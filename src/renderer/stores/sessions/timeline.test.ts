@@ -2120,6 +2120,80 @@ describe('foldTimeline', () => {
     expect(expanded.map((i) => i.key)).toEqual([groupKey, 't1', 'th', 't2', 't3']);
   });
 
+  it('展开的组把平铺出来的子行标成 nested，组头本身不标', () => {
+    const items = [toolItem('t1'), thinkingItem('th'), toolItem('t2'), toolItem('t3')];
+    const collapsed = foldTimeline(items, false, new Set());
+    const groupKey = collapsed[0].key;
+    const expanded = foldTimeline(items, false, new Set([groupKey]));
+    const group = expanded[0] as Extract<TimelineItem, { kind: 'tool-group' }>;
+    expect('nested' in group && group.nested).toBeFalsy();
+    const children = expanded.slice(1);
+    expect(
+      children.map((i) => (i.kind === 'tool' || i.kind === 'thinking' ? i.nested : undefined))
+    ).toEqual([true, true, true, true]);
+    // 收拢态不产生嵌套标记，避免折叠时还按组内样式渲染
+    expect(collapsed).toHaveLength(1);
+  });
+
+  it('带结构化结果的行也不压成紧凑行（沙箱 / 子代理；rtk 例外）', () => {
+    const withExtra = (key: string, name: string, extra: Record<string, unknown>): TimelineItem =>
+      ({ ...toolItem(key, name), ...extra }) as unknown as TimelineItem;
+    const sandbox = withExtra('s1', 'exec', { sandbox: { state: 'ok', calls: [] } });
+    const subagent = withExtra('s2', 'subagent', {
+      agentMeta: { modelId: 'm', outputTokens: 12 },
+      subagentOp: 'spawn',
+    });
+    // rtk 几乎挂在每条 bash 上，排除它紧凑行就形同虚设；统计条在展开时补在输出下方
+    const rtk = withExtra('s3', 'bash', {
+      rtk: { status: 'compressed', tokensBefore: 100, tokensAfter: 10 },
+    });
+    const items = [sandbox, subagent, rtk, toolItem('t4')];
+    const collapsed = foldTimeline(items, false, new Set());
+    const groupKey = collapsed[0].key;
+    const expanded = foldTimeline(items, false, new Set([groupKey]));
+    expect(expanded.map((i) => (i.kind === 'tool' ? i.nested : undefined))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      true,
+      true,
+    ]);
+  });
+
+  it('展开的组不把核心产物行标成 nested，它们仍按完整行渲染', () => {
+    const items = [
+      toolItem('t1'),
+      toolItem('e1', 'apply_patch', [toolItem('x')]),
+      toolItem('t2'),
+      toolItem('t3'),
+    ];
+    const collapsed = foldTimeline(items, false, new Set());
+    const groupKey = collapsed[0].key;
+    const expanded = foldTimeline(items, false, new Set([groupKey]));
+    expect(expanded.map((i) => i.key)).toEqual([groupKey, 't1', 'e1', 't2', 't3']);
+    const nestedOf = (item: TimelineItem): boolean | undefined =>
+      item.kind === 'tool' || item.kind === 'thinking' ? item.nested : undefined;
+    expect(expanded.map(nestedOf)).toEqual([undefined, true, undefined, true, true]);
+  });
+
+  it('已完成活动组展开时，diff 行同样保留完整行', () => {
+    const items = [
+      toolItem('t1', 'read'),
+      toolItem('t2', 'grep'),
+      toolItem('e1', 'apply_patch', [toolItem('x')]),
+      toolItem('t3', 'read'),
+    ];
+    const collapsed = foldTimeline(items, false, new Set(), { collapseCompletedActivity: true });
+    const groupKey = collapsed[0].key;
+    const expanded = foldTimeline(items, false, new Set([groupKey]), {
+      collapseCompletedActivity: true,
+    });
+    const edit = expanded.find((i) => i.key === 'e1');
+    expect(edit?.kind).toBe('tool');
+    expect(edit && edit.kind === 'tool' && edit.nested).toBeUndefined();
+    expect(edit && edit.kind === 'tool' && edit.edits).toBeTruthy();
+  });
+
   it('compact：running 只读工具进组，不钉组外', () => {
     const runningTool = { ...toolItem('r', 'read'), state: 'running' } as TimelineItem;
     const items = [

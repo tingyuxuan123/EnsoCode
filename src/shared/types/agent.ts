@@ -193,7 +193,7 @@ export const PROTECTED_ACTION_CATEGORIES = [
 ] as const;
 export type ProtectedActionCategory = (typeof PROTECTED_ACTION_CATEGORIES)[number];
 
-/** 内嵌浏览器操作闭集：worker 只能发这些，raw CDP 永不进协议。 */
+/** 内嵌浏览器操作闭集；CDP 调试另由 Main 策略校验，不能绕过正式操作。 */
 export const BROWSER_OPS = [
   'navigate',
   'snapshot',
@@ -212,6 +212,16 @@ export const BROWSER_OPS = [
   'lock',
   'close',
   'cdp',
+  'navigation',
+  'read_text',
+  'read_elements',
+  'hover',
+  'set_checked',
+  'scroll_into_view',
+  'wait',
+  'device',
+  'history',
+  'downloads',
 ] as const;
 export type BrowserOp = (typeof BROWSER_OPS)[number];
 
@@ -1609,7 +1619,9 @@ export type RendererAgentEvent =
               | 'agent-control-invoke'
               | 'agent-control-cancel'
               | 'computer-invoke'
-              | 'computer-cancel';
+              | 'computer-cancel'
+              | 'browser-invoke'
+              | 'browser-cancel';
           }
         >
       | { type: 'session-reloaded' }
@@ -1776,6 +1788,12 @@ export type AgentWorkerEvent =
       requestId: string;
       op: BrowserOp;
       params: unknown;
+    }
+  | {
+      type: 'browser-cancel';
+      identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      requestId: string;
     }
   | {
       type: 'memory-invoke';
@@ -3697,6 +3715,11 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'op', 'params']) &&
         isNonEmptyString(value.requestId) &&
         BROWSER_OPS.includes(value.op as BrowserOp)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'browser-cancel':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
+        isNonEmptyString(value.requestId)
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'memory-invoke':

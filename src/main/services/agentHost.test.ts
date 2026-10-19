@@ -38,6 +38,7 @@ import {
   agentTypeRegistrySnapshot,
   configuredAgentTypes,
   expectedAgentTypeToolIds,
+  isBrowserSessionToolEnabled,
   readSettingsState,
   rememberParentToolProfile,
   resolveAgentTypeSpawnConfig,
@@ -45,9 +46,64 @@ import {
   resolvePresetSystemPrompt,
   resolveSubagentModelSelection,
   resolveWebSearchConfig,
+  sendAgentCommand,
+  setBrowserCancellationListener,
   setMemberAgentTypeSource,
+  stopAgentWorker,
+  stopAgentWorkerForQuit,
   toSessionMcpConfig,
 } from './agentHost';
+
+describe('browser lifecycle cancellation', () => {
+  it('abort/release 命令即时撤销对应 generation；worker 停止/退出清全部', async () => {
+    const cancel = vi.fn();
+    const identity = {
+      sessionId: 'browser-owner',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    setBrowserCancellationListener(cancel);
+    sendAgentCommand({ type: 'abort', identity });
+    sendAgentCommand({ type: 'release-parent', identity });
+    expect(cancel.mock.calls).toEqual([
+      [identity, 'abort'],
+      [identity, 'release'],
+    ]);
+    expect(isBrowserSessionToolEnabled(identity)).toBe(false);
+    sendAgentCommand({
+      type: 'spawn-parent',
+      identity,
+      cwd: '/tmp',
+      model: {
+        api: 'openai-responses',
+        baseUrl: 'https://example.com',
+        apiKey: 'test',
+        modelId: 'test',
+        settingsProviderId: 'test',
+      },
+      disabledTools: ['browser'],
+    });
+    expect(isBrowserSessionToolEnabled(identity)).toBe(false);
+    sendAgentCommand({
+      type: 'spawn-parent',
+      identity,
+      cwd: '/tmp',
+      model: {
+        api: 'openai-responses',
+        baseUrl: 'https://example.com',
+        apiKey: 'test',
+        modelId: 'test',
+        settingsProviderId: 'test',
+      },
+    });
+    expect(isBrowserSessionToolEnabled(identity)).toBe(true);
+    expect(isBrowserSessionToolEnabled({ ...identity, generation: 'old' })).toBe(false);
+    cancel.mockClear();
+    stopAgentWorker();
+    await stopAgentWorkerForQuit(100);
+    expect(cancel.mock.calls).toEqual([[], []]);
+    setBrowserCancellationListener(() => {});
+  });
+});
 
 describe('resolveWebSearchConfig', () => {
   const custom: ModelProvider = {

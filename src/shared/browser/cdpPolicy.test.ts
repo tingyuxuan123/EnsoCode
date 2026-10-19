@@ -12,6 +12,8 @@ describe('assertAllowedCdpMethod', () => {
       'Log.enable',
       'Network.enable',
       'Page.captureScreenshot',
+      'Emulation.canEmulate',
+      'Emulation.getScreenInfos',
     ]) {
       expect(() => assertAllowedCdpMethod(method)).not.toThrow();
     }
@@ -24,6 +26,17 @@ describe('assertAllowedCdpMethod', () => {
       'Browser.getVersion',
       'Storage.clearDataForOrigin',
       'Network.setCookie',
+      'Network.setCookies',
+      'Network.getCookies',
+      'Network.getAllCookies',
+      'Emulation.setDeviceMetricsOverride',
+      'Emulation.clearDeviceMetricsOverride',
+      'Emulation.setTouchEmulationEnabled',
+      'Emulation.setUserAgentOverride',
+      'Network.setUserAgentOverride',
+      'Browser.setDownloadBehavior',
+      'Page.setDownloadBehavior',
+      'Storage.getCookies',
       'Network.clearBrowserCookies',
       'Page.navigate',
       'DOM.setFileInputFiles',

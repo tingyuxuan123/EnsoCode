@@ -1,3 +1,5 @@
+import type { BrowserDevice } from '../types/browser';
+import { parseBrowserDevice } from './devices';
 import { assertAllowedUrl } from './urlPolicy';
 
 export interface PersistedBrowserTab {
@@ -5,6 +7,7 @@ export interface PersistedBrowserTab {
   title: string;
   conversationId?: string;
   at?: number;
+  device?: BrowserDevice;
 }
 
 export function parsePersistedBrowserTabs(raw: unknown): Record<string, PersistedBrowserTab> {
@@ -22,7 +25,13 @@ export function parsePersistedBrowserTabs(raw: unknown): Record<string, Persiste
     }
     const at = (value as { at?: unknown }).at;
     const conversationId = (value as { conversationId?: unknown }).conversationId;
+    let device: BrowserDevice | undefined;
+    try {
+      const candidate = (value as { device?: unknown }).device;
+      if (candidate !== undefined) device = parseBrowserDevice(candidate);
+    } catch {}
     out[sessionId] = {
+      ...(device ? { device } : {}),
       url,
       title: typeof title === 'string' ? title : '',
       ...(typeof conversationId === 'string' && conversationId

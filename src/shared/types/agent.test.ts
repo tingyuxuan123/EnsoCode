@@ -2102,7 +2102,21 @@ describe('browser-invoke / browser-result', () => {
     ]) {
       expect(parseAgentWorkerEvent({ ...invoke, op })).not.toBeNull();
     }
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'hover' })).toBeNull();
+    for (const op of [
+      'navigation',
+      'read_text',
+      'read_elements',
+      'hover',
+      'set_checked',
+      'scroll_into_view',
+      'wait',
+      'device',
+      'history',
+      'downloads',
+    ]) {
+      expect(parseAgentWorkerEvent({ ...invoke, op })).not.toBeNull();
+    }
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'cookie' })).toBeNull();
     expect(parseAgentWorkerEvent({ ...invoke, requestId: '' })).toBeNull();
     expect(
       parseAgentWorkerEvent({ ...invoke, identity: { ...parent, generation: 'old' } })
@@ -2110,6 +2124,17 @@ describe('browser-invoke / browser-result', () => {
     const { params: _p, ...noParams } = invoke;
     expect(parseAgentWorkerEvent(noParams)).toBeNull();
     expect(parseAgentWorkerEvent({ ...invoke, extra: 1 })).toBeNull();
+  });
+
+  it('browser-cancel 绑定完整 identity，拒绝多余字段和脏请求', () => {
+    const cancel = { type: 'browser-cancel', identity: parent, seq: 6, requestId: 'br-1' };
+    expect(parseAgentWorkerEvent(cancel)).toEqual(cancel);
+    expect(parseAgentWorkerEvent({ ...cancel, identity: child })).not.toBeNull();
+    expect(parseAgentWorkerEvent({ ...cancel, requestId: '' })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...cancel, op: 'click' })).toBeNull();
+    expect(
+      parseAgentWorkerEvent({ ...cancel, identity: { ...parent, generation: 'old' } })
+    ).toBeNull();
   });
 
   it('browser-result 成功带 result，失败带 error，字段互斥', () => {

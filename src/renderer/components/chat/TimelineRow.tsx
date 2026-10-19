@@ -85,6 +85,7 @@ import {
 import { canWithdrawMessage } from '@/stores/sessions/reducer';
 import { formatDuration, formatTokens } from '@/stores/sessions/stats';
 import {
+  canRenderNestedRow,
   exploreStepsKey,
   isReadOnlyTool,
   isSandboxTool,
@@ -167,6 +168,7 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         b.kind === a.kind &&
         a.text === b.text &&
         a.streaming === b.streaming &&
+        (a.kind !== 'thinking' || (b.kind === 'thinking' && a.nested === b.nested)) &&
         (a.kind !== 'text' ||
           (b.kind === 'text' &&
             perfEqual(a.perf, b.perf) &&
@@ -179,6 +181,7 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         b.kind === 'tool' &&
         a.state === b.state &&
         a.name === b.name &&
+        a.nested === b.nested &&
         a.summary === b.summary &&
         a.output === b.output &&
         a.edits === b.edits &&
@@ -326,7 +329,7 @@ function SkillTag({ name, content }: { name: string; content: string }) {
 
 function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
   return (
-    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-sm">
+    <div className="max-w-[80%] rounded-2xl rounded-br-md border border-border bg-secondary px-4 py-2.5 text-sm">
       {chip}
       {extra ? <span className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</span> : null}
     </div>
@@ -356,7 +359,7 @@ function WorkflowPresetInvocation({
 }) {
   const { t } = useI18n();
   return (
-    <div className="min-w-64 max-w-[80%] overflow-hidden rounded-2xl rounded-br-md bg-muted text-sm">
+    <div className="min-w-64 max-w-[80%] overflow-hidden rounded-2xl rounded-br-md border border-border bg-secondary text-sm">
       <div className="flex items-center gap-2.5 px-3.5 py-2.5">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info/15 text-info">
           <Workflow className="h-4 w-4" />
@@ -492,7 +495,7 @@ function MentionRefChips({
 }
 
 export const USER_BUBBLE =
-  'max-w-[80%] rounded-2xl rounded-br-md border border-brand/15 bg-brand/8 px-4 py-2.5 text-sm dark:border-brand/25 dark:bg-brand/14';
+  'max-w-[80%] rounded-2xl rounded-br-md border border-border bg-secondary px-4 py-2.5 text-sm';
 
 /** 用户气泡：识别合成标记,渲染成系统事件行 / 角色块 / 来源徽章而非原始 XML */
 function UserText({
@@ -771,10 +774,16 @@ export const TimelineRow = memo(function TimelineRow({
           streaming={item.streaming}
           durationMs={item.durationMs}
           startedAt={item.startedAt}
+          nested={item.nested}
         />
       );
     case 'tool':
-      return <ToolRow item={item} />;
+      // 与数据层的标记同源判断：带结构化结果的行一律走完整行
+      return item.nested && canRenderNestedRow(item) ? (
+        <NestedToolRow item={item} />
+      ) : (
+        <ToolRow item={item} />
+      );
     case 'tool-group':
       return <ToolGroupRow item={item} onToggle={onToggleGroup} />;
     case 'error':
@@ -1352,45 +1361,99 @@ function ThinkingRow({
   streaming,
   durationMs,
   startedAt,
+  nested,
 }: {
   itemKey: string;
   text: string;
   streaming: boolean;
   durationMs: number | null;
   startedAt?: number;
+  /** 展开的工具组内：行更矮、字更小，思考只是步骤之间的分隔而不是条目 */
+  nested?: boolean;
 }) {
   const { t } = useI18n();
   const expandLiveReasoning = useSettingsStore((s) => s.expandLiveReasoning);
   const [userToggled, setUserToggled] = useState<boolean | null>(null);
   const expanded = thinkingRowExpanded(userToggled, streaming, expandLiveReasoning);
+  const label = streaming ? (
+    <span className="t-shimmer" data-text={t('Thinking…')}>
+      {t('Thinking…')}
+    </span>
+  ) : durationMs !== null ? (
+    <span>{t('Thought for {{duration}}', { duration: formatDuration(durationMs) })}</span>
+  ) : (
+    <span>{t('Thought process')}</span>
+  );
   return (
     <div>
       <button
         type="button"
         onClick={() => setUserToggled(!expanded)}
-        className="flex min-h-[26px] items-center gap-2 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span className="flex size-[22px] shrink-0 items-center justify-center">
-          <Brain className={cn('h-3.5 w-3.5', streaming && 'animate-pulse text-brand')} />
-        </span>
-        {streaming ? (
-          <span className="t-shimmer" data-text={t('Thinking…')}>
-            {t('Thinking…')}
-          </span>
-        ) : durationMs !== null ? (
-          <span>{t('Thought for {{duration}}', { duration: formatDuration(durationMs) })}</span>
-        ) : (
-          <span>{t('Thought process')}</span>
+        className={cn(
+          'flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground',
+          nested ? 'h-[24px] px-1.5 text-[11px]' : 'min-h-[26px] text-[13px]'
         )}
+      >
+        <span
+          className={cn(
+            'flex shrink-0 items-center justify-center',
+            nested ? 'size-4' : 'size-[22px]'
+          )}
+        >
+          <Brain
+            className={cn(
+              nested ? 'h-3 w-3' : 'h-3.5 w-3.5',
+              streaming && 'animate-pulse text-brand'
+            )}
+          />
+        </span>
+        {label}
         {streaming && <RunningElapsed itemKey={itemKey} since={startedAt} />}
-        <ChevronRight className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')} />
+        <ChevronRight
+          className={cn(
+            'transition-transform',
+            nested ? 'h-2.5 w-2.5' : 'h-3 w-3',
+            expanded && 'rotate-90'
+          )}
+        />
       </button>
-      {expanded && (
-        <p className="t-acc-reveal mt-1 ml-[10px] border-l-2 border-border py-0.5 pl-[19px] text-[13px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
-          {text}
-        </p>
-      )}
+      {expanded && <ReasoningBody text={text} streaming={streaming} />}
     </div>
+  );
+}
+
+/**
+ * 展开的推理正文：高度封顶并独立滚动。
+ * 长思考不封顶会把答复和输入框整体推出视口，所以只在框内滚动；
+ * 流式期间若用户没往回滚，就跟着最新 token 走。
+ */
+function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }) {
+  const bodyRef = useRef<HTMLParagraphElement>(null);
+  /** 默认贴底；用户向上翻看历史推理时暂停自动跟随 */
+  const stickToBottom = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: text/streaming 只作为跟随触发信号，不参与计算
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !stickToBottom.current) return;
+    body.scrollTop = body.scrollHeight;
+  }, [text, streaming]);
+  return (
+    <p
+      ref={bodyRef}
+      onScroll={() => {
+        const body = bodyRef.current;
+        if (!body) return;
+        stickToBottom.current = body.scrollHeight - body.scrollTop - body.clientHeight < 32;
+      }}
+      className={cn(
+        // 流式时只开一个小窗口（约 4 行），像活动指示而不是正文；
+        // 思考结束后用户主动展开才给完整高度。
+        't-acc-reveal mt-1 ml-[10px] overflow-y-auto border-l-2 border-border py-0.5 pl-[19px] text-[13px] leading-relaxed text-muted-foreground whitespace-pre-wrap [scrollbar-width:thin]',
+        streaming ? 'max-h-28' : 'max-h-[min(16rem,38vh)]'
+      )}
+    >
+      {text}
+    </p>
   );
 }
 
@@ -1549,6 +1612,10 @@ function ToolGroupRow({
       explored.push(t('{{count}} searches', { count: item.stats.searches }));
   }
   const activity = item.activity;
+  // 组内失败数：折叠时也要能看见，否则失败被埋在展开体里
+  const failedCount = item.children.filter(
+    (child) => child.kind === 'tool' && child.state === 'error'
+  ).length;
   const activityParts: string[] = [];
   if (activity) {
     if (activity.thinking > 0)
@@ -1594,6 +1661,11 @@ function ToolGroupRow({
         <span className="shrink-0 font-medium text-foreground/90">{label}</span>
       )}
       <span className="min-w-0 flex-1 truncate">{detail.join(' · ')}</span>
+      {failedCount > 0 && (
+        <span className="shrink-0 rounded bg-destructive/12 px-1.5 py-px text-[10px] text-destructive">
+          {t('{{count}} calls failed', { count: failedCount })}
+        </span>
+      )}
       <ChevronRight
         className={cn('h-3 w-3 shrink-0 transition-transform', item.expanded && 'rotate-90')}
       />
@@ -1810,6 +1882,116 @@ export function ReadImagePreview({ path, fallback }: { path: string; fallback: R
         frameClassName="block w-full"
         className="mx-auto block max-h-80 max-w-full rounded-md bg-muted/40 object-contain"
       />
+    </div>
+  );
+}
+
+/** 组内行输出预览行数：超出就给「共 N 行」的展开入口 */
+const NESTED_PREVIEW_LINES = 3;
+
+/**
+ * 展开工具组内的紧凑行：等宽正文 + 右对齐耗时，悬停出复制。
+ * 组内行不带工具名标签——图标已经表达类型，正文才是要看的东西。
+ * 失败行就地给出错误首行，长输出只给前三行。
+ */
+function NestedToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const failed = item.state === 'error';
+  const busy = item.state === 'running' || item.state === 'reviewing';
+  const output = item.output ? stripAnsi(item.output).replace(/\n+$/, '') : '';
+  const outputLines = output ? output.split('\n') : [];
+  const long = outputLines.length > NESTED_PREVIEW_LINES;
+  const preview = long ? outputLines.slice(0, NESTED_PREVIEW_LINES).join('\n') : output;
+  const expandable = long || (failed && output.length > 0) || Boolean(item.rtk);
+  const Icon = toolIcon(item.name);
+  const duration = item.durationMs !== null ? formatDuration(item.durationMs) : '';
+  return (
+    <div>
+      <div
+        className={cn(
+          'group/nested flex h-[26px] items-center gap-2 rounded-md px-1.5 transition-colors',
+          busy && 'bg-brand/10',
+          !busy && 'hover:bg-accent'
+        )}
+      >
+        <button
+          type="button"
+          disabled={!expandable}
+          onClick={() => setExpanded((v) => !v)}
+          title={item.summary}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-2 text-left',
+            expandable && 'cursor-pointer'
+          )}
+        >
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            {busy ? (
+              <LoaderCircle className="size-3.5 animate-spin text-brand" />
+            ) : (
+              <Icon
+                className={cn('size-3.5', failed ? 'text-destructive' : 'text-muted-foreground')}
+              />
+            )}
+          </span>
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate font-mono text-[11.5px]',
+              failed ? 'text-destructive' : busy ? 'text-foreground' : 'text-foreground/75'
+            )}
+          >
+            {item.summary}
+          </span>
+        </button>
+        <span className="hidden shrink-0 items-center gap-0.5 pl-1 group-hover/nested:flex">
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(item.summary).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1000);
+              });
+            }}
+            title={t('Copy')}
+            className="flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+          >
+            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          </button>
+          {expandable && (
+            <ChevronRight
+              className={cn(
+                'size-3 text-muted-foreground transition-transform',
+                expanded && 'rotate-90'
+              )}
+            />
+          )}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 text-[10px] tabular-nums group-hover/nested:hidden',
+            busy ? 'text-brand' : 'text-muted-foreground/70'
+          )}
+        >
+          {busy ? t('Running…') : duration}
+        </span>
+      </div>
+      {failed && output && (
+        <pre className="mt-1 mb-1 max-h-40 overflow-auto rounded-md bg-destructive/8 px-2.5 py-1.5 font-mono text-[11px] leading-[18px] whitespace-pre-wrap text-destructive/90">
+          {expanded ? output : preview}
+        </pre>
+      )}
+      {!failed && expanded && output && (
+        <pre className="mt-1 mb-1 max-h-60 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono text-[11px] leading-[18px] whitespace-pre-wrap text-muted-foreground">
+          {output}
+        </pre>
+      )}
+      {/* 压缩统计只在完整行展开时出现；紧凑行补在同一位置，否则 RTK 用户会丢这条信息 */}
+      {expanded && item.rtk && (
+        <div className="mb-1 overflow-hidden rounded-md border border-border/50">
+          <RtkToolStatsBar value={item.rtk} />
+        </div>
+      )}
     </div>
   );
 }
@@ -2316,6 +2498,11 @@ function ToolNode({ name, state }: { name: string; state: StepNodeState }) {
 export function isToolStepRow(item: TimelineItem): boolean {
   if (item.kind === 'tool-group') return true;
   return item.kind === 'tool' && !item.todos && !item.name.startsWith('goal_');
+}
+
+/** 组内紧凑行：节点 16px、行高 26px，竖线几何与完整行的 22px/30px 不同 */
+export function isNestedToolRow(item: TimelineItem): boolean {
+  return item.kind === 'tool' && Boolean(item.nested) && canRenderNestedRow(item);
 }
 
 const firstLine = (text: string): string => stripAnsi(text.split('\n', 1)[0] ?? '');

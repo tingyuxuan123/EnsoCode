@@ -41,9 +41,9 @@ export function WelcomeSuggestions({ onPick }: { onPick: (prompt: string) => voi
           type="button"
           onClick={() => onPick(t(prompt))}
           data-slot="welcome-suggestion"
-          className="group flex items-start gap-3 rounded-xl border bg-card px-3.5 py-3 text-left shadow-xs transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-brand/25 hover:shadow-float"
+          className="group flex items-start gap-3 rounded-lg border border-border/70 bg-card/40 px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-accent/60"
         >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand/8 text-brand dark:bg-brand/14">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-brand">
             <Icon className="size-3.5" />
           </span>
           <span className="min-w-0">

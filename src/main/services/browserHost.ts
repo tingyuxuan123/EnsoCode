@@ -4,6 +4,14 @@ import { assertAllowedCdpMethod } from '@shared/browser/cdpPolicy';
 import { parseDesignBinding, sanitizeUiElementPayload } from '@shared/browser/designMode';
 import { assertDevtoolsIdle } from '@shared/browser/devtools';
 import { pickFaviconUrl } from '@shared/browser/favicon';
+import { parseBrowserDevice } from '@shared/browser/devices';
+import { pagePrepareInputScript, pageCheckedScript, pageScrollIntoViewScript, pageWaitScript, parseBrowserWait, parseBrowserKey } from '@shared/browser/interactionScripts';
+import { parseReadRequest, parsePageReadSnapshot, readPageSlice, type PageReadSnapshot } from '@shared/browser/reading';
+import { pageReadScript } from '@shared/browser/readingScripts';
+import { effectiveBrowserViewport } from '@shared/browser/viewport';
+import type { BrowserDevice } from '@shared/types/browser';
+import { BrowserHistoryStore } from './browserHistory';
+import { BrowserDownloads } from './browserDownloads';
 import {
   DESIGN_MODE_BINDING,
   PAGE_DESIGN_MODE_COMPOSE_SCRIPT,
@@ -200,6 +208,17 @@ interface Tab {
   synthetic: number;
   /** 上一个占用该 tab 的成员会话；换人后旧快照的 ref 作废 */
   lastHolder?: string;
+  device: BrowserDevice;
+  control: 'agent' | 'manual';
+  generation: number;
+  snapshotSeq: number;
+  readSnapshot?: PageReadSnapshot;
+  readKey?: string;
+  queue: Promise<unknown>;
+  active?: AbortController;
+  operationSignal?: AbortSignal;
+  emulationQueue: Promise<void>;
+  emulationKey?: string;
 }
 
 const EMPTY_STATE: BrowserTabState = {
@@ -295,6 +314,112 @@ export class BrowserHost {
   private disposing = false;
   private readonly lastSeen = new Map<string, number>();
   private idleTimer: ReturnType<typeof setInterval> | undefined;
+  private historyStore?: BrowserHistoryStore;
+  private downloadsStore?: BrowserDownloads;
+  private readonly downloadsListeners = new Set<(conversationId: string) => void>();
+
+  onDownloadsChanged(listener: (conversationId: string) => void): () => void {
+    this.downloadsListeners.add(listener);
+    return () => this.downloadsListeners.delete(listener);
+  }
+
+  private recordsQuery(params: unknown) {
+    if (params !== undefined && !isRecord(params)) throw new Error('Record params must be an object');
+    const p = isRecord(params) ? params : {};
+    if (p.query !== undefined && (typeof p.query !== 'string' || p.query.length > 500)) throw new Error('Invalid query');
+    for (const key of ['offset', 'limit']) {
+      const value = p[key];
+      if (value !== undefined && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < (key === 'limit' ? 1 : 0) || value > (key === 'limit' ? 200 : 1000000))) throw new Error(`Invalid ${key}`);
+    }
+    return { ...(typeof p.query === 'string' ? { query: p.query } : {}), ...(typeof p.offset === 'number' ? { offset: p.offset } : {}), ...(typeof p.limit === 'number' ? { limit: p.limit } : {}) };
+  }
+
+  private getHistory(): BrowserHistoryStore {
+    return this.historyStore ??= new BrowserHistoryStore({ filePath: join(app.getPath('userData'), 'browser-history.json') });
+  }
+
+  private getDownloads(): BrowserDownloads {
+    return this.downloadsStore ??= new BrowserDownloads({
+      filePath: join(app.getPath('userData'), 'browser-downloads.json'),
+      downloadDir: join(app.getPath('downloads'), 'EnsoCode'),
+      onChange: (conversationId) => { for (const listener of this.downloadsListeners) listener(conversationId); },
+    });
+  }
+
+  async history(conversationId: string, params: unknown): Promise<unknown> {
+    const query = this.recordsQuery(params);
+    const action = isRecord(params) ? params.action ?? 'list' : 'list';
+    const store = this.getHistory();
+    if (action === 'remove') store.remove(conversationId, paramString(params, 'id'));
+    else if (action === 'clear') store.clear(conversationId);
+    else if (action !== 'list') throw new Error('Invalid history action');
+    return store.query(conversationId, query);
+  }
+
+  async downloads(conversationId: string, params: unknown): Promise<unknown> {
+    const query = this.recordsQuery(params);
+    const action = isRecord(params) ? params.action ?? 'list' : 'list';
+    const store = this.getDownloads();
+    if (action === 'pause' || action === 'resume' || action === 'cancel' || action === 'remove' || action === 'reveal') await store.action(conversationId, paramString(params, 'id'), action);
+    else if (action !== 'list') throw new Error('Invalid download action');
+    return store.query(conversationId, query);
+  }
+
+  private ownedTab(tabId: string, conversationId: string): Tab {
+    const tab = this.tabs.get(tabId);
+    if (!tab) throw new Error('Browser tab is closed or unknown');
+    if (tab.ownerSessionId !== conversationId) throw new Error('Browser tab owner mismatch');
+    return tab;
+  }
+
+  private invalidateRefs(tab: Tab): void {
+    tab.lastSnapshot = undefined;
+    tab.readSnapshot = undefined;
+    tab.readKey = undefined;
+  }
+
+  private takeOver(tab: Tab): void {
+    tab.control = 'manual';
+    tab.generation += 1;
+    tab.active?.abort(new Error('The user took over browser control'));
+    this.invalidateRefs(tab);
+    this.tabClaims.userTookOver(tab.id);
+    this.emitState(tab.ownerSessionId, tab.id);
+  }
+
+  async setControl(tabId: string, conversationId: string, control: 'manual' | 'agent'): Promise<BrowserTabState> {
+    const tab = this.ownedTab(tabId, conversationId);
+    if (control !== 'manual' && control !== 'agent') throw new Error('Invalid browser control');
+    if (control === 'manual') {
+      this.takeOver(tab);
+      if (await this.removeLockOverlay(tab)) tab.locked = false;
+    } else {
+      tab.generation += 1;
+      tab.control = 'agent';
+      this.invalidateRefs(tab);
+    }
+    this.emitState(conversationId, tabId);
+    return this.stateOf(tab);
+  }
+
+  async setDevice(tabId: string, conversationId: string, device: unknown): Promise<BrowserTabState> {
+    const tab = this.ownedTab(tabId, conversationId);
+    assertDevtoolsIdle(tab.devtoolsOpen);
+    tab.device = parseBrowserDevice(device);
+    this.invalidateRefs(tab);
+    tab.emulationKey = undefined;
+    this.layout();
+    await this.applyEmulation(tab, this.shown?.tabId === tab.id ? this.shown.viewport : null, true);
+    this.emitState(conversationId, tabId);
+    return this.stateOf(tab);
+  }
+
+  stop(tabId: string): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return;
+    this.takeOver(tab);
+    tab.view.webContents.stop();
+  }
 
   /** guest view 需要挂在某扇窗口上才有 viewport；由 main/index.ts 注入主窗口获取器。 */
   setHostWindow(provider: () => BrowserWindow | null): void {
@@ -349,6 +474,8 @@ export class BrowserHost {
       canGoBack: contents.navigationHistory.canGoBack(),
       canGoForward: contents.navigationHistory.canGoForward(),
       locked: tab.locked,
+      device: tab.device,
+      control: tab.control,
       devtoolsOpen: tab.devtoolsOpen,
       designMode: tab.designMode,
       holder: holder ? { conversationId: holder.sessionId, name: holder.name } : null,
@@ -459,7 +586,10 @@ export class BrowserHost {
    */
   private layout(): void {
     const window = this.hostWindow();
-    if (!window || window.isDestroyed()) return;
+    if (!window || window.isDestroyed()) {
+      for (const tab of this.tabs.values()) void this.applyEmulation(tab, null).catch(() => {});
+      return;
+    }
     const { contentView } = window;
     const raise: WebContentsView[] = [];
     for (const tab of this.tabs.values()) {
@@ -472,15 +602,10 @@ export class BrowserHost {
         tab.view.setBounds(this.shown.viewport);
         tab.view.setVisible(true);
         if (!this.shown.covered && !this.overlayActive) raise.push(tab.view);
-        if (!tab.devtoolsOpen) {
-          for (const cmd of shownTabCdpCommands()) void this.cdp(tab, cmd.method, cmd.params);
-        }
       } else {
         tab.view.setVisible(false);
-        if (!tab.devtoolsOpen) {
-          for (const cmd of hiddenTabCdpCommands()) void this.cdp(tab, cmd.method, cmd.params);
-        }
       }
+      void this.applyEmulation(tab, onTop && this.shown ? this.shown.viewport : null).catch((error: unknown) => console.warn('[browser] emulation failed', error));
       const dtOnTop = Boolean(
         tab.devtools && tab.devtoolsOpen && this.shownDevtools?.tabId === tab.id
       );
@@ -496,6 +621,39 @@ export class BrowserHost {
     }
     this.ensureWorkbenchOnTop(window);
     for (const view of raise) contentView.addChildView(view);
+  }
+
+  private applyEmulation(tab: Tab, panel: BrowserViewport | null, strict = false): Promise<void> {
+    if (!tab.ready || tab.view.webContents.isDestroyed()) return Promise.resolve();
+    if (tab.devtoolsOpen) {
+      if (strict) return Promise.reject(new Error('Close DevTools before changing device emulation'));
+      return Promise.resolve();
+    }
+    const metrics = effectiveBrowserViewport(tab.device, panel);
+    const key = JSON.stringify({ device: tab.device, metrics, shown: Boolean(panel) });
+    if (tab.emulationKey === key) return tab.emulationQueue;
+    tab.emulationKey = key;
+    const task = tab.emulationQueue.catch(() => {}).then(async () => {
+      if (tab.emulationKey !== key || this.tabs.get(tab.id) !== tab || tab.devtoolsOpen) return;
+      const device = tab.device;
+      const commands = device.enabled ? [
+        { method: 'Emulation.setDeviceMetricsOverride', params: { width: metrics.width, height: metrics.height, deviceScaleFactor: metrics.deviceScaleFactor, mobile: metrics.mobile, screenWidth: metrics.width, screenHeight: metrics.height, scale: metrics.scale, screenOrientation: { type: device.orientation === 'landscape' ? 'landscapePrimary' : 'portraitPrimary', angle: device.orientation === 'landscape' ? 90 : 0 } } },
+        { method: 'Emulation.setTouchEmulationEnabled', params: { enabled: metrics.touch, maxTouchPoints: metrics.touch ? 5 : 1 } },
+        { method: 'Emulation.setUserAgentOverride', params: { userAgent: metrics.mobile ? `${tab.view.webContents.getUserAgent()} Mobile` : tab.view.webContents.getUserAgent(), userAgentMetadata: { brands: [{ brand: 'Chromium', version: process.versions.chrome?.split('.')[0] ?? '130' }], fullVersionList: [], platform: metrics.mobile ? 'Android' : process.platform, platformVersion: '', architecture: '', model: metrics.mobile ? 'Mobile' : '', mobile: metrics.mobile } } },
+        { method: 'Emulation.setFocusEmulationEnabled', params: { enabled: !panel } },
+      ] : [
+        ...(panel ? shownTabCdpCommands() : hiddenTabCdpCommands()),
+        { method: 'Emulation.setTouchEmulationEnabled', params: { enabled: false } },
+        { method: 'Emulation.setUserAgentOverride', params: { userAgent: '' } },
+      ];
+      for (const command of commands) {
+        if (tab.emulationKey !== key || this.tabs.get(tab.id) !== tab || tab.devtoolsOpen) return;
+        const result = await this.cdp(tab, command.method, command.params);
+        if (result === undefined && strict) { tab.emulationKey = undefined; throw new Error(`Device emulation failed: ${command.method}`); }
+      }
+    });
+    tab.emulationQueue = task;
+    return task;
   }
 
   /** host 内白名单 CDP；模型永远摸不到 */
@@ -851,53 +1009,69 @@ export class BrowserHost {
     return this.guestSession;
   }
 
-  /** actor：共享浏览器里的成员会话，按标签页加锁；不传则沿用会话独占的旧行为 */
   async invoke(
     sessionId: string,
     op: BrowserOp,
     params: unknown,
-    actor?: BrowserActor
+    actor?: BrowserActor,
+    options?: { signal?: AbortSignal }
   ): Promise<unknown> {
-    if (!actor) return this.run(sessionId, op, params, () => this.mustTab(sessionId));
-    if (this.tabClaims.takeClosed(actor.sessionId)) throw new Error(BROWSER_TAB_CLOSED_NOTICE);
-    if (op === 'tabs')
-      return this.handleTabs(
-        sessionId,
-        isRecord(params) && typeof params.action === 'string' ? params.action : 'list',
-        isRecord(params) && typeof params.index === 'number' ? params.index : undefined,
-        actor
-      );
-    const pointed = this.tabClaims.pointer(actor.sessionId);
+    options?.signal?.throwIfAborted();
+    if (op === 'history') return this.history(sessionId, params);
+    if (op === 'downloads') return this.downloads(sessionId, params);
+    if (actor && this.tabClaims.takeClosed(actor.sessionId)) throw new Error(BROWSER_TAB_CLOSED_NOTICE);
+    const explicit = isRecord(params) && params.tabId !== undefined ? paramString(params, 'tabId') : undefined;
+    if (explicit) this.ownedTab(explicit, sessionId);
+    if (op === 'tabs') {
+      return this.handleTabs(sessionId, isRecord(params) && typeof params.action === 'string' ? params.action : 'list', isRecord(params) && typeof params.index === 'number' ? params.index : undefined, actor, explicit);
+    }
+    const pointed = actor ? this.tabClaims.pointer(actor.sessionId) : undefined;
     const newTab = op === 'navigate' && isRecord(params) && params.newTab === true;
-    let tab = newTab
-      ? undefined
-      : ((pointed ? this.tabs.get(pointed) : undefined) ?? this.tabFor(sessionId));
-    if (!tab && op === 'navigate') tab = this.createTab(sessionId);
+    let tab = explicit ? this.ownedTab(explicit, sessionId) : newTab ? undefined : ((pointed ? this.tabs.get(pointed) : undefined) ?? this.tabFor(sessionId));
+    if (!tab && (op === 'navigate' || (op === 'navigation' && isRecord(params) && params.action === 'search'))) tab = this.createTab(sessionId);
     if (!tab) throw new Error('No browser tab is open. Call browser_navigate first.');
-    const target = tab;
-    let notice = false;
-    if (CLAIMING_OPS.has(op)) {
+    const target = this.ownedTab(tab.id, sessionId);
+    this.assertAgentControl(target);
+    if (actor) {
       const claim = this.tabClaims.claim(target.id, actor);
       if (!claim.ok) throw new Error(browserTabBusyMessage(claim.holder.name));
-      if (target.lastHolder !== actor.sessionId) target.lastSnapshot = undefined;
+      if (target.lastHolder !== actor.sessionId) this.invalidateRefs(target);
       target.lastHolder = actor.sessionId;
-      if (claim.tookOver) {
-        target.lastSnapshot = undefined;
-        if (op !== 'snapshot') throw new Error(BROWSER_TAKEOVER_NOTICE);
-        notice = true;
+      if (claim.tookOver && op !== 'snapshot' && op !== 'read_text' && op !== 'read_elements') throw new Error(BROWSER_TAKEOVER_NOTICE);
+    }
+    const generation = target.generation;
+    const task = target.queue.catch(() => {}).then(async () => {
+      this.assertAgentControl(target, generation);
+      options?.signal?.throwIfAborted();
+      const controller = new AbortController();
+      const signal = options?.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
+      target.active = controller;
+      target.operationSignal = signal;
+      let removeAbort = () => {};
+      const aborted = new Promise<never>((_resolve, reject) => {
+        const abort = () => reject(signal.reason ?? new Error('Browser operation aborted'));
+        signal.addEventListener('abort', abort, { once: true });
+        removeAbort = () => signal.removeEventListener('abort', abort);
+        if (signal.aborted) abort();
+      });
+      try {
+        const result = await Promise.race([this.run(sessionId, op, params, () => target, target), aborted]);
+        if (op !== 'close') this.assertAgentControl(target, generation);
+        if (op === 'close' && actor) this.tabClaims.takeClosed(actor.sessionId);
+        return result;
+      } finally {
+        removeAbort();
+        if (target.active === controller) { target.active = undefined; target.operationSignal = undefined; }
       }
-    } else {
-      this.tabClaims.point(actor.sessionId, target.id);
-    }
-    if (op === 'lock') {
-      await this.setLocked(sessionId, !(isRecord(params) && params.release === true), target);
-      return { locked: target.locked };
-    }
-    const result = await this.run(sessionId, op, params, () => target, target);
-    if (op === 'close') this.tabClaims.takeClosed(actor.sessionId);
-    return notice && typeof result === 'string'
-      ? `${BROWSER_TAKEOVER_NOTICE}\n\n${result}`
-      : result;
+    });
+    target.queue = task.catch(() => {});
+    return task;
+  }
+
+  private assertAgentControl(tab: Tab, generation?: number): void {
+    if (this.tabs.get(tab.id) !== tab) throw new Error('Browser tab is closed');
+    if (tab.control === 'manual' || (generation !== undefined && generation !== tab.generation)) throw new Error('The user took over browser control. Ask the user to allow Agent control in the browser UI.');
+    tab.operationSignal?.throwIfAborted();
   }
 
   private async run(
@@ -908,6 +1082,19 @@ export class BrowserHost {
     navigateTab?: Tab
   ): Promise<unknown> {
     switch (op) {
+      case 'read_text': return this.readPage(mustTab(), params, 'text');
+      case 'read_elements': return this.readPage(mustTab(), params, 'elements');
+      case 'device': return this.setDevice(mustTab().id, sessionId, isRecord(params) ? params.device : undefined);
+      case 'wait': return this.waitFor(mustTab(), params);
+      case 'hover': return this.pointer(mustTab(), paramString(params, 'ref'), false);
+      case 'set_checked': {
+        if (!isRecord(params) || typeof params.checked !== 'boolean') throw new Error('checked must be boolean');
+        return this.setChecked(mustTab(), paramString(params, 'ref'), params.checked);
+      }
+      case 'scroll_into_view': return this.runPage(mustTab(), pageScrollIntoViewScript(paramString(params, 'ref')), paramString(params, 'ref'));
+      case 'navigation': return this.navigation(mustTab(), params);
+      case 'history': return this.history(sessionId, params);
+      case 'downloads': return this.downloads(sessionId, params);
       case 'navigate':
         return this.navigate(
           sessionId,
@@ -936,7 +1123,7 @@ export class BrowserHost {
           false
         );
       case 'press_key':
-        return this.runPage(mustTab(), pagePressKeyScript(paramString(params, 'key')));
+        return this.pressKey(mustTab(), paramString(params, 'key'));
       case 'scroll':
         return this.runPage(
           mustTab(),
@@ -976,10 +1163,7 @@ export class BrowserHost {
       case 'bounding_box':
         return this.boundingBox(mustTab(), paramString(params, 'ref'));
       case 'screenshot':
-        return this.screenshot(
-          mustTab(),
-          isRecord(params) && typeof params.ref === 'string' ? params.ref : undefined
-        );
+        return this.screenshot(mustTab(), isRecord(params) && typeof params.ref === 'string' ? params.ref : undefined, params);
       case 'cdp':
         return this.cdpCommand(
           mustTab(),
@@ -988,7 +1172,7 @@ export class BrowserHost {
         );
       case 'close': {
         const tab = mustTab();
-        await this.destroyTab(tab);
+        await this.closeTab(tab.id);
         return { closed: tab.id };
       }
       case 'tabs':
@@ -1016,8 +1200,10 @@ export class BrowserHost {
     sessionId: string,
     action: string,
     index?: number,
-    actor?: BrowserActor
+    actor?: BrowserActor,
+    tabId?: string
   ): Promise<unknown> {
+    if (!['new', 'select', 'close', 'list'].includes(action)) throw new Error('Invalid tabs action');
     const list = () => {
       const current =
         (actor && this.tabClaims.pointer(actor.sessionId)) ?? this.currentBySession.get(sessionId);
@@ -1035,10 +1221,8 @@ export class BrowserHost {
       return { opened: tab.id, tabs: list() };
     }
     if (action === 'select') {
-      if (index === undefined || !Number.isInteger(index)) {
-        throw new Error('index is required for select');
-      }
-      const tab = this.tabsForSession(sessionId)[index];
+      if (!tabId && (index === undefined || !Number.isInteger(index))) throw new Error('tabId or index is required for select');
+      const tab = tabId ? this.ownedTab(tabId, sessionId) : this.tabsForSession(sessionId)[index ?? -1];
       if (!tab) throw new Error(`No browser tab at index ${index}`);
       this.currentBySession.set(sessionId, tab.id);
       if (actor) this.tabClaims.point(actor.sessionId, tab.id);
@@ -1081,35 +1265,138 @@ export class BrowserHost {
     return this.pageInfo(contents);
   }
 
+  private async readPage(tab: Tab, params: unknown, kind: 'text' | 'elements'): Promise<unknown> {
+    const request = parseReadRequest(params);
+    const key = JSON.stringify({ scope: request.scope ?? 'viewport', ref: request.ref, role: request.role, text: request.text, kind });
+    if (request.cursor) {
+      if (!tab.readSnapshot || tab.readKey !== key) throw new Error('Stale or invalid read cursor');
+    } else {
+      if (request.ref) this.assertRef(tab, request.ref);
+      const generation = tab.generation;
+      const snapshotId = `${tab.id.replace(/[^a-z0-9-]/gi, '').slice(-40)}-${++tab.snapshotSeq}`;
+      const raw = await tab.view.webContents.executeJavaScript(pageReadScript(request, snapshotId), true);
+      this.assertAgentControl(tab, generation);
+      const snapshot = parsePageReadSnapshot(raw, snapshotId);
+      this.invalidateRefs(tab);
+      tab.readSnapshot = snapshot;
+      tab.readKey = key;
+      tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), snapshot.entries);
+    }
+    if (!tab.readSnapshot) throw new Error('Read snapshot unavailable');
+    return { ...this.pageInfo(tab.view.webContents), tabId: tab.id, ...readPageSlice(tab.readSnapshot, request, kind) };
+  }
+
   private async snapshot(tab: Tab): Promise<string> {
-    const contents = tab.view.webContents;
-    const raw: unknown = await contents.executeJavaScript(PAGE_SNAPSHOT_SCRIPT, true);
+    const generation = tab.generation;
+    const prefix = `${tab.id.replace(/[^a-z0-9-]/gi, '').slice(-40)}-${++tab.snapshotSeq}`;
+    const script = PAGE_SNAPSHOT_SCRIPT.replace("const ref = 'e' + (++counter);", `const ref = 'e' + ${JSON.stringify(prefix)} + '_' + (++counter);`);
+    const raw: unknown = await tab.view.webContents.executeJavaScript(script, true);
+    this.assertAgentControl(tab, generation);
     const entries = parseSnapshotEntries(raw);
     if (!entries) throw new Error('Page snapshot returned an unexpected shape.');
-    tab.lastSnapshot = renderSnapshot(this.pageInfo(contents), entries);
+    this.invalidateRefs(tab);
+    tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), entries);
     return tab.lastSnapshot.text;
   }
 
-  private async click(tab: Tab, ref: string): Promise<PageInfo> {
-    this.assertRef(tab, ref);
-    const outcome: unknown = await tab.view.webContents.executeJavaScript(
-      pageClickScript(ref),
-      true
-    );
-    const error = interpretPageAction(ref, outcome);
-    if (error) throw error;
+  private sendInput(tab: Tab, event: Electron.InputEvent): void {
+    this.assertAgentControl(tab);
+    tab.synthetic += 1;
+    try { tab.view.webContents.sendInputEvent(event); } finally { tab.synthetic -= 1; }
+  }
+
+  private async pressKey(tab: Tab, key: string): Promise<PageInfo> {
+    const { keyCode, modifiers } = parseBrowserKey(key);
+    this.sendInput(tab, { type: 'keyDown', keyCode, modifiers });
+    if (keyCode.length === 1 && modifiers.length === 0) this.sendInput(tab, { type: 'char', keyCode });
+    this.sendInput(tab, { type: 'keyUp', keyCode, modifiers });
+    await sleep(40);
+    this.assertAgentControl(tab);
     return this.pageInfo(tab.view.webContents);
   }
 
+  private async pointer(tab: Tab, ref: string, click: boolean): Promise<PageInfo> {
+    this.assertRef(tab, ref);
+    const point: unknown = await tab.view.webContents.executeJavaScript(pagePrepareInputScript(ref), true);
+    this.assertAgentControl(tab);
+    if (!isRecord(point) || typeof point.x !== 'number' || typeof point.y !== 'number') throw interpretPageAction(ref, point) ?? new Error('Invalid target point');
+    await this.pointerAt(tab, point.x, point.y, click);
+    return this.pageInfo(tab.view.webContents);
+  }
+
+  private async pointerAt(tab: Tab, x: number, y: number, click: boolean): Promise<void> {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) throw new Error('Invalid pointer coordinates');
+    await tab.view.webContents.executeJavaScript(pageLockOverlayDisplayScript(true), true);
+    try {
+      this.sendInput(tab, { type: 'mouseMove', x, y });
+      if (click) {
+        this.sendInput(tab, { type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+        this.sendInput(tab, { type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      }
+      await sleep(40);
+      this.assertAgentControl(tab);
+    } finally {
+      if (tab.locked && this.tabs.get(tab.id) === tab) await tab.view.webContents.executeJavaScript(pageLockOverlayDisplayScript(false), true).catch(() => {});
+    }
+  }
+
+  private click(tab: Tab, ref: string): Promise<PageInfo> { return this.pointer(tab, ref, true); }
+
   private async type(tab: Tab, ref: string, text: string, submit: boolean): Promise<PageInfo> {
     this.assertRef(tab, ref);
-    const outcome: unknown = await tab.view.webContents.executeJavaScript(
-      pageTypeScript(ref, text, submit),
-      true
-    );
-    const error = interpretPageAction(ref, outcome);
-    if (error) throw error;
+    const prepared: unknown = await tab.view.webContents.executeJavaScript(pagePrepareInputScript(ref, true), true);
+    this.assertAgentControl(tab);
+    if (!isRecord(prepared)) throw interpretPageAction(ref, prepared) ?? new Error('Could not focus input');
+    await this.pressKey(tab, process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    await this.pressKey(tab, 'Backspace');
+    this.assertAgentControl(tab);
+    tab.synthetic += 1;
+    try { await tab.view.webContents.insertText(text); } finally { tab.synthetic -= 1; }
+    this.assertAgentControl(tab);
+    if (submit) await this.pressKey(tab, 'Enter');
     return this.pageInfo(tab.view.webContents);
+  }
+
+  private async setChecked(tab: Tab, ref: string, checked: boolean): Promise<PageInfo> {
+    this.assertRef(tab, ref);
+    const before: unknown = await tab.view.webContents.executeJavaScript(pageCheckedScript(ref), true);
+    if (typeof before !== 'boolean') throw interpretPageAction(ref, before) ?? new Error('Element is not checkable');
+    if (before !== checked) await this.click(tab, ref);
+    this.assertAgentControl(tab);
+    const after: unknown = await tab.view.webContents.executeJavaScript(pageCheckedScript(ref), true);
+    if (after !== checked) throw new Error('Click delivered but checked state was not confirmed; do not blindly retry');
+    return this.pageInfo(tab.view.webContents);
+  }
+
+  private async waitFor(tab: Tab, params: unknown): Promise<unknown> {
+    const request = parseBrowserWait(params);
+    if (request.ref) this.assertRef(tab, request.ref);
+    const generation = tab.generation;
+    const deadline = Date.now() + request.timeoutMs;
+    do {
+      this.assertAgentControl(tab, generation);
+      const matched: unknown = await tab.view.webContents.executeJavaScript(pageWaitScript(request), true);
+      this.assertAgentControl(tab, generation);
+      if (matched === true) return { matched: true, ...this.stateOf(tab) };
+      await sleep(Math.min(100, Math.max(1, deadline - Date.now())));
+    } while (Date.now() < deadline);
+    throw new Error(`Browser wait timed out after ${request.timeoutMs}ms`);
+  }
+
+  private async navigation(tab: Tab, params: unknown): Promise<unknown> {
+    const action = paramString(params, 'action');
+    const contents = tab.view.webContents;
+    if (action === 'search') return this.navigate(tab.ownerSessionId, `https://www.google.com/search?q=${encodeURIComponent(paramString(params, 'query'))}`, false, tab);
+    if (action === 'reveal') this.requestReveal(tab.ownerSessionId, tab.id);
+    else if (action === 'stop') contents.stop();
+    else if (action === 'reload') { if (!this.canNavigate(tab, contents.getURL())) throw new Error('Navigation URL is not allowed'); this.invalidateRefs(tab); contents.reload(); }
+    else if (action === 'back' || action === 'forward') {
+      const history = contents.navigationHistory;
+      const delta = action === 'back' ? -1 : 1;
+      const entry = history.getEntryAtIndex(history.getActiveIndex() + delta);
+      if (entry && this.canNavigate(tab, entry.url)) { this.invalidateRefs(tab); if (delta === -1) history.goBack(); else history.goForward(); }
+    } else throw new Error('Invalid navigation action');
+    return this.stateOf(tab);
   }
 
   private async runPage(tab: Tab, script: string, ref?: string): Promise<PageInfo> {
@@ -1293,6 +1580,12 @@ export class BrowserHost {
       favicon: null,
       pickSeq: 0,
       synthetic: 0,
+      device: { enabled: false },
+      control: 'agent',
+      generation: 0,
+      snapshotSeq: 0,
+      queue: Promise.resolve(),
+      emulationQueue: Promise.resolve(),
     };
     const contents = view.webContents;
     const push = () => this.emitState(sessionId, id);

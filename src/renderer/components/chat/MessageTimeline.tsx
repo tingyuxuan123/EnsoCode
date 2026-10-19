@@ -29,6 +29,7 @@ import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
 import {
   isCompactRow,
+  isNestedToolRow,
   isToolStepRow,
   ReplyHeader,
   RetryTurnButton,
@@ -44,7 +45,7 @@ import { WelcomeSuggestions } from './WelcomeSuggestions';
 
 /** 消息列/输入区共用的列：阶梯 max-w + 水平 padding。padding 必须在列上而不是 @container 上，否则两侧查询宽度差 2rem，会在断点附近上下错位。默认到 4xl 保持原阅读宽度，更宽再逐级加档。 */
 export const CHAT_COL =
-  'enso-chat-col mx-auto w-full max-w-2xl px-4 @min-[56rem]:max-w-3xl @min-[72rem]:max-w-4xl @min-[84rem]:max-w-5xl @min-[96rem]:max-w-6xl @min-[112rem]:max-w-7xl';
+  'enso-chat-col mx-auto w-full max-w-3xl px-4 @min-[60rem]:max-w-4xl @min-[80rem]:max-w-5xl @min-[100rem]:max-w-6xl @min-[120rem]:max-w-7xl';
 
 /** 可作为一轮回复开头、挂身份头的行 */
 const REPLY_ROW_KINDS: ReadonlySet<TimelineItem['kind']> = new Set([
@@ -526,6 +527,7 @@ export function MessageTimeline({
         data-step-prev={step && prev && isToolStepRow(prev) ? '' : undefined}
         data-step-next={step && next && isToolStepRow(next) ? '' : undefined}
         data-fold-collapse={folding ? (folding.pair ? 'pair' : 'toggle') : undefined}
+        data-step-compact={isNestedToolRow(item) ? '' : undefined}
         style={
           folding
             ? ({ '--fold-from': `${folding.height}px` } as CSSProperties)
@@ -614,11 +616,11 @@ export function MessageTimeline({
         {items.length === 0 && !busy ? (
           <EmptyReveal className="flex h-full flex-col items-center justify-center gap-2 overflow-y-auto px-4 text-center">
             <span className="t-stagger-line t-stagger-line--1 mb-3">
-              <span className="flex size-11 items-center justify-center rounded-[13px] border border-brand/20 bg-brand/8 text-brand dark:bg-brand/14">
+              <span className="flex size-12 items-center justify-center rounded-2xl border border-border bg-card text-brand shadow-xs">
                 <EnsoMark className="size-6" />
               </span>
             </span>
-            <p className="t-stagger-line t-stagger-line--1 text-[22px] font-semibold tracking-tight">
+            <p className="t-stagger-line t-stagger-line--1 text-xl font-semibold tracking-tight">
               {emptyTitle}
             </p>
             {error ? (

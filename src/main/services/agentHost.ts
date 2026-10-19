@@ -268,6 +268,23 @@ export function setPinnedSessions(source: 'viewed' | 'pair', sessionIds: readonl
   pushPinnedSessions();
 }
 
+type BrowserCancellationPhase = 'abort' | 'release' | 'resume';
+let browserCancellationListener:
+  | ((identity?: SessionIdentity, phase?: BrowserCancellationPhase) => void)
+  | null = null;
+const browserSessionTools = new Map<string, { generation: string; enabled: boolean }>();
+
+export function isBrowserSessionToolEnabled(identity: SessionIdentity): boolean {
+  const policy = browserSessionTools.get(identity.sessionId);
+  return policy?.generation === identity.generation && policy.enabled === true;
+}
+
+export function setBrowserCancellationListener(
+  listener: (identity?: SessionIdentity, phase?: BrowserCancellationPhase) => void
+): void {
+  browserCancellationListener = listener;
+}
+
 export function setAgentEventListener(
   listener: (event: AgentWorkerEvent | { type: 'worker-exited' }) => void
 ): void {
@@ -331,6 +348,7 @@ export function startAgentWorker(): void {
     pushWebSearchConfig();
   });
   child.on('message', (raw) => {
+    if (worker !== child) return;
     const event = parseAgentWorkerEvent(raw);
     if (event) {
       if (event.type === 'oauth-pool-select') {
@@ -369,11 +387,14 @@ export function startAgentWorker(): void {
     }
   });
   child.on('exit', () => {
+    if (worker && worker !== child) return;
     if (worker === child) {
       worker = null;
       workerReady = false;
       workerExited = true;
     }
+    browserCancellationListener?.();
+    browserSessionTools.clear();
     pendingReloads.failAll('agent worker exited');
     workspaceLocks.failAll('agent worker exited');
     for (const [id, p] of pendingCompletions) {
@@ -389,6 +410,8 @@ export function startAgentWorker(): void {
 }
 
 export function stopAgentWorker(): void {
+  browserCancellationListener?.();
+  browserSessionTools.clear();
   workspaceLocks.failAll('agent worker stopped');
   worker?.kill();
   worker = null;
@@ -407,6 +430,7 @@ export function agentWorkerAlive(): boolean {
  * bash 进程组、断开 MCP）跑不到，命令会成孤儿进程。退出前主动发信号并等它自行退出。
  */
 export function stopAgentWorkerForQuit(timeoutMs: number): Promise<void> {
+  browserCancellationListener?.();
   const child = worker;
   if (!child) return Promise.resolve();
   return killAndWaitExit(child, timeoutMs);
@@ -492,6 +516,25 @@ export function setWorkspaceBusyResolver(resolver: (id: string) => boolean): voi
 export function sendAgentCommand(command: AgentCommand): { ok: boolean; error?: string } {
   if (workspaceCommandBlocked(command, workspaceBusy))
     return { ok: false, error: 'Workspace operation in progress.' };
+  if (command.type === 'abort' || command.type === 'release-parent') {
+    browserCancellationListener?.(command.identity, command.type === 'abort' ? 'abort' : 'release');
+  } else if (command.type === 'dismiss-child') {
+    browserCancellationListener?.(command.child, 'release');
+  } else if (
+    command.type === 'prompt' ||
+    command.type === 'prompt-child' ||
+    command.type === 'retry' ||
+    command.type === 'spawn-parent' ||
+    command.type === 'spawn-child'
+  ) {
+    browserCancellationListener?.(command.identity, 'resume');
+  }
+  if (command.type === 'spawn-parent') {
+    browserSessionTools.set(command.identity.sessionId, {
+      generation: command.identity.generation,
+      enabled: !command.disabledTools?.includes('browser'),
+    });
+  }
   const action = agentCommandDispatch({
     hasWorker: worker !== null,
     workerReady,
@@ -689,6 +732,7 @@ export function rememberParentToolProfile(
 
 export function forgetParentToolProfile(sessionId: string): void {
   parentToolProfiles.delete(sessionId);
+  browserSessionTools.delete(sessionId);
 }
 
 export function expectedAgentTypeToolIds(

@@ -322,7 +322,7 @@ export function ChatView() {
 
   if (!chrome) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 bg-background text-center">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 bg-panel text-center">
         <p className="text-lg font-medium">EnsoCode</p>
         <p className="text-sm text-muted-foreground">
           {t('Create or select a project to start a conversation')}
@@ -340,7 +340,7 @@ export function ChatView() {
   );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
       <WorktreeMissingDialog conversationId={chrome.parentId} />
       <CoworkerTabs
         parentId={chrome.parentId}

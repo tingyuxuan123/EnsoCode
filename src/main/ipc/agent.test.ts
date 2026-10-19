@@ -35,6 +35,13 @@ const mocks = vi.hoisted(() => ({
   cleanupSessionFiles: vi.fn(),
   credentials: vi.fn(async () => new Set<string>()),
   readSettingsState: vi.fn((): Record<string, unknown> | undefined => undefined),
+  sendBrowserResult: vi.fn(),
+  browserInvoke: vi.fn(),
+  browserSessionEnabled: vi.fn(() => true),
+  browserCancellationListener: undefined as
+    | undefined
+    | ((identity?: { sessionId: string; generation: string }, phase?: string) => void),
+  isAlive: vi.fn(() => true),
   sendComputerResult: vi.fn(),
   computerInvoke: vi.fn(),
   computerCloseAll: vi.fn(),
@@ -97,6 +104,10 @@ vi.mock('../services/agentHost', () => ({
   rewindSession: vi.fn(),
   forkSession: mocks.forkSession,
   setAgentEventListener: mocks.setAgentEventListener,
+  setBrowserCancellationListener: vi.fn((listener) => {
+    mocks.browserCancellationListener = listener;
+  }),
+  isBrowserSessionToolEnabled: mocks.browserSessionEnabled,
   setSessionApprovalMode: vi.fn(),
   setSessionModel: mocks.setSessionModel,
   setSessionReasoning: vi.fn(),
@@ -108,7 +119,16 @@ vi.mock('../services/agentHost', () => ({
   backgroundForegroundTool: vi.fn(),
   summarizeConversationTitle: mocks.summarizeConversationTitle,
   readSettingsState: mocks.readSettingsState,
+  sendBrowserResultToSession: mocks.sendBrowserResult,
   sendComputerResultToSession: mocks.sendComputerResult,
+}));
+vi.mock('../services/browserHost', () => ({
+  browserHost: {
+    invoke: mocks.browserInvoke,
+    closeForSession: vi.fn(async () => {}),
+    releaseActor: vi.fn(),
+    forgetActor: vi.fn(),
+  },
 }));
 vi.mock('../services/computerHost', () => ({
   computerHost: {
@@ -147,6 +167,8 @@ vi.mock('../services/pairSessionHost', () => ({
 vi.mock('./capabilities', () => ({
   agentSessionIndex: {
     currentIdentity: mocks.currentIdentity,
+    isAlive: mocks.isAlive,
+    childProof: vi.fn(),
     prepareParent: mocks.prepareParent,
     observe: vi.fn(),
     reserveChild: vi.fn(),
@@ -846,6 +868,182 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
       error: 'title summary disabled',
     });
     expect(mocks.resolveModelSelection).not.toHaveBeenCalled();
+  });
+
+  describe('browser bridge', () => {
+    const parent = {
+      sessionId: 'browser-parent',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    const emit = (event: Record<string, unknown>) =>
+      mocks.setAgentEventListener.mock.calls.at(-1)![0]({ seq: 1, ...event });
+    const invoke = (requestId: string, overrides = {}) =>
+      emit({
+        type: 'browser-invoke',
+        identity: parent,
+        requestId,
+        op: 'wait',
+        params: { kind: 'text', text: 'ready' },
+        ...overrides,
+      });
+    beforeEach(() => {
+      mocks.currentIdentity.mockImplementation((id) =>
+        id === parent.sessionId ? parent : undefined
+      );
+      mocks.isAlive.mockReturnValue(true);
+      mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: [] });
+      mocks.browserInvoke.mockReset().mockResolvedValue({ ok: true });
+      mocks.sendBrowserResult.mockReset();
+    });
+    it('旧 generation、结束会话及禁用 browser 均不执行宿主', () => {
+      invoke('stale', {
+        identity: { ...parent, generation: '22222222-2222-4222-8222-222222222222' },
+      });
+      mocks.isAlive.mockReturnValue(false);
+      invoke('ended');
+      mocks.isAlive.mockReturnValue(true);
+      mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: ['browser'] });
+      invoke('disabled');
+      expect(mocks.browserInvoke).not.toHaveBeenCalled();
+      expect(mocks.sendBrowserResult).toHaveBeenCalledTimes(3);
+    });
+    it('取消绑定身份，重放 requestId 不再次执行，迟到结果不投递', async () => {
+      let signal: AbortSignal | undefined;
+      let finish: ((result: unknown) => void) | undefined;
+      mocks.browserInvoke.mockImplementation((_key, _op, _params, _actor, options) => {
+        signal = options?.signal;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      });
+      invoke('bound');
+      expect(signal?.aborted).toBe(false);
+      emit({
+        type: 'browser-cancel',
+        identity: { ...parent, sessionId: 'other' },
+        requestId: 'bound',
+      });
+      expect(signal?.aborted).toBe(false);
+      emit({ type: 'browser-cancel', identity: parent, requestId: 'bound' });
+      expect(signal?.aborted).toBe(true);
+      invoke('bound');
+      expect(mocks.browserInvoke).toHaveBeenCalledTimes(1);
+      mocks.sendBrowserResult.mockClear();
+      finish?.({ late: true });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mocks.sendBrowserResult).not.toHaveBeenCalled();
+    });
+    it('generation 结束和 worker 退出立即取消 Main，在途完成不能给新代回结果', async () => {
+      const signals: AbortSignal[] = [];
+      mocks.browserInvoke.mockImplementation((_key, _op, _params, _actor, options) => {
+        signals.push(options?.signal);
+        return new Promise(() => {});
+      });
+      invoke('end');
+      emit({ type: 'parent-ended', identity: parent, reason: 'released' });
+      expect(signals[0]?.aborted).toBe(true);
+      emit({
+        type: 'parent-ready',
+        identity: parent,
+        sessionFile: '/tmp/enso-browser.jsonl',
+        model: { providerId: 'p', modelId: 'm' },
+      });
+      invoke('exit');
+      expect(signals).toHaveLength(2);
+      emit({ type: 'worker-exited' });
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+    });
+    it('同 generation 的合法驱逐恢复重新开放新请求，但旧 requestId 不复用', async () => {
+      invoke('before-eviction');
+      await Promise.resolve();
+      emit({ type: 'parent-ended', identity: parent, reason: 'evicted' });
+      invoke('while-ended');
+      expect(mocks.browserInvoke).toHaveBeenCalledTimes(1);
+      emit({
+        type: 'parent-ready',
+        identity: parent,
+        sessionFile: '/tmp/enso-browser.jsonl',
+        model: { providerId: 'p', modelId: 'm' },
+      });
+      invoke('after-resume');
+      invoke('before-eviction');
+      expect(mocks.browserInvoke).toHaveBeenCalledTimes(2);
+    });
+    it('Main 超时中止宿主，generation 切换后的结果不发给新代', async () => {
+      vi.useFakeTimers();
+      try {
+        let signal: AbortSignal | undefined;
+        let finish: ((value: unknown) => void) | undefined;
+        mocks.browserInvoke.mockImplementation((_key, _op, _params, _actor, options) => {
+          signal = options.signal;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        });
+        invoke('main-timeout');
+        vi.advanceTimersByTime(65_001);
+        expect(signal?.aborted).toBe(true);
+        expect(mocks.sendBrowserResult).toHaveBeenCalledWith(
+          parent,
+          'main-timeout',
+          expect.objectContaining({ ok: false })
+        );
+        mocks.sendBrowserResult.mockClear();
+        finish?.('late');
+        await Promise.resolve();
+        expect(mocks.sendBrowserResult).not.toHaveBeenCalled();
+        invoke('old-generation');
+        mocks.currentIdentity.mockReturnValue({
+          ...parent,
+          generation: '22222222-2222-4222-8222-222222222222',
+        });
+        emit({ type: 'status', identity: parent, status: 'idle' });
+        expect(signal?.aborted).toBe(true);
+        finish?.('stale');
+        await Promise.resolve();
+        expect(mocks.sendBrowserResult).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+    it('停止/释放门拦截已排队的迟到调用，只有明确启动新轮才恢复', () => {
+      mocks.browserCancellationListener?.(parent, 'abort');
+      invoke('late-after-abort');
+      expect(mocks.browserInvoke).not.toHaveBeenCalled();
+      mocks.browserCancellationListener?.(parent, 'resume');
+      invoke('new-turn');
+      expect(mocks.browserInvoke).toHaveBeenCalledTimes(1);
+      mocks.browserSessionEnabled.mockReturnValue(false);
+      invoke('spawn-disabled');
+      expect(mocks.browserInvoke).toHaveBeenCalledTimes(1);
+      mocks.browserSessionEnabled.mockReturnValue(true);
+    });
+    it('typed child 不因拥有父身份而新增 browser 权限', () => {
+      const child = {
+        ...parent,
+        sessionId: 'child',
+        generation: '22222222-2222-4222-8222-222222222222',
+        parent,
+        instanceId: '33333333-3333-4333-8333-333333333333',
+        instanceName: 'Enso',
+        typeKey: 'agent:enso',
+        profileId: 'enso-locked-v1',
+      };
+      mocks.currentIdentity.mockImplementation((id) =>
+        id === child.sessionId ? child : id === parent.sessionId ? parent : undefined
+      );
+      invoke('child-forged', {
+        identity: child,
+        op: 'cdp',
+        params: { method: 'Runtime.evaluate', params: { expression: '1' } },
+      });
+      expect(mocks.browserInvoke).not.toHaveBeenCalled();
+    });
+    it('模型不能使用 downloads reveal，即便跳过 worker schema', () => {
+      invoke('reveal', { op: 'downloads', params: { action: 'reveal', id: 'file' } });
+      expect(mocks.browserInvoke).not.toHaveBeenCalled();
+    });
   });
 
   describe('computer bridge', () => {

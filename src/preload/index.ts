@@ -185,7 +185,14 @@ import type {
 } from '@shared/types/botIpc';
 import type {
   BrowserClearKind,
+  BrowserControl,
   BrowserDesignModeEvent,
+  BrowserDevice,
+  BrowserDownloadEntry,
+  BrowserDownloadRequest,
+  BrowserHistoryEntry,
+  BrowserHistoryRequest,
+  BrowserResult,
   BrowserTabState,
 } from '@shared/types/browser';
 import type { SessionChangeSnapshots } from '@shared/types/fileChanges';
@@ -1442,6 +1449,35 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_GO_FORWARD, tabId),
     reload: (tabId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_RELOAD, tabId),
+    stop: (tabId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_STOP, tabId),
+    setDevice: (
+      tabId: string,
+      conversationId: string,
+      device: BrowserDevice
+    ): Promise<BrowserResult<BrowserTabState>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SET_DEVICE, tabId, conversationId, device),
+    setControl: (
+      tabId: string,
+      conversationId: string,
+      control: BrowserControl
+    ): Promise<BrowserResult<BrowserTabState>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SET_CONTROL, tabId, conversationId, control),
+    history: (
+      conversationId: string,
+      request: BrowserHistoryRequest
+    ): Promise<BrowserResult<{ items: BrowserHistoryEntry[]; total: number }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_HISTORY, conversationId, request),
+    downloads: (
+      conversationId: string,
+      request: BrowserDownloadRequest
+    ): Promise<BrowserResult<{ items: BrowserDownloadEntry[]; total: number }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOADS, conversationId, request),
+    onDownloadsChanged: (callback: (event: { conversationId: string }) => void): (() => void) => {
+      const listener = (_: unknown, event: { conversationId: string }) => callback(event);
+      ipcRenderer.on(IPC_CHANNELS.BROWSER_DOWNLOADS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_DOWNLOADS_CHANGED, listener);
+    },
     closeTab: (tabId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, tabId),
     closeSession: (conversationId: string): Promise<void> =>

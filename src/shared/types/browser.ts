@@ -4,6 +4,64 @@ export interface BrowserTabHolder {
   name: string;
 }
 
+/** 仅作用单个 tab 的设备预览；enabled=false 表示恢复桌面。 */
+export interface BrowserDevice {
+  enabled: boolean;
+  profileId?: string;
+  width?: number;
+  height?: number;
+  deviceScaleFactor?: number;
+  mobile?: boolean;
+  touch?: boolean;
+  orientation?: 'portrait' | 'landscape';
+  /** 面板内预览缩放，不改变网页逻辑 viewport */
+  scale?: number;
+}
+
+/** 控制权由 Main 持有：manual 时拒绝 Agent 写操作，只有用户 UI 能恢复。 */
+export type BrowserControl = 'agent' | 'manual';
+
+export interface BrowserHistoryEntry {
+  id: string;
+  conversationId: string;
+  tabId: string;
+  url: string;
+  title: string;
+  visitedAt: number;
+}
+
+export interface BrowserDownloadEntry {
+  id: string;
+  conversationId: string;
+  tabId: string;
+  url: string;
+  filename: string;
+  receivedBytes: number;
+  totalBytes: number;
+  state: 'progressing' | 'paused' | 'completed' | 'cancelled' | 'interrupted';
+  startedAt: number;
+  updatedAt: number;
+  error?: string;
+}
+
+export interface BrowserRecordsQuery {
+  query?: string;
+  offset?: number;
+  limit?: number;
+}
+
+export type BrowserHistoryRequest = BrowserRecordsQuery & {
+  action?: 'list' | 'remove' | 'clear';
+  id?: string;
+};
+
+export type BrowserDownloadRequest = BrowserRecordsQuery & {
+  action?: 'list' | 'pause' | 'resume' | 'cancel' | 'remove' | 'reveal';
+  id?: string;
+};
+
+export type BrowserResult<T> = { ok: true; result: T } | { ok: false; error: string };
+
 export interface BrowserTabState {
   /** 无 tab 时为 null */
   tabId: string | null;
@@ -14,8 +72,10 @@ export interface BrowserTabState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
-  /** agent 正在操作(第 3 刀 lock);面板显示「接管」 */
+  /** Agent 操作时显示接管入口。 */
   locked: boolean;
+  control?: BrowserControl;
+  device?: BrowserDevice;
   /** 面板内嵌原生 Chrome DevTools */
   devtoolsOpen: boolean;
   /** 用户圈选 Design Mode */

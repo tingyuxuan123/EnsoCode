@@ -66,7 +66,7 @@ export function TitleBar({ title, className, actions, leading, centered }: Title
       style={isWindows ? { paddingRight: nativeControlsInset } : undefined}
       className={cn(
         // 固定像素高度：红绿灯位置 (y:16) 按 44px 高度对齐，不随 rem 缩放
-        'drag-region relative flex h-[44px] shrink-0 items-center border-b bg-background',
+        'drag-region relative flex h-11 shrink-0 items-center bg-transparent',
         isMac ? 'pl-[84px] pr-3' : 'pl-3',
         className
       )}
@@ -74,7 +74,10 @@ export function TitleBar({ title, className, actions, leading, centered }: Title
       {leading ? (
         <div className="no-drag flex items-center">{leading}</div>
       ) : !centered || !isMac ? (
-        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-brand" />
+          {title}
+        </span>
       ) : null}
 
       {centered && (

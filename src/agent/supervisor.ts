@@ -2507,18 +2507,33 @@ export class SessionSupervisor {
     const askManager = this.createAskManager(identity, gate.humanTimeoutMs);
     // 内嵌浏览器：页面活在 Main，worker 只发 browser-invoke 事件。每个父会话一张挂起表。
     const browser = toolEnabled('browser')
-      ? new BrowserInvoker(identity, (request) => {
-          const managed = managedRef ?? this.sessions.get(sessionId);
-          if (!managed) throw new Error('Session is not ready for browser actions.');
-          this.options.emit({
-            type: 'browser-invoke',
-            identity: managed.identity,
-            seq: ++managed.seq,
-            requestId: request.requestId,
-            op: request.op,
-            params: request.params,
-          });
-        })
+      ? new BrowserInvoker(
+          identity,
+          (request) => {
+            const managed = managedRef ?? this.sessions.get(sessionId);
+            if (!managed) throw new Error('Session is not ready for browser actions.');
+            this.options.emit({
+              type: 'browser-invoke',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              requestId: request.requestId,
+              op: request.op,
+              params: request.params,
+            });
+          },
+          {
+            emitCancel: (requestId) => {
+              const managed = managedRef ?? this.sessions.get(sessionId);
+              if (!managed) return;
+              this.options.emit({
+                type: 'browser-cancel',
+                identity: managed.identity,
+                seq: ++managed.seq,
+                requestId,
+              });
+            },
+          }
+        )
       : undefined;
     // 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件，同 browser 桥。
     const memory = toolEnabled('memory')

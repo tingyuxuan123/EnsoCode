@@ -730,7 +730,7 @@ export function SidePanel({
         className={cn(
           'flex min-h-0 flex-col overflow-hidden',
           // 平时透明让底层挖孔透出 guest；全屏盖在 ChatView 上、收起动画中必须实底
-          open && !cover ? 'bg-transparent' : 'bg-background',
+          open && !cover ? 'bg-transparent' : 'bg-panel',
           cover ? 'absolute inset-y-0 right-0' : 'relative shrink-0',
           open && 'border-l'
         )}
@@ -739,7 +739,7 @@ export function SidePanel({
           // 过冲补条：只盖 [内容右边缘, aside 右边缘]，稳态宽度为 0，不会压到 Browser 挖孔
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 bg-background"
+            className="pointer-events-none absolute inset-y-0 right-0 bg-panel"
             style={{ left: contentW }}
           />
         ) : null}

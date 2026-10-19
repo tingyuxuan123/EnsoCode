@@ -309,6 +309,12 @@ export const IPC_CHANNELS = {
   BROWSER_GO_BACK: 'browser:go-back',
   BROWSER_GO_FORWARD: 'browser:go-forward',
   BROWSER_RELOAD: 'browser:reload',
+  BROWSER_STOP: 'browser:stop',
+  BROWSER_SET_DEVICE: 'browser:set-device',
+  BROWSER_SET_CONTROL: 'browser:set-control',
+  BROWSER_HISTORY: 'browser:history',
+  BROWSER_DOWNLOADS: 'browser:downloads',
+  BROWSER_DOWNLOADS_CHANGED: 'browser:downloads-changed',
   BROWSER_CLEAR_DATA: 'browser:clear-data',
   BROWSER_SET_LOCKED: 'browser:set-locked',
   /** main → renderer:当前 tab 状态 */

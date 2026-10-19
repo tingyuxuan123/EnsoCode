@@ -27,13 +27,16 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* 两级表面：外壳（窗口底色）与面板（侧栏 / 工作区） */
+  --color-shell: var(--shell);
+  --color-panel: var(--panel);
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
 
-  --font-sans: var(--font-family-sans, "Inter", system-ui, sans-serif);
-  --font-mono: var(--font-family-mono, "JetBrains Mono", "Menlo", monospace);
+  --font-sans: var(--font-family-sans, -apple-system, system-ui, sans-serif);
+  --font-mono: var(--font-family-mono, "SF Mono", "Menlo", monospace);
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-marquee: marquee 4s linear infinite alternate;
@@ -55,65 +58,75 @@
 }
 
 @layer base {
+  /* 浅色：中性冷灰工作台，强调色只留给主操作与状态 */
   :root {
     color-scheme: light;
-    --font-family-mono: "JetBrains Mono", "Menlo", monospace;
+    --font-family-sans: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+      "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    --font-family-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
     --font-size-base: 14px;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0.014 285.82);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0.014 285.82);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0.014 285.82);
-    --primary: oklch(0.205 0.014 285.82);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.965 0.003 285.82);
-    --secondary-foreground: oklch(0.205 0.014 285.82);
-    --muted: oklch(0.965 0.003 285.82);
-    --muted-foreground: oklch(0.556 0.014 285.82);
-    --accent: oklch(0.965 0.003 285.82);
-    --accent-foreground: oklch(0.205 0.014 285.82);
-    --destructive: oklch(0.577 0.245 27.33);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0.003 285.82);
-    --input: oklch(0.922 0.003 285.82);
-    --ring: oklch(0.708 0.014 285.82);
-    --radius: 0.5rem;
+    --background: rgb(255 255 255);
+    --foreground: rgb(21 24 31);
+    --card: rgb(249 250 252);
+    --card-foreground: rgb(21 24 31);
+    --popover: rgb(255 255 255);
+    --popover-foreground: rgb(21 24 31);
+    --primary: rgb(79 70 229);
+    --primary-foreground: rgb(255 255 255);
+    --secondary: rgb(240 241 245);
+    --secondary-foreground: rgb(21 24 31);
+    --muted: rgb(245 246 249);
+    --muted-foreground: rgb(104 110 125);
+    --accent: rgb(238 240 246);
+    --accent-foreground: rgb(21 24 31);
+    --destructive: rgb(220 66 66);
+    --destructive-foreground: rgb(255 255 255);
+    --success: rgb(22 138 74);
+    --success-foreground: rgb(255 255 255);
+    --warning: rgb(176 116 12);
+    --warning-foreground: rgb(255 255 255);
+    --info: rgb(37 99 235);
+    --info-foreground: rgb(255 255 255);
+    --border: rgb(227 229 236);
+    --input: rgb(227 229 236);
+    --ring: rgb(99 102 241);
+    /* 外壳与面板两级：外壳比面板暗一档，靠明度而不靠边框分出层次 */
+    --shell: rgb(236 238 244);
+    --panel: rgb(255 255 255);
+    --radius: 0.625rem;
   }
 
+  /* 深色优先：整个设计先在这里定稿，浅色是它的降噪版本 */
   .dark {
     color-scheme: dark;
-    --background: oklch(0.145 0.014 285.82);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0.014 285.82);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0.014 285.82);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0.014 285.82);
-    --secondary: oklch(0.269 0.014 285.82);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0.014 285.82);
-    --muted-foreground: oklch(0.708 0.014 285.82);
-    --accent: oklch(0.269 0.014 285.82);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.72);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.269 0.014 285.82);
-    --input: oklch(0.269 0.014 285.82);
-    --ring: oklch(0.439 0.014 285.82);
+    --background: rgb(20 22 30);
+    --foreground: rgb(220 224 234);
+    --card: rgb(26 28 36);
+    --card-foreground: rgb(220 224 234);
+    --popover: rgb(33 36 46);
+    --popover-foreground: rgb(220 224 234);
+    --primary: rgb(99 102 241);
+    --primary-foreground: rgb(255 255 255);
+    --secondary: rgb(38 41 52);
+    --secondary-foreground: rgb(220 224 234);
+    --muted: rgb(27 30 38);
+    --muted-foreground: rgb(138 144 160);
+    --accent: rgb(40 44 56);
+    --accent-foreground: rgb(220 224 234);
+    --destructive: rgb(240 84 84);
+    --destructive-foreground: rgb(24 24 24);
+    --success: rgb(74 182 118);
+    --success-foreground: rgb(16 22 18);
+    --warning: rgb(226 174 84);
+    --warning-foreground: rgb(26 20 10);
+    --info: rgb(112 150 240);
+    --info-foreground: rgb(14 18 28);
+    --border: rgb(42 45 56);
+    --input: rgb(48 51 64);
+    --ring: rgb(129 132 248);
+    /* 外壳比面板更暗，让侧栏/工作区两块面板浮起来 */
+    --shell: rgb(15 17 23);
+    --panel: rgb(26 28 36);
   }
 }
 
@@ -947,4 +960,34 @@ html.bg-image-enabled [data-slot='bot-card-button']:not(:hover) {
   position: relative;
   inset: auto;
   grid-area: 1 / 1;
+}
+
+/* 内嵌浏览器：Agent 持有 tab 时，guest 沉到 workbench 下，这层渐变描边叠在网页上 */
+.browser-agent-glow {
+  border: 2px solid transparent;
+  border-image: linear-gradient(135deg, #a78bfa, #60a5fa 45%, #67e8f9 75%, #a78bfa) 1;
+  box-shadow:
+    inset 0 0 48px 6px color-mix(in oklch, #8b5cf6 22%, transparent),
+    inset 0 -40px 64px -16px color-mix(in oklch, #38bdf8 26%, transparent);
+  animation: browser-agent-glow 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes browser-agent-glow {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-agent-glow { animation: none; }
+}
+
+.browser-stage-checker {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+    linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }

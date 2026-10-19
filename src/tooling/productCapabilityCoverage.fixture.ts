@@ -653,6 +653,16 @@ export const IPC_PRODUCT_COVERAGE = {
   BROWSER_GO_BACK: excluded('Side panel browser history; renderer UI only.'),
   BROWSER_GO_FORWARD: excluded('Side panel browser history; renderer UI only.'),
   BROWSER_RELOAD: excluded('Side panel browser reload; renderer UI only.'),
+  BROWSER_STOP: excluded('Side panel browser stop loading; renderer UI only.'),
+  BROWSER_SET_DEVICE: excluded('Side panel device preview; not an Enso management capability.'),
+  BROWSER_SET_CONTROL: excluded('Explicit user browser takeover and resume; renderer UI only.'),
+  BROWSER_HISTORY: excluded(
+    'Conversation-owned browser history; not an Enso management capability.'
+  ),
+  BROWSER_DOWNLOADS: excluded(
+    'Conversation-owned browser downloads; not an Enso management capability.'
+  ),
+  BROWSER_DOWNLOADS_CHANGED: excluded('Browser download progress push; renderer UI only.'),
   BROWSER_CLEAR_DATA: excluded('Side panel browser data reset; renderer UI only.'),
   BROWSER_SET_LOCKED: excluded('Side panel browser take-control; renderer UI only.'),
   BROWSER_STATE: excluded('Side panel browser state push; renderer UI only.'),

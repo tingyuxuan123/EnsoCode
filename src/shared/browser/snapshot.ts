@@ -1,6 +1,6 @@
 /**
  * 页面快照：页内脚本抽出扁平条目（角色 / 名称 / 深度 / ref / kind），这里做校验与渲染。
- * 纯逻辑，不碰 Electron；ref 只认 `e<n>`，点/填只能用最近一次快照里的 ref。
+ * 纯逻辑，不碰 Electron；点/填只能用最近一次快照里的带代际 ref。
  */
 
 export interface SnapshotEntry {
@@ -24,7 +24,7 @@ export interface BrowserSnapshot {
   text: string;
 }
 
-const REF_PATTERN = /^e\d{1,5}$/;
+const REF_PATTERN = /^e(?:\d{1,5}|[a-z0-9-]{1,80}_\d{1,5})$/;
 const MAX_DEPTH = 64;
 const MAX_ENTRIES = 5000;
 const ENTRY_KEYS = new Set(['role', 'name', 'depth', 'ref', 'value', 'kind']);

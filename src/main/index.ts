@@ -160,19 +160,25 @@ if (!gotTheLock) {
     if (shouldQuitOnWindowAllClosed(process.platform)) app.quit();
   });
 
+  let browserQuitDrain: Promise<void> | undefined;
   // Electron 退出即断开中继，手机侧收到 host-offline
   app.on('before-quit', () => {
     stopTrayToggleShortcut();
     stopPairHost();
     stopPairGuest();
-    // 内嵌浏览器 Cookie / storage 落盘后再关 guest 页
-    void browserHost.dispose();
+    browserQuitDrain ??= browserHost.dispose();
     computerHost.closeAll();
     closeMemoryDb();
   });
   // node-pty TSFN / llama AsyncWorker 在 FreeEnvironment 期间回调会 SIGABRT；
   // 两步必须共用一次 preventDefault，谁先 app.quit 都会拆掉另一边的环境。
   attachAppQuitDrain(app, [
+    {
+      shouldWait: () => browserQuitDrain !== undefined,
+      wait: async () => {
+        await browserQuitDrain;
+      },
+    },
     {
       begin: disposeAllTerminals,
       shouldWait: hasPendingPtys,

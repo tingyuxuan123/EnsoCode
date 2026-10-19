@@ -709,7 +709,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
 
   return (
     <EditProvider createEditor={createEditor}>
-      <div className="flex h-full min-h-0 bg-background">
+      <div className="flex h-full min-h-0 bg-panel">
         <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r text-sm">
           <div className="flex justify-end gap-0.5 px-1 py-0.5">
             <Button

@@ -56,6 +56,8 @@ export type TimelineItem =
       durationMs: number | null;
       /** 思考起点（流式计时用）；无打点则缺省 */
       startedAt?: number;
+      /** 由展开的工具组平铺而来：渲染为组内紧凑行 */
+      nested?: boolean;
     }
   | {
       kind: 'tool';
@@ -106,6 +108,8 @@ export type TimelineItem =
       subagentOp?: SubagentOp;
       /** wait / list 行：agentId → spawn 时起的名字，展开后逐个标注；其它缺省 */
       subagentTitles?: Record<string, string>;
+      /** 由展开的工具组平铺而来：渲染为组内紧凑行 */
+      nested?: boolean;
     }
   | {
       kind: 'tool-group';
@@ -1547,6 +1551,45 @@ const READ_ONLY_TOOLS = new Set(['read', ...SEARCH_TOOLS]);
 
 const READ_FILE_PROGRAMS = new Set(['cat', 'bat', 'head', 'tail', 'less', 'more', 'nl', 'tac']);
 
+/**
+ * 核心产物行：diff / 写入内容 / 图片预览 / 清单。折叠时钉在组外，展开时也保持完整行——
+ * 组内紧凑行只渲染摘要和纯文本输出，压扁这些行等于把改动藏起来。
+ */
+export function isCoreToolRow(item: Extract<TimelineItem, { kind: 'tool' }>): boolean {
+  return Boolean(
+    item.edits ||
+      item.writeContent ||
+      item.fileChanges?.length ||
+      (item.imagePath && item.state !== 'error') ||
+      item.name === 'todo' ||
+      item.name === 'submit_plan'
+  );
+}
+
+/**
+ * 能用组内紧凑行渲染：只有摘要 + 纯文本输出，没有需要专属 UI 的结构化结果。
+ * 宁保守勿激进——漏判只会让某行保持完整样式，误判会丢内容。
+ * `rtk` 不算：它几乎挂在每条 bash 上（RTK 默认开启），排除它紧凑行就形同虚设；
+ * 统计条在展开输出时补在下方。
+ */
+export function canRenderNestedRow(item: Extract<TimelineItem, { kind: 'tool' }>): boolean {
+  return (
+    !isCoreToolRow(item) &&
+    !item.ask &&
+    !item.plan &&
+    !item.sandbox &&
+    !item.source &&
+    !item.agentMeta &&
+    !item.subagentOp &&
+    !item.sentMessage &&
+    !item.memoryContent &&
+    !item.backgroundTaskId &&
+    !item.waiting &&
+    !item.nestedPending &&
+    !item.name.startsWith('goal_')
+  );
+}
+
 /** 精简模式下按「探索」处理的工具行：只读工具，或只读的 bash 命令 */
 export function isReadOnlyTool(item: { name: string; summary: string }): boolean {
   return (
@@ -1633,9 +1676,24 @@ function pairExploreFolds(
   return result;
 }
 
+/**
+ * 展开的工具组把子行平铺到顶层：打上 nested，渲染成组内紧凑行。
+ * 带结构化结果的行（diff / 写入 / 图片 / 沙箱 / RTK / 子代理等）保持完整行，
+ * 紧凑行渲染不了它们的内容。
+ */
+function nestedChildren(items: TimelineItem[]): TimelineItem[] {
+  return items.map((item) =>
+    (item.kind === 'tool' && canRenderNestedRow(item)) || item.kind === 'thinking'
+      ? { ...item, nested: true }
+      : item
+  );
+}
+
 /** 探索组展开过程时其原始行紧随组头 */
 function withExploreChildren(item: TimelineItem): TimelineItem[] {
-  return item.kind === 'tool-group' && item.explore?.steps ? [item, ...item.children] : [item];
+  return item.kind === 'tool-group' && item.explore?.steps
+    ? [item, ...nestedChildren(item.children)]
+    : [item];
 }
 
 function activitySegment(
@@ -1657,6 +1715,9 @@ function activitySegment(
   }
   const key = `group-${segment[0].key}`;
   const expanded = expandedKeys.has(key);
+  // 组头 children 与展开后平铺的行必须同源：段里可能夹着已收好的探索组，
+  // 只有展开探索组的 steps 才会把它的原始行铺回顶层。
+  const rows = segment.flatMap(withExploreChildren);
   const group: TimelineItem = {
     kind: 'tool-group',
     key,
@@ -1665,9 +1726,9 @@ function activitySegment(
     stats,
     exploring: false,
     activity: { thinking, workedMs },
-    children: segment,
+    children: rows,
   };
-  return expanded ? [group, ...segment.flatMap(withExploreChildren)] : [group];
+  return expanded ? [group, ...nestedChildren(rows)] : [group];
 }
 
 /**
@@ -1776,15 +1837,7 @@ export function foldTimeline(
     // 非 compact 仍把 running 钉在组外，方便看此刻在跑什么。
     const pinned = (s: TimelineItem): boolean => {
       if (s.kind !== 'tool') return false;
-      if (
-        s.edits !== null ||
-        s.writeContent ||
-        s.fileChanges?.length ||
-        (s.imagePath && s.state !== 'error') ||
-        s.name === 'todo' ||
-        s.name === 'submit_plan'
-      )
-        return true;
+      if (isCoreToolRow(s)) return true;
       if (s.state !== 'running' && s.state !== 'reviewing') return false;
       return !(compact && isReadOnlyTool(s));
     };
@@ -1815,8 +1868,8 @@ export function foldTimeline(
             )),
         children: groupRows,
       });
-      // 展开：原始顺序全量平铺；收拢：仅 edit 行（diff）跟在组头后
-      if (expanded) result.push(...segment);
+      // 展开：组内行与钉住的产物行按原始顺序平铺；收拢：仅产物行（diff 等）跟在组头后
+      if (expanded) result.push(...nestedChildren(segment));
       else result.push(...editRows);
     }
     i = end;

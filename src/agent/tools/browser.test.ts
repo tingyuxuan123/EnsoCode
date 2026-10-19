@@ -1,4 +1,6 @@
+import type { JsonSchema } from '@shared/capabilities/types';
 import { describe, expect, it, vi } from 'vitest';
+import { matchesJsonSchema } from '../../tooling/productCapabilityCoverage.fixture';
 import { BrowserInvoker, createBrowserTools, withNavigateApproval } from './browser';
 
 const identity = { sessionId: 's1', generation: '11111111-1111-4111-8111-111111111111' };
@@ -22,9 +24,11 @@ describe('BrowserInvoker', () => {
     expect(invoker.resolve({ requestId: 'nope', ok: true })).toBe(false);
   });
 
-  it('abort / cancelAll / 超时 都以拒绝收尾', async () => {
+  it('abort / cancelAll / 超时 都通知 Main，迟到结果不再接受', async () => {
     vi.useFakeTimers();
-    const invoker = new BrowserInvoker(identity, () => {}, { timeoutMs: 1000 });
+    const emit = vi.fn();
+    const emitCancel = vi.fn();
+    const invoker = new BrowserInvoker(identity, emit, { timeoutMs: 1000, emitCancel });
     const controller = new AbortController();
     const aborted = invoker.invoke('snapshot', {}, controller.signal);
     controller.abort();
@@ -38,7 +42,38 @@ describe('BrowserInvoker', () => {
     invoker.cancelAll();
     await expect(cancelled).rejects.toThrow(/cancel/i);
     expect(invoker.pendingCount).toBe(0);
+    expect(emitCancel.mock.calls.map(([id]) => id)).toEqual(
+      emit.mock.calls.map(([request]) => request.requestId)
+    );
+    for (const [request] of emit.mock.calls) {
+      expect(invoker.resolve({ requestId: request.requestId, ok: true })).toBe(false);
+    }
+    invoker.cancelAll();
+    expect(emitCancel).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
+  });
+});
+
+describe('BrowserInvoker cancellation edges', () => {
+  it('预先 abort 不发送调用；成功或 Main 错误不再发取消；取消发送失败也收尾', async () => {
+    const emit = vi.fn();
+    const emitCancel = vi.fn(() => {
+      throw new Error('channel closed');
+    });
+    const invoker = new BrowserInvoker(identity, emit, { emitCancel });
+    await expect(invoker.invoke('snapshot', {}, AbortSignal.abort())).rejects.toThrow(/abort/i);
+    expect(emit).not.toHaveBeenCalled();
+    const success = invoker.invoke('snapshot', {});
+    invoker.resolve({ requestId: emit.mock.calls[0][0].requestId, ok: true, result: 'ok' });
+    await expect(success).resolves.toBe('ok');
+    const failure = invoker.invoke('snapshot', {});
+    invoker.resolve({ requestId: emit.mock.calls[1][0].requestId, ok: false, error: 'denied' });
+    await expect(failure).rejects.toThrow('denied');
+    const active = invoker.invoke('wait', {});
+    invoker.cancelAll();
+    await expect(active).rejects.toThrow(/cancel/i);
+    expect(emitCancel).toHaveBeenCalledTimes(1);
+    expect(invoker.pendingCount).toBe(0);
   });
 });
 
@@ -63,6 +98,13 @@ describe('createBrowserTools', () => {
       'browser_get_bounding_box',
       'browser_screenshot',
       'browser_cdp',
+      'browser_navigation',
+      'browser_read',
+      'browser_interact',
+      'browser_wait',
+      'browser_device',
+      'browser_history',
+      'browser_downloads',
     ]);
     const click = tools.find((tool) => tool.name === 'browser_click')!;
     await expect(click.execute('c1', {}, undefined, undefined, undefined as never)).rejects.toThrow(
@@ -129,6 +171,124 @@ describe('createBrowserTools', () => {
   });
 });
 
+describe('分组浏览器能力', () => {
+  it('所有工具在 schema 前归一，保持简单完整 schema，tabId 不丢失', () => {
+    const tools = createBrowserTools(new BrowserInvoker(identity, () => {}));
+    const cases: Record<string, unknown> = {
+      browser_navigation: { action: ' SEARCH ', query: 'test', tabId: 'tab-1' },
+      browser_read: { kind: 'ELEMENTS', scope: 'DOCUMENT', limit: '20', tabId: 'tab-1' },
+      browser_interact: { action: 'SET_CHECKED', ref: 'e1', checked: 'false', tabId: 'tab-1' },
+      browser_wait: { kind: 'TEXT', text: 'ready', timeoutMs: '500', tabId: 'tab-1' },
+      browser_device: { device: '{"enabled":"true","width":"390","height":"844","mobile":"true"}' },
+      browser_history: { action: 'LIST', offset: '2', limit: '10' },
+      browser_downloads: { action: 'PAUSE', id: 'download-1' },
+      browser_screenshot: {
+        fullPage: 'true',
+        clip: '{"x":"0","y":"0","width":"200","height":"100"}',
+        tabId: 'tab-1',
+      },
+      browser_cdp: { method: 'Runtime.evaluate', params: '{"expression":"1+1"}', tabId: 'tab-1' },
+      browser_scroll: { direction: 'LEFT', amount: '200', tabId: 'tab-1' },
+    };
+    for (const tool of tools) {
+      expect(tool.prepareArguments, tool.name).toBeTypeOf('function');
+      const serialized = JSON.stringify(tool.parameters);
+      expect(serialized).not.toMatch(/"(?:allOf|if|then|else)":/);
+      if (!cases[tool.name]) continue;
+      const prepared = tool.prepareArguments!(cases[tool.name] as never);
+      expect(
+        matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared),
+        `${tool.name}: ${JSON.stringify(prepared)}`
+      ).toBe(true);
+      if ((cases[tool.name] as { tabId?: string }).tabId)
+        expect(prepared).toMatchObject({ tabId: 'tab-1' });
+    }
+    const device = tools.find((tool) => tool.name === 'browser_device')!;
+    expect(device.prepareArguments!(cases.browser_device as never)).toEqual({
+      device: { enabled: true, width: 390, height: 844, mobile: true },
+    });
+  });
+
+  it('分组操作发正式 BrowserOp，禁止模型 reveal 下载文件', async () => {
+    const invoker = new BrowserInvoker(identity, () => {});
+    const invoke = vi.spyOn(invoker, 'invoke').mockResolvedValue({ ok: true });
+    const tools = createBrowserTools(invoker);
+    for (const [name, params, op] of [
+      ['browser_navigation', { action: 'back', tabId: 't' }, 'navigation'],
+      ['browser_read', { kind: 'text', scope: 'document', ref: 'e1' }, 'read_text'],
+      ['browser_read', { kind: 'elements', role: 'button' }, 'read_elements'],
+      ['browser_interact', { action: 'hover', ref: 'e1' }, 'hover'],
+      ['browser_interact', { action: 'set_checked', ref: 'e1', checked: false }, 'set_checked'],
+      ['browser_interact', { action: 'scroll_into_view', ref: 'e1' }, 'scroll_into_view'],
+      ['browser_wait', { kind: 'url', text: 'https://example.com' }, 'wait'],
+      ['browser_device', { device: { enabled: false } }, 'device'],
+      ['browser_history', { action: 'list' }, 'history'],
+      ['browser_downloads', { action: 'pause', id: 'd' }, 'downloads'],
+    ] as const) {
+      const tool = tools.find((item) => item.name === name)!;
+      await tool.execute('c', params as never, undefined, undefined, undefined as never);
+      const expected = Object.fromEntries(
+        Object.entries(params).filter(
+          ([key]) =>
+            !(name === 'browser_read' && key === 'kind') &&
+            !(name === 'browser_interact' && key === 'action')
+        )
+      );
+      expect(invoke).toHaveBeenLastCalledWith(op, expect.objectContaining(expected), undefined);
+    }
+    const downloads = tools.find((tool) => tool.name === 'browser_downloads')!;
+    await expect(
+      downloads.execute(
+        'c',
+        { action: 'reveal', id: 'd' } as never,
+        undefined,
+        undefined,
+        undefined as never
+      )
+    ).rejects.toThrow(/user|allowed/i);
+  });
+
+  it('兼容 CDP 截图也回图片而不是 base64 JSON', async () => {
+    const invoker = new BrowserInvoker(identity, () => {});
+    vi.spyOn(invoker, 'invoke').mockResolvedValue({ data: 'CDP_IMAGE' });
+    const cdp = createBrowserTools(invoker).find((tool) => tool.name === 'browser_cdp')!;
+    const out = await cdp.execute(
+      'c',
+      { method: 'Page.captureScreenshot', params: { format: 'jpeg' } },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    expect(out.content).toEqual([{ type: 'image', data: 'CDP_IMAGE', mimeType: 'image/jpeg' }]);
+  });
+
+  it('截图元数据作为文本但 base64 只放图片块', async () => {
+    const invoker = new BrowserInvoker(identity, () => {});
+    vi.spyOn(invoker, 'invoke').mockResolvedValue({
+      data: 'AAAA',
+      mimeType: 'image/png',
+      width: 300,
+      height: 200,
+      viewport: { width: 390, height: 844 },
+    });
+    const shot = createBrowserTools(invoker).find((tool) => tool.name === 'browser_screenshot')!;
+    const out = await shot.execute(
+      'c',
+      { fullPage: true },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    expect(out.content).toContainEqual({ type: 'image', data: 'AAAA', mimeType: 'image/png' });
+    const text = out.content
+      .filter((item) => item.type === 'text')
+      .map((item) => item.text)
+      .join('');
+    expect(text).toContain('300');
+    expect(text).not.toContain('AAAA');
+  });
+});
+
 describe('withNavigateApproval', () => {
   const fakeGate = (allow: 'allow' | 'deny') => {
     const ask = vi.fn(async () => allow);
@@ -160,6 +320,32 @@ describe('withNavigateApproval', () => {
       'Open example.com in the built-in browser',
       undefined
     );
+  });
+
+  it('搜索与历史删除走审批，查询历史不审批，拒绝不调用宿主', async () => {
+    const { gate, ask } = fakeGate('deny');
+    const invoker = new BrowserInvoker(identity, () => {});
+    const invoke = vi.spyOn(invoker, 'invoke').mockResolvedValue({ entries: [] });
+    const tools = createBrowserTools(invoker).map((tool) => withNavigateApproval(gate, tool));
+    const history = tools.find((tool) => tool.name === 'browser_history')!;
+    await history.execute('c', { action: 'list' }, undefined, undefined, undefined as never);
+    expect(ask).not.toHaveBeenCalled();
+    invoke.mockClear();
+    await expect(
+      history.execute('c', { action: ' CLEAR ' }, undefined, undefined, undefined as never)
+    ).rejects.toThrow(/denied/);
+    const navigation = tools.find((tool) => tool.name === 'browser_navigation')!;
+    await expect(
+      navigation.execute(
+        'c',
+        { action: 'search', query: 'private query' },
+        undefined,
+        undefined,
+        undefined as never
+      )
+    ).rejects.toThrow(/denied/);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('拒绝时抛错且不执行', async () => {

@@ -67,12 +67,12 @@ export function CoworkerTabs({
 
   const tabClass = (active: boolean) =>
     cn(
-      'flex min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-      active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50'
+      'flex min-w-0 shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs transition-colors',
+      active ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/70'
     );
 
   return (
-    <div className="flex items-center gap-1 border-b px-2 py-1">
+    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border/70 px-2">
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         <RenameableTab
           id={parentId}
@@ -103,7 +103,7 @@ export function CoworkerTabs({
                 }
                 className={cn(
                   tabClass(displayedId === coworker.id),
-                  displayedId !== coworker.id && 'group-hover/tab:bg-muted/50'
+                  displayedId !== coworker.id && 'group-hover/tab:bg-accent/70'
                 )}
                 leading={
                   coworker.mode === 'task' ? (
@@ -142,7 +142,7 @@ export function CoworkerTabs({
           title={t('Hire coworker')}
           disabled={!parentStarted}
           onClick={() => setHiring(true)}
-          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>

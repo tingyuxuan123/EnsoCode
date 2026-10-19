@@ -11,41 +11,50 @@
 
 @layer base {
   :root {
-    --brand: oklch(0.54 0.2 280);
-    --brand-foreground: oklch(0.985 0 0);
-    --elevation-float: 0 1px 2px oklch(0.2 0.01 285 / 0.05), 0 12px 32px -12px oklch(0.2 0.02 285 / 0.18);
+    --brand: rgb(79 70 229);
+    --brand-foreground: rgb(255 255 255);
+    /* 浮层阴影：深色下用纯黑叠两层，浅色用低饱和冷灰 */
+    --elevation-float:
+      0 1px 2px rgb(16 18 26 / 0.06), 0 12px 32px -12px rgb(16 18 26 / 0.16);
   }
 
   .dark {
-    --brand: oklch(0.72 0.14 280);
-    --brand-foreground: oklch(0.205 0.014 285.82);
-    --elevation-float: 0 1px 2px oklch(0 0 0 / 0.3), 0 16px 40px -12px oklch(0 0 0 / 0.55);
+    --brand: rgb(129 132 248);
+    --brand-foreground: rgb(14 16 24);
+    --elevation-float:
+      0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.6);
   }
 
-  /* 强调色预设：默认紫罗兰写在 :root/.dark，其余由设置写入 html[data-accent] */
+  /* 强调色预设：默认靛蓝写在 :root/.dark，其余由设置写入 html[data-accent] */
+  html[data-accent='violet'] {
+    --brand: rgb(124 78 214);
+  }
+  html.dark[data-accent='violet'] {
+    --brand: rgb(167 139 250);
+  }
   html[data-accent='indigo'] {
-    --brand: oklch(0.53 0.19 265);
+    --brand: rgb(79 70 229);
   }
   html.dark[data-accent='indigo'] {
-    --brand: oklch(0.7 0.14 265);
+    --brand: rgb(129 132 248);
   }
   html[data-accent='teal'] {
-    --brand: oklch(0.56 0.1 185);
+    --brand: rgb(13 138 136);
   }
   html.dark[data-accent='teal'] {
-    --brand: oklch(0.76 0.12 185);
+    --brand: rgb(69 190 186);
   }
   html[data-accent='amber'] {
-    --brand: oklch(0.64 0.16 55);
+    --brand: rgb(180 116 12);
   }
   html.dark[data-accent='amber'] {
-    --brand: oklch(0.78 0.14 70);
+    --brand: rgb(230 178 84);
   }
   html[data-accent='graphite'] {
-    --brand: oklch(0.27 0.01 285);
+    --brand: rgb(60 66 80);
   }
   html.dark[data-accent='graphite'] {
-    --brand: oklch(0.9 0.005 285);
+    --brand: rgb(190 196 210);
   }
 }
 
@@ -76,6 +85,17 @@
 .enso-step-row[data-step-next]::after {
   top: calc(var(--enso-step-top) + 26px);
   bottom: 0;
+}
+/* 组内紧凑行：节点 16px、行高 26px、左侧 px-1.5，竖线随之收窄并重新居中 */
+.enso-step-row[data-step-compact]::before,
+.enso-step-row[data-step-compact]::after {
+  left: calc(1rem + 13px);
+}
+.enso-step-row[data-step-compact][data-step-prev]::before {
+  height: calc(var(--enso-step-top) + 5px);
+}
+.enso-step-row[data-step-compact][data-step-next]::after {
+  top: calc(var(--enso-step-top) + 21px);
 }
 
 /* ── Shimmer text (15) — Thinking… 流光 ──────────────────────── */

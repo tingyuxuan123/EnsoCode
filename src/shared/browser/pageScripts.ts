@@ -5,6 +5,7 @@
  */
 
 import { DESIGN_SCRIBBLE_HOLD_MS, DESIGN_SCRIBBLE_MOVE_PX } from './designMode';
+import { FIND_PAGE_REF_SOURCE } from './readingScripts';
 
 const REF_ATTR = 'data-enso-ref';
 const LOCK_OVERLAY_ID = 'enso-browser-lock-overlay';
@@ -143,7 +144,7 @@ export const PAGE_SNAPSHOT_SCRIPT = `(() => {
 })()`;
 
 const findByRef = (ref: string) =>
-  `document.querySelector('[${REF_ATTR}=' + ${JSON.stringify(JSON.stringify(ref))} + ']')`;
+  `(() => { ${FIND_PAGE_REF_SOURCE} return findRef(${JSON.stringify(ref)}); })()`;
 
 const withLockHiddenSrc = `const withLockHidden = (fn) => {
   const overlay = document.getElementById(${JSON.stringify(LOCK_OVERLAY_ID)});
@@ -314,8 +315,9 @@ export const pageScrollScript = (opts: {
   direction?: string;
   amount?: number;
 }): string => {
-  const amount = typeof opts.amount === 'number' ? opts.amount : 400;
-  const dir = opts.direction === 'up' ? -1 : 1;
+  const amount = typeof opts.amount === 'number' && Number.isFinite(opts.amount) ? Math.min(Math.abs(opts.amount), 10000) : 400;
+  const dir = opts.direction === 'up' || opts.direction === 'left' ? -1 : 1;
+  const axis = opts.direction === 'left' || opts.direction === 'right' ? 'left' : 'top';
   if (opts.ref) {
     return `(async () => {
       ${settleFramesSrc}

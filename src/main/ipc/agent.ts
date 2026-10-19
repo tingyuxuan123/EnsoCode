@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { browserSessionKey } from '@shared/bots/browser';
-import type { ChildSessionIdentity, SessionIdentity } from '@shared/builtinAgents';
+import {
+  type ChildSessionIdentity,
+  isSameChildSessionIdentity,
+  type SessionIdentity,
+} from '@shared/builtinAgents';
 import { resolveSshTarget } from '@shared/ssh';
 import {
   IPC_CHANNELS,
@@ -61,6 +65,7 @@ import {
   forgetParentToolProfile,
   forkSession,
   isAgentWorkerReady,
+  isBrowserSessionToolEnabled,
   promptChildSession,
   promptSession,
   readSettingsState,
@@ -81,6 +86,7 @@ import {
   sendDelegationResultToSession,
   sendMemoryResultToSession,
   setAgentEventListener,
+  setBrowserCancellationListener,
   setPinnedSessions,
   setSessionApprovalMode,
   setSessionModel,
@@ -203,6 +209,94 @@ let dispatchService: AgentDispatchService | null = null;
 let agentService: AgentService | null = null;
 const pendingAgentControl = new Map<string, AbortController>();
 const pendingComputer = new Map<string, AbortController>();
+interface PendingBrowser {
+  identity: SessionIdentity | ChildSessionIdentity;
+  controller: AbortController;
+  timer: ReturnType<typeof setTimeout>;
+}
+const pendingBrowser = new Map<string, PendingBrowser>();
+const seenBrowserRequests = new Map<string, string>();
+const endedBrowserGenerations = new Set<string>();
+const pausedBrowserGenerations = new Set<string>();
+const browserGenerationKey = (identity: SessionIdentity) =>
+  JSON.stringify([identity.sessionId, identity.generation]);
+
+function sameBrowserIdentity(
+  left: SessionIdentity | ChildSessionIdentity,
+  right: SessionIdentity | ChildSessionIdentity
+): boolean {
+  if (left.sessionId !== right.sessionId || left.generation !== right.generation) return false;
+  if ('parent' in left) return 'parent' in right && isSameChildSessionIdentity(left, right);
+  return !('parent' in right);
+}
+
+function currentBrowserIdentity(identity: SessionIdentity | ChildSessionIdentity): boolean {
+  const current = agentSessionIndex.currentIdentity(identity.sessionId);
+  if (
+    !current ||
+    !sameBrowserIdentity(current, identity) ||
+    !agentSessionIndex.isAlive(identity.sessionId) ||
+    endedBrowserGenerations.has(browserGenerationKey(identity)) ||
+    pausedBrowserGenerations.has(browserGenerationKey(identity))
+  )
+    return false;
+  if ('parent' in identity) {
+    const parent = agentSessionIndex.currentIdentity(identity.parent.sessionId);
+    return (
+      !!parent &&
+      sameBrowserIdentity(parent, identity.parent) &&
+      agentSessionIndex.isAlive(parent.sessionId) &&
+      !endedBrowserGenerations.has(browserGenerationKey(parent)) &&
+      !pausedBrowserGenerations.has(browserGenerationKey(parent))
+    );
+  }
+  return true;
+}
+
+function cancelBrowserRequests(
+  identity?: SessionIdentity,
+  phase?: 'abort' | 'release' | 'resume'
+): void {
+  if (identity && phase === 'resume') {
+    pausedBrowserGenerations.delete(browserGenerationKey(identity));
+    return;
+  }
+  if (identity && phase) pausedBrowserGenerations.add(browserGenerationKey(identity));
+  for (const [requestId, entry] of pendingBrowser) {
+    if (
+      identity &&
+      !(
+        entry.identity.sessionId === identity.sessionId &&
+        entry.identity.generation === identity.generation
+      ) &&
+      !(
+        'parent' in entry.identity &&
+        entry.identity.parent.sessionId === identity.sessionId &&
+        entry.identity.parent.generation === identity.generation
+      )
+    )
+      continue;
+    pendingBrowser.delete(requestId);
+    clearTimeout(entry.timer);
+    entry.controller.abort();
+  }
+}
+
+function browserToolAllowed(identity: SessionIdentity | ChildSessionIdentity): boolean {
+  if ('parent' in identity) {
+    if (
+      !agentSessionIndex.childProof(identity)?.toolIds.some((tool) => tool.startsWith('browser_'))
+    )
+      return false;
+  } else if (!isBrowserSessionToolEnabled(identity)) return false;
+  const conversation = sourceAuthority?.conversation(rootSessionId(identity));
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  const projectId = project?.state === 'active' ? project.projectId : undefined;
+  const state = readSettingsState() ?? {};
+  return !resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
+    disabledBuiltinTools: projectDisabledBuiltinTools(state.projects, projectId),
+  }).includes('browser');
+}
 let sourceBindings: ActiveConversationRegistry | null = null;
 let sourceAuthority: SourceAuthorityRegistry | null = null;
 let botWorkerObserver: ((event: AgentWorkerEvent | { type: 'worker-exited' }) => void) | null =
@@ -869,6 +963,11 @@ async function runAgentControl(
 }
 
 export function registerAgentHandlers(): void {
+  cancelBrowserRequests();
+  seenBrowserRequests.clear();
+  endedBrowserGenerations.clear();
+  pausedBrowserGenerations.clear();
+  setBrowserCancellationListener(cancelBrowserRequests);
   wirePairAgentBridge();
   wirePairSessionHost();
   configureMemoryDistill({ complete: distillCompletion });
@@ -1039,6 +1138,10 @@ export function registerAgentHandlers(): void {
       return;
     }
     if (workerEvent.type === 'worker-exited') {
+      cancelBrowserRequests();
+      seenBrowserRequests.clear();
+      endedBrowserGenerations.clear();
+      pausedBrowserGenerations.clear();
       for (const controller of pendingAgentControl.values()) controller.abort();
       pendingAgentControl.clear();
       for (const controller of pendingComputer.values()) controller.abort();
@@ -1063,7 +1166,29 @@ export function registerAgentHandlers(): void {
     agentService?.observe(workerEvent);
     botWorkerObserver?.(workerEvent);
     humanTimeouts.observe(workerEvent);
+    if (
+      workerEvent.type === 'parent-ended' ||
+      workerEvent.type === 'parent-rejected' ||
+      workerEvent.type === 'child-ended' ||
+      workerEvent.type === 'child-rejected'
+    ) {
+      endedBrowserGenerations.add(browserGenerationKey(workerEvent.identity));
+      cancelBrowserRequests(workerEvent.identity);
+    }
+    if (
+      (workerEvent.type === 'parent-ready' || workerEvent.type === 'child-ready') &&
+      agentSessionIndex.isAlive(workerEvent.identity.sessionId)
+    ) {
+      const current = agentSessionIndex.currentIdentity(workerEvent.identity.sessionId);
+      if (current && sameBrowserIdentity(current, workerEvent.identity))
+        endedBrowserGenerations.delete(browserGenerationKey(workerEvent.identity));
+    }
+    for (const entry of pendingBrowser.values()) {
+      if (!currentBrowserIdentity(entry.identity) || !browserToolAllowed(entry.identity))
+        cancelBrowserRequests(entry.identity);
+    }
     if (workerEvent.type === 'turn-completed' || workerEvent.type === 'turn-failed') {
+      cancelBrowserRequests(workerEvent.identity);
       const file = agentSessionIndex.sessionFile(workerEvent.identity);
       if (file) {
         void ingestSessionJsonl(
@@ -1166,21 +1291,89 @@ export function registerAgentHandlers(): void {
           workerEvent.identity.sessionId
         );
     }
+    if (workerEvent.type === 'browser-cancel') {
+      const pending = pendingBrowser.get(workerEvent.requestId);
+      if (pending && sameBrowserIdentity(pending.identity, workerEvent.identity)) {
+        pendingBrowser.delete(workerEvent.requestId);
+        clearTimeout(pending.timer);
+        pending.controller.abort();
+      }
+      return;
+    }
     if (workerEvent.type === 'browser-invoke') {
       const { identity, requestId, op, params } = workerEvent;
-      void browserHost
-        .invoke(browserKeyFor(identity.sessionId), op, params, browserActorFor(identity.sessionId))
-        .then(
-          (result) => {
-            if (op === 'screenshot') cacheBotScreenshots(identity, [result], 'web');
-            sendBrowserResultToSession(identity, requestId, { ok: true, result });
-          },
-          (error: unknown) =>
-            sendBrowserResultToSession(identity, requestId, {
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-            })
-        );
+      const reject = (error: string) =>
+        sendBrowserResultToSession(identity, requestId, { ok: false, error });
+      if (!currentBrowserIdentity(identity)) {
+        reject('Browser session generation is stale or ended');
+        return;
+      }
+      if (!browserToolAllowed(identity)) {
+        reject('Browser tool is disabled or unavailable to this agent profile');
+        return;
+      }
+      if (seenBrowserRequests.has(requestId)) {
+        reject('Browser requestId has already been used');
+        return;
+      }
+      if (seenBrowserRequests.size >= 100_000) {
+        reject('Browser request budget exhausted; restart the worker');
+        return;
+      }
+      seenBrowserRequests.set(requestId, browserGenerationKey(identity));
+      if (
+        op === 'downloads' &&
+        params &&
+        typeof params === 'object' &&
+        'action' in params &&
+        params.action === 'reveal'
+      ) {
+        reject('Only the user can reveal downloaded files');
+        return;
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        const pending = pendingBrowser.get(requestId);
+        if (pending?.controller !== controller) return;
+        pendingBrowser.delete(requestId);
+        controller.abort();
+        if (currentBrowserIdentity(identity)) reject('Browser action timed out');
+      }, 65_000);
+      timer.unref();
+      const entry: PendingBrowser = { identity, controller, timer };
+      pendingBrowser.set(requestId, entry);
+      const current = () =>
+        pendingBrowser.get(requestId) === entry &&
+        !controller.signal.aborted &&
+        currentBrowserIdentity(identity) &&
+        browserToolAllowed(identity);
+      void (async () => {
+        try {
+          const result = await browserHost.invoke(
+            browserKeyFor(identity.sessionId),
+            op,
+            params,
+            browserActorFor(identity.sessionId),
+            { signal: controller.signal }
+          );
+          if (!current()) return;
+          if (
+            op === 'screenshot' ||
+            (op === 'cdp' &&
+              params &&
+              typeof params === 'object' &&
+              'method' in params &&
+              params.method === 'Page.captureScreenshot')
+          )
+            cacheBotScreenshots(identity, [result], 'web');
+          sendBrowserResultToSession(identity, requestId, { ok: true, result });
+        } catch (error) {
+          if (current()) reject(error instanceof Error ? error.message : String(error));
+        } finally {
+          if (pendingBrowser.get(requestId) === entry) pendingBrowser.delete(requestId);
+          clearTimeout(timer);
+        }
+      })();
       return;
     }
     if (workerEvent.type === 'memory-invoke') {

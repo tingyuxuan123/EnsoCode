@@ -25,6 +25,16 @@ describe('parsePersistedBrowserTabs', () => {
     });
   });
 
+  it('设备配置随标签恢复，损坏设备配置不丢掉有效 URL', () => {
+    const parsed = parsePersistedBrowserTabs({
+      a: { url: 'https://a.test/', device: { enabled: true, profileId: 'iphone-14-pro' } },
+      b: { url: 'https://b.test/', device: { enabled: true, width: -1 } },
+    });
+    expect(parsed.a.device).toMatchObject({ enabled: true, width: 393, height: 852 });
+    expect(parsed.b).toMatchObject({ url: 'https://b.test/' });
+    expect(parsed.b.device).toBeUndefined();
+  });
+
   it('roundtrips', () => {
     const data = { a: { url: 'https://a.test/', title: 'A', conversationId: 'conv-a' } };
     expect(parsePersistedBrowserTabs(JSON.parse(serializePersistedBrowserTabs(data)))).toEqual(

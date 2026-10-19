@@ -35,7 +35,7 @@ export function ResizeHandle({ onResize, onResizingChange }: ResizeHandleProps) 
   );
 
   return (
-    <div className="relative w-px shrink-0 bg-border">
+    <div className="relative w-px shrink-0 bg-transparent">
       <div
         onMouseDown={handleMouseDown}
         className={cn(

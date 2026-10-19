@@ -4,9 +4,9 @@ import { ipcMain, type WebContents } from 'electron';
 import { browserHost } from '../services/browserHost';
 import { sendToAllWindows } from '../windows/createAppWindow';
 import { isMainWebContents } from '../windows/MainWindow';
+import { isSettingsWebContents } from '../windows/SettingsWindow';
 
 const isId = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
-const CLEAR_KINDS = new Set(['cookies', 'cache', 'all']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object';
@@ -55,8 +55,13 @@ export function registerBrowserHandlers(): void {
   });
   ipcMain.handle(
     IPC_CHANNELS.BROWSER_NAVIGATE,
-    async (_event, tabId: unknown, conversationId: unknown, url: unknown) => {
-      if (!isId(tabId) || !isId(conversationId) || typeof url !== 'string') {
+    async (event, tabId: unknown, conversationId: unknown, url: unknown) => {
+      if (
+        !fromMainRenderer(event) ||
+        !isId(tabId) ||
+        !isId(conversationId) ||
+        typeof url !== 'string'
+      ) {
         return { ok: false, error: 'Invalid request' };
       }
       try {
@@ -67,36 +72,124 @@ export function registerBrowserHandlers(): void {
       }
     }
   );
-  ipcMain.handle(IPC_CHANNELS.BROWSER_GO_BACK, (_event, tabId: unknown) => {
-    if (isId(tabId)) browserHost.goBack(tabId);
+  ipcMain.handle(IPC_CHANNELS.BROWSER_GO_BACK, (event, tabId: unknown) => {
+    if (fromMainRenderer(event) && isId(tabId)) browserHost.goBack(tabId);
   });
-  ipcMain.handle(IPC_CHANNELS.BROWSER_GO_FORWARD, (_event, tabId: unknown) => {
-    if (isId(tabId)) browserHost.goForward(tabId);
+  ipcMain.handle(IPC_CHANNELS.BROWSER_GO_FORWARD, (event, tabId: unknown) => {
+    if (fromMainRenderer(event) && isId(tabId)) browserHost.goForward(tabId);
   });
-  ipcMain.handle(IPC_CHANNELS.BROWSER_RELOAD, (_event, tabId: unknown) => {
-    if (isId(tabId)) browserHost.reload(tabId);
+  ipcMain.handle(IPC_CHANNELS.BROWSER_RELOAD, (event, tabId: unknown) => {
+    if (fromMainRenderer(event) && isId(tabId)) browserHost.reload(tabId);
   });
-  ipcMain.handle(IPC_CHANNELS.BROWSER_CLOSE_TAB, async (_event, tabId: unknown) => {
-    if (isId(tabId)) await browserHost.closeTab(tabId);
+  ipcMain.handle(IPC_CHANNELS.BROWSER_STOP, async (event, tabId: unknown) => {
+    if (!fromMainRenderer(event) || !isId(tabId)) return { ok: false, error: 'Invalid request' };
+    try {
+      browserHost.stop(tabId);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
-  ipcMain.handle(IPC_CHANNELS.BROWSER_CLOSE_SESSION, async (_event, conversationId: unknown) => {
-    if (isId(conversationId)) await browserHost.closeSession(conversationId);
+  ipcMain.handle(
+    IPC_CHANNELS.BROWSER_SET_DEVICE,
+    async (event, tabId: unknown, conversationId: unknown, device: unknown) => {
+      if (!fromMainRenderer(event) || !isId(tabId) || !isId(conversationId)) {
+        return { ok: false, error: 'Invalid request' };
+      }
+      try {
+        return { ok: true, result: await browserHost.setDevice(tabId, conversationId, device) };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.BROWSER_SET_CONTROL,
+    async (event, tabId: unknown, conversationId: unknown, control: unknown) => {
+      if (
+        !fromMainRenderer(event) ||
+        !isId(tabId) ||
+        !isId(conversationId) ||
+        (control !== 'manual' && control !== 'agent')
+      ) {
+        return { ok: false, error: 'Invalid request' };
+      }
+      try {
+        return { ok: true, result: await browserHost.setControl(tabId, conversationId, control) };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.BROWSER_HISTORY,
+    async (event, conversationId: unknown, request: unknown) => {
+      if (
+        !fromMainRenderer(event) ||
+        !isId(conversationId) ||
+        !isRecord(request) ||
+        Array.isArray(request)
+      ) {
+        return { ok: false, error: 'Invalid request' };
+      }
+      try {
+        return { ok: true, result: await browserHost.history(conversationId, request) };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.BROWSER_DOWNLOADS,
+    async (event, conversationId: unknown, request: unknown) => {
+      if (
+        !fromMainRenderer(event) ||
+        !isId(conversationId) ||
+        !isRecord(request) ||
+        Array.isArray(request)
+      ) {
+        return { ok: false, error: 'Invalid request' };
+      }
+      try {
+        return { ok: true, result: await browserHost.downloads(conversationId, request) };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+  );
+  browserHost.onDownloadsChanged((conversationId) => {
+    sendToAllWindows(IPC_CHANNELS.BROWSER_DOWNLOADS_CHANGED, { conversationId });
   });
-  ipcMain.handle(IPC_CHANNELS.BROWSER_CLEAR_DATA, async (_event, kind: unknown) => {
-    if (typeof kind !== 'string' || !CLEAR_KINDS.has(kind)) throw new Error('Invalid clear kind');
-    await browserHost.clearData(kind as 'cookies' | 'cache' | 'all');
+  ipcMain.handle(IPC_CHANNELS.BROWSER_CLOSE_TAB, async (event, tabId: unknown) => {
+    if (fromMainRenderer(event) && isId(tabId)) await browserHost.closeTab(tabId);
   });
-  ipcMain.handle(IPC_CHANNELS.BROWSER_RESTORE_TABS, () => browserHost.restorePersistedTabs());
-  ipcMain.handle(IPC_CHANNELS.BROWSER_LIST_SEARCHABLE_TABS, () => browserHost.listSearchableTabs());
+  ipcMain.handle(IPC_CHANNELS.BROWSER_CLOSE_SESSION, async (event, conversationId: unknown) => {
+    if (fromMainRenderer(event) && isId(conversationId)) {
+      await browserHost.closeSession(conversationId);
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.BROWSER_CLEAR_DATA, async (event, kind: unknown) => {
+    if (!isMainWebContents(event.sender.id) && !isSettingsWebContents(event.sender.id)) return;
+    if (kind !== 'cookies' && kind !== 'cache' && kind !== 'all') return;
+    await browserHost.clearData(kind);
+  });
+  ipcMain.handle(IPC_CHANNELS.BROWSER_RESTORE_TABS, (event) => {
+    if (fromMainRenderer(event)) return browserHost.restorePersistedTabs();
+  });
+  ipcMain.handle(IPC_CHANNELS.BROWSER_LIST_SEARCHABLE_TABS, (event) =>
+    fromMainRenderer(event) ? browserHost.listSearchableTabs() : []
+  );
   ipcMain.handle(
     IPC_CHANNELS.BROWSER_SET_LOCKED,
-    async (_event, conversationId: unknown, locked: unknown) => {
-      if (!isId(conversationId) || typeof locked !== 'boolean') return;
+    async (event, conversationId: unknown, locked: unknown) => {
+      if (!fromMainRenderer(event) || !isId(conversationId) || typeof locked !== 'boolean') return;
       await browserHost.setLocked(conversationId, locked);
     }
   );
-  ipcMain.handle(IPC_CHANNELS.BROWSER_SET_DEVTOOLS, (_event, tabId: unknown, open: unknown) => {
-    if (!isId(tabId) || typeof open !== 'boolean') return browserHost.state('');
+  ipcMain.handle(IPC_CHANNELS.BROWSER_SET_DEVTOOLS, (event, tabId: unknown, open: unknown) => {
+    if (!fromMainRenderer(event) || !isId(tabId) || typeof open !== 'boolean') {
+      return browserHost.state('');
+    }
     return browserHost.setDevTools(tabId, open);
   });
   ipcMain.handle(
@@ -124,8 +217,10 @@ export function registerBrowserHandlers(): void {
   });
   ipcMain.handle(
     IPC_CHANNELS.BROWSER_SET_DESIGN_MODE,
-    async (_event, tabId: unknown, enabled: unknown) => {
-      if (!isId(tabId) || typeof enabled !== 'boolean') return browserHost.state('');
+    async (event, tabId: unknown, enabled: unknown) => {
+      if (!fromMainRenderer(event) || !isId(tabId) || typeof enabled !== 'boolean') {
+        return browserHost.state('');
+      }
       return browserHost.setDesignMode(tabId, enabled);
     }
   );

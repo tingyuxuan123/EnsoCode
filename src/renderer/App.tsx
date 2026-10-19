@@ -332,7 +332,7 @@ export default function App() {
   );
 
   return (
-    <div className="relative isolate flex h-screen flex-col">
+    <div className="relative isolate flex h-screen flex-col bg-shell text-foreground">
       {/* 全局 toast 出口（addToast 依赖；不挂则静默失效） */}
       <ToastProvider />
       <BackgroundLayer />
@@ -378,7 +378,7 @@ export default function App() {
         }
       />
       <UpdateBanner />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 gap-1 px-2 pb-2">
         {remoteNodeActive ? (
           // 远程节点态：整块换成对方的目录与会话；本机 Sidebar/ChatView/SidePanel 卸载
           <RemoteNodeView nodeId={activeNodeId} sidebarWidth={width} />
@@ -401,7 +401,7 @@ export default function App() {
             {!collapsed && <ResizeHandle onResize={handleResize} />}
             <div
               ref={workspaceRef}
-              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-panel"
             >
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <ChatView />

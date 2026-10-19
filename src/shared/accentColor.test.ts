@@ -7,8 +7,8 @@ import {
 } from './accentColor';
 
 describe('accentColor', () => {
-  it('默认值是紫罗兰，且在合法取值里', () => {
-    expect(DEFAULT_ACCENT_COLOR).toBe('violet');
+  it('默认值是靛蓝，且在合法取值里', () => {
+    expect(DEFAULT_ACCENT_COLOR).toBe('indigo');
     expect(ACCENT_COLORS).toContain(DEFAULT_ACCENT_COLOR);
   });
 

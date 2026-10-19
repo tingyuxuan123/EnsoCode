@@ -156,7 +156,7 @@ import { WorktreeRenameDialog } from './WorktreeRenameDialog';
 const ARCHIVE_PURGE_DAYS = [7, 15, 30] as const;
 
 const ICON_BUTTON_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
+  'flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 
 interface SidebarProps {
   width?: number;
@@ -718,7 +718,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
       initial={false}
       animate={{ width: collapsed ? 48 : width }}
       transition={springStandard}
-      className="flex shrink-0 flex-col overflow-hidden border-r bg-background"
+      className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-panel"
     >
       {collapsed && (
         <div className="flex w-12 flex-1 flex-col items-center gap-1 py-2">
@@ -780,7 +780,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
         </div>
       )}
       <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
-        <div className="flex h-12 shrink-0 items-center justify-between pr-3 pl-1.5">
+        <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-2.5">
           {/* 节点切换器：本机 / 已连的远程 EnsoCode 桌面 */}
           <div className="flex min-w-0 items-center gap-1">
             <NodeSwitcher />
@@ -802,7 +802,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
               <PopoverTrigger
                 className={cn(
                   ICON_BUTTON_CLASS,
-                  'data-popup-open:bg-muted data-popup-open:text-foreground'
+                  'data-popup-open:bg-accent data-popup-open:text-foreground'
                 )}
                 title={t('Add project or group')}
                 aria-label={t('Add project or group')}
@@ -831,7 +831,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                     }}
                     className={cn(
                       POPOVER_ROW_CLASS,
-                      'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      'text-muted-foreground hover:bg-accent hover:text-foreground'
                     )}
                   >
                     <Icon className="size-3.5 shrink-0" />
@@ -1122,7 +1122,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                               <div ref={drag.setNodeRef} style={drag.style}>
                                 {/* 项目行：图标列（折叠态文件夹/hover 折叠箭头）+ 名称 + 悬停操作；整行可拖拽排序 */}
                                 <div
-                                  className="group flex w-full items-center gap-1 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60"
+                                  className="group flex w-full items-center gap-1 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                                   {...drag.handleProps}
                                 >
                                   <button
@@ -1158,7 +1158,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                                   <button
                                     type="button"
                                     onClick={() => togglePinProject(project.id)}
-                                    className="hidden shrink-0 rounded-md p-1 text-muted-foreground group-hover:block hover:bg-muted hover:text-foreground"
+                                    className="hidden shrink-0 rounded-md p-1 text-muted-foreground group-hover:block hover:bg-accent hover:text-foreground"
                                     title={projectPinned ? t('Unpin project') : t('Pin project')}
                                   >
                                     {projectPinned ? (
@@ -1171,7 +1171,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                                   <button
                                     type="button"
                                     onClick={() => void newConversation(project.id)}
-                                    className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+                                    className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100"
                                     title={t('New conversation')}
                                   >
                                     <MessageSquarePlus className="h-3.5 w-3.5" />
@@ -1256,7 +1256,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                                                               ),
                                                             }))
                                                           }
-                                                          className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                                                          className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                                         >
                                                           {t('Show {{n}} more', {
                                                             n: hiddenIds.length,
@@ -1292,7 +1292,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                                                       ),
                                                     }))
                                                   }
-                                                  className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                                                  className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                                 >
                                                   {t('Collapse')}
                                                 </button>
@@ -1469,7 +1469,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                 onPick={(days, ids) =>
                   setPendingRemove({ kind: 'archived', days, conversationIds: ids })
                 }
-                className="h-8 w-8 rounded-md opacity-100 hover:bg-muted"
+                className="h-8 w-8 rounded-lg opacity-100 hover:bg-accent"
               />
             </div>
           </DialogHeader>
@@ -1500,7 +1500,7 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                       <button
                         type="button"
                         onClick={() => toggleArchiveProject(group.projectId)}
-                        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         title={t('Unarchive project')}
                       >
                         <ArchiveRestore className="h-3.5 w-3.5" />
@@ -1798,7 +1798,7 @@ function ProjectGroupHeader({
         opacity: sortableDrag.isDragging ? 0.4 : undefined,
       }}
       className={cn(
-        'group relative flex h-7 w-full select-none items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+        'group relative flex h-7 w-full select-none items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
         droppable.isOver && 'bg-brand/10 text-foreground',
         sortable && 'cursor-grab'
       )}
@@ -1841,7 +1841,7 @@ function ProjectGroupHeader({
             onEdit();
           }}
           onPointerDown={(event) => event.stopPropagation()}
-          className="absolute inset-y-0 right-1 my-auto flex size-5 items-center justify-center rounded-md opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+          className="absolute inset-y-0 right-1 my-auto flex size-5 items-center justify-center rounded-md opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -2227,7 +2227,7 @@ function ConversationRow({
         'group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-lg py-1.5 pr-2 pl-2 text-sm transition-colors',
         active
           ? 'bg-brand/10 text-foreground dark:bg-brand/15'
-          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
       )}
       onClick={() => {
         if (!renaming) onSelect(id);
@@ -2613,7 +2613,7 @@ function ProjectOverflowMenu({ actions }: { actions: ProjectAction[] }) {
     <Menu>
       <MenuTrigger
         aria-label={t('More actions')}
-        className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 data-popup-open:bg-muted data-popup-open:text-foreground data-popup-open:opacity-100"
+        className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 data-popup-open:bg-accent data-popup-open:text-foreground data-popup-open:opacity-100"
         title={t('More actions')}
         onPointerDown={(event) => event.stopPropagation()}
       >
