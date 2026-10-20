@@ -755,6 +755,7 @@ export const TimelineRow = memo(function TimelineRow({
             <UserMeta
               turnKey={item.key}
               messageIndex={Number(item.key)}
+              text={item.text}
               timestamp={item.timestamp}
               deliveryState={item.deliveryState}
               canCollapse={item.canCollapse}
@@ -1233,6 +1234,7 @@ function CollapsedTurnBar({
 function UserMeta({
   turnKey,
   messageIndex,
+  text,
   timestamp,
   canCollapse,
   deliveryState,
@@ -1240,6 +1242,7 @@ function UserMeta({
 }: {
   turnKey: string;
   messageIndex: number;
+  text: string;
   timestamp?: number;
   canCollapse?: boolean;
   deliveryState?: 'pending' | 'rejected';
@@ -1264,6 +1267,11 @@ function UserMeta({
           <ChevronDown className="h-3 w-3 shrink-0" />
           <span>{t('Collapse')}</span>
         </button>
+      )}
+      {text && (
+        <span className="flex opacity-0 transition-opacity group-hover/user:opacity-100 focus-within:opacity-100">
+          <CopyButton text={text} />
+        </span>
       )}
       {typeof timestamp === 'number' && <span>{formatClock(timestamp)}</span>}
     </div>
