@@ -22,6 +22,7 @@ import {
 import { addToast } from '@/components/ui/toast';
 import { useCodeHighlightOptions } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
+import { fileLanguage } from '@/lib/fileLanguage';
 import {
   addSidePanelBrowser,
   registerFilesOpener,
@@ -749,6 +750,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
                     conversationId={conversationId}
                     projectId={projectId}
                     treeEpoch={treeGen}
+                    activeRel={activeRel}
                     draft={draft}
                     renaming={renaming}
                     local={local}
@@ -1015,7 +1017,11 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
               <Virtualizer style={{ height: '100%', overflow: 'auto' }}>
                 <File
                   key={`${active.rel}:${active.version}`}
-                  file={{ name: fileName(active.rel), contents: active.draft }}
+                  file={{
+                    name: fileName(active.rel),
+                    contents: active.draft,
+                    lang: fileLanguage(active.rel),
+                  }}
                   disableWorkerPool
                   edit
                   editorOptions={editOptions}
@@ -1098,6 +1104,8 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
 }
 
 type TreeHandlers = {
+  /** 当前激活 tab 的 rel（可能是预览 key），用于树行的选中态 */
+  activeRel: string | null;
   draft: { parent: string; kind: 'file' | 'dir' } | null;
   renaming: { rel: string; name: string; at: 'tree' | 'tab' } | null;
   local: boolean;
@@ -1333,6 +1341,7 @@ function FileRow({
   renaming: boolean;
   handlers: TreeHandlers;
 }) {
+  const active = handlers.activeRel != null && fromPreviewKey(handlers.activeRel) === rel;
   const { setNodeRef, listeners, isDragging } = useDraggable({
     id: `workspace-file:${rel}`,
     data: { type: 'workspace-file', relativePath: rel, name } satisfies DragPayload,
@@ -1350,8 +1359,12 @@ function FileRow({
       type="button"
       ref={setNodeRef}
       {...listeners}
+      aria-current={active ? 'true' : undefined}
       style={{ paddingLeft: 20 + depth * 12, opacity: isDragging ? 0.4 : undefined }}
-      className="flex w-full cursor-default items-center gap-1.5 px-2 py-1 text-left hover:bg-muted/60"
+      className={cn(
+        'flex w-full cursor-default items-center gap-1.5 px-2 py-1 text-left hover:bg-muted/60',
+        active && 'bg-muted font-medium text-foreground'
+      )}
       onClick={() => handlers.onOpen(rel)}
     >
       {(() => {

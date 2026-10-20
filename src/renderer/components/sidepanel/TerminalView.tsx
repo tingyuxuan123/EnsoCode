@@ -1,4 +1,4 @@
-import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { insertComposerText, requestFocusComposer } from '@/components/chat/composerMentionBridge';
 import {
   ContextMenu,
@@ -15,6 +15,7 @@ import {
   findInTerminal,
   updateTerminalAppearance,
 } from '@/lib/terminalRegistry';
+import { matchTerminalBackground, readAppPanelColor } from '@/lib/terminalSurface';
 import { useSettingsStore } from '@/stores/settings';
 import { TerminalSearchBar } from './TerminalSearchBar';
 
@@ -25,10 +26,16 @@ interface TerminalViewProps {
   onTitle?: (title: string) => void;
 }
 
-/** 背景图模式下 xterm 自身不刷底色，由 wrapper 用应用底色 + 通用面板 alpha 刷一层 */
-function resolveTerminalTheme(name: string, backgroundImageEnabled: boolean) {
+/**
+ * 终端底色跟应用面板对齐（见 matchTerminalBackground），16 色与前景仍取终端配色。
+ * 背景图模式下 xterm 自身不刷底色，由 wrapper 用同一底色 + 通用面板 alpha 刷一层。
+ */
+function resolveTerminalTheme(name: string, backgroundImageEnabled: boolean, panelColor?: string) {
   const theme = getXtermTheme(name);
-  return backgroundImageEnabled ? withTransparentBackground(theme) : theme;
+  if (!theme) return theme;
+  const background = matchTerminalBackground(theme.background, panelColor);
+  const next = { ...theme, background };
+  return backgroundImageEnabled ? withTransparentBackground(next) : next;
 }
 
 /** 把 registry 里的 xterm host 挂进视图;切走只 detach,实例与 pty 都保留 */
@@ -45,9 +52,14 @@ export function TerminalView({ termId, conversationId, projectId, onTitle }: Ter
   const onTitleRef = useRef(onTitle);
   onTitleRef.current = onTitle;
   const terminalTheme = useSettingsStore((s) => s.terminalTheme);
+  /** 应用主题模式：dark/light/system 切换后 --panel 会变，需要重算终端底色 */
+  const appTheme = useSettingsStore((s) => s.theme);
   const fontFamily = useSettingsStore((s) => s.terminalFontFamily);
   const fontSize = useSettingsStore((s) => s.terminalFontSize);
   const bgImageEnabled = useSettingsStore((s) => s.backgroundImageEnabled);
+  /** 应用面板底色：终端铺底时用它，16 色仍取终端配色 */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 应用主题/终端配色变化后 --panel 才会变，必须借此重读
+  const panelColor = useMemo(() => readAppPanelColor(), [appTheme, terminalTheme]);
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -65,7 +77,11 @@ export function TerminalView({ termId, conversationId, projectId, onTitle }: Ter
       }
       const settings = useSettingsStore.getState();
       const instance = attachTerminal(termId, wrapper, {
-        theme: resolveTerminalTheme(settings.terminalTheme, settings.backgroundImageEnabled),
+        theme: resolveTerminalTheme(
+          settings.terminalTheme,
+          settings.backgroundImageEnabled,
+          readAppPanelColor()
+        ),
         fontFamily: settings.terminalFontFamily,
         fontSize: settings.terminalFontSize,
       });
@@ -115,11 +131,11 @@ export function TerminalView({ termId, conversationId, projectId, onTitle }: Ter
 
   useEffect(() => {
     updateTerminalAppearance(
-      resolveTerminalTheme(terminalTheme, bgImageEnabled),
+      resolveTerminalTheme(terminalTheme, bgImageEnabled, panelColor),
       fontFamily,
       fontSize
     );
-  }, [terminalTheme, fontFamily, fontSize, bgImageEnabled]);
+  }, [terminalTheme, fontFamily, fontSize, bgImageEnabled, panelColor]);
 
   const findNext = useCallback(
     (query: string, options?: Parameters<typeof findInTerminal>[3]) =>
@@ -154,14 +170,15 @@ export function TerminalView({ termId, conversationId, projectId, onTitle }: Ter
   };
 
   const theme = getXtermTheme(terminalTheme);
+  const surfaceBg = theme ? matchTerminalBackground(theme.background, panelColor) : undefined;
   const pane = (
     <div
       ref={wrapperRef}
       data-slot="terminal-pane"
       className="relative h-full w-full overflow-hidden p-2"
       style={{
-        backgroundColor: theme?.background,
-        ['--terminal-bg' as string]: theme?.background,
+        backgroundColor: surfaceBg,
+        ['--terminal-bg' as string]: surfaceBg,
       }}
       onContextMenu={snapshotSelection}
     >

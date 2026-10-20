@@ -1,5 +1,6 @@
 import { type CodeViewDiffItem, type FileDiffMetadata, parseDiffFromFile } from '@pierre/diffs';
 import { diffCacheKey } from './diffCacheKey';
+import { fileLanguage } from './fileLanguage';
 import type { SessionChangeFile } from './sessionChanges';
 
 interface MemoEntry {
@@ -28,8 +29,8 @@ export function buildChangeItems(
     const fileDiff =
       contentChanged || !prev
         ? parseDiffFromFile(
-            { name: file.path, contents: file.oldText },
-            { name: file.path, contents: file.newText }
+            { name: file.path, contents: file.oldText, lang: fileLanguage(file.path) },
+            { name: file.path, contents: file.newText, lang: fileLanguage(file.path) }
           )
         : prev.fileDiff;
     if (contentChanged || !prev)

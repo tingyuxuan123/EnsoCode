@@ -190,7 +190,9 @@ function parseColorWithAlpha(color: string): RGBA | null {
     };
   }
 
-  const rgbaMatch = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/.exec(c);
+  // 同时接受旧式 rgb(a, b, c) 与现代 rgb(a b c) / rgb(a b c / alpha)
+  const rgbaMatch =
+    /^rgba?\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)(?:\s*[,/]\s*([\d.]+))?\s*\)/.exec(c);
   if (rgbaMatch) {
     return {
       r: Number.parseInt(rgbaMatch[1], 10),
@@ -238,10 +240,21 @@ function getLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** 颜色是否落在深色一侧;无法解析时按深色处理(终端默认深底) */
+export function isDarkColor(color: string): boolean {
+  if (!parseColorWithAlpha(color)) return true;
+  return getLuminance(color) < 0.5;
+}
+
+/** 颜色字符串能否被 #rgb / #rrggbb(aa) / rgb() / rgba() 解析 */
+export function isColorParsable(color: string): boolean {
+  return parseColorWithAlpha(color) !== null;
+}
+
 export function isTerminalThemeDark(themeName: string): boolean {
   const theme = getXtermTheme(themeName);
   if (!theme) return true;
-  return getLuminance(theme.background) < 0.5;
+  return isDarkColor(theme.background);
 }
 
 // Apply terminal theme colors to app CSS variables
@@ -269,6 +282,15 @@ export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true):
   // Popover
   root.style.setProperty('--popover', theme.background);
   root.style.setProperty('--popover-foreground', theme.foreground);
+
+  // Shell / Panel - 与终端底色同源，否则终端嵌进面板时会露出一块色差矩形
+  root.style.setProperty('--panel', theme.background);
+  root.style.setProperty(
+    '--shell',
+    isDark
+      ? mixColors(theme.background, '#000000', 0.25)
+      : mixColors(theme.background, '#000000', 0.07)
+  );
 
   // Primary - use foreground as primary
   root.style.setProperty('--primary', theme.foreground);
@@ -332,6 +354,8 @@ export function clearTerminalThemeFromApp(): void {
     '--card-foreground',
     '--popover',
     '--popover-foreground',
+    '--shell',
+    '--panel',
     '--primary',
     '--primary-foreground',
     '--secondary',

@@ -3,6 +3,7 @@ import { stripHashlineRead } from '@shared/hashlineRead';
 import { useEffect, useMemo, useState } from 'react';
 import { useCodeHighlightOptions } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
+import { fileLanguage } from '@/lib/fileLanguage';
 import { CODE_THEME, ensureHighlighter } from './codeHighlighter';
 
 const FILE_OPTIONS = {
@@ -28,7 +29,11 @@ export function ReadFileView({ path, contents }: { path: string; contents: strin
   }, []);
 
   const file = useMemo(
-    () => ({ name: path.split('/').pop() || 'file', contents: stripHashlineRead(contents) }),
+    () => ({
+      name: path.split('/').pop() || 'file',
+      contents: stripHashlineRead(contents),
+      lang: fileLanguage(path),
+    }),
     [path, contents]
   );
 

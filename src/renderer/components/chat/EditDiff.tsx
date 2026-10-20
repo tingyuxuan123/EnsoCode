@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useCodeHighlightOptions } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
 import { diffCacheKey } from '@/lib/diffCacheKey';
+import { fileLanguage } from '@/lib/fileLanguage';
 import { reconstructOld } from '@/lib/sessionChanges';
 import type { EditBlock } from '@/stores/sessions/timeline';
 import { CODE_THEME, ensureHighlighter } from './codeHighlighter';
@@ -102,7 +103,11 @@ export function EditDiff({
 function DiffView({ name, oldText, newText }: { name: string; oldText: string; newText: string }) {
   const options = useCodeHighlightOptions(DIFF_OPTIONS);
   const fileDiff = useMemo(() => {
-    const diff = parseDiffFromFile({ name, contents: oldText }, { name, contents: newText });
+    const lang = fileLanguage(name);
+    const diff = parseDiffFromFile(
+      { name, contents: oldText, lang },
+      { name, contents: newText, lang }
+    );
     // 同一文件多条 edit 同名不同内容，默认按名缓存会串高亮
     diff.cacheKey = diffCacheKey(name, oldText, newText);
     return diff;

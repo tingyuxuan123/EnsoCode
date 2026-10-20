@@ -370,9 +370,10 @@ html.bg-image-enabled diffs-container {
 }
 
 /**
- * 右侧面板的终端：xterm 容器与 wrapper 都内联刷终端主题底色。
- * 底色（--terminal-bg）必须跟终端主题走，不能换成 --background：xterm 的文字与 16 色
- * 都来自终端主题，浅色界面配深色终端主题时只有底色也取自主题才保证对比度。
+ * 右侧面板的终端：xterm 容器与 wrapper 都内联刷同一底色（--terminal-bg）。
+ * 底色由 matchTerminalBackground 决定：界面与终端配色同属深/浅一侧时取应用面板色，
+ * 否则终端嵌进面板会露出一块色差矩形；明暗相反时保留终端配色底色，保证 xterm 的
+ * 文字与 16 色始终有对比度。
  * 半透明只在真的铺了壁纸时加（BackgroundLayer 的 bg-image-media），否则实心渲染，
  * 免得终端主题色被壁纸底下的纯色冲淡成灰。聊天流 bash 输出（terminal-output）同理。
  */

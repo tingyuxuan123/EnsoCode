@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   pending: null as [string, undefined, 'markdown'] | null,
   editors: [] as { focus: ReturnType<typeof vi.fn> }[],
   read: vi.fn(),
+  listDir: vi.fn(),
   t: (key: string) => key,
   state: {
     workspaceRevisionByConversation: {},
@@ -134,7 +135,7 @@ beforeEach(() => {
     electronAPI: {
       workspaceFiles: {
         read: harness.read,
-        listDir: vi.fn(async () => ({ ok: true, entries: [] })),
+        listDir: harness.listDir,
         watchStart: vi.fn(async () => ({ ok: true })),
         watchStop: vi.fn(async () => ({ ok: true })),
         onChange: () => vi.fn(),
@@ -145,6 +146,7 @@ beforeEach(() => {
   harness.pending = null;
   harness.editors = [];
   harness.read.mockReset().mockResolvedValue({ ok: true, content: '# README\ncontent' });
+  harness.listDir.mockReset().mockResolvedValue({ ok: true, entries: [] });
   container = dom.document.getElementById('root') as unknown as HTMLElement;
   root = createRoot(container);
 });
@@ -154,6 +156,25 @@ afterEach(async () => {
 });
 
 describe('FilesView 文件链接预览', () => {
+  it('选中树中的文件后该行进入激活态，且预览 tab 也回指同一行', async () => {
+    harness.listDir.mockResolvedValue({
+      ok: true,
+      entries: [
+        { name: 'README.md', kind: 'file' },
+        { name: 'notes.md', kind: 'file' },
+      ],
+    });
+    await mount();
+    const row = () => container.querySelector('button[aria-current="true"]');
+    expect(row()).toBeNull();
+    const readme = [...container.querySelectorAll('button')].find((el) =>
+      el.textContent?.includes('README.md')
+    );
+    await act(async () => readme?.click());
+    expect(row()?.textContent).toContain('README.md');
+    expect(container.querySelectorAll('button[aria-current="true"]')).toHaveLength(1);
+  });
+
   it('冷挂载 pending Markdown 默认预览并保留 View Source 切换', async () => {
     harness.pending = ['README.md', undefined, 'markdown'];
     await mount();
