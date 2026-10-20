@@ -35,4 +35,22 @@ describe('decorateSessionTools', () => {
     expect(JSON.stringify(direct.content)).toContain('remember this');
     pending = [];
   });
+
+  it('codemode 禁用的工具标为 model-only：模型可直接调用，但不进脚本可调用集', () => {
+    const make = (name: string) =>
+      ({
+        name,
+        label: name,
+        description: name,
+        parameters: { type: 'object', properties: {} },
+        execute: async () => ({ content: [], details: undefined }),
+      }) as unknown as ToolDefinition;
+    const [todo, read] = decorateSessionTools([make('todo'), make('read_file')], {
+      reminders: new SystemReminderRegistry(),
+      runaway: new RunawayGuard(),
+      budget: new ToolOutputBudget({ rootDir: mkdtempSync(path.join(tmpdir(), 'enso-deco-')) }),
+    });
+    expect(todo.exposure).toBe('model-only');
+    expect(read.exposure).toBeUndefined();
+  });
 });

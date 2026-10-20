@@ -9,7 +9,12 @@ import { VIRTUAL_PROVIDER_ID, type VirtualModelEntry } from '@shared/virtualMode
 import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ModelPicker, persistClampedThinkingLevel, resolvePickerCapabilities } from './ModelPicker';
+import {
+  duplicateModelLabels,
+  ModelPicker,
+  persistClampedThinkingLevel,
+  resolvePickerCapabilities,
+} from './ModelPicker';
 
 interface WrapperProps {
   children?: ReactNode;
@@ -767,5 +772,40 @@ describe('ModelPicker reasoning controls mode', () => {
     expect(switchProps?.checked).toBe(false);
     expect(html).not.toContain('data-slider="true"');
     expect(html).not.toContain('>Med<');
+  });
+});
+
+describe('duplicateModelLabels', () => {
+  it('同一条目内重名的已启用模型需要附 id 消歧', () => {
+    const models: ModelEntry[] = [
+      { id: 'cursor-grok-4.6', label: 'Grok 4.6 Medium' },
+      { id: 'grok-4.6', label: 'Grok 4.6 Medium' },
+      { id: 'grok-4.6-max', label: 'Grok 4.6 Max Medium' },
+      { id: 'x', label: 'Grok 4.6 Max Medium', enabled: false },
+      { id: 'no-label' },
+      { id: 'other', label: 'no-label' },
+    ];
+    expect([...duplicateModelLabels(models)]).toEqual(['Grok 4.6 Medium', 'no-label']);
+  });
+
+  it('重名模型的 id 单独成行，不重名的不附 id', () => {
+    const html = renderToStaticMarkup(
+      createElement(ModelPicker, {
+        ...commonProps,
+        providers: [
+          {
+            ...providers[0],
+            models: [
+              { id: 'cursor-grok-4.6', label: 'Grok 4.6 Medium' },
+              { id: 'grok-4.6', label: 'Grok 4.6 Medium' },
+              { id: 'gpt-5', label: 'GPT-5' },
+            ],
+          },
+        ],
+      })
+    );
+    expect(html).toContain('data-model-row-id="cursor-grok-4.6"');
+    expect(html).toContain('data-model-row-id="grok-4.6"');
+    expect(html).not.toContain('data-model-row-id="gpt-5"');
   });
 });

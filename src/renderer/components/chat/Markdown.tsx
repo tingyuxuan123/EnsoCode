@@ -142,12 +142,30 @@ function classifyFileReference(href: string) {
   return { classification, line: undefined };
 }
 
-function MarkdownAnchor({ children, href }: { children?: ReactNode; href?: string }) {
+/** `[`path`](path)` 形式：链接只含一段 inline code 时取其文本，用于把定位按钮并入代码框 */
+function soleInlineCodeText(node: unknown): string | null {
+  const kids = (node as { children?: unknown[] } | undefined)?.children;
+  if (kids?.length !== 1) return null;
+  const code = kids[0] as { tagName?: string; children?: { type?: string; value?: unknown }[] };
+  const text = code.tagName === 'code' && code.children?.length === 1 ? code.children[0] : null;
+  return text?.type === 'text' && typeof text.value === 'string' ? text.value : null;
+}
+
+function MarkdownAnchor({
+  children,
+  href,
+  node,
+}: {
+  children?: ReactNode;
+  href?: string;
+  node?: unknown;
+}) {
   const { t } = useI18n();
   const linkContext = useContext(MarkdownLinkContext);
   const [imagePreview, setImagePreview] = useState<{ rel: string; dataUrl: string } | null>(null);
   const { classification, line } = classifyFileReference(href ?? '');
   const local = classification.kind === 'local' && linkContext !== null;
+  const codeText = local ? soleInlineCodeText(node) : null;
 
   const fail = (error: string) => {
     addToast({
@@ -242,10 +260,28 @@ function MarkdownAnchor({ children, href }: { children?: ReactNode; href?: strin
         }
       }}
     >
-      {children}
+      {codeText ?? children}
     </a>
   );
   if (!local) return anchor;
+
+  if (codeText !== null) {
+    return (
+      <span className="inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/70 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-xs">
+        {anchor}
+        <button
+          type="button"
+          className="inline-flex shrink-0 rounded-[3px] p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          aria-label={t(revealLabel())}
+          title={t(revealLabel())}
+          onClick={() => void openLocal(true)}
+        >
+          <FolderOpen className="h-3 w-3" />
+        </button>
+        <WorkspaceImagePreview image={imagePreview} onClose={() => setImagePreview(null)} />
+      </span>
+    );
+  }
 
   return (
     <span className="inline">

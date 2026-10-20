@@ -117,6 +117,11 @@ export function eventToBinding(
   return parts.join('+');
 }
 
+/** 是否命中「发送消息」绑定；空绑定表示禁用按键发送 */
+export function isSendMessageKey(e: KeyboardEvent | React.KeyboardEvent, binding: string): boolean {
+  return !!binding && eventToBinding(e, { allowBare: true }) === binding;
+}
+
 /** 空格记作 space：否则绑定串里是看不见的空格，mac 的 ⌥Space 还会给出不换行空格 */
 function bindingKey(e: KeyboardEvent | React.KeyboardEvent): string {
   return e.key === ' ' || e.key === '\u00a0' ? 'space' : e.key.toLowerCase();

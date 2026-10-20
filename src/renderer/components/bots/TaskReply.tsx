@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { addToast } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
+import { effectiveKeybindings, formatBinding, isSendMessageKey } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
 import { useBotsStore } from '@/stores/bots';
+import { useSettingsStore } from '@/stores/settings';
 
 export function taskErrorText(error: string, t: TFunction): string {
   switch (error) {
@@ -40,7 +42,7 @@ export async function replyToTask(
   return result.ok;
 }
 
-/** 任务卡回复框：Enter 发送、Shift+Enter 换行，随内容长高；发送成功才清空 */
+/** 任务卡回复框：按「发送消息」快捷键发送，随内容长高；发送成功才清空 */
 export function TaskReply({
   placeholder,
   onSend,
@@ -53,6 +55,7 @@ export function TaskReply({
   const { t } = useI18n();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const sendBinding = effectiveKeybindings(useSettingsStore((s) => s.keybindings))['send-message'];
   const send = async () => {
     const value = text.trim();
     if (!value || sending) return;
@@ -72,12 +75,12 @@ export function TaskReply({
         maxLength={GROUP_TASK_TEXT_MAX}
         placeholder={placeholder}
         aria-label={placeholder}
-        title={t('Enter to send, Shift+Enter for a new line')}
+        title={sendBinding ? `${t('Send')} ${formatBinding(sendBinding)}` : undefined}
         disabled={sending}
         className="text-xs [&_textarea]:max-h-32 [&_textarea]:min-h-0 [&_textarea]:resize-none"
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+          if (!event.nativeEvent.isComposing && isSendMessageKey(event, sendBinding)) {
             event.preventDefault();
             void send();
           }

@@ -131,6 +131,19 @@ function sanitizeAccountText(value: string, maxLength: number): string {
  */
 const SUBMENU_FILTER_THRESHOLD = 20;
 
+/** 同一条目内展示名（label ?? id）重复的已启用模型；这些行需附 id 才能区分（如 Cursor 上游重名）。 */
+export function duplicateModelLabels(models: readonly ModelEntry[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicated = new Set<string>();
+  for (const model of models) {
+    if (model.enabled === false) continue;
+    const name = model.label ?? model.id;
+    if (seen.has(name)) duplicated.add(name);
+    else seen.add(name);
+  }
+  return duplicated;
+}
+
 /**
  * base-ui Menu 在弹层打开时会把方向键/回车/Esc 当菜单导航、把可打印字符当 typeahead 处理——
  * 后者会在 keydown 阶段抢先 `preventDefault()`，导致弹层内任何 `<input>`（顶部全局搜索框、
@@ -253,7 +266,9 @@ function ModelMetaBridge({
 }
 
 /**
- * 一行模型的内容：名称 + （可选）所属条目标签 + 上下文窗口 + 选中标记。窗口缺失时整段不渲染
+ * 一行模型的内容：名称 + （可选）所属条目标签 + 上下文窗口 + 选中标记。
+ * 同一条目里显示名重复时，id 单独放在名称下一行（小字），避免和名称挤在同一行被截断。
+ * 窗口缺失时整段不渲染
  * （不留占位符，有值才显示；`catalog-fallback` 来源仍标「估算」——那是有值，只是不够权威，
  * ⛔ 不编造数字）。
  *
@@ -268,11 +283,13 @@ function ModelRowContent({
   meta,
   entryTag,
   selected,
+  showId,
 }: {
   model: ModelEntry;
   meta: ModelMeta | undefined;
   entryTag?: string;
   selected: boolean;
+  showId?: boolean;
 }) {
   const { t } = useI18n();
   // 行覆盖（ModelEntry.contextWindow，含 Fetch Models 落地的元数据）优先于 catalog；
@@ -285,7 +302,19 @@ function ModelRowContent({
     meta?.source === 'catalog-fallback';
   return (
     <>
-      <span className="min-w-0 flex-1 truncate">{model.label ?? model.id}</span>
+      {showId ? (
+        <span className="flex min-w-0 flex-1 flex-col items-start">
+          <span className="max-w-full truncate">{model.label ?? model.id}</span>
+          <span
+            data-model-row-id={model.id}
+            className="max-w-full truncate font-mono text-[10px] leading-3 text-muted-foreground"
+          >
+            {model.id}
+          </span>
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{model.label ?? model.id}</span>
+      )}
       {entryTag && (
         <span className="shrink-0 truncate text-[10px] text-muted-foreground/60">{entryTag}</span>
       )}
@@ -367,6 +396,7 @@ function ProviderSubmenuList({
     () => provider.models.filter((m) => m.enabled !== false),
     [provider.models]
   );
+  const duplicatedLabels = useMemo(() => duplicateModelLabels(enabledModels), [enabledModels]);
   const showFilter = enabledModels.length > SUBMENU_FILTER_THRESHOLD;
   const visibleModels = useMemo(() => {
     if (!showFilter || !filter.trim()) return enabledModels;
@@ -403,6 +433,7 @@ function ProviderSubmenuList({
             <ModelRowContent
               model={model}
               meta={meta?.[model.id]}
+              showId={duplicatedLabels.has(model.label ?? model.id)}
               selected={provider.id === selectedProviderId && model.id === selectedModelId}
             />
           </MenuItem>
@@ -468,6 +499,7 @@ interface SearchHit {
   provider: ModelProvider;
   model: ModelEntry;
   entryTag: string;
+  showId: boolean;
   score: number;
 }
 
@@ -672,6 +704,7 @@ export function ModelPicker({
     for (const provider of providers) {
       const info = entryInfoByProviderId[provider.id];
       const entryTag = info ? `${info.vendorLabel} · ${info.primary}` : provider.name;
+      const duplicatedLabels = duplicateModelLabels(provider.models);
       for (const model of provider.models) {
         if (model.enabled === false) continue;
         const score = bestFieldScore(q, [
@@ -681,7 +714,13 @@ export function ModelPicker({
           [info?.vendorLabel ?? '', 0.4],
         ]);
         if (score === null) continue;
-        hits.push({ provider, model, entryTag, score });
+        hits.push({
+          provider,
+          model,
+          entryTag,
+          score,
+          showId: duplicatedLabels.has(model.label ?? model.id),
+        });
       }
     }
     return hits.sort((a, b) => b.score - a.score);
@@ -893,7 +932,7 @@ export function ModelPicker({
             {searching ? (
               <>
                 {virtualItems}
-                {searchHits.map(({ provider, model, entryTag }) => (
+                {searchHits.map(({ provider, model, entryTag, showId }) => (
                   <MenuItem
                     key={`${provider.id}/${model.id}`}
                     onClick={() => handleSelectModel(provider.id, model.id)}
@@ -902,6 +941,7 @@ export function ModelPicker({
                       model={model}
                       meta={metaByProvider[provider.id]?.[model.id]}
                       entryTag={entryTag}
+                      showId={showId}
                       selected={provider.id === providerId && model.id === modelId}
                     />
                   </MenuItem>

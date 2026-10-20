@@ -2813,7 +2813,6 @@ export const zhTranslations: Record<string, string> = {
   'Answered; the work continues': '已回复，接着做',
   'Open task card': '打开任务卡',
   Reassign: '改派',
-  'Enter to send, Shift+Enter for a new line': 'Enter 发送，Shift+Enter 换行',
   'Add to the current run…': '补充给当前执行…',
   'Comment…': '评论…',
   'Send reply': '发送回复',

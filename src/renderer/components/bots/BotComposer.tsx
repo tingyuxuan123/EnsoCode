@@ -10,7 +10,7 @@ import { extractSkillQuery } from '@/components/chat/skillCompletion';
 import { VoiceInputButton } from '@/components/chat/VoiceInputButton';
 import { useMentionSearch } from '@/hooks/useMentionSearch';
 import { useI18n } from '@/i18n';
-import { effectiveKeybindings } from '@/lib/keybindings';
+import { effectiveKeybindings, isSendMessageKey } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { BotAvatar } from './BotAvatar';
@@ -123,7 +123,8 @@ export function BotComposer({
   const [activeIndex, setActiveIndex] = useState(0);
   const [sending, setSending] = useState(false);
   const keybindings = useSettingsStore((s) => s.keybindings);
-  const voiceHoldBinding = effectiveKeybindings(keybindings)['voice-hold'];
+  const { 'voice-hold': voiceHoldBinding, 'send-message': sendBinding } =
+    effectiveKeybindings(keybindings);
   const { text } = draft;
   const patchDraft = (patch: Partial<BotComposerDraft>) =>
     setDraft((current) => ({ ...current, ...patch }));
@@ -347,7 +348,7 @@ export function BotComposer({
         return;
       }
     }
-    if (event.key === 'Enter' && !event.shiftKey && !composing) {
+    if (!composing && isSendMessageKey(event, sendBinding)) {
       event.preventDefault();
       void submit();
     }

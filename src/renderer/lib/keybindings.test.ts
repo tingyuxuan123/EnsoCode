@@ -7,6 +7,7 @@ import {
   formatBinding,
   IS_MAC,
   isHoldReleased,
+  isSendMessageKey,
   KEYBINDING_ACTIONS,
 } from './keybindings';
 
@@ -30,6 +31,19 @@ describe('send-message binding', () => {
   it('defaults to Enter', () => {
     expect(KEYBINDING_ACTIONS).toContain('send-message');
     expect(DEFAULT_KEYBINDINGS['send-message']).toBe('enter');
+  });
+
+  it('isSendMessageKey 跟随用户绑定，未绑定时不发送', () => {
+    const enter = keyEvent({ key: 'Enter' });
+    const modEnter = keyEvent({
+      key: 'Enter',
+      ...(IS_MAC ? { metaKey: true } : { ctrlKey: true }),
+    });
+    expect(isSendMessageKey(enter, 'enter')).toBe(true);
+    expect(isSendMessageKey(keyEvent({ key: 'Enter', shiftKey: true }), 'enter')).toBe(false);
+    expect(isSendMessageKey(enter, 'mod+enter')).toBe(false);
+    expect(isSendMessageKey(modEnter, 'mod+enter')).toBe(true);
+    expect(isSendMessageKey(enter, '')).toBe(false);
   });
 
   it('切换最小化到托盘有默认全局绑定', () => {
