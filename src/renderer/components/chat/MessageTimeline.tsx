@@ -27,14 +27,7 @@ import { EnsoMark } from './EnsoMark';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
-import {
-  isCompactRow,
-  isNestedToolRow,
-  isToolStepRow,
-  ReplyHeader,
-  RetryTurnButton,
-  TimelineRow,
-} from './TimelineRow';
+import { isNestedRow, ReplyHeader, RetryTurnButton, TimelineRow } from './TimelineRow';
 import { nextTimelineReveal, revealGroupKeys } from './timelineReveal';
 import {
   nextTimelineRowOrigin,
@@ -508,24 +501,19 @@ export function MessageTimeline({
     [searchQuery, activeHit?.key, activeHit?.nth]
   );
 
-  // 精简模式：探索类行（组头/只读/思考）之间贴紧排；正文→探索 也收紧（正文自带 hover 操作条占位），
-  // 探索→正文留一点距离
+  // 行距对齐 ZCode：工作项之间统一 gap-4；同一组展开出的子项之间 gap-2，组头到首个子项 pt-2
   const rowGap = (item: TimelineItem, index: number): string => {
     const next = folded[index + 1];
-    if (item.kind === 'tool-group' && item.worklog) return 'pb-3';
-    // 时间线上相邻的工具节点贴紧，由竖线串起
-    if (next !== undefined && isToolStepRow(item) && isToolStepRow(next)) return 'pb-1';
-    if (!compact) return 'pb-4';
-    const nextCompact = next !== undefined && isCompactRow(next);
-    if (isCompactRow(item)) return nextCompact ? 'pb-1' : 'pb-2';
-    return item.kind === 'text' && nextCompact ? 'pb-1' : 'pb-4';
+    if (item.kind === 'tool-group' && item.worklog) return 'pb-5';
+    if (next !== undefined && isNestedRow(next)) return 'pb-2';
+    return 'pb-4';
   };
   const renderRow = (item: TimelineItem, index: number) => {
     const prev = folded[index - 1];
     const next = folded[index + 1];
     const replyHead =
       prev?.kind === 'user' && !prev.collapsed && REPLY_ROW_KINDS.has(item.kind) ? prev : undefined;
-    const step = isToolStepRow(item);
+    const nested = isNestedRow(item);
     const now = Date.now();
     const collapse = foldMotionRef.current.collapse.get(item.key);
     const folding = collapse && now - collapse.at < FOLD_MOTION_MS ? collapse : undefined;
@@ -537,10 +525,7 @@ export function MessageTimeline({
         key={item.key}
         data-nav-key={item.key}
         data-reply-head={replyHead ? '' : undefined}
-        data-step-prev={step && prev && isToolStepRow(prev) ? '' : undefined}
-        data-step-next={step && next && isToolStepRow(next) ? '' : undefined}
         data-fold-collapse={folding ? (folding.pair ? 'pair' : 'toggle') : undefined}
-        data-step-compact={isNestedToolRow(item) ? '' : undefined}
         style={
           folding
             ? ({ '--fold-from': `${folding.height}px` } as CSSProperties)
@@ -551,14 +536,29 @@ export function MessageTimeline({
         className={cn(
           CHAT_COL,
           rowGap(item, index),
-          step && 'enso-step-row',
           revealing && 't-fold-reveal',
           '[overflow-wrap:anywhere]'
         )}
       >
         {replyHead && <ReplyHeader model={replyHead.replyModel} at={replyHead.replyAt} />}
         <RowErrorBoundary itemKey={item.key}>
-          <TimelineRow item={item} onToggleGroup={toggleGroup} onToggleTurn={setTurnCollapsed} />
+          {nested ? (
+            // 展开的分组子项：左侧细竖线串起同组（对齐 ZCode ml-2 border-l pl-3.5）
+            <div
+              className={cn(
+                'ml-2 border-l border-border pl-3.5',
+                next !== undefined && isNestedRow(next) && '-mb-2 pb-2'
+              )}
+            >
+              <TimelineRow
+                item={item}
+                onToggleGroup={toggleGroup}
+                onToggleTurn={setTurnCollapsed}
+              />
+            </div>
+          ) : (
+            <TimelineRow item={item} onToggleGroup={toggleGroup} onToggleTurn={setTurnCollapsed} />
+          )}
         </RowErrorBoundary>
       </div>
     );

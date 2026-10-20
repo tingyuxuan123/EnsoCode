@@ -31,7 +31,6 @@ import {
   GitCompare,
   Globe,
   History,
-  Layers,
   ListTodo,
   LoaderCircle,
   type LucideIcon,
@@ -86,7 +85,6 @@ import {
 import { canWithdrawMessage } from '@/stores/sessions/reducer';
 import { formatDuration, formatTokens } from '@/stores/sessions/stats';
 import {
-  canRenderNestedRow,
   exploreStepsKey,
   isReadOnlyTool,
   isSandboxTool,
@@ -105,6 +103,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { useChatHost } from './chatHost';
 import { EditDiff } from './EditDiff';
 import { EnsoMark } from './EnsoMark';
+import { DiffCount } from './FlipMetricValue';
 import { renderHighlighted, useChatSearchHighlight } from './highlightQuery';
 import { Markdown } from './Markdown';
 import { MemoryCaptureResult, MemorySearchResults } from './MemorySearchResults';
@@ -114,11 +113,12 @@ import { splitInlineMentions, splitMentionRefs } from './mentionComposer';
 import { ReadFileView } from './ReadFileView';
 import { RtkToolStatsBar } from './RtkToolStatsBar';
 import { SlashChip, slashChipClass, splitSlashCommand } from './SlashChip';
-import { StepNode, type StepNodeState } from './StepNode';
 import { SubagentResult } from './SubagentResult';
 import { parseSubagentReceipt } from './subagentReceipt';
 import { TerminalOutput } from './TerminalOutput';
 import { TodoList } from './TodoBar';
+import { ToolSummaryRow } from './ToolSummaryRow';
+import { toolLineDelta } from './toolLineDelta';
 import { shouldCollapseUserQuery, USER_QUERY_MAX_HEIGHT } from './userQueryCollapse';
 import { ZoomableImage } from './ZoomableImage';
 
@@ -742,13 +742,9 @@ function UserText({
   );
 }
 
-/** 精简模式下贴紧排的行：探索组头 / 只读一行 / 夹在其间的思考行（对齐 Cursor 的行距） */
-export function isCompactRow(item: TimelineItem): boolean {
-  return (
-    (item.kind === 'tool-group' && !item.worklog) ||
-    item.kind === 'thinking' ||
-    (item.kind === 'tool' && isReadOnlyTool(item))
-  );
+/** 展开的分组平铺出来的子项：左侧细竖线串起，不带图标 */
+export function isNestedRow(item: TimelineItem): boolean {
+  return (item.kind === 'tool' || item.kind === 'thinking') && item.nested === true;
 }
 
 /** 每轮回复的身份头：标识 + 模型 + 时间，挂在本轮首个 assistant 行之上 */
@@ -850,17 +846,11 @@ export const TimelineRow = memo(function TimelineRow({
           text={item.text}
           streaming={item.streaming}
           durationMs={item.durationMs}
-          startedAt={item.startedAt}
           nested={item.nested}
         />
       );
     case 'tool':
-      // 与数据层的标记同源判断：带结构化结果的行一律走完整行
-      return item.nested && canRenderNestedRow(item) ? (
-        <NestedToolRow item={item} />
-      ) : (
-        <ToolRow item={item} />
-      );
+      return <ToolRow item={item} />;
     case 'tool-group':
       return <ToolGroupRow item={item} onToggle={onToggleGroup} />;
     case 'error':
@@ -1438,69 +1428,60 @@ function formatPerf(perf: TurnPerf, t: TFunction, hasTurnDuration = false): stri
   return parts.join(' · ');
 }
 
+/** 流式思考摘要：最后一行非空正文；行号作为滚动 key，同一行续写只原位刷新 */
+function lastNonEmptyLine(text: string): { index: number; text: string } | null {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]?.trim() ?? '';
+    if (line) return { index, text: line };
+  }
+  return null;
+}
+
 /** Think 行：仅在 expandLiveReasoning 时流式展开、结束收起；手动点击覆盖默认 */
 function ThinkingRow({
   itemKey,
   text,
   streaming,
   durationMs,
-  startedAt,
   nested,
 }: {
   itemKey: string;
   text: string;
   streaming: boolean;
   durationMs: number | null;
-  startedAt?: number;
-  /** 展开的工具组内：行更矮、字更小，思考只是步骤之间的分隔而不是条目 */
+  /** 展开的工具组内：不带图标，与组内工具行对齐 */
   nested?: boolean;
 }) {
   const { t } = useI18n();
   const expandLiveReasoning = useSettingsStore((s) => s.expandLiveReasoning);
   const [userToggled, setUserToggled] = useState<boolean | null>(null);
   const expanded = thinkingRowExpanded(userToggled, streaming, expandLiveReasoning);
-  const label = streaming ? (
-    <span className="t-shimmer" data-text={t('Thinking…')}>
-      {t('Thinking…')}
-    </span>
-  ) : durationMs !== null ? (
-    <span>{t('Thought for {{duration}}', { duration: formatDuration(durationMs) })}</span>
-  ) : (
-    <span>{t('Thought process')}</span>
-  );
+  const lastLine = streaming && !expanded ? lastNonEmptyLine(text) : null;
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setUserToggled(!expanded)}
-        className={cn(
-          'flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground',
-          nested ? 'h-[24px] px-1.5 text-[11px]' : 'min-h-[26px] text-[13px]'
-        )}
-      >
-        <span
-          className={cn(
-            'flex shrink-0 items-center justify-center',
-            nested ? 'size-4' : 'size-[22px]'
-          )}
-        >
-          <Brain
-            className={cn(
-              nested ? 'h-3 w-3' : 'h-3.5 w-3.5',
-              streaming && 'animate-pulse text-brand'
-            )}
-          />
-        </span>
-        {label}
-        {streaming && <RunningElapsed itemKey={itemKey} since={startedAt} />}
-        <ChevronRight
-          className={cn(
-            'transition-transform',
-            nested ? 'h-2.5 w-2.5' : 'h-3 w-3',
-            expanded && 'rotate-90'
-          )}
-        />
-      </button>
+      <ToolSummaryRow
+        icon={nested ? undefined : Brain}
+        kind={streaming ? t('Thinking') : t('Thought')}
+        running={streaming}
+        separator={!streaming || lastLine !== null}
+        summary={
+          streaming ? (
+            lastLine ? (
+              <span className="min-w-0 truncate">{lastLine.text}</span>
+            ) : undefined
+          ) : (
+            <span className="whitespace-nowrap">
+              {durationMs !== null ? formatDuration(durationMs) : t('a few seconds')}
+            </span>
+          )
+        }
+        animate={streaming}
+        contentKey={lastLine ? `reasoning-line:${lastLine.index}` : `${itemKey}:done`}
+        refreshVersion={lastLine?.text}
+        expanded={expanded}
+        onToggle={() => setUserToggled(!expanded)}
+      />
       {expanded && <ReasoningBody text={text} streaming={streaming} />}
     </div>
   );
@@ -1532,7 +1513,7 @@ function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }
       className={cn(
         // 流式时只开一个小窗口（约 4 行），像活动指示而不是正文；
         // 思考结束后用户主动展开才给完整高度。
-        't-acc-reveal mt-1 ml-[10px] overflow-y-auto border-l-2 border-border py-0.5 pl-[19px] text-[13px] leading-relaxed text-muted-foreground whitespace-pre-wrap [scrollbar-width:thin]',
+        't-acc-reveal mt-2 ml-2 overflow-y-auto border-l border-border py-0.5 pl-3.5 text-[13px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap [scrollbar-width:thin]',
         streaming ? 'max-h-28' : 'max-h-[min(16rem,38vh)]'
       )}
     >
@@ -1804,48 +1785,50 @@ function ToolGroupRow({
     (child) => child.kind === 'tool' && child.state === 'error'
   ).length;
   const explore = item.explore;
-  const label = explore
+  const running = item.exploring;
+  const kind = explore
     ? toolLabel('explore_fold', t)
-    : compact
-      ? item.exploring
-        ? t('Exploring')
-        : t('Explored')
-      : t('{{count}} tool calls', { count: item.count });
+    : item.terminal
+      ? t(running ? 'Executing' : 'Terminal')
+      : compact
+        ? t(running ? 'Looking up' : 'Looked up')
+        : t('{{count}} tool calls', { count: item.count });
   const detail = explore
     ? [explore.goal, t('{{count}} tool calls', { count: item.count })].filter(Boolean)
-    : compact
-      ? explored
-      : parts;
+    : item.terminal
+      ? [t('{{count}} command(s)', { count: item.count })]
+      : compact
+        ? explored
+        : parts;
+  // 运行中摘要滚动显示最新一条子工具（对齐 ZCode「正在执行 · <命令>」）
+  const latest = running ? item.children.findLast((child) => child.kind === 'tool') : undefined;
+  const latestTool = latest?.kind === 'tool' ? latest : undefined;
+  const summaryText = latestTool ? latestTool.summary : detail.join(' · ');
   const head = (
-    <button
-      type="button"
-      onClick={() => {
-        if (explore?.steps) onToggle?.(exploreStepsKey(item.key));
-        onToggle?.(item.key);
-      }}
-      title={explore?.goal}
-      data-explore-head={explore ? '' : undefined}
-      aria-expanded={item.expanded}
-      className="group/step flex min-h-[30px] w-full items-center gap-2 rounded-lg pr-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-    >
-      <StepNode icon={explore ? FoldVertical : Layers} state={item.exploring ? 'running' : 'ok'} />
-      {item.exploring ? (
-        <span className="t-shimmer shrink-0 font-medium" data-text={label}>
-          {label}
-        </span>
-      ) : (
-        <span className="shrink-0 font-medium text-foreground/90">{label}</span>
-      )}
-      <span className="min-w-0 flex-1 truncate">{detail.join(' · ')}</span>
-      {failedCount > 0 && (
-        <span className="shrink-0 rounded bg-destructive/12 px-1.5 py-px text-[10px] text-destructive">
-          {t('{{count}} calls failed', { count: failedCount })}
-        </span>
-      )}
-      <ChevronRight
-        className={cn('h-3 w-3 shrink-0 transition-transform', item.expanded && 'rotate-90')}
+    <div data-explore-head={explore ? '' : undefined}>
+      <ToolSummaryRow
+        icon={explore ? FoldVertical : item.terminal ? TerminalSquare : Search}
+        kind={kind}
+        separator
+        summary={summaryText ? <span className="min-w-0 truncate">{summaryText}</span> : undefined}
+        animate={running}
+        contentKey={latestTool ? `child:${latestTool.key}` : `${item.key}:done:${summaryText}`}
+        status={
+          failedCount > 0 ? (
+            <span className="shrink-0 whitespace-nowrap text-destructive">
+              {t('{{count}} failed', { count: failedCount })}
+            </span>
+          ) : undefined
+        }
+        running={running}
+        expanded={item.expanded}
+        title={explore?.goal}
+        onToggle={() => {
+          if (explore?.steps) onToggle?.(exploreStepsKey(item.key));
+          onToggle?.(item.key);
+        }}
       />
-    </button>
+    </div>
   );
   if (!explore || !item.expanded) return head;
   // 探索组首层展开只给目标与结果，过程另开一层才平铺原始行
@@ -1854,7 +1837,7 @@ function ToolGroupRow({
       {head}
       <div
         data-slot="tool-details"
-        className="t-acc-reveal mt-1 mb-1.5 ml-[30px] overflow-hidden rounded-lg border border-border/70 bg-card text-sm shadow-xs"
+        className="t-acc-reveal mt-2 mb-1 overflow-hidden rounded-xl border border-border/70 bg-card text-sm"
       >
         {explore.goal && (
           <div className="border-b border-border/60 px-3 py-2">
@@ -2062,116 +2045,6 @@ export function ReadImagePreview({ path, fallback }: { path: string; fallback: R
   );
 }
 
-/** 组内行输出预览行数：超出就给「共 N 行」的展开入口 */
-const NESTED_PREVIEW_LINES = 3;
-
-/**
- * 展开工具组内的紧凑行：等宽正文 + 右对齐耗时，悬停出复制。
- * 组内行不带工具名标签——图标已经表达类型，正文才是要看的东西。
- * 失败行就地给出错误首行，长输出只给前三行。
- */
-function NestedToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const failed = item.state === 'error';
-  const busy = item.state === 'running' || item.state === 'reviewing';
-  const output = item.output ? stripAnsi(item.output).replace(/\n+$/, '') : '';
-  const outputLines = output ? output.split('\n') : [];
-  const long = outputLines.length > NESTED_PREVIEW_LINES;
-  const preview = long ? outputLines.slice(0, NESTED_PREVIEW_LINES).join('\n') : output;
-  const expandable = long || (failed && output.length > 0) || Boolean(item.rtk);
-  const Icon = toolIcon(item.name);
-  const duration = item.durationMs !== null ? formatDuration(item.durationMs) : '';
-  return (
-    <div>
-      <div
-        className={cn(
-          'group/nested flex h-[26px] items-center gap-2 rounded-md px-1.5 transition-colors',
-          busy && 'bg-brand/10',
-          !busy && 'hover:bg-accent'
-        )}
-      >
-        <button
-          type="button"
-          disabled={!expandable}
-          onClick={() => setExpanded((v) => !v)}
-          title={item.summary}
-          className={cn(
-            'flex min-w-0 flex-1 items-center gap-2 text-left',
-            expandable && 'cursor-pointer'
-          )}
-        >
-          <span className="flex size-4 shrink-0 items-center justify-center">
-            {busy ? (
-              <LoaderCircle className="size-3.5 animate-spin text-brand" />
-            ) : (
-              <Icon
-                className={cn('size-3.5', failed ? 'text-destructive' : 'text-muted-foreground')}
-              />
-            )}
-          </span>
-          <span
-            className={cn(
-              'min-w-0 flex-1 truncate font-mono text-[11.5px]',
-              failed ? 'text-destructive' : busy ? 'text-foreground' : 'text-foreground/75'
-            )}
-          >
-            {item.summary}
-          </span>
-        </button>
-        <span className="hidden shrink-0 items-center gap-0.5 pl-1 group-hover/nested:flex">
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(item.summary).then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1000);
-              });
-            }}
-            title={t('Copy')}
-            className="flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
-          >
-            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          </button>
-          {expandable && (
-            <ChevronRight
-              className={cn(
-                'size-3 text-muted-foreground transition-transform',
-                expanded && 'rotate-90'
-              )}
-            />
-          )}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 text-[10px] tabular-nums group-hover/nested:hidden',
-            busy ? 'text-brand' : 'text-muted-foreground/70'
-          )}
-        >
-          {busy ? t('Running…') : duration}
-        </span>
-      </div>
-      {failed && output && (
-        <pre className="mt-1 mb-1 max-h-40 overflow-auto rounded-md bg-destructive/8 px-2.5 py-1.5 font-mono text-[11px] leading-[18px] whitespace-pre-wrap text-destructive/90">
-          {expanded ? output : preview}
-        </pre>
-      )}
-      {!failed && expanded && output && (
-        <pre className="mt-1 mb-1 max-h-60 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono text-[11px] leading-[18px] whitespace-pre-wrap text-muted-foreground">
-          {output}
-        </pre>
-      )}
-      {/* 压缩统计只在完整行展开时出现；紧凑行补在同一位置，否则 RTK 用户会丢这条信息 */}
-      {expanded && item.rtk && (
-        <div className="mb-1 overflow-hidden rounded-md border border-border/50">
-          <RtkToolStatsBar value={item.rtk} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** 单行工具摘要：状态点/图标 + 工具名 + 参数摘要；edit 展开为 diff,write 展开为写入内容,其余为输出 */
 function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   const { t } = useI18n();
@@ -2186,7 +2059,6 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   // 消息类工具展开显示发出的正文（投递回执已在 timeline 剥掉）；出错时只显示错误输出
   const sentMessage = item.state === 'error' ? null : item.sentMessage;
   const hasImage = Boolean(item.imagePath) && item.state !== 'error';
-  const labelKey = TOOL_LABEL_KEYS[item.name];
   const mcp = parseMcpToolName(item.name);
   // 子代理按 id 指代的操作：动作词在前，长标题截断时动作仍可见
   const summary = item.subagentOp
@@ -2233,91 +2105,86 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   if (item.name.startsWith('goal_')) return <GoalSignalRow item={item} />;
   if (item.plan && item.state !== 'error') return <PlanRow plan={item.plan} />;
 
-  return (
-    <div data-tool-style={compact ? 'compact' : 'full'}>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          disabled={!expandable}
-          onClick={() => setExpanded((v) => !v)}
-          className={cn(
-            'group/step flex min-h-[30px] min-w-0 flex-1 items-center gap-2 rounded-lg pr-1.5 text-left text-[13px] transition-colors',
-            expandable && 'cursor-pointer hover:bg-muted/60'
-          )}
+  const busy = item.state === 'running' || item.state === 'reviewing';
+  const failed = item.state === 'error';
+  const delta = toolLineDelta(item);
+  const status = (
+    <>
+      {item.backgroundTaskId && (
+        <span className="shrink-0 whitespace-nowrap" title={item.backgroundTaskId}>
+          {t('Moved to background')}
+        </span>
+      )}
+      {item.state === 'reviewing' && (
+        <span
+          className="t-shimmer shrink-0 whitespace-nowrap"
+          data-text={t('Assistant reviewing…')}
         >
-          <ToolNode name={item.name} state={item.state} />
-          <span className={cn('shrink-0', compact ? 'text-foreground/80' : 'font-medium')}>
-            {labelKey ? t(labelKey) : (mcp?.tool ?? item.name)}
-          </span>
-          <span
-            className={cn(
-              'min-w-0 flex-1 truncate font-mono text-xs',
-              item.state === 'error' ? 'text-destructive' : 'text-muted-foreground'
-            )}
-          >
-            {item.state === 'error' && item.output
-              ? summary && item.name === 'apply_patch' && hasFileChanges
+          {t('Assistant reviewing…')}
+        </span>
+      )}
+      {item.agentMeta && (
+        <span className="shrink-0 whitespace-nowrap font-mono text-[11px]">
+          {[
+            item.agentMeta.modelId,
+            item.agentMeta.outputTokens ? `${item.agentMeta.outputTokens} tok` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      )}
+    </>
+  );
+  return (
+    <div
+      className="group/tool"
+      data-tool-style={compact ? 'compact' : 'full'}
+      data-tool-nested={item.nested ? '' : undefined}
+    >
+      <ToolSummaryRow
+        icon={item.nested ? undefined : toolIcon(item.name)}
+        kind={toolKindLabel(item, busy, t)}
+        summary={
+          failed && item.output ? (
+            <span className="min-w-0 truncate text-destructive/90">
+              {summary && item.name === 'apply_patch' && hasFileChanges
                 ? `${headerSummary} · ${firstLine(item.output)}`
-                : firstLine(item.output)
-              : summary
-                ? headerSummary
-                : null}
-          </span>
-          {item.backgroundTaskId && (
-            <span
-              className="shrink-0 text-[11px] text-muted-foreground"
-              title={item.backgroundTaskId}
-            >
-              {t('Moved to background')}
+                : firstLine(item.output)}
             </span>
-          )}
-          {item.state === 'reviewing' ? (
-            <span className="t-shimmer shrink-0 text-[11px]" data-text={t('Assistant reviewing…')}>
-              {t('Assistant reviewing…')}
-            </span>
-          ) : item.state === 'running' && item.startedAt !== null ? (
-            <RunningElapsed itemKey={item.key} since={item.startedAt ?? undefined} />
-          ) : (
-            (item.agentMeta || item.durationMs !== null) && (
-              <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
-                {[
-                  item.agentMeta?.modelId,
-                  item.agentMeta?.outputTokens ? `${item.agentMeta.outputTokens} tok` : null,
-                  item.durationMs !== null ? formatDuration(item.durationMs) : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            )
-          )}
-          {expandable && (
-            <ChevronRight
-              className={cn(
-                'h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-[opacity,transform] group-hover/step:opacity-100',
-                expanded && 'rotate-90 opacity-100'
-              )}
-            />
-          )}
-        </button>
-        {item.state === 'running' && item.callId && !host && (
-          <MoveToBackgroundButton callId={item.callId} waiting={Boolean(item.waiting)} />
-        )}
-        {(hasDiff || hasWrite || hasFileChanges) && (item.state === 'ok' || hasFileChanges) && (
-          <button
-            type="button"
-            title={t('Open in side panel')}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            onClick={() => addSidePanelChanges()}
-          >
-            <GitCompare className="h-3 w-3" />
-          </button>
-        )}
-      </div>
+          ) : summary ? (
+            <span className="min-w-0 truncate">{headerSummary}</span>
+          ) : undefined
+        }
+        trailing={delta ? <DiffCount added={delta.added} removed={delta.removed} /> : undefined}
+        status={status}
+        running={busy}
+        failed={failed}
+        expanded={expanded && expandable}
+        canToggle={expandable}
+        title={item.summary}
+        onToggle={() => setExpanded((v) => !v)}
+        actions={
+          <>
+            {item.state === 'running' && item.callId && !host && (
+              <MoveToBackgroundButton callId={item.callId} waiting={Boolean(item.waiting)} />
+            )}
+            {(hasDiff || hasWrite || hasFileChanges) && (item.state === 'ok' || hasFileChanges) && (
+              <button
+                type="button"
+                title={t('Open in side panel')}
+                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-[opacity,color] group-hover/tool:opacity-100 hover:bg-muted hover:text-foreground"
+                onClick={() => addSidePanelChanges()}
+              >
+                <GitCompare className="h-3 w-3" />
+              </button>
+            )}
+          </>
+        }
+      />
       {expanded && expandable && (
-        // 展开内容收进与工具名对齐的卡片，左侧留给时间线竖线
         <div
           data-slot="tool-details"
-          className="t-acc-reveal mt-1 mb-1.5 ml-[30px] overflow-hidden rounded-lg border border-border/70 bg-card shadow-xs"
+          className="t-acc-reveal mt-2 mb-1 overflow-hidden rounded-xl border border-border/70 bg-card"
         >
           {mcp && (
             <div className="truncate border-b border-border/60 px-3 py-1 font-mono text-[10px] text-muted-foreground">
@@ -2509,9 +2376,6 @@ function TodoRow({ todos }: { todos: TodoItem[] }) {
   );
 }
 
-/** 切会话会卸载时间线，挂载时刻不能当起点。有 since 用打点；否则按会话+行 key 记住第一次出现的时刻。 */
-const elapsedStartByKey = new Map<string, number>();
-
 /** 运行中的前台命令移交为后台任务，或结束阻塞等待（被等的继续跑）；worker 拒绝时稍后恢复可点 */
 function MoveToBackgroundButton({ callId, waiting }: { callId: string; waiting: boolean }) {
   const { t } = useI18n();
@@ -2628,30 +2492,6 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
   );
 }
 
-function RunningElapsed({ itemKey, since }: { itemKey: string; since?: number }) {
-  const host = useChatHost();
-  const localSessionId = useSessionsStore((state) => displayedConversation(state)?.id ?? '');
-  // 远程节点视图的计时 key 用远程会话 id，不能落到本机 active 会话上
-  const sessionId = host ? (host.sessionId ?? '') : localSessionId;
-  const startRef = useRef<number | null>(null);
-  if (startRef.current === null) {
-    const cacheKey = `${sessionId}:${itemKey}`;
-    startRef.current = since ?? elapsedStartByKey.get(cacheKey) ?? Date.now();
-    if (since === undefined) elapsedStartByKey.set(cacheKey, startRef.current);
-  }
-  const origin = since ?? startRef.current;
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
-      {formatDuration(Date.now() - origin)}
-    </span>
-  );
-}
-
 function toolIcon(name: string): LucideIcon {
   if (name === 'read') return FileText;
   if (name === 'ls') return FolderOpen;
@@ -2665,20 +2505,35 @@ function toolIcon(name: string): LucideIcon {
   return Wrench;
 }
 
-/** 时间线节点：工具类型图标；运行中外圈强调色旋转，失败描红 */
-function ToolNode({ name, state }: { name: string; state: StepNodeState }) {
-  return <StepNode icon={toolIcon(name)} state={state} />;
+type ToolKind = 'read' | 'search' | 'edit' | 'write' | 'terminal' | null;
+
+function toolKind(name: string): ToolKind {
+  if (name === 'read') return 'read';
+  if (name === 'ls' || name === 'grep' || name === 'find' || name === 'glob') return 'search';
+  if (name === 'edit' || name === 'apply_patch') return 'edit';
+  if (name === 'write') return 'write';
+  if (name === 'bash' || name === 'powershell') return 'terminal';
+  return null;
 }
 
-/** 以时间线节点呈现、相邻时用竖线串起的行：普通工具行与工具组头 */
-export function isToolStepRow(item: TimelineItem): boolean {
-  if (item.kind === 'tool-group') return !item.worklog;
-  return item.kind === 'tool' && !item.todos && !item.name.startsWith('goal_');
-}
+const KIND_LABEL: Record<NonNullable<ToolKind>, [done: string, running: string]> = {
+  read: ['Read file', 'Reading'],
+  search: ['Search', 'Searching'],
+  edit: ['Edited', 'Editing'],
+  write: ['Wrote', 'Writing'],
+  terminal: ['Terminal', 'Executing'],
+};
 
-/** 组内紧凑行：节点 16px、行高 26px，竖线几何与完整行的 22px/30px 不同 */
-export function isNestedToolRow(item: TimelineItem): boolean {
-  return item.kind === 'tool' && Boolean(item.nested) && canRenderNestedRow(item);
+/** 工具行的类型词（对齐 ZCode：读取 / 搜索 / 编辑 / 终端，运行中换成「正在…」） */
+function toolKindLabel(
+  item: Extract<TimelineItem, { kind: 'tool' }>,
+  busy: boolean,
+  t: TFunction
+): string {
+  const kind = toolKind(item.name);
+  if (kind) return t(KIND_LABEL[kind][busy ? 1 : 0]);
+  const mcp = parseMcpToolName(item.name);
+  return TOOL_LABEL_KEYS[item.name] ? toolLabel(item.name, t) : (mcp?.tool ?? item.name);
 }
 
 const firstLine = (text: string): string => stripAnsi(text.split('\n', 1)[0] ?? '');

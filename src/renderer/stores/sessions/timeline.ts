@@ -122,6 +122,8 @@ export type TimelineItem =
       stats: ToolGroupStats;
       /** compact 模式下组外仍有 running 的只读行：组头显示 Exploring */
       exploring: boolean;
+      /** 连续命令组（对齐 ZCode「终端 · N 个命令」）；探索组缺省 */
+      terminal?: boolean;
       /** 回合工作日志：本轮最终答案之前的全部过程行（思考 / 工具 / 中间叙述）；普通工具组缺省 */
       worklog?: {
         status: WorklogStatus;
@@ -1540,6 +1542,8 @@ function insertDividers(
 
 /** 折叠门槛：段内非 edit 工具数达到该值才收拢 */
 const FOLD_MIN_TOOLS = 3;
+/** compact（对齐 ZCode）：第二条同类工具到达即升级为父组 */
+const COMPACT_FOLD_MIN_TOOLS = 2;
 
 /** 轮次折叠时可被隐藏的行：回复正文与工具；压缩标记、错误等会话状态行必须保留 */
 function isTurnSwallowable(item: TimelineItem): boolean {
@@ -1806,7 +1810,9 @@ export function foldTimeline(
 
 /**
  * 连续的 tool/thinking 行折成工具组。live：进行中的轮（非 compact 时不折）；
- * running：本段末尾就是会话末尾且仍在生成（compact 组头显示 Exploring）。
+ * running：本段末尾就是会话末尾且仍在生成（组头显示进行中）。
+ * compact（对齐 ZCode）：只读工具连续 ≥2 条收成探索组，写命令连续 ≥2 条收成终端组，
+ * 两类互相打断；思考夹在其间不打断。
  */
 function foldSegments(
   rows: readonly TimelineItem[],
@@ -1814,34 +1820,54 @@ function foldSegments(
   compact: boolean,
   flags: { live: boolean; running: boolean }
 ): TimelineItem[] {
-  const inSegment = (s: TimelineItem): boolean =>
-    s.kind === 'thinking' || (s.kind === 'tool' && (!compact || isReadOnlyTool(s)));
+  type Family = 'explore' | 'terminal' | 'any';
+  const familyOf = (s: TimelineItem): Family | null => {
+    if (s.kind !== 'tool') return null;
+    if (!compact) return 'any';
+    if (isReadOnlyTool(s)) return 'explore';
+    if (s.name === 'bash' && !isCoreToolRow(s) && canRenderNestedRow(s)) return 'terminal';
+    return null;
+  };
   const result: TimelineItem[] = [];
   let i = 0;
   while (i < rows.length) {
     const item = rows[i];
-    if (!inSegment(item)) {
+    const family = familyOf(item);
+    if (family === null && item.kind !== 'thinking') {
       result.push(...withExploreChildren(item));
       i += 1;
       continue;
     }
+    // 段 = 同一类工具 + 夹在其间的思考；思考打头时跟随后面第一条工具的类别
     let end = i;
-    while (end < rows.length && inSegment(rows[end])) end += 1;
+    let segmentFamily: Family | null = family;
+    while (end < rows.length) {
+      const row = rows[end];
+      if (row.kind === 'thinking') {
+        end += 1;
+        continue;
+      }
+      const next = familyOf(row);
+      if (next === null) break;
+      if (segmentFamily === null) segmentFamily = next;
+      else if (next !== segmentFamily) break;
+      end += 1;
+    }
     const segment = mergeAdjacentThinking(rows.slice(i, end));
     const liveSegment = !compact && flags.live;
     // 钉住的行不进组：edit 的 diff、write 的内容、图片预览、todo 清单是核心产物。
-    // compact 下 running 只读行进组（避免完成后从平铺跳进组头抽动）；
+    // compact 下 running 行进组（避免完成后从平铺跳进组头抽动）；
     // 非 compact 仍把 running 钉在组外，方便看此刻在跑什么。
     const pinned = (s: TimelineItem): boolean => {
       if (s.kind !== 'tool') return false;
       if (isCoreToolRow(s)) return true;
       if (s.state !== 'running' && s.state !== 'reviewing') return false;
-      return !(compact && isReadOnlyTool(s));
+      return !compact;
     };
     const editRows = segment.filter(pinned);
     const groupRows = segment.filter((s) => !pinned(s));
     const toolCount = groupRows.filter((s) => s.kind === 'tool').length;
-    if (liveSegment || toolCount < FOLD_MIN_TOOLS) {
+    if (liveSegment || toolCount < (compact ? COMPACT_FOLD_MIN_TOOLS : FOLD_MIN_TOOLS)) {
       result.push(...segment);
     } else {
       const stats: ToolGroupStats = { commands: 0, reads: 0, searches: 0, others: 0 };
@@ -1856,13 +1882,14 @@ function foldSegments(
         expanded,
         count: toolCount,
         stats,
-        // 运行中的尾段在两次调用之间也算探索中，避免组头在「探索了 / 探索中」间来回跳
+        // 运行中的尾段在两次调用之间也算进行中，避免组头在「已完成 / 进行中」间来回跳
         exploring:
           compact &&
           ((flags.running && end === rows.length) ||
             groupRows.some(
               (s) => s.kind === 'tool' && (s.state === 'running' || s.state === 'reviewing')
             )),
+        ...(segmentFamily === 'terminal' ? { terminal: true } : {}),
         children: groupRows,
       });
       // 展开：组内行与钉住的产物行按原始顺序平铺；收拢：仅产物行（diff 等）跟在组头后

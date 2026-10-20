@@ -41,7 +41,7 @@ describe('RTK tool output footer', () => {
     };
     const html = renderToStaticMarkup(createElement(TimelineRow, { item }));
 
-    expect(html).toContain('bash');
+    expect(html).toContain('Terminal');
     expect(html).toContain('git log -n 30');
     expect(html).toContain('data-tool-style="full"');
     expect(html).not.toContain('data-rtk-status');

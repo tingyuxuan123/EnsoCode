@@ -2359,6 +2359,38 @@ describe('foldTimeline', () => {
     expect(exploring(items, false)).toBe(false);
   });
 
+  it('compact：连续 ≥2 条写命令收成终端组，与探索组互相打断', () => {
+    const cmd = (key: string, summary: string) =>
+      ({ ...toolItem(key, 'bash'), summary }) as TimelineItem;
+    const items = [
+      userItem('u'),
+      cmd('c1', 'pnpm build'),
+      thinkingItem('t'),
+      cmd('c2', 'pnpm test'),
+      toolItem('r1', 'read'),
+      toolItem('r2', 'grep'),
+      cmd('c3', 'git commit -m x'),
+    ];
+    const folded = foldTimeline(items, false, new Set(), { compact: true });
+    const groups = folded.filter(
+      (i): i is Extract<TimelineItem, { kind: 'tool-group' }> => i.kind === 'tool-group'
+    );
+    expect(folded.map((i) => i.key)).toEqual(['u', 'group-c1', 'group-r1', 'c3']);
+    expect(groups.map((g) => [g.terminal === true, g.count])).toEqual([
+      [true, 2],
+      [false, 2],
+    ]);
+  });
+
+  it('compact：单条工具不成组', () => {
+    const items = [userItem('u'), toolItem('r1', 'read'), textItem('x')];
+    expect(foldTimeline(items, false, new Set(), { compact: true }).map((i) => i.kind)).toEqual([
+      'user',
+      'tool',
+      'text',
+    ]);
+  });
+
   it('todo 行不进组，平铺在组头之后', () => {
     const items = [toolItem('t1'), toolItem('td', 'todo'), toolItem('t2'), toolItem('t3')];
     const folded = foldTimeline(items, false, new Set());

@@ -52,11 +52,11 @@ describe('nextTimelineRowOrigin', () => {
   });
 
   it('前置把原来的首行收进工具组时，按折叠行重挂，而不是按原始行往前移', () => {
-    const tail = [readTool('a'), readTool('b')];
+    const tail = [readTool('a')];
     const full = [readTool('older'), ...tail];
     const tailFolded = foldTimeline(tail, false, new Set(), { compact: true });
     const fullFolded = foldTimeline(full, false, new Set(), { compact: true });
-    expect(tailFolded.map((item) => item.key)).toEqual(['a', 'b']);
+    expect(tailFolded.map((item) => item.key)).toEqual(['a']);
     expect(fullFolded.map((item) => item.key)).toEqual(['group-older']);
     const origin = nextTimelineRowOrigin(
       null,
