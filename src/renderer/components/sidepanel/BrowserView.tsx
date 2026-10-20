@@ -68,8 +68,6 @@ const sameRect = (a: Rect | null, b: Rect | null) =>
     a.width === b.width &&
     a.height === b.height);
 
-const MIN_PANE = 80;
-const DEFAULT_DEVTOOLS_RATIO = 0.42;
 const STAGE_PADDING = 24;
 const MIN_DEVICE = 50;
 const MAX_DEVICE = 8192;
@@ -156,11 +154,8 @@ export function BrowserView({
   const manualControl = state.control === 'manual';
   const agentLocked = state.locked && !manualControl;
   const elapsed = useElapsed(agentLocked);
-  const [devtoolsRatio, setDevtoolsRatio] = useState(DEFAULT_DEVTOOLS_RATIO);
   const hostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const dtRef = useRef<HTMLDivElement>(null);
-  const splitRef = useRef<HTMLDivElement>(null);
   const lastSent = useRef<Rect | null | undefined>(undefined);
   const lastCovered = useRef(false);
   const lastDt = useRef<Rect | null | undefined>(undefined);
@@ -168,8 +163,10 @@ export function BrowserView({
   const lastStage = useRef<Size | null>(null);
   const lockedRef = useRef(false);
   lockedRef.current = agentLocked;
-  const devtoolsOpenRef = useRef(false);
-  devtoolsOpenRef.current = state.devtoolsOpen;
+  // 停靠的 DevTools 铺满舞台，网页由 Main 叠在前端上报的区域；独立窗口时舞台照常给网页
+  const devtoolsDocked = state.devtoolsOpen && state.devtoolsDock !== 'undocked';
+  const devtoolsDockedRef = useRef(false);
+  devtoolsDockedRef.current = devtoolsDocked;
   const hasPage = /^(https?:|file:)/.test(state.url);
   const hasPageRef = useRef(false);
   hasPageRef.current = hasPage;
@@ -182,7 +179,10 @@ export function BrowserView({
   const device = state.device?.enabled ? state.device : null;
   const shownDevice: BrowserDevice | null =
     device && liveSize ? { ...device, width: liveSize.width, height: liveSize.height } : device;
-  const frame = shownDevice && stage ? browserDeviceFrame(shownDevice, stage, STAGE_PADDING) : null;
+  const frame =
+    shownDevice && stage && !devtoolsDocked
+      ? browserDeviceFrame(shownDevice, stage, STAGE_PADDING)
+      : null;
 
   useEffect(() => {
     return window.electronAPI.browser.onState((event) => {
@@ -282,7 +282,7 @@ export function BrowserView({
         lastHole.current = hole;
         useSidePanelStore.getState().setBrowserHole(`${tabId}:guest`, hole);
       }
-      const dtRect = visible && devtoolsOpenRef.current ? readBox(dtRef.current) : null;
+      const dtRect = visible && devtoolsDockedRef.current ? readBox(stageRef.current) : null;
       const dtCovered = dtRect !== null && isCoveredBy(dtRect, overlayBoxes(document, root));
       if (
         lastDt.current === undefined ||
@@ -372,30 +372,6 @@ export function BrowserView({
 
   const toggleDevice = () =>
     void browserAction(() => applyDevice(device ? { enabled: false } : DEFAULT_BROWSER_DEVICE));
-
-  const onSplitPointer = (event: React.PointerEvent<HTMLDivElement>) => {
-    const host = stageRef.current;
-    const dt = dtRef.current;
-    if (!host || !dt) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const startY = event.clientY;
-    const startHost = host.getBoundingClientRect().height;
-    const startDt = dt.getBoundingClientRect().height;
-    const total = startHost + startDt;
-    const onMove = (move: globalThis.PointerEvent) => {
-      const nextDt = Math.min(
-        total - MIN_PANE,
-        Math.max(MIN_PANE, startDt - (move.clientY - startY))
-      );
-      setDevtoolsRatio(nextDt / total);
-    };
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  };
 
   /** 拖拽设备框边缘：框保持居中，边缘跟手需要按 2 倍位移换算逻辑尺寸 */
   const onDeviceResize =
@@ -642,11 +618,11 @@ export function BrowserView({
         <div
           ref={stageRef}
           className={cn(
-            'relative min-h-0 overflow-hidden',
-            state.devtoolsOpen ? 'shrink-0' : 'flex-1',
-            device && cn('flex items-center justify-center', stageBackgroundClass)
+            'relative min-h-0 flex-1 overflow-hidden',
+            device &&
+              !devtoolsDocked &&
+              cn('flex items-center justify-center', stageBackgroundClass)
           )}
-          style={state.devtoolsOpen ? { flex: `${1 - devtoolsRatio} 1 0` } : undefined}
         >
           <div
             ref={hostRef}
@@ -720,20 +696,6 @@ export function BrowserView({
             </div>
           )}
         </div>
-        {state.devtoolsOpen && (
-          <>
-            <div
-              ref={splitRef}
-              className="h-1.5 shrink-0 cursor-row-resize bg-border hover:bg-ring"
-              onPointerDown={onSplitPointer}
-            />
-            <div
-              ref={dtRef}
-              className="min-h-0 bg-transparent"
-              style={{ flex: `${devtoolsRatio} 1 0` }}
-            />
-          </>
-        )}
       </div>
       <BrowserHistoryPanel
         open={panel === 'history'}

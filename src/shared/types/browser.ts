@@ -78,6 +78,8 @@ export interface BrowserTabState {
   device?: BrowserDevice;
   /** 面板内嵌原生 Chrome DevTools */
   devtoolsOpen: boolean;
+  /** DevTools 打开时的停靠方向；undocked 表示在独立窗口 */
+  devtoolsDock?: 'bottom' | 'right' | 'left' | 'undocked';
   /** 用户圈选 Design Mode */
   designMode: boolean;
   /** 共享浏览器里正在操作该 tab 的成员会话 */

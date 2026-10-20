@@ -2,7 +2,15 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertAllowedCdpMethod } from '@shared/browser/cdpPolicy';
 import { parseDesignBinding, sanitizeUiElementPayload } from '@shared/browser/designMode';
-import { assertDevtoolsIdle } from '@shared/browser/devtools';
+import {
+  assertDevtoolsIdle,
+  DEVTOOLS_DOCK_BRIDGE_SCRIPT,
+  type DevtoolsDockSide,
+  type DevtoolsRect,
+  devtoolsGuestBounds,
+  parseDevtoolsDockMessage,
+  resetUndockedDevtoolsPreference,
+} from '@shared/browser/devtools';
 import { pickFaviconUrl } from '@shared/browser/favicon';
 import { parseBrowserDevice } from '@shared/browser/devices';
 import { pagePrepareInputScript, pageCheckedScript, pageScrollIntoViewScript, pageWaitScript, parseBrowserWait, parseBrowserKey } from '@shared/browser/interactionScripts';
@@ -55,8 +63,8 @@ import type {
   BrowserDesignModeEvent,
   BrowserTabState,
 } from '@shared/types/browser';
-import type { BrowserWindow, Session, WebContents } from 'electron';
-import { app, session, WebContentsView } from 'electron';
+import type { Session, WebContents } from 'electron';
+import { app, BrowserWindow, session, WebContentsView } from 'electron';
 import { getWorkbenchView } from '../windows/createAppWindow';
 import { pinnedWorkbenchBounds } from '../windows/win32Restore';
 import { assertBrowserUrl, resolveLocalCwdForBrowser } from './browserFileRoot';
@@ -200,6 +208,11 @@ interface Tab {
   /** webContents 首次 dom-ready 前 debugger.attach 会让 Main 段错误 */
   ready: boolean;
   devtoolsOpen: boolean;
+  /** DevTools 前端「Dock side」选择；undocked 时前端住在独立窗口 */
+  devtoolsDock: DevtoolsDockSide;
+  /** 停靠时前端上报的网页区域（DevTools 视图内坐标）；未上报为 null */
+  devtoolsPage: DevtoolsRect | null;
+  devtoolsWindow?: BrowserWindow;
   designMode: boolean;
   favicon: string | null;
   designBinding?: boolean;
@@ -477,6 +490,7 @@ export class BrowserHost {
       device: tab.device,
       control: tab.control,
       devtoolsOpen: tab.devtoolsOpen,
+      ...(tab.devtoolsOpen ? { devtoolsDock: tab.devtoolsDock } : {}),
       designMode: tab.designMode,
       holder: holder ? { conversationId: holder.sessionId, name: holder.name } : null,
     };
@@ -542,8 +556,11 @@ export class BrowserHost {
     const tab = this.tabs.get(tabId);
     if (!tab) return EMPTY_STATE;
     if (open && tab.designMode) void this.setDesignMode(tabId, false);
+    if (open === tab.devtoolsOpen) return this.stateOf(tab);
     tab.devtoolsOpen = open;
     if (open) {
+      tab.devtoolsDock = 'bottom';
+      tab.devtoolsPage = null;
       this.detachDebugger(tab);
       this.ensureDevTools(tab);
     } else {
@@ -595,29 +612,42 @@ export class BrowserHost {
     for (const tab of this.tabs.values()) {
       const onTop = Boolean(this.shown && tab.id === this.shown.tabId);
       if (!contentView.children.includes(tab.view)) contentView.addChildView(tab.view, 0);
-      if (tab.devtools && !contentView.children.includes(tab.devtools)) {
+      // 独立窗口里的前端归那扇窗口，不能被主窗口抢回来
+      if (tab.devtools && !tab.devtoolsWindow && !contentView.children.includes(tab.devtools)) {
         contentView.addChildView(tab.devtools, 0);
       }
-      if (onTop && this.shown) {
-        tab.view.setBounds(this.shown.viewport);
+      const dtStage =
+        tab.devtools &&
+        tab.devtoolsOpen &&
+        !tab.devtoolsWindow &&
+        this.shownDevtools?.tabId === tab.id
+          ? this.shownDevtools
+          : null;
+      // 停靠：前端铺满舞台、自带拖拽分隔条，网页叠在它给出的区域上（同 Chrome 的嵌入方式）
+      const guestBounds =
+        dtStage && tab.devtoolsPage
+          ? devtoolsGuestBounds(dtStage.viewport, tab.devtoolsPage)
+          : dtStage
+            ? null
+            : (this.shown?.viewport ?? null);
+      const guestCovered = Boolean(this.shown?.covered || dtStage?.covered);
+      if (dtStage && tab.devtools) {
+        tab.devtools.setBounds(dtStage.viewport);
+        tab.devtools.setVisible(true);
+        if (!dtStage.covered && !this.overlayActive) raise.push(tab.devtools);
+      } else if (tab.devtools && !tab.devtoolsWindow) {
+        tab.devtools.setVisible(false);
+      }
+      if (onTop && guestBounds) {
+        tab.view.setBounds(guestBounds);
         tab.view.setVisible(true);
-        if (!this.shown.covered && !this.overlayActive) raise.push(tab.view);
+        if (!guestCovered && !this.overlayActive) raise.push(tab.view);
       } else {
         tab.view.setVisible(false);
       }
-      void this.applyEmulation(tab, onTop && this.shown ? this.shown.viewport : null).catch((error: unknown) => console.warn('[browser] emulation failed', error));
-      const dtOnTop = Boolean(
-        tab.devtools && tab.devtoolsOpen && this.shownDevtools?.tabId === tab.id
+      void this.applyEmulation(tab, onTop && this.shown ? this.shown.viewport : null).catch(
+        (error: unknown) => console.warn('[browser] emulation failed', error)
       );
-      if (tab.devtools) {
-        if (dtOnTop && this.shownDevtools) {
-          tab.devtools.setBounds(this.shownDevtools.viewport);
-          tab.devtools.setVisible(true);
-          if (!this.shownDevtools.covered && !this.overlayActive) raise.push(tab.devtools);
-        } else {
-          tab.devtools.setVisible(false);
-        }
-      }
     }
     this.ensureWorkbenchOnTop(window);
     for (const view of raise) contentView.addChildView(view);
@@ -681,19 +711,115 @@ export class BrowserHost {
         },
       });
       tab.devtools.setBackgroundColor('#202124');
+      const devtools = tab.devtools.webContents;
+      // 前端 undock 时会 window.open 一个空白宿主窗；独立窗口由我们自己开
+      devtools.setWindowOpenHandler(() => ({ action: 'deny' }));
+      devtools.on('dom-ready', () => {
+        void devtools.executeJavaScript(DEVTOOLS_DOCK_BRIDGE_SCRIPT, true).catch(() => {});
+      });
+      devtools.on('console-message', (details) => {
+        const message = parseDevtoolsDockMessage(details.message);
+        if (message) this.onDevtoolsDock(tab, message);
+      });
     }
     const dt = tab.devtools.webContents;
     if (dt.isDestroyed()) return;
     try {
       contents.setDevToolsWebContents(dt);
     } catch {}
-    // detach：不在 guest 自己身上再拆一条 dock，前端只画在我们给的 view 里
-    contents.openDevTools({ mode: 'detach', activate: false });
+    // 停靠模式才会给前端 can_dock=true，菜单里才有「Dock side」；
+    // 视图布局仍由我们按前端上报的方向 / 网页区域来摆
+    contents.openDevTools({ mode: 'bottom', activate: false });
+  }
+
+  /** 必须在 session.fromPartition 之前：Chromium 建 session 时把偏好读进内存，之后改文件无效 */
+  private resetUndockedPreference(partition: string): void {
+    const file = join(
+      app.getPath('userData'),
+      'Partitions',
+      partition.replace(/^persist:/, ''),
+      'Preferences'
+    );
+    try {
+      if (!existsSync(file)) return;
+      const next = resetUndockedDevtoolsPreference(readFileSync(file, 'utf8'));
+      if (next) writeFileSync(file, next);
+    } catch (error) {
+      console.warn('[browser] could not reset DevTools dock preference', error);
+    }
+  }
+
+  private onDevtoolsDock(
+    tab: Tab,
+    message: { side: DevtoolsDockSide } | { bounds: DevtoolsRect }
+  ): void {
+    if (this.tabs.get(tab.id) !== tab || !tab.devtoolsOpen) return;
+    if ('bounds' in message) {
+      tab.devtoolsPage = message.bounds;
+      this.layout();
+      return;
+    }
+    if (message.side === tab.devtoolsDock) return;
+    tab.devtoolsDock = message.side;
+    if (message.side === 'undocked') {
+      tab.devtoolsPage = null;
+      this.openDevtoolsWindow(tab);
+    } else {
+      this.closeDevtoolsWindow(tab);
+    }
+    this.layout();
+    this.emitState(tab.ownerSessionId, tab.id);
+  }
+
+  /** 选「Undock into separate window」：把同一个前端视图挪进独立窗口，关窗即关 DevTools */
+  private openDevtoolsWindow(tab: Tab): void {
+    const view = tab.devtools;
+    if (!view || tab.devtoolsWindow) return;
+    const host = this.hostWindow();
+    this.detach(view);
+    const bounds = host && !host.isDestroyed() ? host.getBounds() : undefined;
+    const win = new BrowserWindow({
+      width: 960,
+      height: 640,
+      ...(bounds ? { x: bounds.x + 40, y: bounds.y + 40 } : {}),
+      title: `DevTools - ${tab.view.webContents.getURL()}`,
+      backgroundColor: '#202124',
+      show: false,
+    });
+    tab.devtoolsWindow = win;
+    win.contentView.addChildView(view);
+    const syncBounds = () => {
+      if (win.isDestroyed()) return;
+      const { width, height } = win.getContentBounds();
+      view.setBounds({ x: 0, y: 0, width, height });
+    };
+    syncBounds();
+    view.setVisible(true);
+    win.on('resize', syncBounds);
+    win.on('closed', () => {
+      if (tab.devtoolsWindow !== win) return;
+      tab.devtoolsWindow = undefined;
+      if (this.tabs.get(tab.id) === tab && tab.devtoolsOpen) this.setDevTools(tab.id, false);
+    });
+    win.show();
+  }
+
+  private closeDevtoolsWindow(tab: Tab): void {
+    const win = tab.devtoolsWindow;
+    if (!win) return;
+    tab.devtoolsWindow = undefined;
+    if (!win.isDestroyed()) {
+      if (tab.devtools && win.contentView.children.includes(tab.devtools))
+        win.contentView.removeChildView(tab.devtools);
+      win.destroy();
+    }
   }
 
   private teardownDevTools(tab: Tab): void {
     const contents = tab.view.webContents;
     if (!contents.isDestroyed() && contents.isDevToolsOpened()) contents.closeDevTools();
+    this.closeDevtoolsWindow(tab);
+    tab.devtoolsPage = null;
     if (tab.devtools) {
       this.detach(tab.devtools);
       tab.devtools.setVisible(false);
@@ -978,6 +1104,7 @@ export class BrowserHost {
   getSession(): Session {
     if (!this.guestSession) {
       const name = partitionName(app.isPackaged);
+      this.resetUndockedPreference(name);
       this.guestSession = session.fromPartition(name);
       void import('./proxyConfig').then(({ getProxyConfig }) =>
         getProxyConfig().attachSession(this.guestSession as Session)
@@ -1163,7 +1290,10 @@ export class BrowserHost {
       case 'bounding_box':
         return this.boundingBox(mustTab(), paramString(params, 'ref'));
       case 'screenshot':
-        return this.screenshot(mustTab(), isRecord(params) && typeof params.ref === 'string' ? params.ref : undefined, params);
+        return this.screenshot(
+          mustTab(),
+          isRecord(params) && typeof params.ref === 'string' ? params.ref : undefined
+        );
       case 'cdp':
         return this.cdpCommand(
           mustTab(),
@@ -1299,16 +1429,17 @@ export class BrowserHost {
     return tab.lastSnapshot.text;
   }
 
-  private sendInput(tab: Tab, event: Electron.InputEvent): void {
+  private sendInput(tab: Tab, event: Electron.KeyboardInputEvent | Electron.MouseInputEvent): void {
     this.assertAgentControl(tab);
     tab.synthetic += 1;
     try { tab.view.webContents.sendInputEvent(event); } finally { tab.synthetic -= 1; }
   }
 
   private async pressKey(tab: Tab, key: string): Promise<PageInfo> {
-    const { keyCode, modifiers } = parseBrowserKey(key);
+    const { keyCode, modifiers: rawModifiers } = parseBrowserKey(key);
+    const modifiers = rawModifiers as NonNullable<Electron.KeyboardInputEvent['modifiers']>;
     this.sendInput(tab, { type: 'keyDown', keyCode, modifiers });
-    if (keyCode.length === 1 && modifiers.length === 0) this.sendInput(tab, { type: 'char', keyCode });
+    if (keyCode.length === 1 && rawModifiers.length === 0) this.sendInput(tab, { type: 'char', keyCode });
     this.sendInput(tab, { type: 'keyUp', keyCode, modifiers });
     await sleep(40);
     this.assertAgentControl(tab);
@@ -1576,6 +1707,8 @@ export class BrowserHost {
       locked: false,
       ready: false,
       devtoolsOpen: false,
+      devtoolsDock: 'bottom',
+      devtoolsPage: null,
       designMode: false,
       favicon: null,
       pickSeq: 0,
