@@ -246,7 +246,10 @@ function MarkdownAnchor({
     <a
       href={classification.kind === 'external' ? href || undefined : undefined}
       className={cn(
-        'text-brand underline decoration-brand/40 underline-offset-2 transition-colors hover:decoration-brand',
+        // chip 内（`[`path`](path)`）已经是可点控件，颜色和常态下划线会让一行里的路径结成色块
+        codeText !== null
+          ? 'text-inherit no-underline transition-colors hover:text-brand'
+          : 'text-brand underline decoration-brand/40 underline-offset-2 transition-colors hover:decoration-brand',
         local && 'cursor-pointer break-all'
       )}
       role={local ? 'link' : undefined}
@@ -267,7 +270,7 @@ function MarkdownAnchor({
 
   if (codeText !== null) {
     return (
-      <span className="inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/70 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-xs">
+      <span className="mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/60 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-xs">
         {anchor}
         <button
           type="button"
@@ -323,10 +326,14 @@ export const markdownComponents: Components = {
   },
   a: MarkdownAnchor,
   ul: ({ children }) => (
-    <ul className="my-2 list-disc pl-5 space-y-1 marker:text-muted-foreground">{children}</ul>
+    <ul className="my-2.5 list-disc pl-5 space-y-1.5 leading-[1.7] marker:text-muted-foreground">
+      {children}
+    </ul>
   ),
   ol: ({ children }) => (
-    <ol className="my-2 list-decimal pl-5 space-y-1 marker:text-muted-foreground">{children}</ol>
+    <ol className="my-2.5 list-decimal pl-5 space-y-1.5 leading-[1.7] marker:text-muted-foreground">
+      {children}
+    </ol>
   ),
   h1: ({ children }) => <h1 className="mt-3 mb-1.5 text-base font-semibold">{children}</h1>,
   h2: ({ children }) => <h2 className="mt-3 mb-1.5 text-base font-semibold">{children}</h2>,
@@ -377,14 +384,14 @@ export const markdownComponents: Components = {
           type="button"
           onClick={onClick}
           title={value}
-          className="inline-flex max-w-full items-center rounded-[5px] border border-border/70 bg-muted/70 px-1 py-px align-baseline font-mono text-xs text-brand transition-colors hover:bg-muted"
+          className="mx-0.5 inline-flex max-w-full items-center rounded-[5px] border border-border/60 bg-muted/70 px-1 py-px align-baseline font-mono text-xs text-foreground transition-colors hover:bg-muted hover:text-brand"
         >
           <span className="truncate">{value}</span>
         </button>
       );
     }
     return (
-      <code className="rounded-[5px] border border-border/70 bg-muted/70 px-1 py-px font-mono text-xs">
+      <code className="mx-0.5 rounded-[5px] bg-muted/70 px-1 py-px font-mono text-xs">
         {children}
       </code>
     );
@@ -413,9 +420,7 @@ export const markdownComponents: Components = {
     const raw = start !== undefined && end !== undefined ? text.slice(start, end) : null;
     return (
       <div className="group/table relative my-2 min-w-0 max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-        <table className="w-max min-w-full border-collapse text-xs [overflow-wrap:normal]">
-          {children}
-        </table>
+        <table className="w-max min-w-full border-collapse leading-[1.6]">{children}</table>
         {raw && !streaming && (
           <CopyButton
             text={raw}
@@ -426,12 +431,14 @@ export const markdownComponents: Components = {
     );
   },
   th: ({ children }) => (
-    <th className="whitespace-nowrap border-b border-border px-2 py-1 text-left font-medium">
+    <th className="max-w-md min-w-16 border-b border-border px-2.5 py-1.5 text-left font-medium whitespace-normal break-words">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="whitespace-nowrap border-b border-border/50 px-2 py-1">{children}</td>
+    <td className="max-w-md min-w-16 border-b border-border/50 px-2.5 py-1.5 align-top whitespace-normal break-words">
+      {children}
+    </td>
   ),
   hr: () => <hr className="my-3 border-border" />,
 };
