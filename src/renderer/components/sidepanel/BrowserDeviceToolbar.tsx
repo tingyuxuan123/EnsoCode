@@ -61,6 +61,7 @@ export function BrowserDeviceToolbar({
   scale,
   liveSize,
   disabled,
+  devtoolsOpen = false,
   background,
   onBackgroundChange,
   onApply,
@@ -71,6 +72,8 @@ export function BrowserDeviceToolbar({
   /** 拖拽调整尺寸时的实时逻辑尺寸 */
   liveSize?: { width: number; height: number } | null;
   disabled: boolean;
+  /** DevTools 前端占着 guest 的 CDP，改尺寸必然失败；仍允许关闭预览 */
+  devtoolsOpen?: boolean;
   background: BrowserStageBackground;
   onBackgroundChange: (background: BrowserStageBackground) => void;
   onApply: (device: BrowserDevice) => Promise<BrowserResult<BrowserTabState>>;
@@ -87,7 +90,7 @@ export function BrowserDeviceToolbar({
     setDraftHeight(String(liveSize?.height ?? height));
   }, [width, height, liveSize?.width, liveSize?.height]);
 
-  const locked = busy || disabled;
+  const locked = busy || disabled || devtoolsOpen;
   const profileId = device.profileId ?? 'responsive';
   const profileName = (name: string) =>
     name.startsWith('Desktop ') ? t('Desktop {{size}}', { size: name.slice(8) }) : t(name);
@@ -313,7 +316,7 @@ export function BrowserDeviceToolbar({
           variant="ghost"
           size="icon-xs"
           className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={locked}
+          disabled={busy || disabled}
           aria-label={t('Close device preview')}
           title={t('Close device preview')}
           onClick={() => void apply({ enabled: false })}
@@ -321,7 +324,7 @@ export function BrowserDeviceToolbar({
           <X className="size-3.5" />
         </Button>
       </div>
-      {(disabled || error) && (
+      {(disabled || devtoolsOpen || error) && (
         <p
           role={error ? 'alert' : undefined}
           className={cn(
@@ -329,7 +332,12 @@ export function BrowserDeviceToolbar({
             error ? 'text-destructive' : 'text-warning'
           )}
         >
-          {error ?? t('Take control before changing the device preview.')}
+          {error ??
+            t(
+              disabled
+                ? 'Take control before changing the device preview.'
+                : 'Close DevTools to change the device preview.'
+            )}
         </p>
       )}
     </div>

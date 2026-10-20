@@ -376,7 +376,8 @@ export function BrowserView({
   /** 拖拽设备框边缘：框保持居中，边缘跟手需要按 2 倍位移换算逻辑尺寸 */
   const onDeviceResize =
     (axis: 'x' | 'y' | 'xy') => (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!device || !frame || agentLocked) return;
+      // DevTools 占着 CDP 时改尺寸必然被 Main 拒绝，别让拖拽发出注定失败的操作
+      if (!device || !frame || agentLocked || state.devtoolsOpen) return;
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       const startX = event.clientX;
@@ -557,7 +558,8 @@ export function BrowserView({
           </MenuTrigger>
           <MenuPopup align="end" className="min-w-48">
             <MenuItem
-              disabled={agentLocked || controlBusy || state.devtoolsOpen}
+              // DevTools 开着时不能启用或改尺寸，但关掉预览不碰 CDP，仍要放行
+              disabled={agentLocked || controlBusy || (state.devtoolsOpen && !device)}
               onClick={toggleDevice}
             >
               <MonitorSmartphone />
@@ -603,6 +605,7 @@ export function BrowserView({
           scale={frame?.scale ?? null}
           liveSize={liveSize}
           disabled={agentLocked || controlBusy}
+          devtoolsOpen={state.devtoolsOpen}
           background={stageBackground}
           onBackgroundChange={setStageBackground}
           onApply={applyDevice}
@@ -642,7 +645,7 @@ export function BrowserView({
             style={frame ? { width: frame.width, height: frame.height } : undefined}
           >
             {!hasPage && <BrowserNewTab />}
-            {frame && !agentLocked && (
+            {frame && !agentLocked && !state.devtoolsOpen && (
               <>
                 <div
                   className={cn(

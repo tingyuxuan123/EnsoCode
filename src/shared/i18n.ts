@@ -231,6 +231,7 @@ export const zhTranslations: Record<string, string> = {
   'In control {{time}}': '已接管 {{time}}',
   'Let me take over': '我来接管',
   'Take control before changing the device preview.': '请先接管，再更改设备预览。',
+  'Close DevTools to change the device preview.': '请关闭开发者工具，再更改设备预览。',
   'Use dimensions from 50 to 8192, DPR from 0.5 to 4, and at most 20 million viewport pixels.':
     '宽高须为 50–8192，DPR 须为 0.5–4，视口像素总数不超过 2000 万。',
   'Could not update device preview.': '无法更新设备预览。',

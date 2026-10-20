@@ -57,13 +57,14 @@ const initial: BrowserDevice = {
 };
 const apply = vi.fn();
 const background = vi.fn();
-async function render(device = initial, disabled = false) {
+async function render(device = initial, disabled = false, devtoolsOpen = false) {
   await act(async () =>
     root.render(
       <BrowserDeviceToolbar
         device={device}
         scale={0.84}
         disabled={disabled}
+        devtoolsOpen={devtoolsOpen}
         background="default"
         onBackgroundChange={background}
         onApply={apply}
@@ -179,5 +180,14 @@ describe('inline device toolbar', () => {
     await render(initial, true);
     expect(input('Viewport width').disabled).toBe(true);
     expect(container.textContent).toContain('Take control before changing the device preview.');
+  });
+  it('locks metrics while DevTools holds CDP but still allows leaving the preview', async () => {
+    await render(initial, false, true);
+    expect(input('Viewport width').disabled).toBe(true);
+    expect(container.textContent).toContain('Close DevTools to change the device preview.');
+    const close = container.querySelector('[aria-label="Close device preview"]') as HTMLElement;
+    expect((close as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => close.click());
+    expect(apply).toHaveBeenLastCalledWith({ enabled: false });
   });
 });

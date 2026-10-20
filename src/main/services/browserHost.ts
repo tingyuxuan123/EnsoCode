@@ -417,12 +417,18 @@ export class BrowserHost {
 
   async setDevice(tabId: string, conversationId: string, device: unknown): Promise<BrowserTabState> {
     const tab = this.ownedTab(tabId, conversationId);
-    assertDevtoolsIdle(tab.devtoolsOpen);
-    tab.device = parseBrowserDevice(device);
+    const next = parseBrowserDevice(device);
+    // 只有要应用模拟时才占用 CDP；关闭预览不碰 debugger，DevTools 开着也要能退出
+    if (next.enabled) assertDevtoolsIdle(tab.devtoolsOpen);
+    tab.device = next;
     this.invalidateRefs(tab);
     tab.emulationKey = undefined;
     this.layout();
-    await this.applyEmulation(tab, this.shown?.tabId === tab.id ? this.shown.viewport : null, true);
+    await this.applyEmulation(
+      tab,
+      this.shown?.tabId === tab.id ? this.shown.viewport : null,
+      next.enabled
+    );
     this.emitState(conversationId, tabId);
     return this.stateOf(tab);
   }

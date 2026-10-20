@@ -12,7 +12,10 @@ class MockContents extends EventEmitter {
   navigationHistory = { canGoBack: () => false, canGoForward: () => false, clear() {} };
   debugger = { isAttached: () => true, attach() {}, detach() {}, on() {}, sendCommand: async (method: string, params: unknown) => { mock.commands.push({ method, params }); return method === 'Page.captureScreenshot' ? { data: 'image' } : {}; } };
   setWindowOpenHandler() {}
+  setDevToolsWebContents() {}
+  openDevTools() {}
   getURL() { return this.url; }
+  getUserAgent() { return 'MockAgent/1.0'; }
   getTitle() { return 'Page'; }
   isLoading() { return false; }
   isDestroyed() { return false; }
@@ -82,6 +85,19 @@ it('读取生成快照代际，新读使旧 ref 和游标失效', async () => {
   const first = await host.invoke('conv', 'read_elements', { tabId }) as { entries: { ref: string }[] };
   await host.invoke('conv', 'read_text', { tabId });
   await expect(host.invoke('conv', 'click', { tabId, ref: first.entries[0].ref })).rejects.toThrow(/stale/);
+  await host.dispose();
+});
+it('DevTools 占用 CDP 时拒绝改设备模拟，但仍允许关闭设备预览', async () => {
+  const { host, tabId } = await open();
+  await host.setDevice(tabId, 'conv', { enabled: true, width: 393, height: 852 });
+  host.setDevTools(tabId, true);
+  await expect(
+    host.setDevice(tabId, 'conv', { enabled: true, width: 440, height: 956 })
+  ).rejects.toThrow(/DevTools/);
+  expect(host.state(tabId).device).toMatchObject({ width: 393, height: 852 });
+  await expect(host.setDevice(tabId, 'conv', { enabled: false })).resolves.toMatchObject({
+    device: { enabled: false },
+  });
   await host.dispose();
 });
 it('关闭走统一路径，不在搜索或持久恢复清单留下已关闭标签', async () => {
