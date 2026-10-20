@@ -178,7 +178,7 @@ function SidePanelSection() {
         rowId="general.collapseCompletedActivity"
         title={t('Collapse activity after reply')}
         description={t(
-          'When a reply finishes, fold consecutive thinking and tool calls (including edits and commands) into one summary row; failed calls stay visible'
+          'Fold everything before the final answer (thinking, tool calls and interim notes) under one "Worked for" header; running, stopped and failed turns stay expanded'
         )}
         checked={collapseCompletedActivity}
         onChange={setCollapseCompletedActivity}

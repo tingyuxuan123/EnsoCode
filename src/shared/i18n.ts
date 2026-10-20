@@ -361,16 +361,21 @@ export const zhTranslations: Record<string, string> = {
   'Show read/grep/find/ls as one-line rows and fold consecutive tool calls while the agent is still running':
     'read/grep/find/ls 显示为单行，agent 运行中也折叠连续的工具调用',
   'Auto-collapse previous turns': '自动折叠历史轮次',
-  'Collapse activity after reply': '回答完成后折叠过程',
+  'Collapse activity after reply': '回合结束后折叠工作过程',
   'Pin unfinished todos': '固定显示未完成待办',
   'Keep the latest todo list above the input while it has unfinished items, so it does not scroll away with the timeline':
     '最新任务清单还有未完成项时，固定显示在输入框上方，不随时间线滚走',
   'Hide until the todo list updates': '隐藏，清单更新后再显示',
-  'When a reply finishes, fold consecutive thinking and tool calls (including edits and commands) into one summary row; failed calls stay visible':
-    '回答结束后，把连续的思考和工具调用（包括编辑、命令）折成一行摘要；失败的调用仍单独显示',
+  'Fold everything before the final answer (thinking, tool calls and interim notes) under one "Worked for" header; running, stopped and failed turns stay expanded':
+    '把最终答案之前的思考、工具调用和过程叙述收进一行「已工作」；运行中、已停止和失败的轮保持展开',
   'Worked for {{duration}}': '已工作 {{duration}}',
+  'Working for {{duration}}': '工作中 {{duration}}',
+  Worked: '已处理',
+  Stopped: '已停止',
+  'Stopped after {{duration}}': '已停止 · {{duration}}',
+  'Failed after {{duration}}': '已失败 · {{duration}}',
+  'Failed run': '已失败',
   '{{count}} thinking steps': '{{count}} 段思考',
-  Activity: '过程',
   'After you send a new message, fold earlier turns down to the question, timestamp and duration; the latest turn stays expanded':
     '发送新消息后，之前的轮次只保留提问、时间与用时；最后一轮保持展开',
   'Notify only for the main agent': '仅主 agent 发送完成通知',

@@ -31,6 +31,8 @@ export type TimelineItem =
       deliveryState?: 'pending' | 'rejected';
       collapsed?: boolean;
       canCollapse?: boolean;
+      /** 本轮终态：中断/失败时该轮工作日志强制展开；缺省按正常完成处理 */
+      turnStatus?: 'completed' | 'aborted' | 'failed';
       /** 本轮首个 assistant 回复的模型与时间，供回复身份头显示 */
       replyModel?: string;
       replyAt?: number;
@@ -120,8 +122,20 @@ export type TimelineItem =
       stats: ToolGroupStats;
       /** compact 模式下组外仍有 running 的只读行：组头显示 Exploring */
       exploring: boolean;
-      /** 回答完成后的过程折叠组（任意成功工具 + 思考）；普通工具组缺省 */
-      activity?: { thinking: number; workedMs: number };
+      /** 回合工作日志：本轮最终答案之前的全部过程行（思考 / 工具 / 中间叙述）；普通工具组缺省 */
+      worklog?: {
+        status: WorklogStatus;
+        /** 运行中 / 中断 / 失败 / 没有最终答案时强制展开，组头不可收起 */
+        forced: boolean;
+        /** 整轮活跃用时；未知（含 ask_user 等待的轮）时不带 */
+        durationMs?: number;
+        /** 运行中实时计时的起点 */
+        startedAt?: number;
+        /** 过程内思考段数 */
+        thinking: number;
+        /** 过程内失败的工具调用数：收起时也要能看见 */
+        failed: number;
+      };
       /** 成对的 explore_mark → explore_fold 探索组：组头展开只给目标与结果，steps 时才平铺过程；其它组缺省 */
       explore?: { goal: string; report: string; steps: boolean };
       /** 组内原始行（tool + 夹在其间的 thinking），展开时平铺为顶层行 */
@@ -207,6 +221,8 @@ export interface ToolGroupStats {
   searches: number;
   others: number;
 }
+
+export type WorklogStatus = 'running' | 'completed' | 'aborted' | 'failed';
 
 /** 从工具参数里挑一个最能说明「对什么操作」的字段做摘要 */
 const SUMMARY_KEYS = [
@@ -1019,6 +1035,15 @@ function buildMessageTimeline(
       if (currentTurnUserItem && turnDurationMs !== undefined) {
         currentTurnUserItem.turnDurationMs = turnDurationMs;
       }
+      // 本轮终态：中断 / 失败要能在工作日志组头上体现，并强制展开
+      if (currentTurnUserItem) {
+        currentTurnUserItem.turnStatus =
+          message.stopReason === 'aborted'
+            ? 'aborted'
+            : message.stopReason === 'error' || message.errorMessage
+              ? 'failed'
+              : 'completed';
+      }
     }
     // 「流式中」= 最后一个有内容的 part：pi 流式时 thinking/text 后面常已跟着
     // 空占位 part，按「最后一个 part」判会把正在生成的块误判为已完结
@@ -1696,41 +1721,6 @@ function withExploreChildren(item: TimelineItem): TimelineItem[] {
     : [item];
 }
 
-function activitySegment(
-  segment: TimelineItem[],
-  expandedKeys: ReadonlySet<string>
-): TimelineItem[] {
-  if (segment.length < 2) return segment.flatMap(withExploreChildren);
-  const stats: ToolGroupStats = { commands: 0, reads: 0, searches: 0, others: 0 };
-  let thinking = 0;
-  let workedMs = 0;
-  let count = 0;
-  for (const row of segment.flatMap((s) => (s.kind === 'tool-group' ? s.children : [s]))) {
-    if (row.kind === 'thinking') thinking += 1;
-    else if (row.kind === 'tool') {
-      classifyTool(row.name, row.summary, stats, false);
-      count += 1;
-    }
-    if (row.kind === 'thinking' || row.kind === 'tool') workedMs += row.durationMs ?? 0;
-  }
-  const key = `group-${segment[0].key}`;
-  const expanded = expandedKeys.has(key);
-  // 组头 children 与展开后平铺的行必须同源：段里可能夹着已收好的探索组，
-  // 只有展开探索组的 steps 才会把它的原始行铺回顶层。
-  const rows = segment.flatMap(withExploreChildren);
-  const group: TimelineItem = {
-    kind: 'tool-group',
-    key,
-    expanded,
-    count,
-    stats,
-    exploring: false,
-    activity: { thinking, workedMs },
-    children: rows,
-  };
-  return expanded ? [group, ...nestedChildren(rows)] : [group];
-}
-
 /**
  * 工具行分组折叠（折中方案）：
  * - 段 = 连续的 tool/thinking 行（text/user/error 打断）；thinking 收进段内，门槛只数 tool。
@@ -1738,9 +1728,8 @@ function activitySegment(
  * - 默认：running 时最后一个 user 之后的段不折（进行中的轮实时展示）。
  * - compact（对齐 Cursor 的 Explored）：段只收只读工具（read/grep/find/ls/glob），
  *   bash 等其它工具打断段并平铺；live 也折，running 只读行进组，组头标 exploring。
- * - collapseCompletedActivity（对齐 deepchat）：已完成轮次里连续的思考 + 成功工具（不分类型，
- *   含 edit/write/todo）≥2 条折成一个过程组；失败/未完成工具与目标信号打断段。进行中的轮不受影响。
- * - 成功配对的 explore_mark → explore_fold 先收成探索组：平时独立成行，完成后并入过程组。
+ * - collapseCompletedActivity（对齐 ZCode）：每轮最终答案之前的过程收进一个工作日志组头，见 foldTurnRows。
+ * - 成功配对的 explore_mark → explore_fold 先收成探索组。
  * - expandedKeys 含组 key 时组头后平铺 children（参与虚拟化）。
  * 纯函数。
  */
@@ -1799,39 +1788,47 @@ export function foldTimeline(
   const lastUserIndex = sourceItems.findLastIndex(
     (item) => item.kind === 'user' && !item.deliveryState
   );
-  // 生成中只有最后一段正文之后的尾段仍在进行；被正文隔开的前段已完成，可立即折叠
-  const liveFrom = Math.max(
-    lastUserIndex,
-    sourceItems.findLastIndex((item) => item.kind === 'text')
-  );
-  const activityAt = (index: number): boolean =>
-    options.collapseCompletedActivity === true && !(running && index > liveFrom);
-  const inSegment = (s: TimelineItem, index: number): boolean =>
-    s.kind === 'thinking' ||
-    (s.kind === 'tool-group' && activityAt(index)) ||
-    (s.kind === 'tool' &&
-      (activityAt(index)
-        ? s.state === 'ok' && !s.name.startsWith('goal_') && s.name !== 'submit_plan'
-        : !compact || isReadOnlyTool(s)));
+  if (options.collapseCompletedActivity === true) {
+    return foldTurnWorklog(sourceItems, running, lastUserIndex, expandedKeys, compact);
+  }
+  // 第二步：工具段折组。最后一个 user 之后的段属于进行中的轮
+  return [
+    ...foldSegments(sourceItems.slice(0, lastUserIndex + 1), expandedKeys, compact, {
+      live: false,
+      running: false,
+    }),
+    ...foldSegments(sourceItems.slice(lastUserIndex + 1), expandedKeys, compact, {
+      live: running && lastUserIndex >= 0,
+      running,
+    }),
+  ];
+}
+
+/**
+ * 连续的 tool/thinking 行折成工具组。live：进行中的轮（非 compact 时不折）；
+ * running：本段末尾就是会话末尾且仍在生成（compact 组头显示 Exploring）。
+ */
+function foldSegments(
+  rows: readonly TimelineItem[],
+  expandedKeys: ReadonlySet<string>,
+  compact: boolean,
+  flags: { live: boolean; running: boolean }
+): TimelineItem[] {
+  const inSegment = (s: TimelineItem): boolean =>
+    s.kind === 'thinking' || (s.kind === 'tool' && (!compact || isReadOnlyTool(s)));
   const result: TimelineItem[] = [];
   let i = 0;
-  while (i < sourceItems.length) {
-    const item = sourceItems[i];
-    if (!inSegment(item, i)) {
+  while (i < rows.length) {
+    const item = rows[i];
+    if (!inSegment(item)) {
       result.push(...withExploreChildren(item));
       i += 1;
       continue;
     }
-    // 收集连续段
     let end = i;
-    while (end < sourceItems.length && inSegment(sourceItems[end], end)) end += 1;
-    const segment = mergeAdjacentThinking(sourceItems.slice(i, end));
-    if (activityAt(i)) {
-      result.push(...activitySegment(segment, expandedKeys));
-      i = end;
-      continue;
-    }
-    const liveSegment = !compact && running && lastUserIndex >= 0 && i > lastUserIndex;
+    while (end < rows.length && inSegment(rows[end])) end += 1;
+    const segment = mergeAdjacentThinking(rows.slice(i, end));
+    const liveSegment = !compact && flags.live;
     // 钉住的行不进组：edit 的 diff、write 的内容、图片预览、todo 清单是核心产物。
     // compact 下 running 只读行进组（避免完成后从平铺跳进组头抽动）；
     // 非 compact 仍把 running 钉在组外，方便看此刻在跑什么。
@@ -1862,7 +1859,7 @@ export function foldTimeline(
         // 运行中的尾段在两次调用之间也算探索中，避免组头在「探索了 / 探索中」间来回跳
         exploring:
           compact &&
-          ((running && end === sourceItems.length) ||
+          ((flags.running && end === rows.length) ||
             groupRows.some(
               (s) => s.kind === 'tool' && (s.state === 'running' || s.state === 'reviewing')
             )),
@@ -1872,6 +1869,145 @@ export function foldTimeline(
       if (expanded) result.push(...nestedChildren(segment));
       else result.push(...editRows);
     }
+    i = end;
+  }
+  return result;
+}
+
+/** 轮尾的会话状态行：不属于本轮过程，排在最终答案之后，永远可见 */
+function isTurnTailRow(item: TimelineItem): boolean {
+  switch (item.kind) {
+    case 'error':
+    case 'compaction':
+    case 'compaction-notice':
+    case 'compaction-progress':
+    case 'divider':
+    case 'task-note':
+    case 'session-custom':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/** 收起工作日志后仍要露出的过程行：提问、计划与目标信号是给用户看的卡片，不是过程 */
+function isWorklogPinnedRow(item: TimelineItem): boolean {
+  return (
+    item.kind === 'tool' &&
+    (item.name === 'ask_user' || item.name === 'submit_plan' || item.name.startsWith('goal_'))
+  );
+}
+
+/**
+ * 一轮的工作日志（对齐 ZCode 的「已工作 N 秒」）：
+ * - 只有「已结束且最后一行是正文」时，这条正文才是最终答案，留在组外；
+ *   其余过程行（思考、工具、中间叙述）全部收进一个组头，不按边界拆成多段。
+ * - 运行中、中断、失败或没有最终答案时强制展开，组头只报状态。
+ * - 轮尾的错误 / 压缩 / 分隔线等会话状态行排在答案之后，永远可见。
+ * - 展开体内照常按 foldSegments 折工具组。
+ */
+function foldTurnRows(
+  user: Extract<TimelineItem, { kind: 'user' }>,
+  rows: readonly TimelineItem[],
+  turnRunning: boolean,
+  expandedKeys: ReadonlySet<string>,
+  compact: boolean
+): TimelineItem[] {
+  let tailStart = rows.length;
+  while (tailStart > 0 && isTurnTailRow(rows[tailStart - 1])) tailStart -= 1;
+  const flow = rows.slice(0, tailStart);
+  const tail = rows.slice(tailStart);
+  const last = flow.at(-1);
+  const answer = !turnRunning && last?.kind === 'text' ? last : undefined;
+  const history = answer ? flow.slice(0, -1) : flow;
+  const segmentFlags = {
+    live: turnRunning && !user.key.startsWith('partial-'),
+    running: turnRunning,
+  };
+  if (history.length === 0) {
+    return [...foldSegments(flow, expandedKeys, compact, segmentFlags), ...tail];
+  }
+
+  const stats: ToolGroupStats = { commands: 0, reads: 0, searches: 0, others: 0 };
+  let count = 0;
+  let failed = 0;
+  let thinking = 0;
+  const flat = history.flatMap((row) => (row.kind === 'tool-group' ? row.children : [row]));
+  for (const row of mergeAdjacentThinking(flat)) {
+    if (row.kind === 'thinking') thinking += 1;
+    if (row.kind !== 'tool' || EXPLORE_TOOLS.has(row.name)) continue;
+    classifyTool(row.name, row.summary, stats, false);
+    count += 1;
+    if (row.state === 'error') failed += 1;
+  }
+
+  const status: WorklogStatus = turnRunning ? 'running' : (user.turnStatus ?? 'completed');
+  const forced = status !== 'completed' || !answer;
+  const key = `worklog-${user.key}`;
+  const expanded = forced || expandedKeys.has(key);
+  const startedAt = user.timestamp ?? user.replyAt;
+  const children = foldSegments(history, expandedKeys, compact, segmentFlags);
+  const head: TimelineItem = {
+    kind: 'tool-group',
+    key,
+    expanded,
+    count,
+    stats,
+    exploring: false,
+    worklog: {
+      status,
+      forced,
+      thinking,
+      failed,
+      ...(status !== 'running' && typeof user.turnDurationMs === 'number'
+        ? { durationMs: user.turnDurationMs }
+        : {}),
+      ...(status === 'running' && typeof startedAt === 'number' ? { startedAt } : {}),
+    },
+    children,
+  };
+  const body = expanded ? children : history.filter(isWorklogPinnedRow);
+  return [head, ...body, ...(answer ? [answer] : []), ...tail];
+}
+
+/** 按 user 轮次切分，每轮答案之前的过程收进一个工作日志组头 */
+function foldTurnWorklog(
+  rows: readonly TimelineItem[],
+  running: boolean,
+  lastUserIndex: number,
+  expandedKeys: ReadonlySet<string>,
+  compact: boolean
+): TimelineItem[] {
+  const result: TimelineItem[] = [];
+  const firstUserIndex = rows.findIndex((item) => item.kind === 'user');
+  // 历史分页窗口可能从一轮中间开始：没有 user 锚点的前导段按已完成的轮折，
+  // key 锚定首个过程行，补拉历史后不会重复折叠同一段。
+  const leadingEnd = firstUserIndex < 0 ? rows.length : firstUserIndex;
+  if (leadingEnd > 0) {
+    const leading = rows.slice(0, leadingEnd);
+    const anchor: Extract<TimelineItem, { kind: 'user' }> = {
+      kind: 'user',
+      key: `partial-${leading[0].key}`,
+      text: '',
+      images: [],
+    };
+    result.push(
+      ...foldTurnRows(anchor, leading, running && firstUserIndex < 0, expandedKeys, compact)
+    );
+  }
+  let i = leadingEnd;
+  while (i < rows.length) {
+    const user = rows[i] as Extract<TimelineItem, { kind: 'user' }>;
+    let end = i + 1;
+    while (end < rows.length && rows[end].kind !== 'user') end += 1;
+    result.push(user);
+    const turn = rows.slice(i + 1, end);
+    // 待发送的本地回显与已折叠的轮次不套工作日志
+    if (user.deliveryState || user.collapsed) result.push(...turn);
+    else
+      result.push(
+        ...foldTurnRows(user, turn, running && i === lastUserIndex, expandedKeys, compact)
+      );
     i = end;
   }
   return result;

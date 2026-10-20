@@ -359,6 +359,31 @@ describe('buildTimeline', () => {
       });
     });
 
+    it('本轮终态写回 user 行：中断 / 失败 / 正常完成', () => {
+      const timeline = buildTimeline(
+        [
+          { role: 'user', content: [{ type: 'text', text: '改一下' }] },
+          { role: 'assistant', stopReason: 'aborted', content: [] },
+          { role: 'user', content: [{ type: 'text', text: '再来' }] },
+          {
+            role: 'assistant',
+            stopReason: 'error',
+            errorMessage: 'boom',
+            content: [],
+          },
+          { role: 'user', content: [{ type: 'text', text: '好了' }] },
+          { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'ok' }] },
+        ],
+        false
+      );
+      const users = timeline.filter((item) => item.kind === 'user');
+      expect(users.map((item) => (item.kind === 'user' ? item.turnStatus : null))).toEqual([
+        'aborted',
+        'failed',
+        'completed',
+      ]);
+    });
+
     it('多轮对话：历史轮次保留耗时，当前运行中轮次耗时待完结', () => {
       const timeline = buildTimeline(
         [
@@ -2176,15 +2201,17 @@ describe('foldTimeline', () => {
     expect(expanded.map(nestedOf)).toEqual([undefined, true, undefined, true, true]);
   });
 
-  it('已完成活动组展开时，diff 行同样保留完整行', () => {
+  it('工作日志展开时，diff 行同样保留完整行', () => {
     const items = [
+      userItem('u'),
       toolItem('t1', 'read'),
       toolItem('t2', 'grep'),
       toolItem('e1', 'apply_patch', [toolItem('x')]),
       toolItem('t3', 'read'),
+      textItem('answer'),
     ];
     const collapsed = foldTimeline(items, false, new Set(), { collapseCompletedActivity: true });
-    const groupKey = collapsed[0].key;
+    const groupKey = collapsed[1].key;
     const expanded = foldTimeline(items, false, new Set([groupKey]), {
       collapseCompletedActivity: true,
     });
@@ -3041,120 +3068,218 @@ describe('thinkingRowExpanded', () => {
   });
 });
 
-describe('foldTimeline 回答完成后折叠过程（collapseCompletedActivity）', () => {
+describe('foldTimeline 回合工作日志（collapseCompletedActivity）', () => {
   type Group = Extract<TimelineItem, { kind: 'tool-group' }>;
   const on = { collapseCompletedActivity: true };
   const kinds = (items: TimelineItem[]) =>
-    items.map((item) => (item.kind === 'tool' ? item.name : item.kind));
-  const timed = (item: TimelineItem, durationMs: number): TimelineItem =>
-    ({ ...item, durationMs }) as TimelineItem;
+    items.map((item) =>
+      item.kind === 'tool'
+        ? item.name
+        : item.kind === 'tool-group'
+          ? item.worklog
+            ? 'worklog'
+            : 'group'
+          : item.kind
+    );
   const failed = (key: string): TimelineItem =>
     ({ ...toolItem(key, 'bash'), state: 'error' }) as TimelineItem;
+  const turnUser = (key: string, extra: Record<string, unknown> = {}): TimelineItem =>
+    ({ ...userItem(key), ...extra }) as TimelineItem;
+  const error = (key: string): TimelineItem => ({ kind: 'error', key, text: 'boom' });
 
-  it('已完成轮次：思考与任意工具（含 edit/write/todo）连续段折成一行，正文留在组外', () => {
+  it('最后一行正文是最终答案；之前的思考、工具与中间叙述全部收进一个组头', () => {
     const items = [
-      userItem('u'),
-      timed(thinkingItem('t1'), 2000),
-      timed(toolItem('a', 'bash'), 1000),
-      toolItem('b', 'edit', [textItem('x')]),
-      { ...toolItem('c', 'write'), writeContent: 'hi' } as TimelineItem,
-      { ...toolItem('d', 'todo'), todos: [] } as TimelineItem,
-      textItem('answer'),
-    ];
-    const folded = foldTimeline(items, false, new Set(), on);
-    expect(kinds(folded)).toEqual(['user', 'tool-group', 'text']);
-    const group = folded[1] as Group;
-    expect(group.activity).toEqual({ thinking: 1, workedMs: 3000 });
-    expect(group.count).toBe(4);
-    expect(kinds(group.children)).toEqual(['thinking', 'bash', 'edit', 'write', 'todo']);
-  });
-
-  it('展开后按原顺序平铺全部行', () => {
-    const items = [userItem('u'), toolItem('a', 'edit', [textItem('x')]), toolItem('b', 'read')];
-    const collapsed = foldTimeline(items, false, new Set(), on);
-    const key = collapsed[1].key;
-    const expanded = foldTimeline(items, false, new Set([key]), on);
-    expect(kinds(expanded)).toEqual(['user', 'tool-group', 'edit', 'read']);
-  });
-
-  it('中间正文断开分组；只有 1 条的段不折', () => {
-    const items = [
-      userItem('u'),
+      turnUser('u'),
+      thinkingItem('t1'),
       toolItem('a', 'read'),
-      toolItem('b', 'bash'),
       textItem('mid'),
+      thinkingItem('t2'),
+      toolItem('b', 'bash'),
+      textItem('mid2'),
       toolItem('c', 'bash'),
       textItem('answer'),
     ];
-    expect(kinds(foldTimeline(items, false, new Set(), on))).toEqual([
-      'user',
-      'tool-group',
-      'text',
-      'bash',
-      'text',
-    ]);
-  });
-
-  it('失败的工具、目标信号留在组外并断开分组', () => {
-    const items = [
-      userItem('u'),
-      toolItem('a', 'read'),
-      toolItem('b', 'read'),
-      failed('bad'),
-      toolItem('goal', 'goal_complete'),
-      toolItem('c', 'read'),
-      toolItem('d', 'read'),
-    ];
     const folded = foldTimeline(items, false, new Set(), on);
-    expect(kinds(folded)).toEqual(['user', 'tool-group', 'bash', 'goal_complete', 'tool-group']);
+    expect(kinds(folded)).toEqual(['user', 'worklog', 'text']);
+    const group = folded[1] as Group;
+    expect(group.key).toBe('worklog-u');
+    expect(group.expanded).toBe(false);
+    expect(group.count).toBe(3);
+    expect(group.worklog).toEqual({ status: 'completed', forced: false, thinking: 2, failed: 0 });
+    // 最终答案行原样复用
+    expect(folded[2]).toBe(items.at(-1));
   });
 
-  it('正在生成的最新一轮：仍在进行的尾段保持原有行为，历史轮次照常折叠', () => {
+  it('多段叙述与工具交替时不拆成多个组头（回归：只收了第一段）', () => {
+    const rows: TimelineItem[] = [turnUser('u')];
+    for (let n = 0; n < 6; n++) {
+      rows.push(thinkingItem(`t${n}`), toolItem(`b${n}a`), toolItem(`b${n}b`), textItem(`m${n}`));
+    }
+    rows.push(textItem('answer'));
+    const folded = foldTimeline(rows, false, new Set(), on);
+    expect(kinds(folded)).toEqual(['user', 'worklog', 'text']);
+    expect((folded[1] as Group).count).toBe(12);
+    expect((folded[1] as Group).worklog?.thinking).toBe(6);
+  });
+
+  it('组头带整轮活跃用时', () => {
     const items = [
-      userItem('u1'),
-      toolItem('a', 'edit', [textItem('x')]),
-      toolItem('b', 'bash'),
+      turnUser('u', { turnDurationMs: 12300 }),
+      toolItem('a', 'read'),
       textItem('answer'),
-      userItem('u2'),
-      toolItem('c', 'edit', [textItem('x')]),
-      toolItem('d', 'bash'),
+    ];
+    const group = foldTimeline(items, false, new Set(), on)[1] as Group;
+    expect(group.worklog?.durationMs).toBe(12300);
+  });
+
+  it('展开后按原顺序平铺，展开体内照常折工具组', () => {
+    const items = [
+      turnUser('u'),
+      toolItem('a', 'read'),
+      toolItem('b', 'grep'),
+      toolItem('c', 'read'),
+      textItem('mid'),
+      toolItem('e', 'edit', [textItem('x')]),
+      textItem('answer'),
+    ];
+    const expanded = foldTimeline(items, false, new Set(['worklog-u']), on);
+    expect(kinds(expanded)).toEqual(['user', 'worklog', 'group', 'text', 'edit', 'text']);
+    expect((expanded[1] as Group).expanded).toBe(true);
+    const edit = expanded.find((item) => item.key === 'e');
+    expect(edit?.kind === 'tool' && edit.edits).toBeTruthy();
+  });
+
+  it('运行中的轮强制展开：最后一行正文仍算过程，组头记录计时起点', () => {
+    const items = [
+      turnUser('u', { timestamp: 5000 }),
+      toolItem('a', 'read'),
+      textItem('streaming'),
     ];
     const folded = foldTimeline(items, true, new Set(), on);
-    expect(kinds(folded)).toEqual(['user', 'tool-group', 'text', 'user', 'edit', 'bash']);
+    expect(kinds(folded)).toEqual(['user', 'worklog', 'read', 'text']);
+    expect((folded[1] as Group).worklog).toEqual({
+      status: 'running',
+      forced: true,
+      thinking: 0,
+      failed: 0,
+      startedAt: 5000,
+    });
   });
 
-  it('正在生成的最新一轮：被正文隔开的已完成段立即折叠', () => {
-    const items = [
-      userItem('u'),
-      thinkingItem('t1'),
-      toolItem('a', 'edit', [textItem('x')]),
-      toolItem('b', 'bash'),
-      textItem('mid'),
-      toolItem('c', 'edit', [textItem('y')]),
-      toolItem('d', 'bash'),
+  it('运行中的轮刚发出、还没有任何行时不出组头', () => {
+    const items = [turnUser('u')];
+    expect(kinds(foldTimeline(items, true, new Set(), on))).toEqual(['user']);
+  });
+
+  it('中断与失败的轮强制展开，组头带终态', () => {
+    const aborted = [
+      turnUser('u', { turnStatus: 'aborted', turnDurationMs: 3000 }),
+      toolItem('a', 'read'),
+      textItem('answer'),
     ];
-    expect(kinds(foldTimeline(items, true, new Set(), on))).toEqual([
+    const abortedFolded = foldTimeline(aborted, false, new Set(), on);
+    expect(kinds(abortedFolded)).toEqual(['user', 'worklog', 'read', 'text']);
+    expect((abortedFolded[1] as Group).worklog).toMatchObject({
+      status: 'aborted',
+      forced: true,
+      durationMs: 3000,
+    });
+    const failedTurn = [
+      turnUser('u', { turnStatus: 'failed' }),
+      toolItem('a', 'read'),
+      textItem('answer'),
+    ];
+    expect((foldTimeline(failedTurn, false, new Set(), on)[1] as Group).worklog?.status).toBe(
+      'failed'
+    );
+  });
+
+  it('没有最终答案的已完成轮强制展开', () => {
+    const items = [turnUser('u'), toolItem('a', 'read'), toolItem('b', 'bash')];
+    const folded = foldTimeline(items, false, new Set(), on);
+    expect(kinds(folded)).toEqual(['user', 'worklog', 'read', 'bash']);
+    expect((folded[1] as Group).worklog?.forced).toBe(true);
+  });
+
+  it('只有一条正文的轮不出组头', () => {
+    const items = [turnUser('u'), textItem('answer')];
+    expect(kinds(foldTimeline(items, false, new Set(), on))).toEqual(['user', 'text']);
+  });
+
+  it('轮尾的错误行排在最终答案之后，不打断工作日志', () => {
+    const items = [
+      turnUser('u', { turnStatus: 'failed' }),
+      toolItem('a', 'read'),
+      textItem('partial'),
+      error('err'),
+    ];
+    const folded = foldTimeline(items, false, new Set(), on);
+    expect(kinds(folded)).toEqual(['user', 'worklog', 'read', 'text', 'error']);
+  });
+
+  it('失败的工具收进组头，失败数单独计数', () => {
+    const items = [turnUser('u'), toolItem('a', 'read'), failed('bad'), textItem('answer')];
+    const folded = foldTimeline(items, false, new Set(), on);
+    expect(kinds(folded)).toEqual(['user', 'worklog', 'text']);
+    expect((folded[1] as Group).worklog?.failed).toBe(1);
+  });
+
+  it('收起时提问、计划与目标信号仍然露出', () => {
+    const items = [
+      turnUser('u'),
+      toolItem('a', 'read'),
+      toolItem('q', 'ask_user'),
+      toolItem('p', 'submit_plan'),
+      toolItem('g', 'goal_complete'),
+      textItem('answer'),
+    ];
+    const folded = foldTimeline(items, false, new Set(), on);
+    expect(kinds(folded)).toEqual([
       'user',
-      'tool-group',
-      'text',
-      'edit',
-      'bash',
-    ]);
-    expect(kinds(foldTimeline([...items.slice(0, 5)], true, new Set(), on))).toEqual([
-      'user',
-      'tool-group',
+      'worklog',
+      'ask_user',
+      'submit_plan',
+      'goal_complete',
       'text',
     ]);
   });
 
-  it('没有耗时打点时 workedMs 为 0；开关关闭时行为不变', () => {
-    const items = [userItem('u'), toolItem('a', 'edit', [textItem('x')]), toolItem('b', 'bash')];
-    const group = foldTimeline(items, false, new Set(), on)[1] as Group;
-    expect(group.activity).toEqual({ thinking: 0, workedMs: 0 });
+  it('工作日志的 key 在流式新增行后保持稳定', () => {
+    const items = [turnUser('u'), toolItem('a', 'read'), textItem('mid')];
+    const before = foldTimeline(items, true, new Set(), on)[1] as Group;
+    const after = foldTimeline([...items, toolItem('c', 'grep')], true, new Set(), on)[1] as Group;
+    expect(before.key).toBe('worklog-u');
+    expect(after.key).toBe('worklog-u');
+  });
+
+  it('历史分页从一轮中间开始时，没有 user 锚点的前导段也折', () => {
+    const items = [toolItem('a', 'read'), toolItem('b', 'bash'), textItem('answer')];
+    const folded = foldTimeline(items, false, new Set(), on);
+    expect(kinds(folded)).toEqual(['worklog', 'text']);
+    expect(folded[0].key).toBe('worklog-partial-a');
+  });
+
+  it('已折叠的轮次与待发送回显不套工作日志', () => {
+    const items = [
+      turnUser('u1', { canCollapse: true }),
+      toolItem('a', 'read'),
+      textItem('answer'),
+      turnUser('u2'),
+      textItem('answer2'),
+      turnUser('local', { deliveryState: 'pending' }),
+    ];
+    const folded = foldTimeline(items, false, new Set(), {
+      ...on,
+      autoCollapseCompletedTurns: true,
+    });
+    expect(kinds(folded)).toEqual(['user', 'user', 'text', 'user']);
+  });
+
+  it('开关关闭时保持原有分段折叠', () => {
+    const items = [turnUser('u'), toolItem('a', 'edit', [textItem('x')]), toolItem('b', 'bash')];
     expect(kinds(foldTimeline(items, false, new Set()))).toEqual(['user', 'edit', 'bash']);
   });
 });
-
 describe('foldTimeline 探索配对折叠（explore_mark → explore_fold）', () => {
   type Group = Extract<TimelineItem, { kind: 'tool-group' }>;
   const keys = (items: TimelineItem[]) => items.map((item) => item.key);
@@ -3224,8 +3349,8 @@ describe('foldTimeline 探索配对折叠（explore_mark → explore_fold）', (
     const folded = foldTimeline(items, false, new Set(), on);
     expect(folded.map((item) => item.kind)).toEqual(['user', 'tool-group', 'text']);
     const activity = folded[1] as Group;
-    expect(activity.activity).toBeDefined();
-    expect(activity.count).toBe(4);
+    expect(activity.worklog).toBeDefined();
+    expect(activity.count).toBe(2);
     const exploreKey = activity.children[1].key;
     expect(keys(foldTimeline(items, false, new Set([activity.key]), on))).toEqual([
       'u',

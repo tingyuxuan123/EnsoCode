@@ -53,6 +53,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -118,6 +119,7 @@ import { SubagentResult } from './SubagentResult';
 import { parseSubagentReceipt } from './subagentReceipt';
 import { TerminalOutput } from './TerminalOutput';
 import { TodoList } from './TodoBar';
+import { shouldCollapseUserQuery, USER_QUERY_MAX_HEIGHT } from './userQueryCollapse';
 import { ZoomableImage } from './ZoomableImage';
 
 const perfEqual = (a?: TurnPerf, b?: TurnPerf): boolean =>
@@ -156,6 +158,7 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.timestamp !== b.timestamp ||
         a.deliveryState !== b.deliveryState ||
         a.turnDurationMs !== b.turnDurationMs ||
+        a.turnStatus !== b.turnStatus ||
         a.collapsed !== b.collapsed ||
         a.canCollapse !== b.canCollapse
       )
@@ -218,8 +221,12 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.stats.searches === b.stats.searches &&
         a.stats.others === b.stats.others &&
         a.exploring === b.exploring &&
-        a.activity?.thinking === b.activity?.thinking &&
-        a.activity?.workedMs === b.activity?.workedMs &&
+        a.worklog?.status === b.worklog?.status &&
+        a.worklog?.forced === b.worklog?.forced &&
+        a.worklog?.durationMs === b.worklog?.durationMs &&
+        a.worklog?.startedAt === b.worklog?.startedAt &&
+        a.worklog?.thinking === b.worklog?.thinking &&
+        a.worklog?.failed === b.worklog?.failed &&
         a.explore?.goal === b.explore?.goal &&
         a.explore?.report === b.explore?.report &&
         a.explore?.steps === b.explore?.steps
@@ -497,6 +504,74 @@ function MentionRefChips({
 export const USER_BUBBLE =
   'max-w-[80%] rounded-2xl rounded-br-md border border-border bg-secondary px-4 py-2.5 text-sm';
 
+/**
+ * 用户消息长文折叠（对齐 ZCode）：超过 120px 时裁切并用遮罩渐隐，气泡底部居中一个圆形展开按钮。
+ * scrollHeight 不受 max-height 影响，量到的就是完整正文高度；正文变化时回到收起态。
+ */
+function CollapsibleUserText({ text, children }: { text: string; children: ReactNode }) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const [fullHeight, setFullHeight] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 正文变化要重置折叠态并重新测量
+  useLayoutEffect(() => {
+    setExpanded(false);
+    const el = ref.current;
+    if (!el) return;
+    setFullHeight(el.scrollHeight);
+    if (typeof ResizeObserver === 'undefined') return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setFullHeight(el.scrollHeight));
+    });
+    observer.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [text]);
+  const collapsible = shouldCollapseUserQuery(fullHeight);
+  const clamped = collapsible && !expanded;
+  const label = expanded ? t('Collapse') : t('Expand');
+  return (
+    <div className="relative min-w-0" data-user-query="">
+      <div
+        ref={ref}
+        data-user-query-clamped={clamped ? '' : undefined}
+        style={{
+          maxHeight: collapsible
+            ? Math.max(USER_QUERY_MAX_HEIGHT, expanded ? fullHeight : 0)
+            : undefined,
+        }}
+        className={cn(
+          'overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere] transition-[max-height] duration-300 ease-out motion-reduce:transition-none',
+          clamped &&
+            '[mask-image:linear-gradient(to_bottom,black_0%,black_70%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_0%,black_70%,transparent_100%)]'
+        )}
+      >
+        {children}
+      </div>
+      {collapsible && (
+        <div
+          className={cn('flex justify-center', expanded ? 'pt-2' : 'absolute inset-x-0 bottom-0')}
+        >
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            aria-label={label}
+            title={label}
+            className="flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 用户气泡：识别合成标记,渲染成系统事件行 / 角色块 / 来源徽章而非原始 XML */
 function UserText({
   text,
@@ -637,13 +712,12 @@ function UserText({
   const rest = role ? text.slice(role[0].length) : text;
   const fromMain = MAIN_AGENT_BLOCK.exec(rest);
   const body = fromMain ? fromMain[1] : rest;
-  // 主 agent 的消息:左侧气泡 + 蓝色弱底 + markdown 渲染,与用户(右侧灰底纯文本)区分
   return (
     <div
       className={cn(
         fromMain
           ? 'max-w-[80%] rounded-2xl rounded-bl-md border border-blue-500/20 bg-blue-500/8 px-4 py-2.5 text-sm'
-          : cn(USER_BUBBLE, 'whitespace-pre-wrap')
+          : USER_BUBBLE
       )}
     >
       {fromMain && (
@@ -660,7 +734,9 @@ function UserText({
       {fromMain ? (
         <Markdown text={body} searchQuery={searchQuery} activeNth={activeNth} />
       ) : (
-        <InlineMentionText text={body} searchQuery={searchQuery} activeNth={activeNth} />
+        <CollapsibleUserText text={body}>
+          <InlineMentionText text={body} searchQuery={searchQuery} activeNth={activeNth} />
+        </CollapsibleUserText>
       )}
     </div>
   );
@@ -669,7 +745,7 @@ function UserText({
 /** 精简模式下贴紧排的行：探索组头 / 只读一行 / 夹在其间的思考行（对齐 Cursor 的行距） */
 export function isCompactRow(item: TimelineItem): boolean {
   return (
-    item.kind === 'tool-group' ||
+    (item.kind === 'tool-group' && !item.worklog) ||
     item.kind === 'thinking' ||
     (item.kind === 'tool' && isReadOnlyTool(item))
   );
@@ -1596,6 +1672,109 @@ function CompactionRow({
   );
 }
 
+/** 回合工作日志头文案：时长未知时不编造 0 秒 */
+function worklogLabel(
+  worklog: NonNullable<Extract<TimelineItem, { kind: 'tool-group' }>['worklog']>,
+  t: TFunction
+): string {
+  const duration =
+    worklog.durationMs !== undefined ? formatDuration(worklog.durationMs) : undefined;
+  if (worklog.status === 'aborted')
+    return duration ? t('Stopped after {{duration}}', { duration }) : t('Stopped');
+  if (worklog.status === 'failed')
+    return duration ? t('Failed after {{duration}}', { duration }) : t('Failed run');
+  return duration ? t('Worked for {{duration}}', { duration }) : t('Worked');
+}
+
+/** 运行中的工作日志头：每秒刷新「工作中 N 秒」，只重渲染自身，不惊动整行 memo */
+const LiveWorklogLabel = memo(function LiveWorklogLabel({ since }: { since?: number }) {
+  const { t } = useI18n();
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (since === undefined) return;
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [since]);
+  const label =
+    since === undefined
+      ? t('Working')
+      : t('Working for {{duration}}', {
+          duration: formatDuration(Math.max(0, Date.now() - since)),
+        });
+  return (
+    <span className="t-shimmer truncate" data-text={label}>
+      {label}
+    </span>
+  );
+});
+
+/**
+ * 回合工作日志头（对齐 ZCode「已工作 N 秒 ›」）：一行弱化文字 + 底部细线，不占时间线节点列。
+ * 强制展开（运行中 / 中断 / 失败 / 无最终答案）时不可收起，也不显示 chevron。
+ */
+function WorklogHead({
+  item,
+  worklog,
+  onToggle,
+}: {
+  item: Extract<TimelineItem, { kind: 'tool-group' }>;
+  worklog: NonNullable<Extract<TimelineItem, { kind: 'tool-group' }>['worklog']>;
+  onToggle?: (key: string) => void;
+}) {
+  const { t } = useI18n();
+  const detail: string[] = [];
+  if (worklog.thinking > 0) detail.push(t('{{count}} thinking steps', { count: worklog.thinking }));
+  if (item.count > 0) detail.push(t('{{count}} tool calls', { count: item.count }));
+  const label = (
+    <>
+      {worklog.status === 'running' ? (
+        <LiveWorklogLabel since={worklog.startedAt} />
+      ) : (
+        <span className={cn('truncate', worklog.status === 'failed' && 'text-destructive')}>
+          {worklogLabel(worklog, t)}
+        </span>
+      )}
+      {!worklog.forced && (
+        <ChevronRight
+          aria-hidden
+          className={cn(
+            'size-3.5 shrink-0 opacity-70 transition-transform',
+            item.expanded && 'rotate-90'
+          )}
+        />
+      )}
+    </>
+  );
+  return (
+    <div
+      data-worklog-head=""
+      data-worklog-status={worklog.status}
+      className="flex w-full items-center gap-2 border-b border-border/50 pb-2 text-[13px] text-muted-foreground"
+    >
+      {worklog.forced ? (
+        <div className="inline-flex min-w-0 items-center gap-1.5">{label}</div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onToggle?.(item.key)}
+          aria-expanded={item.expanded}
+          className="inline-flex min-w-0 items-center gap-1.5 rounded text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {label}
+        </button>
+      )}
+      {!item.expanded && detail.length > 0 && (
+        <span className="min-w-0 truncate text-muted-foreground/70">{detail.join(' · ')}</span>
+      )}
+      {worklog.failed > 0 && (
+        <span className="ml-auto shrink-0 rounded bg-destructive/12 px-1.5 py-px text-[10px] text-destructive">
+          {t('{{count}} calls failed', { count: worklog.failed })}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** 收拢的工具组头：摘要统计 + chevron；点击展开为组内原始行。compact 下对齐 Cursor：Explored / Exploring */
 function ToolGroupRow({
   item,
@@ -1606,6 +1785,7 @@ function ToolGroupRow({
 }) {
   const { t } = useI18n();
   const compact = useSettingsStore((s) => s.compactReadOnlyTools);
+  if (item.worklog) return <WorklogHead item={item} worklog={item.worklog} onToggle={onToggle} />;
   const parts: string[] = [];
   if (item.stats.commands > 0)
     parts.push(t('ran {{count}} commands', { count: item.stats.commands }));
@@ -1619,36 +1799,23 @@ function ToolGroupRow({
     if (item.stats.searches > 0)
       explored.push(t('{{count}} searches', { count: item.stats.searches }));
   }
-  const activity = item.activity;
   // 组内失败数：折叠时也要能看见，否则失败被埋在展开体里
   const failedCount = item.children.filter(
     (child) => child.kind === 'tool' && child.state === 'error'
   ).length;
-  const activityParts: string[] = [];
-  if (activity) {
-    if (activity.thinking > 0)
-      activityParts.push(t('{{count}} thinking steps', { count: activity.thinking }));
-    if (item.count > 0) activityParts.push(t('{{count}} tool calls', { count: item.count }));
-  }
   const explore = item.explore;
   const label = explore
     ? toolLabel('explore_fold', t)
-    : activity
-      ? activity.workedMs > 0
-        ? t('Worked for {{duration}}', { duration: formatDuration(activity.workedMs) })
-        : t('Activity')
-      : compact
-        ? item.exploring
-          ? t('Exploring')
-          : t('Explored')
-        : t('{{count}} tool calls', { count: item.count });
+    : compact
+      ? item.exploring
+        ? t('Exploring')
+        : t('Explored')
+      : t('{{count}} tool calls', { count: item.count });
   const detail = explore
     ? [explore.goal, t('{{count}} tool calls', { count: item.count })].filter(Boolean)
-    : activity
-      ? activityParts
-      : compact
-        ? explored
-        : parts;
+    : compact
+      ? explored
+      : parts;
   const head = (
     <button
       type="button"
@@ -1658,6 +1825,7 @@ function ToolGroupRow({
       }}
       title={explore?.goal}
       data-explore-head={explore ? '' : undefined}
+      aria-expanded={item.expanded}
       className="group/step flex min-h-[30px] w-full items-center gap-2 rounded-lg pr-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
     >
       <StepNode icon={explore ? FoldVertical : Layers} state={item.exploring ? 'running' : 'ok'} />
@@ -2504,7 +2672,7 @@ function ToolNode({ name, state }: { name: string; state: StepNodeState }) {
 
 /** 以时间线节点呈现、相邻时用竖线串起的行：普通工具行与工具组头 */
 export function isToolStepRow(item: TimelineItem): boolean {
-  if (item.kind === 'tool-group') return true;
+  if (item.kind === 'tool-group') return !item.worklog;
   return item.kind === 'tool' && !item.todos && !item.name.startsWith('goal_');
 }
 

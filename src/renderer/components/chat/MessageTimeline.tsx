@@ -35,7 +35,7 @@ import {
   RetryTurnButton,
   TimelineRow,
 } from './TimelineRow';
-import { nextTimelineReveal } from './timelineReveal';
+import { nextTimelineReveal, revealGroupKeys } from './timelineReveal';
 import {
   nextTimelineRowOrigin,
   type TimelineRowAnchor,
@@ -288,10 +288,8 @@ export function MessageTimeline({
       for (let j = i + 1; j < items.length; j++) {
         const next = items[j];
         if (next.kind === 'user') break;
-        if (next.kind === 'text') {
-          answer = next.text;
-          break;
-        }
+        // 一轮的过程叙述也在这条流里，导航预览要取本轮最后一条正文（最终答案）
+        if (next.kind === 'text') answer = next.text;
       }
       result.push({ key: item.key, question: item.text || '[image]', answer });
     }
@@ -404,10 +402,12 @@ export function MessageTimeline({
     [pinToBottom, scrollToBottom]
   );
   useEffect(() => () => observerRef.current?.disconnect(), []);
-  const foldedIndexOf = (key: string): number =>
-    folded.findIndex(
-      (item) => item.key === key || (item.kind === 'tool-group' && groupContainsKey(item, key))
-    );
+  const foldedIndexOf = (key: string): number => {
+    // 展开的组头 children 里也有目标：先认平铺出来的那一行，否则会滚到组头
+    const exact = folded.findIndex((item) => item.key === key);
+    if (exact >= 0) return exact;
+    return folded.findIndex((item) => item.kind === 'tool-group' && groupContainsKey(item, key));
+  };
   const scrollToFoldedKey = (key: string): void => {
     if (!virtualize) {
       scrollerRef.current
@@ -427,10 +427,22 @@ export function MessageTimeline({
   /** 目标藏在折叠轮次里：先展开，等 folded 重算后再滚动（同步滚动拿到的是旧 folded / 旧 DOM） */
   const pendingJumpRef = useRef<string | null>(null);
   const jumpTo = (key: string) => {
-    if (foldedIndexOf(key) >= 0) {
+    // 命中被折进工作日志 / 工具组里：先展开祖先组，等 folded 重算后再滚，
+    // 否则折叠行不在 DOM 里，只能滚到组头。组只存在于折叠结果里，必须查 folded。
+    const groupKeys = revealGroupKeys(folded, key);
+    if (foldedIndexOf(key) >= 0 && groupKeys.length === 0) {
       pendingJumpRef.current = null;
       scrollToFoldedKey(key);
       return;
+    }
+    if (groupKeys.length > 0) {
+      setExpandedGroups((prev) => {
+        const missing = groupKeys.filter((group) => !prev.has(group));
+        if (missing.length === 0) return prev;
+        const next = new Set(prev);
+        for (const group of missing) next.add(group);
+        return next;
+      });
     }
     let ownerTurnKey: string | null = null;
     let found = false;
@@ -441,9 +453,9 @@ export function MessageTimeline({
         break;
       }
     }
-    if (!found || !ownerTurnKey) return;
+    if (!found) return;
     pendingJumpRef.current = key;
-    setTurnCollapsed(ownerTurnKey, false);
+    if (ownerTurnKey) setTurnCollapsed(ownerTurnKey, false);
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: 只在 folded 重算后消费待跳转 key
   useLayoutEffect(() => {
@@ -500,6 +512,7 @@ export function MessageTimeline({
   // 探索→正文留一点距离
   const rowGap = (item: TimelineItem, index: number): string => {
     const next = folded[index + 1];
+    if (item.kind === 'tool-group' && item.worklog) return 'pb-3';
     // 时间线上相邻的工具节点贴紧，由竖线串起
     if (next !== undefined && isToolStepRow(item) && isToolStepRow(next)) return 'pb-1';
     if (!compact) return 'pb-4';
