@@ -98,12 +98,21 @@ mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
+  # 本地没有 Developer ID 证书时，electron-builder 会直接跳过签名，产物只是
+  # 「改过 Info.plist 的 Electron.app 拷贝」（Info.plist=not bound、Sealed Resources=none），
+  # TCC 的本地网络/麦克风授权因此对不上运行中的实体。
+  # '-' = ad-hoc 重签：不需要证书，但能封存资源并绑定 Info.plist，让 Identifier
+  # 变成 com.j3n5en.enso-code。发布时用 CSC_IDENTITY_AUTO_DISCOVERY 真证书覆盖。
+  identity: '-'
   # electron-builder 默认三项 + 麦克风
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     NSMicrophoneUsageDescription: EnsoCode uses the microphone for voice input. Speech is transcribed locally on this Mac.
     NSAppleEventsUsageDescription: EnsoCode uses Apple Events to activate app windows for the computer tool.
+    # 内置浏览器/终端要访问用户的局域网站点（vite dev server、NAS、打印机等）。
+    # macOS 15+ 起本地网络访问受 TCC 管控，缺这条不会弹授权框，直接 EHOSTUNREACH。
+    NSLocalNetworkUsageDescription: EnsoCode uses the local network to open your dev servers and other devices on this network.
   target:
     - dmg
     - zip

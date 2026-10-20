@@ -1,5 +1,6 @@
 import { assertAllowedUrl } from '@shared/browser/urlPolicy';
 import type { BrowserDevice, BrowserResult } from '@shared/types/browser';
+import { holesClipPath } from '@/lib/backgroundClip';
 
 /** 设备预览时 guest 占位框尺寸：Main 按同一框计算 fit，scale 与这里一致。 */
 export function browserDeviceFrame(
@@ -19,6 +20,26 @@ export function browserDeviceFrame(
   const frameHeight = Math.floor(height * scale);
   if (frameWidth < 1 || frameHeight < 1) return null;
   return { width: frameWidth, height: frameHeight, scale };
+}
+
+/**
+ * 设备预览的舞台底色必须在居中的设备框处挖空。浮层压住网页时 guest 会沉到
+ * workbench 之下，DOM 里任何不透明像素都会把网页盖死；舞台底色铺满整块，
+ * 表现就是打开菜单 / Dialog 后网页变空白。
+ */
+export function deviceStageClip(
+  stage: { width: number; height: number },
+  frame: { width: number; height: number } | null
+): string | undefined {
+  if (!frame || stage.width < 1 || stage.height < 1) return undefined;
+  return holesClipPath([
+    {
+      x: (stage.width - frame.width) / 2,
+      y: (stage.height - frame.height) / 2,
+      width: frame.width,
+      height: frame.height,
+    },
+  ]);
 }
 
 export function resolveBrowserAddress(raw: string): BrowserResult<string> {

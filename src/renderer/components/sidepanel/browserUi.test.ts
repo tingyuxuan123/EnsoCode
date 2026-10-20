@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   browserDeviceFrame,
   browserDownloadProgress,
+  deviceStageClip,
   formatBrowserBytes,
   resolveBrowserAddress,
 } from './browserUi';
@@ -33,6 +34,21 @@ describe('browserDeviceFrame', () => {
     expect(browserDeviceFrame({ enabled: false }, { width: 800, height: 800 }, 0)).toBeNull();
     expect(browserDeviceFrame(undefined, { width: 800, height: 800 }, 0)).toBeNull();
     expect(browserDeviceFrame(phone, { width: 10, height: 10 }, 24)).toBeNull();
+  });
+});
+
+describe('deviceStageClip', () => {
+  it('punches the centered device frame out of the stage backdrop', () => {
+    expect(deviceStageClip({ width: 500, height: 500 }, { width: 208, height: 452 })).toContain(
+      '146px 24px, 354px 24px, 354px 476px, 146px 476px'
+    );
+    expect(deviceStageClip({ width: 500, height: 500 }, { width: 208, height: 452 })).toContain(
+      'polygon(evenodd'
+    );
+  });
+  it('leaves the backdrop whole without a frame or a usable stage', () => {
+    expect(deviceStageClip({ width: 500, height: 500 }, null)).toBeUndefined();
+    expect(deviceStageClip({ width: 0, height: 500 }, { width: 10, height: 10 })).toBeUndefined();
   });
 });
 

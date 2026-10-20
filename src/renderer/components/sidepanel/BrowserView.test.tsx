@@ -237,6 +237,10 @@ describe('BrowserView controls', () => {
     expect(container.querySelector('[data-testid="device-toolbar"]')?.textContent).toBe(
       String(Math.round((452 / 852) * 100))
     );
+    // 舞台底色必须让出设备框：guest 沉到 workbench 之下时才能从洞里透出网页
+    expect(
+      container.querySelector('[data-slot="browser-stage-backdrop"]')?.getAttribute('style')
+    ).toContain('clip-path');
     await click('Device preview');
     expect(harness.setDevice).toHaveBeenLastCalledWith('exact-tab', 'owner', { enabled: false });
     expect(container.querySelector('[data-testid="device-toolbar"]')).toBeNull();

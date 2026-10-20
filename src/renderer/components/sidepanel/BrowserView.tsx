@@ -39,7 +39,7 @@ import {
 import { BrowserDownloadsPanel } from './BrowserDownloadsPanel';
 import { BrowserHistoryPanel } from './BrowserHistoryPanel';
 import { BrowserNewTab } from './BrowserNewTab';
-import { browserDeviceFrame, resolveBrowserAddress } from './browserUi';
+import { browserDeviceFrame, deviceStageClip, resolveBrowserAddress } from './browserUi';
 import { isCoveredBy, overlayBoxes } from './overlayCover';
 
 const EMPTY: BrowserTabState = {
@@ -435,6 +435,8 @@ export function BrowserView({
   const stageBackgroundClass =
     BROWSER_STAGE_BACKGROUNDS.find((entry) => entry.value === stageBackground)?.className ??
     'bg-muted/70';
+  // 舞台底色在设备框处挖空，浮层压住网页时 guest 才能从洞里透出来
+  const stageClip = stage && frame ? deviceStageClip(stage, frame) : undefined;
   const canOpenExternal = /^https?:/.test(state.url);
   const handle =
     'absolute z-10 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-xs transition-colors hover:text-foreground';
@@ -619,11 +621,17 @@ export function BrowserView({
           ref={stageRef}
           className={cn(
             'relative min-h-0 flex-1 overflow-hidden',
-            device &&
-              !devtoolsDocked &&
-              cn('flex items-center justify-center', stageBackgroundClass)
+            device && !devtoolsDocked && 'flex items-center justify-center'
           )}
         >
+          {device && !devtoolsDocked && (
+            <div
+              aria-hidden
+              data-slot="browser-stage-backdrop"
+              className={cn('pointer-events-none absolute inset-0', stageBackgroundClass)}
+              style={stageClip ? { clipPath: stageClip } : undefined}
+            />
+          )}
           <div
             ref={hostRef}
             className={cn(

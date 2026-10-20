@@ -144,5 +144,8 @@ Tailwind 的 `h-11` 会算成 38.5px 而不是 44px，与 `trafficLightPosition:
 - `covered` 由 `BrowserView.tsx` 的 rAF tick 算：`state.locked`，或 body 下 `#root` 之外任一
   portal 元素的盒子与网页矩形相交（`overlayCover.ts`）。新增浮层组件只要 portal 到 body 就自动
   生效，不要为弹层整页隐藏 guest，也不要用原生菜单绕。
+- 挖孔要求网页矩形之上的 DOM **全部透明**：主外壳、workspace 卡片、设备预览舞台底色都不能
+  在洞内刷不透明底色，否则菜单 / Dialog 一开，沉底后的 guest 被盖住，网页表现为整块空白
+  （`BackgroundLayer` 的实心底只在洞外生效）。设备预览的舞台底色由 `deviceStageClip` 在框内挖空。
 - 验证「用户能不能点网页」必须发 **OS 级鼠标事件**（CGEvent / `cliclick`）；CDP
   `Input.dispatchMouseEvent` 直接进 webContents，绕过 NSView hit-test，验不出层级问题。

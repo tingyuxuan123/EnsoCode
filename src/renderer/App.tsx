@@ -332,7 +332,8 @@ export default function App() {
   );
 
   return (
-    <div className="relative isolate flex h-screen flex-col bg-shell text-foreground">
+    // 不能给外壳刷实底：浏览器 guest 沉到 workbench 之下时，这里任何不透明像素都会盖住挖孔
+    <div className="relative isolate flex h-screen flex-col text-foreground">
       {/* 全局 toast 出口（addToast 依赖；不挂则静默失效） */}
       <ToastProvider />
       <BackgroundLayer />
@@ -399,9 +400,10 @@ export default function App() {
               onOpenSearch={() => setSearchOpen(true)}
             />
             {!collapsed && <ResizeHandle onResize={handleResize} />}
+            {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
             <div
               ref={workspaceRef}
-              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-panel"
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border"
             >
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <ChatView />
