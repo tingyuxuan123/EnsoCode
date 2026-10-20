@@ -171,6 +171,14 @@ function BackgroundMedia({ state }: { state: MediaState }) {
 
   // 先预加载再切换：下载/解码期间继续展示旧图，避免露底空隙（尤其网络图）
   const [display, setDisplay] = React.useState<{ src: string; video: boolean } | null>(null);
+
+  // 只有真的铺出壁纸，第三方组件（终端）才需要半透明；开着开关却没图时保持自己的实心底色
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('bg-image-media', display !== null);
+    return () => root.classList.remove('bg-image-media');
+  }, [display]);
+
   React.useEffect(() => {
     if (!target) {
       setDisplay(null);

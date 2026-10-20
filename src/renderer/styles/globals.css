@@ -370,14 +370,14 @@ html.bg-image-enabled diffs-container {
 }
 
 /**
- * 右侧面板的终端：xterm 容器与 wrapper 都内联刷主题底色。
- * 侧栏终端属于主体面板，底色与 alpha 都必须跟通用面板一致；终端主题只保留前景文字配色。
- * 聊天流里的 bash 输出（terminal-output）则继续跟代码块档位并保留终端主题底色色相。
+ * 右侧面板的终端：xterm 容器与 wrapper 都内联刷终端主题底色。
+ * 底色（--terminal-bg）必须跟终端主题走，不能换成 --background：xterm 的文字与 16 色
+ * 都来自终端主题，浅色界面配深色终端主题时只有底色也取自主题才保证对比度。
+ * 半透明只在真的铺了壁纸时加（BackgroundLayer 的 bg-image-media），否则实心渲染，
+ * 免得终端主题色被壁纸底下的纯色冲淡成灰。聊天流 bash 输出（terminal-output）同理。
  */
-html.bg-image-enabled [data-slot='terminal-pane'] {
-  background-color: oklch(from var(--background) l c h / var(--bg-panel-alpha, 0.15)) !important;
-}
-html.bg-image-enabled [data-slot='terminal-output'] {
+html.bg-image-enabled.bg-image-media [data-slot='terminal-pane'],
+html.bg-image-enabled.bg-image-media [data-slot='terminal-output'] {
   background-color: oklch(from var(--terminal-bg, var(--background)) l c h / var(--bg-code-alpha, 0.45)) !important;
 }
 html.bg-image-enabled [data-slot='terminal-pane'] .xterm,
