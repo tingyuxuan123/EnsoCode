@@ -22,7 +22,7 @@ import (
 
 const (
 	checksumsName         = "enso-relay-checksums.txt"
-	defaultUpdateRepo     = "J3n5en/EnsoCode"
+	defaultUpdateRepo     = "tingyuxuan123/EnsoCode"
 	defaultUpdateAPI      = "https://api.github.com"
 	defaultUpdateInterval = 4 * time.Hour
 	minUpdateInterval     = time.Minute
