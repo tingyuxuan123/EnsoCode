@@ -30,7 +30,6 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from '@/components/ui/menu';
-import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { prefetchAccountUsage, useCachedAccountUsage } from '@/hooks/useAccountUsage';
 import { useI18n } from '@/i18n';
@@ -39,6 +38,8 @@ import { useModelMeta } from '@/stores/modelMeta';
 import { formatTokens } from '@/stores/sessions/stats';
 import { interceptRootCascadeEscape, markSubmenuOpen } from './modelPickerCascadeEsc';
 import { type SessionUsageAccount, usageAccountKeyForProvider } from './sessionUsageAccount';
+import { ThinkingLevelSlider } from './ThinkingLevelSlider';
+import { showsThinkingSlider } from './thinkingLevelTrack';
 
 export const OPEN_CHAT_MODEL_PICKER_EVENT = 'enso:open-chat-model-picker';
 
@@ -806,7 +807,6 @@ export function ModelPicker({
     visibleLevels.length > 0
       ? clampProjectThinkingLevel(thinkingLevel, visibleLevels)
       : thinkingLevel;
-  const levelIndex = Math.max(0, visibleLevels.indexOf(displayedThinkingLevel));
 
   /**
    * 归一化 effect：钳位不能只挂在 handleSelectModel 的 onClick 上，两条路径会漏掉——
@@ -1095,55 +1095,20 @@ export function ModelPicker({
                   {t('Depth: {{level}}', { level: t(LEVEL_LABEL_KEYS[displayedThinkingLevel]) })}
                 </p>
               )}
-              {displayedReasoningEnabled && visibleLevels.length > 0 && (
-                <div className="mt-3">
-                  <Slider
-                    tabIndex={-1}
-                    aria-label={t('Thinking level')}
-                    thumbAlignment="center"
-                    className="[&_[data-slot=slider-indicator]]:ms-0 [&_[data-slot=slider-track]]:before:inset-x-0"
-                    min={0}
-                    max={Math.max(1, visibleLevels.length - 1)}
-                    step={1}
-                    value={levelIndex}
-                    disabled={visibleLevels.length === 1}
-                    onValueChange={(value) => {
-                      const index = Array.isArray(value) ? value[0] : value;
-                      const target = visibleLevels[index] ?? visibleLevels[0];
-                      onThinkingChange(target);
-                    }}
-                  />
-                  <div className="relative mt-1 h-6">
-                    {visibleLevels.map((entry, index) => (
-                      <button
-                        key={entry}
-                        type="button"
-                        tabIndex={-1}
-                        data-thinking-tick={entry}
-                        style={{
-                          left: `${(index / Math.max(1, visibleLevels.length - 1)) * 100}%`,
-                        }}
-                        onClick={() => onThinkingChange(entry)}
-                        className="absolute top-0 flex w-0 flex-col items-center"
-                      >
-                        <span className="h-1.5 w-px shrink-0 bg-muted-foreground/40" />
-                        <span
-                          className={cn(
-                            'whitespace-nowrap text-[10px] transition-colors',
-                            index === 0
-                              ? 'self-start'
-                              : index === visibleLevels.length - 1 && 'self-end',
-                            entry === displayedThinkingLevel
-                              ? 'font-medium text-primary'
-                              : 'text-muted-foreground/70 hover:text-foreground'
-                          )}
-                        >
-                          {t(LEVEL_LABEL_KEYS[entry])}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {/* 只有一个可用档时不画滑杆：没有可调范围，禁用态只会让人以为坏了 */}
+              {displayedReasoningEnabled && visibleLevels.length === 1 && (
+                <p className="mt-2 text-xs text-muted-foreground" data-thinking-fixed="">
+                  {t(LEVEL_LABEL_KEYS[visibleLevels[0]])}
+                </p>
+              )}
+              {displayedReasoningEnabled && showsThinkingSlider(visibleLevels.length) && (
+                <ThinkingLevelSlider
+                  levels={visibleLevels}
+                  level={displayedThinkingLevel}
+                  labels={LEVEL_LABEL_KEYS}
+                  ariaLabel={t('Thinking level')}
+                  onChange={onThinkingChange}
+                />
               )}
             </div>
           )}
