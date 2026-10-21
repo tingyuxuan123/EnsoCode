@@ -1515,7 +1515,7 @@ function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }
       className={cn(
         // 流式时只开一个小窗口（约 4 行），像活动指示而不是正文；
         // 思考结束后用户主动展开才给完整高度。
-        't-acc-reveal scroll-stable mt-2 ml-2 overflow-y-auto border-l border-border py-0.5 pl-3.5 text-[13px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap [scrollbar-width:thin]',
+        't-acc-reveal scroll-stable scroll-pill mt-2 ml-2 overflow-y-auto border-l border-border py-0.5 pl-3.5 text-[13px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap',
         streaming ? 'max-h-28' : 'max-h-[min(16rem,38vh)]'
       )}
     >
@@ -1566,7 +1566,7 @@ function TaskNoteRow({ item }: { item: Extract<TimelineItem, { kind: 'task-note'
           <pre className="border-b border-border/60 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {item.detail}
           </pre>
-          <pre className="scroll-stable max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
+          <pre className="scroll-stable scroll-pill max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {logPath
               ? log === undefined
                 ? t('Loading…')
@@ -1647,7 +1647,7 @@ function CompactionRow({
         {divider && <span className="h-px flex-1 bg-border" />}
       </button>
       {expanded && (
-        <pre className="scroll-stable mt-1.5 max-h-80 overflow-auto rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+        <pre className="scroll-stable scroll-pill mt-1.5 max-h-80 overflow-auto rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
           {item.summary || t('(summary unavailable)')}
         </pre>
       )}

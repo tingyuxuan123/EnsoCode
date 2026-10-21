@@ -253,6 +253,32 @@
     scrollbar-gutter: stable;
   }
 
+  /**
+   * 块内独立滚动（思考正文这类"高度封顶、自己滚"的小区域）用细胶囊滑块：
+   * 滑块左右各留 1px 透明边、轨道全透明，只看得见一条悬浮细条；
+   * 轨道宽度仍是 8px，点击/拖拽热区不变。
+   * 注意不能再用 `scrollbar-width: thin`——Chromium 一旦拿到标准属性就忽略
+   * ::-webkit-scrollbar，退回系统原生滚动条（深色底槽 + 灰条），正是它丑的来源。
+   */
+  .scroll-pill::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scroll-pill::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-pill::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .scroll-pill::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50 rounded-full;
+  }
+
   /* Disable text selection */
   * {
     user-select: none;
