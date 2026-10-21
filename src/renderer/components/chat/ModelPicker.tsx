@@ -1090,12 +1090,8 @@ export function ModelPicker({
                 </p>
               )}
 
-              {reasoningMode === 'on' && displayedReasoningEnabled && (
-                <p className="mt-2 text-xs">
-                  {t('Depth: {{level}}', { level: t(LEVEL_LABEL_KEYS[displayedThinkingLevel]) })}
-                </p>
-              )}
-              {/* 只有一个可用档时不画滑杆：没有可调范围，禁用态只会让人以为坏了 */}
+              {/* 当前档由滑杆的滑块 + 高亮标签共同表达，不再重复一行"深度：xx"。
+                  只有一个可用档时不画滑杆：没有可调范围，禁用态只会让人以为坏了 */}
               {displayedReasoningEnabled && visibleLevels.length === 1 && (
                 <p className="mt-2 text-xs text-muted-foreground" data-thinking-fixed="">
                   {t(LEVEL_LABEL_KEYS[visibleLevels[0]])}
