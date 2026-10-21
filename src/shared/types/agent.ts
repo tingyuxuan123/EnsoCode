@@ -1746,6 +1746,8 @@ export type AgentWorkerEvent =
       seq: number;
       sessionFile?: string;
       contextWindow?: number;
+      /** contextWindow 来自兜底（端点没声明、catalog 也没命中），UI 需要显示成估计值 */
+      contextWindowEstimated?: boolean;
       occupancy?: ContextOccupancy;
       usageTotals?: SessionUsageTotals;
     }
@@ -3831,7 +3833,9 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
       const usageTotals = parseSessionUsageTotals(rawTotals);
       return (value.sessionFile === undefined || typeof value.sessionFile === 'string') &&
         (value.contextWindow === undefined ||
-          (typeof value.contextWindow === 'number' && value.contextWindow > 0))
+          (typeof value.contextWindow === 'number' && value.contextWindow > 0)) &&
+        (value.contextWindowEstimated === undefined ||
+          typeof value.contextWindowEstimated === 'boolean')
         ? ({
             ...rest,
             ...(occupancy ? { occupancy } : {}),

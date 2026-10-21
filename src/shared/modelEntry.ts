@@ -55,23 +55,37 @@ export function mergeFetchedModels(
   const updated = current.map((model) => {
     const hit = byId.get(model.id);
     if (!hit) return model;
-    const next: ModelEntry = { ...model };
-    if (next.contextWindow === undefined && hit.contextWindow !== undefined)
-      next.contextWindow = hit.contextWindow;
-    if (next.maxTokens === undefined && hit.maxTokens !== undefined) next.maxTokens = hit.maxTokens;
-    return next;
+    return fillFetchedMetadata({ ...model }, hit);
   });
   const fresh = fetched
     .filter((model) => !known.has(model.id))
-    .map(
-      (model): ModelEntry => ({
-        id: model.id,
-        enabled: true,
-        ...(model.contextWindow !== undefined ? { contextWindow: model.contextWindow } : {}),
-        ...(model.maxTokens !== undefined ? { maxTokens: model.maxTokens } : {}),
-      })
-    );
+    .map((model): ModelEntry => fillFetchedMetadata({ id: model.id, enabled: true }, model));
   return [...updated, ...fresh];
+}
+
+/**
+ * 用端点元数据补齐缺失字段。已有值一律不动：那是用户改过的，比端点声明优先。
+ * `reasoning` 在端点侧是布尔，落盘成行级 on/off 覆盖（否则 unknown 会回落到乐观默认）。
+ */
+function fillFetchedMetadata(entry: ModelEntry, fetched: FetchedModel): ModelEntry {
+  const next: ModelEntry = { ...entry };
+  if (next.contextWindow === undefined && fetched.contextWindow !== undefined) {
+    next.contextWindow = fetched.contextWindow;
+  }
+  if (next.maxTokens === undefined && fetched.maxTokens !== undefined) {
+    next.maxTokens = fetched.maxTokens;
+  }
+  if (next.label === undefined && fetched.label !== undefined) next.label = fetched.label;
+  if (next.reasoning === undefined && fetched.reasoning !== undefined) {
+    next.reasoning = fetched.reasoning ? 'on' : 'off';
+  }
+  if (next.thinkingLevels === undefined && fetched.thinkingLevels !== undefined) {
+    next.thinkingLevels = [...fetched.thinkingLevels];
+  }
+  if (next.vision === undefined && fetched.supportsImage !== undefined) {
+    next.vision = fetched.supportsImage;
+  }
+  return next;
 }
 
 /** 把覆盖写成「缺失=跟随」：显式 undefined 删键，且不落盘 `'follow'` / 非法值。 */

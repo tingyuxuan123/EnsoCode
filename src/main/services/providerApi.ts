@@ -10,9 +10,11 @@ import type {
   FetchedModel,
   ListModelsResult,
   ModelApiKind,
+  ModelThinkingLevelOverride,
   ProviderApiConfig,
   TestProviderResult,
 } from '@shared/types';
+import { MODEL_THINKING_LEVEL_OVERRIDES } from '@shared/types';
 import { net } from 'electron';
 import { createSecretSet } from './secretRedactor';
 
@@ -149,6 +151,103 @@ const MAX_TOKENS_FIELDS = [
   'outputTokenLimit',
 ] as const;
 
+/** 档位弱 → 强排序；端点可能给出 off/none、ultra 这类项目值域外的档 */
+const THINKING_LEVEL_ORDER = MODEL_THINKING_LEVEL_OVERRIDES;
+
+/**
+ * 端点档位别名归一：`ultra` 是我们的 `max`（再高也没有），
+ * `none` / `off` / `disabled` 指「关」，本项目用 reasoning 开关表达，不进档位集合。
+ */
+function normalizeThinkingLevel(value: unknown): ModelThinkingLevelOverride | undefined {
+  if (typeof value !== 'string') return undefined;
+  const level = value.trim().toLowerCase();
+  if (level === 'ultra') return 'max';
+  return (THINKING_LEVEL_ORDER as readonly string[]).includes(level)
+    ? (level as ModelThinkingLevelOverride)
+    : undefined;
+}
+
+/** 去重 + 按强弱排序；过滤后为空 = 未知（不落空数组），避免把「未知」写成「明确不支持」 */
+function normalizeThinkingLevels(raw: unknown): ModelThinkingLevelOverride[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const levels = new Set<ModelThinkingLevelOverride>();
+  for (const item of raw) {
+    const level = normalizeThinkingLevel(item);
+    if (level) levels.add(level);
+  }
+  if (levels.size === 0) return undefined;
+  return THINKING_LEVEL_ORDER.filter((level) => levels.has(level));
+}
+
+const THINKING_LEVELS_FIELDS = [
+  'reasoning_levels',
+  'support_efforts',
+  'supported_reasoning_levels',
+] as const;
+
+function readThinkingLevels(
+  item: Record<string, unknown>
+): ModelThinkingLevelOverride[] | undefined {
+  for (const field of THINKING_LEVELS_FIELDS) {
+    const value = item[field];
+    if (value === undefined) continue;
+    // supported_reasoning_levels 是 [{ effort }]；其余是字符串数组
+    const raw =
+      field === 'supported_reasoning_levels' && Array.isArray(value)
+        ? value.map((entry) => asRecord(entry)?.effort)
+        : value;
+    const levels = normalizeThinkingLevels(raw);
+    if (levels) return levels;
+  }
+  // Kimi 形状的嵌套声明：只有 support:true 才算「声明了档位」
+  const nested = asRecord(item.think_efforts);
+  if (nested?.support === true) return normalizeThinkingLevels(nested.valid_efforts);
+  return undefined;
+}
+
+function readBooleanField(
+  item: Record<string, unknown>,
+  fields: readonly string[]
+): boolean | undefined {
+  for (const field of fields) {
+    const value = item[field];
+    if (typeof value === 'boolean') return value;
+  }
+  return undefined;
+}
+
+/** 各协议的显示名字段不同：Gemini 的 name 是资源路径（等于我们的 id），不能当标签 */
+const LABEL_FIELDS: Record<string, readonly string[]> = {
+  'google-generative-ai': ['displayName', 'display_name'],
+  ollama: [],
+};
+
+function readLabel(api: ModelApiKind, item: Record<string, unknown>): string | undefined {
+  for (const field of LABEL_FIELDS[api] ?? ['display_name', 'name']) {
+    const value = item[field];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return undefined;
+}
+
+/** modalities.input 里没有 image = 明确不支持；字段缺失才回落到 supports_image_in，最后才是未知 */
+function readSupportsImage(item: Record<string, unknown>): boolean | undefined {
+  const modalities = asRecord(item.modalities);
+  const input = modalities?.input;
+  if (Array.isArray(input)) {
+    return input.some(
+      (value) => typeof value === 'string' && value.trim().toLowerCase() === 'image'
+    );
+  }
+  return readBooleanField(item, ['supports_image_in']);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 function firstPositiveField(
   item: Record<string, unknown>,
   fields: readonly string[]
@@ -160,20 +259,39 @@ function firstPositiveField(
   return undefined;
 }
 
-/** 非正 / 非有限 / 非数字一律视为缺失，不留假数字 */
-function attachTokenLimits(id: string, item: Record<string, unknown>): FetchedModel {
-  const contextWindow = firstPositiveField(item, CONTEXT_WINDOW_FIELDS);
-  let maxTokens = firstPositiveField(item, MAX_TOKENS_FIELDS);
+/**
+ * 非正 / 非有限 / 非数字一律视为缺失，不留假数字。
+ * 单条缺字段只丢该字段：一个模型没有 context_length 不能拖垮整份清单。
+ */
+function attachMetadata(
+  api: ModelApiKind,
+  id: string,
+  item: Record<string, unknown>
+): FetchedModel {
+  // Kimi/OpenRouter 风格把窗口塞进 limit{context,output}；扁平字段优先
+  const limit = asRecord(item.limit);
+  const contextWindow =
+    firstPositiveField(item, CONTEXT_WINDOW_FIELDS) ?? positiveFiniteNumber(limit?.context);
+  let maxTokens =
+    firstPositiveField(item, MAX_TOKENS_FIELDS) ?? positiveFiniteNumber(limit?.output);
   if (maxTokens === undefined && item.top_provider && typeof item.top_provider === 'object') {
     // OpenRouter 形状：最大输出藏在 top_provider 里
     maxTokens = firstPositiveField(item.top_provider as Record<string, unknown>, [
       'max_completion_tokens',
     ]);
   }
+  const label = readLabel(api, item);
+  const reasoning = readBooleanField(item, ['reasoning', 'supports_reasoning']);
+  const thinkingLevels = readThinkingLevels(item);
+  const supportsImage = readSupportsImage(item);
   return {
     id,
     ...(contextWindow !== undefined ? { contextWindow } : {}),
     ...(maxTokens !== undefined ? { maxTokens } : {}),
+    ...(label !== undefined ? { label } : {}),
+    ...(reasoning !== undefined ? { reasoning } : {}),
+    ...(thinkingLevels !== undefined ? { thinkingLevels } : {}),
+    ...(supportsImage !== undefined ? { supportsImage } : {}),
   };
 }
 
@@ -212,11 +330,11 @@ export function extractModelEntries(
       .filter(
         (item): item is Record<string, unknown> & { name: string } => typeof item.name === 'string'
       )
-      .map((item) => attachTokenLimits(item.name.replace(/^models\//, ''), item));
+      .map((item) => attachMetadata(api, item.name.replace(/^models\//, ''), item));
   }
   return objects(data.data)
     .filter((item): item is Record<string, unknown> & { id: string } => typeof item.id === 'string')
-    .map((item) => attachTokenLimits(item.id, item));
+    .map((item) => attachMetadata(api, item.id, item));
 }
 
 export async function testProvider(

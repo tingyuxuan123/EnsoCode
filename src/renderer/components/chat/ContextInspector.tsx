@@ -40,9 +40,12 @@ function CompactButton({ conversationId }: { conversationId: string }) {
 export function ContextInspector({
   occupancy,
   conversationId,
+  estimatedWindow = false,
 }: {
   occupancy?: ContextOccupancy;
   conversationId?: string;
+  /** 窗口是兜底值：写成 ~128K，别让占比看起来像精确数字 */
+  estimatedWindow?: boolean;
 }) {
   const { t } = useI18n();
   if (!occupancy) {
@@ -58,7 +61,7 @@ export function ContextInspector({
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="tabular-nums">
           {formatTokens(occupancy.used)}
-          {window ? ` / ${formatTokens(window)}` : ' · ?'}
+          {window ? ` / ${estimatedWindow ? '~' : ''}${formatTokens(window)}` : ' · ?'}
           {occupancy.percent !== undefined ? ` · ${occupancy.percent}%` : ''}
         </span>
         <span className="text-muted-foreground">{t('Estimate')}</span>

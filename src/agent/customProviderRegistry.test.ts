@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   accumulateModelIds,
   installPushedCustomProviders,
+  isEstimatedContextWindow,
   type ModelDirectoryPushState,
   parseModelDirectoryPush,
   parseWorkerCustomProviders,
@@ -138,5 +139,52 @@ describe('installPushedCustomProviders', () => {
     };
     const out = previewModelDirectoryPush(first.parsed, stale, providers);
     expect(out).toEqual({ status: 'ignored', reason: 'stale-revision' });
+  });
+});
+
+describe('registerCustomProviderModels：能力落进 pi 模型定义', () => {
+  beforeEach(() => {
+    resetCustomProviderRegistryForTests();
+  });
+
+  it('端点声明没有图片输入时 input 只留 text，未声明则维持乐观', () => {
+    const { runtime, registerProvider } = mockRuntime();
+    const endpoint = {
+      api: 'openai-completions' as const,
+      baseUrl: 'https://gw.example/v1',
+      apiKey: 'sk-push',
+    };
+    registerCustomProviderModels(runtime, endpoint, [
+      { id: 'no-image', vision: false },
+      { id: 'unknown-image' },
+    ]);
+    const call = registerProvider.mock.calls.at(-1)?.[1] as
+      | { models: { id: string; input: string[] }[] }
+      | undefined;
+    const models = call?.models ?? [];
+    expect(models.find((model) => model.id === 'no-image')?.input).toEqual(['text']);
+    expect(models.find((model) => model.id === 'unknown-image')?.input).toEqual(['text', 'image']);
+  });
+
+  it('上下文窗口的来源可判定：兜底 128K 的模型被标记，显式声明的没有', () => {
+    const { runtime, registerProvider } = mockRuntime();
+    const endpoint = {
+      api: 'openai-completions' as const,
+      baseUrl: 'https://gw.example/v1',
+      apiKey: 'sk-push',
+    };
+    registerCustomProviderModels(runtime, endpoint, [
+      { id: 'unknown-window' },
+      { id: 'declared-window', contextWindow: 1_000_000 },
+    ]);
+    const call = registerProvider.mock.calls.at(-1)?.[1] as
+      | { models: { id: string; contextWindow: number }[] }
+      | undefined;
+    const models = call?.models ?? [];
+    const unknown = models.find((model) => model.id === 'unknown-window');
+    const declared = models.find((model) => model.id === 'declared-window');
+    expect(unknown?.contextWindow).toBe(128_000);
+    expect(unknown && isEstimatedContextWindow(unknown)).toBe(true);
+    expect(declared && isEstimatedContextWindow(declared)).toBe(false);
   });
 });

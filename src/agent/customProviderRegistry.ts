@@ -80,13 +80,23 @@ export function parseWorkerModelEntry(value: unknown): ModelEntry | undefined {
   if (typeof raw.enabled === 'boolean') entry.enabled = raw.enabled;
   if (isReasoningOverride(raw.reasoning)) entry.reasoning = raw.reasoning;
   if (isThinkingLevelOverride(raw.thinkingLevel)) entry.thinkingLevel = raw.thinkingLevel;
+  const thinkingLevels = parseThinkingLevels(raw.thinkingLevels);
+  if (thinkingLevels) entry.thinkingLevels = thinkingLevels;
   if (typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow)) {
     entry.contextWindow = raw.contextWindow;
   }
   if (typeof raw.maxTokens === 'number' && Number.isFinite(raw.maxTokens)) {
     entry.maxTokens = raw.maxTokens;
   }
+  if (typeof raw.vision === 'boolean') entry.vision = raw.vision;
   return entry;
+}
+
+/** 支持集：非空且全非法即丢弃（IPC 入参按 unknown 收窄，不用断言） */
+function parseThinkingLevels(value: unknown): ModelThinkingLevelOverride[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const levels = value.filter(isThinkingLevelOverride);
+  return levels.length > 0 ? levels : undefined;
 }
 
 function parseWorkerCustomProvider(value: unknown): WorkerCustomProvider | undefined {
@@ -149,8 +159,10 @@ function providerFingerprint(provider: WorkerCustomProvider) {
       ...(model.enabled !== undefined ? { enabled: model.enabled } : {}),
       ...(model.reasoning !== undefined ? { reasoning: model.reasoning } : {}),
       ...(model.thinkingLevel !== undefined ? { thinkingLevel: model.thinkingLevel } : {}),
+      ...(model.thinkingLevels !== undefined ? { thinkingLevels: model.thinkingLevels } : {}),
       ...(model.contextWindow !== undefined ? { contextWindow: model.contextWindow } : {}),
       ...(model.maxTokens !== undefined ? { maxTokens: model.maxTokens } : {}),
+      ...(model.vision !== undefined ? { vision: model.vision } : {}),
     })),
   };
 }
@@ -214,25 +226,43 @@ function definitionFor(
 ): CustomModelDefinition {
   const catalog = findCatalogModelById(catalogModels, entry.id);
   const resolved = resolveCustomModelCapabilities(catalog, entry);
-  const contextWindow = resolved.contextWindow ?? 128_000;
-  const maxTokens = resolved.maxTokens ?? 32_000;
+  const contextWindow = resolved.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+  const maxTokens = resolved.maxTokens ?? FALLBACK_MAX_TOKENS;
   const compat = resolveCustomModelCompat(
     api,
     piBaseUrl,
     selectCatalogEntryForCompat(catalogModels, api, piBaseUrl, entry.id)
   );
-  return {
+  const definition: CustomModelDefinition = {
     id: entry.id,
-    name: entry.id,
+    name: entry.label ?? entry.id,
     reasoning: resolved.reasoning,
     ...(resolved.thinkingLevelMap ? { thinkingLevelMap: resolved.thinkingLevelMap } : {}),
-    input: ['text', 'image'],
+    // 端点明确声明「没有图片输入」时才收紧；未知仍按乐观处理，避免把能跑图片的中转站判死
+    input: resolved.vision ? ['text', 'image'] : ['text'],
     ...(catalog?.api === api && catalog.inputLimits ? { inputLimits: catalog.inputLimits } : {}),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow,
     maxTokens,
     ...(compat ? { compat } : {}),
   };
+  if (resolved.contextWindow === undefined) fallbackContextWindowModels.add(definition);
+  return definition;
+}
+
+/** 上下文窗口兜底值：catalog / 行覆盖都没给时用它跑，但调用方要能看出这是猜的 */
+const FALLBACK_CONTEXT_WINDOW = 128_000;
+const FALLBACK_MAX_TOKENS = 32_000;
+
+/** 用了兜底窗口的模型定义（按对象身份记录：注册进 runtime 的就是这些对象） */
+const fallbackContextWindowModels = new WeakSet<object>();
+
+/**
+ * 该模型的上下文窗口是否来自兜底（端点没声明、catalog 也没命中）。
+ * UI 用它把「已知 1M」和「按 128K 猜」区分开，不再显示假精度。
+ */
+export function isEstimatedContextWindow(model: object | undefined): boolean {
+  return model !== undefined && fallbackContextWindowModels.has(model);
 }
 
 /**

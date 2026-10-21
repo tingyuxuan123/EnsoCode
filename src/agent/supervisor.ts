@@ -137,6 +137,7 @@ import { CURSOR_PROVIDER_ID, loadCursorProvider } from './cursor/loadProvider';
 import { attachCursorBridgeToSession, isCursorModel } from './cursor/sessionBridge';
 import {
   installPushedCustomProviders,
+  isEstimatedContextWindow,
   type ModelDirectoryPushState,
   previewModelDirectoryPush,
   registerCustomProviderModels,
@@ -4290,7 +4291,10 @@ export class SessionSupervisor {
   }
 
   private emitSessionMeta(managed: ManagedSession): void {
-    const contextWindow = positiveContextWindow(limitsModelOf(managed.session));
+    const limitsModel = limitsModelOf(managed.session);
+    const contextWindow = positiveContextWindow(limitsModel);
+    // 兜底 128K 与「端点声明 1M」在 UI 上必须能区分，否则占比看起来是精确值
+    const contextWindowEstimated = isEstimatedContextWindow(limitsModel) || undefined;
     let occupancy: ReturnType<typeof collectContextOccupancy> | undefined;
     try {
       const baseline = occupancyFromManaged(managed, contextWindow, (message) =>
@@ -4330,6 +4334,7 @@ export class SessionSupervisor {
       sessionFile: managed.session.sessionFile,
       ...(occupancy ? { occupancy } : {}),
       ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(contextWindowEstimated ? { contextWindowEstimated } : {}),
       // 渲染层冷会话不留正文、手机只持尾窗：按 worker 的完整记录算好随占用下发
       usageTotals: toUsageTotals(computeStats(managed.messages)),
     });

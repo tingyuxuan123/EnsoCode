@@ -15,6 +15,8 @@ export interface CatalogModelEntry {
   maxTokens?: number;
   reasoning?: boolean;
   thinkingLevelMap?: Record<string, string | null | undefined>;
+  /** 输入模态（pi 模型对象的 input）；缺省 = 未知 */
+  input?: readonly string[];
 }
 
 /** 自定义模型能力分层：行覆盖 > 精确 catalog id > 乐观默认 */
@@ -26,11 +28,14 @@ export interface CustomModelFieldSources {
   thinkingLevel: CustomModelResolveSource;
   contextWindow: CustomModelResolveSource;
   maxTokens: CustomModelResolveSource;
+  vision: CustomModelResolveSource;
 }
 
 export interface ResolvedCustomModelCapabilities {
   reasoning: boolean;
   thinkingLevelMap?: Record<string, string | null | undefined>;
+  /** 是否支持图片输入；缺省乐观为 true（自定义中转站大多能转发图片） */
+  vision: boolean;
   /** 缺省 = 数据层未知；spawn 再套 128K，这里不填假数字 */
   contextWindow?: number;
   maxTokens?: number;
@@ -82,11 +87,27 @@ export function pickModelCapabilityOverrides(
   if (isModelThinkingLevelOverride(entry.thinkingLevel)) {
     overrides.thinkingLevel = entry.thinkingLevel;
   }
+  const thinkingLevels = normalizeLevelSet(entry.thinkingLevels);
+  if (thinkingLevels !== undefined) overrides.thinkingLevels = thinkingLevels;
   const contextWindow = positiveFiniteNumber(entry.contextWindow);
   if (contextWindow !== undefined) overrides.contextWindow = contextWindow;
   const maxTokens = positiveFiniteNumber(entry.maxTokens);
   if (maxTokens !== undefined) overrides.maxTokens = maxTokens;
+  if (typeof entry.vision === 'boolean') overrides.vision = entry.vision;
   return overrides;
+}
+
+/** 支持集归一：只留合法档、去重、按强弱排序；过滤后为空 = 未知，不写空数组 */
+function normalizeLevelSet(
+  levels: readonly unknown[] | undefined
+): ModelThinkingLevelOverride[] | undefined {
+  if (!Array.isArray(levels)) return undefined;
+  const valid = new Set<ModelThinkingLevelOverride>();
+  for (const level of levels) {
+    if (isModelThinkingLevelOverride(level)) valid.add(level);
+  }
+  if (valid.size === 0) return undefined;
+  return MODEL_THINKING_LEVEL_OVERRIDES.filter((level) => valid.has(level));
 }
 
 /**
@@ -117,6 +138,7 @@ export function resolveCustomModelCapabilities(
 
   const reasoning = resolveReasoning(catalog, picked);
   const thinking = resolveThinkingLevelMap(catalog, picked, catalogHit, reasoning.value);
+  const vision = resolveVision(catalog, picked, catalogHit);
   const contextWindow = resolvePositive(
     picked.contextWindow,
     catalogHit ? positiveFiniteNumber(catalog?.contextWindow) : undefined,
@@ -132,6 +154,7 @@ export function resolveCustomModelCapabilities(
   return {
     reasoning: reasoning.value,
     ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+    vision: vision.value,
     ...(contextWindow.value !== undefined ? { contextWindow: contextWindow.value } : {}),
     ...(maxTokens.value !== undefined ? { maxTokens: maxTokens.value } : {}),
     thinkingLevels: supportedProjectThinkingLevels({
@@ -143,6 +166,7 @@ export function resolveCustomModelCapabilities(
       thinkingLevel: thinking.source,
       contextWindow: contextWindow.source,
       maxTokens: maxTokens.source,
+      vision: vision.source,
     },
   };
 }
@@ -171,6 +195,16 @@ function resolveThinkingLevelMap(
   if (picked.thinkingLevel) {
     return {
       value: thinkingLevelMapForCap(picked.thinkingLevel),
+      source: 'override',
+    };
+  }
+  // 端点声明的支持集排在 catalog 之前：它是这个具体模型的事实，
+  // catalog 只按精确 id 命中，命中不到时支持集是唯一可信来源。
+  if (picked.thinkingLevels) {
+    return {
+      value: reasoningEnabled
+        ? thinkingLevelMapFromProjectLevels(reasoningEnabled, picked.thinkingLevels)
+        : undefined,
       source: 'override',
     };
   }
@@ -206,7 +240,8 @@ export function resolveCustomModelView(
   return resolveCustomModelCapabilities(catalogFromModelMeta(meta), entry);
 }
 
-function thinkingLevelMapFromProjectLevels(
+/** 把"支持集"写成 pi 的 thinkingLevelMap：集合里没有的档置 null，xhigh/max 只有声明了才算支持 */
+export function thinkingLevelMapFromProjectLevels(
   reasoning: boolean | undefined,
   levels: ThinkingLevel[] | undefined
 ): Record<string, string | null> | undefined {
@@ -218,6 +253,19 @@ function thinkingLevelMapFromProjectLevels(
     if (!levels.includes(level)) map[level] = null;
   }
   return Object.keys(map).length > 0 ? map : undefined;
+}
+
+/** 视觉能力：行覆盖 > catalog input > 乐观默认 true（未知不等于不支持） */
+function resolveVision(
+  catalog: CatalogModelEntry | undefined,
+  picked: ModelCapabilityOverrides,
+  catalogHit: boolean
+): { value: boolean; source: CustomModelResolveSource } {
+  if (typeof picked.vision === 'boolean') return { value: picked.vision, source: 'override' };
+  if (catalogHit && Array.isArray(catalog?.input)) {
+    return { value: catalog.input.includes('image'), source: 'catalog' };
+  }
+  return { value: true, source: 'default' };
 }
 
 function resolvePositive(

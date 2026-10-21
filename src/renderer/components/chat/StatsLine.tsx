@@ -526,6 +526,7 @@ export function StatsLine({ conversationId }: StatsLineProps) {
                       <ContextInspector
                         occupancy={conversation.occupancy}
                         conversationId={conversation.id}
+                        estimatedWindow={conversation.contextWindowEstimated === true}
                       />
                     </PopoverPopup>
                   </Popover>

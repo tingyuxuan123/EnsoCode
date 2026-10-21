@@ -15,6 +15,7 @@ const sonnetCatalog = {
   thinkingLevelMap: { max: 'max' },
   contextWindow: 200_000,
   maxTokens: 64_000,
+  input: ['text', 'image'],
 } as const;
 
 const noReasoningCatalog = {
@@ -76,6 +77,7 @@ describe('resolveCustomModelCapabilities', () => {
       thinkingLevel: 'catalog',
       contextWindow: 'catalog',
       maxTokens: 'catalog',
+      vision: 'catalog',
     });
   });
 
@@ -100,6 +102,7 @@ describe('resolveCustomModelCapabilities', () => {
       thinkingLevel: 'default',
       contextWindow: 'default',
       maxTokens: 'default',
+      vision: 'default',
     });
   });
 
@@ -120,6 +123,7 @@ describe('resolveCustomModelCapabilities', () => {
       thinkingLevel: 'override',
       contextWindow: 'override',
       maxTokens: 'override',
+      vision: 'catalog',
     });
   });
 
@@ -158,6 +162,60 @@ describe('resolveCustomModelCapabilities', () => {
     expect(resolved.reasoning).toBe(true);
     expect(resolved.thinkingLevelMap).toEqual({ xhigh: 'xhigh', max: 'max' });
     expect(resolved.source.thinkingLevel).toBe('default');
+  });
+
+  it('端点声明的档位支持集：缺档剔除、未声明的 xhigh/max 不支持', () => {
+    const resolved = resolveCustomModelCapabilities(undefined, {
+      reasoning: 'on',
+      thinkingLevels: ['low', 'high', 'max'],
+    });
+    expect(resolved.thinkingLevels).toEqual(['low', 'high', 'max']);
+    expect(resolved.thinkingLevelMap).toEqual({
+      minimal: null,
+      medium: null,
+      max: 'max',
+    });
+    expect(resolved.source.thinkingLevel).toBe('override');
+  });
+
+  it('用户设定的最高档压过端点支持集', () => {
+    const resolved = resolveCustomModelCapabilities(undefined, {
+      reasoning: 'on',
+      thinkingLevels: ['low', 'high', 'max'],
+      thinkingLevel: 'low',
+    });
+    expect(resolved.thinkingLevels).toEqual(['minimal', 'low']);
+  });
+
+  it('支持集在 reasoning:off 时被忽略，非法值过滤后不发明档位', () => {
+    const off = resolveCustomModelCapabilities(undefined, {
+      reasoning: 'off',
+      thinkingLevels: ['low', 'high'],
+    });
+    expect(off.reasoning).toBe(false);
+    expect(off.thinkingLevels).toEqual([]);
+    expect(off.thinkingLevelMap).toBeUndefined();
+
+    const dirty = resolveCustomModelCapabilities(undefined, {
+      reasoning: 'on',
+      thinkingLevels: ['ultra', 'low', 42] as unknown as ThinkingLevel[],
+    });
+    expect(dirty.thinkingLevels).toEqual(['low']);
+  });
+
+  it('视觉能力：行覆盖 > catalog input > 乐观默认 true', () => {
+    expect(resolveCustomModelCapabilities(undefined, { vision: false }).vision).toBe(false);
+    expect(resolveCustomModelCapabilities(undefined, { vision: false }).source.vision).toBe(
+      'override'
+    );
+    const fromCatalog = resolveCustomModelCapabilities(
+      { id: 'text-model', reasoning: false, input: ['text'] },
+      {}
+    );
+    expect(fromCatalog.vision).toBe(false);
+    expect(fromCatalog.source.vision).toBe('catalog');
+    expect(resolveCustomModelCapabilities(undefined, {}).vision).toBe(true);
+    expect(resolveCustomModelCapabilities(undefined, {}).source.vision).toBe('default');
   });
 });
 

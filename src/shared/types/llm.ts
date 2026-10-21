@@ -32,8 +32,15 @@ export type ModelThinkingLevelOverride = (typeof MODEL_THINKING_LEVEL_OVERRIDES)
 export interface ModelCapabilityOverrides {
   reasoning?: ModelReasoningOverride;
   thinkingLevel?: ModelThinkingLevelOverride;
+  /**
+   * 端点声明的档位支持集（/models 的 reasoning_levels 等）。与上面的 `thinkingLevel` 分工：
+   * 那个是用户设定的最高档，这个是「这个模型到底有哪些档」，缺档的档位会被剔除。
+   */
+  thinkingLevels?: ModelThinkingLevelOverride[];
   contextWindow?: number;
   maxTokens?: number;
+  /** 是否支持图片输入。缺省 = 未知（沿用乐观默认，保持既有自定义模型可用） */
+  vision?: boolean;
 }
 
 export interface ModelEntry extends ModelCapabilityOverrides {

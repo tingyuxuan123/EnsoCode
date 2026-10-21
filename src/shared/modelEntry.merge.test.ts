@@ -47,4 +47,58 @@ describe('mergeFetchedModels', () => {
     const merged = mergeFetchedModels(current, [{ id: 'b' }, { id: 'new' }]);
     expect(merged).toEqual([{ id: 'a' }, { id: 'b', label: 'B' }, { id: 'new', enabled: true }]);
   });
+
+  it('新模型一并带上端点声明的 label / reasoning / 档位集 / 视觉', () => {
+    const merged = mergeFetchedModels(
+      [],
+      [
+        {
+          id: 'auto/deepseek-v4.1-flash',
+          contextWindow: 1048576,
+          maxTokens: 384000,
+          label: 'DeepSeek V4.1 Flash',
+          reasoning: true,
+          thinkingLevels: ['low', 'high', 'max'],
+          supportsImage: true,
+        },
+        { id: 'text-only', supportsImage: false },
+      ]
+    );
+    expect(merged).toEqual([
+      {
+        id: 'auto/deepseek-v4.1-flash',
+        enabled: true,
+        contextWindow: 1048576,
+        maxTokens: 384000,
+        label: 'DeepSeek V4.1 Flash',
+        reasoning: 'on',
+        thinkingLevels: ['low', 'high', 'max'],
+        vision: true,
+      },
+      { id: 'text-only', enabled: true, vision: false },
+    ]);
+  });
+
+  it('已有一律不覆盖：用户改过的 label / 关闭的推理 / 自定的档位与视觉都保留', () => {
+    const current: ModelEntry[] = [
+      {
+        id: 'kept',
+        enabled: true,
+        label: '我的名字',
+        reasoning: 'off',
+        thinkingLevels: ['low'],
+        vision: false,
+      },
+    ];
+    const merged = mergeFetchedModels(current, [
+      {
+        id: 'kept',
+        label: '端点名字',
+        reasoning: true,
+        thinkingLevels: ['low', 'high', 'max'],
+        supportsImage: true,
+      },
+    ]);
+    expect(merged).toEqual(current);
+  });
 });

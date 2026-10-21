@@ -240,6 +240,8 @@ export interface Conversation extends SessionProjection {
   lastActiveAt?: number;
   /** 当前模型上下文窗口（session-meta 下发；未知则水位表显示 ?） */
   contextWindow?: number;
+  /** 上面这个窗口是兜底猜出来的（端点没声明、catalog 也没命中），UI 显示成估计值 */
+  contextWindowEstimated?: boolean;
   /** Worker 拆账单；未 spawn 时缺省 */
   occupancy?: ContextOccupancy;
   /** Worker 按完整记录算的用量（session-meta 下发），供手机状态栏 */
@@ -1537,6 +1539,8 @@ export const useSessionsStore = create<SessionsState>()(
               // 与 Main 同款守卫：空值不覆写，否则 resume 路径丢失 → 重启后历史无法找回
               ...(event.sessionFile ? { sessionFile: event.sessionFile } : {}),
               ...(event.contextWindow !== undefined ? { contextWindow: event.contextWindow } : {}),
+              // 每次 meta 都覆盖：换成已知窗口的模型时要能把「估计」摘掉
+              contextWindowEstimated: event.contextWindowEstimated === true ? true : undefined,
               ...(event.occupancy ? { occupancy: event.occupancy } : {}),
               ...(event.usageTotals ? { usageTotals: event.usageTotals } : {}),
             });

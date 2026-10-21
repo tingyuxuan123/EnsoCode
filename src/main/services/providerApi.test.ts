@@ -321,6 +321,153 @@ describe('extractModelEntries', () => {
   });
 });
 
+describe('extractModelEntries：端点声明的能力元数据', () => {
+  it('一次带出 label / reasoning / 档位支持集 / 视觉（3425 网关形状）', () => {
+    const data = {
+      data: [
+        {
+          id: 'auto/deepseek-v4.1-flash',
+          context_length: 1048576,
+          max_input_tokens: 1048576,
+          max_output_tokens: 384000,
+          display_name: 'DeepSeek V4.1 Flash',
+          magpie_label: 'DeepSeek V4.1 Flash · routing group',
+          reasoning: true,
+          reasoning_levels: ['low', 'high', 'max'],
+          modalities: { input: ['text', 'image'] },
+        },
+        {
+          id: 'workbuddy/hy4-preview-f',
+          display_name: 'hy4-preview-f',
+          reasoning: false,
+        },
+      ],
+    };
+    expect(extractModelEntries('openai-completions', data)).toEqual([
+      {
+        id: 'auto/deepseek-v4.1-flash',
+        contextWindow: 1048576,
+        maxTokens: 384000,
+        label: 'DeepSeek V4.1 Flash',
+        reasoning: true,
+        thinkingLevels: ['low', 'high', 'max'],
+        supportsImage: true,
+      },
+      // 缺 context_length/max_output_tokens 只丢这两个字段，不整条丢弃、不整批失败
+      { id: 'workbuddy/hy4-preview-f', label: 'hy4-preview-f', reasoning: false },
+    ]);
+  });
+
+  it('档位归一化：none/off 丢弃、ultra 夹到 max、去重并按强弱排序', () => {
+    const data = {
+      data: [
+        {
+          id: 'ultra',
+          reasoning: true,
+          reasoning_levels: ['none', 'high', 'ultra', 'low', 'high'],
+        },
+        { id: 'only-none', reasoning: true, reasoning_levels: ['none'] },
+        { id: 'empty', reasoning: true, reasoning_levels: [] },
+        { id: 'not-array', reasoning: true, reasoning_levels: 'low' },
+        { id: 'junk', reasoning: true, reasoning_levels: [1, null, 'low ', {}] },
+      ],
+    };
+    expect(extractModelEntries('openai-completions', data)).toEqual([
+      { id: 'ultra', reasoning: true, thinkingLevels: ['low', 'high', 'max'] },
+      // 只有 off 可用的模型 → 档位未知，不写空数组（未知 ≠ 明确不支持）
+      { id: 'only-none', reasoning: true },
+      // reasoning:true 但 levels 为空 → 同样是未知
+      { id: 'empty', reasoning: true },
+      { id: 'not-array', reasoning: true },
+      { id: 'junk', reasoning: true, thinkingLevels: ['low'] },
+    ]);
+  });
+
+  it('supported_reasoning_levels（对象数组）与 support_efforts（扁平）都认', () => {
+    const data = {
+      data: [
+        {
+          id: 'objects',
+          reasoning: true,
+          supported_reasoning_levels: [{ effort: 'low' }, { effort: 'xhigh' }, { effort: 'bogus' }],
+        },
+        { id: 'flat', reasoning: true, support_efforts: ['minimal', 'max'] },
+        {
+          id: 'nested',
+          think_efforts: { support: true, valid_efforts: ['low', 'medium'] },
+        },
+        // support:false 表示不支持 → 不当成空数组写入
+        { id: 'nested-off', think_efforts: { support: false, valid_efforts: ['low'] } },
+      ],
+    };
+    expect(extractModelEntries('openai-completions', data)).toEqual([
+      { id: 'objects', reasoning: true, thinkingLevels: ['low', 'xhigh'] },
+      { id: 'flat', reasoning: true, thinkingLevels: ['minimal', 'max'] },
+      { id: 'nested', thinkingLevels: ['low', 'medium'] },
+      { id: 'nested-off' },
+    ]);
+  });
+
+  it('reasoning / 视觉字段的别名与 false 语义', () => {
+    const data = {
+      data: [
+        { id: 'alias-reasoning', supports_reasoning: true },
+        { id: 'no-reasoning', supports_reasoning: false },
+        { id: 'image-alias', supports_image_in: true },
+        { id: 'no-image', supports_image_in: false },
+        // modalities 声明了输入但没有 image → 明确不支持图片
+        { id: 'text-only', modalities: { input: ['text'] } },
+        { id: 'garbage', modalities: 'image', supports_image_in: 'yes' },
+      ],
+    };
+    expect(extractModelEntries('openai-completions', data)).toEqual([
+      { id: 'alias-reasoning', reasoning: true },
+      { id: 'no-reasoning', reasoning: false },
+      { id: 'image-alias', supportsImage: true },
+      { id: 'no-image', supportsImage: false },
+      { id: 'text-only', supportsImage: false },
+      { id: 'garbage' },
+    ]);
+  });
+
+  it('label 取 display_name，退回 name；空串 / 非字符串不写', () => {
+    const data = {
+      data: [
+        { id: 'both', display_name: 'Nice Name', name: 'other' },
+        { id: 'name-only', name: 'Name Only' },
+        { id: 'blank', display_name: '   ', name: 'Fallback' },
+        { id: 'number', display_name: 42 },
+      ],
+    };
+    expect(extractModelEntries('openai-completions', data)).toEqual([
+      { id: 'both', label: 'Nice Name' },
+      { id: 'name-only', label: 'Name Only' },
+      { id: 'blank', label: 'Fallback' },
+      { id: 'number' },
+    ]);
+  });
+
+  it('Kimi 形状 limit{context,output} 兜底，扁平字段仍然优先', () => {
+    const data = {
+      data: [
+        { id: 'limit-only', limit: { context: 200000, output: 64000 } },
+        {
+          id: 'both',
+          context_length: 1000,
+          max_output_tokens: 100,
+          limit: { context: 200000, output: 64000 },
+        },
+        { id: 'bad-limit', limit: { context: -1, output: 'x' } },
+      ],
+    };
+    expect(extractModelEntries('openai-completions', data)).toEqual([
+      { id: 'limit-only', contextWindow: 200000, maxTokens: 64000 },
+      { id: 'both', contextWindow: 1000, maxTokens: 100 },
+      { id: 'bad-limit' },
+    ]);
+  });
+});
+
 describe('toMessage', () => {
   it('超时被翻译成可读文案', () => {
     const err = new Error('aborted');
