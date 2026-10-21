@@ -168,6 +168,7 @@ import {
   resolveOauthPoolModel,
 } from './oauthAccountPool';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
+import { progressPreambleExtension } from './progressPreamble';
 import { createProjectSettingsManager } from './projectCode';
 import { projectMessage } from './projection';
 import { applyWorkerProxyEnv } from './proxyEnv';
@@ -470,6 +471,8 @@ function createSessionResourceLoader(options: {
   persona?: string;
   /** 仅子会话：追加子代理行为合同到系统提示词（进 system prompt 才不会随压缩丢失） */
   childContract?: boolean;
+  /** 仅父会话：工具调用前先说一句下一步打算，供用户在运行中看到进度 */
+  progressPreamble?: boolean;
 }): DefaultResourceLoader {
   const harness = options.loadHarnessAssets && !options.remoteAgentsFiles;
   const skillPaths = harness
@@ -561,6 +564,7 @@ function createSessionResourceLoader(options: {
       ...(options.childContract
         ? [appendSystemPromptExtension('subagent-contract', SUBAGENT_CONTRACT_PROMPT)]
         : []),
+      ...(options.progressPreamble ? [progressPreambleExtension] : []),
       ...(persona
         ? [
             {
@@ -1996,6 +2000,7 @@ export class SessionSupervisor {
       exploreFold,
       codemode: codemodeHost.extension,
       persona: systemPrompt,
+      progressPreamble: true,
       ...(compactStrategy !== 'standard'
         ? {
             compactStrategy,

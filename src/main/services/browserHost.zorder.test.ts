@@ -54,6 +54,7 @@ vi.mock('electron', () => ({
           getEntryAtIndex: () => undefined,
         },
         executeJavaScript: async () => 'ok',
+        reload: () => contents.emit('did-start-loading'),
         loadURL: async (url: string) => {
           contents.url = url;
         },
@@ -144,6 +145,23 @@ it('covered 闩锁同样在上报方消失后回落', async () => {
 
   host.resetOverlayReports();
   expect(raised(win)).toBe(true);
+});
+
+it('面板可见性上报不抢 agent 当前 tab，也不为空面板建空 tab', async () => {
+  const { host } = await setup();
+  host.setViewport('browser:panel-uuid', 'conv', viewport);
+  expect(host.state('conv').tabId).toBe('tab-a');
+  expect(mock.contents).toHaveLength(1);
+  // 原始症状：面板上报后 reload 落到空页并报 URL 不允许
+  await expect(host.invoke('conv', 'navigation', { action: 'reload' })).resolves.toBeDefined();
+});
+
+it('尚未加载页面的 tab reload 报明确原因，不冒充 URL 策略拒绝', async () => {
+  const host = new BrowserHost();
+  await host.invoke('conv', 'tabs', { action: 'new' });
+  await expect(host.invoke('conv', 'navigation', { action: 'reload' })).rejects.toThrow(
+    /no page loaded/i
+  );
 });
 
 it('hibernateAll 关掉 guest webContents，进托盘才能丢掉 renderer', async () => {

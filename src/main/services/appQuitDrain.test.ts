@@ -62,4 +62,16 @@ describe('createAppQuitDrain', () => {
     drain.onWillQuit({ preventDefault: vi.fn() }, quit);
     await vi.waitFor(() => expect(quit).toHaveBeenCalledOnce());
   });
+
+  // Electron 在 will-quit 监听器返回后才把 preventDefault 落成「取消退出」；
+  // 同一宏任务内（含微任务）重入 app.quit() 会被当成「已在退出中」吞掉，进程挂住。
+  it('re-quits on a later macrotask even when every waiter settles immediately', async () => {
+    const drain = createAppQuitDrain([{ shouldWait: () => true, wait: async () => {} }]);
+    const quit = vi.fn();
+    drain.onWillQuit({ preventDefault: vi.fn() }, quit);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(quit).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(quit).toHaveBeenCalledOnce();
+  });
 });

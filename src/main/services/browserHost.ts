@@ -286,6 +286,8 @@ const USER_INPUT = new Set(['mouseDown', 'rawKeyDown', 'keyDown']);
 export class BrowserHost {
   private readonly tabs = new Map<string, Tab>();
   private readonly currentBySession = new Map<string, string>();
+  /** agent 自己的当前 tab：UI 面板可见性/用户浏览不得改写，否则下一条不带 tabId 的工具会打错页 */
+  private readonly agentBySession = new Map<string, string>();
   private readonly tabClaims = new BrowserTabClaims({
     onChange: (tabId) => {
       const tab = this.tabs.get(tabId);
@@ -525,9 +527,16 @@ export class BrowserHost {
     covered = false
   ): BrowserTabState {
     if (viewport) {
-      if (!this.tabs.has(tabId)) void this.restoreTab(tabId, sessionId);
-      this.currentBySession.set(sessionId, tabId);
-      this.userTabs.add(tabId);
+      // 面板 id 与浏览器 tab id 同形但不等价：只认已存在的 tab。未知 id 交给
+      // restoreTab 按持久化 URL 懒恢复；没有 URL 就不该建一个空白 tab，更不能
+      // 把 agent 的「当前 tab」指过去（否则下一次不带 tabId 的 reload/导航落到空页）。
+      const tab = this.tabs.get(tabId);
+      if (tab) {
+        if (tab.ownerSessionId === sessionId) this.currentBySession.set(sessionId, tabId);
+        this.userTabs.add(tabId);
+      } else {
+        void this.restoreTab(tabId, sessionId);
+      }
       this.pendingReveal.delete(sessionId);
       this.shown = { tabId, sessionId, viewport, covered };
       this.touch(tabId);
@@ -1160,10 +1169,12 @@ export class BrowserHost {
     }
     const pointed = actor ? this.tabClaims.pointer(actor.sessionId) : undefined;
     const newTab = op === 'navigate' && isRecord(params) && params.newTab === true;
-    let tab = explicit ? this.ownedTab(explicit, sessionId) : newTab ? undefined : ((pointed ? this.tabs.get(pointed) : undefined) ?? this.tabFor(sessionId));
+    let tab = explicit ? this.ownedTab(explicit, sessionId) : newTab ? undefined : ((pointed ? this.tabs.get(pointed) : undefined) ?? this.agentTabFor(sessionId));
     if (!tab && (op === 'navigate' || (op === 'navigation' && isRecord(params) && params.action === 'search'))) tab = this.createTab(sessionId);
     if (!tab) throw new Error('No browser tab is open. Call browser_navigate first.');
     const target = this.ownedTab(tab.id, sessionId);
+    // 工具一旦选定 tab，后续不带 tabId 的调用都跟随它；UI 面板可见性不得改写这个指针
+    this.agentBySession.set(sessionId, target.id);
     this.assertAgentControl(target);
     if (actor) {
       const claim = this.tabClaims.claim(target.id, actor);
@@ -1342,7 +1353,7 @@ export class BrowserHost {
     if (!['new', 'select', 'close', 'list'].includes(action)) throw new Error('Invalid tabs action');
     const list = () => {
       const current =
-        (actor && this.tabClaims.pointer(actor.sessionId)) ?? this.currentBySession.get(sessionId);
+        (actor && this.tabClaims.pointer(actor.sessionId)) ?? this.agentBySession.get(sessionId);
       return this.tabsForSession(sessionId).map((tab, tabIndex) => ({
         index: tabIndex,
         ...this.stateOf(tab),
@@ -1352,6 +1363,7 @@ export class BrowserHost {
     if (action === 'new') {
       const tab = this.createTab(sessionId);
       if (actor) this.tabClaims.claim(tab.id, actor);
+      this.agentBySession.set(sessionId, tab.id);
       this.userTabs.add(tab.id);
       this.requestReveal(sessionId, tab.id);
       return { opened: tab.id, tabs: list() };
@@ -1361,6 +1373,7 @@ export class BrowserHost {
       const tab = tabId ? this.ownedTab(tabId, sessionId) : this.tabsForSession(sessionId)[index ?? -1];
       if (!tab) throw new Error(`No browser tab at index ${index}`);
       this.currentBySession.set(sessionId, tab.id);
+      this.agentBySession.set(sessionId, tab.id);
       if (actor) this.tabClaims.point(actor.sessionId, tab.id);
       this.requestReveal(sessionId, tab.id);
       return { selected: tab.id, tabs: list() };
@@ -1526,7 +1539,7 @@ export class BrowserHost {
     if (action === 'search') return this.navigate(tab.ownerSessionId, `https://www.google.com/search?q=${encodeURIComponent(paramString(params, 'query'))}`, false, tab);
     if (action === 'reveal') this.requestReveal(tab.ownerSessionId, tab.id);
     else if (action === 'stop') contents.stop();
-    else if (action === 'reload') { if (!this.canNavigate(tab, contents.getURL())) throw new Error('Navigation URL is not allowed'); this.invalidateRefs(tab); contents.reload(); }
+    else if (action === 'reload') { if (!contents.getURL()) throw new Error('This browser tab has no page loaded yet; call browser_navigate first.'); if (!this.canNavigate(tab, contents.getURL())) throw new Error('Navigation URL is not allowed'); this.invalidateRefs(tab); contents.reload(); }
     else if (action === 'back' || action === 'forward') {
       const history = contents.navigationHistory;
       const delta = action === 'back' ? -1 : 1;
@@ -1685,8 +1698,14 @@ export class BrowserHost {
     return id ? this.tabs.get(id) : undefined;
   }
 
+  /** agent 视角的当前 tab：只由工具自己选定/显式 tabId 更新，UI 面板上报不改它 */
+  private agentTabFor(sessionId: string): Tab | undefined {
+    const id = this.agentBySession.get(sessionId);
+    return (id ? this.tabs.get(id) : undefined) ?? this.tabFor(sessionId);
+  }
+
   private mustTab(sessionId: string): Tab {
-    const tab = this.tabFor(sessionId);
+    const tab = this.agentTabFor(sessionId);
     if (!tab) throw new Error('No browser tab is open. Call browser_navigate first.');
     return tab;
   }
@@ -1784,6 +1803,7 @@ export class BrowserHost {
       this.tabs.delete(id);
       this.tabClaims.closeTab(id);
       if (this.currentBySession.get(sessionId) === id) this.currentBySession.delete(sessionId);
+      if (this.agentBySession.get(sessionId) === id) this.agentBySession.delete(sessionId);
       this.emitState(sessionId, id);
     });
     this.tabs.set(id, tab);
@@ -1834,6 +1854,9 @@ export class BrowserHost {
     this.tabClaims.closeTab(tab.id);
     if (this.currentBySession.get(tab.ownerSessionId) === tab.id) {
       this.currentBySession.delete(tab.ownerSessionId);
+    }
+    if (this.agentBySession.get(tab.ownerSessionId) === tab.id) {
+      this.agentBySession.delete(tab.ownerSessionId);
     }
     if (!this.disposing && !opts?.keepPersist && !this.userTabs.has(tab.id)) {
       this.forgetTab(tab.id);
@@ -1941,15 +1964,17 @@ export class BrowserHost {
     this.loadPersisted();
     if (this.tabs.has(tabId)) return;
     const saved = this.persisted[tabId];
-    const owner = saved?.conversationId ?? sessionId ?? tabId;
-    const tab = this.createTab(owner, tabId);
-    this.userTabs.add(tab.id);
+    // 没有持久化 URL = 从没加载过页面。此时建 tab 只会留下一个永久空白页，
+    // 并把 agent 的当前 tab 指过去；面板首帧会在真正导航后自己再上报。
     if (!saved?.url) return;
     try {
       assertAllowedUrl(saved.url);
     } catch {
       return;
     }
+    const owner = saved.conversationId ?? sessionId ?? tabId;
+    const tab = this.createTab(owner, tabId);
+    this.userTabs.add(tab.id);
     await tab.view.webContents.loadURL(saved.url).catch(() => {});
   }
 

@@ -338,6 +338,13 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
 - 锁定两层防：页内 `PAGE_LOCK_OVERLAY_SCRIPT` 吞用户指针 + renderer 把锁定当 `covered` 让 guest 沉底，
   hover 遮罩与「接管」按钮画在 renderer（见 windows.md 层级一节）。
 - 浏览器工具 `executionMode: 'sequential'`：navigate 会清 ref，并行必假 stale。
+- **「当前 tab」有两个指针，不能合并**：`currentBySession` 服务布局和面板显示，可被
+  renderer 的 `setViewport` / 用户导航改写；`agentBySession` 只由工具本身（隐式选中、
+  显式 tabId、`tabs new|select`）推进。合并的后果是面板一可见就改写 agent 指针，
+  下一条不带 tabId 的 reload/导航打到别的页面（真实现象：空 tab 上 reload 报
+  `Navigation URL is not allowed`，模型反复在错页打转）。
+- 面板可见性上报只允许认**已存在**的 tab；`restoreTab` 没有持久化 URL 时不得建 tab，
+  否则会留下永久空白页。空白 tab 的 reload 报「no page loaded」，不要冒充 URL 策略拒绝。
 - 回合结束（`turn-completed` / `turn-failed`）关未锁且用户没在看的 tab；`parent-ended` 强关。
 
 ## 用量「按项目」不能用 cwd basename
