@@ -13,7 +13,12 @@ const harness = vi.hoisted(() => ({
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: unknown) => unknown) =>
-    select({ fileOpenRules: harness.rules, setFileOpenRules: harness.setRules }),
+    select({
+      fileOpenRules: harness.rules,
+      setFileOpenRules: harness.setRules,
+      contextMenuOpen: [],
+      setContextMenuOpen: vi.fn(),
+    }),
 }));
 vi.mock('@/components/ui/toast', () => ({ addToast: harness.toast }));
 vi.mock('@/components/ui/button', () => ({

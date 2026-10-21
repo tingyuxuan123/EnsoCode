@@ -85,7 +85,8 @@ export async function listModels(
     let headers: Record<string, string> = {};
     switch (config.api) {
       case 'anthropic-messages':
-        url = `${withVersionSegment(base, 'v1')}/models`;
+        // 官方默认每页 20 条且带 has_more；同步需要完整清单，取单页上限
+        url = `${withVersionSegment(base, 'v1')}/models?limit=1000`;
         headers = { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION };
         break;
       case 'google-generative-ai':
@@ -295,15 +296,29 @@ function attachMetadata(
   };
 }
 
+/**
+ * 全量同步必须使用完整有效的模型清单；未拉完的分页或解析时被过滤的损坏条目
+ * 不能被误判为模型下架。合法空数组仍代表上游已经没有模型，可以用于清空本地清单。
+ *
+ * Full synchronization requires a complete, valid list: unfetched pages or discarded
+ * malformed entries must not be mistaken for retired models. A valid empty array may
+ * clear the local list.
+ */
 export function isValidModelListPayload(api: ModelApiKind, data: unknown): boolean {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return false;
   }
   const obj = data as Record<string, unknown>;
-  if (api === 'google-generative-ai' || api === 'ollama') {
-    return Array.isArray(obj.models);
+  if (
+    obj.has_more === true ||
+    (typeof obj.nextPageToken === 'string' && obj.nextPageToken.length > 0)
+  ) {
+    return false;
   }
-  return Array.isArray(obj.data);
+  const entries = api === 'google-generative-ai' || api === 'ollama' ? obj.models : obj.data;
+  if (!Array.isArray(entries)) return false;
+  const models = extractModelEntries(api, obj);
+  return models.length === entries.length && models.every((model) => model.id.trim().length > 0);
 }
 
 export function extractModelEntries(
