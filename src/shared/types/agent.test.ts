@@ -581,6 +581,67 @@ describe('parent/child commands', () => {
     ).toBeNull();
   });
 
+  it.each([true, false])('模型能力字段在主模型、嵌套模型与换模命令中保留：vision=%s', (vision) => {
+    const configured = {
+      ...model,
+      thinkingLevels: ['low', 'medium', 'high'],
+      vision,
+    };
+    const commands = [
+      { type: 'spawn-parent', identity: parent, cwd: '/repo', model: configured },
+      { type: 'set-model', identity: parent, model: configured },
+      {
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: '/repo',
+        model,
+        smartCompactSummaryModel: configured,
+        approvalReviewer: configured,
+        subagentModels: [{ name: 'reviewer', config: configured }],
+      },
+      {
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: '/repo',
+        model: {
+          ...configured,
+          virtual: { name: 'Auto', primary: configured, fallbacks: [configured] },
+        },
+      },
+    ];
+    for (const command of commands) {
+      expect(parseAgentCommand(command)).toEqual(command);
+    }
+  });
+
+  it.each([
+    { thinkingLevels: [] },
+    { thinkingLevels: 'high' },
+    { thinkingLevels: ['high', 'invalid'] },
+    { thinkingLevels: ['off'] },
+    { thinkingLevels: [1] },
+    { thinkingLevels: null },
+    { vision: 'false' },
+    { vision: 0 },
+    { vision: null },
+    { unknownCapability: true },
+  ])('模型能力协议拒绝脏值与未知字段：%j', (overrides) => {
+    const configured = { ...model, ...overrides };
+    for (const command of [
+      { type: 'spawn-parent', identity: parent, cwd: '/repo', model: configured },
+      { type: 'set-model', identity: parent, model: configured },
+      {
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: '/repo',
+        model,
+        subagentModels: [{ name: 'reviewer', config: configured }],
+      },
+    ]) {
+      expect(parseAgentCommand(command)).toBeNull();
+    }
+  });
+
   it('spawn-parent 携 rolePrompt:非空字符串通过,脏值拒绝', () => {
     const base = { type: 'spawn-parent', identity: parent, cwd: '/repo', model };
     expect(parseAgentCommand({ ...base, rolePrompt: 'You are aside' })).toEqual({

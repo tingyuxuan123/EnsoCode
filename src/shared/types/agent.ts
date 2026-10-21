@@ -2275,9 +2275,16 @@ function parsePhysicalSpawnModelConfig(value: unknown): SpawnModelConfig | null 
       'oauthAccountPool',
       'reasoning',
       'thinkingLevel',
+      'thinkingLevels',
       'contextWindow',
       'maxTokens',
+      'vision',
     ]) ||
+    (value.thinkingLevels !== undefined &&
+      (!Array.isArray(value.thinkingLevels) ||
+        value.thinkingLevels.length === 0 ||
+        !value.thinkingLevels.every((level) => MODEL_THINKING_LEVEL_OVERRIDES.includes(level)))) ||
+    (value.vision !== undefined && typeof value.vision !== 'boolean') ||
     !MODEL_API_KINDS.includes(value.api as ModelApiKind) ||
     typeof value.baseUrl !== 'string' ||
     typeof value.apiKey !== 'string' ||

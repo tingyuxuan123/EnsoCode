@@ -12,6 +12,16 @@ worker 入口对 main→worker 命令做 shape 白名单校验（`src/shared/typ
 联合类型加了新成员，parser 的 switch 缺 case 不报错。
 
 **规矩**：加命令三件套 = 联合类型 + parseAgentCommand case + 回归测试（agent.test.ts）。
+嵌套配置加字段也一样：2026-10-21 新增 `thinkingLevels` / `vision` 后，Main 已经下发，
+但 `parsePhysicalSpawnModelConfig` 白名单没同步，整个 `spawn-parent` 被丢弃。
+后续 prompt 报 `unknown or stale session generation`，界面只剩「送达待确认」；
+权威记录仍为 draft、无 sessionFile，依赖历史文件的自动恢复也不会触发。
+
+修复必须同时覆盖协议和消费：白名单校验合法字段，worker 注册模型复用统一能力提取函数，
+不能继续手抄旧字段。回归用 Main 的真实选型产物调用 worker parser，并断言最终注册模型的
+档位与图片能力，避免生产端、解析端各自单测通过而实际契约断裂。
+回归位置：`src/shared/types/agent.test.ts`、`src/main/services/agentHost.test.ts`、
+`src/agent/supervisor.resolve.test.ts`。
 
 ## 坑 2：post 型 IPC 的「ok」不等于「做完了」
 

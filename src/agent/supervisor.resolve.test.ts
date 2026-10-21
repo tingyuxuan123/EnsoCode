@@ -15,6 +15,7 @@ type CatalogRow = {
   thinkingLevelMap?: Record<string, string | null | undefined>;
   contextWindow?: number;
   maxTokens?: number;
+  input?: string[];
   compat?: unknown;
   api?: string;
   baseUrl?: string;
@@ -187,6 +188,58 @@ describe('resolveBaseModel apiKey', () => {
     expect(model.thinkingLevelMap).toBeUndefined();
     expect(model.contextWindow).toBe(80_000);
     expect(model.maxTokens).toBe(8_000);
+  });
+
+  it('端点声明的 thinkingLevels 压过 catalog 并写进注册模型的 thinkingLevelMap', () => {
+    const runtime = mockRuntime({
+      catalog: [
+        {
+          id: 'claude-sonnet-4',
+          reasoning: true,
+          thinkingLevelMap: { max: 'max' },
+        },
+      ],
+    });
+    const model = resolveBaseModel(runtime, {
+      ...apiKeySpawn,
+      thinkingLevels: ['low', 'medium', 'high'],
+    });
+    expect(model.thinkingLevelMap).toEqual({ minimal: null });
+  });
+
+  it('vision:false 收紧为纯文本，vision:true 压过 catalog 仍可图像', () => {
+    const textOnly = resolveBaseModel(
+      mockRuntime({
+        catalog: [{ id: 'claude-sonnet-4', input: ['text', 'image'] }],
+      }),
+      { ...apiKeySpawn, vision: false }
+    );
+    expect(textOnly.input).toEqual(['text']);
+    const withImage = resolveBaseModel(
+      mockRuntime({
+        catalog: [{ id: 'claude-sonnet-4', input: ['text'] }],
+      }),
+      { ...apiKeySpawn, vision: true }
+    );
+    expect(withImage.input).toEqual(['text', 'image']);
+  });
+
+  it('重新解析同一模型时 thinkingLevels / vision 跟更新，不残留旧能力', () => {
+    const runtime = mockRuntime({ catalog: [{ id: 'claude-sonnet-4', reasoning: true }] });
+    const first = resolveBaseModel(runtime, {
+      ...apiKeySpawn,
+      thinkingLevels: ['low', 'medium'],
+      vision: false,
+    });
+    expect(first.thinkingLevelMap).toEqual({ minimal: null, high: null });
+    expect(first.input).toEqual(['text']);
+    const second = resolveBaseModel(runtime, {
+      ...apiKeySpawn,
+      thinkingLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      vision: true,
+    });
+    expect(second.thinkingLevelMap).toEqual({ minimal: null, xhigh: 'xhigh', max: 'max' });
+    expect(second.input).toEqual(['text', 'image']);
   });
 
   it('google-generative-ai 缺 v1beta 时补上再注册', () => {

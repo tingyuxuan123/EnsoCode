@@ -30,7 +30,7 @@ import { WORKSPACE_WRITE_TOOL_ID } from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
 import { HUMAN_REQUEST_TIMEOUT_MS } from '@shared/humanRequestTimeout';
 import { DEFAULT_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
-import { positiveContextWindow } from '@shared/modelCatalog';
+import { pickModelCapabilityOverrides, positiveContextWindow } from '@shared/modelCatalog';
 import type { ModelDirectorySnapshot } from '@shared/modelDirectory';
 import { isOauthAccountPool } from '@shared/oauthAccountPool';
 import { resolveOauthCatalogModel } from '@shared/oauthCatalog';
@@ -4973,11 +4973,7 @@ export function resolveBaseModel(runtime: ModelRuntime, model: SpawnModelConfig)
     return registered;
   }
   const providerId = providerKeyFor(model);
-  const entry: ModelEntry = { id: model.modelId };
-  if (model.reasoning !== undefined) entry.reasoning = model.reasoning;
-  if (model.thinkingLevel !== undefined) entry.thinkingLevel = model.thinkingLevel;
-  if (model.contextWindow !== undefined) entry.contextWindow = model.contextWindow;
-  if (model.maxTokens !== undefined) entry.maxTokens = model.maxTokens;
+  const entry: ModelEntry = { id: model.modelId, ...pickModelCapabilityOverrides(model) };
   // registerProvider 整体替换 models：同一端点+key 的多个模型要累积，否则虚拟模型的同 provider
   // 成员会互相挤出目录（pi 路由时按目录重新取模型）。同 id 仍覆盖，保持 spawn 重解析。
   registerCustomProviderModels(

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { McpServerEntry, ModelProvider } from '@shared/types';
+import { parseAgentCommand } from '@shared/types/agent';
 import { describe, expect, it, vi } from 'vitest';
 import { botToAgentType } from './bots/botAgentType';
 import { createModelProbe } from './bots/modelProbe';
@@ -317,6 +318,58 @@ describe('readSettingsState', () => {
     });
     settingsMock.value = { 'enso-settings': { version: 14, state: { disabledBuiltinTools: [] } } };
     expect(readSettingsState()).toEqual({ disabledBuiltinTools: [] });
+  });
+});
+
+describe('Main 到 worker 的模型能力协议', () => {
+  it.each([true, false])('Main 生成的完整模型配置可被 worker 接收：vision=%s', (vision) => {
+    const capabilities = {
+      reasoning: 'on' as const,
+      thinkingLevel: 'high' as const,
+      thinkingLevels: ['low', 'medium', 'high'] as const,
+      contextWindow: 200_000,
+      maxTokens: 8_000,
+      vision,
+    };
+    settingsMock.value = {
+      'enso-settings': {
+        state: {
+          providers: [
+            {
+              id: 'protocol-provider',
+              name: 'Protocol fixture',
+              api: 'anthropic-messages',
+              baseUrl: 'https://protocol.example/v1',
+              apiKey: 'fixture-key',
+              enabled: true,
+              models: [{ id: 'protocol-model', ...capabilities }],
+            },
+          ],
+        },
+      },
+    };
+    const resolved = resolveModelSelection('protocol-provider', 'protocol-model', new Set());
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) throw new Error(resolved.error);
+    expect(resolved.selection.config).toMatchObject(capabilities);
+    const identity = {
+      sessionId: 'protocol-session',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    for (const command of [
+      {
+        type: 'spawn-parent',
+        identity,
+        cwd: '/fixture',
+        model: resolved.selection.config,
+        smartCompactSummaryModel: resolved.selection.config,
+        approvalReviewer: resolved.selection.config,
+        subagentModels: [{ name: 'reviewer', config: resolved.selection.config }],
+      },
+      { type: 'set-model', identity, model: resolved.selection.config },
+    ]) {
+      expect(parseAgentCommand(command)).toEqual(command);
+    }
   });
 });
 
