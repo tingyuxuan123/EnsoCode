@@ -18,7 +18,7 @@ const BAR = 'mb-1 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 tex
 
 function PlanPreview({ doc }: { doc: PlanDoc }) {
   return (
-    <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm">
+    <div className="scroll-stable mt-2 max-h-72 overflow-y-auto rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm">
       <Markdown text={doc.text} />
     </div>
   );

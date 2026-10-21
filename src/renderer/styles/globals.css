@@ -241,6 +241,18 @@
     @apply bg-muted-foreground/40;
   }
 
+  /**
+   * 滚动条占位固定。上面的 ::-webkit-scrollbar 定宽后滚动条不再浮在内容上，
+   * 而要吃掉 8px 布局宽度：会话执行时内容高度常在可视高度附近反复越界
+   * （流式增高、思考块折起、终端输出灌入），滚动条一会儿出现一会儿消失，
+   * 整块文字跟着重新折行，看起来就是聊天区抖动。
+   * 内容会持续变长的滚动容器（聊天主列表、思考块、工具输出、终端、任务栏）
+   * 统一挂这个类：宽度与滚动条是否出现无关，折行也就稳定了。
+   */
+  .scroll-stable {
+    scrollbar-gutter: stable;
+  }
+
   /* Disable text selection */
   * {
     user-select: none;

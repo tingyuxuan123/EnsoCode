@@ -732,7 +732,7 @@ export function MessageTimeline({
                 }
               }
             }}
-            className="h-full select-text overflow-y-auto [overflow-anchor:none]"
+            className="scroll-stable h-full select-text overflow-y-auto [overflow-anchor:none]"
           >
             <div ref={attachContent}>
               {renderHeader()}
@@ -775,7 +775,7 @@ export function MessageTimeline({
             scrollerRef={(el) => {
               scrollerRef.current = el instanceof HTMLElement ? el : null;
             }}
-            className="h-full select-text"
+            className="scroll-stable h-full select-text"
             components={{
               List: TimelineList,
               Header: renderHeader,

@@ -265,7 +265,7 @@ function AgentDetails({ agent }: { agent: SubagentInfo }) {
   return (
     <div
       ref={ref}
-      className="max-h-96 space-y-2 overflow-auto px-3 py-2 text-sm"
+      className="scroll-stable max-h-96 space-y-2 overflow-auto px-3 py-2 text-sm"
       onScroll={(event) => {
         followingRef.current = shouldFollowTaskBarOutput(event.currentTarget);
       }}
@@ -354,7 +354,7 @@ export function AgentActivityView({ activity }: { activity: SubagentActivity }) 
             </div>
           )}
           <div className="text-[10px] text-muted-foreground/70">{t('Arguments')}</div>
-          <pre className="max-h-28 overflow-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted-foreground/80">
+          <pre className="scroll-stable max-h-28 overflow-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted-foreground/80">
             {stripAnsi(activity.argumentsText)}
           </pre>
           {activity.outputText && (
@@ -509,7 +509,7 @@ function TailView({ tail }: { tail: string }) {
   return (
     <pre
       ref={ref}
-      className="max-h-56 overflow-auto border-t border-border/60 px-2.5 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground"
+      className="scroll-stable max-h-56 overflow-auto border-t border-border/60 px-2.5 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground"
     >
       {stripAnsi(tail) || t('(no output yet)')}
     </pre>
