@@ -15,6 +15,19 @@ export function assertReleaseVersion(version, tag) {
   return version;
 }
 
+/** Personal tags have a separate namespace; the official validator stays strict. */
+export function assertReleaseRef(version, ref) {
+  assertReleaseVersion(version);
+  if (!ref?.startsWith('refs/tags/')) return version;
+  const tag = ref.slice('refs/tags/'.length);
+  if (tag.startsWith('personal-v')) {
+    if (tag !== `personal-v${version}`)
+      throw new Error('Personal tag does not match package version');
+    return version;
+  }
+  return assertReleaseVersion(version, tag);
+}
+
 function validateManifest(value, version) {
   assertReleaseVersion(version);
   if (value?.version !== version || !Array.isArray(value.files) || !value.files.length) {
@@ -109,10 +122,7 @@ async function main() {
   );
   const [command, ...args] = process.argv.slice(2);
   if (command === 'version') {
-    const tag = process.env.GITHUB_REF?.startsWith('refs/tags/')
-      ? process.env.GITHUB_REF.slice(10)
-      : undefined;
-    console.log(assertReleaseVersion(version, tag));
+    console.log(assertReleaseRef(version, process.env.GITHUB_REF));
   } else if (command === 'merge-mac' && args.length === 3) {
     const inputs = await Promise.all(
       args.slice(0, 2).map(async (file) => parse(await readFile(file, 'utf8')))

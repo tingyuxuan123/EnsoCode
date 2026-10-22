@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, X509Certificate } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { parse, stringify } from 'yaml';
-import { assertReleaseVersion, mergeMacManifests, verifyReleaseDirectory } from './release.mjs';
+import * as personalRelease from './personal-release.mjs';
+import * as release from './release.mjs';
+
+const { assertReleaseVersion, mergeMacManifests, verifyReleaseDirectory } = release;
 
 const version = '0.2.10';
 const data = Buffer.from('test installer');
@@ -23,6 +26,36 @@ test('版本与 tag 必须一致，手动分支构建也必须使用合法稳定
   }
   assert.throws(() => assertReleaseVersion(version, 'v0.2.9'));
   assert.throws(() => assertReleaseVersion(version, version));
+});
+
+test('个人 tag 校验不放宽正式版本校验，错误版本与相似前缀均拒绝', () => {
+  assert.equal(typeof release.assertReleaseRef, 'function');
+  const { assertReleaseRef } = release;
+  assert.equal(assertReleaseRef(version, `refs/tags/personal-v${version}`), version);
+  assert.equal(assertReleaseRef(version, `refs/tags/v${version}`), version);
+  assert.equal(assertReleaseRef(version, 'refs/heads/main'), version);
+  for (const ref of [
+    'refs/tags/personal-v0.2.9',
+    'refs/tags/personal-v0.2.10-evil',
+    'refs/tags/other',
+  ]) {
+    assert.throws(() => assertReleaseRef(version, ref));
+  }
+  assert.throws(() => assertReleaseVersion(version, `personal-v${version}`));
+});
+
+test('个人更新清单只能前进，按数字比较，不能降级或覆盖同版本', () => {
+  assert.equal(typeof personalRelease.assertPersonalFeedAdvance, 'function');
+  const { assertPersonalFeedAdvance } = personalRelease;
+  assert.doesNotThrow(() => assertPersonalFeedAdvance('0.2.9', '0.2.10'));
+  assert.doesNotThrow(() => assertPersonalFeedAdvance('0.2.18', '0.3.0'));
+  for (const [current, next] of [
+    ['0.2.18', '0.2.18'],
+    ['0.2.18', '0.2.17'],
+    ['0.10.0', '0.9.99'],
+    ['bad', '0.2.19'],
+  ])
+    assert.throws(() => assertPersonalFeedAdvance(current, next));
 });
 
 test('Mac 合并同时保留两架构 zip 的哈希、大小和兼容旧字段', () => {
@@ -96,16 +129,15 @@ test('发布 workflow 必须先跑完整检查，显式选择签名，最终仅�
   assert.doesNotMatch(publication, /--draft=false|--latest/);
 });
 
-test('个人自签名构建仅手动触发，验明证书身份且不发布 Release', async () => {
+test('个人 tag 自动构建，受信 main 校验先于证书使用，手动构建仍仅产出 artifact', async () => {
   const file = new URL('../.github/workflows/build-personal-mac.yml', import.meta.url);
   assert.ok(existsSync(file), '需要独立的个人 Mac 构建 workflow');
   const workflow = parse(await readFile(file, 'utf8'));
-  assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
+  assert.deepEqual(workflow.on.push?.tags, ['personal-v*']);
   assert.deepEqual(workflow.permissions, { contents: 'read' });
-  const fingerprint = workflow.on.workflow_dispatch.inputs.certificate_sha1;
-  assert.equal(fingerprint.required, true);
-  assert.match(fingerprint.default, /^[A-F0-9]{40}$/);
-  assert.equal(workflow.jobs['build-personal-mac'].if, "github.ref == 'refs/heads/main'");
+  assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'));
+  assert.match(workflow.jobs['build-personal-mac'].if, /refs\/heads\/main/);
+  assert.match(workflow.jobs['build-personal-mac'].if, /personal-v/);
   const steps = workflow.jobs['build-personal-mac'].steps;
   assert.equal(
     steps.find((step) => step.name === 'Install dependencies').env?.GITHUB_TOKEN,
@@ -114,15 +146,18 @@ test('个人自签名构建仅手动触发，验明证书身份且不发布 Rele
   const gate = steps.findIndex((step) => step.run === 'pnpm release:check');
   const signing = steps.findIndex((step) => step.name === 'Import personal signing certificate');
   assert.ok(gate >= 0 && gate < signing);
+  const trusted = steps.findIndex((step) => step.name === 'Validate trusted release ref');
+  assert.ok(trusted >= 0 && trusted < gate);
+  assert.match(steps[trusted].run, /merge-base --is-ancestor/);
   const imported = steps[signing];
   assert.equal(imported.env.LOCAL_SIGNING_CERTIFICATE, `\${{ secrets.LOCAL_SIGNING_CERTIFICATE }}`);
   assert.equal(imported.env.LOCAL_SIGNING_PASSWORD, `\${{ secrets.LOCAL_SIGNING_PASSWORD }}`);
-  assert.equal(imported.env.EXPECTED_SHA1, `\${{ inputs.certificate_sha1 }}`);
+  assert.match(workflow.env.EXPECTED_SHA1, /^[A-F0-9]{40}$/);
   assert.match(imported.run, /\^\[A-F0-9\]\{40\}\$/);
   assert.match(imported.run, /find-identity/);
-  // 钥匙串导出的自签名证书不一定被 PKCS#12 标成 client certificate。
-  assert.match(imported.run, /pkcs12[^\n]*-in/);
-  assert.doesNotMatch(imported.run, /-clcerts/);
+  // 原 Secret 导出的 P12 不含证书：公钥证书入库，私钥仍只从 Secret 导入，按指纹配对。
+  assert.match(imported.run, /build\/personal-signing\.pem/);
+  assert.match(imported.run, /security import "\$CERT_PATH"/);
   assert.match(imported.run, /sudo security add-trusted-cert -d/);
   const build = steps.find((step) => step.name === 'Build personal Mac package');
   assert.match(build.run, /--mac --arm64 --publish never/);
@@ -134,15 +169,62 @@ test('个人自签名构建仅手动触发，验明证书身份且不发布 Rele
   assert.match(verification.run, /codesign --verify -R=/);
   assert.match(verification.run, /release\.mjs verify dist/);
   const artifact = steps.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
-  for (const required of ['dist/*.zip', 'dist/*.dmg', 'dist/latest-mac.yml', 'dist/SHA256SUMS']) {
-    assert.ok(artifact.with.path.includes(required));
+  assert.equal(artifact.with.path, 'dist/release-assets/');
+  for (const required of [
+    'dist/*.zip',
+    'dist/*.dmg',
+    'dist/latest-mac.yml',
+    'release.mjs verify dist/release-assets',
+  ]) {
+    assert.ok(verification.run.includes(required));
   }
   const cleanup = steps.find((step) => step.name === 'Clean personal signing material');
   assert.equal(cleanup.if, 'always()');
   assert.match(cleanup.run, /sudo security remove-trusted-cert -d/);
   assert.match(cleanup.run, /delete-keychain/);
   assert.match(cleanup.run, /rm -f/);
-  assert.doesNotMatch(JSON.stringify(workflow), /gh release|APPLE_CERTIFICATE/);
+  assert.doesNotMatch(JSON.stringify(workflow), /APPLE_CERTIFICATE/);
+  const publicCert = await readFile(
+    new URL('../build/personal-signing.pem', import.meta.url),
+    'utf8'
+  );
+  assert.match(publicCert, /BEGIN CERTIFICATE/);
+  assert.doesNotMatch(publicCert, /PRIVATE KEY/);
+  assert.equal(
+    new X509Certificate(publicCert).fingerprint.replaceAll(':', ''),
+    workflow.env.EXPECTED_SHA1
+  );
+});
+
+test('个人发布仅 tag 触发写权限，下载验收后公开并推进清单，不改正式 latest', async () => {
+  const workflow = parse(
+    await readFile(new URL('../.github/workflows/build-personal-mac.yml', import.meta.url), 'utf8')
+  );
+  const publish = workflow.jobs['publish-personal'];
+  assert.ok(publish, '需要 tag 驱动的个人发布 job');
+  assert.equal(publish.needs, 'build-personal-mac');
+  assert.match(publish.if, /github.event_name == 'push'/);
+  assert.match(publish.if, /refs\/tags\/personal-v/);
+  assert.deepEqual(publish.permissions, { contents: 'write' });
+  assert.equal(workflow.concurrency.group, 'personal-updates');
+  const steps = publish.steps;
+  const draft = steps.findIndex((step) => step.name === 'Upload draft release');
+  const verify = steps.findIndex((step) => step.name === 'Verify remote draft assets');
+  const open = steps.findIndex((step) => step.name === 'Publish personal prerelease');
+  const publicVerify = steps.findIndex((step) => step.name === 'Verify public assets');
+  const feed = steps.findIndex((step) => step.name === 'Advance personal update feed');
+  assert.ok(
+    draft >= 0 && draft < verify && verify < open && open < publicVerify && publicVerify < feed
+  );
+  assert.match(steps[draft].run, /--draft/);
+  assert.match(steps[verify].run, /gh release download/);
+  assert.match(steps[verify].run, /shasum -a 256 -c/);
+  assert.match(steps[verify].run, /codesign --verify/);
+  assert.match(steps[open].run, /--draft=false --prerelease --latest=false/);
+  assert.match(steps[publicVerify].run, /curl.*--max-time/);
+  assert.match(steps[feed].run, /assertPersonalFeedAdvance/);
+  assert.match(steps[feed].run, /HEAD:personal-updates/);
+  assert.doesNotMatch(steps[feed].run, /--force/);
 });
 
 test('个人安装包只使用独立 generic 更新源，正式 GitHub 更新源不变', async () => {

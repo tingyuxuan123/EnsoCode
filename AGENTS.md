@@ -9,7 +9,7 @@
 - 优先复用现有实现模式；详细规范见 [`docs/engineering-guidelines.md`](docs/engineering-guidelines.md)。
 - 非平凡改动、排障或发现可复用经验时，使用 [`project-knowledge`](.agents/skills/project-knowledge/SKILL.md) 检索和沉淀项目知识。
 - 真实排查过的高代价陷阱见 [`docs/engineering-reference/big-question/`](docs/engineering-reference/big-question/)。
-- 用户要求“发布 / 发版 / 推送更新 / 打包升级”时，默认发布供用户本人使用的 Mac arm64 同证书个人更新版，按 [`桌面版发布与更新验收`](docs/engineering-reference/guides/releasing.md) 完成验收后公开个人 prerelease 并推进 `personal-updates`；不改正式 latest，不把构建成功等同于已安装或自动升级成功。
+- 用户要求“发布 / 发版 / 推送更新 / 打包升级”时，默认递增版本并推送 `personal-v<version>` tag，由 GitHub Actions 构建 Mac arm64 同证书个人版、验收后公开 prerelease 并推进 `personal-updates`。不在本机打包、不回退本机构建；CI 失败就修 CI。详见 [`桌面版发布与更新验收`](docs/engineering-reference/guides/releasing.md)；不改正式 latest，不把发布等同于已安装。
 
 ## 测试先行
 

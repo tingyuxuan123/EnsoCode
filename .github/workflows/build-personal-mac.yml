@@ -1,31 +1,49 @@
 name: Build Personal Mac
 
-# 只产出供证书所有者验收的 arm64 包，不向正式更新源发布。
+# personal-v* 只发布个人更新源；手动 main 构建仍只保留 artifact。
 on:
+  push:
+    tags:
+      - 'personal-v*'
   workflow_dispatch:
-    inputs:
-      certificate_sha1:
-        description: 'Expected signing certificate SHA-1 (must match the installed app)'
-        required: true
-        type: string
-        default: CB0DAF252F47DC25E63BCBE4F8D533A5B58844E7
+
+env:
+  EXPECTED_SHA1: CB0DAF252F47DC25E63BCBE4F8D533A5B58844E7
+  RELEASE_TAG: ${{ github.ref_name }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: personal-mac-${{ github.ref }}
+  group: personal-updates
   cancel-in-progress: false
 
 jobs:
   build-personal-mac:
-    # 避免在任意分支的代码中使用个人签名私钥。
-    if: github.ref == 'refs/heads/main'
+    # tag 必须已进入 main；在使用私钥之前还会做 ancestry 与版本校验。
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/personal-v'))
     runs-on: macos-15
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate trusted release ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION=$(node -p "require('./package.json').version")
+            [ "$RELEASE_TAG" = "personal-v$VERSION" ]
+            PUBLISHED=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+              --jq '.[] | select(.tag_name == env.RELEASE_TAG and .draft == false) | .tag_name')
+            test -z "$PUBLISHED" || { echo 'Published versions are immutable; use a new version.'; exit 1; }
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -55,7 +73,6 @@ jobs:
         env:
           LOCAL_SIGNING_CERTIFICATE: ${{ secrets.LOCAL_SIGNING_CERTIFICATE }}
           LOCAL_SIGNING_PASSWORD: ${{ secrets.LOCAL_SIGNING_PASSWORD }}
-          EXPECTED_SHA1: ${{ inputs.certificate_sha1 }}
         run: |
           set -euo pipefail
           : "${LOCAL_SIGNING_CERTIFICATE:?Missing LOCAL_SIGNING_CERTIFICATE secret}"
@@ -70,8 +87,8 @@ jobs:
           CERT_PATH="$RUNNER_TEMP/personal-signing.pem"
           OPENSSL="$(brew --prefix openssl@3)/bin/openssl"
           printf '%s' "$LOCAL_SIGNING_CERTIFICATE" | base64 --decode > "$P12_PATH"
-          "$OPENSSL" pkcs12 -legacy -in "$P12_PATH" -nokeys \
-            -passin env:LOCAL_SIGNING_PASSWORD -out "$CERT_PATH"
+          # 现有 Secret 的 P12 可能只含私钥；公钥证书单独入库并按旧版指纹校验。
+          cp build/personal-signing.pem "$CERT_PATH"
           ACTUAL_SHA1=$("$OPENSSL" x509 -in "$CERT_PATH" -noout -fingerprint -sha1 \
             | cut -d= -f2 | tr -d ':')
           [ "$ACTUAL_SHA1" = "$EXPECTED_SHA1" ] || {
@@ -83,6 +100,7 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH"
           security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$LOCAL_SIGNING_PASSWORD" \
             -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s \
@@ -107,12 +125,15 @@ jobs:
           codesign --verify --deep --strict "$APP"
           REQUIREMENT="identifier \"com.j3n5en.enso-code\" and certificate root = H\"$MAC_SIGNING_IDENTITY\""
           codesign --verify -R="$REQUIREMENT" "$APP"
-          node scripts/release.mjs verify dist
           DMG=$(find dist -maxdepth 1 -name '*.dmg' -type f | head -1)
           test -n "$DMG"
           hdiutil verify "$DMG"
           ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
             scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
+          # 不把 builder-debug 等未上传文件写进发布校验和。
+          mkdir -p dist/release-assets
+          cp dist/*.zip dist/*.dmg dist/*.blockmap dist/latest-mac.yml dist/release-assets/
+          node scripts/release.mjs verify dist/release-assets
 
       - name: Clean personal signing material
         if: always()
@@ -129,17 +150,135 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: personal-mac-arm64-${{ github.run_number }}
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.blockmap
-            dist/latest-mac.yml
-            dist/SHA256SUMS
+          path: dist/release-assets/
           if-no-files-found: error
           retention-days: 7
 
       - name: Explain personal build boundary
         run: |
           echo '### Personal self-signed Mac test build' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Download the artifact below. This workflow does not publish a Release or install an update.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Manual main runs keep an artifact; personal-v tags continue to verified prerelease publication.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Only Macs trusting the same certificate can use these packages. Automatic upgrade still needs end-to-end acceptance.' >> "$GITHUB_STEP_SUMMARY"
+
+  publish-personal:
+    needs: build-personal-mac
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/personal-v')
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Install verification dependencies
+        # 只验证发布脚本；不在发布 job 重跑安装脚本或重建包。
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download verified build
+        uses: actions/download-artifact@v7
+        with:
+          name: personal-mac-arm64-${{ github.run_number }}
+          path: release-assets
+
+      - name: Trust public verification certificate
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA1=$(openssl x509 -in build/personal-signing.pem -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')
+          [ "$ACTUAL_SHA1" = "$EXPECTED_SHA1" ]
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain build/personal-signing.pem
+
+      - name: Upload draft release
+        run: |
+          set -euo pipefail
+          node scripts/release.mjs version
+          node scripts/release.mjs verify release-assets
+          EXISTING=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq '.[] | select(.tag_name == env.RELEASE_TAG) | if .draft then "draft" else "published" end')
+          if [ "$EXISTING" = published ]; then
+            echo 'Refusing to overwrite a published release.'; exit 1
+          elif [ "$EXISTING" = draft ]; then
+            gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --draft --prerelease --latest=false --title "$RELEASE_TAG — 个人更新" \
+              --notes 'Mac arm64 同证书个人更新。由 tag 触发 CI 构建并校验；非正式 latest，未公证。安装与重启由用户操作。' \
+              release-assets/*
+          fi
+
+      - name: Verify remote draft assets
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir remote-assets
+          (cd remote-assets && shasum -a 256 -c SHA256SUMS)
+          cmp release-assets/SHA256SUMS remote-assets/SHA256SUMS
+          node scripts/release.mjs verify remote-assets
+          VERSION=$(node -p "require('./package.json').version")
+          ditto -x -k "remote-assets/EnsoCode-$VERSION-arm64-mac.zip" remote-app
+          APP=remote-app/EnsoCode.app
+          codesign --verify --deep --strict "$APP"
+          REQUIREMENT="identifier \"com.j3n5en.enso-code\" and certificate root = H\"$EXPECTED_SHA1\""
+          codesign --verify -R="$REQUIREMENT" "$APP"
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
+            scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
+          hdiutil verify "remote-assets/EnsoCode-$VERSION-arm64.dmg"
+
+      - name: Publish personal prerelease
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+
+      - name: Verify public assets
+        run: |
+          set -euo pipefail
+          mkdir public-assets
+          for FILE in release-assets/*; do
+            NAME=$(basename "$FILE")
+            curl --fail --location --retry 2 --connect-timeout 15 --max-time 300 \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$NAME" -o "public-assets/$NAME"
+          done
+          (cd public-assets && shasum -a 256 -c SHA256SUMS)
+          cmp release-assets/SHA256SUMS public-assets/SHA256SUMS
+          node scripts/release.mjs verify public-assets
+
+      - name: Checkout personal feed
+        uses: actions/checkout@v5
+        with:
+          ref: personal-updates
+          path: personal-feed
+
+      - name: Advance personal update feed
+        run: |
+          set -euo pipefail
+          git -C personal-feed pull --ff-only origin personal-updates
+          node scripts/personal-release.mjs public-assets next-feed
+          node --input-type=module -e 'import fs from "node:fs"; import {parse} from "yaml"; import {assertPersonalFeedAdvance} from "./scripts/personal-release.mjs"; assertPersonalFeedAdvance(parse(fs.readFileSync("personal-feed/latest-mac.yml","utf8")).version, parse(fs.readFileSync("next-feed/latest-mac.yml","utf8")).version)'
+          cp next-feed/latest-mac.yml personal-feed/latest-mac.yml
+          git -C personal-feed config user.name 'github-actions[bot]'
+          git -C personal-feed config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C personal-feed add latest-mac.yml
+          git -C personal-feed commit -m "chore(personal-updates): $RELEASE_TAG"
+          git -C personal-feed push origin HEAD:personal-updates
+          curl --fail --location --retry 2 --connect-timeout 15 --max-time 60 \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/personal-updates/latest-mac.yml?run=$GITHUB_RUN_ID" -o public-feed.yml
+          cmp next-feed/latest-mac.yml public-feed.yml
+          echo "Published $RELEASE_TAG to personal-updates; installation remains user-controlled." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean public verification certificate
+        if: always()
+        run: |
+          sudo security remove-trusted-cert -d build/personal-signing.pem || true
+          sudo security delete-certificate -Z "$EXPECTED_SHA1" /Library/Keychains/System.keychain || true

@@ -4,6 +4,19 @@ import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 import { assertReleaseVersion, verifyReleaseDirectory } from './release.mjs';
 
+/** A delayed tag build must never downgrade or replace the current personal feed. */
+export function assertPersonalFeedAdvance(current, next) {
+  assertReleaseVersion(current);
+  assertReleaseVersion(next);
+  const left = current.split('.').map(BigInt);
+  const right = next.split('.').map(BigInt);
+  for (let i = 0; i < 3; i++) {
+    if (right[i] > left[i]) return;
+    if (right[i] < left[i]) break;
+  }
+  throw new Error('Personal update feed must advance to a newer version');
+}
+
 /** Convert only verified local manifests; never weaken the official release URL validator. */
 export async function preparePersonalFeed(artifactDir, outputDir, version) {
   assertReleaseVersion(version);

@@ -14,6 +14,8 @@ pnpm-debug.log*
 .env.*.local
 coverage/
 *.pem
+# 仅此公钥证书入库，供 CI 与现有个人版按指纹配对；私钥仍一律排除。
+!build/personal-signing.pem
 thumbs.db
 dist*/
 build/cer.p12
