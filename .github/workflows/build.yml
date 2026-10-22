@@ -9,12 +9,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 # 缓存按 ref 隔离：tag 触发时只能读 main 上的缓存，tag 上存下的下一个 tag 读不到。
 # 所以这里只读不存，main 上的 pnpm-store-* 由 relay-go / deploy-relay 负责写入。
 jobs:
   # 先构建 Vite 产物，共享给所有平台
   build-app:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -40,6 +45,24 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate version and run release gates
+        run: pnpm release:check
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Refuse to overwrite a published release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          PUBLISHED=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            | jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag and .draft == false) | .tag_name')
+          if [ -n "$PUBLISHED" ]; then
+            echo "Release $TAG is already published; use a new version."
+            exit 1
+          fi
 
       - name: Build app
         run: pnpm build
@@ -92,11 +115,20 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -z "$APPLE_CERTIFICATE" ]; then
-            echo "No certificate configured, skipping..."
+            echo "No Developer ID: building ad-hoc manual-install test packages only."
+            echo "MAC_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "MAC_NOTARIZE=false" >> "$GITHUB_ENV"
             exit 0
           fi
+          : "${APPLE_CERTIFICATE_PASSWORD:?Missing certificate password}"
+          : "${APPLE_ID:?Missing Apple ID}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?Missing notarization password}"
+          : "${APPLE_TEAM_ID:?Missing Apple team ID}"
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
@@ -107,14 +139,31 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
           rm $RUNNER_TEMP/certificate.p12
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | awk '/Developer ID Application:/{print $2; exit}')
+          test -n "$IDENTITY" || { echo "No Developer ID Application identity found"; exit 1; }
+          echo "MAC_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "MAC_NOTARIZE=true" >> "$GITHUB_ENV"
 
       - name: Build macOS (${{ matrix.arch }})
-        run: npx electron-builder --mac --${{ matrix.arch }} --publish onTag
+        run: >-
+          pnpm exec electron-builder --mac --${{ matrix.arch }} --publish onTag
+          -c.mac.identity="$MAC_SIGNING_IDENTITY" -c.mac.notarize="$MAC_NOTARIZE"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify Mac signature and notarization
+        run: |
+          APP=$(find dist -maxdepth 2 -name EnsoCode.app -type d | head -1)
+          codesign --verify --deep --strict "$APP"
+          if [ "$MAC_NOTARIZE" = true ]; then
+            codesign -dv --verbose=2 "$APP" 2>&1 | grep 'Authority=Developer ID Application:'
+            xcrun stapler validate "$APP"
+            spctl --assess --type execute --verbose "$APP"
+          fi
 
       - name: Smoke test packaged natives
         run: |
@@ -131,14 +180,26 @@ jobs:
           path: dist/latest-mac.yml
           retention-days: 1
 
-      # 同 Windows：非 tag 构建不发布，传上来才能下载试装（x64 交叉包可拿到 Intel Mac 上验）
+      # 无论是否 tag，都保留试装包、ZIP 和更新清单供验收。
       - name: Upload installer
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v6
         with:
           name: mac-installer-${{ matrix.arch }}
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
+          if-no-files-found: error
           retention-days: 7
+
+      - name: Clean signing keychain
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          if [ -f "$RUNNER_TEMP/app-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db"
+          fi
 
   build-windows:
     needs: build-app
@@ -169,7 +230,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Windows
-        run: npx electron-builder --win --x64 --publish onTag
+        run: pnpm exec electron-builder --win --x64 --publish onTag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -185,7 +246,9 @@ jobs:
           name: windows-installer
           path: |
             dist/*.exe
+            dist/*.blockmap
             dist/latest.yml
+          if-no-files-found: error
           retention-days: 7
 
   build-linux:
@@ -226,12 +289,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Linux
-        run: npx electron-builder --linux --x64 --publish onTag
+        run: pnpm exec electron-builder --linux --x64 --publish onTag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Smoke test packaged natives
         run: ELECTRON_RUN_AS_NODE=1 dist/linux-unpacked/enso-code scripts/smoke-packaged-natives.cjs dist/linux-unpacked/resources
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-installer
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/latest-linux.yml
+          if-no-files-found: error
+          retention-days: 7
 
   build-relay:
     runs-on: ubuntu-latest
@@ -316,6 +390,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Download latest-mac.yml artifacts
         uses: actions/download-artifact@v7
         with:
@@ -324,27 +410,15 @@ jobs:
 
       - name: Merge latest-mac.yml
         run: |
-          ARM64_YML="mac-yml-artifacts/latest-mac-arm64/latest-mac.yml"
-          X64_YML="mac-yml-artifacts/latest-mac-x64/latest-mac.yml"
-
-          echo "=== ARM64 YML ===" && cat "$ARM64_YML"
-          echo -e "\n=== X64 YML ===" && cat "$X64_YML"
-
-          # 用 runner 镜像自带的 yq，不在发版时拉未锁定版本的 latest
-          ARM64_JSON=$(yq -o=json "$ARM64_YML")
-          X64_JSON=$(yq -o=json "$X64_YML")
-
-          echo "$ARM64_JSON" | jq --argjson x64 "$(echo "$X64_JSON" | jq '.files')" \
-            '.files = .files + $x64' | yq -P > latest-mac.yml
-
-          echo -e "\n=== MERGED YML ===" && cat latest-mac.yml
+          node scripts/release.mjs merge-mac \
+            mac-yml-artifacts/latest-mac-arm64/latest-mac.yml \
+            mac-yml-artifacts/latest-mac-x64/latest-mac.yml latest-mac.yml
 
       - name: Upload merged latest-mac.yml to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          gh release delete-asset "$TAG" latest-mac.yml --yes 2>/dev/null || true
           gh release upload "$TAG" latest-mac.yml --clobber
 
       - name: Download relay binaries
@@ -450,8 +524,26 @@ jobs:
 
           cat release-notes.md
 
-      - name: Update Release
+      - name: Verify release assets and generate checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          gh release edit ${{ steps.tag.outputs.name }} --draft=false --notes-file release-notes.md --latest
+          gh release download "$TAG" --dir release-assets
+          node scripts/release.mjs verify release-assets --all-platforms
+          (cd release-assets && sha256sum -c enso-relay-checksums.txt)
+          gh release upload "$TAG" release-assets/SHA256SUMS --clobber
+
+      - name: Keep verified Release as draft for manual acceptance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo '> Draft test build. macOS builds without Developer ID are ad-hoc signed and require manual installation; automatic update is not verified.'
+            echo '> Do not publish until platform installation, data retention and update acceptance checks pass. See docs/engineering-reference/guides/releasing.md.'
+            echo ''
+            cat release-notes.md
+          } > draft-notes.md
+          gh release edit "$TAG" --draft --notes-file draft-notes.md
+          echo "Draft $TAG is ready for acceptance; this workflow never publishes it automatically." >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 {
   "name": "enso-code",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "EnsoCode - Electron Multi-Window Scaffold",
   "main": "./out/main/index.js",
   "author": {
@@ -27,7 +27,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "test": "node --test scripts/rtk.test.mjs && vitest run",
+    "test": "node --test scripts/rtk.test.mjs scripts/release.test.mjs && vitest run",
+    "release:check": "node scripts/release.mjs version && pnpm typecheck && pnpm lint && pnpm test",
+    "release:verify": "node scripts/release.mjs verify dist",
     "test:watch": "vitest",
     "format": "biome format --write .",
     "postinstall": "node node_modules/electron/install.js && node scripts/fix-node-pty-helper.mjs"

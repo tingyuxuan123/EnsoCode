@@ -102,7 +102,8 @@ mac:
   # 「改过 Info.plist 的 Electron.app 拷贝」（Info.plist=not bound、Sealed Resources=none），
   # TCC 的本地网络/麦克风授权因此对不上运行中的实体。
   # '-' = ad-hoc 重签：不需要证书，但能封存资源并绑定 Info.plist，让 Identifier
-  # 变成 com.j3n5en.enso-code。发布时用 CSC_IDENTITY_AUTO_DISCOVERY 真证书覆盖。
+  # 变成 com.j3n5en.enso-code。仅供本地/草稿测试；CI 有正式证书时必须通过
+  # -c.mac.identity 显式覆盖，CSC_IDENTITY_AUTO_DISCOVERY 不会覆盖这里的 '-'。
   identity: '-'
   # electron-builder 默认三项 + 麦克风
   entitlements: build/entitlements.mac.plist
