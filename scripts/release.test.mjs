@@ -107,6 +107,10 @@ test('个人自签名构建仅手动触发，验明证书身份且不发布 Rele
   assert.match(fingerprint.default, /^[A-F0-9]{40}$/);
   assert.equal(workflow.jobs['build-personal-mac'].if, "github.ref == 'refs/heads/main'");
   const steps = workflow.jobs['build-personal-mac'].steps;
+  assert.equal(
+    steps.find((step) => step.name === 'Install dependencies').env?.GITHUB_TOKEN,
+    `\${{ secrets.GITHUB_TOKEN }}`
+  );
   const gate = steps.findIndex((step) => step.run === 'pnpm release:check');
   const signing = steps.findIndex((step) => step.name === 'Import personal signing certificate');
   assert.ok(gate >= 0 && gate < signing);
@@ -138,10 +142,7 @@ test('个人自签名构建仅手动触发，验明证书身份且不发布 Rele
   assert.match(cleanup.run, /sudo security remove-trusted-cert -d/);
   assert.match(cleanup.run, /delete-keychain/);
   assert.match(cleanup.run, /rm -f/);
-  assert.doesNotMatch(
-    JSON.stringify(workflow),
-    /gh release|secrets\.GITHUB_TOKEN|APPLE_CERTIFICATE/
-  );
+  assert.doesNotMatch(JSON.stringify(workflow), /gh release|APPLE_CERTIFICATE/);
 });
 
 test('个人安装包只使用独立 generic 更新源，正式 GitHub 更新源不变', async () => {
