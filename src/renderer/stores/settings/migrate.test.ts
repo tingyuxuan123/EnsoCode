@@ -2,6 +2,40 @@ import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine
 import { describe, expect, it } from 'vitest';
 import { mergeSettingsState, migrateSettings, SETTINGS_VERSION } from './migrate';
 
+describe('代码搜索设置迁移与水合', () => {
+  it('v17 迁移全局及项目默认关，幂等且保留新版显式授权', () => {
+    expect(SETTINGS_VERSION).toBe(17);
+    const previous = {
+      disabledBuiltinTools: ['computer'],
+      projects: [{ id: 'p1', disabledBuiltinTools: [] }, { id: 'p2' }],
+    };
+    const expected = {
+      disabledBuiltinTools: ['computer', 'code_search'],
+      projects: [{ id: 'p1', disabledBuiltinTools: ['code_search'] }, { id: 'p2' }],
+    };
+    expect(migrateSettings(previous, 16)).toEqual(expected);
+    expect(migrateSettings(expected, 16)).toEqual(expected);
+    expect(migrateSettings(previous, 17)).toBe(previous);
+  });
+
+  it('当前版本水合坏账号回落 null，合法账号保留且缺字段不冒充用户选择', () => {
+    const current = {
+      editMode: 'apply_patch' as const,
+      accentColor: 'indigo' as const,
+      codeSearchAccountKey: null as string | null,
+    };
+    for (const key of [null, '', 'anthropic', 'devin#0', {}, 123]) {
+      expect(
+        mergeSettingsState({ codeSearchAccountKey: key }, current).codeSearchAccountKey
+      ).toBeNull();
+    }
+    expect(
+      mergeSettingsState({ codeSearchAccountKey: 'devin#2' }, current).codeSearchAccountKey
+    ).toBe('devin#2');
+    expect(mergeSettingsState({}, current).codeSearchAccountKey).toBeNull();
+  });
+});
+
 describe('文件链接右键打开设置水合', () => {
   const current = {
     editMode: 'apply_patch' as const,
@@ -82,7 +116,7 @@ describe('请求体状态栏段位升级', () => {
     const currentMain = { statusLineSegments: oldDefault, disabledBuiltinTools };
     expect(migrateSettings(currentMain, 14)).toMatchObject({
       statusLineSegments: STATUS_LINE_PRESETS.default,
-      disabledBuiltinTools,
+      disabledBuiltinTools: [...disabledBuiltinTools, 'code_search'],
     });
   });
 });
@@ -310,7 +344,7 @@ describe('设置持久化迁移', () => {
   it('v7 → v8 把已落盘的空 disabledBuiltinTools 补上 memory 默认关', () => {
     expect(migrateSettings({ theme: 'dark', disabledBuiltinTools: [] }, 7)).toEqual({
       theme: 'dark',
-      disabledBuiltinTools: ['memory', 'computer'],
+      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       editMode: 'apply_patch',
     });
@@ -318,7 +352,7 @@ describe('设置持久化迁移', () => {
 
   it('v7 → v8 已有其它禁用项时只追加 memory，不覆盖用户选择', () => {
     expect(migrateSettings({ disabledBuiltinTools: ['browser'] }, 7)).toEqual({
-      disabledBuiltinTools: ['browser', 'memory', 'computer'],
+      disabledBuiltinTools: ['browser', 'memory', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       editMode: 'apply_patch',
     });
@@ -327,7 +361,7 @@ describe('设置持久化迁移', () => {
   it('v7 → v8 已经关掉 memory 则不重复追加', () => {
     const state = { disabledBuiltinTools: ['memory', 'browser'] };
     expect(migrateSettings(state, 7)).toEqual({
-      disabledBuiltinTools: ['memory', 'browser', 'computer'],
+      disabledBuiltinTools: ['memory', 'browser', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       editMode: 'apply_patch',
     });
@@ -401,7 +435,7 @@ describe('设置持久化迁移', () => {
     'v12 → v13 把旧 task/coworker 开关迁为统一 mode 掩码（%j）',
     (legacy, unifiedDisabled, modes) => {
       expect(migrateSettings({ disabledBuiltinTools: [...legacy] }, 12)).toEqual({
-        disabledBuiltinTools: [...unifiedDisabled, 'computer'],
+        disabledBuiltinTools: [...unifiedDisabled, 'computer', 'code_search'],
         subagentAllowedModes: modes,
       });
     }
@@ -421,17 +455,17 @@ describe('设置持久化迁移', () => {
         12
       )
     ).toEqual({
-      disabledBuiltinTools: ['browser', 'computer'],
+      disabledBuiltinTools: ['browser', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       projects: [
         {
           id: 'p1',
-          disabledBuiltinTools: ['computer'],
+          disabledBuiltinTools: ['computer', 'code_search'],
           subagentAllowedModes: ['task'],
         },
         {
           id: 'p2',
-          disabledBuiltinTools: ['computer'],
+          disabledBuiltinTools: ['computer', 'code_search'],
           subagentAllowedModes: ['coworker'],
         },
         { id: 'p3' },
@@ -488,15 +522,17 @@ describe('设置持久化迁移', () => {
 
   it('v13 → v14 把已落盘的 disabledBuiltinTools 补上 computer 默认关', () => {
     expect(migrateSettings({ disabledBuiltinTools: ['memory'] }, 13)).toEqual({
-      disabledBuiltinTools: ['memory', 'computer'],
+      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
     });
     expect(migrateSettings({ disabledBuiltinTools: ['memory', 'computer'] }, 13)).toEqual({
-      disabledBuiltinTools: ['memory', 'computer'],
+      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
     });
     expect(migrateSettings({ theme: 'dark' }, 13)).toEqual({ theme: 'dark' });
     expect(
       migrateSettings({ projects: [{ id: 'p1', disabledBuiltinTools: ['browser'] }] }, 13)
-    ).toEqual({ projects: [{ id: 'p1', disabledBuiltinTools: ['browser', 'computer'] }] });
+    ).toEqual({
+      projects: [{ id: 'p1', disabledBuiltinTools: ['browser', 'computer', 'code_search'] }],
+    });
   });
 
   // 持久化文件是用户机器上的真实文件，可能被手改坏或来自更早的残缺版本

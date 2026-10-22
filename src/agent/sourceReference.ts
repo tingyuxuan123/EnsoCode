@@ -4,7 +4,7 @@ export type SourceReference =
   | { type: 'file'; path: string; toolName: string; toolCallId: string }
   | { type: 'web'; url: string; toolName: string; toolCallId: string };
 
-const SKIP_TOOLS = new Set(['bash', 'powershell', 'exec']);
+const SKIP_TOOLS = new Set(['bash', 'powershell', 'exec', 'code_search']);
 const PATH_KEYS = ['path', 'file_path', 'target'] as const;
 const URL_KEYS = ['url', 'href'] as const;
 

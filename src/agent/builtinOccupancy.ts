@@ -9,6 +9,7 @@ import { createSubmitPlanTool } from './planMode';
 import { createUnifiedSubagentTool } from './subagent';
 import { createTodoTool } from './todo';
 import { BrowserInvoker, createBrowserTools } from './tools/browser';
+import { createCodeSearchTool } from './tools/codeSearch';
 import { ComputerInvoker, createComputerTool } from './tools/computer';
 import { createMemoryTools, MemoryInvoker } from './tools/memory';
 import { createWebTools } from './tools/web';
@@ -61,6 +62,19 @@ export function snapshotBuiltinOccupancyTools(input?: {
     ask_user: [fields(createAskTool(ask))],
     browser: createBrowserTools(browser).map(fields),
     web: createWebTools().map(fields),
+    code_search: [
+      fields(
+        createCodeSearchTool({
+          run: async () => ({
+            status: 'no_matches',
+            content: '',
+            files: [],
+            warnings: [],
+            truncated: false,
+          }),
+        })
+      ),
+    ],
     memory: createMemoryTools(new MemoryInvoker(noopIdentity, () => {})).map(fields),
     background_tasks: createTaskTools({
       read: async () => undefined,

@@ -173,6 +173,10 @@ export const CONFIG_SYNC_FIELD_POLICY = {
   agentTypes: { mode: 'portable' },
   disabledBuiltinAgentTypes: { mode: 'portable' },
   disabledBuiltinTools: { mode: 'portable' },
+  codeSearchAccountKey: {
+    mode: 'excluded',
+    reason: 'references a device-local Devin subscription account',
+  },
   webSearchChain: {
     mode: 'excluded',
     // 链条目引用本机 provider 条目 id（自定义 provider 是安装期 uuid），跨机导出会悬空；

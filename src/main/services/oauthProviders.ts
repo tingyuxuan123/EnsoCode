@@ -484,6 +484,17 @@ export function broadcastOauthCredentialsChanged(source?: WebContents): void {
   }
 }
 
+/**
+ * 账号凭证一变（登录同 key 更新、登出、导入）必须让 worker 重推代码搜索配置：
+ * 即使选中的账号 key 没变也换新代际，取消在途搜索并丢弃 worker 侧 JWT 缓存。
+ * 动态 import 避开 agentHost ↔ oauthProviders 的静态环；失败不影响登录/登出本身。
+ */
+function invalidateCodeSearchAccount(accountKey: string): void {
+  void import('./agentHost')
+    .then(({ pushCodeSearchConfig }) => pushCodeSearchConfig({ invalidateAccountKey: accountKey }))
+    .catch(() => {});
+}
+
 /** Renderer 只需要展示来源，不得拿到 OAuth 查询参数里的 state 等敏感值 */
 function authUrlForRenderer(url: string): string {
   try {
@@ -680,6 +691,7 @@ async function runOauthLogin(
     });
     refreshModelDirectoryInBackground();
     broadcastOauthCredentialsChanged(sender);
+    invalidateCodeSearchAccount(accountKey);
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
     emit({ type: 'error', message: sanitizeUpstreamBody(raw).slice(0, 300) });
@@ -736,6 +748,8 @@ export async function oauthLogout(accountKey: string, sender?: WebContents): Pro
   // 任意字符串都能当键传进 pi 的 logout/getAuth，先按已存凭证收窄
   if (!(await hasStoredAccount(runtime, accountKey))) {
     invalidateOauthQuota(accountKey);
+    // 账号已缺失也要让在途代码搜索取消，别继续用旧配置
+    invalidateCodeSearchAccount(accountKey);
     return;
   }
   await runtime.logout(accountKey);
@@ -745,6 +759,7 @@ export async function oauthLogout(accountKey: string, sender?: WebContents): Pro
     delete meta[accountKey];
   });
   broadcastOauthCredentialsChanged(sender);
+  invalidateCodeSearchAccount(accountKey);
 }
 
 // ---- 从 Codex Desktop / CLI 导入 ----
@@ -840,13 +855,17 @@ export async function importCodexOauthCredential(
     installCodexLinkedRefresh(runtime);
     await syncAccountProviders(runtime);
   }
-  if (duplicateKey) return { status: 'duplicate', accountKey: duplicateKey };
+  if (duplicateKey) {
+    invalidateCodeSearchAccount(duplicateKey);
+    return { status: 'duplicate', accountKey: duplicateKey };
+  }
   const account: OauthAccount = {
     key: accountKey,
     providerId: CODEX_PROVIDER_ID,
     ...identityFromCredential(CODEX_PROVIDER_ID, credential.access),
   };
   broadcastOauthCredentialsChanged(sender);
+  invalidateCodeSearchAccount(accountKey);
   return { status: 'imported', account };
 }
 

@@ -1239,9 +1239,9 @@ export function createCapabilityHandlers(
       if (!BUILTIN_TOOLS.some((tool) => tool.id === id))
         return invalid(`Unknown built-in tool: ${id}`);
       // 桌面键鼠不可撤回且需系统授权：只能由用户在设置页打开
-      if (id === 'computer' && params.enabled)
+      if ((id === 'computer' || id === 'code_search') && params.enabled)
         return invalid(
-          'The computer tool can only be turned on by the user in Settings → Built-in tools.'
+          `The ${id} tool can only be turned on by the user in Settings → Built-in tools.`
         );
       const disabled = new Set(
         effectiveDisabledBuiltinTools(settingsState(services.readSettings()).disabledBuiltinTools)

@@ -5,6 +5,23 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  'Code search': '代码搜索',
+  'Search workspace code with your existing Devin subscription. Default off.':
+    '使用已有 Devin 订阅搜索项目代码，默认关闭。',
+  'Code search account': '代码搜索账号',
+  'Select a Devin account': '选择 Devin 账号',
+  'Unavailable Devin account': 'Devin 账号不可用',
+  'Manage subscriptions': '管理订阅',
+  "Code search sends queries, directory information and selected code snippets to Devin's cloud. Ordinary code may contain hardcoded secrets; review the workspace before enabling.":
+    '代码搜索会向 Devin 云端发送查询、目录信息与所选代码片段。普通代码也可能含硬编码密钥等秘密，启用前请审查项目内容。',
+  'Could not load Devin accounts. Open subscription settings and try again.':
+    '无法加载 Devin 账号，请前往订阅设置检查后重试。',
+  'The selected Devin account is unavailable. Code search will not switch accounts automatically. Select an account or sign in again in subscription settings.':
+    '所选 Devin 账号不可用，代码搜索不会自动切换账号。请手动选择账号，或前往订阅设置重新登录。',
+  'No signed-in Devin accounts. Use the existing subscription settings to sign in.':
+    '没有已登录的 Devin 账号，请前往现有订阅设置登录。',
+  'The code search tool switch takes effect in new conversations. Account selection stays on this device.':
+    '代码搜索工具开关仅对新会话生效。账号选择仅保存在本机。',
   'Classification only, not for chat': '仅用于分类，不能聊天',
   'ChatGPT account selected': '已选择 ChatGPT 账号',
   'ChatGPT account switched': 'ChatGPT 账号已接替',

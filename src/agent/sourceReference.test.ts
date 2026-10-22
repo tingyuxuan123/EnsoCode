@@ -30,6 +30,12 @@ describe('extractSourceReferences', () => {
     expect(extractSourceReferences('read', { path: 1 }, 'c6')).toEqual([]);
   });
 
+  it('代码搜索引用来自校验后的结果，不把检索范围冒充命中文件', () => {
+    expect(extractSourceReferences('code_search', { query: 'entry', path: 'src' }, 's1')).toEqual(
+      []
+    );
+  });
+
   it('marker 是紧凑单行', () => {
     expect(
       renderSourceReferenceMarker({ type: 'file', path: 'a.ts', toolName: 'read', toolCallId: '1' })

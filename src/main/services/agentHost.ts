@@ -20,6 +20,7 @@ import {
   childProfileToolIds,
   WORKSPACE_WRITE_TOOL_ID,
 } from '@shared/childProfileTools';
+import { type CodeSearchConfig, parseCodeSearchAccountKey } from '@shared/codeSearch';
 import { resolveCompactStrategy } from '@shared/compactStrategy';
 import {
   type DefaultModelRef,
@@ -112,7 +113,11 @@ import { getMcpOAuthStore } from './mcpOAuthStore';
 import { getMcpToolCatalog } from './mcpToolCatalog';
 import { getModelDirectorySnapshot, onModelDirectoryChanged } from './modelDirectory';
 import { OAUTH_POOL_EXHAUSTED } from './oauthAccountPool';
-import { getOauthQuotaCoordinator, getRuntime as getOauthRuntime } from './oauthProviders';
+import {
+  getOauthQuotaCoordinator,
+  getRuntime as getOauthRuntime,
+  readStoredOauthCredentialKeys,
+} from './oauthProviders';
 import { PendingReloadRegistry } from './pendingReloads';
 import { enabledPlugins, type RuntimeAgentType, withPluginAgentTypes } from './pluginRuntime';
 import { killAndWaitExit } from './processExit';
@@ -346,6 +351,7 @@ export function startAgentWorker(): void {
     pushDisabledWorkflowPresets();
     pushModelDirectory();
     pushWebSearchConfig();
+    replayCodeSearchConfig();
   });
   child.on('message', (raw) => {
     if (worker !== child) return;
@@ -986,6 +992,9 @@ export function spawnSession(
   const memoryLanguage = typeof state?.memoryLanguage === 'string' ? state.memoryLanguage : 'en';
   // worker 崩溃/退出后不自动拉起的话，所有会话都只能靠重启 app 恢复；在 spawn 入口按需重建
   if (!worker && workerExited) startAgentWorker();
+  // Uses the caller's already-read authoritative credential keys. Queue before spawn
+  // so cold workers cannot create a permanent tool directory before async replay.
+  seedCodeSearchConfig(authenticatedAccountKeys);
   const sent = sendAgentCommand({
     type: 'spawn-parent',
     identity,
@@ -1942,6 +1951,97 @@ export function pushWebSearchConfig(): void {
   } satisfies AgentCommand);
 }
 
+/**
+ * 代码搜索选号只认设置里显式选择的裸 `devin` / `devin#n`，且必须当前真有 OAuth 凭证。
+ * 未配置、未知账号或已登出都降级为 `null`，绝不自动切到其它账号。
+ */
+export function resolveCodeSearchConfig(
+  accountKeys: ReadonlySet<string>,
+  revision: number
+): CodeSearchConfig {
+  const configured = parseCodeSearchAccountKey(readSettingsState()?.codeSearchAccountKey);
+  return {
+    accountKey: configured && accountKeys.has(configured) ? configured : null,
+    revision,
+  };
+}
+
+/** Main 持有的单调代际：账号真正变更、注销或同 key 强制失效时递增，worker 只按它比较新旧任务。 */
+let codeSearchRevision = 0;
+let lastCodeSearchConfig: CodeSearchConfig | null = null;
+/** 串行化：迟到的 auth.json 读盘结果不能覆盖更新的配置 */
+let codeSearchPushQueue: Promise<void> = Promise.resolve();
+
+export function seedCodeSearchConfig(accountKeys: ReadonlySet<string>): void {
+  const next = resolveCodeSearchConfig(accountKeys, codeSearchRevision);
+  if (next.accountKey !== lastCodeSearchConfig?.accountKey) codeSearchRevision++;
+  const config = { accountKey: next.accountKey, revision: codeSearchRevision };
+  lastCodeSearchConfig = config;
+  sendAgentCommand({ type: 'set-code-search-config', config });
+}
+
+async function applyCodeSearchConfig(
+  invalidateAccountKey: string | undefined,
+  force: boolean
+): Promise<void> {
+  let accountKeys: ReadonlySet<string>;
+  try {
+    accountKeys = await readStoredOauthCredentialKeys();
+  } catch {
+    // 权威凭证读不到时 fail-closed，不让在途搜索继续用未知账号
+    accountKeys = new Set();
+  }
+  const previous = lastCodeSearchConfig;
+  const next = resolveCodeSearchConfig(accountKeys, codeSearchRevision);
+  const invalidated =
+    invalidateAccountKey !== undefined &&
+    (invalidateAccountKey === next.accountKey || invalidateAccountKey === previous?.accountKey);
+  if (invalidated || next.accountKey !== previous?.accountKey) {
+    codeSearchRevision = Math.max(codeSearchRevision + 1, 1);
+  }
+  const config: CodeSearchConfig = {
+    accountKey: next.accountKey,
+    revision: codeSearchRevision,
+  };
+  // 普通重复推送（设置保存、模型目录刷新）保持相同代际，不打断进行中的搜索
+  if (
+    !force &&
+    previous &&
+    previous.accountKey === config.accountKey &&
+    previous.revision === config.revision
+  ) {
+    return;
+  }
+  lastCodeSearchConfig = config;
+  if (worker && workerReady)
+    worker.postMessage({ type: 'set-code-search-config', config } satisfies AgentCommand);
+}
+
+function queueCodeSearchConfig(
+  invalidateAccountKey: string | undefined,
+  force: boolean
+): Promise<void> {
+  const run = codeSearchPushQueue.then(() => applyCodeSearchConfig(invalidateAccountKey, force));
+  codeSearchPushQueue = run.catch(() => {});
+  return run;
+}
+
+/**
+ * 下发代码搜索选号与代际（只发账号引用，不发凭据）。
+ * `invalidateAccountKey` 用于 OAuth 登录同 key 更新 / 登出：即使账号选择没变也换新代际，
+ * 让在途搜索取消并丢弃 worker 侧 JWT 缓存。
+ */
+export function pushCodeSearchConfig(
+  options: { invalidateAccountKey?: string } = {}
+): Promise<void> {
+  return queueCodeSearchConfig(options.invalidateAccountKey, false);
+}
+
+/** worker 重建 ready 后必须重推（worker 侧代际从零开始）；同一配置也只重发，不递增代际。 */
+function replayCodeSearchConfig(): void {
+  void queueCodeSearchConfig(undefined, true);
+}
+
 let modelDirectoryListenerBound = false;
 
 function bindModelDirectoryListener(): void {
@@ -1950,6 +2050,7 @@ function bindModelDirectoryListener(): void {
   onModelDirectoryChanged(() => {
     pushModelDirectory();
     pushWebSearchConfig();
+    void pushCodeSearchConfig();
   });
 }
 

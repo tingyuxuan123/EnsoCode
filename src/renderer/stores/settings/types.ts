@@ -307,6 +307,8 @@ export interface SettingsState {
   disabledBuiltinTools: string[];
   /** web_search 全局候选链（空 = 现行行为：会话模型原生 → Exa） */
   webSearchChain: WebSearchChainEntry[];
+  /** 代码搜索固定使用的 Devin 订阅账号 key；null = 未选择，仅存本机，不自动切号。 */
+  codeSearchAccountKey: string | null;
   /** 被关闭的内置工作流预设（id 集合;默认全开） */
   disabledWorkflowPresets: string[];
   /** 统一 subagent 工具允许创建的 Agent 模式。 */
@@ -483,6 +485,7 @@ export interface SettingsState {
   toggleBuiltinAgentType: (name: string, enabled: boolean) => void;
   toggleBuiltinTool: (id: string, enabled: boolean) => void;
   setWebSearchChain: (entries: WebSearchChainEntry[]) => void;
+  setCodeSearchAccountKey: (key: string | null) => void;
   toggleWorkflowPreset: (id: string, enabled: boolean) => void;
   setSubagentAllowedModes: (modes: AgentMode[]) => void;
 

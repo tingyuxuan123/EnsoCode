@@ -19,6 +19,7 @@ import {
   parseCapabilityReceipt,
   parseCapabilityResult,
 } from '../capabilities/types';
+import { type CodeSearchConfig, parseCodeSearchConfig } from '../codeSearch';
 import { type CompactStrategy, parseCompactStrategy } from '../compactStrategy';
 import type { DefaultModelRef } from '../defaultModel';
 import { parseMaxActiveCoworkers } from '../maxActiveCoworkers';
@@ -1254,6 +1255,7 @@ export type AgentCommand =
   /** 设置里禁用的内置预设：worker 执行与工具说明都按它过滤 */
   | { type: 'set-disabled-workflow-presets'; ids: string[] }
   | { type: 'set-web-search-config'; chain: WebSearchChainEntry[]; configured?: boolean }
+  | { type: 'set-code-search-config'; config: CodeSearchConfig }
   /** 统一模型目录 + 自定义 provider 全量注册信息。载荷在 worker 内再收窄。 */
   | { type: 'set-model-directory'; snapshot: unknown; customProviders: unknown }
   | { type: 'compact'; identity: SessionIdentity; instructions?: string }
@@ -3330,6 +3332,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     case 'set-auto-retry-limit':
       return hasExactKeys(value, ['type', 'limit']) && parseAutoRetryLimit(value.limit) !== null
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'set-code-search-config':
+      return hasExactKeys(value, ['type', 'config']) && parseCodeSearchConfig(value.config)
         ? (value as unknown as AgentCommand)
         : null;
     case 'set-web-search-config':

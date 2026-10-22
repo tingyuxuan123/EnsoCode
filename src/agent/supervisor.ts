@@ -117,6 +117,9 @@ import {
 } from './childReasoning';
 import { createClaudeHooksExtension } from './claudeHooks';
 import { CodemodeHost, isDeferredMcp } from './codemode';
+import { WindsurfCompletion } from './codeSearch/completion';
+import { runCodeSearch } from './codeSearch/searchLoop';
+import { CodeSearchHost } from './codeSearchHost';
 import {
   collectContextOccupancy,
   estimateConversationTokens,
@@ -228,6 +231,7 @@ import { createTodoTool, TodoStaleReminder } from './todo';
 import { decorateSessionTools } from './toolDecorators';
 import { ToolOutputBudget } from './toolOutputBudget';
 import { BrowserInvoker, createBrowserTools, withNavigateApproval } from './tools/browser';
+import { createCodeSearchTool } from './tools/codeSearch';
 import { ComputerInvoker, createComputerTool, withComputerApproval } from './tools/computer';
 import { createDelegationTools, type DelegationOp } from './tools/delegation';
 import { createEnsoAppTool, EnsoAppInvoker } from './tools/ensoApp';
@@ -856,6 +860,7 @@ export class SessionSupervisor {
   private disabledWorkflowPresets: string[] = [];
   /** undefined 跟随会话；空数组表示已配置但全部不可用，直接走 Exa。 */
   private webSearchChain: readonly WebSearchChainEntry[] | undefined;
+  private readonly codeSearch = new CodeSearchHost();
   /**
    * Main 推送的统一模型目录。revision 与自定义 provider 语义都没变时不再注册。
    * 当前消费者是自定义 provider 预注册；快照本体由后续的全局 web_search
@@ -1005,6 +1010,7 @@ export class SessionSupervisor {
         managed.asks.snapshot().length > 0 ||
         hasPendingCalls(managed) ||
         (managed.workflowRuns?.size ?? 0) > 0 ||
+        this.codeSearch.pendingCount(id) > 0 ||
         managed.pendingTaskReminders.length > 0 ||
         this.bgTasks.snapshot(id).some((task) => task.status === 'running'),
       hasChildren:
@@ -1035,6 +1041,7 @@ export class SessionSupervisor {
    *  清回 false，之后可携新 cwd + resumeFile 重新 spawn（Move to worktree / 闲置回收后再点开）。 */
   private async releaseParent(managed: ManagedSession, reason: string): Promise<void> {
     const parentId = managed.identity.sessionId;
+    this.codeSearch.cancelSession(parentId);
     this.workspaceClaims.forget(parentId);
     // 先收掉整棵子会话（coworker/child 都以 `${parentId}::` 为键前缀）
     for (const [id, child] of [...this.sessions]) {
@@ -1117,6 +1124,7 @@ export class SessionSupervisor {
                 managed.gate.snapshot().length > 0 ||
                 managed.asks.snapshot().length > 0 ||
                 hasPendingCalls(managed) ||
+                this.codeSearch.pendingCount(managed.identity.sessionId) > 0 ||
                 this.bgTasks
                   .snapshot(managed.identity.sessionId)
                   .some((task) => task.status === 'running')
@@ -1227,6 +1235,10 @@ export class SessionSupervisor {
     }
     if (command.type === 'set-disabled-workflow-presets') {
       this.disabledWorkflowPresets = command.ids;
+      return;
+    }
+    if (command.type === 'set-code-search-config') {
+      this.codeSearch.configure(command.config);
       return;
     }
     if (command.type === 'set-web-search-config') {
@@ -1840,6 +1852,7 @@ export class SessionSupervisor {
       }
       case 'abort': {
         const managed = this.must(command.identity);
+        this.codeSearch.cancelSession(managed.identity.sessionId);
         // 重试倒计时中 pi 只发 auto_retry_end、不再有 agent_end：须按取消重试同口径收口，
         // 否则 renderer 的中断标记吞掉下一轮收束（队列不再泵），排队压缩永远停在 queued
         const retrying = managed.session.isRetrying;
@@ -2626,6 +2639,34 @@ export class SessionSupervisor {
           ]
         : []),
       ...(toolEnabled('web') ? createWebTools({ chain: () => this.webSearchChain }) : []),
+      ...(toolEnabled('code_search') && !remote && !botMode && this.codeSearch.accountKey
+        ? [
+            createCodeSearchTool({
+              run: (input, searchCwd, signal) =>
+                this.codeSearch.run(sessionId, signal, async (accountKey, searchSignal) => {
+                  const completion = new WindsurfCompletion({
+                    access: async (caller) => {
+                      const authSignal = caller ?? searchSignal;
+                      try {
+                        const registry = await this.getRuntime();
+                        if (authSignal.aborted) throw new Error('cancelled');
+                        ensureAccountProvider(registry, accountKey);
+                        const auth = await registry.getAuth(accountKey, { signal: authSignal });
+                        const token = auth?.auth.apiKey;
+                        if (!token || authSignal.aborted) throw new Error('unavailable');
+                        return { token, signal: authSignal };
+                      } catch {
+                        throw new Error(
+                          'Devin search credentials unavailable or cancelled. Select a logged-in account in settings.'
+                        );
+                      }
+                    },
+                  });
+                  return runCodeSearch(input, searchCwd, completion, searchSignal);
+                }),
+            }),
+          ]
+        : []),
       ...(toolEnabled('todo') ? [createTodoTool((todos) => todoReminder.update(todos))] : []),
       ...(computer ? [withComputerApproval(gate, createComputerTool(computer))] : []),
       ...(toolEnabled('ask_user') ? [createAskTool(askManager)] : []),
@@ -4391,6 +4432,7 @@ export class SessionSupervisor {
     this.workspaceSwitch.clear();
     this.bgTasks.stopAll();
     for (const managed of this.sessions.values()) {
+      this.codeSearch.cancelSession(managed.identity.sessionId);
       cancelContinuousMemory(managed.session.sessionManager);
       managed.ensoApp?.cancelAll('Enso worker shutdown');
       managed.browser?.cancelAll('Enso worker shutdown');

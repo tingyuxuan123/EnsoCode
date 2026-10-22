@@ -812,13 +812,17 @@ export function planImport(
   ] as const) {
     if (key in bundle.state) state[key] = clone(bundle.state[key]);
   }
-  // computer 需本机系统授权且键鼠不可撤回：导入只沿用本机开关，不随配置包打开或关闭
+  // computer / code_search 涉及本机授权：配置包不能打开或撤销本机显式选择。
   if (Array.isArray(state.disabledBuiltinTools)) {
-    const localOff = !Array.isArray(current.disabledBuiltinTools)
-      ? true
-      : current.disabledBuiltinTools.includes('computer');
-    const next = state.disabledBuiltinTools.filter((id) => id !== 'computer');
-    state.disabledBuiltinTools = localOff ? [...next, 'computer'] : next;
+    let next = state.disabledBuiltinTools;
+    for (const toolId of ['computer', 'code_search']) {
+      const localOff = !Array.isArray(current.disabledBuiltinTools)
+        ? true
+        : current.disabledBuiltinTools.includes(toolId);
+      next = next.filter((id) => id !== toolId);
+      if (localOff) next.push(toolId);
+    }
+    state.disabledBuiltinTools = next;
   }
 
   const availableModels = new Map(

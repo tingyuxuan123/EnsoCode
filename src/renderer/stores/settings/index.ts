@@ -4,6 +4,7 @@ import {
   DEFAULT_BOT_MAX_RUNNING_TURNS,
   normalizeBotMaxRunningTurns,
 } from '@shared/bots/concurrency';
+import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
   type DefaultModelRef,
   oauthCredentialBlock,
@@ -241,6 +242,7 @@ const initialState = {
   disabledBuiltinAgentTypes: [] as string[],
   disabledBuiltinTools: [...DEFAULT_DISABLED_BUILTIN_TOOLS] as string[],
   webSearchChain: [] as WebSearchChainEntry[],
+  codeSearchAccountKey: null as string | null,
   disabledWorkflowPresets: [] as string[],
   subagentAllowedModes: ['task', 'coworker'] as import('@shared/types/agent').AgentMode[],
   onboarded: false,
@@ -790,6 +792,8 @@ export const useSettingsStore = create<SettingsState>()(
         })),
 
       setWebSearchChain: (entries) => set({ webSearchChain: parseWebSearchChain(entries) }),
+      setCodeSearchAccountKey: (key) =>
+        set({ codeSearchAccountKey: parseCodeSearchAccountKey(key) }),
 
       toggleWorkflowPreset: (id, enabled) =>
         set((state) => ({

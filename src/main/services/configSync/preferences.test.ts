@@ -25,6 +25,40 @@ const bundle = (state: Partial<ConfigSyncBundle['state']>): ConfigSyncBundle => 
 });
 
 describe('config sync portable preference contract', () => {
+  it('代码搜索账号引用仅留本机，不随配置同步导出', () => {
+    expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('codeSearchAccountKey', {
+      mode: 'excluded',
+      reason: expect.stringContaining('device-local'),
+    });
+    expect(SYNC_FIELDS).not.toContain('codeSearchAccountKey');
+  });
+
+  it.each(['merge', 'replace'] as const)('导入 %s 保留本机代码搜索授权，兼容缺省旧字段', (mode) => {
+    expect(
+      planImport(
+        { disabledBuiltinTools: ['code_search'] },
+        bundle({ disabledBuiltinTools: [] }),
+        mode
+      ).state.disabledBuiltinTools
+    ).toContain('code_search');
+    expect(
+      planImport(
+        { disabledBuiltinTools: [] },
+        bundle({ disabledBuiltinTools: ['code_search'] }),
+        mode
+      ).state.disabledBuiltinTools
+    ).not.toContain('code_search');
+    expect(
+      planImport({}, bundle({ disabledBuiltinTools: [] }), mode).state.disabledBuiltinTools
+    ).toContain('code_search');
+    expect(
+      planImport({ disabledBuiltinTools: ['code_search'] }, bundle({}), mode).state
+        .disabledBuiltinTools
+    ).toContain('code_search');
+    expect(
+      planImport({ disabledBuiltinTools: [] }, bundle({}), mode).state.disabledBuiltinTools
+    ).not.toContain('code_search');
+  });
   it('本机文件打开规则及应用路径不进入配置同步字段', () => {
     expect(CONFIG_SYNC_FIELD_POLICY.fileOpenRules).toEqual({
       mode: 'excluded',
@@ -330,6 +364,7 @@ describe('config sync portable preference contract', () => {
     expect(planImport({}, incoming, 'merge').state.disabledBuiltinTools).toEqual([
       'browser',
       'computer',
+      'code_search',
     ]);
   });
 });

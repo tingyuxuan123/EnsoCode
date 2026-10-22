@@ -2497,7 +2497,8 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
 function toolIcon(name: string): LucideIcon {
   if (name === 'read') return FileText;
   if (name === 'ls') return FolderOpen;
-  if (name === 'grep' || name === 'find' || name === 'glob') return Search;
+  if (name === 'grep' || name === 'find' || name === 'glob' || name === 'code_search')
+    return Search;
   if (name === 'bash' || name === 'powershell' || name === 'task_output') return TerminalSquare;
   if (name === 'edit' || name === 'apply_patch') return Pencil;
   if (name === 'write') return FilePlus;
@@ -2511,7 +2512,14 @@ type ToolKind = 'read' | 'search' | 'edit' | 'write' | 'terminal' | null;
 
 function toolKind(name: string): ToolKind {
   if (name === 'read') return 'read';
-  if (name === 'ls' || name === 'grep' || name === 'find' || name === 'glob') return 'search';
+  if (
+    name === 'ls' ||
+    name === 'grep' ||
+    name === 'find' ||
+    name === 'glob' ||
+    name === 'code_search'
+  )
+    return 'search';
   if (name === 'edit' || name === 'apply_patch') return 'edit';
   if (name === 'write') return 'write';
   if (name === 'bash' || name === 'powershell') return 'terminal';

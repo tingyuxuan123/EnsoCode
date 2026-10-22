@@ -1176,22 +1176,29 @@ function buildMessageTimeline(
             part.name === 'read' && !result?.isError
               ? readImagePreviewPath(part.arguments, cwd)
               : null;
+          const codeSearchQuery =
+            part.name === 'code_search' && call.args && typeof call.args === 'object'
+              ? (call.args as Record<string, unknown>).query
+              : undefined;
           items.push({
             kind: 'tool',
             key,
             name: call.name,
-            summary: execSource
-              ? summarizeExecSource(execSource)
-              : patchPaths
-                ? patchPaths.length > 1
-                  ? `${patchPaths.length} files`
-                  : toProjectRelativePath(patchPaths[0] ?? '', cwd)
-                : (sent?.summary ??
-                  captured?.title ??
-                  asked?.ask.question ??
-                  subagent?.title ??
-                  call.summary ??
-                  summarizeArgs(call.args, cwd)),
+            summary:
+              typeof codeSearchQuery === 'string'
+                ? codeSearchQuery
+                : execSource
+                  ? summarizeExecSource(execSource)
+                  : patchPaths
+                    ? patchPaths.length > 1
+                      ? `${patchPaths.length} files`
+                      : toProjectRelativePath(patchPaths[0] ?? '', cwd)
+                    : (sent?.summary ??
+                      captured?.title ??
+                      asked?.ask.question ??
+                      subagent?.title ??
+                      call.summary ??
+                      summarizeArgs(call.args, cwd)),
             source: execSource,
             output: sent ? stripDeliveryReceipt(output) : asked ? asked.output : output,
             nestedPending: nestedPendingCount(part.id, pendingApprovals) || undefined,
@@ -1559,7 +1566,7 @@ function isTurnSwallowable(item: TimelineItem): boolean {
   }
 }
 
-const SEARCH_TOOLS = new Set(['grep', 'find', 'glob', 'ls']);
+const SEARCH_TOOLS = new Set(['grep', 'find', 'glob', 'ls', 'code_search']);
 
 function classifyTool(
   name: string,

@@ -313,11 +313,11 @@ describe('readSettingsState', () => {
       },
     };
     expect(readSettingsState()).toEqual({
-      disabledBuiltinTools: ['memory', 'computer'],
-      projects: [{ id: 'p', disabledBuiltinTools: ['computer'] }],
+      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
+      projects: [{ id: 'p', disabledBuiltinTools: ['computer', 'code_search'] }],
     });
     settingsMock.value = { 'enso-settings': { version: 14, state: { disabledBuiltinTools: [] } } };
-    expect(readSettingsState()).toEqual({ disabledBuiltinTools: [] });
+    expect(readSettingsState()).toEqual({ disabledBuiltinTools: ['code_search'] });
   });
 });
 

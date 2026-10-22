@@ -1,10 +1,15 @@
 import { type AccentColor, resolveAccentColor } from '@shared/accentColor';
+import {
+  CODE_SEARCH_DEFAULT_OFF_SETTINGS_VERSION,
+  parseCodeSearchAccountKey,
+} from '@shared/codeSearch';
 import { resolveCompactStrategy } from '@shared/compactStrategy';
 import { normalizeContextMenuOpen, normalizeFileOpenRules } from '@shared/fileOpening';
 import { extractModelOverrides, referencedModelIds } from '@shared/modelDirectory';
 import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine';
 import { type EditMode, type ModelEntry, resolveEditMode } from '@shared/types';
 import {
+  addCodeSearchDefaultOff,
   addComputerDefaultOff,
   COMPUTER_DEFAULT_OFF_SETTINGS_VERSION,
   effectiveSubagentAllowedModes,
@@ -24,7 +29,7 @@ import { parseWebSearchChain } from '@shared/webSearchChain';
  */
 
 /** 当前持久化数据版本；改数据形状时 +1 并在 `migrateSettings` 里加一段 */
-export const SETTINGS_VERSION = 16;
+export const SETTINGS_VERSION = 17;
 
 export function mergeSettingsState<T extends { editMode: EditMode; accentColor: AccentColor }>(
   persisted: unknown,
@@ -46,6 +51,10 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     'webSearchChain' in source
       ? { webSearchChain: parseWebSearchChain(source.webSearchChain) }
       : {};
+  const codeSearch =
+    'codeSearchAccountKey' in source
+      ? { codeSearchAccountKey: parseCodeSearchAccountKey(source.codeSearchAccountKey) }
+      : {};
   void bashInterceptEnabled;
   const fileOpening =
     'fileOpenRules' in source || 'fileOpenRules' in current
@@ -60,6 +69,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...rest,
     ...voice,
     ...search,
+    ...codeSearch,
     ...fileOpening,
     ...contextMenuOpening,
     editMode,
@@ -85,6 +95,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * （只留禁用/别名/能力覆盖及选型引用行）；清单改由 Main 侧统一模型目录派生，
  * 老账号不再错过新版本静态表里的新模型（gemini-3.8-flash 事故的根修）。
  * 幂等：对已是稀疏表的条目重跑 extractModelOverrides 结果不变。
+ * v16 → v17：全局与项目内置工具列表补 code_search 默认关，避免升级时静默云端发送代码。
  */
 export function migrateSettings(persisted: unknown, version: number): unknown {
   if (version >= SETTINGS_VERSION) return persisted;
@@ -198,6 +209,9 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
         };
       }),
     };
+  }
+  if (version < CODE_SEARCH_DEFAULT_OFF_SETTINGS_VERSION) {
+    state = addCodeSearchDefaultOff(state);
   }
   return state;
 }

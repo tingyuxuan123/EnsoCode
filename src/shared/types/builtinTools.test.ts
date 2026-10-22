@@ -13,6 +13,10 @@ import {
 } from './builtinTools';
 
 describe('isWorkflowAvailable', () => {
+  it('code_search 注册为内置工具且新安装默认关闭', () => {
+    expect(BUILTIN_TOOLS.some((tool) => tool.id === 'code_search')).toBe(true);
+    expect(effectiveDisabledBuiltinTools(undefined)).toContain('code_search');
+  });
   it('workflow 靠 subagent 派发子代理，两者任一关闭都不可用', () => {
     expect(isWorkflowAvailable([])).toBe(true);
     expect(isWorkflowAvailable(['memory'])).toBe(true);
@@ -37,8 +41,8 @@ describe('isBuiltinToolEnabledForProject', () => {
 });
 
 describe('effectiveDisabledBuiltinTools', () => {
-  it('缺字段时用默认关闭列表：memory 默认关，其余全开', () => {
-    expect(effectiveDisabledBuiltinTools(undefined)).toEqual(['memory', 'computer']);
+  it('缺字段时使用默认关闭列表', () => {
+    expect(effectiveDisabledBuiltinTools(undefined)).toEqual(['memory', 'computer', 'code_search']);
     for (const id of DEFAULT_DISABLED_BUILTIN_TOOLS) {
       expect(
         BUILTIN_TOOLS.some((tool) => tool.id === id),
@@ -137,6 +141,29 @@ describe('addComputerDefaultOff', () => {
 });
 
 describe('persistedSettingsState webSearchChain 收窄', () => {
+  it.each([undefined, null, '17', Number.NaN, Number.POSITIVE_INFINITY, -1, 17.5])(
+    '脏版本 %s 不绕过 code_search 默认关闭',
+    (version) => {
+      expect(
+        persistedSettingsState({ state: { disabledBuiltinTools: [] }, version })
+          ?.disabledBuiltinTools
+      ).toContain('code_search');
+    }
+  );
+
+  it('v17 之前全局与项目列表缺 code_search 时保守关闭，不覆盖新版显式授权', () => {
+    const state = {
+      disabledBuiltinTools: ['browser'],
+      projects: [{ id: 'p1', disabledBuiltinTools: [] }, { id: 'p2' }, null],
+    };
+    expect(persistedSettingsState({ state, version: 16 })).toEqual({
+      disabledBuiltinTools: ['browser', 'code_search'],
+      projects: [{ id: 'p1', disabledBuiltinTools: ['code_search'] }, { id: 'p2' }, null],
+    });
+    expect(persistedSettingsState({ state, version: 17 })).toEqual(state);
+    expect(persistedSettingsState({ state: {}, version: 16 })).toEqual({});
+    expect(state.projects[0]).toEqual({ id: 'p1', disabledBuiltinTools: [] });
+  });
   it('脏数据收窄为空链；合法链透传', () => {
     expect(
       persistedSettingsState({ state: { webSearchChain: 'garbage' }, version: 99 })?.webSearchChain

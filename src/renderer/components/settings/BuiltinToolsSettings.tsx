@@ -53,6 +53,7 @@ import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
+import { CodeSearchSettings } from './CodeSearchSettings';
 import {
   enabledOccupancyTotal,
   OccupancyEnabledTotal,
@@ -73,6 +74,7 @@ const TOOL_ICON: Record<string, LucideIcon> = {
   ask_user: MessageCircleQuestion,
   browser: Globe,
   web: Search,
+  code_search: Search,
   background_tasks: SquareTerminal,
   memory: Brain,
   isolated_sandbox: Box,
@@ -323,6 +325,7 @@ export function BuiltinToolsSettings() {
             {tool.id === 'web' ? (
               <WebSearchChainEditor disabled={disabled.includes('web')} />
             ) : null}
+            {tool.id === 'code_search' ? <CodeSearchSettings /> : null}
             {tool.id === 'subagent' ? (
               <div className="space-y-2" data-settings-row="tools.subagentModes">
                 {(

@@ -40,6 +40,7 @@ export const TOOL_LABEL_KEYS: Partial<Record<string, string>> = {
   browser_screenshot: 'Browser screenshot',
   browser_cdp: 'Browser CDP',
   web_search: 'Web search',
+  code_search: 'Code search',
   web_fetch: 'Web fetch',
 };
 

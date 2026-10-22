@@ -20,6 +20,7 @@ extraResources:
     to: icon-win.png
 files:
   - out/**
+  - THIRD_PARTY_NOTICES.md
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'

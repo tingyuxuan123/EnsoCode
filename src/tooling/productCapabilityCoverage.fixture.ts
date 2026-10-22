@@ -130,6 +130,9 @@ export const SETTINGS_DATA_COVERAGE = {
   disabledBuiltinAgentTypes: surfaces('agent-types.toggle-builtin'),
   disabledBuiltinTools: surfaces('tools.toggle-builtin'),
   webSearchChain: surfaces('tools.toggle-builtin'),
+  codeSearchAccountKey: excluded(
+    'Code search cloud account selection is device-local and requires explicit consent.'
+  ),
   disabledWorkflowPresets: excluded('Built-in workflow preset toggles in the settings page.'),
   subagentAllowedModes: surfaces('tools.toggle-builtin'),
   onboarded: surfaces('onboarding.complete'),
@@ -314,6 +317,9 @@ export const SETTINGS_ACTION_COVERAGE = {
   toggleBuiltinAgentType: surfaces('agent-types.toggle-builtin'),
   toggleBuiltinTool: surfaces('tools.toggle-builtin'),
   setWebSearchChain: surfaces('tools.toggle-builtin'),
+  setCodeSearchAccountKey: excluded(
+    'Code search cloud account selection is a desktop-only safety preference.'
+  ),
   toggleWorkflowPreset: excluded('Built-in workflow preset toggles in the settings page.'),
   setSubagentAllowedModes: surfaces('tools.toggle-builtin'),
   setOnboarded: surfaces('onboarding.complete'),
@@ -364,6 +370,9 @@ export const BUILTIN_TOOL_COVERAGE: Readonly<Record<string, CoverageDisposition>
   background_tasks: surfaces('coding-tools.background-task'),
   browser: surfaces('coding-tools.browser'),
   web: surfaces('coding-tools.web'),
+  code_search: excluded(
+    'Opt-in local code search sends selected code to Devin; enabled only by the user in desktop settings.'
+  ),
   isolated_sandbox: surfaces('coding-tools.isolated-sandbox'),
   memory: surfaces('coding-tools.memory'),
   computer: surfaces('coding-tools.computer'),

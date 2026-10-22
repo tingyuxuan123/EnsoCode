@@ -49,6 +49,7 @@
     "@vscode/ripgrep": "1.17.0",
     "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.8.9",
+    "ignore": "7.0.5",
     "koffi": "^3.3.1",
     "level": "^10.0.0",
     "libopus-wasm": "^0.4.1",

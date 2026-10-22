@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
   type ContextMenuOpen,
   type FileOpenRule,
@@ -130,6 +131,7 @@ export const SETTINGS_STATE_FIELDS = [
   'disabledBuiltinAgentTypes',
   'disabledBuiltinTools',
   'webSearchChain',
+  'codeSearchAccountKey',
   'disabledWorkflowPresets',
   'subagentAllowedModes',
   'memoryEmbeddingModel',
@@ -205,6 +207,8 @@ const CONFIG_SYNC_EXCLUDED_STATE_FIELDS = new Set<SettingsStateField>([
   'disabledWorkflowPresets',
   // 与 CONFIG_SYNC_FIELD_POLICY 的 excluded 一致：引用本机 provider 条目，跨机悬空
   'webSearchChain',
+  // 引用本机 OAuth 账号，跨机必然悬空；账号撤销必须由本机实时核验
+  'codeSearchAccountKey',
 ]);
 
 export const CONFIG_SYNC_COMMIT_FIELDS = SETTINGS_STATE_FIELDS.filter(
@@ -457,6 +461,7 @@ function scheduleWrite(
           pushDisabledWorkflowPresets,
           pushModelDirectory,
           pushWebSearchConfig,
+          pushCodeSearchConfig,
         }) => {
           pushApprovalReviewer(await readStoredOauthCredentialKeys());
           pushMaxActiveCoworkers();
@@ -464,6 +469,7 @@ function scheduleWrite(
           pushDisabledWorkflowPresets();
           pushModelDirectory();
           pushWebSearchConfig();
+          void pushCodeSearchConfig();
         }
       )
       .catch(() => {});
@@ -582,6 +588,7 @@ export function commitSettingsTransaction(
         pushDisabledWorkflowPresets,
         pushModelDirectory,
         pushWebSearchConfig,
+        pushCodeSearchConfig,
       }) => {
         pushApprovalReviewer(await readStoredOauthCredentialKeys());
         pushMaxActiveCoworkers();
@@ -589,6 +596,7 @@ export function commitSettingsTransaction(
         pushDisabledWorkflowPresets();
         pushModelDirectory();
         pushWebSearchConfig();
+        void pushCodeSearchConfig();
       }
     )
     .catch(() => {});
@@ -624,6 +632,15 @@ export function patchSettingsState(
     const config = parseContextMenuOpen(value);
     if (!config) return { ok: false, error: 'Invalid context menu opening' };
     targetValue = config;
+  } else if (targetField === 'codeSearchAccountKey') {
+    // 只接受显式 devin / devin#n；任意键不能借设置变成 auth.json 的账号引用
+    if (value === null) {
+      targetValue = null;
+    } else {
+      const accountKey = parseCodeSearchAccountKey(value);
+      if (accountKey === null) return { ok: false, error: 'Invalid code search account' };
+      targetValue = accountKey;
+    }
   }
   const current = readSettings() ?? {};
   const persisted =

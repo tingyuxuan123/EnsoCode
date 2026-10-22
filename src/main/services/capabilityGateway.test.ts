@@ -532,7 +532,7 @@ describe('CapabilityGateway OAuth/default/secret/receipt', () => {
     }
   );
 
-  it('Enso 不能打开 computer；改其它工具时旧落盘列表保持 computer 关闭', async () => {
+  it('Enso 不能打开 computer；改其它工具时旧落盘列表保持云端搜索与 computer 关闭', async () => {
     const { gateway, state, patchSettings } = fixture();
     const enable = await gateway.invoke(
       request('tool-computer', 'tools.toggle-builtin', { id: 'computer', enabled: true })
@@ -545,7 +545,16 @@ describe('CapabilityGateway OAuth/default/secret/receipt', () => {
       request('tool-browser', 'tools.toggle-builtin', { id: 'browser', enabled: false })
     );
     expect(other.modelResult).toMatchObject({ ok: true });
-    expect(state.disabledBuiltinTools).toEqual(['memory', 'computer', 'browser']);
+    expect(state.disabledBuiltinTools).toEqual(['memory', 'computer', 'code_search', 'browser']);
+  });
+
+  it('Enso 不能自行打开会外发代码的 code_search', async () => {
+    const { gateway, patchSettings } = fixture();
+    const enable = await gateway.invoke(
+      request('tool-code-search', 'tools.toggle-builtin', { id: 'code_search', enabled: true })
+    );
+    expect(enable.modelResult).toMatchObject({ ok: false, code: 'invalid' });
+    expect(patchSettings).not.toHaveBeenCalled();
   });
 
   it('子模型更新能力不能夹带 enabled 重新开启禁用条目', async () => {

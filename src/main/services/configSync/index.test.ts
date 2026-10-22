@@ -57,6 +57,44 @@ afterAll(() => {
 
 describe('config sync sender-bound import flow', () => {
   it.each(['merge', 'replace'] as const)(
+    '代码搜索账号不进入导出包，%s 导入旧禁用列表仍保持本机关停及账号',
+    async (mode) => {
+      settings.patchSettingsState('codeSearchAccountKey', 'devin#2');
+      settings.patchSettingsState('disabledBuiltinTools', ['computer']);
+      try {
+        const file = join(userData, `code-search-${mode}.enso-config`);
+        expect(await service.exportConfigToPath({ includeSecrets: false }, file)).toMatchObject({
+          ok: true,
+        });
+        const exported = await decodeBundle(readFileSync(file));
+        expect(exported.state).not.toHaveProperty('codeSearchAccountKey');
+        // 模拟 code_search 诞生前导出的配置；旧列表的“全开”不是本机云端发送授权。
+        exported.state.disabledBuiltinTools = [];
+        writeFileSync(file, await encodeBundle(exported));
+        settings.patchSettingsState('codeSearchAccountKey', 'devin');
+        const opened = await service.openImportForSender(51, file);
+        expect(opened.ok).toBe(true);
+        if (!opened.ok) return;
+        expect(
+          await service.previewImportForSender(51, opened.token, undefined, mode)
+        ).toMatchObject({
+          ok: true,
+        });
+        expect(await service.commitImportForSender(51, opened.token, mode)).toMatchObject({
+          ok: true,
+        });
+        const persisted = JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8'));
+        expect(persisted['enso-settings'].state.codeSearchAccountKey).toBe('devin');
+        expect(persisted['enso-settings'].state.disabledBuiltinTools).toContain('code_search');
+      } finally {
+        settings.patchSettingsState('codeSearchAccountKey', null);
+        settings.patchSettingsState('disabledBuiltinTools', ['memory', 'computer', 'code_search']);
+        settings.flushSettings();
+      }
+    }
+  );
+
+  it.each(['merge', 'replace'] as const)(
     '子模型禁用状态经便携导出和 %s 导入后实际落盘',
     async (mode) => {
       const providers = [

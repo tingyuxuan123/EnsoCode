@@ -260,6 +260,10 @@ Enso 不调 pi 的 `bindExtensions`，pi 不发 `session_start`/`session_shutdow
 
 ## 异步资源替换与取消
 
+内置 `code_search` 的职责、默认关闭、云端数据边界和检索预算见
+[内置代码搜索](code-search.md)。它复用 Devin 账号，不另建凭据存储；搜索失败不得
+删除普通聊天的共享凭据。
+
 - 缓存失效比较实际有效配置；Provider 的 ID 不变，不代表端点或凭证未变，删除记录也必须失效。
 - 重配、刷新和关闭都要使旧初始化失效；成功、失败及 `finally` 只允许当前任务发布状态，过期资源须释放。
 - 发出 abort 不等于文件 I/O 已结束。同目录下载重启前等待旧任务收尾，不能仅删除 `running` 后立即复用 `.part`。
