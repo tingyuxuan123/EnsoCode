@@ -1,0 +1,143 @@
+name: Build Personal Mac
+
+# 只产出供证书所有者验收的 arm64 包，不向正式更新源发布。
+on:
+  workflow_dispatch:
+    inputs:
+      certificate_sha1:
+        description: 'Expected signing certificate SHA-1 (must match the installed app)'
+        required: true
+        type: string
+        default: CB0DAF252F47DC25E63BCBE4F8D533A5B58844E7
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-mac-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-personal-mac:
+    # 避免在任意分支的代码中使用个人签名私钥。
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run release gates
+        run: pnpm release:check
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Build app
+        run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Import personal signing certificate
+        env:
+          LOCAL_SIGNING_CERTIFICATE: ${{ secrets.LOCAL_SIGNING_CERTIFICATE }}
+          LOCAL_SIGNING_PASSWORD: ${{ secrets.LOCAL_SIGNING_PASSWORD }}
+          EXPECTED_SHA1: ${{ inputs.certificate_sha1 }}
+        run: |
+          set -euo pipefail
+          : "${LOCAL_SIGNING_CERTIFICATE:?Missing LOCAL_SIGNING_CERTIFICATE secret}"
+          : "${LOCAL_SIGNING_PASSWORD:?Missing LOCAL_SIGNING_PASSWORD secret}"
+          [[ "$EXPECTED_SHA1" =~ ^[A-F0-9]{40}$ ]] || {
+            echo "Expected certificate SHA-1 must be 40 uppercase hexadecimal characters."
+            exit 1
+          }
+          umask 077
+          KEYCHAIN_PATH="$RUNNER_TEMP/personal-signing.keychain-db"
+          P12_PATH="$RUNNER_TEMP/personal-signing.p12"
+          CERT_PATH="$RUNNER_TEMP/personal-signing.pem"
+          OPENSSL="$(brew --prefix openssl@3)/bin/openssl"
+          printf '%s' "$LOCAL_SIGNING_CERTIFICATE" | base64 --decode > "$P12_PATH"
+          "$OPENSSL" pkcs12 -legacy -in "$P12_PATH" -clcerts -nokeys \
+            -passin env:LOCAL_SIGNING_PASSWORD -out "$CERT_PATH"
+          ACTUAL_SHA1=$("$OPENSSL" x509 -in "$CERT_PATH" -noout -fingerprint -sha1 \
+            | cut -d= -f2 | tr -d ':')
+          [ "$ACTUAL_SHA1" = "$EXPECTED_SHA1" ] || {
+            echo "Certificate does not match the installed app's expected signing identity."
+            exit 1
+          }
+          KEYCHAIN_PASSWORD=$("$OPENSSL" rand -hex 32)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$LOCAL_SIGNING_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$CERT_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | grep -F "$EXPECTED_SHA1" > /dev/null
+          echo "MAC_SIGNING_IDENTITY=$EXPECTED_SHA1" >> "$GITHUB_ENV"
+          rm -f "$P12_PATH"
+
+      - name: Build personal Mac package
+        run: >-
+          pnpm exec electron-builder --mac --arm64 --publish never
+          --config electron-builder.personal.yml
+          -c.mac.identity="$MAC_SIGNING_IDENTITY" -c.mac.notarize=false
+
+      - name: Verify personal Mac package
+        run: |
+          set -euo pipefail
+          APP=dist/mac-arm64/EnsoCode.app
+          codesign --verify --deep --strict "$APP"
+          REQUIREMENT="identifier \"com.j3n5en.enso-code\" and certificate root = H\"$MAC_SIGNING_IDENTITY\""
+          codesign --verify -R="$REQUIREMENT" "$APP"
+          node scripts/release.mjs verify dist
+          DMG=$(find dist -maxdepth 1 -name '*.dmg' -type f | head -1)
+          test -n "$DMG"
+          hdiutil verify "$DMG"
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
+            scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
+
+      - name: Clean personal signing material
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/personal-signing.pem" ]; then
+            sudo security remove-trusted-cert -d "$RUNNER_TEMP/personal-signing.pem" || true
+          fi
+          rm -f "$RUNNER_TEMP/personal-signing.p12" "$RUNNER_TEMP/personal-signing.pem"
+          if [ -f "$RUNNER_TEMP/personal-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/personal-signing.keychain-db"
+          fi
+
+      - name: Upload personal test package
+        uses: actions/upload-artifact@v6
+        with:
+          name: personal-mac-arm64-${{ github.run_number }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Explain personal build boundary
+        run: |
+          echo '### Personal self-signed Mac test build' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Download the artifact below. This workflow does not publish a Release or install an update.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Only Macs trusting the same certificate can use these packages. Automatic upgrade still needs end-to-end acceptance.' >> "$GITHUB_STEP_SUMMARY"

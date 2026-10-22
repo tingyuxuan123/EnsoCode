@@ -1,0 +1,6 @@
+# 个人自签名包需首次手动安装；正式包仍使用 electron-builder.yml。
+extends: ./electron-builder.yml
+publish:
+  - provider: generic
+    url: https://raw.githubusercontent.com/tingyuxuan123/EnsoCode/personal-updates/
+    useMultipleRangeRequest: false

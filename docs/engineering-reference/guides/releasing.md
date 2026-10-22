@@ -54,6 +54,43 @@ security find-identity -v -p codesigning   # 应出现 1 valid identities found
 旧应用的 requirement 已写死 cdhash，Squirrel 无法自替换；此后的同签名构建才能自动更新。
 自签名证书只在信任该证书的机器上有效，不能作为对外分发方案，也不解除 Gatekeeper 隔离提示。
 
+#### GitHub Actions 个人自签名测试构建
+
+`.github/workflows/build-personal-mac.yml` 是独立、仅手动触发的 Mac arm64 测试流程，
+使用 `electron-builder.personal.yml` 写入隔离的 generic 更新源，不替代正式 `Build`，
+不创建或公开 Release，不更新正式 latest。使用方式：
+
+1. 将当前安装版本对应的证书及私钥导出为带密码的 `.p12`。把 Base64 内容存入仓库
+   Actions Secret `LOCAL_SIGNING_CERTIFICATE`，导出密码存入 `LOCAL_SIGNING_PASSWORD`。
+   不要把 `.p12`、私钥、密码提交到仓库或发到聊天中。
+2. workflow 合入 `main` 后，在 Actions → **Build Personal Mac** → **Run workflow**，
+   分支选 `main`。`certificate_sha1` 填当前安装应用签名证书的 SHA-1（40 位大写十六进制，
+   可从 `codesign -d -r- /Applications/EnsoCode.app` 的 `certificate root` 获取并转大写）。
+   名称相同不代表同一证书，重新生成证书也不能兼容旧签名。
+3. 流程先跑完整检查、构建，再导入临时钥匙串；核对证书指纹、配置签名信任后显式选择该身份，
+   关闭公证，验证包的哈希、签名要求、DMG 和原生依赖。签名材料在成功或失败后都清理。
+4. 成功后下载 `personal-mac-arm64-<run number>` artifact（保留 7 天），这只表示构建与静态验证通过。
+   草稿和 Actions artifacts 均不会被普通自动更新发现；不能把下载产物等同于已安装或自动升级成功。
+   新版必须高于已安装版本，并另行验收个人测试更新源及完整升级链路。正式对外 latest 仍遵循
+   本文的 Developer ID、公证与发布授权要求。
+
+经用户明确授权个人通道测试时，允许将验收后的同证书包公开为 **个人 prerelease**，
+不能设为正式 latest。首次正常退出后手动安装个人包（例如 0.2.14），才能读取个人更新源；
+仍使用正式 GitHub provider 的旧包不会自动切换。后续个人包仍须递增版本（例如 0.2.15）。
+
+- 个人 release tag 为 `personal-v<version>`（不会触发正式 `v*` 构建）；产物先建草稿上传，
+  校验后用 `--prerelease --latest=false` 公开，不覆盖已公开版本。不要把个人 tag 交给正式版本校验。
+- `node scripts/personal-release.mjs <artifact目录> <feed目录>` 先校验本地文件哈希，再生成
+  `latest-mac.yml`，其中下载 URL 固定指向同仓库对应的 `personal-v<version>` 资产。
+  正式 `release.mjs` 仍拒绝任意远程 URL，不能为个人源放宽它的安全边界。
+- 只有对应资产公开且重新下载校验成功后，才把生成的清单提交到独立的 `personal-updates`
+  分支。个人包读取 `https://raw.githubusercontent.com/tingyuxuan123/EnsoCode/personal-updates/`，
+  正式包仍读取原 GitHub latest，两者互不替代。此分支清单是可推进的通道指针，不是安装包。
+- 用户手动执行第一次安装和后续软件内更新；不要强杀承载会话的进程、热替换应用或提前报告升级成功。
+
+该流程只允许运行 `main`，权限仅 `contents: read`，不读取正式 Apple 签名 Secrets。
+证书持有者仍须审查 `main` 上会执行的代码及仓库写权限：CI 中能访问私钥的恶意代码可能盗取私钥。
+
 GitHub Actions Secrets（仅在仓库设置中配置，不写代码、日志或聊天）：
 
 - `APPLE_CERTIFICATE`：包含私钥的 Developer ID Application `.p12` 的 base64。
