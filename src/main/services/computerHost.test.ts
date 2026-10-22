@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(async () => {}) },
@@ -55,6 +55,10 @@ describe('ComputerHost', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('run 执行 guest，frames 在同会话后续调用里仍在', async () => {
     const backend = new FakeDesktopBackend();
     const host = new ComputerHost(() => backend);
@@ -105,18 +109,34 @@ describe('ComputerHost', () => {
   });
 
   it('打开辅助功能设置不弹阻塞 TCC', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     const host = new ComputerHost(() => new FakeDesktopBackend());
-    await host.openPermissionSettings('accessibility');
+    await expect(host.openPermissionSettings('accessibility')).resolves.toEqual({ ok: true });
     expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
     expect(openMacPrivacySettings).toHaveBeenCalledWith('accessibility');
   });
 
   it('打开屏幕录制设置不阻塞在截屏 TCC', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     const host = new ComputerHost(() => new FakeDesktopBackend());
-    await host.openPermissionSettings('screen');
+    await expect(host.openPermissionSettings('screen')).resolves.toEqual({ ok: true });
     expect(desktopCapturer.getSources).not.toHaveBeenCalled();
     expect(openMacPrivacySettings).toHaveBeenCalledWith('screen');
   });
+
+  it.each(['linux', 'win32'] as const)(
+    '%s 上拒绝打开 macOS 权限设置且不触发系统权限请求',
+    async (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform);
+      const host = new ComputerHost(() => new FakeDesktopBackend());
+      for (const kind of ['screen', 'accessibility'] as const) {
+        await expect(host.openPermissionSettings(kind)).resolves.toMatchObject({ ok: false });
+      }
+      expect(openMacPrivacySettings).not.toHaveBeenCalled();
+      expect(desktopCapturer.getSources).not.toHaveBeenCalled();
+      expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
+    }
+  );
 
   it('非只读占用桌面，Esc 中止等待', async () => {
     const events: string[] = [];
