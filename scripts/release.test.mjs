@@ -116,6 +116,9 @@ test('个人自签名构建仅手动触发，验明证书身份且不发布 Rele
   assert.equal(imported.env.EXPECTED_SHA1, `\${{ inputs.certificate_sha1 }}`);
   assert.match(imported.run, /\^\[A-F0-9\]\{40\}\$/);
   assert.match(imported.run, /find-identity/);
+  // 钥匙串导出的自签名证书不一定被 PKCS#12 标成 client certificate。
+  assert.match(imported.run, /pkcs12[^\n]*-in/);
+  assert.doesNotMatch(imported.run, /-clcerts/);
   assert.match(imported.run, /sudo security add-trusted-cert -d/);
   const build = steps.find((step) => step.name === 'Build personal Mac package');
   assert.match(build.run, /--mac --arm64 --publish never/);

@@ -68,7 +68,7 @@ jobs:
           CERT_PATH="$RUNNER_TEMP/personal-signing.pem"
           OPENSSL="$(brew --prefix openssl@3)/bin/openssl"
           printf '%s' "$LOCAL_SIGNING_CERTIFICATE" | base64 --decode > "$P12_PATH"
-          "$OPENSSL" pkcs12 -legacy -in "$P12_PATH" -clcerts -nokeys \
+          "$OPENSSL" pkcs12 -legacy -in "$P12_PATH" -nokeys \
             -passin env:LOCAL_SIGNING_PASSWORD -out "$CERT_PATH"
           ACTUAL_SHA1=$("$OPENSSL" x509 -in "$CERT_PATH" -noout -fingerprint -sha1 \
             | cut -d= -f2 | tr -d ':')
