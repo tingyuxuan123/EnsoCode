@@ -320,8 +320,10 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
 `browserHost.ts` 持有 `persist:enso[-dev]-browser` 独立 session 与 tab 表（按 agent
 `sessionId` 记「当前 tab」）。worker 经 `browser-invoke` 事件调用，Main 回 `browser-result`。
 
-- URL 门在 `@shared/browser/urlPolicy`：只放 http(s)；`will-navigate` / `will-redirect` /
-  `setWindowOpenHandler` 都过同一道。
+- URL 门在 `@shared/browser/urlPolicy`；Main 的 `browserFileRoot.assertBrowserUrl` 追加当前可信
+  本地会话的工作区边界与 realpath 校验，允许 http(s) 和工作区内现存的普通文件，拒绝符号链接
+  逃逸、目录和缺失文件。模型导航、手动导航、页内跳转、重定向、弹窗和 file 子资源请求
+  都复用这一校验；file URL 不进持久化历史或标签恢复。
 - 模型可用的 `browser_cdp` 只走 `@shared/browser/cdpPolicy.assertAllowedCdpMethod`：给调试面
   （Runtime / DOM / CSS / Profiler / Performance / Log / Network.enable），拒 `Input.*`、Cookie、
   `Page.navigate`、下载、`Target.*` / `Browser.*` / `Storage.*`。点击 / 输入 / 导航一律走专用工具，

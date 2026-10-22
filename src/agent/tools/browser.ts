@@ -280,7 +280,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     define(
       'browser_navigate',
       'navigate',
-      'Open an absolute HTTP(S) URL and reveal it to the user. Localhost requires no approval. Read browser_snapshot or browser_read next.',
+      'Open an HTTP(S) URL or an existing file:// URL inside the current local workspace and reveal it to the user. Files outside the workspace are denied. Localhost requires no approval. Read browser_snapshot or browser_read next.',
       { url: string, newTab: boolean },
       ['url'],
       { newTab: false }

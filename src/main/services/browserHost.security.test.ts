@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -84,7 +84,7 @@ it('file 导航清除旧 HTTP 持久化；请求与页内导航守住工作区�
   const callback = vi.fn();
   mock.request({ url: 'file:///etc/passwd', webContentsId: 42 }, callback);
   expect(callback).toHaveBeenCalledWith({ cancel: true });
-  await expect(host.navigate('conversation', file)).rejects.toThrow();
+  await expect(host.navigate('conversation', 'file:///etc/passwd')).rejects.toThrow();
   await expect(host.userNavigate('tab', 'other-conversation', file)).rejects.toThrow(/owner/);
   expect(mock.clearHistory).toHaveBeenCalledOnce();
   host.goBack('tab');
@@ -98,4 +98,36 @@ it('file 导航清除旧 HTTP 持久化；请求与页内导航守住工作区�
   symlinkSync('/etc/passwd', join(mock.dir, 'index.html'));
   mock.request({ url: file, webContentsId: 42 }, callback);
   expect(callback).toHaveBeenLastCalledWith({ cancel: true });
+});
+
+it('模型导航可预览当前工作区文件，但不读取越界、缺失、目录或符号链接逃逸目标', async () => {
+  const root = join(mock.dir, 'workspace');
+  mkdirSync(root);
+  const preview = join(root, 'preview.html');
+  const outside = join(mock.dir, 'outside.html');
+  writeFileSync(preview, '<h1>Workspace preview</h1>');
+  writeFileSync(outside, 'private');
+  symlinkSync(outside, join(root, 'escape.html'));
+  setBrowserFileRootResolver((id) => (id === 'preview-conversation' ? root : null));
+  const host = new BrowserHost();
+  const file = pathToFileURL(preview).href;
+
+  // browser_navigate 实际进入的 Main 分派路径，而不仅是手动地址栏路径。
+  await expect(
+    host.invoke('preview-conversation', 'navigate', { url: file })
+  ).resolves.toMatchObject({
+    url: file,
+  });
+  expect(mock.url).toBe(file);
+
+  for (const target of [outside, root, join(root, 'missing.html'), join(root, 'escape.html')]) {
+    await expect(
+      host.invoke('preview-conversation', 'navigate', { url: pathToFileURL(target).href })
+    ).rejects.toThrow(/security restriction/i);
+    expect(mock.url).toBe(file);
+  }
+  await expect(host.invoke('unbound-conversation', 'navigate', { url: file })).rejects.toThrow(
+    /security restriction/i
+  );
+  expect(mock.url).toBe(file);
 });
