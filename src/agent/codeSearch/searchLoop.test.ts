@@ -71,6 +71,127 @@ describe('runCodeSearch 循环', () => {
     expect(result.files[0]!.path).toBe('a.ts');
   });
 
+  it.each([
+    {},
+    { command: { op: 'readfile', path: '/codebase/private.ts', start: 1, end: 1 } },
+    { command2: { op: 'readfile', path: '/codebase/private.ts', start: 1, end: 1 } },
+    {
+      command1: { op: 'readfile', path: '/codebase/private.ts', start: 1, end: 1 },
+      shell: 'cat /codebase/private.ts',
+    },
+    {
+      command1: { op: 'readfile', path: '/codebase/private.ts', start: 1, end: 1 },
+      command17: { op: 'ls' },
+    },
+  ])('批次字段错误时整批不执行，允许模型在原预算内改正：%j', async (invalid) => {
+    // 真实失败：外层 query/path 合法，内部检索模型却发了不符合批次 schema 的参数。
+    write('private.ts', 'SHOULD_NOT_REACH_CLOUD\n');
+    write('a.ts', 'verified needle\n');
+    const completion = scripted([
+      () => command(invalid),
+      (_system, messages) => {
+        expect(messages.at(-1)).toMatchObject({ role: 'tool' });
+        expect(messages.at(-1)?.content).toContain('No commands were executed');
+        expect(messages.at(-1)?.content).toContain('command1');
+        expect(JSON.stringify(messages)).not.toContain('SHOULD_NOT_REACH_CLOUD');
+        return command({
+          command1: { op: 'readfile', path: '/codebase/a.ts', start: 1, end: 1 },
+        });
+      },
+      (_system, messages) => {
+        expect(messages.at(-1)?.content).toContain('verified needle');
+        return answer([{ path: '/codebase/a.ts', ranges: [{ start: 1, end: 1 }] }]);
+      },
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.status).toBe('success');
+    expect(result.files[0]?.ranges[0]?.content).toContain('verified needle');
+    expect(completion.calls).toBe(3);
+  });
+
+  it('内部模型超量发出编号命令时只执行前四条，明确告知截断并返回 partial', async () => {
+    // 参考实现的真实兼容点：模型会一次返回 command1…command8；不能因此丢弃整个搜索。
+    for (let i = 1; i <= 4; i++) write(`a${i}.ts`, `ADMITTED_${i}\n`);
+    write('overflow.ts', 'SHOULD_NOT_REACH_CLOUD\n');
+    const completion = scripted([
+      () =>
+        command({
+          command1: { op: 'readfile', path: '/codebase/a1.ts', start: 1, end: 1 },
+          command2: { op: 'readfile', path: '/codebase/a2.ts', start: 1, end: 1 },
+          command3: { op: 'readfile', path: '/codebase/a3.ts', start: 1, end: 1 },
+          command4: { op: 'readfile', path: '/codebase/a4.ts', start: 1, end: 1 },
+          command5: { op: 'readfile', path: '/codebase/overflow.ts', start: 1, end: 1 },
+          command6: { op: 'bash', command: 'echo forbidden' },
+          command8: { op: 'readfile', path: '/codebase/../outside.ts' },
+          command16: null,
+        }),
+      (_system, messages) => {
+        const output = messages.at(-1)?.content ?? '';
+        expect(output).toContain('[PARTIAL]');
+        expect(output).toContain('Commands beyond command4 were not executed');
+        for (let i = 1; i <= 4; i++) expect(output).toContain(`ADMITTED_${i}`);
+        expect(JSON.stringify(messages)).not.toContain('SHOULD_NOT_REACH_CLOUD');
+        return answer([{ path: '/codebase/a1.ts', ranges: [{ start: 1, end: 1 }] }]);
+      },
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.status).toBe('partial');
+    expect(result.files[0]?.ranges[0]?.content).toContain('ADMITTED_1');
+    expect(result.warnings.join('\n')).toContain('command4');
+    expect(completion.calls).toBe(2);
+  });
+
+  it('超量批次的前四条中有坏参数时整批仍先拒绝，不执行其中的合法命令', async () => {
+    write('a.ts', 'SHOULD_NOT_REACH_CLOUD\n');
+    const completion = scripted([
+      () =>
+        command({
+          command1: { op: 'readfile', path: '/codebase/a.ts', start: 1, end: 1 },
+          command2: { op: 'bash' },
+          command5: { op: 'ls' },
+        }),
+      (_system, messages) => {
+        expect(messages.at(-1)?.content).toContain('No commands were executed');
+        expect(JSON.stringify(messages)).not.toContain('SHOULD_NOT_REACH_CLOUD');
+        return answer([]);
+      },
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.status).toBe('no_matches');
+    expect(completion.calls).toBe(2);
+  });
+
+  it('反复发出错误批次不会增加 6+2 轮预算，也不会执行其中的合法命令', async () => {
+    write('private.ts', 'SHOULD_NOT_REACH_CLOUD\n');
+    const completion = scripted([
+      (_system, messages) => {
+        expect(JSON.stringify(messages)).not.toContain('SHOULD_NOT_REACH_CLOUD');
+        return command({
+          command1: { op: 'readfile', path: '/codebase/private.ts', start: 1, end: 1 },
+          extra: true,
+        });
+      },
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result).toMatchObject({ status: 'error', code: 'bounds', files: [] });
+    expect(completion.calls).toBe(8);
+  });
+
+  it('批次纠正期间取消后不再执行模型随后返回的命令', async () => {
+    write('a.ts', 'needle\n');
+    const caller = new AbortController();
+    const completion = scripted([
+      () => command({ command: 'readfile /codebase/a.ts' }),
+      () => {
+        caller.abort();
+        return command({ command1: { op: 'readfile', path: '/codebase/a.ts' } });
+      },
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, caller.signal);
+    expect(result).toMatchObject({ status: 'error', code: 'cancelled', files: [] });
+    expect(completion.calls).toBe(2);
+  });
+
   it('未知工具直接拒绝且不执行任何命令', async () => {
     write('a.ts', 'needle\n');
     const completion = scripted([() => '[TOOL_CALLS] shell{"command":"rm -rf /"}']);
