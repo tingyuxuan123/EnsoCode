@@ -1,0 +1,13 @@
+version: 0.2.16
+files:
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.16/EnsoCode-0.2.16-arm64-mac.zip
+    sha512: awj9AHc9MNVpXcX4beGyofwXmqbkCRz6jNf+X+BsdqkfikidpzRv219hkciPcHqK3ucr/DPyEiVjyDrdyNunrg==
+    size: 141802051
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.16/EnsoCode-0.2.16-arm64.dmg
+    sha512: bdTXtVp+WeNR+dLR9UkFPSo/D+celLB2hVrWCwmnBOdNM/cS54fHwYQWuHiYh2QOIkngWL1Wq1K3OVw5ZlIm6w==
+    size: 142031921
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.16/EnsoCode-0.2.16-arm64-mac.zip
+sha512: awj9AHc9MNVpXcX4beGyofwXmqbkCRz6jNf+X+BsdqkfikidpzRv219hkciPcHqK3ucr/DPyEiVjyDrdyNunrg==
+releaseDate: 2026-10-22T06:48:06.383Z
+releaseName: EnsoCode 0.2.16 — 个人测试
+releaseNotes: 个人测试通道 0.2.16：仅供信任 EnsoCode Local Signing 证书的 Mac 使用。不是正式发布。
