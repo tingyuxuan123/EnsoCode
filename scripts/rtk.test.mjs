@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseManifest, prepareRtk, resourceBinaryPath, targetFor } from './rtk.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -92,6 +93,66 @@ test('bounds a stalled download with an abort timeout', async () => {
           new Promise((_resolve, reject) => {
             signal.addEventListener('abort', () => reject(signal.reason), { once: true });
           }),
+      }),
+      /Timed out downloading RTK.*after 5ms/
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('a stalled download settles even when the subprocess has no other active handles', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'enso-rtk-process-'));
+  try {
+    const script = `
+      import assert from 'node:assert/strict';
+      import { prepareRtk } from ${JSON.stringify(pathToFileURL(path.join(root, 'scripts/rtk.mjs')).href)};
+      await assert.rejects(prepareRtk({
+        root: ${JSON.stringify(temporaryRoot)},
+        platform: 'darwin', arch: 'arm64', manifest: ${JSON.stringify(manifest)},
+        downloadTimeoutMs: 20,
+        fetchImpl: async (_url, { signal }) => new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+      }), /Timed out downloading RTK.*after 20ms/);
+      // An early failure must clear the referenced 60s timer and let this child exit.
+      await assert.rejects(prepareRtk({
+        root: ${JSON.stringify(temporaryRoot)},
+        platform: 'darwin', arch: 'arm64', manifest: ${JSON.stringify(manifest)},
+        downloadTimeoutMs: 60_000,
+        fetchImpl: async () => ({ ok: false, status: 503 }),
+      }), /HTTP 503/);
+      console.log('timeout-settled');
+    `;
+    assert.equal(
+      execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+        encoding: 'utf8',
+        timeout: 5_000,
+      }).trim(),
+      'timeout-settled'
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('the same download timeout also bounds a stalled response body', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'enso-rtk-body-'));
+  try {
+    await assert.rejects(
+      prepareRtk({
+        root: temporaryRoot,
+        platform: 'darwin',
+        arch: 'arm64',
+        manifest,
+        downloadTimeoutMs: 5,
+        fetchImpl: async (_url, { signal }) => ({
+          ok: true,
+          arrayBuffer: () =>
+            new Promise((_resolve, reject) => {
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+            }),
+        }),
       }),
       /Timed out downloading RTK.*after 5ms/
     );

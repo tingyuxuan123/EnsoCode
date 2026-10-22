@@ -151,11 +151,21 @@ export async function prepareRtk({
   if ((await fileSha256(destination)) === target.binarySha256) return destination;
 
   await rm(destination, { force: true });
-  let response;
+  // AbortSignal.timeout uses an unref'ed timer: without an active socket (e.g. a
+  // mocked fetch in CI), Node can exit before the promised deadline settles.
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(new DOMException('RTK download timed out', 'TimeoutError')),
+    downloadTimeoutMs
+  );
+  let archive;
   try {
-    response = await fetchImpl(`${checkedManifest.baseUrl}/${target.asset}`, {
-      signal: AbortSignal.timeout(downloadTimeoutMs),
+    const response = await fetchImpl(`${checkedManifest.baseUrl}/${target.asset}`, {
+      signal: controller.signal,
     });
+    if (!response.ok)
+      throw new Error(`Failed to download RTK ${target.asset}: HTTP ${response.status}`);
+    archive = Buffer.from(await response.arrayBuffer());
   } catch (error) {
     if (error?.name === 'TimeoutError') {
       throw new Error(`Timed out downloading RTK ${target.asset} after ${downloadTimeoutMs}ms`, {
@@ -165,10 +175,9 @@ export async function prepareRtk({
     throw new Error(`Failed to download RTK ${target.asset}: ${error?.message ?? String(error)}`, {
       cause: error,
     });
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!response.ok)
-    throw new Error(`Failed to download RTK ${target.asset}: HTTP ${response.status}`);
-  const archive = Buffer.from(await response.arrayBuffer());
   const actualArchiveSha = sha256(archive);
   if (actualArchiveSha !== target.sha256) {
     throw new Error(

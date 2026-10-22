@@ -129,6 +129,16 @@ gh run view <run-id> --repo "$REPO" --log-failed  # 仅失败时
 两架构 Mac ZIP、`latest*.yml`、`SHA256SUMS` 齐全。下载并重新校验后才进入安装验收。
 不要反复触发重复构建；权限不足或平台构建失败时报告具体阻塞和失败步骤，勿提前公开。
 
+### CI 测试在本地通过、远程被取消
+
+先看 `gh run view <run-id> --log-failed`，不要把 lint 的 info 当作真正失败项。
+若 Node 测试报 `Promise resolution is still pending but the event loop has already resolved`，
+检查所等待的超时是否只有 `AbortSignal.timeout` / `unref()` 计时器，且模拟请求没有真实网络句柄。
+RTK 下载采用会保活的计时器，并在读取响应体结束或失败后 `finally` 清理；独立子进程测试
+验证“没有其它活动句柄仍能超时”和“提前失败后进程能立即退出”。不要靠跳过测试或增加随意 sleep 修复。
+尽量同时用 `.nvmrc` 指定的 Node 与开发机 Node 运行脚本测试。修复后递增版本并创建新 tag，
+重新运行旧 tag 的任务仍会使用旧源码，不能带入新修复。
+
 ## 结束时必须交代
 
 向用户分别说明并提供证据，不用一句“更新好了”代替：
