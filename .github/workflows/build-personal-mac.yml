@@ -137,14 +137,8 @@ jobs:
 
       - name: Clean personal signing material
         if: always()
-        run: |
-          if [ -f "$RUNNER_TEMP/personal-signing.pem" ]; then
-            sudo security remove-trusted-cert -d "$RUNNER_TEMP/personal-signing.pem" || true
-          fi
-          rm -f "$RUNNER_TEMP/personal-signing.p12" "$RUNNER_TEMP/personal-signing.pem"
-          if [ -f "$RUNNER_TEMP/personal-signing.keychain-db" ]; then
-            security delete-keychain "$RUNNER_TEMP/personal-signing.keychain-db"
-          fi
+        timeout-minutes: 2
+        run: node scripts/personal-signing.mjs
 
       - name: Upload personal test package
         uses: actions/upload-artifact@v6
@@ -279,6 +273,5 @@ jobs:
 
       - name: Clean public verification certificate
         if: always()
-        run: |
-          sudo security remove-trusted-cert -d build/personal-signing.pem || true
-          sudo security delete-certificate -Z "$EXPECTED_SHA1" /Library/Keychains/System.keychain || true
+        timeout-minutes: 2
+        run: node scripts/personal-signing.mjs --public

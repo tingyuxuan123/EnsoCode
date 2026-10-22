@@ -180,9 +180,13 @@ test('个人 tag 自动构建，受信 main 校验先于证书使用，手动构
   }
   const cleanup = steps.find((step) => step.name === 'Clean personal signing material');
   assert.equal(cleanup.if, 'always()');
-  assert.match(cleanup.run, /sudo security remove-trusted-cert -d/);
-  assert.match(cleanup.run, /delete-keychain/);
-  assert.match(cleanup.run, /rm -f/);
+  assert.equal(cleanup['timeout-minutes'], 2);
+  assert.match(cleanup.run, /node scripts\/personal-signing\.mjs/);
+  const publicCleanup = workflow.jobs['publish-personal'].steps.find(
+    (step) => step.name === 'Clean public verification certificate'
+  );
+  assert.equal(publicCleanup['timeout-minutes'], 2);
+  assert.match(publicCleanup.run, /node scripts\/personal-signing\.mjs --public/);
   assert.doesNotMatch(JSON.stringify(workflow), /APPLE_CERTIFICATE/);
   const publicCert = await readFile(
     new URL('../build/personal-signing.pem', import.meta.url),
@@ -194,6 +198,93 @@ test('个人 tag 自动构建，受信 main 校验先于证书使用，手动构
     new X509Certificate(publicCert).fingerprint.replaceAll(':', ''),
     workflow.env.EXPECTED_SHA1
   );
+});
+
+const signingCleanup = async () => {
+  const file = new URL('./personal-signing.mjs', import.meta.url);
+  assert.ok(existsSync(file), '需要有界、非交互的 CI 签名材料清理器');
+  return import(file.href);
+};
+
+test('CI 清理的系统命令会在超时后真正终止，不只让等待 Promise 超时', async () => {
+  const { runCleanupCommand } = await signingCleanup();
+  const result = await runCleanupCommand(
+    process.execPath,
+    ['-e', 'setInterval(() => {}, 1000)'],
+    100
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.timedOut, true);
+  assert.throws(() => process.kill(result.pid, 0), { code: 'ESRCH' });
+});
+
+test('sudo 内部也有硬截止，不依赖普通用户终止 root 子进程', {
+  skip: process.platform === 'win32',
+}, async () => {
+  const { runCleanupCommand } = await signingCleanup();
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-signing-sudo-'));
+  const previousPath = process.env.PATH;
+  const output = path.join(dir, 'args.json');
+  try {
+    // Fake sudo records argv only; this test never requests privileges or touches a keychain.
+    await writeFile(
+      path.join(dir, 'sudo'),
+      `#!${process.execPath}\nrequire('fs').writeFileSync(${JSON.stringify(output)},JSON.stringify(process.argv.slice(2)));\n`,
+      { mode: 0o700 }
+    );
+    process.env.PATH = `${dir}${path.delimiter}${previousPath}`;
+    assert.equal(
+      (await runCleanupCommand('sudo', ['-n', 'security', 'remove-trusted-cert'], 1000)).ok,
+      true
+    );
+    const args = JSON.parse(await readFile(output, 'utf8'));
+    assert.deepEqual(args.slice(0, 3), ['-n', '/usr/bin/perl', '-e']);
+    assert.match(args[3], /alarm.*exec/);
+    assert.deepEqual(args.slice(4), ['1', 'security', 'remove-trusted-cert']);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('清理命令即使超时也先删除私钥包，随后移除独立钥匙串与证书文件', async () => {
+  const { cleanupPersonalSigning } = await signingCleanup();
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-signing-cleanup-'));
+  const files = ['personal-signing.p12', 'personal-signing.keychain-db', 'personal-signing.pem'];
+  try {
+    for (const file of files) await writeFile(path.join(dir, file), 'fixture');
+    const seen = [];
+    const warnings = await cleanupPersonalSigning({
+      tempDir: dir,
+      run(command, args, timeoutMs) {
+        assert.equal(existsSync(path.join(dir, 'personal-signing.p12')), false);
+        seen.push({ command, args, timeoutMs });
+        return { ok: false, timedOut: true };
+      },
+    });
+    assert.ok(warnings.length > 0);
+    for (const file of files) assert.equal(existsSync(path.join(dir, file)), false);
+    assert.ok(seen.every((call) => call.timeoutMs > 0 && call.timeoutMs <= 15_000));
+    assert.ok(seen.some((call) => call.command === 'sudo' && call.args[0] === '-n'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('清理只操作 RUNNER_TEMP 中的专用文件，未创建签名材料时不调用钥匙串命令', async () => {
+  const { cleanupPersonalSigning } = await signingCleanup();
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-signing-cleanup-empty-'));
+  try {
+    assert.deepEqual(
+      await cleanupPersonalSigning({ tempDir: dir, run: () => assert.fail('不得调用') }),
+      []
+    );
+    await assert.rejects(cleanupPersonalSigning({ tempDir: '' }));
+    await assert.rejects(cleanupPersonalSigning({ tempDir: 'relative' }));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('个人发布仅 tag 触发写权限，下载验收后公开并推进清单，不改正式 latest', async () => {

@@ -53,6 +53,12 @@ CI 结束才判断成功；queued / in_progress / artifact 上传成功都不是
 匹配失败必须停止，不关闭签名校验、不重新生成身份、不输出私钥或密码。
 所有签名材料在成功或失败后清理；CI 不读取正式 Apple 签名 Secrets。
 
+0.2.19 的 CI 已通过构建、签名和原生依赖验收，但在清理步骤挂起直到 job 超时，未上传或发布。
+macOS `security` / trustd 的清理命令不得无界等待：`scripts/personal-signing.mjs` 先删 P12，
+每条命令限时 10 秒并终止进程组，最后无条件删除独立临时钥匙串及 sidecar 文件；
+`sudo -n` 禁止交互，step 另设 2 分钟上限。公钥信任清理失败可警告，但私钥文件删除失败必须失败。
+不要把“清理挂起”误报成构建或签名失败；也不要仅用 Promise 超时而留下原命令继续运行。
+
 构建 job 只有 `contents: read`；只有依赖成功构建的 tag 发布 job 有 `contents: write`。
 使用私钥之前检查 tag 对应提交已进入 main，且 tag 与版本一致。持有仓库写权限的人仍能改动 workflow，
 证书所有者必须审查会在 CI 执行的代码；祖先校验不能替代仓库权限保护。
