@@ -315,9 +315,11 @@ export const pageScrollScript = (opts: {
   direction?: string;
   amount?: number;
 }): string => {
-  const amount = typeof opts.amount === 'number' && Number.isFinite(opts.amount) ? Math.min(Math.abs(opts.amount), 10000) : 400;
+  const amount =
+    typeof opts.amount === 'number' && Number.isFinite(opts.amount)
+      ? Math.min(Math.abs(opts.amount), 10000)
+      : 400;
   const dir = opts.direction === 'up' || opts.direction === 'left' ? -1 : 1;
-  const axis = opts.direction === 'left' || opts.direction === 'right' ? 'left' : 'top';
   if (opts.ref) {
     return `(async () => {
       ${settleFramesSrc}

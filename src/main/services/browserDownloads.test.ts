@@ -360,7 +360,10 @@ describe('BrowserDownloads', () => {
     rmSync(blocked);
     mkdirSync(blocked);
     await manager.flush();
-    const restored = new BrowserDownloads({ filePath: join(blocked, 'downloads.json'), downloadDir });
+    const restored = new BrowserDownloads({
+      filePath: join(blocked, 'downloads.json'),
+      downloadDir,
+    });
     expect(restored.query(owner.conversationId, {}).items[0].receivedBytes).toBe(45);
     expect(readdirSync(blocked)).toEqual(['downloads.json']);
     restored.dispose();

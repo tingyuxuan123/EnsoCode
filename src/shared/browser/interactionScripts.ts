@@ -42,15 +42,35 @@ export interface BrowserWaitRequest {
   timeoutMs: number;
 }
 export function parseBrowserWait(raw: unknown): BrowserWaitRequest {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('wait params must be an object');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    throw new Error('wait params must be an object');
   const p = raw as Record<string, unknown>;
-  if (p.kind !== 'text' && p.kind !== 'element' && p.kind !== 'url') throw new Error('Invalid wait kind');
-  if (p.kind === 'element' ? typeof p.ref !== 'string' || !p.ref : typeof p.text !== 'string' || !p.text) throw new Error('wait requires text or ref');
+  if (p.kind !== 'text' && p.kind !== 'element' && p.kind !== 'url')
+    throw new Error('Invalid wait kind');
+  if (
+    p.kind === 'element'
+      ? typeof p.ref !== 'string' || !p.ref
+      : typeof p.text !== 'string' || !p.text
+  )
+    throw new Error('wait requires text or ref');
   const state = p.state ?? 'present';
-  if (state !== 'present' && state !== 'absent' && state !== 'visible' && state !== 'hidden') throw new Error('Invalid wait state');
+  if (state !== 'present' && state !== 'absent' && state !== 'visible' && state !== 'hidden')
+    throw new Error('Invalid wait state');
   const timeoutMs = p.timeoutMs ?? 10000;
-  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) throw new Error('wait timeoutMs must be between 1 and 30000');
-  return { kind: p.kind, ...(typeof p.ref === 'string' ? { ref: p.ref } : {}), ...(typeof p.text === 'string' ? { text: p.text } : {}), state, timeoutMs };
+  if (
+    typeof timeoutMs !== 'number' ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > 30000
+  )
+    throw new Error('wait timeoutMs must be between 1 and 30000');
+  return {
+    kind: p.kind,
+    ...(typeof p.ref === 'string' ? { ref: p.ref } : {}),
+    ...(typeof p.text === 'string' ? { text: p.text } : {}),
+    state,
+    timeoutMs,
+  };
 }
 export function pageWaitScript(request: BrowserWaitRequest): string {
   return `(() => {
@@ -68,9 +88,29 @@ export function parseBrowserKey(key: string): { keyCode: string; modifiers: stri
   const pieces = key.split('+');
   const last = pieces.pop();
   if (!last) throw new Error('Invalid key');
-  const aliases: Record<string, string> = { ctrl: 'control', control: 'control', cmd: 'meta', command: 'meta', meta: 'meta', alt: 'alt', option: 'alt', shift: 'shift' };
+  const aliases: Record<string, string> = {
+    ctrl: 'control',
+    control: 'control',
+    cmd: 'meta',
+    command: 'meta',
+    meta: 'meta',
+    alt: 'alt',
+    option: 'alt',
+    shift: 'shift',
+  };
   const modifiers = pieces.map((part) => aliases[part.toLowerCase()]);
   if (modifiers.some((part) => !part)) throw new Error('Invalid key modifier');
-  const keys: Record<string, string> = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Escape: 'Escape', Esc: 'Escape', Space: 'Space', ' ': 'Space', Return: 'Enter', Delete: 'Delete' };
+  const keys: Record<string, string> = {
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+    Escape: 'Escape',
+    Esc: 'Escape',
+    Space: 'Space',
+    ' ': 'Space',
+    Return: 'Enter',
+    Delete: 'Delete',
+  };
   return { keyCode: keys[last] ?? last, modifiers };
 }

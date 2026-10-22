@@ -1,11 +1,15 @@
 import type { BrowserDevice } from '../types/browser';
 
-export function effectiveBrowserViewport(device: BrowserDevice | undefined, panel: BrowserViewport | null) {
+export function effectiveBrowserViewport(
+  device: BrowserDevice | undefined,
+  panel: BrowserViewport | null
+) {
   const width = device?.enabled ? (device.width ?? 1280) : (panel?.width ?? 1280);
   const height = device?.enabled ? (device.height ?? 800) : (panel?.height ?? 800);
   const fit = panel ? Math.min(panel.width / width, panel.height / height, 1) : 1;
   return {
-    width, height,
+    width,
+    height,
     deviceScaleFactor: device?.enabled ? (device.deviceScaleFactor ?? 1) : 1,
     mobile: device?.enabled ? (device.mobile ?? false) : false,
     touch: device?.enabled ? (device.touch ?? false) : false,
