@@ -824,8 +824,8 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
                     className={cn(
                       'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs',
                       doc.rel === activeRel
-                        ? 'bg-muted font-medium'
-                        : 'text-muted-foreground hover:bg-muted/50'
+                        ? 'bg-accent font-medium'
+                        : 'text-muted-foreground hover:bg-accent/50'
                     )}
                     onClick={() => {
                       if (!renamingHere) setActiveRel(doc.rel);
@@ -1362,8 +1362,8 @@ function FileRow({
       aria-current={active ? 'true' : undefined}
       style={{ paddingLeft: 20 + depth * 12, opacity: isDragging ? 0.4 : undefined }}
       className={cn(
-        'flex w-full cursor-default items-center gap-1.5 px-2 py-1 text-left hover:bg-muted/60',
-        active && 'bg-muted font-medium text-foreground'
+        'flex w-full cursor-default items-center gap-1.5 px-2 py-1 text-left hover:bg-accent/50',
+        active && 'bg-accent font-medium text-foreground'
       )}
       onClick={() => handlers.onOpen(rel)}
     >
