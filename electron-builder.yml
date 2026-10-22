@@ -98,13 +98,13 @@ mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
-  # 本地没有 Developer ID 证书时，electron-builder 会直接跳过签名，产物只是
-  # 「改过 Info.plist 的 Electron.app 拷贝」（Info.plist=not bound、Sealed Resources=none），
-  # TCC 的本地网络/麦克风授权因此对不上运行中的实体。
-  # '-' = ad-hoc 重签：不需要证书，但能封存资源并绑定 Info.plist，让 Identifier
-  # 变成 com.j3n5en.enso-code。仅供本地/草稿测试；CI 有正式证书时必须通过
-  # -c.mac.identity 显式覆盖，CSC_IDENTITY_AUTO_DISCOVERY 不会覆盖这里的 '-'。
-  identity: '-'
+  # 不写死 identity，交给 electron-builder 自动发现：先找 "Developer ID Application:"
+  # 前缀的证书，找不到时回退到任意非 Apple 的 codesigning 身份（本机自签名证书）。
+  # 写死 '-' 会让每个构建的 designated requirement 绑到自身 cdhash，新构建不满足旧
+  # 应用的要求，Squirrel 装不上更新（详见 docs/engineering-reference/guides/releasing.md）。
+  # 完全没有证书的机器请显式传 -c.mac.identity=-：不签名会得到「改过 Info.plist 的
+  # Electron.app 拷贝」（Info.plist=not bound、Sealed Resources=none），TCC 的本地网络/
+  # 麦克风授权对不上运行实体，arm64 上还可能直接无法启动。CI 始终显式传 -c.mac.identity。
   # electron-builder 默认三项 + 麦克风
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist

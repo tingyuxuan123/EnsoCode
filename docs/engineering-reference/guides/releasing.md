@@ -23,9 +23,36 @@
 
 ## macOS 签名
 
-本地 `mac.identity: '-'` 仅用于 ad-hoc 完整性签名，不等于 Developer ID，也不是公证。
-`CSC_IDENTITY_AUTO_DISCOVERY` 不会覆盖显式的 `'-'`。CI 读取证书后通过
-`-c.mac.identity` 显式选择 Developer ID Application，执行公证与签名验证。
+`electron-builder.yml` 不写死 `mac.identity`：electron-builder 先找 `Developer ID Application:`
+前缀的证书，找不到时回退到任意非 Apple 的 codesigning 身份（本机自签名证书）。CI 读取证书后
+通过 `-c.mac.identity` 显式选择 Developer ID Application，执行公证与签名验证。
+完全没有证书的机器必须显式传 `-c.mac.identity=-` 走 ad-hoc 完整性签名：不签名只剩「改过
+Info.plist 的 Electron.app 拷贝」，TCC 授权对不上运行实体，arm64 上还可能无法启动。
+
+### 本地自签名证书（免 Developer ID，仅本机自动更新可用）
+
+ad-hoc 的 designated requirement 绑当前构建的 cdhash，永远无法自动更新。要在**本机**把自动更新
+链路跑通，可在登录钥匙串建一张自签名 Code Signing 证书；requirement 会变成
+`identifier "com.j3n5en.enso-code" and certificate root = H"<证书哈希>"`，跨构建稳定。
+
+```bash
+# 生成（openssl 3 必须用 -legacy，否则 security import 报 MAC verification failed）
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes \
+  -subj "/CN=EnsoCode Local Signing/O=EnsoCode Local/C=CN" \
+  -addext "basicConstraints=critical,CA:false" -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=critical,codeSigning"
+openssl pkcs12 -export -inkey key.pem -in cert.pem -out id.p12 -passout pass:<pw> \
+  -name "EnsoCode Local Signing" -legacy -macalg sha1 \
+  -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES
+security import id.p12 -k ~/Library/Keychains/login.keychain-db -P <pw> -T /usr/bin/codesign
+security add-trusted-cert -r trustRoot -p codeSign \
+  -k ~/Library/Keychains/login.keychain-db cert.pem
+security find-identity -v -p codesigning   # 应出现 1 valid identities found
+```
+
+之后 `pnpm build:mac` 会自动选中它。**从 ad-hoc 版本切到自签名版本必须手动覆盖安装一次**，
+旧应用的 requirement 已写死 cdhash，Squirrel 无法自替换；此后的同签名构建才能自动更新。
+自签名证书只在信任该证书的机器上有效，不能作为对外分发方案，也不解除 Gatekeeper 隔离提示。
 
 GitHub Actions Secrets（仅在仓库设置中配置，不写代码、日志或聊天）：
 
