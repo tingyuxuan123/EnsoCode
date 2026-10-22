@@ -643,7 +643,7 @@ function UpdateSection() {
           version: status.info?.version ?? '',
         });
       case 'error':
-        return t('Update check failed');
+        return `${t('Update failed')}${status.error ? `: ${status.error}` : ''}`;
       default:
         return null;
     }
@@ -662,7 +662,7 @@ function UpdateSection() {
           <p className="text-sm">
             {t('Current version')} · {APP_VERSION}
           </p>
-          {text && <p className="mt-0.5 truncate text-xs text-muted-foreground">{text}</p>}
+          {text && <p className="mt-0.5 break-words text-xs text-muted-foreground">{text}</p>}
         </div>
         {status?.status === 'downloaded' ? (
           <Button

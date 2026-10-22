@@ -64,6 +64,21 @@ GitHub Actions Secrets（仅在仓库设置中配置，不写代码、日志或�
 从现有 ad-hoc 应用迁移到正式签名版可能需要首次手动安装，再验证后续同签名更新。
 不要禁用签名或完整性校验来强行实现自动升级。
 
+### 下载完成但“重启更新”无反应
+
+macOS 的 ZIP 下载完成仅表示 electron-updater 已缓存文件；Squirrel 仍须验证签名并准备安装。
+ad-hoc 签名的 designated requirement 常绑定当前构建的 cdhash，新构建不满足旧应用的要求，
+即使两个包各自的 `codesign --verify` 都通过，也不能据此认定可自动替换。
+
+先检查 `~/Library/Caches/enso-code-updater/pending/update-info.json` 与缓存 ZIP 的 SHA-512，
+解压到独立临时目录，用 `codesign -d -r- <旧应用>` / `<新应用>` 比较要求，再使用
+`codesign --verify -R='<旧应用的 designated requirement>' <新应用>` 验证兼容性。
+验证失败时手动覆盖安装，不能关闭签名校验。不要打印本地代理 URL 中的临时认证信息。
+
+应用必须允许下载后的安装错误覆盖 `downloaded` 状态，取消退出标记与空闲安装重试，向设置页和
+更新横幅显示真实错误；不能用“下载完成后忽略其它状态”的守卫吞掉原生安装器错误。
+回归：`src/main/services/updater/AutoUpdater.test.ts`、`src/renderer/components/app/UpdateBanner.test.tsx`。
+
 ## 一轮发布
 
 1. 独立提交修复与发布流程变更；升级版本，执行 `pnpm release:check`。

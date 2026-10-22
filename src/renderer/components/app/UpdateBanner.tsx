@@ -1,5 +1,5 @@
 import type { UpdateStatus } from '@shared/types/updater';
-import { Download, RotateCw, X } from 'lucide-react';
+import { AlertTriangle, Download, RotateCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/i18n';
 
@@ -12,32 +12,43 @@ export function UpdateBanner() {
   useEffect(() => {
     return window.electronAPI.updater.onStatus((next) => {
       setStatus(next);
-      if (next.status === 'downloaded' || next.status === 'downloading') setDismissed(false);
+      if (next.status === 'downloaded' || next.status === 'downloading' || next.status === 'error')
+        setDismissed(false);
     });
   }, []);
 
   if (dismissed || !status) return null;
-  if (status.status !== 'downloaded' && status.status !== 'downloading') return null;
+  if (
+    status.status !== 'downloaded' &&
+    status.status !== 'downloading' &&
+    status.status !== 'error'
+  )
+    return null;
 
   const version = status.info?.version;
   const isDownloaded = status.status === 'downloaded';
+  const isError = status.status === 'error';
 
   return (
     <div className="border-b border-blue-500/20 bg-background">
       <div className="flex items-center gap-2 bg-blue-500/8 px-4 py-1.5 text-xs">
-        {isDownloaded ? (
+        {isError ? (
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+        ) : isDownloaded ? (
           <RotateCw className="h-3.5 w-3.5 shrink-0 text-blue-500" />
         ) : (
           <Download className="h-3.5 w-3.5 shrink-0 animate-pulse text-blue-500" />
         )}
-        <span className="min-w-0 flex-1">
-          {isDownloaded
-            ? t('New version {{version}} is ready — restart to update.', {
-                version: version ?? '',
-              })
-            : t('Downloading update… {{percent}}%', {
-                percent: Math.round(status.progress?.percent ?? 0),
-              })}
+        <span className="min-w-0 flex-1 break-words">
+          {isError
+            ? `${t('Update failed')}${status.error ? `: ${status.error}` : ''}`
+            : isDownloaded
+              ? t('New version {{version}} is ready — restart to update.', {
+                  version: version ?? '',
+                })
+              : t('Downloading update… {{percent}}%', {
+                  percent: Math.round(status.progress?.percent ?? 0),
+                })}
         </span>
         {isDownloaded && (
           <button

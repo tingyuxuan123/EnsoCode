@@ -72,7 +72,7 @@ class AutoUpdaterService {
       this.sendStatus({ status: 'downloaded', info: projectInfo(info) });
       this.notifyIdleStateChanged();
     });
-    autoUpdater.on('error', (error) => this.sendStatus({ status: 'error', error: error.message }));
+    autoUpdater.on('error', (error) => this.handleUpdateError(error));
 
     autoUpdater.autoDownload = autoUpdateEnabled;
 
@@ -99,11 +99,29 @@ class AutoUpdaterService {
   }
 
   private sendStatus(status: UpdateStatus): void {
-    // 下载完成后不再发别的状态,避免更新提示被后续检查冲掉
-    if (this.updateDownloaded && status.status !== 'downloaded') return;
+    // 下载完成后忽略迟到的检查状态，但原生安装器的错误必须可见。
+    if (this.updateDownloaded && status.status !== 'downloaded' && status.status !== 'error')
+      return;
     for (const win of BrowserWindow.getAllWindows()) {
       sendToWindow(win, IPC_CHANNELS.UPDATER_STATUS, status);
     }
+  }
+
+  private handleUpdateError(error: unknown): void {
+    if (this.updateDownloaded || this.quittingForUpdate) {
+      // A downloaded ZIP is not proof that Squirrel accepted its signature.
+      // Do not leave the app in quit-bypass mode or retry installation on exit.
+      this.updateDownloaded = false;
+      this.quittingForUpdate = false;
+      autoUpdater.autoInstallOnAppQuit = false;
+      this.idleGate.markFailed();
+      this.clearIdleTimer();
+      writeTrayReenterAfterUpdate(false);
+    }
+    this.sendStatus({
+      status: 'error',
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   async checkForUpdates(): Promise<void> {
@@ -130,9 +148,13 @@ class AutoUpdaterService {
   }
 
   quitAndInstall(): void {
-    if (!this.updateDownloaded) return;
+    if (!this.updateDownloaded || this.quittingForUpdate) return;
     this.quittingForUpdate = true;
-    autoUpdater.quitAndInstall();
+    try {
+      autoUpdater.quitAndInstall();
+    } catch (error) {
+      this.handleUpdateError(error);
+    }
   }
 
   setAutoUpdateEnabled(enabled: boolean): void {

@@ -102,6 +102,7 @@ export const zhTranslations: Record<string, string> = {
   'New version {{version}} is ready — restart to update.':
     '新版本 {{version}} 已就绪 —— 重启以更新。',
   'Update check failed': '检查更新失败',
+  'Update failed': '更新失败',
   'Restart to update': '重启更新',
   'Automatic updates': '自动更新',
   'Download and install updates automatically': '自动下载并安装更新',
