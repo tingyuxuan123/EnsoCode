@@ -8,5 +8,6 @@
 - `guides/`：跨层改动、复用、根因分析和动手前检查。
 - `big-question/`：项目真实踩过的高代价陷阱。
 - `testing.md`：Vitest、TDD、测试边界和真机验证要求。
+- [桌面版发布与更新验收](guides/releasing.md)：版本、签名、发布门禁、草稿构建、安装验收及常见阻塞。
 
 日常开发先读 `AGENTS.md` 与 `docs/engineering-guidelines.md`；需要深入某一层时再读本目录对应文档。

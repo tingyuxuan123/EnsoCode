@@ -4,8 +4,8 @@ description: >
   Navigate EnsoCode's long-term engineering conventions, layer boundaries, testing rules,
   historical decisions, and high-cost pitfalls. Use before non-trivial or cross-layer changes,
   when adding IPC or session/worker behavior, when debugging state/history/input issues,
-  when a fix reveals a reusable rule, or when the user asks to search or capture project knowledge.
-  项目知识导航、踩坑检索、根因沉淀、TDD 和工程约定。
+  when a fix reveals a reusable rule, when preparing a desktop release/update, or when the user asks to search or capture project knowledge.
+  项目知识导航、踩坑检索、根因沉淀、TDD、发版、推送更新、打包升级和工程约定。
 ---
 
 # Project Knowledge
@@ -25,6 +25,7 @@ description: >
 | UI、弹窗、窗口、样式 | `docs/engineering-reference/renderer/components.md`、`dialogs.md`、`styling.md`、`main/windows.md` |
 | 纯逻辑、协议、解析器、路径校验 | `docs/engineering-reference/testing.md` |
 | 怀疑已有类似实现 | `docs/engineering-reference/guides/code-reuse-thinking-guide.md` |
+| 发版、推送更新、打包升级、GitHub Actions / Release | `docs/engineering-reference/guides/releasing.md` |
 
 动手前至少回答：行为差距是什么、行为真正属于哪一层、哪些文件必须改、哪些相邻问题明确不做。
 
