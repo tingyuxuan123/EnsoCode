@@ -7,8 +7,9 @@ import type { WorktreeStatus } from '@shared/types/worktree';
 import { worktreeReadyToAutoCleanup } from './worktree';
 
 /**
- * 侧栏会话分组的排序纯函数。各栏目内按最后活跃时间倒序
+ * 侧栏会话分组的排序纯函数。历史栏目内按最后活跃时间倒序
  * (最后一条消息 timestamp,无消息回落 createdAt);置顶只改分组内先后。
+ * 活跃栏保持 order 的稳定目录顺序，避免并发会话交替输出时上下换位。
  * 归档与置顶/项目分组互斥:archived 的会话只出现在「已归档」栏目。
  * 项目归档(archivedProjectIds)是项目层标记:该项目全部会话整组进「已归档」栏目,
  * 会话自身的 archived/pinned 标记原样保留,恢复项目后侧栏与归档前完全一致。
@@ -130,39 +131,39 @@ export function projectConversationIds(
 }
 
 /**
- * 全部置顶会话 id(跨项目)。manualIds 是用户拖拽过的手动顺序:
- * 命中的按其顺序排前,未收录的新置顶按活跃时间追加末尾,失效 id 忽略。
- * 归档的与 order 之外的会话(coworker)不参与。
+ * 蓝/绿/红活跃态:运行、待确认、未读失败、未读。失败查看过即退出(红点仍在项目组里)。
+ * 只筛选、不按输出时间重排：多会话交替产生消息时行位置与 Cmd+数字 槽位保持稳定。
  */
-/** 蓝/绿/红活跃态:运行、待确认、未读失败、未读。失败查看过即退出(红点仍在项目组里) */
 export function activeConversationIds(
   order: readonly string[],
   conversations: Conversations,
   archivedProjectIds: readonly string[] = []
 ): string[] {
   const archivedProjects = new Set(archivedProjectIds);
-  return sortByActivity(
-    order.filter((id) => {
-      const conversation = conversations[id];
-      if (!conversation || conversation.archived === true) return false;
-      if (archivedProjects.has(conversation.projectId)) return false;
-      const tone = conversationDotTone({
-        status: conversation.status ?? 'idle',
-        spawning: conversation.spawning,
-        unread: conversation.unread,
-        pendingAskCount: conversation.pendingAsks?.length ?? 0,
-        hasRunningChild: conversationHasRunningChild(
-          { ...conversation, status: conversation.status ?? 'idle' },
-          conversations as Record<string, { status: string; spawning?: boolean } | undefined>
-        ),
-      });
-      if (tone === 'failed') return conversation.unread === true;
-      return tone === 'running' || tone === 'waiting' || tone === 'unread';
-    }),
-    conversations
-  );
+  return order.filter((id) => {
+    const conversation = conversations[id];
+    if (!conversation || conversation.archived === true) return false;
+    if (archivedProjects.has(conversation.projectId)) return false;
+    const tone = conversationDotTone({
+      status: conversation.status ?? 'idle',
+      spawning: conversation.spawning,
+      unread: conversation.unread,
+      pendingAskCount: conversation.pendingAsks?.length ?? 0,
+      hasRunningChild: conversationHasRunningChild(
+        { ...conversation, status: conversation.status ?? 'idle' },
+        conversations as Record<string, { status: string; spawning?: boolean } | undefined>
+      ),
+    });
+    if (tone === 'failed') return conversation.unread === true;
+    return tone === 'running' || tone === 'waiting' || tone === 'unread';
+  });
 }
 
+/**
+ * 全部置顶会话 id(跨项目)。manualIds 是用户拖拽过的手动顺序:
+ * 命中的按其顺序排前,未收录的新置顶按活跃时间追加末尾,失效 id 忽略。
+ * 归档的与 order 之外的会话(coworker)不参与。
+ */
 export function pinnedConversationIds(
   order: readonly string[],
   conversations: Conversations,

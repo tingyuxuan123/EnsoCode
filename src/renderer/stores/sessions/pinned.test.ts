@@ -547,15 +547,45 @@ describe('activeConversationIds', () => {
     'archivedFail',
   ];
 
-  it('只收蓝绿红活跃态(含未读绿点、未读失败),按最后活跃时间倒序', () => {
+  it('只收蓝绿红活跃态(含未读绿点、未读失败),保持会话目录顺序', () => {
     expect(activeConversationIds(liveOrder, live)).toEqual([
-      'idle',
-      'fail',
       'run',
       'wait',
+      'fail',
+      'idle',
       'spawn',
       'childParent',
     ]);
+  });
+
+  it('多个会话交替产生新消息时不交换活跃栏位置', () => {
+    // 真实场景：两个 agent 交替输出 / 返回工具结果，末消息时间轮流变成最新。
+    const sessions = {
+      a: conv('p1', 2, 20, { status: 'running' }),
+      b: conv('p1', 1, 10, { status: 'running' }),
+    };
+    const ids = ['a', 'b'];
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
+    sessions.b = { ...sessions.b, messages: [{ timestamp: 30 }] };
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
+    sessions.a = { ...sessions.a, messages: [{ timestamp: 40 }] };
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
+    sessions.b = { ...sessions.b, messages: [{ timestamp: 50 }] };
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
+  });
+
+  it('冷会话活跃时间更新、正文回填和运行结束变未读都不改变相对位置', () => {
+    const sessions = {
+      a: conv('p1', 2, undefined, { status: 'running', lastActiveAt: 20 }),
+      b: conv('p2', 1, undefined, { status: 'running', lastActiveAt: 10 }),
+    };
+    const ids = ['a', 'b'];
+    sessions.b = { ...sessions.b, lastActiveAt: 30 };
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
+    sessions.b = { ...sessions.b, messages: [{ timestamp: 40 }] };
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
+    sessions.b = { ...sessions.b, status: 'idle', unread: true };
+    expect(activeConversationIds(ids, sessions)).toEqual(ids);
   });
 
   it('已读的失败会话退出活跃栏', () => {
@@ -564,9 +594,9 @@ describe('activeConversationIds', () => {
 
   it('归档会话与归档项目不进活跃栏', () => {
     expect(activeConversationIds(liveOrder, live, ['p2'])).toEqual([
-      'idle',
       'run',
       'wait',
+      'idle',
       'spawn',
       'childParent',
     ]);
