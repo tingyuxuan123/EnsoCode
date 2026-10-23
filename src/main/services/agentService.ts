@@ -326,7 +326,13 @@ export class AgentService implements AgentServiceContract {
         return failure('invalid-state', 'requestId and message are required.');
       }
       if (agent.value.status === 'closed') {
-        return failure('invalid-state', 'Agent is dismissed.');
+        // task 跑完一轮就被关闭回收，是最常见的"向已关闭 Agent 发送"；给出可执行的下一步
+        return failure(
+          'invalid-state',
+          agent.value.mode === 'task'
+            ? 'This task Agent already finished its only Run and is closed. Use report with its runId to read the result; for follow-up work spawn a new Agent, or spawn with mode=coworker to keep context across Runs.'
+            : 'This coworker Agent is closed (dismissed or its session ended). Use report with a runId to read past results; spawn a new Agent to continue.'
+        );
       }
       const active = agent.value.activeRunId ? this.runs.get(agent.value.activeRunId) : undefined;
       if (request.expectedRunId && request.expectedRunId !== active?.runId) {

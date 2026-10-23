@@ -493,6 +493,33 @@ describe('AgentService lifecycle', () => {
     expect(runtime.dismiss).toHaveBeenCalledTimes(1);
   });
 
+  it('向已关闭的 Agent 发送时说明原因和下一步：task 只跑一轮，coworker 已被解雇', async () => {
+    const { service } = setup();
+    const task = await service.spawn(spawnRequest());
+    if (!task.ok) throw new Error(task.error);
+    await service.stop({ context, requestId: 'stop-task', runId: task.value.runId });
+    const toTask = await service.send({
+      context,
+      requestId: 'send-task',
+      agentId: task.value.agentId,
+      message: 'follow up',
+    });
+    expect(toTask).toMatchObject({ ok: false, code: 'invalid-state' });
+    expect(!toTask.ok && toTask.error).toMatch(/task.*only Run.*spawn.*coworker/i);
+
+    const coworker = await service.spawn(spawnRequest({ requestId: 'spawn-cw', mode: 'coworker' }));
+    if (!coworker.ok) throw new Error(coworker.error);
+    await service.dismiss({ context, requestId: 'dismiss-cw', agentId: coworker.value.agentId });
+    const toCoworker = await service.send({
+      context,
+      requestId: 'send-cw',
+      agentId: coworker.value.agentId,
+      message: 'more',
+    });
+    expect(toCoworker).toMatchObject({ ok: false, code: 'invalid-state' });
+    expect(!toCoworker.ok && toCoworker.error).toMatch(/closed.*spawn a new/i);
+  });
+
   it('stop 掉 task 唯一的 Run 后关闭实例并回收子会话，不留孤儿', async () => {
     const { service, runtime } = setup();
     const spawned = await service.spawn(spawnRequest());
