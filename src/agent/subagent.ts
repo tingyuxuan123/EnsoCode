@@ -53,15 +53,88 @@ function waitReceiptOf(value: unknown): AgentWaitReceipt | undefined {
   return typeof report?.timedOut === 'boolean' ? (report as AgentWaitReceipt) : undefined;
 }
 
+const OPERATIONS = ['spawn', 'send', 'wait', 'report', 'list', 'message', 'stop', 'dismiss'];
+
 /** 未传 agent_type 时 Main 派发 worker（与 selectHiredAgentType / workflow 同口径） */
 const DEFAULT_AGENT_TYPE = 'worker';
+
+function invalidParams(reason: string): Error {
+  return new Error(`invalid subagent parameters: ${reason}`);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** 模型常把可选字段填成空串：视为未传，而不是整条请求作废 */
+function optionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function nonEmptyText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/** schema 被序列化成 JSON 字符串时先解析；解析不出对象就指明字段 */
+function normalizeSchema(value: unknown): unknown {
+  if (value === undefined || isPlainObject(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (isPlainObject(parsed)) return parsed;
+    } catch {
+      // 落到下面统一报错
+    }
+  }
+  throw invalidParams('schema must be a JSON Schema object.');
+}
+
+function checkGate(value: unknown): void {
+  if (value === undefined) return;
+  if (
+    !isPlainObject(value) ||
+    Object.keys(value).some((key) => key !== 'commandRef') ||
+    !nonEmptyText(value.commandRef)
+  ) {
+    throw invalidParams(
+      'gate must be an object like {"commandRef": "<command id>"}; shell text or argv is not accepted.'
+    );
+  }
+}
+
+/** Agent 与 Run 是两种身份：按操作指出该用哪个，并点名用错的那个 */
+function requireRunId(operation: string, params: Record<string, unknown>): void {
+  if (nonEmptyText(params.runId)) return;
+  const misuse = params.agentId !== undefined ? ', not agentId' : '';
+  throw invalidParams(
+    `${operation} requires runId (the Run id from a spawn/send receipt)${misuse}.`
+  );
+}
+
+function requireAgentId(operation: string, params: Record<string, unknown>): void {
+  if (nonEmptyText(params.agentId)) return;
+  const misuse = params.runId !== undefined ? ', not runId' : '';
+  throw invalidParams(
+    `${operation} requires agentId (the Agent id from the spawn receipt)${misuse}.`
+  );
+}
 
 export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefinition {
   const modelNames = deps.models.map((model) => model.name);
   const typeNames = deps.agentTypes.map((agentType) => agentType.name);
   const defaultAgentType = deps.agentTypes.find((type) => type.name === DEFAULT_AGENT_TYPE);
+  const parsed = (operation: string, candidate: Record<string, unknown>) => {
+    const request = parseAgentControlToolRequest(candidate);
+    if (!request) throw invalidParams(`check the ${operation} fields against the tool schema.`);
+    return request;
+  };
   const normalize = (params: Record<string, unknown>): AgentControlToolRequest | null => {
     const operation = params.operation;
+    if (typeof operation !== 'string' || !OPERATIONS.includes(operation)) {
+      throw invalidParams(`operation must be one of: ${OPERATIONS.join(', ')}.`);
+    }
+    checkGate(params.gate);
+    const schema = normalizeSchema(params.schema);
     if (operation === 'spawn') {
       const agentTypeName = typeof params.agent_type === 'string' ? params.agent_type : undefined;
       const agentType = agentTypeName
@@ -90,7 +163,7 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       }
       const description = typeof params.description === 'string' ? params.description.trim() : '';
       const prompt = typeof params.prompt === 'string' ? params.prompt.trim() : '';
-      const name = typeof params.name === 'string' ? params.name.trim() : '';
+      const name = optionalText(params.name)?.trim() ?? '';
       const label =
         description ||
         name ||
@@ -107,27 +180,30 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       const candidate = {
         operation,
         mode: params.mode ?? 'task',
-        ...(typeof params.name === 'string' ? { name: params.name } : {}),
+        ...(name ? { name } : {}),
         description: label,
         prompt,
         ...(agentTypeName ? { agentType: agentTypeName } : {}),
         ...(modelName ? { model: modelName } : {}),
         ...(thinking ? { thinking } : {}),
         wait: params.wait ?? false,
-        ...(params.schema !== undefined ? { schema: params.schema } : {}),
+        ...(schema !== undefined ? { schema } : {}),
         ...(params.gate !== undefined ? { gate: params.gate } : {}),
       };
-      return parseAgentControlToolRequest(candidate);
+      return parsed(operation, candidate);
     }
     if (operation === 'send') {
-      return parseAgentControlToolRequest({
+      requireAgentId(operation, params);
+      if (!nonEmptyText(params.message)) throw invalidParams('send requires a non-empty message.');
+      const expectedRunId = optionalText(params.expectedRunId);
+      return parsed(operation, {
         operation,
         agentId: params.agentId,
         message: params.message,
         delivery: params.delivery ?? 'auto',
-        ...(params.expectedRunId !== undefined ? { expectedRunId: params.expectedRunId } : {}),
+        ...(expectedRunId ? { expectedRunId } : {}),
         wait: params.wait ?? false,
-        ...(params.schema !== undefined ? { schema: params.schema } : {}),
+        ...(schema !== undefined ? { schema } : {}),
         ...(params.gate !== undefined ? { gate: params.gate } : {}),
       });
     }
@@ -137,7 +213,15 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
         : params.runId !== undefined
           ? [params.runId]
           : [];
-      return parseAgentControlToolRequest({
+      if (runIds.length === 0) {
+        const misuse = params.agentId !== undefined ? ', not agentId' : '';
+        throw invalidParams(
+          `wait requires runId or runIds (Run ids from spawn/send receipts)${misuse}.`
+        );
+      }
+      if (!runIds.every(nonEmptyText)) throw invalidParams('runIds must be non-empty strings.');
+      if (new Set(runIds).size !== runIds.length) throw invalidParams('runIds must be distinct.');
+      return parsed(operation, {
         operation,
         runIds,
         until: params.until ?? 'all',
@@ -145,21 +229,27 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       });
     }
     if (operation === 'report' || operation === 'stop') {
-      return parseAgentControlToolRequest({ operation, runId: params.runId });
+      requireRunId(operation, params);
+      return parsed(operation, { operation, runId: params.runId });
     }
     if (operation === 'dismiss') {
-      return parseAgentControlToolRequest({ operation, agentId: params.agentId });
+      requireAgentId(operation, params);
+      return parsed(operation, { operation, agentId: params.agentId });
     }
     if (operation === 'list') {
-      return parseAgentControlToolRequest({
+      const cursor = optionalText(params.cursor);
+      return parsed(operation, {
         operation,
         ...(params.status !== undefined ? { status: params.status } : {}),
-        ...(params.cursor !== undefined ? { cursor: params.cursor } : {}),
+        ...(cursor ? { cursor } : {}),
         limit: params.limit ?? 20,
       });
     }
     if (operation === 'message') {
-      return parseAgentControlToolRequest({ operation, to: params.to, text: params.text });
+      if (!nonEmptyText(params.to) || !nonEmptyText(params.text)) {
+        throw invalidParams('message requires non-empty to (an agentId) and text.');
+      }
+      return parsed(operation, { operation, to: params.to, text: params.text });
     }
     return null;
   };
@@ -177,6 +267,7 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
     promptGuidelines: [
       'spawn requires non-empty description and prompt. Omit both for every other operation.',
       'Agent and Run are different identities: use runId for wait/report/stop and agentId for send/dismiss.',
+      'A task Agent runs exactly once and closes when its Run ends; for follow-ups spawn a new one (or use mode=coworker) instead of send.',
       "When not to use: if the target is already known, use the direct tool (read for a known path, grep for a specific symbol). Reserve subagents for open-ended work that spans many files, independent work that can run in parallel, or tasks matching an agent type. Once you've delegated a search, don't also run it yourself.",
       'Brief a subagent like a smart colleague who just walked into the room: it has not seen this conversation. State the goal and why, what you already learned or ruled out, and the expected answer shape and length (e.g. "report in under 200 words").',
       'Subagents run in the background and you are notified automatically with a result summary when a Run finishes. Do not wait (wait operation or wait:true) unless your very next step cannot proceed without that result; keep working or reply to the user meanwhile. Do not sleep, poll, or call report/wait on a running Run just to check progress.',

@@ -418,6 +418,68 @@ describe('unified subagent tool', () => {
     );
   });
 
+  it('参数不合法时指出具体字段，Agent 与 Run 身份用错时给出正确字段', async () => {
+    const { deps, tool } = setup();
+    const run = (params: Record<string, unknown>) =>
+      tool.execute('call-invalid', params, undefined, undefined, {} as never);
+    await expect(run({ operation: 'wait', agentId: 'agent-1' })).rejects.toThrow(
+      /wait.*runId.*not agentId/i
+    );
+    await expect(run({ operation: 'report', agentId: 'agent-1' })).rejects.toThrow(
+      /report.*runId.*not agentId/i
+    );
+    await expect(run({ operation: 'stop' })).rejects.toThrow(/stop.*runId/i);
+    await expect(run({ operation: 'send', runId: 'run-1', message: 'go' })).rejects.toThrow(
+      /send.*agentId.*not runId/i
+    );
+    await expect(run({ operation: 'dismiss', runId: 'run-1' })).rejects.toThrow(
+      /dismiss.*agentId.*not runId/i
+    );
+    await expect(run({ operation: 'send', agentId: 'agent-1', message: ' ' })).rejects.toThrow(
+      /message/i
+    );
+    await expect(
+      run({ operation: 'spawn', description: 'x', prompt: 'x', schema: 'not json' })
+    ).rejects.toThrow(/schema.*object/i);
+    await expect(run({ operation: 'wait', runIds: ['r', 'r'] })).rejects.toThrow(/distinct/i);
+    await expect(
+      run({ operation: 'spawn', description: 'x', prompt: 'x', gate: 'pnpm test' })
+    ).rejects.toThrow(/gate.*commandRef/i);
+    await expect(run({ operation: 'nope' })).rejects.toThrow(/operation/i);
+    expect(deps.invoke).not.toHaveBeenCalled();
+  });
+
+  it('可选字符串传空串视为未传，schema 传 JSON 字符串先解析成对象', async () => {
+    const { deps, tool } = setup();
+    const run = (params: Record<string, unknown>) =>
+      tool.execute('call-lenient', params, undefined, undefined, {} as never);
+    await run({
+      operation: 'spawn',
+      name: '',
+      description: 'x',
+      prompt: 'x',
+      schema: '{"type":"object"}',
+    });
+    expect(deps.invoke).toHaveBeenLastCalledWith(
+      {
+        operation: 'spawn',
+        mode: 'task',
+        description: 'x',
+        prompt: 'x',
+        wait: false,
+        schema: { type: 'object' },
+      },
+      undefined
+    );
+    await run({ operation: 'send', agentId: 'a', message: 'go', expectedRunId: '' });
+    expect(deps.invoke).toHaveBeenLastCalledWith(
+      { operation: 'send', agentId: 'a', message: 'go', delivery: 'auto', wait: false },
+      undefined
+    );
+    await run({ operation: 'list', cursor: '' });
+    expect(deps.invoke).toHaveBeenLastCalledWith({ operation: 'list', limit: 20 }, undefined);
+  });
+
   it('wait 超过上限的 timeoutMs 在 schema 校验前截到 10 分钟，不报错', async () => {
     const { tool, deps } = setup();
     expect(
