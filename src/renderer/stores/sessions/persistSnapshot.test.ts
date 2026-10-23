@@ -21,6 +21,15 @@ const conv = (id: string, extra: { title?: string; text?: string } = {}) => ({
 });
 
 describe('cachedPartializeSessions', () => {
+  it('隐藏协作者标签只活在内存，不改变成员持久化', () => {
+    const persisted = cachedPartializeSessions({
+      conversations: { a: { ...conv('a'), coworkerIds: ['child'], hiddenCoworkerIds: ['child'] } },
+      order: ['a'],
+      activeId: 'a',
+    });
+    expect(persisted.conversations.a.hiddenCoworkerIds).toBeUndefined();
+    expect(persisted.conversations.a.coworkerIds).toEqual(['child']);
+  });
   it('preserves empty worktree drafts and their names across serialization', () => {
     const worktree = {
       conversationId: 'a',

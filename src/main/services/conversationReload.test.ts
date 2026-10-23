@@ -18,6 +18,16 @@ const never = async (): Promise<never> => {
 };
 
 describe('reloadConversation 来源选择', () => {
+  it('普通 child 在 worker 退出后回落到 pi 尾窗，保留来源和游标', async () => {
+    const result = await reloadConversation('child', {
+      isLive: () => true,
+      isChild: () => true,
+      reloadLive: async () => ({ ok: false, error: 'Worker exited' }),
+      readHistory: async () => ({ ok: true, source: 'tail', ...tail }),
+      readParentTail: never,
+    });
+    expect(result).toEqual({ ok: true, source: 'tail', ...tail });
+  });
   it('不在 worker 里的根会话 → 读 pi jsonl 尾窗（不碰 safe journal）', async () => {
     const result = await reloadConversation('root', {
       isLive: () => false,
@@ -47,7 +57,7 @@ describe('reloadConversation 来源选择', () => {
       reloadLive: async () => ({ ok: true, snapshot, seq: 9 }),
       readHistory: async () => {
         historyReads++;
-        return { ok: true, projection };
+        return { ok: true, source: 'history', projection };
       },
       readParentTail: never,
     });
@@ -64,7 +74,7 @@ describe('reloadConversation 来源选择', () => {
         liveCalls++;
         return { ok: false, error: 'unused' };
       },
-      readHistory: async () => ({ ok: true, projection }),
+      readHistory: async () => ({ ok: true, source: 'history', projection }),
       readParentTail: never,
     });
     expect(result).toEqual({ ok: true, source: 'history', projection });
@@ -76,7 +86,7 @@ describe('reloadConversation 来源选择', () => {
       isLive: () => true,
       isChild: () => true,
       reloadLive: async () => ({ ok: false, error: 'Timed out' }),
-      readHistory: async () => ({ ok: true, projection }),
+      readHistory: async () => ({ ok: true, source: 'history', projection }),
       readParentTail: never,
     });
     expect(result).toEqual({ ok: true, source: 'history', projection });

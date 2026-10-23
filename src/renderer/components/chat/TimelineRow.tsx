@@ -51,6 +51,7 @@ import {
   memo,
   type ReactNode,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -68,6 +69,7 @@ import {
 } from '@/components/ui/dialog';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { useOauthAccountEmails } from '@/hooks/useOauthAccountEmails';
+import { useSubagentProcess } from '@/hooks/useSubagentProcess';
 import { type TFunction, useI18n } from '@/i18n';
 import { diffCacheKey } from '@/lib/diffCacheKey';
 import { parseMcpToolName } from '@/lib/mcpToolName';
@@ -100,7 +102,7 @@ import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { AskUserResult } from './AskUserResult';
 import { CodeBlock } from './CodeBlock';
 import { ConfirmDialog } from './ConfirmDialog';
-import { useChatHost } from './chatHost';
+import { ChatSessionContext, useChatHost } from './chatHost';
 import { EditDiff } from './EditDiff';
 import { EnsoMark } from './EnsoMark';
 import { DiffCount } from './FlipMetricValue';
@@ -208,6 +210,7 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.ask?.answer === b.ask?.answer &&
         a.ask?.autoSelected === b.ask?.autoSelected &&
         a.subagentOp === b.subagentOp &&
+        a.subagentAgentIds?.join('\0') === b.subagentAgentIds?.join('\0') &&
         JSON.stringify(a.subagentTitles) === JSON.stringify(b.subagentTitles) &&
         a.waiting === b.waiting
       );
@@ -2051,6 +2054,16 @@ export function ReadImagePreview({ path, fallback }: { path: string; fallback: R
 function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   const { t } = useI18n();
   const host = useChatHost();
+  const parentId = useContext(ChatSessionContext) ?? host?.sessionId;
+  const { openableAgentIds, openAgent } = useSubagentProcess(parentId, item.subagentAgentIds ?? []);
+  const singleAgentId =
+    item.subagentAgentIds?.length === 1 && item.subagentOp !== 'wait' && item.subagentOp !== 'list'
+      ? item.subagentAgentIds[0]
+      : undefined;
+  const activateAgent =
+    singleAgentId && openableAgentIds.has(singleAgentId)
+      ? () => openAgent(singleAgentId)
+      : undefined;
   const compactReadOnly = useSettingsStore((s) => s.compactReadOnlyTools);
   const expandLiveEdits = useSettingsStore((s) => s.expandLiveEdits);
   const compact = compactReadOnly && item.name !== 'bash' && isReadOnlyTool(item);
@@ -2165,21 +2178,40 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
         canToggle={expandable}
         title={item.summary}
         onToggle={() => setExpanded((v) => !v)}
+        onActivate={activateAgent}
+        actionLabel={t('View subagent process')}
         actions={
           <>
+            {item.name === 'subagent' &&
+              !activateAgent &&
+              [...openableAgentIds].map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={t('View subagent process')}
+                  data-subagent-open={id}
+                  className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => openAgent(id)}
+                >
+                  <Bot className="size-3" />
+                  {t('View process')}
+                </button>
+              ))}
             {item.state === 'running' && item.callId && !host && (
               <MoveToBackgroundButton callId={item.callId} waiting={Boolean(item.waiting)} />
             )}
-            {(hasDiff || hasWrite || hasFileChanges) && (item.state === 'ok' || hasFileChanges) && (
-              <button
-                type="button"
-                title={t('Open in side panel')}
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-[opacity,color] group-hover/tool:opacity-100 hover:bg-muted hover:text-foreground"
-                onClick={() => addSidePanelChanges()}
-              >
-                <GitCompare className="h-3 w-3" />
-              </button>
-            )}
+            {!host &&
+              (hasDiff || hasWrite || hasFileChanges) &&
+              (item.state === 'ok' || hasFileChanges) && (
+                <button
+                  type="button"
+                  title={t('Open in side panel')}
+                  className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-[opacity,color] group-hover/tool:opacity-100 hover:bg-muted hover:text-foreground"
+                  onClick={() => addSidePanelChanges()}
+                >
+                  <GitCompare className="h-3 w-3" />
+                </button>
+              )}
           </>
         }
       />
@@ -2275,7 +2307,12 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                     </div>
                   )}
                   {subagentReceipt ? (
-                    <SubagentResult view={subagentReceipt} titles={item.subagentTitles} />
+                    <SubagentResult
+                      view={subagentReceipt}
+                      titles={item.subagentTitles}
+                      onOpenAgent={openAgent}
+                      openableAgentIds={openableAgentIds}
+                    />
                   ) : (
                     item.output && (
                       <pre className="px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
@@ -2435,6 +2472,10 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
   const { t } = useI18n();
   const sessionId = useSessionsStore((state) => displayedConversation(state)?.id ?? '');
   const runs = useSubagentRunsStore((state) => state.byConversation[sessionId] ?? NO_RUNS);
+  const { openableAgentIds, openAgent } = useSubagentProcess(
+    sessionId,
+    runs.map((run) => run.agentId)
+  );
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     if (!sessionId) return;
@@ -2444,7 +2485,16 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
       useSubagentRunsStore.getState().replace(sessionId, next);
       setLoaded(true);
     };
-    const load = () => window.electronAPI.agent.subagentProgress(sessionId).then(replace, () => {});
+    const load = () => {
+      const revision = useSubagentRunsStore.getState().revisionByConversation[sessionId] ?? 0;
+      return window.electronAPI.agent.subagentProgress(sessionId).then(
+        (next) => {
+          if ((useSubagentRunsStore.getState().revisionByConversation[sessionId] ?? 0) === revision)
+            replace(next);
+        },
+        () => {}
+      );
+    };
     const unsubscribe = window.electronAPI.agent.onSubagentProgress((push) => {
       if (push.sessionId === sessionId) replace(push.runs);
     });
@@ -2476,6 +2526,15 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
               <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
                 {formatDuration(run.elapsedMs)}
               </span>
+              {openableAgentIds.has(run.agentId) && (
+                <button
+                  type="button"
+                  onClick={() => openAgent(run.agentId)}
+                  className="shrink-0 rounded px-1.5 py-0.5 hover:bg-muted"
+                >
+                  {t('View process')}
+                </button>
+              )}
             </div>
             {run.text && (
               <div className="line-clamp-2 break-words pl-2 text-[11px] text-muted-foreground/80">

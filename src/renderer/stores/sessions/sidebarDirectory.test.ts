@@ -128,7 +128,7 @@ describe('selectCoworkerTabConversations', () => {
     expect(running[0]).toMatchObject({ id: 'child', title: 'worker', status: 'running' });
   });
 
-  it('tab 携带子会话的 task / coworker 模式', () => {
+  it('一次性 task 不再占用顶部标签，持久和旧版 coworker 保留', () => {
     const parent = conv('parent', { coworkerIds: ['task', 'coworker', 'legacy'] });
     const tabs = selectCoworkerTabConversations(
       {
@@ -139,7 +139,38 @@ describe('selectCoworkerTabConversations', () => {
       },
       'parent'
     );
-    expect(tabs.map((tab) => tab.mode)).toEqual(['task', 'coworker', 'coworker']);
+    expect(tabs.map((tab) => tab.id)).toEqual(['coworker', 'legacy']);
+    expect(tabs.map((tab) => tab.mode)).toEqual(['coworker', 'coworker']);
+  });
+
+  it('关闭标签只隐藏视图，恢复列表仍能找到同一个持久实例', () => {
+    const parent = conv('parent', { coworkerIds: ['a', 'b'], hiddenCoworkerIds: ['a'] });
+    const conversations = {
+      parent,
+      a: conv('a', { parentId: 'parent' }),
+      b: conv('b', { parentId: 'parent' }),
+    };
+    expect(selectCoworkerTabConversations(conversations, 'parent').map((c) => c.id)).toEqual(['b']);
+    expect(selectCoworkerTabConversations(conversations, 'parent', true).map((c) => c.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(parent.coworkerIds).toEqual(['a', 'b']);
+  });
+
+  it('已解雇和跨父会话的条目不能作为交互标签重新打开', () => {
+    const parent = conv('parent', { coworkerIds: ['ended', 'foreign', 'history'] });
+    expect(
+      selectCoworkerTabConversations(
+        {
+          parent,
+          ended: conv('ended', { parentId: 'parent', ended: true }),
+          foreign: conv('foreign', { parentId: 'another' }),
+          history: conv('history', { parentId: 'parent', historyOnly: true }),
+        },
+        'parent'
+      )
+    ).toEqual([]);
   });
 
   it('按父会话隔离缓存，交错订阅不会挤掉稳定引用', () => {
@@ -169,11 +200,11 @@ describe('selectCoworkerTabConversations', () => {
   });
 
   it('parent coworkerIds 增删和重排都会立即更新 tab 顺序', () => {
-    const childA = conv('child-a-order', { parentId: 'parent-order' });
-    const childB = conv('child-b-order', { parentId: 'parent-order' });
+    const childA = conv('child-a-order', { parentId: 'parent' });
+    const childB = conv('child-b-order', { parentId: 'parent' });
     const first = selectCoworkerTabConversations(
       {
-        parent: conv('parent-order', { coworkerIds: ['child-a-order'] }),
+        parent: conv('parent', { coworkerIds: ['child-a-order'] }),
         'child-a-order': childA,
         'child-b-order': childB,
       },
@@ -183,7 +214,7 @@ describe('selectCoworkerTabConversations', () => {
 
     const reordered = selectCoworkerTabConversations(
       {
-        parent: conv('parent-order', {
+        parent: conv('parent', {
           coworkerIds: ['child-b-order', 'child-a-order'],
         }),
         'child-a-order': childA,
@@ -195,7 +226,7 @@ describe('selectCoworkerTabConversations', () => {
 
     const removed = selectCoworkerTabConversations(
       {
-        parent: conv('parent-order', { coworkerIds: [] }),
+        parent: conv('parent', { coworkerIds: [] }),
         'child-a-order': childA,
         'child-b-order': childB,
       },

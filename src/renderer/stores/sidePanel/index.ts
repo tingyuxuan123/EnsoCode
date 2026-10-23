@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ScreenRect } from '@/lib/guestViewOcclusion';
 import { useSessionsStore } from '@/stores/sessions';
 import { SIDE_PANEL_VERSION, splitLegacySnapshots } from './migrate';
+import { stripTransientSidePanelLayouts } from './transientPanels';
 import { resizeSidePanelWidth, SIDE_PANEL_DEFAULT_WIDTH } from './width';
 
 export { SIDE_PANEL_DEFAULT_WIDTH, SIDE_PANEL_MIN_WIDTH } from './width';
@@ -178,7 +179,7 @@ export const useSidePanelStore = create<SidePanelState>()(
       partialize: (state) => ({
         lastWidth: state.lastWidth,
         uiByConversation: state.uiByConversation,
-        layouts: state.layouts,
+        layouts: stripTransientSidePanelLayouts(state.layouts),
         changesModeByConversation: state.changesModeByConversation,
       }),
       migrate: (persisted, version) => {

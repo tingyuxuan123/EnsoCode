@@ -1,6 +1,7 @@
 import type { ChildSessionIdentity } from '@shared/builtinAgents';
 import type { CapabilityAskRequest } from '@shared/capabilities/types';
 import type {
+  ChildHistoryResult,
   ConversationReloadResult,
   DispatchMainEvent,
   ParentHistoryTailResult,
@@ -107,11 +108,13 @@ const updateConversationSelection = vi.fn(
   }
 );
 
-const readChildHistory = vi.fn(async (_conversationId: string) => ({
-  ok: false as const,
-  code: 'not-found' as const,
-  error: 'none',
-}));
+const readChildHistory = vi.fn(
+  async (_conversationId: string, _beforeIndex?: number): Promise<ChildHistoryResult> => ({
+    ok: false,
+    code: 'not-found',
+    error: 'none',
+  })
+);
 const dismissCoworker = vi.fn(
   async (): Promise<{ ok: boolean; error?: string }> => ({
     ok: true,
@@ -279,7 +282,8 @@ describe('typed Agent child projection', () => {
     selectConversation.mockClear();
     createConversation.mockClear();
     updateConversationSelection.mockClear();
-    readChildHistory.mockClear();
+    readChildHistory.mockReset();
+    readChildHistory.mockResolvedValue({ ok: false, code: 'not-found', error: 'none' });
     readParentHistoryTail.mockReset();
     readParentHistoryTail.mockResolvedValue({
       ok: false,
@@ -1113,6 +1117,457 @@ describe('typed Agent child projection', () => {
     });
     expect(conversation.messages[0].content).toEqual([{ type: 'text', text: 'restored history' }]);
     expect(conversation.customEntries).toHaveLength(1);
+  });
+
+  describe('子代理只读观察', () => {
+    function seedObserved(started = true) {
+      const identity = childIdentity(1);
+      onAgentEvent?.(reserve(1));
+      sessionsModule.useSessionsStore.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [identity.sessionId]: {
+            ...state.conversations[identity.sessionId],
+            started,
+            spawning: false,
+            status: started ? 'running' : 'idle',
+            sessionFile: '/managed/child.jsonl',
+            child: {
+              ...state.conversations[identity.sessionId].child!,
+              mode: 'task',
+              dispatchOrigin: 'agent-tool',
+            },
+          },
+        },
+      }));
+      return identity;
+    }
+
+    it('typed task 回收只移除活成员，保留可读历史且发送前拒绝', async () => {
+      const identity = seedObserved();
+      onAgentEvent?.({
+        type: 'coworker-update',
+        identity: identity.parent,
+        seq: 2,
+        coworker: {
+          id: identity.sessionId,
+          name: identity.instanceName,
+          status: 'dismissed',
+          createdAt: 0,
+        },
+      });
+      const store = sessionsModule.useSessionsStore;
+      expect(store.getState().conversations[identity.sessionId]).toMatchObject({
+        ended: true,
+        started: false,
+        spawning: false,
+        historyOnly: true,
+        sessionFile: '/managed/child.jsonl',
+      });
+      expect(store.getState().conversations.parent.coworkerIds).not.toContain(identity.sessionId);
+      const before = store.getState().conversations[identity.sessionId].messages;
+      expect(
+        await store
+          .getState()
+          .send(
+            '不应发送',
+            { providerId: 'p', modelId: 'm', cwd: '/workspace' },
+            undefined,
+            identity.sessionId
+          )
+      ).toContain('read-only');
+      expect(store.getState().conversations[identity.sessionId].messages).toBe(before);
+    });
+
+    it('观察保热但不切主会话，多个观察释放最后一个前仍接收正文', async () => {
+      const identity = seedObserved();
+      const store = sessionsModule.useSessionsStore;
+      reloadConversation.mockResolvedValue({ ok: false, error: 'not available' });
+      expect(typeof store.getState().acquireObservation).toBe('function');
+      const releaseA = store.getState().acquireObservation(identity.sessionId);
+      const releaseB = store.getState().acquireObservation(identity.sessionId);
+      await Promise.resolve();
+      expect(store.getState().activeId).toBe('parent');
+      expect(store.getState().conversations.parent.activeTabId).toBeUndefined();
+      expect(reloadConversation).toHaveBeenCalledWith(identity.sessionId);
+      releaseA();
+      releaseA();
+      const aborts = agentAbort.mock.calls.length;
+      const releases = agentRelease.mock.calls.length;
+      try {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(Date.now() + MESSAGE_CACHE_TTL_MS + 1);
+        onAgentEvent?.({
+          type: 'message-upsert',
+          identity,
+          seq: 2,
+          index: 0,
+          message: { role: 'assistant', content: [{ type: 'text', text: '仍在直播' }] },
+        });
+        expect(store.getState().conversations[identity.sessionId].messages[0]?.content).toEqual([
+          { type: 'text', text: '仍在直播' },
+        ]);
+      } finally {
+        releaseB();
+        vi.useRealTimers();
+      }
+      expect(agentAbort.mock.calls.length).toBe(aborts);
+      expect(agentRelease.mock.calls.length).toBe(releases);
+    });
+
+    it('已结束普通 child 从尾窗回放，分页仍走 child 安全入口', async () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      readChildHistory.mockResolvedValueOnce({
+        ok: true,
+        source: 'tail',
+        baseIndex: 1,
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: '结果' }] }],
+      });
+      expect(typeof store.getState().acquireObservation).toBe('function');
+      const release = store.getState().acquireObservation(identity.sessionId);
+      try {
+        await vi.waitFor(() =>
+          expect(store.getState().conversations[identity.sessionId].messages).toHaveLength(1)
+        );
+        expect(store.getState().conversations[identity.sessionId].historyBaseIndex).toBe(1);
+        readChildHistory.mockResolvedValueOnce({
+          ok: true,
+          source: 'tail',
+          baseIndex: 0,
+          messages: [{ role: 'user', content: [{ type: 'text', text: '任务' }] }],
+        });
+        await store.getState().loadOlderHistory(identity.sessionId);
+        expect(readChildHistory).toHaveBeenLastCalledWith(identity.sessionId, 1);
+        expect(
+          store.getState().conversations[identity.sessionId].messages.map((m) => m.role)
+        ).toEqual(['user', 'assistant']);
+      } finally {
+        release();
+      }
+    });
+
+    it('冷读在途 child 已换代时丢弃旧历史', async () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      let finish!: (result: ChildHistoryResult) => void;
+      readChildHistory.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          })
+      );
+      const release = store.getState().acquireObservation(identity.sessionId);
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [identity.sessionId]: {
+            ...state.conversations[identity.sessionId],
+            generation: 'new-generation',
+            started: true,
+            messages: [{ role: 'assistant', content: [{ type: 'text', text: '新代' }] }],
+          },
+        },
+      }));
+      finish({
+        ok: true,
+        source: 'history',
+        projection: {
+          records: [{ type: 'safe-assistant-text', text: '旧代', at: 1 }],
+          partial: false,
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(store.getState().conversations[identity.sessionId].messages[0].content).toEqual([
+        { type: 'text', text: '新代' },
+      ]);
+      expect(store.getState().conversations[identity.sessionId].historyOnly).not.toBe(true);
+      release();
+    });
+
+    it('历史读取失败收口加载并保留原因', async () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      readChildHistory.mockResolvedValueOnce({
+        ok: false,
+        code: 'not-found',
+        error: 'History file is missing.',
+      });
+      const release = store.getState().acquireObservation(identity.sessionId);
+      await vi.waitFor(() =>
+        expect(store.getState().conversations[identity.sessionId].historyError).toBe(
+          'History file is missing.'
+        )
+      );
+      expect(store.getState().conversations[identity.sessionId].historyLoading).not.toBe(true);
+      release();
+    });
+
+    it('手动重读失败保留正文并展示历史错误，再成功时清除', async () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [identity.sessionId]: {
+            ...state.conversations[identity.sessionId],
+            messages: [{ role: 'assistant', content: [{ type: 'text', text: '已有正文' }] }],
+          },
+        },
+      }));
+      reloadConversation.mockResolvedValueOnce({ ok: false, error: '无法读盘' });
+      await store.getState().reloadConversation(identity.sessionId);
+      expect(store.getState().conversations[identity.sessionId].historyError).toBe('无法读盘');
+      expect(store.getState().conversations[identity.sessionId].messages[0].content).toEqual([
+        { type: 'text', text: '已有正文' },
+      ]);
+      reloadConversation.mockResolvedValueOnce({
+        ok: true,
+        source: 'tail',
+        messages: [],
+        baseIndex: 0,
+      });
+      await store.getState().reloadConversation(identity.sessionId);
+      expect(store.getState().conversations[identity.sessionId].historyError).toBeUndefined();
+    });
+
+    it('新代 child 恢复时清除上次只读历史标志', () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [identity.sessionId]: {
+            ...state.conversations[identity.sessionId],
+            historyOnly: true,
+            ended: true,
+          },
+        },
+      }));
+      onAgentEvent?.({
+        type: 'snapshot',
+        partial: true,
+        sessions: [
+          {
+            identity: { ...identity, generation: 'new' },
+            status: 'idle',
+            messages: [],
+            commands: [],
+            child: {
+              ...store.getState().conversations[identity.sessionId].child!,
+              childGeneration: 'new',
+            },
+          },
+        ],
+      });
+      expect(store.getState().conversations[identity.sessionId].historyOnly).not.toBe(true);
+    });
+
+    it('Main 最终验收失败摘要随历史保留，过期 child 代际不能写入', () => {
+      const identity = seedObserved();
+      const store = sessionsModule.useSessionsStore;
+      const run = {
+        runId: 'validated-run',
+        status: 'failed' as const,
+        finishedAt: 100,
+        error: '验收命令失败',
+      };
+      onAgentEvent?.({ type: 'subagent-run-settled', identity, run });
+      expect(store.getState().conversations[identity.sessionId].lastSubagentRun).toEqual(run);
+      const partialize = store.persist.getOptions().partialize!;
+      expect(
+        (partialize(store.getState()) as { conversations: Record<string, unknown> }).conversations[
+          identity.sessionId
+        ]
+      ).toMatchObject({ lastSubagentRun: run });
+      onAgentEvent?.({
+        type: 'subagent-run-settled',
+        identity: { ...identity, generation: 'stale' },
+        run: { ...run, runId: 'old-run', finishedAt: 999 },
+      });
+      expect(store.getState().conversations[identity.sessionId].lastSubagentRun).toEqual(run);
+    });
+
+    it('首次观察补快照期间 task 回收后自动转读冷历史，不停在空窗', async () => {
+      const identity = seedObserved();
+      const store = sessionsModule.useSessionsStore;
+      let finish!: (result: ConversationReloadResult) => void;
+      reloadConversation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          })
+      );
+      reloadConversation.mockResolvedValueOnce({
+        ok: true,
+        source: 'tail',
+        baseIndex: 0,
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: '完整冷历史' }] }],
+      });
+      const release = store.getState().acquireObservation(identity.sessionId);
+      try {
+        onAgentEvent?.({
+          type: 'coworker-update',
+          identity: identity.parent,
+          seq: 2,
+          coworker: {
+            id: identity.sessionId,
+            name: identity.instanceName,
+            status: 'dismissed',
+            createdAt: 0,
+          },
+        });
+        finish({
+          ok: true,
+          source: 'live',
+          seq: 1,
+          snapshot: { identity, status: 'running', messages: [], commands: [] },
+        });
+        await vi.waitFor(() =>
+          expect(store.getState().conversations[identity.sessionId].messages[0]?.content).toEqual([
+            { type: 'text', text: '完整冷历史' },
+          ])
+        );
+        expect(store.getState().conversations[identity.sessionId].started).toBe(false);
+        expect(store.getState().conversations[identity.sessionId].ended).toBe(true);
+      } finally {
+        release();
+      }
+    });
+
+    it('冷读在途仅收到 child-ended 水位推进时仍落地历史', async () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      let finish!: (value: ChildHistoryResult) => void;
+      readChildHistory.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          })
+      );
+      const release = store.getState().acquireObservation(identity.sessionId);
+      try {
+        onAgentEvent?.({ type: 'child-ended', identity, seq: 2, reason: 'dismissed' });
+        finish({
+          ok: true,
+          source: 'tail',
+          baseIndex: 0,
+          messages: [{ role: 'assistant', content: [{ type: 'text', text: '已结束的完整记录' }] }],
+        });
+        await vi.waitFor(() =>
+          expect(store.getState().conversations[identity.sessionId].messages).toHaveLength(1)
+        );
+        expect(store.getState().conversations[identity.sessionId].ended).toBe(true);
+      } finally {
+        release();
+      }
+    });
+
+    it('删除父会话同时清理不再在活成员集合内的历史 child', async () => {
+      const identity = seedObserved(false);
+      const store = sessionsModule.useSessionsStore;
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          parent: { ...state.conversations.parent, coworkerIds: [] },
+          [identity.sessionId]: { ...state.conversations[identity.sessionId], ended: true },
+        },
+      }));
+      store.getState().removeConversation('parent');
+      expect(store.getState().conversations[identity.sessionId]).toBeUndefined();
+    });
+  });
+
+  describe('协作者标签关闭与恢复', () => {
+    function seedTabs() {
+      onAgentEvent?.(reserve(1));
+      const id = childIdentity(1).sessionId;
+      const store = sessionsModule.useSessionsStore;
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          parent: { ...state.conversations.parent, activeTabId: id },
+          [id]: {
+            ...state.conversations[id],
+            spawning: false,
+            started: true,
+            status: 'running',
+            child: { ...state.conversations[id].child!, mode: 'coworker' },
+          },
+        },
+      }));
+      return { store, id };
+    }
+
+    it('关闭选中标签只回到父会话，不停止、不解雇、不删实例或正文', () => {
+      const { store, id } = seedTabs();
+      const before = store.getState().conversations[id];
+      const dismissed = dismissCoworker.mock.calls.length;
+      const aborted = agentAbort.mock.calls.length;
+      expect(typeof store.getState().closeCoworkerTab).toBe('function');
+      store.getState().closeCoworkerTab('parent', id);
+      expect(store.getState().conversations.parent.activeTabId).toBeUndefined();
+      expect(store.getState().conversations.parent.hiddenCoworkerIds).toContain(id);
+      expect(store.getState().conversations.parent.coworkerIds).toContain(id);
+      expect(store.getState().conversations[id]).toBe(before);
+      expect(dismissCoworker.mock.calls.length).toBe(dismissed);
+      expect(agentAbort.mock.calls.length).toBe(aborted);
+    });
+
+    it('从目录重新打开同一 coworker，只恢复标签且不重新雇佣', () => {
+      const { store, id } = seedTabs();
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          parent: {
+            ...state.conversations.parent,
+            hiddenCoworkerIds: [id],
+            activeTabId: undefined,
+          },
+        },
+      }));
+      const hired = hireCoworker.mock.calls.length;
+      store.getState().selectTab('parent', id);
+      expect(store.getState().conversations.parent.activeTabId).toBe(id);
+      expect(store.getState().conversations.parent.hiddenCoworkerIds ?? []).not.toContain(id);
+      expect(hireCoworker.mock.calls.length).toBe(hired);
+    });
+
+    it('task 和跨父目标不能通过标签选择进入可交互会话', () => {
+      const { store, id } = seedTabs();
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          parent: { ...state.conversations.parent, activeTabId: undefined },
+          [id]: {
+            ...state.conversations[id],
+            child: { ...state.conversations[id].child!, mode: 'task' },
+          },
+          other: { ...state.conversations.parent, id: 'other', activeTabId: undefined },
+        },
+      }));
+      store.getState().selectTab('parent', id);
+      expect(store.getState().conversations.parent.activeTabId).toBeUndefined();
+      store.getState().selectTab('other', id);
+      expect(store.getState().conversations.other.activeTabId).toBeUndefined();
+    });
+
+    it('旧选中项或通知指向 task 时回到父对话，不留下无标签的交互视图', () => {
+      const { store, id } = seedTabs();
+      store.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [id]: {
+            ...state.conversations[id],
+            child: { ...state.conversations[id].child!, mode: 'task' },
+          },
+        },
+      }));
+      store.getState().selectTab('parent', id);
+      expect(store.getState().conversations.parent.activeTabId).toBeUndefined();
+      expect(store.getState().conversations[id].started).toBe(true);
+    });
   });
 
   describe('已结束 child 的只读回放', () => {

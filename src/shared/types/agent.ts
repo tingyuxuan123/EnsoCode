@@ -490,6 +490,14 @@ export interface AgentRunSnapshot {
   text?: string;
 }
 
+/** Main 结算后的最小 Run 摘要；不含 prompt、正文或鉴权信息。 */
+export interface SubagentRunSettlement {
+  runId: string;
+  status: AgentRunStatus;
+  finishedAt: number;
+  error?: string;
+}
+
 export interface AgentSpawnReceipt {
   agentId: string;
   runId: string;
@@ -1035,7 +1043,8 @@ export interface SafeJournalProjection {
 
 /** 已结束 child 的只读历史读取结果。失败一律给结构化码，渲染层据此决定是否重试。 */
 export type ChildHistoryResult =
-  | { ok: true; projection: SafeJournalProjection }
+  | { ok: true; source: 'history'; projection: SafeJournalProjection }
+  | { ok: true; source: 'tail'; messages: ProjectedMessage[]; baseIndex: number }
   | { ok: false; code: 'not-found' | 'unavailable'; error: string };
 
 /**
@@ -1629,6 +1638,7 @@ export type RendererAgentEvent =
       | { type: 'session-reloaded' }
     >
   | RendererChildLifecycleEvent
+  | { type: 'subagent-run-settled'; identity: ChildSessionIdentity; run: SubagentRunSettlement }
   | { type: 'worker-exited' };
 
 export function workspaceBranchChangedNote(branch: string): string {

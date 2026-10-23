@@ -834,8 +834,8 @@ const electronAPI = {
     requestSnapshot: (sessionId?: string): Promise<AgentActionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_SNAPSHOT, sessionId),
     /** 已结束 child 的只读历史；只传 conversationId，路径由 Main 推导 */
-    readChildHistory: (conversationId: string): Promise<ChildHistoryResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.AGENT_CHILD_HISTORY_READ, { conversationId }),
+    readChildHistory: (conversationId: string, beforeIndex?: number): Promise<ChildHistoryResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_CHILD_HISTORY_READ, { conversationId, beforeIndex }),
     /** 手动「重新读取会话」：只传 conversationId，来源（worker 活快照 / safe journal）由 Main 决定，只读不 spawn */
     reloadConversation: (conversationId: string): Promise<ConversationReloadResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_CONVERSATION_RELOAD, { conversationId }),

@@ -63,12 +63,15 @@ ipcMain.handle(CH, (_event, request) => {
 });
 ```
 
-`src/main/ipc/agent.ts` 的 `readChildHistory` 是范例，两道校验缺一不可：
-`path.resolve` 后必须落在预期目录内（防 `../` 穿越），且 basename 必须符合预期前缀
-（这里是 `enso-`，避免读到未脱敏的 pi session 文件）。
+`src/main/services/childHistory.ts` 的 `readChildHistory` 是范例：先根据 Main 自读的
+typed child metadata 验证 parent/实例归属，再检查路径与 `realpath` 都在 sessions
+目录内（包括符号链接逃逸），最后按权威类型校验文件头和格式。
+locked Enso 只允许 `enso-*` safe journal；普通 child 的 pi JSONL 只能经过既有
+`projectMessage` 白名单投影后返回，不能把原文件或任意 JSON 字段直接交给 Renderer。
+只读历史不能用 spawn/resume 来获得，也不能调用会修复换行或迁移落盘的读取入口。
 
 测试要直接验“恶意输入不读盘”：不存在的 id、持久化记录里的路径逃出目录、
-文件名不合预期、以及请求额外带了 `sessionFile` 时不被采信。
+文件类型不合预期、符号链接逃逸、以及请求额外带 `sessionFile` 时被拒绝。
 
 ## 入参一律当 unknown
 

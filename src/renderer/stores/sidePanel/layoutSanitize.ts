@@ -22,6 +22,17 @@ function keepPanel(id: string, panel: unknown, known: ReadonlySet<string>): bool
   return id === 'browser' || id.startsWith('browser:');
 }
 
+export function filterSidePanelTabGroups(value: unknown, keep: ReadonlySet<string>): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.flatMap((group) => {
+    if (!isRecord(group) || !Array.isArray(group.panelIds)) return [group];
+    const panelIds = group.panelIds.filter(
+      (id): id is string => typeof id === 'string' && keep.has(id)
+    );
+    return panelIds.length ? [{ ...group, panelIds }] : [];
+  });
+}
+
 function sanitizeNode(node: unknown, keep: ReadonlySet<string>): GridNode | undefined {
   if (!isRecord(node)) return undefined;
   if (node.type === 'leaf') {
@@ -35,8 +46,14 @@ function sanitizeNode(node: unknown, keep: ReadonlySet<string>): GridNode | unde
         ? data.activeView
         : views[0];
     return {
+      ...node,
       type: 'leaf',
-      data: { ...data, views, activeView },
+      data: {
+        ...data,
+        views,
+        activeView,
+        ...(data?.tabGroups ? { tabGroups: filterSidePanelTabGroups(data.tabGroups, keep) } : {}),
+      },
       size: node.size,
     };
   }
@@ -48,9 +65,23 @@ function sanitizeNode(node: unknown, keep: ReadonlySet<string>): GridNode | unde
         })
       : [];
     if (children.length === 0) return undefined;
-    return { type: 'branch', data: children, size: node.size };
+    return { ...node, type: 'branch', data: children, size: node.size };
   }
   return undefined;
+}
+
+/** Prune selected tab IDs without interpreting or dropping other component types. */
+export function filterSidePanelLayout(
+  layout: SerializedDockview,
+  keep: ReadonlySet<string>
+): SerializedDockview | undefined {
+  const root = sanitizeNode(layout.grid.root, keep);
+  if (keep.size === 0) return undefined;
+  return {
+    ...layout,
+    panels: Object.fromEntries(Object.entries(layout.panels).filter(([id]) => keep.has(id))),
+    grid: { ...layout.grid, root: root ?? { type: 'branch', data: [] } },
+  } as SerializedDockview;
 }
 
 export function sanitizeSidePanelLayout(

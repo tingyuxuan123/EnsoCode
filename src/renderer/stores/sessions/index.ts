@@ -43,6 +43,7 @@ import {
   cleanTitleSummarySource,
   extractRepresentativeTitle,
 } from '@/components/chat/mentionComposer';
+import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { useWorkflowRunsStore } from '@/stores/workflowRuns';
 
 /** 会话目标(pi-goal 式):active 时每次轮次收束自动续跑一次,直到终止信号或安全限制 */
@@ -84,6 +85,7 @@ import {
   rewindWorkerPhase,
   shouldSendRewindCommand,
 } from './conversationRewind';
+import { canSelectCoworkerTab } from './coworkerTabPolicy';
 import {
   bodyLastActiveAt,
   btwHotSessionIds,
@@ -139,6 +141,13 @@ function planToolEnabled(projectId: string): boolean {
 const lastViewedAt: Record<string, number> = {};
 const parentTailInFlight = new Set<string>();
 const olderHistoryInFlight = new Set<string>();
+const childHistoryInFlight = new Map<string, symbol>();
+/** 观察引用只影响正文缓存，不注册 worker、不改变当前聊天或 child 生命周期。 */
+const observationPins = new Map<string, Set<symbol>>();
+
+function hotSessionIds(conversations: Record<string, Conversation>): Set<string> {
+  return new Set([...btwHotSessionIds(conversations), ...observationPins.keys()]);
+}
 /** 冷缓存清掉的 child 再被看到时补历史。实现在 store 创建后赋值。 */
 let loadViewedChildHistory: (conversationId: string) => void = () => {};
 /**
@@ -177,6 +186,9 @@ function forgetUnknownSessionClocks(conversations: Record<string, unknown>): voi
   const known = new Set(Object.keys(conversations));
   pruneSessionClocks(lastViewedAt, known);
   pruneSessionClocks(snapshotResyncAt, known);
+  for (const id of observationPins.keys()) {
+    if (!known.has(id)) observationPins.delete(id);
+  }
 }
 
 /**
@@ -284,6 +296,10 @@ export interface Conversation extends SessionProjection {
   historyLoadAttempted?: boolean;
   /** 上滑翻页在途；不持久化 */
   historyLoading?: boolean;
+  /** 只读历史加载失败，独立于模型执行错误；不持久化。 */
+  historyError?: string;
+  /** safe journal 的不完整标记；不能把未记录内容伪装成完整过程。 */
+  historyPartial?: boolean;
   /** 手动重读在途（菜单项禁用 / 反馈）；不持久化 */
   reloading?: boolean;
   /** 当前 child TAB 的危险 capability ASK；不持久化。 */
@@ -296,6 +312,8 @@ export interface Conversation extends SessionProjection {
   coworkerIds?: string[];
   /** 父会话专有：当前 tab（undefined = 主会话） */
   activeTabId?: string;
+  /** 关闭协作者标签仅隐藏视图，实例仍在编；纯运行态，不持久化。 */
+  hiddenCoworkerIds?: string[];
   /** 完成未读:后台完成且用户未查看(侧栏绿点);选中时清除。持久化 */
   unread?: boolean;
   /** 排队待发消息(running 时用户消息先入队) */
@@ -424,6 +442,8 @@ interface SessionsState {
   resumeConversation(id: string): Promise<void>;
   /** 上滑加载更早历史：只读 jsonl，不 spawn */
   loadOlderHistory(id: string): Promise<void>;
+  /** 可见观察视图保热与惰性补水；返回幂等 release，绝不停止或复活 child。 */
+  acquireObservation(id: string): () => void;
   /**
    * 手动「重新读取会话」：绕过本地缓存向 Main 要权威正文（来源由 Main 选）。只读不 spawn，
    * 不动草稿 / 排队 / started。同会话在途合并；失败保留旧正文并返回原因，成功返 null。
@@ -458,6 +478,7 @@ interface SessionsState {
   abort(conversationId?: string): Promise<void>;
   /** 切换聊天区 tab（undefined = 主会话） */
   selectTab(parentId: string, tabId?: string): void;
+  closeCoworkerTab(parentId: string, childId: string): void;
   /** 解雇 coworker：活会话删除靠 coworker-update 回流（单一数据流）；
    * 重启后 worker/Main 侧无实体的死 tab（IPC 拒绝且未 started）本地移除兑底 */
   dismissCoworkerFromUI(parentId: string, coworkerId: string): Promise<void>;
@@ -843,24 +864,65 @@ export const useSessionsStore = create<SessionsState>()(
           !conversation?.parentId ||
           conversation.started ||
           conversation.messages.length > 0 ||
-          conversation.historyLoadAttempted
+          conversation.historyLoadAttempted ||
+          childHistoryInFlight.has(conversationId)
         ) {
           return;
         }
-        set((state) => patch(state, conversationId, { historyLoadAttempted: true }));
-        const result = await window.electronAPI.agent.readChildHistory(conversationId);
-        if (!result.ok) return;
-        const timeline = projectSafeJournal(result.projection.records);
-        if (timeline.messages.length === 0 && timeline.customEntries.length === 0) return;
+        const token = Symbol(conversationId);
+        childHistoryInFlight.set(conversationId, token);
+        const stillCurrent = (current: Conversation | undefined) =>
+          current &&
+          current.generation === conversation.generation &&
+          current.sessionFile === conversation.sessionFile &&
+          !current.started &&
+          // 生命周期事件可以只推进 seq，不改变正文；不能因此丢弃已结束 child 的唯一冷读。
+          current.messages === conversation.messages &&
+          current.customEntries === conversation.customEntries &&
+          current.historyBaseIndex === conversation.historyBaseIndex;
         set((state) =>
-          state.conversations[conversationId]
-            ? patch(state, conversationId, {
-                messages: timeline.messages,
-                customEntries: timeline.customEntries,
-                historyOnly: true,
-              })
-            : state
+          patch(state, conversationId, {
+            historyLoadAttempted: true,
+            historyLoading: true,
+            historyError: undefined,
+          })
         );
+        try {
+          const result = await window.electronAPI.agent.readChildHistory(conversationId);
+          if (!stillCurrent(get().conversations[conversationId])) return;
+          if (!result.ok) {
+            set((state) => patch(state, conversationId, { historyError: result.error }));
+            return;
+          }
+          const timeline =
+            result.source === 'tail'
+              ? { messages: result.messages, customEntries: [] }
+              : projectSafeJournal(result.projection.records);
+          set((state) =>
+            patch(state, conversationId, {
+              messages: timeline.messages,
+              customEntries: timeline.customEntries,
+              historyBaseIndex: result.source === 'tail' ? result.baseIndex : undefined,
+              historyPartial: result.source === 'history' ? result.projection.partial : undefined,
+              historyOnly: true,
+            })
+          );
+        } catch (error) {
+          if (stillCurrent(get().conversations[conversationId])) {
+            set((state) =>
+              patch(state, conversationId, {
+                historyError: error instanceof Error ? error.message : String(error),
+              })
+            );
+          }
+        } finally {
+          if (childHistoryInFlight.get(conversationId) === token) {
+            childHistoryInFlight.delete(conversationId);
+            if (get().conversations[conversationId]?.generation === conversation.generation) {
+              set((state) => patch(state, conversationId, { historyLoading: undefined }));
+            }
+          }
+        }
       }
 
       async function adoptMissingRootAuthority(
@@ -999,8 +1061,25 @@ export const useSessionsStore = create<SessionsState>()(
         });
       });
 
+      window.electronAPI.agent.onSubagentProgress?.((push) => {
+        useSubagentRunsStore.getState().replace(push.sessionId, push.runs);
+      });
       window.electronAPI.agent.onEvent((event) => {
+        if (event.type === 'subagent-run-settled') {
+          set((state) => {
+            const id = event.identity.sessionId;
+            const current = state.conversations[id];
+            if (!current?.child || current.parentId !== event.identity.parent.sessionId)
+              return state;
+            const next = applyAgentEvent(current, id, event);
+            return next === current ? state : patch(state, id, next);
+          });
+          return;
+        }
         if (event.type === 'worker-exited') {
+          for (const id of Object.keys(useSubagentRunsStore.getState().byConversation)) {
+            useSubagentRunsStore.getState().replace(id, []);
+          }
           set((state) => {
             const conversations = { ...state.conversations };
             for (const id of Object.keys(conversations)) {
@@ -1063,7 +1142,7 @@ export const useSessionsStore = create<SessionsState>()(
                   lastViewedAt,
                   now,
                   MESSAGE_CACHE_TTL_MS,
-                  btwHotSessionIds(conversations)
+                  hotSessionIds(conversations)
                 );
                 const next = applyAgentEvent(conversation, id, event);
                 const title = conversation.title || firstUserText(next) || '';
@@ -1108,6 +1187,9 @@ export const useSessionsStore = create<SessionsState>()(
                     : {}),
                   started: true,
                   spawning: false,
+                  historyOnly: undefined,
+                  ended: undefined,
+                  historyError: undefined,
                   error: undefined,
                   pendingCapabilityAsks: [],
                   activeOauthAsk: undefined,
@@ -1213,14 +1295,16 @@ export const useSessionsStore = create<SessionsState>()(
               child = applyDispatchEvent(child, childId, dispatchEvent) as Conversation;
             }
             pendingDispatchEvents.delete(childId);
-            const focus = shouldFocusChildReservation({
-              manual: manualDispatchRequestIds.delete(event.requestId),
-              activeId: state.activeId,
-              parentId,
-              childId,
-              activeTabId: parent.activeTabId,
-              tabExists: Boolean(parent.activeTabId && state.conversations[parent.activeTabId]),
-            });
+            const focus =
+              event.metadata.mode !== 'task' &&
+              shouldFocusChildReservation({
+                manual: manualDispatchRequestIds.delete(event.requestId),
+                activeId: state.activeId,
+                parentId,
+                childId,
+                activeTabId: parent.activeTabId,
+                tabExists: Boolean(parent.activeTabId && state.conversations[parent.activeTabId]),
+              });
             return {
               activeId: focus ? parentId : state.activeId,
               conversations: {
@@ -1314,7 +1398,27 @@ export const useSessionsStore = create<SessionsState>()(
             const coworker = event.coworker;
             const conversations = { ...state.conversations, [id]: nextParent as Conversation };
             if (coworker.status === 'dismissed') {
-              delete conversations[coworker.id];
+              const retired = conversations[coworker.id];
+              // task 完成同样会 dismiss：运行实体回收不等于删除可读历史。
+              // 只保留已有权威 metadata 的 child，旧裸 coworker 仍沿用原清理语义。
+              if (retired?.child)
+                conversations[coworker.id] = {
+                  ...retired,
+                  ended: true,
+                  started: false,
+                  spawning: false,
+                  historyOnly: true,
+                  status: retired.status === 'failed' ? 'failed' : 'idle',
+                  runStartedAt: undefined,
+                  lastOutputAt: undefined,
+                  pendingApprovals: [],
+                  pendingAsks: [],
+                  pendingCapabilityAsks: [],
+                  toolOutputs: {},
+                  toolStartedAt: {},
+                  toolDeadlineAt: {},
+                };
+              else delete conversations[coworker.id];
               conversations[id] = {
                 ...(nextParent as Conversation),
                 coworkerIds: (parent.coworkerIds ?? []).filter(
@@ -1337,6 +1441,7 @@ export const useSessionsStore = create<SessionsState>()(
                     spawning: false,
                     // worker 侧有实体 = 复活，清掉上一代的终态标记
                     ended: undefined,
+                    historyOnly: undefined,
                     sessionFile: coworker.sessionFile ?? existing.sessionFile,
                     coworkerName: coworker.name,
                     ...(coworker.agentType ? { agentType: coworker.agentType } : {}),
@@ -1567,7 +1672,7 @@ export const useSessionsStore = create<SessionsState>()(
             lastViewedAt,
             Date.now(),
             MESSAGE_CACHE_TTL_MS,
-            btwHotSessionIds(current.conversations)
+            hotSessionIds(current.conversations)
           )
         ) {
           if (extractedTitle && rawUserText) {
@@ -1673,6 +1778,7 @@ export const useSessionsStore = create<SessionsState>()(
             ...(event.type === 'child-ready'
               ? {
                   started: true,
+                  historyOnly: undefined,
                   sessionFile: event.sessionFile,
                 }
               : {}),
@@ -1693,7 +1799,7 @@ export const useSessionsStore = create<SessionsState>()(
               lastViewedAt,
               Date.now(),
               MESSAGE_CACHE_TTL_MS,
-              btwHotSessionIds(state.conversations)
+              hotSessionIds(state.conversations)
             ) &&
             (next.messages.length > 0 || next.customEntries.length > 0)
               ? {
@@ -2776,8 +2882,8 @@ export const useSessionsStore = create<SessionsState>()(
           }
           set((state) => {
             const conversations = { ...state.conversations };
-            for (const coworkerId of conversation.coworkerIds ?? []) {
-              delete conversations[coworkerId];
+            for (const [childId, child] of Object.entries(conversations)) {
+              if (child.parentId === id || child.btwParentId === id) delete conversations[childId];
             }
             delete conversations[id];
             const order = state.order.filter((entry) => entry !== id);
@@ -3333,20 +3439,55 @@ export const useSessionsStore = create<SessionsState>()(
           // 未 ended 的 child（渲染层不传路径、不指定身份），tab 由事件回流重建。
         },
 
+        acquireObservation(id) {
+          const conversation = get().conversations[id];
+          if (!conversation?.parentId || !conversation.child) return () => {};
+          const token = Symbol(id);
+          const pins = observationPins.get(id) ?? new Set<symbol>();
+          const first = pins.size === 0;
+          pins.add(token);
+          observationPins.set(id, pins);
+          if (first) {
+            if (conversation.started) {
+              void get()
+                .reloadConversation(id)
+                .then((error) => {
+                  const current = get().conversations[id];
+                  if (current?.generation !== conversation.generation) return;
+                  set((state) => patch(state, id, { historyError: error ?? undefined }));
+                });
+            } else void loadChildHistory(id);
+          }
+          return () => {
+            if (!pins.delete(token) || observationPins.get(id) !== pins || pins.size > 0) return;
+            observationPins.delete(id);
+            lastViewedAt[id] = Date.now();
+            armColdEvictTimer();
+          };
+        },
+
         async loadOlderHistory(id) {
           if (olderHistoryInFlight.has(id)) return;
           const conversation = get().conversations[id];
           const beforeIndex = conversation?.historyBaseIndex;
-          if (!conversation || conversation.parentId || !beforeIndex || beforeIndex <= 0) return;
-          const read = window.electronAPI.agent.readParentHistoryTail;
+          if (!conversation || !beforeIndex || beforeIndex <= 0) return;
+          const read = conversation.parentId
+            ? window.electronAPI.agent.readChildHistory
+            : window.electronAPI.agent.readParentHistoryTail;
           if (!read) return;
           olderHistoryInFlight.add(id);
           set((state) => patch(state, id, { historyLoading: true }));
           try {
             const result = await read(id, beforeIndex);
-            if (!result.ok || result.messages.length === 0) return;
+            if (!result.ok || !('messages' in result) || result.messages.length === 0) return;
             const latest = get().conversations[id];
-            if (!latest || latest.historyBaseIndex !== beforeIndex) return;
+            if (
+              !latest ||
+              latest.historyBaseIndex !== beforeIndex ||
+              latest.generation !== conversation.generation ||
+              latest.sessionFile !== conversation.sessionFile
+            )
+              return;
             set((state) => {
               const current = state.conversations[id];
               if (!current) return state;
@@ -3375,28 +3516,61 @@ export const useSessionsStore = create<SessionsState>()(
             buffered: [],
             promise: Promise.resolve(null),
           };
+          let retryEndedHistory = false;
           entry.promise = (async (): Promise<string | null> => {
             set((state) => patch(state, id, { reloading: true }));
+            const fail = (error: string) => {
+              const current = get().conversations[id];
+              if (current?.generation === before.generation)
+                set((state) => patch(state, id, { historyError: error }));
+              return error;
+            };
             try {
               const result = await window.electronAPI.agent.reloadConversation(id);
-              if (!result.ok) return result.error;
               const latest = get().conversations[id];
               // 在途中被删除：丢弃，不复活。代际已变（重新 spawn）：旧代 live 快照不得覆盖新代
               if (!latest || latest.generation !== before.generation) return null;
+              if (latest.ended && !before.ended) {
+                retryEndedHistory = true;
+                return null;
+              }
+              if (!result.ok) return fail(result.error);
+              // 磁盘回退没有事件水位；在途已接到新正文时不可用旧盘内容覆盖直播。
+              if (
+                result.source !== 'live' &&
+                (latest.messages !== before.messages ||
+                  latest.customEntries !== before.customEntries ||
+                  latest.sessionFile !== before.sessionFile)
+              )
+                return null;
               set((state) => {
                 const current = state.conversations[id];
                 if (!current) return state;
                 const next = applyConversationReload(current, id, result, entry.buffered);
-                return next === current ? state : patch(state, id, next as Conversation);
+                return next === current
+                  ? state
+                  : patch(state, id, {
+                      ...next,
+                      historyLoadAttempted: true,
+                      historyError: undefined,
+                      historyPartial:
+                        result.source === 'history' ? result.projection.partial : undefined,
+                    } as Conversation);
               });
               return null;
             } catch (error) {
-              return error instanceof Error ? error.message : String(error);
+              return fail(error instanceof Error ? error.message : String(error));
             } finally {
               reloadInFlight.delete(id);
               if (get().conversations[id]) {
                 set((state) => patch(state, id, { reloading: undefined }));
               }
+              // task 在首次快照回包前回收时，释放在途锁后补一次只读历史；不复活 worker。
+              if (retryEndedHistory && observationPins.has(id))
+                queueMicrotask(() => {
+                  if (observationPins.has(id) && get().conversations[id]?.ended)
+                    void get().reloadConversation(id);
+                });
             }
           })();
           reloadInFlight.set(id, entry);
@@ -3643,9 +3817,52 @@ export const useSessionsStore = create<SessionsState>()(
         },
 
         selectTab(parentId, tabId) {
-          if (!get().conversations[parentId]) return;
-          set((state) => patch(state, parentId, { activeTabId: tabId }));
+          const conversations = get().conversations;
+          if (!conversations[parentId]) return;
+          const targetId = tabId === parentId ? undefined : tabId;
+          if (targetId) {
+            const child = conversations[targetId];
+            // 老版无 typed metadata 的只读历史仍保留既有访问路径；新 typed task/终态只能观察。
+            const legacyChild = child && !child.child && child.parentId === parentId;
+            if (!legacyChild && !canSelectCoworkerTab(conversations, parentId, targetId)) {
+              if (
+                conversations[parentId].activeTabId === targetId ||
+                (child?.parentId === parentId &&
+                  child.child?.mode === 'task' &&
+                  conversations[parentId].activeTabId)
+              ) {
+                set((state) => patch(state, parentId, { activeTabId: undefined }));
+              }
+              return;
+            }
+          }
+          set((state) =>
+            patch(state, parentId, {
+              activeTabId: targetId,
+              hiddenCoworkerIds: (state.conversations[parentId].hiddenCoworkerIds ?? []).filter(
+                (id) => id !== targetId
+              ),
+            })
+          );
           if (tabId && tabId !== parentId) void loadChildHistory(tabId);
+        },
+
+        closeCoworkerTab(parentId, childId) {
+          const conversations = get().conversations;
+          if (!canSelectCoworkerTab(conversations, parentId, childId)) return;
+          const parent = conversations[parentId];
+          if ((parent.hiddenCoworkerIds ?? []).includes(childId)) return;
+          set((state) =>
+            patch(state, parentId, {
+              hiddenCoworkerIds: [
+                ...(state.conversations[parentId].hiddenCoworkerIds ?? []),
+                childId,
+              ],
+              ...(state.conversations[parentId].activeTabId === childId
+                ? { activeTabId: undefined }
+                : {}),
+            })
+          );
         },
 
         async dismissCoworkerFromUI(parentId, coworkerId) {
@@ -3659,7 +3876,17 @@ export const useSessionsStore = create<SessionsState>()(
             const parent = state.conversations[parentId];
             if (!parent) return state;
             const conversations = { ...state.conversations };
-            delete conversations[coworkerId];
+            const retired = conversations[coworkerId];
+            if (retired?.child)
+              conversations[coworkerId] = {
+                ...retired,
+                ended: true,
+                started: false,
+                spawning: false,
+                historyOnly: true,
+                status: retired.status === 'failed' ? 'failed' : 'idle',
+              };
+            else delete conversations[coworkerId];
             conversations[parentId] = {
               ...parent,
               coworkerIds: (parent.coworkerIds ?? []).filter((id) => id !== coworkerId),
@@ -4049,7 +4276,7 @@ function sweepColdMessages(current = useSessionsStore.getState()): void {
     lastViewedAt,
     Date.now(),
     MESSAGE_CACHE_TTL_MS,
-    btwHotSessionIds(current.conversations)
+    hotSessionIds(current.conversations)
   );
   if (next !== current.conversations) useSessionsStore.setState({ conversations: next });
 }
@@ -4061,7 +4288,7 @@ function sweepExpiredStamps(current = useSessionsStore.getState()): void {
     lastViewedAt,
     Date.now(),
     MESSAGE_CACHE_TTL_MS,
-    btwHotSessionIds(current.conversations)
+    hotSessionIds(current.conversations)
   );
   if (next !== current.conversations) useSessionsStore.setState({ conversations: next });
 }
@@ -4076,7 +4303,7 @@ function armColdEvictTimer(): void {
     viewedFromState(current),
     Date.now(),
     MESSAGE_CACHE_TTL_MS,
-    btwHotSessionIds(current.conversations)
+    hotSessionIds(current.conversations)
   );
   // 没有未来到期点时仍排一个满 TTL，清掉从未盖章的正文；0 表示刚扫过已过期项。
   const wait = delay !== null && delay > 0 ? delay : MESSAGE_CACHE_TTL_MS;

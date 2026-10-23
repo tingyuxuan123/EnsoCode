@@ -1,4 +1,5 @@
 import { conversationHasRunningChild } from '@shared/conversationDotTone';
+import { canSelectCoworkerTab } from './coworkerTabPolicy';
 
 export interface SidebarDirectoryEntry {
   id: string;
@@ -47,13 +48,16 @@ type Source = {
   pendingCapabilityAsks?: readonly unknown[];
   coworkerIds?: readonly string[];
   coworkerName?: string;
-  child?: { agentInstanceName?: string; mode?: 'task' | 'coworker' };
+  child?: { agentInstanceName?: string; agentInstanceId?: string; mode?: 'task' | 'coworker' };
   subagents?: readonly { status: string }[];
   parentId?: string;
   sessionFile?: string;
   worktree?: { path?: string };
   reloading?: boolean;
   btwParentId?: string;
+  hiddenCoworkerIds?: readonly string[];
+  ended?: boolean;
+  historyOnly?: boolean;
 };
 
 function lastActiveAt(conversation: Source): number | undefined {
@@ -190,6 +194,7 @@ export interface CoworkerTabConversation {
   child?: { agentInstanceName?: string };
   mode: 'task' | 'coworker';
   reloading: boolean;
+  canObserve: boolean;
 }
 
 interface CoworkerTabsCache {
@@ -200,19 +205,24 @@ interface CoworkerTabsCache {
 
 const EMPTY_COWORKER_TABS: CoworkerTabConversation[] = [];
 const cachedCoworkerTabs = new WeakMap<Source, CoworkerTabsCache>();
+const cachedAllCoworkerTabs = new WeakMap<Source, CoworkerTabsCache>();
 
 /** 当前 tab 条的窄投影，避免其它会话事件触发 CoworkerTabs 重渲染。 */
 export function selectCoworkerTabConversations(
   conversations: Record<string, Source | undefined>,
-  parentId: string
+  parentId: string,
+  includeHidden = false
 ): CoworkerTabConversation[] {
   const parent = conversations[parentId];
   if (!parent) return EMPTY_COWORKER_TABS;
-  const cached = cachedCoworkerTabs.get(parent);
+  const cache = includeHidden ? cachedAllCoworkerTabs : cachedCoworkerTabs;
+  const cached = cache.get(parent);
   if (cached?.source === conversations) return cached.value;
   const next = (parent.coworkerIds ?? []).flatMap((id): CoworkerTabConversation[] => {
     const conversation = conversations[id];
-    return conversation
+    return conversation &&
+      canSelectCoworkerTab(conversations, parentId, id) &&
+      (includeHidden || !(parent.hiddenCoworkerIds ?? []).includes(id))
       ? [
           {
             id: conversation.id ?? id,
@@ -228,12 +238,13 @@ export function selectCoworkerTabConversations(
               : undefined,
             mode: conversation.child?.mode === 'task' ? 'task' : 'coworker',
             reloading: conversation.reloading === true,
+            canObserve: Boolean(conversation.child?.agentInstanceId),
           },
         ]
       : [];
   });
   const print = JSON.stringify(next);
   const value = cached?.print === print ? cached.value : next;
-  cachedCoworkerTabs.set(parent, { source: conversations, print, value });
+  cache.set(parent, { source: conversations, print, value });
   return value;
 }

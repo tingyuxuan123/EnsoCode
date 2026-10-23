@@ -3714,6 +3714,34 @@ describe('子代理按 runId / agentId 指代的操作行', () => {
   const rows = (extra: ProjectedMessage[], running = false) =>
     buildTimeline([...history, ...extra], running).filter((item) => item.kind === 'tool');
 
+  it('观察入口保留 spawn 的 Agent 身份，不把 Run 当成会话', () => {
+    const tools = rows([]);
+    expect(tools[0]).toMatchObject({ subagentAgentIds: [a] });
+    expect(tools[2]).toMatchObject({ subagentAgentIds: [b] });
+  });
+
+  it('尾窗缺少 spawn 时，report 的权威回执仍可关联 Agent', () => {
+    const tools = buildTimeline(
+      [
+        user('读报告'),
+        call('q', { operation: 'report', runId: 'r9' }),
+        result('q', json({ run: { agentId: b, runId: 'r9', status: 'succeeded' }, text: 'ok' })),
+      ],
+      false
+    ).filter((item) => item.kind === 'tool');
+    expect(tools[0]).toMatchObject({ subagentAgentIds: [b] });
+  });
+
+  it('等待多个 Run 的观察目标按 Agent 去重，未知 Run 不猜测', () => {
+    const tools = rows(
+      [call('w', { operation: 'wait', runIds: ['r1', 'r2', 'r3', 'unknown'] })],
+      true
+    );
+    expect(tools[3]).toMatchObject({ subagentAgentIds: [a, b] });
+    const unknown = rows([call('q', { operation: 'report', runId: 'unknown' })]);
+    expect(unknown[3]).not.toHaveProperty('subagentAgentIds');
+  });
+
   it('report / stop 按 runId 找回 spawn 时起的标题（起了名字取名字）', () => {
     const tools = rows([
       call('q1', { operation: 'report', runId: 'r1' }),

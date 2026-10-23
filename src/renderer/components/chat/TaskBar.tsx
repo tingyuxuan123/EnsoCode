@@ -26,6 +26,7 @@ import { formatDuration } from '@/stores/sessions/stats';
 import { useSettingsStore } from '@/stores/settings';
 import { Markdown } from './Markdown';
 import { StepNode } from './StepNode';
+import { SubagentProcessBar } from './SubagentProcessBar';
 import { summarizeSubagentToolArgs } from './subagentToolSummary';
 import { shouldFollowTaskBarOutput } from './taskBarScroll';
 
@@ -96,7 +97,8 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly }: TaskBarProps)
     return () => clearTimeout(timer);
   }, [sessionId, tasks, subagents, dismissed, openTaskId]);
 
-  if (visible.length === 0 && visibleAgents.length === 0) return null;
+  if (visible.length === 0 && visibleAgents.length === 0)
+    return readOnly ? null : <SubagentProcessBar sessionId={sessionId} />;
 
   const dismiss = (taskId: string) => {
     setDismissed((prev) => writeDismissed(sessionId, new Set(prev).add(taskId)));
@@ -107,84 +109,89 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly }: TaskBarProps)
   const openAgent = visibleAgents.find((agent) => agent.id === openTaskId) ?? null;
 
   return (
-    <div className="relative mb-1.5">
-      {(openTask || openAgent) && (
-        <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 rounded-xl border bg-card shadow-float">
-          <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
-            <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-              {openTask ? openTask.command : openAgent?.description}
-              {openAgent?.modelId ? ` · ${modelDisplayName(virtualModels, openAgent.modelId)}` : ''}
-            </span>
-            <button
-              type="button"
-              onClick={() => setOpenTaskId(null)}
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+    <>
+      {!readOnly && <SubagentProcessBar sessionId={sessionId} />}
+      <div className="relative mb-1.5">
+        {(openTask || openAgent) && (
+          <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 rounded-xl border bg-card shadow-float">
+            <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+              <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
+                {openTask ? openTask.command : openAgent?.description}
+                {openAgent?.modelId
+                  ? ` · ${modelDisplayName(virtualModels, openAgent.modelId)}`
+                  : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpenTaskId(null)}
+                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {openTask && <TailView tail={openTask.tail} />}
+            {openAgent && <AgentDetails key={openAgent.id} agent={openAgent} />}
           </div>
-          {openTask && <TailView tail={openTask.tail} />}
-          {openAgent && <AgentDetails key={openAgent.id} agent={openAgent} />}
-        </div>
-      )}
-      <div className="flex flex-col gap-0.5 rounded-xl border bg-card p-1 shadow-xs">
-        {visible.map((task) => (
-          <DockRow
-            key={task.taskId}
-            icon={TerminalSquare}
-            status={task.status}
-            meta={<TaskMeta task={task} />}
-            open={openTaskId === task.taskId}
-            onToggle={() => setOpenTaskId(openTaskId === task.taskId ? null : task.taskId)}
-            stopTitle={t('Stop task')}
-            onStop={
-              readOnly
-                ? undefined
-                : () => void window.electronAPI.agent.stopTask(sessionId, task.taskId)
-            }
-            onDismiss={() => dismiss(task.taskId)}
-          >
-            <span
-              className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
-              title={task.command}
+        )}
+        <div className="flex flex-col gap-0.5 rounded-xl border bg-card p-1 shadow-xs">
+          {visible.map((task) => (
+            <DockRow
+              key={task.taskId}
+              icon={TerminalSquare}
+              status={task.status}
+              meta={<TaskMeta task={task} />}
+              open={openTaskId === task.taskId}
+              onToggle={() => setOpenTaskId(openTaskId === task.taskId ? null : task.taskId)}
+              stopTitle={t('Stop task')}
+              onStop={
+                readOnly
+                  ? undefined
+                  : () => void window.electronAPI.agent.stopTask(sessionId, task.taskId)
+              }
+              onDismiss={() => dismiss(task.taskId)}
             >
-              {task.command}
-            </span>
-          </DockRow>
-        ))}
-        {visibleAgents.map((agent) => (
-          <DockRow
-            key={agent.id}
-            icon={Bot}
-            status={agent.status}
-            meta={<AgentMeta agent={agent} />}
-            open={openTaskId === agent.id}
-            onToggle={() => setOpenTaskId(openTaskId === agent.id ? null : agent.id)}
-            stopTitle={t('Stop subagent')}
-            onStop={
-              readOnly
-                ? undefined
-                : () => void window.electronAPI.agent.stopSubagent(sessionId, agent.id)
-            }
-            onDismiss={() => dismiss(agent.id)}
-          >
-            {agent.agentType && <span className="shrink-0 font-medium">{agent.agentType}</span>}
-            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              {agent.description}
-              {agent.modelId && (
-                <span className="text-muted-foreground/60">
-                  {' '}
-                  · {modelDisplayName(virtualModels, agent.modelId)}
-                </span>
-              )}
-              {agent.status === 'running' && agent.currentActivity && (
-                <span className="text-muted-foreground/60"> · {agent.currentActivity}</span>
-              )}
-            </span>
-          </DockRow>
-        ))}
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+                title={task.command}
+              >
+                {task.command}
+              </span>
+            </DockRow>
+          ))}
+          {visibleAgents.map((agent) => (
+            <DockRow
+              key={agent.id}
+              icon={Bot}
+              status={agent.status}
+              meta={<AgentMeta agent={agent} />}
+              open={openTaskId === agent.id}
+              onToggle={() => setOpenTaskId(openTaskId === agent.id ? null : agent.id)}
+              stopTitle={t('Stop subagent')}
+              onStop={
+                readOnly
+                  ? undefined
+                  : () => void window.electronAPI.agent.stopSubagent(sessionId, agent.id)
+              }
+              onDismiss={() => dismiss(agent.id)}
+            >
+              {agent.agentType && <span className="shrink-0 font-medium">{agent.agentType}</span>}
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {agent.description}
+                {agent.modelId && (
+                  <span className="text-muted-foreground/60">
+                    {' '}
+                    · {modelDisplayName(virtualModels, agent.modelId)}
+                  </span>
+                )}
+                {agent.status === 'running' && agent.currentActivity && (
+                  <span className="text-muted-foreground/60"> · {agent.currentActivity}</span>
+                )}
+              </span>
+            </DockRow>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

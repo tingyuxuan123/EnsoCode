@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   resolveModelSelection: vi.fn(),
   readSettings: vi.fn((): unknown => null),
   setAgentEventListener: vi.fn(),
-  restoreJournal: vi.fn(() => ({ records: [], partial: false })),
+  readChildHistory: vi.fn(async () => ({ ok: true, source: 'tail', messages: [], baseIndex: 0 })),
   existsSync: vi.fn(() => true),
   persistedConversation: vi.fn(),
   currentIdentity: vi.fn(),
@@ -193,9 +193,7 @@ vi.mock('./bots', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./bots')>()),
   getBotServices: mocks.getBotServices,
 }));
-vi.mock('../../agent/ensoSafeJournal', () => ({
-  EnsoSafeJournal: { restore: mocks.restoreJournal },
-}));
+vi.mock('../services/childHistory', () => ({ readChildHistory: mocks.readChildHistory }));
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs')>()),
   existsSync: mocks.existsSync,
@@ -228,7 +226,7 @@ describe('agent IPC Main identity boundary', () => {
     mocks.dispatchHost.resolveSubagentModel = undefined;
     mocks.handlers.clear();
     mocks.spawnSession.mockReset();
-    mocks.restoreJournal.mockClear();
+    mocks.readChildHistory.mockClear();
     mocks.existsSync.mockReturnValue(true);
     mocks.persistedConversation.mockReset();
     mocks.currentIdentity.mockReset();
@@ -702,68 +700,38 @@ describe('agent IPC Main identity boundary', () => {
     const read = (request: unknown) =>
       mocks.handlers.get(IPC_CHANNELS.AGENT_CHILD_HISTORY_READ)?.(event, request);
 
-    it('正常路径返回投影', async () => {
-      mocks.persistedConversation.mockReturnValue({
-        sessionFile: '/tmp/agent/sessions/enso-parent__cw-1-gen.jsonl',
-      });
-      await expect(read({ conversationId: 'parent::cw-1' })).resolves.toEqual({
-        ok: true,
-        projection: { records: [], partial: false },
-      });
+    it('只把已收窄 ID 和可选游标委托给只读服务', async () => {
+      for (const beforeIndex of [undefined, 0, 60, Number.MAX_SAFE_INTEGER]) {
+        await expect(read({ conversationId: 'child', beforeIndex })).resolves.toEqual({
+          ok: true,
+          source: 'tail',
+          messages: [],
+          baseIndex: 0,
+        });
+        expect(mocks.readChildHistory).toHaveBeenLastCalledWith('child', beforeIndex, {
+          sessionDir: '/tmp/agent/sessions',
+          persistedConversation: expect.any(Function),
+        });
+      }
+      expect(mocks.spawnSession).not.toHaveBeenCalled();
     });
 
-    it('不是持久化会话时不读任何文件', async () => {
-      mocks.persistedConversation.mockReturnValue(null);
-      await expect(read({ conversationId: 'unknown' })).resolves.toMatchObject({
-        ok: false,
-        code: 'not-found',
-      });
-      expect(mocks.restoreJournal).not.toHaveBeenCalled();
-    });
-
-    it('路径逃出 sessions 目录一律拒绝（防穿越）', async () => {
-      mocks.persistedConversation.mockReturnValue({
-        sessionFile: '/tmp/agent/sessions/../../../etc/passwd',
-      });
-      await expect(read({ conversationId: 'parent::cw-1' })).resolves.toMatchObject({
-        ok: false,
-        code: 'unavailable',
-      });
-      expect(mocks.restoreJournal).not.toHaveBeenCalled();
-    });
-
-    it('非 enso- 前缀的文件不读（pi 普通 session 未经脱敏）', async () => {
-      mocks.persistedConversation.mockReturnValue({
-        sessionFile: '/tmp/agent/sessions/2026-08-29T00-00-00-000Z_abc.jsonl',
-      });
-      await expect(read({ conversationId: 'parent::cw-1' })).resolves.toMatchObject({
-        ok: false,
-        code: 'unavailable',
-      });
-      expect(mocks.restoreJournal).not.toHaveBeenCalled();
-    });
-
-    it('文件不存在时给 not-found，不抛错', async () => {
-      mocks.persistedConversation.mockReturnValue({
-        sessionFile: '/tmp/agent/sessions/enso-gone.jsonl',
-      });
-      mocks.existsSync.mockReturnValue(false);
-      await expect(read({ conversationId: 'parent::cw-1' })).resolves.toMatchObject({
-        ok: false,
-        code: 'not-found',
-      });
-    });
-
-    it('渲染层传路径不会被采信', async () => {
-      // 只认 conversationId；带上 sessionFile 也得走 Main 自己的持久化查询。
-      mocks.persistedConversation.mockReturnValue(null);
-      await expect(
-        read({ conversationId: 'parent::cw-1', sessionFile: '/etc/passwd' })
-      ).resolves.toMatchObject({
-        ok: false,
-        code: 'not-found',
-      });
-      expect(mocks.restoreJournal).not.toHaveBeenCalled();
+    it('非法 ID、非安全整数游标和额外路径字段在服务前拒绝', async () => {
+      for (const request of [
+        null,
+        [],
+        {},
+        { conversationId: '' },
+        { conversationId: 1 },
+        ...[-1, 0.1, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '1', null].map(
+          (beforeIndex) => ({ conversationId: 'child', beforeIndex })
+        ),
+        { conversationId: 'child', sessionFile: '/etc/passwd' },
+      ]) {
+        await expect(read(request)).resolves.toMatchObject({ ok: false });
+      }
+      expect(mocks.readChildHistory).not.toHaveBeenCalled();
+      expect(mocks.persistedConversation).not.toHaveBeenCalled();
     });
   });
 

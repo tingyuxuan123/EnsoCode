@@ -24,6 +24,8 @@ export function ToolSummaryRow({
   separator,
   title,
   onToggle,
+  onActivate,
+  actionLabel,
   actions,
 }: {
   icon?: LucideIcon;
@@ -41,6 +43,9 @@ export function ToolSummaryRow({
   separator?: boolean;
   title?: string;
   onToggle?: () => void;
+  /** 只读详情导航不是折叠动作，不能带 aria-expanded 或展开箭头。 */
+  onActivate?: () => void;
+  actionLabel?: string;
   /** 行尾的独立按钮（侧栏打开、移到后台等），不参与展开点击 */
   actions?: ReactNode;
 }) {
@@ -70,7 +75,7 @@ export function ToolSummaryRow({
           {status}
         </span>
       )}
-      {canToggle && (
+      {canToggle && !onActivate && (
         <ChevronRight
           aria-hidden
           className={cn(
@@ -85,11 +90,12 @@ export function ToolSummaryRow({
     'group/tool-summary inline-flex min-h-6 max-w-full min-w-0 items-center gap-2 text-left text-sm transition-colors';
   return (
     <div className="flex min-w-0 items-center gap-1">
-      {canToggle ? (
+      {canToggle || onActivate ? (
         <button
           type="button"
-          onClick={onToggle}
-          aria-expanded={expanded}
+          onClick={onActivate ?? onToggle}
+          aria-label={onActivate ? actionLabel : undefined}
+          aria-expanded={onActivate ? undefined : expanded}
           title={title}
           className={cn(
             className,

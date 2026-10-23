@@ -24,6 +24,30 @@ commands 不持久化，commands 仍由 snapshot / commands 事件恢复到内�
 过期 seq 的事件在 reducer 里丢弃。改事件处理逻辑时改 `reducer.ts`（纯函数，有测试），
 不要把逻辑写进订阅回调。
 
+## 子代理只读观察
+
+- 子代理正文继续使用 `sessions` 同一份会话投影，不以截短 progress 或 TaskBar 活动拼接第二份日志。
+- Agent id、Run id 与 child session id 不可混用；打开目标按直属 parent 与 Main child metadata
+  的 `agentInstanceId` 精确关联，不按名称、时间或字符串拼接猜测。
+- `acquireObservation` 只负责可见视图保热与补水，最后一个观察者释放后回到既有 TTL；
+  关闭观察 tab 不能 abort/dismiss child，隐藏的父 dock 不得永久保热。
+- typed task 自动 dismiss 时，从活成员集合移除，但保留 ended 元数据和 sessionFile 以只读回放。
+  Main 的最近 Run 终态是小型元数据，不是完整 Run 账本；当前 Run 的 validating/queued 等进度优先于上一轮终态。
+- 冷读回包校验 generation、文件来源和正文基准。仅生命周期 seq 推进不能使唯一冷读丢失；
+  首次 live 重读在途 child 已回收时，丢弃旧 live 状态，再补一次只读历史，不复活运行实体。
+- 观察视图明确关闭 retry/rewind/fork/withdraw、输入和审批能力，也不触发自动打开 Changes。
+  详情/目录 tab 只在内存保留，持久布局精确剥离其引用，不改其它面板的恢复行为。
+- 顶部交互标签只展示持久协作者，`task` 只走运行项/代理目录/只读详情。协作者标签的 X
+  调用 `closeCoworkerTab`，只写 parent 的运行态 `hiddenCoworkerIds`，不改变在编成员、正文或 worker；
+  该字段不持久化。恢复菜单与目录的「打开对话」选择同一会话，并清除隐藏项，不再次雇佣。
+- 「解雇协作者」必须是显式菜单动作并二次确认；不能用关闭标签隐式触发。
+  目录与顶部交互资格共用 `canSelectCoworkerTab`：排除 task、跨父、已结束与只读历史，
+  兼容旧在编协作者缺省 mode。一次 Run 完成只表示协作者待命，不代表实例已解雇。
+
+回归：`sessions/index.test.ts`、`subagentTargets.test.ts`、`subagentRuns.test.ts`、
+`SubagentSessionView.test.tsx`、`CoworkerTabs.test.tsx`、`sidebarDirectory.test.ts`
+和 `sidePanel/observationDock.test.ts`。
+
 ## 加字段的完整流程
 
 漏掉任何一步都会出问题：

@@ -101,6 +101,7 @@ interface AgentRecord {
 
 interface RunRecord {
   context: AgentControlContext;
+  identity: ChildSessionIdentity;
   agentId: string;
   runId: string;
   mode: AgentMode;
@@ -139,6 +140,8 @@ export interface AgentServiceOptions {
   notify?: (context: AgentControlContext, text: string, urgent: boolean) => void;
   /** 某父会话名下未结束 Run 的进度变化：负载是该 owner 的全量快照（REPLACE 语义） */
   onProgress?: (ownerId: string, runs: AgentRunProgress[]) => void;
+  /** Main 权威 Run 终态（含校验结果），按该 Run 的 exact child 身份只发布一次。 */
+  onRunSettled?: (identity: ChildSessionIdentity, run: AgentRunSnapshot, error?: string) => void;
 }
 
 const TERMINAL_RUN_STATUSES: ReadonlySet<AgentRunStatus> = new Set([
@@ -600,13 +603,15 @@ export class AgentService implements AgentServiceContract {
   observe(event: AgentWorkerEvent | { type: 'worker-exited' }): void {
     if (event.type === 'worker-exited') {
       for (const agent of this.agents.values()) {
-        const active = agent.activeRunId ? this.runs.get(agent.activeRunId) : undefined;
-        if (active && !TERMINAL_RUN_STATUSES.has(active.status)) {
-          // 父会话随 worker 一起没了，无人可通知
-          active.delivered = true;
-          this.finishRun(active, 'interrupted', 'Agent worker exited.');
+        for (const run of this.runs.values()) {
+          if (run.agentId !== agent.agentId || TERMINAL_RUN_STATUSES.has(run.status)) continue;
+          // 父会话随 worker 一起没了，无人可通知；已排队 Run 也不可悬挂或恢复后启动。
+          run.delivered = true;
+          run.validationAbort?.abort();
+          this.finishRun(run, 'interrupted', 'Agent worker exited.');
         }
         agent.activeRunId = undefined;
+        agent.queuedRunIds = [];
         agent.status = agent.mode === 'coworker' ? 'parked' : 'closed';
       }
       return;
@@ -759,6 +764,7 @@ export class AgentService implements AgentServiceContract {
   ): RunRecord {
     return {
       context: agent.context,
+      identity: agent.identity,
       agentId: agent.agentId,
       runId,
       mode: agent.mode,
@@ -881,6 +887,7 @@ export class AgentService implements AgentServiceContract {
     run.finishedAt = this.now();
     run.activity = undefined;
     if (error !== undefined) run.error = error;
+    this.options.onRunSettled?.(run.identity, this.snapshot(run), run.error);
     this.pushProgress(run.context.owner.ownerId);
     // 在等它的 wait 同步结算并标记已知情；仍有 wait 在等它（until:all）则交给那次回执
     this.flushWaiters();

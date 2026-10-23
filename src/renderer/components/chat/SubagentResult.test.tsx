@@ -31,6 +31,26 @@ const report = (over: Partial<Extract<SubagentReceiptView, { kind: 'report' }>> 
   });
 
 describe('SubagentResult', () => {
+  it('仅可靠关联的目标有查看过程按钮，多目标各自保留入口', () => {
+    const html = renderToStaticMarkup(
+      createElement(SubagentResult, {
+        view: {
+          kind: 'list',
+          head: '',
+          info: '{}',
+          runs: [
+            { agentId: 'a', runId: 'r1', status: 'running', durationMs: null },
+            { agentId: 'unknown', runId: 'r2', status: 'closed', durationMs: null },
+          ],
+        },
+        onOpenAgent: () => {},
+        openableAgentIds: new Set(['a']),
+      })
+    );
+    expect(html.match(/\[View process\]/g)).toHaveLength(1);
+    expect(html).toContain('data-subagent-open="a"');
+    expect(html).not.toContain('data-subagent-open="unknown"');
+  });
   it('查看报告：回答按 Markdown 放最前，下面一行状态与用时，运行信息收在折叠里', () => {
     const html = report();
     expect(html).toContain('<div data-md="">fake-ok</div>');

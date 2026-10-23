@@ -9,7 +9,9 @@ import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import type { SettingsState } from '@/stores/settings/types';
 import { useSidePanelStore } from '@/stores/sidePanel';
+import { isSubagentPanel } from '@/stores/sidePanel/transientPanels';
 import { resolveSidePanelDockConversationId } from './sidePanelDockId';
+import { resolveSubagentTarget } from './subagentTargets';
 
 const docks = new Map<string, DockviewApi>();
 const filesTabClosers = new Map<string, () => boolean>();
@@ -27,6 +29,12 @@ const pendingWorkflowReveal: {
   runId: string;
 }[] = [];
 const revealedWorkflowRuns = new Set<string>();
+type SubagentReveal = {
+  parentConversationId: string;
+  childConversationId?: string;
+  title?: string;
+};
+const pendingSubagentReveal = new Map<string, Map<string, SubagentReveal>>();
 
 /** 工作流 tab 跟随该项目生效的内置工具开关（项目覆盖优先于全局） */
 export function selectWorkflowAvailable(
@@ -69,6 +77,17 @@ export function registerFilesOpener(
 
 export function bindSidePanelDock(conversationId: string, api: DockviewApi): void {
   docks.set(conversationId, api);
+  // onReady restores the saved layout synchronously; reveal only after fromJSON completes.
+  queueMicrotask(() => {
+    if (docks.get(conversationId) !== api) return;
+    const pending = pendingSubagentReveal.get(conversationId);
+    pendingSubagentReveal.delete(conversationId);
+    for (const item of pending?.values() ?? []) {
+      if (item.childConversationId) {
+        addSidePanelSubagent({ ...item, childConversationId: item.childConversationId });
+      } else addSidePanelSubagentDirectory(item.parentConversationId);
+    }
+  });
   if (pendingFilesReveal.delete(conversationId)) {
     // 等 onReady 里的布局恢复完再建，免得被 fromJSON 覆盖
     queueMicrotask(() => {
@@ -186,6 +205,8 @@ export function openSidePanelFile(
 ): void {
   const sessions = useSessionsStore.getState();
   const dockId = resolveSidePanelDockConversationId(sessions.conversations, conversationId);
+  // An unproven or different-workspace child must not open a file in another host.
+  if (sessions.conversations[conversationId]?.child && dockId === conversationId) return;
   const projectId = sessions.conversations[dockId]?.projectId;
   if (!projectId) return;
   useSidePanelStore.getState().ensureOpen(dockId);
@@ -242,6 +263,56 @@ export function addSidePanelBtw(opts?: { title?: string }): void {
   });
 }
 
+/** Explicit, read-only reveal in the parent's owner dock. Never switches the main chat selection. */
+export function addSidePanelSubagent(opts: {
+  parentConversationId: string;
+  childConversationId: string;
+  title?: string;
+}): void {
+  const conversations = useSessionsStore.getState().conversations;
+  const agentId = conversations[opts.childConversationId]?.child?.agentInstanceId;
+  if (!agentId) return;
+  const target = resolveSubagentTarget(conversations, opts.parentConversationId, agentId);
+  if (!target || target.childConversationId !== opts.childConversationId) return;
+  revealSubagentPanel({ ...target, title: opts.title ?? target.title });
+}
+
+export function addSidePanelSubagentDirectory(parentConversationId: string): void {
+  if (!useSessionsStore.getState().conversations[parentConversationId]) return;
+  revealSubagentPanel({ parentConversationId });
+}
+
+function revealSubagentPanel(opts: SubagentReveal): void {
+  const conversations = useSessionsStore.getState().conversations;
+  const dockId = resolveSidePanelDockConversationId(conversations, opts.parentConversationId);
+  if (!conversations[dockId]) return;
+  const id = opts.childConversationId
+    ? `subagent:${opts.childConversationId}`
+    : `subagents:${opts.parentConversationId}`;
+  useSidePanelStore.getState().ensureOpen(dockId);
+  const api = docks.get(dockId);
+  if (!api) {
+    let pending = pendingSubagentReveal.get(dockId);
+    if (!pending) {
+      pending = new Map();
+      pendingSubagentReveal.set(dockId, pending);
+    }
+    pending.set(id, opts);
+    return;
+  }
+  const existing = api.getPanel(id);
+  if (existing) {
+    existing.focus();
+    return;
+  }
+  api.addPanel({
+    id,
+    component: opts.childConversationId ? 'subagent-session' : 'subagent-directory',
+    title: opts.title ?? 'Agents',
+    params: opts,
+  });
+}
+
 export function addSidePanelWorkflow(opts: {
   conversationId: string;
   runId: string;
@@ -286,10 +357,32 @@ export function closeSidePanelBrowser(conversationId: string, tabId: string): vo
 export function disposeConversationResources(conversationId: string): void {
   const api = docks.get(conversationId);
   docks.delete(conversationId);
+  // A btw parent may own observers inside another dock. Close only its transient views.
+  for (const dock of docks.values()) {
+    for (const panel of [...dock.panels]) {
+      if (!isSubagentPanel(panel.id)) continue;
+      const params = panel.api.getParameters<SubagentReveal>();
+      if (
+        params?.parentConversationId === conversationId ||
+        params?.childConversationId === conversationId
+      )
+        panel.api.close();
+    }
+  }
   filesTabClosers.delete(conversationId);
   filesOpeners.delete(conversationId);
   pendingFileOpens.delete(conversationId);
   pendingFilesReveal.delete(conversationId);
+  pendingSubagentReveal.delete(conversationId);
+  for (const pending of pendingSubagentReveal.values()) {
+    for (const [key, item] of pending) {
+      if (
+        item.parentConversationId === conversationId ||
+        item.childConversationId === conversationId
+      )
+        pending.delete(key);
+    }
+  }
   pendingBrowserReveal.splice(
     0,
     pendingBrowserReveal.length,
@@ -305,6 +398,7 @@ export function disposeConversationResources(conversationId: string): void {
   }
   if (api) {
     for (const panel of [...api.panels]) {
+      if (isSubagentPanel(panel.id)) continue;
       if (panel.id === 'changes' || panel.id === 'files') continue;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) continue;
       releaseTerminal(panel.id);

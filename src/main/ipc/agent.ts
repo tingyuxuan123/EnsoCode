@@ -48,7 +48,6 @@ import {
   parseParentSourceBindingRequest,
 } from '@shared/types/mentions';
 import { app, ipcMain, powerMonitor, type WebContents, webContents } from 'electron';
-import { EnsoSafeJournal } from '../../agent/ensoSafeJournal';
 import { titleSummaryTimeoutMs } from '../../agent/titleSummary';
 import { ActiveConversationRegistry } from '../services/activeConversationRegistry';
 import { AgentDispatchService } from '../services/agentDispatchService';
@@ -107,6 +106,7 @@ import { pickBrowserFileRoot, setBrowserFileRootResolver } from '../services/bro
 import { browserHost } from '../services/browserHost';
 import type { BrowserActor } from '../services/browserTabClaims';
 import { chatModelsRoot } from '../services/chatModels';
+import { readChildHistory as readPersistedChildHistory } from '../services/childHistory';
 import { computerHost } from '../services/computerHost';
 import { reloadConversation } from '../services/conversationReload';
 import { searchFiles } from '../services/fileSearch';
@@ -514,31 +514,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/**
- * 已结束 child 的只读历史。只读不复活：不进 sessionIndex、不占容量、不注册能力授权。
- *
- * 路径的唯一来源是 Main 自己读的持久化会话记录，再叠两道校验：
- * 必须落在 sessions 目录内（防穿越）、basename 必须是 enso- 前缀的 safe journal
- * （不读 pi 的普通 session 文件，那里面没经过脱敏）。
- */
-async function readChildHistory(conversationId: string): Promise<ChildHistoryResult> {
-  const persisted = agentSessionIndex.persistedConversation(conversationId);
-  const sessionFile = persisted?.sessionFile;
-  if (!isNonEmptyString(sessionFile)) {
-    return { ok: false, code: 'not-found', error: 'No persisted history for this conversation.' };
-  }
-  const sessionDir = path.join(app.getPath('userData'), 'agent', 'sessions');
-  const resolved = path.resolve(sessionFile);
-  const withinSessionDir =
-    resolved === path.resolve(sessionDir) ||
-    resolved.startsWith(`${path.resolve(sessionDir)}${path.sep}`);
-  if (!withinSessionDir || !path.basename(resolved).startsWith('enso-')) {
-    return { ok: false, code: 'unavailable', error: 'History file is not a safe journal.' };
-  }
-  if (!existsSync(resolved)) {
-    return { ok: false, code: 'not-found', error: 'History file is missing.' };
-  }
-  return { ok: true, projection: await EnsoSafeJournal.restore(resolved) };
+/** 历史服务只读文件；不进入 worker 生命周期、容量或能力授权。 */
+async function readChildHistory(
+  conversationId: string,
+  beforeIndex?: number
+): Promise<ChildHistoryResult> {
+  return readPersistedChildHistory(conversationId, beforeIndex, {
+    sessionDir: path.join(app.getPath('userData'), 'agent', 'sessions'),
+    persistedConversation: (id) => agentSessionIndex.persistedConversation(id),
+  });
 }
 
 /**
@@ -1062,6 +1046,19 @@ export function registerAgentHandlers(): void {
       if (identity) sendAgentCommand({ type: 'agent-notify', identity, text, urgent });
     },
     onProgress: (ownerId, runs) => subagentProgressPush.update(ownerId, runs),
+    onRunSettled: (identity, run, error) => {
+      if (run.finishedAt === undefined) return;
+      broadcastAgentEvent({
+        type: 'subagent-run-settled',
+        identity,
+        run: {
+          runId: run.runId,
+          status: run.status,
+          finishedAt: run.finishedAt,
+          ...(error !== undefined ? { error } : {}),
+        },
+      });
+    },
     allowedModes: (context) => {
       const state = readSettingsState() ?? {};
       const projects = Array.isArray(state.projects) ? state.projects : [];
@@ -1664,11 +1661,19 @@ export function registerAgentHandlers(): void {
   // 已结束 child 的只读历史：渲染层只能给 conversationId，路径一律由 Main 从自己读的
   // 持久化会话里推导。接受渲染层传路径等于开放任意文件读取。
   ipcMain.handle(IPC_CHANNELS.AGENT_CHILD_HISTORY_READ, async (_event, request: unknown) => {
-    const conversationId = asRecord(request)?.conversationId;
-    if (!isNonEmptyString(conversationId)) {
+    const value = asRecord(request);
+    if (!value || !isNonEmptyString(value.conversationId)) {
       return { ok: false, code: 'not-found', error: 'conversationId is required' };
     }
-    return await readChildHistory(conversationId);
+    const beforeIndex = value.beforeIndex;
+    if (
+      Object.keys(value).some((key) => key !== 'conversationId' && key !== 'beforeIndex') ||
+      (beforeIndex !== undefined &&
+        (typeof beforeIndex !== 'number' || !Number.isSafeInteger(beforeIndex) || beforeIndex < 0))
+    ) {
+      return { ok: false, code: 'unavailable', error: 'Invalid child history request.' };
+    }
+    return await readChildHistory(value.conversationId, beforeIndex);
   });
 
   // 手动重新读取会话：来源由 Main 按会话索引决定（worker 内存活着 → 带 seq 的快照，否则 safe journal）。

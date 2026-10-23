@@ -79,6 +79,119 @@ function spawnRequest(overrides: Partial<AgentControlSpawnRequest> = {}): AgentC
 }
 
 describe('AgentService lifecycle', () => {
+  it('onRunSettled：只接受精确 child 身份，成功终态只回调一次', async () => {
+    const onRunSettled = vi.fn();
+    const { service, children } = setup({ onRunSettled, now: () => 123 });
+    const spawned = await service.spawn(spawnRequest());
+    if (!spawned.ok) throw new Error(spawned.error);
+    const completed = {
+      type: 'turn-completed' as const,
+      identity: children[0],
+      seq: 1,
+      turnId: spawned.value.runId,
+    };
+    service.observe({
+      ...completed,
+      identity: { ...children[0], generation: '99999999-9999-4999-8999-999999999999' },
+    });
+    expect(onRunSettled).not.toHaveBeenCalled();
+    service.observe(completed);
+    service.observe({ ...completed, seq: 2 });
+    service.observe({ type: 'child-ended', identity: children[0], seq: 3, reason: 'dismissed' });
+    service.observe({ type: 'worker-exited' });
+    expect(onRunSettled).toHaveBeenCalledExactlyOnceWith(
+      children[0],
+      {
+        owner,
+        agentId: spawned.value.agentId,
+        runId: spawned.value.runId,
+        mode: 'task',
+        status: 'succeeded',
+        createdAt: 123,
+        startedAt: 123,
+        finishedAt: 123,
+      },
+      undefined
+    );
+  });
+
+  it('onRunSettled：取消 validating 后迟到 gate 不再发布成功或复活 run', async () => {
+    const onRunSettled = vi.fn();
+    const { service, runtime, children } = setup({ onRunSettled, now: () => 456 });
+    const gate = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(runtime.validate!).mockReturnValueOnce(gate.promise);
+    const spawned = await service.spawn(
+      spawnRequest({ mode: 'coworker', gate: { commandRef: 'tests' } })
+    );
+    if (!spawned.ok) throw new Error(spawned.error);
+    service.observe({
+      type: 'turn-completed',
+      identity: children[0],
+      seq: 1,
+      turnId: spawned.value.runId,
+    });
+    expect(onRunSettled).not.toHaveBeenCalled();
+    await service.stop({ context, requestId: 'stop-validation', runId: spawned.value.runId });
+    gate.resolve({ ok: true });
+    await Promise.resolve();
+    expect(onRunSettled).toHaveBeenCalledExactlyOnceWith(
+      children[0],
+      expect.objectContaining({
+        runId: spawned.value.runId,
+        status: 'cancelled',
+        finishedAt: 456,
+      }),
+      undefined
+    );
+  });
+
+  it('onRunSettled：worker 退出同时结算 active 和 queued，重复退出不重复通知', async () => {
+    const onRunSettled = vi.fn();
+    const { service, runtime, children } = setup({ onRunSettled, now: () => 789 });
+    const spawned = await service.spawn(spawnRequest({ mode: 'coworker' }));
+    if (!spawned.ok) throw new Error(spawned.error);
+    const queued = await service.send({
+      context,
+      requestId: 'queued',
+      agentId: spawned.value.agentId,
+      message: 'next',
+      delivery: 'next',
+    });
+    if (!queued.ok) throw new Error(queued.error);
+    service.observe({ type: 'worker-exited' });
+    service.observe({ type: 'worker-exited' });
+    expect(onRunSettled).toHaveBeenCalledTimes(2);
+    for (const runId of [spawned.value.runId, queued.value.runId]) {
+      expect(onRunSettled).toHaveBeenCalledWith(
+        children[0],
+        expect.objectContaining({
+          runId,
+          status: 'interrupted',
+          finishedAt: 789,
+        }),
+        'Agent worker exited.'
+      );
+    }
+    expect(service.progress(owner.ownerId)).toEqual([]);
+    expect(runtime.prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('onRunSettled：prompt 下发失败也发布失败终态且不暴露 prompt/schema', async () => {
+    const onRunSettled = vi.fn();
+    const { service, runtime, children } = setup({ onRunSettled });
+    vi.mocked(runtime.prompt).mockResolvedValueOnce({ ok: false, error: 'delivery failed' });
+    await service.spawn(spawnRequest({ prompt: 'private prompt', schema: { private: 'schema' } }));
+    expect(onRunSettled).toHaveBeenCalledExactlyOnceWith(
+      children[0],
+      expect.objectContaining({
+        status: 'failed',
+        finishedAt: expect.any(Number),
+      }),
+      'delivery failed'
+    );
+    expect(JSON.stringify(onRunSettled.mock.calls)).not.toContain('private');
+  });
+
   it('不注入 randomUuid 时默认 id 生成器可直接调用', async () => {
     // crypto.randomUUID 解绑后调用会抛 "Value of \"this\" must be of type Crypto"。
     const { runtime } = setup();

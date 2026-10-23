@@ -26,4 +26,11 @@ describe('useSubagentRunsStore', () => {
     replace('c1', []);
     expect(useSubagentRunsStore.getState().byConversation).toEqual({ c2: [run('r2')] });
   });
+
+  it('running 到空快照仍推进 revision，迟到初始查询不能复活旧进度', () => {
+    const before = useSubagentRunsStore.getState().revisionByConversation?.c1 ?? 0;
+    useSubagentRunsStore.getState().replace('c1', [run('r1')]);
+    useSubagentRunsStore.getState().replace('c1', []);
+    expect(useSubagentRunsStore.getState().revisionByConversation?.c1 ?? 0).toBeGreaterThan(before);
+  });
 });

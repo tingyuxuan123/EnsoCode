@@ -45,6 +45,8 @@ export interface ChatHost {
 }
 
 export const ChatHostContext = createContext<ChatHost | null>(null);
+/** 正文宿主的真实会话，不依赖全局正在显示的主聊天；侧栏也使用同一标识。 */
+export const ChatSessionContext = createContext<string | null>(null);
 
 export function useChatHost(): ChatHost | null {
   return useContext(ChatHostContext);

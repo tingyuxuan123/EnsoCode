@@ -8,6 +8,7 @@ vi.mock('@/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 vi.mock('./Markdown', () => ({ Markdown: ({ text }: { text: string }) => text }));
+vi.mock('./SubagentProcessBar', () => ({ SubagentProcessBar: () => null }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: { virtualModels: never[] }) => unknown) =>
     select({ virtualModels: [] }),

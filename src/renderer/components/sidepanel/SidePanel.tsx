@@ -10,6 +10,7 @@ import type {
 import { DockviewReact, themeDark, themeLight } from 'dockview-react';
 import { motion } from 'framer-motion';
 import {
+  Bot,
   FolderOpen,
   GitCompare,
   Globe,
@@ -32,6 +33,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
 import {
   addSidePanelBrowser,
+  addSidePanelSubagentDirectory,
   addSidePanelWorkflow,
   bindSidePanelDock,
   closeSidePanelBrowser,
@@ -44,6 +46,7 @@ import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { useSidePanelStore } from '@/stores/sidePanel';
 import { sanitizeSidePanelLayout } from '@/stores/sidePanel/layoutSanitize';
+import { isSubagentPanel } from '@/stores/sidePanel/transientPanels';
 import {
   CHAT_MIN_WIDTH,
   resolveSidePanelWidth,
@@ -54,6 +57,8 @@ import { BrowserView } from './BrowserView';
 import { BtwView } from './BtwView';
 import { ChangesView } from './ChangesView';
 import { FilesView } from './FilesView';
+import { SubagentDirectoryView } from './SubagentDirectoryView';
+import { SubagentSessionView } from './SubagentSessionView';
 import { shouldSkipSidePanelWidthAnim, sidePanelWidthTransition } from './sidePanelWidthAnim';
 import { TerminalView } from './TerminalView';
 import { idsToClose, type TabCloseKind } from './tabCloseActions';
@@ -62,7 +67,35 @@ import 'dockview-react/dist/styles/dockview.css';
 import './sidepanel-dock.css';
 
 /** dockview 的 part 组件在独立渲染树中,cwd 等上下文经 context 注入 */
-const PanelContext = createContext<{ conversationId?: string; projectId?: string }>({});
+const PanelContext = createContext<{
+  conversationId?: string;
+  projectId?: string;
+  visible?: boolean;
+}>({});
+
+function SubagentPanel(
+  props: IDockviewPanelProps<{ parentConversationId: string; childConversationId: string }>
+) {
+  const { visible: dockVisible } = useContext(PanelContext);
+  const [panelVisible, setPanelVisible] = useState(props.api.isActive && props.api.isVisible);
+  useEffect(() => {
+    const update = () => setPanelVisible(props.api.isActive && props.api.isVisible);
+    update();
+    const active = props.api.onDidActiveChange(update);
+    const visibility = props.api.onDidVisibilityChange(update);
+    return () => {
+      active.dispose();
+      visibility.dispose();
+    };
+  }, [props.api]);
+  return <SubagentSessionView {...props.params} visible={Boolean(dockVisible && panelVisible)} />;
+}
+
+function SubagentDirectoryPanel(props: IDockviewPanelProps<{ parentConversationId: string }>) {
+  const { t } = useI18n();
+  useEffect(() => props.api.setTitle(t('Agents')), [props.api, t]);
+  return <SubagentDirectoryView parentConversationId={props.params.parentConversationId} />;
+}
 
 function nextTerminalTitle(api: DockviewApi, label: string): string {
   const count = api.panels.length;
@@ -274,6 +307,8 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <FolderOpen className="h-3 w-3 shrink-0" />
       ) : props.api.id.startsWith('btw:') ? (
         <MessageCircle className="h-3 w-3 shrink-0" />
+      ) : isSubagentPanel(props.api.id) ? (
+        <Bot className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'workflow' ? (
         <Workflow className="h-3 w-3 shrink-0" />
       ) : isBrowser && favicon && !faviconBroken ? (
@@ -330,6 +365,7 @@ function NewTabMenu({
   onNewBrowser,
   onNewBtw,
   onNewWorkflow,
+  onNewSubagents,
   compact,
 }: {
   onNewTerminal: () => void;
@@ -339,6 +375,7 @@ function NewTabMenu({
   onNewBtw: () => void;
   /** 缺省 = 该项目没开 workflow 工具，不给入口 */
   onNewWorkflow?: () => void;
+  onNewSubagents?: () => void;
   compact?: boolean;
 }) {
   const { t } = useI18n();
@@ -377,6 +414,12 @@ function NewTabMenu({
           <MessageCircle className="h-4 w-4" />
           {t('Btw')}
         </MenuItem>
+        {onNewSubagents && (
+          <MenuItem onClick={onNewSubagents}>
+            <Bot className="h-4 w-4" />
+            {t('Agents')}
+          </MenuItem>
+        )}
         {onNewWorkflow ? (
           <MenuItem onClick={onNewWorkflow}>
             <Workflow className="h-4 w-4" />
@@ -413,6 +456,9 @@ function SidePanelHeaderActions({
       </button>
       <NewTabMenu
         compact
+        onNewSubagents={
+          conversationId ? () => addSidePanelSubagentDirectory(conversationId) : undefined
+        }
         onNewTerminal={() => {
           if (group) {
             containerApi.addPanel({
@@ -468,6 +514,9 @@ function Watermark(props: IWatermarkPanelProps) {
           {t('No tabs yet. Create one to get started.')}
         </p>
         <NewTabMenu
+          onNewSubagents={
+            conversationId ? () => addSidePanelSubagentDirectory(conversationId) : undefined
+          }
           onNewTerminal={() =>
             addTerminalPanel(props.containerApi, conversationId, projectId, t('Terminal'))
           }
@@ -504,6 +553,8 @@ const DOCK_COMPONENTS = {
   browser: BrowserPanel,
   btw: BtwPanel,
   workflow: WorkflowPanel,
+  'subagent-session': SubagentPanel,
+  'subagent-directory': SubagentDirectoryPanel,
 };
 
 /** 跟随应用暗色模式(applyAppTheme 切换 documentElement 的 dark class) */
@@ -522,15 +573,17 @@ function useIsDark(): boolean {
 function MountedConversationDock({
   conversationId,
   hidden,
+  visible,
 }: {
   conversationId: string;
   hidden: boolean;
+  visible: boolean;
 }) {
   const projectId = useSessionsStore((s) => s.conversations[conversationId]?.projectId);
   if (!projectId) return null;
   return (
     <div className={cn('absolute inset-0', hidden && 'hidden')}>
-      <ConversationDock conversationId={conversationId} projectId={projectId} />
+      <ConversationDock conversationId={conversationId} projectId={projectId} visible={visible} />
     </div>
   );
 }
@@ -538,9 +591,11 @@ function MountedConversationDock({
 function ConversationDock({
   conversationId,
   projectId,
+  visible,
 }: {
   conversationId: string;
   projectId: string;
+  visible: boolean;
 }) {
   const isDark = useIsDark();
   const workflowAvailable = useWorkflowAvailable(projectId);
@@ -574,6 +629,7 @@ function ConversationDock({
     });
     // 只有用户关 tab 才回收;dock 本身不随切会话卸载
     event.api.onDidRemovePanel((panel) => {
+      if (isSubagentPanel(panel.id)) return;
       if (panel.id === 'changes' || panel.id === 'files') return;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) {
         void window.electronAPI.browser.closeTab(panel.id);
@@ -590,7 +646,7 @@ function ConversationDock({
   };
 
   return (
-    <PanelContext.Provider value={{ conversationId, projectId }}>
+    <PanelContext.Provider value={{ conversationId, projectId, visible }}>
       <div className="enso-side-dock h-full">
         <DockviewReact
           components={DOCK_COMPONENTS}
@@ -755,7 +811,12 @@ export function SidePanel({
           {visibleIds.length > 0 ? (
             <div className="relative min-h-0 flex-1">
               {visibleIds.map((id) => (
-                <MountedConversationDock key={id} conversationId={id} hidden={id !== activeId} />
+                <MountedConversationDock
+                  key={id}
+                  conversationId={id}
+                  hidden={id !== activeId}
+                  visible={id === activeId && open}
+                />
               ))}
             </div>
           ) : (

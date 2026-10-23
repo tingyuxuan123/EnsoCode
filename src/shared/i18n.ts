@@ -5,6 +5,56 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  Subagents: '子代理',
+  'One-off task': '一次性任务',
+  'Persistent collaborator': '持久协作者',
+  'Created manually': '手动创建',
+  'Dispatched by agent': '模型派发',
+  'Dispatched via mention': '通过提及派发',
+  'Collaborator standing by': '协作者待命',
+  'Open conversation': '打开对话',
+  'Last run: {{status}}': '最近执行：{{status}}',
+  'Process observation only. Messages cannot be sent here.':
+    '此处仅用于观察运行过程，不能发送消息。',
+  'Closing this view does not stop the agent.': '关闭此视图不会停止代理。',
+  'Close conversation view': '关闭对话视图',
+  'Collaborator actions': '协作者操作',
+  'Reopen collaborator': '重新打开协作者',
+  'Add collaborator': '添加协作者',
+  'Collaborator name': '协作者名称',
+  'Adding collaborator…': '正在添加协作者…',
+  'Dismiss collaborator': '解雇协作者',
+  'Dismiss {{name}}?': '解雇 {{name}}？',
+  'This ends the collaborator session and stops its work. Closing a tab only hides the view.':
+    '此操作会结束协作者会话并停止其工作。若只是收起界面，请关闭对话视图。',
+  'A persistent collaborator can receive follow-up messages. One-off tasks are dispatched by the agent and viewed in Agents.':
+    '持久协作者可以持续接收后续消息；一次性任务由模型派发，并在「代理」中查看过程。',
+  'The name is a label; choose the role separately below.':
+    '名称仅用于识别协作者，实际角色请在下方单独选择。',
+  'General purpose': '通用',
+  'View subagent process': '查看子代理运行过程',
+  '{{count}} running': '{{count}} 个运行中',
+  'Subagent session is unavailable.': '子代理会话不可用。',
+  'Reload recorded history': '重新读取历史记录',
+  'Recorded history is unavailable for this ended subagent.': '此已结束子代理的历史记录不可用。',
+  'No recorded output yet': '暂无已记录的输出',
+  'Only recorded history is shown. Some earlier content may be unavailable.':
+    '仅显示已记录的历史，部分早期内容可能不可用。',
+  'File links are unavailable for this workspace.': '此工作区暂不支持文件链接。',
+  'Recorded child sessions, not a complete run history.':
+    '显示已记录的子会话，不代表完整的执行历史。',
+  'No subagents yet': '暂无子代理',
+  'Parent conversation is unavailable.': '父会话不可用。',
+  'Subagent sessions appear here when they are created.': '创建子代理后，其会话将显示在这里。',
+  Starting: '启动中',
+  Ended: '已结束',
+  Succeeded: '已成功',
+  Cancelled: '已取消',
+  Validating: '验收中',
+  'Awaiting input': '等待输入',
+  'Child history is unavailable or invalid.': '子代理历史不可用或格式无效。',
+  'No persisted child history.': '未找到子代理历史记录。',
+  'Child history file is missing.': '子代理历史文件已丢失。',
   'Code search': '代码搜索',
   'Search workspace code with your existing Devin subscription. Default off.':
     '使用已有 Devin 订阅搜索项目代码，默认关闭。',
@@ -724,7 +774,7 @@ export const zhTranslations: Record<string, string> = {
   'No usable model is available. Configure provider credentials and enable a model first.':
     '没有可用模型。请先配置提供商凭证并启用模型。',
   Agent: 'Agent',
-  Agents: 'Agent',
+  Agents: '代理',
   File: '文件',
   Files: '文件',
   Folder: '文件夹',

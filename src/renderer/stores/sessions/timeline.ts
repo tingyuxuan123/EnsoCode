@@ -110,6 +110,8 @@ export type TimelineItem =
       subagentOp?: SubagentOp;
       /** wait / list 行：agentId → spawn 时起的名字，展开后逐个标注；其它缺省 */
       subagentTitles?: Record<string, string>;
+      /** 正文目标由这些 Agent id 再和 Main child metadata 关联，不拼会话 id。 */
+      subagentAgentIds?: string[];
       /** 由展开的工具组平铺而来：渲染为组内紧凑行 */
       nested?: boolean;
     }
@@ -567,6 +569,37 @@ function recordSubagent(
   if (operation !== 'spawn') return;
   const label = [name, description].find((value) => typeof value === 'string' && value.trim());
   if (typeof label === 'string') agents.set(agentId, label.trim());
+}
+
+function subagentLinkIds(
+  args: unknown,
+  output: string | undefined,
+  runs: ReadonlyMap<string, string>
+): string[] {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return [];
+  const record = args as Record<string, unknown>;
+  const ids = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) ids.add(value);
+  };
+  add(record.agentId);
+  if (typeof record.runId === 'string') add(runs.get(record.runId));
+  if (Array.isArray(record.runIds))
+    for (const runId of record.runIds) {
+      if (typeof runId === 'string') add(runs.get(runId));
+    }
+  const receipt = splitTrailingJson(output)?.value;
+  const addRecord = (value: unknown) => {
+    if (value && typeof value === 'object' && !Array.isArray(value))
+      add((value as Record<string, unknown>).agentId);
+  };
+  if (receipt) {
+    addRecord(receipt);
+    addRecord(receipt.run);
+    for (const key of ['runs', 'agents'])
+      if (Array.isArray(receipt[key])) for (const value of receipt[key]) addRecord(value);
+  }
+  return [...ids];
 }
 
 export type SubagentOp = 'report' | 'wait' | 'stop' | 'dismiss' | 'list';
@@ -1154,6 +1187,10 @@ function buildMessageTimeline(
             part.name === 'subagent'
               ? extractSubagentHeader(part.arguments, spawnedAgents, subagentRuns)
               : null;
+          const linkedAgentIds =
+            part.name === 'subagent'
+              ? subagentLinkIds(part.arguments, result?.output, subagentRuns)
+              : [];
           const sent = extractSentMessage(part.name, part.arguments, spawnedAgents);
           const sentMessage = sent?.text ?? extractSpawnTask(part.name, part.arguments);
           const captured = extractCapturedMemory(part.name, part.arguments);
@@ -1237,6 +1274,7 @@ function buildMessageTimeline(
             ...(asked ? { ask: asked.ask } : {}),
             ...(subagent?.op ? { subagentOp: subagent.op } : {}),
             ...(subagent?.titles ? { subagentTitles: subagent.titles } : {}),
+            ...(linkedAgentIds.length > 0 ? { subagentAgentIds: linkedAgentIds } : {}),
             ...(result || !toolStartedAt ? {} : { startedAt: toolStartedAt[part.id] ?? null }),
           });
           return;

@@ -25,10 +25,14 @@ const STATUS: Record<string, [label: string, dot: string]> = {
 export function SubagentResult({
   view,
   titles,
+  onOpenAgent,
+  openableAgentIds,
 }: {
   view: SubagentReceiptView;
   /** agentId → spawn 时起的名字 */
   titles?: Record<string, string>;
+  onOpenAgent?: (agentId: string) => void;
+  openableAgentIds?: ReadonlySet<string>;
 }) {
   const { t } = useI18n();
   return (
@@ -43,7 +47,16 @@ export function SubagentResult({
       {view.runs.length > 0 && (
         <ul className="space-y-0.5 text-xs text-muted-foreground">
           {view.runs.map((run) => (
-            <RunLine key={run.runId || run.agentId} run={run} title={titles?.[run.agentId]} />
+            <RunLine
+              key={run.runId || run.agentId}
+              run={run}
+              title={titles?.[run.agentId]}
+              onOpen={
+                onOpenAgent && openableAgentIds?.has(run.agentId)
+                  ? () => onOpenAgent(run.agentId)
+                  : undefined
+              }
+            />
           ))}
         </ul>
       )}
@@ -71,7 +84,15 @@ export function SubagentResult({
   );
 }
 
-function RunLine({ run, title }: { run: SubagentRunLine; title?: string }) {
+function RunLine({
+  run,
+  title,
+  onOpen,
+}: {
+  run: SubagentRunLine;
+  title?: string;
+  onOpen?: () => void;
+}) {
   const { t } = useI18n();
   const [label, dot] = STATUS[run.status] ?? [null, 'bg-muted-foreground'];
   const took =
@@ -85,6 +106,16 @@ function RunLine({ run, title }: { run: SubagentRunLine; title?: string }) {
       <span className="shrink-0">
         {[label ? t(label) : run.status, took].filter(Boolean).join(' · ')}
       </span>
+      {onOpen && (
+        <button
+          type="button"
+          data-subagent-open={run.agentId}
+          onClick={onOpen}
+          className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          {t('View process')}
+        </button>
+      )}
     </li>
   );
 }

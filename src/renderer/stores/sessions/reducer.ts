@@ -12,6 +12,7 @@ import {
   type SessionIdentity,
   type SlashCommand,
   type SubagentInfo,
+  type SubagentRunSettlement,
   shouldApplyDispatchMainEvent,
 } from '@shared/types/agent';
 import { extractEdits, extractWriteContent } from './timeline';
@@ -243,6 +244,8 @@ export interface SessionProjection {
   subagents: SubagentInfo[];
   /** child 会话终态：已结束，跨重启不复活（随 partialize 持久化，重启后 Main 级联恢复据此跳过） */
   ended?: boolean;
+  /** Main 验收后的最近 Run 终态，小型历史元数据；不代表完整 Run 账本。 */
+  lastSubagentRun?: SubagentRunSettlement;
   /** 本次 running 的起点（wall clock），idle/failed 时清空 */
   runStartedAt?: number;
   /** 最近一次可见进展时间（消息/工具/子代理/任务/审批提问）：运行中计时显示「距上次返回」，随 running 结束清空 */
@@ -343,6 +346,17 @@ export function applyAgentEvent(
         agent.status === 'running' ? { ...agent, status: 'failed' as const } : agent
       ),
     };
+  }
+
+  if (event.type === 'subagent-run-settled') {
+    if (
+      event.identity.sessionId !== sessionId ||
+      event.identity.generation !== state.generation ||
+      (state.lastSubagentRun && state.lastSubagentRun.finishedAt > event.run.finishedAt)
+    )
+      return state;
+    if (JSON.stringify(state.lastSubagentRun) === JSON.stringify(event.run)) return state;
+    return { ...state, lastSubagentRun: event.run };
   }
 
   if (event.type === 'snapshot') {
