@@ -590,10 +590,19 @@ export class McpManager {
         `callTool ${name}`
       );
     const annotations = toAnnotations(tool.annotations);
+    let description = tool.description ?? `MCP tool ${tool.name} from ${server.name}`;
+    // Kimi CU 的上游描述只提 window_id，但执行时仍要求 app / pid；只补文案，不猜目标应用。
+    if (
+      mcpNamespaceName(server.name).toLowerCase() === 'mcp__kimi_cu' &&
+      tool.name === 'get_window_state'
+    ) {
+      description +=
+        '\nRequires app (bundle ID) or pid on every call, together with window_id; window_id alone is not sufficient. Use list_apps / list_windows to obtain the target app or pid, and pass it explicitly even when reusing a known window_id.';
+    }
     return {
       name,
       label: `${server.name}: ${tool.name}`,
-      description: tool.description ?? `MCP tool ${tool.name} from ${server.name}`,
+      description,
       // MCP inputSchema 是标准 JSON Schema，TypeBox 的 TSchema 结构同源，直接透传
       parameters: tool.inputSchema as ToolDefinition['parameters'],
       outputSchema: mcpResultSchema(tool.outputSchema) as ToolDefinition['outputSchema'],

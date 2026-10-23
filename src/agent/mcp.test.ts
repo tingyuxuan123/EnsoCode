@@ -440,6 +440,61 @@ describe('McpManager deferred servers', () => {
   });
 });
 
+describe('McpManager Kimi CU 工具描述', () => {
+  it.each(['kimi-cu', 'kimi_cu', 'Kimi CU'])(
+    '%s 的窗口截图工具明确要求 app 或 pid，且保留上游描述和参数',
+    async (name) => {
+      const description = 'Capture a selected window by window_id.';
+      const inputSchema = {
+        type: 'object',
+        properties: {
+          app: { type: 'string' },
+          pid: { type: 'integer' },
+          window_id: { type: 'integer' },
+        },
+      };
+      clientState.listTools = vi.fn(async () => ({
+        tools: [{ name: 'get_window_state', description, inputSchema }],
+      }));
+      const { manager } = makeManager();
+      const [tool] = await manager.toolsFor([{ ...httpServer, name }]);
+      expect(tool.description).toContain(description);
+      expect(tool.description).toContain('Requires app (bundle ID) or pid on every call');
+      expect(tool.description).toContain('window_id alone is not sufficient');
+      expect(tool.parameters).toEqual(inputSchema);
+      const params = { app: 'com.example.app', window_id: 123 };
+      await tool.execute('tc-window', params, undefined, undefined, {} as never);
+      expect(clientState.callTool).toHaveBeenCalledWith(
+        { name: 'get_window_state', arguments: params },
+        undefined,
+        expect.objectContaining({ timeout: expect.any(Number) })
+      );
+    }
+  );
+
+  it('上游没有描述时也补充应用定位要求', async () => {
+    clientState.listTools = vi.fn(async () => ({
+      tools: [{ name: 'get_window_state', inputSchema: { type: 'object' } }],
+    }));
+    const { manager } = makeManager();
+    const [tool] = await manager.toolsFor([{ ...httpServer, name: 'kimi-cu' }]);
+    expect(tool.description).toContain('Requires app (bundle ID) or pid on every call');
+  });
+
+  it.each([
+    ['other-server', 'get_window_state'],
+    ['kimi-cu', 'get_app_state'],
+  ])('不修改 %s 的 %s 描述', async (name, toolName) => {
+    const description = 'Original upstream description.';
+    clientState.listTools = vi.fn(async () => ({
+      tools: [{ name: toolName, description, inputSchema: { type: 'object' } }],
+    }));
+    const { manager } = makeManager();
+    const [tool] = await manager.toolsFor([{ ...httpServer, name }]);
+    expect(tool.description).toBe(description);
+  });
+});
+
 describe('McpManager per-server timeouts', () => {
   it('uses configured connectTimeoutMs for connect', async () => {
     vi.useFakeTimers();

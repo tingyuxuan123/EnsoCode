@@ -1,2 +1,21 @@
 packages:
   - 'packages/*'
+
+# pnpm >=10.26：统一声明依赖安装脚本权限，未列出的包仍默认禁止执行。
+allowBuilds:
+  '@google/genai': true
+  '@vscode/ripgrep': true
+  classic-level: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  node-llama-cpp: true
+  node-pty: true
+  onnxruntime-node: true
+  protobufjs: true
+  workerd: true
+  better-sqlite3: false
+
+patchedDependencies:
+  '@earendil-works/pi-coding-agent@1.0.0': patches/@earendil-works__pi-coding-agent@1.0.0.patch
+  '@rahularya01/pi-cursor@1.4.39': patches/@rahularya01__pi-cursor@1.4.39.patch

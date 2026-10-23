@@ -185,14 +185,13 @@ afterEach(async () => {
 });
 
 describe('BrowserView controls', () => {
-  it('shows all five capabilities and takeover guidance on a new tab', () => {
+  it('shows all five capabilities on a new tab', () => {
     for (const text of [
       'Browse the web',
       'Read pages',
       'Interact with pages',
       'Test layouts',
       'Retrace your steps',
-      'You can take control at any time.',
     ])
       expect(container.textContent).toContain(text);
   });

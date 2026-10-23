@@ -131,28 +131,6 @@
   "engines": {
     "node": ">=22"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@google/genai",
-      "@vscode/ripgrep",
-      "classic-level",
-      "electron",
-      "electron-winstaller",
-      "esbuild",
-      "node-llama-cpp",
-      "node-pty",
-      "onnxruntime-node",
-      "protobufjs",
-      "workerd"
-    ],
-    "ignoredBuiltDependencies": [
-      "better-sqlite3"
-    ],
-    "patchedDependencies": {
-      "@earendil-works/pi-coding-agent@1.0.0": "patches/@earendil-works__pi-coding-agent@1.0.0.patch",
-      "@rahularya01/pi-cursor@1.4.39": "patches/@rahularya01__pi-cursor@1.4.39.patch"
-    }
-  },
   "optionalDependencies": {
     "node-llama-cpp": "3.20.0"
   }

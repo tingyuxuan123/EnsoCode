@@ -1,4 +1,4 @@
-import { BookOpen, Globe, Hand, History, MousePointer2, ScanLine } from 'lucide-react';
+import { BookOpen, Globe, History, MousePointer2, ScanLine } from 'lucide-react';
 import { useI18n } from '@/i18n';
 
 const CAPABILITIES = [
@@ -29,7 +29,7 @@ export function BrowserNewTab() {
   const { t } = useI18n();
   return (
     <div className="h-full overflow-y-auto px-5 py-7">
-      <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center">
+      <div className="mx-auto flex min-h-full w-fit max-w-md flex-col justify-center">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border text-primary">
             <Globe className="size-5" />
@@ -41,20 +41,16 @@ export function BrowserNewTab() {
             </p>
           </div>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-5">
           {CAPABILITIES.map(({ icon: Icon, title, detail }) => (
             <div key={title} className="flex items-start gap-3">
               <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
-                <h3 className="font-medium text-sm">{t(title)}</h3>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t(detail)}</p>
+                <h3 className="font-medium text-sm leading-5">{t(title)}</h3>
+                <p className="text-xs leading-relaxed text-muted-foreground">{t(detail)}</p>
               </div>
             </div>
           ))}
-        </div>
-        <div className="mt-6 flex items-start gap-2 rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
-          <Hand className="mt-0.5 size-3.5 shrink-0" />
-          <p>{t('You can take control at any time. The agent only resumes when you allow it.')}</p>
         </div>
       </div>
     </div>

@@ -14,7 +14,7 @@
 
 `node-datachannel` 这类「没有也能跑」的模块不要顶层 `import`：用 `await import()` 包在 try 里预加载（`preloadDirectPeer()`），
 失败只 `console.warn` 一次并让工厂返回 `null`，上层自动退回无该能力的路径（直连 → 中继）。
-它的二进制在嵌套 optional 依赖 `@node-datachannel/<platform>` 里，无 install 脚本，不进 `onlyBuiltDependencies`。
+它的二进制在嵌套 optional 依赖 `@node-datachannel/<platform>` 里，无 install 脚本，不需要在 `allowBuilds` 中放行。
 pnpm 把平台包放在 `node-datachannel` 的兄弟目录，electron-builder 收集器只打 JS；必须在 `electron-builder.yml` 把
 `node_modules/.pnpm/node-datachannel@<ver>/node_modules/@node-datachannel` 拷到 `node_modules/@node-datachannel`，
 并 `asarUnpack` 对应 `.node`。各 OS 的 CI 各自安装自己平台的二进制。漏拷的表现是启动 warn
@@ -47,21 +47,24 @@ function tableExists(db: Database.Database, table: string): boolean {
 ## pnpm 构建脚本
 
 pnpm 10 默认**禁止**依赖执行安装脚本，原生模块会因此拿不到二进制文件。
-`package.json` 里必须显式放行：
+在 `pnpm-workspace.yaml` 的 `allowBuilds` 中显式声明权限（以下为节选，完整名单以该文件为准）：
 
-```json
-"pnpm": {
-  "onlyBuiltDependencies": [
-    "better-sqlite3", "classic-level", "electron", "electron-winstaller", "esbuild"
-  ]
-}
+```yaml
+allowBuilds:
+  classic-level: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  better-sqlite3: false
 ```
 
-漏项的表现各异且不直观：`electron` 漏了是找不到 Electron 可执行文件，
-`better-sqlite3` 漏了是运行时报找不到 `.node`。新增原生依赖后**先加进这个数组再装**。
+`true` 放行安装脚本，`false` 明确禁用且不提示未审批；未列出的依赖仍默认禁止。
+漏项的表现各异且不直观，例如 `electron` 漏了会找不到 Electron 可执行文件。
+新增原生依赖后**先确认是否需要安装脚本，再声明权限**；保留 `better-sqlite3: false` 的现有策略，不为消除警告擅自放开。
 
-`postinstall` 里的 `electron-builder install-app-deps` 负责把原生模块重编译到
-Electron 的 ABI，不要删。
+`allowBuilds` 从 pnpm 10.26.0 起可用，与项目固定的 10.26.2 兼容。
+不要再把这些设置放回 `package.json.pnpm`：新版 pnpm 会忽略并在每次命令启动时告警。
+`patchedDependencies` 也统一放在 `pnpm-workspace.yaml`，保持与锁文件中的补丁记录一致。
 
 ## 版本对齐
 
