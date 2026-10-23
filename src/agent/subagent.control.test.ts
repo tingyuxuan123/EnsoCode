@@ -382,6 +382,42 @@ describe('unified subagent tool', () => {
     expect(properties).not.toHaveProperty('model');
   });
 
+  it('不传 agent_type 时按默认 worker 预检必选模型，不留到 Main 才失败', async () => {
+    const { deps, tool } = setup({
+      agentTypes: [
+        {
+          name: 'worker',
+          description: 'worker',
+          systemPrompt: '',
+          tools: 'all',
+          allowModelOverride: true,
+        },
+      ],
+    });
+    expect(tool.promptGuidelines?.join('\n')).toMatch(/without agent_type.*worker.*model/i);
+    await expect(
+      tool.execute(
+        'call-default-worker',
+        { operation: 'spawn', description: 'x', prompt: 'x' },
+        undefined,
+        undefined,
+        {} as never
+      )
+    ).rejects.toThrow(/"worker".*requires a model.*OpenAI\/gpt-cheap/i);
+    expect(deps.invoke).not.toHaveBeenCalled();
+    await tool.execute(
+      'call-default-worker-ok',
+      { operation: 'spawn', description: 'x', prompt: 'x', model: 'OpenAI/gpt-cheap' },
+      undefined,
+      undefined,
+      {} as never
+    );
+    expect(deps.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'OpenAI/gpt-cheap' }),
+      undefined
+    );
+  });
+
   it('wait 超过上限的 timeoutMs 在 schema 校验前截到 10 分钟，不报错', async () => {
     const { tool, deps } = setup();
     expect(

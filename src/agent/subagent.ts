@@ -53,16 +53,20 @@ function waitReceiptOf(value: unknown): AgentWaitReceipt | undefined {
   return typeof report?.timedOut === 'boolean' ? (report as AgentWaitReceipt) : undefined;
 }
 
+/** 未传 agent_type 时 Main 派发 worker（与 selectHiredAgentType / workflow 同口径） */
+const DEFAULT_AGENT_TYPE = 'worker';
+
 export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefinition {
   const modelNames = deps.models.map((model) => model.name);
   const typeNames = deps.agentTypes.map((agentType) => agentType.name);
+  const defaultAgentType = deps.agentTypes.find((type) => type.name === DEFAULT_AGENT_TYPE);
   const normalize = (params: Record<string, unknown>): AgentControlToolRequest | null => {
     const operation = params.operation;
     if (operation === 'spawn') {
       const agentTypeName = typeof params.agent_type === 'string' ? params.agent_type : undefined;
       const agentType = agentTypeName
         ? deps.agentTypes.find((candidate) => candidate.name === agentTypeName)
-        : undefined;
+        : defaultAgentType;
       if (agentTypeName && !agentType) {
         throw new Error(
           `unknown agent_type "${agentTypeName}". Available: [${typeNames.join(', ')}]`
@@ -186,6 +190,9 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       ...(modelNames.length > 0
         ? [
             `model must be copied exactly from the model enum: ${modelNames.join(', ')}. Short names are rejected.`,
+            ...(defaultAgentType?.allowModelOverride
+              ? [`spawn without agent_type uses ${DEFAULT_AGENT_TYPE}, which also requires model.`]
+              : []),
           ]
         : []),
     ],
