@@ -835,6 +835,17 @@ describe('parent/child commands', () => {
     expect(parseAgentCommand({ ...base, smartCompactSummaryModel: 'anthropic/x' })).toBeNull();
   });
 
+  it('set-compact-route 接受最新摘要模型，缺省表示改跟会话模型', () => {
+    expect(parseAgentCommand({ type: 'set-compact-route', model, mode: 'fast' })).toEqual({
+      type: 'set-compact-route',
+      model,
+      mode: 'fast',
+    });
+    expect(parseAgentCommand({ type: 'set-compact-route' })).toEqual({ type: 'set-compact-route' });
+    expect(parseAgentCommand({ type: 'set-compact-route', model: { modelId: 'gpt' } })).toBeNull();
+    expect(parseAgentCommand({ type: 'set-compact-route', mode: 'plugin' })).toBeNull();
+  });
+
   it('spawn-parent / set-model 携虚拟模型配置：成员与分类器严格收窄', () => {
     const virtualModel = {
       ...model,

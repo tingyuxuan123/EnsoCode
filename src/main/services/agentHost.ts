@@ -1892,6 +1892,25 @@ export function pushApprovalReviewer(authenticatedAccountKeys?: ReadonlySet<stri
   } satisfies AgentCommand);
 }
 
+/** 已打开会话的下一次压缩用当前摘要模型，不沿用 spawn 时的那份 */
+export function pushCompactRoute(authenticatedAccountKeys?: ReadonlySet<string>): void {
+  if (!worker || !workerReady) return;
+  const state = readSettingsState();
+  const strategy = resolveCompactStrategy(state?.compactStrategy, state?.smartCompactEnabled);
+  const ref = asModelRef(state?.smartCompactModel);
+  const resolved =
+    strategy !== 'standard' && ref
+      ? resolveModelSelection(ref.providerId, ref.modelId, authenticatedAccountKeys ?? new Set())
+      : undefined;
+  const model = resolved?.ok ? resolved.selection.config : undefined;
+  const mode = parseSmartCompactMode(state?.smartCompactMode) ?? undefined;
+  worker.postMessage({
+    type: 'set-compact-route',
+    ...(model ? { model } : {}),
+    ...(mode ? { mode } : {}),
+  } satisfies AgentCommand);
+}
+
 export function pushMaxActiveCoworkers(): void {
   if (!worker || !workerReady) return;
   worker.postMessage({
@@ -2055,10 +2074,8 @@ function bindModelDirectoryListener(): void {
 }
 
 function customProvidersForWorker(): WorkerCustomProvider[] {
-  const providers = readSettingsState()?.providers;
-  if (!Array.isArray(providers)) return [];
   const out: WorkerCustomProvider[] = [];
-  for (const item of providers) {
+  for (const item of providersFromSettings()) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const provider = item as Partial<ModelProvider>;
     if (provider.oauthAccountKey) continue;
@@ -2114,7 +2131,8 @@ function providersFromSettings(): ModelProvider[] {
       )
     : [];
   // OAuth 条目的 models 只是稀疏覆盖；存在性、enabled 与凭证校验都看目录物化后的清单。
-  return materializeProviders(raw, getModelDirectorySnapshot());
+  const materialized = materializeProviders(raw, getModelDirectorySnapshot());
+  return materialized;
 }
 
 export function modelRefForSpawnConfig(config: SpawnModelConfig): ModelRef {

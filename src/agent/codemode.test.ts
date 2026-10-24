@@ -217,6 +217,23 @@ describe('CodemodeHost', () => {
     expect(load.mock.calls.filter(([s]) => s.name === 'a')).toHaveLength(1);
   });
 
+  it('未启用 codemode 时也能把后来连上的常驻 MCP 工具补进当前会话，同名不重复注册', () => {
+    const host = new CodemodeHost({ codemode: false, deferredServers: [] });
+    const { registered } = install(host);
+    const search = tool('mcp__notion__search');
+    expect(host.adoptDirectTools([search])).toEqual(['mcp__notion__search']);
+    expect(registered).toEqual([
+      expect.objectContaining({ name: search.name, defaultActive: true }),
+    ]);
+    expect(host.adoptDirectTools([search, tool('mcp__notion__read')])).toEqual([
+      'mcp__notion__read',
+    ]);
+    expect(registered.map((item) => item.name)).toEqual([
+      'mcp__notion__search',
+      'mcp__notion__read',
+    ]);
+  });
+
   it('按需 server 清单写进 mcp_servers 段', async () => {
     const { emit } = install(
       new CodemodeHost({ codemode: true, deferredServers: [server('a', ['x'])] })

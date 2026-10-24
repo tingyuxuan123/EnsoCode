@@ -192,6 +192,61 @@ describe('SessionSupervisor compact failure', () => {
     expect(await names({})).toEqual([]);
   });
 
+  it('已打开会话切换摘要模型后，下一次压缩读取最新模型', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-compact-')),
+    });
+    supervisor.handleCommand({
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: '/workspace',
+      model,
+      compactStrategy: 'smart',
+      smartCompactSummaryModel: { ...model, modelId: 'old-summary' },
+    });
+    await waitFor(events, 'parent-ready');
+    const factories = mocks.loaderOptions.at(-1)?.extensionFactories as
+      | Array<{ name: string; factory: (pi: { on: (name: string, fn: unknown) => void }) => void }>
+      | undefined;
+    let handler: ((event: unknown, ctx: unknown) => Promise<unknown>) | undefined;
+    factories
+      ?.find((factory) => factory.name === 'enso-compact')
+      ?.factory({
+        on: (name, fn) => {
+          if (name === 'session_before_compact') handler = fn as typeof handler;
+        },
+      });
+    const find = vi.fn(() => undefined);
+    const compactEvent = {
+      branchEntries: [{ id: '1' }, { id: '2' }, { id: '3' }],
+      signal: new AbortController().signal,
+      preparation: {},
+    };
+    const ctx = {
+      modelRegistry: { find },
+      sessionManager: { getBranch: () => [] },
+    };
+    await handler?.(compactEvent, ctx);
+    expect(find).toHaveBeenLastCalledWith(expect.any(String), 'old-summary');
+
+    supervisor.handleCommand({
+      type: 'set-compact-route',
+      model: { ...model, modelId: 'latest-summary' },
+      mode: 'fast',
+    });
+    await handler?.(compactEvent, ctx);
+    expect(find).toHaveBeenLastCalledWith(expect.any(String), 'latest-summary');
+
+    supervisor.handleCommand({ type: 'set-compact-route' });
+    find.mockClear();
+    await handler?.(compactEvent, ctx);
+    expect(find).not.toHaveBeenCalled();
+    await supervisor.shutdown();
+  });
+
   it('compaction_end 已带错误时不再因 compact() 抛错重复上报', async () => {
     const events: AgentWorkerEvent[] = [];
     const supervisor = new SessionSupervisor({

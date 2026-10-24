@@ -7,7 +7,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import type { McpServerSpawnConfig } from '@shared/types/agent';
 import { looksLikeApplyPatchDocument } from './applyPatch/parser';
-import { mcpNamespaceName } from './mcpNames';
+import { mcpNamespaceName, oneLine } from './mcpNames';
 
 export const CODEMODE_TOOL_NAME = 'codemode';
 export const TOOL_SEARCH_TOOL_NAME = 'tool_search';
@@ -90,20 +90,6 @@ export function withCodemodeTimeout(code: string): string {
   return `${OPTIONS_PREFIX} ${JSON.stringify({ ...options, timeout_ms: timeout })}${rest}`;
 }
 
-const isBidiControl = (code: number): boolean =>
-  (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069);
-
-function oneLine(text: string, max: number): string {
-  let clean = '';
-  for (const char of text) {
-    const code = char.codePointAt(0) ?? 0;
-    if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || isBidiControl(code)) clean += ' ';
-    else clean += char;
-  }
-  const line = clean.replace(/\s+/g, ' ').trim();
-  return line.length <= max ? line : `${line.slice(0, max - 1)}…`;
-}
-
 export const isDeferredMcp = (server: McpServerSpawnConfig): boolean =>
   server.loadMode === 'deferred';
 
@@ -157,6 +143,9 @@ export interface CodemodeHostOptions {
 export class CodemodeHost {
   private loadDeferred?: (server: McpServerSpawnConfig) => Promise<ToolDefinition[] | null>;
   private readonly registeredServers = new Set<string>();
+  /** 本会话后来补进的常驻 MCP 工具，避免授权预热重复注册 */
+  private readonly adoptedDirect = new Set<string>();
+  private pi?: ExtensionAPI;
   private deferredPending?: Promise<void>;
   private readonly nestedCounts = new Map<string, number>();
 
@@ -179,6 +168,30 @@ export class CodemodeHost {
     this.loadDeferred = load;
   }
 
+  /**
+   * 把授权后才连上的常驻 MCP 工具补进当前会话。pi 会在下一次模型请求声明它们。
+   * 已有同名工具不替换：换 token 只更新原连接上的凭据。
+   */
+  adoptDirectTools(tools: readonly ToolDefinition[]): string[] {
+    const pi = this.pi;
+    if (!pi || tools.length === 0) return [];
+    const existing = new Set(this.adoptedDirect);
+    try {
+      for (const tool of pi.getAllTools()) existing.add(tool.name);
+    } catch {
+      // 扩展还没绑到会话上时没有工具表，只靠已补记的名字去重
+    }
+    const added: string[] = [];
+    for (const tool of tools) {
+      if (existing.has(tool.name)) continue;
+      pi.registerTool({ ...tool, defaultActive: true });
+      existing.add(tool.name);
+      this.adoptedDirect.add(tool.name);
+      added.push(tool.name);
+    }
+    return added;
+  }
+
   readonly extension: InlineExtension = {
     name: 'enso-codemode',
     hidden: true,
@@ -186,6 +199,7 @@ export class CodemodeHost {
   };
 
   private install(pi: ExtensionAPI): void {
+    this.pi = pi;
     if (!this.enabled) return;
     const { codemode, deferredServers } = this.options;
     // pi 默认注册为未激活；Enso 按开关直接在注册时激活

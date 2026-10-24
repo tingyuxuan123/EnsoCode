@@ -54,6 +54,7 @@ import { useI18n } from '@/i18n';
 import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
 import { CodeSearchSettings } from './CodeSearchSettings';
+import { NewSessionBadge } from './NewSessionBadge';
 import {
   enabledOccupancyTotal,
   OccupancyEnabledTotal,
@@ -88,6 +89,7 @@ function ToolRow({
   control,
   children,
   rowId,
+  newSession,
 }: {
   icon: LucideIcon;
   title: string;
@@ -95,13 +97,17 @@ function ToolRow({
   control?: ReactNode;
   children?: ReactNode;
   rowId?: string;
+  newSession?: boolean;
 }) {
   return (
     <div className="rounded-md border px-3 py-2.5" data-settings-row={rowId}>
       <div className="flex items-center gap-3">
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{title}</p>
+          <p className="text-sm font-medium">
+            {title}
+            {newSession && <NewSessionBadge />}
+          </p>
           <p className="text-muted-foreground text-xs">{description}</p>
         </div>
         {control}
@@ -293,6 +299,11 @@ export function BuiltinToolsSettings() {
         <h3 className="font-medium text-lg">
           {t('Built-in tools')}
           <OccupancyEnabledTotal tokens={enabledTokens} />
+          <NewSessionBadge
+            note={t(
+              'Turning a tool on applies to new sessions. Turning off Memory or Computer also blocks it in open sessions.'
+            )}
+          />
         </h3>
         <p className="text-muted-foreground text-sm">
           {t('Toggle the built-in tools available to agents.')}
@@ -450,6 +461,7 @@ export function BuiltinToolsSettings() {
 
         <ToolRow
           icon={FoldVertical}
+          newSession
           title={t('Explore fold')}
           description={t(
             'Let the agent mark exploratory reads and keep only a short report in later model context. Timeline stays intact.'
@@ -459,6 +471,7 @@ export function BuiltinToolsSettings() {
 
         <ToolRow
           rowId="tools.rtkEnabled"
+          newSession
           icon={Shrink}
           title={t('RTK command compression')}
           description={t(
@@ -469,6 +482,7 @@ export function BuiltinToolsSettings() {
 
         <ToolRow
           icon={ShieldAlert}
+          newSession
           title={t('Protected action confirmation')}
           description={t(
             'Even in full-access mode, ask before external sends, deletions, payments, deployments and secret-file access. Always on for Bot members not set to Full access. Takes effect on new conversations.'
@@ -480,6 +494,7 @@ export function BuiltinToolsSettings() {
 
         <ToolRow
           rowId="tools.editMode"
+          newSession
           icon={FilePenLine}
           title={t('File edit mode')}
           description={t(

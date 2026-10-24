@@ -39,7 +39,7 @@ import {
 import { PRODUCT_SURFACE_INVENTORY, type ProductSurfaceId } from '../productSurfaces';
 import { parseRequestBodyUsage, type RequestBodyUsage } from '../requestBodyUsage';
 import { parseRtkToolStats, type RtkToolStats } from '../rtk';
-import { parseSmartCompactMode } from '../smartCompactMode';
+import { parseSmartCompactMode, type SmartCompactMode } from '../smartCompactMode';
 import { parseSshTimeoutSeconds } from '../sshTimeout';
 import {
   isWebSearchChainEntry,
@@ -1258,6 +1258,8 @@ export type AgentCommand =
       feedback?: string;
     }
   | { type: 'set-approval-reviewer'; model?: SpawnModelConfig }
+  /** 已打开会话的压缩摘要模型。缺省 model 表示改跟会话模型 */
+  | { type: 'set-compact-route'; model?: SpawnModelConfig; mode?: SmartCompactMode }
   | { type: 'set-max-active-coworkers'; limit: number }
   /** 自动重试次数：0 关闭，-1 无限 */
   | { type: 'set-auto-retry-limit'; limit: number }
@@ -3334,6 +3336,12 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'set-approval-reviewer':
       return hasOnlyKeys(value, ['type', 'model']) &&
         (value.model === undefined || parseSpawnModelConfig(value.model))
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'set-compact-route':
+      return hasOnlyKeys(value, ['type', 'model', 'mode']) &&
+        (value.model === undefined || parseSpawnModelConfig(value.model) !== null) &&
+        (value.mode === undefined || parseSmartCompactMode(value.mode) !== null)
         ? (value as unknown as AgentCommand)
         : null;
     case 'set-max-active-coworkers':

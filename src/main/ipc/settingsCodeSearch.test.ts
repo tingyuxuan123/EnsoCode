@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
 // settings 保存后动态 import agentHost 推配置；mock 掉避免把 worker 入口拖进测试。
 vi.mock('../services/agentHost', () => ({
   pushApprovalReviewer: vi.fn(),
+  pushCompactRoute: vi.fn(),
   pushMaxActiveCoworkers: vi.fn(),
   pushAutoRetryLimit: vi.fn(),
   pushDisabledWorkflowPresets: vi.fn(),

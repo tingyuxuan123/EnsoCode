@@ -12,6 +12,7 @@ const clientState = {
   connect: vi.fn(async () => {}),
   listTools: vi.fn(async () => ({ tools: [] as { name: string; inputSchema: unknown }[] })),
   callTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
+  instructions: undefined as string | undefined,
 };
 
 const transportState = {
@@ -32,6 +33,9 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
     }
     callTool(...args: unknown[]) {
       return clientState.callTool(...(args as []));
+    }
+    getInstructions() {
+      return clientState.instructions;
     }
     close() {
       clientState.closed += 1;
@@ -124,6 +128,7 @@ beforeEach(() => {
   clientState.connect = vi.fn(async () => {});
   clientState.listTools = vi.fn(async () => ({ tools: [] }));
   clientState.callTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] }));
+  clientState.instructions = undefined;
   transportState.http = [];
   transportState.stdio = [];
 });
@@ -180,6 +185,45 @@ describe('McpManager status reporting', () => {
     const { manager, events } = makeManager();
     await manager.toolsFor([httpServer]);
     expect(events.at(-1)).toMatchObject({ state: 'unauthorized' });
+  });
+});
+
+describe('McpManager server instructions', () => {
+  const twoTools = () =>
+    vi.fn(async () => ({
+      tools: [
+        { name: 'search', inputSchema: { type: 'object' } },
+        { name: 'find_related', inputSchema: { type: 'object' } },
+      ],
+    }));
+
+  it('把 server instructions 作为每个工具的同一条 prompt guideline（pi 按文本去重）', async () => {
+    clientState.listTools = twoTools();
+    clientState.instructions = 'Call `search` once.\nDo not grep for the same content.';
+    const tools = await makeManager().manager.toolsFor([httpServer]);
+    const [first, second] = tools.map((tool) => tool.promptGuidelines);
+    expect(first).toEqual([
+      'mcp__notion server instructions: Call `search` once. Do not grep for the same content.',
+    ]);
+    expect(second).toEqual(first);
+  });
+
+  it('无 instructions 或全空白时不加 guideline', async () => {
+    clientState.listTools = twoTools();
+    clientState.instructions = ' \n ';
+    const tools = await makeManager().manager.toolsFor([httpServer]);
+    expect(tools.every((tool) => tool.promptGuidelines === undefined)).toBe(true);
+  });
+
+  it('剥离控制字符并截断超长 instructions', async () => {
+    clientState.listTools = twoTools();
+    clientState.instructions = `a\u0000b\u202e${'x'.repeat(5000)}`;
+    const [tool] = await makeManager().manager.toolsFor([httpServer]);
+    const guideline = tool?.promptGuidelines?.[0] ?? '';
+    expect(guideline).not.toContain('\u0000');
+    expect(guideline).not.toContain('\u202e');
+    expect(guideline.length).toBeLessThanOrEqual(2100);
+    expect(guideline.endsWith('…')).toBe(true);
   });
 });
 

@@ -354,6 +354,88 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     await supervisor.shutdown();
   });
 
+  it('授权连上的常驻 MCP 补进已打开且选了该服务器的会话，其他服务器的工具不混入', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const notion = {
+      id: 'notion',
+      name: 'notion',
+      transport: 'http' as const,
+      url: 'https://mcp.example',
+    };
+    const other = {
+      id: 'other',
+      name: 'other',
+      transport: 'http' as const,
+      url: 'https://other.example',
+    };
+    const search = {
+      name: 'mcp__notion__search',
+      label: 'notion: search',
+      description: 'Search',
+      parameters: { type: 'object', properties: {} },
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
+    };
+    const foreign = {
+      name: 'mcp__other__ping',
+      label: 'other: ping',
+      description: 'Ping',
+      parameters: { type: 'object', properties: {} },
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'pong' }] })),
+    };
+    mocks.mcpToolsFor.mockImplementation(
+      async (servers: Array<{ id?: string }>, budget?: number) => {
+        if (budget !== undefined) return [];
+        if (servers[0]?.id === 'notion') return [search];
+        if (servers[0]?.id === 'other') return [foreign];
+        return [];
+      }
+    );
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-mcp-auth-')),
+    });
+    supervisor.handleCommand({
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: '/workspace',
+      model,
+      approvalMode: 'supervised',
+      mcpServers: [notion],
+    });
+    await waitFor(events, 'parent-ready');
+    const options = mocks.createAgentSession.mock.calls.at(-1)?.[0] as {
+      customTools: Array<{ name: string }>;
+    };
+    expect(options.customTools.some((tool) => tool.name === search.name)).toBe(false);
+
+    const factories = (
+      mocks.loaderOptions.at(-1) as {
+        extensionFactories: Array<{ name?: string; factory?: (pi: unknown) => void }>;
+      }
+    ).extensionFactories;
+    const registered: ToolDefinition[] = [];
+    factories
+      .find((factory) => factory.name === 'enso-codemode')
+      ?.factory?.({
+        on: () => {},
+        registerTool: (tool: ToolDefinition) => registered.push(tool),
+        appendEntry: () => {},
+        getAllTools: () => registered.map((tool) => ({ name: tool.name })),
+        getSettings: () => ({}),
+      });
+    supervisor.handleCommand({ type: 'warm-mcp', servers: [notion, other] });
+    await settleUntil(() => registered.some((tool) => tool.name === search.name));
+    expect(registered.filter((tool) => tool.name === search.name)).toEqual([
+      expect.objectContaining({ name: search.name, defaultActive: true }),
+    ]);
+    expect(registered.some((tool) => tool.name === foreign.name)).toBe(false);
+    supervisor.handleCommand({ type: 'warm-mcp', servers: [notion] });
+    await settle();
+    expect(registered.filter((tool) => tool.name === search.name)).toHaveLength(1);
+    await supervisor.shutdown();
+  });
+
   it('apply_patch 完整只读预检失败时不会进入 approval', async () => {
     const events: AgentWorkerEvent[] = [];
     const cwd = mkdtempSync(path.join(tmpdir(), 'enso-dispatch-preflight-'));

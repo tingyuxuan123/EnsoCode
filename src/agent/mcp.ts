@@ -18,7 +18,9 @@ import type {
   McpServerSpawnConfig,
   McpWorkerEvent,
 } from '@shared/types/agent';
-import { assignMcpToolNames, mcpNamespaceName } from './mcpNames';
+import { assignMcpToolNames, mcpNamespaceName, oneLine } from './mcpNames';
+
+const INSTRUCTIONS_MAX = 2000;
 
 interface Connection {
   client: Client;
@@ -511,6 +513,12 @@ export class McpManager {
     }
     this.scopeChallenges.delete(connectionKey(server));
     this.emitStatus(server, 'ready', { toolCount: tools.length });
+    // 同 Claude Code：server instructions 进 system prompt；挂在每个工具上，pi 按文本去重，
+    // 只渲染已激活工具的 guideline，按需（deferred）server 不会进 prompt
+    const instructions = oneLine(client.getInstructions() ?? '', INSTRUCTIONS_MAX);
+    const promptGuidelines = instructions
+      ? [`${mcpNamespaceName(server.name)} server instructions: ${instructions}`]
+      : undefined;
     return {
       client,
       tools: (() => {
@@ -518,9 +526,10 @@ export class McpManager {
           server.name,
           tools.map((tool) => tool.name)
         );
-        return tools.map((tool, index) =>
-          this.toToolDefinition(client, server, tool, names[index], callTimeoutMs)
-        );
+        return tools.map((tool, index) => ({
+          ...this.toToolDefinition(client, server, tool, names[index], callTimeoutMs),
+          ...(promptGuidelines ? { promptGuidelines } : {}),
+        }));
       })(),
     };
   }

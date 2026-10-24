@@ -13,6 +13,21 @@ const serverSlug = (serverName: string): string =>
 /** `mcp__<server>`：只含 [A-Za-z0-9_]，即 codemode 脚本里的标识符（同 pi 0.99.2 / Codex） */
 export const mcpNamespaceName = (serverName: string): string => `mcp__${serverSlug(serverName)}`;
 
+const isBidiControl = (code: number): boolean =>
+  (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069);
+
+/** MCP server 提供的文本进 system prompt 前：去控制/双向字符、压成一行、截断 */
+export function oneLine(text: string, max: number): string {
+  let clean = '';
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || isBidiControl(code)) clean += ' ';
+    else clean += char;
+  }
+  const line = clean.replace(/\s+/g, ' ').trim();
+  return line.length <= max ? line : `${line.slice(0, max - 1)}…`;
+}
+
 function toolName(serverName: string, tool: string, taken: boolean): string {
   const name = `${mcpNamespaceName(serverName)}__${tool.replace(/[^A-Za-z0-9_]/g, '_')}`;
   if (name.length <= MAX_TOOL_NAME_LENGTH && !taken) return name;

@@ -2,6 +2,7 @@ import type { ExtensionAPI, InlineExtension } from '@earendil-works/pi-coding-ag
 import type { SmartCompactMode } from '@shared/smartCompactMode';
 import type { SpawnModelConfig } from '@shared/types/agent';
 import { createEnsoCompactFallback } from '../ensoCompact/extension';
+import type { EnsoCompactOptions } from '../ensoCompact/types';
 import { formatSmartCompactSummaryModel, parseSmartCompactSummaryRef } from '../smartCompact';
 import { registerCompactionTrigger } from './vendor/hooks/compaction-trigger.js';
 import { registerConsolidationTrigger } from './vendor/hooks/consolidation-trigger.js';
@@ -16,19 +17,21 @@ import { registerRecallTool } from './vendor/tools/recall-observation.js';
 export interface ContinuousMemoryOptions {
   model?: SpawnModelConfig;
   mode?: SmartCompactMode;
+  /** 与已打开会话共享；有它时压缩读最新摘要模型，不在装载时冻结 */
+  compact?: EnsoCompactOptions;
 }
 
 /** 上游 consolidation 无跨会话 abort 句柄；关机路径仍调用以保持 supervisor 签名。 */
 export function cancelContinuousMemory(_manager: object): void {}
 
-function overlayEnsoModel(runtime: Runtime, model?: SpawnModelConfig): void {
-  if (!model) return;
-  const ref = parseSmartCompactSummaryRef(formatSmartCompactSummaryModel(model));
-  if (!ref) return;
+function overlayEnsoModel(runtime: Runtime, compact: EnsoCompactOptions): void {
   const ensure = runtime.ensureConfig.bind(runtime);
   runtime.ensureConfig = (cwd: string) => {
     ensure(cwd);
-    runtime.config.model = { provider: ref.provider, id: ref.id, thinking: 'low' };
+    const ref = compact.summaryModel;
+    runtime.config.model = ref
+      ? { provider: ref.provider, id: ref.id, thinking: 'low' }
+      : undefined;
   };
 }
 
@@ -80,15 +83,15 @@ function registerEnsoCompactionHook(
 
 export function createContinuousMemoryFactory(options: ContinuousMemoryOptions = {}) {
   return (pi: ExtensionAPI) => {
-    const modelRef = options.model
-      ? parseSmartCompactSummaryRef(formatSmartCompactSummaryModel(options.model))
-      : undefined;
-    const fallback = createEnsoCompactFallback({
-      summaryModel: modelRef,
+    const compact = options.compact ?? {
       mode: options.mode,
-    });
+      summaryModel: options.model
+        ? parseSmartCompactSummaryRef(formatSmartCompactSummaryModel(options.model))
+        : undefined,
+    };
+    const fallback = createEnsoCompactFallback(compact);
     const runtime = new Runtime();
-    overlayEnsoModel(runtime, options.model);
+    overlayEnsoModel(runtime, compact);
     registerConsolidationTrigger(pi, runtime);
     registerCompactionTrigger(pi, runtime);
     registerEnsoCompactionHook(pi, runtime, fallback);
