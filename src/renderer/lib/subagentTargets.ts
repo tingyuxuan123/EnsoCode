@@ -19,6 +19,12 @@ export interface SubagentDirectoryEntry {
   status: 'starting' | 'waiting' | 'ended' | AgentRunStatus;
   modelId?: string;
   createdAt: number;
+  /** 最近一次 Run 开始执行的时刻（Main 时钟）；旧数据缺省 */
+  startedAt?: number;
+  /** 最近一次 Run 的结束时刻（Main 验收后写入）；运行中或未知时缺省 */
+  finishedAt?: number;
+  /** 运行中 Run 已用时长（Main 推送）；仅活跃 Run 有 */
+  elapsedMs?: number;
   ended: boolean;
 }
 
@@ -93,6 +99,12 @@ function entryFor(
       typeof conversation.createdAt === 'number' && Number.isFinite(conversation.createdAt)
         ? conversation.createdAt
         : 0,
+    ...(typeof lastRun?.startedAt === 'number' && Number.isFinite(lastRun.startedAt)
+      ? { startedAt: lastRun.startedAt }
+      : {}),
+    ...(typeof lastRun?.finishedAt === 'number' && Number.isFinite(lastRun.finishedAt)
+      ? { finishedAt: lastRun.finishedAt }
+      : {}),
     ended,
   };
 }
@@ -146,7 +158,7 @@ export function selectSubagentDirectory(
         !entry.closed &&
         ['queued', 'running', 'awaiting_input', 'validating'].includes(current.status)
       ) {
-        return [{ ...entry, status: current.status, ended: false }];
+        return [{ ...entry, status: current.status, ended: false, elapsedMs: current.elapsedMs }];
       }
       return [entry];
     })
@@ -171,6 +183,9 @@ export function selectSubagentDirectory(
         entry.status === old.status &&
         entry.modelId === old.modelId &&
         entry.createdAt === old.createdAt &&
+        entry.startedAt === old.startedAt &&
+        entry.finishedAt === old.finishedAt &&
+        entry.elapsedMs === old.elapsedMs &&
         entry.ended === old.ended
       );
     })

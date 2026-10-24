@@ -1370,6 +1370,7 @@ describe('typed Agent child projection', () => {
       const run = {
         runId: 'validated-run',
         status: 'failed' as const,
+        startedAt: 40,
         finishedAt: 100,
         error: '验收命令失败',
       };

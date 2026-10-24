@@ -11,6 +11,7 @@ import {
   Check,
   ChevronRight,
   CircleAlert,
+  Clock,
   FileText,
   ListTodo,
   LoaderCircle,
@@ -21,7 +22,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useSubagentDirectory } from '@/hooks/useSubagentDirectory';
 import { useI18n } from '@/i18n';
 import { parseMcpToolName, unwrapMcpProxyCall } from '@/lib/mcpToolName';
@@ -38,14 +39,18 @@ import { summarizeSubagentToolArgs } from './subagentToolSummary';
 import { TodoList } from './TodoBar';
 import { shouldFollowTaskBarOutput } from './taskBarScroll';
 import {
+  agentCardTitle,
   agentDockSummary,
+  agentDurationMs,
   bashDockSummary,
+  DOCK_FILTERS,
   type DockFilter,
   type DockSummary,
   defaultDockFilter,
   filterDockAgents,
   filterDockTasks,
   isDockAgentRunning,
+  spawnBriefs,
   type TodoDockSummary,
   todoDockSummary,
 } from './taskDock';
@@ -139,7 +144,11 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly, todos }: TaskBa
         >
           {(filter) =>
             directory.length > 0 ? (
-              <AgentCards sessionId={sessionId} entries={filterDockAgents(directory, filter)} />
+              <AgentCards
+                sessionId={sessionId}
+                entries={filterDockAgents(directory, filter)}
+                order={directory.map((entry) => entry.agentId)}
+              />
             ) : (
               <LegacyAgentList
                 sessionId={sessionId}
@@ -298,8 +307,17 @@ function DockPanel({
 }) {
   const { t } = useI18n();
   const [filter, setFilter] = useState<DockFilter>(() => defaultDockFilter(summary.running));
+  const filterLabel: Record<DockFilter, string> = {
+    recent: t('Recent'),
+    running: t('In progress'),
+    done: t('Completed'),
+    all: t('All'),
+  };
   return (
-    <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex max-h-[min(28rem,60vh)] flex-col rounded-xl border bg-card shadow-float">
+    <div
+      data-task-dock-panel=""
+      className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex h-[min(20rem,55vh)] flex-col rounded-xl border bg-card shadow-float"
+    >
       <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2 text-xs">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">{title}</span>
@@ -307,7 +325,7 @@ function DockPanel({
           {t('{{count}} running', { count: summary.running })}
         </span>
         <div className="ml-auto flex items-center gap-0.5 rounded-lg bg-muted p-0.5" role="tablist">
-          {(['running', 'all'] as const).map((value) => (
+          {DOCK_FILTERS.map((value) => (
             <button
               key={value}
               type="button"
@@ -320,7 +338,7 @@ function DockPanel({
                 filter === value && 'bg-background text-foreground shadow-xs'
               )}
             >
-              {value === 'running' ? t('Running') : t('All')}
+              {filterLabel[value]}
             </button>
           ))}
         </div>
@@ -421,12 +439,24 @@ function BashList({
 function AgentCards({
   sessionId,
   entries,
+  order,
 }: {
   sessionId: string;
   entries: SubagentDirectoryEntry[];
+  /** 全部子代理按派发先后的 agentId，决定卡片序号，不随筛选变化 */
+  order: string[];
 }) {
   const { t } = useI18n();
   const virtualModels = useSettingsStore((state) => state.virtualModels);
+  const messages = useSessionsStore((state) => state.conversations[sessionId]?.messages);
+  const briefs = useMemo(() => spawnBriefs(messages ?? []), [messages]);
+  const anyRunning = entries.some(isDockAgentRunning);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!anyRunning) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [anyRunning]);
   if (entries.length === 0) return <EmptyDock />;
   const statusLabel = (entry: SubagentDirectoryEntry) =>
     isDockAgentRunning(entry)
@@ -439,14 +469,19 @@ function AgentCards({
             ? t('Cancelled')
             : t('Completed');
   return (
-    <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2 @2xl:grid-cols-3">
       {entries.map((entry) => {
         const running = isDockAgentRunning(entry);
+        const index = order.indexOf(entry.agentId);
+        const title = agentCardTitle(entry.title);
+        const brief = briefs.get(entry.agentId);
+        const duration = agentDurationMs({ ...entry, running }, now);
         return (
           <button
             key={entry.childConversationId}
             type="button"
             data-subagent-open={entry.agentId}
+            title={t('View process')}
             onClick={() => {
               const target = resolveSubagentTarget(
                 useSessionsStore.getState().conversations,
@@ -455,15 +490,31 @@ function AgentCards({
               );
               if (target) addSidePanelSubagent(target);
             }}
-            className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted"
+            className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-muted/50 px-3 py-2.5 text-left text-xs transition-colors hover:bg-muted"
           >
-            <span className="truncate text-sm font-medium text-foreground" title={entry.title}>
-              {entry.title}
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              {index >= 0 && (
+                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+              )}
+              <span className="truncate text-sm font-medium text-foreground" title={entry.title}>
+                {title}
+              </span>
             </span>
-            <span className="truncate text-muted-foreground">
-              {entry.mode === 'task' ? t('One-off task') : t('Persistent collaborator')}
-              {entry.modelId ? ` · ${modelDisplayName(virtualModels, entry.modelId)}` : ''}
+            <span
+              data-subagent-brief=""
+              className="line-clamp-2 min-h-[2lh] text-muted-foreground"
+              title={brief}
+            >
+              {brief ?? (entry.mode === 'task' ? t('One-off task') : t('Persistent collaborator'))}
             </span>
+            {entry.modelId && (
+              <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
+                <Bot className="h-3 w-3 shrink-0" aria-hidden />
+                <span className="truncate">{modelDisplayName(virtualModels, entry.modelId)}</span>
+              </span>
+            )}
             <span
               className={cn(
                 'flex items-center gap-1',
@@ -478,7 +529,12 @@ function AgentCards({
                 <Check className="h-3 w-3" aria-hidden />
               )}
               {statusLabel(entry)}
-              <span className="ml-auto text-muted-foreground">{t('View process')}</span>
+              {duration !== undefined && (
+                <span className="ml-auto flex items-center gap-1 text-muted-foreground tabular-nums">
+                  <Clock className="h-3 w-3" aria-hidden />
+                  {formatDuration(duration)}
+                </span>
+              )}
             </span>
           </button>
         );

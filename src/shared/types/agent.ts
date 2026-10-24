@@ -494,6 +494,8 @@ export interface AgentRunSnapshot {
 export interface SubagentRunSettlement {
   runId: string;
   status: AgentRunStatus;
+  /** Run 开始执行的时刻（Main 时钟）；旧数据缺省 */
+  startedAt?: number;
   finishedAt: number;
   error?: string;
 }

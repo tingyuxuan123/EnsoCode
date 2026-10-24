@@ -1054,6 +1054,7 @@ export function registerAgentHandlers(): void {
         run: {
           runId: run.runId,
           status: run.status,
+          startedAt: run.startedAt ?? run.createdAt,
           finishedAt: run.finishedAt,
           ...(error !== undefined ? { error } : {}),
         },
