@@ -5,14 +5,16 @@ import { addSidePanelSubagent, addSidePanelSubagentDirectory } from '@/lib/sideP
 import { resolveSubagentTarget } from '@/lib/subagentTargets';
 import { useSessionsStore } from '@/stores/sessions';
 
-/** 入口基于持久 child metadata，不依赖五秒后消失的 TaskBar 活动预览。 */
+/**
+ * 入口基于持久 child metadata，不依赖五秒后消失的 TaskBar 活动预览。
+ * 仅在仍有存活子代理（运行中或待命协作者）时显示；全部结束后历史只经侧边栏 Agents 页进入。
+ */
 export function SubagentProcessBar({ sessionId }: { sessionId: string }) {
   const { t } = useI18n();
   const entries = useSubagentDirectory(sessionId);
-  if (!entries?.length) return null;
-  const running = entries.filter(
-    (entry) => !entry.closed && !entry.ended && entry.status !== 'waiting'
-  );
+  const live = entries?.filter((entry) => !entry.closed && !entry.ended) ?? [];
+  if (live.length === 0) return null;
+  const running = live.filter((entry) => entry.status !== 'waiting');
   return (
     <div className="mb-1.5 rounded-xl border bg-card p-1 text-xs" data-subagent-process-bar="">
       <button

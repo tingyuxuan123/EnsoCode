@@ -66,7 +66,15 @@ describe('agent process shortcuts (SSR only)', () => {
   });
 
   it('历史实例即使有迟到 running 状态也不列为运行中', () => {
-    mock.entries = [entry({ status: 'running', closed: true, ended: true })];
+    mock.entries = [entry({ status: 'running', closed: true, ended: true }), entry()];
     expect(render()).not.toContain('data-subagent-open');
+  });
+
+  it('全部子代理结束后隐藏入口，历史只留在侧边栏 Agents 页', () => {
+    mock.entries = [
+      entry({ childConversationId: 'a', mode: 'task', status: 'ended', ended: true }),
+      entry({ childConversationId: 'b', closed: true }),
+    ];
+    expect(render()).toBe('');
   });
 });
