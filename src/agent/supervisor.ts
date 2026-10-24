@@ -3549,8 +3549,10 @@ export class SessionSupervisor {
 
   /** 会话正忙时先攒着：中途重建工具表会碰到还在执行的工具。 */
   private sessionAcceptsMcpTools(managed: ManagedSession): boolean {
-    if (managed.status === 'running' || managed.session.isStreaming) return false;
-    return managed.session.isIdle !== false;
+    if (managed.session.isStreaming) return false;
+    // agent_settled 时 SDK 已空闲，但本地 running 投影要在 completeTurn 才收口。
+    // 工具表能否重建以 SDK 的活动状态为准，不能被滞后的投影挡住。
+    return managed.session.isIdle ?? managed.status !== 'running';
   }
 
   private deliverMcpTools(sessionId: string, tools: readonly ToolDefinition[]): void {

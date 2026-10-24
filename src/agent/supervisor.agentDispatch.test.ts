@@ -436,6 +436,99 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     await supervisor.shutdown();
   });
 
+  it('子代理运行中连上的 MCP 工具不打断活轮，并在下一次 Run 前装入', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const sessionDir = mkdtempSync(path.join(tmpdir(), 'enso-child-mcp-hotplug-'));
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir,
+    });
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: '/workspace',
+        model,
+      });
+      await waitFor(events, 'parent-ready');
+      const server = { id: 'notes', name: 'notes', transport: 'stdio' as const, command: 'mock' };
+      const read = {
+        name: 'mcp__notes__read',
+        label: 'Read',
+        description: 'Read notes',
+        parameters: { type: 'object', properties: {} },
+        execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'note' }] })),
+      };
+      const search = { ...read, name: 'mcp__notes__search', label: 'Search' };
+      mocks.mcpToolsFor.mockResolvedValue([read]);
+      const identity = { ...child, typeKey: 'builtin:worker' as const, profileId: undefined };
+      supervisor.handleCommand({
+        type: 'spawn-child',
+        identity,
+        cwd: '/workspace',
+        config: {
+          typeKey: 'builtin:worker',
+          displayName: 'Worker',
+          description: 'MCP worker',
+          spawnSpecId: 'worker-mcp',
+          systemPrompt: 'worker role',
+          model,
+          tools: 'all',
+          skillPaths: [],
+          skillBindingIds: [],
+          mcpServers: [server],
+          mcpBindingIds: ['notes-binding'],
+          systemPromptHash: 'worker-hash',
+        },
+      });
+      await waitFor(events, 'child-ready');
+      const registered: ToolDefinition[] = [];
+      const factories = mocks.loaderOptions.at(-1)?.extensionFactories as Array<{
+        name?: string;
+        factory?: (pi: unknown) => void;
+      }>;
+      factories
+        .find((factory) => factory.name === 'enso-codemode')
+        ?.factory?.({
+          on: () => {},
+          registerTool: (tool: ToolDefinition) => registered.push(tool),
+          appendEntry: () => {},
+          getAllTools: () => registered.map((tool) => ({ name: tool.name })),
+          getSettings: () => ({}),
+        });
+      const piSession = mocks.sessions.at(-1) as ReturnType<typeof session>;
+      // pi 在 agent_settled 回调前已经空闲；supervisor 的 running 投影尚未收口。
+      Object.defineProperty(piSession, 'isIdle', { get: () => !piSession.isStreaming });
+      piSession.emit({ type: 'agent_start' });
+      piSession.isStreaming = true;
+      mocks.mcpToolsFor.mockResolvedValue([read, search]);
+      supervisor.handleCommand({ type: 'warm-mcp', servers: [server] });
+      await settle();
+      expect(registered.some((tool) => tool.name === search.name)).toBe(false);
+      piSession.isStreaming = false;
+      piSession.emit({ type: 'agent_end', messages: [] });
+      piSession.emit({ type: 'agent_settled' });
+      expect(registered.some((tool) => tool.name === search.name)).toBe(true);
+      let searchAvailableAtPrompt = false;
+      piSession.prompt.mockImplementation(async () => {
+        searchAvailableAtPrompt = registered.some((tool) => tool.name === search.name);
+      });
+      supervisor.handleCommand({
+        type: 'prompt-child',
+        identity,
+        requestId: 'next-run',
+        task: { text: 'Search the notes', images: [], fileMentions: [] },
+      });
+      await settle();
+      expect(piSession.prompt).toHaveBeenCalled();
+      expect(searchAvailableAtPrompt).toBe(true);
+    } finally {
+      await supervisor.shutdown();
+      rmSync(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it('apply_patch 完整只读预检失败时不会进入 approval', async () => {
     const events: AgentWorkerEvent[] = [];
     const cwd = mkdtempSync(path.join(tmpdir(), 'enso-dispatch-preflight-'));

@@ -80,6 +80,14 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 回归：`oauthQuotaCoordinator.test.ts`、`agentHost.oauthPool.test.ts`、
 `oauthProviders.test.ts`。测试使用依赖注入、临时目录和假网络，不读取真实用户凭据。
 
+## MCP 工具补入以 SDK 空闲状态为准
+
+常驻 MCP 授权/预热后，只向 spawn 时已选择该服务器的会话补入工具；活轮中先排队，
+在 SDK 空闲后更新工具表。空闲判定以 `session.isIdle` 为准：`agent_settled` 回调中
+SDK 已空闲，但 supervisor 的 `managed.status` 仍可能是 `running`，不能用滞后投影
+挡住补入。否则父会话的 `promptFresh` 尚能兜底，直接走 `prompt-child` 的下一次 Run
+却一直看不到新工具。回归：`supervisor.agentDispatch.test.ts` 的子代理 MCP 活轮补入用例。
+
 ## 能力授权以 child generation 为单位
 
 `capabilityGateway` 的 invocation 上下文按 `generationKey(child)` 建键，
