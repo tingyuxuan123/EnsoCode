@@ -13,6 +13,7 @@ import {
 } from '@shared/types/agent';
 import { type BlockingWait, detachedWaitNote } from './backgroundTasks';
 import { CHILD_THINKING_LEVELS, resolveChildThinkingInput } from './childReasoning';
+import { subagentModelGuide } from './subagentModelGuide';
 
 export interface UnifiedSubagentDeps {
   agentTypes: AgentTypeSpawnConfig[];
@@ -121,6 +122,7 @@ function requireAgentId(operation: string, params: Record<string, unknown>): voi
 
 export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefinition {
   const modelNames = deps.models.map((model) => model.name);
+  const modelGuide = subagentModelGuide(deps.models);
   const typeNames = deps.agentTypes.map((agentType) => agentType.name);
   const defaultAgentType = deps.agentTypes.find((type) => type.name === DEFAULT_AGENT_TYPE);
   const parsed = (operation: string, candidate: Record<string, unknown>) => {
@@ -281,6 +283,11 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       ...(modelNames.length > 0
         ? [
             `model must be copied exactly from the model enum: ${modelNames.join(', ')}. Short names are rejected.`,
+            ...(modelGuide
+              ? [
+                  `Pick model by the user's selection rules and match the delegated work to them: ${modelGuide}.`,
+                ]
+              : []),
             ...(defaultAgentType?.allowModelOverride
               ? [`spawn without agent_type uses ${DEFAULT_AGENT_TYPE}, which also requires model.`]
               : []),
@@ -320,7 +327,8 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
                 type: 'string',
                 enum: modelNames,
                 description:
-                  'Exact model id from the model enum. Short names and guessed ids are rejected.',
+                  'Exact model id from the model enum. Short names and guessed ids are rejected.' +
+                  (modelGuide ? ` When to use each: ${modelGuide}.` : ''),
               },
             }
           : {}),

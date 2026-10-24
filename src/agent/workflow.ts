@@ -13,6 +13,7 @@ import type {
   WorkflowRunSnapshot,
 } from '@shared/types/workflow';
 import { JSException, type JSValueHandle, QuickJS } from 'quickjs-wasi';
+import { subagentModelGuide } from './subagentModelGuide';
 import { resolveWorkflowPresetArgs, type WorkflowPreset } from './workflowPresets';
 
 const require = createRequire(import.meta.url);
@@ -42,7 +43,7 @@ export interface WorkflowToolDeps {
   /** 会话建立时的可用预设快照，写进工具说明供模型挑选 */
   presets?: readonly WorkflowPresetSummary[];
   /** 与 subagent 工具同源：可选模型，以及哪些类型要求主 agent 选模型 */
-  models?: readonly Pick<SubagentModelOption, 'name'>[];
+  models?: readonly Pick<SubagentModelOption, 'name' | 'description'>[];
   agentTypes?: readonly Pick<AgentTypeSpawnConfig, 'name' | 'allowModelOverride'>[];
   randomUuid?: () => string;
 }
@@ -534,6 +535,7 @@ const USER_STOP_TEXT = 'was stopped by the user — do not restart it';
 
 export function createWorkflowTool(deps: WorkflowToolDeps): ToolDefinition {
   const modelNames = (deps.models ?? []).map((option) => option.name);
+  const modelGuide = subagentModelGuide(deps.models ?? []);
   const pickTypes = (deps.agentTypes ?? [])
     .filter((type) => type.allowModelOverride === true)
     .map((type) => type.name);
@@ -591,6 +593,11 @@ export function createWorkflowTool(deps: WorkflowToolDeps): ToolDefinition {
                 ? ` (${pickTypes.join(', ')}; agent() without agentType uses worker). Pass it when running presets that use these types`
                 : ''
             }.`,
+            ...(modelGuide
+              ? [
+                  `Pick model by the user's selection rules and match each agent's work to them: ${modelGuide}.`,
+                ]
+              : []),
           ]
         : []),
       'Child failure returns null. Do not treat null as success without checking it.',
@@ -635,7 +642,8 @@ export function createWorkflowTool(deps: WorkflowToolDeps): ToolDefinition {
                 type: 'string',
                 enum: modelNames,
                 description:
-                  'Model for every agent() without its own model whose agent type requires one. Exact id from the enum.',
+                  'Model for every agent() without its own model whose agent type requires one. Exact id from the enum.' +
+                  (modelGuide ? ` When to use each: ${modelGuide}.` : ''),
               },
             }
           : {}),

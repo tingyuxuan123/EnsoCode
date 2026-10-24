@@ -72,6 +72,24 @@ describe('unified subagent tool', () => {
     expect(tool.promptGuidelines?.join('\n')).toMatch(/model enum/i);
   });
 
+  it('用户为每个模型写的选型描述会进入 model 参数说明和使用准则', () => {
+    const { tool } = setup({
+      models: [
+        { name: 'DeepSeek/v4-flash', config: cheapConfig, description: '只读调研、大量读代码' },
+        { name: 'Claude/opus', config: cheapConfig, description: '代码评审、架构设计' },
+        { name: 'OpenAI/gpt-cheap', config: cheapConfig },
+      ],
+    });
+    const model = (tool.parameters as { properties: { model?: { description?: string } } })
+      .properties.model;
+    const guidelines = tool.promptGuidelines?.join('\n') ?? '';
+    for (const text of [model?.description ?? '', guidelines]) {
+      expect(text).toContain('DeepSeek/v4-flash: 只读调研、大量读代码');
+      expect(text).toContain('Claude/opus: 代码评审、架构设计');
+    }
+    expect(guidelines).not.toContain('OpenAI/gpt-cheap:');
+  });
+
   it('spawn 漏掉 description 时用 name 或 prompt 补标签，斜杠模型名仍然合法', async () => {
     const { deps, tool } = setup({
       agentTypes: [

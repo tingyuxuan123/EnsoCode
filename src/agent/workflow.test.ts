@@ -556,6 +556,21 @@ describe('workflow tool', () => {
         (bare.parameters as { properties: Record<string, unknown> }).properties.model
       ).toBeUndefined();
     });
+
+    it('model 参数说明和使用准则带上用户写的选型描述', () => {
+      const tool = createWorkflowTool({
+        invoke: vi.fn(),
+        emit: vi.fn(),
+        agentTypes,
+        models: [
+          { name: 'Max/claude-opus-5', description: '评审与架构' },
+          { name: 'OpenAI/gpt-6' },
+        ],
+      });
+      const params = tool.parameters as { properties: Record<string, { description?: string }> };
+      expect(params.properties.model?.description).toContain('Max/claude-opus-5: 评审与架构');
+      expect(tool.promptGuidelines?.join('\n')).toContain('Max/claude-opus-5: 评审与架构');
+    });
   });
 
   // 模板字面量语法混进参数值，确认不会被当成代码
