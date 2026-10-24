@@ -494,7 +494,6 @@ export const zhTranslations: Record<string, string> = {
   'Pin unfinished todos': '固定显示未完成待办',
   'Keep the latest todo list above the input while it has unfinished items, so it does not scroll away with the timeline':
     '最新任务清单还有未完成项时，固定显示在输入框上方，不随时间线滚走',
-  'Hide until the todo list updates': '隐藏，清单更新后再显示',
   'Fold everything before the final answer (thinking, tool calls and interim notes) under one "Worked for" header; running, stopped and failed turns stay expanded':
     '把最终答案之前的思考、工具调用和过程叙述收进一行「已工作」；运行中、已停止和失败的轮保持展开',
   'Worked for {{duration}}': '已工作 {{duration}}',
@@ -1516,6 +1515,7 @@ export const zhTranslations: Record<string, string> = {
   'Background tasks': '后台任务',
   'Background Bash': '后台 Bash',
   'Background Agent': '后台 Agent',
+  'Current progress': '当前进度',
   'Clear finished tasks': '清空历史任务',
   'Removes completed and cancelled jobs. Running tasks are kept. Sessions will show as not distilled again, since that flag is derived from job history — re-distilling is deduplicated, so it will not create duplicate memories.':
     '清除已完成和已作废的任务，进行中的保留。清除后会话会重新显示为「未提炼」——该标记是由任务历史推导的；重新提炼有去重，不会产生重复记忆。',

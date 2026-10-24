@@ -1,4 +1,9 @@
-import type { BackgroundTaskInfo, SubagentActivity, SubagentInfo } from '@shared/types/agent';
+import type {
+  BackgroundTaskInfo,
+  SubagentActivity,
+  SubagentInfo,
+  TodoItem,
+} from '@shared/types/agent';
 import { modelDisplayName } from '@shared/virtualModels';
 import {
   Ban,
@@ -7,6 +12,7 @@ import {
   ChevronRight,
   CircleAlert,
   FileText,
+  ListTodo,
   LoaderCircle,
   Search,
   Square,
@@ -29,6 +35,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { Markdown } from './Markdown';
 import { StepNode } from './StepNode';
 import { summarizeSubagentToolArgs } from './subagentToolSummary';
+import { TodoList } from './TodoBar';
 import { shouldFollowTaskBarOutput } from './taskBarScroll';
 import {
   agentDockSummary,
@@ -39,6 +46,8 @@ import {
   filterDockAgents,
   filterDockTasks,
   isDockAgentRunning,
+  type TodoDockSummary,
+  todoDockSummary,
 } from './taskDock';
 
 interface TaskBarProps {
@@ -48,20 +57,23 @@ interface TaskBarProps {
   subagents: SubagentInfo[];
   /** 手机只读配对：停止会被 host 拦截，不给按钮 */
   readOnly?: boolean;
+  /** 最新仍有未完成项的任务清单（「当前进度」按钮）；缺省不显示 */
+  todos?: { id: string; todos: TodoItem[] } | null;
 }
 
-type DockKind = 'bash' | 'agent';
+type DockKind = 'bash' | 'agent' | 'todo';
 
 /**
- * 输入框上方的固定按钮条：「后台 Bash」「后台 Agent」各一枚，任务再多也只占一行。
+ * 输入框上方的固定按钮条：「后台 Bash」「后台 Agent」「当前进度」各一枚，任务再多也只占一行。
  * 按钮直接带运行数与失败红点；点开在输入框上方弹出列表，可在「运行中 / 全部」间切换。
  * 子代理入口来自持久 child metadata：会话派过子代理就保留，全部结束后仍可回看。
  */
-export function TaskBar({ sessionId, tasks, subagents, readOnly }: TaskBarProps) {
+export function TaskBar({ sessionId, tasks, subagents, readOnly, todos }: TaskBarProps) {
   const { t } = useI18n();
   const directory = useSubagentDirectory(sessionId);
   const [open, setOpen] = useState<DockKind | null>(null);
   const bash = bashDockSummary(tasks);
+  const progress = todoDockSummary(todos);
   // 远程节点没有本机 child 会话，只有推送行；目录为空时退回推送行
   const legacyAgents = directory.length === 0 ? subagents : [];
   const agents =
@@ -91,11 +103,14 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly }: TaskBarProps)
     };
   }, [open]);
 
-  if (!bash && !agents) return null;
+  if (!bash && !agents && !progress) return null;
   const toggle = (kind: DockKind) => setOpen((current) => (current === kind ? null : kind));
 
   return (
     <div ref={ref} className="relative mb-1.5" data-task-dock="">
+      {open === 'todo' && progress && todos && (
+        <TodoPanel summary={progress} todos={todos.todos} onClose={() => setOpen(null)} />
+      )}
       {open === 'bash' && bash && (
         <DockPanel
           icon={TerminalSquare}
@@ -158,6 +173,62 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly }: TaskBarProps)
             onClick={() => toggle('agent')}
           />
         )}
+        {progress && (
+          <button
+            type="button"
+            data-task-dock-button="todo"
+            aria-expanded={open === 'todo'}
+            onClick={() => toggle('todo')}
+            className={cn(
+              'inline-flex h-7 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground',
+              open === 'todo' && 'bg-muted text-foreground'
+            )}
+          >
+            {progress.active ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <ListTodo className="h-3.5 w-3.5" aria-hidden />
+            )}
+            <span>{t('Current progress')}</span>
+            <span className="tabular-nums">
+              {progress.done}/{progress.total}
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 「当前进度」弹层：完整清单，无筛选（清单本身就是整表） */
+function TodoPanel({
+  summary,
+  todos,
+  onClose,
+}: {
+  summary: TodoDockSummary;
+  todos: TodoItem[];
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex max-h-[min(28rem,60vh)] flex-col rounded-xl border bg-card shadow-float">
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2 text-xs">
+        <ListTodo className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+        <span className="font-medium text-foreground">{t('Current progress')}</span>
+        <span className="text-muted-foreground tabular-nums">
+          {summary.done}/{summary.total}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="scroll-stable min-h-0 flex-1 overflow-auto px-3 py-2">
+        <TodoList todos={todos} />
       </div>
     </div>
   );

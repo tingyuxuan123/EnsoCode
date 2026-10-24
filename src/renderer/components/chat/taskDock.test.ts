@@ -7,6 +7,7 @@ import {
   defaultDockFilter,
   filterDockAgents,
   filterDockTasks,
+  todoDockSummary,
 } from './taskDock';
 
 const task = (
@@ -87,5 +88,30 @@ describe('筛选', () => {
     ];
     expect(filterDockAgents(entries, 'running').map((e) => e.title)).toEqual(['b']);
     expect(filterDockAgents(entries, 'all').map((e) => e.title)).toEqual(['c', 'b', 'a']);
+  });
+});
+
+describe('当前进度按钮', () => {
+  it('没有未完成清单时不显示', () => {
+    expect(todoDockSummary(null)).toBeNull();
+    expect(todoDockSummary({ id: 't', todos: [] })).toBeNull();
+  });
+
+  it('按钮给出 已完成/总数，并标出是否有进行中的项', () => {
+    expect(
+      todoDockSummary({
+        id: 't',
+        todos: [
+          { content: 'a', status: 'completed' },
+          { content: 'b', status: 'in_progress' },
+          { content: 'c', status: 'pending' },
+        ],
+      })
+    ).toEqual({ done: 1, total: 3, active: true });
+    expect(todoDockSummary({ id: 't', todos: [{ content: 'a', status: 'pending' }] })).toEqual({
+      done: 0,
+      total: 1,
+      active: false,
+    });
   });
 });

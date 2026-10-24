@@ -1,4 +1,9 @@
-import type { BackgroundTaskInfo, SubagentActivity, SubagentInfo } from '@shared/types/agent';
+import type {
+  BackgroundTaskInfo,
+  SubagentActivity,
+  SubagentInfo,
+  TodoItem,
+} from '@shared/types/agent';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -50,8 +55,9 @@ const renderBar = (
   sessionId: string,
   tasks: BackgroundTaskInfo[],
   subagents: SubagentInfo[],
-  readOnly?: boolean
-) => renderToStaticMarkup(createElement(TaskBar, { sessionId, tasks, subagents, readOnly }));
+  readOnly?: boolean,
+  todos?: { id: string; todos: TodoItem[] } | null
+) => renderToStaticMarkup(createElement(TaskBar, { sessionId, tasks, subagents, readOnly, todos }));
 
 const dirEntry = (overrides: Partial<SubagentDirectoryEntry> = {}): SubagentDirectoryEntry => ({
   childConversationId: 'child',
@@ -99,6 +105,33 @@ describe('TaskBar 输入框上方的固定按钮条', () => {
     expect(html).toContain('data-task-dock-button="agent"');
     expect(html).toContain('Background Agent');
     expect(html).not.toContain('data-task-dock-button="bash"');
+  });
+
+  it('任务清单也是同一排的按钮：显示 当前进度 已完成/总数，不再单独占一条', () => {
+    directory.entries = [];
+    const html = renderBar('todos', [task('running')], [], false, {
+      id: 'list-1',
+      todos: [
+        { content: '写测试', status: 'completed' },
+        { content: '实现', status: 'in_progress' },
+        { content: '验收', status: 'pending' },
+      ],
+    });
+    expect(html).toContain('data-task-dock-button="todo"');
+    expect(html).toMatch(/data-task-dock-button="todo"[^>]*>.*Current progress.*1\/3/s);
+    expect(html).not.toContain('写测试');
+    expect(html.indexOf('data-task-dock-button="bash"')).toBeLessThan(
+      html.indexOf('data-task-dock-button="todo"')
+    );
+  });
+
+  it('只有任务清单时也显示按钮条', () => {
+    directory.entries = [];
+    const html = renderBar('only-todos', [], [], false, {
+      id: 'list-2',
+      todos: [{ content: 'x', status: 'pending' }],
+    });
+    expect(html).toContain('data-task-dock-button="todo"');
   });
 });
 

@@ -44,7 +44,7 @@ import { StatsLine } from './StatsLine';
 import { resolveSessionUsageAccount } from './sessionUsageAccount';
 import { dedupeSlashCommands } from './skillCompletion';
 import { TaskBar } from './TaskBar';
-import { TodoBar } from './TodoBar';
+import { usePinnedTodos } from './TodoBar';
 import { WorkspaceBadge } from './WorkspaceBadge';
 import { WorktreeMissingDialog } from './WorktreeMissingDialog';
 import { WorktreePicker } from './WorktreePicker';
@@ -86,6 +86,7 @@ export function ChatView() {
     speechStatus?.models.find((model) => model.id === voiceModel)?.state === 'ready';
   const chrome = useSessionsStore(useShallow(selectChatChrome));
   const memberName = useMemberName(chrome?.displayedParentId ? chrome.agentType : undefined);
+  const pinnedTodos = usePinnedTodos(chrome?.id ?? '');
   const oauthSnapshot = useOauthCredentialStore((state) => state.snapshot);
   const enabledProviders = useUsableProviders();
   const candidateConversations = useSessionsStore((state) =>
@@ -407,6 +408,7 @@ export function ChatView() {
               sessionId={chrome.id}
               tasks={chrome.backgroundTasks ?? []}
               subagents={chrome.subagents ?? []}
+              todos={pinnedTodos}
             />
           </MarkdownLinkContext.Provider>
           <ApprovalBar
@@ -447,7 +449,6 @@ export function ChatView() {
           )}
           <MessageQueue conversationId={chrome.id} queued={chrome.queuedMessages ?? []} />
           {chrome.goal && <GoalBar conversationId={chrome.id} goal={chrome.goal} />}
-          <TodoBar key={chrome.id} conversationId={chrome.id} />
           {!chrome.displayedParentId && modelBlockMessage && (
             <div
               role="status"

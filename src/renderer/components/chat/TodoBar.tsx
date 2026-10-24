@@ -1,13 +1,12 @@
 import type { TodoItem } from '@shared/types/agent';
-import { Check, ChevronDown, ChevronRight, Circle, CircleDot, ListTodo, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useI18n } from '@/i18n';
+import { Check, Circle, CircleDot } from 'lucide-react';
+import { useMemo } from 'react';
 import { latestUnfinishedTodos } from '@/lib/pinnedTodos';
 import { cn } from '@/lib/utils';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 
-/** ✓/●/○ 清单；时间线 todo 行与固定待办条共用 */
+/** ✓/●/○ 清单；时间线 todo 行与输入框上方「当前进度」弹层共用 */
 export function TodoList({ todos }: { todos: TodoItem[] }) {
   return (
     <ul className="space-y-0.5 text-xs">
@@ -37,67 +36,15 @@ export function TodoList({ todos }: { todos: TodoItem[] }) {
   );
 }
 
-/** 会话内已手动隐藏的清单（按 todo toolCallId）；模型更新清单后换新 id 自动重新出现 */
-const hiddenTodoLists = new Set<string>();
-
-/** 输入框上方的固定待办条：最新清单仍有未完成项时显示，默认一行摘要，可展开 */
-export function TodoBar({ conversationId }: { conversationId: string }) {
-  const { t } = useI18n();
+/**
+ * 输入框上方「当前进度」按钮的数据：最新清单仍有未完成项时返回，否则 null。
+ * 受「固定未完成待办」设置控制；关闭后不显示按钮。
+ */
+export function usePinnedTodos(conversationId: string): { id: string; todos: TodoItem[] } | null {
   const enabled = useSettingsStore((s) => s.pinUnfinishedTodos);
   const messages = useSessionsStore((s) => s.conversations[conversationId]?.messages);
-  const list = useMemo(
+  return useMemo(
     () => (enabled && messages ? latestUnfinishedTodos(messages) : null),
     [enabled, messages]
-  );
-  const [expanded, setExpanded] = useState(false);
-  const [, setHiddenVersion] = useState(0);
-  if (!list || hiddenTodoLists.has(list.id)) return null;
-  const done = list.todos.filter((todo) => todo.status === 'completed').length;
-  const current =
-    list.todos.find((todo) => todo.status === 'in_progress') ??
-    list.todos.find((todo) => todo.status === 'pending');
-  return (
-    <div className="mb-1 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1.5 text-xs">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          <ListTodo className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="shrink-0 font-medium">{t('Todos')}</span>
-          <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
-            {done}/{list.todos.length}
-          </span>
-          {!expanded && current && (
-            <span className="min-w-0 flex-1 truncate text-muted-foreground" title={current.content}>
-              {current.content}
-            </span>
-          )}
-          {expanded ? (
-            <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          )}
-        </button>
-        <button
-          type="button"
-          title={t('Hide until the todo list updates')}
-          onClick={() => {
-            hiddenTodoLists.add(list.id);
-            setHiddenVersion((value) => value + 1);
-          }}
-          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {expanded && (
-        <div className="mt-1.5 max-h-48 overflow-y-auto">
-          <TodoList todos={list.todos} />
-        </div>
-      )}
-    </div>
   );
 }
