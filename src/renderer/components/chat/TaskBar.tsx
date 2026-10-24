@@ -4,12 +4,10 @@ import {
   Ban,
   Bot,
   Check,
-  ChevronDown,
   ChevronRight,
   CircleAlert,
   FileText,
   LoaderCircle,
-  type LucideIcon,
   Search,
   Square,
   Terminal,
@@ -18,243 +16,456 @@ import {
   X,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useSubagentDirectory } from '@/hooks/useSubagentDirectory';
 import { useI18n } from '@/i18n';
 import { parseMcpToolName, unwrapMcpProxyCall } from '@/lib/mcpToolName';
+import { addSidePanelSubagent, addSidePanelSubagentDirectory } from '@/lib/sidePanelDock';
+import { resolveSubagentTarget, type SubagentDirectoryEntry } from '@/lib/subagentTargets';
 import { stripAnsi } from '@/lib/terminalText';
 import { cn } from '@/lib/utils';
+import { useSessionsStore } from '@/stores/sessions';
 import { formatDuration } from '@/stores/sessions/stats';
 import { useSettingsStore } from '@/stores/settings';
 import { Markdown } from './Markdown';
 import { StepNode } from './StepNode';
-import { SubagentProcessBar } from './SubagentProcessBar';
 import { summarizeSubagentToolArgs } from './subagentToolSummary';
 import { shouldFollowTaskBarOutput } from './taskBarScroll';
+import {
+  agentDockSummary,
+  bashDockSummary,
+  type DockFilter,
+  type DockSummary,
+  defaultDockFilter,
+  filterDockAgents,
+  filterDockTasks,
+  isDockAgentRunning,
+} from './taskDock';
 
 interface TaskBarProps {
   sessionId: string;
   tasks: BackgroundTaskInfo[];
+  /** 旧版 worker / 远程节点推送的子代理行；本机子代理以持久目录为准 */
   subagents: SubagentInfo[];
   /** 手机只读配对：停止会被 host 拦截，不给按钮 */
   readOnly?: boolean;
 }
 
-/** 按会话记住已收起的条目。TaskBar 用 conversation.id 当 key，切会话/coworker 会卸载重挂，组件 state 会丢。 */
-const dismissedBySession = new Map<string, Set<string>>();
-
-const readDismissed = (sessionId: string): Set<string> => {
-  const cached = dismissedBySession.get(sessionId);
-  return cached ? new Set(cached) : new Set();
-};
-
-const writeDismissed = (sessionId: string, next: Set<string>): Set<string> => {
-  dismissedBySession.set(sessionId, next);
-  return next;
-};
-
-/** 本次运行中见过 running 的条目。首次出现即终态（重启后由快照/缓存恢复的历史）不再闪现。 */
-const seenRunningBySession = new Map<string, Set<string>>();
-
-const trackRunning = (sessionId: string, ids: string[]): ReadonlySet<string> => {
-  const seen = seenRunningBySession.get(sessionId) ?? new Set<string>();
-  seenRunningBySession.set(sessionId, seen);
-  for (const id of ids) seen.add(id);
-  return seen;
-};
+type DockKind = 'bash' | 'agent';
 
 /**
- * 后台任务状态行（grok-build 风）：输入框上方每任务一行；
- * 点「查看」在行下内嵌展开输出;done 5s 自动移除,failed 手动关闭。
+ * 输入框上方的固定按钮条：「后台 Bash」「后台 Agent」各一枚，任务再多也只占一行。
+ * 按钮直接带运行数与失败红点；点开在输入框上方弹出列表，可在「运行中 / 全部」间切换。
+ * 子代理入口来自持久 child metadata：会话派过子代理就保留，全部结束后仍可回看。
  */
 export function TaskBar({ sessionId, tasks, subagents, readOnly }: TaskBarProps) {
-  const virtualModels = useSettingsStore((state) => state.virtualModels);
   const { t } = useI18n();
-  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => readDismissed(sessionId));
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const seenRunning = trackRunning(sessionId, [
-    ...tasks.filter((task) => task.status === 'running').map((task) => task.taskId),
-    ...subagents.filter((agent) => agent.status === 'running').map((agent) => agent.id),
-  ]);
-  const shown = (id: string, status: string) =>
-    !dismissed.has(id) && (status === 'running' || seenRunning.has(id));
-  const visible = tasks.filter((task) => shown(task.taskId, task.status));
-  const visibleAgents = subagents.filter((agent) => shown(agent.id, agent.status));
+  const directory = useSubagentDirectory(sessionId);
+  const [open, setOpen] = useState<DockKind | null>(null);
+  const bash = bashDockSummary(tasks);
+  // 远程节点没有本机 child 会话，只有推送行；目录为空时退回推送行
+  const legacyAgents = directory.length === 0 ? subagents : [];
+  const agents =
+    agentDockSummary(directory) ??
+    (legacyAgents.length > 0
+      ? {
+          total: legacyAgents.length,
+          running: legacyAgents.filter((agent) => agent.status === 'running').length,
+          failed: legacyAgents.filter((agent) => agent.status === 'failed').length,
+        }
+      : null);
+  const ref = useRef<HTMLDivElement>(null);
 
-  // 结束的条目(done/failed)5s 后自动收起（展开中的不收）
   useEffect(() => {
-    const seen = seenRunningBySession.get(sessionId);
-    const finished = [
-      ...tasks.filter((task) => task.status !== 'running').map((task) => task.taskId),
-      ...subagents.filter((agent) => agent.status !== 'running').map((agent) => agent.id),
-    ].filter((id) => seen?.has(id) && !dismissed.has(id) && id !== openTaskId);
-    if (finished.length === 0) return;
-    const timer = setTimeout(() => {
-      setDismissed((prev) => {
-        const next = new Set(prev);
-        for (const id of finished) next.add(id);
-        return writeDismissed(sessionId, next);
-      });
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [sessionId, tasks, subagents, dismissed, openTaskId]);
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
-  if (visible.length === 0 && visibleAgents.length === 0)
-    return readOnly ? null : <SubagentProcessBar sessionId={sessionId} />;
-
-  const dismiss = (taskId: string) => {
-    setDismissed((prev) => writeDismissed(sessionId, new Set(prev).add(taskId)));
-    if (openTaskId === taskId) setOpenTaskId(null);
-  };
-
-  const openTask = visible.find((task) => task.taskId === openTaskId) ?? null;
-  const openAgent = visibleAgents.find((agent) => agent.id === openTaskId) ?? null;
+  if (!bash && !agents) return null;
+  const toggle = (kind: DockKind) => setOpen((current) => (current === kind ? null : kind));
 
   return (
-    <>
-      {!readOnly && <SubagentProcessBar sessionId={sessionId} />}
-      <div className="relative mb-1.5">
-        {(openTask || openAgent) && (
-          <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 rounded-xl border bg-card shadow-float">
-            <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
-              <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-                {openTask ? openTask.command : openAgent?.description}
-                {openAgent?.modelId
-                  ? ` · ${modelDisplayName(virtualModels, openAgent.modelId)}`
-                  : ''}
-              </span>
-              <button
-                type="button"
-                onClick={() => setOpenTaskId(null)}
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {openTask && <TailView tail={openTask.tail} />}
-            {openAgent && <AgentDetails key={openAgent.id} agent={openAgent} />}
-          </div>
+    <div ref={ref} className="relative mb-1.5" data-task-dock="">
+      {open === 'bash' && bash && (
+        <DockPanel
+          icon={TerminalSquare}
+          title={t('Background Bash')}
+          summary={bash}
+          onClose={() => setOpen(null)}
+        >
+          {(filter) => (
+            <BashList
+              sessionId={sessionId}
+              tasks={filterDockTasks(tasks, filter)}
+              readOnly={readOnly}
+            />
+          )}
+        </DockPanel>
+      )}
+      {open === 'agent' && agents && (
+        <DockPanel
+          icon={Bot}
+          title={t('Background Agent')}
+          summary={agents}
+          onClose={() => setOpen(null)}
+          onOpenDirectory={
+            directory.length > 0 ? () => addSidePanelSubagentDirectory(sessionId) : undefined
+          }
+        >
+          {(filter) =>
+            directory.length > 0 ? (
+              <AgentCards sessionId={sessionId} entries={filterDockAgents(directory, filter)} />
+            ) : (
+              <LegacyAgentList
+                sessionId={sessionId}
+                agents={legacyAgents.filter(
+                  (agent) => filter === 'all' || agent.status === 'running'
+                )}
+                readOnly={readOnly}
+              />
+            )
+          }
+        </DockPanel>
+      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {bash && (
+          <DockButton
+            kind="bash"
+            icon={TerminalSquare}
+            label={t('Background Bash')}
+            summary={bash}
+            open={open === 'bash'}
+            onClick={() => toggle('bash')}
+          />
         )}
-        <div className="flex flex-col gap-0.5 rounded-xl border bg-card p-1 shadow-xs">
-          {visible.map((task) => (
-            <DockRow
-              key={task.taskId}
+        {agents && (
+          <DockButton
+            kind="agent"
+            icon={Bot}
+            label={t('Background Agent')}
+            summary={agents}
+            open={open === 'agent'}
+            onClick={() => toggle('agent')}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DockButton({
+  kind,
+  icon: Icon,
+  label,
+  summary,
+  open,
+  onClick,
+}: {
+  kind: DockKind;
+  icon: typeof Bot;
+  label: string;
+  summary: DockSummary;
+  open: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      data-task-dock-button={kind}
+      aria-expanded={open}
+      onClick={onClick}
+      title={summary.running > 0 ? t('{{count}} running', { count: summary.running }) : undefined}
+      className={cn(
+        'relative inline-flex h-7 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground',
+        open && 'bg-muted text-foreground'
+      )}
+    >
+      {summary.running > 0 ? (
+        <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+      ) : (
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+      )}
+      <span>{label}</span>
+      {summary.running > 0 && <span className="tabular-nums">· {summary.running}</span>}
+      {summary.failed > 0 && (
+        <span
+          data-task-dock-failed=""
+          role="img"
+          aria-label={t('Failed')}
+          className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-destructive"
+        />
+      )}
+    </button>
+  );
+}
+
+function DockPanel({
+  icon: Icon,
+  title,
+  summary,
+  onClose,
+  onOpenDirectory,
+  children,
+}: {
+  icon: typeof Bot;
+  title: string;
+  summary: DockSummary;
+  onClose: () => void;
+  onOpenDirectory?: () => void;
+  children: (filter: DockFilter) => ReactNode;
+}) {
+  const { t } = useI18n();
+  const [filter, setFilter] = useState<DockFilter>(() => defaultDockFilter(summary.running));
+  return (
+    <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex max-h-[min(28rem,60vh)] flex-col rounded-xl border bg-card shadow-float">
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2 text-xs">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+        <span className="font-medium text-foreground">{title}</span>
+        <span className="text-muted-foreground tabular-nums">
+          {t('{{count}} running', { count: summary.running })}
+        </span>
+        <div className="ml-auto flex items-center gap-0.5 rounded-lg bg-muted p-0.5" role="tablist">
+          {(['running', 'all'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={filter === value}
+              data-task-dock-filter={value}
+              onClick={() => setFilter(value)}
+              className={cn(
+                'rounded-md px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground',
+                filter === value && 'bg-background text-foreground shadow-xs'
+              )}
+            >
+              {value === 'running' ? t('Running') : t('All')}
+            </button>
+          ))}
+        </div>
+        {onOpenDirectory && (
+          <button
+            type="button"
+            onClick={() => {
+              onOpenDirectory();
+              onClose();
+            }}
+            title={t('Agents')}
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="scroll-stable min-h-0 flex-1 overflow-auto p-1.5">{children(filter)}</div>
+    </div>
+  );
+}
+
+function EmptyDock() {
+  const { t } = useI18n();
+  return (
+    <p className="px-2 py-6 text-center text-xs text-muted-foreground">{t('Nothing running.')}</p>
+  );
+}
+
+function BashList({
+  sessionId,
+  tasks,
+  readOnly,
+}: {
+  sessionId: string;
+  tasks: BackgroundTaskInfo[];
+  readOnly?: boolean;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (tasks.length === 0) return <EmptyDock />;
+  return (
+    <div className="flex flex-col gap-0.5">
+      {tasks.map((task) => (
+        <div key={task.taskId}>
+          <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] hover:bg-muted/50">
+            <StepNode
               icon={TerminalSquare}
-              status={task.status}
-              meta={<TaskMeta task={task} />}
-              open={openTaskId === task.taskId}
-              onToggle={() => setOpenTaskId(openTaskId === task.taskId ? null : task.taskId)}
-              stopTitle={t('Stop task')}
-              onStop={
-                readOnly
-                  ? undefined
-                  : () => void window.electronAPI.agent.stopTask(sessionId, task.taskId)
+              state={
+                task.status === 'running' ? 'running' : task.status === 'failed' ? 'error' : 'ok'
               }
-              onDismiss={() => dismiss(task.taskId)}
+            />
+            <button
+              type="button"
+              aria-expanded={expanded === task.taskId}
+              onClick={() => setExpanded(expanded === task.taskId ? null : task.taskId)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
               <span
                 className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
                 title={task.command}
               >
-                {task.command}
+                $ {task.command}
               </span>
-            </DockRow>
-          ))}
-          {visibleAgents.map((agent) => (
-            <DockRow
-              key={agent.id}
+              <TaskMeta task={task} />
+              <ChevronRight
+                className={cn(
+                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+                  expanded === task.taskId && 'rotate-90'
+                )}
+              />
+            </button>
+            {task.status === 'running' && !readOnly && (
+              <button
+                type="button"
+                onClick={() => void window.electronAPI.agent.stopTask(sessionId, task.taskId)}
+                title={t('Stop task')}
+                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Square className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {expanded === task.taskId && <TailView tail={task.tail} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AgentCards({
+  sessionId,
+  entries,
+}: {
+  sessionId: string;
+  entries: SubagentDirectoryEntry[];
+}) {
+  const { t } = useI18n();
+  const virtualModels = useSettingsStore((state) => state.virtualModels);
+  if (entries.length === 0) return <EmptyDock />;
+  const statusLabel = (entry: SubagentDirectoryEntry) =>
+    isDockAgentRunning(entry)
+      ? t('Running')
+      : entry.status === 'failed'
+        ? t('Failed')
+        : entry.mode === 'coworker' && !entry.closed
+          ? t('Collaborator standing by')
+          : entry.status === 'cancelled'
+            ? t('Cancelled')
+            : t('Completed');
+  return (
+    <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2">
+      {entries.map((entry) => {
+        const running = isDockAgentRunning(entry);
+        return (
+          <button
+            key={entry.childConversationId}
+            type="button"
+            data-subagent-open={entry.agentId}
+            onClick={() => {
+              const target = resolveSubagentTarget(
+                useSessionsStore.getState().conversations,
+                sessionId,
+                entry.agentId
+              );
+              if (target) addSidePanelSubagent(target);
+            }}
+            className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted"
+          >
+            <span className="truncate text-sm font-medium text-foreground" title={entry.title}>
+              {entry.title}
+            </span>
+            <span className="truncate text-muted-foreground">
+              {entry.mode === 'task' ? t('One-off task') : t('Persistent collaborator')}
+              {entry.modelId ? ` · ${modelDisplayName(virtualModels, entry.modelId)}` : ''}
+            </span>
+            <span
+              className={cn(
+                'flex items-center gap-1',
+                entry.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
+              )}
+            >
+              {running ? (
+                <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden />
+              ) : entry.status === 'failed' ? (
+                <CircleAlert className="h-3 w-3" aria-hidden />
+              ) : (
+                <Check className="h-3 w-3" aria-hidden />
+              )}
+              {statusLabel(entry)}
+              <span className="ml-auto text-muted-foreground">{t('View process')}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 远程节点没有本机 child 会话：沿用推送行，点开内嵌查看活动与报告 */
+function LegacyAgentList({
+  sessionId,
+  agents,
+  readOnly,
+}: {
+  sessionId: string;
+  agents: SubagentInfo[];
+  readOnly?: boolean;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (agents.length === 0) return <EmptyDock />;
+  return (
+    <div className="flex flex-col gap-0.5">
+      {agents.map((agent) => (
+        <div key={agent.id}>
+          <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] hover:bg-muted/50">
+            <StepNode
               icon={Bot}
-              status={agent.status}
-              meta={<AgentMeta agent={agent} />}
-              open={openTaskId === agent.id}
-              onToggle={() => setOpenTaskId(openTaskId === agent.id ? null : agent.id)}
-              stopTitle={t('Stop subagent')}
-              onStop={
-                readOnly
-                  ? undefined
-                  : () => void window.electronAPI.agent.stopSubagent(sessionId, agent.id)
+              state={
+                agent.status === 'running' ? 'running' : agent.status === 'failed' ? 'error' : 'ok'
               }
-              onDismiss={() => dismiss(agent.id)}
+            />
+            <button
+              type="button"
+              aria-expanded={expanded === agent.id}
+              onClick={() => setExpanded(expanded === agent.id ? null : agent.id)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
               {agent.agentType && <span className="shrink-0 font-medium">{agent.agentType}</span>}
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {agent.description}
-                {agent.modelId && (
-                  <span className="text-muted-foreground/60">
-                    {' '}
-                    · {modelDisplayName(virtualModels, agent.modelId)}
-                  </span>
-                )}
-                {agent.status === 'running' && agent.currentActivity && (
-                  <span className="text-muted-foreground/60"> · {agent.currentActivity}</span>
-                )}
               </span>
-            </DockRow>
-          ))}
+              <AgentMeta agent={agent} />
+            </button>
+            {agent.status === 'running' && !readOnly && (
+              <button
+                type="button"
+                onClick={() => void window.electronAPI.agent.stopSubagent(sessionId, agent.id)}
+                title={t('Stop subagent')}
+                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Square className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {expanded === agent.id && <AgentDetails agent={agent} />}
         </div>
-      </div>
-    </>
-  );
-}
-
-/** 后台任务 / subagent 共用一行：与时间线工具行同一节点列与字号 */
-function DockRow({
-  icon,
-  status,
-  meta,
-  open,
-  onToggle,
-  stopTitle,
-  onStop,
-  onDismiss,
-  children,
-}: {
-  icon: LucideIcon;
-  status: 'running' | 'done' | 'failed';
-  meta: ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  stopTitle: string;
-  onStop?: () => void;
-  onDismiss: () => void;
-  children: ReactNode;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="flex min-h-[30px] min-w-0 items-center gap-2 px-1 text-[13px]">
-      <StepNode
-        icon={icon}
-        state={status === 'running' ? 'running' : status === 'failed' ? 'error' : 'ok'}
-      />
-      {children}
-      {meta}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        {t('Output')}
-        <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
-      </button>
-      {status === 'running' ? (
-        onStop && (
-          <button
-            type="button"
-            onClick={onStop}
-            title={stopTitle}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Square className="h-3 w-3" />
-          </button>
-        )
-      ) : (
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
+      ))}
     </div>
   );
 }

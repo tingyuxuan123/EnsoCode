@@ -2,13 +2,25 @@ import type { BackgroundTaskInfo, SubagentActivity, SubagentInfo } from '@shared
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import type { SubagentDirectoryEntry } from '@/lib/subagentTargets';
 import { AgentActivityView, TaskBar } from './TaskBar';
 
+const directory = vi.hoisted(() => ({ entries: [] as SubagentDirectoryEntry[] }));
 vi.mock('@/i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({
+    t: (key: string, values?: Record<string, unknown>) =>
+      key.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values?.[name] ?? '')),
+  }),
 }));
 vi.mock('./Markdown', () => ({ Markdown: ({ text }: { text: string }) => text }));
-vi.mock('./SubagentProcessBar', () => ({ SubagentProcessBar: () => null }));
+vi.mock('@/hooks/useSubagentDirectory', () => ({
+  useSubagentDirectory: () => directory.entries,
+}));
+vi.mock('@/stores/sessions', () => ({ useSessionsStore: { getState: vi.fn() } }));
+vi.mock('@/lib/sidePanelDock', () => ({
+  addSidePanelSubagent: vi.fn(),
+  addSidePanelSubagentDirectory: vi.fn(),
+}));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: { virtualModels: never[] }) => unknown) =>
     select({ virtualModels: [] }),
@@ -41,27 +53,52 @@ const renderBar = (
   readOnly?: boolean
 ) => renderToStaticMarkup(createElement(TaskBar, { sessionId, tasks, subagents, readOnly }));
 
-describe('TaskBar', () => {
-  it('首次出现即为终态的条目（重启后从快照/缓存恢复）不显示', () => {
-    expect(renderBar('restored', [task('done')], [agent('failed')])).toBe('');
+const dirEntry = (overrides: Partial<SubagentDirectoryEntry> = {}): SubagentDirectoryEntry => ({
+  childConversationId: 'child',
+  agentId: 'agent',
+  title: 'Reviewer',
+  mode: 'task',
+  origin: 'agent-tool',
+  status: 'running',
+  createdAt: 1,
+  ended: false,
+  closed: false,
+  canOpenConversation: true,
+  ...overrides,
+});
+
+describe('TaskBar 输入框上方的固定按钮条', () => {
+  it('没有任何后台命令和子代理时不渲染', () => {
+    directory.entries = [];
+    expect(renderBar('empty', [], [])).toBe('');
   });
 
-  it('本次运行中见过 running 的条目结束后仍显示', () => {
-    renderBar('live', [task('running')], [agent('running')]);
-    const html = renderBar('live', [task('done')], [agent('done')]);
-    expect(html).toContain('pnpm dev');
-    expect(html).toContain('scan repo');
+  it('任务再多也只占一行按钮，不再逐任务铺开行', () => {
+    directory.entries = [];
+    const html = renderBar('many', [task('running'), { ...task('running'), taskId: 't2' }], []);
+    expect(html).toContain('data-task-dock-button="bash"');
+    expect(html).toContain('Background Bash');
+    expect(html).not.toContain('pnpm dev');
   });
 
-  it('只读时仍显示运行中的条目，但不给停止按钮', () => {
-    const writable = renderBar('rw', [task('running')], [agent('running')]);
-    expect(writable).toContain('Stop task');
-    expect(writable).toContain('Stop subagent');
-    const html = renderBar('ro', [task('running')], [agent('running')], true);
-    expect(html).toContain('pnpm dev');
-    expect(html).toContain('scan repo');
-    expect(html).not.toContain('Stop task');
-    expect(html).not.toContain('Stop subagent');
+  it('按钮直接显示运行数，失败给红点', () => {
+    directory.entries = [];
+    const html = renderBar('state', [task('running'), { ...task('failed'), taskId: 't2' }], []);
+    expect(html).toMatch(/data-task-dock-button="bash"[^>]*>.*Background Bash.*·.*1/s);
+    expect(html).toContain('data-task-dock-failed');
+  });
+
+  it('重启后恢复的已结束任务也保留入口，可回看', () => {
+    directory.entries = [];
+    expect(renderBar('restored', [task('done')], [])).toContain('data-task-dock-button="bash"');
+  });
+
+  it('子代理按钮来自持久目录：全部结束后仍保留（B 方案）', () => {
+    directory.entries = [dirEntry({ status: 'succeeded', ended: true })];
+    const html = renderBar('agents', [], [agent('done')]);
+    expect(html).toContain('data-task-dock-button="agent"');
+    expect(html).toContain('Background Agent');
+    expect(html).not.toContain('data-task-dock-button="bash"');
   });
 });
 
