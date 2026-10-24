@@ -1516,6 +1516,8 @@ export const zhTranslations: Record<string, string> = {
   'Background Bash': '后台 Bash',
   'Background Agent': '后台 Agent',
   'Current progress': '当前进度',
+  '{{count}} files changed': '{{count}} 个文件已修改',
+  '{{count}} more files': '还有 {{count}} 个文件',
   'Clear finished tasks': '清空历史任务',
   'Removes completed and cancelled jobs. Running tasks are kept. Sessions will show as not distilled again, since that flag is derived from job history — re-distilling is deduplicated, so it will not create duplicate memories.':
     '清除已完成和已作废的任务，进行中的保留。清除后会话会重新显示为「未提炼」——该标记是由任务历史推导的；重新提炼有去重，不会产生重复记忆。',
