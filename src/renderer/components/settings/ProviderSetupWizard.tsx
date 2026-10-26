@@ -216,7 +216,7 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
               inert={page.step !== step ? true : undefined}
             >
               {page.step === 'provider' && (
-                <DialogPanel className="max-h-[55vh] space-y-2">
+                <DialogPanel bare className="space-y-2">
                   {loadError && (
                     <div className="flex items-start justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
                       <div className="min-w-0">
@@ -286,7 +286,7 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
               )}
 
               {page.step === 'method' && selected && (
-                <DialogPanel className="space-y-3">
+                <DialogPanel bare className="space-y-3">
                   <p className="text-sm font-medium">{t('Choose how to connect')}</p>
                   {isClassifierOnlyProvider({ catalogId: selected.id }) && (
                     <p className="text-xs text-muted-foreground">
@@ -329,7 +329,7 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
               )}
 
               {page.step === 'oauth' && selected && selectedOauth && (
-                <DialogPanel className="space-y-4">
+                <DialogPanel bare className="space-y-4">
                   {flow.state.phase === 'running' || flow.state.phase === 'error' ? (
                     <OauthLoginStep flow={flow} providerLabel={t(selected.label)} onBack={back} />
                   ) : (
@@ -355,6 +355,7 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
               {page.step === 'api-key' && selected && (
                 <ProviderApiForm
                   key={selected.id}
+                  bare
                   initialValue={initialProviderApiValue(selected)}
                   oauth={false}
                   onCancel={back}

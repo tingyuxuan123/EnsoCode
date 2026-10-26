@@ -15,6 +15,7 @@ import {
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useScrollChain } from '@/hooks/useScrollChain';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { ListFilterBar, matchesFilter } from './ListFilterBar';
@@ -503,6 +504,7 @@ export function PickList<T extends { id: string }>({
   const [detail, setDetail] = React.useState<T | null>(null);
   const filtered = items.filter((item) => matchesFilter(query, [getName(item), getSource?.(item)]));
   const filteredIds = filtered.map((item) => item.id);
+  const listRef = useScrollChain<HTMLDivElement>();
   const selectedCount = filtered.filter(isChecked).length;
   const allSelected = filtered.length > 0 && selectedCount === filtered.length;
   const someSelected = selectedCount > 0 && !allSelected;
@@ -532,7 +534,8 @@ export function PickList<T extends { id: string }>({
           </div>
         )}
 
-        <div className="max-h-40 overflow-y-auto p-1.5">
+        {/* 限高滚动；到边界后 useScrollChain 把滚轮交给外层 */}
+        <div ref={listRef} className="max-h-40 overflow-y-auto p-1.5">
           {leading}
           {items.length === 0 && <Empty text={emptyText} />}
           {items.length > 0 && filtered.length === 0 && <Empty text={t('No results')} />}

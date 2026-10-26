@@ -43,7 +43,9 @@ describe('dialog layout conventions', () => {
     const dialog = readFileSync(path.join(RENDERER, 'components/ui/dialog.tsx'), 'utf8');
     const header = dialog.slice(dialog.indexOf('function DialogHeader'));
     expect(header.slice(0, 400)).toContain('p-6');
+    const panelClass = dialog.slice(dialog.indexOf('const DIALOG_PANEL_CLASS'));
+    expect(panelClass.slice(0, 400)).toContain('px-6');
     const panel = dialog.slice(dialog.indexOf('function DialogPanel'));
-    expect(panel.slice(0, 400)).toContain('px-6');
+    expect(panel.slice(0, 600)).toContain('DIALOG_PANEL_CLASS');
   });
 });

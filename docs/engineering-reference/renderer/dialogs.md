@@ -37,6 +37,11 @@
 多阶段弹窗（扫描中 / 选择 / 出错 / 完成）**每个阶段都要各自包一层 `DialogPanel`**，
 参照 `LocalAssetImportDialog.tsx`。
 
+已在外层 `DialogPanel` 滚动区里的向导分步页使用 `DialogPanel bare`，保留排版但不再嵌套
+`ScrollArea`。正文内需要独立限高的列表使用 `useScrollChain`，到顶/到底后把滚轮交给最近的
+外层 viewport。监听按 DOM callback ref 挂载并清理，不能只在首次 effect 里读取 ref：
+模型列表可能在异步拉取完成后才出现，首次渲染时还没有 DOM。
+
 ## 层级
 
 层级令牌在 `src/renderer/lib/z-index.ts`，不要写数字字面量。

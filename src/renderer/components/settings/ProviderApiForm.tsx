@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useScrollChain } from '@/hooks/useScrollChain';
 import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { API_KIND_LABELS } from './constants';
@@ -42,6 +43,8 @@ interface ProviderApiFormProps {
   oauthAccountKey?: string;
   extraFields?: React.ReactNode;
   hideName?: boolean;
+  /** 已经在别的滚动区里（向导的分步页）时不要再套一层 ScrollArea */
+  bare?: boolean;
   saveDisabled?: boolean;
   onCancel: () => void;
   onSave: (value: ProviderApiFormValue) => void;
@@ -56,6 +59,7 @@ export function ProviderApiForm({
   oauthAccountKey,
   extraFields,
   hideName = false,
+  bare = false,
   saveDisabled = false,
   onCancel,
   onSave,
@@ -117,6 +121,7 @@ export function ProviderApiForm({
   }, [filter, models]);
   const visibleIds = visibleModels.map((model) => model.id);
   const selection = useVisibleSelection(visibleIds);
+  const modelListRef = useScrollChain<HTMLDivElement>();
   const enabledCount = models.filter(isEnabled).length;
   const availableTestModel = models.some((model) => model.id === testModel)
     ? testModel
@@ -207,7 +212,7 @@ export function ProviderApiForm({
 
   return (
     <>
-      <DialogPanel className="space-y-4">
+      <DialogPanel bare={bare} className="space-y-4">
         {extraFields}
         {isClassifierOnlyProvider({ api, baseUrl }) && (
           <p className="text-xs text-muted-foreground">{t('Classification only, not for chat')}</p>
@@ -322,7 +327,11 @@ export function ProviderApiForm({
                 actionDisabled={selection.selectedIds.length === 0}
               />
 
-              <div className="max-h-72 w-full space-y-0.5 overflow-y-auto rounded-md border p-1">
+              {/* 列表自己限高滚动，到边界后由 useScrollChain 把滚轮交给对话框 */}
+              <div
+                ref={modelListRef}
+                className="max-h-72 w-full space-y-0.5 overflow-y-auto rounded-md border p-1"
+              >
                 {visibleModels.map((model) => (
                   <ProviderModelRow
                     key={model.id}

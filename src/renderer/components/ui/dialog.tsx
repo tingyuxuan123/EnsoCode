@@ -171,19 +171,26 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
   );
 }
 
-function DialogPanel({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <ScrollArea>
-      <div
-        className={cn(
-          'px-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-1 in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-header]))]:pt-6 in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-footer]))]:pb-6! in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-footer].border-t))]:pb-1 pb-6',
-          className
-        )}
-        data-slot="dialog-panel"
-        {...props}
-      />
-    </ScrollArea>
+const DIALOG_PANEL_CLASS =
+  'px-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-1 in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-header]))]:pt-6 in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-footer]))]:pb-6! in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-footer].border-t))]:pb-1 pb-6';
+
+/**
+ * 对话框正文区。
+ *
+ * bare：已经处在另一个滚动区里时用（例如向导里按步骤嵌的页），只出排版不出
+ * ScrollArea——滚动容器不能套娃，内层那个即使没有溢出也会把滚轮吃掉。
+ */
+function DialogPanel({
+  className,
+  bare = false,
+  ...props
+}: React.ComponentProps<'div'> & { bare?: boolean }) {
+  const content = (
+    <div className={cn(DIALOG_PANEL_CLASS, className)} data-slot="dialog-panel" {...props} />
   );
+  if (bare) return content;
+  // flex-1 + 去掉 h-full：面板高度由对话框剩余空间决定，而不是被内容撑开
+  return <ScrollArea className="!h-auto min-h-0 flex-1">{content}</ScrollArea>;
 }
 
 export {
