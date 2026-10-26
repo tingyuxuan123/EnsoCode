@@ -1607,7 +1607,9 @@ export const useSessionsStore = create<SessionsState>()(
             const next = applyAgentEvent(conversation, id, event);
             if (next === conversation) return state;
             const expected = rewindDraftGuard.get(id);
-            const hasDraft = Boolean(event.editorText || event.editorImages?.length);
+            // 只有发起回退的窗口才接回退文本；其它窗口（桌面 / 远程完整版）的输入框不受影响
+            const hasDraft =
+              expected !== undefined && Boolean(event.editorText || event.editorImages?.length);
             const edited =
               expected !== undefined &&
               conversation.draftText !== undefined &&

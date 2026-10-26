@@ -2842,6 +2842,20 @@ describe('typed Agent child projection', () => {
   });
 
   it('仅图片回退事件也把图片交给输入框', () => {
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        parent: {
+          ...state.conversations.parent,
+          started: true,
+          spawning: false,
+          status: 'idle' as const,
+          generation: 'pg1',
+          messages: [{ role: 'user', entryId: 'e1', content: [{ type: 'text', text: '' }] }],
+        },
+      },
+    }));
+    sessionsModule.useSessionsStore.getState().rewind('parent', 0);
     onAgentEvent?.({
       type: 'rewind-done',
       identity: { sessionId: 'parent', generation: 'pg1' },
@@ -2906,19 +2920,43 @@ describe('typed Agent child projection', () => {
     ).toHaveLength(1);
   });
 
+  it('别的窗口发起的回退不把回退文本写进本窗口输入框', () => {
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        parent: { ...state.conversations.parent, generation: 'pg1', draftText: 'mine' },
+      },
+    }));
+    onAgentEvent?.({
+      type: 'rewind-done',
+      identity: { sessionId: 'parent', generation: 'pg1' },
+      seq: 1,
+      editorText: 'theirs',
+    });
+    expect(sessionsModule.useSessionsStore.getState().conversations.parent.draftText).toBe('mine');
+  });
+
   it('连续回退用本次内容成对替换草稿，避免文本和图片串台', () => {
     sessionsModule.useSessionsStore.setState((state) => ({
       conversations: {
         ...state.conversations,
         parent: {
           ...state.conversations.parent,
+          started: true,
+          spawning: false,
+          status: 'idle' as const,
           generation: 'pg1',
           draftText: 'stale text',
           draftImages: [{ data: 'OLD', mimeType: 'image/png' }],
+          messages: [
+            { role: 'user', entryId: 'e1', content: [{ type: 'text', text: 'one' }] },
+            { role: 'user', entryId: 'e2', content: [{ type: 'text', text: 'two' }] },
+          ],
         },
       },
     }));
 
+    sessionsModule.useSessionsStore.getState().rewind('parent', 0);
     onAgentEvent?.({
       type: 'rewind-done',
       identity: { sessionId: 'parent', generation: 'pg1' },
@@ -2930,6 +2968,7 @@ describe('typed Agent child projection', () => {
       draftImages: undefined,
     });
 
+    sessionsModule.useSessionsStore.getState().rewind('parent', 0);
     onAgentEvent?.({
       type: 'rewind-done',
       identity: { sessionId: 'parent', generation: 'pg1' },
