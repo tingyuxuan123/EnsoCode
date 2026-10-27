@@ -66,6 +66,7 @@
       "!!.zvec-grep",
       "!.hce",
       "!temp",
+      "!*.vetd",
       "!docs/project-history/**/*.html",
       "!packages/relay-go/frontend/assets",
       "!src/agent/continuousMemory/vendor",
