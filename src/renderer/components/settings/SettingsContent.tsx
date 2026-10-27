@@ -139,16 +139,16 @@ export function SettingsContent() {
   }, [resolvedCategory, activeCategory]);
 
   return (
-    <div className="flex h-full w-full gap-2 px-2 pb-2">
+    <div className="flex h-full w-full border-t">
       {/* Left: Category List */}
-      <nav className="w-52 shrink-0 space-y-0.5 overflow-y-auto rounded-xl border border-border bg-panel p-2">
+      <nav className="w-60 shrink-0 space-y-0.5 overflow-y-auto border-r bg-nav p-2">
         {categories.map((category) => (
           <button
             type="button"
             key={category.id}
             onClick={() => setActiveCategory(category.id)}
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+              'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
               category.sub && 'pl-7',
               activeCategory === category.id
                 ? 'bg-accent font-medium text-foreground'
@@ -162,7 +162,7 @@ export function SettingsContent() {
       </nav>
 
       {/* Right: Settings Panel */}
-      <div className="min-w-0 flex-1 overflow-y-auto rounded-xl border border-border bg-panel p-7">
+      <div className="min-w-0 flex-1 overflow-y-auto bg-panel px-10 py-8">
         {activeCategory === 'general' && <GeneralSettings />}
         {activeCategory === 'shortcuts' && <KeybindingsSettings />}
         {activeCategory === 'appearance' && <AppearanceSettings />}

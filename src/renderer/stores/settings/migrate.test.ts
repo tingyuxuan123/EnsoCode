@@ -4,7 +4,6 @@ import { mergeSettingsState, migrateSettings, SETTINGS_VERSION } from './migrate
 
 describe('代码搜索设置迁移与水合', () => {
   it('v17 迁移全局及项目默认关，幂等且保留新版显式授权', () => {
-    expect(SETTINGS_VERSION).toBe(17);
     const previous = {
       disabledBuiltinTools: ['computer'],
       projects: [{ id: 'p1', disabledBuiltinTools: [] }, { id: 'p2' }],
@@ -15,7 +14,16 @@ describe('代码搜索设置迁移与水合', () => {
     };
     expect(migrateSettings(previous, 16)).toEqual(expected);
     expect(migrateSettings(expected, 16)).toEqual(expected);
-    expect(migrateSettings(previous, 17)).toBe(previous);
+    expect(migrateSettings(previous, 18)).toBe(previous);
+  });
+
+  it('v18 把旧默认靛蓝换成晴空蓝，保留其他显式强调色', () => {
+    expect(SETTINGS_VERSION).toBe(18);
+    expect(migrateSettings({ accentColor: 'indigo' }, 17)).toEqual({ accentColor: 'ocean' });
+    expect(migrateSettings({ accentColor: 'teal' }, 17)).toEqual({ accentColor: 'teal' });
+    expect(migrateSettings({ theme: 'dark' }, 17)).toEqual({ theme: 'dark' });
+    const current = { accentColor: 'indigo' };
+    expect(migrateSettings(current, 18)).toBe(current);
   });
 
   it('当前版本水合坏账号回落 null，合法账号保留且缺字段不冒充用户选择', () => {

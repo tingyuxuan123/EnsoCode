@@ -29,7 +29,7 @@ import { parseWebSearchChain } from '@shared/webSearchChain';
  */
 
 /** 当前持久化数据版本；改数据形状时 +1 并在 `migrateSettings` 里加一段 */
-export const SETTINGS_VERSION = 17;
+export const SETTINGS_VERSION = 18;
 
 export function mergeSettingsState<T extends { editMode: EditMode; accentColor: AccentColor }>(
   persisted: unknown,
@@ -96,6 +96,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * 老账号不再错过新版本静态表里的新模型（gemini-3.8-flash 事故的根修）。
  * 幂等：对已是稀疏表的条目重跑 extractModelOverrides 结果不变。
  * v16 → v17：全局与项目内置工具列表补 code_search 默认关，避免升级时静默云端发送代码。
+ * v17 → v18：界面默认强调色由靛蓝改为晴空蓝；旧版落盘的 indigo 即旧默认值，随之换成 ocean。
  */
 export function migrateSettings(persisted: unknown, version: number): unknown {
   if (version >= SETTINGS_VERSION) return persisted;
@@ -212,6 +213,9 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
   }
   if (version < CODE_SEARCH_DEFAULT_OFF_SETTINGS_VERSION) {
     state = addCodeSearchDefaultOff(state);
+  }
+  if (version < 18 && state.accentColor === 'indigo') {
+    state = { ...state, accentColor: 'ocean' };
   }
   return state;
 }

@@ -7,13 +7,14 @@ import {
 } from './accentColor';
 
 describe('accentColor', () => {
-  it('默认值是靛蓝，且在合法取值里', () => {
-    expect(DEFAULT_ACCENT_COLOR).toBe('indigo');
+  it('默认值是晴空蓝，且在合法取值里', () => {
+    expect(DEFAULT_ACCENT_COLOR).toBe('ocean');
     expect(ACCENT_COLORS).toContain(DEFAULT_ACCENT_COLOR);
   });
 
   it('接受全部预设取值', () => {
     for (const accent of ACCENT_COLORS) expect(parseAccentColor(accent)).toBe(accent);
+    expect(parseAccentColor('indigo')).toBe('indigo');
   });
 
   it('非法值 parse 返回 null，resolve 落回默认值', () => {

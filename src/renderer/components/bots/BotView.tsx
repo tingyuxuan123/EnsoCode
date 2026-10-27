@@ -104,7 +104,7 @@ export function BotView({ sidebarWidth, collapsed, onToggleCollapse, onResize }:
   return (
     <>
       {collapsed ? (
-        <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-r bg-background py-2">
+        <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-t border-r bg-nav py-2">
           <BotSearchButton className={RAIL_BUTTON} />
           <button
             type="button"

@@ -1,0 +1,53 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"kind": "devtools",
+		"brief": "EnsoCode coding-agent desktop workbench matching the current Proma modern shell and ocean-light theme from source, not old screenshots. Inter and CJK sans, 6px corners, cool light gray-blue flat panes, 60px icon rail, 300px project/session sidebar, conversation and composer, 300px file/change inspector. Four interactive screens: workbench, new task, review, appearance settings. Keep EnsoCode approvals, coworkers, checkpoints, terminals. Exact reference fixes typography and palette.",
+		"theme": null,
+		"screens": [
+			"overview",
+			"list",
+			"settings"
+		],
+		"keep": [
+			"palette",
+			"type"
+		],
+		"avoid": []
+	},
+	"seed": 31676078,
+	"at": "2026-10-27T06:36:04.741Z",
+	"options": [
+		"achromatic-ledger",
+		"data-terminal",
+		"framed-sheet"
+	],
+	"choice": {
+		"styleId": "achromatic-ledger",
+		"shellId": "icon-rail",
+		"screens": [
+			{
+				"name": "overview",
+				"patternId": "deploy-health-lead"
+			},
+			{
+				"name": "list",
+				"patternId": "table-filter-bar"
+			},
+			{
+				"name": "settings",
+				"patternId": "settings-with-usage"
+			}
+		]
+	},
+	"allow": [
+		"tell-gradient",
+		"tell-gradient-text",
+		"tell-shadow",
+		"tell-glass",
+		"tell-font-count",
+		"tell-mono"
+	],
+	"redraws": []
+}

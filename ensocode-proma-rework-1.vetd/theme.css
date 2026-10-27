@@ -1,0 +1,47 @@
+@import "@fontsource-variable/inter";
+
+/* 取自 Proma 当前 ocean-light 主题与 modern 几何规范。 */
+@theme {
+  --font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --color-surface: hsl(205 30% 97%);
+  --color-surface-foreground: hsl(210 30% 15%);
+  --color-panel: hsl(205 35% 94%);
+  --color-sidebar: hsl(205 30% 96%);
+  --color-control: hsl(205 32% 90%);
+  --color-input: hsl(205 32% 96%);
+  --color-primary: hsl(205 50% 50%);
+  --color-primary-foreground: #ffffff;
+  --color-muted: hsl(210 15% 40%);
+  --color-faint: hsl(210 11% 48%);
+  --color-border: hsl(205 30% 85%);
+  --color-line: hsl(205 24% 90%);
+  --color-selected: hsl(205 15% 90%);
+  --color-hover: hsl(205 24% 92%);
+  --color-success: #36785a;
+  --color-success-soft: #e7f0eb;
+  --color-danger: #ad4b53;
+  --color-danger-soft: #f6e9eb;
+  --color-warning: #a67525;
+  --color-code: #e5ebef;
+  --color-white: #ffffff;
+  --radius-control: 6px;
+  --radius-card: 6px;
+}
+
+:root { font-family: var(--font-sans); color: var(--color-surface-foreground); font-feature-settings: "cv11", "ss01", "ss03", "tnum"; -webkit-font-smoothing: antialiased; color-scheme: light; }
+* { box-sizing: border-box; }
+button, input, textarea, select { font: inherit; }
+button, a, select { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), select { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+button, a { transition: none; }
+textarea { resize: none; }
+code, pre { font-family: var(--font-mono); }
+code { background: var(--color-code); border-radius: 4px; padding: 2px 5px; font-size: .88em; }
+pre code { padding: 0; background: transparent; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--color-border); }
+::selection { background: #c1d6e7; }
+.design-dark { --color-surface: #171b20; --color-surface-foreground: #e2e8ed; --color-panel: #20262c; --color-sidebar: #1c2228; --color-control: #30383e; --color-input: #20272d; --color-muted: #a3b0bb; --color-faint: #97a4ae; --color-border: #3b4650; --color-line: #303a43; --color-selected: #333d46; --color-hover: #2b353f; --color-code: #2b353d; --color-white: #222930; --color-success-soft: #233a30; --color-danger-soft: #41292e; color-scheme: dark; }

@@ -52,3 +52,11 @@ UI → store/reducer → preload → IPC → Main → worker / 文件 / 网络
 ```
 
 症状位置不一定是根因位置。优先用 CDP、IPC 返回值和持久化文件验证可观察事实，不要只盯着当前组件猜测。
+
+<!-- proma:memory:start -->
+## 记忆维护
+
+- 项目记忆索引：[MEMORY.md](</Users/yfdl/.proma/agent-workspaces/ensocode/memory/MEMORY.md>)；详细主题按索引按需读取，新增、移动、归档主题时同步索引。
+- 全局用户画像：[user_profile.md](</Users/yfdl/.proma/memory/user_profile.md>)，跨项目共享；本项目补充偏好存入 /Users/yfdl/.proma/agent-workspaces/ensocode/memory/project-preferences.md 并加入项目索引，仅在本项目覆盖全局偏好。
+- 在任务中及时修订已确认的偏好、经验和决策，保留来源、适用范围和核验日期；不把临时任务进度写成永久偏好。超过一周的阶段性要求结合本轮证据复查；到期或被替代的内容移出有效入口并可恢复地归档。读取不等于核验，不编造用户事实。
+<!-- proma:memory:end -->

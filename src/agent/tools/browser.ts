@@ -226,7 +226,21 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       },
       required
     );
-    const prepare = (raw: unknown) => normalizeArgument(raw ?? {}, definition);
+    const prepare = (raw: unknown) => {
+      const normalized = normalizeArgument(raw ?? {}, definition);
+      // 模型常把可选 tabId 填成 ""；空白等同未传，回落到当前 tab，避免 Main 报 tabId is required
+      if (
+        normalized &&
+        typeof normalized === 'object' &&
+        'tabId' in normalized &&
+        typeof normalized.tabId === 'string' &&
+        !normalized.tabId.trim()
+      ) {
+        const { tabId: _blank, ...rest } = normalized;
+        return rest;
+      }
+      return normalized;
+    };
     return {
       name,
       label: name.replaceAll('_', ' '),

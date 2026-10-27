@@ -9,7 +9,9 @@ import {
 } from '@dnd-kit/core';
 import { FoldHorizontal, PanelRight, UnfoldHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
+import { StatusBar } from '@/components/app/StatusBar';
 import { TitleBar } from '@/components/app/TitleBar';
 import { UpdateBanner } from '@/components/app/UpdateBanner';
 import { BotView } from '@/components/bots/BotView';
@@ -86,7 +88,7 @@ export default function App() {
   useWindowsWindowChrome();
   const [width, setWidth] = useState(() => {
     const saved = Number(localStorage.getItem(WIDTH_KEY));
-    return Number.isFinite(saved) && saved >= MIN_WIDTH ? Math.min(saved, MAX_WIDTH) : 280;
+    return Number.isFinite(saved) && saved >= MIN_WIDTH ? Math.min(saved, MAX_WIDTH) : 264;
   });
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1');
   const { t } = useI18n();
@@ -379,7 +381,19 @@ export default function App() {
         }
       />
       <UpdateBanner />
-      <div className="flex min-h-0 flex-1 gap-1 px-2 pb-2">
+      {/* 平铺外壳：图标轨 + 侧栏 + 工作区，分栏只用 1px 细线，不再做浮起的圆角卡片 */}
+      <div className="flex min-h-0 flex-1">
+        <AppRail
+          sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
+          onToggleSidebar={remoteNodeActive ? undefined : () => setCollapsed((v) => !v)}
+          onOpenSearch={
+            remoteNodeActive
+              ? undefined
+              : botModeActive
+                ? () => useBotsStore.getState().setSearchOpen(true)
+                : () => setSearchOpen(true)
+          }
+        />
         {remoteNodeActive ? (
           // 远程节点态：整块换成对方的目录与会话；本机 Sidebar/ChatView/SidePanel 卸载
           <RemoteNodeView nodeId={activeNodeId} sidebarWidth={width} />
@@ -396,14 +410,13 @@ export default function App() {
             <Sidebar
               width={collapsed ? undefined : width}
               collapsed={collapsed}
-              onToggleCollapse={() => setCollapsed((v) => !v)}
               onOpenSearch={() => setSearchOpen(true)}
             />
             {!collapsed && <ResizeHandle onResize={handleResize} />}
             {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
             <div
               ref={workspaceRef}
-              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border"
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t"
             >
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <ChatView />
@@ -416,6 +429,7 @@ export default function App() {
           </DndContext>
         )}
       </div>
+      <StatusBar />
       {!onboarded && <Onboarding />}
       <WorkspaceSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
       <AlertDialog

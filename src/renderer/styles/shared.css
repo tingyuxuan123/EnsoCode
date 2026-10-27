@@ -11,7 +11,7 @@
 
 @layer base {
   :root {
-    --brand: rgb(79 70 229);
+    --brand: rgb(64 138 191);
     --brand-foreground: rgb(255 255 255);
     /* 浮层阴影：深色下用纯黑叠两层，浅色用低饱和冷灰 */
     --elevation-float:
@@ -19,13 +19,13 @@
   }
 
   .dark {
-    --brand: rgb(129 132 248);
-    --brand-foreground: rgb(14 16 24);
+    --brand: rgb(114 165 202);
+    --brand-foreground: rgb(12 18 24);
     --elevation-float:
       0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.6);
   }
 
-  /* 强调色预设：默认靛蓝写在 :root/.dark，其余由设置写入 html[data-accent] */
+  /* 强调色预设：默认晴空蓝写在 :root/.dark，其余由设置写入 html[data-accent] */
   html[data-accent='violet'] {
     --brand: rgb(124 78 214);
   }

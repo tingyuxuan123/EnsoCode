@@ -288,7 +288,7 @@ export function BotSidebar({
 
   return (
     <aside
-      className="flex shrink-0 flex-col overflow-hidden border-r bg-background"
+      className="flex shrink-0 flex-col overflow-hidden border-t border-r bg-nav"
       style={{ width }}
     >
       <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-2">

@@ -400,7 +400,10 @@ export class BrowserHost {
 
   private ownedTab(tabId: string, conversationId: string): Tab {
     const tab = this.tabs.get(tabId);
-    if (!tab) throw new Error('Browser tab is closed or unknown');
+    if (!tab)
+      throw new Error(
+        'Browser tab is closed or unknown. Omit tabId to use the current tab, or call browser_tabs to list open tabs.'
+      );
     if (tab.ownerSessionId !== conversationId) throw new Error('Browser tab owner mismatch');
     return tab;
   }

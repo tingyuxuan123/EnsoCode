@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 @import "./shared.css";
 
 @theme {
@@ -30,10 +31,16 @@
   /* 两级表面：外壳（窗口底色）与面板（侧栏 / 工作区） */
   --color-shell: var(--shell);
   --color-panel: var(--panel);
+  /* 项目/会话导航面：介于外壳与内容区之间，sync-terminal 写入 shell/panel 后自动跟随 */
+  --color-nav: color-mix(in oklab, var(--shell) 55%, var(--panel));
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+  /* modern 几何：大圆角（卡片/弹窗/气泡）统一收到 6px，胶囊/圆形仍用 rounded-full */
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: calc(var(--radius) + 2px);
 
   --font-sans: var(--font-family-sans, -apple-system, system-ui, sans-serif);
   --font-mono: var(--font-family-mono, "SF Mono", "Menlo", monospace);
@@ -58,75 +65,79 @@
 }
 
 @layer base {
-  /* 浅色：中性冷灰工作台，强调色只留给主操作与状态 */
+  /*
+   * 浅色：晴空碧海（ocean-light）。低饱和蓝灰，外壳/侧栏 = 背景 94%，内容区 97%，
+   * 平铺分栏只靠明度与 1px 细线分层，强调蓝只留给主操作、选中与状态。
+   */
   :root {
     color-scheme: light;
-    --font-family-sans: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+    --font-family-sans: "Inter Variable", "Inter", -apple-system, "SF Pro Text",
       "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
     --font-family-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
     --font-size-base: 14px;
-    --background: rgb(255 255 255);
-    --foreground: rgb(21 24 31);
-    --card: rgb(249 250 252);
-    --card-foreground: rgb(21 24 31);
+    --background: rgb(245 248 250);
+    --foreground: rgb(27 38 50);
+    --card: rgb(245 248 250);
+    --card-foreground: rgb(27 38 50);
     --popover: rgb(255 255 255);
-    --popover-foreground: rgb(21 24 31);
-    --primary: rgb(79 70 229);
+    --popover-foreground: rgb(27 38 50);
+    --primary: rgb(64 138 191);
     --primary-foreground: rgb(255 255 255);
-    --secondary: rgb(240 241 245);
-    --secondary-foreground: rgb(21 24 31);
-    --muted: rgb(245 246 249);
-    --muted-foreground: rgb(104 110 125);
-    --accent: rgb(238 240 246);
-    --accent-foreground: rgb(21 24 31);
-    --destructive: rgb(220 66 66);
+    --secondary: rgb(225 233 239);
+    --secondary-foreground: rgb(36 51 66);
+    --muted: rgb(228 236 241);
+    --muted-foreground: rgb(87 102 117);
+    --accent: rgb(223 231 236);
+    --accent-foreground: rgb(27 38 50);
+    --destructive: rgb(173 75 83);
     --destructive-foreground: rgb(255 255 255);
-    --success: rgb(22 138 74);
+    --success: rgb(54 120 90);
     --success-foreground: rgb(255 255 255);
-    --warning: rgb(176 116 12);
+    --warning: rgb(166 117 37);
     --warning-foreground: rgb(255 255 255);
-    --info: rgb(37 99 235);
+    --info: rgb(57 124 172);
     --info-foreground: rgb(255 255 255);
-    --border: rgb(227 229 236);
-    --input: rgb(227 229 236);
-    --ring: rgb(99 102 241);
-    /* 外壳与面板两级：外壳比面板暗一档，靠明度而不靠边框分出层次 */
-    --shell: rgb(236 238 244);
-    --panel: rgb(255 255 255);
-    --radius: 0.625rem;
+    --border: rgb(212 224 232);
+    --input: rgb(205 219 228);
+    --ring: rgb(64 138 191);
+    /* 外壳（标题栏/图标轨/侧栏）与内容区两级：外壳暗一档，平铺不加卡片外框 */
+    --shell: rgb(234 241 245);
+    --panel: rgb(245 248 250);
+    /* modern 几何：卡片/面板/控件统一 6px，胶囊与圆形仍走 rounded-full */
+    --radius: 6px;
   }
 
-  /* 深色优先：整个设计先在这里定稿，浅色是它的降噪版本 */
+  /* 深色：远山暮霭（ocean-dark）。整体低饱和蓝灰，内容区最深，侧栏/外壳浮一档 */
   .dark {
     color-scheme: dark;
-    --background: rgb(20 22 30);
-    --foreground: rgb(220 224 234);
-    --card: rgb(26 28 36);
-    --card-foreground: rgb(220 224 234);
-    --popover: rgb(33 36 46);
-    --popover-foreground: rgb(220 224 234);
-    --primary: rgb(99 102 241);
+    --background: rgb(22 26 29);
+    --foreground: rgb(226 230 233);
+    --card: rgb(34 38 42);
+    --card-foreground: rgb(226 230 233);
+    --popover: rgb(38 43 49);
+    --popover-foreground: rgb(226 230 233);
+    --primary: rgb(100 156 196);
     --primary-foreground: rgb(255 255 255);
-    --secondary: rgb(38 41 52);
-    --secondary-foreground: rgb(220 224 234);
-    --muted: rgb(27 30 38);
-    --muted-foreground: rgb(138 144 160);
-    --accent: rgb(40 44 56);
-    --accent-foreground: rgb(220 224 234);
-    --destructive: rgb(240 84 84);
+    --secondary: rgb(40 46 51);
+    --secondary-foreground: rgb(226 230 233);
+    --muted: rgb(36 41 46);
+    --muted-foreground: rgb(148 158 168);
+    --accent: rgb(47 54 61);
+    --accent-foreground: rgb(232 235 237);
+    --destructive: rgb(214 104 112);
     --destructive-foreground: rgb(24 24 24);
-    --success: rgb(74 182 118);
+    --success: rgb(104 176 140);
     --success-foreground: rgb(16 22 18);
-    --warning: rgb(226 174 84);
+    --warning: rgb(214 168 92);
     --warning-foreground: rgb(26 20 10);
-    --info: rgb(112 150 240);
+    --info: rgb(122 170 205);
     --info-foreground: rgb(14 18 28);
-    --border: rgb(42 45 56);
-    --input: rgb(48 51 64);
-    --ring: rgb(129 132 248);
-    /* 外壳比面板更暗，让侧栏/工作区两块面板浮起来 */
-    --shell: rgb(15 17 23);
-    --panel: rgb(26 28 36);
+    --border: rgb(46 54 61);
+    --input: rgb(55 64 73);
+    --ring: rgb(114 165 202);
+    /* 外壳（侧栏/图标轨）比内容区亮一档：深色下内容最深，阅读更专注 */
+    --shell: rgb(29 33 37);
+    --panel: rgb(22 26 29);
   }
 }
 
@@ -141,6 +152,13 @@
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--primary) 24%, transparent);
   }
 
   /* 主窗口：body 不铺底，侧栏 Browser 才能挖洞让垫底的 guest view 透出来 */

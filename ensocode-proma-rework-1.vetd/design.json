@@ -1,0 +1,141 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.5797198227889517,
+		"x": -3509.2849223450266,
+		"y": 106.29489165670475
+	},
+	"frames": [
+		{
+			"id": "approvals",
+			"file": "frames/approvals.tsx",
+			"x": 12160,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "运行控制 · 审批、提问与计划",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "运行控制 · 审批、提问与计划"
+			}
+		},
+		{
+			"id": "background-agents",
+			"file": "frames/background-agents.tsx",
+			"x": 6080,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "后台 Agent · 展开状态",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "后台 Agent · 展开状态"
+			}
+		},
+		{
+			"id": "coverage",
+			"file": "frames/coverage.tsx",
+			"x": 9120,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "全功能重构 · 覆盖清单",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "全功能重构 · 覆盖清单"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "对话工作台",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "对话工作台"
+			}
+		},
+		{
+			"id": "new-task",
+			"file": "frames/new-task.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "新建任务",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "新建任务"
+			}
+		},
+		{
+			"id": "projects",
+			"file": "frames/projects.tsx",
+			"x": 10640,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "项目管理 · 设置与分组",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "项目管理 · 设置与分组"
+			}
+		},
+		{
+			"id": "review",
+			"file": "frames/review.tsx",
+			"x": 3040,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "改动审查",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "改动审查"
+			}
+		},
+		{
+			"id": "settings",
+			"file": "frames/settings.tsx",
+			"x": 4560,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "外观设置",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "外观设置"
+			}
+		},
+		{
+			"id": "task-progress",
+			"file": "frames/task-progress.tsx",
+			"x": 7600,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "当前进度 · 展开状态",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "当前进度 · 展开状态"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	}
+}

@@ -1,9 +1,9 @@
-/** 界面强调色预设；值写进 `html[data-accent]`，具体色值由 globals.css 定义 */
-export const ACCENT_COLORS = ['indigo', 'violet', 'teal', 'amber', 'graphite'] as const;
+/** 界面强调色预设；值写进 `html[data-accent]`，具体色值由 shared.css 定义 */
+export const ACCENT_COLORS = ['ocean', 'indigo', 'violet', 'teal', 'amber', 'graphite'] as const;
 
 export type AccentColor = (typeof ACCENT_COLORS)[number];
 
-export const DEFAULT_ACCENT_COLOR: AccentColor = 'indigo';
+export const DEFAULT_ACCENT_COLOR: AccentColor = 'ocean';
 
 export function parseAccentColor(value: unknown): AccentColor | null {
   return typeof value === 'string' && (ACCENT_COLORS as readonly string[]).includes(value)

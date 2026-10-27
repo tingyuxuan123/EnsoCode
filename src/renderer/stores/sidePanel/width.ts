@@ -1,4 +1,4 @@
-export const SIDE_PANEL_DEFAULT_WIDTH = 360;
+export const SIDE_PANEL_DEFAULT_WIDTH = 312;
 export const SIDE_PANEL_MIN_WIDTH = 280;
 export const CHAT_MIN_WIDTH = 360;
 export const SIDE_PANEL_HANDLE_WIDTH = 1;

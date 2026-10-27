@@ -7,7 +7,6 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
 import { conversationDotTone } from '@shared/conversationDotTone';
 import {
   ALL_GROUP_ID,
@@ -37,8 +36,6 @@ import {
   Layers,
   Loader2,
   MessageSquarePlus,
-  PanelLeft,
-  PanelLeftClose,
   Pencil,
   Pin,
   PinOff,
@@ -46,7 +43,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Sparkles,
   Trash2,
 } from 'lucide-react';
 import type * as React from 'react';
@@ -156,16 +152,15 @@ import { WorktreeRenameDialog } from './WorktreeRenameDialog';
 const ARCHIVE_PURGE_DAYS = [7, 15, 30] as const;
 
 const ICON_BUTTON_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
+  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 
 interface SidebarProps {
   width?: number;
   collapsed: boolean;
-  onToggleCollapse: () => void;
   onOpenSearch?: () => void;
 }
 
-export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: SidebarProps) {
+export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
   const { t, locale } = useI18n();
   const projects = useSettingsStore((state) => state.projects);
   const projectGroups = useSettingsStore((state) => state.projectGroups);
@@ -716,69 +711,13 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
   return (
     <motion.aside
       initial={false}
-      animate={{ width: collapsed ? 48 : width }}
+      animate={{ width: collapsed ? 0 : width }}
       transition={springStandard}
-      className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-panel"
+      data-slot="project-sidebar"
+      aria-hidden={collapsed || undefined}
+      className="flex shrink-0 flex-col overflow-hidden border-t bg-nav"
     >
-      {collapsed && (
-        <div className="flex w-12 flex-1 flex-col items-center gap-1 py-2">
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            className={ICON_BUTTON_CLASS}
-            title={
-              searchShortcut ? `${t('Search anything')} (${searchShortcut})` : t('Search anything')
-            }
-          >
-            <Search className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className={ICON_BUTTON_CLASS}
-            title={t('Add project')}
-          >
-            <FolderPlus className="h-4 w-4" />
-          </button>
-          <div className="flex-1" />
-          {archivedCount > 0 && (
-            <button
-              type="button"
-              onClick={openArchive}
-              className={ICON_BUTTON_CLASS}
-              title={`${t('Archived')} (${archivedCount})`}
-            >
-              <Archive className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              void window.electronAPI.window.summonAgent({ typeKey: ENSO_AGENT_TYPE_KEY });
-            }}
-            className={ICON_BUTTON_CLASS}
-            title={t('Ask Enso')}
-          >
-            <Sparkles className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => window.electronAPI.window.openSettings()}
-            className={ICON_BUTTON_CLASS}
-            title={t('Settings')}
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className={ICON_BUTTON_CLASS}
-            title={t('Expand sidebar')}
-          >
-            <PanelLeft className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      {/* 收起后整栏让位：搜索 / 设置 / 询问 Enso / 展开入口都在全局图标轨上 */}
       <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
         <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-2.5">
           {/* 节点切换器：本机 / 已连的远程 EnsoCode 桌面 */}
@@ -1177,10 +1116,10 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
                                     <MessageSquarePlus className="h-3.5 w-3.5" />
                                   </button>
                                   <ProjectOverflowMenu actions={projectActions} />
-                                  {/* 置顶标记放最右：左侧透明操作位仍占宽，放在它们前面会悬在行中间 */}
+                                  {/* 保留最右侧置顶标记的占位，避免菜单遮罩使项目行失去悬停时触发器移位。 */}
                                   {projectPinned && (
                                     <span
-                                      className="flex shrink-0 items-center justify-center rounded p-1 group-hover:hidden"
+                                      className="flex shrink-0 items-center justify-center rounded p-1 group-hover:opacity-0"
                                       aria-hidden
                                     >
                                       <Pin className="h-3.5 w-3.5 text-muted-foreground/70" />
@@ -1397,47 +1336,22 @@ export function Sidebar({ width, collapsed, onToggleCollapse, onOpenSearch }: Si
           </SortableContext>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between border-t p-2">
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className={ICON_BUTTON_CLASS}
-            title={t('Collapse sidebar')}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-          <div className="flex items-center">
-            {archivedCount > 0 && (
-              <button
-                type="button"
-                data-slot="archived-button"
-                onClick={openArchive}
-                className={ICON_BUTTON_CLASS}
-                title={`${t('Archived')} (${archivedCount})`}
-              >
-                <Archive className="h-4 w-4" />
-              </button>
-            )}
+        {/* 归档是侧栏自身的入口；收起/设置/询问 Enso 已移到全局图标轨 */}
+        {archivedCount > 0 && (
+          <div className="flex shrink-0 items-center border-t px-2 py-1.5">
             <button
               type="button"
-              onClick={() => {
-                void window.electronAPI.window.summonAgent({ typeKey: ENSO_AGENT_TYPE_KEY });
-              }}
-              className={ICON_BUTTON_CLASS}
-              title={t('Ask Enso')}
+              data-slot="archived-button"
+              onClick={openArchive}
+              className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title={`${t('Archived')} (${archivedCount})`}
             >
-              <Sparkles className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => window.electronAPI.window.openSettings()}
-              className={ICON_BUTTON_CLASS}
-              title={t('Settings')}
-            >
-              <Settings className="h-4 w-4" />
+              <Archive className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t('Archived')}</span>
+              <span className="ml-auto text-xs tabular-nums">{archivedCount}</span>
             </button>
           </div>
-        </div>
+        )}
       </div>
 
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>

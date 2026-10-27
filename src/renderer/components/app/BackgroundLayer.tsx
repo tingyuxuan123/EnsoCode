@@ -118,8 +118,9 @@ function BackgroundShell({ children }: { children: React.ReactNode }) {
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       style={{
         clipPath,
-        // 实心底：用原始令牌（--background），不能用会被重映射成半透明的 --color-background
-        backgroundColor: 'var(--background)',
+        // 实心底：用原始外壳令牌（--shell），不能用会被重映射成半透明的 --color-* 映射层；
+        // 标题栏、图标轨、状态栏都透出这一层
+        backgroundColor: 'var(--shell)',
       }}
     >
       {children}

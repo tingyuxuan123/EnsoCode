@@ -1,99 +1,99 @@
 {
-  "version": 1,
-  "type": "vetta-design",
-  "canvas": {
-    "zoom": 0.7290035624984644,
-    "x": -1066.1620630867146,
-    "y": 65.542102915143
-  },
-  "frames": [
-    {
-      "id": "01-summary-phases",
-      "file": "frames/01-summary-phases.tsx",
-      "x": 0,
-      "y": 0,
-      "width": 1440,
-      "height": 900,
-      "title": "方案 A · 折叠摘要 + 阶段分组",
-      "meta": {
-        "width": 1440,
-        "height": 900,
-        "title": "方案 A · 折叠摘要 + 阶段分组"
-      }
-    },
-    {
-      "id": "02-command-timeline",
-      "file": "frames/02-command-timeline.tsx",
-      "x": 1520,
-      "y": 0,
-      "width": 1440,
-      "height": 900,
-      "title": "方案 B · 命令时间轴",
-      "meta": {
-        "width": 1440,
-        "height": 900,
-        "title": "方案 B · 命令时间轴"
-      }
-    },
-    {
-      "id": "03-intent-cards",
-      "file": "frames/03-intent-cards.tsx",
-      "x": 3040,
-      "y": 0,
-      "width": 1440,
-      "height": 900,
-      "title": "方案 C · 意图卡片",
-      "meta": {
-        "width": 1440,
-        "height": 900,
-        "title": "方案 C · 意图卡片"
-      }
-    },
-    {
-      "id": "04-states-dark",
-      "file": "frames/04-states-dark.tsx",
-      "x": 4560,
-      "y": 0,
-      "width": 1440,
-      "height": 900,
-      "title": "状态与密度（深色）",
-      "meta": {
-        "width": 1440,
-        "height": 900,
-        "title": "状态与密度（深色）"
-      }
-    },
-    {
-      "id": "05-combined-done",
-      "file": "frames/05-combined-done.tsx",
-      "x": 6080,
-      "y": 0,
-      "width": 1440,
-      "height": 1180,
-      "title": "A+D 合并 · 完成态（含失败、长输出、悬停）",
-      "meta": {
-        "width": 1440,
-        "height": 1180,
-        "title": "A+D 合并 · 完成态（含失败、长输出、悬停）"
-      }
-    },
-    {
-      "id": "06-combined-running",
-      "file": "frames/06-combined-running.tsx",
-      "x": 7600,
-      "y": 0,
-      "width": 1440,
-      "height": 900,
-      "title": "A+D 合并 · 运行中（深色）",
-      "meta": {
-        "width": 1440,
-        "height": 900,
-        "title": "A+D 合并 · 运行中（深色）"
-      }
-    }
-  ],
-  "defaultFrameSize": {
-    "width": 1440,
-    "height": 900
-  }
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"x": -1066.1620630867146,
+		"y": 263.3173714698305,
+		"zoom": 0.7290035624984644
+	},
+	"frames": [
+		{
+			"id": "01-summary-phases",
+			"file": "frames/01-summary-phases.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "方案 A · 折叠摘要 + 阶段分组",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "方案 A · 折叠摘要 + 阶段分组"
+			}
+		},
+		{
+			"id": "02-command-timeline",
+			"file": "frames/02-command-timeline.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "方案 B · 命令时间轴",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "方案 B · 命令时间轴"
+			}
+		},
+		{
+			"id": "03-intent-cards",
+			"file": "frames/03-intent-cards.tsx",
+			"x": 3040,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "方案 C · 意图卡片",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "方案 C · 意图卡片"
+			}
+		},
+		{
+			"id": "04-states-dark",
+			"file": "frames/04-states-dark.tsx",
+			"x": 4560,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "状态与密度（深色）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "状态与密度（深色）"
+			}
+		},
+		{
+			"id": "05-combined-done",
+			"file": "frames/05-combined-done.tsx",
+			"x": 6080,
+			"y": 0,
+			"width": 1440,
+			"height": 1180,
+			"title": "A+D 合并 · 完成态（含失败、长输出、悬停）",
+			"meta": {
+				"width": 1440,
+				"height": 1180,
+				"title": "A+D 合并 · 完成态（含失败、长输出、悬停）"
+			}
+		},
+		{
+			"id": "06-combined-running",
+			"file": "frames/06-combined-running.tsx",
+			"x": 7600,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "A+D 合并 · 运行中（深色）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "A+D 合并 · 运行中（深色）"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	}
 }

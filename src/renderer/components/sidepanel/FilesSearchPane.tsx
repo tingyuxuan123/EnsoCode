@@ -1,17 +1,34 @@
 import type { FilesSearchContentHit, FilesSearchMode, FilesSearchResult } from '@shared/types';
 import { Files, FileText } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { fileTypeIcon, fileTypeIconClass } from './fileIcons';
+import { FileTreeMenu } from './fileTreeMenu';
+
+export interface FilesSearchFileActions {
+  local: boolean;
+  onPreview: (rel: string) => void;
+  onBrowser: (rel: string) => void;
+  onCopyPath: (rel: string) => void;
+  onCopyRel: (rel: string) => void;
+  onCopyFile: (rel: string) => void;
+  onReveal: (rel: string) => void;
+  onNewFile: (parent: string) => void;
+  onNewFolder: (parent: string) => void;
+  onRename: (rel: string, name: string) => void;
+  onDelete: (rel: string, name: string) => void;
+  onSend: (rel: string, name: string) => void;
+}
 
 interface FilesSearchPaneProps {
   conversationId: string;
   projectId: string;
   onOpenFile: (rel: string) => void;
   onClose: () => void;
+  menu: FilesSearchFileActions;
 }
 
 export function FilesSearchPane({
@@ -19,6 +36,7 @@ export function FilesSearchPane({
   projectId,
   onOpenFile,
   onClose,
+  menu,
 }: FilesSearchPaneProps) {
   const { t } = useI18n();
   const seqRef = useRef(0);
@@ -99,28 +117,47 @@ export function FilesSearchPane({
           result.hits.map((hit) => {
             const Icon = fileTypeIcon(hit.name, false);
             return (
-              <button
+              <SearchFileMenu
                 key={hit.relativePath}
-                type="button"
-                className="flex w-full items-start gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-muted"
-                onClick={() => onOpenFile(hit.relativePath)}
+                rel={hit.relativePath}
+                name={hit.name}
+                menu={menu}
+                onOpenFile={onOpenFile}
               >
-                <Icon
-                  className={cn('mt-0.5 size-3.5 shrink-0', fileTypeIconClass(hit.name, false))}
-                />
-                <span className="min-w-0">
-                  <span className="block truncate text-xs">{hit.name}</span>
-                  <span className="block truncate text-[10px] text-muted-foreground">
-                    {hit.relativePath}
+                <button
+                  type="button"
+                  data-search-hit={hit.relativePath}
+                  className="flex w-full items-start gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-muted"
+                  onClick={() => onOpenFile(hit.relativePath)}
+                >
+                  <Icon
+                    className={cn('mt-0.5 size-3.5 shrink-0', fileTypeIconClass(hit.name, false))}
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs">{hit.name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {hit.relativePath}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+              </SearchFileMenu>
             );
           })
         ) : result?.ok && result.mode === 'content' ? (
-          result.hits.map((hit) => (
-            <ContentHitRow key={contentKey(hit)} hit={hit} onOpenFile={onOpenFile} />
-          ))
+          result.hits.map((hit) => {
+            const name = hit.relativePath.split('/').pop() || hit.relativePath;
+            return (
+              <SearchFileMenu
+                key={contentKey(hit)}
+                rel={hit.relativePath}
+                name={name}
+                menu={menu}
+                onOpenFile={onOpenFile}
+              >
+                {contentHitButton(hit, onOpenFile)}
+              </SearchFileMenu>
+            );
+          })
         ) : null}
       </div>
     </div>
@@ -131,18 +168,13 @@ function contentKey(hit: FilesSearchContentHit): string {
   return `${hit.relativePath}:${hit.line}:${hit.column}`;
 }
 
-function ContentHitRow({
-  hit,
-  onOpenFile,
-}: {
-  hit: FilesSearchContentHit;
-  onOpenFile: (rel: string) => void;
-}) {
+function contentHitButton(hit: FilesSearchContentHit, onOpenFile: (rel: string) => void) {
   const name = hit.relativePath.split('/').pop() || hit.relativePath;
   const Icon = fileTypeIcon(name, false);
   return (
     <button
       type="button"
+      data-search-hit={contentKey(hit)}
       className="flex w-full items-start gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-muted"
       onClick={() => onOpenFile(hit.relativePath)}
     >
@@ -157,6 +189,41 @@ function ContentHitRow({
         </span>
       </span>
     </button>
+  );
+}
+
+function SearchFileMenu({
+  rel,
+  name,
+  menu,
+  onOpenFile,
+  children,
+}: {
+  rel: string;
+  name: string;
+  menu: FilesSearchFileActions;
+  onOpenFile: (rel: string) => void;
+  children: ReactElement;
+}) {
+  return (
+    <FileTreeMenu
+      target={{ kind: 'file', rel, name }}
+      local={menu.local}
+      onNewFile={menu.onNewFile}
+      onNewFolder={menu.onNewFolder}
+      onView={onOpenFile}
+      onPreview={menu.onPreview}
+      onBrowser={menu.onBrowser}
+      onCopyPath={menu.onCopyPath}
+      onCopyRel={menu.onCopyRel}
+      onCopyFile={menu.onCopyFile}
+      onReveal={menu.onReveal}
+      onRename={menu.onRename}
+      onDelete={menu.onDelete}
+      onSend={menu.onSend}
+    >
+      {children}
+    </FileTreeMenu>
   );
 }
 

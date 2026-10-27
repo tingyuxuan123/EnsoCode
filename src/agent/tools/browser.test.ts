@@ -169,6 +169,22 @@ describe('createBrowserTools', () => {
     });
     await pending;
   });
+
+  it('空白 tabId 视为未传，回落到当前 tab 而不是让 Main 报 tabId is required', async () => {
+    const invoker = new BrowserInvoker(identity, () => {});
+    const invoke = vi.spyOn(invoker, 'invoke').mockResolvedValue({ ok: true });
+    const tools = createBrowserTools(invoker);
+    for (const [name, params] of [
+      ['browser_navigate', { url: 'https://example.com', tabId: '' }],
+      ['browser_tabs', { action: 'list', tabId: '  ' }],
+      ['browser_snapshot', { tabId: '' }],
+    ] as const) {
+      const tool = tools.find((item) => item.name === name)!;
+      expect(tool.prepareArguments!(params as never)).not.toHaveProperty('tabId');
+      await tool.execute('c', params as never, undefined, undefined, undefined as never);
+      expect(invoke.mock.lastCall?.[1]).not.toHaveProperty('tabId');
+    }
+  });
 });
 
 describe('分组浏览器能力', () => {
