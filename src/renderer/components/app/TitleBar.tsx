@@ -14,6 +14,8 @@ interface TitleBarProps {
   actions?: React.ReactNode;
   /** Optional no-drag content shown in place of the title. */
   leading?: React.ReactNode;
+  /** 只读的标题内容（不拦截拖拽）；与 leading 二选一 */
+  heading?: React.ReactNode;
   /**
    * 可选的居中内容使用独立覆盖层，在 Windows 上避开原生按钮区域。
    * 它保留左侧标题；macOS 隐藏标题以免挤占系统红绿灯。
@@ -50,7 +52,7 @@ export function SummonEnsoButton({ label = true }: { label?: boolean }) {
  * Preserve native caption controls and Snap Layouts on Windows, traffic lights
  * on macOS, and renderer caption controls on Linux.
  */
-export function TitleBar({ title, className, actions, leading, centered }: TitleBarProps) {
+export function TitleBar({ title, className, actions, leading, heading, centered }: TitleBarProps) {
   const { t } = useI18n();
   const isMac = window.electronAPI.env.platform === 'darwin';
   const isWindows = window.electronAPI.env.platform === 'win32';
@@ -73,9 +75,10 @@ export function TitleBar({ title, className, actions, leading, centered }: Title
     >
       {leading ? (
         <div className="no-drag flex items-center">{leading}</div>
+      ) : heading ? (
+        <div className="flex min-w-0 flex-1 items-center">{heading}</div>
       ) : !centered || !isMac ? (
-        <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-brand" />
+        <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
           {title}
         </span>
       ) : null}

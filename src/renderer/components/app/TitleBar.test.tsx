@@ -50,6 +50,18 @@ describe('TitleBar centered content', () => {
     expect(html).toContain('pl-[84px]');
   });
 
+  it('heading replaces the title but stays inside the drag region', () => {
+    setPlatform('darwin');
+    const html = render({
+      title: 'EnsoCode',
+      heading: createElement('span', { 'data-testid': 'heading' }, 'Session'),
+    });
+    expect(html).toContain('data-testid="heading"');
+    expect(html).not.toContain('>EnsoCode<');
+    // 只读标题不能挡住窗口拖拽
+    expect(html).not.toContain('no-drag');
+  });
+
   it('leading still replaces the title and stays left (no centering)', () => {
     setPlatform('win32');
     const html = render({

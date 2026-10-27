@@ -1,4 +1,4 @@
-import { CircleCheck, Laptop, LoaderCircle, Monitor, ShieldCheck } from 'lucide-react';
+import { CircleCheck, Laptop, LoaderCircle, Monitor, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -30,18 +30,18 @@ export function StatusBar() {
   return (
     <footer
       data-slot="status-bar"
-      className="flex h-7 shrink-0 items-center gap-4 border-t bg-shell px-3 text-[11px] text-muted-foreground"
+      className="flex h-6 shrink-0 items-center gap-3 border-t bg-shell px-4 text-[11px] text-muted-foreground"
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span className={cn('size-1.5 shrink-0 rounded-full', nodeTone)} aria-hidden />
         <NodeIcon className="size-3.5 shrink-0" />
-        <span className="truncate">{remote ? remote.label : t('This computer')}</span>
+        <span className="truncate">{remote ? remote.label : t('Local workspace')}</span>
       </span>
-      <span className="ml-auto flex items-center gap-4">
+      <span className="ml-auto flex items-center gap-3">
         {/* 本机会话摘要；远程节点下本机会话仍在后台运行，照常显示 */}
         {summary.waiting > 0 && (
           <span className="flex items-center gap-1.5 text-warning">
-            <ShieldCheck className="size-3.5" />
+            <ShieldAlert className="size-3.5" />
             {t('{{count}} waiting', { count: summary.waiting })}
           </span>
         )}
@@ -57,6 +57,12 @@ export function StatusBar() {
               {t('Idle')}
             </span>
           )
+        )}
+        {!remote && (
+          <span className="flex items-center gap-1">
+            {t('Data stays on this computer')}
+            <ShieldCheck className="size-3" />
+          </span>
         )}
       </span>
     </footer>

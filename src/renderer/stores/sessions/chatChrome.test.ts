@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectChatChrome } from './chatChrome';
+import { displayedConversationId, selectChatChrome } from './chatChrome';
 import type { Conversation } from './index';
 
 const conv = (id: string, extra: Partial<Conversation> = {}): Conversation =>
@@ -52,5 +52,19 @@ describe('selectChatChrome', () => {
     for (const key of keys) {
       expect(second![key]).toBe(first![key]);
     }
+  });
+});
+
+describe('displayedConversationId', () => {
+  it('选中 coworker 页签时返回 coworker，失效页签回落父会话', () => {
+    const parent = conv('parent', { activeTabId: 'cw' });
+    const coworker = conv('cw', { parentId: 'parent' });
+    expect(
+      displayedConversationId({ activeId: 'parent', conversations: { parent, cw: coworker } })
+    ).toBe('cw');
+    expect(displayedConversationId({ activeId: 'parent', conversations: { parent } })).toBe(
+      'parent'
+    );
+    expect(displayedConversationId({ activeId: null, conversations: {} })).toBeNull();
   });
 });

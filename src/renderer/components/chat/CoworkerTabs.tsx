@@ -1,6 +1,6 @@
 import { coworkerTabTone } from '@shared/conversationDotTone';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
-import { Bot, Ellipsis, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { Bot, Ellipsis, MessagesSquare, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import * as React from 'react';
 import { ConversationStatusIndicator } from '@/components/chat/ConversationStatusIndicator';
 import { ConversationTitleEdit } from '@/components/chat/ConversationTitleEdit';
@@ -86,18 +86,23 @@ export function CoworkerTabs({
 
   const tabClass = (active: boolean) =>
     cn(
-      'flex min-w-0 shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs transition-colors',
-      active ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/70'
+      // 下划线页签：激活项底部 2px 强调色，非激活只在悬停时出浅底
+      'relative flex h-full min-w-0 shrink-0 items-center gap-1.5 px-3 text-[13px] transition-colors',
+      active
+        ? 'font-medium text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-brand'
+        : 'text-muted-foreground hover:text-foreground'
     );
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border/70 px-2">
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+    <div className="flex h-11 shrink-0 items-center gap-1 border-b px-4">
+      <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         <RenameableTab
           id={parentId}
-          label={parentTitle || t('New conversation')}
+          // 会话标题已在窗口标题栏；页签只标明主会话，重命名仍编辑真实标题
+          label={t('Main conversation')}
+          renameTitle={parentTitle || t('New conversation')}
           className={tabClass(displayedId === parentId)}
-          leading={<MessageCircle className="h-3 w-3 shrink-0" />}
+          leading={<MessagesSquare className="size-3.5 shrink-0" />}
           reloadDisabled={parentReloading || parentSpawning}
           reloading={parentReloading}
           onSelect={() => useSessionsStore.getState().selectTab(parentId, undefined)}
@@ -111,7 +116,7 @@ export function CoworkerTabs({
             pendingCapabilityAskCount: coworker.pendingCapabilityAskCount,
           });
           return (
-            <div key={coworker.id} className="group/tab flex shrink-0 items-center">
+            <div key={coworker.id} className="group/tab flex h-full shrink-0 items-center">
               <RenameableTab
                 id={coworker.id}
                 label={
@@ -122,9 +127,9 @@ export function CoworkerTabs({
                 }
                 className={cn(
                   tabClass(displayedId === coworker.id),
-                  displayedId !== coworker.id && 'group-hover/tab:bg-accent/70'
+                  displayedId !== coworker.id && 'group-hover/tab:text-foreground'
                 )}
-                leading={<Bot className="h-3 w-3 shrink-0" />}
+                leading={<Bot className="size-3.5 shrink-0" />}
                 trailing={
                   <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center">
                     <ConversationStatusIndicator tone={tone} size="sm" />
@@ -252,6 +257,7 @@ export function CoworkerTabs({
 function RenameableTab({
   id,
   label,
+  renameTitle,
   className,
   leading,
   trailing,
@@ -264,6 +270,8 @@ function RenameableTab({
 }: {
   id: string;
   label: string;
+  /** 重命名时编辑的标题；缺省与 label 相同 */
+  renameTitle?: string;
   className: string;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
@@ -293,7 +301,7 @@ function RenameableTab({
       {leading}
       {renaming ? (
         <ConversationTitleEdit
-          title={label}
+          title={renameTitle ?? label}
           className="max-w-48 text-xs"
           onCommit={(title) => {
             useSessionsStore.getState().renameConversation(id, title);

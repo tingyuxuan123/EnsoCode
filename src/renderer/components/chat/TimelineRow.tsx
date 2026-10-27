@@ -340,7 +340,7 @@ function SkillTag({ name, content }: { name: string; content: string }) {
 
 function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
   return (
-    <div className="max-w-[80%] rounded-2xl rounded-br-md border border-border bg-secondary px-4 py-2.5 text-sm">
+    <div className="max-w-[80%] rounded-lg bg-accent/70 px-4 py-2.5 text-sm">
       {chip}
       {extra ? <span className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</span> : null}
     </div>
@@ -370,7 +370,7 @@ function WorkflowPresetInvocation({
 }) {
   const { t } = useI18n();
   return (
-    <div className="min-w-64 max-w-[80%] overflow-hidden rounded-2xl rounded-br-md border border-border bg-secondary text-sm">
+    <div className="min-w-64 max-w-[80%] overflow-hidden rounded-lg bg-accent/70 text-sm">
       <div className="flex items-center gap-2.5 px-3.5 py-2.5">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-info/15 text-info">
           <Workflow className="h-4 w-4" />
@@ -505,8 +505,7 @@ function MentionRefChips({
   );
 }
 
-export const USER_BUBBLE =
-  'max-w-[80%] rounded-2xl rounded-br-md border border-border bg-secondary px-4 py-2.5 text-sm';
+export const USER_BUBBLE = 'max-w-[80%] rounded-lg bg-accent/70 px-4 py-2.5 text-sm';
 
 /**
  * 用户消息长文折叠（对齐 ZCode）：超过 120px 时裁切并用遮罩渐隐，气泡底部居中一个圆形展开按钮。

@@ -629,7 +629,7 @@ export function Composer({
         ref={setDropRef}
         data-slot="composer"
         className={cn(
-          'rounded-2xl border border-border bg-background shadow-float transition-[border-color,box-shadow] duration-200 focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/10',
+          'rounded-lg border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-brand/50',
           (dragging || dndOver) && 'border-brand/50 bg-brand/5',
           (agentRecipient || planMode) && 'border-primary/35 shadow-primary/5'
         )}

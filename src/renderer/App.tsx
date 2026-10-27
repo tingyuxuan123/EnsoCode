@@ -14,6 +14,7 @@ import { BackgroundLayer } from '@/components/app/BackgroundLayer';
 import { StatusBar } from '@/components/app/StatusBar';
 import { TitleBar } from '@/components/app/TitleBar';
 import { UpdateBanner } from '@/components/app/UpdateBanner';
+import { WorkbenchTitle } from '@/components/app/WorkbenchTitle';
 import { BotView } from '@/components/bots/BotView';
 import { ModeSwitch } from '@/components/bots/ModeSwitch';
 import { requestOpenChatFind } from '@/components/chat/ChatFindBar';
@@ -342,7 +343,12 @@ export default function App() {
       <OauthCredentialBootstrap />
       <TitleBar
         title="EnsoCode"
-        centered={botModeEnabled && !remoteNodeActive ? <ModeSwitch /> : undefined}
+        heading={
+          // 远程节点 / Bot 模式不显示本机会话标题
+          !remoteNodeActive && !botModeActive ? <WorkbenchTitle /> : undefined
+        }
+        // Code 模式的 Code|Bot 切换在侧栏顶部；Bot 模式侧栏不同，仍放标题栏中间
+        centered={botModeActive ? <ModeSwitch /> : undefined}
         actions={
           <>
             <button
@@ -386,6 +392,7 @@ export default function App() {
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
           onToggleSidebar={remoteNodeActive ? undefined : () => setCollapsed((v) => !v)}
+          workspaceTools={!remoteNodeActive && !botModeActive}
           onOpenSearch={
             remoteNodeActive
               ? undefined

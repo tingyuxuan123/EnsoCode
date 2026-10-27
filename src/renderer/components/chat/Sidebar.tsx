@@ -23,7 +23,9 @@ import {
   Archive,
   ArchiveRestore,
   ChevronRight,
+  ChevronsUpDown,
   CircleAlert,
+  CirclePlus,
   Ellipsis,
   Eraser,
   FileText,
@@ -48,6 +50,7 @@ import {
 import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ModeSwitch } from '@/components/bots/ModeSwitch';
 import { AddProjectDialog } from '@/components/chat/AddProjectDialog';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { ConversationStatusIndicator } from '@/components/chat/ConversationStatusIndicator';
@@ -151,9 +154,6 @@ import { WorktreeRenameDialog } from './WorktreeRenameDialog';
 
 const ARCHIVE_PURGE_DAYS = [7, 15, 30] as const;
 
-const ICON_BUTTON_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
-
 interface SidebarProps {
   width?: number;
   collapsed: boolean;
@@ -204,6 +204,20 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
       return next;
     });
   };
+
+  const allProjectsFolded =
+    projects.length > 0 && projects.every((project) => collapsedProjects[project.id] === true);
+  const toggleAllProjects = () => {
+    const fold = !allProjectsFolded;
+    const next = Object.fromEntries(projects.map((project) => [project.id, fold]));
+    localStorage.setItem('enso-collapsed-projects', JSON.stringify(next));
+    setCollapsedProjects(next);
+  };
+  const botModeEnabled = useSettingsStore((state) => state.botModeEnabled);
+  const newTaskProjectId =
+    (activeId ? conversations[activeId]?.projectId : undefined) ?? projects[0]?.id;
+  const newTaskBinding = effectiveKeybindings(keybindings)['new-conversation'];
+  const newTaskShortcut = newTaskBinding ? formatBinding(newTaskBinding) : '';
 
   // 项目自定义顺序(拖拽重排,存 localStorage;新项目追加末尾)
   const [projectOrderIds, setProjectOrderIds] = useState<string[]>(() =>
@@ -719,67 +733,103 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     >
       {/* 收起后整栏让位：搜索 / 设置 / 询问 Enso / 展开入口都在全局图标轨上 */}
       <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
-        <div className="flex h-11 shrink-0 items-center justify-between pr-2 pl-2.5">
-          {/* 节点切换器：本机 / 已连的远程 EnsoCode 桌面 */}
-          <div className="flex min-w-0 items-center gap-1">
-            <NodeSwitcher />
-          </div>
-          <div className="flex items-center">
+        {/* 顶部：Code/Bot 分段（实验开关开启时）+ 全局搜索 */}
+        <div className="flex shrink-0 items-center gap-2 px-3 pt-3">
+          {botModeEnabled ? (
+            <>
+              <ModeSwitch className="h-9 flex-1 [&>button]:flex-1 [&>button]:justify-center" />
+              <button
+                type="button"
+                onClick={onOpenSearch}
+                className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                title={
+                  searchShortcut
+                    ? `${t('Search anything')} (${searchShortcut})`
+                    : t('Search anything')
+                }
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            // 未开启 Bot 模式时没有分段切换，顶部直接是全宽搜索入口
             <button
               type="button"
               onClick={onOpenSearch}
-              className={ICON_BUTTON_CLASS}
-              title={
-                searchShortcut
-                  ? `${t('Search anything')} (${searchShortcut})`
-                  : t('Search anything')
-              }
+              className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md bg-accent/60 px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              <Search className="h-4 w-4" />
+              <Search className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate text-left">{t('Search anything')}</span>
+              {searchShortcut && <span className="shrink-0 text-[11px]">{searchShortcut}</span>}
             </button>
-            <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
-              <PopoverTrigger
-                className={cn(
-                  ICON_BUTTON_CLASS,
-                  'data-popup-open:bg-accent data-popup-open:text-foreground'
-                )}
-                title={t('Add project or group')}
-                aria-label={t('Add project or group')}
-              >
-                <Plus className="h-4 w-4" />
-              </PopoverTrigger>
-              <PopoverPopup
-                side="bottom"
-                align="end"
-                className="w-44 [&_[data-slot=popover-viewport]]:p-1"
-              >
-                {[
-                  { icon: FolderPlus, label: t('Add project'), run: () => setAddOpen(true) },
-                  {
-                    icon: Layers,
-                    label: t('New group'),
-                    run: () => setGroupEditor({ mode: 'create' }),
-                  },
-                ].map(({ icon: Icon, label, run }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => {
-                      setAddMenuOpen(false);
-                      run();
-                    }}
-                    className={cn(
-                      POPOVER_ROW_CLASS,
-                      'text-muted-foreground hover:bg-accent hover:text-foreground'
-                    )}
-                  >
-                    <Icon className="size-3.5 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
-                  </button>
-                ))}
-              </PopoverPopup>
-            </Popover>
-          </div>
+          )}
+        </div>
+        {/* 新建任务：在当前（或第一个）项目开新会话，与 ⌘N 同一动作 */}
+        <button
+          type="button"
+          disabled={!newTaskProjectId}
+          onClick={() => newTaskProjectId && void newConversation(newTaskProjectId)}
+          className="mx-3 mt-3 flex h-9 shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
+        >
+          <CirclePlus className="size-[17px] shrink-0 text-brand" />
+          <span className="text-[14px]">{t('New task')}</span>
+          {newTaskShortcut && (
+            <span className="ml-auto rounded border border-border px-1 text-[11px] text-muted-foreground">
+              {newTaskShortcut}
+            </span>
+          )}
+        </button>
+        {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}
+        <div className="mt-4 flex shrink-0 items-center gap-1 px-4 text-[12px] text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate">{t('Projects')}</span>
+          <button
+            type="button"
+            onClick={toggleAllProjects}
+            className="flex size-6 items-center justify-center rounded-md hover:bg-accent hover:text-foreground"
+            title={allProjectsFolded ? t('Expand all') : t('Collapse all')}
+            aria-label={allProjectsFolded ? t('Expand all') : t('Collapse all')}
+          >
+            <ChevronsUpDown className="size-3.5" />
+          </button>
+          <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
+            <PopoverTrigger
+              className="flex size-6 items-center justify-center rounded-md hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
+              title={t('Add project or group')}
+              aria-label={t('Add project or group')}
+            >
+              <Plus className="size-4" />
+            </PopoverTrigger>
+            <PopoverPopup
+              side="bottom"
+              align="end"
+              className="w-44 [&_[data-slot=popover-viewport]]:p-1"
+            >
+              {[
+                { icon: FolderPlus, label: t('Add project'), run: () => setAddOpen(true) },
+                {
+                  icon: Layers,
+                  label: t('New group'),
+                  run: () => setGroupEditor({ mode: 'create' }),
+                },
+              ].map(({ icon: Icon, label, run }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    run();
+                  }}
+                  className={cn(
+                    POPOVER_ROW_CLASS,
+                    'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  )}
+                >
+                  <Icon className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                </button>
+              ))}
+            </PopoverPopup>
+          </Popover>
         </div>
         <GroupChips
           groups={projectGroups}
@@ -811,7 +861,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
           onEditGroup={(id) => setGroupEditor({ mode: 'edit', id })}
         />
 
-        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pt-1 pb-2">
           {projects.length === 0 && (
             <button
               type="button"
@@ -914,7 +964,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                 <Loader2 className="size-4 animate-spin" />
               </span>
               <span
-                className="min-w-0 flex-1 truncate text-sm font-medium"
+                className="min-w-0 flex-1 truncate text-[13px] font-medium"
                 title={pendingProject.path}
               >
                 {pendingProject.name}
@@ -1061,7 +1111,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                               <div ref={drag.setNodeRef} style={drag.style}>
                                 {/* 项目行：图标列（折叠态文件夹/hover 折叠箭头）+ 名称 + 悬停操作；整行可拖拽排序 */}
                                 <div
-                                  className="group flex w-full items-center gap-1 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
+                                  className="group flex h-9 w-full items-center gap-1 rounded-md px-2 transition-colors hover:bg-accent/70"
                                   {...drag.handleProps}
                                 >
                                   <button
@@ -1336,22 +1386,25 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
           </SortableContext>
         </div>
 
-        {/* 归档是侧栏自身的入口；收起/设置/询问 Enso 已移到全局图标轨 */}
-        {archivedCount > 0 && (
-          <div className="flex shrink-0 items-center border-t px-2 py-1.5">
-            <button
-              type="button"
-              data-slot="archived-button"
-              onClick={openArchive}
-              className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              title={`${t('Archived')} (${archivedCount})`}
-            >
-              <Archive className="h-4 w-4 shrink-0" />
-              <span className="truncate">{t('Archived')}</span>
-              <span className="ml-auto text-xs tabular-nums">{archivedCount}</span>
-            </button>
+        {/* 底部：当前节点（本机 / 远程）+ 归档入口 */}
+        <div className="flex shrink-0 flex-col gap-1 px-3 pt-2 pb-3">
+          <div className="flex items-center">
+            <NodeSwitcher className="h-7 px-1.5 text-[11px]" />
           </div>
-        )}
+          <button
+            type="button"
+            data-slot="archived-button"
+            onClick={openArchive}
+            className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={`${t('Archived')} (${archivedCount})`}
+          >
+            <Archive className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t('Archived')}</span>
+            {archivedCount > 0 && (
+              <span className="ml-auto text-[11px] tabular-nums">{archivedCount}</span>
+            )}
+          </button>
+        </div>
       </div>
 
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
@@ -2138,10 +2191,10 @@ function ConversationRow({
       data-pinned={pinned ? 'true' : 'false'}
       className={cn(
         // 会话行与项目行共用图标/文字基准，worktree 与浏览器/终端计数在第二行
-        'group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-lg py-1.5 pr-2 pl-2 text-sm transition-colors',
+        'group grid min-h-9 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md py-1.5 pr-2 pl-2 text-[13px] transition-colors',
         active
-          ? 'bg-brand/10 text-foreground dark:bg-brand/15'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          ? 'bg-accent font-medium text-foreground'
+          : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'
       )}
       onClick={() => {
         if (!renaming) onSelect(id);
