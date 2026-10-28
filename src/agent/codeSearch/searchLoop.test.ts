@@ -287,6 +287,56 @@ describe('runCodeSearch 循环', () => {
     }
   });
 
+  it('rg 缺少 pattern 时回执纠正，不让整次搜索失败', async () => {
+    // 真实失败：检索模型发出 {op:"rg"}，旧实现在执行中途抛 bounds 错误终止搜索。
+    write('src/a.ts', 'const needle = 1;\n');
+    const completion = scripted([
+      () => command({ command1: { op: 'rg', path: '/codebase/src' } }),
+      (_system, messages) => {
+        expect(messages.at(-1)?.content).toContain('Literal rg requires a nonempty pattern.');
+        return command({ command1: { op: 'rg', path: '/codebase/src', pattern: 'needle' } });
+      },
+      () => answer([{ path: '/codebase/src/a.ts', ranges: [{ start: 1, end: 1 }] }]),
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.status).toBe('success');
+    expect(result.files[0]?.path).toBe('src/a.ts');
+  });
+
+  it.each([
+    ['超过 512 KiB 的文件', 'big.ts', 'x'.repeat(600 * 1024)],
+    ['二进制文件', 'bin.dat', 'ab\u0000cd'],
+  ])('readfile 读到%s时回执说明并继续，不终止搜索', async (_label, name, content) => {
+    write(name, content);
+    write('a.ts', 'verified needle\n');
+    const completion = scripted([
+      () =>
+        command({
+          command1: { op: 'readfile', path: `/codebase/${name}`, start: 1, end: 1 },
+          command2: { op: 'readfile', path: '/codebase/a.ts', start: 1, end: 1 },
+        }),
+      (_system, messages) => {
+        const output = messages.at(-1)?.content ?? '';
+        expect(output).toMatch(/command1:\n\[DENIED\]/);
+        expect(output).toContain('verified needle');
+        return answer([{ path: '/codebase/a.ts', ranges: [{ start: 1, end: 1 }] }]);
+      },
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.status).toBe('success');
+    expect(result.files[0]?.ranges[0]?.content).toContain('verified needle');
+  });
+
+  it('答案路径省略 /codebase 前缀时仍能验证', async () => {
+    write('src/a.ts', 'needle\n');
+    const completion = scripted([
+      () => answer([{ path: 'src/a.ts', ranges: [{ start: 1, end: 1 }] }]),
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.status).toBe('success');
+    expect(result.files[0]?.path).toBe('src/a.ts');
+  });
+
   it('凭据错误透传为脱敏 error 结果', async () => {
     const completion: Completion = {
       async complete() {

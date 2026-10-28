@@ -5,13 +5,18 @@ import ignore, { type Ignore } from 'ignore';
 import { isSecretFilePath } from '../protectedActions';
 import { check, fail, object } from './safety';
 
+/**
+ * 扫描类预算（文件数/目录项/物理读取）耗尽时只把当次命令标为 partial，不终止整次搜索；
+ * 发往云端的累计输出（totalBytes）才是数据外发上限，耗尽后不再回传正文。
+ * 中型仓库的单个源码目录常有 600+ 文件，单命令上限按此留足余量。
+ */
 export const LIMITS = {
   fileBytes: 512 * 1024,
-  filesVisited: 512,
-  entries: 4096,
-  totalFilesVisited: 512,
-  totalEntries: 32768,
-  stepReadBytes: 8 * 1024 * 1024,
+  filesVisited: 4096,
+  entries: 16384,
+  totalFilesVisited: 8192,
+  totalEntries: 131072,
+  stepReadBytes: 16 * 1024 * 1024,
   totalReadBytes: 32 * 1024 * 1024,
   stepBytes: 24 * 1024,
   totalBytes: 192 * 1024,
@@ -64,6 +69,14 @@ interface CachedText {
 
 const PARTIAL =
   '\n[PARTIAL] Scan/output limit reached; this is not proof of no matches. Use ls to discover directories, then narrow the command path and continue. Only return verified file ranges.';
+const OUTPUT_EXHAUSTED =
+  '[PARTIAL] Command output budget for this search is exhausted; nothing more was returned. Call ANSWER now using only file ranges already observed.';
+
+interface Listing {
+  name: string;
+  directory: boolean;
+  file: boolean;
+}
 
 /** Literal grep + bounded wildcard DP: no model-controlled JavaScript regular expression or shell. */
 function wildcard(pattern: string, text: string): boolean {
@@ -104,6 +117,10 @@ export function command(value: unknown): Command {
   if (v.pattern !== undefined && (typeof v.pattern !== 'string' || v.pattern.length > 256)) {
     return fail('bounds', 'Search pattern exceeds its budget.');
   }
+  // 检索模型确实会发出缺 pattern 的 rg；在执行前拒绝，让循环回执纠正而不是执行中途致命失败。
+  if (v.op === 'rg' && (typeof v.pattern !== 'string' || !v.pattern.trim())) {
+    return fail('bounds', 'Literal rg requires a nonempty pattern.');
+  }
   for (const n of [v.start, v.end]) {
     if (
       n !== undefined &&
@@ -124,6 +141,8 @@ export class LocalWorkspace {
   private loadedRules = new Set<string>();
   private visitedPaths = new Set<string>();
   private textCache = new Map<string, CachedText>();
+  /** 目录列表缓存：同一次搜索内重复扫描不再重读目录，也不重复消耗目录项总预算 */
+  private listings = new Map<string, Listing[]>();
   partial = false;
 
   private constructor(
@@ -176,7 +195,13 @@ export class LocalWorkspace {
     }
   }
 
-  virtual(path: string): string {
+  virtual(input: string): string {
+    // 模型常省略 /codebase 前缀（src/a.ts、./src、codebase/src）；只补前缀，穿越与主机绝对路径仍拒绝
+    let path = input.trim();
+    while (path.startsWith('./')) path = path.slice(2);
+    if (path === 'codebase' || path.startsWith('codebase/')) path = `/${path}`;
+    else if (path && path !== '.' && !path.startsWith('/')) path = `/codebase/${path}`;
+    path = path.replace(/\/+$/, '') || path;
     if (path === '/codebase' || path === '.' || path === '') return '';
     if (
       !path.startsWith('/codebase/') ||
@@ -374,9 +399,11 @@ export class LocalWorkspace {
         return;
       }
       if (!this.visitedPaths.has(rel)) {
-        if (++this.visited > LIMITS.totalFilesVisited) {
-          return fail('bounds', 'Total distinct file visit budget exceeded.');
+        if (this.visited >= LIMITS.totalFilesVisited) {
+          scan.partial = true;
+          return;
         }
+        this.visited++;
         this.visitedPaths.add(rel);
       }
       yield rel;
@@ -384,37 +411,66 @@ export class LocalWorkspace {
     }
     if (!info.isDirectory()) return;
     await this.loadRules(this.hostPath(rel));
-    const dir = await opendir(path);
-    for await (const entry of dir) {
+    const listing = await this.list(rel, path, scan);
+    if (!listing) return;
+    for (const entry of listing) {
       check(this.signal);
       if (++scan.entries > LIMITS.entries) {
         scan.partial = true;
         return;
       }
-      if (++this.entries > LIMITS.totalEntries) {
-        return fail('bounds', 'Total directory entry budget exceeded.');
-      }
       const next = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink() || this.ignored(next, entry.isDirectory())) continue;
-      if (entry.isDirectory()) {
+      if (this.ignored(next, entry.directory)) continue;
+      if (entry.directory) {
         if (directories) yield `${next}/`;
         if (recursive) {
           if (depth >= maxDepth) scan.partial = true;
           else yield* this.walk(next, scan, recursive, directories, maxDepth, depth + 1);
         }
-      } else if (entry.isFile()) {
+      } else if (entry.file) {
         yield* this.walk(next, scan, recursive, directories, maxDepth, depth);
       }
       if (scan.entries > LIMITS.entries || scan.files > LIMITS.filesVisited) return;
     }
   }
 
-  private retain(text: string): string {
-    const cut = Buffer.from(text).subarray(0, LIMITS.stepBytes).toString('utf8');
-    this.bytes += Buffer.byteLength(cut);
-    if (this.bytes > LIMITS.totalBytes) {
-      return fail('bounds', 'Total command output budget exceeded.');
+  /** 读取一次目录（跳过符号链接），按名称排序保证结果稳定；总目录项预算耗尽时标 partial 且不缓存残缺列表 */
+  private async list(rel: string, path: string, scan: Scan): Promise<Listing[] | undefined> {
+    const cached = this.listings.get(rel);
+    if (cached) return cached;
+    const entries: Listing[] = [];
+    const dir = await opendir(path);
+    try {
+      for await (const entry of dir) {
+        check(this.signal);
+        if (this.entries >= LIMITS.totalEntries) {
+          scan.partial = true;
+          return;
+        }
+        this.entries++;
+        if (entry.isSymbolicLink()) continue;
+        entries.push({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() });
+      }
+    } finally {
+      await dir.close().catch(() => {});
     }
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    this.listings.set(rel, entries);
+    return entries;
+  }
+
+  private retain(text: string): string {
+    const cut = Buffer.from(text)
+      .subarray(0, LIMITS.stepBytes)
+      .toString('utf8')
+      .replace(/\uFFFD+$/u, '');
+    const bytes = Buffer.byteLength(cut);
+    // 累计外发上限：超出时不回传任何正文，只提示模型用已观察到的区间作答
+    if (this.bytes + bytes > LIMITS.totalBytes) {
+      this.partial = true;
+      return OUTPUT_EXHAUSTED;
+    }
+    this.bytes += bytes;
     return cut;
   }
 

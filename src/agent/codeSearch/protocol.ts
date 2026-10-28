@@ -129,11 +129,35 @@ export function toolMarker(
   const marker = /^([a-zA-Z_]{1,64})\s*(?:\[ARGS\]\s*)?(?=\{)/.exec(rest);
   if (!marker) return fail('protocol', 'Malformed Devin tool marker.');
   const name = marker[1]!;
-  const raw = rest
-    .slice(marker[0].length)
-    .trim()
-    .replace(/<\/s>\s*$/, '');
-  const args = object(json(Buffer.from(raw)));
+  const raw = rest.slice(marker[0].length).trim();
+  // 只取第一个完整 JSON 对象：模型会在参数后接说明文字、EOS 或第二个 [TOOL_CALLS]。
+  // 未闭合时退回整段解析，保持严格的协议错误。
+  const end = firstObjectEnd(raw);
+  const args = object(json(Buffer.from(end > 0 ? raw.slice(0, end) : raw)));
   if (!args) return fail('protocol', 'Invalid Devin tool arguments.');
   return { name, args };
+}
+
+/** 从 `{` 开始按括号深度找第一个对象的结束位置（跳过字符串与转义）；未闭合返回 -1 */
+function firstObjectEnd(text: string): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') depth++;
+    else if (ch === '}' || ch === ']') {
+      depth--;
+      if (depth === 0) return i + 1;
+      if (depth < 0) return -1;
+    }
+  }
+  return -1;
 }

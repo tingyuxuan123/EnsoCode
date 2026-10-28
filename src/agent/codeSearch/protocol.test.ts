@@ -66,6 +66,26 @@ describe('Devin 工具标记', () => {
     });
   });
 
+  it('JSON 后带有说明文字或 EOS 时只取第一个完整对象', () => {
+    expect(toolMarker('[TOOL_CALLS] ANSWER{"files":[]} Done, no more commands.</s>')).toEqual({
+      name: 'ANSWER',
+      args: { files: [] },
+    });
+  });
+
+  it('一次返回多个调用时只取第一个，字符串里的花括号不影响边界', () => {
+    const text =
+      '[TOOL_CALLS] restricted_exec{"command1":{"op":"rg","pattern":"a{b}\\"c"}}[TOOL_CALLS] restricted_exec{"command1":{"op":"ls"}}';
+    expect(toolMarker(text)).toEqual({
+      name: 'restricted_exec',
+      args: { command1: { op: 'rg', pattern: 'a{b}"c' } },
+    });
+  });
+
+  it('对象未闭合时仍按协议错误拒绝', () => {
+    expect(() => toolMarker('[TOOL_CALLS] ANSWER{"files":[')).toThrow(/arguments|JSON/i);
+  });
+
   it('无法识别的标记直接拒绝', () => {
     expect(() => toolMarker('[TOOL_CALLS] not a call')).toThrow(/tool marker/i);
   });

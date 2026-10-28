@@ -10,7 +10,7 @@ import {
   STREAM_PATH,
   streamText,
 } from './protocol';
-import { boundedBody, check, deadline, fail, redact, request } from './safety';
+import { boundedBody, check, DevinError, deadline, fail, redact, request } from './safety';
 
 export interface Completion {
   complete(
@@ -29,7 +29,12 @@ export interface CompletionOptions {
   fetch?: typeof fetch;
   base?: string;
   timeoutMs?: number;
+  /** 瞬时网络失败后重试前的等待；测试设 0 */
+  retryDelayMs?: number;
 }
+
+const RATE_LIMIT_MESSAGE =
+  'Devin is throttling requests right now (rate limit, usage quota or upstream capacity). Wait a moment and retry; do not repeat the search immediately.';
 
 /** Private search client; deliberately not a general model adapter. */
 export class WindsurfCompletion implements Completion {
@@ -60,7 +65,7 @@ export class WindsurfCompletion implements Completion {
     const token = normalizeDevinSessionToken(rawToken);
     const version = this.version;
     const fetcher = this.options.fetch ?? fetch;
-    const post = async (path: string, body: Buffer, framed = false): Promise<Buffer> => {
+    const once = async (path: string, body: Buffer, framed = false): Promise<Buffer> => {
       const response = await request(
         `${this.options.base ?? 'https://server.self-serve.windsurf.com'}${path}`,
         {
@@ -87,11 +92,25 @@ export class WindsurfCompletion implements Completion {
         this.invalidate();
         return fail('login', 'Devin session rejected; sign in again before searching.');
       }
+      if (response.status === 429 || response.status === 503) {
+        await response.body?.cancel();
+        return fail('ratelimit', RATE_LIMIT_MESSAGE);
+      }
       if (!response.ok) {
         await response.body?.cancel();
         return fail('network', 'Devin completion request failed.');
       }
       return boundedBody(response, signal, framed ? 4 * 1024 * 1024 : 64 * 1024);
+    };
+    // 连接失败或 5xx 属于瞬时故障：同一请求在总时限内重试一次；登录、限流和协议错误不重试
+    const post = async (path: string, body: Buffer, framed = false): Promise<Buffer> => {
+      try {
+        return await once(path, body, framed);
+      } catch (error) {
+        if (!(error instanceof DevinError) || error.code !== 'network') throw error;
+        await pause(this.options.retryDelayMs ?? 400, signal);
+        return once(path, body, framed);
+      }
     };
     let jwt: string;
     if (this.cached?.token === token && this.cached.until > Date.now()) {
@@ -119,6 +138,22 @@ export class WindsurfCompletion implements Completion {
     }
     return redact(text, [rawToken, token, jwt]);
   }
+}
+
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  check(signal);
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new DevinError('cancelled', 'Devin operation cancelled or timed out.'));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
 }
 
 function jwtExpiry(token: string, now = Date.now()): number {

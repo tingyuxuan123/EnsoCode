@@ -22,6 +22,31 @@ function normalize(value: unknown): unknown {
   };
 }
 
+/**
+ * 把模型给的 path 归一化为 cwd 下的相对子目录（在校验之前）：cwd 内的绝对路径、`./src`、
+ * 尾部斜杠都接受；cwd 本身等于不限定。越出 cwd 时说明只能搜当前工作区并给出替代做法。
+ */
+export function resolveSearchPath(raw: string, cwd: string): string | undefined {
+  const value = raw.trim();
+  const outside = () =>
+    new Error(
+      `path "${value}" is outside the current workspace ${cwd}. code_search only searches inside the session cwd: omit path or pass a subdirectory of it, and use grep or read for other directories.`
+    );
+  const windowsAbsolute = /^[A-Za-z]:|^\\\\/.test(value);
+  let rel: string;
+  if (path.isAbsolute(value) || windowsAbsolute) {
+    if (windowsAbsolute && !path.win32.isAbsolute(cwd)) throw outside();
+    rel = path.relative(cwd, value);
+    // 越界由下方逐段 `..` 检查判定，避免误伤 `..foo` 这类合法目录名
+    if (path.isAbsolute(rel)) throw outside();
+  } else {
+    rel = value;
+  }
+  const parts = rel.split(/[\\/]/).filter((part) => part && part !== '.');
+  if (parts.includes('..')) throw outside();
+  return parts.length ? parts.join('/') : undefined;
+}
+
 const OUTPUT = {
   type: 'object',
   properties: {
@@ -117,17 +142,15 @@ export function createCodeSearchTool(deps: CodeSearchToolDeps): ToolDefinition {
         throw new Error('query must be nonempty and at most 8192 characters.');
       if (
         record.path !== undefined &&
-        (typeof record.path !== 'string' ||
-          record.path.length > 1024 ||
-          path.isAbsolute(record.path) ||
-          /^[A-Za-z]:|^\\\\/.test(record.path) ||
-          record.path.split(/[\\/]/).includes('..'))
+        (typeof record.path !== 'string' || record.path.length > 1024)
       )
         throw new Error('path must be a relative directory inside the session cwd.');
+      const searchPath =
+        typeof record.path === 'string' ? resolveSearchPath(record.path, ctx.cwd) : undefined;
       const signal = caller ?? new AbortController().signal;
       if (signal.aborted) throw new Error('Code search cancelled.');
       const result = await deps.run(
-        { query: record.query, ...(typeof record.path === 'string' ? { path: record.path } : {}) },
+        { query: record.query, ...(searchPath ? { path: searchPath } : {}) },
         ctx.cwd,
         signal
       );

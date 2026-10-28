@@ -86,6 +86,46 @@ describe('code_search 内置工具', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  it('cwd 内的绝对路径先归一化为相对路径，cwd 本身等于不限定子目录', async () => {
+    // 真实调用：主模型常把项目内绝对路径传给 path。
+    const run = vi.fn(async () => outcome);
+    const tool = createCodeSearchTool({ run });
+    await tool.execute(
+      'a',
+      { query: 'x', path: '/workspace/worktree/src/pages/' },
+      undefined,
+      undefined,
+      ctx
+    );
+    expect(run).toHaveBeenLastCalledWith(
+      { query: 'x', path: 'src/pages' },
+      ctx.cwd,
+      expect.any(AbortSignal)
+    );
+    for (const same of ['/workspace/worktree', '.', './']) {
+      await tool.execute('b', { query: 'x', path: same }, undefined, undefined, ctx);
+      expect(run).toHaveBeenLastCalledWith({ query: 'x' }, ctx.cwd, expect.any(AbortSignal));
+    }
+    await tool.execute('c', { query: 'x', path: './src' }, undefined, undefined, ctx);
+    expect(run).toHaveBeenLastCalledWith(
+      { query: 'x', path: 'src' },
+      ctx.cwd,
+      expect.any(AbortSignal)
+    );
+  });
+
+  it('cwd 外的路径给出可操作的错误，说明只能搜当前工作区', async () => {
+    // 真实失败：主模型想搜另一个仓库（/Users/.../ZCode-main），旧报错只说 path 不合法。
+    const run = vi.fn(async () => outcome);
+    const tool = createCodeSearchTool({ run });
+    for (const outside of ['/workspace/other-repo', '/workspace/worktree-sibling/src']) {
+      await expect(
+        tool.execute('d', { query: 'x', path: outside }, undefined, undefined, ctx)
+      ).rejects.toThrow(/outside the current workspace \/workspace\/worktree.*grep|read/s);
+    }
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('error标为错误但保留结构化数据；no_matches不是错误', async () => {
     for (const status of ['no_matches', 'partial', 'error'] as const) {
       const tool = createCodeSearchTool({ run: async () => ({ ...outcome, status, files: [] }) });

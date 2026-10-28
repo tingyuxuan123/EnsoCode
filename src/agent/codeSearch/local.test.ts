@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LocalWorkspace } from './local';
+import { command, LIMITS, LocalWorkspace } from './local';
 
 let root: string;
 const signal = new AbortController().signal;
@@ -200,10 +200,94 @@ describe('最终片段', () => {
   });
 
   it('超过单命令文件预算时返回显式 partial', async () => {
-    for (let i = 0; i < 520; i++) write(`many/f${i}.txt`, 'nothing here');
+    const saved = LIMITS.filesVisited;
+    LIMITS.filesVisited = 20;
+    try {
+      for (let i = 0; i < 30; i++) write(`many/f${i}.txt`, 'nothing here');
+      const workspace = await LocalWorkspace.create(root, undefined, signal);
+      const output = await workspace.execute({ op: 'rg', pattern: 'needle' });
+      expect(output).toContain('[PARTIAL]');
+      expect(workspace.partial).toBe(true);
+    } finally {
+      LIMITS.filesVisited = saved;
+    }
+  });
+});
+
+describe('预算耗尽降级为 partial，不终止整次搜索', () => {
+  // 真实失败：src/renderer 有 688 个文件，一次 rg 就耗尽旧的 512 个不同文件总预算并整体报错。
+  it('单个目录约 700 个文件时 rg 能完整扫描', async () => {
+    for (let i = 0; i < 700; i++) write(`renderer/f${i}.ts`, `export const v${i} = ${i};`);
+    write('renderer/z-last.ts', 'const needle = true;');
     const workspace = await LocalWorkspace.create(root, undefined, signal);
-    const output = await workspace.execute({ op: 'rg', pattern: 'needle' });
-    expect(output).toContain('[PARTIAL]');
-    expect(workspace.partial).toBe(true);
+    const output = await workspace.execute({
+      op: 'rg',
+      path: '/codebase/renderer',
+      pattern: 'needle',
+    });
+    expect(output).toContain('/codebase/renderer/z-last.ts:1:');
+    expect(output).not.toContain('[PARTIAL]');
+    expect(workspace.partial).toBe(false);
+  });
+
+  it('多条命令累计超过不同文件总预算时返回 partial 而不是抛错', async () => {
+    const saved = LIMITS.totalFilesVisited;
+    LIMITS.totalFilesVisited = 15;
+    try {
+      for (let i = 0; i < 10; i++) write(`a/f${i}.ts`, 'needle a');
+      for (let i = 0; i < 10; i++) write(`b/f${i}.ts`, 'needle b');
+      const workspace = await LocalWorkspace.create(root, undefined, signal);
+      await expect(
+        workspace.execute({ op: 'rg', path: '/codebase/a', pattern: 'needle' })
+      ).resolves.toContain('/codebase/a/f0.ts');
+      const second = await workspace.execute({ op: 'rg', path: '/codebase/b', pattern: 'needle' });
+      expect(second).toContain('[PARTIAL]');
+      expect(workspace.partial).toBe(true);
+      // 已访问过的文件不再计入新文件预算，可以继续复查
+      await expect(
+        workspace.execute({ op: 'rg', path: '/codebase/a', pattern: 'needle' })
+      ).resolves.toContain('/codebase/a/f9.ts');
+    } finally {
+      LIMITS.totalFilesVisited = saved;
+    }
+  });
+
+  it('累计输出预算耗尽后返回明确提示而不是抛错，且不再回传正文', async () => {
+    const saved = LIMITS.totalBytes;
+    LIMITS.totalBytes = 64;
+    try {
+      write('a.ts', `${'needle '.repeat(40)}\n`);
+      const workspace = await LocalWorkspace.create(root, undefined, signal);
+      await workspace.execute({ op: 'readfile', path: '/codebase/a.ts' });
+      const output = await workspace.execute({ op: 'readfile', path: '/codebase/a.ts' });
+      expect(output).toContain('[PARTIAL]');
+      expect(output).not.toContain('needle');
+      expect(workspace.partial).toBe(true);
+    } finally {
+      LIMITS.totalBytes = saved;
+    }
+  });
+});
+
+describe('命令归一化', () => {
+  it('rg 缺少或为空白模式时是可纠正的命令错误', () => {
+    for (const cmd of [{ op: 'rg' }, { op: 'rg', pattern: '' }, { op: 'rg', pattern: '   ' }]) {
+      expect(() => command(cmd)).toThrow('Literal rg requires a nonempty pattern.');
+    }
+    expect(command({ op: 'glob' })).toEqual({ op: 'glob' });
+  });
+
+  it('省略 /codebase 前缀的相对路径按 /codebase 解析，穿越仍拒绝', async () => {
+    write('src/a.ts', 'needle\n');
+    const workspace = await LocalWorkspace.create(root, undefined, signal);
+    for (const path of ['src/a.ts', './src/a.ts', 'codebase/src/a.ts']) {
+      await expect(workspace.execute({ op: 'readfile', path })).resolves.toContain('1: needle');
+    }
+    await expect(
+      workspace.execute({ op: 'readfile', path: 'src/../../etc/passwd' })
+    ).rejects.toMatchObject({ code: 'path' });
+    await expect(workspace.execute({ op: 'readfile', path: '/etc/passwd' })).rejects.toMatchObject({
+      code: 'path',
+    });
   });
 });

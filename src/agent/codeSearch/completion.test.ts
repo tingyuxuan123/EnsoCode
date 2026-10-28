@@ -75,4 +75,46 @@ describe('WindsurfCompletion', () => {
     });
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it('429/503 限流时返回独立的 ratelimit 错误，不重试', async () => {
+    for (const status of [429, 503]) {
+      const fetcher = vi.fn(async () => new Response(null, { status }));
+      const completion = new WindsurfCompletion(session(), { fetch: fetcher });
+      await expect(
+        completion.complete('system', [], '[]', new AbortController().signal)
+      ).rejects.toMatchObject({ code: 'ratelimit', message: expect.stringMatching(/throttl/i) });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it.each([
+    ['网络异常', () => Promise.reject(new TypeError('fetch failed'))],
+    ['5xx', async () => new Response(null, { status: 502 })],
+  ])('流式请求遇到瞬时%s时重试一次', async (_label, transient) => {
+    let streamCalls = 0;
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith(JWT_PATH)) return new Response(new Uint8Array(jwtBody));
+      streamCalls += 1;
+      if (streamCalls === 1) return transient();
+      return new Response(new Uint8Array(streamBody));
+    });
+    const completion = new WindsurfCompletion(session(), { fetch: fetcher, retryDelayMs: 0 });
+    await expect(
+      completion.complete('system', [], '[]', new AbortController().signal)
+    ).resolves.toBe('search answer');
+    expect(streamCalls).toBe(2);
+  });
+
+  it('连续两次网络失败才报 network 错误', async () => {
+    const fetcher = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith(JWT_PATH)
+        ? new Response(new Uint8Array(jwtBody))
+        : new Response(null, { status: 500 })
+    );
+    const completion = new WindsurfCompletion(session(), { fetch: fetcher, retryDelayMs: 0 });
+    await expect(
+      completion.complete('system', [], '[]', new AbortController().signal)
+    ).rejects.toMatchObject({ code: 'network' });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
 });

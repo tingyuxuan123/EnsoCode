@@ -4,6 +4,7 @@ export class DevinError extends Error {
       | 'cancelled'
       | 'login'
       | 'network'
+      | 'ratelimit'
       | 'protocol'
       | 'bounds'
       | 'path'
