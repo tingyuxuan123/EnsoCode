@@ -100,7 +100,7 @@ it('PWA 设置桩定义了所有被打包组件读取的设置键', () => {
   const keys = bundledSettingsKeys();
   // 扫描失效（导入图没走通）时不要静默通过
   expect(keys.size).toBeGreaterThan(5);
-  const state = useSettingsStore.getState() as Record<string, unknown>;
+  const state: Record<string, unknown> = { ...useSettingsStore.getState() };
   const missing = [...keys].filter((key) => state[key] === undefined);
   expect(missing).toEqual([]);
 });
