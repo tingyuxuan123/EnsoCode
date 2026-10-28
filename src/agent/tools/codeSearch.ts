@@ -68,10 +68,12 @@ export function createCodeSearchTool(deps: CodeSearchToolDeps): ToolDefinition {
     description:
       'Cloud-assisted read-only code search in the current local workspace. Uses the selected Devin account; query, directory layout and selected code are sent to Devin/Windsurf. Returns bounded verified file ranges, not the internal search history.',
     promptSnippet:
-      'code_search: locate unfamiliar implementations across the local codebase in an isolated read-only search context.',
+      'code_search: locate an implementation by behavior or concept when you do not yet know its file or symbol name (read-only, cloud-assisted).',
     promptGuidelines: [
-      'Use read for a known file and grep for an exact symbol. Use code_search for open-ended code location; do not duplicate its search in parallel.',
-      'Results may be partial. Inspect verified paths with read before editing; no_matches only covers examined scope.',
+      'Pick the route by what you already have: a known file → read; an exact identifier or regex → grep; a behavior, data flow or relationship you can describe but not name → code_search, as the FIRST exploratory step rather than after a round of guessed grep keywords.',
+      'One code_search call replaces several guess-and-grep rounds: describe the behavior or relationship to locate, not a keyword, and add path when you can narrow the subtree.',
+      'Do not run code_search and grep on the same question in parallel: choose one route, then follow the verified paths it returns with read.',
+      'Results may be partial. Read every returned path before editing; no_matches only covers examined scope, so if the result is thin, narrow the query or switch to grep instead of repeating it.',
     ],
     executionMode: 'sequential',
     annotations: {
