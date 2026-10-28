@@ -16,6 +16,12 @@ import { useSettingsStore } from '@/stores/settings';
 
 const EMPTY: ModelPricing = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const FIELDS = ['input', 'output', 'cacheRead', 'cacheWrite'] as const;
+const FIELD_LABELS = {
+  input: 'Input',
+  output: 'Output',
+  cacheRead: 'Cache read',
+  cacheWrite: 'Cache write',
+} as const;
 
 function toDraft(p: ModelPricing): Record<(typeof FIELDS)[number], string> {
   return {
@@ -58,81 +64,95 @@ function PriceTable({
 }) {
   const { t } = useI18n();
   return (
-    <table className="w-full text-[calc(12rem/14)]">
-      <thead>
-        <tr className="text-[calc(11rem/14)] text-muted-foreground">
-          <th className="pb-2 text-left font-normal">{t('Name')}</th>
+    <div
+      className="min-w-0 overflow-x-auto rounded-[6px] border border-line"
+      data-slot="usage-pricing-table"
+    >
+      <table className="w-full min-w-[42rem] table-fixed text-[calc(12rem/14)]">
+        <colgroup>
+          <col />
           {FIELDS.map((field) => (
-            <th key={field} className="pb-2 text-right font-normal">
-              {field}
-            </th>
+            <col key={field} className="w-[calc(68rem/14)]" />
           ))}
-          <th className="w-14 pb-2" />
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => {
-          const isEditing = editing === row.model;
-          const custom = row.model in overrides;
-          return (
-            <tr key={row.model} className="border-t border-border/60">
-              <td className="py-1.5 pr-3 align-middle">
-                <span className="font-mono text-[calc(12rem/14)]" title={row.model}>
-                  {row.model}
-                </span>
-                {custom && (
-                  <span className="ml-1.5 text-[calc(11rem/14)] text-muted-foreground">
-                    {t('Custom')}
+          <col className="w-[calc(56rem/14)]" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-line text-[calc(11rem/14)] text-muted-foreground">
+            <th className="px-[12px] py-[6px] text-left font-normal">{t('Model id')}</th>
+            {FIELDS.map((field) => (
+              <th key={field} className="px-[8px] py-[6px] text-right font-normal">
+                {t(FIELD_LABELS[field])}
+              </th>
+            ))}
+            <th className="pr-[12px] py-[6px]" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const isEditing = editing === row.model;
+            const custom = row.model in overrides;
+            return (
+              <tr key={row.model}>
+                <td className="px-[12px] py-[6px] align-middle">
+                  <span
+                    className="block truncate font-mono text-[calc(12rem/14)]"
+                    title={row.model}
+                  >
+                    {row.model}
                   </span>
-                )}
-              </td>
-              {FIELDS.map((field) => (
-                <td key={field} className="py-1.5 text-right align-middle">
-                  {isEditing ? (
-                    <Input
-                      size="sm"
-                      inputMode="decimal"
-                      className="ml-auto w-16 [&_input]:text-right"
-                      value={draft[field]}
-                      onChange={(e) => onDraft({ ...draft, [field]: e.target.value })}
-                    />
-                  ) : (
-                    <span
-                      className={cn(
-                        'font-mono tabular-nums',
-                        row.pricing == null && 'text-muted-foreground'
-                      )}
-                    >
-                      {formatRate(row.pricing?.[field])}
-                    </span>
+                  {custom && (
+                    <span className="text-[calc(11rem/14)] text-primary">{t('Custom')}</span>
                   )}
                 </td>
-              ))}
-              <td className="py-1.5 text-right align-middle">
-                {isEditing ? (
-                  <Button
-                    size="sm"
-                    className="h-6 px-1.5 text-[calc(11rem/14)]"
-                    onClick={() => onSave(row.model)}
-                  >
-                    {t('Save')}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1.5 text-[calc(11rem/14)]"
-                    onClick={() => onEdit(row.model, row.pricing)}
-                  >
-                    {t('Edit')}
-                  </Button>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                {FIELDS.map((field) => (
+                  <td key={field} className="px-[8px] py-[6px] text-right align-middle">
+                    {isEditing ? (
+                      <Input
+                        size="sm"
+                        inputMode="decimal"
+                        className="w-full [&_input]:px-1 [&_input]:text-right"
+                        value={draft[field]}
+                        onChange={(e) => onDraft({ ...draft, [field]: e.target.value })}
+                      />
+                    ) : (
+                      <span
+                        title={formatRate(row.pricing?.[field])}
+                        className={cn(
+                          'block truncate tabular-nums',
+                          row.pricing == null && 'text-muted-foreground'
+                        )}
+                      >
+                        {formatRate(row.pricing?.[field])}
+                      </span>
+                    )}
+                  </td>
+                ))}
+                <td className="pr-[12px] py-[6px] text-right align-middle">
+                  {isEditing ? (
+                    <Button
+                      size="sm"
+                      className="h-6 px-1.5 text-[calc(11rem/14)]"
+                      onClick={() => onSave(row.model)}
+                    >
+                      {t('Save')}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[calc(11rem/14)]"
+                      onClick={() => onEdit(row.model, row.pricing)}
+                    >
+                      {t('Edit')}
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -195,10 +215,14 @@ export function UsagePricingEditor({
   };
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-[6px] border bg-card">
-      <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="min-w-0 border-t border-line pt-[20px]"
+    >
+      <CollapsibleTrigger className="flex w-full items-start justify-between gap-3 text-left">
         <div className="min-w-0">
-          <div className="text-[calc(13rem/14)] font-medium">{t('Unit prices')}</div>
+          <div className="text-[calc(14rem/14)] font-medium">{t('Unit prices')}</div>
           <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t('Rates used for cost estimates ($/M tokens).')}
           </p>
@@ -211,7 +235,7 @@ export function UsagePricingEditor({
         />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="space-y-3 border-t px-4 py-3">
+        <div className="min-w-0 space-y-3 pt-[12px]">
           <Input
             size="sm"
             value={query}
@@ -263,7 +287,7 @@ export function UsagePricingEditor({
                     key={field}
                     className="grid min-w-16 gap-1 text-[calc(11rem/14)] text-muted-foreground"
                   >
-                    {field}
+                    {t(FIELD_LABELS[field])}
                     <Input
                       size="sm"
                       inputMode="decimal"

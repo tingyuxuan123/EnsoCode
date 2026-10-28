@@ -35,9 +35,9 @@ export function RankingTable({
   const overflow = rows.length > limit;
   const visible = overflow && !expanded ? rows.slice(0, limit) : rows;
   return (
-    <div className="rounded-[6px] border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-[calc(13rem/14)] font-medium">{title}</span>
+    <section className="min-w-0" data-slot="usage-ranking">
+      <div className="mb-[6px] flex items-center justify-between gap-2">
+        <h4 className="text-[calc(13rem/14)] font-medium">{title}</h4>
         {overflow && (
           <span className="text-[calc(11rem/14)] text-muted-foreground">
             {expanded
@@ -46,53 +46,78 @@ export function RankingTable({
           </span>
         )}
       </div>
-      {visible.length === 0 ? (
-        <p className="py-6 text-center text-[calc(12rem/14)] text-muted-foreground">{emptyLabel}</p>
-      ) : (
-        <table className="w-full text-[calc(12rem/14)]">
-          <thead>
-            <tr className="text-[calc(11rem/14)] text-muted-foreground">
-              <th className="pb-2 text-left font-normal">{t('Name')}</th>
-              <th className="pb-2 text-right font-normal">{t('Cost')}</th>
-              <th className="pb-2 text-right font-normal">{t('Token')}</th>
-              <th className="pb-2 text-right font-normal">{countLabel}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((row) => {
-              const share = total > 0 ? row.tokens / total : 0;
-              return (
-                <tr key={row.key} className="border-t border-border/60">
-                  <td className="py-2 pr-3">
-                    <div className="truncate" title={row.name}>
-                      {row.name || t('(no project)')}
-                    </div>
-                    <div className="mt-1 h-1 w-full rounded-full bg-foreground/[0.06]">
-                      <div
-                        className="h-1 rounded-full bg-foreground/70"
-                        style={{ width: `${Math.max(1, share * 100)}%` }}
+      <div
+        className="min-w-0 overflow-x-auto rounded-[6px] border border-line"
+        data-slot="usage-ranking-frame"
+      >
+        {visible.length === 0 ? (
+          <p className="py-6 text-center text-[calc(12rem/14)] text-muted-foreground">
+            {emptyLabel}
+          </p>
+        ) : (
+          <table className="w-full min-w-[21rem] table-fixed text-[calc(12rem/14)]">
+            <colgroup>
+              <col />
+              <col className="w-[calc(64rem/14)]" />
+              <col className="w-[calc(56rem/14)]" />
+              <col className="w-[calc(64rem/14)]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-line text-[calc(11rem/14)] text-muted-foreground">
+                <th className="px-[12px] py-[6px] text-left font-normal">{t('Name')}</th>
+                <th className="px-[8px] py-[6px] text-right font-normal">{t('Cost')}</th>
+                <th className="px-[8px] py-[6px] text-right font-normal">{t('Token')}</th>
+                <th className="pr-[12px] py-[6px] text-right font-normal whitespace-nowrap">
+                  {countLabel}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((row) => {
+                const share = total > 0 ? row.tokens / total : 0;
+                return (
+                  <tr key={row.key}>
+                    <td className="relative overflow-hidden px-[12px] py-[6px]">
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-[4px] left-0 rounded-r-[3px] bg-primary/10"
+                        style={{ width: `${share * 100}%` }}
                       />
-                    </div>
-                  </td>
-                  <td
-                    className={cn(
-                      'py-2 text-right font-mono tabular-nums',
-                      row.cost === null && 'text-muted-foreground'
-                    )}
-                  >
-                    {formatCost(row.cost)}
-                  </td>
-                  <td className="py-2 text-right font-mono tabular-nums">
-                    {formatTokens(row.tokens)}
-                    <span className="ml-1 text-muted-foreground">{(share * 100).toFixed(0)}%</span>
-                  </td>
-                  <td className="py-2 text-right font-mono tabular-nums">{row.count}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+                      <div className="relative truncate" title={row.name}>
+                        {row.name || t('(no project)')}
+                      </div>
+                    </td>
+                    <td
+                      className={cn(
+                        'px-[8px] py-[6px] text-right tabular-nums whitespace-nowrap',
+                        row.cost === null && 'text-muted-foreground'
+                      )}
+                    >
+                      {formatCost(row.cost)}
+                    </td>
+                    <td
+                      className="px-[8px] py-[6px] text-right tabular-nums whitespace-nowrap"
+                      title={`${formatTokens(row.tokens)} · ${(share * 100).toFixed(0)}%`}
+                      aria-label={`${formatTokens(row.tokens)} · ${(share * 100).toFixed(0)}%`}
+                    >
+                      {formatTokens(row.tokens)}
+                    </td>
+                    <td
+                      className="truncate pr-[12px] py-[6px] text-right tabular-nums"
+                      title={String(row.count)}
+                    >
+                      {row.count}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <p className="border-t border-line px-[12px] py-[6px] text-[calc(11rem/14)] text-faint">
+          {t('{{total}} items', { total: rows.length })}
+        </p>
+      </div>
       {overflow && (
         <Button
           variant="ghost"
@@ -103,6 +128,6 @@ export function RankingTable({
           {expanded ? t('Collapse') : t('Show all')}
         </Button>
       )}
-    </div>
+    </section>
   );
 }

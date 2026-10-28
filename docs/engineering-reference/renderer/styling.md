@@ -51,6 +51,10 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 开关轨道/拇指/位移也要同比例缩放，避免大字号裁切和重叠；窗口标题栏等原生几何除外。
 回归见 `src/renderer/styles/typographyScale.test.ts`。
 
+## 设置页的数据布局
+
+设置窗口包含固定侧栏，多列统计和排行按内容区的 `@container` 宽度切换，不能只按整个窗口的 `sm`/`md` 断点。长模型名、项目名不能参与表格的最小内容宽度计算：表格使用固定列布局、名称省略并保留完整提示；字号放大后确需更宽时，仅在表格内部滚动，不撑宽页面或覆盖相邻排行。至少验收 720px 窗口、默认 960px 窗口、长名称和大字号。回归见 `usage/RankingTable.test.tsx` 与 `usage/UsageCharts.test.tsx`（相对 `src/renderer/components/settings/`）。
+
 ## 主题系统
 
 三种模式由 `theme` 字段驱动（`light` / `dark` / `system` / `sync-terminal`），

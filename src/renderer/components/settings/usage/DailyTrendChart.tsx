@@ -8,9 +8,9 @@ type Metric = 'tokens' | 'cost';
 type SeriesId = 'output' | 'input' | 'cache';
 
 const W = 640;
-const H = 180;
+const H = 150;
 const PAD_TOP = 8;
-const PAD_BOTTOM = 18;
+const PAD_BOTTOM = 0;
 const GAP_RATIO = 0.3;
 /** 非零段至少 2px，避免输出相对缓存小两个数量级时被线性坐标压没 */
 const MIN_SEG_PX = 2;
@@ -21,9 +21,9 @@ function dayLabel(day: string): string {
 }
 
 const TOKEN_SERIES: Array<{ id: SeriesId; cls: string; swatch: string }> = [
-  { id: 'cache', cls: 'fill-foreground/15', swatch: 'bg-foreground/15' },
-  { id: 'input', cls: 'fill-foreground/45', swatch: 'bg-foreground/45' },
-  { id: 'output', cls: 'fill-foreground', swatch: 'bg-foreground' },
+  { id: 'output', cls: 'fill-primary', swatch: 'bg-primary' },
+  { id: 'input', cls: 'fill-primary/55', swatch: 'bg-primary/55' },
+  { id: 'cache', cls: 'fill-control', swatch: 'bg-control' },
 ];
 
 /** 每日趋势：Token 模式堆叠 输出/输入/缓存；费用模式单柱。图例可点选系列。 */
@@ -60,34 +60,10 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
   const hovered = hover !== null ? daily[hover] : null;
 
   return (
-    <div className="rounded-[6px] border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[calc(13rem/14)] font-medium">{t('Daily trend')}</span>
-        <div className="flex items-center gap-3">
-          {metric === 'tokens' && (
-            <div className="flex items-center gap-3 text-[calc(11rem/14)] text-muted-foreground">
-              <Legend
-                className="bg-foreground"
-                label={t('Output')}
-                pressed={on.output}
-                onClick={() => toggle('output')}
-              />
-              <Legend
-                className="bg-foreground/45"
-                label={t('Input')}
-                pressed={on.input}
-                onClick={() => toggle('input')}
-              />
-              <Legend
-                className="bg-foreground/15"
-                label={t('Cache')}
-                pressed={on.cache}
-                onClick={() => toggle('cache')}
-              />
-            </div>
-          )}
-          <MetricToggle value={metric} onChange={setMetric} />
-        </div>
+    <section className="min-w-0" data-slot="usage-trend">
+      <div className="mb-[8px] flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-[calc(14rem/14)] font-medium">{t('Daily trend')}</h4>
+        <MetricToggle value={metric} onChange={setMetric} />
       </div>
       <div className="relative">
         <div className="pointer-events-none absolute left-0 top-0 font-mono text-[calc(11rem/14)] text-muted-foreground">
@@ -115,7 +91,8 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
         )}
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="mt-4 block h-[calc(180rem/14)] w-full"
+          className="mt-4 block h-[calc(150rem/14)] w-full border-b border-line"
+          preserveAspectRatio="none"
           role="img"
           aria-label={t('Daily trend')}
           onMouseLeave={() => setHover(null)}
@@ -129,7 +106,7 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
                     v: p[s.id],
                     cls: s.cls,
                   }))
-                : [{ v: p.cost ?? 0, cls: 'fill-emerald-600 dark:fill-emerald-500' }];
+                : [{ v: p.cost ?? 0, cls: 'fill-primary' }];
             let y = base;
             return (
               <g key={p.day} onMouseEnter={() => setHover(i)}>
@@ -149,22 +126,43 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
                     />
                   );
                 })}
-                {i % labelEvery === 0 && (
-                  <text
-                    x={x + barW / 2}
-                    y={H - 4}
-                    textAnchor="middle"
-                    className="fill-muted-foreground font-mono text-[calc(11rem/14)]"
-                  >
-                    {dayLabel(p.day)}
-                  </text>
-                )}
               </g>
             );
           })}
         </svg>
+        <div className="mt-[4px] flex text-[calc(11rem/14)] tabular-nums text-muted-foreground">
+          {daily
+            .filter((_, i) => i % labelEvery === 0)
+            .map((p) => (
+              <span key={p.day} className="min-w-0 flex-1 truncate text-center" title={p.day}>
+                {dayLabel(p.day)}
+              </span>
+            ))}
+        </div>
       </div>
-    </div>
+      {metric === 'tokens' && (
+        <div className="mt-[8px] flex flex-wrap items-center gap-x-[16px] gap-y-2 text-[calc(11rem/14)] text-muted-foreground">
+          <Legend
+            className="bg-primary"
+            label={t('Output')}
+            pressed={on.output}
+            onClick={() => toggle('output')}
+          />
+          <Legend
+            className="bg-primary/55"
+            label={t('Input')}
+            pressed={on.input}
+            onClick={() => toggle('input')}
+          />
+          <Legend
+            className="bg-control"
+            label={t('Cache')}
+            pressed={on.cache}
+            onClick={() => toggle('cache')}
+          />
+        </div>
+      )}
+    </section>
   );
 }
 

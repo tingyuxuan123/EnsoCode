@@ -1,42 +1,30 @@
 import { PopDigits } from '@/components/ui/pop-digits';
-import { cn } from '@/lib/utils';
+import { useI18n } from '@/i18n';
 
 interface StatCardProps {
   label: string;
   value: string;
   /** 相对上期变化（'+86.4%' / 'new' / null） */
   delta: string | null;
-  tone?: 'default' | 'success' | 'info' | 'muted';
 }
 
-const TONE_CLASS: Record<NonNullable<StatCardProps['tone']>, string> = {
-  default: 'text-foreground',
-  success: 'text-emerald-600 dark:text-emerald-400',
-  info: 'text-sky-600 dark:text-sky-400',
-  muted: 'text-muted-foreground',
-};
-
-/** 统计卡：标签 + 大号等宽数值 + 右上角 delta。delta 不着色——涨费用是坏事、涨 token 是中性，颜色反而误导。 */
-export function StatCard({ label, value, delta, tone = 'default' }: StatCardProps) {
+/** 同设计纵向排列；对比保持中性，不把费用上涨解释为好事。 */
+export function StatCard({ label, value, delta }: StatCardProps) {
+  const { t } = useI18n();
   return (
-    <div className="min-w-0 overflow-hidden py-[4px]">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="min-w-0 text-[calc(12rem/14)] text-muted-foreground">{label}</span>
-        {delta && (
-          <span className="shrink-0 font-mono text-[calc(11rem/14)] tabular-nums text-muted-foreground">
-            {delta}
-          </span>
-        )}
-      </div>
+    <div className="min-w-0 py-[4px]">
+      <p className="text-[calc(11rem/14)] text-muted-foreground">{label}</p>
       <div
-        className={cn(
-          'mt-[2px] truncate font-mono text-[calc(20rem/14)] font-medium leading-[calc(28rem/14)] tabular-nums',
-          TONE_CLASS[tone]
-        )}
+        className="mt-[2px] truncate text-[calc(20rem/14)] font-medium leading-[calc(28rem/14)] tabular-nums"
         title={value}
       >
         <PopDigits value={value} />
       </div>
+      {delta && (
+        <p className="text-[calc(11rem/14)] tabular-nums text-muted-foreground">
+          {delta === 'new' ? t('New this period') : t('{{delta}} vs previous period', { delta })}
+        </p>
+      )}
     </div>
   );
 }

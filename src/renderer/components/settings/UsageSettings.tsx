@@ -64,7 +64,7 @@ export function UsageSettings() {
   }, [days, load]);
 
   return (
-    <div className="space-y-[24px]" data-slot="settings-page">
+    <div className="@container/usage min-w-0 space-y-[24px]" data-slot="settings-page">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
@@ -85,7 +85,12 @@ export function UsageSettings() {
         </Button>
       </div>
 
-      <RangePills value={days} onChange={setDays} />
+      <div className="flex flex-wrap items-center gap-[12px]">
+        <RangePills value={days} onChange={setDays} />
+        <span className="text-[calc(11rem/14)] text-muted-foreground">
+          {t('Based on local records, not subscription limits')}
+        </span>
+      </div>
 
       {error && <p className="text-[calc(13rem/14)] text-destructive">{error}</p>}
 
@@ -94,7 +99,10 @@ export function UsageSettings() {
           <StatGrid totals={summary.totals} previous={summary.previous} />
           <DailyTrendChart daily={summary.daily} />
           <HourlyHeatmap heatmap={summary.heatmap} />
-          <div className="grid grid-cols-2 gap-[16px] max-sm:grid-cols-1">
+          <div
+            className="grid min-w-0 grid-cols-1 gap-[16px] border-t border-line pt-[20px] @min-[44rem]/usage:grid-cols-2"
+            data-slot="usage-rankings"
+          >
             <RankingTable
               title={t('By model')}
               countLabel={t('Messages')}
@@ -135,7 +143,7 @@ export function UsageSettings() {
             />
           )}
           {summary.unpricedModels.length > 0 && (
-            <p className="text-[calc(12rem/14)] text-muted-foreground">
+            <p className="break-words rounded-[6px] border border-warning/30 bg-warning/5 px-[12px] py-[8px] text-[calc(12rem/14)] text-foreground [overflow-wrap:anywhere]">
               {t('No catalog price for: {{models}}. Their cost is not included.', {
                 models: summary.unpricedModels.join(', '),
               })}
@@ -187,12 +195,11 @@ function StatGrid({ totals, previous }: { totals: UsageTotals; previous: UsageTo
   const cache = totals.cacheRead + totals.cacheWrite;
   const prevCache = previous.cacheRead + previous.cacheWrite;
   return (
-    <div className="grid grid-cols-2 gap-x-[24px] gap-y-[16px] md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-[24px] gap-y-[16px] @min-[38rem]/usage:grid-cols-4">
       <StatCard
         label={t('Estimated cost')}
         value={formatCost(totals.cost)}
         delta={formatDelta(previous.cost, totals.cost)}
-        tone="success"
       />
       <StatCard
         label={t('Total tokens')}
@@ -213,13 +220,11 @@ function StatGrid({ totals, previous }: { totals: UsageTotals; previous: UsageTo
         label={t('Cache tokens')}
         value={formatTokens(cache)}
         delta={formatDelta(prevCache, cache)}
-        tone="muted"
       />
       <StatCard
         label={t('Active time')}
         value={formatDurationMs(totals.activeMs)}
         delta={formatDelta(previous.activeMs, totals.activeMs)}
-        tone="info"
       />
       <StatCard
         label={t('Sessions')}
