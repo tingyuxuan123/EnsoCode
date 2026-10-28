@@ -23,7 +23,6 @@ import {
   CircleCheck,
   ClipboardCheck,
   ClipboardList,
-  Copy,
   FilePlus,
   FileText,
   FolderOpen,
@@ -103,6 +102,7 @@ import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { AskUserResult } from './AskUserResult';
 import { CodeBlock } from './CodeBlock';
 import { ConfirmDialog } from './ConfirmDialog';
+import { CopyButton } from './CopyButton';
 import { ChatSessionContext, useChatHost } from './chatHost';
 import { EditDiff } from './EditDiff';
 import { EnsoMark } from './EnsoMark';
@@ -1080,6 +1080,8 @@ function canRewindDisplayedSession(
 
 const userActionClass =
   'flex items-center gap-1 text-[calc(11rem/14)] text-muted-foreground transition-opacity hover:text-foreground';
+const replyActionClass =
+  'flex size-[calc(24rem/14)] shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring';
 
 /** 分叉入口：与回退并列；idle 的 root 显示，冷会话点击时由 store 先唤醒 */
 function ForkButton({ messageIndex }: { messageIndex: number }) {
@@ -1092,7 +1094,8 @@ function ForkButton({ messageIndex }: { messageIndex: number }) {
   return (
     <button
       type="button"
-      className={userActionClass}
+      className={replyActionClass}
+      aria-label={t('Conversation branch')}
       title={t('Keep this session and start a parallel one from here')}
       onClick={() => {
         const state = useSessionsStore.getState();
@@ -1104,7 +1107,6 @@ function ForkButton({ messageIndex }: { messageIndex: number }) {
       }}
     >
       <GitBranch className="h-3 w-3" />
-      {t('Conversation branch')}
     </button>
   );
 }
@@ -1367,7 +1369,7 @@ function UserMeta({
   );
 }
 
-/** assistant 正文：markdown + hover 操作条（复制 / 时间 / 该轮耗时·TTFT·tok/s） */
+/** assistant 正文：右侧悬浮操作不占垂直空间，文件汇总仍在轮末正文下方。 */
 function TextRow({
   item,
   searchQuery = '',
@@ -1377,17 +1379,26 @@ function TextRow({
   searchQuery?: string;
   activeNth?: number;
 }) {
-  const { t } = useI18n();
   const host = useChatHost();
-  const perfStr = item.perf ? formatPerf(item.perf, t, item.turnDurationMs !== undefined) : '';
   return (
-    <div className="group text-[calc(15rem/14)] leading-[calc(27rem/14)] [&_h1]:text-[calc(18rem/14)] [&_h2]:text-[calc(18rem/14)] [&_h3]:text-[calc(16rem/14)]">
-      <Markdown
-        text={item.text}
-        streaming={item.streaming}
-        searchQuery={searchQuery}
-        activeNth={activeNth}
-      />
+    <div className="text-[calc(15rem/14)] leading-[calc(27rem/14)] [&_h1]:text-[calc(18rem/14)] [&_h2]:text-[calc(18rem/14)] [&_h3]:text-[calc(16rem/14)]">
+      <div data-reply-body="" className="group/reply relative pr-[calc(56rem/14)]">
+        <Markdown
+          text={item.text}
+          streaming={item.streaming}
+          searchQuery={searchQuery}
+          activeNth={activeNth}
+        />
+        {!item.streaming && (
+          <div
+            data-reply-actions=""
+            className="absolute top-0 right-0 flex items-center gap-1 text-muted-foreground transition-opacity duration-(--duration-quick) ease-(--ease-out) motion-reduce:transition-none [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:opacity-0 group-hover/reply:pointer-events-auto group-hover/reply:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+          >
+            <CopyButton text={item.text} className={replyActionClass} />
+            {item.turnEnd && <ForkButton messageIndex={Number(item.key.split('-')[0])} />}
+          </div>
+        )}
+      </div>
       {item.turnEnd &&
         !item.streaming &&
         (host?.turnFooter ? (
@@ -1395,40 +1406,7 @@ function TextRow({
         ) : (
           <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
         ))}
-      {!item.streaming && (
-        <div className="mt-[12px] flex min-h-[calc(24rem/14)] items-center gap-2 text-[calc(11rem/14)] text-faint opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-          <CopyButton text={item.text} />
-          {item.turnEnd && <ForkButton messageIndex={Number(item.key.split('-')[0])} />}
-          {item.timestamp && <span>{formatClock(item.timestamp)}</span>}
-          {item.turnDurationMs !== undefined && (
-            <span>
-              · {t('took {{duration}}', { duration: formatDuration(item.turnDurationMs) })}
-            </span>
-          )}
-          {perfStr && <span>· {perfStr}</span>}
-        </div>
-      )}
     </div>
-  );
-}
-
-function CopyButton({ text }: { text: string }) {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1000);
-        });
-      }}
-      className="flex items-center gap-1 transition-colors hover:text-foreground"
-      title={t('Copy')}
-    >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-    </button>
   );
 }
 
@@ -1437,26 +1415,6 @@ const formatClock = (ms: number): string => {
   const d = new Date(ms);
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
-/** 秒：<10s 一位小数，否则整数 */
-const secs = (ms: number): string => {
-  const s = ms / 1000;
-  return s < 10 ? String(Math.round(s * 10) / 10) : String(Math.round(s));
-};
-/** 末 step 读数：本 step 耗时 · TTFT · tok/s；多 step 轮次再附「总计 Xs」= 整轮活跃用时 */
-function formatPerf(perf: TurnPerf, t: TFunction, hasTurnDuration = false): string {
-  const parts: string[] = [];
-  // 单 step 的用时已由「took」展示；多 step 仍保留末 step 墙钟（turnMs 有值）
-  if (!hasTurnDuration || perf.turnMs !== undefined) {
-    parts.push(`${secs(perf.runMs)}s`);
-  }
-  if (perf.ttftMs !== undefined) parts.push(`TTFT ${secs(perf.ttftMs)}s`);
-  if (perf.tps !== undefined) parts.push(`${Math.round(perf.tps)} tok/s`);
-  if (!hasTurnDuration && perf.turnMs !== undefined) {
-    parts.push(t('total {{duration}}', { duration: formatDuration(perf.turnMs) }));
-  }
-  return parts.join(' · ');
-}
-
 /** 流式思考摘要：最后一行非空正文；行号作为滚动 key，同一行续写只原位刷新 */
 function lastNonEmptyLine(text: string): { index: number; text: string } | null {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');

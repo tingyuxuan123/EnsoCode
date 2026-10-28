@@ -130,6 +130,13 @@
 - 验证方法：CDP `/json/list` 应出现 `type: worker`；prod 是 `file://`，模块 worker 照常可加载
   （已用 bogus 消息回 `Unknown request type` 验过）。
 
+## 回复正文操作不占独立行
+
+`TimelineRow` 的正文不再追加时间 / 耗时 / TTFT / 速度统计行。复制与轮末分叉放在
+正文右侧绝对定位的操作区，保留稳定且随字号缩放的横向空间，不以透明页脚预留高度。
+悬停与键盘聚焦只改变操作区可见性，不改变行高或正文折行；无 hover 的触屏常显。
+文件改动汇总与宿主 `turnFooter` 仍在正文下方完整展示。回归：`TimelineRow.actions.test.tsx`。
+
 ## 时间线初始高度不能取首条消息
 
 `MessageTimeline` 切会话会重挂 Virtuoso 并定位 `LAST`。必须提供 `defaultItemHeight` 初始估算，不能让首条长文本的探测高度外推到全部消息；实际行高仍动态测量，不能改成 `fixedItemHeight`。
