@@ -118,7 +118,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
   return (
     <ChatHostContext.Provider value={host}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <header className="flex h-9 shrink-0 items-center gap-2 border-b px-3">
+        <header className="flex h-[36px] shrink-0 items-center gap-2 border-b bg-muted/30 px-4">
           <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="shrink-0 text-muted-foreground text-xs">{node.label}</span>
           <NodeDot node={node} />
@@ -137,7 +137,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
           )}
           <div className="flex-1" />
           {banner && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+            <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px]', node.hostOnline ? 'text-muted-foreground' : 'bg-warning/10 text-warning')}>
               {banner}
             </span>
           )}
@@ -192,7 +192,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
         )}
 
         {sessionId !== null && (
-          <div className="@container pt-1">
+          <div className="@container pt-1 pb-3">
             <div className={CHAT_COL}>
               {/* 自动重试横幅：只展示不可取消（协议无 abort-retry，整轮 abort 已够用） */}
               {view?.retry && <RetryBar retry={view.retry} />}

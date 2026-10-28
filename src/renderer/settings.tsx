@@ -11,7 +11,7 @@ function SettingsApp() {
   const { t } = useI18n();
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-shell">
+    <div className="flex h-screen flex-col overflow-hidden bg-shell" data-slot="settings-window">
       <OauthCredentialBootstrap />
       <TitleBar title={t('Settings')} actions={<SummonEnsoButton label={false} />} />
       <main className="min-h-0 flex-1 overflow-hidden">

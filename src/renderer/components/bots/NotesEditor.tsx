@@ -91,7 +91,7 @@ export function NotesEditor({ target, emptyText }: { target: NotesTarget; emptyT
       {notes.content ? (
         <div
           data-slot="bot-card"
-          className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border bg-card px-2.5 py-2 text-xs"
+          className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border bg-card px-2.5 py-2 text-xs"
         >
           {notes.content}
         </div>

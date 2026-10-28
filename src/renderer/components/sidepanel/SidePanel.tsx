@@ -297,8 +297,8 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
   const tab = (
     <div
       className={cn(
-        'group/tab relative flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-        active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50'
+        'group/tab relative flex h-full min-w-0 items-center gap-1.5 border-r border-line pr-1.5 pl-3 text-[12px]',
+        active ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-accent/50'
       )}
     >
       {props.api.id === 'changes' ? (
@@ -326,7 +326,12 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
       <span className="max-w-32 truncate">{title}</span>
       <button
         type="button"
-        className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/tab:opacity-100"
+        className={cn(
+          'flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-control hover:text-foreground focus-visible:opacity-100',
+          !active && 'opacity-0 group-hover/tab:opacity-100'
+        )}
+        aria-label={t('Close')}
+        title={t('Close')}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -788,7 +793,7 @@ export function SidePanel({
           // 平时透明让底层挖孔透出 guest；全屏盖在 ChatView 上、收起动画中必须实底
           open && !cover ? 'bg-transparent' : 'bg-panel',
           cover ? 'absolute inset-y-0 right-0' : 'relative shrink-0',
-          open && 'border-l'
+          open && 'border-l border-line'
         )}
       >
         {open && !cover && contentW !== undefined ? (

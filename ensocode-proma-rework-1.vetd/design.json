@@ -2,9 +2,9 @@
 	"version": 1,
 	"type": "vetta-design",
 	"canvas": {
-		"zoom": 0.5797198227889517,
-		"x": -3509.2849223450266,
-		"y": 106.29489165670475
+		"zoom": 0.1199058810919539,
+		"x": -11566.238084931907,
+		"y": -1317.4964462368205
 	},
 	"frames": [
 		{
@@ -14,11 +14,25 @@
 			"y": 0,
 			"width": 1440,
 			"height": 900,
-			"title": "运行控制 · 审批、提问与计划",
+			"title": "运行控制 · 工具审批（输入框上方）",
 			"meta": {
 				"width": 1440,
 				"height": 900,
-				"title": "运行控制 · 审批、提问与计划"
+				"title": "运行控制 · 工具审批（输入框上方）"
+			}
+		},
+		{
+			"id": "ask-user",
+			"file": "frames/ask-user.tsx",
+			"x": 13680,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "运行控制 · Agent 提问",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "运行控制 · Agent 提问"
 			}
 		},
 		{
@@ -36,6 +50,230 @@
 			}
 		},
 		{
+			"id": "background-bash",
+			"file": "frames/background-bash.tsx",
+			"x": 18240,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "后台 Bash · 展开状态",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "后台 Bash · 展开状态"
+			}
+		},
+		{
+			"id": "bot-artifacts",
+			"file": "frames/bot-artifacts.tsx",
+			"x": 78080,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 交付物与成员浏览器",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 交付物与成员浏览器"
+			}
+		},
+		{
+			"id": "bot-board",
+			"file": "frames/bot-board.tsx",
+			"x": 64400,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 群组任务看板",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 群组任务看板"
+			}
+		},
+		{
+			"id": "bot-chat",
+			"file": "frames/bot-chat.tsx",
+			"x": 58320,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 成员私聊（右侧资料面板）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 成员私聊（右侧资料面板）"
+			}
+		},
+		{
+			"id": "bot-delegation",
+			"file": "frames/bot-delegation.tsx",
+			"x": 65920,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 委派与执行记录",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 委派与执行记录"
+			}
+		},
+		{
+			"id": "bot-goal",
+			"file": "frames/bot-goal.tsx",
+			"x": 68960,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 从目标开始",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 从目标开始"
+			}
+		},
+		{
+			"id": "bot-group",
+			"file": "frames/bot-group.tsx",
+			"x": 59840,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 群聊与话题",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 群聊与话题"
+			}
+		},
+		{
+			"id": "bot-inbox",
+			"file": "frames/bot-inbox.tsx",
+			"x": 61360,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 待处理收件箱",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 待处理收件箱"
+			}
+		},
+		{
+			"id": "bot-memory",
+			"file": "frames/bot-memory.tsx",
+			"x": 79600,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 成员与群组记忆",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 成员与群组记忆"
+			}
+		},
+		{
+			"id": "bot-new-group",
+			"file": "frames/bot-new-group.tsx",
+			"x": 70480,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 新建群聊",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 新建群聊"
+			}
+		},
+		{
+			"id": "bot-new-member",
+			"file": "frames/bot-new-member.tsx",
+			"x": 72000,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 新建成员（含能力与预算）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 新建成员（含能力与预算）"
+			}
+		},
+		{
+			"id": "bot-new-team",
+			"file": "frames/bot-new-team.tsx",
+			"x": 129940,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 从模板创建团队",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 从模板创建团队"
+			}
+		},
+		{
+			"id": "bot-routines",
+			"file": "frames/bot-routines.tsx",
+			"x": 67440,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 例程与定时任务",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 例程与定时任务"
+			}
+		},
+		{
+			"id": "bot-search",
+			"file": "frames/bot-search.tsx",
+			"x": 81120,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 搜索成员、群聊与消息",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 搜索成员、群聊与消息"
+			}
+		},
+		{
+			"id": "bot",
+			"file": "frames/bot.tsx",
+			"x": 62880,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "Bot · 工作台首页（还没成员）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "Bot · 工作台首页（还没成员）"
+			}
+		},
+		{
+			"id": "chat-find",
+			"file": "frames/chat-find.tsx",
+			"x": 82640,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "会话内查找与轮次导航",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "会话内查找与轮次导航"
+			}
+		},
+		{
 			"id": "coverage",
 			"file": "frames/coverage.tsx",
 			"x": 9120,
@@ -47,6 +285,20 @@
 				"width": 1440,
 				"height": 900,
 				"title": "全功能重构 · 覆盖清单"
+			}
+		},
+		{
+			"id": "goal-queue",
+			"file": "frames/goal-queue.tsx",
+			"x": 15200,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "运行控制 · 自主目标、插话队列与项目信任",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "运行控制 · 自主目标、插话队列与项目信任"
 			}
 		},
 		{
@@ -70,11 +322,361 @@
 			"y": 0,
 			"width": 1440,
 			"height": 900,
-			"title": "新建任务",
+			"title": "新建任务 · 空会话",
 			"meta": {
 				"width": 1440,
 				"height": 900,
-				"title": "新建任务"
+				"title": "新建任务 · 空会话"
+			}
+		},
+		{
+			"id": "node-pair",
+			"file": "frames/node-pair.tsx",
+			"x": 99360,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "节点 · 连接到节点",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "节点 · 连接到节点"
+			}
+		},
+		{
+			"id": "onboarding",
+			"file": "frames/onboarding.tsx",
+			"x": 84160,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "首次使用 · 引导（第 1 步 / 共 8 步）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "首次使用 · 引导（第 1 步 / 共 8 步）"
+			}
+		},
+		{
+			"id": "panel-agents",
+			"file": "frames/panel-agents.tsx",
+			"x": 43120,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 代理目录与过程观察",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 代理目录与过程观察"
+			}
+		},
+		{
+			"id": "panel-browser-device",
+			"file": "frames/panel-browser-device.tsx",
+			"x": 44640,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 浏览器设备预览与下载",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 浏览器设备预览与下载"
+			}
+		},
+		{
+			"id": "panel-browser",
+			"file": "frames/panel-browser.tsx",
+			"x": 46160,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 内嵌浏览器（Agent 操作中）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 内嵌浏览器（Agent 操作中）"
+			}
+		},
+		{
+			"id": "panel-btw",
+			"file": "frames/panel-btw.tsx",
+			"x": 47680,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 旁路提问",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 旁路提问"
+			}
+		},
+		{
+			"id": "panel-changes-git",
+			"file": "frames/panel-changes-git.tsx",
+			"x": 49200,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 改动（Git 暂存与提交）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 改动（Git 暂存与提交）"
+			}
+		},
+		{
+			"id": "panel-file-preview",
+			"file": "frames/panel-file-preview.tsx",
+			"x": 50720,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 文件内容搜索与 Markdown 预览",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 文件内容搜索与 Markdown 预览"
+			}
+		},
+		{
+			"id": "panel-files",
+			"file": "frames/panel-files.tsx",
+			"x": 52240,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 文件（树 + 编辑器）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 文件（树 + 编辑器）"
+			}
+		},
+		{
+			"id": "panel-git-history",
+			"file": "frames/panel-git-history.tsx",
+			"x": 53760,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · Git 历史与提交 Diff",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · Git 历史与提交 Diff"
+			}
+		},
+		{
+			"id": "panel-terminal",
+			"file": "frames/panel-terminal.tsx",
+			"x": 55280,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 终端（多标签）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 终端（多标签）"
+			}
+		},
+		{
+			"id": "panel-workflow",
+			"file": "frames/panel-workflow.tsx",
+			"x": 56800,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 工作流运行",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 工作流运行"
+			}
+		},
+		{
+			"id": "phone-bots",
+			"file": "frames/phone-bots.tsx",
+			"x": 105440,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · Bot 成员与群组",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · Bot 成员与群组"
+			}
+		},
+		{
+			"id": "phone-chat",
+			"file": "frames/phone-chat.tsx",
+			"x": 105910,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · 编程会话（审批与提问）",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · 编程会话（审批与提问）"
+			}
+		},
+		{
+			"id": "phone-config",
+			"file": "frames/phone-config.tsx",
+			"x": 106380,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · 会话设置（底部弹层）",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · 会话设置（底部弹层）"
+			}
+		},
+		{
+			"id": "phone-group",
+			"file": "frames/phone-group.tsx",
+			"x": 131460,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · 群聊话题、发件箱与交付物",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · 群聊话题、发件箱与交付物"
+			}
+		},
+		{
+			"id": "phone-pair",
+			"file": "frames/phone-pair.tsx",
+			"x": 106850,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · 配对电脑",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · 配对电脑"
+			}
+		},
+		{
+			"id": "phone-readonly",
+			"file": "frames/phone-readonly.tsx",
+			"x": 107320,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · 只读设备",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · 只读设备"
+			}
+		},
+		{
+			"id": "phone-sessions",
+			"file": "frames/phone-sessions.tsx",
+			"x": 107790,
+			"y": 0,
+			"width": 390,
+			"height": 844,
+			"title": "手机 · 会话抽屉",
+			"meta": {
+				"width": 390,
+				"height": 844,
+				"title": "手机 · 会话抽屉"
+			}
+		},
+		{
+			"id": "plan-mode",
+			"file": "frames/plan-mode.tsx",
+			"x": 16720,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "运行控制 · 计划模式",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "运行控制 · 计划模式"
+			}
+		},
+		{
+			"id": "project-archive",
+			"file": "frames/project-archive.tsx",
+			"x": 85680,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "项目 · 已归档与清理",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "项目 · 已归档与清理"
+			}
+		},
+		{
+			"id": "project-group",
+			"file": "frames/project-group.tsx",
+			"x": 87200,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "项目 · 分组编辑",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "项目 · 分组编辑"
+			}
+		},
+		{
+			"id": "project-import",
+			"file": "frames/project-import.tsx",
+			"x": 88720,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "项目 · 导入历史会话",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "项目 · 导入历史会话"
+			}
+		},
+		{
+			"id": "project-remove",
+			"file": "frames/project-remove.tsx",
+			"x": 90240,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "项目 · 移除确认",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "项目 · 移除确认"
+			}
+		},
+		{
+			"id": "project-settings",
+			"file": "frames/project-settings.tsx",
+			"x": 91760,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "项目 · 项目设置",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "项目 · 项目设置"
 			}
 		},
 		{
@@ -84,11 +686,53 @@
 			"y": 0,
 			"width": 1440,
 			"height": 900,
-			"title": "项目管理 · 设置与分组",
+			"title": "项目管理 · 添加项目弹窗",
 			"meta": {
 				"width": 1440,
 				"height": 900,
-				"title": "项目管理 · 设置与分组"
+				"title": "项目管理 · 添加项目弹窗"
+			}
+		},
+		{
+			"id": "remote-new-session",
+			"file": "frames/remote-new-session.tsx",
+			"x": 100880,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "远程 · 新建远程会话",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "远程 · 新建远程会话"
+			}
+		},
+		{
+			"id": "remote-node",
+			"file": "frames/remote-node.tsx",
+			"x": 102400,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "远程 · 远端工作台（已连接）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "远程 · 远端工作台（已连接）"
+			}
+		},
+		{
+			"id": "remote-offline",
+			"file": "frames/remote-offline.tsx",
+			"x": 103920,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "远程 · 对方桌面离线",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "远程 · 对方桌面离线"
 			}
 		},
 		{
@@ -98,31 +742,605 @@
 			"y": 0,
 			"width": 1440,
 			"height": 900,
-			"title": "改动审查",
+			"title": "改动审查 · 全屏并排 Diff",
 			"meta": {
 				"width": 1440,
 				"height": 900,
-				"title": "改动审查"
+				"title": "改动审查 · 全屏并排 Diff"
 			}
 		},
 		{
-			"id": "settings",
-			"file": "frames/settings.tsx",
-			"x": 4560,
+			"id": "search",
+			"file": "frames/search.tsx",
+			"x": 93280,
 			"y": 0,
 			"width": 1440,
 			"height": 900,
-			"title": "外观设置",
+			"title": "全局搜索（⌘K）",
 			"meta": {
 				"width": 1440,
 				"height": 900,
-				"title": "外观设置"
+				"title": "全局搜索（⌘K）"
+			}
+		},
+		{
+			"id": "settings-agents",
+			"file": "frames/settings-agents.tsx",
+			"x": 109780,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 子代理类型",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 子代理类型"
+			}
+		},
+		{
+			"id": "settings-appearance",
+			"file": "frames/settings-appearance.tsx",
+			"x": 19760,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 外观",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 外观"
+			}
+		},
+		{
+			"id": "settings-bots",
+			"file": "frames/settings-bots.tsx",
+			"x": 113940,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · Bot 模式",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · Bot 模式"
+			}
+		},
+		{
+			"id": "settings-botTemplates--edit",
+			"file": "frames/settings-botTemplates--edit.tsx",
+			"x": 114980,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · Bot 模板编辑",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · Bot 模板编辑"
+			}
+		},
+		{
+			"id": "settings-botTemplates",
+			"file": "frames/settings-botTemplates.tsx",
+			"x": 116020,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · Bot 模板",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · Bot 模板"
+			}
+		},
+		{
+			"id": "settings-experimental",
+			"file": "frames/settings-experimental.tsx",
+			"x": 117060,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 实验功能",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 实验功能"
+			}
+		},
+		{
+			"id": "settings-general--config-sync",
+			"file": "frames/settings-general--config-sync.tsx",
+			"x": 118100,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 通用 · 配置迁移与本地导入",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 通用 · 配置迁移与本地导入"
+			}
+		},
+		{
+			"id": "settings-general",
+			"file": "frames/settings-general.tsx",
+			"x": 21280,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 通用",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 通用"
+			}
+		},
+		{
+			"id": "settings-instructions",
+			"file": "frames/settings-instructions.tsx",
+			"x": 28560,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 指令文件",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 指令文件"
+			}
+		},
+		{
+			"id": "settings-mcp--add",
+			"file": "frames/settings-mcp--add.tsx",
+			"x": 29600,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · MCP 服务器 · 添加（stdio / JSON）",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · MCP 服务器 · 添加（stdio / JSON）"
+			}
+		},
+		{
+			"id": "settings-mcp--edit",
+			"file": "frames/settings-mcp--edit.tsx",
+			"x": 30640,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · MCP 服务器 · 编辑",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · MCP 服务器 · 编辑"
+			}
+		},
+		{
+			"id": "settings-mcp",
+			"file": "frames/settings-mcp.tsx",
+			"x": 31680,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · MCP 服务器",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · MCP 服务器"
+			}
+		},
+		{
+			"id": "settings-memory--library",
+			"file": "frames/settings-memory--library.tsx",
+			"x": 22320,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 记忆 · 知识与记忆库",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 记忆 · 知识与记忆库"
+			}
+		},
+		{
+			"id": "settings-memory",
+			"file": "frames/settings-memory.tsx",
+			"x": 23360,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 记忆",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 记忆"
+			}
+		},
+		{
+			"id": "settings-phone--insecure",
+			"file": "frames/settings-phone--insecure.tsx",
+			"x": 119140,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 设备（安全存储不可用）",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 设备（安全存储不可用）"
+			}
+		},
+		{
+			"id": "settings-phone",
+			"file": "frames/settings-phone.tsx",
+			"x": 120180,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 设备（配对与连接）",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 设备（配对与连接）"
+			}
+		},
+		{
+			"id": "settings-plugins",
+			"file": "frames/settings-plugins.tsx",
+			"x": 32720,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 插件",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 插件"
+			}
+		},
+		{
+			"id": "settings-presets--edit",
+			"file": "frames/settings-presets--edit.tsx",
+			"x": 110820,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 预设编辑",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 预设编辑"
+			}
+		},
+		{
+			"id": "settings-presets",
+			"file": "frames/settings-presets.tsx",
+			"x": 111860,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 预设",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 预设"
+			}
+		},
+		{
+			"id": "settings-providers--edit",
+			"file": "frames/settings-providers--edit.tsx",
+			"x": 35840,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心 · 编辑模型服务",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心 · 编辑模型服务"
+			}
+		},
+		{
+			"id": "settings-providers--import",
+			"file": "frames/settings-providers--import.tsx",
+			"x": 36880,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心 · 从本地应用导入",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心 · 从本地应用导入"
+			}
+		},
+		{
+			"id": "settings-providers--oauth",
+			"file": "frames/settings-providers--oauth.tsx",
+			"x": 37920,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心 · 订阅登录",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心 · 订阅登录"
+			}
+		},
+		{
+			"id": "settings-providers--pool",
+			"file": "frames/settings-providers--pool.tsx",
+			"x": 38960,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心 · ChatGPT 自动接替池",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心 · ChatGPT 自动接替池"
+			}
+		},
+		{
+			"id": "settings-providers--virtual",
+			"file": "frames/settings-providers--virtual.tsx",
+			"x": 40000,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心 · 虚拟模型",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心 · 虚拟模型"
+			}
+		},
+		{
+			"id": "settings-providers--wizard",
+			"file": "frames/settings-providers--wizard.tsx",
+			"x": 41040,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心 · 添加模型 / 提供商",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心 · 添加模型 / 提供商"
+			}
+		},
+		{
+			"id": "settings-providers",
+			"file": "frames/settings-providers.tsx",
+			"x": 42080,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 模型中心",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 模型中心"
+			}
+		},
+		{
+			"id": "settings-resources",
+			"file": "frames/settings-resources.tsx",
+			"x": 121220,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 资源",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 资源"
+			}
+		},
+		{
+			"id": "settings-shortcuts",
+			"file": "frames/settings-shortcuts.tsx",
+			"x": 24400,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 快捷键",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 快捷键"
+			}
+		},
+		{
+			"id": "settings-skills--empty",
+			"file": "frames/settings-skills--empty.tsx",
+			"x": 33760,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 技能 · 空状态",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 技能 · 空状态"
+			}
+		},
+		{
+			"id": "settings-skills",
+			"file": "frames/settings-skills.tsx",
+			"x": 34800,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 技能",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 技能"
+			}
+		},
+		{
+			"id": "settings-ssh--edit",
+			"file": "frames/settings-ssh--edit.tsx",
+			"x": 122260,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · SSH 连接编辑",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · SSH 连接编辑"
+			}
+		},
+		{
+			"id": "settings-ssh",
+			"file": "frames/settings-ssh.tsx",
+			"x": 123300,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · SSH 连接",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · SSH 连接"
+			}
+		},
+		{
+			"id": "settings-tools",
+			"file": "frames/settings-tools.tsx",
+			"x": 112900,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 内置工具",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 内置工具"
+			}
+		},
+		{
+			"id": "settings-usage",
+			"file": "frames/settings-usage.tsx",
+			"x": 124340,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 用量",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 用量"
+			}
+		},
+		{
+			"id": "settings-voice",
+			"file": "frames/settings-voice.tsx",
+			"x": 25440,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 语音输入",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 语音输入"
+			}
+		},
+		{
+			"id": "settings-workflows--designer",
+			"file": "frames/settings-workflows--designer.tsx",
+			"x": 26480,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 工作流 · 编辑预设（设计器）",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 工作流 · 编辑预设（设计器）"
+			}
+		},
+		{
+			"id": "settings-workflows",
+			"file": "frames/settings-workflows.tsx",
+			"x": 27520,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 工作流",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 工作流"
+			}
+		},
+		{
+			"id": "system-oauth",
+			"file": "frames/system-oauth.tsx",
+			"x": 94800,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "系统 · 订阅登录与子 Agent 授权",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "系统 · 订阅登录与子 Agent 授权"
+			}
+		},
+		{
+			"id": "system-quit",
+			"file": "frames/system-quit.tsx",
+			"x": 96320,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "系统 · 退出确认",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "系统 · 退出确认"
+			}
+		},
+		{
+			"id": "system-states",
+			"file": "frames/system-states.tsx",
+			"x": 108260,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "通用状态 · 空、加载、失败、确认与提示",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "通用状态 · 空、加载、失败、确认与提示"
+			}
+		},
+		{
+			"id": "system-update",
+			"file": "frames/system-update.tsx",
+			"x": 97840,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "系统 · 版本更新横幅",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "系统 · 版本更新横幅"
 			}
 		},
 		{
 			"id": "task-progress",
 			"file": "frames/task-progress.tsx",
-			"x": 7600,
+			"x": 7654,
 			"y": 0,
 			"width": 1440,
 			"height": 900,

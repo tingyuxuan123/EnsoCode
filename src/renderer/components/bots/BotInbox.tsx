@@ -45,14 +45,14 @@ export function BotInbox() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b px-4">
-        <div className="font-semibold text-sm">{t('Inbox')}</div>
+      <header className="flex h-[56px] shrink-0 items-center gap-2.5 border-b px-4">
+        <div className="font-medium text-[13px]">{t('Inbox')}</div>
         <div className="text-muted-foreground text-xs">
           {t('Everything members are waiting on you for')}
         </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl space-y-2.5 px-6 py-4">
+        <div className="mx-auto w-full max-w-[768px] space-y-2 px-6 py-4">
           {sections.count === 0 && memoryWrites.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
               <Inbox className="h-6 w-6" />
@@ -154,7 +154,7 @@ function SilenceCard({
   const dismiss = useBotsStore((s) => s.dismissInbox);
   const name = bot?.name ?? t('Deleted member');
   return (
-    <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <BotAvatar bot={bot} size="sm" busy />
         <span className="text-foreground">{name}</span>
@@ -191,7 +191,7 @@ function BudgetCard({ item, bot }: { item: BotInboxItem; bot: BotProfile | undef
   const openDirect = useBotsStore((s) => s.openDirect);
   const name = bot?.name ?? t('Deleted member');
   return (
-    <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">{name}</span>
@@ -246,7 +246,7 @@ function BlockedCard({
       : t('Waiting for your reply');
   const { chatId, taskId } = record;
   return (
-    <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <BotAvatar bot={to} size="xs" />
         <span className="text-foreground">{name}</span>
@@ -303,7 +303,7 @@ function InterruptedCard({
   const fromName = from?.name ?? t('Deleted member');
   const toName = to?.name ?? t('Deleted member');
   return (
-    <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <BotAvatar bot={from} size="xs" />
         <span className="text-foreground">{fromName}</span>
@@ -381,7 +381,7 @@ function InboxCard({
   const reviewing = item.kind === 'approval' && item.request.phase === 'reviewing';
 
   return (
-    <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">

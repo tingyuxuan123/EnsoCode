@@ -62,8 +62,8 @@ export function BotDrawerPanel({
         type="button"
         onClick={() => onSelect(chat.id)}
         className={cn(
-          'flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60',
-          chat.id === activeChatId && 'bg-muted'
+          'flex min-h-[44px] w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60',
+          chat.id === activeChatId && 'bg-brand/10 dark:bg-brand/15'
         )}
       >
         {member ? (
@@ -76,11 +76,11 @@ export function BotDrawerPanel({
           </span>
         )}
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium text-sm">
+          <span className="block truncate font-medium text-[13px]">
             {member?.name ?? (chat.title || '群聊')}
           </span>
           <span
-            className={cn('block truncate text-xs', idle ? 'text-muted-foreground' : 'text-brand')}
+            className={cn('mt-0.5 block truncate text-[11px]', idle ? 'text-muted-foreground' : 'text-brand')}
           >
             {lastLine(chat, byId, live) || member?.title || '\u00a0'}
           </span>
@@ -92,7 +92,7 @@ export function BotDrawerPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
         {groups.length === 0 && directs.length === 0 && (
-          <p className="rounded-lg border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+          <p className="rounded-md border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
             桌面端还没有 Bot 聊天
           </p>
         )}
@@ -105,7 +105,7 @@ export function BotDrawerPanel({
               const member = item.botId ? byId.get(item.botId) : undefined;
               const owner = item.ownerBotId ? byId.get(item.ownerBotId) : undefined;
               return (
-                <div key={item.key} className="flex items-center gap-2 rounded-lg px-2 py-2">
+                <div key={item.key} className="flex items-center gap-2 rounded-md px-2 py-2">
                   <button
                     type="button"
                     disabled={!item.chatId}
@@ -153,7 +153,7 @@ export function BotDrawerPanel({
           </div>
         )}
       </div>
-      <p className="shrink-0 px-3 py-2 text-center text-[11px] text-muted-foreground">
+      <p className="shrink-0 border-t px-3 py-2 text-center text-[11px] text-muted-foreground">
         新建成员 / 群聊、例行任务请在桌面端管理
       </p>
     </div>

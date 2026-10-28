@@ -259,7 +259,7 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 px-4 pt-4">
+      <div className="flex items-center gap-2.5 px-3 pt-3">
         <BotAvatar
           bot={{
             id: bot.id,
@@ -269,8 +269,8 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
           size="lg"
         />
         <div className="min-w-0">
-          <div className="truncate font-semibold text-base">{bot.name}</div>
-          <div className="truncate text-muted-foreground text-sm">{bot.title}</div>
+          <div className="truncate font-medium text-[14px]">{bot.name}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{bot.title}</div>
           <div className="mt-1 flex flex-wrap gap-1.5">
             <Tooltip>
               <TooltipTrigger
@@ -303,7 +303,7 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
           <TabsTab value="routines">{t('Routines')}</TabsTab>
           <TabsTab value="history">{t('History')}</TabsTab>
         </TabsList>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           <TabsPanel value="profile" className="space-y-3">
             <BotUsageCard bot={bot} />
             <div>
@@ -462,7 +462,7 @@ function SessionList({
           type="button"
           onClick={() => onOpen(session.conversationId)}
           data-slot="bot-card-button"
-          className="flex w-full items-center justify-between rounded-lg border bg-card px-2.5 py-2 text-left text-xs hover:bg-muted"
+          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
         >
           <span>{t('Conversation {{n}}', { n: sessions.length - index })}</span>
           <span className="text-muted-foreground">

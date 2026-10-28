@@ -40,9 +40,6 @@ interface RemoteNodeSidebarProps {
   onNewConversation: () => void;
 }
 
-const ICON_BUTTON_CLASS =
-  'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
-
 /**
  * 远程节点侧栏：对方目录按项目分组，置顶/归档分栏（与本机侧栏、手机抽屉同语义）。
  * 只做选择与新建：置顶/归档/重命名/删除协议不支持，不露入口。
@@ -107,16 +104,16 @@ export function RemoteNodeSidebar({
       type="button"
       onClick={() => onSelect(c.id)}
       className={cn(
-        'group flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 pl-4 text-left text-sm transition-colors',
+        'group flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors',
         activeId === c.id ? 'bg-brand/10 dark:bg-brand/15' : 'hover:bg-muted/60'
       )}
     >
       <span
         className={cn(
-          'h-2 w-2 shrink-0 rounded-full',
+          'h-1.5 w-1.5 shrink-0 rounded-full',
           c.status === 'running' && 'animate-pulse bg-brand',
           c.status === 'failed' && 'bg-destructive',
-          c.status === 'idle' && (c.unread ? 'bg-emerald-500' : 'bg-muted-foreground/30')
+          c.status === 'idle' && (c.unread ? 'bg-success' : 'bg-muted-foreground/30')
         )}
       />
       <span className="min-w-0 flex-1 truncate">
@@ -134,22 +131,22 @@ export function RemoteNodeSidebar({
   return (
     <aside
       className="flex shrink-0 flex-col overflow-hidden border-t border-r bg-nav"
-      style={{ width }}
+      style={{ width: width ?? 264 }}
     >
-      <div className="flex h-12 shrink-0 items-center justify-between pr-3 pl-1.5">
-        <NodeSwitcher />
+      <div className="shrink-0 px-3 pt-3">
         <button
           type="button"
           onClick={onNewConversation}
           disabled={!canCreate}
-          className={cn(ICON_BUTTON_CLASS, !canCreate && 'opacity-40')}
+          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-muted/60 text-[13px] transition-colors hover:bg-muted disabled:opacity-40"
           title={t('New remote conversation')}
         >
-          <SquarePen className="h-4 w-4" />
+          <SquarePen className="h-3.5 w-3.5 text-brand" />
+          {t('New remote conversation')}
         </button>
       </div>
       {/* 顶部只在列表上方留一条分隔线 */}
-      <div className={cn('shrink-0 px-2 py-2', groups.length === 0 && 'border-b')}>
+      <div className="shrink-0 px-3 pt-3 pb-2">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -161,7 +158,7 @@ export function RemoteNodeSidebar({
         </div>
       </div>
       {groups.length > 0 && (
-        <div className="shrink-0 border-b px-2 pb-2">
+        <div className="shrink-0 px-3 pb-2">
           <Select
             items={[
               { value: ALL_GROUP_ID, label: t('All') },
@@ -195,14 +192,14 @@ export function RemoteNodeSidebar({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2">
         {!node.hostOnline && catalog.length === 0 && (
-          <p className="rounded-lg border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+          <p className="rounded-md border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
             {node.connected ? t('Remote desktop is offline') : t('Connecting…')}
           </p>
         )}
         {node.hostOnline && projects.length === 0 && (
-          <p className="rounded-lg border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+          <p className="rounded-md border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
             {t('The remote desktop has no projects yet')}
           </p>
         )}
@@ -211,7 +208,7 @@ export function RemoteNodeSidebar({
           <div>
             <div className="flex items-center gap-1.5 px-2 py-2">
               <Pin className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="font-medium text-sm">{t('Pinned')}</span>
+              <span className="text-[11px] text-muted-foreground">{t('Pinned')}</span>
             </div>
             <div className="flex flex-col gap-y-0.5">
               {pinned.map((c) => row(c, c.projectName))}
@@ -279,14 +276,14 @@ export function RemoteNodeSidebar({
               <button
                 type="button"
                 onClick={() => setFolded((prev) => ({ ...prev, [project.id]: !isFolded }))}
-                className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
+                className="flex h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-left transition-colors hover:bg-muted/60"
               >
                 {isFolded ? (
                   <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 ) : (
                   <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
-                <span className="min-w-0 flex-1 truncate font-medium text-sm">
+                <span className="min-w-0 flex-1 truncate font-medium text-[13px]">
                   {pairProjectDisplayName(project)}
                 </span>
                 {project.sshHost && (
@@ -296,7 +293,7 @@ export function RemoteNodeSidebar({
                 )}
               </button>
               {!isFolded && (
-                <div className="flex flex-col gap-y-0.5">
+                <div className="ml-3 flex flex-col gap-y-0.5 border-l border-border/60 pl-2">
                   {sessions.length === 0 && (
                     <p className="px-4 py-1.5 text-muted-foreground text-xs">
                       {t('No conversations')}
@@ -321,7 +318,7 @@ export function RemoteNodeSidebar({
             <button
               type="button"
               onClick={() => setArchivedOpen((v) => !v)}
-              className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60"
             >
               <Archive className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate font-medium text-sm">{t('Archived')}</span>
@@ -334,6 +331,9 @@ export function RemoteNodeSidebar({
             )}
           </div>
         )}
+      </div>
+      <div className="flex shrink-0 items-center border-t px-1.5 py-2">
+        <NodeSwitcher className="max-w-full" />
       </div>
     </aside>
   );

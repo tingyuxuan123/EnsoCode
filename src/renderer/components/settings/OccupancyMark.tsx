@@ -22,7 +22,7 @@ export function OccupancyMark({ row, pending }: { row?: AssetOccupancyRow; pendi
   const label = pending ? '…' : row?.tokens == null ? '—' : formatTokens(row.tokens);
   return (
     <span
-      className="w-12 shrink-0 text-right text-muted-foreground text-xs tabular-nums"
+      className="w-12 shrink-0 text-right text-muted-foreground text-[12px] tabular-nums"
       title={row?.error || t('Estimate')}
     >
       {label}
@@ -33,7 +33,7 @@ export function OccupancyMark({ row, pending }: { row?: AssetOccupancyRow; pendi
 export function OccupancyEnabledTotal({ tokens }: { tokens: number }) {
   if (tokens <= 0) return null;
   return (
-    <span className="ml-2 font-normal text-muted-foreground text-xs tabular-nums">
+    <span className="ml-2 font-normal text-muted-foreground text-[12px] tabular-nums">
       {formatTokens(tokens)}
     </span>
   );

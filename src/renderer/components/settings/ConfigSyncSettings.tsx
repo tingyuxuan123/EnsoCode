@@ -93,21 +93,21 @@ export function ConfigSyncSettings() {
   return (
     <section className="space-y-3" data-settings-row="general.configSync">
       <div>
-        <h4 className="text-sm font-medium">{t('Configuration transfer')}</h4>
-        <p className="text-xs text-muted-foreground">
+        <h4 className="text-[13px] font-medium">{t('Configuration transfer')}</h4>
+        <p className="text-[12px] text-muted-foreground">
           {t(
             'Move models, presets, agent types, skills, MCP servers and instruction files between devices.'
           )}
         </p>
       </div>
 
-      <div className="rounded-md border px-3 py-3">
+      <div className="rounded-[6px] border px-3 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <FileArchive className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
-              <p className="text-sm font-medium">{t('Portable Enso configuration')}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[13px] font-medium">{t('Portable Enso configuration')}</p>
+              <p className="text-[12px] text-muted-foreground">
                 {t('Export a package or preview one before importing it.')}
               </p>
             </div>
@@ -127,7 +127,7 @@ export function ConfigSyncSettings() {
             </Button>
           </div>
         </div>
-        <div className="mt-3 flex items-start gap-2 border-t pt-3 text-xs text-muted-foreground">
+        <div className="mt-3 flex items-start gap-2 border-t pt-3 text-[12px] text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
             {t(
@@ -139,8 +139,8 @@ export function ConfigSyncSettings() {
           <p
             className={
               openImportMessage.kind === 'error'
-                ? 'mt-2 text-xs text-destructive'
-                : 'mt-2 text-xs text-muted-foreground'
+                ? 'mt-2 text-[12px] text-destructive'
+                : 'mt-2 text-[12px] text-muted-foreground'
             }
             role={openImportMessage.kind === 'error' ? 'alert' : 'status'}
           >
@@ -245,7 +245,7 @@ function ExportDialog({
                 <AlertTitle>{t('Configuration exported')}</AlertTitle>
                 <AlertDescription>
                   <p>{t('Saved package:')}</p>
-                  <p className="break-all font-mono text-xs text-foreground">{filePath}</p>
+                  <p className="break-all font-mono text-[12px] text-foreground">{filePath}</p>
                 </AlertDescription>
               </Alert>
               {skippedInstructions.length > 0 && (
@@ -274,7 +274,7 @@ function ExportDialog({
                 </AlertDescription>
               </Alert>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5">
+              <label className="flex cursor-pointer items-start gap-3 rounded-[6px] border px-3 py-2.5">
                 <Checkbox
                   checked={includeSecrets}
                   onCheckedChange={(checked) => {
@@ -288,10 +288,10 @@ function ExportDialog({
                   }}
                 />
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium">
+                  <span className="block text-[13px] font-medium">
                     {t('Include sensitive configuration')}
                   </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                  <span className="mt-0.5 block text-[12px] text-muted-foreground">
                     {t(
                       'Encrypt the entire package with a password. OAuth login sessions are still excluded.'
                     )}
@@ -311,8 +311,8 @@ function ExportDialog({
               )}
 
               {includeSecrets && (
-                <div className="space-y-3 rounded-md border px-3 py-3">
-                  <div className="flex items-center gap-2 text-sm font-medium">
+                <div className="space-y-3 rounded-[6px] border px-3 py-3">
+                  <div className="flex items-center gap-2 text-[13px] font-medium">
                     <LockKeyhole className="h-4 w-4 text-muted-foreground" />
                     {t('Encryption password')}
                   </div>
@@ -346,19 +346,19 @@ function ExportDialog({
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[12px] text-muted-foreground">
                     {t('Use at least 8 characters. This password cannot be recovered.')}
                   </p>
                 </div>
               )}
 
               {cancelled && (
-                <p className="text-xs text-muted-foreground" role="status">
+                <p className="text-[12px] text-muted-foreground" role="status">
                   {t('Export cancelled.')}
                 </p>
               )}
               {error && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive" role="alert">
+                <p className="flex items-center gap-1.5 text-[12px] text-destructive" role="alert">
                   <CircleAlert className="h-3.5 w-3.5 shrink-0" />
                   {error}
                 </p>
@@ -553,7 +553,7 @@ function ImportDialog({
               />
             </div>
             {error && (
-              <p className="flex items-center gap-1.5 text-xs text-destructive" role="alert">
+              <p className="flex items-center gap-1.5 text-[12px] text-destructive" role="alert">
                 <CircleAlert className="h-3.5 w-3.5 shrink-0" />
                 {error}
               </p>
@@ -564,27 +564,27 @@ function ImportDialog({
         {phase === 'preview' && (
           <DialogPanel className="max-h-[58vh] space-y-4">
             <div className="space-y-2">
-              <p className="text-sm font-medium">{t('Import mode')}</p>
+              <p className="text-[13px] font-medium">{t('Import mode')}</p>
               <RadioGroup
                 value={mode}
                 onValueChange={(value) => changeMode(value as ConfigSyncMode)}
                 className="grid gap-2 sm:grid-cols-2"
                 aria-label={t('Import mode')}
               >
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5">
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-[6px] border px-3 py-2.5">
                   <Radio value="merge" disabled={busy !== null} />
                   <span>
-                    <span className="block text-sm font-medium">{t('Merge')}</span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-[13px] font-medium">{t('Merge')}</span>
+                    <span className="block text-[12px] text-muted-foreground">
                       {t('Add and update matching items while keeping items only on this device.')}
                     </span>
                   </span>
                 </label>
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5">
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-[6px] border px-3 py-2.5">
                   <Radio value="replace" disabled={busy !== null} />
                   <span>
-                    <span className="block text-sm font-medium">{t('Replace')}</span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-[13px] font-medium">{t('Replace')}</span>
+                    <span className="block text-[12px] text-muted-foreground">
                       {t('Replace transferred item categories, removing local-only items in them.')}
                     </span>
                   </span>
@@ -593,16 +593,16 @@ function ImportDialog({
             </div>
 
             {busy === 'preview' && (
-              <div className="flex items-center justify-center gap-2 rounded-md border border-dashed py-10">
+              <div className="flex items-center justify-center gap-2 rounded-[6px] border border-dashed py-10">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">{t('Preparing preview…')}</span>
+                <span className="text-[13px] text-muted-foreground">{t('Preparing preview…')}</span>
               </div>
             )}
 
             {!busy && summary && (
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <div className="overflow-hidden rounded-[6px] border">
+                <table className="w-full text-[13px]">
+                  <thead className="bg-muted/50 text-[12px] text-muted-foreground">
                     <tr>
                       <th scope="col" className="px-3 py-2 text-left font-medium">
                         {t('Category')}
@@ -642,7 +642,7 @@ function ImportDialog({
             )}
 
             {!busy && summary?.find((item) => item.category === 'settings')?.fields?.length ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] text-muted-foreground">
                 {t('Portable settings changed:')}{' '}
                 {summary.find((item) => item.category === 'settings')?.fields?.join(', ')}
               </p>
@@ -695,7 +695,7 @@ function ImportDialog({
               <AlertTitle>{t('Import complete')}</AlertTitle>
               <AlertDescription>
                 <p>{t('Backup of previous settings:')}</p>
-                <p className="break-all font-mono text-xs text-foreground">{backupPath}</p>
+                <p className="break-all font-mono text-[12px] text-foreground">{backupPath}</p>
               </AlertDescription>
             </Alert>
             {refreshFailed && (

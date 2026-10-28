@@ -40,7 +40,7 @@ export function BotActivityRow({ item, bots, clockOffset, onOpen }: Props) {
       type="button"
       disabled={!open}
       onClick={open}
-      className="flex w-full gap-2 rounded-lg border bg-muted/30 px-2.5 py-2 text-left disabled:cursor-default"
+      className="flex w-full gap-2 rounded-md border bg-muted/30 px-2.5 py-2 text-left disabled:cursor-default"
     >
       <BotAvatar bot={bot} size="sm" busy={running} />
       <span className="min-w-0 flex-1">

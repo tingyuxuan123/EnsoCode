@@ -38,8 +38,8 @@
   --color-ring: var(--ring);
 
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-sm: var(--radius);
 
   --font-sans: var(--font-family-sans, "Inter", system-ui, sans-serif);
   --font-mono: var(--font-family-mono, "JetBrains Mono", "Menlo", monospace);
@@ -68,20 +68,20 @@
     color-scheme: light;
     --font-family-mono: "JetBrains Mono", "Menlo", monospace;
     --font-size-base: 15px;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0.014 285.82);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0.014 285.82);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0.014 285.82);
-    --primary: oklch(0.205 0.014 285.82);
+    --background: oklch(0.9768 0.0038 238.42);
+    --foreground: oklch(0.2643 0.0269 248.88);
+    --card: oklch(0.9535 0.009 238.5);
+    --card-foreground: oklch(0.2643 0.0269 248.88);
+    --popover: oklch(0.985 0.003 238.42);
+    --popover-foreground: oklch(0.2643 0.0269 248.88);
+    --primary: oklch(0.6101 0.1094 242.61);
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.965 0.003 285.82);
-    --secondary-foreground: oklch(0.205 0.014 285.82);
-    --muted: oklch(0.965 0.003 285.82);
-    --muted-foreground: oklch(0.556 0.014 285.82);
-    --accent: oklch(0.965 0.003 285.82);
-    --accent-foreground: oklch(0.205 0.014 285.82);
+    --secondary: oklch(0.9535 0.009 238.5);
+    --secondary-foreground: oklch(0.2643 0.0269 248.88);
+    --muted: oklch(0.9223 0.0138 238.58);
+    --muted-foreground: oklch(0.5032 0.0308 248.44);
+    --accent: oklch(0.9382 0.0083 238.49);
+    --accent-foreground: oklch(0.2643 0.0269 248.88);
     --destructive: oklch(0.577 0.245 27.33);
     --destructive-foreground: oklch(0.985 0 0);
     --success: oklch(0.527 0.154 150.07);
@@ -90,28 +90,28 @@
     --warning-foreground: oklch(0.205 0.014 285.82);
     --info: oklch(0.623 0.214 259.81);
     --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0.003 285.82);
-    --input: oklch(0.922 0.003 285.82);
-    --ring: oklch(0.708 0.014 285.82);
-    --radius: 0.5rem;
+    --border: oklch(0.8831 0.0196 238.68);
+    --input: oklch(0.8831 0.0196 238.68);
+    --ring: oklch(0.6101 0.1094 242.61);
+    --radius: 6px;
   }
 
   .dark {
     color-scheme: dark;
-    --background: oklch(0.145 0.014 285.82);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0.014 285.82);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0.014 285.82);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0.014 285.82);
-    --secondary: oklch(0.269 0.014 285.82);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0.014 285.82);
-    --muted-foreground: oklch(0.708 0.014 285.82);
-    --accent: oklch(0.269 0.014 285.82);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: oklch(0.221 0.012 251);
+    --foreground: oklch(0.926 0.009 239);
+    --card: oklch(0.266 0.014 245);
+    --card-foreground: oklch(0.926 0.009 239);
+    --popover: oklch(0.266 0.014 245);
+    --popover-foreground: oklch(0.926 0.009 239);
+    --primary: oklch(0.708 0.079 242);
+    --primary-foreground: oklch(0.221 0.012 251);
+    --secondary: oklch(0.302 0.017 245);
+    --secondary-foreground: oklch(0.926 0.009 239);
+    --muted: oklch(0.335 0.016 238);
+    --muted-foreground: oklch(0.747 0.022 241);
+    --accent: oklch(0.322 0.022 245);
+    --accent-foreground: oklch(0.926 0.009 239);
     --destructive: oklch(0.396 0.141 25.72);
     --destructive-foreground: oklch(0.985 0 0);
     --success: oklch(0.527 0.154 150.07);
@@ -120,9 +120,9 @@
     --warning-foreground: oklch(0.205 0.014 285.82);
     --info: oklch(0.623 0.214 259.81);
     --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.269 0.014 285.82);
-    --input: oklch(0.269 0.014 285.82);
-    --ring: oklch(0.439 0.014 285.82);
+    --border: oklch(0.388 0.022 247);
+    --input: oklch(0.388 0.022 247);
+    --ring: oklch(0.708 0.079 242);
   }
 }
 
@@ -136,6 +136,8 @@
     height: 100%;
     /* Safari 的状态栏/工具栏会采样页面边缘颜色，html 也要有底色，否则露出系统灰 */
     background: var(--background);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03", "tnum";
   }
 
   body {
@@ -183,6 +185,17 @@
     outline: none;
     box-shadow: none;
   }
+
+  button:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+.phone-dock [data-slot="composer"] {
+  border-radius: 6px;
+  box-shadow: none;
 }
 
 /* 固定整个应用来提供 iOS 状态栏底色；不能固定聊天列，否则会覆盖常驻侧栏。 */
@@ -605,4 +618,3 @@
     scale: 1;
   }
 }
-

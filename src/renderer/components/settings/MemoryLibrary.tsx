@@ -87,9 +87,9 @@ export function MemoryRows({
   emptyLabel?: string;
 }) {
   return (
-    <ul className="divide-y rounded-lg border">
+    <ul className="divide-y rounded-[6px] border">
       {items.length === 0 && (
-        <li className="px-3 py-6 text-sm text-muted-foreground">{emptyLabel}</li>
+        <li className="px-3 py-6 text-[13px] text-muted-foreground">{emptyLabel}</li>
       )}
       {items.map((item) => (
         <li key={item.id} className="flex items-center gap-2 px-3 py-2">
@@ -107,17 +107,17 @@ export function MemoryRows({
           >
             <span className="flex items-center gap-2">
               {item.isCrystal && <span title={t('Crystal')}>★</span>}
-              <span className="truncate text-sm">{item.title}</span>
+              <span className="truncate text-[13px]">{item.title}</span>
               <Badge variant="secondary">{item.unitType}</Badge>
               <ImportanceBadge importance={item.importance} t={t} />
               {item.lifecycleState === 'archived' && (
                 <Badge variant="outline">{t('Archived')}</Badge>
               )}
             </span>
-            <span className="line-clamp-2 text-muted-foreground text-xs">
+            <span className="line-clamp-2 text-muted-foreground text-[12px]">
               {item.contentSummary}
             </span>
-            <span className="block text-muted-foreground text-xs">
+            <span className="block text-muted-foreground text-[12px]">
               {formatDate(item.updatedAt)} · {item.spaceLabel} ·{' '}
               {t('{{count}} hits', { count: String(item.accessCount) })}
             </span>
@@ -172,21 +172,21 @@ export function PendingReviewSection({
   if (edges.length === 0) return null;
   return (
     <section className="space-y-2" data-settings-row="memory.review">
-      <h3 className="text-sm font-medium">{t('Needs review')}</h3>
-      <p className="text-xs text-muted-foreground">
+      <h3 className="text-[13px] font-medium">{t('Needs review')}</h3>
+      <p className="text-[12px] text-muted-foreground">
         {t(
           'Reviewing only records your judgement. Nothing is deleted and no memory is superseded.'
         )}
       </p>
       {edges.map((edge) => (
-        <div key={edge.id} className="space-y-1 rounded-lg border px-3 py-2">
+        <div key={edge.id} className="space-y-1 rounded-[6px] border px-3 py-2">
           <div className="flex items-center gap-2">
             <Badge variant="outline">{edge.relation}</Badge>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               {edge.olderId.slice(0, 8)} → {edge.newerId.slice(0, 8)}
             </span>
           </div>
-          {edge.reason && <p className="text-xs text-muted-foreground">{edge.reason}</p>}
+          {edge.reason && <p className="text-[12px] text-muted-foreground">{edge.reason}</p>}
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => onReview(edge.id, 'accepted')}>
               {t('Accept')}
@@ -214,19 +214,19 @@ export function PendingWritesSection({
   if (writes.length === 0) return null;
   return (
     <section className="space-y-2" data-settings-row="memory.pending-writes">
-      <h3 className="text-sm font-medium">{t('Memory writes awaiting approval')}</h3>
-      <p className="text-xs text-muted-foreground">
+      <h3 className="text-[13px] font-medium">{t('Memory writes awaiting approval')}</h3>
+      <p className="text-[12px] text-muted-foreground">
         {t('Bot members need your approval before writing to project or global memory.')}
       </p>
       {writes.map((write) => (
-        <div key={write.id} className="space-y-1 rounded-lg border px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div key={write.id} className="space-y-1 rounded-[6px] border px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
             {write.originLabel && <span className="text-foreground">{write.originLabel}</span>}
             <span>→ {write.spaceLabel}</span>
             {write.redacted && <span>· {t('Secrets redacted')}</span>}
           </div>
-          {write.title && <div className="text-sm font-medium">{write.title}</div>}
-          <p className="whitespace-pre-wrap text-xs">{write.content}</p>
+          {write.title && <div className="text-[13px] font-medium">{write.title}</div>}
+          <p className="whitespace-pre-wrap text-[12px]">{write.content}</p>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => onReview(write.id, 'approve')}>
               {t('Approve')}
@@ -405,8 +405,8 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
   return (
     <div className="space-y-4" data-settings-row="memory.library">
       <div>
-        <h3 className="text-sm font-medium">{t('Stored memories')}</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-[13px] font-medium">{t('Stored memories')}</h3>
+        <p className="text-[12px] text-muted-foreground">
           {t('Everything the agent has saved. Archiving hides a memory from search but keeps it.')}
         </p>
       </div>
@@ -487,7 +487,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
           </SelectPopup>
         </Select>
         {mode === 'exact' && (
-          <label className="flex items-center gap-2 text-muted-foreground text-sm">
+          <label className="flex items-center gap-2 text-muted-foreground text-[13px]">
             <Switch
               checked={includeArchived}
               onCheckedChange={(value) => {
@@ -501,7 +501,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       </div>
 
       {isMemoryRetrievalMode(mode) && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12px] text-muted-foreground">
           {t(
             mode === 'deep'
               ? 'Same recall as Fast, plus intent-weighted fusion and an optional short-timeout LLM rerank. Failures fall back; archived memories are excluded.'
@@ -512,8 +512,8 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       )}
 
       {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-accent/30 px-3 py-2">
-          <span className="text-sm">
+        <div className="flex items-center justify-between gap-3 rounded-[6px] border bg-accent/30 px-3 py-2">
+          <span className="text-[13px]">
             {t('{{count}} selected', { count: String(selected.size) })}
           </span>
           <div className="flex gap-2">
@@ -531,7 +531,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
             <button
               type="button"
               disabled={busy}
-              className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+              className="text-[12px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
               onClick={() => setConfirmBulkDelete(true)}
             >
               {t('Delete permanently')}
@@ -562,7 +562,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       />
 
       {!approximate && total > MEMORY_PAGE_SIZE && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-[12px] text-muted-foreground">
           <Button
             variant="outline"
             size="sm"
@@ -605,7 +605,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
               </DialogHeader>
 
               <DialogPanel className="space-y-4">
-                <p className="whitespace-pre-wrap text-sm">{detail.content}</p>
+                <p className="whitespace-pre-wrap text-[13px]">{detail.content}</p>
 
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                   <MetaField label={t('Importance')} value={detail.importance.toFixed(2)} />
@@ -623,7 +623,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
 
                 {detail.entityNames.length > 0 && (
                   <section className="space-y-1.5">
-                    <p className="font-medium text-xs">{t('Entities')}</p>
+                    <p className="font-medium text-[12px]">{t('Entities')}</p>
                     <div className="flex flex-wrap gap-1">
                       {detail.entityNames.map((name) => (
                         <Badge key={name} variant="secondary">
@@ -636,15 +636,15 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
 
                 {detail.crystalSources.length > 0 && (
                   <section className="space-y-1.5">
-                    <p className="font-medium text-xs">{t('Synthesized from')}</p>
-                    <ul className="divide-y rounded-lg border">
+                    <p className="font-medium text-[12px]">{t('Synthesized from')}</p>
+                    <ul className="divide-y rounded-[6px] border">
                       {detail.crystalSources.map((source) => (
                         <li
                           key={source.id}
                           className="flex items-center justify-between gap-2 px-3 py-2"
                         >
-                          <span className="truncate text-sm">{source.title}</span>
-                          <span className="shrink-0 text-muted-foreground text-xs">
+                          <span className="truncate text-[13px]">{source.title}</span>
+                          <span className="shrink-0 text-muted-foreground text-[12px]">
                             {(source.contributionWeight * 100).toFixed(0)}%
                           </span>
                         </li>
@@ -655,12 +655,12 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
 
                 {detail.evolves.length > 0 && (
                   <section className="space-y-1.5">
-                    <p className="font-medium text-xs">{t('Related versions')}</p>
-                    <ul className="divide-y rounded-lg border">
+                    <p className="font-medium text-[12px]">{t('Related versions')}</p>
+                    <ul className="divide-y rounded-[6px] border">
                       {detail.evolves.map((edge) => (
                         <li key={edge.id} className="flex items-center gap-2 px-3 py-2">
                           <Badge variant="outline">{edge.relation}</Badge>
-                          <span className="text-muted-foreground text-xs">{edge.reviewState}</span>
+                          <span className="text-muted-foreground text-[12px]">{edge.reviewState}</span>
                         </li>
                       ))}
                     </ul>
@@ -758,8 +758,8 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="truncate text-sm">{value}</dd>
+      <dt className="text-muted-foreground text-[12px]">{label}</dt>
+      <dd className="truncate text-[13px]">{value}</dd>
     </div>
   );
 }

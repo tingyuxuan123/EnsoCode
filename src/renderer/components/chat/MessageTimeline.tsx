@@ -1,4 +1,4 @@
-import { ArrowDown, LoaderCircle } from 'lucide-react';
+import { ArrowDown, FolderOpen, LoaderCircle } from 'lucide-react';
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import {
   Component,
@@ -23,7 +23,6 @@ import {
   type TimelineItem,
 } from '@/stores/sessions/timeline';
 import { useSettingsStore } from '@/stores/settings';
-import { EnsoMark } from './EnsoMark';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
@@ -36,9 +35,9 @@ import {
 } from './timelineRowOrigin';
 import { WelcomeSuggestions } from './WelcomeSuggestions';
 
-/** 消息列/输入区共用的列：阶梯 max-w + 水平 padding。padding 必须在列上而不是 @container 上，否则两侧查询宽度差 2rem，会在断点附近上下错位。默认到 4xl 保持原阅读宽度，更宽再逐级加档。 */
+/** 消息和输入共用阅读列；padding 放在列上，保持容器查询断点与两侧对齐。全宽模式仍由 enso-chat-wide 覆盖。 */
 export const CHAT_COL =
-  'enso-chat-col mx-auto w-full max-w-3xl px-4 @min-[60rem]:max-w-4xl @min-[80rem]:max-w-5xl @min-[100rem]:max-w-6xl @min-[120rem]:max-w-7xl';
+  'enso-chat-col mx-auto w-full max-w-[760px] px-[16px] @min-[36rem]:px-[24px]';
 
 /** 可作为一轮回复开头、挂身份头的行 */
 const REPLY_ROW_KINDS: ReadonlySet<TimelineItem['kind']> = new Set([
@@ -627,13 +626,17 @@ export function MessageTimeline({
       <div className="@container relative min-h-0 flex-1">
         <NavRail items={navItems} activeKey={activeNavKey} onJump={jumpTo} />
         {items.length === 0 && !busy ? (
-          <EmptyReveal className="flex h-full flex-col items-center justify-center gap-2 overflow-y-auto px-4 text-center">
-            <span className="t-stagger-line t-stagger-line--1 mb-3">
-              <span className="flex size-12 items-center justify-center rounded-2xl border border-border bg-card text-brand shadow-xs">
-                <EnsoMark className="size-6" />
-              </span>
+          <EmptyReveal
+            className={cn(
+              CHAT_COL,
+              'flex h-full flex-col items-start gap-[6px] overflow-y-auto pt-[40px] pb-[24px] text-left'
+            )}
+          >
+            <span className="t-stagger-line t-stagger-line--1 mb-[2px] flex items-center gap-[6px] text-[11px] text-muted-foreground">
+              <FolderOpen className="size-[14px] shrink-0" />
+              {t('New conversation')}
             </span>
-            <p className="t-stagger-line t-stagger-line--1 text-xl font-semibold tracking-tight">
+            <p className="t-stagger-line t-stagger-line--1 text-[22px] font-semibold tracking-tight">
               {emptyTitle}
             </p>
             {error ? (
@@ -650,12 +653,12 @@ export function MessageTimeline({
             ) : (
               <>
                 {emptyDescription !== '' && (
-                  <p className="t-stagger-line t-stagger-line--2 text-sm text-muted-foreground">
+                  <p className="t-stagger-line t-stagger-line--2 text-[13px] leading-[24px] text-muted-foreground">
                     {emptyDescription ?? t('Ask the agent…')}
                   </p>
                 )}
                 {onSuggestion && (
-                  <div className="t-stagger-line t-stagger-line--3 mt-5 w-full">
+                  <div className="t-stagger-line t-stagger-line--3 mt-[14px] w-full">
                     <WelcomeSuggestions onPick={onSuggestion} />
                   </div>
                 )}
@@ -817,7 +820,7 @@ function HistoryPageHeader({
   onLoadMore?: () => void;
 }) {
   const { t } = useI18n();
-  if (chrome === 'none') return <div className="h-6" />;
+  if (chrome === 'none') return <div className="h-[24px]" />;
   return (
     <div className={cn(CHAT_COL, 'flex items-center justify-center gap-2 py-3')}>
       {chrome === 'loading' ? (

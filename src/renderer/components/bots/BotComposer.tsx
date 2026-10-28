@@ -364,7 +364,7 @@ export function BotComposer({
     <div
       ref={rootRef}
       data-slot="composer"
-      className="relative rounded-2xl border bg-background shadow-float"
+      className="relative rounded-md border bg-background focus-within:border-brand/60"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -372,7 +372,7 @@ export function BotComposer({
       }}
     >
       {popup && items.length > 0 && (
-        <div className="absolute bottom-full left-3 z-10 mb-1.5 max-h-80 w-80 overflow-y-auto rounded-xl border bg-popover p-1 shadow-lg">
+        <div className="absolute bottom-full left-3 z-10 mb-1.5 max-h-80 w-80 overflow-y-auto rounded-md border bg-popover p-1 shadow-lg">
           {items.map((item, index) => {
             const section = SECTION[item.kind];
             const header = index === 0 || SECTION[items[index - 1].kind] !== section;
@@ -435,7 +435,7 @@ export function BotComposer({
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: 附件无稳定 id
               key={index}
-              className="group relative h-14 w-14 overflow-hidden rounded-lg border"
+              className="group relative h-14 w-14 overflow-hidden rounded-md border"
             >
               <img
                 src={`data:${image.mimeType};base64,${image.data}`}
@@ -490,10 +490,10 @@ export function BotComposer({
           event.preventDefault();
           ingest(files);
         }}
-        className="block max-h-56 min-h-12 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        className="block max-h-56 min-h-[52px] w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13.5px] leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60"
       />
 
-      <div className="flex items-center gap-1.5 px-2.5 pb-2">
+      <div className="flex items-center gap-1 px-2 pb-2">
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
@@ -530,7 +530,7 @@ export function BotComposer({
           <button
             type="button"
             onClick={onStop}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand text-brand-foreground"
             title={t('Stop')}
             aria-label={t('Stop')}
           >
@@ -541,7 +541,7 @@ export function BotComposer({
             type="button"
             disabled={!canSend}
             onClick={() => void submit()}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand text-brand-foreground disabled:opacity-40"
             title={t('Send')}
             aria-label={t('Send')}
           >

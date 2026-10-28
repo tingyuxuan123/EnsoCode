@@ -170,12 +170,12 @@ function SwitchRow({
 }) {
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+      className="flex items-center justify-between gap-[16px] py-[10px]"
       data-settings-row={rowId}
     >
       <div className="min-w-0">
-        <p className="text-sm">{title}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="text-[13px]">{title}</p>
+        <p className="text-[12px] text-muted-foreground">{description}</p>
       </div>
       <Switch
         checked={checked}
@@ -374,23 +374,23 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
     <div className="space-y-6" data-settings-row="memory.root">
       <section className="space-y-2">
         <h2 className="text-base font-medium">{t('Memory')}</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {t(
             'Durable knowledge the agent can search and write across sessions. Stored locally in a SQLite database.'
           )}
         </p>
         {/* 开关只在「内置工具」页：这一页本身就是 memory 工具启用后才出现的，
             在这里再放一个「关闭我自己」的开关，点下去整页消失，说明文字也永远看不到 */}
-        <p className="text-muted-foreground text-xs">{t('Turn memory off in Built-in tools.')}</p>
+        <p className="text-muted-foreground text-[12px]">{t('Turn memory off in Built-in tools.')}</p>
       </section>
 
       <div
-        className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+        className="flex items-center justify-between gap-[16px] py-[10px]"
         data-settings-row="memory.modelIdleMinutes"
       >
         <div className="min-w-0">
-          <p className="text-sm">{t('Unload automatically when idle')}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[13px]">{t('Unload automatically when idle')}</p>
+          <p className="text-[12px] text-muted-foreground">
             {t(
               'Release local model memory after this idle period. Models load automatically the next time they are needed.'
             )}
@@ -418,24 +418,24 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
       </div>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium">{t('Embedding model')}</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-[13px] font-medium">{t('Embedding model')}</h3>
+        <p className="text-[12px] text-muted-foreground">
           {t(
             'Used for semantic search and near-duplicate detection. Without it search still works using full-text only.'
           )}
         </p>
         <div
-          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+          className="flex items-center justify-between gap-[16px] py-[10px]"
           data-settings-row="memory.embeddingModel"
         >
           <div className="min-w-0">
-            <p className="text-sm">
+            <p className="text-[13px]">
               {selectedModel
                 ? embeddingModelLabel(selectedModel)
                 : (remoteEmbeddingModel ??
                   (showRemotePicker ? t('Remote (OpenAI-compatible)') : embeddingModel))}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               {selectedModel
                 ? [
                     selectedModel.dim ? `${selectedModel.dim}d` : null,
@@ -475,18 +475,18 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
 
         {selectedModel?.downloadable && (
           <div
-            className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+            className="flex items-center justify-between gap-[16px] py-[10px]"
             data-settings-row="memory.download"
           >
             <div className="min-w-0">
-              <p className="text-sm">
+              <p className="text-[13px]">
                 {selectedModel.state === 'ready'
                   ? t('Model downloaded')
                   : selectedModel.state === 'downloading'
                     ? t('Downloading…')
                     : t('Model not downloaded')}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] text-muted-foreground">
                 {progress && progress.modelId === selectedModel.id
                   ? `${progress.file} · ${formatBytes(progress.received)}${
                       progress.total ? ` / ${formatBytes(progress.total)}` : ''
@@ -540,12 +540,12 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
 
         {showRemotePicker && (
           <div
-            className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+            className="flex items-center justify-between gap-[16px] py-[10px]"
             data-settings-row="memory.remoteModel"
           >
             <div className="min-w-0">
-              <p className="text-sm">{t('Remote model')}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[13px]">{t('Remote model')}</p>
+              <p className="text-[12px] text-muted-foreground">
                 {t('Credentials stay in the main process and are never sent to the renderer.')}
               </p>
             </div>
@@ -586,11 +586,11 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
       </section>
 
       <section className="space-y-2" data-settings-row="memory.distillModel">
-        <h3 className="text-sm font-medium">{t('Distillation')}</h3>
-        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+        <h3 className="text-[13px] font-medium">{t('Distillation')}</h3>
+        <div className="flex items-center justify-between gap-[16px] py-[10px]">
           <div className="min-w-0">
-            <p className="text-sm">{t('Completion backend')}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px]">{t('Completion backend')}</p>
+            <p className="text-[12px] text-muted-foreground">
               {t('Local GGUF runs on this machine. Remote uses the model below.')}
             </p>
           </div>
@@ -615,19 +615,19 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         {selectedChatModel?.downloadable && (
           <div
             className={cn(
-              'flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5',
+              'flex items-center justify-between gap-[16px] py-[10px]',
               chatBlocked === 'missing' && 'border-destructive/50'
             )}
           >
             <div className="min-w-0">
-              <p className="text-sm">
+              <p className="text-[13px]">
                 {selectedChatModel.state === 'ready'
                   ? t('Model downloaded')
                   : selectedChatModel.state === 'downloading'
                     ? t('Downloading…')
                     : t('Model not downloaded')}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] text-muted-foreground">
                 {chatProgress && chatProgress.modelId === selectedChatModel.id
                   ? `${chatProgress.file} · ${formatBytes(chatProgress.received)}${
                       chatProgress.total ? ` / ${formatBytes(chatProgress.total)}` : ''
@@ -679,23 +679,23 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           </div>
         )}
         {chatBlocked === 'missing' && (
-          <p className="text-xs text-destructive">
+          <p className="text-[12px] text-destructive">
             {t(
               'Local model selected but the weights are not on disk. Distillation and interpretation will wait until you click Download.'
             )}
           </p>
         )}
         {chatBlocked === 'downloading' && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {t('Download in progress. Distillation waits until the model is ready.')}
           </p>
         )}
         {chatModel === 'remote' && (
           <>
-            <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+            <div className="flex items-center justify-between gap-[16px] py-[10px]">
               <div className="min-w-0">
-                <p className="text-sm">{t('Distillation model')}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[13px]">{t('Distillation model')}</p>
+                <p className="text-[12px] text-muted-foreground">
                   {t('Reads finished sessions and writes the memories.')}
                 </p>
               </div>
@@ -726,12 +726,12 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           </>
         )}
         <div
-          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+          className="flex items-center justify-between gap-[16px] py-[10px]"
           data-settings-row="memory.language"
         >
           <div className="min-w-0">
-            <p className="text-sm">{t('Memory language')}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px]">{t('Memory language')}</p>
+            <p className="text-[12px] text-muted-foreground">
               {t(
                 'English keeps retrieval and near-duplicate detection stable across languages. Choose Follow conversation if your team only works in one language.'
               )}
@@ -758,7 +758,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium">{t('Background processing')}</h3>
+        <h3 className="text-[13px] font-medium">{t('Background processing')}</h3>
         <SwitchRow
           rowId="memory.distill"
           title={t('Distill sessions automatically')}
@@ -770,7 +770,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           disabled={!memoryEnabled}
         />
         {distillEnabled && chatBlocked && (
-          <p className="text-xs text-destructive">
+          <p className="text-[12px] text-destructive">
             {t(
               'Automatic distillation is on, but the local model is not ready. Sessions will queue until you download it.'
             )}
@@ -789,13 +789,13 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
       </section>
 
       <section className="space-y-2" data-settings-row="memory.stats">
-        <h3 className="text-sm font-medium">{t('Library')}</h3>
+        <h3 className="text-[13px] font-medium">{t('Library')}</h3>
         {stats === null || stats.total === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('No memories stored yet.')}</p>
+          <p className="text-[12px] text-muted-foreground">{t('No memories stored yet.')}</p>
         ) : (
           <>
             {embeddingErrorNotice(stats) && (
-              <p className="text-xs text-destructive">
+              <p className="text-[12px] text-destructive">
                 {t('Vectors unavailable: {{reason}}', {
                   reason: embeddingErrorNotice(stats) ?? '',
                 })}
@@ -813,7 +813,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
                     <button
                       type="button"
                       disabled={backfilling}
-                      className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                      className="text-[12px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
                       onClick={() => {
                         setBackfilling(true);
                         void window.electronAPI.memory.reembed().then(() => loadRef.current?.());
@@ -833,7 +833,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
 
       <section className="space-y-2" data-settings-row="memory.distillSessions">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-medium">{t('Distill past sessions')}</h3>
+          <h3 className="text-[13px] font-medium">{t('Distill past sessions')}</h3>
           {pendingSessions.length > 0 && (
             <Button
               size="sm"
@@ -847,13 +847,13 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             </Button>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12px] text-muted-foreground">
           {t(
             'The automatic switch only covers sessions that end from now on. Distill earlier sessions here to fill the library.'
           )}
         </p>
         {batch && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {t('{{done}}/{{total}} done', {
               done: String(batch.done),
               total: String(batch.total),
@@ -867,16 +867,16 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           </p>
         )}
         {groups.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{t('No recorded sessions found.')}</p>
+          <p className="text-muted-foreground text-[13px]">{t('No recorded sessions found.')}</p>
         ) : (
-          <ul className="divide-y rounded-lg border">
+          <ul className="divide-y rounded-[6px] border">
             {groups.map((group) => {
               const groupPending = group.sessions.filter((s) => !s.distilled);
               return (
                 <li key={group.key} className="flex items-center justify-between gap-3 px-3 py-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{group.name}</p>
-                    <p className="text-muted-foreground text-xs">
+                    <p className="truncate text-[13px]">{group.name}</p>
+                    <p className="text-muted-foreground text-[12px]">
                       {t('{{total}} sessions · {{pending}} not distilled', {
                         total: String(group.sessions.length),
                         pending: String(groupPending.length),
@@ -922,15 +922,15 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
                 </DialogDescription>
               </DialogHeader>
               <DialogPanel>
-                <ul className="divide-y rounded-lg border">
+                <ul className="divide-y rounded-[6px] border">
                   {sessionsOf.sessions.map((session) => (
                     <li
                       key={session.sessionId}
                       className="flex items-center justify-between gap-3 px-3 py-2"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm">{session.title}</p>
-                        <p className="text-muted-foreground text-xs">
+                        <p className="truncate text-[13px]">{session.title}</p>
+                        <p className="text-muted-foreground text-[12px]">
                           {session.updatedAt ? session.updatedAt.slice(0, 10) : ''}
                           {session.distilled ? ` · ${t('Already distilled')}` : ''}
                         </p>
@@ -1022,7 +1022,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
 
       <section className="space-y-2" data-settings-row="memory.jobs">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-medium text-sm">{t('Background tasks')}</h3>
+          <h3 className="font-medium text-[13px]">{t('Background tasks')}</h3>
           <div className="flex shrink-0 items-center gap-1">
             {jobRows.some((row) => row.state !== 'running') && (
               <Button
@@ -1048,19 +1048,19 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           </div>
         </div>
         {jobRows.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{t('Nothing running.')}</p>
+          <p className="text-muted-foreground text-[13px]">{t('Nothing running.')}</p>
         ) : (
-          <ul className="divide-y rounded-lg border">
+          <ul className="divide-y rounded-[6px] border">
             {(allJobs ? jobRows : jobRows.slice(0, VISIBLE_JOBS)).map((row) => (
               <li key={row.key} className="space-y-1 px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Badge variant={row.state === 'failed' ? 'destructive' : 'secondary'}>
                     {t(JOB_KIND_LABELS[row.kind])}
                   </Badge>
-                  <span className="min-w-0 flex-1 truncate text-sm">{row.target}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px]">{row.target}</span>
                   <span
                     className={cn(
-                      'shrink-0 text-xs',
+                      'shrink-0 text-[12px]',
                       row.state === 'failed' ? 'text-destructive' : 'text-muted-foreground'
                     )}
                   >
@@ -1068,7 +1068,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
                   </span>
                 </div>
                 {row.notes.map((note) => (
-                  <p key={note} className="pl-1 text-muted-foreground text-xs">
+                  <p key={note} className="pl-1 text-muted-foreground text-[12px]">
                     · {note}
                   </p>
                 ))}
@@ -1091,10 +1091,10 @@ function Stat({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border px-3 py-2">
-      <p className="text-muted-foreground text-xs">{label}</p>
+    <div className="rounded-[6px] border px-3 py-2">
+      <p className="text-muted-foreground text-[12px]">{label}</p>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm">{value}</p>
+        <p className="text-[13px]">{value}</p>
         {action}
       </div>
     </div>

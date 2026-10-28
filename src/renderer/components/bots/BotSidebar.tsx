@@ -291,10 +291,10 @@ export function BotSidebar({
       className="flex shrink-0 flex-col overflow-hidden border-t border-r bg-nav"
       style={{ width }}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-2">
         <SectionHeader title={t('Group chats')} onAdd={onNewGroup} addLabel={t('New group chat')} />
         {groups.length === 0 && (
-          <p className="px-4 py-1 text-muted-foreground text-xs">{t('No group chats yet')}</p>
+          <p className="px-2 py-1 text-[11px] text-muted-foreground">{t('No group chats yet')}</p>
         )}
         {groups.map(({ chat, summary }) => (
           <ChatContextMenu
@@ -325,7 +325,7 @@ export function BotSidebar({
 
         <SectionHeader title={t('Members')} onAdd={onNewMember} addLabel={t('New member')} />
         {members.length === 0 && (
-          <p className="px-4 py-1 text-muted-foreground text-xs">{t('No members yet')}</p>
+          <p className="px-2 py-1 text-[11px] text-muted-foreground">{t('No members yet')}</p>
         )}
         {members.map(({ bot, row }) => (
           <ChatContextMenu
@@ -587,7 +587,7 @@ export function CountBadge({ count, className }: { count: number; className?: st
   return (
     <span
       className={cn(
-        'min-w-4 rounded-full bg-destructive px-1 text-center font-medium text-[10px] text-white leading-4',
+        'min-w-4 rounded-full bg-destructive px-1 text-center font-medium text-[10px] text-destructive-foreground leading-4',
         className
       )}
     >
@@ -681,7 +681,7 @@ function SectionHeader({
   onToggle?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 pt-3 pb-1 text-[11px] text-muted-foreground">
+    <div className="flex items-center justify-between px-2 pt-2 pb-1 text-[11px] text-muted-foreground">
       {onToggle ? (
         <button type="button" onClick={onToggle} className="hover:text-foreground">
           {title}
@@ -738,7 +738,7 @@ function ChatRow({
         if (event.key === 'Enter') rest.onClick?.(event as never);
       }}
       className={cn(
-        'mx-1.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-colors',
+        'flex cursor-default items-start gap-2 rounded-md px-2 py-1.5 transition-colors',
         active ? 'bg-brand/10 dark:bg-brand/15' : 'hover:bg-muted',
         className
       )}
@@ -746,18 +746,18 @@ function ChatRow({
       {avatar}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="min-w-0 truncate font-medium text-sm">{title}</span>
+          <span className={cn('min-w-0 truncate text-[13px]', active && 'font-medium')}>{title}</span>
           {pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
           <span className="flex-1" />
           {pending > 0 ? (
             <CountBadge count={pending} />
           ) : (
-            meta && <span className="shrink-0 text-[11px] text-muted-foreground">{meta}</span>
+            meta && <span className="shrink-0 text-[10px] text-muted-foreground">{meta}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">{preview}</span>
-          {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-info" />}
+          <span className="mt-0.5 min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{preview}</span>
+          {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-info" />}
           {action && (
             <button
               type="button"

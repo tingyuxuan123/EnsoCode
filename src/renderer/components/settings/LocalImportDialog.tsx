@@ -113,7 +113,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
           <DialogPanel>
             <div className="flex flex-col items-center gap-3 py-12">
               <Spinner className="size-5" />
-              <p className="text-sm text-muted-foreground">{t('Scanning local apps...')}</p>
+              <p className="text-[13px] text-muted-foreground">{t('Scanning local apps...')}</p>
             </div>
           </DialogPanel>
         )}
@@ -122,7 +122,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
           <DialogPanel>
             <div className="flex flex-col items-center gap-3 py-12">
               <CircleAlert className="h-5 w-5 text-destructive" />
-              <p className="text-sm text-muted-foreground">{t('Scan failed')}</p>
+              <p className="text-[13px] text-muted-foreground">{t('Scan failed')}</p>
               <Button variant="outline" size="sm" onClick={runScan}>
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                 {t('Rescan')}
@@ -135,9 +135,9 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
           <>
             <DialogPanel className="max-h-[50vh] space-y-4">
               {foundApps.length === 0 && (
-                <div className="rounded-md border border-dashed px-3 py-6 text-center">
-                  <p className="text-sm font-medium">{t('No local apps detected')}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                <div className="rounded-[6px] border border-dashed px-3 py-6 text-center">
+                  <p className="text-[13px] font-medium">{t('No local apps detected')}</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
                     {t(
                       'Supported: Claude Code, Codex, CC Switch, Alma, Cherry Studio, Hermes, OpenClaw, Grok CLI, Cursor'
                     )}
@@ -148,7 +148,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
               {[...candidatesByApp.entries()].map(([appName, candidates]) => (
                 <div key={appName}>
                   <div className="mb-1 flex items-baseline gap-2 px-1">
-                    <span className="text-xs font-medium text-muted-foreground">{appName}</span>
+                    <span className="text-[12px] font-medium text-muted-foreground">{appName}</span>
                     <span className="truncate text-[11px] text-muted-foreground/60">
                       {scan.apps.find((app) => app.appName === appName)?.configPath}
                     </span>
@@ -158,7 +158,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
                       <label
                         key={candidate.id}
                         className={cn(
-                          'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
+                          'flex cursor-pointer items-center gap-2.5 rounded-[6px] px-2 py-1.5 transition-colors hover:bg-accent/50',
                           candidate.duplicated && 'opacity-60'
                         )}
                       >
@@ -167,7 +167,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
                           onCheckedChange={() => toggle(candidate.id)}
                         />
                         <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="shrink-0 text-sm font-medium">{candidate.name}</span>
+                          <span className="shrink-0 text-[13px] font-medium">{candidate.name}</span>
                           <Badge variant="outline" className="shrink-0 text-[11px]">
                             {candidate.api}
                           </Badge>
@@ -176,7 +176,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
                               {t('Already exists')}
                             </Badge>
                           )}
-                          <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground">
+                          <span className="min-w-0 flex-1 truncate text-right text-[12px] text-muted-foreground">
                             {[
                               candidate.baseUrl,
                               candidate.apiKeyMasked,
@@ -195,7 +195,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
               ))}
 
               {foundApps.length > 0 && scan.candidates.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">
+                <p className="py-6 text-center text-[13px] text-muted-foreground">
                   {t('No importable providers found')}
                 </p>
               )}
@@ -219,7 +219,7 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
                 </Button>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[12px] text-muted-foreground">
                   {t('{{count}} selected', { count: checked.size })}
                 </span>
                 <Button size="sm" disabled={checked.size === 0} onClick={handleImport}>
@@ -235,12 +235,12 @@ export function LocalImportDialog({ open, onOpenChange }: LocalImportDialogProps
           <>
             <DialogPanel className="max-h-[50vh] space-y-3">
               {importedIds.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
+                <p className="py-6 text-center text-[13px] text-muted-foreground">
                   {t('No new providers imported')}
                 </p>
               ) : (
                 <>
-                  <p className="px-1 text-xs text-muted-foreground">
+                  <p className="px-1 text-[12px] text-muted-foreground">
                     {t('Fetch models for each provider, then enable the ones you want.')}
                   </p>
                   {importedIds.map((id) => (
@@ -303,9 +303,9 @@ function ProviderModelSection({ providerId }: { providerId: string }) {
     : provider.models;
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-[6px] border">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider.name}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{provider.name}</span>
         <Badge variant="outline" className="shrink-0 text-[11px]">
           {provider.api}
         </Badge>
@@ -328,7 +328,7 @@ function ProviderModelSection({ providerId }: { providerId: string }) {
           {t('Fetch models')}
         </Button>
       </div>
-      {error && <p className="px-3 py-2 text-xs text-destructive">{error}</p>}
+      {error && <p className="px-3 py-2 text-[12px] text-destructive">{error}</p>}
       {provider.models.length > 0 && (
         <>
           <div className="border-b p-1.5">
@@ -336,7 +336,7 @@ function ProviderModelSection({ providerId }: { providerId: string }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('Filter models...')}
-              className="h-7 text-xs"
+              className="h-7 text-[12px]"
             />
           </div>
           <div className="max-h-40 space-y-0.5 overflow-y-auto p-1.5">
@@ -349,17 +349,17 @@ function ProviderModelSection({ providerId }: { providerId: string }) {
                   checked={model.enabled !== false}
                   onCheckedChange={() => toggleModel(model.id)}
                 />
-                <span className="min-w-0 flex-1 truncate text-sm">{model.id}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px]">{model.id}</span>
               </label>
             ))}
             {filtered.length === 0 && (
-              <p className="px-1.5 py-2 text-xs text-muted-foreground">{t('No models match')}</p>
+              <p className="px-1.5 py-2 text-[12px] text-muted-foreground">{t('No models match')}</p>
             )}
           </div>
         </>
       )}
       {provider.models.length === 0 && !error && (
-        <p className="px-3 py-2 text-xs text-muted-foreground">{t('No models yet')}</p>
+        <p className="px-3 py-2 text-[12px] text-muted-foreground">{t('No models yet')}</p>
       )}
     </div>
   );

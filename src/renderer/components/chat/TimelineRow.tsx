@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  CircleCheck,
   ClipboardCheck,
   ClipboardList,
   Copy,
@@ -340,7 +341,7 @@ function SkillTag({ name, content }: { name: string; content: string }) {
 
 function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
   return (
-    <div className="max-w-[80%] rounded-lg bg-accent/70 px-4 py-2.5 text-sm">
+    <div className="max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[14px] leading-[24px]">
       {chip}
       {extra ? <span className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</span> : null}
     </div>
@@ -505,7 +506,8 @@ function MentionRefChips({
   );
 }
 
-export const USER_BUBBLE = 'max-w-[80%] rounded-lg bg-accent/70 px-4 py-2.5 text-sm';
+export const USER_BUBBLE =
+  'max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[14px] leading-[24px]';
 
 /**
  * 用户消息长文折叠（对齐 ZCode）：超过 120px 时裁切并用遮罩渐隐，气泡底部居中一个圆形展开按钮。
@@ -719,12 +721,12 @@ function UserText({
     <div
       className={cn(
         fromMain
-          ? 'max-w-[80%] rounded-2xl rounded-bl-md border border-blue-500/20 bg-blue-500/8 px-4 py-2.5 text-sm'
+          ? 'max-w-[86%] rounded-[6px] border border-primary/20 bg-primary/8 px-[16px] py-[10px] text-[14px] leading-[24px]'
           : USER_BUBBLE
       )}
     >
       {fromMain && (
-        <p className="mb-1 flex items-center gap-1 text-[10px] font-medium tracking-wide text-blue-600 uppercase dark:text-blue-400">
+        <p className="mb-1 flex items-center gap-1 text-[11px] font-medium text-primary">
           <Bot className="h-3 w-3" />
           {t('From main agent')}
         </p>
@@ -754,7 +756,7 @@ export function isNestedRow(item: TimelineItem): boolean {
 export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
   const speaker = useChatHost()?.speaker;
   return (
-    <div className="mb-2 flex h-6 min-w-0 items-center gap-2 text-xs select-none">
+    <div className="mb-[8px] flex min-h-[20px] min-w-0 items-center gap-[8px] text-[12px] select-none">
       {speaker ? (
         speaker.image ? (
           <img
@@ -773,18 +775,14 @@ export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
           </span>
         )
       ) : (
-        <span className="flex size-[22px] shrink-0 items-center justify-center rounded-[7px] border border-brand/20 bg-brand/8 text-brand dark:bg-brand/14">
-          <EnsoMark className="size-3.5" />
+        <span className="flex size-[17px] shrink-0 items-center justify-center text-foreground">
+          <EnsoMark className="size-[17px]" />
         </span>
       )}
-      <span className="shrink-0 truncate text-[13px] font-semibold text-foreground">
+      <span className="shrink-0 truncate font-medium text-foreground">
         {speaker?.name ?? 'Enso'}
       </span>
-      {model && (
-        <span className="min-w-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-          {model}
-        </span>
-      )}
+      {model && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{model}</span>}
       {typeof at === 'number' && (
         <span className="shrink-0 text-[11px] text-muted-foreground">{formatClock(at)}</span>
       )}
@@ -1320,7 +1318,12 @@ function UserMeta({
   const { t } = useI18n();
   const autoCollapseTurns = useSettingsStore((s) => s.autoCollapseTurns);
   return (
-    <div className="flex items-center gap-2 text-[11px] text-muted-foreground/75 select-none">
+    <div
+      className={cn(
+        'flex min-h-[24px] items-center gap-2 text-[11px] text-faint transition-opacity select-none',
+        !deliveryState && 'opacity-0 group-hover/user:opacity-100 focus-within:opacity-100'
+      )}
+    >
       <RewindButton messageIndex={messageIndex} />
       <WithdrawButton messageIndex={messageIndex} />
       {deliveryState && (
@@ -1361,7 +1364,7 @@ function TextRow({
   const host = useChatHost();
   const perfStr = item.perf ? formatPerf(item.perf, t, item.turnDurationMs !== undefined) : '';
   return (
-    <div className="group text-sm">
+    <div className="group text-[15px] leading-[27px] [&_h1]:text-[18px] [&_h2]:text-[18px] [&_h3]:text-[16px]">
       <Markdown
         text={item.text}
         streaming={item.streaming}
@@ -1376,7 +1379,7 @@ function TextRow({
           <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
         ))}
       {!item.streaming && (
-        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="mt-[12px] flex min-h-[24px] items-center gap-2 text-[11px] text-faint opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           <CopyButton text={item.text} />
           {item.turnEnd && <ForkButton messageIndex={Number(item.key.split('-')[0])} />}
           {item.timestamp && <span>{formatClock(item.timestamp)}</span>}
@@ -1741,8 +1744,19 @@ function WorklogHead({
     <div
       data-worklog-head=""
       data-worklog-status={worklog.status}
-      className="flex w-full items-center gap-2 border-b border-border/50 pb-2 text-[13px] text-muted-foreground"
+      className="flex w-full items-center gap-[8px] text-[12px] text-muted-foreground"
     >
+      {worklog.status === 'running' ? (
+        <LoaderCircle className="size-[14px] shrink-0 animate-spin text-primary" aria-hidden />
+      ) : (
+        <CircleCheck
+          className={cn(
+            'size-[14px] shrink-0',
+            worklog.status === 'failed' ? 'text-destructive' : 'text-success'
+          )}
+          aria-hidden
+        />
+      )}
       {worklog.forced ? (
         <div className="inline-flex min-w-0 items-center gap-1.5">{label}</div>
       ) : (

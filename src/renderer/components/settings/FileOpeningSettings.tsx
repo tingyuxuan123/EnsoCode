@@ -180,16 +180,16 @@ export function FileOpeningSettings() {
   return (
     <section className="space-y-3" data-settings-row="general.fileOpening">
       <div>
-        <h4 className="text-sm font-medium">{t('File opening')}</h4>
-        <p className="text-xs text-muted-foreground">
+        <h4 className="text-[13px] font-medium">{t('File opening')}</h4>
+        <p className="text-[12px] text-muted-foreground">
           {t('Configure how local workspace file links open by extension.')}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12px] text-muted-foreground">
           {t(
             'By default, supported files open inside EnsoCode; other files are revealed in the file manager.'
           )}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12px] text-muted-foreground">
           {t('Executable and installer files are always revealed in the file manager.')}
         </p>
       </div>
@@ -197,9 +197,9 @@ export function FileOpeningSettings() {
       {rules.map((rule) => (
         <div
           key={rule.extension}
-          className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+          className="flex flex-wrap items-center gap-2 rounded-[6px] border px-3 py-2"
         >
-          <span className="w-20 shrink-0 font-mono text-sm">{rule.extension}</span>
+          <span className="w-20 shrink-0 font-mono text-[13px]">{rule.extension}</span>
           <TargetPicker
             extension={rule.extension}
             value={rule.target}
@@ -213,7 +213,7 @@ export function FileOpeningSettings() {
           {rule.target === 'application' && !isExternalFileOpenBlocked(`file${rule.extension}`) && (
             <>
               <span
-                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground"
                 title={rule.applicationPath}
               >
                 {rule.applicationPath}
@@ -238,7 +238,7 @@ export function FileOpeningSettings() {
           </Button>
         </div>
       ))}
-      <div className="space-y-2 rounded-md border p-3">
+      <div className="space-y-2 rounded-[6px] border p-3">
         <div className="flex flex-wrap items-center gap-2">
           <Input
             className="w-24"
@@ -284,7 +284,7 @@ export function FileOpeningSettings() {
                 {t('Choose application')}
               </Button>
               <span
-                className="min-w-0 truncate text-xs text-muted-foreground"
+                className="min-w-0 truncate text-[12px] text-muted-foreground"
                 title={applicationPath}
               >
                 {applicationPath}
@@ -292,7 +292,7 @@ export function FileOpeningSettings() {
             </div>
           )}
         {error && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-[12px] text-destructive">
             {error}
           </p>
         )}

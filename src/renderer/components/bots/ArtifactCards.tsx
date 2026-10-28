@@ -152,7 +152,7 @@ function MediaStrip({ target, media }: { target: BotArtifactTarget; media: BotMe
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: 失败项没有 mediaId，顺序即身份
               key={`failed-${index}`}
-              className="flex w-40 flex-col gap-1 rounded-lg border border-destructive/60 border-dashed p-2 text-destructive text-xs"
+              className="flex w-40 flex-col gap-1 rounded-md border border-destructive/60 border-dashed p-2 text-destructive text-xs"
             >
               <span className="flex items-center gap-1 font-medium">
                 <ImageOff className="h-3.5 w-3.5 shrink-0" />
@@ -200,7 +200,7 @@ function MediaThumb({
       type="button"
       title={title}
       onClick={onOpen}
-      className="relative h-24 w-36 overflow-hidden rounded-lg border bg-muted"
+      className="relative h-24 w-36 overflow-hidden rounded-md border bg-muted"
     >
       {content?.ok && content.kind === 'image' ? (
         <img src={content.dataUrl} alt={title} className="h-full w-full object-cover" />
@@ -284,7 +284,7 @@ function FileCards({ target, artifacts }: { target: BotArtifactTarget; artifacts
           <div
             key={artifact.rel}
             data-slot="bot-card"
-            className="group/artifact flex max-w-64 items-center gap-1 rounded-lg border bg-card py-1 pr-1 pl-2 text-xs"
+            className="group/artifact flex max-w-64 items-center gap-1 rounded-md border bg-card py-1 pr-1 pl-2 text-xs"
           >
             <button
               type="button"

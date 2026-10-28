@@ -35,9 +35,9 @@ export function RankingTable({
   const overflow = rows.length > limit;
   const visible = overflow && !expanded ? rows.slice(0, limit) : rows;
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-[6px] border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-medium">{title}</span>
+        <span className="text-[13px] font-medium">{title}</span>
         {overflow && (
           <span className="text-[11px] text-muted-foreground">
             {expanded
@@ -47,9 +47,9 @@ export function RankingTable({
         )}
       </div>
       {visible.length === 0 ? (
-        <p className="py-6 text-center text-xs text-muted-foreground">{emptyLabel}</p>
+        <p className="py-6 text-center text-[12px] text-muted-foreground">{emptyLabel}</p>
       ) : (
-        <table className="w-full text-xs">
+        <table className="w-full text-[12px]">
           <thead>
             <tr className="text-[11px] text-muted-foreground">
               <th className="pb-2 text-left font-normal">{t('Name')}</th>

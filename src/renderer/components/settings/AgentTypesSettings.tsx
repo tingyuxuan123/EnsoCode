@@ -44,11 +44,11 @@ export function AgentTypesSettings() {
   return (
     <div className="space-y-6">
       <div data-settings-row="agents.root">
-        <h3 className="font-medium text-lg">
+        <h3 className="font-semibold text-[18px]">
           {t('Agent types')}
           <NewSessionBadge />
         </h3>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-[13px]">
           {t(
             'Custom subagent presets: system prompt, model and toolset. The agent picks one via the agent_type parameter.'
           )}
@@ -56,9 +56,9 @@ export function AgentTypesSettings() {
       </div>
       <MaxActiveCoworkersRow />
       {!hasSubagentModels && (
-        <Alert variant="warning" className="text-xs">
+        <Alert variant="warning" className="text-[12px]">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-xs text-foreground/90">
+          <AlertDescription className="text-[12px] text-foreground/90">
             {t('Subagent models not configured warning')}
           </AlertDescription>
           <AlertAction>
@@ -66,7 +66,7 @@ export function AgentTypesSettings() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-7 shrink-0 gap-1 px-2.5 text-xs bg-background/80 hover:bg-background"
+              className="h-7 shrink-0 gap-1 px-2.5 text-[12px] bg-background/80 hover:bg-background"
               onClick={() => {
                 void window.electronAPI.window.summonAgent({
                   typeKey: ENSO_AGENT_TYPE_KEY,
@@ -96,12 +96,12 @@ function MaxActiveCoworkersRow() {
   const setMaxActiveCoworkers = useSettingsStore((state) => state.setMaxActiveCoworkers);
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
+      className="flex items-center justify-between gap-[16px] py-[10px]"
       data-settings-row="agents.maxActiveCoworkers"
     >
       <div className="min-w-0">
-        <p className="text-sm">{t('Max active coworkers')}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px]">{t('Max active coworkers')}</p>
+        <p className="text-[12px] text-muted-foreground">
           {t(
             'How many coworkers one conversation can keep at once. Existing ones stay if you lower the limit; hire more only after dismissing. Subagents are not counted.'
           )}
@@ -149,43 +149,43 @@ export function AgentTypeList({ hasSubagentModels = true }: { hasSubagentModels?
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5">
+      <div className="flex items-center gap-3 rounded-[6px] border border-primary/20 bg-primary/5 px-3 py-2.5">
         <Bot className="h-4 w-4 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-medium">
+          <p className="flex items-center gap-2 text-[13px] font-medium">
             Enso
             <Badge variant="secondary">{t('System')}</Badge>
             <Badge variant="outline">{t('Locked')}</Badge>
           </p>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[12px]">
             {t('Inherits the conversation model and provides product capabilities')}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+      <div className="flex items-center gap-3 rounded-[6px] border px-3 py-2.5">
         <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-medium">
+          <p className="flex items-center gap-2 text-[13px] font-medium">
             general
             <Badge variant="secondary">{t('Built-in')}</Badge>
           </p>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[12px]">
             {t('Follows the conversation model, full toolset')}
           </p>
         </div>
       </div>
 
       {BUILTIN_AGENT_TYPES.filter((type) => !overriddenNames.has(type.name)).map((type) => (
-        <div key={type.name} className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+        <div key={type.name} className="flex items-center gap-3 rounded-[6px] border px-3 py-2.5">
           <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-sm font-medium">
+            <p className="flex items-center gap-2 text-[13px] font-medium">
               {type.name}
               <Badge variant="secondary">{t('Built-in')}</Badge>
               {type.tools === 'readonly' && <Badge variant="outline">{t('Read-only')}</Badge>}
             </p>
-            <p className="truncate text-muted-foreground text-xs">{type.description}</p>
+            <p className="truncate text-muted-foreground text-[12px]">{type.description}</p>
             <p className="text-muted-foreground/80 text-[11px] mt-0.5">
               {hasSubagentModels
                 ? t('Picked by main agent')
@@ -216,17 +216,17 @@ export function AgentTypeList({ hasSubagentModels = true }: { hasSubagentModels?
         const thinkingChoice = mode === 'fixed' ? thinkingChoiceOf(entry) : '';
 
         return (
-          <div key={entry.id} className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+          <div key={entry.id} className="flex items-center gap-3 rounded-[6px] border px-3 py-2.5">
             <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 truncate text-sm font-medium">
+              <p className="flex items-center gap-2 truncate text-[13px] font-medium">
                 {entry.name}
                 {BUILTIN_AGENT_TYPES.some(
                   (type) => type.name === entry.name.trim().toLowerCase()
                 ) && <Badge variant="secondary">{t('Overrides built-in')}</Badge>}
                 {entry.tools === 'readonly' && <Badge variant="outline">{t('Read-only')}</Badge>}
               </p>
-              <p className="truncate text-muted-foreground text-xs">
+              <p className="truncate text-muted-foreground text-[12px]">
                 {modeLabel}
                 {thinkingChoice
                   ? ` · ${t('Thinking level')}: ${thinkingChoice === 'off' ? t('Off') : thinkingChoice}`
@@ -247,7 +247,7 @@ export function AgentTypeList({ hasSubagentModels = true }: { hasSubagentModels?
       <button
         type="button"
         onClick={() => setEditing('new')}
-        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+        className="flex w-full items-center justify-center gap-1.5 rounded-[6px] border border-dashed px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
       >
         <Plus className="h-4 w-4" />
         {t('New agent type')}
@@ -365,7 +365,7 @@ export function AgentTypeEditDialog({
             <FieldLabel>{t('Name (slug)')}</FieldLabel>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="scout" />
             {!isCustomAgentTypeNameAllowed(name) && name.trim() && (
-              <p className="text-destructive text-xs">{t('This Agent name is reserved')}</p>
+              <p className="text-destructive text-[12px]">{t('This Agent name is reserved')}</p>
             )}
           </Field>
           <Field>
@@ -382,7 +382,7 @@ export function AgentTypeEditDialog({
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               rows={5}
-              className="w-full rounded-md border bg-transparent px-2.5 py-1.5 font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded-[6px] border bg-transparent px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-1 focus:ring-ring"
               placeholder={t('You are a fast recon agent. Explore, never modify…')}
             />
           </Field>

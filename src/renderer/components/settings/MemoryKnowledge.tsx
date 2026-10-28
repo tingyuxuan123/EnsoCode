@@ -128,8 +128,8 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
   return (
     <div className="space-y-4" data-settings-row="memory.knowledge">
       <div>
-        <h3 className="font-medium text-sm">{t('Knowledge')}</h3>
-        <p className="text-muted-foreground text-xs">
+        <h3 className="font-medium text-[13px]">{t('Knowledge')}</h3>
+        <p className="text-muted-foreground text-[12px]">
           {t(
             'Browse what the agent knows as a graph or a tree, ask for an interpretation, and consolidate related memories into a crystal.'
           )}
@@ -176,7 +176,7 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
           <>
             <span
               className={cn(
-                'text-xs',
+                'text-[12px]',
                 enoughForCrystal ? 'text-foreground' : 'text-muted-foreground'
               )}
             >
@@ -238,9 +238,9 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
           </DialogHeader>
           <DialogPanel>
             {insight?.ok ? (
-              <p className="whitespace-pre-wrap text-sm">{insight.text}</p>
+              <p className="whitespace-pre-wrap text-[13px]">{insight.text}</p>
             ) : (
-              <p className="text-destructive text-sm">{insight?.error}</p>
+              <p className="text-destructive text-[13px]">{insight?.error}</p>
             )}
           </DialogPanel>
           <DialogFooter>
@@ -259,15 +259,15 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
           </DialogHeader>
           <DialogPanel className="space-y-3">
             {crystal?.ok ? (
-              <p className="whitespace-pre-wrap text-sm">{crystal.content}</p>
+              <p className="whitespace-pre-wrap text-[13px]">{crystal.content}</p>
             ) : (
               <>
-                <p className="text-destructive text-sm">{crystal?.error}</p>
+                <p className="text-destructive text-[13px]">{crystal?.error}</p>
                 {crystal?.candidates && crystal.candidates.length > 0 && (
-                  <ul className="divide-y rounded-lg border">
+                  <ul className="divide-y rounded-[6px] border">
                     {crystal.candidates.map((c) => (
                       <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                        <span className="truncate text-sm">{c.title}</span>
+                        <span className="truncate text-[13px]">{c.title}</span>
                         <Badge variant="secondary">{(c.similarity * 100).toFixed(0)}%</Badge>
                       </li>
                     ))}

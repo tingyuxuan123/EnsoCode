@@ -265,12 +265,12 @@ export function SessionDrawer({
       >
         <div
           className={cn(
-            'flex h-12 shrink-0 items-center justify-between px-3 pt-safe',
+            'flex min-h-[48px] shrink-0 items-center justify-between px-3 pt-safe',
             groups.length === 0 && 'border-b'
           )}
         >
           {botSegment ? (
-            <span className="flex rounded-lg bg-muted p-0.5 text-sm">
+            <span className="flex rounded-md border bg-muted/40 p-0.5 text-[13px]">
               {(['项目', 'Bot'] as const).map((label) => {
                 const selected = (label === 'Bot') === botSegment.active;
                 return (
@@ -281,7 +281,7 @@ export function SessionDrawer({
                     onClick={() => botSegment.onChange(label === 'Bot')}
                     className={cn(
                       'rounded-md px-3 py-0.5 transition-colors',
-                      selected ? 'bg-background font-medium shadow-xs' : 'text-muted-foreground'
+                      selected ? 'bg-background font-medium' : 'text-muted-foreground'
                     )}
                   >
                     {label}
@@ -376,7 +376,7 @@ export function SessionDrawer({
         ) : (
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
             {projects.length === 0 && (
-              <p className="rounded-lg border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+              <p className="rounded-md border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
                 桌面端还没有项目
               </p>
             )}
@@ -536,7 +536,7 @@ export function SessionDrawer({
             <button
               type="button"
               onClick={() => setArchivedOpen((prev) => !prev)}
-              className="flex w-full items-center gap-1 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
+              className="flex w-full items-center gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60"
             >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                 <ChevronRight
@@ -620,7 +620,7 @@ export function SessionDrawer({
               const isActive = d.pairId === activeDevicePairId;
               if (confirmUnpair === d.pairId) {
                 return (
-                  <div key={d.pairId} className="space-y-2 rounded-lg border border-dashed p-3">
+                  <div key={d.pairId} className="space-y-2 rounded-md border border-dashed p-3">
                     <p className="text-xs">解绑「{d.label}」后需重新扫码才能连接，确定吗？</p>
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => setConfirmUnpair(null)}>
@@ -646,7 +646,7 @@ export function SessionDrawer({
                     type="button"
                     onClick={() => onSwitchDevice(d.pairId)}
                     className={cn(
-                      'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60',
+                      'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60',
                       isActive ? 'text-foreground' : 'text-muted-foreground'
                     )}
                   >
@@ -688,7 +688,7 @@ export function SessionDrawer({
             <button
               type="button"
               onClick={onAddDevice}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground"
             >
               <Plus className="h-4 w-4 shrink-0" />
               <span>配对新电脑</span>
@@ -723,7 +723,7 @@ function SessionRow({
       type="button"
       onClick={() => onSelect(session.id)}
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg py-2 pr-2 pl-4 text-left text-sm transition-colors',
+        'flex min-h-[40px] w-full items-center gap-2 rounded-md py-2 pr-2 pl-4 text-left text-[13px] transition-colors',
         active ? 'bg-brand/10 dark:bg-brand/15' : 'hover:bg-muted/60'
       )}
     >
@@ -775,7 +775,7 @@ function ProjectGroup({
   const hidden = sessions.length - shownCount;
   return (
     <div>
-      <div className="flex w-full items-center gap-1 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60">
+      <div className="flex w-full items-center gap-1 rounded-md px-2 py-2 transition-colors hover:bg-muted/60">
         <button
           type="button"
           onClick={onToggleFold}
@@ -830,7 +830,7 @@ function ProjectGroup({
                 <button
                   type="button"
                   onClick={() => onRevealMore(nextRevealedExtra(sessions.length, revealedExtra))}
-                  className="flex-1 rounded-lg py-1 text-center text-muted-foreground text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="flex-1 rounded-md py-1 text-center text-muted-foreground text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
                 >
                   {t('Show {{n}} more', { n: hidden })}
                 </button>
@@ -839,7 +839,7 @@ function ProjectGroup({
                 <button
                   type="button"
                   onClick={() => onRevealMore(prevRevealedExtra(revealedExtra))}
-                  className="flex-1 rounded-lg py-1 text-center text-muted-foreground text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="flex-1 rounded-md py-1 text-center text-muted-foreground text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
                 >
                   {t('Collapse')}
                 </button>

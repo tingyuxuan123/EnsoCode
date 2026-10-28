@@ -59,7 +59,7 @@ export function CodeEditor({
     return (
       <div
         className={cn(
-          'flex w-full items-center justify-center rounded-lg border border-input text-muted-foreground text-xs',
+          'flex w-full items-center justify-center rounded-[6px] border border-input text-muted-foreground text-[12px]',
           className
         )}
       >
@@ -69,7 +69,7 @@ export function CodeEditor({
   }
 
   return (
-    <div className={cn('w-full overflow-hidden rounded-lg border border-input', className)}>
+    <div className={cn('w-full overflow-hidden rounded-[6px] border border-input', className)}>
       <EditProvider createEditor={createEditor}>
         <Virtualizer style={{ height: '100%', overflow: 'auto' }}>
           <File

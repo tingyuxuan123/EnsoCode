@@ -27,8 +27,11 @@ export function RetryBar({ retry, onCancel }: { retry: RetryInfo; onCancel?: () 
   const remainingSeconds = Math.max(0, Math.ceil((retry.at + retry.delayMs - now) / 1000));
 
   return (
-    <div className="mb-1 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs">
-      <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin text-amber-500 [animation-duration:2s]" />
+    <div
+      data-slot="retry-bar"
+      className="mb-[6px] flex items-center gap-[8px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[6px] text-[12px]"
+    >
+      <RefreshCw className="size-[14px] shrink-0 animate-spin text-warning [animation-duration:2s]" />
       <span className="min-w-0 flex-1 truncate" title={retry.error}>
         {retry.maxAttempts > 0
           ? t('Auto-retrying ({{attempt}}/{{max}})', {

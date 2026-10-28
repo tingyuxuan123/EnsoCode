@@ -42,14 +42,14 @@ function SummaryView({ kind, summary }: { kind: ApprovalKind; summary: string })
   if (kind === 'command' && html != null) {
     return (
       <div
-        className="mt-1.5 max-h-24 overflow-auto rounded-md text-xs leading-relaxed [&_pre]:m-0 [&_pre]:px-2 [&_pre]:py-1.5 [&_pre]:font-mono [&_pre]:whitespace-pre-wrap"
+        className="mt-[6px] max-h-24 overflow-auto rounded-[4px] text-[12px] leading-[20px] [&_pre]:m-0 [&_pre]:px-[8px] [&_pre]:py-[6px] [&_pre]:font-mono [&_pre]:whitespace-pre-wrap"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: shiki 输出的受控 HTML（本地生成，无用户注入）
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
   }
   return (
-    <pre className="mt-1.5 max-h-24 overflow-auto rounded-md bg-muted/50 px-2 py-1.5 font-mono text-xs whitespace-pre-wrap">
+    <pre className="mt-[6px] max-h-24 overflow-auto rounded-[4px] bg-muted/50 px-[8px] py-[6px] font-mono text-[12px] leading-[20px] whitespace-pre-wrap">
       {summary}
     </pre>
   );
@@ -79,10 +79,13 @@ export function ApprovalBar({
   };
 
   return (
-    <div className="mb-1 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2">
-      <div className="flex items-center gap-2 text-xs">
-        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-        <span className="shrink-0 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+    <div
+      data-slot="approval-bar"
+      className="mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[12px]"
+    >
+      <div className="flex items-center gap-[8px]">
+        <ShieldAlert className="size-[14px] shrink-0 text-warning" />
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
           {reviewing ? t('Assistant reviewing…') : t('Approval required')}
         </span>
         <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
@@ -114,7 +117,7 @@ export function ApprovalBar({
             type="button"
             disabled={disabled}
             onClick={() => respond('deny')}
-            className="rounded-md px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            className="rounded-[6px] px-[10px] py-[4px] text-[12px] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
           >
             {t('Deny')}
           </button>
@@ -123,7 +126,7 @@ export function ApprovalBar({
               type="button"
               disabled={disabled}
               onClick={() => respond('allowSession')}
-              className="rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              className="rounded-[6px] px-[10px] py-[4px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
               {t('Always allow this session')}
             </button>
@@ -132,7 +135,7 @@ export function ApprovalBar({
             type="button"
             disabled={disabled}
             onClick={() => respond('allow')}
-            className="rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="rounded-[6px] bg-primary px-[10px] py-[4px] text-[12px] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             {t('Allow')}
           </button>

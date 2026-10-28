@@ -125,8 +125,8 @@ export function ResourcesSettings() {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">{t('Resources')}</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-[18px] font-semibold">{t('Resources')}</h3>
+        <p className="text-[13px] text-muted-foreground">
           {t('CPU, memory and disk usage of EnsoCode and the processes it started.')}
         </p>
       </div>
@@ -176,8 +176,8 @@ function ProcessUsage({ metric }: { metric: Metric }) {
     };
   }, []);
 
-  if (error && !snapshot) return <p className="text-sm text-destructive">{error}</p>;
-  if (!snapshot) return <p className="text-sm text-muted-foreground">{t('Loading...')}</p>;
+  if (error && !snapshot) return <p className="text-[13px] text-destructive">{error}</p>;
+  if (!snapshot) return <p className="text-[13px] text-muted-foreground">{t('Loading...')}</p>;
 
   const format = metric === 'cpu' ? formatPercent : formatBytes;
   const meter =
@@ -200,26 +200,26 @@ function ProcessUsage({ metric }: { metric: Metric }) {
           .sort((a, b) => value(b) - value(a));
         if (rows.length === 0) return null;
         return (
-          <div key={group.id} className="rounded-lg border">
-            <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-medium">
+          <div key={group.id} className="rounded-[6px] border">
+            <div className="flex items-center justify-between border-b px-3 py-2 text-[13px] font-medium">
               <span>{t(group.label)}</span>
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-[12px] text-muted-foreground">
                 {format(rows.reduce((sum, p) => sum + value(p), 0))}
               </span>
             </div>
             <div className="divide-y">
               {rows.map((p) => (
-                <div key={p.pid} className="flex items-center gap-3 px-3 py-1.5 text-sm">
-                  <span className="w-20 shrink-0 truncate text-xs text-muted-foreground">
+                <div key={p.pid} className="flex items-center gap-3 px-3 py-1.5 text-[13px]">
+                  <span className="w-20 shrink-0 truncate text-[12px] text-muted-foreground">
                     {roleLabel(p.role, t)}
                   </span>
                   <span className="min-w-0 flex-1 truncate" title={p.command ?? p.name}>
                     {processName(p, t)}
                   </span>
-                  <span className="w-16 text-right font-mono text-xs text-muted-foreground">
+                  <span className="w-16 text-right font-mono text-[12px] text-muted-foreground">
                     {p.pid}
                   </span>
-                  <span className="w-20 text-right font-mono text-xs">{format(value(p))}</span>
+                  <span className="w-20 text-right font-mono text-[12px]">{format(value(p))}</span>
                 </div>
               ))}
             </div>
@@ -244,15 +244,15 @@ function UsageMeter({
   const { t } = useI18n();
   const pct = (v: number) => `${total > 0 ? Math.min(100, (v / total) * 100) : 0}%`;
   return (
-    <div className="space-y-3 rounded-lg border p-4">
+    <div className="space-y-3 rounded-[6px] border p-4">
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <div className="text-xs text-muted-foreground">EnsoCode</div>
+          <div className="text-[12px] text-muted-foreground">EnsoCode</div>
           <div className="font-mono text-2xl font-semibold">{format(app)}</div>
         </div>
         <div className="text-right">
-          <div className="text-xs text-muted-foreground">{t('System')}</div>
-          <div className="font-mono text-sm">
+          <div className="text-[12px] text-muted-foreground">{t('System')}</div>
+          <div className="font-mono text-[13px]">
             {format(system)} / {format(total)}
           </div>
         </div>
@@ -350,7 +350,7 @@ function StorageUsage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <p className="min-w-0 truncate text-xs text-muted-foreground">
+        <p className="min-w-0 truncate text-[12px] text-muted-foreground">
           {busy === 'scan'
             ? progress
               ? t('Scanning {{count}} files · {{size}}', {
@@ -385,10 +385,10 @@ function StorageUsage() {
           </Button>
         )}
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="text-[13px] text-destructive">{error}</p>}
       {snapshot && snapshot.errorCount > 0 && (
         <p
-          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
           title={snapshot.errors.join('\n')}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -412,12 +412,12 @@ function StorageUsage() {
                     format={formatBytes}
                   />
                 ) : (
-                  <div className="rounded-lg border p-4 font-mono text-2xl font-semibold">
+                  <div className="rounded-[6px] border p-4 font-mono text-2xl font-semibold">
                     {formatBytes(used)}
                   </div>
                 )}
                 {roots.map((root) => (
-                  <div key={root.id} className="flex items-center gap-2 px-1 text-xs">
+                  <div key={root.id} className="flex items-center gap-2 px-1 text-[12px]">
                     <span className="shrink-0 text-muted-foreground">{rootLabel(root, t)}</span>
                     <span className="min-w-0 flex-1 truncate font-mono" title={root.path}>
                       {root.path}
@@ -428,7 +428,7 @@ function StorageUsage() {
               </div>
             );
           })}
-          <div className="divide-y rounded-lg border">
+          <div className="divide-y rounded-[6px] border">
             {categories.map((category) => (
               <StorageRow
                 key={category.id}
@@ -528,11 +528,11 @@ function StorageRow({
             className={cn('h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-90')}
           />
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-2 text-sm">
+            <div className="flex items-baseline justify-between gap-2 text-[13px]">
               <span className="font-medium">{t(label)}</span>
-              <span className="font-mono text-xs">{formatBytes(category.bytes)}</span>
+              <span className="font-mono text-[12px]">{formatBytes(category.bytes)}</span>
             </div>
-            <p className="truncate text-xs text-muted-foreground">{t(description)}</p>
+            <p className="truncate text-[12px] text-muted-foreground">{t(description)}</p>
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
               <div className="h-full bg-foreground/60" style={{ width: `${share * 100}%` }} />
             </div>
@@ -549,7 +549,7 @@ function StorageRow({
           {category.entries.map((entry) => (
             <div
               key={`${entry.root}:${entry.path}`}
-              className="group flex items-center gap-2 text-xs"
+              className="group flex items-center gap-2 text-[12px]"
             >
               <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
                 {entry.root === 'data' ? entry.path : `${t('Worktree directory')}/${entry.path}`}
@@ -558,7 +558,7 @@ function StorageRow({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                 aria-label={t('Show in folder')}
                 onClick={() =>
                   void window.electronAPI.resources.revealStorage(entry.root, entry.path)
@@ -633,11 +633,11 @@ function SessionStorage({
         );
 
   return (
-    <div className="rounded-lg border">
+    <div className="rounded-[6px] border">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
-        <div className="shrink-0 text-sm font-medium">
+        <div className="shrink-0 text-[13px] font-medium">
           {t('Conversations')}
-          <span className="ml-2 font-mono text-xs text-muted-foreground">
+          <span className="ml-2 font-mono text-[12px] text-muted-foreground">
             {scoped.length} · {formatBytes(total)}
           </span>
         </div>
@@ -659,7 +659,7 @@ function SessionStorage({
                 <SelectItem key={id} value={id}>
                   <span className="flex w-full items-center gap-3">
                     <span className="flex-1 truncate">{projectLabel(id, p.name)}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span className="font-mono text-[12px] text-muted-foreground">
                       {p.count} · {formatBytes(p.bytes)}
                     </span>
                   </span>
@@ -697,7 +697,7 @@ function SessionStorage({
                     <span className="flex-1">
                       {days > 0 ? t('Older than {{days}} days', { days }) : t('All')}
                     </span>
-                    <span className="font-mono text-xs opacity-70">{next.count}</span>
+                    <span className="font-mono text-[12px] opacity-70">{next.count}</span>
                   </MenuItem>
                 );
               })}
@@ -707,12 +707,12 @@ function SessionStorage({
       </div>
       <div className="max-h-96 divide-y overflow-y-auto">
         {visible.map((session) => (
-          <div key={session.id} className="group flex items-center gap-3 px-3 py-1.5 text-sm">
+          <div key={session.id} className="group flex items-center gap-3 px-3 py-1.5 text-[13px]">
             <div className="min-w-0 flex-1">
               <div className="truncate" title={session.title}>
                 {session.title || t('Untitled')}
               </div>
-              <div className="truncate text-xs text-muted-foreground">
+              <div className="truncate text-[12px] text-muted-foreground">
                 {[
                   session.projectName,
                   session.archived ? t('Archived') : null,
@@ -722,11 +722,11 @@ function SessionStorage({
                   .join(' · ')}
               </div>
             </div>
-            <span className="font-mono text-xs">{formatBytes(session.bytes)}</span>
+            <span className="font-mono text-[12px]">{formatBytes(session.bytes)}</span>
             <Button
               variant="ghost"
               size="icon-sm"
-              className="opacity-0 group-hover:opacity-100"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
               disabled={disabled}
               aria-label={t('Delete')}
               onClick={() =>
@@ -746,7 +746,7 @@ function SessionStorage({
         <button
           type="button"
           onClick={() => setShowAll(!showAll)}
-          className="w-full border-t px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="w-full border-t px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground"
         >
           {showAll ? t('Show less') : t('Show all')}
         </button>

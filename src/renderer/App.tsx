@@ -423,7 +423,7 @@ export default function App() {
             {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
             <div
               ref={workspaceRef}
-              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t"
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t border-line"
             >
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <ChatView />

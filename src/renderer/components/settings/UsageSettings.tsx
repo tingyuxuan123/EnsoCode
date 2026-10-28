@@ -67,8 +67,8 @@ export function UsageSettings() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-medium">{t('Usage')}</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="text-[18px] font-semibold">{t('Usage')}</h3>
+          <p className="text-[13px] text-muted-foreground">
             {t('Token usage across all local sessions; cost is estimated from catalog prices.')}
           </p>
         </div>
@@ -85,7 +85,7 @@ export function UsageSettings() {
 
       <RangePills value={days} onChange={setDays} />
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="text-[13px] text-destructive">{error}</p>}
 
       {summary && (
         <>
@@ -133,7 +133,7 @@ export function UsageSettings() {
             />
           )}
           {summary.unpricedModels.length > 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               {t('No catalog price for: {{models}}. Their cost is not included.', {
                 models: summary.unpricedModels.join(', '),
               })}
@@ -166,7 +166,7 @@ function RangePills({
           type="button"
           onClick={() => onChange(days)}
           className={cn(
-            'rounded-full px-3 py-1 font-mono text-xs transition-colors',
+            'rounded-full px-3 py-1 font-mono text-[12px] transition-colors',
             value === days
               ? 'bg-foreground text-background'
               : 'bg-muted text-muted-foreground hover:text-foreground'

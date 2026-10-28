@@ -218,9 +218,9 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
               {page.step === 'provider' && (
                 <DialogPanel bare className="space-y-2">
                   {loadError && (
-                    <div className="flex items-start justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
+                    <div className="flex items-start justify-between gap-3 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
                       <div className="min-w-0">
-                        <p className="text-xs font-medium">
+                        <p className="text-[12px] font-medium">
                           {t('Could not load subscription providers')}
                         </p>
                         <p className="mt-0.5 break-words text-[11px] text-destructive/80">
@@ -230,7 +230,7 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 shrink-0 px-2 text-xs"
+                        className="h-7 shrink-0 px-2 text-[12px]"
                         onClick={() => void refreshOauthProviders()}
                       >
                         {t('Retry')}
@@ -244,24 +244,24 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                         <button
                           key={definition.id}
                           type="button"
-                          className="flex min-w-0 items-center gap-3 rounded-md border px-3 py-3 text-left transition-colors hover:bg-accent"
+                          className="flex min-w-0 items-center gap-3 rounded-[6px] border px-3 py-3 text-left transition-colors hover:bg-accent"
                           onClick={() => {
                             setSelectedId(definition.id);
                             setStep('method');
                           }}
                         >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-muted text-foreground">
                             <ProviderCatalogMark
                               id={definition.oauthProviderId ?? definition.id}
                               label={definition.label}
                             />
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">
+                            <span className="block truncate text-[13px] font-medium">
                               {t(definition.label)}
                             </span>
                             {isClassifierOnlyProvider({ catalogId: definition.id }) && (
-                              <span className="block text-xs text-muted-foreground">
+                              <span className="block text-[12px] text-muted-foreground">
                                 {t('Classification only, not for chat')}
                               </span>
                             )}
@@ -287,24 +287,24 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
 
               {page.step === 'method' && selected && (
                 <DialogPanel bare className="space-y-3">
-                  <p className="text-sm font-medium">{t('Choose how to connect')}</p>
+                  <p className="text-[13px] font-medium">{t('Choose how to connect')}</p>
                   {isClassifierOnlyProvider({ catalogId: selected.id }) && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[12px] text-muted-foreground">
                       {t('Classification only, not for chat')}
                     </p>
                   )}
                   {availableProviderSetupMethods(selected).includes('oauth') && (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors hover:bg-accent"
+                      className="flex w-full items-center gap-3 rounded-[6px] border px-4 py-3 text-left transition-colors hover:bg-accent"
                       onClick={() => setStep('oauth')}
                     >
                       <BadgeCheck className="h-5 w-5 shrink-0 text-primary" />
                       <span>
-                        <span className="block text-sm font-medium">
+                        <span className="block text-[13px] font-medium">
                           {t('Provider subscription')}
                         </span>
-                        <span className="block text-xs text-muted-foreground">
+                        <span className="block text-[12px] text-muted-foreground">
                           {t('Sign in in your browser and use your subscription account.')}
                         </span>
                       </span>
@@ -313,13 +313,13 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                   {availableProviderSetupMethods(selected).includes('api-key') && (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors hover:bg-accent"
+                      className="flex w-full items-center gap-3 rounded-[6px] border px-4 py-3 text-left transition-colors hover:bg-accent"
                       onClick={() => setStep('api-key')}
                     >
                       <KeyRound className="h-5 w-5 shrink-0 text-primary" />
                       <span>
-                        <span className="block text-sm font-medium">{t('API Key')}</span>
-                        <span className="block text-xs text-muted-foreground">
+                        <span className="block text-[13px] font-medium">{t('API Key')}</span>
+                        <span className="block text-[12px] text-muted-foreground">
                           {t('Configure an endpoint and key, then fetch or test its models.')}
                         </span>
                       </span>
@@ -404,7 +404,7 @@ function ProviderCatalogMark({ id, label }: { id: string; label: string }) {
   const logo = resolveProviderLogo(id, label);
   if (!logo) return <Puzzle className="h-4 w-4 text-muted-foreground" />;
   if (logo.kind === 'letter') {
-    return <span className="text-xs font-semibold text-muted-foreground">{logo.letter}</span>;
+    return <span className="text-[12px] font-semibold text-muted-foreground">{logo.letter}</span>;
   }
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>

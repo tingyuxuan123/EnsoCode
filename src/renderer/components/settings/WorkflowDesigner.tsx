@@ -84,7 +84,7 @@ function PromptField({
     <div ref={wrapRef} className="space-y-1">
       <Textarea
         rows={5}
-        className="text-xs"
+        className="text-[12px]"
         placeholder={t('Prompt')}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -92,7 +92,7 @@ function PromptField({
       <Menu>
         <MenuTrigger
           disabled={tokens.length === 0}
-          className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-muted-foreground text-xs hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-6 items-center gap-1 rounded-[6px] px-1.5 text-muted-foreground text-[12px] hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
         >
           <Braces className="h-3.5 w-3.5" />
           {t('Insert argument')}
@@ -101,7 +101,7 @@ function PromptField({
           {tokens.map((token) => (
             <MenuItem key={token.token} onClick={() => insert(token.token)}>
               {labelOf(token)}
-              <span className="ml-auto pl-4 font-mono text-muted-foreground text-xs">
+              <span className="ml-auto pl-4 font-mono text-muted-foreground text-[12px]">
                 {token.token}
               </span>
             </MenuItem>
@@ -187,7 +187,7 @@ function Terminal({
       data-node={node}
       className="flex w-24 shrink-0 flex-col items-center gap-0.5 rounded-full border bg-background px-3 py-1.5 text-center shadow-xs"
     >
-      <span className="flex items-center gap-1 font-medium text-xs">
+      <span className="flex items-center gap-1 font-medium text-[12px]">
         {icon}
         {title}
       </span>
@@ -296,7 +296,7 @@ export function WorkflowDesigner({
 
   return (
     <div className="w-full space-y-2">
-      <div className="overflow-x-auto rounded-lg border bg-muted/30">
+      <div className="overflow-x-auto rounded-[6px] border bg-muted/30">
         <div
           ref={canvasRef}
           className="relative flex w-max min-w-full items-center justify-center px-3 py-5"
@@ -372,13 +372,13 @@ export function WorkflowDesigner({
                       data-node={`s-${pi}-${si}`}
                       onClick={() => setSelection({ kind: 'step', phase: pi, step: si })}
                       className={cn(
-                        'block w-full rounded-lg border bg-background px-2.5 py-1.5 text-left shadow-xs transition-colors hover:border-primary/60',
+                        'block w-full rounded-[6px] border bg-background px-2.5 py-1.5 text-left shadow-xs transition-colors hover:border-primary/60',
                         active && 'border-primary ring-2 ring-primary/20',
                         invalid && !active && 'border-destructive/50'
                       )}
                     >
                       <span className="flex items-center gap-1.5">
-                        <span className="truncate font-medium text-xs">
+                        <span className="truncate font-medium text-[12px]">
                           {step.label.trim() || t('Untitled step')}
                         </span>
                         <span className="ml-auto shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">
@@ -395,7 +395,7 @@ export function WorkflowDesigner({
                   type="button"
                   disabled={!canAdd}
                   onClick={() => apply(addStep(design, pi, newDesignStep(defaultType)))}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-dashed py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+                  className="flex items-center justify-center gap-1 rounded-[6px] border border-dashed py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-50"
                 >
                   <Plus className="h-3 w-3" />
                   {t('Parallel step')}
@@ -413,9 +413,9 @@ export function WorkflowDesigner({
         </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border p-3">
+      <div className="space-y-2 rounded-[6px] border p-3">
         <div className="flex items-center gap-1">
-          <span className="font-medium text-xs">
+          <span className="font-medium text-[12px]">
             {selected.kind === 'phase'
               ? t('Phase {{n}}', { n: selected.phase + 1 })
               : t('Phase {{n}} · Step {{m}}', { n: selected.phase + 1, m: selected.step + 1 })}
@@ -499,7 +499,7 @@ export function WorkflowDesigner({
           </>
         )}
       </div>
-      <p className="text-muted-foreground text-xs">
+      <p className="text-muted-foreground text-[12px]">
         {t(
           'Click a node to edit it. Steps in a column run in parallel; columns run from left to right.'
         )}

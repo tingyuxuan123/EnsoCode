@@ -87,14 +87,17 @@ export function CoworkerTabs({
   const tabClass = (active: boolean) =>
     cn(
       // 下划线页签：激活项底部 2px 强调色，非激活只在悬停时出浅底
-      'relative flex h-full min-w-0 shrink-0 items-center gap-1.5 px-3 text-[13px] transition-colors',
+      'relative flex h-full min-w-0 shrink-0 items-center gap-[6px] px-[12px] text-[13px] transition-colors',
       active
         ? 'font-medium text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-brand'
         : 'text-muted-foreground hover:text-foreground'
     );
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b px-4">
+    <div
+      data-slot="conversation-tabs"
+      className="flex h-[44px] shrink-0 items-center gap-[4px] border-b border-line px-[16px]"
+    >
       <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         <RenameableTab
           id={parentId}
@@ -102,7 +105,7 @@ export function CoworkerTabs({
           label={t('Main conversation')}
           renameTitle={parentTitle || t('New conversation')}
           className={tabClass(displayedId === parentId)}
-          leading={<MessagesSquare className="size-3.5 shrink-0" />}
+          leading={<MessagesSquare className="size-[14px] shrink-0" />}
           reloadDisabled={parentReloading || parentSpawning}
           reloading={parentReloading}
           onSelect={() => useSessionsStore.getState().selectTab(parentId, undefined)}
@@ -129,7 +132,7 @@ export function CoworkerTabs({
                   tabClass(displayedId === coworker.id),
                   displayedId !== coworker.id && 'group-hover/tab:text-foreground'
                 )}
-                leading={<Bot className="size-3.5 shrink-0" />}
+                leading={<Bot className="size-[14px] shrink-0" />}
                 trailing={
                   <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center">
                     <ConversationStatusIndicator tone={tone} size="sm" />
@@ -226,9 +229,9 @@ export function CoworkerTabs({
           aria-label={t('Add collaborator')}
           disabled={!parentStarted}
           onClick={() => setHiring(true)}
-          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+          className="ml-[4px] flex size-[24px] shrink-0 items-center justify-center rounded-[6px] text-faint transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="size-[14px]" />
         </button>
       </div>
       {trailing}

@@ -46,20 +46,20 @@ export function SkillsSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+      <div className="flex items-center justify-between gap-4 rounded-[6px] border px-3 py-2.5">
         <div>
-          <p className="font-medium text-sm">{t('Load local skills')}</p>
-          <p className="text-muted-foreground text-xs">
+          <p className="font-medium text-[13px]">{t('Load local skills')}</p>
+          <p className="text-muted-foreground text-[12px]">
             {t('Let the agent auto-discover skills under .agents/skills and .pi/skills')}
           </p>
         </div>
         <Switch checked={loadLocalSkills} onCheckedChange={setLoadLocalSkills} />
       </div>
 
-      <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+      <div className="flex items-center justify-between gap-4 rounded-[6px] border px-3 py-2.5">
         <div>
-          <p className="font-medium text-sm">{t('Load project harness assets')}</p>
-          <p className="text-muted-foreground text-xs">
+          <p className="font-medium text-[13px]">{t('Load project harness assets')}</p>
+          <p className="text-muted-foreground text-[12px]">
             {t(
               'Also load skills from .claude/.codex/.cursor and rule files (.cursorrules, .cursor/rules, .claude/rules) in the project'
             )}
@@ -68,9 +68,9 @@ export function SkillsSettings() {
         <Switch checked={loadHarnessAssets} onCheckedChange={setLoadHarnessAssets} />
       </div>
 
-      <div className="flex items-end justify-between gap-4" data-settings-row="skills.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="skills.root">
         <div>
-          <h3 className="font-medium text-lg">
+          <h3 className="font-semibold text-[18px]">
             {t('Skills')}
             <NewSessionBadge
               note={t(
@@ -78,7 +78,7 @@ export function SkillsSettings() {
               )}
             />
             {skills.length > 0 && (
-              <span className="ml-2 font-normal text-muted-foreground text-xs">
+              <span className="ml-2 font-normal text-muted-foreground text-[12px]">
                 {t('{{enabled}}/{{total}} enabled', {
                   enabled: enabledCount,
                   total: skills.length,
@@ -87,7 +87,7 @@ export function SkillsSettings() {
               </span>
             )}
           </h3>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-[13px]">
             {t('Skills registered by reference; files stay in their original location')}
           </p>
         </div>
@@ -98,10 +98,10 @@ export function SkillsSettings() {
       </div>
 
       {skills.length === 0 ? (
-        <div className="rounded-md border border-dashed px-3 py-8 text-center">
+        <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Sparkles className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-sm">{t('No skills yet')}</p>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-3 font-medium text-[13px]">{t('No skills yet')}</p>
+          <p className="mt-1 text-muted-foreground text-[12px]">
             {t('Import skills from Claude Code, Codex or Cursor to get started')}
           </p>
         </div>
@@ -120,13 +120,13 @@ export function SkillsSettings() {
             actionDisabled={selection.selectedIds.length === 0}
           />
           {visible.length === 0 ? (
-            <p className="px-3 py-6 text-center text-muted-foreground text-xs">{t('No results')}</p>
+            <p className="px-3 py-6 text-center text-muted-foreground text-[12px]">{t('No results')}</p>
           ) : (
             <div className="space-y-1">
               {visible.map((skill) => (
                 <div
                   key={skill.id}
-                  className="group flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+                  className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
                   data-settings-row={`skills.${skill.id}`}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -136,7 +136,7 @@ export function SkillsSettings() {
                     />
                     <span
                       className={cn(
-                        'shrink-0 font-medium text-sm',
+                        'shrink-0 font-medium text-[13px]',
                         !skill.enabled && 'text-muted-foreground line-through'
                       )}
                     >
@@ -145,7 +145,7 @@ export function SkillsSettings() {
                     <Badge variant="secondary" className="shrink-0 text-[11px]">
                       {skill.source}
                     </Badge>
-                    <span className="min-w-0 truncate text-muted-foreground text-xs">
+                    <span className="min-w-0 truncate text-muted-foreground text-[12px]">
                       {skill.description || skill.path}
                     </span>
                   </div>
@@ -161,7 +161,7 @@ export function SkillsSettings() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                      className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
                       onClick={() => removeSkill(skill.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

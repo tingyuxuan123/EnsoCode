@@ -69,16 +69,16 @@ export function SubagentModelsSettings() {
   };
 
   return (
-    <section data-slot="subagent-models" className="space-y-2 rounded-lg border bg-card p-3">
+    <section data-slot="subagent-models" className="space-y-2 rounded-[6px] border bg-card p-3">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h4 className="font-medium text-sm">{t('Let the agent pick subagent models')}</h4>
-          <p className="mt-0.5 text-muted-foreground text-xs">
+          <h4 className="font-medium text-[13px]">{t('Let the agent pick subagent models')}</h4>
+          <p className="mt-0.5 text-muted-foreground text-[12px]">
             {t(
               'The main agent can pick one of these models when dispatching subagents or coworkers. The description tells it when to use each model.'
             )}
           </p>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-1 text-muted-foreground text-[12px]">
             {t('Applies to newly started conversations.')}
           </p>
         </div>
@@ -87,7 +87,7 @@ export function SubagentModelsSettings() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 gap-1 px-2.5 text-xs"
+            className="h-7 gap-1 px-2.5 text-[12px]"
             onClick={handleAiConfigure}
           >
             <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -104,7 +104,7 @@ export function SubagentModelsSettings() {
               key={entry.id}
               data-slot="subagent-model-row"
               className={cn(
-                'flex items-center gap-2 rounded-md border px-2 py-1.5',
+                'flex items-center gap-2 rounded-[6px] border px-2 py-1.5',
                 entry.enabled === false && 'bg-muted/50 text-muted-foreground'
               )}
             >
@@ -120,7 +120,7 @@ export function SubagentModelsSettings() {
                   {t('Disabled')}
                 </Badge>
               )}
-              <div className="shrink-0 rounded-md border bg-background">
+              <div className="shrink-0 rounded-[6px] border bg-background">
                 <ModelPicker
                   providers={candidates}
                   providerId={entry.providerId}
@@ -163,7 +163,7 @@ export function SubagentModelsSettings() {
               <Input
                 value={entry.description}
                 placeholder={t('When to use it, e.g. cheap and fast for simple subtasks')}
-                className="h-7 flex-1 text-xs"
+                className="h-7 flex-1 text-[12px]"
                 onChange={(event) => updateEntry(entry.id, { description: event.target.value })}
               />
               <Button
@@ -182,7 +182,7 @@ export function SubagentModelsSettings() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 text-xs"
+            className="h-7 text-[12px]"
             disabled={!seedSelection}
             onClick={() => {
               if (seedSelection) addEntry({ ...seedSelection, description: '' });
@@ -192,7 +192,7 @@ export function SubagentModelsSettings() {
             {t('Add model')}
           </Button>
           {!seedSelection && (
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-[12px]">
               {t('Enable a model and configure valid provider credentials first.')}
             </p>
           )}

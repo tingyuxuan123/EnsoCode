@@ -1,87 +1,100 @@
 export const frame = { width: 1440, height: 900, title: "对话工作台" };
 
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Composer } from '../components/Composer';
-import { added, agents, changes, removed, taskTitle } from '../components/data';
-import { useWorkbench } from '../components/Workbench';
+import { AssistantActions, AssistantHeader, CoworkerTabs, TimelineEvent, TurnFilesCard, UserMessage, WorkedRow } from '../components/Conversation';
+import { coworkers } from '../components/data';
 import { TaskDock, type DockView } from '../components/TaskDock';
+import { useWorkbench } from '../components/Workbench';
 
-export default function WorkbenchScreen({ initialDock = null }: { initialDock?: DockView }) {
-  const { task, setNotice, setInspectorTab, setInspectorOpen } = useWorkbench();
-  const [agent, setAgent] = useState(0);
-  const [stepsOpen, setStepsOpen] = useState(false);
+export type WorkbenchProps = {
+  initialDock?: DockView;
+  /** 输入框上方的运行条（审批、提问、计划、目标、队列……），按真实 ChatView 的顺序传入 */
+  bars?: ReactNode;
+  running?: boolean;
+  locked?: boolean;
+  queuedCount?: number;
+  /** 替换默认时间线（例如计划模式会话） */
+  timeline?: ReactNode;
+  showDock?: boolean;
+  /** 会话头下方的附加条（例如会话内查找条） */
+  topBar?: ReactNode;
+};
+
+function DefaultTimeline({ running }: { running: boolean }) {
+  const { task } = useWorkbench();
+  return (
+    <>
+      <UserMessage>{task || '参考当前 Proma 的布局，把 EnsoCode 的工作台整理得更清爽一些。保留项目会话、协作 Agent 和文件审查，不改现有功能。'}</UserMessage>
+      <AssistantHeader />
+      <WorkedRow />
+      <h2 className="mb-3 text-[18px] font-semibold">工作台结构已整理</h2>
+      <p className="mb-3 text-[15px] leading-[27px]">让对话成为主线，把项目上下文和交付物放在两侧；用背景层次和 1px 细线代替厚重边框。</p>
+      <ul className="space-y-2 text-[14px] leading-6">
+        <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">侧栏</strong><span className="text-muted">：保留分组标签、活跃中 / 已置顶、项目树与节点切换。</span></span></li>
+        <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">输入区</strong><span className="text-muted">：预设、工作区、计划、审批档位和模型集中在一行，运行条按优先级叠在上方。</span></span></li>
+        <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">右侧面板</strong><span className="text-muted">：文件、改动、终端、浏览器、旁路、代理和工作流都是可停靠标签。</span></span></li>
+      </ul>
+      <TurnFilesCard />
+      <pre className="mb-3 overflow-auto rounded-control bg-code px-3 py-2.5 font-mono text-[12px] leading-5"><code className="bg-transparent p-0">{'$ pnpm typecheck && pnpm lint && pnpm test\n✓ 412 tests passed'}</code></pre>
+      <AssistantActions />
+      <TimelineEvent icon="icon-[lucide--archive-restore]">上下文已压缩（压缩前 162K tokens）· 点开查看摘要</TimelineEvent>
+      <UserMessage time="14:51">再把状态栏字段做成可排序的，默认不要轮询额度。</UserMessage>
+      <AssistantHeader time="14:51" />
+      <WorkedRow running={running} />
+      {running && <p className="text-[15px] leading-[27px] text-muted">正在把 StatsLine 的字段配置接到 statusLineSegments……</p>}
+    </>
+  );
+}
+
+function CoworkerTimeline({ id }: { id: string }) {
+  const member = coworkers.find((item) => item.id === id);
+  return (
+    <>
+      <div className="mb-4 flex items-center gap-2 rounded-control bg-panel/60 px-3 py-2 text-[12px] text-muted">
+        <span className="icon-[lucide--bot] size-3.5" />
+        {member?.name} · worker · Claude Sonnet 4.5
+        <span className="ml-auto">{member?.status}</span>
+      </div>
+      <div className="mb-6 flex flex-col items-end"><div className="max-w-[86%] rounded-control bg-panel px-4 py-2.5 text-[14px] leading-6"><span className="mb-1 block text-[11px] text-faint">来自主 agent</span>检查侧栏、输入区与右侧面板在 1280 宽度下是否有截断，列出问题位置。</div></div>
+      <AssistantHeader name={member?.name ?? ''} />
+      <WorkedRow />
+      <p className="text-[15px] leading-[27px]">{id === 'cw2' ? '需要运行一次完整测试才能确认回归，已发起审批请求。' : '已完成样式调整，等待主会话的下一条消息。'}</p>
+    </>
+  );
+}
+
+export default function WorkbenchScreen({ initialDock = null, bars, running = true, locked = false, queuedCount = 0, timeline, showDock = true, topBar }: WorkbenchProps) {
+  const { chatWide } = useWorkbench();
+  const [tab, setTab] = useState('main');
   const [messages, setMessages] = useState<string[]>([]);
   const scroll = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (messages.length && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [messages]);
+  const column = chatWide ? 'mx-auto w-full max-w-none px-8' : 'mx-auto w-full max-w-[760px] px-6';
   return (
-    <div className="flex h-full flex-col bg-surface">
-      <header className="flex h-[43px] shrink-0 items-center gap-1 border-b border-line px-5">
-        {agents.map((item, index) => (
-          <button key={item.name} className={`relative flex h-full items-center gap-1.5 px-3 text-[12px] ${agent === index ? 'text-surface-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:bg-primary' : 'text-muted hover:bg-hover'}`} onClick={() => setAgent(index)}>
-            <span className={`${item.icon} size-3.5`} />
-            {item.name}
-            {index > 0 && <span className="size-[4px] rounded-full bg-success" />}
-          </button>
-        ))}
-        <button aria-label="添加协作 Agent" title="添加协作 Agent" onClick={() => setNotice('设计预览：协作 Agent 使用独立上下文，长期协作者拥有自己的页签。')} className="ml-1 flex size-6 items-center justify-center text-faint hover:text-surface-foreground"><span className="icon-[lucide--plus] size-3.5" /></button>
-        <div className="ml-auto flex items-center gap-1 text-[11px] text-faint"><span className="icon-[lucide--git-branch] size-3" />main</div>
-      </header>
-      <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto px-9 pb-5 pt-6">
-        {agent === 0 ? (
-          <div className="mx-auto max-w-[820px]">
-            <div className="mb-6">
-              <div className="mb-2 flex items-center gap-2 text-[12px]"><span className="font-medium">你</span><span className="text-faint">14:32</span><span className="ml-auto text-[11px] text-faint">示例会话</span></div>
-              <p className="rounded-control bg-panel px-4 py-3 text-[14px] leading-6">{task || '参考当前 Proma 的布局，把 EnsoCode 的工作台整理得更清爽一些。保留项目会话、协作 Agent 和文件审查，不改现有功能。'}</p>
+    <div className="flex h-full min-w-0 flex-col bg-surface">
+      <CoworkerTabs active={tab} onSelect={setTab} />
+      {topBar}
+      <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto pb-4 pt-6">
+        <div className={column}>
+          {tab === 'main' ? (timeline ?? <DefaultTimeline running={running} />) : <CoworkerTimeline id={tab} />}
+          {messages.map((message, index) => (
+            <div key={index} className="mt-6">
+              <UserMessage time="刚刚">{message}</UserMessage>
+              <p className="-mt-3 text-right text-[11px] text-faint">{running ? '已排队，本轮结束后发送（设计预览）' : '已在设计预览中记录，未发送到模型'}</p>
             </div>
-            <div className="mb-3 flex items-center gap-2 text-[12px]"><span className="icon-[lucide--circle-dashed] size-[17px]" /><span className="font-medium">EnsoCode</span><span className="text-faint">14:33</span></div>
-            <p className="text-[15px] leading-[27px]">我会先统一工作区的结构与视觉层级，再整理侧栏、输入区和改动面板。现有会话、审批和协作能力保持不变。</p>
-            <button className="my-3 flex items-center gap-2 text-[12px] text-muted" aria-expanded={stepsOpen} onClick={() => setStepsOpen(!stepsOpen)}>
-              <span className="icon-[lucide--circle-check] size-3.5 text-success" />
-              已完成 3 项界面调整
-              <span className={`${stepsOpen ? 'icon-[lucide--chevron-up]' : 'icon-[lucide--chevron-down]'} size-3`} />
-            </button>
-            {stepsOpen && <div className="mb-4 ml-1 border-l border-border pl-4 text-[12px] leading-7 text-muted"><p>读取现有工作区布局与主题变量</p><p>统一项目侧栏、导航与输入区域</p><p>整理改动审查和界面检查清单</p></div>}
-            <h1 className="mb-3 mt-5 text-[19px] font-semibold">工作台结构已整理</h1>
-            <p className="mb-4 text-[14px] leading-[26px] text-muted">让对话成为主线，把项目上下文和交付物留在两侧。减少嵌套卡片，用背景层次和细分隔线代替厚重边框。</p>
-            <ul className="space-y-2.5 text-[14px] leading-6">
-              <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">导航更清晰</strong><span className="text-muted">：项目和会话分组排列，全局工具收进左侧图标栏。</span></span></li>
-              <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">内容更专注</strong><span className="text-muted">：正文保留阅读宽度，执行过程默认收起，协作结果独立查看。</span></span></li>
-              <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">审查不离开工作区</strong><span className="text-muted">：文件、会话改动和终端统一在右侧切换。</span></span></li>
-            </ul>
-            <div className="mb-4 mt-5 rounded-control border border-line">
-              <div className="flex h-9 items-center gap-2 bg-panel/60 px-3 text-[12px]"><span className="icon-[lucide--files] size-3.5 text-muted" /><span className="font-medium">本次改动</span><span className="ml-auto text-muted">{changes.length} 个文件</span><span className="text-success">+{added}</span><span className="text-danger">−{removed}</span></div>
-              {changes.map((file) => <Link key={file.name} to="/review" className="flex h-9 items-center gap-2 border-t border-line px-3 text-[12px] hover:bg-hover"><span className="icon-[lucide--file-code-2] size-3.5 text-primary" /><span>{file.name}</span><span className="ml-auto text-success">+{file.added}</span><span className="text-danger">−{file.removed}</span><span className="icon-[lucide--chevron-right] ml-1 size-3 text-muted" /></Link>)}
-            </div>
-            <div className="flex items-center gap-2 text-[12px]"><span className="icon-[lucide--circle-check] size-3.5 text-success" /><span className="text-muted">类型、样式与界面检查已通过</span><span className="text-faint">· 演示状态</span></div>
-            <div className="mt-4 flex items-center gap-4 text-[12px]">
-              <Link to="/review" className="flex items-center gap-1 text-primary">查看改动<span className="icon-[lucide--arrow-up-right] size-3.5" /></Link>
-              <button onClick={() => { setInspectorOpen(true); setInspectorTab('terminal'); }} className="text-muted hover:text-surface-foreground">查看终端</button>
-              <button onClick={() => setNotice('设计预览：复制内容仅作为界面交互示例，不会改动工作区文件。')} aria-label="复制回复" title="复制回复" className="ml-auto text-faint"><span className="icon-[lucide--copy] size-3.5" /></button>
-            </div>
-          </div>
-        ) : (
-          <div className="mx-auto max-w-[820px]">
-            <div className="mb-5 flex items-center gap-2 text-[12px]"><span className={`${agents[agent].icon} size-4 text-muted`} /><span>{agents[agent].name}</span><span className="ml-auto text-success">已完成 · 示例</span></div>
-            <h1 className="mb-4 text-[20px] font-semibold">{agent === 1 ? '布局与主题调整完成' : '界面回归检查完成'}</h1>
-            <p className="mb-6 text-[15px] leading-7">{agent === 1 ? '统一蓝灰浅色主题、6px 圆角和左右分栏。所有布局遵循共享令牌，不触碰会话与 Agent 运行逻辑。' : '检查了项目树展开、协作页签、输入框、文件面板与改动审查的页面状态，未发现遮挡或异常换行。'}</p>
-            <div className="space-y-3 border-l border-border pl-4 text-[13px] leading-6 text-muted"><p>范围：当前工作台界面</p><p>交付：{agent === 1 ? '统一的界面层级与组件样式' : '页面检查清单与交互检查记录'}</p><p>边界：设计稿演示，不代表真实检查执行。</p></div>
-            <button onClick={() => setAgent(0)} className="mt-6 text-[13px] text-primary">返回主会话 →</button>
-          </div>
-        )}
-        {messages.map((message, index) => <div key={index} className="mx-auto mt-6 max-w-[820px]"><div className="mb-2 text-[12px] font-medium">你</div><p className="rounded-control bg-panel px-4 py-3 text-[14px] leading-6">{message}</p><p className="mt-3 text-[12px] text-muted">已在设计预览中记录。未发送到模型。</p></div>)}
+          ))}
+        </div>
       </div>
-      <div className="mx-5 flex shrink-0 items-center gap-2 border-t border-line pt-2 text-[11px] text-muted">
-        <span className="icon-[lucide--git-branch] size-3" />
-        main
-        <span className="mx-1 text-border">·</span>
-        <span className="min-w-0 flex-1 truncate">{taskTitle}</span>
-        <span className="whitespace-nowrap">界面调整完成 · 等待验收</span>
+      <div className="shrink-0 pb-3 pt-1">
+        <div className={column}>
+          {showDock && tab === 'main' && <TaskDock initial={initialDock} />}
+          {tab === 'main' && bars}
+          <Composer running={running && tab === 'main'} locked={locked} queuedCount={queuedCount} onSend={(text) => setMessages([...messages, text])} />
+        </div>
       </div>
-      <TaskDock initial={initialDock} />
-      <Composer onSend={(text) => setMessages([...messages, text])} />
     </div>
   );
 }

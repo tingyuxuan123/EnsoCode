@@ -126,9 +126,9 @@ export function ProvidersSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4" data-settings-row="providers.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="providers.root">
         <div>
-          <h3 className="text-lg font-medium">
+          <h3 className="text-[18px] font-semibold">
             {t('Model Providers')}
             <NewSessionBadge
               note={t(
@@ -136,7 +136,7 @@ export function ProvidersSettings() {
               )}
             />
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {t('Manage model API providers for this app')}
           </p>
         </div>
@@ -157,7 +157,7 @@ export function ProvidersSettings() {
       <ApprovalReviewerPicker />
       <SubagentModelsSettings />
       {chatgptPoolSources(providers).length > 0 && !providers.some((p) => p.oauthAccountPool) && (
-        <div className="space-y-1.5 rounded-md border p-3">
+        <div className="space-y-1.5 rounded-[6px] border p-3">
           <Button
             variant="outline"
             size="sm"
@@ -169,7 +169,7 @@ export function ProvidersSettings() {
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             {t('Create ChatGPT account pool')}
           </Button>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {t(
               'Pool entries do not show a single account quota. Fixed-account entries remain unchanged.'
             )}
@@ -178,10 +178,10 @@ export function ProvidersSettings() {
       )}
 
       {providers.length === 0 ? (
-        <div className="rounded-md border border-dashed px-3 py-8 text-center">
+        <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Server className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 text-sm font-medium">{t('No providers yet')}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-3 text-[13px] font-medium">{t('No providers yet')}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
             {t('Import providers from local apps or use the unified setup to get started')}
           </p>
         </div>
@@ -191,7 +191,7 @@ export function ProvidersSettings() {
             const oauthInfo = oauthInfos.find((info) => info.id === group.vendorId);
             const label = group.vendorId === CUSTOM_VENDOR_ID ? t('Custom') : group.label;
             return (
-              <div key={group.vendorId} className="rounded-md px-3 py-2">
+              <div key={group.vendorId} className="rounded-[6px] px-3 py-2">
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
                     {label}
@@ -217,7 +217,7 @@ export function ProvidersSettings() {
                     return (
                       <React.Fragment key={provider.id}>
                         <div
-                          className="group flex items-start justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+                          className="group flex items-start justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
                           data-settings-row={`providers.${provider.id}`}
                         >
                           <div className="min-w-0 flex-1 overflow-hidden">
@@ -229,7 +229,7 @@ export function ProvidersSettings() {
                               )}
                               <span
                                 className={cn(
-                                  'truncate text-sm font-medium',
+                                  'truncate text-[13px] font-medium',
                                   !provider.enabled && 'text-muted-foreground line-through'
                                 )}
                               >
@@ -254,7 +254,7 @@ export function ProvidersSettings() {
                                   {provider.importedFrom}
                                 </Badge>
                               )}
-                              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                              <span className="min-w-0 truncate text-[12px] text-muted-foreground">
                                 {[
                                   isSubscription ? undefined : provider.baseUrl,
                                   provider.oauthAccountPool
@@ -271,7 +271,7 @@ export function ProvidersSettings() {
                               </span>
                             </div>
                             {isClassifierOnlyProvider(provider) && (
-                              <p className="mt-1 text-xs text-muted-foreground">
+                              <p className="mt-1 text-[12px] text-muted-foreground">
                                 {t('Classification only, not for chat')}
                               </p>
                             )}
@@ -289,7 +289,7 @@ export function ProvidersSettings() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                              className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                               onClick={() => setEditing(provider)}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -299,7 +299,7 @@ export function ProvidersSettings() {
                               size="icon"
                               disabled={removingId === provider.id}
                               className={cn(
-                                'h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100',
+                                'h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100',
                                 removingId === provider.id && 'opacity-100'
                               )}
                               onClick={() => setPendingRemove(provider)}
@@ -313,7 +313,7 @@ export function ProvidersSettings() {
                           </div>
                         </div>
                         {removeError?.providerId === provider.id && (
-                          <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
+                          <div className="flex items-center justify-between gap-2 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[12px] text-destructive">
                             <span className="min-w-0 truncate">
                               {t('Sign-out failed: {{message}}', { message: removeError.message })}
                             </span>

@@ -154,7 +154,7 @@ function DelegationRow({
     </>
   );
   return (
-    <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+    <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
       {collapsible ? (
         <button
           type="button"
@@ -339,7 +339,7 @@ export function GroupChatScreen(props: Props) {
         return (
           <div key={entry.seq} className="flex flex-col items-end">
             {entry.text && (
-              <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-brand/10 px-3 py-2 text-sm">
+              <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[14px] rounded-br-[4px] bg-card px-3 py-2 text-[13px] leading-5">
                 {withMentions(entry.text, names)}
                 {entry.truncated && (
                   <p className="text-xs text-muted-foreground">消息过长，仅显示部分内容</p>
@@ -361,7 +361,7 @@ export function GroupChatScreen(props: Props) {
                 <span className="font-medium">{bot?.name ?? '成员'}</span>
                 <span className="text-muted-foreground">{timeOf(entry.at)}</span>
               </p>
-              <div className="mt-0.5 min-w-0 text-sm">
+              <div className="mt-0.5 min-w-0 rounded-[14px] rounded-bl-[4px] bg-muted/40 px-3 py-2 text-[13px] leading-5">
                 <Markdown text={entry.text} />
                 {entry.truncated && (
                   <p className="text-xs text-muted-foreground">消息过长，仅显示部分内容</p>
@@ -436,7 +436,7 @@ export function GroupChatScreen(props: Props) {
 
   return (
     <div className="phone-chat-root flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 items-center gap-1 border-b bg-background px-2 py-2 pt-safe">
+      <header className="flex min-h-[56px] shrink-0 items-center gap-1.5 border-b bg-background px-3 py-1.5 pt-safe">
         {!props.drawerDocked ? (
           <button
             type="button"
@@ -449,8 +449,8 @@ export function GroupChatScreen(props: Props) {
         ) : (
           <span className="h-9 w-9 shrink-0" />
         )}
-        <div className="min-w-0 flex-1 text-center">
-          <p className="truncate font-medium text-sm">{chat.title || '群聊'}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-[13px]">{chat.title || '群聊'}</p>
           {props.threads ? (
             <GroupThreadSwitcher
               threads={props.threads}
@@ -565,7 +565,7 @@ export function GroupChatScreen(props: Props) {
         )}
       </div>
 
-      <div className="phone-dock shrink-0 space-y-2 px-3 pt-1 pb-safe">
+      <div className="phone-dock shrink-0 space-y-2 border-t px-3 pt-2 pb-safe">
         {props.outbox}
         {props.notice && (
           <p className="rounded-md bg-destructive/10 px-2 py-1 text-destructive text-xs">
@@ -600,7 +600,7 @@ export function GroupChatScreen(props: Props) {
           )}
         <div className={cn('relative', props.deviceReadOnly && 'hidden')}>
           {options.length > 0 && (
-            <div className="absolute right-0 bottom-full left-0 mb-1 max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md">
+            <div className="absolute right-0 bottom-full left-0 mb-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
               {options.map((option) => {
                 const bot = bots.get(option.id);
                 return (
@@ -633,7 +633,7 @@ export function GroupChatScreen(props: Props) {
               {picked.map((item) => (
                 <div
                   key={item.url}
-                  className="relative h-14 w-14 overflow-hidden rounded-lg border"
+                  className="relative h-14 w-14 overflow-hidden rounded-md border"
                 >
                   <img src={item.url} alt="" className="h-full w-full object-cover" />
                   <button
@@ -650,7 +650,7 @@ export function GroupChatScreen(props: Props) {
           )}
           <div
             ref={composerRef}
-            className="flex items-end gap-2 rounded-2xl border bg-background px-3 py-2"
+            className="flex items-end gap-2 rounded-md border bg-background px-2 py-1.5 focus-within:border-brand/60"
           >
             <input
               ref={fileRef}

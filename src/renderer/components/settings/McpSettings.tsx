@@ -112,13 +112,13 @@ export function McpSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4" data-settings-row="mcp.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="mcp.root">
         <div>
-          <h3 className="font-medium text-lg">
+          <h3 className="font-semibold text-[18px]">
             {t('MCP Servers')}
             <NewSessionBadge />
             {mcpServers.length > 0 && (
-              <span className="ml-2 font-normal text-muted-foreground text-xs">
+              <span className="ml-2 font-normal text-muted-foreground text-[12px]">
                 {t('{{enabled}}/{{total}} enabled', {
                   enabled: enabledCount,
                   total: mcpServers.length,
@@ -127,7 +127,7 @@ export function McpSettings() {
               </span>
             )}
           </h3>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-[13px]">
             {t('Model Context Protocol servers available to this app')}
           </p>
         </div>
@@ -144,10 +144,10 @@ export function McpSettings() {
       </div>
 
       {mcpServers.length === 0 ? (
-        <div className="rounded-md border border-dashed px-3 py-8 text-center">
+        <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Plug className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-sm">{t('No MCP servers yet')}</p>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-3 font-medium text-[13px]">{t('No MCP servers yet')}</p>
+          <p className="mt-1 text-muted-foreground text-[12px]">
             {t('Import MCP servers from local apps or add one manually to get started')}
           </p>
         </div>
@@ -166,7 +166,7 @@ export function McpSettings() {
             actionDisabled={selection.selectedIds.length === 0}
           />
           {visible.length === 0 ? (
-            <p className="px-3 py-6 text-center text-muted-foreground text-xs">{t('No results')}</p>
+            <p className="px-3 py-6 text-center text-muted-foreground text-[12px]">{t('No results')}</p>
           ) : (
             <div className="space-y-1">
               {visible.map((server) => {
@@ -180,7 +180,7 @@ export function McpSettings() {
                 return (
                   <div key={server.id} className="space-y-1">
                     <div
-                      className="group flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+                      className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
                       data-settings-row={`mcp.${server.id}`}
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -190,7 +190,7 @@ export function McpSettings() {
                         />
                         <span
                           className={cn(
-                            'shrink-0 font-medium text-sm',
+                            'shrink-0 font-medium text-[13px]',
                             !server.enabled && 'text-muted-foreground line-through'
                           )}
                         >
@@ -203,7 +203,7 @@ export function McpSettings() {
                           {server.source}
                         </Badge>
                         {status && <McpStatusBadge status={status} />}
-                        <span className="min-w-0 truncate font-mono text-muted-foreground text-xs">
+                        <span className="min-w-0 truncate font-mono text-muted-foreground text-[12px]">
                           {server.url ?? [server.command, ...(server.args ?? [])].join(' ')}
                         </span>
                       </div>
@@ -229,7 +229,7 @@ export function McpSettings() {
                             variant="ghost"
                             size="icon"
                             title={t('Revoke authorization')}
-                            className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                            className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                             onClick={() => void revoke(server.id)}
                           >
                             <ShieldOff className="h-3.5 w-3.5" />
@@ -253,12 +253,12 @@ export function McpSettings() {
                           )}
                         >
                           <TabsList aria-label={t('Load mode')}>
-                            <TabsTab value="direct" className="h-6 px-2 text-xs sm:h-6 sm:text-xs">
+                            <TabsTab value="direct" className="h-6 px-2 text-[12px] sm:h-6 sm:text-[12px]">
                               {t('Always loaded')}
                             </TabsTab>
                             <TabsTab
                               value="deferred"
-                              className="h-6 px-2 text-xs sm:h-6 sm:text-xs"
+                              className="h-6 px-2 text-[12px] sm:h-6 sm:text-[12px]"
                             >
                               {t('On demand')}
                             </TabsTab>
@@ -271,7 +271,7 @@ export function McpSettings() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                           onClick={() => setEditing(server)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -279,7 +279,7 @@ export function McpSettings() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                          className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
                           onClick={() => removeMcpServer(server.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -287,7 +287,7 @@ export function McpSettings() {
                       </div>
                     </div>
                     {authorizedHint === server.id && (
-                      <p className="px-3 text-muted-foreground text-xs">
+                      <p className="px-3 text-muted-foreground text-[12px]">
                         {t(
                           'Authorized. Conversations that already include this server can use it on the next message.'
                         )}

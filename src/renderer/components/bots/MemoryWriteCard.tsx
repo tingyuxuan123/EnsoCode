@@ -30,7 +30,7 @@ export function MemoryWriteCard({
       .finally(() => setBusy(false));
   };
   return (
-    <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">{bot?.name ?? t('Deleted member')}</span>

@@ -263,7 +263,7 @@ export function NewBotDialog({
                   type="button"
                   onClick={() => applyTemplate(template)}
                   className={cn(
-                    'flex flex-col items-start gap-1 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted',
+                    'flex flex-col items-start gap-1 rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted',
                     source.id === template.id && 'ring-2 ring-info'
                   )}
                 >
@@ -277,7 +277,7 @@ export function NewBotDialog({
               <button
                 type="button"
                 onClick={applyBlank}
-                className="flex items-center justify-center gap-1 rounded-xl border border-dashed p-3 text-muted-foreground text-sm hover:bg-muted"
+                className="flex items-center justify-center gap-1 rounded-md border border-dashed p-3 text-muted-foreground text-sm hover:bg-muted"
               >
                 <Plus className="h-4 w-4" />
                 {t('Blank member')}
@@ -348,7 +348,7 @@ export function NewBotDialog({
                 onChange={(event) => patch({ persona: event.target.value })}
               />
             </div>
-            <div className="col-span-2 rounded-lg border">
+            <div className="col-span-2 rounded-md border">
               <button
                 type="button"
                 className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm"

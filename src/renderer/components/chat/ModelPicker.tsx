@@ -14,7 +14,7 @@ import {
   VIRTUAL_PROVIDER_ID,
   type VirtualModelEntry,
 } from '@shared/virtualModels';
-import { BadgeCheck, Brain, Check, ChevronDown, KeyRound, Shuffle } from 'lucide-react';
+import { BadgeCheck, Brain, Check, ChevronDown, KeyRound, Shuffle, Sparkle } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { providerDisplayName } from '@/components/settings/chatgptPool';
 import { Badge } from '@/components/ui/badge';
@@ -868,11 +868,12 @@ export function ModelPicker({
         <MenuTrigger
           data-model-picker="trigger"
           className={cn(
-            'flex h-7 min-w-14 max-w-64 shrink items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'flex h-[28px] min-w-14 max-w-64 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
             triggerClassName
           )}
           title={triggerLabel}
         >
+          <Sparkle className="size-[14px] shrink-0 text-primary" aria-hidden />
           <span className="flex min-w-0 items-center gap-1">
             <span className="min-w-0 truncate">{triggerLabel}</span>
             {hasSelection && showReasoningControls && reasoningMode ? (

@@ -373,7 +373,7 @@ export function GroupTimeline({
                   <div
                     data-seq={row.entry.seq}
                     className={cn(
-                      '-mx-2 flex flex-col rounded-lg px-2 transition-colors duration-500',
+                      '-mx-2 flex flex-col rounded-md px-2 transition-colors duration-500',
                       flashSeq === row.entry.seq && 'bg-brand/10'
                     )}
                   >
@@ -411,7 +411,7 @@ export function GroupTimeline({
                 disabled={!replyingId}
                 title={t('View live')}
                 onClick={() => replyingId && onOpenLive(replyingId, replying.id)}
-                className="-mx-2 flex gap-2.5 rounded-lg px-2 py-1 text-left hover:bg-muted/60 disabled:pointer-events-none"
+                className="-mx-2 flex gap-2.5 rounded-md px-2 py-1 text-left hover:bg-muted/60 disabled:pointer-events-none"
               >
                 <BotAvatar bot={replying} size="sm" busy />
                 <div className="min-w-0">
@@ -782,7 +782,7 @@ function TurnProcess({
       {open && (
         <div
           data-slot="bot-card"
-          className="mt-1.5 rounded-lg border bg-card px-3 py-2 font-mono text-muted-foreground text-xs leading-relaxed"
+          className="mt-1.5 rounded-md border bg-card px-3 py-2 font-mono text-muted-foreground text-xs leading-relaxed"
         >
           {!state && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {state && 'error' in state && <span>{state.error}</span>}

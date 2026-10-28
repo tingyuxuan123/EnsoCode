@@ -146,13 +146,13 @@ export function PairScreen({
   }, [scanning]);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 pt-safe pb-safe">
+    <div className="mx-auto flex h-full w-full max-w-[420px] flex-col items-center justify-center gap-5 px-6 pt-safe pb-safe">
       <div className="flex flex-col items-center gap-1.5 text-center">
-        <span className="mb-2 flex size-11 items-center justify-center rounded-[13px] border border-brand/20 bg-brand/8 text-brand dark:bg-brand/14">
+        <span className="mb-2 flex size-11 items-center justify-center rounded-[12px] bg-muted text-foreground">
           <EnsoMark className="size-6" />
         </span>
-        <h1 className="font-medium text-lg">连接到 EnsoCode</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="font-semibold text-[15px]">连接到 EnsoCode</h1>
+        <p className="text-[12px] text-muted-foreground leading-5">
           在桌面端「设置 → 手机」生成配对码，扫码或粘贴。
         </p>
       </div>
@@ -163,14 +163,14 @@ export function PairScreen({
             ref={videoRef}
             playsInline
             muted
-            className="aspect-square w-full rounded-lg bg-black object-cover"
+            className="aspect-square w-full rounded-[14px] border bg-foreground object-cover"
           />
           <Button variant="outline" className="w-full" onClick={stopScan}>
             取消扫码
           </Button>
         </div>
       ) : (
-        <Button className="w-full max-w-sm" onClick={() => void startScan()}>
+        <Button className="h-[44px] w-full max-w-sm" onClick={() => void startScan()}>
           <Camera className="mr-1.5 h-4 w-4" />
           扫描二维码
         </Button>
@@ -196,7 +196,7 @@ export function PairScreen({
         </Button>
       </div>
 
-      {error && <p className="max-w-sm text-center text-destructive text-xs">{error}</p>}
+      {error && <p className="w-full max-w-sm rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-destructive text-xs leading-5">{error}</p>}
 
       {onCancel && (
         <Button variant="ghost" className="w-full max-w-sm" onClick={onCancel}>

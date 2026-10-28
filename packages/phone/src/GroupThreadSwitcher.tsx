@@ -62,7 +62,7 @@ export function GroupThreadSwitcher({
       <Menu>
         <MenuTrigger
           aria-label="切换话题"
-          className="mx-auto flex max-w-full items-center justify-center gap-0.5 text-[11px] text-muted-foreground"
+          className="mt-0.5 flex max-w-full items-center gap-0.5 text-[11px] text-muted-foreground"
         >
           <span className="truncate">
             {current?.title ?? '主话题'}

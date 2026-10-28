@@ -34,21 +34,21 @@ const SUGGESTIONS: { icon: LucideIcon; title: string; hint: string; prompt: stri
 export function WelcomeSuggestions({ onPick }: { onPick: (prompt: string) => void }) {
   const { t } = useI18n();
   return (
-    <div className="mx-auto grid w-full max-w-[560px] grid-cols-1 gap-2.5 text-left @min-[36rem]:grid-cols-2">
+    <div className="grid w-full grid-cols-1 gap-[8px] text-left @min-[36rem]:grid-cols-2">
       {SUGGESTIONS.map(({ icon: Icon, title, hint, prompt }) => (
         <button
           key={title}
           type="button"
           onClick={() => onPick(t(prompt))}
           data-slot="welcome-suggestion"
-          className="group flex items-start gap-3 rounded-lg border border-border/70 bg-card/40 px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-accent/60"
+          className="group flex items-start gap-[10px] rounded-[6px] border border-border/70 bg-muted/40 px-[12px] py-[10px] text-left transition-colors hover:border-border hover:bg-accent/60"
         >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-brand">
-            <Icon className="size-3.5" />
-          </span>
+          <Icon className="mt-[2px] size-[14px] shrink-0 text-primary" />
           <span className="min-w-0">
-            <span className="block text-[13px] font-medium">{t(title)}</span>
-            <span className="block text-xs text-muted-foreground">{t(hint)}</span>
+            <span className="block text-[12.5px] font-medium">{t(title)}</span>
+            <span className="block text-[11px] leading-[18px] text-muted-foreground">
+              {t(hint)}
+            </span>
           </span>
         </button>
       ))}

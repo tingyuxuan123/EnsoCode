@@ -270,7 +270,7 @@ function AutoAbilities({
         </Button>
       </div>
       {suggestion && changes.length > 0 && (
-        <div className="space-y-2 rounded-lg border bg-muted/40 p-2.5">
+        <div className="space-y-2 rounded-md border bg-muted/40 p-2.5">
           <p className="font-medium text-xs">{t('Suggested changes')}</p>
           {changes.map((change) => (
             <label key={change.field} className="flex items-start gap-2 text-xs">

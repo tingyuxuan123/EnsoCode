@@ -73,7 +73,7 @@ function PercentSliderRow({
 
   return (
     <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-[13px] font-medium">{label}</span>
       <div className="flex items-center gap-3">
         <Slider
           min={min}
@@ -82,7 +82,7 @@ function PercentSliderRow({
           onValueChange={(v) => setLocal(Array.isArray(v) ? v[0] : v)}
           onValueCommitted={(v) => onCommit(Array.isArray(v) ? v[0] : v)}
         />
-        <span className="w-12 shrink-0 text-right text-sm text-muted-foreground">
+        <span className="w-12 shrink-0 text-right text-[13px] text-muted-foreground">
           {local}
           {unit}
         </span>
@@ -180,8 +180,8 @@ function BackgroundImageSettings() {
     <>
       <div className="flex items-center justify-between border-t pt-6">
         <div>
-          <h3 className="text-lg font-medium">{t('Background image')}</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="text-[18px] font-semibold">{t('Background image')}</h3>
+          <p className="text-[13px] text-muted-foreground">
             {t('Show a custom image behind the interface')}
           </p>
         </div>
@@ -192,7 +192,7 @@ function BackgroundImageSettings() {
         <>
           {/* Source type */}
           <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-            <span className="text-sm font-medium">{t('Source type')}</span>
+            <span className="text-[13px] font-medium">{t('Source type')}</span>
             <Select
               items={sourceTypeOptions}
               value={sourceType}
@@ -213,7 +213,7 @@ function BackgroundImageSettings() {
 
           {/* Source path */}
           <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-            <span className="text-sm font-medium">{pathLabel}</span>
+            <span className="text-[13px] font-medium">{pathLabel}</span>
             <div className="flex items-center gap-2">
               <Input
                 value={localPath}
@@ -254,7 +254,7 @@ function BackgroundImageSettings() {
           {/* Auto switch interval（folder/url） */}
           {sourceType !== 'file' && (
             <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Auto switch')}</span>
+              <span className="text-[13px] font-medium">{t('Auto switch')}</span>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={randomEnabled}
@@ -277,7 +277,7 @@ function BackgroundImageSettings() {
                       }}
                       className="w-24"
                     />
-                    <span className="text-sm text-muted-foreground">{t('seconds')}</span>
+                    <span className="text-[13px] text-muted-foreground">{t('seconds')}</span>
                   </>
                 )}
               </div>
@@ -315,7 +315,7 @@ function BackgroundImageSettings() {
 
           {/* Size mode */}
           <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-            <span className="text-sm font-medium">{t('Size mode')}</span>
+            <span className="text-[13px] font-medium">{t('Size mode')}</span>
             <Select
               items={sizeModeOptions}
               value={sizeMode}
@@ -370,7 +370,7 @@ function TerminalPreview({
 
   return (
     <div
-      className="rounded-lg border p-4 h-40 overflow-auto"
+      className="rounded-[6px] border p-4 h-40 overflow-auto"
       style={{
         backgroundColor: theme.background,
         fontSize: `${fontSize}px`,
@@ -562,7 +562,7 @@ function ThemeCombobox({
           />
           <label
             htmlFor="show-favorites-only-inner"
-            className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
+            className="text-[12px] text-muted-foreground cursor-pointer whitespace-nowrap"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
@@ -573,7 +573,7 @@ function ThemeCombobox({
       <ComboboxPopup>
         <ComboboxList ref={listRef}>
           {filteredThemes.length === 0 && (
-            <div className="py-6 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-[13px] text-muted-foreground">
               {showEmptyFavoritesHint
                 ? t('No favorite themes yet. Click the heart icon to add favorites.')
                 : t('No themes found')}
@@ -738,8 +738,8 @@ export function AppearanceSettings() {
     <div className="space-y-6">
       {/* Theme Mode Section */}
       <div data-settings-row="appearance.theme">
-        <h3 className="text-lg font-medium">{t('Theme mode')}</h3>
-        <p className="text-sm text-muted-foreground">{t('Choose interface theme')}</p>
+        <h3 className="text-[18px] font-semibold">{t('Theme mode')}</h3>
+        <p className="text-[13px] text-muted-foreground">{t('Choose interface theme')}</p>
       </div>
 
       <div className="grid grid-cols-4 gap-3">
@@ -749,7 +749,7 @@ export function AppearanceSettings() {
             key={option.value}
             onClick={() => setTheme(option.value)}
             className={cn(
-              'flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors',
+              'flex flex-col items-center gap-2 rounded-[6px] border-2 p-3 transition-colors',
               theme === option.value
                 ? 'border-primary bg-accent text-accent-foreground'
                 : 'border-transparent bg-muted/50 hover:bg-muted'
@@ -765,14 +765,14 @@ export function AppearanceSettings() {
             >
               <option.icon className="h-5 w-5" />
             </div>
-            <span className="text-sm font-medium">{option.label}</span>
+            <span className="text-[13px] font-medium">{option.label}</span>
           </button>
         ))}
       </div>
 
       <div data-settings-row="appearance.accent">
-        <h3 className="text-lg font-medium">{t('Accent color')}</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-[18px] font-semibold">{t('Accent color')}</h3>
+        <p className="text-[13px] text-muted-foreground">
           {t('Highlight color used across the interface')}
         </p>
       </div>
@@ -798,13 +798,13 @@ export function AppearanceSettings() {
 
       {/* Terminal Section */}
       <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Terminal')}</h3>
-        <p className="text-sm text-muted-foreground">{t('Terminal appearance')}</p>
+        <h3 className="text-[18px] font-semibold">{t('Terminal')}</h3>
+        <p className="text-[13px] text-muted-foreground">{t('Terminal appearance')}</p>
       </div>
 
       {/* Preview */}
       <div className="space-y-2">
-        <p className="text-sm font-medium">{t('Preview')}</p>
+        <p className="text-[13px] font-medium">{t('Preview')}</p>
         <TerminalPreview
           theme={previewTheme}
           fontSize={localFontSize}
@@ -815,7 +815,7 @@ export function AppearanceSettings() {
 
       {/* Theme Selector */}
       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Color scheme')}</span>
+        <span className="text-[13px] font-medium">{t('Color scheme')}</span>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={handlePrevTheme}>
             <ChevronLeft className="h-4 w-4" />
@@ -841,7 +841,7 @@ export function AppearanceSettings() {
 
       {/* Font Family */}
       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Font')}</span>
+        <span className="text-[13px] font-medium">{t('Font')}</span>
         <Input
           value={localFontFamily}
           onChange={(e) => setLocalFontFamily(e.target.value)}
@@ -859,7 +859,7 @@ export function AppearanceSettings() {
 
       {/* Font Size */}
       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Font size')}</span>
+        <span className="text-[13px] font-medium">{t('Font size')}</span>
         <div className="flex items-center gap-2">
           <Input
             type="number"
@@ -876,13 +876,13 @@ export function AppearanceSettings() {
             max={32}
             className="w-20"
           />
-          <span className="text-sm text-muted-foreground">px</span>
+          <span className="text-[13px] text-muted-foreground">px</span>
         </div>
       </div>
 
       {/* Font Weight */}
       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Font weight')}</span>
+        <span className="text-[13px] font-medium">{t('Font weight')}</span>
         <Select
           items={fontWeightOptions}
           value={terminalFontWeight}
@@ -903,7 +903,7 @@ export function AppearanceSettings() {
 
       {/* Font Weight Bold */}
       <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Bold font weight')}</span>
+        <span className="text-[13px] font-medium">{t('Bold font weight')}</span>
         <Select
           items={fontWeightOptions}
           value={terminalFontWeightBold}

@@ -162,7 +162,7 @@ export function NewGroupDialog({
                 type="button"
                 onClick={() => setWorkspace('project')}
                 className={cn(
-                  'rounded-xl border bg-card p-3 text-left disabled:opacity-50',
+                  'rounded-md border bg-card p-3 text-left disabled:opacity-50',
                   workspace === 'project' && 'ring-2 ring-info'
                 )}
               >
@@ -175,7 +175,7 @@ export function NewGroupDialog({
                 type="button"
                 onClick={() => setWorkspace('chat-home')}
                 className={cn(
-                  'rounded-xl border bg-card p-3 text-left',
+                  'rounded-md border bg-card p-3 text-left',
                   workspace === 'chat-home' && 'ring-2 ring-info'
                 )}
               >
@@ -188,7 +188,7 @@ export function NewGroupDialog({
             {workspace === 'project' && (
               <BotProjectPicker projectId={projectId} onChange={setProjectId} />
             )}
-            <div className="mt-2 flex gap-2 rounded-lg border border-warning/40 bg-warning/8 px-3 py-2 text-xs">
+            <div className="mt-2 flex gap-2 rounded-md border border-warning/40 bg-warning/8 px-3 py-2 text-xs">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
               <span>
                 {t(

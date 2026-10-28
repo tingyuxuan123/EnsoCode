@@ -30,7 +30,7 @@ function Detail({ label, items }: { label: string; items: string[] }) {
   if (items.length === 0) return null;
   return (
     <div className="space-y-0.5">
-      <p className="font-medium text-muted-foreground text-xs">{label}</p>
+      <p className="font-medium text-muted-foreground text-[12px]">{label}</p>
       {items.map((item) => (
         <p key={item} className="break-all font-mono text-[11px]">
           {item}
@@ -54,7 +54,7 @@ function PluginRow({
   const { components } = plugin;
   const counts = componentCounts(components, t);
   return (
-    <div className="rounded-md border" data-settings-row={`plugins.${plugin.key}`}>
+    <div className="rounded-[6px] border" data-settings-row={`plugins.${plugin.key}`}>
       <div className="flex items-center justify-between gap-3 px-3 py-2">
         <button
           type="button"
@@ -67,7 +67,7 @@ function PluginRow({
               open && 'rotate-90'
             )}
           />
-          <span className="shrink-0 font-medium text-sm">{plugin.name}</span>
+          <span className="shrink-0 font-medium text-[13px]">{plugin.name}</span>
           {plugin.version && (
             <Badge variant="outline" className="shrink-0 text-[11px]">
               {plugin.version}
@@ -78,7 +78,7 @@ function PluginRow({
               {plugin.marketplace}
             </Badge>
           )}
-          <span className="min-w-0 truncate text-muted-foreground text-xs">
+          <span className="min-w-0 truncate text-muted-foreground text-[12px]">
             {counts ||
               (components.unsupported.length > 0
                 ? `${t('Not supported')}: ${components.unsupported.join(', ')}`
@@ -90,7 +90,7 @@ function PluginRow({
       {open && (
         <div className="space-y-2 border-t px-3 py-2">
           {plugin.description && (
-            <p className="text-muted-foreground text-xs">{plugin.description}</p>
+            <p className="text-muted-foreground text-[12px]">{plugin.description}</p>
           )}
           <Detail label={t('Skills')} items={components.skills} />
           <Detail label={t('Commands')} items={components.commands.map((name) => `/${name}`)} />
@@ -157,18 +157,18 @@ export function PluginsSettings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-4" data-settings-row="plugins.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="plugins.root">
         <div>
-          <h3 className="font-medium text-lg">
+          <h3 className="font-semibold text-[18px]">
             {t('Plugins')}
             <NewSessionBadge />
             {enabledCount > 0 && (
-              <span className="ml-2 font-normal text-muted-foreground text-xs">
+              <span className="ml-2 font-normal text-muted-foreground text-[12px]">
                 {t('{{count}} enabled', { count: enabledCount })}
               </span>
             )}
           </h3>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-[13px]">
             {t(
               'Plugins installed in Claude Code. Each one is switched on or off as a whole here; changes apply to new sessions.'
             )}
@@ -185,10 +185,10 @@ export function PluginsSettings() {
           <Spinner className="size-5" />
         </div>
       ) : installed.length === 0 ? (
-        <div className="rounded-md border border-dashed px-3 py-8 text-center">
+        <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Puzzle className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-sm">{t('No Claude Code plugins found')}</p>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-3 font-medium text-[13px]">{t('No Claude Code plugins found')}</p>
+          <p className="mt-1 text-muted-foreground text-[12px]">
             {t('Install plugins with /plugin in Claude Code, then rescan.')}
           </p>
         </div>
@@ -207,15 +207,15 @@ export function PluginsSettings() {
 
       {missing.length > 0 && (
         <div className="space-y-1">
-          <p className="font-medium text-muted-foreground text-xs">
+          <p className="font-medium text-muted-foreground text-[12px]">
             {t('No longer installed in Claude Code')}
           </p>
           {missing.map((entry) => (
             <div
               key={entry.id}
-              className="flex items-center justify-between gap-3 rounded-md px-3 py-2 hover:bg-accent/50"
+              className="flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 hover:bg-accent/50"
             >
-              <span className="text-muted-foreground text-sm line-through">{entry.name}</span>
+              <span className="text-muted-foreground text-[13px] line-through">{entry.name}</span>
               <Button
                 variant="ghost"
                 size="icon"

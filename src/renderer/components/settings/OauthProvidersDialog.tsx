@@ -111,22 +111,22 @@ export function OauthProviderAccounts({
   return (
     <div className="space-y-4">
       {provider.accounts.length === 0 ? (
-        <div className="rounded-md border border-dashed px-4 py-6 text-center">
-          <p className="text-sm font-medium">{t('No subscription account connected')}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+        <div className="rounded-[6px] border border-dashed px-4 py-6 text-center">
+          <p className="text-[13px] font-medium">{t('No subscription account connected')}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
             {t('Authorize this provider to add its available models.')}
           </p>
         </div>
       ) : (
-        <div className="space-y-1 rounded-md border p-1">
+        <div className="space-y-1 rounded-[6px] border p-1">
           {provider.accounts.map((account) => (
             <div
               key={account.key}
-              className="flex items-start justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+              className="flex items-start justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">
+                  <span className="truncate text-[13px] font-medium">
                     {account.email ?? account.key}
                   </span>
                   {account.plan && (
@@ -156,7 +156,7 @@ export function OauthProviderAccounts({
       )}
 
       {error && (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+        <div className="flex items-start gap-2 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span className="break-words">{error}</span>
         </div>

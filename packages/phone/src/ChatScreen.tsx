@@ -281,7 +281,7 @@ export function ChatScreen(props: Props) {
   return (
     <ChatHostContext.Provider value={host}>
       <div className="phone-chat-root flex h-full min-h-0 flex-col">
-        <header className="flex shrink-0 items-center gap-1 border-b bg-background px-2 py-2 pt-safe">
+        <header className="flex min-h-[56px] shrink-0 items-center gap-1.5 border-b bg-background px-3 py-1.5 pt-safe">
           {bot?.onBack || !props.drawerDocked ? (
             <button
               type="button"
@@ -298,24 +298,24 @@ export function ChatScreen(props: Props) {
           ) : (
             <span className="h-9 w-9 shrink-0" />
           )}
-          <div className="min-w-0 flex-1 text-center">
-            <p className="flex min-w-0 items-center justify-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            <p className="flex min-w-0 items-center gap-1.5">
               {props.connState !== 'host-offline' && props.connState !== 'unauthorized' && (
                 <span
                   className={cn(
                     'h-1.5 w-1.5 shrink-0 rounded-full',
                     props.connState === 'online' && !props.syncing
-                      ? 'bg-emerald-500'
-                      : 'animate-pulse bg-amber-500'
+                      ? 'bg-success'
+                      : 'animate-pulse bg-warning'
                   )}
                   title={
                     props.connState === 'online' && props.syncing ? '同步中…' : props.stateLabel
                   }
                 />
               )}
-              <span className="truncate font-medium text-sm">{props.title}</span>
+              <span className="truncate font-medium text-[13px]">{props.title}</span>
             </p>
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
               {props.projectName || props.stateLabel}
             </p>
           </div>
@@ -341,7 +341,7 @@ export function ChatScreen(props: Props) {
         </header>
 
         {props.connState === 'host-offline' && (
-          <div className="flex shrink-0 items-center justify-center gap-1.5 bg-amber-500/10 py-1 text-amber-700 text-xs dark:text-amber-400">
+          <div className="flex shrink-0 items-center justify-center gap-1.5 border-b border-warning/20 bg-warning/10 px-3 py-1.5 text-warning text-xs">
             <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
             <span>{props.stateLabel}</span>
           </div>
@@ -428,7 +428,7 @@ export function ChatScreen(props: Props) {
         {sessionId !== null && (
           // 浏览器里 safe-area 为 0，用 0.5rem 兜底不贴边；standalone 下取
           // home indicator 的实际高度，不再叠加，避免下方留出多余空白
-          <div className="phone-dock @container shrink-0 pt-1 pb-safe">
+          <div className="phone-dock @container shrink-0 border-t pt-2 pb-safe">
             <div className={CHAT_COL}>
               {/* 自动重试横幅：只展示不可取消（pair 桥无 abort-retry 通道，整轮 abort 已够用） */}
               {view?.retry && <RetryBar retry={view.retry} />}

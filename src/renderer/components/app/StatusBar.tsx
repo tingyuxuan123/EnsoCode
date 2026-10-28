@@ -7,7 +7,7 @@ import { useSessionsStore } from '@/stores/sessions';
 import { summarizeWorkbench } from './statusBarSummary';
 
 /**
- * 窗口底部 28px 状态栏：当前节点、运行中/待处理会话数。只读摘要，不承载操作，
+ * 窗口底部 24px 状态栏：当前节点、运行中/待处理会话数。只读摘要，不承载操作，
  * 状态全部来自现有 store，不新增数据源。
  */
 export function StatusBar() {
@@ -30,7 +30,7 @@ export function StatusBar() {
   return (
     <footer
       data-slot="status-bar"
-      className="flex h-6 shrink-0 items-center gap-3 border-t bg-shell px-4 text-[11px] text-muted-foreground"
+      className="flex h-[24px] shrink-0 items-center gap-3 border-t border-line bg-shell px-4 text-[11px] text-muted-foreground"
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span className={cn('size-1.5 shrink-0 rounded-full', nodeTone)} aria-hidden />

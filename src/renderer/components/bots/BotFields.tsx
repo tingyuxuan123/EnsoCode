@@ -210,7 +210,7 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+    <div className="flex rounded-md bg-muted p-0.5 text-xs">
       {options.map((option) => (
         <button
           key={option.value}

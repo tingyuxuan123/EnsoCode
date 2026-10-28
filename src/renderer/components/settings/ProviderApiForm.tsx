@@ -215,7 +215,7 @@ export function ProviderApiForm({
       <DialogPanel bare={bare} className="space-y-4">
         {extraFields}
         {isClassifierOnlyProvider({ api, baseUrl }) && (
-          <p className="text-xs text-muted-foreground">{t('Classification only, not for chat')}</p>
+          <p className="text-[12px] text-muted-foreground">{t('Classification only, not for chat')}</p>
         )}
         {!hideName && (
           <Field>
@@ -285,7 +285,7 @@ export function ProviderApiForm({
             <FieldLabel>
               {t('Models')}
               {models.length > 0 && (
-                <span className="font-normal text-muted-foreground text-xs">
+                <span className="font-normal text-muted-foreground text-[12px]">
                   {t('{{enabled}}/{{total}} enabled', {
                     enabled: enabledCount,
                     total: models.length,
@@ -298,7 +298,7 @@ export function ProviderApiForm({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 gap-1 px-2 text-xs"
+                className="h-6 gap-1 px-2 text-[12px]"
                 disabled={busy !== null}
                 onClick={handleFetchModels}
               >
@@ -330,7 +330,7 @@ export function ProviderApiForm({
               {/* 列表自己限高滚动，到边界后由 useScrollChain 把滚轮交给对话框 */}
               <div
                 ref={modelListRef}
-                className="max-h-72 w-full space-y-0.5 overflow-y-auto rounded-md border p-1"
+                className="max-h-72 w-full space-y-0.5 overflow-y-auto rounded-[6px] border p-1"
               >
                 {visibleModels.map((model) => (
                   <ProviderModelRow
@@ -365,7 +365,7 @@ export function ProviderApiForm({
                   />
                 ))}
                 {visibleModels.length === 0 && (
-                  <p className="py-4 text-center text-muted-foreground text-xs">
+                  <p className="py-4 text-center text-muted-foreground text-[12px]">
                     {t('No models match')}
                   </p>
                 )}
@@ -386,7 +386,7 @@ export function ProviderApiForm({
                   addModel(newModel);
                 }}
                 placeholder={t('Add a model id')}
-                className="h-8 font-mono text-xs"
+                className="h-8 font-mono text-[12px]"
               />
               <Button
                 type="button"
@@ -444,14 +444,14 @@ export function ProviderApiForm({
           )}
           {status &&
             (status.ok ? (
-              <span className="flex min-w-0 items-center gap-1 text-emerald-600 text-xs dark:text-emerald-500">
+              <span className="flex min-w-0 items-center gap-1 text-emerald-600 text-[12px] dark:text-emerald-500">
                 <CircleCheck className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{status.text}</span>
               </span>
             ) : (
               <button
                 type="button"
-                className="flex min-w-0 items-center gap-1 text-destructive text-xs underline-offset-2 hover:underline"
+                className="flex min-w-0 items-center gap-1 text-destructive text-[12px] underline-offset-2 hover:underline"
                 onClick={() => setErrorDetail(status.text)}
               >
                 <CircleX className="h-3.5 w-3.5 shrink-0" />
@@ -487,7 +487,7 @@ export function ProviderApiForm({
             <DialogTitle>{t('Connection failed')}</DialogTitle>
           </DialogHeader>
           <DialogPanel>
-            <pre className="max-h-80 select-text overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs">
+            <pre className="max-h-80 select-text overflow-auto whitespace-pre-wrap break-all rounded-[6px] bg-muted p-3 font-mono text-[12px]">
               {errorDetail}
             </pre>
           </DialogPanel>

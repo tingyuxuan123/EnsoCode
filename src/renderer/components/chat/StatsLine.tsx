@@ -399,7 +399,7 @@ function buildSegmentValues(
 
 /** composer 下方的会话统计条：段位驱动、每段「图标 + 值」的紧凑呈现，段名只在悬停提示与设置弹层里。
  *  段位顺序 = `statusLineSegments` 数组自身顺序（用户可在设置弹层拖拽），预设不进存储，
- *  见 `statusLinePresetOf`。外层恒占一行高度（h-7）：避免统计从无到有时输入框跳动；
+ *  见 `statusLinePresetOf`。外层恒占一行高度：避免统计从无到有时输入框跳动；
  *  全部段位关掉时仍渲染空容器 + hover 齿轮，否则用户关完就再也打不开设置。 */
 export function StatsLine({ conversationId }: StatsLineProps) {
   const { t } = useI18n();
@@ -473,10 +473,10 @@ export function StatsLine({ conversationId }: StatsLineProps) {
   return (
     <div
       data-slot="stats-line"
-      className="group relative flex h-7 items-center justify-center px-1"
+      className="group relative mt-[6px] flex h-[20px] items-center justify-start pr-[28px]"
     >
       {visibleSegments.length > 0 && (
-        <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-hidden">
+        <div className="flex min-w-0 flex-nowrap items-center gap-[12px] overflow-hidden">
           {visibleSegments.map((id, index) => {
             const value = values[id];
             if (!value) return null;
@@ -488,7 +488,7 @@ export function StatsLine({ conversationId }: StatsLineProps) {
                 onMouseLeave={() => setHoveredId((current) => (current === id ? null : current))}
                 className={cn(
                   'relative flex items-center gap-1 text-[11px] tabular-nums',
-                  value.critical ? 'text-destructive' : 'text-muted-foreground/80'
+                  value.critical ? 'text-destructive' : 'text-faint'
                 )}
               >
                 {id === 'context' && value.percent !== undefined ? (
@@ -541,9 +541,9 @@ export function StatsLine({ conversationId }: StatsLineProps) {
       <Popover>
         <PopoverTrigger
           aria-label={t('Status line settings')}
-          className="-translate-y-1/2 absolute top-1/2 right-1 flex h-5.5 w-5.5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+          className="-translate-y-1/2 absolute top-1/2 right-0 flex size-[20px] items-center justify-center rounded-[4px] text-faint transition-colors hover:bg-muted hover:text-foreground"
         >
-          <Settings2 className="h-3.5 w-3.5" />
+          <Settings2 className="size-[12px]" />
         </PopoverTrigger>
         <PopoverPopup side="top" align="end" className="w-72 [&_[data-slot=popover-viewport]]:p-0">
           <StatusLineSettings icons={icons} values={values} />

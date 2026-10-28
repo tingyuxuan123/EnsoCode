@@ -189,14 +189,14 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly, todos }: TaskBa
             aria-expanded={open === 'todo'}
             onClick={() => toggle('todo')}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground',
-              open === 'todo' && 'bg-muted text-foreground'
+              'inline-flex h-[28px] items-center gap-[6px] rounded-[6px] border border-border/80 bg-background px-[10px] text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+              open === 'todo' && 'bg-control/70 text-foreground'
             )}
           >
             {progress.active ? (
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              <LoaderCircle className="size-[14px] animate-spin" aria-hidden />
             ) : (
-              <ListTodo className="h-3.5 w-3.5" aria-hidden />
+              <ListTodo className="size-[14px]" aria-hidden />
             )}
             <span>{t('Current progress')}</span>
             <span className="tabular-nums">
@@ -221,9 +221,9 @@ function TodoPanel({
 }) {
   const { t } = useI18n();
   return (
-    <div className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex max-h-[min(28rem,60vh)] flex-col rounded-xl border bg-card shadow-float">
-      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2 text-xs">
-        <ListTodo className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+    <div className="absolute bottom-full left-0 right-0 z-30 mb-[6px] flex max-h-[min(360px,60vh)] flex-col overflow-hidden rounded-[6px] border border-border bg-background shadow-float">
+      <div className="flex min-h-[40px] shrink-0 flex-wrap items-center gap-[8px] border-b border-line px-[12px] py-[6px] text-[12px]">
+        <ListTodo className="size-[14px] text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">{t('Current progress')}</span>
         <span className="text-muted-foreground tabular-nums">
           {summary.done}/{summary.total}
@@ -267,14 +267,14 @@ function DockButton({
       onClick={onClick}
       title={summary.running > 0 ? t('{{count}} running', { count: summary.running }) : undefined}
       className={cn(
-        'relative inline-flex h-7 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground',
-        open && 'bg-muted text-foreground'
+        'relative inline-flex h-[28px] items-center gap-[6px] rounded-[6px] border border-border/80 bg-background px-[10px] text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+        open && 'bg-control/70 text-foreground'
       )}
     >
       {summary.running > 0 ? (
-        <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        <LoaderCircle className="size-[14px] animate-spin" aria-hidden />
       ) : (
-        <Icon className="h-3.5 w-3.5" aria-hidden />
+        <Icon className="size-[14px]" aria-hidden />
       )}
       <span>{label}</span>
       {summary.running > 0 && <span className="tabular-nums">· {summary.running}</span>}
@@ -316,15 +316,18 @@ function DockPanel({
   return (
     <div
       data-task-dock-panel=""
-      className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex h-[min(20rem,55vh)] flex-col rounded-xl border bg-card shadow-float"
+      className="absolute bottom-full left-0 right-0 z-30 mb-[6px] flex h-[min(360px,55vh)] flex-col overflow-hidden rounded-[6px] border border-border bg-background shadow-float"
     >
-      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2 text-xs">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+      <div className="flex min-h-[40px] shrink-0 flex-wrap items-center gap-[8px] border-b border-line px-[12px] py-[6px] text-[12px]">
+        <Icon className="size-[14px] text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">{title}</span>
         <span className="text-muted-foreground tabular-nums">
           {t('{{count}} running', { count: summary.running })}
         </span>
-        <div className="ml-auto flex items-center gap-0.5 rounded-lg bg-muted p-0.5" role="tablist">
+        <div
+          className="ml-auto flex h-[26px] items-center gap-[2px] rounded-[6px] bg-control/55 p-[2px]"
+          role="tablist"
+        >
           {DOCK_FILTERS.map((value) => (
             <button
               key={value}
@@ -334,8 +337,8 @@ function DockPanel({
               data-task-dock-filter={value}
               onClick={() => setFilter(value)}
               className={cn(
-                'rounded-md px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground',
-                filter === value && 'bg-background text-foreground shadow-xs'
+                'h-full rounded-[4px] px-[8px] text-[11px] text-muted-foreground transition-colors hover:text-foreground',
+                filter === value && 'bg-background font-medium text-foreground'
               )}
             >
               {filterLabel[value]}
@@ -363,7 +366,7 @@ function DockPanel({
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="scroll-stable min-h-0 flex-1 overflow-auto p-1.5">{children(filter)}</div>
+      <div className="scroll-stable min-h-0 flex-1 overflow-auto p-[8px]">{children(filter)}</div>
     </div>
   );
 }
@@ -388,10 +391,10 @@ function BashList({
   const [expanded, setExpanded] = useState<string | null>(null);
   if (tasks.length === 0) return <EmptyDock />;
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-[6px]">
       {tasks.map((task) => (
-        <div key={task.taskId}>
-          <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] hover:bg-muted/50">
+        <div key={task.taskId} className="rounded-[6px] border border-line px-[12px] py-[8px]">
+          <div className="flex min-h-[24px] min-w-0 items-center gap-[8px] text-[12px]">
             <StepNode
               icon={TerminalSquare}
               state={
@@ -469,7 +472,7 @@ function AgentCards({
             ? t('Cancelled')
             : t('Completed');
   return (
-    <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2 @2xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-[6px] @min-[36rem]:grid-cols-2">
       {entries.map((entry) => {
         const running = isDockAgentRunning(entry);
         const index = order.indexOf(entry.agentId);
@@ -490,7 +493,7 @@ function AgentCards({
               );
               if (target) addSidePanelSubagent(target);
             }}
-            className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-muted/50 px-3 py-2.5 text-left text-xs transition-colors hover:bg-muted"
+            className="flex min-w-0 flex-col gap-[6px] rounded-[6px] border border-line px-[12px] py-[10px] text-left text-[12px] transition-colors hover:bg-accent"
           >
             <span className="flex min-w-0 items-baseline gap-1.5">
               {index >= 0 && (
@@ -498,7 +501,10 @@ function AgentCards({
                   {String(index + 1).padStart(2, '0')}
                 </span>
               )}
-              <span className="truncate text-sm font-medium text-foreground" title={entry.title}>
+              <span
+                className="truncate text-[13px] font-medium text-foreground"
+                title={entry.title}
+              >
                 {title}
               </span>
             </span>

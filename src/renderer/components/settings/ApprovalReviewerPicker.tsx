@@ -16,10 +16,10 @@ export function ApprovalReviewerPicker() {
   const selectedModel = selectedProvider?.models.find((entry) => entry.id === model?.modelId);
 
   return (
-    <section className="space-y-2 rounded-lg border bg-card p-3">
+    <section className="space-y-2 rounded-[6px] border bg-card p-3">
       <div className="min-w-0">
-        <h4 className="font-medium text-sm">{t('Assistant approval model')}</h4>
-        <p className="mt-0.5 text-muted-foreground text-xs">
+        <h4 className="font-medium text-[13px]">{t('Assistant approval model')}</h4>
+        <p className="mt-0.5 text-muted-foreground text-[12px]">
           {t(
             'Required before Assistant approval can be selected. Does not fall back to the chat model.'
           )}
@@ -44,7 +44,7 @@ export function ApprovalReviewerPicker() {
         </div>
       )}
       {model && (!selectedProvider || !selectedModel) && (
-        <p className="text-muted-foreground text-xs">{t('Selected model is unavailable')}</p>
+        <p className="text-muted-foreground text-[12px]">{t('Selected model is unavailable')}</p>
       )}
       {model && (
         <Button variant="ghost" size="sm" className="self-start" onClick={() => setModel(null)}>

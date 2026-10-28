@@ -32,15 +32,18 @@
   --color-shell: var(--shell);
   --color-panel: var(--panel);
   /* 项目/会话导航面：介于外壳与内容区之间，sync-terminal 写入 shell/panel 后自动跟随 */
-  --color-nav: color-mix(in oklab, var(--shell) 55%, var(--panel));
+  --color-nav: color-mix(in srgb, var(--color-shell) 33%, var(--color-panel));
+  --color-control: var(--color-secondary);
+  --color-line: color-mix(in srgb, var(--color-border) 55%, var(--color-panel));
+  --color-faint: color-mix(in srgb, var(--muted-foreground) 86%, var(--foreground));
 
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-sm: var(--radius);
   /* modern 几何：大圆角（卡片/弹窗/气泡）统一收到 6px，胶囊/圆形仍用 rounded-full */
   --radius-xl: var(--radius);
   --radius-2xl: var(--radius);
-  --radius-3xl: calc(var(--radius) + 2px);
+  --radius-3xl: var(--radius);
 
   --font-sans: var(--font-family-sans, -apple-system, system-ui, sans-serif);
   --font-mono: var(--font-family-mono, "SF Mono", "Menlo", monospace);
@@ -83,7 +86,7 @@
     --popover-foreground: rgb(27 38 50);
     --primary: rgb(64 138 191);
     --primary-foreground: rgb(255 255 255);
-    --secondary: rgb(225 233 239);
+    --secondary: rgb(221 231 238);
     --secondary-foreground: rgb(36 51 66);
     --muted: rgb(228 236 241);
     --muted-foreground: rgb(87 102 117);
@@ -97,7 +100,7 @@
     --warning-foreground: rgb(255 255 255);
     --info: rgb(57 124 172);
     --info-foreground: rgb(255 255 255);
-    --border: rgb(212 224 232);
+    --border: rgb(205 219 228);
     --input: rgb(205 219 228);
     --ring: rgb(64 138 191);
     /* 外壳（标题栏/图标轨/侧栏）与内容区两级：外壳暗一档，平铺不加卡片外框 */
@@ -110,20 +113,20 @@
   /* 深色：远山暮霭（ocean-dark）。整体低饱和蓝灰，内容区最深，侧栏/外壳浮一档 */
   .dark {
     color-scheme: dark;
-    --background: rgb(22 26 29);
-    --foreground: rgb(226 230 233);
-    --card: rgb(34 38 42);
-    --card-foreground: rgb(226 230 233);
-    --popover: rgb(38 43 49);
-    --popover-foreground: rgb(226 230 233);
+    --background: rgb(23 27 32);
+    --foreground: rgb(226 232 237);
+    --card: rgb(23 27 32);
+    --card-foreground: rgb(226 232 237);
+    --popover: rgb(34 41 48);
+    --popover-foreground: rgb(226 232 237);
     --primary: rgb(100 156 196);
     --primary-foreground: rgb(255 255 255);
-    --secondary: rgb(40 46 51);
-    --secondary-foreground: rgb(226 230 233);
-    --muted: rgb(36 41 46);
-    --muted-foreground: rgb(148 158 168);
-    --accent: rgb(47 54 61);
-    --accent-foreground: rgb(232 235 237);
+    --secondary: rgb(48 56 62);
+    --secondary-foreground: rgb(226 232 237);
+    --muted: rgb(32 39 45);
+    --muted-foreground: rgb(163 176 187);
+    --accent: rgb(51 61 70);
+    --accent-foreground: rgb(226 232 237);
     --destructive: rgb(214 104 112);
     --destructive-foreground: rgb(24 24 24);
     --success: rgb(104 176 140);
@@ -132,12 +135,12 @@
     --warning-foreground: rgb(26 20 10);
     --info: rgb(122 170 205);
     --info-foreground: rgb(14 18 28);
-    --border: rgb(46 54 61);
-    --input: rgb(55 64 73);
+    --border: rgb(59 70 80);
+    --input: rgb(59 70 80);
     --ring: rgb(114 165 202);
     /* 外壳（侧栏/图标轨）比内容区亮一档：深色下内容最深，阅读更专注 */
-    --shell: rgb(29 33 37);
-    --panel: rgb(22 26 29);
+    --shell: rgb(32 38 44);
+    --panel: rgb(23 27 32);
   }
 }
 
@@ -152,7 +155,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01", "ss03";
+    font-feature-settings: "cv11", "ss01", "ss03", "tnum";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -243,8 +246,8 @@
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
   }
 
   ::-webkit-scrollbar-track {
@@ -261,7 +264,7 @@
 
   /**
    * 滚动条占位固定。上面的 ::-webkit-scrollbar 定宽后滚动条不再浮在内容上，
-   * 而要吃掉 8px 布局宽度：会话执行时内容高度常在可视高度附近反复越界
+   * 而要吃掉 5px 布局宽度：会话执行时内容高度常在可视高度附近反复越界
    * （流式增高、思考块折起、终端输出灌入），滚动条一会儿出现一会儿消失，
    * 整块文字跟着重新折行，看起来就是聊天区抖动。
    * 内容会持续变长的滚动容器（聊天主列表、思考块、工具输出、终端、任务栏）
@@ -347,6 +350,8 @@
  * 避免循环引用，也让 body 能继续拿到实心底色。
  */
 html.bg-image-enabled {
+  --color-shell: oklch(from var(--shell) l c h / var(--bg-panel-alpha, 0.15));
+  --color-panel: oklch(from var(--panel) l c h / var(--bg-panel-alpha, 0.15));
   --color-background: oklch(from var(--background) l c h / var(--bg-panel-alpha, 0.15));
   --color-card: oklch(from var(--card) l c h / var(--bg-panel-alpha, 0.15));
   --color-secondary: oklch(from var(--secondary) l c h / var(--bg-panel-alpha, 0.15));

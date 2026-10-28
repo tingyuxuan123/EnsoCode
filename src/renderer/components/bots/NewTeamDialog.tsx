@@ -277,7 +277,7 @@ export function NewTeamDialog({
                     type="button"
                     disabled={busy}
                     onClick={() => void load({ team: teamSpecOfTemplate(data) })}
-                    className="flex flex-col items-start gap-1.5 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted disabled:opacity-50"
+                    className="flex flex-col items-start gap-1.5 rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted disabled:opacity-50"
                   >
                     <div className="-space-x-1.5 flex">
                       {data.members.map((member) => (
@@ -362,7 +362,7 @@ export function NewTeamDialog({
                       <div
                         key={member.key}
                         className={cn(
-                          'flex items-start gap-2.5 rounded-lg border px-2.5 py-2',
+                          'flex items-start gap-2.5 rounded-md border px-2.5 py-2',
                           !checked && 'opacity-60'
                         )}
                       >
@@ -443,7 +443,7 @@ export function NewTeamDialog({
                             </span>
                           </button>
                           {open && (
-                            <div className="space-y-3 rounded-lg bg-muted/40 p-2.5">
+                            <div className="space-y-3 rounded-md bg-muted/40 p-2.5">
                               <div>
                                 <FieldLabel>{t('Tools')}</FieldLabel>
                                 <Segmented
@@ -512,7 +512,7 @@ export function NewTeamDialog({
                     type="button"
                     onClick={() => setWorkspace('chat-home')}
                     className={cn(
-                      'rounded-xl border bg-card p-3 text-left',
+                      'rounded-md border bg-card p-3 text-left',
                       workspace === 'chat-home' && 'ring-2 ring-info'
                     )}
                   >
@@ -525,7 +525,7 @@ export function NewTeamDialog({
                     type="button"
                     onClick={() => setWorkspace('project')}
                     className={cn(
-                      'rounded-xl border bg-card p-3 text-left disabled:opacity-50',
+                      'rounded-md border bg-card p-3 text-left disabled:opacity-50',
                       workspace === 'project' && 'ring-2 ring-info'
                     )}
                   >
@@ -538,7 +538,7 @@ export function NewTeamDialog({
                 {workspace === 'project' && (
                   <BotProjectPicker projectId={projectId} onChange={setProjectId} />
                 )}
-                <div className="mt-2 flex gap-2 rounded-lg border border-info/40 bg-info/8 px-3 py-2 text-xs">
+                <div className="mt-2 flex gap-2 rounded-md border border-info/40 bg-info/8 px-3 py-2 text-xs">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
                   <span>
                     {t(

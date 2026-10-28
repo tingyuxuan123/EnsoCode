@@ -69,7 +69,7 @@ export function BotArtifacts({ target }: { target: PairBotArtifactTarget }) {
                     thumb: item.thumb,
                   })
                 }
-                className="relative h-20 w-28 overflow-hidden rounded-lg border bg-muted"
+                className="relative h-20 w-28 overflow-hidden rounded-md border bg-muted"
               >
                 {item.thumb ? (
                   <img src={item.thumb} alt="" className="h-full w-full object-cover" />
@@ -98,7 +98,7 @@ export function BotArtifacts({ target }: { target: PairBotArtifactTarget }) {
               <div
                 // biome-ignore lint/suspicious/noArrayIndexKey: 失败项没有 mediaId，顺序即身份
                 key={`failed-${index}`}
-                className="flex w-32 flex-col gap-0.5 rounded-lg border border-destructive/60 border-dashed p-2 text-destructive text-xs"
+                className="flex w-32 flex-col gap-0.5 rounded-md border border-destructive/60 border-dashed p-2 text-destructive text-xs"
               >
                 <span className="truncate font-medium">{item.name ?? LABEL[item.source]}</span>
                 <span>
@@ -144,7 +144,7 @@ function ArtifactChip({ artifact, onOpen }: { artifact: PairBotArtifact; onOpen:
       disabled={!image}
       onClick={onOpen}
       title={artifact.rel}
-      className="flex max-w-60 items-center gap-1.5 rounded-lg border bg-card px-2 py-1 text-left text-xs disabled:cursor-default"
+      className="flex max-w-60 items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-left text-xs disabled:cursor-default"
     >
       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <span className="truncate">{artifact.name}</span>

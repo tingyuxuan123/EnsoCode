@@ -1,4 +1,4 @@
-import { ChevronDown, Pencil } from 'lucide-react';
+import { ChevronDown, FileCode2, Files } from 'lucide-react';
 import { createContext, useContext, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { openSidePanelFile } from '@/lib/sidePanelDock';
@@ -46,15 +46,15 @@ export function TurnFilesCard({
   return (
     <section
       data-turn-files=""
-      className="mt-3 overflow-hidden rounded-xl border bg-card text-xs shadow-xs"
+      className="my-[16px] overflow-hidden rounded-[6px] border border-line text-[12px]"
     >
-      <header className="flex items-center gap-2 px-3 py-2">
-        <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <header className="flex h-[36px] items-center gap-[8px] bg-muted/60 px-[12px]">
+        <Files className="size-[14px] shrink-0 text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">
           {t('{{count}} files changed', { count: summary.files.length })}
         </span>
         <span className="ml-auto flex items-center gap-2 tabular-nums">
-          {summary.added > 0 && <span className="text-green-600">+{summary.added}</span>}
+          {summary.added > 0 && <span className="text-success">+{summary.added}</span>}
           {summary.removed > 0 && <span className="text-destructive">-{summary.removed}</span>}
           {total > 0 && (
             <span
@@ -63,7 +63,7 @@ export function TurnFilesCard({
               title={`+${summary.added} -${summary.removed}`}
             >
               <span
-                className="h-full bg-green-600"
+                className="h-full bg-success"
                 style={{ width: `${(summary.added / total) * 100}%` }}
               />
               <span
@@ -74,7 +74,7 @@ export function TurnFilesCard({
           )}
         </span>
       </header>
-      <ul className="border-t">
+      <ul className="divide-y divide-line border-t border-line">
         {shown.map((file) => {
           const { dir, name } = splitPath(file.path);
           return (
@@ -84,14 +84,15 @@ export function TurnFilesCard({
                 data-turn-file={file.path}
                 title={file.path}
                 onClick={() => openSidePanelFile(conversationId, file.path)}
-                className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted/60"
+                className="flex h-[36px] w-full min-w-0 items-center gap-[8px] px-[12px] text-left transition-colors hover:bg-accent"
               >
+                <FileCode2 className="size-[14px] shrink-0 text-primary" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">
                   {dir && <span className="text-muted-foreground">{dir}</span>}
                   <span className="font-medium text-foreground">{name}</span>
                 </span>
                 <span className="shrink-0 tabular-nums">
-                  {file.added > 0 && <span className="text-green-600">+{file.added}</span>}
+                  {file.added > 0 && <span className="text-success">+{file.added}</span>}
                   {file.removed > 0 && (
                     <span className="ml-1.5 text-destructive">-{file.removed}</span>
                   )}

@@ -54,10 +54,10 @@ export function DefaultModelPicker() {
     : null;
 
   return (
-    <section className="space-y-2 rounded-lg border bg-card p-3">
+    <section className="space-y-2 rounded-[6px] border bg-card p-3">
       <div className="min-w-0">
-        <h4 className="font-medium text-sm">{t('Default model')}</h4>
-        <p className="mt-0.5 text-muted-foreground text-xs">
+        <h4 className="font-medium text-[13px]">{t('Default model')}</h4>
+        <p className="mt-0.5 text-muted-foreground text-[12px]">
           {t(
             defaultModelFollowLast
               ? 'New conversations use the last model you picked.'
@@ -98,17 +98,17 @@ export function DefaultModelPicker() {
       )}
 
       {candidates.length === 0 && (
-        <div className="rounded-md border border-dashed px-3 py-5 text-center">
+        <div className="rounded-[6px] border border-dashed px-3 py-5 text-center">
           <Server className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-2 font-medium text-sm">{t('No usable models')}</p>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-2 font-medium text-[13px]">{t('No usable models')}</p>
+          <p className="mt-1 text-muted-foreground text-[12px]">
             {t('Enable a model and configure valid provider credentials first.')}
           </p>
         </div>
       )}
 
       {(credentialsPending || credentialsError) && (
-        <div className="flex items-start gap-2 rounded-md bg-muted px-2.5 py-2 text-xs">
+        <div className="flex items-start gap-2 rounded-[6px] bg-muted px-2.5 py-2 text-[12px]">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="text-muted-foreground">
             {credentialsError
@@ -121,7 +121,7 @@ export function DefaultModelPicker() {
       )}
 
       {noticeText && (
-        <p className="rounded-md bg-muted px-2.5 py-2 text-muted-foreground text-xs">
+        <p className="rounded-[6px] bg-muted px-2.5 py-2 text-muted-foreground text-[12px]">
           {noticeText}
         </p>
       )}

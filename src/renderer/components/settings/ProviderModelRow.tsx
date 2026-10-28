@@ -92,9 +92,9 @@ export function ProviderModelRow({
       data-expanded={showEditors ? 'true' : 'false'}
       data-can-override={canOverride ? 'true' : 'false'}
       data-override-source={badge}
-      className="rounded-md"
+      className="rounded-[6px]"
     >
-      <div className="group flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent/50">
+      <div className="group flex items-center gap-2 rounded-[6px] px-2 py-1 hover:bg-accent/50">
         {onSelectedChange != null && (
           <Checkbox checked={selected} onCheckedChange={onSelectedChange} />
         )}
@@ -114,7 +114,7 @@ export function ProviderModelRow({
             />
             <span
               className={cn(
-                'min-w-0 flex-1 truncate font-mono text-xs',
+                'min-w-0 flex-1 truncate font-mono text-[12px]',
                 !isEnabled(model) && 'text-muted-foreground line-through'
               )}
             >
@@ -132,7 +132,7 @@ export function ProviderModelRow({
         ) : (
           <span
             className={cn(
-              'min-w-0 flex-1 truncate font-mono text-xs',
+              'min-w-0 flex-1 truncate font-mono text-[12px]',
               !isEnabled(model) && 'text-muted-foreground line-through'
             )}
           >
@@ -144,7 +144,7 @@ export function ProviderModelRow({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            className="h-6 w-6 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
             onClick={onRemove}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -155,7 +155,7 @@ export function ProviderModelRow({
       {showEditors && (
         <div
           data-slot="model-override-editors"
-          className="mb-1 ml-8 space-y-2 rounded-md border border-dashed bg-muted/30 p-2"
+          className="mb-1 ml-8 space-y-2 rounded-[6px] border border-dashed bg-muted/30 p-2"
         >
           <OverrideField label={t('Reasoning')}>
             <TriState
@@ -190,7 +190,7 @@ export function ProviderModelRow({
                 <SelectTrigger
                   size="sm"
                   data-slot="model-thinking-level"
-                  className="h-7 min-h-7 w-full min-w-0 text-xs"
+                  className="h-7 min-h-7 w-full min-w-0 text-[12px]"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -261,7 +261,7 @@ function TriState({
   ];
 
   return (
-    <div data-slot={slot} className="flex w-full rounded-md border bg-background p-0.5">
+    <div data-slot={slot} className="flex w-full rounded-[6px] border bg-background p-0.5">
       {options.map((option) => {
         const selected = value === option.value;
         return (
@@ -306,7 +306,7 @@ function InheritNumberInput({
       data-slot={slot}
       value={value === undefined ? '' : String(value)}
       placeholder={inheritLabel}
-      className="h-7 text-xs"
+      className="h-7 text-[12px]"
       onChange={(event) => {
         const raw = event.target.value;
         if (raw.trim() === '') {

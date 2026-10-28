@@ -56,7 +56,7 @@ export function ModeSwitch({ className }: { className?: string }) {
       role="radiogroup"
       aria-label={t('Switch mode')}
       onKeyDown={onKeyDown}
-      className={cn('flex h-7 shrink-0 rounded-lg bg-muted/60 p-0.5 text-xs', className)}
+      className={cn('flex h-8 shrink-0 rounded-md border bg-muted/40 p-0.5 text-xs', className)}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = mode === value;
@@ -82,7 +82,7 @@ export function ModeSwitch({ className }: { className?: string }) {
               <motion.span
                 layoutId={pillId}
                 aria-hidden
-                className="absolute inset-0 rounded-md bg-background shadow-xs"
+                className="absolute inset-0 rounded-[4px] bg-background"
                 transition={reduceMotion ? { duration: 0 } : springStandard}
               />
             )}

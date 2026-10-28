@@ -629,7 +629,7 @@ export function Composer({
         ref={setDropRef}
         data-slot="composer"
         className={cn(
-          'rounded-lg border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-brand/50',
+          'rounded-[6px] border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60',
           (dragging || dndOver) && 'border-brand/50 bg-brand/5',
           (agentRecipient || planMode) && 'border-primary/35 shadow-primary/5'
         )}
@@ -683,7 +683,10 @@ export function Composer({
           </div>
         )}
         <div
-          className={cn('flex items-start gap-1.5 px-4', images.length > 0 ? 'pt-1.5' : 'pt-3.5')}
+          className={cn(
+            'flex min-h-[64px] items-start gap-1.5 px-[14px] pb-[4px]',
+            images.length > 0 ? 'pt-1.5' : 'pt-[12px]'
+          )}
         >
           {recipient && (
             <MentionChip recipient={recipient} onRemove={() => setRecipient(undefined)} />
@@ -706,6 +709,7 @@ export function Composer({
           )}
           <MentionEditor
             ref={editorRef}
+            className="text-[14px] leading-[24px]"
             placeholder={
               slash
                 ? ''
@@ -780,8 +784,8 @@ export function Composer({
           />
         </div>
         {agentRecipient && <p className="sr-only">{t('Send only to the selected Agent')}</p>}
-        <div className="flex items-center justify-between gap-1.5 px-2 pt-0.5 pb-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+        <div className="flex items-center justify-between gap-[4px] px-[8px] pt-[2px] pb-[8px]">
+          <div className="flex min-w-0 flex-1 items-center gap-[4px] overflow-hidden">
             <input
               ref={imageInputRef}
               type="file"
@@ -799,9 +803,9 @@ export function Composer({
               onClick={() => imageInputRef.current?.click()}
               aria-label={t('Attach image')}
               title={t('Attach image')}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+              className="flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
             >
-              <ImagePlus className="h-3.5 w-3.5" />
+              <ImagePlus className="size-[14px]" />
             </button>
             {holdVoice ? (
               <HoldToTalkToggle
@@ -834,16 +838,16 @@ export function Composer({
             <Button
               variant="outline"
               size="icon"
-              className="size-8 shrink-0 rounded-[10px]"
+              className="size-[32px] shrink-0 rounded-[10px] border-foreground bg-foreground text-background hover:bg-foreground/85"
               onClick={onAbort}
               aria-label={t('Stop')}
             >
-              <CircleStop className="h-4 w-4" />
+              <CircleStop className="size-[16px]" />
             </Button>
           ) : (
             <Button
               size="icon"
-              className="size-8 shrink-0 rounded-[10px] border-brand bg-brand text-brand-foreground shadow-brand/24 hover:bg-brand/90 disabled:opacity-35"
+              className="size-[32px] shrink-0 rounded-[10px] border-primary bg-primary text-primary-foreground shadow-none hover:bg-primary/90 disabled:opacity-35"
               onClick={handleSend}
               disabled={!hasContent || locked}
               aria-label={agentRecipient ? t('Send only to the selected Agent') : t('Send')}
@@ -857,7 +861,7 @@ export function Composer({
                     : t('Send')
               }
             >
-              <ArrowUp className="h-4 w-4" />
+              <ArrowUp className="size-[16px]" />
             </Button>
           )}
         </div>

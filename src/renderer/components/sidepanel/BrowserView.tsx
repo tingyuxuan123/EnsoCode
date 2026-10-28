@@ -444,7 +444,7 @@ export function BrowserView({
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-0.5 border-b border-border/70 px-2">
+      <div className="flex h-[40px] shrink-0 items-center gap-0.5 border-b border-line px-2">
         <Button
           variant="ghost"
           size="icon-xs"

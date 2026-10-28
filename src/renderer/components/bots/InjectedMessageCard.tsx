@@ -32,7 +32,7 @@ export function InjectedMessageCard({ message }: { message: BotInjectedMessage }
   return (
     <div
       data-bot-injection={message.kind}
-      className="w-full rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm"
+      className="w-full rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm"
     >
       <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Icon className="size-3.5 shrink-0" />

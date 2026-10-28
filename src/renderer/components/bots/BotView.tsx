@@ -192,10 +192,10 @@ export function BotView({ sidebarWidth, collapsed, onToggleCollapse, onResize }:
       ) : chat ? (
         <BotChatView key={thread?.id ?? chat.id} chat={thread ?? chat} group={chat} />
       ) : (
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-background px-8 text-center">
           <Bot className="h-8 w-8 text-muted-foreground" />
-          <p className="font-medium text-lg">{t('Bot mode')}</p>
-          <p className="max-w-md text-muted-foreground text-sm">
+          <p className="font-semibold text-[18px]">{t('Bot mode')}</p>
+          <p className="max-w-[420px] text-[13px] text-muted-foreground leading-6">
             {bots.length === 0
               ? t(
                   'Tell us in one sentence what you want done; we will recommend a member or a team and draft your first message.'
@@ -203,7 +203,7 @@ export function BotView({ sidebarWidth, collapsed, onToggleCollapse, onResize }:
               : t('Pick a member or a group chat on the left.')}
           </p>
           {bots.length === 0 && loaded && <GoalOnboarding onPick={startPick} />}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <Button
               size="sm"
               variant={bots.length === 0 ? 'outline' : 'default'}

@@ -29,14 +29,14 @@ export function MemoryTreeView({
 
   if (tree.length === 0) {
     return (
-      <p className="rounded-lg border px-3 py-6 text-muted-foreground text-sm">
+      <p className="rounded-[6px] border px-3 py-6 text-muted-foreground text-[13px]">
         {loading ? t('Loading…') : t('No memories yet.')}
       </p>
     );
   }
 
   return (
-    <ul className="divide-y rounded-lg border">
+    <ul className="divide-y rounded-[6px] border">
       {tree.map((group) => {
         const expanded = open.has(group.id);
         const memoryIds = (group.children ?? [])
@@ -54,7 +54,7 @@ export function MemoryTreeView({
                   setOpen(next);
                 }}
               >
-                <p className="flex items-center gap-2 text-sm">
+                <p className="flex items-center gap-2 text-[13px]">
                   <span className="text-muted-foreground">{expanded ? '▾' : '▸'}</span>
                   <span className="truncate">{group.label}</span>
                   <Badge variant="secondary">{group.count}</Badge>
@@ -83,12 +83,12 @@ export function MemoryTreeView({
                     )}
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {child.isCrystal && <span title={t('Crystal')}>★</span>}
-                      <span className="truncate text-sm">{child.label}</span>
+                      <span className="truncate text-[13px]">{child.label}</span>
                     </span>
                   </li>
                 ))}
                 {group.count > (group.children?.length ?? 0) && (
-                  <li className="px-3 py-2 text-muted-foreground text-xs">
+                  <li className="px-3 py-2 text-muted-foreground text-[12px]">
                     {t('Showing {{shown}} of {{total}}', {
                       shown: String(group.children?.length ?? 0),
                       total: String(group.count),

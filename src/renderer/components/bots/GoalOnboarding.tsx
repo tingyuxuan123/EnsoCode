@@ -74,8 +74,10 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
 
   if (!suggestion) {
     return (
-      <div className="w-full max-w-lg space-y-2 text-left">
+      <div className="w-full max-w-[520px] rounded-md border bg-background p-1.5 text-left focus-within:border-brand/60">
         <Textarea
+          unstyled
+          className="flex w-full text-[13.5px] leading-6 [&_textarea]:min-h-[64px] [&_textarea]:resize-none [&_textarea]:px-2.5 [&_textarea]:py-2"
           value={goal}
           autoFocus
           rows={3}
@@ -85,8 +87,8 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void recommend();
           }}
         />
-        {error && <p className="text-destructive text-xs">{error}</p>}
-        <div className="flex justify-end">
+        {error && <p className="px-2.5 text-destructive text-xs">{error}</p>}
+        <div className="flex justify-end px-1 pb-1">
           <Button size="sm" disabled={!goal.trim() || busy} onClick={() => void recommend()}>
             {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
             {t('Recommend')}
@@ -109,7 +111,7 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
 
   return (
     <div className="w-full max-w-lg space-y-3 text-left">
-      <div data-slot="bot-card" className="rounded-xl border bg-card p-3">
+      <div data-slot="bot-card" className="rounded-md border bg-card p-3">
         <p className="mb-2 flex items-center gap-1.5 text-muted-foreground text-xs">
           <Target className="h-3.5 w-3.5" />
           {suggestion.kind === 'team' ? t('Recommended: a team') : t('Recommended: one member')}

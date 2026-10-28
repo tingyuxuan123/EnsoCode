@@ -120,7 +120,7 @@ export function MemoryGraphView({
 
   if (graph.nodes.length === 0) {
     return (
-      <p className="rounded-lg border px-3 py-6 text-muted-foreground text-sm">
+      <p className="rounded-[6px] border px-3 py-6 text-muted-foreground text-[13px]">
         {loading
           ? t('Loading…')
           : t('No entities yet. Turn on entity extraction and store a few memories first.')}
@@ -130,7 +130,7 @@ export function MemoryGraphView({
 
   return (
     <div className="space-y-3">
-      <div className="relative overflow-hidden rounded-lg border bg-muted/20">
+      <div className="relative overflow-hidden rounded-[6px] border bg-muted/20">
         <div ref={hostRef} className="h-[440px] w-full" />
         <div className="absolute right-2 bottom-2 flex gap-1">
           <Button
@@ -153,7 +153,7 @@ export function MemoryGraphView({
       </div>
 
       <div className="space-y-2">
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-[12px]">
           {t('Colour = entity type · size = how many memories mention it', {})}
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -165,7 +165,7 @@ export function MemoryGraphView({
                 setTypeFilter(typeFilter === entry.entityType ? null : entry.entityType)
               }
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs transition-colors',
+                'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[12px] transition-colors',
                 typeFilter === entry.entityType
                   ? 'border-foreground/40 bg-accent'
                   : 'hover:bg-accent/50'
@@ -180,7 +180,7 @@ export function MemoryGraphView({
             </button>
           ))}
         </div>
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-[12px]">
           {t('{{shown}} of {{total}} entities', {
             shown: String(graph.nodes.length),
             total: String(graph.totalEntities),
@@ -189,14 +189,14 @@ export function MemoryGraphView({
       </div>
 
       {selected && (
-        <section className="space-y-2 rounded-lg border p-3">
+        <section className="space-y-2 rounded-[6px] border p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm">
+              <p className="flex items-center gap-2 text-[13px]">
                 <span className="truncate font-medium">{selected.name}</span>
                 <Badge variant="secondary">{selected.entityType}</Badge>
               </p>
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-[12px]">
                 {t('{{count}} memories · {{space}}', {
                   count: String(selected.memoryCount),
                   space: selected.spaceLabel,
@@ -212,18 +212,18 @@ export function MemoryGraphView({
               {interpreting ? t('Interpreting…') : t('Interpret')}
             </Button>
           </div>
-          <ul className="divide-y rounded-lg border">
+          <ul className="divide-y rounded-[6px] border">
             {memories.length === 0 && (
-              <li className="px-3 py-4 text-muted-foreground text-sm">{t('Loading…')}</li>
+              <li className="px-3 py-4 text-muted-foreground text-[13px]">{t('Loading…')}</li>
             )}
             {memories.map((m) => (
               <li key={m.id} className="space-y-0.5 px-3 py-2">
-                <p className="flex items-center gap-2 text-sm">
+                <p className="flex items-center gap-2 text-[13px]">
                   {m.isCrystal && <span title={t('Crystal')}>★</span>}
                   <span className="truncate">{m.title}</span>
                   <Badge variant="secondary">{m.unitType}</Badge>
                 </p>
-                <p className="line-clamp-2 text-muted-foreground text-xs">{m.contentSummary}</p>
+                <p className="line-clamp-2 text-muted-foreground text-[12px]">{m.contentSummary}</p>
               </li>
             ))}
           </ul>

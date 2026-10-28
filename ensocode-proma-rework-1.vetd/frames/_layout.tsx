@@ -1,33 +1,61 @@
 import { Outlet, useLocation } from 'react-router';
-import { Inspector, Navigation, Notice, WindowBar, WorkbenchProvider, useWorkbench } from '../components/Workbench';
+import { BotShell } from '../components/bot/BotShell';
+import { PhoneShell } from '../components/phone/PhoneShell';
+import { ProjectDialogs } from '../components/ProjectDialogs';
+import { RemoteShell } from '../components/remote/RemoteShell';
+import { SearchDialog } from '../components/SearchDialog';
+import { SettingsWindow } from '../components/settings/SettingsWindow';
+import { UpdateBanner } from '../components/system/UpdateBanner';
+import { AppRail, CodeSidebar, Notice, SidePanel, StatusBar, TitleBar, WorkbenchProvider } from '../components/Workbench';
 
+/**
+ * 路由前缀决定外壳：
+ * - /settings*  独立设置窗口（真实应用为 960×680 的单独窗口）
+ * - /bot*       Bot 模式：标题栏居中模式切换 + 图标轨 + Bot 侧栏
+ * - /remote*    远程节点：整块换成对方的目录与会话
+ * - /phone*     手机伴侣：独立移动布局，不套桌面外壳
+ * - 其余        Code 模式主窗口：56 图标轨 + 264 侧栏 + 对话 + 360 右侧停靠面板
+ */
 function Shell() {
   const { pathname } = useLocation();
-  const { inspectorOpen } = useWorkbench();
-  const showInspector = inspectorOpen && ['/', '/task-progress', '/background-agents'].includes(pathname);
-  // 56 + 264 + 808 + 312 = 1440；面板关闭时主区自动扩展。
+  if (pathname.startsWith('/phone')) return <PhoneShell />;
+  if (pathname.startsWith('/settings')) return <SettingsWindow />;
+  const bot = pathname.startsWith('/bot');
+  const remote = pathname.startsWith('/remote');
   return (
     <>
-      <WindowBar />
+      <TitleBar />
+      <UpdateBanner />
       <div className="relative flex min-h-0 flex-1">
-        <Navigation />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface">
-          <Outlet />
-        </main>
-        {showInspector && <Inspector />}
+        <AppRail />
+        {bot ? (
+          <BotShell />
+        ) : remote ? (
+          <RemoteShell />
+        ) : (
+          <>
+            <CodeSidebar />
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t border-line">
+              <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface">
+                <Outlet />
+              </main>
+              <SidePanel />
+            </div>
+          </>
+        )}
         <Notice />
       </div>
-      <footer className="flex h-[24px] shrink-0 items-center gap-2 border-t border-line bg-panel px-4 text-[11px] text-muted">
-        <span className="icon-[lucide--circle-check] size-3" />
-        本地工作区
-        <span className="mx-2 text-border">|</span>
-        设计预览 · 示例数据
-        <span className="ml-auto">数据留在本机</span>
-        <span className="icon-[lucide--shield-check] ml-1 size-3" />
-      </footer>
+      <StatusBar />
+      {!bot && !remote && <ProjectDialogs />}
+      <SearchDialog />
     </>
   );
 }
+
 export default function Layout() {
-  return <WorkbenchProvider><Shell /></WorkbenchProvider>;
+  return (
+    <WorkbenchProvider>
+      <Shell />
+    </WorkbenchProvider>
+  );
 }

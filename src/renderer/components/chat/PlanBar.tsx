@@ -14,11 +14,12 @@ import {
 } from './ApprovalModePicker';
 import { Markdown } from './Markdown';
 
-const BAR = 'mb-1 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 text-xs';
+const BAR =
+  'mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[12px]';
 
 function PlanPreview({ doc }: { doc: PlanDoc }) {
   return (
-    <div className="scroll-stable mt-2 max-h-72 overflow-y-auto rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm">
+    <div className="scroll-stable mt-[8px] max-h-[190px] overflow-y-auto rounded-[4px] border border-line bg-background px-[12px] py-[8px] text-[12px] leading-[24px]">
       <Markdown text={doc.text} />
     </div>
   );
@@ -94,7 +95,7 @@ function PlanReviewBar({
     <div className={BAR}>
       <div className="flex items-center gap-2">
         <ClipboardList className="h-3.5 w-3.5 shrink-0 text-primary" />
-        <span className="shrink-0 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
           {t('Plan awaiting approval')}
         </span>
         <button

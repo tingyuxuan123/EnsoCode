@@ -100,10 +100,10 @@ function AllowConnectionsSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4" data-settings-row="phone.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="phone.root">
         <div>
-          <h3 className="font-medium text-lg">{t('Allow connections')}</h3>
-          <p className="text-muted-foreground text-sm">
+          <h3 className="font-semibold text-[18px]">{t('Allow connections')}</h3>
+          <p className="text-muted-foreground text-[13px]">
             {t(
               'Let your phone or another EnsoCode desktop connect to this computer. Keep this app running.'
             )}
@@ -132,7 +132,7 @@ function AllowConnectionsSection() {
       </div>
 
       {status && !status.secureStorage && (
-        <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
+        <div className="flex items-start gap-2 rounded-[6px] border border-dashed px-3 py-2 text-[12px]">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <span className="text-muted-foreground">
             {t(
@@ -142,28 +142,28 @@ function AllowConnectionsSection() {
         </div>
       )}
 
-      {error && <p className="text-destructive text-xs">{error}</p>}
+      {error && <p className="text-destructive text-[12px]">{error}</p>}
 
       {status?.pairing && (
-        <div className="space-y-3 rounded-md border border-dashed px-3 py-6">
+        <div className="space-y-3 rounded-[6px] border border-dashed px-3 py-6">
           <div className="text-center">
             {qrDataUrl ? (
               <img src={qrDataUrl} alt={t('Pairing QR code')} className="mx-auto h-52 w-52" />
             ) : (
               <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
             )}
-            <p className="mt-3 font-medium text-sm">{t('Scan with your phone camera')}</p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-3 font-medium text-[13px]">{t('Scan with your phone camera')}</p>
+            <p className="mt-1 text-muted-foreground text-[12px]">
               {t(
                 'Scanning opens the app and pairs it. To keep it handy, add it to your home screen.'
               )}
             </p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-1 text-muted-foreground text-[12px]">
               {t(
                 'On another EnsoCode desktop, paste the link below into Settings → Devices → Connect to a node.'
               )}
             </p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-1 text-muted-foreground text-[12px]">
               {remaining === null
                 ? t('The code expires in 60 seconds and can only be used once.')
                 : remaining > 0
@@ -196,12 +196,12 @@ function AllowConnectionsSection() {
       )}
 
       <div className="space-y-2">
-        <p className="font-medium text-sm">{t('Paired devices')}</p>
+        <p className="font-medium text-[13px]">{t('Paired devices')}</p>
         {devices.length === 0 ? (
-          <div className="rounded-md border border-dashed px-3 py-8 text-center">
+          <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
             <Smartphone className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 font-medium text-sm">{t('No paired devices')}</p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-3 font-medium text-[13px]">{t('No paired devices')}</p>
+            <p className="mt-1 text-muted-foreground text-[12px]">
               {t('Generate a pairing code to let a phone or another desktop connect.')}
             </p>
           </div>
@@ -230,10 +230,10 @@ function ConnectToNodesSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]">
         <div>
-          <h3 className="font-medium text-lg">{t('Connect to a node')}</h3>
-          <p className="text-muted-foreground text-sm">
+          <h3 className="font-semibold text-[18px]">{t('Connect to a node')}</h3>
+          <p className="text-muted-foreground text-[13px]">
             {t(
               'Browse and drive conversations on another EnsoCode desktop. Its agent, keys and history stay there.'
             )}
@@ -246,7 +246,7 @@ function ConnectToNodesSection() {
       </div>
 
       {!secureStorage && (
-        <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
+        <div className="flex items-start gap-2 rounded-[6px] border border-dashed px-3 py-2 text-[12px]">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <span className="text-muted-foreground">
             {t(
@@ -257,12 +257,12 @@ function ConnectToNodesSection() {
       )}
 
       <div className="space-y-2">
-        <p className="font-medium text-sm">{t('Connected nodes')}</p>
+        <p className="font-medium text-[13px]">{t('Connected nodes')}</p>
         {nodes.length === 0 ? (
-          <div className="rounded-md border border-dashed px-3 py-8 text-center">
+          <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
             <Monitor className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 font-medium text-sm">{t('No connected nodes')}</p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-3 font-medium text-[13px]">{t('No connected nodes')}</p>
+            <p className="mt-1 text-muted-foreground text-[12px]">
               {t('Each connecting computer needs its own pairing code from the other desktop.')}
             </p>
           </div>
@@ -311,7 +311,7 @@ function PairedDeviceRow({ device }: { device: PairStatus['devices'][number] }) 
   };
 
   return (
-    <div className="group flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50">
+    <div className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span
           className={cn(
@@ -325,8 +325,8 @@ function PairedDeviceRow({ device }: { device: PairStatus['devices'][number] }) 
         />
         {draft === null ? (
           <>
-            <span className="truncate font-medium text-sm">{device.deviceName}</span>
-            <span className="shrink-0 text-muted-foreground text-xs">
+            <span className="truncate font-medium text-[13px]">{device.deviceName}</span>
+            <span className="shrink-0 text-muted-foreground text-[12px]">
               {device.phoneOnline
                 ? t('Online')
                 : device.connected
@@ -365,11 +365,11 @@ function PairedDeviceRow({ device }: { device: PairStatus['devices'][number] }) 
               if (e.key === 'Enter') void commit();
               if (e.key === 'Escape') setDraft(null);
             }}
-            className="h-7 text-sm"
+            className="h-7 text-[13px]"
           />
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         <Button
           variant="ghost"
           size="icon"
@@ -406,18 +406,18 @@ function NodeRow({ node, onChanged }: { node: RemoteNodeStatus; onChanged: () =>
   };
 
   return (
-    <div className="group flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50">
+    <div className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <NodeDot node={node} />
         {draft === null ? (
           <>
-            <span className="truncate font-medium text-sm">{node.label}</span>
+            <span className="truncate font-medium text-[13px]">{node.label}</span>
             {node.hostname && node.hostname !== node.label && (
               <span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground">
                 {node.hostname}
               </span>
             )}
-            <span className="shrink-0 text-muted-foreground text-xs">
+            <span className="shrink-0 text-muted-foreground text-[12px]">
               {node.hostOnline
                 ? t('Online')
                 : node.connected
@@ -436,11 +436,11 @@ function NodeRow({ node, onChanged }: { node: RemoteNodeStatus; onChanged: () =>
               if (e.key === 'Enter') void commit();
               if (e.key === 'Escape') setDraft(null);
             }}
-            className="h-7 text-sm"
+            className="h-7 text-[13px]"
           />
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         <Button
           variant="ghost"
           size="icon"
@@ -486,8 +486,8 @@ function RelaySection() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="font-medium text-sm">{t('Relay server')}</p>
-        <p className="text-muted-foreground text-xs">
+        <p className="font-medium text-[13px]">{t('Relay server')}</p>
+        <p className="text-muted-foreground text-[12px]">
           {t('The relay only forwards encrypted frames and cannot read your messages.')}
         </p>
         <div className="flex items-center gap-2">
@@ -495,7 +495,7 @@ function RelaySection() {
             value={relayDraft ?? status?.relayUrl ?? ''}
             onChange={(e) => setRelayDraft(e.target.value)}
             placeholder="https://relay.example.com"
-            className="font-mono text-xs"
+            className="font-mono text-[12px]"
           />
           {relayDraft === null ? (
             <Button

@@ -55,7 +55,7 @@ export function PanelSection({ title, children }: { title: string; children: Rea
 
 export function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-dashed py-1.5 text-xs">
+    <div className="flex justify-between gap-3 border-b py-1.5 text-xs">
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <span className="min-w-0 truncate text-right">{value}</span>
     </div>
@@ -172,7 +172,7 @@ export function GroupInfoPanel({
         <TabsTab value="delegations">{t('Delegations')}</TabsTab>
         <TabsTab value="routines">{t('Routines')}</TabsTab>
       </TabsList>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <TabsPanel value="board">
           <TaskBoard chat={chat} onOpenConversation={onOpenConversation} />
         </TabsPanel>
@@ -194,7 +194,7 @@ export function GroupInfoPanel({
 
           <PanelSection title={t('Members')}>
             {members.map(({ id, bot }) => (
-              <div key={id} className="group flex items-center gap-2 rounded-lg py-1.5">
+              <div key={id} className="group flex items-center gap-2 rounded-md py-1.5">
                 <button
                   type="button"
                   onClick={() => void openDirect(id)}
@@ -317,7 +317,7 @@ export function GroupInfoPanel({
           </PanelSection>
 
           <PanelSection title={t('Workspace')}>
-            <div data-slot="bot-card" className="rounded-lg border bg-card px-2.5 py-2">
+            <div className="border-y py-2">
               <WorkspaceMenu chat={chat} className="w-full max-w-none" />
               <p className="mt-1.5 text-muted-foreground text-xs">
                 {workspaceProject ? `${workspaceProject.path} · ` : ''}

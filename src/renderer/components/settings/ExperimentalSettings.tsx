@@ -11,8 +11,8 @@ export function ExperimentalSettings({ onOpenBots }: { onOpenBots: () => void })
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium">{t('Experimental')}</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-[18px] font-semibold">{t('Experimental')}</h3>
+        <p className="text-[13px] text-muted-foreground">
           {t('Features still being tested. They may change or be removed.')}
         </p>
       </div>

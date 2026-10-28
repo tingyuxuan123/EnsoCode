@@ -29,15 +29,13 @@ export function MessageQueue({
   };
 
   return (
-    <div className="mb-1 flex flex-col gap-0.5">
+    <div
+      data-slot="message-queue"
+      className="mb-[6px] flex flex-col rounded-[6px] border border-border/70 bg-muted/45 px-[8px] py-[4px] text-[12px]"
+    >
       {queued.map((message) => (
-        <div
-          key={message.id}
-          className="flex items-center gap-2 rounded-lg border border-border/60 border-dashed bg-muted/20 px-2.5 py-1.5 text-xs"
-        >
-          <span className="shrink-0 text-[10px] text-muted-foreground uppercase tracking-wide">
-            {t('Queued')}
-          </span>
+        <div key={message.id} className="flex min-h-[28px] items-center gap-[8px]">
+          <span className="shrink-0 text-[11px] text-faint">{t('Queued')}</span>
           {editingId === message.id ? (
             <input
               value={draft}

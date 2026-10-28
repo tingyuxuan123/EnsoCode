@@ -20,7 +20,7 @@ export function BotUsageCard({ bot }: { bot: BotProfile }) {
   ];
   const budget = bot.budget;
   return (
-    <div data-slot="bot-card" className="rounded-lg border bg-card p-3">
+    <div data-slot="bot-card" className="rounded-md border bg-card p-3">
       <div className="grid grid-cols-3 gap-2">
         {cells.map(([label, totals]) => (
           <div key={label} className="min-w-0">

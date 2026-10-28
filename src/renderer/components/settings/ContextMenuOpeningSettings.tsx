@@ -107,19 +107,19 @@ export function ContextMenuOpeningSettings() {
   };
 
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className="space-y-2 rounded-[6px] border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h5 className="text-sm font-medium">{t('Context menu opening')}</h5>
+        <h5 className="text-[13px] font-medium">{t('Context menu opening')}</h5>
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
           {t('Configure list')}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[12px] text-muted-foreground">
         {t(
           'Select the opening methods shown in file link context menus. You can add multiple applications.'
         )}
       </p>
-      <p className="truncate text-xs text-muted-foreground" title={enabledNames.join(', ')}>
+      <p className="truncate text-[12px] text-muted-foreground" title={enabledNames.join(', ')}>
         {summary}
       </p>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -134,14 +134,14 @@ export function ContextMenuOpeningSettings() {
           </DialogHeader>
           <DialogPanel className="space-y-2">
             {items.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">
+              <p className="py-6 text-center text-[13px] text-muted-foreground">
                 {t('No opening methods enabled')}
               </p>
             )}
             {items.map((item) => {
               const name = nameOf(item);
               return (
-                <div key={item.id} className="flex items-center gap-3 rounded-md border p-3">
+                <div key={item.id} className="flex items-center gap-3 rounded-[6px] border p-3">
                   <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
                     <Checkbox
                       checked={item.enabled}
@@ -150,12 +150,12 @@ export function ContextMenuOpeningSettings() {
                       onCheckedChange={(enabled) => setEnabled(item, enabled)}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm" title={name}>
+                      <span className="block truncate text-[13px]" title={name}>
                         {name}
                       </span>
                       {item.target === 'application' && (
                         <span
-                          className="block truncate text-xs text-muted-foreground"
+                          className="block truncate text-[12px] text-muted-foreground"
                           title={item.applicationPath}
                         >
                           {item.applicationPath}

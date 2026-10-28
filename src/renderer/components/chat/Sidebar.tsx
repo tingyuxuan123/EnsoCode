@@ -729,7 +729,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
       transition={springStandard}
       data-slot="project-sidebar"
       aria-hidden={collapsed || undefined}
-      className="flex shrink-0 flex-col overflow-hidden border-t bg-nav"
+      className="flex shrink-0 flex-col overflow-hidden border-t border-line bg-nav"
     >
       {/* 收起后整栏让位：搜索 / 设置 / 询问 Enso / 展开入口都在全局图标轨上 */}
       <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
@@ -1457,7 +1457,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                     {group.projectArchived && (
                       <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
                     )}
-                    <span className="min-w-0 flex-1 truncate py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="min-w-0 flex-1 truncate py-1 text-[11px] font-medium text-muted-foreground">
                       {projectName}
                     </span>
                     <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">

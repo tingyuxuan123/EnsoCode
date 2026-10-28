@@ -72,19 +72,19 @@ function PoolProviderForm({ provider, onClose }: { provider: ModelProvider; onCl
       extraFields={
         <Field>
           <FieldLabel>{t('Pool members')}</FieldLabel>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {t(
               'Use enabled, signed-in accounts in the listed order. Model and reasoning stay unchanged. Main agents and subagents share this pool.'
             )}
           </p>
-          <div className="mt-2 w-full space-y-1 rounded-md border p-1">
+          <div className="mt-2 w-full space-y-1 rounded-[6px] border p-1">
             {keys.map((key, index) => {
               const source = sources.find((item) => item.oauthAccountKey === key);
               const account = oauthInfos
                 .flatMap((info) => info.accounts)
                 .find((item) => item.key === key);
               return (
-                <label key={key} className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-sm">
+                <label key={key} className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-[13px]">
                   <Checkbox
                     checked={selected.includes(key)}
                     onCheckedChange={(checked) =>
@@ -93,16 +93,16 @@ function PoolProviderForm({ provider, onClose }: { provider: ModelProvider; onCl
                       )
                     }
                   />
-                  <span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
+                  <span className="shrink-0 text-[12px] text-muted-foreground">{index + 1}.</span>
                   <span className="min-w-0 truncate">{account?.email ?? key}</span>
                   {!source?.enabled && (
-                    <span className="shrink-0 text-xs text-muted-foreground">
+                    <span className="shrink-0 text-[12px] text-muted-foreground">
                       {t('Account disabled')}
                     </span>
                   )}
                   {availability.status === 'ready' &&
                     !availability.authenticatedAccountKeys.has(key) && (
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className="shrink-0 text-[12px] text-muted-foreground">
                         {t('Account signed out')}
                       </span>
                     )}

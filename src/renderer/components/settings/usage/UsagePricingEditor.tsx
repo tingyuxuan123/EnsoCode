@@ -58,7 +58,7 @@ function PriceTable({
 }) {
   const { t } = useI18n();
   return (
-    <table className="w-full text-xs">
+    <table className="w-full text-[12px]">
       <thead>
         <tr className="text-[11px] text-muted-foreground">
           <th className="pb-2 text-left font-normal">{t('Name')}</th>
@@ -77,7 +77,7 @@ function PriceTable({
           return (
             <tr key={row.model} className="border-t border-border/60">
               <td className="py-1.5 pr-3 align-middle">
-                <span className="font-mono text-xs" title={row.model}>
+                <span className="font-mono text-[12px]" title={row.model}>
                   {row.model}
                 </span>
                 {custom && (
@@ -193,11 +193,11 @@ export function UsagePricingEditor({
   };
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-card">
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-[6px] border bg-card">
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
         <div className="min-w-0">
-          <div className="text-sm font-medium">{t('Unit prices')}</div>
-          <p className="text-xs text-muted-foreground">
+          <div className="text-[13px] font-medium">{t('Unit prices')}</div>
+          <p className="text-[12px] text-muted-foreground">
             {t('Rates used for cost estimates ($/M tokens).')}
           </p>
         </div>
@@ -217,7 +217,7 @@ export function UsagePricingEditor({
             placeholder={t('Search models')}
           />
           {usedRows.length === 0 && !adding ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               {q ? t('No matching models') : t('No usage in this period')}
             </p>
           ) : (
@@ -318,7 +318,7 @@ export function UsagePricingEditor({
               </Button>
             </div>
           )}
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-[12px] text-destructive">{error}</p>}
         </div>
       </CollapsibleContent>
     </Collapsible>

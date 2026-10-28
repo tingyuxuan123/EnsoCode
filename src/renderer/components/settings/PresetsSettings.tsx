@@ -32,13 +32,13 @@ export function PresetsSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4" data-settings-row="presets.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="presets.root">
         <div>
-          <h3 className="font-medium text-lg">
+          <h3 className="font-semibold text-[18px]">
             {t('Presets')}
             <NewSessionBadge />
           </h3>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-[13px]">
             {t(
               'Role descriptions, skills, MCP servers and instruction files, chosen per conversation'
             )}
@@ -52,15 +52,15 @@ export function PresetsSettings() {
 
       <div className="space-y-2">
         {/* 内置全局预设：只读，跟随各条目的 enabled 开关 */}
-        <div className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-[6px] border px-3 py-2.5">
           <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-sm font-medium">
+            <p className="flex items-center gap-2 text-[13px] font-medium">
               {t('Global')}
               <Badge variant="outline">{t('Read-only')}</Badge>
               {defaultPresetId === 'default' && <Badge variant="secondary">{t('Default')}</Badge>}
             </p>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-[12px]">
               {t('Follows the enabled switches on the Skills / MCP / Instructions pages')}
             </p>
           </div>
@@ -82,17 +82,17 @@ export function PresetsSettings() {
         {presets
           .filter((preset) => preset.id !== 'default')
           .map((preset) => (
-            <div key={preset.id} className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+            <div key={preset.id} className="flex items-center gap-3 rounded-[6px] border px-3 py-2.5">
               <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 truncate text-sm font-medium">
+                <p className="flex items-center gap-2 truncate text-[13px] font-medium">
                   {preset.name}
                   {preset.systemPromptId && <Badge variant="outline">{t('Custom role')}</Badge>}
                   {defaultPresetId === preset.id && (
                     <Badge variant="secondary">{t('Default')}</Badge>
                   )}
                 </p>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-[12px]">
                   {t('{{skills}} skills · {{mcp}} MCP · {{instruction}} instruction', {
                     skills: preset.skillIds.length,
                     mcp: preset.mcpServerIds.length,
@@ -211,7 +211,7 @@ export function PresetEditDialog({
 
           <Field className="w-full">
             <FieldLabel>{t('Role description')}</FieldLabel>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-[13px]">
               <Checkbox
                 checked={customPrompt}
                 disabled={saving || prompt.loading || Boolean(prompt.error)}
@@ -220,7 +220,7 @@ export function PresetEditDialog({
               {t('Replace pi opening role description')}
             </label>
             {customPrompt && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] text-muted-foreground">
                 {t(
                   'Only replaces the opening role paragraph. Available tools and everything after it stay unchanged. Applies to new and cold-restored sessions.'
                 )}
@@ -299,7 +299,7 @@ export function PresetEditDialog({
                   checked={instructionId === undefined}
                   onCheckedChange={() => setInstructionId(undefined)}
                 />
-                <span className="text-sm text-muted-foreground">{t('None')}</span>
+                <span className="text-[13px] text-muted-foreground">{t('None')}</span>
               </label>
             }
             renderDetail={(i) => <InstructionDetail instruction={i} />}
@@ -308,7 +308,7 @@ export function PresetEditDialog({
 
         <DialogFooter>
           {saveError && (
-            <p role="alert" className="mr-auto text-sm text-destructive">
+            <p role="alert" className="mr-auto text-[13px] text-destructive">
               {saveError}
             </p>
           )}
@@ -399,11 +399,11 @@ function SystemPromptText({
   onRetry: () => void;
 }) {
   const { t } = useI18n();
-  if (loading) return <p className="text-sm text-muted-foreground">{t('Loading...')}</p>;
+  if (loading) return <p className="text-[13px] text-muted-foreground">{t('Loading...')}</p>;
   if (error)
     return (
       <div className="space-y-2">
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-[13px] text-destructive">
           {error}
         </p>
         <Button variant="outline" size="sm" onClick={onRetry}>
@@ -414,7 +414,7 @@ function SystemPromptText({
   return (
     <Textarea
       aria-label={t('Role description')}
-      className="h-32 w-full resize-y font-mono text-xs leading-relaxed"
+      className="h-32 w-full resize-y font-mono text-[12px] leading-relaxed"
       value={content}
       readOnly={readOnly}
       spellCheck={false}
@@ -435,7 +435,7 @@ function DefaultSystemPromptDialog({ onClose }: { onClose: () => void }) {
           </DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {t(
               'This is the pi opening role paragraph. Custom presets replace only this paragraph; tools, guidelines and project context stay unchanged.'
             )}
@@ -511,10 +511,10 @@ export function PickList<T extends { id: string }>({
 
   return (
     <div>
-      <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+      <p className="mb-1 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
         {title}
       </p>
-      <div className="rounded-md border">
+      <div className="rounded-[6px] border">
         {items.length > 0 && (
           <div className="border-b p-1.5">
             <ListFilterBar
@@ -546,7 +546,7 @@ export function PickList<T extends { id: string }>({
             >
               <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                 <Checkbox checked={isChecked(item)} onCheckedChange={() => onToggle(item)} />
-                <span className="min-w-0 flex-1 truncate text-sm">{getName(item)}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px]">{getName(item)}</span>
                 {getSource && (
                   <Badge variant="secondary" className="shrink-0 text-[11px]">
                     {getSource(item)}
@@ -579,7 +579,7 @@ export function PickList<T extends { id: string }>({
 
 export function DetailRows({ rows }: { rows: [string, string | undefined][] }) {
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-2 text-[12px]">
       {rows
         .filter(([, value]) => value)
         .map(([label, value]) => (
@@ -609,7 +609,7 @@ function InstructionDetail({ instruction }: { instruction: InstructionEntry }) {
   }, [instruction]);
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-2 text-[12px]">
       <DetailRows
         rows={[
           [t('Source'), instruction.source],
@@ -627,5 +627,5 @@ function InstructionDetail({ instruction }: { instruction: InstructionEntry }) {
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="py-2 text-xs text-muted-foreground">{text}</p>;
+  return <p className="py-2 text-[12px] text-muted-foreground">{text}</p>;
 }

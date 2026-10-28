@@ -64,7 +64,7 @@ function MemoryRow({ item, onDeleted }: { item: MemoryListItem; onDeleted: () =>
 
   if (draft) {
     return (
-      <div data-slot="bot-card" className="space-y-1.5 rounded-lg border bg-card px-2.5 py-2">
+      <div data-slot="bot-card" className="space-y-1.5 rounded-md border bg-card px-2.5 py-2">
         <Input
           size="sm"
           value={draft.title}
@@ -93,7 +93,7 @@ function MemoryRow({ item, onDeleted }: { item: MemoryListItem; onDeleted: () =>
   return (
     <div
       data-slot="bot-card"
-      className="group flex items-start gap-2 rounded-lg border bg-card px-2.5 py-2"
+      className="group flex items-start gap-2 rounded-md border bg-card px-2.5 py-2"
     >
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-xs">{item.title}</div>

@@ -80,7 +80,7 @@ export function ListFilterBar({
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder={placeholder}
-          className="h-8 text-xs [&_input]:pl-8"
+          className="h-8 text-[12px] [&_input]:pl-8"
         />
       </div>
       {onToggleSelectAll != null && (
@@ -98,7 +98,7 @@ export function ListFilterBar({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 shrink-0 px-2 text-xs"
+            className="h-8 shrink-0 px-2 text-[12px]"
             disabled={actionDisabled}
             onClick={onEnable}
           >
@@ -108,7 +108,7 @@ export function ListFilterBar({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 shrink-0 px-2 text-xs"
+            className="h-8 shrink-0 px-2 text-[12px]"
             disabled={actionDisabled}
             onClick={onDisable}
           >

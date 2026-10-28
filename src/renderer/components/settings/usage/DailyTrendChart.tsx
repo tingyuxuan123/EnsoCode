@@ -60,9 +60,9 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
   const hovered = hover !== null ? daily[hover] : null;
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-[6px] border bg-card p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{t('Daily trend')}</span>
+        <span className="text-[13px] font-medium">{t('Daily trend')}</span>
         <div className="flex items-center gap-3">
           {metric === 'tokens' && (
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
@@ -208,7 +208,7 @@ export function MetricToggle({
     { id: 'cost', label: t('Cost') },
   ];
   return (
-    <div className="flex rounded-md bg-muted p-0.5">
+    <div className="flex rounded-[6px] bg-muted p-0.5">
       {items.map((item) => (
         <button
           key={item.id}

@@ -355,7 +355,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
                 epoch={jsonEpoch}
                 onChange={setJsonText}
               />
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-[12px]">
                 {t('Paste a server object or mcpServers JSON from Cursor / Claude Desktop')}
               </p>
             </Field>
@@ -389,7 +389,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
                       value={command}
                       onChange={(e) => setCommand(e.target.value)}
                       placeholder="npx"
-                      className="font-mono text-xs"
+                      className="font-mono text-[12px]"
                     />
                   </Field>
                   <Field>
@@ -398,7 +398,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
                       value={argsText}
                       onChange={(e) => setArgsText(e.target.value)}
                       rows={3}
-                      className="font-mono text-xs"
+                      className="font-mono text-[12px]"
                     />
                   </Field>
                   <Field>
@@ -407,7 +407,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
                       value={envText}
                       onChange={(e) => setEnvText(e.target.value)}
                       rows={3}
-                      className="font-mono text-xs"
+                      className="font-mono text-[12px]"
                     />
                   </Field>
                 </>
@@ -419,7 +419,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
                       placeholder="https://..."
-                      className="font-mono text-xs"
+                      className="font-mono text-[12px]"
                     />
                   </Field>
                   <Field>
@@ -440,7 +440,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
                       placeholder={t(
                         'Use when the server advertises a wrong authorization server or none'
                       )}
-                      className="font-mono text-xs"
+                      className="font-mono text-[12px]"
                     />
                   </Field>
                 </>
@@ -468,7 +468,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
           )}
 
           {error && (
-            <p key={error} className="t-shake-in text-destructive text-xs">
+            <p key={error} className="t-shake-in text-destructive text-[12px]">
               {error}
             </p>
           )}

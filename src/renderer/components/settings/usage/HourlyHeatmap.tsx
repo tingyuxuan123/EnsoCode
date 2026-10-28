@@ -23,9 +23,9 @@ export function HourlyHeatmap({ heatmap }: { heatmap: number[][] }) {
   const { t } = useI18n();
   const max = Math.max(0, ...heatmap.flat());
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-[6px] border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-medium">{t('Activity by hour')}</span>
+        <span className="text-[13px] font-medium">{t('Activity by hour')}</span>
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span>{t('Less')}</span>
           {LEVELS.map((cls) => (

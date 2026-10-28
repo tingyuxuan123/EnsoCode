@@ -267,15 +267,15 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <header className="@container flex h-[52px] shrink-0 items-center gap-2.5 border-b px-4">
+        <header className="@container flex h-[56px] shrink-0 items-center gap-2 border-b px-4">
           {direct ? (
             <BotAvatar bot={direct} busy={summary.running} />
           ) : (
             <GroupAvatar bots={members} busy={summary.running} />
           )}
           <div className="min-w-0">
-            <div className="truncate font-semibold text-sm">{chatTitle(chat, bots, t)}</div>
-            <div className="truncate text-muted-foreground text-xs">
+            <div className="truncate font-medium text-[13px]">{chatTitle(chat, bots, t)}</div>
+            <div className="truncate text-[11px] text-muted-foreground">
               {direct ? (
                 <DirectSubtitle
                   bot={direct}
@@ -354,11 +354,11 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
         )}
 
         <div className="@container pt-1">
-          <div className={cn(CHAT_COL, 'pb-4')}>
+          <div className={cn(CHAT_COL, 'pb-3')}>
             {direct && (summary.running || summary.queued) && (
               <BotLiveStatus
                 conversationId={chat.sessions[direct.id]?.conversationId}
-                className="mb-2 rounded-lg border bg-muted/30 px-3 py-2"
+                className="mb-2 rounded-md border bg-muted/30 px-3 py-2"
               />
             )}
             <PendingBars items={pending} bots={byId} showNames={chat.kind === 'group'} />
@@ -403,14 +403,14 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
         animate={{ width: targetW }}
         style={{ maxWidth: `max(0px, calc(100% - ${CHAT_MIN_WIDTH + SIDE_PANEL_HANDLE_WIDTH}px))` }}
         transition={sidePanelWidthTransition({ skip: resizing, cover: false, targetW })}
-        className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-background"
+        className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l bg-background"
       >
         {/* 内容固定目标宽度，开合动画只裁切不重排 */}
         <div
           className={cn('flex h-full min-h-0 flex-col', !panelOpen && 'invisible')}
           style={{ width }}
         >
-          <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+          <div className="flex h-[36px] shrink-0 items-center gap-1 border-b px-2">
             {(['info', 'browser'] as const).map((tab) => (
               <button
                 key={tab}

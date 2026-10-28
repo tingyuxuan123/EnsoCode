@@ -48,7 +48,7 @@ export function ProjectCodeTrustBar({
     return (
       <div
         role="status"
-        className="mb-1 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-muted-foreground text-xs"
+        className="mb-[6px] flex items-center gap-[8px] rounded-[6px] border border-border/70 px-[12px] py-[6px] text-[12px] text-muted-foreground"
       >
         <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
         <span className="min-w-0 flex-1">
@@ -64,7 +64,7 @@ export function ProjectCodeTrustBar({
   return (
     <div
       role="alert"
-      className="mb-1 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-2.5 py-2 text-xs"
+      className="mb-[6px] flex items-start gap-[8px] rounded-[6px] border border-warning/40 bg-warning/5 px-[12px] py-[8px] text-[12px] leading-[20px]"
     >
       <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
       <div className="min-w-0 flex-1 space-y-1">

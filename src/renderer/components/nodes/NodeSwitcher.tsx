@@ -11,16 +11,16 @@ import { PairNodeDialog } from './PairNodeDialog';
 export function NodeDot({ node, className }: { node: RemoteNodeStatus; className?: string }) {
   const { t } = useI18n();
   const tone = node.hostOnline
-    ? 'bg-emerald-500'
+    ? 'bg-success'
     : node.connected
-      ? 'bg-amber-500'
+      ? 'bg-warning'
       : 'bg-muted-foreground/40';
   const title = node.hostOnline
     ? t('Online')
     : node.connected
       ? t('Remote desktop is offline')
       : t('Connecting…');
-  return <span className={cn('h-2 w-2 shrink-0 rounded-full', tone, className)} title={title} />;
+  return <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone, className)} title={title} />;
 }
 
 /** 侧栏顶部的节点切换：本机 / 已连节点 / 连接新节点 */
@@ -41,7 +41,7 @@ export function NodeSwitcher({ className }: { className?: string }) {
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           className={cn(
-            'flex h-7 min-w-0 max-w-48 items-center gap-1.5 rounded-lg px-2 text-xs transition-colors hover:bg-muted',
+            'flex h-7 min-w-0 max-w-48 items-center gap-1.5 rounded-md px-2 text-xs transition-colors hover:bg-muted',
             active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             className
           )}

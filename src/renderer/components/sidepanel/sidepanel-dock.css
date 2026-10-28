@@ -28,7 +28,7 @@
   background-color: var(--color-popover);
 }
 
-/* 压掉 dockview 默认 VS 风 tab 条,只留我们自己的 chip */
+/* 平铺标签栏，分隔线与工作区共用语义令牌。 */
 .enso-side-dock,
 .enso-side-dock .dv-dockview,
 .enso-side-dock .dv-groupview {
@@ -37,17 +37,17 @@
 
 .enso-side-dock .dv-tabs-and-actions-container {
   /* 必须走 --color-* 映射层：背景图模式下注入通用面板 alpha */
-  background: var(--color-background);
-  border-bottom: 1px solid var(--color-border);
-  height: auto;
+  background: var(--color-shell);
+  border-bottom: 1px solid var(--color-line);
+  height: 40px;
   min-height: 0;
-  align-items: center;
-  padding: 0.25rem 0.5rem;
+  align-items: stretch;
+  padding: 0;
 }
 
 .enso-side-dock .dv-tabs-container {
-  height: auto;
-  align-items: center;
+  height: 100%;
+  align-items: stretch;
 }
 
 .enso-side-dock .dv-tab {
@@ -56,9 +56,9 @@
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  margin: 0 2px 0 0 !important;
+  margin: 0 !important;
   padding: 0 !important;
-  height: auto !important;
+  height: 100% !important;
 }
 
 .enso-side-dock .dv-default-tab,

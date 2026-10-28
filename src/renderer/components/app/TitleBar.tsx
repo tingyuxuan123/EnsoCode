@@ -68,7 +68,7 @@ export function TitleBar({ title, className, actions, leading, heading, centered
       style={isWindows ? { paddingRight: nativeControlsInset } : undefined}
       className={cn(
         // 固定像素高度：红绿灯位置 (y:16) 按 44px 高度对齐，不随 rem 缩放
-        'drag-region relative flex h-11 shrink-0 items-center bg-transparent',
+        'drag-region relative flex h-[44px] shrink-0 items-center bg-transparent',
         isMac ? 'pl-[84px] pr-3' : 'pl-3',
         className
       )}

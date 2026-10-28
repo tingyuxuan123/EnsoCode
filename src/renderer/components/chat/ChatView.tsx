@@ -323,7 +323,7 @@ export function ChatView() {
 
   if (!chrome) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 bg-panel text-center">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 bg-background text-center">
         <p className="text-lg font-medium">EnsoCode</p>
         <p className="text-sm text-muted-foreground">
           {t('Create or select a project to start a conversation')}
@@ -341,7 +341,7 @@ export function ChatView() {
   );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
+    <div data-slot="chat-view" className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
       <WorktreeMissingDialog conversationId={chrome.parentId} />
       <CoworkerTabs
         parentId={chrome.parentId}
@@ -370,7 +370,7 @@ export function ChatView() {
         timelineRef={timelineRef}
       />
 
-      <div className="@container pt-1">
+      <div className="@container shrink-0 pt-[4px] pb-[12px]">
         <div className={CHAT_COL}>
           {project && project.kind !== 'ssh' && !chrome.displayedParentId && (
             <ProjectCodeTrustBar projectId={project.id} conversationId={chrome.id} />
@@ -384,7 +384,7 @@ export function ChatView() {
           {(chrome.rewinding || chrome.restoringFiles) && (
             <div
               role="status"
-              className="mb-1 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-muted-foreground text-xs"
+              className="mb-[6px] flex items-center gap-2 rounded-[6px] border border-border/70 px-[12px] py-[6px] text-[12px] text-muted-foreground"
             >
               <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
               <span>
@@ -522,26 +522,28 @@ export function ChatView() {
                         useSessionsStore.getState().setApprovalMode(chrome.id, mode)
                       }
                     />
-                    <ModelPicker
-                      listenHotkey
-                      providers={enabledProviders}
-                      virtualModels={virtualModels}
-                      routedModelLabel={routedModelLabel}
-                      activeAccount={activeAccount}
-                      providerId={selectedProviderId}
-                      modelId={effectiveModelId}
-                      reasoningEnabled={chrome.reasoningEnabled ?? false}
-                      thinkingLevel={chrome.thinkingLevel ?? 'medium'}
-                      onSelect={(pid, mid) =>
-                        useSessionsStore.getState().setModel(chrome.id, pid, mid)
-                      }
-                      onReasoningChange={(enabled) =>
-                        useSessionsStore.getState().setReasoning(chrome.id, enabled)
-                      }
-                      onThinkingChange={(level) =>
-                        useSessionsStore.getState().setThinking(chrome.id, level)
-                      }
-                    />
+                    <div className="ml-auto min-w-0 shrink" data-slot="composer-model">
+                      <ModelPicker
+                        listenHotkey
+                        providers={enabledProviders}
+                        virtualModels={virtualModels}
+                        routedModelLabel={routedModelLabel}
+                        activeAccount={activeAccount}
+                        providerId={selectedProviderId}
+                        modelId={effectiveModelId}
+                        reasoningEnabled={chrome.reasoningEnabled ?? false}
+                        thinkingLevel={chrome.thinkingLevel ?? 'medium'}
+                        onSelect={(pid, mid) =>
+                          useSessionsStore.getState().setModel(chrome.id, pid, mid)
+                        }
+                        onReasoningChange={(enabled) =>
+                          useSessionsStore.getState().setReasoning(chrome.id, enabled)
+                        }
+                        onThinkingChange={(level) =>
+                          useSessionsStore.getState().setThinking(chrome.id, level)
+                        }
+                      />
+                    </div>
                   </>
                 )}
                 {chrome.displayedParentId && (

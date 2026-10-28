@@ -1,135 +1,156 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { useState, type ReactNode } from 'react';
+import { Segmented, Spinner, useDismiss } from './Controls';
+import { useWorkbench } from './Workbench';
 
-export type DockView = 'progress' | 'agents' | null;
-const progress = [
-  { title: '排查首页及各角色组件的高度与裁切布局', status: 'completed' },
-  { title: '统一修复内容自适应及底部遮挡问题', status: 'completed' },
-  { title: '执行相关检查并总结修复范围', status: 'running' },
-];
-const tasks = [
-  { id: 'layout', title: '修复采购财务首页自适应布局', description: '统一各角色首页的内容高度，修复文字裁切与底部遮挡。', model: 'GPT-5 Codex', status: 'completed', duration: '4分00秒', result: '已整理内容容器的高度约束与滚动边界，采购、财务角色共用一致的自适应规则。', scope: '首页布局 · 组件高度 · 底部留白' },
-  { id: 'audit', title: '排查其他角色首页裁切布局', description: '检查首页、角色组件与内容区的布局边界，汇总问题位置。', model: 'Gemini 2.5 Pro', status: 'completed', duration: '3分16秒', result: '问题集中在固定高度容器和嵌套 overflow；已输出问题范围供主会话处理。', scope: '角色首页 · 滚动容器 · 问题清单' },
-];
-const done = progress.filter((item) => item.status === 'completed').length;
-const running = tasks.filter((item) => item.status === 'running').length;
-const filters = [{ id: 'recent', label: '最近' }, { id: 'running', label: '进行中' }, { id: 'completed', label: '已完成' }, { id: 'all', label: '全部' }];
+export type DockView = 'progress' | 'agents' | 'bash' | null;
+type Filter = 'recent' | 'running' | 'done' | 'all';
 
-export function TaskDock({ initial = null }: { initial?: DockView }) {
-  const [view, setView] = useState<DockView>(initial);
-  const [filter, setFilter] = useState('recent');
-  const [selected, setSelected] = useState('');
-  const root = useRef<HTMLDivElement>(null);
-  const active = tasks.find((task) => task.id === selected);
-  const visible = tasks.filter((task) => filter === 'recent' || filter === 'all' || task.status === filter);
-  useEffect(() => {
-    if (!view) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setView(null); setSelected(''); }
-    };
-    const closeOutside = (event: PointerEvent) => {
-      if (root.current && !root.current.contains(event.target as Node)) setView(null);
-    };
-    document.addEventListener('keydown', closeOnEscape);
-    document.addEventListener('pointerdown', closeOutside);
-    return () => {
-      document.removeEventListener('keydown', closeOnEscape);
-      document.removeEventListener('pointerdown', closeOutside);
-    };
-  }, [view]);
-  const close = () => { setView(null); setSelected(''); };
+const todos = [
+  { title: '盘点设置页 21 个分类与显隐条件', status: 'completed' },
+  { title: '统一项目侧栏、对话区与右侧停靠面板', status: 'completed' },
+  { title: '补齐运行条与任务栏的所有状态', status: 'in_progress' },
+  { title: '执行 typecheck / lint / test 并截图验收', status: 'pending' },
+];
+const agents = [
+  { id: 'ag1', title: '排查设置页布局裁切', type: 'scout', mode: 'task', origin: '模型派发', model: 'Gemini 2.5 Flash', status: 'running', duration: '1分12秒', summary: '正在读取 settings/*.tsx 的滚动容器……' },
+  { id: 'ag2', title: '审查侧栏改动', type: 'reviewer', mode: 'task', origin: '通过提及派发', model: 'Claude Opus 4.1', status: 'completed', duration: '3分16秒', summary: '未发现行为回归；建议给 GroupChips 的横滑补一个键盘可达的入口。' },
+  { id: 'ag3', title: '补充 settingsCategories 测试', type: 'tester', mode: 'task', origin: '模型派发', model: 'GPT-5 Codex', status: 'failed', duration: '48秒', summary: '测试运行失败：vitest 找不到 jsdom 环境。' },
+  { id: 'ag4', title: '回归检查', type: 'worker', mode: 'coworker', origin: '手动创建', model: 'Claude Sonnet 4.5', status: 'standby', duration: '12分', summary: '协作者待命，可继续接收消息。' },
+];
+const bash = [
+  { id: 'b1', command: 'pnpm dev', status: 'running', duration: '18分', tail: 'VITE v7.1.4  ready in 812 ms\n➜  Local:   http://localhost:5173/' },
+  { id: 'b2', command: 'pnpm test --watch', status: 'failed', duration: '2分', tail: 'FAIL src/shared/settingsDeepLink.test.ts\n  ✕ resolves hidden category (14 ms)' },
+  { id: 'b3', command: 'pnpm typecheck', status: 'completed', duration: '41秒', tail: '类型检查通过' },
+];
+const statusText: Record<string, string> = { running: '运行中', completed: '已完成', failed: '失败', cancelled: '已取消', standby: '协作者待命' };
+const statusIcon = (status: string) => status === 'running' ? <Spinner className="size-3.5 text-primary" /> : <span className={`${status === 'failed' ? 'icon-[lucide--circle-x] text-danger' : status === 'standby' ? 'icon-[lucide--circle-pause] text-muted' : 'icon-[lucide--circle-check] text-success'} size-3.5 shrink-0`} />;
+const match = (status: string, filter: Filter) => filter === 'all' || filter === 'recent' || (filter === 'running' ? status === 'running' : status !== 'running');
+
+function DockButton({ icon, label, running, failed, open, onClick, extra }: { icon: string; label: string; running: number; failed?: boolean; open: boolean; onClick: () => void; extra?: ReactNode }) {
   return (
-    <div ref={root} className="relative mx-5 shrink-0">
-      {view && (
-        <section aria-label={view === 'progress' ? '当前进度面板' : '后台 Agent 面板'} className="absolute bottom-[42px] left-0 right-0 z-30 overflow-hidden rounded-control border border-border bg-surface">
-          <header className="flex h-[44px] items-center gap-2 border-b border-line bg-panel/60 px-4">
-            <span className={`${view === 'progress' ? 'icon-[lucide--list-checks]' : 'icon-[lucide--bot]'} size-4 shrink-0 text-muted`} />
-            <h2 className="whitespace-nowrap text-[13px] font-medium">{view === 'progress' ? '当前进度' : '后台 Agent'}</h2>
-            <span className="text-[12px] tabular-nums text-muted">{view === 'progress' ? `${done} / ${progress.length}` : `${running} 个运行中`}</span>
-            {view === 'agents' && !active && (
-              <div className="ml-auto flex h-7 items-center rounded-control bg-control/45 p-[2px]" role="group" aria-label="筛选后台任务">
-                {filters.map((item) => (
-                  <button key={item.id} onClick={() => setFilter(item.id)} aria-pressed={filter === item.id} className={`h-full whitespace-nowrap rounded-[4px] px-2 text-[11px] ${filter === item.id ? 'bg-surface text-surface-foreground' : 'text-muted hover:text-surface-foreground'}`}>
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {view === 'progress' && <span className="ml-auto text-[11px] text-muted">最后一步进行中</span>}
-            {active && <button onClick={() => setSelected('')} className="ml-auto text-[11px] text-muted hover:text-surface-foreground">返回列表</button>}
-            <button aria-label="收起任务面板" title="收起任务面板" className="ml-2 flex size-6 shrink-0 items-center justify-center rounded-control text-muted hover:bg-hover" onClick={close}>
-              <span className="icon-[lucide--x] size-3.5" />
-            </button>
-          </header>
-          {view === 'progress' ? (
-            <div className="px-4 pb-4 pt-3">
-              <div className="mb-3 h-[3px] overflow-hidden rounded-full bg-control" role="progressbar" aria-label="当前任务完成进度" aria-valuenow={done} aria-valuemin={0} aria-valuemax={progress.length}>
-                <div className="h-full bg-primary" style={{ width: `${done / progress.length * 100}%` }} />
-              </div>
-              <ol className="space-y-2.5">
-                {progress.map((item) => (
-                  <li key={item.title} className="flex items-center gap-2.5 text-[13px] leading-5">
-                    <span className={`${item.status === 'completed' ? 'icon-[lucide--check] text-success' : 'icon-[lucide--circle-dot] text-primary'} size-3.5 shrink-0`} />
-                    <span className={item.status === 'completed' ? 'text-muted line-through decoration-border' : 'font-medium'}>{item.title}</span>
-                  </li>
-                ))}
-              </ol>
-              <div className="mt-4 flex items-center gap-1.5 border-t border-line pt-3 text-[11px] text-muted">
-                <span className="icon-[lucide--info] size-3" />
-                完成后收起清单，结果保留在会话中
-                <Link to="/task-progress" className="ml-auto whitespace-nowrap text-primary">查看进度场景</Link>
-              </div>
-            </div>
-          ) : active ? (
-            <div className="px-4 py-4">
-              <div className="mb-2 flex items-center gap-2"><span className="icon-[lucide--circle-check] size-4 text-success" /><h3 className="text-[14px] font-medium">{active.title}</h3></div>
-              <p className="text-[13px] leading-6 text-muted">{active.result}</p>
-              <dl className="mt-4 grid grid-cols-[64px_1fr] gap-y-2 text-[12px]">
-                <dt className="text-muted">模型</dt><dd>{active.model}</dd>
-                <dt className="text-muted">耗时</dt><dd>{active.duration}</dd>
-                <dt className="text-muted">任务范围</dt><dd>{active.scope}</dd>
-              </dl>
-              <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted">示例结果 · 不代表真实执行记录</p>
-            </div>
-          ) : visible.length ? (
-            <div>
-              <div className="grid grid-cols-2 divide-x divide-line px-1 py-1">
-                {visible.map((task) => (
-                  <article key={task.id} className="flex flex-col px-3 py-3">
-                    <div className="flex items-start gap-2">
-                      <span className="icon-[lucide--circle-check] size-4 shrink-0 text-success" />
-                      <h3 className="min-w-0 text-[13px] font-medium leading-5">{task.title}</h3>
-                    </div>
-                    <p className="mb-3 mt-2 line-clamp-2 text-[12px] leading-5 text-muted">{task.description}</p>
-                    <div className="mt-auto flex items-center gap-1.5 text-[11px] text-muted"><span className="icon-[lucide--bot] size-3" />{task.model}</div>
-                    <div className="mt-3 flex items-center gap-1.5 text-[11px]"><span className="text-success">已完成</span><span className="ml-auto flex items-center gap-1 text-muted"><span className="icon-[lucide--clock-3] size-3" />{task.duration}</span></div>
-                    <button className="mt-3 flex items-center gap-1 self-start whitespace-nowrap text-[11px] text-primary" onClick={() => setSelected(task.id)}>查看交付<span className="icon-[lucide--arrow-up-right] size-3" /></button>
-                  </article>
-                ))}
-              </div>
-              <div className="flex items-center border-t border-line px-4 py-2.5 text-[11px] text-muted"><span>{tasks.length} 个一次性任务 · 已全部结束</span><Link to="/background-agents" className="ml-auto text-primary">查看后台任务场景</Link></div>
-            </div>
-          ) : (
-            <div className="flex h-[124px] flex-col items-center justify-center gap-2 text-[12px] text-muted">
-              <span className="icon-[lucide--circle-check] size-5 text-faint" />
-              <p>没有进行中的后台任务</p>
-              <button className="text-[11px] text-primary" onClick={() => setFilter('completed')}>查看已完成任务</button>
-            </div>
-          )}
-        </section>
+    <button aria-expanded={open} onClick={onClick} title={running ? `${running} 个运行中` : undefined} className={`relative inline-flex h-7 items-center gap-1.5 rounded-control border border-border/80 px-2.5 text-[12px] ${open ? 'bg-control/70 text-surface-foreground' : 'bg-surface text-muted hover:bg-hover hover:text-surface-foreground'}`}>
+      {running ? <Spinner className="size-3.5" /> : <span className={`${icon} size-3.5`} />}
+      {label}
+      {running > 0 && <span className="tabular-nums">· {running}</span>}
+      {extra}
+      {failed && <span role="img" aria-label="失败" className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-danger" />}
+    </button>
+  );
+}
+
+function Panel({ icon, title, count, onClose, children, filter, setFilter, extra }: { icon: string; title: string; count: string; onClose: () => void; children: ReactNode; filter?: Filter; setFilter?: (value: Filter) => void; extra?: ReactNode }) {
+  return (
+    <section aria-label={title} className="absolute bottom-full left-0 right-0 z-30 mb-1.5 flex max-h-[360px] flex-col overflow-hidden rounded-control border border-border bg-surface shadow-[0_8px_24px_rgba(20,40,60,0.12)]">
+      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3 text-[12px]">
+        <span className={`${icon} size-3.5 text-muted`} />
+        <span className="font-medium">{title}</span>
+        <span className="tabular-nums text-muted">{count}</span>
+        <span className="ml-auto" />
+        {extra}
+        {filter && setFilter && <Segmented size="sm" label="筛选" value={filter} onChange={setFilter} options={[{ value: 'recent', label: '最近' }, { value: 'running', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'all', label: '全部' }]} />}
+        <button aria-label="收起" onClick={onClose} className="flex size-6 items-center justify-center rounded-control text-muted hover:bg-hover"><span className="icon-[lucide--x] size-3.5" /></button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-auto p-2">{children}</div>
+    </section>
+  );
+}
+
+/** 输入框上方固定按钮条（chat/TaskBar.tsx）：后台 Bash / 后台 Agent / 当前进度；点开在上方弹出，Esc / 外部点击收起 */
+export function TaskDock({ initial = null }: { initial?: DockView }) {
+  const { openSideTab } = useWorkbench();
+  const [view, setView] = useState<DockView>(initial);
+  const [filter, setFilter] = useState<Filter>('running');
+  const [detail, setDetail] = useState('');
+  const [stopped, setStopped] = useState<string[]>([]);
+  const ref = useDismiss<HTMLDivElement>(Boolean(view), () => { setView(null); setDetail(''); });
+  const done = todos.filter((item) => item.status === 'completed').length;
+  const toggle = (next: DockView) => { setView(view === next ? null : next); setDetail(''); };
+  const shownAgents = agents.filter((agent) => match(stopped.includes(agent.id) ? 'cancelled' : agent.status, filter));
+  const shownBash = bash.filter((task) => match(stopped.includes(task.id) ? 'cancelled' : task.status, filter));
+  const activeAgent = agents.find((agent) => agent.id === detail);
+  return (
+    <div ref={ref} className="relative mb-1.5">
+      {view === 'progress' && (
+        <Panel icon="icon-[lucide--list-todo]" title="当前进度" count={`${done}/${todos.length}`} onClose={() => setView(null)}>
+          <div className="mb-2 h-[3px] overflow-hidden rounded-full bg-control" role="progressbar" aria-valuenow={done} aria-valuemax={todos.length}><div className="h-full bg-primary" style={{ width: `${(done / todos.length) * 100}%` }} /></div>
+          <ol className="space-y-2 px-1">
+            {todos.map((item) => (
+              <li key={item.title} className="flex items-center gap-2.5 text-[13px] leading-5">
+                <span className={`${item.status === 'completed' ? 'icon-[lucide--circle-check] text-success' : item.status === 'in_progress' ? 'icon-[lucide--circle-dot] text-primary' : 'icon-[lucide--circle] text-faint'} size-3.5 shrink-0`} />
+                <span className={item.status === 'completed' ? 'text-muted line-through decoration-border' : item.status === 'in_progress' ? 'font-medium' : 'text-muted'}>{item.title}</span>
+              </li>
+            ))}
+          </ol>
+        </Panel>
       )}
-      <div className="flex h-[36px] items-center gap-2 text-[12px]">
-        <button aria-expanded={view === 'agents'} onClick={() => { setView(view === 'agents' ? null : 'agents'); setSelected(''); }} className={`flex h-7 items-center gap-1.5 whitespace-nowrap rounded-control border px-2.5 ${view === 'agents' ? 'border-border bg-control/65' : 'border-line bg-input text-muted hover:bg-hover'}`}>
-          <span className="icon-[lucide--bot] size-3.5" />
-          后台 Agent
-          <span className="text-[11px] tabular-nums text-muted">{tasks.length}</span>
-        </button>
-        <button aria-expanded={view === 'progress'} onClick={() => setView(view === 'progress' ? null : 'progress')} className={`flex h-7 items-center gap-1.5 whitespace-nowrap rounded-control border px-2.5 ${view === 'progress' ? 'border-border bg-control/65' : 'border-line bg-input text-muted hover:bg-hover'}`}>
-          <span className="icon-[lucide--circle-dot] size-3.5 text-primary" />
+      {view === 'agents' && (
+        <Panel icon="icon-[lucide--bot]" title="后台 Agent" count={`${agents.filter((agent) => agent.status === 'running' && !stopped.includes(agent.id)).length} 个运行中`} onClose={() => setView(null)} filter={activeAgent ? undefined : filter} setFilter={setFilter} extra={activeAgent ? <button onClick={() => setDetail('')} className="text-[12px] text-muted hover:text-surface-foreground">返回列表</button> : <button onClick={() => { setView(null); openSideTab('agents'); }} className="text-[12px] text-primary">在侧栏打开</button>}>
+          {activeAgent ? (
+            <div className="px-2 py-1">
+              <div className="flex items-center gap-2">{statusIcon(activeAgent.status)}<h3 className="text-[14px] font-medium">{activeAgent.title}</h3></div>
+              <dl className="mt-3 grid grid-cols-[72px_1fr] gap-y-1.5 text-[12px]">
+                <dt className="text-muted">类型</dt><dd className="font-mono">{activeAgent.type} · {activeAgent.mode === 'coworker' ? '持久协作者' : '一次性任务'}</dd>
+                <dt className="text-muted">来源</dt><dd>{activeAgent.origin}</dd>
+                <dt className="text-muted">模型</dt><dd>{activeAgent.model}</dd>
+                <dt className="text-muted">用时</dt><dd>{activeAgent.duration}</dd>
+              </dl>
+              <p className="mt-3 border-t border-line pt-3 text-[11px] text-muted">最终报告</p>
+              <p className="mt-1 text-[13px] leading-6">{activeAgent.summary}</p>
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => { setView(null); openSideTab('agents'); }} className="rounded-control border border-border px-3 py-1 text-[12px] hover:bg-hover">查看过程</button>
+                {activeAgent.status === 'running' && <button onClick={() => setStopped([...stopped, activeAgent.id])} className="rounded-control px-3 py-1 text-[12px] text-danger hover:bg-danger-soft">停止子代理</button>}
+              </div>
+            </div>
+          ) : shownAgents.length ? (
+            <div className="grid grid-cols-2 gap-1.5">
+              {shownAgents.map((agent) => {
+                const status = stopped.includes(agent.id) ? 'cancelled' : agent.status;
+                return (
+                  <article key={agent.id} className="flex flex-col rounded-control border border-line px-3 py-2.5">
+                    <div className="flex items-start gap-2">{statusIcon(status)}<h3 className="min-w-0 flex-1 text-[13px] font-medium leading-5">{agent.title}</h3></div>
+                    <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-muted">{agent.summary}</p>
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
+                      <span className="font-mono">{agent.type}</span>·<span>{agent.mode === 'coworker' ? '持久协作者' : '一次性任务'}</span>·<span className="truncate">{agent.model}</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-[11px]">
+                      <span className={status === 'failed' ? 'text-danger' : status === 'running' ? 'text-primary' : 'text-muted'}>{statusText[status]}</span>
+                      <span className="text-faint">{agent.duration}</span>
+                      <button onClick={() => setDetail(agent.id)} className="ml-auto text-primary">查看过程</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : <p className="py-8 text-center text-[12px] text-muted">没有正在运行的任务。</p>}
+        </Panel>
+      )}
+      {view === 'bash' && (
+        <Panel icon="icon-[lucide--square-terminal]" title="后台 Bash" count={`${bash.filter((task) => task.status === 'running' && !stopped.includes(task.id)).length} 个运行中`} onClose={() => setView(null)} filter={filter} setFilter={setFilter}>
+          {shownBash.length ? shownBash.map((task) => {
+            const status = stopped.includes(task.id) ? 'cancelled' : task.status;
+            return (
+              <article key={task.id} className="mb-1.5 rounded-control border border-line px-3 py-2">
+                <div className="flex items-center gap-2 text-[12px]">
+                  {statusIcon(status)}
+                  <code className="min-w-0 flex-1 truncate bg-transparent p-0 font-mono">{task.command}</code>
+                  <span className={status === 'failed' ? 'text-danger' : 'text-muted'}>{statusText[status]}</span>
+                  <span className="text-faint">{task.duration}</span>
+                  {status === 'running' && <button onClick={() => setStopped([...stopped, task.id])} className="text-danger">停止任务</button>}
+                </div>
+                <pre className="mt-1.5 max-h-16 overflow-auto rounded-[4px] bg-code px-2 py-1 font-mono text-[11px] leading-5 text-muted">{task.tail || '(暂无输出)'}</pre>
+              </article>
+            );
+          }) : <p className="py-8 text-center text-[12px] text-muted">没有正在运行的任务。</p>}
+        </Panel>
+      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <DockButton icon="icon-[lucide--square-terminal]" label="后台 Bash" running={1} failed open={view === 'bash'} onClick={() => toggle('bash')} />
+        <DockButton icon="icon-[lucide--bot]" label="后台 Agent" running={1} failed open={view === 'agents'} onClick={() => toggle('agents')} />
+        <button aria-expanded={view === 'progress'} onClick={() => toggle('progress')} className={`inline-flex h-7 items-center gap-1.5 rounded-control border border-border/80 px-2.5 text-[12px] ${view === 'progress' ? 'bg-control/70' : 'bg-surface text-muted hover:bg-hover hover:text-surface-foreground'}`}>
+          <Spinner className="size-3.5" />
           当前进度
-          <span className="text-[11px] tabular-nums text-muted">{done}/{progress.length}</span>
+          <span className="tabular-nums">{done}/{todos.length}</span>
         </button>
-        <span className="ml-auto text-[11px] text-faint">{running ? `${running} 个后台任务运行中` : '后台任务已完成'}</span>
       </div>
     </div>
   );

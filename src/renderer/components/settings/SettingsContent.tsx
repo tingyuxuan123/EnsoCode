@@ -139,30 +139,38 @@ export function SettingsContent() {
   }, [resolvedCategory, activeCategory]);
 
   return (
-    <div className="flex h-full w-full border-t">
+    <div className="flex h-full w-full border-t border-line" data-slot="settings-content">
       {/* Left: Category List */}
-      <nav className="w-60 shrink-0 space-y-0.5 overflow-y-auto border-r bg-nav p-2">
+      <nav
+        aria-label={t('Settings')}
+        className="w-[240px] shrink-0 space-y-[2px] overflow-y-auto border-r border-line bg-nav p-[8px] max-sm:w-[184px]"
+        data-slot="settings-navigation"
+      >
         {categories.map((category) => (
           <button
             type="button"
             key={category.id}
             onClick={() => setActiveCategory(category.id)}
+            aria-current={activeCategory === category.id ? 'page' : undefined}
             className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
-              category.sub && 'pl-7',
+              'flex min-h-[32px] w-full items-center gap-[8px] rounded-[6px] px-[10px] py-[6px] text-left text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-nav',
+              category.sub && 'pl-[28px]',
               activeCategory === category.id
                 ? 'bg-accent font-medium text-foreground'
                 : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
             )}
           >
-            <category.icon className="h-4 w-4" />
-            {category.label}
+            <category.icon className="size-[16px] shrink-0" />
+            <span className="truncate">{category.label}</span>
           </button>
         ))}
       </nav>
 
       {/* Right: Settings Panel */}
-      <div className="min-w-0 flex-1 overflow-y-auto bg-panel px-10 py-8">
+      <div
+        className="min-w-0 flex-1 overflow-y-auto bg-panel px-[40px] py-[32px] max-sm:px-[24px]"
+        data-slot="settings-panel"
+      >
         {activeCategory === 'general' && <GeneralSettings />}
         {activeCategory === 'shortcuts' && <KeybindingsSettings />}
         {activeCategory === 'appearance' && <AppearanceSettings />}

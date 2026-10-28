@@ -241,7 +241,7 @@ function WorkflowPresetDialog({
                     value={arg.default ?? ''}
                     onChange={(e) => patchArg(index, { default: e.target.value })}
                   />
-                  <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
+                  <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-[12px]">
                     <Checkbox
                       checked={arg.required === true}
                       onCheckedChange={(checked) => patchArg(index, { required: checked === true })}
@@ -293,7 +293,7 @@ function WorkflowPresetDialog({
               </Tabs>
             </div>
             {loading ? (
-              <div className="flex w-full items-center justify-center rounded-md border py-12">
+              <div className="flex w-full items-center justify-center rounded-[6px] border py-12">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : tab === 'design' ? (
@@ -305,8 +305,8 @@ function WorkflowPresetDialog({
                   onChange={setDesign}
                 />
               ) : (
-                <div className="flex w-full flex-col items-center gap-2 rounded-md border border-dashed py-8 text-center">
-                  <p className="max-w-md text-muted-foreground text-xs">
+                <div className="flex w-full flex-col items-center gap-2 rounded-[6px] border border-dashed py-8 text-center">
+                  <p className="max-w-md text-muted-foreground text-[12px]">
                     {t(
                       'This preset is plain code and cannot be shown in the designer. Using the designer replaces the current script.'
                     )}
@@ -329,7 +329,7 @@ function WorkflowPresetDialog({
                 onChange={editCode}
               />
             )}
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-[12px]">
               {tab === 'design'
                 ? !designValid &&
                   t('Every phase needs a title and every step needs a label and a prompt.')
@@ -341,7 +341,7 @@ function WorkflowPresetDialog({
             </p>
           </Field>
           {error && (
-            <p className="flex items-center gap-1.5 text-destructive text-xs">
+            <p className="flex items-center gap-1.5 text-destructive text-[12px]">
               <CircleAlert className="h-3.5 w-3.5 shrink-0" />
               {error}
             </p>
@@ -376,13 +376,13 @@ export function WorkflowsSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4" data-settings-row="workflows.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="workflows.root">
         <div>
-          <h3 className="font-medium text-lg">{t('Workflows')}</h3>
-          <p className="text-muted-foreground text-sm">
+          <h3 className="font-semibold text-[18px]">{t('Workflows')}</h3>
+          <p className="text-muted-foreground text-[13px]">
             {t('Preset workflows you can run from the Workflow side panel')}
           </p>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[12px]">
             {t(
               'Project .agents/workflows files take precedence over these; ~/.agents/workflows and built-in presets come after.'
             )}
@@ -395,34 +395,34 @@ export function WorkflowsSettings() {
       </div>
 
       <div className="space-y-2">
-        <h4 className="font-medium text-muted-foreground text-xs">{t('Custom presets')}</h4>
+        <h4 className="font-medium text-muted-foreground text-[12px]">{t('Custom presets')}</h4>
         {presets.length === 0 ? (
-          <div className="rounded-md border border-dashed px-3 py-8 text-center">
+          <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
             <Workflow className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 font-medium text-sm">{t('No custom workflow presets yet')}</p>
+            <p className="mt-3 font-medium text-[13px]">{t('No custom workflow presets yet')}</p>
           </div>
         ) : (
           <div className="space-y-1">
             {presets.map((preset) => (
               <div
                 key={preset.id}
-                className="group flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+                className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
                 data-settings-row={`workflows.${preset.id}`}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{preset.name}</span>
+                    <span className="font-medium text-[13px]">{preset.name}</span>
                     <Badge variant="secondary" className="shrink-0 font-mono text-[11px]">
                       {preset.id}
                     </Badge>
                   </div>
-                  <p className="truncate text-muted-foreground text-xs">{preset.description}</p>
+                  <p className="truncate text-muted-foreground text-[12px]">{preset.description}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                    className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                     aria-label={t('Edit')}
                     onClick={() => setEditing(preset.id)}
                   >
@@ -431,7 +431,7 @@ export function WorkflowsSettings() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                    className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
                     aria-label={t('Delete')}
                     onClick={() =>
                       void window.electronAPI.workflowPresets.delete(preset.id).then(reload)
@@ -448,24 +448,24 @@ export function WorkflowsSettings() {
 
       {builtins.length > 0 && (
         <div className="space-y-2">
-          <h4 className="font-medium text-muted-foreground text-xs">{t('Built-in presets')}</h4>
+          <h4 className="font-medium text-muted-foreground text-[12px]">{t('Built-in presets')}</h4>
           <div className="space-y-1">
             {builtins.map((preset) => (
               <div
                 key={preset.id}
-                className="flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+                className="flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
                 data-settings-row={`workflows.builtin.${preset.id}`}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{t(preset.name)}</span>
+                    <span className="font-medium text-[13px]">{t(preset.name)}</span>
                     <Badge variant="secondary" className="shrink-0 font-mono text-[11px]">
                       {preset.id}
                     </Badge>
                   </div>
-                  <p className="text-muted-foreground text-xs">{t(preset.description)}</p>
+                  <p className="text-muted-foreground text-[12px]">{t(preset.description)}</p>
                   {preset.args.length > 0 && (
-                    <p className="mt-0.5 text-muted-foreground text-xs">
+                    <p className="mt-0.5 text-muted-foreground text-[12px]">
                       {t('Arguments')}:{' '}
                       {preset.args
                         .map((arg) => `${t(arg.label)}${arg.required ? ' *' : ''}`)

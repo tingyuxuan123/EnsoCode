@@ -38,17 +38,17 @@ export function InstructionsSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4" data-settings-row="instructions.root">
+      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="instructions.root">
         <div>
-          <h3 className="font-medium text-lg">
+          <h3 className="font-semibold text-[18px]">
             {t('Instruction Files')}
             <OccupancyEnabledTotal tokens={enabledTokens} />
             <NewSessionBadge />
           </h3>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-[13px]">
             {t('Global CLAUDE.md / AGENTS.md style files from local AI tools')}
           </p>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[12px]">
             {t('Only one file is active at a time; enabling one disables the others')}
           </p>
         </div>
@@ -65,10 +65,10 @@ export function InstructionsSettings() {
       </div>
 
       {instructions.length === 0 ? (
-        <div className="rounded-md border border-dashed px-3 py-8 text-center">
+        <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <FileText className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-sm">{t('No instruction files yet')}</p>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-3 font-medium text-[13px]">{t('No instruction files yet')}</p>
+          <p className="mt-1 text-muted-foreground text-[12px]">
             {t('Import instruction files from local apps or add one manually to get started')}
           </p>
         </div>
@@ -77,13 +77,13 @@ export function InstructionsSettings() {
           {instructions.map((instruction) => (
             <div
               key={instruction.id}
-              className="group flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50"
+              className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
               data-settings-row={`instructions.${instruction.id}`}
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   className={cn(
-                    'shrink-0 font-medium text-sm',
+                    'shrink-0 font-medium text-[13px]',
                     !instruction.enabled && 'text-muted-foreground line-through'
                   )}
                 >
@@ -98,7 +98,7 @@ export function InstructionsSettings() {
                     {t('Linked')}
                   </Badge>
                 )}
-                <span className="min-w-0 truncate text-muted-foreground text-xs">
+                <span className="min-w-0 truncate text-muted-foreground text-[12px]">
                   {instruction.local
                     ? `${t('Local copy')} · ${formatBytes(instruction.bytes)}`
                     : `${instruction.sourcePath} · ${formatBytes(instruction.bytes)}`}
@@ -116,7 +116,7 @@ export function InstructionsSettings() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                  className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => setEditing(instruction)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -124,7 +124,7 @@ export function InstructionsSettings() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => removeInstruction(instruction.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

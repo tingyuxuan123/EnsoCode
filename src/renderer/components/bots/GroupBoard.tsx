@@ -323,7 +323,7 @@ function TaskCard({
       data-slot="bot-card"
       data-task-id={task.id}
       className={cn(
-        'group rounded-lg border bg-card px-2.5 py-2 text-xs transition-shadow',
+        'group rounded-md border bg-card px-2.5 py-2 text-xs transition-shadow',
         !open && !review && 'opacity-75',
         highlighted && 'ring-2 ring-brand/60'
       )}

@@ -220,7 +220,7 @@ export function DelegationCard({
     'flex flex-wrap items-center gap-1.5 whitespace-nowrap text-muted-foreground text-xs';
   const task = append?.text ?? record?.task;
   return (
-    <div data-slot="bot-card" className="max-w-lg rounded-xl border bg-card px-3 py-2.5">
+    <div data-slot="bot-card" className="max-w-lg rounded-md border bg-card px-3 py-2.5">
       {collapsible ? (
         <button
           type="button"

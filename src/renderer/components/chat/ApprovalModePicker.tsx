@@ -66,7 +66,7 @@ export function ApprovalModePicker({ mode, onSelect }: ApprovalModePickerProps) 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="flex h-7 min-w-0 shrink items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex h-[28px] min-w-0 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         title={t(APPROVAL_MODE_META[mode].descKey)}
       >
         <CurrentIcon className="h-3 w-3 shrink-0" />

@@ -23,6 +23,9 @@
   --color-danger: #ad4b53;
   --color-danger-soft: #f6e9eb;
   --color-warning: #a67525;
+  --color-warning-soft: #f6efe1;
+  --color-primary-soft: hsl(205 48% 92%);
+  --color-warning: #a67525;
   --color-code: #e5ebef;
   --color-white: #ffffff;
   --radius-control: 6px;
@@ -44,4 +47,7 @@ pre code { padding: 0; background: transparent; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--color-border); }
 ::selection { background: #c1d6e7; }
-.design-dark { --color-surface: #171b20; --color-surface-foreground: #e2e8ed; --color-panel: #20262c; --color-sidebar: #1c2228; --color-control: #30383e; --color-input: #20272d; --color-muted: #a3b0bb; --color-faint: #97a4ae; --color-border: #3b4650; --color-line: #303a43; --color-selected: #333d46; --color-hover: #2b353f; --color-code: #2b353d; --color-white: #222930; --color-success-soft: #233a30; --color-danger-soft: #41292e; color-scheme: dark; }
+.design-dark { --color-surface: #171b20; --color-surface-foreground: #e2e8ed; --color-panel: #20262c; --color-sidebar: #1c2228; --color-control: #30383e; --color-input: #20272d; --color-muted: #a3b0bb; --color-faint: #97a4ae; --color-border: #3b4650; --color-line: #303a43; --color-selected: #333d46; --color-hover: #2b353f; --color-code: #2b353d; --color-white: #222930; --color-success-soft: #233a30; --color-danger-soft: #41292e; --color-warning-soft: #3d3324; --color-primary-soft: #233545; color-scheme: dark; }
+@keyframes vetd-spin { to { transform: rotate(360deg); } }
+.vetd-spin { animation: vetd-spin 0.9s linear infinite; }
+.design-dark .enso-mark { filter: invert(0.88); }

@@ -21,7 +21,7 @@ export function WorkbenchTitle({ showBrand = true }: { showBrand?: boolean }) {
   return (
     <div className="flex min-w-0 items-center">
       {showBrand && (
-        <span className="w-[230px] shrink-0 truncate text-[12px] font-medium text-muted-foreground">
+        <span className="w-[230px] shrink-0 truncate text-[12px] font-medium text-muted-foreground max-[800px]:w-[150px] max-[650px]:hidden">
           EnsoCode
           <span className="ml-2 font-normal text-muted-foreground/80">{t('Workbench')}</span>
         </span>
