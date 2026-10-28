@@ -345,7 +345,9 @@ export default function App() {
         title="EnsoCode"
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题
-          !remoteNodeActive && !botModeActive ? <WorkbenchTitle /> : undefined
+          !remoteNodeActive && !botModeActive ? (
+            <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
+          ) : undefined
         }
         // Code 模式的 Code|Bot 切换在侧栏顶部；Bot 模式侧栏不同，仍放标题栏中间
         centered={botModeActive ? <ModeSwitch /> : undefined}

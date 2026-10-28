@@ -1,7 +1,7 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
 import { WINDOWS_CAPTION_BUTTONS_WIDTH } from '@shared/windowControls';
 import { Copy, Minus, Sparkles, Square, X } from 'lucide-react';
-import { useRef } from 'react';
+import { type CSSProperties, useRef } from 'react';
 import { useNativeWindowControls } from '@/hooks/useNativeWindowControls';
 import { useWindowMaximized } from '@/hooks/useWindowMaximized';
 import { useI18n } from '@/i18n';
@@ -65,7 +65,12 @@ export function TitleBar({ title, className, actions, leading, heading, centered
     <header
       ref={headerRef}
       data-native-window-controls={isWindows || undefined}
-      style={isWindows ? { paddingRight: nativeControlsInset } : undefined}
+      style={
+        {
+          '--titlebar-left-inset': isMac ? '84px' : '12px',
+          ...(isWindows ? { paddingRight: nativeControlsInset } : {}),
+        } as CSSProperties
+      }
       className={cn(
         // 固定像素高度：红绿灯位置 (y:16) 按 44px 高度对齐，不随 rem 缩放
         'drag-region relative flex h-[44px] shrink-0 items-center bg-transparent',
