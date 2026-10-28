@@ -77,7 +77,7 @@ export function TaskReply({
         aria-label={placeholder}
         title={sendBinding ? `${t('Send')} ${formatBinding(sendBinding)}` : undefined}
         disabled={sending}
-        className="text-xs [&_textarea]:max-h-32 [&_textarea]:min-h-0 [&_textarea]:resize-none"
+        className="text-[calc(11rem/14)] [&_textarea]:max-h-32 [&_textarea]:min-h-0 [&_textarea]:resize-none"
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (!event.nativeEvent.isComposing && isSendMessageKey(event, sendBinding)) {

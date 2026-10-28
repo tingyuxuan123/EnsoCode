@@ -34,7 +34,7 @@ import { isUnread } from '@/stores/bots/unread';
 import { chatErrorText } from './botText';
 
 export const SWITCHER_BUTTON =
-  'flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-2 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50';
+  'flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-2 text-muted-foreground text-[calc(11rem/14)] transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50';
 
 export interface SwitcherEntry {
   id: string;
@@ -204,7 +204,7 @@ export function ThreadMarks({ entry }: { entry: SwitcherEntry }) {
     <>
       {entry.running && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />}
       {entry.unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-info" />}
-      <span className="shrink-0 text-muted-foreground text-xs">
+      <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">
         {formatRelativeTime(entry.activityAt, locale)}
       </span>
     </>
@@ -300,7 +300,7 @@ export function ThreadsDialog({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{entry.title}</span>
                   {entry.preview && (
-                    <span className="block truncate text-muted-foreground text-xs">
+                    <span className="block truncate text-muted-foreground text-[calc(11rem/14)]">
                       {entry.preview}
                     </span>
                   )}

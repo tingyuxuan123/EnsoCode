@@ -25,8 +25,8 @@ export function HourlyHeatmap({ heatmap }: { heatmap: number[][] }) {
   return (
     <div className="rounded-[6px] border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[13px] font-medium">{t('Activity by hour')}</span>
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <span className="text-[calc(13rem/14)] font-medium">{t('Activity by hour')}</span>
+        <div className="flex items-center gap-1 text-[calc(11rem/14)] text-muted-foreground">
           <span>{t('Less')}</span>
           {LEVELS.map((cls) => (
             <span key={cls} className={cn('inline-block h-2.5 w-2.5 rounded-[2px]', cls)} />
@@ -37,7 +37,7 @@ export function HourlyHeatmap({ heatmap }: { heatmap: number[][] }) {
       <div className="grid grid-cols-[28px_1fr] gap-x-2 gap-y-1">
         {heatmap.map((row, weekday) => (
           <div key={WEEKDAY_KEYS[weekday]} className="contents">
-            <span className="self-center text-[10px] text-muted-foreground">
+            <span className="self-center text-[calc(11rem/14)] text-muted-foreground">
               {t(WEEKDAY_KEYS[weekday])}
             </span>
             <div className="grid grid-cols-24 gap-[3px]">
@@ -55,7 +55,7 @@ export function HourlyHeatmap({ heatmap }: { heatmap: number[][] }) {
           </div>
         ))}
         <span />
-        <div className="grid grid-cols-24 font-mono text-[10px] text-muted-foreground">
+        <div className="grid grid-cols-24 font-mono text-[calc(11rem/14)] text-muted-foreground">
           {HOURS.map((label, hour) => (
             <span key={label} className={cn(hour % 3 !== 0 && 'invisible')}>
               {label}

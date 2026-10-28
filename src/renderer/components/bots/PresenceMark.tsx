@@ -53,7 +53,7 @@ export function PresenceMark({ state, className }: { state: Presence; className?
 export function PresenceChip({ info }: { info: PresenceInfo }) {
   const { t } = useI18n();
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-muted py-px pr-1.5 pl-1 text-[11px] text-foreground">
+    <span className="inline-flex items-center gap-1 rounded bg-muted py-px pr-1.5 pl-1 text-[calc(11rem/14)] text-foreground">
       <PresenceMark state={info.state} />
       {presenceLabel(info, t)}
     </span>

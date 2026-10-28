@@ -66,13 +66,11 @@ export function ApprovalModePicker({ mode, onSelect }: ApprovalModePickerProps) 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="flex h-[28px] min-w-0 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex h-[calc(28rem/14)] min-w-0 max-w-full shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         title={t(APPROVAL_MODE_META[mode].descKey)}
       >
         <CurrentIcon className="h-3 w-3 shrink-0" />
-        <span className="hidden min-w-0 truncate @min-[28rem]:inline">
-          {t(APPROVAL_MODE_META[mode].labelKey)}
-        </span>
+        <span className="min-w-0 truncate">{t(APPROVAL_MODE_META[mode].labelKey)}</span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </PopoverTrigger>
       <PopoverPopup side="top" align="start" className="w-80 [&_[data-slot=popover-viewport]]:p-1">
@@ -100,7 +98,7 @@ export function ApprovalModePicker({ mode, onSelect }: ApprovalModePickerProps) 
               <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block">{t(meta.labelKey)}</span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block text-[calc(11rem/14)] text-muted-foreground">
                   {disabled
                     ? t('Select an assistant approval model in Settings first')
                     : t(meta.descKey)}

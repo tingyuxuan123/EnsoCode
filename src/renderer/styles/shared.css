@@ -5,6 +5,8 @@
 @theme {
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  /* Inverse text must use the raw theme color, not the wallpaper-adjusted surface token. */
+  --color-inverse-foreground: var(--background);
 
   --shadow-float: var(--elevation-float);
 }

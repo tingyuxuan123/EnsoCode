@@ -37,7 +37,7 @@ interface AppRailProps {
 }
 
 const RAIL_BUTTON =
-  'relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40';
+  'relative flex size-[36px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40';
 
 /** 设置窗口深链必须带行 id；`<分类>.root` 是各设置页顶部标题行的既有约定 */
 const openSettingsAt = (category: SettingsCategory) =>
@@ -84,9 +84,9 @@ export function AppRail({
       data-slot="app-rail"
       aria-label="EnsoCode"
       // 固定像素宽：根字号可调（--font-size-base），图标轨不随 rem 缩放
-      className="flex w-[56px] shrink-0 flex-col items-center gap-2 bg-shell pt-3 pb-3"
+      className="flex w-[56px] shrink-0 flex-col items-center gap-[8px] bg-shell py-[12px]"
     >
-      <div className="mb-1 flex size-8 items-center justify-center text-foreground">
+      <div className="mb-[4px] flex size-[32px] items-center justify-center text-foreground">
         <EnsoMark className="size-[24px]" />
       </div>
       {onToggleSidebar && (

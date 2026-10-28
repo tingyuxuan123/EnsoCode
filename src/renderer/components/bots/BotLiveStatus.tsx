@@ -80,7 +80,7 @@ export function BotLiveStatus({
         );
 
   return (
-    <div className={cn('min-w-0 text-muted-foreground text-xs', className)}>
+    <div className={cn('min-w-0 text-muted-foreground text-[calc(11rem/14)]', className)}>
       <div className="flex items-center gap-2">
         {leading}
         {label && <span className="truncate">{label}</span>}

@@ -116,14 +116,14 @@ function RemoteDirBrowser({
   return (
     <div className="space-y-1.5 rounded-md border bg-muted/30 p-2">
       <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-xs">
+        <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-[calc(11rem/14)]">
           {path ?? '…'}
         </span>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-[calc(11rem/14)]"
           disabled={!parent || loading}
           onClick={() => parent && load(parent)}
         >
@@ -133,7 +133,7 @@ function RemoteDirBrowser({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-[calc(11rem/14)]"
           onClick={onClose}
         >
           {t('Close')}
@@ -141,16 +141,18 @@ function RemoteDirBrowser({
       </div>
       <div className="relative min-h-16 max-h-40 overflow-y-auto">
         {error ? (
-          <p className="px-1 py-2 text-destructive text-xs">{error}</p>
+          <p className="px-1 py-2 text-destructive text-[calc(11rem/14)]">{error}</p>
         ) : dirs.length === 0 && !loading ? (
-          <p className="px-1 py-2 text-muted-foreground text-xs">{t('No subdirectories')}</p>
+          <p className="px-1 py-2 text-muted-foreground text-[calc(11rem/14)]">
+            {t('No subdirectories')}
+          </p>
         ) : (
           <div className={loading ? 'pointer-events-none space-y-0.5 opacity-40' : 'space-y-0.5'}>
             {dirs.map((dir) => (
               <button
                 key={dir}
                 type="button"
-                className="block w-full truncate rounded px-1.5 py-1 text-left font-mono text-xs hover:bg-muted"
+                className="block w-full truncate rounded px-1.5 py-1 text-left font-mono text-[calc(11rem/14)] hover:bg-muted"
                 disabled={loading}
                 onClick={() => path && load(path === '/' ? `/${dir}` : `${path}/${dir}`)}
               >
@@ -170,7 +172,7 @@ function RemoteDirBrowser({
         type="button"
         variant="outline"
         size="sm"
-        className="h-7 w-full text-xs"
+        className="h-7 w-full text-[calc(11rem/14)]"
         disabled={!path || loading}
         onClick={() => path && onSelect(path)}
       >
@@ -425,10 +427,10 @@ export function AddProjectDialog({
                     }}
                   />
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[calc(11rem/14)] text-muted-foreground">
                   {t('Tools run on the remote host; chat history stays local.')}
                 </p>
-                {formError && <p className="text-destructive text-xs">{formError}</p>}
+                {formError && <p className="text-destructive text-[calc(11rem/14)]">{formError}</p>}
               </>
             ) : (
               <Field className="w-full">
@@ -460,7 +462,7 @@ export function AddProjectDialog({
                           <span className="min-w-0 flex-1 truncate" title={project.path}>
                             {project.displayPath}
                           </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
+                          <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
                             {project.sourceName}
                           </span>
                         </AutocompleteItem>

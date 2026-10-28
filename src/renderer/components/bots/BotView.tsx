@@ -194,8 +194,8 @@ export function BotView({ sidebarWidth, collapsed, onToggleCollapse, onResize }:
       ) : (
         <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-background px-8 text-center">
           <Bot className="h-8 w-8 text-muted-foreground" />
-          <p className="font-semibold text-[18px]">{t('Bot mode')}</p>
-          <p className="max-w-[420px] text-[13px] text-muted-foreground leading-6">
+          <p className="font-semibold text-[calc(18rem/14)]">{t('Bot mode')}</p>
+          <p className="max-w-[420px] text-[calc(13rem/14)] text-muted-foreground leading-6">
             {bots.length === 0
               ? t(
                   'Tell us in one sentence what you want done; we will recommend a member or a team and draft your first message.'

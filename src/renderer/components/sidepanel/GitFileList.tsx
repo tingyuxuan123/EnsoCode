@@ -71,7 +71,7 @@ export function GitFileList({
                 title={child.path}
                 aria-expanded={expanded}
                 aria-controls={expanded ? contentId : undefined}
-                className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+                className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)] hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={() =>
                   setCollapsed((previous) => {
                     const next = new Set(previous);

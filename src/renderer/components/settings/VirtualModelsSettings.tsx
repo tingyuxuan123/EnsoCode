@@ -63,22 +63,22 @@ function ClassifierTimeoutInput({
   };
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[12px]">{t('Timeout')}</span>
+      <span className="text-[calc(12rem/14)]">{t('Timeout')}</span>
       <Input
         type="number"
         value={draft}
         min={CLASSIFIER_TIMEOUT_MIN_MS / 1000}
         max={CLASSIFIER_TIMEOUT_MAX_MS / 1000}
         step={0.5}
-        className="h-7 w-20 text-[12px]"
+        className="h-7 w-20 text-[calc(12rem/14)]"
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
         }}
       />
-      <span className="text-[12px] text-muted-foreground">{t('seconds')}</span>
-      <span className="text-[10px] text-muted-foreground">{hint}</span>
+      <span className="text-[calc(12rem/14)] text-muted-foreground">{t('seconds')}</span>
+      <span className="text-[calc(11rem/14)] text-muted-foreground">{hint}</span>
     </div>
   );
 }
@@ -125,9 +125,9 @@ function Field({
 }) {
   return (
     <div className="grid grid-cols-[6rem_1fr] items-start gap-2">
-      <div className="pt-1.5 text-[12px]">
+      <div className="pt-1.5 text-[calc(12rem/14)]">
         <div>{label}</div>
-        {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}
+        {hint && <div className="text-[calc(11rem/14)] text-muted-foreground">{hint}</div>}
       </div>
       <div className="min-w-0 space-y-1">{children}</div>
     </div>
@@ -285,7 +285,9 @@ export function ClassifierSourceField({
         </div>
       )}
       {noClassifierModels && (
-        <p className="text-[10px] text-destructive">{t('No classifier models available')}</p>
+        <p className="text-[calc(11rem/14)] text-destructive">
+          {t('No classifier models available')}
+        </p>
       )}
       {classifier && (
         <ClassifierTimeoutInput
@@ -295,7 +297,7 @@ export function ClassifierSourceField({
           onChange={onChange}
         />
       )}
-      <p className="text-[10px] text-muted-foreground">{description}</p>
+      <p className="text-[calc(11rem/14)] text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -314,7 +316,9 @@ function ClassifierField({
   const { t } = useI18n();
   if (!entry.fast) {
     return (
-      <p className="pt-1.5 text-[11px] text-muted-foreground">{t('Set a fast model first')}</p>
+      <p className="pt-1.5 text-[calc(11rem/14)] text-muted-foreground">
+        {t('Set a fast model first')}
+      </p>
     );
   }
   return (
@@ -379,11 +383,11 @@ function VirtualModelCard({
           value={entry.name}
           maxLength={60}
           placeholder="Auto"
-          className="h-7 flex-1 text-[12px]"
+          className="h-7 flex-1 text-[calc(12rem/14)]"
           onChange={(event) => update({ name: event.target.value })}
         />
         {!entry.enabled && (
-          <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+          <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
             {t('Disabled')}
           </Badge>
         )}
@@ -465,7 +469,7 @@ function VirtualModelCard({
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 text-[12px]"
+          className="h-7 text-[calc(12rem/14)]"
           disabled={!nextFallback || entry.fallbacks.length >= 8}
           onClick={() => {
             if (nextFallback) update({ fallbacks: [...entry.fallbacks, nextFallback] });
@@ -516,13 +520,13 @@ export function VirtualModelsSettings() {
   return (
     <section data-slot="virtual-models" className="space-y-2 rounded-[6px] border bg-card p-3">
       <div>
-        <h4 className="font-medium text-[13px]">{t('Virtual models')}</h4>
-        <p className="mt-0.5 text-muted-foreground text-[12px]">
+        <h4 className="font-medium text-[calc(13rem/14)]">{t('Virtual models')}</h4>
+        <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
           {t(
             'A virtual model appears as one model in the picker and routes each request to a real model: fallbacks on rate limits or outages, image-capable or larger-context members when needed, and the fast model for summaries.'
           )}
         </p>
-        <p className="mt-1 text-muted-foreground text-[12px]">
+        <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
           {t('Applies to newly started conversations.')}
         </p>
       </div>
@@ -539,7 +543,7 @@ export function VirtualModelsSettings() {
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 text-[12px]"
+          className="h-7 text-[calc(12rem/14)]"
           disabled={!seed}
           onClick={() => {
             if (seed) addEntry({ name: 'Auto', enabled: true, primary: seed, fallbacks: [] });
@@ -549,7 +553,7 @@ export function VirtualModelsSettings() {
           {t('New virtual model')}
         </Button>
         {!seed && (
-          <p className="text-muted-foreground text-[12px]">
+          <p className="text-muted-foreground text-[calc(12rem/14)]">
             {t('Enable a model and configure valid provider credentials first.')}
           </p>
         )}

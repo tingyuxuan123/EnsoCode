@@ -43,10 +43,10 @@ export function WelcomeSuggestions({ onPick }: { onPick: (prompt: string) => voi
           data-slot="welcome-suggestion"
           className="group flex items-start gap-[10px] rounded-[6px] border border-border/70 bg-muted/40 px-[12px] py-[10px] text-left transition-colors hover:border-border hover:bg-accent/60"
         >
-          <Icon className="mt-[2px] size-[14px] shrink-0 text-primary" />
+          <Icon className="mt-[2px] size-[calc(14rem/14)] shrink-0 text-primary" />
           <span className="min-w-0">
-            <span className="block text-[12.5px] font-medium">{t(title)}</span>
-            <span className="block text-[11px] leading-[18px] text-muted-foreground">
+            <span className="block text-[calc(12.5rem/14)] font-medium">{t(title)}</span>
+            <span className="block text-[calc(11rem/14)] leading-[calc(18rem/14)] text-muted-foreground">
               {t(hint)}
             </span>
           </span>

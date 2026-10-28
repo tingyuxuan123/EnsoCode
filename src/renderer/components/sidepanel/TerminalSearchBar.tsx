@@ -90,7 +90,7 @@ export function TerminalSearchBar({
         type="button"
         onClick={() => setCaseSensitive((v) => !v)}
         className={cn(
-          'flex h-6 w-6 items-center justify-center rounded text-xs font-bold',
+          'flex h-6 w-6 items-center justify-center rounded text-[calc(11rem/14)] font-bold',
           caseSensitive ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
         )}
         style={{ color: fg }}
@@ -102,7 +102,7 @@ export function TerminalSearchBar({
         type="button"
         onClick={() => setWholeWord((v) => !v)}
         className={cn(
-          'flex h-6 w-6 items-center justify-center rounded text-xs font-bold',
+          'flex h-6 w-6 items-center justify-center rounded text-[calc(11rem/14)] font-bold',
           wholeWord ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
         )}
         style={{ color: fg }}
@@ -114,7 +114,7 @@ export function TerminalSearchBar({
         type="button"
         onClick={() => setRegex((v) => !v)}
         className={cn(
-          'flex h-6 w-6 items-center justify-center rounded text-xs font-bold',
+          'flex h-6 w-6 items-center justify-center rounded text-[calc(11rem/14)] font-bold',
           regex ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
         )}
         style={{ color: fg }}

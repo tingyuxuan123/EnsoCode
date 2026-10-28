@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 /* 强调色 token 与时间线样式与桌面共用，复用的聊天组件依赖它 */
 @import "../../../src/renderer/styles/shared.css";
 
@@ -36,12 +37,17 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-control: var(--secondary);
+  --color-line: color-mix(in srgb, var(--border) 55%, var(--background));
+  --color-faint: color-mix(in srgb, var(--muted-foreground) 86%, var(--foreground));
 
   --radius-lg: var(--radius);
   --radius-md: var(--radius);
   --radius-sm: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
 
-  --font-sans: var(--font-family-sans, "Inter", system-ui, sans-serif);
+  --font-sans: var(--font-family-sans, "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif);
   --font-mono: var(--font-family-mono, "JetBrains Mono", "Menlo", monospace);
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
@@ -82,13 +88,13 @@
     --muted-foreground: oklch(0.5032 0.0308 248.44);
     --accent: oklch(0.9382 0.0083 238.49);
     --accent-foreground: oklch(0.2643 0.0269 248.88);
-    --destructive: oklch(0.577 0.245 27.33);
+    --destructive: rgb(173 75 83);
     --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
+    --success: rgb(54 120 90);
     --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
+    --warning: rgb(166 117 37);
+    --warning-foreground: oklch(0.985 0 0);
+    --info: rgb(57 124 172);
     --info-foreground: oklch(0.985 0 0);
     --border: oklch(0.8831 0.0196 238.68);
     --input: oklch(0.8831 0.0196 238.68);
@@ -112,14 +118,14 @@
     --muted-foreground: oklch(0.747 0.022 241);
     --accent: oklch(0.322 0.022 245);
     --accent-foreground: oklch(0.926 0.009 239);
-    --destructive: oklch(0.396 0.141 25.72);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
+    --destructive: rgb(214 104 112);
+    --destructive-foreground: rgb(24 24 24);
+    --success: rgb(104 176 140);
+    --success-foreground: rgb(16 22 18);
+    --warning: rgb(214 168 92);
+    --warning-foreground: rgb(26 20 10);
+    --info: rgb(122 170 205);
+    --info-foreground: rgb(14 18 28);
     --border: oklch(0.388 0.022 247);
     --input: oklch(0.388 0.022 247);
     --ring: oklch(0.708 0.079 242);
@@ -196,6 +202,23 @@
 .phone-dock [data-slot="composer"] {
   border-radius: 6px;
   box-shadow: none;
+}
+
+[data-slot="sheet-popup"].phone-sheet {
+  border-radius: 16px 16px 0 0;
+  box-shadow: none;
+}
+
+.phone-sheet::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--border);
 }
 
 /* 固定整个应用来提供 iOS 状态栏底色；不能固定聊天列，否则会覆盖常驻侧栏。 */
@@ -530,7 +553,7 @@
 }
 
 /* 手机端发送/停止按钮触控与视觉呈现：
- * 保持 iOS 推荐的 44px 最小触控区域，视觉上呈现 34px 圆形按钮，
+ * 保持 iOS 推荐的 44px 最小触控区域，视觉上呈现 34px 控件，
  * 提升移动端触屏点击体验，与移动端输入法节奏对齐。
  */
 :root {
@@ -548,7 +571,7 @@
   min-width: var(--phone-touch);
   min-height: var(--phone-touch);
   border: 0;
-  border-radius: 50%;
+  border-radius: 6px;
   padding: 0;
   background: transparent;
   color: var(--brand-foreground);
@@ -566,7 +589,7 @@
   content: "";
   position: absolute;
   inset: 5px;
-  border-radius: 50%;
+  border-radius: 6px;
   background: var(--brand);
   box-shadow: none;
   transition: background-color var(--phone-press-duration) var(--phone-ease);

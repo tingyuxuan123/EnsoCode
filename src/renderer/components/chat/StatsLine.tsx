@@ -473,7 +473,7 @@ export function StatsLine({ conversationId }: StatsLineProps) {
   return (
     <div
       data-slot="stats-line"
-      className="group relative mt-[6px] flex h-[20px] items-center justify-start pr-[28px]"
+      className="group relative mt-[6px] flex h-[calc(20rem/14)] items-center justify-start pr-[28px]"
     >
       {visibleSegments.length > 0 && (
         <div className="flex min-w-0 flex-nowrap items-center gap-[12px] overflow-hidden">
@@ -487,7 +487,7 @@ export function StatsLine({ conversationId }: StatsLineProps) {
                 onMouseEnter={() => setHoveredId(id)}
                 onMouseLeave={() => setHoveredId((current) => (current === id ? null : current))}
                 className={cn(
-                  'relative flex items-center gap-1 text-[11px] tabular-nums',
+                  'relative flex items-center gap-1 text-[calc(11rem/14)] tabular-nums',
                   value.critical ? 'text-destructive' : 'text-faint'
                 )}
               >
@@ -541,9 +541,9 @@ export function StatsLine({ conversationId }: StatsLineProps) {
       <Popover>
         <PopoverTrigger
           aria-label={t('Status line settings')}
-          className="-translate-y-1/2 absolute top-1/2 right-0 flex size-[20px] items-center justify-center rounded-[4px] text-faint transition-colors hover:bg-muted hover:text-foreground"
+          className="-translate-y-1/2 absolute top-1/2 right-0 flex size-[calc(20rem/14)] items-center justify-center rounded-[4px] text-faint transition-colors hover:bg-muted hover:text-foreground"
         >
-          <Settings2 className="size-[12px]" />
+          <Settings2 className="size-[calc(12rem/14)]" />
         </PopoverTrigger>
         <PopoverPopup side="top" align="end" className="w-72 [&_[data-slot=popover-viewport]]:p-0">
           <StatusLineSettings icons={icons} values={values} />

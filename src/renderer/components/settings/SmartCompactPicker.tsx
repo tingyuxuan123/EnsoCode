@@ -52,16 +52,16 @@ export function SmartCompactPicker() {
 
   return (
     <section
-      className="space-y-2 rounded-[6px] border bg-card p-3"
+      className="space-y-[10px] border-t border-line pt-[20px] first-of-type:border-t-0 first-of-type:pt-0"
       data-settings-row="general.smartCompactEnabled"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h4 className="font-medium text-[13px]">
+          <h4 className="font-medium text-[calc(14rem/14)]">
             {t('Context compaction strategy')}
             <NewSessionBadge />
           </h4>
-          <p className="mt-0.5 text-muted-foreground text-[12px]">
+          <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
             {t(
               'Standard uses default compact. Smart compaction uses Enso verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.'
             )}
@@ -90,8 +90,8 @@ export function SmartCompactPicker() {
       {(strategy === 'smart' || strategy === 'codex-native') && (
         <div className="flex items-center justify-between gap-4" data-smart-compact-mode={mode}>
           <div className="min-w-0">
-            <p className="text-muted-foreground text-[12px]">{t('Compaction mode')}</p>
-            <p className="mt-0.5 text-muted-foreground/80 text-[11px]">
+            <p className="text-muted-foreground text-[calc(12rem/14)]">{t('Compaction mode')}</p>
+            <p className="mt-0.5 text-muted-foreground/80 text-[calc(11rem/14)]">
               {t(
                 'Mode changes summary budget and how much recent tail to keep. It does not decide whether compact runs.'
               )}
@@ -120,7 +120,7 @@ export function SmartCompactPicker() {
 
       {enabled && (
         <div className="space-y-2">
-          <p className="font-medium text-[13px]">
+          <p className="font-medium text-[calc(14rem/14)]">
             {t(strategy === 'continuous-memory' ? 'Background memory model' : 'Summary model')}
           </p>
           {candidates.length > 0 && (
@@ -142,7 +142,7 @@ export function SmartCompactPicker() {
             </div>
           )}
           {model && (!selectedProvider || !selectedModel) && (
-            <p className="text-muted-foreground text-[12px]">
+            <p className="text-muted-foreground text-[calc(12rem/14)]">
               {t('Selected model is unavailable — falls back to the session model.')}
             </p>
           )}

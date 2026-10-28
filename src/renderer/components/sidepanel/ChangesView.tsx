@@ -226,7 +226,7 @@ export function ChangesView({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex h-[36px] shrink-0 items-center gap-1 border-b border-line px-2">
+      <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 border-b border-line px-2">
         <div ref={tabsRef} role="tablist" className="t-tabs">
           <span ref={pillRef} aria-hidden="true" className="t-tabs-pill" />
           <ModeTab active={mode === 'all'} onClick={() => setMode(conversationId, 'all')}>
@@ -270,7 +270,7 @@ export function ChangesView({
             {incompletePaths.map((path) => (
               <div
                 key={path}
-                className="m-2 flex shrink-0 items-start gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"
+                className="m-2 flex shrink-0 items-start gap-2 rounded-md border border-dashed px-3 py-2 text-[calc(11rem/14)] text-muted-foreground"
               >
                 <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="min-w-0">
@@ -313,7 +313,7 @@ function ChangeFileHeader({ item, onToggle }: { item: CodeViewItem; onToggle: ()
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1 text-left font-mono text-xs hover:bg-muted/50"
+      className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1 text-left font-mono text-[calc(11rem/14)] hover:bg-muted/50"
     >
       {item.collapsed ? (
         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -345,7 +345,7 @@ function ModeTab({
       onClick={onClick}
       aria-selected={active}
       className={cn(
-        't-tab rounded-md px-2 py-1 text-xs transition-colors',
+        't-tab rounded-md px-2 py-1 text-[calc(11rem/14)] transition-colors',
         active ? 'font-medium' : 'text-muted-foreground hover:bg-muted/50'
       )}
     >

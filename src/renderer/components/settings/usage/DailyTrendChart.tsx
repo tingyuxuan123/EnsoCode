@@ -62,10 +62,10 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
   return (
     <div className="rounded-[6px] border bg-card p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[13px] font-medium">{t('Daily trend')}</span>
+        <span className="text-[calc(13rem/14)] font-medium">{t('Daily trend')}</span>
         <div className="flex items-center gap-3">
           {metric === 'tokens' && (
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-[calc(11rem/14)] text-muted-foreground">
               <Legend
                 className="bg-foreground"
                 label={t('Output')}
@@ -90,11 +90,11 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
         </div>
       </div>
       <div className="relative">
-        <div className="pointer-events-none absolute left-0 top-0 font-mono text-[10px] text-muted-foreground">
+        <div className="pointer-events-none absolute left-0 top-0 font-mono text-[calc(11rem/14)] text-muted-foreground">
           {metric === 'tokens' ? formatTokens(max) : formatCost(max > 0 ? max : null)}
         </div>
         {hovered && (
-          <div className="pointer-events-none absolute right-0 top-0 rounded bg-popover px-2 py-1 font-mono text-[11px] text-popover-foreground shadow-sm ring-1 ring-border">
+          <div className="pointer-events-none absolute right-0 top-0 rounded bg-popover px-2 py-1 font-mono text-[calc(11rem/14)] text-popover-foreground ring-1 ring-border">
             {hovered.day}
             {metric === 'tokens' ? (
               <>
@@ -115,7 +115,7 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
         )}
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="mt-4 block h-[180px] w-full"
+          className="mt-4 block h-[calc(180rem/14)] w-full"
           role="img"
           aria-label={t('Daily trend')}
           onMouseLeave={() => setHover(null)}
@@ -154,7 +154,7 @@ export function DailyTrendChart({ daily }: { daily: UsageDailyPoint[] }) {
                     x={x + barW / 2}
                     y={H - 4}
                     textAnchor="middle"
-                    className="fill-muted-foreground font-mono text-[10px]"
+                    className="fill-muted-foreground font-mono text-[calc(11rem/14)]"
                   >
                     {dayLabel(p.day)}
                   </text>
@@ -215,9 +215,9 @@ export function MetricToggle({
           type="button"
           onClick={() => onChange(item.id)}
           className={cn(
-            'rounded px-2 py-0.5 text-[11px] transition-colors',
+            'rounded px-2 py-0.5 text-[calc(11rem/14)] transition-colors',
             value === item.id
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-background text-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >

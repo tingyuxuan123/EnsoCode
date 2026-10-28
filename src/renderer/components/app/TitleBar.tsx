@@ -31,7 +31,7 @@ export function SummonEnsoButton({ label = true }: { label?: boolean }) {
   return (
     <button
       type="button"
-      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2 text-[calc(11rem/14)] font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => {
         void window.electronAPI.window.summonAgent({ typeKey: ENSO_AGENT_TYPE_KEY });
       }}
@@ -78,7 +78,7 @@ export function TitleBar({ title, className, actions, leading, heading, centered
       ) : heading ? (
         <div className="flex min-w-0 flex-1 items-center">{heading}</div>
       ) : !centered || !isMac ? (
-        <span className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+        <span className="flex items-center gap-2 text-[calc(12rem/14)] font-medium text-muted-foreground">
           {title}
         </span>
       ) : null}

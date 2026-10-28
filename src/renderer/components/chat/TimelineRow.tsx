@@ -274,14 +274,18 @@ function WorkspaceMigratedBanner({ note }: { note: string }) {
   return (
     <div
       title={note}
-      className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground"
+      className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground"
     >
       <GitBranch className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span className="min-w-0">
         {fallback
           ? t('Workspace fell back to the main working tree')
           : t('Workspace moved to an isolated worktree')}
-        {path && <span className="ml-1.5 break-all font-mono text-[11px] opacity-80">{path}</span>}
+        {path && (
+          <span className="ml-1.5 break-all font-mono text-[calc(11rem/14)] opacity-80">
+            {path}
+          </span>
+        )}
       </span>
     </div>
   );
@@ -290,7 +294,7 @@ function WorkspaceMigratedBanner({ note }: { note: string }) {
 function PlanNoteBanner({ note }: { note: PlanNoteKind }) {
   const { t } = useI18n();
   return (
-    <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+    <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
       <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span className="min-w-0">
         {note === 'on'
@@ -341,7 +345,7 @@ function SkillTag({ name, content }: { name: string; content: string }) {
 
 function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
   return (
-    <div className="max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[14px] leading-[24px]">
+    <div className="max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]">
       {chip}
       {extra ? <span className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</span> : null}
     </div>
@@ -377,14 +381,14 @@ function WorkflowPresetInvocation({
           <Workflow className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] text-muted-foreground">{t('Workflow preset')}</p>
+          <p className="text-[calc(11rem/14)] text-muted-foreground">{t('Workflow preset')}</p>
           <p className="truncate font-medium" title={preset.id}>
             {preset.name || preset.id}
           </p>
         </div>
       </div>
       {preset.args.length > 0 && (
-        <dl className="space-y-1 border-t border-border/60 px-3.5 py-2 text-xs">
+        <dl className="space-y-1 border-t border-border/60 px-3.5 py-2 text-[calc(11rem/14)]">
           {preset.args.map(([key, value]) => (
             <div key={key} className="flex gap-2">
               <dt className="shrink-0 font-mono text-muted-foreground">{key}</dt>
@@ -507,7 +511,7 @@ function MentionRefChips({
 }
 
 export const USER_BUBBLE =
-  'max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[14px] leading-[24px]';
+  'max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]';
 
 /**
  * 用户消息长文折叠（对齐 ZCode）：超过 120px 时裁切并用遮罩渐隐，气泡底部居中一个圆形展开按钮。
@@ -609,7 +613,7 @@ function UserText({
             <span
               key={ref.id}
               title={t('Referenced chat')}
-              className="inline-flex h-6 max-w-56 items-center gap-1 rounded-md bg-muted px-1.5 text-xs"
+              className="inline-flex h-6 max-w-56 items-center gap-1 rounded-md bg-muted px-1.5 text-[calc(11rem/14)]"
             >
               <MessagesSquare className="h-3 w-3 shrink-0" />
               <span className="min-w-0 truncate">{ref.title}</span>
@@ -632,7 +636,7 @@ function UserText({
   const planMessage = parsePlanMessage(text);
   if (planMessage?.kind === 'approved') {
     return (
-      <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
         <ClipboardCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span className="min-w-0">
           {t('Plan approved, executing')}
@@ -644,7 +648,7 @@ function UserText({
   if (planMessage?.kind === 'feedback') {
     return (
       <div className={cn(USER_BUBBLE, 'whitespace-pre-wrap')}>
-        <p className="mb-1 flex items-center gap-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+        <p className="mb-1 flex items-center gap-1 text-[calc(11rem/14)] font-medium tracking-wide text-muted-foreground uppercase">
           <ClipboardList className="h-3 w-3" />
           {t('Plan feedback')}
         </p>
@@ -703,7 +707,7 @@ function UserText({
   const block = SYNTHETIC_BLOCK.exec(text);
   if (block) {
     return (
-      <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
         {block[1].startsWith('coworker-') || block[1] === 'agent-notification' ? (
           <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         ) : (
@@ -721,18 +725,18 @@ function UserText({
     <div
       className={cn(
         fromMain
-          ? 'max-w-[86%] rounded-[6px] border border-primary/20 bg-primary/8 px-[16px] py-[10px] text-[14px] leading-[24px]'
+          ? 'max-w-[86%] rounded-[6px] border border-primary/20 bg-primary/8 px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]'
           : USER_BUBBLE
       )}
     >
       {fromMain && (
-        <p className="mb-1 flex items-center gap-1 text-[11px] font-medium text-primary">
+        <p className="mb-1 flex items-center gap-1 text-[calc(11rem/14)] font-medium text-primary">
           <Bot className="h-3 w-3" />
           {t('From main agent')}
         </p>
       )}
       {role?.[1] && !isBtwIsolationPrompt(role[1]) && (
-        <div className="mb-2 rounded-md bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground">
+        <div className="mb-2 rounded-md bg-background/60 px-2.5 py-1.5 text-[calc(11rem/14)] text-muted-foreground">
           <span className="font-semibold">{t('Role')}</span> · {role[1]}
         </div>
       )}
@@ -756,35 +760,41 @@ export function isNestedRow(item: TimelineItem): boolean {
 export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
   const speaker = useChatHost()?.speaker;
   return (
-    <div className="mb-[8px] flex min-h-[20px] min-w-0 items-center gap-[8px] text-[12px] select-none">
+    <div className="mb-[8px] flex min-h-[calc(20rem/14)] min-w-0 items-center gap-[8px] text-[calc(12rem/14)] select-none">
       {speaker ? (
         speaker.image ? (
           <img
             src={speaker.image}
             alt=""
             draggable={false}
-            className="size-[22px] shrink-0 rounded-full object-cover"
+            className="size-[calc(22rem/14)] shrink-0 rounded-full object-cover"
             style={{ backgroundColor: speaker.color }}
           />
         ) : (
           <span
-            className="flex size-[22px] shrink-0 items-center justify-center rounded-full font-semibold text-[11px] text-white"
+            className="flex size-[calc(22rem/14)] shrink-0 items-center justify-center rounded-full font-semibold text-[calc(11rem/14)] text-white"
             style={{ backgroundColor: speaker.color }}
           >
             {[...speaker.name.trim()][0]?.toUpperCase() ?? '?'}
           </span>
         )
       ) : (
-        <span className="flex size-[17px] shrink-0 items-center justify-center text-foreground">
-          <EnsoMark className="size-[17px]" />
+        <span className="flex size-[calc(17rem/14)] shrink-0 items-center justify-center text-foreground">
+          <EnsoMark className="size-[calc(17rem/14)]" />
         </span>
       )}
       <span className="shrink-0 truncate font-medium text-foreground">
         {speaker?.name ?? 'Enso'}
       </span>
-      {model && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{model}</span>}
+      {model && (
+        <span className="min-w-0 truncate text-[calc(11rem/14)] text-muted-foreground">
+          {model}
+        </span>
+      )}
       {typeof at === 'number' && (
-        <span className="shrink-0 text-[11px] text-muted-foreground">{formatClock(at)}</span>
+        <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
+          {formatClock(at)}
+        </span>
       )}
     </div>
   );
@@ -873,7 +883,7 @@ export const TimelineRow = memo(function TimelineRow({
       return <SessionCustomRow entry={item.entry} />;
     case 'divider':
       return (
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-3 text-[calc(11rem/14)] text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
           {item.text}
           <span className="h-px flex-1 bg-border" />
@@ -909,7 +919,7 @@ function OauthAccountRow({
       ? t('ChatGPT account selected: {{account}}', { account: current })
       : t('ChatGPT account selected');
   return (
-    <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-xs">
+    <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-[calc(11rem/14)]">
       <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
       <p className="min-w-0 break-words text-muted-foreground">{text}</p>
     </div>
@@ -921,7 +931,7 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
   if (entry.kind === 'oauth-account-selected') return <OauthAccountRow entry={entry} />;
   if (entry.kind === 'agent-dispatch') {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-xs">
+      <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-[calc(11rem/14)]">
         <Bot className="h-3.5 w-3.5 shrink-0 text-primary" />
         <span className="text-muted-foreground">{t('Dispatched to')}</span>
         <span className="font-medium">{entry.child.instanceName}</span>
@@ -930,7 +940,7 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
   }
   if (entry.kind === 'agent-completed') {
     return (
-      <div className="flex items-start gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-2 text-xs">
+      <div className="flex items-start gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-2 text-[calc(11rem/14)]">
         <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
         <div className="min-w-0">
           <p className="font-medium">
@@ -947,7 +957,7 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
   }
   if (entry.kind === 'agent-failed') {
     return (
-      <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-2.5 py-2 text-xs">
+      <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-2.5 py-2 text-[calc(11rem/14)]">
         <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
         <div className="min-w-0">
           <p className="font-medium">
@@ -964,7 +974,7 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
   return (
     <div
       className={cn(
-        'rounded-md border px-2.5 py-2 text-xs',
+        'rounded-md border px-2.5 py-2 text-[calc(11rem/14)]',
         succeeded
           ? 'border-emerald-500/20 bg-emerald-500/5'
           : receipt.outcome === 'failed'
@@ -1051,7 +1061,7 @@ export function RetryTurnButton() {
         if (!conversation) return;
         useSessionsStore.getState().retry(conversation.id);
       }}
-      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
     >
       <RefreshCw className="h-3 w-3" />
       {t('Retry')}
@@ -1068,7 +1078,7 @@ function canRewindDisplayedSession(
 }
 
 const userActionClass =
-  'flex items-center gap-1 text-[11px] text-muted-foreground transition-opacity hover:text-foreground';
+  'flex items-center gap-1 text-[calc(11rem/14)] text-muted-foreground transition-opacity hover:text-foreground';
 
 /** 分叉入口：与回退并列；idle 的 root 显示，冷会话点击时由 store 先唤醒 */
 function ForkButton({ messageIndex }: { messageIndex: number }) {
@@ -1240,7 +1250,9 @@ function RewindButton({ messageIndex }: { messageIndex: number }) {
             <option.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1">
               <span className="block">{option.label}</span>
-              <span className="block text-xs text-muted-foreground">{option.desc}</span>
+              <span className="block text-[calc(11rem/14)] text-muted-foreground">
+                {option.desc}
+              </span>
             </span>
           </button>
         ))}
@@ -1280,7 +1292,7 @@ function CollapsedTurnBar({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80 select-none">
+    <div className="flex items-center gap-1.5 text-[calc(11rem/14)] text-muted-foreground/80 select-none">
       <button
         type="button"
         onClick={() => onToggle?.(turnKey, false)}
@@ -1320,8 +1332,9 @@ function UserMeta({
   return (
     <div
       className={cn(
-        'flex min-h-[24px] items-center gap-2 text-[11px] text-faint transition-opacity select-none',
-        !deliveryState && 'opacity-0 group-hover/user:opacity-100 focus-within:opacity-100'
+        'flex min-h-[calc(24rem/14)] items-center gap-2 text-[calc(11rem/14)] text-faint transition-opacity select-none',
+        !deliveryState &&
+          '[@media(hover:hover)]:opacity-0 group-hover/user:opacity-100 focus-within:opacity-100'
       )}
     >
       <RewindButton messageIndex={messageIndex} />
@@ -1333,7 +1346,10 @@ function UserMeta({
         <button
           type="button"
           onClick={() => onToggleTurn(turnKey, true)}
-          className={cn(userActionClass, 'cursor-pointer opacity-0 group-hover/user:opacity-100')}
+          className={cn(
+            userActionClass,
+            'cursor-pointer [@media(hover:hover)]:opacity-0 group-hover/user:opacity-100 focus-visible:opacity-100'
+          )}
           title={t('Collapse')}
         >
           <ChevronDown className="h-3 w-3 shrink-0" />
@@ -1341,7 +1357,7 @@ function UserMeta({
         </button>
       )}
       {text && (
-        <span className="flex opacity-0 transition-opacity group-hover/user:opacity-100 focus-within:opacity-100">
+        <span className="flex [@media(hover:hover)]:opacity-0 transition-opacity group-hover/user:opacity-100 focus-within:opacity-100">
           <CopyButton text={text} />
         </span>
       )}
@@ -1364,7 +1380,7 @@ function TextRow({
   const host = useChatHost();
   const perfStr = item.perf ? formatPerf(item.perf, t, item.turnDurationMs !== undefined) : '';
   return (
-    <div className="group text-[15px] leading-[27px] [&_h1]:text-[18px] [&_h2]:text-[18px] [&_h3]:text-[16px]">
+    <div className="group text-[calc(15rem/14)] leading-[calc(27rem/14)] [&_h1]:text-[calc(18rem/14)] [&_h2]:text-[calc(18rem/14)] [&_h3]:text-[calc(16rem/14)]">
       <Markdown
         text={item.text}
         streaming={item.streaming}
@@ -1379,7 +1395,7 @@ function TextRow({
           <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
         ))}
       {!item.streaming && (
-        <div className="mt-[12px] flex min-h-[24px] items-center gap-2 text-[11px] text-faint opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <div className="mt-[12px] flex min-h-[calc(24rem/14)] items-center gap-2 text-[calc(11rem/14)] text-faint opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           <CopyButton text={item.text} />
           {item.turnEnd && <ForkButton messageIndex={Number(item.key.split('-')[0])} />}
           {item.timestamp && <span>{formatClock(item.timestamp)}</span>}
@@ -1527,7 +1543,7 @@ function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }
       className={cn(
         // 流式时只开一个小窗口（约 4 行），像活动指示而不是正文；
         // 思考结束后用户主动展开才给完整高度。
-        't-acc-reveal scroll-stable scroll-pill mt-2 ml-2 overflow-y-auto border-l border-border py-0.5 pl-3.5 text-[13px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap',
+        't-acc-reveal scroll-stable scroll-pill mt-2 ml-2 overflow-y-auto border-l border-border py-0.5 pl-3.5 text-[calc(13rem/14)] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap',
         streaming ? 'max-h-28' : 'max-h-[min(16rem,38vh)]'
       )}
     >
@@ -1566,7 +1582,7 @@ function TaskNoteRow({ item }: { item: Extract<TimelineItem, { kind: 'task-note'
         title={item.detail}
       >
         <span className="h-px flex-1 bg-border" />
-        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:text-foreground">
           <Check className="h-3 w-3 text-green-600 dark:text-green-500" />
           {text}
           <ChevronRight className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')} />
@@ -1575,10 +1591,10 @@ function TaskNoteRow({ item }: { item: Extract<TimelineItem, { kind: 'task-note'
       </button>
       {expanded && (
         <div className="mt-1.5 rounded-lg border border-border/60 bg-muted/20">
-          <pre className="border-b border-border/60 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+          <pre className="border-b border-border/60 px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {item.detail}
           </pre>
-          <pre className="scroll-stable scroll-pill max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
+          <pre className="scroll-stable scroll-pill max-h-64 overflow-auto px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {logPath
               ? log === undefined
                 ? t('Loading…')
@@ -1598,7 +1614,7 @@ function CompactionProgressRow({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+    <div className="flex items-center gap-2 text-[calc(11rem/14)] text-muted-foreground">
       <LoaderCircle className="h-3 w-3 animate-spin" />
       <span>{state === 'queued' ? t('Compacts after this turn') : t('Compacting…')}</span>
     </div>
@@ -1651,7 +1667,7 @@ function CompactionRow({
         }
       >
         {divider && <span className="h-px flex-1 bg-border" />}
-        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:text-foreground">
           <PackageMinus className="h-3 w-3" />
           {label}
           <ChevronRight className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')} />
@@ -1659,7 +1675,7 @@ function CompactionRow({
         {divider && <span className="h-px flex-1 bg-border" />}
       </button>
       {expanded && (
-        <pre className="scroll-stable scroll-pill mt-1.5 max-h-80 overflow-auto rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+        <pre className="scroll-stable scroll-pill mt-1.5 max-h-80 overflow-auto rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
           {item.summary || t('(summary unavailable)')}
         </pre>
       )}
@@ -1744,14 +1760,17 @@ function WorklogHead({
     <div
       data-worklog-head=""
       data-worklog-status={worklog.status}
-      className="flex w-full items-center gap-[8px] text-[12px] text-muted-foreground"
+      className="flex w-full items-center gap-[8px] text-[calc(12rem/14)] text-muted-foreground"
     >
       {worklog.status === 'running' ? (
-        <LoaderCircle className="size-[14px] shrink-0 animate-spin text-primary" aria-hidden />
+        <LoaderCircle
+          className="size-[calc(14rem/14)] shrink-0 animate-spin text-primary"
+          aria-hidden
+        />
       ) : (
         <CircleCheck
           className={cn(
-            'size-[14px] shrink-0',
+            'size-[calc(14rem/14)] shrink-0',
             worklog.status === 'failed' ? 'text-destructive' : 'text-success'
           )}
           aria-hidden
@@ -1773,7 +1792,7 @@ function WorklogHead({
         <span className="min-w-0 truncate text-muted-foreground/70">{detail.join(' · ')}</span>
       )}
       {worklog.failed > 0 && (
-        <span className="ml-auto shrink-0 rounded bg-destructive/12 px-1.5 py-px text-[10px] text-destructive">
+        <span className="ml-auto shrink-0 rounded bg-destructive/12 px-1.5 py-px text-[calc(11rem/14)] text-destructive">
           {t('{{count}} calls failed', { count: worklog.failed })}
         </span>
       )}
@@ -1866,20 +1885,20 @@ function ToolGroupRow({
       >
         {explore.goal && (
           <div className="border-b border-border/60 px-3 py-2">
-            <div className="mb-0.5 text-[11px] text-muted-foreground">{t('Goal')}</div>
+            <div className="mb-0.5 text-[calc(11rem/14)] text-muted-foreground">{t('Goal')}</div>
             <p className="whitespace-pre-wrap">{explore.goal}</p>
           </div>
         )}
         {explore.report && (
           <div className="border-b border-border/60 px-3 py-2">
-            <div className="mb-0.5 text-[11px] text-muted-foreground">{t('Result')}</div>
+            <div className="mb-0.5 text-[calc(11rem/14)] text-muted-foreground">{t('Result')}</div>
             <Markdown text={explore.report} />
           </div>
         )}
         <button
           type="button"
           onClick={() => onToggle?.(exploreStepsKey(item.key))}
-          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <ChevronRight
             className={cn('h-3 w-3 shrink-0 transition-transform', explore.steps && 'rotate-90')}
@@ -2027,7 +2046,7 @@ function SandboxOutput({
               <span
                 key={name}
                 className={cn(
-                  'rounded-md border px-1.5 py-0.5 font-mono text-[10px]',
+                  'rounded-md border px-1.5 py-0.5 font-mono text-[calc(11rem/14)]',
                   failed ? 'border-destructive/40 text-destructive' : 'text-muted-foreground'
                 )}
                 title={group
@@ -2045,7 +2064,7 @@ function SandboxOutput({
         view?.status === 'completed' && typeof view.value !== 'string' ? (
           <CodeBlock code={value} language="json" />
         ) : (
-          <pre className="font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+          <pre className="font-mono text-[calc(11rem/14)] leading-relaxed text-muted-foreground whitespace-pre-wrap">
             {stripAnsi(value)}
           </pre>
         )
@@ -2159,7 +2178,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
         </span>
       )}
       {item.agentMeta && (
-        <span className="shrink-0 whitespace-nowrap font-mono text-[11px]">
+        <span className="shrink-0 whitespace-nowrap font-mono text-[calc(11rem/14)]">
           {[
             item.agentMeta.modelId,
             item.agentMeta.outputTokens ? `${item.agentMeta.outputTokens} tok` : null,
@@ -2210,7 +2229,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                   type="button"
                   title={t('View subagent process')}
                   data-subagent-open={id}
-                  className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[calc(11rem/14)] text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => openAgent(id)}
                 >
                   <Bot className="size-3" />
@@ -2241,7 +2260,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
           className="t-acc-reveal mt-2 mb-1 overflow-hidden rounded-xl border border-border/70 bg-card"
         >
           {mcp && (
-            <div className="truncate border-b border-border/60 px-3 py-1 font-mono text-[10px] text-muted-foreground">
+            <div className="truncate border-b border-border/60 px-3 py-1 font-mono text-[calc(11rem/14)] text-muted-foreground">
               {mcp.server}.{mcp.tool}
             </div>
           )}
@@ -2263,7 +2282,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                 >
                   <div
                     className={cn(
-                      'flex items-center gap-2 border-border/60 px-3 py-1 font-mono text-[10px] text-muted-foreground',
+                      'flex items-center gap-2 border-border/60 px-3 py-1 font-mono text-[calc(11rem/14)] text-muted-foreground',
                       (index > 0 || hasDiff) && 'border-t'
                     )}
                   >
@@ -2280,7 +2299,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
           )}
           {shouldShowToolOutputAfterFileChanges(item) && (
             <ToolContentScroller follow={false} className="border-t border-border/60">
-              <pre className="px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+              <pre className="px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed text-muted-foreground whitespace-pre-wrap">
                 {stripAnsi(item.output ?? '')}
               </pre>
             </ToolContentScroller>
@@ -2335,7 +2354,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                     />
                   ) : (
                     item.output && (
-                      <pre className="px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                      <pre className="px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed text-muted-foreground whitespace-pre-wrap">
                         {stripAnsi(item.output)}
                       </pre>
                     )
@@ -2381,7 +2400,9 @@ function GoalSignalRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }>
       <div className="min-w-0 flex-1">
         <p className="font-medium">{label}</p>
         {item.summary && (
-          <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground text-xs">{item.summary}</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground text-[calc(11rem/14)]">
+            {item.summary}
+          </p>
         )}
       </div>
     </div>
@@ -2397,7 +2418,7 @@ function PlanRow({ plan }: { plan: { title: string; text: string } }) {
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full min-w-0 items-center gap-2 text-left text-xs"
+        className="flex w-full min-w-0 items-center gap-2 text-left text-[calc(11rem/14)]"
       >
         <ClipboardList className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="shrink-0 font-medium text-muted-foreground">{t('Plan')}</span>
@@ -2423,7 +2444,7 @@ function TodoRow({ todos }: { todos: TodoItem[] }) {
   const done = todos.filter((todo) => todo.status === 'completed').length;
   return (
     <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-      <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="mb-1 flex items-center gap-2 text-[calc(11rem/14)] text-muted-foreground">
         <ListTodo className="h-3.5 w-3.5 shrink-0" />
         <span className="font-medium">{t('Todos')}</span>
         <span>
@@ -2459,7 +2480,7 @@ function MoveToBackgroundButton({ callId, waiting }: { callId: string; waiting: 
       type="button"
       disabled={pending}
       title={label}
-      className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+      className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
       onClick={() => {
         setPending(true);
         void window.electronAPI.agent.backgroundTool(sessionId, callId).then(
@@ -2530,7 +2551,7 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
   // wait 只列它等的子代理；spawn / send 带 wait 时行上没有 agentId，列出全部在跑的
   const visible = agentIds?.length ? runs.filter((run) => agentIds.includes(run.agentId)) : runs;
   return (
-    <div className="border-b border-border/60 px-3 py-2 text-xs">
+    <div className="border-b border-border/60 px-3 py-2 text-[calc(11rem/14)]">
       {visible.length === 0 ? (
         <div className="text-muted-foreground">{t('No running subagents')}</div>
       ) : (
@@ -2543,7 +2564,7 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
               <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
                 {runActivityLabel(run, t)}
               </span>
-              <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
+              <span className="shrink-0 font-mono text-[calc(11rem/14)] text-muted-foreground/70 tabular-nums">
                 {formatDuration(run.elapsedMs)}
               </span>
               {openableAgentIds.has(run.agentId) && (
@@ -2557,14 +2578,14 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
               )}
             </div>
             {run.text && (
-              <div className="line-clamp-2 break-words pl-2 text-[11px] text-muted-foreground/80">
+              <div className="line-clamp-2 break-words pl-2 text-[calc(11rem/14)] text-muted-foreground/80">
                 {run.text.replace(/\s+/g, ' ')}
               </div>
             )}
           </div>
         ))
       )}
-      <div className="mt-1 text-[11px] text-muted-foreground/80">
+      <div className="mt-1 text-[calc(11rem/14)] text-muted-foreground/80">
         {t(
           'Stopping the wait does not stop subagents; the assistant is notified when they finish.'
         )}

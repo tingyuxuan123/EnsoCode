@@ -8,7 +8,7 @@ export function AskUserResult({ ask, waiting }: { ask: AskUserView; waiting: boo
   const { t } = useI18n();
   const custom = ask.answer !== null && !ask.options.includes(ask.answer) ? ask.answer : null;
   return (
-    <div className="space-y-1.5 px-3 py-2 text-xs">
+    <div className="space-y-1.5 px-3 py-2 text-[calc(11rem/14)]">
       <p className="whitespace-pre-wrap break-words leading-relaxed text-foreground">
         {ask.question}
       </p>

@@ -39,7 +39,11 @@ export function DelegationBadge({ state, interrupted }: { state: string; interru
     canceled: t('Canceled'),
     blocked: t('Stuck run'),
   };
-  return <span className={cn('rounded px-1.5 text-[11px]', tone)}>{label[state] ?? state}</span>;
+  return (
+    <span className={cn('rounded px-1.5 text-[calc(11rem/14)]', tone)}>
+      {label[state] ?? state}
+    </span>
+  );
 }
 
 /** 验收条件与最近一次校验结果 */
@@ -47,7 +51,10 @@ export function CheckBadge({ check, className }: { check: TaskCheck; className?:
   const { t } = useI18n();
   return (
     <div
-      className={cn('flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs', className)}
+      className={cn(
+        'flex min-w-0 items-center gap-1.5 text-muted-foreground text-[calc(11rem/14)]',
+        className
+      )}
     >
       <span className="shrink-0">{t('Acceptance check')}</span>
       <code className="min-w-0 truncate rounded bg-muted px-1" title={check.text}>
@@ -56,7 +63,7 @@ export function CheckBadge({ check, className }: { check: TaskCheck; className?:
       {check.passed !== undefined && (
         <span
           className={cn(
-            'shrink-0 rounded px-1.5 text-[11px]',
+            'shrink-0 rounded px-1.5 text-[calc(11rem/14)]',
             check.passed ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive'
           )}
         >
@@ -199,7 +206,7 @@ export function DelegationCard({
       <span className="text-foreground">{to?.name ?? t('Deleted member')}</span>
       <span>· {t('Delegation')}</span>
       {append ? (
-        <span className="rounded bg-info/15 px-1.5 text-[11px] text-info">
+        <span className="rounded bg-info/15 px-1.5 text-[calc(11rem/14)] text-info">
           {taskSeq === undefined
             ? t('Merged into the current run')
             : t('Merged into the current run of #{{n}}', { n: taskSeq })}
@@ -217,7 +224,7 @@ export function DelegationCard({
     </>
   );
   const headerClass =
-    'flex flex-wrap items-center gap-1.5 whitespace-nowrap text-muted-foreground text-xs';
+    'flex flex-wrap items-center gap-1.5 whitespace-nowrap text-muted-foreground text-[calc(11rem/14)]';
   const task = append?.text ?? record?.task;
   return (
     <div data-slot="bot-card" className="max-w-lg rounded-md border bg-card px-3 py-2.5">
@@ -234,18 +241,20 @@ export function DelegationCard({
       ) : (
         <div className={headerClass}>{header}</div>
       )}
-      {!open && task && <div className="mt-1 truncate text-muted-foreground text-xs">{task}</div>}
+      {!open && task && (
+        <div className="mt-1 truncate text-muted-foreground text-[calc(11rem/14)]">{task}</div>
+      )}
       {open && task && <div className="mt-1.5 line-clamp-3 text-sm">{task}</div>}
       {open && (
         <>
           {record?.check && !append && <CheckBadge check={record.check} className="mt-1.5" />}
           {summary && (
-            <div className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-muted-foreground text-xs">
+            <div className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-muted-foreground text-[calc(11rem/14)]">
               {summary}
             </div>
           )}
           {blocked && record && (
-            <div className="mt-1.5 rounded-md bg-warning/10 px-2 py-1 text-xs">
+            <div className="mt-1.5 rounded-md bg-warning/10 px-2 py-1 text-[calc(11rem/14)]">
               <div className="line-clamp-4 whitespace-pre-wrap">
                 {t('Blocked · needs: {{need}}', { need: blocked.need })}
               </div>

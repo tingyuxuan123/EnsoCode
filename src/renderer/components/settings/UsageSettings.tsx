@@ -64,11 +64,13 @@ export function UsageSettings() {
   }, [days, load]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-[18px] font-semibold">{t('Usage')}</h3>
-          <p className="text-[13px] text-muted-foreground">
+          <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+            {t('Usage')}
+          </h3>
+          <p className="text-[calc(13rem/14)] text-muted-foreground">
             {t('Token usage across all local sessions; cost is estimated from catalog prices.')}
           </p>
         </div>
@@ -85,14 +87,14 @@ export function UsageSettings() {
 
       <RangePills value={days} onChange={setDays} />
 
-      {error && <p className="text-[13px] text-destructive">{error}</p>}
+      {error && <p className="text-[calc(13rem/14)] text-destructive">{error}</p>}
 
       {summary && (
         <>
           <StatGrid totals={summary.totals} previous={summary.previous} />
           <DailyTrendChart daily={summary.daily} />
           <HourlyHeatmap heatmap={summary.heatmap} />
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-2 gap-[16px] max-sm:grid-cols-1">
             <RankingTable
               title={t('By model')}
               countLabel={t('Messages')}
@@ -133,7 +135,7 @@ export function UsageSettings() {
             />
           )}
           {summary.unpricedModels.length > 0 && (
-            <p className="text-[12px] text-muted-foreground">
+            <p className="text-[calc(12rem/14)] text-muted-foreground">
               {t('No catalog price for: {{models}}. Their cost is not included.', {
                 models: summary.unpricedModels.join(', '),
               })}
@@ -159,17 +161,18 @@ function RangePills({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex w-fit items-center gap-[2px] rounded-[6px] bg-muted/55 p-[3px]">
       {USAGE_RANGE_DAYS.map((days) => (
         <button
           key={days}
           type="button"
+          aria-pressed={value === days}
           onClick={() => onChange(days)}
           className={cn(
-            'rounded-full px-3 py-1 font-mono text-[12px] transition-colors',
+            'h-[calc(26rem/14)] rounded-[4px] px-[10px] text-[calc(12rem/14)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
             value === days
-              ? 'bg-foreground text-background'
-              : 'bg-muted text-muted-foreground hover:text-foreground'
+              ? 'bg-background font-medium text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {t(RANGE_LABEL_KEYS[days])}
@@ -184,7 +187,7 @@ function StatGrid({ totals, previous }: { totals: UsageTotals; previous: UsageTo
   const cache = totals.cacheRead + totals.cacheWrite;
   const prevCache = previous.cacheRead + previous.cacheWrite;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-[24px] gap-y-[16px] md:grid-cols-4">
       <StatCard
         label={t('Estimated cost')}
         value={formatCost(totals.cost)}

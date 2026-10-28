@@ -24,11 +24,11 @@ export function RequestCountdown({
   const { t } = useI18n();
   if (remainingMs === undefined) return null;
   if (remainingMs <= 0)
-    return <span className="shrink-0 text-[10px] text-warning">{t(expiredLabel)}</span>;
+    return <span className="shrink-0 text-[calc(11rem/14)] text-warning">{t(expiredLabel)}</span>;
   const seconds = Math.ceil(remainingMs / 1000);
   const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   return (
-    <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+    <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground tabular-nums">
       {t('{{time}} left', { time })}
     </span>
   );

@@ -86,7 +86,7 @@ function Group({
   const shown = limit && !all ? Math.min(limit, count) : count;
   return (
     <section className="mt-4 first:mt-0">
-      <h4 className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+      <h4 className="mb-1.5 font-medium text-[calc(11rem/14)] text-muted-foreground uppercase tracking-wide">
         {title} · {count}
       </h4>
       <div className="space-y-1.5">{children(shown)}</div>
@@ -189,7 +189,7 @@ export function TaskBoard({
         {t('New task')}
       </Button>
       {tasks.length === 0 && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-[calc(11rem/14)]">
           {t('No tasks yet. Members can also add and claim tasks with the board tool.')}
         </p>
       )}
@@ -323,7 +323,7 @@ function TaskCard({
       data-slot="bot-card"
       data-task-id={task.id}
       className={cn(
-        'group rounded-md border bg-card px-2.5 py-2 text-xs transition-shadow',
+        'group rounded-md border bg-card px-2.5 py-2 text-[calc(11rem/14)] transition-shadow',
         !open && !review && 'opacity-75',
         highlighted && 'ring-2 ring-brand/60'
       )}
@@ -609,7 +609,7 @@ function ReturnDialog({
             maxLength={GROUP_TASK_TEXT_MAX}
             onChange={(event) => setReason(event.target.value)}
           />
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[calc(11rem/14)]">
             {rework
               ? t(
                   '{{name}} continues in the same conversation with this reason, and the result comes back for review.',
@@ -696,7 +696,7 @@ function TaskEditor({
               maxLength={TASK_CHECK_TEXT_MAX}
               onChange={(event) => setCheck(event.target.value)}
             />
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
               {t(
                 "Done only when the member's tool output contains this text, e.g. a command printing ALL_TESTS_PASS."
               )}
@@ -741,7 +741,11 @@ export function GroupDelegations({
     />
   );
   if (!groups.active.length && !groups.completed.length && !groups.failed.length)
-    return <p className="text-muted-foreground text-xs">{t('No delegations in this group yet')}</p>;
+    return (
+      <p className="text-muted-foreground text-[calc(11rem/14)]">
+        {t('No delegations in this group yet')}
+      </p>
+    );
   return (
     <div>
       {groups.active.length > 0 && (

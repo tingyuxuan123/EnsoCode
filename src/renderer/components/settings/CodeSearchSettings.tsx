@@ -71,7 +71,7 @@ export function CodeSearchSettings() {
 
   return (
     <div className="space-y-2" data-settings-row="tools.codeSearch">
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t(
           "Code search sends queries, directory information and selected code snippets to Devin's cloud. Ordinary code may contain hardcoded secrets; review the workspace before enabling."
         )}
@@ -118,23 +118,23 @@ export function CodeSearchSettings() {
         </Button>
       </div>
       {pending ? (
-        <p className="text-muted-foreground text-[12px]">{t('Loading…')}</p>
+        <p className="text-muted-foreground text-[calc(12rem/14)]">{t('Loading…')}</p>
       ) : data?.error || availability.status !== 'ready' ? (
-        <p className="text-destructive text-[12px]" role="status">
+        <p className="text-destructive text-[calc(12rem/14)]" role="status">
           {t('Could not load Devin accounts. Open subscription settings and try again.')}
         </p>
       ) : unavailable ? (
-        <p className="text-destructive text-[12px]" role="status">
+        <p className="text-destructive text-[calc(12rem/14)]" role="status">
           {t(
             'The selected Devin account is unavailable. Code search will not switch accounts automatically. Select an account or sign in again in subscription settings.'
           )}
         </p>
       ) : accounts.length === 0 ? (
-        <p className="text-muted-foreground text-[12px]">
+        <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t('No signed-in Devin accounts. Use the existing subscription settings to sign in.')}
         </p>
       ) : null}
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t(
           'The code search tool switch takes effect in new conversations. Account selection stays on this device.'
         )}

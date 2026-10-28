@@ -44,6 +44,10 @@
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
+修改桌面/手机共享聊天或 UI 组件时，另跑
+`pnpm --filter @enso/phone typecheck && pnpm --filter @enso/phone build`。
+根 TypeScript 配置不覆盖手机包；桌面导出、props 和 store 字段变化不能只靠根检查验收。
+
 一个可独立描述的修复、功能或重构使用一个独立提交，不把无关改动混在一起。
 
 ## IPC 与安全边界

@@ -82,13 +82,13 @@ export function BrowserHistoryPanel({
             />
           </div>
           {(records.error || navigationError) && (
-            <p role="alert" className="break-words text-xs text-destructive">
+            <p role="alert" className="break-words text-[calc(11rem/14)] text-destructive">
               {navigationError ?? records.error}
             </p>
           )}
           <div aria-busy={records.loading} className="min-h-32">
             {records.loading && (
-              <p role="status" className="py-2 text-xs text-muted-foreground">
+              <p role="status" className="py-2 text-[calc(11rem/14)] text-muted-foreground">
                 {t('Loading browser records…')}
               </p>
             )}
@@ -96,7 +96,7 @@ export function BrowserHistoryPanel({
               <div className="rounded-md border border-dashed px-3 py-8 text-center">
                 <History className="mx-auto size-5 text-muted-foreground" />
                 <p className="mt-3 text-sm font-medium">{t('No browsing history')}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">
                   {t(
                     'Pages you visit will appear here. Try another search if records are filtered.'
                   )}
@@ -118,7 +118,7 @@ export function BrowserHistoryPanel({
                   <span className="block truncate text-sm font-medium">
                     {item.title || item.url}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  <span className="mt-0.5 block truncate text-[calc(11rem/14)] text-muted-foreground">
                     {item.url}
                   </span>
                   <time
@@ -159,7 +159,7 @@ export function BrowserHistoryPanel({
             ))}
           </div>
           {navigationDisabled && (
-            <p className="text-xs text-warning">
+            <p className="text-[calc(11rem/14)] text-warning">
               {t('Take control before opening a history page.')}
             </p>
           )}

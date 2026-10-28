@@ -2,6 +2,7 @@ import { agentTypeDisplayName, ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents
 import { conversationDotTone } from '@shared/conversationDotTone';
 import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import { planPhase } from '@shared/planMode';
+import { projectDisplayName } from '@shared/projectName';
 import { isBuiltinToolEnabledForProject } from '@shared/types/builtinTools';
 import type { AgentTypeMentionCandidate } from '@shared/types/mentions';
 import { isVirtualRef, modelDisplayName } from '@shared/virtualModels';
@@ -365,7 +366,7 @@ export function ChatView() {
       <ChatSessionTimeline
         conversationId={chrome.id}
         cwd={toolCwd}
-        emptyTitle={project?.name ?? 'EnsoCode'}
+        emptyTitle={project ? projectDisplayName(project) : 'EnsoCode'}
         onSuggestion={project ? pickSuggestion : undefined}
         timelineRef={timelineRef}
       />
@@ -384,7 +385,7 @@ export function ChatView() {
           {(chrome.rewinding || chrome.restoringFiles) && (
             <div
               role="status"
-              className="mb-[6px] flex items-center gap-2 rounded-[6px] border border-border/70 px-[12px] py-[6px] text-[12px] text-muted-foreground"
+              className="mb-[6px] flex items-center gap-2 rounded-[6px] border border-border/70 px-[12px] py-[6px] text-[calc(12rem/14)] text-muted-foreground"
             >
               <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
               <span>
@@ -452,7 +453,7 @@ export function ChatView() {
           {!chrome.displayedParentId && modelBlockMessage && (
             <div
               role="status"
-              className="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-xs"
+              className="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-[calc(11rem/14)]"
             >
               {modelBlockMessage}
             </div>
@@ -522,7 +523,10 @@ export function ChatView() {
                         useSessionsStore.getState().setApprovalMode(chrome.id, mode)
                       }
                     />
-                    <div className="ml-auto min-w-0 shrink" data-slot="composer-model">
+                    <div
+                      className="ml-auto min-w-0 max-w-full shrink-0 [&_[data-model-picker=trigger]]:max-w-full"
+                      data-slot="composer-model"
+                    >
                       <ModelPicker
                         listenHotkey
                         providers={enabledProviders}
@@ -547,7 +551,7 @@ export function ChatView() {
                   </>
                 )}
                 {chrome.displayedParentId && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[calc(11rem/14)] text-muted-foreground">
                     {memberName ??
                       (chrome.agentType
                         ? agentTypeDisplayName(chrome.agentType, customAgentTypes)

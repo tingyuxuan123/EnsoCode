@@ -212,7 +212,7 @@ export function NewRemoteSessionDialog({
             </Select>
           </Field>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground text-xs">{t('Reasoning')}</span>
+            <span className="text-muted-foreground text-[calc(11rem/14)]">{t('Reasoning')}</span>
             <Switch checked={reasoningEnabled} onCheckedChange={setReasoningEnabled} />
           </div>
           {reasoningEnabled && (
@@ -252,7 +252,7 @@ export function NewRemoteSessionDialog({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="text-muted-foreground text-[calc(11rem/14)]">{label}</span>
       {children}
     </div>
   );

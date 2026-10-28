@@ -19,9 +19,9 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "relative inline-flex min-h-[32px] w-full min-w-[112px] select-none items-center justify-between gap-[8px] rounded-[6px] border border-border bg-input/20 px-[10px] text-left text-[12px] outline-none ring-ring/20 transition-shadow pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 focus-visible:border-ring focus-visible:ring-2 aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/16 data-disabled:pointer-events-none data-disabled:opacity-55 [&_svg:not([class*='size-'])]:size-[14px] [&_svg]:pointer-events-none [&_svg]:shrink-0",
-        size === 'sm' && 'min-h-[28px] gap-[6px] px-[8px]',
-        size === 'lg' && 'min-h-[36px]',
+        "relative inline-flex min-h-[calc(32rem/14)] w-full min-w-[112px] select-none items-center justify-between gap-[8px] rounded-[6px] border border-border bg-input/20 px-[10px] text-left text-[calc(12rem/14)] outline-none ring-ring/20 transition-shadow pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 focus-visible:border-ring focus-visible:ring-2 aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/16 data-disabled:pointer-events-none data-disabled:opacity-55 [&_svg:not([class*='size-'])]:size-[calc(14rem/14)] [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        size === 'sm' && 'min-h-[calc(28rem/14)] gap-[6px] px-[8px]',
+        size === 'lg' && 'min-h-[calc(36rem/14)]',
         className
       )}
       data-slot="select-trigger"
@@ -29,7 +29,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon data-slot="select-icon">
-        <ChevronsUpDownIcon className="size-[14px] text-muted-foreground" />
+        <ChevronsUpDownIcon className="size-[calc(14rem/14)] text-muted-foreground" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -104,7 +104,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       className={cn(
-        "grid min-h-[28px] in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default grid-cols-[14px_1fr] items-center gap-[8px] rounded-[4px] py-[4px] ps-[8px] pe-[16px] text-[12px] outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-55 [&_svg:not([class*='size-'])]:size-[14px] [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "grid min-h-[calc(28rem/14)] in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default grid-cols-[1rem_1fr] items-center gap-[8px] rounded-[4px] py-[4px] ps-[8px] pe-[16px] text-[calc(12rem/14)] outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-55 [&_svg:not([class*='size-'])]:size-[calc(14rem/14)] [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       data-slot="select-item"
@@ -150,7 +150,7 @@ function SelectGroup(props: SelectPrimitive.Group.Props) {
 function SelectGroupLabel(props: SelectPrimitive.GroupLabel.Props) {
   return (
     <SelectPrimitive.GroupLabel
-      className="px-2 py-1.5 font-medium text-muted-foreground text-xs"
+      className="px-2 py-1.5 font-medium text-muted-foreground text-[calc(11rem/14)]"
       data-slot="select-group-label"
       {...props}
     />

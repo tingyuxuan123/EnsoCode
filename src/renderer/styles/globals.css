@@ -35,7 +35,7 @@
   --color-nav: color-mix(in srgb, var(--color-shell) 33%, var(--color-panel));
   --color-control: var(--color-secondary);
   --color-line: color-mix(in srgb, var(--color-border) 55%, var(--color-panel));
-  --color-faint: color-mix(in srgb, var(--muted-foreground) 86%, var(--foreground));
+  --color-faint: color-mix(in srgb, var(--muted-foreground) 85%, var(--panel));
 
   --radius-lg: var(--radius);
   --radius-md: var(--radius);
@@ -848,7 +848,6 @@ html.bg-image-enabled [data-slot='bot-card-button']:not(:hover) {
 
 /* ── Texts reveal (18) ───────────────────────────────────────── */
 .t-stagger-line {
-  display: block;
   opacity: 0;
   transform: translateY(var(--stagger-distance));
   filter: blur(var(--stagger-blur));

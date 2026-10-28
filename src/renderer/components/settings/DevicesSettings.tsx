@@ -28,8 +28,12 @@ import { useRemoteNodesStore } from '@/stores/remoteNodes';
  * 「连接到节点」= 本机作 guest：粘别的桌面的配对链接，管理已连节点（在线/重命名/解绑）。
  */
 export function DevicesSettings() {
+  const { t } = useI18n();
   return (
-    <div className="space-y-10">
+    <div className="space-y-[28px]" data-slot="settings-page">
+      <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+        {t('Devices')}
+      </h3>
       <AllowConnectionsSection />
       <ConnectToNodesSection />
       <RelaySection />
@@ -99,11 +103,14 @@ function AllowConnectionsSection() {
   const devices = status?.devices ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="phone.root">
+    <section className="space-y-[16px]">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="phone.root"
+      >
         <div>
-          <h3 className="font-semibold text-[18px]">{t('Allow connections')}</h3>
-          <p className="text-muted-foreground text-[13px]">
+          <h4 className="font-medium text-[calc(14rem/14)]">{t('Allow connections')}</h4>
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t(
               'Let your phone or another EnsoCode desktop connect to this computer. Keep this app running.'
             )}
@@ -132,7 +139,7 @@ function AllowConnectionsSection() {
       </div>
 
       {status && !status.secureStorage && (
-        <div className="flex items-start gap-2 rounded-[6px] border border-dashed px-3 py-2 text-[12px]">
+        <div className="flex items-start gap-2 rounded-[6px] border border-dashed px-3 py-2 text-[calc(12rem/14)]">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <span className="text-muted-foreground">
             {t(
@@ -142,7 +149,7 @@ function AllowConnectionsSection() {
         </div>
       )}
 
-      {error && <p className="text-destructive text-[12px]">{error}</p>}
+      {error && <p className="text-destructive text-[calc(12rem/14)]">{error}</p>}
 
       {status?.pairing && (
         <div className="space-y-3 rounded-[6px] border border-dashed px-3 py-6">
@@ -152,18 +159,20 @@ function AllowConnectionsSection() {
             ) : (
               <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
             )}
-            <p className="mt-3 font-medium text-[13px]">{t('Scan with your phone camera')}</p>
-            <p className="mt-1 text-muted-foreground text-[12px]">
+            <p className="mt-3 font-medium text-[calc(13rem/14)]">
+              {t('Scan with your phone camera')}
+            </p>
+            <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
               {t(
                 'Scanning opens the app and pairs it. To keep it handy, add it to your home screen.'
               )}
             </p>
-            <p className="mt-1 text-muted-foreground text-[12px]">
+            <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
               {t(
                 'On another EnsoCode desktop, paste the link below into Settings → Devices → Connect to a node.'
               )}
             </p>
-            <p className="mt-1 text-muted-foreground text-[12px]">
+            <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
               {remaining === null
                 ? t('The code expires in 60 seconds and can only be used once.')
                 : remaining > 0
@@ -174,7 +183,7 @@ function AllowConnectionsSection() {
 
           {status.inviteUri && (
             <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+              <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1.5 font-mono text-[calc(11rem/14)] text-muted-foreground">
                 {status.inviteUri}
               </code>
               <Button
@@ -196,12 +205,12 @@ function AllowConnectionsSection() {
       )}
 
       <div className="space-y-2">
-        <p className="font-medium text-[13px]">{t('Paired devices')}</p>
+        <p className="font-medium text-[calc(13rem/14)]">{t('Paired devices')}</p>
         {devices.length === 0 ? (
           <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
             <Smartphone className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 font-medium text-[13px]">{t('No paired devices')}</p>
-            <p className="mt-1 text-muted-foreground text-[12px]">
+            <p className="mt-3 font-medium text-[calc(13rem/14)]">{t('No paired devices')}</p>
+            <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
               {t('Generate a pairing code to let a phone or another desktop connect.')}
             </p>
           </div>
@@ -213,7 +222,7 @@ function AllowConnectionsSection() {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -229,11 +238,11 @@ function ConnectToNodesSection() {
   React.useEffect(() => useRemoteNodesStore.getState().bind(), []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]">
+    <section className="space-y-[16px] border-t border-line pt-[20px]">
+      <div className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]">
         <div>
-          <h3 className="font-semibold text-[18px]">{t('Connect to a node')}</h3>
-          <p className="text-muted-foreground text-[13px]">
+          <h4 className="font-medium text-[calc(14rem/14)]">{t('Connect to a node')}</h4>
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t(
               'Browse and drive conversations on another EnsoCode desktop. Its agent, keys and history stay there.'
             )}
@@ -246,7 +255,7 @@ function ConnectToNodesSection() {
       </div>
 
       {!secureStorage && (
-        <div className="flex items-start gap-2 rounded-[6px] border border-dashed px-3 py-2 text-[12px]">
+        <div className="flex items-start gap-2 rounded-[6px] border border-dashed px-3 py-2 text-[calc(12rem/14)]">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <span className="text-muted-foreground">
             {t(
@@ -257,12 +266,12 @@ function ConnectToNodesSection() {
       )}
 
       <div className="space-y-2">
-        <p className="font-medium text-[13px]">{t('Connected nodes')}</p>
+        <p className="font-medium text-[calc(13rem/14)]">{t('Connected nodes')}</p>
         {nodes.length === 0 ? (
           <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
             <Monitor className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 font-medium text-[13px]">{t('No connected nodes')}</p>
-            <p className="mt-1 text-muted-foreground text-[12px]">
+            <p className="mt-3 font-medium text-[calc(13rem/14)]">{t('No connected nodes')}</p>
+            <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
               {t('Each connecting computer needs its own pairing code from the other desktop.')}
             </p>
           </div>
@@ -276,7 +285,7 @@ function ConnectToNodesSection() {
       </div>
 
       <PairNodeDialog open={pairOpen} onOpenChange={setPairOpen} switchOnSuccess={false} />
-    </div>
+    </section>
   );
 }
 
@@ -288,7 +297,7 @@ function TransportBadge({ transport, rttMs }: { transport?: 'relay' | 'direct'; 
   return (
     <span
       className={cn(
-        'shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none',
+        'shrink-0 rounded px-1.5 py-0.5 text-[calc(11rem/14)] leading-none',
         direct ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'
       )}
     >
@@ -325,8 +334,8 @@ function PairedDeviceRow({ device }: { device: PairStatus['devices'][number] }) 
         />
         {draft === null ? (
           <>
-            <span className="truncate font-medium text-[13px]">{device.deviceName}</span>
-            <span className="shrink-0 text-muted-foreground text-[12px]">
+            <span className="truncate font-medium text-[calc(13rem/14)]">{device.deviceName}</span>
+            <span className="shrink-0 text-muted-foreground text-[calc(12rem/14)]">
               {device.phoneOnline
                 ? t('Online')
                 : device.connected
@@ -346,7 +355,7 @@ function PairedDeviceRow({ device }: { device: PairStatus['devices'][number] }) 
                 )
               }
               className={cn(
-                'shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none transition-colors',
+                'shrink-0 rounded px-1.5 py-0.5 text-[calc(11rem/14)] leading-none transition-colors',
                 device.scope === 'read'
                   ? 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/25'
                   : 'bg-muted text-muted-foreground hover:bg-accent'
@@ -365,7 +374,7 @@ function PairedDeviceRow({ device }: { device: PairStatus['devices'][number] }) 
               if (e.key === 'Enter') void commit();
               if (e.key === 'Escape') setDraft(null);
             }}
-            className="h-7 text-[13px]"
+            className="h-7 text-[calc(13rem/14)]"
           />
         )}
       </div>
@@ -411,13 +420,13 @@ function NodeRow({ node, onChanged }: { node: RemoteNodeStatus; onChanged: () =>
         <NodeDot node={node} />
         {draft === null ? (
           <>
-            <span className="truncate font-medium text-[13px]">{node.label}</span>
+            <span className="truncate font-medium text-[calc(13rem/14)]">{node.label}</span>
             {node.hostname && node.hostname !== node.label && (
-              <span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground">
+              <span className="shrink-0 truncate font-mono text-[calc(11rem/14)] text-muted-foreground">
                 {node.hostname}
               </span>
             )}
-            <span className="shrink-0 text-muted-foreground text-[12px]">
+            <span className="shrink-0 text-muted-foreground text-[calc(12rem/14)]">
               {node.hostOnline
                 ? t('Online')
                 : node.connected
@@ -436,7 +445,7 @@ function NodeRow({ node, onChanged }: { node: RemoteNodeStatus; onChanged: () =>
               if (e.key === 'Enter') void commit();
               if (e.key === 'Escape') setDraft(null);
             }}
-            className="h-7 text-[13px]"
+            className="h-7 text-[calc(13rem/14)]"
           />
         )}
       </div>
@@ -484,10 +493,10 @@ function RelaySection() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[12px] border-t border-line pt-[20px]">
       <div className="space-y-2">
-        <p className="font-medium text-[13px]">{t('Relay server')}</p>
-        <p className="text-muted-foreground text-[12px]">
+        <p className="font-medium text-[calc(14rem/14)]">{t('Relay server')}</p>
+        <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t('The relay only forwards encrypted frames and cannot read your messages.')}
         </p>
         <div className="flex items-center gap-2">
@@ -495,7 +504,7 @@ function RelaySection() {
             value={relayDraft ?? status?.relayUrl ?? ''}
             onChange={(e) => setRelayDraft(e.target.value)}
             placeholder="https://relay.example.com"
-            className="font-mono text-[12px]"
+            className="font-mono text-[calc(12rem/14)]"
           />
           {relayDraft === null ? (
             <Button

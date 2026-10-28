@@ -68,7 +68,7 @@ export function VoiceNote({
       aria-live="polite"
       data-testid={status ? undefined : 'voice-partial'}
       style={{ position: 'fixed', ...placement, zIndex: Z_INDEX.TOOLTIP }}
-      className="w-max rounded-md border bg-popover px-2 py-1 text-popover-foreground text-xs shadow-md"
+      className="w-max rounded-md border bg-popover px-2 py-1 text-popover-foreground text-[calc(11rem/14)] shadow-md"
     >
       {children}
     </p>,
@@ -215,7 +215,7 @@ export function VoiceInputButton({
                 />
               ))}
             </span>
-            <span className="text-xs tabular-nums">
+            <span className="text-[calc(11rem/14)] tabular-nums">
               {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
             </span>
             <Square className="h-3 w-3 fill-current" />

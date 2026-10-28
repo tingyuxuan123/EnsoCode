@@ -100,15 +100,15 @@ function ToolRow({
   newSession?: boolean;
 }) {
   return (
-    <div className="rounded-[6px] border px-3 py-2.5" data-settings-row={rowId}>
+    <div className="px-[12px] py-[10px]" data-settings-row={rowId}>
       <div className="flex items-center gap-3">
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium">
+          <p className="text-[calc(13rem/14)] font-medium">
             {title}
             {newSession && <NewSessionBadge />}
           </p>
-          <p className="text-muted-foreground text-[12px]">{description}</p>
+          <p className="text-muted-foreground text-[calc(12rem/14)]">{description}</p>
         </div>
         {control}
       </div>
@@ -141,13 +141,13 @@ function WebSearchChainEditor({ disabled }: { disabled: boolean }) {
 
   return (
     <div className="space-y-2" data-settings-row="tools.webSearchChain">
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t(
           "Try these models' built-in search in order. Credentials resolve at call time; if all fail, the keyless Exa service is the permanent fallback."
         )}
       </p>
       {chain.length === 0 && (
-        <p className="text-muted-foreground text-[12px]">
+        <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t(
             "Default: use the current session model's built-in search when available, otherwise Exa."
           )}
@@ -173,7 +173,7 @@ function WebSearchChainEditor({ disabled }: { disabled: boolean }) {
           }}
         >
           <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground" />
-          <span className="w-4 shrink-0 text-center text-muted-foreground text-[12px]">
+          <span className="w-4 shrink-0 text-center text-muted-foreground text-[calc(12rem/14)]">
             {index + 1}
           </span>
           <div className="min-w-0 flex-1">
@@ -218,7 +218,7 @@ function WebSearchChainEditor({ disabled }: { disabled: boolean }) {
           />
         </div>
       )}
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t('Final fallback: Exa (keyless hosted search). Not a chain entry; always last.')}
       </p>
     </div>
@@ -294,9 +294,9 @@ export function BuiltinToolsSettings() {
   }, [guideOpen]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div data-settings-row="tools.root">
-        <h3 className="font-semibold text-[18px]">
+        <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
           {t('Built-in tools')}
           <OccupancyEnabledTotal tokens={enabledTokens} />
           <NewSessionBadge
@@ -305,12 +305,12 @@ export function BuiltinToolsSettings() {
             )}
           />
         </h3>
-        <p className="text-muted-foreground text-[13px]">
+        <p className="text-muted-foreground text-[calc(13rem/14)]">
           {t('Toggle the built-in tools available to agents.')}
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
         {BUILTIN_TOOLS.map((tool) => (
           <ToolRow
             key={tool.id}
@@ -346,7 +346,7 @@ export function BuiltinToolsSettings() {
                   ] as const
                 ).map(([mode, label]) => (
                   <div key={mode} className="flex items-center justify-between gap-4">
-                    <span className="text-[13px]">{t(label)}</span>
+                    <span className="text-[calc(13rem/14)]">{t(label)}</span>
                     <Switch
                       checked={subagentAllowedModes.includes(mode)}
                       disabled={!subagentEnabled}
@@ -355,7 +355,7 @@ export function BuiltinToolsSettings() {
                   </div>
                 ))}
                 {!subagentEnabled && (
-                  <p className="text-muted-foreground text-[12px]">
+                  <p className="text-muted-foreground text-[calc(12rem/14)]">
                     {t(
                       'The unified subagent tool is off. Re-enabling it keeps this mode selection.'
                     )}
@@ -366,20 +366,20 @@ export function BuiltinToolsSettings() {
             {tool.id === 'computer' && computerEnabled ? (
               <div className="space-y-2" data-settings-row="tools.computer">
                 {capabilities && computerPermissionGuideKind(capabilities) === 'unsupported' ? (
-                  <p className="text-muted-foreground text-[12px]">
+                  <p className="text-muted-foreground text-[calc(12rem/14)]">
                     {t('This platform cannot operate the desktop yet.')}
                   </p>
                 ) : (
                   <>
                     {capabilities?.platform === 'darwin' && (
-                      <p className="text-muted-foreground text-[12px]">
+                      <p className="text-muted-foreground text-[calc(12rem/14)]">
                         {t(
                           'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to EnsoCode, then restart the app.'
                         )}
                       </p>
                     )}
                     {capabilities && (
-                      <p className="text-muted-foreground text-[12px]">
+                      <p className="text-muted-foreground text-[calc(12rem/14)]">
                         {t(
                           capabilities.capturePermission === 'granted'
                             ? 'Capture: granted'
@@ -430,7 +430,7 @@ export function BuiltinToolsSettings() {
             ) : null}
             {tool.id === 'browser' ? (
               <div className="space-y-2">
-                <p className="text-muted-foreground text-[12px]">
+                <p className="text-muted-foreground text-[calc(12rem/14)]">
                   {t(
                     'Cookies and site storage of the built-in browser, separate from the app itself.'
                   )}
@@ -554,9 +554,11 @@ function ComputerPermissionGuideDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="space-y-3">
-          {!capabilities && <p className="text-muted-foreground text-[13px]">{t('Loading…')}</p>}
+          {!capabilities && (
+            <p className="text-muted-foreground text-[calc(13rem/14)]">{t('Loading…')}</p>
+          )}
           {kind === 'needs-permission' && (
-            <div className="flex gap-2 rounded-[6px] border border-destructive/32 bg-destructive/8 p-3 text-[13px]">
+            <div className="flex gap-2 rounded-[6px] border border-destructive/32 bg-destructive/8 p-3 text-[calc(13rem/14)]">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
               <p>
                 {t(
@@ -567,7 +569,7 @@ function ComputerPermissionGuideDialog({
           )}
           {capabilities?.platform === 'darwin' && kind !== 'unsupported' && (
             <div className="space-y-2">
-              <p className="text-muted-foreground text-[12px]">
+              <p className="text-muted-foreground text-[calc(12rem/14)]">
                 {t(
                   capabilities.capturePermission === 'granted'
                     ? 'Capture: granted'

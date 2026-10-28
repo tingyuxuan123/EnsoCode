@@ -84,10 +84,10 @@ export function PairNodeDialog({
             placeholder="https://…/#relay=…&pk=…"
             autoFocus
             spellCheck={false}
-            className="font-mono text-xs"
+            className="font-mono text-[calc(11rem/14)]"
           />
           {error && (
-            <p key={error} className="t-shake-in text-destructive text-xs">
+            <p key={error} className="t-shake-in text-destructive text-[calc(11rem/14)]">
               {error}
             </p>
           )}

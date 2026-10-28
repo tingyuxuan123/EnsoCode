@@ -124,7 +124,7 @@ function DelegationRow({
   bots,
 }: {
   entry: DelegationEntry;
-  bots: Map<string, PairBotMember>;
+  bots: ReadonlyMap<string, PairBotMember>;
 }) {
   const collapsible = Boolean(entry.taskId);
   const [open, setOpen] = useState(!collapsible);
@@ -699,6 +699,7 @@ export function GroupChatScreen(props: Props) {
               <button
                 type="button"
                 aria-label="停止"
+                data-composer-action="stop"
                 onClick={props.onStop}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground"
               >
@@ -708,6 +709,7 @@ export function GroupChatScreen(props: Props) {
             <button
               type="button"
               aria-label="发送"
+              data-composer-action="send"
               disabled={
                 (!text.trim() && picked.length === 0) ||
                 sending ||

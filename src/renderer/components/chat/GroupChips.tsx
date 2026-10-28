@@ -142,7 +142,7 @@ export function GroupChips({
   return (
     <div className="flex shrink-0 items-center gap-1 px-3 pt-2 pb-1">
       {showSearch && (
-        <label className="flex h-6.5 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-transparent bg-muted/60 pr-0.5 pl-2.5 text-xs text-muted-foreground transition-colors focus-within:border-brand/45">
+        <label className="flex h-6.5 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-transparent bg-muted/60 pr-0.5 pl-2.5 text-[calc(11rem/14)] text-muted-foreground transition-colors focus-within:border-brand/45">
           <TextSearch className="size-3.5 shrink-0" />
           <input
             ref={inputRef}
@@ -248,10 +248,10 @@ export function GroupChips({
 
 function chipClass(selected: boolean, dropping: boolean) {
   return cn(
-    'flex h-6.5 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs transition-colors',
+    'flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[calc(12rem/14)] transition-colors',
     selected
-      ? 'bg-brand/12 font-medium text-foreground'
-      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+      ? 'bg-foreground font-medium text-inverse-foreground'
+      : 'bg-control/50 text-muted-foreground hover:bg-control hover:text-foreground',
     dropping && 'bg-brand/10 text-foreground ring-1 ring-brand/40 ring-inset'
   );
 }
@@ -269,7 +269,7 @@ function ChipContent({
 }) {
   return (
     <>
-      {emoji && <span className="text-[13px] leading-none">{emoji}</span>}
+      {emoji && <span className="text-[calc(13rem/14)] leading-none">{emoji}</span>}
       {color && (
         <span
           className="size-2 shrink-0 rounded-full"
@@ -278,9 +278,7 @@ function ChipContent({
         />
       )}
       <span className="max-w-32 truncate">{label}</span>
-      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-muted-foreground/12 px-1 font-normal text-[10px] text-muted-foreground tabular-nums">
-        {count}
-      </span>
+      <span className="font-normal text-[calc(11rem/14)] tabular-nums opacity-70">{count}</span>
     </>
   );
 }
@@ -476,13 +474,15 @@ function GroupMenuRow({
       >
         <span className="flex w-4 shrink-0 items-center justify-center gap-1">
           {emoji ? (
-            <span className="text-[13px] leading-none">{emoji}</span>
+            <span className="text-[calc(13rem/14)] leading-none">{emoji}</span>
           ) : color ? (
             <span className="size-2 rounded-full" style={{ backgroundColor: color }} aria-hidden />
           ) : null}
         </span>
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className="shrink-0 text-muted-foreground text-xs tabular-nums">{count}</span>
+        <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)] tabular-nums">
+          {count}
+        </span>
         <span className="flex size-5 shrink-0 items-center justify-center">
           {selected && (
             <Check className={cn('size-3.5 text-brand', onEdit && 'group-hover/row:opacity-0')} />

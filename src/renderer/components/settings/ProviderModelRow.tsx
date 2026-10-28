@@ -114,7 +114,7 @@ export function ProviderModelRow({
             />
             <span
               className={cn(
-                'min-w-0 flex-1 truncate font-mono text-[12px]',
+                'min-w-0 flex-1 truncate font-mono text-[calc(12rem/14)]',
                 !isEnabled(model) && 'text-muted-foreground line-through'
               )}
             >
@@ -124,7 +124,7 @@ export function ProviderModelRow({
               variant={BADGE_VARIANTS[badge]}
               size="sm"
               data-slot="model-override-badge"
-              className="shrink-0 text-[10px]"
+              className="shrink-0 text-[calc(11rem/14)]"
             >
               {t(BADGE_LABEL_KEYS[badge])}
             </Badge>
@@ -132,7 +132,7 @@ export function ProviderModelRow({
         ) : (
           <span
             className={cn(
-              'min-w-0 flex-1 truncate font-mono text-[12px]',
+              'min-w-0 flex-1 truncate font-mono text-[calc(12rem/14)]',
               !isEnabled(model) && 'text-muted-foreground line-through'
             )}
           >
@@ -190,7 +190,7 @@ export function ProviderModelRow({
                 <SelectTrigger
                   size="sm"
                   data-slot="model-thinking-level"
-                  className="h-7 min-h-7 w-full min-w-0 text-[12px]"
+                  className="h-7 min-h-7 w-full min-w-0 text-[calc(12rem/14)]"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -233,7 +233,7 @@ export function ProviderModelRow({
 function OverrideField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex w-full flex-col items-stretch gap-1">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-[calc(11rem/14)] text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -272,7 +272,7 @@ function TriState({
             data-value={option.key}
             data-selected={selected ? 'true' : 'false'}
             className={cn(
-              'h-6 flex-1 rounded-sm px-1.5 text-[11px]',
+              'h-6 flex-1 rounded-sm px-1.5 text-[calc(11rem/14)]',
               selected
                 ? 'bg-accent font-medium text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -306,7 +306,7 @@ function InheritNumberInput({
       data-slot={slot}
       value={value === undefined ? '' : String(value)}
       placeholder={inheritLabel}
-      className="h-7 text-[12px]"
+      className="h-7 text-[calc(12rem/14)]"
       onChange={(event) => {
         const raw = event.target.value;
         if (raw.trim() === '') {

@@ -608,7 +608,7 @@ export function Composer({
               }}
               onMouseMove={() => setActiveIndex(index)}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs',
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)]',
                 // 同 MentionPicker：浅色主题下 bg-muted 在纯白 popover 上不可见
                 index === activeIndex && 'bg-foreground/10'
               )}
@@ -629,9 +629,10 @@ export function Composer({
         ref={setDropRef}
         data-slot="composer"
         className={cn(
-          'rounded-[6px] border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60',
+          'rounded-[6px] border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-brand/60',
+          locked && 'border-line opacity-80',
           (dragging || dndOver) && 'border-brand/50 bg-brand/5',
-          (agentRecipient || planMode) && 'border-primary/35 shadow-primary/5'
+          (agentRecipient || planMode) && 'border-brand/35 shadow-brand/5'
         )}
         onDragOver={(event) => {
           if (event.dataTransfer.types.includes('Files')) {
@@ -684,7 +685,7 @@ export function Composer({
         )}
         <div
           className={cn(
-            'flex min-h-[64px] items-start gap-1.5 px-[14px] pb-[4px]',
+            'flex min-h-[calc(64rem/14)] items-start gap-1.5 px-[14px] pb-[4px]',
             images.length > 0 ? 'pt-1.5' : 'pt-[12px]'
           )}
         >
@@ -709,7 +710,7 @@ export function Composer({
           )}
           <MentionEditor
             ref={editorRef}
-            className="text-[14px] leading-[24px]"
+            className="text-[calc(14rem/14)] leading-[calc(24rem/14)]"
             placeholder={
               slash
                 ? ''
@@ -784,8 +785,8 @@ export function Composer({
           />
         </div>
         {agentRecipient && <p className="sr-only">{t('Send only to the selected Agent')}</p>}
-        <div className="flex items-center justify-between gap-[4px] px-[8px] pt-[2px] pb-[8px]">
-          <div className="flex min-w-0 flex-1 items-center gap-[4px] overflow-hidden">
+        <div className="flex items-end justify-between gap-[4px] px-[8px] pt-[2px] pb-[8px]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-[4px]">
             <input
               ref={imageInputRef}
               type="file"
@@ -803,9 +804,9 @@ export function Composer({
               onClick={() => imageInputRef.current?.click()}
               aria-label={t('Attach image')}
               title={t('Attach image')}
-              className="flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+              className="flex size-[calc(28rem/14)] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
             >
-              <ImagePlus className="size-[14px]" />
+              <ImagePlus className="size-[calc(14rem/14)]" />
             </button>
             {holdVoice ? (
               <HoldToTalkToggle
@@ -838,16 +839,16 @@ export function Composer({
             <Button
               variant="outline"
               size="icon"
-              className="size-[32px] shrink-0 rounded-[10px] border-foreground bg-foreground text-background hover:bg-foreground/85"
+              className="size-[calc(32rem/14)] shrink-0 rounded-[6px] border-foreground bg-foreground text-inverse-foreground hover:bg-foreground/85"
               onClick={onAbort}
               aria-label={t('Stop')}
             >
-              <CircleStop className="size-[16px]" />
+              <CircleStop className="size-[calc(16rem/14)]" />
             </Button>
           ) : (
             <Button
               size="icon"
-              className="size-[32px] shrink-0 rounded-[10px] border-primary bg-primary text-primary-foreground shadow-none hover:bg-primary/90 disabled:opacity-35"
+              className="size-[calc(32rem/14)] shrink-0 rounded-[6px] border-brand bg-brand text-brand-foreground shadow-none hover:bg-brand/90 disabled:opacity-35"
               onClick={handleSend}
               disabled={!hasContent || locked}
               aria-label={agentRecipient ? t('Send only to the selected Agent') : t('Send')}
@@ -861,7 +862,7 @@ export function Composer({
                     : t('Send')
               }
             >
-              <ArrowUp className="size-[16px]" />
+              <ArrowUp className="size-[calc(16rem/14)]" />
             </Button>
           )}
         </div>
@@ -882,7 +883,7 @@ export function Composer({
           <DialogHeader>
             <DialogTitle>{preview?.label ?? t('Selected UI element')}</DialogTitle>
           </DialogHeader>
-          <DialogPanel className="space-y-2 text-xs">
+          <DialogPanel className="space-y-2 text-[calc(11rem/14)]">
             {preview && (
               <>
                 <p className="text-muted-foreground break-all">{preview.path}</p>

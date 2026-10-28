@@ -93,7 +93,11 @@ export function WorkspaceBranchDialog({
             }}
           />
           {(validationError || error) && (
-            <p id={errorId} role="alert" className="mt-2 break-words text-xs text-destructive">
+            <p
+              id={errorId}
+              role="alert"
+              className="mt-2 break-words text-[calc(11rem/14)] text-destructive"
+            >
               {validationError || error}
             </p>
           )}

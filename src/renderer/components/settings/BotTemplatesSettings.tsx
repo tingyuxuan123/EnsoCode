@@ -223,10 +223,12 @@ export function BotTemplatesSettings() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div>
-        <h3 className="text-[18px] font-semibold">{t('Bot templates')}</h3>
-        <p className="text-[13px] text-muted-foreground">
+        <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+          {t('Bot templates')}
+        </h3>
+        <p className="text-[calc(13rem/14)] text-muted-foreground">
           {t(
             'Templates used when creating members and teams. Built-in templates can be edited, hidden or restored.'
           )}
@@ -397,16 +399,18 @@ function TemplateRow<T>({
       <div className={cn('flex min-w-0 flex-1 items-center gap-3', item.hidden && 'opacity-50')}>
         {avatar}
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[13px] font-medium">
+          <p className="flex items-center gap-2 text-[calc(13rem/14)] font-medium">
             <span className="truncate">{title}</span>
-            <span className="truncate font-normal text-muted-foreground text-[12px]">{subtitle}</span>
+            <span className="truncate font-normal text-muted-foreground text-[calc(12rem/14)]">
+              {subtitle}
+            </span>
             <Badge variant="secondary">
               {item.source === 'custom' ? t('Custom') : t('Built-in')}
             </Badge>
             {item.modified && <Badge variant="outline">{t('Modified')}</Badge>}
             {item.hidden && <Badge variant="outline">{t('Hidden')}</Badge>}
           </p>
-          <p className="truncate text-muted-foreground text-[12px]">{summary}</p>
+          <p className="truncate text-muted-foreground text-[calc(12rem/14)]">{summary}</p>
         </div>
       </div>
       <div className="flex shrink-0 items-center">{actions}</div>
@@ -431,13 +435,13 @@ function TemplateDialog({
   const [busy, setBusy] = useState(false);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-2xl">
+      <DialogContent className="max-h-[85vh] max-w-[640px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-3">
           {children}
-          {error && <p className="text-destructive text-[12px]">{error}</p>}
+          {error && <p className="text-destructive text-[calc(12rem/14)]">{error}</p>}
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>
@@ -473,7 +477,7 @@ function MemberFields({
       <div>
         <FieldLabel>{t('Name')}</FieldLabel>
         <Input value={value.name} onChange={(event) => onChange({ name: event.target.value })} />
-        {issue && <p className="mt-1 text-destructive text-[12px]">{issue}</p>}
+        {issue && <p className="mt-1 text-destructive text-[calc(12rem/14)]">{issue}</p>}
       </div>
       <div>
         <FieldLabel>{t('Title')}</FieldLabel>
@@ -666,7 +670,7 @@ function TeamTemplateDialog({
       </div>
       <div>
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-muted-foreground text-[12px]">{t('Members')}</span>
+          <span className="text-muted-foreground text-[calc(12rem/14)]">{t('Members')}</span>
           <Button
             size="xs"
             variant="outline"
@@ -699,10 +703,14 @@ function TeamTemplateDialog({
                       bot={{ name: member.name, avatar: { color: member.color } }}
                       size="sm"
                     />
-                    <span className="truncate text-[13px]">{member.name || t('Unnamed')}</span>
-                    <span className="truncate text-muted-foreground text-[12px]">{member.title}</span>
+                    <span className="truncate text-[calc(13rem/14)]">
+                      {member.name || t('Unnamed')}
+                    </span>
+                    <span className="truncate text-muted-foreground text-[calc(12rem/14)]">
+                      {member.title}
+                    </span>
                     {boss && (
-                      <span className="flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">
+                      <span className="flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 text-[calc(11rem/14)] text-muted-foreground">
                         <Crown className="h-3 w-3" />
                         {t('Owner')}
                       </span>

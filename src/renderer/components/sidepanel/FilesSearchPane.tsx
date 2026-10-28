@@ -98,13 +98,13 @@ export function FilesSearchPane({
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-1">
         {!query.trim() ? (
-          <p className="px-1 py-2 text-muted-foreground text-xs">
+          <p className="px-1 py-2 text-muted-foreground text-[calc(11rem/14)]">
             {t('Type to search this workspace.')}
           </p>
         ) : loading && !result ? (
-          <p className="px-1 py-2 text-muted-foreground text-xs">{t('Searching…')}</p>
+          <p className="px-1 py-2 text-muted-foreground text-[calc(11rem/14)]">{t('Searching…')}</p>
         ) : result && !result.ok ? (
-          <p className="px-1 py-2 text-muted-foreground text-xs">
+          <p className="px-1 py-2 text-muted-foreground text-[calc(11rem/14)]">
             {t(
               result.error === 'unsupported'
                 ? 'Search is not available for SSH workspaces.'
@@ -112,7 +112,7 @@ export function FilesSearchPane({
             )}
           </p>
         ) : result?.ok && result.hits.length === 0 ? (
-          <p className="px-1 py-2 text-muted-foreground text-xs">{t('No results')}</p>
+          <p className="px-1 py-2 text-muted-foreground text-[calc(11rem/14)]">{t('No results')}</p>
         ) : result?.ok && result.mode === 'names' ? (
           result.hits.map((hit) => {
             const Icon = fileTypeIcon(hit.name, false);
@@ -134,8 +134,8 @@ export function FilesSearchPane({
                     className={cn('mt-0.5 size-3.5 shrink-0', fileTypeIconClass(hit.name, false))}
                   />
                   <span className="min-w-0">
-                    <span className="block truncate text-xs">{hit.name}</span>
-                    <span className="block truncate text-[10px] text-muted-foreground">
+                    <span className="block truncate text-[calc(11rem/14)]">{hit.name}</span>
+                    <span className="block truncate text-[calc(11rem/14)] text-muted-foreground">
                       {hit.relativePath}
                     </span>
                   </span>
@@ -180,11 +180,11 @@ function contentHitButton(hit: FilesSearchContentHit, onOpenFile: (rel: string) 
     >
       <Icon className={cn('mt-0.5 size-3.5 shrink-0', fileTypeIconClass(name, false))} />
       <span className="min-w-0">
-        <span className="block truncate text-xs">
+        <span className="block truncate text-[calc(11rem/14)]">
           {name}
           <span className="text-muted-foreground">:{hit.line}</span>
         </span>
-        <span className="block truncate font-mono text-[10px] text-muted-foreground">
+        <span className="block truncate font-mono text-[calc(11rem/14)] text-muted-foreground">
           {hit.content.trim()}
         </span>
       </span>
@@ -243,7 +243,7 @@ function ModeButton({
       type="button"
       variant="ghost"
       size="sm"
-      className={cn('h-6 flex-1 px-1 text-xs', active && 'bg-muted')}
+      className={cn('h-6 flex-1 px-1 text-[calc(11rem/14)]', active && 'bg-muted')}
       aria-pressed={active}
       onClick={onClick}
     >

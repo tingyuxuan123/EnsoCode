@@ -112,8 +112,10 @@ export function OauthProviderAccounts({
     <div className="space-y-4">
       {provider.accounts.length === 0 ? (
         <div className="rounded-[6px] border border-dashed px-4 py-6 text-center">
-          <p className="text-[13px] font-medium">{t('No subscription account connected')}</p>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)] font-medium">
+            {t('No subscription account connected')}
+          </p>
+          <p className="mt-1 text-[calc(12rem/14)] text-muted-foreground">
             {t('Authorize this provider to add its available models.')}
           </p>
         </div>
@@ -126,11 +128,11 @@ export function OauthProviderAccounts({
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-[13px] font-medium">
+                  <span className="truncate text-[calc(13rem/14)] font-medium">
                     {account.email ?? account.key}
                   </span>
                   {account.plan && (
-                    <Badge variant="outline" className="shrink-0 text-[10px] uppercase">
+                    <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)] uppercase">
                       {account.plan}
                     </Badge>
                   )}
@@ -156,7 +158,7 @@ export function OauthProviderAccounts({
       )}
 
       {error && (
-        <div className="flex items-start gap-2 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+        <div className="flex items-start gap-2 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-[calc(12rem/14)] text-destructive">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span className="break-words">{error}</span>
         </div>
@@ -193,7 +195,9 @@ export function AccountUsageBlock({ info }: { info: OauthAccountUsage | undefine
   const { t } = useI18n();
   if (!info) return null;
   if (info.error) {
-    return <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">{info.error}</p>;
+    return (
+      <p className="mt-0.5 truncate text-[calc(11rem/14)] text-muted-foreground/70">{info.error}</p>
+    );
   }
   if (info.windows.length === 0) return null;
 
@@ -213,7 +217,10 @@ export function AccountUsageBlock({ info }: { info: OauthAccountUsage | undefine
       {info.windows.map((windowInfo) => {
         const reset = resetLabel(windowInfo.resetsAt);
         return (
-          <div key={windowInfo.label} className="flex min-w-0 items-center gap-2 text-[11px]">
+          <div
+            key={windowInfo.label}
+            className="flex min-w-0 items-center gap-2 text-[calc(11rem/14)]"
+          >
             <span className="w-24 shrink-0 truncate text-muted-foreground" title={windowInfo.label}>
               {windowInfo.label}
             </span>

@@ -50,7 +50,7 @@ export function WorkspaceMenu({ chat, className }: { chat: BotChat; className?: 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           className={cn(
-            'flex h-7 min-w-0 max-w-56 @max-[28rem]:max-w-32 @max-[21rem]:max-w-24 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground',
+            'flex h-7 min-w-0 max-w-56 @max-[28rem]:max-w-32 @max-[21rem]:max-w-24 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-muted-foreground text-[calc(11rem/14)] transition-colors hover:bg-muted hover:text-foreground',
             className
           )}
           title={t('Workspace')}
@@ -78,7 +78,9 @@ export function WorkspaceMenu({ chat, className }: { chat: BotChat; className?: 
             {t('Open folder')}
           </button>
           <div className="my-1 border-t" />
-          <div className="px-2 py-1 text-[11px] text-muted-foreground">{t('Change workspace')}</div>
+          <div className="px-2 py-1 text-[calc(11rem/14)] text-muted-foreground">
+            {t('Change workspace')}
+          </div>
           <div className="max-h-64 overflow-y-auto">
             {options.map((option) => {
               const selected = sameWorkspace(chat, option.input);

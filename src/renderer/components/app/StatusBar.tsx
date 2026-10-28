@@ -30,7 +30,7 @@ export function StatusBar() {
   return (
     <footer
       data-slot="status-bar"
-      className="flex h-[24px] shrink-0 items-center gap-3 border-t border-line bg-shell px-4 text-[11px] text-muted-foreground"
+      className="flex h-[calc(24rem/14)] shrink-0 items-center gap-3 border-t border-line bg-shell px-4 text-[calc(11rem/14)] text-muted-foreground"
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span className={cn('size-1.5 shrink-0 rounded-full', nodeTone)} aria-hidden />

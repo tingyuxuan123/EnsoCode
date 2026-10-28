@@ -191,7 +191,7 @@ export function BtwView({
         />
         <button
           type="button"
-          className="ml-auto rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="ml-auto rounded-md px-2 py-1 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
           disabled={!lastAssistant}
           onClick={inject}
         >
@@ -208,7 +208,7 @@ export function BtwView({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
           <MessageCircle className="h-5 w-5" />
-          <p className="text-xs">
+          <p className="text-[calc(11rem/14)]">
             {t('Ask a side question without sending it to the main agent.')}
           </p>
         </div>
@@ -325,7 +325,7 @@ function ModeChip({
     <button
       type="button"
       className={cn(
-        'rounded-md px-2 py-1 text-xs transition-colors',
+        'rounded-md px-2 py-1 text-[calc(11rem/14)] transition-colors',
         active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50'
       )}
       onClick={onClick}

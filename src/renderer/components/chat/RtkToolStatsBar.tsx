@@ -19,7 +19,7 @@ export function RtkToolStatsBar({ value }: { value: unknown }) {
   const savings = rtkSavings(stats);
   return (
     <div
-      className="border-border/60 border-t text-[10px] text-muted-foreground"
+      className="border-border/60 border-t text-[calc(11rem/14)] text-muted-foreground"
       data-rtk-status={stats.status}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-3 py-1">

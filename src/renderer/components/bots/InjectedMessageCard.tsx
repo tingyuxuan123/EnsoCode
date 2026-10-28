@@ -34,7 +34,7 @@ export function InjectedMessageCard({ message }: { message: BotInjectedMessage }
       data-bot-injection={message.kind}
       className="w-full rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm"
     >
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <div className="mb-1 flex items-center gap-1.5 text-[calc(11rem/14)] font-medium text-muted-foreground">
         <Icon className="size-3.5 shrink-0" />
         <span>{title}</span>
         {message.kind === 'delegation-result' && message.status && (
@@ -68,13 +68,13 @@ export function InjectedMessageCard({ message }: { message: BotInjectedMessage }
                   ))}
       </div>
       {message.kind === 'delegation-task' && message.context && (
-        <details className="mt-1.5 text-xs text-muted-foreground">
+        <details className="mt-1.5 text-[calc(11rem/14)] text-muted-foreground">
           <summary className="cursor-pointer">{t('Context')}</summary>
           <p className="mt-1 whitespace-pre-wrap break-words">{message.context}</p>
         </details>
       )}
       {message.kind === 'group' && message.instruction && (
-        <details className="mt-1.5 text-xs text-muted-foreground">
+        <details className="mt-1.5 text-[calc(11rem/14)] text-muted-foreground">
           <summary className="cursor-pointer">{t('Instructions')}</summary>
           <p className="mt-1 whitespace-pre-wrap break-words">{message.instruction}</p>
         </details>
@@ -85,7 +85,7 @@ export function InjectedMessageCard({ message }: { message: BotInjectedMessage }
             <span
               key={ref.id}
               title={t('Referenced chat')}
-              className="inline-flex h-6 max-w-56 items-center gap-1 rounded-md bg-muted px-1.5 text-xs"
+              className="inline-flex h-6 max-w-56 items-center gap-1 rounded-md bg-muted px-1.5 text-[calc(11rem/14)]"
             >
               <MessagesSquare className="h-3 w-3 shrink-0" />
               <span className="min-w-0 truncate">{ref.title}</span>
@@ -94,12 +94,12 @@ export function InjectedMessageCard({ message }: { message: BotInjectedMessage }
         </div>
       )}
       {message.kind === 'group' && message.note && (
-        <p className="mt-1.5 text-xs text-muted-foreground">
+        <p className="mt-1.5 text-[calc(11rem/14)] text-muted-foreground">
           {t('Dispatch hint: {{note}}', { note: message.note })}
         </p>
       )}
       {message.kind !== 'group' && !!message.group?.length && (
-        <details className="mt-1.5 text-xs text-muted-foreground">
+        <details className="mt-1.5 text-[calc(11rem/14)] text-muted-foreground">
           <summary className="cursor-pointer">
             {t('Group messages')} · {message.group.length}
           </summary>

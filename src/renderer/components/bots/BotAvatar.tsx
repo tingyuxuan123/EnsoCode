@@ -7,8 +7,8 @@ import { type AvatarBot, botAvatarSrc } from './avatarImage';
 import { PresenceMark } from './PresenceMark';
 
 const SIZES = {
-  xs: 'h-5 w-5 text-[9px]',
-  sm: 'h-6 w-6 text-[11px]',
+  xs: 'h-5 w-5 text-[calc(11rem/14)]',
+  sm: 'h-6 w-6 text-[calc(11rem/14)]',
   md: 'h-8 w-8 text-[13px]',
   lg: 'h-16 w-16 text-2xl',
 } as const;

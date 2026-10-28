@@ -22,14 +22,14 @@ export function PlanModeToggle({
       }
       onClick={() => onToggle(!active)}
       className={cn(
-        'flex h-[28px] min-w-0 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] transition-colors',
+        'flex h-[calc(28rem/14)] min-w-0 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] transition-colors',
         active
           ? 'bg-primary/10 text-primary hover:bg-primary/15'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
       )}
     >
-      <ClipboardList className="size-[14px] shrink-0" />
-      <span className="hidden @min-[28rem]:inline">{t('Plan')}</span>
+      <ClipboardList className="size-[calc(14rem/14)] shrink-0" />
+      <span>{t('Plan')}</span>
     </button>
   );
 }

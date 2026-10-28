@@ -42,16 +42,23 @@ export function GeneralSettings() {
   const { t } = useI18n();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div>
-        <h3 className="text-[18px] font-semibold">{t('General')}</h3>
-        <p className="text-[13px] text-muted-foreground">{t('General application settings')}</p>
+        <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+          {t('General')}
+        </h3>
+        <p className="text-[calc(13rem/14)] text-muted-foreground">
+          {t('General application settings')}
+        </p>
       </div>
 
-      <div className="flex items-center gap-3" data-settings-row="general.language">
-        <span className="text-[13px] font-medium">{t('Language')}</span>
+      <div
+        className="flex items-center justify-between gap-[16px] py-[10px]"
+        data-settings-row="general.language"
+      >
+        <span className="text-[calc(13rem/14)] font-medium">{t('Language')}</span>
         <Select
-          items={{ en: 'English', zh: '简体中文' }}
+          items={{ en: 'English', zh: '简体中文', 'zh-CN': '简体中文', 'en-US': 'English' }}
           value={language}
           onValueChange={(v) => setLanguage(v as 'en' | 'zh')}
         >
@@ -129,7 +136,7 @@ function SidePanelSection() {
         ? t('Unlimited')
         : t('{{count}} times', { count: value });
   return (
-    <div className="space-y-2">
+    <div className="space-y-0 border-t border-line pt-[20px]">
       <SwitchRow
         rowId="general.openChangesOnFileEdit"
         title={t('Open Changes when files are edited')}
@@ -198,8 +205,8 @@ function SidePanelSection() {
         data-settings-row="general.generationStallTimeout"
       >
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Stop if no output')}</p>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)]">{t('Stop if no output')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'Abort and retry the run when no tokens or tool results arrive for this long. Thinking counts as output.'
             )}
@@ -232,8 +239,8 @@ function SidePanelSection() {
         data-settings-row="general.autoRetryLimit"
       >
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Auto-retry on transient errors')}</p>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)]">{t('Auto-retry on transient errors')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'Retry with backoff (up to 60s apart) after 429, 5xx or network errors. Quota and billing errors are never retried. Unlimited keeps retrying until you cancel.'
             )}
@@ -280,14 +287,14 @@ function AutoArchiveSection() {
   const autoDeleteArchivedDays = useSettingsStore((s) => s.autoDeleteArchivedDays);
   const setAutoDeleteArchivedDays = useSettingsStore((s) => s.setAutoDeleteArchivedDays);
   return (
-    <div className="space-y-2">
+    <div className="space-y-0 border-t border-line pt-[20px]">
       <div
         className="flex items-center justify-between gap-[16px] py-[10px]"
         data-settings-row="general.autoArchiveIdleDays"
       >
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Archive idle conversations')}</p>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)]">{t('Archive idle conversations')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'Move conversations that have been idle this long into Archived. Does not delete them.'
             )}
@@ -326,8 +333,8 @@ function AutoArchiveSection() {
         data-settings-row="general.autoDeleteArchivedDays"
       >
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Delete archived conversations after')}</p>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)]">{t('Delete archived conversations after')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'Permanently delete conversations that have been archived longer than this. This cannot be undone. Choosing a positive value deletes already-overdue archived conversations immediately.'
             )}
@@ -373,8 +380,8 @@ function TerminalShellSection() {
       data-settings-row="general.terminalShell"
     >
       <div className="min-w-0">
-        <p className="text-[13px]">{t('Terminal shell')}</p>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-[calc(13rem/14)]">{t('Terminal shell')}</p>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t('Applies to new side panel terminals. SSH projects keep the remote login shell.')}
         </p>
       </div>
@@ -433,8 +440,8 @@ function WorktreeRootSection() {
       data-settings-row="general.worktreeRoot"
     >
       <div className="min-w-0">
-        <p className="text-[13px]">{t('Worktree root directory')}</p>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-[calc(13rem/14)]">{t('Worktree root directory')}</p>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t(
             'Where isolated session worktrees are created. Leave empty to use the app data directory. Existing worktrees stay where they are.'
           )}
@@ -455,7 +462,7 @@ function WorktreeRootSection() {
             {t('Browse')}
           </Button>
         </div>
-        {error && <p className="text-[12px] text-destructive">{error}</p>}
+        {error && <p className="text-[calc(12rem/14)] text-destructive">{error}</p>}
       </div>
     </div>
   );
@@ -476,11 +483,11 @@ function WindowsLocalShellSection() {
       data-settings-row="general.windowsLocalShell"
     >
       <div className="min-w-0">
-        <p className="text-[13px]">
+        <p className="text-[calc(13rem/14)]">
           {t('Windows local command shell')}
           <NewSessionBadge />
         </p>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t(
             'Only the Windows local agent command tool. SSH and other platforms stay on bash. Takes effect on the next session.'
           )}
@@ -525,8 +532,8 @@ export function SwitchRow({
       data-settings-row={rowId}
     >
       <div className="min-w-0">
-        <p className="text-[13px]">{title}</p>
-        <p className="text-[12px] text-muted-foreground">{description}</p>
+        <p className="text-[calc(13rem/14)]">{title}</p>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={(value) => onChange(value === true)} />
     </div>
@@ -567,15 +574,18 @@ function ProxySection() {
   };
 
   return (
-    <div className="space-y-3" data-settings-row="general.proxy">
+    <div
+      className="space-y-[12px] border-t border-line pt-[20px]"
+      data-settings-row="general.proxy"
+    >
       <div>
-        <h4 className="text-[13px] font-medium">{t('Network proxy')}</h4>
-        <p className="text-[12px] text-muted-foreground">
+        <h4 className="text-[calc(14rem/14)] font-medium">{t('Network proxy')}</h4>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t('Used by model requests, the built-in browser, and agent tools')}
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-[13px] font-medium">{t('Proxy mode')}</span>
+        <span className="text-[calc(13rem/14)] font-medium">{t('Proxy mode')}</span>
         <Select
           items={{
             system: t('Follow system proxy'),
@@ -597,7 +607,7 @@ function ProxySection() {
       </div>
       {proxyMode === 'custom' && (
         <div className="flex items-start gap-3">
-          <span className="pt-1.5 text-[13px] font-medium">{t('Proxy URL')}</span>
+          <span className="pt-1.5 text-[calc(13rem/14)] font-medium">{t('Proxy URL')}</span>
           <div className="min-w-0 space-y-1">
             <Input
               value={draft}
@@ -608,7 +618,7 @@ function ProxySection() {
                 if (event.key === 'Enter') commitUrl();
               }}
             />
-            {error && <p className="text-[12px] text-destructive">{error}</p>}
+            {error && <p className="text-[calc(12rem/14)] text-destructive">{error}</p>}
           </div>
         </div>
       )}
@@ -656,17 +666,24 @@ function UpdateSection() {
   const busy = status?.status === 'checking' || status?.status === 'downloading';
 
   return (
-    <div className="space-y-3" data-settings-row="general.updates">
+    <div
+      className="space-y-[12px] border-t border-line pt-[20px]"
+      data-settings-row="general.updates"
+    >
       <div>
-        <h4 className="text-[13px] font-medium">{t('Updates')}</h4>
-        <p className="text-[12px] text-muted-foreground">{t('Application update settings')}</p>
+        <h4 className="text-[calc(14rem/14)] font-medium">{t('Updates')}</h4>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
+          {t('Application update settings')}
+        </p>
       </div>
       <div className="flex items-center justify-between gap-[16px] py-[10px]">
         <div className="min-w-0">
-          <p className="text-[13px]">
+          <p className="text-[calc(13rem/14)]">
             {t('Current version')} · {APP_VERSION}
           </p>
-          {text && <p className="mt-0.5 break-words text-[12px] text-muted-foreground">{text}</p>}
+          {text && (
+            <p className="mt-0.5 break-words text-[calc(12rem/14)] text-muted-foreground">{text}</p>
+          )}
         </div>
         {status?.status === 'downloaded' ? (
           <Button
@@ -690,8 +707,8 @@ function UpdateSection() {
       </div>
       <div className="flex items-center justify-between gap-[16px] py-[10px]">
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Automatic updates')}</p>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)]">{t('Automatic updates')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t('Download and install updates automatically')}
           </p>
         </div>
@@ -707,8 +724,8 @@ function UpdateSection() {
         className={`flex items-center justify-between gap-[16px] py-[10px] ${autoUpdate ? '' : 'opacity-60'}`}
       >
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Restart and apply when idle')}</p>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)]">{t('Restart and apply when idle')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'After the update is downloaded, restart automatically if no agent is running, nothing is queued, and there are no pending questions or approvals. The idle state must last 5 minutes, and a focused window also blocks it.'
             )}

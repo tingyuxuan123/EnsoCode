@@ -20,7 +20,9 @@ export function NodeDot({ node, className }: { node: RemoteNodeStatus; className
     : node.connected
       ? t('Remote desktop is offline')
       : t('Connecting…');
-  return <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone, className)} title={title} />;
+  return (
+    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone, className)} title={title} />
+  );
 }
 
 /** 侧栏顶部的节点切换：本机 / 已连节点 / 连接新节点 */
@@ -41,7 +43,7 @@ export function NodeSwitcher({ className }: { className?: string }) {
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           className={cn(
-            'flex h-7 min-w-0 max-w-48 items-center gap-1.5 rounded-md px-2 text-xs transition-colors hover:bg-muted',
+            'flex h-7 min-w-0 max-w-48 items-center gap-1.5 rounded-md px-2 text-[calc(11rem/14)] transition-colors hover:bg-muted',
             active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             className
           )}
@@ -125,7 +127,7 @@ function NodeOption({
       {icon}
       <span className="min-w-0 flex-1 truncate">
         {label}
-        {hint && <span className="ml-1.5 text-[10px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="ml-1.5 text-[calc(11rem/14)] text-muted-foreground">{hint}</span>}
       </span>
       {selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
     </button>

@@ -734,14 +734,14 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
       {/* 收起后整栏让位：搜索 / 设置 / 询问 Enso / 展开入口都在全局图标轨上 */}
       <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
         {/* 顶部：Code/Bot 分段（实验开关开启时）+ 全局搜索 */}
-        <div className="flex shrink-0 items-center gap-2 px-3 pt-3">
+        <div className="flex shrink-0 items-center gap-2 px-[12px] pt-[12px]">
           {botModeEnabled ? (
             <>
               <ModeSwitch className="h-9 flex-1 [&>button]:flex-1 [&>button]:justify-center" />
               <button
                 type="button"
                 onClick={onOpenSearch}
-                className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex size-[calc(36rem/14)] shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title={
                   searchShortcut
                     ? `${t('Search anything')} (${searchShortcut})`
@@ -756,11 +756,13 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
             <button
               type="button"
               onClick={onOpenSearch}
-              className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md bg-accent/60 px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="flex h-[calc(36rem/14)] min-w-0 flex-1 items-center gap-2 rounded-md bg-accent/60 px-2.5 text-[calc(13rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <Search className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left">{t('Search anything')}</span>
-              {searchShortcut && <span className="shrink-0 text-[11px]">{searchShortcut}</span>}
+              {searchShortcut && (
+                <span className="shrink-0 text-[calc(11rem/14)]">{searchShortcut}</span>
+              )}
             </button>
           )}
         </div>
@@ -769,18 +771,18 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
           type="button"
           disabled={!newTaskProjectId}
           onClick={() => newTaskProjectId && void newConversation(newTaskProjectId)}
-          className="mx-3 mt-3 flex h-9 shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
+          className="mx-[12px] mt-[12px] flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
         >
-          <CirclePlus className="size-[17px] shrink-0 text-brand" />
-          <span className="text-[14px]">{t('New task')}</span>
+          <CirclePlus className="size-[calc(17rem/14)] shrink-0 text-brand" />
+          <span className="text-[calc(14rem/14)]">{t('New task')}</span>
           {newTaskShortcut && (
-            <span className="ml-auto rounded border border-border px-1 text-[11px] text-muted-foreground">
+            <span className="ml-auto rounded border border-border px-1 text-[calc(11rem/14)] text-muted-foreground">
               {newTaskShortcut}
             </span>
           )}
         </button>
         {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}
-        <div className="mt-4 flex shrink-0 items-center gap-1 px-4 text-[12px] text-muted-foreground">
+        <div className="mt-[16px] flex shrink-0 items-center gap-1 px-4 text-[calc(12rem/14)] text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">{t('Projects')}</span>
           <button
             type="button"
@@ -861,7 +863,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
           onEditGroup={(id) => setGroupEditor({ mode: 'edit', id })}
         />
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pt-1 pb-2">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-[12px] pt-1 pb-2">
           {projects.length === 0 && (
             <button
               type="button"
@@ -911,7 +913,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
           {/* 无置顶会话时,拖动会话中露出临时落点条 */}
           {pinnedIds.length === 0 && dragPayload?.type === 'chat' && !dragPayload.pinned && (
             <PinnedDropZone>
-              <div className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-2 text-[calc(11rem/14)] text-muted-foreground">
                 <Pin className="h-3.5 w-3.5" />
                 {t('Drop here to pin')}
               </div>
@@ -964,17 +966,17 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                 <Loader2 className="size-4 animate-spin" />
               </span>
               <span
-                className="min-w-0 flex-1 truncate text-[13px] font-medium"
+                className="min-w-0 flex-1 truncate text-[calc(13rem/14)] font-medium"
                 title={pendingProject.path}
               >
                 {pendingProject.name}
                 {pendingProject.sshHost && (
-                  <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[10px] font-normal">
+                  <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[calc(11rem/14)] font-normal">
                     {pendingProject.sshHost}
                   </span>
                 )}
               </span>
-              <span className="shrink-0 text-xs">{t('Adding...')}</span>
+              <span className="shrink-0 text-[calc(11rem/14)]">{t('Adding...')}</span>
             </div>
           )}
           <SortableContext
@@ -1111,7 +1113,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                               <div ref={drag.setNodeRef} style={drag.style}>
                                 {/* 项目行：图标列（折叠态文件夹/hover 折叠箭头）+ 名称 + 悬停操作；整行可拖拽排序 */}
                                 <div
-                                  className="group flex h-9 w-full items-center gap-1 rounded-md px-2 transition-colors hover:bg-accent/70"
+                                  className="group flex h-[calc(36rem/14)] w-full items-center gap-1 rounded-md px-2 transition-colors hover:bg-accent/70"
                                   {...drag.handleProps}
                                 >
                                   <button
@@ -1131,12 +1133,12 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                                     >
                                       {projectDisplayName(project)}
                                       {project.kind === 'ssh' && (
-                                        <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[10px] font-normal text-muted-foreground">
+                                        <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[calc(11rem/14)] font-normal text-muted-foreground">
                                           {project.sshConnectionName ?? project.sshHost}
                                         </span>
                                       )}
                                       {recentView && (
-                                        <span className="mt-0.5 block truncate text-[10px] font-normal text-muted-foreground">
+                                        <span className="mt-0.5 block truncate text-[calc(11rem/14)] font-normal text-muted-foreground">
                                           {projectGroups.find(
                                             (group) => group.id === project.groupId
                                           )?.name ?? t('Ungrouped')}
@@ -1245,7 +1247,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                                                               ),
                                                             }))
                                                           }
-                                                          className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                                          className="flex-1 rounded-lg py-1 text-center text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                                         >
                                                           {t('Show {{n}} more', {
                                                             n: hiddenIds.length,
@@ -1281,7 +1283,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                                                       ),
                                                     }))
                                                   }
-                                                  className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                                  className="flex-1 rounded-lg py-1 text-center text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                                 >
                                                   {t('Collapse')}
                                                 </button>
@@ -1289,7 +1291,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                                             </div>
                                           )}
                                         {visibleConversations.length === 0 && (
-                                          <p className="py-1.5 pl-8 text-xs text-muted-foreground">
+                                          <p className="py-1.5 pl-8 text-[calc(11rem/14)] text-muted-foreground">
                                             {t('No conversations yet')}
                                           </p>
                                         )}
@@ -1311,7 +1313,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
               };
               if (recentView && !searching && activeProjects.length === 0) {
                 return (
-                  <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+                  <p className="px-2 py-6 text-center text-[calc(11rem/14)] text-muted-foreground">
                     {t('No projects active in the last {{n}} days', {
                       n: RECENT_PROJECT_WINDOW_DAYS,
                     })}
@@ -1389,19 +1391,19 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
         {/* 底部：当前节点（本机 / 远程）+ 归档入口 */}
         <div className="flex shrink-0 flex-col gap-1 px-3 pt-2 pb-3">
           <div className="flex items-center">
-            <NodeSwitcher className="h-7 px-1.5 text-[11px]" />
+            <NodeSwitcher className="h-7 px-1.5 text-[calc(11rem/14)]" />
           </div>
           <button
             type="button"
             data-slot="archived-button"
             onClick={openArchive}
-            className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="flex h-[calc(32rem/14)] min-w-0 items-center gap-2 rounded-md px-2 text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             title={`${t('Archived')} (${archivedCount})`}
           >
             <Archive className="h-4 w-4 shrink-0" />
             <span className="truncate">{t('Archived')}</span>
             {archivedCount > 0 && (
-              <span className="ml-auto text-[11px] tabular-nums">{archivedCount}</span>
+              <span className="ml-auto text-[calc(11rem/14)] tabular-nums">{archivedCount}</span>
             )}
           </button>
         </div>
@@ -1457,10 +1459,10 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                     {group.projectArchived && (
                       <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
                     )}
-            <span className="min-w-0 flex-1 truncate py-1 text-[11px] font-medium text-muted-foreground">
+                    <span className="min-w-0 flex-1 truncate py-1 text-[calc(11rem/14)] font-medium text-muted-foreground">
                       {projectName}
                     </span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                    <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground tabular-nums">
                       {group.ids.length}
                     </span>
                     {group.projectArchived ? (
@@ -1765,7 +1767,7 @@ function ProjectGroupHeader({
         opacity: sortableDrag.isDragging ? 0.4 : undefined,
       }}
       className={cn(
-        'group relative flex h-7 w-full select-none items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+        'group relative flex h-7 w-full select-none items-center rounded-md px-2 text-[calc(11rem/14)] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
         droppable.isOver && 'bg-brand/10 text-foreground',
         sortable && 'cursor-grab'
       )}
@@ -1792,7 +1794,7 @@ function ProjectGroupHeader({
         />
         <span
           className={cn(
-            'ml-auto shrink-0 text-[10px] text-muted-foreground/70 tabular-nums',
+            'ml-auto shrink-0 text-[calc(11rem/14)] text-muted-foreground/70 tabular-nums',
             onEdit && 'transition-opacity group-hover:opacity-0'
           )}
         >
@@ -1874,19 +1876,21 @@ function ProjectDragPreview({
           {sessionIds.length > COLLAPSED_SESSION_LIMIT && (
             <div className="flex items-center gap-1">
               {hiddenCount > 0 && (
-                <div className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground">
+                <div className="flex-1 rounded-lg py-1 text-center text-[calc(11rem/14)] text-muted-foreground">
                   {t('Show {{n}} more', { n: hiddenCount })}
                 </div>
               )}
               {revealedExtra > 0 && (
-                <div className="flex-1 rounded-lg py-1 text-center text-xs text-muted-foreground">
+                <div className="flex-1 rounded-lg py-1 text-center text-[calc(11rem/14)] text-muted-foreground">
                   {t('Collapse')}
                 </div>
               )}
             </div>
           )}
           {sessionIds.length === 0 && (
-            <p className="py-1.5 pl-8 text-xs text-muted-foreground">{t('No conversations yet')}</p>
+            <p className="py-1.5 pl-8 text-[calc(11rem/14)] text-muted-foreground">
+              {t('No conversations yet')}
+            </p>
           )}
         </div>
       )}
@@ -2191,7 +2195,7 @@ function ConversationRow({
       data-pinned={pinned ? 'true' : 'false'}
       className={cn(
         // 会话行与项目行共用图标/文字基准，worktree 与浏览器/终端计数在第二行
-        'group grid min-h-9 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md py-1.5 pr-2 pl-2 text-[13px] transition-colors',
+        'group grid min-h-[calc(36rem/14)] cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md py-1.5 pr-2 pl-2 text-[calc(13rem/14)] transition-colors',
         active
           ? 'bg-accent font-medium text-foreground'
           : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'
@@ -2215,7 +2219,7 @@ function ConversationRow({
       <div className="flex min-w-0 items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {sourceTitle && (
-            <span className="max-w-1/3 truncate text-[10px] text-muted-foreground/70">
+            <span className="max-w-1/3 truncate text-[calc(11rem/14)] text-muted-foreground/70">
               {t('Branched from {{title}}', { title: sourceTitle })}
             </span>
           )}
@@ -2232,7 +2236,9 @@ function ConversationRow({
             <span className="min-w-0 flex-1 truncate">
               {displayTitle}
               {subtitle && (
-                <span className="ml-1.5 text-[10px] text-muted-foreground">{subtitle}</span>
+                <span className="ml-1.5 text-[calc(11rem/14)] text-muted-foreground">
+                  {subtitle}
+                </span>
               )}
             </span>
           )}
@@ -2246,7 +2252,7 @@ function ConversationRow({
         )}
         {!renaming &&
           (switchHint ? (
-            <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+            <span className="shrink-0 text-[calc(11rem/14)] tabular-nums text-muted-foreground">
               {switchHint}
             </span>
           ) : (
@@ -2257,7 +2263,7 @@ function ConversationRow({
                   aria-hidden
                 />
               )}
-              <span className="shrink-0 text-[10px] text-muted-foreground/80 tabular-nums group-hover:hidden">
+              <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground/80 tabular-nums group-hover:hidden">
                 {formatRelativeTime(
                   conversation.lastActiveAt ?? conversation.createdAt,
                   locale,
@@ -2596,7 +2602,7 @@ function ProjectOverflowMenu({ actions }: { actions: ProjectAction[] }) {
 /** 区块标签:纯文字,不占图标列(对应不可折叠的 Active / Pinned 等分区) */
 function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2 py-2 text-xs font-medium text-muted-foreground">
+    <div className="px-2 py-2 text-[calc(11rem/14)] font-medium text-muted-foreground">
       <span className="truncate">{children}</span>
     </div>
   );

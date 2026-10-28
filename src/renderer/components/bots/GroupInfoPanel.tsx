@@ -45,7 +45,7 @@ import { WorkspaceMenu } from './WorkspaceMenu';
 export function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-5">
-      <h4 className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+      <h4 className="mb-1.5 font-medium text-[calc(11rem/14)] text-muted-foreground uppercase tracking-wide">
         {title}
       </h4>
       {children}
@@ -55,7 +55,7 @@ export function PanelSection({ title, children }: { title: string; children: Rea
 
 export function KeyValue({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-3 border-b py-1.5 text-xs">
+    <div className="flex justify-between gap-3 border-b py-1.5 text-[calc(11rem/14)]">
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <span className="min-w-0 truncate text-right">{value}</span>
     </div>
@@ -205,21 +205,21 @@ export function GroupInfoPanel({
                     <div className="flex items-center gap-1.5 text-sm">
                       <span className="truncate">{bot?.name ?? t('Deleted member')}</span>
                       {chat.bossBotId === id && (
-                        <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">
+                        <span className="shrink-0 rounded bg-muted px-1.5 text-[calc(11rem/14)] text-muted-foreground">
                           {t('Owner')}
                         </span>
                       )}
                       {muted.includes(id) && (
                         <span
                           title={t('Replies only when @-mentioned by name')}
-                          className="flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 text-[10px] text-muted-foreground"
+                          className="flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 text-[calc(11rem/14)] text-muted-foreground"
                         >
                           <BellOff className="h-2.5 w-2.5" />
                           {t('Muted')}
                         </span>
                       )}
                     </div>
-                    <div className="truncate text-muted-foreground text-xs">
+                    <div className="truncate text-muted-foreground text-[calc(11rem/14)]">
                       {bot?.scope || bot?.title}
                     </div>
                   </div>
@@ -267,7 +267,7 @@ export function GroupInfoPanel({
             <Popover open={adding} onOpenChange={setAdding}>
               <PopoverTrigger
                 disabled={candidates.length === 0}
-                className="mt-1 flex h-7 items-center gap-1 rounded-md border px-2 text-muted-foreground text-xs hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className="mt-1 flex h-7 items-center gap-1 rounded-md border px-2 text-muted-foreground text-[calc(11rem/14)] hover:bg-muted hover:text-foreground disabled:opacity-50"
               >
                 <Plus className="h-3.5 w-3.5" />
                 {t('Add member')}
@@ -319,7 +319,7 @@ export function GroupInfoPanel({
           <PanelSection title={t('Workspace')}>
             <div className="border-y py-2">
               <WorkspaceMenu chat={chat} className="w-full max-w-none" />
-              <p className="mt-1.5 text-muted-foreground text-xs">
+              <p className="mt-1.5 text-muted-foreground text-[calc(11rem/14)]">
                 {workspaceProject ? `${workspaceProject.path} · ` : ''}
                 {t('Shared by all members')}
               </p>
@@ -328,7 +328,7 @@ export function GroupInfoPanel({
 
           <PanelSection title={t('Routing limits')}>
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-muted-foreground text-xs">{t('Without @')}</span>
+              <span className="text-muted-foreground text-[calc(11rem/14)]">{t('Without @')}</span>
               <Select
                 items={modeItems}
                 value={chat.routing.mode}
@@ -351,7 +351,9 @@ export function GroupInfoPanel({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="space-y-1">
-                <span className="text-muted-foreground text-xs">{t('@ relay limit')}</span>
+                <span className="text-muted-foreground text-[calc(11rem/14)]">
+                  {t('@ relay limit')}
+                </span>
                 <Input
                   type="number"
                   min={1}
@@ -361,7 +363,9 @@ export function GroupInfoPanel({
                 />
               </label>
               <label className="space-y-1">
-                <span className="text-muted-foreground text-xs">{t('Replies per member')}</span>
+                <span className="text-muted-foreground text-[calc(11rem/14)]">
+                  {t('Replies per member')}
+                </span>
                 <Input
                   type="number"
                   min={1}
@@ -432,7 +436,7 @@ export function GroupInfoPanel({
               <BookmarkPlus />
               {t('Save as team template')}
             </Button>
-            <p className="mt-1.5 text-muted-foreground text-xs">
+            <p className="mt-1.5 text-muted-foreground text-[calc(11rem/14)]">
               {t(
                 'Group settings and member personas only. Memory, sessions, timeline, tasks, routines, models, skills and MCP are not included.'
               )}

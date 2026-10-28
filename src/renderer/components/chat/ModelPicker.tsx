@@ -308,7 +308,7 @@ function ModelRowContent({
           <span className="max-w-full truncate">{model.label ?? model.id}</span>
           <span
             data-model-row-id={model.id}
-            className="max-w-full truncate font-mono text-[10px] leading-3 text-muted-foreground"
+            className="max-w-full truncate font-mono text-[calc(11rem/14)] leading-3 text-muted-foreground"
           >
             {model.id}
           </span>
@@ -317,11 +317,13 @@ function ModelRowContent({
         <span className="min-w-0 flex-1 truncate">{model.label ?? model.id}</span>
       )}
       {entryTag && (
-        <span className="shrink-0 truncate text-[10px] text-muted-foreground/60">{entryTag}</span>
+        <span className="shrink-0 truncate text-[calc(11rem/14)] text-muted-foreground/60">
+          {entryTag}
+        </span>
       )}
       {windowTokens !== undefined && (
         <span
-          className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70"
+          className="shrink-0 text-[calc(11rem/14)] tabular-nums text-muted-foreground/70"
           title={estimated ? t('Estimated context window (catalog fallback)') : t('Context window')}
         >
           {formatTokens(windowTokens)}
@@ -424,7 +426,7 @@ function ProviderSubmenuList({
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={stopTypeaheadOnly}
             placeholder={t('Filter models in this entry')}
-            className="h-7 w-full rounded-md border bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+            className="h-7 w-full rounded-md border bg-transparent px-2 text-[calc(11rem/14)] outline-none placeholder:text-muted-foreground focus:border-ring"
           />
         </div>
       )}
@@ -440,13 +442,13 @@ function ProviderSubmenuList({
           </MenuItem>
         ))}
         {visibleModels.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+          <p className="px-2 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
             {t('No models found')}
           </p>
         )}
       </div>
       {showFilter && (
-        <p className="-mx-1 -mb-1 mt-1 border-t px-2 py-1 text-[10px] text-muted-foreground/60">
+        <p className="-mx-1 -mb-1 mt-1 border-t px-2 py-1 text-[calc(11rem/14)] text-muted-foreground/60">
           {t('Showing {{shown}} of {{total}} models', {
             shown: visibleModels.length,
             total: enabledModels.length,
@@ -465,7 +467,10 @@ function SubmenuUsage({ accountKey }: { accountKey: string }) {
   return (
     <div className="-mx-1 -mt-1 mb-1 space-y-1 border-b px-3 py-2">
       {info.windows.map((windowInfo) => (
-        <div key={windowInfo.label} className="flex min-w-0 items-center gap-2 text-[10px]">
+        <div
+          key={windowInfo.label}
+          className="flex min-w-0 items-center gap-2 text-[calc(11rem/14)]"
+        >
           <span className="w-8 shrink-0 truncate text-muted-foreground" title={windowInfo.label}>
             {windowInfo.label}
           </span>
@@ -863,21 +868,26 @@ export function ModelPicker({
   );
 
   return (
-    <div className={cn(triggerClassName && 'w-full min-w-0')}>
+    <div className={cn('min-w-0 max-w-full', triggerClassName && 'w-full')}>
       <Menu open={open} onOpenChange={handleRootOpenChange}>
         <MenuTrigger
           data-model-picker="trigger"
           className={cn(
-            'flex h-[28px] min-w-14 max-w-64 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'flex h-[calc(28rem/14)] min-w-14 max-w-64 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
             triggerClassName
           )}
           title={triggerLabel}
         >
-          <Sparkle className="size-[14px] shrink-0 text-primary" aria-hidden />
+          {!formTrigger && (
+            <Sparkle className="size-[calc(14rem/14)] shrink-0 text-primary" aria-hidden />
+          )}
           <span className="flex min-w-0 items-center gap-1">
             <span className="min-w-0 truncate">{triggerLabel}</span>
             {hasSelection && showReasoningControls && reasoningMode ? (
-              <span className="shrink-0 text-[10px]" data-reasoning-summary={reasoningMode}>
+              <span
+                className="shrink-0 text-[calc(11rem/14)]"
+                data-reasoning-summary={reasoningMode}
+              >
                 {t(
                   reasoningMode === 'follow'
                     ? 'Follow parent'
@@ -948,7 +958,7 @@ export function ModelPicker({
                   </MenuItem>
                 ))}
                 {searchHits.length === 0 && virtualItems.length === 0 && (
-                  <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                  <p className="px-1 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
                     {t('No models found')}
                   </p>
                 )}
@@ -999,7 +1009,7 @@ export function ModelPicker({
                                 {info?.primary ?? provider.name}
                               </span>
                               {info?.secondary && (
-                                <span className="w-full truncate text-left text-[10px] text-muted-foreground/60">
+                                <span className="w-full truncate text-left text-[calc(11rem/14)] text-muted-foreground/60">
                                   {info.secondary}
                                 </span>
                               )}
@@ -1008,7 +1018,7 @@ export function ModelPicker({
                               <Badge
                                 variant="outline"
                                 size="sm"
-                                className="max-w-20 shrink-0 truncate text-[9px] uppercase"
+                                className="max-w-20 shrink-0 truncate text-[calc(11rem/14)] uppercase"
                               >
                                 {info.plan}
                               </Badge>
@@ -1039,7 +1049,7 @@ export function ModelPicker({
                   </MenuGroup>
                 ))}
                 {groups.length === 0 && virtualItems.length === 0 && (
-                  <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                  <p className="px-1 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
                     {t('No models found')}
                   </p>
                 )}
@@ -1050,7 +1060,7 @@ export function ModelPicker({
           {showReasoningControls && (
             <div className="-mx-1 -mb-1 mt-1 border-t p-3">
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1 text-xs">
+                <span className="flex items-center gap-1 text-[calc(11rem/14)]">
                   <Brain className="h-3.5 w-3.5 text-muted-foreground" />
                   {t('Reasoning')}
                 </span>
@@ -1072,7 +1082,7 @@ export function ModelPicker({
                       type="button"
                       size="sm"
                       variant={reasoningMode === mode ? 'default' : 'outline'}
-                      className="h-7 flex-1 px-2 text-xs"
+                      className="h-7 flex-1 px-2 text-[calc(11rem/14)]"
                       aria-pressed={reasoningMode === mode}
                       data-reasoning-mode={mode}
                       disabled={
@@ -1086,7 +1096,7 @@ export function ModelPicker({
                 </div>
               )}
               {reasoningUnsupported && (!reasoningMode || !!currentProvider?.oauthAccountKey) && (
-                <p className="mt-1 text-[10px] text-muted-foreground/70">
+                <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground/70">
                   {t('{{model}} does not support reasoning', { model: current?.label ?? modelId })}
                 </p>
               )}
@@ -1094,7 +1104,10 @@ export function ModelPicker({
               {/* 当前档由滑杆的滑块 + 高亮标签共同表达，不再重复一行"深度：xx"。
                   只有一个可用档时不画滑杆：没有可调范围，禁用态只会让人以为坏了 */}
               {displayedReasoningEnabled && visibleLevels.length === 1 && (
-                <p className="mt-2 text-xs text-muted-foreground" data-thinking-fixed="">
+                <p
+                  className="mt-2 text-[calc(11rem/14)] text-muted-foreground"
+                  data-thinking-fixed=""
+                >
                   {t(LEVEL_LABEL_KEYS[visibleLevels[0]])}
                 </p>
               )}

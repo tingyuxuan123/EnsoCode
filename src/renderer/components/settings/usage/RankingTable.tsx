@@ -37,9 +37,9 @@ export function RankingTable({
   return (
     <div className="rounded-[6px] border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[13px] font-medium">{title}</span>
+        <span className="text-[calc(13rem/14)] font-medium">{title}</span>
         {overflow && (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[calc(11rem/14)] text-muted-foreground">
             {expanded
               ? t('{{total}} items', { total: rows.length })
               : t('Top {{count}} of {{total}}', { count: limit, total: rows.length })}
@@ -47,11 +47,11 @@ export function RankingTable({
         )}
       </div>
       {visible.length === 0 ? (
-        <p className="py-6 text-center text-[12px] text-muted-foreground">{emptyLabel}</p>
+        <p className="py-6 text-center text-[calc(12rem/14)] text-muted-foreground">{emptyLabel}</p>
       ) : (
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[calc(12rem/14)]">
           <thead>
-            <tr className="text-[11px] text-muted-foreground">
+            <tr className="text-[calc(11rem/14)] text-muted-foreground">
               <th className="pb-2 text-left font-normal">{t('Name')}</th>
               <th className="pb-2 text-right font-normal">{t('Cost')}</th>
               <th className="pb-2 text-right font-normal">{t('Token')}</th>

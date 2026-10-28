@@ -39,7 +39,7 @@ const COLORS: Record<SlashKind, string> = {
 
 export function slashChipClass(kind: SlashKind, interactive = false): string {
   return cn(
-    'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 align-middle text-xs font-medium',
+    'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 align-middle text-[calc(11rem/14)] font-medium',
     COLORS[kind],
     interactive && kind === 'skill' && 'hover:bg-info/25',
     interactive && kind === 'goal' && 'hover:bg-warning/35 dark:hover:bg-warning/25',

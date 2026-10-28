@@ -30,7 +30,7 @@ export function OauthLoginStep({ flow, providerLabel, onBack }: OauthLoginStepPr
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-medium">{t('Authorization failed')}</p>
-              <p className="mt-1 break-words text-xs">{flow.state.message}</p>
+              <p className="mt-1 break-words text-[calc(12rem/14)]">{flow.state.message}</p>
             </div>
           </div>
         </div>
@@ -69,7 +69,9 @@ export function OauthLoginStep({ flow, providerLabel, onBack }: OauthLoginStepPr
               {t('Authorizing {{provider}}', { provider: providerLabel })}
             </p>
             {flow.state.progress && (
-              <p className="mt-1 text-xs text-muted-foreground">{t(flow.state.progress)}</p>
+              <p className="mt-1 text-[calc(12rem/14)] text-muted-foreground">
+                {t(flow.state.progress)}
+              </p>
             )}
           </div>
         </div>
@@ -77,7 +79,9 @@ export function OauthLoginStep({ flow, providerLabel, onBack }: OauthLoginStepPr
 
       {flow.state.userCode && (
         <div className="rounded-md border px-4 py-3 text-center">
-          <p className="text-xs text-muted-foreground">{t('Enter this code in your browser')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
+            {t('Enter this code in your browser')}
+          </p>
           <p className="mt-2 select-all font-mono text-xl font-semibold tracking-[0.2em]">
             {flow.state.userCode}
           </p>
@@ -107,7 +111,7 @@ export function OauthLoginStep({ flow, providerLabel, onBack }: OauthLoginStepPr
                   <span>
                     <span className="block text-sm">{option.label}</span>
                     {option.description && (
-                      <span className="block text-xs text-muted-foreground">
+                      <span className="block text-[calc(12rem/14)] text-muted-foreground">
                         {option.description}
                       </span>
                     )}

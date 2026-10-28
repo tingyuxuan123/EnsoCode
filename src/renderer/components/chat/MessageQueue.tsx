@@ -31,11 +31,11 @@ export function MessageQueue({
   return (
     <div
       data-slot="message-queue"
-      className="mb-[6px] flex flex-col rounded-[6px] border border-border/70 bg-muted/45 px-[8px] py-[4px] text-[12px]"
+      className="mb-[6px] flex flex-col rounded-[6px] border border-border/70 bg-muted/45 px-[8px] py-[4px] text-[calc(12rem/14)]"
     >
       {queued.map((message) => (
-        <div key={message.id} className="flex min-h-[28px] items-center gap-[8px]">
-          <span className="shrink-0 text-[11px] text-faint">{t('Queued')}</span>
+        <div key={message.id} className="flex min-h-[calc(28rem/14)] items-center gap-[8px]">
+          <span className="shrink-0 text-[calc(11rem/14)] text-faint">{t('Queued')}</span>
           {editingId === message.id ? (
             <input
               value={draft}

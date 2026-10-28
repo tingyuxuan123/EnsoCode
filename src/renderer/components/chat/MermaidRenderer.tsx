@@ -229,7 +229,7 @@ export function MermaidRenderer({
           type="button"
           onClick={handleReset}
           className={cn(
-            'flex items-center justify-center rounded text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
+            'flex items-center justify-center rounded text-[calc(11rem/14)] transition-colors hover:bg-accent hover:text-accent-foreground',
             pct
           )}
           title={t('Reset zoom')}
@@ -295,13 +295,13 @@ export function MermaidRenderer({
   if (error) {
     return (
       <div className={cn('overflow-x-auto rounded-lg border border-destructive/50', className)}>
-        <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-[calc(11rem/14)] text-destructive">
           <span>{t('Mermaid render error')}</span>
         </div>
         <pre className="p-4 text-sm">
           <code className="block font-mono leading-relaxed text-muted-foreground">{code}</code>
         </pre>
-        <div className="border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <div className="border-t border-border bg-muted/30 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
           {error}
         </div>
       </div>

@@ -107,7 +107,7 @@ function PresetRow({
     <li className="rounded-md border">
       <button
         type="button"
-        className="w-full px-2 py-1.5 text-left text-xs hover:bg-muted/60"
+        className="w-full px-2 py-1.5 text-left text-[calc(11rem/14)] hover:bg-muted/60"
         onClick={onToggle}
       >
         <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ function PresetRow({
           }}
         >
           {preset.args.map((arg) => (
-            <label key={arg.key} className="block text-xs">
+            <label key={arg.key} className="block text-[calc(11rem/14)]">
               <span className="text-muted-foreground">
                 {preset.source === 'builtin' ? t(arg.label) : arg.label}
                 {arg.required ? ' *' : ''}
@@ -182,7 +182,9 @@ function PresetList({ conversationId }: { conversationId: string }) {
   return (
     <section>
       <div className="mb-1.5 flex items-center gap-2">
-        <h3 className="flex-1 text-xs font-medium text-muted-foreground">{t('Presets')}</h3>
+        <h3 className="flex-1 text-[calc(11rem/14)] font-medium text-muted-foreground">
+          {t('Presets')}
+        </h3>
         <Button
           type="button"
           variant="ghost"
@@ -255,12 +257,12 @@ function MemberRow({
     </>
   );
   const childId = member.childId;
-  if (!childId) return <li className="text-xs">{body}</li>;
+  if (!childId) return <li className="text-[calc(11rem/14)]">{body}</li>;
   return (
     <li>
       <button
         type="button"
-        className="w-full rounded px-1 py-0.5 text-left text-xs hover:bg-muted/60"
+        className="w-full rounded px-1 py-0.5 text-left text-[calc(11rem/14)] hover:bg-muted/60"
         onClick={() => openMember(conversationId, childId)}
       >
         {body}
@@ -300,7 +302,7 @@ export function WorkflowView({ conversationId }: { conversationId: string }) {
             <div className="flex items-center gap-2">
               <span className={cn('h-2 w-2 shrink-0 rounded-full', STATUS_CLASS[run.status])} />
               <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{run.name}</h3>
-              <span className="text-xs text-muted-foreground">{t(run.status)}</span>
+              <span className="text-[calc(11rem/14)] text-muted-foreground">{t(run.status)}</span>
               {run.status === 'running' ? (
                 <Button
                   type="button"
@@ -317,8 +319,8 @@ export function WorkflowView({ conversationId }: { conversationId: string }) {
                 </Button>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{run.description}</p>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">{run.description}</p>
+            <p className="mt-2 text-[calc(11rem/14)] text-muted-foreground">
               {t('{{count}} agents', { count: run.members.length })}
             </p>
             <div className="mt-2 space-y-2">
@@ -326,7 +328,7 @@ export function WorkflowView({ conversationId }: { conversationId: string }) {
                 const showPhase = Boolean(group.phase) && group.phase !== groups[index - 1]?.phase;
                 return (
                   <div key={`${group.batch}:${group.phase ?? ''}`}>
-                    <div className="mb-1 flex items-center gap-2 text-xs">
+                    <div className="mb-1 flex items-center gap-2 text-[calc(11rem/14)]">
                       {showPhase ? <span className="font-medium">{group.phase}</span> : null}
                       {group.members.length > 1 ? (
                         <span className="text-muted-foreground">{t('Parallel')}</span>
@@ -345,9 +347,11 @@ export function WorkflowView({ conversationId }: { conversationId: string }) {
                 );
               })}
             </div>
-            {run.error ? <p className="mt-2 text-xs text-destructive">{run.error}</p> : null}
+            {run.error ? (
+              <p className="mt-2 text-[calc(11rem/14)] text-destructive">{run.error}</p>
+            ) : null}
             {run.logs.length > 0 ? (
-              <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
+              <p className="mt-2 whitespace-pre-wrap text-[calc(11rem/14)] text-muted-foreground">
                 {run.logs.join('\n')}
               </p>
             ) : null}

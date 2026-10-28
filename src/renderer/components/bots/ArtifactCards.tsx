@@ -152,7 +152,7 @@ function MediaStrip({ target, media }: { target: BotArtifactTarget; media: BotMe
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: 失败项没有 mediaId，顺序即身份
               key={`failed-${index}`}
-              className="flex w-40 flex-col gap-1 rounded-md border border-destructive/60 border-dashed p-2 text-destructive text-xs"
+              className="flex w-40 flex-col gap-1 rounded-md border border-destructive/60 border-dashed p-2 text-destructive text-[calc(11rem/14)]"
             >
               <span className="flex items-center gap-1 font-medium">
                 <ImageOff className="h-3.5 w-3.5 shrink-0" />
@@ -168,7 +168,7 @@ function MediaStrip({ target, media }: { target: BotArtifactTarget; media: BotMe
         )}
       </div>
       {desktop && (
-        <p className="mt-1 text-warning text-xs">
+        <p className="mt-1 text-warning text-[calc(11rem/14)]">
           {t('Desktop screenshots may capture sensitive content from other windows.')}
         </p>
       )}
@@ -212,7 +212,7 @@ function MediaThumb({
       {label && (
         <span
           className={cn(
-            'absolute top-1 left-1 rounded px-1 text-[10px] leading-4',
+            'absolute top-1 left-1 rounded px-1 text-[calc(11rem/14)] leading-4',
             item.source === 'desktop'
               ? 'bg-warning text-warning-foreground'
               : 'bg-black/60 text-white'
@@ -222,7 +222,7 @@ function MediaThumb({
         </span>
       )}
       {(item.caption || item.name) && (
-        <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pt-3 pb-0.5 text-left text-[10px] text-white">
+        <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pt-3 pb-0.5 text-left text-[calc(11rem/14)] text-white">
           {item.caption ?? item.name}
         </span>
       )}
@@ -250,16 +250,18 @@ function MediaPreviewDialog({
         <DialogHeader>
           <DialogTitle className="flex min-w-0 items-center gap-2 pr-8">
             <span className="truncate">{title}</span>
-            <span className="shrink-0 font-normal text-muted-foreground text-xs">{label}</span>
+            <span className="shrink-0 font-normal text-muted-foreground text-[calc(11rem/14)]">
+              {label}
+            </span>
           </DialogTitle>
         </DialogHeader>
         {item?.source === 'desktop' && (
-          <p className="text-warning text-xs">
+          <p className="text-warning text-[calc(11rem/14)]">
             {t('Desktop screenshots may capture sensitive content from other windows.')}
           </p>
         )}
         {item?.source === 'file' && (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[calc(11rem/14)]">
             {t(
               'Copied into this chat: later edits or deletion of the original do not change it. Deleted together with the chat.'
             )}
@@ -284,7 +286,7 @@ function FileCards({ target, artifacts }: { target: BotArtifactTarget; artifacts
           <div
             key={artifact.rel}
             data-slot="bot-card"
-            className="group/artifact flex max-w-64 items-center gap-1 rounded-md border bg-card py-1 pr-1 pl-2 text-xs"
+            className="group/artifact flex max-w-64 items-center gap-1 rounded-md border bg-card py-1 pr-1 pl-2 text-[calc(11rem/14)]"
           >
             <button
               type="button"
@@ -364,7 +366,7 @@ function ArtifactPreviewDialog({
         <DialogHeader>
           <DialogTitle className="flex min-w-0 items-center gap-2 pr-8">
             <span className="truncate">{artifact?.name}</span>
-            <span className="truncate font-normal text-muted-foreground text-xs">
+            <span className="truncate font-normal text-muted-foreground text-[calc(11rem/14)]">
               {artifact?.rel}
             </span>
             <span className="flex-1" />
@@ -430,7 +432,7 @@ function PreviewBody({ name, content }: { name: string; content: BotArtifactRead
         <iframe title={name} sandbox="" srcDoc={content.text} className="h-full w-full bg-white" />
       )}
       {content?.ok && content.kind === 'text' && (
-        <div className="p-2 text-xs">
+        <div className="p-2 text-[calc(11rem/14)]">
           <ReadFileView path={name} contents={content.text} />
         </div>
       )}

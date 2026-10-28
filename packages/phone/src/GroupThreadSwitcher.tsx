@@ -107,9 +107,11 @@ export function GroupThreadSwitcher({
         </MenuPopup>
       </Menu>
       <Sheet open={listOpen} onOpenChange={setListOpen}>
-        <SheetContent side="bottom" className="max-h-[80vh] pb-safe">
-          <SheetHeader>
-            <SheetTitle>全部话题（{entries.length}）</SheetTitle>
+        <SheetContent side="bottom" className="phone-sheet max-h-[80vh] pb-safe">
+          <SheetHeader className="px-4 pt-7 pb-4">
+            <SheetTitle className="font-semibold text-[15px]">
+              全部话题（{entries.length}）
+            </SheetTitle>
           </SheetHeader>
           <div className="px-4 pb-2">
             <Input

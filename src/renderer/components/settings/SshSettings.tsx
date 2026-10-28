@@ -144,10 +144,13 @@ export function SshSettings() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="ssh.root">
+    <div className="space-y-[24px]" data-slot="settings-page">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="ssh.root"
+      >
         <div>
-          <h2 className="text-[18px] font-semibold">
+          <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
             {t('SSH')}
             <NewSessionBadge
               note={t(
@@ -155,7 +158,7 @@ export function SshSettings() {
               )}
             />
           </h2>
-          <p className="mt-1 text-[13px] text-muted-foreground">
+          <p className="mt-1 text-[calc(13rem/14)] text-muted-foreground">
             {t('Saved hosts for remote projects. Passwords stay in the system keychain.')}
           </p>
         </div>
@@ -164,10 +167,12 @@ export function SshSettings() {
           {t('Add connection')}
         </Button>
       </div>
-      {testHint && <p className="text-[13px] text-muted-foreground">{testHint}</p>}
-      <ul className="divide-y rounded-[6px] border">
+      {testHint && <p className="text-[calc(13rem/14)] text-muted-foreground">{testHint}</p>}
+      <ul className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
         {connections.length === 0 && (
-          <li className="px-3 py-6 text-[13px] text-muted-foreground">{t('No SSH connections yet')}</li>
+          <li className="px-3 py-6 text-[calc(13rem/14)] text-muted-foreground">
+            {t('No SSH connections yet')}
+          </li>
         )}
         {connections.map((connection) => (
           <li
@@ -180,8 +185,8 @@ export function SshSettings() {
               className="min-w-0 flex-1 text-left"
               onClick={() => openEdit(connection)}
             >
-              <div className="truncate text-[13px] font-medium">{connection.name}</div>
-              <div className="truncate text-[12px] text-muted-foreground">
+              <div className="truncate text-[calc(13rem/14)] font-medium">{connection.name}</div>
+              <div className="truncate text-[calc(12rem/14)] text-muted-foreground">
                 {connection.user ? `${connection.user}@` : ''}
                 {connection.host}
                 {connection.port ? `:${connection.port}` : ''} ·{' '}
@@ -209,7 +214,7 @@ export function SshSettings() {
       <SshTimeoutRow />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[500px]">
           <form onSubmit={(event) => void save(event)} className="flex flex-col">
             <DialogHeader>
               <DialogTitle>
@@ -274,7 +279,7 @@ export function SshSettings() {
                   />
                 </Field>
               )}
-              {error && <p className="text-[13px] text-destructive">{error}</p>}
+              {error && <p className="text-[calc(13rem/14)] text-destructive">{error}</p>}
             </DialogPanel>
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
@@ -307,8 +312,8 @@ function SshTimeoutRow() {
       data-settings-row="ssh.timeout"
     >
       <div className="min-w-0">
-        <p className="text-[13px]">{t('SSH timeout')}</p>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-[calc(13rem/14)]">{t('SSH timeout')}</p>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t(
             'Time limit for connection tests, loading remote AGENTS.md, remote folder browsing and file panel actions. Agent tool commands are not affected.'
           )}

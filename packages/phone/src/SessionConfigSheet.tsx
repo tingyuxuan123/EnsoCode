@@ -56,9 +56,9 @@ export function SessionConfigSheet({
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent side="bottom" className="pb-safe">
-        <SheetHeader>
-          <SheetTitle>会话设置</SheetTitle>
+      <SheetContent side="bottom" className="phone-sheet pb-safe">
+        <SheetHeader className="px-4 pt-7 pb-4">
+          <SheetTitle className="font-semibold text-[15px]">会话设置</SheetTitle>
         </SheetHeader>
         <div className="space-y-4 p-4 pt-0">
           <Field label="模型服务">

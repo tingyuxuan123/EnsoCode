@@ -125,10 +125,13 @@ export function ProvidersSettings() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="providers.root">
+    <div className="space-y-[24px]" data-slot="settings-page">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="providers.root"
+      >
         <div>
-          <h3 className="text-[18px] font-semibold">
+          <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
             {t('Model Providers')}
             <NewSessionBadge
               note={t(
@@ -136,7 +139,7 @@ export function ProvidersSettings() {
               )}
             />
           </h3>
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[calc(13rem/14)] text-muted-foreground">
             {t('Manage model API providers for this app')}
           </p>
         </div>
@@ -169,7 +172,7 @@ export function ProvidersSettings() {
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             {t('Create ChatGPT account pool')}
           </Button>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'Pool entries do not show a single account quota. Fixed-account entries remain unchanged.'
             )}
@@ -180,8 +183,8 @@ export function ProvidersSettings() {
       {providers.length === 0 ? (
         <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Server className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 text-[13px] font-medium">{t('No providers yet')}</p>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <p className="mt-3 text-[calc(13rem/14)] font-medium">{t('No providers yet')}</p>
+          <p className="mt-1 text-[calc(12rem/14)] text-muted-foreground">
             {t('Import providers from local apps or use the unified setup to get started')}
           </p>
         </div>
@@ -193,10 +196,10 @@ export function ProvidersSettings() {
             return (
               <div key={group.vendorId} className="rounded-[6px] px-3 py-2">
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+                  <span className="text-[calc(11rem/14)] font-semibold tracking-wide text-muted-foreground">
                     {label}
                   </span>
-                  <span className="text-[11px] text-muted-foreground/60">
+                  <span className="text-[calc(11rem/14)] text-muted-foreground/60">
                     {group.providers.length}
                   </span>
                 </div>
@@ -217,7 +220,7 @@ export function ProvidersSettings() {
                     return (
                       <React.Fragment key={provider.id}>
                         <div
-                          className="group flex items-start justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
+                          className="group flex items-start justify-between gap-[12px] px-[12px] py-[10px] transition-colors hover:bg-accent/50"
                           data-settings-row={`providers.${provider.id}`}
                         >
                           <div className="min-w-0 flex-1 overflow-hidden">
@@ -229,7 +232,7 @@ export function ProvidersSettings() {
                               )}
                               <span
                                 className={cn(
-                                  'truncate text-[13px] font-medium',
+                                  'truncate text-[calc(13rem/14)] font-medium',
                                   !provider.enabled && 'text-muted-foreground line-through'
                                 )}
                               >
@@ -239,22 +242,25 @@ export function ProvidersSettings() {
                                 account?.plan && (
                                   <Badge
                                     variant="outline"
-                                    className="shrink-0 text-[10px] uppercase"
+                                    className="shrink-0 text-[calc(11rem/14)] uppercase"
                                   >
                                     {account.plan}
                                   </Badge>
                                 )
                               ) : (
-                                <Badge variant="outline" className="shrink-0 text-[11px]">
+                                <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)]">
                                   {API_KIND_LABELS[provider.api] ?? provider.api}
                                 </Badge>
                               )}
                               {provider.importedFrom && (
-                                <Badge variant="secondary" className="shrink-0 text-[11px]">
+                                <Badge
+                                  variant="secondary"
+                                  className="shrink-0 text-[calc(11rem/14)]"
+                                >
                                   {provider.importedFrom}
                                 </Badge>
                               )}
-                              <span className="min-w-0 truncate text-[12px] text-muted-foreground">
+                              <span className="min-w-0 truncate text-[calc(12rem/14)] text-muted-foreground">
                                 {[
                                   isSubscription ? undefined : provider.baseUrl,
                                   provider.oauthAccountPool
@@ -271,7 +277,7 @@ export function ProvidersSettings() {
                               </span>
                             </div>
                             {isClassifierOnlyProvider(provider) && (
-                              <p className="mt-1 text-[12px] text-muted-foreground">
+                              <p className="mt-1 text-[calc(12rem/14)] text-muted-foreground">
                                 {t('Classification only, not for chat')}
                               </p>
                             )}
@@ -313,7 +319,7 @@ export function ProvidersSettings() {
                           </div>
                         </div>
                         {removeError?.providerId === provider.id && (
-                          <div className="flex items-center justify-between gap-2 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[12px] text-destructive">
+                          <div className="flex items-center justify-between gap-2 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[calc(12rem/14)] text-destructive">
                             <span className="min-w-0 truncate">
                               {t('Sign-out failed: {{message}}', { message: removeError.message })}
                             </span>
@@ -321,7 +327,7 @@ export function ProvidersSettings() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-6 px-2 text-[11px]"
+                                className="h-6 px-2 text-[calc(11rem/14)]"
                                 onClick={() => void performRemove(provider)}
                               >
                                 {t('Retry')}
@@ -329,7 +335,7 @@ export function ProvidersSettings() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 px-2 text-[11px] text-destructive hover:text-destructive"
+                                className="h-6 px-2 text-[calc(11rem/14)] text-destructive hover:text-destructive"
                                 onClick={() => void performRemove(provider, { skipLogout: true })}
                               >
                                 {t('Delete anyway')}

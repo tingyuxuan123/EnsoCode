@@ -90,13 +90,13 @@ export function BrowserDownloadsPanel({
             />
           </div>
           {records.error && (
-            <p role="alert" className="break-words text-xs text-destructive">
+            <p role="alert" className="break-words text-[calc(11rem/14)] text-destructive">
               {records.error}
             </p>
           )}
           <div aria-busy={records.loading} className="min-h-32 space-y-1">
             {records.loading && records.items.length === 0 && (
-              <p role="status" className="py-2 text-xs text-muted-foreground">
+              <p role="status" className="py-2 text-[calc(11rem/14)] text-muted-foreground">
                 {t('Loading browser records…')}
               </p>
             )}
@@ -104,7 +104,7 @@ export function BrowserDownloadsPanel({
               <div className="rounded-md border border-dashed px-3 py-8 text-center">
                 <Download className="mx-auto size-5 text-muted-foreground" />
                 <p className="mt-3 font-medium text-sm">{t('No browser downloads')}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">
                   {t('Files downloaded from web pages will appear here.')}
                 </p>
               </div>
@@ -120,7 +120,10 @@ export function BrowserDownloadsPanel({
                       <p className="truncate text-sm font-medium" title={item.filename}>
                         {item.filename}
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground" title={item.url}>
+                      <p
+                        className="mt-0.5 truncate text-[calc(11rem/14)] text-muted-foreground"
+                        title={item.url}
+                      >
                         {item.url}
                       </p>
                     </div>
@@ -214,7 +217,9 @@ export function BrowserDownloadsPanel({
                     />
                   )}
                   {item.error && (
-                    <p className="mt-2 break-words text-xs text-destructive">{item.error}</p>
+                    <p className="mt-2 break-words text-[calc(11rem/14)] text-destructive">
+                      {item.error}
+                    </p>
                   )}
                 </div>
               );

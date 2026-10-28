@@ -96,7 +96,7 @@ export function VoiceModelList() {
   if (!status) return null;
   if (status.state === 'unsupported') {
     return (
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t('Voice input is not available on this platform.')}
       </p>
     );
@@ -126,7 +126,7 @@ export function VoiceModelList() {
   const selectedModel = status.models.find((model) => model.id === selected);
   return (
     <div className="space-y-1.5" data-settings-row="tools.voiceModel">
-      <p className="text-[13px]">{t('Speech model')}</p>
+      <p className="text-[calc(13rem/14)]">{t('Speech model')}</p>
       <div role="radiogroup" className="divide-y rounded-[6px] border">
         {status.models.map((model) => {
           const active = model.id === selected;
@@ -151,7 +151,7 @@ export function VoiceModelList() {
                   {active ? <span className="size-2 rounded-full bg-primary" /> : null}
                 </span>
                 <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-1.5 text-[13px]">
+                  <span className="flex flex-wrap items-center gap-1.5 text-[calc(13rem/14)]">
                     {t(MODEL_TEXT[model.id].name)}
                     {model.remote ? (
                       <Badge variant="warning" size="sm">
@@ -167,12 +167,12 @@ export function VoiceModelList() {
                       </Badge>
                     ) : null}
                   </span>
-                  <span className="block text-muted-foreground text-[12px]">
+                  <span className="block text-muted-foreground text-[calc(12rem/14)]">
                     {t(MODEL_TEXT[model.id].description)}
                   </span>
                   <span
                     className={cn(
-                      'block text-[12px]',
+                      'block text-[calc(12rem/14)]',
                       error?.modelId === model.id
                         ? 'text-destructive'
                         : model.remote
@@ -198,7 +198,7 @@ export function VoiceModelList() {
         })}
       </div>
       {status.state !== 'ready' && status.state !== 'downloading' && !selectedModel?.remote ? (
-        <p className="text-muted-foreground text-[12px]">
+        <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t('Download the selected model to start using voice input.')}
         </p>
       ) : null}
@@ -218,8 +218,8 @@ function GeminiKeySetting() {
   const setValue = useSettingsStore((state) => state.setVoiceGeminiApiKey);
   return (
     <div className="space-y-1.5 pt-2" data-settings-row="voice.geminiApiKey">
-      <p className="text-[13px]">{t('Gemini API key')}</p>
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-[calc(13rem/14)]">{t('Gemini API key')}</p>
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t('Create one for free in Google AI Studio.')}
       </p>
       <Input
@@ -241,8 +241,8 @@ function VoiceVocabularySetting() {
   const setValue = useSettingsStore((state) => state.setVoiceVocabulary);
   return (
     <div className="space-y-1.5 pt-2" data-settings-row="voice.vocabulary">
-      <p className="text-[13px]">{t('Custom vocabulary')}</p>
-      <p className="text-muted-foreground text-[12px]">
+      <p className="text-[calc(13rem/14)]">{t('Custom vocabulary')}</p>
+      <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t(
           'One term per line, up to 100. Helps with names and code terms such as useEffect or pnpm.'
         )}
@@ -299,8 +299,8 @@ export function VoiceCorrectionSettings() {
     <div className="space-y-2" data-settings-row="tools.voiceCorrection">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13px]">{t('Correct with a language model')}</p>
-          <p className="text-muted-foreground text-[12px]">
+          <p className="text-[calc(13rem/14)]">{t('Correct with a language model')}</p>
+          <p className="text-muted-foreground text-[calc(12rem/14)]">
             {t(
               'Fixes homophones, code terms and number formats after recognition. Adds about 1-3 seconds; the raw text is kept if it fails.'
             )}
@@ -311,7 +311,7 @@ export function VoiceCorrectionSettings() {
       {enabled ? (
         <>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px]">{t('Correction model')}</p>
+            <p className="text-[calc(13rem/14)]">{t('Correction model')}</p>
             <Select
               value={modelId}
               items={items}
@@ -333,7 +333,7 @@ export function VoiceCorrectionSettings() {
             <div className="flex items-center justify-between gap-3">
               <p
                 className={cn(
-                  'text-[12px]',
+                  'text-[calc(12rem/14)]',
                   selected.state === 'missing' ? 'text-destructive' : 'text-muted-foreground'
                 )}
               >
@@ -357,7 +357,7 @@ export function VoiceCorrectionSettings() {
           ) : null}
           {modelId === 'remote' && candidates.length > 0 ? (
             <div className="flex items-center justify-between gap-3">
-              <p className="text-muted-foreground text-[12px]">
+              <p className="text-muted-foreground text-[calc(12rem/14)]">
                 {t('A fast, inexpensive model is enough.')}
               </p>
               <div className="flex shrink-0 items-center gap-1">
@@ -396,11 +396,13 @@ export function VoiceInputSettings() {
   const enabled = useSettingsStore((state) => state.voiceInputEnabled);
   const setEnabled = useSettingsStore((state) => state.setVoiceInputEnabled);
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div className="flex items-start justify-between gap-4" data-settings-row="voice.root">
         <div>
-          <h3 className="font-semibold text-[18px]">{t('Voice input')}</h3>
-          <p className="text-muted-foreground text-[13px]">
+          <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
+            {t('Voice input')}
+          </h3>
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t(
               'Adds a microphone to the composer on this computer and on paired phones. Local models transcribe speech on this computer.'
             )}
@@ -470,7 +472,7 @@ function MicrophoneSetting() {
   }
   return (
     <div className="flex items-center justify-between gap-3" data-settings-row="voice.microphone">
-      <p className="text-[13px]">{t('Microphone')}</p>
+      <p className="text-[calc(13rem/14)]">{t('Microphone')}</p>
       <Select value={deviceId} items={items} onValueChange={(value) => setDeviceId(String(value))}>
         <SelectTrigger className="w-64">
           <SelectValue />

@@ -269,8 +269,8 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
           size="lg"
         />
         <div className="min-w-0">
-          <div className="truncate font-medium text-[14px]">{bot.name}</div>
-          <div className="truncate text-[11px] text-muted-foreground">{bot.title}</div>
+          <div className="truncate font-medium text-[calc(14rem/14)]">{bot.name}</div>
+          <div className="truncate text-[calc(11rem/14)] text-muted-foreground">{bot.title}</div>
           <div className="mt-1 flex flex-wrap gap-1.5">
             <Tooltip>
               <TooltipTrigger
@@ -309,7 +309,9 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
             <div>
               <FieldLabel hint={t('Used for @ in groups; must be unique')}>{t('Name')}</FieldLabel>
               <Input value={form.name} onChange={(event) => patch({ name: event.target.value })} />
-              {nameIssue && <p className="mt-1 text-destructive text-xs">{nameIssue}</p>}
+              {nameIssue && (
+                <p className="mt-1 text-destructive text-[calc(11rem/14)]">{nameIssue}</p>
+              )}
             </div>
             <div>
               <FieldLabel>{t('Title')}</FieldLabel>
@@ -453,7 +455,9 @@ function SessionList({
   }, [chat.id, botId]);
   if (sessions === null) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
   if (sessions.length === 0)
-    return <p className="text-muted-foreground text-xs">{t('No conversations yet')}</p>;
+    return (
+      <p className="text-muted-foreground text-[calc(11rem/14)]">{t('No conversations yet')}</p>
+    );
   return (
     <div className="space-y-1">
       {sessions.map((session, index) => (
@@ -462,7 +466,7 @@ function SessionList({
           type="button"
           onClick={() => onOpen(session.conversationId)}
           data-slot="bot-card-button"
-          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)] hover:bg-muted"
         >
           <span>{t('Conversation {{n}}', { n: sessions.length - index })}</span>
           <span className="text-muted-foreground">

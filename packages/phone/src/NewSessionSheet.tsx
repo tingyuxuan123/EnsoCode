@@ -104,9 +104,9 @@ export function NewSessionSheet({
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent side="bottom" className="pb-safe">
-        <SheetHeader>
-          <SheetTitle>新建会话</SheetTitle>
+      <SheetContent side="bottom" className="phone-sheet pb-safe">
+        <SheetHeader className="px-4 pt-7 pb-4">
+          <SheetTitle className="font-semibold text-[15px]">新建会话</SheetTitle>
         </SheetHeader>
         <div className="space-y-4 p-4 pt-0">
           <Field label="项目">

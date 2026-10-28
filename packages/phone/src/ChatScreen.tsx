@@ -34,7 +34,7 @@ import {
 } from '@/components/chat/MessageTimeline';
 import { RetryBar } from '@/components/chat/RetryBar';
 import { TaskBar } from '@/components/chat/TaskBar';
-import { TodoBar } from '@/components/chat/TodoBar';
+import { usePinnedTodos } from '@/components/chat/TodoBar';
 import { cn } from '@/lib/utils';
 import { buildTimeline } from '@/stores/sessions/timeline';
 import { BotArtifacts } from './BotArtifacts';
@@ -205,6 +205,7 @@ export function ChatScreen(props: Props) {
         }
       : null
   );
+  const pinnedTodos = usePinnedTodos(sessionId ?? '');
 
   const timeline = useMemo(
     () =>
@@ -420,7 +421,7 @@ export function ChatScreen(props: Props) {
             virtualize={false}
             historyLoading={props.historyLoading}
             hasOlder={props.hasOlder}
-            firstItemIndex={minIndex ?? 0}
+            olderCursor={minIndex ?? 0}
             onStartReached={props.hasOlder ? loadOlder : undefined}
           />
         )}
@@ -442,13 +443,13 @@ export function ChatScreen(props: Props) {
               {props.goal && !readOnly && (
                 <GoalBar conversationId={sessionId} goal={{ ...props.goal, noProgressRuns: 0 }} />
               )}
-              <TodoBar key={sessionId} conversationId={sessionId} />
               {/* 后台任务 / subagent 胶囊：停止按钮经 stub 发 pair 命令 */}
               <TaskBar
                 sessionId={sessionId}
                 tasks={view?.tasks ?? []}
                 subagents={view?.subagents ?? []}
                 readOnly={props.deviceReadOnly}
+                todos={pinnedTodos}
               />
               {bot?.outbox}
               {bot?.notice && (

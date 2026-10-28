@@ -39,16 +39,16 @@ export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBar
   return (
     <div
       data-slot="ask-bar"
-      className="mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[12px]"
+      className="mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[calc(12rem/14)]"
     >
       <div className="flex items-start gap-2">
-        <MessageCircleQuestion className="mt-[2px] size-[14px] shrink-0 text-primary" />
-        <span className="min-w-0 flex-1 text-[13px] leading-[20px] whitespace-pre-wrap">
+        <MessageCircleQuestion className="mt-[2px] size-[calc(14rem/14)] shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 text-[calc(13rem/14)] leading-[calc(20rem/14)] whitespace-pre-wrap">
           {active.question}
         </span>
         <RequestCountdown remainingMs={remainingMs} expiredLabel="Timed out · no answer" />
         {asks.length > 1 && (
-          <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+          <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground tabular-nums">
             1/{asks.length}
           </span>
         )}
@@ -61,7 +61,7 @@ export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBar
               type="button"
               disabled={disabled}
               onClick={() => answer(option)}
-              className="rounded-[6px] border border-border/70 px-[10px] py-[4px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              className="rounded-[6px] border border-border/70 px-[10px] py-[4px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
               {option}
             </button>
@@ -79,13 +79,13 @@ export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBar
           }}
           disabled={disabled}
           placeholder={t('Type an answer…')}
-          className="h-[28px] min-w-0 flex-1 rounded-[6px] border bg-background px-[8px] text-[12px] outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+          className="h-[calc(28rem/14)] min-w-0 flex-1 rounded-[6px] border bg-background px-[8px] text-[calc(12rem/14)] outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
         />
         <button
           type="button"
           disabled={disabled || !text.trim()}
           onClick={() => answer(text)}
-          className="flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="flex size-[calc(28rem/14)] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
         >
           <Send className="h-3.5 w-3.5" />
         </button>

@@ -23,7 +23,8 @@ export function MemorySpaceList({ spaceId, emptyText }: { spaceId: string; empty
   }, [load]);
 
   if (items === null) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-  if (items.length === 0) return <p className="text-muted-foreground text-xs">{emptyText}</p>;
+  if (items.length === 0)
+    return <p className="text-muted-foreground text-[calc(11rem/14)]">{emptyText}</p>;
   return (
     <div className="space-y-1.5">
       {items.map((item) => (
@@ -96,8 +97,10 @@ function MemoryRow({ item, onDeleted }: { item: MemoryListItem; onDeleted: () =>
       className="group flex items-start gap-2 rounded-md border bg-card px-2.5 py-2"
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-xs">{item.title}</div>
-        <div className="line-clamp-3 text-muted-foreground text-xs">{item.contentSummary}</div>
+        <div className="truncate font-medium text-[calc(11rem/14)]">{item.title}</div>
+        <div className="line-clamp-3 text-muted-foreground text-[calc(11rem/14)]">
+          {item.contentSummary}
+        </div>
       </div>
       <div className="flex shrink-0 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
         <button

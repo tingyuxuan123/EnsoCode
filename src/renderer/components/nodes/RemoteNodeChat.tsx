@@ -118,9 +118,9 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
   return (
     <ChatHostContext.Provider value={host}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <header className="flex h-[36px] shrink-0 items-center gap-2 border-b bg-muted/30 px-4">
+        <header className="flex h-[calc(36rem/14)] shrink-0 items-center gap-2 border-b bg-muted/30 px-4">
           <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="shrink-0 text-muted-foreground text-xs">{node.label}</span>
+          <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">{node.label}</span>
           <NodeDot node={node} />
           {entry && (
             <>
@@ -129,7 +129,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
                 {entry.title || t('New conversation')}
               </span>
               {entry.projectName && (
-                <span className="truncate font-mono text-muted-foreground text-xs">
+                <span className="truncate font-mono text-muted-foreground text-[calc(11rem/14)]">
                   {entry.projectName}
                 </span>
               )}
@@ -137,7 +137,12 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
           )}
           <div className="flex-1" />
           {banner && (
-            <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px]', node.hostOnline ? 'text-muted-foreground' : 'bg-warning/10 text-warning')}>
+            <span
+              className={cn(
+                'shrink-0 rounded-md px-2 py-0.5 text-[calc(11rem/14)]',
+                node.hostOnline ? 'text-muted-foreground' : 'bg-warning/10 text-warning'
+              )}
+            >
               {banner}
             </span>
           )}
@@ -223,7 +228,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
                       onThinkingChange={props.onSetThinking}
                     />
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[calc(11rem/14)] text-muted-foreground">
                       {entry?.modelId ?? ''}
                     </span>
                   )
@@ -263,7 +268,7 @@ function TabPill({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+        'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[calc(11rem/14)] transition-colors',
         active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50'
       )}
     >

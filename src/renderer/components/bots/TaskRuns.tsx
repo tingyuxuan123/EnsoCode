@@ -51,7 +51,7 @@ export function TaskRunAppends({ appends }: { appends: readonly DelegationAppend
           </span>
           <span
             className={cn(
-              'shrink-0 rounded px-1.5 text-[11px]',
+              'shrink-0 rounded px-1.5 text-[calc(11rem/14)]',
               append.ok === undefined
                 ? 'bg-info/15 text-info'
                 : append.ok
@@ -87,7 +87,7 @@ export function TaskRuns({
   const nameOf = (id: string) => bots.get(id)?.name ?? t('Deleted member');
   return (
     <section className="mt-1.5 border-t pt-1.5">
-      <h5 className="mb-1 text-[11px] text-muted-foreground">
+      <h5 className="mb-1 text-[calc(11rem/14)] text-muted-foreground">
         {t('Run history')} · {rows.length}
       </h5>
       <ul className="space-y-1">
@@ -101,7 +101,7 @@ export function TaskRuns({
                 <span className="text-foreground">{nameOf(run.botId)}</span>
                 <span>· {run.nested ? t('Sub-delegation') : triggerText(run.trigger, t)}</span>
                 {time.queued ? (
-                  <span className="rounded bg-info/15 px-1.5 text-[11px] text-info">
+                  <span className="rounded bg-info/15 px-1.5 text-[calc(11rem/14)] text-info">
                     {t('Queued {{time}}', { time: formatElapsed(time.ms) })}
                   </span>
                 ) : (

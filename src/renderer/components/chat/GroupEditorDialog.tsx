@@ -200,7 +200,7 @@ export function GroupEditorDialog({
                     </label>
                   ))}
                   {visibleProjects.length === 0 && (
-                    <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                    <p className="px-2 py-3 text-center text-[calc(11rem/14)] text-muted-foreground">
                       {t('No matching projects found')}
                     </p>
                   )}

@@ -248,14 +248,14 @@ function HoldOverlay({
           )}
         >
           {preview ? (
-            <p data-testid="voice-partial" className="text-[15px] leading-relaxed">
+            <p data-testid="voice-partial" className="text-[calc(15rem/14)] leading-relaxed">
               {preview}
             </p>
           ) : phase === 'recording' ? (
             <p className="text-sm">{t('Speak now')}</p>
           ) : null}
           {busy || phase === 'starting' ? (
-            <span className="flex items-center gap-1.5 text-xs opacity-85">
+            <span className="flex items-center gap-1.5 text-[calc(11rem/14)] opacity-85">
               <Spinner aria-hidden className="size-3.5" />
               {t(
                 phase === 'starting'
@@ -288,7 +288,7 @@ function HoldOverlay({
           >
             <X className="size-6" />
           </span>
-          <p className="mb-5 text-white/80 text-xs">
+          <p className="mb-5 text-white/80 text-[calc(11rem/14)]">
             {t(cancelling ? 'Release to cancel' : 'Slide up to cancel')}
           </p>
           <div
@@ -298,7 +298,7 @@ function HoldOverlay({
             )}
           >
             <span className="text-sm">{t('Release to finish')}</span>
-            <span className="mt-1 text-xs tabular-nums opacity-60">
+            <span className="mt-1 text-[calc(11rem/14)] tabular-nums opacity-60">
               {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
             </span>
           </div>

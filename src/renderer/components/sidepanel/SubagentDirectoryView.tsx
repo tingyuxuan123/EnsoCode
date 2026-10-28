@@ -41,7 +41,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
   return (
     <div className="h-full overflow-y-auto bg-background p-3">
       <h2 className="text-sm font-medium">{t('Agents')}</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">
         {t('Recorded child sessions, not a complete run history.')}
       </p>
       {!parentExists || !entries.length ? (
@@ -50,7 +50,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
           <p className="mt-3 text-sm font-medium">
             {parentExists ? t('No subagents yet') : t('Parent conversation is unavailable.')}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">
             {t('Subagent sessions appear here when they are created.')}
           </p>
         </div>
@@ -65,7 +65,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
           ({ label, items }) =>
             items.length > 0 && (
               <section key={label} className="mt-4">
-                <h3 className="mb-1 px-2 text-xs font-medium text-muted-foreground">
+                <h3 className="mb-1 px-2 text-[calc(11rem/14)] font-medium text-muted-foreground">
                   {label} · {items.length}
                 </h3>
                 {[
@@ -79,7 +79,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
                   ({ label: lifecycle, items: members }) =>
                     members.length > 0 && (
                       <div key={lifecycle} className="mt-2">
-                        <h4 className="px-2 text-xs text-muted-foreground">
+                        <h4 className="px-2 text-[calc(11rem/14)] text-muted-foreground">
                           {lifecycle} · {members.length}
                         </h4>
                         {members.map((entry) => (
@@ -93,14 +93,14 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
                                 <p className="truncate text-sm" title={entry.title}>
                                   {entry.title}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-[calc(11rem/14)] text-muted-foreground">
                                   {entry.origin === 'manual'
                                     ? t('Created manually')
                                     : entry.origin === 'agent-tool'
                                       ? t('Dispatched by agent')
                                       : t('Dispatched via mention')}
                                 </p>
-                                <p className="truncate text-xs text-muted-foreground">
+                                <p className="truncate text-[calc(11rem/14)] text-muted-foreground">
                                   {hasEnded(entry)
                                     ? t('Ended')
                                     : standingBy(entry)
@@ -109,7 +109,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
                                   {entry.modelId ? ` · ${entry.modelId}` : ''}
                                 </p>
                                 {entry.ended && entry.status !== 'ended' && (
-                                  <p className="text-xs text-muted-foreground">
+                                  <p className="text-[calc(11rem/14)] text-muted-foreground">
                                     {t('Last run: {{status}}', {
                                       status: statusLabel(entry.status),
                                     })}
@@ -121,7 +121,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-7 text-xs"
+                                className="h-7 text-[calc(11rem/14)]"
                                 onClick={() =>
                                   addSidePanelSubagent({
                                     parentConversationId,
@@ -136,7 +136,7 @@ export function SubagentDirectoryView({ parentConversationId }: { parentConversa
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 text-xs"
+                                  className="h-7 text-[calc(11rem/14)]"
                                   onClick={() => {
                                     const state = useSessionsStore.getState();
                                     if (

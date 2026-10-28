@@ -288,13 +288,15 @@ export function BotSidebar({
 
   return (
     <aside
-      className="flex shrink-0 flex-col overflow-hidden border-t border-r bg-nav"
+      className="flex shrink-0 flex-col overflow-hidden border-line border-t border-r bg-nav"
       style={{ width }}
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-2">
         <SectionHeader title={t('Group chats')} onAdd={onNewGroup} addLabel={t('New group chat')} />
         {groups.length === 0 && (
-          <p className="px-2 py-1 text-[11px] text-muted-foreground">{t('No group chats yet')}</p>
+          <p className="px-2 py-1 text-[calc(11rem/14)] text-muted-foreground">
+            {t('No group chats yet')}
+          </p>
         )}
         {groups.map(({ chat, summary }) => (
           <ChatContextMenu
@@ -325,7 +327,9 @@ export function BotSidebar({
 
         <SectionHeader title={t('Members')} onAdd={onNewMember} addLabel={t('New member')} />
         {members.length === 0 && (
-          <p className="px-2 py-1 text-[11px] text-muted-foreground">{t('No members yet')}</p>
+          <p className="px-2 py-1 text-[calc(11rem/14)] text-muted-foreground">
+            {t('No members yet')}
+          </p>
         )}
         {members.map(({ bot, row }) => (
           <ChatContextMenu
@@ -411,7 +415,7 @@ export function BotSidebar({
           })}
       </div>
 
-      <div className="@container flex shrink-0 items-center justify-between border-t p-2">
+      <div className="@container flex shrink-0 items-center justify-between border-line border-t p-2">
         <button
           type="button"
           onClick={onCollapse}
@@ -587,7 +591,7 @@ export function CountBadge({ count, className }: { count: number; className?: st
   return (
     <span
       className={cn(
-        'min-w-4 rounded-full bg-destructive px-1 text-center font-medium text-[10px] text-destructive-foreground leading-4',
+        'min-w-4 rounded-full bg-destructive px-1 text-center font-medium text-[calc(11rem/14)] text-destructive-foreground leading-4',
         className
       )}
     >
@@ -608,10 +612,12 @@ function ArchivedGroup({
   return (
     <div>
       <div className="flex items-center gap-2 pr-0.5 pl-2">
-        <span className="min-w-0 flex-1 truncate py-1 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+        <span className="min-w-0 flex-1 truncate py-1 font-medium text-[calc(11rem/14)] text-muted-foreground uppercase tracking-wide">
           {title}
         </span>
-        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">{count}</span>
+        <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground tabular-nums">
+          {count}
+        </span>
       </div>
       <div className="flex flex-col gap-y-0.5">{children}</div>
     </div>
@@ -648,7 +654,9 @@ function ArchivedRow({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm">{title}</span>
           {preview && (
-            <span className="block truncate text-muted-foreground text-xs">{preview}</span>
+            <span className="block truncate text-muted-foreground text-[calc(11rem/14)]">
+              {preview}
+            </span>
           )}
         </span>
       </button>
@@ -681,7 +689,7 @@ function SectionHeader({
   onToggle?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-2 pt-2 pb-1 text-[11px] text-muted-foreground">
+    <div className="flex items-center justify-between px-2 pt-2 pb-1 text-[calc(11rem/14)] text-muted-foreground">
       {onToggle ? (
         <button type="button" onClick={onToggle} className="hover:text-foreground">
           {title}
@@ -734,6 +742,7 @@ function ChatRow({
       role="button"
       tabIndex={0}
       {...rest}
+      aria-label={title}
       onKeyDown={(event) => {
         if (event.key === 'Enter') rest.onClick?.(event as never);
       }}
@@ -746,17 +755,23 @@ function ChatRow({
       {avatar}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className={cn('min-w-0 truncate text-[13px]', active && 'font-medium')}>{title}</span>
+          <span className={cn('min-w-0 truncate text-[calc(13rem/14)]', active && 'font-medium')}>
+            {title}
+          </span>
           {pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
           <span className="flex-1" />
           {pending > 0 ? (
             <CountBadge count={pending} />
           ) : (
-            meta && <span className="shrink-0 text-[10px] text-muted-foreground">{meta}</span>
+            meta && (
+              <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">{meta}</span>
+            )
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="mt-0.5 min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{preview}</span>
+          <span className="mt-0.5 min-w-0 flex-1 truncate text-[calc(11rem/14)] text-muted-foreground">
+            {preview}
+          </span>
           {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-info" />}
           {action && (
             <button
@@ -765,7 +780,7 @@ function ChatRow({
                 event.stopPropagation();
                 action.onClick();
               }}
-              className="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:bg-background hover:text-foreground"
+              className="shrink-0 rounded px-1.5 text-[calc(11rem/14)] text-muted-foreground hover:bg-background hover:text-foreground"
             >
               {action.label}
             </button>

@@ -1,6 +1,7 @@
 import { useDraggable } from '@dnd-kit/core';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
+import { projectDisplayName } from '@shared/projectName';
 import type { FilesDirEntry } from '@shared/types';
 import type { ProjectedMessage } from '@shared/types/agent';
 import { ChevronRight, Code2, Eye, RefreshCw, Search } from 'lucide-react';
@@ -711,8 +712,13 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
   return (
     <EditProvider createEditor={createEditor}>
       <div className="flex h-full min-h-0 bg-panel">
-        <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r text-sm">
-          <div className="flex justify-end gap-0.5 px-1 py-0.5">
+        <div className="flex w-[40%] min-w-[140px] max-w-[224px] shrink-0 flex-col overflow-hidden border-r border-line text-[calc(12rem/14)]">
+          <div className="flex h-[calc(36rem/14)] shrink-0 items-center justify-end gap-0.5 border-b border-line px-1">
+            {project && (
+              <span className="mr-auto min-w-0 truncate pl-2 text-[calc(11rem/14)] text-muted-foreground">
+                {projectDisplayName(project)}
+              </span>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -860,7 +866,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
           {openDocs.length > 0 && (
             <div
               ref={tabStripRef}
-              className="flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1"
+              className="flex h-[calc(36rem/14)] shrink-0 items-stretch overflow-x-auto border-b border-line"
             >
               {openDocs.map((doc) => {
                 const renamingHere =
@@ -870,9 +876,9 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
                     type="button"
                     data-file-tab={doc.rel}
                     className={cn(
-                      'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs',
+                      'flex items-center gap-1.5 border-r border-line px-3 text-[calc(12rem/14)]',
                       doc.rel === activeRel
-                        ? 'bg-accent font-medium'
+                        ? 'bg-background font-medium'
                         : 'text-muted-foreground hover:bg-accent/50'
                     )}
                     onClick={() => {
@@ -995,7 +1001,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
             </div>
           )}
           {active?.conflict && (
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b px-2 py-1 text-[11px]">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b px-2 py-1 text-[calc(11rem/14)]">
               <span>{t('This file changed on disk.')}</span>
               <button
                 type="button"
@@ -1225,7 +1231,7 @@ function NameDraft({
       ref={inputRef}
       className={
         variant === 'tab'
-          ? 'max-w-36 rounded-sm border bg-background px-1 py-0 text-xs outline-none'
+          ? 'max-w-36 rounded-sm border bg-background px-1 py-0 text-[calc(11rem/14)] outline-none'
           : 'mx-1 my-0.5 w-[calc(100%-0.5rem)] rounded-sm border bg-background px-1 py-0.5 text-sm outline-none'
       }
       style={variant === 'tree' ? { marginLeft: 8 + depth * 12 } : undefined}

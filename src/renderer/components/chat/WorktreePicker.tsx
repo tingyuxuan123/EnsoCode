@@ -393,7 +393,7 @@ export function WorktreePicker({
         <PopoverTrigger
           ref={triggerRef}
           disabled={disabled}
-          className="flex h-[28px] min-w-0 max-w-52 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          className="flex h-[calc(28rem/14)] min-w-0 max-w-52 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
           title={
             conversation.worktree
               ? `${pickerLabel}\n${worktreeHoverText(conversation.worktree, statuses[conversationId], t)}`
@@ -407,7 +407,7 @@ export function WorktreePicker({
           ) : (
             <House className="h-3 w-3 shrink-0" />
           )}
-          <span className="min-w-0 truncate font-mono text-[11px]">{pickerLabel}</span>
+          <span className="min-w-0 font-mono text-[calc(11rem/14)] truncate">{pickerLabel}</span>
           <ChevronDown className="h-3 w-3 shrink-0" />
         </PopoverTrigger>
         <PopoverPopup
@@ -423,7 +423,7 @@ export function WorktreePicker({
                 type="button"
                 onClick={() => setBranchView(false)}
                 aria-label={t('Back to workspaces')}
-                className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)] text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                 {t('Local branches')}
@@ -469,7 +469,7 @@ export function WorktreePicker({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{option.name}</span>
                     {option.hint && (
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="block truncate text-[calc(11rem/14)] text-muted-foreground">
                         {option.hint}
                       </span>
                     )}
@@ -479,7 +479,7 @@ export function WorktreePicker({
               ))}
               {canAttach && candidates.length > 0 && (
                 <div className="mt-1 border-t pt-1">
-                  <p className="px-2 py-1 text-[11px] text-muted-foreground">
+                  <p className="px-2 py-1 text-[calc(11rem/14)] text-muted-foreground">
                     {t('Existing worktrees')}
                   </p>
                   <div className="max-h-56 overflow-y-auto">
@@ -498,7 +498,7 @@ export function WorktreePicker({
                         <GitBranch className="h-3.5 w-3.5 shrink-0" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate">{worktreeDisplayName(worktree)}</span>
-                          <span className="block truncate text-xs text-muted-foreground">
+                          <span className="block truncate text-[calc(11rem/14)] text-muted-foreground">
                             {worktree.path}
                           </span>
                         </span>
@@ -541,7 +541,7 @@ export function WorktreePicker({
                   type="button"
                   disabled={disabled}
                   onClick={() => setBranchView(true)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >
                   <GitBranch className="h-3.5 w-3.5 shrink-0" />
                   <span className="flex-1">{t('Switch branch')}</span>

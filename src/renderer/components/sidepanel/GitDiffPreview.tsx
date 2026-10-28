@@ -69,7 +69,7 @@ export function GitDiffPreview({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {message ? (
         <div
-          className="flex h-full items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground"
+          className="flex h-full items-center justify-center px-4 py-8 text-center text-[calc(11rem/14)] text-muted-foreground"
           role="status"
         >
           {message}

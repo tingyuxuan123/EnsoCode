@@ -1,12 +1,20 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { parseHTML } from 'linkedom';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+} from '@/components/ui/dialog';
 
 /**
- * Dialog 的内边距只由 DialogHeader（p-6）和 DialogPanel（px-6）提供，
- * DialogDescription 本身不带 padding。把说明文字裸放在 DialogContent 下
- * 会顶到弹窗边缘、和标题不对齐——typecheck 和单测都发现不了，只有肉眼能看出来。
- * 用静态扫描把这个错误挡住。
+ * Dialog 的像素内边距由 Header / Panel / Footer 提供；Description 和滚动包装层
+ * 不重复提供 padding。静态扫描拦截绕过这些布局 slot 的裸内容，渲染断言锁定职责。
  */
 
 const RENDERER = path.resolve(__dirname, '../renderer');
@@ -38,14 +46,40 @@ describe('dialog layout conventions', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps the padding that those slots are responsible for', () => {
-    // 约定变了就要更新上面的扫描规则，别让它变成空转的测试
-    const dialog = readFileSync(path.join(RENDERER, 'components/ui/dialog.tsx'), 'utf8');
-    const header = dialog.slice(dialog.indexOf('function DialogHeader'));
-    expect(header.slice(0, 400)).toContain('p-6');
-    const panelClass = dialog.slice(dialog.indexOf('const DIALOG_PANEL_CLASS'));
-    expect(panelClass.slice(0, 400)).toContain('px-6');
-    const panel = dialog.slice(dialog.indexOf('function DialogPanel'));
-    expect(panel.slice(0, 600)).toContain('DIALOG_PANEL_CLASS');
+  it.each([false, true])('assigns pixel padding to each layout slot (bare panel: %s)', (bare) => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        Dialog,
+        { open: true },
+        createElement(DialogHeader, null, createElement(DialogDescription, null, 'Description')),
+        createElement(DialogPanel, { bare }, 'Body'),
+        createElement(DialogFooter, null, 'Actions')
+      )
+    );
+    const { document } = parseHTML(markup);
+    const slot = (name: string) => {
+      const element = document.querySelector(`[data-slot="dialog-${name}"]`);
+      expect(element, `Missing dialog-${name}`).not.toBeNull();
+      return element as HTMLElement;
+    };
+    const paddingClasses = (element: Element) =>
+      element.className.split(/\s+/).filter((token) => /^p[xytrblse]?-/.test(token));
+
+    expect(paddingClasses(slot('header'))).toEqual(['px-[20px]', 'py-[16px]', 'pr-[48px]']);
+    expect(paddingClasses(slot('panel'))).toEqual(['px-[20px]', 'py-[16px]']);
+    expect(slot('panel').className).toContain(
+      'in-[[data-slot=dialog-popup]:not(:has([data-slot=dialog-footer].border-t))]:pb-[20px]'
+    );
+    expect(paddingClasses(slot('footer'))).toEqual(['px-[20px]', 'py-[12px]']);
+    expect(paddingClasses(slot('description'))).toEqual([]);
+
+    const viewport = document.querySelector('[data-slot="scroll-area-viewport"]');
+    if (bare) {
+      expect(viewport).toBeNull();
+    } else {
+      expect(viewport).not.toBeNull();
+      expect(paddingClasses(viewport as Element)).toEqual([]);
+      expect(paddingClasses(viewport?.parentElement as Element)).toEqual([]);
+    }
   });
 });

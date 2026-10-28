@@ -36,7 +36,7 @@ export function WorktreeBadge({
     <span
       data-slot="worktree-label"
       title={worktreeHoverText(worktree, status, t)}
-      className="col-span-2 grid min-w-0 grid-cols-subgrid items-center text-[10px] leading-4 text-muted-foreground/70"
+      className="col-span-2 grid min-w-0 grid-cols-subgrid items-center text-[calc(11rem/14)] leading-4 text-muted-foreground/70"
     >
       <span className="relative flex h-3 min-w-0 items-center justify-center">
         <GitBranch

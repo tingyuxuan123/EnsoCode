@@ -196,7 +196,7 @@ function WorkflowPresetDialog({
 
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-[960px]">
         <DialogHeader>
           <DialogTitle>
             {target === 'new' ? t('Add workflow preset') : t('Edit workflow preset')}
@@ -241,7 +241,7 @@ function WorkflowPresetDialog({
                     value={arg.default ?? ''}
                     onChange={(e) => patchArg(index, { default: e.target.value })}
                   />
-                  <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-[12px]">
+                  <span className="flex shrink-0 items-center gap-1 text-muted-foreground text-[calc(12rem/14)]">
                     <Checkbox
                       checked={arg.required === true}
                       onCheckedChange={(checked) => patchArg(index, { required: checked === true })}
@@ -306,7 +306,7 @@ function WorkflowPresetDialog({
                 />
               ) : (
                 <div className="flex w-full flex-col items-center gap-2 rounded-[6px] border border-dashed py-8 text-center">
-                  <p className="max-w-md text-muted-foreground text-[12px]">
+                  <p className="max-w-md text-muted-foreground text-[calc(12rem/14)]">
                     {t(
                       'This preset is plain code and cannot be shown in the designer. Using the designer replaces the current script.'
                     )}
@@ -329,7 +329,7 @@ function WorkflowPresetDialog({
                 onChange={editCode}
               />
             )}
-            <p className="text-muted-foreground text-[12px]">
+            <p className="text-muted-foreground text-[calc(12rem/14)]">
               {tab === 'design'
                 ? !designValid &&
                   t('Every phase needs a title and every step needs a label and a prompt.')
@@ -341,7 +341,7 @@ function WorkflowPresetDialog({
             </p>
           </Field>
           {error && (
-            <p className="flex items-center gap-1.5 text-destructive text-[12px]">
+            <p className="flex items-center gap-1.5 text-destructive text-[calc(12rem/14)]">
               <CircleAlert className="h-3.5 w-3.5 shrink-0" />
               {error}
             </p>
@@ -375,14 +375,19 @@ export function WorkflowsSettings() {
   const builtins = all.filter((preset) => preset.source === 'builtin');
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="workflows.root">
+    <div className="space-y-[24px]" data-slot="settings-page">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="workflows.root"
+      >
         <div>
-          <h3 className="font-semibold text-[18px]">{t('Workflows')}</h3>
-          <p className="text-muted-foreground text-[13px]">
+          <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
+            {t('Workflows')}
+          </h3>
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t('Preset workflows you can run from the Workflow side panel')}
           </p>
-          <p className="text-muted-foreground text-[12px]">
+          <p className="text-muted-foreground text-[calc(12rem/14)]">
             {t(
               'Project .agents/workflows files take precedence over these; ~/.agents/workflows and built-in presets come after.'
             )}
@@ -395,28 +400,34 @@ export function WorkflowsSettings() {
       </div>
 
       <div className="space-y-2">
-        <h4 className="font-medium text-muted-foreground text-[12px]">{t('Custom presets')}</h4>
+        <h4 className="font-medium text-muted-foreground text-[calc(12rem/14)]">
+          {t('Custom presets')}
+        </h4>
         {presets.length === 0 ? (
           <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
             <Workflow className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 font-medium text-[13px]">{t('No custom workflow presets yet')}</p>
+            <p className="mt-3 font-medium text-[calc(13rem/14)]">
+              {t('No custom workflow presets yet')}
+            </p>
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
             {presets.map((preset) => (
               <div
                 key={preset.id}
-                className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
+                className="group flex items-center justify-between gap-[12px] px-[12px] py-[10px] transition-colors hover:bg-accent/50"
                 data-settings-row={`workflows.${preset.id}`}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-[13px]">{preset.name}</span>
-                    <Badge variant="secondary" className="shrink-0 font-mono text-[11px]">
+                    <span className="font-medium text-[calc(13rem/14)]">{preset.name}</span>
+                    <Badge variant="secondary" className="shrink-0 font-mono text-[calc(11rem/14)]">
                       {preset.id}
                     </Badge>
                   </div>
-                  <p className="truncate text-muted-foreground text-[12px]">{preset.description}</p>
+                  <p className="truncate text-muted-foreground text-[calc(12rem/14)]">
+                    {preset.description}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
@@ -448,24 +459,28 @@ export function WorkflowsSettings() {
 
       {builtins.length > 0 && (
         <div className="space-y-2">
-          <h4 className="font-medium text-muted-foreground text-[12px]">{t('Built-in presets')}</h4>
+          <h4 className="font-medium text-muted-foreground text-[calc(12rem/14)]">
+            {t('Built-in presets')}
+          </h4>
           <div className="space-y-1">
             {builtins.map((preset) => (
               <div
                 key={preset.id}
-                className="flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
+                className="flex items-center justify-between gap-[12px] px-[12px] py-[10px] transition-colors hover:bg-accent/50"
                 data-settings-row={`workflows.builtin.${preset.id}`}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-[13px]">{t(preset.name)}</span>
-                    <Badge variant="secondary" className="shrink-0 font-mono text-[11px]">
+                    <span className="font-medium text-[calc(13rem/14)]">{t(preset.name)}</span>
+                    <Badge variant="secondary" className="shrink-0 font-mono text-[calc(11rem/14)]">
                       {preset.id}
                     </Badge>
                   </div>
-                  <p className="text-muted-foreground text-[12px]">{t(preset.description)}</p>
+                  <p className="text-muted-foreground text-[calc(12rem/14)]">
+                    {t(preset.description)}
+                  </p>
                   {preset.args.length > 0 && (
-                    <p className="mt-0.5 text-muted-foreground text-[12px]">
+                    <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
                       {t('Arguments')}:{' '}
                       {preset.args
                         .map((arg) => `${t(arg.label)}${arg.required ? ' *' : ''}`)

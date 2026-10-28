@@ -160,7 +160,9 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
           <DialogPanel>
             <div className="flex flex-col items-center gap-3 py-12">
               <Spinner className="size-5" />
-              <p className="text-muted-foreground text-[13px]">{t('Scanning local apps...')}</p>
+              <p className="text-muted-foreground text-[calc(13rem/14)]">
+                {t('Scanning local apps...')}
+              </p>
             </div>
           </DialogPanel>
         )}
@@ -169,7 +171,7 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
           <DialogPanel>
             <div className="flex flex-col items-center gap-3 py-12">
               <CircleAlert className="h-5 w-5 text-destructive" />
-              <p className="text-muted-foreground text-[13px]">{t('Scan failed')}</p>
+              <p className="text-muted-foreground text-[calc(13rem/14)]">{t('Scan failed')}</p>
               <Button variant="outline" size="sm" onClick={runScan}>
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                 {t('Rescan')}
@@ -183,14 +185,16 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
             <DialogPanel className="max-h-[50vh] space-y-4">
               {foundSources.length === 0 && (
                 <div className="rounded-[6px] border border-dashed px-3 py-6 text-center">
-                  <p className="font-medium text-[13px]">{t('No local apps detected')}</p>
+                  <p className="font-medium text-[calc(13rem/14)]">{t('No local apps detected')}</p>
                 </div>
               )}
 
               {[...byGroup.entries()].map(([groupName, items]) => (
                 <div key={groupName}>
                   <div className="mb-1 px-1">
-                    <span className="font-medium text-muted-foreground text-[12px]">{groupName}</span>
+                    <span className="font-medium text-muted-foreground text-[calc(12rem/14)]">
+                      {groupName}
+                    </span>
                   </div>
                   <div className="space-y-0.5">
                     {items.map((candidate) => (
@@ -206,14 +210,16 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
                           onCheckedChange={() => toggle(candidate.id)}
                         />
                         <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="shrink-0 font-medium text-[13px]">{candidate.name}</span>
+                          <span className="shrink-0 font-medium text-[calc(13rem/14)]">
+                            {candidate.name}
+                          </span>
                           {candidate.kind === 'mcp' && (
-                            <Badge variant="outline" className="shrink-0 text-[11px]">
+                            <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)]">
                               {candidate.transport}
                             </Badge>
                           )}
                           {candidate.duplicated && (
-                            <Badge variant="secondary" className="shrink-0 text-[11px]">
+                            <Badge variant="secondary" className="shrink-0 text-[calc(11rem/14)]">
                               {candidate.duplicateReason === 'same-content'
                                 ? t('Same content')
                                 : candidate.duplicateReason === 'same-name'
@@ -221,7 +227,7 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
                                   : t('Already exists')}
                             </Badge>
                           )}
-                          <span className="min-w-0 flex-1 truncate text-right text-muted-foreground text-[12px]">
+                          <span className="min-w-0 flex-1 truncate text-right text-muted-foreground text-[calc(12rem/14)]">
                             {candidate.kind === 'skill'
                               ? candidate.description || candidate.path
                               : candidate.kind === 'instruction'
@@ -243,7 +249,7 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
               ))}
 
               {foundSources.length > 0 && candidates.length === 0 && (
-                <p className="py-6 text-center text-muted-foreground text-[13px]">
+                <p className="py-6 text-center text-muted-foreground text-[calc(13rem/14)]">
                   {t('Nothing importable found')}
                 </p>
               )}
@@ -267,7 +273,7 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
                 </Button>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-muted-foreground text-[12px]">
+                <span className="text-muted-foreground text-[calc(12rem/14)]">
                   {t('{{count}} selected', { count: checked.size })}
                 </span>
                 <Button size="sm" disabled={checked.size === 0} onClick={handleImport}>
@@ -282,7 +288,7 @@ export function LocalAssetImportDialog({ kind, open, onOpenChange }: LocalAssetI
         {phase === 'done' && (
           <DialogPanel>
             <div className="flex flex-col items-center gap-3 py-12">
-              <p className="font-medium text-[13px]">
+              <p className="font-medium text-[calc(13rem/14)]">
                 {t('Imported {{count}} entries', { count: importedCount })}
               </p>
               <Button size="sm" onClick={() => onOpenChange(false)}>

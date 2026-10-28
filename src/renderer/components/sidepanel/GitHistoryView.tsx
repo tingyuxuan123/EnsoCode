@@ -142,8 +142,8 @@ export function GitHistoryView({
                     )}
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-xs">{commit.subject}</span>
-                    <span className="flex min-w-0 gap-2 text-[11px] text-muted-foreground">
+                    <span className="truncate text-[calc(11rem/14)]">{commit.subject}</span>
+                    <span className="flex min-w-0 gap-2 text-[calc(11rem/14)] text-muted-foreground">
                       <span className="shrink-0 font-mono">{commit.hash.slice(0, 7)}</span>
                       <span className="min-w-0 flex-1 truncate">{commit.author}</span>
                       <time className="shrink-0" dateTime={commit.date}>
@@ -155,13 +155,15 @@ export function GitHistoryView({
                 {expanded && (
                   <div id={`${id}-${commit.hash}`} className="my-1 ml-3 border-l pl-1">
                     {filesLoading ? (
-                      <p className="px-2 py-3 text-xs text-muted-foreground">{t('Loading...')}</p>
+                      <p className="px-2 py-3 text-[calc(11rem/14)] text-muted-foreground">
+                        {t('Loading...')}
+                      </p>
                     ) : filesError ? (
-                      <p role="alert" className="px-2 py-3 text-xs text-destructive">
+                      <p role="alert" className="px-2 py-3 text-[calc(11rem/14)] text-destructive">
                         {t(filesError)}
                       </p>
                     ) : files.length === 0 ? (
-                      <p className="px-2 py-3 text-xs text-muted-foreground">
+                      <p className="px-2 py-3 text-[calc(11rem/14)] text-muted-foreground">
                         {t('No file changes in this commit.')}
                       </p>
                     ) : (
@@ -192,12 +194,12 @@ export function GitHistoryView({
             </div>
           )}
           {error && (
-            <p role="alert" className="px-2 py-3 text-xs text-destructive">
+            <p role="alert" className="px-2 py-3 text-[calc(11rem/14)] text-destructive">
               {t(error)}
             </p>
           )}
           {!loading && !error && commits.length === 0 && (
-            <p className="m-1 rounded-md border border-dashed px-2 py-5 text-center text-xs text-muted-foreground">
+            <p className="m-1 rounded-md border border-dashed px-2 py-5 text-center text-[calc(11rem/14)] text-muted-foreground">
               {t('No commits yet.')}
             </p>
           )}
@@ -226,7 +228,7 @@ export function GitHistoryView({
     >
       {selectedCommit && path && (
         <div
-          className="shrink-0 truncate border-b px-3 py-1 text-[11px] text-muted-foreground"
+          className="shrink-0 truncate border-b px-3 py-1 text-[calc(11rem/14)] text-muted-foreground"
           title={`${selectedCommit.subject} · ${path}`}
         >
           {selectedCommit.hash.slice(0, 7)} · {path}

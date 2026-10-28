@@ -74,7 +74,7 @@ export function NotesEditor({ target, emptyText }: { target: NotesTarget; emptyT
           onChange={(event) => setDraft(event.target.value)}
         />
         <div className="flex items-center gap-1.5">
-          <span className="mr-auto text-muted-foreground text-xs">
+          <span className="mr-auto text-muted-foreground text-[calc(11rem/14)]">
             {draft.length} / {notes.maxChars}
           </span>
           <Button size="xs" variant="ghost" disabled={saving} onClick={() => setDraft(null)}>
@@ -91,12 +91,12 @@ export function NotesEditor({ target, emptyText }: { target: NotesTarget; emptyT
       {notes.content ? (
         <div
           data-slot="bot-card"
-          className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border bg-card px-2.5 py-2 text-xs"
+          className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border bg-card px-2.5 py-2 text-[calc(11rem/14)]"
         >
           {notes.content}
         </div>
       ) : (
-        <p className="text-muted-foreground text-xs">{emptyText}</p>
+        <p className="text-muted-foreground text-[calc(11rem/14)]">{emptyText}</p>
       )}
       <Button size="xs" variant="outline" onClick={() => setDraft(notes.content)}>
         {t('Edit notes')}

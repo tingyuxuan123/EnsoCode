@@ -1,5 +1,5 @@
 import type { TodoItem } from '@shared/types/agent';
-import { Check, Circle, CircleDot } from 'lucide-react';
+import { Circle, CircleCheck, CircleDot } from 'lucide-react';
 import { useMemo } from 'react';
 import { latestUnfinishedTodos } from '@/lib/pinnedTodos';
 import { cn } from '@/lib/utils';
@@ -9,20 +9,20 @@ import { useSettingsStore } from '@/stores/settings';
 /** ✓/●/○ 清单；时间线 todo 行与输入框上方「当前进度」弹层共用 */
 export function TodoList({ todos }: { todos: TodoItem[] }) {
   return (
-    <ul className="space-y-0.5 text-xs">
+    <ul className="space-y-[8px] text-[calc(13rem/14)] leading-[calc(20rem/14)]">
       {todos.map((todo) => (
-        <li key={todo.content} className="flex items-start gap-1.5">
+        <li key={todo.content} className="flex items-start gap-[10px]">
           {todo.status === 'completed' ? (
-            <Check className="mt-0.5 h-3 w-3 shrink-0 text-green-600 dark:text-green-500" />
+            <CircleCheck className="mt-[3px] size-[calc(14rem/14)] shrink-0 text-success" />
           ) : todo.status === 'in_progress' ? (
-            <CircleDot className="mt-0.5 h-3 w-3 shrink-0 text-blue-500" />
+            <CircleDot className="mt-[3px] size-[calc(14rem/14)] shrink-0 text-primary" />
           ) : (
-            <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/50" />
+            <Circle className="mt-[3px] size-[calc(14rem/14)] shrink-0 text-faint" />
           )}
           <span
             className={cn(
               todo.status === 'completed'
-                ? 'text-muted-foreground line-through'
+                ? 'text-muted-foreground line-through decoration-border'
                 : todo.status === 'in_progress'
                   ? 'font-medium'
                   : 'text-muted-foreground'

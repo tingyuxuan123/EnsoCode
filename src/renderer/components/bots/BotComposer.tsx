@@ -379,7 +379,9 @@ export function BotComposer({
             return (
               <div key={itemKey(item)}>
                 {header && (
-                  <div className="px-2 py-1 text-[11px] text-muted-foreground">{t(section)}</div>
+                  <div className="px-2 py-1 text-[calc(11rem/14)] text-muted-foreground">
+                    {t(section)}
+                  </div>
                 )}
                 <button
                   type="button"
@@ -422,7 +424,7 @@ export function BotComposer({
         </div>
       )}
       {lacking.length > 0 && (
-        <div className="px-4 pt-1.5 text-warning text-xs">
+        <div className="px-4 pt-1.5 text-warning text-[calc(11rem/14)]">
           {t('{{names}} cannot use this skill; they will be told it is unavailable', {
             names: lacking.map((member) => member.name).join(', '),
           })}
@@ -490,7 +492,7 @@ export function BotComposer({
           event.preventDefault();
           ingest(files);
         }}
-        className="block max-h-56 min-h-[52px] w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13.5px] leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        className="block max-h-56 min-h-[calc(52rem/14)] w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[calc(13.5rem/14)] leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60"
       />
 
       <div className="flex items-center gap-1 px-2 pb-2">
@@ -525,7 +527,9 @@ export function BotComposer({
           />
         )}
         {toolbar}
-        <div className="min-w-0 flex-1 truncate text-muted-foreground text-xs">{hint}</div>
+        <div className="min-w-0 flex-1 truncate text-muted-foreground text-[calc(11rem/14)]">
+          {hint}
+        </div>
         {running && onStop && !canSend ? (
           <button
             type="button"
@@ -567,7 +571,7 @@ function ItemRow({
     case 'all':
       return (
         <>
-          <span className="grid h-6 w-6 place-items-center rounded-full bg-muted text-[11px]">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-muted text-[calc(11rem/14)]">
             @
           </span>
           <span>{t('everyone')}</span>
@@ -578,7 +582,9 @@ function ItemRow({
         <>
           <BotAvatar bot={item.bot} size="sm" />
           <span className="min-w-0 truncate">{item.bot.name}</span>
-          <span className="min-w-0 truncate text-muted-foreground text-xs">{item.bot.title}</span>
+          <span className="min-w-0 truncate text-muted-foreground text-[calc(11rem/14)]">
+            {item.bot.title}
+          </span>
         </>
       );
     case 'chat':
@@ -586,7 +592,7 @@ function ItemRow({
         <>
           <MessagesSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 truncate">{item.chat.title}</span>
-          <span className="shrink-0 text-muted-foreground text-xs">
+          <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">
             {item.chat.kind === 'group' ? t('Group chat') : t('Direct chat')}
           </span>
         </>
@@ -596,7 +602,9 @@ function ItemRow({
         <>
           <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="shrink-0">{item.name}</span>
-          <span className="min-w-0 truncate text-muted-foreground text-xs">{item.path}</span>
+          <span className="min-w-0 truncate text-muted-foreground text-[calc(11rem/14)]">
+            {item.path}
+          </span>
         </>
       );
     case 'skill':
@@ -604,7 +612,7 @@ function ItemRow({
         <>
           <Sparkles className="h-4 w-4 shrink-0 text-info" />
           <span className="shrink-0">{item.skill.name}</span>
-          <span className="min-w-0 truncate text-muted-foreground text-xs">
+          <span className="min-w-0 truncate text-muted-foreground text-[calc(11rem/14)]">
             {grouped ? ownerNames(item.skill.owners) : item.skill.description}
           </span>
         </>
@@ -627,7 +635,7 @@ function RefChip({
   return (
     <span
       className={cn(
-        'inline-flex h-6 max-w-56 items-center gap-1 rounded-md px-1.5 text-xs',
+        'inline-flex h-6 max-w-56 items-center gap-1 rounded-md px-1.5 text-[calc(11rem/14)]',
         tone === 'skill' ? 'bg-info/15 text-info' : 'bg-muted text-foreground'
       )}
     >

@@ -77,7 +77,7 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
       <div className="w-full max-w-[520px] rounded-md border bg-background p-1.5 text-left focus-within:border-brand/60">
         <Textarea
           unstyled
-          className="flex w-full text-[13.5px] leading-6 [&_textarea]:min-h-[64px] [&_textarea]:resize-none [&_textarea]:px-2.5 [&_textarea]:py-2"
+          className="flex w-full text-[calc(13.5rem/14)] leading-6 [&_textarea]:min-h-[calc(64rem/14)] [&_textarea]:resize-none [&_textarea]:px-2.5 [&_textarea]:py-2"
           value={goal}
           autoFocus
           rows={3}
@@ -87,7 +87,7 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void recommend();
           }}
         />
-        {error && <p className="px-2.5 text-destructive text-xs">{error}</p>}
+        {error && <p className="px-2.5 text-destructive text-[calc(11rem/14)]">{error}</p>}
         <div className="flex justify-end px-1 pb-1">
           <Button size="sm" disabled={!goal.trim() || busy} onClick={() => void recommend()}>
             {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
@@ -112,7 +112,7 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
   return (
     <div className="w-full max-w-lg space-y-3 text-left">
       <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-        <p className="mb-2 flex items-center gap-1.5 text-muted-foreground text-xs">
+        <p className="mb-2 flex items-center gap-1.5 text-muted-foreground text-[calc(11rem/14)]">
           <Target className="h-3.5 w-3.5" />
           {suggestion.kind === 'team' ? t('Recommended: a team') : t('Recommended: one member')}
         </p>
@@ -122,11 +122,13 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
             <div className="min-w-0">
               <p className="font-medium text-sm">
                 {member.name}
-                <span className="ml-2 font-normal text-muted-foreground text-xs">
+                <span className="ml-2 font-normal text-muted-foreground text-[calc(11rem/14)]">
                   {member.title}
                 </span>
               </p>
-              {member.scope && <p className="text-muted-foreground text-xs">{member.scope}</p>}
+              {member.scope && (
+                <p className="text-muted-foreground text-[calc(11rem/14)]">{member.scope}</p>
+              )}
             </div>
           </div>
         ) : (
@@ -142,16 +144,16 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
                 ))}
               </div>
               <p className="font-medium text-sm">{template.title}</p>
-              <p className="text-muted-foreground text-xs">{template.summary}</p>
+              <p className="text-muted-foreground text-[calc(11rem/14)]">{template.summary}</p>
             </div>
           )
         )}
         {suggestion.reason && (
-          <p className="mt-2 text-muted-foreground text-xs">{suggestion.reason}</p>
+          <p className="mt-2 text-muted-foreground text-[calc(11rem/14)]">{suggestion.reason}</p>
         )}
       </div>
       <div className="space-y-1">
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-[calc(11rem/14)]">
           {t('First message (put into the input box, not sent)')}
         </p>
         <Textarea
@@ -160,7 +162,7 @@ export function GoalOnboarding({ onPick }: { onPick: (pick: GoalPick) => void | 
           onChange={(event) => setFirstMessage(event.target.value)}
         />
       </div>
-      {error && <p className="text-destructive text-xs">{error}</p>}
+      {error && <p className="text-destructive text-[calc(11rem/14)]">{error}</p>}
       <div className="flex items-center justify-between">
         <Button
           size="sm"

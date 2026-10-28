@@ -129,10 +129,12 @@ function ResultRow({
           <span className="truncate">{title}</span>
           {badges}
         </div>
-        {detail && <p className="truncate text-muted-foreground text-xs">{detail}</p>}
+        {detail && <p className="truncate text-muted-foreground text-[calc(11rem/14)]">{detail}</p>}
       </div>
       {meta && (
-        <span className="max-w-48 shrink-0 truncate text-muted-foreground text-xs">{meta}</span>
+        <span className="max-w-48 shrink-0 truncate text-muted-foreground text-[calc(11rem/14)]">
+          {meta}
+        </span>
       )}
     </>
   );
@@ -442,7 +444,7 @@ export function WorkspaceSearchDialog({
       tabIndex={-1}
       data-search-scope={scope}
       title={t('Switch scope')}
-      className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+      className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-muted-foreground text-[calc(11rem/14)] transition-colors hover:bg-accent hover:text-foreground"
       onPointerDown={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -450,14 +452,14 @@ export function WorkspaceSearchDialog({
       }}
     >
       {t(SCOPE_LABELS[scope])}
-      <Kbd className="h-4 min-w-4 text-[10px]">⇥</Kbd>
+      <Kbd className="h-4 min-w-4 text-[calc(11rem/14)]">⇥</Kbd>
     </button>
   );
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup
-        className="max-h-[min(36rem,calc(100vh-6rem))] max-w-2xl"
+        className="max-h-[min(576px,calc(100vh-6rem))] max-w-[680px]"
         onKeyDown={closeOnEscape}
       >
         <Command>
@@ -473,7 +475,7 @@ export function WorkspaceSearchDialog({
               <CommandEmpty>
                 {t('No matching results')}
                 {scope !== 'all-including-archived' && (
-                  <span className="mt-2 flex items-center justify-center gap-1.5 text-xs">
+                  <span className="mt-2 flex items-center justify-center gap-1.5 text-[calc(11rem/14)]">
                     <Kbd>⇥</Kbd>
                     {t(scope === 'project' ? 'Search all projects' : 'Include archived')}
                   </span>

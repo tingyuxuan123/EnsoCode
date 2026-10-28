@@ -80,7 +80,10 @@ export function BotDrawerPanel({
             {member?.name ?? (chat.title || '群聊')}
           </span>
           <span
-            className={cn('mt-0.5 block truncate text-[11px]', idle ? 'text-muted-foreground' : 'text-brand')}
+            className={cn(
+              'mt-0.5 block truncate text-[11px]',
+              idle ? 'text-muted-foreground' : 'text-brand'
+            )}
           >
             {lastLine(chat, byId, live) || member?.title || '\u00a0'}
           </span>

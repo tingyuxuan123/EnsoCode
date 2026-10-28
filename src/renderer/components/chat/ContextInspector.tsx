@@ -29,7 +29,7 @@ function CompactButton({ conversationId }: { conversationId: string }) {
     <button
       type="button"
       disabled={Boolean(compaction)}
-      className="w-full rounded-sm border border-border px-2 py-1 text-[11px] text-foreground/90 hover:bg-muted disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-transparent"
+      className="w-full rounded-sm border border-border px-2 py-1 text-[calc(11rem/14)] text-foreground/90 hover:bg-muted disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-transparent"
       onClick={() => useSessionsStore.getState().compact(conversationId)}
     >
       {label}
@@ -50,7 +50,7 @@ export function ContextInspector({
   const { t } = useI18n();
   if (!occupancy) {
     return (
-      <p className="px-2 py-1.5 text-xs text-muted-foreground">
+      <p className="px-2 py-1.5 text-[calc(11rem/14)] text-muted-foreground">
         {t('Context occupancy unavailable until the session starts')}
       </p>
     );
@@ -58,7 +58,7 @@ export function ContextInspector({
   const window = occupancy.contextWindow;
   return (
     <div className="flex flex-col gap-2 px-2 py-1.5">
-      <div className="flex items-baseline justify-between gap-2 text-xs">
+      <div className="flex items-baseline justify-between gap-2 text-[calc(11rem/14)]">
         <span className="tabular-nums">
           {formatTokens(occupancy.used)}
           {window ? ` / ${estimatedWindow ? '~' : ''}${formatTokens(window)}` : ' · ?'}
@@ -67,12 +67,12 @@ export function ContextInspector({
         <span className="text-muted-foreground">{t('Estimate')}</span>
       </div>
       {occupancy.compactionModelMismatch && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[calc(11rem/14)] text-muted-foreground">
           {t('Current summary was produced by another model family')}
         </p>
       )}
       {occupancy.compactedMessageCount > 0 && (
-        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 text-[calc(11rem/14)] text-muted-foreground">
           <p>
             {t('{{count}} older messages are folded into the summary', {
               count: occupancy.compactedMessageCount,
@@ -98,7 +98,7 @@ export function ContextInspector({
           const tokens = occupancy.buckets[id];
           const share = occupancy.used > 0 ? Math.round((tokens / occupancy.used) * 100) : 0;
           return (
-            <li key={id} className="flex items-center gap-2 text-[11px]">
+            <li key={id} className="flex items-center gap-2 text-[calc(11rem/14)]">
               <span className="w-28 shrink-0 truncate text-muted-foreground">
                 {t(BUCKET_LABELS[id])}
               </span>

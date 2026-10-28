@@ -79,7 +79,7 @@ export function MentionPicker({
       <div role="group" aria-label={label}>
         <p
           className={cn(
-            'px-2 pb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase',
+            'px-2 pb-1 text-[calc(11rem/14)] font-medium tracking-wide text-muted-foreground uppercase',
             pad ? 'pt-2' : 'pt-1.5'
           )}
         >
@@ -155,7 +155,7 @@ export function MentionPicker({
                       }
                     }}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs',
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)]',
                       activeIndex === index && 'bg-foreground/10'
                     )}
                   >
@@ -253,7 +253,7 @@ function MentionOption({
       // mousemove 只在物理移动时触发，不和键盘打架。
       onMouseMove={onHover}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs',
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[calc(11rem/14)]',
         // 浅色主题下 popover(纯白)与 muted 亮度差仅 0.035，高亮几乎不可见；
         // 用前景色衍生的透明度保证两种主题都有对比度。
         active && 'bg-foreground/10'
@@ -265,7 +265,7 @@ function MentionOption({
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="shrink-0 font-medium">{candidate.label}</span>
-          <Badge variant="outline" className="px-1 py-0 text-[9px]">
+          <Badge variant="outline" className="px-1 py-0 text-[calc(11rem/14)]">
             {candidate.kind === 'agent-type'
               ? t(
                   candidate.source === 'system'
@@ -281,7 +281,7 @@ function MentionOption({
                 : t(directory ? 'Folder' : 'File')}
           </Badge>
           {candidate.kind === 'agent-type' && candidate.locked && (
-            <Badge variant="secondary" className="px-1 py-0 text-[9px]">
+            <Badge variant="secondary" className="px-1 py-0 text-[calc(11rem/14)]">
               {t('Locked')}
             </Badge>
           )}

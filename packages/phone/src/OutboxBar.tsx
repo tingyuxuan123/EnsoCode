@@ -22,7 +22,7 @@ export function OutboxBar({ items, readOnly, onRetry, onDiscard }: Props) {
         <div
           key={item.deliveryId}
           className={cn(
-            'flex flex-wrap items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs',
+            'flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px]',
             item.status === 'failed' ? 'border-destructive/40 bg-destructive/5' : 'bg-muted/40'
           )}
         >

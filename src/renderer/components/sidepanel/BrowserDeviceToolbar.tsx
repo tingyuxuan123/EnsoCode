@@ -45,7 +45,7 @@ export const DEFAULT_BROWSER_DEVICE: BrowserDevice = {
 
 const SCALES = [25, 50, 75, 100];
 const TRIGGER =
-  'inline-flex h-7 shrink-0 items-center whitespace-nowrap gap-1 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-muted data-popup-open:text-foreground';
+  'inline-flex h-7 shrink-0 items-center whitespace-nowrap gap-1 rounded-md px-2 text-[calc(11rem/14)] text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-muted data-popup-open:text-foreground';
 
 function Chip({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -153,7 +153,7 @@ export function BrowserDeviceToolbar({
       value={value}
       disabled={locked}
       aria-label={label}
-      className="w-16 shrink-0 text-xs [&_input]:px-1 [&_input]:text-center [&_input]:tabular-nums"
+      className="w-16 shrink-0 text-[calc(11rem/14)] [&_input]:px-1 [&_input]:text-center [&_input]:tabular-nums"
       onChange={(event) => set(event.target.value)}
       onBlur={commitSize}
       onKeyDown={(event) => {
@@ -166,7 +166,7 @@ export function BrowserDeviceToolbar({
 
   return (
     <div className="@container shrink-0 border-b border-border/70">
-      <div className="flex h-10 min-w-0 items-center gap-1 overflow-x-auto px-2 text-xs [scrollbar-width:none]">
+      <div className="flex h-10 min-w-0 items-center gap-1 overflow-x-auto px-2 text-[calc(11rem/14)] [scrollbar-width:none]">
         <span className="hidden shrink-0 whitespace-nowrap pl-1 pr-0.5 font-medium text-foreground @min-[26rem]:inline">
           {t('Size:')}
         </span>
@@ -328,7 +328,7 @@ export function BrowserDeviceToolbar({
         <p
           role={error ? 'alert' : undefined}
           className={cn(
-            'break-words px-3 pb-1.5 text-xs',
+            'break-words px-3 pb-1.5 text-[calc(11rem/14)]',
             error ? 'text-destructive' : 'text-warning'
           )}
         >

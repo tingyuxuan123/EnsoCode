@@ -42,14 +42,14 @@ function SummaryView({ kind, summary }: { kind: ApprovalKind; summary: string })
   if (kind === 'command' && html != null) {
     return (
       <div
-        className="mt-[6px] max-h-24 overflow-auto rounded-[4px] text-[12px] leading-[20px] [&_pre]:m-0 [&_pre]:px-[8px] [&_pre]:py-[6px] [&_pre]:font-mono [&_pre]:whitespace-pre-wrap"
+        className="mt-[6px] max-h-24 overflow-auto rounded-[4px] text-[calc(12rem/14)] leading-[calc(20rem/14)] [&_pre]:m-0 [&_pre]:px-[8px] [&_pre]:py-[6px] [&_pre]:font-mono [&_pre]:whitespace-pre-wrap"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: shiki 输出的受控 HTML（本地生成，无用户注入）
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
   }
   return (
-    <pre className="mt-[6px] max-h-24 overflow-auto rounded-[4px] bg-muted/50 px-[8px] py-[6px] font-mono text-[12px] leading-[20px] whitespace-pre-wrap">
+    <pre className="mt-[6px] max-h-24 overflow-auto rounded-[4px] bg-muted/50 px-[8px] py-[6px] font-mono text-[calc(12rem/14)] leading-[calc(20rem/14)] whitespace-pre-wrap">
       {summary}
     </pre>
   );
@@ -81,11 +81,11 @@ export function ApprovalBar({
   return (
     <div
       data-slot="approval-bar"
-      className="mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[12px]"
+      className="mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[calc(12rem/14)]"
     >
       <div className="flex items-center gap-[8px]">
-        <ShieldAlert className="size-[14px] shrink-0 text-warning" />
-        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+        <ShieldAlert className="size-[calc(14rem/14)] shrink-0 text-warning" />
+        <span className="shrink-0 text-[calc(11rem/14)] font-medium text-muted-foreground">
           {reviewing ? t('Assistant reviewing…') : t('Approval required')}
         </span>
         <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
@@ -97,14 +97,14 @@ export function ApprovalBar({
           </span>
         </span>
         {active.protected && (
-          <span className="shrink-0 rounded bg-destructive/15 px-1.5 text-[10px] text-destructive">
+          <span className="shrink-0 rounded bg-destructive/15 px-1.5 text-[calc(11rem/14)] text-destructive">
             {protectedActionLabel(active.protected, t)}
           </span>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-2">
           <RequestCountdown remainingMs={remainingMs} expiredLabel="Timed out · denied" />
           {approvals.length > 1 && (
-            <span className="text-[10px] text-muted-foreground tabular-nums">
+            <span className="text-[calc(11rem/14)] text-muted-foreground tabular-nums">
               1/{approvals.length}
             </span>
           )}
@@ -117,7 +117,7 @@ export function ApprovalBar({
             type="button"
             disabled={disabled}
             onClick={() => respond('deny')}
-            className="rounded-[6px] px-[10px] py-[4px] text-[12px] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            className="rounded-[6px] px-[10px] py-[4px] text-[calc(12rem/14)] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
           >
             {t('Deny')}
           </button>
@@ -126,7 +126,7 @@ export function ApprovalBar({
               type="button"
               disabled={disabled}
               onClick={() => respond('allowSession')}
-              className="rounded-[6px] px-[10px] py-[4px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              className="rounded-[6px] px-[10px] py-[4px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
               {t('Always allow this session')}
             </button>
@@ -135,7 +135,7 @@ export function ApprovalBar({
             type="button"
             disabled={disabled}
             onClick={() => respond('allow')}
-            className="rounded-[6px] bg-primary px-[10px] py-[4px] text-[12px] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="rounded-[6px] bg-primary px-[10px] py-[4px] text-[calc(12rem/14)] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             {t('Allow')}
           </button>

@@ -105,7 +105,7 @@ function DialogPopup({
           {showCloseButton && (
             <DialogPrimitive.Close
               aria-label="Close"
-              className="absolute end-[16px] top-[12px] z-50 flex size-[24px] cursor-pointer items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute end-[16px] top-[12px] z-50 flex size-[calc(24rem/14)] cursor-pointer items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               <XIcon className="h-4 w-4" />
             </DialogPrimitive.Close>
@@ -154,7 +154,7 @@ function DialogFooter({
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
-      className={cn('font-semibold text-[16px] leading-[24px]', className)}
+      className={cn('font-semibold text-[calc(16rem/14)] leading-[calc(24rem/14)]', className)}
       data-slot="dialog-title"
       {...props}
     />
@@ -164,7 +164,10 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
 function DialogDescription({ className, ...props }: DialogPrimitive.Description.Props) {
   return (
     <DialogPrimitive.Description
-      className={cn('text-muted-foreground text-[12px] leading-[20px]', className)}
+      className={cn(
+        'text-muted-foreground text-[calc(12rem/14)] leading-[calc(20rem/14)]',
+        className
+      )}
       data-slot="dialog-description"
       {...props}
     />

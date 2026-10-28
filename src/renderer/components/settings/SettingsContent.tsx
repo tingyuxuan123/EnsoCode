@@ -153,14 +153,14 @@ export function SettingsContent() {
             onClick={() => setActiveCategory(category.id)}
             aria-current={activeCategory === category.id ? 'page' : undefined}
             className={cn(
-              'flex min-h-[32px] w-full items-center gap-[8px] rounded-[6px] px-[10px] py-[6px] text-left text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-nav',
+              'flex min-h-[calc(32rem/14)] w-full items-center gap-[8px] rounded-[6px] px-[10px] py-[6px] text-left text-[calc(13rem/14)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-nav',
               category.sub && 'pl-[28px]',
               activeCategory === category.id
                 ? 'bg-accent font-medium text-foreground'
                 : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
             )}
           >
-            <category.icon className="size-[16px] shrink-0" />
+            <category.icon className="size-[calc(16rem/14)] shrink-0" />
             <span className="truncate">{category.label}</span>
           </button>
         ))}

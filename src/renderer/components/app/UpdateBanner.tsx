@@ -30,14 +30,14 @@ export function UpdateBanner() {
   const isError = status.status === 'error';
 
   return (
-    <div className="border-b border-blue-500/20 bg-background">
-      <div className="flex items-center gap-2 bg-blue-500/8 px-4 py-1.5 text-xs">
+    <div className="border-b border-primary/20 bg-background">
+      <div className="flex items-center gap-2 bg-primary/8 px-4 py-1.5 text-[calc(12rem/14)]">
         {isError ? (
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
         ) : isDownloaded ? (
-          <RotateCw className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+          <RotateCw className="h-3.5 w-3.5 shrink-0 text-primary" />
         ) : (
-          <Download className="h-3.5 w-3.5 shrink-0 animate-pulse text-blue-500" />
+          <Download className="h-3.5 w-3.5 shrink-0 animate-pulse text-primary" />
         )}
         <span className="min-w-0 flex-1 break-words">
           {isError

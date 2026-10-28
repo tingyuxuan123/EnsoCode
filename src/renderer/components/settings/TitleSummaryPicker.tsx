@@ -22,11 +22,11 @@ export function TitleSummaryPicker() {
   const selectedModel = selectedProvider?.models.find((entry) => entry.id === model?.modelId);
 
   return (
-    <section className="space-y-2 rounded-[6px] border bg-card p-3">
+    <section className="space-y-[10px] border-t border-line pt-[20px] first-of-type:border-t-0 first-of-type:pt-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h4 className="font-medium text-[13px]">{t('Conversation title summary')}</h4>
-          <p className="mt-0.5 text-muted-foreground text-[12px]">
+          <h4 className="font-medium text-[calc(14rem/14)]">{t('Conversation title summary')}</h4>
+          <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
             {t('Generate a short AI title from the first message of a new conversation.')}
           </p>
         </div>
@@ -54,7 +54,7 @@ export function TitleSummaryPicker() {
             </div>
           )}
           {model && (!selectedProvider || !selectedModel) && (
-            <p className="text-muted-foreground text-[12px]">
+            <p className="text-muted-foreground text-[calc(12rem/14)]">
               {t('Selected model is unavailable — falls back to the default model.')}
             </p>
           )}

@@ -110,7 +110,7 @@ function PresenceDetails({ info, bot }: { info: MemberPresence; bot: BotProfile 
   );
   const pending = info.wait && 'conversationId' in info.wait ? info.wait.conversationId : undefined;
   return (
-    <PreviewCardPopup align="start" className="w-72 flex-col gap-1.5 p-3 text-xs">
+    <PreviewCardPopup align="start" className="w-72 flex-col gap-1.5 p-3 text-[calc(11rem/14)]">
       <div className="flex items-center gap-2">
         <span className="font-semibold text-sm">{bot?.name ?? t('Deleted member')}</span>
         <PresenceChip info={info} />
@@ -219,7 +219,7 @@ export function MemberBusyBar({
                       ? revealPending(target.conversationId)
                       : target && onOpenLive(target.conversationId, botId)
                   }
-                  className="flex h-7 min-w-0 items-center gap-1.5 rounded-full px-1 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-7 min-w-0 items-center gap-1.5 rounded-full px-1 text-muted-foreground text-[calc(11rem/14)] transition-colors hover:bg-muted hover:text-foreground"
                 />
               }
             >

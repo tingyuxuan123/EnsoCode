@@ -332,7 +332,7 @@ export function GroupTimeline({
               </div>
             )}
             {timeline && !timeline.hasOlder && !folded && entries.length > 0 && (
-              <div className="text-center text-[11px] text-muted-foreground">
+              <div className="text-center text-[calc(11rem/14)] text-muted-foreground">
                 {t('Beginning of the chat')}
               </div>
             )}
@@ -349,7 +349,10 @@ export function GroupTimeline({
             {placed.head.map(card)}
             {rows.map((row) =>
               row.kind === 'day' ? (
-                <div key={row.key} className="py-1 text-center text-[11px] text-muted-foreground">
+                <div
+                  key={row.key}
+                  className="py-1 text-center text-[calc(11rem/14)] text-muted-foreground"
+                >
                   {new Date(row.at).toLocaleDateString()}
                 </div>
               ) : (
@@ -358,7 +361,7 @@ export function GroupTimeline({
                     <button
                       type="button"
                       onClick={toggleEarlier}
-                      className="flex items-center gap-1 self-center rounded-md px-2 py-1 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
+                      className="flex items-center gap-1 self-center rounded-md px-2 py-1 text-muted-foreground text-[calc(11rem/14)] hover:bg-muted hover:text-foreground"
                     >
                       {folded ? (
                         <ChevronRight className="h-3.5 w-3.5" />
@@ -399,7 +402,7 @@ export function GroupTimeline({
               </div>
             )}
             {!history && !replying && runtime?.routing && (
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
                 <TypingDots />
                 {t('Choosing who replies…')}
               </div>
@@ -415,7 +418,7 @@ export function GroupTimeline({
               >
                 <BotAvatar bot={replying} size="sm" busy />
                 <div className="min-w-0">
-                  <div className="text-muted-foreground text-xs">
+                  <div className="text-muted-foreground text-[calc(11rem/14)]">
                     <span className="mr-1.5 font-semibold text-foreground">{replying.name}</span>
                     {t('Replying')}
                   </div>
@@ -443,7 +446,7 @@ export function GroupTimeline({
         <button
           type="button"
           onClick={backToLatest}
-          className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-muted-foreground text-xs shadow-float transition-colors hover:text-foreground"
+          className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-muted-foreground text-[calc(11rem/14)] shadow-float transition-colors hover:text-foreground"
         >
           <ArrowDown className="h-3 w-3" />
           {newCount > 0 ? t('Back to latest · {{n}} new', { n: newCount }) : t('Back to latest')}
@@ -512,7 +515,7 @@ const EntryRow = memo(function EntryRow({
     case 'system':
       if (entry.newConversation)
         return (
-          <div className="flex items-center gap-3 text-muted-foreground text-xs">
+          <div className="flex items-center gap-3 text-muted-foreground text-[calc(11rem/14)]">
             <div className="h-px flex-1 bg-border" />
             {t('New conversation')} · {timeOf(entry.at)}
             <div className="h-px flex-1 bg-border" />
@@ -523,7 +526,7 @@ const EntryRow = memo(function EntryRow({
       ) : (
         <div
           data-slot="bot-notice"
-          className="self-center rounded-full bg-muted px-2.5 py-0.5 text-center text-muted-foreground text-xs"
+          className="self-center rounded-full bg-muted px-2.5 py-0.5 text-center text-muted-foreground text-[calc(11rem/14)]"
         >
           {entry.text}
           {retryable && (
@@ -550,7 +553,9 @@ const EntryRow = memo(function EntryRow({
           {entry.images?.length ? <ArtifactCards target={{ chatId, entryId: entry.id }} /> : null}
           {(entry.refs?.skill || entry.refs?.chats?.length) && <HumanRefs refs={entry.refs} />}
           {!continued && (
-            <span className="mt-0.5 text-[11px] text-muted-foreground">{timeOf(entry.at)}</span>
+            <span className="mt-0.5 text-[calc(11rem/14)] text-muted-foreground">
+              {timeOf(entry.at)}
+            </span>
           )}
         </div>
       );
@@ -586,14 +591,14 @@ const EntryRow = memo(function EntryRow({
           )}
           <div className="min-w-0 flex-1">
             {!continued && (
-              <div className="mb-0.5 text-muted-foreground text-xs">
+              <div className="mb-0.5 text-muted-foreground text-[calc(11rem/14)]">
                 <span className="mr-1.5 font-semibold text-foreground">
                   {bot?.name ?? t('Deleted member')}
                 </span>
                 {bot?.title ? `${bot.title} · ` : ''}
                 {timeOf(entry.at)}
                 {entry.model && (
-                  <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                  <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[calc(11rem/14)]">
                     {entry.model}
                   </span>
                 )}
@@ -604,7 +609,7 @@ const EntryRow = memo(function EntryRow({
                         ? 'Asked to sum up after the assigned members replied'
                         : 'Picked automatically because nobody was @-mentioned'
                     )}
-                    className="ml-1.5 rounded border px-1 py-px text-[10px]"
+                    className="ml-1.5 rounded border px-1 py-px text-[calc(11rem/14)]"
                   >
                     {t(ROUTED_BY_LABELS[entry.routedBy])}
                   </span>
@@ -656,7 +661,7 @@ function ProgressRow({
       <BotAvatar bot={bot} size="sm" />
       <div
         className={cn(
-          'flex min-w-0 max-w-lg items-start gap-1.5 rounded-md border-l-2 bg-muted/50 px-2 py-1 text-xs',
+          'flex min-w-0 max-w-lg items-start gap-1.5 rounded-md border-l-2 bg-muted/50 px-2 py-1 text-[calc(11rem/14)]',
           tone.className
         )}
       >
@@ -680,7 +685,9 @@ function ProgressRow({
             <MentionText text={entry.text} bots={bots} />
           )}
         </div>
-        <span className="shrink-0 text-[11px] text-muted-foreground">{timeOf(entry.at)}</span>
+        <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
+          {timeOf(entry.at)}
+        </span>
       </div>
     </div>
   );
@@ -773,7 +780,7 @@ function TurnProcess({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+        className="flex items-center gap-1 text-muted-foreground text-[calc(11rem/14)] hover:text-foreground"
       >
         <Icon className="h-3 w-3" />
         {t('View process')}
@@ -782,7 +789,7 @@ function TurnProcess({
       {open && (
         <div
           data-slot="bot-card"
-          className="mt-1.5 rounded-md border bg-card px-3 py-2 font-mono text-muted-foreground text-xs leading-relaxed"
+          className="mt-1.5 rounded-md border bg-card px-3 py-2 font-mono text-muted-foreground text-[calc(11rem/14)] leading-relaxed"
         >
           {!state && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {state && 'error' in state && <span>{state.error}</span>}
@@ -827,7 +834,8 @@ function HumanRefs({
   const chats = useBotsStore((s) => s.chats);
   const bots = useBotsStore((s) => s.bots);
   const skills = useSettingsStore((s) => s.skills);
-  const chip = 'inline-flex h-6 max-w-56 items-center gap-1 rounded-md px-1.5 text-xs';
+  const chip =
+    'inline-flex h-6 max-w-56 items-center gap-1 rounded-md px-1.5 text-[calc(11rem/14)]';
   return (
     <div className="mt-1 flex flex-wrap justify-end gap-1.5">
       {refs.skill && (

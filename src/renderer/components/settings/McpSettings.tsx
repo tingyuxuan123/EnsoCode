@@ -34,34 +34,37 @@ function McpStatusBadge({ status }: { status: McpServerStatus }) {
   const { t } = useI18n();
   if (status.state === 'connecting') {
     return (
-      <Badge variant="outline" className="shrink-0 animate-pulse text-[11px] text-muted-foreground">
+      <Badge
+        variant="outline"
+        className="shrink-0 animate-pulse text-[calc(11rem/14)] text-muted-foreground"
+      >
         {t('Connecting')}
       </Badge>
     );
   }
   if (status.state === 'ready') {
     return (
-      <Badge variant="success" className="shrink-0 text-[11px]">
+      <Badge variant="success" className="shrink-0 text-[calc(11rem/14)]">
         {t('{{count}} tools', { count: status.toolCount ?? 0 })}
       </Badge>
     );
   }
   if (status.state === 'unauthorized') {
     return (
-      <Badge variant="warning" className="shrink-0 text-[11px]">
+      <Badge variant="warning" className="shrink-0 text-[calc(11rem/14)]">
         {t('Not authorized')}
       </Badge>
     );
   }
   if (status.state === 'idle') {
     return (
-      <Badge variant="outline" className="shrink-0 text-[11px] text-muted-foreground">
+      <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
         {t('Authorized, pending connection')}
       </Badge>
     );
   }
   return (
-    <Badge variant="error" className="shrink-0 text-[11px]" title={status.error}>
+    <Badge variant="error" className="shrink-0 text-[calc(11rem/14)]" title={status.error}>
       {t('Connection failed')}
     </Badge>
   );
@@ -111,14 +114,17 @@ export function McpSettings() {
   const enabledTokens = enabledOccupancyTotal(directIds, occupancy.rows);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="mcp.root">
+    <div className="space-y-[24px]" data-slot="settings-page">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="mcp.root"
+      >
         <div>
-          <h3 className="font-semibold text-[18px]">
+          <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
             {t('MCP Servers')}
             <NewSessionBadge />
             {mcpServers.length > 0 && (
-              <span className="ml-2 font-normal text-muted-foreground text-[12px]">
+              <span className="ml-2 font-normal text-muted-foreground text-[calc(12rem/14)]">
                 {t('{{enabled}}/{{total}} enabled', {
                   enabled: enabledCount,
                   total: mcpServers.length,
@@ -127,7 +133,7 @@ export function McpSettings() {
               </span>
             )}
           </h3>
-          <p className="text-muted-foreground text-[13px]">
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t('Model Context Protocol servers available to this app')}
           </p>
         </div>
@@ -146,8 +152,8 @@ export function McpSettings() {
       {mcpServers.length === 0 ? (
         <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Plug className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-[13px]">{t('No MCP servers yet')}</p>
-          <p className="mt-1 text-muted-foreground text-[12px]">
+          <p className="mt-3 font-medium text-[calc(13rem/14)]">{t('No MCP servers yet')}</p>
+          <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
             {t('Import MCP servers from local apps or add one manually to get started')}
           </p>
         </div>
@@ -166,9 +172,11 @@ export function McpSettings() {
             actionDisabled={selection.selectedIds.length === 0}
           />
           {visible.length === 0 ? (
-            <p className="px-3 py-6 text-center text-muted-foreground text-[12px]">{t('No results')}</p>
+            <p className="px-3 py-6 text-center text-muted-foreground text-[calc(12rem/14)]">
+              {t('No results')}
+            </p>
           ) : (
-            <div className="space-y-1">
+            <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
               {visible.map((server) => {
                 // 事件可能缺 serverId（旧配置），按名字兜底
                 const status = statuses[server.id] ?? statuses[server.name];
@@ -180,32 +188,36 @@ export function McpSettings() {
                 return (
                   <div key={server.id} className="space-y-1">
                     <div
-                      className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
+                      className="group flex items-center justify-between gap-[12px] px-[12px] py-[10px] transition-colors hover:bg-accent/50"
                       data-settings-row={`mcp.${server.id}`}
                     >
-                      <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-[12px]">
                         <Checkbox
                           checked={selection.isSelected(server.id)}
                           onCheckedChange={(checked) => selection.toggleOne(server.id, checked)}
                         />
-                        <span
-                          className={cn(
-                            'shrink-0 font-medium text-[13px]',
-                            !server.enabled && 'text-muted-foreground line-through'
-                          )}
-                        >
-                          {server.name}
-                        </span>
-                        <Badge variant="outline" className="shrink-0 text-[11px]">
-                          {server.transport}
-                        </Badge>
-                        <Badge variant="secondary" className="shrink-0 text-[11px]">
-                          {server.source}
-                        </Badge>
-                        {status && <McpStatusBadge status={status} />}
-                        <span className="min-w-0 truncate font-mono text-muted-foreground text-[12px]">
-                          {server.url ?? [server.command, ...(server.args ?? [])].join(' ')}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 flex-wrap items-center gap-[6px]">
+                            <span
+                              className={cn(
+                                'truncate font-medium text-[calc(13rem/14)]',
+                                !server.enabled && 'text-muted-foreground line-through'
+                              )}
+                            >
+                              {server.name}
+                            </span>
+                            <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)]">
+                              {server.transport}
+                            </Badge>
+                            <Badge variant="secondary" className="shrink-0 text-[calc(11rem/14)]">
+                              {server.source}
+                            </Badge>
+                            {status && <McpStatusBadge status={status} />}
+                          </div>
+                          <p className="mt-[2px] truncate font-mono text-muted-foreground text-[calc(12rem/14)]">
+                            {server.url ?? [server.command, ...(server.args ?? [])].join(' ')}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {(canAuthorize || status?.state === 'unauthorized') && (
@@ -253,12 +265,15 @@ export function McpSettings() {
                           )}
                         >
                           <TabsList aria-label={t('Load mode')}>
-                            <TabsTab value="direct" className="h-6 px-2 text-[12px] sm:h-6 sm:text-[12px]">
+                            <TabsTab
+                              value="direct"
+                              className="h-6 px-2 text-[calc(12rem/14)] sm:h-6 sm:text-[calc(12rem/14)]"
+                            >
                               {t('Always loaded')}
                             </TabsTab>
                             <TabsTab
                               value="deferred"
-                              className="h-6 px-2 text-[12px] sm:h-6 sm:text-[12px]"
+                              className="h-6 px-2 text-[calc(12rem/14)] sm:h-6 sm:text-[calc(12rem/14)]"
                             >
                               {t('On demand')}
                             </TabsTab>
@@ -287,7 +302,7 @@ export function McpSettings() {
                       </div>
                     </div>
                     {authorizedHint === server.id && (
-                      <p className="px-3 text-muted-foreground text-[12px]">
+                      <p className="px-3 text-muted-foreground text-[calc(12rem/14)]">
                         {t(
                           'Authorized. Conversations that already include this server can use it on the next message.'
                         )}

@@ -9,10 +9,12 @@ export function ExperimentalSettings({ onOpenBots }: { onOpenBots: () => void })
   const botModeEnabled = useSettingsStore((s) => s.botModeEnabled);
   const setBotModeEnabled = useSettingsStore((s) => s.setBotModeEnabled);
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div>
-        <h3 className="text-[18px] font-semibold">{t('Experimental')}</h3>
-        <p className="text-[13px] text-muted-foreground">
+        <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+          {t('Experimental')}
+        </h3>
+        <p className="text-[calc(13rem/14)] text-muted-foreground">
           {t('Features still being tested. They may change or be removed.')}
         </p>
       </div>

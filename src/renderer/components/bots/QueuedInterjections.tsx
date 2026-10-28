@@ -22,7 +22,7 @@ export function QueuedInterjections({
       return (
         <div
           key={item.deliveryId}
-          className="flex items-center gap-2 text-muted-foreground text-xs"
+          className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]"
         >
           <span>
             {name} · {t('Queued')}

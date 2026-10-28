@@ -46,10 +46,10 @@ export function TurnFilesCard({
   return (
     <section
       data-turn-files=""
-      className="my-[16px] overflow-hidden rounded-[6px] border border-line text-[12px]"
+      className="my-[16px] overflow-hidden rounded-[6px] border border-line text-[calc(12rem/14)]"
     >
-      <header className="flex h-[36px] items-center gap-[8px] bg-muted/60 px-[12px]">
-        <Files className="size-[14px] shrink-0 text-muted-foreground" aria-hidden />
+      <header className="flex h-[calc(36rem/14)] items-center gap-[8px] bg-muted/60 px-[12px]">
+        <Files className="size-[calc(14rem/14)] shrink-0 text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">
           {t('{{count}} files changed', { count: summary.files.length })}
         </span>
@@ -84,9 +84,9 @@ export function TurnFilesCard({
                 data-turn-file={file.path}
                 title={file.path}
                 onClick={() => openSidePanelFile(conversationId, file.path)}
-                className="flex h-[36px] w-full min-w-0 items-center gap-[8px] px-[12px] text-left transition-colors hover:bg-accent"
+                className="flex h-[calc(36rem/14)] w-full min-w-0 items-center gap-[8px] px-[12px] text-left transition-colors hover:bg-accent"
               >
-                <FileCode2 className="size-[14px] shrink-0 text-primary" aria-hidden />
+                <FileCode2 className="size-[calc(14rem/14)] shrink-0 text-primary" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">
                   {dir && <span className="text-muted-foreground">{dir}</span>}
                   <span className="font-medium text-foreground">{name}</span>

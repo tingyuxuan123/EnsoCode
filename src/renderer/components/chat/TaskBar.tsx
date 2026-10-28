@@ -189,14 +189,14 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly, todos }: TaskBa
             aria-expanded={open === 'todo'}
             onClick={() => toggle('todo')}
             className={cn(
-              'inline-flex h-[28px] items-center gap-[6px] rounded-[6px] border border-border/80 bg-background px-[10px] text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+              'inline-flex h-[calc(28rem/14)] items-center gap-[6px] rounded-[6px] border border-border/80 bg-background px-[10px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
               open === 'todo' && 'bg-control/70 text-foreground'
             )}
           >
             {progress.active ? (
-              <LoaderCircle className="size-[14px] animate-spin" aria-hidden />
+              <LoaderCircle className="size-[calc(14rem/14)] animate-spin" aria-hidden />
             ) : (
-              <ListTodo className="size-[14px]" aria-hidden />
+              <ListTodo className="size-[calc(14rem/14)]" aria-hidden />
             )}
             <span>{t('Current progress')}</span>
             <span className="tabular-nums">
@@ -222,8 +222,8 @@ function TodoPanel({
   const { t } = useI18n();
   return (
     <div className="absolute bottom-full left-0 right-0 z-30 mb-[6px] flex max-h-[min(360px,60vh)] flex-col overflow-hidden rounded-[6px] border border-border bg-background shadow-float">
-      <div className="flex min-h-[40px] shrink-0 flex-wrap items-center gap-[8px] border-b border-line px-[12px] py-[6px] text-[12px]">
-        <ListTodo className="size-[14px] text-muted-foreground" aria-hidden />
+      <div className="flex min-h-[calc(40rem/14)] shrink-0 flex-wrap items-center gap-[8px] border-b border-line px-[12px] py-[6px] text-[calc(12rem/14)]">
+        <ListTodo className="size-[calc(14rem/14)] text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">{t('Current progress')}</span>
         <span className="text-muted-foreground tabular-nums">
           {summary.done}/{summary.total}
@@ -237,6 +237,18 @@ function TodoPanel({
         </button>
       </div>
       <div className="scroll-stable min-h-0 flex-1 overflow-auto px-3 py-2">
+        <div
+          className="mb-[8px] h-[calc(3rem/14)] overflow-hidden rounded-full bg-control"
+          role="progressbar"
+          aria-label={t('Current progress')}
+          aria-valuenow={summary.done}
+          aria-valuemax={summary.total}
+        >
+          <div
+            className="h-full bg-primary"
+            style={{ width: `${(summary.done / Math.max(1, summary.total)) * 100}%` }}
+          />
+        </div>
         <TodoList todos={todos} />
       </div>
     </div>
@@ -267,14 +279,14 @@ function DockButton({
       onClick={onClick}
       title={summary.running > 0 ? t('{{count}} running', { count: summary.running }) : undefined}
       className={cn(
-        'relative inline-flex h-[28px] items-center gap-[6px] rounded-[6px] border border-border/80 bg-background px-[10px] text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+        'relative inline-flex h-[calc(28rem/14)] items-center gap-[6px] rounded-[6px] border border-border/80 bg-background px-[10px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
         open && 'bg-control/70 text-foreground'
       )}
     >
       {summary.running > 0 ? (
-        <LoaderCircle className="size-[14px] animate-spin" aria-hidden />
+        <LoaderCircle className="size-[calc(14rem/14)] animate-spin" aria-hidden />
       ) : (
-        <Icon className="size-[14px]" aria-hidden />
+        <Icon className="size-[calc(14rem/14)]" aria-hidden />
       )}
       <span>{label}</span>
       {summary.running > 0 && <span className="tabular-nums">· {summary.running}</span>}
@@ -318,14 +330,14 @@ function DockPanel({
       data-task-dock-panel=""
       className="absolute bottom-full left-0 right-0 z-30 mb-[6px] flex h-[min(360px,55vh)] flex-col overflow-hidden rounded-[6px] border border-border bg-background shadow-float"
     >
-      <div className="flex min-h-[40px] shrink-0 flex-wrap items-center gap-[8px] border-b border-line px-[12px] py-[6px] text-[12px]">
-        <Icon className="size-[14px] text-muted-foreground" aria-hidden />
+      <div className="flex min-h-[calc(40rem/14)] shrink-0 flex-wrap items-center gap-[8px] border-b border-line px-[12px] py-[6px] text-[calc(12rem/14)]">
+        <Icon className="size-[calc(14rem/14)] text-muted-foreground" aria-hidden />
         <span className="font-medium text-foreground">{title}</span>
         <span className="text-muted-foreground tabular-nums">
           {t('{{count}} running', { count: summary.running })}
         </span>
         <div
-          className="ml-auto flex h-[26px] items-center gap-[2px] rounded-[6px] bg-control/55 p-[2px]"
+          className="ml-auto flex h-[calc(26rem/14)] items-center gap-[2px] rounded-[6px] bg-control/55 p-[2px]"
           role="tablist"
         >
           {DOCK_FILTERS.map((value) => (
@@ -337,7 +349,7 @@ function DockPanel({
               data-task-dock-filter={value}
               onClick={() => setFilter(value)}
               className={cn(
-                'h-full rounded-[4px] px-[8px] text-[11px] text-muted-foreground transition-colors hover:text-foreground',
+                'h-full rounded-[4px] px-[8px] text-[calc(11rem/14)] text-muted-foreground transition-colors hover:text-foreground',
                 filter === value && 'bg-background font-medium text-foreground'
               )}
             >
@@ -374,7 +386,9 @@ function DockPanel({
 function EmptyDock() {
   const { t } = useI18n();
   return (
-    <p className="px-2 py-6 text-center text-xs text-muted-foreground">{t('Nothing running.')}</p>
+    <p className="px-2 py-6 text-center text-[calc(11rem/14)] text-muted-foreground">
+      {t('Nothing running.')}
+    </p>
   );
 }
 
@@ -394,7 +408,7 @@ function BashList({
     <div className="flex flex-col gap-[6px]">
       {tasks.map((task) => (
         <div key={task.taskId} className="rounded-[6px] border border-line px-[12px] py-[8px]">
-          <div className="flex min-h-[24px] min-w-0 items-center gap-[8px] text-[12px]">
+          <div className="flex min-h-[calc(24rem/14)] min-w-0 items-center gap-[8px] text-[calc(12rem/14)]">
             <StepNode
               icon={TerminalSquare}
               state={
@@ -408,7 +422,7 @@ function BashList({
               className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
               <span
-                className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+                className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/14)] text-muted-foreground"
                 title={task.command}
               >
                 $ {task.command}
@@ -493,7 +507,7 @@ function AgentCards({
               );
               if (target) addSidePanelSubagent(target);
             }}
-            className="flex min-w-0 flex-col gap-[6px] rounded-[6px] border border-line px-[12px] py-[10px] text-left text-[12px] transition-colors hover:bg-accent"
+            className="flex min-w-0 flex-col gap-[6px] rounded-[6px] border border-line px-[12px] py-[10px] text-left text-[calc(12rem/14)] transition-colors hover:bg-accent"
           >
             <span className="flex min-w-0 items-baseline gap-1.5">
               {index >= 0 && (
@@ -502,7 +516,7 @@ function AgentCards({
                 </span>
               )}
               <span
-                className="truncate text-[13px] font-medium text-foreground"
+                className="truncate text-[calc(13rem/14)] font-medium text-foreground"
                 title={entry.title}
               >
                 {title}
@@ -566,7 +580,7 @@ function LegacyAgentList({
     <div className="flex flex-col gap-0.5">
       {agents.map((agent) => (
         <div key={agent.id}>
-          <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] hover:bg-muted/50">
+          <div className="flex min-h-[calc(30rem/14)] min-w-0 items-center gap-2 rounded-md px-1.5 text-[calc(13rem/14)] hover:bg-muted/50">
             <StepNode
               icon={Bot}
               state={
@@ -580,7 +594,7 @@ function LegacyAgentList({
               className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
               {agent.agentType && <span className="shrink-0 font-medium">{agent.agentType}</span>}
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate text-[calc(11rem/14)] text-muted-foreground">
                 {agent.description}
               </span>
               <AgentMeta agent={agent} />
@@ -625,12 +639,12 @@ function AgentDetails({ agent }: { agent: SubagentInfo }) {
         <AgentActivityView key={activity.id} activity={activity} />
       ))}
       {activities.length === 0 && !agent.resultText && (
-        <pre className="font-mono text-xs whitespace-pre-wrap text-muted-foreground">
+        <pre className="font-mono text-[calc(11rem/14)] whitespace-pre-wrap text-muted-foreground">
           {(agent.activityLog ?? []).join('\n') || t('(no output yet)')}
         </pre>
       )}
       {agent.detailsPruned && (
-        <div className="rounded-md border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+        <div className="rounded-md border border-dashed px-2.5 py-2 text-[calc(11rem/14)] text-muted-foreground">
           {t('Earlier activity details were cleared; the final report is still available.')}
         </div>
       )}
@@ -643,7 +657,9 @@ function AgentDetails({ agent }: { agent: SubagentInfo }) {
               : 'border-blue-500/30 bg-blue-500/5'
           )}
         >
-          <div className="mb-1.5 font-medium text-xs text-foreground">{t('Final report')}</div>
+          <div className="mb-1.5 font-medium text-[calc(11rem/14)] text-foreground">
+            {t('Final report')}
+          </div>
           <Markdown text={agent.resultText} />
         </section>
       )}
@@ -657,7 +673,7 @@ export function AgentActivityView({ activity }: { activity: SubagentActivity }) 
   if (activity.type === 'assistant') {
     return (
       <section className="rounded-md bg-muted/30 px-2.5 py-2">
-        <div className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+        <div className="mb-1 text-[calc(11rem/14)] font-medium tracking-wide text-muted-foreground uppercase">
           {t('Assistant')}
         </div>
         <FoldedContent text={activity.text} markdown />
@@ -675,13 +691,13 @@ export function AgentActivityView({ activity }: { activity: SubagentActivity }) 
         aria-controls={contentId}
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition-colors hover:bg-muted/50"
+        className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[calc(11rem/14)] transition-colors hover:bg-muted/50"
       >
         <SubagentToolIcon toolName={toolName} />
         <span className="shrink-0 font-medium text-foreground/80">{mcp?.tool ?? toolName}</span>
         {summary && (
           <span
-            className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
+            className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/14)] text-muted-foreground"
             title={summary}
           >
             {summary}
@@ -700,18 +716,20 @@ export function AgentActivityView({ activity }: { activity: SubagentActivity }) 
       {expanded && (
         <div id={contentId} className="ml-5 border-border/50 border-l pb-2 pl-2.5">
           {mcp && (
-            <div className="mb-1 truncate font-mono text-[10px] text-muted-foreground/70">
+            <div className="mb-1 truncate font-mono text-[calc(11rem/14)] text-muted-foreground/70">
               {mcp.server}.{mcp.tool}
             </div>
           )}
-          <div className="text-[10px] text-muted-foreground/70">{t('Arguments')}</div>
-          <pre className="scroll-stable max-h-28 overflow-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted-foreground/80">
+          <div className="text-[calc(11rem/14)] text-muted-foreground/70">{t('Arguments')}</div>
+          <pre className="scroll-stable max-h-28 overflow-auto font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground/80">
             {stripAnsi(activity.argumentsText)}
           </pre>
           {activity.outputText && (
             <div className="mt-1.5 border-border/40 border-t pt-1.5">
-              <div className="mb-0.5 text-[10px] text-muted-foreground">{t('Result')}</div>
-              <pre className="overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/80">
+              <div className="mb-0.5 text-[calc(11rem/14)] text-muted-foreground">
+                {t('Result')}
+              </div>
+              <pre className="overflow-auto font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-foreground/80">
                 {stripAnsi(activity.outputText)}
               </pre>
             </div>
@@ -791,21 +809,21 @@ function FoldedContent({
   const body = markdown ? (
     <Markdown text={text} />
   ) : (
-    <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+    <pre className="overflow-x-auto font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
       {stripAnsi(text)}
     </pre>
   );
   if (!long) {
     return (
       <div>
-        {label && <div className="mb-0.5 text-[10px] text-muted-foreground">{label}</div>}
+        {label && <div className="mb-0.5 text-[calc(11rem/14)] text-muted-foreground">{label}</div>}
         {body}
       </div>
     );
   }
   return (
     <details className="group/details">
-      <summary className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground">
+      <summary className="cursor-pointer text-[calc(11rem/14)] text-muted-foreground hover:text-foreground">
         {label ? `${label} · ` : ''}
         {t('{{count}} chars', { count: text.length })}
       </summary>
@@ -822,7 +840,7 @@ function AgentMeta({ agent }: { agent: SubagentInfo }) {
     return () => clearInterval(timer);
   }, [agent.status]);
   return (
-    <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
+    <span className="shrink-0 font-mono text-[calc(11rem/14)] text-muted-foreground/70 tabular-nums">
       {agent.steps > 0 ? `${agent.steps} steps · ` : ''}
       {agent.outputTokens ? `${agent.outputTokens} tok · ` : ''}
       {agent.status === 'running' ? formatDuration(Date.now() - agent.startedAt) : agent.status}
@@ -838,7 +856,7 @@ function TaskMeta({ task }: { task: BackgroundTaskInfo }) {
     return () => clearInterval(timer);
   }, [task.status]);
   return (
-    <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
+    <span className="shrink-0 font-mono text-[calc(11rem/14)] text-muted-foreground/70 tabular-nums">
       {task.status === 'running'
         ? formatDuration(Date.now() - task.startedAt)
         : task.exitCode !== undefined
@@ -860,7 +878,7 @@ function TailView({ tail }: { tail: string }) {
   return (
     <pre
       ref={ref}
-      className="scroll-stable max-h-56 overflow-auto border-t border-border/60 px-2.5 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground"
+      className="scroll-stable max-h-56 overflow-auto border-t border-border/60 px-2.5 py-2 font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground"
     >
       {stripAnsi(tail) || t('(no output yet)')}
     </pre>

@@ -15,11 +15,11 @@ import {
 import { Markdown } from './Markdown';
 
 const BAR =
-  'mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[12px]';
+  'mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[calc(12rem/14)]';
 
 function PlanPreview({ doc }: { doc: PlanDoc }) {
   return (
-    <div className="scroll-stable mt-[8px] max-h-[190px] overflow-y-auto rounded-[4px] border border-line bg-background px-[12px] py-[8px] text-[12px] leading-[24px]">
+    <div className="scroll-stable mt-[8px] max-h-[190px] overflow-y-auto rounded-[4px] border border-line bg-background px-[12px] py-[8px] text-[calc(12rem/14)] leading-[calc(24rem/14)]">
       <Markdown text={doc.text} />
     </div>
   );
@@ -95,7 +95,7 @@ function PlanReviewBar({
     <div className={BAR}>
       <div className="flex items-center gap-2">
         <ClipboardList className="h-3.5 w-3.5 shrink-0 text-primary" />
-        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+        <span className="shrink-0 text-[calc(11rem/14)] font-medium text-muted-foreground">
           {t('Plan awaiting approval')}
         </span>
         <button
@@ -132,7 +132,7 @@ function PlanReviewBar({
           type="button"
           disabled={busy}
           onClick={() => void respond('discard')}
-          className="rounded-md px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          className="rounded-md px-[10px] py-[4px] text-[calc(12rem/14)] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
           {t('Discard and exit plan mode')}
         </button>
@@ -141,7 +141,7 @@ function PlanReviewBar({
             type="button"
             disabled={busy || !feedback.trim()}
             onClick={() => void respond('revise')}
-            className="rounded-md px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            className="rounded-md px-[10px] py-[4px] text-[calc(12rem/14)] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             {t('Send feedback')}
           </button>
@@ -150,7 +150,7 @@ function PlanReviewBar({
             type="button"
             disabled={busy}
             onClick={() => setRevising(true)}
-            className="rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            className="rounded-md px-[10px] py-[4px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
             {t('Request changes')}
           </button>
@@ -161,7 +161,7 @@ function PlanReviewBar({
             disabled={busy}
             onClick={() => void respond('approve')}
             title={t(APPROVAL_MODE_META[approvalMode].labelKey)}
-            className="rounded-l-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="rounded-l-md bg-primary px-[10px] py-[4px] text-[calc(12rem/14)] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             {t('Approve and execute')}
           </button>
@@ -178,7 +178,7 @@ function PlanReviewBar({
               align="end"
               className="w-80 [&_[data-slot=popover-viewport]]:p-1"
             >
-              <p className="px-2 pt-1 pb-1.5 text-muted-foreground text-xs">
+              <p className="px-2 pt-1 pb-1.5 text-muted-foreground text-[calc(11rem/14)]">
                 {t('Approve and execute with')}
               </p>
               {APPROVAL_MODE_ORDER.map((option) => {
@@ -203,7 +203,9 @@ function PlanReviewBar({
                     <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1">
                       <span className="block">{t(meta.labelKey)}</span>
-                      <span className="block text-xs text-muted-foreground">{t(meta.descKey)}</span>
+                      <span className="block text-[calc(11rem/14)] text-muted-foreground">
+                        {t(meta.descKey)}
+                      </span>
                     </span>
                   </button>
                 );

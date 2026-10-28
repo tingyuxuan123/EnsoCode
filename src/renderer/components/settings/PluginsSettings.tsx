@@ -30,9 +30,9 @@ function Detail({ label, items }: { label: string; items: string[] }) {
   if (items.length === 0) return null;
   return (
     <div className="space-y-0.5">
-      <p className="font-medium text-muted-foreground text-[12px]">{label}</p>
+      <p className="font-medium text-muted-foreground text-[calc(12rem/14)]">{label}</p>
       {items.map((item) => (
-        <p key={item} className="break-all font-mono text-[11px]">
+        <p key={item} className="break-all font-mono text-[calc(11rem/14)]">
           {item}
         </p>
       ))}
@@ -54,12 +54,13 @@ function PluginRow({
   const { components } = plugin;
   const counts = componentCounts(components, t);
   return (
-    <div className="rounded-[6px] border" data-settings-row={`plugins.${plugin.key}`}>
+    <div data-settings-row={`plugins.${plugin.key}`}>
       <div className="flex items-center justify-between gap-3 px-3 py-2">
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
           onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
         >
           <ChevronRight
             className={cn(
@@ -67,18 +68,18 @@ function PluginRow({
               open && 'rotate-90'
             )}
           />
-          <span className="shrink-0 font-medium text-[13px]">{plugin.name}</span>
+          <span className="shrink-0 font-medium text-[calc(13rem/14)]">{plugin.name}</span>
           {plugin.version && (
-            <Badge variant="outline" className="shrink-0 text-[11px]">
+            <Badge variant="outline" className="shrink-0 text-[calc(11rem/14)]">
               {plugin.version}
             </Badge>
           )}
           {plugin.marketplace && (
-            <Badge variant="secondary" className="shrink-0 text-[11px]">
+            <Badge variant="secondary" className="shrink-0 text-[calc(11rem/14)]">
               {plugin.marketplace}
             </Badge>
           )}
-          <span className="min-w-0 truncate text-muted-foreground text-[12px]">
+          <span className="min-w-0 truncate text-muted-foreground text-[calc(12rem/14)]">
             {counts ||
               (components.unsupported.length > 0
                 ? `${t('Not supported')}: ${components.unsupported.join(', ')}`
@@ -88,9 +89,9 @@ function PluginRow({
         <Switch checked={entry?.enabled === true} onCheckedChange={onToggle} />
       </div>
       {open && (
-        <div className="space-y-2 border-t px-3 py-2">
+        <div className="space-y-[8px] border-t border-line bg-muted/20 px-[40px] py-[10px]">
           {plugin.description && (
-            <p className="text-muted-foreground text-[12px]">{plugin.description}</p>
+            <p className="text-muted-foreground text-[calc(12rem/14)]">{plugin.description}</p>
           )}
           <Detail label={t('Skills')} items={components.skills} />
           <Detail label={t('Commands')} items={components.commands.map((name) => `/${name}`)} />
@@ -156,19 +157,22 @@ export function PluginsSettings() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="plugins.root">
+    <div className="space-y-[24px]" data-slot="settings-page">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="plugins.root"
+      >
         <div>
-          <h3 className="font-semibold text-[18px]">
+          <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
             {t('Plugins')}
             <NewSessionBadge />
             {enabledCount > 0 && (
-              <span className="ml-2 font-normal text-muted-foreground text-[12px]">
+              <span className="ml-2 font-normal text-muted-foreground text-[calc(12rem/14)]">
                 {t('{{count}} enabled', { count: enabledCount })}
               </span>
             )}
           </h3>
-          <p className="text-muted-foreground text-[13px]">
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t(
               'Plugins installed in Claude Code. Each one is switched on or off as a whole here; changes apply to new sessions.'
             )}
@@ -187,13 +191,15 @@ export function PluginsSettings() {
       ) : installed.length === 0 ? (
         <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <Puzzle className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-[13px]">{t('No Claude Code plugins found')}</p>
-          <p className="mt-1 text-muted-foreground text-[12px]">
+          <p className="mt-3 font-medium text-[calc(13rem/14)]">
+            {t('No Claude Code plugins found')}
+          </p>
+          <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
             {t('Install plugins with /plugin in Claude Code, then rescan.')}
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
           {installed.map((plugin) => (
             <PluginRow
               key={plugin.key}
@@ -207,7 +213,7 @@ export function PluginsSettings() {
 
       {missing.length > 0 && (
         <div className="space-y-1">
-          <p className="font-medium text-muted-foreground text-[12px]">
+          <p className="font-medium text-muted-foreground text-[calc(12rem/14)]">
             {t('No longer installed in Claude Code')}
           </p>
           {missing.map((entry) => (
@@ -215,7 +221,9 @@ export function PluginsSettings() {
               key={entry.id}
               className="flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 hover:bg-accent/50"
             >
-              <span className="text-muted-foreground text-[13px] line-through">{entry.name}</span>
+              <span className="text-muted-foreground text-[calc(13rem/14)] line-through">
+                {entry.name}
+              </span>
               <Button
                 variant="ghost"
                 size="icon"

@@ -91,7 +91,9 @@ export function SessionSwitcher({
                 <Check className={cn(entry.id !== currentId && 'invisible')} />
                 <span className="min-w-0 flex-1 truncate">{entry.title}</span>
                 {!entry.resumable && entry.id !== currentId && (
-                  <span className="shrink-0 text-muted-foreground text-xs">{t('Read-only')}</span>
+                  <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">
+                    {t('Read-only')}
+                  </span>
                 )}
                 <ThreadMarks entry={entry} />
               </MenuItem>

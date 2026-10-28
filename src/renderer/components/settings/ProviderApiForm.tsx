@@ -215,7 +215,9 @@ export function ProviderApiForm({
       <DialogPanel bare={bare} className="space-y-4">
         {extraFields}
         {isClassifierOnlyProvider({ api, baseUrl }) && (
-          <p className="text-[12px] text-muted-foreground">{t('Classification only, not for chat')}</p>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
+            {t('Classification only, not for chat')}
+          </p>
         )}
         {!hideName && (
           <Field>
@@ -285,7 +287,7 @@ export function ProviderApiForm({
             <FieldLabel>
               {t('Models')}
               {models.length > 0 && (
-                <span className="font-normal text-muted-foreground text-[12px]">
+                <span className="font-normal text-muted-foreground text-[calc(12rem/14)]">
                   {t('{{enabled}}/{{total}} enabled', {
                     enabled: enabledCount,
                     total: models.length,
@@ -298,7 +300,7 @@ export function ProviderApiForm({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 gap-1 px-2 text-[12px]"
+                className="h-6 gap-1 px-2 text-[calc(12rem/14)]"
                 disabled={busy !== null}
                 onClick={handleFetchModels}
               >
@@ -365,7 +367,7 @@ export function ProviderApiForm({
                   />
                 ))}
                 {visibleModels.length === 0 && (
-                  <p className="py-4 text-center text-muted-foreground text-[12px]">
+                  <p className="py-4 text-center text-muted-foreground text-[calc(12rem/14)]">
                     {t('No models match')}
                   </p>
                 )}
@@ -386,7 +388,7 @@ export function ProviderApiForm({
                   addModel(newModel);
                 }}
                 placeholder={t('Add a model id')}
-                className="h-8 font-mono text-[12px]"
+                className="h-8 font-mono text-[calc(12rem/14)]"
               />
               <Button
                 type="button"
@@ -444,14 +446,14 @@ export function ProviderApiForm({
           )}
           {status &&
             (status.ok ? (
-              <span className="flex min-w-0 items-center gap-1 text-emerald-600 text-[12px] dark:text-emerald-500">
+              <span className="flex min-w-0 items-center gap-1 text-emerald-600 text-[calc(12rem/14)] dark:text-emerald-500">
                 <CircleCheck className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{status.text}</span>
               </span>
             ) : (
               <button
                 type="button"
-                className="flex min-w-0 items-center gap-1 text-destructive text-[12px] underline-offset-2 hover:underline"
+                className="flex min-w-0 items-center gap-1 text-destructive text-[calc(12rem/14)] underline-offset-2 hover:underline"
                 onClick={() => setErrorDetail(status.text)}
               >
                 <CircleX className="h-3.5 w-3.5 shrink-0" />
@@ -487,7 +489,7 @@ export function ProviderApiForm({
             <DialogTitle>{t('Connection failed')}</DialogTitle>
           </DialogHeader>
           <DialogPanel>
-            <pre className="max-h-80 select-text overflow-auto whitespace-pre-wrap break-all rounded-[6px] bg-muted p-3 font-mono text-[12px]">
+            <pre className="max-h-80 select-text overflow-auto whitespace-pre-wrap break-all rounded-[6px] bg-muted p-3 font-mono text-[calc(12rem/14)]">
               {errorDetail}
             </pre>
           </DialogPanel>

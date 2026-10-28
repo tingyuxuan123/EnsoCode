@@ -1058,6 +1058,9 @@ export const zhTranslations: Record<string, string> = {
   Model: '模型',
   'Working directory': '工作目录',
   'Ask the agent…': '想让 agent 做什么…',
+  'Start a new task': '开始一项新任务',
+  'Describe the work to complete in {{project}}. Choose a model and approval mode below.':
+    '描述你要在 {{project}} 里完成的工作，模型与审批档位可以在输入框里改。',
   'Thinking…': '思考中…',
   'Thought process': '思考过程',
   'Thought for {{duration}}': '思考了 {{duration}}',

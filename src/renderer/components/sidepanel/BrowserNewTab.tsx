@@ -36,7 +36,7 @@ export function BrowserNewTab() {
           </div>
           <div className="min-w-0">
             <h2 className="font-medium text-lg">{t('Enso Browser')}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">
               {t('Your agent can explore the web with you.')}
             </p>
           </div>
@@ -47,7 +47,9 @@ export function BrowserNewTab() {
               <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <h3 className="font-medium text-sm leading-5">{t(title)}</h3>
-                <p className="text-xs leading-relaxed text-muted-foreground">{t(detail)}</p>
+                <p className="text-[calc(11rem/14)] leading-relaxed text-muted-foreground">
+                  {t(detail)}
+                </p>
               </div>
             </div>
           ))}

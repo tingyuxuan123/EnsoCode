@@ -70,10 +70,10 @@ export function ChatFindBar({
             }
           }}
           placeholder={t('Search messages...')}
-          className="h-8 text-xs [&_input]:pl-8"
+          className="h-8 text-[calc(11rem/14)] [&_input]:pl-8"
         />
       </div>
-      <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+      <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)] tabular-nums">
         {total === 0 ? t('No results') : `${current}/${total}`}
       </span>
       <Button

@@ -72,12 +72,14 @@ export function NavRail({ items, activeKey, onJump }: NavRailProps) {
                 type="button"
                 onClick={() => onJump(item.key)}
                 onMouseEnter={() => setHoverIndex(index)}
-                className="flex h-[7px] items-center"
+                className="flex h-[calc(7rem/14)] items-center"
               >
                 <span
                   className={cn(
                     'rounded-full transition-all duration-150',
-                    active || hovered ? 'h-[3px] bg-foreground' : 'h-[2px] bg-muted-foreground/40'
+                    active || hovered
+                      ? 'h-[calc(3rem/14)] bg-foreground'
+                      : 'h-[calc(2rem/14)] bg-muted-foreground/40'
                   )}
                   style={{ width: widthOf(index, active) }}
                 />
@@ -90,9 +92,11 @@ export function NavRail({ items, activeKey, onJump }: NavRailProps) {
               className="pointer-events-none absolute left-10 w-72 -translate-y-1/2 rounded-xl border bg-popover p-3 shadow-lg"
               style={{ top: `${((hoverIndex + 0.5) / visible.length) * 100}%` }}
             >
-              <p className="line-clamp-2 text-xs font-semibold">{visible[hoverIndex].question}</p>
+              <p className="line-clamp-2 text-[calc(11rem/14)] font-semibold">
+                {visible[hoverIndex].question}
+              </p>
               {visible[hoverIndex].answer && (
-                <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
+                <p className="mt-1 line-clamp-3 text-[calc(11rem/14)] text-muted-foreground">
                   {visible[hoverIndex].answer}
                 </p>
               )}

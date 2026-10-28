@@ -24,11 +24,11 @@ export function BotUsageCard({ bot }: { bot: BotProfile }) {
       <div className="grid grid-cols-3 gap-2">
         {cells.map(([label, totals]) => (
           <div key={label} className="min-w-0">
-            <div className="text-muted-foreground text-xs">{label}</div>
+            <div className="text-muted-foreground text-[calc(11rem/14)]">{label}</div>
             <div className="truncate font-medium text-sm tabular-nums">
               {formatTokens(totals.tokens)}
             </div>
-            <div className="truncate text-muted-foreground text-xs tabular-nums">
+            <div className="truncate text-muted-foreground text-[calc(11rem/14)] tabular-nums">
               {formatCost(totals.cost)}
             </div>
           </div>
@@ -38,8 +38,8 @@ export function BotUsageCard({ bot }: { bot: BotProfile }) {
         <div
           className={
             overview.exhausted
-              ? 'mt-2 text-destructive text-xs'
-              : 'mt-2 text-muted-foreground text-xs'
+              ? 'mt-2 text-destructive text-[calc(11rem/14)]'
+              : 'mt-2 text-muted-foreground text-[calc(11rem/14)]'
           }
         >
           {[

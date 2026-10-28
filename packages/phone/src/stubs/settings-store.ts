@@ -2,7 +2,7 @@ import type { TerminalPalette } from '@enso/pair';
 import type { Locale } from '@shared/i18n';
 import { normalizeTimelinePrefs, type PairTimelinePrefs } from '@shared/pair/timelinePrefs';
 import { useSyncExternalStore } from 'react';
-import type { Theme } from '../../../../src/renderer/stores/settings/types';
+import type { SettingsState, Theme } from '../../../../src/renderer/stores/settings/types';
 
 /**
  * `@/stores/settings` 的 PWA 桩：手机端不持有设置（provider/skill/project 都在桌面），
@@ -10,7 +10,12 @@ import type { Theme } from '../../../../src/renderer/stores/settings/types';
  * 经 vite alias 注入，桌面源码零改动。
  */
 
-interface SettingsSlice extends PairTimelinePrefs {
+interface SettingsSlice
+  extends PairTimelinePrefs,
+    Pick<
+      SettingsState,
+      'contextMenuOpen' | 'chatWide' | 'virtualModels' | 'disabledBuiltinTools' | 'voiceInputDevice'
+    > {
   language: Locale | 'system';
   theme: Theme;
   terminalTheme: string;
@@ -48,6 +53,12 @@ let state: SettingsSlice = {
   // 时间线折叠 / 待办条：appearance 帧到达前按桌面默认值
   ...normalizeTimelinePrefs({}),
   keybindings: {},
+  // Desktop-only entry points stay unavailable; shared components still need defined values.
+  contextMenuOpen: [],
+  chatWide: false,
+  virtualModels: [],
+  disabledBuiltinTools: [],
+  voiceInputDevice: 'default',
 };
 
 type Listener = (state: SettingsSlice, prev: SettingsSlice) => void;

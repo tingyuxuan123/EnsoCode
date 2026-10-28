@@ -124,108 +124,125 @@ export function Onboarding() {
 
   return (
     <div
-      className="fixed inset-0 z-[45] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-[45] flex items-center justify-center bg-shell px-[24px]"
       data-enso-float=""
+      data-slot="onboarding"
     >
-      <div className="relative flex w-[32rem] max-w-[90vw] flex-col rounded-2xl border bg-popover p-6 shadow-xl">
+      <div className="relative flex w-[620px] max-w-full flex-col overflow-hidden rounded-[6px] border border-border bg-popover">
         <button
           type="button"
           onClick={finish}
-          className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="absolute right-[12px] top-[8px] flex size-[calc(24rem/14)] items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={t('Close')}
         >
           <X className="h-4 w-4" />
         </button>
 
         {/* 进度点 */}
-        <div className="mb-5 flex items-center gap-1.5">
+        <div className="flex items-center gap-[6px] border-b border-line px-[16px] py-[12px] pr-[48px]">
           {STEPS.map((s, i) => (
             <span
               key={s}
               className={cn(
-                'h-1 flex-1 rounded-full transition-colors',
+                'h-[calc(4rem/14)] flex-1 rounded-full transition-colors',
                 i <= stepIndex ? 'bg-primary' : 'bg-muted'
               )}
             />
           ))}
+          <span className="ml-[8px] shrink-0 text-[calc(11rem/14)] tabular-nums text-muted-foreground">
+            {stepIndex + 1}/{STEPS.length}
+          </span>
         </div>
 
-        {step === 'welcome' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Wand2 className="h-6 w-6 text-primary" />
-            </div>
-            <h2 className="text-lg font-semibold">{t('Welcome to EnsoCode')}</h2>
-            <p className="text-sm text-muted-foreground">
-              {t(
-                'Import your providers and assets from local AI apps to get started. You can skip any step.'
-              )}
-            </p>
-          </div>
-        )}
-
-        {step !== 'welcome' && step !== 'done' && step !== 'preset' && step !== 'agentType' && (
-          <ImportStepView
-            {...importStep[step]}
-            importedLabel={t('{{count}} imported', { count: importStep[step].count })}
-          />
-        )}
-
-        {step === 'preset' && (
-          <ImportStepView
-            icon={Layers}
-            title={t('Presets')}
-            desc={t('Bundle skills, MCP servers and an instruction file into a preset (optional)')}
-            count={presets.length}
-            onImport={() => setPresetOpen(true)}
-            importedLabel={t('{{count}} presets', { count: presets.length })}
-            importLabel={t('New preset')}
-          />
-        )}
-
-        {step === 'agentType' && (
-          <div className="flex flex-col gap-3 py-2">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <Bot className="h-6 w-6 text-muted-foreground" />
+        <div
+          className="max-h-[65vh] min-h-[calc(240rem/14)] overflow-y-auto px-[24px] py-[24px]"
+          data-slot="onboarding-step"
+        >
+          {step === 'welcome' && (
+            <div className="flex flex-col items-start gap-[8px]">
+              <div className="flex items-center gap-[8px]">
+                <Wand2 className="size-[calc(20rem/14)] text-primary" />
+                <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+                  {t('Welcome to EnsoCode')}
+                </h2>
               </div>
-              <h2 className="text-lg font-semibold">{t('Agent types')}</h2>
-              <p className="text-sm text-muted-foreground">
-                {t('Give subagents their own model, skills and MCP servers (optional)')}
+              <p className="text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">
+                {t(
+                  'Import your providers and assets from local AI apps to get started. You can skip any step.'
+                )}
               </p>
             </div>
-            <div className="max-h-64 overflow-y-auto pr-1">
-              <AgentTypeList />
-            </div>
-          </div>
-        )}
+          )}
 
-        {step === 'done' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Check className="h-6 w-6 text-primary" />
-            </div>
-            <h2 className="text-lg font-semibold">{t('All set')}</h2>
-            <p className="text-sm text-muted-foreground">
-              {t('You can always import more from Settings later.')}
-            </p>
-          </div>
-        )}
+          {step !== 'welcome' && step !== 'done' && step !== 'preset' && step !== 'agentType' && (
+            <ImportStepView
+              {...importStep[step]}
+              importedLabel={t('{{count}} imported', { count: importStep[step].count })}
+            />
+          )}
 
-        {modelReady && (
-          <div className="mt-4 flex items-center justify-between rounded-lg border border-dashed px-3 py-2">
-            <p className="text-xs text-muted-foreground">
-              {t('Need help choosing a setup? Ask Enso.')}
-            </p>
-            <Button variant="ghost" size="sm" onClick={summonEnso}>
-              <Sparkles className="h-3.5 w-3.5" />
-              {t('Ask Enso')}
-            </Button>
-          </div>
-        )}
+          {step === 'preset' && (
+            <ImportStepView
+              icon={Layers}
+              title={t('Presets')}
+              desc={t(
+                'Bundle skills, MCP servers and an instruction file into a preset (optional)'
+              )}
+              count={presets.length}
+              onImport={() => setPresetOpen(true)}
+              importedLabel={t('{{count}} presets', { count: presets.length })}
+              importLabel={t('New preset')}
+            />
+          )}
+
+          {step === 'agentType' && (
+            <div className="flex flex-col gap-[16px]">
+              <div className="space-y-[6px]">
+                <div className="flex items-center gap-[8px]">
+                  <Bot className="size-[calc(20rem/14)] text-primary" />
+                  <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+                    {t('Agent types')}
+                  </h2>
+                </div>
+                <p className="text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">
+                  {t('Give subagents their own model, skills and MCP servers (optional)')}
+                </p>
+              </div>
+              <div className="max-h-64 overflow-y-auto pr-1">
+                <AgentTypeList />
+              </div>
+            </div>
+          )}
+
+          {step === 'done' && (
+            <div className="flex flex-col items-center gap-[8px] py-[24px] text-center">
+              <div className="flex size-[calc(32rem/14)] items-center justify-center rounded-full bg-success/10">
+                <Check className="size-[calc(24rem/14)] text-success" />
+              </div>
+              <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+                {t('All set')}
+              </h2>
+              <p className="text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">
+                {t('You can always import more from Settings later.')}
+              </p>
+            </div>
+          )}
+
+          {modelReady && (
+            <div className="mt-[16px] flex items-center justify-between gap-[12px] rounded-[6px] border border-line px-[12px] py-[8px]">
+              <p className="text-[calc(11rem/14)] text-muted-foreground">
+                {t('Need help choosing a setup? Ask Enso.')}
+              </p>
+              <Button variant="ghost" size="sm" onClick={summonEnso}>
+                <Sparkles className="h-3.5 w-3.5" />
+                {t('Ask Enso')}
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* 导航 */}
-        <div className="mt-6 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-[12px] border-t border-line px-[16px] py-[12px]">
           <Button variant="ghost" size="sm" onClick={prev} disabled={stepIndex === 0}>
             {t('Back')}
           </Button>
@@ -283,13 +300,13 @@ function ImportStepView({
   secondary?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-6 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-6 w-6 text-muted-foreground" />
+    <div className="flex flex-col items-start gap-[8px]">
+      <div className="flex items-center gap-[8px]">
+        <Icon className="size-[calc(20rem/14)] text-primary" />
+        <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">{title}</h2>
       </div>
-      <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="text-sm text-muted-foreground">{desc}</p>
-      <div className="mt-1 flex items-center gap-2">
+      <p className="text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">{desc}</p>
+      <div className="mt-[8px] flex flex-wrap items-center gap-[8px]">
         <Button variant="outline" size="sm" onClick={onImport}>
           {importLabel}
         </Button>
@@ -299,7 +316,7 @@ function ImportStepView({
           </Button>
         )}
       </div>
-      {count > 0 && <p className="text-xs text-primary">{importedLabel}</p>}
+      {count > 0 && <p className="text-[calc(11rem/14)] text-success">{importedLabel}</p>}
     </div>
   );
 }

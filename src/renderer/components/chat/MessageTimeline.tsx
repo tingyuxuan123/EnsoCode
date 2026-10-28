@@ -1,4 +1,4 @@
-import { ArrowDown, FolderOpen, LoaderCircle } from 'lucide-react';
+import { ArrowDown, ChevronRight, FolderOpen, LoaderCircle } from 'lucide-react';
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import {
   Component,
@@ -597,7 +597,7 @@ export function MessageTimeline({
   const renderFooter = () => (
     <div className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
       {busy && (
-        <div className="flex min-h-[26px] items-center gap-2 text-[13px]">
+        <div className="flex min-h-[calc(26rem/14)] items-center gap-2 text-[calc(13rem/14)]">
           <LoadingDots />
           <span className="t-shimmer" data-text={loading ? t('Loading…') : t('Working…')}>
             {loading ? t('Loading…') : t('Working…')}
@@ -632,12 +632,18 @@ export function MessageTimeline({
               'flex h-full flex-col items-start gap-[6px] overflow-y-auto pt-[40px] pb-[24px] text-left'
             )}
           >
-            <span className="t-stagger-line t-stagger-line--1 mb-[2px] flex items-center gap-[6px] text-[11px] text-muted-foreground">
-              <FolderOpen className="size-[14px] shrink-0" />
+            <span className="t-stagger-line t-stagger-line--1 mb-[2px] flex items-center gap-[6px] text-[calc(11rem/14)] text-muted-foreground">
+              <FolderOpen className="size-[calc(14rem/14)] shrink-0" />
+              {onSuggestion && (
+                <>
+                  <span className="max-w-[240px] truncate">{emptyTitle}</span>
+                  <ChevronRight className="size-3 shrink-0" />
+                </>
+              )}
               {t('New conversation')}
             </span>
-            <p className="t-stagger-line t-stagger-line--1 text-[22px] font-semibold tracking-tight">
-              {emptyTitle}
+            <p className="t-stagger-line t-stagger-line--1 text-[calc(22rem/14)] font-semibold tracking-tight">
+              {onSuggestion ? t('Start a new task') : emptyTitle}
             </p>
             {error ? (
               <>
@@ -653,8 +659,16 @@ export function MessageTimeline({
             ) : (
               <>
                 {emptyDescription !== '' && (
-                  <p className="t-stagger-line t-stagger-line--2 text-[13px] leading-[24px] text-muted-foreground">
-                    {emptyDescription ?? t('Ask the agent…')}
+                  <p className="t-stagger-line t-stagger-line--2 text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">
+                    {emptyDescription ??
+                      (onSuggestion
+                        ? t(
+                            'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
+                            {
+                              project: emptyTitle,
+                            }
+                          )
+                        : t('Ask the agent…'))}
                   </p>
                 )}
                 {onSuggestion && (
@@ -792,7 +806,7 @@ export function MessageTimeline({
           <button
             type="button"
             onClick={scrollToBottom}
-            className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-xs text-muted-foreground shadow-float transition-colors hover:text-foreground"
+            className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-[calc(11rem/14)] text-muted-foreground shadow-float transition-colors hover:text-foreground"
           >
             <ArrowDown className="h-3 w-3" />
             {t('Scroll to bottom')}
@@ -820,24 +834,28 @@ function HistoryPageHeader({
   onLoadMore?: () => void;
 }) {
   const { t } = useI18n();
-  if (chrome === 'none') return <div className="h-[24px]" />;
+  if (chrome === 'none') return <div className="h-[calc(24rem/14)]" />;
   return (
     <div className={cn(CHAT_COL, 'flex items-center justify-center gap-2 py-3')}>
       {chrome === 'loading' ? (
         <>
           <LoaderCircle className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">{t('Loading earlier messages…')}</p>
+          <p className="text-[calc(11rem/14)] text-muted-foreground">
+            {t('Loading earlier messages…')}
+          </p>
         </>
       ) : chrome === 'more' ? (
         <button
           type="button"
-          className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+          className="text-[calc(11rem/14)] text-muted-foreground underline-offset-2 hover:underline"
           onClick={onLoadMore}
         >
           {t('Load earlier messages')}
         </button>
       ) : (
-        <p className="text-xs text-muted-foreground">{t('Beginning of conversation')}</p>
+        <p className="text-[calc(11rem/14)] text-muted-foreground">
+          {t('Beginning of conversation')}
+        </p>
       )}
     </div>
   );
@@ -845,7 +863,7 @@ function HistoryPageHeader({
 
 function LoadingDots() {
   return (
-    <span className="relative flex size-[22px] shrink-0 items-center justify-center">
+    <span className="relative flex size-[calc(22rem/14)] shrink-0 items-center justify-center">
       <span className="absolute size-2 animate-ping rounded-full bg-brand/50" />
       <span className="relative size-2 rounded-full bg-brand" />
     </span>
@@ -867,7 +885,7 @@ const ElapsedTimer = memo(function ElapsedTimer({ since }: { since: number }) {
     return () => clearInterval(timer);
   }, []);
   return (
-    <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+    <span className="font-mono text-[calc(11rem/14)] text-muted-foreground tabular-nums">
       {formatElapsed(Date.now() - since)}
     </span>
   );
@@ -894,7 +912,7 @@ class RowErrorBoundary extends Component<
   render(): ReactNode {
     if (this.state.failed) {
       return (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
+        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[calc(11rem/14)] text-destructive">
           message render failed · {this.props.itemKey}
         </p>
       );

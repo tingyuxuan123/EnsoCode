@@ -18,10 +18,12 @@ import { useSettingsStore } from '@/stores/settings';
 export function KeybindingsSettings() {
   const { t } = useI18n();
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div data-settings-row="shortcuts.root">
-        <h3 className="text-[18px] font-semibold">{t('Shortcuts')}</h3>
-        <p className="text-[13px] text-muted-foreground">
+        <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+          {t('Shortcuts')}
+        </h3>
+        <p className="text-[calc(13rem/14)] text-muted-foreground">
           {t('Click a shortcut to rebind it. Backspace removes it; Esc cancels.')}
         </p>
       </div>
@@ -73,7 +75,7 @@ function KeybindingsSection() {
   };
 
   return (
-    <div className="divide-y rounded-[6px] border">
+    <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
       {KEYBINDING_ACTIONS.map((action) => {
         const isCapturing = capturing === action;
         const isCustom = keybindings[action] !== undefined;
@@ -81,13 +83,15 @@ function KeybindingsSection() {
         return (
           <div key={action} className="flex items-center gap-3 px-3 py-2">
             <div className="min-w-0 flex-1">
-              <p className="text-[13px]">{t(ACTION_LABEL_KEYS[action])}</p>
+              <p className="text-[calc(13rem/14)]">{t(ACTION_LABEL_KEYS[action])}</p>
               {ACTION_HINT_KEYS[action] && (
-                <p className="text-muted-foreground text-[12px]">{t(ACTION_HINT_KEYS[action])}</p>
+                <p className="text-muted-foreground text-[calc(12rem/14)]">
+                  {t(ACTION_HINT_KEYS[action])}
+                </p>
               )}
             </div>
             {isCapturing && conflictWith && (
-              <span className="text-[12px] text-destructive">
+              <span className="text-[calc(12rem/14)] text-destructive">
                 {t('Already used by "{{label}}"', { label: t(ACTION_LABEL_KEYS[conflictWith]) })}
               </span>
             )}
@@ -132,11 +136,15 @@ function KeybindingsSection() {
               )}
             >
               {isCapturing ? (
-                <span className="text-[12px] text-muted-foreground">{t('Press shortcut…')}</span>
+                <span className="text-[calc(12rem/14)] text-muted-foreground">
+                  {t('Press shortcut…')}
+                </span>
               ) : binding ? (
                 <Kbd>{formatBinding(binding)}</Kbd>
               ) : (
-                <span className="text-[12px] text-muted-foreground">{t('No shortcut')}</span>
+                <span className="text-[calc(12rem/14)] text-muted-foreground">
+                  {t('No shortcut')}
+                </span>
               )}
             </button>
           </div>

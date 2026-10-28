@@ -13,7 +13,9 @@ export function MemorySearchResults({
 }) {
   const { t } = useI18n();
   if (hits.length === 0) {
-    return <p className="px-3 py-2 text-xs text-muted-foreground">{t('No results')}</p>;
+    return (
+      <p className="px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">{t('No results')}</p>
+    );
   }
   return (
     <ul className="divide-y divide-border/60">
@@ -32,7 +34,7 @@ export function MemoryCaptureResult({ view }: { view: MemoryCaptureView }) {
     : t('Similar memories already exist, nothing was written');
   return (
     <>
-      {note && <p className="px-3 pt-2 text-xs text-muted-foreground">{note}</p>}
+      {note && <p className="px-3 pt-2 text-[calc(11rem/14)] text-muted-foreground">{note}</p>}
       {view.written ? (
         <MemorySearchResults hits={[view.memory]} defaultOpen />
       ) : (
@@ -61,7 +63,7 @@ function MemoryHitRow({ hit, defaultOpen }: { hit: MemorySearchHit; defaultOpen:
         <span className="flex min-w-0 items-center gap-1.5">
           <span
             className={cn(
-              'min-w-0 flex-1 font-medium text-foreground text-xs',
+              'min-w-0 flex-1 font-medium text-foreground text-[calc(11rem/14)]',
               open ? 'break-words' : 'truncate'
             )}
           >
@@ -78,14 +80,14 @@ function MemoryHitRow({ hit, defaultOpen }: { hit: MemorySearchHit; defaultOpen:
             </Badge>
           )}
           {hit.score !== null && (
-            <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
+            <span className="shrink-0 font-mono text-[calc(11rem/14)] text-muted-foreground/70 tabular-nums">
               {hit.score.toFixed(2)}
             </span>
           )}
         </span>
         <span
           className={cn(
-            'mt-0.5 whitespace-pre-wrap break-words text-muted-foreground text-xs leading-relaxed',
+            'mt-0.5 whitespace-pre-wrap break-words text-muted-foreground text-[calc(11rem/14)] leading-relaxed',
             open ? 'block' : 'line-clamp-2'
           )}
         >

@@ -45,9 +45,9 @@ export function BotInbox() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-      <header className="flex h-[56px] shrink-0 items-center gap-2.5 border-b px-4">
-        <div className="font-medium text-[13px]">{t('Inbox')}</div>
-        <div className="text-muted-foreground text-xs">
+      <header className="flex h-[calc(56rem/14)] shrink-0 items-center gap-2.5 border-b px-4">
+        <div className="font-medium text-[calc(13rem/14)]">{t('Inbox')}</div>
+        <div className="text-muted-foreground text-[calc(11rem/14)]">
           {t('Everything members are waiting on you for')}
         </div>
       </header>
@@ -91,7 +91,7 @@ export function BotInbox() {
             />
           ))}
           {sections.blocked.length > 0 && (
-            <div className="pt-3 font-medium text-muted-foreground text-xs">
+            <div className="pt-3 font-medium text-muted-foreground text-[calc(11rem/14)]">
               {t('Stuck delegated tasks')}
             </div>
           )}
@@ -105,7 +105,7 @@ export function BotInbox() {
             />
           ))}
           {sections.interrupted.length > 0 && (
-            <div className="pt-3 font-medium text-muted-foreground text-xs">
+            <div className="pt-3 font-medium text-muted-foreground text-[calc(11rem/14)]">
               {t('Interrupted delegations')}
             </div>
           )}
@@ -155,12 +155,12 @@ function SilenceCard({
   const name = bot?.name ?? t('Deleted member');
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+      <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={bot} size="sm" busy />
         <span className="text-foreground">{name}</span>
         {chatName && <span>· {chatName}</span>}
         {item.delegationId && <span>· {t('Delegation')}</span>}
-        <span className="rounded bg-warning/20 px-1.5 text-[11px] text-warning">
+        <span className="rounded bg-warning/20 px-1.5 text-[calc(11rem/14)] text-warning">
           <QuietFor since={item.since ?? item.createdAt} />
         </span>
       </div>
@@ -192,15 +192,15 @@ function BudgetCard({ item, bot }: { item: BotInboxItem; bot: BotProfile | undef
   const name = bot?.name ?? t('Deleted member');
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+      <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">{name}</span>
-        <span className="rounded bg-destructive/15 px-1.5 text-[11px] text-destructive">
+        <span className="rounded bg-destructive/15 px-1.5 text-[calc(11rem/14)] text-destructive">
           {t('Budget')}
         </span>
       </div>
       <div className="mt-2 text-sm">{t("{{name}}'s budget for today is used up", { name })}</div>
-      <div className="mt-1 text-muted-foreground text-xs">
+      <div className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
         {item.budget?.reason === 'cost'
           ? t('Daily cost limit reached. New messages are refused until local midnight.')
           : t('Daily token limit reached. New messages are refused until local midnight.')}
@@ -247,7 +247,7 @@ function BlockedCard({
   const { chatId, taskId } = record;
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+      <div className="flex items-center gap-1.5 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={to} size="xs" />
         <span className="text-foreground">{name}</span>
         {chatName && <span>· {chatName}</span>}
@@ -256,7 +256,7 @@ function BlockedCard({
         <span>{t('Stuck for {{time}}', { time: formatElapsed(now - since) })}</span>
       </div>
       <div className="mt-2 line-clamp-2 text-muted-foreground text-sm">{record.task}</div>
-      <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs">
+      <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[calc(11rem/14)]">
         <div className="line-clamp-4 whitespace-pre-wrap font-medium">
           {t('Blocked · needs: {{need}}', { need: record.blocked?.need ?? '' })}
         </div>
@@ -304,7 +304,7 @@ function InterruptedCard({
   const toName = to?.name ?? t('Deleted member');
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+      <div className="flex items-center gap-1.5 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={from} size="xs" />
         <span className="text-foreground">{fromName}</span>
         <span>→</span>
@@ -315,7 +315,9 @@ function InterruptedCard({
         <DelegationBadge state={record.state} interrupted />
       </div>
       <div className="mt-2 line-clamp-3 text-sm">{record.task}</div>
-      <div className="mt-1 text-muted-foreground text-xs">{failureText(record, t)}</div>
+      <div className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
+        {failureText(record, t)}
+      </div>
       <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5">
         <Button size="xs" variant="ghost" onClick={() => void dismiss(inboxKey)}>
           {t('Dismiss')}
@@ -382,7 +384,7 @@ function InboxCard({
 
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+      <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">
           {item.delegation
@@ -396,14 +398,14 @@ function InboxCard({
         <span
           className={
             item.kind === 'approval'
-              ? 'rounded bg-warning/20 px-1.5 text-[11px] text-warning'
-              : 'rounded bg-info/15 px-1.5 text-[11px] text-info'
+              ? 'rounded bg-warning/20 px-1.5 text-[calc(11rem/14)] text-warning'
+              : 'rounded bg-info/15 px-1.5 text-[calc(11rem/14)] text-info'
           }
         >
           {item.kind === 'approval' ? t('Approval') : t('Question')}
         </span>
         {item.kind === 'approval' && item.request.protected && (
-          <span className="rounded bg-destructive/15 px-1.5 text-[11px] text-destructive">
+          <span className="rounded bg-destructive/15 px-1.5 text-[calc(11rem/14)] text-destructive">
             {protectedActionLabel(item.request.protected, t)}
           </span>
         )}
@@ -411,7 +413,7 @@ function InboxCard({
       {item.kind === 'approval' ? (
         <div className="mt-2 text-sm">
           {toolLabel(item.request.tool, t)}
-          <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 px-2 py-1.5 font-mono text-xs">
+          <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 px-2 py-1.5 font-mono text-[calc(11rem/14)]">
             {item.request.summary}
           </pre>
         </div>
@@ -428,7 +430,9 @@ function InboxCard({
         </Button>
         {item.kind === 'approval' ? (
           reviewing ? (
-            <span className="text-muted-foreground text-xs">{t('Assistant reviewing…')}</span>
+            <span className="text-muted-foreground text-[calc(11rem/14)]">
+              {t('Assistant reviewing…')}
+            </span>
           ) : (
             <>
               <Button size="xs" variant="outline" disabled={busy} onClick={() => approve('deny')}>

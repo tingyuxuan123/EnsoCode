@@ -271,7 +271,10 @@ function AutocompleteGroup({ className, ...props }: AutocompletePrimitive.Group.
 function AutocompleteGroupLabel({ className, ...props }: AutocompletePrimitive.GroupLabel.Props) {
   return (
     <AutocompletePrimitive.GroupLabel
-      className={cn('px-2 py-1.5 font-medium text-muted-foreground text-xs', className)}
+      className={cn(
+        'px-2 py-1.5 font-medium text-muted-foreground text-[calc(11rem/14)]',
+        className
+      )}
       data-slot="autocomplete-group-label"
       {...props}
     />
@@ -346,7 +349,7 @@ function AutocompleteStatus({ className, ...props }: AutocompletePrimitive.Statu
   return (
     <AutocompletePrimitive.Status
       className={cn(
-        'px-3 py-2 font-medium text-muted-foreground text-xs empty:m-0 empty:p-0',
+        'px-3 py-2 font-medium text-muted-foreground text-[calc(11rem/14)] empty:m-0 empty:p-0',
         className
       )}
       data-slot="autocomplete-status"

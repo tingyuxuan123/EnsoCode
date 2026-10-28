@@ -134,13 +134,15 @@ export function BotProjectPicker({
             <AutocompleteItem key={item.path} value={item} className="gap-2">
               <span className="shrink-0">{item.label}</span>
               <span
-                className="min-w-0 flex-1 truncate text-muted-foreground text-xs"
+                className="min-w-0 flex-1 truncate text-muted-foreground text-[calc(11rem/14)]"
                 title={item.path}
               >
                 {item.detail}
               </span>
               {!item.projectId && (
-                <span className="shrink-0 text-muted-foreground text-xs">{t('Add')}</span>
+                <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">
+                  {t('Add')}
+                </span>
               )}
             </AutocompleteItem>
           )}

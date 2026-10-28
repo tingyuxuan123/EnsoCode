@@ -139,13 +139,15 @@ function RoutineSummary({ routine }: { routine: BotRoutine }) {
   return (
     <>
       <div className="mt-2 font-medium text-sm">{routine.title}</div>
-      <div className="mt-0.5 text-muted-foreground text-xs">
+      <div className="mt-0.5 text-muted-foreground text-[calc(11rem/14)]">
         {describeCron(routine.schedule, locale)}
         {routine.doneBy
           ? ` · ${t('Done by {{name}}', { name: executor?.name ?? t('Deleted member') })}`
           : ''}
       </div>
-      <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs">{routine.prompt}</div>
+      <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-[calc(11rem/14)]">
+        {routine.prompt}
+      </div>
     </>
   );
 }
@@ -162,7 +164,7 @@ export function RoutineAlertCard({ alert }: { alert: RoutineAlert }) {
   const chat = chats.find((item) => item.id === routine.chatId);
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+      <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={owner} size="sm" />
         <span className="text-foreground">{owner?.name ?? t('Deleted member')}</span>
         {chat?.kind === 'group' && <span>· {chatTitle(chat, bots, t)}</span>}
@@ -170,7 +172,9 @@ export function RoutineAlertCard({ alert }: { alert: RoutineAlert }) {
       </div>
       <RoutineSummary routine={routine} />
       {alert.kind === 'blocked' && (
-        <div className="mt-1 text-destructive text-xs">{blockText(routine.blockedReason, t)}</div>
+        <div className="mt-1 text-destructive text-[calc(11rem/14)]">
+          {blockText(routine.blockedReason, t)}
+        </div>
       )}
       <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5">
         {chat && (
@@ -219,7 +223,7 @@ export function RoutineBadge({ routine }: { routine: BotRoutine }) {
         : routine.status === 'paused'
           ? [t('Paused'), 'bg-muted text-muted-foreground']
           : [t('Enabled'), 'bg-success/15 text-success'];
-  return <span className={cn('rounded px-1.5 text-[11px]', tone)}>{label}</span>;
+  return <span className={cn('rounded px-1.5 text-[calc(11rem/14)]', tone)}>{label}</span>;
 }
 
 /** 群时间线里成员提议 / 改动例行任务的 system 条目：仍待批准时可直接批准 / 拒绝 / 试运行 */
@@ -238,14 +242,14 @@ export function RoutineProposalCard({
   return (
     <div
       data-slot="bot-card"
-      className="w-full max-w-md self-center rounded-md border bg-card px-3 py-2 text-xs"
+      className="w-full max-w-md self-center rounded-md border bg-card px-3 py-2 text-[calc(11rem/14)]"
     >
       <div className="flex items-center gap-2 text-muted-foreground">
         <span className="min-w-0 flex-1">{text}</span>
         {routine ? (
           <RoutineBadge routine={routine} />
         ) : (
-          <span className="text-[11px]">{t('Routine removed')}</span>
+          <span className="text-[calc(11rem/14)]">{t('Routine removed')}</span>
         )}
       </div>
       {routine && <RoutineSummary routine={routine} />}

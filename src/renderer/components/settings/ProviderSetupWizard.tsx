@@ -206,7 +206,7 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
           </DialogDescription>
         </DialogHeader>
 
-        <DialogPanel className="t-page-slide provider-setup-pages" data-page={displayedPageId}>
+        <DialogPanel className="t-page-slide provider-setup-pages p-0!" data-page={displayedPageId}>
           {renderedPages.map((page) => (
             <section
               key={`${page.id}:${page.step}`}
@@ -220,17 +220,17 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                   {loadError && (
                     <div className="flex items-start justify-between gap-3 rounded-[6px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
                       <div className="min-w-0">
-                        <p className="text-[12px] font-medium">
+                        <p className="text-[calc(12rem/14)] font-medium">
                           {t('Could not load subscription providers')}
                         </p>
-                        <p className="mt-0.5 break-words text-[11px] text-destructive/80">
+                        <p className="mt-0.5 break-words text-[calc(11rem/14)] text-destructive/80">
                           {loadError}
                         </p>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 shrink-0 px-2 text-[12px]"
+                        className="h-7 shrink-0 px-2 text-[calc(12rem/14)]"
                         onClick={() => void refreshOauthProviders()}
                       >
                         {t('Retry')}
@@ -257,22 +257,22 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                             />
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-[13px] font-medium">
+                            <span className="block truncate text-[calc(13rem/14)] font-medium">
                               {t(definition.label)}
                             </span>
                             {isClassifierOnlyProvider({ catalogId: definition.id }) && (
-                              <span className="block text-[12px] text-muted-foreground">
+                              <span className="block text-[calc(12rem/14)] text-muted-foreground">
                                 {t('Classification only, not for chat')}
                               </span>
                             )}
                             <span className="mt-1 flex flex-wrap gap-1">
                               {methods.includes('oauth') && (
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge variant="outline" className="text-[calc(11rem/14)]">
                                   {t('Subscription')}
                                 </Badge>
                               )}
                               {methods.includes('api-key') && (
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge variant="outline" className="text-[calc(11rem/14)]">
                                   {t('API Key')}
                                 </Badge>
                               )}
@@ -287,9 +287,9 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
 
               {page.step === 'method' && selected && (
                 <DialogPanel bare className="space-y-3">
-                  <p className="text-[13px] font-medium">{t('Choose how to connect')}</p>
+                  <p className="text-[calc(13rem/14)] font-medium">{t('Choose how to connect')}</p>
                   {isClassifierOnlyProvider({ catalogId: selected.id }) && (
-                    <p className="text-[12px] text-muted-foreground">
+                    <p className="text-[calc(12rem/14)] text-muted-foreground">
                       {t('Classification only, not for chat')}
                     </p>
                   )}
@@ -301,10 +301,10 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                     >
                       <BadgeCheck className="h-5 w-5 shrink-0 text-primary" />
                       <span>
-                        <span className="block text-[13px] font-medium">
+                        <span className="block text-[calc(13rem/14)] font-medium">
                           {t('Provider subscription')}
                         </span>
-                        <span className="block text-[12px] text-muted-foreground">
+                        <span className="block text-[calc(12rem/14)] text-muted-foreground">
                           {t('Sign in in your browser and use your subscription account.')}
                         </span>
                       </span>
@@ -318,8 +318,10 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
                     >
                       <KeyRound className="h-5 w-5 shrink-0 text-primary" />
                       <span>
-                        <span className="block text-[13px] font-medium">{t('API Key')}</span>
-                        <span className="block text-[12px] text-muted-foreground">
+                        <span className="block text-[calc(13rem/14)] font-medium">
+                          {t('API Key')}
+                        </span>
+                        <span className="block text-[calc(12rem/14)] text-muted-foreground">
                           {t('Configure an endpoint and key, then fetch or test its models.')}
                         </span>
                       </span>
@@ -404,7 +406,11 @@ function ProviderCatalogMark({ id, label }: { id: string; label: string }) {
   const logo = resolveProviderLogo(id, label);
   if (!logo) return <Puzzle className="h-4 w-4 text-muted-foreground" />;
   if (logo.kind === 'letter') {
-    return <span className="text-[12px] font-semibold text-muted-foreground">{logo.letter}</span>;
+    return (
+      <span className="text-[calc(12rem/14)] font-semibold text-muted-foreground">
+        {logo.letter}
+      </span>
+    );
   }
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>

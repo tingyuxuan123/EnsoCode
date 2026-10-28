@@ -20,7 +20,7 @@ const COLORS: Record<MentionKind, string> = {
 
 export function mentionChipClass(kind: MentionKind): string {
   return cn(
-    'inline-flex max-w-52 items-center gap-1 rounded-md px-1.5 py-0.5 align-middle text-xs font-medium',
+    'inline-flex max-w-52 items-center gap-1 rounded-md px-1.5 py-0.5 align-middle text-[calc(11rem/14)] font-medium',
     COLORS[kind]
   );
 }

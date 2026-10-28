@@ -170,7 +170,10 @@ export function PairScreen({
           </Button>
         </div>
       ) : (
-        <Button className="h-[44px] w-full max-w-sm" onClick={() => void startScan()}>
+        <Button
+          className="h-[44px] w-full max-w-sm border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={() => void startScan()}
+        >
           <Camera className="mr-1.5 h-4 w-4" />
           扫描二维码
         </Button>
@@ -196,7 +199,11 @@ export function PairScreen({
         </Button>
       </div>
 
-      {error && <p className="w-full max-w-sm rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-destructive text-xs leading-5">{error}</p>}
+      {error && (
+        <p className="w-full max-w-sm rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-destructive text-xs leading-5">
+          {error}
+        </p>
+      )}
 
       {onCancel && (
         <Button variant="ghost" className="w-full max-w-sm" onClick={onCancel}>

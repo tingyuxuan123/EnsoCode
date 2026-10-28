@@ -166,7 +166,10 @@ export function ProjectSettingsDialog({
             <Field className="w-full items-stretch">
               <FieldLabel>{t('Path')}</FieldLabel>
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <p className="min-w-0 flex-1 truncate font-mono text-xs" title={pathLabel}>
+                <p
+                  className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/14)]"
+                  title={pathLabel}
+                >
                   {pathLabel}
                 </p>
                 <CopyButton text={pathLabel} className="shrink-0" />
@@ -228,14 +231,14 @@ export function ProjectSettingsDialog({
               description={t('Used for new conversations in this project.')}
               inheritLabel={t('Follows group, then global default')}
             />
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-[calc(11rem/14)]">
               {t('Session choice overrides the project default.')}
             </p>
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+              <div className="flex items-center justify-between gap-4 border-t border-line py-3">
                 <div className="min-w-0">
                   <p className="font-medium text-sm">{t('Follow global built-in tools')}</p>
-                  <p className="text-muted-foreground text-xs">
+                  <p className="text-muted-foreground text-[calc(11rem/14)]">
                     {t(
                       'When off, configure built-in tools for this project. They override the global setting on the next session.'
                     )}
@@ -248,12 +251,14 @@ export function ProjectSettingsDialog({
                   {BUILTIN_TOOLS.map((tool) => (
                     <div
                       key={tool.id}
-                      className="flex items-center gap-3 rounded-md border px-3 py-2.5"
+                      className="flex items-center gap-3 rounded-md px-3 py-2.5 hover:bg-accent/50"
                     >
                       <Wrench className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">{t(tool.name)}</p>
-                        <p className="text-muted-foreground text-xs">{t(tool.description)}</p>
+                        <p className="text-muted-foreground text-[calc(11rem/14)]">
+                          {t(tool.description)}
+                        </p>
                       </div>
                       <Switch
                         checked={!disabledBuiltinTools.includes(tool.id)}
@@ -269,10 +274,10 @@ export function ProjectSettingsDialog({
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+              <div className="flex items-center justify-between gap-4 border-t border-line py-3">
                 <div className="min-w-0">
                   <p className="font-medium text-sm">{t('Follow global unified agent modes')}</p>
-                  <p className="text-muted-foreground text-xs">
+                  <p className="text-muted-foreground text-[calc(11rem/14)]">
                     {t('When off, this project uses its own explicit Agent mode permission mask.')}
                   </p>
                 </div>
@@ -285,7 +290,7 @@ export function ProjectSettingsDialog({
                 />
               </div>
               {!followGlobalSubagentModes && (
-                <div className="space-y-2 rounded-lg border px-3 py-2.5">
+                <div className="space-y-2 border-t border-line py-3">
                   {(
                     [
                       ['task', 'One-shot task agents'],
@@ -313,7 +318,7 @@ export function ProjectSettingsDialog({
                   {(followGlobalTools ? globalDisabledBuiltinTools : disabledBuiltinTools).includes(
                     'subagent'
                   ) && (
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground text-[calc(11rem/14)]">
                       {t(
                         'The unified subagent tool is off. Re-enabling it keeps this mode selection.'
                       )}
@@ -323,18 +328,18 @@ export function ProjectSettingsDialog({
               )}
             </div>
             {project?.trustedProjectCode?.length ? (
-              <div className="flex items-start gap-3 rounded-lg border px-3 py-2.5">
+              <div className="flex items-start gap-3 rounded-md border border-warning/25 bg-warning/5 px-3 py-2.5">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm">{t('Trusted project extensions')}</p>
                   <p
-                    className="truncate font-mono text-muted-foreground text-xs"
+                    className="truncate font-mono text-muted-foreground text-[calc(11rem/14)]"
                     title={project.trustedProjectCode.join('\n')}
                   >
                     {project.trustedProjectCode.join(', ')}
                   </p>
                   {revokeTrust && (
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground text-[calc(11rem/14)]">
                       {t('No longer loaded after saving, starting with the next session.')}
                     </p>
                   )}

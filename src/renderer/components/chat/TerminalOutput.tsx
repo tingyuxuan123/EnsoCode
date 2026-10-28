@@ -4,7 +4,7 @@ import { matchTerminalBackground, readAppPanelColor } from '@/lib/terminalSurfac
 import { stripAnsi } from '@/lib/terminalText';
 import { useSettingsStore } from '@/stores/settings';
 
-/** bash 工具输出：沿用终端配色与等宽字体族，但字号/字重跟随聊天流（text-xs），不套终端那套大字号 */
+/** bash 工具输出：沿用终端配色与等宽字体族，但字号/字重跟随聊天流（text-[calc(11rem/14)]），不套终端那套大字号 */
 export function TerminalOutput({ command, output }: { command: string; output: string }) {
   const terminalTheme = useSettingsStore((s) => s.terminalTheme);
   const appTheme = useSettingsStore((s) => s.theme);
@@ -20,7 +20,7 @@ export function TerminalOutput({ command, output }: { command: string; output: s
   return (
     <div
       data-slot="terminal-output"
-      className="px-3 py-2 text-xs leading-relaxed"
+      className="px-3 py-2 text-[calc(11rem/14)] leading-relaxed"
       style={{
         backgroundColor: background,
         ['--terminal-bg' as string]: background,

@@ -29,7 +29,7 @@ export function MemoryTreeView({
 
   if (tree.length === 0) {
     return (
-      <p className="rounded-[6px] border px-3 py-6 text-muted-foreground text-[13px]">
+      <p className="rounded-[6px] border px-3 py-6 text-muted-foreground text-[calc(13rem/14)]">
         {loading ? t('Loading…') : t('No memories yet.')}
       </p>
     );
@@ -54,7 +54,7 @@ export function MemoryTreeView({
                   setOpen(next);
                 }}
               >
-                <p className="flex items-center gap-2 text-[13px]">
+                <p className="flex items-center gap-2 text-[calc(13rem/14)]">
                   <span className="text-muted-foreground">{expanded ? '▾' : '▸'}</span>
                   <span className="truncate">{group.label}</span>
                   <Badge variant="secondary">{group.count}</Badge>
@@ -83,12 +83,12 @@ export function MemoryTreeView({
                     )}
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {child.isCrystal && <span title={t('Crystal')}>★</span>}
-                      <span className="truncate text-[13px]">{child.label}</span>
+                      <span className="truncate text-[calc(13rem/14)]">{child.label}</span>
                     </span>
                   </li>
                 ))}
                 {group.count > (group.children?.length ?? 0) && (
-                  <li className="px-3 py-2 text-muted-foreground text-[12px]">
+                  <li className="px-3 py-2 text-muted-foreground text-[calc(12rem/14)]">
                     {t('Showing {{shown}} of {{total}}', {
                       shown: String(group.children?.length ?? 0),
                       total: String(group.count),

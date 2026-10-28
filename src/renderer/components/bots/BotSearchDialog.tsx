@@ -157,7 +157,7 @@ export function BotSearchDialog() {
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5 text-xs">
+                      <div className="flex min-w-0 items-center gap-1.5 text-[calc(11rem/14)]">
                         <span className="truncate font-medium">
                           {chat ? chatTitle(chat, bots, t) : t('Deleted chat')}
                         </span>
@@ -166,7 +166,7 @@ export function BotSearchDialog() {
                           {history}
                         </span>
                       </div>
-                      <p className="line-clamp-2 break-words text-muted-foreground text-xs">
+                      <p className="line-clamp-2 break-words text-muted-foreground text-[calc(11rem/14)]">
                         {snippetParts(hit.snippet, hit.ranges).map((part, index) =>
                           part.match ? (
                             // biome-ignore lint/suspicious/noArrayIndexKey: 片段按位置稳定
@@ -180,14 +180,14 @@ export function BotSearchDialog() {
                         )}
                       </p>
                     </div>
-                    <span className="shrink-0 text-muted-foreground text-xs">
+                    <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">
                       {hit.at ? formatRelativeTime(hit.at, locale, now) : ''}
                     </span>
                   </CommandItem>
                 );
               })}
               {current?.truncated && (
-                <p className="px-2 py-1.5 text-center text-muted-foreground text-xs">
+                <p className="px-2 py-1.5 text-center text-muted-foreground text-[calc(11rem/14)]">
                   {t('Showing the latest {{n}} matches', { n: current.hits.length })}
                 </p>
               )}

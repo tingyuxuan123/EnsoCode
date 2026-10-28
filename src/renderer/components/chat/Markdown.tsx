@@ -355,7 +355,7 @@ function MarkdownAnchor({
 
   if (codeText !== null) {
     return (
-      <span className="mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/60 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-xs">
+      <span className="mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/60 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-[calc(11rem/14)]">
         {anchor}
         <button
           type="button"
@@ -431,7 +431,9 @@ export const markdownComponents: Components = {
     if (alert) {
       return (
         <blockquote className={cn('my-1.5 border-l-2 pl-3', alert.border)}>
-          <p className={cn('mt-1.5 mb-0.5 text-xs font-semibold', alert.text)}>{t(alert.label)}</p>
+          <p className={cn('mt-1.5 mb-0.5 text-[calc(11rem/14)] font-semibold', alert.text)}>
+            {t(alert.label)}
+          </p>
           {children}
         </blockquote>
       );
@@ -469,7 +471,7 @@ export const markdownComponents: Components = {
           type="button"
           onClick={onClick}
           title={value}
-          className="mx-0.5 inline-flex max-w-full items-center rounded-[5px] border border-border/60 bg-muted/70 px-1 py-px align-baseline font-mono text-xs text-foreground transition-colors hover:bg-muted hover:text-brand"
+          className="mx-0.5 inline-flex max-w-full items-center rounded-[5px] border border-border/60 bg-muted/70 px-1 py-px align-baseline font-mono text-[calc(11rem/14)] text-foreground transition-colors hover:bg-muted hover:text-brand"
         >
           <span className="truncate">{value}</span>
         </button>
@@ -483,7 +485,7 @@ export const markdownComponents: Components = {
       );
     }
     return (
-      <code className="mx-0.5 rounded-[5px] bg-muted/70 px-1 py-px font-mono text-xs">
+      <code className="mx-0.5 rounded-[5px] bg-muted/70 px-1 py-px font-mono text-[calc(11rem/14)]">
         {children}
       </code>
     );

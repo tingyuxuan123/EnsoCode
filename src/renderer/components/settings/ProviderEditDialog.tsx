@@ -72,7 +72,7 @@ function PoolProviderForm({ provider, onClose }: { provider: ModelProvider; onCl
       extraFields={
         <Field>
           <FieldLabel>{t('Pool members')}</FieldLabel>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
               'Use enabled, signed-in accounts in the listed order. Model and reasoning stay unchanged. Main agents and subagents share this pool.'
             )}
@@ -84,7 +84,10 @@ function PoolProviderForm({ provider, onClose }: { provider: ModelProvider; onCl
                 .flatMap((info) => info.accounts)
                 .find((item) => item.key === key);
               return (
-                <label key={key} className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-[13px]">
+                <label
+                  key={key}
+                  className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-[calc(13rem/14)]"
+                >
                   <Checkbox
                     checked={selected.includes(key)}
                     onCheckedChange={(checked) =>
@@ -93,16 +96,18 @@ function PoolProviderForm({ provider, onClose }: { provider: ModelProvider; onCl
                       )
                     }
                   />
-                  <span className="shrink-0 text-[12px] text-muted-foreground">{index + 1}.</span>
+                  <span className="shrink-0 text-[calc(12rem/14)] text-muted-foreground">
+                    {index + 1}.
+                  </span>
                   <span className="min-w-0 truncate">{account?.email ?? key}</span>
                   {!source?.enabled && (
-                    <span className="shrink-0 text-[12px] text-muted-foreground">
+                    <span className="shrink-0 text-[calc(12rem/14)] text-muted-foreground">
                       {t('Account disabled')}
                     </span>
                   )}
                   {availability.status === 'ready' &&
                     !availability.authenticatedAccountKeys.has(key) && (
-                      <span className="shrink-0 text-[12px] text-muted-foreground">
+                      <span className="shrink-0 text-[calc(12rem/14)] text-muted-foreground">
                         {t('Account signed out')}
                       </span>
                     )}

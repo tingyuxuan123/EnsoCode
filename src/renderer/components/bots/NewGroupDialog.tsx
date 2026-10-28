@@ -114,7 +114,7 @@ export function NewGroupDialog({
           <div>
             <FieldLabel hint={t('Pick at least two, and one owner')}>{t('Members')}</FieldLabel>
             {bots.length < 2 && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-[calc(11rem/14)]">
                 {t('Create at least two members first.')}
               </p>
             )}
@@ -134,11 +134,13 @@ export function NewGroupDialog({
                     <span className="min-w-0 flex-1 truncate text-sm">
                       {bot.name}
                       {bot.title && (
-                        <span className="ml-1.5 text-muted-foreground text-xs">{bot.title}</span>
+                        <span className="ml-1.5 text-muted-foreground text-[calc(11rem/14)]">
+                          {bot.title}
+                        </span>
                       )}
                     </span>
                     {checked && (
-                      <label className="flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
+                      <label className="flex shrink-0 items-center gap-1 text-muted-foreground text-[calc(11rem/14)]">
                         <input
                           type="radio"
                           name="group-owner"
@@ -167,7 +169,7 @@ export function NewGroupDialog({
                 )}
               >
                 <div className="font-medium text-sm">{t('Based on a Code project')}</div>
-                <div className="mt-0.5 text-muted-foreground text-xs">
+                <div className="mt-0.5 text-muted-foreground text-[calc(11rem/14)]">
                   {t('Members read and write directly in the project folder')}
                 </div>
               </button>
@@ -180,7 +182,7 @@ export function NewGroupDialog({
                 )}
               >
                 <div className="font-medium text-sm">{t('Standalone workspace')}</div>
-                <div className="mt-0.5 text-muted-foreground text-xs">
+                <div className="mt-0.5 text-muted-foreground text-[calc(11rem/14)]">
                   {t('A new empty folder for this group, removed with the group')}
                 </div>
               </button>
@@ -188,7 +190,7 @@ export function NewGroupDialog({
             {workspace === 'project' && (
               <BotProjectPicker projectId={projectId} onChange={setProjectId} />
             )}
-            <div className="mt-2 flex gap-2 rounded-md border border-warning/40 bg-warning/8 px-3 py-2 text-xs">
+            <div className="mt-2 flex gap-2 rounded-md border border-warning/40 bg-warning/8 px-3 py-2 text-[calc(11rem/14)]">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
               <span>
                 {t(

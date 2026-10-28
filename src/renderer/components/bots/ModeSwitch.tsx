@@ -56,7 +56,10 @@ export function ModeSwitch({ className }: { className?: string }) {
       role="radiogroup"
       aria-label={t('Switch mode')}
       onKeyDown={onKeyDown}
-      className={cn('flex h-8 shrink-0 rounded-md border bg-muted/40 p-0.5 text-xs', className)}
+      className={cn(
+        'flex h-8 shrink-0 rounded-md border bg-muted/40 p-0.5 text-[calc(11rem/14)]',
+        className
+      )}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = mode === value;

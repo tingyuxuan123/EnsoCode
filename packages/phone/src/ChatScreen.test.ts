@@ -1,9 +1,15 @@
+import { emptyGuestView } from '@shared/pair/guestProjection';
+import type { TodoItem } from '@shared/types/agent';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { ChatScreen } from './ChatScreen';
 
-vi.mock('./stubs/sessions-store', () => ({ setDisplayedConversation: () => {} }));
+const prefs = vi.hoisted(() => ({ pinUnfinishedTodos: true }));
+vi.mock('@/stores/sessions', () => import('./stubs/sessions-store'));
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: (select: (state: { pinUnfinishedTodos: boolean }) => unknown) => select(prefs),
+}));
 vi.mock('./chatHost', () => ({ phoneChatHost: () => ({}) }));
 vi.mock('@/components/chat/Composer', () => ({
   Composer: ({ focusKey }: { focusKey: string }) =>
@@ -13,13 +19,24 @@ vi.mock('@/components/chat/MessageTimeline', () => ({ MessageTimeline: () => nul
 vi.mock('@/components/chat/ApprovalBar', () => ({ ApprovalBar: () => null }));
 vi.mock('@/components/chat/AskBar', () => ({ AskBar: () => null }));
 vi.mock('@/components/chat/GoalBar', () => ({ GoalBar: () => null }));
-vi.mock('@/components/chat/TaskBar', () => ({ TaskBar: () => null }));
-vi.mock('@/components/chat/TodoBar', () => ({ TodoBar: () => null }));
+vi.mock('@/components/chat/TaskBar', () => ({
+  TaskBar: ({ todos }: { todos?: { todos: TodoItem[] } | null }) =>
+    todos
+      ? createElement(
+          'button',
+          { type: 'button', 'data-task-dock-button': 'todo' },
+          `Current progress ${todos.todos.filter((item) => item.status === 'completed').length}/${todos.todos.length}`
+        )
+      : null,
+}));
 vi.mock('@/components/chat/RetryBar', () => ({ RetryBar: () => null }));
 vi.mock('@/components/chat/MessageQueue', () => ({ MessageQueue: () => null }));
 vi.mock('./SessionStatsLine', () => ({ SessionStatsLine: () => null }));
 
 const noop = () => {};
+beforeEach(() => {
+  prefs.pinUnfinishedTodos = true;
+});
 const render = (patch: Partial<Parameters<typeof ChatScreen>[0]> = {}) =>
   renderToStaticMarkup(
     createElement(ChatScreen, {
@@ -64,3 +81,46 @@ it.each([{ canCreate: false }, { deviceReadOnly: true }, { connState: 'offline' 
     );
   }
 );
+
+it('keeps current progress in the shared task dock, including read-only conversations', () => {
+  const view = emptyGuestView();
+  view.messages.set(20, {
+    role: 'toolResult',
+    toolName: 'todo',
+    toolCallId: 'list',
+    content: [],
+    todos: [
+      { content: 'Test', status: 'completed' },
+      { content: 'Implement', status: 'in_progress' },
+    ],
+  });
+  for (const deviceReadOnly of [false, true]) {
+    const html = render({ view, deviceReadOnly });
+    expect(html).toContain('data-task-dock-button="todo"');
+    expect(html).toContain('Current progress 1/2');
+  }
+  view.messages.set(21, {
+    role: 'toolResult',
+    toolName: 'todo',
+    toolCallId: 'finished',
+    content: [],
+    todos: [{ content: 'Done', status: 'completed' }],
+  });
+  expect(render({ view })).not.toContain('data-task-dock-button="todo"');
+});
+
+it('respects the host pinned-progress preference without leaking progress across sessions', () => {
+  const view = emptyGuestView();
+  view.messages.set(0, {
+    role: 'toolResult',
+    toolName: 'todo',
+    content: [],
+    todos: [{ content: 'Unfinished', status: 'pending' }],
+  });
+  expect(render({ view })).toContain('data-task-dock-button="todo"');
+  expect(render({ sessionId: 'other', view: emptyGuestView() })).not.toContain(
+    'data-task-dock-button="todo"'
+  );
+  prefs.pinUnfinishedTodos = false;
+  expect(render({ view })).not.toContain('data-task-dock-button="todo"');
+});

@@ -38,7 +38,9 @@ export function ReadFileView({ path, contents }: { path: string; contents: strin
   );
 
   if (!ready) {
-    return <div className="px-3 py-2 text-xs text-muted-foreground">{t('Loading...')}</div>;
+    return (
+      <div className="px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">{t('Loading...')}</div>
+    );
   }
   return <File file={file} disableWorkerPool options={options} />;
 }

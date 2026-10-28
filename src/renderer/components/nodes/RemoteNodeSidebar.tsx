@@ -104,7 +104,7 @@ export function RemoteNodeSidebar({
       type="button"
       onClick={() => onSelect(c.id)}
       className={cn(
-        'group flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors',
+        'group flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[calc(12rem/14)] transition-colors',
         activeId === c.id ? 'bg-brand/10 dark:bg-brand/15' : 'hover:bg-muted/60'
       )}
     >
@@ -118,10 +118,12 @@ export function RemoteNodeSidebar({
       />
       <span className="min-w-0 flex-1 truncate">
         {c.title || t('New conversation')}
-        {subtitle && <span className="ml-1.5 text-[10px] text-muted-foreground">{subtitle}</span>}
+        {subtitle && (
+          <span className="ml-1.5 text-[calc(11rem/14)] text-muted-foreground">{subtitle}</span>
+        )}
       </span>
       {c.updatedAt !== undefined && (
-        <span className="shrink-0 text-[10px] text-muted-foreground/80 tabular-nums">
+        <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground/80 tabular-nums">
           {formatRelativeTime(c.updatedAt, locale, nowTick)}
         </span>
       )}
@@ -130,7 +132,7 @@ export function RemoteNodeSidebar({
 
   return (
     <aside
-      className="flex shrink-0 flex-col overflow-hidden border-t border-r bg-nav"
+      className="flex shrink-0 flex-col overflow-hidden border-line border-t border-r bg-nav"
       style={{ width: width ?? 264 }}
     >
       <div className="shrink-0 px-3 pt-3">
@@ -138,7 +140,7 @@ export function RemoteNodeSidebar({
           type="button"
           onClick={onNewConversation}
           disabled={!canCreate}
-          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-muted/60 text-[13px] transition-colors hover:bg-muted disabled:opacity-40"
+          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-muted/60 text-[calc(13rem/14)] transition-colors hover:bg-muted disabled:opacity-40"
           title={t('New remote conversation')}
         >
           <SquarePen className="h-3.5 w-3.5 text-brand" />
@@ -153,7 +155,7 @@ export function RemoteNodeSidebar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('Search conversations...')}
-            className="h-8 border-transparent bg-muted/60 text-xs shadow-none ring-brand/15 before:hidden has-focus-visible:border-brand/45 [&_input]:pl-8"
+            className="h-8 border-transparent bg-muted/60 text-[calc(11rem/14)] shadow-none ring-brand/15 before:hidden has-focus-visible:border-brand/45 [&_input]:pl-8"
           />
         </div>
       </div>
@@ -208,7 +210,7 @@ export function RemoteNodeSidebar({
           <div>
             <div className="flex items-center gap-1.5 px-2 py-2">
               <Pin className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-[11px] text-muted-foreground">{t('Pinned')}</span>
+              <span className="text-[calc(11rem/14)] text-muted-foreground">{t('Pinned')}</span>
             </div>
             <div className="flex flex-col gap-y-0.5">
               {pinned.map((c) => row(c, c.projectName))}
@@ -239,7 +241,7 @@ export function RemoteNodeSidebar({
                     [`g:${item.section.groupId}`]: !prev[`g:${item.section.groupId}`],
                   }))
                 }
-                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-left text-xs font-medium text-muted-foreground"
+                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-left text-[calc(11rem/14)] font-medium text-muted-foreground"
               >
                 <ChevronRight
                   className={cn(
@@ -259,7 +261,7 @@ export function RemoteNodeSidebar({
                 <span className="min-w-0 flex-1 truncate">
                   {item.section.group?.name ?? t('Ungrouped')}
                 </span>
-                <span className="shrink-0 text-[10px] text-muted-foreground/70">
+                <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground/70">
                   {item.section.projects.length}
                 </span>
               </button>
@@ -283,11 +285,11 @@ export function RemoteNodeSidebar({
                 ) : (
                   <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
-                <span className="min-w-0 flex-1 truncate font-medium text-[13px]">
+                <span className="min-w-0 flex-1 truncate font-medium text-[calc(13rem/14)]">
                   {pairProjectDisplayName(project)}
                 </span>
                 {project.sshHost && (
-                  <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px] text-muted-foreground">
+                  <span className="shrink-0 rounded bg-muted px-1 font-mono text-[calc(11rem/14)] text-muted-foreground">
                     ssh
                   </span>
                 )}
@@ -295,7 +297,7 @@ export function RemoteNodeSidebar({
               {!isFolded && (
                 <div className="ml-3 flex flex-col gap-y-0.5 border-l border-border/60 pl-2">
                   {sessions.length === 0 && (
-                    <p className="px-4 py-1.5 text-muted-foreground text-xs">
+                    <p className="px-4 py-1.5 text-muted-foreground text-[calc(11rem/14)]">
                       {t('No conversations')}
                     </p>
                   )}
@@ -322,7 +324,7 @@ export function RemoteNodeSidebar({
             >
               <Archive className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate font-medium text-sm">{t('Archived')}</span>
-              <span className="text-[10px] text-muted-foreground">{archived.length}</span>
+              <span className="text-[calc(11rem/14)] text-muted-foreground">{archived.length}</span>
             </button>
             {archivedOpen && (
               <div className="flex flex-col gap-y-0.5">

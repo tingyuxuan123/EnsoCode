@@ -117,7 +117,7 @@ function AlertDialogFooter({
 function AlertDialogTitle({ className, ...props }: AlertDialogPrimitive.Title.Props) {
   return (
     <AlertDialogPrimitive.Title
-      className={cn('font-semibold text-[16px] leading-[24px]', className)}
+      className={cn('font-semibold text-[calc(16rem/14)] leading-[calc(24rem/14)]', className)}
       data-slot="alert-dialog-title"
       {...props}
     />
@@ -127,7 +127,10 @@ function AlertDialogTitle({ className, ...props }: AlertDialogPrimitive.Title.Pr
 function AlertDialogDescription({ className, ...props }: AlertDialogPrimitive.Description.Props) {
   return (
     <AlertDialogPrimitive.Description
-      className={cn('text-muted-foreground text-[12px] leading-[20px]', className)}
+      className={cn(
+        'text-muted-foreground text-[calc(12rem/14)] leading-[calc(20rem/14)]',
+        className
+      )}
       data-slot="alert-dialog-description"
       {...props}
     />

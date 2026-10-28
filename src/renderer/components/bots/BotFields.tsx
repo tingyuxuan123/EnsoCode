@@ -54,8 +54,8 @@ export function FieldLabel({
 }) {
   return (
     <div className="mb-1 flex items-center justify-between gap-2">
-      <span className="text-muted-foreground text-xs">{children}</span>
-      {hint && <span className="text-[11px] text-muted-foreground/70">{hint}</span>}
+      <span className="text-muted-foreground text-[calc(11rem/14)]">{children}</span>
+      {hint && <span className="text-[calc(11rem/14)] text-muted-foreground/70">{hint}</span>}
       {action}
     </div>
   );
@@ -84,7 +84,7 @@ export function ColorPicker({
         </button>
       ))}
       <label
-        className="relative grid h-6 w-6 cursor-pointer place-items-center overflow-hidden rounded-full border text-[10px] text-muted-foreground"
+        className="relative grid h-6 w-6 cursor-pointer place-items-center overflow-hidden rounded-full border text-[calc(11rem/14)] text-muted-foreground"
         title={t('Custom color')}
       >
         +
@@ -183,7 +183,7 @@ export function ApprovalSelect({
             <SelectItem key={mode} value={mode}>
               <div>
                 <div>{t(APPROVAL_MODE_META[mode].labelKey)}</div>
-                <div className="text-muted-foreground text-xs">
+                <div className="text-muted-foreground text-[calc(11rem/14)]">
                   {t(APPROVAL_MODE_META[mode].descKey)}
                 </div>
               </div>
@@ -192,7 +192,7 @@ export function ApprovalSelect({
         </SelectPopup>
       </Select>
       {value === 'full' && (
-        <p className="mt-1 text-muted-foreground text-xs">
+        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
           {t('Protected actions will not ask for confirmation either.')}
         </p>
       )}
@@ -210,7 +210,7 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex rounded-md bg-muted p-0.5 text-xs">
+    <div className="flex rounded-md bg-muted p-0.5 text-[calc(11rem/14)]">
       {options.map((option) => (
         <button
           key={option.value}
@@ -219,7 +219,7 @@ export function Segmented<T extends string>({
           className={cn(
             'flex-1 rounded-md px-2 py-1 transition-colors',
             value === option.value
-              ? 'bg-background font-medium text-foreground shadow-xs'
+              ? 'bg-background font-medium text-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -247,7 +247,7 @@ export function TeamRefField({
   const { t } = useI18n();
   const chip = (active: boolean) =>
     cn(
-      'rounded-full border px-2 py-0.5 text-xs transition-colors',
+      'rounded-full border px-2 py-0.5 text-[calc(11rem/14)] transition-colors',
       active ? 'border-info bg-info/10 text-foreground' : 'text-muted-foreground hover:bg-muted'
     );
   return (
@@ -284,7 +284,7 @@ export function TeamRefField({
         })}
       </div>
       {value !== 'any' && value.length === 0 && (
-        <p className="mt-1 text-muted-foreground text-xs">{t('None selected')}</p>
+        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">{t('None selected')}</p>
       )}
     </div>
   );

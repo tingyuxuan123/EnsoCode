@@ -123,7 +123,7 @@ export function BrowserRecordsPagination({
   const { t } = useI18n();
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="mr-auto text-xs text-muted-foreground">
+      <span className="mr-auto text-[calc(11rem/14)] text-muted-foreground">
         {t('Page {{page}} of {{pages}} · {{total}} records', {
           page: Math.floor(offset / PAGE_SIZE) + 1,
           pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),

@@ -81,7 +81,7 @@ const renderDocument = () => {
 const renderRows = () =>
   Object.fromEntries(
     [...renderDocument().querySelectorAll('[role="button"]')].map((row) => [
-      row.querySelector('.font-medium')?.textContent,
+      row.getAttribute('aria-label'),
       Boolean(row.querySelector('.animate-pulse.bg-success')),
     ])
   );

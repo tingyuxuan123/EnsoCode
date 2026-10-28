@@ -23,10 +23,12 @@ import { ClassifierSourceField } from './VirtualModelsSettings';
 export function BotSettings() {
   const { t } = useI18n();
   return (
-    <div className="space-y-6">
+    <div className="space-y-[24px]" data-slot="settings-page">
       <div>
-        <h3 className="text-[18px] font-semibold">{t('Bot mode')}</h3>
-        <p className="text-[13px] text-muted-foreground">
+        <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
+          {t('Bot mode')}
+        </h3>
+        <p className="text-[calc(13rem/14)] text-muted-foreground">
           {t('Settings shared by all members and group chats.')}
         </p>
       </div>
@@ -52,8 +54,8 @@ function BotMaxRunningTurnsRow() {
       data-settings-row="bots.maxRunningTurns"
     >
       <div className="min-w-0">
-        <p className="text-[13px]">{t('Bot concurrency limit')}</p>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-[calc(13rem/14)]">{t('Bot concurrency limit')}</p>
+        <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t(
             'Shared by private chats, group chats, delegations and routines. Lowering it never interrupts running work; raising it may hit model rate limits.'
           )}
@@ -89,9 +91,12 @@ function BotAssistantModelRow() {
   const provider = model ? candidates.find((p) => p.id === model.providerId) : undefined;
   const selected = provider?.models.find((m) => m.id === model?.modelId);
   return (
-    <div className="rounded-[6px] border px-3 py-2.5" data-settings-row="bots.assistantModel">
-      <p className="text-[13px]">{t('Bot assistant model')}</p>
-      <p className="mb-2 text-[12px] text-muted-foreground">
+    <div
+      className="space-y-[8px] border-t border-line pt-[20px]"
+      data-settings-row="bots.assistantModel"
+    >
+      <p className="text-[calc(13rem/14)]">{t('Bot assistant model')}</p>
+      <p className="mb-2 text-[calc(12rem/14)] text-muted-foreground">
         {t('Used for helper tasks such as auto-configuring member abilities.')}
       </p>
       <ModelPicker
@@ -109,7 +114,7 @@ function BotAssistantModelRow() {
         onThinkingChange={() => {}}
       />
       {model && !selected && (
-        <p className="mt-1 text-muted-foreground text-[12px]">
+        <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
           {t('Selected model is unavailable — falls back to the default model.')}
         </p>
       )}
@@ -130,9 +135,12 @@ function BotRouteClassifierRow() {
   const candidates = React.useMemo(() => usable.filter(canBeVirtualMember), [usable]);
   const classifierProviders = useUsableClassifierProviders();
   return (
-    <div className="rounded-[6px] border px-3 py-2.5" data-settings-row="bots.routeClassifier">
-      <p className="text-[13px]">{t('Group reply picker model')}</p>
-      <p className="mb-2 text-[12px] text-muted-foreground">
+    <div
+      className="space-y-[8px] border-t border-line pt-[20px]"
+      data-settings-row="bots.routeClassifier"
+    >
+      <p className="text-[calc(13rem/14)]">{t('Group reply picker model')}</p>
+      <p className="mb-2 text-[calc(12rem/14)] text-muted-foreground">
         {t(
           'When nobody is @-mentioned in a smart-routing group, this model picks which member replies.'
         )}

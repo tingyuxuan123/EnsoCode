@@ -31,21 +31,21 @@ export function MemoryWriteCard({
   };
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+      <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">{bot?.name ?? t('Deleted member')}</span>
         {chatName && <span>· {chatName}</span>}
-        <span className="rounded bg-warning/20 px-1.5 text-[11px] text-warning">
+        <span className="rounded bg-warning/20 px-1.5 text-[calc(11rem/14)] text-warning">
           {t('Memory write')}
         </span>
         <span>→ {write.spaceLabel}</span>
         {write.redacted && <span>· {t('Secrets redacted')}</span>}
       </div>
       {write.title && <div className="mt-2 font-medium text-sm">{write.title}</div>}
-      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 px-2 py-1.5 text-xs">
+      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 px-2 py-1.5 text-[calc(11rem/14)]">
         {write.content}
       </pre>
-      {error && <div className="mt-1 text-destructive text-xs">{error}</div>}
+      {error && <div className="mt-1 text-destructive text-[calc(11rem/14)]">{error}</div>}
       <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5">
         <Button size="xs" variant="outline" disabled={busy} onClick={() => decide('reject')}>
           {t('Reject')}

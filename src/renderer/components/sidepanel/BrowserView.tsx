@@ -444,7 +444,7 @@ export function BrowserView({
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="flex h-[40px] shrink-0 items-center gap-0.5 border-b border-line px-2">
+      <div className="flex h-[calc(40rem/14)] shrink-0 items-center gap-0.5 border-b border-line px-2">
         <Button
           variant="ghost"
           size="icon-xs"
@@ -508,7 +508,7 @@ export function BrowserView({
             aria-label={t('Search or enter a URL')}
             spellCheck={false}
             disabled={agentLocked}
-            className="h-8 w-full min-w-0 rounded-lg border border-border/70 bg-muted/50 pl-8 pr-3 text-xs text-foreground outline-none transition-[background-color,border-color,box-shadow] placeholder:text-muted-foreground/72 hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/25 disabled:opacity-64"
+            className="h-8 w-full min-w-0 rounded-lg border border-border/70 bg-muted/50 pl-8 pr-3 text-[calc(11rem/14)] text-foreground outline-none transition-[background-color,border-color,box-shadow] placeholder:text-muted-foreground/72 hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/25 disabled:opacity-64"
           />
         </form>
         {manualControl && (
@@ -614,7 +614,7 @@ export function BrowserView({
       {error && (
         <div
           role="alert"
-          className="break-words border-b bg-destructive/10 px-3 py-1 text-xs text-destructive"
+          className="break-words border-b bg-destructive/10 px-3 py-1 text-[calc(11rem/14)] text-destructive"
         >
           {error}
         </div>
@@ -683,12 +683,15 @@ export function BrowserView({
               <div className="browser-agent-glow pointer-events-none absolute inset-0" />
               <div className="absolute bottom-5 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-full border border-border/80 bg-popover py-1.5 pl-5 pr-1.5 text-popover-foreground shadow-lg">
                 <div className="min-w-0 leading-tight">
-                  <div className="truncate text-xs font-medium" title={state.holder?.name}>
+                  <div
+                    className="truncate text-[calc(11rem/14)] font-medium"
+                    title={state.holder?.name}
+                  >
                     {state.holder
                       ? t('{{name}} is using this tab', { name: state.holder.name })
                       : t('Agent is browsing')}
                   </div>
-                  <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  <div className="mt-0.5 text-[calc(11rem/14)] tabular-nums text-muted-foreground">
                     {t('In control {{time}}', { time: elapsed })}
                   </div>
                 </div>

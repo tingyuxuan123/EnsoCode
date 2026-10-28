@@ -271,7 +271,9 @@ export function NewBotDialog({
                     bot={{ name: template.data.title, avatar: { color: template.data.color } }}
                   />
                   <span className="font-medium text-sm">{template.data.title}</span>
-                  <span className="text-muted-foreground text-xs">{template.data.summary}</span>
+                  <span className="text-muted-foreground text-[calc(11rem/14)]">
+                    {template.data.summary}
+                  </span>
                 </button>
               ))}
               <button
@@ -293,7 +295,9 @@ export function NewBotDialog({
                 onChange={(event) => patch({ name: event.target.value })}
                 onBlur={() => setTouched(true)}
               />
-              {touched && nameIssue && <p className="mt-1 text-destructive text-xs">{nameIssue}</p>}
+              {touched && nameIssue && (
+                <p className="mt-1 text-destructive text-[calc(11rem/14)]">{nameIssue}</p>
+              )}
             </div>
             <div>
               <FieldLabel>{t('Title')}</FieldLabel>
@@ -359,7 +363,7 @@ export function NewBotDialog({
                   className={cn('h-4 w-4 transition-transform', abilitiesOpen && 'rotate-90')}
                 />
                 <span className="font-medium">{t('Abilities')}</span>
-                <span className="truncate text-muted-foreground text-xs">
+                <span className="truncate text-muted-foreground text-[calc(11rem/14)]">
                   {t('Tools, approval, skills, MCP, delegation and memory')}
                 </span>
               </button>

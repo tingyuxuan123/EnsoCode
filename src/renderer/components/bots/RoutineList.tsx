@@ -178,7 +178,7 @@ export function RoutineList({
         {t('New routine')}
       </Button>
       {routines.length === 0 && (
-        <p className="text-muted-foreground text-xs">{t('No routines yet')}</p>
+        <p className="text-muted-foreground text-[calc(11rem/14)]">{t('No routines yet')}</p>
       )}
       {routines.map((routine) => {
         const chat = chats.find((item) => item.id === routine.chatId);
@@ -194,7 +194,7 @@ export function RoutineList({
             key={routine.id}
             data-slot="bot-card"
             className={cn(
-              'rounded-md border bg-card px-2.5 py-2 text-xs',
+              'rounded-md border bg-card px-2.5 py-2 text-[calc(11rem/14)]',
               routine.status === 'paused' && 'opacity-70'
             )}
           >
@@ -494,7 +494,12 @@ function SchedulePicker({ value, onChange }: { value: string; onChange: (cron: s
           />
         </div>
       )}
-      <p className={cn('mt-1 text-xs', preview ? 'text-muted-foreground' : 'text-destructive')}>
+      <p
+        className={cn(
+          'mt-1 text-[calc(11rem/14)]',
+          preview ? 'text-muted-foreground' : 'text-destructive'
+        )}
+      >
         {preview
           ? `${preview.description} · ${
               preview.next ? t('Next run {{time}}', { time: stamp(preview.next) }) : t('Never runs')
@@ -627,7 +632,7 @@ function RoutineEditor({
             <div>
               <FieldLabel>{t('Target chat')}</FieldLabel>
               {options.length === 0 ? (
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-[calc(11rem/14)]">
                   {t('This member is not in any chat yet. Start a private chat first.')}
                 </p>
               ) : (

@@ -26,9 +26,9 @@ export function GoalBar({ conversationId, goal }: { conversationId: string; goal
   return (
     <div
       data-slot="goal-bar"
-      className="mb-[6px] flex items-center gap-[8px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[6px] text-[12px]"
+      className="mb-[6px] flex items-center gap-[8px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[6px] text-[calc(12rem/14)]"
     >
-      <Target className="size-[14px] shrink-0 text-muted-foreground" />
+      <Target className="size-[calc(14rem/14)] shrink-0 text-muted-foreground" />
       <span
         className="min-w-0 flex-1 truncate"
         title={goal.note ? `${goal.text} — ${goal.note}` : goal.text}
@@ -37,7 +37,7 @@ export function GoalBar({ conversationId, goal }: { conversationId: string; goal
         {goal.note && <span className="text-muted-foreground"> — {goal.note}</span>}
       </span>
       <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[goal.status])} />
-      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+      <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground tabular-nums">
         {statusLabel[goal.status]}
         {goal.status === 'active' && goal.autoTurns > 0 ? ` · ${goal.autoTurns}/25` : ''}
       </span>

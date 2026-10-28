@@ -59,7 +59,7 @@ export function CodeEditor({
     return (
       <div
         className={cn(
-          'flex w-full items-center justify-center rounded-[6px] border border-input text-muted-foreground text-[12px]',
+          'flex w-full items-center justify-center rounded-[6px] border border-input text-muted-foreground text-[calc(12rem/14)]',
           className
         )}
       >

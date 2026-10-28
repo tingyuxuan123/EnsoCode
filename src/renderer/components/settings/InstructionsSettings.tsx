@@ -37,18 +37,21 @@ export function InstructionsSettings() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-[16px]" data-settings-row="instructions.root">
+    <div className="space-y-[24px]" data-slot="settings-page">
+      <div
+        className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
+        data-settings-row="instructions.root"
+      >
         <div>
-          <h3 className="font-semibold text-[18px]">
+          <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
             {t('Instruction Files')}
             <OccupancyEnabledTotal tokens={enabledTokens} />
             <NewSessionBadge />
           </h3>
-          <p className="text-muted-foreground text-[13px]">
+          <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t('Global CLAUDE.md / AGENTS.md style files from local AI tools')}
           </p>
-          <p className="text-muted-foreground text-[12px]">
+          <p className="text-muted-foreground text-[calc(12rem/14)]">
             {t('Only one file is active at a time; enabling one disables the others')}
           </p>
         </div>
@@ -67,42 +70,44 @@ export function InstructionsSettings() {
       {instructions.length === 0 ? (
         <div className="rounded-[6px] border border-dashed px-3 py-8 text-center">
           <FileText className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-3 font-medium text-[13px]">{t('No instruction files yet')}</p>
-          <p className="mt-1 text-muted-foreground text-[12px]">
+          <p className="mt-3 font-medium text-[calc(13rem/14)]">{t('No instruction files yet')}</p>
+          <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
             {t('Import instruction files from local apps or add one manually to get started')}
           </p>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
           {instructions.map((instruction) => (
             <div
               key={instruction.id}
-              className="group flex items-center justify-between gap-3 rounded-[6px] px-3 py-2 transition-colors hover:bg-accent/50"
+              className="group flex items-center justify-between gap-[12px] px-[12px] py-[10px] transition-colors hover:bg-accent/50"
               data-settings-row={`instructions.${instruction.id}`}
             >
-              <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className={cn(
-                    'shrink-0 font-medium text-[13px]',
-                    !instruction.enabled && 'text-muted-foreground line-through'
-                  )}
-                >
-                  {instruction.name}
-                </span>
-                <Badge variant="secondary" className="shrink-0 text-[11px]">
-                  {instruction.source}
-                </Badge>
-                {!instruction.local && (
-                  <Badge variant="outline" className="shrink-0 gap-1 text-[11px]">
-                    <Link2 className="h-3 w-3" />
-                    {t('Linked')}
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-[8px]">
+                  <span
+                    className={cn(
+                      'truncate font-medium text-[calc(13rem/14)]',
+                      !instruction.enabled && 'text-muted-foreground line-through'
+                    )}
+                  >
+                    {instruction.name}
+                  </span>
+                  <Badge variant="secondary" className="shrink-0 text-[calc(11rem/14)]">
+                    {instruction.source}
                   </Badge>
-                )}
-                <span className="min-w-0 truncate text-muted-foreground text-[12px]">
+                  {!instruction.local && (
+                    <Badge variant="outline" className="shrink-0 gap-1 text-[calc(11rem/14)]">
+                      <Link2 className="h-3 w-3" />
+                      {t('Linked')}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-[2px] truncate text-muted-foreground text-[calc(12rem/14)]">
                   {instruction.local
                     ? `${t('Local copy')} · ${formatBytes(instruction.bytes)}`
                     : `${instruction.sourcePath} · ${formatBytes(instruction.bytes)}`}
-                </span>
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <OccupancyMark
@@ -116,6 +121,7 @@ export function InstructionsSettings() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label={t('Edit')}
                   className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => setEditing(instruction)}
                 >
@@ -124,6 +130,7 @@ export function InstructionsSettings() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label={t('Remove')}
                   className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => removeInstruction(instruction.id)}
                 >

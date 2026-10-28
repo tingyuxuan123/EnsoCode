@@ -45,6 +45,12 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 <div className="h-[44px] pl-[84px]">   // 而不是 h-11 pl-20
 ```
 
+设计稿的文字尺寸按默认 14px 根字号换算：13px 正文用
+`text-[calc(13rem/14)]`，24px 行高用 `leading-[calc(24rem/14)]`。
+不要用固定像素字号取消外观设置的字号缩放。随文字放大的控件，其高度、图标列、
+开关轨道/拇指/位移也要同比例缩放，避免大字号裁切和重叠；窗口标题栏等原生几何除外。
+回归见 `src/renderer/styles/typographyScale.test.ts`。
+
 ## 主题系统
 
 三种模式由 `theme` 字段驱动（`light` / `dark` / `system` / `sync-terminal`），
@@ -86,6 +92,11 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 className="bg-zinc-950"
 style={{ backgroundColor: theme.background }}
 ```
+
+深色填充按钮、停止图标或反色标签的文字使用 `text-inverse-foreground`，不要使用
+`text-background`：后者也会经过背景 alpha 重映射，可见度 100% 时文字会完全透明。
+inverse 令牌取原始 `--background`，仍跟随 light/dark/sync-terminal，但不随面板透明。
+回归见 `src/renderer/styles/inverseForeground.test.ts`。
 
 处理办法按情况选：
 

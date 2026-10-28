@@ -134,7 +134,7 @@ export function BotAbilityFields({
             onChange={(event) => onChange({ budgetTokens: event.target.value })}
           />
         </div>
-        <p className="mt-1 text-muted-foreground text-xs">
+        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
           {t(
             'Resets at local midnight. Once reached, new messages to this member are refused and a running reply is stopped.'
           )}
@@ -152,7 +152,7 @@ export function BotAbilityFields({
           aria-label={t('Per-turn token limit')}
           onChange={(event) => onChange({ maxTurnTokens: event.target.value })}
         />
-        <p className="mt-1 text-muted-foreground text-xs">
+        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
           {t(
             'A single reply that uses more tokens than this (counted while streaming) is stopped.'
           )}
@@ -171,7 +171,7 @@ export function BotAbilityFields({
           aria-label={t('Delegation time limit (minutes)')}
           onChange={(event) => onChange({ delegationTimeout: event.target.value })}
         />
-        <p className="mt-1 text-muted-foreground text-xs">
+        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
           {t(
             'When other members delegate to this one, the task fails with a timeout after this long. A delegator can ask for less, not more.'
           )}
@@ -261,7 +261,7 @@ function AutoAbilities({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-[calc(11rem/14)]">
           {t('Let a model suggest abilities from the name, title, responsibilities and persona.')}
         </span>
         <Button size="xs" variant="outline" disabled={busy} onClick={() => void run()}>
@@ -271,9 +271,9 @@ function AutoAbilities({
       </div>
       {suggestion && changes.length > 0 && (
         <div className="space-y-2 rounded-md border bg-muted/40 p-2.5">
-          <p className="font-medium text-xs">{t('Suggested changes')}</p>
+          <p className="font-medium text-[calc(11rem/14)]">{t('Suggested changes')}</p>
           {changes.map((change) => (
-            <label key={change.field} className="flex items-start gap-2 text-xs">
+            <label key={change.field} className="flex items-start gap-2 text-[calc(11rem/14)]">
               <Checkbox
                 className="mt-0.5"
                 checked={!skipped.includes(change.field)}
@@ -463,7 +463,7 @@ function DelegationField({
       {value !== 'any' && (
         <div className="mt-1.5 space-y-1">
           {bots.length === 0 && (
-            <p className="text-muted-foreground text-xs">{t('No other members')}</p>
+            <p className="text-muted-foreground text-[calc(11rem/14)]">{t('No other members')}</p>
           )}
           {bots.map((bot) => (
             <label key={bot.id} className="flex items-center gap-2 text-sm">

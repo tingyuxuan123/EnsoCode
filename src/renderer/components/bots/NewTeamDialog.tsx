@@ -289,7 +289,9 @@ export function NewTeamDialog({
                       ))}
                     </div>
                     <span className="font-medium text-sm">{data.title}</span>
-                    <span className="text-muted-foreground text-xs">{data.summary}</span>
+                    <span className="text-muted-foreground text-[calc(11rem/14)]">
+                      {data.summary}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -330,8 +332,10 @@ export function NewTeamDialog({
               <div>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground text-xs">{t('Members')}</span>
-                    <span className="text-[11px] text-muted-foreground/70">
+                    <span className="text-muted-foreground text-[calc(11rem/14)]">
+                      {t('Members')}
+                    </span>
+                    <span className="text-[calc(11rem/14)] text-muted-foreground/70">
                       {t('Uncheck members you do not need; the owner stays')}
                     </span>
                   </span>
@@ -397,28 +401,32 @@ export function NewTeamDialog({
                                 }));
                               }}
                             />
-                            <span className="truncate text-muted-foreground text-xs">
+                            <span className="truncate text-muted-foreground text-[calc(11rem/14)]">
                               {member.title}
                             </span>
                             {boss && (
-                              <span className="flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">
+                              <span className="flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 text-[calc(11rem/14)] text-muted-foreground">
                                 <Crown className="h-3 w-3" />
                                 {t('Owner')}
                               </span>
                             )}
                           </div>
-                          <p className="text-muted-foreground text-xs">{member.scope}</p>
+                          <p className="text-muted-foreground text-[calc(11rem/14)]">
+                            {member.scope}
+                          </p>
                           {renamed && renamed.to === member.name && (
-                            <p className="text-warning text-xs">
+                            <p className="text-warning text-[calc(11rem/14)]">
                               {t('"{{from}}" is taken, renamed to "{{to}}"', renamed)}
                             </p>
                           )}
-                          {issue && <p className="text-destructive text-xs">{issue}</p>}
+                          {issue && (
+                            <p className="text-destructive text-[calc(11rem/14)]">{issue}</p>
+                          )}
                           <button
                             type="button"
                             disabled={!checked}
                             onClick={() => setExpanded(open ? null : member.key)}
-                            className="flex items-start gap-1 text-left text-[11px] text-muted-foreground hover:text-foreground disabled:pointer-events-none"
+                            className="flex items-start gap-1 text-left text-[calc(11rem/14)] text-muted-foreground hover:text-foreground disabled:pointer-events-none"
                           >
                             {open ? (
                               <ChevronDown className="mt-px h-3 w-3 shrink-0" />
@@ -499,7 +507,7 @@ export function NewTeamDialog({
                   })}
                 </div>
                 {!picked && (
-                  <p className="mt-1 text-destructive text-xs">
+                  <p className="mt-1 text-destructive text-[calc(11rem/14)]">
                     {t('Keep the owner and at least one other member.')}
                   </p>
                 )}
@@ -517,7 +525,7 @@ export function NewTeamDialog({
                     )}
                   >
                     <div className="font-medium text-sm">{t('Standalone workspace')}</div>
-                    <div className="mt-0.5 text-muted-foreground text-xs">
+                    <div className="mt-0.5 text-muted-foreground text-[calc(11rem/14)]">
                       {t('A new empty folder for this group, removed with the group')}
                     </div>
                   </button>
@@ -530,7 +538,7 @@ export function NewTeamDialog({
                     )}
                   >
                     <div className="font-medium text-sm">{t('Based on a Code project')}</div>
-                    <div className="mt-0.5 text-muted-foreground text-xs">
+                    <div className="mt-0.5 text-muted-foreground text-[calc(11rem/14)]">
                       {t('Members read and write directly in the project folder')}
                     </div>
                   </button>
@@ -538,7 +546,7 @@ export function NewTeamDialog({
                 {workspace === 'project' && (
                   <BotProjectPicker projectId={projectId} onChange={setProjectId} />
                 )}
-                <div className="mt-2 flex gap-2 rounded-md border border-info/40 bg-info/8 px-3 py-2 text-xs">
+                <div className="mt-2 flex gap-2 rounded-md border border-info/40 bg-info/8 px-3 py-2 text-[calc(11rem/14)]">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
                   <span>
                     {t(

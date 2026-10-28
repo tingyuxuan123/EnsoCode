@@ -45,7 +45,7 @@ export function SubagentResult({
         <p className="whitespace-pre-wrap text-destructive">{view.error}</p>
       )}
       {view.runs.length > 0 && (
-        <ul className="space-y-0.5 text-xs text-muted-foreground">
+        <ul className="space-y-0.5 text-[calc(11rem/14)] text-muted-foreground">
           {view.runs.map((run) => (
             <RunLine
               key={run.runId || run.agentId}
@@ -61,22 +61,22 @@ export function SubagentResult({
         </ul>
       )}
       {view.kind === 'list' && view.runs.length === 0 && (
-        <p className="text-xs text-muted-foreground">{t('No agents')}</p>
+        <p className="text-[calc(11rem/14)] text-muted-foreground">{t('No agents')}</p>
       )}
       {view.kind === 'wait' && view.timedOut && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[calc(11rem/14)] text-muted-foreground">
           {t('Timed out; unfinished agents keep running')}
         </p>
       )}
       {view.kind === 'wait' && view.interrupted && (
-        <p className="text-xs text-muted-foreground">{t('Wait was interrupted')}</p>
+        <p className="text-[calc(11rem/14)] text-muted-foreground">{t('Wait was interrupted')}</p>
       )}
-      <details className="text-xs text-muted-foreground">
+      <details className="text-[calc(11rem/14)] text-muted-foreground">
         <summary className="cursor-pointer hover:text-foreground">{t('Run info')}</summary>
         <pre className="mt-1 whitespace-pre-wrap font-mono">{view.info}</pre>
       </details>
       {view.head && (
-        <pre className="whitespace-pre-wrap font-mono text-xs text-muted-foreground">
+        <pre className="whitespace-pre-wrap font-mono text-[calc(11rem/14)] text-muted-foreground">
           {view.head}
         </pre>
       )}

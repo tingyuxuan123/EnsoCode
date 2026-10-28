@@ -180,12 +180,12 @@ export function SubagentSessionView({
               <p className="truncate text-sm font-medium" title={entry?.title}>
                 {entry?.title}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-[calc(11rem/14)] text-muted-foreground">
                 {t('Read-only')} · {lifecycleText}
                 {entry?.modelId ? ` · ${entry.modelId}` : ''}
               </p>
               {entry?.ended && status !== 'ended' && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[calc(11rem/14)] text-muted-foreground">
                   {t('Last run: {{status}}', { status: statusText })}
                 </p>
               )}
@@ -194,7 +194,7 @@ export function SubagentSessionView({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-7 text-[calc(11rem/14)]"
                 onClick={() => {
                   const state = useSessionsStore.getState();
                   if (
@@ -224,26 +224,32 @@ export function SubagentSessionView({
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <p className="shrink-0 border-b px-3 py-2 text-xs text-muted-foreground">
+          <p className="shrink-0 border-b px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
             {t('Process observation only. Messages cannot be sent here.')}{' '}
             {t('Closing this view does not stop the agent.')}
           </p>
           {historyError && (
             <div
               role="alert"
-              className="flex shrink-0 items-start gap-2 border-b px-3 py-2 text-xs text-destructive"
+              className="flex shrink-0 items-start gap-2 border-b px-3 py-2 text-[calc(11rem/14)] text-destructive"
             >
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 break-words">{t(historyError)}</span>
             </div>
           )}
           {conversation.historyPartial && (
-            <p role="status" className="shrink-0 border-b px-3 py-2 text-xs text-muted-foreground">
+            <p
+              role="status"
+              className="shrink-0 border-b px-3 py-2 text-[calc(11rem/14)] text-muted-foreground"
+            >
               {t('Only recorded history is shown. Some earlier content may be unavailable.')}
             </p>
           )}
           {!fileLinksAvailable && (
-            <p role="status" className="shrink-0 border-b px-3 py-2 text-xs text-muted-foreground">
+            <p
+              role="status"
+              className="shrink-0 border-b px-3 py-2 text-[calc(11rem/14)] text-muted-foreground"
+            >
               {t('File links are unavailable for this workspace.')}
             </p>
           )}

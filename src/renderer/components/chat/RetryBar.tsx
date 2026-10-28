@@ -29,9 +29,9 @@ export function RetryBar({ retry, onCancel }: { retry: RetryInfo; onCancel?: () 
   return (
     <div
       data-slot="retry-bar"
-      className="mb-[6px] flex items-center gap-[8px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[6px] text-[12px]"
+      className="mb-[6px] flex items-center gap-[8px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[6px] text-[calc(12rem/14)]"
     >
-      <RefreshCw className="size-[14px] shrink-0 animate-spin text-warning [animation-duration:2s]" />
+      <RefreshCw className="size-[calc(14rem/14)] shrink-0 animate-spin text-warning [animation-duration:2s]" />
       <span className="min-w-0 flex-1 truncate" title={retry.error}>
         {retry.maxAttempts > 0
           ? t('Auto-retrying ({{attempt}}/{{max}})', {

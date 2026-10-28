@@ -58,9 +58,9 @@ function PriceTable({
 }) {
   const { t } = useI18n();
   return (
-    <table className="w-full text-[12px]">
+    <table className="w-full text-[calc(12rem/14)]">
       <thead>
-        <tr className="text-[11px] text-muted-foreground">
+        <tr className="text-[calc(11rem/14)] text-muted-foreground">
           <th className="pb-2 text-left font-normal">{t('Name')}</th>
           {FIELDS.map((field) => (
             <th key={field} className="pb-2 text-right font-normal">
@@ -77,11 +77,13 @@ function PriceTable({
           return (
             <tr key={row.model} className="border-t border-border/60">
               <td className="py-1.5 pr-3 align-middle">
-                <span className="font-mono text-[12px]" title={row.model}>
+                <span className="font-mono text-[calc(12rem/14)]" title={row.model}>
                   {row.model}
                 </span>
                 {custom && (
-                  <span className="ml-1.5 text-[10px] text-muted-foreground">{t('Custom')}</span>
+                  <span className="ml-1.5 text-[calc(11rem/14)] text-muted-foreground">
+                    {t('Custom')}
+                  </span>
                 )}
               </td>
               {FIELDS.map((field) => (
@@ -110,7 +112,7 @@ function PriceTable({
                 {isEditing ? (
                   <Button
                     size="sm"
-                    className="h-6 px-1.5 text-[11px]"
+                    className="h-6 px-1.5 text-[calc(11rem/14)]"
                     onClick={() => onSave(row.model)}
                   >
                     {t('Save')}
@@ -119,7 +121,7 @@ function PriceTable({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-1.5 text-[11px]"
+                    className="h-6 px-1.5 text-[calc(11rem/14)]"
                     onClick={() => onEdit(row.model, row.pricing)}
                   >
                     {t('Edit')}
@@ -196,8 +198,8 @@ export function UsagePricingEditor({
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-[6px] border bg-card">
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
         <div className="min-w-0">
-          <div className="text-[13px] font-medium">{t('Unit prices')}</div>
-          <p className="text-[12px] text-muted-foreground">
+          <div className="text-[calc(13rem/14)] font-medium">{t('Unit prices')}</div>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t('Rates used for cost estimates ($/M tokens).')}
           </p>
         </div>
@@ -217,7 +219,7 @@ export function UsagePricingEditor({
             placeholder={t('Search models')}
           />
           {usedRows.length === 0 && !adding ? (
-            <p className="text-[12px] text-muted-foreground">
+            <p className="text-[calc(12rem/14)] text-muted-foreground">
               {q ? t('No matching models') : t('No usage in this period')}
             </p>
           ) : (
@@ -247,7 +249,7 @@ export function UsagePricingEditor({
           {adding ? (
             <div className="space-y-2">
               <div className="flex flex-wrap items-end gap-2">
-                <label className="grid min-w-36 gap-1 text-[11px] text-muted-foreground">
+                <label className="grid min-w-36 gap-1 text-[calc(11rem/14)] text-muted-foreground">
                   {t('Model id')}
                   <Input
                     size="sm"
@@ -259,7 +261,7 @@ export function UsagePricingEditor({
                 {FIELDS.map((field) => (
                   <label
                     key={field}
-                    className="grid min-w-16 gap-1 text-[11px] text-muted-foreground"
+                    className="grid min-w-16 gap-1 text-[calc(11rem/14)] text-muted-foreground"
                   >
                     {field}
                     <Input
@@ -318,7 +320,7 @@ export function UsagePricingEditor({
               </Button>
             </div>
           )}
-          {error && <p className="text-[12px] text-destructive">{error}</p>}
+          {error && <p className="text-[calc(12rem/14)] text-destructive">{error}</p>}
         </div>
       </CollapsibleContent>
     </Collapsible>

@@ -269,17 +269,23 @@ export function GitChangesView({
           </div>
         )}
         <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-xs" title={status?.branch ?? undefined}>
+        <span
+          className="min-w-0 flex-1 truncate text-[calc(11rem/14)]"
+          title={status?.branch ?? undefined}
+        >
           {status?.branch ?? (status ? t('Detached HEAD') : t('Git'))}
         </span>
         {status?.upstream && (
-          <span className="shrink-0 text-[11px] text-muted-foreground" title={status.upstream}>
+          <span
+            className="shrink-0 text-[calc(11rem/14)] text-muted-foreground"
+            title={status.upstream}
+          >
             ↓{status.behind} ↑{status.ahead}
           </span>
         )}
         {status && !status.upstream && (
           <span
-            className="max-w-20 truncate text-[11px] text-muted-foreground"
+            className="max-w-20 truncate text-[calc(11rem/14)] text-muted-foreground"
             title={t('No upstream branch configured.')}
           >
             {t('No upstream')}
@@ -322,7 +328,7 @@ export function GitChangesView({
       {busy && (
         <p
           role="status"
-          className="flex shrink-0 items-center gap-2 px-3 py-1 text-xs text-muted-foreground"
+          className="flex shrink-0 items-center gap-2 px-3 py-1 text-[calc(11rem/14)] text-muted-foreground"
         >
           <Loader2 className="size-3 animate-spin" />
           {t(busy)}…
@@ -331,7 +337,7 @@ export function GitChangesView({
       {error && (
         <p
           role="alert"
-          className="max-h-24 shrink-0 overflow-auto whitespace-pre-wrap break-words border-b px-3 py-2 text-xs text-destructive"
+          className="max-h-24 shrink-0 overflow-auto whitespace-pre-wrap break-words border-b px-3 py-2 text-[calc(11rem/14)] text-destructive"
         >
           {t(error)}
         </p>
@@ -339,7 +345,7 @@ export function GitChangesView({
       {unavailable || disabled || readError || !status ? (
         <div
           role="status"
-          className="m-3 flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground"
+          className="m-3 flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed p-4 text-center text-[calc(11rem/14)] text-muted-foreground"
         >
           {t(
             unavailable
@@ -369,7 +375,7 @@ export function GitChangesView({
               navigation={
                 <>
                   <div className="shrink-0 px-2 pb-1.5">
-                    <InputGroup className="text-xs">
+                    <InputGroup className="text-[calc(11rem/14)]">
                       <InputGroupInput
                         ref={filterInput}
                         size="sm"
@@ -402,7 +408,7 @@ export function GitChangesView({
                     {visibleGroups.map((group) =>
                       group.files.length === 0 ? null : (
                         <section key={group.id} className="mb-2 last:mb-0">
-                          <div className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                          <div className="flex items-center gap-1 px-2 py-1 text-[calc(11rem/14)] font-medium text-muted-foreground">
                             <span className="min-w-0 flex-1 truncate">
                               {group.title}{' '}
                               <span className="ml-1 font-normal">{group.files.length}</span>
@@ -479,7 +485,7 @@ export function GitChangesView({
                       )
                     )}
                     {visibleCount === 0 && (
-                      <p className="m-1 rounded-md border border-dashed px-2 py-5 text-center text-xs text-muted-foreground">
+                      <p className="m-1 rounded-md border border-dashed px-2 py-5 text-center text-[calc(11rem/14)] text-muted-foreground">
                         {t(
                           status.staged.length + status.unstaged.length === 0
                             ? 'Working tree clean.'
@@ -495,7 +501,7 @@ export function GitChangesView({
                       value={message}
                       aria-label={t('Commit message')}
                       placeholder={t('Enter commit message…')}
-                      className="min-w-0 flex-1 text-xs [&_textarea]:max-h-[calc(6lh+0.5rem)] [&_textarea]:min-h-[calc(3lh+0.5rem)] [&_textarea]:resize-none [&_textarea]:overflow-auto"
+                      className="min-w-0 flex-1 text-[calc(11rem/14)] [&_textarea]:max-h-[calc(6lh+0.5rem)] [&_textarea]:min-h-[calc(3lh+0.5rem)] [&_textarea]:resize-none [&_textarea]:overflow-auto"
                       disabled={busy !== null}
                       onChange={(event) => setMessage(event.target.value)}
                       onKeyDown={(event) => {
@@ -520,7 +526,9 @@ export function GitChangesView({
                       <GitCommitHorizontal className="size-3.5" />
                       {t('Commit')}
                       {status.staged.length > 0 && (
-                        <span className="font-mono text-[11px]">{status.staged.length}</span>
+                        <span className="font-mono text-[calc(11rem/14)]">
+                          {status.staged.length}
+                        </span>
                       )}
                     </Button>
                   </div>
@@ -529,7 +537,7 @@ export function GitChangesView({
             >
               {selected && (
                 <div
-                  className="shrink-0 truncate border-b px-3 py-1 text-[11px] text-muted-foreground"
+                  className="shrink-0 truncate border-b px-3 py-1 text-[calc(11rem/14)] text-muted-foreground"
                   title={selected.path}
                 >
                   {t(selected.staged ? 'Staged changes' : 'Unstaged changes')} · {selected.path}

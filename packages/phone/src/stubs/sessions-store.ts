@@ -1,4 +1,6 @@
-import type { ProjectedMessage } from '@shared/types/agent';
+import type { ChildConversationMetadata } from '@shared/types/agent';
+import { resolveRewindTarget } from '@/stores/sessions/conversationRewind';
+import type { TimelineMessage } from '@/stores/sessions/reducer';
 
 /**
  * `@/stores/sessions` 的 PWA 桩：手机端会话状态在 client.ts，不用 zustand。
@@ -27,13 +29,18 @@ export interface Conversation {
   status: string;
   started: boolean;
   spawning: boolean;
-  messages: ProjectedMessage[];
+  messages: TimelineMessage[];
   activeTabId?: string;
   queuedMessages?: QueuedMessage[];
   /** TimelineRow / sidePanelDock 读取；手机无侧栏工程，空串即可 */
   projectId: string;
   parentId?: string;
   historyOnly?: boolean;
+  historyBaseIndex?: number;
+  rewinding?: boolean;
+  restoringFiles?: boolean;
+  workspaceMigrating?: boolean;
+  child?: ChildConversationMetadata;
 }
 
 /** 队列 / 目标操作：真正状态在桌面 renderer store，手机只发命令，由 App 注入 */
@@ -54,12 +61,26 @@ type SessionsSlice = {
   conversations: Record<string, Conversation>;
   /** TimelineRow ForkButton 读取；手机 ChatHost.canFork=false，保持 no-op */
   forkFromMessage(conversationId: string, userIndexFromEnd: number): Promise<string | null>;
-} & QueueActions;
+  rewind(sessionId: string, anchor: string | number, restoreFiles?: boolean): void;
+  withdrawMessage(conversationId: string, target: { kind: 'queue' | 'delivery'; id: string }): void;
+} & Omit<QueueActions, 'rewind'>;
+
+let rewindAction: QueueActions['rewind'] = () => {};
 
 const state: SessionsSlice = {
   activeId: null,
   conversations: {},
-  rewind: () => {},
+  rewind: (sessionId, anchor, restoreFiles) => {
+    // Shared UI anchors by persisted entry; pair keeps its existing user-index command.
+    const conversation = state.conversations[sessionId];
+    const index =
+      typeof anchor === 'number'
+        ? anchor
+        : conversation
+          ? resolveRewindTarget(conversation, anchor)?.userIndexFromEnd
+          : undefined;
+    if (index !== undefined) rewindAction(sessionId, index, restoreFiles);
+  },
   retry: () => {},
   forkFromMessage: async () => null,
   removeQueuedMessage: () => {},
@@ -69,11 +90,16 @@ const state: SessionsSlice = {
   pauseGoal: () => {},
   resumeGoal: () => {},
   clearGoal: () => {},
+  withdrawMessage: (conversationId, target) => {
+    if (target.kind === 'queue') state.removeQueuedMessage(conversationId, target.id);
+  },
 };
 
 /** App 启动时注入：把桌面 MessageQueue 组件的 store 调用转成 pair 命令 */
 export function setQueueActions(actions: QueueActions): void {
-  Object.assign(state, actions);
+  const { rewind, ...rest } = actions;
+  rewindAction = rewind;
+  Object.assign(state, rest);
 }
 
 /** 由 ChatScreen 在渲染前同步当前会话，供复用组件内部读取 */

@@ -29,12 +29,12 @@ export function PresetPicker({ presetId, onSelect, disabled }: PresetPickerProps
   if (disabled) {
     return (
       <span
-        className="flex h-[28px] min-w-0 max-w-40 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground"
+        className="flex h-[calc(28rem/14)] min-w-0 max-w-40 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground"
         title={t('Preset is locked after the conversation starts')}
       >
-        <Layers className="size-[14px] shrink-0" />
+        <Layers className="size-[calc(14rem/14)] shrink-0" />
         <span className="truncate">{current.name}</span>
-        <LockKeyhole className="size-[12px] shrink-0 text-faint" />
+        <LockKeyhole className="size-[calc(12rem/14)] shrink-0 text-faint" />
       </span>
     );
   }
@@ -42,10 +42,10 @@ export function PresetPicker({ presetId, onSelect, disabled }: PresetPickerProps
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="flex h-[28px] min-w-0 max-w-40 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex h-[calc(28rem/14)] min-w-0 max-w-40 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         title={current.name}
       >
-        <Layers className="size-[14px] shrink-0" />
+        <Layers className="size-[calc(14rem/14)] shrink-0" />
         <span className="min-w-0 truncate">{current.name}</span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </PopoverTrigger>

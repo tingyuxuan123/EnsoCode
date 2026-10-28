@@ -79,14 +79,14 @@ export function EditDiff({
 
   if (state.kind === 'loading') {
     return (
-      <div className="border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
+      <div className="border-t border-border/60 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
         {t('Loading diff…')}
       </div>
     );
   }
 
   return (
-    <div className="border-t border-border/60 text-xs">
+    <div className="border-t border-border/60 text-[calc(11rem/14)]">
       {state.kind === 'full' ? (
         <DiffView name={name} oldText={state.oldText} newText={state.newText} />
       ) : (

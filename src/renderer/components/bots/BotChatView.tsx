@@ -267,15 +267,17 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <header className="@container flex h-[56px] shrink-0 items-center gap-2 border-b px-4">
+        <header className="@container flex h-[calc(56rem/14)] shrink-0 items-center gap-2 border-line border-b px-4">
           {direct ? (
             <BotAvatar bot={direct} busy={summary.running} />
           ) : (
             <GroupAvatar bots={members} busy={summary.running} />
           )}
           <div className="min-w-0">
-            <div className="truncate font-medium text-[13px]">{chatTitle(chat, bots, t)}</div>
-            <div className="truncate text-[11px] text-muted-foreground">
+            <div className="truncate font-medium text-[calc(13rem/14)]">
+              {chatTitle(chat, bots, t)}
+            </div>
+            <div className="truncate text-[calc(11rem/14)] text-muted-foreground">
               {direct ? (
                 <DirectSubtitle
                   bot={direct}
@@ -311,7 +313,7 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
                     else void useBotsStore.getState().refreshChats();
                   })
                 }
-                className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 text-muted-foreground text-[calc(11rem/14)] transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
                 title={t('New conversation')}
                 aria-label={t('New conversation')}
               >
@@ -403,21 +405,21 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
         animate={{ width: targetW }}
         style={{ maxWidth: `max(0px, calc(100% - ${CHAT_MIN_WIDTH + SIDE_PANEL_HANDLE_WIDTH}px))` }}
         transition={sidePanelWidthTransition({ skip: resizing, cover: false, targetW })}
-        className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l bg-background"
+        className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-line border-l bg-background"
       >
         {/* 内容固定目标宽度，开合动画只裁切不重排 */}
         <div
           className={cn('flex h-full min-h-0 flex-col', !panelOpen && 'invisible')}
           style={{ width }}
         >
-          <div className="flex h-[36px] shrink-0 items-center gap-1 border-b px-2">
+          <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 border-b px-2">
             {(['info', 'browser'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => useBotsStore.getState().setPanelTab(tab)}
                 className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors',
+                  'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[calc(11rem/14)] transition-colors',
                   panelTab === tab
                     ? 'bg-brand/10 font-medium text-foreground dark:bg-brand/15'
                     : 'text-muted-foreground hover:text-foreground'
@@ -500,7 +502,7 @@ function ActiveDelegations({
   return (
     <div className="shrink-0 border-b bg-muted/30">
       <div className={cn(CHAT_COL, 'py-2')}>
-        <div className="mb-1.5 text-muted-foreground text-xs">
+        <div className="mb-1.5 text-muted-foreground text-[calc(11rem/14)]">
           {t('Delegations in progress · {{n}}', { n: items.length })}
         </div>
         <div className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
@@ -546,11 +548,11 @@ function DirectChips({ bot }: { bot: BotProfile }) {
   const meta = APPROVAL_MODE_META[bot.approvalMode];
   return (
     <>
-      <span className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground text-xs">
+      <span className="flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground text-[calc(11rem/14)]">
         <Sparkles className="h-3 w-3 shrink-0" />
         <span className="max-w-32 truncate">{model}</span>
       </span>
-      <span className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground text-xs">
+      <span className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground text-[calc(11rem/14)]">
         <Shield className="h-3 w-3" />
         {t(meta.labelKey)}
       </span>
@@ -641,7 +643,7 @@ export function PendingBars({
         return (
           <div key={conversationId} data-pending-conversation={conversationId}>
             {(showNames || delegation) && (
-              <div className="mb-1 flex items-center gap-1.5 text-muted-foreground text-xs">
+              <div className="mb-1 flex items-center gap-1.5 text-muted-foreground text-[calc(11rem/14)]">
                 <BotAvatar bot={bot} size="xs" />
                 {delegation
                   ? t('{{name}} (on behalf of {{owner}}) needs you', {

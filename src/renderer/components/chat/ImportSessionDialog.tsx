@@ -97,7 +97,7 @@ export function ImportSessionDialog({ project, onClose }: ImportSessionDialogPro
               <div className="flex w-64 shrink-0 flex-col overflow-y-auto rounded-lg border">
                 {sources.map((source) => (
                   <div key={source.sourceId}>
-                    <p className="sticky top-0 bg-background px-2.5 pt-2 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                    <p className="sticky top-0 bg-background px-2.5 pt-2 pb-1 text-[calc(11rem/14)] font-medium text-muted-foreground">
                       {source.sourceName}
                     </p>
                     {source.sessions.map((session) => (
@@ -112,8 +112,10 @@ export function ImportSessionDialog({ project, onClose }: ImportSessionDialogPro
                           selected?.path === session.path ? 'bg-muted' : 'hover:bg-muted/50'
                         )}
                       >
-                        <p className="truncate text-xs">{session.title || t('Untitled')}</p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="truncate text-[calc(11rem/14)]">
+                          {session.title || t('Untitled')}
+                        </p>
+                        <p className="text-[calc(11rem/14)] text-muted-foreground">
                           {new Date(session.updatedAt).toLocaleString()} ·{' '}
                           {t('{{count}} messages', { count: session.messageCount })}
                         </p>
@@ -125,7 +127,7 @@ export function ImportSessionDialog({ project, onClose }: ImportSessionDialogPro
 
               <div className="min-w-0 flex-1 overflow-y-auto rounded-lg border bg-muted/20 p-3">
                 {!selected ? (
-                  <p className="py-12 text-center text-xs text-muted-foreground">
+                  <p className="py-12 text-center text-[calc(11rem/14)] text-muted-foreground">
                     {t('Select a session to preview')}
                   </p>
                 ) : preview === null ? (
@@ -139,7 +141,7 @@ export function ImportSessionDialog({ project, onClose }: ImportSessionDialogPro
                         // biome-ignore lint/suspicious/noArrayIndexKey: 预览列表只读且整体替换
                         key={index}
                         className={cn(
-                          'max-w-[90%] rounded-lg px-2.5 py-1.5 text-xs whitespace-pre-wrap',
+                          'max-w-[90%] rounded-lg px-2.5 py-1.5 text-[calc(11rem/14)] whitespace-pre-wrap',
                           message.role === 'user'
                             ? 'self-end bg-primary/10'
                             : 'self-start bg-background border'

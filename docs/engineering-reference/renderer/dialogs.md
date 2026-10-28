@@ -24,15 +24,22 @@
 </Dialog>
 ```
 
-`DialogContent` 里**直接放裸 div 会没有内边距** —— 三件套用 `has()` 选择器互相感知，
-根据彼此是否存在调整上下留白。绕过它们，内容就会紧贴边框。
+`DialogContent` / `DialogPopup` 只提供容器边框、6px 圆角与层级，**不提供正文内边距**。
+里面直接放裸 div 会紧贴边框；正文必须经 `DialogPanel`，说明文字必须留在 `DialogHeader` 内。
 
 各段职责：
 
-- `DialogHeader` —— `p-6`，只放标题和描述
-- `DialogPanel` —— `px-6` + 内置 `ScrollArea`，长内容加 `max-h-[50vh]`
-- `DialogFooter` —— `px-6 py-4 border-t bg-muted/50`，按钮靠右；
+- `DialogHeader` —— `px-[20px] py-[16px] pr-[48px] border-b border-line`，只放标题和描述；
+  右侧 48px 给关闭按钮留位，标题 16px、说明 12px。
+- `DialogPanel` —— `px-[20px] py-[16px]` + 内置 `ScrollArea`，长内容可加 `max-h-[50vh]`；
+  没有带顶部分隔线的 footer 时，正文下内边距为 20px。
+- `DialogFooter` —— 默认 `px-[20px] py-[12px] border-t border-line`，无额外底色，按钮靠右；
   左右分置时加 `className="sm:justify-between"`
+- `DialogDescription` —— 只负责说明文字样式，不再加 padding；`ScrollArea` 包装层也不重复加 padding。
+
+这些尺寸使用固定像素，避免应用 14px 根字号把 `p-6` / `px-6` 缩成非设计尺寸。
+调用处通常只加排版间距（如 `space-y-4`），不要给 popup、说明文字或滚动包装层再叠同一层内边距。
+回归约束见 `src/tooling/dialogLayout.test.ts`：保留裸内容扫描，并检查每个 slot 及 `bare` 正文的 padding 责任。
 
 多阶段弹窗（扫描中 / 选择 / 出错 / 完成）**每个阶段都要各自包一层 `DialogPanel`**，
 参照 `LocalAssetImportDialog.tsx`。
