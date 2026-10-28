@@ -180,6 +180,7 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
           (b.kind === 'text' &&
             perfEqual(a.perf, b.perf) &&
             a.timestamp === b.timestamp &&
+            a.turnEnd === b.turnEnd &&
             a.turnDurationMs === b.turnDurationMs)) &&
         (a.kind !== 'thinking' || (b.kind === 'thinking' && a.durationMs === b.durationMs))
       );

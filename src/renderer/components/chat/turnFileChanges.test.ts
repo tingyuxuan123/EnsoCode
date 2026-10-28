@@ -1,5 +1,6 @@
+import type { ProjectedMessage } from '@shared/types/agent';
 import { describe, expect, it } from 'vitest';
-import type { TimelineItem } from '@/stores/sessions/timeline';
+import { buildTimeline, type TimelineItem } from '@/stores/sessions/timeline';
 import { turnFileChanges } from './turnFileChanges';
 
 type Tool = Extract<TimelineItem, { kind: 'tool' }>;
@@ -31,6 +32,55 @@ const reply = (key: string, turnEnd = true): TimelineItem =>
   }) as TimelineItem;
 
 describe('turnFileChanges', () => {
+  it('多步执行期间不闪现卡片，整轮结束后才在最终回复汇总所有改动', () => {
+    const messages: ProjectedMessage[] = [
+      { role: 'user', content: [{ type: 'text', text: '修改并校验' }] },
+      {
+        role: 'assistant',
+        stopReason: 'toolUse',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'write',
+            name: 'write',
+            arguments: { path: 'src/a.ts', content: 'hello\n' },
+          },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'write',
+        toolName: 'write',
+        content: [{ type: 'text', text: 'ok' }],
+      },
+      {
+        role: 'assistant',
+        stopReason: 'toolUse',
+        content: [
+          { type: 'text', text: '已修改，继续校验' },
+          { type: 'toolCall', id: 'check', name: 'bash', arguments: { command: 'pnpm test' } },
+        ],
+      },
+    ];
+    expect(turnFileChanges(buildTimeline(messages, true)).size).toBe(0);
+    messages.push({
+      role: 'toolResult',
+      toolCallId: 'check',
+      toolName: 'bash',
+      content: [{ type: 'text', text: 'passed' }],
+    });
+    expect(turnFileChanges(buildTimeline(messages, true)).size).toBe(0);
+    messages.push({
+      role: 'assistant',
+      stopReason: 'stop',
+      content: [{ type: 'text', text: '修改完成，校验通过' }],
+    });
+    expect(turnFileChanges(buildTimeline(messages, true)).size).toBe(0);
+    expect([...turnFileChanges(buildTimeline(messages, false))]).toEqual([
+      [5, { added: 1, removed: 0, files: [{ path: 'src/a.ts', added: 1, removed: 0 }] }],
+    ]);
+  });
+
   it('按本轮结尾的消息下标聚合：同一文件多次改动合并，按改动量降序', () => {
     const items = [
       user('0'),

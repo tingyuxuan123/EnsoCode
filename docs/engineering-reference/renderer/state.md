@@ -24,6 +24,16 @@ commands 不持久化，commands 仍由 snapshot / commands 事件恢复到内�
 过期 seq 的事件在 reducer 里丢弃。改事件处理逻辑时改 `reducer.ts`（纯函数，有测试），
 不要把逻辑写进订阅回调。
 
+## 时间线的轮次结束
+
+`buildTimeline` 的正文 `turnEnd` 表示整轮已收口，不是某个模型 step 已停止流式输出。
+最新一轮仍 `running` 或末条 assistant 为 `pending` 时不能标记；正文后的工具调用、
+工具结果以及正文已完成但 worker 仍在收尾，都不能提前显示最终回复页脚。
+判定复用 `turnSettled`，普通正文与 `<thinking>` 标签拆出的正文保持一致；
+新一轮运行不能清掉历史轮次的 `turnEnd`。
+`TimelineRow` 的 memo 比较必须包含 `turnEnd`，否则正文与耗时未变时，最终页脚不会随收口更新。
+回归：`timeline.test.ts`、`turnFileChanges.test.ts`、`TimelineRow.turnEnd.test.tsx`。
+
 ## 子代理只读观察
 
 - 子代理正文继续使用 `sessions` 同一份会话投影，不以截短 progress 或 TaskBar 活动拼接第二份日志。

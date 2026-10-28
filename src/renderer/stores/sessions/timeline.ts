@@ -1097,7 +1097,8 @@ function buildMessageTimeline(
           if (pieces.length === 0) return;
           // 无标签：保持原文（含首尾空白），避免改已有 text 行形态
           if (pieces.length === 1 && pieces[0].kind === 'text') {
-            const isTurnEnd = isLastStepOfTurn && !streaming;
+            // step 正文结束后仍可能继续执行工具；最终回复须等整轮收口。
+            const isTurnEnd = isLastStepOfTurn && turnSettled && !streaming;
             items.push({
               kind: 'text',
               key,
@@ -1127,7 +1128,8 @@ function buildMessageTimeline(
               });
               return;
             }
-            const isTurnEnd = isLastStepOfTurn && !pieceStreaming && i === pieces.length - 1;
+            const isTurnEnd =
+              isLastStepOfTurn && turnSettled && !pieceStreaming && i === pieces.length - 1;
             items.push({
               kind: 'text',
               key: pieceKey,

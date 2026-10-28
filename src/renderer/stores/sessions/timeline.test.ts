@@ -436,7 +436,7 @@ describe('buildTimeline', () => {
         turnDurationMs: 2500, // 3500 - 1000
       });
     });
-    it('最新一轮 stopReason=pending 时不展示耗时（即使 running=false）', () => {
+    it('最新一轮 stopReason=pending 时不标记结束或展示耗时（即使 running=false）', () => {
       const timeline = buildTimeline(
         [
           { role: 'user', content: [{ type: 'text', text: '你好' }], timestamp: 1000 },
@@ -451,7 +451,8 @@ describe('buildTimeline', () => {
         false
       );
       const textItems = timeline.filter((item) => item.kind === 'text');
-      expect(textItems[0]).toMatchObject({ kind: 'text', turnEnd: true });
+      expect(textItems[0]).toMatchObject({ kind: 'text' });
+      expect(textItems[0].turnEnd).toBeUndefined();
       expect(textItems[0].kind === 'text' && textItems[0].turnDurationMs).toBeUndefined();
     });
 
@@ -1507,6 +1508,59 @@ describe('buildTimeline', () => {
       { text: '结论', turnEnd: true },
     ]);
     expect(timeline.filter((item) => item.kind === 'text' && item.turnEnd)).toHaveLength(1);
+  });
+
+  it.each([
+    ['阶段性正文后继续调用工具', '继续校验', 'toolUse', true],
+    ['工具调用仍在流式生成', '继续校验', 'pending', true],
+    ['带思考标签的阶段性正文', '<thinking>检查结果</thinking>继续校验', 'toolUse', true],
+    ['正文已生成完但整轮仍在收尾', '完成', 'stop', false],
+    ['带思考标签的正文已生成完但整轮仍在收尾', '<thinking>核对</thinking>完成', 'stop', false],
+  ])('%s：不标记 turnEnd', (_scenario, text, stopReason, callsTool) => {
+    const timeline = buildTimeline(
+      [
+        user('修改并校验'),
+        {
+          role: 'assistant',
+          stopReason,
+          content: [
+            { type: 'text', text },
+            ...(callsTool
+              ? [
+                  {
+                    type: 'toolCall' as const,
+                    id: 'check',
+                    name: 'bash',
+                    arguments: { command: 'pnpm test' },
+                  },
+                ]
+              : []),
+          ],
+        },
+      ],
+      true
+    );
+    expect(timeline.some((item) => item.kind === 'text')).toBe(true);
+    expect(timeline.some((item) => item.kind === 'text' && item.turnEnd)).toBe(false);
+  });
+
+  it('新一轮运行时保留上一轮最终正文的 turnEnd', () => {
+    const timeline = buildTimeline(
+      [
+        user('第一轮'),
+        { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: '已完成' }] },
+        user('第二轮'),
+        {
+          role: 'assistant',
+          stopReason: 'stop',
+          content: [{ type: 'text', text: '仍在收尾' }],
+        },
+      ],
+      true
+    );
+    expect(timeline.filter((item) => item.kind === 'text' && item.turnEnd)).toMatchObject([
+      { text: '已完成' },
+    ]);
   });
 
   it('整段 <thinking> 包裹的 text 变成 thinking 块，标签不入正文', () => {
