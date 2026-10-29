@@ -1,13 +1,13 @@
-version: 0.2.30
+version: 0.2.31
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.30/EnsoCode-0.2.30-arm64-mac.zip
-    sha512: eHppe+TlVAYfg27TfRNVXgtJsbsIm6c1mTkg/HxZkbgy2lowyc0FH4sPm4yNK0vhNt3vd2owKfPax6A2yfn4cQ==
-    size: 146672049
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.30/EnsoCode-0.2.30-arm64.dmg
-    sha512: NTYO6HzFVuZqKuJ0LhvG55B3tu0gGNZX50/PxCWRUhbafwNxxq0Npb3OUX5V0jXiSI51ULHCFEttrSuFVMSnHg==
-    size: 146923166
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.30/EnsoCode-0.2.30-arm64-mac.zip
-sha512: eHppe+TlVAYfg27TfRNVXgtJsbsIm6c1mTkg/HxZkbgy2lowyc0FH4sPm4yNK0vhNt3vd2owKfPax6A2yfn4cQ==
-releaseDate: 2026-10-28T09:13:13.502Z
-releaseName: EnsoCode 0.2.30 — 个人测试
-releaseNotes: 个人测试通道 0.2.30：仅供信任 EnsoCode Local Signing 证书的 Mac 使用。不是正式发布。
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.31/EnsoCode-0.2.31-arm64-mac.zip
+    sha512: 17WYEet2ZlKSMYXY5oAYXc+RteQK2ytp4rf5CW1gK6m4Fbz8Jh4oPiXK0QDjyCHN65RqWOXjJ+wJPa6A/gHQWg==
+    size: 146676721
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.31/EnsoCode-0.2.31-arm64.dmg
+    sha512: lb53OOvdEThv4f0QfccP4saprOmsDtZbjo9gc+IjQ5Y0wfwks0mYldbOJ6UnD7CeACH8Ff0dPOTr7gt6pkSRTg==
+    size: 146923640
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.31/EnsoCode-0.2.31-arm64-mac.zip
+sha512: 17WYEet2ZlKSMYXY5oAYXc+RteQK2ytp4rf5CW1gK6m4Fbz8Jh4oPiXK0QDjyCHN65RqWOXjJ+wJPa6A/gHQWg==
+releaseDate: 2026-10-29T02:41:58.010Z
+releaseName: EnsoCode 0.2.31 — 个人测试
+releaseNotes: 个人测试通道 0.2.31：仅供信任 EnsoCode Local Signing 证书的 Mac 使用。不是正式发布。
