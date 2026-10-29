@@ -22,7 +22,7 @@ export function TodoList({ todos }: { todos: TodoItem[] }) {
           <span
             className={cn(
               todo.status === 'completed'
-                ? 'text-muted-foreground line-through decoration-border'
+                ? 'text-muted-foreground line-through decoration-current decoration-[0.12em]'
                 : todo.status === 'in_progress'
                   ? 'font-medium'
                   : 'text-muted-foreground'
