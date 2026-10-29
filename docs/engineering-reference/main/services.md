@@ -191,6 +191,14 @@ steer 的扩展命令拒绝与模板展开语义。不使用 `prompt(..., stream
 `settingsPresetPrompts.test.ts`。配置导入为正文分配新 UUID，不覆盖本机同 ID 正文；旧导入
 正文保留给设置备份恢复使用。
 
+## 工具目录只辅助发现，不裁剪权威说明
+
+`promptCatalog.ts` 在 `before_agent_start` 为已激活、已注册且没有 prompt snippet 的工具
+补充有界的 `tool_catalog` 段。每轮从 SDK 当前工具表重算，空目录删除旧段；来源和名称排序稳定。
+它不改 schema、工具使用准则、子代理模型选型说明或完整 skills 描述；代码导航仍遵循
+已知路径用 read、已知符号用 grep、未知行为用 code_search。扩展应先于最终 persona 替换运行。
+回归：`promptCatalog.test.ts` 与真实 SDK 链路 `promptCatalog.session.test.ts`。
+
 ## 扫描器的三件套结构
 
 `providerScan/` 和 `assetScan/` 都是同一套形状，新增扫描来源时照此扩展：

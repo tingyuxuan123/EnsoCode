@@ -183,6 +183,7 @@ import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
 import { progressPreambleExtension } from './progressPreamble';
 import { createProjectSettingsManager } from './projectCode';
 import { projectMessage } from './projection';
+import { promptCatalogExtension } from './promptCatalog';
 import { applyWorkerProxyEnv } from './proxyEnv';
 import { withReadTruncationMeta } from './readTruncation';
 import { enqueueReminder, REMINDER_QUEUE_LIMIT } from './reminderQueue';
@@ -523,6 +524,7 @@ function createSessionResourceLoader(options: {
     // noExtensions 只挡磁盘上的项目/全局扩展；inline factory 不受影响，图片修剪对所有会话生效
     extensionFactories: [
       ...(options.codemode ? [options.codemode] : []),
+      promptCatalogExtension,
       ...(options.oauthPoolRecovery ? [options.oauthPoolRecovery] : []),
       options.branchContext,
       applyPatchResultExtension,
