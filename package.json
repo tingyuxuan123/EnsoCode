@@ -27,7 +27,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "test": "node --test scripts/rtk.test.mjs scripts/release.test.mjs && vitest run",
+    "test": "node --test scripts/rtk.test.mjs scripts/release.test.mjs && node --test scripts/cdp.test.mjs && vitest run",
     "release:check": "node scripts/release.mjs version && pnpm typecheck && pnpm lint && pnpm test",
     "release:verify": "node scripts/release.mjs verify dist",
     "test:watch": "vitest",

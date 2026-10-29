@@ -12,166 +12,225 @@
 // 何时用 keys/type 而非 eval 里的合成事件：合成 KeyboardEvent 的 isTrusted=false，
 // 且不经过 IME/焦点管线；排查"真实键盘行为"必须用受信任事件。
 
-const args = process.argv.slice(2);
-const cmd = args[0];
-const pageFlag = args.indexOf('--page');
-const urlFilter = pageFlag !== -1 ? args[pageFlag + 1] : 'index.html';
-const rest = (pageFlag !== -1 ? args.slice(0, pageFlag) : args).slice(1);
+import { connect, fetchJson, parseArgs, selectPage, waitUntil } from './cdp-core.mjs';
+import {
+  browserPid,
+  checkFocus,
+  click,
+  ensureFocus,
+  focusExpression,
+  readyExpression,
+} from './cdp-input.mjs';
+import { sessionAction } from './cdp-session.mjs';
 
-if (!cmd || !['pages', 'eval', 'shot', 'keys', 'type', 'drag'].includes(cmd)) {
-  console.error('usage: cdp.mjs pages|eval|shot|keys|type|drag ... [--page <urlSubstring>]');
-  process.exit(2);
-}
-
-// 与 main 的 ENSO_CDP_PORT 同名：同机多实例时指定要连哪一个
-const port = process.env.ENSO_CDP_PORT?.trim() || '9222';
-const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json().catch(() => null);
-if (!list) {
-  console.error(`CDP ${port} 不可达：确认 pnpm dev 在跑（CDP 不是 HMR，改了 main/agent 要重启）`);
-  process.exit(2);
-}
-if (cmd === 'pages') {
-  for (const t of list.filter((x) => x.type === 'page')) console.log(t.url);
-  process.exit(0);
-}
-const page = list.find((x) => x.type === 'page' && x.url.includes(urlFilter));
-if (!page) {
-  console.error(`NO_PAGE for "${urlFilter}"，可用：`);
-  for (const t of list.filter((x) => x.type === 'page')) console.error(' ', t.url);
-  process.exit(2);
-}
-
-const ws = new WebSocket(page.webSocketDebuggerUrl);
-let id = 0;
-const pending = new Map();
-ws.onmessage = (ev) => {
-  const m = JSON.parse(ev.data);
-  if (m.id && pending.has(m.id)) {
-    pending.get(m.id)(m);
-    pending.delete(m.id);
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const { command: cmd, rest, port, timeout } = options;
+  const list = await fetchJson(port, '/json/list');
+  if (cmd === 'pages') {
+    if (!Array.isArray(list)) throw new Error('CDP_UNREACHABLE: invalid target list');
+    for (const target of list.filter((x) => x.type === 'page')) console.log(target.url);
+    return;
   }
-};
-const send = (method, params = {}) =>
-  new Promise((res) => {
-    const i = ++id;
-    pending.set(i, res);
-    ws.send(JSON.stringify({ id: i, method, params }));
-  });
-await new Promise((res, rej) => {
-  ws.onopen = res;
-  ws.onerror = rej;
-});
-
-try {
-  if (cmd === 'eval') {
-    await send('Runtime.enable');
-    const r = await send('Runtime.evaluate', {
-      expression: rest[0],
+  const page = selectPage(list, options.page);
+  const rpc = await connect(page.webSocketDebuggerUrl, { timeout, expectedPort: port });
+  const send = rpc.send;
+  const evaluate = async (expression) => {
+    const response = await send('Runtime.evaluate', {
+      expression,
       returnByValue: true,
       awaitPromise: true,
     });
-    if (r.result?.exceptionDetails) {
-      console.error('EXC', JSON.stringify(r.result.exceptionDetails).slice(0, 2000));
-      process.exit(1);
-    }
-    const v = r.result?.result?.value;
-    console.log(typeof v === 'string' ? v : JSON.stringify(v));
-  } else if (cmd === 'shot') {
-    const out = rest[0] || '/tmp/enso-shot.png';
-    const shot = await send('Page.captureScreenshot', { format: 'png' });
-    const { writeFileSync } = await import('node:fs');
-    writeFileSync(out, Buffer.from(shot.result.data, 'base64'));
-    console.log(out);
-  } else if (cmd === 'keys') {
-    // 常用键的 keyCode 映射；其余按 key 名直接发（现代前端多读 event.key）
-    const CODES = {
-      ArrowDown: 40,
-      ArrowUp: 38,
-      ArrowLeft: 37,
-      ArrowRight: 39,
-      Enter: 13,
-      Escape: 27,
-      Tab: 9,
-      Backspace: 8,
-    };
-    for (const key of rest) {
-      const keyCode = CODES[key];
-      const base = {
-        key,
-        code: key,
-        ...(keyCode ? { windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode } : {}),
-      };
-      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
-      await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-      await new Promise((r) => setTimeout(r, 120));
-    }
-    console.log('sent:', rest.join(' '));
-  } else if (cmd === 'type') {
-    await send('Input.insertText', { text: rest[0] ?? '' });
-    console.log('typed');
-  } else if (cmd === 'drag') {
-    // 陷阱：窗口被遮挡/后台（document.visibilityState === 'hidden'）时，
-    // Chromium 会丢弃 CDP 的鼠标按键事件（move 照常送达），拖拽/点击静默失效。
-    // 这里先检查并尝试把 Electron 带到前台（macOS）。
-    await send('Runtime.enable');
-    const evalJson = async (expr) => {
-      const r = await send('Runtime.evaluate', {
-        expression: `JSON.stringify((${expr}))`,
-        returnByValue: true,
-      });
-      if (r.result?.exceptionDetails) {
-        console.error('EXC', JSON.stringify(r.result.exceptionDetails).slice(0, 800));
-        process.exit(1);
-      }
-      return JSON.parse(r.result.result.value);
-    };
-    if ((await evalJson('document.visibilityState')) === 'hidden') {
-      if (process.platform === 'darwin') {
-        const { execSync } = await import('node:child_process');
-        try {
-          execSync(
-            `osascript -e 'tell application "System Events" to set frontmost of (first process whose name contains "Electron") to true'`
-          );
-          await new Promise((r) => setTimeout(r, 500));
-        } catch {
-          /* 降级到下面的硬错误提示 */
-        }
-      }
-      if ((await evalJson('document.visibilityState')) === 'hidden') {
-        console.error('窗口 hidden：鼠标按键事件会被丢弃，先把 EnsoCode 窗口带到前台再重试');
-        process.exit(1);
-      }
-    }
-    const from = await evalJson(rest[0]);
-    const to = await evalJson(rest[1]);
-    const mouse = (type, x, y, extra = {}) =>
-      send('Input.dispatchMouseEvent', {
-        type,
-        x,
-        y,
-        button: 'left',
-        buttons: 1,
-        clickCount: type === 'mouseMoved' ? 0 : 1,
-        pointerType: 'mouse',
-        ...extra,
-      });
-    await mouse('mouseMoved', from.x, from.y, { buttons: 0 });
-    await mouse('mousePressed', from.x, from.y);
-    // 分段移动：dnd-kit PointerSensor 需要超过 activation 阈值的连续真实移动
-    const steps = 20;
-    for (let i = 1; i <= steps; i++) {
-      await mouse(
-        'mouseMoved',
-        from.x + ((to.x - from.x) * i) / steps,
-        from.y + ((to.y - from.y) * i) / steps
+    if (response.result?.exceptionDetails)
+      throw new Error(
+        `EVALUATE_EXCEPTION: ${JSON.stringify(response.result.exceptionDetails).slice(0, 2000)}`
       );
-      await new Promise((r) => setTimeout(r, 25));
+    return response.result?.result?.value;
+  };
+  const context = {
+    send,
+    evaluate,
+    async activate() {
+      if (process.platform !== 'darwin') return;
+      // SystemInfo is browser-target-only. Never activate a process by name: multiple
+      // Electron apps/profiles may be running, and only this CDP browser PID is safe.
+      let browser;
+      try {
+        const version = await fetchJson(port, '/json/version');
+        browser = await connect(version.webSocketDebuggerUrl, { timeout, expectedPort: port });
+        const info = await browser.send('SystemInfo.getProcessInfo');
+        const pid = browserPid(info);
+        if (!pid) return;
+        const { execFile } = await import('node:child_process');
+        await new Promise((resolve, reject) =>
+          execFile(
+            'osascript',
+            [
+              '-e',
+              `tell application "System Events" to set frontmost of (first process whose unix id is ${pid}) to true`,
+            ],
+            { timeout: Math.min(timeout, 5000) },
+            (error) => (error ? reject(error) : resolve())
+          )
+        );
+        await waitUntil(
+          async () => {
+            const state = await evaluate(focusExpression);
+            return state?.visible && state.focused;
+          },
+          { timeout: Math.min(timeout, 2000), interval: 100 }
+        );
+      } catch {
+        // ensureFocus checks the observable result and requests manual focus.
+      } finally {
+        browser?.close();
+      }
+    },
+  };
+  try {
+    await send('Runtime.enable');
+    if (cmd === 'ready') {
+      const result = await waitUntil(
+        async () => {
+          const state = await evaluate(readyExpression(rest[0]));
+          return state?.ready && state;
+        },
+        { timeout }
+      );
+      console.log(JSON.stringify(result));
+    } else if (cmd === 'click') {
+      console.log(JSON.stringify(await click(context, rest[0], options)));
+    } else if (cmd.startsWith('session-')) {
+      await waitUntil(async () => (await evaluate(readyExpression(undefined, true)))?.ready, {
+        timeout,
+      });
+      const input = {
+        command: cmd,
+        id: rest[0],
+        text: rest[1],
+        providerId: options.providerId,
+        modelId: options.modelId,
+        afterSeq: options.afterSeq,
+      };
+      const action = (value) =>
+        evaluate(`(${sessionAction.toString()})(window,${JSON.stringify(value)})`);
+      let result;
+      if (cmd === 'session-wait') {
+        const first = await action({ ...input, command: 'session-state' });
+        const afterSeq = options.afterSeq ?? first.afterSeq;
+        let last = first;
+        try {
+          result = await waitUntil(
+            async () => {
+              last = await action({ ...input, command: 'session-state', afterSeq });
+              return (!last.ok || last.waiting || last.complete) && last;
+            },
+            { timeout }
+          );
+        } catch (error) {
+          if (error.message !== 'WAIT_TIMEOUT') throw error;
+          result = {
+            ...last,
+            ok: false,
+            complete: false,
+            success: false,
+            timedOut: true,
+            error: 'WAIT_TIMEOUT: no confirmed turn settlement; do not resend automatically',
+          };
+        }
+      } else result = await action(input);
+      console.log(JSON.stringify(result));
+      if (!result?.ok || result.waiting || result.success === false) process.exitCode = 1;
+    } else if (cmd === 'eval') {
+      const v = await evaluate(rest[0]);
+      console.log(typeof v === 'string' ? v : JSON.stringify(v));
+    } else if (cmd === 'shot') {
+      const out = rest[0] || '/tmp/enso-shot.png';
+      const shot = await send('Page.captureScreenshot', { format: 'png' });
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(out, Buffer.from(shot.result.data, 'base64'));
+      console.log(out);
+    } else if (cmd === 'keys') {
+      await ensureFocus(context);
+      // 常用键的 keyCode 映射；其余按 key 名直接发（现代前端多读 event.key）
+      const CODES = {
+        ArrowDown: 40,
+        ArrowUp: 38,
+        ArrowLeft: 37,
+        ArrowRight: 39,
+        Enter: 13,
+        Escape: 27,
+        Tab: 9,
+        Backspace: 8,
+      };
+      for (const key of rest) {
+        const keyCode = CODES[key];
+        const base = {
+          key,
+          code: key,
+          ...(keyCode ? { windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode } : {}),
+        };
+        await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      await checkFocus(context);
+      console.log('sent:', rest.join(' '));
+    } else if (cmd === 'type') {
+      await ensureFocus(context);
+      await send('Input.insertText', { text: rest[0] ?? '' });
+      await checkFocus(context);
+      console.log('typed');
+    } else if (cmd === 'drag') {
+      await ensureFocus(context);
+      const evalJson = evaluate;
+      const from = await evalJson(rest[0]);
+      const to = await evalJson(rest[1]);
+      const mouse = (type, x, y, extra = {}) =>
+        send('Input.dispatchMouseEvent', {
+          type,
+          x,
+          y,
+          button: 'left',
+          buttons: 1,
+          clickCount: type === 'mouseMoved' ? 0 : 1,
+          pointerType: 'mouse',
+          ...extra,
+        });
+      await mouse('mouseMoved', from.x, from.y, { buttons: 0 });
+      await mouse('mousePressed', from.x, from.y);
+      // 分段移动：dnd-kit PointerSensor 需要超过 activation 阈值的连续真实移动
+      const steps = 20;
+      for (let i = 1; i <= steps; i++) {
+        await mouse(
+          'mouseMoved',
+          from.x + ((to.x - from.x) * i) / steps,
+          from.y + ((to.y - from.y) * i) / steps
+        );
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await new Promise((r) => setTimeout(r, 150)); // 悬停让 droppable 识别
+      await mouse('mouseReleased', to.x, to.y, { buttons: 0 });
+      await new Promise((r) => setTimeout(r, 200));
+      await checkFocus(context);
+      console.log('dragged', JSON.stringify(from), '->', JSON.stringify(to));
     }
-    await new Promise((r) => setTimeout(r, 150)); // 悬停让 droppable 识别
-    await mouse('mouseReleased', to.x, to.y, { buttons: 0 });
-    await new Promise((r) => setTimeout(r, 200));
-    console.log('dragged', JSON.stringify(from), '->', JSON.stringify(to));
+  } finally {
+    rpc.close();
   }
-} finally {
-  ws.close();
 }
+
+main().catch((error) => {
+  const command = process.argv[2];
+  if (['session-new', 'session-send'].includes(command))
+    console.log(
+      JSON.stringify({
+        ok: false,
+        accepted: false,
+        error: error.message,
+        outcome: 'If dispatch began, its outcome may be unknown. Never automatically retry.',
+      })
+    );
+  else console.error(error.message);
+  process.exitCode = 1;
+});

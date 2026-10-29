@@ -31,13 +31,13 @@ node .agents/skills/enso-cdp/scripts/cdp.mjs eval '(()=>document.visibilityState
 
 ## 修法
 
-OS 级激活窗口(`Page.bringToFront` **无效**,它只切 tab 不解决 OS 遮挡):
-
-```bash
-osascript -e 'tell application "System Events" to set frontmost of (first process whose name contains "Electron") to true'
-```
-
-`cdp.mjs drag` 已内置可见性检查 + 自动激活;手写鼠标序列前先查 `visibilityState`。
+优先用 `cdp.mjs click '<CSS selector>'`，drag/type/keys 同样复用聚焦检查。
+`Page.bringToFront` 不能保证 OS 级聚焦；脚本从选定 CDP browser target 的
+`SystemInfo.getProcessInfo` 取得 PID，再仅激活该 unix id，禁止按 Electron 名称选第一个进程。
+`visible` 仍不代表 `document.hasFocus()`；真实输入前后都要核验，不能确认时返回
+`MANUAL_FOCUS_REQUIRED`。已派发但结果未知的点击/输入不自动重放，避免重复副作用。
+回归见 `scripts/cdp.test.mjs`。settings 窗口没有主窗口会话 store，UI ready 只检查
+DOM/preload；session helper 才额外等待主窗口 store，不能混用就绪条件。
 
 ## 判别方法(下次遇到"输入类验证时好时坏")
 
