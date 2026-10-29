@@ -501,7 +501,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     });
     const sections: Record<string, string> = {};
     for (const handler of handlers.get('before_agent_start') ?? []) {
-      await handler({ systemPromptOptions: { sections } });
+      await handler({ messageType: 'user', systemPromptOptions: { sections } });
     }
     expect(sections.mcp_servers).toContain('- mcp__notes: read');
     for (const handler of handlers.get('tool_call') ?? []) {

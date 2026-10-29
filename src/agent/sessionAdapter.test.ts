@@ -226,6 +226,101 @@ async function harness(
 }
 
 describe('Pi session adapter integration', () => {
+  it('agent_settled 回调尚未结束时拒绝嵌套续跑，不新增请求或结算', async () => {
+    let attempted = false;
+    let rejection: unknown;
+    const current = await harness(
+      [
+        { content: [], stopReason: 'error', errorMessage: 'HTTP 400 first attempt' },
+        { content: [{ type: 'text', text: 'must not be requested' }] },
+      ],
+      {
+        extensions: [
+          {
+            name: 'settlement-continuation-guard',
+            factory: (pi) => {
+              pi.on('agent_settled', async () => {
+                if (attempted) return;
+                attempted = true;
+                expect(editLatestAssistantForRetry(current.session)).toBe(true);
+                try {
+                  await continueSessionActivity(current.session);
+                } catch (error) {
+                  rejection = error;
+                }
+              });
+            },
+          },
+        ],
+      }
+    );
+    const settled = vi.fn();
+    current.session.subscribe((event) => {
+      if (event.type === 'agent_settled') settled();
+    });
+    await current.session.prompt('original task');
+
+    expect(current.requests).toHaveLength(1);
+    expect(rejection).toBeInstanceOf(Error);
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(current.session.isIdle).toBe(true);
+  });
+
+  it.each([false, true])(
+    '无消息续跑的工具前后保留扩展段落（forcePersona=%s），不持久化撤回补丁',
+    async (forcePersona) => {
+      const current = await harness(
+        [
+          { content: [], stopReason: 'error', errorMessage: 'HTTP 400 retry fixture' },
+          {
+            content: [
+              { type: 'toolCall', id: 'continued-tool', name: 'adapter_test_tool', arguments: {} },
+            ],
+            stopReason: 'toolUse',
+          },
+          { content: [{ type: 'text', text: 'continued with contract' }] },
+        ],
+        {
+          extensions: [
+            {
+              name: 'continuation-prompt-contract',
+              factory: (pi) => {
+                pi.on('before_agent_start', (event) => {
+                  event.systemPromptOptions.sections.fixture_contract = 'PRESERVED_TOOL_CONTRACT';
+                  if (forcePersona)
+                    return {
+                      systemPrompt: `${event.systemPrompt}\nFORCED_PERSONA_CONTRACT\nPRESERVED_TOOL_CONTRACT`,
+                    };
+                });
+              },
+            },
+          ],
+        }
+      );
+      await current.session.prompt('original task');
+      const systemEntries = () =>
+        current.manager
+          .getBranch()
+          .filter((entry) => entry.type === 'message' && entry.message.role === 'system');
+      const beforeRetry = systemEntries().length;
+      expect(editLatestAssistantForRetry(current.session)).toBe(true);
+
+      await continueSessionActivity(current.session);
+
+      expect(current.requests).toHaveLength(3);
+      for (const request of current.requests.slice(1)) {
+        expect(JSON.stringify(request.messages)).toContain('PRESERVED_TOOL_CONTRACT');
+        if (forcePersona) expect(contextText(request)).toContain('FORCED_PERSONA_CONTRACT');
+      }
+      expect(systemEntries()).toHaveLength(beforeRetry);
+      expect(
+        current.manager
+          .getBranch()
+          .filter((entry) => entry.type === 'message' && entry.message.role === 'user')
+      ).toHaveLength(1);
+    }
+  );
+
   it('guarded steer defers without starting an idle activity or persisting user input', async () => {
     const current = await harness([]);
     await expect(
@@ -496,5 +591,164 @@ describe('Pi session adapter integration', () => {
       .join('\n');
     expect(displayedText).toContain('old provider error response');
     expect(displayedText).toContain('Retry succeeded.');
+  });
+
+  it('无消息续跑保留完整结算生命周期，只准备 custom 规则而不新增任务或消费 nextTurn', async () => {
+    const lifecycle: string[] = [];
+    const current = await harness(
+      [
+        { content: [{ type: 'text', text: 'continued' }] },
+        { content: [{ type: 'text', text: 'next answer' }] },
+      ],
+      {
+        seedError: true,
+        extensions: [
+          {
+            name: 'continuation-lifecycle',
+            factory: (pi) => {
+              pi.on('before_agent_start', (event) => {
+                lifecycle.push(`before_agent_start:${event.messageType}`);
+              });
+              pi.on('agent_before_settle', () => {
+                lifecycle.push('agent_before_settle');
+              });
+              pi.on('agent_settled', () => {
+                lifecycle.push('agent_settled');
+              });
+            },
+          },
+        ],
+      }
+    );
+    const originalSystem = current.session.systemPrompt;
+    const originalTools = current.session.getActiveToolNames();
+    await current.session.sendCustomMessage(
+      { customType: 'next-turn-only', content: 'pending next-turn context', display: false },
+      { deliverAs: 'nextTurn' }
+    );
+    expect(editLatestAssistantForRetry(current.session)).toBe(true);
+
+    await continueSessionActivity(current.session);
+
+    expect(lifecycle).toEqual([
+      'before_agent_start:custom',
+      'agent_before_settle',
+      'agent_settled',
+    ]);
+    expect(current.session.isIdle).toBe(true);
+    expect(current.requests).toHaveLength(1);
+    expect(contextText(current.requests[0]!)).not.toContain('pending next-turn context');
+    expect(current.session.systemPrompt).toBe(originalSystem);
+    expect(current.session.getActiveToolNames()).toEqual(originalTools);
+    const branch = current.manager.getBranch();
+    expect(
+      branch.filter((entry) => entry.type === 'message' && entry.message.role === 'user')
+    ).toHaveLength(1);
+    expect(branch.some((entry) => entry.type === 'custom_message')).toBe(false);
+
+    // 独立代理不可泄漏到正常 prompt：下一轮仍执行 hook、注入 nextTurn 并记录真实用户消息。
+    await current.session.prompt('next real task');
+    expect(lifecycle).toEqual([
+      'before_agent_start:custom',
+      'agent_before_settle',
+      'agent_settled',
+      'before_agent_start:user',
+      'agent_before_settle',
+      'agent_settled',
+    ]);
+    expect(contextText(current.requests[1]!)).toContain('pending next-turn context');
+    expect(contextText(current.requests[1]!)).toContain('next real task');
+  });
+
+  it('无消息续跑可被中止，且只结算一次、不留下 busy 状态', async () => {
+    const current = await harness(['wait-for-abort'], { seedError: true });
+    const settled = vi.fn();
+    current.session.subscribe((event) => {
+      if (event.type === 'agent_settled') settled();
+    });
+    expect(editLatestAssistantForRetry(current.session)).toBe(true);
+    const run = continueSessionActivity(current.session);
+    // 若适配入口失效，先传播启动失败，避免把错误误报成等待 provider 超时。
+    await Promise.race([current.streamStarted, run]);
+    await current.session.abort();
+    await run;
+
+    expect(current.requests).toHaveLength(1);
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(current.session.isIdle).toBe(true);
+    expect(
+      current.manager
+        .getBranch()
+        .filter((entry) => entry.type === 'message' && entry.message.role === 'user')
+    ).toHaveLength(1);
+  });
+
+  it('无消息续跑的临时错误仍由 SDK 自动重试，只结算一次且不重放原任务', async () => {
+    const current = await harness(
+      [
+        { content: [], stopReason: 'error', errorMessage: '503 service temporarily unavailable' },
+        { content: [{ type: 'text', text: 'retry recovered' }] },
+      ],
+      { seedError: true }
+    );
+    current.session.settingsManager.applyOverrides({
+      retry: { enabled: true, maxRetries: 1, baseDelayMs: 1 },
+    });
+    const events: string[] = [];
+    current.session.subscribe((event) => {
+      if (['auto_retry_start', 'auto_retry_end', 'agent_settled'].includes(event.type))
+        events.push(event.type);
+    });
+    expect(editLatestAssistantForRetry(current.session)).toBe(true);
+
+    await continueSessionActivity(current.session);
+
+    expect(current.requests).toHaveLength(2);
+    expect(events).toEqual(['auto_retry_start', 'auto_retry_end', 'agent_settled']);
+    expect(current.session.isIdle).toBe(true);
+    expect(
+      current.manager
+        .getBranch()
+        .filter((entry) => entry.type === 'message' && entry.message.role === 'user')
+    ).toHaveLength(1);
+  });
+
+  it('异步 custom 规则准备期间新加入的 nextTurn 不会被续跑吞掉', async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const current = await harness(
+      [
+        { content: [{ type: 'text', text: 'continued' }] },
+        { content: [{ type: 'text', text: 'next answer' }] },
+      ],
+      {
+        seedError: true,
+        extensions: [
+          {
+            name: 'delayed-custom-preparation',
+            factory: (pi) => {
+              pi.on('before_agent_start', async (event) => {
+                if (event.messageType !== 'custom') return;
+                entered.resolve();
+                await release.promise;
+              });
+            },
+          },
+        ],
+      }
+    );
+    expect(editLatestAssistantForRetry(current.session)).toBe(true);
+    const run = continueSessionActivity(current.session);
+    await Promise.race([entered.promise, run]);
+    await current.session.sendCustomMessage(
+      { customType: 'late-next-turn', content: 'queued during preparation', display: false },
+      { deliverAs: 'nextTurn' }
+    );
+    release.resolve();
+    await run;
+
+    expect(contextText(current.requests[0]!)).not.toContain('queued during preparation');
+    await current.session.prompt('next real task');
+    expect(contextText(current.requests[1]!)).toContain('queued during preparation');
   });
 });

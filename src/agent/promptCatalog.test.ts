@@ -87,6 +87,7 @@ describe('promptCatalogExtension', () => {
     const options: BeforeAgentStartEvent['systemPromptOptions'] = {
       cwd: '/workspace',
       selectedTools: [],
+      hiddenTools: [],
       toolSnippets: {},
       toolGuidelines: {},
       promptGuidelines: ['MODEL SELECTION GUIDE'],
@@ -103,6 +104,7 @@ describe('promptCatalogExtension', () => {
       run: () =>
         handler?.({
           type: 'before_agent_start',
+          messageType: 'user',
           prompt: 'hi',
           systemPrompt: '',
           systemPromptOptions: options,

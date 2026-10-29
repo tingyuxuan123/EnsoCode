@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PROGRESS_PREAMBLE_RULE, progressPreambleExtension } from './progressPreamble';
 
 type Options = { promptGuidelines: string[] };
-type Handler = (event: { systemPromptOptions: Options }) => void;
+type Handler = (event: { messageType: 'user'; systemPromptOptions: Options }) => void;
 
 function install(): Handler {
   let handler: Handler | undefined;
@@ -19,8 +19,8 @@ describe('progress preamble rule', () => {
   it('追加到已有规则之后，多轮触发不重复', () => {
     const handler = install();
     const options: Options = { promptGuidelines: ['Existing rule'] };
-    handler({ systemPromptOptions: options });
-    handler({ systemPromptOptions: options });
+    handler({ messageType: 'user', systemPromptOptions: options });
+    handler({ messageType: 'user', systemPromptOptions: options });
     expect(options.promptGuidelines).toEqual(['Existing rule', PROGRESS_PREAMBLE_RULE]);
   });
 

@@ -239,7 +239,7 @@ describe('CodemodeHost', () => {
       new CodemodeHost({ codemode: true, deferredServers: [server('a', ['x'])] })
     );
     const sections: Record<string, string> = {};
-    await emit('before_agent_start', { systemPromptOptions: { sections } });
+    await emit('before_agent_start', { messageType: 'user', systemPromptOptions: { sections } });
     expect(sections.mcp_servers).toContain('- mcp__a: x');
   });
 });

@@ -35,8 +35,6 @@ describe('pnpm 项目配置', () => {
 
   it('工作区声明的补丁与锁文件一致且补丁文件存在', () => {
     expect(workspace.patchedDependencies).toEqual({
-      '@earendil-works/pi-coding-agent@1.0.0':
-        'patches/@earendil-works__pi-coding-agent@1.0.0.patch',
       '@rahularya01/pi-cursor@1.4.39': 'patches/@rahularya01__pi-cursor@1.4.39.patch',
     });
     const lockedPaths = Object.fromEntries(
@@ -49,5 +47,25 @@ describe('pnpm 项目配置', () => {
     for (const patch of Object.values(lockedPaths)) {
       expect(existsSync(fileURLToPath(new URL(patch, root)))).toBe(true);
     }
+  });
+
+  it('内置 pi 各包同步锁定 1.4.0，不再加载旧版恢复补丁', () => {
+    const packages = [
+      '@earendil-works/pi-agent-core',
+      '@earendil-works/pi-ai',
+      '@earendil-works/pi-coding-agent',
+      '@earendil-works/pi-mcp',
+      '@earendil-works/pi-tui',
+    ] as const;
+    for (const name of packages) {
+      expect(pkg.dependencies[name]).toBe('1.4.0');
+      expect(lockfile.importers['.'].dependencies[name].specifier).toBe('1.4.0');
+      expect(lockfile.importers['.'].dependencies[name].version).toMatch(/^1\.4\.0(?:\(|$)/);
+    }
+    expect(
+      Object.keys(workspace.patchedDependencies).some((name) =>
+        name.startsWith('@earendil-works/pi-coding-agent@')
+      )
+    ).toBe(false);
   });
 });

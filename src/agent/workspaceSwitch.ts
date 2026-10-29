@@ -125,6 +125,7 @@ export function workspaceBranchContextExtension(
     hidden: true,
     factory: (pi) => {
       pi.on('before_agent_start', (event) => {
+        if (event.messageType !== 'user') return;
         const session = getSession();
         if (session?.pendingBranch === undefined) return;
         const requestId = session.pendingBranchRequestId;

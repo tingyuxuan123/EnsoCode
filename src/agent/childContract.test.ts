@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { appendSystemPromptExtension, SUBAGENT_CONTRACT_PROMPT } from './childContract';
 
-type Handler = (event: { systemPromptOptions: { appendSystemPrompt?: string } }) => void;
+type Handler = (event: {
+  messageType: 'user';
+  systemPromptOptions: { appendSystemPrompt?: string };
+}) => void;
 
 function install(text: string): Handler {
   let handler: Handler | undefined;
@@ -18,11 +21,11 @@ describe('child contract system prompt', () => {
   it('追加在已有 append 段之后，多轮重复触发不重复追加', () => {
     const handler = install('CONTRACT');
     const options = { appendSystemPrompt: 'APPEND_SYSTEM' };
-    handler({ systemPromptOptions: options });
-    handler({ systemPromptOptions: options });
+    handler({ messageType: 'user', systemPromptOptions: options });
+    handler({ messageType: 'user', systemPromptOptions: options });
     expect(options.appendSystemPrompt).toBe('APPEND_SYSTEM\n\nCONTRACT');
     const empty: { appendSystemPrompt?: string } = {};
-    handler({ systemPromptOptions: empty });
+    handler({ messageType: 'user', systemPromptOptions: empty });
     expect(empty.appendSystemPrompt).toBe('CONTRACT');
   });
 

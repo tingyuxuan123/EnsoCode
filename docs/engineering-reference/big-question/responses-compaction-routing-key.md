@@ -80,6 +80,11 @@ pnpm exec vitest run src/agent/supervisor.responsesRouting.test.ts
 
 升级 Pi 时复检 raw/simple 委托、payload callback、native provider 注册和 refresh 语义。
 
+Pi 1.4.0 已复检：原生摘要不再从 `reserveTokens` 派生固定输出预算，改用模型输出上限；
+`reserveTokens` 只控制压缩触发余量。回归用两种余量验证 HTTP 请求仍保留 `none` 缓存策略、
+`store:false` 与独立 routing key，输出上限来自模型，而不是恢复旧的 13107 token cap。
+上面的 13107/32000 单变量结果保留为历史实测，不是当前版本的固定预算契约。
+
 ## 相关代码
 
 - `src/agent/openaiResponsesRouting.ts`：最终 payload 的一次性路由 key。

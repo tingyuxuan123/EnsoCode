@@ -1,3 +1,4 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { AgentSession, InlineExtension } from '@earendil-works/pi-coding-agent';
 import { projectMessage } from './projection';
 import {
@@ -176,28 +177,67 @@ export function editLatestAssistantForRetry(session: AgentSession): boolean {
 }
 
 /**
- * 无新增消息的活动续跑：pi 1.0.0 没有公开的 session.continue，裸 agent.continue 会绕过
- * 自动重试、agent_before_settle 和 agent_settled。空消息数组不会重放任务或工具结果，
- * 由 SDK 管理取消与唯一结算。升级时复检私有入口及空数组语义，见 main/services.md。
+ * 无新增消息的活动续跑：pi 1.4.0 没有公开的 session.continue，裸 agent.continue 会绕过
+ * 自动重试、agent_before_settle 和 agent_settled。用 custom 触发准备扩展提示词，去掉合成消息，
+ * 保留无新增任务语义：不重跑用户 prompt hook、不消费 nextTurn、不重放任务/工具。
+ * 不替换共享 session 方法；取消与唯一结算仍由 SDK 管理。升级复检点见 main/services.md。
  *
- * Continue an activity without new messages. Pi 1.0.0 exposes no session.continue;
- * bare agent.continue bypasses retry, agent_before_settle and agent_settled. An empty
- * array does not replay tasks/tools; the SDK owns cancellation and single settlement.
- * Recheck the private entry and empty-array semantics on upgrades; see main/services.md.
+ * Pi 1.4.0 exposes no session.continue. Per-call proxies prepare custom-run prompt rules,
+ * omit the synthetic trigger and preserve nextTurn messages. The SDK owns retry, abort
+ * and settlement. Never replace methods on the shared session or skip prompt preparation.
  */
 export async function continueSessionActivity(session: AgentSession): Promise<void> {
-  if (!session.isIdle) throw new Error('Cannot continue a busy session.');
+  // SDK 在异步 settled hook 期间已将 isIdle 置 true，但新活动必须等整次结算结束。
+  const settling = (session as unknown as { _isEmittingAgentSettled?: boolean })
+    ._isEmittingAgentSettled;
+  if (!session.isIdle || settling) throw new Error('Cannot continue a busy session.');
   const messages = session.agent.state.messages;
   const last = messages.at(-1);
   if (!last || messages.every((message) => message.role === 'system')) {
     throw new Error('No messages to continue from');
   }
   if (last.role === 'assistant') throw new Error('Cannot continue from message role: assistant');
-  const adapter = session as unknown as { _runAgentPrompt(messages: []): Promise<void> };
-  if (typeof adapter._runAgentPrompt !== 'function') {
+  const trigger = {
+    messageType: 'custom' as const,
+    message: {
+      role: 'custom' as const,
+      customType: 'enso-activity-continuation',
+      content: [],
+      display: false,
+      timestamp: Date.now(),
+    },
+  };
+  type ContinuationTrigger = typeof trigger;
+  const adapter = session as unknown as {
+    _startRun(trigger: ContinuationTrigger): Promise<void>;
+    _prepareRun(trigger: ContinuationTrigger): Promise<AgentMessage[]>;
+  };
+  if (typeof adapter._startRun !== 'function' || typeof adapter._prepareRun !== 'function') {
     throw new Error('Pi SDK no longer supports message-free activity continuation.');
   }
-  await adapter._runAgentPrompt([]);
+  const continuation = new Proxy(adapter, {
+    get(target, key, receiver) {
+      if (key === '_prepareRun') {
+        return async () => {
+          // 准备阶段隔离 nextTurn 的读写，不暂存/替换共享数组，避免异步 hook 吞掉新消息。
+          const preparation = new Proxy(target, {
+            get(inner, property, innerReceiver) {
+              if (property === '_pendingNextTurnMessages') return [];
+              return Reflect.get(inner, property, innerReceiver);
+            },
+            set(inner, property, value, innerReceiver) {
+              if (property === '_pendingNextTurnMessages') return true;
+              return Reflect.set(inner, property, value, innerReceiver);
+            },
+          });
+          const prepared = await preparation._prepareRun(trigger);
+          return prepared.filter((message) => message !== trigger.message);
+        };
+      }
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  await continuation._startRun(trigger);
 }
 
 /** context_edit 只作用于模型上下文，渲染层记录仍展示原始消息 */

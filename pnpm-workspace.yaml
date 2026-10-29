@@ -17,5 +17,4 @@ allowBuilds:
   better-sqlite3: false
 
 patchedDependencies:
-  '@earendil-works/pi-coding-agent@1.0.0': patches/@earendil-works__pi-coding-agent@1.0.0.patch
   '@rahularya01/pi-cursor@1.4.39': patches/@rahularya01__pi-cursor@1.4.39.patch

@@ -262,7 +262,7 @@ describe('createClaudeHooksExtension', () => {
     const t = setup([hook('SessionStart', 's', 'startup'), hook('UserPromptSubmit', 'u')], (h) => ({
       stdout: h.event === 'SessionStart' ? 'start ctx' : 'prompt ctx',
     }));
-    const r1 = (await t.fire('before_agent_start', { prompt: 'hello' })) as {
+    const r1 = (await t.fire('before_agent_start', { messageType: 'user', prompt: 'hello' })) as {
       message: { customType: string; content: string; display: boolean };
     };
     expect(r1.message.customType).toBe('claude-hook-context');
@@ -271,7 +271,7 @@ describe('createClaudeHooksExtension', () => {
     expect(r1.message.content).toContain('prompt ctx');
     expect(t.inputs[0]).toMatchObject({ hook_event_name: 'SessionStart', source: 'startup' });
     expect(t.inputs[1]).toMatchObject({ hook_event_name: 'UserPromptSubmit', prompt: 'hello' });
-    const r2 = (await t.fire('before_agent_start', { prompt: 'again' })) as {
+    const r2 = (await t.fire('before_agent_start', { messageType: 'user', prompt: 'again' })) as {
       message: { content: string };
     };
     expect(r2.message.content).not.toContain('start ctx');
@@ -287,20 +287,55 @@ describe('createClaudeHooksExtension', () => {
       },
       true
     );
-    const r = (await t.fire('before_agent_start', { prompt: 'x' })) as {
+    const r = (await t.fire('before_agent_start', { messageType: 'user', prompt: 'x' })) as {
       message: { content: string };
     };
     expect(t.inputs[0]).toMatchObject({ source: 'resume' });
     expect(r.message.content).toContain('resumed ctx');
   });
 
+  it('custom 触发保留首轮 SessionStart，但不注入 UserPromptSubmit 的拒绝或上下文', async () => {
+    const t = setup([hook('SessionStart', 's'), hook('UserPromptSubmit', 'u')], (h) =>
+      h.event === 'SessionStart'
+        ? { stdout: 'start ctx' }
+        : { exitCode: 2, stderr: 'user-only guard' }
+    );
+    const custom = {
+      messageType: 'custom',
+      message: {
+        role: 'custom',
+        customType: 'background-work',
+        content: 'Continue background work',
+        display: false,
+        timestamp: 1,
+      },
+    };
+    expect(await t.fire('before_agent_start', custom)).toEqual({
+      message: { customType: 'claude-hook-context', content: 'start ctx', display: false },
+    });
+    expect(t.notices).toEqual([]);
+    expect(await t.fire('before_agent_start', custom)).toBeUndefined();
+    const user = (await t.fire('before_agent_start', {
+      messageType: 'user',
+      prompt: 'real user input',
+    })) as { message: { content: string } };
+    expect(user.message.content).toContain('user-only guard');
+    expect(user.message.content).not.toContain('start ctx');
+    expect(t.inputs.filter((input) => input.hook_event_name === 'SessionStart')).toHaveLength(1);
+    expect(t.inputs.filter((input) => input.hook_event_name === 'UserPromptSubmit')).toEqual([
+      expect.objectContaining({ prompt: 'real user input' }),
+    ]);
+  });
+
   it('SessionStart matcher 过滤 source；compact 触发', async () => {
     const t = setup([hook('SessionStart', 's', 'compact')], () => ({ stdout: 'after compact' }));
-    expect(await t.fire('before_agent_start', { prompt: 'first' })).toBeUndefined();
+    expect(
+      await t.fire('before_agent_start', { messageType: 'user', prompt: 'first' })
+    ).toBeUndefined();
     expect(t.inputs).toHaveLength(0);
     await t.fire('session_compact', { reason: 'threshold' });
     expect(t.inputs[0]).toMatchObject({ source: 'compact' });
-    const r = (await t.fire('before_agent_start', { prompt: 'x' })) as {
+    const r = (await t.fire('before_agent_start', { messageType: 'user', prompt: 'x' })) as {
       message: { content: string };
     };
     expect(r.message.content).toContain('after compact');
@@ -308,7 +343,7 @@ describe('createClaudeHooksExtension', () => {
 
   it('UserPromptSubmit 阻断时注入拒绝说明并通知', async () => {
     const t = setup([hook('UserPromptSubmit', 'u')], () => ({ exitCode: 2, stderr: 'secret' }));
-    const r = (await t.fire('before_agent_start', { prompt: 'x' })) as {
+    const r = (await t.fire('before_agent_start', { messageType: 'user', prompt: 'x' })) as {
       message: { content: string };
     };
     expect(r.message.content).toContain('UserPromptSubmit hook blocked this prompt: secret');
@@ -317,7 +352,9 @@ describe('createClaudeHooksExtension', () => {
 
   it('没有 context 时 before_agent_start 不返回 message', async () => {
     const t = setup([hook('UserPromptSubmit', 'u')], () => ({}));
-    expect(await t.fire('before_agent_start', { prompt: 'x' })).toBeUndefined();
+    expect(
+      await t.fire('before_agent_start', { messageType: 'user', prompt: 'x' })
+    ).toBeUndefined();
   });
 
   it('Stop 阻断续跑，同一轮最多 3 次，新 prompt 重置', async () => {
@@ -343,7 +380,7 @@ describe('createClaudeHooksExtension', () => {
     expect(results[2]).toBeDefined();
     expect(results[3]).toBeUndefined();
     expect(t.inputs.map((i) => i.stop_hook_active)).toEqual([false, true, true, true]);
-    await t.fire('before_agent_start', { prompt: 'next' });
+    await t.fire('before_agent_start', { messageType: 'user', prompt: 'next' });
     expect(await t.fire('agent_before_settle', { outcome: 'completed' })).toBeDefined();
   });
 
@@ -392,7 +429,7 @@ describe('createClaudeHooksExtension', () => {
         h.event === 'SubagentStart' ? { stdout: 'sub ctx' } : { exitCode: 2, stderr: 'not yet' },
       { kind: 'subagent', agentType: 'explorer' }
     );
-    const r = (await t.fire('before_agent_start', { prompt: 'task' })) as {
+    const r = (await t.fire('before_agent_start', { messageType: 'user', prompt: 'task' })) as {
       message: { content: string };
     };
     expect(t.inputs[0]).toMatchObject({
@@ -402,7 +439,9 @@ describe('createClaudeHooksExtension', () => {
     });
     expect(r.message.content).toContain('sub ctx');
     expect(t.inputs).toHaveLength(1);
-    expect(await t.fire('before_agent_start', { prompt: 'task2' })).toBeUndefined();
+    expect(
+      await t.fire('before_agent_start', { messageType: 'user', prompt: 'task2' })
+    ).toBeUndefined();
     const settle = (await t.fire('agent_before_settle', { outcome: 'completed' })) as {
       continue: boolean;
     };

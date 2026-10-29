@@ -28,13 +28,10 @@ async function flush() {
 }
 
 describe('WorkspaceSwitchGate', () => {
-  it('branch context extension injects a hidden message instead of forcing the system prompt', async () => {
-    const current: { pendingBranch?: string; pendingBranchRequestId?: string } = {
-      pendingBranch: 'feature/new',
-      pendingBranchRequestId: 'req-1',
-    };
+  it('custom 触发不消耗分支上下文，下一条真实用户输入注入一次', async () => {
+    const current = { pendingBranch: 'feature/new', pendingBranchRequestId: 'req-1' };
     const consumed = vi.fn();
-    let handler: ((event: { prompt: string; systemPrompt: string }) => unknown) | undefined;
+    let handler: ((event: Record<string, unknown>) => unknown) | undefined;
     const extension = workspaceBranchContextExtension(() => current, consumed) as {
       factory: (pi: unknown) => void;
     };
@@ -43,7 +40,60 @@ describe('WorkspaceSwitchGate', () => {
         handler = fn;
       },
     });
-    const first = await handler?.({ prompt: 'real input', systemPrompt: 'base' });
+    const customResult = await Promise.resolve()
+      .then(() =>
+        handler?.({
+          messageType: 'custom',
+          message: {
+            role: 'custom',
+            customType: 'background-work',
+            content: 'Continue background work',
+            display: false,
+            timestamp: 1,
+          },
+          systemPrompt: 'base',
+        })
+      )
+      .catch((error: unknown) => error);
+    expect(current).toEqual({ pendingBranch: 'feature/new', pendingBranchRequestId: 'req-1' });
+    expect(customResult).toBeUndefined();
+    expect(consumed).not.toHaveBeenCalled();
+    const user = { messageType: 'user', prompt: 'real input', systemPrompt: 'base' };
+    expect(await handler?.(user)).toEqual({
+      message: {
+        customType: 'enso-branch-context',
+        content: workspaceBranchChangedNote('feature/new'),
+        display: false,
+      },
+    });
+    expect(current.pendingBranch).toBeUndefined();
+    expect(current.pendingBranchRequestId).toBeUndefined();
+    expect(consumed).toHaveBeenCalledExactlyOnceWith('req-1');
+    expect(await handler?.(user)).toBeUndefined();
+  });
+
+  it('branch context extension injects a hidden message instead of forcing the system prompt', async () => {
+    const current: { pendingBranch?: string; pendingBranchRequestId?: string } = {
+      pendingBranch: 'feature/new',
+      pendingBranchRequestId: 'req-1',
+    };
+    const consumed = vi.fn();
+    let handler:
+      | ((event: { messageType: 'user'; prompt: string; systemPrompt: string }) => unknown)
+      | undefined;
+    const extension = workspaceBranchContextExtension(() => current, consumed) as {
+      factory: (pi: unknown) => void;
+    };
+    extension.factory({
+      on: (_event: string, fn: typeof handler) => {
+        handler = fn;
+      },
+    });
+    const first = await handler?.({
+      messageType: 'user',
+      prompt: 'real input',
+      systemPrompt: 'base',
+    });
     expect(first).toEqual({
       message: {
         customType: 'enso-branch-context',
@@ -52,11 +102,15 @@ describe('WorkspaceSwitchGate', () => {
       },
     });
     expect(consumed).toHaveBeenCalledWith('req-1');
-    expect(await handler?.({ prompt: 'next', systemPrompt: 'base' })).toBeUndefined();
+    expect(
+      await handler?.({ messageType: 'user', prompt: 'next', systemPrompt: 'base' })
+    ).toBeUndefined();
 
     current.pendingBranch = 'feature/new';
     const note = workspaceBranchChangedNote('feature/new');
-    expect(await handler?.({ prompt: `${note}\n\ninput`, systemPrompt: 'base' })).toBeUndefined();
+    expect(
+      await handler?.({ messageType: 'user', prompt: `${note}\n\ninput`, systemPrompt: 'base' })
+    ).toBeUndefined();
     expect(current.pendingBranch).toBeUndefined();
   });
 

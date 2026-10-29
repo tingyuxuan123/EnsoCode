@@ -201,52 +201,56 @@ describe('Responses 请求出口的摘要 routing key', () => {
     vi.unstubAllEnvs();
   });
 
-  it('native 摘要保持 none 缓存策略和 13107 预算，仍能通过网关拿到摘要', async () => {
-    // 真实场景：Pi native compaction 创建了 fresh sessionId，但 none 会让 serializer 删掉 key。
-    const sdkOptions: SimpleStreamOptions[] = [];
-    const streamFn: StreamFn = (summaryModel, context, options) => {
-      sdkOptions.push(options ?? {});
-      return runtime.streamSimple(summaryModel, context, options);
-    };
-    const summary = generateSummaryWithUsage(
-      userContext().messages,
-      model,
-      16_384,
-      API_KEY,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'off',
-      streamFn
-    );
-    // Inspect the actual failed request before surfacing the rejected summary assertion.
-    await summary.catch(() => undefined);
-    expect(sdkOptions).toHaveLength(1);
-    expect(sdkOptions[0]).toMatchObject({
-      cacheRetention: 'none',
-      maxTokens: 13_107,
-      sessionId: expect.any(String),
-    });
-    expect(requests).toHaveLength(1);
-    expect(requests[0].body).toMatchObject({
-      model: MODEL_ID,
-      stream: true,
-      store: false,
-      max_output_tokens: 13_107,
-    });
-    expect(requests[0].body).not.toHaveProperty('tools');
-    expect(requests[0].body).not.toHaveProperty('prompt_cache_retention');
-    expect(requests[0].body).not.toHaveProperty('prompt_cache_options');
-    for (const header of ['session_id', 'x-client-request-id', 'x-session-affinity']) {
-      expect(requests[0].headers.has(header)).toBe(false);
+  it.each([16_384, 1_024])(
+    'native 摘要保持 none 缓存策略，reserveTokens=%i 不再限制模型输出预算',
+    async (reserveTokens) => {
+      // 真实场景：Pi native compaction 创建了 fresh sessionId，但 none 会让 serializer 删掉 key。
+      const sdkOptions: SimpleStreamOptions[] = [];
+      const streamFn: StreamFn = (summaryModel, context, options) => {
+        sdkOptions.push(options ?? {});
+        return runtime.streamSimple(summaryModel, context, options);
+      };
+      const summary = generateSummaryWithUsage(
+        userContext().messages,
+        model,
+        reserveTokens,
+        API_KEY,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'off',
+        streamFn
+      );
+      // Inspect the actual failed request before surfacing the rejected summary assertion.
+      await summary.catch(() => undefined);
+      expect(sdkOptions).toHaveLength(1);
+      expect(sdkOptions[0]).toMatchObject({
+        cacheRetention: 'none',
+        sessionId: expect.any(String),
+      });
+      // Pi 1.4.0 将 reserveTokens 限定为压缩触发余量；摘要委托 serializer 使用模型输出上限。
+      expect(sdkOptions[0]).not.toHaveProperty('maxTokens');
+      expect(requests).toHaveLength(1);
+      expect(requests[0].body).toMatchObject({
+        model: MODEL_ID,
+        stream: true,
+        store: false,
+        max_output_tokens: MODEL_CONFIG.maxTokens,
+      });
+      expect(requests[0].body).not.toHaveProperty('tools');
+      expect(requests[0].body).not.toHaveProperty('prompt_cache_retention');
+      expect(requests[0].body).not.toHaveProperty('prompt_cache_options');
+      for (const header of ['session_id', 'x-client-request-id', 'x-session-affinity']) {
+        expect(requests[0].headers.has(header)).toBe(false);
+      }
+      await expect(summary).resolves.toMatchObject({
+        text: SUMMARY,
+        usage: { input: 60, output: 10, totalTokens: 70 },
+      });
+      expect(requests[0].status).toBe(200);
     }
-    await expect(summary).resolves.toMatchObject({
-      text: SUMMARY,
-      usage: { input: 60, output: 10, totalTokens: 70 },
-    });
-    expect(requests[0].status).toBe(200);
-  });
+  );
 
   it('normal 已有 session key 原样保留，输出预算、tools 和 role 与 Pi serializer 一致', async () => {
     const context: Context = {

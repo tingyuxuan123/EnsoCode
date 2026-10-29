@@ -144,17 +144,29 @@ Pi 0.87.1 的 `_rewriteFile()` 不设置 `flushed`；不显式同步时，首条
 会以 `wx` 创建已有文件并抛出 `EEXIST`。回归还须覆盖物化后追加首条 assistant、
 重开 JSONL 后消息仍存在。只有重写成功后才能设置该标记。
 
-第二处：`src/agent/sessionAdapter.ts` 的 `continueSessionActivity()` 调用 pi 1.0.0
-私有 `_runAgentPrompt([])`。公开 API 没有不新增消息的 session 级 continue；裸
+第二处：`src/agent/sessionAdapter.ts` 的 `continueSessionActivity()` 在 pi 1.4.0
+通过每次调用独立的 Proxy 调用私有 `_startRun`，以 custom trigger 准备规则并移除合成消息。
+1.4 删除了旧 `_runAgentPrompt([])`；公开 API 仍没有不新增消息的 session 级 continue，裸
 `agent.continue()` 绕过自动重试、`agent_before_settle` 与 `agent_settled`，手工补发
-settled 无法恢复 OAuth 池的结算前接替。空数组启动完整活动但不追加用户任务，原任务
-及已完成工具结果不重放。显式用户 retry 才复位池的 per-activity `attempted`，自动接替不复位；
+settled 无法恢复 OAuth 池的结算前接替。不能直接跳过 `_prepareRun`：SDK 已在上轮结算时清空
+run options，跳过后会丢失强制 persona，并在工具后持久撤回扩展段落。
+续跑会发出 `before_agent_start{messageType:'custom'}` 重建扩展规则，但不触发仅属于 user 的
+UserPromptSubmit/分支 note、不追加合成 user/custom 任务；真实扩展返回的上下文和 system
+更新仍交给 SDK。准备阶段用第二层独立代理隔离 nextTurn 的读写，异步 hook 中新排队的消息
+也留给下一个真实 prompt，不消费、不替换共享数组或 session 方法。
+原任务及已完成工具结果不重放。显式用户 retry 才复位池的 per-activity `attempted`，自动接替不复位；
 池会话与通知路由在 `agent_start` 初始化，因此恢复后直接 retry 也能获得结构化失败证据。
-入口要求 `session.isIdle`，压缩、branch summary 或其它活动中不允许续跑；保留原
+入口要求 `session.isIdle` 且不在 `_isEmittingAgentSettled` 回调中：SDK 在异步 settled hook
+期间已置 idle，直接启动会造成嵌套结算。压缩、branch summary 或其它活动中不允许续跑；保留原
 `agent.continue()` 的上下文边界：空、仅 system 或 assistant 尾部都拒绝，不发起请求。
 
-**升级 pi 必须复检第二处**：优先查找公开无消息继续 API；确认 `_runAgentPrompt([])`
-仍接受空数组、不产生用户消息，且保留完整 post-run / before-settle / settled 生命周期。
+**升级 pi 必须复检第二处**：优先查找公开无消息继续 API；确认 `_startRun` 仍通过
+`this._prepareRun` 准备消息、custom trigger 消息按引用进入结果（从结果剔除）、空消息续跑
+仍被接受，并保留完整 post-run / before-settle / settled 生命周期。
+两个私有方法缺失时必须在启动前拒绝，不留下 busy 状态。
+真实 SDK 回归还验证强制 persona/扩展段落在工具前后保留、临时错误自动重试、abort 后只结算
+一次，以及后续正常 prompt 消费 nextTurn，避免代理泄漏；不将方法 bind 回真实对象，否则会
+绕过拦截并创建伪任务。
 当前 SDK 的 before-settle 位于低层 loop 结束后，`ctx.signal` 可能为空；取消由
 `session.abort()` 的活动标志和 before-settle 取消守卫阻止延迟选号后的续跑，不能自行
 补发结算或假定低层 `agent.signal` 覆盖整个活动。回归见 `oauthAccountPool.test.ts`
@@ -162,7 +174,7 @@ settled 无法恢复 OAuth 池的结算前接替。空数组启动完整活动�
 选号等待时取消与唯一结算）、`sessionAdapter.test.ts` 和 `supervisor.silentTurn.test.ts`。
 
 第三处：`sessionAdapter.steerActiveSession()` 针对 Bot 插话，以每次调用独立的代理拦截
-pi 1.0.0 `_queueSteer`，在异步 input hook 后、同步入队前再次检查活轮，仍沿用原生
+pi `_queueSteer`（1.4.0 已复检），在异步 input hook 后、同步入队前再次检查活轮，仍沿用原生
 steer 的扩展命令拒绝与模板展开语义。不使用 `prompt(..., streamingBehavior:'steer')`
 在 `started` 回调抛错：那时已经可能做过压缩并清空 nextTurn 消息。
 已入队但到 `agent_settled` 仍未消费的消息（如 abort）按对象引用从
