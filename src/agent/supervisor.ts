@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import {
   type AgentSession,
@@ -160,7 +161,7 @@ import {
   createExploreFoldTools,
   exploreFoldExtension,
 } from './exploreFold';
-import { bindExtensionUI } from './extensionUI';
+import { bindExtensionUI, type ExtensionUIBridge } from './extensionUI';
 import { OperationGate } from './gate';
 import { createGoalTools } from './goal';
 import { readHarnessRuleFiles, resolveHarnessSkillRoots } from './harnessAssets';
@@ -301,6 +302,7 @@ interface ManagedSession {
   identity: SessionIdentity;
   /** 停止/释放期间禁止扩展重开交互；代币防止旧 abort 的 finally 解开新关闭门。 */
   extensionUIBlock?: symbol;
+  extensionUI?: ExtensionUIBridge;
   childIdentity?: ChildSessionIdentity;
   childMetadata?: ChildConversationMetadata;
   session: AgentSession;
@@ -1656,9 +1658,12 @@ export class SessionSupervisor {
         this.notifier.notify(managed.identity.sessionId, command.text, { urgent: command.urgent });
         return;
       }
-      case 'set-approval-mode':
-        this.must(command.identity).gate.mode = command.mode;
+      case 'set-approval-mode': {
+        const managed = this.must(command.identity);
+        managed.gate.mode = command.mode;
+        managed.extensionUI?.approvalModeChanged();
         return;
+      }
       case 'set-plan-mode':
         this.must(command.identity).plan?.setActive(command.active);
         return;
@@ -3002,10 +3007,16 @@ export class SessionSupervisor {
     });
     this.sessions.set(identity.sessionId, managed);
     if (session.extensionRunner) {
-      bindExtensionUI(
+      managed.extensionUI = bindExtensionUI(
         session.extensionRunner,
         managed.asks,
-        () => this.sessions.get(identity.sessionId) === managed && !managed.extensionUIBlock
+        () => this.sessions.get(identity.sessionId) === managed && !managed.extensionUIBlock,
+        {
+          approvalMode: () => gate.mode,
+          requiresConfirmation: () => gate.protectedFloor,
+          lcuExtensionPath: path.join(homedir(), '.local/share/lcu/pi/extension.mjs'),
+          getToolDefinition: (name) => session.getToolDefinition?.(name),
+        }
       );
     }
     this.flushPendingMcpTools(managed);
@@ -3741,6 +3752,7 @@ export class SessionSupervisor {
         return;
       }
       case 'tool_execution_start': {
+        managed.extensionUI?.prepareTool(event.toolName);
         // codemode 嵌套调用只进脚本，不上时间线
         if (event.parentToolCallId) return;
         // 耗时只从真正开始执行算：同轮后发工具不能把前面 bash 的排队算进去

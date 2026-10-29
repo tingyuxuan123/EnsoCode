@@ -32,6 +32,8 @@ export class AskManager {
       defaultAnswer?: string;
       /** Internal: strict ExtensionUI selection, never a free-form/default answer. */
       selectionOnly?: boolean;
+      /** 宿主内部跟踪已成功发出的选择；不暴露给模型或 IPC。 */
+      onRequestId?: (requestId: string) => void;
     } = {}
   ): Promise<string> {
     if (opts.signal?.aborted) return Promise.reject(new Error('question cancelled'));
@@ -88,6 +90,7 @@ export class AskManager {
       }
       try {
         if (this.onRequest(info) === false) onAbort();
+        else if (!settled) opts.onRequestId?.(requestId);
       } catch (error) {
         settle(() => reject(error));
       }
@@ -97,7 +100,11 @@ export class AskManager {
   async select(
     question: string,
     options: string[],
-    opts: { signal?: AbortSignal; timeoutMs?: number } = {}
+    opts: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      onRequestId?: (requestId: string) => void;
+    } = {}
   ): Promise<string | undefined> {
     try {
       if (
@@ -118,19 +125,20 @@ export class AskManager {
     }
   }
 
-  respond(requestId: string, answer: string): void {
+  respond(requestId: string, answer: string): boolean {
     const entry = this.pending.get(requestId);
-    if (!entry || typeof answer !== 'string') return;
+    if (!entry || typeof answer !== 'string') return false;
     if (
       entry.info.selectionOnly &&
       entry.info.expiresAt !== undefined &&
       Date.now() >= entry.info.expiresAt
     ) {
       entry.expire();
-      return;
+      return false;
     }
-    if (!entry.info.selectionOnly && !answer.trim()) return;
+    if (!entry.info.selectionOnly && !answer.trim()) return false;
     entry.resolve(answer);
+    return true;
   }
 
   /** Main 判定等人超时：按未回答收尾 */
