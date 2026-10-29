@@ -1,6 +1,6 @@
 {
   "name": "enso-code",
-  "version": "0.2.32",
+  "version": "0.2.33",
   "description": "EnsoCode - Electron Multi-Window Scaffold",
   "main": "./out/main/index.js",
   "author": {
