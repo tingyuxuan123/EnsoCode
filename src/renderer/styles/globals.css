@@ -898,11 +898,20 @@ html.bg-image-enabled [data-slot='bot-card-button']:not(:hover) {
 .t-clear-mirror { opacity: 0; }
 .t-clear.has-value .t-clear-mirror,
 .t-clear.is-clearing .t-clear-mirror { opacity: 1; }
-.t-clear.has-value > input,
-.t-clear.is-clearing > input {
+/* 输入框现在包在 Input 的 <span data-slot="input-control"> 里，
+   且内层 input 的 data-slot 被 autocomplete 覆写成 autocomplete-input：
+   用后代 input 选择器，避免镜像层和输入框文字同时可见导致叠印。 */
+.t-clear.has-value input,
+.t-clear.is-clearing input {
   -webkit-text-fill-color: transparent;
 }
 .t-clear.has-value .t-clear-placeholder { opacity: 0; }
+/* 文字现在由镜像层独占，右侧要和输入框一样给触发器 / 清除按钮留位：
+   overflow 只在 padding 边缘裁切，光加内边距挡不住溢出文字压到图标上。 */
+.t-clear:has(> [data-slot='autocomplete-trigger'], > [data-slot='autocomplete-clear'])
+  .t-clear-mirror {
+  clip-path: inset(0 calc(var(--spacing) * 7) 0 0);
+}
 .t-clear-glow {
   position: absolute;
   inset: 0;
@@ -916,10 +925,6 @@ html.bg-image-enabled [data-slot='bot-card-button']:not(:hover) {
   .t-clear-glow { opacity: 0 !important; }
 }
 
-.autocomplete-clear-dissolve.has-value [data-slot='input'],
-.autocomplete-clear-dissolve.is-clearing [data-slot='input'] {
-  -webkit-text-fill-color: transparent;
-}
 .autocomplete-clear-dissolve [data-slot='autocomplete-trigger'],
 .autocomplete-clear-dissolve [data-slot='autocomplete-clear'] {
   z-index: 4;

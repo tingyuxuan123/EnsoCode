@@ -114,10 +114,11 @@ function AutocompleteInput({
   const sizeValue = (size ?? 'default') as 'sm' | 'default' | 'lg' | number;
   const wrapRef = React.useRef<HTMLDivElement>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: effect 通过 ref 读写 DOM，依赖项是重定位 pill/镜像层的真实触发信号
+  // 每次渲染都重算镜像层：输入框文字由镜像层独占，选项目 / 点浏览这类程序化改值
+  // 不触发 input 事件，晚一步同步就会把旧路径留在界面上。
   React.useLayoutEffect(() => {
     if (wrapRef.current) syncAutocompleteClearLayers(wrapRef.current);
-  }, [props.value]);
+  });
 
   return (
     <div
