@@ -560,9 +560,12 @@ const patch = (
   state: SessionsState,
   id: string,
   updates: Partial<Conversation>
-): Pick<SessionsState, 'conversations'> => ({
-  conversations: { ...state.conversations, [id]: { ...state.conversations[id], ...updates } },
-});
+): Pick<SessionsState, 'conversations'> => {
+  const current = state.conversations[id];
+  // 异步回调晚到时会话可能已删除：不拼出没有 messages 等字段的半截会话
+  if (!current) return { conversations: state.conversations };
+  return { conversations: { ...state.conversations, [id]: { ...current, ...updates } } };
+};
 
 export const useSessionsStore = create<SessionsState>()(
   persist(

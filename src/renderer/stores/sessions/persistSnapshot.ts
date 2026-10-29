@@ -135,6 +135,7 @@ function entryOf(conversation: PersistableConversation): PersistedEntry {
 export function cachedPartializeSessions(state: SessionsPersistSlice): SessionsPersistSlice {
   const keep = (id: string): boolean =>
     Boolean(state.conversations[id]) && !state.conversations[id]?.btwParentId;
+  const listed = (id: string): boolean => keep(id) && !state.conversations[id]?.parentId;
   const previous = cached;
   const next = new Map<string, PersistedEntry>();
   let changed = !previous;
@@ -149,8 +150,11 @@ export function cachedPartializeSessions(state: SessionsPersistSlice): SessionsP
     if (old !== entry) changed = true;
     next.set(id, entry);
   }
-  const order = state.order.filter(keep);
-  const activeId = state.activeId && keep(state.activeId) ? state.activeId : (order[0] ?? null);
+  const order = state.order.filter(listed);
+  const activeParent = state.activeId ? state.conversations[state.activeId]?.parentId : undefined;
+  const activeRoot =
+    typeof activeParent === 'string' && listed(activeParent) ? activeParent : state.activeId;
+  const activeId = activeRoot && listed(activeRoot) ? activeRoot : (order[0] ?? null);
   if (
     previous &&
     !changed &&

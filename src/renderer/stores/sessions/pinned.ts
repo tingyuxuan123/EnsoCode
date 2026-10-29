@@ -17,6 +17,8 @@ import { worktreeReadyToAutoCleanup } from './worktree';
 
 interface SidebarConversation {
   projectId: string;
+  parentId?: string;
+  btwParentId?: string;
   pinned?: boolean;
   archived?: boolean;
   archivedAt?: number;
@@ -37,6 +39,14 @@ interface SidebarConversation {
 
 type Conversations = Record<string, SidebarConversation | undefined>;
 
+/** 子会话与旁路不进侧栏，即使旧数据把它们写进 order。 */
+function sidebarRoot(id: string, conversations: Conversations): SidebarConversation | undefined {
+  const conversation = conversations[id];
+  return conversation && !conversation.parentId && !conversation.btwParentId
+    ? conversation
+    : undefined;
+}
+
 /** 会话的最后活跃时刻:最后一条消息时间 → 持久化 lastActiveAt(messages 被剥离时) → createdAt */
 export function lastActiveAt(conversation: SidebarConversation): number {
   return (
@@ -54,7 +64,7 @@ function latestActivityByProject(
 ): Map<string, number> {
   const activity = new Map<string, number>();
   for (const id of order) {
-    const conversation = conversations[id];
+    const conversation = sidebarRoot(id, conversations);
     if (!conversation || conversation.archived === true) continue;
     activity.set(
       conversation.projectId,
@@ -112,9 +122,10 @@ export function projectConversationIds(
   conversations: Conversations,
   projectId: string
 ): string[] {
-  const ids = order.filter(
-    (id) => conversations[id]?.projectId === projectId && conversations[id]?.archived !== true
-  );
+  const ids = order.filter((id) => {
+    const conversation = sidebarRoot(id, conversations);
+    return conversation?.projectId === projectId && conversation.archived !== true;
+  });
   return waitingFirst(
     [
       ...sortByActivity(
@@ -141,7 +152,7 @@ export function activeConversationIds(
 ): string[] {
   const archivedProjects = new Set(archivedProjectIds);
   return order.filter((id) => {
-    const conversation = conversations[id];
+    const conversation = sidebarRoot(id, conversations);
     if (!conversation || conversation.archived === true) return false;
     if (archivedProjects.has(conversation.projectId)) return false;
     const tone = conversationDotTone({
@@ -173,7 +184,7 @@ export function pinnedConversationIds(
   const archivedProjects = new Set(archivedProjectIds);
   const byActivity = sortByActivity(
     order.filter((id) => {
-      const conversation = conversations[id];
+      const conversation = sidebarRoot(id, conversations);
       return (
         conversation?.pinned === true &&
         conversation.archived !== true &&
@@ -208,8 +219,11 @@ export function archivedConversationIds(
   const archivedProjects = new Set(archivedProjectIds);
   return sortByActivity(
     order.filter((id) => {
-      const conversation = conversations[id];
-      return conversation?.archived === true || archivedProjects.has(conversation?.projectId ?? '');
+      const conversation = sidebarRoot(id, conversations);
+      return (
+        conversation !== undefined &&
+        (conversation.archived === true || archivedProjects.has(conversation.projectId))
+      );
     }),
     conversations
   );
@@ -235,7 +249,7 @@ export function archivedConversationGroups(
   const archivedProjects = new Set(archivedProjectIds);
   const idsByProject = new Map<string, string[]>();
   for (const id of order) {
-    const conversation = conversations[id];
+    const conversation = sidebarRoot(id, conversations);
     if (!conversation) continue;
     if (conversation.archived !== true && !archivedProjects.has(conversation.projectId)) continue;
     const bucket = idsByProject.get(conversation.projectId);
@@ -305,7 +319,8 @@ export function waitingConversationCount(
   order: readonly string[],
   conversations: Conversations
 ): number {
-  return order.filter((id) => isWaiting(id, conversations)).length;
+  return order.filter((id) => sidebarRoot(id, conversations) && isWaiting(id, conversations))
+    .length;
 }
 
 const DAY_MS = 86_400_000;
@@ -336,7 +351,7 @@ export function staleUnarchivedConversationIds(input: {
   if (!(idleDays > 0)) return [];
   const cutoff = now - idleDays * DAY_MS;
   return order.filter((id) => {
-    const conversation = conversations[id];
+    const conversation = sidebarRoot(id, conversations);
     if (!conversation || conversation.archived === true) return false;
     if (conversation.pinned === true) return false;
     if (activeId && id === activeId) return false;
@@ -361,7 +376,7 @@ export function staleArchivedConversationIds(
 ): string[] {
   const cutoff = now - olderThanDays * DAY_MS;
   return order.filter((id) => {
-    const conversation = conversations[id];
+    const conversation = sidebarRoot(id, conversations);
     if (conversation?.archived !== true) return false;
     if (projectId !== undefined && conversation.projectId !== projectId) return false;
     const archivedAt = conversation.archivedAt ?? lastActiveAt(conversation);

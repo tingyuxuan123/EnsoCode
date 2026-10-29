@@ -5585,4 +5585,30 @@ describe('Plan 模式', () => {
     sessionsModule.useSessionsStore.getState().setPlanMode('plan-parent', true);
     await vi.waitFor(() => expect(conv()?.planState?.active).toBe(false));
   });
+
+  it('setPlanMode 失败回包晚于删除时不会复活会话', async () => {
+    let finish!: (result: { ok: boolean; error?: string }) => void;
+    const pending = new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      finish = resolve;
+    });
+    // 捕获回调完成态，也让旧实现中 partialize 半截会话的异常由测试接住。
+    const then = vi.spyOn(pending, 'then');
+    agentSetPlanMode.mockReturnValueOnce(pending);
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        'plan-parent': { ...state.conversations['plan-parent'], started: true },
+      },
+    }));
+    sessionsModule.useSessionsStore.getState().setPlanMode('plan-parent', true);
+    expect(conv()?.planState?.active).toBe(true);
+    sessionsModule.useSessionsStore.getState().removeConversation('plan-parent');
+    expect(conv()).toBeUndefined();
+
+    finish({ ok: false, error: 'stale' });
+    const completed = await Promise.allSettled([then.mock.results[0].value]);
+    expect(conv()).toBeUndefined();
+    expect(completed[0].status).toBe('fulfilled');
+    expect(sessionsModule.useSessionsStore.getState().order).not.toContain('plan-parent');
+  });
 });

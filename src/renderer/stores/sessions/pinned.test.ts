@@ -38,6 +38,7 @@ type Minimal = {
   archived?: boolean;
   archivedAt?: number;
   parentId?: string;
+  btwParentId?: string;
   createdAt: number;
   lastActiveAt?: number;
   messages: { timestamp?: number }[];
@@ -76,6 +77,143 @@ const conversations: Record<string, Minimal> = {
 
 // order 新的在前(创建序)
 const order = ['e', 'd', 'c', 'b', 'a'];
+
+describe('脏 order 只列根会话', () => {
+  const sessions = {
+    parent: conv('p1', 1, 10, { coworkerIds: ['child'], pinned: true }),
+    child: conv('p1', 1, 999, { parentId: 'parent', status: 'running', pinned: true }),
+    btw: conv('p1', 1, 999, { btwParentId: 'parent', status: 'running', pinned: true }),
+    other: conv('p2', 1, 20, { status: 'running', pinned: true }),
+  };
+  const dirtyOrder = ['missing', 'child', 'parent', 'btw', 'other'];
+
+  it('项目组与置顶栏排除 child/btw，即使手动置顶序列含有它们', () => {
+    expect(projectConversationIds(dirtyOrder, sessions, 'p1')).toEqual(['parent']);
+    expect(pinnedConversationIds(dirtyOrder, sessions, ['child', 'btw', 'parent'])).toEqual([
+      'parent',
+      'other',
+    ]);
+  });
+
+  it('活跃栏保留运行子代理的父会话，根会话顺序不随输出改变', () => {
+    expect(activeConversationIds(dirtyOrder, sessions)).toEqual(['parent', 'other']);
+    expect(
+      activeConversationIds(dirtyOrder, {
+        ...sessions,
+        parent: { ...sessions.parent, messages: [{ timestamp: 2000 }] },
+      })
+    ).toEqual(['parent', 'other']);
+  });
+
+  it('单独归档和项目归档都不列 child/btw', () => {
+    const archived = {
+      ...sessions,
+      parent: { ...sessions.parent, archived: true },
+      child: { ...sessions.child, archived: true },
+      btw: { ...sessions.btw, archived: true },
+    };
+    expect(archivedConversationIds(dirtyOrder, archived)).toEqual(['parent']);
+    expect(archivedConversationGroups(dirtyOrder, archived, ['p1', 'p2'])).toEqual([
+      { projectId: 'p1', ids: ['parent'] },
+    ]);
+    expect(archivedConversationIds(dirtyOrder, sessions, ['p1'])).toEqual(['parent']);
+    expect(archivedConversationGroups(dirtyOrder, sessions, ['p1', 'p2'], ['p1'])).toEqual([
+      { projectId: 'p1', ids: ['parent'], projectArchived: true },
+    ]);
+  });
+
+  it('项目活跃排序与最近窗口不被 child/btw 的新输出推高', () => {
+    const projects = [{ id: 'p1' }, { id: 'p2' }];
+    expect(sortProjectsByActivity(projects, dirtyOrder, sessions)).toEqual([
+      projects[1],
+      projects[0],
+    ]);
+    const now = 20 * 86_400_000;
+    const recent = {
+      ...sessions,
+      child: { ...sessions.child, messages: [{ timestamp: now }] },
+      btw: { ...sessions.btw, messages: [{ timestamp: now }] },
+      other: { ...sessions.other, messages: [{ timestamp: now - 1 }] },
+    };
+    expect(pinned.recentProjects(projects, dirtyOrder, recent, now)).toEqual([projects[1]]);
+  });
+
+  it('角标排除 child/btw 的提问、审批与能力确认，父会话仍可等待', () => {
+    const waiting = {
+      ...sessions,
+      parent: { ...sessions.parent, pendingAsks: [{ requestId: 'parent-ask' }] },
+      child: { ...sessions.child, pendingApprovals: [{}] },
+      btw: { ...sessions.btw, pendingCapabilityAsks: [{}] },
+    };
+    expect(waitingConversationCount(dirtyOrder, waiting)).toBe(1);
+    expect(
+      waitingConversationCount(dirtyOrder, {
+        ...waiting,
+        child: { ...sessions.child, pendingAsks: [{ requestId: 'child-ask' }] },
+        btw: { ...sessions.btw, pendingAsks: [{ requestId: 'btw-ask' }] },
+      })
+    ).toBe(1);
+    expect(activeConversationIds(dirtyOrder, waiting)).toEqual(['parent', 'other']);
+  });
+
+  it('自动归档排除闲置 child/btw，运行子项仍保护父会话', () => {
+    const idle = {
+      parent: conv('p1', 0, undefined, { coworkerIds: ['runningChild'] }),
+      child: conv('p1', 0, undefined, { parentId: 'parent' }),
+      btw: conv('p1', 0, undefined, { btwParentId: 'parent' }),
+      other: conv('p2', 0),
+      runningChild: conv('p1', 0, undefined, { parentId: 'parent', status: 'running' }),
+    };
+    expect(
+      pinned.staleUnarchivedConversationIds({
+        order: dirtyOrder,
+        conversations: idle,
+        now: 40 * 86_400_000,
+        idleDays: 30,
+      })
+    ).toEqual(['other']);
+    expect(activeConversationIds(dirtyOrder, idle)).toEqual(['parent']);
+  });
+
+  const archivedForCleanup = {
+    parent: { ...sessions.parent, archived: true, archivedAt: 0 },
+    child: { ...sessions.child, archived: true, archivedAt: 0 },
+    btw: { ...sessions.btw, archived: true, archivedAt: 0 },
+    other: { ...sessions.other, archived: true, archivedAt: 39 * 86_400_000 },
+  };
+  const cleanupNow = 40 * 86_400_000;
+
+  it('手动过期归档删除和全部删除均排除 child/btw，仍遵守期限与项目过滤', () => {
+    expect(staleArchivedConversationIds(dirtyOrder, archivedForCleanup, 30, cleanupNow)).toEqual([
+      'parent',
+    ]);
+    expect(staleArchivedConversationIds(dirtyOrder, archivedForCleanup, 0, cleanupNow)).toEqual([
+      'parent',
+      'other',
+    ]);
+    expect(
+      staleArchivedConversationIds(dirtyOrder, archivedForCleanup, 0, cleanupNow, 'p1')
+    ).toEqual(['parent']);
+  });
+
+  it('自动删除排除 child/btw，仍跳过当前打开根会话、近期归档与从不设置', () => {
+    expect(
+      pinned.staleArchivedConversationIdsToDelete(dirtyOrder, archivedForCleanup, 30, cleanupNow)
+    ).toEqual(['parent']);
+    expect(
+      pinned.staleArchivedConversationIdsToDelete(
+        dirtyOrder,
+        archivedForCleanup,
+        30,
+        cleanupNow,
+        'parent'
+      )
+    ).toEqual([]);
+    expect(
+      pinned.staleArchivedConversationIdsToDelete(dirtyOrder, archivedForCleanup, 0, cleanupNow)
+    ).toEqual([]);
+  });
+});
 
 describe('sortProjectsByActivity', () => {
   it('跨项目取最新会话时间，不按会话置顶抢排序，不改输入', () => {

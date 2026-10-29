@@ -151,4 +151,51 @@ describe('cachedPartializeSessions', () => {
     expect(persisted.order).toEqual(['a']);
     expect(persisted.activeId).toBe('a');
   });
+
+  it('preserves child records and parent links but lists only roots and selects the parent', () => {
+    const persisted = cachedPartializeSessions({
+      conversations: {
+        first: conv('first'),
+        parent: { ...conv('parent'), coworkerIds: ['child'] },
+        child: { ...conv('child'), parentId: 'parent' },
+      },
+      order: ['child', 'first', 'parent', 'missing'],
+      activeId: 'child',
+    });
+    const restored = JSON.parse(JSON.stringify(persisted));
+    expect(restored.conversations.child.parentId).toBe('parent');
+    expect(restored.conversations.parent.coworkerIds).toEqual(['child']);
+    expect(restored.order).toEqual(['first', 'parent']);
+    expect(restored.activeId).toBe('parent');
+  });
+
+  it.each(['orphan', 'missing', 'btw', 'nested', null])(
+    'falls back to the first root for invalid active id %s',
+    (activeId) => {
+      const persisted = cachedPartializeSessions({
+        conversations: {
+          root: conv('root'),
+          orphan: { ...conv('orphan'), parentId: 'missing' },
+          btw: { ...conv('btw'), btwParentId: 'root' },
+          nested: { ...conv('nested'), parentId: 'orphan' },
+        },
+        order: ['orphan', 'btw', 'missing', 'nested', 'root'],
+        activeId,
+      });
+      expect(persisted.order).toEqual(['root']);
+      expect(persisted.activeId).toBe('root');
+      expect(persisted.conversations.orphan.parentId).toBe('missing');
+    }
+  );
+
+  it('uses null when no listed root remains', () => {
+    const persisted = cachedPartializeSessions({
+      conversations: { child: { ...conv('child'), parentId: 'missing' } },
+      order: ['child', 'missing'],
+      activeId: 'child',
+    });
+    expect(persisted.order).toEqual([]);
+    expect(persisted.activeId).toBeNull();
+    expect(persisted.conversations.child.parentId).toBe('missing');
+  });
 });
