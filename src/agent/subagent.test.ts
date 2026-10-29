@@ -12,6 +12,25 @@ const model: SpawnModelConfig = {
 };
 
 describe('subagent unified control', () => {
+  it('等待完成明确提示 report 读取正文，不能重复 wait/list 猜结果', async () => {
+    const invoke = vi.fn(async () => ({
+      ok: true as const,
+      value: { runs: [{ runId: 'r1', status: 'succeeded' }], timedOut: false, interrupted: false },
+    }));
+    const tool = createUnifiedSubagentTool({ agentTypes: [], models: [], invoke });
+    const result = await tool.execute(
+      'wait',
+      { operation: 'wait', runId: 'r1' },
+      undefined,
+      undefined,
+      {} as never
+    );
+    expect(result.details).toMatchObject({
+      note: expect.stringMatching(/operation=report.*runId/),
+    });
+    expect(JSON.stringify(result.details)).toMatch(/even if.*closed/i);
+    expect(tool.promptGuidelines?.join('\n')).toMatch(/wait.*status.*report/i);
+  });
   it('normalizes model thinking before the typed Main invocation', async () => {
     const invoke = vi.fn(async (request) => ({ ok: true as const, value: request }));
     const tool = createUnifiedSubagentTool({

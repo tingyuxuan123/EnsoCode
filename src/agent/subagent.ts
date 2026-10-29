@@ -1,4 +1,5 @@
 import type { AgentSession, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ChildProfileToolOptions } from '@shared/childProfileTools';
 import type {
   AgentControlToolRequest,
   AgentControlToolResponse,
@@ -11,6 +12,10 @@ import {
   AGENT_WAIT_MAX_MS,
   parseAgentControlToolRequest,
 } from '@shared/types/agent';
+import {
+  agentTypeCapabilitySummary,
+  DELEGATION_CAPABILITY_GUIDANCE,
+} from './agentTypeCapabilities';
 import { type BlockingWait, detachedWaitNote } from './backgroundTasks';
 import { CHILD_THINKING_LEVELS, resolveChildThinkingInput } from './childReasoning';
 import { subagentModelGuide } from './subagentModelGuide';
@@ -18,6 +23,8 @@ import { subagentModelGuide } from './subagentModelGuide';
 export interface UnifiedSubagentDeps {
   agentTypes: AgentTypeSpawnConfig[];
   models: SubagentModelOption[];
+  /** 与本会话 child 工具装配同源，不扩大任何权限。 */
+  childToolProfile?: ChildProfileToolOptions;
   invoke(
     request: AgentControlToolRequest,
     signal?: AbortSignal,
@@ -29,6 +36,8 @@ export interface UnifiedSubagentDeps {
 
 const WAIT_TIMEOUT_NOTE =
   'The wait timed out; this is not a failure. Pending Runs keep going and you will be notified automatically when each finishes — continue other work instead of waiting again.';
+const REPORT_RETRIEVAL_NOTE =
+  'Wait receipts contain Run status, not the child findings. For a completed Run, call subagent operation=report with its runId to read text/value, even if the task Agent is closed. Do not repeat wait/list to retrieve findings.';
 
 /** 后台回执的知识边界：通知到达前模型对结果一无所知 */
 const BACKGROUND_RECEIPT_NOTE =
@@ -55,6 +64,29 @@ function waitReceiptOf(value: unknown): AgentWaitReceipt | undefined {
 }
 
 const OPERATIONS = ['spawn', 'send', 'wait', 'report', 'list', 'message', 'stop', 'dismiss'];
+
+const OPERATION_FIELDS: Record<string, readonly string[]> = {
+  spawn: [
+    'mode',
+    'name',
+    'description',
+    'prompt',
+    'agent_type',
+    'model',
+    'thinking',
+    'wait',
+    'schema',
+    'gate',
+  ],
+  send: ['agentId', 'message', 'delivery', 'expectedRunId', 'wait', 'schema', 'gate'],
+  wait: ['runId', 'runIds', 'until', 'timeoutMs'],
+  report: ['runId'],
+  stop: ['runId'],
+  dismiss: ['agentId'],
+  list: ['status', 'cursor', 'limit'],
+  message: ['to', 'text'],
+};
+const DECLARED_FIELDS = new Set(['operation', ...Object.values(OPERATION_FIELDS).flat()]);
 
 /** 未传 agent_type 时 Main 派发 worker（与 selectHiredAgentType / workflow 同口径） */
 const DEFAULT_AGENT_TYPE = 'worker';
@@ -255,6 +287,55 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
     }
     return null;
   };
+  const prepare = (input: unknown): Record<string, unknown> => {
+    if (!isPlainObject(input)) throw invalidParams('parameters must be an object.');
+    const params = { ...(clampWaitTimeout(input) as Record<string, unknown>) };
+    // 只归一已声明可选键的占位；未知键即使为空也不能绕过 schema 白名单。
+    for (const [key, value] of Object.entries(params)) {
+      if (
+        key !== 'operation' &&
+        DECLARED_FIELDS.has(key) &&
+        (value === null || value === undefined || (typeof value === 'string' && !value.trim()))
+      ) {
+        delete params[key];
+      }
+    }
+    if (typeof params.agent_type === 'string') params.agent_type = params.agent_type.trim();
+    if (
+      params.operation === 'wait' &&
+      nonEmptyText(params.runId) &&
+      Array.isArray(params.runIds) &&
+      params.runIds.length === 0
+    )
+      delete params.runIds;
+    const request = normalize(params);
+    if (!request) throw invalidParams('operation is unavailable.');
+    const allowed = OPERATION_FIELDS[request.operation] ?? [];
+    const extra = Object.keys(params).filter(
+      (key) => key !== 'operation' && !allowed.includes(key)
+    );
+    if (extra.length) {
+      throw invalidParams(
+        `${request.operation} does not accept ${extra.join(', ')}. Allowed fields: operation, ${allowed.join(', ')}. No action was dispatched.`
+      );
+    }
+    if (request.operation === 'wait' && params.runId !== undefined && params.runIds !== undefined) {
+      throw invalidParams('wait accepts runId or runIds, not both.');
+    }
+    if (request.operation === 'spawn') {
+      params.description = request.description;
+      params.prompt = request.prompt;
+      if (request.model) params.model = request.model;
+      if (request.thinking) params.thinking = request.thinking;
+    }
+    if (
+      (request.operation === 'spawn' || request.operation === 'send') &&
+      request.schema !== undefined
+    ) {
+      params.schema = request.schema;
+    }
+    return params;
+  };
   return {
     name: 'subagent',
     label: 'Subagent',
@@ -268,7 +349,9 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       'Spawn task/coworker agents, list owned agents, send Runs or bound messages, wait/report/stop a Run, or dismiss an Agent. Default spawn mode=task and wait=false; finished Runs notify you automatically.',
     promptGuidelines: [
       'spawn requires non-empty description and prompt. Omit both for every other operation.',
+      DELEGATION_CAPABILITY_GUIDANCE,
       'Agent and Run are different identities: use runId for wait/report/stop and agentId for send/dismiss.',
+      'wait returns status only; use operation=report with runId to read the completed child findings. report works even after a task Agent closes. Never repeat wait/list to retrieve report text.',
       'A task Agent runs exactly once and closes when its Run ends; for follow-ups spawn a new one (or use mode=coworker) instead of send.',
       "When not to use: if the target is already known, use the direct tool (read for a known path, grep for a specific symbol). Reserve subagents for open-ended work that spans many files, independent work that can run in parallel, or tasks matching an agent type. Once you've delegated a search, don't also run it yourself.",
       'Brief a subagent like a smart colleague who just walked into the room: it has not seen this conversation. State the goal and why, what you already learned or ruled out, and the expected answer shape and length (e.g. "report in under 200 words").',
@@ -315,9 +398,9 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
           ? {
               agent_type: {
                 type: 'string',
-                description: `Agent type: ${deps.agentTypes
-                  .map((type) => `${type.name} (${type.description || 'custom'})`)
-                  .join('; ')}`,
+                description: `Agent types and capability limits: ${deps.agentTypes
+                  .map((type) => agentTypeCapabilitySummary(type, deps.childToolProfile))
+                  .join('\n')}`,
               },
             }
           : {}),
@@ -369,9 +452,9 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       required: ['operation'],
       additionalProperties: false,
     } as unknown as ToolDefinition['parameters'],
-    prepareArguments: clampWaitTimeout as unknown as ToolDefinition['prepareArguments'],
+    prepareArguments: prepare as ToolDefinition['prepareArguments'],
     async execute(toolCallId, params, signal) {
-      const request = normalize(clampWaitTimeout(params) as Record<string, unknown>);
+      const request = normalize(prepare(params));
       if (!request) throw new Error('invalid subagent operation parameters');
       const waits =
         request.operation === 'wait' ||
@@ -400,7 +483,9 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
             ? WAIT_TIMEOUT_NOTE
             : background
               ? BACKGROUND_RECEIPT_NOTE
-              : undefined;
+              : receipt
+                ? REPORT_RETRIEVAL_NOTE
+                : undefined;
       const value =
         note && response.value && typeof response.value === 'object'
           ? { ...(response.value as Record<string, unknown>), note }

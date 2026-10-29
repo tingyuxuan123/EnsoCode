@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ChildProfileToolOptions } from '@shared/childProfileTools';
 import type {
   AgentControlToolRequest,
   AgentControlToolResponse,
@@ -13,6 +14,10 @@ import type {
   WorkflowRunSnapshot,
 } from '@shared/types/workflow';
 import { JSException, type JSValueHandle, QuickJS } from 'quickjs-wasi';
+import {
+  agentTypeCapabilitySummary,
+  DELEGATION_CAPABILITY_GUIDANCE,
+} from './agentTypeCapabilities';
 import { subagentModelGuide } from './subagentModelGuide';
 import { resolveWorkflowPresetArgs, type WorkflowPreset } from './workflowPresets';
 
@@ -44,7 +49,9 @@ export interface WorkflowToolDeps {
   presets?: readonly WorkflowPresetSummary[];
   /** 与 subagent 工具同源：可选模型，以及哪些类型要求主 agent 选模型 */
   models?: readonly Pick<SubagentModelOption, 'name' | 'description'>[];
-  agentTypes?: readonly Pick<AgentTypeSpawnConfig, 'name' | 'allowModelOverride'>[];
+  agentTypes?: readonly (Pick<AgentTypeSpawnConfig, 'name' | 'allowModelOverride'> &
+    Partial<Pick<AgentTypeSpawnConfig, 'description' | 'tools' | 'writeScope' | 'mcpServers'>>)[];
+  childToolProfile?: ChildProfileToolOptions;
   randomUuid?: () => string;
 }
 
@@ -577,7 +584,10 @@ export function createWorkflowTool(deps: WorkflowToolDeps): ToolDefinition {
       'Set background:true to return a runId immediately; the result arrives later as a notification. Pass stop:<runId> alone to cancel a background run. ' +
       'The script is plain JavaScript with top-level await and must return a JSON value. Hooks: agent(prompt, opts?), parallel(thunks), pipeline(items, ...stages), phase(title), log(message), args. ' +
       'A failed child resolves to null. Bad hook arguments fail the whole run. The script cannot use filesystem, network, timers, or Node APIs. Status is shown in the side panel.' +
-      presetCatalog(deps.presets),
+      presetCatalog(deps.presets) +
+      (deps.agentTypes?.length
+        ? `\nAgent capability limits:\n${deps.agentTypes.map((type) => agentTypeCapabilitySummary(type, deps.childToolProfile)).join('\n')}`
+        : ''),
     promptSnippet:
       'workflow: run a saved preset or write a JavaScript orchestration script that fans subagents out. Use for an explicit workflow request, a large fan-out, or a task a listed preset clearly fits. One or two delegations should use subagent.',
     promptGuidelines: [
@@ -586,6 +596,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): ToolDefinition {
       'Choose background:true when the run is long and you have other work to do or the user should not wait; keep it off when the next step needs the result. Do not poll a background run — wait for its notification.',
       'script is plain JavaScript, not TypeScript, with top-level await. End with return <json>.',
       'agent() options are only label, phase, model, agentType, and schema. Anything else fails the run.',
+      DELEGATION_CAPABILITY_GUIDANCE,
       ...(modelNames.length > 0
         ? [
             `model must be copied exactly from the model enum: ${modelNames.join(', ')}. Top-level model applies to every agent() without its own model whose agent type requires one${

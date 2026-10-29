@@ -191,6 +191,20 @@ steer 的扩展命令拒绝与模板展开语义。不使用 `prompt(..., stream
 `settingsPresetPrompts.test.ts`。配置导入为正文分配新 UUID，不覆盖本机同 ID 正文；旧导入
 正文保留给设置备份恢复使用。
 
+## 委派前展示能力，缺口不靠猜测补齐
+
+`agentTypeCapabilities.ts` 从 `childProfileToolIds` 和父会话工具档生成 subagent/workflow
+类型说明：readonly 无 shell，父会话禁写也不能显示 shell/编辑工具；writeScope 只描述
+确实存在的文件编辑能力。它不序列化模型凭证、MCP env 或启动参数，也不授予新权限。
+需要 Git diff/测试等命令时，由有权的主代理采集有界证据后交给只读子代理，不能要求它
+越权执行或改读其他仓库来猜结论。子代理合同要求缺能力早报，区分已核验事实、推断和未核验项。
+
+subagent 保持跨厂商兼容的平面 schema；`prepareArguments` 在 schema 校验前完成已声明
+可选字段的空占位归一、model:thinking 拆分、schema JSON 解析和操作字段预检，产物须满足
+自身 schema 且幂等。非空串用字段在 Main RPC 前拒绝，不静默选择模型。
+wait 只返回 Run 状态；取正文必须用 `operation=report` + runId，task Agent 已 closed 仍可读取。
+回归：`subagent.control.test.ts`、`agentTypeCapabilities.test.ts`、`subagent.test.ts`。
+
 ## 工具目录只辅助发现，不裁剪权威说明
 
 `promptCatalog.ts` 在 `before_agent_start` 为已激活、已注册且没有 prompt snippet 的工具

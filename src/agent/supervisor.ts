@@ -28,7 +28,11 @@ import {
   isSameChildSessionIdentity,
   type SessionIdentity,
 } from '@shared/builtinAgents';
-import { WORKSPACE_WRITE_TOOL_ID } from '@shared/childProfileTools';
+import {
+  type ChildProfileToolOptions,
+  childProfileShell,
+  WORKSPACE_WRITE_TOOL_ID,
+} from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
 import { HUMAN_REQUEST_TIMEOUT_MS } from '@shared/humanRequestTimeout';
 import { DEFAULT_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
@@ -2595,8 +2599,20 @@ export class SessionSupervisor {
         }),
       -1
     );
+    const childToolProfile: ChildProfileToolOptions = {
+      editMode: resolveEditMode(requestedEditMode, hashlineEditEnabled),
+      shell: childProfileShell({
+        platform: process.platform,
+        remote: Boolean(remote),
+        preference: windowsLocalShell,
+      }),
+      exploreFold: exploreFoldEnabled,
+      isolatedSandbox: toolEnabled('isolated_sandbox'),
+      workspaceWrite: toolEnabled(WORKSPACE_WRITE_TOOL_ID),
+    };
     const unifiedSubagentTool = createUnifiedSubagentTool({
       agentTypes,
+      childToolProfile,
       models: subagentModels,
       invoke: async (request, signal, detach) => {
         const response = await agentControl.invoke(request, signal, detach);
@@ -2763,6 +2779,7 @@ export class SessionSupervisor {
               presets: listWorkflowPresets(workflowRoots, this.disabledWorkflowPresets),
               models: subagentModels,
               agentTypes,
+              childToolProfile,
               activeRuns: workflowRuns,
               notify: (text, urgent) => this.notifier.notify(sessionId, text, { urgent }),
               emit: (run) => {

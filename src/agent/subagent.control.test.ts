@@ -1,6 +1,8 @@
+import type { JsonSchema } from '@shared/capabilities/types';
 import type { SpawnModelConfig } from '@shared/types';
 import type { AgentControlToolResponse, AgentWorkerEvent } from '@shared/types/agent';
 import { describe, expect, it, vi } from 'vitest';
+import { matchesJsonSchema } from '../tooling/productCapabilityCoverage.fixture';
 import { AgentControlInvoker } from './agentControl';
 import { createUnifiedSubagentTool, type UnifiedSubagentDeps } from './subagent';
 
@@ -23,6 +25,165 @@ function setup(overrides: Partial<UnifiedSubagentDeps> = {}) {
 }
 
 describe('unified subagent tool', () => {
+  it('已声明可选字段的 null 占位不会穿透到非 nullable schema', () => {
+    const { tool } = setup();
+    const prepared = tool.prepareArguments?.({
+      operation: 'spawn',
+      prompt: 'p',
+      name: null,
+      mode: null,
+      wait: null,
+      schema: null,
+      gate: null,
+    });
+    expect(prepared).toEqual({ operation: 'spawn', description: 'p', prompt: 'p' });
+    expect(matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared)).toBe(true);
+    expect(tool.prepareArguments?.({ operation: 'report', runId: 'r', agentId: null })).toEqual({
+      operation: 'report',
+      runId: 'r',
+    });
+    expect(() =>
+      tool.prepareArguments?.({ operation: 'report', runId: 'r', invented: null })
+    ).toThrow(/invented/i);
+  });
+  it('wait 的空 runIds 占位不遮蔽有效 runId，无有效身份仍拒绝', () => {
+    const { tool } = setup();
+    expect(tool.prepareArguments?.({ operation: 'wait', runId: 'r', runIds: [] })).toEqual({
+      operation: 'wait',
+      runId: 'r',
+    });
+    expect(() => tool.prepareArguments?.({ operation: 'wait', runIds: [] })).toThrow(/runId/i);
+  });
+  it('agent_type 先 trim，仍使用精确名称而非猜测别名', () => {
+    const { tool } = setup({
+      agentTypes: [
+        {
+          name: 'scout',
+          description: '',
+          systemPrompt: '',
+          tools: 'readonly',
+          allowModelOverride: true,
+        },
+      ],
+    });
+    const prepared = tool.prepareArguments?.({
+      operation: 'spawn',
+      agent_type: ' scout ',
+      prompt: 'p',
+      model: 'OpenAI/gpt-cheap',
+    });
+    expect(prepared).toMatchObject({ agent_type: 'scout' });
+    expect(matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared)).toBe(true);
+  });
+  it('父代理按类型看到准确的 shell、编辑范围和模型要求，不泄露凭证', () => {
+    const { tool } = setup({
+      agentTypes: [
+        {
+          name: 'scout',
+          description: 'Recon',
+          systemPrompt: '',
+          tools: 'readonly',
+          allowModelOverride: true,
+        },
+        {
+          name: 'worker',
+          description: 'Implementation',
+          systemPrompt: '',
+          tools: 'all',
+          allowModelOverride: false,
+        },
+        {
+          name: 'tester',
+          description: 'Tests',
+          systemPrompt: '',
+          tools: 'all',
+          writeScope: ['**/*.test.ts'],
+          allowModelOverride: true,
+        },
+      ],
+    });
+    const description = (tool.parameters as { properties: { agent_type: { description: string } } })
+      .properties.agent_type.description;
+    expect(description).toContain('scout');
+    expect(description).toContain('read, grep, find, ls');
+    expect(description).toContain('no shell');
+    expect(description).toContain('model required');
+    expect(description).toContain('model override not allowed');
+    expect(description).toContain('**/*.test.ts');
+    expect(description).not.toContain(cheapConfig.baseUrl);
+    expect(description).not.toContain('apiKey');
+    expect(tool.promptGuidelines?.join('\n')).toContain('git log/show/diff');
+  });
+
+  it('缺少默认 worker 的必选模型在 prepareArguments 阶段明确拒绝，不创建子代理', () => {
+    const { tool, deps } = setup({
+      agentTypes: [
+        {
+          name: 'worker',
+          description: '',
+          systemPrompt: '',
+          tools: 'all',
+          allowModelOverride: true,
+        },
+      ],
+    });
+    expect(() =>
+      tool.prepareArguments?.({ operation: 'spawn', description: 'review', prompt: 'review' })
+    ).toThrow(/worker.*requires a model/i);
+    expect(deps.invoke).not.toHaveBeenCalled();
+  });
+
+  it('模型后缀与 JSON schema 在参数校验前归一化，产物满足自身 schema 且幂等', () => {
+    const { tool } = setup();
+    const input = {
+      operation: 'spawn',
+      prompt: 'review',
+      model: 'OpenAI/gpt-cheap:high',
+      schema: '{"type":"object"}',
+    };
+    const prepared = tool.prepareArguments?.(input);
+    expect(prepared).toMatchObject({
+      model: 'OpenAI/gpt-cheap',
+      thinking: 'high',
+      schema: { type: 'object' },
+    });
+    expect(matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared)).toBe(true);
+    expect(tool.prepareArguments?.(prepared)).toEqual(prepared);
+    expect(input.model).toBe('OpenAI/gpt-cheap:high');
+  });
+
+  it('非 spawn 的有效多余字段在执行前指出字段，空串占位则安全丢弃', async () => {
+    const { tool, deps } = setup();
+    expect(() =>
+      tool.prepareArguments?.({ operation: 'report', runId: 'r', description: 'unrelated' })
+    ).toThrow(/description.*report|report.*description/i);
+    await expect(
+      tool.execute(
+        'mixed',
+        { operation: 'wait', runId: 'r', agentId: 'a' },
+        undefined,
+        undefined,
+        {} as never
+      )
+    ).rejects.toThrow(/agentId.*wait|wait.*agentId/i);
+    const prepared = tool.prepareArguments?.({
+      operation: 'report',
+      runId: 'r',
+      description: '',
+      prompt: ' ',
+    });
+    expect(prepared).toEqual({ operation: 'report', runId: 'r' });
+    expect(matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared)).toBe(true);
+    expect(deps.invoke).not.toHaveBeenCalled();
+  });
+
+  it('非对象参数直接报告对象要求而不是抛 TypeError', () => {
+    const { tool } = setup();
+    for (const value of [null, [], 'spawn']) {
+      expect(() => tool.prepareArguments?.(value)).toThrow(/object/i);
+    }
+  });
+
   it('模型只看到 subagent，一个 schema 覆盖全部生命周期操作', () => {
     const { tool } = setup();
     expect(tool.name).toBe('subagent');

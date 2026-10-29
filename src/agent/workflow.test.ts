@@ -95,6 +95,17 @@ describe('workflowChildOutcome', () => {
 });
 
 describe('workflow tool', () => {
+  it('工作流和 subagent 共用能力边界，readonly 不能承诺跑 Git 或测试', () => {
+    const tool = createWorkflowTool({
+      invoke: vi.fn(),
+      emit: vi.fn(),
+      agentTypes: [{ name: 'scout', tools: 'readonly', allowModelOverride: true }],
+    });
+    expect(tool.description).toContain('read, grep, find, ls');
+    expect(tool.description).toContain('no shell');
+    expect(tool.description).toContain('model required');
+    expect(tool.promptGuidelines?.join('\n')).toContain('git log/show/diff');
+  });
   it('schema 声明完整类型，并且只在显式编排时使用', () => {
     const tool = createWorkflowTool({ invoke: vi.fn(), emit: vi.fn() });
     const parameters = tool.parameters as {
