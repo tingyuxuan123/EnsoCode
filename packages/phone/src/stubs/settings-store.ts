@@ -14,7 +14,12 @@ interface SettingsSlice
   extends PairTimelinePrefs,
     Pick<
       SettingsState,
-      'contextMenuOpen' | 'chatWide' | 'virtualModels' | 'disabledBuiltinTools' | 'voiceInputDevice'
+      | 'contextMenuOpen'
+      | 'chatWide'
+      | 'virtualModels'
+      | 'disabledBuiltinTools'
+      | 'voiceInputDevice'
+      | 'projects'
     > {
   language: Locale | 'system';
   theme: Theme;
@@ -22,7 +27,6 @@ interface SettingsSlice
   terminalFontFamily: string;
   syncTerminalTheme: boolean;
   providers: never[];
-  projects: never[];
   skills: never[];
   presets: never[];
   agentTypes: never[];

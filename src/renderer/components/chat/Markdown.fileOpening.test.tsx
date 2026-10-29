@@ -3,7 +3,7 @@ import { parseHTML } from 'linkedom';
 import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Markdown, MarkdownLinkContext } from './Markdown';
+import { LocalFileTrigger, Markdown, MarkdownLinkContext } from './Markdown';
 
 const harness = vi.hoisted(() => ({
   open: vi.fn(),
@@ -13,6 +13,7 @@ const harness = vi.hoisted(() => ({
   openSidePanelFile: vi.fn(),
   toast: vi.fn(),
   contextMenuOpen: [] as ContextMenuOpen,
+  projects: [] as { id: string; kind: string }[],
 }));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/lib/sidePanelDock', () => ({ openSidePanelFile: harness.openSidePanelFile }));
@@ -20,8 +21,12 @@ vi.mock('@/components/ui/toast', () => ({ addToast: harness.toast }));
 vi.mock('./CodeBlock', () => ({ CodeBlock: () => null }));
 vi.mock('./MermaidRenderer', () => ({ MermaidRenderer: () => null }));
 vi.mock('@/stores/settings', () => ({
-  useSettingsStore: (selector: (state: { contextMenuOpen: ContextMenuOpen }) => unknown) =>
-    selector({ contextMenuOpen: harness.contextMenuOpen }),
+  useSettingsStore: (
+    selector: (state: {
+      contextMenuOpen: ContextMenuOpen;
+      projects: typeof harness.projects;
+    }) => unknown
+  ) => selector({ contextMenuOpen: harness.contextMenuOpen, projects: harness.projects }),
 }));
 vi.mock('@/components/ui/context-menu', async () => {
   const { cloneElement, createContext, useContext, useState } = await import('react');
@@ -95,7 +100,10 @@ beforeEach(() => {
   const dom = parseHTML('<html><body><div id="root"></div></body></html>');
   vi.stubGlobal('window', dom.window);
   vi.stubGlobal('document', dom.document);
-  vi.stubGlobal('navigator', { userAgent: 'Windows', clipboard: { writeText: vi.fn() } });
+  vi.stubGlobal('navigator', {
+    userAgent: 'Windows',
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   Object.assign(dom.window, {
     electronAPI: {
@@ -118,6 +126,7 @@ beforeEach(() => {
     { id: 'vscode', target: 'vscode', enabled: true },
   ];
   harness.readImage.mockResolvedValue({ ok: true, dataUrl: 'data:image/png;base64,AAAA' });
+  harness.projects = [];
 });
 
 afterEach(async () => {
@@ -126,6 +135,18 @@ afterEach(async () => {
 });
 
 describe('聊天文件链接的打开方式', () => {
+  it.each(['[source](src/a.ts)', '`src/a.ts`'])(
+    'SSH 隐藏全部 reveal 菜单和按钮：%s',
+    async (text) => {
+      harness.projects = [{ id: 'project', kind: 'ssh' }];
+      await render(text);
+      expect(container.querySelector('button[aria-label="Reveal in File Explorer"]')).toBeNull();
+      await click(text.startsWith('[') ? 'a' : 'button', 'contextmenu');
+      expect(
+        [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
+      ).toEqual(['Open in {{app}}']);
+    }
+  );
   it.each([
     ['[source](src/a.ts:12)', 'a'],
     ['`src/a.ts:12`', 'button'],
@@ -355,5 +376,150 @@ describe('聊天文件链接的打开方式', () => {
       'data:image/svg+xml;base64,AAAA'
     );
     expect(container.querySelector('iframe, object, embed')).toBeNull();
+  });
+});
+
+describe('气泡文件卡片', () => {
+  async function chip(path: string, authorized = true) {
+    expect(LocalFileTrigger).toBeTypeOf('function');
+    await act(async () =>
+      root.render(
+        <MarkdownLinkContext.Provider value={authorized ? context : null}>
+          <LocalFileTrigger path={path}>
+            <span data-chip="">file</span>
+          </LocalFileTrigger>
+        </MarkdownLinkContext.Provider>
+      )
+    );
+  }
+  const labels = () =>
+    [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+
+  it.each(['src/100%.txt', 'src/a%20b.txt', 'src/report#draft.txt', 'src/what?.txt'])(
+    '文件 mention 保留原始文件名而不作 URL 解码或截断：%s',
+    async (path) => {
+      await chip(path);
+      await click('[data-chip]');
+      expect(harness.open).toHaveBeenCalledWith({
+        conversationId: 'child',
+        projectId: 'project',
+        rel: path,
+      });
+      await click('[data-chip]', 'contextmenu');
+      await click('[role="menuitem"]:last-child');
+      expect(harness.openContext).toHaveBeenCalledWith({
+        conversationId: 'child',
+        projectId: 'project',
+        rel: path,
+        itemId: 'vscode',
+      });
+    }
+  );
+
+  it('mention 的 #L 行号后缀只定位行，不把其他 # 当 URL 片段', async () => {
+    await chip('src/a#draft.ts#L6-L11');
+    await click('[data-chip]');
+    expect(harness.openSidePanelFile).toHaveBeenCalledWith('child', 'src/a#draft.ts', 6);
+    expect(harness.open).not.toHaveBeenCalled();
+  });
+
+  it('Windows 卡片点击和 Enter 共用现有 open 链路，只传工作区相对路径', async () => {
+    await chip('C:\\workspace\\src\\a.ts');
+    await click('[data-chip]');
+    expect(harness.open).toHaveBeenCalledWith({
+      conversationId: 'child',
+      projectId: 'project',
+      rel: 'src/a.ts',
+    });
+    expect(harness.openSidePanelFile).toHaveBeenCalledWith('child', 'src/a.ts');
+    await act(async () => {
+      const event = new window.Event('keydown', { bubbles: true, cancelable: true });
+      Object.assign(event, { key: 'Enter' });
+      container.querySelector('[role="link"]')?.dispatchEvent(event);
+    });
+    expect(harness.open).toHaveBeenCalledTimes(2);
+  });
+
+  it('固定复制路径、补充 reveal，并且启用设置时不重复', async () => {
+    harness.contextMenuOpen = [];
+    await chip('src/a.ts');
+    await click('[data-chip]', 'contextmenu');
+    expect(labels()).toEqual(['Reveal in File Explorer', 'Copy Path']);
+    await click('[role="menuitem"]');
+    expect(harness.reveal).toHaveBeenCalledWith({
+      conversationId: 'child',
+      projectId: 'project',
+      rel: 'src/a.ts',
+    });
+    harness.contextMenuOpen = [{ id: 'reveal', enabled: true, target: 'reveal' }];
+    await chip('src/a.ts');
+    expect(labels()).toEqual(['Copy Path', 'Reveal in File Explorer']);
+  });
+
+  it('SSH 即便启用 reveal 设置也只显示复制与应用项', async () => {
+    harness.projects = [{ id: 'project', kind: 'ssh' }];
+    await chip('src/a.ts');
+    await click('[data-chip]', 'contextmenu');
+    expect(labels()).toEqual(['Copy Path', 'Open in {{app}}']);
+  });
+
+  it('卡片配置项仍只传条目标识与相对路径，图片复用 readImage 预览', async () => {
+    await chip('C:\\workspace\\src\\a.ts');
+    await click('[data-chip]', 'contextmenu');
+    await click('[role="menuitem"]:last-child');
+    expect(harness.openContext).toHaveBeenCalledWith({
+      conversationId: 'child',
+      projectId: 'project',
+      rel: 'src/a.ts',
+      itemId: 'vscode',
+    });
+    harness.open.mockResolvedValueOnce({
+      ok: true,
+      target: 'internal',
+      viewer: 'image',
+      rel: 'image.png',
+    });
+    await chip('image.png');
+    await click('[data-chip]');
+    expect(harness.readImage).toHaveBeenCalledWith({
+      conversationId: 'child',
+      projectId: 'project',
+      rel: 'image.png',
+    });
+    expect(container.querySelector('[role="dialog"] img')?.getAttribute('src')).toBe(
+      'data:image/png;base64,AAAA'
+    );
+    expect(container.querySelector('iframe,object,embed')).toBeNull();
+  });
+
+  it.each([
+    ['C:\\outside\\file.pdf', true],
+    ['../secret.txt', true],
+    ['src/a.ts', false],
+    ['javascript:alert(1)', true],
+  ] as const)('越界/无上下文/危险路径只复制原文且不发 Main：%s %s', async (path, authorized) => {
+    await chip(path, authorized);
+    await click('[data-chip]');
+    await click('[data-chip]', 'contextmenu');
+    expect(labels()).toEqual(['Copy Path']);
+    await click('[role="menuitem"]');
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(path);
+    expect(harness.open).not.toHaveBeenCalled();
+    expect(harness.reveal).not.toHaveBeenCalled();
+    expect(harness.openContext).not.toHaveBeenCalled();
+    expect(harness.openSidePanelFile).not.toHaveBeenCalled();
+  });
+
+  it('复制失败只提示错误', async () => {
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error('denied'));
+    await chip('src/a.ts');
+    await click('[data-chip]', 'contextmenu');
+    const item = [...container.querySelectorAll('[role="menuitem"]')].find(
+      (item) => item.textContent === 'Copy Path'
+    );
+    await act(async () => item?.dispatchEvent(new window.Event('click', { bubbles: true })));
+    expect(harness.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error', description: 'denied' })
+    );
   });
 });

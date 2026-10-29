@@ -14,6 +14,7 @@ import {
   createEditorPayload,
   extractMentionQuery,
   extractRepresentativeTitle,
+  fileMentionBasename,
   mentionDisplayText,
   mentionPopupLayout,
   resolvePopupKeyAction,
@@ -68,6 +69,47 @@ const duplicateNames = toFileMentionCandidates([
 ]);
 
 describe('typed multi-entity mentions', () => {
+  it('含空格和中文的 Windows/Unix 文件路径整体往返，旧无空格格式不变', () => {
+    for (const path of [
+      'C:\\Program Files\\资料\\a b.pdf',
+      '/home/me/资料/报告.docx',
+      'src/中文目录/',
+      'src/main.ts',
+    ]) {
+      const segments = [
+        { type: 'file' as const, path },
+        { type: 'text' as const, text: ' 对比' },
+      ];
+      const wire = serializeSegments(segments);
+      expect(wire).toBe(`${/\s/.test(path) ? `@"${path}"` : `@${path}`} 对比`);
+      expect(splitInlineMentions(wire)).toEqual(segments);
+    }
+    expect(fileMentionBasename('C:\\资料\\目录\\')).toBe('目录');
+    expect(splitInlineFileTokens('@D:\\资料\\报告.docx')).toEqual([
+      { type: 'file', path: 'D:\\资料\\报告.docx' },
+    ]);
+  });
+
+  it('引号路径要求完整 token 边界，含引号或换行的文件名安全降级为普通路径文本', () => {
+    for (const text of [
+      'say @"hello world" ok',
+      '@"a b.pdf"suffix',
+      '@"a b.pdf',
+      'mail user@a.com @types/node @scope/pkg',
+      '@host:8080.x',
+    ]) {
+      expect(splitInlineFileTokens(text)).toEqual([{ type: 'text', text }]);
+    }
+    expect(splitInlineFileTokens('see @"a b.pdf", next')).toEqual([
+      { type: 'text', text: 'see ' },
+      { type: 'file', path: 'a b.pdf' },
+      { type: 'text', text: ', next' },
+    ]);
+    for (const path of ['a.txt "quoted".pdf', 'a.txt\nother.pdf']) {
+      expect(serializeSegments([{ type: 'file', path }])).toBe(path);
+    }
+  });
+
   it('keeps Main registry order, all legal types, duplicate labels, and Files after Agents', () => {
     const groups = groupMentionCandidates('', agents, duplicateNames);
     expect(groups.agents.map((candidate) => candidate.typeKey)).toEqual([
@@ -457,6 +499,12 @@ describe('typed multi-entity mentions', () => {
   it('超长粘贴附件的绝对路径含空格时整体渲染成一个文件卡片', () => {
     const pasted =
       '/Users/me/Library/Application Support/enso-code/agent/sessions/pasted-text/45451c80-50eb-464e-bd55-366c66d49bff/d76184b6/pasted-text.txt';
+    const payload = serializeSegments([
+      { type: 'file', path: pasted },
+      { type: 'text', text: '\u00a0总结一下' },
+    ]);
+    expect(cleanTitleSummarySource(payload)).toBe('总结一下');
+    expect(extractRepresentativeTitle(payload)).toBe('总结一下');
     expect(splitInlineFileTokens(`@${pasted}\u00a0总结一下 @src/a.ts`)).toEqual([
       { type: 'file', path: pasted },
       { type: 'text', text: '\u00a0总结一下 ' },

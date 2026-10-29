@@ -132,12 +132,21 @@ export type MentionSegment =
   | { type: 'chat'; label: string; sessionFile: string }
   | { type: 'ui-element'; id: string; label: string; path: string; text: string; imageId: string };
 
-/** 编辑器段 → wire text：文件原位 @path，会话/选区原位内联引用块 */
+/** 编辑器段 → wire text：文件原位 @path（空白路径用 @"path"），会话/选区原位引用块 */
 export function serializeSegments(segments: readonly MentionSegment[]): string {
   return segments
     .map((segment) => {
       if (segment.type === 'text') return segment.text;
-      if (segment.type === 'file') return `@${segment.path}`;
+      if (segment.type === 'file') {
+        // 不引入转义协议；不能安全表示的引号/换行路径降级为原文，避免错误的半截卡片。
+        if (/["\r\n]/.test(segment.path)) return segment.path;
+        // fork 的粘贴附件有独立完整路径协议，保留旧 wire，标题清洗也依赖它。
+        const pasted = splitPastedTextRefs(`@${segment.path}`);
+        if (pasted.length === 1 && pasted[0].type === 'file' && pasted[0].path === segment.path) {
+          return `@${segment.path}`;
+        }
+        return /\s/.test(segment.path) ? `@"${segment.path}"` : `@${segment.path}`;
+      }
       if (segment.type === 'chat') return chatRefLine(segment.label, segment.sessionFile);
       return formatUiElementRefLine(segment);
     })
@@ -272,7 +281,10 @@ export function splitInlineMentions(text: string): MentionSegment[] {
 
 /** 内联文件 token：带扩展名才算（@src/main.ts、@.DS_Store、@.gitignore），
  * 目录以尾 / 识别（@src/、@src/components/）。避免误伤 @types/node 这类 npm scope（无点） */
-const INLINE_FILE_TOKEN = /^(?:[\w./-]*\.[\w-]{1,16}(?:#L\d+(?:-L\d+)?)?|[\w./-]+\/)$/;
+const INLINE_FILE_TOKEN =
+  /^(?:[A-Za-z]:[\\/])?(?:[\p{L}\p{N}_./\\-]*\.[\w-]{1,16}(?:#L\d+(?:-L\d+)?)?|[\p{L}\p{N}_./\\-]+[\\/])$/u;
+const QUOTED_FILE_TOKEN =
+  /^"([^"\r\n]*(?:\.[\w-]{1,16}(?:#L\d+(?:-L\d+)?)?|[\\/]))"(?=$|\s|[),.;!?]+(?:\s|$))/;
 const FILE_LINE_REF = /#L\d+(?:-L\d+)?$/;
 
 export function stripFileLineRef(path: string): string {
@@ -307,6 +319,15 @@ function splitHeuristicFileTokens(text: string): InlineSegment[] {
       break;
     }
     const previous = at > 0 ? text[at - 1] : ' ';
+    const quoted = /\s/.test(previous) ? QUOTED_FILE_TOKEN.exec(text.slice(at + 1)) : null;
+    if (quoted) {
+      plain += text.slice(index, at);
+      if (plain) segments.push({ type: 'text', text: plain });
+      plain = '';
+      segments.push({ type: 'file', path: quoted[1] });
+      index = at + 1 + quoted[0].length;
+      continue;
+    }
     const raw = /^\S*/.exec(text.slice(at + 1))?.[0] ?? '';
     const token = raw.replace(/[),.;!?]+$/, '');
     if ((previous === ' ' || previous === '\n') && token && INLINE_FILE_TOKEN.test(token)) {

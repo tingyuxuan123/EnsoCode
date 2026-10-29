@@ -1,5 +1,5 @@
 import { parseHTML } from 'linkedom';
-import { act, createElement } from 'react';
+import { act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineItem } from '@/stores/sessions/timeline';
@@ -29,7 +29,12 @@ vi.mock('@/stores/sessions', () => ({
     getState: () => state,
   }),
 }));
-vi.mock('./Markdown', () => ({ Markdown: ({ text }: { text: string }) => <p>{text}</p> }));
+vi.mock('./Markdown', () => ({
+  Markdown: ({ text }: { text: string }) => <p>{text}</p>,
+  LocalFileTrigger: ({ path, children }: { path: string; children: ReactNode }) => (
+    <span data-local-file={path}>{children}</span>
+  ),
+}));
 vi.mock('./EditDiff', () => ({ EditDiff: () => null }));
 vi.mock('./ReadFileView', () => ({ ReadFileView: () => null }));
 
@@ -71,6 +76,21 @@ const render = (item: TimelineItem) =>
   act(async () => root.render(createElement(TimelineRow, { item })));
 
 describe('回复正文的紧凑操作区', () => {
+  it.each([
+    [
+      '请看 @"C:\\workspace\\中文目录\\a b.pdf" 再总结',
+      'C:\\workspace\\中文目录\\a b.pdf',
+      'a b.pdf',
+    ],
+    ['请看\n\n@C:\\workspace\\中文目录\\a.pdf', 'C:\\workspace\\中文目录\\a.pdf', 'a.pdf'],
+    ['请看 @src/components/ 再总结', 'src/components/', 'components'],
+  ])('新旧文件卡片接入共用 trigger，保留 Proma 气泡：%s', async (text, path, label) => {
+    await render({ kind: 'user', key: 'user-mention', text, images: [], timestamp: undefined });
+    const trigger = container.querySelector('[data-local-file]');
+    expect(trigger?.getAttribute('data-local-file')).toBe(path);
+    expect(trigger?.textContent).toBe(label);
+    expect(container.innerHTML).toContain('max-w-[86%] rounded-[6px] bg-muted');
+  });
   it('不在正文下方显示时间、耗时、TTFT 或生成速度', async () => {
     await render(reply());
     expect(container.textContent).toBe('先读取组件规范，再继续修改。');

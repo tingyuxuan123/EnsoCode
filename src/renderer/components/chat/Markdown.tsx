@@ -170,20 +170,26 @@ async function openFileLinkContext(
 function FileLinkContextMenu({
   context,
   file,
+  extra,
   children,
 }: {
-  context: MarkdownLinkContextValue;
+  context: MarkdownLinkContextValue | null;
   file: string;
+  extra?: ReactNode;
   children: ReactElement;
 }) {
   const { t } = useI18n();
   const configured = useSettingsStore((state) => state.contextMenuOpen);
-  const items = configured.filter((item) => item.enabled);
-  if (items.length === 0) return children;
+  const ssh = useSshProject(context);
+  const items = context
+    ? configured.filter((item) => item.enabled && !(ssh && item.target === 'reveal'))
+    : [];
+  if (items.length === 0 && !extra) return children;
   return (
     <ContextMenu>
       <ContextMenuTrigger render={children} onContextMenu={(event) => event.stopPropagation()} />
       <ContextMenuPopup className="min-w-48">
+        {extra}
         {items.map((item) => {
           const name =
             item.target === 'application'
@@ -196,7 +202,7 @@ function FileLinkContextMenu({
             <ContextMenuItem
               key={item.id}
               closeOnClick
-              onClick={() => void openFileLinkContext(context, file, item.id, t)}
+              onClick={() => context && void openFileLinkContext(context, file, item.id, t)}
             >
               {item.target === 'reveal' ? t(revealLabel()) : t('Open in {{app}}', { app: name })}
             </ContextMenuItem>
@@ -231,21 +237,20 @@ function soleInlineCodeText(node: unknown): string | null {
   return text?.type === 'text' && typeof text.value === 'string' ? text.value : null;
 }
 
-function MarkdownAnchor({
-  children,
-  href,
-  node,
-}: {
-  children?: ReactNode;
-  href?: string;
-  node?: unknown;
-}) {
+function useSshProject(context: MarkdownLinkContextValue | null) {
+  return useSettingsStore(
+    (state) =>
+      context !== null &&
+      state.projects.some((project) => project.id === context.projectId && project.kind === 'ssh')
+  );
+}
+
+/** 共享现有授权、打开规则与图片预览；只向 Main 发送经过边界检查的相对路径。 */
+function useLocalFileOpen(path: string | null, line?: number) {
   const { t } = useI18n();
   const linkContext = useContext(MarkdownLinkContext);
+  const ssh = useSshProject(linkContext);
   const [imagePreview, setImagePreview] = useState<{ rel: string; dataUrl: string } | null>(null);
-  const { classification, line } = classifyFileReference(href ?? '');
-  const local = classification.kind === 'local' && linkContext !== null;
-  const codeText = local ? soleInlineCodeText(node) : null;
 
   const fail = (error: string) => {
     addToast({
@@ -256,8 +261,8 @@ function MarkdownAnchor({
   };
 
   const openLocal = async (reveal: boolean) => {
-    if (!linkContext || classification.kind !== 'local') return;
-    const rel = toWorkspaceRelativePath(classification.path, linkContext.cwd);
+    if (!linkContext || path === null || (reveal && ssh)) return;
+    const rel = toWorkspaceRelativePath(path, linkContext.cwd);
     if (rel == null) {
       fail('invalid-path');
       return;
@@ -316,6 +321,101 @@ function MarkdownAnchor({
     }
   };
 
+  const preview = (
+    <WorkspaceImagePreview image={imagePreview} onClose={() => setImagePreview(null)} />
+  );
+  return { linkContext, openLocal, preview, ssh };
+}
+
+/** 卡片的越界路径仅可复制，不扩大工作区权限，也不导航到磁盘 URL。 */
+export function LocalFileTrigger({ path, children }: { path: string; children: ReactElement }) {
+  const { t } = useI18n();
+  // mention 是磁盘路径而非 URL：不能解码 %20，也不能截掉文件名内的 # / ?。
+  const reference = /^(.*)#L([1-9]\d*)(?:-L[1-9]\d*)?$/.exec(path);
+  const candidate = reference ? reference[1] : path;
+  const line =
+    reference && Number.isSafeInteger(Number(reference[2])) ? Number(reference[2]) : undefined;
+  const protocol = /^[a-z][a-z\d+.-]*:/i.test(candidate) && !/^[a-z]:[\\/]/i.test(candidate);
+  const file = protocol || candidate.includes('\0') ? null : candidate;
+  const { linkContext, openLocal, preview, ssh } = useLocalFileOpen(file, line);
+  const revealConfigured = useSettingsStore((state) =>
+    state.contextMenuOpen.some((item) => item.enabled && item.target === 'reveal')
+  );
+  const inWorkspace =
+    linkContext !== null &&
+    file !== null &&
+    toWorkspaceRelativePath(file, linkContext.cwd) !== null;
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(path);
+      addToast({ type: 'success', title: t('Copied') });
+    } catch (error: unknown) {
+      addToast({
+        type: 'error',
+        title: t('Copy failed'),
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  const extra = (
+    <>
+      {inWorkspace && !ssh && !revealConfigured && (
+        <ContextMenuItem closeOnClick onClick={() => void openLocal(true)}>
+          {t(revealLabel())}
+        </ContextMenuItem>
+      )}
+      <ContextMenuItem closeOnClick onClick={() => void copyPath()}>
+        {t('Copy Path')}
+      </ContextMenuItem>
+    </>
+  );
+  return (
+    <>
+      <FileLinkContextMenu
+        context={inWorkspace ? linkContext : null}
+        file={file ?? path}
+        extra={extra}
+      >
+        <span
+          role={inWorkspace ? 'link' : undefined}
+          tabIndex={inWorkspace ? 0 : undefined}
+          className={inWorkspace ? 'cursor-pointer' : undefined}
+          onClick={() => {
+            if (inWorkspace) void openLocal(false);
+          }}
+          onKeyDown={(event) => {
+            if (inWorkspace && event.key === 'Enter') {
+              event.preventDefault();
+              void openLocal(false);
+            }
+          }}
+        >
+          {children}
+        </span>
+      </FileLinkContextMenu>
+      {preview}
+    </>
+  );
+}
+
+function MarkdownAnchor({
+  children,
+  href,
+  node,
+}: {
+  children?: ReactNode;
+  href?: string;
+  node?: unknown;
+}) {
+  const { t } = useI18n();
+  const { classification, line } = classifyFileReference(href ?? '');
+  const { linkContext, openLocal, preview, ssh } = useLocalFileOpen(
+    classification.kind === 'local' ? classification.path : null,
+    line
+  );
+  const local = classification.kind === 'local' && linkContext !== null;
+  const codeText = local ? soleInlineCodeText(node) : null;
+
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (classification.kind === 'external') return;
     event.preventDefault();
@@ -357,16 +457,18 @@ function MarkdownAnchor({
     return (
       <span className="mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/60 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-[calc(11rem/14)]">
         {anchor}
-        <button
-          type="button"
-          className="inline-flex shrink-0 rounded-[3px] p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-          aria-label={t(revealLabel())}
-          title={t(revealLabel())}
-          onClick={() => void openLocal(true)}
-        >
-          <FolderOpen className="h-3 w-3" />
-        </button>
-        <WorkspaceImagePreview image={imagePreview} onClose={() => setImagePreview(null)} />
+        {!ssh && (
+          <button
+            type="button"
+            className="inline-flex shrink-0 rounded-[3px] p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+            aria-label={t(revealLabel())}
+            title={t(revealLabel())}
+            onClick={() => void openLocal(true)}
+          >
+            <FolderOpen className="h-3 w-3" />
+          </button>
+        )}
+        {preview}
       </span>
     );
   }
@@ -374,16 +476,18 @@ function MarkdownAnchor({
   return (
     <span className="inline">
       {anchor}
-      <button
-        type="button"
-        className="ml-1 inline-flex rounded p-0.5 align-middle text-muted-foreground hover:bg-muted hover:text-foreground"
-        aria-label={t(revealLabel())}
-        title={t(revealLabel())}
-        onClick={() => void openLocal(true)}
-      >
-        <FolderOpen className="h-3.5 w-3.5" />
-      </button>
-      <WorkspaceImagePreview image={imagePreview} onClose={() => setImagePreview(null)} />
+      {!ssh && (
+        <button
+          type="button"
+          className="ml-1 inline-flex rounded p-0.5 align-middle text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label={t(revealLabel())}
+          title={t(revealLabel())}
+          onClick={() => void openLocal(true)}
+        >
+          <FolderOpen className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {preview}
     </span>
   );
 }

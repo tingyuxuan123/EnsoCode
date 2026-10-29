@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
+import {
+  ContextMenu,
+  ContextMenuItem,
+  ContextMenuPopup,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { addToast } from '@/components/ui/toast';
 import { useOverlayGuard } from '@/hooks/useOverlayGuard';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
+import { copyImageToClipboard } from './imageClipboard';
 
 interface ZoomableImageProps {
   src: string;
@@ -13,6 +22,7 @@ interface ZoomableImageProps {
 
 /** 消息里的图片：点击全屏预览，点遮罩或 Esc 关闭 */
 export function ZoomableImage({ src, className, frameClassName, onError }: ZoomableImageProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   useOverlayGuard(open);
 
@@ -25,15 +35,40 @@ export function ZoomableImage({ src, className, frameClassName, onError }: Zooma
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
+  const copy = async () => {
+    try {
+      await copyImageToClipboard(src);
+      addToast({ type: 'success', title: t('Image copied') });
+    } catch (error: unknown) {
+      addToast({
+        type: 'error',
+        title: t('Could not copy image'),
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={cn('cursor-zoom-in', frameClassName)}
-      >
-        <img src={src} alt="" className={className} onError={onError} />
-      </button>
+      <ContextMenu>
+        <ContextMenuTrigger
+          render={
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className={cn('cursor-zoom-in', frameClassName)}
+            >
+              <img src={src} alt="" className={className} onError={onError} />
+            </button>
+          }
+          onContextMenu={(event) => event.stopPropagation()}
+        />
+        <ContextMenuPopup className="min-w-36">
+          <ContextMenuItem closeOnClick onClick={() => void copy()}>
+            {t('Copy image')}
+          </ContextMenuItem>
+        </ContextMenuPopup>
+      </ContextMenu>
       {open && (
         <button
           type="button"
