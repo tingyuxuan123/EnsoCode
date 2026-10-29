@@ -11,9 +11,9 @@ describe('BrowserTabClaims', () => {
 
   it('lets the first member hold a tab and rejects others immediately', () => {
     const claims = new BrowserTabClaims();
-    expect(claims.claim('t1', alice)).toEqual({ ok: true, tookOver: false });
+    expect(claims.claim('t1', alice)).toEqual({ ok: true });
     expect(claims.claim('t1', bob)).toEqual({ ok: false, holder: alice });
-    expect(claims.claim('t1', alice)).toEqual({ ok: true, tookOver: false });
+    expect(claims.claim('t1', alice)).toEqual({ ok: true });
     expect(claims.holder('t1')).toEqual(alice);
   });
 
@@ -83,22 +83,6 @@ describe('BrowserTabClaims', () => {
     expect(claims.takeClosed(alice.sessionId)).toBe(false);
     expect(claims.pointer(alice.sessionId)).toBeUndefined();
     expect(claims.claim('t1', bob).ok).toBe(true);
-  });
-
-  it('tells the holder on its next action after the user took over, only once', () => {
-    const claims = new BrowserTabClaims();
-    claims.claim('t1', alice);
-    claims.userTookOver('t1');
-    expect(claims.holder('t1')).toEqual(alice);
-    expect(claims.claim('t1', bob)).toEqual({ ok: false, holder: alice });
-    expect(claims.claim('t1', alice)).toEqual({ ok: true, tookOver: true });
-    expect(claims.claim('t1', alice)).toEqual({ ok: true, tookOver: false });
-  });
-
-  it('ignores a user takeover on a tab nobody holds', () => {
-    const claims = new BrowserTabClaims();
-    claims.userTookOver('t1');
-    expect(claims.claim('t1', alice)).toEqual({ ok: true, tookOver: false });
   });
 
   it('points a member at a tab without claiming it', () => {

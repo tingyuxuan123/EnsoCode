@@ -126,6 +126,9 @@ Tailwind 的 `h-11` 会算成 38.5px 而不是 44px，与 `trafficLightPosition:
 
 真机踩过的坑（改 `browserHost.ts` 前先读）：
 
+- 自定义 DevTools 自带 X 的关闭通知不能只靠 Electron 事件；必须桥接 embedder
+  `closeWindow` 并统一清理前端引用，再恢复布局。已销毁 view 不得重新挂载，否则连菜单
+  covered 上报也会失败。详见 [关闭 DevTools 后布局残留](../big-question/browser-devtools-close-layout.md)。
 - `contentView` 的子视图**全部画在 renderer 之上**，index 0 也不例外；无头只能 `setVisible(false)`。
 - 隐藏后 view 尺寸归零，页面布局 0×0（快照只剩 inline 元素、截图空）。用 CDP
   `Emulation.setDeviceMetricsOverride` 撑出 viewport，可见时 `clearDeviceMetricsOverride`。
@@ -140,10 +143,10 @@ Tailwind 的 `h-11` 会算成 38.5px 而不是 44px，与 `trafficLightPosition:
   **透明像素照样吃掉 hit-test**——guest 垫在它下面时用户点不到网页（锁没锁都一样，真机踩过）。
   所以：平时 guest `addChildView(view)` 叠在工作区**之上**，用户可直接操作；只有 renderer
   报 `covered=true` 时才 `addChildView(view, 0)` 沉到底，靠 HTML 透明洞（`.enso-guest-hole`）
-  透出网页，让菜单 / Dialog / 锁定遮罩盖在上面。
-- `covered` 由 `BrowserView.tsx` 的 rAF tick 算：`state.locked`，或 body 下 `#root` 之外任一
-  portal 元素的盒子与网页矩形相交（`overlayCover.ts`）。新增浮层组件只要 portal 到 body 就自动
-  生效，不要为弹层整页隐藏 guest，也不要用原生菜单绕。
+  透出网页，让菜单 / Dialog 盖在上面。
+- `covered` 由 `BrowserView.tsx` 的 rAF tick 算：空页占位，或带浮层标记的可见盒子与网页
+  矩形相交（`overlayCover.ts`，不区分是否 portal 到 `#root` 外）。`locked` 仅为标签保留标记，
+  不参与覆盖或人工输入门控。不要为弹层整页隐藏 guest，也不要用原生菜单绕。
 - 挖孔要求网页矩形之上的 DOM **全部透明**：主外壳、workspace 卡片、设备预览舞台底色都不能
   在洞内刷不透明底色，否则菜单 / Dialog 一开，沉底后的 guest 被盖住，网页表现为整块空白
   （`BackgroundLayer` 的实心底只在洞外生效）。设备预览的舞台底色由 `deviceStageClip` 在框内挖空。

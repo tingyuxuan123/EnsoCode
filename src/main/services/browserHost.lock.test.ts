@@ -72,7 +72,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-import { PAGE_LOCK_OVERLAY_SCRIPT, PAGE_UNLOCK_OVERLAY_SCRIPT } from '@shared/browser/pageScripts';
+import { PAGE_UNLOCK_OVERLAY_SCRIPT } from '@shared/browser/pageScripts';
 import { BrowserHost } from './browserHost';
 
 mock.dir = mkdtempSync(join(tmpdir(), 'browser-lock-'));
@@ -90,42 +90,30 @@ const openTab = async (host: BrowserHost, tabId: string, sessionId = 'conv') => 
   return contents;
 };
 
-it('unlock 只在遮罩确实移除后才落 locked=false', async () => {
+it('browser_lock 只保留标签生命周期，不安装阻止人工操作的遮罩', async () => {
   const host = new BrowserHost();
   const contents = await openTab(host, 'tab-a');
   await host.setLocked('conv', true);
   expect(host.state('tab-a').locked).toBe(true);
+  expect(contents.scripts.some((script: string) => script.includes('preventDefault'))).toBe(false);
 
   mock.exec = async () => {
     throw new Error('context destroyed');
   };
   await host.setLocked('conv', false);
-  expect(host.state('tab-a').locked).toBe(true);
-
-  mock.exec = async () => 'stuck';
-  await host.setLocked('conv', false);
-  expect(host.state('tab-a').locked).toBe(true);
-
-  mock.exec = async () => 'ok';
-  contents.scripts.length = 0;
-  await host.setLocked('conv', false);
   expect(host.state('tab-a').locked).toBe(false);
-  expect(contents.scripts).toContain(PAGE_UNLOCK_OVERLAY_SCRIPT);
 });
 
-it('lock op 如实回报真实状态，解锁失败不谎报 released', async () => {
+it('保留和释放标签不再依赖页内遮罩执行结果', async () => {
   const host = new BrowserHost();
   await openTab(host, 'tab-a');
   expect(await host.invoke('conv', 'lock', {})).toEqual({ locked: true });
 
   mock.exec = async () => 'stuck';
-  expect(await host.invoke('conv', 'lock', { release: true })).toEqual({ locked: true });
-
-  mock.exec = async () => 'ok';
   expect(await host.invoke('conv', 'lock', { release: true })).toEqual({ locked: false });
 });
 
-it('did-finish-load 始终把遮罩对齐 locked，清掉 BFCache 带回来的残留', async () => {
+it('did-finish-load 无论是否保留标签都清掉旧版或 BFCache 残留遮罩', async () => {
   const host = new BrowserHost();
   const contents = await openTab(host, 'tab-a');
 
@@ -138,7 +126,8 @@ it('did-finish-load 始终把遮罩对齐 locked，清掉 BFCache 带回来的�
   contents.scripts.length = 0;
   contents.emit('did-finish-load');
   await Promise.resolve();
-  expect(contents.scripts).toContain(PAGE_LOCK_OVERLAY_SCRIPT);
+  expect(contents.scripts).toContain(PAGE_UNLOCK_OVERLAY_SCRIPT);
+  expect(contents.scripts.some((script: string) => script.includes('preventDefault'))).toBe(false);
 });
 
 it('release 解锁会话下所有 tab，加锁仍只作用于当前 tab', async () => {
@@ -157,6 +146,4 @@ it('release 解锁会话下所有 tab，加锁仍只作用于当前 tab', async 
   await host.setLocked('conv', false);
   expect(host.state('tab-a').locked).toBe(false);
   expect(host.state('tab-b').locked).toBe(false);
-  expect(first.scripts).toContain(PAGE_UNLOCK_OVERLAY_SCRIPT);
-  expect(second.scripts).toContain(PAGE_UNLOCK_OVERLAY_SCRIPT);
 });

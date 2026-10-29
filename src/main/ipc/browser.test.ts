@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
     onDesignMode: vi.fn(),
     onDownloadsChanged: vi.fn(),
     setDevice: vi.fn(async () => ({ tabId: 'tab', device: { enabled: false } })),
-    setControl: vi.fn(async () => ({ tabId: 'tab', control: 'manual' })),
     history: vi.fn(async () => ({ items: [], total: 0 })),
     downloads: vi.fn(async () => ({ items: [], total: 0 })),
     stop: vi.fn(),
@@ -90,6 +89,10 @@ it('浮层 / 矩形上报只认主窗口 renderer', () => {
   expect(mocks.host.setViewport).toHaveBeenCalledWith('tab', 'conv', null, true);
 });
 
+it('不再注册互斥控制权切换接口', () => {
+  expect(mocks.handlers.has('browser:set-control')).toBe(false);
+});
+
 it('上报方崩溃 / 销毁 / 整页重载后清掉浮层闩锁', () => {
   const overlay = mocks.listeners.get(IPC_CHANNELS.BROWSER_SET_OVERLAY_ACTIVE)!;
 
@@ -109,10 +112,9 @@ it('上报方崩溃 / 销毁 / 整页重载后清掉浮层闩锁', () => {
   expect(mocks.host.resetOverlayReports).toHaveBeenCalledTimes(3);
 });
 
-it('设备、接管、历史、下载入口拒绝非主窗口和坏参数', async () => {
+it('设备、历史、下载入口拒绝非主窗口和坏参数', async () => {
   for (const channel of [
     IPC_CHANNELS.BROWSER_SET_DEVICE,
-    IPC_CHANNELS.BROWSER_SET_CONTROL,
     IPC_CHANNELS.BROWSER_HISTORY,
     IPC_CHANNELS.BROWSER_DOWNLOADS,
     IPC_CHANNELS.BROWSER_STOP,
@@ -129,7 +131,6 @@ it('设备、接管、历史、下载入口拒绝非主窗口和坏参数', asyn
     });
   }
   expect(mocks.host.setDevice).not.toHaveBeenCalled();
-  expect(mocks.host.setControl).not.toHaveBeenCalled();
   expect(mocks.host.history).not.toHaveBeenCalled();
   expect(mocks.host.downloads).not.toHaveBeenCalled();
   expect(mocks.host.stop).not.toHaveBeenCalled();
@@ -194,13 +195,6 @@ it('新接口返回结构化结果并保留权威归属参数', async () => {
     mocks.handlers.get(IPC_CHANNELS.BROWSER_SET_DEVICE)!(event, 'tab', 'conv', device)
   ).resolves.toEqual({ ok: true, result: { tabId: 'tab', device } });
   expect(mocks.host.setDevice).toHaveBeenCalledWith('tab', 'conv', device);
-  await expect(
-    mocks.handlers.get(IPC_CHANNELS.BROWSER_SET_CONTROL)!(event, 'tab', 'conv', 'manual')
-  ).resolves.toEqual({ ok: true, result: { tabId: 'tab', control: 'manual' } });
-  expect(mocks.host.setControl).toHaveBeenCalledWith('tab', 'conv', 'manual');
-  expect(
-    await mocks.handlers.get(IPC_CHANNELS.BROWSER_SET_CONTROL)!(event, 'tab', 'conv', 'steal')
-  ).toEqual({ ok: false, error: 'Invalid request' });
   for (const [channel, method] of [
     [IPC_CHANNELS.BROWSER_HISTORY, mocks.host.history],
     [IPC_CHANNELS.BROWSER_DOWNLOADS, mocks.host.downloads],

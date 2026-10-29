@@ -9,6 +9,7 @@
 | [traffic-lights.md](traffic-lights.md) | macOS 红绿灯遮标题 / 弹窗后位置偏移 |
 | [ui-component-classname.md](ui-component-classname.md) | 输入框左侧一大片留白、图标不见了 |
 | [dialog-layering.md](dialog-layering.md) | 弹窗内的下拉点开没反应 |
+| [browser-devtools-close-layout.md](browser-devtools-close-layout.md) | 关闭 DevTools 后网页下方留白、更多菜单被原生网页盖住 |
 | [ios-pwa-header-blur.md](ios-pwa-header-blur.md) | Safari 正常，独立 PWA 顶部标题模糊；透明遮罩又留下灰色状态栏 |
 | [dedupe-identity.md](dedupe-identity.md) | 去重没生效，同一个东西导入了三份 |
 | [agent-end-run-scoped-messages.md](agent-end-run-scoped-messages.md) | 多轮对话后历史消息消失，只剩最近一轮 |

@@ -4,7 +4,6 @@ import {
   PAGE_DESIGN_MODE_DISABLE_SCRIPT,
   PAGE_DESIGN_MODE_ENABLE_SCRIPT,
   PAGE_DESIGN_MODE_HIDE_SCRIPT,
-  PAGE_LOCK_OVERLAY_SCRIPT,
   PAGE_SETTLE_COMBOBOX_MS,
   PAGE_SETTLE_FRAME_MS,
   PAGE_SNAPSHOT_SCRIPT,
@@ -12,7 +11,6 @@ import {
   pageClickScript,
   pageClickXyScript,
   pageDragPointsScript,
-  pageLockOverlayDisplayScript,
   pagePressKeyScript,
   pageScrollScript,
   pageSelectOptionScript,
@@ -29,10 +27,8 @@ const runUnlock = (nodes: { id: string }[]): unknown => {
   return new Function('document', `return ${PAGE_UNLOCK_OVERLAY_SCRIPT}`)(document);
 };
 
-describe('lock overlay scripts', () => {
-  it('installs a full-page overlay and can remove it', () => {
-    expect(PAGE_LOCK_OVERLAY_SCRIPT).toContain('enso-browser-lock-overlay');
-    expect(PAGE_LOCK_OVERLAY_SCRIPT).toContain('preventDefault');
+describe('legacy lock overlay cleanup', () => {
+  it('only removes a legacy full-page overlay', () => {
     expect(PAGE_UNLOCK_OVERLAY_SCRIPT).toContain('enso-browser-lock-overlay');
     expect(PAGE_UNLOCK_OVERLAY_SCRIPT).toContain('.remove()');
   });
@@ -165,13 +161,11 @@ describe('post-action settle', () => {
 });
 
 describe('drag point resolver', () => {
-  it('resolves source/target in page space and hides the lock overlay so hit-testing is real', () => {
+  it('resolves source/target in page space with real hit-testing', () => {
     const src = pageDragPointsScript({ ref: 'e1' }, { x: 2, y: 3 });
     expect(src).toContain('elementFromPoint');
     expect(src).toContain('data-enso-ref');
     expect(src).not.toContain('MouseEvent');
-    expect(pageLockOverlayDisplayScript(true)).toContain('enso-browser-lock-overlay');
-    expect(pageLockOverlayDisplayScript(true)).toContain('none');
   });
 
   it('fires a shared DataTransfer HTML5 drag sequence so native drop handlers run', () => {

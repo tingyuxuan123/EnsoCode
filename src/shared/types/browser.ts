@@ -18,9 +18,6 @@ export interface BrowserDevice {
   scale?: number;
 }
 
-/** 控制权由 Main 持有：manual 时拒绝 Agent 写操作，只有用户 UI 能恢复。 */
-export type BrowserControl = 'agent' | 'manual';
-
 export interface BrowserHistoryEntry {
   id: string;
   conversationId: string;
@@ -72,9 +69,8 @@ export interface BrowserTabState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
-  /** Agent 操作时显示接管入口。 */
+  /** browser_lock 的标签保留标记；不拦截人工操作或暂停 Agent。 */
   locked: boolean;
-  control?: BrowserControl;
   device?: BrowserDevice;
   /** 面板内嵌原生 Chrome DevTools */
   devtoolsOpen: boolean;

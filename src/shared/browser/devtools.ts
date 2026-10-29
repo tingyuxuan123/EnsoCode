@@ -14,14 +14,17 @@ export interface DevtoolsRect {
   height: number;
 }
 
-export type DevtoolsDockMessage = { side: DevtoolsDockSide } | { bounds: DevtoolsRect };
+export type DevtoolsDockMessage =
+  | { side: DevtoolsDockSide }
+  | { bounds: DevtoolsRect }
+  | { closed: true };
 
 const DOCK_TAG = '__enso_devtools_dock__';
 const SIDES: readonly DevtoolsDockSide[] = ['bottom', 'right', 'left', 'undocked'];
 const MAX_DIMENSION = 16384;
 
 /**
- * Electron 不把 DevTools 前端的停靠方向和 setInspectedPageBounds 转给宿主；
+ * Electron 不把 DevTools 前端的停靠方向、网页区域和自带关闭按钮转给宿主；
  * 注入脚本把它们以 console.debug 带固定前缀发回。脏值整体丢弃。
  */
 export const DEVTOOLS_DOCK_BRIDGE_SCRIPT = `(() => {
@@ -33,7 +36,12 @@ export const DEVTOOLS_DOCK_BRIDGE_SCRIPT = `(() => {
   const original = api.sendMessageToEmbedder.bind(api);
   api.sendMessageToEmbedder = (method, args, callback) => {
     try {
-      if (method === 'setInspectedPageBounds' && args && args[0]) {
+      if (method === 'closeWindow') {
+        // 自定义前端的原生关闭不会可靠触发 guest 的 devtools-closed；
+        // 让 Main 统一关闭、销毁和恢复布局，不交给 Electron 单独拆掉前端。
+        emit({ closed: true });
+        return;
+      } else if (method === 'setInspectedPageBounds' && args && args[0]) {
         const b = args[0];
         emit({ bounds: { x: b.x, y: b.y, width: b.width, height: b.height } });
       } else if (method === 'setPreference' && args && args[0] === 'currentDockState') {
@@ -87,6 +95,7 @@ export function parseDevtoolsDockMessage(message: string): DevtoolsDockMessage |
     return null;
   }
   if (!isRecord(payload) || Object.keys(payload).length !== 1) return null;
+  if ('closed' in payload) return payload.closed === true ? { closed: true } : null;
   if ('side' in payload) {
     const side = payload.side;
     return typeof side === 'string' && (SIDES as readonly string[]).includes(side)

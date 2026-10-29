@@ -7,10 +7,12 @@ import { type BrowserSurface, BrowserView } from './BrowserView';
 
 const harness = vi.hoisted(() => ({
   onState: null as ((event: { tabId: string; state: BrowserTabState }) => void) | null,
-  setControl: vi.fn(),
   navigate: vi.fn(),
+  goBack: vi.fn(),
+  goForward: vi.fn(),
   stop: vi.fn(),
   reload: vi.fn(),
+  setDesignMode: vi.fn(),
   setViewport: vi.fn(),
   setDevice: vi.fn(),
   frame: null as (() => void) | null,
@@ -70,13 +72,35 @@ vi.mock('@/components/ui/menu', () => {
   };
 });
 vi.mock('./BrowserDeviceToolbar', () => ({
-  BrowserDeviceToolbar: ({ scale }: { scale: number | null }) => (
-    <div data-testid="device-toolbar">{scale === null ? 'fit' : Math.round(scale * 100)}</div>
+  BrowserDeviceToolbar: ({ scale, disabled }: { scale: number | null; disabled: boolean }) => (
+    <div data-testid="device-toolbar">
+      {scale === null ? 'fit' : Math.round(scale * 100)}
+      <button type="button" aria-label="Change preview size" disabled={disabled} />
+    </div>
   ),
   BROWSER_STAGE_BACKGROUNDS: [],
   DEFAULT_BROWSER_DEVICE: { enabled: true, profileId: 'responsive', width: 393, height: 852 },
 }));
-vi.mock('./BrowserHistoryPanel', () => ({ BrowserHistoryPanel: () => null }));
+vi.mock('./BrowserHistoryPanel', () => ({
+  BrowserHistoryPanel: ({
+    open,
+    navigationDisabled,
+    onNavigate,
+  }: {
+    open: boolean;
+    navigationDisabled: boolean;
+    onNavigate: (url: string) => Promise<boolean>;
+  }) =>
+    open ? (
+      <button
+        type="button"
+        disabled={navigationDisabled}
+        onClick={() => void onNavigate('https://history.example/')}
+      >
+        Open history page
+      </button>
+    ) : null,
+}));
 vi.mock('./BrowserDownloadsPanel', () => ({ BrowserDownloadsPanel: () => null }));
 const state: BrowserTabState = {
   tabId: 'exact-tab',
@@ -87,11 +111,12 @@ const state: BrowserTabState = {
   canGoBack: false,
   canGoForward: false,
   locked: false,
-  control: 'agent',
   devtoolsOpen: false,
   designMode: false,
   holder: null,
 };
+const holder = { conversationId: 'agent-session', name: 'Browser agent' };
+let browserState: BrowserTabState;
 let root: Root;
 let container: HTMLElement;
 const surface: BrowserSurface = {
@@ -103,14 +128,18 @@ const surface: BrowserSurface = {
   updateParameters: vi.fn(),
 };
 async function emit(next: Partial<BrowserTabState>) {
-  await act(async () => harness.onState?.({ tabId: 'exact-tab', state: { ...state, ...next } }));
+  browserState = { ...state, ...next };
+  await act(async () => harness.onState?.({ tabId: 'exact-tab', state: browserState }));
 }
-async function click(text: string, index = 0) {
+function getButton(text: string, index = 0) {
   const button = Array.from(container.querySelectorAll('button')).filter(
     (item) => item.textContent === text || item.getAttribute('aria-label') === text
   )[index];
   expect(button).toBeDefined();
-  await act(async () => button?.click());
+  return button;
+}
+async function click(text: string, index = 0) {
+  await act(async () => getButton(text, index).click());
 }
 
 beforeEach(async () => {
@@ -134,7 +163,8 @@ beforeEach(async () => {
     toJSON: () => ({}),
   });
   harness.frame = null;
-  harness.setViewport.mockReset().mockResolvedValue(state);
+  browserState = state;
+  harness.setViewport.mockReset().mockImplementation(async () => browserState);
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn((callback: () => void) => {
@@ -144,17 +174,19 @@ beforeEach(async () => {
   );
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  harness.setControl.mockReset().mockImplementation(async (_tabId, _conversationId, control) => ({
-    ok: true,
-    result: { ...state, control },
-  }));
   harness.navigate.mockReset().mockResolvedValue({ ok: true });
+  harness.goBack.mockReset().mockResolvedValue({ ok: true });
+  harness.goForward.mockReset().mockResolvedValue({ ok: true });
   harness.stop.mockReset().mockResolvedValue({ ok: true });
   harness.reload.mockReset().mockResolvedValue(undefined);
-  harness.setDevice.mockReset().mockImplementation(async (_tabId, _conversationId, device) => ({
-    ok: true,
-    result: { ...state, url: 'https://example.com/', device },
-  }));
+  harness.setDesignMode.mockReset().mockImplementation(async (_tabId, designMode) => {
+    browserState = { ...browserState, designMode };
+    return browserState;
+  });
+  harness.setDevice.mockReset().mockImplementation(async (_tabId, _conversationId, device) => {
+    browserState = { ...browserState, url: 'https://example.com/', device };
+    return { ok: true, result: browserState };
+  });
   Object.assign(dom.window, {
     electronAPI: {
       browser: {
@@ -164,12 +196,14 @@ beforeEach(async () => {
         },
         onDesignMode: () => vi.fn(),
         navigate: harness.navigate,
-        setControl: harness.setControl,
+        goBack: harness.goBack,
+        goForward: harness.goForward,
         stop: harness.stop,
         reload: harness.reload,
+        setDesignMode: harness.setDesignMode,
         setViewport: harness.setViewport,
         setDevice: harness.setDevice,
-        setDevToolsViewport: vi.fn(async () => state),
+        setDevToolsViewport: vi.fn(async () => browserState),
       },
     },
   });
@@ -195,34 +229,76 @@ describe('BrowserView controls', () => {
     ])
       expect(container.textContent).toContain(text);
   });
-  it('takes over an unlocked exact tab and only resumes on an explicit click', async () => {
-    await emit({});
-    expect(harness.setControl).not.toHaveBeenCalled();
-    await click('Take control');
-    expect(harness.setControl).toHaveBeenLastCalledWith('exact-tab', 'owner', 'manual');
-    expect(container.textContent).toContain('Allow agent to continue');
-    await emit({ control: 'manual', url: 'https://example.com/' });
-    expect(harness.setControl).toHaveBeenCalledTimes(1);
-    await click('Allow agent to continue');
-    expect(harness.setControl).toHaveBeenLastCalledWith('exact-tab', 'owner', 'agent');
-  });
-  it('surfaces control failure without pretending takeover succeeded', async () => {
-    harness.setControl.mockResolvedValueOnce({ ok: false, error: 'Takeover failed' });
-    await click('Take control');
-    expect(container.textContent).toContain('Takeover failed');
-    expect(container.textContent).not.toContain('Allow agent to continue');
-  });
-  it('shows the floating takeover pill while the agent holds the tab', async () => {
-    await emit({ locked: true, url: 'https://example.com/' });
-    expect(container.textContent).toContain('Agent is browsing');
-    expect(container.textContent).toContain('In control {{time}}');
-    expect(container.querySelector('.browser-agent-glow')).not.toBeNull();
-    const address = container.querySelector('input[aria-label="Search or enter a URL"]');
-    expect((address as HTMLInputElement).disabled).toBe(true);
-    await click('Let me take over');
-    expect(harness.setControl).toHaveBeenLastCalledWith('exact-tab', 'owner', 'manual');
-    await emit({ locked: true, control: 'manual', url: 'https://example.com/' });
+  it.each([
+    { locked: false, holder: null },
+    { locked: false, holder },
+    { locked: true, holder },
+  ])('has no exclusive control UI for %o', async (ownership) => {
+    await emit({ ...ownership, url: 'https://example.com/' });
+    for (const text of [
+      'Take control',
+      'Allow agent to continue',
+      'Let me take over',
+      'Agent is browsing',
+      'In control {{time}}',
+    ])
+      expect(container.textContent).not.toContain(text);
     expect(container.querySelector('.browser-agent-glow')).toBeNull();
+  });
+  it('keeps navigation and design controls enabled while an agent retains the tab', async () => {
+    await emit({
+      locked: true,
+      holder,
+      url: 'https://example.com/',
+      canGoBack: true,
+      canGoForward: true,
+    });
+    const address = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search or enter a URL"]'
+    );
+    expect(address?.disabled).toBe(false);
+    for (const text of ['Back', 'Forward', 'Reload', 'Toggle Design Mode', 'Device preview'])
+      expect(getButton(text).disabled).toBe(false);
+    const form = container.querySelector('form');
+    await act(async () =>
+      form?.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+    );
+    expect(harness.navigate).toHaveBeenCalledWith('exact-tab', 'owner', 'https://example.com/');
+    await click('Back');
+    expect(harness.goBack).toHaveBeenCalledWith('exact-tab');
+    await click('Forward');
+    expect(harness.goForward).toHaveBeenCalledWith('exact-tab');
+    await click('Reload');
+    expect(harness.reload).toHaveBeenCalledWith('exact-tab');
+    await click('Toggle Design Mode');
+    expect(harness.setDesignMode).toHaveBeenCalledWith('exact-tab', true);
+  });
+  it('keeps device controls and resize handles available while an agent retains the tab', async () => {
+    await emit({
+      locked: true,
+      holder,
+      url: 'https://example.com/',
+      device: { enabled: true, width: 393, height: 852 },
+    });
+    await act(async () => harness.frame?.());
+    expect(getButton('Change preview size').disabled).toBe(false);
+    expect(container.querySelectorAll('[class*="cursor-"][aria-hidden]')).toHaveLength(3);
+    expect(getButton('Device preview').disabled).toBe(false);
+    await click('Device preview');
+    expect(harness.setDevice).toHaveBeenLastCalledWith('exact-tab', 'owner', { enabled: false });
+    await click('Device preview');
+    expect(harness.setDevice).toHaveBeenLastCalledWith(
+      'exact-tab',
+      'owner',
+      expect.objectContaining({ enabled: true })
+    );
+  });
+  it('allows opening history pages while an agent retains the tab', async () => {
+    await emit({ locked: true, holder, url: 'https://example.com/' });
+    await click('Browsing history');
+    expect(getButton('Open history page').disabled).toBe(false);
+    await click('Open history page');
+    expect(harness.navigate).toHaveBeenCalledWith('exact-tab', 'owner', 'https://history.example/');
   });
   it('opens device preview from the menu and sizes the guest to the centered frame', async () => {
     await emit({ url: 'https://example.com/' });
@@ -262,6 +338,34 @@ describe('BrowserView controls', () => {
       true
     );
     await emit({ url: 'https://example.com/' });
+    await act(async () => harness.frame?.());
+    expect(harness.setViewport).toHaveBeenLastCalledWith(
+      'exact-tab',
+      'owner',
+      expect.any(Object),
+      false
+    );
+  });
+  it('covers retained real pages only while an overlay intersects them', async () => {
+    await emit({ locked: true, holder, url: 'https://example.com/' });
+    await act(async () => harness.frame?.());
+    expect(harness.setViewport).toHaveBeenLastCalledWith(
+      'exact-tab',
+      'owner',
+      expect.any(Object),
+      false
+    );
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-slot', 'dialog-popup');
+    document.body.append(overlay);
+    await act(async () => harness.frame?.());
+    expect(harness.setViewport).toHaveBeenLastCalledWith(
+      'exact-tab',
+      'owner',
+      expect.any(Object),
+      true
+    );
+    overlay.remove();
     await act(async () => harness.frame?.());
     expect(harness.setViewport).toHaveBeenLastCalledWith(
       'exact-tab',

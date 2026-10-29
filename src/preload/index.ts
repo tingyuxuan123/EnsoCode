@@ -199,7 +199,6 @@ import type {
 } from '@shared/types/botIpc';
 import type {
   BrowserClearKind,
-  BrowserControl,
   BrowserDesignModeEvent,
   BrowserDevice,
   BrowserDownloadEntry,
@@ -1497,12 +1496,6 @@ const electronAPI = {
       device: BrowserDevice
     ): Promise<BrowserResult<BrowserTabState>> =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SET_DEVICE, tabId, conversationId, device),
-    setControl: (
-      tabId: string,
-      conversationId: string,
-      control: BrowserControl
-    ): Promise<BrowserResult<BrowserTabState>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SET_CONTROL, tabId, conversationId, control),
     history: (
       conversationId: string,
       request: BrowserHistoryRequest

@@ -104,24 +104,6 @@ export function registerBrowserHandlers(): void {
     }
   );
   ipcMain.handle(
-    IPC_CHANNELS.BROWSER_SET_CONTROL,
-    async (event, tabId: unknown, conversationId: unknown, control: unknown) => {
-      if (
-        !fromMainRenderer(event) ||
-        !isId(tabId) ||
-        !isId(conversationId) ||
-        (control !== 'manual' && control !== 'agent')
-      ) {
-        return { ok: false, error: 'Invalid request' };
-      }
-      try {
-        return { ok: true, result: await browserHost.setControl(tabId, conversationId, control) };
-      } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
-      }
-    }
-  );
-  ipcMain.handle(
     IPC_CHANNELS.BROWSER_HISTORY,
     async (event, conversationId: unknown, request: unknown) => {
       if (

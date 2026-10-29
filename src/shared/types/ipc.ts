@@ -324,7 +324,6 @@ export const IPC_CHANNELS = {
   BROWSER_RELOAD: 'browser:reload',
   BROWSER_STOP: 'browser:stop',
   BROWSER_SET_DEVICE: 'browser:set-device',
-  BROWSER_SET_CONTROL: 'browser:set-control',
   BROWSER_HISTORY: 'browser:history',
   BROWSER_DOWNLOADS: 'browser:downloads',
   BROWSER_DOWNLOADS_CHANGED: 'browser:downloads-changed',

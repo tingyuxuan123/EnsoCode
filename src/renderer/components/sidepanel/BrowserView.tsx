@@ -6,7 +6,6 @@ import {
   Download,
   Ellipsis,
   Globe,
-  Hand,
   History,
   Info,
   MonitorSmartphone,
@@ -84,29 +83,6 @@ function readBox(el: HTMLElement | null): Rect | null {
   };
 }
 
-function formatElapsed(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-}
-
-/** Agent 持有 tab 的累计时长；松开锁定即清零 */
-function useElapsed(active: boolean): string {
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) {
-      setStartedAt(null);
-      return;
-    }
-    const start = Date.now();
-    setStartedAt(start);
-    setNow(start);
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [active]);
-  return formatElapsed(startedAt === null ? 0 : now - startedAt);
-}
-
 /**
  * 真实网页由 Main 的 WebContentsView 画在主窗口上；这里只是一块占位 div，
  * 负责把自己的屏幕矩形与可见性报给 Main，并渲染地址栏。
@@ -147,13 +123,9 @@ export function BrowserView({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<'history' | 'downloads' | null>(null);
-  const [controlBusy, setControlBusy] = useState(false);
   const [stage, setStage] = useState<Size | null>(null);
   const [stageBackground, setStageBackground] = useState<BrowserStageBackground>('default');
   const [liveSize, setLiveSize] = useState<Size | null>(null);
-  const manualControl = state.control === 'manual';
-  const agentLocked = state.locked && !manualControl;
-  const elapsed = useElapsed(agentLocked);
   const hostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const lastSent = useRef<Rect | null | undefined>(undefined);
@@ -161,8 +133,6 @@ export function BrowserView({
   const lastDt = useRef<Rect | null | undefined>(undefined);
   const lastDtCovered = useRef(false);
   const lastStage = useRef<Size | null>(null);
-  const lockedRef = useRef(false);
-  lockedRef.current = agentLocked;
   // 停靠的 DevTools 铺满舞台，网页由 Main 叠在前端上报的区域；独立窗口时舞台照常给网页
   const devtoolsDocked = state.devtoolsOpen && state.devtoolsDock !== 'undocked';
   const devtoolsDockedRef = useRef(false);
@@ -262,10 +232,7 @@ export function BrowserView({
         document.visibilityState === 'visible';
       const rect = visible ? readBox(hostRef.current) : null;
       const covered =
-        rect !== null &&
-        (!hasPageRef.current ||
-          lockedRef.current ||
-          isCoveredBy(rect, overlayBoxes(document, root)));
+        rect !== null && (!hasPageRef.current || isCoveredBy(rect, overlayBoxes(document, root)));
       if (
         lastSent.current === undefined ||
         !sameRect(lastSent.current, rect) ||
@@ -339,20 +306,6 @@ export function BrowserView({
     }
   };
 
-  const changeControl = async (control: 'manual' | 'agent') => {
-    setControlBusy(true);
-    setError(null);
-    try {
-      const result = await window.electronAPI.browser.setControl(tabId, conversationId, control);
-      if (result.ok) setState(result.result);
-      else setError(result.error);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('Could not change browser control.'));
-    } finally {
-      setControlBusy(false);
-    }
-  };
-
   const browserAction = async (
     action: () => Promise<{ ok: boolean; error?: string }> | Promise<void>
   ) => {
@@ -377,7 +330,7 @@ export function BrowserView({
   const onDeviceResize =
     (axis: 'x' | 'y' | 'xy') => (event: React.PointerEvent<HTMLDivElement>) => {
       // DevTools 占着 CDP 时改尺寸必然被 Main 拒绝，别让拖拽发出注定失败的操作
-      if (!device || !frame || agentLocked || state.devtoolsOpen) return;
+      if (!device || !frame || state.devtoolsOpen) return;
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       const startX = event.clientX;
@@ -449,7 +402,7 @@ export function BrowserView({
           variant="ghost"
           size="icon-xs"
           className={iconButton}
-          disabled={agentLocked || !state.canGoBack}
+          disabled={!state.canGoBack}
           onClick={() => void browserAction(() => window.electronAPI.browser.goBack(tabId))}
           aria-label={t('Back')}
           title={t('Back')}
@@ -460,7 +413,7 @@ export function BrowserView({
           variant="ghost"
           size="icon-xs"
           className={iconButton}
-          disabled={agentLocked || !state.canGoForward}
+          disabled={!state.canGoForward}
           onClick={() => void browserAction(() => window.electronAPI.browser.goForward(tabId))}
           aria-label={t('Forward')}
           title={t('Forward')}
@@ -471,7 +424,7 @@ export function BrowserView({
           variant="ghost"
           size="icon-xs"
           className={iconButton}
-          disabled={agentLocked || !state.tabId}
+          disabled={!state.tabId}
           onClick={() =>
             void browserAction(() =>
               state.loading
@@ -507,22 +460,9 @@ export function BrowserView({
             placeholder={t('Search or enter a URL')}
             aria-label={t('Search or enter a URL')}
             spellCheck={false}
-            disabled={agentLocked}
-            className="h-8 w-full min-w-0 rounded-lg border border-border/70 bg-muted/50 pl-8 pr-3 text-[calc(11rem/14)] text-foreground outline-none transition-[background-color,border-color,box-shadow] placeholder:text-muted-foreground/72 hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/25 disabled:opacity-64"
+            className="h-8 w-full min-w-0 rounded-lg border border-border/70 bg-muted/50 pl-8 pr-3 text-[calc(11rem/14)] text-foreground outline-none transition-[background-color,border-color,box-shadow] placeholder:text-muted-foreground/72 hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/25"
           />
         </form>
-        {manualControl && (
-          <Button
-            variant="outline"
-            size="xs"
-            className="shrink-0 rounded-full"
-            disabled={controlBusy}
-            title={t('Manual control')}
-            onClick={() => void changeControl('agent')}
-          >
-            {t('Allow agent to continue')}
-          </Button>
-        )}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -538,7 +478,7 @@ export function BrowserView({
           variant="ghost"
           size="icon-xs"
           className={cn(iconButton, state.designMode && 'bg-muted text-foreground')}
-          disabled={!state.tabId || agentLocked || state.devtoolsOpen}
+          disabled={!state.tabId || state.devtoolsOpen}
           onClick={() =>
             void window.electronAPI.browser.setDesignMode(tabId, !state.designMode).then(setState)
           }
@@ -559,7 +499,7 @@ export function BrowserView({
           <MenuPopup align="end" className="min-w-48">
             <MenuItem
               // DevTools 开着时不能启用或改尺寸，但关掉预览不碰 CDP，仍要放行
-              disabled={agentLocked || controlBusy || (state.devtoolsOpen && !device)}
+              disabled={state.devtoolsOpen && !device}
               onClick={toggleDevice}
             >
               <MonitorSmartphone />
@@ -587,15 +527,6 @@ export function BrowserView({
               <Download />
               {t('Browser downloads')}
             </MenuItem>
-            {!manualControl && (
-              <>
-                <MenuSeparator />
-                <MenuItem disabled={controlBusy} onClick={() => void changeControl('manual')}>
-                  <Hand />
-                  {t('Take control')}
-                </MenuItem>
-              </>
-            )}
           </MenuPopup>
         </Menu>
       </div>
@@ -604,7 +535,7 @@ export function BrowserView({
           device={device}
           scale={frame?.scale ?? null}
           liveSize={liveSize}
-          disabled={agentLocked || controlBusy}
+          disabled={false}
           devtoolsOpen={state.devtoolsOpen}
           background={stageBackground}
           onBackgroundChange={setStageBackground}
@@ -645,7 +576,7 @@ export function BrowserView({
             style={frame ? { width: frame.width, height: frame.height } : undefined}
           >
             {!hasPage && <BrowserNewTab />}
-            {frame && !agentLocked && !state.devtoolsOpen && (
+            {frame && !state.devtoolsOpen && (
               <>
                 <div
                   className={cn(
@@ -678,37 +609,6 @@ export function BrowserView({
               </>
             )}
           </div>
-          {agentLocked && (
-            <div className="absolute inset-0 cursor-default">
-              <div className="browser-agent-glow pointer-events-none absolute inset-0" />
-              <div className="absolute bottom-5 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-full border border-border/80 bg-popover py-1.5 pl-5 pr-1.5 text-popover-foreground shadow-lg">
-                <div className="min-w-0 leading-tight">
-                  <div
-                    className="truncate text-[calc(11rem/14)] font-medium"
-                    title={state.holder?.name}
-                  >
-                    {state.holder
-                      ? t('{{name}} is using this tab', { name: state.holder.name })
-                      : t('Agent is browsing')}
-                  </div>
-                  <div className="mt-0.5 text-[calc(11rem/14)] tabular-nums text-muted-foreground">
-                    {t('In control {{time}}', { time: elapsed })}
-                  </div>
-                </div>
-                <span className="h-7 w-px shrink-0 bg-border" />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="shrink-0 rounded-full"
-                  disabled={controlBusy}
-                  onClick={() => void changeControl('manual')}
-                >
-                  <Hand className="size-4" />
-                  {t('Let me take over')}
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
       <BrowserHistoryPanel
@@ -716,7 +616,7 @@ export function BrowserView({
         onOpenChange={(open) => setPanel(open ? 'history' : null)}
         conversationId={conversationId}
         onNavigate={navigate}
-        navigationDisabled={agentLocked}
+        navigationDisabled={false}
       />
       <BrowserDownloadsPanel
         open={panel === 'downloads'}

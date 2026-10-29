@@ -6,6 +6,7 @@ import { parseBrowserDevice } from '@shared/browser/devices';
 import {
   assertDevtoolsIdle,
   DEVTOOLS_DOCK_BRIDGE_SCRIPT,
+  type DevtoolsDockMessage,
   type DevtoolsDockSide,
   type DevtoolsRect,
   devtoolsGuestBounds,
@@ -27,7 +28,6 @@ import {
   PAGE_DESIGN_MODE_DISABLE_SCRIPT,
   PAGE_DESIGN_MODE_ENABLE_SCRIPT,
   PAGE_DESIGN_MODE_HIDE_SCRIPT,
-  PAGE_LOCK_OVERLAY_SCRIPT,
   PAGE_SETTLE_FRAMES_SCRIPT,
   PAGE_SNAPSHOT_SCRIPT,
   PAGE_UNLOCK_OVERLAY_SCRIPT,
@@ -36,7 +36,6 @@ import {
   pageDesignModeShowFrozenScript,
   pageDragPointsScript,
   pageHighlightScript,
-  pageLockOverlayDisplayScript,
   pageScrollScript,
   pageSelectOptionScript,
 } from '@shared/browser/pageScripts';
@@ -79,7 +78,6 @@ import { assertBrowserUrl, resolveLocalCwdForBrowser } from './browserFileRoot';
 import { BrowserHistoryStore } from './browserHistory';
 import {
   BROWSER_TAB_CLOSED_NOTICE,
-  BROWSER_TAKEOVER_NOTICE,
   type BrowserActor,
   BrowserTabClaims,
   browserTabBusyMessage,
@@ -93,6 +91,7 @@ import {
 
 const PARTITION_SUFFIX = '-browser';
 const NAVIGATE_TIMEOUT_MS = 30_000;
+const ABORT_GRACE_MS = 2_000;
 const MAX_HEADLESS_TABS = 4;
 /** 会话不在看的 Browser 进程，闲置这么久就卸掉（URL 仍落盘） */
 const IDLE_MS = 5 * 60 * 1000;
@@ -226,12 +225,12 @@ interface Tab {
   favicon: string | null;
   designBinding?: boolean;
   pickSeq: number;
-  /** 正在发合成输入（drag / CDP Input.*），input-event 不算用户接管 */
+  /** 正在发合成输入（drag / CDP Input.*），不将其当作人工页面改动 */
   synthetic: number;
   /** 上一个占用该 tab 的成员会话；换人后旧快照的 ref 作废 */
   lastHolder?: string;
   device: BrowserDevice;
-  control: 'agent' | 'manual';
+  /** 人工操作 / 导航后的页面代际，仅用于拒绝迟到快照，不是控制权。 */
   generation: number;
   snapshotSeq: number;
   readSnapshot?: PageReadSnapshot;
@@ -414,32 +413,9 @@ export class BrowserHost {
     tab.readKey = undefined;
   }
 
-  private takeOver(tab: Tab): void {
-    tab.control = 'manual';
+  private userInteracted(tab: Tab): void {
     tab.generation += 1;
-    tab.active?.abort(new Error('The user took over browser control'));
     this.invalidateRefs(tab);
-    this.tabClaims.userTookOver(tab.id);
-    this.emitState(tab.ownerSessionId, tab.id);
-  }
-
-  async setControl(
-    tabId: string,
-    conversationId: string,
-    control: 'manual' | 'agent'
-  ): Promise<BrowserTabState> {
-    const tab = this.ownedTab(tabId, conversationId);
-    if (control !== 'manual' && control !== 'agent') throw new Error('Invalid browser control');
-    if (control === 'manual') {
-      this.takeOver(tab);
-      if (await this.removeLockOverlay(tab)) tab.locked = false;
-    } else {
-      tab.generation += 1;
-      tab.control = 'agent';
-      this.invalidateRefs(tab);
-    }
-    this.emitState(conversationId, tabId);
-    return this.stateOf(tab);
   }
 
   async setDevice(
@@ -467,7 +443,7 @@ export class BrowserHost {
   stop(tabId: string): void {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
-    this.takeOver(tab);
+    this.userInteracted(tab);
     tab.view.webContents.stop();
   }
 
@@ -525,7 +501,6 @@ export class BrowserHost {
       canGoForward: contents.navigationHistory.canGoForward(),
       locked: tab.locked,
       device: tab.device,
-      control: tab.control,
       devtoolsOpen: tab.devtoolsOpen,
       ...(tab.devtoolsOpen ? { devtoolsDock: tab.devtoolsDock } : {}),
       designMode: tab.designMode,
@@ -605,11 +580,12 @@ export class BrowserHost {
     if (open) {
       tab.devtoolsDock = 'bottom';
       tab.devtoolsPage = null;
+      // debugger 让位后，不能再把旧模拟配置当成已经生效。
+      tab.emulationKey = undefined;
       this.detachDebugger(tab);
       this.ensureDevTools(tab);
     } else {
       this.teardownDevTools(tab);
-      this.shownDevtools = null;
     }
     this.layout();
     this.emitState(tab.ownerSessionId, tab.id);
@@ -804,12 +780,17 @@ export class BrowserHost {
       });
       tab.devtools.setBackgroundColor('#202124');
       const devtools = tab.devtools.webContents;
+      devtools.once('destroyed', () => {
+        if (this.tabs.get(tab.id) !== tab || tab.devtools?.webContents !== devtools) return;
+        this.setDevTools(tab.id, false);
+      });
       // 前端 undock 时会 window.open 一个空白宿主窗；独立窗口由我们自己开
       devtools.setWindowOpenHandler(() => ({ action: 'deny' }));
       devtools.on('dom-ready', () => {
         void devtools.executeJavaScript(DEVTOOLS_DOCK_BRIDGE_SCRIPT, true).catch(() => {});
       });
       devtools.on('console-message', (details) => {
+        if (tab.devtools?.webContents !== devtools) return;
         const message = parseDevtoolsDockMessage(details.message);
         if (message) this.onDevtoolsDock(tab, message);
       });
@@ -841,11 +822,12 @@ export class BrowserHost {
     }
   }
 
-  private onDevtoolsDock(
-    tab: Tab,
-    message: { side: DevtoolsDockSide } | { bounds: DevtoolsRect }
-  ): void {
+  private onDevtoolsDock(tab: Tab, message: DevtoolsDockMessage): void {
     if (this.tabs.get(tab.id) !== tab || !tab.devtoolsOpen) return;
+    if ('closed' in message) {
+      this.setDevTools(tab.id, false);
+      return;
+    }
     if ('bounds' in message) {
       tab.devtoolsPage = message.bounds;
       this.layout();
@@ -908,14 +890,17 @@ export class BrowserHost {
   }
 
   private teardownDevTools(tab: Tab): void {
+    const frontend = tab.devtools;
+    this.closeDevtoolsWindow(tab);
+    // closeDevTools 会销毁自定义前端；先摘掉引用，避免关闭事件重入或 layout
+    // 再把已销毁的 child view 挂回窗口（连后续菜单 covered 上报都会因此失败）。
+    tab.devtools = undefined;
+    tab.devtoolsPage = null;
+    if (this.shownDevtools?.tabId === tab.id) this.shownDevtools = null;
+    if (frontend) this.detach(frontend);
     const contents = tab.view.webContents;
     if (!contents.isDestroyed() && contents.isDevToolsOpened()) contents.closeDevTools();
-    this.closeDevtoolsWindow(tab);
-    tab.devtoolsPage = null;
-    if (tab.devtools) {
-      this.detach(tab.devtools);
-      tab.devtools.setVisible(false);
-    }
+    if (frontend && !frontend.webContents.isDestroyed()) frontend.webContents.close();
   }
 
   private async cdp(tab: Tab, method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -944,13 +929,12 @@ export class BrowserHost {
     if (existing && existing.ownerSessionId !== sessionId)
       throw new Error('Browser tab owner mismatch.');
     if (!existing) this.createTab(sessionId, tabId);
-    this.tabClaims.userTookOver(tabId);
     this.currentBySession.set(sessionId, tabId);
     this.userTabs.add(tabId);
     const url = this.allowUrl(raw, sessionId);
     const tab = this.tabs.get(tabId);
     if (!tab) return;
-    tab.lastSnapshot = undefined;
+    this.userInteracted(tab);
     await Promise.race([
       tab.view.webContents.loadURL(url.href),
       sleep(NAVIGATE_TIMEOUT_MS).then(() => {
@@ -965,7 +949,7 @@ export class BrowserHost {
       const history = tab.view.webContents.navigationHistory;
       const entry = history.getEntryAtIndex(history.getActiveIndex() - 1);
       if (!entry || !this.canNavigate(tab, entry.url)) return;
-      this.tabClaims.userTookOver(tabId);
+      this.userInteracted(tab);
       history.goBack();
     }
   }
@@ -976,7 +960,7 @@ export class BrowserHost {
       const history = tab.view.webContents.navigationHistory;
       const entry = history.getEntryAtIndex(history.getActiveIndex() + 1);
       if (!entry || !this.canNavigate(tab, entry.url)) return;
-      this.tabClaims.userTookOver(tabId);
+      this.userInteracted(tab);
       history.goForward();
     }
   }
@@ -993,7 +977,7 @@ export class BrowserHost {
   reload(tabId: string): void {
     const tab = this.tabs.get(tabId);
     if (!tab || !this.canNavigate(tab, tab.view.webContents.getURL())) return;
-    this.tabClaims.userTookOver(tabId);
+    this.userInteracted(tab);
     tab.view.webContents.reload();
   }
 
@@ -1019,23 +1003,19 @@ export class BrowserHost {
   }
 
   /**
-   * 加锁只作用于当前 tab；释放要覆盖会话下全部 tab，否则切过 tab 会留下永远锁死的孤儿。
-   * 不带 target 的释放来自面板「接管」；成员自己加 / 解锁只动它在用的 tab。
+   * 兼容 browser_lock 的标签保留标记，不拦截用户输入或阻止 Agent 协作。
+   * 保留只作用于目标 tab；无目标的释放覆盖会话下全部 tab。
    */
   async setLocked(sessionId: string, locked: boolean, target?: Tab): Promise<void> {
     const current = target ?? this.mustTab(sessionId);
     if (locked) {
-      if (current.designMode) await this.setDesignMode(current.id, false);
       current.locked = true;
-      await this.syncLockOverlay(current);
       this.emitState(sessionId, current.id);
       return;
     }
     for (const tab of target ? [target] : this.tabs.values()) {
       if (tab.ownerSessionId !== sessionId) continue;
-      if (!target && tab.locked) this.tabClaims.userTookOver(tab.id);
-      // 遮罩没真删掉就不谎报 unlocked，用户可以再按一次
-      if (await this.removeLockOverlay(tab)) tab.locked = false;
+      tab.locked = false;
       this.emitState(tab.ownerSessionId, tab.id);
     }
   }
@@ -1043,7 +1023,7 @@ export class BrowserHost {
   async setDesignMode(tabId: string, enabled: boolean): Promise<BrowserTabState> {
     const tab = this.tabs.get(tabId);
     if (!tab) return EMPTY_STATE;
-    if (enabled && (tab.locked || tab.devtoolsOpen)) return this.stateOf(tab);
+    if (enabled && tab.devtoolsOpen) return this.stateOf(tab);
     if (!enabled) {
       tab.designMode = false;
       tab.pickSeq += 1;
@@ -1174,25 +1154,6 @@ export class BrowserHost {
     return this.screenshot(tab);
   }
 
-  /** 返回 guest 页是否已对齐到目标状态。 */
-  private async syncLockOverlay(tab: Tab, locked = tab.locked): Promise<boolean> {
-    const contents = tab.view.webContents;
-    // 页面已销毁 / 还没 ready：没有文档就没有遮罩，解锁视为已达成
-    if (contents.isDestroyed() || !tab.ready) return !locked;
-    const script = locked ? PAGE_LOCK_OVERLAY_SCRIPT : PAGE_UNLOCK_OVERLAY_SCRIPT;
-    const result = await contents.executeJavaScript(script, true).catch(() => undefined);
-    return result === 'ok';
-  }
-
-  /** 导航竞态会让一次 executeJavaScript 直接拒绝，重试几次再判定失败。 */
-  private async removeLockOverlay(tab: Tab): Promise<boolean> {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (await this.syncLockOverlay(tab, false)) return true;
-      await sleep(50);
-    }
-    return false;
-  }
-
   getSession(): Session {
     if (!this.guestSession) {
       const name = partitionName(app.isPackaged);
@@ -1268,20 +1229,17 @@ export class BrowserHost {
     const target = this.ownedTab(tab.id, sessionId);
     // 工具一旦选定 tab，后续不带 tabId 的调用都跟随它；UI 面板可见性不得改写这个指针
     this.agentBySession.set(sessionId, target.id);
-    this.assertAgentControl(target);
     if (actor) {
       const claim = this.tabClaims.claim(target.id, actor);
       if (!claim.ok) throw new Error(browserTabBusyMessage(claim.holder.name));
       if (target.lastHolder !== actor.sessionId) this.invalidateRefs(target);
       target.lastHolder = actor.sessionId;
-      if (claim.tookOver && op !== 'snapshot' && op !== 'read_text' && op !== 'read_elements')
-        throw new Error(BROWSER_TAKEOVER_NOTICE);
     }
-    const generation = target.generation;
+    let draining: Promise<unknown> | undefined;
     const task = target.queue
       .catch(() => {})
       .then(async () => {
-        this.assertAgentControl(target, generation);
+        this.assertTabActive(target);
         options?.signal?.throwIfAborted();
         const controller = new AbortController();
         const signal = options?.signal
@@ -1289,40 +1247,99 @@ export class BrowserHost {
           : controller.signal;
         target.active = controller;
         target.operationSignal = signal;
+        let running: Promise<unknown> | undefined;
+        let settled = false;
+        let graceTimer: ReturnType<typeof setTimeout> | undefined;
+        let recovered!: () => void;
+        const recovery = new Promise<void>((resolve) => {
+          recovered = resolve;
+        });
         let removeAbort = () => {};
         const aborted = new Promise<never>((_resolve, reject) => {
-          const abort = () => reject(signal.reason ?? new Error('Browser operation aborted'));
+          const abort = () => {
+            if (!settled && !graceTimer) {
+              graceTimer = setTimeout(() => {
+                // 不能在旧任务仍可能发输入时复用 tab；超时只能关闭它后回收队列。
+                if (this.tabs.get(target.id) !== target) {
+                  recovered();
+                  return;
+                }
+                void this.closeTab(target.id)
+                  .catch(() => {})
+                  .finally(recovered);
+              }, ABORT_GRACE_MS);
+            }
+            try {
+              const contents = target.view.webContents;
+              if ((op === 'navigate' || op === 'navigation') && !contents.isDestroyed())
+                contents.stop();
+            } catch {
+              // webContents 可能在取消同时销毁，不能让 abort listener 抛到 Main。
+            } finally {
+              reject(signal.reason ?? new Error('Browser operation aborted'));
+            }
+          };
           signal.addEventListener('abort', abort, { once: true });
           removeAbort = () => signal.removeEventListener('abort', abort);
           if (signal.aborted) abort();
         });
         try {
-          const result = await Promise.race([
-            this.run(sessionId, op, params, () => target, target),
-            aborted,
-          ]);
-          if (op !== 'close') this.assertAgentControl(target, generation);
+          running = this.run(sessionId, op, params, () => target, target).finally(() => {
+            settled = true;
+            clearTimeout(graceTimer);
+            // 取消只提前结束调用者等待；底层工作退出前保留自己的 signal 与队列槽位，
+            // 防止迟到的点击/输入读到下一次操作的 signal 后继续执行。
+            if (target.active === controller) {
+              target.active = undefined;
+              target.operationSignal = undefined;
+            }
+          });
+          draining = Promise.race([running, recovery]);
+          // 调用者可能已经取消；独立的 drain 仍须消费底层任务的迟到失败。
+          void draining.catch(() => {});
+          const result = await Promise.race([running, aborted]);
+          if (op !== 'close') this.assertTabActive(target);
           if (op === 'close' && actor) this.tabClaims.takeClosed(actor.sessionId);
           return result;
         } finally {
           removeAbort();
-          if (target.active === controller) {
+          if (target.active === controller && !running) {
+            clearTimeout(graceTimer);
             target.active = undefined;
             target.operationSignal = undefined;
           }
         }
       });
-    target.queue = task.catch(() => {});
-    return task;
+    target.queue = task
+      .catch(() => {})
+      .then(() => draining)
+      .catch(() => {});
+    const externalSignal = options?.signal;
+    if (!externalSignal) return task;
+    let removeExternalAbort = () => {};
+    const externalAbort = new Promise<never>((_resolve, reject) => {
+      const abort = () => reject(externalSignal.reason ?? new Error('Browser operation aborted'));
+      externalSignal.addEventListener('abort', abort, { once: true });
+      removeExternalAbort = () => externalSignal.removeEventListener('abort', abort);
+      if (externalSignal.aborted) abort();
+    });
+    try {
+      // 排队阶段也必须立即响应调用者取消；队列任务稍后检查 signal，不执行动作。
+      return await Promise.race([task, externalAbort]);
+    } finally {
+      removeExternalAbort();
+    }
   }
 
-  private assertAgentControl(tab: Tab, generation?: number): void {
+  private assertTabActive(tab: Tab): void {
     if (this.tabs.get(tab.id) !== tab) throw new Error('Browser tab is closed');
-    if (tab.control === 'manual' || (generation !== undefined && generation !== tab.generation))
-      throw new Error(
-        'The user took over browser control. Ask the user to allow Agent control in the browser UI.'
-      );
     tab.operationSignal?.throwIfAborted();
+  }
+
+  private assertSnapshotCurrent(tab: Tab, generation: number): void {
+    this.assertTabActive(tab);
+    if (generation !== tab.generation)
+      throw new Error('Page changed while reading; refresh browser_snapshot or browser_read.');
   }
 
   private async run(
@@ -1455,8 +1472,8 @@ export class BrowserHost {
         );
       case 'lock': {
         const locked = !(isRecord(params) && params.release === true);
-        await this.setLocked(sessionId, locked);
-        // 解锁可能失败（遮罩没删掉），如实回报真实状态
+        const targeted = locked || (isRecord(params) && params.tabId !== undefined);
+        await this.setLocked(sessionId, locked, targeted ? mustTab() : undefined);
         return { locked: mustTab().locked };
       }
     }
@@ -1562,7 +1579,7 @@ export class BrowserHost {
         pageReadScript(request, snapshotId),
         true
       );
-      this.assertAgentControl(tab, generation);
+      this.assertSnapshotCurrent(tab, generation);
       const snapshot = parsePageReadSnapshot(raw, snapshotId);
       this.invalidateRefs(tab);
       tab.readSnapshot = snapshot;
@@ -1585,7 +1602,7 @@ export class BrowserHost {
       `const ref = 'e' + ${JSON.stringify(prefix)} + '_' + (++counter);`
     );
     const raw: unknown = await tab.view.webContents.executeJavaScript(script, true);
-    this.assertAgentControl(tab, generation);
+    this.assertSnapshotCurrent(tab, generation);
     const entries = parseSnapshotEntries(raw);
     if (!entries) throw new Error('Page snapshot returned an unexpected shape.');
     this.invalidateRefs(tab);
@@ -1594,7 +1611,7 @@ export class BrowserHost {
   }
 
   private sendInput(tab: Tab, event: Electron.KeyboardInputEvent | Electron.MouseInputEvent): void {
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
     tab.synthetic += 1;
     try {
       tab.view.webContents.sendInputEvent(event);
@@ -1611,7 +1628,7 @@ export class BrowserHost {
       this.sendInput(tab, { type: 'char', keyCode });
     this.sendInput(tab, { type: 'keyUp', keyCode, modifiers });
     await sleep(40);
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
     return this.pageInfo(tab.view.webContents);
   }
 
@@ -1621,7 +1638,8 @@ export class BrowserHost {
       pagePrepareInputScript(ref),
       true
     );
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
+    this.assertRef(tab, ref);
     if (!isRecord(point) || typeof point.x !== 'number' || typeof point.y !== 'number')
       throw interpretPageAction(ref, point) ?? new Error('Invalid target point');
     await this.pointerAt(tab, point.x, point.y, click);
@@ -1631,21 +1649,13 @@ export class BrowserHost {
   private async pointerAt(tab: Tab, x: number, y: number, click: boolean): Promise<void> {
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0)
       throw new Error('Invalid pointer coordinates');
-    await tab.view.webContents.executeJavaScript(pageLockOverlayDisplayScript(true), true);
-    try {
-      this.sendInput(tab, { type: 'mouseMove', x, y });
-      if (click) {
-        this.sendInput(tab, { type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
-        this.sendInput(tab, { type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-      }
-      await sleep(40);
-      this.assertAgentControl(tab);
-    } finally {
-      if (tab.locked && this.tabs.get(tab.id) === tab)
-        await tab.view.webContents
-          .executeJavaScript(pageLockOverlayDisplayScript(false), true)
-          .catch(() => {});
+    this.sendInput(tab, { type: 'mouseMove', x, y });
+    if (click) {
+      this.sendInput(tab, { type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+      this.sendInput(tab, { type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
     }
+    await sleep(40);
+    this.assertTabActive(tab);
   }
 
   private click(tab: Tab, ref: string): Promise<PageInfo> {
@@ -1658,19 +1668,22 @@ export class BrowserHost {
       pagePrepareInputScript(ref, true),
       true
     );
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
+    this.assertRef(tab, ref);
     if (!isRecord(prepared))
       throw interpretPageAction(ref, prepared) ?? new Error('Could not focus input');
     await this.pressKey(tab, process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    this.assertRef(tab, ref);
     await this.pressKey(tab, 'Backspace');
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
+    this.assertRef(tab, ref);
     tab.synthetic += 1;
     try {
       await tab.view.webContents.insertText(text);
     } finally {
       tab.synthetic -= 1;
     }
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
     if (submit) await this.pressKey(tab, 'Enter');
     return this.pageInfo(tab.view.webContents);
   }
@@ -1684,7 +1697,7 @@ export class BrowserHost {
     if (typeof before !== 'boolean')
       throw interpretPageAction(ref, before) ?? new Error('Element is not checkable');
     if (before !== checked) await this.click(tab, ref);
-    this.assertAgentControl(tab);
+    this.assertTabActive(tab);
     const after: unknown = await tab.view.webContents.executeJavaScript(
       pageCheckedScript(ref),
       true
@@ -1697,15 +1710,16 @@ export class BrowserHost {
   private async waitFor(tab: Tab, params: unknown): Promise<unknown> {
     const request = parseBrowserWait(params);
     if (request.ref) this.assertRef(tab, request.ref);
-    const generation = tab.generation;
     const deadline = Date.now() + request.timeoutMs;
     do {
-      this.assertAgentControl(tab, generation);
+      this.assertTabActive(tab);
+      if (request.ref) this.assertRef(tab, request.ref);
       const matched: unknown = await tab.view.webContents.executeJavaScript(
         pageWaitScript(request),
         true
       );
-      this.assertAgentControl(tab, generation);
+      this.assertTabActive(tab);
+      if (request.ref) this.assertRef(tab, request.ref);
       if (matched === true) return { matched: true, ...this.stateOf(tab) };
       await sleep(Math.min(100, Math.max(1, deadline - Date.now())));
     } while (Date.now() < deadline);
@@ -1786,7 +1800,7 @@ export class BrowserHost {
     if (fromRef) this.assertRef(tab, fromRef);
     if (toRef) this.assertRef(tab, toRef);
     const contents = tab.view.webContents;
-    await contents.executeJavaScript(pageLockOverlayDisplayScript(true), true);
+    let pressed: { x: number; y: number } | undefined;
     try {
       const raw: unknown = await contents.executeJavaScript(pageDragPointsScript(from, to), true);
       if (raw === 'stale' || !isRecord(raw) || !isRecord(raw.from) || !isRecord(raw.to)) {
@@ -1798,17 +1812,21 @@ export class BrowserHost {
       const endY = Number(raw.to.y);
       if (![startX, startY, endX, endY].every(Number.isFinite)) throw new Error('Drag failed.');
       for (const event of dragInputEvents({ x: startX, y: startY }, { x: endX, y: endY })) {
-        tab.synthetic += 1;
-        try {
-          contents.sendInputEvent(event);
-        } finally {
-          tab.synthetic -= 1;
-        }
+        this.sendInput(tab, event);
+        pressed = event.type === 'mouseUp' ? undefined : { x: event.x, y: event.y };
         await sleep(16);
       }
       await sleep(40);
     } finally {
-      await contents.executeJavaScript(pageLockOverlayDisplayScript(false), true);
+      // 取消也必须抬起已按下的鼠标；这是释放输入状态，不是继续自动操作。
+      if (pressed && !contents.isDestroyed()) {
+        tab.synthetic += 1;
+        try {
+          contents.sendInputEvent({ type: 'mouseUp', ...pressed, button: 'left', clickCount: 1 });
+        } finally {
+          tab.synthetic -= 1;
+        }
+      }
       await contents.executeJavaScript(PAGE_SETTLE_FRAMES_SCRIPT, true);
     }
     return this.pageInfo(tab.view.webContents);
@@ -1934,7 +1952,6 @@ export class BrowserHost {
       pickSeq: 0,
       synthetic: 0,
       device: { enabled: false },
-      control: 'agent',
       generation: 0,
       snapshotSeq: 0,
       queue: Promise.resolve(),
@@ -1942,14 +1959,19 @@ export class BrowserHost {
     };
     const contents = view.webContents;
     const push = () => this.emitState(sessionId, id);
-    // 真实输入与 UI 接管走同一路径，立即取消旧操作并使页面引用失效。
+    // 人工操作只让旧引用失效，不取消协作等待或锁死后续 Agent 工具。
     contents.on('input-event', (_event, input) => {
-      if (tab.synthetic === 0 && USER_INPUT.has(input.type)) this.takeOver(tab);
+      if (tab.synthetic === 0 && USER_INPUT.has(input.type)) this.userInteracted(tab);
     });
     contents.on('did-start-loading', push);
     contents.on('did-stop-loading', push);
+    // replaceState / hash 也可能来自 Agent 输入；真实人工输入和工具栏单独失效引用。
     contents.on('did-navigate-in-page', push);
     contents.on('page-title-updated', push);
+    contents.on('devtools-closed', () => {
+      if (this.tabs.get(id) === tab && !contents.isDestroyed() && !contents.isDevToolsOpened())
+        this.setDevTools(id, false);
+    });
     // 页内链接 / 重定向也过同一道 URL 门
     const guard = (event: { preventDefault(): void }, url: string) => {
       try {
@@ -1972,19 +1994,19 @@ export class BrowserHost {
       // a workspace or symlink changes. HTTP-only browsing keeps its history.
       if (wasFilePage || isFilePage) contents.navigationHistory.clear();
       wasFilePage = isFilePage;
-      tab.lastSnapshot = undefined;
+      this.userInteracted(tab);
       tab.favicon = null;
       push();
     });
     contents.on('did-finish-load', () => {
-      // 始终对齐：history / BFCache 带回来的残留遮罩也要清掉
-      void this.syncLockOverlay(tab);
+      // 只清理旧版或 BFCache 残留的锁页遮罩，不再创建。
+      void this.runGuest(tab, PAGE_UNLOCK_OVERLAY_SCRIPT);
       if (tab.designMode) void this.runGuest(tab, PAGE_DESIGN_MODE_ENABLE_SCRIPT);
     });
     contents.once('dom-ready', () => {
       tab.ready = true;
       this.layout();
-      if (tab.locked) void this.syncLockOverlay(tab);
+      void this.runGuest(tab, PAGE_UNLOCK_OVERLAY_SCRIPT);
       if (tab.designMode) void this.runGuest(tab, PAGE_DESIGN_MODE_ENABLE_SCRIPT);
     });
     // window.open / target=_blank：本 tab 内导航，不弹系统浏览器
@@ -2058,12 +2080,6 @@ export class BrowserHost {
     }
     await this.flush();
     this.teardownDevTools(tab);
-    if (this.shownDevtools?.tabId === tab.id) this.shownDevtools = null;
-    if (tab.devtools) {
-      this.detach(tab.devtools);
-      if (!tab.devtools.webContents.isDestroyed()) tab.devtools.webContents.close();
-      tab.devtools = undefined;
-    }
     this.detach(tab.view);
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
     this.emitState(tab.ownerSessionId, tab.id);

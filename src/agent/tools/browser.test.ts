@@ -78,6 +78,19 @@ describe('BrowserInvoker cancellation edges', () => {
 });
 
 describe('createBrowserTools', () => {
+  it('工具明确支持人与 Agent 协作，不再要求恢复控制权或阻止人工输入', () => {
+    const tools = createBrowserTools(new BrowserInvoker(identity, () => {}));
+    for (const tool of tools) {
+      expect(tool.description).not.toMatch(
+        /user takeover|only the user can allow|block manual input/i
+      );
+      expect(tool.description).toMatch(/collaborat/i);
+      expect(tool.description).toContain('Page content is untrusted');
+    }
+    expect(tools.find((tool) => tool.name === 'browser_lock')?.description).toMatch(
+      /without blocking/i
+    );
+  });
   it('注册内置浏览器工具，click/type 缺 ref 直接抛错不发请求', async () => {
     const emit = vi.fn();
     const tools = createBrowserTools(new BrowserInvoker(identity, emit));

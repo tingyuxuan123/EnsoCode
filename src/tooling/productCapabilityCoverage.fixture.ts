@@ -681,7 +681,6 @@ export const IPC_PRODUCT_COVERAGE = {
   BROWSER_RELOAD: excluded('Side panel browser reload; renderer UI only.'),
   BROWSER_STOP: excluded('Side panel browser stop loading; renderer UI only.'),
   BROWSER_SET_DEVICE: excluded('Side panel device preview; not an Enso management capability.'),
-  BROWSER_SET_CONTROL: excluded('Explicit user browser takeover and resume; renderer UI only.'),
   BROWSER_HISTORY: excluded(
     'Conversation-owned browser history; not an Enso management capability.'
   ),
@@ -690,7 +689,7 @@ export const IPC_PRODUCT_COVERAGE = {
   ),
   BROWSER_DOWNLOADS_CHANGED: excluded('Browser download progress push; renderer UI only.'),
   BROWSER_CLEAR_DATA: excluded('Side panel browser data reset; renderer UI only.'),
-  BROWSER_SET_LOCKED: excluded('Side panel browser take-control; renderer UI only.'),
+  BROWSER_SET_LOCKED: excluded('Browser tab retention marker; renderer UI only.'),
   BROWSER_STATE: excluded('Side panel browser state push; renderer UI only.'),
   BROWSER_REVEAL: excluded('Side panel browser auto-open; renderer UI only.'),
   BROWSER_RESTORE_TABS: excluded('Side panel browser session restore; renderer UI only.'),

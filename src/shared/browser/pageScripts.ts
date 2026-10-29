@@ -243,28 +243,7 @@ export const pageTypeScript = (
   return 'ok';
 })()`;
 
-/** 盖在 guest 页上吞掉用户指针；agent 的 element.click() 不经过这层。 */
-export const PAGE_LOCK_OVERLAY_SCRIPT = `(() => {
-  const ID = ${JSON.stringify(LOCK_OVERLAY_ID)};
-  if (document.getElementById(ID)) return 'ok';
-  const el = document.createElement('div');
-  el.id = ID;
-  Object.assign(el.style, {
-    position: 'fixed',
-    inset: '0',
-    zIndex: '2147483647',
-    background: 'transparent',
-    cursor: 'not-allowed',
-  });
-  const block = (e) => { e.stopPropagation(); e.preventDefault(); };
-  for (const type of ['click','mousedown','mouseup','pointerdown','pointerup','wheel','touchstart','contextmenu']) {
-    el.addEventListener(type, block, true);
-  }
-  document.documentElement.appendChild(el);
-  return 'ok';
-})()`;
-
-/** 幂等；只有确认节点真的没了才返回 'ok'，宿主据此才敢落 locked=false。 */
+/** 清理旧版 / BFCache 残留锁页遮罩；只删除，不再安装或恢复。 */
 export const PAGE_UNLOCK_OVERLAY_SCRIPT = `(() => {
   const ID = ${JSON.stringify(LOCK_OVERLAY_ID)};
   for (let i = 0; i < 8; i++) {
@@ -377,12 +356,6 @@ export const pageBoundingBoxScript = (ref: string): string => `(() => {
   if (!el) return null;
   const r = el.getBoundingClientRect();
   return { x: r.x, y: r.y, width: r.width, height: r.height };
-})()`;
-
-export const pageLockOverlayDisplayScript = (hidden: boolean): string => `(() => {
-  const el = document.getElementById(${JSON.stringify(LOCK_OVERLAY_ID)});
-  if (el) el.style.display = ${hidden ? JSON.stringify('none') : JSON.stringify('')};
-  return 'ok';
 })()`;
 
 export const PAGE_SETTLE_FRAMES_SCRIPT = `(async () => {

@@ -1,18 +1,17 @@
 /**
  * 共享浏览器的标签页操作锁（Main）：同一标签同一时刻只让一个成员会话操作。
  * 首次操作即占用，本轮结束 / 停止 / 闲置超时释放；被占时立即拒绝，不排队。
- * 用户本人不受锁限制，接管后占用者下一次操作收到提示。
+ * 用户本人不受锁限制，人工操作不会改变成员之间的占用关系。
  */
 export interface BrowserActor {
   sessionId: string;
   name: string;
 }
 
-export type BrowserClaim = { ok: true; tookOver: boolean } | { ok: false; holder: BrowserActor };
+export type BrowserClaim = { ok: true } | { ok: false; holder: BrowserActor };
 
 interface Held {
   actor: BrowserActor;
-  tookOver: boolean;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -20,9 +19,6 @@ const DEFAULT_IDLE_MS = 5 * 60_000;
 
 export const browserTabBusyMessage = (name: string) =>
   `${name} is using this browser tab. Open a new tab (browser_navigate with newTab: true) or try again later.`;
-
-export const BROWSER_TAKEOVER_NOTICE =
-  'The user took over this browser tab since your last action, so the page may have changed. Call browser_snapshot to see the current page before continuing.';
 
 export const BROWSER_TAB_CLOSED_NOTICE =
   'The browser tab you were using was closed. Call browser_navigate to open a page again.';
@@ -60,10 +56,10 @@ export class BrowserTabClaims {
     if (current) clearTimeout(current.timer);
     const timer = setTimeout(() => this.drop(tabId), this.idleMs);
     (timer as { unref?: () => void }).unref?.();
-    this.held.set(tabId, { actor, tookOver: false, timer });
+    this.held.set(tabId, { actor, timer });
     this.point(actor.sessionId, tabId);
     if (!current) this.onChange(tabId);
-    return { ok: true, tookOver: current?.tookOver ?? false };
+    return { ok: true };
   }
 
   release(sessionId: string): void {
@@ -89,11 +85,6 @@ export class BrowserTabClaims {
   /** 成员在用的标签被关掉后，下一次操作取一次提示 */
   takeClosed(sessionId: string): boolean {
     return this.closed.delete(sessionId);
-  }
-
-  userTookOver(tabId: string): void {
-    const entry = this.held.get(tabId);
-    if (entry) entry.tookOver = true;
   }
 
   private drop(tabId: string): void {

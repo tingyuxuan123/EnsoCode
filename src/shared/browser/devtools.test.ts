@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { runInNewContext } from 'node:vm';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assertDevtoolsIdle,
   DEVTOOLS_BUSY_ERROR,
+  DEVTOOLS_DOCK_BRIDGE_SCRIPT,
   devtoolsGuestBounds,
   parseDevtoolsDockMessage,
   resetUndockedDevtoolsPreference,
@@ -48,6 +50,11 @@ describe('assertDevtoolsIdle', () => {
 const tag = '__enso_devtools_dock__';
 
 describe('parseDevtoolsDockMessage', () => {
+  it('只接受严格的关闭通知', () => {
+    expect(parseDevtoolsDockMessage(`${tag}{"closed":true}`)).toEqual({ closed: true });
+    for (const raw of ['{"closed":false}', '{"closed":"true"}', '{"closed":true,"extra":1}'])
+      expect(parseDevtoolsDockMessage(`${tag}${raw}`)).toBeNull();
+  });
   it('解析停靠方向与网页区域', () => {
     expect(parseDevtoolsDockMessage(`${tag}{"side":"right"}`)).toEqual({ side: 'right' });
     expect(parseDevtoolsDockMessage(`${tag}{"side":"undocked"}`)).toEqual({ side: 'undocked' });
@@ -72,6 +79,27 @@ describe('parseDevtoolsDockMessage', () => {
       `${tag}null`,
     ])
       expect(parseDevtoolsDockMessage(raw), raw).toBeNull();
+  });
+});
+
+describe('DevTools embedder bridge', () => {
+  it('自带关闭按钮交给宿主清理，不让 Electron 单独销毁前端而遗留布局', () => {
+    const original = vi.fn();
+    const debug = vi.fn();
+    const api = { sendMessageToEmbedder: original };
+    runInNewContext(DEVTOOLS_DOCK_BRIDGE_SCRIPT, {
+      DevToolsAPI: api,
+      console: { debug },
+    });
+
+    api.sendMessageToEmbedder('closeWindow', []);
+
+    expect(debug.mock.calls.map(([message]) => parseDevtoolsDockMessage(message))).toContainEqual({
+      closed: true,
+    });
+    expect(original).not.toHaveBeenCalled();
+    api.sendMessageToEmbedder('unhandledMethod', ['keep']);
+    expect(original).toHaveBeenCalledWith('unhandledMethod', ['keep'], undefined);
   });
 });
 

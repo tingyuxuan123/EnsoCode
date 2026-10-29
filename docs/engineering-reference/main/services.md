@@ -342,15 +342,25 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
   要放宽先改策略测试再改名单。host 自用的 CDP（截图、设备度量）不过这道门。
 - 快照只收视口内可见控件（带 `kind=click|fill|select`）和可见正文，不把屏外文章推进模型。
   password 控件要进 snapshot（`kind=fill`），但**不带当前值**；file / hidden 仍排除。
-- 点 / 填 / 键 / 滚 / 选 / 拖走页内脚本 DOM 事件（`@shared/browser/pageScripts`），ref 只认最近一次快照。
-  点/填前 `elementFromPoint` 检查遮挡（先隐掉锁定遮罩）；被挡住返回 covered，不要当 stale 重试死 ref。
+- 点 / 填 / 键 / 滚 / 选 / 拖走页内脚本与可信原生输入（`@shared/browser/pageScripts`），ref 只认最近一次快照。
+  点/填前 `elementFromPoint` 检查遮挡；被挡住返回 covered，不要当 stale 重试死 ref。
   动作后在页内等两帧或 50ms，combobox 输入最多再等 200ms 出建议。
-- 拖拽不走合成 `MouseEvent`（HTML5 DnD / 部分库不认）。Main 先隐锁定遮罩，再
+- 拖拽不走合成 `MouseEvent`（HTML5 DnD / 部分库不认）。Main
   页内用同一份 `DataTransfer` 发 `dragstart/dragover/drop`（原生 HTML5），然后
   `webContents.sendInputEvent` 发可信 mouseDown → 先微移 8px → 分段 mouseMove → mouseUp
   （jQuery UI 一类 mousedown 拖拽）。模型仍不能调 `Input.*`。
-- 锁定两层防：页内 `PAGE_LOCK_OVERLAY_SCRIPT` 吞用户指针 + renderer 把锁定当 `covered` 让 guest 沉底，
-  hover 遮罩与「接管」按钮画在 renderer（见 windows.md 层级一节）。
+- **人与 Agent 默认协作，不做互斥控制权切换**：人工点击、键盘、导航、刷新不进入 manual，
+  不永久阻断后续工具，也不要求「允许 Agent 继续」。`browser_lock` / `locked` 仅保留标签生命周期，
+  不安装吞输入的遮罩，不禁用工具栏、不因 locked 上报 covered；成员 Agent 之间的 tab 占用协调仍保留。
+  `release: true` 未指定 tabId 时释放本会话全部保留标记，指定 tabId 时仅释放目标。
+- 人工操作 / 导航使旧 ref 和读取游标失效；读取过程中页面变化只拒绝本次迟到快照，重新读取即可继续。
+  文本 / URL 等待不因人工操作中止，允许人协助完成条件；显式取消、会话结束和关闭 tab 的保护仍生效。
+  页面加载时仅清理旧版或 BFCache 残留的锁页遮罩，不再创建。
+  `did-navigate-in-page` 只推送状态；Agent 输入触发的 replaceState / hash 不视为人工操作，
+  真实 input-event 和用户工具栏仍负责失效旧引用。
+- 取消（含排队阶段）立即结束调用者等待；同 tab 队列和该次操作的取消信号保留到实际任务退出。
+  取消后 2 秒仍未退出则关闭该 tab 回收队列，不在原 tab 上放行下一次操作，防止迟到点击 / 输入
+  读到新信号继续执行。回归：`browserHost.capabilities.test.ts`。
 - 浏览器工具 `executionMode: 'sequential'`：navigate 会清 ref，并行必假 stale。
 - **「当前 tab」有两个指针，不能合并**：`currentBySession` 服务布局和面板显示，可被
   renderer 的 `setViewport` / 用户导航改写；`agentBySession` 只由工具本身（隐式选中、
