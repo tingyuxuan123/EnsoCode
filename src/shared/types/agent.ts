@@ -259,6 +259,8 @@ export interface AskRequestInfo {
   question: string;
   /** 可选快捷选项（用户也可自由输入） */
   options?: string[];
+  /** 仅允许精确选择列出的选项；空字符串答复表示取消。 */
+  selectionOnly?: boolean;
   /** 等人回答的截止时间（ms）；到期由 Main 按未回答处理 */
   expiresAt?: number;
 }
@@ -2920,6 +2922,25 @@ function parseResolvedAgentTypeSpawnConfig(value: unknown): ResolvedAgentTypeSpa
   return value as unknown as ResolvedAgentTypeSpawnConfig;
 }
 
+function isAskRequestInfo(value: unknown): value is AskRequestInfo {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.requestId) &&
+    isNonEmptyString(value.question) &&
+    isOptionalTimestamp(value.expiresAt) &&
+    (value.selectionOnly === undefined || typeof value.selectionOnly === 'boolean') &&
+    (value.options === undefined ||
+      (Array.isArray(value.options) &&
+        value.options.every((option) => typeof option === 'string'))) &&
+    (value.selectionOnly !== true ||
+      (value.question.trim().length > 0 &&
+        Array.isArray(value.options) &&
+        value.options.length > 0 &&
+        value.options.every((option) => typeof option === 'string' && option.trim().length > 0) &&
+        new Set(value.options).size === value.options.length))
+  );
+}
+
 export function parseSessionSnapshot(value: unknown): SessionSnapshot | null {
   if (!isRecord(value)) return null;
   if (
@@ -2955,6 +2976,8 @@ export function parseSessionSnapshot(value: unknown): SessionSnapshot | null {
     (value.child !== undefined && parseChildConversationMetadata(value.child) === null) ||
     (value.planState !== undefined && parsePlanState(value.planState) === null) ||
     (value.requestBody !== undefined && parseRequestBodyUsage(value.requestBody) === null) ||
+    (value.pendingAsks !== undefined &&
+      (!Array.isArray(value.pendingAsks) || !value.pendingAsks.every(isAskRequestInfo))) ||
     (value.safeJournal !== undefined && parseSafeJournalProjection(value.safeJournal) === null) ||
     (value.customEntries !== undefined &&
       (!Array.isArray(value.customEntries) ||
@@ -3381,7 +3404,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
       return hasExactKeys(value, ['type', 'identity', 'requestId', 'answer']) &&
         parseAnySessionIdentity(value.identity) &&
         isNonEmptyString(value.requestId) &&
-        isNonEmptyString(value.answer)
+        typeof value.answer === 'string'
         ? (value as unknown as AgentCommand)
         : null;
     case 'capability-result':
@@ -3897,12 +3920,7 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
     case 'ask-resolved':
       return isNonEmptyString(value.requestId) ? (value as unknown as AgentWorkerEvent) : null;
     case 'ask-request':
-      return isRecord(value.ask) &&
-        isNonEmptyString(value.ask.requestId) &&
-        isNonEmptyString(value.ask.question) &&
-        isOptionalTimestamp(value.ask.expiresAt)
-        ? (value as unknown as AgentWorkerEvent)
-        : null;
+      return isAskRequestInfo(value.ask) ? (value as unknown as AgentWorkerEvent) : null;
     case 'subagent-update':
       return isRecord(value.agent) ? (value as unknown as AgentWorkerEvent) : null;
     case 'coworker-update':

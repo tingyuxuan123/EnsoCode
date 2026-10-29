@@ -160,6 +160,7 @@ import {
   createExploreFoldTools,
   exploreFoldExtension,
 } from './exploreFold';
+import { bindExtensionUI } from './extensionUI';
 import { OperationGate } from './gate';
 import { createGoalTools } from './goal';
 import { readHarnessRuleFiles, resolveHarnessSkillRoots } from './harnessAssets';
@@ -298,6 +299,8 @@ type PromptDisposition = Parameters<NonNullable<PromptOptions['preflightResult']
 
 interface ManagedSession {
   identity: SessionIdentity;
+  /** 停止/释放期间禁止扩展重开交互；代币防止旧 abort 的 finally 解开新关闭门。 */
+  extensionUIBlock?: symbol;
   childIdentity?: ChildSessionIdentity;
   childMetadata?: ChildConversationMetadata;
   session: AgentSession;
@@ -1063,12 +1066,14 @@ export class SessionSupervisor {
   /** 释放父会话：中断 + 销毁 worker 侧会话树，jsonl 留盘。下游靠 parent-ended 把 started
    *  清回 false，之后可携新 cwd + resumeFile 重新 spawn（Move to worktree / 闲置回收后再点开）。 */
   private async releaseParent(managed: ManagedSession, reason: string): Promise<void> {
+    managed.extensionUIBlock = Symbol('release');
     const parentId = managed.identity.sessionId;
     this.codeSearch.cancelSession(parentId);
     this.workspaceClaims.forget(parentId);
     // 先收掉整棵子会话（coworker/child 都以 `${parentId}::` 为键前缀）
     for (const [id, child] of [...this.sessions]) {
       if (!id.startsWith(`${parentId}::`)) continue;
+      child.extensionUIBlock = Symbol('release');
       child.gate.cancelAll();
       child.asks.cancelAll();
       cancelContinuousMemory(child.session.sessionManager);
@@ -1881,6 +1886,8 @@ export class SessionSupervisor {
       }
       case 'abort': {
         const managed = this.must(command.identity);
+        const uiBlock = Symbol('abort');
+        managed.extensionUIBlock = uiBlock;
         this.codeSearch.cancelSession(managed.identity.sessionId);
         // 重试倒计时中 pi 只发 auto_retry_end、不再有 agent_end：须按取消重试同口径收口，
         // 否则 renderer 的中断标记吞掉下一轮收束（队列不再泵），排队压缩永远停在 queued
@@ -1905,7 +1912,12 @@ export class SessionSupervisor {
           managed.status = 'idle';
           this.emitStatus(managed);
         }
-        void managed.session.abort().catch(() => {});
+        void managed.session
+          .abort()
+          .catch(() => {})
+          .finally(() => {
+            if (managed.extensionUIBlock === uiBlock) managed.extensionUIBlock = undefined;
+          });
         return;
       }
       case 'release-parent':
@@ -2893,7 +2905,9 @@ export class SessionSupervisor {
             seq: ++managed.seq,
             ask,
           });
+          return true;
         }
+        return false;
       },
       (requestId) => {
         const managed = this.sessions.get(identity.sessionId);
@@ -2987,6 +3001,13 @@ export class SessionSupervisor {
       this.onSessionEvent(managed, event);
     });
     this.sessions.set(identity.sessionId, managed);
+    if (session.extensionRunner) {
+      bindExtensionUI(
+        session.extensionRunner,
+        managed.asks,
+        () => this.sessions.get(identity.sessionId) === managed && !managed.extensionUIBlock
+      );
+    }
     this.flushPendingMcpTools(managed);
     this.bindAutoRetryLimit(session);
     const stream = session.agent?.streamFunction;
@@ -3327,6 +3348,7 @@ export class SessionSupervisor {
     const parent = this.mustCurrent(parentId);
     const managed = this.sessions.get(coworkerId);
     if (managed) {
+      managed.extensionUIBlock = Symbol('dismiss');
       managed.gate.cancelAll();
       managed.asks.cancelAll();
       cancelContinuousMemory(managed.session.sessionManager);

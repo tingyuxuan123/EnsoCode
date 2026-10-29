@@ -16,7 +16,8 @@ export class AskManager {
   private readonly pending = new Map<string, PendingAsk>();
 
   constructor(
-    private readonly onRequest: (info: AskRequestInfo) => void,
+    // biome-ignore lint/suspicious/noConfusingVoidType: existing event callbacks may return void; only false rejects dispatch.
+    private readonly onRequest: (info: AskRequestInfo) => boolean | void,
     private readonly onResolved: (requestId: string) => void,
     /** 等真人回答的时限：提问带 expiresAt，由 Main 到期发 request-timeout */
     readonly humanTimeoutMs?: number
@@ -25,58 +26,110 @@ export class AskManager {
   ask(
     question: string,
     options?: string[],
-    opts: { signal?: AbortSignal; timeoutMs?: number; defaultAnswer?: string } = {}
+    opts: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      defaultAnswer?: string;
+      /** Internal: strict ExtensionUI selection, never a free-form/default answer. */
+      selectionOnly?: boolean;
+    } = {}
   ): Promise<string> {
+    if (opts.signal?.aborted) return Promise.reject(new Error('question cancelled'));
+    const timeoutMs =
+      typeof opts.timeoutMs === 'number' && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0
+        ? opts.timeoutMs
+        : undefined;
+    const expiresIn = timeoutMs
+      ? Math.min(timeoutMs, this.humanTimeoutMs || Number.POSITIVE_INFINITY)
+      : this.humanTimeoutMs;
     const requestId = `ask-${++counter}-${Date.now().toString(36)}`;
     const info: AskRequestInfo = {
       requestId,
       question,
       ...(options && options.length > 0 ? { options } : {}),
-      ...(this.humanTimeoutMs ? { expiresAt: Date.now() + this.humanTimeoutMs } : {}),
+      ...(opts.selectionOnly ? { selectionOnly: true } : {}),
+      ...(expiresIn ? { expiresAt: Date.now() + expiresIn } : {}),
     };
     return new Promise<string>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
       const settle = (fn: () => void) => {
-        if (timer) clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) clearTimeout(timer);
+        opts.signal?.removeEventListener('abort', onAbort);
         this.pending.delete(requestId);
-        this.onResolved(requestId);
         fn();
+        this.onResolved(requestId);
       };
+      const onAbort = () => settle(() => reject(new Error('question cancelled')));
       this.pending.set(requestId, {
         info,
         resolve: (answer) => settle(() => resolve(answer)),
         reject: (error) => settle(() => reject(error)),
         expire: () => {
-          opts.signal?.removeEventListener('abort', onAbort);
           settle(() =>
-            opts.defaultAnswer
+            !opts.selectionOnly && opts.defaultAnswer
               ? resolve(`${opts.defaultAnswer} (auto-selected: no response in 10 minutes)`)
               : reject(new Error(ASK_TIMEOUT_ERROR))
           );
         },
       });
-      const onAbort = () => settle(() => reject(new Error('question cancelled')));
       opts.signal?.addEventListener('abort', onAbort, { once: true });
       // 超时:有默认答案则视为选中(无人值守不永久卡死),否则取消
-      if (opts.timeoutMs && opts.timeoutMs > 0) {
+      if (timeoutMs) {
         timer = setTimeout(() => {
-          opts.signal?.removeEventListener('abort', onAbort);
           settle(() =>
-            opts.defaultAnswer
+            !opts.selectionOnly && opts.defaultAnswer
               ? resolve(`${opts.defaultAnswer} (auto-selected: no response in time)`)
               : reject(new Error('question timed out'))
           );
-        }, opts.timeoutMs);
+        }, timeoutMs);
       }
-      this.onRequest(info);
+      try {
+        if (this.onRequest(info) === false) onAbort();
+      } catch (error) {
+        settle(() => reject(error));
+      }
     });
+  }
+
+  async select(
+    question: string,
+    options: string[],
+    opts: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<string | undefined> {
+    try {
+      if (
+        typeof question !== 'string' ||
+        !question.trim() ||
+        !Array.isArray(options) ||
+        options.length === 0 ||
+        options.some((option) => typeof option !== 'string' || !option.trim()) ||
+        new Set(options).size !== options.length
+      ) {
+        throw new Error('question and distinct non-empty options are required');
+      }
+      const choices = [...options];
+      const answer = await this.ask(question, choices, { ...opts, selectionOnly: true });
+      return choices.includes(answer) ? answer : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   respond(requestId: string, answer: string): void {
     const entry = this.pending.get(requestId);
-    if (!entry) return;
-    this.pending.delete(requestId);
-    this.onResolved(requestId);
+    if (!entry || typeof answer !== 'string') return;
+    if (
+      entry.info.selectionOnly &&
+      entry.info.expiresAt !== undefined &&
+      Date.now() >= entry.info.expiresAt
+    ) {
+      entry.expire();
+      return;
+    }
+    if (!entry.info.selectionOnly && !answer.trim()) return;
     entry.resolve(answer);
   }
 
@@ -87,8 +140,7 @@ export class AskManager {
 
   /** abort/dismiss 时取消全部挂起提问(fail-closed) */
   cancelAll(): void {
-    for (const [requestId, entry] of this.pending) {
-      this.onResolved(requestId);
+    for (const entry of this.pending.values()) {
       entry.reject(new Error('question cancelled'));
     }
     this.pending.clear();

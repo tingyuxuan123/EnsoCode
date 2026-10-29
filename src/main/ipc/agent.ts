@@ -1946,7 +1946,7 @@ export function registerAgentHandlers(): void {
     IPC_CHANNELS.AGENT_ASK_RESPOND,
     (_event, sessionId: unknown, requestId: unknown, answer: unknown): AgentActionResult => {
       const identity = exactIdentity(sessionId);
-      if (!identity || !isNonEmptyString(requestId) || !isNonEmptyString(answer)) {
+      if (!identity || !isNonEmptyString(requestId) || typeof answer !== 'string') {
         return { ok: false, error: 'invalid ask response or stale session generation' };
       }
       return respondAsk(identity, requestId, answer);

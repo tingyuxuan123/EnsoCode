@@ -32,6 +32,45 @@ const SPAWN_SPEC_ID = '55555555-5555-4555-8555-555555555555';
 const DISPATCH_ID = '66666666-6666-4666-8666-666666666666';
 
 const parent = { sessionId: 'conversation-1', generation: PARENT_GENERATION } as const;
+
+describe('selection ask transport', () => {
+  it('回答命令保留空字符串取消但拒绝非字符串', () => {
+    const command = { type: 'ask-respond', identity: parent, requestId: 'q', answer: '' };
+    expect(parseAgentCommand(command)).toEqual(command);
+    for (const answer of [null, 1, {}, [], undefined]) {
+      expect(parseAgentCommand({ ...command, answer })).toBeNull();
+    }
+  });
+
+  it('事件与快照验证 selectionOnly 和选项类型，兼容普通旧提问', () => {
+    const base = { requestId: 'q', question: 'pick' };
+    const event = { type: 'ask-request', identity: parent, seq: 1 };
+    const snapshot = { identity: parent, status: 'idle', messages: [], commands: [] };
+    for (const ask of [
+      base,
+      { ...base, options: [] },
+      { ...base, selectionOnly: false },
+      { ...base, selectionOnly: true, options: [' a ', 'a', 'b', 'c', 'd'] },
+    ]) {
+      expect(parseAgentWorkerEvent({ ...event, ask })).not.toBeNull();
+      expect(parseSessionSnapshot({ ...snapshot, pendingAsks: [ask] })).not.toBeNull();
+    }
+    for (const ask of [
+      { ...base, selectionOnly: 'true' },
+      { ...base, options: 'a' },
+      { ...base, options: [1] },
+      { ...base, selectionOnly: true },
+      { ...base, selectionOnly: true, options: [] },
+      { ...base, selectionOnly: true, options: [' '] },
+      { ...base, selectionOnly: true, options: ['a', 'a'] },
+      { ...base, expiresAt: Number.NaN },
+    ]) {
+      expect(parseAgentWorkerEvent({ ...event, ask })).toBeNull();
+      expect(parseSessionSnapshot({ ...snapshot, pendingAsks: [ask] })).toBeNull();
+    }
+    expect(parseSessionSnapshot({ ...snapshot, pendingAsks: {} })).toBeNull();
+  });
+});
 const child = {
   sessionId: 'conversation-1::cw-33333333',
   generation: CHILD_GENERATION,

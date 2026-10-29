@@ -375,11 +375,17 @@ function InboxCard({
         decision
       )
     );
-  const reply = (text: string) =>
-    text.trim() &&
+  const selectionOnly = item.kind === 'ask' && item.request.selectionOnly;
+  const reply = (text: string) => {
+    if (busy || (!selectionOnly && !text.trim())) return;
     run(
-      window.electronAPI.agent.respondAsk(item.conversationId, item.request.requestId, text.trim())
+      window.electronAPI.agent.respondAsk(
+        item.conversationId,
+        item.request.requestId,
+        selectionOnly ? text : text.trim()
+      )
     );
+  };
   const reviewing = item.kind === 'approval' && item.request.phase === 'reviewing';
 
   return (
@@ -466,16 +472,24 @@ function InboxCard({
                 {option}
               </Button>
             ))}
-            <Input
-              className="h-7 w-48"
-              value={answer}
-              placeholder={t('Custom answer…')}
-              onChange={(event) => setAnswer(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && reply(answer)}
-            />
-            <Button size="xs" disabled={busy || !answer.trim()} onClick={() => reply(answer)}>
-              {t('Reply')}
-            </Button>
+            {selectionOnly ? (
+              <Button size="xs" variant="outline" disabled={busy} onClick={() => reply('')}>
+                {t('Cancel')}
+              </Button>
+            ) : (
+              <>
+                <Input
+                  className="h-7 w-48"
+                  value={answer}
+                  placeholder={t('Custom answer…')}
+                  onChange={(event) => setAnswer(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && reply(answer)}
+                />
+                <Button size="xs" disabled={busy || !answer.trim()} onClick={() => reply(answer)}>
+                  {t('Reply')}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>

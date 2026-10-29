@@ -1,7 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { ModelRuntime, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type {
+  ExtensionUIContext,
+  ModelRuntime,
+  ToolDefinition,
+} from '@earendil-works/pi-coding-agent';
 import { childProfileShell, childProfileToolIds } from '@shared/childProfileTools';
 import { DEFAULT_PERSONA_PROMPT } from '@shared/systemPrompt';
 import type { AgentCommand, AgentWorkerEvent } from '@shared/types/agent';
@@ -120,9 +124,23 @@ const model = {
 function session(options: Record<string, unknown>) {
   const listeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
   const labels: string[] = [];
+  const noUI: Pick<ExtensionUIContext, 'select' | 'confirm'> = {
+    select: async () => undefined,
+    confirm: async () => false,
+  };
+  let ui = noUI;
   const value = {
     model: options.model,
     resourceLoader: options.resourceLoader,
+    extensionRunner: {
+      getUIContext: () => ui,
+      setUIContext: (context: typeof ui) => {
+        ui = context;
+      },
+      createContext: () => ({ hasUI: ui !== noUI, ui }),
+      hasHandlers: vi.fn(() => false),
+      emit: vi.fn(async (_event: { type: string; reason?: string }) => undefined),
+    },
     sessionManager: options.sessionManager,
     messages: [],
     sessionFile: `/tmp/session-${mocks.sessions.length}.jsonl`,
@@ -227,6 +245,151 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
       session: session(options),
     }));
+  });
+
+  it('普通会话的扩展选择框通过提问事件展示，用户原样选择后才返回', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    const context = current.extensionRunner.createContext();
+    expect(context.hasUI).toBe(true);
+    const result = context.ui.select('Allow Computer Use to use TextEdit?', [
+      'Allow this conversation',
+      'Always allow',
+      'Deny',
+    ]);
+    const event = events.findLast((event) => event.type === 'ask-request');
+    expect(event).toMatchObject({
+      identity: parent,
+      ask: { selectionOnly: true, options: ['Allow this conversation', 'Always allow', 'Deny'] },
+    });
+    if (event?.type !== 'ask-request') throw new Error('missing extension selection');
+    supervisor.handleCommand({
+      type: 'ask-respond',
+      identity: parent,
+      requestId: event.ask.requestId,
+      answer: 'Deny',
+    });
+    await expect(result).resolves.toBe('Deny');
+    expect(events.filter((event) => event.type === 'ask-resolved')).toHaveLength(1);
+  });
+
+  it('停止会话时取消扩展确认框，不把未回答当作授权', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    expect(current.extensionRunner.createContext().hasUI).toBe(true);
+    const result = current.extensionRunner.createContext().ui.confirm('授权确认', '是否继续？');
+    expect(events.some((event) => event.type === 'ask-request')).toBe(true);
+    supervisor.handleCommand({ type: 'abort', identity: parent });
+    await expect(result).resolves.toBe(false);
+  });
+
+  it('会话释放后旧扩展界面立即返回取消，不遗留不可回答的提问', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    const ui = current.extensionRunner.createContext().ui;
+    const pending = ui.select('授权？', ['Allow', 'Deny']);
+    supervisor.handleCommand({ type: 'release-parent', identity: parent });
+    await waitFor(events, 'parent-ended');
+    await expect(pending).resolves.toBeUndefined();
+    const count = events.filter((event) => event.type === 'ask-request').length;
+    await expect(ui.select('旧会话', ['Allow'])).resolves.toBeUndefined();
+    expect(events.filter((event) => event.type === 'ask-request')).toHaveLength(count);
+  });
+
+  it('session_shutdown 里的扩展确认立即拒绝，不阻塞会话释放', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    const outcomes: boolean[] = [];
+    current.extensionRunner.hasHandlers.mockReturnValue(true);
+    current.extensionRunner.emit.mockImplementation(async () => {
+      outcomes.push(await current.extensionRunner.createContext().ui.confirm('收尾', '继续？'));
+    });
+    supervisor.handleCommand({ type: 'release-parent', identity: parent });
+    await settleUntil(() => events.some((event) => event.type === 'parent-ended'));
+    const requests = events.filter((event) => event.type === 'ask-request');
+    // 红灯时先清掉测试自己制造的等待，避免泄漏；断言仍检查取消前的可观察结果。
+    for (const event of requests) {
+      if (event.type === 'ask-request')
+        supervisor.handleCommand({
+          type: 'ask-respond',
+          identity: parent,
+          requestId: event.ask.requestId,
+          answer: '',
+        });
+    }
+    expect(requests).toHaveLength(0);
+    expect(outcomes).toEqual([false]);
+    expect(events.some((event) => event.type === 'parent-ended')).toBe(true);
+  });
+
+  it('停止过程中的扩展确认不能重新打开卡片，下一轮仍可正常询问', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    const ui = current.extensionRunner.createContext().ui;
+    const outcomes: boolean[] = [];
+    current.abort.mockImplementation(async () => {
+      outcomes.push(await ui.confirm('停止中', '继续？'));
+    });
+    supervisor.handleCommand({ type: 'abort', identity: parent });
+    await settleUntil(() => outcomes.length > 0);
+    const requests = events.filter((event) => event.type === 'ask-request');
+    for (const event of requests) {
+      if (event.type === 'ask-request')
+        supervisor.handleCommand({
+          type: 'ask-respond',
+          identity: parent,
+          requestId: event.ask.requestId,
+          answer: '',
+        });
+    }
+    expect(requests).toHaveLength(0);
+    expect(outcomes).toEqual([false]);
+    const next = ui.select('下一轮', ['Allow', 'Deny']);
+    const request = events.findLast((event) => event.type === 'ask-request');
+    expect(request).toBeDefined();
+    if (request?.type !== 'ask-request') throw new Error('missing next selection');
+    supervisor.handleCommand({
+      type: 'ask-respond',
+      identity: parent,
+      requestId: request.ask.requestId,
+      answer: 'Deny',
+    });
+    await expect(next).resolves.toBe('Deny');
   });
 
   it.each([

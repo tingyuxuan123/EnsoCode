@@ -266,6 +266,26 @@ Main 在每次 spawn 时按 key 从 `~/.claude/plugins/installed_plugins.json` �
 Enso 不调 pi 的 `bindExtensions`，pi 不发 `session_start`/`session_shutdown`：SessionStart 在首轮
 `before_agent_start` 补跑，SessionEnd 由 supervisor 释放父会话时自行 emit。插件在配置同步中排除。
 
+## Pi 扩展的人机选择与授权
+
+`extensionUI.ts` 在会话注册后通过公开 `extensionRunner.setUIContext` 接入 `select` / `confirm`，
+以 `rpc` 模式复用 `AskManager` → `ask-request` → AskBar → `ask-respond`。不要为接一个选择框调用
+`bindExtensions`：它还会触发 `session_start` 和资源发现，改变以上既有生命周期。
+
+- 扩展选择带 `selectionOnly: true`，隐藏自由输入；只返回扩展提供的精确原始标签，不 trim、不截到四项。
+- 空字符串仅对严格选择表示取消；普通 `ask_user` 忽略空白答复。非原始选项、超时、中断和失效代际均返回
+  `undefined`（确认返回 `false`），不设默认许可、不替扩展记住许可，也不把会话许可提升成永久许可。
+- 请求绑定具体 managed session / AskManager；发送失败立即收尾。所有结束路径只发一次 resolved，清计时器与
+  abort 监听；旧会话不得创建悬空卡片或采用迟到许可。已配对手机沿用既有可信答复通路。
+- 停止/释放/解雇先封闭扩展交互，再取消旧请求；shutdown hook 不得重新弹框阻塞释放。
+  停止的封闭令牌只由对应 abort 收尾解除，不得解开随后发生的释放/再次停止；截止后的答复即使先于计时器回调也拒绝。
+- 这里只支持选择与确认。终端 custom、输入编辑器、状态小组件以及 `/lcu pick` 的 composer 写入不在本桥范围内；
+  macOS 屏幕录制/辅助功能仍由系统授权，工具审批模式也不代替 LCU 的应用许可。
+
+升级 Pi 时复检公开 runner UI 绑定及 runtime 重建行为：重建 runner 必须重新绑定，不能默认保留。
+回归：`extensionUI.test.ts`（真实 SDK、临时目录）、`ask.test.ts`、`supervisor.agentDispatch.test.ts`、
+`shared/types/agent.test.ts`、`main/ipc/agent.test.ts`、`AskBar.test.tsx`。
+
 ## 异步资源替换与取消
 
 内置 `code_search` 的职责、默认关闭、云端数据边界和检索预算见

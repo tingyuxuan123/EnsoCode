@@ -30,10 +30,10 @@ export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBar
   const disabled =
     responding === active.requestId || (remainingMs !== undefined && remainingMs <= 0);
   const answer = (value: string) => {
-    if (!value.trim()) return;
+    if (disabled || (!active.selectionOnly && !value.trim())) return;
     setResponding(active.requestId);
     setText('');
-    onAnswer(active.requestId, value.trim());
+    onAnswer(active.requestId, active.selectionOnly ? value : value.trim());
   };
 
   return (
@@ -68,28 +68,39 @@ export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBar
           ))}
         </div>
       )}
-      <div className="mt-2 flex items-center gap-1.5">
-        <input
-          ref={inputRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return;
-            if (e.key === 'Enter') answer(text);
-          }}
-          disabled={disabled}
-          placeholder={t('Type an answer…')}
-          className="h-[calc(28rem/14)] min-w-0 flex-1 rounded-[6px] border bg-background px-[8px] text-[calc(12rem/14)] outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-        />
+      {active.selectionOnly ? (
         <button
           type="button"
-          disabled={disabled || !text.trim()}
-          onClick={() => answer(text)}
-          className="flex size-[calc(28rem/14)] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+          disabled={disabled}
+          onClick={() => answer('')}
+          className="mt-2 rounded-[6px] border border-border/70 px-[10px] py-[4px] text-[calc(12rem/14)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
         >
-          <Send className="h-3.5 w-3.5" />
+          {t('Cancel')}
         </button>
-      </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-1.5">
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === 'Enter') answer(text);
+            }}
+            disabled={disabled}
+            placeholder={t('Type an answer…')}
+            className="h-[calc(28rem/14)] min-w-0 flex-1 rounded-[6px] border bg-background px-[8px] text-[calc(12rem/14)] outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+          />
+          <button
+            type="button"
+            disabled={disabled || !text.trim()}
+            onClick={() => answer(text)}
+            className="flex size-[calc(28rem/14)] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

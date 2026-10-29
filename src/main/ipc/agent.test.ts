@@ -252,6 +252,21 @@ describe('agent IPC Main identity boundary', () => {
     expect(mocks.dispatchHost.resolveSubagentModel).toBe(resolveSubagentModelSelection);
   });
 
+  it('提问回答允许空字符串取消，但拒绝非字符串或过期身份', () => {
+    const identity = { sessionId: 'parent', generation: '11111111-1111-4111-8111-111111111111' };
+    mocks.currentIdentity.mockReturnValue(identity);
+    mocks.respondAsk.mockReturnValue({ ok: true });
+    const handler = mocks.handlers.get(IPC_CHANNELS.AGENT_ASK_RESPOND)!;
+    for (const answer of [undefined, null, 1, {}, []]) {
+      expect(handler(event, 'parent', 'q', answer)).toMatchObject({ ok: false });
+    }
+    expect(mocks.respondAsk).not.toHaveBeenCalled();
+    expect(handler(event, 'parent', 'q', '')).toEqual({ ok: true });
+    expect(mocks.respondAsk).toHaveBeenCalledExactlyOnceWith(identity, 'q', '');
+    mocks.currentIdentity.mockReturnValue(undefined);
+    expect(handler(event, 'parent', 'q', '')).toMatchObject({ ok: false });
+  });
+
   it('desktop rewind requires a persisted entry ID and a current generation', () => {
     const identity = { sessionId: 'parent', generation: '11111111-1111-4111-8111-111111111111' };
     mocks.currentIdentity.mockReturnValue(identity);
