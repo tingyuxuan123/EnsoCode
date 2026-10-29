@@ -18,6 +18,7 @@ import type {
   McpServerSpawnConfig,
   McpWorkerEvent,
 } from '@shared/types/agent';
+import { KIMI_CU_JS_HINT, normalizeKimiCuArguments } from './mcpKimiCu';
 import { assignMcpToolNames, mcpNamespaceName, oneLine } from './mcpNames';
 
 const INSTRUCTIONS_MAX = 2000;
@@ -600,27 +601,34 @@ export class McpManager {
       );
     const annotations = toAnnotations(tool.annotations);
     let description = tool.description ?? `MCP tool ${tool.name} from ${server.name}`;
+    const isKimiCu = mcpNamespaceName(server.name).toLowerCase() === 'mcp__kimi_cu';
     // Kimi CU 的上游描述只提 window_id，但执行时仍要求 app / pid；只补文案，不猜目标应用。
-    if (
-      mcpNamespaceName(server.name).toLowerCase() === 'mcp__kimi_cu' &&
-      tool.name === 'get_window_state'
-    ) {
+    if (isKimiCu && tool.name === 'get_window_state') {
       description +=
         '\nRequires app (bundle ID) or pid on every call, together with window_id; window_id alone is not sufficient. Use list_apps / list_windows to obtain the target app or pid, and pass it explicitly even when reusing a known window_id.';
     }
+    // 上游 js 描述没说 cell 里怎么调 KimiCU，模型会臆造全局 `kimi`
+    if (isKimiCu && tool.name === 'js') description += KIMI_CU_JS_HINT;
+    const prepare = isKimiCu
+      ? (params: unknown) => normalizeKimiCuArguments(tool.name, tool.inputSchema, params)
+      : undefined;
     return {
       name,
       label: `${server.name}: ${tool.name}`,
       description,
       // MCP inputSchema 是标准 JSON Schema，TypeBox 的 TSchema 结构同源，直接透传
       parameters: tool.inputSchema as ToolDefinition['parameters'],
+      // 归一必须在 schema 校验之前（占位的空枚举值过不了校验）
+      ...(prepare ? { prepareArguments: prepare as ToolDefinition['prepareArguments'] } : {}),
       outputSchema: mcpResultSchema(tool.outputSchema) as ToolDefinition['outputSchema'],
       namespace: {
         name: mcpNamespaceName(server.name),
         description: server.description || server.name,
       },
       ...(annotations ? { annotations } : {}),
-      execute: async (_toolCallId, params) => {
+      execute: async (_toolCallId, raw) => {
+        // 归一幂等：不依赖调用方是否已走过 prepareArguments
+        const params = prepare ? prepare(raw) : raw;
         try {
           return mapToolResult(await invoke(active, params), name);
         } catch (error) {

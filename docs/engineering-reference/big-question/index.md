@@ -40,6 +40,7 @@
 | [macos-local-network-denied.md](macos-local-network-denied.md) | 局域网地址 1ms 内 EHOSTUNREACH、arp 空、公网正常；系统设置「本地网络」开关却是开的 |
 | [model-directory-single-source.md](model-directory-single-source.md) | 新版本静态表里的模型进不了老账号的 picker（清单冻结在登录时刻）；vitest 里莫名 `unknown oauth provider` |
 | [mcp-oauth-worker-refresh.md](mcp-oauth-worker-refresh.md) | 远程 MCP 授权过一阵就变「需要授权」，token 正常、有效期长的 MCP 不受影响 |
+| [kimi-cu-mcp-placeholder-args.md](kimi-cu-mcp-placeholder-args.md) | Kimi CU 报 AX pagination requires mode=ax / window_id 0 not found / kimi is not defined；js 通道 runtime socket Connection refused |
 
 ## 共同教训
 

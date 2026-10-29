@@ -525,6 +525,62 @@ describe('McpManager Kimi CU 工具描述', () => {
     expect(tool.description).toContain('Requires app (bundle ID) or pid on every call');
   });
 
+  it('js 工具说明 cell 内用 @kimi/cu 调用，而不是不存在的全局 kimi', async () => {
+    const description = 'Evaluate one persistent JavaScript module cell.';
+    clientState.listTools = vi.fn(async () => ({
+      tools: [{ name: 'js', description, inputSchema: { type: 'object' } }],
+    }));
+    const { manager } = makeManager();
+    const [tool] = await manager.toolsFor([{ ...httpServer, name: 'kimi-cu' }]);
+    expect(tool.description).toContain(description);
+    expect(tool.description).toContain("let { kimiCU } = await import('@kimi/cu')");
+    expect(tool.description).toContain('no global `kimi`');
+  });
+
+  it('校验前丢弃占位与互斥参数，执行时发给服务端的是归一后的参数', async () => {
+    const inputSchema = {
+      type: 'object',
+      properties: {
+        app: { type: 'string' },
+        mode: { type: 'string', enum: ['full', 'image', 'ax'] },
+        limit: { type: 'integer' },
+        offset: { type: 'integer' },
+        snapshot_id: { type: 'string' },
+        window_id: { type: 'integer' },
+      },
+    };
+    clientState.listTools = vi.fn(async () => ({
+      tools: [{ name: 'get_app_state', inputSchema }],
+    }));
+    const { manager } = makeManager();
+    const [tool] = await manager.toolsFor([{ ...httpServer, name: 'kimi-cu' }]);
+    const raw = {
+      app: 'com.apple.finder',
+      mode: 'full',
+      limit: 120,
+      offset: 0,
+      snapshot_id: '',
+      window_id: 0,
+    };
+    const expected = { app: 'com.apple.finder', mode: 'full' };
+    expect(tool.prepareArguments?.(raw)).toEqual(expected);
+    await tool.execute('tc-app', raw as never, undefined, undefined, {} as never);
+    expect(clientState.callTool).toHaveBeenLastCalledWith(
+      { name: 'get_app_state', arguments: expected },
+      undefined,
+      expect.objectContaining({ timeout: expect.any(Number) })
+    );
+  });
+
+  it('其他 server 不做参数归一', async () => {
+    clientState.listTools = vi.fn(async () => ({
+      tools: [{ name: 'get_app_state', inputSchema: { type: 'object' } }],
+    }));
+    const { manager } = makeManager();
+    const [tool] = await manager.toolsFor([httpServer]);
+    expect(tool.prepareArguments).toBeUndefined();
+  });
+
   it.each([
     ['other-server', 'get_window_state'],
     ['kimi-cu', 'get_app_state'],
