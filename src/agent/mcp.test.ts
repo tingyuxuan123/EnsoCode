@@ -337,6 +337,25 @@ describe('oauthFingerprint', () => {
 });
 
 describe('McpManager connection cache', () => {
+  it.each(['http', 'sse'] as const)(
+    '%s 请求头变化后不复用旧连接，未变时复用',
+    async (transport) => {
+      const { manager } = makeManager();
+      const server = { ...httpServer, transport, headers: { Authorization: 'Bearer old-test' } };
+      await manager.toolsFor([server]);
+      await manager.toolsFor([server]);
+      expect(clientState.instances).toBe(1);
+      await manager.toolsFor([{ ...server, headers: { Authorization: 'Bearer new-test' } }]);
+      expect(clientState.instances).toBe(2);
+      expect(transportState.http[1]?.options).toMatchObject({
+        requestInit: { headers: { Authorization: 'Bearer new-test' } },
+      });
+      await manager.toolsFor([{ ...server, headers: undefined }]);
+      expect(clientState.instances).toBe(3);
+      await manager.closeAll();
+    }
+  );
+
   it('token 不变时复用连接', async () => {
     const { manager } = makeManager();
     await manager.toolsFor([{ ...httpServer, oauth: { access_token: 'a' } }]);

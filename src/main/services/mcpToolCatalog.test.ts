@@ -29,6 +29,22 @@ afterEach(() => {
 });
 
 describe('McpToolCatalogStore', () => {
+  it('headers 只存签名，轮换后磁盘目录失效', () => {
+    const server = entry({
+      transport: 'http',
+      url: 'https://example.test/mcp',
+      headers: { Authorization: 'Bearer fake-secret' },
+    });
+    new McpToolCatalogStore(file()).record(server, ['find']);
+    const reloaded = new McpToolCatalogStore(file());
+    expect(reloaded.names(server)).toEqual(['find']);
+    expect(readFileSync(file(), 'utf-8')).not.toContain('fake-secret');
+    expect(readFileSync(file(), 'utf-8')).not.toContain('Authorization');
+    expect(
+      reloaded.names({ ...server, headers: { Authorization: 'Bearer fake-rotated' } })
+    ).toBeUndefined();
+  });
+
   it('记录工具名并由新实例从盘上读回，文件不含 env 明文', () => {
     new McpToolCatalogStore(file()).record(entry(), ['find', 'fetch']);
     expect(new McpToolCatalogStore(file()).names(entry())).toEqual(['find', 'fetch']);

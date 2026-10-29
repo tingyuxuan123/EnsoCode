@@ -331,12 +331,22 @@ function mcpEntry(plan: PlannedEntry): JsonRecord {
   };
   mergeSensitiveField(next, plan.source, plan.existing, 'args', omitted);
   mergeSensitiveField(next, plan.source, plan.existing, 'env', omitted);
+  mergeSensitiveField(next, plan.source, plan.existing, 'headers', omitted);
   if (plan.existing) next.url = preserveUrlParts(next.url, plan.existing.url, omitted, 'url');
   delete next.omittedFields;
   if (plan.existing && importedEnvConflicts(plan.source, plan.existing, omitted)) {
     next.env = clone(plan.existing.env);
     next.enabled = false;
   } else if (!plan.existing && omitted.size > 0) {
+    next.enabled = false;
+  }
+  if (
+    plan.existing &&
+    !omitted.has('headers') &&
+    plan.source.headers !== undefined &&
+    !sameValue(plan.existing.headers, plan.source.headers)
+  ) {
+    next.headers = clone(plan.existing.headers);
     next.enabled = false;
   }
   return next;

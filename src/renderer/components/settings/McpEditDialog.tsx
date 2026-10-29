@@ -75,6 +75,7 @@ const specFromDiscovered = (entry: DiscoveredMcpServer): Record<string, unknown>
   if (entry.args && entry.args.length > 0) spec.args = entry.args;
   if (entry.env && Object.keys(entry.env).length > 0) spec.env = entry.env;
   if (entry.url) spec.url = entry.url;
+  if (entry.headers && Object.keys(entry.headers).length > 0) spec.headers = entry.headers;
   return spec;
 };
 
@@ -94,6 +95,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
   const [argsText, setArgsText] = React.useState('');
   const [envText, setEnvText] = React.useState('');
   const [url, setUrl] = React.useState('');
+  const [headers, setHeaders] = React.useState<Record<string, string> | undefined>();
   const [connectTimeout, setConnectTimeout] = React.useState('');
   const [callTimeout, setCallTimeout] = React.useState('');
   const [jsonText, setJsonText] = React.useState('');
@@ -115,6 +117,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
     setArgsText((entry.args ?? []).join('\n'));
     setEnvText(formatEnv(entry.env && Object.keys(entry.env).length > 0 ? entry.env : undefined));
     setUrl(entry.url ?? '');
+    setHeaders(entry.headers);
   };
 
   const formToJson = (): string => {
@@ -127,6 +130,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
       if (env) spec.env = env;
     } else {
       spec.url = url.trim();
+      if (headers && Object.keys(headers).length > 0) spec.headers = headers;
     }
     return JSON.stringify(spec, null, 2);
   };
@@ -143,12 +147,14 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
           args,
           env,
           url: undefined,
+          headers: undefined,
           ...serverOptions(),
         }
       : {
           name: nextName,
           transport: entry.transport,
           url: (entry.url ?? '').trim(),
+          headers: entry.headers,
           command: undefined,
           args: undefined,
           env: undefined,
@@ -169,6 +175,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
     setArgsText((base?.args ?? []).join('\n'));
     setEnvText(formatEnv(base?.env));
     setUrl(base?.url ?? '');
+    setHeaders(base?.headers);
     setConnectTimeout(base?.connectTimeoutSec?.toString() ?? '');
     setCallTimeout(base?.callTimeoutSec?.toString() ?? '');
     setJsonText('');
@@ -287,12 +294,14 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
             args: parseLines(argsText),
             env: parseEnv(envText),
             url: undefined,
+            headers: undefined,
             ...serverOptions(),
           }
         : {
             name: name.trim(),
             transport,
             url: url.trim(),
+            headers,
             command: undefined,
             args: undefined,
             env: undefined,

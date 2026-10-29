@@ -2,6 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { parseMcpImportJson } from './mcpConfig';
 
 describe('parseMcpImportJson', () => {
+  it.each(['http', 'sse'])('%s 配置保留 Authorization 与自定义请求头', (type) => {
+    const headers = { Authorization: 'Bearer test-only', 'X-Tenant': 'team-a' };
+    expect(
+      parseMcpImportJson(JSON.stringify({ type, url: 'https://example.test/mcp', headers }))
+    ).toMatchObject({ ok: true, servers: [{ transport: type, headers }] });
+  });
+
+  it('headers 只接收字符串对象，坏输入不变成请求头', () => {
+    const parse = (headers: unknown) =>
+      parseMcpImportJson(JSON.stringify({ url: 'https://example.test/mcp', headers }));
+    const result = parse({ Authorization: 'Bearer test-only', Number: 1, Nested: {}, Empty: '' });
+    expect(result.ok && result.servers[0].headers).toEqual({
+      Authorization: 'Bearer test-only',
+      Empty: '',
+    });
+    for (const headers of [null, ['not-a-header'], 'bad', 42]) {
+      const result = parse(headers);
+      expect(result.ok && result.servers[0]).not.toHaveProperty('headers');
+    }
+    const stdio = parseMcpImportJson(JSON.stringify({ command: 'test', headers: { A: 'b' } }));
+    expect(stdio.ok && stdio.servers[0]).not.toHaveProperty('headers');
+  });
+
   it('解析 Cursor / Claude Desktop 的 mcpServers 对象', () => {
     const result = parseMcpImportJson(
       JSON.stringify({

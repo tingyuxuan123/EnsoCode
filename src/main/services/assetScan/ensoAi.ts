@@ -9,7 +9,7 @@ const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
 const asStringRecord = (value: unknown): Record<string, string> => {
-  if (!value || typeof value !== 'object') return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result: Record<string, string> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     if (typeof item === 'string') result[key] = item;
@@ -54,6 +54,7 @@ export function readEnsoAiMcp(settingsPath: string): DiscoveredMcpServer[] {
         args: command ? asStringArray(item.args) : undefined,
         env: command ? asStringRecord(item.env) : undefined,
         url: url || undefined,
+        headers: url && item.headers !== undefined ? asStringRecord(item.headers) : undefined,
       },
     ];
   });

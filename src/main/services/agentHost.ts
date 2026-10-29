@@ -1846,6 +1846,9 @@ function toMcpSpawnConfig(server: McpServerEntry): McpServerSpawnConfig {
     ...(server.args?.length ? { args: server.args } : {}),
     ...(server.env && Object.keys(server.env).length > 0 ? { env: server.env } : {}),
     ...(server.url ? { url: server.url } : {}),
+    ...(server.transport !== 'stdio' && server.headers && Object.keys(server.headers).length > 0
+      ? { headers: server.headers }
+      : {}),
     ...(oauth ? { oauth } : {}),
     ...mcpTimeoutsForSpawn(server),
   };

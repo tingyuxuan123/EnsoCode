@@ -202,6 +202,19 @@ export const MODEL_API_KINDS = [
   （`src/main/services/assetScan/index.ts` 的 `existingKeys()`），
   字段改名要同步改那里，否则去重静默失效 —— 类型检查抓不到，因为那里是 `unknown` 断言。
 
+## MCP HTTP/SSE 请求头保真
+
+`McpServerEntry.headers?: Record<string, string>` 与运行时配置同名；JSON 解析、格式化、
+表单/JSON 切换、确认导入和 Main 下发 worker 都必须保留。编辑删除该字段时，patch 显式
+写 `headers: undefined`，不能仅省略，否则 store 浅合并会留下旧鉴权头。stdio 不下发 headers。
+
+headers 属于敏感配置：扫描候选不带值，加密配置包保留，明文导出删除并记录
+`omittedFields: ['headers']`。连接、占用探测和工具目录签名均包含 headers，换凭据时
+不能复用旧结果；工具目录仅落哈希，不保存请求头明文。
+
+回归：`mcpConfig.test.ts`、`McpEditDialog.test.ts`、`agentHost.test.ts`、`mcp.test.ts`、
+`mcpOccupancy.test.ts`、`mcpToolCatalog.test.ts` 和 `configSync/headers.test.ts`。
+
 ## 敏感字段不进渲染层
 
 `apiKey` 明文、MCP 的 `env` 值只存在于主进程。传给渲染层的候选类型只带脱敏信息：

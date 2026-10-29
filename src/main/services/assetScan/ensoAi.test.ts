@@ -22,6 +22,32 @@ function ensoAiSettings(state: Record<string, unknown>): unknown {
 }
 
 describe('readEnsoAiMcp', () => {
+  it('保留 HTTP/SSE 字符串 headers，忽略非字符串值与数组', () => {
+    const file = writeTmpJson(
+      ensoAiSettings({
+        mcpServers: [
+          {
+            name: 'http',
+            url: 'https://example.test/http',
+            headers: { Authorization: 'Bearer fake', bad: 1 },
+          },
+          {
+            name: 'sse',
+            transportType: 'sse',
+            url: 'https://example.test/sse',
+            headers: { 'X-Key': 'fake' },
+          },
+          { name: 'array', url: 'https://example.test/array', headers: ['fake'] },
+        ],
+      })
+    );
+    expect(readEnsoAiMcp(file)).toMatchObject([
+      { headers: { Authorization: 'Bearer fake' } },
+      { headers: { 'X-Key': 'fake' } },
+      { headers: {} },
+    ]);
+  });
+
   it('解析 stdio 与 http 两种 mcpServers 条目', () => {
     const file = writeTmpJson(
       ensoAiSettings({

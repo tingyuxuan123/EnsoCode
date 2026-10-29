@@ -186,6 +186,30 @@ describe('resolveWebSearchConfig', () => {
 });
 
 describe('agentHost session MCP config', () => {
+  it.each(['http', 'sse'] as const)('%s 的鉴权请求头下发给 worker', (transport) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'enso-session-mcp-'));
+    try {
+      const catalog = new McpToolCatalogStore(path.join(dir, 'catalog.json'));
+      const headers = { Authorization: 'Bearer test-only', 'X-Tenant': 'team-a' };
+      expect(
+        toSessionMcpConfig(
+          {
+            id: 'remote',
+            name: 'remote',
+            transport,
+            url: 'https://example.test/mcp',
+            headers,
+            source: 'Manual',
+            enabled: true,
+          },
+          catalog
+        )
+      ).toMatchObject({ transport, headers });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('deferred 带 loadMode 与缓存工具名，direct 与缺省保持原样', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'enso-session-mcp-'));
     const catalog = new McpToolCatalogStore(path.join(dir, 'catalog.json'));

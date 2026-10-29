@@ -9,10 +9,19 @@ interface CatalogRow {
   tools: string[];
 }
 
-/** 连接配置签名：配置变了缓存即作废；只存哈希，env 明文不落盘 */
+/** 连接配置签名：配置变了缓存即作废；只存哈希，env/headers 明文不落盘 */
 function signature(server: McpServerEntry): string {
   return createHash('sha256')
-    .update(JSON.stringify([server.transport, server.command, server.args, server.env, server.url]))
+    .update(
+      JSON.stringify([
+        server.transport,
+        server.command,
+        server.args,
+        server.env,
+        server.url,
+        server.headers,
+      ])
+    )
     .digest('hex')
     .slice(0, 16);
 }

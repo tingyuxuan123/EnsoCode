@@ -38,11 +38,15 @@ function transport(server: McpServerEntry) {
     }
     case 'http': {
       if (!server.url) throw new Error('http server missing url');
-      return new StreamableHTTPClientTransport(new URL(server.url));
+      return new StreamableHTTPClientTransport(new URL(server.url), {
+        requestInit: { headers: server.headers },
+      });
     }
     case 'sse': {
       if (!server.url) throw new Error('sse server missing url');
-      return new SSEClientTransport(new URL(server.url));
+      return new SSEClientTransport(new URL(server.url), {
+        requestInit: { headers: server.headers },
+      });
     }
     default:
       throw new Error(`unknown transport: ${server.transport}`);
@@ -54,7 +58,14 @@ type ProbedTool = { name: string; description?: string; inputSchema: unknown };
 const cache = new Map<string, ProbedTool[]>();
 
 function cacheKey(server: McpServerEntry): string {
-  return JSON.stringify([server.transport, server.command, server.args, server.env, server.url]);
+  return JSON.stringify([
+    server.transport,
+    server.command,
+    server.args,
+    server.env,
+    server.url,
+    server.headers,
+  ]);
 }
 
 export async function listMcpOccupancyTools(server: McpServerEntry): Promise<OccupancyTool[]> {

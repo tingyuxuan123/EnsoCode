@@ -786,7 +786,7 @@ export interface McpServerSpawnConfig {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
-  /** http/sse 请求头（Claude 插件 .mcp.json 用它传 key） */
+  /** http/sse 请求头（手动配置或 Claude 插件 .mcp.json 的鉴权凭据） */
   headers?: Record<string, string>;
   /** 已授权的 OAuth 凭据（http/sse 远程 server） */
   oauth?: McpOAuthAccess;

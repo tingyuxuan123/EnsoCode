@@ -7,6 +7,7 @@ export interface DiscoveredMcpServer {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  headers?: Record<string, string>;
 }
 
 export type ParseMcpImportResult =
@@ -19,7 +20,7 @@ const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
 const asStringRecord = (value: unknown): Record<string, string> => {
-  if (!value || typeof value !== 'object') return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result: Record<string, string> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     if (typeof item === 'string') result[key] = item;
@@ -46,14 +47,17 @@ export function parseServerMap(servers: unknown): DiscoveredMcpServer[] {
     const url = asText(config.url) || asText(config.serverUrl);
     const command = asText(config.command);
     if (!command && !url) continue;
+    const transport = toTransport(config.type ?? config.transport, url);
+    const headers = transport === 'stdio' ? {} : asStringRecord(config.headers);
 
     result.push({
       name,
-      transport: toTransport(config.type ?? config.transport, url),
+      transport,
       command: command || undefined,
       args: command ? asStringArray(config.args) : undefined,
       env: command ? asStringRecord(config.env) : undefined,
       url: url || undefined,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
     });
   }
 

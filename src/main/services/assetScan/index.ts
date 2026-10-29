@@ -325,6 +325,7 @@ export function collectAssetImport(scanId: string, candidateIds: string[]): Coll
         args: cached.server.args,
         env: cached.server.env,
         url: cached.server.url,
+        headers: cached.server.headers,
         source: SOURCE_NAMES[cached.sourceId],
       });
     } else {
