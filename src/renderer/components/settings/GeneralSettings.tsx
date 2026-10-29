@@ -22,6 +22,7 @@ import {
   AUTO_ARCHIVE_IDLE_DAYS,
   AUTO_DELETE_ARCHIVED_DAYS,
 } from '@/stores/settings/autoArchiveIdleDays';
+import { CompactReserveTokensSection } from './CompactReserveTokensSection';
 import { ConfigSyncSettings } from './ConfigSyncSettings';
 import { FileOpeningSettings } from './FileOpeningSettings';
 import { NewSessionBadge } from './NewSessionBadge';
@@ -77,6 +78,7 @@ export function GeneralSettings() {
       <SidePanelSection />
       <FileOpeningSettings />
       <SmartCompactPicker />
+      <CompactReserveTokensSection />
       <WindowsLocalShellSection />
       <TerminalShellSection />
       <WorktreeRootSection />

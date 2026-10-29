@@ -18,6 +18,10 @@ import type {
   StartOauthWizardRequest,
 } from '@shared/capabilities/types';
 import type {
+  CompactReserveTokensReadResult,
+  CompactReserveTokensResult,
+} from '@shared/compactionSettings';
+import type {
   ChatModelDto,
   DistillableSessionDto,
   EmbeddingDownloadProgressDto,
@@ -1094,6 +1098,13 @@ const electronAPI = {
     },
     respond: (response: CapabilityAskResponse): Promise<CapabilityAskDecisionAck> =>
       ipcRenderer.invoke(IPC_CHANNELS.CAPABILITIES_RESPOND, response),
+  },
+
+  compaction: {
+    getReserveTokens: (): Promise<CompactReserveTokensReadResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.COMPACTION_RESERVE_TOKENS_GET),
+    setReserveTokens: (value: number | null): Promise<CompactReserveTokensResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.COMPACTION_RESERVE_TOKENS_SET, value),
   },
 
   proxy: {

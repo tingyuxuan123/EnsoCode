@@ -130,6 +130,15 @@ onChanged: (callback: () => void): (() => void) => {
 - `ElectronAPI` 类型由 `typeof electronAPI` 推导并在 `src/preload/types.ts` 挂到
   `window`，渲染层因此有完整补全。新增方法不需要手写类型声明。
 
+## 压缩预留值只写应用隔离的 pi 设置
+
+`compaction:reserve-tokens-*` 只接受主界面与设置窗口；Renderer 只传整数或 null，
+Main 推导 `userData/agent/pi-agent/settings.json`，不接受配置路径。值范围为 4096–65536，
+null 删除覆盖字段；留空不改变 pi 默认。设置页标明新启动或重新创建的会话生效。
+`piCompactionSettings.ts` 与 worker 使用同版本 proper-lockfile 的异步锁及过期规则，
+读最新盘面后仅修改目标字段并原子替换；坏 JSON 不覆盖，锁/IO 失败返回结构化结果。
+回归：`compaction.test.ts`、`piCompactionSettings.test.ts`、`compactionSettings.test.ts`。
+
 ## preload 的构建约束
 
 preload 产物是 **ESM**（`out/preload/index.mjs`），窗口配置里的路径必须与之一致：

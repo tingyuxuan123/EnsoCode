@@ -361,6 +361,10 @@ export const IPC_CHANNELS = {
   // Network proxy
   PROXY_APPLY: 'proxy:apply',
 
+  // App-isolated pi compaction settings
+  COMPACTION_RESERVE_TOKENS_GET: 'compaction:reserve-tokens-get',
+  COMPACTION_RESERVE_TOKENS_SET: 'compaction:reserve-tokens-set',
+
   // Phone second screen (pairing + relay)
   PAIR_START: 'pair:start',
   PAIR_CANCEL: 'pair:cancel',

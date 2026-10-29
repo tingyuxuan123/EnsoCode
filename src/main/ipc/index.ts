@@ -9,6 +9,7 @@ import { registerBrowserHandlers } from './browser';
 import { registerBtwHandlers } from './btw';
 import { registerCapabilityHandlers } from './capabilities';
 import { registerChangesHandlers } from './changes';
+import { registerCompactionHandlers } from './compaction';
 import { registerComputerHandlers } from './computer';
 import { registerConfigSyncHandlers } from './configSync';
 import { registerFileHandlers } from './files';
@@ -45,6 +46,7 @@ export function registerIpcHandlers(): void {
   registerAgentHandlers();
   registerUpdaterHandlers();
   registerProxyHandlers();
+  registerCompactionHandlers();
   registerProjectHandlers();
   registerBrowserHandlers();
   registerSshConnectionHandlers();

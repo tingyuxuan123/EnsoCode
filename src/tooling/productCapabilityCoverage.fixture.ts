@@ -618,6 +618,12 @@ export const IPC_PRODUCT_COVERAGE = {
     'Device idle-restart update policy; not an Enso capability.'
   ),
   PROXY_APPLY: surfaces('general.proxy-mode', 'general.custom-proxy-url'),
+  COMPACTION_RESERVE_TOKENS_GET: excluded(
+    'Device-local pi compaction threshold; settings UI only.'
+  ),
+  COMPACTION_RESERVE_TOKENS_SET: excluded(
+    'Device-local pi compaction threshold; settings UI only.'
+  ),
   UPDATER_STATUS: surfaces('updates.status'),
   DIALOG_SELECT_FILE: excluded('Native file picker; user-driven OS dialog.'),
   FILES_LIST_MEDIA: excluded('Renderer media listing for background picker.'),

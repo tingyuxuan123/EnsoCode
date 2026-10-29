@@ -472,6 +472,18 @@ export const zhTranslations: Record<string, string> = {
   'Expand reasoning while streaming': '流式推理时自动展开',
   'Automatically unfold the thinking block while the model is still reasoning. It collapses again when reasoning ends.':
     '模型思考时自动展开推理内容；思考结束后仍自动收起',
+  'Compaction reserve tokens': '压缩预留 Token',
+  'Compaction runs when context exceeds the model window minus this value. Larger values compact earlier. Do not set it close to the window of small-context models. Leave empty for the default. Applies to newly started or recreated sessions.':
+    '上下文超过模型窗口减去此值时触发压缩。值越大压缩越早，请勿设到接近小窗口模型的窗口大小。留空跟随默认值，仅对新启动或重新创建的会话生效。',
+  'Enter a whole number between {{min}} and {{max}}, or leave it empty.':
+    '请输入 {{min}} 至 {{max}} 之间的整数，或留空使用默认值。',
+  'The pi settings file is busy. Try saving again shortly.':
+    'pi 设置文件正被占用，请稍后重试保存。',
+  'The pi settings file is invalid. It has not been overwritten.':
+    'pi 设置文件格式损坏，未覆盖原文件。',
+  'Could not access the pi settings file. Try again.': '无法访问 pi 设置文件，请重试。',
+  'Context window compaction threshold; larger values compact earlier; new sessions only.':
+    '上下文窗口的压缩阈值，值越大越早压缩，仅新会话生效。',
   'Context compaction strategy': '上下文压缩策略',
   'Standard uses default compact. Smart compaction uses Enso verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.':
     '标准使用默认压缩。智能压缩在压缩时用 Enso 验证式摘要。Codex 原生压缩在 Codex 模型上额外保存官方 Codex checkpoint，其他模型按智能压缩处理。持续记忆在后台持续记录观察，压缩时保留更多上下文；失败都回退默认压缩。切换策略从下一个会话生效。摘要模型和压缩档位对已打开的对话在下一次压缩时用最新设置。',
