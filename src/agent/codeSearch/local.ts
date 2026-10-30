@@ -3,6 +3,7 @@ import { lstat, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import ignore, { type Ignore } from 'ignore';
 import { isSecretFilePath } from '../protectedActions';
+import { matchLines } from './matcher';
 import { check, fail, object } from './safety';
 
 /**
@@ -18,6 +19,7 @@ export const LIMITS = {
   totalEntries: 131072,
   stepReadBytes: 16 * 1024 * 1024,
   totalReadBytes: 32 * 1024 * 1024,
+  finalReadBytes: 8 * 1024 * 1024,
   stepBytes: 24 * 1024,
   totalBytes: 192 * 1024,
   snippetBytes: 48 * 1024,
@@ -78,7 +80,7 @@ interface Listing {
   file: boolean;
 }
 
-/** Literal grep + bounded wildcard DP: no model-controlled JavaScript regular expression or shell. */
+/** Bounded wildcard DP: no model-controlled JavaScript regular expression or shell. */
 function wildcard(pattern: string, text: string): boolean {
   let row = new Array<boolean>(text.length + 1).fill(false);
   row[0] = true;
@@ -98,6 +100,7 @@ export interface Command {
   op: 'rg' | 'readfile' | 'tree' | 'ls' | 'glob';
   path?: string;
   pattern?: string;
+  literal?: boolean;
   start?: number;
   end?: number;
 }
@@ -107,7 +110,7 @@ export function command(value: unknown): Command {
   if (
     !v ||
     !['rg', 'readfile', 'tree', 'ls', 'glob'].includes(String(v.op)) ||
-    Object.keys(v).some((k) => !['op', 'path', 'pattern', 'start', 'end'].includes(k))
+    Object.keys(v).some((k) => !['op', 'path', 'pattern', 'literal', 'start', 'end'].includes(k))
   ) {
     return fail('protocol', 'Invalid restricted_exec command.');
   }
@@ -116,6 +119,9 @@ export function command(value: unknown): Command {
   }
   if (v.pattern !== undefined && (typeof v.pattern !== 'string' || v.pattern.length > 256)) {
     return fail('bounds', 'Search pattern exceeds its budget.');
+  }
+  if (v.literal !== undefined && typeof v.literal !== 'boolean') {
+    return fail('protocol', 'Invalid literal flag; expected boolean.');
   }
   // 检索模型确实会发出缺 pattern 的 rg；在执行前拒绝，让循环回执纠正而不是执行中途致命失败。
   if (v.op === 'rg' && (typeof v.pattern !== 'string' || !v.pattern.trim())) {
@@ -132,11 +138,31 @@ export function command(value: unknown): Command {
   return v as unknown as Command;
 }
 
+interface ObservedRange {
+  path: string;
+  start: number;
+  end: number;
+}
+
+interface Observation extends ObservedRange {
+  readfile: boolean;
+  order: number;
+}
+
+interface DeliveredLine {
+  endByte: number;
+  range: ObservedRange;
+  readfile: boolean;
+}
+
 export class LocalWorkspace {
   private entries = 0;
   private visited = 0;
   private bytes = 0;
   private readBytes = 0;
+  private finalReadBytes = 0;
+  private observations: Observation[] = [];
+  private observationOrder = 0;
   private rules: Rule[] = [];
   private loadedRules = new Set<string>();
   private visitedPaths = new Set<string>();
@@ -266,7 +292,9 @@ export class LocalWorkspace {
     rel: string,
     ignoreRules = true,
     reuse = false,
-    fromCwd = false
+    fromCwd = false,
+    final = false,
+    stepRemaining = LIMITS.stepReadBytes
   ): Promise<string> {
     if (ignoreRules && this.ignored(rel)) return fail('path', 'Ignored paths are excluded.');
     const path = await this.fence(rel, fromCwd);
@@ -291,14 +319,23 @@ export class LocalWorkspace {
       if (!stat.isFile() || stat.size > LIMITS.fileBytes) {
         return fail('bounds', 'File is not regular text or exceeds 512 KiB.');
       }
-      if (stat.size + 1 > LIMITS.totalReadBytes - this.readBytes) {
-        return fail('bounds', 'Total file read budget exceeded.');
+      const remaining = final
+        ? LIMITS.finalReadBytes - this.finalReadBytes
+        : Math.min(LIMITS.totalReadBytes - this.readBytes, stepRemaining);
+      if (stat.size > remaining) {
+        return fail(
+          'bounds',
+          final ? 'Final file read budget exceeded.' : 'Total file read budget exceeded.'
+        );
       }
-      const buffer = Buffer.alloc(Math.min(stat.size + 1, LIMITS.fileBytes + 1));
+      const buffer = Buffer.alloc(Math.min(stat.size + 1, LIMITS.fileBytes + 1, remaining));
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-      this.readBytes += bytesRead;
+      if (final) this.finalReadBytes += bytesRead;
+      else this.readBytes += bytesRead;
       check(this.signal);
-      if (bytesRead > LIMITS.fileBytes) return fail('bounds', 'File exceeded the byte budget.');
+      if (bytesRead > LIMITS.fileBytes || (await handle.stat()).size > bytesRead) {
+        return fail('bounds', 'File exceeded the byte budget.');
+      }
       const now = await lstat(await this.fence(rel, fromCwd));
       if (now.ino !== stat.ino || now.dev !== stat.dev) {
         return fail('path', 'File changed identity during read.');
@@ -328,10 +365,16 @@ export class LocalWorkspace {
     }
   }
 
-  private async loadRules(base: string): Promise<void> {
+  private async loadRules(base: string, final = false): Promise<void> {
     if (this.loadedRules.has(base)) return;
     try {
-      const text = await this.text(base ? `${base}/.gitignore` : '.gitignore', false, false, true);
+      const text = await this.text(
+        base ? `${base}/.gitignore` : '.gitignore',
+        false,
+        false,
+        true,
+        final
+      );
       if (
         text.length > 32_768 ||
         text.split('\n').length > 512 ||
@@ -347,8 +390,8 @@ export class LocalWorkspace {
   }
 
   /** Load cwd → root → requested directory rules before touching directly requested paths. */
-  private async loadAncestors(): Promise<void> {
-    await this.loadRules('');
+  private async loadAncestors(final = false): Promise<void> {
+    await this.loadRules('', final);
     let current = '';
     for (const part of this.rootRel.split('/').filter(Boolean)) {
       current = current ? `${current}/${part}` : part;
@@ -361,12 +404,12 @@ export class LocalWorkspace {
         else if (match.unignored) ignored = false;
       }
       if (ignored) return fail('path', 'Ignored paths are excluded.');
-      await this.loadRules(current);
+      await this.loadRules(current, final);
     }
   }
 
-  private async prepare(rel: string): Promise<void> {
-    await this.loadAncestors();
+  private async prepare(rel: string, final = false): Promise<void> {
+    await this.loadAncestors(final);
     let currentHost = this.rootRel;
     let currentRoot = '';
     for (const part of rel.split('/').filter(Boolean)) {
@@ -377,7 +420,7 @@ export class LocalWorkspace {
       if (this.ignored(currentRoot, info.isDirectory())) {
         return fail('path', 'Ignored paths are excluded.');
       }
-      if (info.isDirectory()) await this.loadRules(currentHost);
+      if (info.isDirectory()) await this.loadRules(currentHost, final);
     }
   }
 
@@ -459,19 +502,76 @@ export class LocalWorkspace {
     return entries;
   }
 
-  private retain(text: string): string {
+  private observe(range: ObservedRange, readfile: boolean): void {
+    let candidate: Observation = { ...range, readfile, order: ++this.observationOrder };
+    for (let i = this.observations.length - 1; i >= 0; i--) {
+      const old = this.observations[i]!;
+      if (
+        old.path !== candidate.path ||
+        old.start > candidate.end + 1 ||
+        candidate.start > old.end + 1
+      )
+        continue;
+      candidate = {
+        path: candidate.path,
+        start: Math.min(old.start, candidate.start),
+        end: Math.max(old.end, candidate.end),
+        readfile: old.readfile || candidate.readfile,
+        order:
+          old.readfile === candidate.readfile
+            ? Math.max(old.order, candidate.order)
+            : old.readfile
+              ? old.order
+              : candidate.order,
+      };
+      this.observations.splice(i, 1);
+      i = this.observations.length; // A bridge can now touch an earlier, previously separate range.
+    }
+    this.observations.push(candidate);
+    this.observations.sort((a, b) => Number(b.readfile) - Number(a.readfile) || b.order - a.order);
+    this.observations.length = Math.min(this.observations.length, 64);
+  }
+
+  /** Trusted generation metadata only: never infer evidence from model text or file contents. */
+  observedRanges(): ObservedRange[] {
+    const result: ObservedRange[] = [];
+    const files = new Map<string, number>();
+    for (const { path, start, end } of this.observations) {
+      if (result.length >= LIMITS.finalRanges) break;
+      if (!files.has(path) && files.size >= LIMITS.finalFiles) continue;
+      for (let first = start; first <= end; first += 400) {
+        const count = files.get(path) ?? 0;
+        if (count >= 4 || result.length >= LIMITS.finalRanges) break;
+        files.set(path, count + 1);
+        result.push({ path, start: first, end: Math.min(end, first + 399) });
+      }
+    }
+    return result;
+  }
+
+  private retain(text: string, delivered: DeliveredLine[] = []): string {
+    const truncated = Buffer.byteLength(text) > LIMITS.stepBytes;
+    const payloadCap = truncated
+      ? Math.max(0, LIMITS.stepBytes - Buffer.byteLength(PARTIAL))
+      : LIMITS.stepBytes;
     const cut = Buffer.from(text)
-      .subarray(0, LIMITS.stepBytes)
+      .subarray(0, payloadCap)
       .toString('utf8')
       .replace(/\uFFFD+$/u, '');
-    const bytes = Buffer.byteLength(cut);
+    const output = cut + (truncated ? PARTIAL : '');
+    const bytes = Buffer.byteLength(output);
     // 累计外发上限：超出时不回传任何正文，只提示模型用已观察到的区间作答
     if (this.bytes + bytes > LIMITS.totalBytes) {
       this.partial = true;
       return OUTPUT_EXHAUSTED;
     }
     this.bytes += bytes;
-    return cut;
+    this.partial ||= truncated;
+    const returnedBytes = Buffer.byteLength(cut);
+    for (const line of delivered) {
+      if (line.endByte <= returnedBytes) this.observe(line.range, line.readfile);
+    }
+    return output;
   }
 
   async execute(cmd: Command): Promise<string> {
@@ -487,27 +587,44 @@ export class LocalWorkspace {
       const start = cmd.start ?? 1;
       const end = cmd.end ?? start + 199;
       if (end < start || end - start > 399) return fail('bounds', 'Read window exceeds 400 lines.');
-      return this.retain(
-        (await this.text(rel, true, true))
-          .split('\n')
-          .slice(start - 1, end)
-          .map((l, i) => `${start + i}: ${l}`)
-          .join('\n')
-      );
+      const rows = (await this.text(rel, true, true)).split('\n').slice(start - 1, end);
+      let endByte = 0;
+      const delivered: DeliveredLine[] = [];
+      const output = rows
+        .map((line, i) => {
+          const rendered = `${start + i}: ${line}`;
+          endByte += (i ? 1 : 0) + Buffer.byteLength(rendered);
+          delivered.push({
+            endByte,
+            range: { path: `/codebase/${rel}`, start: start + i, end: start + i },
+            readfile: true,
+          });
+          return rendered;
+        })
+        .join('\n');
+      return this.retain(output, delivered);
     }
     if (cmd.op === 'rg' && !cmd.pattern)
       return fail('bounds', 'Literal rg requires a nonempty pattern.');
     const scan: Scan = { entries: 0, files: 0, partial: false };
     const out: string[] = [];
+    const delivered: DeliveredLine[] = [];
+    const sources: { file: string; lines: string[]; first: number }[] = [];
+    const stdin: string[] = [];
+    let inputBytes = 0;
+    let globalLine = 1;
+    const native = cmd.op === 'rg' && !cmd.literal && /[\\.^$|?*+()[\]{}\r\n]/.test(cmd.pattern!);
     let size = 0;
     const readStart = this.readBytes;
-    const append = (line: string): boolean => {
+    const append = (line: string, range?: ObservedRange): boolean => {
       const bytes = Buffer.byteLength(line) + 1;
       if (size + bytes > LIMITS.stepBytes - 512) {
         scan.partial = true;
         return false;
       }
+      const endByte = size + Buffer.byteLength(line);
       out.push(line);
+      if (range) delivered.push({ endByte, range, readfile: false });
       size += bytes;
       return true;
     };
@@ -533,7 +650,14 @@ export class LocalWorkspace {
       }
       let text: string;
       try {
-        text = await this.text(file, true, true);
+        text = await this.text(
+          file,
+          true,
+          true,
+          false,
+          false,
+          LIMITS.stepReadBytes - (this.readBytes - readStart)
+        );
       } catch (error) {
         check(this.signal);
         if (error instanceof Error && error.message.startsWith('Total file read budget')) {
@@ -550,14 +674,62 @@ export class LocalWorkspace {
         throw error;
       }
       const lines = text.split('\n');
+      if (native) {
+        const normalized = `${text}\n`;
+        const bytes = Buffer.byteLength(normalized);
+        if (inputBytes + bytes > LIMITS.stepReadBytes) {
+          scan.partial = true;
+          break;
+        }
+        sources.push({ file, lines, first: globalLine });
+        stdin.push(normalized);
+        globalLine += lines.length;
+        inputBytes += bytes;
+        continue;
+      }
       for (let i = 0; i < lines.length; i++) {
         if (lines[i]!.includes(cmd.pattern!)) {
-          if (!append(`/codebase/${file}:${i + 1}: ${lines[i]!.slice(0, 2000)}`)) break outer;
+          const line = lines[i]!;
+          if (
+            !append(
+              `/codebase/${file}:${i + 1}: ${line.slice(0, 2000)}`,
+              line.length <= 2000
+                ? { path: `/codebase/${file}`, start: i + 1, end: i + 1 }
+                : undefined
+            )
+          )
+            break outer;
         }
       }
     }
+    if (native) {
+      const result = await matchLines(cmd.pattern!, stdin.join(''), this.signal);
+      scan.partial ||= result.partial;
+      if (result.notice) append(result.notice);
+      let sourceIndex = 0;
+      for (const hit of result.lines) {
+        while (
+          sourceIndex < sources.length &&
+          hit >= sources[sourceIndex]!.first + sources[sourceIndex]!.lines.length
+        )
+          sourceIndex++;
+        const source = sources[sourceIndex];
+        if (!source || hit < source.first) continue;
+        const lineIndex = hit - source.first;
+        const line = source.lines[lineIndex]!;
+        if (
+          !append(
+            `/codebase/${source.file}:${lineIndex + 1}: ${line.slice(0, 2000)}`,
+            line.length <= 2000
+              ? { path: `/codebase/${source.file}`, start: lineIndex + 1, end: lineIndex + 1 }
+              : undefined
+          )
+        )
+          break;
+      }
+    }
     this.partial ||= scan.partial;
-    return this.retain(out.join('\n') + (scan.partial ? PARTIAL : ''));
+    return this.retain(out.join('\n') + (scan.partial ? PARTIAL : ''), delivered);
   }
 
   async snippet(
@@ -566,14 +738,14 @@ export class LocalWorkspace {
     end: number
   ): Promise<{ path: string; start: number; end: number; content: string }> {
     const rel = this.virtual(virtual);
-    await this.prepare(rel);
+    await this.prepare(rel, true);
     check(this.signal);
     if (end < start || start < 1 || end - start > 399) {
       return fail('bounds', 'Answer range exceeds 400 lines.');
     }
     const path = await this.fence(rel);
     // Never reuse the command cache here: the answer must reflect the file at finalization time.
-    const lines = (await this.text(rel, true, false)).split('\n');
+    const lines = (await this.text(rel, true, false, false, true)).split('\n');
     check(this.signal);
     if (end > lines.length) return fail('bounds', 'Answer range exceeds file length.');
     const output = relative(this.cwd, path).split(sep).join('/');

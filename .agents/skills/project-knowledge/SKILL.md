@@ -43,6 +43,7 @@ description: >
 | worktree 切换后文件写错位置 | `big-question/worktree-move-races.md` |
 | CDP 点击、拖拽或输入时好时坏 | `big-question/cdp-hidden-window-input.md` |
 | retry、回退、恢复行为异常 | `big-question/pi-auto-retry-willretry.md`、`checkpoint-cross-session-wipe.md` |
+| 代码搜索反复耗尽预算或报坏 JSON | `big-question/code-search-protocol-and-evidence.md` |
 | 弹窗或下拉无响应 | `big-question/dialog-layering.md`、`ui-component-classname.md` |
 
 排查应沿完整链路验证可观察事实：

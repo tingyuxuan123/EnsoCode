@@ -1,5 +1,8 @@
 # code_search 内置接入验收记录
 
+> 本文保留首次接入时的验收范围；后续可靠性修复及双厂商补验收见
+> [2026-10-30 记录](2026-10-30-code-search-reliability.md)。
+
 ## 范围
 
 实现受限本地代码检索 + Devin Fast Context，复用已有 Devin 登录。
