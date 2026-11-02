@@ -161,16 +161,66 @@ export function AssistantHeader({ time = '14:33', name = 'EnsoCode' }: { time?: 
   );
 }
 
-/** 本轮文件改动卡（TurnFilesCard） */
+/**
+ * 时间线里的工具卡（TimelineRow ToolRow）底部的代审结论行（ApprovalReviewBar）。
+ * 只在「助手代审」真的跑过时出现：10px 灰度一行，跟工具结果走，不占视觉重心。
+ */
+export function ApprovalReviewLine({
+  verdict = 'allow',
+  model = 'claude-haiku-4',
+  scores = 'allow 0.94 · ask 0.03 · block 0.03',
+  reason,
+}: {
+  verdict?: 'allow' | 'deny' | 'ask';
+  model?: string;
+  scores?: string;
+  reason?: string;
+}) {
+  const label = verdict === 'allow' ? '自动代审 · 已放行' : verdict === 'deny' ? '自动代审 · 已拒绝' : '自动代审 · 转交给你';
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-1 text-[10px] text-faint">
+      <span className="font-semibold text-muted">{label}</span>
+      <span aria-hidden="true">·</span>
+      <span className="font-mono">{model}</span>
+      <span className="font-mono">{scores}</span>
+      {reason && <span>原因：{reason}</span>}
+    </div>
+  );
+}
+
+/** 一条已完成的命令工具卡（带代审结论），用于展示代审在时间线里的真实位置 */
+export function ToolResultCard() {
+  return (
+    <div className="my-3 overflow-hidden rounded-control border border-line">
+      <div className="flex h-8 items-center gap-2 bg-panel/60 px-3 text-[12px]">
+        <span className="icon-[lucide--square-terminal] size-3.5 text-muted" />
+        <span className="font-mono">bash</span>
+        <span className="min-w-0 truncate text-muted">pnpm typecheck && pnpm lint</span>
+        <span className="ml-auto flex items-center gap-1 text-[11px] text-success"><span className="icon-[lucide--circle-check] size-3" />0.8s</span>
+      </div>
+      <pre className="overflow-auto bg-code px-3 py-2 font-mono text-[11px] leading-5"><code className="bg-transparent p-0">{'✓ 412 tests passed'}</code></pre>
+      <ApprovalReviewLine reason="只读命令，不改工作区" />
+    </div>
+  );
+}
+
+/** 本轮文件改动卡（TurnFilesCard）：只在轮次结束后出现（挂在最后一条回复下方），头部带 +/− 比例条 */
 export function TurnFilesCard() {
   const { openSideTab } = useWorkbench();
+  const total = added + removed;
   return (
     <div className="my-4 rounded-control border border-line">
       <div className="flex h-9 items-center gap-2 bg-panel/60 px-3 text-[12px]">
         <span className="icon-[lucide--files] size-3.5 text-muted" />
         <span className="font-medium">{changes.length} 个文件已修改</span>
-        <span className="ml-auto text-success">+{added}</span>
-        <span className="text-danger">−{removed}</span>
+        <span className="ml-auto flex items-center gap-2 tabular-nums">
+          <span className="text-success">+{added}</span>
+          <span className="text-danger">−{removed}</span>
+          <span className="flex h-1.5 w-12 overflow-hidden rounded-full bg-control" title={`+${added} −${removed}`}>
+            <span className="h-full bg-success" style={{ width: `${(added / total) * 100}%` }} />
+            <span className="h-full bg-danger" style={{ width: `${(removed / total) * 100}%` }} />
+          </span>
+        </span>
       </div>
       {changes.map((file) => (
         <button key={file.name} onClick={() => openSideTab('changes')} className="flex h-9 w-full items-center gap-2 border-t border-line px-3 text-left text-[12px] hover:bg-hover">
@@ -185,18 +235,63 @@ export function TurnFilesCard() {
   );
 }
 
-/** 助手消息操作：复制 / 重试 */
-export function AssistantActions() {
+/**
+ * 助手正文块（TimelineRow TextRow）：操作条悬浮在右上，不占垂直空间。
+ * 真实界面只在 hover 时淡入，设计稿里常显以便评审。
+ * 轮次耗时 / TTFT / tok/s 已从消息下方移除，只留在底部状态栏。
+ */
+export function ReplyBlock({ children, actions = true }: { children: ReactNode; actions?: boolean }) {
   const { setNotice } = useWorkbench();
   return (
-    <div className="mt-3 flex items-center gap-1 text-faint">
-      <button title="复制" onClick={() => setNotice('已复制。')} className="flex size-6 items-center justify-center rounded hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--copy] size-3.5" /></button>
-      <button title="重试" onClick={() => setNotice('重试本轮：重新生成回复（设计预览）。')} className="flex size-6 items-center justify-center rounded hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--refresh-cw] size-3.5" /></button>
-      <span className="ml-1 text-[11px]">用时 4m12s · Claude Sonnet 4.5</span>
-      <Link to="/review" className="ml-auto text-[12px] text-primary">打开改动审查</Link>
+    <div className="group/reply relative pr-[56px]">
+      {children}
+      {actions && (
+        <div data-reply-actions="" className="absolute right-0 top-0 flex items-center gap-1 text-faint">
+          <button title="复制整条回复" aria-label="复制整条回复" onClick={() => setNotice('已复制整条回复。')} className="flex size-6 items-center justify-center rounded-[4px] hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--copy] size-3.5" /></button>
+          <button title="保留源线，从这里开对话分支" aria-label="对话分支" onClick={() => setNotice('已从这里开对话分支：新会话出现在侧栏，标注「分支自」。')} className="flex size-6 items-center justify-center rounded-[4px] hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--git-branch] size-3.5" /></button>
+        </div>
+      )}
     </div>
   );
 }
+
+/**
+ * 正文里的文件卡（Markdown 文件链接 → chip）：左键打开/预览，右键给出打开方式与「复制路径」。
+ * 越界（工作区外 / ssh / 协议串）的路径只给复制，不导航、也不扩大权限。
+ */
+export function FileCardChip({ path, inWorkspace = true }: { path: string; inWorkspace?: boolean }) {
+  const { setNotice } = useWorkbench();
+  const [menu, setMenu] = useState(false);
+  const ref = useDismiss<HTMLSpanElement>(menu, () => setMenu(false));
+  return (
+    <span ref={ref} className="relative inline-flex">
+      <button
+        onContextMenu={(event) => { event.preventDefault(); setMenu(true); }}
+        onClick={() => (inWorkspace ? setNotice(`打开 ${path}（设计预览）。`) : setNotice('这个路径在工作区外，只能复制。'))}
+        className={`mx-0.5 inline-flex max-w-full items-center gap-1 rounded-[5px] border border-border/60 bg-muted/70 py-px pl-1 pr-1 align-baseline font-mono text-[11px] ${inWorkspace ? 'cursor-pointer hover:border-border' : 'text-muted'}`}
+      >
+        <span className="icon-[lucide--file-code-2] size-3 shrink-0 text-primary" />
+        <span className="truncate">{path}</span>
+        <span className="icon-[lucide--chevron-down] size-3 shrink-0 text-faint" />
+      </button>
+      {menu && (
+        <MenuPanel label="文件操作" className="left-0 top-6 w-56">
+          {inWorkspace ? (
+            <>
+              <MenuItem icon="icon-[lucide--file-code-2]" label="打开文件" onClick={() => { setMenu(false); setNotice(`打开 ${path}（设计预览）。`); }} />
+              <MenuItem icon="icon-[lucide--folder-search]" label="在访达中显示" onClick={() => { setMenu(false); setNotice('已在访达中定位。'); }} />
+              <MenuSeparator />
+            </>
+          ) : (
+            <p className="px-2 pb-1 pt-1.5 text-[11px] leading-4 text-muted">工作区外的路径：只允许复制，不会导航到磁盘地址。</p>
+          )}
+          <MenuItem icon="icon-[lucide--copy]" label="复制路径" onClick={() => { setMenu(false); setNotice('已复制路径。'); }} />
+        </MenuPanel>
+      )}
+    </span>
+  );
+}
+
 
 /** 时间线里的系统事件分隔：压缩 / 进入 Plan / worktree 迁移 / 账号接替 */
 export function TimelineEvent({ icon, children }: { icon: string; children: ReactNode }) {

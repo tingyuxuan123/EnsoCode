@@ -18,9 +18,9 @@ function Countdown({ seconds, expired }: { seconds: number; expired: string }) {
   return <span className="shrink-0 text-[11px] tabular-nums text-faint">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</span>;
 }
 
-type Approval = { id: string; kind: 'command' | 'file-edit' | 'file-write' | 'mcp'; tool: string; summary: string; protected?: string; reviewing?: boolean; expiresIn: number; sandbox?: boolean };
+type Approval = { id: string; kind: 'command' | 'file-edit' | 'file-write' | 'mcp'; tool: string; summary: string; protected?: string; reviewing?: boolean; expiresIn: number; sandbox?: boolean; reviewFallback?: string };
 const approvalQueue: Approval[] = [
-  { id: 'a1', kind: 'command', tool: 'bash', summary: 'pnpm typecheck && pnpm lint && pnpm test', expiresIn: 268 },
+  { id: 'a1', kind: 'command', tool: 'bash', summary: 'pnpm typecheck && pnpm lint && pnpm test', expiresIn: 268, reviewFallback: '自动代审超时，请你决定。' },
   { id: 'a2', kind: 'file-write', tool: 'write', summary: '~/.ssh/config', protected: '受保护：密钥', expiresIn: 268 },
   { id: 'a3', kind: 'mcp', tool: 'github › create_pull_request', summary: '{ "title": "统一工作台布局", "base": "main" }', reviewing: true, expiresIn: 268, sandbox: true },
   { id: 'a4', kind: 'command', tool: 'bash', summary: 'rm -rf dist && pnpm build', expiresIn: 0 },
@@ -49,9 +49,10 @@ export function ApprovalBar({ allowSession = true, onDone }: { allowSession?: bo
           {queue.length > 1 && <span className="text-[11px] tabular-nums text-faint">1/{queue.length}</span>}
         </span>
       </div>
+      {active.reviewFallback && <p className="mt-1 text-[11px] text-warning">{active.reviewFallback}</p>}
       <pre className="mt-1.5 max-h-24 overflow-auto whitespace-pre-wrap rounded-[4px] bg-code px-2 py-1.5 font-mono text-[12px] leading-5">{active.summary}</pre>
       {active.reviewing ? (
-        <p className="mt-2 flex items-center gap-2 text-[11px] text-muted"><Spinner className="size-3" />审批助手正在审查这一步；审完后自动放行或转交给你。<button onClick={next} className="ml-auto text-primary">下一条</button></p>
+        <p className="mt-2 flex items-center gap-2 text-[11px] text-muted"><Spinner className="size-3" />代审模型正在评分（allow / ask / block）；高分放行、低分拒绝，余下转交给你。<button onClick={next} className="ml-auto text-primary">下一条</button></p>
       ) : (
         <div className="mt-2 flex items-center justify-end gap-1.5">
           {active.protected && <span className="mr-auto text-[11px] text-muted">受保护操作只能单次授权；拒绝不会中止会话。</span>}

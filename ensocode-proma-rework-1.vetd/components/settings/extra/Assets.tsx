@@ -116,15 +116,109 @@ const plugins = [
   { id: 'old', name: 'legacy-linter', version: '0.9.0', on: true, components: [], hooks: false, missing: true },
 ];
 
+/** Enso 原生扩展插件（extensionPlugins）：与 Claude Code 插件彼此独立，新装的先停用 */
+const nativePlugins = [
+  { id: 'acme.todo-sync', name: 'Todo Sync', version: '1.2.0', state: 'enabled' as 'enabled' | 'disabled', configurable: true, pendingVersion: '', pendingPermissions: [] as string[] },
+  { id: 'acme.deploy-console', name: 'Deploy Console', version: '0.4.1', state: 'disabled' as 'enabled' | 'disabled', configurable: false, pendingVersion: '0.5.0', pendingPermissions: ['net.fetch: api.acme.dev', 'fs.read: ~/Projects/**'] },
+];
+
+const trustWarning =
+  '插件的 main 进程拥有完整的 Node.js 权限，ui.js 与主界面同权。只安装你完全信任的插件；权限限制的是 Enso 提供的宿主 API，不是插件自己的代码——这不是系统沙箱。';
+
+/** 安装预览（ExtensionPluginInstallPreview）：先把申请到的权限展开，确认后才落地 */
+function PluginInstallDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Overlay>
+      <Dialog
+        title="检查插件安装"
+        description="先看清它会拿到什么权限，再决定是否安装。"
+        width={560}
+        onClose={onClose}
+        footer={<><button onClick={onClose} className="px-3 py-2 text-[12px] text-muted">取消</button><button onClick={onClose} className={primaryButton}>确认安装</button></>}
+      >
+        <p className="text-[13px] font-semibold">Todo Sync <span className="font-mono text-[12px] font-normal text-muted">1.3.0</span></p>
+        <p className="mt-0.5 font-mono text-[11px] text-muted">acme.todo-sync（1.2.0 → 1.3.0）</p>
+        <p className="mt-2 text-[13px]">把会话里的待办同步到项目看板。</p>
+        <p className="mt-2 rounded-control border border-warning/40 bg-warning-soft px-3 py-2 text-[12px] leading-5">{trustWarning}</p>
+        <dl className="mt-3 space-y-2 text-[12px]">
+          <div><dt className="font-medium">权限</dt>{['composer.trigger', 'sidepanel.view', 'tool: todo_push'].map((item) => <dd key={item} className="break-all font-mono text-[11px] text-muted">{item}</dd>)}</div>
+          <div><dt className="font-medium">宿主 fs.read</dt><dd className="break-all font-mono text-[11px] text-muted">~/Projects/EnsoCode/**</dd></div>
+          <div><dt className="font-medium">宿主 fs.write</dt><dd className="break-all font-mono text-[11px] text-muted">~/Projects/EnsoCode/.todo/**</dd></div>
+          <div><dt className="font-medium">宿主 net.fetch</dt><dd className="break-all font-mono text-[11px] text-muted">api.acme.dev</dd></div>
+          <div><dt className="font-medium">工具</dt><dd className="break-all font-mono text-[11px] text-muted">todo_push: 把当前会话的待办推送到看板</dd></div>
+          <div><dt className="font-medium">警告</dt><dd className="text-[11px] text-warning">包含 ui.js：与主界面同权</dd></div>
+        </dl>
+      </Dialog>
+    </Overlay>
+  );
+}
+
+/** Enso 原生插件区：安装（文件夹 / zip / HTTPS）、信任提示、列表、待批准更新、配置表单 */
+function NativePluginsSection({ onInstall }: { onInstall: () => void }) {
+  const [native, setNative] = useState(nativePlugins);
+  const [url, setUrl] = useState('');
+  const [configuring, setConfiguring] = useState('');
+  return (
+    <SettingsSection title="Enso 插件" description="应用自己的原生扩展；新装进来的默认停用，由你手动开启。">
+      <div className="mb-2 flex flex-wrap gap-2">
+        <button onClick={onInstall} className={outlineButton}><span className="icon-[lucide--folder-input] size-3.5" />从文件夹安装</button>
+        <button onClick={onInstall} className={outlineButton}><span className="icon-[lucide--file-archive] size-3.5" />从 zip 安装</button>
+      </div>
+      <div className="mb-2 flex items-center gap-2">
+        <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/plugin.zip" aria-label="插件地址" className={inputClass} />
+        <button disabled={!/^https?:\/\//.test(url)} onClick={onInstall} className={outlineButton}>预览地址</button>
+      </div>
+      <p className="mb-3 rounded-control border border-warning/40 bg-warning-soft px-3 py-2 text-[12px] leading-5">{trustWarning}</p>
+      <div className="space-y-2">
+        {native.map((plugin) => (
+          <div key={plugin.id} className="space-y-2 rounded-control border border-line p-3">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium">{plugin.name} <span className="font-mono text-[11px] font-normal text-muted">{plugin.version}</span></p>
+                <p className="truncate font-mono text-[11px] text-muted">{plugin.id}</p>
+              </div>
+              <Badge tone={plugin.state === 'enabled' ? 'success' : 'neutral'}>{plugin.state === 'enabled' ? '已启用' : '已停用'}</Badge>
+              {plugin.configurable && (
+                <button onClick={() => setConfiguring(configuring === plugin.id ? '' : plugin.id)} aria-label="配置" title="配置" className="flex size-7 items-center justify-center rounded-control text-muted hover:bg-hover"><span className="icon-[lucide--settings-2] size-3.5" /></button>
+              )}
+              <Switch label={plugin.name} checked={plugin.state === 'enabled'} onChange={(on) => setNative(native.map((item) => item.id === plugin.id ? { ...item, state: on ? 'enabled' : 'disabled' } : item))} />
+              <button onClick={() => setNative(native.filter((item) => item.id !== plugin.id))} aria-label="卸载" title="卸载" className="flex size-7 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-danger"><span className="icon-[lucide--trash-2] size-3.5" /></button>
+            </div>
+            {plugin.pendingVersion && (
+              <div className="space-y-2 rounded-control border border-warning/40 bg-warning-soft px-3 py-2 text-[12px]">
+                <p>待批准的更新需要你显式同意权限：{plugin.pendingVersion}</p>
+                <p className="break-all font-mono text-[11px]">{plugin.pendingPermissions.join(' · ')}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setNative(native.map((item) => item.id === plugin.id ? { ...item, version: plugin.pendingVersion, pendingVersion: '', pendingPermissions: [] } : item))} className={primaryButton}>批准更新权限</button>
+                  <button onClick={() => setNative(native.map((item) => item.id === plugin.id ? { ...item, pendingVersion: '', pendingPermissions: [] } : item))} className={outlineButton}>保持当前版本</button>
+                </div>
+              </div>
+            )}
+            {configuring === plugin.id && (
+              <div className="space-y-3 rounded-control border border-line p-3">
+                <label className="block space-y-1 text-[13px]"><span>Webhook 地址</span><input defaultValue="https://hooks.acme.dev/enso" className={inputClass} /></label>
+                <label className="block space-y-1 text-[13px]"><span>API Token <span className="text-[12px] text-muted">已设置（留空则保留）</span></span><input type="password" defaultValue="" placeholder="••••••" className={inputClass} /></label>
+                <button className={primaryButton}>保存</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </SettingsSection>
+  );
+}
 /** PluginsSettings：扫描本机 Claude Code 已安装插件（不是市场），整包开关，组件详情，清理已卸载 */
-export function PluginsPage({ empty = false }: { empty?: boolean }) {
+export function PluginsPage({ empty = false, dialog = '' }: { empty?: boolean; dialog?: '' | 'install' }) {
   const [list, setList] = useState(empty ? [] : plugins);
   const [open, setOpen] = useState('superpowers');
   const [scanning, setScanning] = useState(false);
+  const [installing, setInstalling] = useState(dialog === 'install');
   const rescan = () => { setScanning(true); window.setTimeout(() => setScanning(false), 900); };
   return (
     <>
-      <SettingsHeader title="插件" description={`已启用 ${list.filter((p) => p.on && !p.missing).length} 个 · Claude Code 里已安装的插件，在这里按整包开关，新会话生效。`} actions={<button onClick={rescan} disabled={scanning} className={outlineButton}>{scanning ? <Spinner /> : <span className="icon-[lucide--refresh-cw] size-3.5" />}重新扫描</button>} />
+      <SettingsHeader title="插件" description={`Claude Code 插件已启用 ${list.filter((p) => p.on && !p.missing).length} 个 · 两套插件彼此独立`} actions={<button onClick={rescan} disabled={scanning} className={outlineButton}>{scanning ? <Spinner /> : <span className="icon-[lucide--refresh-cw] size-3.5" />}重新扫描</button>} />
+      <NativePluginsSection onInstall={() => setInstalling(true)} />
+      <p className="mb-2 mt-7 border-t border-line pt-5 text-[14px] font-medium">Claude Code 插件 <span className="ml-1 text-[12px] font-normal text-muted">在 Claude Code 里装好的插件，这里按整包开关，新会话生效</span></p>
       {list.length ? (
         <div className="divide-y divide-line rounded-control border border-line">
           {list.map((p) => (
@@ -151,6 +245,7 @@ export function PluginsPage({ empty = false }: { empty?: boolean }) {
       ) : (
         <div className="rounded-control border border-dashed border-border"><Empty icon="icon-[lucide--puzzle]" title="没有找到 Claude Code 插件" description="在 Claude Code 里用 /plugin 安装插件后重新扫描。" action={<button onClick={rescan} className={outlineButton}>重新扫描</button>} /></div>
       )}
+      {installing && <PluginInstallDialog onClose={() => setInstalling(false)} />}
     </>
   );
 }
@@ -222,6 +317,7 @@ export function McpDialog({ onClose, editing }: { onClose: () => void; editing?:
             ) : (
               <>
                 <label className="mt-3 block text-[12px] font-medium">URL<input defaultValue={editing ? 'https://api.githubcopilot.com/mcp/' : ''} placeholder="https://" className={`${inputClass} mt-1.5 font-mono font-normal`} /></label>
+                <label className="mt-3 block text-[12px] font-medium">HTTP 请求头（JSON，可选）<textarea defaultValue={'{\n  "X-Workspace": "demo"\n}'} aria-label="HTTP 请求头" className="mt-1.5 h-16 w-full rounded-control border border-border bg-code p-2 font-mono text-[12px] font-normal outline-none" /></label>
                 <label className="mt-3 block text-[12px] font-medium">OAuth 客户端名称（可选）<input placeholder="用于只接受已知 OAuth 客户端的服务器" className={`${inputClass} mt-1.5 font-normal`} /></label>
                 <label className="mt-3 block text-[12px] font-medium">OAuth 授权服务器元数据地址（可选）<input placeholder="服务器声明的授权服务器不对或没有声明时填写" className={`${inputClass} mt-1.5 font-normal`} /></label>
               </>

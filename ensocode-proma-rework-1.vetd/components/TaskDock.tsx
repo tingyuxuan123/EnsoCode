@@ -77,7 +77,7 @@ export function TaskDock({ initial = null }: { initial?: DockView }) {
             {todos.map((item) => (
               <li key={item.title} className="flex items-center gap-2.5 text-[13px] leading-5">
                 <span className={`${item.status === 'completed' ? 'icon-[lucide--circle-check] text-success' : item.status === 'in_progress' ? 'icon-[lucide--circle-dot] text-primary' : 'icon-[lucide--circle] text-faint'} size-3.5 shrink-0`} />
-                <span className={item.status === 'completed' ? 'text-muted line-through decoration-border' : item.status === 'in_progress' ? 'font-medium' : 'text-muted'}>{item.title}</span>
+                <span className={item.status === 'completed' ? 'text-muted line-through decoration-current decoration-[0.12em]' : item.status === 'in_progress' ? 'font-medium' : 'text-muted'}>{item.title}</span>
               </li>
             ))}
           </ol>

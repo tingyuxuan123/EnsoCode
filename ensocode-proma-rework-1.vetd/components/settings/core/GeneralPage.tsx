@@ -63,6 +63,7 @@ function Compaction() {
   const [mode, setMode] = useState('auto');
   const [model, setModel] = useState('');
   return (
+    <>
     <SettingsSection title="上下文压缩策略" description="标准使用默认压缩。智能压缩在压缩时用 Enso 验证式摘要。Codex 原生压缩在 Codex 模型上额外保存官方 checkpoint。持续记忆在后台持续记录观察；失败都回退默认压缩。">
       <SettingsRow label="策略" description={<span className="flex items-center gap-2">切换策略从下一个会话生效 <NewSessionBadge /></span>}>
         <Select label="上下文压缩策略" value={strategy} onChange={setStrategy} width="w-52" options={[['standard', '标准'], ['smart', '智能压缩'], ['codex-native', 'Codex 原生压缩'], ['continuous-memory', '持续记忆（实验）']]} />
@@ -78,6 +79,14 @@ function Compaction() {
         </SettingsRow>
       )}
     </SettingsSection>
+    <SettingsSection title="压缩预留 tokens" description="写在 pi 自己的全局设置文件里，不复制进应用的 settings。留空表示删除这项覆盖，回到默认值。">
+      <SettingsRow label="预留额度" description="给下一次压缩预留的 token 数（默认 16384，范围 4096–65536）。改完对新开的会话生效。">
+        <input defaultValue="16384" inputMode="numeric" aria-label="压缩预留 tokens" className="h-8 w-28 rounded-control border border-border bg-input px-2 text-right font-mono text-[12px] outline-none focus:border-primary/60" />
+        <button className={outlineButton}>保存</button>
+      </SettingsRow>
+      <p className="text-[11px] text-muted">文件被占用时会提示「pi 设置文件正忙，稍后再存」；文件内容不合法时不会覆盖它。当前值：16384。</p>
+    </SettingsSection>
+    </>
   );
 }
 

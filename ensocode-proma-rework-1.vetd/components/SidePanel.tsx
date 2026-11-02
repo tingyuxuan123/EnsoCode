@@ -8,6 +8,7 @@ import { ChangesView } from './panel/ChangesView';
 import { FilesView } from './panel/FilesView';
 import { TerminalView } from './panel/TerminalView';
 import { WorkflowView } from './panel/WorkflowView';
+import { PluginView } from './panel/PluginView';
 import { useWorkbench, type SideTab } from './Workbench';
 
 function View({ tab }: { tab: SideTab }) {
@@ -17,6 +18,7 @@ function View({ tab }: { tab: SideTab }) {
   if (tab.kind === 'browser') return <BrowserView />;
   if (tab.kind === 'btw') return <BtwView />;
   if (tab.kind === 'agents') return <AgentsView />;
+  if (tab.kind === 'plugin') return <PluginView />;
   return <WorkflowView />;
 }
 
@@ -79,6 +81,8 @@ export function SidePanel({ width = 360 }: { width?: number }) {
               {sideTabKinds.map((kind) => (
                 <MenuItem key={kind.id} icon={kind.icon} label={kind.label} hint={kind.id === 'btw' ? '旁路提问，不会发给主 agent' : kind.id === 'workflow' ? '内置工具「工作流」开启时可用' : undefined} onClick={() => { setAddMenu(false); openSideTab(kind.id); }} />
               ))}
+              <MenuSeparator />
+              <MenuItem icon="icon-[lucide--puzzle]" label="本地便签 · Notes 示例插件" onClick={() => { setAddMenu(false); openSideTab('plugin', '本地便签'); }} />
             </MenuPanel>
           )}
         </div>

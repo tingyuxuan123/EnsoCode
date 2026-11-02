@@ -276,8 +276,8 @@ export function Composer({ onSend, initial = '', running = false, locked = false
   const [images, setImages] = useState(0);
   const [chips, setChips] = useState<Mention[]>([]);
   const [recording, setRecording] = useState(false);
-  const popup = draft.endsWith('@') ? 'mention' : /(^|\s)\/[\w:-]*$/.test(draft) ? 'slash' : '';
-  const ref = useDismiss<HTMLDivElement>(Boolean(popup), () => setDraft(draft.replace(/[@/][\w:-]*$/, '')));
+  const popup = draft.endsWith('@') ? 'mention' : /(^|\s)#[^\s#]*$/.test(draft) ? 'plugin' : /(^|\s)\/[\w:-]*$/.test(draft) ? 'slash' : '';
+  const ref = useDismiss<HTMLDivElement>(Boolean(popup), () => setDraft(draft.replace(/[@/#][\w:-]*$/, '')));
   const agentRecipient = chips.find((chip) => chip.kind === 'agent');
   const hasContent = draft.trim().length > 0 || images > 0;
   const send = () => {
@@ -294,10 +294,17 @@ export function Composer({ onSend, initial = '', running = false, locked = false
       <div ref={ref} className={`relative rounded-control border bg-input ${locked ? 'border-line opacity-80' : 'border-border focus-within:border-primary/60'}`}>
         {popup && (
           <MenuPanel label={popup === 'mention' ? '输入 @ 选择文件或 Agent' : '命令建议'} className="bottom-full left-0 mb-1 w-[420px]">
-            <MenuLabel>{popup === 'mention' ? '输入 @ 选择文件或 Agent' : '命令建议'}</MenuLabel>
+            <MenuLabel>{popup === 'mention' ? '输入 @ 选择文件或 Agent' : popup === 'plugin' ? '插件建议 · Snippets 示例' : '命令建议'}</MenuLabel>
             {popup === 'mention'
               ? mentionOptions.map((option) => <MenuItem key={option.label} icon={option.icon} label={option.label} hint={option.hint} onClick={() => { setChips([...chips, option]); setDraft(draft.slice(0, -1)); }} />)
-              : slashOptions.map((option) => <MenuItem key={option.name} icon="icon-[lucide--square-slash]" label={option.name} hint={option.hint} onClick={() => { if (option.name.startsWith('/skill')) setChips([...chips, { kind: 'skill', label: option.name.slice(7) }]); setDraft(draft.replace(/\/[\w:-]*$/, option.name.startsWith('/skill') ? '' : `${option.name} `)); }} />)}
+              : popup === 'plugin'
+                ? [
+                    { name: 'review', text: '请审查正确性、边界条件和遗漏的测试。' },
+                    { name: 'tests', text: '先添加失败测试，再给出最小实现。' },
+                  ].filter((item) => item.name.includes(draft.split('#').at(-1) ?? '')).map((item) => (
+                    <MenuItem key={item.name} icon="icon-[lucide--hash]" label={`#${item.name}`} hint={item.text} onClick={() => setDraft(draft.replace(/#[^\s#]*$/, item.text))} />
+                  ))
+                : slashOptions.map((option) => <MenuItem key={option.name} icon="icon-[lucide--square-slash]" label={option.name} hint={option.hint} onClick={() => { if (option.name.startsWith('/skill')) setChips([...chips, { kind: 'skill', label: option.name.slice(7) }]); setDraft(draft.replace(/\/[\w:-]*$/, option.name.startsWith('/skill') ? '' : `${option.name} `)); }} />) }
           </MenuPanel>
         )}
         {(chips.length > 0 || images > 0) && (

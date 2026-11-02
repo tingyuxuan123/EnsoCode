@@ -121,7 +121,9 @@ export function ProvidersPage({ open }: { open?: 'wizard' | 'edit' | 'oauth' | '
   const [defaultModel, setDefaultModel] = useState('Claude Sonnet 4.5');
   const [followLast, setFollowLast] = useState('fixed');
   const [title, setTitle] = useState('');
-  const [reviewer, setReviewer] = useState('deepseek-reasoner');
+  const [reviewer, setReviewer] = useState('typesafe-one');
+  const [autoManage, setAutoManage] = useState(true);
+  const [threshold, setThreshold] = useState('0.9');
   const [remove, setRemove] = useState<Provider | null>(null);
   const [removing, setRemoving] = useState('');
   const [removeError, setRemoveError] = useState('');
@@ -157,10 +159,24 @@ export function ProvidersPage({ open }: { open?: 'wizard' | 'edit' | 'oauth' | '
         <SettingsRow label="会话标题总结" description="新会话发出首条消息后，用 AI 自动生成简短标题。">
           <ModelSelect label="会话标题总结" value={title} onChange={setTitle} emptyLabel="跟随默认模型" allowVirtual={false} />
         </SettingsRow>
-        <SettingsRow label="助手代审模型" description={reviewer === 'deepseek-reasoner' ? <span className="text-danger">所选模型不可用 · DeepSeek 已停用</span> : '选好后新会话默认走助手代审；未选则该档不可用，不会回退到当前会话模型。'}>
-          <ModelSelect label="助手代审模型" value={reviewer} onChange={setReviewer} emptyLabel="尚未选择助手代审模型" allowVirtual={false} unavailable={reviewer === 'deepseek-reasoner'} />
+        <SettingsRow label="助手代审模型" description="选定后才能在审批档位里选「助手代审」；未选则这一档不可用，也不会回退到当前会话模型。分类器模型只判断 allow / ask / block，不能聊天。">
+          <Select label="助手代审模型" value={reviewer} onChange={setReviewer} width="w-52" options={[[ 'typesafe-one', 'TypeSafe System One（分类器）' ], ['Claude Haiku 4.5', 'Claude Haiku 4.5'], ['deepseek-reasoner', 'DeepSeek（不可用）'], ['', '尚未选择']]} />
           {reviewer && <button onClick={() => setReviewer('')} className="text-[12px] text-muted">清除</button>}
         </SettingsRow>
+        {reviewer === 'deepseek-reasoner' && <p className="-mt-1 mb-2 text-[12px] text-danger">所选模型不可用 · DeepSeek 已停用</p>}
+        {reviewer === 'typesafe-one' && (
+          <div className="mb-3 rounded-control border border-line px-3 py-2.5">
+            <p className="text-[12px] leading-5 text-muted">{autoManage ? '自动代管：只在决策模型很有把握时直接放行；其余一律拒绝，让 agent 换一种做法。受保护操作仍然会问你。' : '决策模型只在很有把握时放行或阻止，其余都转交给你。'}</p>
+            <div className="mt-2 flex items-center justify-between gap-3"><span className="text-[13px]">自动代管审批</span><Switch label="自动代管审批" checked={autoManage} onChange={setAutoManage} /></div>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px]">自动放行阈值</span>
+                <span className="block text-[12px] leading-5 text-muted">只有放行概率达到这个值才会自动跑；贴着阈值的操作可能这次放行、下次不放行。</span>
+              </span>
+              <Select label="自动放行阈值" value={threshold} onChange={setThreshold} width="w-36" options={[['0.85', '0.85（更宽松）'], ['0.9', '0.9（默认）'], ['0.95', '0.95（更严格）']]} />
+            </div>
+          </div>
+        )}
       </SettingsSection>
       <VirtualModels onEdit={() => setDialog('virtual')} />
       <SubagentModels />

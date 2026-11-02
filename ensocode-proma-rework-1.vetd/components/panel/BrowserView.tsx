@@ -49,7 +49,7 @@ function Page() {
 
 /**
  * 内嵌浏览器（sidepanel/BrowserView.tsx + BrowserNewTab / BrowserDeviceToolbar / BrowserHistoryPanel / BrowserDownloadsPanel）。
- * 地址栏、前进后退、刷新；Agent 占用时顶部显示谁在用、可「我来接管」，接管后可「允许 Agent 继续」；
+ * 人与 Agent 可协作浏览；不再显示独占锁、「接管」或「允许 Agent 继续」。
  * 圈选模式把页面元素发给对话；设备预览、开发者工具、浏览历史与下载都在同一面板内开。
  */
 export function BrowserView() {
@@ -60,7 +60,7 @@ export function BrowserView() {
   const [records, setRecords] = useState<'page' | 'history' | 'downloads'>('page');
   const [device, setDevice] = useState(false);
   const ref = useDismiss<HTMLDivElement>(menu, () => setMenu(false));
-  const agent = state === 'agent';
+  const [devtools, setDevtools] = useState(false);
   const pick = (next: BrowserPreset['state']) => {
     setState(next);
     setRecords(next === 'history' ? 'history' : next === 'downloads' ? 'downloads' : 'page');
@@ -82,34 +82,12 @@ export function BrowserView() {
             <MenuPanel label="浏览器操作" className="right-0 top-8 w-52">
               <MenuItem icon="icon-[lucide--scan-search]" label="开关圈选模式" hint="点选页面元素，作为上下文发给对话" onClick={() => setMenu(false)} />
               <MenuItem icon="icon-[lucide--monitor-smartphone]" label="设备预览" checked={device} onClick={() => { setMenu(false); pick('device'); }} />
-              <MenuItem icon="icon-[lucide--wrench]" label="开发者工具" onClick={() => setMenu(false)} />
+              <MenuItem icon="icon-[lucide--wrench]" label="开发者工具" checked={devtools} onClick={() => { setMenu(false); setDevtools(!devtools); }} />
               <MenuItem icon="icon-[lucide--history]" label="浏览历史" onClick={() => { setMenu(false); pick('history'); }} />
               <MenuItem icon="icon-[lucide--download]" label="浏览器下载" onClick={() => { setMenu(false); pick('downloads'); }} />
             </MenuPanel>
           )}
         </div>
-      </div>
-      <div className={`flex h-7 shrink-0 items-center gap-2 border-b border-line px-2 text-[11px] ${agent ? 'bg-warning-soft text-surface-foreground' : 'bg-panel text-muted'}`}>
-        {agent ? (
-          <>
-            <Spinner className="size-3" />
-            <span className="truncate">Agent 正在操作 · 界面实现 正在用这个标签页</span>
-            <button onClick={() => pick('manual')} className="ml-auto shrink-0 rounded-control bg-surface px-2 py-0.5 text-[11px]">我来接管</button>
-          </>
-        ) : state === 'error' ? (
-          <>
-            <span className="icon-[lucide--circle-alert] size-3.5 text-danger" />
-            <span>导航失败 · ERR_CONNECTION_REFUSED</span>
-            <button onClick={() => pick('agent')} className="ml-auto shrink-0 text-primary">重试</button>
-          </>
-        ) : (
-          <>
-            <span className="size-1.5 rounded-full bg-success" />
-            <span className="truncate">已接管 · 11:43 起由你手动控制</span>
-            <button onClick={() => pick('agent')} className="ml-auto shrink-0 text-primary">允许 Agent 继续</button>
-            <button className="shrink-0 text-muted hover:text-surface-foreground">在浏览器中打开</button>
-          </>
-        )}
       </div>
       {device && (
         <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line bg-panel px-2 text-[11px]">
@@ -165,8 +143,8 @@ export function BrowserView() {
               ))}
             </div>
             <div className="flex h-9 shrink-0 items-center gap-2 border-t border-line px-3 text-[11px]">
-              <span className="text-muted">请先接管，再打开历史网页。</span>
-              <button onClick={() => pick('manual')} className="ml-auto rounded-control border border-border px-2 py-0.5 text-surface-foreground hover:bg-hover">接管</button>
+              <span className="text-muted">点击历史记录可直接打开网页。</span>
+              <button onClick={() => pick('manual')} className="ml-auto text-primary">返回网页</button>
               <button className="text-muted hover:text-surface-foreground">关闭</button>
             </div>
           </div>
@@ -200,7 +178,15 @@ export function BrowserView() {
           </div>
         )}
       </div>
-      <PreviewStates value={state} onChange={pick} options={[{ value: 'agent', label: 'Agent 操作中' }, { value: 'manual', label: '已接管' }, { value: 'error', label: '导航失败' }, { value: 'newtab', label: '新标签页' }, { value: 'history', label: '历史' }, { value: 'downloads', label: '下载' }]} />
+      {devtools && (
+        <div className="h-40 shrink-0 overflow-auto border-t border-line bg-code p-3 font-mono text-[11px]">
+          <div className="mb-3 flex gap-4 border-b border-line pb-2"><span>Elements</span><span className="text-muted">Console</span><span className="text-muted">Network</span><button onClick={() => setDevtools(false)} className="ml-auto" aria-label="关闭开发者工具">×</button></div>
+          <p className="text-muted">{'<main class="workspace">'}</p>
+          <p className="pl-4">{'<section class="status-line">…</section>'}</p>
+          <p className="text-muted">{'</main>'}</p>
+        </div>
+      )}
+      <PreviewStates value={state} onChange={pick} options={[{ value: 'agent', label: '协作浏览' }, { value: 'error', label: '导航失败' }, { value: 'newtab', label: '新标签页' }, { value: 'history', label: '历史' }, { value: 'downloads', label: '下载' }]} />
     </div>
   );
 }

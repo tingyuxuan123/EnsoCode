@@ -190,6 +190,10 @@ export function CodeSidebar() {
         <span className="text-[14px]">新建任务</span>
         <span className="ml-auto rounded border border-border px-1 text-[11px] text-muted">⌘N</span>
       </Link>
+      <button onClick={() => setNotice('新建了一个临时会话：不属于任何项目，删掉即清空（设计预览）。')} className="mx-3 mt-1 flex h-8 shrink-0 items-center gap-2 rounded-control px-1.5 text-[13px] text-muted hover:bg-hover hover:text-surface-foreground">
+        <span className="icon-[lucide--message-square-plus] size-4 shrink-0" />
+        <span>开始临时会话</span>
+      </button>
       <div ref={addRef} className="relative mt-4 flex shrink-0 items-center gap-1 px-4 text-[12px] text-muted">
         <span className="flex-1">项目</span>
         <button title={folded.length === projects.length ? '全部展开' : '全部折叠'} onClick={() => setFolded(folded.length === projects.length ? [] : projects.map((project) => project.id))} className="flex size-6 items-center justify-center rounded-control hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--chevrons-up-down] size-3.5" /></button>
@@ -259,6 +263,16 @@ export function CodeSidebar() {
           );
         }) : scoped.map((project) => <ProjectNode key={project.id} project={project} folded={folded.includes(project.id)} onToggle={() => toggle(project.id)} />)}
         {!scoped.length && <p className="px-2 py-6 text-center text-[12px] text-muted">没有匹配的会话</p>}
+        <div className="mt-3" data-slot="scratch-section">
+          <div className="group flex items-center justify-between pr-1">
+            <SectionLabel>临时会话</SectionLabel>
+            <button onClick={() => setNotice('新建了一个临时会话（设计预览）。')} title="开始临时会话" aria-label="开始临时会话" className="flex size-5 items-center justify-center rounded hover:bg-hover"><span className="icon-[lucide--plus] size-3.5" /></button>
+          </div>
+          <p className="px-2 pb-1 text-[11px] text-faint">临时会话会一直保留，直到你删除它。</p>
+          <div className="flex flex-col gap-y-0.5">
+            <SessionRow session={{ id: 'sc1', title: '试一段正则表达式', time: '20 分钟', dot: 'idle' }} active={false} />
+          </div>
+        </div>
       </div>
       <div className="flex shrink-0 flex-col gap-1 px-3 pb-3 pt-2">
         <NodeSwitcher />

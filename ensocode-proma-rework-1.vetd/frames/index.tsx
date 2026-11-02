@@ -2,7 +2,7 @@ export const frame = { width: 1440, height: 900, title: "对话工作台" };
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Composer } from '../components/Composer';
-import { AssistantActions, AssistantHeader, CoworkerTabs, TimelineEvent, TurnFilesCard, UserMessage, WorkedRow } from '../components/Conversation';
+import { AssistantHeader, CoworkerTabs, FileCardChip, ReplyBlock, TimelineEvent, ToolResultCard, TurnFilesCard, UserMessage, WorkedRow } from '../components/Conversation';
 import { coworkers } from '../components/data';
 import { TaskDock, type DockView } from '../components/TaskDock';
 import { useWorkbench } from '../components/Workbench';
@@ -28,16 +28,19 @@ function DefaultTimeline({ running }: { running: boolean }) {
       <UserMessage>{task || '参考当前 Proma 的布局，把 EnsoCode 的工作台整理得更清爽一些。保留项目会话、协作 Agent 和文件审查，不改现有功能。'}</UserMessage>
       <AssistantHeader />
       <WorkedRow />
-      <h2 className="mb-3 text-[18px] font-semibold">工作台结构已整理</h2>
-      <p className="mb-3 text-[15px] leading-[27px]">让对话成为主线，把项目上下文和交付物放在两侧；用背景层次和 1px 细线代替厚重边框。</p>
-      <ul className="space-y-2 text-[14px] leading-6">
-        <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">侧栏</strong><span className="text-muted">：保留分组标签、活跃中 / 已置顶、项目树与节点切换。</span></span></li>
-        <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">输入区</strong><span className="text-muted">：预设、工作区、计划、审批档位和模型集中在一行，运行条按优先级叠在上方。</span></span></li>
-        <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">右侧面板</strong><span className="text-muted">：文件、改动、终端、浏览器、旁路、代理和工作流都是可停靠标签。</span></span></li>
-      </ul>
+      <ToolResultCard />
+      <ReplyBlock>
+        <h2 className="mb-3 text-[18px] font-semibold">工作台结构已整理</h2>
+        <p className="mb-3 text-[15px] leading-[27px]">让对话成为主线，把项目上下文和交付物放在两侧；用背景层次和 1px 细线代替厚重边框。改动集中在 <FileCardChip path="src/renderer/components/chat/Sidebar.tsx" /> 与 <FileCardChip path="src/renderer/styles/globals.css" />。</p>
+        <ul className="space-y-2 text-[14px] leading-6">
+          <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">侧栏</strong><span className="text-muted">：保留分组标签、活跃中 / 已置顶、项目树与节点切换，新增临时会话区。</span></span></li>
+          <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">输入区</strong><span className="text-muted">：预设、工作区、计划、审批档位和模型集中在一行，运行条按优先级叠在上方。</span></span></li>
+          <li className="flex gap-3"><span className="mt-2.5 size-[4px] shrink-0 rounded-full bg-border" /><span><strong className="font-medium">右侧面板</strong><span className="text-muted">：文件、改动、终端、浏览器、旁路、代理、工作流和插件视图都是可停靠标签。</span></span></li>
+        </ul>
+        <pre className="mb-3 overflow-auto rounded-control bg-code px-3 py-2.5 font-mono text-[12px] leading-5"><code className="bg-transparent p-0">{'$ pnpm typecheck && pnpm lint && pnpm test\n✓ 412 tests passed'}</code></pre>
+        <p className="text-[15px] leading-[27px] text-muted">工作区外引用如 <FileCardChip path="/Users/me/.ssh/config" inWorkspace={false} /> 只能复制路径，不会导航到磁盘地址。</p>
+      </ReplyBlock>
       <TurnFilesCard />
-      <pre className="mb-3 overflow-auto rounded-control bg-code px-3 py-2.5 font-mono text-[12px] leading-5"><code className="bg-transparent p-0">{'$ pnpm typecheck && pnpm lint && pnpm test\n✓ 412 tests passed'}</code></pre>
-      <AssistantActions />
       <TimelineEvent icon="icon-[lucide--archive-restore]">上下文已压缩（压缩前 162K tokens）· 点开查看摘要</TimelineEvent>
       <UserMessage time="14:51">再把状态栏字段做成可排序的，默认不要轮询额度。</UserMessage>
       <AssistantHeader time="14:51" />

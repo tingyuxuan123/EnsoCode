@@ -29,11 +29,16 @@ export function ToolsPage() {
   const [protectedAsk, setProtectedAsk] = useState(true);
   const [webChain, setWebChain] = useState(['当前会话模型原生搜索', 'Exa（免 key）']);
   const [showPerm, setShowPerm] = useState(false);
+  const [lcu, setLcu] = useState(false);
+  const [allowedApps, setAllowedApps] = useState([
+    { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app' },
+    { name: 'Google Chrome', path: '/Applications/Google Chrome.app' },
+  ]);
   const on = tools.filter((tool) => tool.on).length;
   return (
     <>
       <SettingsHeader title="内置工具" description="开关 agent 可用的内置工具。" actions={<span className="text-[11px] text-muted">已启用 {on}/{tools.length}</span>} />
-      <InlineNotice>开启工具只对新会话生效；关闭记忆或电脑操控会同时在已打开的会话中拦截。<NewSessionBadge /></InlineNotice>
+      <InlineNotice>已打开的会话在当前轮结束时应用开关（不会停掉正在跑的工具与子代理）；隔离沙箱、工作区写入与目标工具保持启动时的配置。</InlineNotice>
       <SettingsSection title="工具" description="关闭后不下发给会话，模型看不到这份工具。">
         <SettingsList>
           {tools.map((tool) => (
@@ -73,9 +78,27 @@ export function ToolsPage() {
         <p className="mt-1.5 text-[11px] text-muted">资源准备失败时工具会退回本地 grep，并在时间线提示原因。</p>
       </SettingsSection>
 
-      <SettingsSection title="电脑操控" description="Agent 可以截取窗口并控制键鼠。需要把屏幕录制和辅助功能授权给 EnsoCode，然后重启；只有新会话会拿到这个工具。">
-        <SettingsRow label="权限状态" description={showPerm ? '屏幕录制：已授权 · 辅助功能：未授权' : '当前系统还不能操作桌面。'}>
+      <SettingsSection title="电脑操控" description="Agent 可以截取窗口并控制键鼠。macOS 需要把屏幕录制和辅助功能授权给 EnsoCode，然后重启。工具开关在当前轮结束后应用。">
+        <SettingsRow label="权限状态" description={showPerm ? '截屏：已授权 · 输入/辅助功能：已授权' : '当前系统还不能操作桌面。'}>
           <button className={outlineButton} onClick={() => setShowPerm(!showPerm)}>打开权限引导</button>
+        </SettingsRow>
+        <SettingsRow stacked label="AI 可以控制的应用" description="AI 第一次在某个应用里点击或输入时会问你。这里列的是你选了「总是允许」的应用；允许之后，它能读到那个应用窗口里的全部内容。">
+          <div className="divide-y divide-line rounded-control border border-line">
+            {allowedApps.map((app) => (
+              <div key={app.path} className="flex items-center gap-3 px-3 py-2">
+                <span className="icon-[lucide--app-window] size-4 shrink-0 text-muted" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px]">{app.name}</span>
+                  <span className="block truncate font-mono text-[11px] text-muted" title={app.path}>{app.path}</span>
+                </span>
+                <button className={outlineButton} onClick={() => setAllowedApps(allowedApps.filter((item) => item.path !== app.path))}>撤销</button>
+              </div>
+            ))}
+            {allowedApps.length === 0 && <p className="px-3 py-2 text-[12px] text-muted">还没有总是允许的应用。</p>}
+          </div>
+        </SettingsRow>
+        <SettingsRow label="LCU 电脑操控" description="允许加载已经装好的 LCU Pi 扩展，与内置 Computer 独立；不会帮你安装 LCU。对新会话或冷恢复的会话生效，改完需要重启 EnsoCode 才作用到已打开的会话。">
+          <button onClick={() => setLcu(!lcu)} aria-pressed={lcu} aria-label="LCU 电脑操控" className={`flex h-[18px] w-8 shrink-0 items-center rounded-full px-[3px] ${lcu ? 'justify-end bg-primary' : 'justify-start bg-border'}`}><span className="size-3 rounded-full bg-white" /></button>
         </SettingsRow>
         {showPerm && (
           <div className="mb-2 rounded-control border border-line bg-panel/50 px-3 py-2 text-[12px] leading-6">
@@ -85,7 +108,7 @@ export function ToolsPage() {
               <li>辅助功能：用于读取无障碍树与点击</li>
             </ol>
             <div className="mt-1.5 flex gap-2"><button className={outlineButton}>打开屏幕录制设置</button><button className={outlineButton}>打开辅助功能设置</button></div>
-            <p className="mt-1 text-[11px] text-faint">授权后重启应用；已完成授权时显示「电脑操控已就绪。开一个新会话即可使用。」</p>
+            <p className="mt-1 text-[11px] text-faint">授权后重启应用；电脑操控就绪后，已打开会话可在当前轮结束后使用。</p>
           </div>
         )}
       </SettingsSection>

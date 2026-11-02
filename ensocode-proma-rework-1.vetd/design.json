@@ -2,9 +2,9 @@
 	"version": 1,
 	"type": "vetta-design",
 	"canvas": {
-		"x": -11566.238084931907,
-		"y": -1201.581529244633,
-		"zoom": 0.1199058810919539
+		"zoom": 0.4132879590691098,
+		"x": -1187.1345270549104,
+		"y": -116.80963015374681
 	},
 	"frames": [
 		{
@@ -392,11 +392,11 @@
 			"y": 0,
 			"width": 1440,
 			"height": 900,
-			"title": "右侧面板 · 内嵌浏览器（Agent 操作中）",
+			"title": "右侧面板 · 内嵌浏览器（协作浏览）",
 			"meta": {
 				"width": 1440,
 				"height": 900,
-				"title": "右侧面板 · 内嵌浏览器（Agent 操作中）"
+				"title": "右侧面板 · 内嵌浏览器（协作浏览）"
 			}
 		},
 		{
@@ -467,6 +467,20 @@
 				"width": 1440,
 				"height": 900,
 				"title": "右侧面板 · Git 历史与提交 Diff"
+			}
+		},
+		{
+			"id": "panel-plugin",
+			"file": "frames/panel-plugin.tsx",
+			"x": 132970,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧面板 · 插件视图（本地便签）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧面板 · 插件视图（本地便签）"
 			}
 		},
 		{
@@ -985,6 +999,20 @@
 				"width": 960,
 				"height": 680,
 				"title": "设置 · 设备（配对与连接）"
+			}
+		},
+		{
+			"id": "settings-plugins--native",
+			"file": "frames/settings-plugins--native.tsx",
+			"x": 131930,
+			"y": 0,
+			"width": 960,
+			"height": 680,
+			"title": "设置 · 插件 · 安装预览",
+			"meta": {
+				"width": 960,
+				"height": 680,
+				"title": "设置 · 插件 · 安装预览"
 			}
 		},
 		{

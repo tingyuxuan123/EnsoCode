@@ -112,7 +112,7 @@ export function MemorySettingsPage() {
           ))}
         </div>
       </SettingsSection>
-      <SettingsSection title="后台任务" actions={<button className="text-[12px] text-muted hover:text-surface-foreground" title="清除已完成和已作废的任务，进行中的保留。">清空历史任务</button>}>
+      <SettingsSection title="后台任务" actions={<span className="flex items-center gap-2"><button className="text-[12px] text-muted hover:text-surface-foreground" title="重新跑一遍抽取失败的实体任务；已成功的不会重跑。">重试失败的抽取（1）</button><button className="text-[12px] text-muted hover:text-surface-foreground" title="清除已完成和已作废的任务，进行中的保留。">清空历史任务</button></span>}>
         <div className="divide-y divide-line rounded-control border border-line text-[12px]">
           {[['提炼 · 统一工作台布局与侧栏样式', '进行中', 'running'], ['抽取实体 · 优化文件搜索体验', '已完成', 'done'], ['提炼 · 中继握手超时排查', '失败 · 模型超时', 'failed']].map(([label, status, tone]) => (
             <div key={label} className="flex items-center gap-2 px-3 py-2">
@@ -242,7 +242,7 @@ export function MemoryLibraryPage() {
           </div>
         )) : <p className="text-[12px] text-muted">没有待批准的写入。</p>}
       </SettingsSection>
-      <SettingsSection title="已存记忆" description="agent 存下的全部记忆。归档只是让它不再出现在检索里，内容仍保留。">
+      <SettingsSection title="已存记忆" description="agent 存下的全部记忆。归档只是让它不再出现在检索里，内容仍保留。衰减按创建时间算，检索次数不会刷新它。">
         <div className="mb-2 flex items-center gap-2">
           <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control border border-border bg-input px-2.5 text-muted"><span className="icon-[lucide--search] size-3.5" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索记忆" aria-label="搜索记忆" className="min-w-0 flex-1 bg-transparent text-[12px] text-surface-foreground outline-none" /></label>
           <select className={selectClass}><option>全部空间</option><option>全局</option><option>EnsoCode</option></select>
@@ -253,6 +253,12 @@ export function MemoryLibraryPage() {
           <label className="flex items-center gap-1.5 text-[12px] text-muted"><Checkbox label="显示已归档" checked={showArchived} onChange={setShowArchived} />显示已归档</label>
           {mode !== 'exact' && <span className="ml-auto text-[11px] text-warning">嵌入模型未就绪，本次跳过了向量通道。</span>}
         </div>
+        {mode === 'deep' && (
+          <div className="mb-2 space-y-1 rounded-control border border-line bg-panel/50 px-3 py-2 text-[11px] leading-5 text-muted">
+            <p>深入检索：与 agent 同一套路径（全文 + 向量 + 实体按相关度合并），只返回前几条，没有精确总数；已归档不参与。</p>
+            <p>模型辅助回退：模型不可用（示例状态）。</p>
+        </div>
+        )}
         {selected.length > 0 && (
           <div className="mb-2 flex items-center gap-3 rounded-control bg-panel px-3 py-1.5 text-[12px]">
             已选 {selected.length} 项
@@ -270,7 +276,7 @@ export function MemoryLibraryPage() {
                   <p className="text-[13px] leading-5">{m.text}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted">
                     <Badge tone={m.crystal ? 'primary' : 'neutral'}>{m.kind}</Badge>
-                    {m.space} · 重要度 {m.importance} · 命中 {m.hits} 次
+                    {m.space} · 重要度 {m.importance} · 检索 {m.hits} 次
                     {m.archived && <Badge>已归档</Badge>}
                   </p>
                 </div>
