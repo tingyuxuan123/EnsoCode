@@ -13,6 +13,7 @@ import {
   clearFinishedMemoryJobs,
   deleteMemoryPermanently,
   deleteMemorySpace,
+  getMemoryJobsSnapshot,
   listMemoriesForAdmin,
   openExistingMemoryDb,
   restoreMemory,
@@ -79,6 +80,29 @@ it('deleting a chat space keeps pending member jobs but stops them routing into 
 });
 
 describe('memory admin — 语义搜索模式', () => {
+  it('deep 明确回报是否使用模型辅助，fast 恒为 off', async () => {
+    await add('Postgres assist');
+    const assist = {
+      analyze: async () => null,
+      rerank: async () => null,
+      outcome: () => ({ assist: 'fallback' as const, assistReason: 'unparseable' as const }),
+    };
+    const deep = await searchMemoriesForAdmin(
+      db,
+      { query: 'Postgres', limit: 10, offset: 0, mode: 'deep' },
+      null,
+      assist
+    );
+    expect(deep).toMatchObject({ assist: 'fallback', assistReason: 'unparseable' });
+    const fast = await searchMemoriesForAdmin(
+      db,
+      { query: 'Postgres', limit: 10, offset: 0, mode: 'fast' },
+      null,
+      assist
+    );
+    expect(fast).toMatchObject({ assist: 'off' });
+  });
+
   const embedder: Embedder = {
     model: 'kw',
     dim: 1,
@@ -95,6 +119,7 @@ describe('memory admin — 语义搜索模式', () => {
     expect(result.vectorsUsed).toBe(false);
     expect(result.approximate).toBe(true);
     expect(result.items).toHaveLength(1);
+    expect(result.items[0].appearances).toBe(1);
   });
 
   it('实体通道生效：正文没有该词但 MENTIONS 同实体的记忆也能搜到', async () => {
@@ -134,6 +159,15 @@ describe('memory admin — 语义搜索模式', () => {
 });
 
 describe('memory admin', () => {
+  it('展示被检索次数，不把未写入的 access_count 当命中数', async () => {
+    const memory = await add('appearance count');
+    db.prepare('UPDATE memories SET appearances = 7, access_count = 99 WHERE id = ?').run(
+      memory.id
+    );
+    const result = listMemoriesForAdmin(db, { limit: 10, offset: 0 });
+    expect(result.items[0]).toMatchObject({ appearances: 7 });
+  });
+
   it('returns correct total independently of pagination and escapes FTS syntax', async () => {
     await add('alpha (special) one');
     await add('alpha "special" two');
@@ -209,6 +243,16 @@ function jobIds(): number[] {
 }
 
 describe('memory admin — 清空历史任务', () => {
+  it('KG 全库失败计数不受列表 limit 截断，取消与其它类型失败不算 KG 失败', () => {
+    insertJob('kg', 'first#failed', 'done', 'bad');
+    insertJob('kg', 'second#failed', 'done', 'bad');
+    insertJob('kg', 'third#cancel', 'cancelled', 'changed');
+    insertJob('distill', 'fourth#distill', 'done', 'bad');
+    const snapshot = getMemoryJobsSnapshot(db, 1);
+    expect(snapshot.kg).toHaveLength(1);
+    expect(snapshot.kgFailed).toBe(2);
+  });
+
   it('deletes done/cancelled (including failed-as-done) and keeps pending/running', () => {
     const pending = insertJob('distill', 'pending-fp', 'pending');
     const running = insertJob('kg', 'mem#kg', 'running');

@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   toMemoryJobsSnapshot: vi.fn(() => ({ distill: [], kg: [], reembed: null })),
   getMemoryDistillJobs: vi.fn(() => []),
   getMemoryKgJobs: vi.fn(() => []),
+  getMemoryKgFailedCount: vi.fn(() => 0),
+  retryFailedMemoryKg: vi.fn(() => 0),
   getMemoryReembedProgress: vi.fn(() => null),
   distillSessionNow: vi.fn(async () => true),
   getMemoryCompletion: vi.fn(
@@ -72,6 +74,8 @@ vi.mock('../services/memoryAdmin', () => ({
 vi.mock('../services/memoryHost', () => ({
   getMemoryDistillJobs: mocks.getMemoryDistillJobs,
   getMemoryKgJobs: mocks.getMemoryKgJobs,
+  getMemoryKgFailedCount: mocks.getMemoryKgFailedCount,
+  retryFailedMemoryKg: mocks.retryFailedMemoryKg,
   getMemoryReembedProgress: mocks.getMemoryReembedProgress,
   distillSessionNow: mocks.distillSessionNow,
   getMemoryCompletion: mocks.getMemoryCompletion,
@@ -131,6 +135,52 @@ beforeEach(() => {
 });
 
 describe('memory IPC', () => {
+  it('scratch 列表与旧空间标为临时会话，手动提炼不写入隐藏项目 space', async () => {
+    const projectId = 'scratch-hidden';
+    mocks.registry = {
+      projection: () => ({
+        projects: [{ projectId, kind: 'scratch', canonicalPath: '/user-data/scratch/internal' }],
+        conversations: [{ conversationId: 'temporary', projectId, sessionFile: 'temp.jsonl' }],
+      }),
+    };
+    const sessions = await handler(IPC_CHANNELS.MEMORY_DISTILLABLE_SESSIONS)(event);
+    expect(sessions).toMatchObject([
+      { sessionId: 'temporary', projectId: null, projectName: 'Temporary chats' },
+    ]);
+    await handler(IPC_CHANNELS.MEMORY_DISTILL_SESSION)(event, 'temporary', false);
+    expect(mocks.distillSessionNow).toHaveBeenCalledWith(
+      { sessionId: 'temporary', sessionFile: 'temp.jsonl', projectId: null },
+      { force: false }
+    );
+    mocks.listMemoriesForAdmin.mockReturnValueOnce({
+      items: [{ id: 'old', spaceId: `proj:${projectId}`, spaceLabel: 'internal' }],
+      total: 1,
+    } as never);
+    const result = await handler(IPC_CHANNELS.MEMORY_LIST)(event, { limit: 10, offset: 0 });
+    expect(result).toMatchObject({ items: [{ spaceLabel: 'Temporary chats' }] });
+  });
+
+  it('KG retry 只接受可信窗口无载荷请求；结构化回报并仅在 reset 后广播', async () => {
+    const retry = handler(IPC_CHANNELS.MEMORY_KG_RETRY_FAILED);
+    expect(retry({ sender: { id: 99 } })).toMatchObject({ ok: false, reset: 0 });
+    for (const raw of [null, {}, '/tmp/foreign.db', { path: '/tmp/foreign.db' }]) {
+      expect(retry(event, raw)).toMatchObject({ ok: false, reset: 0 });
+    }
+    expect(retry(event, undefined, { path: 'x' })).toMatchObject({ ok: false });
+    expect(mocks.retryFailedMemoryKg).not.toHaveBeenCalled();
+    expect(mocks.openExistingMemoryDb).not.toHaveBeenCalled();
+    mocks.retryFailedMemoryKg.mockReturnValueOnce(2);
+    expect(retry(event)).toEqual({ ok: true, reset: 2 });
+    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
+    mocks.send.mockClear();
+    expect(retry(event)).toEqual({ ok: true, reset: 0 });
+    expect(mocks.send).not.toHaveBeenCalled();
+    mocks.retryFailedMemoryKg.mockImplementationOnce(() => {
+      throw new Error('locked');
+    });
+    expect(retry(event)).toEqual({ ok: false, reset: 0, error: 'locked' });
+  });
+
   it('labels project spaces with the project name, never the raw proj:<uuid>', async () => {
     const projectId = '6db81646-1111-4111-8111-111111111111';
     mocks.registry = {

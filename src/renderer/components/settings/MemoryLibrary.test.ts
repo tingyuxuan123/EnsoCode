@@ -51,7 +51,12 @@ vi.mock('react', async (importOriginal) => {
   };
 });
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string>) =>
+      params ? key.replace(/\{\{(\w+)\}\}/g, (_, k: string) => params[k] ?? '') : key,
+  }),
+}));
 
 const t = (key: string, params?: Record<string, string>) =>
   params ? key.replace(/\{\{(\w+)\}\}/g, (_, k: string) => params[k] ?? '') : key;
@@ -70,7 +75,7 @@ function item(overrides: Partial<MemoryListItem> = {}): MemoryListItem {
     lifecycleState: 'active',
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-02T00:00:00.000Z',
-    accessCount: 3,
+    appearances: 3,
     ...overrides,
   };
 }
@@ -253,6 +258,30 @@ afterEach(() => {
 });
 
 describe('MemoryLibrary response ordering', () => {
+  it('明确衰减按创建时间，不把检索次数当访问热度', () => {
+    const { ui } = setupLibrary();
+    expect(ui.html()).toContain(
+      'Decay is based on creation time; retrieval counts do not refresh it.'
+    );
+  });
+
+  it('deep 展示模型辅助降级原因，旧响应缺字段不伪称使用模型', async () => {
+    const { ui, reply } = setupLibrary();
+    await reply(0, ['Initial']);
+    ui.query('Postgres');
+    ui.select(0, 'deep');
+    await reply(2, ['Baseline'], {
+      approximate: true,
+      assist: 'fallback',
+      assistReason: 'timeout',
+    });
+    expect(ui.html()).toContain('Model assist fallback: timeout');
+    ui.query('another');
+    await reply(3, ['Older backend'], { approximate: true });
+    expect(ui.html()).not.toContain('Model assist used');
+    expect(ui.html()).not.toContain('Model assist fallback');
+  });
+
   it.each(['query', 'space', 'page', 'mode', 'changed', 'revision'] as const)(
     'keeps the latest rows and count after an older %s response',
     async (change) => {
@@ -435,6 +464,18 @@ describe('isPristineEmpty', () => {
 });
 
 describe('MemoryRows', () => {
+  it('旧 DTO 缺 appearances 时显示零，不回退到旧 access_count', () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRows, {
+        t,
+        onOpen: () => {},
+        items: [item({ appearances: undefined, accessCount: 99 })],
+      })
+    );
+    expect(html).toContain('Retrieved 0 times');
+    expect(html).not.toContain('99');
+  });
+
   it('marks crystals and archived rows, and shows access counts', () => {
     const html = renderToStaticMarkup(
       createElement(MemoryRows, {
@@ -449,7 +490,7 @@ describe('MemoryRows', () => {
     expect(html).toContain('★');
     expect(html).toContain('Archived');
     expect(html).toContain('Retrieval fuses three channels');
-    expect(html).toContain('3 hits');
+    expect(html).toContain('Retrieved 3 times');
     expect(html).toContain('decision');
   });
 

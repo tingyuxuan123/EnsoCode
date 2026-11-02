@@ -26,6 +26,19 @@ const harness = vi.hoisted(() => ({
   pickerProps: null as Record<string, unknown> | null,
 }));
 
+vi.mock('react', async (importOriginal) => {
+  const react = await importOriginal<typeof import('react')>();
+  return {
+    ...react,
+    useState: (initial: unknown) => {
+      if (initial && typeof initial === 'object' && 'distill' in initial && 'kg' in initial)
+        return [harness.jobs, () => {}];
+      // biome-ignore lint/correctness/useHookAtTopLevel: SSR test adapter retains actual hooks except the jobs DTO fixture.
+      return react.useState(initial);
+    },
+  };
+});
+
 function model(overrides: Partial<EmbeddingModelDto> = {}): EmbeddingModelDto {
   return {
     id: 'local:potion-multilingual-128M',
@@ -122,6 +135,17 @@ beforeEach(() => {
 });
 
 describe('embeddingErrorNotice', () => {
+  it('显示全库失败 KG 数量的一键重试入口，旧 DTO 缺计数时不显示', () => {
+    harness.jobs = { distill: [], kg: [], reembed: null, kgFailed: 7 };
+    expect(renderToStaticMarkup(createElement(MemorySettings))).toContain(
+      'Retry failed extractions (7)'
+    );
+    harness.jobs = { distill: [], kg: [], reembed: null };
+    expect(renderToStaticMarkup(createElement(MemorySettings))).not.toContain(
+      'Retry failed extractions'
+    );
+  });
+
   const base: MemoryStats = {
     total: 2,
     bySpace: { global: 2 },

@@ -9,6 +9,7 @@ import {
   isMemoryRetrievalMode,
   isPendingMemoryWriteDecision,
   type MemoryJobsSnapshot,
+  type MemoryKgRetryResult,
   type MemoryListResult,
   type MemoryMutationResult,
   type MemoryStats,
@@ -70,11 +71,13 @@ import {
   getMemoryDistillJobs,
   getMemoryEmbedder,
   getMemoryEmbeddingError,
+  getMemoryKgFailedCount,
   getMemoryKgJobs,
   getMemoryReembedProgress,
   memoryDatabase,
   memoryLanguage,
   refreshMemoryEmbedding,
+  retryFailedMemoryKg,
   setMemoryChangeListener,
 } from '../services/memoryHost';
 import {
@@ -99,7 +102,7 @@ const EMPTY_STATS: MemoryStats = {
   embedded: 0,
   databaseBytes: 0,
 };
-const EMPTY_JOBS: MemoryJobsSnapshot = { distill: [], kg: [], reembed: null };
+const EMPTY_JOBS: MemoryJobsSnapshot = { distill: [], kg: [], reembed: null, kgFailed: 0 };
 const EMPTY_GRAPH: MemoryGraphDto = { nodes: [], edges: [], totalEntities: 0 };
 
 function isTrustedWindow(webContentsId: number): boolean {
@@ -309,8 +312,29 @@ export function registerMemoryHandlers(): void {
       reembed: snapshot.reembed
         ? { ...snapshot.reembed, target: label(snapshot.reembed.target) }
         : null,
+      kgFailed: getMemoryKgFailedCount(),
     };
   });
+
+  ipcMain.handle(
+    IPC_CHANNELS.MEMORY_KG_RETRY_FAILED,
+    (event, raw: unknown, ...extra: unknown[]): MemoryKgRetryResult => {
+      if (!isTrustedWindow(event.sender.id) || raw !== undefined || extra.length > 0) {
+        return { ok: false, reset: 0, error: 'Invalid request.' };
+      }
+      try {
+        const reset = retryFailedMemoryKg();
+        if (reset > 0) memoryChanged();
+        return { ok: true, reset };
+      } catch (error) {
+        return {
+          ok: false,
+          reset: 0,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+  );
 
   ipcMain.handle(IPC_CHANNELS.MEMORY_EVOLVES_PENDING, (event) => {
     if (!isTrustedWindow(event.sender.id)) return [];
@@ -597,7 +621,10 @@ async function projectNames(): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   for (const project of registry?.projection().projects ?? []) {
     if (project.kind === 'bot-home') continue;
-    names.set(project.projectId, basename(project.canonicalPath));
+    names.set(
+      project.projectId,
+      project.kind === 'scratch' ? 'Temporary chats' : basename(project.canonicalPath)
+    );
   }
   return names;
 }
@@ -612,7 +639,10 @@ async function spaceLabeler(): Promise<(spaceId: string) => string> {
   const names = new Map<string, string>();
   for (const project of registry?.projection().projects ?? []) {
     if (project.kind === 'bot-home') continue;
-    names.set(project.projectId, basename(project.canonicalPath));
+    names.set(
+      project.projectId,
+      project.kind === 'scratch' ? 'Temporary chats' : basename(project.canonicalPath)
+    );
   }
   const bots = new BotStore(path.join(app.getPath('userData'), 'bots'));
   const chats = new BotChatStore(path.join(app.getPath('userData'), 'bot-chats'));
@@ -679,8 +709,13 @@ async function listDistillableSessionRecords(): Promise<DistillableRecord[]> {
       sessionId: conversation.conversationId,
       sessionFile,
       title: titles.get(conversation.conversationId) ?? conversation.conversationId.slice(0, 8),
-      projectId: conversation.projectId || null,
-      projectName: project ? basename(project.canonicalPath) : null,
+      projectId: project?.kind === 'scratch' ? null : conversation.projectId || null,
+      projectName:
+        project?.kind === 'scratch'
+          ? 'Temporary chats'
+          : project
+            ? basename(project.canonicalPath)
+            : null,
       distilled: distilled.has(conversation.conversationId),
       updatedAt,
     });

@@ -7,7 +7,7 @@ const hit = (over: Record<string, unknown> = {}) => ({
   content: '随应用分发，默认开启',
   unitType: 'decision',
   spaceId: 'proj:3e8d',
-  score: 0.955,
+  relevance: 0.955,
   isLatest: true,
   ...over,
 });
@@ -15,7 +15,10 @@ const hit = (over: Record<string, unknown> = {}) => ({
 describe('parseMemorySearchHits', () => {
   it('把 Main bridge 投影的 JSON 解析为命中列表，并区分全局/项目空间', () => {
     const output = JSON.stringify({
-      results: [hit(), hit({ id: 'm2', spaceId: 'global', unitType: 'preference', score: 1.2 })],
+      results: [
+        hit(),
+        hit({ id: 'm2', spaceId: 'global', unitType: 'preference', relevance: 0.8 }),
+      ],
     });
     expect(parseMemorySearchHits(output)).toEqual([
       {
@@ -24,7 +27,7 @@ describe('parseMemorySearchHits', () => {
         content: '随应用分发，默认开启',
         unitType: 'decision',
         space: 'project',
-        score: 0.955,
+        relevance: 0.955,
       },
       {
         id: 'm2',
@@ -32,7 +35,7 @@ describe('parseMemorySearchHits', () => {
         content: '随应用分发，默认开启',
         unitType: 'preference',
         space: 'global',
-        score: 1.2,
+        relevance: 0.8,
       },
     ]);
   });
@@ -41,11 +44,20 @@ describe('parseMemorySearchHits', () => {
     expect(parseMemorySearchHits('{"results":[]}')).toEqual([]);
   });
 
+  it('旧 score 历史仍可展示正文，但不把混分当相关度；非法概率置空', () => {
+    for (const relevance of [undefined, null, '0.9', 1.5, -2]) {
+      const parsed = parseMemorySearchHits(
+        JSON.stringify({ results: [hit({ relevance, score: 0.95 })] })
+      );
+      expect(parsed?.[0]).toMatchObject({ id: 'm1', relevance: null });
+    }
+  });
+
   it('可选字段缺失或非法时置空，不拖垮整条结果', () => {
     expect(
       parseMemorySearchHits(
         JSON.stringify({
-          results: [hit({ unitType: undefined, spaceId: 'team:x', score: 'high' })],
+          results: [hit({ unitType: undefined, spaceId: 'team:x', relevance: 'high' })],
         })
       )
     ).toEqual([
@@ -55,7 +67,7 @@ describe('parseMemorySearchHits', () => {
         content: '随应用分发，默认开启',
         unitType: null,
         space: null,
-        score: null,
+        relevance: null,
       },
     ]);
   });
@@ -100,7 +112,7 @@ describe('parseMemoryCapture', () => {
         content: '捎带提醒会被一起藏掉',
         unitType: 'learning',
         space: 'project',
-        score: null,
+        relevance: null,
       },
     });
     expect(parseMemoryCapture(inserted({ deduplicated: true }), 'x')).toMatchObject({
@@ -127,7 +139,7 @@ describe('parseMemoryCapture', () => {
           content: '随应用分发，默认开启',
           unitType: 'decision',
           space: null,
-          score: 0.9312,
+          relevance: 0.9312,
         },
       ],
     });

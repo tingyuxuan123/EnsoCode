@@ -173,11 +173,12 @@ describe('executeMemoryOp', () => {
       'search',
       { query: 'pnpm', limit: 10, spaceId: 'all' },
       { projectId: PROJECT }
-    )) as { results: Record<string, unknown>[] };
+    )) as { results: Record<string, unknown>[]; assist?: string };
     expect(r.results).toHaveLength(2);
+    expect(r.assist).toBe('off');
     for (const hit of r.results) {
       expect(Object.keys(hit).sort()).toEqual(
-        ['content', 'id', 'isLatest', 'score', 'spaceId', 'title', 'unitType'].sort()
+        ['content', 'id', 'isLatest', 'rank', 'spaceId', 'title', 'unitType'].sort()
       );
     }
     const global = (await executeMemoryOp(
@@ -207,7 +208,10 @@ describe('executeMemoryOp', () => {
     await add('note redis cache replica');
     await add('note redis cluster cache');
     const kafka = await add('note kafka broker topic');
-    await add('note misc misc misc misc misc misc misc misc');
+    await createMemory(db, {
+      content: 'note misc misc misc misc misc misc misc misc',
+      spaceId: 'global',
+    });
     if (kafka.status !== 'inserted') throw new Error();
     const r = (await executeMemoryOp(
       db,

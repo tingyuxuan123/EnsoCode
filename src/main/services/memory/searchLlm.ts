@@ -1,10 +1,11 @@
 import {
+  completeWithin,
   parseRerankScores,
   parseSearchAnalysis,
   SEARCH_LLM_RERANK_MAX,
   SEARCH_LLM_TIMEOUT_MS,
+  type SearchAssistReason,
   SearchLlmGate,
-  withTimeout,
 } from '@shared/memory/searchAssist';
 import type { Complete } from './distill';
 import type { SearchAssist } from './types';
@@ -22,33 +23,72 @@ const RERANK_SYSTEM =
 
 const gate = new SearchLlmGate();
 
-export function createSearchAssist(complete: Complete | null): SearchAssist | null {
+export function createSearchAssist(
+  complete: Complete | null,
+  opts?: { gate?: SearchLlmGate }
+): SearchAssist | null {
   if (!complete) return null;
+  const llmGate = opts?.gate ?? gate;
+  const value = complete.searchTimeoutMs;
+  const timeoutMs =
+    typeof value === 'number' && Number.isFinite(value) && value > 0
+      ? value
+      : SEARCH_LLM_TIMEOUT_MS;
+  let succeeded = false;
+  let failure: SearchAssistReason | undefined;
+  const fail = (reason: SearchAssistReason) => {
+    failure ??= reason;
+    if (reason === 'timeout' || reason === 'error') llmGate.trip();
+  };
+  const call = async (system: string, user: string, signal?: AbortSignal) => {
+    const result = await completeWithin(
+      (child) => complete(system, user, { signal: child }),
+      timeoutMs,
+      signal
+    );
+    if (!result.ok) {
+      fail(result.reason);
+      return null;
+    }
+    return result.value;
+  };
   return {
-    async analyze(query) {
-      if (!gate.available()) return null;
-      const raw = await withTimeout(complete(ANALYZE_SYSTEM, query), SEARCH_LLM_TIMEOUT_MS);
-      if (raw == null) {
-        gate.trip();
+    timeoutMs,
+    fallback: fail,
+    outcome: () =>
+      succeeded
+        ? { assist: 'llm' }
+        : failure
+          ? { assist: 'fallback', assistReason: failure }
+          : { assist: 'off' },
+    async analyze(query, signal) {
+      if (!llmGate.available()) {
+        fail('backoff');
         return null;
       }
-      return parseSearchAnalysis(raw, query);
+      const raw = await call(ANALYZE_SYSTEM, query, signal);
+      if (raw == null) return null;
+      const parsed = parseSearchAnalysis(raw, query);
+      if (parsed) succeeded = true;
+      else fail('unparseable');
+      return parsed;
     },
-    async rerank(query, items) {
+    async rerank(query, items, signal) {
       const window = items.slice(0, SEARCH_LLM_RERANK_MAX);
-      if (!gate.available() || window.length === 0) return null;
+      if (window.length === 0) return null;
+      if (!llmGate.available()) {
+        fail('backoff');
+        return null;
+      }
       const listing = window
         .map((item, i) => `${i + 1}. ${item.title}\n${item.content}`)
         .join('\n\n');
-      const raw = await withTimeout(
-        complete(RERANK_SYSTEM, `Query: ${query}\n\n${listing}`),
-        SEARCH_LLM_TIMEOUT_MS
-      );
-      if (raw == null) {
-        gate.trip();
-        return null;
-      }
-      return parseRerankScores(raw, window.length);
+      const raw = await call(RERANK_SYSTEM, `Query: ${query}\n\n${listing}`, signal);
+      if (raw == null) return null;
+      const parsed = parseRerankScores(raw, window.length);
+      if (parsed) succeeded = true;
+      else fail('unparseable');
+      return parsed;
     },
   };
 }

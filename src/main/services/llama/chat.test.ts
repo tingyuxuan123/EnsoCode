@@ -17,6 +17,30 @@ afterEach(() => {
 });
 
 describe('createLocalComplete', () => {
+  it('调用者取消会中止底层 prompt', async () => {
+    let promptSignal: AbortSignal | undefined;
+    const complete = createLocalComplete('/m/a.gguf', {
+      acquireModelImpl: async () => fakeModel(),
+      createSession: async () => ({
+        prompt: (_text, opts) =>
+          new Promise((_resolve, reject) => {
+            promptSignal = opts?.signal;
+            opts?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError'))
+            );
+          }),
+        dispose: () => {},
+      }),
+    });
+    const caller = new AbortController();
+    const pending = complete('s', 'u', { signal: caller.signal });
+    const observed = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(promptSignal).toBeDefined());
+    caller.abort();
+    await observed;
+    expect(promptSignal?.aborted).toBe(true);
+  });
+
   it('returns the session text as-is, including markdown fences', async () => {
     const complete = createLocalComplete('/m/a.gguf', {
       acquireModelImpl: async () => fakeModel(),
@@ -176,6 +200,14 @@ describe('createLocalComplete', () => {
 });
 
 describe('memoryCompleteFromSettings', () => {
+  it('远端 complete 标注 8 秒辅助检索预算，不改变默认模型选择', async () => {
+    const complete = await memoryCompleteFromSettings(
+      { memoryChatModel: 'remote' },
+      { modelsRoot: '/missing', remoteComplete: async () => async () => 'remote' }
+    );
+    expect(complete?.searchTimeoutMs).toBe(8000);
+  });
+
   it('uses the remote complete when the setting is remote or absent', async () => {
     const remote = async () => async () => 'remote-text';
     const fromAbsent = await memoryCompleteFromSettings(undefined, {

@@ -60,7 +60,7 @@ const JOB_KIND_LABELS: Record<JobKind, string> = {
   reembed: 'job:vectors',
 };
 
-const EMPTY_JOBS: MemoryJobsSnapshot = { distill: [], kg: [], reembed: null };
+const EMPTY_JOBS: MemoryJobsSnapshot = { distill: [], kg: [], reembed: null, kgFailed: 0 };
 
 // 模型清单来自 Main 的注册表（registry.ts），不在渲染层重写一份：
 // 手写副本一旦 id 对不上，选中后会静默回落默认模型，用户完全看不出来
@@ -236,6 +236,9 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
   const [bulkPrompt, setBulkPrompt] = React.useState<BulkPrompt | null>(null);
   const [backfilling, setBackfilling] = React.useState(false);
   const [allJobs, setAllJobs] = React.useState(false);
+  const [kgRetryBusy, setKgRetryBusy] = React.useState(false);
+  const [kgRetryError, setKgRetryError] = React.useState<string | null>(null);
+  const kgRetryPending = React.useRef(false);
   // 轮询回调里要读最新值，state 会被闭包定住
   const backfillingRef = React.useRef(false);
   backfillingRef.current = backfilling;
@@ -1032,6 +1035,34 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-medium text-[calc(14rem/14)]">{t('Background tasks')}</h3>
           <div className="flex shrink-0 items-center gap-1">
+            {(jobs.kgFailed ?? 0) > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={kgRetryBusy}
+                onClick={() => {
+                  if (kgRetryPending.current) return;
+                  kgRetryPending.current = true;
+                  setKgRetryBusy(true);
+                  setKgRetryError(null);
+                  void window.electronAPI.memory
+                    .kgRetryFailed()
+                    .then((result) => {
+                      if (!result.ok) setKgRetryError(result.error ?? 'Retry failed');
+                      loadRef.current?.();
+                    })
+                    .catch((error: unknown) =>
+                      setKgRetryError(error instanceof Error ? error.message : String(error))
+                    )
+                    .finally(() => {
+                      kgRetryPending.current = false;
+                      setKgRetryBusy(false);
+                    });
+                }}
+              >
+                {t('Retry failed extractions ({{count}})', { count: String(jobs.kgFailed) })}
+              </Button>
+            )}
             {jobRows.some((row) => row.state !== 'running') && (
               <Button
                 size="sm"
@@ -1055,6 +1086,11 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             )}
           </div>
         </div>
+        {kgRetryError && (
+          <p className="text-destructive text-[calc(12rem/14)]" role="alert">
+            {kgRetryError}
+          </p>
+        )}
         {jobRows.length === 0 ? (
           <p className="text-muted-foreground text-[calc(13rem/14)]">{t('Nothing running.')}</p>
         ) : (

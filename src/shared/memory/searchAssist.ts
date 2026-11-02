@@ -2,8 +2,64 @@ import type { SearchIntent } from './searchIntent';
 import type { TemporalIntent } from './temporalIntent';
 
 export const SEARCH_LLM_TIMEOUT_MS = 1500;
+export const SEARCH_LLM_REMOTE_TIMEOUT_MS = 8000;
 export const SEARCH_LLM_RERANK_MAX = 8;
 export const SEARCH_LLM_BACKOFF_MS = 30_000;
+
+export type SearchAssistState = 'llm' | 'fallback' | 'off';
+export type SearchAssistReason = 'timeout' | 'error' | 'unparseable' | 'backoff' | 'cancelled';
+export type SearchAssistReport = { assist: SearchAssistState; assistReason?: SearchAssistReason };
+
+export const searchLlmTimeoutMs = (backend: 'local' | 'remote'): number =>
+  backend === 'remote' ? SEARCH_LLM_REMOTE_TIMEOUT_MS : SEARCH_LLM_TIMEOUT_MS;
+
+export function searchAssistReport(
+  mode: 'fast' | 'deep' | undefined,
+  assist: { outcome?: () => SearchAssistReport } | null | undefined
+): SearchAssistReport {
+  return mode === 'deep' && assist?.outcome ? assist.outcome() : { assist: 'off' };
+}
+
+/** Race only bounds the caller; the signal also cancels the actual completion. Late results are ignored. */
+export function completeWithin<T>(
+  start: (signal: AbortSignal) => Promise<T>,
+  ms: number,
+  parent?: AbortSignal
+): Promise<{ ok: true; value: T } | { ok: false; reason: 'timeout' | 'error' | 'cancelled' }> {
+  return new Promise((resolve) => {
+    const controller = new AbortController();
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (
+      result: { ok: true; value: T } | { ok: false; reason: 'timeout' | 'error' | 'cancelled' }
+    ) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      parent?.removeEventListener('abort', onAbort);
+      resolve(result);
+    };
+    const cancel = (reason: 'timeout' | 'cancelled') => {
+      finish({ ok: false, reason });
+      controller.abort(new DOMException(reason, 'AbortError'));
+    };
+    const onAbort = () => cancel('cancelled');
+    parent?.addEventListener('abort', onAbort, { once: true });
+    if (parent?.aborted) {
+      onAbort();
+      return;
+    }
+    timer = setTimeout(() => cancel('timeout'), ms);
+    try {
+      Promise.resolve(start(controller.signal)).then(
+        (value) => finish({ ok: true, value }),
+        () => finish({ ok: false, reason: 'error' })
+      );
+    } catch {
+      finish({ ok: false, reason: 'error' });
+    }
+  });
+}
 
 const LLM_INTENTS = [
   'concept_lookup',
@@ -67,11 +123,11 @@ export function parseSearchAnalysis(raw: string, query: string): SearchAnalysis 
     intent: mapLlmIntent(obj.intent as LlmIntent),
     entityTerms: querySubstrings(query, obj.entity_terms ?? obj.entityTerms, 3),
     confidence,
-    temporal: parseTemporal(obj),
+    temporal: parseTemporal(obj, query),
   };
 }
 
-function parseTemporal(obj: Record<string, unknown>): TemporalIntent | null {
+function parseTemporal(obj: Record<string, unknown>, query: string): TemporalIntent | null {
   if (obj.has_temporal_intent !== true) return null;
   const confidence =
     typeof obj.temporal_confidence === 'number' && Number.isFinite(obj.temporal_confidence)
@@ -86,7 +142,8 @@ function parseTemporal(obj: Record<string, unknown>): TemporalIntent | null {
           ? JSON.stringify(obj.temporal_value)
           : '';
     const year = /\b((?:19|20)\d{2})\b/.exec(raw);
-    if (year) return { type: 'year', value: year[1], confidence };
+    if (year && new RegExp(`\\b${year[1]}\\b`).test(query))
+      return { type: 'year', value: year[1], confidence };
   }
   if (type === 'relative' || type === 'range' || type === 'context' || type === 'reference') {
     return { type: 'relative', value: null, confidence };

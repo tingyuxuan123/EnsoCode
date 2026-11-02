@@ -3,7 +3,13 @@ import { computeDecayScore } from '@shared/memory/decay';
 import { normalizeEntityName } from '@shared/memory/entityNormalize';
 import { mmrRerank } from '@shared/memory/mmr';
 import { finalScore, minMaxNormalize, rrf } from '@shared/memory/rrf';
-import { blendRerankScore, SEARCH_LLM_RERANK_MAX, termCoverage } from '@shared/memory/searchAssist';
+import {
+  blendRerankScore,
+  completeWithin,
+  SEARCH_LLM_RERANK_MAX,
+  SEARCH_LLM_TIMEOUT_MS,
+  termCoverage,
+} from '@shared/memory/searchAssist';
 import { channelWeights, detectSearchIntent } from '@shared/memory/searchIntent';
 import { expandTemporalRange, normalizeTemporalDate } from '@shared/memory/temporal';
 import { computeTemporalBoost, detectTemporalIntent } from '@shared/memory/temporalIntent';
@@ -218,7 +224,8 @@ async function vectorChannel(
   q: string,
   spaceIds: string[],
   scope: Scope,
-  pool: number
+  pool: number,
+  relevance: Map<string, number>
 ): Promise<string[]> {
   // 扩展未加载或该维度还没有任何向量：通道为空，RRF 退化为纯 FTS
   if (!hasVec(db)) return [];
@@ -228,7 +235,7 @@ async function vectorChannel(
   // 维度可能到这里才首次已知（onnx / remote）
   const dim = embedder.dim ?? query.length;
   if (query.length !== dim || !vecTableExists(db, dim)) return [];
-  // KNN 下推到 sqlite-vec：cosine distance = 1 - cos，只保留 cos > 0（与旧版点积过滤一致）；
+  // cosine distance = 1 - cos；不按固定阈值截断，不同 embedding 模型绝对值不可比。
   // model / space_id 作为 partition key 在 vec 表内过滤（实测 0.1.9 partition key 支持 IN），
   // 外层 space 的海量行不会挤占本 space 的 k 名额（3a 评审 Major 4）
   const spacePlaceholders = spaceIds.map(() => '?').join(',');
@@ -238,7 +245,7 @@ async function vectorChannel(
        FROM (SELECT rowid, distance FROM ${vecTableName(dim)}
              WHERE embedding MATCH ? AND k = ? AND model = ? AND space_id IN (${spacePlaceholders})) v
        JOIN memories m ON m.rowid = v.rowid
-       WHERE ${scope.sql} AND m.embedding_model = ? AND v.distance < 1
+       WHERE ${scope.sql} AND m.embedding_model = ?
        ORDER BY v.distance ASC, m.id ASC LIMIT ?`
     )
     .all(
@@ -250,6 +257,9 @@ async function vectorChannel(
       embedder.model,
       pool
     ) as { id: string; distance: number }[];
+  for (const r of rows) {
+    if (Number.isFinite(r.distance)) relevance.set(r.id, Math.max(-1, Math.min(1, 1 - r.distance)));
+  }
   return rows.map((r) => r.id);
 }
 
@@ -286,16 +296,22 @@ function hitOrder(a: MemorySearchHit, b: MemorySearchHit): number {
 async function applyLlmRerank(
   q: string,
   hits: MemorySearchHit[],
-  assist: SearchAssist
+  assist: SearchAssist,
+  signal?: AbortSignal
 ): Promise<void> {
   const window = hits.slice(0, Math.min(SEARCH_LLM_RERANK_MAX, hits.length));
-  const scores = await assist
-    .rerank(
-      q,
-      window.map((h) => ({ title: h.memory.title, content: h.memory.content }))
-    )
-    .catch(() => null);
-  if (!scores || scores.length !== window.length) return;
+  const scores = await boundedAssist(
+    assist,
+    (child) =>
+      assist.rerank(
+        q,
+        window.map((h) => ({ title: h.memory.title, content: h.memory.content })),
+        child
+      ),
+    signal
+  );
+  if (!scores || scores.length !== window.length || scores.some((score) => !Number.isFinite(score)))
+    return;
   const orig = minMaxNormalize(window.map((h) => h.score));
   for (const [i, hit] of window.entries()) {
     const coverage = termCoverage(
@@ -316,6 +332,7 @@ export async function searchMemories(
   opts: SearchOptions
 ): Promise<MemorySearchHit[]> {
   const q = opts.q.trim();
+  throwIfCancelled(opts.signal);
   const limit = Math.max(1, opts.limit ?? DEFAULT_LIMIT);
   // 过滤参数非法是调用方错误，在空查询短路之前就抛
   const temporal = temporalClause(opts);
@@ -323,6 +340,7 @@ export async function searchMemories(
   const pool = Math.max(rerankPoolSize(limit), 20);
   const scope = scopeClause(opts.spaceIds, temporal);
 
+  const relevance = new Map<string, number>();
   const [ftsIds, vecIds, entityIds, communityIds, analysis] = await Promise.all([
     Promise.resolve()
       .then(() => ftsChannel(db, q, scope, pool))
@@ -330,7 +348,9 @@ export async function searchMemories(
     // 生产不传 embedder（memoryHost.ts）时向量通道为空，RRF 退化为纯 FTS 排名；
     // 单通道失败/缺失的兜底见 search.test.ts「falls back to …」两例
     opts.embedder
-      ? vectorChannel(db, opts.embedder, q, opts.spaceIds, scope, pool).catch(() => [] as string[])
+      ? vectorChannel(db, opts.embedder, q, opts.spaceIds, scope, pool, relevance).catch(
+          () => [] as string[]
+        )
       : Promise.resolve([] as string[]),
     Promise.resolve()
       .then(() => entityChannel(db, q, scope, pool))
@@ -339,9 +359,10 @@ export async function searchMemories(
       .then(() => communityChannel(db, q, scope, pool))
       .catch(() => [] as string[]),
     opts.mode === 'deep' && opts.assist
-      ? opts.assist.analyze(q).catch(() => null)
+      ? boundedAssist(opts.assist, (signal) => opts.assist!.analyze(q, signal), opts.signal)
       : Promise.resolve(null),
   ]);
+  throwIfCancelled(opts.signal);
 
   const searchIntent = analysis?.intent ?? (opts.mode === 'deep' ? detectSearchIntent(q) : null);
   const weights = searchIntent ? channelWeights(searchIntent) : undefined;
@@ -366,6 +387,7 @@ export async function searchMemories(
   fused.forEach(([id, rrfScore], i) => {
     const memory = byId.get(id);
     if (!memory) return;
+    // last_accessed_at 仅创建时写入，access_count 不因检索修改：避免越召回越靠前的正反馈。
     const decay = computeDecayScore({
       lastAccessedAt: memory.lastAccessedAt,
       accessCount: memory.accessCount,
@@ -375,12 +397,13 @@ export async function searchMemories(
     const boost = temporalIntent ? computeTemporalBoost(memory.eventStart, now, temporalIntent) : 0;
     // crystal 是多源合成的结论，同分时应压过任一单源记忆：乘法 boost
     const score = finalScore(semantic[i], decay, boost) * (memory.isCrystal ? CRYSTAL_BOOST : 1);
-    hits.push({ memory, rrf: rrfScore, decay, score });
+    hits.push({ memory, rrf: rrfScore, decay, score, relevance: relevance.get(id) ?? null });
   });
   hits.sort(hitOrder);
   if (opts.mode === 'deep' && opts.assist && hits.length > 1) {
-    await applyLlmRerank(q, hits, opts.assist);
+    await applyLlmRerank(q, hits, opts.assist, opts.signal);
   }
+  throwIfCancelled(opts.signal);
   if (opts.mmr !== false && hits.length > limit) {
     // 只用当前模型的已存向量（BLOB 已 L2 归一化）；无向量的行不参与惩罚，纯 FTS 时保持原序。
     // 量纲：relevance 是混分后的 finalScore（约 0.3–1.5），惩罚项是余弦（0–1）×(1−λ)，两者不同尺度，
@@ -405,8 +428,31 @@ export async function searchMemories(
     db.prepare(
       `UPDATE memories SET appearances = appearances + 1 WHERE id IN (${hits.map(() => '?').join(',')})`
     ).run(...hits.map((h) => h.memory.id));
+    for (const hit of hits) hit.memory.appearances += 1;
   } catch {
     // best-effort 计数，不参与排序也不影响返回
   }
   return hits;
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Memory search cancelled', 'AbortError');
+}
+
+async function boundedAssist<T>(
+  assist: SearchAssist,
+  start: (signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal
+): Promise<T | null> {
+  const budget = assist.timeoutMs;
+  const result = await completeWithin(
+    start,
+    typeof budget === 'number' && Number.isFinite(budget) && budget > 0
+      ? budget
+      : SEARCH_LLM_TIMEOUT_MS,
+    signal
+  );
+  if (result.ok) return result.value;
+  if (result.reason !== 'error') assist.fallback?.(result.reason);
+  return null;
 }

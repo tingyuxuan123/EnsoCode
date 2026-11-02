@@ -52,6 +52,16 @@ describe('parseSearchAnalysis', () => {
     expect(parseSearchAnalysis('{"intent":"hyde"}', 'q')).toBeNull();
     expect(parseSearchAnalysis('not json', 'q')).toBeNull();
   });
+
+  it('不接受 LLM 编造的查询年份；坏概率不产生非数分数', () => {
+    const raw =
+      '{"intent":"factual_query","confidence":"high","has_temporal_intent":true,"temporal_type":"year","temporal_value":"2020","temporal_confidence":"high"}';
+    expect(parseSearchAnalysis(raw, 'Postgres in 2024')?.temporal).toBeNull();
+    expect(parseSearchAnalysis(raw, 'Postgres')?.temporal).toBeNull();
+    const matched = parseSearchAnalysis(raw, 'Postgres in 2020');
+    expect(Number.isFinite(matched?.confidence)).toBe(true);
+    expect(Number.isFinite(matched?.temporal?.confidence)).toBe(true);
+  });
 });
 
 describe('parseRerankScores', () => {

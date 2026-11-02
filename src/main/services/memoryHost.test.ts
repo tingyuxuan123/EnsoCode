@@ -57,11 +57,13 @@ import {
   getMemoryDistillJobs,
   getMemoryEmbedder,
   getMemoryEmbeddingError,
+  getMemoryKgFailedCount,
   getMemoryKgJobs,
   getMemoryReembedProgress,
   invokeMemory,
   memoryDatabase,
   refreshMemoryEmbedding,
+  retryFailedMemoryKg,
   rootSessionId,
   scheduleMemoryDistill,
   setMemoryChangeListener,
@@ -96,7 +98,7 @@ describe('memoryHost 懒建', () => {
     closeMemoryDb();
     await expect(
       invokeMemory('search', { query: 'x', limit: 5, spaceId: 'global' }, null)
-    ).resolves.toEqual({ results: [] });
+    ).resolves.toEqual({ results: [], assist: 'off' });
   });
 });
 
@@ -143,7 +145,8 @@ describe('memoryHost embedding 接线', () => {
         results: { id: string }[];
       }>;
     expect((await search('cache')).results.map((r) => r.id)).toEqual([memory.id]);
-    expect((await search('kafka')).results).toEqual([]);
+    // 正交向量也在 KNN 候选池，不再按固定余弦阈值丢弃。
+    expect((await search('kafka')).results.map((r) => r.id)).toEqual([memory.id]);
 
     // none：新写入无向量，查询也不走向量（cache 不再命中 redis），FTS 照常
     configureMemoryEmbedding({ modelId: 'none' });
@@ -497,6 +500,44 @@ describe('memoryHost 会话结束蒸馏接线', () => {
 });
 
 describe('memoryHost KG 抽取接线', () => {
+  it('KG 关闭时重试只 reset；开启时重试自动跑，重复点击不重复调用模型', async () => {
+    configureMemoryEmbedding({ modelId: 'none', autoDownload: false });
+    configureMemoryDistill({ enabled: false });
+    const complete = vi.fn(async () => '{"entities":[],"relationships":[]}');
+    configureMemoryKg({ enabled: false, complete: () => complete });
+    const db = memoryDatabase();
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO memory_jobs (kind,target,status,cursor,total,done,failed,error,created_at,updated_at) VALUES ('kg','missing#old','done',3,0,0,1,'bad',?,?)"
+    ).run(now, now);
+    closeMemoryDb();
+    expect(getMemoryKgFailedCount()).toBe(1);
+    expect(getMemoryKgJobs().some((job) => job.fingerprint === 'missing#old')).toBe(true);
+    expect(retryFailedMemoryKg()).toBe(1);
+    expect(retryFailedMemoryKg()).toBe(0);
+    await awaitMemoryKg();
+    expect(complete).not.toHaveBeenCalled();
+    const captured = (await invokeMemory(
+      'capture',
+      { content: 'retry enabled unique', importance: 0.6, spaceId: 'global', force: true },
+      null
+    )) as { memory: { id: string } };
+    const { ensureKgJob } = await import('./memory/kg');
+    const reopened = memoryDatabase();
+    const job = ensureKgJob(reopened, captured.memory.id)!;
+    reopened
+      .prepare("UPDATE memory_jobs SET status='done',failed=1,error='bad' WHERE id=?")
+      .run(job.id);
+    configureMemoryKg({ enabled: true });
+    expect(retryFailedMemoryKg()).toBe(1);
+    expect(retryFailedMemoryKg()).toBe(0);
+    await awaitMemoryKg();
+    expect(complete).toHaveBeenCalledTimes(1);
+    configureMemoryKg({ enabled: false });
+    reopened.prepare("DELETE FROM memory_jobs WHERE id=? OR target='missing#old'").run(job.id);
+    reopened.prepare('DELETE FROM memories WHERE id=?').run(captured.memory.id);
+  });
+
   const kgJson = (names: string[]) =>
     JSON.stringify({
       entities: names.map((n) => ({ name: n, type: 'TOOL', confidence: 0.9 })),

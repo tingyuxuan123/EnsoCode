@@ -1,11 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { SearchLlmGate } from '@shared/memory/searchAssist';
 import type Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openMemoryDb } from './db';
 import { applyExtraction } from './kg';
 import { buildFtsMatchQuery, searchMemories } from './search';
+import { createSearchAssist } from './searchLlm';
 import { createMemory, updateMemory } from './store';
 import { type Embedder, projectSpaceId } from './types';
 
@@ -16,6 +18,7 @@ beforeEach(() => {
   db = openMemoryDb(path.join(dir, 'memory.db'));
 });
 afterEach(() => {
+  vi.useRealTimers();
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -213,12 +216,10 @@ describe('searchMemories — 双时间检索', () => {
     // 无 event_start 的记忆 boost=0，走无意图公式，不可能超过 1
     expect(hits.find((h) => h.memory.id === plain.id)!.score).toBeLessThanOrEqual(1);
     expect(hits.find((h) => h.memory.id === other.id)!.score).toBeLessThan(hits[0].score);
-    // 单结果 semantic=1：年份匹配的精确公式 0.7 + decay*0.15 + (recency*0.3 + 0.8*conf*0.7)
+    // 单结果 semantic=1：年份匹配仍保留 0.85 语义权重，加分最多 0.1
     const [only] = await searchMemories(db, { q: 'made 2020', spaceIds: ['global'], now: NOW });
     expect(only.memory.id).toBe(hit.id);
-    const days = (NOW.getTime() - Date.parse('2020-01-01T00:00:00Z')) / 86_400_000;
-    const boost = (1 / (1 + days / 365)) * 0.3 + 0.8 * 1 * 0.7;
-    expect(only.score).toBeCloseTo(0.7 + 0.15 * only.decay + boost, 9);
+    expect(only.score).toBeCloseTo(0.85 + 0.15 * only.decay + 0.1, 9);
     // 没有时间意图时不加 boost
     const [plainHit] = await searchMemories(db, { q: 'made', spaceIds: ['global'], now: NOW });
     expect(plainHit.score).toBeCloseTo(0.85 + 0.15 * plainHit.decay, 9);
@@ -226,6 +227,20 @@ describe('searchMemories — 双时间检索', () => {
 });
 
 describe('searchMemories — hybrid', () => {
+  it('FTS-only 不伪造相关度；向量通道返回原始余弦且不丢弃负相关候选', async () => {
+    const emb: Embedder = { model: 'signed', dim: 2, embed: async () => Float32Array.from([1, 0]) };
+    const plain = await add('signed plain');
+    const negative = await add('opposite vector', 'global', {
+      ...emb,
+      embed: async () => Float32Array.from([-1, 0]),
+    });
+    const positive = await add('same vector', 'global', emb);
+    const hits = await searchMemories(db, { q: 'signed', spaceIds: ['global'], embedder: emb });
+    expect(hits.find((h) => h.memory.id === plain.id)).toMatchObject({ relevance: null });
+    expect(hits.find((h) => h.memory.id === negative.id)).toMatchObject({ relevance: -1 });
+    expect(hits.find((h) => h.memory.id === positive.id)).toMatchObject({ relevance: 1 });
+  });
+
   it('single result gets semantic=1.0 and score = finalScore(1, decay)', async () => {
     const m = await add('only one memory about Redis');
     const [hit] = await searchMemories(db, { q: 'Redis', spaceIds: ['global'] });
@@ -241,11 +256,8 @@ describe('searchMemories — hybrid', () => {
       ...emb,
       embed: async () => Float32Array.from([0, 1]),
     });
-    // 只有 FTS 能召回：正文含 cache，但向量与查询正交
-    const ftsOnly = await add('cache invalidation strategy', 'global', {
-      ...emb,
-      embed: async () => Float32Array.from([1, 0]),
-    });
+    // 不再按余弦截断，FTS-only 必须真正没有向量。
+    const ftsOnly = await add('cache invalidation strategy');
     // 两路都命中
     const both = await add('Redis cache eviction policy', 'global', emb);
     const hits = await searchMemories(db, { q: 'cache', spaceIds: ['global'], embedder: emb });
@@ -400,7 +412,7 @@ describe('searchMemories — MMR 去冗余', () => {
     const r2 = await add('note redis cache replica', 'global', emb);
     const r3 = await add('note redis cluster cache', 'global', emb);
     const k = await add('note kafka broker topic', 'global', emb);
-    const filler = await add('note misc misc misc misc misc misc misc misc', 'global', emb);
+    const filler = await add('note misc misc misc misc misc misc misc misc');
     return { redis: [r1.id, r2.id, r3.id], kafka: k.id, filler: filler.id };
   }
 
@@ -595,6 +607,70 @@ describe('searchMemories — 实体通道（三通道并集）', () => {
 });
 
 describe('searchMemories — mode fast vs deep', () => {
+  it('检索层超时护栏不把底层 timeout 误标为调用者取消', async () => {
+    await add('Postgres timeout outcome');
+    vi.useFakeTimers();
+    const assist = createSearchAssist(async () => new Promise(() => {}), {
+      gate: new SearchLlmGate(),
+    })!;
+    const pending = searchMemories(db, {
+      q: 'Postgres',
+      spaceIds: ['global'],
+      mode: 'deep',
+      assist,
+    });
+    await vi.advanceTimersByTimeAsync(1500);
+    await pending;
+    expect(assist.outcome?.()).toEqual({ assist: 'fallback', assistReason: 'timeout' });
+  });
+
+  it('任意辅助挂起也不能永久阻断基础检索，超时会取消辅助', async () => {
+    const memory = await add('Postgres baseline');
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    const pending = searchMemories(db, {
+      q: 'Postgres',
+      spaceIds: ['global'],
+      mode: 'deep',
+      assist: {
+        analyze: (_q, caller) => {
+          signal = caller;
+          return new Promise(() => {});
+        },
+        rerank: async () => null,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(ids(await pending)).toEqual([memory.id]);
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('取消检索不增加 appearances，并将 signal 传到辅助', async () => {
+    const memory = await add('Postgres cancel');
+    const caller = new AbortController();
+    let signal: AbortSignal | undefined;
+    const pending = searchMemories(db, {
+      q: 'Postgres',
+      spaceIds: ['global'],
+      mode: 'deep',
+      signal: caller.signal,
+      assist: {
+        analyze: (_q, parent) => {
+          signal = parent;
+          return new Promise(() => {});
+        },
+        rerank: async () => null,
+      },
+    });
+    const observed = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    caller.abort();
+    await observed;
+    expect(signal?.aborted).toBe(true);
+    expect(db.prepare('SELECT appearances FROM memories WHERE id = ?').get(memory.id)).toEqual({
+      appearances: 0,
+    });
+  });
+
   it('fast 等权 RRF 保持 FTS 优先；deep 关系问句抬实体通道', async () => {
     // 先写实体-only，再写 FTS-only：等权时 min-max 拉平 RRF，updated_at 让较新的字面命中排前。
     const paraphrase = await add('集群编排方案确定，后续按此推进');

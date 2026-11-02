@@ -34,11 +34,13 @@ import {
 import type { RemoteEmbeddingOptions } from './memory/embedding/remote';
 import type { EmbeddingModelSpec, EmbeddingProvider } from './memory/embedding/types';
 import {
+  countFailedKgJobs,
   ensureKgJob,
   ensurePendingKgJobs,
   type KgJob,
   listKgJobs,
   listResumableKgJobs,
+  retryFailedKgJobs,
   runKgJob,
 } from './memory/kg';
 import { approvePendingWrite } from './memory/pending';
@@ -508,7 +510,52 @@ function resumeMemoryKg(): void {
 
 /** 设置页出口；库未打开不为此建库 */
 export function getMemoryKgJobs(limit?: number): KgJob[] {
-  return db ? listKgJobs(db, limit) : [];
+  return readKgSnapshot([], (database) => listKgJobs(database, limit));
+}
+
+export function getMemoryKgFailedCount(): number {
+  return readKgSnapshot(0, countFailedKgJobs);
+}
+
+/** Inspect existing persisted jobs without opening the host or scheduling model work. */
+function readKgSnapshot<T>(fallback: T, read: (database: Database.Database) => T): T {
+  if (db) return read(db);
+  const file = path.join(memoryRoot(), 'memory.db');
+  if (!existsSync(file)) return fallback;
+  let database: Database.Database | null = null;
+  try {
+    database = openMemoryDb(file);
+    return read(database);
+  } catch {
+    return fallback;
+  } finally {
+    database?.close();
+  }
+}
+
+export function retryFailedMemoryKg(): number {
+  // Settings can be opened before any agent has opened the host DB. Never create a missing DB.
+  if (!db) {
+    const file = path.join(memoryRoot(), 'memory.db');
+    if (!existsSync(file)) return 0;
+    // Do not claim the host handle: its next normal open must still initialize/resume all queues.
+    const temporary = openMemoryDb(file);
+    try {
+      return retryFailedKgJobs(temporary).length;
+    } finally {
+      temporary.close();
+    }
+  }
+  const jobs = retryFailedKgJobs(db);
+  if (jobs.length > 0 && kgConfig.enabled) {
+    void enqueueLlmJob(async () => {
+      for (const job of jobs) {
+        if (!kgConfig.enabled) break;
+        await runOneKg(job);
+      }
+    });
+  }
+  return jobs.length;
 }
 
 /** 等后台 KG 抽取收尾（测试 / 退出前用） */

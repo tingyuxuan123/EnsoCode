@@ -45,6 +45,21 @@ const snapshot = (over: Partial<MemoryJobsSnapshot> = {}): MemoryJobsSnapshot =>
 });
 
 describe('toJobRows', () => {
+  it('failed 列标记也显示失败，cancelled 不因 failed 列标红；旧 DTO 仍兼容', () => {
+    const rows = toJobRows(
+      snapshot({
+        kg: [
+          kg({ id: 1, failed: 1, error: null }),
+          kg({ id: 2, status: 'cancelled', failed: 1, error: 'changed' }),
+          kg({ id: 3 }),
+        ],
+      })
+    );
+    expect(rows.find((row) => row.key === 'kg:1')?.state).toBe('failed');
+    expect(rows.find((row) => row.key === 'kg:2')?.state).toBe('cancelled');
+    expect(rows.find((row) => row.key === 'kg:3')?.state).toBe('done');
+  });
+
   it('shows what each job produced, not just a count', () => {
     const rows = toJobRows(
       snapshot({

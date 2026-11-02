@@ -23,10 +23,10 @@ export interface JobRow {
 
 const shortId = (id: string) => id.slice(0, 8);
 
-function stateOf(status: string, error: string | null): JobState {
+function stateOf(status: string, error: string | null, failed = 0): JobState {
   if (status === 'pending' || status === 'running') return 'running';
   if (status === 'cancelled') return 'cancelled';
-  return error ? 'failed' : 'done';
+  return error || failed > 0 ? 'failed' : 'done';
 }
 
 const NOTE_LABELS: Record<string, string> = {
@@ -64,7 +64,7 @@ export function toJobRows(snapshot: MemoryJobsSnapshot): JobRow[] {
   }
 
   for (const job of snapshot.kg) {
-    const state = stateOf(job.status, job.error);
+    const state = stateOf(job.status, job.error, job.failed);
     rows.push({
       key: `kg:${job.id}`,
       kind: 'kg',

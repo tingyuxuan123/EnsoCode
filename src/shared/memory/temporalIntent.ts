@@ -1,3 +1,5 @@
+import { TEMPORAL_YEAR_BOOST } from './constants';
+
 // 时间意图只用正则门，不调 LLM。
 
 export interface TemporalIntent {
@@ -32,25 +34,18 @@ export function detectTemporalIntent(query: string): TemporalIntent | null {
   return null;
 }
 
-const MS_PER_DAY = 86_400_000;
-
 /**
- * 时间 boost：
- *   base  = 1 / (1 + |now - event_start|days / 365)        （事件越近越高）
- *   match = 0.8 当 type=year 且事件年份相等，否则 0
- *   boost = base * 0.3 + match * confidence * 0.7
- * 无 event_start 时为 0。
+ * 只奖励明确年份匹配，最多 0.1；相对时间不加分也不过滤。
+ * now 参数保留兼容调用方，事件新旧不再参与 boost。
  */
 export function computeTemporalBoost(
   eventStart: string | null,
-  now: Date,
+  _now: Date,
   intent: TemporalIntent
 ): number {
-  if (!eventStart) return 0;
-  const start = Date.parse(`${eventStart}T00:00:00.000Z`);
-  if (Number.isNaN(start)) return 0;
-  const diffDays = Math.abs(now.getTime() - start) / MS_PER_DAY;
-  const base = 1 / (1 + diffDays / 365);
-  const match = intent.type === 'year' && eventStart.slice(0, 4) === intent.value ? 0.8 : 0;
-  return base * 0.3 + match * intent.confidence * 0.7;
+  if (!eventStart || intent.type !== 'year' || eventStart.slice(0, 4) !== intent.value) return 0;
+  const confidence = Number.isFinite(intent.confidence)
+    ? Math.min(1, Math.max(0, intent.confidence))
+    : 0;
+  return TEMPORAL_YEAR_BOOST * confidence;
 }

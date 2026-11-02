@@ -15,13 +15,16 @@ const hit = (over: Partial<MemorySearchHit> = {}): MemorySearchHit => ({
   content: '随应用分发，默认开启',
   unitType: 'decision',
   space: 'project',
-  score: 0.9612,
+  relevance: 0.9612,
   ...over,
 });
 
 describe('MemorySearchResults', () => {
   it('每条命中展示标题、类型、空间、分数与正文，默认折叠', () => {
-    const html = render([hit(), hit({ id: 'm2', title: '全局偏好', space: 'global', score: 1.2 })]);
+    const html = render([
+      hit(),
+      hit({ id: 'm2', title: '全局偏好', space: 'global', relevance: 0.8 }),
+    ]);
 
     expect(html).toContain('RTK 采用官方 prebuilt');
     expect(html).toContain('随应用分发，默认开启');
@@ -29,7 +32,8 @@ describe('MemorySearchResults', () => {
     expect(html).toContain('[Project]');
     expect(html).toContain('[Global]');
     expect(html).toContain('0.96');
-    expect(html).toContain('1.20');
+    expect(html).toContain('0.80');
+    expect(html).toContain('[Semantic similarity]');
     expect(html.match(/<li/g)).toHaveLength(2);
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('line-clamp-2');
@@ -37,7 +41,7 @@ describe('MemorySearchResults', () => {
   });
 
   it('可选元数据缺失时不渲染空徽标或分数', () => {
-    const html = render([hit({ unitType: null, space: null, score: null })]);
+    const html = render([hit({ unitType: null, space: null, relevance: null })]);
 
     expect(html).not.toContain('[Project]');
     expect(html).not.toContain('[Global]');
@@ -58,7 +62,7 @@ describe('MemoryCaptureResult', () => {
     const html = renderCapture({
       written: true,
       deduplicated: false,
-      memory: hit({ score: null }),
+      memory: hit({ relevance: null }),
     });
 
     expect(html).toContain('RTK 采用官方 prebuilt');

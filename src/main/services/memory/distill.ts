@@ -30,13 +30,14 @@ import type { CreateMemoryInput, Embedder, Memory } from './types';
 export interface CompleteOptions {
   maxTokens?: number;
   stage?: 'extract' | 'consolidate';
+  signal?: AbortSignal;
 }
 
-export type Complete = (
+export type Complete = ((
   systemPrompt: string,
   userText: string,
   options?: CompleteOptions
-) => Promise<string>;
+) => Promise<string>) & { searchTimeoutMs?: number };
 
 export interface TranscriptMessage {
   role: 'user' | 'assistant';

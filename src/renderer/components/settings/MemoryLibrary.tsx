@@ -9,6 +9,7 @@ import {
   isMemoryRetrievalMode,
   type MemoryDetail,
   type MemoryListItem,
+  type MemoryListResult,
   type MemorySearchMode,
   type PendingMemoryWriteDto,
 } from '@shared/memory/dto';
@@ -119,7 +120,7 @@ export function MemoryRows({
             </span>
             <span className="block text-muted-foreground text-[calc(12rem/14)]">
               {formatDate(item.updatedAt)} · {item.spaceLabel} ·{' '}
-              {t('{{count}} hits', { count: String(item.accessCount) })}
+              {t('Retrieved {{count}} times', { count: String(item.appearances ?? 0) })}
             </span>
           </button>
         </li>
@@ -265,6 +266,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
   const [mode, setMode] = React.useState<MemorySearchMode>('exact');
   const [approximate, setApproximate] = React.useState(false);
   const [vectorsUsed, setVectorsUsed] = React.useState(true);
+  const [assist, setAssist] = React.useState<Pick<MemoryListResult, 'assist' | 'assistReason'>>({});
   const [items, setItems] = React.useState<MemoryListItem[]>([]);
   const [total, setTotal] = React.useState(0);
   const [spaces, setSpaces] = React.useState<{ id: string; label: string }[]>([]);
@@ -300,6 +302,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       setTotal(0);
       setApproximate(true);
       setVectorsUsed(true);
+      setAssist({});
       return;
     }
     void window.electronAPI.memory
@@ -318,6 +321,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
         setTotal(result.total);
         setApproximate(result.approximate === true);
         setVectorsUsed(result.vectorsUsed !== false);
+        setAssist({ assist: result.assist, assistReason: result.assistReason });
       });
     // 全库统计与待审阅不属于列表筛选，不能随空查询一起作废。
     void window.electronAPI.memory.stats().then((stats) => {
@@ -409,7 +413,8 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       <div>
         <h3 className="text-[calc(14rem/14)] font-medium">{t('Stored memories')}</h3>
         <p className="text-[calc(12rem/14)] text-muted-foreground">
-          {t('Everything the agent has saved. Archiving hides a memory from search but keeps it.')}
+          {t('Everything the agent has saved. Archiving hides a memory from search but keeps it.')}{' '}
+          {t('Decay is based on creation time; retrieval counts do not refresh it.')}
         </p>
       </div>
 
@@ -510,6 +515,11 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
               : 'Same path the agent uses: full-text, vectors and entities merged by relevance. Shows the top matches only — no exact count, and archived memories are excluded.'
           )}
           {!vectorsUsed && ` ${t('Embedding model is not ready, so vectors are skipped.')}`}
+          {mode === 'deep' && assist.assist === 'llm' && ` ${t('Model assist used.')}`}
+          {mode === 'deep' && assist.assist === 'off' && ` ${t('Model assist off.')}`}
+          {mode === 'deep' &&
+            assist.assist === 'fallback' &&
+            ` ${t('Model assist fallback: {{reason}}', { reason: assist.assistReason ?? 'error' })}`}
         </p>
       )}
 

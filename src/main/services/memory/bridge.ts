@@ -1,4 +1,5 @@
 import { CRYSTAL_MIN_SOURCES } from '@shared/memory/constants';
+import { searchAssistReport } from '@shared/memory/searchAssist';
 import {
   parseMemoryCaptureRequest,
   parseMemoryCrystallizeRequest,
@@ -94,15 +95,17 @@ export async function executeMemoryOp(
       recordedDateTo: request.recordedDateTo ?? null,
     });
     return {
-      results: hits.map((hit) => ({
+      results: hits.map((hit, index) => ({
         id: hit.memory.id,
         title: hit.memory.title,
         content: hit.memory.content,
         unitType: hit.memory.unitType,
         spaceId: hit.memory.spaceId,
-        score: Number(hit.score.toFixed(4)),
+        rank: index + 1,
+        ...(hit.relevance === null ? {} : { relevance: Number(hit.relevance.toFixed(4)) }),
         isLatest: hit.memory.isLatest,
       })),
+      ...searchAssistReport(request.mode, assist),
     };
   }
   if (op === 'capture') {

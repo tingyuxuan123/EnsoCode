@@ -8,6 +8,7 @@ import { contentHash } from './contentHash';
 import { cleanupOrphanMentions, openMemoryDb } from './db';
 import {
   applyExtraction,
+  countFailedKgJobs,
   ensureKgJob,
   ensurePendingKgJobs,
   extractLevel1,
@@ -19,6 +20,7 @@ import {
   listResumableKgJobs,
   normalizeExtraction,
   parseKgResponse,
+  retryFailedKgJobs,
   runKgJob,
 } from './kg';
 import { createMemory, updateMemory } from './store';
@@ -353,16 +355,87 @@ describe('kg 任务：幂等、续跑、失败不影响记忆', () => {
       },
     });
     expect(j.status).toBe('pending');
+    expect(j.failed).toBe(0);
     expect(j.attempts).toBe(1);
     expect(j.error).toContain('provider down');
     for (let i = 1; i < KG_MAX_ATTEMPTS; i++)
       j = await runKgJob(db, j, { complete: completeWith('garbage') });
     expect(j.status).toBe('done');
+    expect(j.failed).toBe(1);
     expect(j.error).toContain('not parseable');
     expect(count('entities')).toBe(0);
     expect(db.prepare('SELECT lifecycle_state FROM memories WHERE id = ?').get(m.id)).toEqual({
       lifecycle_state: 'active',
     });
+  });
+
+  it('模型完成前记忆变化不写入过期图谱，取消不算抽取失败', async () => {
+    const memory = await create('Kubernetes original');
+    const job = ensureKgJob(db, memory.id)!;
+    const done = await runKgJob(db, job, {
+      complete: async () => {
+        updateMemory(db, memory.id, { content: 'Nomad replacement' });
+        return sample;
+      },
+    });
+    expect(done).toMatchObject({ status: 'cancelled', failed: 0 });
+    expect(count('entities')).toBe(0);
+  });
+
+  it('抽取期间永久删除任务与记忆，迟到输出被取消且不抛异常', async () => {
+    const memory = await create('Docker deleted while extracting');
+    const job = ensureKgJob(db, memory.id)!;
+    const done = await runKgJob(db, job, {
+      complete: async () => {
+        db.prepare('DELETE FROM memory_jobs WHERE id=?').run(job.id);
+        db.prepare('DELETE FROM memories WHERE id=?').run(memory.id);
+        return sample;
+      },
+    });
+    expect(done).toMatchObject({ status: 'cancelled', failed: 0 });
+    expect(count('entities')).toBe(0);
+  });
+
+  it('重复执行已完成的旧任务快照不会再花一次 completion', async () => {
+    const memory = await create('Docker repeat');
+    const job = ensureKgJob(db, memory.id)!;
+    let calls = 0;
+    const complete = async () => {
+      calls++;
+      return sample;
+    };
+    await runKgJob(db, job, { complete });
+    await runKgJob(db, job, { complete });
+    expect(calls).toBe(1);
+  });
+
+  it('失败计数兼容旧 done+error，只重置失败终态；重复点击不重复排队', async () => {
+    const one = ensureKgJob(db, (await create('retry failed one')).id)!;
+    const old = ensureKgJob(db, (await create('retry legacy two')).id)!;
+    const cancelled = ensureKgJob(db, (await create('cancelled three')).id)!;
+    const running = ensureKgJob(db, (await create('running four')).id)!;
+    db.prepare(
+      "UPDATE memory_jobs SET status='done', failed=1, cursor=3, error='bad JSON' WHERE id=?"
+    ).run(one.id);
+    db.prepare(
+      "UPDATE memory_jobs SET status='done', failed=0, cursor=3, error='legacy error' WHERE id=?"
+    ).run(old.id);
+    db.prepare("UPDATE memory_jobs SET status='cancelled', error='changed' WHERE id=?").run(
+      cancelled.id
+    );
+    db.prepare("UPDATE memory_jobs SET status='running', error='retry' WHERE id=?").run(running.id);
+    expect(countFailedKgJobs(db)).toBe(2);
+    expect(retryFailedKgJobs(db).map((job) => job.id)).toEqual([one.id, old.id]);
+    expect(countFailedKgJobs(db)).toBe(0);
+    expect(retryFailedKgJobs(db)).toEqual([]);
+    expect(listKgJobs(db).find((job) => job.id === one.id)).toMatchObject({
+      status: 'pending',
+      failed: 0,
+      attempts: 0,
+      error: null,
+    });
+    expect(listKgJobs(db).find((job) => job.id === cancelled.id)?.status).toBe('cancelled');
+    expect(listKgJobs(db).find((job) => job.id === running.id)?.status).toBe('running');
   });
 
   it('重启续跑：pending 与半路 running 都可列出；内容已变的任务跑时标 cancelled；模型无产出直接 done', async () => {

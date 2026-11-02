@@ -1,3 +1,4 @@
+import { searchLlmTimeoutMs } from '@shared/memory/searchAssist';
 import type { Complete } from '../memory/distill';
 import {
   chatModelIdFromSettings,
@@ -248,6 +249,14 @@ export function createLocalComplete(
     const queuedAt = performance.now();
     const release = chatIdle.acquire();
     return new Promise<string>((resolve, reject) => {
+      const external = completeOptions?.signal;
+      const ac = new AbortController();
+      const onAbort = () => {
+        ac.abort(external?.reason);
+        reject(new DOMException('Local chat cancelled', 'AbortError'));
+      };
+      external?.addEventListener('abort', onAbort, { once: true });
+      if (external?.aborted) onAbort();
       void enqueue(async () => {
         const startedAt = performance.now();
         if (completeOptions?.stage)
@@ -255,7 +264,6 @@ export function createLocalComplete(
             stage: completeOptions.stage,
             durationMs: Math.round(startedAt - queuedAt),
           });
-        const ac = new AbortController();
         const timedOut = new Error('local chat timed out');
         const timer = setTimeout(() => {
           ac.abort(timedOut);
@@ -263,6 +271,7 @@ export function createLocalComplete(
         }, timeoutMs);
         let session: ChatSessionLike | null = null;
         try {
+          ac.signal.throwIfAborted();
           if (cachedContext && cachedContext.path !== modelPath) await disposeChatContext();
           const modelStartedAt = performance.now();
           const model = await acquire('chat', modelPath);
@@ -285,6 +294,7 @@ export function createLocalComplete(
             signal: ac.signal,
             maxTokens: completeOptions?.maxTokens,
           });
+          ac.signal.throwIfAborted();
           if (completeOptions?.stage)
             console.info('[memory-distill] local inference', {
               stage: completeOptions.stage,
@@ -298,6 +308,7 @@ export function createLocalComplete(
           reject(error);
         } finally {
           clearTimeout(timer);
+          external?.removeEventListener('abort', onAbort);
           try {
             session?.dispose();
           } catch {}
@@ -317,9 +328,17 @@ export async function memoryCompleteFromSettings(
   }
 ): Promise<Complete | null> {
   const id = chatModelIdFromSettings(state);
-  if (id === REMOTE_CHAT_MODEL_ID) return opts.remoteComplete();
+  if (id === REMOTE_CHAT_MODEL_ID) {
+    const complete = await opts.remoteComplete();
+    if (complete) complete.searchTimeoutMs = searchLlmTimeoutMs('remote');
+    return complete;
+  }
   const gguf = localChatModelPathIfReady(opts.modelsRoot, id);
   if (!gguf) return null;
   const spec = resolveChatModelSpec(id);
-  return (opts.createLocal ?? createLocalComplete)(gguf, { contextSize: spec?.contextSize });
+  const complete = (opts.createLocal ?? createLocalComplete)(gguf, {
+    contextSize: spec?.contextSize,
+  });
+  complete.searchTimeoutMs = searchLlmTimeoutMs('local');
+  return complete;
 }
