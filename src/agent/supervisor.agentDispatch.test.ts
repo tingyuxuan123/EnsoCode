@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import type {
   ExtensionUIContext,
   ModelRuntime,
+  SettingsManager,
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { childProfileShell, childProfileToolIds } from '@shared/childProfileTools';
@@ -253,6 +254,40 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
       session: session(options),
     }));
+  });
+
+  it.each([true, false])('LCU=%s 传到资源加载层，与内置 Computer 独立', async (lcuEnabled) => {
+    const events: AgentWorkerEvent[] = [];
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-lcu-supervisor-'));
+    const lcu = path.join(homedir(), '.local/share/lcu/pi/extension.mjs');
+    writeFileSync(path.join(root, 'settings.json'), JSON.stringify({ packages: [lcu] }));
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        lcuEnabled,
+        disabledTools: [],
+      });
+      await waitFor(events, 'parent-ready');
+      const manager = mocks.loaderOptions[0].settingsManager as SettingsManager;
+      expect(manager.getGlobalSettings().packages).toEqual([lcu]);
+      if (!lcuEnabled) {
+        expect(mocks.loaderOptions[0].noExtensions).toBe(true);
+        expect(mocks.loaderOptions[0].additionalExtensionPaths).not.toContain(lcu);
+      }
+      const tools = mocks.createAgentSession.mock.calls[0][0].customTools as ToolDefinition[];
+      expect(tools.some((tool) => tool.name === 'computer')).toBe(true);
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('重开会话只恢复通知，不自动prompt；下一次工具结果搭车且消费后清盘', async () => {

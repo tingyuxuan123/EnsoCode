@@ -220,6 +220,7 @@ describe('buildSettingsCatalog', () => {
     'agents.maxActiveCoworkers',
     'tools.root',
     'tools.rtkEnabled',
+    'tools.lcuEnabled',
     'tools.editMode',
     'skills.root',
     'mcp.root',
@@ -234,6 +235,22 @@ describe('buildSettingsCatalog', () => {
     const ids = catalog.map((e) => e.id);
     for (const id of staticIds) {
       expect(ids).toContain(id);
+    }
+  });
+
+  it('中英文均能定位独立的 LCU 电脑控制开关', () => {
+    const catalog = buildSettingsCatalog();
+    expect(catalog.find((entry) => entry.id === 'tools.lcuEnabled')).toMatchObject({
+      category: 'tools',
+      title: 'LCU computer control',
+    });
+    expect(getTranslation('zh', 'LCU computer control')).toBe('LCU 电脑控制');
+    for (const query of ['LCU', 'LCU computer control', 'LCU 电脑控制']) {
+      expect(
+        searchSettingsEntries(catalog, query, {
+          translate: (key) => getTranslation('zh', key),
+        }).map((entry) => entry.id)
+      ).toContain('tools.lcuEnabled');
     }
   });
 

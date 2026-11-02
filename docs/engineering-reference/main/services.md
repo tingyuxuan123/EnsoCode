@@ -380,6 +380,15 @@ Enso 不调 pi 的 `bindExtensions`，pi 不发 `session_start`/`session_shutdow
 
 ## Pi 扩展的人机选择与授权
 
+设置 → 内置工具中的「LCU 电脑控制」由本机 `lcuEnabled` 独立控制，缺省开启只保留已安装扩展的既有加载，
+不安装 LCU，也不影响内置 `computer`。改动在新建或冷恢复会话时读取，不热卸载运行中扩展；
+已打开的会话需要释放后重新打开（或重启应用）。该设备策略不随配置同步导入/导出，也不开放给模型修改。
+关闭时，`lcuExtension.ts` 先通过 SDK 公开包解析器发现资源，在执行扩展前按安装入口的文件身份排除 LCU，
+再关闭磁盘扩展自动发现并显式传入其余入口；相对路径、目录包、file URL 与符号链接均由 SDK 统一解析。
+不能用加载后的 `extensionsOverride` 或按 `js` 名称隐藏替代，否则扩展副作用已执行或误伤同名第三方工具。
+不修改 Pi settings 或 LCU 安装文件；升级 SDK 时复检 `noExtensions` 与显式入口的加载顺序。
+回归：`projectCode.test.ts`、`supervisor.agentDispatch.test.ts`、`lcuEnabled.test.ts`。
+
 `extensionUI.ts` 在会话注册后通过公开 `extensionRunner.setUIContext` 接入 `select` / `confirm`，
 以 `rpc` 模式复用 `AskManager` → `ask-request` → AskBar → `ask-respond`。不要为接一个选择框调用
 `bindExtensions`：它还会触发 `session_start` 和资源发现，改变以上既有生命周期。

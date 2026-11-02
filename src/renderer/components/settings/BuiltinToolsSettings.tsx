@@ -238,6 +238,8 @@ export function BuiltinToolsSettings() {
   const setExploreFoldEnabled = useSettingsStore((state) => state.setExploreFoldEnabled);
   const rtkEnabled = useSettingsStore((state) => state.rtkEnabled);
   const setRtkEnabled = useSettingsStore((state) => state.setRtkEnabled);
+  const lcuEnabled = useSettingsStore((state) => state.lcuEnabled);
+  const setLcuEnabled = useSettingsStore((state) => state.setLcuEnabled);
   const protectedActionsInCode = useSettingsStore((state) => state.protectedActionsInCode);
   const setProtectedActionsInCode = useSettingsStore((state) => state.setProtectedActionsInCode);
   const editMode = useSettingsStore((state) => state.editMode);
@@ -333,6 +335,7 @@ export function BuiltinToolsSettings() {
                   pending={occupancy.pending && !occupancy.rows[tool.id]}
                 />
                 <Switch
+                  aria-label={t(tool.name)}
                   checked={!disabled.includes(tool.id)}
                   onCheckedChange={(checked) => {
                     toggle(tool.id, checked);
@@ -462,6 +465,23 @@ export function BuiltinToolsSettings() {
             ) : null}
           </ToolRow>
         ))}
+
+        <ToolRow
+          rowId="tools.lcuEnabled"
+          newSession
+          icon={Monitor}
+          title={t('LCU computer control')}
+          description={t(
+            'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart EnsoCode to apply changes to open sessions.'
+          )}
+          control={
+            <Switch
+              aria-label={t('LCU computer control')}
+              checked={lcuEnabled}
+              onCheckedChange={setLcuEnabled}
+            />
+          }
+        />
 
         <ComputerPermissionGuideDialog
           open={guideOpen}

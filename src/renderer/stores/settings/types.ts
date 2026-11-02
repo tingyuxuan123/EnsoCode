@@ -130,6 +130,9 @@ export interface SettingsState {
   /** RTK 命令压缩；缺省开，新建或冷恢复会话生效。 */
   rtkEnabled: boolean;
 
+  /** 本机已安装 LCU 扩展加载开关；缺省开，新建或冷恢复生效，不影响内置 Computer。 */
+  lcuEnabled: boolean;
+
   /** Code 会话也启用受保护动作底线（Bot 会话恒开）；缺省关，新建或冷恢复会话生效。 */
   protectedActionsInCode: boolean;
 
@@ -350,6 +353,7 @@ export interface SettingsState {
   setWindowsLocalShell: (value: WindowsLocalShell) => void;
   setExploreFoldEnabled: (value: boolean) => void;
   setRtkEnabled: (value: boolean) => void;
+  setLcuEnabled: (value: boolean) => void;
   setProtectedActionsInCode: (value: boolean) => void;
   setMemoryEmbeddingModel: (value: string) => void;
   setMemoryEmbeddingAutoDownload: (value: boolean) => void;

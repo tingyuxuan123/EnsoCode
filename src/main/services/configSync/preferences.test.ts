@@ -25,6 +25,20 @@ const bundle = (state: Partial<ConfigSyncBundle['state']>): ConfigSyncBundle => 
 });
 
 describe('config sync portable preference contract', () => {
+  it('LCU 加载开关仅留当前设备，不随配置同步导出或提交', () => {
+    expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('lcuEnabled', {
+      mode: 'excluded',
+      reason: expect.stringContaining('device-local'),
+    });
+    expect(SYNC_FIELDS).not.toContain('lcuEnabled');
+    expect(() =>
+      validateBundle({
+        ...bundle({}),
+        state: { ...baseState(), lcuEnabled: false },
+      })
+    ).toThrow();
+  });
+
   it('代码搜索账号引用仅留本机，不随配置同步导出', () => {
     expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('codeSearchAccountKey', {
       mode: 'excluded',

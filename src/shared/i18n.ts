@@ -484,6 +484,9 @@ export const zhTranslations: Record<string, string> = {
   'Remove download record': '删除下载记录',
   'Download progress': '下载进度',
   'RTK command compression': 'RTK 命令压缩',
+  'LCU computer control': 'LCU 电脑控制',
+  'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart EnsoCode to apply changes to open sessions.':
+    '允许加载本机已安装的 LCU Pi 扩展，与内置「电脑操控」独立，不会安装 LCU。新建或冷恢复会话时生效；已打开的会话请重启 EnsoCode 后继续。',
   'Compress supported command output before it enters the model context. Takes effect on new conversations.':
     '在受支持的命令输出进入模型上下文前进行压缩。新会话生效。',
   'Protected action confirmation': '受保护操作确认',

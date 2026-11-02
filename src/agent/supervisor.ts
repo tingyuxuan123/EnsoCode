@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -187,6 +186,7 @@ import { OperationGate } from './gate';
 import { createGoalTools } from './goal';
 import { readHarnessRuleFiles, resolveHarnessSkillRoots } from './harnessAssets';
 import { type ContextMessage, sanitizeContextMessages } from './imageContext';
+import { createLcuResourceLoader, installedLcuExtensionPath } from './lcuExtension';
 import { McpManager } from './mcp';
 import { partitionMcpNamespaces } from './mcpNames';
 import { createMessageCoworkerTool } from './messageCoworker';
@@ -495,7 +495,7 @@ function sessionAgentsFilesOverride(
   });
 }
 
-function createSessionResourceLoader(options: {
+async function createSessionResourceLoader(options: {
   branchContext: InlineExtension;
   silentTurnRecovery: InlineExtension;
   oauthPoolRecovery?: InlineExtension;
@@ -512,6 +512,8 @@ function createSessionResourceLoader(options: {
   remoteSsh?: { host: string };
   /** 加载项目内 .claude/.codex/.cursor 的 skills 与规则文件；远程会话不适用（cwd 不在本机） */
   loadHarnessAssets?: boolean;
+  /** 已安装的 LCU Pi 扩展开关，与内置 computer 无关；只在创建 loader 时读取。 */
+  lcuEnabled?: boolean;
   /** 用户已信任的项目代码来源；未全部信任时不加载项目扩展与包 */
   trustedProjectCode?: readonly string[];
   /** Claude 插件命令：作为 `/plugin:command` 提示词模板加入 */
@@ -537,7 +539,7 @@ function createSessionResourceLoader(options: {
   childContract?: boolean;
   /** 仅父会话：工具调用前先说一句下一步打算，供用户在运行中看到进度 */
   progressPreamble?: boolean;
-}): DefaultResourceLoader {
+}): Promise<DefaultResourceLoader> {
   const harness = options.loadHarnessAssets && !options.remoteAgentsFiles;
   const skillPaths = harness
     ? [...options.skillPaths, ...resolveHarnessSkillRoots(options.cwd)]
@@ -545,7 +547,7 @@ function createSessionResourceLoader(options: {
   const persona = options.persona;
   const pluginCommands = options.pluginCommands ?? [];
   const pluginHooks = options.pluginHooks;
-  return new DefaultResourceLoader({
+  const loaderOptions: ConstructorParameters<typeof DefaultResourceLoader>[0] = {
     cwd: options.cwd,
     agentDir: options.agentDir,
     settingsManager: createProjectSettingsManager(
@@ -659,7 +661,8 @@ function createSessionResourceLoader(options: {
       : sessionAgentsFilesOverride(options.agentDir, options.instruction, [
           ...(harness ? readHarnessRuleFiles(options.cwd) : []),
         ]),
-  });
+  };
+  return createLcuResourceLoader(loaderOptions, options.lcuEnabled);
 }
 
 /** Enso 不走 pi 的会话切换流程，session_shutdown 要自己发（Claude 插件的 SessionEnd hook 靠它） */
@@ -1658,7 +1661,8 @@ export class SessionSupervisor {
           command.protectedActions,
           command.botRoutines,
           command.botWriteLock,
-          command.botDelegationTask
+          command.botDelegationTask,
+          command.lcuEnabled
         );
         return;
       case 'spawn-child':
@@ -2216,7 +2220,8 @@ export class SessionSupervisor {
     protectedActions = false,
     botRoutines = false,
     botWriteLock?: { label: string; ancestors: string[] },
-    botDelegationTask = false
+    botDelegationTask = false,
+    lcuEnabled = true
   ): Promise<void> {
     const sessionId = identity.sessionId;
     const sessionEditMode = resolveEditMode(requestedEditMode, hashlineEditEnabled);
@@ -2285,7 +2290,7 @@ export class SessionSupervisor {
       codemode: toolEnabled('isolated_sandbox'),
       deferredServers: deferredMcp,
     });
-    const resourceLoader = createSessionResourceLoader({
+    const resourceLoader = await createSessionResourceLoader({
       branchContext: this.branchContextExtension(() => managedRef),
       oauthPoolRecovery: this.oauthPoolRecovery(),
       silentTurnRecovery: silentTurnRecoveryExtension((kind) => {
@@ -2301,6 +2306,7 @@ export class SessionSupervisor {
       remoteAgentsFiles,
       ...(remote ? { remoteSsh: { host: remote.host } } : {}),
       loadHarnessAssets,
+      lcuEnabled,
       trustedProjectCode,
       pluginCommands,
       pluginHooks: { hooks: pluginHooks, role: { kind: 'parent' }, resumed: Boolean(resumeFile) },
@@ -2633,7 +2639,7 @@ export class SessionSupervisor {
               silentTurnRecovery,
               this.oauthPoolRecovery()
             )
-          : createSessionResourceLoader({
+          : await createSessionResourceLoader({
               branchContext,
               silentTurnRecovery,
               oauthPoolRecovery: this.oauthPoolRecovery(),
@@ -2647,6 +2653,7 @@ export class SessionSupervisor {
               ...(remote ? { remoteSsh: { host: remote.host } } : {}),
               // 类型化子代理与项目资源隔离（同 noSkills/noExtensions），不追加 harness 资源
               loadHarnessAssets: resolved || agentType ? false : loadHarnessAssets,
+              lcuEnabled,
               trustedProjectCode,
               pluginHooks: {
                 hooks: pluginHooks,
@@ -3375,7 +3382,7 @@ export class SessionSupervisor {
         {
           approvalMode: () => gate.mode,
           requiresConfirmation: () => gate.protectedFloor,
-          lcuExtensionPath: path.join(homedir(), '.local/share/lcu/pi/extension.mjs'),
+          lcuExtensionPath: installedLcuExtensionPath(),
           getToolDefinition: (name) => session.getToolDefinition?.(name),
         }
       );

@@ -1173,6 +1173,8 @@ export type AgentCommand =
       windowsLocalShell?: WindowsLocalShell;
       /** 内置 RTK；未设置时默认启用。 */
       rtkEnabled?: boolean;
+      /** 本机已安装 LCU 扩展；未设置时默认允许加载，不安装或启用未安装的扩展。 */
+      lcuEnabled?: boolean;
       /** ssh 项目：工具执行切到远端。Main 从项目权威派生，不信任 renderer。 */
       remote?: AgentRemoteConfig;
       /** 旁路会话：首条 prompt 前缀注入，消费一次 */
@@ -3205,6 +3207,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'disabledTools',
           'windowsLocalShell',
           'rtkEnabled',
+          'lcuEnabled',
           'remote',
           'rolePrompt',
           'systemPrompt',
@@ -3234,6 +3237,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         (value.pluginHooks !== undefined && parsePluginHooks(value.pluginHooks) === null) ||
         (value.pluginTools !== undefined && !isPluginToolList(value.pluginTools)) ||
         (value.rtkEnabled !== undefined && typeof value.rtkEnabled !== 'boolean') ||
+        (value.lcuEnabled !== undefined && typeof value.lcuEnabled !== 'boolean') ||
         (value.planMode !== undefined && typeof value.planMode !== 'boolean') ||
         (value.windowsLocalShell !== undefined &&
           !(WINDOWS_LOCAL_SHELLS as readonly string[]).includes(

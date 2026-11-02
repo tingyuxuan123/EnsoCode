@@ -245,6 +245,13 @@ const STATIC_CATALOG: SettingsSearchEntry[] = [
   },
   { id: 'tools.root', category: 'tools', title: 'Built-in tools' },
   {
+    id: 'tools.lcuEnabled',
+    category: 'tools',
+    title: 'LCU computer control',
+    description:
+      'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart EnsoCode to apply changes to open sessions.',
+  },
+  {
     id: 'tools.rtkEnabled',
     category: 'tools',
     title: 'RTK command compression',

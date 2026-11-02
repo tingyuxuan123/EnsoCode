@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AgentCommand } from '@shared/types/agent';
 import { beforeEach, expect, it, vi } from 'vitest';
 
@@ -179,6 +182,30 @@ it('clears scopes on worker exit/reset; replacement generation owns future pushe
   pushBuiltinTools();
   expect(replacement.posted.filter((command) => command.type === 'set-builtin-tools')).toEqual([]);
   stopAgentWorker();
+});
+
+it.each([false, true])('新建和冷恢复均从 Main 本机设置读取 LCU：resume=%s', (resume) => {
+  const dir = mkdtempSync(join(tmpdir(), 'enso-lcu-spawn-'));
+  const resumeFile = join(dir, 'session.jsonl');
+  writeFileSync(resumeFile, '');
+  try {
+    startAgentWorker();
+    const worker = workers.at(-1)!;
+    worker.emit('spawn');
+    for (const lcuEnabled of [undefined, true, false, null, 'false', 0]) {
+      settings.state.lcuEnabled = lcuEnabled;
+      expect(
+        spawnSession(identity, { ...request, ...(resume ? { resumeFile } : {}) }, new Set()).ok
+      ).toBe(true);
+      expect(worker.posted.findLast((command) => command.type === 'spawn-parent')).toMatchObject({
+        lcuEnabled: lcuEnabled !== false,
+        ...(resume ? { resumeFile } : {}),
+      });
+    }
+  } finally {
+    stopAgentWorker();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 it('warm spawn does not lift a fixed browser restriction', () => {
