@@ -219,6 +219,7 @@ import {
   type SshExecutor,
   sshPasswordEnv,
 } from './ssh/executor';
+import { installStreamGuard } from './streamGuard';
 import { applyRemoteWorkingDirectory } from './ssh/posixPath';
 import { createRemoteGrepToolDefinition } from './ssh/remoteGrep';
 import { createRemoteOperations } from './ssh/remoteOperations';
@@ -4680,6 +4681,7 @@ export class SessionSupervisor {
       });
       await initializeWorkerRuntime(runtime);
       installOauthPoolSelector(runtime, this.selectOauthPool);
+      installStreamGuard(runtime);
       return runtime;
     })();
     return this.runtimePromise;
