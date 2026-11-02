@@ -1,7 +1,6 @@
-import { app, webContents } from 'electron';
+import { webContents } from 'electron';
 import { getWindowWebContents } from '../../windows/createAppWindow';
 import { getMainWindow } from '../../windows/MainWindow';
-import { type DesignResourcePaths, designResourcePaths } from './paths';
 import { DesignToolBroker } from './toolBroker';
 
 let broker: DesignToolBroker | null = null;
@@ -27,13 +26,6 @@ export function getDesignToolBroker(): DesignToolBroker {
   return broker;
 }
 
-export function getDesignPaths(): DesignResourcePaths {
-  return designResourcePaths({
-    packaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    appPath: app.getAppPath(),
-    userDataPath: app.getPath('userData'),
-  });
-}
+export { getDesignPaths } from './appPaths';
 
 export { DesignToolBroker, DesignToolError } from './toolBroker';

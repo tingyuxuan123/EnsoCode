@@ -12,6 +12,7 @@ import { registerChangesHandlers } from './changes';
 import { registerCompactionHandlers } from './compaction';
 import { registerComputerHandlers } from './computer';
 import { registerConfigSyncHandlers } from './configSync';
+import { registerDesignHandlers } from './design';
 import { registerExtensionPluginHandlers } from './extensionPlugins';
 import { registerFileHandlers } from './files';
 import { registerFilesWorkspaceHandlers } from './filesWorkspace';
@@ -53,6 +54,7 @@ export function registerIpcHandlers(): void {
   registerSshConnectionHandlers();
   registerComputerHandlers();
   registerExtensionPluginHandlers();
+  registerDesignHandlers();
   registerFileHandlers();
   registerFilesWorkspaceHandlers();
   registerGitHandlers();
