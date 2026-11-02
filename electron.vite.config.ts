@@ -51,6 +51,12 @@ export default defineConfig({
         '@': path.resolve(__dirname, 'src/renderer'),
         '@shared': path.resolve(__dirname, 'src/shared'),
         '@enso/pair': pairAlias,
+        '@vetta-org/plugin-sdk': path.resolve(
+          __dirname,
+          'src/renderer/features/design/host/sdk.ts'
+        ),
+        '@design-engine': path.resolve(__dirname, 'resources/design/engine'),
+        '@design-agent': path.resolve(__dirname, 'resources/design'),
       },
     },
     // diff 高亮 worker（@pierre/diffs）含动态 import，iife 格式打不了，需 es

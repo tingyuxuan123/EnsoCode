@@ -8,7 +8,10 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/renderer/*"],
-      "@shared/*": ["./src/shared/*"]
+      "@shared/*": ["./src/shared/*"],
+      "@vetta-org/plugin-sdk": ["./src/renderer/features/design/host/sdk.ts"],
+      "@design-engine/*": ["./resources/design/engine/*"],
+      "@design-agent/*": ["./resources/design/*"]
     }
   },
   "include": ["src/renderer/**/*", "src/shared/**/*"],

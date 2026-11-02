@@ -70,7 +70,8 @@
       "!docs/project-history/**/*.html",
       "!packages/relay-go/frontend/assets",
       "!src/agent/continuousMemory/vendor",
-      "!src/shared/providers/devin/vendor"
+      "!src/shared/providers/devin/vendor",
+      "!src/renderer/features/design/vetta"
     ]
   },
   "overrides": [

@@ -15,7 +15,10 @@
     "paths": {
       "@/*": ["./src/renderer/*"],
       "@shared/*": ["./src/shared/*"],
-      "@enso/pair": ["./packages/pair/src/index.ts"]
+      "@enso/pair": ["./packages/pair/src/index.ts"],
+      "@vetta-org/plugin-sdk": ["./src/renderer/features/design/host/sdk.ts"],
+      "@design-engine/*": ["./resources/design/engine/*"],
+      "@design-agent/*": ["./resources/design/*"]
     }
   },
   "include": ["src/**/*", "packages/pair/src/**/*", "electron.vite.config.ts"]

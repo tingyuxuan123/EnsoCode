@@ -1,0 +1,850 @@
+import type { ComponentType, ReactNode } from "react";
+import type { ConversationMessage } from "./conversation.js";
+import type { Disposable } from "./disposable.js";
+import type { PluginImageRef } from "./images.js";
+import type { PluginPromptAttachment } from "./prompt-attachment.js";
+import type { ConversationScenario } from "./scenario.js";
+import type { PluginShortcutScopeContribution } from "./shortcuts.js";
+
+export interface PluginGlobalSlotContribution {
+	id: string;
+	component: ComponentType;
+}
+
+export interface PluginAbilityDetailSlotProps {
+	abilityId: string;
+	installed: boolean;
+	enabled: boolean;
+}
+
+/** Inline setup/status surface rendered near the top of one ability detail page. */
+export interface PluginAbilityDetailSlotContribution {
+	id: string;
+	abilityId: string;
+	component: ComponentType<PluginAbilityDetailSlotProps>;
+}
+
+/**
+ * Props handed to a workspace-view component. A workspace view owns the whole
+ * content area, so unlike panel slots it is addressed by its own route and can
+ * be deep-linked; the host passes back its identity so one component can serve
+ * several registered views.
+ */
+export interface PluginWorkspaceViewProps {
+	/** The contribution id as registered (NOT namespaced). */
+	viewId: string;
+	/** The owning plugin id. */
+	pluginId: string;
+}
+
+/**
+ * Badge tone. The host maps it to its own theme colors — a plugin cannot pick a
+ * raw color, so badges stay consistent with the built-in navigation entries.
+ */
+export type PluginNavBadgeTone = "accent" | "danger" | "default" | "warning";
+
+/**
+ * A badge on the plugin's sidebar navigation entry.
+ *
+ * `beta` is the host's own preset — it renders exactly like the built-in
+ * 知识库 Beta 标识, wording included (and localized by the host), so plugins do
+ * not have to spell "Beta" themselves in every locale.
+ *
+ * `count` renders `99+` past 99 and disappears at 0 — an unread badge showing
+ * "0" is worse than no badge.
+ */
+export type PluginNavBadge =
+	| { kind: "beta" }
+	| { kind: "text"; text: string; tone?: PluginNavBadgeTone }
+	| { kind: "count"; count: number; tone?: PluginNavBadgeTone }
+	| { kind: "dot"; tone?: PluginNavBadgeTone };
+
+/**
+ * A **workspace view**（工作区视图）: a full-page surface a plugin contributes to
+ * the host's primary navigation. It is the plugin counterpart of a built-in page
+ * such as 自动化 / 知识库 — the host gives it its own route
+ * (`/workspace/<pluginId>/<viewId>`) and a sidebar entry, and the plugin owns the
+ * entire content area while it is open.
+ *
+ * Use it for standalone workbenches that are NOT bound to one conversation
+ * (dashboards, boards, consoles). Conversation-scoped UI belongs in an
+ * {@link PluginActivityTabContribution activity tab}; floating UI belongs in a
+ * {@link PluginGlobalSlotContribution global slot}.
+ */
+export interface PluginWorkspaceViewContribution {
+	/** Unique within the plugin; the host namespaces it as `${pluginId}:${id}`. */
+	id: string;
+	/** Sidebar entry label. Supports `%catalogKey%` i18n lookup. */
+	label: string;
+	/**
+	 * Sidebar entry icon as an **iconify class string** (e.g.
+	 * `"icon-[solar--widget-5-linear]"`) — NOT a React node, because the host
+	 * renders it inside its own nav button and persists nav layout by key.
+	 *
+	 * Omit it to inherit the plugin's own `plugin.json` icon: a packaged image
+	 * (svg / png / webp …) is masked with the theme's foreground color, so a plugin
+	 * that ships artwork does not have to find a lookalike in an icon set. Set
+	 * {@link PluginWorkspaceViewContribution.iconTint} to `false` to keep its colors.
+	 */
+	icon?: string;
+	/**
+	 * Whether an image icon is tinted with the theme's foreground color. Defaults to
+	 * `true`, which keeps the entry consistent with the built-in navigation and legible
+	 * in every theme.
+	 *
+	 * Pass `false` for a full-color logo. Weigh it first: the entry renders at 16px
+	 * beside monochrome built-ins, and a fixed-color image cannot follow the active
+	 * theme — a dark logo can disappear on a dark sidebar. Has no effect on Iconify
+	 * class icons, which are always tinted.
+	 */
+	iconTint?: boolean;
+	/** Optional one-line description; shown as the nav entry tooltip. */
+	description?: string;
+	/**
+	 * Initial badge on the sidebar entry. `{ kind: "text" }` supports the same
+	 * `%catalogKey%` i18n lookup as {@link label}. Update it at runtime with
+	 * {@link PluginUiApi.setWorkspaceViewBadge}.
+	 */
+	badge?: PluginNavBadge;
+	/** Zero-props aside from {@link PluginWorkspaceViewProps}. */
+	component: ComponentType<PluginWorkspaceViewProps>;
+	/** Sort hint among this plugin's own views (ascending). Defaults to 0. */
+	navOrder?: number;
+	/**
+	 * Whether this view takes a sidebar entry. Defaults to `true`.
+	 *
+	 * Pass `false` for a surface users open occasionally — a setup page, a
+	 * diagnostics console. It then lives only under Settings → More options,
+	 * where the host lists every off-sidebar view and opens it inside the
+	 * settings shell, so switching between such pages stays one click.
+	 *
+	 * The sidebar is a scarce, user-curated space: a plugin that always claims a
+	 * slot pushes the entries someone actually uses into the overflow menu.
+	 */
+	sidebar?: boolean;
+}
+
+/**
+ * What a workspace view puts into the **host page header** — the window's top
+ * bar that also carries the drag region, the macOS traffic-light gutter and the
+ * sidebar trigger.
+ *
+ * Without this the header still renders, showing the app name above the
+ * plugin's own toolbar — two stacked bars. Set `hideTitle` and move the view's
+ * toolbar in here and the surface gets a single, host-consistent header.
+ *
+ * `left` / `right` are ReactNodes rendered by the host inside that bar (left:
+ * right after the sidebar trigger; right: before the window controls). They are
+ * rendered in the plugin's i18n + CSS scope, so `useTranslation()` and the
+ * plugin's own classes work as usual. Pass fresh nodes whenever the view's
+ * state changes — this is a live setter, not a one-time registration.
+ */
+export interface PluginWorkspaceViewHeader {
+	/** Replaces the host title text. Supports `%catalogKey%` i18n lookup. */
+	title?: string;
+	/** Drop the host title entirely (use when {@link left} carries its own). */
+	hideTitle?: boolean;
+	/** Rendered in the header's left cluster, after the sidebar trigger. */
+	left?: ReactNode;
+	/** Rendered in the header's action cluster, before the window controls. */
+	right?: ReactNode;
+	/**
+	 * Float the host header OVER the view instead of stacking above it. The view
+	 * then owns the full content height, and its top `~44px` sit under the
+	 * transparent header strip (window drag region / traffic lights / sidebar
+	 * trigger all keep working on top). Use for immersive full-page surfaces
+	 * whose own hero starts at the very top; leave unset for toolbar-style
+	 * headers that need their own opaque row.
+	 */
+	immersive?: boolean;
+}
+
+export interface PluginAudioMetadata {
+	/** Embedded title; preview renderers should fall back to file.name. */
+	title?: string;
+	artist?: string;
+	/** Embedded cover art as a Data URL when available. */
+	coverDataUrl?: string;
+}
+
+export interface PluginPreviewUrlOptions {
+	/** Optional media hint for ambiguous containers such as webm. */
+	mediaKind?: "audio" | "video";
+}
+
+/**
+ * The file handed to a file-preview plugin component. The host does NOT
+ * pre-read or guess encoding — the plugin decides whether to read text or
+ * bytes. `path` is also exposed for plugins that prefer native fetch.
+ */
+export interface PluginPreviewFile {
+	path: string | null;
+	name: string;
+	extension: string;
+	mime: string;
+	size: number;
+	/** Read the file as a UTF-8 string. */
+	readText(): Promise<string>;
+	/** Read the raw file bytes. */
+	readBytes(): Promise<ArrayBuffer>;
+	/** A fetchable streaming URL for the file (Range-capable). */
+	getUrl(options?: PluginPreviewUrlOptions): string;
+	/**
+	 * Subscribe to on-disk changes of this file. The listener fires (debounced
+	 * by the host) whenever the file's contents change, letting previews update
+	 * live. Returns a Disposable; call dispose() to stop watching. A no-op for
+	 * files without a real path (url-only sources).
+	 */
+	watch(listener: () => void): Disposable;
+	/**
+	 * Host-provided audio metadata for local media files. Returns null when the
+	 * host cannot provide metadata, e.g. url-only sources or unsupported files.
+	 */
+	getAudioMetadata?(): Promise<PluginAudioMetadata | null>;
+}
+
+export interface PluginFilePreviewProps {
+	file: PluginPreviewFile;
+}
+
+/**
+ * A file handed to {@link PluginUiApi.previewFile} — the *opening* side of the
+ * global previewer, the mirror image of {@link PluginPreviewFile} (which is the
+ * *rendering* side). Bytes never cross over: the host reads the source itself.
+ *
+ * Exactly one of `path` (local absolute path) or `url` (host media / http URL)
+ * must be given. `path` is the shape the host's own file tree uses, so the
+ * previewer also offers "在 Finder 中显示" for it.
+ */
+export interface PluginPreviewFileRef {
+	/** Local absolute path. Requires the `fs.read` permission. */
+	path?: string;
+	/** Fetchable URL (host media URL or http/https). Requires `ui.slot.message`. */
+	url?: string;
+	/**
+	 * Display name **including the extension** — the previewer dispatches to a
+	 * renderer by this extension, not by `mimeType`. Optional for `path`
+	 * sources (the host falls back to the path's basename).
+	 */
+	name?: string;
+	mimeType?: string;
+	/** Byte size, shown in the previewer's download detail when known. */
+	size?: number;
+}
+
+export interface PluginFilePreviewContribution {
+	/** Lower-case extensions without the dot, e.g. ["svg"]. */
+	extensions: string[];
+	component: ComponentType<PluginFilePreviewProps>;
+}
+
+/**
+ * An activity-panel tab contributed by a plugin. Registering only adds the
+ * tab to the "addable pool" — it renders only after the user attaches it in
+ * the activity panel (scoped by session cwd).
+ */
+/** Host residency policy for an activity-panel tab. */
+export type PluginActivityTabRetention = "active-only" | "warm" | "pinned";
+
+export interface PluginActivityTabContribution {
+	/**
+	 * 标签栏上的默认相对位置，越小越靠前；缺省 100（排在全部内置标签卡之后）。
+	 *
+	 * 内置的取值可作标尺：文件 0、批量 10、浏览器 15、计划 18、待办 20、后台任务 30。
+	 * 下限被宿主钳到 10，「文件」永远是第一枚；用户拖拽出来的顺序优先于这个值。
+	 */
+	order?: number;
+	id: string;
+	label: string;
+	/**
+	 * Tab icon as a React node (not an iconify class string).
+	 * Omit to inherit the host-resolved brand icon from `plugin.json#icon`
+	 * (`ctx.plugin.iconUrl`). Prefer omitting for package brand icons so the
+	 * plugin never loads assets via absolute `/…` paths or host protocols.
+	 */
+	icon?: ReactNode;
+	component: ComponentType;
+	/**
+	 * 允许该标签卡出现的对话场景 slug 列表（镜像工具的 scope_use）。**fail-closed**：
+	 * 未声明/空数组 = 任何会话都不显示；声明后仅在列出的场景里出现（如
+	 * `["project", "conversation"]`）。会话页插槽据此随对话类型显隐。
+	 */
+	scope_use?: readonly ConversationScenario[];
+	/**
+	 * 注册后是否默认在标签栏里（缺省 `true`）。声明 `false` 表示「出现条件由我
+	 * 自己决定」——注册只是入池，之后由 {@link PluginUiApi.setActivityTabVisible}
+	 * 或 {@link PluginUiApi.openActivityTab} 决定何时上栏（如 git 只在仓库目录、
+	 * 工作台跟随输入栏 toggle）。无论哪种，用户仍可用减号手动隐藏。
+	 */
+	initiallyVisible?: boolean;
+	/**
+	 * Component residency while the tab is inactive. Defaults to `"warm"`:
+	 * visited tabs stay mounted in the host's bounded LRU cache. Use
+	 * `"active-only"` for cheap, stateless content and `"pinned"` for runtimes
+	 * that must never be evicted while available.
+	 */
+	retention?: PluginActivityTabRetention;
+	/**
+	 * @deprecated Use {@link PluginActivityTabContribution.retention}. `true`
+	 * maps to `"pinned"`; `false` maps to `"active-only"`.
+	 */
+	keepAliveWhenAvailable?: boolean;
+}
+
+/**
+ * 会话底部面板的组件贡献。
+ *
+ * 与 {@link PluginActivityTabContribution} 的分工：活动面板在右侧、一个贡献只有一个
+ * 实例、适合「看某个东西的当前状态」；底部面板横跨会话页下沿、可分屏、**同一个贡献
+ * 可以开多个实例**，适合终端、日志跟随这类长驻的工作面。
+ *
+ * meta 走命令式的 {@link PluginBottomPanelContextValue.setMeta} 而不是「每帧返回 meta
+ * 的 hook」：多实例场景下 hook 拿不到实例身份，两套 meta 事实源会在改名后打架。
+ */
+export interface PluginBottomPanelContribution {
+	/** Unique within the plugin; the host namespaces it as `plugin:<pluginId>:<id>`. */
+	id: string;
+	/** 「+」菜单里的名字，也是新实例的初始名。Supports `%catalogKey%` i18n lookup. */
+	label: string;
+	/**
+	 * Tab icon as a React node or an iconify class string.
+	 * Omit to inherit the host-resolved brand icon from `plugin.json#icon`.
+	 */
+	icon?: ReactNode;
+	/** Zero-props；实例上下文经 {@link useBottomPanel} 取。 */
+	component: ComponentType;
+	/**
+	 * 允许出现的对话场景 slug 列表。**fail-closed**：未声明/空数组 = 任何会话都不出现。
+	 */
+	scope_use?: readonly ConversationScenario[];
+	/** 「+」菜单里的相对位置，越小越靠前；缺省 100（排在内置之后）。 */
+	order?: number;
+	/**
+	 * 同一会话里最多能开几个实例；缺省不限。单例面板给 1，终端一类不设。
+	 */
+	maxInstances?: number;
+}
+
+/** Explicit conversation scope for an activity-tab command. */
+export interface PluginActivityTabTargetOptions {
+	/**
+	 * Absolute cwd whose activity-tab state should be changed. Omit to target
+	 * the conversation currently displayed by the host. Tool handlers and
+	 * background work should pass the triggering session's cwd so a foreground
+	 * navigation change cannot redirect the command to another conversation.
+	 */
+	cwd?: string;
+}
+
+/** Options for {@link PluginUiApi.openActivityTab}. */
+export interface PluginOpenActivityTabOptions extends PluginActivityTabTargetOptions {
+	/**
+	 * Desired panel width as it opens: a pixel number, or `"max"` to track the
+	 * widest the window allows — `"max"` keeps following window resizes until the
+	 * user drags the divider. The host clamps to its min/max bounds. Omit to keep
+	 * the user's current width.
+	 */
+	width?: number | "max";
+}
+
+export interface PluginCaptureRegion {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/**
+ * Decoration a plugin contributes to the next outgoing prompt while its input
+ * action is active. `metadata` is shallow-merged into the prompt request and
+ * `instructions` are appended as hidden, model-visible guidance.
+ */
+export interface PluginPromptDecoration {
+	metadata?: Record<string, unknown>;
+	/** Hidden plugin-owned instructions appended to the next agent turn. */
+	instructions?: string[];
+}
+
+/**
+ * An action button shown in a row beneath the AI input bar. Rendered as a
+ * toggle: clicking activates, clicking again deactivates. While active, the
+ * host calls `decoratePrompt()` before each send and merges the returned
+ * metadata into the outgoing prompt request. The plugin owns any side state
+ * (it is the same Module Federation instance as its other slots).
+ */
+export interface PluginInputActionContribution {
+	id: string;
+	label: string;
+	/** Button icon as a React node. Omit to inherit the plugin's `plugin.json#icon`. */
+	icon?: ReactNode;
+	/** Whether the action begins in the active state. Defaults to false. */
+	defaultActive?: boolean;
+	/**
+	 * 该输入动作所依赖的 agent 工具名。设置后，仅当该工具在当前会话处于激活（按工具的
+	 * scope_use 解析）时才显示这个 badge——避免在工具被场景屏蔽（如批量任务）时仍显示一个
+	 * 点了也无效的开关。不设则始终显示。例如「图像生成」设为 "generate_image"。
+	 */
+	requiresActiveTool?: string;
+	/**
+	 * 允许该 toggle 出现的对话场景 slug 列表（镜像工具的 scope_use）。**fail-closed**：
+	 * 未声明/空数组 = 任何会话都不显示；声明后仅在列出的场景里出现。与 `requiresActiveTool`
+	 * 取「与」：两者都满足才显示。
+	 */
+	scope_use?: readonly ConversationScenario[];
+	/**
+	 * When true, this plugin's agent contributions (tools / skills / MCP /
+	 * systemPrompt) and Activity Tabs are hard-isolated: inactive until this
+	 * toggle is on (ADR-0041, knowledgeMode-style). Default false.
+	 */
+	hardIsolation?: boolean;
+	/**
+	 * Fired when the user toggles the action; `active` is the new state. Return
+	 * `false` when `active` is true to VETO the activation (e.g. the plugin needs
+	 * configuration first) — the toggle stays off. Deactivation can't be vetoed.
+	 */
+	onToggle?(active: boolean): boolean | void;
+	/**
+	 * Called by the host before sending while the action is active. The
+	 * returned metadata is merged into the outgoing prompt request.
+	 */
+	decoratePrompt?(): PluginPromptDecoration | void;
+}
+
+/**
+ * A declarative, serializable descriptor for one card rendered beneath a
+ * message. `type` selects a registered card renderer; `key` drives cross-turn
+ * dedup (same key across turns = one logical card, shown only under its latest
+ * anchor); `payload` carries STABLE REFERENCES (e.g. image ids), not a content
+ * snapshot — the renderer resolves live state from it. `title`/`icon` label the
+ * card's tab (override the renderer's registration defaults). Rides a tool
+ * result's out-of-band `details.cards`; crosses the agent→host boundary, so
+ * `icon` is an icon-symbol string, not a node.
+ */
+export interface CardDescriptor {
+	type: string;
+	key?: string;
+	payload?: unknown;
+	title?: string;
+	icon?: string;
+}
+
+/** A pending (in-flight) tool call handed to a renderer's `pendingFor`. */
+export interface PluginPendingToolCall {
+	toolName: string;
+	args: Record<string, unknown>;
+}
+
+/**
+ * Props for a card renderer. `descriptor` is the card's data; `pending` is true
+ * while it was synthesized from an in-flight tool (render a skeleton); `message`
+ * is the anchoring conversation message.
+ */
+export interface PluginCardProps {
+	descriptor: CardDescriptor;
+	pending: boolean;
+	message: ConversationMessage;
+}
+
+/**
+ * A card renderer registered by a plugin, keyed by `type`. A descriptor whose
+ * `type` matches is rendered by `component`. `title`/`icon` are the default tab
+ * label/icon (a descriptor may override either). `pendingFor`, given an
+ * in-flight tool call, returns a provisional descriptor so a skeleton card
+ * appears (and claims a tab) before the tool's result lands — or null when this
+ * renderer doesn't handle that tool. The `type` must be globally unique across
+ * plugins (convention: prefix with the plugin id, e.g. "image-gen:preview").
+ */
+export interface PluginCardRendererContribution {
+	type: string;
+	component: ComponentType<PluginCardProps>;
+	title?: string;
+	/** Default tab icon as a React node. Omit to inherit the plugin's `plugin.json#icon`. */
+	icon?: ReactNode;
+	pendingFor?: (toolCall: PluginPendingToolCall) => CardDescriptor | null;
+}
+
+/** A tool call handed to a tool-call slot renderer. */
+export interface PluginToolCallSlotToolCall {
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	status: "pending" | "success" | "error" | "cancelled";
+	result?: string;
+	isError?: boolean;
+}
+
+export interface PluginToolCallSlotProps {
+	toolCall: PluginToolCallSlotToolCall;
+}
+
+/**
+ * A component that **replaces the host's default inline transcript rendering**
+ * for a specific tool (matched by `toolName`; first registered renderer wins).
+ * This is how a plugin renders rich UI for its OWN agent tool's output — plugin
+ * tools cannot emit `details.cards`, so the message card system (registerCardRenderer)
+ * does not serve them; the tool-call slot does.
+ */
+export interface PluginToolCallSlotContribution {
+	id: string;
+	toolName: string;
+	component: ComponentType<PluginToolCallSlotProps>;
+}
+
+/**
+ * A card rendered at the bottom of the message list for the LATEST turn — NOT
+ * bound to a tool call. The host mounts `component` in the footer slot and
+ * re-mounts it each session/turn; the plugin owns visibility entirely (it reads
+ * live state via SDK hooks — `useActiveConversation`, `useConversationMessages`,
+ * `ctx.conversation.on("turn-end")` — and returns `null` to render nothing,
+ * e.g. git renders only inside a repo that has changes). `scope_use` gates which
+ * conversation scenarios it may appear in (**fail-closed**, mirrors the other
+ * slots). `id` must be unique within the plugin.
+ */
+export interface PluginTurnCardContribution {
+	id: string;
+	component: ComponentType;
+	/**
+	 * 允许该 turn 卡出现的对话场景 slug 列表（镜像其它插槽的 scope_use）。**fail-closed**：
+	 * 未声明/空数组 = 任何会话都不显示；声明后仅在列出的场景里出现（如 `["project"]`）。
+	 */
+	scope_use?: readonly ConversationScenario[];
+}
+
+/**
+ * Options for {@link PluginUiApi.notify}. Surfaces a host toast so users can
+ * see plugin failures without opening DevTools.
+ */
+export interface PluginNotifyOptions {
+	/** Toast body. Required even when `error` is set (user-facing summary). */
+	message: string;
+	/** Defaults to plugin display name when omitted. */
+	title?: string;
+	/** Defaults to `"info"`; when `error` is set and variant omitted, host uses `"error"`. */
+	variant?: "info" | "success" | "warning" | "error";
+	/**
+	 * Optional failure cause. Host formats message + stack and adds a
+	 * "复制堆栈" action so the user can paste it into bug reports / chat.
+	 */
+	error?: unknown;
+	/**
+	 * Auto-dismiss delay in ms. `0` keeps the toast until dismissed.
+	 * Defaults: sticky (`0`) when `error` is present, otherwise host default (~4s).
+	 */
+	durationMs?: number;
+}
+
+/**
+ * 新会话上下文区的激活条件。**只能写本插件自己的东西**——填别人的 id 一律不生效。
+ *
+ * 这条限制是故意的：否则插件 A 可以声明「只要用户选了 B 的智能体我就上屏」，把别人的
+ * 使用场景劫持过来。
+ *
+ * 各字段取并集：任意一条命中即激活。至少要声明一条——全空等于「任何新会话都上屏」，宿主拒掉。
+ */
+export interface PluginNewSessionContextActivation {
+	/** 本插件在 manifest 里声明的智能体 id（不带 `plugin:` 前缀）。 */
+	agents?: readonly string[];
+	/** 本插件在 manifest 里声明的团队 id。省略则任意「含本插件成员的团队」都算命中。 */
+	teams?: readonly string[];
+	/** 本插件提供的 skill 名；用户在输入框里提到时命中。 */
+	skills?: readonly string[];
+	/** 本插件提供的 MCP server 名。 */
+	mcpServers?: readonly string[];
+}
+
+/** 用户在新会话页当前选中的对话目标。 */
+export interface PluginNewSessionTarget {
+	readonly kind: "agent" | "team";
+	/** Agent 档案 id 或团队 id。 */
+	readonly id: string;
+	/** 目标若由本插件贡献，这里给出 manifest 里的那个 id。 */
+	readonly contributedId?: string;
+}
+
+/**
+ * 渲染上下文。这是一个**会继续生长的对象**：后续新增字段不会破坏既有插件，所以按需
+ * 解构、不要假定它只有这些键。
+ */
+export interface PluginNewSessionContext {
+	readonly target: PluginNewSessionTarget | null;
+	/** 输入框里提到的、属于本插件的能力。 */
+	readonly mentionedAbilities: {
+		readonly skills: readonly string[];
+		readonly mcpServers: readonly string[];
+	};
+	/**
+	 * 输入框中尚未发送的文本。需要 `conversation.draft.read` 权限，未授予时恒为空串。
+	 *
+	 * 只在本贡献处于激活状态时提供——插件拿不到「用户随便打点什么」的全程流水。
+	 */
+	readonly draft: string;
+	/** 当前工作区目录；未选择项目时为 null。 */
+	readonly cwd: string | null;
+	/** 回写输入栏。刻意不提供「直接发送」：越过发送前这道关不属于本区职责。 */
+	readonly composer: {
+		/** 把资源挂成附件，随下一次发送带走。 */
+		attach(attachment: PluginPromptAttachment): void;
+		/**
+		 * 往草稿里插一段文本。始终是插入而非替换，免得抹掉用户已经打的内容。
+		 *
+		 * `position` 缺省为 `"end"`（光标处）。`"start"` 插到最前面，适合「先定题、细节
+		 * 由用户补」这类写法——用户点完多半光标并不在开头，位置只能由调用方定死。
+		 */
+		insertText(text: string, options?: { position?: "start" | "end" }): void;
+	};
+}
+
+/**
+ * 新会话页输入框下方的一块内容（`ui.slot.new-session-context`）。
+ *
+ * 与 input-action 的分工：那是发送前的开关，这是发送前的**上下文**——把用户接下来多半
+ * 要用到的素材摆出来。激活与否由宿主按 {@link PluginNewSessionContextActivation} 裁决，
+ * 插件只负责在被激活后渲染，因此拿不到用户逐键输入的全程内容。
+ *
+ * 同时有多个贡献上屏时，宿主会在该区域顶部出 tabbar；只有一个时直接渲染内容。
+ */
+export interface PluginNewSessionContextContribution {
+	id: string;
+	/** tabbar 上的标题；只有一个贡献上屏时不展示。 */
+	label: string;
+	/** tab 图标；省略时用插件自己的图标。 */
+	icon?: ReactNode;
+	activateWhen: PluginNewSessionContextActivation;
+	/**
+	 * 横向占位。`"input"`（默认）与输入框同宽，适合补充说明一类的窄内容；`"wide"` 铺满
+	 * 页面可用宽度，留给画廊、素材墙这类「内容本身就是主角」的东西——把它们压在输入框
+	 * 宽度里，每一项都会小到看不清。
+	 */
+	width?: "input" | "wide";
+	render(context: PluginNewSessionContext): ReactNode;
+}
+
+/**
+ * 宿主左侧侧边栏此刻的形态。给插件自适应布局用——尤其是沉浸式工作区视图：
+ * 侧边栏收起时宿主页头会长出「展开侧边栏」按钮并占住左上角，视图自己画在那一带的
+ * 东西需要让位。
+ */
+export interface PluginSidebarState {
+	/** 用户手动收起了侧边栏。窄屏下这一位仍然只反映用户意愿，不受窗口宽度影响。 */
+	collapsed: boolean;
+	/** 窗口窄到侧边栏改走悬浮覆盖，不再占据左侧一栏。 */
+	narrow: boolean;
+	/** 侧边栏此刻是否实际占着左边那一栏。等价于 `!collapsed && !narrow`，多数自适应只需要这一位。 */
+	visible: boolean;
+}
+
+export interface PluginUiApi {
+	registerGlobalSlot(contribution: PluginGlobalSlotContribution): Disposable;
+	registerAbilityDetailSlot(contribution: PluginAbilityDetailSlotContribution): Disposable;
+	/** Render an opaque setup URL as a host-themed PNG data URL. */
+	createQrCode(text: string): Promise<string>;
+	/**
+	 * Register a **workspace view**（工作区视图）— a full-page surface with its own
+	 * route and sidebar entry, on par with the host's built-in pages. Needs the
+	 * `ui.slot.workspace-view` permission (missing permission = **warn+noop**).
+	 *
+	 * The entry lands in the sidebar's「更多」收纳 by default; the user can pin it
+	 * to the top region or reorder it, and that layout is remembered.
+	 */
+	registerWorkspaceView(contribution: PluginWorkspaceViewContribution): Disposable;
+	/**
+	 * Register a **new-session context block** — content shown beneath the input
+	 * on the new-session page, surfaced only when the user's current selection or
+	 * draft matches {@link PluginNewSessionContextActivation}. Needs the
+	 * `ui.slot.new-session-context` permission (missing permission = **warn+noop**).
+	 */
+	registerNewSessionContext(contribution: PluginNewSessionContextContribution): Disposable;
+	/**
+	 * Navigate to one of this plugin's own workspace views. `viewId` is the
+	 * contribution id passed to {@link PluginUiApi.registerWorkspaceView}. No-op
+	 * when the view is not registered (e.g. permission missing).
+	 */
+	openWorkspaceView(viewId: string): void;
+	/**
+	 * Update (or clear, with `null`) the badge on one of this plugin's workspace
+	 * view entries. Re-registering the view is NOT a way to do this — it would
+	 * remount the whole surface — so live badges (unread counts, status dots)
+	 * must come through here.
+	 *
+	 * No-op when the view is not registered (e.g. permission missing).
+	 */
+	setWorkspaceViewBadge(viewId: string, badge: PluginNavBadge | null): void;
+	/**
+	 * Fill (or clear, with `null`) the host page header while one of this
+	 * plugin's workspace views is open. Call it from the view component (an
+	 * effect that re-runs on state change) and clear it on unmount — the host
+	 * keeps the entry keyed by view, and only applies it on that view's route.
+	 *
+	 * The header itself is never removed: it owns the window drag region and the
+	 * macOS traffic-light gutter. This is how a view takes it over instead.
+	 *
+	 * No-op when the view is not registered (e.g. permission missing).
+	 */
+	setWorkspaceViewHeader(viewId: string, header: PluginWorkspaceViewHeader | null): void;
+	/**
+	 * Register a preview component keyed by file extension. The host dispatches
+	 * registered extensions before its built-in fallback renderers; first
+	 * registrant wins on conflict.
+	 */
+	registerFilePreview(contribution: PluginFilePreviewContribution): Disposable;
+	/**
+	 * Register an activity-panel tab into the addable pool. The user attaches
+	 * it manually via the panel's "+" picker; attach records are keyed by the
+	 * session cwd.
+	 */
+	registerActivityTab(contribution: PluginActivityTabContribution): Disposable;
+	/**
+	 * Register a component into the session's bottom panel addable pool. The user
+	 * opens instances from the panel's "+" menu; one contribution can have several
+	 * instances in the same session, and each instance renames itself through
+	 * {@link useBottomPanel}.
+	 */
+	registerBottomPanel(contribution: PluginBottomPanelContribution): Disposable;
+	/**
+	 * Register a toggle action shown beneath the AI input bar. While active,
+	 * its `decoratePrompt()` annotates the next outgoing prompt.
+	 */
+	registerInputAction(contribution: PluginInputActionContribution): Disposable;
+	/**
+	 * Register a card renderer keyed by `type`. Cards rendered beneath a message
+	 * come from tool results' out-of-band `details.cards` (or `pendingFor` for
+	 * in-flight tools); the host resolves each card's `type` to a registered
+	 * renderer. Multiple cards under one message are shown as a tab-switcher
+	 * ("收纳") or a flat list.
+	 */
+	registerCardRenderer(contribution: PluginCardRendererContribution): Disposable;
+	/**
+	 * Register a renderer that replaces the host's default inline transcript UI
+	 * for a tool call (matched by `toolName`). The complement to card renderers:
+	 * use it to render UI for a plugin's own agent tool output.
+	 */
+	registerToolCallSlot(contribution: PluginToolCallSlotContribution): Disposable;
+	/**
+	 * Register a card rendered at the bottom of the message list for the latest
+	 * turn — NOT bound to a tool call. The host mounts the component in the
+	 * footer slot; the plugin owns visibility (return `null` to render nothing,
+	 * e.g. git renders only in a repo with changes). Gated by `scope_use`
+	 * (fail-closed). Needs the `ui.slot.turn-card` permission.
+	 */
+	registerTurnCard(contribution: PluginTurnCardContribution): Disposable;
+	/**
+	 * Register a keyboard shortcut scope on the host's shared ShortcutScopeStack
+	 * (same path as host UI: modal > overlay > surface > app). Needs
+	 * `ui.shortcuts.register`. Plugins cannot use kind `"app"` (reserved for
+	 * host-configurable global actions). Prefer {@link usePluginShortcutScope}
+	 * from React components with a module-captured `registerShortcutScope`.
+	 */
+	registerShortcutScope(contribution: PluginShortcutScopeContribution): Disposable;
+	/**
+	 * Programmatically attach (if needed) and activate one of this plugin's
+	 * own activity tabs in a conversation's activity panel. `tabId`
+	 * is the contribution id passed to registerActivityTab. Any payload (e.g.
+	 * which image to edit) is passed via the plugin's own in-memory state.
+	 *
+	 * Pass `options.width` to size the panel as it opens — a pixel number, or
+	 * `"max"` to expand it to the widest the current window allows (the host
+	 * still clamps to its min/max and auto-hides the sidebar when needed). Omit
+	 * to leave the user's current width untouched.
+	 *
+	 * Omit `options.cwd` for the conversation currently displayed by the host.
+	 * Tool handlers and background work should pass their session cwd explicitly.
+	 */
+	openActivityTab(tabId: string, options?: PluginOpenActivityTabOptions): void;
+	/**
+	 * 把本插件的某个活动面板标签卡在目标会话里上栏 / 下栏，**不激活也不展开
+	 * 面板**——`openActivityTab` 是「用户此刻要看它」，这个是「它现在该不该在
+	 * 栏里」。配合 `initiallyVisible: false` 使用，插件即可完全掌握自己标签卡的
+	 * 出现条件（如 git 只在仓库目录里上栏、工作台跟随输入栏 toggle）。
+	 *
+	 * 上栏记录按会话 cwd 持久化（ADR-0026），所以只需在条件变化时调用一次；
+	 * 用户随后用减号手动隐藏的结果不会被重复调用覆盖。缺省作用于宿主当前显示的
+	 * 会话；工具 handler 与后台任务应通过 `options.cwd` 传入自己的会话 cwd。既没有
+	 * 显式 cwd、也没有活动会话时为 no-op（无处记录）。
+	 */
+	setActivityTabVisible(tabId: string, visible: boolean, options?: PluginActivityTabTargetOptions): void;
+	/**
+	 * 直接设置活动面板宽度：像素值，或 `"max"` 表示「跟随窗口拉满」（宿主仍会夹到
+	 * 自己的 min/max 内，必要时自动收起侧边栏）。
+	 *
+	 * `"max"` 是一种持续状态而非一次性求值：窗口尺寸变化时面板跟着变宽变窄，直到
+	 * 用户拖动分隔条或有人写入具体像素为止。传数字则是一次性的固定宽度。
+	 *
+	 * 与 `openActivityTab(id, { width })` 的区别：那里的宽度只在标签卡首次 attach
+	 * 时生效（避免 activate 重放覆盖用户手拖的宽度）；这个是命令式的，每次调用都
+	 * 生效，供插件在自己的标签卡被激活、进入某种视图时按需调整。用户随后仍可拖动。
+	 */
+	setActivityPanelWidth(width: number | "max"): void;
+	/**
+	 * Bind or clear plugin-owned context for outgoing prompts. The host renders
+	 * its label/icon and carries a structured `context` as a versioned snapshot.
+	 * Attachments default to one-shot; `lifecycle: "sticky"` remains until the
+	 * plugin or user clears the capsule.
+	 */
+	setPromptAttachment(attachment: PluginPromptAttachment | null): void;
+	/**
+	 * Open the host's global full-screen image previewer for the given image.
+	 * Only the image reference (id/url) crosses over — bytes stay out-of-band.
+	 *
+	 * Pass `group` (e.g. all images of the message) to open as an image group:
+	 * the previewer shows a thumbnail strip + arrows and starts at `ref`.
+	 */
+	previewImage(ref: PluginImageRef, group?: PluginImageRef[]): void;
+	/**
+	 * Open the host's global file previewer for any file — the general form of
+	 * {@link PluginUiApi.previewImage}, which only takes image URLs. Accepts a
+	 * local absolute `path` (the shape the host's own file tree uses) as well as
+	 * a `url`; the previewer dispatches by the file's extension, so a file type
+	 * some plugin registered via `registerFilePreview` lands in that renderer.
+	 *
+	 * Pass `group` (e.g. all outputs of one run) to open as a group: images get
+	 * the thumbnail strip + arrows, and the previewer starts at `file`.
+	 *
+	 * Permissions: `fs.read` as soon as any entry carries a `path` (it hands a
+	 * local file to the host to read); `ui.slot.message` for url-only calls,
+	 * same gate as `previewImage`.
+	 */
+	previewFile(file: PluginPreviewFileRef, group?: PluginPreviewFileRef[]): void;
+	/**
+	 * Capture a rectangle in the current Vetta window and open the host save
+	 * dialog. Coordinates use renderer DIP values such as getBoundingClientRect().
+	 * Requires `ui.slot.activity-tab`.
+	 */
+	captureRegion(rect: PluginCaptureRegion, defaultFileName: string): Promise<string | null>;
+	/**
+	 * Copy an image to the system clipboard. Takes a `data:image/...;base64,`
+	 * URL and goes through the native clipboard, so it does not depend on the
+	 * renderer's `ClipboardItem` support. No permission required — the plugin
+	 * can only write what it already rendered.
+	 */
+	copyImage(dataUrl: string): Promise<void>;
+	/**
+	 * Hand a URL to the OS default browser (Electron `shell.openExternal`) —
+	 * NOT the in-app browser panel. Only `http:`/`https:` are accepted; the host
+	 * rejects every other protocol, so this cannot be used to launch arbitrary
+	 * schemes. Needs `shell.openExternal`.
+	 */
+	openExternal(url: string): Promise<void>;
+	/**
+	 * Show a global toast in the host UI (bottom-right). No permission required.
+	 * Prefer this over swallowing errors into opaque UI copy: pass `error` so
+	 * the host attaches a one-click "copy stack" action for the user.
+	 *
+	 * Capture `ctx.ui.notify` in `activate` if React components need it
+	 * (components do not receive `ctx`).
+	 */
+	notify(options: PluginNotifyOptions): void;
+	/**
+	 * 读当前侧边栏形态。无需权限——这是纯布局信息，不含任何用户数据。
+	 *
+	 * React 组件请改用 `useSidebarState()`：它会在状态变化时重渲染，不必自己订阅。
+	 * 这一对只为拿不到 hook 的地方准备（`activate()` 内、工具处理器、命令式绘制的画布）。
+	 */
+	getSidebarState(): PluginSidebarState;
+	/**
+	 * 订阅侧边栏形态变化——用户收起/展开侧边栏、或窗口跨过窄屏阈值时触发。
+	 * 返回 Disposable 取消订阅；请在插件失活时释放。
+	 *
+	 * 回调按值去重：拖窗口不会把它打成回调风暴，只有三元组真的变了才通知。
+	 */
+	onSidebarStateChanged(listener: (state: PluginSidebarState) => void): Disposable;
+}

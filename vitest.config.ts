@@ -9,6 +9,9 @@ export default defineConfig({
       '@shared': path.resolve(root, 'src/shared'),
       '@': path.resolve(root, 'src/renderer'),
       '@enso/pair': path.resolve(root, 'packages/pair/src/index.ts'),
+      '@vetta-org/plugin-sdk': path.resolve(root, 'src/renderer/features/design/host/sdk.ts'),
+      '@design-engine': path.resolve(root, 'resources/design/engine'),
+      '@design-agent': path.resolve(root, 'resources/design'),
       // 主进程模块顶层会 import electron，node 环境下用桩替换
       electron: path.resolve(root, 'test/stubs/electron.ts'),
       '@electron-toolkit/utils': path.resolve(root, 'test/stubs/electron-toolkit-utils.ts'),
@@ -17,6 +20,24 @@ export default defineConfig({
   test: {
     // 主进程逻辑跑在 node 环境；渲染层若日后加测试再按目录覆盖
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'packages/**/*.test.ts'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'design',
+          environment: 'happy-dom',
+          include: ['src/renderer/features/design/**/*.test.{ts,tsx}'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'default',
+          environment: 'node',
+          exclude: ['src/renderer/features/design/**', '**/node_modules/**'],
+          include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'packages/**/*.test.ts'],
+        },
+      },
+    ],
   },
 });
