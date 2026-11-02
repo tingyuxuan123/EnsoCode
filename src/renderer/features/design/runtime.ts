@@ -22,10 +22,11 @@ export function listRegisteredDesignTools(): Array<{
 }
 export function startDesignRuntime(): Promise<void> {
   if (started) return started;
-  started = (async () => {
+  const attempt = (async () => {
     const ctx = createDesignContext();
     const plugin = (await import('./vetta/src/index')).default;
     await plugin.activate(ctx);
+    // Listeners subscribe only after a successful activation, so a retry never doubles them.
     const api = window.electronAPI.design;
     api.onToolRequest((request: DesignToolRequestEvent) => {
       if (requests.has(request.requestId)) return;
@@ -65,10 +66,15 @@ export function startDesignRuntime(): Promise<void> {
         if (hookQueues.get(event.sessionId) === next) hookQueues.delete(event.sessionId);
       });
     });
-    const result = await api.registerRuntime({ viewingSessionId });
-    if (!result.ok) throw new Error(result.error);
   })();
-  return started;
+  // Registration with Main lives in setDesignViewingSession (re-sent on every session
+  // change), so a transient IPC failure is retried instead of being cached forever.
+  const guarded: Promise<void> = attempt.catch((error) => {
+    if (started === guarded) started = undefined;
+    throw error;
+  });
+  started = guarded;
+  return guarded;
 }
 export async function setDesignViewingSession(id: string | null): Promise<void> {
   viewingSessionId = id;

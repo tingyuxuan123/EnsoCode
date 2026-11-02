@@ -13,7 +13,7 @@ vi.mock('@/stores/settings', () => ({
 }));
 
 import { designHooks, designPromptProviders, useDesignRegistry } from './host/registry';
-import { listRegisteredDesignTools, startDesignRuntime } from './runtime';
+import { listRegisteredDesignTools, setDesignViewingSession, startDesignRuntime } from './runtime';
 
 afterEach(() => vi.unstubAllGlobals());
 it('activates upstream headlessly, registers all tools and replies through design IPC', async () => {
@@ -58,6 +58,8 @@ it('activates upstream headlessly, registers all tools and replies through desig
   expect(
     useDesignRegistry.getState().contributions.some((item) => item.kind === 'activity-tab')
   ).toBe(true);
+  // DesignRuntimeHost always reports the viewed session on mount (null included).
+  await setDesignViewingSession(null);
   expect(registerRuntime).toHaveBeenCalledWith({ viewingSessionId: null });
   invoke?.({
     requestId: 'sizes',
