@@ -5,6 +5,13 @@ const READ_SCOPE_COMMANDS: ReadonlySet<string> = new Set([
   'snapshot',
   'subscribe',
   'history',
+  'file-list',
+  'file-read',
+  'preview-list',
+  'preview-open',
+  'preview-frame',
+  'preview-refresh',
+  'preview-close',
   'push-subscribe',
   'push-unsubscribe',
   'presence',
@@ -31,31 +38,33 @@ export const isPairScope = (value: unknown): value is PairScope =>
 
 /** 写操作有专用回执时保留请求标识，让手机结算等待状态。 */
 export const scopeRejection = (command: PhoneToHost): HostToPhone =>
-  command.type === 'bot-send'
-    ? {
-        type: 'bot-send-result',
-        chatId: command.chatId,
-        deliveryId: command.deliveryId,
-        ok: false,
-        error: 'read-only',
-      }
-    : command.type === 'bot-new-session'
+  command.type === 'preview-input'
+    ? { type: 'preview-result', requestId: command.requestId, error: 'read-only' }
+    : command.type === 'bot-send'
       ? {
-          type: 'bot-new-session-result',
+          type: 'bot-send-result',
           chatId: command.chatId,
-          requestId: command.requestId,
+          deliveryId: command.deliveryId,
           ok: false,
           error: 'read-only',
         }
-      : command.type === 'bot-thread-create' || command.type === 'bot-thread-select'
+      : command.type === 'bot-new-session'
         ? {
-            type: 'bot-thread-result',
+            type: 'bot-new-session-result',
             chatId: command.chatId,
             requestId: command.requestId,
             ok: false,
             error: 'read-only',
           }
-        : { type: 'command-rejected', command: command.type, error: 'read-only' };
+        : command.type === 'bot-thread-create' || command.type === 'bot-thread-select'
+          ? {
+              type: 'bot-thread-result',
+              chatId: command.chatId,
+              requestId: command.requestId,
+              ok: false,
+              error: 'read-only',
+            }
+          : { type: 'command-rejected', command: command.type, error: 'read-only' };
 
 export function setScopeInList(
   list: readonly PairedDevice[],

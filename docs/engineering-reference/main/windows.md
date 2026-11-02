@@ -17,6 +17,9 @@ input: {
 窗口一律经 `createAppWindow()` 工厂创建，不要直接 `new BrowserWindow`。工厂统一处理了
 无边框样式、窗口状态持久化、可编辑区右键菜单、外链转系统浏览器、dev/prod 加载路径。
 
+配对 [网页预览](pair-preview.md) 的隐藏 offscreen 渲染器不是应用 UI：必须使用无 preload、
+沙箱、独立内存 session 的专用窗口，不走会附带应用权限的 `createAppWindow()`。
+
 单例窗口的模式见 `SettingsWindow.ts`：模块级变量持有引用，已存在则 `restore()` + `focus()`，
 `closed` 事件里置空。
 

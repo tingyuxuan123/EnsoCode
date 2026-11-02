@@ -171,6 +171,43 @@ describe('PairClient 缓存与续传', () => {
     await settle();
     return socket;
   }
+
+  it('文件能力由桌面声明，文件列表和分块回执走现有加密消息出口', async () => {
+    events.onFilesAvailable = vi.fn();
+    events.onFileReply = vi.fn();
+    const socket = await start();
+    socket.receive({ type: 'host-info', hostname: 'host', appVersion: '1' });
+    await settle();
+    expect(events.onFilesAvailable).toHaveBeenLastCalledWith(false);
+    socket.receive({ type: 'host-info', hostname: 'host', appVersion: '1', files: true });
+    const list = { type: 'file-list-result', requestId: 'list', files: [] };
+    const chunk = { type: 'file-read-result', requestId: 'read', data: '' };
+    socket.receive(list);
+    socket.receive(chunk);
+    await settle();
+    expect(events.onFilesAvailable).toHaveBeenLastCalledWith(true);
+    expect(events.onFileReply).toHaveBeenCalledWith(list);
+    expect(events.onFileReply).toHaveBeenCalledWith(chunk);
+  });
+  it('网页预览只在桌面声明能力后显示，未知或坏标识回执不分发', async () => {
+    events.onPreviewAvailable = vi.fn();
+    events.onPreviewReply = vi.fn();
+    const socket = await start();
+    socket.receive({ type: 'host-info', hostname: 'host', appVersion: '1' });
+    await settle();
+    expect(events.onPreviewAvailable).toHaveBeenLastCalledWith(false);
+    socket.receive({ type: 'host-info', hostname: 'host', appVersion: '1', preview: true });
+    const list = { type: 'preview-list-result', requestId: 'list', entries: [] };
+    const result = { type: 'preview-result', requestId: 'open', previewId: 'p' };
+    socket.receive(list);
+    socket.receive(result);
+    socket.receive({ type: 'preview-result', requestId: null });
+    await settle();
+    expect(events.onPreviewAvailable).toHaveBeenLastCalledWith(true);
+    expect(events.onPreviewReply).toHaveBeenCalledTimes(2);
+    expect(events.onPreviewReply).toHaveBeenCalledWith(list);
+    expect(events.onPreviewReply).toHaveBeenCalledWith(result);
+  });
   function subscription(socket: Socket) {
     const command = socket.sent.filter((item) => item.type === 'subscribe').at(-1);
     expect(command?.type).toBe('subscribe');

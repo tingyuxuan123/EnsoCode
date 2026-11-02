@@ -15,6 +15,8 @@ import {
   renameDevice,
   revokeDevice,
   setDeviceScope,
+  setPairFilePort,
+  setPairPreviewPort,
   setPairQueueActionListener,
   setPairResumeListener,
   setPairSessionConfigListener,
@@ -24,6 +26,7 @@ import {
   startPairing,
   updatePairCatalog,
 } from '../services/pairHost';
+import { createPairPreviewBrowser } from '../services/pairPreviewBrowser';
 import { isPairScope } from '../services/pairScope';
 import {
   adoptPairSessionHeadless,
@@ -33,8 +36,12 @@ import {
 } from '../services/pairSessionHost';
 import { sendToAllWindows } from '../windows/createAppWindow';
 import { isMainWindowAlive } from '../windows/MainWindow';
+import { createPairFilesPort } from './pairFiles';
+import { createPairPreviewsPort } from './pairPreview';
 
 export function registerPairHandlers(): void {
+  setPairFilePort(createPairFilesPort());
+  setPairPreviewPort(createPairPreviewsPort(createPairPreviewBrowser));
   // 状态变化广播回设置页（配对成功、手机上下线、重连）
   setPairStatusListener(() => {
     const status = getPairStatus();

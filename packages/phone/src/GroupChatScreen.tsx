@@ -44,6 +44,7 @@ import type { ConnState, SessionView } from './client';
 import { GroupThreadSwitcher, type GroupThreads } from './GroupThreadSwitcher';
 import { compressImages } from './image';
 import { readOnlyBanner } from './readOnly';
+import { WebPreview } from './WebPreview';
 
 export interface MemberPending {
   sessionId: string;
@@ -368,6 +369,11 @@ export function GroupChatScreen(props: Props) {
                 )}
               </div>
               <BotArtifacts target={{ chatId: props.chat.id, entryId: entry.id }} />
+              <div className="mt-1.5">
+                <WebPreview target={{ bot: { chatId: props.chat.id, entryId: entry.id } }}>
+                  网页预览
+                </WebPreview>
+              </div>
               <button
                 type="button"
                 onClick={() => props.onOpenProcess(entry.conversationId)}

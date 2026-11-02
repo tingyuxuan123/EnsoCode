@@ -12,6 +12,113 @@ import {
 } from './pairPolicy';
 
 describe('手机命令白名单', () => {
+  it('accepts bounded opaque preview commands and rejects every extra wire field', () => {
+    const commands = [
+      { type: 'preview-list', requestId: 'r', target: { sessionId: 's' } },
+      {
+        type: 'preview-open',
+        requestId: 'r',
+        target: { sessionId: 's' },
+        entryId: 'a'.repeat(64),
+        width: 390,
+        height: 844,
+      },
+      ...['preview-frame', 'preview-refresh', 'preview-close'].map((type) => ({
+        type,
+        requestId: 'r',
+        previewId: 'opaque',
+      })),
+      {
+        type: 'preview-input',
+        requestId: 'r',
+        previewId: 'opaque',
+        frameId: 'frame',
+        input: { kind: 'click', x: 1, y: 2 },
+      },
+    ];
+    for (const command of commands) {
+      expect(parsePhoneCommand(command)).toEqual({ ok: true, command });
+      for (const key of ['path', 'url', 'port', 'extra'])
+        expect(parsePhoneCommand({ ...command, [key]: 'forged' }).ok).toBe(false);
+      expect(parsePhoneCommand({ ...command, requestId: 'r'.repeat(101) }).ok).toBe(false);
+    }
+    const open = commands[1];
+    for (const width of [319, 1281, 390.5, NaN, Infinity])
+      expect(parsePhoneCommand({ ...open, width }).ok).toBe(false);
+    const input = commands.at(-1);
+    for (const invalid of [
+      { kind: 'click', x: Infinity, y: 0 },
+      { kind: 'click', x: -1, y: 0 },
+      { kind: 'scroll', deltaX: 2001, deltaY: 0 },
+      { kind: 'text', text: 'x'.repeat(2001) },
+      { kind: 'key', key: 'F12' },
+      { kind: 'key', key: 'Enter', extra: true },
+      { kind: 'text', text: 'ok', path: '/secret' },
+    ])
+      expect(parsePhoneCommand({ ...input, input: invalid }).ok).toBe(false);
+  });
+  it('accepts file requests only as rebuilt opaque IDs, never paths', () => {
+    const targets = [
+      { sessionId: 'session' },
+      { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } },
+      {
+        bot: {
+          chatId: '11111111-1111-4111-8111-111111111111',
+          conversationId: 'session',
+          messageIndex: 0,
+        },
+      },
+    ];
+    for (const target of targets) {
+      for (const command of [
+        { type: 'file-list', requestId: 'r', target },
+        { type: 'file-read', requestId: 'r', target, fileId: 'a'.repeat(64), offset: 0 },
+      ]) {
+        const parsed = parsePhoneCommand(command);
+        expect(parsed).toEqual({ ok: true, command });
+        if (parsed.ok) expect(parsed.command).not.toBe(command);
+        for (const key of ['path', 'sessionFile', 'cwd', 'rel', 'extra']) {
+          expect(parsePhoneCommand({ ...command, [key]: '/secret' }).ok).toBe(false);
+          expect(
+            parsePhoneCommand({ ...command, target: { ...target, [key]: '/secret' } }).ok
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('rejects dirty file offsets, oversized IDs and mixed targets', () => {
+    const command = {
+      type: 'file-read',
+      requestId: 'r',
+      target: { sessionId: 's' },
+      fileId: 'a'.repeat(64),
+      offset: 0,
+    };
+    for (const offset of [
+      -1,
+      0.5,
+      NaN,
+      Infinity,
+      '0',
+      null,
+      50 * 1024 * 1024 + 1,
+      Number.MAX_SAFE_INTEGER + 1,
+    ])
+      expect(parsePhoneCommand({ ...command, offset }).ok).toBe(false);
+    for (const patch of [
+      { requestId: '' },
+      { requestId: 'r'.repeat(101) },
+      { fileId: 'A'.repeat(64) },
+      { fileId: '../secret' },
+      { target: { sessionId: 's'.repeat(201) } },
+      { target: { sessionId: 's', bot: { chatId: 'chat', entryId: 'entry' } } },
+      { target: { bot: { chatId: 'chat', entryId: 'e', rel: 'secret' } } },
+      { target: { bot: { chatId: 'chat', entryId: 'e', conversationId: 's', messageIndex: 0 } } },
+    ])
+      expect(parsePhoneCommand({ ...command, ...patch }).ok).toBe(false);
+  });
+
   it('validates bot new-session IDs and explicit confirmation, dropping unknown fields', () => {
     const command = { type: 'bot-new-session', chatId: 'chat', requestId: 'request' };
     for (const confirmed of [undefined, false, true]) {

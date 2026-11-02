@@ -16,6 +16,13 @@ const READ_ONLY_ALLOWED = [
   'snapshot',
   'subscribe',
   'history',
+  'file-list',
+  'file-read',
+  'preview-list',
+  'preview-open',
+  'preview-frame',
+  'preview-refresh',
+  'preview-close',
   'push-subscribe',
   'push-unsubscribe',
   'presence',
@@ -32,6 +39,18 @@ const READ_ONLY_ALLOWED = [
 ];
 
 describe('配对作用域', () => {
+  it('rejects preview interaction with its request identity on read-only devices', () => {
+    expect(commandAllowedForScope('read', 'preview-input')).toBe(false);
+    expect(
+      scopeRejection({
+        type: 'preview-input',
+        requestId: 'r',
+        previewId: 'p',
+        frameId: 'f',
+        input: { kind: 'text', text: 'hello' },
+      })
+    ).toEqual({ type: 'preview-result', requestId: 'r', error: 'read-only' });
+  });
   it('旧记录缺省为 operate，脏值也按 operate', () => {
     expect(deviceScope(device('a'))).toBe('operate');
     expect(deviceScope({ ...device('a'), scope: 'admin' as never })).toBe('operate');

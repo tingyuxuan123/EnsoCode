@@ -1,6 +1,6 @@
 import type { PhoneToHost } from '@enso/pair';
 import { describe, expect, it } from 'vitest';
-import { artifactKey, BotArtifactsPort } from './botArtifactsPort';
+import { artifactKey, artifactMessageTarget, BotArtifactsPort } from './botArtifactsPort';
 
 const chatId = '11111111-1111-4111-8111-111111111111';
 const entry = { chatId, entryId: 'e1' };
@@ -19,6 +19,14 @@ describe('artifactKey', () => {
   it('distinguishes entry and turn targets', () => {
     expect(artifactKey(entry)).not.toBe(artifactKey(turn));
     expect(artifactKey(turn)).toBe(artifactKey({ ...turn }));
+  });
+  it('长私聊尾窗把显示下标映射到权威历史下标，乐观消息不能借用旧轮产物', () => {
+    expect(artifactMessageTarget(chatId, 'c1', [250, 251, 254], 2)).toEqual({
+      chatId,
+      conversationId: 'c1',
+      messageIndex: 254,
+    });
+    expect(artifactMessageTarget(chatId, 'c1', [250, 251, 254], 3)).toBeNull();
   });
 });
 

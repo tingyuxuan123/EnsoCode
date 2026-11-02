@@ -21,6 +21,18 @@ const KINDS = new Set(['image', 'markdown', 'html', 'pdf', 'text', 'other']);
 const SOURCES = new Set(['file', 'web', 'desktop', 'upload']);
 const IMAGE_TIMEOUT_MS = 30_000;
 
+export function artifactMessageTarget(
+  chatId: string,
+  conversationId: string,
+  indices: readonly number[],
+  localIndex: number
+): PairBotArtifactTarget | null {
+  const messageIndex = indices[localIndex];
+  return Number.isSafeInteger(messageIndex) && messageIndex >= 0
+    ? { chatId, conversationId, messageIndex }
+    : null;
+}
+
 export const artifactKey = (target: PairBotArtifactTarget): string =>
   'entryId' in target
     ? `${target.chatId}|e|${target.entryId}`

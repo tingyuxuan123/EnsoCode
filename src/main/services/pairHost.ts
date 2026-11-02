@@ -15,6 +15,7 @@ import {
   isConnectStuck,
   openFrame,
   type PairedDevice,
+  type PairFileTarget,
   type PairScope,
   type PairSyncCursor,
   type PhoneToHost,
@@ -70,6 +71,7 @@ import { readNotifyMainAgentOnly } from './notifications';
 import type { BotSessionAccess } from './pairBotFrames';
 import { PAIR_DIRECT_ENABLED, PAIR_STUN_SERVERS } from './pairDirectConfig';
 import { isDirectPeerAvailable, mainDirectPeerFactory, preloadDirectPeer } from './pairDirectPeer';
+import type { PairFileCommand, PairFilePort } from './pairFiles';
 import { flushChangedMeta, requestPairMeta } from './pairMetaFlush';
 import { startPairNetworkWatch } from './pairNetworkWatch';
 import {
@@ -87,6 +89,7 @@ import {
   powerSaveBlockerKind,
   shouldHoldPairPowerKeepAlive,
 } from './pairPowerKeepAlive';
+import type { PairPreviewCommand, PairPreviewPort } from './pairPreview';
 import { seedRelayHostCache } from './pairRelayLookup';
 import { openPairRelayWebSocket } from './pairRelayOpen';
 import { PairReplayLog } from './pairReplay';
@@ -139,6 +142,10 @@ interface Connection {
   direct: DirectLink;
   /** 手机当前订阅的会话（null = 列表页，不收正文） */
   subscribedId: string | null;
+  /** File replies survive same-session cursor resync, but not switching away and back. */
+  fileSubscriptionEpoch: number;
+  previewEpoch: number;
+  fileOperation?: { generation: number; ioEpoch: number };
   sinceIndex?: number;
   /** 待应答的 history 分页请求（beforeIndex）；下一个 snapshot 事件到达时切片发回 */
   pendingHistory?: number;
@@ -280,7 +287,30 @@ export type PairBotCommand = Extract<
       | 'bot-artifact-image';
   }
 >;
-export type PairReply = (message: HostToPhone) => Promise<boolean>;
+export type PairReply = (message: HostToPhone, valid?: () => boolean) => Promise<boolean>;
+
+let previewPort: PairPreviewPort | null = null;
+export function setPairPreviewPort(port: PairPreviewPort | null): void {
+  for (const conn of connections.values()) releasePreview(conn);
+  previewPort = port;
+  for (const conn of connections.values()) if (conn.phoneOnline) requestMeta(conn);
+}
+
+function releasePreview(conn: Connection): void {
+  conn.previewEpoch++;
+  previewPort?.release(conn.device.pairId);
+}
+
+/** Main authority/mode changes must tear down browsers, not merely hide their frames. */
+export function releasePairPreviews(): void {
+  for (const conn of connections.values()) releasePreview(conn);
+}
+
+let filePort: PairFilePort | null = null;
+
+export function setPairFilePort(port: PairFilePort | null): void {
+  filePort = port;
+}
 
 /**
  * Bot 模式挂点（ipc/pairBots 注入）：pairHost 只做传输。
@@ -301,6 +331,7 @@ export interface PairBotPort {
 let botPort: PairBotPort | null = null;
 
 export function setPairBotPort(port: PairBotPort | null): void {
+  if (botPort !== port) for (const conn of connections.values()) releasePreview(conn);
   botPort = port;
 }
 
@@ -444,6 +475,7 @@ export function stopPairHost(): void {
   cancelPairing();
   for (const conn of connections.values()) {
     conn.closed = true;
+    releasePreview(conn);
     conn.ioEpoch++;
     conn.syncRevision++;
     conn.voiceUploads.clear();
@@ -566,6 +598,7 @@ export function setDeviceScope(pairId: string, scope: PairScope): { ok: boolean;
   const conn = connections.get(pairId);
   const updated = next.find((d) => d.pairId === pairId);
   if (conn && updated) {
+    if (deviceScope(conn.device) !== deviceScope(updated)) releasePreview(conn);
     conn.device = updated;
     // host-info 指纹含 readOnly，变了即重发给在线手机
     requestMeta(conn);
@@ -614,6 +647,7 @@ function openConnection(device: PairedDevice): void {
   const existing = connections.get(device.pairId);
   if (existing) {
     existing.closed = true;
+    releasePreview(existing);
     existing.ioEpoch++;
     existing.syncRevision++;
     existing.voiceUploads.clear();
@@ -634,6 +668,8 @@ function openConnection(device: PairedDevice): void {
     dropRelay: null,
     direct: null as unknown as DirectLink,
     subscribedId: null,
+    fileSubscriptionEpoch: 0,
+    previewEpoch: 0,
     metaDirty: false,
     metaSending: false,
     phoneOnline: false,
@@ -689,6 +725,7 @@ function openConnection(device: PairedDevice): void {
 
 function connect(conn: Connection): void {
   if (conn.closed) return;
+  releasePreview(conn);
   const generation = ++conn.generation;
   const base = toWebSocketUrl(conn.device.relayUrl);
   const url = `${base}/v1/pair/${encodeURIComponent(conn.device.pairId)}?role=host&token=${encodeURIComponent(conn.device.token)}`;
@@ -700,8 +737,11 @@ function connect(conn: Connection): void {
 }
 
 function clearConnectionSubscription(conn: Connection): void {
+  releasePreview(conn);
   conn.ioEpoch++;
   conn.syncRevision++;
+  conn.fileSubscriptionEpoch++;
+  conn.fileOperation = undefined;
   conn.voiceUploads.clear();
   conn.receiveQueue = Promise.resolve();
   conn.sendQueue = Promise.resolve();
@@ -735,6 +775,7 @@ function attachHostSocket(conn: Connection, ws: WebSocket, generation: number): 
     conn.heartbeat = null;
     conn.ws = null;
     conn.dropRelay = null;
+    releasePreview(conn);
     // 直连还活着就不算手机离线：业务帧继续走 DataChannel（直连再掉时由 onTransportChange 补置离线）
     if (conn.direct.transport() !== 'direct') {
       conn.phoneOnline = false;
@@ -791,6 +832,7 @@ function attachHostSocket(conn: Connection, ws: WebSocket, generation: number): 
           resyncGuestMeta(conn);
           notifyStatus();
         } else if (control.type === 'peer-left') {
+          releasePreview(conn);
           conn.phoneOnline = false;
           conn.direct.peerOnline(false);
           if (conn.direct.transport() !== 'direct') clearConnectionSubscription(conn);
@@ -821,6 +863,7 @@ function forgetDevice(pairId: string): void {
   const conn = connections.get(pairId);
   if (conn) {
     conn.closed = true;
+    releasePreview(conn);
     conn.ioEpoch++;
     conn.syncRevision++;
     conn.voiceUploads.clear();
@@ -857,6 +900,130 @@ function scheduleReconnect(conn: Connection): void {
 
 function connectionCurrent(conn: Connection, generation: number, ioEpoch: number): boolean {
   return !conn.closed && conn.generation === generation && conn.ioEpoch === ioEpoch;
+}
+
+function previewTargetAccessible(conn: Connection, target: PairFileTarget): boolean {
+  return (
+    !('sessionId' in target) ||
+    (target.sessionId === conn.subscribedId &&
+      catalog.some((entry) => entry.id === target.sessionId) &&
+      botPort?.sessionAccess(target.sessionId) !== 'deny')
+  );
+}
+
+function handlePreviewCommand(
+  conn: Connection,
+  command: PairPreviewCommand,
+  generation: number,
+  ioEpoch: number
+): void {
+  const port = previewPort;
+  const epoch = conn.previewEpoch;
+  const scope = deviceScope(conn.device);
+  const current = () =>
+    connectionCurrent(conn, generation, ioEpoch) &&
+    conn.phoneOnline &&
+    conn.previewEpoch === epoch &&
+    previewPort === port &&
+    deviceScope(conn.device) === scope;
+  const unavailable: HostToPhone =
+    command.type === 'preview-list'
+      ? {
+          type: 'preview-list-result',
+          requestId: command.requestId,
+          entries: [],
+          error: 'unavailable',
+        }
+      : { type: 'preview-result', requestId: command.requestId, error: 'unavailable' };
+  if (!port || ('target' in command && !previewTargetAccessible(conn, command.target))) {
+    void send(conn, unavailable, current);
+    return;
+  }
+  const allowed = (target: PairFileTarget) => current() && previewTargetAccessible(conn, target);
+  const reply: PairReply = async (message, valid) => {
+    const guard = () => current() && (!valid || valid());
+    const sent = guard() ? await send(conn, message, guard) : false;
+    if (!sent && current()) releasePreview(conn);
+    return sent;
+  };
+  // Browser/history I/O cannot hold the receive queue: subscribe/abort remain responsive.
+  void port.handle(conn.device.pairId, command, reply, allowed).catch(() => {
+    if (current()) {
+      port.release(conn.device.pairId);
+      void reply(unavailable);
+    }
+  });
+}
+
+function fileTargetAccessible(conn: Connection, target: PairFileTarget): boolean {
+  if (
+    'sessionId' in target &&
+    (target.sessionId !== conn.subscribedId ||
+      !catalog.some((entry) => entry.id === target.sessionId) ||
+      botPort?.sessionAccess(target.sessionId) === 'deny')
+  )
+    return false;
+  try {
+    return filePort?.canAccess?.(target) ?? true;
+  } catch {
+    return false;
+  }
+}
+
+function fileUnavailable(command: PairFileCommand, error = 'unavailable'): HostToPhone {
+  return command.type === 'file-list'
+    ? { type: 'file-list-result', requestId: command.requestId, files: [], error }
+    : { type: 'file-read-result', requestId: command.requestId, error };
+}
+
+function handleFileCommand(
+  conn: Connection,
+  command: PairFileCommand,
+  generation: number,
+  ioEpoch: number
+): void {
+  const port = filePort;
+  const current = () => connectionCurrent(conn, generation, ioEpoch);
+  if (!port || !fileTargetAccessible(conn, command.target)) {
+    void send(conn, fileUnavailable(command), current);
+    return;
+  }
+  if (conn.fileOperation?.generation === generation && conn.fileOperation.ioEpoch === ioEpoch) {
+    void send(conn, fileUnavailable(command, 'busy'), current);
+    return;
+  }
+  let accessKey: string | null | undefined;
+  try {
+    accessKey = port.accessKey?.(command.target);
+  } catch {
+    void send(conn, fileUnavailable(command), current);
+    return;
+  }
+  const operation = { generation, ioEpoch };
+  conn.fileOperation = operation;
+  const subscriptionEpoch = conn.fileSubscriptionEpoch;
+  // Recheck both before encryption and after it, not merely when an async file read starts.
+  const accessible = () => {
+    try {
+      return (
+        current() &&
+        filePort === port &&
+        (!('sessionId' in command.target) || conn.fileSubscriptionEpoch === subscriptionEpoch) &&
+        fileTargetAccessible(conn, command.target) &&
+        port.accessKey?.(command.target) === accessKey
+      );
+    } catch {
+      return false;
+    }
+  };
+  const reply: PairReply = (message) =>
+    accessible() ? send(conn, message, accessible) : Promise.resolve(false);
+  void Promise.resolve()
+    .then(() => port.handle(command, reply))
+    .catch(() => reply(fileUnavailable(command)))
+    .finally(() => {
+      if (conn.fileOperation === operation) conn.fileOperation = undefined;
+    });
 }
 
 function enqueueFrame(
@@ -923,6 +1090,19 @@ async function handleFrame(
     }
   }
   switch (command.type) {
+    case 'preview-list':
+    case 'preview-open':
+    case 'preview-frame':
+    case 'preview-refresh':
+    case 'preview-close':
+    case 'preview-input':
+      handlePreviewCommand(conn, command, generation, ioEpoch);
+      break;
+    case 'file-list':
+    case 'file-read':
+      // Disk/history work must never block this connection's receive queue (e.g. abort/subscribe).
+      handleFileCommand(conn, command, generation, ioEpoch);
+      break;
     case 'prompt':
       agentBridge?.prompt(command.sessionId, command.text, command.images);
       break;
@@ -950,6 +1130,10 @@ async function handleFrame(
         !conn.pendingSync.answered &&
         conn.pendingSync.sessionId === command.sessionId;
       const revision = ++conn.syncRevision;
+      if (conn.subscribedId !== command.sessionId) {
+        conn.fileSubscriptionEpoch++;
+        releasePreview(conn);
+      }
       conn.subscribedId = command.sessionId;
       conn.sinceIndex = command.sync ? undefined : command.sinceIndex;
       // 换了订阅，旧会话的分页请求作废
@@ -1113,6 +1297,10 @@ async function handleFrame(
       conn.syncRevision++;
       conn.pendingSync = undefined;
       conn.syncLiveRevision = undefined;
+      if (conn.subscribedId !== command.sessionId) {
+        conn.fileSubscriptionEpoch++;
+        releasePreview(conn);
+      }
       conn.subscribedId = command.sessionId;
       /*
        * 会话已在 worker 侧起来，但 renderer 的 store 里没有它——桌面列表看不到，
@@ -1224,6 +1412,7 @@ function enqueueSend(
 }
 
 function send(conn: Connection, message: HostToPhone, guard?: SendGuard): Promise<boolean> {
+  if (message.type === 'bot-catalog' && !message.enabled) releasePreview(conn);
   return enqueueSend(conn, message, false, guard);
 }
 
@@ -1282,6 +1471,8 @@ async function sendMeta(conn: Connection): Promise<void> {
   const hostInfo = {
     hostname: os.hostname(),
     appVersion: app.getVersion(),
+    ...(filePort ? { files: true as const } : {}),
+    ...(previewPort ? { preview: true as const } : {}),
     ...(directReady ? { capabilities: ['direct-v1' as const], iceServers: PAIR_STUN_SERVERS } : {}),
     ...(speechAvailable() ? { voiceInput: true as const } : {}),
     ...(deviceScope(conn.device) === 'read' ? { readOnly: true as const } : {}),
@@ -1533,6 +1724,7 @@ export function updatePairCatalog(payload: {
   /** false：OAuth 暂态空列表，不能覆盖上一份真列表，也不能下发 */
   providersSettled?: boolean;
 }): void {
+  const previousCatalog = catalog;
   catalog = payload.catalog;
   catalogReady = true;
   pinnedOrder = payload.pinnedOrder ?? [];
@@ -1556,6 +1748,10 @@ export function updatePairCatalog(payload: {
     })),
   };
   for (const conn of connections.values()) {
+    const previous = previousCatalog.find((entry) => entry.id === conn.subscribedId);
+    const next = catalog.find((entry) => entry.id === conn.subscribedId);
+    if (previous && (!next || previous.projectId !== next.projectId || previous.cwd !== next.cwd))
+      releasePreview(conn);
     // 人对端在房才推：readyState 开着但 peer-left 时往 relay 白发且会误记 sentMeta
     if (conn.phoneOnline) requestMeta(conn);
   }
@@ -1571,8 +1767,13 @@ export function getPairProjects(): ProjectEntry[] {
 
 export function mutatePairCatalog(mutate: (entries: CatalogEntry[]) => CatalogEntry[]): void {
   if (!catalogReady) return;
+  const previousCatalog = catalog;
   catalog = mutate(catalog);
   for (const conn of connections.values()) {
+    const previous = previousCatalog.find((entry) => entry.id === conn.subscribedId);
+    const next = catalog.find((entry) => entry.id === conn.subscribedId);
+    if (previous && (!next || previous.projectId !== next.projectId || previous.cwd !== next.cwd))
+      releasePreview(conn);
     if (conn.phoneOnline) requestMeta(conn);
   }
 }

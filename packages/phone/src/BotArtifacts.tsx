@@ -8,6 +8,7 @@ import {
   type ImageRef,
   type ImageResult,
 } from './botArtifactsPort';
+import { FileDownloads } from './FileDownloads';
 
 export const BotArtifactsContext = createContext<{
   port: BotArtifactsPort;
@@ -123,6 +124,10 @@ export function BotArtifacts({ target }: { target: PairBotArtifactTarget }) {
               onOpen={() => setPreview({ ref: { rel: artifact.rel }, title: artifact.name })}
             />
           ))}
+          <FileDownloads target={{ bot: target }}>
+            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span>下载文件</span>
+          </FileDownloads>
         </div>
       )}
       {preview && (

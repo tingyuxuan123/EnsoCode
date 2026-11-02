@@ -138,6 +138,14 @@ export interface ClientEvents {
   /** 一条回复的产物卡片与 send_image 图（bot-artifacts 应答） */
   onBotArtifacts?(frame: Extract<HostToPhone, { type: 'bot-artifacts' }>): void;
   onBotArtifactImage?(frame: Extract<HostToPhone, { type: 'bot-artifact-image' }>): void;
+  onFilesAvailable?(available: boolean): void;
+  onFileReply?(
+    frame: Extract<HostToPhone, { type: 'file-list-result' | 'file-read-result' }>
+  ): void;
+  onPreviewAvailable?(available: boolean): void;
+  onPreviewReply?(
+    frame: Extract<HostToPhone, { type: 'preview-list-result' | 'preview-result' }>
+  ): void;
 }
 
 export class PairClient {
@@ -517,6 +525,8 @@ export class PairClient {
         break;
       case 'host-info':
         this.direct.hostInfo(payload);
+        this.events.onPreviewAvailable?.(payload.preview === true);
+        this.events.onFilesAvailable?.(payload.files === true);
         this.setVoiceInput(payload.voiceInput === true);
         this.events.onReadOnly?.(payload.readOnly === true);
         break;
@@ -625,6 +635,14 @@ export class PairClient {
         break;
       case 'bot-artifact-image':
         if (typeof payload.requestId === 'string') this.events.onBotArtifactImage?.(payload);
+        break;
+      case 'file-list-result':
+      case 'file-read-result':
+        if (typeof payload.requestId === 'string') this.events.onFileReply?.(payload);
+        break;
+      case 'preview-list-result':
+      case 'preview-result':
+        if (typeof payload.requestId === 'string') this.events.onPreviewReply?.(payload);
         break;
       case 'command-rejected':
         if (typeof payload.command === 'string')

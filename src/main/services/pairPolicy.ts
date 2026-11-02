@@ -1,6 +1,9 @@
 import {
   DIRECT_SIGNAL_MAX_CHARS,
   isPairSyncCursor,
+  PAIR_FILE_MAX_BYTES,
+  type PairFileTarget,
+  type PairPreviewInput,
   type PhoneToHost,
   VOICE_CHUNK_MAX_CHARS,
   VOICE_CHUNK_MAX_INDEX,
@@ -185,12 +188,158 @@ export interface SpawnWhitelist {
 
 export type CommandCheck = { ok: true; command: PhoneToHost } | { ok: false; error: string };
 
+const onlyKeys = (v: Record<string, unknown>, keys: readonly string[]): boolean =>
+  Object.keys(v).every((key) => keys.includes(key));
+
+export function parsePairFileTarget(value: unknown): PairFileTarget | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (onlyKeys(v, ['sessionId']) && isStr(v.sessionId) && v.sessionId.length <= 200)
+    return { sessionId: v.sessionId };
+  if (!onlyKeys(v, ['bot']) || !v.bot || typeof v.bot !== 'object' || Array.isArray(v.bot))
+    return null;
+  const bot = v.bot as Record<string, unknown>;
+  const keys =
+    'entryId' in bot ? ['chatId', 'entryId'] : ['chatId', 'conversationId', 'messageIndex'];
+  const target = onlyKeys(bot, keys) ? parseArtifactTarget(bot) : null;
+  return target ? { bot: target } : null;
+}
+
+export function parsePairFileCommand(
+  value: unknown
+): Extract<PhoneToHost, { type: 'file-list' | 'file-read' }> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const target = parsePairFileTarget(v.target);
+  if (!target || !isStr(v.requestId) || v.requestId.length > 100) return null;
+  if (v.type === 'file-list' && onlyKeys(v, ['type', 'requestId', 'target']))
+    return { type: v.type, requestId: v.requestId, target };
+  if (
+    v.type !== 'file-read' ||
+    !onlyKeys(v, ['type', 'requestId', 'target', 'fileId', 'offset']) ||
+    typeof v.fileId !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(v.fileId) ||
+    typeof v.offset !== 'number' ||
+    !Number.isSafeInteger(v.offset) ||
+    v.offset < 0 ||
+    v.offset > PAIR_FILE_MAX_BYTES
+  )
+    return null;
+  return { type: v.type, requestId: v.requestId, target, fileId: v.fileId, offset: v.offset };
+}
+
+const previewId = (value: unknown): value is string => isStr(value) && value.length <= 100;
+const boundedNumber = (value: unknown, min: number, max: number): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+
+function parsePreviewInput(value: unknown): PairPreviewInput | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    v.kind === 'click' &&
+    onlyKeys(v, ['kind', 'x', 'y']) &&
+    boundedNumber(v.x, 0, 1280) &&
+    boundedNumber(v.y, 0, 1200)
+  )
+    return { kind: v.kind, x: v.x, y: v.y };
+  if (
+    v.kind === 'scroll' &&
+    onlyKeys(v, ['kind', 'deltaX', 'deltaY']) &&
+    boundedNumber(v.deltaX, -2000, 2000) &&
+    boundedNumber(v.deltaY, -2000, 2000)
+  )
+    return { kind: v.kind, deltaX: v.deltaX, deltaY: v.deltaY };
+  if (
+    v.kind === 'text' &&
+    onlyKeys(v, ['kind', 'text']) &&
+    typeof v.text === 'string' &&
+    v.text.length <= 2000
+  )
+    return { kind: v.kind, text: v.text };
+  if (
+    v.kind === 'key' &&
+    onlyKeys(v, ['kind', 'key']) &&
+    typeof v.key === 'string' &&
+    [
+      'Enter',
+      'Tab',
+      'Escape',
+      'Backspace',
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+    ].includes(v.key)
+  )
+    return { kind: v.kind, key: v.key as Extract<PairPreviewInput, { kind: 'key' }>['key'] };
+  return null;
+}
+
+export function parsePairPreviewCommand(
+  value: unknown
+): Extract<PhoneToHost, { type: `preview-${string}` }> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (!previewId(v.requestId)) return null;
+  if (v.type === 'preview-list' || v.type === 'preview-open') {
+    const target = parsePairFileTarget(v.target);
+    if (!target) return null;
+    if (v.type === 'preview-list' && onlyKeys(v, ['type', 'requestId', 'target']))
+      return { type: v.type, requestId: v.requestId, target };
+    if (
+      v.type === 'preview-open' &&
+      onlyKeys(v, ['type', 'requestId', 'target', 'entryId', 'width', 'height']) &&
+      typeof v.entryId === 'string' &&
+      /^[a-f0-9]{64}$/.test(v.entryId) &&
+      boundedNumber(v.width, 320, 1280) &&
+      Number.isInteger(v.width) &&
+      boundedNumber(v.height, 240, 1200) &&
+      Number.isInteger(v.height)
+    )
+      return {
+        type: v.type,
+        requestId: v.requestId,
+        target,
+        entryId: v.entryId,
+        width: v.width,
+        height: v.height,
+      };
+    return null;
+  }
+  if (!previewId(v.previewId)) return null;
+  if (
+    (v.type === 'preview-frame' || v.type === 'preview-refresh' || v.type === 'preview-close') &&
+    onlyKeys(v, ['type', 'requestId', 'previewId'])
+  )
+    return { type: v.type, requestId: v.requestId, previewId: v.previewId };
+  if (
+    v.type === 'preview-input' &&
+    onlyKeys(v, ['type', 'requestId', 'previewId', 'frameId', 'input']) &&
+    previewId(v.frameId)
+  ) {
+    const input = parsePreviewInput(v.input);
+    return input
+      ? { type: v.type, requestId: v.requestId, previewId: v.previewId, frameId: v.frameId, input }
+      : null;
+  }
+  return null;
+}
+
 /** 结构校验：类型白名单 + 必填字段。通过后仍需业务校验（spawn 见 checkSpawn） */
 export function parsePhoneCommand(value: unknown): CommandCheck {
   if (typeof value !== 'object' || value === null) return { ok: false, error: 'not an object' };
   const v = value as Record<string, unknown>;
   if (typeof v.type === 'string' && v.type.startsWith('bot-')) return parseBotCommand(v);
+  if (typeof v.type === 'string' && v.type.startsWith('preview-')) {
+    const command = parsePairPreviewCommand(v);
+    return command ? { ok: true, command } : { ok: false, error: 'invalid preview request' };
+  }
   switch (v.type) {
+    case 'file-list':
+    case 'file-read': {
+      const command = parsePairFileCommand(v);
+      return command ? { ok: true, command } : { ok: false, error: 'invalid file request' };
+    }
     case 'prompt':
     case 'steer':
     case 'enqueue': {

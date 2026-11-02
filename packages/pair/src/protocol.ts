@@ -50,6 +50,45 @@ export const DIRECT_SIGNAL_MAX_CHARS = 16_384;
 
 export type PairSyncCursor = { epoch: string; seq: number };
 
+/** Opaque Main-derived identity; rel is display-only, never accepted in file requests. */
+export type PairFileTarget = { sessionId: string } | { bot: PairBotArtifactTarget };
+export interface PairPreviewEntry {
+  id: string;
+  label: string;
+  kind: 'html' | 'server';
+}
+export interface PairPreviewFrame {
+  frameId: string;
+  width: number;
+  height: number;
+  dataUrl: string;
+  title?: string;
+}
+export type PairPreviewInput =
+  | { kind: 'click'; x: number; y: number }
+  | { kind: 'scroll'; deltaX: number; deltaY: number }
+  | { kind: 'text'; text: string }
+  | {
+      kind: 'key';
+      key:
+        | 'Enter'
+        | 'Tab'
+        | 'Escape'
+        | 'Backspace'
+        | 'ArrowUp'
+        | 'ArrowDown'
+        | 'ArrowLeft'
+        | 'ArrowRight';
+    };
+export interface PairFileEntry {
+  id: string;
+  name: string;
+  size: number;
+  rel: string;
+}
+export const PAIR_FILE_CHUNK_BYTES = 384 * 1024;
+export const PAIR_FILE_MAX_BYTES = 50 * 1024 * 1024;
+
 export type PairSessionSync = {
   type: 'session-sync';
   sessionId: string;
@@ -62,6 +101,29 @@ export type PairSessionSync = {
 
 // ── 上行：手机 → Electron（加密 payload，白名单）─────────────────────────
 export type PhoneToHost =
+  | { type: 'preview-list'; requestId: string; target: PairFileTarget }
+  | {
+      type: 'preview-open';
+      requestId: string;
+      target: PairFileTarget;
+      entryId: string;
+      width: number;
+      height: number;
+    }
+  | {
+      type: 'preview-frame' | 'preview-refresh' | 'preview-close';
+      requestId: string;
+      previewId: string;
+    }
+  | {
+      type: 'preview-input';
+      requestId: string;
+      previewId: string;
+      frameId: string;
+      input: PairPreviewInput;
+    }
+  | { type: 'file-list'; requestId: string; target: PairFileTarget }
+  | { type: 'file-read'; requestId: string; target: PairFileTarget; fileId: string; offset: number }
   | { type: 'prompt'; sessionId: string; text: string; images?: AttachedImage[] }
   | { type: 'steer'; sessionId: string; text: string; images?: AttachedImage[] }
   | { type: 'abort'; sessionId: string }
@@ -158,6 +220,14 @@ export type PhoneToHost =
 
 /** 手机命令白名单：main 只接受这些 type，其余（set-approval-mode、设置写入等）拒绝 */
 export const PHONE_COMMAND_TYPES = [
+  'preview-list',
+  'preview-open',
+  'preview-frame',
+  'preview-refresh',
+  'preview-close',
+  'preview-input',
+  'file-list',
+  'file-read',
   'prompt',
   'steer',
   'abort',
@@ -513,6 +583,14 @@ export interface TerminalPalette {
 
 /** 下行信封：pair 自有的目录类帧 + 透传的现有 RendererAgentEvent（此处不重定义，按 unknown 透传） */
 export type HostToPhone =
+  | { type: 'preview-list-result'; requestId: string; entries: PairPreviewEntry[]; error?: string }
+  | {
+      type: 'preview-result';
+      requestId: string;
+      previewId?: string;
+      frame?: PairPreviewFrame;
+      error?: string;
+    }
   | {
       type: 'catalog';
       entries: CatalogEntry[];
@@ -551,6 +629,9 @@ export type HostToPhone =
       type: 'host-info';
       hostname: string;
       appVersion: string;
+      /** Missing on older desktops: file download UI must stay hidden. */
+      files?: true;
+      preview?: true;
       /** 直连能力声明；缺省（旧桌面）即不支持 */
       capabilities?: DirectCapability[];
       /** STUN 列表由 host 下发，guest 不硬编码，换地址只改桌面 */
@@ -625,4 +706,15 @@ export type HostToPhone =
       artifacts: PairBotArtifact[];
       media: PairBotMedia[];
     }
-  | { type: 'bot-artifact-image'; requestId: string; dataUrl?: string; error?: string };
+  | { type: 'bot-artifact-image'; requestId: string; dataUrl?: string; error?: string }
+  | { type: 'file-list-result'; requestId: string; files: PairFileEntry[]; error?: string }
+  | {
+      type: 'file-read-result';
+      requestId: string;
+      name?: string;
+      size?: number;
+      offset?: number;
+      /** Standard base64 of at most PAIR_FILE_CHUNK_BYTES raw bytes. */
+      data?: string;
+      error?: string;
+    };

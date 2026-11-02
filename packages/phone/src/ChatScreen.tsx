@@ -38,13 +38,16 @@ import { usePinnedTodos } from '@/components/chat/TodoBar';
 import { cn } from '@/lib/utils';
 import { buildTimeline } from '@/stores/sessions/timeline';
 import { BotArtifacts } from './BotArtifacts';
+import { artifactMessageTarget } from './botArtifactsPort';
 import { phoneChatHost } from './chatHost';
 import type { ConnState, SessionView } from './client';
+import { FileDownloads } from './FileDownloads';
 import { compressWithin, imageBudget } from './image';
 import { appendEchoMessages, type QueueSendEcho } from './queueSendEcho';
 import { readOnlyBanner } from './readOnly';
 import { SessionStatsLine } from './SessionStatsLine';
 import { setDisplayedConversation } from './stubs/sessions-store';
+import { WebPreview } from './WebPreview';
 
 interface Props {
   sessionId: string | null;
@@ -137,6 +140,11 @@ export function ChatScreen(props: Props) {
   const running = view?.status === 'running';
   const bot = props.bot;
   const readOnly = Boolean(bot?.readOnly || props.deviceReadOnly);
+  const entries = useMemo(
+    () => (view ? [...view.messages.entries()].sort((a, b) => a[0] - b[0]) : []),
+    [view]
+  );
+  const messageIndices = useMemo(() => entries.map(([index]) => index), [entries]);
   const artifactChatId = props.artifacts?.chatId;
   const artifactConversationId = props.artifacts?.conversationId;
   const host = useMemo(
@@ -144,19 +152,26 @@ export function ChatScreen(props: Props) {
       ...phoneChatHost({ sessionId, bot, deviceReadOnly: props.deviceReadOnly }),
       ...(artifactChatId && artifactConversationId
         ? {
-            turnFooter: (messageIndex: number) => (
-              <BotArtifacts
-                target={{
-                  chatId: artifactChatId,
-                  conversationId: artifactConversationId,
-                  messageIndex,
-                }}
-              />
-            ),
+            turnFooter: (localIndex: number) => {
+              const target = artifactMessageTarget(
+                artifactChatId,
+                artifactConversationId,
+                messageIndices,
+                localIndex
+              );
+              return target ? (
+                <>
+                  <BotArtifacts target={target} />
+                  <div className="mt-1.5">
+                    <WebPreview target={{ bot: target }}>网页预览</WebPreview>
+                  </div>
+                </>
+              ) : null;
+            },
           }
         : {}),
     }),
-    [sessionId, bot, props.deviceReadOnly, artifactChatId, artifactConversationId]
+    [sessionId, bot, props.deviceReadOnly, artifactChatId, artifactConversationId, messageIndices]
   );
   const slashCommands = useMemo<SlashCommand[]>(() => {
     if (bot) return [];
@@ -176,10 +191,6 @@ export function ChatScreen(props: Props) {
     return [...base, ...extra];
   }, [props.slashCommands, bot]);
 
-  const entries = useMemo(
-    () => (view ? [...view.messages.entries()].sort((a, b) => a[0] - b[0]) : []),
-    [view]
-  );
   const messages = useMemo<ProjectedMessage[]>(
     () =>
       appendEchoMessages(
@@ -320,6 +331,8 @@ export function ChatScreen(props: Props) {
               {props.projectName || props.stateLabel}
             </p>
           </div>
+          {sessionId && !bot && <FileDownloads key={sessionId} target={{ sessionId }} />}
+          {sessionId && !bot && <WebPreview key={`preview:${sessionId}`} target={{ sessionId }} />}
           {bot?.readOnly ? (
             <span className="h-9 w-9 shrink-0" />
           ) : (

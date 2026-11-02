@@ -14,6 +14,7 @@ import type {
 import { app, BrowserWindow, shell } from 'electron';
 import {
   artifactCandidates,
+  BOT_ARTIFACT_LIMIT,
   isOpenableArtifact,
   parseArtifactTarget,
   resolveArtifactFile,
@@ -27,7 +28,9 @@ import type { BotChatStore } from '../services/bots/chatStore';
 import { mediaFile } from '../services/bots/media';
 import { fitDataUrl, mediaMime } from '../services/bots/mediaImage';
 import { readBotSessionMessages } from '../services/bots/sessionMessages';
+import { PAIR_FILE_LIST_LIMIT, type PairFileSource } from '../services/pairFiles';
 import { getSourceAuthorityRegistry } from './agent';
+import { sessionWorktree } from './worktree';
 
 interface ContentServices {
   chats: BotChatStore;
@@ -88,7 +91,8 @@ interface TurnContent {
 /** 由聊天 + 条目 / 会话消息标识推导该轮消息与工作区根；会话必须属于该聊天 */
 async function artifactsOf(
   { chats }: ContentServices,
-  request: unknown
+  request: unknown,
+  limit = BOT_ARTIFACT_LIMIT
 ): Promise<TurnContent | null> {
   const target = parseArtifactTarget(request);
   const chat = target ? chats.get(target.chatId) : undefined;
@@ -124,6 +128,10 @@ async function artifactsOf(
   if (conversation?.bot?.chatId !== chat.id) return null;
   const project = authority?.project(conversation.projectId);
   if (!project) return null;
+  const worktree = sessionWorktree(conversationId);
+  if (worktree && worktree.projectId !== project.projectId) return null;
+  const root = worktree?.path ?? project.canonicalPath;
+  const stamp = JSON.stringify([conversation, project, worktree]);
   let turn = fallback;
   try {
     const messages = await readMessages(conversation.sessionFile);
@@ -132,6 +140,15 @@ async function artifactsOf(
   } catch {
     // 会话文件缺失 / 损坏：群条目仍可按回复正文提到的路径出卡片
   }
+  const current = authority?.conversation(conversationId);
+  if (
+    JSON.stringify([
+      current,
+      current && authority?.project(current.projectId),
+      sessionWorktree(conversationId),
+    ]) !== stamp
+  )
+    return null;
   const mediaDir = chats.mediaDir(chat.id);
   // 只认 send_image 工具结果，且副本必须真在本聊天的 media 目录里
   const media = sendImageItems(turn).filter(
@@ -143,13 +160,60 @@ async function artifactsOf(
     media.flatMap((item) => (item.source === 'file' && item.name ? [item.name] : []))
   );
   return {
-    root: project.canonicalPath,
+    root,
     mediaDir,
-    artifacts: resolveArtifacts(project.canonicalPath, artifactCandidates(turn)).filter(
+    artifacts: resolveArtifacts(root, artifactCandidates(turn), limit).filter(
       (artifact) => !sent.has(artifact.rel)
     ),
     media,
   };
+}
+
+/** Synchronous recheck for queued phone file replies; no session subscription is needed for groups. */
+export function phoneFileAccess({ chats }: ContentServices, request: unknown): boolean {
+  return phoneFileAccessKey({ chats }, request) !== null;
+}
+
+/** Same access decision plus an authority stamp, to invalidate in-flight replies on root/owner changes. */
+export function phoneFileAccessKey(
+  { chats }: Pick<ContentServices, 'chats'>,
+  request: unknown
+): string | null {
+  const target = parseArtifactTarget(request);
+  const chat = target && chats.get(target.chatId);
+  if (!target || !chat) return null;
+  let conversationId: string;
+  if ('entryId' in target) {
+    if (chat.kind !== 'group') return null;
+    const entry = chats.findEntry(chat.id, target.entryId);
+    if (entry?.kind !== 'bot') return null;
+    conversationId = entry.conversationId;
+  } else {
+    if (chat.kind !== 'direct') return null;
+    conversationId = target.conversationId;
+  }
+  const authority = getSourceAuthorityRegistry();
+  const conversation = authority?.conversation(conversationId);
+  const project = conversation && authority?.project(conversation.projectId);
+  const worktree = sessionWorktree(conversationId);
+  return conversation?.bot?.chatId === chat.id &&
+    project?.state === 'active' &&
+    project.kind !== 'ssh' &&
+    (!worktree || worktree.projectId === project.projectId)
+    ? JSON.stringify([target, conversation, project, worktree])
+    : null;
+}
+
+/** Download candidates share the exact turn authorization and group fallback used by artifact cards. */
+export async function phoneFileSource(
+  services: ContentServices,
+  target: BotArtifactTarget
+): Promise<PairFileSource | null> {
+  if (!phoneFileAccess(services, target)) return null;
+  const found = await artifactsOf(services, target, PAIR_FILE_LIST_LIMIT);
+  return found?.root && phoneFileAccess(services, target)
+    ? { root: found.root, artifacts: found.artifacts }
+    : null;
 }
 
 export async function listArtifacts(

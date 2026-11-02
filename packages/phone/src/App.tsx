@@ -35,12 +35,15 @@ import { type ConnState, PairClient, type SessionView } from './client';
 import { formatOnlineConnectionLabel } from './connectionLabel';
 import { pickActive, removeDevice, renameDevice, upsertDevice } from './deviceList';
 import { resolveDrawerSegment, saveDrawerSegment } from './drawerSegment';
+import { FileDownloadsRoot } from './FileDownloads';
+import { FileTransferPort } from './fileTransferPort';
 import { GroupChatScreen, type MemberPending } from './GroupChatScreen';
 import { parseSessionFromSearch, parseSessionId, takeStashedSessionId } from './launchSession';
 import { useMediaQuery, WIDE_LAYOUT_QUERY } from './media';
 import { NewSessionSheet } from './NewSessionSheet';
 import { OutboxBar } from './OutboxBar';
 import { PairScreen } from './PairScreen';
+import { PreviewPort } from './previewPort';
 import {
   isPushSupported,
   isStandalone,
@@ -169,6 +172,8 @@ export function App() {
   /** 已收到桌面下发的 push-config；旧版桌面不会发，开关据此提示升级 */
   const [pushConfigReady, setPushConfigReady] = useState(false);
   const [voiceInput, setVoiceInput] = useState(false);
+  const [filesAvailable, setFilesAvailable] = useState(false);
+  const [previewAvailable, setPreviewAvailable] = useState(false);
   /** 桌面把本设备设为只读（host-info.readOnly） */
   const [deviceReadOnly, setDeviceReadOnly] = useState(false);
   /** 有写操作被桌面以只读拦下：横幅改为明确提示 */
@@ -212,6 +217,22 @@ export function App() {
   const outboxRef = useRef<BotOutbox | null>(null);
   const artifactsPort = useMemo(
     () => new BotArtifactsPort((command) => clientRef.current?.send(command)),
+    []
+  );
+  const filesPort = useMemo(
+    () =>
+      new FileTransferPort((command) => {
+        if (!clientRef.current) return false;
+        clientRef.current.send(command);
+      }),
+    []
+  );
+  const previewPort = useMemo(
+    () =>
+      new PreviewPort((command) => {
+        if (!clientRef.current) return false;
+        clientRef.current.send(command);
+      }),
     []
   );
   const newSessionPort = useMemo(
@@ -340,6 +361,10 @@ export function App() {
     setHistoryPending(new Set());
     setTransport('relay');
     setVoiceInput(false);
+    setFilesAvailable(false);
+    setPreviewAvailable(false);
+    previewPort.reset();
+    filesPort.reset();
     setDeviceReadOnly(false);
     setReadOnlyRejected(false);
     setBotNewSessionSupported(false);
@@ -357,6 +382,8 @@ export function App() {
         if (next !== 'online') {
           outboxRef.current?.interrupted();
           artifactsPort.reset();
+          filesPort.reset();
+          previewPort.reset();
           newSessionPort.reset();
           threadPort.reset();
           setBotNewSessionSupported(false);
@@ -366,6 +393,10 @@ export function App() {
       },
       onBotArtifacts: (frame) => artifactsPort.receive(frame),
       onBotArtifactImage: (frame) => artifactsPort.receiveImage(frame),
+      onFilesAvailable: setFilesAvailable,
+      onFileReply: (frame) => filesPort.receive(frame),
+      onPreviewAvailable: setPreviewAvailable,
+      onPreviewReply: (frame) => previewPort.receive(frame),
       onBotNewSessionResult: (frame) => {
         newSessionPort.receive(frame);
         if (frame.error === READ_ONLY_ERROR) rejectedReadOnly();
@@ -544,6 +575,8 @@ export function App() {
       botRefreshRef.current = null;
       client.close();
       clientRef.current = null;
+      filesPort.reset();
+      previewPort.reset();
       newSessionPort.reset();
       threadPort.reset();
     };
@@ -1125,7 +1158,12 @@ export function App() {
   };
 
   return (
-    <div className="phone-app-root flex h-full min-h-0">
+    <FileDownloadsRoot
+      port={filesPort}
+      available={filesAvailable}
+      online={state === 'online'}
+      preview={{ port: previewPort, available: previewAvailable, readOnly: deviceReadOnly }}
+    >
       <SessionDrawer
         open={docked || drawerOpen}
         docked={docked}
@@ -1346,6 +1384,6 @@ export function App() {
           />
         )}
       </div>
-    </div>
+    </FileDownloadsRoot>
   );
 }
