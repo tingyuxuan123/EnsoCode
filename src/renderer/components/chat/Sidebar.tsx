@@ -50,7 +50,6 @@ import {
 import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ModeSwitch } from '@/components/bots/ModeSwitch';
 import { AddProjectDialog } from '@/components/chat/AddProjectDialog';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { ConversationStatusIndicator } from '@/components/chat/ConversationStatusIndicator';
@@ -104,6 +103,7 @@ import {
   MenuTrigger,
 } from '@/components/ui/menu';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsList, TabsTab } from '@/components/ui/tabs';
 import { addToast } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
@@ -130,7 +130,12 @@ import {
   sessionSwitchSlotIds,
   shownConversationCount,
 } from '@/stores/sessions/sessionSwitchSlots';
-import { selectSidebarConversations } from '@/stores/sessions/sidebarDirectory';
+import {
+  newSidebarConversationProjectId,
+  type SidebarView,
+  selectSidebarConversations,
+  sidebarViewOrder,
+} from '@/stores/sessions/sidebarDirectory';
 import { DIRTY_MAIN_TREE, worktreeHasPendingWork } from '@/stores/sessions/worktree';
 import { useSettingsStore } from '@/stores/settings';
 import {
@@ -157,10 +162,12 @@ const ARCHIVE_PURGE_DAYS = [7, 15, 30] as const;
 interface SidebarProps {
   width?: number;
   collapsed: boolean;
+  view: SidebarView;
+  onViewChange: (view: SidebarView) => void;
   onOpenSearch?: () => void;
 }
 
-export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
+export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: SidebarProps) {
   const { t, locale } = useI18n();
   const projects = useSettingsStore((state) => state.projects);
   const regularProjects = projects.filter((project) => project.kind !== 'scratch');
@@ -179,8 +186,11 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
   const conversations = useSessionsStore((state) =>
     selectSidebarConversations(state.conversations)
   );
-  const order = useSessionsStore((state) => state.order);
+  const allOrder = useSessionsStore((state) => state.order);
   const activeId = useSessionsStore((state) => state.activeId);
+  const activeProjectId = activeId ? conversations[activeId]?.projectId : undefined;
+  const temporaryView = view === 'conversations';
+  const order = sidebarViewOrder(allOrder, conversations, projects, view);
   const newConversation = useSessionsStore((state) => state.newConversation);
   const selectConversation = useSessionsStore((state) => state.selectConversation);
   const removeConversation = useSessionsStore((state) => state.removeConversation);
@@ -216,11 +226,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     localStorage.setItem('enso-collapsed-projects', JSON.stringify(next));
     setCollapsedProjects(next);
   };
-  const botModeEnabled = useSettingsStore((state) => state.botModeEnabled);
-  const newTaskProjectId =
-    (activeId ? conversations[activeId]?.projectId : undefined) ??
-    regularProjects[0]?.id ??
-    scratchProject?.id;
+  const newTaskProjectId = newSidebarConversationProjectId(projects, activeProjectId, 'projects');
   const startTemporaryChat = async () => {
     if (!scratchProject) return;
     try {
@@ -508,7 +514,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     orderedProjects.map((project) => project.id),
     archivedProjectIds
   );
-  const searching = listQuery.trim().length > 0;
+  const searching = !temporaryView && listQuery.trim().length > 0;
   const convMatches = (id: string) =>
     matchesQuery(listQuery, [conversations[id]?.title || t('New conversation')]);
   const inActiveGroup = (id: string) => {
@@ -522,10 +528,11 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     order,
     conversations,
     pinnedOrderIds,
-    projectIds: [...(scratchProject ? [scratchProject.id] : []), ...activeProjectIds],
+    projectIds: temporaryView ? (scratchProject ? [scratchProject.id] : []) : activeProjectIds,
     archivedProjectIds,
-    collapsedProjects,
-    revealedExtras,
+    collapsedProjects: temporaryView ? {} : collapsedProjects,
+    revealedExtras:
+      temporaryView && scratchProject ? { [scratchProject.id]: order.length } : revealedExtras,
     searching,
     matches: convMatches,
     projectMatches: (projectId) => {
@@ -582,6 +589,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
         .filter((group) => group.ids.length > 0)
     : archivedGroups;
   const archivedInSlice = (group: (typeof archivedGroups)[number]) => {
+    if (temporaryView) return group.projectId === scratchProject?.id;
     if (resolvedGroupId === ALL_GROUP_ID) return true;
     const project = projects.find((item) => item.id === group.projectId);
     if (!project) return resolvedGroupId === UNGROUPED_GROUP_ID;
@@ -745,147 +753,172 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     >
       {/* 收起后整栏让位：搜索 / 设置 / 询问 Enso / 展开入口都在全局图标轨上 */}
       <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
-        {/* 顶部：Code/Bot 分段（实验开关开启时）+ 全局搜索 */}
+        {/* 项目 / 临时对话分段 + 全局搜索；Code / Bot 切换常驻左侧图标轨 */}
         <div className="flex shrink-0 items-center gap-2 px-[12px] pt-[12px]">
-          {botModeEnabled ? (
-            <>
-              <ModeSwitch className="h-9 flex-1 [&>button]:flex-1 [&>button]:justify-center" />
-              <button
-                type="button"
-                onClick={onOpenSearch}
-                className="flex size-[calc(36rem/14)] shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                title={
-                  searchShortcut
-                    ? `${t('Search anything')} (${searchShortcut})`
-                    : t('Search anything')
-                }
-              >
-                <Search className="h-4 w-4" />
-              </button>
-            </>
-          ) : (
-            // 未开启 Bot 模式时没有分段切换，顶部直接是全宽搜索入口
-            <button
-              type="button"
-              onClick={onOpenSearch}
-              className="flex h-[calc(36rem/14)] min-w-0 flex-1 items-center gap-2 rounded-md bg-accent/60 px-2.5 text-[calc(13rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <Search className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-left">{t('Search anything')}</span>
-              {searchShortcut && (
-                <span className="shrink-0 text-[calc(11rem/14)]">{searchShortcut}</span>
-              )}
-            </button>
-          )}
-        </div>
-        {/* 新建任务：在当前（或第一个）项目开新会话，与 ⌘N 同一动作 */}
-        <button
-          type="button"
-          disabled={!newTaskProjectId}
-          onClick={() => newTaskProjectId && void newConversation(newTaskProjectId)}
-          className="mx-[12px] mt-[12px] flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
-        >
-          <CirclePlus className="size-[calc(17rem/14)] shrink-0 text-brand" />
-          <span className="text-[calc(14rem/14)]">{t('New task')}</span>
-          {newTaskShortcut && (
-            <span className="ml-auto rounded border border-border px-1 text-[calc(11rem/14)] text-muted-foreground">
-              {newTaskShortcut}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          disabled={!scratchProject}
-          onClick={() => void startTemporaryChat()}
-          className="mx-[12px] mt-1 flex h-[calc(32rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-        >
-          <MessageSquarePlus className="size-4 shrink-0" />
-          <span className="text-sm">{t('Start a temporary chat')}</span>
-        </button>
-        {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}
-        <div className="mt-[16px] flex shrink-0 items-center gap-1 px-4 text-[calc(12rem/14)] text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">{t('Projects')}</span>
+          <Tabs
+            value={view}
+            onValueChange={(value) => {
+              if (value !== 'projects' && value !== 'conversations') return;
+              onViewChange(value);
+              setListQuery('');
+            }}
+            className="min-w-0 flex-1"
+          >
+            <TabsList className="h-[calc(36rem/14)] w-full">
+              <TabsTab value="projects" className="h-full flex-1 text-[calc(13rem/14)]">
+                {t('Projects')}
+              </TabsTab>
+              <TabsTab value="conversations" className="h-full flex-1 text-[calc(13rem/14)]">
+                {t('Conversations')}
+              </TabsTab>
+            </TabsList>
+          </Tabs>
           <button
             type="button"
-            onClick={toggleAllProjects}
-            className="flex size-6 items-center justify-center rounded-md hover:bg-accent hover:text-foreground"
-            title={allProjectsFolded ? t('Expand all') : t('Collapse all')}
-            aria-label={allProjectsFolded ? t('Expand all') : t('Collapse all')}
+            onClick={onOpenSearch}
+            className="flex size-[calc(36rem/14)] shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={
+              searchShortcut ? `${t('Search anything')} (${searchShortcut})` : t('Search anything')
+            }
+            aria-label={t('Search anything')}
           >
-            <ChevronsUpDown className="size-3.5" />
+            <Search className="size-4" />
           </button>
-          <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
-            <PopoverTrigger
-              className="flex size-6 items-center justify-center rounded-md hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
-              title={t('Add project or group')}
-              aria-label={t('Add project or group')}
-            >
-              <Plus className="size-4" />
-            </PopoverTrigger>
-            <PopoverPopup
-              side="bottom"
-              align="end"
-              className="w-44 [&_[data-slot=popover-viewport]]:p-1"
-            >
-              {[
-                { icon: FolderPlus, label: t('Add project'), run: () => setAddOpen(true) },
-                {
-                  icon: Layers,
-                  label: t('New group'),
-                  run: () => setGroupEditor({ mode: 'create' }),
-                },
-              ].map(({ icon: Icon, label, run }) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    setAddMenuOpen(false);
-                    run();
-                  }}
-                  className={cn(
-                    POPOVER_ROW_CLASS,
-                    'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  )}
-                >
-                  <Icon className="size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                </button>
-              ))}
-            </PopoverPopup>
-          </Popover>
         </div>
-        <GroupChips
-          groups={projectGroups}
-          selectedId={resolvedGroupId}
-          counts={Object.fromEntries(
-            projectGroups.map((group) => [
-              group.id,
-              filterProjectsByGroup(orderedProjects, projectGroups, archivedProjectIds, group.id)
-                .length,
-            ])
-          )}
-          totalCount={
-            filterProjectsByGroup(orderedProjects, projectGroups, archivedProjectIds, ALL_GROUP_ID)
-              .length
-          }
-          recentCount={recentActiveProjects.length}
-          ungroupedCount={
-            filterProjectsByGroup(
-              orderedProjects,
-              projectGroups,
-              archivedProjectIds,
-              UNGROUPED_GROUP_ID
-            ).length
-          }
-          query={listQuery}
-          onQueryChange={setListQuery}
-          onSelect={selectGroup}
-          onAddGroup={() => setGroupEditor({ mode: 'create' })}
-          onEditGroup={(id) => setGroupEditor({ mode: 'edit', id })}
-        />
+        {/* 新建任务：在当前（或第一个）项目开新会话，与 ⌘N 同一动作 */}
+        {!temporaryView && (
+          <button
+            type="button"
+            disabled={!newTaskProjectId}
+            onClick={() => newTaskProjectId && void newConversation(newTaskProjectId)}
+            className="mx-[12px] mt-[12px] flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
+          >
+            <CirclePlus className="size-[calc(17rem/14)] shrink-0 text-brand" />
+            <span className="text-[calc(14rem/14)]">{t('New task')}</span>
+            {newTaskShortcut && (
+              <span className="ml-auto rounded border border-border px-1 text-[calc(11rem/14)] text-muted-foreground">
+                {newTaskShortcut}
+              </span>
+            )}
+          </button>
+        )}
+        {temporaryView && (
+          <button
+            type="button"
+            disabled={!scratchProject}
+            onClick={() => void startTemporaryChat()}
+            className="mx-[12px] mt-[12px] flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
+          >
+            <MessageSquarePlus className="size-[calc(17rem/14)] shrink-0 text-brand" />
+            <span className="text-[calc(14rem/14)]">{t('Start a temporary chat')}</span>
+            {newTaskShortcut && (
+              <span className="ml-auto rounded border border-border px-1 text-[calc(11rem/14)] text-muted-foreground">
+                {newTaskShortcut}
+              </span>
+            )}
+          </button>
+        )}
+        {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}
+        {!temporaryView && (
+          <>
+            <div className="mt-[16px] flex shrink-0 items-center gap-1 px-4 text-[calc(12rem/14)] text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate">{t('Projects')}</span>
+              <button
+                type="button"
+                onClick={toggleAllProjects}
+                className="flex size-6 items-center justify-center rounded-md hover:bg-accent hover:text-foreground"
+                title={allProjectsFolded ? t('Expand all') : t('Collapse all')}
+                aria-label={allProjectsFolded ? t('Expand all') : t('Collapse all')}
+              >
+                <ChevronsUpDown className="size-3.5" />
+              </button>
+              <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
+                <PopoverTrigger
+                  className="flex size-6 items-center justify-center rounded-md hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
+                  title={t('Add project or group')}
+                  aria-label={t('Add project or group')}
+                >
+                  <Plus className="size-4" />
+                </PopoverTrigger>
+                <PopoverPopup
+                  side="bottom"
+                  align="end"
+                  className="w-44 [&_[data-slot=popover-viewport]]:p-1"
+                >
+                  {[
+                    { icon: FolderPlus, label: t('Add project'), run: () => setAddOpen(true) },
+                    {
+                      icon: Layers,
+                      label: t('New group'),
+                      run: () => setGroupEditor({ mode: 'create' }),
+                    },
+                  ].map(({ icon: Icon, label, run }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => {
+                        setAddMenuOpen(false);
+                        run();
+                      }}
+                      className={cn(
+                        POPOVER_ROW_CLASS,
+                        'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="size-3.5 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                    </button>
+                  ))}
+                </PopoverPopup>
+              </Popover>
+            </div>
+            <GroupChips
+              groups={projectGroups}
+              selectedId={resolvedGroupId}
+              counts={Object.fromEntries(
+                projectGroups.map((group) => [
+                  group.id,
+                  filterProjectsByGroup(
+                    orderedProjects,
+                    projectGroups,
+                    archivedProjectIds,
+                    group.id
+                  ).length,
+                ])
+              )}
+              totalCount={
+                filterProjectsByGroup(
+                  orderedProjects,
+                  projectGroups,
+                  archivedProjectIds,
+                  ALL_GROUP_ID
+                ).length
+              }
+              recentCount={recentActiveProjects.length}
+              ungroupedCount={
+                filterProjectsByGroup(
+                  orderedProjects,
+                  projectGroups,
+                  archivedProjectIds,
+                  UNGROUPED_GROUP_ID
+                ).length
+              }
+              query={listQuery}
+              onQueryChange={setListQuery}
+              onSelect={selectGroup}
+              onAddGroup={() => setGroupEditor({ mode: 'create' })}
+              onEditGroup={(id) => setGroupEditor({ mode: 'edit', id })}
+            />
+          </>
+        )}
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-[12px] pt-1 pb-2">
-          {regularProjects.length === 0 && (
+        <div
+          className={cn(
+            'min-h-0 flex-1 space-y-2 overflow-y-auto px-[12px] pt-1 pb-2',
+            temporaryView && 'mt-[16px]'
+          )}
+        >
+          {!temporaryView && regularProjects.length === 0 && (
             <button
               type="button"
               onClick={() => setAddOpen(true)}
@@ -981,7 +1014,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
               </div>
             </PinnedDropZone>
           )}
-          {scratchProject && (
+          {temporaryView && scratchProject && (
             <div data-slot="scratch-section">
               <div className="flex items-center justify-between pr-1">
                 <SidebarSectionLabel>{t('Temporary chats')}</SidebarSectionLabel>
@@ -999,6 +1032,11 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                 {t('Temporary chats are kept until you delete them.')}
               </p>
               <div className="flex flex-col gap-y-0.5">
+                {projectConversationIds(order, conversations, scratchProject.id).length === 0 && (
+                  <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+                    {t('No conversations yet')}
+                  </p>
+                )}
                 {projectConversationIds(order, conversations, scratchProject.id)
                   .filter((id) => !searching || convMatches(id))
                   .map((id) => (
@@ -1020,7 +1058,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
               </div>
             </div>
           )}
-          {pendingProject && (
+          {!temporaryView && pendingProject && (
             <div className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-muted-foreground">
               <span className="flex size-4 shrink-0 items-center justify-center">
                 <Loader2 className="size-4 animate-spin" />
@@ -1053,6 +1091,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
             strategy={verticalListSortingStrategy}
           >
             {(() => {
+              if (temporaryView) return null;
               const projectNode = (project: Project) => {
                 const projectConversations = projectConversationIds(
                   order,

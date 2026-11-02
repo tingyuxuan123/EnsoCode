@@ -63,6 +63,10 @@ import {
 import { bindPairCatalogSync } from '@/stores/pairCatalog';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSessionsStore } from '@/stores/sessions';
+import {
+  newSidebarConversationProjectId,
+  type SidebarView,
+} from '@/stores/sessions/sidebarDirectory';
 import { runSessionClean } from '@/stores/sessions/storageClean';
 import { useSettingsStore } from '@/stores/settings';
 import { flushElectronPersist } from '@/stores/settings/storage';
@@ -93,9 +97,21 @@ export default function App() {
     return Number.isFinite(saved) && saved >= MIN_WIDTH ? Math.min(saved, MAX_WIDTH) : 264;
   });
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1');
+  const [sidebarView, setSidebarView] = useState<SidebarView>('projects');
   const { t } = useI18n();
   const chatWide = useSettingsStore((s) => s.chatWide);
   const activeConversationId = useSessionsStore((s) => s.activeId);
+  const activeProjectId = useSessionsStore((s) =>
+    s.activeId ? s.conversations[s.activeId]?.projectId : undefined
+  );
+  const scratchProjectId = useSettingsStore(
+    (s) => s.projects.find((project) => project.kind === 'scratch')?.id
+  );
+  // 搜索、通知等选到另一类会话时跟随选中项；手动切页和 Code / Bot 切换保留当前页。
+  useEffect(() => {
+    if (!activeConversationId || !activeProjectId) return;
+    setSidebarView(activeProjectId === scratchProjectId ? 'conversations' : 'projects');
+  }, [activeConversationId, activeProjectId, scratchProjectId]);
   const sideOpen = useSidePanelStore((s) =>
     activeConversationId ? Boolean(s.uiByConversation[activeConversationId]?.open) : false
   );
@@ -226,7 +242,11 @@ export default function App() {
     const startNewConversation = () => {
       const sessions = useSessionsStore.getState();
       const active = sessions.activeId ? sessions.conversations[sessions.activeId] : null;
-      const projectId = active?.projectId ?? useSettingsStore.getState().projects[0]?.id;
+      const projectId = newSidebarConversationProjectId(
+        useSettingsStore.getState().projects,
+        active?.projectId,
+        sidebarView
+      );
       if (projectId) void sessions.newConversation(projectId);
     };
     const onKeyDown = (e: KeyboardEvent) => {
@@ -314,7 +334,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [keybindings]);
+  }, [keybindings, sidebarView]);
 
   useEffect(() => {
     if (!sideOpen || !sideFullscreen) return;
@@ -350,8 +370,6 @@ export default function App() {
             <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
           ) : undefined
         }
-        // Code 模式的 Code|Bot 切换在侧栏顶部；Bot 模式侧栏不同，仍放标题栏中间
-        centered={botModeActive ? <ModeSwitch /> : undefined}
         actions={
           <>
             <button
@@ -395,7 +413,7 @@ export default function App() {
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
           onToggleSidebar={remoteNodeActive ? undefined : () => setCollapsed((v) => !v)}
-          workspaceTools={!remoteNodeActive && !botModeActive}
+          modeSwitch={botModeEnabled && !remoteNodeActive ? <ModeSwitch /> : undefined}
           onOpenSearch={
             remoteNodeActive
               ? undefined
@@ -420,6 +438,8 @@ export default function App() {
             <Sidebar
               width={collapsed ? undefined : width}
               collapsed={collapsed}
+              view={sidebarView}
+              onViewChange={setSidebarView}
               onOpenSearch={() => setSearchOpen(true)}
             />
             {!collapsed && <ResizeHandle onResize={handleResize} />}

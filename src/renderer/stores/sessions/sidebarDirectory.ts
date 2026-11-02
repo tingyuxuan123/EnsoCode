@@ -1,6 +1,37 @@
 import { conversationHasRunningChild } from '@shared/conversationDotTone';
 import { canSelectCoworkerTab } from './coworkerTabPolicy';
 
+export type SidebarView = 'projects' | 'conversations';
+
+export function newSidebarConversationProjectId(
+  projects: readonly { id: string; kind?: string }[],
+  activeProjectId: string | undefined,
+  view: SidebarView
+): string | undefined {
+  if (view === 'conversations') return projects.find((project) => project.kind === 'scratch')?.id;
+  const regular = projects.filter((project) => project.kind !== 'scratch');
+  return regular.find((project) => project.id === activeProjectId)?.id ?? regular[0]?.id;
+}
+
+/** 先按项目 / 临时对话收窄目录，活跃、置顶、归档与快捷键沿用同一范围。 */
+export function sidebarViewOrder(
+  order: readonly string[],
+  conversations: Record<string, { projectId: string } | undefined>,
+  projects: readonly { id: string; kind?: string }[],
+  view: SidebarView
+): string[] {
+  const scratchIds = new Set(
+    projects.filter((project) => project.kind === 'scratch').map((project) => project.id)
+  );
+  return order.filter((id) => {
+    const conversation = conversations[id];
+    return (
+      conversation !== undefined &&
+      scratchIds.has(conversation.projectId) === (view === 'conversations')
+    );
+  });
+}
+
 export interface SidebarDirectoryEntry {
   id: string;
   title: string;
