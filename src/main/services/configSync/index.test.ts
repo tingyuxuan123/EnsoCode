@@ -56,6 +56,90 @@ afterAll(() => {
 });
 
 describe('config sync sender-bound import flow', () => {
+  it.each([
+    { change: 'same', mode: 'merge' },
+    { change: 'changed', mode: 'merge' },
+    { change: 'same', mode: 'replace' },
+    { change: 'changed', mode: 'replace' },
+  ] as const)('同步复核模型 $change（$mode）时按本机授权边界处理', async ({ change, mode }) => {
+    const reviewer = { providerId: 'review-provider', modelId: 'review-model' };
+    const provider = {
+      id: 'review-provider',
+      name: 'Review',
+      api: 'openai-completions',
+      apiKey: 'local',
+      baseUrl: 'https://example.test',
+      enabled: true,
+      models: [{ id: 'review-model' }, { id: 'other' }],
+    };
+    settings.patchSettingsState('providers', [provider]);
+    settings.patchSettingsState('approvalReviewer', reviewer);
+    const file = join(userData, `review-${change}-${mode}.enso-config`);
+    await service.exportConfigToPath({ includeSecrets: false }, file);
+    settings.patchSettingsState(
+      'approvalReviewer',
+      change === 'changed' ? { ...reviewer, modelId: 'other' } : reviewer
+    );
+    settings.patchSettingsState('approvalAutoManage', true);
+    try {
+      const opened = await service.openImportForSender(52, file);
+      expect(opened.ok).toBe(true);
+      if (!opened.ok) return;
+      expect(await service.previewImportForSender(52, opened.token, undefined, mode)).toMatchObject(
+        { ok: true }
+      );
+      expect(await service.commitImportForSender(52, opened.token, mode)).toMatchObject({
+        ok: true,
+      });
+      const persisted = JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8'));
+      expect(persisted['enso-settings'].state.approvalAutoManage).toBe(change === 'same');
+    } finally {
+      settings.patchSettingsState('approvalReviewer', null);
+      settings.patchSettingsState('approvalAutoManage', false);
+      settings.patchSettingsState('providers', []);
+      settings.flushSettings();
+    }
+  });
+  it.each(['same', 'name', 'baseUrl', 'api', 'apiKey', 'oauthAccountKey'])(
+    '同步事务检查复核模型实际配置：%s',
+    (change) => {
+      const provider = {
+        id: 'review-provider',
+        name: 'Review',
+        api: 'openai-completions',
+        apiKey: 'local',
+        baseUrl: 'https://example.test',
+        enabled: true,
+        models: [{ id: 'review-model' }],
+      };
+      settings.patchSettingsState('providers', [provider]);
+      settings.patchSettingsState('approvalReviewer', {
+        providerId: provider.id,
+        modelId: 'review-model',
+      });
+      settings.patchSettingsState('approvalAutoManage', true);
+      try {
+        const nextProvider = change === 'same' ? provider : { ...provider, [change]: 'changed' };
+        expect(
+          settings.commitSettingsTransaction(
+            settings.settingsFingerprint(settings.readSettings()),
+            {
+              providers: [nextProvider],
+            }
+          )
+        ).toMatchObject({ ok: true });
+        const persisted = JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8'));
+        expect(persisted['enso-settings'].state.approvalAutoManage).toBe(
+          change === 'same' || change === 'name'
+        );
+      } finally {
+        settings.patchSettingsState('approvalReviewer', null);
+        settings.patchSettingsState('approvalAutoManage', false);
+        settings.patchSettingsState('providers', []);
+        settings.flushSettings();
+      }
+    }
+  );
   it.each(['merge', 'replace'] as const)(
     '代码搜索账号不进入导出包，%s 导入旧禁用列表仍保持本机关停及账号',
     async (mode) => {

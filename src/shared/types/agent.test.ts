@@ -88,6 +88,91 @@ const model = {
   settingsProviderId: 'provider-entry-1',
 };
 const task = { text: 'Configure theme', images: [], fileMentions: [] };
+
+describe('approval reviewer classifier protocol boundaries', () => {
+  const classifier = { provider: 'typesafe', modelId: 'jev', apiKey: 'fixture-secret' };
+  it('allows exactly classifier-only management fields, on spawn and live updates', () => {
+    for (const allowThreshold of [0.85, 0.9, 0.95]) {
+      const command = { type: 'set-approval-reviewer', classifier, managed: true, allowThreshold };
+      expect(parseAgentCommand(command)).toEqual(command);
+      expect(
+        parseAgentCommand({
+          type: 'spawn-parent',
+          identity: parent,
+          cwd: '/tmp',
+          model,
+          approvalReviewerClassifier: classifier,
+          approvalReviewerManaged: true,
+          approvalReviewerAllowThreshold: allowThreshold,
+        })
+      ).not.toBeNull();
+    }
+    for (const extra of [
+      { model },
+      { managed: false },
+      { managed: 'true' },
+      { allowThreshold: 0.99 },
+      { allowThreshold: NaN },
+      { allowThreshold: Infinity },
+      { allowThreshold: '0.9' },
+      { extra: true },
+    ]) {
+      expect(parseAgentCommand({ type: 'set-approval-reviewer', classifier, ...extra })).toBeNull();
+    }
+    expect(parseAgentCommand({ type: 'set-approval-reviewer', model, managed: true })).toBeNull();
+    expect(
+      parseAgentCommand({ type: 'set-approval-reviewer', model, allowThreshold: 0.95 })
+    ).toBeNull();
+    expect(
+      parseAgentCommand({
+        type: 'set-approval-reviewer',
+        classifier: { ...classifier, baseUrl: 'https://untrusted' },
+      })
+    ).toBeNull();
+  });
+  it('validates audit hashes/probabilities and fallback reasons', () => {
+    const request = {
+      requestId: 'a',
+      actionHash: 'a'.repeat(64),
+      tool: 'computer',
+      kind: 'command',
+      summary: 'run',
+      reviewFallback: 'timeout',
+    };
+    const event = { type: 'approval-request', identity: parent, seq: 1, request };
+    expect(parseAgentWorkerEvent(event)).toEqual(event);
+    expect(
+      parseAgentWorkerEvent({ ...event, request: { ...request, actionHash: 'bad' } })
+    ).toBeNull();
+    expect(
+      parseAgentWorkerEvent({ ...event, request: { ...request, reviewFallback: 'bad' } })
+    ).toBeNull();
+    const message = {
+      role: 'toolResult',
+      content: [],
+      approvalReview: {
+        verdict: 'deny',
+        model: 'jev',
+        actionHash: request.actionHash,
+        allow: 0.6,
+        ask: 0.3,
+        block: 0.1,
+      },
+    };
+    expect(
+      parseAgentWorkerEvent({ type: 'message-upsert', identity: parent, seq: 2, index: 0, message })
+    ).not.toBeNull();
+    expect(
+      parseAgentWorkerEvent({
+        type: 'message-upsert',
+        identity: parent,
+        seq: 2,
+        index: 0,
+        message: { ...message, approvalReview: { ...message.approvalReview, allow: 0.99 } },
+      })
+    ).toBeNull();
+  });
+});
 const proof = {
   spawnSpecId: SPAWN_SPEC_ID,
   typeKey: 'agent:enso',

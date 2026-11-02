@@ -276,6 +276,9 @@ export interface SettingsState {
   memoryLanguage: string;
   /** 助手代审模型；null = 该档不可用 */
   approvalReviewer: DefaultModelRef | null;
+  /** Explicit device-local opt-in; classifiers only, never changes session approval mode. */
+  approvalAutoManage: boolean;
+  approvalAllowThreshold: number;
   /** 上次选的审批档；null = 新会话仍按代审可用性默认 */
   lastApprovalMode: ApprovalMode | null;
   /** 新会话默认是否开启推理；缺省 true */
@@ -437,6 +440,8 @@ export interface SettingsState {
   setMemoryChatModel: (modelId: string) => void;
   setMemoryLanguage: (language: string) => void;
   setApprovalReviewer: (model: DefaultModelRef | null) => void;
+  setApprovalAutoManage: (enabled: boolean) => void;
+  setApprovalAllowThreshold: (threshold: number) => void;
   setLastApprovalMode: (mode: ApprovalMode) => void;
   // Skill actions
   /** 按技能目录路径去重，返回实际新增数量 */

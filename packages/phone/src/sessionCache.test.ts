@@ -135,6 +135,24 @@ const data = (
 });
 
 describe('phone session cache', () => {
+  it('保留退回人工原因与受保护动作标记', async () => {
+    const cache = createPhoneCacheStore({ backend: new MemoryBackend(), now: () => 1_000 });
+    const rich = data();
+    rich.sessions[0].view.approvals = [
+      {
+        requestId: 'apr',
+        tool: 'bash',
+        kind: 'command',
+        summary: 'delete',
+        reviewFallback: 'timeout',
+        protected: 'delete',
+      },
+    ];
+    await cache.save('pair', rich);
+    expect((await cache.load('pair'))?.sessions[0].view.approvals).toEqual(
+      rich.sessions[0].view.approvals
+    );
+  });
   it('按 pair 隔离，并原子恢复 Map 正文与同步游标', async () => {
     const backend = new MemoryBackend();
     const cache = createPhoneCacheStore({ backend, now: () => 1_000 });

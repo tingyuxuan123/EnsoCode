@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ApprovalReviewFallback, ApprovalReviewRecord } from '@shared/approvalReviewRecord';
 import { APPROVAL_TIMEOUT_ERROR } from '@shared/humanRequestTimeout';
 import type {
   ApprovalDecision,
@@ -7,6 +9,8 @@ import type {
   ApprovalRequestInfo,
   ProtectedActionCategory,
 } from '@shared/types/agent';
+import { approvalReviewArguments, computeApprovalActionHash } from './approvalReview';
+import { rememberApprovalReview } from './approvalReviewRecords';
 import { classifyProtectedTool } from './protectedActions';
 import { extractWriteTargetPaths } from './writeScope';
 
@@ -17,10 +21,29 @@ interface PendingApproval {
   settle(result: ApprovalResult): void;
 }
 
+export type ApprovalReviewResult =
+  | { decision: 'auto_allow' | 'block'; rationale?: string; record?: ApprovalReviewRecord }
+  | { decision: 'deny'; message: string; record?: ApprovalReviewRecord }
+  | {
+      decision: 'ask_user';
+      rationale?: string;
+      fallback?: ApprovalReviewFallback;
+      record?: ApprovalReviewRecord;
+    };
+
+export interface ApprovalReviewContext {
+  exactArguments?: string;
+  argumentsHash?: string;
+  recordScope?: string;
+  isCurrent?: () => boolean;
+  /** Delay allow audit publication until the caller's final execution checks pass. */
+  onAllowReview?: (record: ApprovalReviewRecord) => void;
+}
 export type ApprovalReviewFn = (
   info: ApprovalRequestInfo,
-  signal: AbortSignal | undefined
-) => Promise<{ decision: 'auto_allow' | 'ask_user' | 'block'; rationale?: string }>;
+  signal: AbortSignal | undefined,
+  context?: ApprovalReviewContext
+) => Promise<ApprovalReviewResult>;
 
 export interface ApprovalGateOptions {
   review?: ApprovalReviewFn;
@@ -40,15 +63,33 @@ export class ApprovalGate {
   private sessionAllowed = new Set<string>();
   private pending = new Map<string, PendingApproval>();
   private counter = 0;
+  private readonly id = randomUUID();
+  private currentMode: ApprovalMode;
+  private revocation = 0;
+  get revision(): number {
+    return this.revocation;
+  }
 
   constructor(
-    public mode: ApprovalMode,
+    mode: ApprovalMode,
     private readonly onRequest: (info: ApprovalRequestInfo) => void,
     private readonly onResolve: (requestId: string) => void,
     private readonly options?: ApprovalGateOptions
-  ) {}
+  ) {
+    this.currentMode = mode;
+  }
+
+  get mode(): ApprovalMode {
+    return this.currentMode;
+  }
+  set mode(mode: ApprovalMode) {
+    if (mode === this.currentMode) return;
+    this.cancelAll();
+    this.currentMode = mode;
+  }
 
   get protectedFloor(): boolean {
+    if (this.mode === 'assistant') return true;
     if (this.options?.protectedFloor !== true) return false;
     return !(this.options.exemptFull === true && this.mode === 'full');
   }
@@ -83,31 +124,45 @@ export class ApprovalGate {
     signal: AbortSignal | undefined,
     toolCallId?: string,
     filePaths?: string[],
-    protectedCategory?: ProtectedActionCategory
+    protectedCategory?: ProtectedActionCategory,
+    context?: ApprovalReviewContext
   ): Promise<ApprovalResult> {
-    const requestId = `apr-${++this.counter}-${Date.now()}`;
+    const requestId = `apr-${this.id}-${++this.counter}`;
+    const actionHash = computeApprovalActionHash({
+      requestId,
+      toolCallId,
+      tool,
+      kind,
+      summary,
+      argumentsHash: context?.argumentsHash,
+      scope: context?.recordScope,
+    });
     let info: ApprovalRequestInfo = {
       requestId,
       tool,
       kind,
       summary,
+      actionHash,
       ...(filePaths?.length ? { filePaths: [...filePaths] } : {}),
       ...(toolCallId ? { toolCallId } : {}),
       ...(protectedCategory ? { protected: protectedCategory } : {}),
     };
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let settled = false;
-      const settle = (result: ApprovalResult) => {
+      const controller = new AbortController();
+      const settle = (result: ApprovalResult, error?: Error) => {
         if (settled) return;
         settled = true;
         this.pending.delete(requestId);
         signal?.removeEventListener('abort', onAbort);
+        controller.abort();
         this.onResolve(requestId);
-        resolve(result);
+        if (error) reject(error);
+        else resolve(result);
       };
       const onAbort = () => settle('cancel');
-      const askHuman = () => {
-        info = { ...info, phase: undefined };
+      const askHuman = (fallback?: ApprovalReviewFallback) => {
+        info = { ...info, phase: undefined, ...(fallback ? { reviewFallback: fallback } : {}) };
         const timeoutMs = this.options?.humanTimeoutMs;
         if (timeoutMs) info = { ...info, expiresAt: Date.now() + timeoutMs };
         this.pending.set(requestId, { info, settle });
@@ -130,10 +185,27 @@ export class ApprovalGate {
       this.pending.set(requestId, { info, settle });
       this.onRequest(info);
       void Promise.resolve()
-        .then(() => review(info, signal))
+        .then(() => (settled ? undefined : review({ ...info }, controller.signal, context)))
         .then((result) => {
-          if (settled) return;
+          if (settled || !result) return;
+          if (context?.isCurrent && !context.isCurrent()) {
+            settle('cancel');
+            return;
+          }
+          if (result.record && result.record.actionHash !== actionHash) {
+            askHuman('invalid');
+            return;
+          }
+          if (
+            result.record &&
+            result.record.verdict !== 'allow' &&
+            toolCallId &&
+            context?.recordScope
+          ) {
+            rememberApprovalReview(context.recordScope, toolCallId, result.record);
+          }
           if (result.decision === 'auto_allow') {
+            if (result.record?.verdict === 'allow') context?.onAllowReview?.(result.record);
             settle('allow');
             return;
           }
@@ -141,7 +213,11 @@ export class ApprovalGate {
             settle('block');
             return;
           }
-          askHuman();
+          if (result.decision === 'deny') {
+            settle('block', new Error(result.message));
+            return;
+          }
+          askHuman(result.decision === 'ask_user' ? result.fallback : undefined);
         })
         .catch(() => {
           if (!settled) askHuman();
@@ -153,6 +229,7 @@ export class ApprovalGate {
   respond(requestId: string, decision: ApprovalDecision): void {
     const entry = this.pending.get(requestId);
     if (!entry) return;
+    if (entry.info.phase === 'reviewing') return;
     if (decision === 'allowSession' && !entry.info.protected) {
       this.sessionAllowed.add(entry.info.tool);
     }
@@ -166,11 +243,12 @@ export class ApprovalGate {
 
   /** abort / 会话终止：全部按取消收尾 */
   cancelAll(): void {
+    this.revocation++;
     for (const entry of [...this.pending.values()]) entry.settle('cancel');
   }
 
   snapshot(): ApprovalRequestInfo[] {
-    return [...this.pending.values()].map((entry) => entry.info);
+    return [...this.pending.values()].map((entry) => ({ ...entry.info }));
   }
 }
 
@@ -205,6 +283,10 @@ export function withApproval(
   return {
     ...definition,
     async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const revision = gate.revision;
+      const argumentsHash = computeApprovalActionHash(params);
+      let allowReview: ApprovalReviewRecord | undefined;
+      const recordScope = ctx?.sessionManager?.getSessionId();
       const protectedCategory = gate.protectedFloor
         ? classifyProtectedTool(definition.name, kind, params)
         : null;
@@ -221,10 +303,26 @@ export function withApproval(
             signal,
             toolCallId,
             filePaths,
-            protectedCategory ?? undefined
+            protectedCategory ?? undefined,
+            {
+              argumentsHash,
+              exactArguments: approvalReviewArguments(params),
+              recordScope,
+              onAllowReview: (record) => {
+                allowReview = record;
+              },
+              isCurrent: () => computeApprovalActionHash(params) === argumentsHash,
+            }
           )
         );
       }
+      if (
+        signal?.aborted ||
+        gate.revision !== revision ||
+        computeApprovalActionHash(params) !== argumentsHash
+      )
+        throw new Error('Approval cancelled: context or tool arguments changed');
+      if (allowReview && recordScope) rememberApprovalReview(recordScope, toolCallId, allowReview);
       return definition.execute(toolCallId, params, signal, onUpdate, ctx);
     },
   };
@@ -239,6 +337,8 @@ export function withProtectedFloor(
   return {
     ...definition,
     async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const revision = gate.revision;
+      const argumentsHash = computeApprovalActionHash(params);
       const protectedCategory = gate.protectedFloor
         ? classifyProtectedTool(definition.name, kind, params)
         : null;
@@ -252,10 +352,17 @@ export function withProtectedFloor(
             signal,
             toolCallId,
             undefined,
-            protectedCategory
+            protectedCategory,
+            { argumentsHash, isCurrent: () => computeApprovalActionHash(params) === argumentsHash }
           )
         );
       }
+      if (
+        signal?.aborted ||
+        gate.revision !== revision ||
+        computeApprovalActionHash(params) !== argumentsHash
+      )
+        throw new Error('Approval cancelled: context or tool arguments changed');
       return definition.execute(toolCallId, params, signal, onUpdate, ctx);
     },
   };

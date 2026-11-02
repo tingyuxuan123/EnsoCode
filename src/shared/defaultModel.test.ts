@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultApprovalMode,
+  isUsableApprovalReviewer,
   type ModelCredentialContext,
   modelUsability,
   resolveChatModel,
@@ -36,6 +37,28 @@ const ready = (...keys: string[]): ModelCredentialContext => ({
 const oauthError: ModelCredentialContext = {
   oauthCredentials: { status: 'error', error: 'auth unavailable' },
 };
+
+describe('classifier approval reviewer availability', () => {
+  it('requires enabled provider, credentials and an enabled listed model without enabling chat use', () => {
+    const p = provider('typesafe', ['jev-latest'], {
+      api: 'typesafe-system-one',
+      baseUrl: 'https://api.typesafe.ai/v1/',
+    });
+    const ref = { providerId: p.id, modelId: 'jev-latest' };
+    expect(isUsableApprovalReviewer(ref, [p], ready())).toBe(true);
+    expect(modelUsability(ref, [p], ready())).toBe('classifier-only');
+    for (const candidate of [
+      { ...p, enabled: false },
+      { ...p, apiKey: '' },
+      { ...p, models: [] },
+      { ...p, models: [{ id: 'jev-latest', enabled: false }] },
+      { ...p, oauthAccountKey: 'typesafe' },
+    ]) {
+      expect(isUsableApprovalReviewer(ref, [candidate], ready())).toBe(false);
+    }
+    expect(defaultApprovalMode(ref, [p], ready(), 'full')).toBe('full');
+  });
+});
 
 describe('modelUsability detailed reasons', () => {
   it('区分 provider/model 缺失或 disabled、API key 缺失与 OAuth ready-missing', () => {

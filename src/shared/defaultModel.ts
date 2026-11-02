@@ -2,7 +2,12 @@ import { eligibleOauthPoolAccountKeys, isOauthAccountPool } from './oauthAccount
 import { isClassifierOnlyProvider } from './providerCatalog';
 import type { ModelProvider } from './types';
 import type { ApprovalMode, ThinkingLevel } from './types/agent';
-import { findVirtualModel, isVirtualRef, type VirtualModelEntry } from './virtualModels';
+import {
+  classifierProviderFor,
+  findVirtualModel,
+  isVirtualRef,
+  type VirtualModelEntry,
+} from './virtualModels';
 
 export interface DefaultModelRef {
   providerId: string;
@@ -178,6 +183,34 @@ export function isUsableModel(
   return modelUsability(selection, providers, credentials, virtualModels) === 'usable';
 }
 
+export function isUsableApprovalClassifier(
+  selection: DefaultModelRef | null,
+  providers: readonly ModelProvider[]
+): boolean {
+  if (!selection) return false;
+  const provider = providers.find((entry) => entry.id === selection.providerId);
+  if (!provider?.enabled || !isClassifierOnlyProvider(provider) || !classifierProviderFor(provider))
+    return false;
+  if (
+    !provider.apiKey?.trim() ||
+    provider.oauthAccountKey ||
+    provider.oauthAccountPool !== undefined
+  )
+    return false;
+  return provider.models.some((model) => model.id === selection.modelId && model.enabled !== false);
+}
+
+export function isUsableApprovalReviewer(
+  reviewer: DefaultModelRef | null,
+  providers: readonly ModelProvider[],
+  credentials: ModelCredentialContext
+): boolean {
+  return (
+    isUsableModel(reviewer, providers, credentials) ||
+    isUsableApprovalClassifier(reviewer, providers)
+  );
+}
+
 /** 新会话缺省审批档：优先上次档；assistant 仅在代审模型可用时保留，否则 full。 */
 export function defaultApprovalMode(
   reviewer: DefaultModelRef | null,
@@ -185,7 +218,7 @@ export function defaultApprovalMode(
   credentials: ModelCredentialContext,
   lastMode?: ApprovalMode | null
 ): ApprovalMode {
-  const reviewerUsable = isUsableModel(reviewer, providers, credentials);
+  const reviewerUsable = isUsableApprovalReviewer(reviewer, providers, credentials);
   if (lastMode === 'assistant') return reviewerUsable ? 'assistant' : 'full';
   if (lastMode === 'supervised' || lastMode === 'auto-edits' || lastMode === 'full') {
     return lastMode;

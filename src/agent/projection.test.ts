@@ -2,6 +2,32 @@ import { describe, expect, it } from 'vitest';
 import { PROJECTED_FILE_CHANGE_LIMIT, PROJECTED_TEXT_LIMIT, projectMessage } from './projection';
 
 describe('projectMessage', () => {
+  it('whitelists managed decisions and fallbacks from arbitrary tool results', () => {
+    const base = { model: 'jev', actionHash: 'a'.repeat(64) };
+    for (const approvalReview of [
+      { ...base, verdict: 'allow', allow: 0.95, ask: 0.04, block: 0.01 },
+      { ...base, verdict: 'deny', allow: 0.6, ask: 0.3, block: 0.1, reason: 'unclear_target' },
+      { ...base, verdict: 'fallback', fallback: 'error' },
+    ]) {
+      expect(
+        projectMessage({
+          role: 'toolResult',
+          toolName: 'mcp__test',
+          content: [],
+          details: {
+            approvalReview: { ...approvalReview, apiKey: 'secret', transcript: 'private' },
+          },
+        })
+      ).toEqual({ role: 'toolResult', toolName: 'mcp__test', content: [], approvalReview });
+    }
+    expect(
+      projectMessage({
+        role: 'toolResult',
+        content: [],
+        details: { approvalReview: { ...base, verdict: 'allow', allow: 1 } },
+      })
+    ).not.toHaveProperty('approvalReview');
+  });
   it('命令统计从 details 白名单投影，历史恢复可见且内部状态不泄露', () => {
     const rtk = {
       status: 'compressed',

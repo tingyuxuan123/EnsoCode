@@ -192,6 +192,7 @@ describe('ApprovalGate assistant 档代审 (options.review)', () => {
     expect(infos).toEqual([
       {
         requestId: expect.stringMatching(/^apr-/),
+        actionHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         tool: 'bash',
         kind: 'command',
         summary: 'ls',
@@ -237,7 +238,7 @@ describe('ApprovalGate assistant 档代审 (options.review)', () => {
     const review = vi.fn().mockResolvedValue({ decision: 'ask_user' });
     const { gate, requests } = makeGate('assistant', { review });
     const p = gate.ask('bash', 'command', 'ls', undefined);
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await vi.waitFor(() => expect(gate.snapshot()[0]?.phase).toBeUndefined());
     gate.respond(requests[0], 'allow');
     await expect(p).resolves.toBe('allow');
   });
@@ -246,7 +247,7 @@ describe('ApprovalGate assistant 档代审 (options.review)', () => {
     const review = vi.fn().mockRejectedValue(new Error('reviewer down'));
     const { gate, requests } = makeGate('assistant', { review });
     const p = gate.ask('bash', 'command', 'ls', undefined);
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await vi.waitFor(() => expect(gate.snapshot()[0]?.phase).toBeUndefined());
     gate.respond(requests[0], 'allow');
     await expect(p).resolves.toBe('allow');
   });
@@ -255,7 +256,7 @@ describe('ApprovalGate assistant 档代审 (options.review)', () => {
     const review = vi.fn().mockResolvedValue({ decision: 'not-a-real-decision' } as never);
     const { gate, requests } = makeGate('assistant', { review });
     const p = gate.ask('bash', 'command', 'ls', undefined);
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await vi.waitFor(() => expect(gate.snapshot()[0]?.phase).toBeUndefined());
     gate.respond(requests[0], 'deny');
     await expect(p).resolves.toBe('deny');
   });

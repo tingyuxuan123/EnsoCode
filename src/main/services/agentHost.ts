@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import {
+  type ApprovalAllowThreshold,
+  DEFAULT_APPROVAL_ALLOW_THRESHOLD,
+  parseApprovalAllowThreshold,
+} from '@shared/approvalReviewRecord';
 import { normalizeAutoRetryLimit } from '@shared/autoRetry';
 import {
   type AgentTypeKey,
@@ -24,6 +29,7 @@ import { type CodeSearchConfig, parseCodeSearchAccountKey } from '@shared/codeSe
 import { resolveCompactStrategy } from '@shared/compactStrategy';
 import {
   type DefaultModelRef,
+  isUsableApprovalClassifier,
   type ModelCredentialContext,
   modelUsability,
 } from '@shared/defaultModel';
@@ -33,6 +39,7 @@ import { pickModelCapabilityOverrides } from '@shared/modelCatalog';
 import { materializeProviders } from '@shared/modelDirectory';
 import { eligibleOauthPoolAccountKeys, isOauthAccountPool } from '@shared/oauthAccountPool';
 import { ensureAccountProvider } from '@shared/piAccounts';
+import { isClassifierOnlyProvider } from '@shared/providerCatalog';
 import { providerKeyFor } from '@shared/providers/providerKey';
 import { proxyEnvPatchFromEnv } from '@shared/proxy';
 import { parseSmartCompactMode } from '@shared/smartCompactMode';
@@ -933,10 +940,10 @@ export function spawnSession(
   if (!reviewer.ok) {
     if (request.approvalMode === 'assistant') return { ok: false, error: reviewer.error };
   }
-  if (request.approvalMode === 'assistant' && (!reviewer.ok || !reviewer.selection)) {
+  if (request.approvalMode === 'assistant' && (!reviewer.ok || !reviewer.source)) {
     return { ok: false, error: 'Select an assistant approval model in Settings first.' };
   }
-  const approvalReviewerConfig = reviewer.ok ? reviewer.selection?.config : undefined;
+  const approvalReviewerSource = reviewer.ok ? reviewer.source : null;
   const bot = options?.bot;
   const preset: Preset | undefined = bot
     ? { id: 'bot', name: 'bot', skillIds: bot.skillIds, mcpServerIds: bot.mcpServerIds }
@@ -1031,7 +1038,7 @@ export function spawnSession(
     ...(pluginHooks.length > 0 ? { pluginHooks } : {}),
     ...(request.approvalMode ? { approvalMode: request.approvalMode } : {}),
     ...(request.planMode !== undefined ? { planMode: request.planMode } : {}),
-    ...(approvalReviewerConfig ? { approvalReviewer: approvalReviewerConfig } : {}),
+    ...approvalReviewerSpawnFields(approvalReviewerSource),
     ...(agentTypes.length > 0 ? { agentTypes } : {}),
     ...(subagentModels.length > 0 ? { subagentModels } : {}),
     ...(disabledTools.length > 0 ? { disabledTools } : {}),
@@ -1620,7 +1627,7 @@ export function setSessionApprovalMode(
   if (mode === 'assistant') {
     const reviewer = resolveApprovalReviewer(authenticatedAccountKeys);
     if (!reviewer.ok) return reviewer;
-    if (!reviewer.selection) {
+    if (!reviewer.source) {
       return { ok: false, error: 'Select an assistant approval model in Settings first.' };
     }
     pushApprovalReviewer(authenticatedAccountKeys);
@@ -1906,22 +1913,71 @@ function asModelRef(value: unknown): DefaultModelRef | null {
     : null;
 }
 
+export type ApprovalReviewerSource =
+  | { model: SpawnModelConfig }
+  | {
+      classifier: VirtualClassifierCredentials;
+      managed?: true;
+      allowThreshold?: ApprovalAllowThreshold;
+    };
+
 export function resolveApprovalReviewer(
   authenticatedAccountKeys: ReadonlySet<string>
-): ModelSelectionResult | { ok: true; selection: null } {
-  const ref = asModelRef(readSettingsState()?.approvalReviewer);
-  if (!ref) return { ok: true, selection: null };
-  return resolveModelSelection(ref.providerId, ref.modelId, authenticatedAccountKeys);
+): { ok: false; error: string } | { ok: true; source: ApprovalReviewerSource | null } {
+  const state = readSettingsState();
+  const ref = asModelRef(state?.approvalReviewer);
+  if (!ref) return { ok: true, source: null };
+  const providers = providersFromSettings();
+  const provider = providers.find((item) => item.id === ref.providerId);
+  if (provider && isClassifierOnlyProvider(provider)) {
+    const classifierProvider = classifierProviderFor(provider);
+    if (!classifierProvider || !isUsableApprovalClassifier(ref, providers))
+      return { ok: false, error: 'The assistant approval classifier is unavailable.' };
+    const allowThreshold = parseApprovalAllowThreshold(state?.approvalAllowThreshold);
+    return {
+      ok: true,
+      source: {
+        classifier: { provider: classifierProvider, modelId: ref.modelId, apiKey: provider.apiKey },
+        ...(state?.approvalAutoManage === true ? { managed: true } : {}),
+        ...(allowThreshold === DEFAULT_APPROVAL_ALLOW_THRESHOLD ? {} : { allowThreshold }),
+      },
+    };
+  }
+  const resolved = resolveModelSelection(ref.providerId, ref.modelId, authenticatedAccountKeys);
+  return resolved.ok ? { ok: true, source: { model: resolved.selection.config } } : resolved;
+}
+
+function approvalReviewerSpawnFields(source: ApprovalReviewerSource | null | undefined) {
+  if (!source) return {};
+  return 'model' in source
+    ? { approvalReviewer: source.model }
+    : {
+        approvalReviewerClassifier: source.classifier,
+        ...(source.managed ? { approvalReviewerManaged: true as const } : {}),
+        ...(source.allowThreshold === undefined
+          ? {}
+          : { approvalReviewerAllowThreshold: source.allowThreshold }),
+      };
 }
 
 export function pushApprovalReviewer(authenticatedAccountKeys?: ReadonlySet<string>): void {
   if (!worker || !workerReady) return;
   const keys = authenticatedAccountKeys ?? new Set<string>();
   const resolved = resolveApprovalReviewer(keys);
-  const model = resolved.ok ? resolved.selection?.config : undefined;
+  const source = resolved.ok ? resolved.source : null;
   worker.postMessage({
     type: 'set-approval-reviewer',
-    ...(model ? { model } : {}),
+    ...(source
+      ? 'model' in source
+        ? { model: source.model }
+        : {
+            classifier: source.classifier,
+            ...(source.managed ? { managed: true as const } : {}),
+            ...(source.allowThreshold === undefined
+              ? {}
+              : { allowThreshold: source.allowThreshold }),
+          }
+      : {}),
   } satisfies AgentCommand);
 }
 

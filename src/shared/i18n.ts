@@ -5,6 +5,32 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  'Auto-managed review timed out. Please decide.': '自动托管复核超时，请你确认。',
+  'Auto-managed review failed. Please decide.': '自动托管复核失败，请你确认。',
+  'Auto-managed review returned no valid decision. Please decide.':
+    '自动托管复核未返回有效决策，请你确认。',
+  'Tool arguments are too large to review safely. Please decide.':
+    '工具参数过长，无法安全复核，请你确认。',
+  'Regenerable output': '可重新生成的产物',
+  'Reversible workspace change': '可撤销的工作区修改',
+  'Possible data loss': '可能丢失数据',
+  'Changes system state': '改变系统状态',
+  'Sends data externally': '向外发送数据',
+  'Unclear target or intent': '目标或意图不明确',
+  '0.85 (looser)': '0.85（更宽松）',
+  '0.9 (default)': '0.9（默认）',
+  '0.95 (stricter)': '0.95（更严格）',
+  'Auto-allow threshold': '自动放行阈值',
+  'Auto-manage approvals': '自动托管审批',
+  'Auto-managed · allowed': '自动托管 · 已放行',
+  'Auto-managed · asks you': '自动托管 · 仍需你确认',
+  'Auto-managed · denied': '自动托管 · 已拒绝',
+  'Auto-managed: runs only when the decision model is highly confident it is safe. Everything else is denied and the agent tries another way. Protected actions still ask you.':
+    '自动托管：仅当决策模型高度确信安全时才放行，其余操作会被拒绝并由代理换一种方式；受保护操作仍然会询问你。',
+  'Decision models only allow or block when highly confident. Everything else asks you.':
+    '决策模型只在高置信时才放行或拦截，其余情况都会询问你。',
+  'Only runs automatically when the allow probability reaches this value. Operations near the threshold may be allowed one time and not the next.':
+    '仅当放行概率达到该值时才自动执行；接近阈值的操作可能这次放行、下次询问。',
   'Temporary chats': '临时会话',
   'Start a temporary chat': '新建临时会话',
   'Temporary chats are kept until you delete them.': '临时会话会保留，直到你主动删除。',

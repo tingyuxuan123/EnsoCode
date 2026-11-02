@@ -99,6 +99,7 @@ import {
 } from '@/stores/sessions/timeline';
 import { useSettingsStore } from '@/stores/settings';
 import { useSubagentRunsStore } from '@/stores/subagentRuns';
+import { ApprovalReviewBar } from './ApprovalReviewBar';
 import { AskUserResult } from './AskUserResult';
 import { CodeBlock } from './CodeBlock';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -2318,6 +2319,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                   )}
                 </>
               )}
+              {item.approvalReview && <ApprovalReviewBar value={item.approvalReview} />}
               <RtkToolStatsBar value={item.rtk} />
             </ToolContentScroller>
           )}

@@ -25,6 +25,37 @@ const user = (text: string): ProjectedMessage => ({
 });
 
 describe('historyPageChrome', () => {
+  it('keeps allow/deny/fallback audit metadata on its own tool result row', () => {
+    const base = { model: 'jev', actionHash: 'a'.repeat(64) };
+    const records = [
+      { ...base, verdict: 'allow' as const, allow: 0.95, ask: 0.04, block: 0.01 },
+      { ...base, verdict: 'deny' as const, allow: 0.6, ask: 0.3, block: 0.1 },
+      { ...base, verdict: 'fallback' as const, fallback: 'error' as const },
+    ];
+    const messages: ProjectedMessage[] = [
+      user('task'),
+      {
+        role: 'assistant',
+        content: records.map((_record, index) => ({
+          type: 'toolCall' as const,
+          id: `call-${index}`,
+          name: 'bash',
+          arguments: { command: 'echo ok' },
+        })),
+      },
+      ...records.map((approvalReview, index) => ({
+        role: 'toolResult' as const,
+        content: [{ type: 'text' as const, text: 'result' }],
+        toolCallId: `call-${index}`,
+        toolName: 'bash',
+        isError: index === 1,
+        approvalReview,
+      })),
+    ];
+    const tools = buildTimeline(messages, false).filter((item) => item.kind === 'tool');
+    expect(tools.map((item) => item.approvalReview)).toEqual(records);
+    expect(tools.map((item) => item.state)).toEqual(['ok', 'error', 'ok']);
+  });
   it('空时间线不占 Header，避免盖住 Preparing / 空态', () => {
     expect(historyPageChrome(false, true, false)).toBe('none');
     expect(historyPageChrome(false, false, false)).toBe('none');

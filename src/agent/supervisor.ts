@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import {
   type AgentSession,
   createAgentSession,
@@ -80,6 +81,7 @@ import type {
   SpawnModelConfig,
   SubagentModelOption,
   ThinkingLevel,
+  VirtualClassifierCredentials,
 } from '@shared/types/agent';
 import { parseAgentSessionCustomEntry, STALE_SESSION_ERROR } from '@shared/types/agent';
 import { type EditMode, resolveEditMode } from '@shared/types/editMode';
@@ -96,15 +98,27 @@ import {
   validateApplyPatchTargets,
 } from './applyPatch';
 import { applyPatchResultExtension } from './applyPatchResultExtension';
-import { ApprovalGate, withApproval, withProtectedFloor } from './approval';
+import {
+  ApprovalGate,
+  type ApprovalReviewContext,
+  type ApprovalReviewResult,
+  withApproval,
+  withProtectedFloor,
+} from './approval';
 import {
   APPROVAL_REVIEW_TIMEOUT_MS,
+  ApprovalReviewArgumentsTooLargeError,
+  accumulateApprovalReviewSecrets,
+  buildApprovalClassifierRequest,
   buildApprovalReviewSystemPrompt,
   buildApprovalReviewUserPrompt,
   computeApprovalActionHash,
+  decideFromApprovalClassifier,
+  decideManagedApproval,
   normalizeReviewDecision,
   recentReviewMessages,
 } from './approvalReview';
+import { approvalReviewResultExtension } from './approvalReviewRecords';
 import { AskManager, createAskTool } from './ask';
 import { ensureAssistantUsage } from './assistantUsage';
 import {
@@ -320,6 +334,8 @@ interface ManagedSession {
   customEntries: AgentSessionCustomEntry[];
   commands: SlashCommand[];
   modelId: string;
+  /** Worker-only historical credentials; null means budget exhausted, so review is disabled. */
+  reviewSecrets?: readonly string[] | null;
   toolIds: string[];
   proofToolIds: string[];
   safeJournal?: EnsoSafeJournal;
@@ -544,6 +560,7 @@ function createSessionResourceLoader(options: {
       ...(options.oauthPoolRecovery ? [options.oauthPoolRecovery] : []),
       options.branchContext,
       applyPatchResultExtension,
+      approvalReviewResultExtension,
       {
         name: 'image-context',
         hidden: true,
@@ -691,6 +708,7 @@ function createEnsoResourceLoader(
     extensionFactories: [
       branchContext,
       applyPatchResultExtension,
+      approvalReviewResultExtension,
       silentTurnRecovery,
       ...(oauthPoolRecovery ? [oauthPoolRecovery] : []),
     ],
@@ -898,7 +916,7 @@ export class SessionSupervisor {
   /** 不可回收的会话（桌面正在查看 / 手机订阅），由 Main 全量下发 */
   private pinned: ReadonlySet<string> = new Set();
   private readonly evictionTimer: ReturnType<typeof setInterval>;
-  private approvalReviewer: SpawnModelConfig | undefined;
+  private approvalReviewer: ApprovalReviewerSource | undefined;
   /** 所有已打开会话的压缩摘要路线；设置变更时原地改 */
   private readonly compactRoute: EnsoCompactOptions = {};
   private maxActiveCoworkers = DEFAULT_MAX_ACTIVE_COWORKERS;
@@ -1371,7 +1389,14 @@ export class SessionSupervisor {
       return;
     }
     if (command.type === 'set-approval-reviewer') {
-      this.approvalReviewer = command.model;
+      this.setApprovalReviewer(
+        approvalReviewerSource(
+          command.model,
+          command.classifier,
+          command.managed,
+          command.allowThreshold
+        )
+      );
       return;
     }
     if (command.type === 'set-compact-route') {
@@ -1571,7 +1596,12 @@ export class SessionSupervisor {
           command.skillPaths,
           command.mcpServers,
           command.approvalMode,
-          command.approvalReviewer,
+          approvalReviewerSource(
+            command.approvalReviewer,
+            command.approvalReviewerClassifier,
+            command.approvalReviewerManaged,
+            command.approvalReviewerAllowThreshold
+          ),
           command.agentTypes,
           command.disabledTools,
           command.instruction,
@@ -1768,6 +1798,10 @@ export class SessionSupervisor {
         await managed.session.setModel(next);
         ensureAssistantUsage(managed.session.messages as unknown[]);
         managed.modelId = command.model.modelId;
+        managed.reviewSecrets = accumulateApprovalReviewSecrets(
+          managed.reviewSecrets,
+          approvalModelSecrets(command.model)
+        );
         // 必须回报：Main 的 agentSessionIndex 只认 parent-ready 与本事件，
         // 不回报就会让后续派发的 selection 校验永远对不上（issue #30）。
         this.options.emit({
@@ -1825,7 +1859,14 @@ export class SessionSupervisor {
         return;
       }
       case 'set-approval-reviewer':
-        this.approvalReviewer = command.model;
+        this.setApprovalReviewer(
+          approvalReviewerSource(
+            command.model,
+            command.classifier,
+            command.managed,
+            command.allowThreshold
+          )
+        );
         return;
       case 'ask-respond':
         this.must(command.identity).asks.respond(command.requestId, command.answer);
@@ -2102,7 +2143,7 @@ export class SessionSupervisor {
     skillPaths: string[] = [],
     mcpServers: McpServerSpawnConfig[] = [],
     approvalMode: ApprovalMode = 'full',
-    approvalReviewer?: SpawnModelConfig,
+    approvalReviewer?: ApprovalReviewerSource,
     agentTypes: AgentTypeSpawnConfig[] = [],
     disabledTools: string[] = [],
     instruction?: { path: string; content: string },
@@ -2236,7 +2277,7 @@ export class SessionSupervisor {
       directMcp.length > 0 ? this.mcp.toolsFor(directMcp, 3000) : Promise.resolve([]),
     ]);
     const toolsMs = Date.now() - toolsStart;
-    if (approvalReviewer) this.approvalReviewer = approvalReviewer;
+    if (approvalReviewer) this.setApprovalReviewer(approvalReviewer);
 
     let managedRef: ManagedSession | undefined;
     const gate = new ApprovalGate(
@@ -2262,7 +2303,7 @@ export class SessionSupervisor {
         }
       },
       {
-        review: (info, signal) => this.reviewApproval(info, signal),
+        review: (info, signal, context) => this.reviewApproval(info, signal, context),
         protectedFloor: botMode || protectedActions,
         ...(botMode ? { exemptFull: true, humanTimeoutMs: HUMAN_REQUEST_TIMEOUT_MS } : {}),
       }
@@ -3036,6 +3077,10 @@ export class SessionSupervisor {
       checkpoints,
       runawayGuard: runaway,
     });
+    managedRef.reviewSecrets = accumulateApprovalReviewSecrets(
+      undefined,
+      approvalModelSecrets(model)
+    );
     this.rememberMcpHotplug(
       sessionId,
       new Set(directMcp.map((server) => this.mcpServerKey(server))),
@@ -3458,6 +3503,10 @@ export class SessionSupervisor {
       ...(result.requestBudget ? { requestBudget: result.requestBudget } : {}),
     });
     if (!resumeFile) managedRef.pendingRole = config.systemPrompt;
+    managedRef.reviewSecrets = accumulateApprovalReviewSecrets(
+      undefined,
+      approvalModelSecrets(config.model)
+    );
     this.options.emit({
       type: 'child-ready',
       identity,
@@ -4912,21 +4961,32 @@ export class SessionSupervisor {
     return this.runtimePromise;
   }
 
+  private setApprovalReviewer(source: ApprovalReviewerSource | undefined): void {
+    // Compare every credential and model option without logging any of them. Identical settings
+    // broadcasts (including another session's spawn) must not revoke an in-flight review.
+    if (!sameApprovalReviewerSource(this.approvalReviewer, source)) this.approvalReviewer = source;
+  }
+
   private async reviewApproval(
     info: import('@shared/types/agent').ApprovalRequestInfo,
-    signal: AbortSignal | undefined
-  ): Promise<{ decision: 'auto_allow' | 'ask_user' | 'block'; rationale?: string }> {
-    const reviewer = this.approvalReviewer;
-    if (!reviewer) {
+    signal: AbortSignal | undefined,
+    context?: ApprovalReviewContext
+  ): Promise<ApprovalReviewResult> {
+    const source = this.approvalReviewer;
+    if (!source) {
       return { decision: 'ask_user', rationale: 'No approval reviewer model is configured.' };
     }
-    const actionHash = computeApprovalActionHash({
-      version: 1,
-      kind: 'enso_tool_permission_review',
-      tool: info.tool,
-      approvalKind: info.kind,
-      summary: info.summary,
-    });
+    if ('classifier' in source) return this.classifyApproval(source, info, signal, context);
+    const reviewer = source.model;
+    const actionHash =
+      info.actionHash ??
+      computeApprovalActionHash({
+        version: 1,
+        kind: 'enso_tool_permission_review',
+        tool: info.tool,
+        approvalKind: info.kind,
+        summary: info.summary,
+      });
     const runtime = await this.getRuntime();
     const model = await resolveBaseModelOrRefresh(runtime, reviewer);
     const controller = new AbortController();
@@ -4939,11 +4999,15 @@ export class SessionSupervisor {
         error.name = 'AbortError';
         throw error;
       }
-      const recentMessages = recentReviewMessages(
-        [...this.sessions.values()].find((session) =>
-          session.gate.snapshot().some((item) => item.requestId === info.requestId)
-        )?.messages ?? []
+      const owner = [...this.sessions.values()].find((session) =>
+        session.gate.snapshot().some((item) => item.requestId === info.requestId)
       );
+      const recentMessages = recentReviewMessages(owner?.messages ?? []);
+      if (owner?.reviewSecrets === null)
+        return {
+          decision: 'ask_user',
+          rationale: 'Auto-review credential redaction capacity exceeded.',
+        };
       const message = await runtime.completeSimple(
         model,
         {
@@ -4951,13 +5015,16 @@ export class SessionSupervisor {
           messages: [
             {
               role: 'user',
-              content: buildApprovalReviewUserPrompt({
-                actionHash,
-                tool: info.tool,
-                kind: info.kind,
-                summary: info.summary,
-                recentMessages,
-              }),
+              content: buildApprovalReviewUserPrompt(
+                {
+                  actionHash,
+                  tool: info.tool,
+                  kind: info.kind,
+                  summary: info.summary,
+                  recentMessages,
+                },
+                [...approvalModelSecrets(reviewer), ...(owner?.reviewSecrets ?? [])]
+              ),
               timestamp: Date.now(),
             },
           ],
@@ -4969,12 +5036,110 @@ export class SessionSupervisor {
             .map((part) => (part.type === 'text' ? (part.text ?? '') : ''))
             .join('')
         : '';
+      if (controller.signal.aborted || this.approvalReviewer !== source)
+        return { decision: 'ask_user', rationale: 'Auto-review was revoked.' };
       return normalizeReviewDecision(raw, actionHash);
     } catch {
       return { decision: 'ask_user', rationale: 'Auto-review failed.' };
     } finally {
       clearTimeout(timeout);
       signal?.removeEventListener('abort', onParentAbort);
+    }
+  }
+
+  /** Classifier-only management; never changes chat-reviewer ask_user semantics. */
+  private async classifyApproval(
+    source: Extract<ApprovalReviewerSource, { classifier: unknown }>,
+    info: import('@shared/types/agent').ApprovalRequestInfo,
+    signal: AbortSignal | undefined,
+    context?: ApprovalReviewContext
+  ): Promise<ApprovalReviewResult> {
+    const { classifier: credentials, managed, allowThreshold } = source;
+    const owner = [...this.sessions.values()].find((session) =>
+      session.gate
+        .snapshot()
+        .some((item) => item.requestId === info.requestId && item.actionHash === info.actionHash)
+    );
+    const timeout = AbortSignal.timeout(APPROVAL_REVIEW_TIMEOUT_MS);
+    const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const fallback = (
+      reason: import('@shared/approvalReviewRecord').ApprovalReviewFallback
+    ): ApprovalReviewResult => ({
+      decision: 'ask_user',
+      rationale:
+        reason === 'too-large'
+          ? 'Tool arguments are too large to review safely. Please decide.'
+          : 'Auto-review failed.',
+      ...(managed
+        ? {
+            fallback: reason,
+            record: info.actionHash
+              ? {
+                  verdict: 'fallback' as const,
+                  model: credentials.modelId,
+                  actionHash: info.actionHash,
+                  fallback: reason,
+                }
+              : undefined,
+          }
+        : {}),
+    });
+    const current = () =>
+      owner &&
+      this.sessions.get(owner.identity.sessionId) === owner &&
+      owner.gate.mode === 'assistant' &&
+      this.approvalReviewer === source &&
+      owner.gate
+        .snapshot()
+        .some((item) => item.requestId === info.requestId && item.actionHash === info.actionHash) &&
+      !combined.aborted;
+    let onAbort: (() => void) | undefined;
+    try {
+      if (!current() || !info.actionHash) return fallback('invalid');
+      if (owner?.reviewSecrets === null) return fallback('error');
+      const request = buildApprovalClassifierRequest(
+        {
+          actionHash: info.actionHash,
+          tool: info.tool,
+          kind: info.kind,
+          summary: info.summary,
+          recentMessages: recentReviewMessages(owner!.messages),
+          exactArguments: context?.exactArguments,
+        },
+        { managed, secrets: [credentials.apiKey ?? '', ...(owner?.reviewSecrets ?? [])] }
+      );
+      // Race even when a provider ignores cancellation: a timed-out verdict can never grant permission.
+      const result = await Promise.race([
+        (async () => {
+          const runtime = await this.getRuntime();
+          if (!current()) throw new Error('Review revoked');
+          const model = resolveClassifierModel(runtime, credentials);
+          return runtime.classify(model, request, {
+            signal: combined,
+            ...(credentials.apiKey ? { apiKey: credentials.apiKey } : {}),
+          });
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          onAbort = () => reject(new Error('Review aborted'));
+          combined.addEventListener('abort', onAbort, { once: true });
+          if (combined.aborted) onAbort();
+        }),
+      ]);
+      if (!current() || result.stopReason !== 'stop')
+        return fallback(timeout.aborted ? 'timeout' : 'error');
+      return managed
+        ? decideManagedApproval(
+            result.answers,
+            credentials.modelId,
+            allowThreshold,
+            info.actionHash
+          )
+        : decideFromApprovalClassifier(result.answers.decision, allowThreshold);
+    } catch (error) {
+      if (error instanceof ApprovalReviewArgumentsTooLargeError) return fallback('too-large');
+      return fallback(timeout.aborted ? 'timeout' : 'error');
+    } finally {
+      if (onAbort) combined.removeEventListener('abort', onAbort);
     }
   }
 
@@ -5584,4 +5749,51 @@ function collectSlashCommands(session: AgentSession): SlashCommand[] {
     // 资源加载失败不阻塞会话，命令列表为空即可
   }
   return commands;
+}
+
+type ApprovalReviewerSource =
+  | { model: SpawnModelConfig }
+  | {
+      classifier: VirtualClassifierCredentials;
+      managed?: boolean;
+      allowThreshold?: import('@shared/approvalReviewRecord').ApprovalAllowThreshold;
+    };
+
+function sameApprovalReviewerSource(
+  left: ApprovalReviewerSource | undefined,
+  right: ApprovalReviewerSource | undefined
+): boolean {
+  return isDeepStrictEqual(left, right);
+}
+
+function approvalModelSecrets(model: SpawnModelConfig): string[] {
+  const virtual = model.virtual;
+  return [
+    model.apiKey,
+    ...(virtual
+      ? [
+          ...approvalModelSecrets(virtual.primary),
+          ...(virtual.fast ? approvalModelSecrets(virtual.fast) : []),
+          ...virtual.fallbacks.flatMap(approvalModelSecrets),
+          ...(virtual.classifier?.model ? approvalModelSecrets(virtual.classifier.model) : []),
+          virtual.classifier?.classifier?.apiKey ?? '',
+        ]
+      : []),
+  ].filter(Boolean);
+}
+
+function approvalReviewerSource(
+  model: SpawnModelConfig | undefined,
+  classifier: VirtualClassifierCredentials | undefined,
+  managed: boolean | undefined,
+  allowThreshold: import('@shared/approvalReviewRecord').ApprovalAllowThreshold | undefined
+): ApprovalReviewerSource | undefined {
+  if (model) return { model };
+  return classifier
+    ? {
+        classifier,
+        ...(managed ? { managed: true } : {}),
+        ...(allowThreshold === undefined ? {} : { allowThreshold }),
+      }
+    : undefined;
 }

@@ -1,3 +1,4 @@
+import type { ApprovalReviewRecord } from '@shared/approvalReviewRecord';
 import { IMAGE_EXTENSIONS, mediaExtension } from '@shared/localImage';
 import { firstProgram, isReadOnlyCommand } from '@shared/readOnlyCommand';
 import type { RtkToolStats } from '@shared/rtk';
@@ -92,6 +93,7 @@ export type TimelineItem =
       sandbox?: SandboxView | null;
       /** RTK 对本次工具调用的真实处理结果；无元数据时缺省 */
       rtk?: RtkToolStats;
+      approvalReview?: ApprovalReviewRecord;
       /** 运行中的 bash/powershell 调用 id（转后台用），或阻塞等待的调用 id（不等了）；其它缺省 */
       callId?: string;
       /** 运行中的阻塞等待（子代理 wait / wait:true、task_output 带时限）：可「不等了」；其它缺省 */
@@ -901,6 +903,7 @@ function buildMessageTimeline(
       applyPatchOutcome: ProjectedApplyPatchOutcome | null;
       codemodeCalls: ProjectedCodemodeCall[] | null;
       rtk?: RtkToolStats;
+      approvalReview?: ApprovalReviewRecord;
       backgroundTaskId?: string;
     }
   >();
@@ -917,6 +920,7 @@ function buildMessageTimeline(
         applyPatchOutcome: message.applyPatchOutcome ?? null,
         codemodeCalls: message.codemodeCalls ?? null,
         rtk: message.rtk,
+        approvalReview: message.approvalReview,
         backgroundTaskId: message.backgroundTaskId,
       });
     }
@@ -1265,6 +1269,7 @@ function buildMessageTimeline(
             durationMs: result?.durationMs ?? null,
             agentMeta: result?.agentMeta ?? null,
             ...(result?.rtk ? { rtk: result.rtk } : {}),
+            ...(result?.approvalReview ? { approvalReview: result.approvalReview } : {}),
             ...(liveCommand || waiting ? { callId: part.id } : {}),
             ...(waiting ? { waiting } : {}),
             ...(result?.backgroundTaskId ? { backgroundTaskId: result.backgroundTaskId } : {}),

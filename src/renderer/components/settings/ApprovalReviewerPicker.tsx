@@ -1,7 +1,24 @@
+import {
+  APPROVAL_ALLOW_THRESHOLDS,
+  parseApprovalAllowThreshold,
+} from '@shared/approvalReviewRecord';
+import { isClassifierOnlyProvider } from '@shared/providerCatalog';
+import { useMemo } from 'react';
 import { MODEL_PICKER_FORM_TRIGGER_CLASS, ModelPicker } from '@/components/chat/ModelPicker';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
-import { useUsableProviders } from '@/stores/modelDirectory/useProviders';
+import {
+  useUsableClassifierProviders,
+  useUsableProviders,
+} from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
 
 /** 助手代审模型：未选则该档不可用，不回退会话模型。 */
@@ -9,7 +26,23 @@ export function ApprovalReviewerPicker() {
   const { t } = useI18n();
   const model = useSettingsStore((state) => state.approvalReviewer);
   const setModel = useSettingsStore((state) => state.setApprovalReviewer);
-  const candidates = useUsableProviders();
+  const autoManage = useSettingsStore((state) => state.approvalAutoManage) === true;
+  const setAutoManage = useSettingsStore((state) => state.setApprovalAutoManage);
+  const allowThreshold = parseApprovalAllowThreshold(
+    useSettingsStore((state) => state.approvalAllowThreshold)
+  );
+  const setAllowThreshold = useSettingsStore((state) => state.setApprovalAllowThreshold);
+  const thresholdItems: Record<string, string> = {
+    '0.85': t('0.85 (looser)'),
+    '0.9': t('0.9 (default)'),
+    '0.95': t('0.95 (stricter)'),
+  };
+  const chatProviders = useUsableProviders();
+  const classifierProviders = useUsableClassifierProviders();
+  const candidates = useMemo(
+    () => [...chatProviders, ...classifierProviders.filter(isClassifierOnlyProvider)],
+    [chatProviders, classifierProviders]
+  );
   const selectedProvider = model
     ? candidates.find((entry) => entry.id === model.providerId)
     : undefined;
@@ -42,6 +75,51 @@ export function ApprovalReviewerPicker() {
             onThinkingChange={() => {}}
           />
         </div>
+      )}
+      {selectedProvider && selectedModel && isClassifierOnlyProvider(selectedProvider) && (
+        <>
+          <p className="text-muted-foreground text-xs">
+            {autoManage
+              ? t(
+                  'Auto-managed: runs only when the decision model is highly confident it is safe. Everything else is denied and the agent tries another way. Protected actions still ask you.'
+                )
+              : t(
+                  'Decision models only allow or block when highly confident. Everything else asks you.'
+                )}
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm">{t('Auto-manage approvals')}</span>
+            <Switch
+              aria-label={t('Auto-manage approvals')}
+              checked={autoManage}
+              onCheckedChange={setAutoManage}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm">{t('Auto-allow threshold')}</span>
+            <Select
+              items={thresholdItems}
+              value={String(allowThreshold)}
+              onValueChange={(value) => setAllowThreshold(Number(value))}
+            >
+              <SelectTrigger className="w-36" aria-label={t('Auto-allow threshold')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {APPROVAL_ALLOW_THRESHOLDS.map((value) => (
+                  <SelectItem key={value} value={String(value)}>
+                    {thresholdItems[String(value)]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            {t(
+              'Only runs automatically when the allow probability reaches this value. Operations near the threshold may be allowed one time and not the next.'
+            )}
+          </p>
+        </>
       )}
       {model && (!selectedProvider || !selectedModel) && (
         <p className="text-muted-foreground text-[calc(12rem/14)]">

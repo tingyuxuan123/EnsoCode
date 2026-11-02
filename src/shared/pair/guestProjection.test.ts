@@ -130,6 +130,26 @@ describe('applyGuestEvent（单条事件）', () => {
     ).toEqual(['q1']);
   });
 
+  it('同一审批复核退回人工时就地替换，不留下隐藏按钮的旧队首', () => {
+    const request = { requestId: 'r1', tool: 'bash', kind: 'command', summary: 'action' };
+    const reviewing = applyGuestEvent(emptyGuestView(), {
+      type: 'approval-request',
+      request: { ...request, phase: 'reviewing' },
+    }).view;
+    const queued = applyGuestEvent(reviewing, {
+      type: 'approval-request',
+      request: { ...request, requestId: 'r2' },
+    }).view;
+    const fallback = applyGuestEvent(queued, {
+      type: 'approval-request',
+      request: { ...request, reviewFallback: 'too-large' },
+    }).view;
+    expect(fallback.approvals.map((item) => item.requestId)).toEqual(['r1', 'r2']);
+    expect(fallback.approvals[0]).toEqual({ ...request, reviewFallback: 'too-large' });
+    expect(fallback.approvals[0].phase).toBeUndefined();
+    expect(reviewing.approvals[0].phase).toBe('reviewing');
+  });
+
   it('task-started / subagent-update 走任务投影，不动消息', () => {
     const base = viewWith([[0, 'hi']]);
     const r = applyGuestEvent(base, {

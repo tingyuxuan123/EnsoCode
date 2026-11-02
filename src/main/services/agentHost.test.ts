@@ -43,6 +43,7 @@ import {
   readSettingsState,
   rememberParentToolProfile,
   resolveAgentTypeSpawnConfig,
+  resolveApprovalReviewer,
   resolveModelSelection,
   resolvePresetSystemPrompt,
   resolveSubagentModelSelection,
@@ -54,6 +55,76 @@ import {
   stopAgentWorkerForQuit,
   toSessionMcpConfig,
 } from './agentHost';
+
+describe('approval classifier source settings', () => {
+  const classifier: ModelProvider = {
+    id: 'ts',
+    name: 'TypeSafe',
+    api: 'typesafe-system-one',
+    baseUrl: 'https://api.typesafe.ai/v1/',
+    apiKey: 'secret',
+    enabled: true,
+    models: [{ id: 'jev-latest' }],
+  };
+  const set = (provider = classifier, extra: Record<string, unknown> = {}) => {
+    settingsMock.value = {
+      'enso-settings': {
+        state: {
+          providers: [provider],
+          approvalReviewer: { providerId: provider.id, modelId: 'jev-latest' },
+          ...extra,
+        },
+      },
+    };
+  };
+  it('resolves a classifier without management by default; settings only affect the classifier', () => {
+    set();
+    expect(resolveApprovalReviewer(new Set())).toEqual({
+      ok: true,
+      source: { classifier: { provider: 'typesafe', modelId: 'jev-latest', apiKey: 'secret' } },
+    });
+    set(classifier, { approvalAutoManage: true, approvalAllowThreshold: 0.95 });
+    expect(resolveApprovalReviewer(new Set())).toMatchObject({
+      ok: true,
+      source: { managed: true, allowThreshold: 0.95 },
+    });
+    set(classifier, { approvalAutoManage: 'true', approvalAllowThreshold: NaN });
+    expect(resolveApprovalReviewer(new Set())).toMatchObject({
+      ok: true,
+      source: { classifier: { modelId: 'jev-latest' } },
+    });
+    expect(resolveApprovalReviewer(new Set())).not.toHaveProperty('source.managed');
+    set(
+      {
+        ...classifier,
+        api: 'openai-completions',
+        baseUrl: 'https://example.test/v1',
+        catalogId: undefined,
+      },
+      { approvalAutoManage: true }
+    );
+    expect(resolveApprovalReviewer(new Set())).toHaveProperty('source.model');
+    expect(resolveApprovalReviewer(new Set())).not.toHaveProperty('source.managed');
+  });
+  it('rejects disabled, missing credential or unknown models and unknown classifier providers', () => {
+    for (const provider of [
+      { ...classifier, enabled: false },
+      { ...classifier, apiKey: '' },
+      { ...classifier, models: [] },
+      { ...classifier, models: [{ id: 'jev-latest', enabled: false }] },
+      { ...classifier, oauthAccountKey: 'typesafe' },
+      {
+        ...classifier,
+        api: 'openai-completions' as const,
+        baseUrl: 'https://unknown.test',
+        catalogId: 'typesafe',
+      },
+    ]) {
+      set(provider);
+      expect(resolveApprovalReviewer(new Set()).ok).toBe(false);
+    }
+  });
+});
 
 describe('browser lifecycle cancellation', () => {
   it('abort/release 命令即时撤销对应 generation；worker 停止/退出清全部', async () => {

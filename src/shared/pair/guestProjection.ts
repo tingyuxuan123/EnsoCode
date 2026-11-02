@@ -102,7 +102,10 @@ export function applyGuestEvent(
     case 'approval-request': {
       // worker 新格式载荷嵌在 request 里；旧格式平铺在事件上，两者都兼容
       const approval = (event.request ?? event) as unknown as ApprovalRequestInfo;
-      view.approvals = [...view.approvals, approval];
+      const index = view.approvals.findIndex((item) => item.requestId === approval.requestId);
+      view.approvals = [...view.approvals];
+      if (index < 0) view.approvals.push(approval);
+      else view.approvals[index] = approval;
       break;
     }
     case 'approval-resolved':

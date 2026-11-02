@@ -272,6 +272,37 @@ describe('PairClient 缓存与续传', () => {
     );
   });
 
+  it('同一审批先复核后退回人工，手机投影只保留可操作的最新请求', async () => {
+    const socket = await start();
+    replay(socket);
+    await settle();
+    const request = { requestId: 'apr', tool: 'bash', kind: 'command', summary: 'action' };
+    socket.receive({
+      type: 'agent-event',
+      cursor: { ...cursor, seq: 1 },
+      event: {
+        type: 'approval-request',
+        sessionId: 's',
+        request: { ...request, phase: 'reviewing' },
+      },
+    });
+    await settle();
+    expect(client.getSession('s')?.approvals[0].phase).toBe('reviewing');
+    socket.receive({
+      type: 'agent-event',
+      cursor: { ...cursor, seq: 2 },
+      event: {
+        type: 'approval-request',
+        sessionId: 's',
+        request: { ...request, reviewFallback: 'too-large' },
+      },
+    });
+    await settle();
+    expect(client.getSession('s')?.approvals).toEqual([
+      { ...request, reviewFallback: 'too-large' },
+    ]);
+  });
+
   it('丢弃重复live事件，序号断档只重订阅一次且保留旧内容', async () => {
     const socket = await start();
     replay(socket);

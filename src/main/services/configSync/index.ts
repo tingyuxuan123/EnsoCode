@@ -193,6 +193,9 @@ export const CONFIG_SYNC_FIELD_POLICY = {
   projects: { mode: 'excluded', reason: 'device-local paths and authority records' },
   projectGroups: { mode: 'excluded', reason: 'device-local project grouping' },
   usageModelPricing: { mode: 'portable' },
+  // 代审阈值与托管开关决定本机是否自动放行工具：必须逐机确认，不随配置包跨机打开。
+  approvalAutoManage: { mode: 'excluded', reason: 'local automation consent' },
+  approvalAllowThreshold: { mode: 'excluded', reason: 'pairs with local auto-manage consent' },
   virtualModels: { mode: 'excluded', reason: 'virtual model routing is not synced yet' },
 } as const satisfies Record<SettingsStateField, ConfigSyncFieldPolicy>;
 

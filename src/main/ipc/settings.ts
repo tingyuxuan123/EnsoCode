@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
   type ContextMenuOpen,
@@ -22,6 +23,7 @@ import {
 import { normalizeSshTimeoutSeconds } from '@shared/sshTimeout';
 import { IPC_CHANNELS, isEditMode, resolveEditMode } from '@shared/types';
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { approvalReviewerConsentConfiguration } from '../services/configSync/approvalReviewerConsent';
 import { readStoredOauthCredentialKeys } from '../services/oauthProviders';
 import {
   parseTrayPreventDisplaySleep,
@@ -115,6 +117,8 @@ export const SETTINGS_STATE_FIELDS = [
   'memoryChatModel',
   'memoryLanguage',
   'approvalReviewer',
+  'approvalAutoManage',
+  'approvalAllowThreshold',
   'lastApprovalMode',
   'defaultReasoningEnabled',
   'defaultThinkingLevel',
@@ -164,6 +168,8 @@ export type SettingsStateField = (typeof SETTINGS_STATE_FIELDS)[number];
 
 /** Device-local keys that config-sync must never fingerprint or write back. */
 const CONFIG_SYNC_EXCLUDED_STATE_FIELDS = new Set<SettingsStateField>([
+  'approvalAutoManage',
+  'approvalAllowThreshold',
   'hashlineEditEnabled',
   'virtualModels',
   'windowsLocalShell',
@@ -555,9 +561,13 @@ export function commitSettingsTransaction(
     persisted.state && typeof persisted.state === 'object'
       ? { ...(persisted.state as Record<string, unknown>) }
       : {};
+  const previousReviewer = approvalReviewerConsentConfiguration(currentState);
   for (const field of CONFIG_SYNC_COMMIT_FIELDS) {
     if (field in statePatch) currentState[field] = statePatch[field];
   }
+  // Consent binds the model endpoint and authentication source, not just the picker reference.
+  if (!isDeepStrictEqual(previousReviewer, approvalReviewerConsentConfiguration(currentState)))
+    currentState.approvalAutoManage = false;
   if ('editMode' in statePatch) delete currentState.hashlineEditEnabled;
   const next = {
     ...latest,

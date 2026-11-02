@@ -5,10 +5,16 @@ import type {
   ProjectGroupEntry,
   ProviderEntry,
 } from '@enso/pair';
+import {
+  APPROVAL_REVIEW_FALLBACKS,
+  type ApprovalReviewFallback,
+} from '@shared/approvalReviewRecord';
 import type { GuestSessionView } from '@shared/pair/guestProjection';
 import {
+  PROTECTED_ACTION_CATEGORIES,
   type ProjectedMessage,
   type ProjectedPart,
+  type ProtectedActionCategory,
   parseSessionUsageTotals,
 } from '@shared/types/agent';
 
@@ -631,6 +637,12 @@ function parseApprovals(value: unknown): GuestSessionView['approvals'] | null {
       summary: item.summary,
       ...(typeof item.toolCallId === 'string' ? { toolCallId: item.toolCallId } : {}),
       ...(item.phase === 'reviewing' ? { phase: 'reviewing' as const } : {}),
+      ...((APPROVAL_REVIEW_FALLBACKS as readonly unknown[]).includes(item.reviewFallback)
+        ? { reviewFallback: item.reviewFallback as ApprovalReviewFallback }
+        : {}),
+      ...((PROTECTED_ACTION_CATEGORIES as readonly unknown[]).includes(item.protected)
+        ? { protected: item.protected as ProtectedActionCategory }
+        : {}),
       ...(typeof item.expiresAt === 'number' ? { expiresAt: item.expiresAt } : {}),
     };
   });
