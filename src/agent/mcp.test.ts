@@ -134,6 +134,29 @@ beforeEach(() => {
 });
 
 describe('McpManager status reporting', () => {
+  it('工具取消信号传到SDK，已取消的连接错误不重连重放', async () => {
+    clientState.listTools = vi.fn(async () => ({
+      tools: [{ name: 'check', inputSchema: { type: 'object' } }],
+    }));
+    const manager = makeManager().manager;
+    const [tool] = await manager.toolsFor([httpServer]);
+    const controller = new AbortController();
+    await tool.execute('cancel-check', {}, controller.signal, undefined, undefined as never);
+    expect(clientState.callTool).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ signal: controller.signal })
+    );
+    clientState.callTool = vi.fn(async () => {
+      controller.abort();
+      throw new Error('Not connected');
+    });
+    await expect(
+      tool.execute('cancel-reconnect', {}, controller.signal, undefined, undefined as never)
+    ).rejects.toThrow();
+    expect(clientState.instances).toBe(1);
+    await manager.closeAll();
+  });
   it('reports connecting then ready with tool count', async () => {
     clientState.listTools = vi.fn(async () => ({
       tools: [

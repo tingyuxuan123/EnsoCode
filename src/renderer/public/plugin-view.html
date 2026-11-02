@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; frame-src 'none'; form-action 'none'; base-uri 'none'; navigate-to 'none'" />
+  <script>
+    (() => {
+      const nonce = location.hash.slice(1);
+      let port = null;
+      let sequence = 0;
+      let theme = 'light';
+      const pending = new Map();
+      Object.defineProperty(window, 'enso', { configurable: false, writable: false, value: Object.freeze({
+        get theme() { return theme; },
+        call(method, args) {
+          if (!port) return Promise.reject(new Error('bridge not ready'));
+          const id = ++sequence;
+          return new Promise((resolve, reject) => { pending.set(id, { resolve, reject }); port.postMessage({ id, method, args: args ?? null }); });
+        },
+      }) });
+      const initialize = (event) => {
+        const data = event.data;
+        if (port || event.source !== window.parent || !nonce || !data || data.type !== 'enso-view-init' || data.nonce !== nonce || typeof data.html !== 'string' || event.ports.length !== 1) return;
+        window.removeEventListener('message', initialize);
+        port = event.ports[0]; theme = data.theme === 'dark' ? 'dark' : 'light';
+        port.onmessage = ({ data: reply }) => {
+          const entry = reply && pending.get(reply.id);
+          if (!entry) return;
+          pending.delete(reply.id);
+          if (reply.ok) entry.resolve(reply.value); else entry.reject(new Error(String(reply.error)));
+        };
+        // Preserve this document's CSP instead of replacing the head with plugin HTML.
+        const documentBody = new DOMParser().parseFromString(data.html, 'text/html');
+        document.documentElement.dataset.theme = theme;
+        for (const node of [...documentBody.head.childNodes, ...documentBody.body.childNodes]) {
+          if (node.nodeType === Node.ELEMENT_NODE && ['META', 'BASE'].includes(node.tagName)) continue;
+          if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SCRIPT') {
+            const script = document.createElement('script'); script.textContent = node.textContent; document.body.appendChild(script);
+          } else document.body.appendChild(document.importNode(node, true));
+        }
+      };
+      // No navigation/UI popup privileges are granted by sandbox. Block link/form defaults too.
+      document.addEventListener('click', (event) => { if (event.target.closest?.('a')) event.preventDefault(); }, true);
+      document.addEventListener('submit', (event) => event.preventDefault(), true);
+      window.addEventListener('message', initialize);
+    })();
+  </script>
+</head>
+<body></body>
+</html>

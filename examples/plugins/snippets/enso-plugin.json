@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "enso.example.snippets",
+  "name": "Snippets (local demo)",
+  "version": "1.0.0",
+  "description": "Static # snippets, a composer button and a right-side reply action. No network or credentials.",
+  "main": "main.mjs",
+  "renderer": "ui.js",
+  "permissions": ["ui.slot", "composer.draft"],
+  "contributes": { "triggers": [{ "symbol": "#", "name": "snippet" }] }
+}

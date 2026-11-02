@@ -1,0 +1,135 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { MainToPluginHost, PluginHostToMain } from '@shared/extensionPlugins/protocol';
+import { afterEach, describe, expect, it } from 'vitest';
+import { runPluginHost } from './host';
+
+const dirs: string[] = [];
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+function harness(source: string) {
+  const dir = mkdtempSync(join(tmpdir(), 'plugin-host-'));
+  dirs.push(dir);
+  writeFileSync(join(dir, 'main.mjs'), source);
+  const sent: PluginHostToMain[] = [];
+  let handler: (msg: unknown) => void = () => {};
+  runPluginHost({ send: (m) => sent.push(m), onMessage: (h) => (handler = h) });
+  const deliver = (msg: MainToPluginHost) => handler(msg);
+  const next = async (pred: (m: PluginHostToMain) => boolean) => {
+    for (let i = 0; i < 200; i++) {
+      const found = sent.find(pred);
+      if (found) return found;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    throw new Error('timeout');
+  };
+  deliver({ t: 'init', pluginId: 'a.b', pluginRoot: dir, main: 'main.mjs', dataDir: dir });
+  return { sent, deliver, next };
+}
+
+const call = (
+  id: string,
+  method: 'tool.execute' | 'command.run' | 'renderer.call',
+  payload: unknown
+) =>
+  ({
+    t: 'call',
+    id,
+    method,
+    payload,
+    invocationId: `inv-${id}`,
+    sessionId: 's1',
+    projectRoot: '/repo',
+  }) as const;
+
+describe('upstream runPluginHost compatibility', () => {
+  it('加载后上报已注册的工具、命令、补全和渲染方法', async () => {
+    const h = harness(`export function activate(enso) {
+      enso.tools.register('lookup', async (args) => 'hi ' + args.q);
+      enso.commands.register('refresh', async () => {});
+      enso.triggers.register('demo', { candidates: async () => [], pick: async () => ({ text: 'x' }) });
+      enso.renderer.handle('ping', async () => 'pong');
+    }`);
+    const ready = await h.next((m) => m.t === 'ready');
+    expect(ready).toEqual({
+      t: 'ready',
+      registered: {
+        tools: ['lookup'],
+        commands: ['refresh'],
+        triggers: ['demo'],
+        rendererMethods: ['ping'],
+      },
+    });
+  });
+
+  it('执行工具并把字符串结果规整成 { content }', async () => {
+    const h = harness(
+      `export function activate(enso) { enso.tools.register('lookup', async (args, ctx) => 'hi ' + args.q + ' ' + ctx.sessionId); }`
+    );
+    await h.next((m) => m.t === 'ready');
+    h.deliver(call('1', 'tool.execute', { name: 'lookup', args: { q: 'x' } }));
+    expect(await h.next((m) => m.t === 'res' && m.id === '1')).toEqual({
+      t: 'res',
+      id: '1',
+      ok: true,
+      value: { content: 'hi x s1' },
+    });
+  });
+
+  it('activate 抛错时上报 init-error', async () => {
+    const h = harness(`export function activate() { throw new Error('boom'); }`);
+    expect(await h.next((m) => m.t === 'init-error')).toMatchObject({
+      message: expect.stringContaining('boom'),
+    });
+  });
+
+  it('未注册的处理器返回 NOT_FOUND', async () => {
+    const h = harness('export function activate() {}');
+    await h.next((m) => m.t === 'ready');
+    h.deliver(call('2', 'command.run', { id: 'nope' }));
+    expect(await h.next((m) => m.t === 'res' && m.id === '2')).toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND' },
+    });
+  });
+
+  it('处理器内的宿主调用自动带上本次调用 id，并转发回 Main', async () => {
+    const h = harness(`export function activate(enso) {
+      enso.renderer.handle('read', async () => enso.fs.readText('a.txt'));
+    }`);
+    await h.next((m) => m.t === 'ready');
+    h.deliver(call('3', 'renderer.call', { method: 'read', args: null }));
+    const hostCall = await h.next((m) => m.t === 'call');
+    expect(hostCall).toMatchObject({
+      api: 'fs.readText',
+      args: { path: 'a.txt' },
+      invocationId: 'inv-3',
+    });
+    if (hostCall.t !== 'call') return;
+    h.deliver({ t: 'res', id: hostCall.id, ok: true, value: 'content' });
+    expect(await h.next((m) => m.t === 'res' && m.id === '3')).toMatchObject({
+      ok: true,
+      value: 'content',
+    });
+  });
+
+  it('取消后处理器收到 abort，挂起的宿主调用被拒绝', async () => {
+    const h = harness(`export function activate(enso) {
+      enso.tools.register('slow', async (args, ctx) => {
+        try { await enso.fs.readText('a.txt'); return 'done'; }
+        catch (e) { return 'aborted:' + ctx.signal.aborted; }
+      });
+    }`);
+    await h.next((m) => m.t === 'ready');
+    h.deliver(call('4', 'tool.execute', { name: 'slow', args: {} }));
+    await h.next((m) => m.t === 'call');
+    h.deliver({ t: 'cancel', invocationId: 'inv-4' });
+    expect(await h.next((m) => m.t === 'res' && m.id === '4')).toMatchObject({
+      ok: true,
+      value: { content: 'aborted:true' },
+    });
+  });
+});

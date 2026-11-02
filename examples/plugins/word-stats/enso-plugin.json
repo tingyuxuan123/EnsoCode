@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "enso.example.wordstats",
+  "name": "Word Stats (local demo)",
+  "version": "1.0.0",
+  "description": "Count the text supplied to a tool; no file or network access through host APIs.",
+  "main": "main.mjs",
+  "renderer": "ui.js",
+  "permissions": ["agent.tool", "ui.slot"],
+  "contributes": {
+    "agentTools": [
+      {
+        "name": "count_words",
+        "description": "Count words, lines and Unicode characters in the supplied text. Does not read files.",
+        "parameters": {
+          "type": "object",
+          "properties": { "text": { "type": "string", "description": "Text to count" } },
+          "required": ["text"],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "skills": ["skills/bar-chart"],
+    "presets": [
+      {
+        "id": "writer",
+        "name": "Local Writer",
+        "skills": ["skills/bar-chart"],
+        "mcpServers": [],
+        "instruction": "prompts/instruction.md",
+        "systemPrompt": "prompts/persona.md"
+      }
+    ]
+  }
+}

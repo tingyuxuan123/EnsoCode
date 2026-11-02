@@ -5,8 +5,17 @@ import type {
 } from '@shared/types/mentions';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { extractTriggerQuery } from '../../plugins/triggers';
 import { extractMentionQuery, fileMentionBasename, type MentionSegment } from './mentionComposer';
 import { extractSkillQuery } from './skillCompletion';
+
+export function editorSlashQuery(
+  before: string,
+  firstNode: boolean,
+  literal: boolean
+): string | null {
+  return !literal && firstNode && /^\/[^\s]*$/.test(before) ? before.slice(1) : null;
+}
 
 /**
  * contentEditable 提及编辑器:文件/会话以原子卡片(contenteditable=false)内联,
@@ -26,24 +35,26 @@ export interface MentionEditorState {
   slashQuery: string | null;
   /** 光标处的 $query(null = 无活动技能 token) */
   skillQuery: string | null;
+  /** 光标处的 #query（插件补全；/ 命令保持宿主语义） */
+  pluginQuery: string | null;
 }
 
 export interface MentionEditorHandle {
   focus(): void;
   isEmpty(): boolean;
   getSegments(): MentionSegment[];
-  setSegments(segments: readonly MentionSegment[]): void;
+  setSegments(segments: readonly MentionSegment[], literal?: boolean): void;
   clear(): void;
   /** 用卡片替换光标处的 @token(无 token 则插在光标处),尾随一个空格 */
   insertMention(
     candidate: FileMentionCandidate | ChatMentionCandidate | UiElementMentionCandidate
   ): void;
   /** 仅移除光标处的 @token、/token 或 $token */
-  consumeToken(prefix: '@' | '/' | '$'): void;
+  consumeToken(prefix: '@' | '/' | '$' | '#'): void;
   /** 在光标处插入文件卡片(拖拽文件用,无 token 语义) */
   insertFileChip(path: string, label?: string): void;
   /** 在光标处插入纯文本 */
-  insertText(text: string): void;
+  insertText(text: string, literal?: boolean): void;
   /** 活动 @ token 首字符的视口矩形，给 mention 弹窗锚点用 */
   getMentionAnchorRect(): DOMRect | null;
 }
@@ -304,6 +315,7 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
     ref
   ) {
     const rootRef = useRef<HTMLDivElement>(null);
+    const literalNodes = useRef(new WeakSet<Node>());
     /** 最近一次落在编辑器内文本节点上的光标，选区被 IME 推出去时用它拉回 */
     const lastCaretRef = useRef<{ node: Text; offset: number } | null>(null);
 
@@ -354,32 +366,47 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
       let mentionQuery: string | null = null;
       let slashQuery: string | null = null;
       let skillQuery: string | null = null;
+      let pluginQuery: string | null = null;
       const caret = caretContext(root);
       if (caret) {
         const before = caret.node.textContent?.slice(0, caret.offset) ?? '';
         mentionQuery = extractMentionQuery(before, before.length);
         if (mentionQuery === null) skillQuery = extractSkillQuery(before, before.length);
+        if (mentionQuery === null && skillQuery === null) pluginQuery = extractTriggerQuery(before);
         // slash 仅当光标在首个文本节点、且 token 从 0 开始
-        if (mentionQuery === null && caret.node === root.firstChild && /^\/[^\s]*$/.test(before)) {
-          slashQuery = before.slice(1);
-        }
+        if (mentionQuery === null)
+          slashQuery = editorSlashQuery(
+            before,
+            caret.node === root.firstChild,
+            literalNodes.current.has(caret.node)
+          );
       }
-      onStateChange({ plainText, hasMentions, segments, mentionQuery, slashQuery, skillQuery });
+      onStateChange({
+        plainText,
+        hasMentions,
+        segments,
+        mentionQuery,
+        slashQuery,
+        skillQuery,
+        pluginQuery,
+      });
     }, [onStateChange]);
 
     /** 光标处活动 token 的范围(@、/ 或 $) */
     const activeTokenRange = useCallback(
-      (prefix: '@' | '/' | '$'): { node: Text; start: number; end: number } | null => {
+      (prefix: '@' | '/' | '$' | '#'): { node: Text; start: number; end: number } | null => {
         const root = rootRef.current;
         if (!root) return null;
         const caret = caretContext(root);
         if (!caret) return null;
         const before = caret.node.textContent?.slice(0, caret.offset) ?? '';
-        if (prefix === '@' || prefix === '$') {
+        if (prefix === '@' || prefix === '$' || prefix === '#') {
           const query =
             prefix === '@'
               ? extractMentionQuery(before, before.length)
-              : extractSkillQuery(before, before.length);
+              : prefix === '#'
+                ? extractTriggerQuery(before)
+                : extractSkillQuery(before, before.length);
           if (query === null) return null;
           return { node: caret.node, start: before.length - query.length - 1, end: caret.offset };
         }
@@ -433,13 +460,15 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
           );
         },
         getSegments: () => (rootRef.current ? walkSegments(rootRef.current) : []),
-        setSegments: (segments) => {
+        setSegments: (segments, literal = false) => {
           const root = rootRef.current;
           if (!root) return;
           root.textContent = '';
           for (const segment of segments) {
             if (segment.type === 'text') {
-              root.appendChild(document.createTextNode(segment.text));
+              const node = document.createTextNode(segment.text);
+              if (literal) literalNodes.current.add(node);
+              root.appendChild(node);
             } else {
               root.appendChild(buildChip(segment));
             }
@@ -487,8 +516,12 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
             false
           );
         },
-        insertText: (text) => {
-          insertNodeAtCaret(() => document.createTextNode(text), false);
+        insertText: (text, literal = false) => {
+          insertNodeAtCaret(() => {
+            const node = document.createTextNode(text);
+            if (literal) literalNodes.current.add(node);
+            return node;
+          }, false);
         },
         getMentionAnchorRect: () => {
           const token = activeTokenRange('@');

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8" /><style>
+  body { padding: 12px; font: 13px/1.5 system-ui; color: #222; }
+  :root[data-theme='dark'] body { color: #ddd; }
+  textarea { box-sizing: border-box; width: 100%; min-height: 180px; color: inherit; background: transparent; border: 1px solid #888; border-radius: 6px; padding: 8px; }
+  button { margin-top: 8px; }
+</style></head><body>
+  <label for="note">本地便签（卸载插件同时删除）</label><textarea id="note" maxlength="8000"></textarea><button id="save" type="button">保存</button><p id="status" role="status"></p>
+  <script>
+    const note = document.getElementById('note');
+    const status = document.getElementById('status');
+    const save = document.getElementById('save');
+    window.enso.call('read').then((text) => { note.value = text; }).catch((error) => { status.textContent = error.message; });
+    save.onclick = async () => {
+      save.disabled = true;
+      try { await window.enso.call('save', { text: note.value }); status.textContent = '已保存'; }
+      catch (error) { status.textContent = error.message; }
+      finally { save.disabled = false; }
+    };
+  </script>
+</body></html>

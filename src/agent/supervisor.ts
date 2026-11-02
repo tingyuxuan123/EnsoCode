@@ -35,6 +35,7 @@ import {
   WORKSPACE_WRITE_TOOL_ID,
 } from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
+import type { PluginToolDescriptor } from '@shared/extensionPlugins/types';
 import { HUMAN_REQUEST_TIMEOUT_MS } from '@shared/humanRequestTimeout';
 import { DEFAULT_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
 import { pickModelCapabilityOverrides, positiveContextWindow } from '@shared/modelCatalog';
@@ -46,6 +47,7 @@ import {
   EMPTY_PLAN_STATE,
   PLAN_ENTRY_TYPE,
   parsePlanMessage,
+  planPhase,
   splitPlanPrefix,
   withPlanNote,
 } from '@shared/planMode';
@@ -200,6 +202,7 @@ import {
 } from './oauthAccountPool';
 import { PendingNotificationStore } from './pendingNotifications';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
+import { PluginMcpGateway } from './pluginMcpGateway';
 import { progressPreambleExtension } from './progressPreamble';
 import { createProjectSettingsManager } from './projectCode';
 import { projectMessage } from './projection';
@@ -270,6 +273,7 @@ import { createEnsoCapabilitiesTool } from './tools/ensoCapabilities';
 import { createGroupHistoryTool } from './tools/groupHistory';
 import { createGroupTasksTool } from './tools/groupTasks';
 import { createMemoryTools, MemoryInvoker } from './tools/memory';
+import { createPluginTools, PluginToolInvoker } from './tools/pluginTools';
 import { createRoutineProposeTool } from './tools/routinePropose';
 import { confirmOutsideImage, createSendImageTool } from './tools/sendImage';
 import { createWebTools } from './tools/web';
@@ -351,6 +355,7 @@ interface ManagedSession {
   /** 已因不支持 adaptive 降级过的模型（虚拟模型下每个成员各降一次） */
   adaptiveDowngraded: Set<string>;
   computer?: ComputerInvoker;
+  pluginTools?: PluginToolInvoker;
   /** 最近一次 auto_retry_start 携带的原始错误（取消重试时的终态错误文案） */
   lastRetryError?: string;
   /** 已见终态 agent_end、待 agent_settled 收口；failTurn 等提前收口时清掉，settled 不再重复收 */
@@ -453,6 +458,7 @@ const PENDING_COUNTERS: Record<PendingCounterKey, true> = {
   delegation: true,
   agentControl: true,
   computer: true,
+  pluginTools: true,
 };
 
 export function hasPendingCalls(managed: ManagedSession): boolean {
@@ -939,6 +945,8 @@ export class SessionSupervisor {
   private modelDirectoryPush: ModelDirectoryPushState | undefined;
   /** 父会话通知(合并投递):闲则注入合成提示唤醒,忙则挂 pending 搭下次工具结果 */
   private readonly pendingNotifications: PendingNotificationStore;
+  /** 插件经宿主 MCP 的执行通道：绑定 exact generation、plan 与审批。 */
+  private readonly pluginMcp: PluginMcpGateway;
   private readonly forgottenNotifications = new Set<string>();
   private readonly notifier = new ParentNotifier(
     (sessionId) => {
@@ -1077,6 +1085,25 @@ export class SessionSupervisor {
     this.pendingNotifications = new PendingNotificationStore(
       path.join(options.sessionDir, 'pending-notifications')
     );
+    this.pluginMcp = new PluginMcpGateway({
+      session: (identity) => {
+        const managed = this.sessions.get(identity.sessionId);
+        if (!managed || !isSameGeneration(managed.identity, identity) || managed.childIdentity)
+          return null;
+        return {
+          gate: managed.gate,
+          planning: () => {
+            const state = managed.plan?.state();
+            if (!state) return false;
+            const phase = planPhase(state);
+            return phase === 'planning' || phase === 'awaiting_review';
+          },
+          recordScope: managed.session.sessionManager.getSessionId(),
+        };
+      },
+      tools: (server) => this.mcp.resolve(server).then((result) => (result.ok ? result.tools : [])),
+      emit: (event) => this.options.emit(event),
+    });
     this.bgTasks = new BackgroundTaskManager(
       {
         onStarted: (sessionId, task) => {
@@ -1221,6 +1248,8 @@ export class SessionSupervisor {
     managed.delegation?.cancelAll('Session released');
     managed.agentControl?.close('Session released');
     managed.computer?.cancelAll('Session released');
+    managed.pluginTools?.cancelAll('Session released');
+    this.pluginMcp.cancelSession(managed.identity);
     try {
       await managed.session.abort();
     } catch {}
@@ -1623,6 +1652,7 @@ export class SessionSupervisor {
           command.trustedProjectCode,
           command.pluginCommands,
           command.pluginHooks,
+          command.pluginTools ?? [],
           command.botMode,
           command.botGroupTasks,
           command.protectedActions,
@@ -1909,6 +1939,19 @@ export class SessionSupervisor {
         }
         return;
       }
+      case 'plugin-tool-result': {
+        const managed = this.sessions.get(command.identity.sessionId);
+        if (!managed?.pluginTools?.resolve(command)) {
+          console.warn(`[plugin] dropped result for unknown request ${command.requestId}`);
+        }
+        return;
+      }
+      case 'plugin-mcp-list':
+      case 'plugin-mcp-call':
+      case 'plugin-mcp-cancel': {
+        this.pluginMcp.handle(command);
+        return;
+      }
       case 'append-session-custom-entry': {
         const managed = this.must(command.identity);
         managed.session.sessionManager.appendCustomEntry('enso-agent-session', command.entry);
@@ -2096,6 +2139,8 @@ export class SessionSupervisor {
         // 用户中止：预算 Run 就此结束，不再补交报告，之后的回合也不再计数
         managed.requestBudget?.disarm();
         managed.computer?.cancelAll('Computer action aborted');
+        managed.pluginTools?.cancelAll('Plugin tool aborted');
+        this.pluginMcp.cancelSession(managed.identity);
         // 立即收口投影：不 await session.abort()（内部 waitForIdle 会一直等到工具/流
         // 真正结束，工具不响应 signal 时永远等不到，UI 就卡在 running 上）。
         // 中断信号发出即视为本轮终止，后续 agent_end 回流由 status 守卫幂等吸收。
@@ -2165,6 +2210,7 @@ export class SessionSupervisor {
     trustedProjectCode: readonly string[] = [],
     pluginCommands: readonly PluginCommandSpawn[] = [],
     pluginHooks: readonly PluginHookSpawn[] = [],
+    pluginToolDescriptors: readonly PluginToolDescriptor[] = [],
     botMode = false,
     botGroupTasks = false,
     protectedActions = false,
@@ -3033,8 +3079,50 @@ export class SessionSupervisor {
     );
     const planGated = (tools: Def[]): Def[] =>
       tools.map((tool) => withPlanGate(tool, { host: planHost, readonlyAgentTypes }));
+    // 原生插件工具：执行经 Main 回到插件进程。仍然受 plan 门与工具审批约束，
+    // 插件声明的描述不参与保护动作分类，也不给任何免审能力。
+    const pluginToolInvoker =
+      pluginToolDescriptors.length > 0
+        ? new PluginToolInvoker(
+            identity,
+            (request) => {
+              const managed = managedRef ?? this.sessions.get(sessionId);
+              if (!managed) throw new Error('Session is not ready for plugin tools.');
+              this.options.emit({
+                type: 'plugin-tool-invoke',
+                identity: managed.identity,
+                seq: ++managed.seq,
+                requestId: request.requestId,
+                toolName: request.toolName,
+                fingerprint: request.fingerprint,
+                args: request.args,
+              });
+            },
+            {
+              emitCancel: (requestId) => {
+                const managed = managedRef ?? this.sessions.get(sessionId);
+                if (managed) {
+                  this.options.emit({
+                    type: 'plugin-tool-cancel',
+                    identity: managed.identity,
+                    seq: ++managed.seq,
+                    requestId,
+                  });
+                }
+              },
+            }
+          )
+        : undefined;
+    const pluginTools = pluginToolInvoker
+      ? planGated(
+          createPluginTools([...pluginToolDescriptors], pluginToolInvoker).map((tool) =>
+            withApproval(gate, 'command', tool as unknown as Def)
+          ) as Def[]
+        )
+      : [];
     const customTools = decorateSessionTools(
       [
+        ...pluginTools,
         ...planGated(sessionTools),
         ...builtin('plan', [createSubmitPlanTool(planHost, randomUUID)]),
       ],
@@ -3159,6 +3247,7 @@ export class SessionSupervisor {
       if (managed.plan && planMode !== undefined) plan.setActive(planMode);
     }
     managedRef.computer = computer;
+    managedRef.pluginTools = pluginToolInvoker;
     managedRef.delegation = delegation;
     this.options.emit({
       type: 'parent-ready',
@@ -4938,6 +5027,8 @@ export class SessionSupervisor {
       managed.agentControl?.close('Enso worker shutdown');
       managed.currentTurnId = undefined;
       managed.computer?.cancelAll('Enso worker shutdown');
+      managed.pluginTools?.cancelAll('Enso worker shutdown');
+      this.pluginMcp.close();
       // pi 的 bash 是 detached 进程组，只在中断信号上 killProcessTree；SDK 未导出退出清理，
       // 这里同步触发中断（不等 waitForIdle），否则 worker 退出后命令成孤儿进程
       void managed.session.abort().catch(() => {});

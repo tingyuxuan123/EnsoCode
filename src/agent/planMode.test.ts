@@ -49,6 +49,15 @@ function setup(state: PlanState, mode: 'supervised' | 'full' = 'full') {
 }
 
 describe('withPlanGate', () => {
+  it.each([planning, reviewing])(
+    '原生插件工具在规划/待审时默认拒绝，不进入插件代码',
+    async (state) => {
+      const { run } = setup(state);
+      const plugin = tool('plugin_enso-example__write');
+      await expect(run(plugin, { text: 'mutation' })).rejects.toThrow(/Plan mode is active/);
+      expect(plugin.execute).not.toHaveBeenCalled();
+    }
+  );
   it('非 Plan 状态原样放行', async () => {
     const { run } = setup(EMPTY_PLAN_STATE);
     const edit = tool('edit');

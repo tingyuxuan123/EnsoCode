@@ -77,6 +77,7 @@ import { addSidePanelChanges } from '@/lib/sidePanelDock';
 import { stripAnsi } from '@/lib/terminalText';
 import { SUBAGENT_OP_LABEL_KEYS, TOOL_LABEL_KEYS, toolLabel } from '@/lib/toolLabels';
 import { cn } from '@/lib/utils';
+import { PluginToolCardSlot } from '@/plugins/slots';
 import { useSessionsStore } from '@/stores/sessions';
 import {
   canShowConversationFork,
@@ -2320,6 +2321,11 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                 </>
               )}
               {item.approvalReview && <ApprovalReviewBar value={item.approvalReview} />}
+              <PluginToolCardSlot
+                name={item.name}
+                output={item.output ?? null}
+                state={item.state}
+              />
               <RtkToolStatsBar value={item.rtk} />
             </ToolContentScroller>
           )}

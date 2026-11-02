@@ -66,6 +66,7 @@ import {
   forkSession,
   isAgentWorkerReady,
   isBrowserSessionToolEnabled,
+  pluginHostMcpServers,
   promptChildSession,
   promptSession,
   readSettingsState,
@@ -110,6 +111,8 @@ import { chatModelsRoot } from '../services/chatModels';
 import { readChildHistory as readPersistedChildHistory } from '../services/childHistory';
 import { computerHost } from '../services/computerHost';
 import { reloadConversation } from '../services/conversationReload';
+import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
+import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionPlugins/planPolicy';
 import { searchFiles } from '../services/fileSearch';
 import { createLocalComplete, memoryCompleteFromSettings } from '../services/llama/chat';
 import {
@@ -127,6 +130,7 @@ import {
   rootSessionId,
   scheduleMemoryDistill,
 } from '../services/memoryHost';
+import { setNativePluginResources } from '../services/nativePluginResources';
 import { maybeNotify, maybeNotifyBot, setViewedSession } from '../services/notifications';
 import { readStoredOauthCredentialKeys } from '../services/oauthProviders';
 import { forwardAgentEvent, setPairAgentBridge } from '../services/pairHost';
@@ -211,6 +215,7 @@ let dispatchService: AgentDispatchService | null = null;
 let agentService: AgentService | null = null;
 const pendingAgentControl = new Map<string, AbortController>();
 const pendingComputer = new Map<string, AbortController>();
+const pendingPluginTools = new Map<string, AbortController>();
 interface PendingBrowser {
   identity: SessionIdentity | ChildSessionIdentity;
   controller: AbortController;
@@ -453,6 +458,14 @@ function projectIdFor(sessionId: string): string | undefined {
   const id = sourceAuthority?.conversation(sessionId)?.projectId;
   // 临时载体不接受 Renderer 配置的项目级覆盖，始终沿用全局权限与模型规则。
   return id && sourceAuthority?.project(id)?.kind !== 'scratch' ? id : undefined;
+}
+
+/** 插件 fs 代办的项目根：只认权威记录；SSH 会话的目录不在本机，返回 null。 */
+export function pluginProjectRoot(sessionId: string): string | null {
+  const conversation = sourceAuthority?.conversation(sessionId);
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  if (project?.kind === 'ssh') return null;
+  return authoritativeSpawnCwd(sessionId);
 }
 
 /** 旁路会话继承父会话工作区；路径由 Main 从权威记录推导，不采信 renderer。 */
@@ -972,6 +985,56 @@ async function runAgentControl(
   }
 }
 
+/** Main keeps the latest folded Plan state per live generation, for that-generation plugin policy. */
+const pluginPlanStates = new PluginPlanStates();
+const pluginMcp = new PluginMcpRequests((command) => sendAgentCommand(command).ok);
+
+function pluginTargetIdentity(sessionId: string | null) {
+  if (!sessionId) return null;
+  const identity = agentSessionIndex.currentIdentity(sessionId);
+  return identity && !('parent' in identity) ? identity : null;
+}
+
+/** Everything a plugin asks Main to do on behalf of a session re-checks that session's live state. */
+async function pluginInvocationPolicy(target: {
+  sessionId: string | null;
+  projectRoot: string | null;
+}) {
+  const blocked = { allowWrite: false, allowMcpCall: false };
+  const identity = pluginTargetIdentity(target.sessionId);
+  if (!identity || !target.projectRoot) return blocked;
+  if (!agentSessionIndex.isReady(identity)) return blocked;
+  if (!pluginPlanStates.allows(identity)) return blocked;
+  return { allowWrite: true, allowMcpCall: true };
+}
+
+function pluginMcpServers() {
+  return pluginHostMcpServers();
+}
+
+async function wireNativePluginHost(): Promise<void> {
+  // 插件宿主只在真正需要时加载；测试与无插件场景不需要它的独立进程入口。
+  const { getExtensionPlugins, setPluginInvocationPolicy, setPluginMcpBridge } = await import(
+    '../services/extensionPlugins'
+  );
+  setPluginInvocationPolicy(pluginInvocationPolicy);
+  setPluginMcpBridge({
+    mcpTools: (_target, signal) => {
+      const identity = pluginTargetIdentity(_target.sessionId);
+      if (!identity) return Promise.reject(new Error('Plugin MCP session is unavailable'));
+      return pluginMcp.list({ identity, servers: pluginMcpServers() }, signal);
+    },
+    mcpCall: (_target, server, tool, args, signal) => {
+      const identity = pluginTargetIdentity(_target.sessionId);
+      if (!identity) return Promise.reject(new Error('Plugin MCP session is unavailable'));
+      return pluginMcp.call({ identity, servers: pluginMcpServers(), server, tool, args }, signal);
+    },
+  });
+  // 只读取已启用插件的描述与资源，不执行插件代码；插件进程在首次真实调用时才启动。
+  const service = getExtensionPlugins();
+  setNativePluginResources((presetId) => service.sessionResources(presetId) as never);
+}
+
 export function registerAgentHandlers(): void {
   cancelBrowserRequests();
   seenBrowserRequests.clear();
@@ -996,6 +1059,9 @@ export function registerAgentHandlers(): void {
     },
   });
   // OS 的 /tmp 等上层别名先正规化；scratch helper 仍拒绝自身或子目录的符号链接。
+  void wireNativePluginHost().catch((error) => {
+    console.warn('[plugins] native plugin host unavailable:', error);
+  });
   sourceAuthority.ensureScratchProject(path.join(realpathSync(app.getPath('userData')), 'scratch'));
   setBrowserFileRootResolver((conversationId) => {
     const rootId = agentSessionIndex.workspaceRoot(conversationId);
@@ -1179,6 +1245,8 @@ export function registerAgentHandlers(): void {
       pendingAgentControl.clear();
       for (const controller of pendingComputer.values()) controller.abort();
       pendingComputer.clear();
+      for (const controller of pendingPluginTools.values()) controller.abort();
+      pendingPluginTools.clear();
       computerHost.closeAll();
       for (const targetId of pendingWorktreeForks.keys()) discardForkWorktree(targetId);
       // worker 死后连接全部失效：清掉残留状态，避免设置页长期显示假 ready
@@ -1192,9 +1260,11 @@ export function registerAgentHandlers(): void {
       workerEvent.type === 'workspace-lock-result' ||
       workerEvent.type === 'oauth-pool-select' ||
       workerEvent.type === 'mcp-oauth-refresh' ||
+      workerEvent.type === 'plugin-mcp-result' ||
       workerEvent.type === 'workspace-unlock-result'
     )
       return;
+    observePluginPlanEvent(pluginPlanStates, workerEvent);
     dispatchService?.observe(workerEvent);
     agentService?.observe(workerEvent);
     botWorkerObserver?.(workerEvent);
@@ -1527,6 +1597,40 @@ export function registerAgentHandlers(): void {
           error: error instanceof Error ? error.message : String(error),
         });
       }
+      return;
+    }
+    if (workerEvent.type === 'plugin-tool-cancel') {
+      pendingPluginTools.get(workerEvent.requestId)?.abort();
+      return;
+    }
+    if (workerEvent.type === 'plugin-tool-invoke') {
+      const { identity, requestId, toolName, fingerprint, args } = workerEvent;
+      const controller = new AbortController();
+      pendingPluginTools.set(requestId, controller);
+      void (async () => {
+        const { getExtensionPlugins } = await import('../services/extensionPlugins');
+        return getExtensionPlugins().callTool({
+          toolName,
+          fingerprint,
+          args,
+          sessionId: identity.sessionId,
+          projectRoot: pluginProjectRoot(identity.sessionId),
+          signal: controller.signal,
+        });
+      })()
+        .then(
+          (result) =>
+            sendAgentCommand({ type: 'plugin-tool-result', identity, requestId, ok: true, result }),
+          (error: unknown) =>
+            sendAgentCommand({
+              type: 'plugin-tool-result',
+              identity,
+              requestId,
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            })
+        )
+        .finally(() => pendingPluginTools.delete(requestId));
       return;
     }
     if (workerEvent.type === 'computer-cancel') {

@@ -33,6 +33,13 @@ import { useI18n } from '@/i18n';
 import { effectiveKeybindings, eventToBinding, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
+import { registerDraftTarget } from '../../plugins/draftBridge';
+import { PluginComposerSlots } from '../../plugins/slots';
+import {
+  type PluginCandidate,
+  pickPluginCandidate,
+  usePluginTriggerCandidates,
+} from '../../plugins/triggers';
 import {
   registerComposerFocus,
   registerComposerInsert,
@@ -197,6 +204,27 @@ export function Composer({
   const composerRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
+  const pluginStateRef = useRef({ busy, locked, images, slash, recipient, focusKey });
+  pluginStateRef.current = { busy, locked, images, slash, recipient, focusKey };
+  const pluginEditRevision = useRef(0);
+  useEffect(() => {
+    if (isolated || !focusKey) return;
+    return registerDraftTarget({
+      key: focusKey,
+      segments: () => editorRef.current?.getSegments() ?? [],
+      insertText: (text) => editorRef.current?.insertText(text, true),
+      setText: (text) => editorRef.current?.setSegments(text ? [{ type: 'text', text }] : [], true),
+      revision: () => pluginEditRevision.current,
+      busy: () =>
+        composingRef.current ||
+        pluginStateRef.current.busy ||
+        pluginStateRef.current.locked ||
+        !editorRef.current,
+      hasReferences: () =>
+        pluginStateRef.current.images.length > 0 ||
+        Boolean(pluginStateRef.current.slash || pluginStateRef.current.recipient),
+    });
+  }, [isolated, focusKey]);
   const [popupLayout, setPopupLayout] = useState<{
     left: number;
     flyoutSide: 'left' | 'right';
@@ -212,6 +240,8 @@ export function Composer({
   );
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [skillQuery, setSkillQuery] = useState<string | null>(null);
+  const [pluginQuery, setPluginQuery] = useState<string | null>(null);
+  const pluginItems = usePluginTriggerCandidates(isolated ? null : pluginQuery, focusKey ?? null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [openFolderId, setOpenFolderId] = useState<MentionFolderId | null>(null);
   const [folderIndex, setFolderIndex] = useState(0);
@@ -220,6 +250,7 @@ export function Composer({
   /** 编辑器每次输入/光标变化回流：同步 query 与派生态，重置弹窗选中 */
   const handleEditorState = useCallback(
     (state: MentionEditorState) => {
+      pluginEditRevision.current++;
       if (state.plainText.trim() || state.hasMentions) onActivate?.();
       setEditorPlain(state.plainText);
       setEditorHasMentions(state.hasMentions);
@@ -244,6 +275,7 @@ export function Composer({
       });
       setSlashQuery(state.slashQuery);
       setSkillQuery(state.skillQuery);
+      setPluginQuery(state.pluginQuery);
     },
     [onActivate]
   );
@@ -312,7 +344,7 @@ export function Composer({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset highlight when the filter token changes
   useEffect(() => {
     setActiveIndex(0);
-  }, [slashQuery, skillQuery, subQuery]);
+  }, [slashQuery, skillQuery, subQuery, pluginQuery]);
 
   useEffect(() => {
     const item = slashListRef.current?.children[activeIndex] as HTMLElement | undefined;
@@ -331,14 +363,47 @@ export function Composer({
     setMentionQuery(null);
   }, []);
 
+  const pickPlugin = useCallback(
+    (candidate: PluginCandidate) => {
+      const revision = pluginEditRevision.current;
+      const sessionId = focusKey;
+      setPluginQuery(null);
+      void pickPluginCandidate(candidate, sessionId ?? null).then((text) => {
+        const state = pluginStateRef.current;
+        const editor = editorRef.current;
+        if (
+          text === null ||
+          !editor ||
+          revision !== pluginEditRevision.current ||
+          sessionId !== state.focusKey ||
+          state.busy ||
+          state.locked ||
+          composingRef.current ||
+          state.images.length ||
+          state.slash ||
+          state.recipient ||
+          editor.getSegments().some((segment) => segment.type !== 'text')
+        )
+          return;
+        editor.consumeToken('#');
+        editor.insertText(text, true);
+        setPluginQuery(null);
+        setSlashQuery(null);
+      });
+    },
+    [focusKey]
+  );
+
   const popupKind =
     mentionQuery !== null && mentionItems.length > 0
       ? 'mention'
-      : slashResults.length > 0
-        ? 'slash'
-        : subResults.length > 0
-          ? 'slash-sub'
-          : null;
+      : pluginQuery !== null && pluginItems.length > 0
+        ? 'plugin'
+        : slashResults.length > 0
+          ? 'slash'
+          : subResults.length > 0
+            ? 'slash-sub'
+            : null;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 光标移动、picker 挂载、flyout 打开都要重测宽高
   useLayoutEffect(() => {
@@ -369,9 +434,11 @@ export function Composer({
   const popupLength =
     popupKind === 'mention'
       ? mentionItems.length
-      : popupKind === 'slash-sub'
-        ? subResults.length
-        : slashResults.length;
+      : popupKind === 'plugin'
+        ? pluginItems.length
+        : popupKind === 'slash-sub'
+          ? subResults.length
+          : slashResults.length;
 
   const applySlashSubcommand = useCallback(
     (name: string, sendNow: boolean) => {
@@ -406,6 +473,9 @@ export function Composer({
         }
         const item = mentionItems[activeIndex];
         if (item?.type === 'item') pickMention(item.candidate);
+      } else if (popupKind === 'plugin') {
+        const item = pluginItems[activeIndex];
+        if (item) pickPlugin(item);
       } else if (popupKind === 'slash') {
         const item = slashResults[activeIndex];
         if (!item) return;
@@ -426,6 +496,8 @@ export function Composer({
       mentionGroups,
       mentionItems,
       pickMention,
+      pickPlugin,
+      pluginItems,
       popupKind,
       slashResults,
       skillQuery,
@@ -527,6 +599,7 @@ export function Composer({
         setMentionQuery(null);
         setSlashQuery(null);
         setSkillQuery(null);
+        setPluginQuery(null);
         setOpenFolderId(null);
         return;
       }
@@ -581,6 +654,35 @@ export function Composer({
           left={popupLayout.left}
           flyoutSide={popupLayout.flyoutSide}
         />
+      )}
+      {popupKind === 'plugin' && (
+        <div
+          ref={slashListRef}
+          role="listbox"
+          aria-label={t('Plugin suggestions')}
+          className="absolute bottom-full left-0 z-10 mb-1.5 max-h-64 w-full overflow-y-auto rounded-[6px] border bg-popover p-1 shadow-md"
+        >
+          {pluginItems.map((candidate, index) => (
+            <button
+              key={candidate.key}
+              type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => pickPlugin(candidate)}
+              onMouseMove={() => setActiveIndex(index)}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-[calc(12rem/14)]',
+                index === activeIndex && 'bg-foreground/10'
+              )}
+            >
+              <span className="font-medium">#{candidate.item.label}</span>
+              <span className="min-w-0 truncate text-muted-foreground">
+                {candidate.item.detail}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
       {(popupKind === 'slash' || popupKind === 'slash-sub') && (
         <div
@@ -833,7 +935,23 @@ export function Composer({
               />
             ) : null}
             {toolbar}
+            {!isolated && (
+              <PluginComposerSlots
+                side="left"
+                sessionId={focusKey ?? null}
+                draft={editorPlain.replaceAll('\uFFFC', '')}
+                busy={busy || locked}
+              />
+            )}
           </div>
+          {!isolated && (
+            <PluginComposerSlots
+              side="right"
+              sessionId={focusKey ?? null}
+              draft={editorPlain.replaceAll('\uFFFC', '')}
+              busy={busy || locked}
+            />
+          )}
           {/* 生成中且输入为空才显示停止；有草稿则保持发送，方便手机点按钮入队 */}
           {effectiveBusy && !hasContent ? (
             <Button

@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { NativePluginsSection } from '@/plugins/NativePluginsSection';
 import { useSettingsStore } from '@/stores/settings';
 import { NewSessionBadge } from './NewSessionBadge';
 
@@ -158,13 +159,14 @@ export function PluginsSettings() {
 
   return (
     <div className="space-y-[24px]" data-slot="settings-page">
+      <NativePluginsSection />
       <div
         className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
         data-settings-row="plugins.root"
       >
         <div>
           <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
-            {t('Plugins')}
+            {t('Claude Code plugins')}
             <NewSessionBadge />
             {enabledCount > 0 && (
               <span className="ml-2 font-normal text-muted-foreground text-[calc(12rem/14)]">

@@ -1598,6 +1598,75 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.COMPUTER_OPEN_PERMISSIONS, kind),
   },
 
+  extensionPlugins: {
+    list: (): Promise<ExtensionPluginListResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_LIST),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
+    },
+    pickAndStage: (kind: 'dir' | 'zip'): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_PICK_AND_STAGE, kind),
+    stageFromUrl: (url: string): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_URL, url),
+    commit: (token: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_COMMIT, token),
+    discard: (token: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_DISCARD, token),
+    setEnabled: (id: string, enabled: boolean): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_SET_ENABLED, id, enabled),
+    approvePending: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_APPROVE_PENDING, id),
+    rejectPending: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_REJECT_PENDING, id),
+    uninstall: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_UNINSTALL, id),
+    configGet: (
+      id: string
+    ): Promise<{ ok: true; fields: ExtensionPluginConfigField[] } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_GET, id),
+    configSet: (
+      id: string,
+      patch: Record<string, string | null>
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_SET, id, patch),
+    call: (request: {
+      pluginId: string;
+      method: 'command.run' | 'trigger.candidates' | 'trigger.pick' | 'renderer.call';
+      payload: Record<string, unknown>;
+      sessionId: string | null;
+      /** Renderer 在收到调用时读取 navigator.userActivation.isActive；Main 缺省按 false 处理。 */
+      gesture?: boolean;
+    }): Promise<
+      { ok: true; value: unknown; code?: string } | { ok: false; error: string; code?: string }
+    > => ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CALL, request),
+    asset: (
+      id: string,
+      rel: string
+    ): Promise<{ ok: true; mime: string; base64: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_ASSET, id, rel),
+    onDraftRequest: (
+      callback: (request: {
+        requestId: string;
+        sessionId: string;
+        op: 'readDraft' | 'insertText' | 'replaceDraft';
+        payload: Record<string, unknown>;
+      }) => void
+    ): (() => void) => {
+      const listener = (_event: unknown, request: Parameters<typeof callback>[0]) =>
+        callback(request);
+      ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_DRAFT_REQUEST, listener);
+      return () =>
+        ipcRenderer.removeListener(IPC_CHANNELS.EXTENSION_PLUGINS_DRAFT_REQUEST, listener);
+    },
+    respondDraft: (
+      response:
+        | { requestId: string; ok: true; value: unknown }
+        | { requestId: string; ok: false; code: string; error: string }
+    ): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_DRAFT_RESPONSE, response),
+  },
   workspaceSearch: {
     query: (request: WorkspaceSearchQueryRequest): Promise<WorkspaceSearchQueryResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_SEARCH_QUERY, request),
@@ -1609,3 +1678,13 @@ export type ElectronAPI = typeof electronAPI;
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
 import type { ComputerAllowedApp, ComputerCapabilities } from '@shared/computer/types';
+import type {
+  ExtensionPluginConfigField,
+  ExtensionPluginInstallPreview,
+  ExtensionPluginListResult,
+} from '@shared/extensionPlugins/types';
+
+type PluginStageResult =
+  | { ok: true; preview: ExtensionPluginInstallPreview }
+  | { ok: true; cancelled: true }
+  | { ok: false; error: string };

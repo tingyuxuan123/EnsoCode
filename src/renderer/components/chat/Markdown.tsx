@@ -25,6 +25,8 @@ import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { openSidePanelFile } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
+import { parsePluginFence, pluginBlock } from '@/plugins/registry';
+import { PluginBlock } from '@/plugins/slots';
 import { useSettingsStore } from '@/stores/settings';
 import { CodeBlock } from './CodeBlock';
 import { CopyButton } from './CopyButton';
@@ -608,6 +610,11 @@ export const markdownComponents: Components = {
     const language = parseFenceLang(info);
     if (language?.toLowerCase() === 'mermaid') {
       return <MermaidRenderer code={source} streaming={streaming} />;
+    }
+    // 插件代码块：语言标记形如 `pluginId:lang`，只有该插件已启用并注册时才接管渲染。
+    const fence = language ? parsePluginFence(language) : null;
+    if (fence && pluginBlock(fence.pluginId, fence.lang)) {
+      return <PluginBlock pluginId={fence.pluginId} lang={fence.lang} source={source} />;
     }
     return <CodeBlock code={source} language={language} streaming={streaming} />;
   },

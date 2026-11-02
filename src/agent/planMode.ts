@@ -209,6 +209,10 @@ export function withPlanGate(
         return definition.execute(toolCallId, params, signal, onUpdate, ctx);
       const record = (params ?? {}) as Record<string, unknown>;
       const name = definition.name;
+      // Native plugin descriptors do not prove read-only behavior. Default-deny while planning,
+      // including codemode calls which share this wrapper; installation is not plan approval.
+      if (name.startsWith('plugin_'))
+        throw denied('native plugin tools are disabled while planning');
       if (DENIED_TOOLS.has(name)) throw denied(`${name} is disabled while planning`);
       if (name === 'computer' && normalizeComputerParams(params)?.readOnly !== true) {
         throw denied('computer only runs with read_only: true while planning');

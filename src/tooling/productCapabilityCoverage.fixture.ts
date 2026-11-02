@@ -871,6 +871,22 @@ export const IPC_PRODUCT_COVERAGE = {
   COMPUTER_OPEN_PERMISSIONS: surfaces('coding-tools.computer'),
   COMPUTER_ALLOWED_APPS: surfaces('coding-tools.computer'),
   COMPUTER_REVOKE_APP: surfaces('coding-tools.computer'),
+  EXTENSION_PLUGINS_LIST: surfaces('tools.list'),
+  EXTENSION_PLUGINS_CHANGED: excluded('Push notification for the plugins settings page.'),
+  EXTENSION_PLUGINS_COMMIT: surfaces('tools.list'),
+  EXTENSION_PLUGINS_DISCARD: surfaces('tools.list'),
+  EXTENSION_PLUGINS_SET_ENABLED: surfaces('tools.list'),
+  EXTENSION_PLUGINS_APPROVE_PENDING: surfaces('tools.list'),
+  EXTENSION_PLUGINS_REJECT_PENDING: surfaces('tools.list'),
+  EXTENSION_PLUGINS_UNINSTALL: surfaces('tools.list'),
+  EXTENSION_PLUGINS_PICK_AND_STAGE: surfaces('tools.list'),
+  EXTENSION_PLUGINS_STAGE_URL: surfaces('tools.list'),
+  EXTENSION_PLUGINS_CALL: excluded('Runtime plugin UI call from the trusted renderer.'),
+  EXTENSION_PLUGINS_ASSET: excluded('Runtime plugin asset fetch from the trusted renderer.'),
+  EXTENSION_PLUGINS_DRAFT_REQUEST: excluded('Internal draft bridge request.'),
+  EXTENSION_PLUGINS_DRAFT_RESPONSE: excluded('Internal draft bridge response.'),
+  EXTENSION_PLUGINS_CONFIG_GET: surfaces('tools.list'),
+  EXTENSION_PLUGINS_CONFIG_SET: surfaces('tools.list'),
 } satisfies Record<keyof typeof IPC_CHANNELS, CoverageDisposition>;
 
 export const AUTHORITATIVE_COVERAGE_SOURCES = {

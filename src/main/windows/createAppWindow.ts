@@ -12,6 +12,7 @@ import {
   type WebContents,
   WebContentsView,
 } from 'electron';
+import { installPluginViewNavigationGuard } from '../services/extensionPlugins/viewNavigation';
 import { shouldReloadRenderer } from './rendererGone';
 import { attachPinnedWorkbenchBoundsSync, attachWindowsRestoreWake } from './win32Restore';
 import { windowChromeOptions } from './windowChrome';
@@ -122,6 +123,8 @@ function attachWebContentsHandlers(win: BrowserWindow, contents: WebContents, en
     }
     return { action: 'deny' };
   });
+
+  installPluginViewNavigationGuard(contents);
 
   let goneAt = 0;
   let goneCount = 0;

@@ -120,6 +120,7 @@ import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
 import { getMcpOAuthStore } from './mcpOAuthStore';
 import { getMcpToolCatalog } from './mcpToolCatalog';
 import { getModelDirectorySnapshot, onModelDirectoryChanged } from './modelDirectory';
+import { nativePluginResources } from './nativePluginResources';
 import { OAUTH_POOL_EXHAUSTED } from './oauthAccountPool';
 import {
   getOauthQuotaCoordinator,
@@ -945,25 +946,39 @@ export function spawnSession(
   }
   const approvalReviewerSource = reviewer.ok ? reviewer.source : null;
   const bot = options?.bot;
+  // 原生 Enso 插件：资源只描述已启用的插件，不执行插件代码；Bot 与远程会话不并入本机插件。
+  const native = remote || bot ? null : nativePluginResources(request.presetId);
+  if (native?.preset && !native.preset.ok) return { ok: false, error: native.preset.error };
+  const nativePreset = native?.preset?.ok ? native.preset : undefined;
   const preset: Preset | undefined = bot
     ? { id: 'bot', name: 'bot', skillIds: bot.skillIds, mcpServerIds: bot.mcpServerIds }
-    : resolvePreset(request.presetId);
+    : nativePreset
+      ? undefined
+      : resolvePreset(request.presetId);
   const systemPrompt = bot
     ? { ok: true as const, content: bot.systemPrompt }
-    : resolvePresetSystemPrompt(preset);
+    : nativePreset?.systemPrompt
+      ? { ok: true as const, content: nativePreset.systemPrompt }
+      : resolvePresetSystemPrompt(preset);
   if (!systemPrompt.ok) {
     return { ok: false, error: '自定义系统提示词正文读取失败，请重新保存或恢复默认。' };
   }
   const instruction = bot
     ? bot.instruction
-    : resolveGlobalInstruction(preset ? { instructionId: preset.instructionId } : undefined);
+    : nativePreset?.instruction
+      ? nativePreset.instruction
+      : resolveGlobalInstruction(preset ? { instructionId: preset.instructionId } : undefined);
   const state = readSettingsState();
   // Claude 插件：按各自开关现读安装目录，不受预设影响
   const plugins = enabledPlugins(state);
-  const skillPaths = [...enabledSkillPaths(preset), ...(bot ? [] : plugins.skillPaths)];
-  const mcpServers = enabledMcpServers(preset);
+  const skillPaths = [
+    ...enabledSkillPaths(preset),
+    ...(bot ? [] : plugins.skillPaths),
+    ...(native?.skillPaths ?? []),
+  ];
+  const mcpServers = enabledMcpServers(nativePreset ? undefined : preset);
   const mcpNames = new Set(mcpServers.map((server) => server.name));
-  for (const server of bot ? [] : plugins.mcpServers) {
+  for (const server of [...(bot ? [] : plugins.mcpServers), ...(native?.mcpServers ?? [])]) {
     if (!mcpNames.has(server.name)) mcpServers.push(server);
     mcpNames.add(server.name);
   }
@@ -1036,6 +1051,7 @@ export function spawnSession(
     ...(mcpServers.length > 0 ? { mcpServers } : {}),
     ...(plugins.commands.length > 0 ? { pluginCommands: plugins.commands } : {}),
     ...(pluginHooks.length > 0 ? { pluginHooks } : {}),
+    ...(native && native.tools.length > 0 ? { pluginTools: native.tools } : {}),
     ...(request.approvalMode ? { approvalMode: request.approvalMode } : {}),
     ...(request.planMode !== undefined ? { planMode: request.planMode } : {}),
     ...approvalReviewerSpawnFields(approvalReviewerSource),
@@ -1854,6 +1870,11 @@ function enabledSkillPaths(preset?: Preset): string[] {
     ? skills.filter((skill) => preset.skillIds.includes(skill.id))
     : skills.filter((skill) => skill.enabled !== false);
   return picked.map((skill) => skill.path);
+}
+
+/** 插件调宿主 MCP：用户已启用的全部 server，凭据由 Main 组装，不经插件。 */
+export function pluginHostMcpServers(): McpServerSpawnConfig[] {
+  return enabledMcpServers();
 }
 
 function enabledMcpServers(preset?: Preset): McpServerSpawnConfig[] {

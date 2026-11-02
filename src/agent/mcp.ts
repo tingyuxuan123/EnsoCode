@@ -586,7 +586,7 @@ export class McpManager {
     callTimeoutMs: number
   ): ToolDefinition {
     let active = client;
-    const invoke = (target: Client, params: unknown) =>
+    const invoke = (target: Client, params: unknown, signal?: AbortSignal) =>
       withTimeout(
         // SDK 内部请求默认 60s 超时，必须显式传入，否则外层 withTimeout 永远轮不到
         target.callTool(
@@ -595,7 +595,7 @@ export class McpManager {
             arguments: (params ?? {}) as Record<string, unknown>,
           },
           undefined,
-          { timeout: callTimeoutMs }
+          { timeout: callTimeoutMs, signal }
         ),
         callTimeoutMs,
         `callTool ${name}`
@@ -627,17 +627,20 @@ export class McpManager {
         description: server.description || server.name,
       },
       ...(annotations ? { annotations } : {}),
-      execute: async (_toolCallId, raw) => {
+      execute: async (_toolCallId, raw, signal) => {
+        if (signal?.aborted) throw new Error('MCP call aborted');
         // 归一幂等：不依赖调用方是否已走过 prepareArguments
         const params = prepare ? prepare(raw) : raw;
         try {
-          return mapToolResult(await invoke(active, params), name);
+          return mapToolResult(await invoke(active, params, signal), name);
         } catch (error) {
+          if (signal?.aborted) throw error;
           if (!isRetriableMcpConnectionError(error)) throw error;
           const next = await this.reconnect(server, active);
           if (!next) throw error;
           active = next.client;
-          return mapToolResult(await invoke(active, params), name);
+          if (signal?.aborted) throw new Error('MCP call aborted');
+          return mapToolResult(await invoke(active, params, signal), name);
         }
       },
     };

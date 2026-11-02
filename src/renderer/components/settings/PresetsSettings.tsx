@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useScrollChain } from '@/hooks/useScrollChain';
 import { useI18n } from '@/i18n';
+import { useEnabledPluginPresets } from '@/plugins/usePluginPresets';
 import { useSettingsStore } from '@/stores/settings';
 import { ListFilterBar, matchesFilter } from './ListFilterBar';
 import { NewSessionBadge } from './NewSessionBadge';
@@ -24,6 +25,7 @@ import { NewSessionBadge } from './NewSessionBadge';
 export function PresetsSettings() {
   const { t } = useI18n();
   const presets = useSettingsStore((state) => state.presets);
+  const pluginPresets = useEnabledPluginPresets();
   const removePreset = useSettingsStore((state) => state.removePreset);
   const defaultPresetId = useSettingsStore((state) => state.defaultPresetId);
   const setDefaultPresetId = useSettingsStore((state) => state.setDefaultPresetId);
@@ -120,6 +122,39 @@ export function PresetsSettings() {
             </div>
           ))}
       </div>
+
+      {pluginPresets.length > 0 && (
+        <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
+          {pluginPresets.map((preset) => (
+            <div
+              key={preset.id}
+              className="flex min-h-[calc(48rem/14)] items-center gap-[12px] px-[12px] py-[10px]"
+            >
+              <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-[calc(13rem/14)]">
+                  {preset.name} <Badge variant="outline">{t('Read-only')}</Badge>
+                </p>
+                <p className="text-muted-foreground text-[calc(12rem/14)]">
+                  {preset.pluginName} ·{' '}
+                  {t('{{skills}} skills · {{mcp}} MCP · {{instruction}} instruction', {
+                    skills: preset.skills,
+                    mcp: preset.mcpServers,
+                    instruction: preset.instruction ? 1 : 0,
+                  })}
+                </p>
+              </div>
+              {defaultPresetId === preset.id ? (
+                <Badge variant="secondary">{t('Default')}</Badge>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => setDefaultPresetId(preset.id)}>
+                  {t('Set as default')}
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {editing !== null && (
         <PresetEditDialog

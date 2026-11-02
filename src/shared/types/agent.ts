@@ -30,6 +30,8 @@ import {
 import { type CodeSearchConfig, parseCodeSearchConfig } from '../codeSearch';
 import { type CompactStrategy, parseCompactStrategy } from '../compactStrategy';
 import type { DefaultModelRef } from '../defaultModel';
+import { parsePluginToolName } from '../extensionPlugins/toolName';
+import type { PluginToolDescriptor } from '../extensionPlugins/types';
 import { parseMaxActiveCoworkers } from '../maxActiveCoworkers';
 import {
   isCodexAccountKey,
@@ -1156,6 +1158,7 @@ export type AgentCommand =
       pluginCommands?: PluginCommandSpawn[];
       /** 已启用 Claude 插件的 command hooks；远程会话不下发 */
       pluginHooks?: PluginHookSpawn[];
+      pluginTools?: PluginToolDescriptor[];
       instruction?: { path: string; content: string };
       approvalMode?: ApprovalMode;
       /** 助手代审模型；仅 approvalMode=assistant 时有意义 */
@@ -1407,6 +1410,30 @@ export type AgentCommand =
   /** 不可被闲置回收的会话全集（桌面正在查看 + 手机订阅中），每次全量覆盖 */
   | { type: 'pin-sessions'; sessionIds: string[] }
   | { type: 'warm-mcp'; servers: McpServerSpawnConfig[] }
+  | {
+      type: 'plugin-tool-result';
+      identity: SessionIdentity;
+      requestId: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    }
+  | {
+      type: 'plugin-mcp-list';
+      identity: SessionIdentity;
+      requestId: string;
+      servers: McpServerSpawnConfig[];
+    }
+  | {
+      type: 'plugin-mcp-call';
+      identity: SessionIdentity;
+      requestId: string;
+      servers: McpServerSpawnConfig[];
+      server: string;
+      tool: string;
+      args: Record<string, unknown>;
+    }
+  | { type: 'plugin-mcp-cancel'; identity: SessionIdentity; requestId: string }
   /** 运行中同步代理 env；null 表示删除该键 */
   | { type: 'set-proxy-env'; env: Record<string, string | null> };
 
@@ -1655,6 +1682,7 @@ export type RendererAgentEvent =
       | ChildLifecycleEvent
       | McpWorkerEvent
       | WorkspaceLockEvent
+      | { type: 'plugin-mcp-result' }
       | { type: 'oauth-pool-select' }
       | Extract<
           AgentWorkerEvent,
@@ -1665,7 +1693,9 @@ export type RendererAgentEvent =
               | 'computer-invoke'
               | 'computer-cancel'
               | 'browser-invoke'
-              | 'browser-cancel';
+              | 'browser-cancel'
+              | 'plugin-tool-invoke'
+              | 'plugin-tool-cancel';
           }
         >
       | { type: 'session-reloaded' }
@@ -1683,6 +1713,30 @@ export type WorkspaceLockEvent =
   | { type: 'workspace-unlock-result'; requestId: string; ok: boolean; error?: string };
 
 export type AgentWorkerEvent =
+  | {
+      type: 'plugin-mcp-result';
+      identity: SessionIdentity;
+      requestId: string;
+      ok: true;
+      value: unknown;
+    }
+  | {
+      type: 'plugin-mcp-result';
+      identity: SessionIdentity;
+      requestId: string;
+      ok: false;
+      error: string;
+    }
+  | {
+      type: 'plugin-tool-invoke';
+      identity: SessionIdentity;
+      seq: number;
+      requestId: string;
+      toolName: string;
+      fingerprint: string;
+      args: Record<string, unknown>;
+    }
+  | { type: 'plugin-tool-cancel'; identity: SessionIdentity; seq: number; requestId: string }
   | {
       type: 'oauth-pool-select';
       requestId: string;
@@ -2002,6 +2056,60 @@ const hasOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[])
 
 const hasExactKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
   Object.keys(value).length === keys.length && hasOnlyKeys(value, keys);
+
+const pluginFingerprint = (v: unknown): v is string =>
+  typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
+function boundedJson(value: unknown, bytes = 65_536): boolean {
+  try {
+    const text = JSON.stringify(value);
+    return typeof text === 'string' && text.length <= bytes;
+  } catch {
+    return false;
+  }
+}
+function isPluginToolList(value: unknown): value is PluginToolDescriptor[] {
+  if (!Array.isArray(value) || value.length > 200) return false;
+  const names = new Set<string>();
+  return value.every((tool) => {
+    if (
+      !isRecord(tool) ||
+      !hasExactKeys(tool, ['name', 'description', 'parameters', 'pluginId', 'fingerprint']) ||
+      typeof tool.name !== 'string' ||
+      typeof tool.description !== 'string' ||
+      tool.description.length > 1024 ||
+      parsePluginToolName(tool.name)?.pluginId !== tool.pluginId ||
+      !pluginFingerprint(tool.fingerprint) ||
+      !isRecord(tool.parameters) ||
+      tool.parameters.type !== 'object' ||
+      !boundedJson(tool.parameters) ||
+      names.has(tool.name)
+    )
+      return false;
+    names.add(tool.name);
+    return true;
+  });
+}
+function pluginMcpServers(value: unknown): value is McpServerSpawnConfig[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= 200 &&
+    value.every(
+      (server) =>
+        isRecord(server) &&
+        isNonEmptyString(server.name) &&
+        (server.transport === 'stdio'
+          ? isNonEmptyString(server.command)
+          : (server.transport === 'http' || server.transport === 'sse') &&
+            isNonEmptyString(server.url)) &&
+        (server.args === undefined ||
+          (Array.isArray(server.args) && server.args.every((arg) => typeof arg === 'string'))) &&
+        (server.env === undefined ||
+          (isRecord(server.env) &&
+            Object.values(server.env).every((entry) => typeof entry === 'string'))) &&
+        boundedJson(server, 262_144)
+    )
+  );
+}
 
 const isMcpScopeChallenge = (value: unknown): value is McpScopeChallenge =>
   isRecord(value) &&
@@ -3085,6 +3193,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'mcpServers',
           'pluginCommands',
           'pluginHooks',
+          'pluginTools',
           'instruction',
           'approvalMode',
           'approvalReviewer',
@@ -3123,6 +3232,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         (value.pluginCommands !== undefined &&
           parsePluginCommands(value.pluginCommands) === null) ||
         (value.pluginHooks !== undefined && parsePluginHooks(value.pluginHooks) === null) ||
+        (value.pluginTools !== undefined && !isPluginToolList(value.pluginTools)) ||
         (value.rtkEnabled !== undefined && typeof value.rtkEnabled !== 'boolean') ||
         (value.planMode !== undefined && typeof value.planMode !== 'boolean') ||
         (value.windowsLocalShell !== undefined &&
@@ -3479,7 +3589,8 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'browser-result':
     case 'memory-result':
     case 'delegation-result':
-    case 'computer-result': {
+    case 'computer-result':
+    case 'plugin-tool-result': {
       if (
         !hasOnlyKeys(value, ['type', 'identity', 'requestId', 'ok', 'result', 'error']) ||
         !parseAnySessionIdentity(value.identity) ||
@@ -3594,6 +3705,33 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
       return hasExactKeys(value, ['type', 'servers']) && Array.isArray(value.servers)
         ? (value as unknown as AgentCommand)
         : null;
+    case 'plugin-mcp-list':
+    case 'plugin-mcp-call': {
+      const call = value.type === 'plugin-mcp-call';
+      return hasExactKeys(
+        value,
+        call
+          ? ['type', 'identity', 'requestId', 'servers', 'server', 'tool', 'args']
+          : ['type', 'identity', 'requestId', 'servers']
+      ) &&
+        parseSessionIdentity(value.identity) &&
+        !('parent' in (value.identity as object)) &&
+        isNonEmptyString(value.requestId) &&
+        pluginMcpServers(value.servers) &&
+        (!call ||
+          (isNonEmptyString(value.server) &&
+            isNonEmptyString(value.tool) &&
+            isRecord(value.args) &&
+            boundedJson(value.args)))
+        ? (value as unknown as AgentCommand)
+        : null;
+    }
+    case 'plugin-mcp-cancel':
+      return hasExactKeys(value, ['type', 'identity', 'requestId']) &&
+        parseSessionIdentity(value.identity) &&
+        isNonEmptyString(value.requestId)
+        ? (value as unknown as AgentCommand)
+        : null;
     case 'set-proxy-env': {
       if (!hasExactKeys(value, ['type', 'env']) || !isRecord(value.env)) return null;
       for (const entry of Object.values(value.env)) {
@@ -3655,6 +3793,17 @@ const isOptionalTimestamp = (value: unknown): boolean =>
 
 export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
   if (!isRecord(value) || !isNonEmptyString(value.type)) return null;
+  if (value.type === 'plugin-mcp-result') {
+    return parseSessionIdentity(value.identity) &&
+      isNonEmptyString(value.requestId) &&
+      (value.ok === true
+        ? hasExactKeys(value, ['type', 'identity', 'requestId', 'ok', 'value'])
+        : value.ok === false &&
+          hasExactKeys(value, ['type', 'identity', 'requestId', 'ok', 'error']) &&
+          isNonEmptyString(value.error))
+      ? (value as unknown as AgentWorkerEvent)
+      : null;
+  }
   if (value.type === 'oauth-pool-select') {
     return hasOnlyKeys(value, [
       'type',
@@ -3868,6 +4017,31 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         : null;
     case 'computer-cancel':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
+        isNonEmptyString(value.requestId)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'plugin-tool-invoke':
+      return hasExactKeys(value, [
+        'type',
+        'identity',
+        'seq',
+        'requestId',
+        'toolName',
+        'fingerprint',
+        'args',
+      ]) &&
+        parseSessionIdentity(value.identity) &&
+        isNonEmptyString(value.requestId) &&
+        typeof value.toolName === 'string' &&
+        parsePluginToolName(value.toolName) !== null &&
+        pluginFingerprint(value.fingerprint) &&
+        isRecord(value.args) &&
+        boundedJson(value.args)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'plugin-tool-cancel':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
+        parseSessionIdentity(value.identity) &&
         isNonEmptyString(value.requestId)
         ? (value as unknown as AgentWorkerEvent)
         : null;

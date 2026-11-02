@@ -414,6 +414,7 @@ export class AgentSessionIndex {
       event.type === 'session-reloaded' ||
       event.type === 'oauth-pool-select' ||
       event.type === 'workspace-lock-result' ||
+      event.type === 'plugin-mcp-result' ||
       event.type === 'workspace-unlock-result'
     )
       return false;

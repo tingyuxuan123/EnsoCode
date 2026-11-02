@@ -18,6 +18,7 @@ import {
   MessageCircle,
   Minimize2,
   Plus,
+  Puzzle,
   SquareTerminal,
   Workflow,
   X,
@@ -42,6 +43,8 @@ import {
 } from '@/lib/sidePanelDock';
 import { releaseTerminal } from '@/lib/terminalRegistry';
 import { cn } from '@/lib/utils';
+import { PluginView } from '@/plugins/PluginView';
+import { type PluginViewRef, usePluginViews } from '@/plugins/viewBridge';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { useSidePanelStore } from '@/stores/sidePanel';
@@ -269,6 +272,35 @@ function closeGroupTabs(
   }
 }
 
+function addPluginViewPanel(
+  api: DockviewApi,
+  conversationId: string | undefined,
+  view: PluginViewRef,
+  group?: IDockviewHeaderActionsProps['group']
+): void {
+  const id = `plugin:${view.pluginId}:${view.id}`;
+  const existing = api.getPanel(id);
+  if (existing) {
+    existing.focus();
+    return;
+  }
+  api.addPanel({
+    id,
+    component: 'plugin',
+    title: view.title,
+    params: { conversationId, pluginId: view.pluginId, viewId: view.id },
+    ...(group ? { position: { referenceGroup: group } } : {}),
+  });
+}
+function PluginViewPanel(
+  props: IDockviewPanelProps<{ conversationId?: string; pluginId?: string; viewId?: string }>
+) {
+  const { conversationId, pluginId, viewId } = props.params;
+  return pluginId && viewId ? (
+    <PluginView pluginId={pluginId} viewId={viewId} sessionId={conversationId ?? null} />
+  ) : null;
+}
+
 /** 与 CoworkerTabs 同款 chip:圆角、bg-muted 激活、hover 出关闭 */
 function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null }>) {
   const { t } = useI18n();
@@ -311,6 +343,8 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <Bot className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'workflow' ? (
         <Workflow className="h-3 w-3 shrink-0" />
+      ) : props.api.id.startsWith('plugin:') ? (
+        <Puzzle className="h-3 w-3 shrink-0" />
       ) : isBrowser && favicon && !faviconBroken ? (
         <img
           src={favicon}
@@ -371,6 +405,7 @@ function NewTabMenu({
   onNewBtw,
   onNewWorkflow,
   onNewSubagents,
+  onNewPluginView,
   compact,
 }: {
   onNewTerminal: () => void;
@@ -381,9 +416,11 @@ function NewTabMenu({
   /** 缺省 = 该项目没开 workflow 工具，不给入口 */
   onNewWorkflow?: () => void;
   onNewSubagents?: () => void;
+  onNewPluginView?: (view: PluginViewRef) => void;
   compact?: boolean;
 }) {
   const { t } = useI18n();
+  const pluginViews = usePluginViews();
   return (
     <Menu>
       <MenuTrigger
@@ -431,6 +468,13 @@ function NewTabMenu({
             {t('Workflow')}
           </MenuItem>
         ) : null}
+        {onNewPluginView &&
+          pluginViews.map((view) => (
+            <MenuItem key={`${view.pluginId}:${view.id}`} onClick={() => onNewPluginView(view)}>
+              <Puzzle className="h-4 w-4" />
+              {view.title} · {view.pluginName}
+            </MenuItem>
+          ))}
       </MenuPopup>
     </Menu>
   );
@@ -461,6 +505,7 @@ function SidePanelHeaderActions({
       </button>
       <NewTabMenu
         compact
+        onNewPluginView={(view) => addPluginViewPanel(containerApi, conversationId, view, group)}
         onNewSubagents={
           conversationId ? () => addSidePanelSubagentDirectory(conversationId) : undefined
         }
@@ -519,6 +564,7 @@ function Watermark(props: IWatermarkPanelProps) {
           {t('No tabs yet. Create one to get started.')}
         </p>
         <NewTabMenu
+          onNewPluginView={(view) => addPluginViewPanel(props.containerApi, conversationId, view)}
           onNewSubagents={
             conversationId ? () => addSidePanelSubagentDirectory(conversationId) : undefined
           }
@@ -560,6 +606,7 @@ const DOCK_COMPONENTS = {
   workflow: WorkflowPanel,
   'subagent-session': SubagentPanel,
   'subagent-directory': SubagentDirectoryPanel,
+  plugin: PluginViewPanel,
 };
 
 /** 跟随应用暗色模式(applyAppTheme 切换 documentElement 的 dark class) */
@@ -635,7 +682,7 @@ function ConversationDock({
     // 只有用户关 tab 才回收;dock 本身不随切会话卸载
     event.api.onDidRemovePanel((panel) => {
       if (isSubagentPanel(panel.id)) return;
-      if (panel.id === 'changes' || panel.id === 'files') return;
+      if (panel.id === 'changes' || panel.id === 'files' || panel.id.startsWith('plugin:')) return;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) {
         void window.electronAPI.browser.closeTab(panel.id);
         return;

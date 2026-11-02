@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "enso.example.notes",
+  "name": "Notes (local demo)",
+  "version": "1.0.0",
+  "description": "A self-contained sandbox sidebar page; stores only notes in this plugin's private data directory.",
+  "main": "main.mjs",
+  "permissions": ["ui.view"],
+  "contributes": { "views": [{ "id": "notes", "title": "Local Notes", "entry": "notes.html" }] }
+}

@@ -51,6 +51,7 @@ import {
   closeActiveSidePanelTab,
 } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
+import { PluginUiHost } from '@/plugins/PluginUiHost';
 import { useBotsStore } from '@/stores/bots';
 import {
   isBotModeActive,
@@ -434,6 +435,7 @@ export default function App() {
                 <ResizeHandle onResize={handleSideResize} onResizingChange={setSideResizing} />
               )}
               <SidePanel width={sideWidth} resizing={sideResizing} />
+              <PluginUiHost />
             </div>
           </DndContext>
         )}

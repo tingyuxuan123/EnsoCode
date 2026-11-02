@@ -45,10 +45,12 @@ import {
   startAgentWorker,
   stopAgentWorker,
 } from './agentHost';
+import { setNativePluginResources } from './nativePluginResources';
 
 const identity = { sessionId: 'hot-parent', generation: '11111111-1111-4111-8111-111111111111' };
 const request = { sessionId: identity.sessionId, cwd: '/tmp', providerId: 'p', modelId: 'm' };
 beforeEach(() => {
+  setNativePluginResources(undefined);
   stopAgentWorker();
   settings.state = {
     disabledBuiltinTools: ['browser', 'memory', 'computer', 'code_search'],
@@ -64,6 +66,65 @@ beforeEach(() => {
       },
     ],
   };
+});
+
+it('插件资源只给本机普通父会话，插件预设附角色和指令，失效预设拒绝', () => {
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  const descriptor = {
+    name: 'plugin_enso-example__check',
+    description: 'check',
+    pluginId: 'enso.example',
+    fingerprint: 'a'.repeat(64),
+    parameters: { type: 'object' },
+  };
+  setNativePluginResources((preset) => ({
+    tools: [descriptor],
+    skillPaths: ['/fixture/plugin-skill'],
+    mcpServers: [],
+    ...(preset
+      ? {
+          preset: {
+            ok: true as const,
+            systemPrompt: 'plugin persona',
+            instruction: { path: '/fixture/instruction.md', content: 'plugin instruction' },
+          },
+        }
+      : {}),
+  }));
+  expect(
+    spawnSession(identity, { ...request, presetId: 'plugin:enso.example:review' }, new Set()).ok
+  ).toBe(true);
+  expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+    pluginTools: [descriptor],
+    skillPaths: ['/fixture/plugin-skill'],
+    systemPrompt: 'plugin persona',
+    instruction: { content: 'plugin instruction' },
+  });
+  const ssh = { ...identity, sessionId: 'ssh-parent' };
+  spawnSession(ssh, { ...request, sessionId: ssh.sessionId }, new Set(), {
+    host: 'fixture',
+    auth: 'key',
+  });
+  expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).not.toHaveProperty(
+    'pluginTools'
+  );
+  setNativePluginResources(() => ({
+    tools: [],
+    skillPaths: [],
+    mcpServers: [],
+    preset: { ok: false, error: 'preset disabled' },
+  }));
+  expect(
+    spawnSession(
+      { ...identity, sessionId: 'missing' },
+      { ...request, sessionId: 'missing', presetId: 'plugin:enso.example:review' },
+      new Set()
+    )
+  ).toMatchObject({ ok: false, error: 'preset disabled' });
+  stopAgentWorker();
+  setNativePluginResources(undefined);
 });
 
 it('pushes effective hot changes per parent generation, updates browser admission, and pins child proof', () => {
