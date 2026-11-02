@@ -3,6 +3,9 @@
 `src/main/services/` 放不依赖 `ipcMain` 的业务逻辑。三类典型：**扫描外部应用配置**、
 **对外发起网络请求**、**agent worker 的生命周期托管**（`agentHost.ts`）。
 
+配对 Web 的 HTML / React / Vue 预览采用电脑侧隔离渲染，不在配对 origin 执行网页代码；
+传输、授权、Vite 兼容和真机回归契约见 [网页预览](pair-preview.md)。
+
 ## Bot 宿主的投递边界
 
 - `status: idle` 不是回合终态：worker 还会发送 session-meta、turn-completed。Bot 槽位、结果归属与队列只在终态结算；但中断、命令失败等路径只有 idle/failed，宿主在宽限期后兜底结算并 pump，无宿主轮次的会话回到 idle 时也要 pump，否则排队投递与并发槽永久挂起。
@@ -38,6 +41,47 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 **主进程 + worker 共用、渲染层碰不到**的运行时代码只能放 `src/shared/providers/`——
 那是 shared 层「不碰 `node:*`」的唯一例外，理由与守卫见
 [../shared/index.md](../shared/index.md)。
+
+## 模型流与后台通知的边界
+
+- `streamGuard.ts` 包装共享 runtime 的公开流出口，不接管 session 重试或结算。
+  任意事件刷新空闲时钟；90 秒只记日志，默认 300 秒无事件产生可重试超时。
+  localhost 可能是云端网关，不能据地址自动放宽；900 秒只供权威本地推理调用方显式注入。
+  用户取消始终为 aborted，长段正文/思考的完全周期复读为不可重试错误；不检测工具参数。
+  正常终态、取消、超时都必须只结算一次，清 timer/listener，迟到数据不得改变已返回快照。
+- 后台完成通知带有界输出尾部，不代表新的用户请求。命令和输出进入通知包络前须转义；
+  `ensoCompact/extract.ts` 不从自动通知提取用户目标、约束、路径或授权，摘要模板也必须
+  保留来源区别，不能把工具输出中的指令升级为用户决定。
+- `dismiss-child` 与同一 child 的创建命令共用串行门；创建失败或已换代时清理幂等，
+  清理异常不得把父会话标成 failed。仍须验证 exact 父代和完整 child 身份。
+- 未投递通知在去抖前写入 `sessions/pending-notifications/`，JSON 大小、条数和文本均有上限，
+  不跟随通知目录/文件链接，原子替换。新通知仅在 SDK preflight 接受后确认；恢复的旧通知
+  单独保存，只搭下一次真实工具结果，不在打开会话或轮次收口时自动唤醒模型，不承诺恢复进程。
+  删除会话时 Main 清盘并发送 `forget-notifications`，防止旧任务迟到重新创建孤儿文件。
+
+## 临时会话与工具热切换
+
+- scratch 是仅 Main 可创建的隐藏项目载体；每个根会话 cwd 固定为 `userData/scratch/<UUID>`。
+  共用无 Node 依赖的 `conversationCwd` 词法规则，Main 再验证 exact realpath 与符号链接边界；
+  文件树、浏览器、子代理和 workflow 不得退回共享 scratch 根或旁边会话目录。
+  临时历史保留到显式删除，不参加自动删除；不把 scratch 作为 Bot/手机普通项目或项目级权限覆盖。
+- 可热切内置工具在启动时注册，由 Main 按 generation 推有效全局/项目/固定禁用列表，
+  worker 只在 SDK 真正 idle 时激活；正在跑的回合只缓存最新配置，不中止工具与既有 child。
+  sandbox/write/goal 保持 spawn 固定，个人版 code_search 仍须通过本机账号配置门。
+  关闭 plan 必须带一次 OFF 提示，缓存引用和 codemode 也不能绕过禁用。
+
+## 内置记忆的相关度、取消与失败恢复
+
+- 混排 score 仅用于排序，对外返回 rank 与可选向量余弦 relevance；FTS 命中不填伪相关度，
+  旧历史 score 不能继续当百分比展示。显式匹配年份加分最多 0.1，不降低语义权重。
+- deep 辅助使用有界超时和真实 AbortSignal，远端完整链路传到 worker，本地传到 llama；
+  不只丢弃 Promise 结果。降级原因与是否使用模型辅助必须可观察；检索次数沿用 appearances。
+- KG 重试复用 failed 列、幂等重置，关闭时不启动抽取。冷库管理操作使用临时句柄并关闭，
+  不提前占用宿主全局 db，否则正常开库的蒸馏/向量/KG 恢复钩子会被跳过。
+
+回归：`streamGuard.test.ts`、`streamGuard.sdk.test.ts`、`backgroundTasks.test.ts`、
+`ensoCompact/extract.test.ts`、`supervisor.agentDispatch.test.ts`、`pendingNotifications.test.ts`、
+`builtinLoadout.sdk.test.ts`、`scratchWorkspace.test.ts`、`memoryHost.retry.test.ts`。
 
 
 ## ChatGPT 顺序账号池的额度权威
