@@ -1,5 +1,8 @@
 # 个人自签名包需首次手动安装；正式包仍使用 electron-builder.yml。
 extends: ./electron-builder.yml
+# 继承父 extraResources 的 resources/design → design（含 engine/node_modules）。
+# builder 26 会拼接 extraResources 数组，不能重列 design，否则并发复制同一目标。
+extraResources: []
 publish:
   - provider: generic
     url: https://raw.githubusercontent.com/tingyuxuan123/EnsoCode/personal-updates/

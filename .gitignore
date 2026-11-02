@@ -48,3 +48,7 @@ __pycache__/
 resources/rtk/*/rtk
 resources/rtk/*/rtk.exe
 resources/rtk/*/rtk.tmp-*
+
+# 随包设计引擎由 prepare-design-engine.mjs / CI 预装，不提交安装产物。
+resources/design/engine/node_modules/
+resources/design/engine/.enso-design-engine-stamp.json

@@ -1,7 +1,9 @@
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findArchMismatches } from '../src/tooling/packagedArch.mjs';
 import stripPackagedNatives from '../src/tooling/stripPackagedNatives.mjs';
+import { stripForeignDesignPackages } from './prepare-design-engine.mjs';
 import { copyRtkDistribution } from './rtk.mjs';
 
 const ARCH_NAME = ['ia32', 'x64', 'armv7l', 'arm64', 'universal'];
@@ -26,6 +28,22 @@ function packagedResourcesDir(context) {
 
 export default async function afterPack(context) {
   await stripPackagedNatives(context);
+  const designModules = path.join(
+    packagedResourcesDir(context),
+    'design',
+    'engine',
+    'node_modules'
+  );
+  if (!(await stat(designModules).catch(() => null))?.isDirectory()) {
+    throw new Error(
+      'Design engine is not prepared; run node scripts/prepare-design-engine.mjs before packaging'
+    );
+  }
+  await stripForeignDesignPackages(
+    designModules,
+    context.electronPlatformName,
+    archName(context.arch)
+  );
   await copyRtkDistribution(
     root,
     path.join(packagedResourcesDir(context), 'rtk'),

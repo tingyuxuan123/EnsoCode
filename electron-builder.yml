@@ -18,6 +18,16 @@ extraResources:
     to: icon.ico
   - from: build/icon-win.png
     to: icon-win.png
+  # 独立于 files matcher：Vite/原生 optional deps 必须完整放在 asar 外。
+  - from: resources/design
+    to: design
+    filter:
+      - '**/*'
+      - '!**/.cache/**'
+      - '!**/.vite/**'
+      - '!**/.DS_Store'
+      - '!**/node_modules/.package-lock.json'
+      - '!engine/.enso-design-engine-stamp.json'
 files:
   - out/**
   - THIRD_PARTY_NOTICES.md
@@ -109,6 +119,8 @@ mac:
   # electron-builder 默认三项 + 麦克风
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  # @electron/osx-sign 递归遍历 Contents（含 extraResources/design），自动签 Mach-O/.node。
+  # afterPack 先裁掉其它平台/架构 optional 包，再由现有签名与 deep/strict 验收门兜底。
   extendInfo:
     NSMicrophoneUsageDescription: EnsoCode uses the microphone for voice input. Speech is transcribed locally on this Mac.
     NSAppleEventsUsageDescription: EnsoCode uses Apple Events to activate app windows for the computer tool.

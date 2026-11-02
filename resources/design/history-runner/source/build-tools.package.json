@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "fflate": "0.8.2",
+    "isomorphic-git": "1.41.3",
+    "vite": "7.1.7"
+  }
+}

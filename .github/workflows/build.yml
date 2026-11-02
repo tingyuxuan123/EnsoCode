@@ -111,6 +111,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_arch: ${{ matrix.arch }}
 
+      - name: Prepare bundled design engine (Mac ${{ matrix.arch }})
+        run: node scripts/prepare-design-engine.mjs
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+
       - name: Import Apple Certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -229,6 +234,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare bundled design engine (Windows x64)
+        run: node scripts/prepare-design-engine.mjs
+        env:
+          npm_config_arch: x64
+
       - name: Build Windows
         run: pnpm exec electron-builder --win --x64 --publish onTag
         env:
@@ -287,6 +297,11 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare bundled design engine (Linux x64)
+        run: node scripts/prepare-design-engine.mjs
+        env:
+          npm_config_arch: x64
 
       - name: Build Linux
         run: pnpm exec electron-builder --linux --x64 --publish onTag

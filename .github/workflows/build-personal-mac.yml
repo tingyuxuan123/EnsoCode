@@ -69,6 +69,11 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
+      - name: Prepare bundled design engine (Mac arm64)
+        run: node scripts/prepare-design-engine.mjs
+        env:
+          npm_config_arch: arm64
+
       - name: Import personal signing certificate
         env:
           LOCAL_SIGNING_CERTIFICATE: ${{ secrets.LOCAL_SIGNING_CERTIFICATE }}
