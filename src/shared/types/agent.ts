@@ -1269,6 +1269,8 @@ export type AgentCommand =
   | { type: 'set-auto-retry-limit'; limit: number }
   /** 设置里禁用的内置预设：worker 执行与工具说明都按它过滤 */
   | { type: 'set-disabled-workflow-presets'; ids: string[] }
+  /** Main-only deletion tombstone, never a model tool or generic renderer IPC. */
+  | { type: 'forget-notifications'; conversationId: string }
   | { type: 'set-web-search-config'; chain: WebSearchChainEntry[]; configured?: boolean }
   | { type: 'set-code-search-config'; config: CodeSearchConfig }
   /** 统一模型目录 + 自定义 provider 全量注册信息。载荷在 worker 内再收窄。 */
@@ -3398,6 +3400,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     case 'set-model-directory':
       return hasExactKeys(value, ['type', 'snapshot', 'customProviders'])
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'forget-notifications':
+      return hasExactKeys(value, ['type', 'conversationId']) && isUuid(value.conversationId)
         ? (value as unknown as AgentCommand)
         : null;
     case 'ask-respond':

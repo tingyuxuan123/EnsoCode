@@ -1658,6 +1658,7 @@ export function registerAgentHandlers(): void {
       return { accepted: false, error: 'Invalid conversation request.' };
     const result = sourceAuthority!.removeConversation(parsed);
     if (result.accepted) {
+      sendAgentCommand({ type: 'forget-notifications', conversationId: parsed.conversationId });
       sourceBindings!.invalidateConversation(parsed.conversationId);
       removeConversationSessionFiles({
         sessionDir: path.join(app.getPath('userData'), 'agent', 'sessions'),

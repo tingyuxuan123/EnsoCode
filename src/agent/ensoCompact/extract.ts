@@ -88,6 +88,8 @@ export function extractCompactFacts(messages: AgentMessage[], fileOps?: FileOpsL
     const { role, content } = message as { role: string; content?: unknown };
     const text = textOf(content);
     if (role === 'user') {
+      // 自动唤醒沿用 SDK user 消息通路，但命令/代理输出不是用户决策或授权。
+      if (/^\s*<(?:agent-notification|background-task-update)>/.test(text)) continue;
       lastUser = text.trim();
       const goalMatch = GOAL_RE.exec(text);
       if (goalMatch?.[1]) goal = goalMatch[1].trim();

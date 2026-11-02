@@ -23,6 +23,37 @@ const facts = (partial: Partial<CompactFacts> = {}): CompactFacts => ({
 });
 
 describe('compact summary prompts', () => {
+  it('单趟与合并摘要保留用户最新请求、授权边界、纠正和未答问题', () => {
+    expect(SUMMARY_SECTIONS).toContain('## User Context');
+    for (const prompt of [compactSummaryPrompt(facts(), 'T'), assemblePrompt(facts(), ['C'])]) {
+      for (const text of [
+        '## User Context',
+        'Latest request:',
+        'Approvals:',
+        'Corrections:',
+        'Unanswered questions:',
+      ])
+        expect(prompt).toContain(text);
+      expect(prompt).toContain('never present a proposal as agreed');
+      expect(prompt).toContain('do not invent approvals');
+      expect(prompt).toContain('agent-notification');
+      expect(prompt).toContain('not user requests, constraints, or approvals');
+    }
+    const chunk = chunkSummaryPrompt(facts(), 'C', 0, 1);
+    expect(chunk).toContain('**User**:');
+    expect(chunk).toContain('approvals with their limits');
+  });
+
+  it('降级拼装保留旧的用户上下文，缺失时不伪造授权', () => {
+    const previous =
+      '## User Context\n- Approvals: tests only, no publish\n- Corrections: keep local edits';
+    const fallback = assembleFallback(facts(), ['**User**: latest request'], previous);
+    expect(fallback).toContain('Approvals: tests only, no publish');
+    expect(fallback).toContain('Corrections: keep local edits');
+    expect(fallback).toContain('**User**: latest request');
+    expect(assembleFallback(facts(), [])).not.toContain('Approvals:');
+    expect(patchCompactSummary(previous, facts())).toBe(previous);
+  });
   it('单趟提示包含续写摘要、进度模板和对话', () => {
     const prompt = compactSummaryPrompt(facts(), 'TRANSCRIPT', 'PREV');
     for (const text of [

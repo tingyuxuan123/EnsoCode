@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -95,6 +96,29 @@ describe('removeConversationSessionFiles', () => {
         sessionFile: path.join(root, 'missing', 'a.jsonl'),
       })
     ).not.toThrow();
+  });
+
+  it('删除父子未投递通知，保留相似前缀、无关与坏名字文件，不跟随目录链接', () => {
+    const pending = path.join(sessionDir, 'pending-notifications');
+    mkdirSync(pending);
+    const own = path.join(pending, `${CONVERSATION_ID}.json`);
+    const child = path.join(pending, `${encodeURIComponent(`${CONVERSATION_ID}::cw-child`)}.json`);
+    const unrelated = path.join(pending, `${CONVERSATION_ID}extra.json`);
+    const bad = path.join(pending, '%bad.json');
+    for (const file of [own, child, unrelated, bad]) writeFileSync(file, '["pending"]');
+    removeConversationSessionFiles({ sessionDir, conversationId: CONVERSATION_ID });
+    expect(existsSync(own)).toBe(false);
+    expect(existsSync(child)).toBe(false);
+    expect(existsSync(unrelated)).toBe(true);
+    expect(existsSync(bad)).toBe(true);
+    rmSync(pending, { recursive: true });
+    const outside = path.join(root, 'outside');
+    mkdirSync(outside);
+    const protectedFile = path.join(outside, `${CONVERSATION_ID}.json`);
+    writeFileSync(protectedFile, 'keep');
+    symlinkSync(outside, pending);
+    removeConversationSessionFiles({ sessionDir, conversationId: CONVERSATION_ID });
+    expect(existsSync(protectedFile)).toBe(true);
   });
 
   it('删除scratch仅删除该UUID目录，即使sessions目录不存在也保留相邻会话', () => {

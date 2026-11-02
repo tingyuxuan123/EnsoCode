@@ -1,4 +1,4 @@
-import { readdirSync, rmSync } from 'node:fs';
+import { lstatSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { removePastedTextFiles } from './pastedTextFiles';
 import { removeScratchWorkspace } from './scratchWorkspace';
@@ -61,5 +61,21 @@ export function removeConversationSessionFiles(
     } catch {}
   }
   removePastedTextFiles(root, id);
-
+  const pendingRoot = path.join(root, 'pending-notifications');
+  try {
+    if (!lstatSync(pendingRoot).isDirectory()) return;
+    for (const entry of readdirSync(pendingRoot)) {
+      if (!entry.endsWith('.json')) continue;
+      let sessionId: string;
+      try {
+        sessionId = decodeURIComponent(entry.slice(0, -5));
+      } catch {
+        continue;
+      }
+      if (sessionId === id || sessionId.startsWith(`${id}::`) || sessionId.startsWith(`${id}-`))
+        rmSync(path.join(pendingRoot, entry), { force: true });
+    }
+  } catch {
+    /* best-effort */
+  }
 }

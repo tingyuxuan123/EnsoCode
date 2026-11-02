@@ -606,6 +606,16 @@ describe('Main-owned source authority contracts', () => {
 });
 
 describe('parent/child commands', () => {
+  it('删除通知命令只接受Main生成的根UUID，不接受磁盘路径或额外字段', () => {
+    const command = {
+      type: 'forget-notifications',
+      conversationId: '11111111-1111-4111-8111-111111111111',
+    };
+    expect(parseAgentCommand(command)).toEqual(command);
+    expect(parseAgentCommand({ ...command, conversationId: '../escape' })).toBeNull();
+    expect(parseAgentCommand({ ...command, path: '/tmp' })).toBeNull();
+  });
+
   it('rewind accepts an exclusive persisted entry anchor and rejects ambiguous or dirty anchors', () => {
     const command = { type: 'rewind', identity: parent, entryId: 'user-entry', restoreFiles: true };
     expect(parseAgentCommand(command)).toEqual(command);

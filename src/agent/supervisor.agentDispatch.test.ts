@@ -98,6 +98,7 @@ vi.mock('@earendil-works/pi-coding-agent', async (importOriginal) => {
 });
 
 import type { BackgroundTaskManager } from './backgroundTasks';
+import { PendingNotificationStore } from './pendingNotifications';
 import { SessionSupervisor } from './supervisor';
 
 const parent = {
@@ -234,6 +235,194 @@ function applyCustomPersona(options: Record<string, unknown> | undefined, system
 }
 
 describe('SessionSupervisor deterministic child lifecycle', () => {
+  it('重开会话只恢复通知，不自动prompt；下一次工具结果搭车且消费后清盘', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-notification-restore-'));
+    const store = new PendingNotificationStore(path.join(root, 'pending-notifications'));
+    store.save(parent.sessionId, ['historic task result']);
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: root, model });
+    await waitFor(events, 'parent-ready');
+    try {
+      const current = mocks.sessions[0] as ReturnType<typeof session>;
+      current.emit({ type: 'agent_settled' });
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      expect(current.prompt).not.toHaveBeenCalled();
+      const options = mocks.createAgentSession.mock.calls.at(-1)?.[0] as {
+        customTools: ToolDefinition[];
+      };
+      const ls = options.customTools.find((tool) => tool.name === 'ls')!;
+      const result = await ls.execute(
+        'restore-result',
+        { path: root },
+        undefined,
+        undefined,
+        {} as never
+      );
+      const text = JSON.stringify(result.content);
+      expect(text).toContain('historic task result');
+      expect(text).toContain('Recovered notification from before this session was reopened');
+      expect(text).toContain('not proof that a process is still running');
+      expect(store.load(parent.sessionId)).toEqual([]);
+      const next = await ls.execute(
+        'next-result',
+        { path: root },
+        undefined,
+        undefined,
+        {} as never
+      );
+      expect(JSON.stringify(next.content)).not.toContain('historic task result');
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('会话正忙或不在内存时，任务完成通知先持久化且不丢失', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-notification-queue-'));
+    const store = new PendingNotificationStore(path.join(root, 'pending-notifications'));
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: root, model });
+    await waitFor(events, 'parent-ready');
+    try {
+      const current = mocks.sessions[0] as ReturnType<typeof session>;
+      current.emit({ type: 'agent_start' });
+      const bg = (supervisor as unknown as { bgTasks: BackgroundTaskManager }).bgTasks;
+      for (const id of [parent.sessionId, 'not-open']) {
+        bg.adopt(
+          id,
+          {
+            output: () => `queued ${id} result`,
+            pipe: () => {},
+            done: Promise.resolve(0),
+            kill: () => {},
+          },
+          { command: 'check', startedAt: Date.now() }
+        );
+        await vi.waitFor(() => expect(store.load(id).join('\n')).toContain(`queued ${id} result`));
+      }
+      expect(current.prompt).not.toHaveBeenCalled();
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([undefined, 'handled', 'started', 'queued'] as const)(
+    '通知在 preflight=%s 后失败：只有确实接收的通知才从磁盘移除',
+    async (disposition) => {
+      const events: AgentWorkerEvent[] = [];
+      const root = mkdtempSync(path.join(tmpdir(), 'enso-notify-ack-'));
+      const store = new PendingNotificationStore(path.join(root, 'pending-notifications'));
+      const supervisor = new SessionSupervisor({
+        emit: (event) => events.push(event),
+        agentDir: root,
+        sessionDir: root,
+      });
+      supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: root, model });
+      await waitFor(events, 'parent-ready');
+      try {
+        const current = mocks.sessions[0] as ReturnType<typeof session>;
+        current.prompt.mockImplementation(async (_text, options) => {
+          if (disposition) options?.preflightResult?.(disposition);
+          throw new Error('notification rejected or request failed');
+        });
+        const bg = (supervisor as unknown as { bgTasks: BackgroundTaskManager }).bgTasks;
+        bg.adopt(
+          parent.sessionId,
+          {
+            output: () => 'ack evidence',
+            pipe: () => {},
+            done: Promise.resolve(0),
+            kill: () => {},
+          },
+          { command: 'check', startedAt: Date.now() }
+        );
+        await vi.waitFor(() => expect(current.prompt).toHaveBeenCalledOnce());
+        expect(store.load(parent.sessionId).length).toBe(
+          disposition === 'started' || disposition === 'queued' ? 0 : 1
+        );
+      } finally {
+        await supervisor.shutdown();
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it('已删除会话的任务迟到完成不再重建通知文件', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-notify-deleted-'));
+    const id = '11111111-1111-4111-8111-111111111111';
+    const supervisor = new SessionSupervisor({ emit: () => {}, agentDir: root, sessionDir: root });
+    try {
+      const notifier = (
+        supervisor as unknown as { notifier: { notify: (id: string, text: string) => void } }
+      ).notifier;
+      supervisor.handleCommand({
+        type: 'forget-notifications',
+        conversationId: id,
+      } as AgentCommand);
+      await settle();
+      notifier.notify(id, 'late root');
+      notifier.notify(`${id}::cw-late`, 'late child');
+      expect(
+        new PendingNotificationStore(path.join(root, 'pending-notifications')).load(id)
+      ).toEqual([]);
+      expect(
+        new PendingNotificationStore(path.join(root, 'pending-notifications')).load(
+          `${id}::cw-late`
+        )
+      ).toEqual([]);
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('通知prompt未收尾时又收到完成通知，首轮settled后仍继续投递', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-notify-followup-'));
+    const supervisor = new SessionSupervisor({
+      emit: (e) => events.push(e),
+      agentDir: root,
+      sessionDir: root,
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: root, model });
+    await waitFor(events, 'parent-ready');
+    try {
+      const current = mocks.sessions[0] as ReturnType<typeof session>;
+      const done = Promise.withResolvers<void>();
+      current.prompt.mockImplementationOnce(async (_text, options) => {
+        options?.preflightResult?.('started');
+        await done.promise;
+      });
+      const notifier = (
+        supervisor as unknown as {
+          notifier: { notify: (id: string, text: string, opts?: { urgent: boolean }) => void };
+        }
+      ).notifier;
+      notifier.notify(parent.sessionId, 'first-notice', { urgent: true });
+      expect(current.prompt).toHaveBeenCalledOnce();
+      notifier.notify(parent.sessionId, 'second-notice', { urgent: true });
+      current.emit({ type: 'agent_settled' });
+      done.resolve();
+      await vi.waitFor(() => expect(current.prompt).toHaveBeenCalledTimes(2));
+      expect(current.prompt.mock.calls[1][0]).toContain('second-notice');
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+
   beforeEach(() => {
     vi.useRealTimers();
     mocks.sessions.length = 0;

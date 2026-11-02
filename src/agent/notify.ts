@@ -16,9 +16,13 @@ interface Buffer {
 export class ParentNotifier {
   private readonly buffers = new Map<string, Buffer>();
 
-  constructor(private readonly deliver: (sessionId: string, text: string) => void) {}
+  constructor(
+    private readonly deliver: (sessionId: string, text: string) => void,
+    private readonly queued?: (sessionId: string, text: string) => void
+  ) {}
 
   notify(sessionId: string, text: string, opts: { urgent?: boolean } = {}): void {
+    this.queued?.(sessionId, text);
     if (opts.urgent) {
       this.flush(sessionId);
       this.deliver(sessionId, text);
