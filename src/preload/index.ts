@@ -213,6 +213,36 @@ import type {
   BrowserResult,
   BrowserTabState,
 } from '@shared/types/browser';
+import type {
+  DesignCaptureRequest,
+  DesignCaptureResponse,
+  DesignEngineExitEvent,
+  DesignEngineProgressEvent,
+  DesignEngineRequest,
+  DesignEngineResponse,
+  DesignFsRequest,
+  DesignFsResponse,
+  DesignHookEvent,
+  DesignNetworkRequest,
+  DesignNetworkResponse,
+  DesignResult,
+  DesignRootInfo,
+  DesignRootRef,
+  DesignRuntimeRegistration,
+  DesignSaveAsRequest,
+  DesignSaveAsResponse,
+  DesignScriptRequest,
+  DesignScriptResponse,
+  DesignShellRequest,
+  DesignStorageRequest,
+  DesignStorageResponse,
+  DesignToolCancelEvent,
+  DesignToolRequestEvent,
+  DesignToolResponse,
+  DesignWatchEvent,
+  DesignWatchRequest,
+  DesignWatchResponse,
+} from '@shared/types/design';
 import type { SessionChangeSnapshots } from '@shared/types/fileChanges';
 import type {
   AgentComposerPrefillEvent,
@@ -1671,7 +1701,55 @@ const electronAPI = {
     query: (request: WorkspaceSearchQueryRequest): Promise<WorkspaceSearchQueryResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_SEARCH_QUERY, request),
   },
+  /** 设计子系统（移植 vetta-ui-design）。只传根标识与根内相对路径，绝对路径由 Main 推导。 */
+  design: {
+    resolveRoot: (ref: DesignRootRef): Promise<DesignResult<{ root: DesignRootInfo }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_RESOLVE_ROOT, ref),
+    fs: (request: DesignFsRequest): Promise<DesignFsResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_FS, request),
+    saveAs: (request: DesignSaveAsRequest): Promise<DesignSaveAsResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_SAVE_AS, request),
+    watch: (request: DesignWatchRequest): Promise<DesignWatchResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WATCH, request),
+    unwatch: (watchId: string): Promise<DesignResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_UNWATCH, watchId),
+    onWatchEvent: (callback: (event: DesignWatchEvent) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_WATCH_EVENT, callback),
+    engine: (request: DesignEngineRequest): Promise<DesignEngineResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_ENGINE, request),
+    onEngineProgress: (callback: (event: DesignEngineProgressEvent) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_ENGINE_PROGRESS, callback),
+    onEngineExit: (callback: (event: DesignEngineExitEvent) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_ENGINE_EXIT, callback),
+    capture: (request: DesignCaptureRequest): Promise<DesignCaptureResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_CAPTURE, request),
+    script: (request: DesignScriptRequest): Promise<DesignScriptResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_SCRIPT, request),
+    storage: (request: DesignStorageRequest): Promise<DesignStorageResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_STORAGE, request),
+    network: (request: DesignNetworkRequest): Promise<DesignNetworkResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_NETWORK, request),
+    shell: (request: DesignShellRequest): Promise<DesignResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_SHELL, request),
+    /** 设计运行时就绪后登记；viewingSessionId 变化时重复调用即可。 */
+    registerRuntime: (registration: DesignRuntimeRegistration): Promise<DesignResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_RUNTIME_REGISTER, registration),
+    onToolRequest: (callback: (request: DesignToolRequestEvent) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_TOOL_REQUEST, callback),
+    onToolCancel: (callback: (event: DesignToolCancelEvent) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_TOOL_CANCEL, callback),
+    respondTool: (response: DesignToolResponse): Promise<DesignResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_TOOL_RESPONSE, response),
+    onHook: (callback: (event: DesignHookEvent) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_HOOK, callback),
+  },
 };
+
+function subscribeDesign<T>(channel: string, callback: (payload: T) => void): () => void {
+  const listener = (_event: unknown, payload: T) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
 
 export type ElectronAPI = typeof electronAPI;
 

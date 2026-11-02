@@ -1,0 +1,168 @@
+# 移植 Open Vetta 设计功能（vetta-ui-design）设计稿
+
+> 状态：已确认（2026-11-02），P1 实施中。来源：`open-vetta-main/packages/plugins/presets/vetta-ui-design`（插件 0.7.6，Apache-2.0；内含 taste-skill，MIT）。
+> 上游参考：ADR-0053/0054/0055/0066/0068/0069、`docs/desktop/design-gallery.md`。
+
+## 1. 行为差距
+
+| | 现在 | 目标 |
+|---|---|---|
+| 设计产出 | agent 只能写普通前端代码，用侧栏浏览器看单页 | agent 用 `vetd_*` 工具产出 `x.vetd/` 设计包（TSX 路由 = 画框），按设计方法论（方向发牌、质量检查、批注闭环）工作 |
+| 查看 | 侧栏 BrowserView 一次只显示一个页面 | 无限画布同时摆多个画框，热更新；点选元素回传给 agent；批注、撤销重做、交互模式 |
+| 管理 | 无 | 设计画廊（跨项目扫描根目录 `*.vetd/`）、`.vetdz` 分享包导入导出、设备样机 PNG/PDF、包内 git 历史 |
+
+EnsoCode 原生插件（`docs/plugins.md`）缺少工作区视图挂点、长驻进程、离屏截图，工具单次 60 秒，侧栏只能放沙箱 iframe。因此**做成内置功能，不走原生插件**，也不为此扩展原生插件 API。
+
+## 2. 总体结构
+
+```text
+Renderer  src/renderer/features/design/
+  vetta/            ← 上游 src/ 原样移植（canvas/vetd/gallery/mockup/history/…，约 3.1 万行）
+  host/             ← Vetta PluginContext 子集的适配层（@vetta-org/plugin-sdk 经 vite alias 指向这里）
+  runtime.ts        ← 主窗口常驻的设计运行时：执行 vetd_* 工具 handler、hook、tool-gate
+  mounts/           ← 把上游组件挂进 EnsoCode：画布面板、画廊视图、截图卡、文件树、预览
+Preload   window.electronAPI.design.*（按领域 typed 出口）
+Main      src/main/services/design/
+  engine.ts         ← vite dev server 进程管理（端口、生命周期、日志尾巴）
+  capture.ts        ← 离屏截图（隐藏窗口 + CDP Page.captureScreenshot）
+  fs.ts             ← 设计文件读写，按项目/会话权威根校验边界
+  storage.ts        ← userData/design-data 键值存储
+  gallery.ts        ← 跨项目扫描根目录 *.vetd/
+  runner.ts         ← history-runner / check-syntax 一次性 node 调用
+  ipc/design.ts     ← handler，入参全部 unknown 收窄
+Worker    src/agent/tools/design.ts ← vetd_* 工具代理（schema 本地声明，执行转发 Main → Renderer）
+Resources resources/design/{engine, history-runner, skills/vetta-ui-design, vendor/taste-skill}
+```
+
+原则：**上游源码尽量不改**，差异集中在 `host/` 适配层和少数必须替换处（`cards/file-url.ts` 的 `vetta-file://`、`@vetta/ios` alias），便于以后同步上游。
+
+## 3. 关键决定
+
+### D1 工具执行位置：Renderer 设计运行时
+
+上游工具（`src/tools.ts` 等）与画布强耦合：打开画布页签、共享画布 localStorage 快照做离屏截图、引擎轮询用 `window.setInterval`。搬到 Node 等于重写。
+
+采用：worker 注册 `vetd_*` 代理工具 → `design-invoke`（仿 `browser-invoke`：校验 session generation、开关、重复 requestId、取消、超时）→ Main 路由到**持有该会话的窗口**（无则主窗口）的设计运行时执行 → 结果经 Main 回 worker。
+
+- 设计运行时随主窗口挂载，不依赖画布是否可见。
+- 窗口不存在、正在重载或运行时未就绪：返回结构化错误，不挂起。
+- 超时按工具区分：`vetd_install`、批量 `vetd_screenshot`、`vetd_export` 放宽到 10 分钟，其余 2 分钟；取消信号透传到运行时。
+- 备选（不采用）：工具搬进 Main/worker。更符合“worker 为权威”，但需要重写约 40% 上游代码，且画布状态要再造一份同步。
+
+### D2 适配层而非改写
+
+`host/` 实现上游实际用到的 API 子集（调研清单见附录 A），每个方法落到 `window.electronAPI.design.*`。SDK hooks（`useTranslation`、`useActivityTab`、`usePluginShortcutScope`）同样由适配层提供。
+
+路径边界：上游 fs API 传绝对路径；适配层把路径拆成 `{rootId, relPath}`，`rootId` 来自 Main 下发的项目/会话权威根。Main 再按根推导绝对路径、拒绝 `..`、符号链接逃逸；写操作仅允许落在 `*.vetd/` 包内、`.vetdz` 导出位置和设计约定文件。`saveAs` 由 Main 弹原生对话框，用户所选路径只在 Main 内使用。
+
+### D3 Node 运行时：用 Electron 自身
+
+vite dev server、history-runner、check-syntax 都用 `process.execPath` + `ELECTRON_RUN_AS_NODE=1` 运行（打包产物已验证可用，见 `scripts/smoke-packaged-natives.cjs`），不依赖用户安装 Node。
+
+- 引擎模板及其 `node_modules`（vite、Tailwind v4、React 19、react-router、Iconify 图标集，含 esbuild/rollup/oxide 平台二进制）由 CI 按平台 `npm ci` 预装，经 `extraResources` 随包，不进 asar。首次使用拷到 `userData/design/engine/<版本>/`（上游同款“内置 vendor 主路径”）。
+- `vetd_install`（设计级 npm 依赖）需要 npm：v1 使用 `shellPath` 找到的系统 npm；找不到时返回结构化错误，提示安装 Node.js。
+
+### D4 引擎进程管理（Main `design/engine.ts`）
+
+参照上游 `command-spawner.ts`：每份打开的设计一个 vite；只监听 `127.0.0.1`，端口由 Main 先 `listen(0)` 探测再 `--strictPort` 传入；全局上限 8 个；保留 stdout/stderr 尾巴 64KB 用于诊断；停止时 TERM，3 秒后 KILL；切离设计、关窗口、退出应用时清理。Renderer 只拿到 `{engineId, port}`。
+
+### D5 画框承载：Renderer iframe
+
+`browserHost` 同时只显示一个 guest，不能承载多画框。画布改用 iframe 指向 `http://127.0.0.1:<port>`：
+
+- `index.html` CSP 增加 `frame-src http://127.0.0.1:*`，仅回环。
+- iframe 与渲染层跨源，设计代码碰不到父页面 DOM 和 preload；桥消息只认 `vetd:true` 且 `event.origin` 等于该引擎端口。
+- Main 对这些子 frame 拦截导航，只允许同一引擎源（复用插件视图的子 frame 导航拦截模式）。
+- iframe 是普通 DOM，弹窗、下拉可以正常盖在上面，不需要 overlayGuard 沉层。
+
+### D6 离屏截图（Main `design/capture.ts`）
+
+上游用 `capturePage`；EnsoCode 已知隐藏视图 `capturePage` 会报合成错误，改用隐藏窗口加 CDP `Page.captureScreenshot`，参考 `pairPreviewBrowser.ts`。最多复用 4 个窗口，视口不超过 4096，同一 key 串行执行。URL 必须属于已登记的引擎端口，否则拒绝。准备脚本和就绪表达式只在这些引擎页执行。
+
+### D7 界面挂载
+
+| 上游挂点 | EnsoCode 落点 |
+|---|---|
+| activity-tab → 画布 | 侧栏 Dockview 新面板 `design`，打开时进入 sidePanel `fullscreen` 铺满（对应上游 `width:"max"`） |
+| workspace-view → 画廊 | App 主区新增一种视图，替换 ChatView 区域；AppRail 增加“设计”入口（待确认，见 §6） |
+| global → 样机导出弹窗 | App 根部挂载，沿用项目 Dialog 分层 |
+| file-preview → `.vetdz` 预览 | 文件预览按扩展名分发 |
+| message card → 截图卡 | `vetd_screenshot` 工具卡渲染 |
+| new-session-context → 风格库 | 新建会话页（WelcomeSuggestions 区域）+ 设计师预设 pill |
+| file-explorer | `fileIcons.ts` 给 `.vetd/` 目录加图标，`fileTreeMenu.tsx` 加“在设计画布中打开” |
+| shortcuts | 画布内局部快捷键（C 批注、Mod-Z/Shift-Z/Y） |
+| input-action | 上游实际未注册，不做 |
+
+样式：上游 CSS 是 Tailwind v4 theme + utilities（无 preflight），用 `@scope([data-vetta-plugin-root=vetta-ui-design])` 包住。保留该 scope，portal 根补同名标记；在 scope 内把上游依赖的宿主变量（background/foreground/card/popover/border/muted/accent/primary/secondary …）映射到 EnsoCode `globals.css` 变量。
+
+### D8 Agent 集成
+
+- **技能**：`resources/design/skills/vetta-ui-design` 加进 `additionalSkillPaths`，由设置开关控制，默认开启。
+- **设计师角色**：内置 preset，正文取上游 `agent/agents/designer.md`。
+- **tool-gate**：上游每轮按“cwd 是否有设计稿 / 技能是否激活”决定 `vetd_*` 是否可见。改为 worker 在每轮 prompt 入口查询 Main 缓存的设计存在性（上游 `design-presence` 语义），不可见时不进入工具集合。
+- **hooks**：UserPromptSubmit / Stop / SessionEnd（历史自动提交）从 worker 事件经 Main 转给设计运行时。
+- **计划模式**：新工具不会自动被拒。`vetd_create/install/notes/direction/restore/export/assets/screenshot`（都会写文件）加入 `planMode.ts` DENIED_TOOLS；`vetd_status/sizes/history` 允许。写测试覆盖。
+- **审批**：沿用内置工具审批链路。
+
+### D9 网络
+
+assets（图片搜索/下载）、design-systems 目录同步走 Main fetch，使用固定主机白名单（实现时从上游源码收集），响应大小设上限；Renderer 不获得通用 fetch。
+
+## 4. 分期与验收
+
+每期单独提交、单独可验收。
+
+**P1 引擎与 agent 工具链**
+资源打包与 CI 预装引擎；Main engine/capture/fs/storage/runner/ipc；preload；适配层；设计运行时；worker 代理工具 + design-invoke；技能与设计师预设；tool-gate、hooks、计划模式。
+验收：在对话里让 agent 新建一份设计 → `x.vetd/` 落盘、vite 起来、`vetd_screenshot` 截图卡显示画框；计划模式下写类工具被拒；两家厂商模型（如 Claude 与 GPT）真机跑通。
+
+**P2 画布**
+Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（attach 到 composer）、批注层与派活、撤销重做、交互模式、设备壳、引擎恢复 UI。
+验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素生成 attach；批注派活生成 prompt。
+
+**P3 画廊、导出、历史、文件树**
+画廊视图与入口；`.vetdz` 导入导出、`.vetdz` 预览；样机 PNG/PDF；历史抽屉（history-runner）；文件树图标与右键；旧格式迁移。
+验收：画廊列出多个项目的设计并能跳回会话；导出后再导入内容一致；历史恢复正确。
+
+**收尾**
+`THIRD_PARTY_NOTICES.md` 补 Vetta（Apache-2.0）与 taste-skill（MIT）声明并保留上游 NOTICE；`docs/engineering-reference/` 记录设计子系统边界；`pnpm typecheck && pnpm lint && pnpm test`。
+
+上游测试（约 150 个，vitest + happy-dom）随源码迁入；依赖 Vetta 宿主的测试改用适配层 fake。新增的 Main 路径校验、端口与进程管理、design-invoke 校验、计划模式门控按 Red-Green 先写测试。
+
+## 5. 明确不做
+
+- SSH/远端设计引擎与远端端口转发（上游 `ssh-transport` 相关分支）。
+- 托管 npm/Node 运行时；无系统 npm 时 `vetd_install` 直接报错。
+- 扩展原生插件 API，或把本功能做成可卸载插件。
+- 输入栏按钮挂点（上游未注册）。
+- 手机端、IM 入口对设计的支持。
+- Windows/Linux 打包验收（发布流程只覆盖 Mac arm64；资源脚本按平台写，但不验收）。
+- 上游自动同步机制；只记录移植基准版本，以后人工同步。
+
+## 6. 已确认决定（2026-11-02）
+
+1. 画廊入口：AppRail 增加“设计”图标。
+2. 设计技能默认开启（全局可见，由 tool-gate 控制工具暴露），设置中可关闭。
+3. 接受引擎 `node_modules` 预装带来的安装包体积增加（预计数十 MB，P1 实测后记录）。
+
+## 7. 风险
+
+- 工具执行依赖渲染层：窗口重载中途的工具调用会失败，需结构化错误加 agent 重试提示。
+- 多窗口时会话归属判定需要实现时确认（参照 browser-invoke 的会话路由）。
+- 上游代码风格与本项目 Biome/tsconfig 规则不一致；迁入目录可能需要局部 lint 例外，避免大规模格式化导致与上游难以同步。
+- 设计代码由 agent 生成并在 iframe/vite 中执行：iframe 跨源隔离 + 导航拦截是安全边界；vite 进程本身是本机 Node，与 agent bash 同等信任。
+
+## 附录 A：上游宿主依赖（调研结论）
+
+- fs：readFile/writeFile/readDir/stat/delete/watchDirectory（回调只给目录路径字符串、宿主共用广播）、rename/createDirectory、listFilesRecursive（跳过隐藏项、上限万条）、readBinaryFile、saveAs。`move` 未实际使用。
+- command：run（一次性、无 shell）；spawn（长驻，stop/status/onExit，`{{PORT}}` 替换）。
+- capture：输入 URL、CSS 宽高、复用 key、准备脚本、就绪表达式、探针；输出 dataUrl、scaleFactor、probe；releaseOffscreen。
+- storage：插件私有、跨项目持久化（方向历史、体系目录缓存）；位图缓存另用 IndexedDB，偏好另用 localStorage。
+- network：Main 侧请求，绕 CORS，受 allowedHosts 限制。
+- agent：registerTool / registerHook / registerSystemPromptProvider（tool-gate 注入 designer.md 视觉原则）。
+- conversation：会话/工具/回合事件订阅（订阅即重放），createSession、sendPrompt。
+- official：projects.list/create/archive、sessions.list/listRunningCwds/open、navigation.open、dialog.openFiles、shell.showItemInFolder。
+- ui：各挂点注册，copyImage、previewImage、openExternal、notify、setWorkspaceViewHeader、setActivityPanelWidth、iconUrl。
+- 工具：vetd_create / screenshot / status / sizes / install / notes / direction / assets / export / history / restore。
+- 引擎桥消息（均带 `vetd:true`）：父→子 set-mode/show-frame/navigate/reload/clear-selection/capture/resolve-element/interaction-config/frame-radius；子→父 ready/rendered/selected/exit-inspect/captured/hmr-updated/frame-error/context-menu/navigated/wheel/space/element-resolved/storage/status-bar-kind。
+- history-runner：isomorphic-git + fflate 单文件脚本，管理包内 `.history`，stdout 返回 JSON；需先构建。
