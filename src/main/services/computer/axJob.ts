@@ -7,7 +7,8 @@ export type AxJobBridge = {
     pid: number,
     query: { role?: string; title?: string; value?: string; description?: string; limit?: number }
   ): Promise<AxTreeNode[]>;
-  elementAt(x: number, y: number): Promise<AxTreeNode | null>;
+  /** pid 给定时只在该 app 内命中（不受遮挡它的其它窗口影响） */
+  elementAt(x: number, y: number, pid?: number): Promise<AxTreeNode | null>;
   focused(): Promise<AxTreeNode | null>;
   node(handle: string): Promise<AxTreeNode>;
   attributes(handle: string): Promise<Array<[string, string]>>;
@@ -15,7 +16,15 @@ export type AxJobBridge = {
   perform(handle: string, action: string): Promise<void>;
   setValue(handle: string, value: string): Promise<void>;
   focus(handle: string): Promise<void>;
+  /** 以下仅 macOS：句柄所属进程、按 pid 打开/恢复 Chromium/Electron 的 AX 树 */
+  pid?(handle: string): Promise<number | undefined>;
+  enable?(pid: number, bundleId?: string): Promise<{ changed: string[] }>;
+  restoreEnable?(pid: number, attrs: string[]): Promise<void>;
 };
+
+function unsupported(op: string): never {
+  throw new Error(`AX op '${op}' is not supported on this platform`);
+}
 
 export async function dispatchAxJob(ax: AxJobBridge, request: AxWorkerRequest): Promise<unknown> {
   switch (request.op) {
@@ -24,7 +33,7 @@ export async function dispatchAxJob(ax: AxJobBridge, request: AxWorkerRequest): 
     case 'query':
       return ax.query(request.pid, request);
     case 'elementAt':
-      return ax.elementAt(request.x, request.y);
+      return ax.elementAt(request.x, request.y, request.pid);
     case 'focused':
       return ax.focused();
     case 'node':
@@ -39,6 +48,14 @@ export async function dispatchAxJob(ax: AxJobBridge, request: AxWorkerRequest): 
       return ax.setValue(request.handle, request.value);
     case 'focus':
       return ax.focus(request.handle);
+    case 'pid':
+      return ax.pid ? ax.pid(request.handle) : unsupported(request.op);
+    case 'enable':
+      return ax.enable ? ax.enable(request.pid, request.bundleId) : unsupported(request.op);
+    case 'restoreEnable':
+      return ax.restoreEnable
+        ? ax.restoreEnable(request.pid, request.attrs)
+        : unsupported(request.op);
   }
 }
 

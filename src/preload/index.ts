@@ -1587,6 +1587,10 @@ const electronAPI = {
   },
 
   computer: {
+    allowedApps: (): Promise<ComputerAllowedApp[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.COMPUTER_ALLOWED_APPS),
+    revokeApp: (key: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.COMPUTER_REVOKE_APP, key),
     capabilities: (): Promise<
       { ok: true; capabilities: ComputerCapabilities } | { ok: false; error: string }
     > => ipcRenderer.invoke(IPC_CHANNELS.COMPUTER_CAPABILITIES),
@@ -1604,4 +1608,4 @@ export type ElectronAPI = typeof electronAPI;
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
-import type { ComputerCapabilities } from '@shared/computer/types';
+import type { ComputerAllowedApp, ComputerCapabilities } from '@shared/computer/types';

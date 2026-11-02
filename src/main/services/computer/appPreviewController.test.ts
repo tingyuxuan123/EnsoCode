@@ -1,0 +1,126 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PreviewController, type PreviewView } from './appPreviewController';
+
+function setup(enabled = true) {
+  const log: string[] = [];
+  const view: PreviewView = {
+    show: (input) => log.push(`show ${input.windowId} ${input.app}`),
+    hide: () => log.push('hide'),
+    dispose: () => log.push('dispose'),
+    pointer: (fx, fy) => log.push(`pointer ${fx} ${fy}`),
+  };
+  const state = { enabled };
+  const controller = new PreviewController({
+    enabled: () => state.enabled,
+    view: () => view,
+    hideDelayMs: 1000,
+  });
+  const activity = (owner: string, windowId = 'w1') =>
+    controller.activity({
+      owner,
+      windowId,
+      pid: 1,
+      app: 'Notes',
+      path: '/Applications/Notes.app',
+      size: async () => ({ width: 800, height: 600 }),
+    });
+  return { controller, log, state, activity };
+}
+
+describe('PreviewController', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('后台操作窗口时显示；最后一个 run 结束后延时收起', async () => {
+    const { controller, log, activity } = setup();
+    await activity('a');
+    await activity('b', 'w2');
+    controller.runEnd('a');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(log).toEqual(['show w1 Notes', 'show w2 Notes']);
+    controller.runEnd('b');
+    await vi.advanceTimersByTimeAsync(999);
+    expect(log.at(-1)).toBe('show w2 Notes');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(log.at(-1)).toBe('hide');
+  });
+
+  it('收起前又有新操作：取消收起', async () => {
+    const { controller, log, activity } = setup();
+    await activity('a');
+    controller.runEnd('a');
+    await vi.advanceTimersByTimeAsync(500);
+    await activity('b');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(log).not.toContain('hide');
+  });
+
+  it('设置里关掉时不显示', async () => {
+    const { log, activity } = setup(false);
+    await activity('a');
+    expect(log).toEqual([]);
+  });
+
+  it('用户关掉预览只屏蔽该窗口，换窗口可显示，下一轮可重新显示', async () => {
+    const { controller, log, activity } = setup();
+    await activity('a');
+    controller.userClosed('w1');
+    await activity('a');
+    expect(log).toEqual(['show w1 Notes', 'hide']);
+    await activity('a', 'w2');
+    expect(log.at(-1)).toBe('show w2 Notes');
+    await activity('a', 'w1');
+    expect(log.at(-1)).toBe('show w2 Notes');
+    controller.runEnd('a');
+    await vi.advanceTimersByTimeAsync(1000);
+    await activity('c', 'w1');
+    expect(log.at(-1)).toBe('show w1 Notes');
+  });
+
+  it('older async activity cannot replace the newest target', async () => {
+    const { controller, log, activity } = setup();
+    let resume!: (size: { width: number; height: number }) => void;
+    const old = controller.activity({
+      owner: 'a',
+      windowId: 'old',
+      app: 'Old',
+      path: '/Old.app',
+      pid: 1,
+      size: () =>
+        new Promise((resolve) => {
+          resume = resolve;
+        }),
+    });
+    await activity('b', 'new');
+    resume({ width: 10, height: 10 });
+    await old;
+    expect(log).toEqual(['show new Notes']);
+  });
+
+  it('未知 owner 的 runEnd 不影响显示', async () => {
+    const { controller, log, activity } = setup();
+    await activity('a');
+    controller.runEnd('zzz');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(log).toEqual(['show w1 Notes']);
+  });
+
+  it('指针只画在正在显示同一窗口的画中画里', async () => {
+    const { controller, log, activity } = setup();
+    expect(controller.pointer('w1', 0.5, 0.5)).toBe(false);
+    await activity('a');
+    expect(controller.pointer('w2', 0.5, 0.5)).toBe(false);
+    expect(controller.pointer('w1', 0.25, 0.75)).toBe(true);
+    expect(log.at(-1)).toBe('pointer 0.25 0.75');
+    controller.userClosed('w1');
+    expect(controller.pointer('w1', 0.5, 0.5)).toBe(false);
+  });
+
+  it('收起后不再画指针', async () => {
+    const { controller, activity } = setup();
+    await activity('a');
+    controller.runEnd('a');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(controller.pointer('w1', 0.5, 0.5)).toBe(false);
+  });
+});

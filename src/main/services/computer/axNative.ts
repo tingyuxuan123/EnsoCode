@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { AX_STALE_HANDLE, formatAxHandle, parseAxHandle } from '@shared/computer/axRegistry';
 import type { AxTreeNode } from '@shared/computer/axTree';
 import { isLikelyCfPointer, splitUniqueRefs, takeOwnedRefs } from './axCfArray';
+import { axEnablementAttribute } from './axEnablement';
 import { type AxJobBridge, dispatchAxJob } from './axJob';
 import { collectAxRoots } from './axRoots';
 import {
@@ -18,6 +19,7 @@ import {
   axWalkDecision,
 } from './axWalkBudget';
 import type { AxWorkerRequest } from './axWorkerClient';
+import { PRESS_ANCESTOR_DEPTH, PRESS_LABEL_ROLES, PRESSABLE_ROLES } from './clickRoute';
 
 export interface AxHandleScope {
   scope: string;
@@ -53,12 +55,29 @@ export function axSetValueRejection(input: {
 export class AxHandleTable<T> {
   private next = 1;
   private readonly generations = new Map<string, number>();
-  private readonly entries = new Map<string, { value: T } & AxHandleScope>();
+  private readonly entries = new Map<string, { value: T; hash?: number } & AxHandleScope>();
+  /** scope → 元素哈希 → 句柄；提供身份函数时用于跨代复用同一元素的句柄 */
+  private readonly index = new Map<string, Map<number, string[]>>();
 
   constructor(
     private readonly epoch: string,
-    private readonly refs: { retain: (value: T) => void; release: (value: T) => void }
+    private readonly refs: {
+      retain: (value: T) => void;
+      release: (value: T) => void;
+      /** 元素身份（如 CFHash/CFEqual）；省略时每次 add 都是新句柄 */
+      hash?: (value: T) => number;
+      equals?: (a: T, b: T) => boolean;
+    }
   ) {}
+
+  private unindex(id: string, entry: { scope: string; hash?: number }): void {
+    if (entry.hash === undefined) return;
+    const bucket = this.index.get(entry.scope)?.get(entry.hash);
+    if (!bucket) return;
+    const at = bucket.indexOf(id);
+    if (at !== -1) bucket.splice(at, 1);
+    if (bucket.length === 0) this.index.get(entry.scope)?.delete(entry.hash);
+  }
 
   get size(): number {
     return this.entries.size;
@@ -70,6 +89,7 @@ export class AxHandleTable<T> {
     for (const [id, entry] of this.entries) {
       if (entry.scope === scope && entry.generation + 1 < generation) {
         this.entries.delete(id);
+        this.unindex(id, entry);
         this.refs.release(entry.value);
       }
     }
@@ -77,11 +97,30 @@ export class AxHandleTable<T> {
   }
 
   add(value: T, at: AxHandleScope): string {
-    const id = formatAxHandle(this.epoch, this.next++);
     const current = this.generations.get(at.scope) ?? 0;
-    if (at.generation + 1 < current) return id;
+    if (at.generation + 1 < current) return formatAxHandle(this.epoch, this.next++);
+    const { hash: hashOf, equals } = this.refs;
+    const hash = hashOf && equals ? hashOf(value) : undefined;
+    if (hash !== undefined && equals) {
+      for (const id of this.index.get(at.scope)?.get(hash) ?? []) {
+        const entry = this.entries.get(id);
+        if (entry && equals(entry.value, value)) {
+          entry.generation = Math.max(entry.generation, at.generation);
+          return id;
+        }
+      }
+    }
+    const id = formatAxHandle(this.epoch, this.next++);
     this.refs.retain(value);
-    this.entries.set(id, { value, scope: at.scope, generation: at.generation });
+    this.entries.set(id, { value, scope: at.scope, generation: at.generation, hash });
+    if (hash !== undefined) {
+      let byHash = this.index.get(at.scope);
+      if (!byHash) {
+        byHash = new Map();
+        this.index.set(at.scope, byHash);
+      }
+      byHash.set(hash, [...(byHash.get(hash) ?? []), id]);
+    }
     return id;
   }
 
@@ -148,7 +187,9 @@ async function load(): Promise<AxJobBridge> {
   const CFEqual = cf.func('CFEqual', 'bool', ['void *', 'void *']);
   const CFStringGetTypeID = cf.func('CFStringGetTypeID', 'ulong', []);
   const kCFBooleanTrue = koffi.decode(cf.symbol('kCFBooleanTrue'), 'void *');
+  const kCFBooleanFalse = koffi.decode(cf.symbol('kCFBooleanFalse'), 'void *');
   const AXUIElementCreateApplication = ax.func('AXUIElementCreateApplication', 'void *', ['int']);
+  const AXUIElementGetPid = ax.func('AXUIElementGetPid', 'int', ['void *', 'void *']);
   const AXUIElementCreateSystemWide = ax.func('AXUIElementCreateSystemWide', 'void *', []);
   const AXIsProcessTrusted = ax.func('AXIsProcessTrusted', 'bool', []);
   const axRefOut = koffi.out(koffi.pointer('void', 2));
@@ -233,6 +274,8 @@ async function load(): Promise<AxJobBridge> {
     }
   };
 
+  const CFHash = cf.func('CFHash', 'ulong', ['void *']);
+  // 同一原生元素跨快照保持同一句柄，Main 侧 ref 随之稳定（diff 视图里未变行的 ref 仍可用）
   const handles = new AxHandleTable<unknown>(randomBytes(4).toString('hex'), {
     retain: (element) => {
       CFRetain(element);
@@ -240,6 +283,8 @@ async function load(): Promise<AxJobBridge> {
     release: (element) => {
       CFRelease(element);
     },
+    hash: (element) => Number(CFHash(element)),
+    equals: sameElement,
   });
   const axActionName = (action: string) =>
     action.startsWith('AX') ? action : `AX${action[0].toUpperCase()}${action.slice(1)}`;
@@ -343,6 +388,43 @@ async function load(): Promise<AxJobBridge> {
     ...describeLite(element, ref),
     bounds: readAxBounds(element),
   });
+  let AXUIElementGetWindow: ((element: unknown, out: Buffer) => unknown) | undefined;
+  try {
+    AXUIElementGetWindow = ax.func('_AXUIElementGetWindow', 'int', ['void *', 'void *']);
+  } catch {
+    AXUIElementGetWindow = undefined;
+  }
+  /** 元素所在窗口号：窗口本身直接取，其它元素经 AXWindow 属性 */
+  const elementWindowId = (element: unknown): number | undefined => {
+    if (!AXUIElementGetWindow) return undefined;
+    const read = (target: unknown) => {
+      const out = Buffer.alloc(4);
+      return Number(AXUIElementGetWindow?.(target, out)) === 0 ? out.readUInt32LE(0) : undefined;
+    };
+    if (readAxString(element, 'AXRole') === 'AXWindow') return read(element);
+    const { value } = copyAttr(element, 'AXWindow');
+    if (!value) return undefined;
+    try {
+      return read(value);
+    } finally {
+      CFRelease(value);
+    }
+  };
+  const elementPid = (element: unknown): number | undefined => {
+    const out = Buffer.alloc(4);
+    if (Number(AXUIElementGetPid(element, out)) !== 0) return undefined;
+    const pid = out.readInt32LE(0);
+    return pid > 0 ? pid : undefined;
+  };
+  const readAxBool = (element: unknown, name: string): boolean => {
+    const { value } = copyAttr(element, name);
+    if (!value) return false;
+    try {
+      return Boolean(CFEqual(value, kCFBooleanTrue));
+    } finally {
+      CFRelease(value);
+    }
+  };
   const describeNew = (element: unknown, at: AxHandleScope) =>
     describe(element, handles.add(element, at));
   const readCellTexts = (element: unknown): string[] => {
@@ -536,19 +618,68 @@ async function load(): Promise<AxJobBridge> {
         }
       });
     },
-    async elementAt(x, y) {
-      return withSystemWide((sys) => {
+    async elementAt(x, y, pid) {
+      // 按 app 的命中是后端内部探测，用独立作用域，不推进 desktop 作用域的代（否则会作废模型手里的 ref）
+      const scope = typeof pid === 'number' && pid > 0 ? `probe:${pid}` : AX_DESKTOP_SCOPE;
+      /** 按 app 探测时：命中按钮/链接里的文字或图标，换成它所属的可按控件（返回 +1 引用） */
+      const pressableAncestor = (element: unknown): unknown => {
+        let current: unknown = element;
+        CFRetain(current);
+        for (let depth = 0; depth < PRESS_ANCESTOR_DEPTH; depth++) {
+          if (!PRESS_LABEL_ROLES.has(readAxString(current, 'AXRole'))) return current;
+          const { value: parent } = copyAttr(current, 'AXParent');
+          if (!parent) return current;
+          if (
+            PRESSABLE_ROLES.has(readAxString(parent, 'AXRole')) &&
+            readActionNames(parent).includes('AXPress')
+          ) {
+            CFRelease(current);
+            return parent;
+          }
+          CFRelease(current);
+          current = parent;
+        }
+        CFRelease(current);
+        CFRetain(element);
+        return element;
+      };
+      const hit = (root: unknown) => {
         const out = [null];
-        const status = Number(AXUIElementCopyElementAtPosition(sys, x, y, out));
-        const element = out[0];
-        if (!element) return null;
+        const status = Number(AXUIElementCopyElementAtPosition(root, x, y, out));
+        const raw = out[0];
+        if (!raw) return null;
+        if (status !== 0 || !isLikelyCfPointer(raw)) {
+          CFRelease(raw);
+          return null;
+        }
+        // pressableAncestor 返回自己持有的 +1 引用，原始命中在此归还
+        const element = scope === AX_DESKTOP_SCOPE ? raw : pressableAncestor(raw);
+        if (scope !== AX_DESKTOP_SCOPE) CFRelease(raw);
         try {
-          if (status !== 0 || !isLikelyCfPointer(element)) return null;
-          return describeNew(element, handles.begin(AX_DESKTOP_SCOPE));
+          const owner = elementPid(element);
+          const windowId = elementWindowId(element);
+          const actions = readActionNames(element);
+          return {
+            ...describeNew(element, handles.begin(scope)),
+            ...(owner ? { pid: owner } : {}),
+            ...(windowId ? { windowId } : {}),
+            ...(actions.length > 0 ? { actions } : {}),
+          };
         } finally {
           CFRelease(element);
         }
-      });
+      };
+      if (typeof pid === 'number' && pid > 0) {
+        const app = AXUIElementCreateApplication(pid);
+        if (!app) return null;
+        try {
+          AXUIElementSetMessagingTimeout(app, AX_MESSAGING_TIMEOUT_SEC);
+          return hit(app);
+        } finally {
+          CFRelease(app);
+        }
+      }
+      return withSystemWide(hit);
     },
     async focused() {
       return withSystemWide((sys) => {
@@ -564,7 +695,14 @@ async function load(): Promise<AxJobBridge> {
     async node(handle) {
       const element = handles.get(handle);
       const actions = readActionNames(element);
-      return { ...describe(element, handle), ...(actions.length > 0 ? { actions } : {}) };
+      const pid = elementPid(element);
+      const windowId = elementWindowId(element);
+      return {
+        ...describe(element, handle),
+        ...(actions.length > 0 ? { actions } : {}),
+        ...(pid ? { pid } : {}),
+        ...(windowId ? { windowId } : {}),
+      };
     },
     async attributes(handle) {
       return axAttributePairs(describeLite(handles.get(handle), handle));
@@ -607,6 +745,30 @@ async function load(): Promise<AxJobBridge> {
         Number(AXUIElementSetAttributeValue(element, attr, kCFBooleanTrue))
       );
       if (status !== 0) throw new Error(`AX focus failed (${status})`);
+    },
+    async pid(handle) {
+      return elementPid(handles.get(handle));
+    },
+    async enable(pid, bundleId) {
+      return withApp(pid, async (app) => {
+        const attr = axEnablementAttribute({
+          manualSettable: isSettable(app, 'AXManualAccessibility'),
+          bundleId,
+        });
+        if (!attr || readAxBool(app, attr)) return { changed: [] };
+        const status = withCfString(attr, (name) =>
+          Number(AXUIElementSetAttributeValue(app, name, kCFBooleanTrue))
+        );
+        return { changed: status === 0 ? [attr] : [] };
+      });
+    },
+    async restoreEnable(pid, attrs) {
+      await withApp(pid, async (app) => {
+        for (const attr of attrs) {
+          if (attr !== 'AXManualAccessibility' && attr !== 'AXEnhancedUserInterface') continue;
+          withCfString(attr, (name) => AXUIElementSetAttributeValue(app, name, kCFBooleanFalse));
+        }
+      });
     },
   };
 }

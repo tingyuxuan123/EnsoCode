@@ -1,21 +1,36 @@
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { appIdentityKey } from '@shared/computer/appIdentity';
+import { ComputerError } from '@shared/computer/errors';
 import { normalizeComputerParams } from '@shared/computer/params';
-import type { ComputerCapabilities, ComputerRunResult } from '@shared/computer/types';
+import type {
+  ComputerAllowedApp,
+  ComputerCapabilities,
+  ComputerRunResult,
+} from '@shared/computer/types';
 import type { ComputerOp } from '@shared/types/agent';
-import type { DesktopBackend } from './computer/backend';
+import { app } from 'electron';
+import { promptComputerAppAccess } from './computer/appApprovalPrompt';
+import { AppAuthorizer } from './computer/appAuthorization';
+import { createAppPreview } from './computer/appPreview';
+import type { DesktopBackend, InputGuard } from './computer/backend';
 import {
   type ComputerGuestSession,
   createComputerGuestSession,
   disposeComputerGuestVm,
   runComputerGuest,
 } from './computer/guest';
+import { LeaseTable } from './computer/leaseTable';
 import { openMacPrivacySettings } from './computer/macPrivacySettings';
 import { ComputerOccupancy } from './computer/occupancy';
 import { createElectronOccupancyDeps } from './computer/occupancyOverlay';
 import { createDesktopBackend } from './computer/platform';
+import { pointerPlacement } from './computer/pointerPlacement';
 
 const DEFAULT_LEASE_WAIT_MS = 20_000;
-const BUSY_MESSAGE =
-  'Another session is using the computer right now. Wait for it to finish, then try again.';
+/** 真实键鼠只有一套：前台接管独占这把锁 */
+const FOREGROUND_LEASE = 'fg';
+const AX_WRITE_LEASE = 'ax-write';
 const YIELD_MESSAGE =
   'The user took over the desktop (Esc or physical input). Stop and ask the user before using computer again.';
 
@@ -34,23 +49,61 @@ function abortedError(signal: AbortSignal): Error {
     : new Error('Computer action aborted');
 }
 
+export interface ComputerFeedback {
+  pointer(input: {
+    pid?: number;
+    app?: string;
+    screenX: number;
+    screenY: number;
+    action: string;
+    /** 被操作的窗口与落点在其中的比例 */
+    windowId?: string;
+    fx?: number;
+    fy?: number;
+    /** 屏幕上这一点能否看到目标窗口；被盖住（如用户正在用的 app）时为 false */
+    exposed?: boolean;
+  }): void;
+  /** 后台操作某个窗口：预览（画中画）跟随它 */
+  activity?(input: {
+    owner: string;
+    windowId: string;
+    pid: number;
+    app: string;
+    path: string;
+    size: () => Promise<{ width: number; height: number } | undefined>;
+  }): void;
+  /** run 结束（预览据此延时收起） */
+  runEnd?(owner: string): void;
+  /** 收起并释放所有反馈窗口 */
+  dispose?(): void;
+}
+
 /**
- * Main 侧桌面 computer 宿主。桌面只有一个：所有 session 共享一把租约，
- * 同一时刻只跑一个 run；同 session 新 run 先中止并等旧 run 收尾。
+ * Main 侧桌面 computer 宿主。run 本身不占桌面；动作开始前按目标 app 申请租约：
+ * 同一 app 串行、不同 app 并行，前台接管额外独占真实键鼠。
+ * 同 session 新 run 先中止并等旧 run 收尾。
  */
 export class ComputerHost {
   private readonly sessions = new Map<string, SessionState>();
   private backend?: DesktopBackend;
-  private lease?: { sessionId: string; released: Promise<void> };
-  private readonly leaseWaitMs: number;
+  private readonly leases: LeaseTable;
 
   constructor(
     private backendFactory: () => DesktopBackend,
     private occupancy?: ComputerOccupancy,
-    options: { leaseWaitMs?: number } = {}
+    options: {
+      leaseWaitMs?: number;
+      authorizer?: AppAuthorizer;
+      feedback?: ComputerFeedback;
+    } = {}
   ) {
-    this.leaseWaitMs = options.leaseWaitMs ?? DEFAULT_LEASE_WAIT_MS;
+    this.leases = new LeaseTable({ waitMs: options.leaseWaitMs ?? DEFAULT_LEASE_WAIT_MS });
+    this.authorizer = options.authorizer;
+    this.feedback = options.feedback;
   }
+
+  private readonly authorizer?: AppAuthorizer;
+  private readonly feedback?: ComputerFeedback;
 
   setBackendFactory(factory: () => DesktopBackend): void {
     this.backendFactory = factory;
@@ -92,7 +145,8 @@ export class ComputerHost {
       await previous;
       if (controller.signal.aborted) throw abortedError(controller.signal);
       if (this.sessions.get(sessionId) !== state) throw new Error('Computer session closed');
-      const release = await this.acquire(sessionId, controller.signal);
+      const owner = `${sessionId}#${randomUUID()}`;
+      const backend = this.sharedBackend();
       const occupancy = normalized.readOnly ? undefined : this.occupancy;
       let occupancyGen: number | undefined;
       // 后台投递不碰用户的鼠标键盘；第一次前台接管时才亮横幅、挂 Esc 与用户输入检测
@@ -107,56 +161,217 @@ export class ComputerHost {
         },
         endSynthetic: () => occupancy.endSynthetic(),
       };
+      const access = async (request: {
+        target?: string;
+        ref?: string;
+        delivery: 'background' | 'foreground';
+        point?: { x: number; y: number };
+        signal: AbortSignal;
+      }): Promise<InputGuard> => {
+        const resolveApp = () =>
+          request.ref
+            ? backend.appForRef?.(request.ref)
+            : request.target && request.target !== 'desktop'
+              ? backend.appForTarget?.(request.target)
+              : backend.appForDesktopInput?.({ point: request.point });
+        const desktop = !request.ref && (!request.target || request.target === 'desktop');
+        let app = request.ref
+          ? await backend.appForRef?.(request.ref)
+          : !desktop && request.target
+            ? await backend.appForTarget?.(request.target)
+            : null;
+        // 真实键鼠落在 desktop 上时，授权与加锁对象是实际收到输入的 app，判断不了就拒绝
+        if (desktop && request.delivery === 'foreground' && backend.appForDesktopInput) {
+          app = await backend.appForDesktopInput({ point: request.point });
+          if (!app) {
+            throw new ComputerError(
+              'app-unknown',
+              'Cannot tell which app would receive this desktop input; target a window with desktop.window(...) instead.'
+            );
+          }
+        }
+        const keys: string[] = [];
+        let restoreDesktop = false;
+        const labels: Record<string, string> = { [FOREGROUND_LEASE]: 'the mouse and keyboard' };
+        if (request.delivery === 'foreground') keys.push(FOREGROUND_LEASE);
+        if (app) {
+          restoreDesktop = Boolean(
+            desktop &&
+              request.delivery === 'foreground' &&
+              this.authorizer &&
+              !this.authorizer.isAuthorized(sessionId, app)
+          );
+          await this.authorizer?.authorize(sessionId, app, request.signal);
+          const key = `app:${appIdentityKey(app)}`;
+          keys.push(key);
+          labels[key] = app.name;
+        } else if (backend.appForTarget || backend.appForRef) {
+          throw new ComputerError(
+            'app-unknown',
+            'Cannot identify the target app; use desktop.window(...) / desktop.app(...) or {delivery:"foreground"}; input was not sent.'
+          );
+        } else if (request.ref) {
+          // 后端给不出 app 身份（如 Windows）：AX 写操作退回全局串行
+          keys.push(AX_WRITE_LEASE);
+          labels[AX_WRITE_LEASE] = 'accessibility actions';
+        } else if (!desktop && request.target) {
+          const key = `win:${request.target}`;
+          keys.push(key);
+          labels[key] = `window ${request.target}`;
+        }
+        await this.leases.acquire(owner, keys, request.signal, labels);
+        const expected = app;
+        if (restoreDesktop && expected) {
+          // The approval sheet activates EnsoCode. Under the foreground lease restore
+          // only the captured app, not whatever is now frontmost/under the pointer.
+          let restoreTarget: string | undefined;
+          const identityGuard: InputGuard = {
+            check: async () => {
+              if (request.signal.aborted) throw abortedError(request.signal);
+              const current = restoreTarget
+                ? await backend.appForTarget?.(restoreTarget)
+                : await backend.appForProcess?.(expected.pid);
+              if (
+                !current ||
+                current.pid !== expected.pid ||
+                appIdentityKey(current) !== appIdentityKey(expected)
+              )
+                throw new ComputerError(
+                  'target-changed',
+                  'The target process changed during approval.'
+                );
+              if (this.authorizer && !this.authorizer.isAuthorized(sessionId, expected))
+                throw new ComputerError(
+                  'app-denied',
+                  'App authorization was revoked during approval.'
+                );
+            },
+          };
+          await identityGuard.check();
+          const windows = await backend.windows();
+          const window = windows.find(
+            (item) =>
+              item.pid === expected.pid && (!expected.windowId || item.id === expected.windowId)
+          );
+          if (!window)
+            throw new ComputerError('target-changed', 'The approved app window disappeared.');
+          restoreTarget = window.id;
+          await identityGuard.check();
+          lazyOccupancy?.beginSynthetic();
+          try {
+            await backend.raise(window.id, identityGuard);
+          } finally {
+            lazyOccupancy?.endSynthetic();
+          }
+        }
+        const guard: InputGuard = {
+          check: async (cleanup = false, snapshot) => {
+            if (!cleanup && request.signal.aborted) throw abortedError(request.signal);
+            if (!expected) return;
+            const current =
+              snapshot !== undefined
+                ? snapshot
+                : cleanup
+                  ? await backend.appForProcess?.(expected.pid)
+                  : await resolveApp();
+            if (
+              !current ||
+              current.pid !== expected.pid ||
+              (!cleanup && current.windowId !== expected.windowId) ||
+              appIdentityKey(current) !== appIdentityKey(expected)
+            ) {
+              throw new ComputerError(
+                'target-changed',
+                'The target window or process changed; reacquire the app and ask again.'
+              );
+            }
+            if (
+              !cleanup &&
+              (request.signal.aborted ||
+                (this.authorizer && !this.authorizer.isAuthorized(sessionId, expected)))
+            ) {
+              throw new ComputerError(
+                'app-denied',
+                'App authorization expired or was revoked; input was not sent.'
+              );
+            }
+          },
+        };
+        await guard.check();
+        const windowId =
+          app?.windowId ?? (request.ref ? backend.targetForRef?.(request.ref) : request.target);
+        if (request.delivery === 'background' && app && windowId && windowId !== 'desktop') {
+          this.feedback?.activity?.({
+            owner,
+            windowId,
+            pid: app.pid,
+            app: app.name,
+            path: app.path,
+            size: async () => {
+              const window = (await backend.windows()).find((item) => item.id === windowId);
+              return window ? { width: window.width, height: window.height } : undefined;
+            },
+          });
+        }
+        return guard;
+      };
+      const feedback = this.feedback;
       try {
         return await runComputerGuest({
           code: normalized.code,
           readOnly: normalized.readOnly,
           timeoutMs: normalized.timeoutSec * 1000,
           signal: controller.signal,
-          backend: this.sharedBackend(),
+          backend,
           session: guest,
           occupancy: lazyOccupancy,
+          access,
+          ...(feedback
+            ? {
+                feedback: {
+                  pointer: (input: {
+                    target: string;
+                    screenX: number;
+                    screenY: number;
+                    action: string;
+                  }) => {
+                    void Promise.all([
+                      backend.appForTarget?.(input.target),
+                      backend.windows(),
+                    ]).then(
+                      ([app, windows]) => {
+                        const point = { x: input.screenX, y: input.screenY };
+                        const placement = pointerPlacement(windows, input.target, point);
+                        feedback.pointer({
+                          screenX: input.screenX,
+                          screenY: input.screenY,
+                          action: input.action,
+                          windowId: input.target,
+                          exposed: placement?.exposed ?? false,
+                          ...(placement ? { fx: placement.fx, fy: placement.fy } : {}),
+                          ...(app ? { pid: app.pid, app: app.name } : {}),
+                        });
+                      },
+                      () => undefined
+                    );
+                  },
+                },
+              }
+            : {}),
           persistVm: true,
         });
       } finally {
+        // Late native calls still hold their per-app lease until their finally cleanup completes.
+        await guest.inflight;
         if (occupancyGen !== undefined) this.occupancy?.stop(occupancyGen);
-        release();
+        this.leases.releaseOwner(owner);
+        this.feedback?.runEnd?.(owner);
       }
     } finally {
       signal?.removeEventListener('abort', onAbort);
       state.active.delete(controller);
       markDone();
     }
-  }
-
-  private async acquire(sessionId: string, signal: AbortSignal): Promise<() => void> {
-    const deadline = Date.now() + this.leaseWaitMs;
-    while (this.lease) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw new Error(BUSY_MESSAGE);
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let onAbort: (() => void) | undefined;
-      await Promise.race([
-        this.lease.released,
-        new Promise<void>((resolve) => {
-          timer = setTimeout(resolve, remaining);
-        }),
-        new Promise<void>((resolve) => {
-          onAbort = () => resolve();
-          signal.addEventListener('abort', onAbort, { once: true });
-        }),
-      ]);
-      clearTimeout(timer);
-      if (onAbort) signal.removeEventListener('abort', onAbort);
-      if (signal.aborted) throw abortedError(signal);
-    }
-    const { promise: released, resolve } = Promise.withResolvers<void>();
-    const lease = { sessionId, released };
-    this.lease = lease;
-    return () => {
-      if (this.lease === lease) this.lease = undefined;
-      resolve();
-    };
   }
 
   async capabilities(): Promise<ComputerCapabilities> {
@@ -177,8 +392,17 @@ export class ComputerHost {
     }
   }
 
+  allowedApps(): ComputerAllowedApp[] {
+    return this.authorizer?.list() ?? [];
+  }
+
+  revokeApp(key: string): boolean {
+    return this.authorizer?.revoke(key) ?? false;
+  }
+
   /** 中止该 session 的 run（含排队中的），收尾后释放 VM；之后同 id 再调用会从空 VM 开始 */
   close(sessionId: string): void {
+    this.authorizer?.forgetSession(sessionId);
     const state = this.sessions.get(sessionId);
     if (!state) return;
     this.sessions.delete(sessionId);
@@ -186,12 +410,48 @@ export class ComputerHost {
     void state.tail.then(() => disposeComputerGuestVm(state.guest));
   }
 
-  /** worker 退出 / 应用退出：停下所有桌面操作 */
+  /** worker 退出 / 应用退出：停下所有桌面操作，收尾合成焦点与 AX 打开声明 */
   closeAll(): void {
+    this.feedback?.dispose?.();
+    const tails = [...this.sessions.values()].map((state) => state.tail);
     for (const sessionId of [...this.sessions.keys()]) this.close(sessionId);
+    const backend = this.backend;
+    if (!backend?.releaseAll) return;
+    // 先同步收尾一次（应用即将退出），run 全部落地后再收一次被它们重新激活的目标
+    backend.releaseAll();
+    void Promise.allSettled(tails).then(() => backend.releaseAll?.());
   }
 }
 
-export const computerHost = new ComputerHost(() => {
-  return createDesktopBackend();
-}, new ComputerOccupancy(createElectronOccupancyDeps()));
+export const computerHost = new ComputerHost(
+  () => createDesktopBackend(),
+  new ComputerOccupancy(createElectronOccupancyDeps()),
+  {
+    // 名单只在 macOS 后端生效（Windows 后端不提供 app 身份）
+    authorizer: new AppAuthorizer({
+      file: () => path.join(app.getPath('userData'), 'computer', 'allowed-apps.json'),
+      prompt: promptComputerAppAccess,
+    }),
+    feedback: composeFeedback(createAppPreview({ enabled: () => true })),
+  }
+);
+
+/** 指针画在画中画里；屏幕上只在真能看到目标窗口时画，免得盖在用户正在用的 app 上 */
+function composeFeedback(
+  preview: Pick<ComputerFeedback, 'activity' | 'runEnd' | 'dispose'> & {
+    pointer(windowId: string, fx: number, fy: number): boolean;
+  }
+): ComputerFeedback {
+  return {
+    pointer: (input) => {
+      if (input.windowId && input.fx !== undefined && input.fy !== undefined) {
+        preview.pointer(input.windowId, input.fx, input.fy);
+      }
+    },
+    activity: (input) => void preview.activity?.(input),
+    runEnd: (owner) => preview.runEnd?.(owner),
+    dispose: () => {
+      preview.dispose?.();
+    },
+  };
+}

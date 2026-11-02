@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { AxRegistry, axHandleEpoch } from '@shared/computer/axRegistry';
+import { appIdentityKey } from '@shared/computer/appIdentity';
+import { AxRegistry, axHandleEpoch, isAxStaleHandleError } from '@shared/computer/axRegistry';
 import type { AxTreeNode } from '@shared/computer/axTree';
 import {
   BackgroundUnavailableError,
@@ -14,15 +15,39 @@ import type {
   ComputerWindowInfo,
 } from '@shared/computer/types';
 import { clipboard, desktopCapturer, type NativeImage, screen, systemPreferences } from 'electron';
-import { resolveOpenArgs } from './appLaunch';
+import { backgroundOpenArgs } from './appLaunch';
+import { AxEnablementRegistry } from './axEnablement';
 import { withAxErrors } from './axErrors';
 import { axPressFallbackMessage, isAxPressUnsupported } from './axJob';
 import { AX_SNAPSHOT_DEFAULT_DEPTH } from './axWalkBudget';
-import type { CaptureBytes, DesktopBackend, PointerOptions } from './backend';
-import { resolveClickRoute } from './clickRoute';
-import { loadMacosNative, type MacosNative } from './macosNative';
+import type {
+  CaptureBytes,
+  ClickOutcome,
+  DesktopBackend,
+  InputGuard,
+  InputOutcome,
+  PointerOptions,
+  TargetApp,
+} from './backend';
+import {
+  axClickPath,
+  chooseClickPath,
+  pickWindowForElement,
+  resolveClickRoute,
+} from './clickRoute';
+import { FocusRegistry } from './focusSession';
+import { macClickCount, macModifierFlags } from './macKey';
+import { loadMacosNative, type MacosNative, type SkyPoint } from './macosNative';
+import { hidSecondsSinceLastEvent } from './occupancyHid';
 import { preflightScreenCaptureAccess } from './screenCaptureAccess';
-import { isSkyClickUnavailable, skyClickLocalPoint } from './skyClick';
+import {
+  isSkyClickUnavailable,
+  skyClickLocalPoint,
+  skyDragPath,
+  skyDragRecipe,
+  skyMouseButton,
+  skyPointerClickRecipe,
+} from './skyClick';
 import { findCapturerWindowSource, thumbnailCropForWindow } from './windowSource';
 
 const execFileAsync = promisify(execFile);
@@ -36,14 +61,8 @@ async function capturePermission(): Promise<ComputerPermissionState> {
 }
 
 const AX_DESKTOP_TARGET = 'desktop';
-
-function skyClickCanHonor(opts?: PointerOptions): boolean {
-  return (
-    (opts?.button ?? 'left').trim().toLowerCase() === 'left' &&
-    (opts?.modifiers?.length ?? 0) === 0 &&
-    (opts?.count ?? 1) <= 2
-  );
-}
+/** 物理输入停顿超过该秒数才临时切换输入法布局，避免打乱用户正在进行的输入 */
+const USER_TYPING_IDLE_SECONDS = 1;
 
 function axPermission(): ComputerPermissionState {
   return systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'denied';
@@ -52,6 +71,8 @@ function axPermission(): ComputerPermissionState {
 export class MacosDesktopBackend implements DesktopBackend {
   private native: MacosNative | null | undefined;
   private readonly registry = new AxRegistry<string>(axHandleEpoch);
+  private focus?: FocusRegistry;
+  private axEnable?: AxEnablementRegistry;
 
   private async nativeOrNull(): Promise<MacosNative | null> {
     if (this.native !== undefined) return this.native;
@@ -63,12 +84,15 @@ export class MacosDesktopBackend implements DesktopBackend {
     const native = await this.nativeOrNull();
     const capture = await capturePermission();
     const ax = axPermission();
+    const input = Boolean(native) && ax === 'granted';
+    // 后台投递全部依赖 SkyLight 私有通道；它不可用时如实报 false，而不是只看权限
+    const backgroundInput = input && native?.skyAvailable() === true;
     return {
       platform: 'darwin',
       capture: capture !== 'denied',
-      input: Boolean(native) && ax === 'granted',
-      ax: Boolean(native) && ax === 'granted',
-      backgroundInput: Boolean(native) && ax === 'granted',
+      input,
+      ax: input,
+      backgroundInput,
       clipboard: true,
       capturePermission: capture,
       inputPermission: ax,
@@ -221,60 +245,322 @@ export class MacosDesktopBackend implements DesktopBackend {
     return native;
   }
 
-  async click(_target: string, screenX: number, screenY: number, opts?: PointerOptions) {
-    const native = await this.requireNative('input');
-    const delivery = opts?.delivery ?? 'background';
-    const window = (await this.windows()).find((item) => item.id === _target);
-    const pid = window?.pid;
-    const windowId = window ? Number(window.id) : undefined;
-    const resolved = resolveClickRoute({ delivery, pid, windowId });
-    // skyClick 只支持左键单/双击且不带修饰键；其它组合走 postToPid 以保留按钮/次数/修饰键
-    const route = resolved === 'skyClick' && !skyClickCanHonor(opts) ? 'postToPid' : resolved;
-    if (route === 'unavailable') {
-      throw new BackgroundUnavailableError(
-        'macOS pixel click cannot target a window in background'
-      );
-    }
-    if (route === 'skyClick' && window && pid) {
-      const local = skyClickLocalPoint({ x: screenX, y: screenY }, window);
-      try {
-        await native.skyClick({
-          screenX,
-          screenY,
-          windowX: local.x,
-          windowY: local.y,
-          windowId: Number(window.id),
-          pid,
-          alreadyFront: window.focused === true,
-          count: (opts?.count ?? 1) >= 2 ? 2 : 1,
-        });
-        return;
-      } catch (error) {
-        if (!isSkyClickUnavailable(error)) throw error;
-        await native.click(screenX, screenY, { ...opts, pid });
-        return;
-      }
-    }
-    await native.click(screenX, screenY, route === 'postToPid' ? { ...opts, pid } : opts);
+  private focusRegistry(native: MacosNative): FocusRegistry {
+    this.focus ??= new FocusRegistry({
+      frontPid: () => native.frontPid(),
+      activate: (pid, windowId) => native.activateWindow(pid, windowId),
+      deactivate: (pid, windowId) => native.deactivateWindow(pid, windowId),
+      setFront: (pid) => native.setFrontProcess(pid),
+      hidIdleSeconds: hidSecondsSinceLastEvent,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
+    return this.focus;
   }
 
-  async move(_target: string, screenX: number, screenY: number, opts?: PointerOptions) {
-    const native = await this.requireNative('input');
-    if ((opts?.delivery ?? 'background') === 'background') {
-      throw new BackgroundUnavailableError('macOS mouse move cannot run in background');
+  /**
+   * Electron/Chromium 默认不建网页 AX 树，读取也需要临时启用（不代表输入授权）。
+   * registry 空闲 60 秒或 releaseAll 时仅还原由我们打开的属性，读操作不会永久修改它。
+   */
+  private async ensureAx(native: MacosNative, pid: number): Promise<void> {
+    this.axEnable ??= new AxEnablementRegistry({
+      enable: async (target) =>
+        native.axEnable(target, native.appIdentity(target)?.bundleId || undefined),
+      restore: (target, attrs) => native.axRestoreEnable(target, attrs),
+    });
+    if (await this.axEnable.ensure(pid)) await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  private async backgroundTarget(
+    native: MacosNative,
+    target: string,
+    action: string,
+    outerGuard?: InputGuard
+  ): Promise<{ window: ComputerWindowInfo; pid: number; windowId: number; guard: InputGuard }> {
+    await outerGuard?.check();
+    if (!native.skyAvailable()) {
+      throw new BackgroundUnavailableError(
+        `macOS ${action}: the SkyLight event channel is unavailable on this system`
+      );
     }
-    await native.move(screenX, screenY);
+    if (target === 'desktop') {
+      throw new BackgroundUnavailableError(
+        `macOS ${action} needs a window target in background (use desktop.window(...) or desktop.app(...))`
+      );
+    }
+    const window = (await this.windows()).find((item) => item.id === target);
+    const pid = window?.pid;
+    const windowId = window ? Number(window.id) : Number.NaN;
+    if (!window || !pid || !Number.isInteger(windowId) || windowId <= 0) {
+      throw new BackgroundUnavailableError(
+        `macOS ${action}: window '${target}' has no process identity`
+      );
+    }
+    const identity = this.identify(native, pid);
+    const guard: InputGuard = {
+      check: async (cleanup = false) => {
+        const current = cleanup
+          ? undefined
+          : (await native.windows()).find((item) => item.id === target);
+        const app = native.appIdentity(pid);
+        if (
+          !app ||
+          appIdentityKey(app) !== appIdentityKey(identity) ||
+          (!cleanup &&
+            (!current ||
+              current.pid !== pid ||
+              current.x !== window.x ||
+              current.y !== window.y ||
+              current.width !== window.width ||
+              current.height !== window.height))
+        ) {
+          throw new ComputerError(
+            'target-changed',
+            'The target window or process changed; input was not sent.'
+          );
+        }
+        await outerGuard?.check(cleanup, { ...app, pid, windowId: current?.id });
+      },
+    };
+    await guard.check();
+    return { window, pid, windowId, guard };
+  }
+
+  private async inFocus<T>(
+    native: MacosNative,
+    pid: number,
+    windowId: number,
+    fn: (guard: InputGuard) => Promise<T>,
+    guard: InputGuard
+  ): Promise<T> {
+    await guard.check();
+    await this.ensureAx(native, pid).catch(() => undefined);
+    await guard.check();
+    const registry = this.focusRegistry(native);
+    try {
+      const session = registry.session(pid);
+      return await session.guard(windowId, async () => {
+        await guard.check();
+        return fn({
+          check: async (cleanup = false) => {
+            await guard.check(cleanup);
+            if (!cleanup) session.assertSafe();
+          },
+        });
+      });
+    } catch (error) {
+      if (!isSkyClickUnavailable(error)) throw error;
+      // 激活包被拒（1002 多见于辅助功能授权失效）：不要偷偷改成前台
+      throw new BackgroundUnavailableError(
+        `macOS refused background focus for this app (${error instanceof Error ? error.message : String(error)}); EnsoCode may have lost Accessibility permission`
+      );
+    } finally {
+      // Every action restores synthetic focus, including abort and failed input.
+      try {
+        await guard.check(true);
+        registry.release(pid);
+      } catch {
+        registry.discard(pid);
+      }
+    }
+  }
+
+  private skyPoint(window: ComputerWindowInfo, x: number, y: number): SkyPoint {
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      x < window.x ||
+      y < window.y ||
+      x >= window.x + window.width ||
+      y >= window.y + window.height
+    ) {
+      throw new ComputerError(
+        'invalid-point',
+        'Background coordinates must be inside the target window; take a fresh screenshot.'
+      );
+    }
+    const local = skyClickLocalPoint({ x, y }, window);
+    return { screenX: x, screenY: y, windowX: local.x, windowY: local.y };
+  }
+
+  async click(
+    target: string,
+    screenX: number,
+    screenY: number,
+    opts?: PointerOptions
+  ): Promise<ClickOutcome> {
+    const native = await this.requireNative('input');
+    const delivery = opts?.delivery ?? 'background';
+    const clickedWindow = (await this.windows()).find((item) => item.id === target);
+    const route = resolveClickRoute({
+      delivery,
+      pid: clickedWindow?.pid,
+      windowId: clickedWindow ? Number(clickedWindow.id) : undefined,
+    });
+    if (route === 'hid') {
+      await opts?.guard?.check();
+      await native.click(screenX, screenY, opts);
+      return { via: 'hid' };
+    }
+    if (route === 'unavailable') {
+      throw new BackgroundUnavailableError(
+        target === 'desktop'
+          ? 'macOS background click needs a window target (use desktop.window(...) or desktop.app(...))'
+          : `macOS background click: window '${target}' has no process identity`
+      );
+    }
+    const { pid, windowId, guard } = await this.backgroundTarget(
+      native,
+      target,
+      'click',
+      opts?.guard
+    );
+    const button = skyMouseButton(opts?.button);
+    const count = macClickCount(opts?.count);
+    const flags = macModifierFlags(opts?.modifiers);
+    if (route === 'skyClick') {
+      this.skyPoint(
+        clickedWindow ??
+          (() => {
+            throw new BackgroundUnavailableError('macOS background click needs a resolved window');
+          })(),
+        screenX,
+        screenY
+      );
+      await this.ensureAx(native, pid).catch(() => undefined);
+      const element = await this.rawElementAt(native, screenX, screenY, pid);
+      const path = chooseClickPath({
+        targetPid: pid,
+        targetWindowId: windowId,
+        element,
+        button,
+        count,
+        modifiers: opts?.modifiers,
+      });
+      if (path === 'axPress' && element) {
+        try {
+          await this.inFocus(
+            native,
+            pid,
+            windowId,
+            () => native.axPerform(element.ref, 'press'),
+            guard
+          );
+          return { via: 'axPress' };
+        } catch (error) {
+          // 只在“控件不认 press / 元素已失效”时退回合成点击；超时等错误下 press 可能已生效，
+          // 再点一次会让提交/发送类按钮触发两次
+          if (!isAxPressUnsupported(error) && !isAxStaleHandleError(error)) throw error;
+        }
+      }
+      const window = (await this.windows()).find((item) => item.id === target);
+      if (!window) throw new ComputerError('window-not-found', `window '${target}' not found`);
+      await this.inFocus(
+        native,
+        pid,
+        windowId,
+        (guard) =>
+          native.skyPointer({
+            pid,
+            windowId,
+            button,
+            flags,
+            points: [this.skyPoint(window, screenX, screenY)],
+            steps: skyPointerClickRecipe({ button, count }),
+            guard,
+          }),
+        guard
+      );
+      return { via: 'synthetic' };
+    }
+    throw new BackgroundUnavailableError('Background clicking requires an exact window identity');
+  }
+
+  /** 落点元素（含 pid 与动作）；读不到时 null，不影响合成点击 */
+  private async rawElementAt(
+    native: MacosNative,
+    screenX: number,
+    screenY: number,
+    pid: number
+  ): Promise<AxTreeNode | null> {
+    try {
+      // 按 app 命中：后台目标常被别的窗口盖住，系统级命中会落到遮挡它的 app
+      return await native.axElementAt(screenX, screenY, pid);
+    } catch {
+      return null;
+    }
+  }
+
+  async move(target: string, screenX: number, screenY: number, opts?: PointerOptions) {
+    const native = await this.requireNative('input');
+    if ((opts?.delivery ?? 'background') === 'foreground') {
+      await opts?.guard?.check();
+      await native.move(screenX, screenY);
+      return;
+    }
+    const { window, pid, windowId, guard } = await this.backgroundTarget(
+      native,
+      target,
+      'mouse move',
+      opts?.guard
+    );
+    await this.inFocus(
+      native,
+      pid,
+      windowId,
+      (guard) =>
+        native.skyPointer({
+          pid,
+          windowId,
+          button: 'left',
+          flags: macModifierFlags(opts?.modifiers),
+          points: [this.skyPoint(window, screenX, screenY)],
+          steps: [{ kind: 'moved', pointKind: 'target', clickState: 0, phase: 2, delayAfterMs: 0 }],
+          guard,
+        }),
+      guard
+    );
   }
 
   async drag(target: string, points: Array<{ x: number; y: number }>, opts?: PointerOptions) {
     if (points.length === 0) return;
-    await this.move(target, points[0].x, points[0].y, opts);
     const native = await this.requireNative('input');
-    await native.drag(points);
+    if ((opts?.delivery ?? 'background') === 'foreground') {
+      await opts?.guard?.check();
+      await native.move(points[0].x, points[0].y);
+      await native.drag(points);
+      return;
+    }
+    if (points.length < 2) throw new Error('drag needs at least two points');
+    if (skyMouseButton(opts?.button) !== 'left') {
+      throw new BackgroundUnavailableError('macOS background drag supports the left button only');
+    }
+    const { window, pid, windowId, guard } = await this.backgroundTarget(
+      native,
+      target,
+      'drag',
+      opts?.guard
+    );
+    const path = skyDragPath(points).map((point) => this.skyPoint(window, point.x, point.y));
+    await this.inFocus(
+      native,
+      pid,
+      windowId,
+      (guard) =>
+        native.skyPointer({
+          pid,
+          windowId,
+          button: 'left',
+          flags: macModifierFlags(opts?.modifiers),
+          points: path,
+          steps: skyDragRecipe(path.length),
+          guard,
+        }),
+      guard
+    );
   }
 
   async scroll(
-    _target: string,
+    target: string,
     screenX: number,
     screenY: number,
     dx: number,
@@ -282,26 +568,91 @@ export class MacosDesktopBackend implements DesktopBackend {
     opts?: PointerOptions
   ) {
     const native = await this.requireNative('input');
-    if ((opts?.delivery ?? 'background') === 'background') {
-      throw new BackgroundUnavailableError('macOS scroll cannot run in background');
+    if ((opts?.delivery ?? 'background') === 'foreground') {
+      await opts?.guard?.check();
+      await native.scroll(screenX, screenY, dx, dy);
+      return;
     }
-    await native.scroll(screenX, screenY, dx, dy);
+    const { window, pid, windowId, guard } = await this.backgroundTarget(
+      native,
+      target,
+      'scroll',
+      opts?.guard
+    );
+    await this.inFocus(
+      native,
+      pid,
+      windowId,
+      (guard) =>
+        native.skyScroll({
+          pid,
+          windowId,
+          point: this.skyPoint(window, screenX, screenY),
+          dx,
+          dy,
+          flags: macModifierFlags(opts?.modifiers),
+          guard,
+        }),
+      guard
+    );
   }
 
-  async typeText(_target: string, text: string, opts?: PointerOptions) {
-    const native = await this.requireNative('input');
-    if ((opts?.delivery ?? 'background') === 'background') {
-      throw new BackgroundUnavailableError('macOS typing cannot run in background without AX');
-    }
-    await native.typeText(text);
+  /** 输入法激活时需切英文布局；用户正在打字就不切（会打乱用户输入），改为提醒模型核对 */
+  private layoutPlan(native: MacosNative): { englishLayout: boolean; note?: string } {
+    if (!native.inputMethodActive()) return { englishLayout: false };
+    const idle = hidSecondsSinceLastEvent();
+    if (idle !== null && idle >= USER_TYPING_IDLE_SECONDS) return { englishLayout: true };
+    return {
+      englishLayout: false,
+      note: 'An input method is active and the user is typing, so the layout was not switched; verify the text with ax() or el.value',
+    };
   }
 
-  async keyChord(_target: string, keys: string[], opts?: PointerOptions) {
+  async typeText(target: string, text: string, opts?: PointerOptions): Promise<InputOutcome> {
     const native = await this.requireNative('input');
-    if ((opts?.delivery ?? 'background') === 'background') {
-      throw new BackgroundUnavailableError('macOS key chords cannot run in background without AX');
+    if ((opts?.delivery ?? 'background') === 'foreground') {
+      await opts?.guard?.check();
+      await native.typeText(text, opts?.guard);
+      return {};
     }
-    await native.keyChord(keys);
+    const { pid, windowId, guard } = await this.backgroundTarget(
+      native,
+      target,
+      'typing',
+      opts?.guard
+    );
+    const plan = this.layoutPlan(native);
+    await this.inFocus(
+      native,
+      pid,
+      windowId,
+      (guard) => native.pidTypeText(pid, text, { englishLayout: plan.englishLayout, guard }),
+      guard
+    );
+    return plan.note ? { note: plan.note } : {};
+  }
+
+  async keyChord(target: string, keys: string[], opts?: PointerOptions): Promise<InputOutcome> {
+    const native = await this.requireNative('input');
+    if ((opts?.delivery ?? 'background') === 'foreground') {
+      await opts?.guard?.check();
+      await native.keyChord(keys, opts?.guard);
+      return {};
+    }
+    const { pid, windowId, guard } = await this.backgroundTarget(
+      native,
+      target,
+      'key chords',
+      opts?.guard
+    );
+    await this.inFocus(
+      native,
+      pid,
+      windowId,
+      (guard) => native.pidKeyChord(pid, keys, guard),
+      guard
+    );
+    return {};
   }
 
   async endRun() {
@@ -309,13 +660,95 @@ export class MacosDesktopBackend implements DesktopBackend {
     await native?.endInput();
   }
 
-  async raise(windowId: string) {
+  releaseAll(): void {
+    this.focus?.releaseAll();
+    this.axEnable?.releaseAll();
+  }
+
+  /** 有 pid 却认不出 app 时拒绝（fail-closed），不能当成「没有 app」跳过授权 */
+  private identify(native: MacosNative, pid: number, name?: string): TargetApp {
+    const identity = native.appIdentity(pid);
+    if (!identity) {
+      throw new ComputerError(
+        'app-unknown',
+        `Cannot identify the app of process ${pid}; computer will not send input to it.`
+      );
+    }
+    return { ...identity, name: name || identity.name, pid };
+  }
+
+  async appForTarget(target: string): Promise<TargetApp | null> {
+    if (target === 'desktop') return null;
+    const native = await this.nativeOrNull();
+    const window = (await this.windows()).find((item) => item.id === target);
+    if (!native || !window?.pid) return null;
+    return { ...this.identify(native, window.pid, window.app), windowId: target };
+  }
+
+  async appForProcess(pid: number): Promise<TargetApp | null> {
+    const native = await this.nativeOrNull();
+    const identity = native?.appIdentity(pid);
+    return identity ? { ...identity, pid } : null;
+  }
+
+  targetForRef(ref: string): string {
+    return this.registry.targetOf(ref);
+  }
+
+  async appForRef(ref: string): Promise<TargetApp | null> {
+    const native = await this.nativeOrNull();
+    if (!native) return null;
+    const handle = this.registry.resolve(ref);
+    const node = await withAxErrors(() => native.axNode(handle), ref);
+    const pid = node.pid ?? (await withAxErrors(() => native.axPid(handle), ref));
+    if (!pid) {
+      throw new ComputerError('app-unknown', `Cannot identify the app that owns ${ref}.`);
+    }
+    const target = node.windowId ? String(node.windowId) : this.registry.targetOf(ref);
+    const window = (await this.windows()).find((item) => item.id === target && item.pid === pid);
+    if (!window)
+      throw new ComputerError(
+        'target-changed',
+        'AX target window disappeared; reacquire its state.'
+      );
+    return { ...this.identify(native, pid, window.app), windowId: window.id };
+  }
+
+  async appForDesktopInput(input: { point?: { x: number; y: number } }): Promise<TargetApp | null> {
+    const native = await this.nativeOrNull();
+    if (!native) return null;
+    const windows = await this.windows();
+    const point = input.point;
+    // 窗口列表按显示层级从前到后；取落点处最上层的普通窗口
+    const hit = point
+      ? windows.find(
+          (item) =>
+            item.pid &&
+            point.x >= item.x &&
+            point.y >= item.y &&
+            point.x < item.x + item.width &&
+            point.y < item.y + item.height
+        )
+      : undefined;
+    const pid = hit?.pid ?? native.frontPid();
+    if (!pid) return null;
+    return this.identify(native, pid, (hit ?? windows.find((item) => item.pid === pid))?.app);
+  }
+
+  async raise(windowId: string, guard?: InputGuard) {
     const native = await this.requireNative('input');
-    await native.raise(windowId);
+    await guard?.check();
+    await native.raise(windowId, guard);
+  }
+
+  private async ensureAxForTarget(native: MacosNative, target: string): Promise<void> {
+    const pid = (await this.windows()).find((item) => item.id === target)?.pid;
+    if (pid) await this.ensureAx(native, pid).catch(() => undefined);
   }
 
   async axSnapshot(target: string, opts?: { maxDepth?: number; all?: boolean }) {
     const native = await this.requireNative('ax');
+    await this.ensureAxForTarget(native, target);
     const generation = this.registry.beginSnapshot(target);
     // 超时由 axWorkerClient 负责（到点会终止 worker），这里不再叠一层 race
     const nodes = await withAxErrors(() =>
@@ -343,6 +776,7 @@ export class MacosDesktopBackend implements DesktopBackend {
     }
   ) {
     const native = await this.requireNative('ax');
+    await this.ensureAxForTarget(native, target);
     const generation = this.registry.beginSnapshot(target);
     try {
       const nodes = await withAxErrors(() => native.axQuery(target, query));
@@ -402,41 +836,69 @@ export class MacosDesktopBackend implements DesktopBackend {
     return withAxErrors(() => native.axParent(handle), ref);
   }
 
-  async axPerform(ref: string, action: string) {
+  async axPerform(ref: string, action: string, guard?: InputGuard) {
     const native = await this.requireNative('ax');
     const handle = this.registry.resolve(ref);
+    await guard?.check();
     await withAxErrors(() => native.axPerform(handle, action), ref);
   }
 
-  async axSetValue(ref: string, value: string) {
+  async axSetValue(ref: string, value: string, guard?: InputGuard) {
     const native = await this.requireNative('ax');
     const handle = this.registry.resolve(ref);
+    await guard?.check();
     await withAxErrors(() => native.axSetValue(handle, value), ref);
   }
 
-  async axFocus(ref: string) {
+  async axFocus(ref: string, guard?: InputGuard) {
     const native = await this.requireNative('ax');
     const handle = this.registry.resolve(ref);
+    await guard?.check();
     await withAxErrors(() => native.axFocus(handle), ref);
   }
 
-  async axClick(ref: string) {
-    try {
-      await this.axPerform(ref, 'press');
-    } catch (error) {
-      if (!isAxPressUnsupported(error)) throw error;
-      const node = await this.axNode(ref);
-      const bounds = node.bounds;
-      if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
-        throw new Error(axPressFallbackMessage(node.role, ref));
+  /** press 不被支持时退回控件中心点的点击，投递方式沿用调用方（缺省后台） */
+  async axClick(ref: string, opts?: PointerOptions) {
+    let node = await this.axNode(ref);
+    if (axClickPath(node) === 'axPress') {
+      try {
+        await this.axPerform(ref, 'press', opts?.guard);
+        return;
+      } catch (error) {
+        if (!isAxPressUnsupported(error)) throw error;
       }
-      await this.click(
-        this.registry.targetOf(ref),
-        bounds.x + bounds.width / 2,
-        bounds.y + bounds.height / 2,
-        { delivery: 'foreground' }
-      );
+      node = await this.axNode(ref);
     }
+    const bounds = node.bounds;
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+      throw new Error(axPressFallbackMessage(node.role, ref));
+    }
+    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const window = pickWindowForElement(await this.windows(), {
+      pid: node.pid,
+      windowId: node.windowId,
+      center,
+      fallback: this.registry.targetOf(ref),
+    });
+    if (node.pid === undefined || window === 'desktop')
+      throw new ComputerError('app-unknown', 'AX element has no exact window identity');
+    if (opts?.delivery === 'foreground') {
+      // AXPress does not need z-order, but its HID fallback must never hit an occluding app.
+      const front = async () =>
+        (await this.windows()).some((item) => item.id === window && item.focused);
+      if (!(await front())) {
+        await this.raise(window, opts.guard);
+        if (!(await front()))
+          throw new ComputerError(
+            'target-changed',
+            'The AX target window could not be brought to the front; input was not sent.'
+          );
+      }
+    }
+    await this.click(window, center.x, center.y, {
+      ...opts,
+      delivery: opts?.delivery ?? 'background',
+    });
   }
 
   async clipboardRead() {
@@ -448,7 +910,7 @@ export class MacosDesktopBackend implements DesktopBackend {
   }
 
   async launchApp(name: string, opts?: { pane?: string }): Promise<void> {
-    await execFileAsync('/usr/bin/open', resolveOpenArgs(name, opts), {
+    await execFileAsync('/usr/bin/open', backgroundOpenArgs(name, opts), {
       timeout: 15_000,
     });
   }

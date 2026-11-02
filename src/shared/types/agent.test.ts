@@ -130,13 +130,14 @@ describe('approval reviewer classifier protocol boundaries', () => {
       })
     ).toBeNull();
   });
-  it('validates audit hashes/probabilities and fallback reasons', () => {
+  it('validates audit hashes/probabilities, fallback reasons and desktop protected human floor', () => {
     const request = {
       requestId: 'a',
       actionHash: 'a'.repeat(64),
       tool: 'computer',
       kind: 'command',
       summary: 'run',
+      protected: 'desktop-control',
       reviewFallback: 'timeout',
     };
     const event = { type: 'approval-request', identity: parent, seq: 1, request };

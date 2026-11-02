@@ -54,6 +54,7 @@ import { useI18n } from '@/i18n';
 import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
 import { CodeSearchSettings } from './CodeSearchSettings';
+import { ComputerAllowedApps } from './ComputerAllowedApps';
 import { NewSessionBadge } from './NewSessionBadge';
 import {
   enabledOccupancyTotal,
@@ -405,6 +406,7 @@ export function BuiltinToolsSettings() {
                         )}
                       </p>
                     )}
+                    {capabilities?.platform === 'darwin' && <ComputerAllowedApps />}
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => setGuideOpen(true)}>
                         {t('Show permission guide')}

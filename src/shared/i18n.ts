@@ -20,6 +20,7 @@ export const zhTranslations: Record<string, string> = {
   '0.85 (looser)': '0.85（更宽松）',
   '0.9 (default)': '0.9（默认）',
   '0.95 (stricter)': '0.95（更严格）',
+  'Apps the AI may control': '允许 AI 控制的应用',
   'Auto-allow threshold': '自动放行阈值',
   'Auto-manage approvals': '自动托管审批',
   'Auto-managed · allowed': '自动托管 · 已放行',
@@ -29,8 +30,12 @@ export const zhTranslations: Record<string, string> = {
     '自动托管：仅当决策模型高度确信安全时才放行，其余操作会被拒绝并由代理换一种方式；受保护操作仍然会询问你。',
   'Decision models only allow or block when highly confident. Everything else asks you.':
     '决策模型只在高置信时才放行或拦截，其余情况都会询问你。',
+  'No apps are always allowed yet.': '还没有永久允许的应用。',
   'Only runs automatically when the allow probability reaches this value. Operations near the threshold may be allowed one time and not the next.':
     '仅当放行概率达到该值时才自动执行；接近阈值的操作可能这次放行、下次询问。',
+  Revoke: '撤销',
+  'The first time the AI clicks or types in an app, EnsoCode asks you. Apps you always allow are listed here; it can then read everything in their windows.':
+    'AI 首次点击或输入某个应用时，EnsoCode 会询问你。永久允许的应用会列在这里；之后它可以读取这些应用窗口里的全部内容。',
   'Temporary chats': '临时会话',
   'Start a temporary chat': '新建临时会话',
   'Temporary chats are kept until you delete them.': '临时会话会保留，直到你主动删除。',

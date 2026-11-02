@@ -199,6 +199,7 @@ export const PROTECTED_ACTION_CATEGORIES = [
   'payment',
   'deploy',
   'secret',
+  'desktop-control',
 ] as const;
 export type ProtectedActionCategory = (typeof PROTECTED_ACTION_CATEGORIES)[number];
 

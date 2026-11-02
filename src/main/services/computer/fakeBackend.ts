@@ -1,7 +1,7 @@
 import { AxRegistry } from '@shared/computer/axRegistry';
 import type { AxTreeNode } from '@shared/computer/axTree';
 import type { ComputerCapabilities, ComputerWindowInfo } from '@shared/computer/types';
-import type { CaptureBytes, DesktopBackend, PointerOptions } from './backend';
+import type { CaptureBytes, DesktopBackend, PointerOptions, TargetApp } from './backend';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -13,7 +13,18 @@ export class FakeDesktopBackend implements DesktopBackend {
   readonly launches: string[] = [];
   readonly panes: string[] = [];
   clipboard = '';
+  /** 能力上报的后台投递；false 时 guest 缺省走前台接管 */
+  backgroundInput = true;
+  /** 每个 run 内各动作开始/结束的时间线，用于断言并行与串行 */
+  readonly timeline: string[] = [];
+  /** 动作耗时（毫秒），用于制造并发窗口 */
+  inputDelayMs = 0;
   endRun?: () => Promise<void>;
+  releasedAll = 0;
+  /** false 时模拟拿不到 app 身份的后端（如 Windows） */
+  appIdentities = true;
+  /** desktop 级前台输入会落到的 app；null 表示无法判断 */
+  desktopInputApp: TargetApp | null | undefined;
   private readonly registry = new AxRegistry<AxTreeNode>();
   windowsList: ComputerWindowInfo[] = [
     {
@@ -35,7 +46,7 @@ export class FakeDesktopBackend implements DesktopBackend {
       capture: true,
       input: true,
       ax: true,
-      backgroundInput: true,
+      backgroundInput: this.backgroundInput,
       clipboard: true,
       capturePermission: 'granted',
       inputPermission: 'granted',
@@ -69,7 +80,50 @@ export class FakeDesktopBackend implements DesktopBackend {
   raiseFails = false;
 
   async click(target: string, screenX: number, screenY: number, opts?: PointerOptions) {
+    this.timeline.push(`click:${target}:start`);
+    if (this.inputDelayMs > 0)
+      await new Promise((resolve) => setTimeout(resolve, this.inputDelayMs));
     this.clicks.push({ target, x: screenX, y: screenY, delivery: opts?.delivery });
+    this.timeline.push(`click:${target}:end`);
+  }
+
+  releaseAll(): void {
+    this.releasedAll += 1;
+  }
+
+  async appForDesktopInput(): Promise<TargetApp | null> {
+    if (this.desktopInputApp !== undefined) return this.desktopInputApp;
+    const focused = this.windowsList.find((item) => item.focused) ?? this.windowsList[0];
+    const app = focused ? await this.appForTarget(focused.id) : null;
+    if (!app) return null;
+    const { windowId: _windowId, ...identity } = app;
+    return identity;
+  }
+
+  async appForTarget(target: string): Promise<TargetApp | null> {
+    if (!this.appIdentities) return null;
+    const window = this.windowsList.find((item) => item.id === target);
+    if (!window?.pid) return null;
+    return {
+      pid: window.pid,
+      windowId: window.id,
+      name: window.app,
+      bundleId: `test.${window.app.toLowerCase()}`,
+      path: `/Applications/${window.app}.app`,
+    };
+  }
+
+  async appForProcess(pid: number): Promise<TargetApp | null> {
+    const window = this.windowsList.find((item) => item.pid === pid);
+    return window ? this.appForTarget(window.id) : null;
+  }
+
+  targetForRef(ref: string): string {
+    return this.registry.targetOf(ref);
+  }
+
+  async appForRef(ref: string): Promise<TargetApp | null> {
+    return this.appForTarget(this.registry.targetOf(ref));
   }
 
   async move(_target: string, _x: number, _y: number, opts?: PointerOptions) {
@@ -97,6 +151,7 @@ export class FakeDesktopBackend implements DesktopBackend {
   async raise(windowId: string) {
     this.raised.push(windowId);
     if (this.raiseFails) return;
+    this.desktopInputApp = undefined;
     this.windowsList = this.windowsList.map((window) => ({
       ...window,
       focused: window.id === windowId,

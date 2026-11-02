@@ -869,6 +869,8 @@ export const IPC_PRODUCT_COVERAGE = {
   BOT_TEMPLATES_CHANGED: excluded('Bot mode template library change notification transport.'),
   COMPUTER_CAPABILITIES: surfaces('coding-tools.computer'),
   COMPUTER_OPEN_PERMISSIONS: surfaces('coding-tools.computer'),
+  COMPUTER_ALLOWED_APPS: surfaces('coding-tools.computer'),
+  COMPUTER_REVOKE_APP: surfaces('coding-tools.computer'),
 } satisfies Record<keyof typeof IPC_CHANNELS, CoverageDisposition>;
 
 export const AUTHORITATIVE_COVERAGE_SOURCES = {

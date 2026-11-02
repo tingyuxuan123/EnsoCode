@@ -131,6 +131,32 @@ describe('createComputerTool', () => {
 });
 
 describe('withComputerApproval', () => {
+  it('assistant 的写操作不交给分类器自动放行', async () => {
+    const review = vi.fn(async () => ({ decision: 'auto_allow' as const }));
+    const onRequest = vi.fn();
+    const emit = vi.fn();
+    const gate = new ApprovalGate('assistant', onRequest, () => {}, { review });
+    const tool = withComputerApproval(
+      gate,
+      createComputerTool(new ComputerInvoker(identity, emit))
+    );
+    const pending = tool.execute(
+      'c1',
+      { code: 'await desktop.type("hello")' },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(review).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+    expect(onRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ protected: 'desktop-control' })
+    );
+    gate.cancelAll();
+    await expect(pending).rejects.toThrow(/cancel/);
+  });
+
   it('read_only 跳过审批，写操作走 command', async () => {
     const emit = vi.fn();
     const invoker = new ComputerInvoker(identity, emit);

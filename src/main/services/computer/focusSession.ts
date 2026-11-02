@@ -1,0 +1,237 @@
+import { ComputerError } from '@shared/computer/errors';
+
+/** 原生焦点原语；全部同步，便于在轮询里即时还回前台。 */
+export interface FocusDeps {
+  /** 系统真前台进程；不可读时 undefined */
+  frontPid(): number | undefined;
+  /** 让目标进程相信自己处于激活态、该窗口为 key（不改变系统真前台） */
+  activate(pid: number, windowId: number): void;
+  deactivate(pid: number, windowId: number): void;
+  /** 把系统真前台还给 pid；失败返回 false */
+  setFront(pid: number): boolean;
+  /** 距上次物理键鼠的秒数；null 表示不可检测 */
+  hidIdleSeconds(): number | null;
+  sleep(ms: number): Promise<void>;
+}
+
+export interface FocusSessionOptions {
+  /** 激活包投递后给目标处理的时间 */
+  settleMs?: number;
+  /** 单个会话内容忍的焦点窃取次数 */
+  maxSteals?: number;
+  /** 物理输入距今小于该秒数视为用户正在操作 */
+  userActiveSeconds?: number;
+  /** 动作期间轮询真前台的间隔；0 关闭 */
+  pollMs?: number;
+}
+
+const DEFAULTS = {
+  settleMs: 40,
+  maxSteals: 3,
+  userActiveSeconds: 1,
+  pollMs: 30,
+} satisfies Required<FocusSessionOptions>;
+
+function userActiveError(): ComputerError {
+  return new ComputerError(
+    'user-active',
+    'The user is using the target app right now; background input was not sent. Wait until they switch away, or ask them.'
+  );
+}
+
+/**
+ * 每个目标进程一份合成焦点状态：
+ * believed-active（目标相信自己激活、key 窗口）与 really-active（系统真前台）分开跟踪。
+ * 动作期间若目标把自己抢成真前台，而用户没有动键鼠，就把前台还给用户原来的 app。
+ */
+export class FocusSession {
+  private believed = false;
+  private window: number | undefined;
+  private userFront: number | undefined;
+  private steals = 0;
+  private closed = false;
+  /** 进行中的动作数；大于 0 时不按空闲收尾 */
+  busy = 0;
+  private readonly options: Required<FocusSessionOptions>;
+
+  constructor(
+    readonly pid: number,
+    private readonly deps: FocusDeps,
+    options: FocusSessionOptions = {}
+  ) {
+    this.options = { ...DEFAULTS, ...options };
+  }
+
+  state(): { believedActive: boolean; window: number | undefined; reallyActive: boolean } {
+    return {
+      believedActive: this.believed,
+      window: this.window,
+      reallyActive: this.deps.frontPid() === this.pid,
+    };
+  }
+
+  private userActive(): boolean {
+    const idle = this.deps.hidIdleSeconds();
+    return idle === null || idle < this.options.userActiveSeconds;
+  }
+
+  async enforce(windowId: number): Promise<void> {
+    if (this.closed) throw new Error('focus session closed');
+    const front = this.deps.frontPid();
+    if (front === this.pid) {
+      // 目标就是真前台：合成激活态与“用户原前台”都已作废，不能再按窃取处理
+      this.believed = false;
+      this.userFront = undefined;
+      if (this.userActive()) throw userActiveError();
+      this.window = windowId;
+      return;
+    }
+    if (front !== undefined) this.userFront = front;
+    if (this.believed && this.window === windowId) return;
+    if (this.believed && this.window !== undefined) {
+      this.deps.deactivate(this.pid, this.window);
+      this.believed = false;
+    }
+    this.believed = true;
+    this.window = windowId;
+    this.deps.activate(this.pid, windowId);
+    await this.deps.sleep(this.options.settleMs);
+  }
+
+  /** 目标成了真前台时的处置；返回需要抛给调用方的错误 */
+  private detectSteal(): ComputerError | undefined {
+    const front = this.deps.frontPid();
+    if (front !== this.pid) {
+      // If the user switches apps, never restore an out-of-date front app later.
+      if (front !== undefined) this.userFront = front;
+      return undefined;
+    }
+    const userFront = this.userFront;
+    if (userFront === undefined || userFront === this.pid) return undefined;
+    // 系统已把真激活给了目标，原来的合成激活态不再成立
+    this.believed = false;
+    if (this.userActive()) {
+      this.userFront = undefined;
+      return userActiveError();
+    }
+    this.steals += 1;
+    const restored = this.deps.setFront(userFront);
+    if (!restored || this.steals > this.options.maxSteals) {
+      return new ComputerError(
+        'focus-steal',
+        'The target app keeps taking the foreground from the user; background input stopped. Use delivery:"foreground" or ask the user.'
+      );
+    }
+    return undefined;
+  }
+
+  async guard<T>(windowId: number, fn: () => Promise<T>): Promise<T> {
+    await this.enforce(windowId);
+    this.assertSafe();
+    let pending: ComputerError | undefined;
+    const timer =
+      this.options.pollMs > 0
+        ? setInterval(() => {
+            pending ??= this.detectSteal();
+          }, this.options.pollMs)
+        : undefined;
+    let result: T;
+    this.busy += 1;
+    try {
+      result = await fn();
+    } catch (error) {
+      this.busy -= 1;
+      if (timer) clearInterval(timer);
+      // 动作本身失败时只做还回，不改写它的错误
+      this.detectSteal();
+      throw error;
+    }
+    this.busy -= 1;
+    if (timer) clearInterval(timer);
+    const error = pending ?? this.detectSteal();
+    if (error) throw error;
+    return result;
+  }
+
+  assertSafe(): void {
+    if (this.closed) throw new Error('focus session closed');
+    const error = this.detectSteal();
+    if (error) throw error;
+    if (this.deps.frontPid() === this.pid && this.userActive()) throw userActiveError();
+  }
+
+  teardown(): void {
+    if (this.closed) return;
+    this.closed = true;
+    // 目标已是真前台时它的激活是真的，反激活会让它丢掉用户的输入
+    if (this.believed && this.window !== undefined && this.deps.frontPid() !== this.pid) {
+      this.believed = false;
+      this.deps.deactivate(this.pid, this.window);
+    }
+  }
+}
+
+/** 后端级登记：动作内按 pid 复用；macOS inFocus 在每个动作 finally 中 release，空闲计时只是兜底。 */
+export class FocusRegistry {
+  private readonly sessions = new Map<number, FocusSession>();
+  private readonly timers = new Map<number, ReturnType<typeof setTimeout>>();
+  private readonly idleMs: number;
+
+  constructor(
+    private readonly deps: FocusDeps,
+    private readonly options: FocusSessionOptions & { idleMs?: number } = {}
+  ) {
+    this.idleMs = options.idleMs ?? 8_000;
+  }
+
+  has(pid: number): boolean {
+    return this.sessions.has(pid);
+  }
+
+  session(pid: number): FocusSession {
+    let session = this.sessions.get(pid);
+    if (!session) {
+      session = new FocusSession(pid, this.deps, this.options);
+      this.sessions.set(pid, session);
+    }
+    this.touch(pid);
+    return session;
+  }
+
+  touch(pid: number): void {
+    const previous = this.timers.get(pid);
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(() => {
+      if ((this.sessions.get(pid)?.busy ?? 0) > 0) this.touch(pid);
+      else this.release(pid);
+    }, this.idleMs);
+    timer.unref?.();
+    this.timers.set(pid, timer);
+  }
+
+  release(pid: number): void {
+    this.remove(pid, true);
+  }
+
+  /** A dead/replaced pid must not receive even cleanup activation records. */
+  discard(pid: number): void {
+    this.remove(pid, false);
+  }
+
+  private remove(pid: number, teardown: boolean): void {
+    const timer = this.timers.get(pid);
+    if (timer) clearTimeout(timer);
+    this.timers.delete(pid);
+    const session = this.sessions.get(pid);
+    this.sessions.delete(pid);
+    try {
+      if (teardown) session?.teardown();
+    } catch {
+      // 进程已退出：没有可恢复的激活态
+    }
+  }
+
+  releaseAll(): void {
+    for (const pid of [...this.sessions.keys()]) this.release(pid);
+  }
+}

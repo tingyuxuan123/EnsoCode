@@ -9,7 +9,7 @@ import type { ComputerRunResult, ComputerScreenshot } from '@shared/computer/typ
 import { JSException, type JSValueHandle, QuickJS } from 'quickjs-wasi';
 import { describeAxOutcome, describeAxWorkerExited } from './axStatus';
 import { AX_WORKER_EXITED } from './axWorkerClient';
-import type { DesktopBackend, PointerOptions } from './backend';
+import type { DesktopBackend, InputGuard, PointerOptions } from './backend';
 import { cropPngAround } from './clickCrop';
 import { hiddenBehindOthers } from './coverage';
 import { resolveMacKey } from './macKey';
@@ -95,11 +95,15 @@ const NOT_FRONT_MESSAGE = (target: string) =>
   `window '${target}' could not be brought to the front; input was not sent so it cannot land in another app. Ask the user to bring it forward.`;
 
 const HIDDEN_WINDOW_NOTE =
-  'window is covered by other windows; Chrome/Electron-based apps stop repainting while covered, so this image may be stale — verify with ax()/el.value, or raise() it if you must see it';
+  'window is covered by other windows; Chrome/Electron-based apps stop repainting while covered, so this image may be stale — verify with ax()/el.value instead of raising it';
 
-function pointerOpts(raw: unknown): PointerOptions {
+/** 显式 delivery 优先；缺省按平台能力：支持后台投递时走后台，否则前台接管 */
+function pointerOpts(raw: unknown, fallback: Delivery = 'foreground'): PointerOptions {
   const record = asRecord(raw);
-  const delivery: Delivery = record.delivery === 'background' ? 'background' : 'foreground';
+  const delivery: Delivery =
+    record.delivery === 'background' || record.delivery === 'foreground'
+      ? record.delivery
+      : fallback;
   return {
     delivery,
     ...(typeof record.button === 'string' ? { button: record.button } : {}),
@@ -119,6 +123,8 @@ function applyFocus<T extends { id: string; focused?: boolean }>(
 }
 
 export const DEFAULT_SETTLE_MS = 120;
+/** 低于 worker 侧 COMPUTER_INVOKE_GRACE_MS（30s），留出收尾时间 */
+const DEFAULT_ACCESS_GRACE_MS = 25_000;
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -325,6 +331,25 @@ export async function runComputerGuest(input: {
     beginSynthetic(input?: { keys?: readonly string[] }): void;
     endSynthetic(): void;
   };
+  /**
+   * 动作前的授权与加锁：target 为窗口、ref 为 AX 元素；前台还要独占真实键鼠。
+   * 由宿主实现（按 app 授权、per-app 租约），未提供时不限制。
+   */
+  access?: (request: {
+    target?: string;
+    ref?: string;
+    delivery: Delivery;
+    /** desktop 级指针动作的屏幕落点，用于判断实际收到输入的 app */
+    point?: { x: number; y: number };
+    signal: AbortSignal;
+    // biome-ignore lint/suspicious/noConfusingVoidType: tests may only observe access
+  }) => Promise<InputGuard | void>;
+  /** 等授权/等锁可不计入预算的累计上限；须小于 worker 侧超出预算的余量 */
+  accessGraceMs?: number;
+  /** 后台指针动作的可视反馈（虚拟指针），不影响投递 */
+  feedback?: {
+    pointer(input: { target: string; screenX: number; screenY: number; action: string }): void;
+  };
   persistVm?: boolean;
 }): Promise<ComputerRunResult> {
   const screenshots: ComputerScreenshot[] = [];
@@ -340,13 +365,44 @@ export async function runComputerGuest(input: {
   // 墙钟预算：含截图、等待与输入耗时；外部 abort 同样收口到这里
   const run = new AbortController();
   const signal = run.signal;
-  const deadline = setTimeout(() => {
+  // 等用户授权与等别的 session 释放 app 不计入预算（原先等租约也在 run 开始之前），
+  // 但累计有上限：worker 侧只比预算多等 30s，超出部分照常计时
+  const budget = {
+    remaining: input.timeoutMs,
+    startedAt: Date.now(),
+    paused: 0,
+    pausedAt: 0,
+    grace: input.accessGraceMs ?? DEFAULT_ACCESS_GRACE_MS,
+  };
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const fireTimeout = () => {
     const error = new Error(
       `Computer run exceeded its ${Math.round(input.timeoutMs / 1000)}s time budget`
     );
     error.name = 'ComputerTimeoutError';
     run.abort(error);
-  }, input.timeoutMs);
+  };
+  const armDeadline = () => {
+    budget.startedAt = Date.now();
+    deadline = setTimeout(fireTimeout, budget.remaining);
+  };
+  const pauseBudget = () => {
+    if (budget.paused++ > 0) return;
+    clearTimeout(deadline);
+    budget.pausedAt = Date.now();
+    budget.remaining = Math.max(0, budget.remaining - (budget.pausedAt - budget.startedAt));
+    deadline = setTimeout(fireTimeout, budget.remaining + budget.grace);
+  };
+  const resumeBudget = () => {
+    if (--budget.paused > 0 || signal.aborted) return;
+    clearTimeout(deadline);
+    const waited = Date.now() - budget.pausedAt;
+    const credited = Math.min(waited, budget.grace);
+    budget.grace -= credited;
+    budget.remaining = Math.max(0, budget.remaining - (waited - credited));
+    armDeadline();
+  };
+  armDeadline();
   const onOuterAbort = () => run.abort(input.signal?.reason);
   if (input.signal?.aborted) run.abort(input.signal.reason);
   else input.signal?.addEventListener('abort', onOuterAbort, { once: true });
@@ -373,11 +429,39 @@ export async function runComputerGuest(input: {
   clockHolder.clock = clock;
 
   const settleMs = input.settleMs ?? DEFAULT_SETTLE_MS;
+  /** 只有前台输入会临时改系统状态（输入法等），后台 run 不能去恢复别人的前台输入 */
+  let usedForeground = false;
+  let defaultDelivery: Delivery = 'foreground';
+  const showPointer = (target: string, screenX: number, screenY: number, action: string) => {
+    try {
+      input.feedback?.pointer({ target, screenX, screenY, action });
+    } catch {
+      // 反馈失败不影响动作
+    }
+  };
   const sleep = input.sleep ?? defaultSleep;
   const settle = async () => {
     if (settleMs > 0) await abortableDelay(settleMs, signal, sleep);
   };
+  const withAccess = async (request: {
+    target?: string;
+    ref?: string;
+    delivery: Delivery;
+    point?: { x: number; y: number };
+  }) => {
+    if (!input.access) return;
+    pauseBudget();
+    try {
+      const guard = await input.access({ ...request, signal });
+      if (signal.aborted) throw abortError(signal);
+      await guard?.check();
+      return guard;
+    } finally {
+      resumeBudget();
+    }
+  };
   const withSynthetic = async <T>(fn: () => Promise<T>, keys?: readonly string[]): Promise<T> => {
+    usedForeground = true;
     input.occupancy?.beginSynthetic(keys ? { keys } : undefined);
     try {
       return await fn();
@@ -386,33 +470,49 @@ export async function runComputerGuest(input: {
     }
   };
   /**
-   * 显式 background 只交给后端（不接管桌面）；默认前台接管。
-   * 前台键鼠落在最前面的窗口上：先把目标提上来并确认，否则宁可失败也不打进用户正在用的 App。
+   * 后台只交给后端（不接管桌面）；前台接管时键鼠落在最前面的窗口上：
+   * 先把目标提上来并确认，否则宁可失败也不打进用户正在用的 App。
    */
-  const deliver = async (
+  const deliver = async <T>(
     raw: unknown,
-    fn: (opts: PointerOptions) => Promise<void>,
+    fn: (opts: PointerOptions) => Promise<T>,
     target?: string,
-    keys?: readonly string[]
-  ): Promise<Delivery> => {
-    const opts = pointerOpts(raw);
+    keys?: readonly string[],
+    point?: { x: number; y: number },
+    ref?: string
+  ): Promise<{ delivery: Delivery; outcome: T | undefined }> => {
+    const opts = pointerOpts(raw, defaultDelivery);
+    const guard = await withAccess({
+      target,
+      ...(ref ? { ref } : {}),
+      delivery: opts.delivery ?? 'foreground',
+      ...(point ? { point } : {}),
+    });
+    if (guard) opts.guard = guard;
+    if (signal.aborted) throw abortError(signal);
     if (opts.delivery === 'background') {
-      await fn(opts);
-      return 'background';
+      return { delivery: 'background', outcome: await fn(opts) };
     }
+    let outcome: T | undefined;
     await withSynthetic(async () => {
       if (target && target !== 'desktop') {
         const front = async () =>
           (await input.backend.windows()).find((item) => item.id === target)?.focused === true;
         if (!(await front())) {
-          await input.backend.raise(target);
+          await input.backend.raise(target, guard || undefined);
           await settle();
           if (!(await front())) throw new Error(NOT_FRONT_MESSAGE(target));
         }
       }
-      await fn(opts);
+      if (signal.aborted) throw abortError(signal);
+      await guard?.check();
+      outcome = await fn(opts);
     }, keys);
-    return 'foreground';
+    return { delivery: 'foreground', outcome };
+  };
+  /** AX 写操作也要先过 app 授权与租约，但不接管桌面 */
+  const accessRef = async (ref: string, delivery: Delivery = 'background') => {
+    return withAccess({ ref, delivery });
   };
   const throwIfProtected = async (axText?: string) => {
     const listed = await input.backend.windows();
@@ -457,6 +557,11 @@ export async function runComputerGuest(input: {
 
   try {
     const capabilities = await Promise.race([input.backend.capabilities(), aborted]);
+    // macOS never silently falls back to the real keyboard/mouse when SkyLight is unavailable.
+    defaultDelivery =
+      capabilities.platform === 'darwin' || capabilities.backgroundInput
+        ? 'background'
+        : 'foreground';
     if (!primed) {
       vm.newFunction('__ensoHost', (methodHandle: JSValueHandle, argsHandle: JSValueHandle) => {
         const method = methodHandle.toString();
@@ -615,14 +720,18 @@ export async function runComputerGuest(input: {
             Number(args.x),
             Number(args.y)
           );
-          const delivery = await deliver(
+          const { delivery, outcome } = await deliver(
             args,
-            (opts) =>
+            async (opts) =>
               method === 'move'
                 ? input.backend.move(target, mapped.screenX, mapped.screenY, opts)
                 : input.backend.click(target, mapped.screenX, mapped.screenY, opts),
-            target
+            target,
+            undefined,
+            { x: mapped.screenX, y: mapped.screenY }
           );
+          if (delivery === 'background')
+            showPointer(target, mapped.screenX, mapped.screenY, method);
           if (method === 'click') await settle();
           if (method === 'click') await throwIfProtected();
           const probe: Partial<Awaited<ReturnType<typeof probePixels>>> =
@@ -650,6 +759,7 @@ export async function runComputerGuest(input: {
             screenX: mapped.screenX,
             screenY: mapped.screenY,
             delivery,
+            ...(outcome && typeof outcome === 'object' ? { via: outcome.via } : {}),
             clickSpace: target,
             hashNote: 'afterHash is immediate; next screenshot() is the current frame',
             ...hashProbe,
@@ -667,7 +777,7 @@ export async function runComputerGuest(input: {
               Number(record.y)
             );
           });
-          await deliver(
+          const { delivery } = await deliver(
             args,
             (opts) =>
               input.backend.drag(
@@ -675,10 +785,16 @@ export async function runComputerGuest(input: {
                 mapped.map((point) => ({ x: point.screenX, y: point.screenY })),
                 opts
               ),
-            target
+            target,
+            undefined,
+            mapped[0] ? { x: mapped[0].screenX, y: mapped[0].screenY } : undefined
           );
+          const last = mapped.at(-1);
+          if (delivery === 'background' && last) {
+            showPointer(target, last.screenX, last.screenY, 'drag');
+          }
           await settle();
-          return { ok: true };
+          return { ok: true, delivery };
         }
         case 'scroll': {
           const target = String(args.target ?? '');
@@ -689,7 +805,7 @@ export async function runComputerGuest(input: {
             Number(args.y)
           );
           const delta = normalizeScrollDelta(args);
-          const delivery = await deliver(
+          const { delivery } = await deliver(
             args,
             (opts) =>
               input.backend.scroll(
@@ -700,8 +816,12 @@ export async function runComputerGuest(input: {
                 delta.dy,
                 opts
               ),
-            target
+            target,
+            undefined,
+            { x: mapped.screenX, y: mapped.screenY }
           );
+          if (delivery === 'background')
+            showPointer(target, mapped.screenX, mapped.screenY, 'scroll');
           await settle();
           const probe = await probePixels(input.backend, input.session, target);
           const { png: _png, ...hashProbe } = probe;
@@ -721,9 +841,9 @@ export async function runComputerGuest(input: {
         }
         case 'type': {
           const target = String(args.target ?? '');
-          const delivery = await deliver(
+          const { delivery, outcome } = await deliver(
             args,
-            (opts) => input.backend.typeText(target, String(args.text ?? ''), opts),
+            async (opts) => input.backend.typeText(target, String(args.text ?? ''), opts),
             target
           );
           await settle();
@@ -733,6 +853,9 @@ export async function runComputerGuest(input: {
             chars: String(args.text ?? '').length,
             delivery,
             ax: 'no AX, assumed keystrokes delivered',
+            ...(outcome && typeof outcome === 'object' && outcome.note
+              ? { note: outcome.note }
+              : {}),
           };
         }
         case 'press': {
@@ -747,9 +870,9 @@ export async function runComputerGuest(input: {
                 ? chord.filter((key): key is string => typeof key === 'string')
                 : [];
           const target = String(args.target ?? '');
-          const delivery = await deliver(
+          const { delivery, outcome } = await deliver(
             args,
-            (opts) => input.backend.keyChord(target, keys, opts),
+            async (opts) => input.backend.keyChord(target, keys, opts),
             target,
             keys
           );
@@ -764,11 +887,15 @@ export async function runComputerGuest(input: {
             }),
             unmapped: keys.filter((key) => resolveMacKey(key).code === undefined),
             delivery,
+            ...(outcome && typeof outcome === 'object' && outcome.note
+              ? { note: outcome.note }
+              : {}),
           };
         }
         case 'raise': {
           const raised = String(args.target ?? '');
-          await withSynthetic(() => input.backend.raise(raised));
+          const guard = await withAccess({ target: raised, delivery: 'foreground' });
+          await withSynthetic(() => input.backend.raise(raised, guard || undefined));
           input.session.lastFocusedId = raised;
           await settle();
           const raisedWindows = await input.backend.windows();
@@ -789,7 +916,7 @@ export async function runComputerGuest(input: {
               (describeAxOutcome({ trusted: true, status: 0, nodeCount: 0 }) ?? '');
             await throwIfProtected(text);
             const target = String(args.target ?? '');
-            // diff 省略未变行的新 ref，而旧 ref 两代后失效：只在显式要求时给 diff
+            // 同一元素跨快照保持同一 ref，diff 省略的未变行仍可用旧 ref；仍只在显式要求时给 diff
             const disableDiff = args.diff !== true;
             session.lastAx ??= new Map();
             const prev = session.lastAx.get(target);
@@ -847,25 +974,46 @@ export async function runComputerGuest(input: {
           return input.backend.axChildren(String(args.ref ?? ''));
         case 'axParent':
           return input.backend.axParent(String(args.ref ?? ''));
-        case 'axPerform':
-          await input.backend.axPerform(String(args.ref ?? ''), String(args.action ?? 'press'));
+        case 'axPerform': {
+          const guard = await accessRef(String(args.ref ?? ''));
+          await input.backend.axPerform(
+            String(args.ref ?? ''),
+            String(args.action ?? 'press'),
+            guard || undefined
+          );
           await settle();
           return { ok: true };
-        case 'axSetValue':
-          await input.backend.axSetValue(String(args.ref ?? ''), String(args.value ?? ''));
+        }
+        case 'axSetValue': {
+          const guard = await accessRef(String(args.ref ?? ''));
+          await input.backend.axSetValue(
+            String(args.ref ?? ''),
+            String(args.value ?? ''),
+            guard || undefined
+          );
           await settle();
           return { ok: true };
-        case 'axFocus':
-          await input.backend.axFocus(String(args.ref ?? ''));
+        }
+        case 'axFocus': {
+          const guard = await accessRef(String(args.ref ?? ''));
+          await input.backend.axFocus(String(args.ref ?? ''), guard || undefined);
           await settle();
           return { ok: true };
-        case 'axClick':
-          await withSynthetic(() =>
-            input.backend.axClick(String(args.ref ?? ''), pointerOpts(args))
+        }
+        case 'axClick': {
+          const ref = String(args.ref ?? '');
+          await deliver(
+            args,
+            (opts) => input.backend.axClick(ref, opts),
+            input.backend.targetForRef?.(ref),
+            undefined,
+            undefined,
+            ref
           );
           await settle();
           await throwIfProtected();
           return { ok: true };
+        }
         case 'clipboard.read':
           return input.backend.clipboardRead();
         case 'clipboard.write':
@@ -952,7 +1100,7 @@ export async function runComputerGuest(input: {
   } finally {
     clearTimeout(deadline);
     try {
-      await input.backend.endRun?.();
+      if (usedForeground) await input.backend.endRun?.();
     } catch {
       // 恢复失败不覆盖 run 结果
     }

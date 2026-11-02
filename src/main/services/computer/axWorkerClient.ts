@@ -17,14 +17,17 @@ export type AxWorkerRequest =
       description?: string;
       limit: number;
     }
-  | { op: 'elementAt'; x: number; y: number }
+  | { op: 'elementAt'; x: number; y: number; pid?: number }
   | { op: 'focused' }
   | { op: 'node'; handle: string }
   | { op: 'attributes'; handle: string }
   | { op: 'children'; handle: string }
   | { op: 'perform'; handle: string; action: string }
   | { op: 'setValue'; handle: string; value: string }
-  | { op: 'focus'; handle: string };
+  | { op: 'focus'; handle: string }
+  | { op: 'pid'; handle: string }
+  | { op: 'enable'; pid: number; bundleId?: string }
+  | { op: 'restoreEnable'; pid: number; attrs: string[] };
 
 export type AxWorkerJob = AxWorkerRequest & { id: string };
 
