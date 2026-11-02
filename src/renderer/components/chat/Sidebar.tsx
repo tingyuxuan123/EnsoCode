@@ -163,6 +163,8 @@ interface SidebarProps {
 export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
   const { t, locale } = useI18n();
   const projects = useSettingsStore((state) => state.projects);
+  const regularProjects = projects.filter((project) => project.kind !== 'scratch');
+  const scratchProject = projects.find((project) => project.kind === 'scratch');
   const projectGroups = useSettingsStore((state) => state.projectGroups);
   const createProjectGroup = useSettingsStore((state) => state.createProjectGroup);
   const updateProjectGroup = useSettingsStore((state) => state.updateProjectGroup);
@@ -206,16 +208,26 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
   };
 
   const allProjectsFolded =
-    projects.length > 0 && projects.every((project) => collapsedProjects[project.id] === true);
+    regularProjects.length > 0 &&
+    regularProjects.every((project) => collapsedProjects[project.id] === true);
   const toggleAllProjects = () => {
     const fold = !allProjectsFolded;
-    const next = Object.fromEntries(projects.map((project) => [project.id, fold]));
+    const next = Object.fromEntries(regularProjects.map((project) => [project.id, fold]));
     localStorage.setItem('enso-collapsed-projects', JSON.stringify(next));
     setCollapsedProjects(next);
   };
   const botModeEnabled = useSettingsStore((state) => state.botModeEnabled);
   const newTaskProjectId =
-    (activeId ? conversations[activeId]?.projectId : undefined) ?? projects[0]?.id;
+    (activeId ? conversations[activeId]?.projectId : undefined) ??
+    regularProjects[0]?.id ??
+    scratchProject?.id;
+  const startTemporaryChat = async () => {
+    if (!scratchProject) return;
+    try {
+      if (await newConversation(scratchProject.id)) return;
+    } catch {}
+    addToast({ type: 'error', title: t('Failed to create conversation') });
+  };
   const newTaskBinding = effectiveKeybindings(keybindings)['new-conversation'];
   const newTaskShortcut = newTaskBinding ? formatBinding(newTaskBinding) : '';
 
@@ -223,7 +235,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
   const [projectOrderIds, setProjectOrderIds] = useState<string[]>(() =>
     readSidebarOrder(PROJECT_ORDER_KEY)
   );
-  const orderedProjects = applyProjectOrder(projects, projectOrderIds);
+  const orderedProjects = applyProjectOrder(regularProjects, projectOrderIds);
 
   // 项目归档(项目层标记,存 localStorage):整个项目移到底部 Archived 栏目,
   // 不碰其下会话的 archived/pinned——恢复后会话分布与归档前完全一致,
@@ -501,7 +513,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     matchesQuery(listQuery, [conversations[id]?.title || t('New conversation')]);
   const inActiveGroup = (id: string) => {
     const projectId = conversations[id]?.projectId;
-    return !projectId || slicedIdSet.has(projectId);
+    return !projectId || projectId === scratchProject?.id || slicedIdSet.has(projectId);
   };
   const visibleActiveIds = (searching ? activeIds.filter(convMatches) : activeIds).filter(
     inActiveGroup
@@ -510,7 +522,7 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
     order,
     conversations,
     pinnedOrderIds,
-    projectIds: activeProjectIds,
+    projectIds: [...(scratchProject ? [scratchProject.id] : []), ...activeProjectIds],
     archivedProjectIds,
     collapsedProjects,
     revealedExtras,
@@ -781,6 +793,15 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
             </span>
           )}
         </button>
+        <button
+          type="button"
+          disabled={!scratchProject}
+          onClick={() => void startTemporaryChat()}
+          className="mx-[12px] mt-1 flex h-[calc(32rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          <MessageSquarePlus className="size-4 shrink-0" />
+          <span className="text-sm">{t('Start a temporary chat')}</span>
+        </button>
         {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}
         <div className="mt-[16px] flex shrink-0 items-center gap-1 px-4 text-[calc(12rem/14)] text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">{t('Projects')}</span>
@@ -864,13 +885,13 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
         />
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-[12px] pt-1 pb-2">
-          {projects.length === 0 && (
+          {regularProjects.length === 0 && (
             <button
               type="button"
               onClick={() => setAddOpen(true)}
               className="w-full rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground transition-colors hover:border-brand/50 hover:text-foreground"
             >
-              {t('Add a project to start')}
+              {t(scratchProject ? 'Add project' : 'Add a project to start')}
             </button>
           )}
           {visibleActiveIds.length > 0 && (
@@ -959,6 +980,45 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
                 </SortableContext>
               </div>
             </PinnedDropZone>
+          )}
+          {scratchProject && (
+            <div data-slot="scratch-section">
+              <div className="flex items-center justify-between pr-1">
+                <SidebarSectionLabel>{t('Temporary chats')}</SidebarSectionLabel>
+                <button
+                  type="button"
+                  onClick={() => void startTemporaryChat()}
+                  title={t('Start a temporary chat')}
+                  aria-label={t('Start a temporary chat')}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Plus className="size-3.5" />
+                </button>
+              </div>
+              <p className="px-2 pb-1 text-[calc(11rem/14)] text-muted-foreground/70">
+                {t('Temporary chats are kept until you delete them.')}
+              </p>
+              <div className="flex flex-col gap-y-0.5">
+                {projectConversationIds(order, conversations, scratchProject.id)
+                  .filter((id) => !searching || convMatches(id))
+                  .map((id) => (
+                    <ConversationRow
+                      key={id}
+                      id={id}
+                      conversation={conversations[id]}
+                      active={activeId === id}
+                      switchHint={switchHintFor(id, 'project')}
+                      locale={locale}
+                      nowTick={nowTick}
+                      hoverTitle={t('Temporary chats')}
+                      onSelect={selectConversation}
+                      onTogglePin={togglePinConversation}
+                      onToggleArchive={(conversationId) => void handleToggleArchive(conversationId)}
+                      onRemove={(conversationId) => void openRemoveConversation(conversationId)}
+                    />
+                  ))}
+              </div>
+            </div>
           )}
           {pendingProject && (
             <div className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-muted-foreground">
@@ -1450,9 +1510,12 @@ export function Sidebar({ width, collapsed, onOpenSearch }: SidebarProps) {
             )}
             {slicedArchivedGroups.map((group) => {
               const archivedProject = projects.find((project) => project.id === group.projectId);
-              const projectName = archivedProject
-                ? projectDisplayName(archivedProject)
-                : t('Other');
+              const projectName =
+                archivedProject?.kind === 'scratch'
+                  ? t('Temporary chats')
+                  : archivedProject
+                    ? projectDisplayName(archivedProject)
+                    : t('Other');
               return (
                 <div key={group.projectId}>
                   <div className="group flex items-center gap-2 rounded-md pr-0.5 pl-2">
@@ -2147,6 +2210,11 @@ function ConversationRow({
       (project) => project.id === conversation.projectId && project.kind !== 'ssh'
     )
   );
+  const scratchProject = useSettingsStore((state) =>
+    state.projects.some(
+      (project) => project.id === conversation.projectId && project.kind === 'scratch'
+    )
+  );
   const [renaming, setRenaming] = useState(false);
   const worktree = useSessionsStore((state) => state.conversations[id]?.worktree);
   const workspaceBusy = useSessionsStore((state) =>
@@ -2400,6 +2468,7 @@ function ConversationRow({
                   </ContextMenuItem>
                 )
               : onMoveToWorktree &&
+                !scratchProject &&
                 useSettingsStore.getState().projects.find((p) => p.id === conversation.projectId)
                   ?.kind !== 'ssh' && (
                   <ContextMenuItem disabled={worktreeDisabled} onClick={() => onMoveToWorktree(id)}>

@@ -97,9 +97,9 @@ export function workspaceLabel(
   }
 }
 
-/** 只有本地项目能当 Bot 工作区 */
+/** 只有普通本地项目能当 Bot 工作区，scratch 是会话私有目录的隐藏承载。 */
 export function localProjects(projects: readonly Project[]): Project[] {
-  return projects.filter((project) => project.kind !== 'ssh');
+  return projects.filter((project) => project.kind === undefined || project.kind === 'local');
 }
 
 /** 「X 的副本」重名时依次加 2、3… */

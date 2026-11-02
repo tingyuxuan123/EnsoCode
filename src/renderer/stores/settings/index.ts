@@ -823,7 +823,7 @@ export const useSettingsStore = create<SettingsState>()(
           // 本地/远程不互认:ssh 项目还要同 host
           return remote
             ? project.sshConnectionId === remote.sshConnectionId
-            : project.kind !== 'ssh';
+            : project.kind === undefined || project.kind === 'local';
         });
         const result = existing
           ? { accepted: true as const, value: existing }
@@ -941,7 +941,7 @@ export const useSettingsStore = create<SettingsState>()(
       setProjectGroupId: (projectId, groupId) => {
         set((state) => ({
           projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
+            if (project.id !== projectId || project.kind === 'scratch') return project;
             if (!groupId) {
               const { groupId: _removed, ...rest } = project;
               return rest;
@@ -954,7 +954,7 @@ export const useSettingsStore = create<SettingsState>()(
         const next = alias?.trim();
         set((state) => ({
           projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
+            if (project.id !== projectId || project.kind === 'scratch') return project;
             if (!next) {
               const { alias: _removed, ...rest } = project;
               return rest;
@@ -966,7 +966,7 @@ export const useSettingsStore = create<SettingsState>()(
       setProjectDefaultModel: (projectId, model, reasoning) => {
         set((state) => ({
           projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
+            if (project.id !== projectId || project.kind === 'scratch') return project;
             if (!model) {
               const {
                 defaultModel: _removed,
@@ -993,7 +993,7 @@ export const useSettingsStore = create<SettingsState>()(
       setProjectDisabledBuiltinTools: (projectId, disabled) => {
         set((state) => ({
           projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
+            if (project.id !== projectId || project.kind === 'scratch') return project;
             if (!disabled) {
               const { disabledBuiltinTools: _removed, ...rest } = project;
               return rest;
@@ -1009,7 +1009,7 @@ export const useSettingsStore = create<SettingsState>()(
       setProjectSubagentAllowedModes: (projectId, modes) => {
         set((state) => ({
           projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
+            if (project.id !== projectId || project.kind === 'scratch') return project;
             if (!modes) {
               const { subagentAllowedModes: _removed, ...rest } = project;
               return rest;
@@ -1025,7 +1025,7 @@ export const useSettingsStore = create<SettingsState>()(
       setProjectTrustedCode: (projectId, sources) => {
         set((state) => ({
           projects: state.projects.map((project) => {
-            if (project.id !== projectId) return project;
+            if (project.id !== projectId || project.kind === 'scratch') return project;
             if (!sources) {
               const { trustedProjectCode: _removed, ...rest } = project;
               return rest;
@@ -1209,9 +1209,14 @@ function applyProjectAuthorityProjection(projection: SourceAuthorityProjection):
       const previous = previousById.get(project.projectId);
       return {
         id: project.projectId,
-        name: projectNameFromPath(project.canonicalPath),
+        name:
+          project.kind === 'scratch'
+            ? 'Temporary chats'
+            : projectNameFromPath(project.canonicalPath),
         path: project.canonicalPath,
-        ...localProjectFields(previous),
+        ...(project.kind === 'scratch'
+          ? { kind: 'scratch' as const }
+          : localProjectFields(previous)),
         ...(project.kind === 'ssh'
           ? {
               kind: 'ssh' as const,
@@ -1241,6 +1246,8 @@ function sameProjectProjection(
     const project = currentById.get(candidate.id);
     return (
       project !== undefined &&
+      (candidate.kind !== 'scratch' ||
+        Object.keys(project).length === Object.keys(candidate).length) &&
       project.name === candidate.name &&
       project.path === candidate.path &&
       project.kind === candidate.kind &&

@@ -23,9 +23,11 @@ const mocks = vi.hoisted(() => ({
   setSessionThinking: vi.fn((..._args: unknown[]) => ({ ok: true })),
   identities: new Map<string, { sessionId: string; generation: string }>(),
   pairPort: null as PairBotPort | null,
+  releasePairPreviews: vi.fn(),
 }));
 
 vi.mock('../services/pairHost', () => ({
+  releasePairPreviews: mocks.releasePairPreviews,
   setPairBotPort: (port: PairBotPort) => {
     mocks.pairPort = port;
   },
@@ -219,7 +221,9 @@ describe('bots IPC', () => {
     const previous = getBotServices()!;
     await previous.host.deliver(chatId, alice, 'first');
     mocks.settings.botModeEnabled = false;
+    mocks.releasePairPreviews.mockClear();
     syncBotModeServices();
+    expect(mocks.releasePairPreviews).toHaveBeenCalledOnce();
     expect(await previous.host.deliver(chatId, alice, 'later')).toEqual({
       ok: false,
       error: 'disabled',

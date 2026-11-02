@@ -348,11 +348,13 @@ describe('WorktreePicker', () => {
     harness.statuses.source = { exists: false, dirty: false, ahead: 0 };
     expect(render()).not.toContain('Existing worktrees');
   });
-  it('hides worktree UI for child conversations and SSH projects', () => {
+  it('hides worktree UI for child conversations, SSH and scratch projects', () => {
     harness.conversations.current.parentId = 'parent';
     expect(render()).toBe('');
     delete harness.conversations.current.parentId;
     harness.projectKind = 'ssh';
+    expect(render()).toBe('');
+    harness.projectKind = 'scratch';
     expect(render()).toBe('');
   });
 });

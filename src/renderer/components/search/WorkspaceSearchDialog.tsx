@@ -186,7 +186,10 @@ export function WorkspaceSearchDialog({
       return conversationToSearchDoc({
         conversationId: conversation.id,
         projectId: conversation.projectId,
-        projectName: project?.name ?? conversation.projectId,
+        projectName:
+          project?.kind === 'scratch'
+            ? t('Temporary chats')
+            : (project?.name ?? conversation.projectId),
         title: conversation.title,
         lastActiveAt: conversationActivityAt(conversation),
         archived: conversation.archived,
@@ -197,7 +200,7 @@ export function WorkspaceSearchDialog({
         messages: conversation.messages,
       });
     });
-  }, [activeId, conversations, open, projects]);
+  }, [activeId, conversations, open, projects, t]);
 
   const hotHits = useMemo(
     () => (trimmed ? searchWorkspace(docs, query, { currentProjectId, scope }) : NO_HITS),
@@ -371,7 +374,11 @@ export function WorkspaceSearchDialog({
   const now = Date.now();
   const projectNameOf = (projectId: string) => {
     const project = projects.find((item) => item.id === projectId);
-    return project ? projectDisplayName(project) : '';
+    return project?.kind === 'scratch'
+      ? t('Temporary chats')
+      : project
+        ? projectDisplayName(project)
+        : '';
   };
   const metaOf = (projectId: string, at?: number) =>
     [projectNameOf(projectId), at ? formatRelativeTime(at, locale, now) : '']

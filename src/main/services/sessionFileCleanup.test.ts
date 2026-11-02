@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,7 +18,7 @@ describe('removeConversationSessionFiles', () => {
   let sessionDir: string;
 
   beforeEach(() => {
-    root = mkdtempSync(path.join(tmpdir(), 'enso-session-cleanup-'));
+    root = realpathSync(mkdtempSync(path.join(tmpdir(), 'enso-session-cleanup-')));
     sessionDir = path.join(root, 'agent', 'sessions');
     mkdirSync(sessionDir, { recursive: true });
   });
@@ -88,6 +95,21 @@ describe('removeConversationSessionFiles', () => {
         sessionFile: path.join(root, 'missing', 'a.jsonl'),
       })
     ).not.toThrow();
+  });
+
+  it('删除scratch仅删除该UUID目录，即使sessions目录不存在也保留相邻会话', () => {
+    const scratch = path.join(root, 'scratch');
+    const own = path.join(scratch, CONVERSATION_ID);
+    const other = path.join(scratch, '22222222-2222-4222-8222-222222222222');
+    mkdirSync(own, { recursive: true });
+    mkdirSync(other, { recursive: true });
+    removeConversationSessionFiles({
+      sessionDir: path.join(root, 'missing'),
+      conversationId: CONVERSATION_ID,
+      scratchRoot: scratch,
+    });
+    expect(existsSync(own)).toBe(false);
+    expect(existsSync(other)).toBe(true);
   });
 
   it('删除该会话及其子会话的 tool-output 目录，保留其他会话的', () => {

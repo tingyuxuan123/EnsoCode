@@ -374,6 +374,16 @@ describe('Main-owned source authority contracts', () => {
     expect(parseProjectAuthority(sshProject)).toEqual(sshProject);
     const localKind = { ...project, kind: 'local' };
     expect(parseProjectAuthority(localKind)).toEqual(localKind);
+    const scratch = { ...project, kind: 'scratch' };
+    expect(parseProjectAuthority(scratch)).toEqual(scratch);
+    expect(parseProjectAuthority({ ...scratch, sshHost: 'forged' })).toBeNull();
+    expect(
+      parseCreateProjectAuthorityRequest({
+        requestId: 'scratch',
+        path: '/arbitrary',
+        kind: 'scratch',
+      })
+    ).toBeNull();
     expect(parseProjectAuthority({ ...project, kind: 'ssh' })).toBeNull();
     expect(parseProjectAuthority({ ...project, kind: 'ssh', sshHost: 'user@dev-box' })).toBeNull();
     expect(

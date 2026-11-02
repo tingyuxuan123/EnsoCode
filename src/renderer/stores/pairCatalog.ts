@@ -36,7 +36,8 @@ function buildPayload(): PairCatalogPayload {
   const settings = useSettingsStore.getState();
   const sessions = useSessionsStore.getState();
   // 与桌面侧栏一致的项目手动顺序（拖拽偏好存 localStorage，不进 settings store）
-  const orderedProjects = applyProjectOrder(settings.projects, readSidebarOrder(PROJECT_ORDER_KEY));
+  const ordinaryProjects = settings.projects.filter((project) => project.kind !== 'scratch');
+  const orderedProjects = applyProjectOrder(ordinaryProjects, readSidebarOrder(PROJECT_ORDER_KEY));
   const archivedProjects = new Set(readSidebarOrder(ARCHIVED_PROJECTS_KEY));
   // 与桌面侧栏同口径的展示名（别名优先），手机端没有 settings.projects 只能拿下发的字符串
   const projectName = new Map(settings.projects.map((p) => [p.id, projectDisplayName(p)]));
@@ -114,7 +115,10 @@ function buildPayload(): PairCatalogPayload {
     Boolean(c?.parentId && inOrder.has(c.parentId))
   );
 
-  const catalog = [...topLevel, ...children].map(toEntry);
+  const ordinaryIds = new Set(ordinaryProjects.map((project) => project.id));
+  const catalog = [...topLevel, ...children]
+    .filter((c) => ordinaryIds.has(c.projectId))
+    .map(toEntry);
 
   // 与桌面选择器同一套可用口径（启用 + 凭证真实可用 + 启用模型），并剥掉密钥。
   // OAuth 未就绪的空列表不结算，main 会扣下这一帧，避免手机显示没有模型服务。
@@ -129,14 +133,14 @@ function buildPayload(): PairCatalogPayload {
     // 置顶组的手动拖拽顺序：手机置顶栏按它排前，未收录的按活跃倒序
     pinnedOrder: readSidebarOrder(PINNED_ORDER_KEY),
     projects: orderedProjects.map((project) => ({
-      ...toPairProjectEntry(project),
+      ...toPairProjectEntry({ ...project, kind: project.kind === 'ssh' ? 'ssh' : 'local' }),
       ...(archivedProjects.has(project.id) ? { archived: true as const } : {}),
     })),
     projectGroups: settings.projectGroups,
     providers: providerPlan.entries,
     providersSettled: providerPlan.settled,
     // 仅 main 侧用于 spawn 反查 cwd，不下发手机
-    projectPaths: settings.projects.map((p) => ({ id: p.id, path: p.path })),
+    projectPaths: ordinaryProjects.map((p) => ({ id: p.id, path: p.path })),
     // 原样下发（含 sync-terminal：手机也按终端配色推导整套 UI，与桌面一致）；
     // system 交由手机跟随自己的系统深浅色，而非照搬桌面此刻的解析结果
     theme: settings.theme,

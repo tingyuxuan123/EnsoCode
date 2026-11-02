@@ -161,6 +161,24 @@ describe('autoDeleteStaleArchived', () => {
     expect(ids()).toEqual(['live']);
   });
 
+  it('临时会话即使超期归档也保留，只有用户明确删除才清理', () => {
+    seed(
+      {
+        scratch: conv('scratch', 100, { projectId: 'scratch-project' }),
+        ordinary: conv('ordinary', 100),
+      },
+      15
+    );
+    settings.useSettingsStore.setState({
+      projects: [
+        { id: 'project', name: 'Project', path: '/workspace' },
+        { id: 'scratch-project', name: 'Temporary chats', path: '/data/scratch', kind: 'scratch' },
+      ],
+    });
+    action().autoDeleteStaleArchived?.(NOW);
+    expect(ids()).toEqual(['scratch']);
+  });
+
   it('省略 now 时用 Date.now() 作 cutoff', () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);

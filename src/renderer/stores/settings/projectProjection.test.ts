@@ -47,6 +47,43 @@ function projection(paths: string[]): SourceAuthorityProjection {
 }
 
 describe('project authority projection write guard', () => {
+  it('scratch 投影去除所有项目级覆盖，重复到达仍不写盘', async () => {
+    const scratch = {
+      id: 'scratch',
+      name: 'Temporary chats',
+      kind: 'scratch' as const,
+      path: '/data/scratch',
+    };
+    settingsModule.useSettingsStore.setState({
+      projects: [
+        {
+          ...scratch,
+          defaultModel: { providerId: 'wrong', modelId: 'wrong' },
+          disabledBuiltinTools: [],
+          trustedProjectCode: ['wrong'],
+        },
+      ],
+    });
+    const value: SourceAuthorityProjection = {
+      projects: [
+        {
+          projectId: scratch.id,
+          canonicalPath: scratch.path,
+          kind: 'scratch',
+          state: 'active',
+          version: 1,
+        },
+      ],
+      conversations: [],
+    };
+    projectionListener?.(value);
+    expect(settingsModule.useSettingsStore.getState().projects).toEqual([scratch]);
+    await Promise.resolve();
+    writeKey.mockClear();
+    projectionListener?.(value);
+    await Promise.resolve();
+    expect(writeKey).not.toHaveBeenCalled();
+  });
   beforeAll(async () => {
     settingsModule = await import('./index');
   });

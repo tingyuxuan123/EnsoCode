@@ -15,6 +15,82 @@ afterEach(() => {
 });
 
 describe('SourceAuthorityRegistry', () => {
+  it('无普通项目也可登记 scratch，幂等且可选但不可由 renderer 创建或删除', () => {
+    const root = temporary();
+    const registry = new SourceAuthorityRegistry({
+      registryFile: path.join(root, 'registry.json'),
+    });
+    expect(registry).toHaveProperty('ensureScratchProject');
+    const project = registry.ensureScratchProject(path.join(root, 'scratch'))!;
+    expect(project.kind).toBe('scratch');
+    expect(registry.ensureScratchProject(project.canonicalPath)?.projectId).toBe(project.projectId);
+    expect(registry.rendererProjection().projects).toEqual([project]);
+    expect(
+      registry.selectProject({ requestId: 's', projectId: project.projectId, version: 1 }).accepted
+    ).toBe(true);
+    expect(
+      registry.createProject({ requestId: 'p', path: project.canonicalPath, kind: 'scratch' })
+        .accepted
+    ).toBe(false);
+    expect(
+      registry.removeProject({ requestId: 'r', projectId: project.projectId, version: 1 }).accepted
+    ).toBe(false);
+  });
+
+  it('scratch 创建前确认独立 cwd，拒绝坏 id/符号链接且重启保持目录和历史身份', () => {
+    const root = temporary();
+    const registryFile = path.join(root, 'registry.json');
+    const registry = new SourceAuthorityRegistry({ registryFile });
+    expect(registry).toHaveProperty('ensureScratchProject');
+    const project = registry.ensureScratchProject(path.join(root, 'scratch'))!;
+    const id = '11111111-1111-4111-8111-111111111111';
+    const create = (conversationId: string) =>
+      registry.createConversation({
+        requestId: 'c',
+        projectId: project.projectId,
+        projectVersion: 1,
+        conversationId,
+      });
+    expect(create('../escape').accepted).toBe(false);
+    expect(create(id).accepted).toBe(true);
+    expect(registry.spawnCwd(id, '/wrong/worktree')).toBe(path.join(project.canonicalPath, id));
+    writeFileSync(path.join(project.canonicalPath, id, 'kept.txt'), 'keep');
+    registry.markReady(id, path.join(root, 'history.jsonl'), { providerId: 'p', modelId: 'm' });
+    const reloaded = new SourceAuthorityRegistry({ registryFile });
+    expect(reloaded.spawnCwd(id)).toBe(path.join(project.canonicalPath, id));
+    expect(reloaded.conversation(id)?.sessionFile).toBe(path.join(root, 'history.jsonl'));
+    const other = '22222222-2222-4222-8222-222222222222';
+    symlinkSync(
+      path.join(project.canonicalPath, id),
+      path.join(project.canonicalPath, other),
+      'dir'
+    );
+    expect(create(other).accepted).toBe(false);
+    expect(registry.conversation(other)).toBeUndefined();
+  });
+
+  it('scratch 根被替换为外部 symlink 后重启不得把它规范化成可信路径', () => {
+    const root = temporary();
+    const registryFile = path.join(root, 'registry.json');
+    const registry = new SourceAuthorityRegistry({ registryFile });
+    const scratch = path.join(root, 'scratch');
+    const project = registry.ensureScratchProject(scratch)!;
+    const outside = path.join(root, 'outside');
+    mkdirSync(outside);
+    rmSync(scratch, { recursive: true });
+    symlinkSync(outside, scratch, 'dir');
+    const reloaded = new SourceAuthorityRegistry({ registryFile });
+    expect(reloaded.project(project.projectId)?.canonicalPath).toBe(scratch);
+    expect(reloaded.ensureScratchProject(scratch)).toBeUndefined();
+    expect(
+      reloaded.createConversation({
+        requestId: 'c',
+        projectId: project.projectId,
+        projectVersion: 1,
+      }).accepted
+    ).toBe(false);
+  });
+
   const botId = '33333333-3333-4333-8333-333333333333';
   const chatId = '44444444-4444-4444-8444-444444444444';
 

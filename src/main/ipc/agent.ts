@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { browserSessionKey } from '@shared/bots/browser';
 import {
@@ -7,6 +7,7 @@ import {
   isSameChildSessionIdentity,
   type SessionIdentity,
 } from '@shared/builtinAgents';
+import { conversationCwd } from '@shared/conversationCwd';
 import { resolveSshTarget } from '@shared/ssh';
 import {
   IPC_CHANNELS,
@@ -134,6 +135,7 @@ import {
   handlePairHeadlessAgentEvent,
 } from '../services/pairSessionHost';
 import { remoteCandidates } from '../services/remoteModels';
+import { resolveScratchWorkspace } from '../services/scratchWorkspace';
 import { removeConversationSessionFiles } from '../services/sessionFileCleanup';
 import {
   projectParentHistoryPage,
@@ -388,6 +390,25 @@ function rootIdentity(sessionId: unknown): SessionIdentity | undefined {
   return identity && !('parent' in identity) ? identity : undefined;
 }
 
+function authoritativeSpawnCwd(conversationId: string): string | null {
+  const conversation = sourceAuthority?.conversation(conversationId);
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  if (
+    conversation?.kind !== 'root' ||
+    conversation.lifecycle === 'ended' ||
+    project?.state !== 'active'
+  )
+    return null;
+  if (project.kind === 'scratch')
+    return resolveScratchWorkspace(project.canonicalPath, conversationId);
+  return conversationCwd({
+    kind: project.kind,
+    canonicalPath: project.canonicalPath,
+    conversationId,
+    worktreePath: sessionWorktree(conversationId)?.path,
+  });
+}
+
 function persistedRootSpawn(request: AgentSpawnRequest, ownerWebContentsId: number): boolean {
   if (!isMainWebContents(ownerWebContentsId) || request.sessionId.includes('::cw-')) return false;
   const conversation = sourceAuthority?.conversation(request.sessionId);
@@ -399,6 +420,7 @@ function persistedRootSpawn(request: AgentSpawnRequest, ownerWebContentsId: numb
   ) {
     return false;
   }
+  if (project.kind === 'scratch') return authoritativeSpawnCwd(request.sessionId) === request.cwd;
   // cwd 授权：项目主工作树，或该会话在 main 登记过的隔离 worktree（不信任其它路径）
   if (project.canonicalPath === request.cwd) return true;
   // ssh 项目无 worktree：cwd 只允许等于远端 canonicalPath
@@ -428,7 +450,9 @@ function remoteConfigFor(sessionId: string): AgentRemoteConfig | undefined {
 }
 
 function projectIdFor(sessionId: string): string | undefined {
-  return sourceAuthority?.conversation(sessionId)?.projectId;
+  const id = sourceAuthority?.conversation(sessionId)?.projectId;
+  // 临时载体不接受 Renderer 配置的项目级覆盖，始终沿用全局权限与模型规则。
+  return id && sourceAuthority?.project(id)?.kind !== 'scratch' ? id : undefined;
 }
 
 /** 旁路会话继承父会话工作区；路径由 Main 从权威记录推导，不采信 renderer。 */
@@ -437,14 +461,15 @@ export function resolveConversationWorkspace(conversationId: string): {
   projectId: string;
   remote?: AgentRemoteConfig;
 } | null {
-  const conversation = sourceAuthority?.conversation(conversationId);
+  const rootId = agentSessionIndex.workspaceRoot(conversationId);
+  const conversation = sourceAuthority?.conversation(rootId);
   const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
   if (!conversation || conversation.lifecycle === 'ended' || project?.state !== 'active') {
     return null;
   }
-  const cwd = sessionWorktree(conversationId)?.path ?? project.canonicalPath;
+  const cwd = authoritativeSpawnCwd(rootId);
   if (!cwd) return null;
-  const remote = remoteConfigFor(conversationId);
+  const remote = remoteConfigFor(rootId);
   return { cwd, projectId: conversation.projectId, ...(remote ? { remote } : {}) };
 }
 
@@ -969,13 +994,16 @@ export function registerAgentHandlers(): void {
       sendToAllWindows(IPC_CHANNELS.SOURCE_AUTHORITY_CHANGED, projection);
     },
   });
+  // OS 的 /tmp 等上层别名先正规化；scratch helper 仍拒绝自身或子目录的符号链接。
+  sourceAuthority.ensureScratchProject(path.join(realpathSync(app.getPath('userData')), 'scratch'));
   setBrowserFileRootResolver((conversationId) => {
-    const conversation = sourceAuthority?.conversation(conversationId);
+    const rootId = agentSessionIndex.workspaceRoot(conversationId);
+    const conversation = sourceAuthority?.conversation(rootId);
     const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
     const cwd = pickBrowserFileRoot({
       conversation,
       project,
-      worktree: sessionWorktree(conversationId),
+      worktree: sessionWorktree(rootId),
     });
     if (!cwd) return null;
     try {
@@ -1063,12 +1091,15 @@ export function registerAgentHandlers(): void {
     allowedModes: (context) => {
       const state = readSettingsState() ?? {};
       const projects = Array.isArray(state.projects) ? state.projects : [];
-      const project = projects.find(
-        (entry) =>
-          entry &&
-          typeof entry === 'object' &&
-          (entry as { id?: unknown }).id === context.owner.projectId
-      ) as { disabledBuiltinTools?: unknown; subagentAllowedModes?: unknown } | undefined;
+      const project =
+        sourceAuthority?.project(context.owner.projectId)?.kind === 'scratch'
+          ? undefined
+          : (projects.find(
+              (entry) =>
+                entry &&
+                typeof entry === 'object' &&
+                (entry as { id?: unknown }).id === context.owner.projectId
+            ) as { disabledBuiltinTools?: unknown; subagentAllowedModes?: unknown } | undefined);
       const disabled = resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
         disabledBuiltinTools: project?.disabledBuiltinTools,
       });
@@ -1108,8 +1139,10 @@ export function registerAgentHandlers(): void {
       validate: async (input) => {
         const source = sourceBindings?.resolveParentSource(input.context.owner.ownerId);
         if (!source) return { ok: false, error: 'Agent parent workspace is unavailable.' };
+        const cwd = authoritativeSpawnCwd(source.parentConversationId);
+        if (!cwd) return { ok: false, error: 'Agent parent workspace is unavailable.' };
         return validateAgentRun({
-          cwd: source.parentProjectPath,
+          cwd,
           ...(input.text !== undefined ? { text: input.text } : {}),
           ...(input.schema !== undefined ? { schema: input.schema } : {}),
           ...(input.gate ? { gate: input.gate } : {}),
@@ -1629,6 +1662,9 @@ export function registerAgentHandlers(): void {
         sessionDir: path.join(app.getPath('userData'), 'agent', 'sessions'),
         conversationId: parsed.conversationId,
         ...(result.value.sessionFile ? { sessionFile: result.value.sessionFile } : {}),
+        ...(sourceAuthority!.project(result.value.projectId)?.kind === 'scratch'
+          ? { scratchRoot: sourceAuthority!.project(result.value.projectId)!.canonicalPath }
+          : {}),
       });
     }
     return result;
@@ -1815,8 +1851,13 @@ export function registerAgentHandlers(): void {
     // 渲染层的自动 resume 可能携陈旧 cwd 抢先 spawn（Move to worktree 竞态，CDP 实测），
     // 在权威侧收口后整类问题消失。
     const registeredWorktree = parsedRaw ? sessionWorktree(parsedRaw.sessionId) : undefined;
-    const parsed =
-      parsedRaw && registeredWorktree ? { ...parsedRaw, cwd: registeredWorktree.path } : parsedRaw;
+    const scratch =
+      parsedRaw &&
+      sourceAuthority?.project(sourceAuthority?.conversation(parsedRaw.sessionId)?.projectId ?? '')
+        ?.kind === 'scratch';
+    const canonicalCwd =
+      parsedRaw && scratch ? authoritativeSpawnCwd(parsedRaw.sessionId) : registeredWorktree?.path;
+    const parsed = parsedRaw && canonicalCwd ? { ...parsedRaw, cwd: canonicalCwd } : parsedRaw;
     if (!parsed || !persistedRootSpawn(parsed, event.sender.id)) {
       return { ok: false, error: 'invalid spawn request' };
     }
@@ -1835,7 +1876,8 @@ export function registerAgentHandlers(): void {
       return { ok: false, error: 'worktree operation in progress' };
     }
     const currentWorktree = sessionWorktree(parsed.sessionId);
-    const currentRequest = currentWorktree ? { ...parsed, cwd: currentWorktree.path } : parsed;
+    const currentCwd = scratch ? authoritativeSpawnCwd(parsed.sessionId) : currentWorktree?.path;
+    const currentRequest = currentCwd ? { ...parsed, cwd: currentCwd } : parsed;
     if (!persistedRootSpawn(currentRequest, event.sender.id)) {
       return { ok: false, error: 'conversation authority changed' };
     }

@@ -1,3 +1,6 @@
+import { mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -250,6 +253,46 @@ describe('agent IPC Main identity boundary', () => {
 
   it('派发 host 接上子代理模型解析，模型覆盖才不会被当成档案禁止', () => {
     expect(mocks.dispatchHost.resolveSubagentModel).toBe(resolveSubagentModelSelection);
+  });
+
+  it('scratch spawn覆写共享根/伪造worktree，凭证等待后目录被换成symlink则拒绝', async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'enso-scratch-ipc-')));
+    const authority = getSourceAuthorityRegistry()!;
+    const project = authority.ensureScratchProject(path.join(root, 'scratch'))!;
+    const created = authority.createConversation({
+      requestId: crypto.randomUUID(),
+      projectId: project.projectId,
+      projectVersion: project.version,
+    });
+    expect(created.accepted).toBe(true);
+    if (!created.accepted) throw new Error('scratch not created');
+    const id = created.value.conversationId;
+    const cwd = path.join(project.canonicalPath, id);
+    mocks.sessionWorktree.mockReturnValue({ path: '/forged-worktree' });
+    try {
+      const request = {
+        sessionId: id,
+        providerId: 'provider',
+        modelId: 'model',
+        cwd: project.canonicalPath,
+      };
+      const result = await mocks.handlers.get(IPC_CHANNELS.AGENT_SPAWN)!(event, request);
+      expect(result).not.toMatchObject({ ok: false });
+      expect(mocks.spawnSession.mock.calls.at(-1)?.[1].cwd).toBe(cwd);
+      expect(mocks.spawnSession.mock.calls.at(-1)?.[4]).toBeUndefined();
+      mocks.spawnSession.mockClear();
+      mocks.credentials.mockImplementationOnce(async () => {
+        rmSync(cwd, { recursive: true, force: true });
+        symlinkSync(root, cwd);
+        return new Set();
+      });
+      expect(await mocks.handlers.get(IPC_CHANNELS.AGENT_SPAWN)!(event, request)).toMatchObject({
+        ok: false,
+      });
+      expect(mocks.spawnSession).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('提问回答允许空字符串取消，但拒绝非字符串或过期身份', () => {

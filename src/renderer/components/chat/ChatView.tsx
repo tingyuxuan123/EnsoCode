@@ -1,4 +1,5 @@
 import { agentTypeDisplayName, ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
+import { conversationCwd } from '@shared/conversationCwd';
 import { conversationDotTone } from '@shared/conversationDotTone';
 import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import { planPhase } from '@shared/planMode';
@@ -231,7 +232,7 @@ export function ChatView() {
   const [projectSkills, setProjectSkills] = useState<{ name: string; description: string }[]>([]);
 
   useEffect(() => {
-    if (!project?.path || !loadLocalSkills) {
+    if (!project?.path || project.kind === 'scratch' || !loadLocalSkills) {
       setProjectSkills([]);
       return;
     }
@@ -247,7 +248,7 @@ export function ChatView() {
     return () => {
       cancelled = true;
     };
-  }, [project?.path, loadLocalSkills]);
+  }, [project?.path, project?.kind, loadLocalSkills]);
 
   const chromeCommands = chrome?.commands;
   const slashCommands = useMemo(() => {
@@ -291,7 +292,15 @@ export function ChatView() {
     ['planning', 'awaiting_review'].includes(planPhase(chrome?.planState));
   const running = chrome?.status === 'running';
   const busy = chrome?.busy === true;
-  const toolCwd = chrome?.parentWorktreePath ?? project?.path;
+  const toolCwd =
+    project && chrome
+      ? (conversationCwd({
+          kind: project.kind,
+          canonicalPath: project.path,
+          conversationId: chrome.parentId,
+          worktreePath: chrome.parentWorktreePath,
+        }) ?? undefined)
+      : undefined;
   const capabilityApprovals = useMemo(
     () =>
       (chrome?.pendingCapabilityAsks ?? []).map((request) => ({
@@ -329,6 +338,23 @@ export function ChatView() {
         <p className="text-sm text-muted-foreground">
           {t('Create or select a project to start a conversation')}
         </p>
+        {projects.find((entry) => entry.kind === 'scratch') && (
+          <>
+            <button
+              type="button"
+              className="mt-3 rounded-md bg-brand px-4 py-2 text-sm text-white hover:opacity-90"
+              onClick={() => {
+                const scratch = projects.find((entry) => entry.kind === 'scratch');
+                if (scratch) void useSessionsStore.getState().newConversation(scratch.id);
+              }}
+            >
+              {t('Start a temporary chat')}
+            </button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('Temporary chats are kept until you delete them.')}
+            </p>
+          </>
+        )}
       </div>
     );
   }
@@ -352,7 +378,7 @@ export function ChatView() {
             <WorkspaceBadge
               project={project}
               conversationId={chrome.parentId}
-              path={chrome.parentWorktreePath ?? project.path}
+              path={toolCwd ?? ''}
               branch={branch}
               openDisabled={chrome.parentWorktreeMissing}
             >
@@ -366,16 +392,25 @@ export function ChatView() {
       <ChatSessionTimeline
         conversationId={chrome.id}
         cwd={toolCwd}
-        emptyTitle={project ? projectDisplayName(project) : 'EnsoCode'}
+        emptyTitle={
+          project?.kind === 'scratch'
+            ? t('Temporary chats')
+            : project
+              ? projectDisplayName(project)
+              : 'EnsoCode'
+        }
         onSuggestion={project ? pickSuggestion : undefined}
         timelineRef={timelineRef}
       />
 
       <div className="@container shrink-0 pt-[4px] pb-[12px]">
         <div className={CHAT_COL}>
-          {project && project.kind !== 'ssh' && !chrome.displayedParentId && (
-            <ProjectCodeTrustBar projectId={project.id} conversationId={chrome.id} />
-          )}
+          {project &&
+            project.kind !== 'ssh' &&
+            project.kind !== 'scratch' &&
+            !chrome.displayedParentId && (
+              <ProjectCodeTrustBar projectId={project.id} conversationId={chrome.id} />
+            )}
           {chrome.retry && (
             <RetryBar
               retry={chrome.retry}
@@ -459,7 +494,7 @@ export function ChatView() {
             </div>
           )}
           <Composer
-            cwd={project?.path}
+            cwd={toolCwd}
             chatCandidates={chatCandidates}
             commands={slashCommands}
             running={running}

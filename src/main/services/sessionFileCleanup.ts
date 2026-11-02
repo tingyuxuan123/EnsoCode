@@ -1,11 +1,14 @@
 import { readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { removePastedTextFiles } from './pastedTextFiles';
+import { removeScratchWorkspace } from './scratchWorkspace';
 
 export interface RemoveConversationSessionFilesOptions {
   sessionDir: string;
   conversationId: string;
   sessionFile?: string;
+  /** 仅 Main 权威 scratch 项目提供，不能接收 Renderer 任意路径。 */
+  scratchRoot?: string;
 }
 
 /**
@@ -21,6 +24,7 @@ export function removeConversationSessionFiles(
   options: RemoveConversationSessionFilesOptions
 ): void {
   const root = path.resolve(options.sessionDir);
+  if (options.scratchRoot) removeScratchWorkspace(options.scratchRoot, options.conversationId);
   if (options.sessionFile) {
     const resolved = path.resolve(options.sessionFile);
     if (resolved.startsWith(`${root}${path.sep}`)) {
@@ -57,4 +61,5 @@ export function removeConversationSessionFiles(
     } catch {}
   }
   removePastedTextFiles(root, id);
+
 }

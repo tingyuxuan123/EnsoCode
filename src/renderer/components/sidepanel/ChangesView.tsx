@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useSessionsStore } from '@/stores/sessions';
 import { buildTimeline, completedEditWriteFingerprint } from '@/stores/sessions/timeline';
+import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
 import { useSidePanelStore } from '@/stores/sidePanel';
 import { GitChangesView } from './GitChangesView';
@@ -102,8 +103,8 @@ export function ChangesView({
     Boolean(s.conversations[conversationId]?.workspaceMigrating)
   );
   const project = useSettingsStore((s) => s.projects.find((item) => item.id === projectId));
-  const root = useSessionsStore(
-    (s) => s.conversations[conversationId]?.worktree?.path ?? project?.path
+  const root = useSessionsStore((s) =>
+    sessionWorkspaceCwd(project, conversationId, s.conversations)
   );
   const running = useSessionsStore((s) => s.conversations[conversationId]?.status === 'running');
 

@@ -9,8 +9,10 @@ import {
 } from '@shared/types/agent';
 import { app, ipcMain, shell } from 'electron';
 import { listProjectCodeSources } from '../../agent/projectCode';
+import { sendAgentCommand } from '../services/agentHost';
 import { openInApps } from '../services/openInApps';
 import { getRecentProjects } from '../services/recentProjects';
+import { resolveScratchWorkspace } from '../services/scratchWorkspace';
 import { removeConversationSessionFiles } from '../services/sessionFileCleanup';
 import { getSshConnectionStore } from '../services/sshConnectionStore';
 import { sshProbeDirectory } from '../services/sshProbe';
@@ -57,6 +59,18 @@ function resolveLocalCwd(parsed: {
   if (project?.state !== 'active') return { error: 'unavailable' };
   // ssh 项目的路径在远端，本机打不开；bot-home 只走 Bot 通道
   if (project.kind === 'ssh' || project.kind === 'bot-home') return { error: 'unsupported' };
+  if (project.kind === 'scratch') {
+    if (!parsed.conversationId) return { error: 'unsupported' };
+    const conversation = registry?.conversation(parsed.conversationId);
+    if (
+      conversation?.kind !== 'root' ||
+      conversation.lifecycle === 'ended' ||
+      conversation.projectId !== parsed.projectId
+    )
+      return { error: 'unavailable' };
+    const cwd = resolveScratchWorkspace(project.canonicalPath, parsed.conversationId);
+    return cwd ? { cwd } : { error: 'unavailable' };
+  }
   let cwd = project.canonicalPath;
   if (parsed.conversationId) {
     const conversation = registry?.conversation(parsed.conversationId);
@@ -172,6 +186,10 @@ export function registerProjectHandlers(): void {
     if (result.accepted) {
       const sessionDir = path.join(app.getPath('userData'), 'agent', 'sessions');
       for (const conversation of conversations) {
+        sendAgentCommand({
+          type: 'forget-notifications',
+          conversationId: conversation.conversationId,
+        });
         removeConversationSessionFiles({
           sessionDir,
           conversationId: conversation.conversationId,

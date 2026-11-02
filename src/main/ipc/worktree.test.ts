@@ -82,6 +82,20 @@ beforeEach(async () => {
 afterEach(() => rmSync(mocks.root, { recursive: true, force: true }));
 
 describe('worktree binding', () => {
+  it('scratch 不允许创建或绑定 worktree，不可覆盖独立会话目录', async () => {
+    mocks.project.mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/scratch',
+      state: 'active',
+      kind: 'scratch',
+    });
+    expect(
+      (await invoke(IPC_CHANNELS.WORKTREE_CREATE, { conversationId: 'target', projectId: 'p' })).ok
+    ).toBe(false);
+    expect((await invoke('worktree:bind', 'target', 'source')).ok).toBe(false);
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(readRegistry().get('target')).toBeUndefined();
+  });
   it('does not let create replace an existing or in-flight shared binding', async () => {
     expect(
       (await invoke(IPC_CHANNELS.WORKTREE_CREATE, { conversationId: 'source', projectId: 'p' })).ok

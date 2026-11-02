@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   listApps: vi.fn(),
   openInApp: vi.fn(),
   listProjectCodeSources: vi.fn(),
+  resolveScratchWorkspace: vi.fn(),
+  sendAgentCommand: vi.fn(),
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -33,6 +35,10 @@ vi.mock('electron', () => ({
 }));
 vi.mock('../services/sessionFileCleanup', () => ({
   removeConversationSessionFiles: mocks.removeConversationSessionFiles,
+}));
+vi.mock('../services/agentHost', () => ({ sendAgentCommand: mocks.sendAgentCommand }));
+vi.mock('../services/scratchWorkspace', () => ({
+  resolveScratchWorkspace: mocks.resolveScratchWorkspace,
 }));
 vi.mock('../windows/MainWindow', () => ({
   isMainWebContents: (id: number) => id === 1,
@@ -69,6 +75,7 @@ describe('project authority IPC', () => {
     mocks.removeProject.mockReset().mockReturnValue({ accepted: true, value: {} });
     mocks.projection.mockReset().mockReturnValue({ projects: [], conversations: [] });
     mocks.removeConversationSessionFiles.mockReset();
+    mocks.sendAgentCommand.mockReset();
     mocks.project.mockReset().mockReturnValue({
       projectId: 'project-1',
       state: 'active',
@@ -82,6 +89,7 @@ describe('project authority IPC', () => {
       lifecycle: 'ready',
     });
     mocks.sessionWorktree.mockReset();
+    mocks.resolveScratchWorkspace.mockReset();
     mocks.statSync.mockReset().mockReturnValue({ isDirectory: () => true });
     mocks.openPath.mockReset().mockResolvedValue('');
     mocks.listApps
@@ -156,6 +164,10 @@ describe('project authority IPC', () => {
       accepted: true,
     });
     expect(mocks.removeConversationSessionFiles).toHaveBeenCalledTimes(2);
+    expect(mocks.sendAgentCommand.mock.calls).toEqual([
+      [{ type: 'forget-notifications', conversationId: 'conversation-a' }],
+      [{ type: 'forget-notifications', conversationId: 'conversation-b' }],
+    ]);
     expect(mocks.removeConversationSessionFiles).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-a',
@@ -233,6 +245,34 @@ describe('project authority IPC', () => {
     const reveal = mocks.handlers.get(IPC_CHANNELS.PROJECTS_REVEAL)!;
     await expect(reveal(event(1), { projectId: 'project-1' })).resolves.toEqual({ ok: true });
     expect(mocks.openPath).toHaveBeenCalledWith('/repo/enso');
+  });
+
+  it('scratch reveal 只打开该权威会话目录，不允许打开共享根或使用 worktree', async () => {
+    const reveal = mocks.handlers.get(IPC_CHANNELS.PROJECTS_REVEAL)!;
+    const id = '11111111-1111-4111-8111-111111111111';
+    mocks.project.mockReturnValue({
+      projectId: 'project-1',
+      state: 'active',
+      kind: 'scratch',
+      canonicalPath: '/scratch',
+    });
+    mocks.resolveScratchWorkspace.mockReturnValue(`/scratch/${id}`);
+    mocks.sessionWorktree.mockReturnValue({ path: '/scratch' });
+    await expect(reveal(event(1), { projectId: 'project-1' })).resolves.toEqual({
+      ok: false,
+      error: 'unsupported',
+    });
+    await expect(reveal(event(1), { projectId: 'project-1', conversationId: id })).resolves.toEqual(
+      { ok: true }
+    );
+    expect(mocks.openPath).toHaveBeenCalledWith(`/scratch/${id}`);
+    expect(mocks.resolveScratchWorkspace).toHaveBeenCalledWith('/scratch', id);
+    mocks.openPath.mockClear();
+    mocks.resolveScratchWorkspace.mockReturnValue(null);
+    await expect(reveal(event(1), { projectId: 'project-1', conversationId: id })).resolves.toEqual(
+      { ok: false, error: 'unavailable' }
+    );
+    expect(mocks.openPath).not.toHaveBeenCalled();
   });
 
   it('reveal 会话优先打开 Main 登记的 Windows worktree 路径', async () => {

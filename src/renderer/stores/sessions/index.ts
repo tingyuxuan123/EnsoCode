@@ -1,6 +1,7 @@
 import type { AgentTypeKey } from '@shared/builtinAgents';
 import type { CapabilityAskRequest } from '@shared/capabilities/types';
 import { parseCompactCommand } from '@shared/compactCommand';
+import { conversationCwd } from '@shared/conversationCwd';
 import {
   type DefaultModelRef,
   defaultApprovalMode,
@@ -2102,7 +2103,8 @@ export const useSessionsStore = create<SessionsState>()(
             conversation.historyOnly ||
             conversation.archived ||
             !project ||
-            project.kind === 'ssh'
+            project.kind === 'ssh' ||
+            project.kind === 'scratch'
           ) {
             return {
               ok: false,
@@ -2463,6 +2465,8 @@ export const useSessionsStore = create<SessionsState>()(
           if (sourceId !== undefined) {
             const source = get().conversations[sourceId];
             if (
+              useSettingsStore.getState().projects.find((project) => project.id === projectId)
+                ?.kind === 'scratch' ||
               options?.forkedFrom ||
               !source?.worktree ||
               source.projectId !== projectId ||
@@ -2830,7 +2834,8 @@ export const useSessionsStore = create<SessionsState>()(
         },
 
         autoDeleteStaleArchived(now = Date.now()) {
-          const days = useSettingsStore.getState().autoDeleteArchivedDays;
+          const settings = useSettingsStore.getState();
+          const days = settings.autoDeleteArchivedDays;
           if (!(days > 0)) return;
           const { order, conversations, activeId } = get();
           const ids = staleArchivedConversationIdsToDelete(
@@ -2840,7 +2845,15 @@ export const useSessionsStore = create<SessionsState>()(
             now,
             activeId
           );
-          for (const id of ids) get().removeConversation(id);
+          const scratchProjects = new Set(
+            settings.projects
+              .filter((project) => project.kind === 'scratch')
+              .map((project) => project.id)
+          );
+          for (const id of ids) {
+            if (scratchProjects.has(conversations[id]?.projectId)) continue;
+            get().removeConversation(id);
+          }
         },
 
         removeConversation(id) {
@@ -3154,6 +3167,18 @@ export const useSessionsStore = create<SessionsState>()(
           if (!id) return 'no conversation';
           const conversation = get().conversations[id];
           if (!conversation) return 'no conversation';
+          const project = useSettingsStore
+            .getState()
+            .projects.find((item) => item.id === conversation.projectId);
+          const spawnCwd = conversationCwd({
+            kind: project?.kind,
+            canonicalPath: project?.kind === 'scratch' ? project.path : target.cwd,
+            conversationId: id,
+            worktreePath: conversation.worktree?.path,
+          });
+          // Invalid scratch ids cannot fall back to the shared project root or gain an optimistic echo.
+          if (!conversation.parentId && !conversation.btwParentId && !spawnCwd)
+            return 'conversation workspace is unavailable';
           if (conversation.workspaceMigrating) return 'workspace operation in progress';
           if (conversation.rewinding || conversation.restoringFiles) return 'rewind in progress';
           // 只读回放的已结束实例：必须在乐观回显之前拦，否则会往只读历史里插一条
@@ -3300,7 +3325,7 @@ export const useSessionsStore = create<SessionsState>()(
                   providerId: target.providerId,
                   modelId: target.modelId,
                   // 隔离会话一律在自己的 worktree 里跑，不信任调用方传的 cwd
-                  cwd: conversation.worktree?.path ?? target.cwd,
+                  cwd: spawnCwd ?? target.cwd,
                   resumeFile: conversation.sessionFile,
                   reasoningEnabled: conversation.reasoningEnabled,
                   thinkingLevel: conversation.thinkingLevel,
@@ -3383,6 +3408,13 @@ export const useSessionsStore = create<SessionsState>()(
           const settings = useSettingsStore.getState();
           const project = settings.projects.find((p) => p.id === conversation.projectId);
           if (!project) return;
+          const cwd = conversationCwd({
+            kind: project.kind,
+            canonicalPath: project.path,
+            conversationId: id,
+            worktreePath: conversation.worktree?.path,
+          });
+          if (!cwd) return;
           const snapshot = useOauthCredentialStore.getState().snapshot;
           const resolution = resolveChatModel({
             defaultModel: settings.defaultModel,
@@ -3406,7 +3438,7 @@ export const useSessionsStore = create<SessionsState>()(
           const { providerId, modelId } = resolution;
           // 隔离会话：resume 前先校验 worktree 还在不在（可能被 prune/手动删除）。
           // 丢失时不自动重建，标记 worktreeMissing 让用户选重建/回退（设计决策）。
-          if (conversation.worktree) {
+          if (conversation.worktree && project.kind !== 'scratch') {
             const status = await window.electronAPI.worktree.status(id);
             if (!status.ok || !status.value.exists) {
               set((state) => patch(state, id, { worktreeMissing: true }));
@@ -3418,7 +3450,7 @@ export const useSessionsStore = create<SessionsState>()(
             sessionId: id,
             providerId,
             modelId,
-            cwd: conversation.worktree?.path ?? project.path,
+            cwd,
             resumeFile: conversation.sessionFile,
             reasoningEnabled: conversation.reasoningEnabled,
             thinkingLevel: conversation.thinkingLevel,

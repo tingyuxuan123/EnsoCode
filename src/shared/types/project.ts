@@ -14,15 +14,15 @@ export interface ProjectGroup {
   defaultThinkingLevel?: ThinkingLevel;
 }
 
-/** 项目：本地目录或 ssh 远程目录的引用，作为会话的工作目录 */
+/** 项目目录引用；scratch 是 Main 创建的隐藏承载，每个会话使用独立子目录。 */
 export interface Project {
   id: string;
   name: string;
   path: string;
   /** 用户自定义别名；非空时优先于 name 展示，name/path 仍参与搜索 */
   alias?: string;
-  /** 缺省 local;ssh 项目的工具调用全部在远端执行 */
-  kind?: 'local' | 'ssh';
+  /** 缺省 local；ssh 工具在远端执行；scratch 不出现在普通项目列表。 */
+  kind?: 'local' | 'ssh' | 'scratch';
   /** kind='ssh' 时的 ssh 目标(user@host 或 ssh config 别名) */
   sshHost?: string;
   sshConnectionId?: string;

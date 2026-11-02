@@ -15,6 +15,7 @@ import {
   type TimelineItem,
   terminalErrorText,
 } from '@/stores/sessions/timeline';
+import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
 
 export function SubagentSessionView({
@@ -50,8 +51,13 @@ export function SubagentSessionView({
       resolveSidePanelDockConversationId(state.conversations, childConversationId) !==
       childConversationId
   );
-  const projectPath = useSettingsStore(
-    (state) => state.projects.find((project) => project.id === conversation?.projectId)?.path
+  const project = useSettingsStore((state) =>
+    state.projects.find((project) => project.id === conversation?.projectId)
+  );
+  const scratchCwd = useSessionsStore((state) =>
+    project?.kind === 'scratch'
+      ? sessionWorkspaceCwd(project, childConversationId, state.conversations)
+      : undefined
   );
   const valid = Boolean(conversation && target === childConversationId);
   useEffect(() => {
@@ -59,7 +65,10 @@ export function SubagentSessionView({
     return useSessionsStore.getState().acquireObservation(childConversationId);
   }, [childConversationId, valid, visible]);
 
-  const cwd = conversation?.worktree?.path ?? parentWorktree ?? projectPath;
+  const cwd =
+    project?.kind === 'scratch'
+      ? scratchCwd
+      : (conversation?.worktree?.path ?? parentWorktree ?? project?.path);
   const running = conversation?.status === 'running' && !entry?.closed;
   const cache = useRef<{ conversation?: Conversation; cwd?: string; items: TimelineItem[] }>({
     items: [],

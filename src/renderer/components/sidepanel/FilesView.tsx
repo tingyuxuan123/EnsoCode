@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useSessionsStore } from '@/stores/sessions';
 import { hasAuthoritativeMessages } from '@/stores/sessions/messageCache';
 import { buildTimeline, completedEditWriteFingerprint } from '@/stores/sessions/timeline';
+import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
 import { FilesSearchPane } from './FilesSearchPane';
 import { fileTypeIcon, fileTypeIconClass } from './fileIcons';
@@ -317,8 +318,8 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
   }, [applyDisk, conversationId, readFile]);
 
   const running = useSessionsStore((s) => s.conversations[conversationId]?.status === 'running');
-  const root = useSessionsStore(
-    (s) => s.conversations[conversationId]?.worktree?.path ?? project?.path
+  const root = useSessionsStore((s) =>
+    sessionWorkspaceCwd(project, conversationId, s.conversations)
   );
   const historyBaseIndex = useSessionsStore(
     (s) => s.conversations[conversationId]?.historyBaseIndex

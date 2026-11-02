@@ -2,9 +2,10 @@ import { realpathSync, statSync } from 'node:fs';
 import { isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertAllowedUrl } from '@shared/browser/urlPolicy';
+import { resolveScratchWorkspace } from './scratchWorkspace';
 
 export function pickBrowserFileRoot(input: {
-  conversation?: { projectId: string; lifecycle: string };
+  conversation?: { conversationId?: string; projectId: string; lifecycle: string };
   project?: { projectId: string; state: string; kind?: string; canonicalPath: string };
   worktree?: { projectId: string; path: string };
 }): string | null {
@@ -13,10 +14,15 @@ export function pickBrowserFileRoot(input: {
     !conversation ||
     conversation.lifecycle === 'ended' ||
     project?.state !== 'active' ||
-    (project.kind !== undefined && project.kind !== 'local') ||
     conversation.projectId !== project.projectId
   )
     return null;
+  if (project.kind === 'scratch') {
+    return conversation.conversationId
+      ? resolveScratchWorkspace(project.canonicalPath, conversation.conversationId)
+      : null;
+  }
+  if (project.kind !== undefined && project.kind !== 'local') return null;
   if (worktree && worktree.projectId !== project.projectId) return null;
   return worktree?.path ?? project.canonicalPath;
 }

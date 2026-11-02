@@ -36,6 +36,8 @@ export function WorkspaceBadge({
   const { t } = useI18n();
   const [apps, setApps] = useState<OpenInApp[]>([]);
   const local = project.kind !== 'ssh';
+  const scratch = project.kind === 'scratch';
+  const label = scratch ? t('Temporary chats') : project.name;
   const refreshApps = useCallback(() => {
     if (!local) return;
     window.electronAPI.projects
@@ -55,17 +57,21 @@ export function WorkspaceBadge({
     <Menu onOpenChange={(next) => next && refreshApps()}>
       <MenuTrigger
         className="group ml-1.5 flex h-6 min-w-0 shrink-0 items-center rounded-full border border-border/60 px-2 font-mono text-[11.5px] text-muted-foreground outline-none transition-colors duration-(--duration-quick) hover:border-border focus-visible:border-border data-popup-open:border-border"
-        title={path}
-        aria-label={branch ? `${project.name} / ${branch}` : project.name}
+        title={scratch ? label : path}
+        aria-label={branch && !scratch ? `${label} / ${branch}` : label}
         onPointerEnter={refreshApps}
       >
         <Folder className="h-3 w-3 shrink-0" />
         <span
-          className={`grid grid-cols-[0fr] opacity-0 transition-[grid-template-columns,opacity] duration-(--duration-fast) ease-(--ease-smooth-out) ${REVEAL}`}
+          className={
+            scratch
+              ? 'grid grid-cols-[1fr] opacity-100'
+              : `grid grid-cols-[0fr] opacity-0 transition-[grid-template-columns,opacity] duration-(--duration-fast) ease-(--ease-smooth-out) ${REVEAL}`
+          }
         >
           <span className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap pl-1.5">
-            <span className="max-w-40 truncate">{project.name}</span>
-            {branch && (
+            <span className="max-w-40 truncate">{label}</span>
+            {branch && !scratch && (
               <>
                 <span className="opacity-40">/</span>
                 <GitBranch className="h-3 w-3 shrink-0" />

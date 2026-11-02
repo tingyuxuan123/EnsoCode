@@ -1,7 +1,9 @@
 import type { ChildSessionIdentity } from '@shared/builtinAgents';
 import type { CapabilityAskRequest } from '@shared/capabilities/types';
 import type {
+  AuthorityMutationResult,
   ChildHistoryResult,
+  ConversationAuthorityProjection,
   ConversationReloadResult,
   DispatchMainEvent,
   ParentHistoryTailResult,
@@ -64,7 +66,10 @@ const selectConversation = vi.fn(async (request: { conversationId: string }) => 
   )!,
 }));
 const createConversation = vi.fn(
-  async (request?: { projectId?: string; conversationId?: string }) => {
+  async (request?: {
+    projectId?: string;
+    conversationId?: string;
+  }): Promise<AuthorityMutationResult<ConversationAuthorityProjection>> => {
     const value = {
       conversationId: request?.conversationId ?? nextConversationId,
       projectId: request?.projectId ?? 'project',
@@ -267,6 +272,123 @@ async function seedParent() {
 }
 
 describe('typed Agent child projection', () => {
+  it('无普通项目时 scratch 复用新建 authority 流程，发送 cwd 限定本会话', async () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    nextConversationId = id;
+    sourceProjection = {
+      projects: [
+        {
+          projectId: 'scratch-project',
+          canonicalPath: '/data/scratch',
+          kind: 'scratch',
+          state: 'active',
+          version: 1,
+        },
+      ],
+      conversations: [],
+    };
+    settingsModule.useSettingsStore.setState({
+      projects: [
+        { id: 'scratch-project', name: 'Temporary chats', path: '/data/scratch', kind: 'scratch' },
+      ],
+    });
+    const store = sessionsModule.useSessionsStore;
+    store.setState({ conversations: {}, order: [], activeId: null });
+    expect(await store.getState().newConversation('scratch-project')).toBe(id);
+    expect(createConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'scratch-project', projectVersion: 1 })
+    );
+    expect(
+      await store.getState().send('hello', { providerId: 'p', modelId: 'm', cwd: '/data/scratch' })
+    ).toBeNull();
+    expect(agentSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: id, cwd: `/data/scratch/${id}` })
+    );
+  });
+
+  it('scratch 无效 id 在乐观回显前拒绝，不向共享根发送', async () => {
+    const store = sessionsModule.useSessionsStore;
+    settingsModule.useSettingsStore.setState({
+      projects: [
+        { id: 'project', name: 'Temporary chats', path: '/data/scratch', kind: 'scratch' },
+      ],
+    });
+    const before = store.getState().conversations.parent.messages;
+    const result = await store
+      .getState()
+      .send('never send', { providerId: 'p', modelId: 'm', cwd: '/data/scratch' });
+    expect(result).not.toBeNull();
+    expect(store.getState().conversations.parent.messages).toEqual(before);
+    expect(agentSpawn).not.toHaveBeenCalled();
+  });
+
+  it('scratch Main 创建失败不创建本地草稿或改变选中项', async () => {
+    const store = sessionsModule.useSessionsStore;
+    sourceProjection = {
+      projects: [
+        {
+          projectId: 'scratch',
+          canonicalPath: '/data/scratch',
+          kind: 'scratch',
+          state: 'active',
+          version: 1,
+        },
+      ],
+      conversations: [],
+    };
+    const before = store.getState().conversations;
+    createConversation.mockResolvedValueOnce({
+      accepted: false,
+      error: 'Scratch workspace unavailable.',
+    });
+    expect(await store.getState().newConversation('scratch')).toBeNull();
+    expect(store.getState().conversations).toBe(before);
+    expect(store.getState().activeId).toBe('parent');
+    expect(agentSpawn).not.toHaveBeenCalled();
+  });
+
+  it('scratch 重启后 resume 保持原会话目录，不采用本地遗留worktree', async () => {
+    enableRewindResumeModel();
+    const store = sessionsModule.useSessionsStore;
+    const id = '11111111-1111-4111-8111-111111111111';
+    const previous = store.getState().conversations.parent;
+    settingsModule.useSettingsStore.setState({
+      projects: [
+        { id: 'project', path: '/data/scratch', name: 'Temporary chats', kind: 'scratch' },
+      ],
+    });
+    store.setState({
+      conversations: {
+        [id]: {
+          ...previous,
+          id,
+          sessionFile: '/history.jsonl',
+          worktree: {
+            conversationId: id,
+            projectId: 'project',
+            repoPath: '/data/scratch',
+            path: '/wrong',
+            branch: 'wrong',
+            baseBranch: 'main',
+            baseCommit: 'abc',
+            createdAt: 1,
+          },
+          lastProviderId: 'p1',
+          lastModelId: 'm1',
+        },
+      },
+      order: [id],
+      activeId: id,
+    });
+    await store.getState().resumeConversation(id);
+    expect(agentSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: id,
+        cwd: `/data/scratch/${id}`,
+        resumeFile: '/history.jsonl',
+      })
+    );
+  });
   beforeAll(async () => {
     // Store modules bind browser/Electron globals at module load, so this boundary is intentionally delayed.
     settingsModule = await import('../settings');

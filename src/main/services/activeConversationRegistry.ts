@@ -330,6 +330,11 @@ export class ActiveConversationRegistry {
       : null;
   }
 
+  /** Execution cwd is separate from project identity and shared by the entire parent tree. */
+  spawnCwd(conversationId: string, worktreePath?: string): string | null {
+    return this.options.authority.spawnCwd(conversationId, worktreePath);
+  }
+
   private resolveAuthority(conversationId: string): {
     parentConversationId: string;
     parentProjectId: string;

@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { conversationCwd } from '@shared/conversationCwd';
 import { resolveSshTarget } from '@shared/ssh';
 import type {
   AuthorityMutationResult,
@@ -26,6 +27,7 @@ import type {
   SourceAuthorityProjection,
   UpdateConversationSelectionRequest,
 } from '@shared/types/agent';
+import { resolveScratchWorkspace } from './scratchWorkspace';
 
 interface PersistedAuthority {
   migrationVersion: 1;
@@ -66,12 +68,15 @@ function projectIdentity(
   project: Pick<ProjectAuthority, 'kind' | 'canonicalPath' | 'sshConnectionId'>
 ): string {
   if (project.kind === 'ssh') return `ssh:${project.sshConnectionId}:${project.canonicalPath}`;
+  if (project.kind === 'scratch') return `scratch:${project.canonicalPath}`;
   return project.kind === 'bot-home'
     ? `bot-home:${project.canonicalPath}`
     : `local:${project.canonicalPath}`;
 }
 
 function normalizeStoredProject(project: ProjectAuthority): { canonicalPath: string } {
+  // Never adopt a replacement symlink as the new trusted scratch root on restart.
+  if (project.kind === 'scratch') return { canonicalPath: project.canonicalPath };
   if (project.kind === 'ssh') {
     const canonicalPath = normalizeRemoteProjectPath(project.canonicalPath);
     return { canonicalPath: canonicalPath ?? project.canonicalPath };
@@ -144,10 +149,30 @@ export class SourceAuthorityRegistry {
       : undefined;
   }
 
+  /** Authoritative root cwd; scratch never inherits a worktree or falls back to its shared root. */
+  spawnCwd(conversationId: string, worktreePath?: string): string | null {
+    const conversation = this.conversations.get(conversationId);
+    const project = conversation ? this.projects.get(conversation.projectId) : undefined;
+    if (
+      conversation?.kind !== 'root' ||
+      conversation.lifecycle === 'ended' ||
+      project?.state !== 'active'
+    )
+      return null;
+    if (project.kind === 'scratch')
+      return resolveScratchWorkspace(project.canonicalPath, conversationId);
+    return conversationCwd({
+      kind: project.kind,
+      canonicalPath: project.canonicalPath,
+      conversationId,
+      worktreePath,
+    });
+  }
+
   createProject(
     request: CreateProjectAuthorityRequest
   ): AuthorityMutationResult<ProjectAuthorityProjection> {
-    if (request.kind === 'bot-home') {
+    if (request.kind === 'bot-home' || request.kind === 'scratch') {
       return { accepted: false, error: 'Project kind is reserved.' };
     }
     try {
@@ -200,6 +225,32 @@ export class SourceAuthorityRegistry {
     this.markProjectRemoved(project);
     this.commit();
     return true;
+  }
+
+  /** Main-only hidden carrier; renderer creates conversations by this project's authority id. */
+  ensureScratchProject(dir: string): ProjectAuthorityProjection | undefined {
+    try {
+      const stored = this.findActiveByIdentity(`scratch:${path.resolve(dir)}`);
+      if (stored) {
+        if (realpathSync(dir) !== stored.canonicalPath || !statSync(dir).isDirectory())
+          return undefined;
+        return { ...stored };
+      }
+      mkdirSync(dir, { recursive: true });
+      const canonicalPath = realpathSync(dir);
+      // Do not adopt a symlink in the scratch-root slot.
+      if (canonicalPath !== path.resolve(dir)) return undefined;
+      const inserted = this.insertProject({
+        projectId: this.randomUuid(),
+        canonicalPath,
+        kind: 'scratch',
+        state: 'active',
+        version: 1,
+      });
+      return inserted.accepted ? inserted.value : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   botHomeProject(dir: string): ProjectAuthorityProjection | undefined {
@@ -277,6 +328,7 @@ export class SourceAuthorityRegistry {
     if (
       project?.state !== 'active' ||
       project.kind === 'bot-home' ||
+      project.kind === 'scratch' ||
       project.version !== request.version
     ) {
       return { accepted: false, error: 'Project authority is stale or unavailable.' };
@@ -322,8 +374,15 @@ export class SourceAuthorityRegistry {
           : { accepted: false, error: 'Conversation authority is stale or unavailable.' };
       }
     }
+    const conversationId = request.conversationId ?? this.randomUuid();
+    if (
+      project.kind === 'scratch' &&
+      !resolveScratchWorkspace(project.canonicalPath, conversationId, { create: true })
+    ) {
+      return { accepted: false, error: 'Scratch workspace is unavailable.' };
+    }
     const value: ConversationAuthority = {
-      conversationId: request.conversationId ?? this.randomUuid(),
+      conversationId,
       projectId: project.projectId,
       kind: 'root',
       lifecycle: 'draft',
@@ -341,7 +400,8 @@ export class SourceAuthorityRegistry {
     bot: ConversationBotBinding
   ): ConversationAuthorityProjection | undefined {
     const project = this.projects.get(projectId);
-    if (project?.state !== 'active' || project.kind === 'ssh') return undefined;
+    if (project?.state !== 'active' || project.kind === 'ssh' || project.kind === 'scratch')
+      return undefined;
     const value: ConversationAuthority = {
       conversationId: this.randomUuid(),
       projectId,

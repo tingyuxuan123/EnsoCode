@@ -77,7 +77,11 @@ export function WorktreePicker({
     conversation ? state.projects.find((p) => p.id === conversation.projectId) : undefined
   );
   const enabled = Boolean(
-    conversation && !conversation.parentId && !conversation.child && project?.kind !== 'ssh'
+    conversation &&
+      !conversation.parentId &&
+      !conversation.child &&
+      project?.kind !== 'ssh' &&
+      project?.kind !== 'scratch'
   );
   const workspaceKey = `${conversationId}\0${conversation?.worktree?.path ?? project?.path ?? ''}`;
   const currentKeyRef = useRef(workspaceKey);
@@ -158,7 +162,7 @@ export function WorktreePicker({
   }, [refreshBranches, workspaceRevision]);
   if (!conversation || conversation.parentId || conversation.child) return null;
   // ssh 远程项目没有本机 git worktree可用,main 也会拒绝——入口直接隐藏
-  if (project?.kind === 'ssh') return null;
+  if (project?.kind === 'ssh' || project?.kind === 'scratch') return null;
   const isolated = Boolean(conversation.worktree);
   const disabled =
     busy ||

@@ -130,6 +130,7 @@ import { setBotAvatarResolver } from '../services/localImageProtocol';
 import { listMemories } from '../services/memory/store';
 import { notifyBotChat } from '../services/notifications';
 import { readStoredOauthCredentialKeys } from '../services/oauthProviders';
+import { releasePairPreviews } from '../services/pairHost';
 import {
   botChatPasteOwner,
   removePastedTextFiles,
@@ -780,6 +781,7 @@ export function getBotServices(): BotServices | null {
 }
 
 export function syncBotModeServices(): void {
+  if (!botModeEnabled()) releasePairPreviews();
   if (botModeEnabled()) {
     const current = getBotServices();
     current?.host.setMaxRunningTurns(readSettingsState()?.botMaxRunningTurns);
