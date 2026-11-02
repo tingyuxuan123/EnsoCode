@@ -17,6 +17,7 @@ import {
   planKickoffText,
   planPhase,
 } from '@shared/planMode';
+import { DESIGN_PLAN_ALLOWED_TOOLS, DESIGN_TOOL_NAMES } from '@shared/types/design';
 
 export interface PlanHost {
   state(): PlanState;
@@ -180,7 +181,14 @@ function executionDone(entries: readonly unknown[], planId: string): boolean {
   return sawItems && done && !interrupted;
 }
 
-const DENIED_TOOLS = new Set(['edit', 'write', 'apply_patch', 'todo', 'workflow']);
+const DENIED_TOOLS = new Set([
+  'edit',
+  'write',
+  'apply_patch',
+  'todo',
+  'workflow',
+  ...DESIGN_TOOL_NAMES.filter((name) => !DESIGN_PLAN_ALLOWED_TOOLS.includes(name)),
+]);
 const SUBAGENT_PASSIVE_OPS = new Set(['wait', 'report', 'list', 'stop', 'dismiss']);
 
 const denied = (reason: string) =>

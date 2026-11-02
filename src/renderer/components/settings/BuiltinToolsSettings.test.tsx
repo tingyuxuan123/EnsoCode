@@ -5,6 +5,8 @@ import { BuiltinToolsSettings } from './BuiltinToolsSettings';
 
 const controls = vi.hoisted(() => ({
   lcuEnabled: true,
+  designEnabled: true,
+  setDesignEnabled: vi.fn(),
   setLcuEnabled: vi.fn(),
   toggleBuiltinTool: vi.fn(),
   switches: [] as Array<{
@@ -23,6 +25,8 @@ vi.mock('@/stores/settings', () => ({
       editMode: 'apply_patch',
       lcuEnabled: controls.lcuEnabled,
       setLcuEnabled: controls.setLcuEnabled,
+      designEnabled: controls.designEnabled,
+      setDesignEnabled: controls.setDesignEnabled,
       toggleBuiltinTool: controls.toggleBuiltinTool,
     }),
 }));
@@ -58,6 +62,7 @@ beforeEach(() => {
   controls.lcuEnabled = true;
   controls.switches = [];
   controls.setLcuEnabled.mockClear();
+  controls.setDesignEnabled.mockClear();
   controls.toggleBuiltinTool.mockClear();
 });
 
@@ -101,4 +106,18 @@ it('LCU 与内置 Computer 的 UI 开关使用各自 action', () => {
   computer?.onCheckedChange?.(true);
   expect(controls.toggleBuiltinTool).toHaveBeenCalledWith('computer', true);
   expect(controls.setLcuEnabled).not.toHaveBeenCalled();
+});
+
+it('design has one independent device setting row, with no duplicate generic builtin toggle', () => {
+  const html = renderToStaticMarkup(<BuiltinToolsSettings />);
+  expect(html).toContain('data-settings-row="tools.designEnabled"');
+  expect(html).toContain('Design (UI design canvas)');
+  const design = controls.switches.find(
+    (control) => control['aria-label'] === 'Design (UI design canvas)'
+  );
+  expect(design?.checked).toBe(true);
+  design?.onCheckedChange?.(false);
+  expect(controls.setDesignEnabled).toHaveBeenCalledWith(false);
+  expect(controls.switches.filter((control) => control['aria-label'] === 'Design')).toHaveLength(0);
+  expect(controls.toggleBuiltinTool).not.toHaveBeenCalled();
 });

@@ -238,6 +238,8 @@ export function BuiltinToolsSettings() {
   const setExploreFoldEnabled = useSettingsStore((state) => state.setExploreFoldEnabled);
   const rtkEnabled = useSettingsStore((state) => state.rtkEnabled);
   const setRtkEnabled = useSettingsStore((state) => state.setRtkEnabled);
+  const designEnabled = useSettingsStore((state) => state.designEnabled);
+  const setDesignEnabled = useSettingsStore((state) => state.setDesignEnabled);
   const lcuEnabled = useSettingsStore((state) => state.lcuEnabled);
   const setLcuEnabled = useSettingsStore((state) => state.setLcuEnabled);
   const protectedActionsInCode = useSettingsStore((state) => state.protectedActionsInCode);
@@ -321,7 +323,7 @@ export function BuiltinToolsSettings() {
       </div>
 
       <div className="divide-y divide-line overflow-hidden rounded-[6px] border border-line">
-        {BUILTIN_TOOLS.map((tool) => (
+        {BUILTIN_TOOLS.filter((tool) => tool.id !== 'design').map((tool) => (
           <ToolRow
             key={tool.id}
             icon={TOOL_ICON[tool.id] ?? Wrench}
@@ -508,6 +510,23 @@ export function BuiltinToolsSettings() {
             'Compress supported command output before it enters the model context. Takes effect on new conversations.'
           )}
           control={<Switch checked={rtkEnabled} onCheckedChange={setRtkEnabled} />}
+        />
+
+        <ToolRow
+          rowId="tools.designEnabled"
+          newSession
+          icon={Wrench}
+          title={t('Design (UI design canvas)')}
+          description={t(
+            'Enable design skills and vetd_* tools. Skill loading changes apply to new or cold-restored sessions; disabling stops design tool calls. Remote projects are not supported yet.'
+          )}
+          control={
+            <Switch
+              aria-label={t('Design (UI design canvas)')}
+              checked={designEnabled}
+              onCheckedChange={setDesignEnabled}
+            />
+          }
         />
 
         <ToolRow

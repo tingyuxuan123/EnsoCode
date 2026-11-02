@@ -69,6 +69,10 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     'lcuEnabled' in source || 'lcuEnabled' in current
       ? { lcuEnabled: source.lcuEnabled !== false }
       : {};
+  const design =
+    'designEnabled' in source || 'designEnabled' in current
+      ? { designEnabled: source.designEnabled !== false }
+      : {};
   return {
     ...current,
     ...rest,
@@ -78,6 +82,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...fileOpening,
     ...contextMenuOpening,
     ...lcu,
+    ...design,
     editMode,
     accentColor,
   } as T;

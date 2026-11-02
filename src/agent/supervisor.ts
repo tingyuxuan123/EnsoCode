@@ -85,6 +85,7 @@ import type {
   VirtualClassifierCredentials,
 } from '@shared/types/agent';
 import { parseAgentSessionCustomEntry, STALE_SESSION_ERROR } from '@shared/types/agent';
+import { type DesignToolName, isDesignToolName } from '@shared/types/design';
 import { type EditMode, resolveEditMode } from '@shared/types/editMode';
 import type { ModelEntry } from '@shared/types/llm';
 import { providerIdOfAccountKey } from '@shared/types/oauthProviders';
@@ -172,6 +173,7 @@ import {
   previewModelDirectoryPush,
   registerCustomProviderModels,
 } from './customProviderRegistry';
+import { DesignPresence, designGateExtension, designToolNames } from './designGate';
 import { createNormalizedEditTool } from './editTool';
 import type { EnsoCompactOptions } from './ensoCompact/types';
 import { ENSO_SYSTEM_PROMPT } from './ensoPrompt';
@@ -268,6 +270,7 @@ import { BrowserInvoker, createBrowserTools, withNavigateApproval } from './tool
 import { createCodeSearchTool } from './tools/codeSearch';
 import { ComputerInvoker, createComputerTool, withComputerApproval } from './tools/computer';
 import { createDelegationTools, type DelegationOp } from './tools/delegation';
+import { createDesignTools, DesignInvoker } from './tools/design';
 import { createEnsoAppTool, EnsoAppInvoker } from './tools/ensoApp';
 import { createEnsoCapabilitiesTool } from './tools/ensoCapabilities';
 import { createGroupHistoryTool } from './tools/groupHistory';
@@ -324,6 +327,8 @@ interface SessionFactory {
 /** pi 未从包入口导出 `PromptDisposition`，从 `PromptOptions.preflightResult` 的参数推导。 */
 type PromptDisposition = Parameters<NonNullable<PromptOptions['preflightResult']>>[0];
 
+const designPresence = new DesignPresence();
+
 interface ManagedSession {
   identity: SessionIdentity;
   /** 停止/释放期间禁止扩展重开交互；代币防止旧 abort 的 finally 解开新关闭门。 */
@@ -349,6 +354,7 @@ interface ManagedSession {
   promptedRequestIds: Set<string>;
   ensoApp?: EnsoAppInvoker;
   browser?: BrowserInvoker;
+  design?: DesignInvoker;
   memory?: MemoryInvoker;
   delegation?: MemoryInvoker<DelegationOp>;
   agentControl?: AgentControlInvoker;
@@ -454,6 +460,7 @@ type PendingCounterKey = {
 const PENDING_COUNTERS: Record<PendingCounterKey, true> = {
   ensoApp: true,
   browser: true,
+  design: true,
   memory: true,
   delegation: true,
   agentControl: true,
@@ -502,6 +509,7 @@ async function createSessionResourceLoader(options: {
   cwd: string;
   agentDir: string;
   noSkills: boolean;
+  designGate?: InlineExtension;
   /** 类型化子代理:不装项目扩展(扩展注册的工具与 systemPrompt 注入是给主会话的,漏进去会让它误以为要再委派) */
   noExtensions?: boolean;
   skillPaths: string[];
@@ -564,6 +572,7 @@ async function createSessionResourceLoader(options: {
     // noExtensions 只挡磁盘上的项目/全局扩展；inline factory 不受影响，图片修剪对所有会话生效
     extensionFactories: [
       ...(options.codemode ? [options.codemode] : []),
+      ...(options.designGate ? [options.designGate] : []),
       promptCatalogExtension,
       ...(options.oauthPoolRecovery ? [options.oauthPoolRecovery] : []),
       options.branchContext,
@@ -1247,6 +1256,7 @@ export class SessionSupervisor {
     cancelContinuousMemory(managed.session.sessionManager);
     managed.ensoApp?.cancelAll('Session released');
     managed.browser?.cancelAll('Session released');
+    managed.design?.cancelAll('Session released');
     managed.memory?.cancelAll('Session released');
     managed.delegation?.cancelAll('Session released');
     managed.agentControl?.close('Session released');
@@ -1535,6 +1545,7 @@ export class SessionSupervisor {
       command.type === 'capability-result'
         ? command.child
         : command.type === 'browser-result' ||
+            command.type === 'design-result' ||
             command.type === 'memory-result' ||
             command.type === 'delegation-result' ||
             command.type === 'computer-result'
@@ -1925,6 +1936,11 @@ export class SessionSupervisor {
         }
         return;
       }
+      case 'design-result': {
+        const managed = this.must(command.identity);
+        managed.design?.resolve(command);
+        return;
+      }
       case 'memory-result': {
         const managed = this.must(command.identity);
         if (!managed.memory?.resolve(command)) {
@@ -2137,6 +2153,7 @@ export class SessionSupervisor {
         cancelContinuousMemory(managed.session.sessionManager);
         managed.ensoApp?.cancelAll('Enso capability invocation aborted');
         managed.browser?.cancelAll('Browser action aborted');
+        managed.design?.cancelAll('Design action aborted');
         managed.memory?.cancelAll('Memory action aborted');
         managed.delegation?.cancelAll('Delegation action aborted');
         managed.currentTurnId = undefined;
@@ -2290,7 +2307,29 @@ export class SessionSupervisor {
       codemode: toolEnabled('isolated_sandbox'),
       deferredServers: deferredMcp,
     });
+    let visibleDesignNames = designToolNames(!disabledTools.includes('design') && !remote, false);
+    let refreshDesignTools = () => {};
     const resourceLoader = await createSessionResourceLoader({
+      designGate: designGateExtension({
+        cwd,
+        enabled: () =>
+          !remote && !(managedRef?.builtinDisabledTools ?? disabledTools).includes('design'),
+        presence: designPresence,
+        apply: (names) => {
+          visibleDesignNames = names;
+          refreshDesignTools();
+        },
+        prompt: (prompt) => {
+          if (managedRef)
+            this.options.emit({
+              type: 'design-hook',
+              identity: managedRef.identity,
+              seq: ++managedRef.seq,
+              event: 'prompt-submit',
+              prompt,
+            });
+        },
+      }),
       branchContext: this.branchContextExtension(() => managedRef),
       oauthPoolRecovery: this.oauthPoolRecovery(),
       silentTurnRecovery: silentTurnRecoveryExtension((kind) => {
@@ -2917,6 +2956,33 @@ export class SessionSupervisor {
         },
       }
     );
+    const design = new DesignInvoker(
+      identity,
+      (request) => {
+        const managed = managedRef ?? this.sessions.get(sessionId);
+        if (!managed) throw new Error('Session is not ready for design actions.');
+        this.options.emit({
+          type: 'design-invoke',
+          identity: managed.identity,
+          seq: ++managed.seq,
+          requestId: request.requestId,
+          tool: request.tool,
+          params: request.params,
+        });
+      },
+      {
+        emitCancel: (requestId) => {
+          const managed = managedRef ?? this.sessions.get(sessionId);
+          if (managed)
+            this.options.emit({
+              type: 'design-cancel',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              requestId,
+            });
+        },
+      }
+    );
     // 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件，同 browser 桥。
     const memory = new MemoryInvoker(identity, (request) => {
       const managed = managedRef ?? this.sessions.get(sessionId);
@@ -2979,6 +3045,26 @@ export class SessionSupervisor {
       : undefined;
     const sessionTools = [
       ...buildCoreTools(),
+      ...builtin(
+        'design',
+        createDesignTools(design, {
+          created: () => {
+            designPresence.created(cwd);
+            visibleDesignNames = designToolNames(true, true);
+            refreshDesignTools();
+          },
+        }).map((tool) => {
+          const approved = withApproval(gate, 'mcp', tool);
+          return {
+            ...approved,
+            execute: async (...args: Parameters<Def['execute']>) => {
+              if (!visibleDesignNames.includes(tool.name as DesignToolName))
+                throw new Error('Design tool is not available in this workspace.');
+              return approved.execute(...args);
+            },
+          };
+        })
+      ),
       ...(browser
         ? builtin(
             'browser',
@@ -3199,6 +3285,7 @@ export class SessionSupervisor {
     managedRef.workflowRuns = workflowRuns;
     if (rolePrompt && !resumeFile) managedRef.pendingRole = rolePrompt;
     managedRef.browser = browser;
+    managedRef.design = design;
     managedRef.memory = memory;
     {
       const managed = managedRef;
@@ -3227,7 +3314,9 @@ export class SessionSupervisor {
         enabledBuiltins = enabledHotBuiltins(disabled);
         if (!this.codeSearch.accountKey) enabledBuiltins.delete('code_search');
         const active = session.getActiveToolNames();
-        const next = nextActiveToolNames(active, builtinGroups, enabledBuiltins);
+        const next = nextActiveToolNames(active, builtinGroups, enabledBuiltins).filter(
+          (name) => !isDesignToolName(name) || (!remote && visibleDesignNames.includes(name))
+        );
         if (next.length !== active.length || next.some((name, index) => name !== active[index])) {
           session.setActiveToolsByName(next);
         }
@@ -3237,13 +3326,16 @@ export class SessionSupervisor {
           for (const [id, names] of builtinGroups) {
             for (const name of names) {
               const definition = indexed.get(name);
-              if (enabledBuiltins.has(id) && definition) cursorBridge.tools.set(name, definition);
+              if (enabledBuiltins.has(id) && next.includes(name) && definition)
+                cursorBridge.tools.set(name, definition);
               else cursorBridge.tools.delete(name);
             }
           }
         }
         setPlanEnabled(enabledBuiltins.has('plan'));
       };
+      refreshDesignTools = () =>
+        managed.applyBuiltinTools?.(managed.builtinDisabledTools ?? disabledTools);
       const pending = this.pendingBuiltinTools.get(`${sessionId}\0${identity.generation}`);
       for (const [key, entry] of this.pendingBuiltinTools) {
         if (entry.identity.sessionId === sessionId) this.pendingBuiltinTools.delete(key);
@@ -4222,6 +4314,14 @@ export class SessionSupervisor {
         return;
       }
       case 'agent_end': {
+        if (managed.design && !managed.builtinDisabledTools?.includes('design')) {
+          this.options.emit({
+            type: 'design-hook',
+            identity: managed.identity,
+            seq: ++managed.seq,
+            event: 'stop',
+          });
+        }
         this.reconcileMessages(managed, this.transcript(managed));
         // pi 将自动重试瞬态错误（随后 auto_retry_start）：非终态，不 settle、
         // 不发 turn-completed、状态保持 running，否则输入框解锁后又自己跑起来
@@ -5029,6 +5129,7 @@ export class SessionSupervisor {
       cancelContinuousMemory(managed.session.sessionManager);
       managed.ensoApp?.cancelAll('Enso worker shutdown');
       managed.browser?.cancelAll('Enso worker shutdown');
+      managed.design?.cancelAll('Enso worker shutdown');
       managed.memory?.cancelAll('Enso worker shutdown');
       managed.delegation?.cancelAll('Enso worker shutdown');
       managed.agentControl?.close('Enso worker shutdown');

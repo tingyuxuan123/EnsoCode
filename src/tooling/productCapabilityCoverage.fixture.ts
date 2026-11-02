@@ -42,6 +42,7 @@ export const SETTINGS_DATA_COVERAGE = {
   ),
   rtkEnabled: excluded('RTK command compression is a desktop session preference.'),
   lcuEnabled: excluded('LCU extension loading is a device-local desktop session preference.'),
+  designEnabled: excluded('UI design canvas is a device-local desktop session preference.'),
   memoryEmbeddingModel: excluded('Memory embedding model choice is a desktop preference.'),
   memoryEmbeddingAutoDownload: excluded('Memory model download policy is a device preference.'),
   memoryModelIdleMinutes: excluded('Memory model idle unloading policy is a device preference.'),
@@ -184,6 +185,7 @@ export const SETTINGS_ACTION_COVERAGE = {
   ),
   setRtkEnabled: excluded('RTK command compression is a desktop session preference.'),
   setLcuEnabled: excluded('LCU extension loading is a device-local desktop session preference.'),
+  setDesignEnabled: excluded('UI design canvas is a device-local desktop session preference.'),
   setProtectedActionsInCode: excluded(
     'Protected-action confirmation floor for Code sessions; desktop safety preference.'
   ),
@@ -375,6 +377,7 @@ export const BUILTIN_TOOL_COVERAGE: Readonly<Record<string, CoverageDisposition>
   ask_user: surfaces('coding-tools.ask-user'),
   background_tasks: surfaces('coding-tools.background-task'),
   browser: surfaces('coding-tools.browser'),
+  design: excluded('Desktop UI design canvas; controlled by the designEnabled setting.'),
   web: surfaces('coding-tools.web'),
   code_search: excluded(
     'Opt-in local code search sends selected code to Devin; enabled only by the user in desktop settings.'

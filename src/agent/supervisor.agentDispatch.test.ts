@@ -290,6 +290,89 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     }
   });
 
+  it('design gate hides tools before prompt, exposes them after create, injects creed and forwards lifecycle/cancel', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-design-supervisor-'));
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    try {
+      supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: root, model });
+      await waitFor(events, 'parent-ready');
+      const current = mocks.sessions[0] as ReturnType<typeof session>;
+      const tools = mocks.createAgentSession.mock.calls[0][0].customTools as ToolDefinition[];
+      expect(current.getActiveToolNames().filter((name) => name.startsWith('vetd_'))).toEqual([
+        'vetd_create',
+        'vetd_sizes',
+      ]);
+      const gate = (
+        mocks.loaderOptions[0].extensionFactories as Array<{
+          name: string;
+          factory(pi: unknown): void;
+        }>
+      ).find((item) => item.name === 'design-tool-gate')!;
+      let runBefore: (event: unknown) => Promise<void> = async () => {};
+      gate.factory({
+        on: (_name: string, handler: typeof runBefore) => {
+          runBefore = handler;
+        },
+        getActiveTools: () => current.getActiveToolNames(),
+      });
+      const prompt = {
+        messageType: 'user',
+        prompt: 'design a poster',
+        systemPromptOptions: { selectedTools: [], sections: {} as Record<string, string> },
+      };
+      await runBefore(prompt);
+      expect(prompt.systemPromptOptions.sections.vetd_core_principles).toBeUndefined();
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'design-hook',
+          event: 'prompt-submit',
+          prompt: 'design a poster',
+        })
+      );
+      const creating = tools
+        .find((tool) => tool.name === 'vetd_create')!
+        .execute('create', { product: 'poster' }, undefined, undefined, {} as never);
+      await settle();
+      const request = events.findLast((event) => event.type === 'design-invoke');
+      if (request?.type !== 'design-invoke') throw new Error('missing design invoke');
+      supervisor.handleCommand({
+        type: 'design-result',
+        identity: parent,
+        requestId: request.requestId,
+        ok: true,
+        result: { content: [{ type: 'text', text: '{"ok":true}' }] },
+      });
+      await creating;
+      expect(current.getActiveToolNames().filter((name) => name.startsWith('vetd_'))).toHaveLength(
+        11
+      );
+      await runBefore(prompt);
+      expect(prompt.systemPromptOptions.sections.vetd_core_principles).toContain(
+        'one thing seen first'
+      );
+      current.emit({ type: 'agent_end', messages: [] });
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'design-hook', event: 'stop' })
+      );
+      const pending = tools
+        .find((tool) => tool.name === 'vetd_status')!
+        .execute('status', {}, undefined, undefined, {} as never);
+      const rejected = expect(pending).rejects.toThrow(/released/);
+      await settle();
+      supervisor.handleCommand({ type: 'release-parent', identity: parent });
+      await rejected;
+      expect(events).toContainEqual(expect.objectContaining({ type: 'design-cancel' }));
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('重开会话只恢复通知，不自动prompt；下一次工具结果搭车且消费后清盘', async () => {
     const events: AgentWorkerEvent[] = [];
     const root = mkdtempSync(path.join(tmpdir(), 'enso-notification-restore-'));

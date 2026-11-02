@@ -9,6 +9,7 @@ import {
   planPhase,
 } from '@shared/planMode';
 import type { ApprovalRequestInfo } from '@shared/types/agent';
+import { DESIGN_PLAN_ALLOWED_TOOLS, DESIGN_TOOL_NAMES } from '@shared/types/design';
 import { describe, expect, it, vi } from 'vitest';
 import { ApprovalGate, withApproval } from './approval';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
@@ -49,6 +50,20 @@ function setup(state: PlanState, mode: 'supervised' | 'full' = 'full') {
 }
 
 describe('withPlanGate', () => {
+  it('design tools only permit status/sizes/history in planning and review', async () => {
+    for (const state of [planning, reviewing]) {
+      const { run } = setup(state);
+      for (const name of DESIGN_TOOL_NAMES) {
+        const definition = tool(name);
+        if (DESIGN_PLAN_ALLOWED_TOOLS.includes(name)) {
+          await expect(run(definition, {})).resolves.toEqual(ok);
+        } else {
+          await expect(run(definition, {})).rejects.toThrow(/Plan mode is active/);
+          expect(definition.execute).not.toHaveBeenCalled();
+        }
+      }
+    }
+  });
   it.each([planning, reviewing])(
     '原生插件工具在规划/待审时默认拒绝，不进入插件代码',
     async (state) => {

@@ -103,7 +103,7 @@ it('插件资源只给本机普通父会话，插件预设附角色和指令，�
   ).toBe(true);
   expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
     pluginTools: [descriptor],
-    skillPaths: ['/fixture/plugin-skill'],
+    skillPaths: ['/fixture/plugin-skill', '/tmp/resources/design/skills'],
     systemPrompt: 'plugin persona',
     instruction: { content: 'plugin instruction' },
   });
@@ -161,6 +161,32 @@ it('pushes effective hot changes per parent generation, updates browser admissio
   settings.state.projects = [];
   pushBuiltinTools();
   expect(updates()).toHaveLength(2);
+  stopAgentWorker();
+});
+
+it('design switch controls bundled skills and hot tool loadout even over project overrides', () => {
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  spawnSession(identity, request, new Set(), undefined, 'project');
+  expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+    skillPaths: ['/tmp/resources/design/skills'],
+  });
+  settings.state.designEnabled = false;
+  settings.state.projects = [{ id: 'project', disabledBuiltinTools: [] }];
+  pushBuiltinTools();
+  expect(worker.posted.at(-1)).toMatchObject({
+    type: 'set-builtin-tools',
+    disabledTools: expect.arrayContaining(['design']),
+  });
+  const cold = { ...identity, sessionId: 'design-off' };
+  spawnSession(cold, { ...request, sessionId: cold.sessionId }, new Set());
+  const command = worker.posted.findLast((c) => c.type === 'spawn-parent');
+  expect(command).not.toHaveProperty('skillPaths');
+  expect(command).toMatchObject({ disabledTools: expect.arrayContaining(['design']) });
+  settings.state.designEnabled = true;
+  pushBuiltinTools();
+  expect(worker.posted.at(-1)).toMatchObject({ type: 'set-builtin-tools' });
   stopAgentWorker();
 });
 

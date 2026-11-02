@@ -33,6 +33,7 @@ import {
   type ModelCredentialContext,
   modelUsability,
 } from '@shared/defaultModel';
+import { designToolSettings } from '@shared/design/settings';
 import { normalizeMaxActiveCoworkers } from '@shared/maxActiveCoworkers';
 import { mcpTimeoutsForSpawn } from '@shared/mcpTimeout';
 import { pickModelCapabilityOverrides } from '@shared/modelCatalog';
@@ -83,6 +84,7 @@ import {
   type SkillEntry,
 } from '@shared/types/assets';
 import { persistedSettingsState } from '@shared/types/builtinTools';
+import type { DesignToolResult } from '@shared/types/design';
 import {
   MODEL_REASONING_OVERRIDES,
   MODEL_THINKING_LEVEL_OVERRIDES,
@@ -115,6 +117,7 @@ import { type MemberAgentType, memberSpawnDescription } from './bots/botAgentTyp
 import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
+import { getDesignPaths } from './design/appPaths';
 import { resolveGlobalInstruction } from './instructionStore';
 import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
 import { getMcpOAuthStore } from './mcpOAuthStore';
@@ -286,11 +289,23 @@ type BrowserCancellationPhase = 'abort' | 'release' | 'resume';
 let browserCancellationListener:
   | ((identity?: SessionIdentity, phase?: BrowserCancellationPhase) => void)
   | null = null;
-const browserSessionTools = new Map<string, { generation: string; enabled: boolean }>();
+const browserSessionTools = new Map<
+  string,
+  { generation: string; enabled: boolean; designEnabled: boolean }
+>();
+let designSettingsListener: (() => void) | undefined;
+export function setDesignSettingsListener(listener: () => void): void {
+  designSettingsListener = listener;
+}
 
 export function isBrowserSessionToolEnabled(identity: SessionIdentity): boolean {
   const policy = browserSessionTools.get(identity.sessionId);
   return policy?.generation === identity.generation && policy.enabled === true;
+}
+
+export function isDesignSessionToolEnabled(identity: SessionIdentity): boolean {
+  const policy = browserSessionTools.get(identity.sessionId);
+  return policy?.generation === identity.generation && policy.designEnabled === true;
 }
 
 export function setBrowserCancellationListener(
@@ -553,11 +568,13 @@ export function sendAgentCommand(command: AgentCommand): { ok: boolean; error?: 
     browserSessionTools.set(command.identity.sessionId, {
       generation: command.identity.generation,
       enabled: !command.disabledTools?.includes('browser'),
+      designEnabled: !command.disabledTools?.includes('design'),
     });
   } else if (command.type === 'set-builtin-tools') {
     const policy = browserSessionTools.get(command.identity.sessionId);
     if (policy?.generation === command.identity.generation) {
       policy.enabled = !command.disabledTools.includes('browser');
+      policy.designEnabled = !command.disabledTools.includes('design');
     }
   }
   const action = agentCommandDispatch({
@@ -975,6 +992,7 @@ export function spawnSession(
     ...enabledSkillPaths(preset),
     ...(bot ? [] : plugins.skillPaths),
     ...(native?.skillPaths ?? []),
+    ...(!remote && state?.designEnabled !== false ? [getDesignPaths().skillsDir] : []),
   ];
   const mcpServers = enabledMcpServers(nativePreset ? undefined : preset);
   const mcpNames = new Set(mcpServers.map((server) => server.name));
@@ -992,7 +1010,7 @@ export function spawnSession(
     : configuredAgentTypes(authenticatedAccountKeys, subagentModels.length > 0, plugins);
   const extraDisabledTools = options?.extraDisabledTools ?? [];
   const disabledTools = sessionDisabledTools(
-    state,
+    designToolSettings(state),
     projectId,
     extraDisabledTools,
     isComputerPlatformSupported()
@@ -1212,6 +1230,14 @@ export function sendBrowserResultToSession(
   outcome: { ok: true; result: unknown } | { ok: false; error: string }
 ): { ok: boolean; error?: string } {
   return sendAgentCommand({ type: 'browser-result', identity, requestId, ...outcome });
+}
+
+export function sendDesignResultToSession(
+  identity: SessionIdentity | ChildSessionIdentity,
+  requestId: string,
+  outcome: { ok: true; result: DesignToolResult } | { ok: false; error: string }
+): { ok: boolean; error?: string } {
+  return sendAgentCommand({ type: 'design-result', identity, requestId, ...outcome });
 }
 
 export function sendMemoryResultToSession(
@@ -2048,9 +2074,10 @@ export function pushDisabledWorkflowPresets(): void {
 
 /** Reuse the authoritative parent scopes; do not mutate existing child generations. */
 export function pushBuiltinTools(): void {
+  designSettingsListener?.();
   if (!worker || !workerReady) return;
   for (const change of builtinToolScopes.changes(
-    readSettingsState(),
+    designToolSettings(readSettingsState()),
     isComputerPlatformSupported()
   )) {
     sendAgentCommand({ type: 'set-builtin-tools', ...change });

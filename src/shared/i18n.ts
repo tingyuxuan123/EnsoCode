@@ -1759,6 +1759,9 @@ export const zhTranslations: Record<string, string> = {
   Script: '脚本',
   Steps: '步骤',
   Design: '设计',
+  'Design (UI design canvas)': '设计（UI 设计画布）',
+  'Enable design skills and vetd_* tools. Skill loading changes apply to new or cold-restored sessions; disabling stops design tool calls. Remote projects are not supported yet.':
+    '启用设计技能与 vetd_* 工具。技能加载变更在新建或冷恢复会话生效；关闭后不再允许设计工具调用。暂不支持远程项目。',
   Code: '代码',
   'Default (worker)': '默认（worker）',
   'Phase {{n}}': '阶段 {{n}}',
@@ -1814,6 +1817,8 @@ export const zhTranslations: Record<string, string> = {
     '后台 shell 任务:长命令挂后台跑,完成时通知',
   "Built-in browser: open pages in Enso's own Chromium, read snapshots, click and type by ref":
     '内嵌浏览器:在 Enso 自带 Chromium 里打开页面,读快照,按 ref 点击与输入',
+  'UI design canvas: create and verify standalone Vetta design documents':
+    'UI 设计画布：创建与验证独立的 Vetta 设计文档',
   "Web search and fetch: search with the session model's built-in search (falls back to a keyless service) and read public pages as markdown":
     '联网搜索与抓取:优先用会话模型自带的搜索(不支持时降级到免 key 服务),并把公开网页读成 markdown',
   'This project ships pi extension code that runs with your permissions. It was not loaded. Trust it only if you trust this repository.':

@@ -43,6 +43,7 @@ import {
 } from '@shared/types/agent';
 import { parseTaskCheck } from '@shared/types/bot';
 import { effectiveSubagentAllowedModes } from '@shared/types/builtinTools';
+import { type DesignHookEvent, designToolTimeoutMs } from '@shared/types/design';
 import {
   parseAgentDispatchRequest,
   parseParentModelSelectionRequest,
@@ -66,6 +67,7 @@ import {
   forkSession,
   isAgentWorkerReady,
   isBrowserSessionToolEnabled,
+  isDesignSessionToolEnabled,
   pluginHostMcpServers,
   promptChildSession,
   promptSession,
@@ -85,9 +87,11 @@ import {
   sendBrowserResultToSession,
   sendComputerResultToSession,
   sendDelegationResultToSession,
+  sendDesignResultToSession,
   sendMemoryResultToSession,
   setAgentEventListener,
   setBrowserCancellationListener,
+  setDesignSettingsListener,
   setPinnedSessions,
   setSessionApprovalMode,
   setSessionModel,
@@ -111,6 +115,7 @@ import { chatModelsRoot } from '../services/chatModels';
 import { readChildHistory as readPersistedChildHistory } from '../services/childHistory';
 import { computerHost } from '../services/computerHost';
 import { reloadConversation } from '../services/conversationReload';
+import { getDesignToolBroker } from '../services/design';
 import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
 import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionPlugins/planPolicy';
 import { searchFiles } from '../services/fileSearch';
@@ -223,6 +228,8 @@ interface PendingBrowser {
 }
 const pendingBrowser = new Map<string, PendingBrowser>();
 const seenBrowserRequests = new Map<string, string>();
+const pendingDesign = new Map<string, PendingBrowser>();
+const seenDesignRequests = new Set<string>();
 const endedBrowserGenerations = new Set<string>();
 const pausedBrowserGenerations = new Set<string>();
 const browserGenerationKey = (identity: SessionIdentity) =>
@@ -264,6 +271,7 @@ function cancelBrowserRequests(
   identity?: SessionIdentity,
   phase?: 'abort' | 'release' | 'resume'
 ): void {
+  if (phase !== 'resume') cancelDesignRequests(identity);
   if (identity && phase === 'resume') {
     pausedBrowserGenerations.delete(browserGenerationKey(identity));
     return;
@@ -287,6 +295,59 @@ function cancelBrowserRequests(
     clearTimeout(entry.timer);
     entry.controller.abort();
   }
+}
+
+function cancelDesignRequests(identity?: SessionIdentity, error?: string): void {
+  for (const [requestId, entry] of pendingDesign) {
+    const own = !identity || sameBrowserIdentity(entry.identity, identity);
+    const child =
+      identity &&
+      'parent' in entry.identity &&
+      sameBrowserIdentity(entry.identity.parent, identity);
+    if (!own && !child) continue;
+    pendingDesign.delete(requestId);
+    clearTimeout(entry.timer);
+    entry.controller.abort();
+    if (error && currentBrowserIdentity(entry.identity))
+      sendDesignResultToSession(entry.identity, requestId, { ok: false, error });
+  }
+}
+
+function designToolAllowed(identity: SessionIdentity | ChildSessionIdentity): boolean {
+  if (
+    'parent' in identity &&
+    !agentSessionIndex.childProof(identity)?.toolIds.some((tool) => tool.startsWith('vetd_'))
+  )
+    return false;
+  if (!('parent' in identity) && !isDesignSessionToolEnabled(identity)) return false;
+  const state = readSettingsState() ?? {};
+  const conversation = sourceAuthority?.conversation(rootSessionId(identity));
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  return (
+    state.designEnabled !== false &&
+    !resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
+      disabledBuiltinTools: projectDisabledBuiltinTools(
+        state.projects,
+        project?.state === 'active' ? project.projectId : undefined
+      ),
+    }).includes('design')
+  );
+}
+
+function emitDesignHook(
+  identity: SessionIdentity,
+  event: DesignHookEvent['event'],
+  prompt?: string
+): void {
+  if (readSettingsState()?.designEnabled === false) return;
+  const cwd = pluginProjectRoot(identity.sessionId);
+  if (cwd)
+    getDesignToolBroker().emitHook({
+      event,
+      sessionId: identity.sessionId,
+      cwd,
+      ...(prompt !== undefined ? { prompt } : {}),
+    });
 }
 
 function browserToolAllowed(identity: SessionIdentity | ChildSessionIdentity): boolean {
@@ -1038,9 +1099,15 @@ async function wireNativePluginHost(): Promise<void> {
 export function registerAgentHandlers(): void {
   cancelBrowserRequests();
   seenBrowserRequests.clear();
+  seenDesignRequests.clear();
   endedBrowserGenerations.clear();
   pausedBrowserGenerations.clear();
   setBrowserCancellationListener(cancelBrowserRequests);
+  setDesignSettingsListener(() => {
+    for (const entry of pendingDesign.values())
+      if (!designToolAllowed(entry.identity))
+        cancelDesignRequests(entry.identity, 'Design tool is disabled');
+  });
   wirePairAgentBridge();
   wirePairSessionHost();
   configureMemoryDistill({ complete: distillCompletion });
@@ -1239,6 +1306,7 @@ export function registerAgentHandlers(): void {
     if (workerEvent.type === 'worker-exited') {
       cancelBrowserRequests();
       seenBrowserRequests.clear();
+      seenDesignRequests.clear();
       endedBrowserGenerations.clear();
       pausedBrowserGenerations.clear();
       for (const controller of pendingAgentControl.values()) controller.abort();
@@ -1269,12 +1337,30 @@ export function registerAgentHandlers(): void {
     agentService?.observe(workerEvent);
     botWorkerObserver?.(workerEvent);
     humanTimeouts.observe(workerEvent);
+    if (workerEvent.type === 'design-hook') {
+      // Stop follows abort/release: the action admission pause must not suppress history hooks.
+      const current = agentSessionIndex.currentIdentity(workerEvent.identity.sessionId);
+      if (
+        current &&
+        sameBrowserIdentity(current, workerEvent.identity) &&
+        !endedBrowserGenerations.has(browserGenerationKey(workerEvent.identity))
+      )
+        emitDesignHook(workerEvent.identity, workerEvent.event, workerEvent.prompt);
+      return;
+    }
     if (
       workerEvent.type === 'parent-ended' ||
       workerEvent.type === 'parent-rejected' ||
       workerEvent.type === 'child-ended' ||
       workerEvent.type === 'child-rejected'
     ) {
+      const current = agentSessionIndex.currentIdentity(workerEvent.identity.sessionId);
+      if (
+        current &&
+        sameBrowserIdentity(current, workerEvent.identity) &&
+        !endedBrowserGenerations.has(browserGenerationKey(workerEvent.identity))
+      )
+        emitDesignHook(workerEvent.identity, 'session-end');
       endedBrowserGenerations.add(browserGenerationKey(workerEvent.identity));
       cancelBrowserRequests(workerEvent.identity);
     }
@@ -1289,6 +1375,10 @@ export function registerAgentHandlers(): void {
     for (const entry of pendingBrowser.values()) {
       if (!currentBrowserIdentity(entry.identity) || !browserToolAllowed(entry.identity))
         cancelBrowserRequests(entry.identity);
+    }
+    for (const entry of pendingDesign.values()) {
+      if (!currentBrowserIdentity(entry.identity) || !designToolAllowed(entry.identity))
+        cancelDesignRequests(entry.identity);
     }
     if (workerEvent.type === 'turn-completed' || workerEvent.type === 'turn-failed') {
       cancelBrowserRequests(workerEvent.identity);
@@ -1401,6 +1491,81 @@ export function registerAgentHandlers(): void {
         clearTimeout(pending.timer);
         pending.controller.abort();
       }
+      return;
+    }
+    if (workerEvent.type === 'design-cancel') {
+      const entry = pendingDesign.get(workerEvent.requestId);
+      if (entry && sameBrowserIdentity(entry.identity, workerEvent.identity)) {
+        pendingDesign.delete(workerEvent.requestId);
+        clearTimeout(entry.timer);
+        entry.controller.abort();
+      }
+      return;
+    }
+    if (workerEvent.type === 'design-invoke') {
+      const { identity, requestId, tool, params } = workerEvent;
+      const reject = (error: string) =>
+        sendDesignResultToSession(identity, requestId, { ok: false, error });
+      if (!currentBrowserIdentity(identity)) {
+        reject('Design session generation is stale or ended');
+        return;
+      }
+      if (!designToolAllowed(identity)) {
+        reject('Design tool is disabled or unavailable to this agent profile');
+        return;
+      }
+      if (seenDesignRequests.has(requestId)) {
+        reject('Design requestId has already been used');
+        return;
+      }
+      if (seenDesignRequests.size >= 100_000) {
+        reject('Design request budget exhausted; restart the worker');
+        return;
+      }
+      seenDesignRequests.add(requestId);
+      const cwd = pluginProjectRoot(identity.sessionId);
+      if (!cwd) {
+        const conversation = sourceAuthority?.conversation(rootSessionId(identity));
+        const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+        reject(
+          project?.kind === 'ssh' ? '设计功能暂不支持远程项目' : 'Design workspace is unavailable'
+        );
+        return;
+      }
+      const controller = new AbortController();
+      const timeoutMs = designToolTimeoutMs(tool);
+      const timer = setTimeout(() => {
+        if (pendingDesign.get(requestId)?.controller !== controller) return;
+        pendingDesign.delete(requestId);
+        controller.abort();
+        if (currentBrowserIdentity(identity)) reject('Design action timed out');
+      }, timeoutMs);
+      timer.unref();
+      const entry = { identity, controller, timer };
+      pendingDesign.set(requestId, entry);
+      const current = () =>
+        pendingDesign.get(requestId) === entry &&
+        !controller.signal.aborted &&
+        currentBrowserIdentity(identity) &&
+        designToolAllowed(identity);
+      void (async () => {
+        try {
+          const result = await getDesignToolBroker().request({
+            sessionId: identity.sessionId,
+            cwd,
+            tool,
+            params,
+            timeoutMs,
+            signal: controller.signal,
+          });
+          if (current()) sendDesignResultToSession(identity, requestId, { ok: true, result });
+        } catch (error) {
+          if (current()) reject(error instanceof Error ? error.message : String(error));
+        } finally {
+          if (pendingDesign.get(requestId) === entry) pendingDesign.delete(requestId);
+          clearTimeout(timer);
+        }
+      })();
       return;
     }
     if (workerEvent.type === 'browser-invoke') {

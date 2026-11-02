@@ -42,6 +42,11 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
       "Built-in browser: open pages in Enso's own Chromium, read snapshots, click and type by ref",
   },
   {
+    id: 'design',
+    name: 'Design',
+    description: 'UI design canvas: create and verify standalone Vetta design documents',
+  },
+  {
     id: 'web',
     name: 'Web search',
     description:
@@ -94,6 +99,7 @@ export const HOT_BUILTIN_TOOL_IDS = [
   'plan',
   'ask_user',
   'browser',
+  'design',
   'web',
   'code_search',
   'background_tasks',

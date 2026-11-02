@@ -39,6 +39,10 @@ const mocks = vi.hoisted(() => ({
   credentials: vi.fn(async () => new Set<string>()),
   readSettingsState: vi.fn((): Record<string, unknown> | undefined => undefined),
   sendBrowserResult: vi.fn(),
+  sendDesignResult: vi.fn(),
+  designRequest: vi.fn(),
+  designHook: vi.fn(),
+  designSettingsListener: undefined as undefined | (() => void),
   browserInvoke: vi.fn(),
   browserSessionEnabled: vi.fn(() => true),
   browserCancellationListener: undefined as
@@ -110,7 +114,11 @@ vi.mock('../services/agentHost', () => ({
   setBrowserCancellationListener: vi.fn((listener) => {
     mocks.browserCancellationListener = listener;
   }),
+  setDesignSettingsListener: vi.fn((listener) => {
+    mocks.designSettingsListener = listener;
+  }),
   isBrowserSessionToolEnabled: mocks.browserSessionEnabled,
+  isDesignSessionToolEnabled: () => true,
   setSessionApprovalMode: vi.fn(),
   setSessionModel: mocks.setSessionModel,
   setSessionReasoning: vi.fn(),
@@ -123,7 +131,11 @@ vi.mock('../services/agentHost', () => ({
   summarizeConversationTitle: mocks.summarizeConversationTitle,
   readSettingsState: mocks.readSettingsState,
   sendBrowserResultToSession: mocks.sendBrowserResult,
+  sendDesignResultToSession: mocks.sendDesignResult,
   sendComputerResultToSession: mocks.sendComputerResult,
+}));
+vi.mock('../services/design', () => ({
+  getDesignToolBroker: () => ({ request: mocks.designRequest, emitHook: mocks.designHook }),
 }));
 vi.mock('../services/browserHost', () => ({
   browserHost: {
@@ -894,6 +906,162 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
       error: 'title summary disabled',
     });
     expect(mocks.resolveModelSelection).not.toHaveBeenCalled();
+  });
+
+  describe('design bridge', () => {
+    const parent = {
+      sessionId: 'design-parent',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    const emit = (event: Record<string, unknown>) =>
+      mocks.setAgentEventListener.mock.calls.at(-1)![0]({ seq: 1, ...event });
+    const invoke = (id: string, extra = {}) =>
+      emit({
+        type: 'design-invoke',
+        identity: parent,
+        requestId: id,
+        tool: 'vetd_create',
+        params: {},
+        ...extra,
+      });
+    beforeEach(() => {
+      mocks.currentIdentity.mockReturnValue(parent);
+      mocks.isAlive.mockReturnValue(true);
+      mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: [] });
+      mocks.sendDesignResult.mockReset();
+      mocks.designRequest.mockReset();
+      mocks.designHook.mockReset();
+      mocks.designRequest.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+      const authority = getSourceAuthorityRegistry()!;
+      vi.spyOn(authority, 'conversation').mockReturnValue({
+        conversationId: parent.sessionId,
+        kind: 'root',
+        projectId: 'p',
+        lifecycle: 'ready',
+        version: 1,
+      } as never);
+      vi.spyOn(authority, 'project').mockReturnValue({
+        projectId: 'p',
+        kind: 'local',
+        canonicalPath: '/repo',
+        state: 'active',
+        version: 1,
+      } as never);
+    });
+    it('uses authoritative cwd, validates generation/switch and rejects SSH explicitly', async () => {
+      invoke('stale', { identity: { ...parent, generation: 'old' } });
+      mocks.readSettingsState.mockReturnValue({ designEnabled: false });
+      invoke('disabled');
+      expect(mocks.designRequest).not.toHaveBeenCalled();
+      mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: [] });
+      getSourceAuthorityRegistry()!.project = vi.fn(() => ({
+        projectId: 'p',
+        kind: 'ssh',
+        canonicalPath: '/remote',
+        state: 'active',
+        version: 1,
+      })) as never;
+      invoke('remote');
+      expect(mocks.sendDesignResult).toHaveBeenLastCalledWith(parent, 'remote', {
+        ok: false,
+        error: '设计功能暂不支持远程项目',
+      });
+      getSourceAuthorityRegistry()!.project = vi.fn(() => ({
+        projectId: 'p',
+        kind: 'local',
+        canonicalPath: '/repo',
+        state: 'active',
+        version: 1,
+      })) as never;
+      invoke('good');
+      await Promise.resolve();
+      expect(mocks.designRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/repo',
+          sessionId: parent.sessionId,
+          tool: 'vetd_create',
+          timeoutMs: 600_000,
+        })
+      );
+      expect(mocks.sendDesignResult).toHaveBeenLastCalledWith(
+        parent,
+        'good',
+        expect.objectContaining({ ok: true })
+      );
+    });
+    it('deduplicates, binds cancellation, rejects timeout and suppresses late replies; disabling aborts pending calls', async () => {
+      vi.useFakeTimers();
+      try {
+        let finish: ((value: unknown) => void) | undefined;
+        let signal: AbortSignal | undefined;
+        mocks.designRequest.mockImplementation((call) => {
+          signal = call.signal;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        });
+        invoke('bound');
+        emit({
+          type: 'design-cancel',
+          identity: { ...parent, sessionId: 'other' },
+          requestId: 'bound',
+        });
+        expect(signal?.aborted).toBe(false);
+        emit({ type: 'design-cancel', identity: parent, requestId: 'bound' });
+        expect(signal?.aborted).toBe(true);
+        invoke('bound');
+        expect(mocks.designRequest).toHaveBeenCalledTimes(1);
+        mocks.sendDesignResult.mockClear();
+        finish?.({ content: [] });
+        await Promise.resolve();
+        expect(mocks.sendDesignResult).not.toHaveBeenCalled();
+        invoke('timeout', { tool: 'vetd_status' });
+        vi.advanceTimersByTime(120_000);
+        expect(signal?.aborted).toBe(true);
+        expect(mocks.sendDesignResult).toHaveBeenLastCalledWith(
+          parent,
+          'timeout',
+          expect.objectContaining({ ok: false })
+        );
+        invoke('disabled-late');
+        mocks.readSettingsState.mockReturnValue({ designEnabled: false });
+        mocks.designSettingsListener?.();
+        expect(signal?.aborted).toBe(true);
+        expect(mocks.sendDesignResult).toHaveBeenLastCalledWith(
+          parent,
+          'disabled-late',
+          expect.objectContaining({ ok: false })
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+    it('routes user prompt/agent_end and exact session end hooks once, not stale or disabled hooks', () => {
+      emit({ type: 'design-hook', identity: parent, event: 'prompt-submit', prompt: 'design it' });
+      emit({ type: 'design-hook', identity: parent, event: 'stop' });
+      emit({ type: 'design-hook', identity: { ...parent, generation: 'old' }, event: 'stop' });
+      emit({ type: 'parent-ended', identity: parent });
+      emit({ type: 'parent-ended', identity: parent });
+      expect(mocks.designHook.mock.calls.map(([event]) => event.event)).toEqual([
+        'prompt-submit',
+        'stop',
+        'session-end',
+      ]);
+      expect(mocks.designHook.mock.calls[0][0]).toEqual({
+        event: 'prompt-submit',
+        cwd: '/repo',
+        sessionId: parent.sessionId,
+        prompt: 'design it',
+      });
+      mocks.readSettingsState.mockReturnValue({ designEnabled: false });
+      emit({ type: 'design-hook', identity: parent, event: 'stop' });
+      expect(mocks.designHook).toHaveBeenCalledTimes(3);
+    });
+    it('Stop hook is delivered after abort so changed designs can still auto-save history', () => {
+      mocks.browserCancellationListener?.(parent, 'abort');
+      emit({ type: 'design-hook', identity: parent, event: 'stop' });
+      expect(mocks.designHook).toHaveBeenCalledWith(expect.objectContaining({ event: 'stop' }));
+    });
   });
 
   describe('browser bridge', () => {

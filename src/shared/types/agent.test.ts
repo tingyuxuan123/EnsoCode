@@ -33,6 +33,66 @@ const DISPATCH_ID = '66666666-6666-4666-8666-666666666666';
 
 const parent = { sessionId: 'conversation-1', generation: PARENT_GENERATION } as const;
 
+describe('design tool transport', () => {
+  const invoke = {
+    type: 'design-invoke',
+    identity: parent,
+    seq: 1,
+    requestId: 'design-1',
+    tool: 'vetd_create',
+    params: { name: 'demo' },
+  };
+  it('accepts invoke/cancel/results and rejects unknown tools, extra keys and stale identities', () => {
+    expect(parseAgentWorkerEvent(invoke)).toEqual(invoke);
+    const cancel = { type: 'design-cancel', identity: parent, seq: 2, requestId: 'design-1' };
+    expect(parseAgentWorkerEvent(cancel)).toEqual(cancel);
+    const hook = {
+      type: 'design-hook',
+      identity: parent,
+      seq: 3,
+      event: 'prompt-submit',
+      prompt: 'make a design',
+    };
+    expect(parseAgentWorkerEvent(hook)).toEqual(hook);
+    expect(parseAgentWorkerEvent({ ...hook, event: 'unknown' })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...hook, cwd: '/tmp' })).toBeNull();
+    for (const bad of [
+      { ...invoke, tool: 'browser_navigate' },
+      { ...invoke, tool: 'vetd_unknown' },
+      { ...invoke, requestId: '' },
+      { ...invoke, seq: -1 },
+      { ...invoke, identity: { sessionId: 'conversation-1' } },
+      { ...invoke, cwd: '/tmp' },
+      { ...cancel, params: {} },
+    ])
+      expect(parseAgentWorkerEvent(bad)).toBeNull();
+    const result = {
+      type: 'design-result',
+      identity: parent,
+      requestId: 'design-1',
+      ok: true,
+      result: {
+        content: [
+          { type: 'text', text: 'ok' },
+          { type: 'image', data: 'abc', mimeType: 'image/png' },
+        ],
+      },
+    };
+    expect(parseAgentCommand(result)).toEqual(result);
+    expect(
+      parseAgentCommand({ ...result, ok: false, result: undefined, error: 'failed' })
+    ).not.toBeNull();
+    for (const bad of [
+      { ...result, error: 'no' },
+      { ...result, requestId: '' },
+      { ...result, result: { content: [{ type: 'image', data: 1, mimeType: 'image/png' }] } },
+      { ...result, result: undefined },
+      { ...result, cwd: '/tmp' },
+    ])
+      expect(parseAgentCommand(bad)).toBeNull();
+  });
+});
+
 describe('selection ask transport', () => {
   it('回答命令保留空字符串取消但拒绝非字符串', () => {
     const command = { type: 'ask-respond', identity: parent, requestId: 'q', answer: '' };

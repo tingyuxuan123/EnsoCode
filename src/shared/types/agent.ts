@@ -30,6 +30,7 @@ import {
 import { type CodeSearchConfig, parseCodeSearchConfig } from '../codeSearch';
 import { type CompactStrategy, parseCompactStrategy } from '../compactStrategy';
 import type { DefaultModelRef } from '../defaultModel';
+import { isDesignToolResult } from '../design/toolResult';
 import { parsePluginToolName } from '../extensionPlugins/toolName';
 import type { PluginToolDescriptor } from '../extensionPlugins/types';
 import { parseMaxActiveCoworkers } from '../maxActiveCoworkers';
@@ -57,6 +58,7 @@ import {
   type WebSearchChainEntry,
 } from '../webSearchChain';
 import { WINDOWS_LOCAL_SHELLS, type WindowsLocalShell } from '../windowsLocalShell';
+import { type DesignToolName, isDesignToolName } from './design';
 import { type EditMode, isEditMode } from './editMode';
 import {
   PROJECTED_APPLY_PATCH_PATH_COUNT_LIMIT,
@@ -1313,7 +1315,7 @@ export type AgentCommand =
       envelope: CapabilityExecutionEnvelope;
     }
   | {
-      type: 'browser-result';
+      type: 'browser-result' | 'design-result';
       identity: SessionIdentity | ChildSessionIdentity;
       requestId: string;
       ok: boolean;
@@ -1696,6 +1698,9 @@ export type RendererAgentEvent =
               | 'computer-cancel'
               | 'browser-invoke'
               | 'browser-cancel'
+              | 'design-invoke'
+              | 'design-cancel'
+              | 'design-hook'
               | 'plugin-tool-invoke'
               | 'plugin-tool-cancel';
           }
@@ -1883,6 +1888,27 @@ export type AgentWorkerEvent =
       requestId: string;
       capabilityId: ProductSurfaceId;
       params: unknown;
+    }
+  | {
+      type: 'design-hook';
+      identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      event: 'prompt-submit' | 'stop';
+      prompt?: string;
+    }
+  | {
+      type: 'design-invoke';
+      identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      requestId: string;
+      tool: DesignToolName;
+      params: unknown;
+    }
+  | {
+      type: 'design-cancel';
+      identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      requestId: string;
     }
   | {
       type: 'browser-invoke';
@@ -3591,6 +3617,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         ? (value as unknown as AgentCommand)
         : null;
     case 'browser-result':
+    case 'design-result':
     case 'memory-result':
     case 'delegation-result':
     case 'computer-result':
@@ -3606,7 +3633,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
       const shapeOk = value.ok
         ? value.error === undefined
         : isNonEmptyString(value.error) && value.result === undefined;
-      return shapeOk ? (value as unknown as AgentCommand) : null;
+      return shapeOk &&
+        (value.type !== 'design-result' || !value.ok || isDesignToolResult(value.result))
+        ? (value as unknown as AgentCommand)
+        : null;
     }
     case 'workflow-stop':
       return hasExactKeys(value, ['type', 'identity', 'runId']) &&
@@ -3987,6 +4017,24 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'op', 'params']) &&
         isNonEmptyString(value.requestId) &&
         BROWSER_OPS.includes(value.op as BrowserOp)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'design-invoke':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'tool', 'params']) &&
+        isNonEmptyString(value.requestId) &&
+        isDesignToolName(value.tool)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'design-hook':
+      return hasOnlyKeys(value, ['type', 'identity', 'seq', 'event', 'prompt']) &&
+        (value.event === 'prompt-submit' || value.event === 'stop') &&
+        (value.prompt === undefined ||
+          (value.event === 'prompt-submit' && typeof value.prompt === 'string'))
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'design-cancel':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
+        isNonEmptyString(value.requestId)
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'browser-cancel':
