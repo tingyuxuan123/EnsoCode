@@ -84,6 +84,40 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 `builtinLoadout.sdk.test.ts`、`scratchWorkspace.test.ts`、`memoryHost.retry.test.ts`。
 
 
+## 桌面后台输入、原生插件与托管代审
+
+**macOS 后台桌面输入**（`services/computer/`）
+- 目标应用身份是 canonical 路径 + bundle id，不是名称或 pid；每个动作执行前重新解析窗口并按
+  exact pid/bundle/path 复核，租约按 app 串行、不同 app 并行。
+- 后台路线禁止回退 `hid` 全局事件或前台接管；解析不到窗口、授权被撤销、pid 失效都 fail-closed。
+  用户明确要求前台投递时才允许前台路径。
+- 应用授权（一次 / 本次会话 / 永远）由 Main 独立询问，与工具审批无关；受保护底线与 assistant
+  代审都不能替代它。画中画只显示被操作窗口，点击指针画进画中画，不覆盖用户正在用的应用；
+  一轮结束后延时收起，用户关闭过的窗口本轮不再弹。
+
+**原生插件**（`services/extensionPlugins/`、`pluginHost/`、`renderer/plugins/`、[plugins.md](../../plugins.md)）
+- 安装只复制到 `userData/extension-plugins`，不引用源目录；zip/URL 下载校验公网地址、重定向、
+  解压边界与符号链接。安装/更新**不执行插件代码**，停用与待批准版本从不运行。
+- `main.mjs` 是完整 Node 子进程，`ui.js` 与主界面同权：这是信任边界，不是 OS 沙箱；界面必须明说，
+  不能用清单权限暗示隔离。侧栏 HTML 才是 opaque-origin sandbox iframe。
+- 插件工具经 worker → Main → 插件进程往返，沿用 `withPlanGate` 与 `withApproval`；规划期默认拒绝
+  所有 `plugin_*` 工具。工具名带插件 id，会话许可不能跨插件或跨版本借用（fingerprint 不匹配即拒）。
+- 插件调宿主 MCP 必须带 exact session generation，Main 侧再查 live 会话与 Plan 状态，worker 侧用
+  真实 MCP 工具名过审批；安装授权不等于逐次授权。
+- 管理通道只接受主界面/设置窗口的 top frame 且 URL 精确匹配本地入口；安装 token 绑定发起窗口。
+
+**分类器代审与托管**（`agent/approvalReview.ts`、`shared/approvalReviewRecord.ts`）
+- 普通聊天模型代审仍是 JSON 契约；分类器（Jev 等）走 allow/ask/block 概率，缺字段、非有限值、
+  分布矛盾一律退回人工，不把缺项当 0 放行。
+- 托管默认关闭、只存本机（configSync 排除）。只有置信度达到阈值才放行；未达标只拒绝当前这一条
+  并把理由交回模型；判定失败/超时退人工。受保护动作、桌面应用授权、插件安装永远不由托管决定。
+- 每组判定写入工具结果的可投影记录（allow/deny/fallback + actionHash），按 pi session + toolCallId
+  作用域绑定，迟到结果不能串到别的请求。
+
+回归：`computerHost.test.ts`、`computer/*.test.ts`、`extensionPlugins/*.test.ts`、
+`pluginHost/*.test.ts`、`renderer/plugins/*.test.ts`、`agent/pluginMcpGateway.test.ts`、
+`agent/approvalManaged.test.ts`、`agent/approvalReviewSupervisor.test.ts`。
+
 ## ChatGPT 顺序账号池的额度权威
 
 `oauthProviders.getOauthQuotaCoordinator()` 持有 Main 唯一额度缓存，UI 的
