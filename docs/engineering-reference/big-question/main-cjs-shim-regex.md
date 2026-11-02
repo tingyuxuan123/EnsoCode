@@ -25,6 +25,10 @@ shim 就被插进了字符串中间。
 以前没出事，是因为用 `require(` 的模块（如 `llama/gpuBackendInstall.ts`）都被动态 import 到了单独 chunk；
 一旦某个被 `main/index.ts` 静态引入的模块写了 `const require = createRequire(...)` 再 `require(x)`，就会触发。
 
+检测是**纯文本**扫描，字符串字面量同样算数：2026-11-02 设计子系统把一段交给子进程
+`node -e` 执行的扫描脚本作为模板字符串嵌在 Main（`SCAN_SCRIPT`），脚本里的 `require(`
+一样触发了 shim，症状完全相同。
+
 ## 修法
 
 静态进 main 主 chunk 的模块不要出现字面量 `require(` / `require.resolve(` / `__dirname` / `__filename`：
@@ -36,12 +40,20 @@ const mod = load(dir);
 
 路径用 `import.meta.dirname` 或 `fileURLToPath(new URL('.', import.meta.url))`。
 
+要交给子进程执行的脚本文本：写成 `require ('fs')`（括号前加空格，JS 语义不变、不命中
+`CJSyntaxRe`），或把脚本放成随包资源文件由子进程直接加载，不要以含 `require(` 的字面量
+进入 main 主 chunk。
+
 ## 回归防线
 
 构建本身会失败，不会静默；看到 “Unterminated string literal” 且紧跟 `// -- CommonJS Shims --`
 就先搜本次改动里新出现的 `require(`。
 
+嵌入脚本另有单测：`src/main/services/design/scripts.test.ts` 断言脚本文本不含
+`CJSyntaxRe` 能命中的写法，并在真实子进程里执行一次，证明改写后语义不变。
+
 ## 相关代码
 
 - `src/main/services/speech/service.ts` 的 `createSherpaRecognizer`
+- `src/main/services/design/scripts.ts` 的 `SCAN_SCRIPT`
 - `node_modules/electron-vite/dist/chunks/lib-*.js` 的 `CJSyntaxRe` / `ESMStaticImportRe`

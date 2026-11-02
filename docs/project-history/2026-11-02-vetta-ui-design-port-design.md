@@ -114,11 +114,12 @@ assets（图片搜索/下载）、design-systems 目录同步走 Main fetch，�
 
 **P1 引擎与 agent 工具链**
 资源打包与 CI 预装引擎；Main engine/capture/fs/storage/runner/ipc；preload；适配层；设计运行时；worker 代理工具 + design-invoke；技能与设计师预设；tool-gate、hooks、计划模式。
-验收：在对话里让 agent 新建一份设计 → `x.vetd/` 落盘、vite 起来、`vetd_screenshot` 截图卡显示画框；计划模式下写类工具被拒；两家厂商模型（如 Claude 与 GPT）真机跑通。
+验收：在对话里让 agent 新建一份设计 → `x.vetd/` 落盘、vite 起来、`vetd_status` 返回引擎与画框状态；计划模式下写类工具被拒；无设计时只暴露 `vetd_create`/`vetd_sizes`；两家厂商模型（如 Claude 与 GPT）真机跑通。
+（2026-11-02 调整：上游 `vetd_screenshot`/`vetd_export`/部分 `vetd_direction` 操作依赖画布控制器，P1 不挂画布，这些工具返回可重试错误，截图验收移到 P2。）
 
 **P2 画布**
 Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（attach 到 composer）、批注层与派活、撤销重做、交互模式、设备壳、引擎恢复 UI。
-验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素生成 attach；批注派活生成 prompt。
+验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素生成 attach；批注派活生成 prompt；依赖画布控制器的工具（清单见 `src/renderer/features/design/PORTING.md`）逐项可用，`vetd_screenshot` 截图卡显示画框。
 
 **P3 画廊、导出、历史、文件树**
 画廊视图与入口；`.vetdz` 导入导出、`.vetdz` 预览；样机 PNG/PDF；历史抽屉（history-runner）；文件树图标与右键；旧格式迁移。

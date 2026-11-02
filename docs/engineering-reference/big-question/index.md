@@ -30,7 +30,7 @@
 | [hashline-stale-recovery.md](hashline-stale-recovery.md) | 文件远处变动使旧 TAG 失效；恢复必须证明上下文唯一且不改变行号坐标系 |
 | [session-before-compact-return-and-eviction-range.md](session-before-compact-return-and-eviction-range.md) | 持续记忆压缩：overflow 轮直接失败 / 走了原生摘要；memory#2 起静默丢旧史、split-turn 前缀无覆盖 |
 | [electron-builder-platform-files.md](electron-builder-platform-files.md) | 安装包 asar 里出现 src/packages，体积比应用代码大出一两百 MB |
-| [main-cjs-shim-regex.md](main-cjs-shim-regex.md) | 构建报 i18n 某条译文 Unterminated string literal，后面紧跟 CommonJS Shims |
+| [main-cjs-shim-regex.md](main-cjs-shim-regex.md) | 构建报 i18n 某条译文 Unterminated string literal，后面紧跟 CommonJS Shims（含字符串里嵌的子进程脚本） |
 | [history-paging-stuck-at-top.md](history-paging-stuck-at-top.md) | 长会话上滑翻一两页就停，顶部钉着「上下文已压缩」；或每翻一页跳回底部 |
 | [coworker-adopt-phantom-run.md](coworker-adopt-phantom-run.md) | subagent 雇的 coworker 回复完了 Run 仍一直「进行中」，send 带 wait:true 永远不返回；单测全绿 |
 | [virtuoso-scrolltoindex-index-space.md](virtuoso-scrolltoindex-index-space.md) | 导航条/搜索跳转点哪条都跳到最新一条：scrollToIndex 误叠 firstItemIndex 原点被钳到末行 |
