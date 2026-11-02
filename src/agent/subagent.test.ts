@@ -95,6 +95,14 @@ describe('subagent unified control', () => {
     expect(guidelines).toMatch(/Once you've delegated/);
     expect(guidelines).toMatch(/smart colleague/);
   });
+
+  it('小任务优先本线程完成，不为一次简单检查扇出多个子代理', () => {
+    const tool = createUnifiedSubagentTool({ agentTypes: [], models: [], invoke: vi.fn() });
+    const guidelines = (tool.promptGuidelines ?? []).join('\n');
+    expect(guidelines).toContain('Default to doing the work yourself in this thread');
+    expect(guidelines).toContain('Do not fan out several subagents for one small task');
+    expect(guidelines).toContain('one well-briefed subagent');
+  });
 });
 
 describe('CoworkerIdleReminder', () => {

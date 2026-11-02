@@ -38,4 +38,15 @@ describe('child contract system prompt', () => {
     expect(SUBAGENT_CONTRACT_PROMPT).toMatch(/verified facts.*inferences.*unverified/i);
     expect(SUBAGENT_CONTRACT_PROMPT).toMatch(/unrelated (repositories|projects)/i);
   });
+
+  it('合同限定任务范围、避免重复探索，要求编辑前读新文件并返回自足结果', () => {
+    expect(SUBAGENT_CONTRACT_PROMPT).toContain('Do only the assigned work, then stop');
+    expect(SUBAGENT_CONTRACT_PROMPT).toContain('do not redo exploration');
+    expect(SUBAGENT_CONTRACT_PROMPT).toContain('read a file fresh before editing');
+    expect(SUBAGENT_CONTRACT_PROMPT).toContain('self-sufficient');
+    expect(SUBAGENT_CONTRACT_PROMPT).toContain('absolute paths');
+    expect(SUBAGENT_CONTRACT_PROMPT).toContain(
+      'Do not run recursive deletes outside temporary directories you created'
+    );
+  });
 });
