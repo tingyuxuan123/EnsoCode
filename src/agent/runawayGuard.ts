@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { prependToolText, toolResultIsError, toolResultText } from './systemReminder';
 
@@ -21,7 +22,7 @@ function bump(streak: Streak, key: string): Streak {
 
 function fingerprint(value: unknown): string {
   try {
-    return JSON.stringify(value, (_key, nested) => {
+    const serialized = JSON.stringify(value, (_key, nested) => {
       if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
         return Object.fromEntries(
           Object.keys(nested as Record<string, unknown>)
@@ -30,7 +31,9 @@ function fingerprint(value: unknown): string {
         );
       }
       return nested;
-    }).slice(0, 4096);
+    });
+    // 比较完整值，不能因长参数或输出的前缀相同而吞掉尾部进展；只留定长摘要。
+    return serialized === undefined ? '' : createHash('sha256').update(serialized).digest('hex');
   } catch {
     return '';
   }
@@ -49,7 +52,7 @@ export function runawayReminderText(kind: RunawaySignal): string {
         ? `[runaway guard] The same error family has now occurred ${THRESHOLD} times. Do not retry the identical failing action. Inspect the error, change the approach, or stop.`
         : kind === 'unchanged_progress_repeat'
           ? `[runaway guard] ${THRESHOLD} consecutive tool results made no observable progress. Stop repeating the same step; inspect what you already have and change approach.`
-          : `[runaway guard] The immediately repeated tool action has now occurred ${THRESHOLD} times with the same arguments. Do not repeat it unchanged. Inspect the results already returned and take a different next step.`;
+          : `[runaway guard] The immediately repeated tool action has now occurred ${THRESHOLD} times with the same arguments and the same result. Do not repeat it unchanged. Inspect the results already returned and take a different next step.`;
   return (
     `<system-reminder>\n${guidance}\n` +
     'This reminder applies only to the current Turn. Do not save or generalize it into Memory, Skills, or other persistent instructions.\n' +
@@ -94,10 +97,16 @@ export class RunawayGuard {
         : bump(this.result, fingerprint(result.text));
       this.poll = { key: '', count: 0 };
     } else {
-      this.action = bump(this.action, `${toolName}\0${fingerprint(args)}`);
+      const actionKey = `${toolName}\0${fingerprint(args)}`;
+      const outcome = result.isError ? errorFamily(result.text) : fingerprint(result.text);
+      this.action = bump(
+        this.action,
+        `${actionKey}\0${result.isError ? 'error' : 'ok'}\0${outcome}`
+      );
+      // edit/write/bash 等不同动作可能都只返回同一条成功回执，不能据此断言无进展。
       this.result = result.isError
         ? { key: '', count: 0 }
-        : bump(this.result, `${toolName}\0${fingerprint(result.text)}`);
+        : bump(this.result, `${actionKey}\0${outcome}`);
       this.poll = { key: '', count: 0 };
     }
     this.error = result.isError
