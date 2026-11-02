@@ -71,7 +71,8 @@
       "!packages/relay-go/frontend/assets",
       "!src/agent/continuousMemory/vendor",
       "!src/shared/providers/devin/vendor",
-      "!src/renderer/features/design/vetta"
+      "!src/renderer/features/design/vetta",
+      "!resources/design"
     ]
   },
   "overrides": [
