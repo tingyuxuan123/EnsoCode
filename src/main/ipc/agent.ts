@@ -1104,6 +1104,7 @@ export function registerAgentHandlers(): void {
       const disabled = resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
         disabledBuiltinTools: project?.disabledBuiltinTools,
       });
+      if (disabled.includes('subagent')) return new Set();
       return new Set(
         effectiveSubagentAllowedModes(
           project?.subagentAllowedModes ?? state.subagentAllowedModes,

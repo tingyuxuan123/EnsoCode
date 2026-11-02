@@ -76,4 +76,20 @@ describe('subagent allowed modes settings', () => {
     store.setProjectTrustedCode('project-1', null);
     expect(settings.useSettingsStore.getState().projects[0]?.trustedProjectCode).toBeUndefined();
   });
+
+  it('scratch 只跟随全局默认和工具，不允许项目级配置或信任提权', () => {
+    const scratch = {
+      id: 'scratch',
+      name: 'Temporary chats',
+      path: '/data/scratch',
+      kind: 'scratch' as const,
+    };
+    settings.useSettingsStore.setState({ projects: [scratch] });
+    const store = settings.useSettingsStore.getState();
+    store.setProjectDefaultModel('scratch', { providerId: 'wrong', modelId: 'wrong' });
+    store.setProjectDisabledBuiltinTools('scratch', []);
+    store.setProjectSubagentAllowedModes('scratch', ['task', 'coworker']);
+    store.setProjectTrustedCode('scratch', ['.pi/extensions']);
+    expect(settings.useSettingsStore.getState().projects).toEqual([scratch]);
+  });
 });

@@ -105,6 +105,7 @@ import agentWorkerPath from '../../agent/index?modulePath';
 import { readSettings } from '../ipc/settings';
 import { agentCommandDispatch } from './agentCommandDispatch';
 import { type MemberAgentType, memberSpawnDescription } from './bots/botAgentType';
+import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
 import { resolveGlobalInstruction } from './instructionStore';
@@ -349,6 +350,7 @@ export function startAgentWorker(): void {
     pushMaxActiveCoworkers();
     pushAutoRetryLimit();
     pushDisabledWorkflowPresets();
+    pushBuiltinTools();
     pushModelDirectory();
     pushWebSearchConfig();
     replayCodeSearchConfig();
@@ -401,6 +403,8 @@ export function startAgentWorker(): void {
     }
     browserCancellationListener?.();
     browserSessionTools.clear();
+    builtinToolScopes.clear();
+    parentToolProfiles.clear();
     pendingReloads.failAll('agent worker exited');
     workspaceLocks.failAll('agent worker exited');
     for (const [id, p] of pendingCompletions) {
@@ -418,6 +422,8 @@ export function startAgentWorker(): void {
 export function stopAgentWorker(): void {
   browserCancellationListener?.();
   browserSessionTools.clear();
+  builtinToolScopes.clear();
+  parentToolProfiles.clear();
   workspaceLocks.failAll('agent worker stopped');
   worker?.kill();
   worker = null;
@@ -535,11 +541,16 @@ export function sendAgentCommand(command: AgentCommand): { ok: boolean; error?: 
   ) {
     browserCancellationListener?.(command.identity, 'resume');
   }
-  if (command.type === 'spawn-parent') {
+  if (command.type === 'spawn-parent' && !builtinToolScopes.has(command.identity)) {
     browserSessionTools.set(command.identity.sessionId, {
       generation: command.identity.generation,
       enabled: !command.disabledTools?.includes('browser'),
     });
+  } else if (command.type === 'set-builtin-tools') {
+    const policy = browserSessionTools.get(command.identity.sessionId);
+    if (policy?.generation === command.identity.generation) {
+      policy.enabled = !command.disabledTools.includes('browser');
+    }
   }
   const action = agentCommandDispatch({
     hasWorker: worker !== null,
@@ -721,6 +732,7 @@ function resolvePhysicalModelSelection(
 }
 
 const parentToolProfiles = new Map<string, ChildProfileToolOptions>();
+const builtinToolScopes = new BuiltinToolScopes();
 
 export interface AgentTypeProfileContext {
   parentSessionId?: string;
@@ -728,7 +740,7 @@ export interface AgentTypeProfileContext {
   remote?: boolean;
 }
 
-/** 记下父会话 spawn 时下发给 worker 的工具档。事后改设置不能拿来做 proof。 */
+/** All fields here are spawn-fixed: hot toggles must not change child proof or lift restrictions. */
 export function rememberParentToolProfile(
   sessionId: string,
   profile: ChildProfileToolOptions
@@ -738,6 +750,7 @@ export function rememberParentToolProfile(
 
 export function forgetParentToolProfile(sessionId: string): void {
   parentToolProfiles.delete(sessionId);
+  builtinToolScopes.forget(sessionId);
   browserSessionTools.delete(sessionId);
 }
 
@@ -955,16 +968,13 @@ export function spawnSession(
   const agentTypes = options?.omitDispatchTools
     ? []
     : configuredAgentTypes(authenticatedAccountKeys, subagentModels.length > 0, plugins);
-  const disabledTools = resolveDisabledBuiltinTools(state?.disabledBuiltinTools, {
-    disabledBuiltinTools: projectDisabledBuiltinTools(state?.projects, projectId),
-  });
-  for (const id of options?.extraDisabledTools ?? []) {
-    if (!disabledTools.includes(id)) disabledTools.push(id);
-  }
-  // 当前平台不能操作桌面时不下发 computer，避免模型反复调用必失败的工具
-  if (!isComputerPlatformSupported() && !disabledTools.includes('computer')) {
-    disabledTools.push('computer');
-  }
+  const extraDisabledTools = options?.extraDisabledTools ?? [];
+  const disabledTools = sessionDisabledTools(
+    state,
+    projectId,
+    extraDisabledTools,
+    isComputerPlatformSupported()
+  );
   const loadHarnessAssets = state?.loadHarnessAssets === true;
   const trustedProjectCode = projectTrustedCode(state?.projects, projectId);
   const windowsLocalShell = parseWindowsLocalShell(state?.windowsLocalShell);
@@ -1014,7 +1024,7 @@ export function spawnSession(
     ...(smartCompactEnabled ? { smartCompactEnabled: true } : {}),
     ...(smartCompactSummaryModel ? { smartCompactSummaryModel } : {}),
     ...(smartCompactMode ? { smartCompactMode } : {}),
-    ...(disabledTools.includes('memory') ? {} : { memoryLanguage }),
+    memoryLanguage,
     ...(skillPaths.length > 0 ? { skillPaths } : {}),
     ...(mcpServers.length > 0 ? { mcpServers } : {}),
     ...(plugins.commands.length > 0 ? { pluginCommands: plugins.commands } : {}),
@@ -1036,7 +1046,10 @@ export function spawnSession(
     ...(options?.bot?.writeLock ? { botWriteLock: options.bot.writeLock } : {}),
     ...(options?.bot || state?.protectedActionsInCode === true ? { protectedActions: true } : {}),
   });
-  if (sent.ok) {
+  if (
+    sent.ok &&
+    builtinToolScopes.remember(identity, projectId, extraDisabledTools, disabledTools)
+  ) {
     rememberParentToolProfile(identity.sessionId, {
       editMode,
       shell: childProfileShell({
@@ -1953,6 +1966,17 @@ export function pushDisabledWorkflowPresets(): void {
     type: 'set-disabled-workflow-presets',
     ids: parseDisabledWorkflowPresets(readSettingsState()?.disabledWorkflowPresets),
   } satisfies AgentCommand);
+}
+
+/** Reuse the authoritative parent scopes; do not mutate existing child generations. */
+export function pushBuiltinTools(): void {
+  if (!worker || !workerReady) return;
+  for (const change of builtinToolScopes.changes(
+    readSettingsState(),
+    isComputerPlatformSupported()
+  )) {
+    sendAgentCommand({ type: 'set-builtin-tools', ...change });
+  }
 }
 
 export function resolveWebSearchConfig(): { chain: WebSearchChainEntry[]; configured: boolean } {

@@ -86,6 +86,21 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
  */
 export const DEFAULT_DISABLED_BUILTIN_TOOLS = ['memory', 'computer', 'code_search'] as const;
 
+/** Only these groups may change in open parent sessions; sandbox/write/goal stay spawn-bound. */
+export const HOT_BUILTIN_TOOL_IDS = [
+  'subagent',
+  'workflow',
+  'todo',
+  'plan',
+  'ask_user',
+  'browser',
+  'web',
+  'code_search',
+  'background_tasks',
+  'memory',
+  'computer',
+] as const;
+
 /** 引入 computer 的设置版本；更早落盘的禁用列表不含它，按默认关闭补齐 */
 export const COMPUTER_DEFAULT_OFF_SETTINGS_VERSION = 14;
 

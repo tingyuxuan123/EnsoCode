@@ -113,9 +113,16 @@ const model = {
 type Listener = (event: { type: string; [key: string]: unknown }) => void;
 
 function session(options: Record<string, unknown>) {
+  let activeTools = ((options.customTools ?? []) as Array<{ name: string }>).map(
+    (tool) => tool.name
+  );
   const listeners = new Set<Listener>();
   const value = {
     model: options.model,
+    getActiveToolNames: () => [...activeTools],
+    setActiveToolsByName: (names: string[]) => {
+      activeTools = [...names];
+    },
     resourceLoader: options.resourceLoader,
     sessionManager: options.sessionManager,
     sessionFile: `/tmp/session-${mocks.sessions.length}.jsonl`,

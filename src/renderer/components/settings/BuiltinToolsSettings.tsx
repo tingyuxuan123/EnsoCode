@@ -97,7 +97,7 @@ function ToolRow({
   control?: ReactNode;
   children?: ReactNode;
   rowId?: string;
-  newSession?: boolean;
+  newSession?: boolean | string;
 }) {
   return (
     <div className="px-[12px] py-[10px]" data-settings-row={rowId}>
@@ -106,7 +106,9 @@ function ToolRow({
         <div className="min-w-0 flex-1">
           <p className="text-[calc(13rem/14)] font-medium">
             {title}
-            {newSession && <NewSessionBadge />}
+            {newSession && (
+              <NewSessionBadge note={typeof newSession === 'string' ? newSession : undefined} />
+            )}
           </p>
           <p className="text-muted-foreground text-[calc(12rem/14)]">{description}</p>
         </div>
@@ -299,14 +301,19 @@ export function BuiltinToolsSettings() {
         <h3 className="font-semibold text-[calc(18rem/14)] leading-[calc(26rem/14)]">
           {t('Built-in tools')}
           <OccupancyEnabledTotal tokens={enabledTokens} />
-          <NewSessionBadge
-            note={t(
-              'Turning a tool on applies to new sessions. Turning off Memory or Computer also blocks it in open sessions.'
-            )}
-          />
         </h3>
         <p className="text-muted-foreground text-[calc(13rem/14)]">
           {t('Toggle the built-in tools available to agents.')}
+        </p>
+        <p className="text-muted-foreground text-[calc(12rem/14)]">
+          {t(
+            'Open sessions apply tool changes when the current turn finishes. Running tools and agents are not stopped.'
+          )}
+        </p>
+        <p className="text-muted-foreground text-[calc(12rem/14)]">
+          {t(
+            'Isolated sandbox, workspace write access and goal tools keep their spawn-time configuration.'
+          )}
         </p>
       </div>
 
@@ -317,6 +324,7 @@ export function BuiltinToolsSettings() {
             icon={TOOL_ICON[tool.id] ?? Wrench}
             title={t(tool.name)}
             description={t(tool.description)}
+            newSession={tool.id === 'isolated_sandbox'}
             control={
               <>
                 <OccupancyMark
@@ -547,9 +555,9 @@ function ComputerPermissionGuideDialog({
             {kind === 'unsupported'
               ? t('This platform cannot operate the desktop yet.')
               : kind === 'ready'
-                ? t('Computer is ready. Start a new session to use it.')
+                ? t('Computer is ready. Open sessions can use it after the current turn finishes.')
                 : t(
-                    'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to EnsoCode, then restart. Only new sessions pick up the tool.'
+                    'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to EnsoCode, then restart.'
                   )}
           </DialogDescription>
         </DialogHeader>

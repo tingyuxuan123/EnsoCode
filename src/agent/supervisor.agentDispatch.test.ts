@@ -7,6 +7,7 @@ import type {
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { childProfileShell, childProfileToolIds } from '@shared/childProfileTools';
+import { PLAN_MODE_OFF_NOTE } from '@shared/planMode';
 import { DEFAULT_PERSONA_PROMPT } from '@shared/systemPrompt';
 import type { AgentCommand, AgentWorkerEvent } from '@shared/types/agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,6 +124,7 @@ const model = {
 };
 
 function session(options: Record<string, unknown>) {
+  let activeTools = ((options.customTools ?? []) as ToolDefinition[]).map((tool) => tool.name);
   const listeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
   const labels: string[] = [];
   const noUI: Pick<ExtensionUIContext, 'select' | 'confirm'> = {
@@ -184,6 +186,11 @@ function session(options: Record<string, unknown>) {
     isStreaming: false,
     isRetrying: false,
     isCompacting: false,
+    isIdle: true,
+    getActiveToolNames: () => [...activeTools],
+    setActiveToolsByName: vi.fn((names: string[]) => {
+      activeTools = [...names];
+    }),
   };
   mocks.sessions.push(value);
   return value;
@@ -235,6 +242,19 @@ function applyCustomPersona(options: Record<string, unknown> | undefined, system
 }
 
 describe('SessionSupervisor deterministic child lifecycle', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    mocks.sessions.length = 0;
+    mocks.managers.length = 0;
+    mocks.loaderOptions.length = 0;
+    mocks.createAgentSession.mockReset();
+    rmSync(path.join(tmpdir(), 'enso-dispatch-sessions'), { recursive: true, force: true });
+    mocks.mcpToolsFor.mockReset().mockResolvedValue([]);
+    mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
+      session: session(options),
+    }));
+  });
+
   it('重开会话只恢复通知，不自动prompt；下一次工具结果搭车且消费后清盘', async () => {
     const events: AgentWorkerEvent[] = [];
     const root = mkdtempSync(path.join(tmpdir(), 'enso-notification-restore-'));
@@ -422,18 +442,271 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     }
   });
 
+  it('hot loadout registers initially disabled tools; idle switches preserve MCP and spawn-only tools', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: '/tmp/enso-dispatch-sessions',
+    });
+    supervisor.handleCommand({
+      type: 'set-code-search-config',
+      config: { accountKey: 'devin', revision: 1 },
+    });
+    supervisor.handleCommand({
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: '/workspace',
+      model,
+      disabledTools: ['browser', 'computer', 'memory', 'plan', 'subagent', 'code_search'],
+    });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    const definitions = (mocks.createAgentSession.mock.calls[0]?.[0].customTools ??
+      []) as ToolDefinition[];
+    expect(definitions.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'browser_navigate',
+        'computer',
+        'memory_search',
+        'submit_plan',
+        'subagent',
+        'code_search',
+      ])
+    );
+    expect(current.getActiveToolNames()).not.toContain('browser_navigate');
+    expect(current.getActiveToolNames()).not.toContain('workflow');
+    current.setActiveToolsByName([...current.getActiveToolNames(), 'mcp__kept', 'codemode']);
+    supervisor.handleCommand({ type: 'set-builtin-tools', identity: parent, disabledTools: [] });
+    expect(current.getActiveToolNames()).toEqual(
+      expect.arrayContaining([
+        'browser_navigate',
+        'computer',
+        'memory_search',
+        'submit_plan',
+        'subagent',
+        'workflow',
+        'code_search',
+        'mcp__kept',
+        'codemode',
+      ])
+    );
+    supervisor.handleCommand({ type: 'set-plan-mode', identity: parent, active: true });
+    supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'research' });
+    await settleUntil(() => current.prompt.mock.calls.length > 0);
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: parent,
+      disabledTools: ['plan', 'browser', 'code_search'],
+    });
+    expect(current.getActiveToolNames()).not.toContain('submit_plan');
+    expect(events.filter((event) => event.type === 'plan-state').at(-1)).toMatchObject({
+      state: { active: false },
+    });
+    supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'continue' });
+    await settleUntil(() => current.prompt.mock.calls.length > 1);
+    expect(current.prompt.mock.calls.at(-1)?.[0]).toContain(PLAN_MODE_OFF_NOTE);
+    const browser = definitions.find((tool) => tool.name === 'browser_navigate')!;
+    // A cached reference (e.g. codemode) must not bypass disabling.
+    await expect(
+      browser.execute('nested', { url: 'https://example.test' }, undefined, undefined, {} as never)
+    ).rejects.toThrow(/disabled/i);
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'browser-invoke' ||
+          event.type === 'computer-invoke' ||
+          event.type === 'memory-invoke'
+      )
+    ).toBe(false);
+    await supervisor.shutdown();
+  });
 
-  beforeEach(() => {
-    vi.useRealTimers();
-    mocks.sessions.length = 0;
-    mocks.managers.length = 0;
-    mocks.loaderOptions.length = 0;
-    mocks.createAgentSession.mockReset();
-    rmSync(path.join(tmpdir(), 'enso-dispatch-sessions'), { recursive: true, force: true });
-    mocks.mcpToolsFor.mockReset().mockResolvedValue([]);
-    mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
-      session: session(options),
-    }));
+  it('disabling a live tool waits for the running call to finish, and does not cancel it', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: '/tmp/enso-dispatch-sessions',
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    current.isIdle = false;
+    current.emit({ type: 'agent_start' });
+    const tools = mocks.createAgentSession.mock.calls[0]![0].customTools as ToolDefinition[];
+    const snapshot = tools.find((tool) => tool.name === 'browser_snapshot')!;
+    const call = snapshot.execute('snapshot', {}, undefined, undefined, {} as never);
+    await settleUntil(() => events.some((event) => event.type === 'browser-invoke'));
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: parent,
+      disabledTools: ['browser'],
+    });
+    expect(current.getActiveToolNames()).toContain('browser_snapshot');
+    expect(events.some((event) => event.type === 'browser-cancel')).toBe(false);
+    const request = events.find((event) => event.type === 'browser-invoke');
+    if (request?.type !== 'browser-invoke') throw new Error('Missing browser invocation');
+    supervisor.handleCommand({
+      type: 'browser-result',
+      identity: parent,
+      requestId: request.requestId,
+      ok: true,
+      result: { snapshot: 'finished' },
+    });
+    await call;
+    current.isIdle = true;
+    current.emit({ type: 'agent_settled' });
+    expect(current.getActiveToolNames()).not.toContain('browser_snapshot');
+    await expect(snapshot.execute('later', {}, undefined, undefined, {} as never)).rejects.toThrow(
+      /disabled/
+    );
+    await supervisor.shutdown();
+  });
+
+  it('hot loadout waits for SDK idle, ignores stale generations and coalesces latest pending changes', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: '/tmp/enso-dispatch-sessions',
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    current.isIdle = false;
+    current.emit({ type: 'agent_start' });
+    current.setActiveToolsByName.mockClear();
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: parent,
+      disabledTools: ['todo'],
+    });
+    current.emit({ type: 'agent_end', messages: [] });
+    expect(current.setActiveToolsByName).not.toHaveBeenCalled();
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: parent,
+      disabledTools: ['browser'],
+    });
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: { ...parent, generation: 'stale' },
+      disabledTools: ['todo'],
+    });
+    current.isIdle = true;
+    current.emit({ type: 'agent_settled' }); // managed.status still running here
+    expect(current.getActiveToolNames()).toContain('todo');
+    expect(current.getActiveToolNames()).not.toContain('browser_navigate');
+    expect(current.setActiveToolsByName).toHaveBeenCalledTimes(1);
+    await supervisor.shutdown();
+  });
+
+  it('code_search account configuration can arrive after spawn and is fail-closed without a selected account', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: '/tmp/enso-dispatch-sessions',
+    });
+    supervisor.handleCommand({
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: '/workspace',
+      model,
+      disabledTools: ['code_search'],
+    });
+    supervisor.handleCommand({ type: 'set-builtin-tools', identity: parent, disabledTools: [] });
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: { ...parent, generation: 'stale' },
+      disabledTools: ['code_search'],
+    });
+    await waitFor(events, 'parent-ready');
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    expect(current.getActiveToolNames()).not.toContain('code_search');
+    supervisor.handleCommand({
+      type: 'set-code-search-config',
+      config: { accountKey: 'devin', revision: 1 },
+    });
+    expect(current.getActiveToolNames()).toContain('code_search');
+    supervisor.handleCommand({
+      type: 'set-code-search-config',
+      config: { accountKey: null, revision: 2 },
+    });
+    expect(current.getActiveToolNames()).not.toContain('code_search');
+    supervisor.handleCommand({
+      type: 'set-code-search-config',
+      config: { accountKey: 'devin', revision: 1 },
+    });
+    expect(current.getActiveToolNames()).not.toContain('code_search');
+    await supervisor.shutdown();
+  });
+
+  it('hot subagent enablement keeps new and existing children on the parent spawn-fixed profile', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: '/tmp/enso-dispatch-sessions',
+    });
+    supervisor.handleCommand({
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: '/workspace',
+      model,
+      disabledTools: ['subagent', 'workspace_write', 'isolated_sandbox'],
+    });
+    await waitFor(events, 'parent-ready');
+    supervisor.handleCommand({ type: 'set-builtin-tools', identity: parent, disabledTools: [] });
+    const current = mocks.sessions[0] as ReturnType<typeof session>;
+    expect(current.getActiveToolNames()).toContain('subagent');
+    const identity = { ...child, typeKey: 'builtin:worker' as const, profileId: undefined };
+    supervisor.handleCommand({
+      type: 'spawn-child',
+      identity,
+      cwd: '/workspace',
+      config: {
+        typeKey: 'builtin:worker',
+        displayName: 'Worker',
+        description: 'Worker',
+        spawnSpecId: 'hot-profile',
+        systemPrompt: 'Worker',
+        model,
+        tools: 'all',
+        skillPaths: [],
+        skillBindingIds: [],
+        mcpServers: [],
+        mcpBindingIds: [],
+        systemPromptHash: 'profile',
+      },
+    });
+    await waitFor(events, 'child-ready');
+    const childSession = mocks.sessions[1] as ReturnType<typeof session>;
+    const childTools = childSession.getActiveToolNames();
+    expect(childTools).not.toEqual(
+      expect.arrayContaining([
+        'bash',
+        'apply_patch',
+        'subagent',
+        'browser_snapshot',
+        'memory_search',
+      ])
+    );
+    expect(events.find((event) => event.type === 'child-ready')).toMatchObject({
+      proof: {
+        toolIds: childProfileToolIds('all', { workspaceWrite: false, isolatedSandbox: false }),
+      },
+    });
+    supervisor.handleCommand({
+      type: 'set-builtin-tools',
+      identity: parent,
+      disabledTools: ['subagent'],
+    });
+    expect(current.getActiveToolNames()).not.toContain('subagent');
+    expect(childSession.getActiveToolNames()).toEqual(childTools);
+    expect(childSession.abort).not.toHaveBeenCalled();
+    await supervisor.shutdown();
   });
 
   it('普通会话的扩展选择框通过提问事件展示，用户原样选择后才返回', async () => {
@@ -1225,7 +1498,10 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     expect(childNames).not.toEqual(expect.arrayContaining(['apply_patch', 'edit', 'write']));
     expect(messageMain).toBeDefined();
     await messageMain!.execute('call', { message: 'explicit handoff', urgent: true });
-    expect(parentSession.prompt).toHaveBeenCalledWith(expect.stringContaining('explicit handoff'));
+    expect(parentSession.prompt).toHaveBeenCalledWith(
+      expect.stringContaining('explicit handoff'),
+      expect.objectContaining({ preflightResult: expect.any(Function) })
+    );
   });
 
   it('spawn-child 的类型级 reasoning/thinkingLevel 作为类型预设进入子会话', async () => {

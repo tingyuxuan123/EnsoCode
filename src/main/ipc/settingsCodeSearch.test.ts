@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const userData = mkdtempSync(path.join(tmpdir(), 'enso-settings-code-search-'));
 const pushCodeSearchConfig = vi.fn(async () => {});
+const pushBuiltinTools = vi.fn();
 
 vi.mock('electron', () => ({
   app: { getPath: () => userData, on: vi.fn() },
@@ -19,6 +20,7 @@ vi.mock('../services/agentHost', () => ({
   pushMaxActiveCoworkers: vi.fn(),
   pushAutoRetryLimit: vi.fn(),
   pushDisabledWorkflowPresets: vi.fn(),
+  pushBuiltinTools,
   pushModelDirectory: vi.fn(),
   pushWebSearchConfig: vi.fn(),
   pushCodeSearchConfig,
@@ -76,11 +78,24 @@ describe('codeSearchAccountKey 设置字段', () => {
 
   it('config-sync 备份恢复提交后同样重推代码搜索配置', async () => {
     pushCodeSearchConfig.mockClear();
+    pushBuiltinTools.mockClear();
     const current = settings.readSettings();
     const result = settings.commitSettingsTransaction(settings.settingsFingerprint(current), {
       providers: [],
     });
     expect(result.ok).toBe(true);
     await vi.waitFor(() => expect(pushCodeSearchConfig).toHaveBeenCalled());
+    expect(pushBuiltinTools).toHaveBeenCalled();
+  });
+
+  it('global and project tool changes trigger the open-session loadout push', async () => {
+    for (const [field, value] of [
+      ['disabledBuiltinTools', ['browser']],
+      ['projects', [{ id: 'p', disabledBuiltinTools: ['todo'] }]],
+    ] as const) {
+      pushBuiltinTools.mockClear();
+      expect(settings.patchSettingsState(field, value).ok).toBe(true);
+      await vi.waitFor(() => expect(pushBuiltinTools).toHaveBeenCalled());
+    }
   });
 });

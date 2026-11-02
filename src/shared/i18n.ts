@@ -8,6 +8,16 @@ export const zhTranslations: Record<string, string> = {
   'Temporary chats': '临时会话',
   'Start a temporary chat': '新建临时会话',
   'Temporary chats are kept until you delete them.': '临时会话会保留，直到你主动删除。',
+  'Open sessions apply tool changes when the current turn finishes. Running tools and agents are not stopped.':
+    '已打开会话会在当前回合结束后应用工具开关，不会停止正在运行的工具或代理。',
+  'Isolated sandbox, workspace write access and goal tools keep their spawn-time configuration.':
+    '隔离沙箱、工作区写入权限和目标工具仍沿用会话启动时的配置。',
+  'Computer is ready. Open sessions can use it after the current turn finishes.':
+    '桌面工具已就绪，已打开会话可在当前回合结束后使用。',
+  'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to EnsoCode, then restart.':
+    '代理可以截取窗口并控制键盘鼠标。请授予 EnsoCode 屏幕录制和辅助功能权限后重启。',
+  'The code search tool switch takes effect when the current turn finishes. Account selection stays on this device.':
+    '代码搜索开关在当前回合结束后生效，账号选择仅保留在本机。',
   'Semantic similarity': '语义相似度',
   'Retrieved {{count}} times': '被检索 {{count}} 次',
   'Retry failed extractions ({{count}})': '重试失败的抽取（{{count}} 项）',

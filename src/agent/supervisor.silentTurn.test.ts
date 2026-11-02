@@ -112,6 +112,9 @@ const model = {
 };
 
 function session(options: Record<string, unknown>) {
+  let activeTools = ((options.customTools ?? []) as Array<{ name: string }>).map(
+    (tool) => tool.name
+  );
   const listeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
   const agentState = {
     messages: [] as unknown[],
@@ -138,6 +141,10 @@ function session(options: Record<string, unknown>) {
   };
   const value = {
     model: options.model,
+    getActiveToolNames: () => [...activeTools],
+    setActiveToolsByName: (names: string[]) => {
+      activeTools = [...names];
+    },
     resourceLoader: options.resourceLoader,
     sessionManager: options.sessionManager,
     sessionFile: `/tmp/session-${mocks.sessions.length}.jsonl`,

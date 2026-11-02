@@ -97,7 +97,7 @@ afterEach(async () => {
 const render = () => act(async () => root.render(<CodeSearchSettings />));
 
 describe('代码搜索设置', () => {
-  it('仅列出既有 Devin 账号，展示云端与硬编码秘密风险以及新会话生效说明', async () => {
+  it('仅列出既有 Devin 账号，展示云端与硬编码秘密风险以及回合边界生效说明', async () => {
     await render();
     expect(container.querySelector('[data-account="devin"]')).not.toBeNull();
     expect(container.textContent).not.toContain('other@example.test');
@@ -105,7 +105,8 @@ describe('代码搜索设置', () => {
     expect(container.textContent).toContain(
       'queries, directory information and selected code snippets'
     );
-    expect(container.textContent).toContain('new conversations');
+    expect(container.textContent).toContain('current turn finishes');
+    expect(container.textContent).not.toContain('new conversations');
     expect(harness.set).not.toHaveBeenCalled();
     await act(async () => harness.select?.('devin'));
     expect(harness.set).toHaveBeenCalledWith('devin');

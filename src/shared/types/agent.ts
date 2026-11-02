@@ -1269,6 +1269,8 @@ export type AgentCommand =
   | { type: 'set-auto-retry-limit'; limit: number }
   /** 设置里禁用的内置预设：worker 执行与工具说明都按它过滤 */
   | { type: 'set-disabled-workflow-presets'; ids: string[] }
+  /** Main-owned effective parent loadout; worker applies only when SDK is idle. */
+  | { type: 'set-builtin-tools'; identity: SessionIdentity; disabledTools: string[] }
   /** Main-only deletion tombstone, never a model tool or generic renderer IPC. */
   | { type: 'forget-notifications'; conversationId: string }
   | { type: 'set-web-search-config'; chain: WebSearchChainEntry[]; configured?: boolean }
@@ -3400,6 +3402,16 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     case 'set-model-directory':
       return hasExactKeys(value, ['type', 'snapshot', 'customProviders'])
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'set-builtin-tools':
+      return hasExactKeys(value, ['type', 'identity', 'disabledTools']) &&
+        parseSessionIdentity(value.identity) &&
+        Array.isArray(value.disabledTools) &&
+        value.disabledTools.length <= 64 &&
+        value.disabledTools.every(
+          (id) => typeof id === 'string' && id.length > 0 && id.length <= 64
+        )
         ? (value as unknown as AgentCommand)
         : null;
     case 'forget-notifications':

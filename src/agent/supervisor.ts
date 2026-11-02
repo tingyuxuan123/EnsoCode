@@ -113,6 +113,7 @@ import {
   foregroundCommandTimeoutMs,
   withBackground,
 } from './backgroundTasks';
+import { enabledHotBuiltins, nextActiveToolNames } from './builtinLoadout';
 import { CheckpointManager, withCheckpoint } from './checkpoint/manager';
 import { createRemoteCheckpointHost } from './checkpoint/remoteHost';
 import { appendSystemPromptExtension, SUBAGENT_CONTRACT_PROMPT } from './childContract';
@@ -220,10 +221,10 @@ import {
   type SshExecutor,
   sshPasswordEnv,
 } from './ssh/executor';
-import { installStreamGuard } from './streamGuard';
 import { applyRemoteWorkingDirectory } from './ssh/posixPath';
 import { createRemoteGrepToolDefinition } from './ssh/remoteGrep';
 import { createRemoteOperations } from './ssh/remoteOperations';
+import { installStreamGuard } from './streamGuard';
 import {
   appendYieldJson,
   parseJsonFromAssistant,
@@ -379,6 +380,11 @@ interface ManagedSession {
   pendingRole?: string;
   /** 仅父会话：Plan 模式状态机（设置里关闭时缺省） */
   plan?: PlanController;
+  /** Disabling the controller must not lose the one-shot exit note for the model. */
+  pendingPlanNote?: string;
+  applyBuiltinTools?: (disabled: readonly string[]) => void;
+  builtinDisabledTools?: readonly string[];
+  pendingBuiltinTools?: readonly string[];
   /** 下一条 prompt 产生的 user 消息的投递回执；id 为 null 表示该投递无乐观回显 */
   promptDelivery?: { id: string | null };
   /** 已入 pi steer 队列、尚未上屏的投递回执，与 pi 队列同序 */
@@ -901,6 +907,11 @@ export class SessionSupervisor {
   /** undefined 跟随会话；空数组表示已配置但全部不可用，直接走 Exa。 */
   private webSearchChain: readonly WebSearchChainEntry[] | undefined;
   private readonly codeSearch = new CodeSearchHost();
+  /** Spawn is asynchronous; only the matching generation may consume this update. */
+  private readonly pendingBuiltinTools = new Map<
+    string,
+    { identity: SessionIdentity; disabled: readonly string[] }
+  >();
   /**
    * Main 推送的统一模型目录。revision 与自定义 provider 语义都没变时不再注册。
    * 当前消费者是自定义 provider 预注册；快照本体由后续的全局 web_search
@@ -1381,6 +1392,27 @@ export class SessionSupervisor {
     }
     if (command.type === 'set-code-search-config') {
       this.codeSearch.configure(command.config);
+      for (const managed of this.sessions.values()) {
+        if (!managed.applyBuiltinTools) continue;
+        managed.pendingBuiltinTools ??= managed.builtinDisabledTools;
+        this.flushPendingBuiltinTools(managed);
+      }
+      return;
+    }
+    if (command.type === 'set-builtin-tools') {
+      const managed = this.sessions.get(command.identity.sessionId);
+      if (managed?.applyBuiltinTools && isSameGeneration(managed.identity, command.identity)) {
+        managed.pendingBuiltinTools = [...command.disabledTools];
+        this.flushPendingBuiltinTools(managed);
+      } else if (!managed) {
+        this.pendingBuiltinTools.set(
+          `${command.identity.sessionId}\0${command.identity.generation}`,
+          {
+            identity: command.identity,
+            disabled: [...command.disabledTools],
+          }
+        );
+      }
       return;
     }
     if (command.type === 'set-web-search-config') {
@@ -2744,51 +2776,66 @@ export class SessionSupervisor {
       trackWait: (toolCallId) => this.bgTasks.trackBlockingWait(sessionId, toolCallId),
     });
     const askManager = this.createAskManager(identity, gate.humanTimeoutMs);
-    // 内嵌浏览器：页面活在 Main，worker 只发 browser-invoke 事件。每个父会话一张挂起表。
-    const browser = toolEnabled('browser')
-      ? new BrowserInvoker(
-          identity,
-          (request) => {
-            const managed = managedRef ?? this.sessions.get(sessionId);
-            if (!managed) throw new Error('Session is not ready for browser actions.');
-            this.options.emit({
-              type: 'browser-invoke',
-              identity: managed.identity,
-              seq: ++managed.seq,
-              requestId: request.requestId,
-              op: request.op,
-              params: request.params,
-            });
-          },
-          {
-            emitCancel: (requestId) => {
-              const managed = managedRef ?? this.sessions.get(sessionId);
-              if (!managed) return;
-              this.options.emit({
-                type: 'browser-cancel',
-                identity: managed.identity,
-                seq: ++managed.seq,
-                requestId,
-              });
-            },
+    // Register dormant definitions without starting any capability. Active loadout is idle-only.
+    const builtinGroups = new Map<string, string[]>();
+    let enabledBuiltins = enabledHotBuiltins(disabledTools);
+    const builtin = (id: string, tools: Def[]): Def[] => {
+      builtinGroups.set(
+        id,
+        tools.map((tool) => tool.name)
+      );
+      return tools.map((tool) => ({
+        ...tool,
+        execute: async (...args: Parameters<Def['execute']>) => {
+          // Also protects cached references, Cursor and codemode nested calls.
+          if (!enabledBuiltins.has(id) || (id === 'code_search' && !this.codeSearch.accountKey)) {
+            throw new Error(`Built-in tool ${id} is disabled or unavailable.`);
           }
-        )
-      : undefined;
-    // 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件，同 browser 桥。
-    const memory = toolEnabled('memory')
-      ? new MemoryInvoker(identity, (request) => {
+          return tool.execute(...args);
+        },
+      }));
+    };
+    // 内嵌浏览器：页面活在 Main，worker 只发 browser-invoke 事件。每个父会话一张挂起表。
+    const browser = new BrowserInvoker(
+      identity,
+      (request) => {
+        const managed = managedRef ?? this.sessions.get(sessionId);
+        if (!managed) throw new Error('Session is not ready for browser actions.');
+        this.options.emit({
+          type: 'browser-invoke',
+          identity: managed.identity,
+          seq: ++managed.seq,
+          requestId: request.requestId,
+          op: request.op,
+          params: request.params,
+        });
+      },
+      {
+        emitCancel: (requestId) => {
           const managed = managedRef ?? this.sessions.get(sessionId);
-          if (!managed) throw new Error('Session is not ready for memory actions.');
+          if (!managed) return;
           this.options.emit({
-            type: 'memory-invoke',
+            type: 'browser-cancel',
             identity: managed.identity,
             seq: ++managed.seq,
-            requestId: request.requestId,
-            op: request.op,
-            params: request.params,
+            requestId,
           });
-        })
-      : undefined;
+        },
+      }
+    );
+    // 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件，同 browser 桥。
+    const memory = new MemoryInvoker(identity, (request) => {
+      const managed = managedRef ?? this.sessions.get(sessionId);
+      if (!managed) throw new Error('Session is not ready for memory actions.');
+      this.options.emit({
+        type: 'memory-invoke',
+        identity: managed.identity,
+        seq: ++managed.seq,
+        requestId: request.requestId,
+        op: request.op,
+        params: request.params,
+      });
+    });
     const delegation = botMode
       ? new MemoryInvoker<DelegationOp>(identity, (request) => {
           const managed = managedRef ?? this.sessions.get(sessionId);
@@ -2807,42 +2854,44 @@ export class SessionSupervisor {
       customDir: this.options.workflowDir,
     });
     const workflowRuns = new Map<string, AbortController>();
-    const computer =
-      toolEnabled('computer') && !remote
-        ? new ComputerInvoker(
-            identity,
-            (request) => {
+    const computer = !remote
+      ? new ComputerInvoker(
+          identity,
+          (request) => {
+            const managed = managedRef ?? this.sessions.get(sessionId);
+            if (!managed) throw new Error('Session is not ready for computer actions.');
+            this.options.emit({
+              type: 'computer-invoke',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              requestId: request.requestId,
+              op: request.op,
+              params: request.params,
+            });
+          },
+          {
+            emitCancel: (requestId) => {
               const managed = managedRef ?? this.sessions.get(sessionId);
-              if (!managed) throw new Error('Session is not ready for computer actions.');
+              if (!managed) return;
               this.options.emit({
-                type: 'computer-invoke',
+                type: 'computer-cancel',
                 identity: managed.identity,
                 seq: ++managed.seq,
-                requestId: request.requestId,
-                op: request.op,
-                params: request.params,
+                requestId,
               });
             },
-            {
-              emitCancel: (requestId) => {
-                const managed = managedRef ?? this.sessions.get(sessionId);
-                if (!managed) return;
-                this.options.emit({
-                  type: 'computer-cancel',
-                  identity: managed.identity,
-                  seq: ++managed.seq,
-                  requestId,
-                });
-              },
-            }
-          )
-        : undefined;
+          }
+        )
+      : undefined;
     const sessionTools = [
       ...buildCoreTools(),
       ...(browser
-        ? createBrowserTools(browser).map((tool) => withNavigateApproval(gate, tool))
+        ? builtin(
+            'browser',
+            createBrowserTools(browser).map((tool) => withNavigateApproval(gate, tool))
+          )
         : []),
-      ...(memory ? createMemoryTools(memory, { language: memoryLanguage }) : []),
+      ...(memory ? builtin('memory', createMemoryTools(memory, { language: memoryLanguage })) : []),
       ...(delegation
         ? createDelegationTools(delegation, {
             groupTasks: botGroupTasks,
@@ -2858,9 +2907,9 @@ export class SessionSupervisor {
             createSendImageTool(delegation, cwd, confirmOutsideImage(gate)),
           ]
         : []),
-      ...(toolEnabled('web') ? createWebTools({ chain: () => this.webSearchChain }) : []),
-      ...(toolEnabled('code_search') && !remote && !botMode && this.codeSearch.accountKey
-        ? [
+      ...builtin('web', createWebTools({ chain: () => this.webSearchChain })),
+      ...(!remote && !botMode
+        ? builtin('code_search', [
             createCodeSearchTool({
               run: (input, searchCwd, signal) =>
                 this.codeSearch.run(sessionId, signal, async (accountKey, searchSignal) => {
@@ -2885,40 +2934,39 @@ export class SessionSupervisor {
                   return runCodeSearch(input, searchCwd, completion, searchSignal);
                 }),
             }),
-          ]
+          ])
         : []),
-      ...(toolEnabled('todo') ? [createTodoTool((todos) => todoReminder.update(todos))] : []),
-      ...(computer ? [withComputerApproval(gate, createComputerTool(computer))] : []),
-      ...(toolEnabled('ask_user') ? [createAskTool(askManager)] : []),
-      ...(toolEnabled('subagent') ? [unifiedSubagentTool] : []),
-      ...(toolEnabled('workflow') && toolEnabled('subagent')
-        ? [
-            createWorkflowTool({
-              invoke: (request, signal) => agentControl.invoke(request, signal),
-              // 远程会话的 cwd 在远端，本地只读设置、全局与内置预设（与 Main 列表口径一致）
-              loadPreset: (id) =>
-                loadWorkflowPreset(id, workflowRoots, this.disabledWorkflowPresets),
-              presets: listWorkflowPresets(workflowRoots, this.disabledWorkflowPresets),
-              models: subagentModels,
-              agentTypes,
-              childToolProfile,
-              activeRuns: workflowRuns,
-              notify: (text, urgent) => this.notifier.notify(sessionId, text, { urgent }),
-              emit: (run) => {
-                const managed = managedRef ?? this.sessions.get(sessionId);
-                if (!managed) return;
-                this.options.emit({
-                  type: 'workflow-status',
-                  identity: managed.identity,
-                  seq: ++managed.seq,
-                  run,
-                });
-              },
-            }),
-          ]
+      ...builtin('todo', [createTodoTool((todos) => todoReminder.update(todos))]),
+      ...(computer
+        ? builtin('computer', [withComputerApproval(gate, createComputerTool(computer))])
         : []),
+      ...builtin('ask_user', [createAskTool(askManager)]),
+      ...builtin('subagent', [unifiedSubagentTool]),
+      ...builtin('workflow', [
+        createWorkflowTool({
+          invoke: (request, signal) => agentControl.invoke(request, signal),
+          // 远程会话的 cwd 在远端，本地只读设置、全局与内置预设（与 Main 列表口径一致）
+          loadPreset: (id) => loadWorkflowPreset(id, workflowRoots, this.disabledWorkflowPresets),
+          presets: listWorkflowPresets(workflowRoots, this.disabledWorkflowPresets),
+          models: subagentModels,
+          agentTypes,
+          childToolProfile,
+          activeRuns: workflowRuns,
+          notify: (text, urgent) => this.notifier.notify(sessionId, text, { urgent }),
+          emit: (run) => {
+            const managed = managedRef ?? this.sessions.get(sessionId);
+            if (!managed) return;
+            this.options.emit({
+              type: 'workflow-status',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              run,
+            });
+          },
+        }),
+      ]),
       ...(exploreFold ? createExploreFoldTools(exploreFold) : []),
-      ...(toolEnabled('background_tasks') ? createTaskTools(this.bgTasks, sessionId) : []),
+      ...builtin('background_tasks', createTaskTools(this.bgTasks, sessionId)),
       ...(toolEnabled('goal')
         ? createGoalTools((kind, note) => {
             const managed = managedRef ?? this.sessions.get(sessionId);
@@ -2943,13 +2991,11 @@ export class SessionSupervisor {
       agentTypes.filter((type) => type.tools === 'readonly').map((type) => type.name)
     );
     const planGated = (tools: Def[]): Def[] =>
-      toolEnabled('plan')
-        ? tools.map((tool) => withPlanGate(tool, { host: planHost, readonlyAgentTypes }))
-        : tools;
+      tools.map((tool) => withPlanGate(tool, { host: planHost, readonlyAgentTypes }));
     const customTools = decorateSessionTools(
       [
         ...planGated(sessionTools),
-        ...(toolEnabled('plan') ? [createSubmitPlanTool(planHost, randomUUID)] : []),
+        ...builtin('plan', [createSubmitPlanTool(planHost, randomUUID)]),
       ],
       { reminders, runaway, budget }
     );
@@ -3014,7 +3060,7 @@ export class SessionSupervisor {
     if (rolePrompt && !resumeFile) managedRef.pendingRole = rolePrompt;
     managedRef.browser = browser;
     managedRef.memory = memory;
-    if (toolEnabled('plan')) {
+    {
       const managed = managedRef;
       const plan = new PlanController(
         {
@@ -3023,10 +3069,49 @@ export class SessionSupervisor {
         },
         () => this.emitPlanState(managed)
       );
-      planRef.current = plan;
-      managed.plan = plan;
-      if (planMode !== undefined) plan.setActive(planMode);
-      else this.emitPlanState(managed);
+      const setPlanEnabled = (enabled: boolean) => {
+        if (!enabled) {
+          if (plan.state().active) plan.setActive(false);
+          managed.pendingPlanNote ??= plan.takeNote();
+          planRef.current = undefined;
+          managed.plan = undefined;
+        } else {
+          if (managed.plan) return;
+          planRef.current = plan;
+          managed.plan = plan;
+          this.emitPlanState(managed);
+        }
+      };
+      managed.applyBuiltinTools = (disabled) => {
+        managed.builtinDisabledTools = [...disabled];
+        enabledBuiltins = enabledHotBuiltins(disabled);
+        if (!this.codeSearch.accountKey) enabledBuiltins.delete('code_search');
+        const active = session.getActiveToolNames();
+        const next = nextActiveToolNames(active, builtinGroups, enabledBuiltins);
+        if (next.length !== active.length || next.some((name, index) => name !== active[index])) {
+          session.setActiveToolsByName(next);
+        }
+        managed.toolIds = [...session.getActiveToolNames(), ...codemodeTools];
+        if (cursorBridge) {
+          const indexed = indexCursorTools(customTools);
+          for (const [id, names] of builtinGroups) {
+            for (const name of names) {
+              const definition = indexed.get(name);
+              if (enabledBuiltins.has(id) && definition) cursorBridge.tools.set(name, definition);
+              else cursorBridge.tools.delete(name);
+            }
+          }
+        }
+        setPlanEnabled(enabledBuiltins.has('plan'));
+      };
+      const pending = this.pendingBuiltinTools.get(`${sessionId}\0${identity.generation}`);
+      for (const [key, entry] of this.pendingBuiltinTools) {
+        if (entry.identity.sessionId === sessionId) this.pendingBuiltinTools.delete(key);
+      }
+      managed.applyBuiltinTools(
+        pending && isSameGeneration(pending.identity, identity) ? pending.disabled : disabledTools
+      );
+      if (managed.plan && planMode !== undefined) plan.setActive(planMode);
     }
     managedRef.computer = computer;
     managedRef.delegation = delegation;
@@ -3754,6 +3839,18 @@ export class SessionSupervisor {
     plug.adopt(tools);
   }
 
+  private flushPendingBuiltinTools(managed: ManagedSession): void {
+    if (
+      !managed.pendingBuiltinTools ||
+      !managed.applyBuiltinTools ||
+      !this.sessionAcceptsMcpTools(managed)
+    )
+      return;
+    const disabled = managed.pendingBuiltinTools;
+    managed.pendingBuiltinTools = undefined;
+    managed.applyBuiltinTools(disabled);
+  }
+
   private installAdoptedMcpTools(
     host: CodemodeHost,
     sessionId: string,
@@ -4005,6 +4102,7 @@ export class SessionSupervisor {
       }
       case 'agent_settled': {
         this.flushPendingMcpTools(managed);
+        this.flushPendingBuiltinTools(managed);
         for (const slot of managed.steerDeliveries ?? []) {
           if (!slot.id || !slot.detach?.()) continue;
           managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
@@ -4325,6 +4423,7 @@ export class SessionSupervisor {
     deliveryId?: string
   ): void {
     this.flushPendingMcpTools(managed);
+    this.flushPendingBuiltinTools(managed);
     if (managed.session.isStreaming) {
       void this.steerTracked(managed, text, images, deliveryId).catch((error) => {
         this.failTurn(managed, toErrorMessage(error));
@@ -4357,6 +4456,8 @@ export class SessionSupervisor {
     options?: Parameters<AgentSession['prompt']>[1],
     deliveryId?: string
   ): Promise<void> {
+    // Also covers notifications and child Run paths that do not use promptFresh.
+    this.flushPendingBuiltinTools(managed);
     const slot = { id: deliveryId ?? null };
     managed.promptDelivery = slot;
     let dispatched = false;
@@ -4476,6 +4577,7 @@ export class SessionSupervisor {
     managed.requestBudget?.disarm();
     managed.contextUsage.setPendingSnapshot(undefined);
     managed.status = 'failed';
+    this.flushPendingBuiltinTools(managed);
     // 失败轮不总结，但下一轮的起点仍要往前推，否则失败轮的消息会混进下一轮摘要
     managed.turnStartIndex = managed.messages.length;
     // 轮失败时放弃排队压缩（通常是 queued；running 压缩与 failTurn 时序上不可达）
@@ -4773,6 +4875,7 @@ export class SessionSupervisor {
 
   /** worker 退出前 fail-closed 清理挂起 capability，并断开 MCP 子进程。 */
   shutdown(): Promise<void> {
+    this.pendingBuiltinTools.clear();
     clearInterval(this.evictionTimer);
     this.workspaceSwitch.clear();
     this.bgTasks.stopAll();
@@ -5229,8 +5332,12 @@ function planFreeEditorText(text: string): string {
 }
 
 /** Plan 状态变化后的一次性提示，随下一条进入模型的用户消息前置 */
-function withPendingPlanNote(managed: { plan?: PlanController }, text: string): string {
-  const note = managed.plan?.takeNote();
+function withPendingPlanNote(
+  managed: { plan?: PlanController; pendingPlanNote?: string },
+  text: string
+): string {
+  const note = managed.plan?.takeNote() ?? managed.pendingPlanNote;
+  managed.pendingPlanNote = undefined;
   return note ? withPlanNote(note, text) : text;
 }
 

@@ -460,6 +460,7 @@ function scheduleWrite(
           pushMaxActiveCoworkers,
           pushAutoRetryLimit,
           pushDisabledWorkflowPresets,
+          pushBuiltinTools,
           pushModelDirectory,
           pushWebSearchConfig,
           pushCodeSearchConfig,
@@ -469,6 +470,7 @@ function scheduleWrite(
           pushMaxActiveCoworkers();
           pushAutoRetryLimit();
           pushDisabledWorkflowPresets();
+          pushBuiltinTools();
           pushModelDirectory();
           pushWebSearchConfig();
           void pushCodeSearchConfig();
@@ -589,6 +591,7 @@ export function commitSettingsTransaction(
         pushMaxActiveCoworkers,
         pushAutoRetryLimit,
         pushDisabledWorkflowPresets,
+        pushBuiltinTools,
         pushModelDirectory,
         pushWebSearchConfig,
         pushCodeSearchConfig,
@@ -598,6 +601,7 @@ export function commitSettingsTransaction(
         pushMaxActiveCoworkers();
         pushAutoRetryLimit();
         pushDisabledWorkflowPresets();
+        pushBuiltinTools();
         pushModelDirectory();
         pushWebSearchConfig();
         void pushCodeSearchConfig();

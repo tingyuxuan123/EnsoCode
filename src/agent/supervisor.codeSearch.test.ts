@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   options: [] as Array<{ customTools?: Array<{ name: string }> }>,
+  active: [] as string[],
 }));
 vi.mock('./cursor/loadProvider', () => ({
   CURSOR_PROVIDER_ID: 'cursor',
@@ -52,6 +53,7 @@ vi.mock('@earendil-works/pi-coding-agent', async (original) => {
     },
     createAgentSession: async (options: Record<string, unknown>) => {
       mocks.options.push(options);
+      mocks.active = (options.customTools as Array<{ name: string }>).map((tool) => tool.name);
       return {
         session: {
           model: options.model,
@@ -64,6 +66,10 @@ vi.mock('@earendil-works/pi-coding-agent', async (original) => {
           abort: async () => {},
           dispose: () => {},
           isIdle: true,
+          getActiveToolNames: () => mocks.active,
+          setActiveToolsByName: (names: string[]) => {
+            mocks.active = [...names];
+          },
         },
       };
     },
@@ -114,7 +120,7 @@ async function create(disabledTools: string[], configured = true) {
     await new Promise<void>((resolve) => setImmediate(resolve));
   expect(events.find((e) => e.type === 'parent-rejected')).toBeUndefined();
   expect(events.some((e) => e.type === 'parent-ready')).toBe(true);
-  return { supervisor, tools: mocks.options.at(-1)?.customTools?.map((tool) => tool.name) ?? [] };
+  return { supervisor, tools: mocks.active };
 }
 
 describe('supervisor 注册代码搜索', () => {

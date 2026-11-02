@@ -615,6 +615,16 @@ describe('parent/child commands', () => {
     expect(parseAgentCommand({ ...command, conversationId: '../escape' })).toBeNull();
     expect(parseAgentCommand({ ...command, path: '/tmp' })).toBeNull();
   });
+  it('validates exact generation-bound set-builtin-tools commands', () => {
+    const command = { type: 'set-builtin-tools', identity: parent, disabledTools: ['memory'] };
+    expect(parseAgentCommand(command)).toEqual(command);
+    expect(parseAgentCommand({ ...command, disabledTools: [] })).not.toBeNull();
+    for (const disabledTools of ['memory', [1], [''], ['x'.repeat(65)], Array(65).fill('todo')]) {
+      expect(parseAgentCommand({ ...command, disabledTools })).toBeNull();
+    }
+    expect(parseAgentCommand({ ...command, extra: true })).toBeNull();
+    expect(parseAgentCommand({ ...command, identity: { sessionId: 'parent' } })).toBeNull();
+  });
 
   it('rewind accepts an exclusive persisted entry anchor and rejects ambiguous or dirty anchors', () => {
     const command = { type: 'rewind', identity: parent, entryId: 'user-entry', restoreFiles: true };

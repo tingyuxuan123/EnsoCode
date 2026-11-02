@@ -136,7 +136,7 @@ export function CodeSearchSettings() {
       ) : null}
       <p className="text-muted-foreground text-[calc(12rem/14)]">
         {t(
-          'The code search tool switch takes effect in new conversations. Account selection stays on this device.'
+          'The code search tool switch takes effect when the current turn finishes. Account selection stays on this device.'
         )}
       </p>
     </div>
