@@ -153,6 +153,23 @@ Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（atta
 - 上游代码风格与本项目 Biome/tsconfig 规则不一致；迁入目录可能需要局部 lint 例外，避免大规模格式化导致与上游难以同步。
 - 设计代码由 agent 生成并在 iframe/vite 中执行：iframe 跨源隔离 + 导航拦截是安全边界；vite 进程本身是本机 Node，与 agent bash 同等信任。
 
+## 8. P1 验收记录（2026-11-02，隔离 userData + fake provider，CDP 9333）
+
+- worker → Main → Renderer 运行时 → Main fs：`vetd_create` 生成 `ledger-app.vetd/`（design.json、theme.css、direction.json、`.history`），Stop hook 自动提交一条历史。
+- 新会话扫描 cwd 发现设计后 11 个 `vetd_*` 全部可见；无设计项目只暴露 `vetd_create`/`vetd_sizes`；模型强调用隐藏工具得到 `Tool vetd_status not found`。
+- 计划模式下 `vetd_create` 被拒，未落盘。`vetd_status` 返回设计列表与引擎状态。
+- 引擎经 Electron-as-Node 在 127.0.0.1 随机端口启动，物化到 userData/design/engine/<版本>；离屏截图返回渲染正确的画框（Tailwind 与 theme 生效，probe 读到标题，scaleFactor 2）。停止引擎 8ms 返回且页面存活；SIGTERM 退出时 will-quit 清理全部 vite 进程。
+- 全量：typecheck、lint、vitest 1140 文件/11968 用例、node:test 49、`pnpm build` 通过。
+- **尚未完成**：两家真实厂商模型的自主调用验证（需使用用户真实配置）。
+
+## 9. 遗留到 P2/P3
+
+- Electron 崩溃或 SIGKILL 时引擎（独立进程组）会成为孤儿进程：加父进程存活监测或启动时清理残留。
+- design IPC 只信任主窗口：其它应用窗口的运行时登记失败，工具一律路由主窗口。
+- 已发出的 fs/engine/script IPC 无取消字段，取消只停止等待，不撤销已发生的写入或进程动作。
+- 「画布已打开」作为 tool-gate 条件、依赖画布控制器的工具清单见 `src/renderer/features/design/PORTING.md`。
+- 设计师角色（上游为可 @ 的 agent 角色）尚未接入。
+
 ## 附录 A：上游宿主依赖（调研结论）
 
 - fs：readFile/writeFile/readDir/stat/delete/watchDirectory（回调只给目录路径字符串、宿主共用广播）、rename/createDirectory、listFilesRecursive（跳过隐藏项、上限万条）、readBinaryFile、saveAs。`move` 未实际使用。
