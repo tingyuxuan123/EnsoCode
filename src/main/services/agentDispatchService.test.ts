@@ -73,6 +73,8 @@ interface SetupOptions {
   /** 跳过写入 draft selection，模拟新对话尚未选过模型 */
   persistSelection?: boolean;
   resolveDefaultModel?: () => { providerId: string; modelId: string } | null;
+  scratch?: boolean;
+  rejectChild?: string;
 }
 
 async function setup(
@@ -80,11 +82,14 @@ async function setup(
   options: SetupOptions = {}
 ) {
   const root = path.join(process.cwd(), 'temp', `dispatch-${crypto.randomUUID()}`);
-  const projectPath = path.join(root, 'project');
+  const projectPath = path.join(root, options.scratch ? 'scratch' : 'project');
   mkdirSync(projectPath, { recursive: true });
   roots.push(root);
   const authority = new SourceAuthorityRegistry({ registryFile: path.join(root, 'registry.json') });
-  const project = authority.createProject({ requestId: 'p', path: projectPath });
+  const scratch = options.scratch ? authority.ensureScratchProject(projectPath) : undefined;
+  const project = scratch
+    ? { accepted: true as const, value: scratch }
+    : authority.createProject({ requestId: 'p', path: projectPath });
   if (!project.accepted) throw new Error(project.error);
   const conversation = authority.createConversation({
     requestId: 'c',
@@ -173,6 +178,7 @@ async function setup(
   const capabilityBindings: ChildSessionIdentity[] = [];
   const terminatedGenerations: ChildSessionIdentity[] = [];
   const promptedTasks: string[] = [];
+  const dismissedChildren: ChildSessionIdentity[] = [];
   let service!: AgentDispatchService;
   service = new AgentDispatchService({
     registerCapabilityInvocation: (context) => {
@@ -236,6 +242,13 @@ async function setup(
       },
       spawnChild: (identity, cwd, _config, resumeFile) => {
         spawnChildCalls.push({ identity, cwd, ...(resumeFile ? { resumeFile } : {}) });
+        if (options.rejectChild) {
+          const reason = options.rejectChild;
+          queueMicrotask(() =>
+            service.observe({ type: 'child-rejected', identity, seq: 0, reason })
+          );
+          return { ok: true };
+        }
         const altered = proofOverride?.(config) ?? {};
         queueMicrotask(() =>
           service.observe({
@@ -264,7 +277,10 @@ async function setup(
         customEntries.push(entry);
         return { ok: true };
       },
-      dismissChild: () => ({ ok: true }),
+      dismissChild: (_parent, child) => {
+        dismissedChildren.push(child);
+        return { ok: true };
+      },
       resumeCoworker: (parent, coworkerId, name, agentType, resumeFile) => {
         resumeCoworkerCalls.push({
           parent,
@@ -293,6 +309,7 @@ async function setup(
     projectPath: project.value.canonicalPath,
     root,
     promptedTasks,
+    dismissedChildren,
   };
 }
 
@@ -401,6 +418,27 @@ describe('AgentDispatchService delta coordination', () => {
       );
     }
   );
+
+  it('scratch 子会话与父会话用相同独立 cwd，忽略遗留 worktree (#184)', async () => {
+    const fixture = await setup(undefined, { scratch: true });
+    worktrees.set(fixture.conversationId, { path: '/wrong-worktree' });
+    const result = await fixture.service.dispatch(
+      {
+        requestId: crypto.randomUUID(),
+        selectionBindingId: fixture.selectionBindingId,
+        typeKey: 'agent:enso',
+        task: { text: 'help', images: [], fileMentions: [] },
+      },
+      1
+    );
+    expect(result.accepted).toBe(true);
+    expect(fixture.spawnChildCalls[0]?.cwd).toBe(
+      path.join(fixture.projectPath, fixture.conversationId)
+    );
+    expect(fixture.bindings.resolveParentSource(fixture.conversationId)?.parentProjectPath).toBe(
+      fixture.projectPath
+    );
+  });
 
   it('新对话未写入 draft selection 时仍能按 binding 解析 spawn cwd', async () => {
     const fixture = await setup(undefined, {
@@ -658,6 +696,35 @@ describe('parent-ready 级联恢复 child（§7.3）', () => {
     await settle();
     return identity;
   }
+
+  it.each(['manual', 'agent-tool'] as const)(
+    'worker 拒绝 child：%s 释放预约、保留调用方错误边界且可继续雇用',
+    async (origin) => {
+      const options = { rejectChild: 'Child source does not match.' };
+      const fixture = await setup(undefined, options);
+      await ready(fixture, '11111111-1111-4111-8111-111111111111');
+      const result = await fixture.service.hireCoworker(
+        fixture.conversationId,
+        'helper',
+        'agent:enso',
+        undefined,
+        origin
+      );
+      expect(result).toMatchObject({ ok: false, code: 'unavailable' });
+      if (origin === 'agent-tool')
+        expect(result.ok ? '' : result.error).toContain('Child source does not match.');
+      else expect(result.ok ? '' : result.error).toBe('Agent session was rejected before ready.');
+      expect(fixture.dismissedChildren).toEqual([fixture.spawnChildCalls[0].identity]);
+      expect(fixture.index.listCoworkers(fixture.conversationId)).toMatchObject({
+        ok: true,
+        data: [],
+      });
+      options.rejectChild = '';
+      expect(
+        (await fixture.service.hireCoworker(fixture.conversationId, 'helper', 'agent:enso')).ok
+      ).toBe(true);
+    }
+  );
 
   it.each([true, false])('hire 按 root registry 选择 cwd（worktree=%s）', async (isolated) => {
     const fixture = await setup();

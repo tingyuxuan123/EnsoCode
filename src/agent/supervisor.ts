@@ -1468,8 +1468,11 @@ export class SessionSupervisor {
       return;
     }
     this.pendingCommands.set(scopeId, (this.pendingCommands.get(scopeId) ?? 0) + 1);
+    // 与仍在创建的同一 child 排队，避免 Main ready 超时的清理抢在落地前变成 no-op。
+    const commandKey =
+      command.type === 'dismiss-child' ? command.child.sessionId : identity.sessionId;
     void this.gate
-      .run(identity.sessionId, () => this.execute(command))
+      .run(commandKey, () => this.execute(command))
       .finally(() => {
         const count = (this.pendingCommands.get(scopeId) ?? 1) - 1;
         if (count) this.pendingCommands.set(scopeId, count);
@@ -1493,6 +1496,11 @@ export class SessionSupervisor {
             seq: 0,
             reason: message,
           });
+          return;
+        }
+        if (command.type === 'dismiss-child' || command.type === 'dismiss-coworker') {
+          // 清理失败属于子会话，不得把仍有效的父会话污染为 failed。
+          console.error(`[${command.type}] failed:`, message);
           return;
         }
         const managed = this.sessions.get(identity.sessionId);
@@ -1571,9 +1579,10 @@ export class SessionSupervisor {
         return;
       case 'dismiss-child': {
         this.must(command.parent);
-        const child = this.must(command.child);
+        // spawn 被拒或 child 已换代时清理是 no-op，仍保留 exact 父代与 child 身份校验。
+        const child = this.sessions.get(command.child.sessionId);
         if (
-          !child.childIdentity ||
+          !child?.childIdentity ||
           !isSameChildSessionIdentity(command.child, child.childIdentity)
         ) {
           return;

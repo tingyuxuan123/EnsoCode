@@ -1850,6 +1850,144 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     });
   });
 
+  it('清理从未建成的 child 或过期清理命令不能把父会话拖成 failed', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    try {
+      for (const command of [
+        { type: 'dismiss-child', parent, child },
+        { type: 'dismiss-child', parent, child },
+        {
+          type: 'dismiss-coworker',
+          parent: { ...parent, generation: 'stale' },
+          coworkerId: child.sessionId,
+        },
+      ] as AgentCommand[]) {
+        supervisor.handleCommand(command);
+        await settle();
+      }
+      const current = mocks.sessions[0] as ReturnType<typeof session>;
+      supervisor.handleCommand({
+        type: 'prompt',
+        identity: parent,
+        text: 'continue after rejected child',
+      });
+      await settle();
+      expect(current.prompt).toHaveBeenCalledWith('continue after rejected child', undefined);
+      expect(events.filter((e) => e.type === 'status' && e.status === 'failed')).toEqual([]);
+      expect(events.filter((e) => e.type === 'child-ended')).toEqual([]);
+    } finally {
+      await supervisor.shutdown();
+    }
+  });
+
+  it('dismiss-child 的旧 child 代际不影响新 child，正确代际可清理', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const config = {
+      typeKey: 'agent:enso' as const,
+      displayName: 'Enso',
+      description: 'Enso',
+      spawnSpecId: 'test-spawn',
+      systemPrompt: 'safe',
+      model,
+      tools: 'enso-locked' as const,
+      skillPaths: [],
+      skillBindingIds: [],
+      mcpServers: [],
+      mcpBindingIds: [],
+      systemPromptHash: 'hash',
+      lockedProfileId: 'enso-locked-v1' as const,
+    };
+    supervisor.handleCommand({ type: 'spawn-child', identity: child, cwd: '/workspace', config });
+    await waitFor(events, 'child-ready');
+    try {
+      const current = mocks.sessions[1] as ReturnType<typeof session>;
+      supervisor.handleCommand({
+        type: 'dismiss-child',
+        parent,
+        child: { ...child, generation: 'old-child' },
+      });
+      await settle();
+      expect(current.dispose).not.toHaveBeenCalled();
+      expect(events.filter((e) => e.type === 'status' && e.status === 'failed')).toEqual([]);
+      supervisor.handleCommand({ type: 'dismiss-child', parent, child });
+      await settle();
+      expect(current.dispose).toHaveBeenCalledOnce();
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'child-ended', identity: child })
+      );
+    } finally {
+      await supervisor.shutdown();
+    }
+  });
+
+  it('child 正在创建时收到 dismiss：等待该代启动落地后清理，不遗留幽灵 child', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-dispatch-')),
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: '/workspace', model });
+    await waitFor(events, 'parent-ready');
+    const paused = Promise.withResolvers<void>();
+    let creating = false;
+    mocks.createAgentSession.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      creating = true;
+      await paused.promise;
+      return { session: session(options) };
+    });
+    supervisor.handleCommand({
+      type: 'spawn-child',
+      identity: child,
+      cwd: '/workspace',
+      config: {
+        typeKey: 'agent:enso',
+        displayName: 'Enso',
+        description: 'Enso',
+        spawnSpecId: 'slow-spawn',
+        systemPrompt: 'safe',
+        model,
+        tools: 'enso-locked',
+        skillPaths: [],
+        skillBindingIds: [],
+        mcpServers: [],
+        mcpBindingIds: [],
+        systemPromptHash: 'hash',
+        lockedProfileId: 'enso-locked-v1',
+      },
+    });
+    await settleUntil(() => creating);
+    expect(creating).toBe(true);
+    supervisor.handleCommand({ type: 'dismiss-child', parent, child });
+    await settle();
+    paused.resolve();
+    await waitFor(events, 'child-ready');
+    try {
+      await settle();
+      expect((mocks.sessions[1] as ReturnType<typeof session>).dispose).toHaveBeenCalledOnce();
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'child-ended', identity: child })
+      );
+      expect(events.some((e) => e.type === 'status' && e.status === 'failed')).toBe(false);
+    } finally {
+      await supervisor.shutdown();
+    }
+  });
+
   it('dismiss-coworker 遥控解雇 worker 直雇 coworker：exact 父代执行，旧代拒绝', async () => {
     // 双形状过渡命令：工具直雇 coworker 不在 Main sessions 索引，
     // Main 只能按 parent.coworkers 映射发裸 id；worker 侧以 exact 父代为门。

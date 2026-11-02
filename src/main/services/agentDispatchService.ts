@@ -383,10 +383,12 @@ export class AgentDispatchService {
     } catch (error) {
       this.options.sessionIndex.releaseChild(child);
       this.options.host.dismissChild(target.identity, child, false);
+      const cause = error instanceof Error && typeof error.cause === 'string' ? error.cause : '';
+      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
         code: 'unavailable',
-        error: error instanceof Error ? error.message : String(error),
+        error: cause && dispatchOrigin === 'agent-tool' ? `${message} Reason: ${cause}` : message,
         suggestedAction: 'Retry from the current coding conversation.',
       };
     } finally {
@@ -871,11 +873,16 @@ export class AgentDispatchService {
   private async resolveSpawnCwd(
     binding: Pick<ParentSourceBinding, 'parentConversationId' | 'parentProjectPath'>
   ): Promise<string> {
-    // 延迟加载避免 IPC 初始化循环；项目身份仍用 canonicalPath，只有 spawn cwd 随 worktree。
+    // 项目身份仍用 canonicalPath；父子 spawn 共用权威 cwd（worktree 或 scratch 独立目录）。
     const { sessionWorktree, sessionWorktreeBusy } = await import('../ipc/worktree');
     if (sessionWorktreeBusy(binding.parentConversationId))
       throw new Error('Worktree operation in progress.');
-    return sessionWorktree(binding.parentConversationId)?.path ?? binding.parentProjectPath;
+    const cwd = this.options.sourceRegistry.spawnCwd(
+      binding.parentConversationId,
+      sessionWorktree(binding.parentConversationId)?.path
+    );
+    if (!cwd) throw new Error('Conversation workspace is unavailable.');
+    return cwd;
   }
 
   private currentOrNewParent(binding: ParentSourceBinding): SessionIdentity {
@@ -983,7 +990,11 @@ export class AgentDispatchService {
         }
         if (failure(event)) {
           cleanup(waiter);
-          reject(new Error('Agent session was rejected before ready.'));
+          // 保留界面使用的固定错误文案，worker 原因供模型调用方诊断。
+          const reason = 'reason' in event && typeof event.reason === 'string' ? event.reason : '';
+          reject(
+            new Error('Agent session was rejected before ready.', reason ? { cause: reason } : {})
+          );
           return true;
         }
         return false;
