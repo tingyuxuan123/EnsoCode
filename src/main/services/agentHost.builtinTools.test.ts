@@ -15,6 +15,8 @@ vi.mock('./modelDirectory', () => ({
   onModelDirectoryChanged: () => () => {},
 }));
 vi.mock('./oauthProviders', () => ({ readStoredOauthCredentialKeys: async () => new Set() }));
+// 桌面控制只在 macOS/Windows 可用；固定为可用，避免 Linux CI 自动追加 computer 限制
+vi.mock('./computer/support', () => ({ isComputerPlatformSupported: () => true }));
 class Worker extends EventEmitter {
   posted: AgentCommand[] = [];
   postMessage(command: AgentCommand) {

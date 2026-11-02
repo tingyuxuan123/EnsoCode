@@ -55,6 +55,17 @@ import { openMacPrivacySettings } from './computer/macPrivacySettings';
 import { ComputerOccupancy } from './computer/occupancy';
 import { ComputerHost } from './computerHost';
 
+// 隐私设置跳转只在 macOS 生效，Linux/Windows CI 上必须固定平台再断言
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: platform });
+  try {
+    return await run();
+  } finally {
+    if (descriptor) Object.defineProperty(process, 'platform', descriptor);
+  }
+}
+
 describe('ComputerHost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -111,14 +122,14 @@ describe('ComputerHost', () => {
 
   it('打开辅助功能设置不弹阻塞 TCC', async () => {
     const host = new ComputerHost(() => new FakeDesktopBackend());
-    await host.openPermissionSettings('accessibility');
+    await withPlatform('darwin', () => host.openPermissionSettings('accessibility'));
     expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
     expect(openMacPrivacySettings).toHaveBeenCalledWith('accessibility');
   });
 
   it('打开屏幕录制设置不阻塞在截屏 TCC', async () => {
     const host = new ComputerHost(() => new FakeDesktopBackend());
-    await host.openPermissionSettings('screen');
+    await withPlatform('darwin', () => host.openPermissionSettings('screen'));
     expect(desktopCapturer.getSources).not.toHaveBeenCalled();
     expect(openMacPrivacySettings).toHaveBeenCalledWith('screen');
   });
