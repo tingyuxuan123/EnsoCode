@@ -31,7 +31,7 @@ class Socket {
   readyState = 0;
   binaryType = '';
   onopen?: () => void;
-  onclose?: (event: { code: number }) => void;
+  onclose?: (event: { code: number; reason: string }) => void;
   onmessage?: (event: { data: ArrayBuffer | string }) => void;
   sent: PhoneToHost[] = [];
   constructor() {
@@ -47,9 +47,9 @@ class Socket {
   receive(payload: unknown) {
     this.onmessage?.({ data: new TextEncoder().encode(JSON.stringify(payload)).buffer });
   }
-  close(code = 1000) {
+  close(code = 1000, reason = '') {
     this.readyState = 3;
-    this.onclose?.({ code });
+    this.onclose?.({ code, reason });
   }
 }
 
@@ -171,6 +171,78 @@ describe('PairClient 缓存与续传', () => {
     await settle();
     return socket;
   }
+
+  it('同一配对被其他页面接管后停止抢连，切前台也不重连且缓存保留', async () => {
+    const socket = await start();
+    const sentBefore = socket.sent.length;
+    socket.close(1000, 'replaced');
+    await settle();
+    expect(events.onState).toHaveBeenLastCalledWith('replaced');
+    expect(client.getSession('s')?.messages.get(0)).toEqual(text('old'));
+    expect(cache.clear).not.toHaveBeenCalled();
+    client.nudge('visibility');
+    client.nudge('online');
+    client.connect();
+    client.send({ type: 'snapshot' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(Socket.all).toHaveLength(1);
+    expect(socket.sent).toHaveLength(sentBefore);
+    expect(events.onState).toHaveBeenLastCalledWith('replaced');
+  });
+
+  it('普通断网仍自动重连，只有明确 replaced 才暂停连接', async () => {
+    const socket = await start();
+    socket.close(1006, '');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(Socket.all).toHaveLength(2);
+  });
+
+  it('被接管后迟到的旧连接在线与业务回执不能复活页面', async () => {
+    const socket = await start();
+    socket.close(1000, 'replaced');
+    socket.onmessage?.({ data: JSON.stringify({ type: 'host-online' }) });
+    socket.receive({ type: 'catalog', entries: [] });
+    await settle();
+    expect(events.onState).toHaveBeenLastCalledWith('replaced');
+    expect(client.getSession('s')).toBeDefined();
+  });
+
+  it('旧页面被替换不会抢走新页面的连接，直连回调和发送也在退出时停止', async () => {
+    const direct = liveDirectPeer();
+    client.close();
+    client = new PairClient(device, events, () => direct.peer, cache);
+    const first = await start();
+    first.receive({
+      type: 'host-info',
+      hostname: 'host',
+      appVersion: '1',
+      capabilities: ['direct-v1'],
+    });
+    await settle();
+    direct.fireOpen();
+    const secondEvents = { ...events, onState: vi.fn() };
+    const second = new PairClient(device, secondEvents, null, cache);
+    try {
+      second.connect();
+      await settle();
+      const secondSocket = Socket.all.at(-1)!;
+      secondSocket.open();
+      secondSocket.onmessage?.({ data: JSON.stringify({ type: 'host-online' }) });
+      first.close(1000, 'replaced');
+      await settle();
+      direct.fireMessage(
+        new TextEncoder().encode(JSON.stringify({ type: 'catalog', entries: [] }))
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(Socket.all).toHaveLength(2);
+      expect(secondSocket.readyState).toBe(1);
+      expect(secondEvents.onState).toHaveBeenLastCalledWith('online');
+      expect(events.onState).toHaveBeenLastCalledWith('replaced');
+      expect(client.getSession('s')).toBeDefined();
+    } finally {
+      second.close();
+    }
+  });
 
   it('文件能力由桌面声明，文件列表和分块回执走现有加密消息出口', async () => {
     events.onFilesAvailable = vi.fn();

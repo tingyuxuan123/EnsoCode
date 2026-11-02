@@ -139,7 +139,7 @@ export function ChatScreen(props: Props) {
   }, [sessionId, props.tabGroup]);
   const running = view?.status === 'running';
   const bot = props.bot;
-  const readOnly = Boolean(bot?.readOnly || props.deviceReadOnly);
+  const readOnly = Boolean(bot?.readOnly || props.deviceReadOnly || props.connState === 'replaced');
   const entries = useMemo(
     () => (view ? [...view.messages.entries()].sort((a, b) => a[0] - b[0]) : []),
     [view]
@@ -312,19 +312,21 @@ export function ChatScreen(props: Props) {
           )}
           <div className="min-w-0 flex-1">
             <p className="flex min-w-0 items-center gap-1.5">
-              {props.connState !== 'host-offline' && props.connState !== 'unauthorized' && (
-                <span
-                  className={cn(
-                    'h-1.5 w-1.5 shrink-0 rounded-full',
-                    props.connState === 'online' && !props.syncing
-                      ? 'bg-success'
-                      : 'animate-pulse bg-warning'
-                  )}
-                  title={
-                    props.connState === 'online' && props.syncing ? '同步中…' : props.stateLabel
-                  }
-                />
-              )}
+              {props.connState !== 'host-offline' &&
+                props.connState !== 'unauthorized' &&
+                props.connState !== 'replaced' && (
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 shrink-0 rounded-full',
+                      props.connState === 'online' && !props.syncing
+                        ? 'bg-success'
+                        : 'animate-pulse bg-warning'
+                    )}
+                    title={
+                      props.connState === 'online' && props.syncing ? '同步中…' : props.stateLabel
+                    }
+                  />
+                )}
               <span className="truncate font-medium text-[13px]">{props.title}</span>
             </p>
             <p className="mt-0.5 truncate text-[11px] text-muted-foreground">

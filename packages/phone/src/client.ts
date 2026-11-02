@@ -72,7 +72,13 @@ import { setHostTheme } from './theme';
  * 重连后按游标增量续传（游标失配则回落全量 snapshot）。
  */
 
-export type ConnState = 'connecting' | 'online' | 'host-offline' | 'unauthorized' | 'offline';
+export type ConnState =
+  | 'connecting'
+  | 'online'
+  | 'host-offline'
+  | 'unauthorized'
+  | 'offline'
+  | 'replaced';
 
 /** 与桌面远程节点视图共用一份投影结构 */
 export type SessionView = GuestSessionView;
@@ -288,7 +294,7 @@ export class PairClient {
     // 半开死链的 close 事件可能永不到达：心跳判死后直接走关闭路径，幂等防双跑
     let settled = false;
     let connectTimer: ReturnType<typeof setTimeout> | undefined;
-    const closed = (code: number | null): void => {
+    const closed = (code: number | null, reason = ''): void => {
       if (settled) return;
       settled = true;
       if (connectTimer) clearTimeout(connectTimer);
@@ -300,6 +306,13 @@ export class PairClient {
       // 1008 = 中继明确告知凭据已失效（解绑时下发，或带失效凭据重连时下发）
       if (code === 1008 || this.revoked) {
         this.revoke();
+        return;
+      }
+      if (code === 1000 && reason === 'replaced' && !this.closed) {
+        // 与网络断开不同：自动重连会把另一个页面再踢掉，双方形成无限抢连。
+        // close 只停止当前客户端，不清配对 / 会话缓存；显式接管由 App 新建客户端。
+        this.close();
+        this.events.onState('replaced');
         return;
       }
       if (this.closed) return;
@@ -363,7 +376,7 @@ export class PairClient {
       this.enqueueFrame(new Uint8Array(event.data as ArrayBuffer), ws);
     };
 
-    ws.onclose = (event) => closed(event.code);
+    ws.onclose = (event) => closed(event.code, event.reason);
 
     ws.onerror = () => {
       try {

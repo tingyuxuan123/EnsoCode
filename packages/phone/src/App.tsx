@@ -94,6 +94,7 @@ const STATE_LABEL: Record<ConnState, string> = {
   'host-offline': '桌面端离线',
   unauthorized: '配对已失效',
   offline: '重连中…',
+  replaced: '已在其他页面连接',
 };
 
 const PUSH_ENABLED_KEY = 'enso-phone-push';
@@ -130,6 +131,7 @@ export function App() {
   /** 已配对状态下的「配对新电脑」流程（覆盖 PairScreen） */
   const [adding, setAdding] = useState(false);
   const [state, setState] = useState<ConnState>('connecting');
+  const [connectionRevision, setConnectionRevision] = useState(0);
   const [transport, setTransport] = useState<'relay' | 'direct'>('relay');
   const [rttMs, setRttMs] = useState<number | null>(null);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
@@ -580,7 +582,7 @@ export function App() {
       newSessionPort.reset();
       threadPort.reset();
     };
-  }, [device?.pairId, device?.token, device?.relayUrl, device?.contentKey]);
+  }, [device?.pairId, device?.token, device?.relayUrl, device?.contentKey, connectionRevision]);
 
   /** 手机刚 spawn 的会话 id（一次性）：首次订阅不进 syncing——全新会话没有历史可陈旧，
    * 而 spawn 在途时 host 回的快照不含它，会让「同步中」横幅挂到切会话才消 */
@@ -594,7 +596,7 @@ export function App() {
       if (id !== subscribedId) freshIdsRef.current.delete(id);
     }
     setView(subscribedId ? (clientRef.current?.getSession(subscribedId) ?? null) : null);
-  }, [subscribedId, device?.pairId]);
+  }, [subscribedId, device?.pairId, connectionRevision]);
 
   const pairId = device?.pairId;
   useEffect(() => {
@@ -792,7 +794,13 @@ export function App() {
   };
 
   const switchDevice = (pairId: string) => {
-    if (pairId === device?.pairId) return;
+    if (pairId === device?.pairId) {
+      if (state === 'replaced') {
+        setState('connecting');
+        setConnectionRevision((value) => value + 1);
+      }
+      return;
+    }
     saveActiveDeviceId(pairId);
     setActiveDeviceId(pairId);
     // 旧连接状态不属于新桌面：乐观置回连接中，避免闪现 unauthorized/host-offline 旧屏
@@ -1236,6 +1244,26 @@ export function App() {
         }
       />
       <div className="flex h-full min-w-0 flex-1 flex-col">
+        {state === 'replaced' && (
+          <div
+            role="status"
+            className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-b bg-muted px-3 py-2 text-muted-foreground text-xs"
+          >
+            <span>
+              同一配对已在其他页面打开，当前页面已暂停连接，避免反复闪烁。历史和配对数据已保留。
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setState('connecting');
+                setConnectionRevision((value) => value + 1);
+              }}
+            >
+              在此页面连接
+            </Button>
+          </div>
+        )}
         {wide && !docked && !drawerOpen && (
           // 宽屏折叠态的展开入口：左缘中部把手，不与各屏头部按钮冲突，任何界面都能唤回侧栏
           <button
