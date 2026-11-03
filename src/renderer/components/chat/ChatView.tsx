@@ -33,6 +33,7 @@ import { ApprovalBar } from './ApprovalBar';
 import { ApprovalModePicker } from './ApprovalModePicker';
 import { AskBar } from './AskBar';
 import { ChatSessionTimeline } from './ChatSessionTimeline';
+import { CollapsingToolbar } from './CollapsingToolbar';
 import { Composer } from './Composer';
 import { ConversationStatusIndicator } from './ConversationStatusIndicator';
 import { CoworkerTabs } from './CoworkerTabs';
@@ -556,30 +557,65 @@ export function ChatView() {
               <>
                 {!chrome.displayedParentId && (
                   <>
-                    <PresetPicker
-                      presetId={chrome.presetId ?? 'default'}
-                      disabled={chrome.started}
-                      onSelect={(presetId) =>
-                        useSessionsStore.getState().setPreset(chrome.id, presetId)
-                      }
-                    />
-                    <WorktreePicker
-                      conversationId={chrome.id}
-                      onBranchChange={handleBranchChange}
-                    />
-                    {(planAvailable || chrome.planState?.active) && (
-                      <PlanModeToggle
-                        active={chrome.planState?.active ?? false}
-                        onToggle={(active) =>
-                          useSessionsStore.getState().setPlanMode(chrome.id, active)
-                        }
-                      />
-                    )}
-                    <ApprovalModePicker
-                      mode={chrome.approvalMode ?? 'full'}
-                      onSelect={(mode) =>
-                        useSessionsStore.getState().setApprovalMode(chrome.id, mode)
-                      }
+                    {/* 放不下时按 rank 逐个收成图标，再逐个收进「…」：预设 → 审批 → 工作区 → 计划 */}
+                    <CollapsingToolbar
+                      items={[
+                        {
+                          id: 'preset',
+                          rank: 0,
+                          render: (compact) => (
+                            <PresetPicker
+                              compact={compact}
+                              presetId={chrome.presetId ?? 'default'}
+                              disabled={chrome.started}
+                              onSelect={(presetId) =>
+                                useSessionsStore.getState().setPreset(chrome.id, presetId)
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          id: 'worktree',
+                          rank: 2,
+                          render: (compact) => (
+                            <WorktreePicker
+                              compact={compact}
+                              conversationId={chrome.id}
+                              onBranchChange={handleBranchChange}
+                            />
+                          ),
+                        },
+                        ...(planAvailable || chrome.planState?.active
+                          ? [
+                              {
+                                id: 'plan',
+                                rank: 3,
+                                render: (compact: boolean) => (
+                                  <PlanModeToggle
+                                    compact={compact}
+                                    active={chrome.planState?.active ?? false}
+                                    onToggle={(active) =>
+                                      useSessionsStore.getState().setPlanMode(chrome.id, active)
+                                    }
+                                  />
+                                ),
+                              },
+                            ]
+                          : []),
+                        {
+                          id: 'approval',
+                          rank: 1,
+                          render: (compact) => (
+                            <ApprovalModePicker
+                              compact={compact}
+                              mode={chrome.approvalMode ?? 'full'}
+                              onSelect={(mode) =>
+                                useSessionsStore.getState().setApprovalMode(chrome.id, mode)
+                              }
+                            />
+                          ),
+                        },
+                      ]}
                     />
                     <div
                       className="ml-auto min-w-0 max-w-full shrink-0 [&_[data-model-picker=trigger]]:max-w-full"

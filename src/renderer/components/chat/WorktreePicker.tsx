@@ -39,10 +39,13 @@ import { canAttachWorktree, existingProjectWorktrees, worktreeDisplayName } from
 export function WorktreePicker({
   conversationId,
   onBranchChange,
+  compact = false,
 }: {
   conversationId: string;
   /** 当前分支（未知/非 git/加载中为 undefined），供会话头展示，避免重复拉取 */
   onBranchChange?: (branch: string | undefined) => void;
+  /** composer 工具行放不下时只留图标 */
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const conversation = useSessionsStore((state) => state.conversations[conversationId]);
@@ -397,7 +400,11 @@ export function WorktreePicker({
         <PopoverTrigger
           ref={triggerRef}
           disabled={disabled}
-          className="flex h-[calc(28rem/14)] min-w-0 max-w-52 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          className={cn(
+            'flex h-[calc(28rem/14)] min-w-0 max-w-52 shrink-0 items-center gap-[4px] rounded-[6px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50',
+            compact ? 'px-[7px]' : 'px-[8px]'
+          )}
+          aria-label={pickerLabel}
           title={
             conversation.worktree
               ? `${pickerLabel}\n${worktreeHoverText(conversation.worktree, statuses[conversationId], t)}`
@@ -411,8 +418,10 @@ export function WorktreePicker({
           ) : (
             <House className="h-3 w-3 shrink-0" />
           )}
-          <span className="min-w-0 font-mono text-[calc(11rem/14)] truncate">{pickerLabel}</span>
-          <ChevronDown className="h-3 w-3 shrink-0" />
+          {!compact && (
+            <span className="min-w-0 font-mono text-[calc(11rem/14)] truncate">{pickerLabel}</span>
+          )}
+          {!compact && <ChevronDown className="h-3 w-3 shrink-0" />}
         </PopoverTrigger>
         <PopoverPopup
           side="top"

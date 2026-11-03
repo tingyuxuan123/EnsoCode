@@ -39,6 +39,8 @@ export const APPROVAL_MODE_ORDER: ApprovalMode[] = [
 interface ApprovalModePickerProps {
   mode: ApprovalMode;
   onSelect: (mode: ApprovalMode) => void;
+  /** composer 工具行放不下时只留图标 */
+  compact?: boolean;
 }
 
 /** 助手代审档位可用：设置里选了启用中的代审模型 */
@@ -57,7 +59,7 @@ export function useApprovalReviewerReady(): boolean {
 }
 
 /** composer 工具行的审批档位选择（盾牌 pill），会话中途可切换即时生效 */
-export function ApprovalModePicker({ mode, onSelect }: ApprovalModePickerProps) {
+export function ApprovalModePicker({ mode, onSelect, compact = false }: ApprovalModePickerProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const reviewerReady = useApprovalReviewerReady();
@@ -66,12 +68,18 @@ export function ApprovalModePicker({ mode, onSelect }: ApprovalModePickerProps) 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="flex h-[calc(28rem/14)] min-w-0 max-w-full shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        title={t(APPROVAL_MODE_META[mode].descKey)}
+        className={cn(
+          'flex h-[calc(28rem/14)] min-w-0 max-w-full shrink-0 items-center gap-[4px] rounded-[6px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+          compact ? 'px-[7px]' : 'px-[8px]'
+        )}
+        aria-label={t(APPROVAL_MODE_META[mode].labelKey)}
+        title={`${t(APPROVAL_MODE_META[mode].labelKey)}\n${t(APPROVAL_MODE_META[mode].descKey)}`}
       >
         <CurrentIcon className="h-3 w-3 shrink-0" />
-        <span className="min-w-0 truncate">{t(APPROVAL_MODE_META[mode].labelKey)}</span>
-        <ChevronDown className="h-3 w-3 shrink-0" />
+        {!compact && (
+          <span className="min-w-0 truncate">{t(APPROVAL_MODE_META[mode].labelKey)}</span>
+        )}
+        {!compact && <ChevronDown className="h-3 w-3 shrink-0" />}
       </PopoverTrigger>
       <PopoverPopup side="top" align="start" className="w-80 [&_[data-slot=popover-viewport]]:p-1">
         {APPROVAL_MODE_ORDER.map((option) => {

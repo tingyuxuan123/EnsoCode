@@ -12,10 +12,12 @@ interface PresetPickerProps {
   onSelect: (presetId: string) => void;
   /** 会话已开始后预设固化，不能中途替换（skill/MCP/指令在 spawn 时注入） */
   disabled?: boolean;
+  /** composer 工具行放不下时只留图标 */
+  compact?: boolean;
 }
 
 /** composer 工具行的预设选择：pill 触发 + 默认/自定义预设列表（会话开始前可选，之后只读） */
-export function PresetPicker({ presetId, onSelect, disabled }: PresetPickerProps) {
+export function PresetPicker({ presetId, onSelect, disabled, compact = false }: PresetPickerProps) {
   const { t } = useI18n();
   const presets = useSettingsStore((state) => state.presets);
   const pluginPresets = useEnabledPluginPresets();
@@ -35,12 +37,15 @@ export function PresetPicker({ presetId, onSelect, disabled }: PresetPickerProps
   if (disabled) {
     return (
       <span
-        className="flex h-[calc(28rem/14)] min-w-0 max-w-40 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground"
-        title={t('Preset is locked after the conversation starts')}
+        className={cn(
+          'flex h-[calc(28rem/14)] min-w-0 max-w-40 shrink-0 items-center gap-[4px] rounded-[6px] text-[calc(12rem/14)] text-muted-foreground',
+          compact ? 'px-[7px]' : 'px-[8px]'
+        )}
+        title={`${current.name}\n${t('Preset is locked after the conversation starts')}`}
       >
         <Layers className="size-[calc(14rem/14)] shrink-0" />
-        <span className="truncate">{current.name}</span>
-        <LockKeyhole className="size-[calc(12rem/14)] shrink-0 text-faint" />
+        <span className={compact ? 'sr-only' : 'truncate'}>{current.name}</span>
+        {!compact && <LockKeyhole className="size-[calc(12rem/14)] shrink-0 text-faint" />}
       </span>
     );
   }
@@ -48,12 +53,16 @@ export function PresetPicker({ presetId, onSelect, disabled }: PresetPickerProps
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="flex h-[calc(28rem/14)] min-w-0 max-w-40 shrink-0 items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className={cn(
+          'flex h-[calc(28rem/14)] min-w-0 max-w-40 shrink-0 items-center gap-[4px] rounded-[6px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+          compact ? 'px-[7px]' : 'px-[8px]'
+        )}
+        aria-label={current.name}
         title={current.name}
       >
         <Layers className="size-[calc(14rem/14)] shrink-0" />
-        <span className="min-w-0 truncate">{current.name}</span>
-        <ChevronDown className="h-3 w-3 shrink-0" />
+        {!compact && <span className="min-w-0 truncate">{current.name}</span>}
+        {!compact && <ChevronDown className="h-3 w-3 shrink-0" />}
       </PopoverTrigger>
       <PopoverPopup side="top" align="start" className="w-52 [&_[data-slot=popover-viewport]]:p-1">
         {options.map((option) => {
