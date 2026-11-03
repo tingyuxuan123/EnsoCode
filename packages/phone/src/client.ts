@@ -3,18 +3,22 @@ import {
   backoffDelay,
   type CatalogEntry,
   createBrowserDirectPeerFactory,
+  createFrameReplay,
   DirectLink,
   type DirectPeerFactory,
   type DirectTransport,
   encodeVoiceChunks,
+  type FrameReplay,
   fromBase64Url,
   type Heartbeat,
   type HostToPhone,
   isConnectStuck,
   isForegroundSocketStale,
   isPairSyncCursor,
+  isReplayBootstrap,
+  isReplayBootstrapResponse,
+  isReplayHello,
   type NudgeReason,
-  openFrame,
   type PairBotActivity,
   type PairBotChatSummary,
   type PairBotEvent,
@@ -29,7 +33,6 @@ import {
   type ProviderEntry,
   parsePairSessionSync,
   RELAY_CONNECT_TIMEOUT_MS,
-  sealFrame,
   shouldReplaceOnNudge,
   toWebSocketUrl,
   VISIBILITY_PROBE_MS,
@@ -59,6 +62,7 @@ import {
   type VoiceSession,
 } from '@shared/types/speech';
 import { type PhoneCacheData, type PhoneCacheStore, phoneCache } from './sessionCache';
+import { loadDevices, pinReplayVersion } from './storage';
 import {
   setCompactReadOnlyTools,
   setExpandLiveEdits,
@@ -158,6 +162,11 @@ export class PairClient {
   private ws: WebSocket | null = null;
   private heartbeat: Heartbeat | null = null;
   private contentKey: Uint8Array;
+  private replay: FrameReplay;
+  private ioEpoch = 0;
+  private pendingWrites: { command: PhoneToHost; expiresAt: number }[] = [];
+  private pendingWriteBytes = 0;
+  private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private attempt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
@@ -216,6 +225,21 @@ export class PairClient {
     private cache: PhoneCacheStore = phoneCache
   ) {
     this.contentKey = fromBase64Url(device.contentKey);
+    this.replay = createFrameReplay(undefined, undefined, {
+      role: 'guest',
+      requireModern:
+        device.replayVersion === 1 ||
+        loadDevices().some(
+          (d) =>
+            d.pairId === device.pairId &&
+            d.contentKey === device.contentKey &&
+            d.replayVersion === 1
+        ),
+      onModern: () => {
+        pinReplayVersion(device);
+        device.replayVersion = 1;
+      },
+    });
     this.direct = new DirectLink({
       role: 'guest',
       factory: directFactory,
@@ -277,7 +301,8 @@ export class PairClient {
         });
       return;
     }
-    this.events.onState('connecting');
+    if (this.direct.transport() !== 'direct') this.events.onState('connecting');
+    this.invalidateIO(this.direct.transport() !== 'direct');
     const base = toWebSocketUrl(this.device.relayUrl);
     const url = `${base}/v1/pair/${encodeURIComponent(this.device.pairId)}?role=guest&token=${encodeURIComponent(this.device.token)}`;
     let ws: WebSocket;
@@ -302,6 +327,7 @@ export class PairClient {
       this.heartbeat?.stop();
       this.heartbeat = null;
       this.ws = null;
+      this.invalidateIO(this.direct.transport() !== 'direct');
       this.roomPrimed = false;
       // 1008 = 中继明确告知凭据已失效（解绑时下发，或带失效凭据重连时下发）
       if (code === 1008 || this.revoked) {
@@ -348,6 +374,7 @@ export class PairClient {
       if (this.closed || this.revoked || this.ws !== ws) return;
       clearTimeout(connectTimer);
       this.attempt = 0;
+      this.drainReplayHello();
       this.primeRoom();
     };
 
@@ -357,11 +384,14 @@ export class PairClient {
         try {
           const control = JSON.parse(event.data) as { type?: string };
           if (control.type === 'host-online') {
+            this.replay.peerReset();
+            this.drainReplayHello();
             this.events.onState('online');
             this.direct.peerOnline(true);
             this.flushDirectRestart();
             this.primeRoom();
           } else if (control.type === 'host-offline') {
+            this.invalidateIO();
             this.events.onState('host-offline');
             this.direct.peerOnline(false);
             this.roomPrimed = false;
@@ -427,6 +457,7 @@ export class PairClient {
   close(): void {
     this.flushCache();
     this.closed = true;
+    this.invalidateIO();
     this.pendingDirectRestart = false;
     this.stopSyncRetry();
     if (this.timer) clearTimeout(this.timer);
@@ -464,22 +495,38 @@ export class PairClient {
   }
 
   private enqueueFrame(frame: Uint8Array, socket?: WebSocket): void {
+    const epoch = this.ioEpoch;
     this.receiveQueue = this.receiveQueue
       .then(async () => {
-        if (this.closed || this.revoked || (socket && socket !== this.ws)) return;
-        await this.handleFrame(frame, socket);
+        if (!this.ioCurrent(epoch, socket)) return;
+        await this.handleFrame(frame, socket, epoch);
       })
       .catch(() => {});
   }
 
-  private async handleFrame(frame: Uint8Array, socket?: WebSocket): Promise<void> {
+  private async handleFrame(
+    frame: Uint8Array,
+    socket?: WebSocket,
+    epoch = this.ioEpoch
+  ): Promise<void> {
     let payload: HostToPhone;
+    let trusted: boolean;
     try {
-      payload = (await openFrame(this.contentKey, frame)) as HostToPhone;
+      const opened = await this.replay.open(this.contentKey, frame, () =>
+        this.ioCurrent(epoch, socket)
+      );
+      if (!this.replayHealthy()) return;
+      if (!opened) return;
+      payload = opened.payload as HostToPhone;
+      trusted = opened.trusted;
     } catch {
       return;
     }
-    if (this.closed || this.revoked || (socket && socket !== this.ws)) return;
+    if (!this.ioCurrent(epoch, socket)) return;
+    if (this.replay.takeHello()) this.send({ type: 'replay-hello' });
+    if (this.replay.isReady()) this.flushPendingWrites();
+    if (isReplayHello(payload)) return;
+    if (!trusted && (this.replay.isReady() || !isReplayBootstrapResponse(payload.type))) return;
     switch (payload.type) {
       case 'catalog': {
         // 幽灵会话判定要在 onCatalog 前：上层可能据 ghost 立即切走
@@ -931,17 +978,134 @@ export class PairClient {
   }
 
   send(command: PhoneToHost): void {
-    if (!this.canSend()) return;
+    this.sendCommand(command, Date.now() + 10_000);
+  }
+
+  private sendCommand(command: PhoneToHost, expiresAt: number): void {
+    if (!this.replayHealthy()) return;
+    if (!this.canSend()) {
+      if (!isReplayBootstrap(command.type))
+        this.events.onCommandRejected?.(command.type, 'offline');
+      return;
+    }
+    if (!this.replay.isReady() && !isReplayBootstrap(command.type)) {
+      this.deferWrite(command, expiresAt);
+      return;
+    }
+    const epoch = this.ioEpoch;
     this.sendQueue = this.sendQueue
       .then(async () => {
-        if (this.closed || this.revoked) return;
-        const frame = await sealFrame(this.contentKey, command);
-        if (this.closed || this.revoked) return;
+        if (!this.ioCurrent(epoch)) {
+          this.rejectUnsent(command);
+          return;
+        }
+        if (!this.replay.isReady() && !isReplayBootstrap(command.type)) {
+          this.deferWrite(command, expiresAt);
+          return;
+        }
+        const frame = await this.replay.seal(this.contentKey, command);
+        if (!this.ioCurrent(epoch)) {
+          this.rejectUnsent(command);
+          return;
+        }
         // 直连优先；背压/刚好断掉时无缝退回中继
         if (this.direct.send(frame)) return;
         this.sendFrameViaRelay(frame);
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (!this.ioCurrent(epoch)) {
+          this.rejectUnsent(command);
+          return;
+        }
+        if (!this.replayHealthy()) return;
+        if (error instanceof Error && error.message === 'replay epoch changed') {
+          // seal aborted before transport send; only the same live I/O generation may retry.
+          this.deferWrite(command, expiresAt);
+          if (this.replay.isReady()) this.flushPendingWrites();
+        } else this.events.onCommandRejected?.(command.type, 'encryption failed');
+      });
+  }
+
+  private ioCurrent(epoch: number, socket?: WebSocket): boolean {
+    return (
+      !this.closed && !this.revoked && epoch === this.ioEpoch && (!socket || socket === this.ws)
+    );
+  }
+
+  private rejectUnsent(command: PhoneToHost): void {
+    if (!isReplayBootstrap(command.type))
+      this.events.onCommandRejected?.(command.type, 'connection changed');
+  }
+
+  private deferWrite(command: PhoneToHost, expiresAt: number): void {
+    if (Date.now() >= expiresAt) {
+      this.events.onCommandRejected?.(command.type, 'handshake timeout');
+      return;
+    }
+    const bytes = JSON.stringify(command).length * 3;
+    if (this.pendingWrites.length >= 64 || this.pendingWriteBytes + bytes > 1_000_000) {
+      this.events.onCommandRejected?.(command.type, 'handshake queue full');
+      return;
+    }
+    this.pendingWrites.push({ command: structuredClone(command), expiresAt });
+    this.pendingWriteBytes += bytes;
+    if (this.handshakeTimer) clearTimeout(this.handshakeTimer);
+    this.handshakeTimer = setTimeout(
+      () => this.clearPendingWrites('handshake timeout'),
+      Math.min(...this.pendingWrites.map((pending) => pending.expiresAt)) - Date.now()
+    );
+  }
+
+  private clearPendingWrites(error?: string): typeof this.pendingWrites {
+    if (this.handshakeTimer) clearTimeout(this.handshakeTimer);
+    this.handshakeTimer = null;
+    const pending = this.pendingWrites;
+    this.pendingWrites = [];
+    this.pendingWriteBytes = 0;
+    if (error)
+      for (const { command } of pending) this.events.onCommandRejected?.(command.type, error);
+    return pending;
+  }
+
+  private flushPendingWrites(): void {
+    for (const { command, expiresAt } of this.clearPendingWrites()) {
+      if (Date.now() >= expiresAt)
+        this.events.onCommandRejected?.(command.type, 'handshake timeout');
+      else this.sendCommand(command, expiresAt);
+    }
+  }
+
+  private invalidateIO(resetReplay = true): void {
+    this.ioEpoch++;
+    if (resetReplay) this.replay.peerReset();
+    this.clearPendingWrites('connection changed');
+    this.sendQueue = Promise.resolve();
+    this.receiveQueue = Promise.resolve();
+  }
+
+  private replayHealthy(): boolean {
+    if (!this.replay.isFailed()) return true;
+    if (!this.closed && this.device.replayVersion === 1) {
+      this.clearPendingWrites('replay state exhausted');
+      this.events.onCommandRejected?.('replay-hello', 'replay state exhausted');
+      this.replay = createFrameReplay(undefined, undefined, { role: 'guest', requireModern: true });
+      this.invalidateIO();
+      this.direct.peerGone();
+      this.events.onState('offline');
+      this.replaceRelay();
+      return false;
+    }
+    if (!this.closed) {
+      this.clearPendingWrites('replay state exhausted');
+      this.events.onCommandRejected?.('replay-hello', 'replay state exhausted');
+      this.close();
+      this.events.onState('offline');
+    }
+    return false;
+  }
+
+  private drainReplayHello(): void {
+    if (this.replayHealthy() && this.replay.takeHello()) this.send({ type: 'replay-hello' });
   }
 
   private sendFrameViaRelay(frame: Uint8Array): void {
@@ -956,13 +1120,16 @@ export class PairClient {
   }
 
   private sendViaRelay(command: PhoneToHost): void {
+    const epoch = this.ioEpoch;
     this.sendQueue = this.sendQueue
       .then(async () => {
-        if (this.closed || this.revoked) return;
-        const frame = await sealFrame(this.contentKey, command);
-        if (!this.closed && !this.revoked) this.sendFrameViaRelay(frame);
+        if (!this.ioCurrent(epoch)) return;
+        const frame = await this.replay.seal(this.contentKey, command);
+        if (this.ioCurrent(epoch)) this.sendFrameViaRelay(frame);
       })
-      .catch(() => {});
+      .catch(() => {
+        this.replayHealthy();
+      });
   }
 
   private setSync(next: SyncTracking): void {
@@ -1069,6 +1236,7 @@ export class PairClient {
 
   private revoke(): void {
     this.revoked = true;
+    this.invalidateIO();
     this.pendingDirectRestart = false;
     this.stopSyncRetry();
     if (this.timer) clearTimeout(this.timer);

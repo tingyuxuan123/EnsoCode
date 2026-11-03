@@ -45,7 +45,17 @@ function defaultLabel(list: readonly StoredDevice[]): string {
 export function upsertDevice(list: readonly StoredDevice[], device: PairedDevice): StoredDevice[] {
   const existing = list.find((d) => d.pairId === device.pairId);
   if (existing) {
-    return list.map((d) => (d.pairId === device.pairId ? { ...device, label: d.label } : d));
+    return list.map((d) =>
+      d.pairId === device.pairId
+        ? {
+            ...device,
+            label: d.label,
+            ...(d.contentKey === device.contentKey && d.replayVersion === 1
+              ? { replayVersion: 1 as const }
+              : {}),
+          }
+        : d
+    );
   }
   return [...list, { ...device, label: defaultLabel(list) }];
 }

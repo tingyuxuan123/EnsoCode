@@ -16,15 +16,21 @@ vi.mock('./stubs/settings-store', () => ({
   setExpandLiveEdits: vi.fn(),
   setTerminalAppearance: vi.fn(),
 }));
-vi.mock('@enso/pair', async (original) => ({
-  ...(await original<typeof import('@enso/pair')>()),
-  sealFrame: async (_key: unknown, payload: unknown) =>
-    new TextEncoder().encode(JSON.stringify(payload)),
-  openFrame: vi.fn(async (_key: unknown, frame: Uint8Array) =>
+vi.mock('@enso/pair', async (original) => {
+  const actual = await original<typeof import('@enso/pair')>();
+  const seal = async (_key: unknown, payload: unknown) =>
+    new TextEncoder().encode(JSON.stringify(payload));
+  const open = vi.fn(async (_key: unknown, frame: Uint8Array) =>
     JSON.parse(new TextDecoder().decode(frame))
-  ),
-  attachHeartbeat: () => ({ stop() {}, probe() {} }),
-}));
+  );
+  return {
+    ...actual,
+    sealFrame: seal,
+    openFrame: open,
+    createFrameReplay: () => actual.createFrameReplay(seal, open),
+    attachHeartbeat: () => ({ stop() {}, probe() {} }),
+  };
+});
 
 class Socket {
   static all: Socket[] = [];
@@ -162,15 +168,60 @@ describe('PairClient 缓存与续传', () => {
     vi.unstubAllGlobals();
   });
 
-  async function start() {
+  async function start(legacyReady = true) {
     client.connect();
     client.subscribe('s');
     await settle();
     const socket = Socket.all[0];
     socket.open();
     await settle();
+    if (legacyReady) {
+      socket.receive({ type: 'replay-hello' });
+      await settle();
+    }
     return socket;
   }
+
+  it('未收到加密应答时写请求先排队，legacy 应答后按序发出而非静默丢失', async () => {
+    const socket = await start(false);
+    client.send({ type: 'prompt', sessionId: 's', text: 'queued' });
+    await settle();
+    expect(socket.sent.some((p) => p.type === 'prompt')).toBe(false);
+    socket.receive({ type: 'host-info', hostname: 'legacy', appVersion: '1' });
+    await settle();
+    expect(socket.sent.filter((p) => p.type === 'prompt')).toEqual([
+      { type: 'prompt', sessionId: 's', text: 'queued' },
+    ]);
+  });
+
+  it('握手等待有界，超时/断线请求显式拒绝，不把旧请求送到下一条连接', async () => {
+    events.onCommandRejected = vi.fn();
+    const socket = await start(false);
+    for (let i = 0; i < 65; i++)
+      client.send({ type: 'prompt', sessionId: 's', text: `queued-${i}` });
+    expect(events.onCommandRejected).toHaveBeenCalledWith('prompt', 'handshake queue full');
+    socket.close(1006);
+    await vi.advanceTimersByTimeAsync(1000);
+    const next = Socket.all[1];
+    next.open();
+    next.receive({ type: 'host-info', hostname: 'legacy', appVersion: '1' });
+    await settle();
+    expect(next.sent.some((p) => p.type === 'prompt')).toBe(false);
+    expect(events.onCommandRejected).toHaveBeenCalledWith('prompt', 'connection changed');
+  });
+
+  it('握手超时清理容量和回调，下一次请求不继承旧 byte 预算', async () => {
+    events.onCommandRejected = vi.fn();
+    await start(false);
+    client.send({ type: 'prompt', sessionId: 's', text: 'x'.repeat(330_000) });
+    client.send({ type: 'abort', sessionId: 's' });
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(events.onCommandRejected).toHaveBeenCalledWith('prompt', 'handshake timeout');
+    expect(events.onCommandRejected).toHaveBeenCalledWith('abort', 'handshake timeout');
+    vi.mocked(events.onCommandRejected).mockClear();
+    client.send({ type: 'prompt', sessionId: 's', text: 'x'.repeat(330_000) });
+    expect(events.onCommandRejected).not.toHaveBeenCalled();
+  });
 
   it('同一配对被其他页面接管后停止抢连，切前台也不重连且缓存保留', async () => {
     const socket = await start();

@@ -78,9 +78,18 @@ async function importContentKey(contentKey: Uint8Array): Promise<CryptoKey> {
 }
 
 /** 加密任意 JSON payload 成一帧密文 */
-export async function sealFrame(contentKey: Uint8Array, payload: unknown): Promise<Uint8Array> {
+export function sealFrame(contentKey: Uint8Array, payload: unknown): Promise<Uint8Array> {
+  return sealFrameWithNonce(contentKey, payload, crypto.getRandomValues(new Uint8Array(NONCE_LEN)));
+}
+
+/** Internal replay-layer primitive; deliberately NOT exported from the package root. */
+export async function sealFrameWithNonce(
+  contentKey: Uint8Array,
+  payload: unknown,
+  nonce: Uint8Array
+): Promise<Uint8Array> {
+  if (nonce.length !== NONCE_LEN) throw new PairCryptoError('nonce must be 12 bytes');
   const key = await importContentKey(contentKey);
-  const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
   const plaintext = encoder.encode(JSON.stringify(payload));
   const ct = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ab(nonce) }, key, ab(plaintext))

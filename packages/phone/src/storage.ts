@@ -45,7 +45,30 @@ export function loadDevices(): StoredDevice[] {
 }
 
 export function saveDevices(devices: StoredDevice[]): void {
+  // App may hold an older copy; never erase a pin for unchanged credentials.
+  const previous = migrateStore(localStorage.getItem(DEVICES_KEY), null);
+  devices = devices.map((device) =>
+    previous.some(
+      (d) =>
+        d.pairId === device.pairId && d.contentKey === device.contentKey && d.replayVersion === 1
+    )
+      ? { ...device, replayVersion: 1 }
+      : device
+  );
   localStorage.setItem(DEVICES_KEY, JSON.stringify(devices));
+}
+
+export function pinReplayVersion(device: PairedDevice): void {
+  const list = loadDevices();
+  if (!list.some((d) => d.pairId === device.pairId && d.contentKey === device.contentKey))
+    throw new Error('pair credentials changed');
+  saveDevices(
+    list.map((d) =>
+      d.pairId === device.pairId && d.contentKey === device.contentKey
+        ? { ...d, replayVersion: 1 }
+        : d
+    )
+  );
 }
 
 export function loadActiveDeviceId(): string | null {

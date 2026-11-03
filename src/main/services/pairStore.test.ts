@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,26 @@ const cred = (pairId: string, over: Record<string, unknown> = {}) => ({
 });
 
 describe('已配对设备改名', () => {
+  it('rename失败不能把未持久化 modern pin 暴露到 cache', async () => {
+    const s = await store();
+    s.saveDevices([cred('p1')]);
+    mkdirSync(path.join(dir, 'phone-pairing.bin.tmp'));
+    expect(s.saveDevices([{ ...cred('p1'), replayVersion: 1 }])).toBe(false);
+    expect(s.loadDevices()[0].replayVersion).toBeUndefined();
+  });
+  it('能力钉只跟随同 key，旧 UI 保存不能抹掉；落盘重载保留', async () => {
+    let s = await store();
+    const stale = [cred('p1')];
+    s.saveDevices([{ ...cred('p1'), replayVersion: 1 }]);
+    s.saveDevices(stale);
+    vi.resetModules();
+    s = await store();
+    expect(s.loadDevices()[0].replayVersion).toBe(1);
+    expect(s.upsertDevice(s.loadDevices(), cred('p1'))[0].replayVersion).toBe(1);
+    expect(
+      s.upsertDevice(s.loadDevices(), cred('p1', { contentKey: 'BBBB' }))[0].replayVersion
+    ).toBeUndefined();
+  });
   it('按 pairId 改 deviceName 并 trim', async () => {
     const { upsertDevice, renameDevice } = await store();
     const list = upsertDevice([], cred('p1'));

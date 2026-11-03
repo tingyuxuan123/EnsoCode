@@ -3,18 +3,21 @@ import {
   attachHeartbeat,
   backoffDelay,
   claimPairing,
+  createFrameReplay,
   DirectLink,
+  type FrameReplay,
   fromBase64Url,
   type Heartbeat,
   type HostToPhone,
   isConnectStuck,
-  openFrame,
+  isReplayBootstrap,
+  isReplayBootstrapResponse,
+  isReplayHello,
   type PairedDevice,
   type PhoneToHost,
   parsePairUri,
   RELAY_CONNECT_TIMEOUT_MS,
   revokePairing,
-  sealFrame,
   shouldReplaceOnNudge,
   toBase64Url,
   toWebSocketUrl,
@@ -71,6 +74,17 @@ interface Connection {
   generation: number;
   probeNonce: number;
   probeSentAt: number | null;
+  replay: FrameReplay;
+  ioEpoch: number;
+  receiveQueue: Promise<void>;
+  sendQueue: Promise<void>;
+  pendingWrites: {
+    command: PhoneToHost;
+    resolve: (result: NodeActionResult) => void;
+    expiresAt: number;
+  }[];
+  pendingWriteBytes: number;
+  handshakeTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const connections = new Map<string, Connection>();
@@ -167,6 +181,7 @@ export function stopPairGuest(): void {
 
 function closeConnection(conn: Connection): void {
   conn.closed = true;
+  invalidateIO(conn);
   if (conn.timer) clearTimeout(conn.timer);
   conn.heartbeat?.stop();
   conn.heartbeat = null;
@@ -279,13 +294,36 @@ function openConnection(node: RemoteNode): void {
     generation: 0,
     probeNonce: 0,
     probeSentAt: null,
+    replay: createFrameReplay(undefined, undefined, {
+      role: 'guest',
+      requireModern: node.replayVersion === 1,
+      onModern: () => {
+        if (conn.node.replayVersion === 1) return;
+        const nodes = loadNodes();
+        if (!nodes.some((n) => n.nodeId === node.nodeId && n.contentKey === node.contentKey))
+          throw new Error('pair credentials changed');
+        if (
+          saveNodes(
+            nodes.map((n) => (n.nodeId === node.nodeId ? { ...n, replayVersion: 1 } : n))
+          ) === false
+        )
+          throw new Error('replay pin could not be persisted');
+        conn.node.replayVersion = 1;
+      },
+    }),
+    ioEpoch: 0,
+    receiveQueue: Promise.resolve(),
+    sendQueue: Promise.resolve(),
+    pendingWrites: [],
+    pendingWriteBytes: 0,
+    handshakeTimer: null,
   };
   conn.direct = new DirectLink({
     role: 'guest',
     // openConnection 在 preloadDirectPeer 之后：原生模块缺失就别对 host-info 白跑协商
     factory: PAIR_DIRECT_ENABLED && isDirectPeerAvailable() ? mainDirectPeerFactory : null,
     sendSignal: (signal) => void sendViaRelay(conn, signal as PhoneToHost),
-    onFrame: (frame) => void handleFrame(conn, frame),
+    onFrame: (frame) => enqueueFrame(conn, frame),
     onTransportChange: () => {
       conn.rttMs = null;
       notifyStatus();
@@ -312,6 +350,7 @@ function openConnection(node: RemoteNode): void {
 
 function connect(conn: Connection): void {
   if (conn.closed) return;
+  invalidateIO(conn, conn.direct.transport() !== 'direct');
   const generation = ++conn.generation;
   const base = toWebSocketUrl(conn.node.relayUrl);
   const url = `${base}/v1/pair/${encodeURIComponent(conn.node.pairId)}?role=guest&token=${encodeURIComponent(conn.node.token)}`;
@@ -344,7 +383,8 @@ function attachGuestSocket(conn: Connection, ws: WebSocket, generation: number):
     conn.heartbeat = null;
     conn.ws = null;
     conn.dropRelay = null;
-    conn.hostOnline = false;
+    invalidateIO(conn, conn.direct.transport() !== 'direct');
+    conn.hostOnline = conn.direct.transport() === 'direct' && conn.replay.isReady();
     // 1008 = 中继明确告知凭据已失效（对方解绑）。网络波动不是 1008，仍需重连。
     if (code === 1008) {
       dropRevoked(conn);
@@ -374,21 +414,26 @@ function attachGuestSocket(conn: Connection, ws: WebSocket, generation: number):
   ws.onopen = () => {
     if (connectTimer) clearTimeout(connectTimer);
     conn.attempt = 0;
+    drainReplayHello(conn);
     notifyStatus();
   };
 
   ws.onmessage = (event) => {
+    if (conn.closed || conn.generation !== generation || conn.ws !== ws) return;
     if (typeof event.data === 'string') {
       // 中继明文控制帧
       try {
         const control = JSON.parse(event.data) as { type?: string };
         if (control.type === 'host-online') {
-          conn.hostOnline = true;
+          conn.replay.peerReset();
+          drainReplayHello(conn);
+          conn.hostOnline = false;
           conn.direct.peerOnline(true);
           notifyStatus();
           // 进房即要目录（host 收 peer-joined 也会推，双保险防时序丢帧）
           void sendFrame(conn, { type: 'snapshot' });
         } else if (control.type === 'host-offline') {
+          invalidateIO(conn);
           conn.hostOnline = false;
           conn.direct.peerOnline(false);
           notifyStatus();
@@ -398,7 +443,7 @@ function attachGuestSocket(conn: Connection, ws: WebSocket, generation: number):
       } catch {}
       return;
     }
-    void handleFrame(conn, new Uint8Array(event.data as ArrayBuffer));
+    enqueueFrame(conn, new Uint8Array(event.data as ArrayBuffer), ws);
   };
 
   ws.onclose = (event) => closed(event.code);
@@ -425,19 +470,58 @@ function scheduleReconnect(conn: Connection): void {
 
 // ── 收：解密 → 过滤 → 推 renderer ────────────────────────────────────
 
-async function handleFrame(conn: Connection, frame: Uint8Array): Promise<void> {
-  // 收到加密帧即证明对方在房间里（控制帧可能因时序丢失）
-  if (!conn.hostOnline) {
-    conn.hostOnline = true;
-    notifyStatus();
-  }
+function currentIO(
+  conn: Connection,
+  generation: number,
+  epoch: number,
+  socket?: WebSocket
+): boolean {
+  return (
+    !conn.closed &&
+    conn.generation === generation &&
+    conn.ioEpoch === epoch &&
+    (!socket || conn.ws === socket)
+  );
+}
+
+function enqueueFrame(conn: Connection, frame: Uint8Array, socket?: WebSocket): void {
+  const generation = conn.generation;
+  const epoch = conn.ioEpoch;
+  const current = () => currentIO(conn, generation, epoch, socket);
+  conn.receiveQueue = conn.receiveQueue
+    .then(async () => {
+      if (current()) await handleFrame(conn, frame, current);
+    })
+    .catch(() => {});
+}
+
+async function handleFrame(
+  conn: Connection,
+  frame: Uint8Array,
+  current: () => boolean
+): Promise<void> {
   let payload: HostToPhone;
+  let trusted: boolean;
   try {
-    payload = (await openFrame(conn.contentKey, frame)) as HostToPhone;
+    const opened = await conn.replay.open(conn.contentKey, frame, current);
+    if (!replayHealthy(conn)) return;
+    if (!opened || !current()) return;
+    payload = opened.payload as HostToPhone;
+    trusted = opened.trusted;
   } catch {
     console.warn('[nodes] frame decrypt failed, dropped');
     return;
   }
+  if (conn.replay.takeHello()) void sendFrame(conn, { type: 'replay-hello' });
+  if (conn.replay.isReady()) {
+    if (!conn.hostOnline) {
+      conn.hostOnline = true;
+      notifyStatus();
+    }
+    flushPendingWrites(conn);
+  }
+  if (isReplayHello(payload)) return;
+  if (!trusted && (conn.replay.isReady() || !isReplayBootstrapResponse(payload.type))) return;
   if (typeof payload !== 'object' || payload === null || typeof payload.type !== 'string') return;
   switch (payload.type) {
     case 'host-info': {
@@ -484,11 +568,142 @@ async function handleFrame(conn: Connection, frame: Uint8Array): Promise<void> {
 
 // ── 发：加密上行 ──────────────────────────────────────────────────────
 
-async function sendFrame(conn: Connection, command: PhoneToHost): Promise<NodeActionResult> {
+function sendFrame(
+  conn: Connection,
+  command: PhoneToHost,
+  expiresAt = Date.now() + 10_000
+): Promise<NodeActionResult> {
+  if (!replayHealthy(conn)) return Promise.resolve({ ok: false, error: 'replay state exhausted' });
+  if (conn.closed) return Promise.resolve({ ok: false, error: 'offline' });
+  const generation = conn.generation;
+  const epoch = conn.ioEpoch;
+  return new Promise((resolve) => {
+    if (!conn.replay.isReady() && !isReplayBootstrap(command.type)) {
+      deferWrite(conn, command, resolve, expiresAt);
+      return;
+    }
+    // The transport queue only waits for encryption, never a handshake promise. A write
+    // deferred by a reset releases this queue so its hello can complete the handshake.
+    conn.sendQueue = conn.sendQueue
+      .then(async () => {
+        if (!currentIO(conn, generation, epoch)) {
+          resolve({ ok: false, error: 'connection changed' });
+          return;
+        }
+        if (!conn.replay.isReady() && !isReplayBootstrap(command.type)) {
+          deferWrite(conn, command, resolve, expiresAt);
+          return;
+        }
+        const result = await sendNow(conn, command, generation, epoch);
+        if (
+          !result.ok &&
+          result.error === 'replay epoch changed' &&
+          currentIO(conn, generation, epoch)
+        ) {
+          deferWrite(conn, command, resolve, expiresAt);
+          if (conn.replay.isReady()) flushPendingWrites(conn);
+        } else resolve(result);
+      })
+      .catch((error) => resolve({ ok: false, error: String(error) }));
+  });
+}
+
+function deferWrite(
+  conn: Connection,
+  command: PhoneToHost,
+  resolve: (result: NodeActionResult) => void,
+  expiresAt: number
+): void {
+  if (Date.now() >= expiresAt) {
+    resolve({ ok: false, error: 'handshake timeout' });
+    return;
+  }
+  const bytes = JSON.stringify(command).length * 3;
+  if (conn.pendingWrites.length >= 64 || conn.pendingWriteBytes + bytes > 1_000_000) {
+    resolve({ ok: false, error: 'handshake queue full' });
+    return;
+  }
+  conn.pendingWriteBytes += bytes;
+  conn.pendingWrites.push({ command: structuredClone(command), resolve, expiresAt });
+  if (conn.handshakeTimer) clearTimeout(conn.handshakeTimer);
+  conn.handshakeTimer = setTimeout(
+    () => clearPendingWrites(conn, 'handshake timeout'),
+    Math.min(...conn.pendingWrites.map((pending) => pending.expiresAt)) - Date.now()
+  );
+}
+
+function flushPendingWrites(conn: Connection): void {
+  for (const pending of clearPendingWrites(conn)) {
+    if (Date.now() >= pending.expiresAt) pending.resolve({ ok: false, error: 'handshake timeout' });
+    else void sendFrame(conn, pending.command, pending.expiresAt).then(pending.resolve);
+  }
+}
+
+function clearPendingWrites(conn: Connection, error?: string): Connection['pendingWrites'] {
+  if (conn.handshakeTimer) clearTimeout(conn.handshakeTimer);
+  conn.handshakeTimer = null;
+  const pending = conn.pendingWrites;
+  conn.pendingWrites = [];
+  conn.pendingWriteBytes = 0;
+  if (error) for (const item of pending) item.resolve({ ok: false, error });
+  return pending;
+}
+
+function invalidateIO(conn: Connection, resetReplay = true): void {
+  conn.ioEpoch++;
+  if (resetReplay) conn.replay.peerReset();
+  clearPendingWrites(conn, 'connection changed');
+  conn.receiveQueue = Promise.resolve();
+  conn.sendQueue = Promise.resolve();
+}
+
+function replayHealthy(conn: Connection): boolean {
+  if (!conn.replay.isFailed()) return true;
+  if (!conn.closed && conn.node.replayVersion === 1) {
+    console.warn(
+      '[nodes] replay capacity exhausted; restarting pinned peer handshake',
+      conn.node.nodeId
+    );
+    clearPendingWrites(conn, 'replay state exhausted');
+    conn.replay = createFrameReplay(undefined, undefined, { role: 'guest', requireModern: true });
+    invalidateIO(conn);
+    conn.direct.peerGone();
+    conn.hostOnline = false;
+    if (conn.dropRelay) conn.dropRelay();
+    else scheduleReconnect(conn);
+    notifyStatus();
+    return false;
+  }
+  if (!conn.closed) {
+    console.error(
+      '[nodes] replay state exhausted or capability pin failed; disconnecting',
+      conn.node.nodeId
+    );
+    clearPendingWrites(conn, 'replay state exhausted');
+    closeConnection(conn);
+    conn.hostOnline = false;
+    notifyStatus();
+  }
+  return false;
+}
+
+function drainReplayHello(conn: Connection): void {
+  if (replayHealthy(conn) && conn.replay.takeHello())
+    void sendFrame(conn, { type: 'replay-hello' });
+}
+
+async function sendNow(
+  conn: Connection,
+  command: PhoneToHost,
+  generation: number,
+  epoch: number
+): Promise<NodeActionResult> {
+  if (!currentIO(conn, generation, epoch)) return { ok: false, error: 'connection changed' };
   const direct = conn.direct.transport() === 'direct';
   if (!direct && conn.ws?.readyState !== 1) return { ok: false, error: 'offline' };
   try {
-    const frame = await sealFrame(conn.contentKey, command);
+    const frame = await conn.replay.seal(conn.contentKey, command);
+    if (!currentIO(conn, generation, epoch)) return { ok: false, error: 'connection changed' };
     if (frame.byteLength > 1_000_000) {
       return { ok: false, error: 'frame over relay limit' };
     }
@@ -496,6 +711,7 @@ async function sendFrame(conn: Connection, command: PhoneToHost): Promise<NodeAc
     if (conn.direct.send(frame)) return { ok: true };
     return sendFrameViaRelay(conn, frame) ? { ok: true } : { ok: false, error: 'offline' };
   } catch (error) {
+    replayHealthy(conn);
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -508,9 +724,13 @@ function sendFrameViaRelay(conn: Connection, frame: Uint8Array): boolean {
 
 /** 直连信令只能走中继 */
 async function sendViaRelay(conn: Connection, command: PhoneToHost): Promise<void> {
+  const generation = conn.generation;
+  const epoch = conn.ioEpoch;
   try {
-    sendFrameViaRelay(conn, await sealFrame(conn.contentKey, command));
+    const frame = await conn.replay.seal(conn.contentKey, command);
+    if (currentIO(conn, generation, epoch)) sendFrameViaRelay(conn, frame);
   } catch (error) {
+    replayHealthy(conn);
     console.warn('[nodes] signal send failed', error);
   }
 }

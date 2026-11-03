@@ -34,6 +34,11 @@ describe('migrateStore', () => {
 });
 
 describe('upsertDevice', () => {
+  it('同 key 重配对保留 modern 钉，换 key 不继承', () => {
+    const list = upsertDevice([], paired({ replayVersion: 1 }));
+    expect(upsertDevice(list, paired())[0].replayVersion).toBe(1);
+    expect(upsertDevice(list, paired({ contentKey: 'new' }))[0].replayVersion).toBeUndefined();
+  });
   it('新增取最小可用默认名：电脑 1、电脑 2…', () => {
     const one = upsertDevice([], paired());
     expect(one[0].label).toBe('电脑 1');

@@ -7,6 +7,7 @@ import {
   openFrame,
   PairCryptoError,
   sealFrame,
+  sealFrameWithNonce,
 } from './crypto';
 
 describe('AES-256-GCM 业务帧', () => {
@@ -28,6 +29,17 @@ describe('AES-256-GCM 业务帧', () => {
     const a = await sealFrame(key, { x: 1 });
     const b = await sealFrame(key, { x: 1 });
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(false);
+  });
+
+  it('显式 nonce 原样写入帧，错误长度拒绝而非悄悄换随机值', async () => {
+    const key = generateContentKey();
+    const nonce = new Uint8Array(12).fill(9);
+    const frame = await sealFrameWithNonce(key, { type: 'snapshot' }, nonce);
+    expect(frame.subarray(1, 13)).toEqual(nonce);
+    expect(await openFrame(key, frame)).toEqual({ type: 'snapshot' });
+    await expect(sealFrameWithNonce(key, {}, new Uint8Array(11))).rejects.toBeInstanceOf(
+      PairCryptoError
+    );
   });
 
   it('错误密钥解密失败', async () => {

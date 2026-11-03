@@ -101,6 +101,7 @@ export type PairSessionSync = {
 
 // ── 上行：手机 → Electron（加密 payload，白名单）─────────────────────────
 export type PhoneToHost =
+  | { type: 'replay-hello' }
   | { type: 'preview-list'; requestId: string; target: PairFileTarget }
   | {
       type: 'preview-open';
@@ -583,6 +584,7 @@ export interface TerminalPalette {
 
 /** 下行信封：pair 自有的目录类帧 + 透传的现有 RendererAgentEvent（此处不重定义，按 unknown 透传） */
 export type HostToPhone =
+  | { type: 'replay-hello' }
   | { type: 'preview-list-result'; requestId: string; entries: PairPreviewEntry[]; error?: string }
   | {
       type: 'preview-result';

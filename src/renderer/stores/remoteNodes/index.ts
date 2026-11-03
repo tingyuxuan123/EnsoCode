@@ -1,6 +1,7 @@
-import type { PhoneToHost } from '@enso/pair';
+import { isReplayBootstrap, type PhoneToHost } from '@enso/pair';
 import type { NodeMessage, NodesStatus, RemoteNodeStatus } from '@shared/types/nodes';
 import { create } from 'zustand';
+import { addToast } from '@/components/ui/toast';
 import {
   applyNodeMessage,
   type Cursors,
@@ -53,25 +54,29 @@ interface RemoteNodesState {
   bind: () => () => void;
   switchNode: (nodeId: ActiveNode) => void;
   selectSession: (nodeId: string, sessionId: string | null) => void;
-  send: (nodeId: string, command: PhoneToHost) => void;
+  send: (nodeId: string, command: PhoneToHost) => Promise<boolean>;
   requestHistory: (nodeId: string, sessionId: string) => void;
   /** 新建远程会话：本地生成 sessionId、发 spawn、立即选中 */
   spawn: (
     nodeId: string,
     request: Omit<Extract<PhoneToHost, { type: 'spawn' }>, 'type' | 'sessionId'>
-  ) => string;
+  ) => string | null;
   /** 重新配对/解绑等外部动作后刷新列表 */
   refresh: () => Promise<void>;
 }
 
 export const useRemoteNodesStore = create<RemoteNodesState>()((set, get) => {
   const viewOf = (nodeId: string): NodeView => get().byNode[nodeId] ?? emptyNodeView();
+  const sendError = (error: string): false => {
+    addToast({ type: 'error', title: 'Remote command not sent', description: error });
+    return false;
+  };
 
   const runEffects = (nodeId: string, effects: NodeEffect[]): void => {
     for (const effect of effects) {
       switch (effect.kind) {
         case 'send':
-          void window.electronAPI.nodes.send(nodeId, effect.command);
+          void get().send(nodeId, effect.command);
           break;
         case 'cursor':
           saveCursor(nodeId, effect.sessionId, effect.index);
@@ -169,8 +174,18 @@ export const useRemoteNodesStore = create<RemoteNodesState>()((set, get) => {
       commit(nodeId, r.view, r.effects);
     },
 
-    send: (nodeId, command) => {
-      void window.electronAPI.nodes.send(nodeId, command);
+    send: async (nodeId, command) => {
+      if (
+        !isReplayBootstrap(command.type) &&
+        !get().nodes.some((n) => n.nodeId === nodeId && n.hostOnline)
+      )
+        return sendError('offline');
+      try {
+        const result = await window.electronAPI.nodes.send(nodeId, command);
+        return result.ok || sendError(result.error ?? 'offline');
+      } catch (error) {
+        return sendError(error instanceof Error ? error.message : String(error));
+      }
     },
 
     requestHistory: (nodeId, sessionId) => {
@@ -180,8 +195,22 @@ export const useRemoteNodesStore = create<RemoteNodesState>()((set, get) => {
     },
 
     spawn: (nodeId, request) => {
+      if (!get().nodes.some((n) => n.nodeId === nodeId && n.hostOnline)) {
+        sendError('offline');
+        return null;
+      }
       const sessionId = crypto.randomUUID();
-      void window.electronAPI.nodes.send(nodeId, { type: 'spawn', sessionId, ...request });
+      void get()
+        .send(nodeId, { type: 'spawn', sessionId, ...request })
+        .then((sent) => {
+          if (sent) return;
+          set({ freshIds: new Set([...get().freshIds].filter((id) => id !== sessionId)) });
+          if (
+            viewOf(nodeId).activeSessionId === sessionId &&
+            !viewOf(nodeId).catalog.some((c) => c.id === sessionId)
+          )
+            get().selectSession(nodeId, null);
+        });
       set({ freshIds: new Set([...get().freshIds, sessionId]) });
       get().selectSession(nodeId, sessionId);
       return sessionId;

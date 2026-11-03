@@ -20,19 +20,29 @@ const hostMocks = vi.hoisted(() => ({
 
 vi.mock('@enso/pair', async (importOriginal) => {
   const original = await importOriginal<typeof import('@enso/pair')>();
+  const { sealFrameWithNonce } = await import('../../../packages/pair/src/crypto');
   return {
     ...original,
     attachHeartbeat: () => ({ stop: vi.fn(), probe: vi.fn() }),
-    sealFrame: async (key: Uint8Array, payload: unknown) => {
-      if (
-        payload &&
-        typeof payload === 'object' &&
-        'type' in payload &&
-        payload.type === 'preview-result'
-      )
-        await hostMocks.sealPreview?.();
-      return original.sealFrame(key, payload);
-    },
+    createFrameReplay: (...[seal, open, options]: Parameters<typeof original.createFrameReplay>) =>
+      original.createFrameReplay(
+        async (key, payload, nonce) => {
+          if (
+            payload &&
+            typeof payload === 'object' &&
+            'type' in payload &&
+            payload.type === 'preview-result'
+          )
+            await hostMocks.sealPreview?.();
+          return seal
+            ? seal(key, payload, nonce)
+            : nonce
+              ? sealFrameWithNonce(key, payload, nonce)
+              : original.sealFrame(key, payload);
+        },
+        open,
+        options
+      ),
   };
 });
 vi.mock('electron', () => ({

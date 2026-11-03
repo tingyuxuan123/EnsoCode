@@ -32,6 +32,7 @@ import {
 import { BotThreadPort } from './botThreadPort';
 import { ChatScreen } from './ChatScreen';
 import { type ConnState, PairClient, type SessionView } from './client';
+import { phoneCommandRejection } from './commandRejection';
 import { formatOnlineConnectionLabel } from './connectionLabel';
 import { pickActive, removeDevice, renameDevice, upsertDevice } from './deviceList';
 import { resolveDrawerSegment, saveDrawerSegment } from './drawerSegment';
@@ -417,8 +418,11 @@ export function App() {
         setDeviceReadOnly(readOnly);
         if (!readOnly) setReadOnlyRejected(false);
       },
-      onCommandRejected: (_command, error) => {
+      onCommandRejected: (command, error) => {
         if (error === READ_ONLY_ERROR) rejectedReadOnly();
+        const rejected = phoneCommandRejection(command, error);
+        setBotNotice(rejected.notice);
+        if (rejected.clearQueueEchoes) setQueueEchoes([]);
       },
       onCatalog: (entries, order) => {
         setCatalog(entries);
@@ -1324,6 +1328,7 @@ export function App() {
             voice={voice}
             queued={withoutQueuedIds(entry?.queued, queueEchoes, activeId ?? '')}
             echoes={queueEchoes}
+            notice={botNotice}
             goal={entry?.goal}
             context={entry?.context}
             usageTotals={entry?.usageTotals}

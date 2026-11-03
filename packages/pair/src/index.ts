@@ -118,6 +118,15 @@ export {
   toWebSocketUrl,
 } from './relay';
 export {
+  createFrameReplay,
+  type FrameReplay,
+  type FrameReplayOptions,
+  isReplayBootstrap,
+  isReplayBootstrapResponse,
+  isReplayHello,
+  type OpenedReplayFrame,
+} from './replay';
+export {
   createCachedHostLookup,
   isConnectStuck,
   isForegroundSocketStale,

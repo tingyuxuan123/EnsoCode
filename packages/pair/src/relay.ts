@@ -30,6 +30,8 @@ export interface PairedDevice {
   pairedAt: number;
   /** host 侧授权：read 只能查看，operate 可发送/审批/停止；缺省（旧记录）为 operate */
   scope?: PairScope;
+  /** Direction-bound replay protocol observed under this contentKey; sticky across reload. */
+  replayVersion?: 1;
 }
 
 export type PairScope = 'read' | 'operate';

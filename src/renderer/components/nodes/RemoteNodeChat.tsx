@@ -213,7 +213,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
                 commands={[]}
                 running={running}
                 busy={running}
-                locked={(view?.approvals ?? []).length > 0}
+                locked={!node.hostOnline || (view?.approvals ?? []).length > 0}
                 focusKey={`${node.nodeId}:${sessionId}`}
                 toolbar={
                   configurable && entry ? (
@@ -235,7 +235,8 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
                 }
                 onSend={(payload) => {
                   // 远程节点不支持 @ 派发与 slash：只取文本与图片
-                  if (!payload.text.trim() && payload.images.length === 0) return false;
+                  if (!node.hostOnline || (!payload.text.trim() && payload.images.length === 0))
+                    return false;
                   props.onSend(payload.text, payload.images);
                   timelineRef.current?.scrollToBottom();
                   return true;

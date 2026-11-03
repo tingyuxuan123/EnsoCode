@@ -60,6 +60,8 @@ interface Props {
   clockOffset?: number;
   connState: ConnState;
   stateLabel: string;
+  /** Local send failure, also shown in Code mode (not only Bot conversations). */
+  notice?: string | null;
   /** 订阅会话同步中：标题旁状态灯用 amber pulse */
   syncing?: boolean;
   canCreate: boolean;
@@ -467,9 +469,9 @@ export function ChatScreen(props: Props) {
                 todos={pinnedTodos}
               />
               {bot?.outbox}
-              {bot?.notice && (
+              {(props.notice || bot?.notice) && (
                 <p className="mb-1 rounded-md bg-destructive/10 px-2 py-1 text-destructive text-xs">
-                  {bot.notice}
+                  {props.notice || bot?.notice}
                 </p>
               )}
               {props.deviceReadOnly ? (

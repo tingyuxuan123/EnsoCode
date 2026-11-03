@@ -4,16 +4,19 @@ import {
   backoffDelay,
   buildPairLink,
   type CatalogEntry,
+  createFrameReplay,
   DEFAULT_RELAY_URL,
   DirectLink,
   type DirectSignal,
+  type FrameReplay,
   fromBase64Url,
   type Heartbeat,
   type HostAppearance,
   type HostPairSession,
   type HostToPhone,
   isConnectStuck,
-  openFrame,
+  isReplayBootstrap,
+  isReplayHello,
   type PairedDevice,
   type PairFileTarget,
   type PairScope,
@@ -25,7 +28,6 @@ import {
   pollHostPairing,
   RELAY_CONNECT_TIMEOUT_MS,
   revokePairing,
-  sealFrame,
   shouldReplaceOnNudge,
   startHostPairing,
   type TerminalPalette,
@@ -183,6 +185,7 @@ interface Connection {
   receiveQueue: Promise<void>;
   sendQueue: Promise<void>;
   voiceUploads: VoiceUploads;
+  replay: FrameReplay;
 }
 
 const connections = new Map<string, Connection>();
@@ -683,6 +686,24 @@ function openConnection(device: PairedDevice): void {
     syncRevision: 0,
     receiveQueue: Promise.resolve(),
     sendQueue: Promise.resolve(),
+    replay: createFrameReplay(undefined, undefined, {
+      role: 'host',
+      announce: true,
+      requireModern: device.replayVersion === 1,
+      onModern: () => {
+        if (conn.device.replayVersion === 1) return;
+        const devices = loadDevices();
+        if (!devices.some((d) => d.pairId === device.pairId && d.contentKey === device.contentKey))
+          throw new Error('pair credentials changed');
+        if (
+          saveDevices(
+            devices.map((d) => (d.pairId === device.pairId ? { ...d, replayVersion: 1 } : d))
+          ) === false
+        )
+          throw new Error('replay pin could not be persisted');
+        conn.device.replayVersion = 1;
+      },
+    }),
     voiceUploads: new VoiceUploads({
       open: openSpeechSession,
       // 每处 ioEpoch++ 都伴随 voiceUploads.clear()，旧连接的会话已取消，中间结果不会再出来
@@ -727,6 +748,8 @@ function connect(conn: Connection): void {
   if (conn.closed) return;
   releasePreview(conn);
   const generation = ++conn.generation;
+  if (conn.direct.transport() !== 'direct') conn.replay.peerReset();
+  if (!replayHealthy(conn)) return;
   const base = toWebSocketUrl(conn.device.relayUrl);
   const url = `${base}/v1/pair/${encodeURIComponent(conn.device.pairId)}?role=host&token=${encodeURIComponent(conn.device.token)}`;
   void openPairRelayWebSocket(url)
@@ -811,6 +834,7 @@ function attachHostSocket(conn: Connection, ws: WebSocket, generation: number): 
   ws.onopen = () => {
     if (connectTimer) clearTimeout(connectTimer);
     conn.attempt = 0;
+    if (conn.replay.takeHello()) void send(conn, { type: 'replay-hello' });
     notifyStatus();
   };
 
@@ -821,6 +845,8 @@ function attachHostSocket(conn: Connection, ws: WebSocket, generation: number): 
       try {
         const control = JSON.parse(event.data) as { type?: string };
         if (control.type === 'peer-joined') {
+          conn.replay.peerReset();
+          if (!replayHealthy(conn)) return;
           conn.phoneOnline = true;
           conn.phoneVisible = true;
           conn.direct.peerOnline(true);
@@ -828,6 +854,7 @@ function attachHostSocket(conn: Connection, ws: WebSocket, generation: number): 
           if (conn.direct.transport() !== 'direct') {
             clearConnectionSubscription(conn);
           }
+          if (conn.replay.takeHello()) void send(conn, { type: 'replay-hello' });
           // 进房重推 catalog；providers 等低频通道按指纹跳过
           resyncGuestMeta(conn);
           notifyStatus();
@@ -900,6 +927,47 @@ function scheduleReconnect(conn: Connection): void {
 
 function connectionCurrent(conn: Connection, generation: number, ioEpoch: number): boolean {
   return !conn.closed && conn.generation === generation && conn.ioEpoch === ioEpoch;
+}
+
+function replayHealthy(conn: Connection): boolean {
+  if (!conn.replay.isFailed()) return true;
+  if (!conn.closed && conn.device.replayVersion === 1) {
+    console.warn(
+      '[pair] replay capacity exhausted; restarting pinned peer handshake',
+      conn.device.pairId
+    );
+    clearConnectionSubscription(conn);
+    conn.replay = createFrameReplay(undefined, undefined, {
+      role: 'host',
+      announce: true,
+      requireModern: true,
+    });
+    conn.direct.peerGone();
+    conn.phoneOnline = false;
+    if (conn.dropRelay) conn.dropRelay();
+    else scheduleReconnect(conn);
+    notifyStatus();
+    return false;
+  }
+  if (!conn.closed) {
+    console.error(
+      '[pair] replay state exhausted or capability pin failed; disconnecting',
+      conn.device.pairId
+    );
+    conn.closed = true;
+    conn.phoneOnline = false;
+    if (conn.timer) clearTimeout(conn.timer);
+    if (conn.providersRetry) clearTimeout(conn.providersRetry);
+    clearConnectionSubscription(conn);
+    conn.heartbeat?.stop();
+    conn.direct.close();
+    try {
+      conn.ws?.close();
+    } catch {}
+    conn.ws = null;
+    notifyStatus();
+  }
+  return false;
 }
 
 function previewTargetAccessible(conn: Connection, target: PairFileTarget): boolean {
@@ -1056,13 +1124,34 @@ async function handleFrame(
   ioEpoch: number
 ): Promise<void> {
   let payload: unknown;
+  let trusted: boolean;
   try {
-    payload = await openFrame(conn.contentKey, frame);
+    const opened = await conn.replay.open(conn.contentKey, frame, () =>
+      connectionCurrent(conn, generation, ioEpoch)
+    );
+    if (!replayHealthy(conn)) return;
+    if (!opened) return;
+    payload = opened.payload;
+    trusted = opened.trusted;
   } catch {
     console.warn('[pair] frame decrypt failed, dropped');
     return;
   }
   if (!connectionCurrent(conn, generation, ioEpoch)) return;
+  if (conn.replay.takeHello()) void send(conn, { type: 'replay-hello' });
+  if (isReplayHello(payload)) return;
+  // Modern bootstrap is a finite allowlist, independent of operate/read scope. Future
+  // writes (including file-save/remote invocation) cannot accidentally become bootstrap.
+  if (
+    !trusted &&
+    (conn.replay.isReady() ||
+      typeof payload !== 'object' ||
+      payload === null ||
+      !('type' in payload) ||
+      typeof payload.type !== 'string' ||
+      !isReplayBootstrap(payload.type))
+  )
+    return;
   // 解密成功才证明当前连接的手机仍在房间里，旧队列不能复活已关闭连接。
   if (!conn.phoneOnline) {
     conn.phoneOnline = true;
@@ -1183,6 +1272,9 @@ async function handleFrame(
       break;
     }
     case 'snapshot':
+      // Metadata fingerprints may suppress every channel during cold startup/reconnect.
+      // Still answer the bootstrap so a new guest can finish its fresh challenge exchange.
+      void send(conn, { type: 'replay-hello' });
       // 只要目录；会话正文走 subscribe。peer-joined 已经 forget 过 catalog，
       // 这里再 forget 会把刚发出的 14kB 瘦目录再打一遍。
       resyncGuestMeta(conn, false);
@@ -1370,7 +1462,7 @@ async function sendNow(
     if (!relayOnly && message.type === 'providers') sentProviderFp.delete(conn.device.pairId);
   };
   try {
-    const frame = await sealFrame(conn.contentKey, message);
+    const frame = await conn.replay.seal(conn.contentKey, message);
     if (!connectionCurrent(conn, generation, ioEpoch) || (guard && !guard())) {
       releaseProviderFp();
       return false;
@@ -1388,6 +1480,7 @@ async function sendNow(
     return ok;
   } catch (error) {
     releaseProviderFp();
+    replayHealthy(conn);
     console.warn('[pair] send failed', error);
     return false;
   }

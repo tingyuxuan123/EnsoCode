@@ -51,7 +51,16 @@ export function upsertNode(
   const existing = list.find((n) => n.pairId === device.pairId);
   if (existing) {
     return list.map((n) =>
-      n.pairId === device.pairId ? { ...device, nodeId: device.pairId, label: n.label } : n
+      n.pairId === device.pairId
+        ? {
+            ...device,
+            nodeId: device.pairId,
+            label: n.label,
+            ...(n.contentKey === device.contentKey && n.replayVersion === 1
+              ? { replayVersion: 1 as const }
+              : {}),
+          }
+        : n
     );
   }
   const trimmed = label?.trim();
@@ -113,8 +122,14 @@ export function loadNodes(): RemoteNode[] {
 }
 
 /** 原子写：临时文件 + rename，避免崩溃损坏 */
-export function saveNodes(nodes: RemoteNode[]): void {
-  cache = nodes;
+export function saveNodes(nodes: RemoteNode[]): boolean {
+  nodes = nodes.map((node) =>
+    loadNodes().some(
+      (n) => n.pairId === node.pairId && n.contentKey === node.contentKey && n.replayVersion === 1
+    )
+      ? { ...node, replayVersion: 1 }
+      : node
+  );
   try {
     const file = storePath();
     const json = JSON.stringify(nodes);
@@ -124,7 +139,10 @@ export function saveNodes(nodes: RemoteNode[]): void {
     const tmp = `${file}.tmp`;
     writeFileSync(tmp, data);
     renameSync(tmp, file);
+    cache = nodes;
+    return true;
   } catch (error) {
     console.warn('[nodes] save failed', error);
+    return false;
   }
 }

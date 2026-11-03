@@ -33,7 +33,14 @@ export function upsertDevice(list: readonly PairedDevice[], device: PairedDevice
   if (existing) {
     return list.map((d) =>
       d.pairId === device.pairId
-        ? { ...device, deviceName: d.deviceName, ...(d.scope ? { scope: d.scope } : {}) }
+        ? {
+            ...device,
+            deviceName: d.deviceName,
+            ...(d.scope ? { scope: d.scope } : {}),
+            ...(d.contentKey === device.contentKey && d.replayVersion === 1
+              ? { replayVersion: 1 as const }
+              : {}),
+          }
         : d
     );
   }
@@ -71,8 +78,15 @@ export function loadDevices(): PairedDevice[] {
 }
 
 /** 原子写：临时文件 + rename，避免崩溃损坏 */
-export function saveDevices(devices: PairedDevice[]): void {
-  cache = devices;
+export function saveDevices(devices: PairedDevice[]): boolean {
+  devices = devices.map((device) =>
+    loadDevices().some(
+      (d) =>
+        d.pairId === device.pairId && d.contentKey === device.contentKey && d.replayVersion === 1
+    )
+      ? { ...device, replayVersion: 1 }
+      : device
+  );
   try {
     const file = storePath();
     const json = JSON.stringify(devices);
@@ -82,8 +96,11 @@ export function saveDevices(devices: PairedDevice[]): void {
     const tmp = `${file}.tmp`;
     writeFileSync(tmp, data);
     renameSync(tmp, file);
+    cache = devices;
+    return true;
   } catch (error) {
     console.warn('[pair] save devices failed', error);
+    return false;
   }
 }
 

@@ -1,7 +1,13 @@
 import { openFrame, sealFrame, toBase64Url } from '@enso/pair';
 import type { RendererAgentEvent } from '@shared/types/agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sealFrameWithNonce } from '../../../packages/pair/src/crypto';
 import { PairReplayLog } from './pairReplay';
+
+function stripReplay(payload: unknown): Record<string, unknown> {
+  const { replay: _, ...rest } = payload as Record<string, unknown>;
+  return rest;
+}
 
 interface TestSocket {
   readyState: number;
@@ -82,6 +88,7 @@ vi.mock('./pushNotifier', async (importOriginal) => ({
 import {
   forwardAgentEvent,
   type PairBotPort,
+  setPairAgentBridge,
   setPairBotPort,
   setPairResumeListener,
   startPairHost,
@@ -327,12 +334,11 @@ describe('pairHost session-sync 接线', () => {
 
   async function sentPayloads(): Promise<Record<string, unknown>[]> {
     const calls = hostMocks.socket?.send.mock.calls ?? [];
-    return Promise.all(
-      calls.map(
-        async ([data]) =>
-          (await openFrame(contentKey, new Uint8Array(data))) as Record<string, unknown>
+    return (
+      await Promise.all(
+        calls.map(async ([data]) => stripReplay(await openFrame(contentKey, new Uint8Array(data))))
       )
-    );
+    ).filter((payload) => payload.type !== 'replay-hello');
   }
 
   const snapshotEvent = (): RendererAgentEvent =>
@@ -347,6 +353,58 @@ describe('pairHost session-sync 接线', () => {
         },
       ],
     }) as RendererAgentEvent;
+
+  it('现代握手后明文 peer-joined 不能让同一 prompt 再执行或降级 legacy', async () => {
+    const prompt = vi.fn();
+    setPairAgentBridge({
+      prompt,
+      steer: vi.fn(),
+      abort: vi.fn(),
+      respondApproval: vi.fn(),
+      respondAsk: vi.fn(),
+      spawn: vi.fn(),
+    });
+    await receive({ type: 'snapshot' });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const hostHello = (
+      await Promise.all(
+        (hostMocks.socket?.send.mock.calls ?? []).map(async ([data]) =>
+          openFrame(contentKey, new Uint8Array(data))
+        )
+      )
+    )
+      .filter((p) => (p as { type?: string }).type === 'replay-hello')
+      .at(-1) as { replay: { c: string } } | undefined;
+    const prefix = new Uint8Array(8).fill(21);
+    const nonce = new Uint8Array(12);
+    nonce.set(prefix);
+    nonce[11] = 1;
+    const frame = await sealFrameWithNonce(
+      contentKey,
+      {
+        type: 'prompt',
+        sessionId: 's1',
+        text: 'once',
+        replay: {
+          r: 'g',
+          p: toBase64Url(prefix),
+          c: toBase64Url(new Uint8Array(8).fill(22)),
+          e: hostHello?.replay.c ?? toBase64Url(new Uint8Array(8).fill(23)),
+        },
+      },
+      nonce
+    );
+    const deliver = () =>
+      hostMocks.socket?.onmessage?.({ data: frame.slice().buffer as ArrayBuffer });
+    deliver();
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
+    hostMocks.socket?.onmessage?.({ data: JSON.stringify({ type: 'peer-joined' }) });
+    deliver();
+    await receive({ type: 'prompt', sessionId: 's1', text: 'legacy-replay' });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(hostHello).toBeDefined();
+  });
 
   it('离线手机代审不推送，同 ID 升级人工仅推一次，结束后的旧事件不推送', () => {
     hostMocks.pushSubscribed = true;
@@ -382,7 +440,7 @@ describe('pairHost session-sync 接线', () => {
     expect(hostMocks.resume).toHaveBeenCalledTimes(1);
 
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     const initial = (await sentPayloads())[0];
     expect(initial).toMatchObject({
       type: 'session-sync',
@@ -406,7 +464,7 @@ describe('pairHost session-sync 接线', () => {
       sessionId: 's1',
       sync: { requestId: 'request-2', cursor: initialCursor },
     });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     const replay = (await sentPayloads())[0];
     expect(replay).toMatchObject({
       type: 'session-sync',
@@ -424,7 +482,7 @@ describe('pairHost session-sync 接线', () => {
       sessionId: 's1',
       sync: { requestId: 'request-3', cursor: replay.cursor },
     });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({
       type: 'session-sync',
       mode: 'replay',
@@ -445,7 +503,7 @@ describe('pairHost session-sync 接线', () => {
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
     expect(hostMocks.resume).toHaveBeenCalledTimes(2);
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({
       type: 'session-sync',
       mode: 'snapshot',
@@ -467,7 +525,7 @@ describe('pairHost session-sync 接线', () => {
       seq: 2,
       status: 'running',
     });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(2));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(2));
     const payloads = await sentPayloads();
     expect(payloads.map((payload) => payload.type)).toEqual(['session-sync', 'agent-event']);
     expect(payloads[0]?.requestId).toBe('latest');
@@ -481,14 +539,14 @@ describe('pairHost session-sync 接线', () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'initial' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     const cursor = (await sentPayloads())[0]?.cursor;
     hostMocks.socket?.send.mockClear();
 
     const changed = snapshotEvent();
     if (changed.type === 'snapshot') changed.sessions[0].status = 'failed';
     forwardAgentEvent(changed);
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({
       type: 'agent-event',
       event: { type: 'session-invalidated', sessionId: 's1' },
@@ -500,7 +558,7 @@ describe('pairHost session-sync 接线', () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'refresh', cursor } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({
       type: 'session-sync',
       mode: 'snapshot',
@@ -512,18 +570,18 @@ describe('pairHost session-sync 接线', () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'initial' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     hostMocks.socket?.send.mockClear();
     forwardAgentEvent(snapshotEvent());
     await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(hostMocks.socket?.send).not.toHaveBeenCalled();
+    expect(await sentPayloads()).toHaveLength(0);
   });
 
   it('worker-exited 会让 host 拒绝旧 cursor 并重新请求 snapshot', async () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'before-exit' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     const cursor = (await sentPayloads())[0]?.cursor;
 
     hostMocks.socket?.send.mockClear();
@@ -536,14 +594,14 @@ describe('pairHost session-sync 接线', () => {
       sync: { requestId: 'after-exit', cursor },
     });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
-    expect(hostMocks.socket?.send).not.toHaveBeenCalled();
+    expect(await sentPayloads()).toHaveLength(0);
   });
 
   it('旧端 subscribe 仍收到无 cursor 的 agent-event snapshot 与 live 事件', async () => {
     await receive({ type: 'subscribe', sessionId: 's1', sinceIndex: -1 });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({
       type: 'agent-event',
       event: { type: 'snapshot' },
@@ -557,7 +615,7 @@ describe('pairHost session-sync 接线', () => {
       seq: 2,
       status: 'running',
     });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).not.toHaveProperty('cursor');
   });
 
@@ -565,7 +623,7 @@ describe('pairHost session-sync 接线', () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'initial' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
     forwardAgentEvent(snapshotEvent());
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     hostMocks.socket?.send.mockClear();
     hostMocks.requestSnapshot.mockClear();
 
@@ -579,7 +637,7 @@ describe('pairHost session-sync 接线', () => {
       ];
     }
     forwardAgentEvent(page);
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({ type: 'history', sessionId: 's1' });
   });
 });
@@ -644,12 +702,11 @@ describe('pairHost Bot 会话接线', () => {
 
   async function sentPayloads(): Promise<Record<string, unknown>[]> {
     const calls = hostMocks.socket?.send.mock.calls ?? [];
-    return Promise.all(
-      calls.map(
-        async ([data]) =>
-          (await openFrame(contentKey, new Uint8Array(data))) as Record<string, unknown>
+    return (
+      await Promise.all(
+        calls.map(async ([data]) => stripReplay(await openFrame(contentKey, new Uint8Array(data))))
       )
-    );
+    ).filter((payload) => payload.type !== 'replay-hello');
   }
 
   const coldSnapshot = (count: number): RendererAgentEvent =>
@@ -678,7 +735,7 @@ describe('pairHost Bot 会话接线', () => {
     vi.mocked(port.sessionAccess).mockReturnValue('cold');
     vi.mocked(port.coldSnapshot).mockResolvedValue(coldSnapshot(300));
     await receive({ type: 'subscribe', sessionId: 'bot-1', sync: { requestId: 'r1' } });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect(hostMocks.resume).not.toHaveBeenCalled();
     expect(hostMocks.requestSnapshot).not.toHaveBeenCalled();
     const [sync] = await sentPayloads();
@@ -688,7 +745,7 @@ describe('pairHost Bot 会话接线', () => {
 
     hostMocks.socket?.send.mockClear();
     await receive({ type: 'history', sessionId: 'bot-1', beforeIndex: base });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect((await sentPayloads())[0]).toMatchObject({ type: 'history', sessionId: 'bot-1' });
     expect(port.coldSnapshot).toHaveBeenCalledTimes(2);
   });
@@ -712,7 +769,7 @@ describe('pairHost Bot 会话接线', () => {
 
   it('bot 命令交 Bot 层处理，应答回到同一连接', async () => {
     await receive({ type: 'bot-chat-open', chatId: 'chat-1', junk: true });
-    await vi.waitFor(() => expect(hostMocks.socket?.send).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
     expect(port.handle).toHaveBeenCalledWith(
       'pair-bot',
       { type: 'bot-chat-open', chatId: 'chat-1' },

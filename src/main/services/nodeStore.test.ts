@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { PairedDevice } from '@enso/pair';
@@ -94,6 +94,27 @@ describe('节点列表纯函数', () => {
 });
 
 describe('节点凭据落盘', () => {
+  it('写入失败不能把未持久化 modern pin 留在 cache', async () => {
+    const s = await store();
+    const nodes = s.upsertNode([], cred('p1'), undefined);
+    s.saveNodes(nodes);
+    mkdirSync(path.join(dir, 'remote-nodes.bin.tmp'));
+    expect(s.saveNodes(nodes.map((n) => ({ ...n, replayVersion: 1 })))).toBe(false);
+    expect(s.loadNodes()[0].replayVersion).toBeUndefined();
+  });
+  it('modern 钉跨落盘重载保留，旧副本不能擦除，同 key upsert 不降级', async () => {
+    let s = await store();
+    const stale = s.upsertNode([], cred('p1'), undefined);
+    s.saveNodes(stale.map((n) => ({ ...n, replayVersion: 1 })));
+    s.saveNodes(stale);
+    vi.resetModules();
+    s = await store();
+    expect(s.loadNodes()[0].replayVersion).toBe(1);
+    expect(s.upsertNode(s.loadNodes(), cred('p1'), undefined)[0].replayVersion).toBe(1);
+    expect(
+      s.upsertNode(s.loadNodes(), cred('p1', { contentKey: 'new' }), undefined)[0].replayVersion
+    ).toBeUndefined();
+  });
   it('空盘读回空数组', async () => {
     const { loadNodes } = await store();
     expect(loadNodes()).toEqual([]);

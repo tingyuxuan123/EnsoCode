@@ -64,6 +64,14 @@ it('offers new-session in direct Bot and Code, but not the read-only group proce
   expect(render({ bot: { readOnly: true } })).not.toContain('aria-label="新建会话"');
 });
 
+it('Code 和 Bot 都能看到本地握手发送失败，而不是只有 Bot notice', () => {
+  for (const bot of [undefined, {}]) {
+    expect(render({ bot, notice: '操作未发送：handshake timeout' })).toContain(
+      '操作未发送：handshake timeout'
+    );
+  }
+});
+
 it('retains a direct Bot draft across session replacement, without merging Code drafts', () => {
   for (const sessionId of ['old', 'new']) {
     expect(render({ sessionId, bot: { chatId: 'chat' } })).toContain(
