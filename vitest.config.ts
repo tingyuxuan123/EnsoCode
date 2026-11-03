@@ -27,6 +27,9 @@ export default defineConfig({
           name: 'design',
           environment: 'happy-dom',
           include: ['src/renderer/features/design/**/*.test.{ts,tsx}'],
+          // Upstream history-runner / syntax-scan tests spawn real Node processes; under the
+          // full parallel suite they exceed the 5s default while passing in ~1s alone.
+          testTimeout: 20_000,
         },
       },
       {
