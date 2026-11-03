@@ -1,15 +1,15 @@
 import type { ChildProcess } from 'node:child_process';
 import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { decodeDesignArchive } from '@shared/design/archive';
 import type { DesignScriptRequest, DesignScriptResponse } from '@shared/types/design';
-import { unzipSync } from 'fflate';
 import { getDesignPaths } from './appPaths';
 import { materializeEngine } from './engine';
-import { DesignServiceError, isErrno, MAX_LIST_FILES, record, tooLarge } from './errors';
+import { DesignServiceError, isErrno, record, tooLarge } from './errors';
 import { readBounded } from './files';
 import { killGroup, runCommand, stopChild } from './process';
 import { designDirectory } from './roots';
-import { checkedPath, isRelativePath } from './security';
+import { checkedPath } from './security';
 
 /** Fixed esbuild transform-only program, matching upstream SCAN_SCRIPT's RawSyntaxError[]. */
 // Keep a space before the child loader's parentheses: electron-vite scans strings
@@ -42,22 +42,11 @@ async function assertRunnerTree(dir: string): Promise<void> {
   };
   await walk(dir);
 }
-async function validateHistoryPack(dir: string, pack: string): Promise<void> {
+export async function validateHistoryPack(dir: string, pack: string): Promise<void> {
   const bytes = await readBounded(pack, 24 * 1024 * 1024);
-  let total = 0;
-  let count = 0;
-  unzipSync(bytes, {
-    filter: (file) => {
-      if (
-        !isRelativePath(file.name) ||
-        !file.name ||
-        file.name.split('/').some((p) => p === '..' || p === '.')
-      )
-        throw new DesignServiceError('OUT_OF_ROOT', 'Invalid history archive path');
-      total += file.originalSize;
-      if (total > 64 * 1024 * 1024 || ++count > MAX_LIST_FILES) tooLarge();
-      return false; // Validate headers only; runner is the only code that extracts.
-    },
+  decodeDesignArchive(bytes, {
+    maxCompressedBytes: 24 * 1024 * 1024,
+    maxUncompressedBytes: 64 * 1024 * 1024,
   });
   try {
     const info = await lstat(path.join(dir, '.history'));

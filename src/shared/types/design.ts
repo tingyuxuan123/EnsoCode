@@ -93,6 +93,41 @@ export interface DesignSaveAsRequest {
 /** 用户在原生对话框中选择的路径；取消时 path 为 null。 */
 export type DesignSaveAsResponse = DesignResult<{ path: string | null }>;
 
+// P3 gallery: only Main chooses the managed workspace. Archive is reversible
+// gallery visibility, not removal of project execution authority.
+export interface DesignProjectEntry {
+  projectId: string;
+  path: string;
+}
+export type DesignProjectsRequest =
+  | { op: 'list' }
+  | { op: 'create'; name: string }
+  | { op: 'setArchived'; projectId: string; archived: boolean };
+export type DesignProjectsResponse =
+  | DesignResult<{
+      workspacePath: string;
+      projects: DesignProjectEntry[];
+      archivedProjects: DesignProjectEntry[];
+    }>
+  | DesignResult<{ project: DesignProjectEntry }>
+  | DesignResult;
+
+export interface DesignOpenFilesRequest {
+  title?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+  multiple?: boolean;
+  maxBytes?: number;
+}
+export type DesignOpenFilesResponse = DesignResult<{
+  files: Array<{ path: string; name: string; data: string }>;
+}>;
+
+/** Untrusted share HTML lives at a separate sandboxed origin, never in the host. */
+export type DesignPreviewRequest =
+  | { op: 'open'; html: string }
+  | { op: 'close'; previewId: string };
+export type DesignPreviewResponse = DesignResult<{ previewId: string; url: string }> | DesignResult;
+
 export interface DesignWatchRequest {
   root: DesignRootRef;
   rel: string;

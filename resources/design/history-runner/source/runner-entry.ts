@@ -12,7 +12,8 @@ import { createHash } from "node:crypto";
 import fs, { type Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { unzipSync, zipSync } from "fflate";
+import { zipSync } from "fflate";
+import { assertDesignArchivePath, decodeDesignArchive } from "./archive";
 import git from "isomorphic-git";
 
 /** gitdir 不叫 `.git`：叫 `.git` 会让放进代码仓库的设计变成 embedded repository。 */
@@ -232,6 +233,7 @@ async function log(dir: string, limit: number): Promise<HistoryCommit[]> {
  */
 async function restore(dir: string, sha: string, title: string): Promise<HistoryCommit | null> {
 	const gitdir = gitdirOf(dir);
+	await assertSafeCheckout(dir, sha);
 	await git.checkout({ fs, dir, gitdir, ref: sha, force: true, noUpdateHead: true });
 	return commit(dir, title, sha);
 }
@@ -243,7 +245,30 @@ async function restore(dir: string, sha: string, title: string): Promise<History
  * 退出时用 HEAD 覆盖回去，历史里不该留下任何痕迹。
  */
 async function checkoutOnly(dir: string, sha: string): Promise<void> {
+	await assertSafeCheckout(dir, sha);
 	await git.checkout({ fs, dir, gitdir: gitdirOf(dir), ref: sha, force: true, noUpdateHead: true });
+}
+
+/** ZIP metadata cannot describe the file modes hidden inside Git objects. */
+async function assertSafeCheckout(dir: string, sha: string): Promise<void> {
+	const gitdir = gitdirOf(dir);
+	const { commit } = await git.readCommit({ fs, gitdir, oid: sha });
+	let count = 0;
+	const walk = async (oid: string, prefix: string, depth: number): Promise<void> => {
+		if (depth > 64) throw new Error("History tree is too deep");
+		const { tree } = await git.readTree({ fs, gitdir, oid });
+		for (const entry of tree) {
+			if (++count > 10000) throw new Error("History tree is too large");
+			const relative = prefix ? `${prefix}/${entry.path}` : entry.path;
+			assertDesignArchivePath(relative);
+			if (entry.path.includes("/") || IGNORED_TOP_LEVEL.has(relative.split("/")[0]))
+				throw new Error("History tree contains a reserved path");
+			if (entry.type === "tree" && entry.mode === "040000") await walk(entry.oid, relative, depth + 1);
+			else if (entry.type !== "blob" || !["100644", "100755"].includes(entry.mode))
+				throw new Error("History may restore only regular source files, not symlinks or submodules");
+		}
+	};
+	await walk(commit.tree, "", 0);
 }
 
 /** 某个版本里一个文件的内容（预览、对比用）。 */
@@ -292,9 +317,13 @@ function packHistory(dir: string, out: string): number {
 function unpackHistory(dir: string, from: string): number {
 	const gitdir = gitdirOf(dir);
 	if (fs.existsSync(join(gitdir, "HEAD"))) return 0;
-	const entries = unzipSync(new Uint8Array(fs.readFileSync(from)));
+	if (fs.statSync(from).size > 24 * 1024 * 1024) throw new Error("History archive is too large");
+	const entries = decodeDesignArchive(new Uint8Array(fs.readFileSync(from)), {
+		maxCompressedBytes: 24 * 1024 * 1024,
+		maxUncompressedBytes: 64 * 1024 * 1024,
+	});
 	let written = 0;
-	for (const [rel, bytes] of Object.entries(entries)) {
+	for (const [rel, bytes] of entries) {
 		if (rel.endsWith("/")) continue;
 		const target = join(gitdir, rel);
 		fs.mkdirSync(dirname(target), { recursive: true });

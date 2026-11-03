@@ -226,6 +226,12 @@ import type {
   DesignHookEvent,
   DesignNetworkRequest,
   DesignNetworkResponse,
+  DesignOpenFilesRequest,
+  DesignOpenFilesResponse,
+  DesignPreviewRequest,
+  DesignPreviewResponse,
+  DesignProjectsRequest,
+  DesignProjectsResponse,
   DesignResult,
   DesignRootInfo,
   DesignRootRef,
@@ -1710,6 +1716,12 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.DESIGN_FS, request),
     saveAs: (request: DesignSaveAsRequest): Promise<DesignSaveAsResponse> =>
       ipcRenderer.invoke(IPC_CHANNELS.DESIGN_SAVE_AS, request),
+    openFiles: (request: DesignOpenFilesRequest): Promise<DesignOpenFilesResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_OPEN_FILES, request),
+    projects: (request: DesignProjectsRequest): Promise<DesignProjectsResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PROJECTS, request),
+    preview: (request: DesignPreviewRequest): Promise<DesignPreviewResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PREVIEW, request),
     watch: (request: DesignWatchRequest): Promise<DesignWatchResponse> =>
       ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WATCH, request),
     unwatch: (watchId: string): Promise<DesignResult> =>

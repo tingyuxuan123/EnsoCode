@@ -7,7 +7,7 @@ import { setDesignCanvasCwds } from '../services/agentHost';
 import { DesignCaptureService } from '../services/design/capture';
 import { DesignEngineService } from '../services/design/engine';
 import { failure } from '../services/design/errors';
-import { designFs, designSaveAs } from '../services/design/fs';
+import { designFs, designOpenFiles, designSaveAs } from '../services/design/fs';
 import { getDesignPaths, getDesignToolBroker } from '../services/design/index';
 import { requestNetwork } from '../services/design/network';
 import { EnginePidRegistry } from '../services/design/orphans';
@@ -17,6 +17,9 @@ import {
   parseEngine,
   parseFs,
   parseNetwork,
+  parseOpenFiles,
+  parsePreview,
+  parseProjects,
   parseRegistration,
   parseRoot,
   parseSaveAs,
@@ -26,6 +29,8 @@ import {
   parseWatch,
   token,
 } from '../services/design/parsers';
+import { DesignPreviewService } from '../services/design/preview';
+import { DesignProjectsService } from '../services/design/projects';
 import { resolveDesignRoot } from '../services/design/roots';
 import { DesignScriptService } from '../services/design/scripts';
 import { checkedPath } from '../services/design/security';
@@ -62,6 +67,8 @@ export function createDesignHandlers(deps: {
   storage: DesignStorage;
   projectRoot(sessionId: string): string | null | Promise<string | null>;
   canvasCwds(cwds: string[]): void;
+  projects?: DesignProjectsService;
+  preview?: DesignPreviewService;
 }) {
   const attached = new Set<number>();
   const canvases = new Map<number, DesignCanvasPresence & { cwd?: string }>();
@@ -86,6 +93,7 @@ export function createDesignHandlers(deps: {
     deps.watch.releaseOwner(owner);
     deps.capture.releaseOwner(owner);
     deps.scripts.releaseOwner(owner);
+    deps.preview?.releaseOwner(owner);
   };
   const guard =
     (handler: Handler): Handler =>
@@ -133,6 +141,19 @@ export function createDesignHandlers(deps: {
       const request = parseSaveAs(raw);
       const owner = deps.owner(event.sender.id);
       return request && owner ? designSaveAs(owner, request) : invalid();
+    }),
+    openFiles: guard(async (event, raw) => {
+      const request = parseOpenFiles(raw);
+      const owner = deps.owner(event.sender.id);
+      return request && owner ? designOpenFiles(owner, request) : invalid();
+    }),
+    projects: guard(async (_event, raw) => {
+      const request = parseProjects(raw);
+      return request && deps.projects ? deps.projects.request(request) : invalid();
+    }),
+    preview: guard(async (event, raw) => {
+      const request = parsePreview(raw);
+      return request && deps.preview ? deps.preview.request(event.sender.id, request) : invalid();
     }),
     watch: guard(async (event, raw) => {
       const request = parseWatch(raw);
@@ -211,12 +232,18 @@ export function registerDesignHandlers(): void {
   };
   let handlers: ReturnType<typeof createDesignHandlers> | undefined;
   let dispose: (() => void) | undefined;
-  const load = () => {
+  const load = async () => {
+    if (handlers) return handlers;
+    const registry = (await import('./agent')).getSourceAuthorityRegistry();
+    if (!registry) throw new Error('Project authority is not ready');
+    // Other requests may have initialized the services while the authority import yielded.
     if (handlers) return handlers;
     const engine = new DesignEngineService(send);
     const capture = new DesignCaptureService((id, engineId) => engine.registered(id, engineId));
     const scripts = new DesignScriptService();
     const watch = new DesignWatchService(send);
+    const storage = new DesignStorage(getDesignPaths().storageDir);
+    const preview = new DesignPreviewService();
     handlers = createDesignHandlers({
       trusted,
       owner,
@@ -224,7 +251,13 @@ export function registerDesignHandlers(): void {
       capture,
       scripts,
       watch,
-      storage: new DesignStorage(getDesignPaths().storageDir),
+      storage,
+      projects: new DesignProjectsService(
+        join(app.getPath('documents'), 'EnsoCode', 'Designs'),
+        registry,
+        storage
+      ),
+      preview,
       projectRoot: async (sessionId) => (await import('./agent')).pluginProjectRoot(sessionId),
       canvasCwds: setDesignCanvasCwds,
     });
@@ -234,6 +267,7 @@ export function registerDesignHandlers(): void {
       capture.dispose();
       scripts.dispose();
       watch.dispose();
+      void preview.dispose();
     };
     return handlers;
   };
@@ -242,6 +276,9 @@ export function registerDesignHandlers(): void {
     [IPC_CHANNELS.DESIGN_RESOLVE_ROOT, 'resolveRoot'],
     [IPC_CHANNELS.DESIGN_FS, 'fs'],
     [IPC_CHANNELS.DESIGN_SAVE_AS, 'saveAs'],
+    [IPC_CHANNELS.DESIGN_OPEN_FILES, 'openFiles'],
+    [IPC_CHANNELS.DESIGN_PROJECTS, 'projects'],
+    [IPC_CHANNELS.DESIGN_PREVIEW, 'preview'],
     [IPC_CHANNELS.DESIGN_WATCH, 'watch'],
     [IPC_CHANNELS.DESIGN_UNWATCH, 'unwatch'],
     [IPC_CHANNELS.DESIGN_ENGINE, 'engine'],
@@ -263,7 +300,7 @@ export function registerDesignHandlers(): void {
           error: 'Only the trusted local main window can use design services',
         };
       try {
-        return await load()[key](event, raw);
+        return await (await load())[key](event, raw);
       } catch (error) {
         return failure(error);
       }

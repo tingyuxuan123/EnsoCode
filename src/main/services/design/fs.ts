@@ -4,6 +4,8 @@ import type {
   DesignFsEntry,
   DesignFsRequest,
   DesignFsResponse,
+  DesignOpenFilesRequest,
+  DesignOpenFilesResponse,
   DesignSaveAsRequest,
   DesignSaveAsResponse,
 } from '@shared/types/design';
@@ -141,4 +143,30 @@ export async function designSaveAs(
   // The selected absolute path is never accepted back as authority by a later IPC request.
   await writeFile(result.filePath, bytes);
   return { ok: true, path: result.filePath };
+}
+
+export async function designOpenFiles(
+  owner: BrowserWindow,
+  request: DesignOpenFilesRequest
+): Promise<DesignOpenFilesResponse> {
+  const picked = await dialog.showOpenDialog(owner, {
+    title: request.title,
+    filters: request.filters?.length
+      ? request.filters
+      : [{ name: 'Design', extensions: ['vetdz', 'vetd'] }],
+    properties: request.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+  });
+  if (picked.canceled) return { ok: true, files: [] };
+  if (picked.filePaths.length > 8) tooLarge();
+  const files: Array<{ path: string; name: string; data: string }> = [];
+  let total = 0;
+  for (const file of picked.filePaths) {
+    if (!/\.(vetdz|vetd)$/i.test(file))
+      throw new DesignServiceError('INVALID_ARGUMENT', 'Only design share files can be selected');
+    const bytes = await readBounded(file, request.maxBytes ?? MAX_FILE_BYTES);
+    total += bytes.length;
+    if (total > MAX_FILE_BYTES) tooLarge();
+    files.push({ path: file, name: path.basename(file), data: bytes.toString('base64') });
+  }
+  return { ok: true, files };
 }

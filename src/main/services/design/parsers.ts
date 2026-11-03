@@ -4,6 +4,9 @@ import type {
   DesignEngineRequest,
   DesignFsRequest,
   DesignNetworkRequest,
+  DesignOpenFilesRequest,
+  DesignPreviewRequest,
+  DesignProjectsRequest,
   DesignRootRef,
   DesignRuntimeRegistration,
   DesignSaveAsRequest,
@@ -15,6 +18,7 @@ import type {
 } from '@shared/types/design';
 import { MAX_FILE_BYTES, record } from './errors';
 import { externalUrl } from './network';
+import { validDesignProjectName } from './projects';
 import { isRelativePath, isStoragePath } from './security';
 
 export const token = (v: unknown): v is string =>
@@ -28,6 +32,59 @@ const integer = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
 const keys = (v: Record<string, unknown>, allowed: string[]): boolean =>
   Object.keys(v).every((k) => allowed.includes(k));
+
+export function parseProjects(v: unknown): DesignProjectsRequest | null {
+  if (!record(v)) return null;
+  if (v.op === 'list' && keys(v, ['op'])) return { op: 'list' };
+  if (v.op === 'create' && validDesignProjectName(v.name) && keys(v, ['op', 'name']))
+    return { op: 'create', name: v.name };
+  return v.op === 'setArchived' &&
+    token(v.projectId) &&
+    typeof v.archived === 'boolean' &&
+    keys(v, ['op', 'projectId', 'archived'])
+    ? { op: 'setArchived', projectId: v.projectId, archived: v.archived }
+    : null;
+}
+export function parseOpenFiles(v: unknown): DesignOpenFilesRequest | null {
+  if (!record(v) || !keys(v, ['title', 'filters', 'multiple', 'maxBytes'])) return null;
+  if (
+    (v.title !== undefined && !text(v.title, 500)) ||
+    (v.multiple !== undefined && typeof v.multiple !== 'boolean') ||
+    (v.maxBytes !== undefined && !integer(v.maxBytes, 1, MAX_FILE_BYTES))
+  )
+    return null;
+  let filters: DesignOpenFilesRequest['filters'];
+  if (v.filters !== undefined) {
+    if (!Array.isArray(v.filters) || v.filters.length > 8) return null;
+    filters = [];
+    for (const filter of v.filters) {
+      if (
+        !record(filter) ||
+        !keys(filter, ['name', 'extensions']) ||
+        !text(filter.name, 100) ||
+        !Array.isArray(filter.extensions) ||
+        filter.extensions.length === 0 ||
+        !filter.extensions.every((extension) => extension === 'vetdz' || extension === 'vetd')
+      )
+        return null;
+      filters.push({ name: filter.name, extensions: [...filter.extensions] });
+    }
+  }
+  return {
+    ...(typeof v.title === 'string' ? { title: v.title } : {}),
+    ...(typeof v.multiple === 'boolean' ? { multiple: v.multiple } : {}),
+    ...(typeof v.maxBytes === 'number' ? { maxBytes: v.maxBytes } : {}),
+    ...(filters ? { filters } : {}),
+  };
+}
+export function parsePreview(v: unknown): DesignPreviewRequest | null {
+  if (!record(v)) return null;
+  if (v.op === 'open' && text(v.html, MAX_FILE_BYTES) && keys(v, ['op', 'html']))
+    return { op: 'open', html: v.html };
+  return v.op === 'close' && token(v.previewId) && keys(v, ['op', 'previewId'])
+    ? { op: 'close', previewId: v.previewId }
+    : null;
+}
 export function parseCanvasPresence(v: unknown): DesignCanvasPresence | null {
   return record(v) &&
     keys(v, ['sessionId', 'open']) &&

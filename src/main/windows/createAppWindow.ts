@@ -14,6 +14,7 @@ import {
 } from 'electron';
 import { runningDesignEnginePorts } from '../services/design/engine';
 import { installDesignNavigationGuard } from '../services/design/navigation';
+import { designPreviewPorts } from '../services/design/preview';
 import { installPluginViewNavigationGuard } from '../services/extensionPlugins/viewNavigation';
 import { shouldReloadRenderer } from './rendererGone';
 import { attachPinnedWorkbenchBoundsSync, attachWindowsRestoreWake } from './win32Restore';
@@ -128,7 +129,10 @@ function attachWebContentsHandlers(win: BrowserWindow, contents: WebContents, en
 
   installPluginViewNavigationGuard(contents);
   if (entry === 'index')
-    installDesignNavigationGuard(contents, () => runningDesignEnginePorts(contents.id));
+    installDesignNavigationGuard(
+      contents,
+      () => new Set([...runningDesignEnginePorts(contents.id), ...designPreviewPorts(contents.id)])
+    );
 
   let goneAt = 0;
   let goneCount = 0;

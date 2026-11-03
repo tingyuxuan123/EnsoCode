@@ -202,7 +202,7 @@ var err = function(ind, msg, nt) {
   return e;
 };
 var inflt = function(dat, st, buf, dict) {
-  var sl = dat.length, dl = dict ? dict.length : 0;
+  var sl = dat.length, dl = 0;
   if (!sl || st.f && !st.l)
     return buf || new u8(0);
   var noBuf = !buf;
@@ -689,15 +689,6 @@ var mrg = function(a, b) {
     o[k] = b[k];
   return o;
 };
-var b2 = function(d, b) {
-  return d[b] | d[b + 1] << 8;
-};
-var b4 = function(d, b) {
-  return (d[b] | d[b + 1] << 8 | d[b + 2] << 16 | d[b + 3] << 24) >>> 0;
-};
-var b8 = function(d, b) {
-  return b4(d, b) + b4(d, b + 4) * 4294967296;
-};
 var wbytes = function(d, b, v) {
   for (; v; ++b)
     d[b] = v, v >>>= 8;
@@ -705,9 +696,43 @@ var wbytes = function(d, b, v) {
 function deflateSync(data, opts) {
   return dopt(data, opts || {}, 0, 0);
 }
-function inflateSync(data, opts) {
-  return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
-}
+var Inflate = /* @__PURE__ */ (function() {
+  function Inflate2(opts, cb) {
+    if (typeof opts == "function")
+      cb = opts, opts = {};
+    this.ondata = cb;
+    var dict = opts && opts.dictionary && opts.dictionary.subarray(-32768);
+    this.s = { i: 0, b: dict ? dict.length : 0 };
+    this.o = new u8(32768);
+    this.p = new u8(0);
+    if (dict)
+      this.o.set(dict);
+  }
+  Inflate2.prototype.e = function(c) {
+    if (!this.ondata)
+      err(5);
+    if (this.d)
+      err(4);
+    if (!this.p.length)
+      this.p = c;
+    else if (c.length) {
+      var n = new u8(this.p.length + c.length);
+      n.set(this.p), n.set(c, this.p.length), this.p = n;
+    }
+  };
+  Inflate2.prototype.c = function(final) {
+    this.s.i = +(this.d = final || false);
+    var bts = this.s.b;
+    var dt = inflt(this.p, this.s, this.o);
+    this.ondata(slc(dt, bts, this.s.b), this.d);
+    this.o = slc(dt, this.s.b - 32768), this.s.b = this.o.length;
+    this.p = slc(this.p, this.s.p / 8 | 0), this.s.p &= 7;
+  };
+  Inflate2.prototype.push = function(chunk, final) {
+    this.e(chunk), this.c(final);
+  };
+  return Inflate2;
+})();
 var fltn = function(d, p, t, o) {
   for (var k in d) {
     var val = d[k], n = p + k, op = o;
@@ -729,22 +754,6 @@ try {
   tds = 1;
 } catch (e) {
 }
-var dutf8 = function(d) {
-  for (var r = "", i = 0; ; ) {
-    var c = d[i++];
-    var eb = (c > 127) + (c > 223) + (c > 239);
-    if (i + eb > d.length)
-      return { s: r, r: slc(d, i - 1) };
-    if (!eb)
-      r += String.fromCharCode(c);
-    else if (eb == 3) {
-      c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
-    } else if (eb & 1)
-      r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
-    else
-      r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
-  }
-};
 function strToU8(str, latin1) {
   var i;
   if (te)
@@ -773,34 +782,6 @@ function strToU8(str, latin1) {
   }
   return slc(ar, 0, ai);
 }
-function strFromU8(dat, latin1) {
-  if (latin1) {
-    var r = "";
-    for (var i = 0; i < dat.length; i += 16384)
-      r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
-    return r;
-  } else if (td) {
-    return td.decode(dat);
-  } else {
-    var _a2 = dutf8(dat), s = _a2.s, r = _a2.r;
-    if (r.length)
-      err(8);
-    return s;
-  }
-}
-var slzh = function(d, b) {
-  return b + 30 + b2(d, b + 26) + b2(d, b + 28);
-};
-var zh = function(d, b, z) {
-  var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
-  var _a2 = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
-  return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
-};
-var z64e = function(d, b) {
-  for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
-    ;
-  return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
-};
 var exfl = function(ex) {
   var le = 0;
   if (ex) {
@@ -902,39 +883,144 @@ function zipSync(data, opts) {
   wzf(out, o, files.length, cdl, oe);
   return out;
 }
-function unzipSync(data, opts) {
-  var files = {};
-  var e = data.length - 22;
-  for (; b4(data, e) != 101010256; --e) {
-    if (!e || data.length - e > 65558)
-      err(13);
+const DEFAULTS = {
+  maxCompressedBytes: 32 * 1024 * 1024,
+  maxUncompressedBytes: 128 * 1024 * 1024,
+  maxFileBytes: 32 * 1024 * 1024,
+  maxEntries: 1e4
+};
+function invalid(reason) {
+  throw new Error(`Invalid design archive: ${reason}`);
+}
+function assertDesignArchivePath(name) {
+  if (!name || name.length > 4096 || /[\\\0:]/.test(name) || name.split("/").some((part) => !part || part === "." || part === ".."))
+    invalid("unsafe path");
+}
+const identity = (name) => name.normalize("NFC").toLowerCase();
+const crcTable = Uint32Array.from({ length: 256 }, (_, n) => {
+  let crc2 = n;
+  for (let k = 0; k < 8; k++) crc2 = crc2 & 1 ? 3988292384 ^ crc2 >>> 1 : crc2 >>> 1;
+  return crc2 >>> 0;
+});
+function updateCrc(crc2, bytes) {
+  let next = crc2;
+  for (const byte of bytes) next = next >>> 8 ^ crcTable[(next ^ byte) & 255];
+  return next;
+}
+function decodeDesignArchive(bytes, limits = {}) {
+  const bound = { ...DEFAULTS, ...limits };
+  for (const limit of Object.values(bound)) {
+    if (!Number.isSafeInteger(limit) || limit < 0) invalid("invalid limits");
   }
-  var c = b2(data, e + 8);
-  if (!c)
-    return {};
-  var o = b4(data, e + 16);
-  var z = o == 4294967295 || c == 65535;
-  if (z) {
-    var ze = b4(data, e - 12);
-    z = b4(data, ze) == 101075792;
-    if (z) {
-      c = b4(data, ze + 32);
-      o = b4(data, ze + 48);
+  if (bytes.length > bound.maxCompressedBytes || bytes.length < 22) invalid("compressed size");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const u162 = (offset) => view.getUint16(offset, true);
+  const u32 = (offset) => view.getUint32(offset, true);
+  let end = bytes.length - 22;
+  const earliest = Math.max(0, end - 65535);
+  while (end >= earliest && (u32(end) !== 101010256 || end + 22 + u162(end + 20) !== bytes.length))
+    end--;
+  if (end < earliest) invalid("missing end record");
+  const count = u162(end + 10);
+  const centralSize = u32(end + 12);
+  const centralStart = u32(end + 16);
+  if (u162(end + 4) || u162(end + 6) || u162(end + 8) !== count || count === 65535 || count > bound.maxEntries || centralStart + centralSize !== end)
+    invalid("unsupported directory");
+  const decodeName = (start, length) => {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(
+        bytes.subarray(start, start + length)
+      );
+    } catch {
+      return invalid("invalid UTF-8 path");
+    }
+  };
+  const checkExtra = (start, length) => {
+    const stop = start + length;
+    for (let p2 = start; p2 < stop; ) {
+      if (p2 + 4 > stop) invalid("truncated extra field");
+      const tag2 = u162(p2);
+      const size = u162(p2 + 2);
+      if (tag2 === 1 || tag2 === 28789 || p2 + 4 + size > stop) invalid("unsupported extra field");
+      p2 += 4 + size;
+    }
+  };
+  const entries = [];
+  const paths = /* @__PURE__ */ new Map();
+  const spans = [];
+  let total = 0;
+  let p = centralStart;
+  for (let i = 0; i < count; i++) {
+    if (p + 46 > end || u32(p) !== 33639248) invalid("central header");
+    const flags = u162(p + 8);
+    const method = u162(p + 10);
+    const crc2 = u32(p + 16);
+    const compressed = u32(p + 20);
+    const size = u32(p + 24);
+    const nameLength = u162(p + 28);
+    const extraLength = u162(p + 30);
+    const next = p + 46 + nameLength + extraLength + u162(p + 32);
+    if (next > end || flags & -2063 || method !== 0 && method !== 8 || u162(p + 34))
+      invalid("unsupported entry");
+    const rawName = decodeName(p + 46, nameLength);
+    const directory = rawName.endsWith("/");
+    const name = directory ? rawName.slice(0, -1) : rawName;
+    assertDesignArchivePath(name);
+    const key = identity(name);
+    if (paths.has(key)) invalid("duplicate path");
+    paths.set(key, directory);
+    const unixType = u32(p + 38) >>> 16 & 61440;
+    if (unixType && unixType !== (directory ? 16384 : 32768)) invalid("non-regular entry");
+    if (directory && size !== 0 || size > bound.maxFileBytes) invalid("entry size");
+    total += size;
+    if (total > bound.maxUncompressedBytes) invalid("total size");
+    checkExtra(p + 46 + nameLength, extraLength);
+    const local = u32(p + 42);
+    if (local + 30 > centralStart || u32(local) !== 67324752) invalid("local header");
+    const localNameLength = u162(local + 26);
+    const localExtraLength = u162(local + 28);
+    const start = local + 30 + localNameLength + localExtraLength;
+    if (start + compressed > centralStart || u162(local + 6) !== flags || u162(local + 8) !== method || decodeName(local + 30, localNameLength) !== rawName || !(flags & 8) && (u32(local + 14) !== crc2 || u32(local + 18) !== compressed || u32(local + 22) !== size) || method === 0 && compressed !== size)
+      invalid("inconsistent local entry");
+    checkExtra(local + 30 + localNameLength, localExtraLength);
+    spans.push([local, start + compressed]);
+    entries.push({ name, directory, size, compressed, method, crc: crc2, start });
+    p = next;
+  }
+  if (p !== end) invalid("directory size mismatch");
+  spans.sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < spans.length; i++) {
+    if (spans[i][0] < spans[i - 1][1]) invalid("overlapping entries");
+  }
+  for (const name of paths.keys()) {
+    const parts = name.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      if (paths.get(parts.slice(0, i).join("/")) === false) invalid("file/directory conflict");
     }
   }
-  for (var i = 0; i < c; ++i) {
-    var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
-    o = no;
-    {
-      if (!c_2)
-        files[fn] = slc(data, b, b + sc);
-      else if (c_2 == 8)
-        files[fn] = inflateSync(data.subarray(b, b + sc), { out: new u8(su) });
-      else
-        err(14, "unknown compression type " + c_2);
+  const result = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    const output = new Uint8Array(entry.size);
+    let offset = 0;
+    let crc2 = -1;
+    const consume = (chunk) => {
+      if (offset + chunk.length > entry.size) invalid("inflated size exceeds header");
+      output.set(chunk, offset);
+      offset += chunk.length;
+      crc2 = updateCrc(crc2, chunk);
+    };
+    const data = bytes.subarray(entry.start, entry.start + entry.compressed);
+    if (entry.method === 0) consume(data);
+    else {
+      const inflate2 = new Inflate(consume);
+      if (!data.length) invalid("empty deflate stream");
+      for (let n = 0; n < data.length; n += 256)
+        inflate2.push(data.subarray(n, n + 256), n + 256 >= data.length);
     }
+    if (offset !== entry.size || (crc2 ^ -1) >>> 0 !== entry.crc) invalid("length or CRC mismatch");
+    if (!entry.directory) result.set(entry.name, output);
   }
-  return files;
+  return result;
 }
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
@@ -3733,9 +3819,9 @@ function requireCrc32() {
     }
     return table;
   }
-  var crcTable = makeTable();
+  var crcTable2 = makeTable();
   function crc322(crc2, buf, len, pos) {
-    var t = crcTable, end = pos + len;
+    var t = crcTable2, end = pos + len;
     crc2 ^= -1;
     for (var i = pos; i < end; i++) {
       crc2 = crc2 >>> 8 ^ t[(crc2 ^ buf[i]) & 255];
@@ -7003,8 +7089,8 @@ function requireInflate() {
   var ZStream = requireZstream();
   var GZheader = requireGzheader();
   var toString = Object.prototype.toString;
-  function Inflate(options) {
-    if (!(this instanceof Inflate)) return new Inflate(options);
+  function Inflate2(options) {
+    if (!(this instanceof Inflate2)) return new Inflate2(options);
     this.options = utils.assign({
       chunkSize: 16384,
       windowBits: 0,
@@ -7054,7 +7140,7 @@ function requireInflate() {
       }
     }
   }
-  Inflate.prototype.push = function(data, mode) {
+  Inflate2.prototype.push = function(data, mode) {
     var strm = this.strm;
     var chunkSize = this.options.chunkSize;
     var dictionary = this.options.dictionary;
@@ -7130,10 +7216,10 @@ function requireInflate() {
     }
     return true;
   };
-  Inflate.prototype.onData = function(chunk) {
+  Inflate2.prototype.onData = function(chunk) {
     this.chunks.push(chunk);
   };
-  Inflate.prototype.onEnd = function(status2) {
+  Inflate2.prototype.onEnd = function(status2) {
     if (status2 === c.Z_OK) {
       if (this.options.to === "string") {
         this.result = this.chunks.join("");
@@ -7146,7 +7232,7 @@ function requireInflate() {
     this.msg = this.strm.msg;
   };
   function inflate2(input, options) {
-    var inflator = new Inflate(options);
+    var inflator = new Inflate2(options);
     inflator.push(input, true);
     if (inflator.err) {
       throw inflator.msg || msg[inflator.err];
@@ -7158,7 +7244,7 @@ function requireInflate() {
     options.raw = true;
     return inflate2(input, options);
   }
-  inflate$2.Inflate = Inflate;
+  inflate$2.Inflate = Inflate2;
   inflate$2.inflate = inflate2;
   inflate$2.inflateRaw = inflateRaw;
   inflate$2.ungzip = inflate2;
@@ -19598,11 +19684,33 @@ async function log(dir, limit) {
 }
 async function restore(dir, sha, title) {
   const gitdir = gitdirOf(dir);
+  await assertSafeCheckout(dir, sha);
   await index.checkout({ fs, dir, gitdir, ref: sha, force: true, noUpdateHead: true });
   return commit(dir, title, sha);
 }
 async function checkoutOnly(dir, sha) {
+  await assertSafeCheckout(dir, sha);
   await index.checkout({ fs, dir, gitdir: gitdirOf(dir), ref: sha, force: true, noUpdateHead: true });
+}
+async function assertSafeCheckout(dir, sha) {
+  const gitdir = gitdirOf(dir);
+  const { commit: commit2 } = await index.readCommit({ fs, gitdir, oid: sha });
+  let count = 0;
+  const walk2 = async (oid, prefix, depth) => {
+    if (depth > 64) throw new Error("History tree is too deep");
+    const { tree } = await index.readTree({ fs, gitdir, oid });
+    for (const entry of tree) {
+      if (++count > 1e4) throw new Error("History tree is too large");
+      const relative = prefix ? `${prefix}/${entry.path}` : entry.path;
+      assertDesignArchivePath(relative);
+      if (entry.path.includes("/") || IGNORED_TOP_LEVEL.has(relative.split("/")[0]))
+        throw new Error("History tree contains a reserved path");
+      if (entry.type === "tree" && entry.mode === "040000") await walk2(entry.oid, relative, depth + 1);
+      else if (entry.type !== "blob" || !["100644", "100755"].includes(entry.mode))
+        throw new Error("History may restore only regular source files, not symlinks or submodules");
+    }
+  };
+  await walk2(commit2.tree, "", 0);
 }
 async function show(dir, sha, filepath) {
   try {
@@ -19636,9 +19744,13 @@ function packHistory(dir, out) {
 function unpackHistory(dir, from) {
   const gitdir = gitdirOf(dir);
   if (fs.existsSync(join$1(gitdir, "HEAD"))) return 0;
-  const entries = unzipSync(new Uint8Array(fs.readFileSync(from)));
+  if (fs.statSync(from).size > 24 * 1024 * 1024) throw new Error("History archive is too large");
+  const entries = decodeDesignArchive(new Uint8Array(fs.readFileSync(from)), {
+    maxCompressedBytes: 24 * 1024 * 1024,
+    maxUncompressedBytes: 64 * 1024 * 1024
+  });
   let written = 0;
-  for (const [rel, bytes] of Object.entries(entries)) {
+  for (const [rel, bytes] of entries) {
     if (rel.endsWith("/")) continue;
     const target = join$1(gitdir, rel);
     fs.mkdirSync(dirname$1(target), { recursive: true });
