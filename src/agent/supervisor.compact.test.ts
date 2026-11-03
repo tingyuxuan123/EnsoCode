@@ -1,9 +1,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import {
+  type AgentSession,
+  type ModelRuntime,
+  SettingsManager,
+} from '@earendil-works/pi-coding-agent';
+import { providerKeyFor } from '@shared/providers/providerKey';
 import type { AgentWorkerEvent } from '@shared/types/agent';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   sessions: [] as Array<Record<string, unknown>>,
@@ -108,7 +113,7 @@ function session(options: Record<string, unknown>) {
   );
   const listeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
   const value = {
-    model: options.model,
+    model: options.model as NonNullable<AgentSession['model']>,
     getActiveToolNames: () => [...activeTools],
     setActiveToolsByName: (names: string[]) => {
       activeTools = [...names];
@@ -129,10 +134,23 @@ function session(options: Record<string, unknown>) {
     abort: vi.fn(async () => undefined),
     compact: vi.fn(async () => undefined),
     dispose: vi.fn(),
+    setModel: vi.fn(async (next: NonNullable<AgentSession['model']>) => {
+      await Promise.resolve();
+      value.model = next;
+    }),
     setThinkingLevel: vi.fn(),
+    settingsManager: SettingsManager.inMemory(),
+    contextTokens: null as number | null,
+    getContextUsage(): { tokens: number | null; contextWindow: number } | undefined {
+      return { tokens: this.contextTokens, contextWindow: this.model.contextWindow };
+    },
     navigateTree: vi.fn(async () => ({ cancelled: false })),
     isStreaming: false,
     isRetrying: false,
+    isCompacting: false,
+    get isIdle() {
+      return !this.isStreaming && !this.isCompacting;
+    },
   };
   mocks.sessions.push(value);
   return value;
@@ -162,6 +180,165 @@ describe('SessionSupervisor compact failure', () => {
     mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
       session: session(options),
     }));
+  });
+
+  describe('切换模型时的提前压缩', () => {
+    const next = { ...model, modelId: 'small', contextWindow: 40_000 };
+    let dir: string;
+    let supervisor: SessionSupervisor;
+    let events: AgentWorkerEvent[];
+    let live: ReturnType<typeof session>;
+
+    beforeEach(async () => {
+      dir = mkdtempSync(path.join(tmpdir(), 'enso-switch-compact-'));
+      events = [];
+      supervisor = new SessionSupervisor({
+        emit: (event) => events.push(event),
+        agentDir: dir,
+        sessionDir: dir,
+      });
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: dir,
+        model: { ...model, contextWindow: 100_000 },
+      });
+      await waitFor(events, 'parent-ready');
+      live = mocks.sessions[0] as ReturnType<typeof session>;
+      live.settingsManager = SettingsManager.inMemory({
+        compaction: {
+          reserveTokens: 2_000,
+          modelOverrides: {
+            [`${providerKeyFor(next)}/${next.modelId}`]: { reserveTokens: 10_000 },
+          },
+        },
+      });
+      live.contextTokens = 30_001;
+      live.compact.mockImplementation(async () => {
+        live.emit({ type: 'compaction_start' });
+        live.contextTokens = null; // SDK 暂不信任压缩前的用量，直到新 assistant 回包
+        live.emit({ type: 'compaction_end' });
+      });
+      events.length = 0;
+    });
+
+    afterEach(async () => {
+      await supervisor.shutdown();
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    async function switchModel(selection = next) {
+      events.length = 0;
+      supervisor.handleCommand({ type: 'set-model', identity: parent, model: selection });
+      await settle();
+      expect(events).toContainEqual({
+        type: 'model-changed',
+        identity: parent,
+        seq: expect.any(Number),
+        model: { providerId: selection.settingsProviderId, modelId: selection.modelId },
+      });
+    }
+
+    const compactStates = () =>
+      events.flatMap((event) => (event.type === 'compaction' ? [event.state] : []));
+
+    it('超过新模型窗口扣除该模型预留后的阈值，先同步模型再压缩', async () => {
+      await switchModel();
+      expect(compactStates()).toEqual(['start', 'end']);
+      expect(events.findIndex((event) => event.type === 'model-changed')).toBeLessThan(
+        events.findIndex((event) => event.type === 'compaction')
+      );
+    });
+
+    it.each([null, 29_999, 30_000])('用量 %s 未知或未严格超阈值时只切模型', async (tokens) => {
+      live.contextTokens = tokens;
+      await switchModel();
+      expect(compactStates()).toEqual([]);
+    });
+
+    it('SDK 没有上下文用量时只切模型', async () => {
+      vi.spyOn(live, 'getContextUsage').mockReturnValue(undefined);
+      await switchModel();
+      expect(compactStates()).toEqual([]);
+    });
+
+    it('切到更大的窗口后仍能留足预留，不触发压缩', async () => {
+      await switchModel({ ...next, contextWindow: 200_000 });
+      expect(compactStates()).toEqual([]);
+    });
+
+    it('用量回报窗口尚未更新时仍按新选模型的窗口判断', async () => {
+      vi.spyOn(live, 'getContextUsage').mockReturnValue({ tokens: 30_001, contextWindow: 100_000 });
+      await switchModel();
+      expect(compactStates()).toEqual(['start', 'end']);
+    });
+
+    it('自动压缩关闭时即使超阈值也只切模型', async () => {
+      live.settingsManager.setCompactionEnabled(false);
+      await switchModel();
+      expect(compactStates()).toEqual([]);
+    });
+
+    it.each(['SDK 忙碌', 'SDK 正在压缩', '投影仍 running', '已有压缩在途', '上一轮失败'])(
+      '%s 时只切模型',
+      async (activity) => {
+        if (activity === 'SDK 忙碌') live.isStreaming = true;
+        if (activity === 'SDK 正在压缩') live.isCompacting = true;
+        if (activity === '投影仍 running') live.emit({ type: 'agent_start' });
+        if (activity === '已有压缩在途') live.emit({ type: 'compaction_start' });
+        if (activity === '上一轮失败') {
+          live.emit({ type: 'agent_start' });
+          live.messages.push({ role: 'assistant', content: [], stopReason: 'error' });
+          live.emit({ type: 'agent_end', willRetry: false });
+          live.emit({ type: 'agent_settled' });
+          await waitFor(events, 'turn-failed');
+        }
+        await switchModel();
+        expect(compactStates()).toEqual([]);
+      }
+    );
+
+    it('prompt 已投递但 SDK 尚在输入预检时，不抢占新轮压缩', async () => {
+      const delay = Promise.withResolvers<undefined>();
+      live.prompt.mockReturnValue(delay.promise);
+      try {
+        supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'preflight' });
+        await settle();
+        expect(live.prompt).toHaveBeenCalledOnce();
+        await switchModel();
+        expect(compactStates()).toEqual([]);
+      } finally {
+        delay.resolve(undefined);
+        await settle();
+      }
+    });
+
+    it('刚压缩后再切到更小模型，不使用压缩前的旧用量', async () => {
+      await switchModel();
+      expect(compactStates()).toEqual(['start', 'end']);
+      await switchModel({ ...next, modelId: 'smaller', contextWindow: 20_000 });
+      expect(compactStates()).toEqual([]);
+    });
+
+    it('切换触发的压缩尚未发出开始事件时，后续 prompt 不抢跑', async () => {
+      const delay = Promise.withResolvers<void>();
+      const compact = live.compact.getMockImplementation();
+      live.compact.mockImplementation(async () => {
+        await delay.promise; // 模拟 Pi compact() 开头 await abort() 的空档
+        await compact?.();
+      });
+      try {
+        await switchModel();
+        supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'next message' });
+        await settle();
+        expect(live.prompt).not.toHaveBeenCalled();
+      } finally {
+        delay.resolve();
+        await settle();
+      }
+      expect(compactStates()).toEqual(['start', 'end']);
+      expect(live.prompt).toHaveBeenCalledExactlyOnceWith('next message', undefined);
+    });
   });
 
   it('装载层压缩策略互斥：同一会话只挂一个 compact 扩展', async () => {

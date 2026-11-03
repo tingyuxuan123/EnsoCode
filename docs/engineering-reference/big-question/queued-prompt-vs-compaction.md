@@ -24,12 +24,16 @@
   只对纯 streaming 限时；每次等过之后让一拍 `setTimeout(0)` 再复查，给延后压缩先启动的机会。
 - renderer 压缩 end 时若时间线里还有 optimistic 回显（投递在途），不泵队列、不续跑 goal，
   交给那一轮 turn-completed 泵。
+- 空闲会话换模型时，用新选模型窗口与每模型预留判断是否提前压缩；必须同时确认 SDK 空闲、
+  无在途投递/轮次，并在同会话串行门内等待压缩。不能异步启动后立即放门，否则 `compact()`
+  开头的 `await abort()` 会给下一条 prompt 留出抢跑空档。模型切换事件先同步，压缩后未知用量不复用旧值。
 
 ## 回归防线
 
 - `src/agent/supervisor.agentDispatch.test.ts`：压缩中 prompt 等压完、自动压缩超僵尸时限不失败、
   空闲后下一个宏任务才启动的压缩。
 - `src/renderer/stores/sessions/index.test.ts`：压缩结束时已有投递在途不再泵下一条。
+- `src/agent/supervisor.compact.test.ts`：换模型后按新窗口和每模型预留触发；压缩启动前的空档不放过后续 prompt。
 
 ## 相关代码
 

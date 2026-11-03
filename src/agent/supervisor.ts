@@ -19,6 +19,7 @@ import {
   type PromptTemplate,
   type ResourceDiagnostic,
   SessionManager,
+  shouldCompact,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { autoRetryOverrides, DEFAULT_AUTO_RETRY_LIMIT } from '@shared/autoRetry';
@@ -1886,6 +1887,36 @@ export class SessionSupervisor {
           seq: ++managed.seq,
           model: settingsModelRef(command.model),
         });
+        // SDK 在 prompt 的输入/鉴权预检中仍可能报告 idle；已投递的轮次也不能打断。
+        if (
+          managed.status !== 'idle' ||
+          !managed.session.isIdle ||
+          managed.compaction ||
+          managed.promptDelivery ||
+          managed.roundPending ||
+          (managed.currentTurnId && managed.promptedRequestIds.has(managed.currentTurnId))
+        ) {
+          return;
+        }
+        try {
+          const usage = managed.session.getContextUsage();
+          // 虚拟模型的用量窗口可能来自上次物理路由；这里使用新选择本身的窗口。
+          if (
+            usage &&
+            usage.tokens !== null &&
+            shouldCompact(
+              usage.tokens,
+              next.contextWindow,
+              managed.session.settingsManager.getCompactionSettings(next)
+            )
+          ) {
+            // compact() 先 await abort() 再设置 SDK 的压缩状态；持门避免下一条 prompt 抢跑。
+            await this.runCompaction(managed);
+          }
+        } catch (error) {
+          // 无效的压缩设置不应把已经成功的模型切换标成会话失败。
+          console.warn('[compact] model switch preflight failed:', toErrorMessage(error));
+        }
         return;
       }
       case 'set-reasoning': {
