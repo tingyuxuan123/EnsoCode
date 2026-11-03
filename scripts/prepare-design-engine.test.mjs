@@ -1,9 +1,53 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { prepareDesignEngine, stripForeignDesignPackages } from './prepare-design-engine.mjs';
+
+test('packaged design distribution requires preferred source, rebuild inputs and full licenses', async (t) => {
+  const { assertDesignDistribution } = createRequire(import.meta.url)(
+    './smoke-packaged-design.cjs'
+  );
+  const root = await fixture(t);
+  const files = [
+    'LICENSE',
+    'NOTICE',
+    'UPSTREAM.md',
+    'engine/package.json',
+    'engine/vite.config.mjs',
+    'engine/src/main.tsx',
+    'engine/node_modules/vite/bin/vite.js',
+    'skills/vetta-ui-design/SKILL.md',
+    'agents/designer.md',
+    'history-runner/runner.mjs',
+    'history-runner/source/runner-entry.ts',
+    'history-runner/source/archive.ts',
+    'history-runner/source/isomorphic-git-join.js',
+    'history-runner/source/build-tools.package.json',
+    'history-runner/source/build-tools.package-lock.json',
+    'history-runner/source/vite.runner.config.ts',
+    'history-runner/LICENSES/fflate-MIT.txt',
+    'history-runner/LICENSES/isomorphic-git-MIT.txt',
+    'history-runner/LICENSES/LGPL-3.0.txt',
+    'history-runner/LICENSES/GPL-3.0.txt',
+  ];
+  for (const file of files) {
+    const target = path.join(root, 'design', file);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, 'shipped source/license fixture');
+  }
+  assert.doesNotThrow(() => assertDesignDistribution(root));
+  for (const file of files) {
+    const target = path.join(root, 'design', file);
+    await rm(target);
+    assert.throws(() => assertDesignDistribution(root), { code: 'ENOENT' }, file);
+    await writeFile(target, '');
+    assert.throws(() => assertDesignDistribution(root), /Empty distribution file/, file);
+    await writeFile(target, 'restored fixture');
+  }
+});
 
 async function fixture(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'enso-design-engine-'));

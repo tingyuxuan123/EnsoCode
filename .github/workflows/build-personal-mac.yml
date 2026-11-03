@@ -135,6 +135,8 @@ jobs:
           hdiutil verify "$DMG"
           ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
             scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
+            scripts/smoke-packaged-design.cjs "$PWD/$APP/Contents/Resources"
           # 不把 builder-debug 等未上传文件写进发布校验和。
           mkdir -p dist/release-assets
           cp dist/*.zip dist/*.dmg dist/*.blockmap dist/latest-mac.yml dist/release-assets/
@@ -234,6 +236,8 @@ jobs:
           codesign --verify -R="$REQUIREMENT" "$APP"
           ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
             scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/EnsoCode" \
+            scripts/smoke-packaged-design.cjs "$PWD/$APP/Contents/Resources"
           hdiutil verify "remote-assets/EnsoCode-$VERSION-arm64.dmg"
 
       - name: Publish personal prerelease

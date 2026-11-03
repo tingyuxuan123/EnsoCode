@@ -68,6 +68,8 @@ macOS `security` / trustd 的清理命令不得无界等待：`scripts/personal-
 1. `pnpm release:check`：版本/tag、类型、lint、全量测试；然后 `pnpm build`。
 2. CI Mac arm64 使用原证书打包，不执行 Apple Developer ID 公证。
 3. 本包 deep/strict 签名、固定旧证书 requirement、DMG 完整性、原生依赖/内置二进制冒烟均通过。
+   包内设计引擎也须实际编译临时画框；历史 runner 须能提交版本，并随包带齐许可文本、
+   可修改源码及重建输入。此门在本包和重新下载的草稿 ZIP 上均执行，不替代 UI 安装验收。
 4. 只将 ZIP、DMG、blockmap、`latest-mac.yml` 放入发布目录再生成 `SHA256SUMS`，
    不把未上传的 builder-debug 文件混入校验清单。
 5. 创建草稿；已公开版本不允许重建覆盖。未公开草稿可在同 tag 重跑时重传，但仍需重新验收。
