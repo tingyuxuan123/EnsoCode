@@ -162,3 +162,15 @@ P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个�
 继承 secondary，外部同类无效；输入框真实键入 `c` 不触发画布绑定、面板焦点则触发；样机弹窗
 具备插件根标记、Header/Panel/Footer 与宿主 z=51。隔离实例已关闭、数据目录已删除。
 完整画框/依赖 controller 的工具/两厂商模型联合真机验收由主任务继续，不能把本节替代 P2 验收清单。
+
+## 品牌替换（P2 集成）
+
+上游界面把 agent 称作 “Vetta”，导出样机默认画 Vetta 图标与 “Designed By Vetta”。EnsoCode 中：
+
+- `locales/{zh,en}.json` 中 18 处 “Vetta” 换成聊天界面上的 agent 名 “Enso”；插件名改为“设计 / Design”，样机开关文案改为 EnsoCode。
+- `canvas/NotesLayer.tsx`、`canvas/NotesDrawer.tsx` 写死的批注作者名改为 “Enso”。
+- `mockup/render.ts` 水印文字改为 “EnsoCode / Designed with EnsoCode”；`mockup/brand-logo.ts` 换成 `build/icons/128x128.png`（常量名保持不变以减少 diff）。
+- `assets/assets-tool.ts` 外部图片 API 的 User-Agent 如实标明 EnsoCode。
+- `vetd/check-sources.ts` 中引用按钮文案的提示同步为“让 Enso 去做”。
+- 保留：`.vetdz` 保存对话框的文件类型名 “Vetta Design”（上游格式名）、给模型看的工具描述与技能正文（漂移测试要求与上游一致）。
+- `test/skill-presentation.test.ts` 的插件名断言同步改为“设计”。

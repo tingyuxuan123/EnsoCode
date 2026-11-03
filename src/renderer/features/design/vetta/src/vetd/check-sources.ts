@@ -395,7 +395,7 @@ function rulesFor(installedPackages: ReadonlySet<string>): Rule[] {
 	{
 		id: "minified-source",
 		test: (line) => line.length > MAX_LINE_LENGTH,
-		message: `Line is over ${MAX_LINE_LENGTH} characters — the source is written as one long line. Element→source mapping is per line, so every element then reports the same location and the user's "让 Vetta 调整" can no longer target anything. Format it normally, one element per line for nested markup.`,
+		message: `Line is over ${MAX_LINE_LENGTH} characters — the source is written as one long line. Element→source mapping is per line, so every element then reports the same location and the user's "让 Enso 去做" can no longer target anything. Format it normally, one element per line for nested markup.`,
 	},
 	];
 }

@@ -284,7 +284,7 @@ function NoteRow({
 					</span>
 					{lastAgent ? (
 						<span className="mt-1 flex items-start gap-1 text-[10px] leading-snug text-muted-foreground">
-							<span className="shrink-0 font-medium">Vetta</span>
+							<span className="shrink-0 font-medium">Enso</span>
 							<span className="min-w-0 flex-1 truncate">{lastAgent.text}</span>
 						</span>
 					) : null}

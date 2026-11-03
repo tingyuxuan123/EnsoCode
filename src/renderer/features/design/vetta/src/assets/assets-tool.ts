@@ -50,7 +50,7 @@ const SEARCH_SOURCES = ["photos", "openverse", "wikimedia", "nasa"] as const;
 type SearchSource = (typeof SEARCH_SOURCES)[number];
 const MAX_RESULTS = 12;
 /** Wikimedia 要求带可识别的 User-Agent，否则会限流或拒绝。 */
-const HEADERS = { "User-Agent": "VettaDesign/1.0 (design mockups; https://github.com/openvetta/open-vetta)" };
+const HEADERS = { "User-Agent": "EnsoCode-Design/1.0 (design mockups; https://github.com/tingyuxuan123/EnsoCode)" };
 const SEARCH_TIMEOUT_MS = 15_000;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 /** 联系表里每张缩略图的显示宽度。 */
