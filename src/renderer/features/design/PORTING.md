@@ -81,9 +81,9 @@ conversation.abort、official.projects.create/archive 等写操作、official.di
 | gallery/open-demo.ts | 任意 node 写临时 HTML 并用系统命令打开 | P1 明确报错；无此固定 Main API，P3 做沙箱 demo。 |
 | style.css | 上游由插件包扫描工具类并全量 scope | 显式限定 Tailwind 扫描目录并单文件编译后 scope；宿主与插件不交叉产出工具类。 |
 | cards/file-url.ts、ScreenshotSwiper.tsx | 同步生成 vetta-file://local 特权 URL | 经 SDK fs.readBinaryFile → MIME 校验 → blob URL；卡片卸载/替换时释放，弹层独立持有 URL，避免虚拟卡片卸载把预览清掉。 |
-| canvas/design-runtime.ts | 模块级单画布 controller | 保留单例，新增订阅；仅活跃 dock 挂载，controller 就绪/失效/卸载或会话切换时报告 `{sessionId, open}`，上报失败只警告。 |
+| canvas/design-runtime.ts、canvas/CanvasTab.tsx | 模块级单画布 controller | 保留单例，新增订阅及 mounted cwd；tools/assets/direction/export/history 及 tool-gate 用 `getCanvasController(cwd)` 隔离项目（包括嵌套项目）。仅活跃 dock 挂载，presence 只报告匹配该挂载 cwd 的 controller。 |
 | canvas/FrameView.tsx、interaction/InteractionView.tsx | 刷新原 iframe 的 src | 端口变化换 iframe key，FrameView 重绑 bridge 并重置加载基线；Main 按 frame 首次引擎 origin 锁定导航。sandbox/allow 与上游一致（这两处均未设置）。 |
-| canvas/bridge-client.ts、interaction/nav-bridge.ts、shared/frame-origin.ts | 主要按 source 匹配，未校验 origin，父→子用 `*` | 本地同时要求已登记 iframe、固定 `http://127.0.0.1:<port>` origin 和 `vetd:true`，含 space/HMR；父→子只投递该 origin，截图/元素回应必须匹配请求画框。 |
+| canvas/bridge-client.ts、interaction/nav-bridge.ts、shared/frame-origin.ts | 主要按 source 匹配，未校验 origin，父→子用 `*` | 本地同时要求已登记 iframe、固定 `http://127.0.0.1:<port>` origin 和 `vetd:true`，含 space/HMR；父→子只投递该 origin，截图/元素回应必须匹配请求画框。冷 iframe 的元素查询还须等待 rendered（不只 ready），避免命中 lazy frame 提交前的空 div；重挂/重新 ready 清除渲染标记，等待有上限。 |
 | mockup/ExportMockupDialog.tsx | 自建 z-1000 模态及 Escape 监听 | 业务工作台不改，外壳改宿主 Dialog Header/Panel/Footer、层级/焦点、body portal 内补 scope 根。其它上游 PluginPortal 已有标记；选中追问 portal 目标在画布内。 |
 | sdk/activity-tab.ts、sdk/conversation.ts、notes/handoff.ts | 备注派活调用当前会话，无显式会话 id | 本地在 ActivityTab 上下文携带 canvas sessionId，派活带所属 id/cwd 并在真正发送前复核，旧回调不改发新会话，忙时不入队。 |
 
@@ -99,6 +99,29 @@ conversation.abort、official.projects.create/archive 等写操作、official.di
 onToolCancel abort，取消后不返回成功。文本/JSON → text，显式图片 → base64+mimeType，
 cards → details.cards；异常 respondTool `{ok:false,error}`。上游业务 `{ok:false}` 保留为文本结果。
 当前查看会话（含 child tab）变化重新 registerRuntime；旧异步 resolve 回包不覆盖新会话。
+工具 cwd 使用 resolveRoot 的规范路径，避免 `/tmp` 与 `/private/tmp` 分裂身份。宿主
+`host/canvas-target.ts` 对 create/截图/方向/素材/导出及前台 status 串行租用单画布，排队与
+打开等待各最多 60 秒，完成、超时、取消均释放。调用 cwd 与当前查看 cwd 相同（含同项目
+designer 子会话）才可选择设计；其它项目的后台调用返回 `{ok:false,retryable:true}`，请用户
+切回对应会话，绝不抢当前画布。后台 status 仍发现文件但 `open:null`，sizes/history 等
+文件级工具不等画布租约。显式 cwd 的迟到 openActivityTab 也不能切走前台项目。
+前台路由按已解析的当前会话身份匹配，不将 store 中可能保留别名的 worktree 路径与
+规范路径直接比较；`/tmp`、符号链接等路径别名不会把本项目误判成后台项目。
+create 成功须等精确新设计 controller 就绪；若已创建但未打开，保留 vetdPath、返回可重试
+失败并明确勿重复 create，应切回会话后重试 status/screenshot，避免生成 `-1` 半成品。
+宿主保留该 cwd 的精确待开目标供重试；仅在确认包已创建后返回 `created:true`，worker 的
+`tools/design.ts` 据此仍刷新工具 gate，普通创建前失败不刷新。
+这是与上游单活动页签宿主的差异：不会创建后台/headless controller，用户切走后的长任务
+可能失败。上游 getter 按 cwd 再次过滤，覆盖 handler 内 await 后重新读取的竞态；已发出
+的文件/引擎 IPC 仍不能撤销。回归见 `runtime-canvas.test.ts`。
+
+隔离假 provider 对照（2026-11-03，HEAD `4a3ae51b` 与修复版）：同一响应并列两个
+codemode，第二个均受本轮初始工具表限制；不能当作真实模型“收到结果后的下一响应”。
+临时 provider 每收到 tool_result 才发下一 codemode，权威 child 历史确认两个独立
+assistant 响应：HEAD 下一响应工具可见，但 create 后 status 为 open:null、截图要求
+重试；修复版 designer create/写 frame → 下一响应 status 为新项目路径、截图成功，
+无后缀包，切回 A 后 status/截图仍正确。后台请求不会抢前台画布也已复验。原始“B
+读到 A”未稳定复现，不能据此断言旧 controller 延迟来自哪次 Dock 挂载竞态。
 hooks 按会话串行：prompt-submit → UserPromptSubmit 先封存上轮再记提示，stop → Stop 提交，
 session-end → SessionEnd 清理提示记忆。契约没有 turnId/model/cause，填保守默认；历史 hooks
 只用 session.id/cwd/prompt。prompt providers 本期只登记，未伪称影响 worker tool-gate/系统提示词。
@@ -151,7 +174,8 @@ conversation 接了查看会话的运行状态边沿（供 notes 闸口），尚
 - 仅跳过 engine-manager 的 3 条 ~/.vetta 迁移/旧 readiness 测试：EnsoCode 明确不迁移该目录，Main 引擎服务另测；退出事件测试继续跑。
 
 新增 paths/results/context/runtime-dispatch/完整入口激活测试，包含 RED 后 GREEN 的路径映射、
-结果转换、分发与 cards 保留断言。真机模型验收尚未执行；不能以 happy-dom 结果代替两厂商模型验证。
+结果转换、分发与 cards 保留断言。P2 集成已进行 Claude/GPT 真实模型验证，详细结果与
+尚未覆盖的工具矩阵见设计稿 §10；不能以 happy-dom 或假 provider 替代真实模型证据。
 
 P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个既有 skip；侧栏/时间线/
 工具卡/draft 回归 39 文件、426 passed，根 typecheck 与变更文件 Biome 通过，phone typecheck/build

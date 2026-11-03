@@ -1,6 +1,6 @@
 # 移植 Open Vetta 设计功能（vetta-ui-design）设计稿
 
-> 状态：已确认（2026-11-02），P1 实施中。来源：`open-vetta-main/packages/plugins/presets/vetta-ui-design`（插件 0.7.6，Apache-2.0；内含 taste-skill，MIT）。
+> 状态：已确认（2026-11-02），P1/P2 完成，P3 待实施。来源：`open-vetta-main/packages/plugins/presets/vetta-ui-design`（插件 0.7.6，Apache-2.0；内含 taste-skill，MIT）。
 > 上游参考：ADR-0053/0054/0055/0066/0068/0069、`docs/desktop/design-gallery.md`。
 
 ## 1. 行为差距
@@ -88,7 +88,7 @@ vite dev server、history-runner、check-syntax 都用 `process.execPath` + `ELE
 | global → 样机导出弹窗 | App 根部挂载，沿用项目 Dialog 分层 |
 | file-preview → `.vetdz` 预览 | 文件预览按扩展名分发 |
 | message card → 截图卡 | `vetd_screenshot` 工具卡渲染 |
-| new-session-context → 风格库 | 新建会话页（WelcomeSuggestions 区域）+ 设计师预设 pill |
+| new-session-context → 风格库 | 新建会话页（WelcomeSuggestions 区域）；设计师以子 agent 类型接入，不新增聊天预设 |
 | file-explorer | `fileIcons.ts` 给 `.vetd/` 目录加图标，`fileTreeMenu.tsx` 加“在设计画布中打开” |
 | shortcuts | 画布内局部快捷键（C 批注、Mod-Z/Shift-Z/Y） |
 | input-action | 上游实际未注册，不做 |
@@ -98,7 +98,7 @@ vite dev server、history-runner、check-syntax 都用 `process.execPath` + `ELE
 ### D8 Agent 集成
 
 - **技能**：`resources/design/skills/vetta-ui-design` 加进 `additionalSkillPaths`，由设置开关控制，默认开启。
-- **设计师角色**：内置 preset，正文取上游 `agent/agents/designer.md`。
+- **设计师角色**：内置 `designer` 子 agent 类型，正文取上游 `agent/agents/designer.md`，仅改为向 parent 汇报；不做聊天 preset。只有 designer child 获得设计工具，继承自身审批和 parent Plan 门；关闭设计时同步隐藏角色。
 - **tool-gate**：开关关闭则隐藏全部；否则画布 cwd 集合命中直接开放全部（上游 `getCanvasController` 快捷路径），未命中则按 worker 的 cwd 文件发现/create 缓存决定。Renderer 仅上报 `{sessionId, open}`，Main 用 `pluginProjectRoot` 推导并汇总 cwd，worker ready/重启重推；技能激活本身不是 gate 输入。
 - **hooks**：UserPromptSubmit / Stop / SessionEnd（历史自动提交）从 worker 事件经 Main 转给设计运行时。
 - **计划模式**：新工具不会自动被拒。`vetd_create/install/notes/direction/restore/export/assets/screenshot`（都会写文件）加入 `planMode.ts` DENIED_TOOLS；`vetd_status/sizes/history` 允许。写测试覆盖。
@@ -119,7 +119,7 @@ assets（图片搜索/下载）、design-systems 目录同步走 Main fetch，�
 
 **P2 画布**
 Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（attach 到 composer）、批注层与派活、撤销重做、交互模式、设备壳、引擎恢复 UI。
-验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素 → 提问徽标 → 批注 → 自动派活发出带定位信息（source/domPath/frame）的 `vetd_notes` prompt（上游 0.7.6 已不再把选中常驻挂到输入框，按上游现行行为）；依赖画布控制器的工具（清单见 `src/renderer/features/design/PORTING.md`）逐项可用，`vetd_screenshot` 截图卡显示画框。
+验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素 → 提问徽标 → 批注 → 自动派活发出固定的“调用 vetd_notes”prompt，agent 调用 `vetd_notes` 后拿到批注的定位信息（`anchor.frameId`、`element.source/domPath`）与标注截图（上游 0.7.6 已不再把选中常驻挂到输入框，prompt 本身也不内嵌定位，按上游现行行为）；依赖画布控制器的工具（清单见 `src/renderer/features/design/PORTING.md`）逐项可用，`vetd_screenshot` 截图卡显示画框。
 
 **P3 画廊、导出、历史、文件树**
 画廊视图与入口；`.vetdz` 导入导出、`.vetdz` 预览；样机 PNG/PDF；历史抽屉（history-runner）；文件树图标与右键；旧格式迁移。
@@ -170,10 +170,45 @@ Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（atta
 
 - [x] P2-Main：崩溃孤儿引擎双层清理完成（父进程 watchdog + 启动 PID/命令签名复核）。隔离 Electron 43 Main（CDP 9444）启动真实 Vite 并确认 HTTP 200，SIGKILL Main 后约 369ms 引擎退出；真实 ps 清理、PID 复用拒杀、坏记录与链接均有测试。Windows 启动清理 fail-closed 不发信号，尚未真机验收。
 - design IPC 只信任主窗口：其它应用窗口的运行时登记失败，工具一律路由主窗口。
+- [x] P2 会话隔离：与上游单活动页签不同，宿主只允许调用 cwd 与当前查看 cwd 相同（包括同项目 designer child）时选择/等待设计；其它项目后台的画布依赖调用返回可重试错误，请用户切回，不抢前台画布。status 的文件发现、sizes/history 等照常可用，后台 status 不暴露其它项目的 open。controller 记录 mounted cwd，工具每次读取均校验；create 返回前等精确新路径，已创建未打开时返回原路径并提示勿重复 create。单画布租约排队/打开等待各最多 60 秒，结束/超时/取消释放；不实现后台 headless canvas，已发 IPC 不可撤销。详见 `src/renderer/features/design/PORTING.md` 和 `runtime-canvas.test.ts`。
 - 已发出的 fs/engine/script IPC 无取消字段，取消只停止等待，不撤销已发生的写入或进程动作。
 - [x] P2-Main：「画布已打开」已通过 IPC → Main cwd 并集 → agentHost ready 重推 → supervisor → DesignPresence 接入门控。跨 sender 替换、销毁清理、SSH 忽略、worker 重启及关闭回退均有回归。依赖画布控制器的工具仍由 Renderer 验收，清单见 `src/renderer/features/design/PORTING.md`。
 - [x] P2-Main：`vetd_*` 工具结果 `details.cards` 白名单投影为 `designCards`，实时与 JSONL 恢复共用投影；每消息最多 32 张，字段 ≤512 字符，payload 仅 JSON 普通对象且 ≤4KB。
-- 设计师角色（上游为可 @ 的 agent 角色）尚未接入。
+- [x] P2 设计师角色：内置 `designer` 子 agent 已接入 typed child 与 coworker 路径；Main 验证精确 child 身份与工具证明，按 root/worktree 路由，结果回到 child，历史 hook 只由 parent 持有。设计开关同时影响可见角色、候选和 registry revision。
+
+## 10. P2 集成验收记录（2026-11-03）
+
+所有运行时验证使用独立 `/tmp` userData 与临时项目，未操作用户真实会话；隔离实例、
+复制的 provider 配置、临时项目和对照 worktree 均已清理。
+
+- CDP：画框成功渲染，修改 `Ledger v1` 为 `Ledger v2 HMR` 后原 iframe 不重建、内容热更新；
+  画布明暗主题、全屏、输入框快捷键隔离与宿主弹窗层级通过。
+- 工具：单帧 screenshot、status、direction deal/propose/choose、素材搜索、PNG images 导出通过；
+  screenshot 卡实时与刷新后恢复通过。真机发现 CSP 缺少 `img-src blob:`，修复后缩略图成功加载。
+- 批注：UI 落钉、输入批注、保存源码锚点（`frames/index.tsx:5`）并自动发出调用 `vetd_notes`
+  的固定指令；冻结锚点读取通过。补验活体时发现新 iframe 的 bridge ready 早于 React
+  frame 渲染，查询会命中空 div 或误判锚点过期；先以两个失败测试复现，再让查询等待
+  rendered。真机复验返回 `h1`、正确文本、`frames/index.tsx:3` 且无 `anchorStale`，编号
+  标注截图已读取确认；resolve 回复落盘且 pendingRemaining 为 0。
+- 多画框：同一画布显示 index/second 两帧，`all:true` 与显式 `frames:["index","second"]`
+  均返回两张快照及总览图；已目视确认两帧内容，重复检查能返回 stalledFrames。
+- 引擎恢复：仅杀死已核验 PID/父进程/userData 的隔离 Vite，自动恢复后端口改变，status
+  报 running，两帧仍在，单帧截图再次成功；不杀其它项目的 Vite。
+- 真实 Anthropic `claude-opus-5-5`：自主读技能、创建番茄钟首页、提方向并修正对比度失败、
+  安装字体、写 theme/frame、多次截图自检并修正数据矛盾，最终 notes 为空。
+- 真实 OpenAI `gpt-6.1-sol`：parent 自行派出 designer，未直接调用设计工具；child 自主
+  读技能、创建骑行竖版海报、安装字体、写源码并截图修正重叠。该次暴露跨会话画布问题，
+  不能把 child 再 create 得到后缀包的绕过当作验收成功。
+- 会话隔离修复：假 provider 对照已提交 `4a3ae51b` 和修复版本，以收到工具结果后的下一条
+  独立模型响应验证（不是同一响应并列 toolCall）。旧版可见后续工具，但 create 返回时
+  status 为 `open:null`；修复版 designer 创建后 status 指向 B、截图正确且只生成一个无后缀包，
+  切回 A 的 status/截图仍正确。后台 B 不切走前台 A，status 不暴露 A，截图返回可重试错误。
+  原始“B 读到 A”的具体挂载竞态未稳定重现，不伪称已定位它的唯一触发时序。
+- P3 / 联合收尾仍需覆盖：画廊、分享包与样机 PNG/PDF、历史 UI/恢复和文件树。实际安装包
+  体积、签名/公证和 LGPL 分发义务最终确认仍属 CI/发布验收，桌面构建通过不等于已安装或已发布。
+- 最终集成检查：`pnpm typecheck`、`pnpm lint`（无错误，仅既有提示）、`pnpm test`
+  （Vitest 1151 文件通过 / 2 跳过，12045 用例通过 / 10 跳过；node:test 49 通过）、
+  `pnpm build`、`pnpm --filter @enso/phone typecheck` 与 `build` 全部成功。
 
 ## 附录 A：上游宿主依赖（调研结论）
 
