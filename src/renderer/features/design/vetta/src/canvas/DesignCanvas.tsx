@@ -1720,8 +1720,10 @@ export function DesignCanvas({
 			ref={containerRef}
 			// select-none：画布外壳（frame 标题、尺寸标注等）不参与文本选择，
 			// 否则拖动平移会把它们刷成蓝色高亮，看着像选中了 frame。
+			// overflow-clip：画布只通过 world transform 平移。hidden 仍允许浏览器滚动
+			// 容器来显示焦点/后代，从而把不在 world 内的工具栏也一起推走。
 			// vetd-interacting：缩放/平移进行中把画布拍平，见 style.css 的同名段落。
-			className={`relative h-full w-full select-none overflow-hidden outline-none vetd-canvas-bg ${
+			className={`relative h-full w-full select-none overflow-clip outline-none vetd-canvas-bg ${
 				view.interacting ? "vetd-interacting" : ""
 			}`}
 			style={{ cursor }}

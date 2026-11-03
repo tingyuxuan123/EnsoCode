@@ -211,6 +211,20 @@ Main 验证 sender 所属的存活引擎后推导端口，且用实际 origin �
 隔离 Electron CDP 9333 实际点击“浏览器打开”，系统 Chrome 地址为登记引擎的
 `/settings-ssh`，页面标题显示该临时测试帧；无失败通知。验收标签页与隔离实例随后清理。
 
+### 编辑画布工具栏被原生滚动带走（2026-11-03）
+
+画布原先用 `overflow-hidden` 裁切大尺寸 world，但它仍是可编程/焦点滚动容器。
+隔离 Chromium 的 957×661 画布中，对 1800×800 画框调用 scrollIntoView 后，外壳出现
+scrollLeft=421.5、scrollTop=69.5，上角动作组和底部工具栏同量偏移；这是不同于 world
+平移的第二套坐标，能复现工具栏向左移出边界的症状。最初的自动等待助手本身会触发
+scrollIntoView，因此不把它描述为已还原用户那一次具体拖拽的触发时序。
+编辑画布根改为 `overflow-clip`，不加坐标补偿、不改 manifest 或工具栏定位。
+`scripts/check-design-canvas-viewport.mjs` 在同一 Chromium 中覆盖 scrollIntoView、屏外元素
+focus、scrollTo；临时切回 hidden 时失败，clip 时原生滚动始终为零、两组工具栏坐标不变。
+另经受信任指针验证拖手平移、拖动画框以及按钮缩放到 120%，内容按预期变化，工具栏不动。
+程序化约束为 540px 宽后，右上组保留 10.5px 右边距、底栏中心误差为零；这不是原生分栏
+拖动验收，后者被 MANUAL_FOCUS_REQUIRED 拦截且未执行，不宣称通过。
+
 ## P3 宿主接线与安全差异
 
 - AppRail 新增“设计”，只在本机 Code 模式且 designEnabled 开启时可用。注册的 GalleryView

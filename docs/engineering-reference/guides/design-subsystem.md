@@ -17,6 +17,10 @@ Open Vetta 的业务代码保留在 `src/renderer/features/design/vetta/`，宿�
 - 交互预览“浏览器打开”不走通用 HTTPS 外链：宿主将本机 URL 映射成已登记 engineId +
   path/query/hash，Main 复核该引擎仍存活且属于 sender，再用权威端口拼回环 URL。
   其它 HTTP 服务、未知/失效引擎和能改变 origin 的路径一律拒绝，不放宽网络请求策略。
+- 编辑画布外壳使用 `overflow: clip` 而非 `hidden`：平移只能来自 world transform。
+  `hidden` 仍允许焦点/scrollIntoView/原生滚动改变 scrollLeft/scrollTop，把同层工具栏一起带走。
+  真 Chromium 回归：隔离实例打开超出视口的画框后执行
+  `ENSO_CDP_PORT=9333 node scripts/check-design-canvas-viewport.mjs`；happy-dom 无布局，不能代替该验证。
 
 ## 分享与预览
 
