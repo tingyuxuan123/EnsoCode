@@ -4,6 +4,7 @@ import {
   buildAgentTypeRegistrySnapshot,
   ENSO_AGENT_TYPE_KEY,
   ENSO_LOCKED_PROFILE,
+  effectiveDisabledBuiltinAgentTypes,
   isReservedAgentTypeName,
   isSameChildSessionIdentity,
   isSameSessionIdentity,
@@ -12,9 +13,48 @@ import {
   parseAgentTypeKey,
   parseAgentTypeRegistrySnapshot,
 } from './builtinAgents';
+import { BUILTIN_AGENT_TYPES } from './types/assets';
 
 const CUSTOM_ID = '11111111-1111-4111-8111-111111111111';
 const BOT_ID = '33333333-3333-4333-8333-333333333333';
+
+describe('designer availability', () => {
+  it('keeps the upstream role, adapted to parent-agent communication, out of descriptions', () => {
+    const designer = BUILTIN_AGENT_TYPES.find((entry) => entry.name === 'designer');
+    expect(designer).toMatchObject({ tools: 'all', modelMode: 'agent_pick' });
+    expect(designer?.description).toMatch(/standalone.*UI.*posters.*slides/i);
+    expect(designer?.systemPrompt).toContain('the eight prides and shames');
+    expect(designer?.systemPrompt).toContain('vetta-ui-design');
+    expect(designer?.systemPrompt).toContain('parent agent');
+    expect(designer?.systemPrompt).not.toContain('report to the Master');
+  });
+
+  it.each([undefined, {}, { designEnabled: true }, { designEnabled: 'false' }])(
+    'defaults designer to enabled: %j',
+    (state) => expect(effectiveDisabledBuiltinAgentTypes(state)).toEqual([])
+  );
+
+  it('combines explicit disables with the feature switch without mutation or duplicates', () => {
+    const state = { designEnabled: false, disabledBuiltinAgentTypes: ['worker', 1, 'worker'] };
+    const disabled = effectiveDisabledBuiltinAgentTypes(state);
+    expect(disabled).toEqual(['worker', 'designer']);
+    expect(state.disabledBuiltinAgentTypes).toEqual(['worker', 1, 'worker']);
+    expect(
+      buildAgentTypeRegistrySnapshot({
+        revision: 0,
+        disabledBuiltinAgentTypes: disabled,
+        customAgentTypes: [],
+      }).candidates.map((entry) => entry.typeKey)
+    ).not.toContain('builtin:designer');
+    expect(
+      effectiveDisabledBuiltinAgentTypes({
+        designEnabled: false,
+        disabledBuiltinAgentTypes: ['designer'],
+      })
+    ).toEqual(['designer']);
+    expect(effectiveDisabledBuiltinAgentTypes({ disabledBuiltinAgentTypes: 'worker' })).toEqual([]);
+  });
+});
 
 describe('agentTypeDisplayName', () => {
   const custom = [{ id: CUSTOM_ID, name: '  reviewer-x ' }];
@@ -93,6 +133,7 @@ describe('AgentType registry and locked Enso profile', () => {
       'agent:enso',
       'builtin:reviewer',
       'builtin:tester',
+      'builtin:designer',
       `custom:${CUSTOM_ID}`,
     ]);
     expect(parseAgentTypeRegistrySnapshot(snapshot)).toEqual(snapshot);

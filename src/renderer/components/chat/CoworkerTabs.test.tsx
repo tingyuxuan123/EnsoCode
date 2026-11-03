@@ -1,13 +1,17 @@
-import { createElement } from 'react';
+import { parseHTML } from 'linkedom';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoworkerTabs } from './CoworkerTabs';
 
-const mock = vi.hoisted(() => ({ state: { conversations: {} as Record<string, unknown> } }));
+const mock = vi.hoisted(() => ({
+  state: { conversations: {} as Record<string, unknown> },
+  settings: { agentTypes: [], disabledBuiltinAgentTypes: [], designEnabled: true },
+}));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/stores/settings', () => ({
-  useSettingsStore: (selector: (s: object) => unknown) =>
-    selector({ agentTypes: [], disabledBuiltinAgentTypes: [] }),
+  useSettingsStore: (selector: (s: object) => unknown) => selector(mock.settings),
 }));
 vi.mock('@/stores/sessions', () => ({
   useSessionsStore: Object.assign((selector: (s: object) => unknown) => selector(mock.state), {
@@ -26,6 +30,23 @@ vi.mock('@/components/ui/menu', () => ({
     createElement('button', { ...props, type: 'button' }, children),
   MenuPopup: () => null,
   MenuItem: () => null,
+}));
+vi.mock('@/components/ui/dialog', () => ({
+  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
+    open ? children : null,
+  DialogContent: ({ children }: { children: React.ReactNode }) => children,
+  DialogDescription: () => null,
+  DialogFooter: () => null,
+  DialogHeader: () => null,
+  DialogPanel: ({ children }: { children: React.ReactNode }) => children,
+  DialogTitle: () => null,
+}));
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ children }: { children: React.ReactNode }) => children,
+  SelectPopup: ({ children }: { children: React.ReactNode }) => children,
+  SelectItem: ({ value }: { value: string }) => createElement('span', { 'data-agent-type': value }),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
 }));
 
 beforeEach(() => {
@@ -48,6 +69,28 @@ beforeEach(() => {
 });
 
 describe('协作者标签操作语义', () => {
+  it.each([true, false])('雇佣类型按设计开关过滤：%s', async (designEnabled) => {
+    const dom = parseHTML('<html><body><div id="root"></div></body></html>');
+    vi.stubGlobal('window', dom.window);
+    vi.stubGlobal('document', dom.document);
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const container = dom.document.getElementById('root') as unknown as HTMLElement;
+    const root = createRoot(container);
+    mock.settings.designEnabled = designEnabled;
+    try {
+      await act(async () =>
+        root.render(createElement(CoworkerTabs, { parentId: 'parent', displayedId: 'parent' }))
+      );
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('button[title="Add collaborator"]')!.click()
+      );
+      expect(container.querySelector('[data-agent-type="worker"]')).not.toBeNull();
+      expect(Boolean(container.querySelector('[data-agent-type="designer"]'))).toBe(designEnabled);
+    } finally {
+      await act(async () => root.unmount());
+      vi.unstubAllGlobals();
+    }
+  });
   it('一次性任务不出现，协作者关闭是关闭视图而非解雇', () => {
     const html = renderToStaticMarkup(
       createElement(CoworkerTabs, { parentId: 'parent', displayedId: 'parent' })

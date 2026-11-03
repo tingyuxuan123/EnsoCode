@@ -4,6 +4,7 @@ import path from 'node:path';
 import { browserSessionKey } from '@shared/bots/browser';
 import {
   type ChildSessionIdentity,
+  DESIGNER_AGENT_TYPE_KEY,
   isSameChildSessionIdentity,
   type SessionIdentity,
 } from '@shared/builtinAgents';
@@ -41,6 +42,7 @@ import {
   parseUpdateConversationSelectionRequest,
   THINKING_LEVELS,
 } from '@shared/types/agent';
+import { DESIGNER_AGENT_NAME } from '@shared/types/assets';
 import { parseTaskCheck } from '@shared/types/bot';
 import { effectiveSubagentAllowedModes } from '@shared/types/builtinTools';
 import { type DesignHookEvent, designToolTimeoutMs } from '@shared/types/design';
@@ -314,14 +316,28 @@ function cancelDesignRequests(identity?: SessionIdentity, error?: string): void 
 }
 
 function designToolAllowed(identity: SessionIdentity | ChildSessionIdentity): boolean {
-  if (
-    'parent' in identity &&
-    !agentSessionIndex.childProof(identity)?.toolIds.some((tool) => tool.startsWith('vetd_'))
-  )
-    return false;
-  if (!('parent' in identity) && !isDesignSessionToolEnabled(identity)) return false;
+  const rootId = rootSessionId(identity);
+  if ('parent' in identity) {
+    if (
+      identity.typeKey !== DESIGNER_AGENT_TYPE_KEY ||
+      !agentSessionIndex.childProof(identity)?.toolIds.some((tool) => tool.startsWith('vetd_')) ||
+      !isDesignSessionToolEnabled(identity.parent)
+    )
+      return false;
+  } else if (rootId !== identity.sessionId) {
+    // Legacy coworker recovery has a plain identity; require the live parent's indexed coworker.
+    const parent = agentSessionIndex.currentIdentity(rootId);
+    if (
+      !parent ||
+      'parent' in parent ||
+      !currentBrowserIdentity(parent) ||
+      !isDesignSessionToolEnabled(parent) ||
+      agentSessionIndex.coworkerOf(parent, identity.sessionId)?.agentType !== DESIGNER_AGENT_NAME
+    )
+      return false;
+  } else if (!isDesignSessionToolEnabled(identity)) return false;
   const state = readSettingsState() ?? {};
-  const conversation = sourceAuthority?.conversation(rootSessionId(identity));
+  const conversation = sourceAuthority?.conversation(rootId);
   const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
   return (
     state.designEnabled !== false &&
@@ -339,7 +355,12 @@ function emitDesignHook(
   event: DesignHookEvent['event'],
   prompt?: string
 ): void {
-  if (readSettingsState()?.designEnabled === false) return;
+  // The parent owns history for this workspace, even when a child produced the design.
+  if (
+    rootSessionId(identity) !== identity.sessionId ||
+    readSettingsState()?.designEnabled === false
+  )
+    return;
   const cwd = pluginProjectRoot(identity.sessionId);
   if (cwd)
     getDesignToolBroker().emitHook({
@@ -1523,9 +1544,10 @@ export function registerAgentHandlers(): void {
         return;
       }
       seenDesignRequests.add(requestId);
-      const cwd = pluginProjectRoot(identity.sessionId);
+      const sessionId = rootSessionId(identity);
+      const cwd = pluginProjectRoot(sessionId);
       if (!cwd) {
-        const conversation = sourceAuthority?.conversation(rootSessionId(identity));
+        const conversation = sourceAuthority?.conversation(sessionId);
         const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
         reject(
           project?.kind === 'ssh' ? '设计功能暂不支持远程项目' : 'Design workspace is unavailable'
@@ -1551,7 +1573,7 @@ export function registerAgentHandlers(): void {
       void (async () => {
         try {
           const result = await getDesignToolBroker().request({
-            sessionId: identity.sessionId,
+            sessionId,
             cwd,
             tool,
             params,

@@ -35,6 +35,18 @@ function readyChild(child: ChildSessionIdentity) {
 }
 
 describe('AgentSessionIndex generation and reservation authority', () => {
+  it('team candidates hide designer when design is off and preserve explicit disables', () => {
+    const state = { designEnabled: true, disabledBuiltinAgentTypes: ['worker'] };
+    const sessions = new AgentSessionIndex({
+      readSettings: () => ({ 'enso-settings': { state } }),
+      randomUuid: uuids(),
+    });
+    expect(sessions.listAgentTypes().map((entry) => entry.typeKey)).toContain('builtin:designer');
+    state.designEnabled = false;
+    const names = sessions.listAgentTypes().map((entry) => entry.typeKey);
+    expect(names).not.toContain('builtin:designer');
+    expect(names).not.toContain('builtin:worker');
+  });
   it('blocks starting, reserved and running workspace trees but allows idle children', () => {
     const sessions = index();
     expect(sessions.workspaceTreeRunning(parent.sessionId)).toBe(false);

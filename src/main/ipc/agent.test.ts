@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   persistedConversation: vi.fn(),
   currentIdentity: vi.fn(),
   coworkerOf: vi.fn(),
+  childProof: vi.fn(),
   resolveTeamTarget: vi.fn(),
   isMainWebContents: vi.fn(() => true),
   dismissChildSession: vi.fn(() => ({ ok: true })),
@@ -183,7 +184,7 @@ vi.mock('./capabilities', () => ({
   agentSessionIndex: {
     currentIdentity: mocks.currentIdentity,
     isAlive: mocks.isAlive,
-    childProof: vi.fn(),
+    childProof: mocks.childProof,
     prepareParent: mocks.prepareParent,
     observe: vi.fn(),
     reserveChild: vi.fn(),
@@ -925,6 +926,9 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
         ...extra,
       });
     beforeEach(() => {
+      mocks.sessionWorktree.mockReset();
+      mocks.childProof.mockReset();
+      mocks.coworkerOf.mockReset();
       mocks.currentIdentity.mockReturnValue(parent);
       mocks.isAlive.mockReturnValue(true);
       mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: [] });
@@ -1035,6 +1039,72 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
       } finally {
         vi.useRealTimers();
       }
+    });
+    it('child uses root worktree cwd and canvas session, replies to child, never commits duplicate child hooks', async () => {
+      const child = {
+        sessionId: `${parent.sessionId}::cw-designer`,
+        generation: '22222222-2222-4222-8222-222222222222',
+        parent,
+        instanceId: '33333333-3333-4333-8333-333333333333',
+        instanceName: 'Designer',
+        typeKey: 'builtin:designer',
+      };
+      const authority = getSourceAuthorityRegistry()!;
+      const root = authority.conversation(parent.sessionId);
+      vi.spyOn(authority, 'conversation').mockImplementation((id) =>
+        id === parent.sessionId ? root : undefined
+      );
+      mocks.currentIdentity.mockImplementation((id) =>
+        id === parent.sessionId ? parent : id === child.sessionId ? child : undefined
+      );
+      mocks.sessionWorktree.mockReturnValue({ path: '/isolated/worktree' });
+      mocks.childProof.mockReturnValue({ toolIds: ['vetd_create', 'vetd_sizes'] });
+      invoke('child-create', { identity: child });
+      await Promise.resolve();
+      expect(mocks.designRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: '/isolated/worktree', sessionId: parent.sessionId })
+      );
+      expect(mocks.sendDesignResult).toHaveBeenCalledWith(
+        child,
+        'child-create',
+        expect.objectContaining({ ok: true })
+      );
+      emit({ type: 'design-hook', identity: child, event: 'stop' });
+      emit({ type: 'child-ended', identity: child });
+      expect(mocks.designHook).not.toHaveBeenCalled();
+      emit({ type: 'design-hook', identity: parent, event: 'stop' });
+      expect(mocks.designHook).toHaveBeenCalledTimes(1);
+      mocks.sessionWorktree.mockReset();
+    });
+    it('legacy coworker design calls require an indexed designer owned by the live root', async () => {
+      const legacy = {
+        sessionId: `${parent.sessionId}::cw-legacy`,
+        generation: '22222222-2222-4222-8222-222222222222',
+      };
+      mocks.currentIdentity.mockImplementation((id) =>
+        id === parent.sessionId ? parent : id === legacy.sessionId ? legacy : undefined
+      );
+      mocks.coworkerOf.mockReturnValue({ id: legacy.sessionId, agentType: 'worker' });
+      invoke('legacy-worker', { identity: legacy });
+      expect(mocks.designRequest).not.toHaveBeenCalled();
+      expect(mocks.sendDesignResult).toHaveBeenLastCalledWith(
+        legacy,
+        'legacy-worker',
+        expect.objectContaining({ ok: false })
+      );
+      mocks.coworkerOf.mockImplementation((owner, id) =>
+        owner === parent && id === legacy.sessionId ? { id, agentType: 'designer' } : undefined
+      );
+      invoke('legacy-designer', { identity: legacy });
+      await Promise.resolve();
+      expect(mocks.designRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: '/repo', sessionId: parent.sessionId })
+      );
+      expect(mocks.sendDesignResult).toHaveBeenLastCalledWith(
+        legacy,
+        'legacy-designer',
+        expect.objectContaining({ ok: true })
+      );
     });
     it('routes user prompt/agent_end and exact session end hooks once, not stale or disabled hooks', () => {
       emit({ type: 'design-hook', identity: parent, event: 'prompt-submit', prompt: 'design it' });

@@ -69,6 +69,9 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   worker 只在 SDK 真正 idle 时激活；正在跑的回合只缓存最新配置，不中止工具与既有 child。
   sandbox/write/goal 保持 spawn 固定，个人版 code_search 仍须通过本机账号配置门。
   关闭 plan 必须带一次 OFF 提示，缓存引用和 codemode 也不能绕过禁用。
+- `builtin:designer` 在本地且父会话启用 `design` 时登记 `vetd_*`：child-ready 证明列出全部
+  已登记定义，可见集合另由 cwd 的 `DesignPresence` 决定。规划和审批在 worker，Main 用根会话的
+  权威 cwd 与画布路由，结果回原 child generation；历史 hook 仅由父会话触发。
 
 ## 内置记忆的相关度、取消与失败恢复
 

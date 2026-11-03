@@ -41,11 +41,16 @@ vi.mock('electron', () => ({
   },
 }));
 
+import { DESIGN_TOOL_NAMES } from '@shared/types/design';
 import {
+  agentTypeRegistrySnapshot,
+  configuredAgentTypes,
   expectedAgentTypeToolIds,
   forgetParentToolProfile,
   isBrowserSessionToolEnabled,
   pushBuiltinTools,
+  resolveAgentTypeSpawnConfig,
+  resolveModelSelection,
   setDesignCanvasCwds,
   spawnSession,
   startAgentWorker,
@@ -209,6 +214,43 @@ it('design switch controls bundled skills and hot tool loadout even over project
   settings.state.designEnabled = true;
   pushBuiltinTools();
   expect(worker.posted.at(-1)).toMatchObject({ type: 'set-builtin-tools' });
+  stopAgentWorker();
+});
+
+it('designer availability, bundled skill and exact proof follow the effective parent design loadout', () => {
+  startAgentWorker();
+  workers.at(-1)!.emit('spawn');
+  spawnSession(identity, request, new Set());
+  const selected = resolveModelSelection('p', 'm', new Set());
+  if (!selected.ok) throw new Error(selected.error);
+  const resolveDesigner = (remote = false) =>
+    resolveAgentTypeSpawnConfig('builtin:designer', selected.selection, new Set(), {
+      parentSessionId: identity.sessionId,
+      remote,
+    });
+  expect(configuredAgentTypes(new Set()).find((entry) => entry.name === 'designer')).toMatchObject({
+    skillPaths: ['/tmp/resources/design/skills'],
+  });
+  const resolved = resolveDesigner();
+  expect(resolved.ok).toBe(true);
+  if (!resolved.ok) throw new Error(resolved.error);
+  expect(resolved.expectedToolIds).toEqual(expect.arrayContaining([...DESIGN_TOOL_NAMES]));
+  expect(resolved.config.skillPaths).toEqual(['/tmp/resources/design/skills']);
+  expect(resolved.config.skillBindingIds).toHaveLength(1);
+  const remote = resolveDesigner(true);
+  expect(remote.ok && remote.expectedToolIds.some((id) => id.startsWith('vetd_'))).toBe(false);
+  settings.state.disabledBuiltinTools = ['design'];
+  pushBuiltinTools();
+  const disabled = resolveDesigner();
+  expect(disabled.ok && disabled.expectedToolIds.some((id) => id.startsWith('vetd_'))).toBe(false);
+  const beforeSwitch = agentTypeRegistrySnapshot().revision;
+  settings.state.designEnabled = false;
+  expect(configuredAgentTypes(new Set()).some((entry) => entry.name === 'designer')).toBe(false);
+  expect(
+    agentTypeRegistrySnapshot().candidates.some((entry) => entry.typeKey === 'builtin:designer')
+  ).toBe(false);
+  expect(agentTypeRegistrySnapshot().revision).not.toBe(beforeSwitch);
+  expect(resolveDesigner().ok).toBe(false);
   stopAgentWorker();
 });
 

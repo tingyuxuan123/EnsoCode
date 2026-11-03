@@ -11,6 +11,8 @@ import { childProfileShell, childProfileToolIds } from '@shared/childProfileTool
 import { PLAN_MODE_OFF_NOTE } from '@shared/planMode';
 import { DEFAULT_PERSONA_PROMPT } from '@shared/systemPrompt';
 import type { AgentCommand, AgentWorkerEvent } from '@shared/types/agent';
+import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
+import { DESIGN_TOOL_NAMES } from '@shared/types/design';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -101,6 +103,7 @@ vi.mock('@earendil-works/pi-coding-agent', async (importOriginal) => {
 
 import type { BackgroundTaskManager } from './backgroundTasks';
 import { PendingNotificationStore } from './pendingNotifications';
+import * as ssh from './ssh/executor';
 import { SessionSupervisor } from './supervisor';
 
 const parent = {
@@ -386,6 +389,245 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    'designer',
+    'worker',
+    'disabled-designer',
+    'legacy-designer',
+    'hot-disabled-designer',
+    'remote-designer',
+  ] as const)(
+    '%s child design tool loadout, proof, plan, result and cancellation',
+    async (variant) => {
+      const root = mkdtempSync(path.join(tmpdir(), 'enso-designer-child-'));
+      const events: AgentWorkerEvent[] = [];
+      const supervisor = new SessionSupervisor({
+        emit: (event) => events.push(event),
+        agentDir: root,
+        sessionDir: root,
+      });
+      const name = variant === 'worker' ? 'worker' : 'designer';
+      const remote = variant === 'remote-designer';
+      const executor = remote
+        ? vi.spyOn(ssh, 'createSshExecutor').mockReturnValue({
+            host: 'fixture',
+            exec: vi.fn(async () => ({ stdout: '', stderr: '', code: 1 })),
+            execRaw: vi.fn(),
+            execStream: vi.fn(),
+          })
+        : undefined;
+      const legacy = variant === 'legacy-designer';
+      const designer = BUILTIN_AGENT_TYPES.find((entry) => entry.name === 'designer');
+      const identity = {
+        sessionId: 'parent::cw-designer',
+        generation: child.generation,
+        parent,
+        instanceId: child.instanceId,
+        instanceName: 'Designer',
+        typeKey: `builtin:${name}` as const,
+      };
+      try {
+        supervisor.handleCommand({
+          type: 'spawn-parent',
+          identity: parent,
+          cwd: root,
+          model,
+          ...(remote ? { remote: { host: 'fixture', auth: 'key' as const } } : {}),
+          planMode: true,
+          approvalMode: 'auto-edits',
+          disabledTools: variant === 'disabled-designer' ? ['design'] : [],
+          agentTypes: designer ? [designer] : [],
+        });
+        await waitFor(events, 'parent-ready');
+        if (variant === 'hot-disabled-designer') {
+          // Main has already switched policy, but the parent model is awaiting the child.
+          (mocks.sessions[0] as ReturnType<typeof session>).isIdle = false;
+          supervisor.handleCommand({
+            type: 'set-builtin-tools',
+            identity: parent,
+            disabledTools: ['design'],
+          });
+        }
+        if (legacy) {
+          supervisor.handleCommand({
+            type: 'resume-coworker',
+            parent,
+            name: identity.instanceName,
+            coworkerId: identity.sessionId,
+            agentType: name,
+            resumeFile: path.join(root, 'legacy.jsonl'),
+          });
+          await waitFor(events, 'coworker-update');
+        } else {
+          supervisor.handleCommand({
+            type: 'spawn-child',
+            identity,
+            cwd: root,
+            config: {
+              typeKey: identity.typeKey,
+              displayName: name,
+              description: '',
+              spawnSpecId: 'spawn-design',
+              systemPrompt: designer?.systemPrompt ?? '',
+              model,
+              tools: 'all',
+              skillPaths: [],
+              skillBindingIds: [],
+              mcpServers: [],
+              mcpBindingIds: [],
+              systemPromptHash: 'hash',
+            },
+          });
+          await waitFor(events, 'child-ready');
+        }
+        const ready = events.find((event) => event.type === 'child-ready');
+        const coworker = events.find((event) => event.type === 'coworker-update');
+        const actor =
+          legacy && coworker?.type === 'coworker-update' ? coworker.coworkerIdentity : identity;
+        if (!actor) throw new Error('missing legacy coworker identity');
+        const current = mocks.sessions[1] as ReturnType<typeof session>;
+        const tools = mocks.createAgentSession.mock.calls[1][0].customTools as ToolDefinition[];
+        const isDesign = (id: string) => id.startsWith('vetd_');
+        const enabled = variant === 'designer' || legacy;
+        expect(tools.map((tool) => tool.name).filter(isDesign)).toEqual(
+          enabled ? DESIGN_TOOL_NAMES : []
+        );
+        if (ready?.type === 'child-ready')
+          expect(ready.proof.toolIds.filter(isDesign)).toEqual(enabled ? DESIGN_TOOL_NAMES : []);
+        if (!enabled) return;
+        expect(current.getActiveToolNames().filter(isDesign)).toEqual([
+          'vetd_create',
+          'vetd_sizes',
+        ]);
+        const run = (toolName: string, args: Record<string, unknown>) =>
+          tools
+            .find((tool) => tool.name === toolName)!
+            .execute(toolName, args, undefined, undefined, {} as never);
+        const approved = new Set<string>();
+        const approve = async (tool: string) => {
+          const request = () =>
+            events.findLast(
+              (event) =>
+                event.type === 'approval-request' &&
+                event.request.tool === tool &&
+                !approved.has(event.request.requestId)
+            );
+          await settleUntil(() => Boolean(request()));
+          const approval = request();
+          if (approval?.type !== 'approval-request') throw new Error('missing child approval');
+          approved.add(approval.request.requestId);
+          expect(approval.identity).toEqual(actor);
+          supervisor.handleCommand({
+            type: 'approval-respond',
+            identity: actor,
+            requestId: approval.request.requestId,
+            decision: 'allow',
+          });
+        };
+        await expect(run('vetd_create', { product: 'poster' })).rejects.toThrow(
+          /Plan mode is active/
+        );
+        await expect(run('vetd_status', {})).rejects.toThrow(/not available/);
+        expect(events.some((event) => event.type === 'design-invoke')).toBe(false);
+        const gate = (
+          mocks.loaderOptions[1].extensionFactories as Array<{
+            name: string;
+            factory(pi: unknown): void;
+          }>
+        ).find((extension) => extension.name === 'design-tool-gate');
+        expect(gate).toBeDefined();
+        let runBefore = async (_event: unknown) => {};
+        gate!.factory({
+          on: (_name: string, handler: typeof runBefore) => {
+            runBefore = handler;
+          },
+          getActiveTools: () => current.getActiveToolNames(),
+        });
+        const prompt = {
+          messageType: 'user',
+          prompt: 'draw a poster',
+          systemPromptOptions: { selectedTools: [], sections: {} as Record<string, string> },
+        };
+        supervisor.handleCommand({ type: 'design-canvas', cwds: [root] });
+        await runBefore(prompt);
+        expect(current.getActiveToolNames().filter(isDesign)).toEqual(DESIGN_TOOL_NAMES);
+        expect(prompt.systemPromptOptions.sections.vetd_core_principles).toContain(
+          'one thing seen first'
+        );
+        supervisor.handleCommand({ type: 'design-canvas', cwds: [] });
+        await runBefore(prompt);
+        expect(current.getActiveToolNames().filter(isDesign)).toEqual([
+          'vetd_create',
+          'vetd_sizes',
+        ]);
+        expect(events.some((event) => event.type === 'design-hook')).toBe(false);
+        supervisor.handleCommand({ type: 'set-plan-mode', identity: parent, active: false });
+        await settle();
+        const pending = run('vetd_create', { product: 'poster' });
+        expect(events.some((event) => event.type === 'design-invoke')).toBe(false);
+        await approve('vetd_create');
+        await waitFor(events, 'design-invoke');
+        const request = events.findLast((event) => event.type === 'design-invoke');
+        if (request?.type !== 'design-invoke') throw new Error('missing design invoke');
+        expect(request.identity).toEqual(actor);
+        const result = { content: [{ type: 'text' as const, text: '{"ok":true}' }] };
+        supervisor.handleCommand({
+          type: 'design-result',
+          identity: legacy
+            ? parent
+            : { sessionId: identity.sessionId, generation: identity.generation },
+          requestId: request.requestId,
+          ok: true,
+          result,
+        });
+        await settle();
+        expect(current.getActiveToolNames().filter(isDesign)).toEqual([
+          'vetd_create',
+          'vetd_sizes',
+        ]);
+        supervisor.handleCommand({
+          type: 'design-result',
+          identity: actor,
+          requestId: request.requestId,
+          ok: true,
+          result,
+        });
+        await expect(pending).resolves.toMatchObject(result);
+        expect(current.getActiveToolNames().filter(isDesign)).toEqual(DESIGN_TOOL_NAMES);
+        current.emit({ type: 'agent_end', messages: [] });
+        expect(events.some((event) => event.type === 'design-hook')).toBe(false);
+        const status = run('vetd_status', {});
+        const cancelled = expect(status).rejects.toThrow(/aborted/);
+        await approve('vetd_status');
+        await settleUntil(() =>
+          events.some((event) => event.type === 'design-invoke' && event.tool === 'vetd_status')
+        );
+        supervisor.handleCommand({ type: 'abort', identity: actor });
+        await cancelled;
+        expect(events).toContainEqual(
+          expect.objectContaining({ type: 'design-cancel', identity: actor })
+        );
+        const ending = run('vetd_status', {});
+        const released = expect(ending).rejects.toThrow(/released|dismissed/);
+        // Approval remains independent; a lifecycle teardown also cancels waiting approvals.
+        await approve('vetd_status');
+        await settle();
+        if (legacy)
+          supervisor.handleCommand({
+            type: 'dismiss-coworker',
+            parent,
+            coworkerId: identity.sessionId,
+          });
+        else supervisor.handleCommand({ type: 'release-parent', identity: parent });
+        await released;
+      } finally {
+        await supervisor.shutdown();
+        executor?.mockRestore();
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
 
   it('重开会话只恢复通知，不自动prompt；下一次工具结果搭车且消费后清盘', async () => {
     const events: AgentWorkerEvent[] = [];

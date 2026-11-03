@@ -3,6 +3,7 @@ import {
   type AgentTypeKey,
   buildAgentTypeRegistrySnapshot,
   type ChildSessionIdentity,
+  effectiveDisabledBuiltinAgentTypes,
   isSameChildSessionIdentity,
   type SessionIdentity,
 } from '@shared/builtinAgents';
@@ -550,16 +551,13 @@ export class AgentSessionIndex {
 
   listAgentTypes(): TeamAgentType[] {
     const state = settingsState(this.options.readSettings());
-    const disabledBuiltinAgentTypes = Array.isArray(state.disabledBuiltinAgentTypes)
-      ? state.disabledBuiltinAgentTypes.filter((name): name is string => typeof name === 'string')
-      : [];
     const customAgentTypes = withPluginAgentTypes(
       Array.isArray(state.agentTypes) ? state.agentTypes.filter(isAgentTypeEntry) : [],
       state
     );
     const snapshot = buildAgentTypeRegistrySnapshot({
       revision: 0,
-      disabledBuiltinAgentTypes,
+      disabledBuiltinAgentTypes: effectiveDisabledBuiltinAgentTypes(state),
       customAgentTypes,
     });
     return snapshot.candidates.map((candidate) => {

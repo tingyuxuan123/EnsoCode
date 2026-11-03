@@ -12,8 +12,10 @@ import {
   type AgentTypeRegistrySnapshot,
   buildAgentTypeRegistrySnapshot,
   type ChildSessionIdentity,
+  DESIGNER_AGENT_TYPE_KEY,
   ENSO_AGENT_TYPE_KEY,
   ENSO_LOCKED_PROFILE,
+  effectiveDisabledBuiltinAgentTypes,
   isReservedAgentTypeName,
   type SessionIdentity,
   visibleMemberAgentTypes,
@@ -79,12 +81,13 @@ import {
   type AgentTypeEntry,
   BUILTIN_AGENT_TYPES,
   DEFAULT_PRESET_ID,
+  DESIGNER_AGENT_NAME,
   type McpServerEntry,
   type Preset,
   type SkillEntry,
 } from '@shared/types/assets';
 import { persistedSettingsState } from '@shared/types/builtinTools';
-import type { DesignToolResult } from '@shared/types/design';
+import { DESIGN_TOOL_NAMES, type DesignToolResult } from '@shared/types/design';
 import {
   MODEL_REASONING_OVERRIDES,
   MODEL_THINKING_LEVEL_OVERRIDES,
@@ -613,15 +616,13 @@ export function setMemberAgentTypeSource(source: () => readonly MemberAgentType[
 
 export function agentTypeRegistrySnapshot(): AgentTypeRegistrySnapshot {
   const state = readSettingsState();
-  const disabledBuiltinAgentTypes = Array.isArray(state?.disabledBuiltinAgentTypes)
-    ? state.disabledBuiltinAgentTypes.filter((name): name is string => typeof name === 'string')
-    : [];
+  const disabledBuiltinAgentTypes = effectiveDisabledBuiltinAgentTypes(state);
   const customAgentTypes = withPluginAgentTypes(
     Array.isArray(state?.agentTypes) ? state.agentTypes.filter(isAgentTypeEntry) : [],
     state
   );
   return buildAgentTypeRegistrySnapshot({
-    revision: settingsRevision(state),
+    revision: settingsRevision(state, disabledBuiltinAgentTypes),
     disabledBuiltinAgentTypes,
     customAgentTypes,
     members: memberAgentTypes(),
@@ -873,6 +874,17 @@ export function resolveAgentTypeSpawnConfig(
   const disabledTools = resolveDisabledBuiltinTools(state?.disabledBuiltinTools, {
     disabledBuiltinTools: projectDisabledBuiltinTools(state?.projects, context?.projectId),
   });
+  const parentPolicy = context?.parentSessionId
+    ? browserSessionTools.get(context.parentSessionId)
+    : undefined;
+  // Child readiness verifies every registered definition, not just those currently visible.
+  const designerWithTools =
+    typeKey === DESIGNER_AGENT_TYPE_KEY &&
+    context?.remote !== true &&
+    (parentPolicy?.designEnabled ?? !disabledTools.includes('design'));
+  const skillPaths = designerWithTools
+    ? [...new Set([...resources.skillPaths, getDesignPaths().skillsDir])]
+    : resources.skillPaths;
   const liveProfile: ChildProfileToolOptions = {
     editMode: resolveEditMode(state?.editMode, state?.hashlineEditEnabled),
     shell: childProfileShell({
@@ -884,10 +896,13 @@ export function resolveAgentTypeSpawnConfig(
     isolatedSandbox: !disabledTools.includes('isolated_sandbox'),
     workspaceWrite: !disabledTools.includes(WORKSPACE_WRITE_TOOL_ID),
   };
-  const expectedToolIds = expectedAgentTypeToolIds(definition.tools, {
+  const profileToolIds = expectedAgentTypeToolIds(definition.tools, {
     ...liveProfile,
     ...(context?.parentSessionId ? { parentSessionId: context.parentSessionId } : {}),
   });
+  const expectedToolIds = designerWithTools
+    ? [...profileToolIds, ...DESIGN_TOOL_NAMES]
+    : profileToolIds;
   return {
     ok: true,
     config: {
@@ -909,8 +924,8 @@ export function resolveAgentTypeSpawnConfig(
         ? { thinkingLevel: definition.thinkingLevel as ModelThinkingLevelOverride }
         : {}),
       allowedToolIds: expectedToolIds,
-      skillPaths: resources.skillPaths,
-      skillBindingIds: resources.skillPaths.map(() => randomUUID()),
+      skillPaths,
+      skillBindingIds: skillPaths.map(() => randomUUID()),
       mcpServers: resources.mcpServers,
       mcpBindingIds: resources.mcpServers.map(() => randomUUID()),
       systemPromptHash: createHash('sha256').update(definition.systemPrompt).digest('hex'),
@@ -1711,11 +1726,7 @@ export function configuredAgentTypes(
   plugins?: ResolvedPlugins
 ): AgentTypeSpawnConfig[] {
   const state = readSettingsState();
-  const disabled = new Set(
-    Array.isArray(state?.disabledBuiltinAgentTypes)
-      ? state.disabledBuiltinAgentTypes.filter((name): name is string => typeof name === 'string')
-      : []
-  );
+  const disabled = new Set(effectiveDisabledBuiltinAgentTypes(state));
   const custom = withPluginAgentTypes(
     Array.isArray(state?.agentTypes) ? state.agentTypes.filter(isAgentTypeEntry) : [],
     state,
@@ -1737,6 +1748,7 @@ export function configuredAgentTypes(
       systemPrompt: type.systemPrompt,
       tools: type.tools,
       ...(type.writeScope ? { writeScope: [...type.writeScope] } : {}),
+      ...(type.name === DESIGNER_AGENT_NAME ? { skillPaths: [getDesignPaths().skillsDir] } : {}),
       allowModelOverride: effectiveMode === 'agent_pick',
     };
   });
@@ -2364,9 +2376,12 @@ function isMcpServerEntry(value: unknown): value is McpServerEntry {
   );
 }
 
-function settingsRevision(state: Record<string, unknown> | undefined): number {
+function settingsRevision(
+  state: Record<string, unknown> | undefined,
+  disabledBuiltinAgentTypes: readonly string[]
+): number {
   const serialized = JSON.stringify({
-    disabledBuiltinAgentTypes: state?.disabledBuiltinAgentTypes ?? [],
+    disabledBuiltinAgentTypes,
     agentTypes: state?.agentTypes ?? [],
   });
   let hash = 0;

@@ -24,6 +24,7 @@ import {
 import { autoRetryOverrides, DEFAULT_AUTO_RETRY_LIMIT } from '@shared/autoRetry';
 import {
   type ChildSessionIdentity,
+  DESIGNER_AGENT_TYPE_KEY,
   ENSO_LOCKED_PROFILE,
   isSameChildSessionIdentity,
   type SessionIdentity,
@@ -85,6 +86,7 @@ import type {
   VirtualClassifierCredentials,
 } from '@shared/types/agent';
 import { parseAgentSessionCustomEntry, STALE_SESSION_ERROR } from '@shared/types/agent';
+import { DESIGNER_AGENT_NAME, DESIGNER_SYSTEM_PROMPT } from '@shared/types/assets';
 import { type DesignToolName, isDesignToolName } from '@shared/types/design';
 import { type EditMode, resolveEditMode } from '@shared/types/editMode';
 import type { ModelEntry } from '@shared/types/llm';
@@ -296,6 +298,7 @@ interface ChildSessionResult {
   toolIds: string[];
   proofToolIds: string[];
   ensoApp?: EnsoAppInvoker;
+  design?: DesignInvoker;
   safeJournal?: EnsoSafeJournal;
   runawayGuard?: RunawayGuard;
   requestBudget?: RequestBudget;
@@ -316,7 +319,7 @@ interface SessionFactory {
     modelOverride?: SpawnModelConfig;
     /** 派发时 /thinking 档位，赢过模型条目预设 */
     thinkingOverride?: ChildThinkingLevel;
-    identity?: ChildSessionIdentity;
+    identity: SessionIdentity | ChildSessionIdentity;
     gate: ApprovalGate;
     askManager?: AskManager;
     resumeFile?: string;
@@ -328,6 +331,25 @@ interface SessionFactory {
 type PromptDisposition = Parameters<NonNullable<PromptOptions['preflightResult']>>[0];
 
 const designPresence = new DesignPresence();
+
+function approvedDesignTools(
+  gate: ApprovalGate,
+  invoker: DesignInvoker,
+  available: (name: DesignToolName) => boolean,
+  created: () => void
+): ToolDefinition[] {
+  return createDesignTools(invoker, { created }).map((tool) => {
+    const approved = withApproval(gate, 'mcp', tool);
+    return {
+      ...approved,
+      execute: async (...args: Parameters<ToolDefinition['execute']>) => {
+        if (!isDesignToolName(tool.name) || !available(tool.name))
+          throw new Error('Design tool is not available in this workspace.');
+        return approved.execute(...args);
+      },
+    };
+  });
+}
 
 interface ManagedSession {
   identity: SessionIdentity;
@@ -1236,6 +1258,7 @@ export class SessionSupervisor {
       child.asks.cancelAll();
       cancelContinuousMemory(child.session.sessionManager);
       child.ensoApp?.cancelAll('Parent released');
+      child.design?.cancelAll('Parent released');
       try {
         await child.session.abort();
       } catch {}
@@ -1941,7 +1964,15 @@ export class SessionSupervisor {
         return;
       }
       case 'design-result': {
-        const managed = this.must(command.identity);
+        const managed = this.sessions.get(command.identity.sessionId);
+        if (
+          !managed ||
+          !isSameGeneration(managed.identity, command.identity) ||
+          (managed.childIdentity
+            ? !isSameChildSessionIdentity(managed.childIdentity, command.identity)
+            : 'parent' in command.identity)
+        )
+          return;
         managed.design?.resolve(command);
         return;
       }
@@ -2612,6 +2643,17 @@ export class SessionSupervisor {
         : readOnlyTools(gate)),
       ...wrapMcpTools(gate),
     ];
+    // 父工具与 designer child 的 vetd 工具共用父 Plan 门，codemode 嵌套调用同样受限。
+    const planRef: { current?: PlanController } = {};
+    const planHost = {
+      state: () => planRef.current?.state() ?? EMPTY_PLAN_STATE,
+      submit: (doc: Parameters<PlanController['submit']>[0]) => planRef.current?.submit(doc),
+    };
+    const readonlyAgentTypes = new Set(
+      agentTypes.filter((type) => type.tools === 'readonly').map((type) => type.name)
+    );
+    const planGated = (tools: Def[]): Def[] =>
+      tools.map((tool) => withPlanGate(tool, { host: planHost, readonlyAgentTypes }));
     // 会话工厂：一次性 subagent 与持久 coworker 共用。gate 参数化——subagent 复用父门,
     // coworker 用独立门(否则审批条落错 tab、allowSession 白名单跨会话泄漏)
     const factory: SessionFactory = {
@@ -2632,6 +2674,59 @@ export class SessionSupervisor {
         extraTools = [],
       }) => {
         const isLockedEnso = resolved?.tools === 'enso-locked';
+        const typedIdentity = 'parent' in childIdentity ? childIdentity : undefined;
+        // Legacy resume has no typeKey; do not grant the builtin tools to an ordinary override.
+        const isDesigner = resolved
+          ? typedIdentity?.typeKey === DESIGNER_AGENT_TYPE_KEY && resolved.tools === 'all'
+          : agentType?.name === DESIGNER_AGENT_NAME &&
+            agentType.tools === 'all' &&
+            agentType.systemPrompt === DESIGNER_SYSTEM_PROMPT;
+        const designEnabled = () =>
+          isDesigner &&
+          !remote &&
+          // Main has applied this policy, even when the parent's SDK is still busy.
+          !(
+            managedRef?.pendingBuiltinTools ??
+            managedRef?.builtinDisabledTools ??
+            disabledTools
+          ).includes('design');
+        let childSession: AgentSession | undefined;
+        let childCursor: CursorSessionBridge | undefined;
+        let indexedDesignTools: ReturnType<typeof indexCursorTools> | undefined;
+        let visibleChildDesignNames = designToolNames(designEnabled(), false);
+        const currentChild = () => {
+          const managed = this.sessions.get(childIdentity.sessionId);
+          if (!managed || !isSameGeneration(managed.identity, childIdentity)) return undefined;
+          if (
+            typedIdentity &&
+            (!managed.childIdentity ||
+              !isSameChildSessionIdentity(typedIdentity, managed.childIdentity))
+          )
+            return undefined;
+          return managed;
+        };
+        const withVisibleDesign = (names: readonly string[]) => [
+          ...names.filter((name) => !isDesignToolName(name)),
+          ...visibleChildDesignNames,
+        ];
+        const refreshChildDesignTools = () => {
+          if (!childSession) return;
+          const active = childSession.getActiveToolNames();
+          const next = withVisibleDesign(active);
+          if (!isDeepStrictEqual(active, next)) childSession.setActiveToolsByName(next);
+          const managed = currentChild();
+          if (managed) managed.toolIds = withVisibleDesign(managed.toolIds);
+          if (childCursor && indexedDesignTools) {
+            for (const [name, definition] of indexedDesignTools) {
+              if (isDesignToolName(name) && visibleChildDesignNames.includes(name))
+                childCursor.tools.set(name, definition);
+              else childCursor.tools.delete(name);
+            }
+          }
+        };
+        const childDesign = designEnabled()
+          ? this.createDesignInvoker(childIdentity, currentChild)
+          : undefined;
         const selectedMcp = resolved?.mcpServers ?? agentType?.mcpServers ?? [];
         // 冷连接最长 3s：与模型解析、资源加载并行，不串在首字节前的关键路径最前面
         const mcpPending =
@@ -2653,7 +2748,7 @@ export class SessionSupervisor {
           childReasoning.enabled,
           selectedModel.modelId
         );
-        if (isLockedEnso && (!childIdentity || !askManager)) {
+        if (isLockedEnso && (!typedIdentity || !askManager)) {
           throw new Error('Locked Enso child requires exact identity and ask manager.');
         }
         const childExploreFold =
@@ -2663,14 +2758,14 @@ export class SessionSupervisor {
           codemode: !isLockedEnso && toolEnabled('isolated_sandbox'),
           deferredServers: isLockedEnso || typed ? [] : deferredMcp,
         });
-        const selectedSkillPaths = resolved?.skillPaths ?? agentType?.skillPaths ?? [];
+        const selectedSkillPaths =
+          isDesigner && !childDesign ? [] : (resolved?.skillPaths ?? agentType?.skillPaths ?? []);
         const branchContext = this.branchContextExtension(() =>
           [...this.sessions.values()].find((managed) => managed.session === session)
         );
         const silentTurnRecovery = silentTurnRecoveryExtension((kind) => {
-          if (!childIdentity) return;
-          const managed = this.sessions.get(childIdentity.sessionId);
-          if (!managed || !isSameGeneration(managed.identity, childIdentity)) return;
+          const managed = typedIdentity && currentChild();
+          if (!managed) return;
           managed.silentTurnNudgeUsed = true;
           managed.silentTurnKind = kind;
         });
@@ -2683,6 +2778,20 @@ export class SessionSupervisor {
               this.oauthPoolRecovery()
             )
           : await createSessionResourceLoader({
+              ...(childDesign
+                ? {
+                    designGate: designGateExtension({
+                      cwd,
+                      enabled: designEnabled,
+                      presence: designPresence,
+                      apply: (names) => {
+                        visibleChildDesignNames = names;
+                        refreshChildDesignTools();
+                      },
+                      // Only the parent emits history hooks for this shared design workspace.
+                    }),
+                  }
+                : {}),
               branchContext,
               silentTurnRecovery,
               oauthPoolRecovery: this.oauthPoolRecovery(),
@@ -2718,15 +2827,15 @@ export class SessionSupervisor {
           .flat()
           .map((tool) => withApproval(childGate, 'mcp', tool));
         const ensoApp =
-          isLockedEnso && childIdentity && askManager
+          isLockedEnso && typedIdentity && askManager
             ? new EnsoAppInvoker(
-                childIdentity,
+                typedIdentity,
                 () => this.sessions.get(childIdentity.sessionId)?.currentTurnId,
                 (request) => {
                   const managed = this.sessions.get(childIdentity.sessionId);
                   if (
                     !managed?.childIdentity ||
-                    !isSameChildSessionIdentity(childIdentity, managed.childIdentity)
+                    !isSameChildSessionIdentity(typedIdentity, managed.childIdentity)
                   ) {
                     throw new Error('Enso child generation is no longer current.');
                   }
@@ -2760,11 +2869,25 @@ export class SessionSupervisor {
                     childGate,
                     undefined,
                     agentType?.writeScope,
-                    childIdentity?.sessionId
+                    typedIdentity?.sessionId
                   )),
               ...(typed ? typeMcpTools : wrapMcpTools(childGate)),
               ...(extraTools as Def[]),
               ...(childExploreFold ? createExploreFoldTools(childExploreFold) : []),
+              ...(childDesign
+                ? planGated(
+                    approvedDesignTools(
+                      childGate,
+                      childDesign,
+                      (name) => designEnabled() && visibleChildDesignNames.includes(name),
+                      () => {
+                        designPresence.created(cwd);
+                        visibleChildDesignNames = designToolNames(designEnabled(), true);
+                        refreshChildDesignTools();
+                      }
+                    )
+                  )
+                : []),
             ];
         const childRunaway = new RunawayGuard();
         const childReminders = new SystemReminderRegistry();
@@ -2780,7 +2903,7 @@ export class SessionSupervisor {
           rootDir: path.join(
             this.options.sessionDir,
             'tool-output',
-            childIdentity?.sessionId ?? `${sessionId}-child`
+            typedIdentity?.sessionId ?? `${sessionId}-child`
           ),
         });
         const rawSubTools = childTools;
@@ -2793,8 +2916,8 @@ export class SessionSupervisor {
         const subTools = isLockedEnso ? rawSubTools : decorateChild(rawSubTools);
         childCodemode.bindDeferredTools(deferredMcpLoader(childGate, decorateChild));
         const safeJournal =
-          isLockedEnso && childIdentity
-            ? new EnsoSafeJournal(this.options.sessionDir, childIdentity, cwd, childResume)
+          isLockedEnso && typedIdentity
+            ? new EnsoSafeJournal(this.options.sessionDir, typedIdentity, cwd, childResume)
             : undefined;
         const sessionManager = safeJournal
           ? SessionManager.inMemory(cwd)
@@ -2823,11 +2946,19 @@ export class SessionSupervisor {
           resourceLoader: subLoader,
           sessionManager,
         });
+        childSession = session;
         const childExtraTools = childCodemode.activeToolNames();
-        const childCursor = isCursorModel(subModel)
+        childCursor = isCursorModel(subModel)
           ? attachCursorBridgeToSession(session, subTools, cwd)
           : undefined;
-        if (childIdentity && !isLockedEnso) {
+        if (childDesign) {
+          if (childCursor)
+            indexedDesignTools = indexCursorTools(
+              subTools.filter((tool) => isDesignToolName(tool.name))
+            );
+          refreshChildDesignTools();
+        }
+        if (typedIdentity && !isLockedEnso) {
           const childServers = typed
             ? selectedMcp
             : directMcp.filter((server) => !isDeferredMcp(server));
@@ -2849,13 +2980,19 @@ export class SessionSupervisor {
           modelId: selectedModel.modelId,
           ...(safeJournal ? { safeJournal } : {}),
           modelRef: settingsModelRef(selectedModel),
-          toolIds: [...subTools.map((tool) => tool.name), ...childExtraTools],
+          toolIds: [
+            ...(childDesign
+              ? withVisibleDesign(subTools.map((tool) => tool.name))
+              : subTools.map((tool) => tool.name)),
+            ...childExtraTools,
+          ],
           // Decorators clone tools; exclude MCP by identity before decoration.
           proofToolIds: [
             ...rawSubTools.filter((tool) => !typeMcpTools.includes(tool)).map((tool) => tool.name),
             ...childExtraTools,
           ],
           ...(ensoApp ? { ensoApp } : {}),
+          ...(childDesign ? { design: childDesign } : {}),
           ...(isLockedEnso ? {} : { runawayGuard: childRunaway }),
           requestBudget,
         };
@@ -2960,33 +3097,7 @@ export class SessionSupervisor {
         },
       }
     );
-    const design = new DesignInvoker(
-      identity,
-      (request) => {
-        const managed = managedRef ?? this.sessions.get(sessionId);
-        if (!managed) throw new Error('Session is not ready for design actions.');
-        this.options.emit({
-          type: 'design-invoke',
-          identity: managed.identity,
-          seq: ++managed.seq,
-          requestId: request.requestId,
-          tool: request.tool,
-          params: request.params,
-        });
-      },
-      {
-        emitCancel: (requestId) => {
-          const managed = managedRef ?? this.sessions.get(sessionId);
-          if (managed)
-            this.options.emit({
-              type: 'design-cancel',
-              identity: managed.identity,
-              seq: ++managed.seq,
-              requestId,
-            });
-        },
-      }
-    );
+    const design = this.createDesignInvoker(identity, () => managedRef);
     // 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件，同 browser 桥。
     const memory = new MemoryInvoker(identity, (request) => {
       const managed = managedRef ?? this.sessions.get(sessionId);
@@ -3051,23 +3162,16 @@ export class SessionSupervisor {
       ...buildCoreTools(),
       ...builtin(
         'design',
-        createDesignTools(design, {
-          created: () => {
+        approvedDesignTools(
+          gate,
+          design,
+          (name) => visibleDesignNames.includes(name),
+          () => {
             designPresence.created(cwd);
             visibleDesignNames = designToolNames(true, true);
             refreshDesignTools();
-          },
-        }).map((tool) => {
-          const approved = withApproval(gate, 'mcp', tool);
-          return {
-            ...approved,
-            execute: async (...args: Parameters<Def['execute']>) => {
-              if (!visibleDesignNames.includes(tool.name as DesignToolName))
-                throw new Error('Design tool is not available in this workspace.');
-              return approved.execute(...args);
-            },
-          };
-        })
+          }
+        )
       ),
       ...(browser
         ? builtin(
@@ -3165,17 +3269,6 @@ export class SessionSupervisor {
           })
         : []),
     ];
-    // Plan 工具门包在父会话工具最外层（codemode 嵌套调用同样受限）；目录跨模式不变
-    const planRef: { current?: PlanController } = {};
-    const planHost = {
-      state: () => planRef.current?.state() ?? EMPTY_PLAN_STATE,
-      submit: (doc: Parameters<PlanController['submit']>[0]) => planRef.current?.submit(doc),
-    };
-    const readonlyAgentTypes = new Set(
-      agentTypes.filter((type) => type.tools === 'readonly').map((type) => type.name)
-    );
-    const planGated = (tools: Def[]): Def[] =>
-      tools.map((tool) => withPlanGate(tool, { host: planHost, readonlyAgentTypes }));
     // 原生插件工具：执行经 Main 回到插件进程。仍然受 plan 门与工具审批约束，
     // 插件声明的描述不参与保护动作分类，也不给任何免审能力。
     const pluginToolInvoker =
@@ -3360,6 +3453,39 @@ export class SessionSupervisor {
       model: settingsModelRef(model),
     });
     checkpoints?.cleanupOldSessions();
+  }
+
+  private createDesignInvoker(
+    identity: SessionIdentity | ChildSessionIdentity,
+    current: () => ManagedSession | undefined
+  ): DesignInvoker {
+    return new DesignInvoker(
+      identity,
+      (request) => {
+        const managed = current();
+        if (!managed) throw new Error('Session is not ready for design actions.');
+        this.options.emit({
+          type: 'design-invoke',
+          identity: managed.identity,
+          seq: ++managed.seq,
+          requestId: request.requestId,
+          tool: request.tool,
+          params: request.params,
+        });
+      },
+      {
+        emitCancel: (requestId) => {
+          const managed = current();
+          if (managed)
+            this.options.emit({
+              type: 'design-cancel',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              requestId,
+            });
+        },
+      }
+    );
   }
 
   private createAskManager(identity: SessionIdentity, humanTimeoutMs?: number): AskManager {
@@ -3694,6 +3820,7 @@ export class SessionSupervisor {
       ...(result.runawayGuard ? { runawayGuard: result.runawayGuard } : {}),
       ...(result.requestBudget ? { requestBudget: result.requestBudget } : {}),
     });
+    managedRef.design = result.design;
     if (!resumeFile) managedRef.pendingRole = config.systemPrompt;
     managedRef.reviewSecrets = accumulateApprovalReviewSecrets(
       undefined,
@@ -3772,9 +3899,10 @@ export class SessionSupervisor {
       parent.gate.floorOptions
     );
     const askManager = this.createAskManager(identity, gate.humanTimeoutMs);
-    const { session, modelId, toolIds, runawayGuard, requestBudget } =
+    const { session, modelId, toolIds, proofToolIds, design, runawayGuard, requestBudget } =
       await factory.createChildSession({
         agentType,
+        identity,
         modelOverride,
         thinkingOverride: thinking,
         gate,
@@ -3810,10 +3938,12 @@ export class SessionSupervisor {
       coworkerName: name,
       asks: askManager,
       toolIds,
+      proofToolIds,
       ...(resumeFile ? { resumeFile } : {}),
       ...(runawayGuard ? { runawayGuard } : {}),
       ...(requestBudget ? { requestBudget } : {}),
     });
+    managed.design = design;
     // 角色提示在首条消息前缀注入(无论来自主 agent send 还是用户 tab);resume 时 jsonl 已有
     if (!resumeFile && agentType?.systemPrompt) {
       managed.pendingRole = agentType.systemPrompt;
@@ -3832,6 +3962,7 @@ export class SessionSupervisor {
       managed.asks.cancelAll();
       cancelContinuousMemory(managed.session.sessionManager);
       managed.ensoApp?.cancelAll('Child dismissed');
+      managed.design?.cancelAll('Child dismissed');
       try {
         await managed.session.abort();
       } catch {}
@@ -4318,7 +4449,11 @@ export class SessionSupervisor {
         return;
       }
       case 'agent_end': {
-        if (managed.design && !managed.builtinDisabledTools?.includes('design')) {
+        if (
+          managed.design &&
+          !managed.parentId &&
+          !managed.builtinDisabledTools?.includes('design')
+        ) {
           this.options.emit({
             type: 'design-hook',
             identity: managed.identity,

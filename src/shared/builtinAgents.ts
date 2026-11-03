@@ -1,5 +1,6 @@
-import { type AgentTypeEntry, BUILTIN_AGENT_TYPES } from './types/assets';
+import { type AgentTypeEntry, BUILTIN_AGENT_TYPES, DESIGNER_AGENT_NAME } from './types/assets';
 
+export const DESIGNER_AGENT_TYPE_KEY = `builtin:${DESIGNER_AGENT_NAME}` as const;
 export const ENSO_AGENT_TYPE_KEY = 'agent:enso' as const;
 export const ENSO_LOCKED_PROFILE_ID = 'enso-locked-v1' as const;
 export const ENSO_SYSTEM_PROMPT_ID = 'enso-system-v1' as const;
@@ -274,6 +275,22 @@ export function visibleMemberAgentTypes<T extends MemberAgentTypeInput>(
     taken.add(name);
     return true;
   });
+}
+
+/** Runtime policy only; turning design off does not change saved builtin preferences. */
+export function effectiveDisabledBuiltinAgentTypes(
+  state?: {
+    disabledBuiltinAgentTypes?: unknown;
+    designEnabled?: unknown;
+  } | null
+): string[] {
+  const disabled = new Set(
+    Array.isArray(state?.disabledBuiltinAgentTypes)
+      ? state.disabledBuiltinAgentTypes.filter((name): name is string => typeof name === 'string')
+      : []
+  );
+  if (state?.designEnabled === false) disabled.add(DESIGNER_AGENT_NAME);
+  return [...disabled];
 }
 
 export function buildAgentTypeRegistrySnapshot(input: {

@@ -1,3 +1,4 @@
+import { effectiveDisabledBuiltinAgentTypes } from '@shared/builtinAgents';
 import { coworkerTabTone } from '@shared/conversationDotTone';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
 import { Bot, Ellipsis, MessagesSquare, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
@@ -355,7 +356,12 @@ function RenameableTab({
 function HireCoworkerDialog({ parentId, onClose }: { parentId: string; onClose: () => void }) {
   const { t } = useI18n();
   const agentTypes = useSettingsStore((state) => state.agentTypes);
-  const disabledBuiltins = useSettingsStore((state) => state.disabledBuiltinAgentTypes);
+  const disabledBuiltinAgentTypes = useSettingsStore((state) => state.disabledBuiltinAgentTypes);
+  const designEnabled = useSettingsStore((state) => state.designEnabled);
+  const disabledBuiltins = effectiveDisabledBuiltinAgentTypes({
+    disabledBuiltinAgentTypes,
+    designEnabled,
+  });
   const [name, setName] = React.useState('');
   const [agentType, setAgentType] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
