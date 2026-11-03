@@ -55,14 +55,14 @@ beforeEach(() => {
 	root = createRoot(host);
 });
 
-afterEach(() => {
-	act(() => root.unmount());
+afterEach(async () => {
+	await act(async () => root.unmount());
 	host.remove();
 	document.body.innerHTML = "";
 });
 
-function render(node: React.ReactNode): void {
-	act(() => root.render(node));
+async function render(node: React.ReactNode): Promise<void> {
+	await act(async () => root.render(node));
 }
 
 function buttonByText(text: string): HTMLButtonElement | null {
@@ -74,52 +74,56 @@ function buttonByText(text: string): HTMLButtonElement | null {
 }
 
 describe("DesignSystemDetailDialog", () => {
-	it("展示名称、分类、标语与配色", () => {
-		render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
+	it("展示名称、分类、标语与配色", async () => {
+		await render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
 		expect(document.body.textContent).toContain("Linear");
 		expect(document.body.textContent).toContain("Crisp dark tooling UI");
 		// 配色条来自 theme.css 的 token。
 		expect(document.body.querySelector('[title^="primary"]')).not.toBeNull();
 	});
 
-	it("有 demo 时用常开滚动的真实预览", () => {
-		render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
-		expect(document.body.querySelector("iframe")?.getAttribute("srcdoc")).toBe(DEMO_HTML);
+	it("有 demo 时用常开滚动的真实预览，HTML 经宿主沙箱策略保护", async () => {
+		await render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
+		const frame = document.querySelector('[data-slot="dialog-popup"] iframe');
+		const doc = new DOMParser().parseFromString(frame?.getAttribute("srcdoc") ?? "", "text/html");
+		expect(doc.body.textContent).toBe("demo");
+		expect(doc.head.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content")).toContain("script-src 'none'");
+		expect(frame?.getAttribute("sandbox")).toBe("allow-same-origin");
 		expect(document.body.querySelector("[data-active]")).not.toBeNull();
 	});
 
-	it("右下角「使用」把这套体系交回去", () => {
+	it("右下角「使用」把这套体系交回去", async () => {
 		const used: string[] = [];
-		render(
+		await render(
 			<DesignSystemDetailDialog system={withDemo} busy={false} onUse={(s) => used.push(s.id)} onClose={() => {}} />,
 		);
 		const use = buttonByText("gallery.detail.use");
 		expect(use).not.toBeNull();
-		act(() => {
+		await act(async () => {
 			use?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 		});
 		expect(used).toEqual(["linear"]);
 	});
 
-	it("busy 时「使用」禁用，避免重复建项目", () => {
-		render(<DesignSystemDetailDialog system={withDemo} busy onUse={() => {}} onClose={() => {}} />);
+	it("busy 时「使用」禁用，避免重复建项目", async () => {
+		await render(<DesignSystemDetailDialog system={withDemo} busy onUse={() => {}} onClose={() => {}} />);
 		expect(buttonByText("gallery.detail.use")?.disabled).toBe(true);
 	});
 
-	it("只有带 demo 的体系才有「在浏览器打开」", () => {
-		render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
+	it("只有带 demo 的体系才有「在应用内预览」", async () => {
+		await render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
 		expect(buttonByText("gallery.detail.openDemo")).not.toBeNull();
-		render(<DesignSystemDetailDialog system={system()} busy={false} onUse={() => {}} onClose={() => {}} />);
+		await render(<DesignSystemDetailDialog system={system()} busy={false} onUse={() => {}} onClose={() => {}} />);
 		expect(buttonByText("gallery.detail.openDemo")).toBeNull();
 	});
 
-	it("Esc 关闭", () => {
+	it("Esc 从真实宿主 Dialog 关闭", async () => {
 		const closed: true[] = [];
-		render(
+		await render(
 			<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => closed.push(true)} />,
 		);
-		act(() => {
-			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+		await act(async () => {
+			document.querySelector('[data-slot="dialog-popup"]')?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 		});
 		expect(closed).toEqual([true]);
 	});

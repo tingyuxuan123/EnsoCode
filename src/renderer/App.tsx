@@ -39,7 +39,17 @@ import {
 import { Button } from '@/components/ui/button';
 import { ToastProvider } from '@/components/ui/toast';
 import { DesignRuntimeHost } from '@/features/design/DesignRuntimeHost';
+import { useDesignRegistry } from '@/features/design/host/registry';
+import { useTranslation as useDesignTranslation } from '@/features/design/host/translation';
+import {
+  closeDesignGallery,
+  isDesignGalleryAvailable,
+  isDesignSessionSelection,
+  openDesignGallery,
+} from '@/features/design/host/workspace-view';
+import { DesignGallery, DesignGalleryHeader } from '@/features/design/mounts/DesignGallery';
 import { DesignGlobalSlots } from '@/features/design/mounts/DesignGlobalSlots';
+import { GALLERY_VIEW_ID } from '@/features/design/vetta/src/tab-ids';
 import { useAutoArchiveScan } from '@/hooks/useAutoArchiveScan';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useDockBadge } from '@/hooks/useDockBadge';
@@ -103,6 +113,16 @@ export default function App() {
   const { t } = useI18n();
   const chatWide = useSettingsStore((s) => s.chatWide);
   const activeConversationId = useSessionsStore((s) => s.activeId);
+  const activeTabId = useSessionsStore((s) =>
+    s.activeId ? s.conversations[s.activeId]?.activeTabId : undefined
+  );
+  const lastSessionSelection = useRef({ id: activeConversationId, tab: activeTabId });
+  // Explicit session navigation leaves the workspace view; stream/status updates do not.
+  useEffect(() => {
+    const previous = lastSessionSelection.current;
+    if (previous.id !== activeConversationId || previous.tab !== activeTabId) closeDesignGallery();
+    lastSessionSelection.current = { id: activeConversationId, tab: activeTabId };
+  }, [activeConversationId, activeTabId]);
   const activeProjectId = useSessionsStore((s) =>
     s.activeId ? s.conversations[s.activeId]?.projectId : undefined
   );
@@ -190,6 +210,18 @@ export default function App() {
   const activeNodeId = useRemoteNodesStore((s) => s.activeNodeId);
   const remoteNodeActive = activeNodeId !== 'local';
   const botModeActive = useBotModeActive();
+  const designEnabled = useSettingsStore((s) => s.designEnabled);
+  const galleryAvailable = isDesignGalleryAvailable({
+    designEnabled,
+    remoteNodeActive,
+    botModeActive,
+  });
+  const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
+  const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
+  const { t: designT } = useDesignTranslation();
+  useEffect(() => {
+    if (!galleryAvailable) closeDesignGallery();
+  }, [galleryAvailable]);
   const botModeEnabled = useSettingsStore((s) => s.botModeEnabled);
   const appMode = useAppModeStore((s) => s.mode);
   // 关闭实验开关或切到远程节点：回到 Code（设置未水合前 botModeEnabled 恒为 false，不能据此回退）
@@ -217,7 +249,10 @@ export default function App() {
   useEffect(
     () =>
       window.electronAPI.agent.onFocusSession((sessionId) => {
-        if (useSessionsStore.getState().conversations[sessionId]) showLocalCodeView();
+        if (useSessionsStore.getState().conversations[sessionId]) {
+          closeDesignGallery();
+          showLocalCodeView();
+        }
       }),
     []
   );
@@ -232,6 +267,7 @@ export default function App() {
     const bindings = effectiveKeybindings(keybindings);
     // 主会话 + coworker 循环切换;无 coworker 时不动
     const cycleTab = (direction: 1 | -1) => {
+      closeDesignGallery();
       const sessions = useSessionsStore.getState();
       const parent = sessions.activeId ? sessions.conversations[sessions.activeId] : null;
       if (!parent) return;
@@ -242,6 +278,7 @@ export default function App() {
       sessions.selectTab(parent.id, tabs[(current + direction + tabs.length) % tabs.length]);
     };
     const startNewConversation = () => {
+      closeDesignGallery();
       const sessions = useSessionsStore.getState();
       const active = sessions.activeId ? sessions.conversations[sessions.activeId] : null;
       const projectId = newSidebarConversationProjectId(
@@ -265,6 +302,18 @@ export default function App() {
       }
       // 远程节点 / Bot 模式：本机 Code 会话相关的快捷键不响应（新对话/tab 切换/右侧面板/查找）
       const remote = useRemoteNodesStore.getState().activeNodeId !== 'local' || isBotModeActive();
+      if (
+        useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID &&
+        [
+          'toggle-side-panel',
+          'toggle-side-panel-fullscreen',
+          'new-btw-tab',
+          'close-side-tab',
+          'find-in-chat',
+          'focus-composer',
+        ].some((key) => pressed === bindings[key as keyof typeof bindings])
+      )
+        return;
       if (isBotModeActive() && pressed === bindings['toggle-side-panel']) {
         e.preventDefault();
         useBotsStore.getState().togglePanel();
@@ -331,6 +380,7 @@ export default function App() {
         requestOpenChatFind();
       } else if (pressed === bindings['search-workspace']) {
         e.preventDefault();
+        closeDesignGallery();
         setSearchOpen(true);
       }
     };
@@ -339,7 +389,7 @@ export default function App() {
   }, [keybindings, sidebarView]);
 
   useEffect(() => {
-    if (!sideOpen || !sideFullscreen) return;
+    if (!sideOpen || !sideFullscreen || galleryActive) return;
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
@@ -349,7 +399,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
-  }, [sideOpen, sideFullscreen]);
+  }, [sideOpen, sideFullscreen, galleryActive]);
 
   // 拖拽：侧栏项目排序 / 会话拖入 Composer / 拖到 Pinned 区。
   // 6px 启动阈值：行点击与行内按钮不受影响。onDragEnd 在 Sidebar 的 useDndMonitor 里。
@@ -368,47 +418,52 @@ export default function App() {
       <OauthCredentialBootstrap />
       <TitleBar
         title="EnsoCode"
+        leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题
-          !remoteNodeActive && !botModeActive ? (
+          !remoteNodeActive && !botModeActive && !galleryActive ? (
             <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
           ) : undefined
         }
         actions={
-          <>
-            <button
-              type="button"
-              className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-                chatWide ? 'text-foreground' : 'text-muted-foreground'
-              )}
-              onClick={() => useSettingsStore.getState().setChatWide(!chatWide)}
-              aria-label={chatWide ? t('Use reading width') : t('Use full chat width')}
-              title={chatWide ? t('Use reading width') : t('Use full chat width')}
-            >
-              {chatWide ? (
-                <FoldHorizontal className="h-4 w-4" />
-              ) : (
-                <UnfoldHorizontal className="h-4 w-4" />
-              )}
-            </button>
-            {!remoteNodeActive && (
+          galleryActive ? (
+            <DesignGalleryHeader side="right" />
+          ) : (
+            <>
               <button
                 type="button"
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-                  (botModeActive ? botPanelOpen : sideOpen)
-                    ? 'text-foreground'
-                    : 'text-muted-foreground'
+                  chatWide ? 'text-foreground' : 'text-muted-foreground'
                 )}
-                onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
-                aria-label={t('Toggle side panel')}
-                title={t('Toggle side panel')}
+                onClick={() => useSettingsStore.getState().setChatWide(!chatWide)}
+                aria-label={chatWide ? t('Use reading width') : t('Use full chat width')}
+                title={chatWide ? t('Use reading width') : t('Use full chat width')}
               >
-                <PanelRight className="h-4 w-4" />
+                {chatWide ? (
+                  <FoldHorizontal className="h-4 w-4" />
+                ) : (
+                  <UnfoldHorizontal className="h-4 w-4" />
+                )}
               </button>
-            )}
-          </>
+              {!remoteNodeActive && (
+                <button
+                  type="button"
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
+                    (botModeActive ? botPanelOpen : sideOpen)
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                  )}
+                  onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
+                  aria-label={t('Toggle side panel')}
+                  title={t('Toggle side panel')}
+                >
+                  <PanelRight className="h-4 w-4" />
+                </button>
+              )}
+            </>
+          )
         }
       />
       <UpdateBanner />
@@ -423,7 +478,19 @@ export default function App() {
               ? undefined
               : botModeActive
                 ? () => useBotsStore.getState().setSearchOpen(true)
-                : () => setSearchOpen(true)
+                : () => {
+                    closeDesignGallery();
+                    setSearchOpen(true);
+                  }
+          }
+          designGallery={
+            galleryAvailable
+              ? {
+                  label: designT('gallery.nav.label'),
+                  active: galleryActive,
+                  onToggle: galleryActive ? closeDesignGallery : openDesignGallery,
+                }
+              : undefined
           }
         />
         {remoteNodeActive ? (
@@ -439,27 +506,43 @@ export default function App() {
           />
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={dndCollision}>
-            <Sidebar
-              width={collapsed ? undefined : width}
-              collapsed={collapsed}
-              view={sidebarView}
-              onViewChange={setSidebarView}
-              onOpenSearch={() => setSearchOpen(true)}
-            />
+            <div
+              className="flex min-h-0 shrink-0"
+              onClickCapture={(event) => {
+                if (isDesignSessionSelection(event.target)) closeDesignGallery();
+              }}
+            >
+              <Sidebar
+                width={collapsed ? undefined : width}
+                collapsed={collapsed}
+                view={sidebarView}
+                onViewChange={setSidebarView}
+                onOpenSearch={() => {
+                  closeDesignGallery();
+                  setSearchOpen(true);
+                }}
+              />
+            </div>
             {!collapsed && <ResizeHandle onResize={handleResize} />}
             {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
             <div
               ref={workspaceRef}
               className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t border-line"
             >
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <ChatView />
-              </div>
-              {sideOpen && !sideFullscreen && (
-                <ResizeHandle onResize={handleSideResize} onResizingChange={setSideResizing} />
+              {galleryActive ? (
+                <DesignGallery />
+              ) : (
+                <>
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <ChatView />
+                  </div>
+                  {sideOpen && !sideFullscreen && (
+                    <ResizeHandle onResize={handleSideResize} onResizingChange={setSideResizing} />
+                  )}
+                  <SidePanel width={sideWidth} resizing={sideResizing} />
+                  <PluginUiHost />
+                </>
               )}
-              <SidePanel width={sideWidth} resizing={sideResizing} />
-              <PluginUiHost />
             </div>
           </DndContext>
         )}

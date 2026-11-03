@@ -52,7 +52,8 @@ function rows(): HTMLElement[] {
 }
 
 function buttonsWithText(text: string): HTMLButtonElement[] {
-	return ([...host.querySelectorAll("button")] as HTMLButtonElement[]).filter((button) =>
+	const scope = text.startsWith("history.confirm.") ? document.querySelector('[data-slot="dialog-popup"]') : host;
+	return ([...scope?.querySelectorAll("button") ?? []] as HTMLButtonElement[]).filter((button) =>
 		button.textContent?.includes(text),
 	);
 }
@@ -68,8 +69,8 @@ beforeEach(() => {
 	onRestored.mockReset();
 });
 
-afterEach(() => {
-	act(() => root.unmount());
+afterEach(async () => {
+	await act(async () => root.unmount());
 	host.remove();
 });
 
@@ -113,7 +114,10 @@ describe("HistoryDrawer", () => {
 			buttonsWithText("history.restore")[0]?.click();
 		});
 		expect(restoreDesign).not.toHaveBeenCalled();
-		expect(host.textContent).toContain("history.confirm.title");
+		const dialog = document.querySelector('[data-slot="dialog-popup"]');
+		expect(dialog?.textContent).toContain("history.confirm.title");
+		expect(dialog?.querySelector('[data-vetta-plugin-root]')).not.toBeNull();
+		expect(buttonsWithText("history.confirm.ok")).toHaveLength(1);
 
 		await act(async () => {
 			buttonsWithText("history.confirm.ok")[0]?.click();
@@ -157,11 +161,13 @@ describe("HistoryDrawer", () => {
 		await act(async () => {
 			buttonsWithText("history.restore")[0]?.click();
 		});
+		expect(document.querySelector('[data-slot="dialog-popup"]')).not.toBeNull();
+		expect(buttonsWithText("history.confirm.cancel")).toHaveLength(1);
 		await act(async () => {
 			buttonsWithText("history.confirm.cancel")[0]?.click();
 		});
 		expect(restoreDesign).not.toHaveBeenCalled();
-		expect(host.textContent).not.toContain("history.confirm.title");
+		expect(document.querySelector('[data-slot="dialog-popup"]')).toBeNull();
 	});
 
 	it("恢复后重新拉一次列表", async () => {

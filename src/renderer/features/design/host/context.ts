@@ -2,6 +2,7 @@ import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import type { DesignResult, DesignRootRef } from '@shared/types/design';
 import { addToast } from '@/components/ui/toast';
 import { addSidePanelDesign, setSidePanelDesignVisible } from '@/lib/sidePanelDock';
+import { showLocalCodeView } from '@/stores/bots/mode';
 import { readMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { oauthCredentialContext, useOauthCredentialStore } from '@/stores/oauthCredentials';
 import { useSessionsStore } from '@/stores/sessions';
@@ -11,7 +12,7 @@ import { useSidePanelStore } from '@/stores/sidePanel';
 import type { ConversationEvent, ConversationState } from '../vetta/sdk/conversation';
 import type { PluginFsApi } from '../vetta/sdk/fs';
 import type { PluginNetworkResponse } from '../vetta/sdk/network';
-import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
+import { CANVAS_TAB_ID, GALLERY_VIEW_ID } from '../vetta/src/tab-ids';
 import {
   resolveDesignActivitySession,
   resolveDesignPromptTarget,
@@ -21,6 +22,7 @@ import { isDesignViewingCwd, setDesignViewingCwd } from './canvas-target';
 import { insertDesignComposerText, setDesignPromptAttachment } from './composer';
 import { captureDesign, releaseDesignCapture } from './engine';
 import { designPaths, resolveDesignRoot } from './paths';
+import { createGalleryProject, listGalleryProjects, setGalleryProjectArchived } from './projects';
 import {
   designHooks,
   designPromptProviders,
@@ -32,6 +34,7 @@ import {
 } from './registry';
 import { translate } from './translation';
 import type { PluginContext } from './types';
+import { closeDesignGallery, openDesignGallery } from './workspace-view';
 
 export function unsupported(api: string): never {
   throw new Error(`EnsoCode design host: ${api} is not supported in P1`);
@@ -283,7 +286,10 @@ export function createDesignContext(): PluginContext {
       if (width === 'max') useSidePanelStore.getState().setFullscreen(true);
       else if (target) useSidePanelStore.getState().setWidth(target, width);
     },
-    openWorkspaceView: (id) => updateDesignUi('workspaceView', id),
+    openWorkspaceView: (id) => {
+      if (id === GALLERY_VIEW_ID) openDesignGallery();
+      else throw new Error(`Unknown design workspace view: ${id}`);
+    },
     setWorkspaceViewHeader: (id, header) => updateDesignUi(`header:${id}`, header),
     setWorkspaceViewBadge: (id, badge) => updateDesignUi(`badge:${id}`, badge),
     setPromptAttachment: (attachment) => {
@@ -436,37 +442,46 @@ export function createDesignContext(): PluginContext {
       },
     },
     official: subset<PluginContext['official']>('official', {
-      dialog: subset<PluginContext['official']['dialog']>('official.dialog', {}),
-      projects: subset<PluginContext['official']['projects']>('official.projects', {
-        async list() {
-          const projects = useSettingsStore
-            .getState()
-            .projects.filter((p) => p.kind !== 'ssh' && p.kind !== 'scratch');
-          await Promise.all(
-            projects.map((p) => resolveDesignRoot({ kind: 'project', projectId: p.id }))
-          );
-          return {
-            workspacePath: '',
-            projects: projects.map((p) => ({ name: p.name, path: p.path })),
-            archivedProjects: [],
-          };
+      dialog: subset<PluginContext['official']['dialog']>('official.dialog', {
+        async openFiles(options = {}) {
+          const result = unwrap(await api().openFiles(options));
+          return result.files;
         },
+      }),
+      projects: subset<PluginContext['official']['projects']>('official.projects', {
+        list: listGalleryProjects,
+        async create(name, customPath) {
+          if (customPath !== undefined)
+            throw new Error('Custom design workspace paths are not supported');
+          return createGalleryProject(name);
+        },
+        archive: (cwd) => setGalleryProjectArchived(cwd, true),
+        unarchive: (cwd) => setGalleryProjectArchived(cwd, false),
       }),
       sessions: subset<PluginContext['official']['sessions']>('official.sessions', {
         async list(cwd) {
           const state = useSessionsStore.getState();
           return Object.values(state.conversations)
-            .filter((c) => designConversationCwd(c.id) === cwd && c.sessionFile)
+            .filter(
+              (c) =>
+                !c.parentId &&
+                !c.btwParentId &&
+                !c.historyOnly &&
+                designConversationCwd(c.id) === cwd &&
+                c.sessionFile
+            )
             .map((c) => ({
               path: c.sessionFile!,
               cwd,
+              modifiedAt: c.lastActiveAt ?? c.createdAt,
               access: {
                 readHistory: true,
                 interactiveResume: c.status !== 'running',
                 rename: true,
                 delete: true,
               },
-            }));
+            }))
+            .sort((a, b) => b.modifiedAt - a.modifiedAt);
         },
         async listRunningCwds() {
           return [
@@ -484,6 +499,10 @@ export function createDesignContext(): PluginContext {
             (c) => c.sessionFile === input.sessionPath && designConversationCwd(c.id) === input.cwd
           );
           if (!conversation) throw new Error('Design session not found');
+          if (conversation.parentId || conversation.btwParentId || conversation.historyOnly)
+            throw new Error('Gallery navigation requires a root conversation');
+          showLocalCodeView();
+          closeDesignGallery();
           state.selectConversation(conversation.id);
         },
       }),
@@ -494,7 +513,31 @@ export function createDesignContext(): PluginContext {
       },
       navigation: subset<PluginContext['official']['navigation']>('official.navigation', {
         async open(input) {
-          updateDesignUi('navigation', input);
+          if (input.target !== 'new-session' || !input.cwd)
+            throw new Error('Unsupported design navigation target');
+          const project = useSettingsStore
+            .getState()
+            .projects.find((entry) => entry.kind !== 'ssh' && entry.path === input.cwd);
+          if (!project) throw new Error('Local design project not found');
+          await resolveDesignRoot({ kind: 'project', projectId: project.id });
+          showLocalCodeView();
+          closeDesignGallery();
+          const id = await useSessionsStore.getState().newConversation(project.id);
+          if (!id) throw new Error('Could not create design conversation');
+          // This is a user-initiated navigation, never an automatic send. Append to
+          // an existing empty session's local draft rather than discarding it.
+          if (input.draft)
+            useSessionsStore.setState((state) => {
+              const conversation = state.conversations[id];
+              if (!conversation) return state;
+              return {
+                conversations: {
+                  ...state.conversations,
+                  [id]: { ...conversation, draftText: input.draft, draftAppend: true },
+                },
+              };
+            });
+          updateDesignUi('navigation', { ...input, sessionId: id });
           return input;
         },
       }),

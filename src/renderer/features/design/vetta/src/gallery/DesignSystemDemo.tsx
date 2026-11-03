@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DesignSystemPreview } from "../canvas/DesignSystemPreview";
 import type { DesignSystem } from "../design-systems/types";
+import { sandboxDesignDemoHtml } from "../../../host/demo-preview";
 
 /**
  * 一套体系的 HTML demo 预览。
@@ -45,6 +46,7 @@ export function designSystemDemoHtml(system: DesignSystem): string | null {
 
 export function DesignSystemDemo({ system, active, className }: DesignSystemDemoProps) {
 	const html = designSystemDemoHtml(system);
+	const safeHtml = useMemo(() => html === null ? null : sandboxDesignDemoHtml(html), [html]);
 	const boxRef = useRef<HTMLDivElement | null>(null);
 	/** 当前缩放：只在 DOM 与这个 ref 之间流动，不进 state（见文件头）。 */
 	const scaleRef = useRef(0.25);
@@ -147,7 +149,8 @@ export function DesignSystemDemo({ system, active, className }: DesignSystemDemo
 					<iframe
 						title=""
 						sandbox="allow-same-origin"
-						srcDoc={html}
+						referrerPolicy="no-referrer"
+						srcDoc={safeHtml ?? ""}
 						scrolling="no"
 						onLoad={onFrameLoad}
 						className="pointer-events-none block border-0"

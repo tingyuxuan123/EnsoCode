@@ -4,8 +4,16 @@ const { sessions, settings, reveal } = vi.hoisted(() => ({
   sessions: {
     activeId: 'b',
     conversations: {
-      a: { projectId: 'pa' },
-      b: { projectId: 'pb', worktree: undefined as { path: string } | undefined },
+      a: { id: 'a', projectId: 'pa', sessionFile: 'a.jsonl', createdAt: 1, lastActiveAt: 10 },
+      b: {
+        id: 'b',
+        projectId: 'pb',
+        sessionFile: 'b.jsonl',
+        createdAt: 2,
+        lastActiveAt: 20,
+        parentId: undefined as string | undefined,
+        worktree: undefined as { path: string } | undefined,
+      },
     },
     selectConversation: vi.fn(),
   },
@@ -38,6 +46,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
   sessions.conversations.b.worktree = undefined;
+  sessions.conversations.b.parentId = undefined;
+  settings.projects[1].path = '/b';
+});
+it('gallery session navigation candidates are newest first, rather than object insertion order', async () => {
+  settings.projects[1].path = '/a';
+  expect(
+    (await createDesignContext().official.sessions.list('/a')).map((item) => item.path)
+  ).toEqual(['b.jsonl', 'a.jsonl']);
+});
+it('gallery navigation never treats a coworker as a root conversation', async () => {
+  settings.projects[1].path = '/a';
+  sessions.conversations.b.parentId = 'a';
+  expect(
+    (await createDesignContext().official.sessions.list('/a')).map((item) => item.path)
+  ).toEqual(['a.jsonl']);
 });
 it('opens the viewed session using its authoritative cwd even when the stored cwd is an alias', () => {
   sessions.conversations.b.worktree = { path: '/tmp/b' };

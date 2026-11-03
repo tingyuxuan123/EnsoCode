@@ -99,7 +99,10 @@ describe("designSystemDemoHtml", () => {
 describe("DesignSystemDemo", () => {
 	it("把 demo 渲染进 iframe", () => {
 		act(() => root.render(<DesignSystemDemo system={withDemo} active={false} />));
-		expect(frame()?.getAttribute("srcdoc")).toBe(DEMO_HTML);
+		const html = frame()?.getAttribute("srcdoc") ?? "";
+		expect(html).toContain("<h1>Linear</h1>");
+		expect(html).toContain("Content-Security-Policy");
+		expect(frame()?.getAttribute("referrerpolicy")).toBe("no-referrer");
 	});
 
 	it("iframe 不给脚本执行权——这是远端 HTML 的安全边界", () => {

@@ -143,6 +143,7 @@ export async function startDesignFromSystem(
 	system: DesignSystem,
 	projectName: string,
 	locale: string,
+	isCurrent: () => boolean = () => true,
 ): Promise<StartedFromSystem> {
 	const ctx = getPluginCtx();
 	// 项目名由用户在对话框里给：他点的是风格，不是在给项目起名。
@@ -155,7 +156,7 @@ export async function startDesignFromSystem(
 			.writeFile(`${cwd}/${resourcesDir}/${RESOURCE_INDEX_FILE}`, buildResourceIndex(system.name, written))
 			.catch(() => {});
 	}
-	await ctx.official.navigation.open({
+	if (isCurrent()) await ctx.official.navigation.open({
 		target: "new-session",
 		cwd,
 		draft: buildStyleStartDraft(system, locale),

@@ -1,5 +1,5 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import { PanelLeft, Search, Settings2, Sparkles } from 'lucide-react';
+import { PanelLeft, Ruler, Search, Settings2, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
@@ -16,6 +16,8 @@ interface AppRailProps {
   modeSwitch?: ReactNode;
   /** 侧栏收起时补上的搜索入口（展开时搜索在侧栏顶部） */
   onOpenSearch?: () => void;
+  /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
+  designGallery?: { label: string; active: boolean; onToggle(): void };
 }
 
 const RAIL_BUTTON =
@@ -30,6 +32,7 @@ export function AppRail({
   onToggleSidebar,
   modeSwitch,
   onOpenSearch,
+  designGallery,
 }: AppRailProps) {
   const { t } = useI18n();
   const keybindings = useSettingsStore((s) => s.keybindings);
@@ -80,6 +83,19 @@ export function AppRail({
         />
       )}
       {modeSwitch}
+      {designGallery && (
+        <RailTip label={designGallery.label}>
+          <button
+            type="button"
+            onClick={designGallery.onToggle}
+            className={cn(RAIL_BUTTON, designGallery.active && 'bg-accent text-foreground')}
+            aria-label={designGallery.label}
+            aria-pressed={designGallery.active}
+          >
+            <Ruler className="size-[19px]" />
+          </button>
+        </RailTip>
+      )}
       <div className="flex-1" />
       <RailTip label={t('Ask Enso')}>
         <button

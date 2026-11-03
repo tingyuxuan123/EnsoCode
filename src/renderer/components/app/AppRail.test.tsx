@@ -24,6 +24,23 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
 const modeSwitch = createElement('div', { 'data-testid': 'mode' });
 
 describe('AppRail 精简导航', () => {
+  it('设计入口只在宿主允许时出现，并反映画廊的切换状态', () => {
+    const onToggle = vi.fn();
+    const props = { designGallery: { label: 'Design', active: false, onToggle } };
+    expect(railItems(props)).toEqual(['Design', 'Ask Enso', 'Settings']);
+    const markup = (active: boolean) =>
+      parseHTML(
+        renderToStaticMarkup(
+          createElement(AppRail, {
+            designGallery: { ...props.designGallery, active },
+          })
+        )
+      ).document.querySelector('[aria-label="Design"]');
+    expect(markup(false)?.getAttribute('aria-pressed')).toBe('false');
+    expect(markup(true)?.getAttribute('aria-pressed')).toBe('true');
+    expect(railItems({})).not.toContain('Design');
+  });
+
   it('展开时侧栏开关与模式切换之间有分隔符，不显示搜索', () => {
     expect(
       railItems({

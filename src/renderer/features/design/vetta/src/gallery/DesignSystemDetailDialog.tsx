@@ -1,11 +1,13 @@
 import { useTranslation } from "@vetta-org/plugin-sdk";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Dialog, DialogHeader, DialogPanel, DialogFooter, DialogPopup, DialogTitle } from "@/components/ui/dialog";
+import { DesignRoot } from "../../../mounts/DesignRoot";
+import { DesignDemoViewer } from "../../../mounts/DesignDemoViewer";
 import { DesignSystemPreview } from "../canvas/DesignSystemPreview";
 import { designSystemCategoryLabel, designSystemTagline } from "../design-systems/labels";
 import { parsePreviewTokens } from "../design-systems/preview-tokens";
 import type { DesignSystem } from "../design-systems/types";
 import { getPluginCtx, notify } from "../plugin-context";
-import { PluginPortal } from "../plugin-portal";
 import { DesignSystemDemo, designSystemDemoHtml } from "./DesignSystemDemo";
 import { openDemoInBrowser } from "./open-demo";
 
@@ -22,7 +24,7 @@ const PALETTE_KEYS = ["primary", "accent", "surface", "surface-raised", "surface
 
 /**
  * 一套设计体系的详情 Dialog:大图 demo 自动滚动预览 + 配色 + 元信息,
- * 右下角「使用」进新建流程,demo 也可以丢给系统浏览器全尺寸看。
+ * 右下角「使用」进新建流程,demo 在应用内沙箱全尺寸看。
  */
 export function DesignSystemDetailDialog({ system, busy, onUse, onClose }: DesignSystemDetailDialogProps) {
 	const { t, locale } = useTranslation();
@@ -37,16 +39,6 @@ export function DesignSystemDetailDialog({ system, busy, onUse, onClose }: Desig
 	// tagline 有译文时 blurb 是补充信息;两者相同就没必要念两遍。
 	const tagline = designSystemTagline(system, locale, t);
 	const blurb = system.blurb !== tagline ? system.blurb : null;
-
-	useEffect(() => {
-		const onKeyDown = (event: KeyboardEvent): void => {
-			if (event.key !== "Escape") return;
-			event.stopPropagation();
-			onClose();
-		};
-		window.addEventListener("keydown", onKeyDown, true);
-		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, [onClose]);
 
 	const onOpenDemo = async (): Promise<void> => {
 		setOpening(true);
@@ -69,45 +61,23 @@ export function DesignSystemDetailDialog({ system, busy, onUse, onClose }: Desig
 	};
 
 	return (
-		<PluginPortal>
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop */}
-			<div
-				className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/55 px-6 py-8 backdrop-blur-[2px]"
-				onClick={onClose}
-			>
-				{/* biome-ignore lint/a11y/noStaticElementInteractions: keeps backdrop clicks off the panel */}
-				<div
-					role="dialog"
-					aria-label={t("gallery.detail.aria", { name: system.name })}
-					className="flex max-h-[min(80vh,760px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
-					onClick={(event) => event.stopPropagation()}
-				>
-					<div className="flex shrink-0 items-center gap-2.5 border-b border-border px-5 pb-3 pt-4">
+		<Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+			<DialogPopup className="max-h-[min(80vh,760px)] max-w-2xl" bottomStickOnMobile={false} aria-label={t("gallery.detail.aria", { name: system.name })}>
+				<DesignRoot>
+					<DialogHeader className="flex-row items-center gap-2.5">
 						<span
 							title={t(system.vibe === "dark" ? "ds.vibe.dark" : "ds.vibe.light")}
 							className={`size-2.5 shrink-0 rounded-full border ${
 								system.vibe === "dark" ? "border-zinc-500 bg-zinc-900" : "border-zinc-300 bg-zinc-50"
 							}`}
 						/>
-						<h2 className="min-w-0 truncate text-base font-semibold text-foreground">{system.name}</h2>
+						<DialogTitle className="min-w-0 truncate">{system.name}</DialogTitle>
 						<span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] text-muted-foreground">
 							{designSystemCategoryLabel(system, t)}
 						</span>
-						<div className="flex-1" />
-						<button
-							type="button"
-							title={t("ds.close")}
-							aria-label={t("ds.close")}
-							onClick={onClose}
-							className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-						>
-							<svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-								<path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-							</svg>
-						</button>
-					</div>
+					</DialogHeader>
 
-					<div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+					<DialogPanel>
 						{/* 大图预览:有 demo 就常开自动滚动,让这页一直「活着」;没有就用 token 色板。 */}
 						{hasDemo ? (
 							<DesignSystemDemo system={system} active className="aspect-[16/10] rounded-xl border border-border" />
@@ -156,10 +126,9 @@ export function DesignSystemDetailDialog({ system, busy, onUse, onClose }: Desig
 								</button>
 							) : null}
 						</dl>
-					</div>
+					</DialogPanel>
 
-					<div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
-						<div className="flex-1" />
+					<DialogFooter>
 						{hasDemo ? (
 							<button
 								type="button"
@@ -181,9 +150,10 @@ export function DesignSystemDetailDialog({ system, busy, onUse, onClose }: Desig
 						>
 							{t("gallery.detail.use", { name: system.name })}
 						</button>
-					</div>
-				</div>
-			</div>
-		</PluginPortal>
+					</DialogFooter>
+				</DesignRoot>
+			</DialogPopup>
+			<DesignDemoViewer />
+		</Dialog>
 	);
 }

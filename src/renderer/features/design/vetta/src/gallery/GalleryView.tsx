@@ -2,6 +2,7 @@ import { useTranslation } from "@vetta-org/plugin-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "../canvas/ConfirmDialog";
 import { SHARE_EXTENSION, SHARE_PREVIEW_EXTENSIONS } from "../export/share-format";
+import { parsePackagedVetd } from "../export/import-design";
 import { refreshDesignCatalog } from "../design-systems/index";
 import { getPluginCtx, notify } from "../plugin-context";
 import { GALLERY_VIEW_ID } from "../tab-ids";
@@ -54,11 +55,18 @@ export function GalleryView() {
 	const [busy, setBusy] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	const [archiveTarget, setArchiveTarget] = useState<GalleryCardData | null>(null);
+	const [importTarget, setImportTarget] = useState<{ fileName: string; bytes: Uint8Array } | null>(null);
+	const importingRef = useRef(false);
 	/** 右键菜单的定位基准：菜单是这个容器的 absolute 子节点。 */
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	/** Hero 的「逛逛风格库」滚动目标。 */
 	const stylesRef = useRef<HTMLDivElement | null>(null);
 	const loadAbortRef = useRef<AbortController | null>(null);
+	const mountedRef = useRef(true);
+	useEffect(() => {
+		mountedRef.current = true;
+		return () => { mountedRef.current = false; };
+	}, []);
 
 	const refresh = useCallback(
 		async (options?: { forceCatalog?: boolean }) => {
@@ -100,7 +108,9 @@ export function GalleryView() {
 	/** 导完直接进项目看设计：包里已经有成品，用户刚表达的意图就是「打开它」。 */
 	const enterCreated = useCallback(
 		async (created: CreatedDesign) => {
+			if (!mountedRef.current) return;
 			await refresh();
+			if (!mountedRef.current) return;
 			await openProjectFromGallery({ cwd: created.cwd, vetdPath: created.vetdPath });
 		},
 		[refresh],
@@ -115,6 +125,7 @@ export function GalleryView() {
 			setBusy(true);
 			try {
 				const created = await createDesignProject(name);
+				if (!mountedRef.current) return;
 				setCreating(false);
 				await startDesignProject(created.cwd);
 			} catch (error) {
@@ -134,7 +145,7 @@ export function GalleryView() {
 		async (system: DesignSystem, name: string) => {
 			setBusy(true);
 			try {
-				await startDesignFromSystem(system, name, locale);
+				await startDesignFromSystem(system, name, locale, () => mountedRef.current);
 				setPendingSystem(null);
 			} catch (error) {
 				notify({ message: t("gallery.styles.failed"), error });
@@ -147,6 +158,8 @@ export function GalleryView() {
 
 	const importBytes = useCallback(
 		async (fileName: string, bytes: Uint8Array) => {
+			if (importingRef.current) return;
+			importingRef.current = true;
 			setBusy(true);
 			try {
 				const created = await importDesignPackage(fileName, bytes);
@@ -155,40 +168,59 @@ export function GalleryView() {
 			} catch (error) {
 				notify({ message: t("gallery.import.failed"), error });
 			} finally {
+				importingRef.current = false;
 				setBusy(false);
 			}
 		},
 		[enterCreated, t],
 	);
 
+	/** Both entry points validate the complete archive before consent, and before any project exists. */
+	const requestImport = useCallback((fileName: string, bytes: Uint8Array) => {
+		if (busy) return;
+		try {
+			parsePackagedVetd(bytes);
+			setImportTarget({ fileName, bytes: bytes.slice() });
+			setBusy(true);
+		} catch (error) {
+			notify({ message: t("gallery.import.failed"), error });
+		}
+	}, [busy, t]);
+
 	/** 按钮入口：走宿主的原生选择框，内容随选择一起回来（插件读不了项目外的文件）。 */
 	const onPickImport = useCallback(async () => {
+		if (busy) return;
 		try {
 			const picked = await getPluginCtx().official.dialog.openFiles({
 				title: t("gallery.import.title"),
 				filters: [{ name: t("gallery.import.filter"), extensions: [...SHARE_PREVIEW_EXTENSIONS] }],
 			});
 			const file = picked[0];
-			if (!file) return;
-			await importBytes(file.name, Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0)));
+			if (!file || !mountedRef.current) return;
+			requestImport(file.name, Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0)));
 		} catch (error) {
 			notify({ message: t("gallery.import.failed"), error });
 		}
-	}, [importBytes, t]);
+	}, [requestImport, t, busy]);
 
 	const onDrop = useCallback(
 		async (event: React.DragEvent) => {
 			event.preventDefault();
 			setDragging(false);
+			if (busy) return;
 			const file = [...event.dataTransfer.files].find((candidate) => isSharePackageName(candidate.name));
 			if (!file) {
 				notify({ message: t("gallery.import.wrongType", { ext: SHARE_EXTENSION }) });
 				return;
 			}
-			// 拖进来的 File 直接就能读字节，不需要任何宿主授权。
-			await importBytes(file.name, new Uint8Array(await file.arrayBuffer()));
+			// Reject before allocation: decoding limits are too late for a multi-GB File.
+			try {
+				if (file.size > 32 * 1024 * 1024) throw new Error("Design share exceeds 32 MiB");
+				const bytes = new Uint8Array(await file.arrayBuffer());
+				if (mountedRef.current) requestImport(file.name, bytes);
+			} catch (error) { notify({ message: t("gallery.import.failed"), error }); }
 		},
-		[importBytes, t],
+		[requestImport, t, busy],
 	);
 
 	const onExport = useCallback(
@@ -467,6 +499,23 @@ export function GalleryView() {
 					danger
 					onConfirm={() => void onArchive(archiveTarget)}
 					onCancel={() => setArchiveTarget(null)}
+				/>
+			) : null}
+
+			{importTarget ? (
+				<ConfirmDialog
+					title={`${t("gallery.action.import")}: ${importTarget.fileName}`}
+					description={locale.startsWith("zh")
+						? "只读预览在安全沙箱中运行；导入后打开将执行设计源码，并可能安装 npm 依赖。设计及依赖可以执行本机代码，请仅在信任来源时继续。"
+						: "Read-only previews stay in a safe sandbox. Importing and opening this package runs its design source and may install npm dependencies. Design code and dependencies can execute local code. Only import trusted sources."}
+					confirmLabel={t("gallery.action.import")}
+					cancelLabel={t("gallery.action.cancel")}
+					danger
+					onConfirm={() => {
+						setImportTarget(null);
+						void importBytes(importTarget.fileName, importTarget.bytes);
+					}}
+					onCancel={() => { setImportTarget(null); setBusy(false); }}
 				/>
 			) : null}
 
