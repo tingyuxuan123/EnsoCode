@@ -92,6 +92,9 @@ export class BridgeHub {
 	/** 已经报过 ready（bridge 装好、能应答消息）的 frame。 */
 	private readonly ready = new Set<string>();
 	private readonly readyWaiters = new Map<string, Set<() => void>>();
+	/** Bridge readiness precedes React's lazy frame commit on a cold iframe. */
+	private readonly rendered = new Set<string>();
+	private readonly renderedWaiters = new Map<string, Set<() => void>>();
 	private readonly onMessage = (event: MessageEvent): void => {
 		const data = event.data as Record<string, unknown> | null;
 		if (!data || data.vetd !== true) return;
@@ -103,6 +106,7 @@ export class BridgeHub {
 				// 这一帧重新装了一次 bridge——它是个全新的文档，不认识之前发出去的
 				// requestId。挂起的截图等到天荒地老也等不来回音，直接判死。
 				this.abortCaptures(frameId, "the frame reloaded while capturing (a build error recovery or HMR reload)");
+				this.rendered.delete(frameId);
 				this.ready.add(frameId);
 				const waiters = this.readyWaiters.get(frameId);
 				if (waiters) {
@@ -116,9 +120,14 @@ export class BridgeHub {
 				if (radius !== undefined) this.post(frameId, { type: "frame-radius", radius });
 				return;
 			}
-			case "rendered":
+			case "rendered": {
+				this.rendered.add(frameId);
+				const waiters = this.renderedWaiters.get(frameId);
+				this.renderedWaiters.delete(frameId);
+				if (waiters) for (const waiter of waiters) waiter();
 				if (frameId) this.events?.onRendered(frameId);
 				return;
+			}
 			case "frame-error":
 				if (frameId) this.events?.onFrameError(frameId, typeof data.message === "string" ? data.message : null);
 				return;
@@ -206,10 +215,15 @@ export class BridgeHub {
 		this.frames.clear();
 		this.origins.clear();
 		this.ready.clear();
+		this.rendered.clear();
 		for (const waiters of this.readyWaiters.values()) {
 			for (const waiter of waiters) waiter();
 		}
 		this.readyWaiters.clear();
+		for (const waiters of this.renderedWaiters.values()) {
+			for (const waiter of waiters) waiter();
+		}
+		this.renderedWaiters.clear();
 	}
 
 	register(frameId: string, iframe: HTMLIFrameElement | null): void {
@@ -223,6 +237,7 @@ export class BridgeHub {
 		this.origins.delete(frameId);
 		// iframe 卸了，下次挂上是全新的文档，得重新等它报 ready。
 		this.ready.delete(frameId);
+		this.rendered.delete(frameId);
 		this.abortCaptures(frameId, "the frame's iframe was unmounted while capturing");
 	}
 
@@ -249,17 +264,27 @@ export class BridgeHub {
 	 * 编译失败会连 bridge 一起带走），再等一轮截图超时只是把 8s 拖成 38s。
 	 */
 	private waitReady(frameId: string, timeoutMs: number): Promise<boolean> {
-		if (this.ready.has(frameId)) return Promise.resolve(true);
+		return this.waitFrameState(frameId, this.ready, this.readyWaiters, timeoutMs);
+	}
+
+	private waitFrameState(
+		frameId: string,
+		state: ReadonlySet<string>,
+		listeners: Map<string, Set<() => void>>,
+		timeoutMs: number,
+	): Promise<boolean> {
+		if (state.has(frameId)) return Promise.resolve(true);
 		return new Promise<boolean>((resolve) => {
-			const waiters = this.readyWaiters.get(frameId) ?? new Set<() => void>();
-			this.readyWaiters.set(frameId, waiters);
+			const waiters = listeners.get(frameId) ?? new Set<() => void>();
+			listeners.set(frameId, waiters);
 			let timer = 0;
 			const done = (): void => {
 				window.clearTimeout(timer);
-				resolve(true);
+				resolve(state.has(frameId));
 			};
 			timer = window.setTimeout(() => {
 				waiters.delete(done);
+				if (waiters.size === 0) listeners.delete(frameId);
 				resolve(false);
 			}, timeoutMs);
 			waiters.add(done);
@@ -321,9 +346,11 @@ export class BridgeHub {
 	 * 锚不上元素备注照样成立（frame 锚），这条路上没有值得抛给用户的错误。
 	 */
 	async resolveElement(frameId: string, query: ElementQuery, timeoutMs = 5_000): Promise<SelectedElementPayload | null> {
-		if (!this.frames.has(frameId)) return null;
+		const frame = this.frames.get(frameId);
+		if (!frame) return null;
 		if (!(await this.waitReady(frameId, READY_TIMEOUT_MS))) return null;
-		if (!this.frames.has(frameId)) return null;
+		if (!(await this.waitFrameState(frameId, this.rendered, this.renderedWaiters, READY_TIMEOUT_MS))) return null;
+		if (this.frames.get(frameId) !== frame) return null;
 		this.captureCounter += 1;
 		const requestId = `res-${this.captureCounter}`;
 		return new Promise<SelectedElementPayload | null>((resolve) => {

@@ -48,6 +48,54 @@ function fakeFrame(): HTMLIFrameElement {
 
 afterEach(() => {
 	document.body.innerHTML = "";
+	vi.useRealTimers();
+});
+
+it("waits for rendered content, not just the bridge's ready message, before resolving note anchors", async () => {
+	const bridge = new BridgeHub();
+	const iframe = fakeFrame();
+	bridge.start(events());
+	bridge.register("home", iframe);
+	fromFrame(iframe, { type: "ready" });
+	const post = vi.spyOn(iframe.contentWindow!, "postMessage");
+	try {
+		const pending = bridge.resolveElement("home", { domPath: "main h1" });
+		await Promise.resolve();
+		expect(post).not.toHaveBeenCalled();
+		fromFrame(iframe, { type: "rendered" }, "http://127.0.0.1:5180");
+		await Promise.resolve();
+		expect(post).not.toHaveBeenCalled();
+		fromFrame(iframe, { type: "rendered" });
+		await vi.waitFor(() => expect(post).toHaveBeenCalled());
+		const message = post.mock.calls.at(-1)![0] as { requestId: string; type: string };
+		expect(message.type).toBe("resolve-element");
+		const payload = { tag: "h1", text: "Home", source: "frames/index.tsx:3" };
+		fromFrame(iframe, { type: "element-resolved", requestId: message.requestId, payload });
+		await expect(pending).resolves.toEqual(payload);
+	} finally { bridge.stop(); }
+});
+
+it("does not reuse a previous document's rendered signal and bounds waits for an unrendered frame", async () => {
+	vi.useFakeTimers();
+	const bridge = new BridgeHub();
+	const first = fakeFrame();
+	const second = fakeFrame();
+	bridge.start(events());
+	bridge.register("home", first);
+	fromFrame(first, { type: "ready" });
+	fromFrame(first, { type: "rendered" });
+	bridge.register("home", null);
+	bridge.register("home", second);
+	fromFrame(second, { type: "ready" });
+	const post = vi.spyOn(second.contentWindow!, "postMessage");
+	try {
+		const pending = bridge.resolveElement("home", { x: 60, y: 100 });
+		await Promise.resolve();
+		expect(post).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(8_001);
+		await expect(pending).resolves.toBeNull();
+		expect(post).not.toHaveBeenCalled();
+	} finally { bridge.stop(); }
 });
 
 it("keeps frame registrations and in-flight captures when the callbacks change", async () => {
