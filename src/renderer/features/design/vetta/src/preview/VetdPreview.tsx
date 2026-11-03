@@ -1,13 +1,13 @@
 import type { PluginPreviewFile } from "@vetta-org/plugin-sdk";
 import { useTranslation } from "@vetta-org/plugin-sdk";
 import { useEffect, useState } from "react";
-import { parsePackagedVetd, importPackagedVetd, type PackagedVetd } from "../export/import-design";
-import { getPluginCtx, notify } from "../plugin-context";
-import { setPendingDesignPath } from "../canvas/design-runtime";
+import { parsePackagedVetd, parseDesignManifest, type PackagedVetd } from "../export/import-design";
+import { notify } from "../plugin-context";
+import type { DesignPreviewActions } from "../../../host/preview-files";
+import { ConfirmDialog } from "@/components/chat/ConfirmDialog";
 import { PreviewCanvas } from "./PreviewCanvas";
 import { inlineSnapshotAssets } from "./snapshot-assets";
-import { CANVAS_TAB_ID } from "../tab-ids";
-import { emptyManifest, type VetdManifest } from "../vetd/manifest-types";
+import type { VetdManifest } from "../vetd/manifest-types";
 
 type PreviewState =
 	| { kind: "loading" }
@@ -18,25 +18,26 @@ type PreviewState =
 
 function parseManifest(json: string): VetdManifest | null {
 	try {
-		const parsed = JSON.parse(json) as VetdManifest;
-		if (parsed && parsed.type === "vetta-design" && Array.isArray(parsed.frames)) {
-			return { ...emptyManifest(), ...parsed };
-		}
+		return parseDesignManifest(json);
 	} catch {
 		// fallthrough
 	}
 	return null;
 }
 
-export function VetdPreview({ file }: { file: PluginPreviewFile }) {
-	const { t } = useTranslation();
+export function VetdPreview({ file, actions }: { file: PluginPreviewFile; actions?: DesignPreviewActions }) {
+	const { t, locale } = useTranslation();
 	const [state, setState] = useState<PreviewState>({ kind: "loading" });
+	const [confirmImport, setConfirmImport] = useState(false);
+	const [importing, setImporting] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
+		setState({ kind: "loading" });
 		const load = async (): Promise<void> => {
-			const url = file.getUrl();
-			const bytes = url ? new Uint8Array(await (await fetch(url)).arrayBuffer()) : null;
+			if (file.size > 32 * 1024 * 1024) throw new Error("Design preview exceeds size limit");
+			const bytes = new Uint8Array(await file.readBytes());
+			if (bytes.length > 32 * 1024 * 1024) throw new Error("Design preview exceeds size limit");
 			if (!bytes) {
 				setState({ kind: "invalid" });
 				return;
@@ -51,14 +52,14 @@ export function VetdPreview({ file }: { file: PluginPreviewFile }) {
 				}
 				// 图片在包里但快照引用的是构建产物路径（srcdoc 下解析不到），这里补上。
 				const snapshotHtml = packaged.snapshotHtml
-					? await inlineSnapshotAssets(packaged.snapshotHtml, packaged.designFiles)
+					? await inlineSnapshotAssets(packaged.snapshotHtml, packaged.designFiles, { decodeRaster: false })
 					: null;
 				if (cancelled) return;
 				setState({ kind: "packaged", manifest, packaged, snapshotHtml });
 				return;
 			}
 			const manifest = parseManifest(new TextDecoder().decode(bytes));
-			setState(manifest ? { kind: "working", manifest } : { kind: "invalid" });
+			if (!cancelled) setState(manifest && file.extension === "vetd" ? { kind: "working", manifest } : { kind: "invalid" });
 		};
 		load().catch((error: unknown) => {
 			if (cancelled) return;
@@ -71,24 +72,19 @@ export function VetdPreview({ file }: { file: PluginPreviewFile }) {
 	}, [file, t]);
 
 	const openCanvas = (): void => {
-		if (file.path) setPendingDesignPath(file.path);
-		const ctx = getPluginCtx();
-		ctx.ui.setActivityTabVisible(CANVAS_TAB_ID, true);
-		ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max" });
+		void actions?.openCanvas().catch((error) => notify({ message: t("canvas.import.failed"), error }));
 	};
 
 	const runImport = async (packaged: PackagedVetd): Promise<void> => {
+		if (!actions || importing) return;
+		setImporting(true);
 		try {
-			const ctx = getPluginCtx();
-			if (!file.path) throw new Error("no file path");
-			const targetDir = file.path.slice(0, file.path.lastIndexOf("/"));
-			const vetdPath = await importPackagedVetd(ctx, packaged, targetDir, file.name);
+			const vetdPath = await actions.importPackage(packaged);
 			notify({ message: t("canvas.import.done", { path: vetdPath }), variant: "success", durationMs: 5000 });
-			setPendingDesignPath(vetdPath);
-			ctx.ui.setActivityTabVisible(CANVAS_TAB_ID, true);
-			ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max" });
 		} catch (error) {
 			notify({ message: t("canvas.import.failed"), error });
+		} finally {
+			setImporting(false);
 		}
 	};
 
@@ -122,6 +118,7 @@ export function VetdPreview({ file }: { file: PluginPreviewFile }) {
 					<button
 						type="button"
 						onClick={openCanvas}
+						disabled={!actions}
 						className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
 					>
 						{t("preview.open")}
@@ -129,13 +126,22 @@ export function VetdPreview({ file }: { file: PluginPreviewFile }) {
 				) : (
 					<button
 						type="button"
-						onClick={() => void runImport(state.packaged)}
+						onClick={() => setConfirmImport(true)}
+						disabled={!actions || importing}
 						className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
 					>
 						{t("preview.import")}
 					</button>
 				)}
 			</div>
+			<ConfirmDialog
+				open={confirmImport}
+				onOpenChange={setConfirmImport}
+				title={t("preview.import")}
+				description={locale === "zh" ? "导入后将在设计画布中运行包内代码，设计及 npm 依赖可以执行本机代码。仅导入可信来源；只读预览不会授予这些权限。是否继续？" : "Importing opens executable design code on the canvas. The design and npm dependencies can execute local code. Only import trusted sources; read-only preview does not grant these permissions. Continue?"}
+				confirmLabel={t("preview.import")}
+				onConfirm={() => { setConfirmImport(false); if (state.kind === "packaged") void runImport(state.packaged); }}
+			/>
 			{state.kind === "packaged" && !state.snapshotHtml ? (
 				<p className="text-xs text-muted-foreground">{t("preview.snapshot.missing")}</p>
 			) : null}

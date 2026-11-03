@@ -3,6 +3,7 @@ import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback
 import { CanvasDotGlow } from "../canvas/CanvasDotGlow";
 import { fitViewport, useViewport } from "../canvas/use-viewport";
 import type { VetdFrameEntry, VetdManifest } from "../vetd/manifest-types";
+import { mountDesignSnapshot } from "../../../host/preview-snapshot";
 
 /** fit 时四周留白（屏幕像素）。 */
 const FIT_PADDING = 24;
@@ -142,17 +143,29 @@ export function planMounted(
  * iframe 按 frame 的真实尺寸铺满画框，缩放由外层 world 的 transform 统一负责——
  * 所以放大之后仍是矢量渲染，不会糊。
  */
-function SnapshotFrame({ html, frameId, onLoaded }: { html: string; frameId: string; onLoaded(): void }) {
+export function SnapshotFrame({ url, frameId, onLoaded }: { url: string; frameId: string; onLoaded(): void }) {
 	const ref = useRef<HTMLIFrameElement | null>(null);
+	const show = useCallback(() => {
+		// sandbox without allow-same-origin has an opaque origin, so '*' is required.
+		// Only a non-executable frame identifier is sent to this exact child window.
+		ref.current?.contentWindow?.postMessage({ vetd: true, type: "show-frame", id: frameId }, "*");
+	}, [frameId]);
+	useEffect(() => {
+		const onMessage = (event: MessageEvent) => {
+			if (event.source === ref.current?.contentWindow && event.origin === "null" && event.data?.vetd === true && event.data.type === "ready") show();
+		};
+		window.addEventListener("message", onMessage);
+		return () => window.removeEventListener("message", onMessage);
+	}, [show]);
 	return (
 		<iframe
 			ref={ref}
 			title={frameId}
-			srcDoc={html}
+			src={url}
 			sandbox="allow-scripts"
 			className="pointer-events-none h-full w-full border-0 bg-white"
 			onLoad={() => {
-				ref.current?.contentWindow?.postMessage({ vetd: true, type: "show-frame", id: frameId }, "*");
+				show();
 				onLoaded();
 			}}
 		/>
@@ -171,6 +184,12 @@ interface PreviewCanvasProps {
  */
 export function PreviewCanvas({ manifest, snapshotHtml }: PreviewCanvasProps) {
 	const { t } = useTranslation();
+	const [snapshot, setSnapshot] = useState<{ html: string; url: string } | null>(null);
+	useEffect(() => {
+		if (!snapshotHtml) return;
+		return mountDesignSnapshot(snapshotHtml, (url) => setSnapshot({ html: snapshotHtml, url }));
+	}, [snapshotHtml]);
+	const snapshotUrl = snapshot?.html === snapshotHtml ? snapshot.url : null;
 	const frames = manifest.frames;
 	const contentBounds = useMemo(() => boundsOfFrames(frames), [frames]);
 	/** 已经建了 iframe 的 frame（离开可见范围后还留着，来回平移不必反复重启动；总数见 MAX_MOUNTED）。 */
@@ -238,7 +257,7 @@ export function PreviewCanvas({ manifest, snapshotHtml }: PreviewCanvasProps) {
 
 	/** 该建 iframe 的 frame，见 planMounted。 */
 	useEffect(() => {
-		if (!snapshotHtml) return;
+		if (!snapshotUrl) return;
 		const visibleIds = frames
 			.filter((frame) => !cullRect || intersects(cullRect, frame))
 			.sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x))
@@ -256,7 +275,7 @@ export function PreviewCanvas({ manifest, snapshotHtml }: PreviewCanvasProps) {
 				return kept;
 			});
 		}
-	}, [frames, cullRect, loaded, mounted, snapshotHtml]);
+	}, [frames, cullRect, loaded, mounted, snapshotUrl]);
 
 	const markLoaded = useCallback((frameId: string): void => {
 		setLoaded((current) => (current.has(frameId) ? current : new Set(current).add(frameId)));
@@ -307,9 +326,9 @@ export function PreviewCanvas({ manifest, snapshotHtml }: PreviewCanvasProps) {
 						</div>
 						{/* 直角：圆角会让 iframe 的 overflow 裁剪走带遮罩的合成路径（同编辑态 FrameView）。 */}
 						<div className="h-full w-full overflow-hidden bg-white shadow ring-1 ring-border">
-							{snapshotHtml && mounted.has(frame.id) ? (
+							{snapshotUrl && mounted.has(frame.id) ? (
 								<SnapshotFrame
-									html={snapshotHtml}
+									url={snapshotUrl}
 									frameId={frame.id}
 									onLoaded={() => markLoaded(frame.id)}
 								/>

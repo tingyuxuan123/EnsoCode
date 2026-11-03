@@ -8,6 +8,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  PanelsTopLeft,
   Settings,
   Terminal,
 } from 'lucide-react';
@@ -45,12 +46,14 @@ const byExtColor: Record<string, string> = {
 };
 
 export function fileTypeIcon(name: string, isDir: boolean, expanded = false): LucideIcon {
+  if (/\.vetd$/i.test(name) || (!isDir && /\.vetdz$/i.test(name))) return PanelsTopLeft;
   if (isDir) return expanded ? FolderOpen : Folder;
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   return byExt[ext] ?? File;
 }
 
 export function fileTypeIconClass(name: string, isDir: boolean): string {
+  if (/\.vetd$/i.test(name) || (!isDir && /\.vetdz$/i.test(name))) return 'text-primary';
   if (isDir) return 'text-amber-500';
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   return byExtColor[ext] ?? 'text-muted-foreground';

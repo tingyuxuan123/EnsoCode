@@ -21,6 +21,8 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { addToast } from '@/components/ui/toast';
+import { isDesignPreviewRel, openDesignDirectory } from '@/features/design/host/preview-files';
+import { DesignFilePreview } from '@/features/design/mounts/DesignFilePreview';
 import { useCodeHighlightOptions } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
 import { fileLanguage } from '@/lib/fileLanguage';
@@ -86,6 +88,7 @@ interface OpenDoc {
   conflict: boolean;
   tooLarge?: boolean;
   preview?: boolean;
+  designPreview?: boolean;
   /** 同 tab 内的 source/preview 切换（仅 Markdown）；undefined 视为 source */
   viewMode?: 'source' | 'preview';
 }
@@ -136,6 +139,8 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
   const [confirmDelete, setConfirmDelete] = useState<null | { rel: string; name: string }>(null);
   const project = useSettingsStore((s) => s.projects.find((p) => p.id === projectId));
   const local = project?.kind !== 'ssh';
+  const designEnabled = useSettingsStore((s) => s.designEnabled);
+  const designAvailable = local && designEnabled;
   const openDocsRef = useRef(openDocs);
   openDocsRef.current = openDocs;
   const activeRelRef = useRef(activeRel);
@@ -201,6 +206,27 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
         setActiveRel(rel);
         return;
       }
+      if (designAvailable && isDesignPreviewRel(rel)) {
+        // Never run a share archive through workspaceFiles.read (UTF-8/editor path).
+        setOpenDocs((docs) =>
+          docs.some((doc) => doc.rel === rel)
+            ? docs
+            : [
+                ...docs,
+                {
+                  rel,
+                  contents: '',
+                  draft: '',
+                  version: 0,
+                  dirty: false,
+                  conflict: false,
+                  designPreview: true,
+                },
+              ]
+        );
+        setActiveRel(rel);
+        return;
+      }
       const epoch = opEpochRef.current;
       const result = await readFile(rel);
       if (!result || wasPathInvalidated(mutationsRef.current, rel, epoch)) return;
@@ -239,7 +265,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
       setActiveRel(rel);
       void window.electronAPI.workspaceFiles.watchStart({ ...req, rel });
     },
-    [failToast, readFile, req]
+    [designAvailable, failToast, readFile, req]
   );
 
   const [confirmClose, setConfirmClose] = useState<null | {
@@ -306,7 +332,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
     const unsubscribe = window.electronAPI.workspaceFiles.onChange((event) => {
       if (event.conversationId !== conversationId) return;
       const doc = openDocsRef.current.find((item) => item.rel === event.rel);
-      if (!doc) return;
+      if (!doc || doc.designPreview) return;
       void readFile(event.rel).then((result) => {
         if (alive && result?.ok) applyDisk(event.rel, result.content);
       });
@@ -348,7 +374,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
     let alive = true;
     const rels = new Set(editedRelsKey ? editedRelsKey.split('\n') : []);
     for (const rel of rels) {
-      if (!openDocsRef.current.some((doc) => doc.rel === rel)) continue;
+      if (!openDocsRef.current.some((doc) => doc.rel === rel && !doc.designPreview)) continue;
       void readFile(rel).then((result) => {
         if (alive && result?.ok) applyDisk(rel, result.content);
       });
@@ -368,6 +394,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
     let alive = true;
     bumpTree();
     for (const doc of openDocsRef.current) {
+      if (doc.designPreview) continue;
       const rel = fromPreviewKey(doc.rel);
       const epoch = opEpochRef.current;
       void readFile(rel).then((result) => {
@@ -463,6 +490,10 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
 
   const openPreview = useCallback(
     async (rel: string, allowSourceToggle = false) => {
+      if (designAvailable && isDesignPreviewRel(rel)) {
+        await openFile(rel);
+        return;
+      }
       if (allowSourceToggle) {
         await openFile(rel, 'preview');
         return;
@@ -494,7 +525,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
       ]);
       setActiveRel(key);
     },
-    [failToast, readFile, openFile]
+    [designAvailable, failToast, readFile, openFile]
   );
 
   useEffect(
@@ -554,6 +585,13 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
     [conversationId, failToast, req]
   );
 
+  const openDesign = useCallback(
+    (rel: string) => {
+      void openDesignDirectory(conversationId, rel).catch(() => failToast());
+    },
+    [conversationId, failToast]
+  );
+
   const save = useCallback(
     async (rel: string) => {
       if (useSessionsStore.getState().conversations[conversationId]?.workspaceMigrating) {
@@ -564,7 +602,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
         return;
       }
       const doc = openDocsRef.current.find((item) => item.rel === rel);
-      if (!doc || doc.preview) return;
+      if (!doc || doc.preview || doc.designPreview) return;
       const content = doc.draft;
       const epoch = opEpochRef.current;
       const result = await window.electronAPI.workspaceFiles.write({ ...req, rel, content });
@@ -681,7 +719,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
       if (toRel) {
         recordMutation(rel);
         for (const doc of openDocsRef.current) {
-          if (doc.preview || doc.tooLarge) continue;
+          if (doc.preview || doc.designPreview || doc.tooLarge) continue;
           const nextRel = remapRelForRename(doc.rel, rel, toRel);
           if (nextRel == null) continue;
           void window.electronAPI.workspaceFiles.watchStop({ ...req, rel: doc.rel });
@@ -809,6 +847,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
                     draft={draft}
                     renaming={renaming}
                     local={local}
+                    onDesignCanvas={designAvailable ? openDesign : undefined}
                     expandedDirs={expandedDirs}
                     onToggleDir={toggleDir}
                     onOpen={openFile}
@@ -1055,6 +1094,15 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
               <div className="flex h-full items-center justify-center px-3 text-center text-sm text-muted-foreground">
                 {ready ? t('Open a file from the tree.') : t('Loading...')}
               </div>
+            ) : active.designPreview ? (
+              designAvailable ? (
+                <DesignFilePreview
+                  key={active.rel}
+                  conversationId={conversationId}
+                  rel={active.rel}
+                  revision={workspaceRevision}
+                />
+              ) : null
             ) : active.tooLarge ? (
               <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
                 {t('This file is too large to open in the editor.')}
@@ -1169,6 +1217,7 @@ type TreeHandlers = {
   onOpen: (rel: string) => void;
   onPreview: (rel: string) => void;
   onBrowser: (rel: string) => void;
+  onDesignCanvas?: (rel: string) => void;
   onCopyPath: (rel: string) => void;
   onCopyRel: (rel: string) => void;
   onCopyFile: (rel: string) => void;
@@ -1336,6 +1385,7 @@ function FileTree({
               <FileTreeMenu
                 target={{ kind: 'dir', rel: child, name: entry.name }}
                 local={handlers.local}
+                onDesignCanvas={handlers.onDesignCanvas}
                 onNewFile={handlers.onNewFile}
                 onNewFolder={handlers.onNewFolder}
                 onCopyPath={handlers.onCopyPath}

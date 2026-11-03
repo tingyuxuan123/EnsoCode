@@ -3,7 +3,7 @@
  * 快照经 srcdoc 加载没有 origin，构建产物路径解析不到，只读预览里图片全是裂的；
  * 这里守的是「构建后的文件名能对回包内原图」以及「对不上时不破坏文档」。
  */
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { findAssetReferences, inlineSnapshotAssets, resolveDesignAsset } from "../src/preview/snapshot-assets";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
@@ -54,4 +54,20 @@ it("inlines non-raster assets verbatim", async () => {
 	const svg = new Uint8Array([0x3c, 0x73, 0x76, 0x67]);
 	const out = await inlineSnapshotAssets('u="/assets/logo-AbCdEfGh.svg"', files({ "assets/logo.svg": svg }));
 	expect(out).toContain("data:image/svg+xml;base64,");
+});
+
+it("untrusted preview does not decode image bytes in the privileged parent", async () => {
+	const decode = vi.fn();
+	vi.stubGlobal("createImageBitmap", decode);
+	try {
+		await inlineSnapshotAssets('src="/assets/known-hash.png"', files({ "assets/known.png": PNG }), { decodeRaster: false });
+		expect(decode).not.toHaveBeenCalled();
+	} finally { vi.unstubAllGlobals(); }
+});
+
+it("repeated asset references cannot expand HTML beyond the bounded output budget", async () => {
+	const html = 'src="/assets/known-hash.svg";'.repeat(100);
+	const out = await inlineSnapshotAssets(html, files({ "assets/known.svg": new Uint8Array(1024) }), { maxOutputBytes: 4096, decodeRaster: false });
+	 expect(new TextEncoder().encode(out).length).toBeLessThanOrEqual(4096);
+	 expect(out).toBe(html);
 });

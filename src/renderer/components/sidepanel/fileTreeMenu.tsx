@@ -6,6 +6,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { translate as designText } from '@/features/design/host/translation';
 import { useI18n } from '@/i18n';
 
 export function parentRel(rel: string): string {
@@ -45,6 +46,7 @@ export function FileTreeMenu({
   onRename,
   onDelete,
   onSend,
+  onDesignCanvas,
 }: {
   target: FileTreeTarget;
   local: boolean;
@@ -61,6 +63,7 @@ export function FileTreeMenu({
   onRename?: (rel: string, name: string) => void;
   onDelete?: (rel: string, name: string) => void;
   onSend?: (rel: string, name: string) => void;
+  onDesignCanvas?: (rel: string) => void;
 }) {
   const { t } = useI18n();
   const createParent =
@@ -74,6 +77,11 @@ export function FileTreeMenu({
     <ContextMenu>
       <ContextMenuTrigger render={children as ReactElement<Record<string, unknown>>} />
       <ContextMenuPopup className="min-w-52">
+        {local && target.kind === 'dir' && /\.vetd$/i.test(target.name) && onDesignCanvas && (
+          <ContextMenuItem onClick={() => onDesignCanvas(target.rel)}>
+            {designText('fileExplorer.openCanvas')}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onClick={() => onNewFile(createParent)}>{t('New File')}</ContextMenuItem>
         <ContextMenuItem onClick={() => onNewFolder(createParent)}>
           {t('New Folder')}

@@ -127,16 +127,31 @@ async function shrinkRaster(bytes: Uint8Array, mime: string): Promise<string> {
 export async function inlineSnapshotAssets(
 	html: string,
 	designFiles: ReadonlyMap<string, Uint8Array>,
+	options: { decodeRaster?: boolean; maxOutputBytes?: number } = {},
 ): Promise<string> {
-	const references = findAssetReferences(html);
-	if (references.length === 0) return html;
+	const maxOutput = options.maxOutputBytes ?? 32 * 1024 * 1024;
+	let outputBytes = new TextEncoder().encode(html).length;
+	if (outputBytes > maxOutput) throw new Error("Snapshot exceeds preview size limit");
+	const counts = new Map<string, number>();
+	let occurrencesTotal = 0;
+	for (const match of html.matchAll(ASSET_REFERENCE)) {
+		if (++occurrencesTotal > 10000) return html;
+		counts.set(match[0], (counts.get(match[0]) ?? 0) + 1);
+	}
+	if (!counts.size) return html;
 	const inlined = new Map<string, string>();
-	for (const reference of references) {
+	for (const reference of counts.keys()) {
 		const bytes = resolveDesignAsset(reference, designFiles);
 		if (!bytes) continue;
 		const extension = extensionOf(reference);
 		const mime = MIME_BY_EXTENSION[extension] ?? "application/octet-stream";
-		inlined.set(reference, RASTER_EXTENSIONS.has(extension) ? await shrinkRaster(bytes, mime) : dataUrl(mime, bytes));
+		const occurrences = counts.get(reference) ?? 1;
+		// Bound before base64 allocation and account for every repeated occurrence, not just distinct assets.
+		const estimated = 4 * Math.ceil(bytes.length / 3) + mime.length + 13;
+		if (outputBytes + occurrences * Math.max(0, estimated - reference.length) > maxOutput) continue;
+		const replacement = options.decodeRaster !== false && RASTER_EXTENSIONS.has(extension) ? await shrinkRaster(bytes, mime) : dataUrl(mime, bytes);
+		outputBytes += occurrences * (replacement.length - reference.length);
+		inlined.set(reference, replacement);
 	}
 	if (inlined.size === 0) return html;
 	// replacer 函数：data: URI 里含 `+` `/` 等字符，字符串替换值还会解释 `$&` 之类。

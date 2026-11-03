@@ -1,15 +1,19 @@
 import type { PluginContext } from "@vetta-org/plugin-sdk";
 import { strToU8, zipSync, type Zippable } from "fflate";
+import { assertDesignArchivePath } from "@shared/design/archive";
 import { buildDesign } from "../engine/engine-manager";
 import { HISTORY_ENTRY, packHistoryForShare } from "../history/history-transfer";
 import type { DesignSession } from "../vetd/design-session";
 import { MANIFEST_FILE } from "../vetd/manifest-types";
 import { SHARE_EXTENSION } from "./share-format";
+import { parsePackagedVetd } from "./import-design";
 
 const BUILD_DIR = ".vetd-build";
 // `.notes.json` 是用户和 Vetta 之间的工作批注，不是设计内容，分享包不带。
 // `design.json` 在包里单独以 manifest.json 落一份，不重复进 design/。
-const EXCLUDED_PREFIXES = [`${BUILD_DIR}/`, "node_modules/", ".snapshots/", ".notes.json", MANIFEST_FILE];
+const EXCLUDED_PREFIXES = [`${BUILD_DIR}/`, "node_modules/", ".snapshots/", ".history/", ".history-pack.zip", ".notes.json", MANIFEST_FILE];
+const MAX_PACKAGE_BYTES = 32 * 1024 * 1024;
+const packageQueues = new Map<string, Promise<unknown>>();
 
 function base64FromBytes(bytes: Uint8Array): string {
 	let binary = "";
@@ -79,16 +83,32 @@ export interface DesignPackage {
  */
 export async function buildDesignPackage(ctx: PluginContext, session: DesignSession): Promise<DesignPackage> {
 	const outDir = `${session.dirPath}/${BUILD_DIR}`;
+	const previous = packageQueues.get(session.dirPath) ?? Promise.resolve();
+	const work = previous.catch(() => {}).then(async () => {
+		try { return await buildPackage(ctx, session, outDir); }
+		finally { await ctx.fs.delete(outDir).catch(() => {}); }
+	});
+	packageQueues.set(session.dirPath, work);
+	try { return await work; }
+	finally { if (packageQueues.get(session.dirPath) === work) packageQueues.delete(session.dirPath); }
+}
+
+async function buildPackage(ctx: PluginContext, session: DesignSession, outDir: string): Promise<DesignPackage> {
 	await buildDesign(ctx, session.dirPath, outDir);
 	const snapshotHtml = await buildSnapshotHtml(ctx, outDir);
+	if (new TextEncoder().encode(snapshotHtml).byteLength > MAX_PACKAGE_BYTES)
+		throw new Error("Design snapshot exceeds the 32 MiB share limit");
 
 	const zipEntries: Zippable = {
 		"manifest.json": strToU8(`${JSON.stringify(session.manifest, null, "\t")}\n`),
 		"snapshot.html": strToU8(snapshotHtml),
 	};
 	const files = await ctx.fs.listFilesRecursive(session.dirPath);
+	let total = Object.values(zipEntries).reduce((sum, bytes) => sum + (bytes as Uint8Array).length, 0);
+	if (files.length > 10000) throw new Error("Too many files in design share");
 	for (const file of files) {
 		const rel = file.relPath.replaceAll("\\", "/");
+		assertDesignArchivePath(rel);
 		if (EXCLUDED_PREFIXES.some((prefix) => rel.startsWith(prefix))) continue;
 		const extension = rel.split(".").pop()?.toLowerCase() ?? "";
 		if (TEXT_EXTENSIONS.has(extension)) {
@@ -98,10 +118,20 @@ export async function buildDesignPackage(ctx: PluginContext, session: DesignSess
 			const binary = await ctx.fs.readBinaryFile(file.path);
 			zipEntries[`design/${rel}`] = bytesFromBase64(binary.data);
 		}
+		const bytes = zipEntries[`design/${rel}`] as Uint8Array;
+		total += bytes.length;
+		if (bytes.length > MAX_PACKAGE_BYTES || total > 128 * 1024 * 1024)
+			throw new Error("Design sources exceed the share size limit");
 	}
 	// 版本历史跟着分享包走（ADR-0069）：收包方导入后能看到这份设计是怎么长成这样的。
 	const history = await packHistoryForShare(ctx, session.dirPath);
-	if (history.kind === "ok") zipEntries[HISTORY_ENTRY] = bytesFromBase64(history.base64);
+	if (history.kind === "ok") {
+		const bytes = bytesFromBase64(history.base64);
+		total += bytes.length;
+		if (total > 128 * 1024 * 1024 || bytes.length > MAX_PACKAGE_BYTES)
+			throw new Error("Design history exceeds the share size limit");
+		zipEntries[HISTORY_ENTRY] = bytes;
+	}
 	if (history.kind === "too-large") {
 		ctx.ui.notify({
 			variant: "warning",
@@ -110,7 +140,9 @@ export async function buildDesignPackage(ctx: PluginContext, session: DesignSess
 	}
 
 	const zipped = zipSync(zipEntries, { level: 6 });
-	await ctx.fs.delete(outDir).catch(() => {});
+	if (zipped.byteLength > MAX_PACKAGE_BYTES) throw new Error("Design share exceeds the 32 MiB import limit");
+	// Validate the exact output with the importer's manifest, count and nested limits.
+	parsePackagedVetd(zipped);
 	return {
 		fileName: `${session.name}-share.${SHARE_EXTENSION}`,
 		base64: base64FromBytes(zipped),

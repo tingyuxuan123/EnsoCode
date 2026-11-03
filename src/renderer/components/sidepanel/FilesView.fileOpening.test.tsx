@@ -10,6 +10,8 @@ const harness = vi.hoisted(() => ({
   editors: [] as { focus: ReturnType<typeof vi.fn> }[],
   read: vi.fn(),
   listDir: vi.fn(),
+  designEnabled: true,
+  projectKind: 'local',
   t: (key: string) => key,
   state: {
     workspaceRevisionByConversation: {},
@@ -24,7 +26,21 @@ vi.mock('@/stores/sessions', () => ({
 }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: unknown) => unknown) =>
-    select({ projects: [{ id: 'project', path: 'C:/workspace' }] }),
+    select({
+      designEnabled: harness.designEnabled,
+      projects: [{ id: 'project', path: 'C:/workspace', kind: harness.projectKind }],
+    }),
+}));
+vi.mock('@/features/design/host/preview-files', () => ({
+  isDesignPreviewRel: (rel: string) => /\.(vetd|vetdz)$/i.test(rel),
+  openDesignDirectory: vi.fn(),
+}));
+vi.mock('@/features/design/mounts/DesignFilePreview', () => ({
+  DesignFilePreview: ({ conversationId, rel }: { conversationId: string; rel: string }) => (
+    <div data-viewer="design" data-owner={conversationId}>
+      {rel}
+    </div>
+  ),
 }));
 vi.mock('@/stores/sessions/timeline', () => ({
   buildTimeline: () => [],
@@ -145,6 +161,8 @@ beforeEach(() => {
   harness.opener = null;
   harness.pending = null;
   harness.editors = [];
+  harness.designEnabled = true;
+  harness.projectKind = 'local';
   harness.read.mockReset().mockResolvedValue({ ok: true, content: '# README\ncontent' });
   harness.listDir.mockReset().mockResolvedValue({ ok: true, entries: [] });
   container = dom.document.getElementById('root') as unknown as HTMLElement;
@@ -156,6 +174,25 @@ afterEach(async () => {
 });
 
 describe('FilesView 文件链接预览', () => {
+  it.each(['share.vetdz', 'legacy-share.vetd'])(
+    '本地 %s 在文本读取之前分发到绑定owner的设计预览',
+    async (rel) => {
+      await mount();
+      await act(async () => harness.opener?.(rel));
+      expect(harness.read).not.toHaveBeenCalled();
+      expect(container.querySelector('[data-viewer="design"]')?.getAttribute('data-owner')).toBe(
+        'owner'
+      );
+      expect(container.querySelector('[data-viewer="design"]')?.textContent).toBe(rel);
+    }
+  );
+  it.each(['disabled', 'ssh'])('%s 不挂载本地设计预览', async (mode) => {
+    harness.designEnabled = mode !== 'disabled';
+    harness.projectKind = mode === 'ssh' ? 'ssh' : 'local';
+    await mount();
+    await act(async () => harness.opener?.('share.vetdz'));
+    expect(container.querySelector('[data-viewer="design"]')).toBeNull();
+  });
   it('选中树中的文件后该行进入激活态，且预览 tab 也回指同一行', async () => {
     harness.listDir.mockResolvedValue({
       ok: true,
