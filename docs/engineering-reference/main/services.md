@@ -6,6 +6,9 @@
 配对 Web 的 HTML / React / Vue 预览采用电脑侧隔离渲染，不在配对 origin 执行网页代码；
 传输、授权、Vite 兼容和真机回归契约见 [网页预览](pair-preview.md)。
 
+内置设计的根授权、单画布归属、分享包/历史校验与独立 CSP 预览见
+[设计子系统](../guides/design-subsystem.md)。
+
 ## Bot 宿主的投递边界
 
 - `status: idle` 不是回合终态：worker 还会发送 session-meta、turn-completed。Bot 槽位、结果归属与队列只在终态结算；但中断、命令失败等路径只有 idle/failed，宿主在宽限期后兜底结算并 pump，无宿主轮次的会话回到 idle 时也要 pump，否则排队投递与并发槽永久挂起。

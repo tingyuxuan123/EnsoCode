@@ -1,6 +1,6 @@
 # 移植 Open Vetta 设计功能（vetta-ui-design）设计稿
 
-> 状态：已确认（2026-11-02），P1/P2 完成，P3 待实施。来源：`open-vetta-main/packages/plugins/presets/vetta-ui-design`（插件 0.7.6，Apache-2.0；内含 taste-skill，MIT）。
+> 状态：已确认（2026-11-02），P1/P2/P3 实现与自动验收完成；原生保存面板手工验收与签名安装包验收见 §12 限制。来源：`open-vetta-main/packages/plugins/presets/vetta-ui-design`（插件 0.7.6，Apache-2.0；内含 taste-skill，MIT）。
 > 上游参考：ADR-0053/0054/0055/0066/0068/0069、`docs/desktop/design-gallery.md`。
 
 ## 1. 行为差距
@@ -209,6 +209,51 @@ Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（atta
 - 最终集成检查：`pnpm typecheck`、`pnpm lint`（无错误，仅既有提示）、`pnpm test`
   （Vitest 1151 文件通过 / 2 跳过，12045 用例通过 / 10 跳过；node:test 49 通过）、
   `pnpm build`、`pnpm --filter @enso/phone typecheck` 与 `build` 全部成功。
+
+## 11. P3 实施边界（2026-11-03）
+
+- 行为差距：画廊/file-preview/file-explorer 贡献目前只登记未挂载；官方 project/dialog/navigation
+  子集尚无实现，分享包预览不能直接继承主窗口 CSP 后执行内联脚本。
+- 所属层：Renderer 挂载上游画廊/分享预览/文件树，适配层绑定 owner 会话；Main 负责固定项目
+  根、原生文件选择及独立沙箱预览 URL。共享 archive decoder 统一 ZIP 路径、大小、CRC 和类型边界。
+- 必改：App/AppRail、FilesView/fileTreeMenu/fileIcons 与 design mounts/host；shared design/IPC、
+  preload typed API、main/ipc/design 及 design projects/preview/fs；history runner 的解包防线。
+- 新项目只收名称，由 Main 落在 Documents/EnsoCode/Designs；导入前完整验证分享包。
+  “归档”适配为可恢复的画廊隐藏，不删除目录、会话或撤销执行权限；画廊提供恢复入口。
+- 预览使用受限随机回环 URL+不可猜 token+独立 CSP，关闭/窗口销毁释放；分享代码只能在
+  sandbox allow-scripts、无 same-origin/preload/外部网络的 iframe 中执行，不放宽主窗 CSP。
+  从只读包导入为可执行设计须明确确认；设计引擎/npm 继续按既有本机代码信任模型运行。
+- 明确不做：远程/SSH 设计、任意 command、任意磁盘路径 IPC、新增后台画布、全局项目管理
+  重构或安装包发布。用户已有 `ensocode-proma-rework-1.vetd/` 不操作。
+
+## 12. P3 验收（2026-11-03）
+
+- 画廊：AppRail 入口、本机/Code/designEnabled 门禁、保留窗口栏、两个项目/三份设计列出；
+  卡片跳到 root 会话并定位设计。新建界面显示 Documents/EnsoCode/Designs 落点，确认后
+  创建项目并导航新会话，输入框有 `@skill:vetta-ui-design` 草稿。隐藏/恢复不删除原目录。
+- 风格库：Linear 详情与全尺寸 Demo 实际渲染，CSP+无脚本 sandbox；不再执行任意 node 命令。
+- 分享包：双画框 .vetdz 构建约 96KB，解析/导入保留源码、manifest、snapshot 与 4833 字节
+  history.zip；文件树只读预览的两帧分别显示 Home/Details。独立预览脚本探针证实 parent DOM
+  与外部 fetch 被拒、electronAPI 为 undefined，主窗口 CSP 未放宽。
+- 样机：工作台实际编码并保存 PNG 1968×1668（168672 字节）和单页 PDF（120907 字节，
+  `%PDF-1.4`、页数/EOF 正确），图片目视确认两帧与 EnsoCode 标识。
+- 历史 UI：创建 baseline/changed 两版本，抽屉“恢复到此”确认后磁盘标题从 Revision 回到 Ride，
+  新提交携带 restoredFrom；“查看”旧版有只读横幅并展示旧标题。
+- 两厂商真机：隔离配置下 Claude Opus 5.5 自主读技能/status/history，调用 vetd_export
+  images 生成两张 PNG 并 Read 核对；GPT 6.1 自主读技能、status/history、两帧 screenshot 并
+  Read 合览图，vetd_export PDF 返回两页。两者均报告测试稿 theme placeholder，未擅改源码。
+- 安全复核发现四项并已按 RED→GREEN 修复：画廊过滤子会话/按最近活跃排序；离开后不执行
+  迟到导航；导出复用完整 importer 防计数/历史展开限制漂移；拖入在 arrayBuffer 前限制体积。
+  另补 ZIP 实际 CRC 与 Git tree symlink 回归，重建 readable runner；临时锁文件前缀已修复。
+- 最终检查：typecheck、lint（无错误，既有 info）、Vitest 1173 文件通过 / 2 跳过、12140
+  用例通过 / 10 跳过；node:test 49 通过；桌面 build 与 phone typecheck/build 全部通过。
+- 清理：所有隔离 Electron/Vite/provider、复制的真实 provider 配置、临时设计项目和验收创建的
+  独立 managed 子目录已删除；未操作用户 `ensocode-proma-rework-1.vetd/`。
+
+限制：原生保存面板已触发，但 CUA 无法可靠区分同一 Electron 二进制的用户实例与隔离实例，
+故未点击不确定窗口；样机产物使用临时 saveAs 适配写入隔离设计包，Main 原生选择/保存取消、
+大小限制和精确字节写入有服务测试。不得把这写成原生面板手工验收已完成。签名/公证、实际
+安装包增量与 LGPL 分发最终确认仍属于发布验收，本次未发版、未安装。
 
 ## 附录 A：上游宿主依赖（调研结论）
 

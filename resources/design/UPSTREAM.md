@@ -34,9 +34,9 @@ the source adaptations and direction/photo data.
 
 ## History runner: rebuilding the vendored artifact
 
-`history-runner/runner.mjs` is a self-contained ESM bundle of the unmodified
+`history-runner/runner.mjs` is a self-contained ESM bundle of the ported
 upstream `history-runner/src/runner-entry.ts`, built with upstream's
-`vite.runner.config.ts` (Node 20 target), with **one build-only change**:
+`vite.runner.config.ts` (Node 20 target), with this build-only change:
 `minify: true` → `minify: false`. This preserves readable identifiers and allows
 users to modify/replace the LGPL-covered helper below. Only Node built-ins remain external.
 There is no runtime npm install. The dependency versions used were:
@@ -45,13 +45,33 @@ There is no runtime npm install. The dependency versions used were:
 - isomorphic-git **1.41.3**
 - fflate **0.8.2**
 
-Rebuild without altering the upstream checkout or installing its workspace SDK:
+P3 changes: bounded archive decoding (CRC, real expansion size, paths, file types),
+and preflight Git tree modes before checkout/restore (no links/submodules). The
+decoder's authoritative application source is `src/shared/design/archive.ts`; a
+byte-identical standalone copy ships in `history-runner/source/archive.ts`.
+The original build lock contained temporary workspace-prefixed keys. These were
+relocated to normal `node_modules/` keys while preserving pinned versions and
+integrity values; `npm ci` and the rebuilt artifact were verified.
+
+Rebuild from this repository without altering an upstream checkout:
+
+```bash
+node scripts/build-design-runner.mjs
+```
+
+The script installs the pinned build-tools lock in an isolated temporary directory,
+copies the runner and shared decoder, builds a readable standalone artifact and
+removes the temporary directory. This is an explicit maintainer command, not run
+at application startup. To rebuild from the shipped preferred source alone, use
+the following layout (copy `source/archive.ts` too):
 
 ```bash
 P=/path/to/open-vetta-main/packages/plugins/presets/vetta-ui-design
 REPO=/path/to/EnsoCode
 TMP=$(mktemp -d /tmp/enso-design-runner.XXXXXX)
-cp -R "$P" "$TMP/plugin"
+mkdir -p "$TMP/plugin/history-runner/src"
+cp "$REPO/resources/design/history-runner/source/runner-entry.ts" "$TMP/plugin/history-runner/src/"
+cp "$REPO/resources/design/history-runner/source/archive.ts" "$TMP/plugin/history-runner/src/"
 cp "$REPO/resources/design/history-runner/source/vite.runner.config.ts" "$TMP/plugin/"
 mkdir -p "$TMP/build-tools"
 cp "$REPO/resources/design/history-runner/source/build-tools.package.json" "$TMP/build-tools/package.json"
@@ -62,8 +82,8 @@ ln -s ../build-tools/node_modules "$TMP/plugin/node_modules"
 cp "$TMP/plugin/history-runner/dist/runner.mjs" "$REPO/resources/design/history-runner/runner.mjs"
 ```
 
-This snapshot built to 566.88 kB (gzip 120.40 kB), SHA-256
-`cdf461f9c6b47c6170220a12fde7649a851844445d5cceb5e34ae959dfe68b0d`.
+The P3 artifact built to 572.54 kB (gzip 122.20 kB), SHA-256
+`64a5eca7749073a9b41788eae413f72ba8348cec2a7334e33a7b967c2ffb9b5d`.
 The build-tools lock pins transitive dependencies. Review any resulting diff and
 repeat smoke checks before replacing the artifact. A self-contained rebuild can
 also use `history-runner/source/runner-entry.ts` and the included config in the
@@ -94,7 +114,7 @@ The package-level MIT license does not supersede that explicit file notice.
   `index.js` (and `index.cjs`). The source-map `sourcesContent` supplies the
   uncombined preferred source copied verbatim as
   `history-runner/source/isomorphic-git-join.js` (lines **1–147**).
-- Bundled location: `history-runner/runner.mjs` lines **8916–9025**, comprising
+- Bundled location: `history-runner/runner.mjs` starting at line **9003**, comprising
   the original license notice and `normalizeString`, `getWindowsDrivePrefix`,
   `normalize`, and `join`. No EnsoCode semantic changes were made to this helper.
 - ZenFS source: <https://github.com/zen-fs/core/blob/main/src/path.ts>, published

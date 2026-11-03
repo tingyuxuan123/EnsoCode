@@ -1,4 +1,4 @@
-# vetta-ui-design → EnsoCode（P1-C / P2-UI）
+# vetta-ui-design → EnsoCode（P1–P3）
 
 ## 基准与边界
 
@@ -10,7 +10,7 @@
 行为差距：EnsoCode 没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
 执行工具和登记贡献，P2-UI 将画布、截图卡和样机工作台接入渲染层，不增加 preload 暴露。
 `host/` 负责 SDK 兼容、绝对路径拆分与 IPC；Main 仍负责权威根、realpath、写白名单。
-画廊、文件树、分享包预览仍未挂载。
+P3 补齐画廊、文件树和分享包预览；新增 Main 项目/原生选择/独立预览能力，仍不开放通用 command。
 
 ## 构建和同步
 
@@ -56,7 +56,7 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 - network GET/POST + JSON body，Main 固定主机白名单继续生效。
 - agent registerTool/registerHook/registerSystemPromptProvider；ui.register*、fileExplorer
   decoration/contextMenu 登记 `useDesignRegistry`。P2 实接 design Dock 打开/可见性/宽度、图片
-  预览、通知、局部快捷键；工作区导航/文件预览仍只登记。openExternal 走 design.shell，
+  预览、通知、局部快捷键；P3 消费工作区与文件贡献。openExternal 走 design.shell，
   copyImage 用浏览器 clipboard，notify 走宿主 toast。
 - conversation 订阅立即微任务重放当前会话；createSession 只用已存在的本地项目；
   sendPrompt 走既有 sessions store，沿用 Composer 的有效模型解析。i18n zh/en 随设置变化；
@@ -66,7 +66,7 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 
 明确不支持（调用抛 `EnsoCode design host: … is not supported in P1`）：
 任意 command.run/spawn、fs.move、storage blobs、multipart/PUT/PATCH/DELETE 网络请求、
-conversation.abort、official.projects.create/archive 等写操作、official.dialog.openFiles/saveCopy、
+conversation.abort、official.projects.open/rename/remove 等写操作、official.dialog.saveCopy、
 其它未实现 official 域；ui.captureRegion/createQrCode/sidebar 订阅。
 默认 AgentMode 返回 code，不做 Vetta 远端执行/权限系统。新增宿主能力不得回退通用 IPC。
 
@@ -78,7 +78,7 @@ conversation.abort、official.projects.create/archive 等写操作、official.di
 | history/runner-host.ts | 把 raw runner 分块物化再 node 执行 | design.script history；ensureRunner 显式不支持独立物化。dir 先转 root/designRel，payload 删除 dir/out/from，Main 固定脚本。 |
 | history/history-transfer.ts | pack/unpack 指定绝对 out/from | 不传 out/from，读写 `<设计包>/.history-pack.zip`；Main 同名推导，禁止任意输出路径。 |
 | vetd/check-syntax.ts | node -e + 引擎 esbuild 扫描 | design.script check-syntax + frames/components 下 TSX 相对列表；仍保留上游失败时不伪造语法错误语义。 |
-| gallery/open-demo.ts | 任意 node 写临时 HTML 并用系统命令打开 | P1 明确报错；无此固定 Main API，P3 做沙箱 demo。 |
+| gallery/open-demo.ts、DesignSystemDemo.tsx | 任意 node 写临时 HTML 并用系统命令打开 | P3 使用宿主 Dialog 内无脚本 iframe；先清洗主动元素/导航/外部资源并加严格 CSP，保留安全 html/body 展示属性。不写临时 HTML，不拉系统浏览器。 |
 | style.css | 上游由插件包扫描工具类并全量 scope | 显式限定 Tailwind 扫描目录并单文件编译后 scope；宿主与插件不交叉产出工具类。 |
 | cards/file-url.ts、ScreenshotSwiper.tsx | 同步生成 vetta-file://local 特权 URL | 经 SDK fs.readBinaryFile → MIME 校验 → blob URL；卡片卸载/替换时释放，弹层独立持有 URL，避免虚拟卡片卸载把预览清掉。 |
 | canvas/design-runtime.ts、canvas/CanvasTab.tsx | 模块级单画布 controller | 保留单例，新增订阅及 mounted cwd；tools/assets/direction/export/history 及 tool-gate 用 `getCanvasController(cwd)` 隔离项目（包括嵌套项目）。仅活跃 dock 挂载，presence 只报告匹配该挂载 cwd 的 controller。 |
@@ -198,3 +198,44 @@ P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个�
 - `vetd/check-sources.ts` 中引用按钮文案的提示同步为“让 Enso 去做”。
 - 保留：`.vetdz` 保存对话框的文件类型名 “Vetta Design”（上游格式名）、给模型看的工具描述与技能正文（漂移测试要求与上游一致）。
 - `test/skill-presentation.test.ts` 的插件名断言同步改为“设计”。
+
+## P3 宿主接线与安全差异
+
+- AppRail 新增“设计”，只在本机 Code 模式且 designEnabled 开启时可用。注册的 GalleryView
+  直接挂主区；header 独立订阅，避免上游每 render 发布新 ReactNode 造成父子重渲染循环。
+  选择会话（含同 id 点击）回到聊天；画廊期间不显示旧 fullscreen Dock。
+- `design.projects` 仅收 list/create(name)/setArchived(projectId,boolean)。Main 决定新项目落点
+  `Documents/EnsoCode/Designs` 并登记现有 source authority，名称拒绝路径/保留字，重名新建后缀目录。
+  archive 仅为持久、可恢复的画廊隐藏，不删除目录/会话/撤销项目权限；宿主提供已隐藏恢复入口。
+  逐个 resolveRoot，单个坏项目不阻断扫描。会话候选只取可续聊的 root，按活跃时间倒序。
+- `design.openFiles` 只用原生选择器获取 vetdz/vetd，最多 8 文件、总计 32MiB；路径不授予后续
+  文件访问权限。saveAs 沿用用户选择的 Main 写入路径；取消不写入，所有接口限可信主窗口。
+- `@shared/design/archive` 是 Renderer、Main 和 standalone runner 使用的同一有界 ZIP32 解码器：
+  压缩/单文件 32MiB、总展开 128MiB、最多万条；拒绝点段/绝对/反斜杠/NUL/大小写或 Unicode
+  别名冲突、Unix 链接/非普通文件、CRC/长度/重叠 header 错误；流式小块 inflate 核对实际输出，
+  不信声明大小。history.zip 单独限 24MiB 压缩/64MiB 展开，并计入总预算。
+- 导入在创建项目/写文件前校验 ZIP、manifest 尺寸/路径和嵌套历史。拖入先检查 File.size 再
+  arrayBuffer，读取失败显示通知。画廊与文件预览均在明确确认代码/npm 执行风险后才导入。
+  离开画廊后的异步导入/新建不再抢回导航；已写文件不会伪称可撤销。
+- 文件树只在本地且开关开启时提供 `.vetd` 目录画布操作与分享文件预览。读取、导入、历史
+  解包绑定原 owner session ref 与规范根，并在 await 后检查选中会话/工作目录；不能凭全局
+  最长路径根重新选权限。watch/URL 在卸载或迟到完成时清理，预览文件从不送文本编辑器解码。
+- 分享快照通过 `design.preview` 临时不可猜 token 回环 URL，独立响应 CSP：默认无资源、无
+  connect/form/base，仅内联 script/style、data 图片字体和受限内嵌 frame；不改主窗口 CSP。
+  外层与内部 srcdoc 都 sandbox allow-scripts、无 allow-same-origin/preload。双层是为了兼容
+  旧快照只在 about: URL 使用 MemoryRouter；show-frame 只发送给确切子窗口，ready 时重发。
+  每窗口最多 8 文档，每文档 32MiB，关闭/窗口销毁释放。没有外部网络或任意磁盘 URL。
+- 导出同设计串行，成功失败都清理 `.vetd-build`，限文件/总大小；保存前用完整 importer
+  重新校验精确产物，保证不会生成应用自己无法导入的包。批注、本机位图及中转历史不进源码包。
+- 历史/样机 UI 已在 P2 画布内，P3 验证 runner、Dialog、PNG/PDF/saveAs 链路；恢复前遍历目标
+  Git 树，仅接受普通 blob/tree，拒绝 symlink/submodule/保留目录。ZIP 无 symlink 不等于 Git
+  对象内无 symlink。Main、runner 双重解包校验；runner 重建入口 `scripts/build-design-runner.mjs`。
+
+P3 真机（隔离 CDP 9333）：画廊列项目和风格、跨项目卡片回到 root 会话；新建后预填设计技能、
+隐藏/恢复保留原目录；96KB 双画框分享包导出/导入保留源码和 history，文件树只读预览实际渲染
+两个不同页面。独立 CSP 探针证实脚本可运行、parent DOM 与网络均拒绝、electronAPI 为 undefined。
+历史抽屉恢复后源码回到旧标题并新增 restoredFrom 提交，旧版本查看有只读横幅。
+样机对话框实际编码产出 1968×1668 PNG 和单页 PDF（有效 header/EOF），标识为 EnsoCode。
+原生保存面板已触发，但因多份同二进制 Electron 无法可靠通过 CUA 绑定，未点击用户其它实例；
+产物验收使用临时 saveAs 适配落到隔离设计包，Main 原生选择/保存的取消与精确字节写入另有服务测试。
+这不等同于已完成原生面板手动验收或签名安装包发布。
