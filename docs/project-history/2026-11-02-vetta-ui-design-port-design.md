@@ -160,7 +160,11 @@ Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（atta
 - 计划模式下 `vetd_create` 被拒，未落盘。`vetd_status` 返回设计列表与引擎状态。
 - 引擎经 Electron-as-Node 在 127.0.0.1 随机端口启动，物化到 userData/design/engine/<版本>；离屏截图返回渲染正确的画框（Tailwind 与 theme 生效，probe 读到标题，scaleFactor 2）。停止引擎 8ms 返回且页面存活；SIGTERM 退出时 will-quit 清理全部 vite 进程。
 - 全量：typecheck、lint、vitest 1140 文件/11968 用例、node:test 49、`pnpm build` 通过。
-- **尚未完成**：两家真实厂商模型的自主调用验证（需使用用户真实配置）。
+- 两厂商真实模型（2026-11-03，隔离 userData，仅复制一个网关 provider）：
+  - Anthropic `claude-opus-5-5`：自然语言需求下自行 Read 技能 → `vetd_create`（mobile，brief/screens/intent）→ `vetd_direction propose`；后者因 P1 无画布返回可重试错误，模型按提示停止并向用户说明，未循环重试。
+  - OpenAI `gpt-6.1-sol`：Read 技能 → `vetd_create`（poster 1080×1440）→ 同一会话立即可用的 `vetd_status`（验证 create 后即时开放全部工具）。
+  - 两个设计包均由 Stop hook 自动提交一条历史。
+- 观察：`vetd_create` 结果沿用上游“已在画布打开”的语义，GPT 据此对用户说“已打开”；P2 挂画布后该说法成立，P1 期间为已知措辞偏差。
 
 ## 9. 遗留到 P2/P3
 
