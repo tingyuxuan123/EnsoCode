@@ -58,7 +58,16 @@ export async function startEngine(path: string): Promise<PluginCommandSpawnHandl
 export async function captureDesign(
   options: PluginOffscreenCaptureOptions
 ): Promise<PluginOffscreenCaptureResult> {
-  const url = new URL(options.url);
+  const target = designEngineRoute(new URL(options.url));
+  const { url: _url, ...rest } = options;
+  const result = await window.electronAPI.design.capture({ op: 'offscreen', ...target, ...rest });
+  if (!result.ok) throw new Error(result.error);
+  if (!('dataUrl' in result)) throw new Error('Capture returned no image');
+  return result;
+}
+
+/** Match the upstream loopback URL to an engine id, never send a Renderer-supplied origin. */
+export function designEngineRoute(url: URL): { engineId: string; path: string } {
   const engine = [...engines.values()].find((value) => String(value.port) === url.port);
   if (
     url.protocol !== 'http:' ||
@@ -67,17 +76,8 @@ export async function captureDesign(
     url.password ||
     !engine
   )
-    throw new Error('Capture URL does not belong to a registered design engine');
-  const { url: _url, ...rest } = options;
-  const result = await window.electronAPI.design.capture({
-    op: 'offscreen',
-    engineId: engine.engineId,
-    path: `${url.pathname}${url.search}${url.hash}`,
-    ...rest,
-  });
-  if (!result.ok) throw new Error(result.error);
-  if (!('dataUrl' in result)) throw new Error('Capture returned no image');
-  return result;
+    throw new Error('URL does not belong to a registered design engine');
+  return { engineId: engine.engineId, path: `${url.pathname}${url.search}${url.hash}` };
 }
 export async function releaseDesignCapture(sessionKey: string): Promise<void> {
   const result = await window.electronAPI.design.capture({ op: 'release', sessionKey });

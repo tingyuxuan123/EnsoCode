@@ -199,6 +199,18 @@ P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个�
 - 保留：`.vetdz` 保存对话框的文件类型名 “Vetta Design”（上游格式名）、给模型看的工具描述与技能正文（漂移测试要求与上游一致）。
 - `test/skill-presentation.test.ts` 的插件名断言同步改为“设计”。
 
+### 交互模式系统浏览器交接修复（2026-11-03）
+
+上游 InteractionView 把当前 `http://127.0.0.1:<port>/<route>` 交给 SDK openExternal；
+最初宿主将它原样转到只接受 HTTPS 的通用外链入口，导致按钮始终报“用系统浏览器打开失败”。
+现在宿主复用截图的引擎 URL 映射，转换为 `design.shell {op:"openEngineRoute",engineId,path}`；
+Main 验证 sender 所属的存活引擎后推导端口，且用实际 origin 再校验路由，普通 openExternal
+仍只允许 HTTPS。解析器拒绝 `//`、反斜杠和会被 WHATWG URL 忽略的制表符/换行控制字符，
+不允许借固定校验端口重定向其它本机服务。无需修改上游按钮或放宽网络白名单。
+回归覆盖子路由/query/hash、未知/已停止/其它 sender 引擎、伪造端口和控制字符。
+隔离 Electron CDP 9333 实际点击“浏览器打开”，系统 Chrome 地址为登记引擎的
+`/settings-ssh`，页面标题显示该临时测试帧；无失败通知。验收标签页与隔离实例随后清理。
+
 ## P3 宿主接线与安全差异
 
 - AppRail 新增“设计”，只在本机 Code 模式且 designEnabled 开启时可用。注册的 GalleryView

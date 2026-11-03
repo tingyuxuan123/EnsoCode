@@ -14,6 +14,9 @@ Open Vetta 的业务代码保留在 `src/renderer/features/design/vetta/`，宿�
   校验；create 等精确目标就绪，失败保留已创建路径。后台项目不能抢走前台画布。
 - 文件预览/导入/历史解包绑定原会话和规范根，异步后复核 owner；不能按全局“最长匹配路径”
   改选权限。取消不返回成功，但已发出的文件/引擎 IPC 无回滚承诺。
+- 交互预览“浏览器打开”不走通用 HTTPS 外链：宿主将本机 URL 映射成已登记 engineId +
+  path/query/hash，Main 复核该引擎仍存活且属于 sender，再用权威端口拼回环 URL。
+  其它 HTTP 服务、未知/失效引擎和能改变 origin 的路径一律拒绝，不放宽网络请求策略。
 
 ## 分享与预览
 

@@ -174,7 +174,7 @@ export function parseEngine(v: unknown): DesignEngineRequest | null {
   return null;
 }
 export function capturePath(v: unknown): v is string {
-  if (!text(v, 8192) || !v.startsWith('/') || v.startsWith('//') || /[\\\0\r\n]/.test(v))
+  if (!text(v, 8192) || !v.startsWith('/') || v.startsWith('//') || /[\\\0\r\n\t]/.test(v))
     return false;
   try {
     const url = new URL(v, 'http://127.0.0.1:1');
@@ -402,6 +402,13 @@ export function parseShell(v: unknown): DesignShellRequest | null {
   if (!record(v)) return null;
   if (v.op === 'openExternal' && text(v.url, 8192) && externalUrl(v.url) && keys(v, ['op', 'url']))
     return { op: v.op, url: v.url };
+  if (
+    v.op === 'openEngineRoute' &&
+    token(v.engineId) &&
+    capturePath(v.path) &&
+    keys(v, ['op', 'engineId', 'path'])
+  )
+    return { op: v.op, engineId: v.engineId, path: v.path };
   const root = parseRoot(v.root);
   return v.op === 'showItemInFolder' &&
     root &&

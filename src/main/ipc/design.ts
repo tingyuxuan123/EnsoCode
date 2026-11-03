@@ -6,7 +6,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { setDesignCanvasCwds } from '../services/agentHost';
 import { DesignCaptureService } from '../services/design/capture';
 import { DesignEngineService } from '../services/design/engine';
-import { failure } from '../services/design/errors';
+import { DesignServiceError, failure } from '../services/design/errors';
 import { designFs, designOpenFiles, designSaveAs } from '../services/design/fs';
 import { getDesignPaths, getDesignToolBroker } from '../services/design/index';
 import { requestNetwork } from '../services/design/network';
@@ -184,11 +184,26 @@ export function createDesignHandlers(deps: {
       const request = parseNetwork(raw);
       return request ? requestNetwork(request) : invalid();
     }),
-    shell: guard(async (_event, raw) => {
+    shell: guard(async (event, raw) => {
       const request = parseShell(raw);
       if (!request) return invalid();
       if (request.op === 'openExternal') await shell.openExternal(request.url);
-      else {
+      else if (request.op === 'openEngineRoute') {
+        const engine = deps.engine.registered(event.sender.id, request.engineId);
+        if (!engine)
+          throw new DesignServiceError(
+            'PERMISSION_DENIED',
+            'Opening a preview requires a live design engine owned by this window'
+          );
+        const origin = `http://127.0.0.1:${engine.port}`;
+        const url = new URL(request.path, origin);
+        if (url.origin !== origin)
+          throw new DesignServiceError(
+            'PERMISSION_DENIED',
+            'Preview route must stay on its design engine'
+          );
+        await shell.openExternal(url.href);
+      } else {
         const root = await resolveDesignRoot(request.root);
         shell.showItemInFolder(await checkedPath(root.path, request.rel));
       }

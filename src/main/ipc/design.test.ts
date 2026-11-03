@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { shell } from 'electron';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DesignCaptureService } from '../services/design/capture';
 import { DesignEngineService } from '../services/design/engine';
@@ -29,8 +30,36 @@ import { createDesignHandlers } from './design';
 
 const temps: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   await Promise.all(temps.splice(0).map((p) => rm(p, { recursive: true, force: true })));
+});
+it('opens the current route using only the live engine registered to the sender', async () => {
+  const { handlers, event, deps } = await fixture();
+  const open = vi.spyOn(shell, 'openExternal');
+  vi.spyOn(deps.engine, 'registered').mockImplementation((owner, engineId) =>
+    owner === 7 && engineId === 'live' ? { port: 5123 } : null
+  );
+  const route = { op: 'openEngineRoute', engineId: 'live', path: '/settings-ssh?tab=a#top' };
+  expect(await handlers.shell(event, route)).toEqual({ ok: true });
+  expect(open).toHaveBeenCalledWith('http://127.0.0.1:5123/settings-ssh?tab=a#top');
+  for (const request of [
+    { ...route, engineId: 'closed' },
+    { ...route, path: '//example.com' },
+    { ...route, path: '/\t/127.0.0.1:1/other-service' },
+    { ...route, path: '/\\example.com' },
+    { ...route, path: 'http://127.0.0.1:5124/' },
+    { ...route, port: 5124 },
+    { op: 'openExternal', url: 'http://127.0.0.1:5123/settings-ssh' },
+  ])
+    expect(await handlers.shell(event, request)).toMatchObject({ ok: false });
+  const other = { ...event, sender: { ...event.sender, id: 8 } };
+  expect(await handlers.shell(other, route)).toMatchObject({ ok: false });
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(await handlers.shell(event, { op: 'openExternal', url: 'https://example.com/' })).toEqual({
+    ok: true,
+  });
+  expect(open).toHaveBeenLastCalledWith('https://example.com/');
 });
 async function fixture(trusted = true) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'design-ipc-'));

@@ -166,3 +166,29 @@ it('maps capture URLs by registered engine port and rejects all other origins', 
     await expect(captureDesign({ url, width: 1, height: 1 })).rejects.toThrow();
   expect(capture).toHaveBeenCalledTimes(1);
 });
+it('maps an interaction preview URL to an engine id and route without widening external URLs', async () => {
+  designPaths.remember({ ref: root, path: '/adapter' });
+  const shell = vi.fn(async (_request: unknown) => ({ ok: true }));
+  vi.stubGlobal('electronAPI', {
+    design: {
+      engine: async () => ({ ok: true, engineId: 'interaction', port: 5312 }),
+      onEngineExit: () => () => {},
+      shell,
+    },
+  });
+  const handle = await startEngine('/adapter/interaction.vetd');
+  const { ui } = createDesignContext();
+  await ui.openExternal('http://127.0.0.1:5312/settings-ssh?tab=a#top');
+  expect(shell).toHaveBeenLastCalledWith({
+    op: 'openEngineRoute',
+    engineId: 'interaction',
+    path: '/settings-ssh?tab=a#top',
+  });
+  await ui.openExternal('https://example.com/');
+  expect(shell).toHaveBeenLastCalledWith({ op: 'openExternal', url: 'https://example.com/' });
+  for (const url of ['http://127.0.0.1:5313/', 'http://other.test/', 'http://user@127.0.0.1:5312/'])
+    await expect(ui.openExternal(url)).rejects.toThrow();
+  await handle.stop();
+  await expect(ui.openExternal('http://127.0.0.1:5312/')).rejects.toThrow();
+  expect(shell).toHaveBeenCalledTimes(2);
+});

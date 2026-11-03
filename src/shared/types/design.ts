@@ -254,7 +254,9 @@ export type DesignNetworkResponse = DesignResult<{
 
 export type DesignShellRequest =
   | { op: 'showItemInFolder'; root: DesignRootRef; rel: string }
-  | { op: 'openExternal'; url: string };
+  | { op: 'openExternal'; url: string }
+  /** Main derives the loopback origin from a live engine owned by the sender. */
+  | { op: 'openEngineRoute'; engineId: string; path: string };
 
 // ─── agent 工具：worker → Main → Renderer 设计运行时 ─────────────────────────
 

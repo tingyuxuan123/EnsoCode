@@ -20,7 +20,7 @@ import {
 } from './activity-route';
 import { isDesignViewingCwd, setDesignViewingCwd } from './canvas-target';
 import { insertDesignComposerText, setDesignPromptAttachment } from './composer';
-import { captureDesign, releaseDesignCapture } from './engine';
+import { captureDesign, designEngineRoute, releaseDesignCapture } from './engine';
 import { designPaths, resolveDesignRoot } from './paths';
 import { createGalleryProject, listGalleryProjects, setGalleryProjectArchived } from './projects';
 import {
@@ -310,7 +310,14 @@ export function createDesignContext(): PluginContext {
       if (options.error) console.warn('[design]', options.error);
     },
     async openExternal(url) {
-      unwrap(await api().shell({ op: 'openExternal', url }));
+      const target = new URL(url);
+      unwrap(
+        await api().shell(
+          target.protocol === 'http:'
+            ? { op: 'openEngineRoute', ...designEngineRoute(target) }
+            : { op: 'openExternal', url }
+        )
+      );
     },
     async copyImage(dataUrl) {
       const blob = await (await fetch(dataUrl)).blob();
