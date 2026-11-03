@@ -206,6 +206,7 @@ import {
   resolveOauthPoolModel,
 } from './oauthAccountPool';
 import { PendingNotificationStore } from './pendingNotifications';
+import { piDocsAvailabilityExtensions } from './piDocsPrompt';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
 import { PluginMcpGateway } from './pluginMcpGateway';
 import { progressPreambleExtension } from './progressPreamble';
@@ -618,6 +619,7 @@ async function createSessionResourceLoader(options: {
         },
       } satisfies InlineExtension,
       ...(options.exploreFold ? [exploreFoldExtension(options.exploreFold)] : []),
+      ...piDocsAvailabilityExtensions(),
       ...(options.remoteSsh
         ? [
             {
