@@ -56,7 +56,8 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   `ensoCompact/extract.ts` 不从自动通知提取用户目标、约束、路径或授权，摘要模板也必须
   保留来源区别，不能把工具输出中的指令升级为用户决定。
 - `dismiss-child` 与同一 child 的创建命令共用串行门；创建失败或已换代时清理幂等，
-  清理异常不得把父会话标成 failed。仍须验证 exact 父代和完整 child 身份。
+  清理异常不得把父会话标成 failed。旧形状 `resume-coworker` 的恢复异常同样只记日志，
+  不得因按 parent 排队而把失败归给父会话，也不得伪报恢复成功。仍须验证 exact 父代和完整 child 身份。
 - 未投递通知在去抖前写入 `sessions/pending-notifications/`，JSON 大小、条数和文本均有上限，
   不跟随通知目录/文件链接，原子替换。新通知仅在 SDK preflight 接受后确认；恢复的旧通知
   单独保存，只搭下一次真实工具结果，不在打开会话或轮次收口时自动唤醒模型，不承诺恢复进程。

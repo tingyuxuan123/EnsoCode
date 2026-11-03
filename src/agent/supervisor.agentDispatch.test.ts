@@ -2685,6 +2685,50 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     );
   });
 
+  it('resume-coworker 创建失败不污染父会话，后续 coworker 仍可恢复', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-dispatch-resume-'));
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    try {
+      supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: root, model });
+      await waitFor(events, 'parent-ready');
+
+      mocks.createAgentSession.mockRejectedValueOnce(new Error('Cannot restore coworker session'));
+      for (const name of ['broken', 'healthy']) {
+        supervisor.handleCommand({
+          type: 'resume-coworker',
+          parent,
+          coworkerId: `parent::cw-${name}`,
+          name,
+          resumeFile: path.join(root, `${name}.jsonl`),
+        });
+      }
+      // 若坏会话未实际尝试创建，一次性拒绝会落到后续会话，等不到成功回流。
+      await waitFor(events, 'coworker-update');
+      expect(events.filter((event) => event.type === 'coworker-update')).toEqual([
+        expect.objectContaining({
+          identity: parent,
+          coworker: expect.objectContaining({ id: 'parent::cw-healthy', status: 'idle' }),
+        }),
+      ]);
+      expect(events).not.toContainEqual(
+        expect.objectContaining({ type: 'status', identity: parent, status: 'failed' })
+      );
+      supervisor.handleCommand({ type: 'snapshot', sessionId: parent.sessionId });
+      expect(events.at(-1)).toMatchObject({
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ identity: parent, status: 'idle' })],
+      });
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('resume-coworker 恢复工具直雇 coworker；容量对 resume 豁免，新雇仍卡上限', async () => {
     const events: AgentWorkerEvent[] = [];
     const supervisor = new SessionSupervisor({

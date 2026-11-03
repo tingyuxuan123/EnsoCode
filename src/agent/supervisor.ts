@@ -1625,8 +1625,12 @@ export class SessionSupervisor {
           });
           return;
         }
-        if (command.type === 'dismiss-child' || command.type === 'dismiss-coworker') {
-          // 清理失败属于子会话，不得把仍有效的父会话污染为 failed。
+        if (
+          command.type === 'dismiss-child' ||
+          command.type === 'dismiss-coworker' ||
+          command.type === 'resume-coworker'
+        ) {
+          // 清理/恢复失败属于子会话，不得把仍有效的父会话标成 failed。
           console.error(`[${command.type}] failed:`, message);
           return;
         }
