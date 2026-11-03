@@ -2552,6 +2552,8 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} files removed': '删除 {{count}} 个文件',
   '{{count}} kept': '保留 {{count}} 个',
   '{{count}} failed': '{{count}} 个失败',
+  '{{count}} not found': '{{count}} 个未找到',
+  'File not found': '文件不存在',
   '{{name}} cleaned': '已清理{{name}}',
   '{{count}} conversations deleted': '已删除 {{count}} 个会话',
   'Scanning {{count}} files · {{size}}': '正在扫描 {{count}} 个文件 · {{size}}',

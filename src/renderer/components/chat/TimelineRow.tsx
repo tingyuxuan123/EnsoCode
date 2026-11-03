@@ -86,6 +86,7 @@ import {
   resolveRewindConfirm,
   userIndexFromEndForTurnKey,
 } from '@/stores/sessions/conversationRewind';
+import { isMissingFileRead } from '@/stores/sessions/missingFileRead';
 import { canWithdrawMessage } from '@/stores/sessions/reducer';
 import { formatDuration, formatTokens } from '@/stores/sessions/stats';
 import {
@@ -1786,10 +1787,13 @@ function ToolGroupRow({
     if (item.stats.searches > 0)
       explored.push(t('{{count}} searches', { count: item.stats.searches }));
   }
-  // 组内失败数：折叠时也要能看见，否则失败被埋在展开体里
-  const failedCount = item.children.filter(
-    (child) => child.kind === 'tool' && child.state === 'error'
+  // 组内失败数：折叠时也要能看见，否则失败被埋在展开体里；read 未找到是探路常态，单独弱化计数
+  const notFoundCount = item.children.filter(
+    (child) => child.kind === 'tool' && isMissingFileRead(child)
   ).length;
+  const failedCount =
+    item.children.filter((child) => child.kind === 'tool' && child.state === 'error').length -
+    notFoundCount;
   const explore = item.explore;
   const running = item.exploring;
   const kind = explore
@@ -1820,10 +1824,19 @@ function ToolGroupRow({
         animate={running}
         contentKey={latestTool ? `child:${latestTool.key}` : `${item.key}:done:${summaryText}`}
         status={
-          failedCount > 0 ? (
-            <span className="shrink-0 whitespace-nowrap text-destructive">
-              {t('{{count}} failed', { count: failedCount })}
-            </span>
+          failedCount > 0 || notFoundCount > 0 ? (
+            <>
+              {failedCount > 0 && (
+                <span className="shrink-0 whitespace-nowrap text-destructive">
+                  {t('{{count}} failed', { count: failedCount })}
+                </span>
+              )}
+              {notFoundCount > 0 && (
+                <span className="shrink-0 whitespace-nowrap">
+                  {t('{{count}} not found', { count: notFoundCount })}
+                </span>
+              )}
+            </>
           ) : undefined
         }
         running={running}
@@ -2122,7 +2135,9 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   if (item.plan && item.state !== 'error') return <PlanRow plan={item.plan} />;
 
   const busy = item.state === 'running' || item.state === 'reviewing';
-  const failed = item.state === 'error';
+  // read 未找到：弱化为「路径 · 文件不存在」，不当失败标红
+  const missingFile = isMissingFileRead(item);
+  const failed = item.state === 'error' && !missingFile;
   const delta = toolLineDelta(item);
   const status = (
     <>
@@ -2166,6 +2181,10 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
               {summary && item.name === 'apply_patch' && hasFileChanges
                 ? `${headerSummary} · ${firstLine(item.output)}`
                 : firstLine(item.output)}
+            </span>
+          ) : missingFile ? (
+            <span className="min-w-0 truncate">
+              {headerSummary} · {t('File not found')}
             </span>
           ) : summary ? (
             <span className="min-w-0 truncate">{headerSummary}</span>
@@ -2294,7 +2313,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                   path={item.imagePath}
                   fallback={<ReadFileView path={item.summary} contents={item.output ?? ''} />}
                 />
-              ) : item.name === 'read' ? (
+              ) : item.name === 'read' && item.state !== 'error' ? (
                 <ReadFileView path={item.summary} contents={item.output ?? ''} />
               ) : item.name === 'subagent' &&
                 item.state !== 'error' &&

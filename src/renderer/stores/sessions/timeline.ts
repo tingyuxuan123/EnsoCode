@@ -15,6 +15,7 @@ import type { ProjectedApplyPatchOutcome, ProjectedFileChange } from '@shared/ty
 import { readDesignCards } from '@/features/design/host/cards';
 import type { CardDescriptor } from '@/features/design/vetta/sdk/ui';
 import { unwrapMcpProxyCall } from '@/lib/mcpToolName';
+import { isMissingFileRead } from './missingFileRead';
 import type { TimelineMessage } from './reducer';
 
 /** edit 工具的单个替换块（pi edit 工具参数 edits[] 的元素） */
@@ -2043,7 +2044,7 @@ function foldTurnRows(
     if (row.kind !== 'tool' || EXPLORE_TOOLS.has(row.name)) continue;
     classifyTool(row.name, row.summary, stats, false);
     count += 1;
-    if (row.state === 'error') failed += 1;
+    if (row.state === 'error' && !isMissingFileRead(row)) failed += 1;
   }
 
   const status: WorklogStatus = turnRunning ? 'running' : (user.turnStatus ?? 'completed');

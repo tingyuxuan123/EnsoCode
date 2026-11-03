@@ -78,6 +78,64 @@ describe('分组展开的子项', () => {
     expect(html).toContain('text-destructive');
   });
 
+  it('read 找不到文件：弱化显示路径与「未找到」，不标红、不露原始 ENOENT', () => {
+    for (const output of [
+      "ENOENT: no such file or directory, access '/Users/x/packages/relay/wrangler.toml'",
+      'File not found: packages/relay/wrangler.toml\nDirectory packages/relay/ exists; entries: package.json.',
+    ]) {
+      const html = renderToStaticMarkup(
+        createElement(TimelineRow, {
+          item: tool({
+            nested: true,
+            name: 'read',
+            summary: 'packages/relay/wrangler.toml',
+            state: 'error',
+            output,
+          }),
+        })
+      );
+      expect(html).toContain('packages/relay/wrangler.toml');
+      expect(html).toContain('File not found');
+      expect(html).not.toContain('ENOENT');
+      expect(html).not.toContain('/Users/x/');
+      expect(html).not.toContain('Directory packages/relay/');
+      expect(html).not.toContain('text-destructive');
+    }
+  });
+
+  it('工具组标题把 read 未找到单独计数，不算进标红的失败数', () => {
+    const missing = tool({
+      key: 'm',
+      name: 'read',
+      summary: 'a.toml',
+      state: 'error',
+      output: 'File not found: a.toml',
+    });
+    const group = (children: TimelineItem[]): TimelineItem => ({
+      kind: 'tool-group',
+      key: 'g',
+      expanded: false,
+      count: children.length,
+      stats: { commands: 0, reads: children.length, searches: 0, others: 0 },
+      exploring: false,
+      children,
+    });
+    const onlyMissing = renderToStaticMarkup(
+      createElement(TimelineRow, { item: group([tool({ name: 'read' }), missing]) })
+    );
+    expect(onlyMissing).toContain('{{count}} not found');
+    expect(onlyMissing).not.toContain('{{count}} failed');
+    expect(onlyMissing).not.toContain('text-destructive');
+
+    const mixed = renderToStaticMarkup(
+      createElement(TimelineRow, {
+        item: group([missing, tool({ key: 'b', state: 'error', output: 'boom' })]),
+      })
+    );
+    expect(mixed).toContain('{{count}} failed');
+    expect(mixed).toContain('{{count}} not found');
+  });
+
   it('运行中类型词换成「正在执行」并扫光', () => {
     const html = renderToStaticMarkup(
       createElement(TimelineRow, { item: tool({ state: 'running' }) })

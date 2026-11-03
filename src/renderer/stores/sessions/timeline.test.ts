@@ -3341,6 +3341,21 @@ describe('foldTimeline 回合工作日志（collapseCompletedActivity）', () =>
     expect((folded[1] as Group).worklog?.failed).toBe(1);
   });
 
+  it('read 找不到文件不计入失败数（新旧两种报错文本），其它工具的 ENOENT 照算', () => {
+    const errored = (key: string, name: string, output: string): TimelineItem =>
+      ({ ...toolItem(key, name), state: 'error', output }) as TimelineItem;
+    const items = [
+      turnUser('u'),
+      errored('m1', 'read', 'File not found: a.ts\nDirectory ./ exists; entries: b.ts.'),
+      errored('m2', 'read', "ENOENT: no such file or directory, access '/p/b.ts'"),
+      errored('m3', 'bash', "ENOENT: no such file or directory, access '/p/c.ts'"),
+      errored('m4', 'read', 'Offset 50 is beyond end of file (3 lines total)'),
+      textItem('answer'),
+    ];
+    const folded = foldTimeline(items, false, new Set(), on);
+    expect((folded[1] as Group).worklog?.failed).toBe(2);
+  });
+
   it('收起时提问、计划与目标信号仍然露出', () => {
     const items = [
       turnUser('u'),
