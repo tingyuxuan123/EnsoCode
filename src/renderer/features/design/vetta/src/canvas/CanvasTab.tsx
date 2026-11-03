@@ -203,6 +203,7 @@ export function CanvasTab() {
 				recoverCurrent?.(new Error(reason));
 			});
 			setCanvasController({
+				cwd,
 				session: nextSession,
 				notes: nextNotes,
 				port: server.port,

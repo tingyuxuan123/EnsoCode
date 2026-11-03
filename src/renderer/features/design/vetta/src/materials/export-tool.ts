@@ -99,7 +99,7 @@ export function registerExportTool(ctx: PluginContext, options: ExportToolOption
 			if (format !== "pdf" && format !== "images") {
 				return { ok: false, error: 'Pass `format`: "pdf" or "images".' };
 			}
-			const controller = getCanvasController();
+			const controller = getCanvasController(session.cwd);
 			if (!controller) {
 				ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
 				return {

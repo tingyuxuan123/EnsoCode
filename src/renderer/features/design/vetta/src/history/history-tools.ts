@@ -99,7 +99,7 @@ ctx.agent.registerTool<RestoreInput>({
 			if (!target) {
 				return { ok: false, error: `No version "${version}" in this design's history. Call vetd_history first.` };
 			}
-			const controller = getCanvasController();
+			const controller = getCanvasController(session.cwd);
 			const outcome = await restoreDesign(ctx, designDir, target, {
 				session: controller?.session.dirPath === designDir ? controller.session : null,
 			});

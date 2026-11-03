@@ -209,8 +209,8 @@ export function registerAssetsTool(ctx: PluginContext, options: { scopeUse: read
 		},
 		scope_use: options.scopeUse,
 		timeoutMs: 120_000,
-		handler: async ({ host, trigger }) => {
-			const controller = getCanvasController();
+		handler: async ({ host, session, trigger }) => {
+			const controller = getCanvasController(session.cwd);
    if (!controller) return { ok: false, retryable: true, error: "No design is open on the canvas. EnsoCode P1 has no canvas mount; vetd_assets requires the P2 Design panel. Do not repeatedly retry until it is available." };
 			const { dirPath } = controller.session;
 			const input = trigger.input;

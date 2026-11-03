@@ -3,6 +3,13 @@ import type {
   DesignToolRequestEvent,
   DesignToolResult,
 } from '@shared/types/design';
+import {
+  acquireDesignCanvas,
+  DesignCanvasUnavailable,
+  finishDesignCreate,
+  prepareDesignCanvas,
+  usesDesignCanvas,
+} from './host/canvas-target';
 import { designHooks, designTools, updateDesignUi } from './host/registry';
 import { toDesignToolResult } from './host/results';
 import type { PluginContext } from './host/types';
@@ -56,19 +63,33 @@ export async function dispatchDesignTool(
   // Upstream has no AbortSignal in its public signature. Extra signal permits
   // cooperative handlers; race ensures a cancelled invocation cannot respond success.
   let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_, reject) => {
-    onAbort = () =>
-      reject(signal.reason ?? new DOMException('Design tool cancelled', 'AbortError'));
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
+  let release: (() => void) | undefined;
   try {
+    if (usesDesignCanvas(request)) release = await acquireDesignCanvas(signal);
+    signal.throwIfAborted();
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () =>
+        reject(signal.reason ?? new DOMException('Design tool cancelled', 'AbortError'));
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
     const result = await Promise.race([
-      Promise.resolve().then(() => tool.handler(context)),
+      Promise.resolve().then(async () => {
+        await prepareDesignCanvas(request, ctx, signal);
+        signal.throwIfAborted();
+        const value = await tool.handler(context);
+        signal.throwIfAborted();
+        return finishDesignCreate(request, value, ctx, signal);
+      }),
       aborted,
     ]);
     signal.throwIfAborted();
     return toDesignToolResult(result);
+  } catch (error) {
+    if (error instanceof DesignCanvasUnavailable)
+      return toDesignToolResult({ ok: false, retryable: true, error: error.message });
+    throw error;
   } finally {
+    release?.();
     if (onAbort) signal.removeEventListener('abort', onAbort);
   }
 }

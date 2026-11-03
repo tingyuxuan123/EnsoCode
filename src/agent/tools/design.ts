@@ -175,7 +175,16 @@ export function createDesignTools(
 /** Runtime returns the upstream handler's object as JSON text (including ok:false). */
 function designCreated(result: DesignToolResult): boolean {
   const success = (value: unknown) =>
-    Boolean(value && typeof value === 'object' && 'ok' in value && value.ok === true);
+    Boolean(
+      value &&
+        typeof value === 'object' &&
+        (('ok' in value && value.ok === true) ||
+          ('created' in value &&
+            value.created === true &&
+            'vetdPath' in value &&
+            typeof value.vetdPath === 'string' &&
+            value.vetdPath.endsWith('.vetd')))
+    );
   if (success(result.details)) return true;
   return result.content.some((part) => {
     if (part.type !== 'text') return false;

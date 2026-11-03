@@ -7,7 +7,7 @@ import { __ActivityTabContext } from '../host/sdk';
 import { dispatchDesignShortcut } from '../host/shortcuts';
 import type { PluginShortcutScopeContribution } from '../vetta/sdk/shortcuts';
 import type { PluginActivityTabContribution } from '../vetta/sdk/ui';
-import { onCanvasController } from '../vetta/src/canvas/design-runtime';
+import { getCanvasController, onCanvasController } from '../vetta/src/canvas/design-runtime';
 import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
 import { DesignRoot } from './DesignRoot';
 import { useDesignCwd } from './useDesignCwd';
@@ -34,12 +34,14 @@ function CanvasMount({
         })
         .catch((error) => console.warn('[design] canvas report failed', error));
     };
-    const stop = onCanvasController((controller) => report(controller !== null));
+    const stop = onCanvasController((controller) =>
+      report(controller !== null && getCanvasController(cwd) === controller)
+    );
     return () => {
       stop();
       report(false);
     };
-  }, [sessionId]);
+  }, [sessionId, cwd]);
   return (
     <DesignRoot>
       <div

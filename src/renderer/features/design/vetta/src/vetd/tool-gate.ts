@@ -25,7 +25,7 @@ export const DESIGN_ONLY_TOOLS = [
 
 /** 这一轮该不该开闸：画布开着，或者 cwd 里确实有设计稿。 */
 export async function designToolsActive(ctx: Pick<PluginContext, "fs">, cwd: string): Promise<boolean> {
-	if (getCanvasController()) return true;
+	if (getCanvasController(cwd)) return true;
 	return await hasDesignInWorkspace(ctx.fs, cwd);
 }
 

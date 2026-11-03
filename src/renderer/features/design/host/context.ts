@@ -17,6 +17,7 @@ import {
   resolveDesignPromptTarget,
   viewedDesignSessionId,
 } from './activity-route';
+import { isDesignViewingCwd, setDesignViewingCwd } from './canvas-target';
 import { insertDesignComposerText, setDesignPromptAttachment } from './composer';
 import { captureDesign, releaseDesignCapture } from './engine';
 import { designPaths, resolveDesignRoot } from './paths';
@@ -59,7 +60,10 @@ let currentConversation: ConversationState = {
   isStreaming: false,
 };
 export function emitDesignConversation(event: ConversationEvent): void {
-  if (event.type === 'conversation-changed') currentConversation = event.conversation;
+  if (event.type === 'conversation-changed') {
+    currentConversation = event.conversation;
+    setDesignViewingCwd(event.conversation.cwd);
+  }
   if (event.type === 'turn-start' || event.type === 'turn-end')
     currentConversation = { ...currentConversation, isStreaming: event.type === 'turn-start' };
   for (const listener of conversationListeners) listener(event);
@@ -81,6 +85,9 @@ export function createDesignContext(): PluginContext {
     const state = useSessionsStore.getState();
     const viewed = viewedDesignSessionId(state.conversations, state.activeId);
     if (cwd === undefined) return viewed === currentConversation.id ? viewed : null;
+    // Main has already resolved the viewed session's root. Its stored worktree
+    // path can still be an alias (/tmp versus /private/tmp on macOS).
+    if (viewed === currentConversation.id && cwd === currentConversation.cwd) return viewed;
     return resolveDesignActivitySession(
       Object.keys(state.conversations).map((id) => ({
         id,
@@ -239,6 +246,14 @@ export function createDesignContext(): PluginContext {
         ...options,
       });
       if (id !== CANVAS_TAB_ID) return;
+      // Explicit-cwd requests can arrive late from background/cancelled tools.
+      const state = useSessionsStore.getState();
+      const viewed = viewedDesignSessionId(state.conversations, state.activeId);
+      if (
+        options?.cwd &&
+        (!isDesignViewingCwd(options.cwd) || !viewed || currentConversation.id !== viewed)
+      )
+        return;
       const target = activityTarget(options?.cwd);
       if (!target) return;
       const sessions = useSessionsStore.getState();

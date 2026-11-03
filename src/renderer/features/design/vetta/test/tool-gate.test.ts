@@ -77,10 +77,17 @@ describe("设计工具闸门", () => {
 
 	it("画布开着时不管工作区扫描结果都放行", async () => {
 		const { provider, listCalls } = harness([ref("src/pages/home.tsx")]);
-		setCanvasController({} as never);
+		setCanvasController({ cwd: "/proj", session: { vetdPath: "/proj/design.vetd" } } as never);
 		const effects = await run(provider);
 		expect(effects.every((effect) => effect.enabled)).toBe(true);
 		expect(listCalls()).toBe(0);
+	});
+
+	it("其它项目的画布不能打开当前空项目的工具闸门", async () => {
+		const { provider, listCalls } = harness([]);
+		setCanvasController({ cwd: "/other", session: { vetdPath: "/other/design.vetd" } } as never);
+		expect((await run(provider)).every((effect) => effect.enabled)).toBe(false);
+		expect(listCalls()).toBe(1);
 	});
 
 	it("同一 cwd 只扫一次工作区", async () => {

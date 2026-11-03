@@ -1,5 +1,6 @@
 import type { DesignToolRequestEvent } from '@shared/types/design';
 import { useSessionsStore } from '@/stores/sessions';
+import { setDesignViewingCwd } from './host/canvas-target';
 import { createDesignContext, emitDesignConversation } from './host/context';
 import { resolveDesignRoot } from './host/paths';
 import { designTools } from './host/registry';
@@ -35,8 +36,15 @@ export function startDesignRuntime(): Promise<void> {
       requests.set(request.requestId, controller);
       void (async () => {
         try {
-          await resolveDesignRoot({ kind: 'session', sessionId: request.session.sessionId });
-          const result = await dispatchDesignTool(request, controller.signal, ctx);
+          const root = await resolveDesignRoot({
+            kind: 'session',
+            sessionId: request.session.sessionId,
+          });
+          const result = await dispatchDesignTool(
+            { ...request, session: { ...request.session, cwd: root.path } },
+            controller.signal,
+            ctx
+          );
           await api.respondTool({ requestId: request.requestId, ok: true, result });
         } catch (error) {
           await api.respondTool({
@@ -79,6 +87,7 @@ export function startDesignRuntime(): Promise<void> {
 }
 export async function setDesignViewingSession(id: string | null): Promise<void> {
   viewingSessionId = id;
+  setDesignViewingCwd(null);
   await startDesignRuntime();
   if (viewingSessionId !== id) return;
   const root = id

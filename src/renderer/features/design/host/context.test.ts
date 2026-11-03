@@ -1,17 +1,69 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
+const { sessions, settings, reveal } = vi.hoisted(() => ({
+  sessions: {
+    activeId: 'b',
+    conversations: {
+      a: { projectId: 'pa' },
+      b: { projectId: 'pb', worktree: undefined as { path: string } | undefined },
+    },
+    selectConversation: vi.fn(),
+  },
+  settings: {
+    projects: [
+      { id: 'pa', path: '/a' },
+      { id: 'pb', path: '/b' },
+    ],
+    language: 'en',
+  },
+  reveal: vi.fn(),
+}));
 vi.mock('@/stores/sessions', () => ({
-  useSessionsStore: { getState: () => ({ conversations: {} }) },
+  useSessionsStore: { getState: () => sessions },
 }));
 vi.mock('@/stores/settings', () => ({
-  useSettingsStore: { getState: () => ({ projects: [], language: 'en' }) },
+  useSettingsStore: { getState: () => settings },
+}));
+vi.mock('@/lib/sidePanelDock', () => ({
+  addSidePanelDesign: reveal,
+  setSidePanelDesignVisible: vi.fn(),
 }));
 
-import { createDesignContext } from './context';
+import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
+import { createDesignContext, emitDesignConversation } from './context';
 import { captureDesign, startEngine } from './engine';
 import { designPaths } from './paths';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+  sessions.conversations.b.worktree = undefined;
+});
+it('opens the viewed session using its authoritative cwd even when the stored cwd is an alias', () => {
+  sessions.conversations.b.worktree = { path: '/tmp/b' };
+  emitDesignConversation({
+    type: 'conversation-changed',
+    conversation: {
+      id: 'b',
+      cwd: '/private/tmp/b',
+      sessionPath: null,
+      model: null,
+      isStreaming: false,
+    },
+  });
+  createDesignContext().ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/private/tmp/b' });
+  expect(reveal).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'b' }));
+  expect(sessions.selectConversation).not.toHaveBeenCalled();
+});
+it('a late background open cannot steal the canvas before the viewing effect catches up', () => {
+  emitDesignConversation({
+    type: 'conversation-changed',
+    conversation: { id: 'a', cwd: '/a', sessionPath: null, model: null, isStreaming: false },
+  });
+  createDesignContext().ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/a' });
+  expect(sessions.selectConversation).not.toHaveBeenCalled();
+  expect(reveal).not.toHaveBeenCalled();
+});
 const root = { kind: 'session' as const, sessionId: 'adapter-test' };
 it('sends only root references and relative paths; rejects outside paths before IPC', async () => {
   designPaths.remember({ ref: root, path: '/adapter' });

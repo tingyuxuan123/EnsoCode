@@ -12,6 +12,56 @@ const result = {
 };
 afterEach(() => vi.useRealTimers());
 describe('DesignInvoker', () => {
+  it.each([
+    { ok: true, vetdPath: '/work/ride.vetd' },
+    { ok: false, created: true, retryable: true, vetdPath: '/work/ride.vetd' },
+  ])(
+    'refreshes design tools when a package was created, including failed canvas open: %j',
+    async (details) => {
+      const emit = vi.fn();
+      const created = vi.fn();
+      const invoker = new DesignInvoker(identity, emit);
+      const create = createDesignTools(invoker, { created })[0];
+      const pending = create.execute(
+        'create',
+        { product: 'mobile' },
+        undefined,
+        undefined,
+        undefined as never
+      );
+      invoker.resolve({
+        requestId: emit.mock.calls[0][0].requestId,
+        ok: true,
+        result: { content: [{ type: 'text', text: JSON.stringify(details) }], details },
+      });
+      await pending;
+      expect(created).toHaveBeenCalledOnce();
+    }
+  );
+  it.each([
+    { ok: false },
+    { ok: false, created: true },
+    { ok: false, created: true, vetdPath: '/work/not-a-design' },
+  ])('does not refresh tools when create did not prove a package exists: %j', async (details) => {
+    const emit = vi.fn();
+    const created = vi.fn();
+    const invoker = new DesignInvoker(identity, emit);
+    const create = createDesignTools(invoker, { created })[0];
+    const pending = create.execute(
+      'create',
+      { product: 'mobile' },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    invoker.resolve({
+      requestId: emit.mock.calls[0][0].requestId,
+      ok: true,
+      result: { content: [{ type: 'text', text: JSON.stringify(details) }] },
+    });
+    await pending;
+    expect(created).not.toHaveBeenCalled();
+  });
   it('routes text/images and errors; drops late results and handles send failure', async () => {
     const emit = vi.fn();
     const invoker = new DesignInvoker(identity, emit);
