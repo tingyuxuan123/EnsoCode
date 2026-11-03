@@ -35,6 +35,7 @@ export const IPC_CHANNELS = {
   DESIGN_TOOL_CANCEL: 'design:tool-cancel',
   DESIGN_TOOL_RESPONSE: 'design:tool-response',
   DESIGN_HOOK: 'design:hook',
+  DESIGN_CANVAS_PRESENCE: 'design:canvas-presence',
   // Settings persistence
   SETTINGS_READ: 'settings:read',
   SETTINGS_WRITE: 'settings:write',

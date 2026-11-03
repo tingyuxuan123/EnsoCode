@@ -911,6 +911,7 @@ export const IPC_PRODUCT_COVERAGE = {
   DESIGN_TOOL_CANCEL: excluded('Internal design tool bridge cancellation.'),
   DESIGN_TOOL_RESPONSE: excluded('Internal design tool bridge response.'),
   DESIGN_HOOK: excluded('Internal design session hook push.'),
+  DESIGN_CANVAS_PRESENCE: excluded('Design canvas mount state feeding the vetd_* tool gate.'),
 } satisfies Record<keyof typeof IPC_CHANNELS, CoverageDisposition>;
 
 export const AUTHORITATIVE_COVERAGE_SOURCES = {

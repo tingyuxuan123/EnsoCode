@@ -214,6 +214,7 @@ import type {
   BrowserTabState,
 } from '@shared/types/browser';
 import type {
+  DesignCanvasPresence,
   DesignCaptureRequest,
   DesignCaptureResponse,
   DesignEngineExitEvent,
@@ -1742,6 +1743,9 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.DESIGN_TOOL_RESPONSE, response),
     onHook: (callback: (event: DesignHookEvent) => void): (() => void) =>
       subscribeDesign(IPC_CHANNELS.DESIGN_HOOK, callback),
+    /** 画布挂载/卸载或切换会话时上报；Main 推导 cwd 并更新 worker 的工具门控。 */
+    reportCanvas: (presence: DesignCanvasPresence): Promise<DesignResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_CANVAS_PRESENCE, presence),
   },
 };
 

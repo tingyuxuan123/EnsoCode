@@ -300,3 +300,13 @@ export interface DesignRuntimeRegistration {
   /** 该窗口当前正在看的会话，用于把工具调用路由到对的窗口。 */
   viewingSessionId: string | null;
 }
+
+/**
+ * 画布挂载状态上报（P2）。上游 tool-gate 在「画布已打开」时直接开放全部 vetd_*；
+ * Renderer 只报会话 id，cwd 由 Main 从会话权威记录推导后推给 worker。
+ * 同一窗口的新上报整体替换旧上报；窗口销毁视为 open:false。
+ */
+export interface DesignCanvasPresence {
+  sessionId: string | null;
+  open: boolean;
+}
