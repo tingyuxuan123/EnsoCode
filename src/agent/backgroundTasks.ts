@@ -3,7 +3,8 @@ import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { getPowerShellConfig, type ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { BackgroundTaskInfo } from '@shared/types/agent';
+import { SHELL_FAILURE_DISPLAY } from '@shared/shellFailure';
+import { type BackgroundTaskInfo, parseShellFailure } from '@shared/types/agent';
 import {
   bindForegroundCommand,
   type DetachableProcess,
@@ -11,7 +12,9 @@ import {
   ForegroundCommand,
   ForegroundDetachedError,
 } from './foregroundCommand';
+import { classifyShellFailure, shellDetails } from './shell/failure';
 import { hardenedEnv } from './shell/hardenedEnv';
+import { DEFAULT_FOREGROUND_YIELD_MS, foregroundYieldMs, shellTimeoutSec } from './shell/policy';
 
 /** 内存缓冲上限（超出截头保尾；磁盘 log 始终全量） */
 const MAX_BUFFER = 200_000;
@@ -44,6 +47,9 @@ interface Task {
   details?: unknown;
   finalize?: () => Promise<unknown>;
   settling: boolean;
+  terminationCause?: 'deadline' | 'user' | 'model';
+  deadlineTimer?: ReturnType<typeof setTimeout>;
+  killTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface PreparedBackgroundCommand {
@@ -158,8 +164,15 @@ export class BackgroundTaskManager {
       details?: unknown;
       finalize?: () => Promise<unknown>;
       env?: NodeJS.ProcessEnv;
+      timeoutSec?: number;
     }
   ): string {
+    if (
+      spawnOpts?.timeoutSec !== undefined &&
+      shellTimeoutSec(spawnOpts.timeoutSec) === undefined
+    ) {
+      throw new Error('Invalid timeout: must be finite positive seconds within the timer limit');
+    }
     const taskId = this.reserveId();
     // detached：独立进程组，kill 时整棵树一起清
     const child = spawnBackground(command, cwd, spawnOpts);
@@ -167,6 +180,8 @@ export class BackgroundTaskManager {
     const task = this.register(sessionId, taskId, spawnOpts?.displayCommand ?? command, {
       details: spawnOpts?.details,
       finalize: spawnOpts?.finalize,
+      deadlineAt:
+        spawnOpts?.timeoutSec === undefined ? undefined : Date.now() + spawnOpts.timeoutSec * 1000,
       kill: (signal) => {
         try {
           if (pid) process.kill(-pid, signal);
@@ -191,11 +206,12 @@ export class BackgroundTaskManager {
   adopt(
     sessionId: string,
     proc: DetachableProcess,
-    opts: { command: string; startedAt: number }
+    opts: { command: string; startedAt: number; deadlineAt?: number }
   ): string {
     const taskId = this.reserveId();
     const task = this.register(sessionId, taskId, opts.command, {
       startedAt: opts.startedAt,
+      deadlineAt: opts.deadlineAt,
       kill: () => proc.kill(),
     });
     this.append(task, Buffer.from(proc.output()));
@@ -281,6 +297,7 @@ export class BackgroundTaskManager {
       details?: unknown;
       finalize?: () => Promise<unknown>;
       startedAt?: number;
+      deadlineAt?: number;
     }
   ): Task {
     const logPath = path.join(this.logDir, `${taskId}.log`);
@@ -288,6 +305,10 @@ export class BackgroundTaskManager {
     try {
       mkdirSync(this.logDir, { recursive: true });
       logStream = createWriteStream(logPath);
+      logStream.on('error', () => {
+        // Disk/log failures must not crash the worker or change the process outcome.
+        task.logStream = null;
+      });
     } catch {
       // 磁盘日志失败不阻塞任务，仅失去全量回看
     }
@@ -314,11 +335,18 @@ export class BackgroundTaskManager {
       },
     };
     this.tasks.set(taskId, task);
+    if (opts.deadlineAt !== undefined) {
+      task.deadlineTimer = setTimeout(
+        () => this.terminate(task, 'deadline'),
+        Math.max(0, opts.deadlineAt - Date.now())
+      );
+      task.deadlineTimer.unref?.();
+    }
     return task;
   }
 
   private append(task: Task, chunk: Buffer): void {
-    if (chunk.length === 0) return;
+    if (chunk.length === 0 || task.info.status !== 'running' || task.settling) return;
     const next = task.output + chunk.toString();
     task.droppedChars += Math.max(0, next.length - MAX_BUFFER);
     task.output = next.slice(-MAX_BUFFER);
@@ -374,17 +402,40 @@ export class BackgroundTaskManager {
 
   private async settle(task: Task, status: 'done' | 'failed', exitCode?: number): Promise<void> {
     task.settling = true;
+    // The process has exited. RTK finalization may be slow: no timer/stop can kill it now.
+    clearTimeout(task.deadlineTimer);
+    clearTimeout(task.killTimer);
     try {
       if (task.finalize) task.details = (await task.finalize()) ?? task.details;
     } catch {
       // 统计失败不能改变原命令的状态或输出。
     }
+    if (task.terminationCause === 'deadline') {
+      status = 'failed';
+      task.output += '\n[timeout deadline reached]';
+    }
+    if (
+      status === 'failed' &&
+      (task.terminationCause === undefined || task.terminationCause === 'deadline')
+    )
+      task.details = shellDetails(task.details, {
+        shellFailure: classifyShellFailure(
+          task.output,
+          exitCode,
+          task.terminationCause === 'deadline' ? 'deadline' : undefined
+        ),
+      });
     this.finish(task, status, exitCode);
   }
 
   private completionText(task: Task): string {
     const { taskId, command, exitCode, status, startedAt } = task.info;
-    const outcome = exitCode !== undefined ? `exit ${exitCode}` : status;
+    const outcome =
+      task.terminationCause === 'deadline'
+        ? `deadline reached${exitCode === undefined ? '' : `, exit ${exitCode}`}`
+        : exitCode !== undefined
+          ? `exit ${exitCode}`
+          : status;
     const lines = [
       `Background task ${taskId} finished (${outcome}, ran ${fmtDuration(Date.now() - startedAt)}).`,
       `Command: ${notificationData(command)}`,
@@ -394,6 +445,10 @@ export class BackgroundTaskManager {
         'This task was stopped by the user — do not restart it unless the user asks; briefly acknowledge the stop.'
       );
     }
+    if (task.terminationCause === 'deadline')
+      lines.push(
+        'The explicit timeout deadline was reached. Do not restart the command automatically.'
+      );
     lines.push(
       'This is a new completion event, not a repeat of the launch request. Do not repeat the earlier launch acknowledgement; briefly report the outcome or use the result for any follow-up.'
     );
@@ -478,18 +533,30 @@ export class BackgroundTaskManager {
   /** 终止：SIGTERM 整个进程组，宽限后 SIGKILL */
   stop(taskId: string, byUser = false): boolean {
     const task = this.tasks.get(taskId);
-    if (task?.info.status !== 'running') return false;
-    if (byUser) task.killedByUser = true;
-    else task.consumed = true; // 模型自己停的：kill 回执即知情，不再通知
-    task.kill('SIGTERM');
-    setTimeout(() => {
-      if (task.info.status === 'running') task.kill('SIGKILL');
+    if (!task) return false;
+    return this.terminate(task, byUser ? 'user' : 'model');
+  }
+
+  private terminate(task: Task, cause: 'deadline' | 'user' | 'model'): boolean {
+    if (task.info.status !== 'running' || task.settling || task.terminationCause) return false;
+    task.terminationCause = cause;
+    task.killedByUser = cause === 'user';
+    if (cause === 'model') task.consumed = true;
+    clearTimeout(task.deadlineTimer);
+    task.killTimer = setTimeout(() => {
+      if (task.info.status === 'running' && !task.settling) task.kill('SIGKILL');
     }, KILL_GRACE_MS).unref?.();
+    task.kill('SIGTERM');
     return true;
   }
 
   knownIds(): string[] {
     return [...this.tasks.keys()];
+  }
+
+  /** Receipt metadata only: unlike read(), never consumes a completion notification. */
+  logPath(taskId: string): string | undefined {
+    return this.tasks.get(taskId)?.logPath;
   }
 
   hasRunningInWorkspace(rootIds: readonly string[]): boolean {
@@ -516,8 +583,8 @@ export class BackgroundTaskManager {
 /** 前台命令尾部 & 检测：引导改用 background 参数 */
 const TRAILING_AMP = /(?:^|[^&])&\s*$/;
 
-/** 前台 bash 默认超时（秒）。background=true 不限。 */
-export const DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC = 120;
+/** Default waiting budget only; it never kills a command. */
+export const DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC = DEFAULT_FOREGROUND_YIELD_MS / 1000;
 
 function spawnBackground(
   command: string,
@@ -562,24 +629,20 @@ export function withForegroundBashTimeout(params: unknown): Record<string, unkno
     params && typeof params === 'object' && !Array.isArray(params)
       ? { ...(params as Record<string, unknown>) }
       : {};
-  if (record.background === true) return record;
-  if (hasExplicitTimeout(record)) return record;
-  return { ...record, timeout: DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC };
+  return record;
 }
 
 function hasExplicitTimeout(record: Record<string, unknown>): boolean {
-  return (
-    typeof record.timeout === 'number' && Number.isFinite(record.timeout) && record.timeout > 0
-  );
+  return shellTimeoutSec(record.timeout) !== undefined;
 }
 
 const DETACH_REASON_TEXT: Record<DetachReason, string> = {
   user: 'The user moved this command to the background',
-  timeout: `The command exceeded the default ${DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC}s foreground timeout and was moved to the background`,
+  timeout: 'The command reached its foreground waiting budget and was moved to the background',
   steer: 'The command was moved to the background because the user sent a new message',
 };
 
-function detachedResult(error: ForegroundDetachedError) {
+function detachedResult(error: ForegroundDetachedError, logPath: string, server: boolean) {
   const { taskId } = error;
   const tail = error.output.slice(-TAIL_LIMIT).trimEnd();
   const text =
@@ -587,7 +650,10 @@ function detachedResult(error: ForegroundDetachedError) {
     'The process is still running — it was not cancelled.\n' +
     (tail ? `Output so far:\n${tail}\n` : '') +
     'You will be notified automatically when it finishes — do not rerun it or poll. ' +
-    `task_output("${taskId}") shows a snapshot, task_stop("${taskId}") stops it.`;
+    `\nFull log: ${logPath}\nNext: Continue with other work. task_output("${taskId}") shows a snapshot, task_stop("${taskId}") stops it.` +
+    (server && error.reason === 'timeout'
+      ? '\nFor servers and watchers, use background: true next time.'
+      : '');
   const details =
     error.details && typeof error.details === 'object' && !Array.isArray(error.details)
       ? error.details
@@ -598,11 +664,16 @@ function detachedResult(error: ForegroundDetachedError) {
   };
 }
 
-/** 前台命令工具实际生效的超时（毫秒）；background 与非命令工具没有截止时间 */
+/** Next foreground settlement (yield or kill), not the process lifetime deadline. */
 export function foregroundCommandTimeoutMs(toolName: string, args: unknown): number | undefined {
   if (toolName !== 'bash' && toolName !== 'powershell') return undefined;
-  const timeout = withForegroundBashTimeout(args).timeout;
-  return typeof timeout === 'number' ? timeout * 1000 : undefined;
+  const record = withForegroundBashTimeout(args);
+  if (record.background === true) return undefined;
+  const deadline = shellTimeoutSec(record.timeout);
+  return Math.min(
+    foregroundYieldMs(record.command, toolName),
+    deadline === undefined ? Infinity : deadline * 1000
+  );
 }
 
 /** bash 加 background 能力：background=true 时 detach 运行立即返回 taskId */
@@ -627,9 +698,9 @@ export function withBackground(
       timeout: {
         type: 'number',
         description:
-          `Timeout in seconds; an explicit timeout kills the command. Without it, a foreground command ` +
-          `still running after ${DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC}s is moved to the background ` +
-          'instead. No timeout when background=true.',
+          'Timeout in seconds; only an explicit timeout kills the command, including after moving to the background. ' +
+          'Foreground commands yield without restarting after 10s (servers), 180s (build/test/install), or 45s (other). ' +
+          'Without timeout there is no kill deadline. For SSH, the deadline stops the local transport client, not necessarily the remote process.',
       },
       background: {
         type: 'boolean',
@@ -645,9 +716,11 @@ export function withBackground(
     parameters,
     promptSnippet:
       `${definition.name}: run shell commands; pass background=true for long-running commands ` +
-      `(dev servers, watchers, long builds). Foreground default timeout ${DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC}s.`,
+      '(dev servers, watchers, long builds). Foreground yields after 10s/180s/45s by command; timeout is an explicit kill deadline.',
     async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const record = params as { command?: string; background?: boolean };
+      const record = withForegroundBashTimeout(params);
+      if (record.timeout !== undefined && !hasExplicitTimeout(record))
+        throw new Error('Invalid timeout: must be finite positive seconds within the timer limit');
       if (record.background && typeof record.command === 'string') {
         const hooks = (definition as BackgroundAwareToolDefinition)[BACKGROUND_COMMAND_HOOKS];
         const prepared = hooks
@@ -663,6 +736,7 @@ export function withBackground(
             displayCommand: hooks ? record.command : undefined,
             details: prepared.details,
             finalize: prepared.finalize,
+            timeoutSec: shellTimeoutSec(record.timeout),
             // SSH 包装命令沿用原环境；本地前后台使用同一组非交互设置。
             env: transform
               ? undefined
@@ -683,11 +757,11 @@ export function withBackground(
             {
               type: 'text',
               text:
-                `Started background task ${taskId}. You will be notified when it finishes; ` +
-                `continue with other work. task_output("${taskId}") shows a snapshot, task_stop("${taskId}") stops it.`,
+                `Started background task ${taskId}. The process is still running. You will be notified when it finishes; do not rerun it or poll. ` +
+                `Full log: ${manager.logPath(taskId) ?? '(unavailable)'}\nNext: Continue with other work. task_output("${taskId}") shows a snapshot, task_stop("${taskId}") stops it.`,
             },
           ],
-          details: prepared.details,
+          details: shellDetails(prepared.details, { backgroundTaskId: taskId }),
         };
       }
       if (typeof record.command === 'string' && TRAILING_AMP.test(record.command.trim())) {
@@ -709,26 +783,87 @@ export function withBackground(
       // 每次调用独立 signal：并行工具共享轮次 signal，不能以它区分调用
       const callSignal = signal ? AbortSignal.any([signal]) : new AbortController().signal;
       const startedAt = Date.now();
+      const timeoutSec = shellTimeoutSec(record.timeout);
+      const deadlineAt = timeoutSec === undefined ? undefined : startedAt + timeoutSec * 1000;
+      const yieldMs = foregroundYieldMs(command, definition.name);
+      let visibleContent: Awaited<ReturnType<ToolDefinition['execute']>>['content'] = [];
+      const update: typeof onUpdate = onUpdate
+        ? (partial) => {
+            visibleContent = partial.content;
+            onUpdate(partial);
+          }
+        : undefined;
       const foreground = new ForegroundCommand(
-        hasExplicitTimeout(record as Record<string, unknown>) ? 'kill' : 'background',
+        { yieldMs, deadlineAt },
         {
-          adopt: (proc) => manager.adopt(sessionId, proc, { command, startedAt }),
+          adopt: (proc, _reason, absoluteDeadline) =>
+            manager.adopt(sessionId, proc, { command, startedAt, deadlineAt: absoluteDeadline }),
           attachFinalize: (taskId, details, finalize) =>
             manager.attachFinalize(taskId, details, finalize),
+          onYieldFailed: (absoluteDeadline) =>
+            onUpdate?.({
+              content: visibleContent,
+              details: { foregroundDeadlineAt: absoluteDeadline },
+            }),
         }
       );
       bindForegroundCommand(callSignal, foreground);
       const untrack = manager.trackForeground(foregroundSessionId, toolCallId, foreground);
       try {
-        return await definition.execute(
+        const result = await definition.execute(
           toolCallId,
           withForegroundBashTimeout(params),
           callSignal,
-          onUpdate,
+          update,
           ctx
         );
+        if (!result.isError) return result;
+        const text = result.content
+          .filter((p) => p.type === 'text')
+          .map((p) => p.text)
+          .join('\n');
+        const code = text.match(/(?:^|\n)Command exited with code (-?\d+)\s*$/)?.[1];
+        const failure = classifyShellFailure(text, code === undefined ? undefined : Number(code));
+        return {
+          ...result,
+          content: [
+            ...result.content,
+            { type: 'text', text: `Next: ${SHELL_FAILURE_DISPLAY[failure.kind].next}` },
+          ],
+          details: shellDetails(result.details, { shellFailure: failure }),
+        };
       } catch (error) {
-        if (error instanceof ForegroundDetachedError) return detachedResult(error);
+        if (error instanceof ForegroundDetachedError)
+          return detachedResult(
+            error,
+            manager.logPath(error.taskId) ?? '(unavailable)',
+            yieldMs === 10_000
+          );
+        // Typed cause survives SDK timeout text rewriting and RTK finalize/rethrow.
+        if (
+          foreground.terminationCause === 'deadline' ||
+          foreground.terminationCause === 'yield_failed'
+        ) {
+          const failure = classifyShellFailure('', undefined, foreground.terminationCause);
+          const output =
+            foreground.terminationCause === 'yield_failed'
+              ? visibleContent
+                  .filter((part) => part.type === 'text')
+                  .map((part) => part.text)
+                  .join('\n')
+                  .slice(-TAIL_LIMIT)
+              : '';
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `${output ? `${output}\n` : ''}${error instanceof Error ? error.message : String(error)}\nNext: ${SHELL_FAILURE_DISPLAY[failure.kind].next}`,
+              },
+            ],
+            details: shellDetails(foreground.failureDetails, { shellFailure: failure }),
+          };
+        }
         throw error;
       } finally {
         untrack();
@@ -786,7 +921,16 @@ export function createTaskTools(
             `unknown task: ${taskId}. Known task ids: [${manager.knownIds().join(', ')}]`
           );
         }
-        const suffix = result.exitCode !== undefined ? ` (exit ${result.exitCode})` : '';
+        const failure =
+          result.details && typeof result.details === 'object' && 'shellFailure' in result.details
+            ? parseShellFailure(result.details.shellFailure)
+            : undefined;
+        const suffix =
+          failure?.kind === 'deadline'
+            ? ` (deadline reached${result.exitCode === undefined ? '' : `, exit ${result.exitCode}`})`
+            : result.exitCode !== undefined
+              ? ` (exit ${result.exitCode})`
+              : '';
         const detachedBy = blocking?.reason();
         const hint =
           result.status !== 'running' || requested === 0
@@ -804,6 +948,7 @@ export function createTaskTools(
             },
           ],
           details: result.details,
+          isError: result.status === 'failed',
         };
       },
     },

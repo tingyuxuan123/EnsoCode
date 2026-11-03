@@ -16,6 +16,28 @@ vi.mock('./EditDiff', () => ({ EditDiff: () => null }));
 vi.mock('./ReadFileView', () => ({ ReadFileView: () => null }));
 
 describe('RTK tool output footer', () => {
+  it('收起的命令显示简短失败状态而非已转后台', () => {
+    const item: Extract<TimelineItem, { kind: 'tool' }> = {
+      kind: 'tool',
+      key: 'failed',
+      name: 'bash',
+      summary: 'npm run dev',
+      output: 'quota full',
+      state: 'error',
+      shellFailure: { kind: 'yield_failed' },
+      edits: null,
+      writeContent: null,
+      todos: null,
+      agentMeta: null,
+      startedAt: null,
+      durationMs: 10_000,
+    };
+    const html = renderToStaticMarkup(createElement(TimelineRow, { item }));
+    expect(html).toContain('Background unavailable');
+    expect(html).toContain('npm run dev');
+    expect(html).not.toContain('Moved to background');
+  });
+
   it.each([false, true])('compactReadOnlyTools=%s 时 bash 仍保留完整外壳和原工具头', (compact) => {
     settings.compactReadOnlyTools = compact;
     const item: Extract<TimelineItem, { kind: 'tool' }> = {

@@ -1257,6 +1257,29 @@ describe('parent/child commands', () => {
     }
   });
 
+  it('ShellFailure 仅是失败命令的白名单展示，不接受授权/重试字段', () => {
+    const message = {
+      role: 'toolResult',
+      toolName: 'bash',
+      isError: true,
+      content: [],
+      shellFailure: { kind: 'deadline' },
+    };
+    const event = { type: 'message-upsert', identity: parent, seq: 1, index: 0, message };
+    expect(parseAgentWorkerEvent(event)).toEqual(event);
+    for (const shellFailure of [
+      { kind: 'allow' },
+      { kind: 'deadline', retryable: true },
+      { kind: 'not_found', exitCode: Infinity },
+      { kind: 'exit_nonzero', exitCode: 1.5 },
+    ]) {
+      expect(parseAgentWorkerEvent({ ...event, message: { ...message, shellFailure } })).toBeNull();
+    }
+    for (const patch of [{ isError: false }, { role: 'assistant' }, { toolName: 'read' }]) {
+      expect(parseAgentWorkerEvent({ ...event, message: { ...message, ...patch } })).toBeNull();
+    }
+  });
+
   it('spawn-parent 携 remote:合法通过,坏 shape 拒绝', () => {
     const base = { type: 'spawn-parent', identity: parent, cwd: '/srv/app', model };
     const withRemote = { ...base, remote: { host: 'user@dev-box', auth: 'key' } };

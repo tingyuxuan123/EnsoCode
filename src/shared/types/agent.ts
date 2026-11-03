@@ -1561,12 +1561,52 @@ export function projectDesignCards(raw: unknown): ProjectedDesignCard[] | undefi
   return cards.length ? cards : undefined;
 }
 
+/** Display-only shell outcome. Never used for authorization or automatic retries. */
+export interface ShellFailure {
+  kind:
+    | 'deadline'
+    | 'yield_failed'
+    | 'exit_nonzero'
+    | 'tty_required'
+    | 'auth_required'
+    | 'not_found'
+    | 'not_executable';
+  exitCode?: number;
+}
+
+export function parseShellFailure(value: unknown): ShellFailure | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.kind !== 'string' ||
+    ![
+      'deadline',
+      'yield_failed',
+      'exit_nonzero',
+      'tty_required',
+      'auth_required',
+      'not_found',
+      'not_executable',
+    ].includes(value.kind)
+  )
+    return undefined;
+  if (
+    value.exitCode !== undefined &&
+    (typeof value.exitCode !== 'number' || !Number.isSafeInteger(value.exitCode))
+  )
+    return undefined;
+  return {
+    kind: value.kind as ShellFailure['kind'],
+    ...(value.exitCode === undefined ? {} : { exitCode: value.exitCode as number }),
+  };
+}
+
 export interface ProjectedMessage {
   /** Persisted user entry identity, absent on unconfirmed messages. */
   entryId?: string;
   rtk?: RtkToolStats;
   /** 前台命令被移交为后台任务时的任务 id */
   backgroundTaskId?: string;
+  shellFailure?: ShellFailure;
   role: string;
   content: ProjectedPart[];
   /** toolResult 消息附带 */
@@ -2332,6 +2372,18 @@ function hasValidProjectedMetadata(value: Record<string, unknown>): boolean {
   if (value.backgroundTaskId !== undefined && !isBackgroundTaskId(value.backgroundTaskId)) {
     return false;
   }
+  if (
+    value.shellFailure !== undefined &&
+    (value.role !== 'toolResult' ||
+      value.isError !== true ||
+      (value.toolName !== 'bash' &&
+        value.toolName !== 'powershell' &&
+        value.toolName !== 'task_output') ||
+      !isRecord(value.shellFailure) ||
+      !hasOnlyKeys(value.shellFailure, ['kind', 'exitCode']) ||
+      !parseShellFailure(value.shellFailure))
+  )
+    return false;
   const fileChanges =
     value.fileChanges === undefined ? undefined : parseProjectedFileChanges(value.fileChanges);
   if (fileChanges === null) return false;

@@ -8,6 +8,7 @@ import type {
   ApprovalRequestInfo,
   ProjectedCodemodeCall,
   ProjectedMessage,
+  ShellFailure,
   TodoItem,
   TurnPerf,
 } from '@shared/types/agent';
@@ -106,6 +107,7 @@ export type TimelineItem =
       waiting?: 'subagent' | 'task';
       /** 前台命令被移交为后台任务时的任务 id；其它缺省 */
       backgroundTaskId?: string;
+      shellFailure?: ShellFailure;
       /** submit_plan 提交的计划；其它工具缺省 */
       plan?: { title: string; text: string } | null;
       /** 联系主 agent / 队员、子代理 send 发出的正文，或子代理 spawn 交代的任务；其它工具缺省 */
@@ -911,6 +913,7 @@ function buildMessageTimeline(
       rtk?: RtkToolStats;
       approvalReview?: ApprovalReviewRecord;
       backgroundTaskId?: string;
+      shellFailure?: ShellFailure;
     }
   >();
   const designCardsByCall = new Map<string, CardDescriptor[]>();
@@ -936,6 +939,7 @@ function buildMessageTimeline(
         rtk: message.rtk,
         approvalReview: message.approvalReview,
         backgroundTaskId: message.backgroundTaskId,
+        shellFailure: message.isError ? message.shellFailure : undefined,
       });
     }
   }
@@ -1298,6 +1302,7 @@ function buildMessageTimeline(
             ...(liveCommand || waiting ? { callId: part.id } : {}),
             ...(waiting ? { waiting } : {}),
             ...(result?.backgroundTaskId ? { backgroundTaskId: result.backgroundTaskId } : {}),
+            ...(result?.shellFailure ? { shellFailure: result.shellFailure } : {}),
             ...(part.name === 'submit_plan'
               ? { plan: extractSubmittedPlan(part.name, part.arguments) }
               : {}),

@@ -241,13 +241,38 @@ describe('SessionSupervisor tool duration', () => {
       (event): event is Extract<AgentWorkerEvent, { type: 'tool-output' }> =>
         event.type === 'tool-output' && event.toolCallId === 'bash-1'
     );
-    // 前台命令带截止时间：renderer 的无输出巡检据此不误杀静默长命令
+    // 下一前台收口时刻 = min(yield, deadline)，不是后台进程寿命。
     expect(bashStart).toMatchObject({
       toolCallId: 'bash-1',
       startedAt: 1_000_000,
+      deadlineAt: 1_045_000,
+      output: '',
+    });
+
+    // 配额满让位失败：仍在前台，沿既有字段刷新下一收口时刻，不误报转后台。
+    parentSession.emit({
+      type: 'tool_execution_update',
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      partialResult: { content: [], details: { foregroundDeadlineAt: 1_900_000 } },
+    });
+    expect(
+      events.filter((e) => e.type === 'tool-output' && e.toolCallId === 'bash-1').at(-1)
+    ).toMatchObject({
+      type: 'tool-output',
       deadlineAt: 1_900_000,
       output: '',
     });
+    const count = events.length;
+    for (const foregroundDeadlineAt of [NaN, Infinity, -1, '1900000', 1_000_000 + 2_147_483_648]) {
+      parentSession.emit({
+        type: 'tool_execution_update',
+        toolCallId: 'bash-1',
+        toolName: 'bash',
+        partialResult: { content: [], details: { foregroundDeadlineAt } },
+      });
+    }
+    expect(events).toHaveLength(count);
 
     vi.setSystemTime(1_005_000);
     parentSession.messages.push(

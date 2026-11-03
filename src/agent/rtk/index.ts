@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { RtkToolStats } from '@shared/rtk';
 import { attachBackgroundCommandHooks, type PreparedBackgroundCommand } from '../backgroundTasks';
-import { ForegroundDetachedError } from '../foregroundCommand';
+import { attachForegroundFailureDetails, ForegroundDetachedError } from '../foregroundCommand';
 import {
   bindPowerShellRtk,
   isPowerShellRtkCandidate,
@@ -625,7 +625,8 @@ export function withRtkOptimization(
           throw error;
         }
         try {
-          await prepared.finalize?.();
+          const details = (await prepared.finalize?.()) ?? prepared.details;
+          attachForegroundFailureDetails(signal, details);
         } catch {
           // 清理或统计错误不能覆盖原始执行错误。
         }

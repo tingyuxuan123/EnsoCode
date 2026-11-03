@@ -1,11 +1,23 @@
+import { SHELL_FAILURE_DISPLAY } from '@shared/shellFailure';
+import type { ShellFailure } from '@shared/types/agent';
 import { useMemo } from 'react';
+import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchTerminalBackground, readAppPanelColor } from '@/lib/terminalSurface';
 import { stripAnsi } from '@/lib/terminalText';
 import { useSettingsStore } from '@/stores/settings';
 
 /** bash 工具输出：沿用终端配色与等宽字体族，但字号/字重跟随聊天流（text-[calc(11rem/14)]），不套终端那套大字号 */
-export function TerminalOutput({ command, output }: { command: string; output: string }) {
+export function TerminalOutput({
+  command,
+  output,
+  failure,
+}: {
+  command: string;
+  output: string;
+  failure?: ShellFailure;
+}) {
+  const { t } = useI18n();
   const terminalTheme = useSettingsStore((s) => s.terminalTheme);
   const appTheme = useSettingsStore((s) => s.theme);
   const fontFamily = useSettingsStore((s) => s.terminalFontFamily);
@@ -39,6 +51,17 @@ export function TerminalOutput({ command, output }: { command: string; output: s
         >
           {stripAnsi(output)}
         </pre>
+      )}
+      {failure && (
+        <div className="mt-2 text-muted-foreground" data-slot="shell-failure">
+          <span className="font-medium">
+            {t(SHELL_FAILURE_DISPLAY[failure.kind].label)}
+            {failure.exitCode === undefined ? '' : ` (exit ${failure.exitCode})`}
+          </span>
+          <div>
+            {t('Next')}: {t(SHELL_FAILURE_DISPLAY[failure.kind].next)}
+          </div>
+        </div>
       )}
     </div>
   );

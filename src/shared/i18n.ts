@@ -1965,6 +1965,27 @@ export const zhTranslations: Record<string, string> = {
   'Move to background': '转为后台',
   'Moving to background…': '正在转后台…',
   'Moved to background': '已转后台',
+  'Timeout deadline': '达到截止时间',
+  'Background unavailable': '后台配额已满',
+  'Command failed': '命令失败',
+  'Terminal required': '需要交互终端',
+  'Authentication required': '需要认证',
+  'Program not found': '未找到程序',
+  'Not executable': '不可执行',
+  'Inspect the output and duration before choosing a new timeout. Do not rerun automatically.':
+    '先检查输出和耗时，再决定新的截止时间。不要自动重跑。',
+  'The command was stopped because the background quota is full. Stop an unneeded task before running it again.':
+    '后台配额已满，命令已受控停止。再次执行前请停止不需要的任务。',
+  'Read the error output and fix the cause before running again.':
+    '先阅读错误输出并修复原因，再次执行。',
+  'Use a non-interactive command, or ask the user to run it in a terminal.':
+    '改用非交互命令，或请用户在终端中执行。',
+  'Ask the user to authenticate through their existing credentials setup.':
+    '请用户通过已有凭据配置完成认证。',
+  'Check the command name, PATH, and project-local executable.':
+    '检查命令名称、PATH 和项目本地可执行文件。',
+  'Check permissions or invoke the file with its interpreter.':
+    '检查文件权限，或使用对应解释器执行。',
   'Stop waiting': '不等了',
   'Stopping wait…': '正在结束等待…',
   'Writing reply…': '正在写回复…',

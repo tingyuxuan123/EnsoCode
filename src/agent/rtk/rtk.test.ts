@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type BackgroundTaskManager, withBackground } from '../backgroundTasks';
+import { BackgroundTaskManager, withBackground } from '../backgroundTasks';
 import { ForegroundDetachedError } from '../foregroundCommand';
+import { createSessionCommandTool } from '../sessionShell';
 import { toBashRuntimePath, withRtkOptimization } from './index';
 import { bindPowerShellRtk } from './powershell';
 
@@ -54,6 +55,88 @@ async function execute(definition: ToolDefinition, command: string, signal?: Abo
 }
 
 describe('withRtkOptimization', () => {
+  it.each([true, false])(
+    'deadline结果保留RTK统计且finalize在途不误杀已退出进程: deadline=%s',
+    async (deadline) => {
+      const logPath = path.join(tempDir('enso-rtk-deadline-log-'), 'gain.txt');
+      const binaryPath = fakeRtk(`
+if (process.argv[2] === 'rewrite') { process.stdout.write('rtk git status'); process.exit(3); }
+if (process.argv[2] === 'gain') setTimeout(() => {
+  require('node:fs').appendFileSync(${JSON.stringify(logPath)}, 'finalized\\n');
+  process.stdout.write(JSON.stringify({ summary: { total_commands: 1, total_input: 100, total_output: 25, total_saved: 75 } }));
+}, 250);
+`);
+      let executions = 0;
+      let aborts = 0;
+      const base = createSessionCommandTool({
+        cwd: process.cwd(),
+        operations: {
+          exec: async (_command, _cwd, options) => {
+            executions++;
+            options.onData(Buffer.from('original output\n'));
+            options.signal?.addEventListener(
+              'abort',
+              () => {
+                aborts++;
+              },
+              { once: true }
+            );
+            if (!deadline) return { exitCode: 0 };
+            return new Promise((_resolve, reject) => {
+              options.signal?.addEventListener(
+                'abort',
+                () => {
+                  reject(new Error('aborted'));
+                },
+                { once: true }
+              );
+            });
+          },
+        },
+      }) as unknown as ToolDefinition;
+      const rtk = withRtkOptimization(base, {
+        binaryPath,
+        dataDir: tempDir('enso-rtk-deadline-data-'),
+        cwd: process.cwd(),
+      });
+      const manager = new BackgroundTaskManager(
+        {
+          onStarted: () => {},
+          onOutput: () => {},
+          onEnded: () => {},
+          onCompletionNotify: () => {},
+        },
+        tempDir('enso-rtk-deadline-tasks-')
+      );
+      const result = await withBackground(rtk, manager, 's1', process.cwd()).execute(
+        'deadline',
+        { command: 'git status', timeout: 0.15 },
+        undefined,
+        undefined,
+        undefined as never
+      );
+      expect(executions).toBe(1);
+      expect(aborts).toBe(deadline ? 1 : 0);
+      expect(readFileSync(logPath, 'utf8')).toBe('finalized\n');
+      expect(result.details).toMatchObject({
+        rtk: {
+          status: 'compressed',
+          originalCommand: 'git status',
+          inputTokens: 100,
+          outputTokens: 25,
+        },
+      });
+      if (deadline) {
+        expect(result.isError).toBe(true);
+        expect(result.details).toMatchObject({ shellFailure: { kind: 'deadline' } });
+        expect(JSON.stringify(result.content)).toContain('original output');
+      } else {
+        expect(result.isError).not.toBe(true);
+        expect(result.details).not.toHaveProperty('shellFailure');
+      }
+    }
+  );
+
   it('PowerShell 绝对 binary 路径中的 JS replacement 特殊序列保持原样', () => {
     const invocation = "& 'C:\\rtk-$&-$`-$''\\rtk.exe'";
 
@@ -925,6 +1008,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
       | { command: string; finalize?: () => Promise<unknown>; details?: unknown }
       | undefined;
     const manager = {
+      logPath: () => '/tmp/task-1.log',
       start(_sessionId: string, command: string, _cwd: string, options?: typeof launch) {
         launch = { command, ...options };
         return 'task-1';
@@ -942,6 +1026,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
 
     expect(calls).toHaveLength(0);
     expect(started.details).toEqual({
+      backgroundTaskId: 'task-1',
       rtk: {
         status: 'pending',
         originalCommand: 'git status',
@@ -976,6 +1061,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
       | { command: string; finalize?: () => Promise<unknown>; details?: unknown }
       | undefined;
     const manager = {
+      logPath: () => '/tmp/task-1.log',
       start(_sessionId: string, command: string, _cwd: string, options?: typeof launch) {
         launch = { command, ...options };
         return 'task-1';
@@ -993,6 +1079,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
 
     expect(calls).toHaveLength(0);
     expect(started.details).toEqual({
+      backgroundTaskId: 'task-1',
       rtk: {
         status: 'pending',
         originalCommand: 'Set-Location .; git status; git diff',

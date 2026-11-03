@@ -5,6 +5,7 @@ import {
   type ProjectedCodemodeCall,
   type ProjectedMessage,
   type ProjectedPart,
+  parseShellFailure,
   projectDesignCards,
   type TodoItem,
 } from '@shared/types/agent';
@@ -186,6 +187,10 @@ export function projectMessage(value: unknown): ProjectedMessage | null {
   ) {
     const rtk = parseRtkToolStats(value.details.rtk);
     if (rtk) projected.rtk = rtk;
+    if (value.isError === true) {
+      const failure = parseShellFailure(value.details.shellFailure);
+      if (failure) projected.shellFailure = failure;
+    }
   }
   if (
     value.role === 'toolResult' &&

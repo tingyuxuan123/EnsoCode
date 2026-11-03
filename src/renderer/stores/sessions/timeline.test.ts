@@ -1003,6 +1003,35 @@ describe('buildTimeline', () => {
     expect(moved[1]).not.toHaveProperty('callId');
   });
 
+  it('命令失败分类保留在时间线且不会显示为已转后台', () => {
+    const messages: TimelineMessage[] = [
+      user('test'),
+      {
+        role: 'assistant',
+        content: [
+          { type: 'toolCall', id: 'failure', name: 'bash', arguments: { command: 'npm test' } },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'failure',
+        toolName: 'bash',
+        isError: true,
+        content: [{ type: 'text', text: 'error' }],
+        shellFailure: { kind: 'yield_failed' },
+      },
+    ];
+    const row = buildTimeline(messages, false)[1];
+    expect(row).toMatchObject({
+      kind: 'tool',
+      state: 'error',
+      shellFailure: { kind: 'yield_failed' },
+    });
+    expect(row).not.toHaveProperty('backgroundTaskId');
+    messages[2] = { ...messages[2], isError: false };
+    expect(buildTimeline(messages, false)[1]).not.toHaveProperty('shellFailure');
+  });
+
   it('运行中的阻塞等待带调用 id 与等待类型，供「不等了」', () => {
     const call = (id: string, name: string, args: Record<string, unknown>): TimelineMessage => ({
       role: 'assistant',

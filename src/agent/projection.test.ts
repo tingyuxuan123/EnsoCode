@@ -108,6 +108,30 @@ describe('projectMessage', () => {
     ).not.toHaveProperty('rtk');
   });
 
+  it('失败展示只给失败命令，白名单不泄露重试或授权信息', () => {
+    const project = (toolName: string, isError: boolean, shellFailure: unknown) =>
+      projectMessage({
+        role: 'toolResult',
+        toolName,
+        isError,
+        content: [],
+        details: { shellFailure },
+      });
+    expect(
+      project('bash', true, { kind: 'not_found', exitCode: 127, retryable: true, secret: 'x' })
+    ).toMatchObject({
+      shellFailure: { kind: 'not_found', exitCode: 127 },
+    });
+    expect(
+      project('bash', true, { kind: 'not_found', retryable: true })?.shellFailure
+    ).not.toHaveProperty('retryable');
+    for (const bad of [null, {}, { kind: 'allow' }, { kind: 'deadline', exitCode: NaN }]) {
+      expect(project('bash', true, bad)).not.toHaveProperty('shellFailure');
+    }
+    expect(project('read', true, { kind: 'deadline' })).not.toHaveProperty('shellFailure');
+    expect(project('bash', false, { kind: 'deadline' })).not.toHaveProperty('shellFailure');
+  });
+
   it('转后台的命令结果投影后台任务 id，非命令工具与脏值不投影', () => {
     for (const toolName of ['bash', 'powershell']) {
       expect(

@@ -65,6 +65,7 @@ debounce 中的会话元数据会丢，表现得很像“持久化 bug”。
 - [ipc.md](ipc.md) —— 通道三点式链路、参数校验、preload 出口
 - [services.md](services.md) —— 扫描器结构、敏感数据边界、去重身份
 - [pair-replay.md](pair-replay.md) —— 配对帧防重放、能力钉住、混合版本和隔离联调边界
+- [shell-scheduling.md](shell-scheduling.md) —— 命令让位与截止、进程移交、回执与失败展示
 - [windows.md](windows.md) —— 多窗口、无边框标题栏、macOS 红绿灯
 - [settings-persistence.md](settings-persistence.md) —— settings.json 缓存、防抖、原子写、多窗口广播
 - [native-modules.md](native-modules.md) —— better-sqlite3 / level 与 pnpm 构建脚本

@@ -241,6 +241,7 @@ import {
 } from './sessionEviction';
 import { branchSessionFromPersistedFile, resolveForkLeafId } from './sessionFork';
 import { createSessionCommandTool } from './sessionShell';
+import { MAX_SHELL_TIMEOUT_SEC } from './shell/policy';
 import { type SilentTurnKind, silentTurnKind } from './silentTurn';
 import { assignCompactRoute, providerKeyFor, smartCompactInlineExtension } from './smartCompact';
 import {
@@ -4423,6 +4424,7 @@ export class SessionSupervisor {
         if (!managed.toolStartAt.has(event.toolCallId)) {
           const startedAt = Date.now();
           managed.toolStartAt.set(event.toolCallId, startedAt);
+          // Next foreground settlement: min(automatic yield, explicit kill deadline).
           const timeoutMs = foregroundCommandTimeoutMs(event.toolName, event.args);
           this.options.emit({
             type: 'tool-output',
@@ -4438,6 +4440,23 @@ export class SessionSupervisor {
       }
       case 'tool_execution_update': {
         if (event.parentToolCallId) return;
+        // A quota-rejected automatic yield keeps running in the foreground until the
+        // original explicit deadline. Refresh the existing bounded watchdog clock.
+        const details: unknown = event.partialResult?.details;
+        const candidate =
+          details && typeof details === 'object' && 'foregroundDeadlineAt' in details
+            ? details.foregroundDeadlineAt
+            : undefined;
+        const start = managed.toolStartAt.get(event.toolCallId);
+        const deadlineAt =
+          (event.toolName === 'bash' || event.toolName === 'powershell') &&
+          start !== undefined &&
+          typeof candidate === 'number' &&
+          Number.isFinite(candidate) &&
+          candidate > Date.now() &&
+          candidate <= start + MAX_SHELL_TIMEOUT_SEC * 1000
+            ? candidate
+            : undefined;
         // pi 已按 BASH_UPDATE_THROTTLE_MS 节流下发全量快照，这里只做投影，不再二次节流
         const parts: unknown = event.partialResult?.content;
         if (!Array.isArray(parts)) return;
@@ -4450,13 +4469,14 @@ export class SessionSupervisor {
           )
           .map((part) => part.text)
           .join('');
-        if (!output) return;
+        if (!output && deadlineAt === undefined) return;
         this.options.emit({
           type: 'tool-output',
           identity: managed.identity,
           seq: ++managed.seq,
           toolCallId: event.toolCallId,
           output,
+          ...(deadlineAt === undefined ? {} : { deadlineAt }),
         });
         return;
       }

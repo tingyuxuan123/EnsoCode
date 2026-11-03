@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { BashOperations, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { BackgroundTaskInfo } from '@shared/types/agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -18,7 +18,10 @@ import {
 import { ForegroundDetachedError } from './foregroundCommand';
 import { createSessionCommandTool } from './sessionShell';
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 
 const makeManager = (logDir = mkdtempSync(path.join(tmpdir(), 'enso-bg-'))) => {
   const notified: string[] = [];
@@ -49,11 +52,10 @@ const until = (pred: () => boolean, ms = 5000) =>
   });
 
 describe('withForegroundBashTimeout', () => {
-  it('前台未指定 timeout 时填默认秒数', () => {
-    expect(DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC).toBe(120);
+  it('前台未指定 timeout 不注入 kill 截止', () => {
+    expect(DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC).toBe(45);
     expect(withForegroundBashTimeout({ command: 'sleep 1' })).toEqual({
       command: 'sleep 1',
-      timeout: DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC,
     });
   });
 
@@ -73,6 +75,41 @@ describe('withForegroundBashTimeout', () => {
 });
 
 describe('foregroundCommandTimeoutMs', () => {
+  it.each([
+    ['npm run dev', 10_000],
+    ['pnpm test', 180_000],
+    ['npm install', 180_000],
+    ['echo "npm run dev"', 45_000],
+    ['npm run dev:build', 45_000],
+    ['npm run start-once', 45_000],
+    ['vitest --watch=false', 180_000],
+    ['jest --watchAll=false', 180_000],
+    ['# npm run dev\necho ok', 45_000],
+    ['cat <<EOF\nnpm run dev\nEOF', 45_000],
+    ['echo $((1&2))', 45_000],
+    ['echo ok && npm run dev', 10_000],
+  ])('按真实命令位置分类 %s', (command, expected) => {
+    expect(foregroundCommandTimeoutMs('bash', { command })).toBe(expected);
+  });
+
+  it('显式截止不代替自动让位：取两者较早值', () => {
+    expect(foregroundCommandTimeoutMs('bash', { command: 'npm run dev', timeout: 60 })).toBe(
+      10_000
+    );
+    expect(foregroundCommandTimeoutMs('bash', { command: 'npm run dev', timeout: 2 })).toBe(2_000);
+  });
+  it.each([0, -1, NaN, Infinity, '30', null, 2_147_484])(
+    '坏 timeout %s 不成为 watchdog 的无界截止',
+    (timeout) => {
+      expect(foregroundCommandTimeoutMs('bash', { command: 'echo ok', timeout })).toBe(45_000);
+    }
+  );
+  it('PowerShell call operator 不拒绝执行，也按真实命令分类', () => {
+    expect(foregroundCommandTimeoutMs('powershell', { command: '& npm.exe run dev' })).toBe(10_000);
+    expect(
+      foregroundCommandTimeoutMs('powershell', { command: 'Write-Output "npm run dev"' })
+    ).toBe(45_000);
+  });
   it('前台 bash / powershell 按实际生效的超时换算毫秒', () => {
     expect(foregroundCommandTimeoutMs('bash', { command: 'sleep 400' })).toBe(
       DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC * 1000
@@ -89,7 +126,233 @@ describe('foregroundCommandTimeoutMs', () => {
   });
 });
 
+describe('Shell 调度贯穿 SDK 包装', () => {
+  function scheduled(timeout?: number, rejectAdopt = false, output = 'captured output\n') {
+    vi.useFakeTimers();
+    const { manager, ended, notified } = makeManager();
+    if (rejectAdopt)
+      vi.spyOn(manager, 'adopt').mockImplementation(() => {
+        throw new Error('quota full');
+      });
+    let complete!: (result: { exitCode: number }) => void;
+    const abort = vi.fn();
+    const exec = vi.fn<BashOperations['exec']>(async (_c, _d, options) => {
+      options.onData(Buffer.from(output));
+      return new Promise((resolve, reject) => {
+        complete = resolve;
+        options.signal?.addEventListener(
+          'abort',
+          () => {
+            abort();
+            reject(new Error('aborted'));
+          },
+          { once: true }
+        );
+      });
+    });
+    const tool = withBackground(
+      createSessionCommandTool({ cwd: '/tmp', operations: { exec } }) as unknown as ToolDefinition,
+      manager,
+      's1',
+      '/tmp'
+    );
+    const updates: unknown[] = [];
+    const pending = tool.execute(
+      'call',
+      { command: 'npm run dev', ...(timeout === undefined ? {} : { timeout }) },
+      undefined,
+      (value) => updates.push(value),
+      undefined as never
+    );
+    return {
+      manager,
+      pending,
+      complete: () => complete({ exitCode: 0 }),
+      abort,
+      exec,
+      updates,
+      ended,
+      notified,
+    };
+  }
+
+  it.each(['user', 'steer', 'timeout'] as const)(
+    '%s 移交不重启进程、不重置显式绝对截止',
+    async (reason) => {
+      const state = scheduled(20);
+      await vi.advanceTimersByTimeAsync(reason === 'timeout' ? 10_000 : 4_000);
+      if (reason !== 'timeout') state.manager.backgroundForeground('s1', 'call', reason);
+      const result = await state.pending;
+      const taskId = state.manager.knownIds()[0];
+      expect(result.details).toMatchObject({ backgroundTaskId: taskId });
+      expect(JSON.stringify(result.content)).toContain('Full log:');
+      expect(JSON.stringify(result.content)).toContain('Next:');
+      expect(result.isError).not.toBe(true);
+      if (reason === 'timeout')
+        expect(JSON.stringify(result.content)).toContain('background: true next time');
+      expect(state.exec).toHaveBeenCalledOnce();
+      expect(state.exec.mock.calls[0][2].timeout).toBeUndefined();
+      const remaining = reason === 'timeout' ? 10_000 : 16_000;
+      await vi.advanceTimersByTimeAsync(remaining - 1);
+      expect(state.abort).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(state.abort).toHaveBeenCalledOnce();
+      expect(state.ended).toEqual([taskId]);
+      expect((await state.manager.read(taskId))?.details).toMatchObject({
+        shellFailure: { kind: 'deadline' },
+      });
+      expect(state.notified).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it.each([undefined, 20])('自动移交失败 timeout=%s 给受控结果，不误报转后台', async (timeout) => {
+    const state = scheduled(timeout, true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    if (timeout !== undefined) {
+      expect(state.abort).not.toHaveBeenCalled();
+      expect(state.updates).toContainEqual(
+        expect.objectContaining({ details: { foregroundDeadlineAt: Date.now() + 10_000 } })
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+    }
+    const result = await state.pending;
+    expect(result.isError).toBe(true);
+    expect(result.details).toMatchObject({
+      shellFailure: { kind: timeout === undefined ? 'yield_failed' : 'deadline' },
+    });
+    expect(result.details).not.toHaveProperty('backgroundTaskId');
+    if (timeout === undefined) expect(JSON.stringify(result.content)).toContain('captured output');
+    expect(state.abort).toHaveBeenCalledOnce();
+    expect(state.exec).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('配额满只刷新截止，保留 SDK 已截断的可见输出快照', async () => {
+    const state = scheduled(20, true, 'x'.repeat(90_000));
+    await vi.advanceTimersByTimeAsync(500);
+    const before = state.updates.at(-1) as { content: unknown };
+    expect(before).toBeDefined();
+    await vi.advanceTimersByTimeAsync(9_500);
+    expect((state.updates.at(-1) as { content: unknown }).content).toEqual(before.content);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await state.pending;
+  });
+
+  it('deadline 先于 yield 不尝试 adopt；正常退出但外层 finalize 在途不受 deadline 影响', async () => {
+    const state = scheduled(2);
+    await vi.advanceTimersByTimeAsync(0);
+    state.complete();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect((await state.pending).isError).not.toBe(true);
+    expect(state.abort).not.toHaveBeenCalled();
+    expect(state.manager.knownIds()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([0, -1, NaN, Infinity, '1', null, 2_147_484])(
+    '坏 timeout %s 在启动前拒绝',
+    async (timeout) => {
+      const { manager } = makeManager();
+      const execute = vi.fn(async () => ({ content: [], details: undefined }));
+      const tool = withBackground(
+        {
+          name: 'bash',
+          parameters: { type: 'object', properties: {} },
+          execute,
+        } as unknown as ToolDefinition,
+        manager,
+        's1',
+        '/tmp'
+      );
+      await expect(
+        tool.execute(
+          'bad',
+          { command: 'echo ok', timeout },
+          undefined,
+          undefined,
+          undefined as never
+        )
+      ).rejects.toThrow('Invalid timeout');
+      expect(execute).not.toHaveBeenCalled();
+      expect(manager.knownIds()).toEqual([]);
+    }
+  );
+});
+
 describe('withBackground promptSnippet 跟随工具名', () => {
+  it.each([0, 1, 126, 127])(
+    '分类只在失败结果触发，成功中的示例错误不改变状态（exit %s）',
+    async (exitCode) => {
+      const { manager } = makeManager();
+      const execute = vi.fn(async () => ({
+        isError: exitCode !== 0,
+        content: [
+          {
+            type: 'text',
+            text: `example: timeout:30\n${exitCode === 0 ? 'command not found (example)' : 'failure output'}\n\nCommand exited with code ${exitCode}`,
+          },
+        ],
+        details: {
+          rtk: { status: 'compressed', originalCommand: 'original command' },
+          custom: 'retained',
+        },
+      }));
+      const tool = withBackground(
+        {
+          name: 'bash',
+          parameters: { type: 'object', properties: {} },
+          execute,
+        } as unknown as ToolDefinition,
+        manager,
+        's1',
+        '/tmp'
+      );
+      const result = await tool.execute(
+        'id',
+        { command: 'original command' },
+        undefined,
+        undefined,
+        undefined as never
+      );
+      expect(result.details).toMatchObject({
+        custom: 'retained',
+        rtk: { originalCommand: 'original command' },
+      });
+      if (exitCode === 0) expect(result.details).not.toHaveProperty('shellFailure');
+      else
+        expect(result.details).toMatchObject({
+          shellFailure: {
+            kind:
+              exitCode === 127 ? 'not_found' : exitCode === 126 ? 'not_executable' : 'exit_nonzero',
+            exitCode,
+          },
+        });
+    }
+  );
+
+  it('AbortError取消语义原样穿越，不伪造为shell失败结果', async () => {
+    const { manager } = makeManager();
+    const aborted = new Error('cancelled');
+    aborted.name = 'AbortError';
+    const tool = withBackground(
+      {
+        name: 'bash',
+        parameters: { type: 'object', properties: {} },
+        execute: async () => {
+          throw aborted;
+        },
+      } as unknown as ToolDefinition,
+      manager,
+      's1',
+      '/tmp'
+    );
+    await expect(
+      tool.execute('id', { command: 'true' }, undefined, undefined, undefined as never)
+    ).rejects.toBe(aborted);
+  });
+
   it('包装 powershell 工具时,promptSnippet 以 powershell: 开头而非 bash:', () => {
     const manager = makeManager().manager;
     const base = {
@@ -236,7 +499,7 @@ describe('withBackground 命令变换(远程会话用)', () => {
     expect(startCalls[0].cwd).toBe(process.cwd());
   });
 
-  it('前台 execute 注入默认 timeout', async () => {
+  it('前台 execute 不注入默认 kill timeout', async () => {
     const { manager } = makeManager();
     const seen: unknown[] = [];
     const base = {
@@ -253,7 +516,6 @@ describe('withBackground 命令变换(远程会话用)', () => {
     await wrapped.execute('t1', { command: 'echo hi' }, undefined, undefined, undefined as never);
     expect(seen[0]).toEqual({
       command: 'echo hi',
-      timeout: DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC,
     });
   });
 });
@@ -350,6 +612,202 @@ describe('withBackground shell 环境', () => {
 });
 
 describe('BackgroundTaskManager', () => {
+  it.each([true, false])('主动停止不是命令失败分类（byUser=%s）', async (byUser) => {
+    vi.useFakeTimers();
+    const { manager } = makeManager();
+    let close!: (code: number | null) => void;
+    const done = new Promise<number | null>((resolve) => {
+      close = resolve;
+    });
+    try {
+      const taskId = manager.adopt(
+        's1',
+        { output: () => '', pipe: () => {}, done, kill: () => close(null) },
+        { command: 'long-running-command', startedAt: Date.now() }
+      );
+      expect(manager.stop(taskId, byUser)).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await manager.read(taskId))?.details ?? {}).not.toHaveProperty('shellFailure');
+      await vi.advanceTimersByTimeAsync(500);
+    } finally {
+      manager.stopAll();
+      vi.useRealTimers();
+    }
+  });
+
+  it('已结束任务的迟到输出不修改权威结果或写入关闭的日志', async () => {
+    const { manager, ended } = makeManager();
+    let output!: (chunk: Buffer) => void;
+    const taskId = manager.adopt(
+      's1',
+      {
+        output: () => 'before',
+        pipe: (sink) => {
+          output = sink;
+        },
+        done: Promise.resolve(0),
+        kill: () => {},
+      },
+      { command: 'ssh-client', startedAt: Date.now() }
+    );
+    await until(() => ended.includes(taskId));
+    output(Buffer.from('late ssh stderr'));
+    expect((await manager.read(taskId))?.output).toBe('before');
+  });
+
+  it.each(['deadline', 'user', 'model'] as const)(
+    'terminationCause first-wins: %s，重复 stop 与迟到 timer 不改通知',
+    async (first) => {
+      vi.useFakeTimers();
+      const { manager, ended, notified } = makeManager();
+      let complete!: (code: number) => void;
+      const kill = vi.fn();
+      const taskId = manager.adopt(
+        's1',
+        {
+          output: () => '',
+          pipe: () => {},
+          kill,
+          done: new Promise<number>((resolve) => {
+            complete = resolve;
+          }),
+        },
+        { command: 'test', startedAt: Date.now(), deadlineAt: Date.now() + 100 }
+      );
+      if (first !== 'deadline') expect(manager.stop(taskId, first === 'user')).toBe(true);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(manager.stop(taskId, true)).toBe(false);
+      expect(manager.stop(taskId)).toBe(false);
+      expect(kill).toHaveBeenCalledOnce();
+      complete(0);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ended).toEqual([taskId]);
+      expect(notified).toHaveLength(first === 'model' ? 0 : 1);
+      if (first === 'deadline') {
+        expect((await manager.read(taskId))?.status).toBe('failed');
+        expect(notified[0]).toContain('deadline');
+        expect(notified[0]).not.toContain('stopped by the user');
+      } else if (first === 'user') expect(notified[0]).toContain('stopped by the user');
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(kill).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('task_output 仍至多等待10分钟；quota仍为10且拒绝第11个', async () => {
+    vi.useFakeTimers();
+    const { manager, notified } = makeManager();
+    const finish: Array<(code: number) => void> = [];
+    const proc = () => ({
+      output: () => '',
+      pipe: () => {},
+      kill: () => {},
+      done: new Promise<number>((resolve) => {
+        finish.push(resolve);
+      }),
+    });
+    for (let i = 0; i < 10; i++)
+      manager.adopt('s1', proc(), { command: 'pending', startedAt: Date.now() });
+    expect(() =>
+      manager.adopt('s1', proc(), { command: 'eleventh', startedAt: Date.now() })
+    ).toThrow('limit 10');
+    const pending = manager.read(manager.knownIds()[0], 20 * 60_000);
+    let returned = false;
+    void pending.then(() => {
+      returned = true;
+    });
+    await vi.advanceTimersByTimeAsync(10 * 60_000 - 1);
+    expect(returned).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await pending)?.status).toBe('running');
+    for (const complete of finish) complete(0);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(notified).toHaveLength(10);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('截止后程序自行以 0 退出，通知也先报告 deadline 而不是成功退出', async () => {
+    vi.useFakeTimers();
+    const { manager, notified } = makeManager();
+    let close!: (code: number) => void;
+    const done = new Promise<number>((resolve) => {
+      close = resolve;
+    });
+    try {
+      const taskId = manager.adopt(
+        's1',
+        { output: () => '', pipe: () => {}, done, kill: () => close(0) },
+        { command: 'trap cleanup TERM', startedAt: Date.now(), deadlineAt: Date.now() + 50 }
+      );
+      await vi.advanceTimersByTimeAsync(50);
+      expect(manager.snapshot('s1')[0]?.status).toBe('failed');
+      expect((await manager.read(taskId))?.details).toMatchObject({
+        shellFailure: { kind: 'deadline', exitCode: 0 },
+      });
+      expect(notified[0]?.split('\n')[0]).toContain('finished (deadline reached, exit 0');
+      const reader = createTaskTools(manager).find((tool) => tool.name === 'task_output');
+      const result = await reader?.execute(
+        'read',
+        { taskId },
+        undefined,
+        undefined,
+        undefined as never
+      );
+      expect(JSON.stringify(result?.content)).toContain('[failed (deadline reached, exit 0)]');
+      await vi.advanceTimersByTimeAsync(500);
+    } finally {
+      manager.stopAll();
+      vi.useRealTimers();
+    }
+  });
+
+  it('显式后台 timeout 生效并正常通知；deadline 不被随后 user stop 覆盖', async () => {
+    const { manager, notified, ended } = makeManager();
+    const taskId = manager.start('s1', 'sleep 30', '/tmp', { timeoutSec: 0.05 });
+    await until(() => ended.includes(taskId), 1500);
+    expect((await manager.read(taskId))?.details).toMatchObject({
+      shellFailure: { kind: 'deadline' },
+    });
+    expect(manager.stop(taskId, true)).toBe(false);
+    expect(notified).toHaveLength(1);
+    expect(notified[0]).toContain('deadline');
+    expect(notified[0]).not.toContain('stopped by the user');
+  });
+
+  it('退出时先撤截止，finalize 在途不能 stop 或被 deadline 误杀', async () => {
+    const { manager, ended } = makeManager();
+    let complete!: (code: number) => void;
+    let finalize!: () => void;
+    const kill = vi.fn();
+    const taskId = manager.adopt(
+      's1',
+      {
+        output: () => '',
+        pipe: () => {},
+        kill,
+        done: new Promise<number>((resolve) => {
+          complete = resolve;
+        }),
+      },
+      { command: 'test', startedAt: Date.now(), deadlineAt: Date.now() + 50 }
+    );
+    manager.attachFinalize(
+      taskId,
+      { rtk: 'pending' },
+      () =>
+        new Promise<void>((resolve) => {
+          finalize = resolve;
+        })
+    );
+    complete(0);
+    await until(() => !!finalize);
+    expect(manager.stop(taskId, true)).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(kill).not.toHaveBeenCalled();
+    finalize();
+    await until(() => ended.includes(taskId));
+    expect(ended).toEqual([taskId]);
+  });
   it('进程退出后等待 finalize，再由 task_output 返回最终 details', async () => {
     const { manager, ended } = makeManager();
     let finishFinalize: ((details: unknown) => void) | undefined;

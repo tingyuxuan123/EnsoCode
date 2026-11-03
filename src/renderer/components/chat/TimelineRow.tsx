@@ -4,6 +4,7 @@ import { stripBotNotesUpdate } from '@shared/bots/notes';
 import { isBtwIsolationPrompt } from '@shared/btw';
 import { toLocalImageUrl } from '@shared/localImage';
 import { type PlanNoteKind, parsePlanMessage, splitPlanPrefix } from '@shared/planMode';
+import { SHELL_FAILURE_DISPLAY } from '@shared/shellFailure';
 import type {
   AgentRunProgress,
   AgentSessionCustomEntry,
@@ -210,6 +211,9 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.nestedPending === b.nestedPending &&
         JSON.stringify(a.sandbox) === JSON.stringify(b.sandbox) &&
         a.rtk === b.rtk &&
+        a.shellFailure?.kind === b.shellFailure?.kind &&
+        a.shellFailure?.exitCode === b.shellFailure?.exitCode &&
+        a.backgroundTaskId === b.backgroundTaskId &&
         a.plan?.title === b.plan?.title &&
         a.plan?.text === b.plan?.text &&
         a.sentMessage === b.sentMessage &&
@@ -2146,6 +2150,14 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
           {t('Moved to background')}
         </span>
       )}
+      {item.shellFailure && (
+        <span
+          className="shrink-0 whitespace-nowrap"
+          title={t(SHELL_FAILURE_DISPLAY[item.shellFailure.kind].next)}
+        >
+          {t(SHELL_FAILURE_DISPLAY[item.shellFailure.kind].label)}
+        </span>
+      )}
       {item.state === 'reviewing' && (
         <span
           className="t-shimmer shrink-0 whitespace-nowrap"
@@ -2306,7 +2318,11 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
               {isSandboxTool(item.name) ? (
                 <SandboxOutput source={item.source} output={item.output} view={sandbox} />
               ) : item.name === 'bash' ? (
-                <TerminalOutput command={item.summary} output={item.output ?? ''} />
+                <TerminalOutput
+                  command={item.summary}
+                  output={item.output ?? ''}
+                  failure={item.shellFailure}
+                />
               ) : item.name === 'read' && hasImage && item.imagePath ? (
                 <ReadImagePreview
                   key={item.imagePath}
