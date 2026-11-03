@@ -213,6 +213,11 @@ import { createProjectSettingsManager } from './projectCode';
 import { projectMessage } from './projection';
 import { promptCatalogExtension } from './promptCatalog';
 import { applyWorkerProxyEnv } from './proxyEnv';
+import {
+  createLocalReadPathProbe,
+  createRemoteReadPathProbe,
+  withReadNotFoundHint,
+} from './readNotFound';
 import { withReadTruncationMeta } from './readTruncation';
 import { enqueueReminder, REMINDER_QUEUE_LIMIT } from './reminderQueue';
 import { withRequestBodyBudget } from './requestBodyBudget';
@@ -2515,8 +2520,19 @@ export class SessionSupervisor {
     // 只读探索四件套(read/grep/find/ls,免审):readonly 子代理的全部工具,也是 base 的底座。
     // 远程会话经 operations 注入落到 ssh(grep 无注入点,换整个定义)
     const structuredById = new Map<string, unknown>();
+    // 文件不存在时给模型路径线索（最近目录条目 / 同名文件），远程只做 stat+readdir
     const wrapRead = (definition: Def): Def =>
-      withReadTruncationMeta(withAgentRead(definition, () => structuredById));
+      withReadTruncationMeta(
+        withAgentRead(
+          withReadNotFoundHint(
+            definition,
+            remoteOps && sshExecutor
+              ? { cwd, probe: createRemoteReadPathProbe(remoteOps.ls), pathApi: path.posix }
+              : { cwd, probe: createLocalReadPathProbe() }
+          ),
+          () => structuredById
+        )
+      );
     const readOnlyTools = (toolGate: ApprovalGate): Def[] => {
       const stock =
         remoteOps && sshExecutor
