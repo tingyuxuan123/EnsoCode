@@ -134,6 +134,7 @@ export function axCollectVisibleText(node: {
 export function axFillEmptyRowTitle(node: {
   role?: string;
   title?: string;
+  titleFromChildren?: true;
   value?: string;
   description?: string;
   children?: Array<{
@@ -146,5 +147,8 @@ export function axFillEmptyRowTitle(node: {
   if (node.role !== 'AXRow' && node.role !== 'AXCell') return;
   if (node.title || node.value) return;
   const text = axCollectVisibleText(node).join(' ');
-  if (text) node.title = text;
+  if (text) {
+    node.title = text;
+    node.titleFromChildren = true;
+  }
 }

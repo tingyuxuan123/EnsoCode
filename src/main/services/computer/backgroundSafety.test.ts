@@ -14,6 +14,7 @@ const native = vi.hoisted(() => ({
   axSnapshot: vi.fn(),
   axNode: vi.fn(),
   axPerform: vi.fn(),
+  endInput: vi.fn(),
   raise: vi.fn(),
   skyClick: vi.fn(async () => {
     throw new Error('SKY_CLICK_UNAVAILABLE');
@@ -35,12 +36,17 @@ vi.mock('electron', () => ({
   clipboard: {},
   desktopCapturer: {},
   screen: {},
+  shell: {},
 }));
 vi.mock('./macosNative', () => ({ loadMacosNative: async () => native }));
+vi.mock('./win32Native', () => ({ loadWin32Native: async () => native }));
 vi.mock('./occupancyHid', () => ({ hidSecondsSinceLastEvent: () => 10 }));
+vi.mock('./screenCaptureAccess', () => ({ preflightScreenCaptureAccess: async () => true }));
 
 import type { InputGuard } from './backend';
+import { createComputerGuestSession, runComputerGuest } from './guest';
 import { MacosDesktopBackend } from './macos';
+import { WindowsDesktopBackend } from './win32';
 
 describe('macOS background input fails closed', () => {
   beforeEach(() => {
@@ -188,7 +194,7 @@ describe('macOS background input fails closed', () => {
       const node = {
         ref: 'native-handle',
         role: 'button',
-        actions: ['press'],
+        actions: ['AXPress'],
         pid: 42,
         windowId: 12,
         bounds: { x: 10, y: 10, width: 40, height: 20 },
@@ -215,6 +221,7 @@ describe('macOS background input fails closed', () => {
       const pending = backend.axClick(element.ref, { delivery: 'foreground' });
       if (fails) await expect(pending).rejects.toThrow(/brought to the front/);
       else await pending;
+      expect(native.axPerform).toHaveBeenCalledOnce();
       expect(native.click).toHaveBeenCalledTimes(fails ? 0 : 1);
       if (!fails)
         expect(native.click).toHaveBeenCalledWith(
@@ -224,4 +231,46 @@ describe('macOS background input fails closed', () => {
         );
     }
   );
+});
+
+describe.each(['darwin', 'win32'] as const)('%s AX ref 坐标回退', (platform) => {
+  it.each([true, false])('AXPress 失败后复核本次落点的元素（复用：%s）', async (reused) => {
+    vi.clearAllMocks();
+    native.appIdentity.mockReturnValue({
+      bundleId: 'com.example.target',
+      name: 'Target',
+      path: '/Applications/Target.app',
+    });
+    native.windows.mockResolvedValue([
+      { id: '12', pid: 42, app: 'Target', focused: true, x: 0, y: 0, width: 200, height: 100 },
+    ]);
+    const node = {
+      ref: 'native-handle',
+      role: 'AXButton',
+      title: '保存',
+      actions: ['AXPress'],
+      pid: 42,
+      windowId: 12,
+      bounds: { x: 10, y: 10, width: 40, height: 20 },
+    };
+    native.axSnapshot.mockResolvedValue([node]);
+    native.axNode.mockResolvedValue(node);
+    native.axPerform.mockImplementationOnce(async () => {
+      if (reused) native.axNode.mockResolvedValue({ ...node, title: '删除' });
+      throw new Error('AX action failed (-25206)');
+    });
+    const pending = runComputerGuest({
+      code: 'const w = await desktop.window("12"); await w.ax(); await (await w.ref("e1")).click()',
+      backend: platform === 'darwin' ? new MacosDesktopBackend() : new WindowsDesktopBackend(),
+      session: createComputerGuestSession(),
+      timeoutMs: 5_000,
+      settleMs: 0,
+      readOnly: false,
+    });
+    if (reused) await expect(pending).rejects.toThrow(/StaleRef.*re-run ax/u);
+    else await expect(pending).resolves.toBeDefined();
+    expect(native.axPerform).toHaveBeenCalledOnce();
+    expect(native.skyPointer).toHaveBeenCalledTimes(!reused && platform === 'darwin' ? 1 : 0);
+    expect(native.click).toHaveBeenCalledTimes(!reused && platform === 'win32' ? 1 : 0);
+  });
 });

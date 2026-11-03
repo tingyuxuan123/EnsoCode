@@ -8,8 +8,8 @@ export class ComputerError extends Error {
 }
 
 export class StaleRefError extends ComputerError {
-  constructor(reference: string) {
-    super('stale-ref', `${reference} expired; re-run ax()/find()`);
+  constructor(reference: string, detail = 'expired') {
+    super('stale-ref', `${reference} ${detail}; re-run ax()/find()`);
     this.name = 'StaleRef';
   }
 }

@@ -1,5 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { formatAxTree, formatAxTreeDiff } from './axTree';
+import {
+  type AxTreeNode,
+  axFingerprint,
+  axFingerprintMatches,
+  formatAxTree,
+  formatAxTreeDiff,
+} from './axTree';
+
+describe('AX ref 身份字段', () => {
+  const node: AxTreeNode = { ref: 'e1', role: 'AXButton', title: '保存', description: '文档操作' };
+
+  it.each(['role', 'title', 'description'] as const)(
+    '%s 改变（包括原生空值）不是同一身份',
+    (key) => {
+      const observed = axFingerprint(node);
+      expect(axFingerprintMatches(observed, { ...node, [key]: '另一控件' })).toBe(false);
+      if (key !== 'role') {
+        expect(axFingerprintMatches(observed, { ...node, [key]: '' })).toBe(false);
+      }
+    }
+  );
+
+  it('空字符串和缺省统一，但 value/focus/enabled/位置不参与身份', () => {
+    const observed = axFingerprint({ ref: 'e1', role: 'AXTextField', title: '' });
+    expect(
+      axFingerprintMatches(observed, {
+        ref: 'e1',
+        role: 'AXTextField',
+        value: '新内容',
+        focused: true,
+        enabled: false,
+        bounds: { x: 1, y: 2, width: 3, height: 4 },
+      })
+    ).toBe(true);
+  });
+});
 
 describe('formatAxTree', () => {
   it('输出带 [ref=eN] 的文本树', () => {

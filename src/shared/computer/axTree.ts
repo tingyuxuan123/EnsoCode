@@ -2,6 +2,8 @@ export interface AxTreeNode {
   ref: string;
   role: string;
   title?: string;
+  /** 快照为无原生标题的行/单元格合成的显示标签，不参与 ref 身份比较。 */
+  titleFromChildren?: true;
   value?: string;
   description?: string;
   enabled?: boolean;
@@ -13,6 +15,26 @@ export interface AxTreeNode {
   pid?: number;
   /** 元素所在窗口号（macOS elementAt/node 返回） */
   windowId?: number;
+}
+
+/** 只比原生身份字段；value、focus、selection 等可随正常操作改变。 */
+export type AxFingerprint = Pick<AxTreeNode, 'role' | 'title' | 'description'>;
+
+export function axFingerprint(node: AxTreeNode): AxFingerprint {
+  return {
+    role: node.role,
+    title: node.titleFromChildren ? undefined : node.title || undefined,
+    description: node.description || undefined,
+  };
+}
+
+export function axFingerprintMatches(observed: AxFingerprint, node: AxTreeNode): boolean {
+  const live = axFingerprint(node);
+  return (
+    observed.role === live.role &&
+    observed.title === live.title &&
+    observed.description === live.description
+  );
 }
 
 const AX_EMPTY_WRAPPER_ROLES = new Set(['AXGroup', 'AXUnknown', 'AXGenericElement']);

@@ -20,6 +20,12 @@ export interface InputGuard {
   check(cleanup?: boolean, current?: TargetApp | null): Promise<void>;
 }
 
+/** Main-only: reuse the checked node; verify any fresh node used for coordinate fallback. */
+export interface AxClickVerification {
+  node: AxTreeNode;
+  check(current: AxTreeNode): void;
+}
+
 /** 点击实际走的路径：可 press 的控件走 AXPress，其余为合成事件 */
 export interface ClickOutcome {
   via: 'axPress' | 'synthetic' | 'hid';
@@ -108,7 +114,7 @@ export interface DesktopBackend {
   axPerform(ref: string, action: string, guard?: InputGuard): Promise<void>;
   axSetValue(ref: string, value: string, guard?: InputGuard): Promise<void>;
   axFocus(ref: string, guard?: InputGuard): Promise<void>;
-  axClick(ref: string, opts?: PointerOptions): Promise<void>;
+  axClick(ref: string, opts?: PointerOptions, verification?: AxClickVerification): Promise<void>;
   clipboardRead(): Promise<string>;
   clipboardWrite(text: string): Promise<void>;
 }

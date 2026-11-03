@@ -452,7 +452,10 @@ async function load(): Promise<AxJobBridge> {
   const fillRowTitle = (node: AxTreeNode, element: unknown) => {
     if (node.role !== 'AXRow' && node.role !== 'AXCell') return;
     const title = axRowTitleFromCells(node.title, node.value, readCellTexts(element));
-    if (title) node.title = title;
+    if (title) {
+      node.title = title;
+      node.titleFromChildren = true;
+    }
   };
   const yieldTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
   const walk = async (

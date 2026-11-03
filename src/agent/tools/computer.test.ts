@@ -68,6 +68,14 @@ describe('ComputerInvoker', () => {
 });
 
 describe('createComputerTool', () => {
+  it('指引要求身份改变后重新观察，而不是宣称新快照作废全部旧 ref', () => {
+    const tool = createComputerTool(new ComputerInvoker(identity, vi.fn()));
+    const guidelines = tool.promptGuidelines?.join('\n') ?? '';
+    expect(guidelines).toContain('refs of unchanged elements stay the same across calls');
+    expect(guidelines).toMatch(/observed ref.*identity.*changes.*re-run ax\(\)\/find\(\)/iu);
+    expect(guidelines).not.toContain('New ax() invalidates older refs');
+  });
+
   it('schema 声明完整类型，缺 code 不发请求', async () => {
     const emit = vi.fn();
     const tool = createComputerTool(new ComputerInvoker(identity, emit));

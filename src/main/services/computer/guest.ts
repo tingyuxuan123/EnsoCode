@@ -1,7 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { formatAxTree, formatAxTreeDiff } from '@shared/computer/axTree';
-import { ReadOnlyError } from '@shared/computer/errors';
+import {
+  type AxFingerprint,
+  type AxTreeNode,
+  axFingerprint,
+  axFingerprintMatches,
+  formatAxTree,
+  formatAxTreeDiff,
+} from '@shared/computer/axTree';
+import { ReadOnlyError, StaleRefError } from '@shared/computer/errors';
 import { type CaptureFrame, mapScreenshotPoint, pixelFingerprint } from '@shared/computer/frame';
 import { COORDINATE_SAFE_MAX_HEIGHT, COORDINATE_SAFE_MAX_WIDTH } from '@shared/computer/params';
 import { isReadOnlyAllowed } from '@shared/computer/readOnly';
@@ -9,7 +16,7 @@ import type { ComputerRunResult, ComputerScreenshot } from '@shared/computer/typ
 import { JSException, type JSValueHandle, QuickJS } from 'quickjs-wasi';
 import { describeAxOutcome, describeAxWorkerExited } from './axStatus';
 import { AX_WORKER_EXITED } from './axWorkerClient';
-import type { DesktopBackend, InputGuard, PointerOptions } from './backend';
+import type { AxClickVerification, DesktopBackend, InputGuard, PointerOptions } from './backend';
 import { cropPngAround } from './clickCrop';
 import { hiddenBehindOthers } from './coverage';
 import { resolveMacKey } from './macKey';
@@ -42,6 +49,8 @@ export interface ComputerGuestSession {
   host?: GuestHostBridge;
   clock?: GuestClock;
   lastAx?: Map<string, string>;
+  /** 此会话见过的 ref 身份；与是否保留 guest VM 无关。 */
+  axSeen?: Map<string, AxFingerprint>;
   /** 被中止的 run 可能留下仍在执行的宿主调用；下一次 run 先等它落地 */
   inflight?: Promise<unknown>;
 }
@@ -297,6 +306,7 @@ const ABORTED_MESSAGE = 'Computer action aborted';
 /** 单次 run 回给模型的截图与文本上限：控制上下文与跨进程/配对帧体积 */
 export const COMPUTER_MAX_SCREENSHOTS_PER_RUN = 4;
 const MAX_RESULT_TEXT_CHARS = 32_000;
+const AX_SEEN_LIMIT = 4000;
 /** 送达前先确认没有 Touch ID / 密码授权框：这些输入不可撤回 */
 const INPUT_METHODS = new Set([
   'click',
@@ -469,13 +479,46 @@ export async function runComputerGuest(input: {
       input.occupancy?.endSynthetic();
     }
   };
+  const rememberAx = (nodes: (AxTreeNode | null)[], presented?: Set<string>) => {
+    if (signal.aborted) throw abortError(signal);
+    session.axSeen ??= new Map();
+    const seen = session.axSeen;
+    const visit = (node: AxTreeNode | null) => {
+      if (!node) return;
+      if (node.ref && (!presented || presented.has(node.ref))) {
+        seen.delete(node.ref);
+        seen.set(node.ref, axFingerprint(node));
+      }
+      if (presented) node.children?.forEach(visit);
+    };
+    nodes.forEach(visit);
+    for (const ref of seen.keys()) {
+      if (seen.size <= AX_SEEN_LIMIT) break;
+      seen.delete(ref);
+    }
+  };
+  const checkAxNode = (ref: string, observed: AxFingerprint, node: AxTreeNode) => {
+    if (signal.aborted) throw abortError(signal);
+    if (node.ref !== ref || !axFingerprintMatches(observed, node)) {
+      throw new StaleRefError(ref, 'now points to a different element');
+    }
+  };
+  const verifyActionRef = async (ref: string): Promise<AxClickVerification> => {
+    if (signal.aborted) throw abortError(signal);
+    const observed = session.axSeen?.get(ref);
+    if (!observed) throw new StaleRefError(ref, 'has no recent observation');
+    const check = (node: AxTreeNode) => checkAxNode(ref, observed, node);
+    const node = await input.backend.axNode(ref);
+    check(node);
+    return { node, check };
+  };
   /**
    * 后台只交给后端（不接管桌面）；前台接管时键鼠落在最前面的窗口上：
    * 先把目标提上来并确认，否则宁可失败也不打进用户正在用的 App。
    */
   const deliver = async <T>(
     raw: unknown,
-    fn: (opts: PointerOptions) => Promise<T>,
+    fn: (opts: PointerOptions, verification?: AxClickVerification) => Promise<T>,
     target?: string,
     keys?: readonly string[],
     point?: { x: number; y: number },
@@ -490,11 +533,13 @@ export async function runComputerGuest(input: {
     });
     if (guard) opts.guard = guard;
     if (signal.aborted) throw abortError(signal);
+    let verification = ref ? await verifyActionRef(ref) : undefined;
     if (opts.delivery === 'background') {
-      return { delivery: 'background', outcome: await fn(opts) };
+      return { delivery: 'background', outcome: await fn(opts, verification) };
     }
     let outcome: T | undefined;
     await withSynthetic(async () => {
+      let raised = false;
       if (target && target !== 'desktop') {
         const front = async () =>
           (await input.backend.windows()).find((item) => item.id === target)?.focused === true;
@@ -502,11 +547,13 @@ export async function runComputerGuest(input: {
           await input.backend.raise(target, guard || undefined);
           await settle();
           if (!(await front())) throw new Error(NOT_FRONT_MESSAGE(target));
+          raised = true;
         }
       }
       if (signal.aborted) throw abortError(signal);
       await guard?.check();
-      outcome = await fn(opts);
+      if (ref && raised) verification = await verifyActionRef(ref);
+      outcome = await fn(opts, verification);
     }, keys);
     return { delivery: 'foreground', outcome };
   };
@@ -920,8 +967,14 @@ export async function runComputerGuest(input: {
             const disableDiff = args.diff !== true;
             session.lastAx ??= new Map();
             const prev = session.lastAx.get(target);
+            const result = !disableDiff && prev ? formatAxTreeDiff(prev, text) : text;
+            // 仅记实际呈现的行。diff 会忽略仅 ref 变化；删除行、折叠包装层和省略行都不更新身份。
+            const presented = new Set(
+              Array.from(result.matchAll(/^(?:\+ )? *\S+ \[ref=(e\d+)\](?= |$)/gmu), (m) => m[1])
+            );
+            rememberAx(nodes, presented);
             session.lastAx.set(target, text);
-            return !disableDiff && prev ? formatAxTreeDiff(prev, text) : text;
+            return result;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             const name = error instanceof Error ? error.name : '';
@@ -948,20 +1001,36 @@ export async function runComputerGuest(input: {
             throw error;
           }
         }
-        case 'find':
-          return input.backend.axQuery(String(args.target ?? ''), {
+        case 'find': {
+          const found = await input.backend.axQuery(String(args.target ?? ''), {
             role: typeof args.role === 'string' ? args.role : undefined,
             title: typeof args.title === 'string' ? args.title : undefined,
             value: typeof args.value === 'string' ? args.value : undefined,
             description: typeof args.description === 'string' ? args.description : undefined,
             limit: typeof args.limit === 'number' ? args.limit : undefined,
           });
-        case 'ref':
-          return input.backend.axNode(String(args.ref ?? ''));
-        case 'elementAt':
-          return input.backend.axElementAt(Number(args.x), Number(args.y));
-        case 'focusedElement':
-          return input.backend.axFocused();
+          rememberAx(found);
+          return found;
+        }
+        case 'ref': {
+          const ref = String(args.ref ?? '');
+          const node = await input.backend.axNode(ref);
+          const observed = session.axSeen?.get(ref);
+          // 解析已知编号不算重新观察，不能把被复用的旧 ref 悄悄绑定给新元素。
+          if (observed) checkAxNode(ref, observed, node);
+          rememberAx([node]);
+          return node;
+        }
+        case 'elementAt': {
+          const node = await input.backend.axElementAt(Number(args.x), Number(args.y));
+          rememberAx([node]);
+          return node;
+        }
+        case 'focusedElement': {
+          const node = await input.backend.axFocused();
+          rememberAx([node]);
+          return node;
+        }
         case 'axBounds':
           return (await input.backend.axNode(String(args.ref ?? ''))).bounds ?? null;
         case 'axAttributes':
@@ -970,33 +1039,37 @@ export async function runComputerGuest(input: {
           const node = await input.backend.axNode(String(args.ref ?? ''));
           return node.actions ?? [];
         }
-        case 'axChildren':
-          return input.backend.axChildren(String(args.ref ?? ''));
-        case 'axParent':
-          return input.backend.axParent(String(args.ref ?? ''));
+        case 'axChildren': {
+          const nodes = await input.backend.axChildren(String(args.ref ?? ''));
+          rememberAx(nodes);
+          return nodes;
+        }
+        case 'axParent': {
+          const node = await input.backend.axParent(String(args.ref ?? ''));
+          rememberAx([node]);
+          return node;
+        }
         case 'axPerform': {
-          const guard = await accessRef(String(args.ref ?? ''));
-          await input.backend.axPerform(
-            String(args.ref ?? ''),
-            String(args.action ?? 'press'),
-            guard || undefined
-          );
+          const ref = String(args.ref ?? '');
+          const guard = await accessRef(ref);
+          await verifyActionRef(ref);
+          await input.backend.axPerform(ref, String(args.action ?? 'press'), guard || undefined);
           await settle();
           return { ok: true };
         }
         case 'axSetValue': {
-          const guard = await accessRef(String(args.ref ?? ''));
-          await input.backend.axSetValue(
-            String(args.ref ?? ''),
-            String(args.value ?? ''),
-            guard || undefined
-          );
+          const ref = String(args.ref ?? '');
+          const guard = await accessRef(ref);
+          await verifyActionRef(ref);
+          await input.backend.axSetValue(ref, String(args.value ?? ''), guard || undefined);
           await settle();
           return { ok: true };
         }
         case 'axFocus': {
-          const guard = await accessRef(String(args.ref ?? ''));
-          await input.backend.axFocus(String(args.ref ?? ''), guard || undefined);
+          const ref = String(args.ref ?? '');
+          const guard = await accessRef(ref);
+          await verifyActionRef(ref);
+          await input.backend.axFocus(ref, guard || undefined);
           await settle();
           return { ok: true };
         }
@@ -1004,7 +1077,7 @@ export async function runComputerGuest(input: {
           const ref = String(args.ref ?? '');
           await deliver(
             args,
-            (opts) => input.backend.axClick(ref, opts),
+            (opts, verification) => input.backend.axClick(ref, opts, verification),
             input.backend.targetForRef?.(ref),
             undefined,
             undefined,

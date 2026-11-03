@@ -21,6 +21,7 @@ import { withAxErrors } from './axErrors';
 import { axPressFallbackMessage, isAxPressUnsupported } from './axJob';
 import { AX_SNAPSHOT_DEFAULT_DEPTH } from './axWalkBudget';
 import type {
+  AxClickVerification,
   CaptureBytes,
   ClickOutcome,
   DesktopBackend,
@@ -858,8 +859,8 @@ export class MacosDesktopBackend implements DesktopBackend {
   }
 
   /** press 不被支持时退回控件中心点的点击，投递方式沿用调用方（缺省后台） */
-  async axClick(ref: string, opts?: PointerOptions) {
-    let node = await this.axNode(ref);
+  async axClick(ref: string, opts?: PointerOptions, verification?: AxClickVerification) {
+    let node = verification?.node ?? (await this.axNode(ref));
     if (axClickPath(node) === 'axPress') {
       try {
         await this.axPerform(ref, 'press', opts?.guard);
@@ -868,6 +869,7 @@ export class MacosDesktopBackend implements DesktopBackend {
         if (!isAxPressUnsupported(error)) throw error;
       }
       node = await this.axNode(ref);
+      verification?.check(node);
     }
     const bounds = node.bounds;
     if (!bounds || bounds.width <= 0 || bounds.height <= 0) {

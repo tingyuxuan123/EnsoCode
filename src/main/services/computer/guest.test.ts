@@ -1,7 +1,9 @@
+import type { AxTreeNode } from '@shared/computer/axTree';
 import { describe, expect, it } from 'vitest';
 import { withAxErrors } from './axErrors';
+import { axFillEmptyRowTitle } from './axWalkBudget';
 import { AX_WORKER_EXITED } from './axWorkerClient';
-import type { PointerOptions } from './backend';
+import type { DesktopBackend, PointerOptions } from './backend';
 import { FakeDesktopBackend } from './fakeBackend';
 import {
   COMPUTER_MAX_SCREENSHOTS_PER_RUN,
@@ -457,6 +459,192 @@ describe('runComputerGuest', () => {
       return hits[0]?.title;
     `);
     expect(result.returnValue).toBe('浅色');
+  });
+});
+
+describe('AX ref 防误操作', () => {
+  function fixture() {
+    // 原生虚拟列表可把同一个有效句柄重新绑定到别的内容，不是 registry 过期。
+    const node: AxTreeNode = { ref: 'e1', role: 'AXButton', title: '保存', description: '原操作' };
+    const parent: AxTreeNode = { ref: 'e2', role: 'AXWindow', title: '列表', children: [node] };
+    const backend: DesktopBackend = new FakeDesktopBackend();
+    const effects: string[] = [];
+    backend.axSnapshot = async () => [parent];
+    backend.axQuery = async () => [node];
+    backend.axNode = async (ref) => (ref === parent.ref ? parent : node);
+    backend.axChildren = async () => [node];
+    backend.axParent = async () => node;
+    backend.axElementAt = async () => node;
+    backend.axFocused = async () => node;
+    backend.targetForRef = () => 'w1';
+    backend.axClick = async () => {
+      effects.push(`click:${node.title}`);
+    };
+    backend.axPerform = async () => {
+      effects.push(`perform:${node.title}`);
+    };
+    backend.axFocus = async () => {
+      effects.push(`focus:${node.title}`);
+    };
+    backend.axSetValue = async () => {
+      effects.push(`setValue:${node.title}`);
+    };
+    const session = createComputerGuestSession();
+    const once = (code: string, options: Partial<Parameters<typeof runComputerGuest>[0]> = {}) =>
+      runComputerGuest({
+        code: `const w = await desktop.window('w1'); ${code}`,
+        readOnly: false,
+        timeoutMs: 10_000,
+        backend,
+        session,
+        settleMs: 0,
+        ...options,
+      });
+    return { node, parent, backend, effects, once };
+  }
+
+  it('拒绝只读树里取得的旧 ref，重新观察后才点新控件', async () => {
+    const { node, effects, once } = fixture();
+    const first = await once('return await w.ax()', { readOnly: true });
+    const ref = /\[ref=(e\d+)\] title="保存"/u.exec(String(first.returnValue))?.[1];
+    expect(ref).toBe('e1');
+
+    node.title = '删除';
+    const click = `await (await w.ref('${ref}')).click()`;
+    await expect(once(click)).rejects.toThrow(/StaleRef.*re-run ax\(\)\/find\(\)/u);
+    expect(effects).toEqual([]);
+
+    await expect(once('return await w.ax()')).resolves.toMatchObject({
+      returnValue: expect.stringContaining('[ref=e1] title="删除"'),
+    });
+    await once(click);
+    expect(effects).toEqual(['click:删除']);
+  });
+
+  it.each([
+    ['(await w.find({ title: "保存" }))[0]', 'el.press()', 'perform', 'description'],
+    ['(await (await w.ref("e2")).children())[0]', 'el.perform("showMenu")', 'perform', 'role'],
+    ['await desktop.elementAt(20, 20)', 'el.focus()', 'focus', 'title'],
+    ['await desktop.focusedElement()', 'el.setValue("v")', 'setValue', 'title'],
+    [
+      'await (await w.ref("e2")).parent()',
+      'el.click({ delivery: "foreground" })',
+      'click',
+      'title',
+    ],
+    ['await w.ref("e1")', 'el.click()', 'click', 'title'],
+  ] as const)('从 %s 观察后在 %s 投递前核对身份', async (observe, action, method, field) => {
+    const { node, effects, once } = fixture();
+    const code = `const el = ${observe}; try { await ${action}; return 'sent'; } catch (e) { return e.name; }`;
+    const result = await once(code, {
+      // 模拟等待审批/租约期间变化；验证不能放在这个异步边界之前。
+      access: async () => ({
+        check: async () => {
+          node[field] = '另一控件';
+        },
+      }),
+    });
+    expect({ result: result.returnValue, effects }).toEqual({ result: 'StaleRef', effects: [] });
+    await once('await w.ax()');
+    await expect(once(code)).resolves.toMatchObject({ returnValue: 'sent' });
+    expect(effects).toEqual([`${method}:${node.title}`]);
+  });
+
+  it('focus/value 变化与 children 扩展观察不会作废同一 ref', async () => {
+    const { node, effects, once } = fixture();
+    await once('await w.ax(); await (await w.ref("e2")).children();');
+    node.value = '当前编辑内容';
+    node.focused = true;
+    await once(
+      'const el = await w.ref("e1"); await el.focus(); await el.setValue("新内容"); await el.press();'
+    );
+    expect(effects).toEqual(['focus:保存', 'setValue:保存', 'perform:保存']);
+  });
+
+  it.each(['AXRow', 'AXCell'])('%s 的快照合成标题不要求出现在原生节点上', async (role) => {
+    const { node, parent, effects, once } = fixture();
+    node.role = role;
+    node.title = undefined;
+    node.description = undefined;
+    const synthesized: AxTreeNode = {
+      ...node,
+      children: [{ ref: 'e3', role: 'AXStaticText', value: '从子节点拼成的标题' }],
+    };
+    axFillEmptyRowTitle(synthesized);
+    parent.children = [synthesized];
+    await expect(once('return await w.ax()')).resolves.toMatchObject({
+      returnValue: expect.stringContaining('title="从子节点拼成的标题"'),
+    });
+    await once('await (await w.ref("e1")).click()');
+    expect(effects).toEqual(['click:undefined']);
+
+    node.description = '另一行';
+    await expect(once('await (await w.ref("e1")).click()')).rejects.toThrow(/StaleRef/u);
+    expect(effects).toEqual(['click:undefined']);
+  });
+
+  it('不是合成标题的原生标题消失也拒绝旧 ref', async () => {
+    const { node, effects, once } = fixture();
+    node.role = 'AXRow';
+    await once('await w.ax()');
+    node.title = undefined;
+    await expect(once('await (await w.ref("e1")).click()')).rejects.toThrow(/StaleRef/u);
+    expect(effects).toEqual([]);
+  });
+
+  it('diff 隐去 ref 的互换时不会无声接受被复用的旧 ref', async () => {
+    const { node, parent, effects, once } = fixture();
+    const other: AxTreeNode = { ...node, ref: 'e3', title: '删除' };
+    parent.children?.push(other);
+    await once('await w.ax()');
+    [node.title, other.title] = [other.title, node.title];
+    parent.children = [other, node];
+    await expect(once('return await w.ax({ diff: true })')).resolves.toMatchObject({
+      returnValue: '(ax unchanged)',
+    });
+    await expect(once('await (await w.ref("e1")).click()')).rejects.toThrow(/StaleRef/u);
+    expect(effects).toEqual([]);
+  });
+
+  it.each(['protected', 'denied'] as const)('%s 阻断时不查询动作身份，也不投递', async (stop) => {
+    const { backend, effects, once } = fixture();
+    if (stop === 'protected') {
+      const [window] = await backend.windows();
+      backend.windows = async () => [
+        { ...window, title: 'System Settings is trying to modify system settings' },
+      ];
+    }
+    backend.axNode = async () => {
+      throw new Error('live lookup should not happen');
+    };
+    await expect(
+      once('const [el] = await w.find({ title: "保存" }); await el.press();', {
+        access: async () => {
+          throw new Error('App access denied');
+        },
+      })
+    ).rejects.toThrow(stop === 'protected' ? /Touch ID, a password/u : /App access denied/u);
+    expect(effects).toEqual([]);
+  });
+
+  it('原生核验挂起期间中止，迟到的结果不能投递', async () => {
+    const { node, backend, effects, once } = fixture();
+    const controller = new AbortController();
+    const readNode = backend.axNode;
+    const result = await once('const [el] = await w.find({ title: "保存" }); await el.press()', {
+      signal: controller.signal,
+      access: async () => {
+        backend.axNode = async () => {
+          controller.abort();
+          return node;
+        };
+      },
+    }).catch((error: unknown) => error);
+    backend.axNode = readNode;
+    await expect(once('return 1')).resolves.toMatchObject({ returnValue: 1 });
+    expect(result).toBeInstanceOf(Error);
+    expect(String(result)).toMatch(/aborted/u);
+    expect(effects).toEqual([]);
   });
 });
 

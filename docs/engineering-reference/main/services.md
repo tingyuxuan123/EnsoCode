@@ -106,6 +106,11 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 - 应用授权（一次 / 本次会话 / 永远）由 Main 独立询问，与工具审批无关；受保护底线与 assistant
   代审都不能替代它。画中画只显示被操作窗口，点击指针画进画中画，不覆盖用户正在用的应用；
   一轮结束后延时收起，用户关闭过的窗口本轮不再弹。
+- 内置 `computer` 对实际呈现的 AX 引用记录 role/title/description；动作在原授权与 guard 后复核，
+  身份变化则拒绝并要求重新 `ax()/find()`。diff 省略的行和旧 ref 解析不能悄悄更新身份，
+  AXPress 失败转坐标前仍需核对；value/focus/selection、合成行标题不作身份。
+  这不是原子核验与投递，字段完全相同的元素复用仍有盲区；外部 LCU 扩展不受此实现保护。
+  回归：`computer/guest.test.ts`、`computer/backgroundSafety.test.ts`、`shared/computer/axTree.test.ts`。
 
 **原生插件**（`services/extensionPlugins/`、`pluginHost/`、`renderer/plugins/`、[plugins.md](../../plugins.md)）
 - 安装只复制到 `userData/extension-plugins`，不引用源目录；zip/URL 下载校验公网地址、重定向、

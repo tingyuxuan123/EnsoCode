@@ -16,7 +16,7 @@ import {
 import { withAxErrors } from './axErrors';
 import { axPressFallbackMessage, isAxPressUnsupported } from './axJob';
 import { AX_SNAPSHOT_DEFAULT_DEPTH } from './axWalkBudget';
-import type { CaptureBytes, DesktopBackend, PointerOptions } from './backend';
+import type { AxClickVerification, CaptureBytes, DesktopBackend, PointerOptions } from './backend';
 import { loadWin32Native, type Win32Native } from './win32Native';
 import { findCapturerWindowSource, thumbnailCropForWindow } from './windowSource';
 import { resolveWinLaunch, resolveWinSettingsPane } from './winLaunch';
@@ -356,12 +356,13 @@ export class WindowsDesktopBackend implements DesktopBackend {
     await withAxErrors(() => native.axFocus(handle), ref);
   }
 
-  async axClick(ref: string) {
+  async axClick(ref: string, _opts?: PointerOptions, verification?: AxClickVerification) {
     try {
       await this.axPerform(ref, 'press');
     } catch (error) {
       if (!isAxPressUnsupported(error)) throw error;
       const node = await this.axNode(ref);
+      verification?.check(node);
       const bounds = node.bounds;
       if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
         throw new Error(axPressFallbackMessage(node.role, ref));
