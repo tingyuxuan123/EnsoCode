@@ -1,15 +1,18 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { DesignResult } from '@shared/types/design';
+import type { DesignCanvasPresence, DesignResult } from '@shared/types/design';
 import { IPC_CHANNELS } from '@shared/types/ipc';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { setDesignCanvasCwds } from '../services/agentHost';
 import { DesignCaptureService } from '../services/design/capture';
 import { DesignEngineService } from '../services/design/engine';
 import { failure } from '../services/design/errors';
 import { designFs, designSaveAs } from '../services/design/fs';
 import { getDesignPaths, getDesignToolBroker } from '../services/design/index';
 import { requestNetwork } from '../services/design/network';
+import { EnginePidRegistry } from '../services/design/orphans';
 import {
+  parseCanvasPresence,
   parseCapture,
   parseEngine,
   parseFs,
@@ -57,10 +60,27 @@ export function createDesignHandlers(deps: {
   scripts: DesignScriptService;
   watch: DesignWatchService;
   storage: DesignStorage;
+  projectRoot(sessionId: string): string | null | Promise<string | null>;
+  canvasCwds(cwds: string[]): void;
 }) {
   const attached = new Set<number>();
+  const canvases = new Map<number, DesignCanvasPresence & { cwd?: string }>();
+  let lastCwds = '[]';
+  const publish = () => {
+    const cwds = [
+      ...new Set(
+        [...canvases.values()].flatMap((entry) => (entry.open && entry.cwd ? [entry.cwd] : []))
+      ),
+    ].sort();
+    const key = JSON.stringify(cwds);
+    if (key === lastCwds) return;
+    lastCwds = key;
+    deps.canvasCwds(cwds);
+  };
   const release = (owner: number) => {
     attached.delete(owner);
+    canvases.delete(owner);
+    publish();
     getDesignToolBroker().releaseOwner(owner);
     deps.engine.releaseOwner(owner);
     deps.watch.releaseOwner(owner);
@@ -87,6 +107,20 @@ export function createDesignHandlers(deps: {
       }
     };
   return {
+    canvasPresence: guard(async (event, raw) => {
+      const request = parseCanvasPresence(raw);
+      if (!request) return invalid();
+      const entry: DesignCanvasPresence & { cwd?: string } = { ...request };
+      canvases.set(event.sender.id, entry);
+      if (entry.open && entry.sessionId) {
+        const cwd = await deps.projectRoot(entry.sessionId);
+        if (canvases.get(event.sender.id) !== entry || event.sender.isDestroyed())
+          return { ok: true };
+        if (cwd) entry.cwd = cwd;
+      }
+      publish();
+      return { ok: true };
+    }),
     resolveRoot: guard(async (_event, raw) => {
       const ref = parseRoot(raw);
       return ref ? { ok: true, root: await resolveDesignRoot(ref) } : invalid();
@@ -152,6 +186,8 @@ export function createDesignHandlers(deps: {
 }
 
 export function registerDesignHandlers(): void {
+  // This is eager even though design handlers/services are lazy: clean previous crashes on startup.
+  new EnginePidRegistry(getDesignPaths().engineBase).cleanup();
   const expected =
     !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? `${process.env.ELECTRON_RENDERER_URL}/index.html`
@@ -189,6 +225,8 @@ export function registerDesignHandlers(): void {
       scripts,
       watch,
       storage: new DesignStorage(getDesignPaths().storageDir),
+      projectRoot: async (sessionId) => (await import('./agent')).pluginProjectRoot(sessionId),
+      canvasCwds: setDesignCanvasCwds,
     });
     dispose = () => {
       getDesignToolBroker().dispose();
@@ -214,6 +252,7 @@ export function registerDesignHandlers(): void {
     [IPC_CHANNELS.DESIGN_SHELL, 'shell'],
     [IPC_CHANNELS.DESIGN_RUNTIME_REGISTER, 'registerRuntime'],
     [IPC_CHANNELS.DESIGN_TOOL_RESPONSE, 'toolResponse'],
+    [IPC_CHANNELS.DESIGN_CANVAS_PRESENCE, 'canvasPresence'],
   ];
   for (const [channel, key] of channels)
     ipcMain.handle(channel, async (event, raw: unknown) => {

@@ -1,4 +1,5 @@
 import type {
+  DesignCanvasPresence,
   DesignCaptureRequest,
   DesignEngineRequest,
   DesignFsRequest,
@@ -27,6 +28,14 @@ const integer = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
 const keys = (v: Record<string, unknown>, allowed: string[]): boolean =>
   Object.keys(v).every((k) => allowed.includes(k));
+export function parseCanvasPresence(v: unknown): DesignCanvasPresence | null {
+  return record(v) &&
+    keys(v, ['sessionId', 'open']) &&
+    (v.sessionId === null || (token(v.sessionId) && v.sessionId.trim().length > 0)) &&
+    typeof v.open === 'boolean'
+    ? { sessionId: v.sessionId, open: v.open }
+    : null;
+}
 export function parseRoot(v: unknown): DesignRootRef | null {
   if (!record(v)) return null;
   if (v.kind === 'session' && token(v.sessionId) && keys(v, ['kind', 'sessionId']))

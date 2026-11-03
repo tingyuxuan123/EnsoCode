@@ -34,6 +34,43 @@ const DISPATCH_ID = '66666666-6666-4666-8666-666666666666';
 const parent = { sessionId: 'conversation-1', generation: PARENT_GENERATION } as const;
 
 describe('design tool transport', () => {
+  it('canvas 命令严格校验完整 cwd 字符串集合及字段', () => {
+    for (const cwds of [[], ['/project/a', '/project/b'], ['C:\\project']]) {
+      const command = { type: 'design-canvas', cwds };
+      expect(parseAgentCommand(command)).toEqual(command);
+    }
+    for (const command of [
+      { type: 'design-canvas' },
+      { type: 'design-canvas', cwds: '/project' },
+      { type: 'design-canvas', cwds: [null] },
+      { type: 'design-canvas', cwds: [''] },
+      { type: 'design-canvas', cwds: ['   '] },
+      { type: 'design-canvas', cwds: ['relative/project'] },
+      { type: 'design-canvas', cwds: new Array(1) },
+      { type: 'design-canvas', cwds: ['/a\0b'] },
+      { type: 'design-canvas', cwds: ['/a', '/a'] },
+      { type: 'design-canvas', cwds: [], cwd: '/evil' },
+    ])
+      expect(parseAgentCommand(command)).toBeNull();
+  });
+  it('设计卡片的 worker 投影协议不允许非设计工具或夹带额外字段', () => {
+    const card = { type: 'screenshot', key: 'a', title: 'A', payload: { frameId: 'home' } };
+    const message = {
+      role: 'toolResult',
+      toolName: 'vetd_screenshot',
+      content: [],
+      designCards: [card],
+    };
+    const event = { type: 'message-upsert', identity: parent, seq: 1, index: 0, message };
+    expect(parseAgentWorkerEvent(event)).toEqual(event);
+    for (const bad of [
+      { ...message, toolName: 'read' },
+      { ...message, role: 'user' },
+      { ...message, designCards: [{ ...card, secret: true }] },
+      { ...message, designCards: [{ ...card, payload: [] }] },
+    ])
+      expect(parseAgentWorkerEvent({ ...event, message: bad })).toBeNull();
+  });
   const invoke = {
     type: 'design-invoke',
     identity: parent,

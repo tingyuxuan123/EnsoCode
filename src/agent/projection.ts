@@ -5,6 +5,7 @@ import {
   type ProjectedCodemodeCall,
   type ProjectedMessage,
   type ProjectedPart,
+  projectDesignCards,
   type TodoItem,
 } from '@shared/types/agent';
 import {
@@ -201,6 +202,15 @@ export function projectMessage(value: unknown): ProjectedMessage | null {
   if (value.role === 'toolResult' && value.toolName === 'todo') {
     const todos = projectTodos(value.details);
     if (todos) projected.todos = todos;
+  }
+  if (
+    value.role === 'toolResult' &&
+    typeof value.toolName === 'string' &&
+    value.toolName.startsWith('vetd_') &&
+    isRecord(value.details)
+  ) {
+    const cards = projectDesignCards(value.details.cards);
+    if (cards) projected.designCards = cards;
   }
   if (value.role === 'toolResult' && value.toolName === 'edit') {
     const editDiff = projectEditDiff(value.details);

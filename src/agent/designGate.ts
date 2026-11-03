@@ -15,6 +15,7 @@ export function isDesignPath(rel: string): boolean {
 
 export class DesignPresence {
   private readonly cache = new Map<string, { value: Promise<boolean>; at: number }>();
+  private canvasCwds = new Set<string>();
   constructor(
     private readonly limits: {
       maxEntries?: number;
@@ -27,7 +28,12 @@ export class DesignPresence {
   created(cwd: string): void {
     this.cache.set(cwd, { value: Promise.resolve(true), at: this.now() });
   }
+  setCanvasCwds(cwds: readonly string[]): void {
+    this.canvasCwds = new Set(cwds);
+  }
   async has(cwd: string): Promise<boolean> {
+    // Upstream getCanvasController shortcut; closing a canvas does not create a positive disk cache.
+    if (this.canvasCwds.has(cwd)) return true;
     const cached = this.cache.get(cwd);
     if (cached) {
       const present = await cached.value;
@@ -72,8 +78,7 @@ export class DesignPresence {
 export const DESIGN_CREED =
   "Core principles — they outrank the style defaults; only the user's words outrank them (if the user asks for or clearly implies the opposite, follow the user and say in one line which one you broke): 1 one thing seen first · 2 space and alignment, not lines and boxes · 3 held objects with light, grain and an edge · 4 built from what only this product has · 5 real data, pictures and words · 6 one bold move, the rest quiet · 7 type with character and a real size step · 8 colour with a source.\nThen ask of the image: is one thing seen first? does the structure survive without lines? does the hero object look held? is it this product's, not the category's? is every number real? can you name the one bold move? do heading and body sound different? can you say where each colour comes from? Fix what fails, unless the user asked for it.";
 
-/** P1 known difference: worker cannot see getCanvasController(). P2 will report canvas
- * presence Renderer → Main → worker; until then only cwd discovery/create opens the gate. */
+/** Canvas presence is replayed by Main; otherwise discover/create decides tool visibility. */
 export function designGateExtension(options: {
   cwd: string;
   enabled(): boolean;

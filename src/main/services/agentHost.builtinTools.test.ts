@@ -46,6 +46,7 @@ import {
   forgetParentToolProfile,
   isBrowserSessionToolEnabled,
   pushBuiltinTools,
+  setDesignCanvasCwds,
   spawnSession,
   startAgentWorker,
   stopAgentWorker,
@@ -57,6 +58,7 @@ const request = { sessionId: identity.sessionId, cwd: '/tmp', providerId: 'p', m
 beforeEach(() => {
   setNativePluginResources(undefined);
   stopAgentWorker();
+  setDesignCanvasCwds([]);
   settings.state = {
     disabledBuiltinTools: ['browser', 'memory', 'computer', 'code_search'],
     providers: [
@@ -71,6 +73,26 @@ beforeEach(() => {
       },
     ],
   };
+});
+
+it('画布 cwd 在 worker 缺席时保留，ready 先重推；重启后相同集合也重推', () => {
+  setDesignCanvasCwds(['/project/b', '/project/a', '/project/a']);
+  startAgentWorker();
+  const first = workers.at(-1)!;
+  expect(first.posted.filter((c) => c.type === 'design-canvas')).toEqual([]);
+  first.emit('spawn');
+  expect(first.posted[0]).toEqual({ type: 'design-canvas', cwds: ['/project/a', '/project/b'] });
+  const before = first.posted.length;
+  setDesignCanvasCwds(['/project/a', '/project/b']);
+  expect(first.posted).toHaveLength(before);
+  stopAgentWorker();
+  startAgentWorker();
+  const second = workers.at(-1)!;
+  second.emit('spawn');
+  expect(second.posted[0]).toEqual(first.posted[0]);
+  setDesignCanvasCwds([]);
+  expect(second.posted.at(-1)).toEqual({ type: 'design-canvas', cwds: [] });
+  stopAgentWorker();
 });
 
 it('插件资源只给本机普通父会话，插件预设附角色和指令，失效预设拒绝', () => {

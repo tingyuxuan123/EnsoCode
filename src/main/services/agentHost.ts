@@ -297,6 +297,17 @@ let designSettingsListener: (() => void) | undefined;
 export function setDesignSettingsListener(listener: () => void): void {
   designSettingsListener = listener;
 }
+let designCanvasCwds: string[] = [];
+export function setDesignCanvasCwds(cwds: readonly string[]): void {
+  const next = [...new Set(cwds)].sort();
+  if (JSON.stringify(next) === JSON.stringify(designCanvasCwds)) return;
+  designCanvasCwds = next;
+  pushDesignCanvasCwds();
+}
+function pushDesignCanvasCwds(): void {
+  if (worker && workerReady)
+    worker.postMessage({ type: 'design-canvas', cwds: designCanvasCwds } satisfies AgentCommand);
+}
 
 export function isBrowserSessionToolEnabled(identity: SessionIdentity): boolean {
   const policy = browserSessionTools.get(identity.sessionId);
@@ -351,6 +362,8 @@ export function startAgentWorker(): void {
 
   child.once('spawn', () => {
     workerReady = true;
+    // Canvas state predates the worker and must precede queued session/prompt commands.
+    pushDesignCanvasCwds();
     // fork 前 ProxyConfig 的 set-proxy-env 因 worker 不存在被丢；spawn 后按 main 当前 env 补发一次
     child.postMessage({
       type: 'set-proxy-env',

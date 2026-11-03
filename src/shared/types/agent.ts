@@ -58,6 +58,7 @@ import {
   type WebSearchChainEntry,
 } from '../webSearchChain';
 import { WINDOWS_LOCAL_SHELLS, type WindowsLocalShell } from '../windowsLocalShell';
+import { isAbsolutePathLike } from '../worktreeRoot';
 import { type DesignToolName, isDesignToolName } from './design';
 import { type EditMode, isEditMode } from './editMode';
 import {
@@ -1439,7 +1440,8 @@ export type AgentCommand =
     }
   | { type: 'plugin-mcp-cancel'; identity: SessionIdentity; requestId: string }
   /** 运行中同步代理 env；null 表示删除该键 */
-  | { type: 'set-proxy-env'; env: Record<string, string | null> };
+  | { type: 'set-proxy-env'; env: Record<string, string | null> }
+  | { type: 'design-canvas'; cwds: string[] };
 
 /** 随消息附带的图片（base64）。id 只活在编辑器，发给 agent 前剥掉。 */
 export interface AttachedImage {
@@ -1505,6 +1507,60 @@ export interface ProjectedCodemodeCall {
   summary?: string;
 }
 
+export interface ProjectedDesignCard {
+  type: string;
+  key: string;
+  title: string;
+  payload: unknown;
+}
+
+/** Design cards carry small JSON references, never inline images or arbitrary runtime objects. */
+export function projectDesignCards(raw: unknown): ProjectedDesignCard[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const bounded = (value: unknown): value is string =>
+    typeof value === 'string' && value.trim().length > 0 && value.length <= 512;
+  const cards: ProjectedDesignCard[] = [];
+  for (const item of raw) {
+    if (cards.length === 32) break;
+    try {
+      if (
+        !isRecord(item) ||
+        !bounded(item.type) ||
+        !bounded(item.key) ||
+        !bounded(item.title) ||
+        !isRecord(item.payload)
+      )
+        continue;
+      let budget = 8192;
+      const ancestors = new Set<object>();
+      const jsonValue = (value: unknown, depth = 0): boolean => {
+        if (--budget < 0 || depth > 32) return false;
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+        if (typeof value === 'number') return Number.isFinite(value);
+        if (!value || typeof value !== 'object' || ancestors.has(value)) return false;
+        if (
+          !Array.isArray(value) &&
+          ![Object.prototype, null].includes(Object.getPrototypeOf(value))
+        )
+          return false;
+        ancestors.add(value);
+        const valid = Object.values(Object.getOwnPropertyDescriptors(value)).every(
+          (descriptor) => 'value' in descriptor && jsonValue(descriptor.value, depth + 1)
+        );
+        ancestors.delete(value);
+        return valid;
+      };
+      if (!jsonValue(item.payload)) continue;
+      const json = JSON.stringify(item.payload);
+      if (new TextEncoder().encode(json).length > 4096) continue;
+      cards.push({ type: item.type, key: item.key, title: item.title, payload: JSON.parse(json) });
+    } catch {
+      /* Invalid entry does not discard the tool result or other cards. */
+    }
+  }
+  return cards.length ? cards : undefined;
+}
+
 export interface ProjectedMessage {
   /** Persisted user entry identity, absent on unconfirmed messages. */
   entryId?: string;
@@ -1545,6 +1601,8 @@ export interface ProjectedMessage {
   applyPatchOutcome?: ProjectedApplyPatchOutcome;
   /** codemode toolResult 的嵌套调用摘要（details.calls） */
   codemodeCalls?: ProjectedCodemodeCall[];
+  /** vetd_* result details.cards, validated small JSON references. */
+  designCards?: ProjectedDesignCard[];
   /** compactionSummary 消息：压缩前的上下文 token 数 */
   tokensBefore?: number;
   /** 摘要来自 Enso compact hook，不是原生 summarizer */
@@ -2252,6 +2310,19 @@ function isProjectedCodemodeCalls(value: unknown): value is ProjectedCodemodeCal
 }
 
 function hasValidProjectedMetadata(value: Record<string, unknown>): boolean {
+  if (
+    value.designCards !== undefined &&
+    (value.role !== 'toolResult' ||
+      typeof value.toolName !== 'string' ||
+      !value.toolName.startsWith('vetd_') ||
+      !Array.isArray(value.designCards) ||
+      value.designCards.length > 32 ||
+      value.designCards.some(
+        (card) => !isRecord(card) || !hasExactKeys(card, ['type', 'key', 'title', 'payload'])
+      ) ||
+      (projectDesignCards(value.designCards)?.length ?? 0) !== value.designCards.length)
+  )
+    return false;
   if (value.approvalReview !== undefined && !parseApprovalReviewRecord(value.approvalReview))
     return false;
   if (value.rtk !== undefined && !parseRtkToolStats(value.rtk)) return false;
@@ -3160,6 +3231,22 @@ export function parseSessionSnapshot(value: unknown): SessionSnapshot | null {
 /** 收窄 Main → worker 命令。旧 global/builtin session shape 一律拒绝。 */
 export function parseAgentCommand(value: unknown): AgentCommand | null {
   if (!isRecord(value) || !isNonEmptyString(value.type)) return null;
+  if (value.type === 'design-canvas') {
+    if (
+      !hasExactKeys(value, ['type', 'cwds']) ||
+      !Array.isArray(value.cwds) ||
+      !Array.from(value.cwds).every(
+        (cwd) =>
+          typeof cwd === 'string' &&
+          cwd.trim().length > 0 &&
+          !cwd.includes('\0') &&
+          isAbsolutePathLike(cwd)
+      ) ||
+      new Set(value.cwds).size !== value.cwds.length
+    )
+      return null;
+    return { type: 'design-canvas', cwds: [...value.cwds] };
+  }
   if (value.type === 'oauth-pool-result') {
     return hasOnlyKeys(value, ['type', 'requestId', 'accountKey', 'selectionReceipt', 'error']) &&
       isNonEmptyString(value.requestId) &&

@@ -6,6 +6,20 @@ import { describe, expect, it } from 'vitest';
 import { DesignPresence, designToolNames, isDesignPath } from './designGate';
 
 describe('design gate', () => {
+  it('canvas cwd 集合即时开放 gate；替换/清空回退文件发现，不污染正缓存', async () => {
+    const presence = new DesignPresence({ maxEntries: 0 });
+    expect(await presence.has('/canvas-a')).toBe(false);
+    presence.setCanvasCwds(['/canvas-a']);
+    expect(await presence.has('/canvas-a')).toBe(true);
+    expect(await presence.has('/canvas-b')).toBe(false);
+    presence.setCanvasCwds(['/canvas-b']);
+    expect(await presence.has('/canvas-a')).toBe(false);
+    expect(await presence.has('/canvas-b')).toBe(true);
+    presence.created('/canvas-a');
+    presence.setCanvasCwds([]);
+    expect(await presence.has('/canvas-a')).toBe(true);
+    expect(await presence.has('/canvas-b')).toBe(false);
+  });
   it('disabled is empty; no design exposes only entry tools; presence exposes all (skill alone is not a trigger)', () => {
     expect(designToolNames(false, true)).toEqual([]);
     expect(designToolNames(true, false)).toEqual(['vetd_create', 'vetd_sizes']);

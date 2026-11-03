@@ -23,6 +23,20 @@ input: {
 单例窗口的模式见 `SettingsWindow.ts`：模块级变量持有引用，已存在则 `restore()` + `focus()`，
 `closed` 事件里置空。
 
+## 设计 iframe 的双层导航边界
+
+主入口 CSP 的 `frame-src` 只允许 `'self'`（既有插件 shell）和 `http://127.0.0.1:*`；
+设置入口不增加该权限。`design/navigation.ts` 在主工作区的 `will-frame-navigate` /
+`will-redirect` 上进一步校验 owner 的运行中引擎端口，并绑定首个引擎 origin；不能
+从一个已登记端口跳到另一个端口。引擎换端口时 Renderer 应重建 iframe，不复用旧 frame。
+主 frame 与插件视图继续使用各自既有策略，`window.open` 仍由工厂的 deny/外链策略处理。
+
+Electron 43 实测：`data:` 被 CSP 拒绝时可能不触发 `will-frame-navigate`，
+`WebFrameMain.url` 仍显示失败 URL；不能只凭 URL 判断逃逸，要验目标内容/脚本确实未执行。
+可信父页重置 iframe 的 `about:blank` 同样可能同步提交、不触发守卫；自发 blank
+继承发起者 origin，本模块允许它，不尝试拦截可信主界面的 DOM 操作。
+回归：`design/navigation.test.ts` 同时检查纯判定、两类事件和真实 index CSP 精确白名单。
+
 ## 无边框标题栏
 
 平台差异集中在工厂里：

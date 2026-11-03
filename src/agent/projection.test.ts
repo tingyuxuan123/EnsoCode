@@ -2,6 +2,64 @@ import { describe, expect, it } from 'vitest';
 import { PROJECTED_FILE_CHANGE_LIMIT, PROJECTED_TEXT_LIMIT, projectMessage } from './projection';
 
 describe('projectMessage', () => {
+  it('仅 vetd_ 工具结果提取有界设计卡片、白名单克隆，不透传 details', () => {
+    const card = {
+      type: 'vetta-ui-design:screenshot',
+      key: 'demo',
+      title: '画框',
+      payload: { dirPath: '/project/a.vetd', frameId: 'home' },
+    };
+    const raw = {
+      role: 'toolResult',
+      toolName: 'vetd_screenshot',
+      content: [],
+      details: { cards: [{ ...card, extra: 'secret' }], secret: 'private' },
+    };
+    expect(projectMessage(raw)).toEqual({
+      role: raw.role,
+      toolName: raw.toolName,
+      content: [],
+      designCards: [card],
+    });
+    expect(projectMessage(raw)?.designCards?.[0]?.payload).not.toBe(card.payload);
+    for (const toolName of ['read', 'screenshot', 'plugin_vetd_screenshot'])
+      expect(projectMessage({ ...raw, toolName })).not.toHaveProperty('designCards');
+    expect(projectMessage({ ...raw, role: 'assistant' })).not.toHaveProperty('designCards');
+  });
+  it('逐项丢弃坏卡片、非 JSON 普通对象与超限 payload，每条消息最多 32 张', () => {
+    const card = { type: 'screenshot', key: 'a', title: 'A', payload: { frameId: 'home' } };
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    const invalid = [
+      null,
+      { ...card, type: '' },
+      { ...card, key: ' ' },
+      { ...card, title: 'x'.repeat(513) },
+      ...[
+        null,
+        [],
+        'text',
+        new Date(),
+        { f: () => 1 },
+        { n: BigInt(1) },
+        { n: undefined },
+        { n: NaN },
+        { x: '中'.repeat(2000) },
+        cyclic,
+      ].map((payload) => ({ ...card, payload })),
+    ];
+    const project = (cards: unknown[]) =>
+      projectMessage({
+        role: 'toolResult',
+        toolName: 'vetd_screenshot',
+        content: [],
+        details: { cards },
+      });
+    expect(project([...invalid, card])?.designCards).toEqual([card]);
+    expect(project(Array.from({ length: 40 }, () => card))?.designCards).toHaveLength(32);
+    expect(project(invalid)?.content).toEqual([]);
+    expect(project(invalid)).not.toHaveProperty('designCards');
+  });
   it('whitelists managed decisions and fallbacks from arbitrary tool results', () => {
     const base = { model: 'jev', actionHash: 'a'.repeat(64) };
     for (const approvalReview of [

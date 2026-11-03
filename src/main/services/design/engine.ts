@@ -16,6 +16,7 @@ import { hydrateShellPath } from '../shellPath';
 import { getDesignPaths } from './appPaths';
 import { DesignServiceError, isErrno, record } from './errors';
 import { readBounded } from './files';
+import { EnginePidRegistry, engineProcessArgs } from './orphans';
 import type { DesignResourcePaths } from './paths';
 import {
   allocateFreePort,
@@ -133,6 +134,12 @@ interface Engine {
 interface Starting {
   owners: Set<number>;
   promise: Promise<Engine>;
+}
+const runningEngines = new Map<string, Engine>();
+export function runningDesignEnginePorts(owner: number): ReadonlySet<number> {
+  return new Set(
+    [...runningEngines.values()].filter((e) => !e.exit && e.owners.has(owner)).map((e) => e.port)
+  );
 }
 export class DesignEngineService {
   private readonly engines = new Map<string, Engine>();
@@ -375,28 +382,18 @@ export class DesignEngineService {
       const port = await allocateFreePort();
       owner();
       this.progress(owners, root, designRel, 'starting');
-      const child = spawn(
-        process.execPath,
-        [
-          'node_modules/vite/bin/vite.js',
-          '--host',
-          '127.0.0.1',
-          '--port',
-          String(port),
-          '--strictPort',
-          '--clearScreen',
-          'false',
-        ],
-        {
-          cwd: engine.root,
-          env: commandEnvironment({ ELECTRON_RUN_AS_NODE: '1', VETD_SRC: dir }),
-          detached: process.platform !== 'win32',
-          stdio: ['ignore', 'pipe', 'pipe'],
-          windowsHide: true,
-        }
-      );
+      const id = randomUUID();
+      const registry = new EnginePidRegistry(getDesignPaths().engineBase);
+      const processIdentity = { parentPid: process.pid, token: id, engineRoot: engine.root, port };
+      const child = spawn(process.execPath, engineProcessArgs(processIdentity), {
+        cwd: engine.root,
+        env: commandEnvironment({ ELECTRON_RUN_AS_NODE: '1', VETD_SRC: dir }),
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
       e = {
-        id: randomUUID(),
+        id,
         dir,
         port,
         owners,
@@ -406,15 +403,20 @@ export class DesignEngineService {
       };
       const entry = e;
       this.engines.set(entry.id, entry);
+      runningEngines.set(entry.id, entry);
       for (const stream of [child.stdout, child.stderr])
         stream.on('data', (chunk: Buffer) => entry.output.append(chunk));
       const exited = new Promise<never>((_resolve, reject) => {
         child.once('error', (error) => {
           entry.exit = { exitCode: null, signal: null };
+          runningEngines.delete(entry.id);
+          registry.remove(entry.id);
           reject(error);
         });
         child.once('exit', (exitCode, signal) => {
           entry.exit = { exitCode, signal };
+          runningEngines.delete(entry.id);
+          registry.remove(entry.id);
           for (const id of entry.audience)
             this.send(id, IPC_CHANNELS.DESIGN_ENGINE_EXIT, {
               engineId: entry.id,
@@ -432,6 +434,9 @@ export class DesignEngineService {
         });
       });
       const ready = async () => {
+        // Keep PID IO in the readiness race: an unwritable sidecar must stop the child,
+        // without leaving the separately observed exit promise unhandled.
+        if (child.pid) registry.add({ version: 1, pid: child.pid, ...processIdentity });
         const deadline = Date.now() + 30000;
         while (Date.now() < deadline) {
           owner();

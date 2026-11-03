@@ -327,6 +327,20 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       };
       await runBefore(prompt);
       expect(prompt.systemPromptOptions.sections.vetd_core_principles).toBeUndefined();
+      supervisor.handleCommand({ type: 'design-canvas', cwds: [root] });
+      await runBefore(prompt);
+      expect(current.getActiveToolNames().filter((name) => name.startsWith('vetd_'))).toHaveLength(
+        11
+      );
+      expect(prompt.systemPromptOptions.sections.vetd_core_principles).toContain(
+        'one thing seen first'
+      );
+      supervisor.handleCommand({ type: 'design-canvas', cwds: [] });
+      await runBefore(prompt);
+      expect(current.getActiveToolNames().filter((name) => name.startsWith('vetd_'))).toHaveLength(
+        2
+      );
+      expect(prompt.systemPromptOptions.sections.vetd_core_principles).toBeUndefined();
       expect(events).toContainEqual(
         expect.objectContaining({
           type: 'design-hook',

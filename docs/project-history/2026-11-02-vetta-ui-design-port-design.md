@@ -64,15 +64,15 @@ vite dev server、history-runner、check-syntax 都用 `process.execPath` + `ELE
 
 ### D4 引擎进程管理（Main `design/engine.ts`）
 
-参照上游 `command-spawner.ts`：每份打开的设计一个 vite；只监听 `127.0.0.1`，端口由 Main 先 `listen(0)` 探测再 `--strictPort` 传入；全局上限 8 个；保留 stdout/stderr 尾巴 64KB 用于诊断；停止时 TERM，3 秒后 KILL；切离设计、关窗口、退出应用时清理。Renderer 只拿到 `{engineId, port}`。
+参照上游 `command-spawner.ts`：每份打开的设计一个 vite；只监听 `127.0.0.1`，端口由 Main 先 `listen(0)` 探测再 `--strictPort` 传入；全局上限 8 个；保留 stdout/stderr 尾巴 64KB 用于诊断；停止时 TERM，3 秒后 KILL；切离设计、关窗口、退出应用时清理。Renderer 只拿到 `{engineId, port}`。P2 追加 `--import` 父进程看门狗（500ms 检测，父 PID 消失或 reparent 后杀引擎进程组）；启动时校验 `userData/design/engine-pids` 中的版本、物化根、nonce、精确 Vite 命令行和进程组，再清理旧 PID，不能只按 PID 杀进程。
 
 ### D5 画框承载：Renderer iframe
 
 `browserHost` 同时只显示一个 guest，不能承载多画框。画布改用 iframe 指向 `http://127.0.0.1:<port>`：
 
-- `index.html` CSP 增加 `frame-src http://127.0.0.1:*`，仅回环。
+- `index.html` CSP 增加 `frame-src 'self' http://127.0.0.1:*`，只新增回环（`'self'` 保留插件 shell 的原有权限），其它入口不变。
 - iframe 与渲染层跨源，设计代码碰不到父页面 DOM 和 preload；桥消息只认 `vetd:true` 且 `event.origin` 等于该引擎端口。
-- Main 对这些子 frame 拦截导航，只允许同一引擎源（复用插件视图的子 frame 导航拦截模式）。
+- Main 对这些子 frame 的导航与重定向绑定首个已登记引擎源，不能跳到另一个端口；主 frame 与插件视图原策略不变。可信父页重置和继承发起者 origin 的 `about:blank` 允许；`data:` 在 Chromium 可能不触发导航守卫，由 CSP 阻止，失败页 URL 不代表目标代码已执行。`window.open` 沿用现有 deny + HTTP(S) 外链策略。
 - iframe 是普通 DOM，弹窗、下拉可以正常盖在上面，不需要 overlayGuard 沉层。
 
 ### D6 离屏截图（Main `design/capture.ts`）
@@ -99,7 +99,7 @@ vite dev server、history-runner、check-syntax 都用 `process.execPath` + `ELE
 
 - **技能**：`resources/design/skills/vetta-ui-design` 加进 `additionalSkillPaths`，由设置开关控制，默认开启。
 - **设计师角色**：内置 preset，正文取上游 `agent/agents/designer.md`。
-- **tool-gate**：上游每轮按“cwd 是否有设计稿 / 技能是否激活”决定 `vetd_*` 是否可见。改为 worker 在每轮 prompt 入口查询 Main 缓存的设计存在性（上游 `design-presence` 语义），不可见时不进入工具集合。
+- **tool-gate**：开关关闭则隐藏全部；否则画布 cwd 集合命中直接开放全部（上游 `getCanvasController` 快捷路径），未命中则按 worker 的 cwd 文件发现/create 缓存决定。Renderer 仅上报 `{sessionId, open}`，Main 用 `pluginProjectRoot` 推导并汇总 cwd，worker ready/重启重推；技能激活本身不是 gate 输入。
 - **hooks**：UserPromptSubmit / Stop / SessionEnd（历史自动提交）从 worker 事件经 Main 转给设计运行时。
 - **计划模式**：新工具不会自动被拒。`vetd_create/install/notes/direction/restore/export/assets/screenshot`（都会写文件）加入 `planMode.ts` DENIED_TOOLS；`vetd_status/sizes/history` 允许。写测试覆盖。
 - **审批**：沿用内置工具审批链路。
@@ -119,7 +119,7 @@ assets（图片搜索/下载）、design-systems 目录同步走 Main fetch，�
 
 **P2 画布**
 Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（attach 到 composer）、批注层与派活、撤销重做、交互模式、设备壳、引擎恢复 UI。
-验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素生成 attach；批注派活生成 prompt；依赖画布控制器的工具（清单见 `src/renderer/features/design/PORTING.md`）逐项可用，`vetd_screenshot` 截图卡显示画框。
+验收：CDP 打开画布，改 tsx 后 100ms 级热更新；选中元素 → 提问徽标 → 批注 → 自动派活发出带定位信息（source/domPath/frame）的 `vetd_notes` prompt（上游 0.7.6 已不再把选中常驻挂到输入框，按上游现行行为）；依赖画布控制器的工具（清单见 `src/renderer/features/design/PORTING.md`）逐项可用，`vetd_screenshot` 截图卡显示画框。
 
 **P3 画廊、导出、历史、文件树**
 画廊视图与入口；`.vetdz` 导入导出、`.vetdz` 预览；样机 PNG/PDF；历史抽屉（history-runner）；文件树图标与右键；旧格式迁移。
@@ -168,10 +168,11 @@ Dockview 设计面板 + 全屏；画框 iframe、热更新、选中回传（atta
 
 ## 9. 遗留到 P2/P3
 
-- Electron 崩溃或 SIGKILL 时引擎（独立进程组）会成为孤儿进程：加父进程存活监测或启动时清理残留。
+- [x] P2-Main：崩溃孤儿引擎双层清理完成（父进程 watchdog + 启动 PID/命令签名复核）。隔离 Electron 43 Main（CDP 9444）启动真实 Vite 并确认 HTTP 200，SIGKILL Main 后约 369ms 引擎退出；真实 ps 清理、PID 复用拒杀、坏记录与链接均有测试。Windows 启动清理 fail-closed 不发信号，尚未真机验收。
 - design IPC 只信任主窗口：其它应用窗口的运行时登记失败，工具一律路由主窗口。
 - 已发出的 fs/engine/script IPC 无取消字段，取消只停止等待，不撤销已发生的写入或进程动作。
-- 「画布已打开」作为 tool-gate 条件、依赖画布控制器的工具清单见 `src/renderer/features/design/PORTING.md`。
+- [x] P2-Main：「画布已打开」已通过 IPC → Main cwd 并集 → agentHost ready 重推 → supervisor → DesignPresence 接入门控。跨 sender 替换、销毁清理、SSH 忽略、worker 重启及关闭回退均有回归。依赖画布控制器的工具仍由 Renderer 验收，清单见 `src/renderer/features/design/PORTING.md`。
+- [x] P2-Main：`vetd_*` 工具结果 `details.cards` 白名单投影为 `designCards`，实时与 JSONL 恢复共用投影；每消息最多 32 张，字段 ≤512 字符，payload 仅 JSON 普通对象且 ≤4KB。
 - 设计师角色（上游为可 @ 的 agent 角色）尚未接入。
 
 ## 附录 A：上游宿主依赖（调研结论）

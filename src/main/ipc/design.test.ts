@@ -23,6 +23,7 @@ vi.mock('../windows/createAppWindow', () => ({
   sendToWindow: vi.fn(),
 }));
 vi.mock('../windows/MainWindow', () => ({ getMainWindow: vi.fn() }));
+vi.mock('../services/agentHost', () => ({ setDesignCanvasCwds: vi.fn() }));
 
 import { createDesignHandlers } from './design';
 
@@ -48,6 +49,10 @@ async function fixture(trusted = true) {
     scripts,
     watch,
     storage,
+    projectRoot: vi.fn((sessionId: string): string | null | Promise<string | null> =>
+      sessionId === 'ssh' ? null : `/projects/${sessionId}`
+    ),
+    canvasCwds: vi.fn(),
   };
   const handlers = createDesignHandlers(deps);
   const once = vi.fn();
@@ -92,4 +97,45 @@ it('内部服务抛错被包装，窗口销毁级联释放 broker/engine/watch/c
   once.mock.calls[0]?.[1]();
   for (const release of releases) expect(release).toHaveBeenCalledWith(7);
   expect(broker.releaseOwner).toHaveBeenCalledWith(7);
+});
+it('画布按 sender 替换、跨窗口按 cwd 去重，关闭与销毁清理；SSH/坏入参不开放 gate', async () => {
+  const { handlers, event, deps, once } = await fixture();
+  const second = { ...event, sender: { ...event.sender, id: 8, once: vi.fn() } };
+  expect(await handlers.canvasPresence(event, { sessionId: 'a', open: true })).toEqual({
+    ok: true,
+  });
+  expect(deps.projectRoot).toHaveBeenCalledWith('a');
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith(['/projects/a']);
+  await handlers.canvasPresence(second, { sessionId: 'a', open: true });
+  expect(deps.canvasCwds).toHaveBeenCalledTimes(1);
+  await handlers.canvasPresence(event, { sessionId: 'b', open: true });
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith(['/projects/a', '/projects/b']);
+  await handlers.canvasPresence(event, { sessionId: 'ssh', open: true });
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith(['/projects/a']);
+  for (const raw of [
+    { sessionId: 'a', open: 'yes' },
+    { sessionId: 'a', open: true, cwd: '/evil' },
+    { open: true },
+    { sessionId: '', open: true },
+  ])
+    expect(await handlers.canvasPresence(event, raw)).toMatchObject({ ok: false });
+  second.sender.once.mock.calls[0]?.[1]();
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith([]);
+  await handlers.canvasPresence(event, { sessionId: 'a', open: true });
+  await handlers.canvasPresence(event, { sessionId: null, open: false });
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith([]);
+  once.mock.calls[0]?.[1]();
+});
+it('异步 cwd 解析不能覆盖新上报或复活已销毁窗口', async () => {
+  const { handlers, event, deps, once } = await fixture();
+  const pending = Promise.withResolvers<string | null>();
+  // The production authority is lazily imported and may yield after a newer report.
+  vi.mocked(deps.projectRoot).mockImplementationOnce(() => pending.promise);
+  const old = handlers.canvasPresence(event, { sessionId: 'a', open: true });
+  await handlers.canvasPresence(event, { sessionId: 'b', open: true });
+  pending.resolve('/projects/a');
+  await old;
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith(['/projects/b']);
+  once.mock.calls[0]?.[1]();
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith([]);
 });

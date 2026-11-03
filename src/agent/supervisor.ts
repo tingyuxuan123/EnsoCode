@@ -1283,6 +1283,10 @@ export class SessionSupervisor {
   }
 
   handleCommand(command: AgentCommand): void {
+    if (command.type === 'design-canvas') {
+      designPresence.setCanvasCwds(command.cwds);
+      return;
+    }
     if (command.type === 'forget-notifications') {
       this.forgottenNotifications.add(command.conversationId);
       for (const managed of this.sessions.values()) {
