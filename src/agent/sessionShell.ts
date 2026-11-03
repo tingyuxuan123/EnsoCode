@@ -1,5 +1,6 @@
 import {
   type BashOperations,
+  type BashToolOptions,
   createBashToolDefinition,
   createLocalBashOperations,
   createLocalPowerShellOperations,
@@ -8,6 +9,7 @@ import {
 import { childProfileShell } from '@shared/childProfileTools';
 import type { WindowsLocalShell } from '@shared/windowsLocalShell';
 import { withDetachableExec } from './foregroundCommand';
+import { hardenedEnv } from './shell/hardenedEnv';
 
 export type SessionShellKind = 'bash' | 'powershell';
 
@@ -32,7 +34,14 @@ export function createSessionCommandTool(input: {
     preference: input.preference,
   });
   const local = kind === 'powershell' ? createLocalPowerShellOperations : createLocalBashOperations;
-  const options = { operations: withDetachableExec(input.operations ?? local()) };
+  const options: BashToolOptions = { operations: withDetachableExec(input.operations ?? local()) };
+  // 保留 pi 已构造的 PATH / PI_*；外部（SSH）operations 自己负责环境。
+  if (!input.operations) {
+    options.spawnHook = (context) => ({
+      ...context,
+      env: hardenedEnv(context.env, { shell: kind }),
+    });
+  }
   return kind === 'powershell'
     ? createPowerShellToolDefinition(input.cwd, options)
     : createBashToolDefinition(input.cwd, options);

@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { createLocalBashOperations } from '@earendil-works/pi-coding-agent';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSessionCommandTool, resolveSessionShellKind } from './sessionShell';
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('resolveSessionShellKind', () => {
   it('远程会话即便在 win32 上也选 bash', () => {
@@ -68,5 +74,76 @@ describe('createSessionCommandTool', () => {
   it('不传 platform 时按 process.platform 判断', () => {
     const tool = createSessionCommandTool({ cwd: '/tmp' });
     expect(tool.name).toBe(process.platform === 'win32' ? 'powershell' : 'bash');
+  });
+
+  it.skipIf(process.platform === 'win32')('本地前台 bash 不执行继承的启动 rc', async () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'enso-fg-env-'));
+    const rc = path.join(cwd, 'startup.sh');
+    const sentinel = path.join(cwd, 'rc-ran');
+    try {
+      writeFileSync(rc, ': > ./rc-ran\n');
+      // 阳性对照：旧的 pi 本地 operations 确实会 source 这份临时 rc。
+      await createLocalBashOperations().exec('true', cwd, {
+        onData: () => {},
+        env: { BASH_ENV: rc, ENV: rc, HOME: cwd, PATH: '/usr/bin:/bin' },
+      });
+      expect(existsSync(sentinel)).toBe(true);
+      rmSync(sentinel);
+      vi.stubEnv('BASH_ENV', rc);
+      vi.stubEnv('ENV', rc);
+      const tool = createSessionCommandTool({ cwd });
+      await tool.execute('fg', { command: 'true' }, undefined, undefined, undefined as never);
+      expect(existsSync(sentinel)).toBe(false);
+      expect(process.env.BASH_ENV).toBe(rc);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    '前台非交互 env 保留 pi 注入的会话信息和 PATH',
+    async () => {
+      const cwd = process.cwd();
+      const tool = createSessionCommandTool({ cwd });
+      const ctx = {
+        cwd,
+        sessionManager: { getSessionId: () => 'fixture-session', getSessionFile: () => undefined },
+      } as Parameters<typeof tool.execute>[4];
+      vi.stubEnv('BASH_ENV', undefined);
+      vi.stubEnv('ENV', undefined);
+      vi.stubEnv('PATH', '/opt/enso-fixture/bin:/usr/bin:/bin');
+      vi.stubEnv('GIT_TERMINAL_PROMPT', '1');
+      vi.stubEnv('PAGER', 'less');
+      vi.stubEnv('NO_COLOR', '0');
+      const result = await tool.execute(
+        'fg',
+        {
+          command:
+            'printf "%s|%s|%s|%s" "$GIT_TERMINAL_PROMPT" "$PAGER" "$NO_COLOR" "$PI_SESSION_ID"; ' +
+            'case ":$PATH:" in *:/opt/enso-fixture/bin:*) printf "|path-ok";; esac',
+        },
+        undefined,
+        undefined,
+        ctx
+      );
+      expect(result.content).toEqual([{ type: 'text', text: '0|cat|1|fixture-session|path-ok' }]);
+    }
+  );
+
+  it('远程 operations 保留自身 askpass 策略', async () => {
+    vi.stubEnv('SSH_ASKPASS_REQUIRE', 'force');
+    let askpass: string | undefined;
+    const tool = createSessionCommandTool({
+      cwd: '/srv/app',
+      remote: true,
+      operations: {
+        async exec(_command, _cwd, options) {
+          askpass = options.env?.SSH_ASKPASS_REQUIRE;
+          return { exitCode: 0 };
+        },
+      },
+    });
+    await tool.execute('remote', { command: 'true' }, undefined, undefined, undefined as never);
+    expect(askpass).toBe('force');
   });
 });

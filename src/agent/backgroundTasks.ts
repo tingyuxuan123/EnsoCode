@@ -11,6 +11,7 @@ import {
   ForegroundCommand,
   ForegroundDetachedError,
 } from './foregroundCommand';
+import { hardenedEnv } from './shell/hardenedEnv';
 
 /** 内存缓冲上限（超出截头保尾；磁盘 log 始终全量） */
 const MAX_BUFFER = 200_000;
@@ -156,6 +157,7 @@ export class BackgroundTaskManager {
       displayCommand?: string;
       details?: unknown;
       finalize?: () => Promise<unknown>;
+      env?: NodeJS.ProcessEnv;
     }
   ): string {
     const taskId = this.reserveId();
@@ -520,16 +522,17 @@ export const DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC = 120;
 function spawnBackground(
   command: string,
   cwd: string,
-  spawnOpts?: { file?: string; argsPrefix?: string[] }
+  spawnOpts?: { file?: string; argsPrefix?: string[]; env?: NodeJS.ProcessEnv }
 ) {
+  const env = spawnOpts?.env ?? process.env;
   if (spawnOpts?.file) {
     return spawn(spawnOpts.file, [...(spawnOpts.argsPrefix ?? []), command], {
       cwd,
-      env: process.env,
+      env,
       detached: true,
     });
   }
-  return spawn(command, { shell: true, cwd, env: process.env, detached: true });
+  return spawn(command, { shell: true, cwd, env, detached: true });
 }
 
 export type BackgroundLaunch = {
@@ -660,6 +663,12 @@ export function withBackground(
             displayCommand: hooks ? record.command : undefined,
             details: prepared.details,
             finalize: prepared.finalize,
+            // SSH 包装命令沿用原环境；本地前后台使用同一组非交互设置。
+            env: transform
+              ? undefined
+              : hardenedEnv(process.env, {
+                  shell: definition.name === 'powershell' ? 'powershell' : 'bash',
+                }),
           });
         } catch (error) {
           try {

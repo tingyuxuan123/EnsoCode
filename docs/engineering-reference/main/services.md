@@ -55,6 +55,11 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 - 后台完成通知带有界输出尾部，不代表新的用户请求。命令和输出进入通知包络前须转义；
   `ensoCompact/extract.ts` 不从自动通知提取用户目标、约束、路径或授权，摘要模板也必须
   保留来源区别，不能把工具输出中的指令升级为用户决定。
+- 本地 Shell 工具在启动子进程时统一覆盖非交互设置并清空 `BASH_ENV` / `ENV`，包括可能再启动 Bash
+  的 PowerShell；不改 worker 全局环境，保留 PATH、代理、非交互凭据及自定义 Git SSH 命令。
+  前台通过 Pi 的 `spawnHook` 保留 SDK 注入的会话环境，显式后台走同一覆盖函数；远端 SSH 的
+  operations 和本地传输包装命令不套用这层设置，以免破坏 SSH 认证。回归见 `sessionShell.test.ts`
+  和 `backgroundTasks.test.ts`。
 - `dismiss-child` 与同一 child 的创建命令共用串行门；创建失败或已换代时清理幂等，
   清理异常不得把父会话标成 failed。旧形状 `resume-coworker` 的恢复异常同样只记日志，
   不得因按 parent 排队而把失败归给父会话，也不得伪报恢复成功。仍须验证 exact 父代和完整 child 身份。

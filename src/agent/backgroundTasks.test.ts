@@ -1,9 +1,9 @@
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { BackgroundTaskInfo } from '@shared/types/agent';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   attachBackgroundCommandHooks,
   BackgroundTaskManager,
@@ -18,7 +18,9 @@ import {
 import { ForegroundDetachedError } from './foregroundCommand';
 import { createSessionCommandTool } from './sessionShell';
 
-const makeManager = () => {
+afterEach(() => vi.unstubAllEnvs());
+
+const makeManager = (logDir = mkdtempSync(path.join(tmpdir(), 'enso-bg-'))) => {
   const notified: string[] = [];
   const ended: string[] = [];
   const started: BackgroundTaskInfo[] = [];
@@ -28,7 +30,7 @@ const makeManager = () => {
     onEnded: (_s, taskId) => ended.push(taskId),
     onCompletionNotify: (_s, text) => notified.push(text),
   };
-  const manager = new BackgroundTaskManager(events, mkdtempSync(path.join(tmpdir(), 'enso-bg-')));
+  const manager = new BackgroundTaskManager(events, logDir);
   return { manager, notified, ended, started };
 };
 
@@ -254,6 +256,97 @@ describe('withBackground 命令变换(远程会话用)', () => {
       timeout: DEFAULT_FOREGROUND_BASH_TIMEOUT_SEC,
     });
   });
+});
+
+describe('withBackground shell 环境', () => {
+  it.skipIf(process.platform === 'win32')(
+    '本地后台和前台统一非交互 env，不执行嵌套 bash 启动 rc',
+    async () => {
+      const cwd = mkdtempSync(path.join(tmpdir(), 'enso-bg-env-'));
+      const rc = path.join(cwd, 'startup.sh');
+      const sentinel = path.join(cwd, 'rc-ran');
+      try {
+        writeFileSync(rc, ': > ./rc-ran\n');
+        vi.stubEnv('BASH_ENV', rc);
+        vi.stubEnv('ENV', rc);
+        vi.stubEnv('GIT_TERMINAL_PROMPT', '1');
+        vi.stubEnv('PAGER', 'less');
+        vi.stubEnv('NO_COLOR', '0');
+        vi.stubEnv('HTTP_PROXY', 'http://proxy.invalid:1234');
+        vi.stubEnv('GH_TOKEN', 'fixture-token');
+        const { manager, ended } = makeManager(cwd);
+        const tool = withBackground(
+          createSessionCommandTool({ cwd }) as unknown as ToolDefinition,
+          manager,
+          's1',
+          cwd
+        );
+        // 后台沿用平台默认 shell；显式起 bash 才能验证 BASH_ENV 会不会继续传给后代。
+        const command =
+          `/bin/bash -c 'printf "%s|%s|%s" "$GIT_TERMINAL_PROMPT" "$PAGER" "$NO_COLOR"; ` +
+          '[[ "$HTTP_PROXY" == http://proxy.invalid:1234 && "$GH_TOKEN" == fixture-token ]] ' +
+          `&& printf "|auth-ok"'`;
+        const oldTaskId = manager.start('legacy', command, cwd);
+        await until(() => ended.includes(oldTaskId));
+        expect(existsSync(sentinel)).toBe(true);
+        rmSync(sentinel);
+        await tool.execute(
+          'bg',
+          { command, background: true },
+          undefined,
+          undefined,
+          undefined as never
+        );
+        const taskId = manager.knownIds()[1];
+        await until(() => ended.includes(taskId));
+        expect(existsSync(sentinel)).toBe(false);
+        const foreground = await tool.execute(
+          'fg',
+          { command },
+          undefined,
+          undefined,
+          undefined as never
+        );
+        expect((await manager.read(taskId))?.output).toBe('0|cat|1|auth-ok');
+        expect(foreground.content).toEqual([{ type: 'text', text: '0|cat|1|auth-ok' }]);
+        expect(existsSync(sentinel)).toBe(false);
+      } finally {
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    '远程后台的本地 SSH 包装命令保留 askpass 策略',
+    async () => {
+      const cwd = mkdtempSync(path.join(tmpdir(), 'enso-remote-bg-env-'));
+      try {
+        vi.stubEnv('BASH_ENV', undefined);
+        vi.stubEnv('ENV', undefined);
+        vi.stubEnv('SSH_ASKPASS_REQUIRE', 'force');
+        const { manager, ended } = makeManager(cwd);
+        const tool = withBackground(
+          createSessionCommandTool({ cwd }) as unknown as ToolDefinition,
+          manager,
+          's1',
+          cwd,
+          () => ({ command: 'printf "%s" "$SSH_ASKPASS_REQUIRE"', cwd })
+        );
+        await tool.execute(
+          'bg',
+          { command: 'remote command', background: true },
+          undefined,
+          undefined,
+          undefined as never
+        );
+        const taskId = manager.knownIds()[0];
+        await until(() => ended.includes(taskId));
+        expect((await manager.read(taskId))?.output).toBe('force');
+      } finally {
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    }
+  );
 });
 
 describe('BackgroundTaskManager', () => {
