@@ -71,7 +71,7 @@ export interface PluginConversationApi {
 	 *
 	 * 没有活跃会话时抛错。插件若想在这种情况下也把话说出去，先 {@link createSession}。
 	 */
-	sendPrompt(text: string): Promise<SendPromptResult>;
+	sendPrompt(text: string, canvas?: { sessionId: string; cwd: string; skipIfStreaming?: boolean }): Promise<SendPromptResult>;
 	/**
 	 * Create a conversation in `cwd` and make it active, resolving once it is ready
 	 * to receive prompts — `await createSession(cwd)` 后可以直接 {@link sendPrompt}。

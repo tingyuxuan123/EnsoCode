@@ -1,5 +1,8 @@
 import type { AgentSessionCustomEntry, ProjectedMessage } from '@shared/types/agent';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { applyPendingDesignCards } from '@/features/design/host/cards';
+import { useDesignRegistry } from '@/features/design/host/registry';
+import type { PluginCardRendererContribution } from '@/features/design/vetta/sdk/ui';
 import { useOpenChangesOnEdit } from '@/hooks/useOpenChangesOnEdit';
 import { eventToBinding } from '@/lib/keybindings';
 import { useSessionsStore } from '@/stores/sessions';
@@ -120,6 +123,16 @@ export function ChatSessionTimeline({
     toolStartedAt,
   ]);
   useOpenChangesOnEdit(timeline, conversationId);
+  const canvasContributions = useDesignRegistry((state) =>
+    state.canvasSessionId === conversationId ? state.contributions : null
+  );
+  const timelineWithCards = useMemo(() => {
+    if (!running || !canvasContributions) return timeline;
+    const renderers = canvasContributions
+      .filter((item) => item.kind === 'card-renderer')
+      .map((item) => item.value as PluginCardRendererContribution);
+    return applyPendingDesignCards(timeline, renderers);
+  }, [running, canvasContributions, timeline]);
   const turnFiles = useMemo(
     () => ({ conversationId, summaries: turnFileChanges(timeline, cwd) }),
     [conversationId, cwd, timeline]
@@ -238,7 +251,7 @@ export function ChatSessionTimeline({
           <MessageTimeline
             key={conversationId}
             ref={timelineRef}
-            items={timeline}
+            items={timelineWithCards}
             busy={timelineActivity !== null}
             loading={timelineActivity === 'loading'}
             running={running}

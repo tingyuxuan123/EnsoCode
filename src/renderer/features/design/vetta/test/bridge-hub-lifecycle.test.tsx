@@ -9,6 +9,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BridgeHub, type BridgeHubEvents } from "../src/canvas/bridge-client";
 import { useBridgeEvents } from "../src/canvas/use-bridge-events";
+import { type NavBridge, useNavBridge } from "../src/interaction/nav-bridge";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,8 +34,16 @@ function Harness({ bridge, handlers }: { bridge: BridgeHub; handlers: BridgeHubE
 	return null;
 }
 
-function fromFrame(iframe: HTMLIFrameElement, data: Record<string, unknown>): void {
-	window.dispatchEvent(new MessageEvent("message", { data: { vetd: true, ...data }, source: iframe.contentWindow }));
+const ORIGIN = "http://127.0.0.1:5179";
+function fromFrame(iframe: HTMLIFrameElement, data: Record<string, unknown>, origin = ORIGIN): void {
+	window.dispatchEvent(new MessageEvent("message", { data: { vetd: true, ...data }, source: iframe.contentWindow, origin }));
+}
+
+function fakeFrame(): HTMLIFrameElement {
+	const iframe = document.createElement("iframe");
+	iframe.src = `${ORIGIN}/home`;
+	Object.defineProperty(iframe, 'contentWindow', { value: { postMessage: vi.fn() } });
+	return iframe;
 }
 
 afterEach(() => {
@@ -49,8 +58,7 @@ it("keeps frame registrations and in-flight captures when the callbacks change",
 	const first = vi.fn();
 	act(() => root.render(<Harness bridge={bridge} handlers={events({ onSelected: first })} />));
 
-	const iframe = document.createElement("iframe");
- Object.defineProperty(iframe, 'contentWindow', { value: { postMessage: vi.fn() } });
+	const iframe = fakeFrame();
  // The fake frame is intentionally detached: happy-dom does not load iframe pages.
 	bridge.register("home", iframe);
 	fromFrame(iframe, { type: "ready", frameId: "home" });
@@ -76,4 +84,48 @@ it("keeps frame registrations and in-flight captures when the callbacks change",
 	// 卸载才真正停：之后的消息不再派发。
 	fromFrame(iframe, { type: "selected", payload: null });
 	expect(second).toHaveBeenCalledTimes(1);
+});
+
+it("requires the registered WindowProxy and origin for all canvas events, and posts to that origin only", () => {
+	const bridge = new BridgeHub();
+	const onSelected = vi.fn(), onHmrUpdated = vi.fn(), onFrameSpace = vi.fn();
+	const iframe = fakeFrame();
+	bridge.start(events({ onSelected, onHmrUpdated, onFrameSpace }));
+	bridge.register("home", iframe);
+	try {
+		fromFrame(iframe, { type: "selected" }, "https://evil.example");
+		fromFrame(iframe, { type: "selected" }, "http://127.0.0.1:5180");
+		fromFrame(iframe, { type: "selected", vetd: false });
+		fromFrame(fakeFrame(), { type: "hmr-updated" });
+		fromFrame(fakeFrame(), { type: "space", down: true });
+		expect(onSelected).not.toHaveBeenCalled();
+		expect(onHmrUpdated).not.toHaveBeenCalled();
+		expect(onFrameSpace).not.toHaveBeenCalled();
+		fromFrame(iframe, { type: "selected" });
+		expect(onSelected).toHaveBeenCalledWith("home", null);
+		bridge.setRadius("home", 16);
+		expect(iframe.contentWindow!.postMessage).toHaveBeenCalledWith({ vetd: true, type: "frame-radius", radius: 16 }, ORIGIN);
+	} finally { bridge.stop(); }
+});
+
+it("requires matching source and loopback origin in interaction mode", () => {
+	const iframe = fakeFrame();
+	const iframeRef = { current: iframe };
+	let nav: NavBridge | undefined;
+	function NavHarness() { nav = useNavBridge(iframeRef); return null; }
+	const host = document.createElement("div");
+	const root = createRoot(host);
+	try {
+		act(() => root.render(<NavHarness />));
+		act(() => {
+			fromFrame(iframe, { type: "navigated", path: "/spoof" }, "http://127.0.0.1:5180");
+			fromFrame(fakeFrame(), { type: "navigated", path: "/wrong-source" });
+			fromFrame(iframe, { type: "navigated", path: "/wrong-tag", vetd: false });
+		});
+		expect(nav?.nav).toBeNull();
+		act(() => fromFrame(iframe, { type: "navigated", path: "/home" }));
+		expect(nav?.nav?.path).toBe("/home");
+		nav?.navigateTo("/login");
+		expect(iframe.contentWindow!.postMessage).toHaveBeenCalledWith({ vetd: true, type: "navigate", to: "/login" }, ORIGIN);
+	} finally { act(() => root.unmount()); }
 });

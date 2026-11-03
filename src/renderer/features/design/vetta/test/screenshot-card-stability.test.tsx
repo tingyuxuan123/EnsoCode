@@ -9,7 +9,7 @@ vi.mock("../src/plugin-context", () => ({
 	getPluginCtx: () => ({ fs: { readDir }, ui: { previewImage: vi.fn() } }),
 }));
 // URL provisioning belongs to the EnsoCode P2 card mount, not swiper layout.
-vi.mock('../src/cards/file-url', () => ({ toVettaFileUrl: () => 'data:image/png;base64,AA==' }));
+vi.mock('../src/cards/file-url', () => ({ toVettaFileUrl: async () => ({ url: 'data:image/png;base64,AA==', dispose() {} }) }));
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

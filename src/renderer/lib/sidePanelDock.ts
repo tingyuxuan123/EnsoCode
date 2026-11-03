@@ -21,6 +21,8 @@ const filesOpeners = new Map<string, (...target: FileTarget) => void>();
 const pendingFileOpens = new Map<string, FileTarget>();
 /** dock 未挂载时挂起的 Files 面板，dock 绑定后补建 */
 const pendingFilesReveal = new Set<string>();
+type DesignReveal = { conversationId: string; title?: string; width?: number | 'max' };
+const pendingDesignReveal = new Map<string, DesignReveal>();
 const pendingBrowserReveal: { conversationId: string; tabId?: string; ownerId?: string }[] = [];
 const pendingWorkflowReveal: {
   conversationId: string;
@@ -80,6 +82,11 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
   // onReady restores the saved layout synchronously; reveal only after fromJSON completes.
   queueMicrotask(() => {
     if (docks.get(conversationId) !== api) return;
+    const design = pendingDesignReveal.get(conversationId);
+    if (design) {
+      pendingDesignReveal.delete(conversationId);
+      addSidePanelDesign(design);
+    }
     const pending = pendingSubagentReveal.get(conversationId);
     pendingSubagentReveal.delete(conversationId);
     for (const item of pending?.values() ?? []) {
@@ -250,6 +257,45 @@ export function addSidePanelBrowser(opts?: {
   });
 }
 
+/** Single design surface per dock; defer until fromJSON has finished. */
+export function addSidePanelDesign(opts?: Partial<DesignReveal>): void {
+  const sessions = useSessionsStore.getState();
+  const ownerId = opts?.conversationId ?? sessions.activeId;
+  if (!ownerId || !sessions.conversations[ownerId]) return;
+  const dockId = resolveSidePanelDockConversationId(sessions.conversations, ownerId);
+  const side = useSidePanelStore.getState();
+  side.ensureOpen(dockId);
+  const api = docks.get(dockId);
+  if (!api) {
+    pendingDesignReveal.set(dockId, { ...opts, conversationId: ownerId });
+    return;
+  }
+  if (opts?.width === 'max' && sessions.activeId === dockId) side.setFullscreen(true);
+  else if (typeof opts?.width === 'number') side.setWidth(dockId, opts.width);
+  const existing = api.getPanel('design');
+  if (existing) {
+    existing.api.updateParameters({ conversationId: ownerId });
+    existing.focus();
+    return;
+  }
+  api.addPanel({
+    id: 'design',
+    component: 'design',
+    title: opts?.title ?? 'Design',
+    params: { conversationId: ownerId, projectId: sessions.conversations[ownerId].projectId },
+  });
+}
+
+export function setSidePanelDesignVisible(conversationId: string, visible: boolean): void {
+  if (visible) return; // Availability is not an instruction to steal focus/open.
+  const dockId = resolveSidePanelDockConversationId(
+    useSessionsStore.getState().conversations,
+    conversationId
+  );
+  pendingDesignReveal.delete(dockId);
+  docks.get(dockId)?.getPanel('design')?.api.close();
+}
+
 export function addSidePanelBtw(opts?: { title?: string }): void {
   const active = activeDock();
   if (!active) return;
@@ -373,6 +419,7 @@ export function disposeConversationResources(conversationId: string): void {
   filesOpeners.delete(conversationId);
   pendingFileOpens.delete(conversationId);
   pendingFilesReveal.delete(conversationId);
+  pendingDesignReveal.delete(conversationId);
   pendingSubagentReveal.delete(conversationId);
   for (const pending of pendingSubagentReveal.values()) {
     for (const [key, item] of pending) {
@@ -399,7 +446,7 @@ export function disposeConversationResources(conversationId: string): void {
   if (api) {
     for (const panel of [...api.panels]) {
       if (isSubagentPanel(panel.id)) continue;
-      if (panel.id === 'changes' || panel.id === 'files') continue;
+      if (panel.id === 'changes' || panel.id === 'files' || panel.id === 'design') continue;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) continue;
       releaseTerminal(panel.id);
       void window.electronAPI?.terminal?.dispose(panel.id);

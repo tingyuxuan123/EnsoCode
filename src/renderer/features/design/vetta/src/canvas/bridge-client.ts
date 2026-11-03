@@ -4,6 +4,7 @@
  * postMessage traffic per frame iframe.
  */
 import { parseStorageEntries, type StorageEntries } from "@design-engine/src/storage-sync";
+import { designFrameOrigin } from "../shared/frame-origin";
 
 export interface SelectedElementPayload {
 	tag: string;
@@ -69,6 +70,7 @@ interface PendingCapture {
 }
 
 interface PendingResolve {
+	frameId: string;
 	resolve(payload: SelectedElementPayload | null): void;
 	timer: number;
 }
@@ -78,6 +80,7 @@ export type ElementQuery = { x: number; y: number } | { domPath: string };
 
 export class BridgeHub {
 	private readonly frames = new Map<string, HTMLIFrameElement>();
+	private readonly origins = new Map<string, string>();
 	private readonly captures = new Map<string, PendingCapture>();
 	private readonly resolves = new Map<string, PendingResolve>();
 	private events: BridgeHubEvents | null = null;
@@ -92,7 +95,8 @@ export class BridgeHub {
 	private readonly onMessage = (event: MessageEvent): void => {
 		const data = event.data as Record<string, unknown> | null;
 		if (!data || data.vetd !== true) return;
-		const frameId = this.frameIdForWindow(event.source);
+		const frameId = this.frameIdForMessage(event);
+		if (!frameId) return;
 		switch (data.type) {
 			case "ready": {
 				if (!frameId) return;
@@ -160,7 +164,7 @@ export class BridgeHub {
 			case "element-resolved": {
 				const requestId = typeof data.requestId === "string" ? data.requestId : "";
 				const pending = this.resolves.get(requestId);
-				if (!pending) return;
+				if (!pending || pending.frameId !== frameId) return;
 				this.resolves.delete(requestId);
 				window.clearTimeout(pending.timer);
 				pending.resolve((data.payload as SelectedElementPayload | null) ?? null);
@@ -169,7 +173,7 @@ export class BridgeHub {
 			case "captured": {
 				const requestId = typeof data.requestId === "string" ? data.requestId : "";
 				const pending = this.captures.get(requestId);
-				if (!pending) return;
+				if (!pending || pending.frameId !== frameId) return;
 				this.captures.delete(requestId);
 				window.clearTimeout(pending.timer);
 				if (typeof data.dataUrl === "string") pending.resolve(data.dataUrl);
@@ -200,6 +204,7 @@ export class BridgeHub {
 		}
 		this.resolves.clear();
 		this.frames.clear();
+		this.origins.clear();
 		this.ready.clear();
 		for (const waiters of this.readyWaiters.values()) {
 			for (const waiter of waiters) waiter();
@@ -208,11 +213,14 @@ export class BridgeHub {
 	}
 
 	register(frameId: string, iframe: HTMLIFrameElement | null): void {
-		if (iframe) {
+		const origin = iframe ? designFrameOrigin(iframe.src) : null;
+		if (iframe && origin) {
 			this.frames.set(frameId, iframe);
+			this.origins.set(frameId, origin);
 			return;
 		}
 		this.frames.delete(frameId);
+		this.origins.delete(frameId);
 		// iframe 卸了，下次挂上是全新的文档，得重新等它报 ready。
 		this.ready.delete(frameId);
 		this.abortCaptures(frameId, "the frame's iframe was unmounted while capturing");
@@ -272,16 +280,18 @@ export class BridgeHub {
 		return { x: rect.left + x * scale, y: rect.top + y * scale };
 	}
 
-	private frameIdForWindow(source: MessageEventSource | null): string | null {
+	private frameIdForMessage(event: MessageEvent): string | null {
+		if (!event.source) return null;
 		for (const [frameId, iframe] of this.frames) {
-			if (iframe.contentWindow === source) return frameId;
+			if (iframe.contentWindow === event.source && this.origins.get(frameId) === event.origin) return frameId;
 		}
 		return null;
 	}
 
 	private post(frameId: string, message: Record<string, unknown>): void {
 		const iframe = this.frames.get(frameId);
-		iframe?.contentWindow?.postMessage({ vetd: true, ...message }, "*");
+		const origin = this.origins.get(frameId);
+		if (origin) iframe?.contentWindow?.postMessage({ vetd: true, ...message }, origin);
 	}
 
 	/**
@@ -321,7 +331,7 @@ export class BridgeHub {
 				this.resolves.delete(requestId);
 				resolve(null);
 			}, timeoutMs);
-			this.resolves.set(requestId, { resolve, timer });
+			this.resolves.set(requestId, { frameId, resolve, timer });
 			this.post(frameId, { type: "resolve-element", requestId, ...query });
 		});
 	}

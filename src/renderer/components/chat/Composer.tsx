@@ -76,6 +76,8 @@ interface ComposerProps {
   /** 底部工具行左侧插槽（模型选择器等） */
   toolbar?: React.ReactNode;
   locked?: boolean;
+  /** Host-owned, single prompt reference; sent only after the normal composer gate. */
+  attachment?: { label: string; text: string; onRemove(): void; onConsumed(): void };
   injectedDraft?: string;
   injectedImages?: AttachedImage[];
   injectedDraftAppend?: boolean;
@@ -129,6 +131,7 @@ export function Composer({
   enterToSend = true,
   toolbar,
   locked = false,
+  attachment,
   injectedDraft,
   injectedImages,
   injectedDraftAppend,
@@ -204,8 +207,8 @@ export function Composer({
   const composerRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
-  const pluginStateRef = useRef({ busy, locked, images, slash, recipient, focusKey });
-  pluginStateRef.current = { busy, locked, images, slash, recipient, focusKey };
+  const pluginStateRef = useRef({ busy, locked, images, slash, recipient, focusKey, attachment });
+  pluginStateRef.current = { busy, locked, images, slash, recipient, focusKey, attachment };
   const pluginEditRevision = useRef(0);
   useEffect(() => {
     if (isolated || !focusKey) return;
@@ -222,7 +225,11 @@ export function Composer({
         !editorRef.current,
       hasReferences: () =>
         pluginStateRef.current.images.length > 0 ||
-        Boolean(pluginStateRef.current.slash || pluginStateRef.current.recipient),
+        Boolean(
+          pluginStateRef.current.slash ||
+            pluginStateRef.current.recipient ||
+            pluginStateRef.current.attachment
+        ),
     });
   }, [isolated, focusKey]);
   const [popupLayout, setPopupLayout] = useState<{
@@ -523,7 +530,16 @@ export function Composer({
       images,
       recipient,
     });
-    if (onSend(payload) === false) return;
+    // A draft for this session must not leak into an explicit @agent dispatch or local command.
+    const attached =
+      !recipient && !/^\/(?:compact|goal|plan)(?:\s|$)/.test(payload.text.trimStart())
+        ? attachment
+        : undefined;
+    const outgoing = attached
+      ? { ...payload, text: [payload.text, attached.text].filter(Boolean).join('\n\n') }
+      : payload;
+    if (onSend(outgoing) === false) return;
+    attached?.onConsumed();
     editorRef.current?.clear();
     setImages([]);
     setSlash(null);
@@ -753,6 +769,21 @@ export function Composer({
           ingestFiles(files);
         }}
       >
+        {attachment && (
+          <div className="flex px-3 pt-2">
+            <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs">
+              <span className="truncate">{attachment.label}</span>
+              <button
+                type="button"
+                aria-label={t('Remove')}
+                onClick={attachment.onRemove}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          </div>
+        )}
         {images.filter((image) => !image.id).length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-3">
             {images

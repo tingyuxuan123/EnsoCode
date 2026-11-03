@@ -1,4 +1,4 @@
-# vetta-ui-design → EnsoCode（P1-C）
+# vetta-ui-design → EnsoCode（P1-C / P2-UI）
 
 ## 基准与边界
 
@@ -7,10 +7,10 @@
 `vetta/vendor/taste-skill` 整体复制，含 LICENSE、UPSTREAM.md 与 library JSON。
 补入上游 plugin.json（静态契约测试使用）和 Apache-2.0 LICENSE。
 
-行为差距：EnsoCode 没有 Vetta 插件宿主、通用 command、特权文件协议；本期只在 Renderer
-执行工具和登记贡献，不渲染画布/画廊/卡片，不增加 Main/preload/worker 契约。
+行为差距：EnsoCode 没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
+执行工具和登记贡献，P2-UI 将画布、截图卡和样机工作台接入渲染层，不增加 preload 暴露。
 `host/` 负责 SDK 兼容、绝对路径拆分与 IPC；Main 仍负责权威根、realpath、写白名单。
-App 仅增加一个 `DesignRuntimeHost`；不改布局、Dockview、文件树或消息卡。
+画廊、文件树、分享包预览仍未挂载。
 
 ## 构建和同步
 
@@ -25,9 +25,11 @@ App 仅增加一个 `DesignRuntimeHost`；不改布局、Dockview、文件树或
   Vitest design project 用 happy-dom，其它测试保持 node；未排除迁入代码的 tsc 检查。
 - Biome 整体排除 `vetta/**`（包括必要 SDK 类型摘录），不对上游目录格式化，
   以免同步产生纯格式差异。host/runtime 正常 lint。
-- 上游入口原本依靠 plugin-vite 将 CSS 包在 plugin-root `@scope` 中。P1 删除入口的
-  全局 stylesheet 副作用导入，避免 Tailwind/theme/devices.css 污染 EnsoCode；P2 必须
-  在 `[data-vetta-plugin-root=vetta-ui-design]` scope 下接入，并补宿主颜色变量/portal 根。
+- 上游入口原本依靠 plugin-vite 将 CSS 包在 plugin-root `@scope` 中。P2 从
+  `DesignRuntimeHost` 单独导入样式，Vite pre 插件排序在 Tailwind 之后、Vite CSS 转换之前，
+  仅处理此文件；主题/工具类/devices.css/画布选择器都包 `@scope`，`:root`/`:host`
+  变 `:scope`，Iconify 默认规则留在 scope 内的低优先级 layer。宿主 Tailwind 不扫描 `vetta/`，
+  Vetta 只扫描 `vetta/src/`。不引入 preflight；颜色和 color-scheme 继承宿主变量。
 - 已使用 electron-vite 的 renderer 配置独立 Vite production build 验证：六个动态 JSON
   directions/heroes/sections/type/palettes/photos 均生成独立 JS chunks，不依赖 resources/vendor。
   完整三段构建另遇 Main bundle 的 unterminated string（非 renderer 代码）。
@@ -53,10 +55,11 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
   engineId + path/query/hash，不把 URL 发给 Main。
 - network GET/POST + JSON body，Main 固定主机白名单继续生效。
 - agent registerTool/registerHook/registerSystemPromptProvider；ui.register*、fileExplorer
-  decoration/contextMenu 登记 `useDesignRegistry`，所有打开/宽度/预览/通知/导航只写内存状态，
-  本期不声称已显示；openExternal 走 design.shell；copyImage 用浏览器 clipboard。
+  decoration/contextMenu 登记 `useDesignRegistry`。P2 实接 design Dock 打开/可见性/宽度、图片
+  预览、通知、局部快捷键；工作区导航/文件预览仍只登记。openExternal 走 design.shell，
+  copyImage 用浏览器 clipboard，notify 走宿主 toast。
 - conversation 订阅立即微任务重放当前会话；createSession 只用已存在的本地项目；
-  sendPrompt 走既有 sessions store，要求会话已选定模型。i18n zh/en 随设置变化；
+  sendPrompt 走既有 sessions store，沿用 Composer 的有效模型解析。i18n zh/en 随设置变化；
   React translation hook 不在 import 时初始化宿主持久 store。
 - official projects.list 使用已有项目并 resolveRoot，sessions.list/listRunningCwds/open
   使用已知会话投影和 sessionWorkspaceCwd（含 worktree），shell.showItemInFolder 走 design.shell。
@@ -64,7 +67,7 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 明确不支持（调用抛 `EnsoCode design host: … is not supported in P1`）：
 任意 command.run/spawn、fs.move、storage blobs、multipart/PUT/PATCH/DELETE 网络请求、
 conversation.abort、official.projects.create/archive 等写操作、official.dialog.openFiles/saveCopy、
-其它未实现 official 域；ui.captureRegion/createQrCode/sidebar 订阅。快捷键只登记，P2 才调度。
+其它未实现 official 域；ui.captureRegion/createQrCode/sidebar 订阅。
 默认 AgentMode 返回 code，不做 Vetta 远端执行/权限系统。新增宿主能力不得回退通用 IPC。
 
 ## 必要替换（上游行为 / 本地实现 / 原因）
@@ -76,7 +79,13 @@ conversation.abort、official.projects.create/archive 等写操作、official.di
 | history/history-transfer.ts | pack/unpack 指定绝对 out/from | 不传 out/from，读写 `<设计包>/.history-pack.zip`；Main 同名推导，禁止任意输出路径。 |
 | vetd/check-syntax.ts | node -e + 引擎 esbuild 扫描 | design.script check-syntax + frames/components 下 TSX 相对列表；仍保留上游失败时不伪造语法错误语义。 |
 | gallery/open-demo.ts | 任意 node 写临时 HTML 并用系统命令打开 | P1 明确报错；无此固定 Main API，P3 做沙箱 demo。 |
-| cards/file-url.ts | 同步生成 vetta-file://local 特权 URL | P1 明确报错，不生成不受 EnsoCode 支持的协议；P2 卡片需异步 fs.readBinaryFile → data/blob URL。swiper 布局测试使用安全 URL fake。 |
+| style.css | 上游由插件包扫描工具类并全量 scope | 显式限定 Tailwind 扫描目录并单文件编译后 scope；宿主与插件不交叉产出工具类。 |
+| cards/file-url.ts、ScreenshotSwiper.tsx | 同步生成 vetta-file://local 特权 URL | 经 SDK fs.readBinaryFile → MIME 校验 → blob URL；卡片卸载/替换时释放，弹层独立持有 URL，避免虚拟卡片卸载把预览清掉。 |
+| canvas/design-runtime.ts | 模块级单画布 controller | 保留单例，新增订阅；仅活跃 dock 挂载，controller 就绪/失效/卸载或会话切换时报告 `{sessionId, open}`，上报失败只警告。 |
+| canvas/FrameView.tsx、interaction/InteractionView.tsx | 刷新原 iframe 的 src | 端口变化换 iframe key，FrameView 重绑 bridge 并重置加载基线；Main 按 frame 首次引擎 origin 锁定导航。sandbox/allow 与上游一致（这两处均未设置）。 |
+| canvas/bridge-client.ts、interaction/nav-bridge.ts、shared/frame-origin.ts | 主要按 source 匹配，未校验 origin，父→子用 `*` | 本地同时要求已登记 iframe、固定 `http://127.0.0.1:<port>` origin 和 `vetd:true`，含 space/HMR；父→子只投递该 origin，截图/元素回应必须匹配请求画框。 |
+| mockup/ExportMockupDialog.tsx | 自建 z-1000 模态及 Escape 监听 | 业务工作台不改，外壳改宿主 Dialog Header/Panel/Footer、层级/焦点、body portal 内补 scope 根。其它上游 PluginPortal 已有标记；选中追问 portal 目标在画布内。 |
+| sdk/activity-tab.ts、sdk/conversation.ts、notes/handoff.ts | 备注派活调用当前会话，无显式会话 id | 本地在 ActivityTab 上下文携带 canvas sessionId，派活带所属 id/cwd 并在真正发送前复核，旧回调不改发新会话，忙时不入队。 |
 
 上游 shared/payload-transfer.ts 的 node -e 辅助实现保留便于同步，但生产替换模块不再调用；
 即使被调用也会被 command 不支持错误拒绝。Main 写白名单已覆盖目前本地可达工具写入；
@@ -106,9 +115,21 @@ session-end → SessionEnd 清理提示记忆。契约没有 turnId/model/cause�
 8. vetd_create：P1 脚手架与 pending open 状态登记有效，但不会真的打开画布；P2 接消费请求、尺寸/方向状态和多个会话隔离。
 9. tool-gate：controller 存在性快捷路径与 worker 每轮缓存闸门衔接；不得把本期注册表当成已注入的模型策略。
 
+选中不再挂到输入框：此版上游 `SelectionAskBadge` 将 frame/DOM 选中保存为批注，空闲防抖后
+通过 `sessions.send` 交给画布所属会话。prompt 指示模型 `Call vetd_notes with no arguments`，
+不内嵌批注原文或快照；`vetd_notes` 返回 `anchor.frameId`、`element.source`（文件:行）、
+`element.domPath` 等和标注图。正在运行时记为已派发、由本轮收尾自检，不排队/结束后不补发；
+跨 cwd 则等正确会话。没有新增“引用到输入框”按钮。
+
+通用 SDK `setPromptAttachment` 仍可设置/替换一条对应会话的 Composer chip，`null` 清除，
+一次性附件在接受发送后摘掉，`sticky` 保留。独立 `insertText` 与附件变更走现有 draft
+generation/revision、忙碌及 IME 门禁；实际发送仍由 Composer。无跨层 metadata 扩展，
+结构化内容以文本附录传递：`<plugin_prompt_contexts>` 中 JSON 数组元素是
+`{pluginId:"vetta-ui-design",schema,version,payload}`，沿用上游尖括号转义及数据边界说明。
+
 取消限制：上游 handler 原签名没有 AbortSignal，runtime 只能竞速拒绝和向 context 添加 signal；
 已经发出的 fs/engine/script IPC 无取消字段，不能撤销已发生的写入/进程动作。后续要完整取消需扩契约。
-conversation 当前仅重放/切换事件，未接完整 worker 工具/turn 实时流；notes 自动派活与生成活动需 P2 接线。
+conversation 接了查看会话的运行状态边沿（供 notes 闸口），尚未接细粒度工具生成/开始/结束事件。
 
 ## 严格类型与测试差异
 
@@ -126,8 +147,18 @@ conversation 当前仅重放/切换事件，未接完整 worker 工具/turn 实�
   文件级环境优先于 project 默认，否则全量测试仍会寻找未安装的 jsdom。
 - engine-recovery-ui：补 onPendingDesignPath fake 及函数型取消订阅。
 - runner-host/history-machine/payload-transfer 测试改 EnsoCode IPC fake；history-peek 使用真实已构建 runner 加 IPC fake。
-- file-url 测试改验证 fail-closed；assets/direction 文案断言改为 P2 面板提示；entry-lazy 检查固定 IPC 而非 raw runner 动态加载。
+- file-url 测试覆盖异步二进制读取、MIME 拒绝及幂等释放；frame-handoff 覆盖端口改变重建 DOM；notes-auto-dispatch 覆盖所属会话及锚点。assets/direction 文案断言改为 P2 面板提示；entry-lazy 检查固定 IPC 而非 raw runner 动态加载。
 - 仅跳过 engine-manager 的 3 条 ~/.vetta 迁移/旧 readiness 测试：EnsoCode 明确不迁移该目录，Main 引擎服务另测；退出事件测试继续跑。
 
 新增 paths/results/context/runtime-dispatch/完整入口激活测试，包含 RED 后 GREEN 的路径映射、
 结果转换、分发与 cards 保留断言。真机模型验收尚未执行；不能以 happy-dom 结果代替两厂商模型验证。
+
+P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个既有 skip；侧栏/时间线/
+工具卡/draft 回归 39 文件、426 passed，根 typecheck 与变更文件 Biome 通过，phone typecheck/build
+通过，`pnpm build` 三段成功。产物 `globals-C-X98f9D.css` 无 scope/无 `.vetd-*` 或 `.device`，
+宿主 `--radius-xl:var(--radius)`/`--font-sans:var(--font-family-sans,…)` 未被上游覆盖；
+`index-kXqFfW9o.css` 有 218 个 scope，492 条 Vetta/devices 规则均在插件 scope 内。
+隔离 `/tmp/enso-p2ui-smoke`、CDP 9333（PID/环境核验后操作）冒烟：面板打开并全屏，明暗画布底色
+继承 secondary，外部同类无效；输入框真实键入 `c` 不触发画布绑定、面板焦点则触发；样机弹窗
+具备插件根标记、Header/Panel/Footer 与宿主 z=51。隔离实例已关闭、数据目录已删除。
+完整画框/依赖 controller 的工具/两厂商模型联合真机验收由主任务继续，不能把本节替代 P2 验收清单。

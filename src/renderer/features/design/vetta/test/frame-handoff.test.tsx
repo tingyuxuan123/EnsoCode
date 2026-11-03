@@ -46,6 +46,7 @@ async function paintFrame(): Promise<void> {
 
 interface Scene {
 	live: boolean;
+	port?: number;
 	paintTick: number;
 	mounted?: boolean;
 	parked?: boolean;
@@ -59,7 +60,7 @@ function mountFrame(scene: Scene): { host: HTMLElement; update(next: Scene): Pro
 		root?.render(
 			<FrameView
     frame={{ id: "home", title: "Home", file: "home.tsx", meta: { title: 'Home', width: 390, height: 844 }, x: 0, y: 0, width: 390, height: 844 }}
-				port={5173}
+				port={current.port ?? 5173}
 				getZoom={() => 1}
 				bridge={bridge}
     menuItems={[]}
@@ -108,6 +109,17 @@ function mountFrame(scene: Scene): { host: HTMLElement; update(next: Scene): Pro
 		},
 	};
 }
+
+it("引擎 origin 变化必须重建 iframe，不能复用首次绑定旧 origin 的 frame", async () => {
+	installRaf();
+	const scene = mountFrame({ live: true, paintTick: 0, port: 5173 });
+	try {
+		const before = scene.host.querySelector("iframe");
+		await scene.update({ live: true, paintTick: 0, port: 5174 });
+		expect(scene.host.querySelector("iframe")).not.toBe(before);
+		expect(scene.host.querySelector("iframe")?.src).toContain("127.0.0.1:5174");
+	} finally { scene.cleanup(); }
+});
 
 /** 位图此刻是否还盖着（opacity 1 = 盖着）。 */
 function rasterCovers(host: HTMLElement): boolean {

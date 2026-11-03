@@ -6,6 +6,7 @@
  * rendered 信号被当成画布的交接点）。交互要的东西也少得多——导航，仅此而已。
  */
 import { type RefObject, useCallback, useEffect, useState } from "react";
+import { designFrameOrigin } from "../shared/frame-origin";
 
 export interface NavState {
 	/** 当前地址，如 `/login`。 */
@@ -39,7 +40,9 @@ export function useNavBridge(iframeRef: RefObject<HTMLIFrameElement | null>): Na
 	useEffect(() => {
 		const onMessage = (event: MessageEvent): void => {
 			// 画布上的每个 frame 也在往同一个 window 发消息，来源过滤是必须的。
-			if (event.source !== iframeRef.current?.contentWindow) return;
+			const iframe = iframeRef.current;
+			const origin = iframe ? designFrameOrigin(iframe.src) : null;
+			if (!origin || !event.source || event.origin !== origin || event.source !== iframe?.contentWindow) return;
 			const data = event.data as Record<string, unknown> | null;
 			if (!data || data.vetd !== true) return;
 			if (data.type === "status-bar-kind") {
@@ -60,7 +63,9 @@ export function useNavBridge(iframeRef: RefObject<HTMLIFrameElement | null>): Na
 
 	const post = useCallback(
 		(message: Record<string, unknown>): void => {
-			iframeRef.current?.contentWindow?.postMessage({ vetd: true, ...message }, "*");
+			const iframe = iframeRef.current;
+			const origin = iframe ? designFrameOrigin(iframe.src) : null;
+			if (origin) iframe?.contentWindow?.postMessage({ vetd: true, ...message }, origin);
 		},
 		[iframeRef],
 	);

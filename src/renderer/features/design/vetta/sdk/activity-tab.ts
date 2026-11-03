@@ -8,6 +8,8 @@ export interface ActivityTabContextValue {
 	 * active conversation may belong to another project (or be null).
 	 */
 	cwd: string | null;
+	/** EnsoCode: owner of the mounted canvas; prevents stale callbacks changing chat target. */
+	sessionId?: string;
 	/** Whether this tab is the selected docked tab or a visible floating tab. */
 	active: boolean;
 }

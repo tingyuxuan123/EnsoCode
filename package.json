@@ -114,6 +114,8 @@
     "hast-util-sanitize": "^5.0.2",
     "lucide-react": "^1.33.0",
     "mermaid": "^11.17.2",
+    "postcss": "^8.5.32",
+    "postcss-selector-parser": "^7.1.7",
     "prettier": "^3.9.9",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",

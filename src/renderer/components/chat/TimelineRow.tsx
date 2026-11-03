@@ -68,6 +68,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
+import { DesignToolCards } from '@/features/design/mounts/DesignToolCards';
 import { useOauthAccountEmails } from '@/hooks/useOauthAccountEmails';
 import { useSubagentProcess } from '@/hooks/useSubagentProcess';
 import { type TFunction, useI18n } from '@/i18n';
@@ -202,6 +203,8 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.durationMs === b.durationMs &&
         a.startedAt === b.startedAt &&
         a.agentMeta === b.agentMeta &&
+        a.designArgs === b.designArgs &&
+        JSON.stringify(a.designCards) === JSON.stringify(b.designCards) &&
         a.source === b.source &&
         a.nestedPending === b.nestedPending &&
         JSON.stringify(a.sandbox) === JSON.stringify(b.sandbox) &&
@@ -2213,6 +2216,14 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
           </>
         }
       />
+      {parentId && item.designCards && item.designCards.length > 0 && (
+        <DesignToolCards
+          cards={item.designCards}
+          pending={item.state === 'running'}
+          messageId={item.key}
+          sessionId={parentId}
+        />
+      )}
       {expanded && expandable && (
         <div
           data-slot="tool-details"

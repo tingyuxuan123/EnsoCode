@@ -159,6 +159,7 @@ export function InteractionView({ port, session, active, trailingSlot }: Interac
 
 	const frameElement = (
 		<iframe
+			key={port}
 			ref={iframeRef}
 			title={t("interaction.title")}
 			src={src ?? undefined}

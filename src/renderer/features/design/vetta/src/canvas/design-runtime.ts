@@ -27,6 +27,13 @@ export interface CanvasController {
 type ActivityListener = (activity: ReadonlyMap<string, FrameActivity>) => void;
 
 let controller: CanvasController | null = null;
+const controllerListeners = new Set<(value: CanvasController | null) => void>();
+/** EnsoCode host presence follows the real controller lifecycle, including recovery. */
+export function onCanvasController(listener: (value: CanvasController | null) => void): () => void {
+ controllerListeners.add(listener);
+ listener(controller);
+ return () => { controllerListeners.delete(listener); };
+}
 const activity = new Map<string, FrameActivity>();
 const activityListeners = new Set<ActivityListener>();
 /** 挂在某个 frame 上的待清理定时器：「已更新」的淡出，或活动态的最短停留。 */
@@ -42,6 +49,7 @@ const activeCalls = new Map<
 
 export function setCanvasController(next: CanvasController | null): void {
 	controller = next;
+	for (const listener of controllerListeners) listener(next);
 }
 
 export function getCanvasController(): CanvasController | null {

@@ -10,7 +10,7 @@ vi.mock("@vetta-org/plugin-sdk", () => ({
 	useTranslation: () => ({ t: (key: string, vars?: Record<string, unknown>) => `${key}:${JSON.stringify(vars ?? {})}` }),
 }));
 
-const sendPrompt = vi.fn((_text: string) => new Promise<void>(() => {}));
+const sendPrompt = vi.fn((_text: string, _canvas?: unknown) => new Promise<void>(() => {}));
 /** 建完会话即广播 conversation-changed，与宿主 openSession 的行为一致。 */
 const createSession = vi.fn((cwd: string) => {
 	emit?.({ type: "conversation-changed", conversation: { cwd, isStreaming: false } });
@@ -36,6 +36,7 @@ vi.mock("../src/plugin-context", () => ({
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { PluginFsApi } from "@vetta-org/plugin-sdk";
+import { __ActivityTabContext } from "../sdk/activity-tab";
 import { useNotesAutoDispatch } from "../src/notes/handoff";
 import { NotesStore } from "../src/notes/notes-store";
 import type { NoteAnchor } from "../src/notes/types";
@@ -136,6 +137,16 @@ it("空闲时落一条备注，自己就派出去了", () => {
 
 	expect(sendPrompt).toHaveBeenCalledTimes(1);
 	expect(sendPrompt.mock.calls[0][0]).toContain("pinned notes on the design canvas");
+});
+
+it("EnsoCode dispatch pins the canvas session and keeps element location on the note", () => {
+	act(() => root.render(<__ActivityTabContext.Provider value={{ cwd: "/w", sessionId: "canvas-owner", active: true }}><Harness cwd="/w" /></__ActivityTabContext.Provider>));
+	act(() => emit?.({ type: "conversation-changed", conversation: { cwd: "/w", isStreaming: false } }));
+	const element = { source: "frames/login.tsx:42", domPath: "main > button", tag: "button", text: "Login", classes: "" };
+	act(() => { store.addNote({ ...anchor, kind: "element", element }, "Make it clearer"); });
+	elapse();
+	expect(sendPrompt).toHaveBeenCalledWith(expect.stringContaining("Call vetd_notes with no arguments"), { sessionId: "canvas-owner", cwd: "/w", skipIfStreaming: true });
+	expect(store.notes[0].anchor).toMatchObject({ frameId: "login", element });
 });
 
 it("派活 prompt 不把 agent 的视野锁死在某一条上", () => {

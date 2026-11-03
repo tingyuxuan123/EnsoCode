@@ -1,5 +1,6 @@
 import { useTranslation } from "@vetta-org/plugin-sdk";
 import { useEffect, useRef, useState } from "react";
+import { useActivityTab } from "../../sdk/activity-tab";
 import { getPluginCtx, notify } from "../plugin-context";
 import type { NotesStore } from "./notes-store";
 import { pendingNotes } from "./types";
@@ -32,6 +33,7 @@ export interface NotesHandoff {
 
 export function useNotesHandoff(cwd: string | null): NotesHandoff {
 	const { t } = useTranslation();
+	const { sessionId } = useActivityTab();
 	const [conversation, setConversation] = useState<{ cwd: string | null; isStreaming: boolean } | null>(null);
 
 	useEffect(() => {
@@ -75,6 +77,15 @@ export function useNotesHandoff(cwd: string | null): NotesHandoff {
 		// sendPrompt 要整轮跑完才 resolve，不 await；发送失败单独报（与设计体系 Dialog 同型）。
 		const conversationApi = getPluginCtx().conversation;
 		const fail = (error: unknown): void => notify({ message: t("notes.handoff.failed"), error });
+		const sendToCanvas = (target?: { sessionId: string; cwd: string; skipIfStreaming: true }): void => {
+			void (target ? conversationApi.sendPrompt(prompt, target) : conversationApi.sendPrompt(prompt)).then((result) => {
+				if (result?.status === "failed" && result.error) fail(result.error.message);
+			}).catch(fail);
+		};
+		if (sessionId && cwd !== null) {
+			sendToCanvas({ sessionId, cwd, skipIfStreaming: true });
+			return;
+		}
 		if (sendNeedsSession && cwd !== null) {
 			// createSession resolve 时会话已就绪，可以直接接 sendPrompt。
 			void conversationApi
@@ -83,7 +94,7 @@ export function useNotesHandoff(cwd: string | null): NotesHandoff {
 				.catch(fail);
 			return;
 		}
-		void conversationApi.sendPrompt(prompt).catch(fail);
+		sendToCanvas();
 	};
 
 	return {

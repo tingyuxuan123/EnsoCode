@@ -1,4 +1,5 @@
 import type { DesignToolRequestEvent } from '@shared/types/design';
+import { useSessionsStore } from '@/stores/sessions';
 import { createDesignContext, emitDesignConversation } from './host/context';
 import { resolveDesignRoot } from './host/paths';
 import { designTools } from './host/registry';
@@ -91,7 +92,7 @@ export async function setDesignViewingSession(id: string | null): Promise<void> 
       cwd: root?.path ?? null,
       sessionPath: null,
       model: null,
-      isStreaming: false,
+      isStreaming: id ? useSessionsStore.getState().conversations[id]?.status === 'running' : false,
     },
   });
   const result = await window.electronAPI.design.registerRuntime({ viewingSessionId: id });

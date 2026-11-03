@@ -12,6 +12,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentChildOauthHost } from '@/components/agent/AgentChildOauthHost';
 import { addToast } from '@/components/ui/toast';
+import {
+  consumeDesignAttachment,
+  serializeDesignAttachment,
+  setDesignPromptAttachment,
+  useDesignComposer,
+} from '@/features/design/host/composer';
 import { useMemberName } from '@/hooks/useMemberName';
 import { toChatMentionCandidates } from '@/hooks/useMentionSearch';
 import { useSpeechStatus } from '@/hooks/useSpeechStatus';
@@ -87,6 +93,7 @@ export function ChatView() {
     speechStatus?.state !== 'unsupported' &&
     speechStatus?.models.find((model) => model.id === voiceModel)?.state === 'ready';
   const chrome = useSessionsStore(useShallow(selectChatChrome));
+  const designAttachment = useDesignComposer((state) => state.bySession[chrome?.id ?? '']);
   const memberName = useMemberName(chrome?.displayedParentId ? chrome.agentType : undefined);
   const pinnedTodos = usePinnedTodos(chrome?.id ?? '');
   const oauthSnapshot = useOauthCredentialStore((state) => state.snapshot);
@@ -494,6 +501,22 @@ export function ChatView() {
             </div>
           )}
           <Composer
+            attachment={
+              designAttachment
+                ? {
+                    label: designAttachment.label,
+                    text: serializeDesignAttachment(designAttachment),
+                    onRemove: () => {
+                      try {
+                        setDesignPromptAttachment(chrome.id, null);
+                      } catch (error) {
+                        addToast({ type: 'warning', description: String(error) });
+                      }
+                    },
+                    onConsumed: () => consumeDesignAttachment(chrome.id),
+                  }
+                : undefined
+            }
             cwd={toolCwd}
             chatCandidates={chatCandidates}
             commands={slashCommands}

@@ -2,7 +2,8 @@
    只 @import utilities 会漏掉依赖 theme 变量的工具类，故 theme 层必须一并导入。 */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";
 /* 交互模式的手机外壳（MIT，见 devices.css/LICENSE）。 */
 @import "devices.css/dist/devices.min.css";
 

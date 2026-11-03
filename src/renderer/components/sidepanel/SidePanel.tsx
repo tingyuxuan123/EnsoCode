@@ -17,6 +17,7 @@ import {
   Maximize2,
   MessageCircle,
   Minimize2,
+  PanelsTopLeft,
   Plus,
   Puzzle,
   SquareTerminal,
@@ -31,9 +32,15 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
+import { viewedDesignSessionId } from '@/features/design/host/activity-route';
+import { useDesignRegistry } from '@/features/design/host/registry';
+import { DesignPanel } from '@/features/design/mounts/DesignPanel';
+import { useDesignCwd } from '@/features/design/mounts/useDesignCwd';
+import { CANVAS_TAB_ID } from '@/features/design/vetta/src/tab-ids';
 import { useI18n } from '@/i18n';
 import {
   addSidePanelBrowser,
+  addSidePanelDesign,
   addSidePanelSubagentDirectory,
   addSidePanelWorkflow,
   bindSidePanelDock,
@@ -72,6 +79,7 @@ import './sidepanel-dock.css';
 /** dockview 的 part 组件在独立渲染树中,cwd 等上下文经 context 注入 */
 const PanelContext = createContext<{
   conversationId?: string;
+  designSessionId?: string;
   projectId?: string;
   visible?: boolean;
 }>({});
@@ -230,6 +238,38 @@ function BrowserPanel(props: IDockviewPanelProps<{ conversationId?: string; proj
   return <BrowserView conversationId={conversationId} panelApi={props.api} />;
 }
 
+function DesignDockPanel(props: IDockviewPanelProps<{ conversationId: string }>) {
+  const { visible, designSessionId } = useContext(PanelContext);
+  const [active, setActive] = useState(props.api.isActive && props.api.isVisible);
+  useEffect(() => {
+    const update = () => setActive(props.api.isActive && props.api.isVisible);
+    update();
+    const a = props.api.onDidActiveChange(update);
+    const v = props.api.onDidVisibilityChange(update);
+    return () => {
+      a.dispose();
+      v.dispose();
+    };
+  }, [props.api]);
+  return (
+    <DesignPanel
+      conversationId={designSessionId ?? props.params.conversationId}
+      active={Boolean(visible && active)}
+    />
+  );
+}
+
+function useDesignAvailable(conversationId?: string, sessionId = conversationId): boolean {
+  const cwd = useDesignCwd(sessionId);
+  const available = useDesignRegistry((state) =>
+    Boolean(state.ui[`visible:${cwd}:${CANVAS_TAB_ID}`])
+  );
+  const attached = useSidePanelStore((state) =>
+    Boolean(state.layouts[conversationId ?? '']?.panels?.design)
+  );
+  return Boolean(cwd && (available || attached));
+}
+
 function addWorkflowPanel(
   api: DockviewApi,
   conversationId: string | undefined,
@@ -343,6 +383,8 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <Bot className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'workflow' ? (
         <Workflow className="h-3 w-3 shrink-0" />
+      ) : props.api.id === 'design' ? (
+        <PanelsTopLeft className="h-3 w-3 shrink-0" />
       ) : props.api.id.startsWith('plugin:') ? (
         <Puzzle className="h-3 w-3 shrink-0" />
       ) : isBrowser && favicon && !faviconBroken ? (
@@ -357,7 +399,7 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
       ) : (
         <SquareTerminal className="h-3 w-3 shrink-0" />
       )}
-      <span className="max-w-32 truncate">{title}</span>
+      <span className="max-w-32 truncate">{props.api.id === 'design' ? t('Design') : title}</span>
       <button
         type="button"
         className={cn(
@@ -404,6 +446,7 @@ function NewTabMenu({
   onNewBrowser,
   onNewBtw,
   onNewWorkflow,
+  onNewDesign,
   onNewSubagents,
   onNewPluginView,
   compact,
@@ -415,6 +458,7 @@ function NewTabMenu({
   onNewBtw: () => void;
   /** 缺省 = 该项目没开 workflow 工具，不给入口 */
   onNewWorkflow?: () => void;
+  onNewDesign?: () => void;
   onNewSubagents?: () => void;
   onNewPluginView?: (view: PluginViewRef) => void;
   compact?: boolean;
@@ -452,6 +496,12 @@ function NewTabMenu({
           <Globe className="h-4 w-4" />
           {t('Browser')}
         </MenuItem>
+        {onNewDesign && (
+          <MenuItem onClick={onNewDesign}>
+            <PanelsTopLeft className="h-4 w-4" />
+            {t('Design')}
+          </MenuItem>
+        )}
         <MenuItem onClick={onNewBtw}>
           <MessageCircle className="h-4 w-4" />
           {t('Btw')}
@@ -488,10 +538,11 @@ function SidePanelHeaderActions({
   group?: IDockviewHeaderActionsProps['group'];
 }) {
   const { t } = useI18n();
-  const { conversationId, projectId } = useContext(PanelContext);
+  const { conversationId, designSessionId, projectId } = useContext(PanelContext);
   const fullscreen = useSidePanelStore((s) => s.fullscreen);
   const toggleFullscreen = useSidePanelStore((s) => s.toggleFullscreen);
   const workflowAvailable = useWorkflowAvailable(projectId);
+  const designAvailable = useDesignAvailable(conversationId, designSessionId);
   return (
     <div className="flex h-full items-center gap-0.5">
       <button
@@ -505,6 +556,16 @@ function SidePanelHeaderActions({
       </button>
       <NewTabMenu
         compact
+        onNewDesign={
+          designAvailable
+            ? () =>
+                addSidePanelDesign({
+                  conversationId: designSessionId ?? conversationId,
+                  title: t('Design'),
+                  width: 'max',
+                })
+            : undefined
+        }
         onNewPluginView={(view) => addPluginViewPanel(containerApi, conversationId, view, group)}
         onNewSubagents={
           conversationId ? () => addSidePanelSubagentDirectory(conversationId) : undefined
@@ -552,8 +613,9 @@ function SidePanelHeaderActions({
 /** 空态水印:无任何 tab 时的新建入口 */
 function Watermark(props: IWatermarkPanelProps) {
   const { t } = useI18n();
-  const { conversationId, projectId } = useContext(PanelContext);
+  const { conversationId, designSessionId, projectId } = useContext(PanelContext);
   const workflowAvailable = useWorkflowAvailable(projectId);
+  const designAvailable = useDesignAvailable(conversationId, designSessionId);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-end border-b bg-background px-2 py-1">
@@ -564,6 +626,16 @@ function Watermark(props: IWatermarkPanelProps) {
           {t('No tabs yet. Create one to get started.')}
         </p>
         <NewTabMenu
+          onNewDesign={
+            designAvailable
+              ? () =>
+                  addSidePanelDesign({
+                    conversationId: designSessionId ?? conversationId,
+                    title: t('Design'),
+                    width: 'max',
+                  })
+              : undefined
+          }
           onNewPluginView={(view) => addPluginViewPanel(props.containerApi, conversationId, view)}
           onNewSubagents={
             conversationId ? () => addSidePanelSubagentDirectory(conversationId) : undefined
@@ -602,6 +674,7 @@ const DOCK_COMPONENTS = {
   changes: ChangesPanel,
   files: FilesPanel,
   browser: BrowserPanel,
+  design: DesignDockPanel,
   btw: BtwPanel,
   workflow: WorkflowPanel,
   'subagent-session': SubagentPanel,
@@ -650,6 +723,9 @@ function ConversationDock({
   visible: boolean;
 }) {
   const isDark = useIsDark();
+  const designSessionId =
+    useSessionsStore((state) => viewedDesignSessionId(state.conversations, conversationId)) ??
+    conversationId;
   const workflowAvailable = useWorkflowAvailable(projectId);
   const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
   // 关掉工具时收起已开的工作流 tab；恢复布局带回来的也一并收掉
@@ -682,7 +758,13 @@ function ConversationDock({
     // 只有用户关 tab 才回收;dock 本身不随切会话卸载
     event.api.onDidRemovePanel((panel) => {
       if (isSubagentPanel(panel.id)) return;
-      if (panel.id === 'changes' || panel.id === 'files' || panel.id.startsWith('plugin:')) return;
+      if (
+        panel.id === 'changes' ||
+        panel.id === 'files' ||
+        panel.id === 'design' ||
+        panel.id.startsWith('plugin:')
+      )
+        return;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) {
         void window.electronAPI.browser.closeTab(panel.id);
         return;
@@ -698,7 +780,7 @@ function ConversationDock({
   };
 
   return (
-    <PanelContext.Provider value={{ conversationId, projectId, visible }}>
+    <PanelContext.Provider value={{ conversationId, designSessionId, projectId, visible }}>
       <div className="enso-side-dock h-full">
         <DockviewReact
           components={DOCK_COMPONENTS}

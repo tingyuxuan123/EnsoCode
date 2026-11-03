@@ -1,10 +1,23 @@
+import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import type { DesignResult, DesignRootRef } from '@shared/types/design';
+import { addToast } from '@/components/ui/toast';
+import { addSidePanelDesign, setSidePanelDesignVisible } from '@/lib/sidePanelDock';
+import { readMaterializedProviders } from '@/stores/modelDirectory/useProviders';
+import { oauthCredentialContext, useOauthCredentialStore } from '@/stores/oauthCredentials';
 import { useSessionsStore } from '@/stores/sessions';
 import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
+import { useSidePanelStore } from '@/stores/sidePanel';
 import type { ConversationEvent, ConversationState } from '../vetta/sdk/conversation';
 import type { PluginFsApi } from '../vetta/sdk/fs';
 import type { PluginNetworkResponse } from '../vetta/sdk/network';
+import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
+import {
+  resolveDesignActivitySession,
+  resolveDesignPromptTarget,
+  viewedDesignSessionId,
+} from './activity-route';
+import { insertDesignComposerText, setDesignPromptAttachment } from './composer';
 import { captureDesign, releaseDesignCapture } from './engine';
 import { designPaths, resolveDesignRoot } from './paths';
 import {
@@ -14,6 +27,7 @@ import {
   registerContribution,
   registerInMap,
   updateDesignUi,
+  useDesignRegistry,
 } from './registry';
 import { translate } from './translation';
 import type { PluginContext } from './types';
@@ -46,7 +60,16 @@ let currentConversation: ConversationState = {
 };
 export function emitDesignConversation(event: ConversationEvent): void {
   if (event.type === 'conversation-changed') currentConversation = event.conversation;
+  if (event.type === 'turn-start' || event.type === 'turn-end')
+    currentConversation = { ...currentConversation, isStreaming: event.type === 'turn-start' };
   for (const listener of conversationListeners) listener(event);
+}
+
+export function syncDesignConversationActivity(id: string | null, streaming: boolean): void {
+  if (currentConversation.id !== id || currentConversation.isStreaming === streaming) return;
+  emitDesignConversation(
+    streaming ? { type: 'turn-start' } : { type: 'turn-end', stopReason: 'stop' }
+  );
 }
 
 export async function prepareDesignRoots(refs: DesignRootRef[]): Promise<void> {
@@ -54,6 +77,27 @@ export async function prepareDesignRoots(refs: DesignRootRef[]): Promise<void> {
 }
 
 export function createDesignContext(): PluginContext {
+  const activityTarget = (cwd?: string) => {
+    const state = useSessionsStore.getState();
+    const viewed = viewedDesignSessionId(state.conversations, state.activeId);
+    if (cwd === undefined) return viewed === currentConversation.id ? viewed : null;
+    return resolveDesignActivitySession(
+      Object.keys(state.conversations).map((id) => ({
+        id,
+        cwd: designConversationCwd(id),
+      })),
+      viewed,
+      cwd
+    );
+  };
+  const promptTarget = () => {
+    const state = useSessionsStore.getState();
+    return resolveDesignPromptTarget(
+      viewedDesignSessionId(state.conversations, state.activeId),
+      useDesignRegistry.getState().canvasSessionId,
+      currentConversation.id
+    );
+  };
   const fs: PluginFsApi = {
     async readDir(path) {
       const mapped = designPaths.map(path);
@@ -189,21 +233,61 @@ export function createDesignContext(): PluginContext {
     registerInputAction: (value) => registerContribution('input-action', value),
     registerToolCallSlot: (value) => registerContribution('tool-call', value),
     registerTurnCard: (value) => registerContribution('turn-card', value),
-    openActivityTab: (id, options) =>
+    openActivityTab: (id, options) => {
       updateDesignUi(`activity:${options?.cwd ?? currentConversation.cwd}:${id}`, {
         open: true,
         ...options,
-      }),
-    setActivityTabVisible: (id, visible, options) =>
-      updateDesignUi(`visible:${options?.cwd ?? currentConversation.cwd}:${id}`, visible),
-    setActivityPanelWidth: (width) => updateDesignUi('panelWidth', width),
+      });
+      if (id !== CANVAS_TAB_ID) return;
+      const target = activityTarget(options?.cwd);
+      if (!target) return;
+      const sessions = useSessionsStore.getState();
+      const parentId = sessions.conversations[target]?.parentId;
+      if (parentId) {
+        sessions.selectConversation(parentId);
+        sessions.selectTab(parentId, target);
+      } else if (sessions.activeId !== target) sessions.selectConversation(target);
+      updateDesignUi(`visible:${designConversationCwd(target)}:${id}`, true);
+      addSidePanelDesign({
+        conversationId: target,
+        title: translate('tab.label'),
+        width: options?.width,
+      });
+    },
+    setActivityTabVisible: (id, visible, options) => {
+      const target = activityTarget(options?.cwd);
+      updateDesignUi(
+        `visible:${target ? designConversationCwd(target) : (options?.cwd ?? currentConversation.cwd)}:${id}`,
+        visible
+      );
+      if (id === CANVAS_TAB_ID && target) setSidePanelDesignVisible(target, visible);
+    },
+    setActivityPanelWidth: (width) => {
+      updateDesignUi('panelWidth', width);
+      const target = useSessionsStore.getState().activeId;
+      if (width === 'max') useSidePanelStore.getState().setFullscreen(true);
+      else if (target) useSidePanelStore.getState().setWidth(target, width);
+    },
     openWorkspaceView: (id) => updateDesignUi('workspaceView', id),
     setWorkspaceViewHeader: (id, header) => updateDesignUi(`header:${id}`, header),
     setWorkspaceViewBadge: (id, badge) => updateDesignUi(`badge:${id}`, badge),
-    setPromptAttachment: (attachment) => updateDesignUi('promptAttachment', attachment),
+    setPromptAttachment: (attachment) => {
+      const id = promptTarget();
+      if (!id) throw new Error('No matching design composer');
+      setDesignPromptAttachment(id, attachment);
+    },
     previewImage: (ref, group) => updateDesignUi('imagePreview', { ref, group }),
     previewFile: (file, group) => updateDesignUi('filePreview', { file, group }),
-    notify: (options) => updateDesignUi('notification', options),
+    notify: (options) => {
+      updateDesignUi('notification', options);
+      addToast({
+        title: options.title ?? translate('tab.label'),
+        description: options.message,
+        type: options.variant ?? (options.error ? 'error' : 'info'),
+        timeout: options.durationMs ?? (options.error ? 0 : undefined),
+      });
+      if (options.error) console.warn('[design]', options.error);
+    },
     async openExternal(url) {
       unwrap(await api().shell({ op: 'openExternal', url }));
     },
@@ -226,23 +310,50 @@ export function createDesignContext(): PluginContext {
         },
       };
     },
-    async sendPrompt(text) {
-      const id = currentConversation.id;
+    async sendPrompt(text, canvas) {
+      const state = useSessionsStore.getState();
+      const id = promptTarget();
       if (!id) throw new Error('No active design conversation');
-      const session = useSessionsStore.getState().conversations[id];
-      if (!session?.lastProviderId || !session.lastModelId || !currentConversation.cwd)
-        throw new Error('Design prompt requires an initialized session model');
+      const session = state.conversations[id];
+      const cwd = designConversationCwd(id);
+      if (!session || !cwd) throw new Error('Design conversation workspace is unavailable');
+      if (
+        canvas &&
+        (canvas.sessionId !== id || (canvas.cwd !== cwd && canvas.cwd !== currentConversation.cwd))
+      ) {
+        throw new Error('The design canvas is no longer in the active conversation');
+      }
+      if (
+        canvas?.skipIfStreaming &&
+        (session.status === 'running' || session.spawning || session.compaction)
+      )
+        return { status: 'failed' };
+      const settings = useSettingsStore.getState();
+      const project = settings.projects.find((item) => item.id === session.projectId);
+      const model = resolveChatModel({
+        defaultModel: settings.defaultModel,
+        ...scopedDefaultModels(project, settings.projectGroups),
+        lastProviderId: session.lastProviderId,
+        lastModelId: session.lastModelId,
+        providers: readMaterializedProviders(),
+        credentials: oauthCredentialContext(useOauthCredentialStore.getState().snapshot),
+        virtualModels: settings.virtualModels,
+      });
+      if (model.source === 'none')
+        throw new Error('Design prompt requires an available session model');
       const error = await useSessionsStore.getState().send(
         text,
         {
-          providerId: session.lastProviderId,
-          modelId: session.lastModelId,
-          cwd: currentConversation.cwd,
+          providerId: model.providerId,
+          modelId: model.modelId,
+          cwd,
         },
         undefined,
         id
       );
-      return error ? { status: 'failed', error: { message: error } } : { status: 'sent' };
+      return error
+        ? { status: 'failed', error: { message: error } }
+        : { status: session.status === 'running' ? 'queued' : 'sent' };
     },
     async createSession(cwd) {
       const project = useSettingsStore
@@ -254,7 +365,11 @@ export function createDesignContext(): PluginContext {
       await resolveDesignRoot({ kind: 'session', sessionId: id });
       return { id, cwd, sessionPath: null, model: null, isStreaming: false };
     },
-    insertText: (text) => updateDesignUi('composerText', text),
+    insertText: (text) => {
+      const id = promptTarget();
+      if (!id) throw new Error('No matching design composer');
+      insertDesignComposerText(id, text);
+    },
     async abort() {
       unsupported('conversation.abort');
     },

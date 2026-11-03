@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import pkg from './package.json';
+import { designStyleScopePlugin } from './src/renderer/features/design/host/style-scope';
 
 // 合并说明：dev 曾为手工 multi-input 显式复刻默认 external（nodeExternal）。
 // 本分支已改用 `?modulePath` 独立构建 agent worker、main 保持官方单入口，
@@ -42,7 +43,7 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), designStyleScopePlugin()],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
     },

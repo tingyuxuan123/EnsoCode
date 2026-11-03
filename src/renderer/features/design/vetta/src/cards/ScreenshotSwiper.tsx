@@ -1,4 +1,5 @@
 import { useTranslation } from "@vetta-org/plugin-sdk";
+import { useEffect, useState } from "react";
 import { getPluginCtx } from "../plugin-context";
 import { toVettaFileUrl } from "./file-url";
 import type { Snapshot } from "./snapshots";
@@ -32,7 +33,22 @@ export function ScreenshotSwiper({
 	leadingSkeleton: boolean;
 }) {
 	const { t } = useTranslation();
-	const group = snapshots.map((snapshot) => ({ id: snapshot.path, url: toVettaFileUrl(snapshot.path) }));
+	const [loaded, setLoaded] = useState<{ id: string; url: string }[]>([]);
+	const paths = snapshots.map((snapshot) => snapshot.path).join("\0");
+	useEffect(() => {
+		let disposed = false;
+		const handles: { dispose(): void }[] = [];
+		void Promise.all(paths ? paths.split("\0").map(async (path) => {
+			try {
+				const handle = await toVettaFileUrl(path, getPluginCtx().fs);
+				if (disposed) { handle.dispose(); return null; }
+				handles.push(handle);
+				return { id: path, url: handle.url };
+			} catch (error) { console.warn("[design] screenshot read failed", error); return null; }
+		}) : []).then((refs) => { if (!disposed) setLoaded(refs.filter((ref) => ref !== null)); });
+		return () => { disposed = true; for (const handle of handles) handle.dispose(); };
+	}, [paths]);
+	const group = loaded.filter((ref) => snapshots.some((snapshot) => snapshot.path === ref.id));
 
 	return (
 		<div className="py-1">
@@ -42,7 +58,7 @@ export function ScreenshotSwiper({
 				nextLabel={t("card.screenshot.next")}
 				resetKey={`${snapshots.length}:${leadingSkeleton}`}
 			>
-				{leadingSkeleton && <CaptureSkeleton />}
+				{(leadingSkeleton || (snapshots.length > 0 && group.length === 0)) && <CaptureSkeleton />}
 				{group.map((ref) => (
 					<button
 						key={ref.id}

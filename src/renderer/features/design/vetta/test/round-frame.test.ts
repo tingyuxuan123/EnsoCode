@@ -29,7 +29,7 @@ describe("BridgeHub.setRadius", () => {
 	it("发给对应画框，iframe 重载报 ready 后补发", () => {
 		const hub = new BridgeHub();
 		const sent: unknown[] = [];
-		const iframe = { contentWindow: { postMessage: (message: unknown) => sent.push(message) } } as unknown as HTMLIFrameElement;
+		const iframe = { src: "http://127.0.0.1:5179/a", contentWindow: { postMessage: (message: unknown) => sent.push(message) } } as unknown as HTMLIFrameElement;
 		hub.register("a", iframe);
 		hub.setRadius("a", 62);
 		expect(sent).toEqual([{ vetd: true, type: "frame-radius", radius: 62 }]);

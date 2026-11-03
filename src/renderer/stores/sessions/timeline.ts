@@ -12,6 +12,8 @@ import type {
   TurnPerf,
 } from '@shared/types/agent';
 import type { ProjectedApplyPatchOutcome, ProjectedFileChange } from '@shared/types/fileChanges';
+import { readDesignCards } from '@/features/design/host/cards';
+import type { CardDescriptor } from '@/features/design/vetta/sdk/ui';
 import { unwrapMcpProxyCall } from '@/lib/mcpToolName';
 import type { TimelineMessage } from './reducer';
 
@@ -69,6 +71,9 @@ export type TimelineItem =
       summary: string;
       output: string | null;
       state: 'running' | 'reviewing' | 'ok' | 'error';
+      /** Scoped rich result cards; only design tools can populate this projection. */
+      designCards?: CardDescriptor[];
+      designArgs?: Record<string, unknown>;
       /** read 到图片时的绝对路径，展开后按原文件渲染（含 svg / 动图）；其它缺省 */
       imagePath?: string;
       /** edit 工具的替换块，用于渲染 diff；非 edit 为 null */
@@ -907,8 +912,16 @@ function buildMessageTimeline(
       backgroundTaskId?: string;
     }
   >();
+  const designCardsByCall = new Map<string, CardDescriptor[]>();
+  const latestDesignAnchor = new Map<string, string>();
   for (const message of messages) {
     if (message.role === 'toolResult' && message.toolCallId) {
+      if (message.toolName?.startsWith('vetd_')) {
+        const cards = readDesignCards((message as { designCards?: unknown }).designCards);
+        designCardsByCall.set(message.toolCallId, cards);
+        for (const card of cards)
+          if (card.key) latestDesignAnchor.set(card.key, message.toolCallId);
+      }
       results.set(message.toolCallId, {
         output: partText(message),
         isError: message.isError === true,
@@ -1227,6 +1240,17 @@ function buildMessageTimeline(
             kind: 'tool',
             key,
             name: call.name,
+            ...(call.name.startsWith('vetd_')
+              ? {
+                  designArgs:
+                    call.args && typeof call.args === 'object' && !Array.isArray(call.args)
+                      ? (call.args as Record<string, unknown>)
+                      : {},
+                  designCards: (designCardsByCall.get(part.id) ?? []).filter(
+                    (card) => card.key && latestDesignAnchor.get(card.key) === part.id
+                  ),
+                }
+              : {}),
             summary:
               typeof codeSearchQuery === 'string'
                 ? codeSearchQuery
@@ -1641,6 +1665,8 @@ export function isCoreToolRow(item: Extract<TimelineItem, { kind: 'tool' }>): bo
     item.edits ||
       item.writeContent ||
       item.fileChanges?.length ||
+      item.designCards?.length ||
+      (item.name === 'vetd_screenshot' && item.state === 'running') ||
       (item.imagePath && item.state !== 'error') ||
       item.name === 'todo' ||
       item.name === 'submit_plan'

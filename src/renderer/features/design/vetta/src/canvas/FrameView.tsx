@@ -173,7 +173,7 @@ export const FrameView = memo(function FrameView({
 			fallbackRef.current = null;
 		}
 		setLoaded(false);
-	}, [mounted, reloadNonce]);
+	}, [mounted, port, reloadNonce]);
 
 	useEffect(() => {
 		if (paintTick > paintBaselineRef.current) setLoaded(true);
@@ -235,7 +235,7 @@ export const FrameView = memo(function FrameView({
 	useEffect(() => {
 		bridge.register(frame.id, iframeRef.current);
 		return () => bridge.register(frame.id, null);
-	}, [bridge, frame.id, mounted]);
+	}, [bridge, frame.id, mounted, port]);
 
 	const rect = resizeRect ?? {
 		x: (placement?.x ?? frame.x) + (moveDelta?.dx ?? 0),
@@ -443,6 +443,7 @@ export const FrameView = memo(function FrameView({
 				    React 应用连同大图留在内存里，合成器照样吃不消。 */}
 				{mounted ? (
 					<iframe
+						key={port}
 						ref={iframeRef}
 						title={frame.title || frame.id}
 						src={frameUrl(port, frame.id, reloadNonce)}

@@ -1,4 +1,5 @@
 import { useTranslation } from "@vetta-org/plugin-sdk";
+import { DesignWorkbenchDialog, DesignWorkbenchPanel, DesignWorkbenchFooter } from "../../../host/workbench-dialog";
 import {
 	type CSSProperties,
 	useCallback,
@@ -262,17 +263,6 @@ export function ExportMockupDialog() {
 		saveOptions(request.session.vetdPath, options);
 	}, [request, options]);
 
-	useEffect(() => {
-		if (!request) return;
-		const onKeyDown = (event: KeyboardEvent): void => {
-			if (event.key !== "Escape") return;
-			event.stopPropagation();
-			close();
-		};
-		window.addEventListener("keydown", onKeyDown, true);
-		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, [request, close]);
-
 	useLayoutEffect(() => {
 		if (!stage) return;
 		const rect = stage.getBoundingClientRect();
@@ -494,29 +484,8 @@ export function ExportMockupDialog() {
 	const multiPage = pages.length > 1;
 
 	return (
-		// 顶部留出宿主标题栏（TitleBar 是 h-9）的高度：macOS 红绿灯就在那条带里，
-		// 模态和它的遮罩都不能盖住，否则点窗口按钮会变成关弹窗。
-		<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/55 px-6 pb-6 pt-11">
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: click-outside backdrop */}
-			<div className="absolute inset-x-0 bottom-0 top-9" onClick={close} />
-			<div className="relative flex h-[85vh] w-[85vw] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-				<div className="flex items-center gap-2 border-b border-border px-4 py-3">
-					<span className="text-sm font-medium text-foreground">{t("mockup.title")}</span>
-					<span className="text-xs text-muted-foreground">
-						{t("mockup.subtitle", { count: shots.length, perPage: options.perPage })}
-					</span>
-					<div className="flex-1" />
-					<button
-						type="button"
-						onClick={close}
-						aria-label={t("mockup.close")}
-						className="rounded-lg px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
-					>
-						✕
-					</button>
-				</div>
-
-				<div className="flex min-h-0 flex-1">
+		<DesignWorkbenchDialog title={t("mockup.title")} subtitle={t("mockup.subtitle", { count: shots.length, perPage: options.perPage })} onClose={close}>
+				<DesignWorkbenchPanel>
 					<FrameRail
 						frames={rail}
 						total={frames.length}
@@ -703,9 +672,9 @@ export function ExportMockupDialog() {
 							</button>
 						</div>
 					</div>
-				</div>
+				</DesignWorkbenchPanel>
 
-				<div className="flex items-center gap-2 border-t border-border px-4 py-3">
+				<DesignWorkbenchFooter>
 					<span className="text-xs text-muted-foreground">
 						{pending
 							? t("mockup.status.capturing")
@@ -754,8 +723,7 @@ export function ExportMockupDialog() {
 					>
 						{busy === "save" ? t("mockup.save.running") : t("mockup.save")}
 					</button>
-				</div>
-			</div>
-		</div>
+				</DesignWorkbenchFooter>
+		</DesignWorkbenchDialog>
 	);
 }

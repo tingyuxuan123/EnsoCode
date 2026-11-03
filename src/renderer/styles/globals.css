@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 @import "./shared.css";
+/* The plugin owns a separately compiled, scoped utilities/theme sheet. */
+@source not "../features/design/vetta";
 
 @theme {
   --color-background: var(--background);

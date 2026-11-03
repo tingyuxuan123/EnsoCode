@@ -13,9 +13,14 @@ export interface DesignContribution {
 interface DesignRegistryState {
   contributions: DesignContribution[];
   ui: Record<string, unknown>;
+  canvasSessionId: string | null;
 }
 /** Runtime-only contributions; P2/P3 consume this store without changing activation. */
-export const useDesignRegistry = create<DesignRegistryState>(() => ({ contributions: [], ui: {} }));
+export const useDesignRegistry = create<DesignRegistryState>(() => ({
+  contributions: [],
+  ui: {},
+  canvasSessionId: null,
+}));
 export const designTools = new Map<string, PluginAgentToolRegistration<any>>();
 export const designHooks = new Map<string, PluginCodingAgentHookRegistration<any>>();
 export const designPromptProviders = new Map<string, PluginSystemPromptProviderRegistration>();

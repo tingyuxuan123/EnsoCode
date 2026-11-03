@@ -36,6 +36,24 @@ export function registerDraftTarget(target: DraftTarget): () => void {
 export function draftRev(segments: readonly MentionSegment[]): string {
   return JSON.stringify(segments);
 }
+/** Internal reference-only edit, using the same owner, busy and optimistic revision lock. */
+export function mutateDraftReferences(
+  sessionId: string,
+  expect: { generation: string; rev: string },
+  mutate: () => void
+): DraftResult {
+  const read = handleDraftRequest({ sessionId, op: 'readDraft', payload: {} });
+  if (!read.ok) return read;
+  const registered = current;
+  if (!registered || registered.target.busy())
+    return { ok: false, code: 'DRAFT_BUSY', error: 'Composer is busy or composing' };
+  const value = read.value as { generation: string; rev: string };
+  if (value.generation !== expect.generation || value.rev !== expect.rev)
+    return { ok: false, code: 'DRAFT_CHANGED', error: 'Read the draft again before writing' };
+  mutate();
+  registered.revision++;
+  return { ok: true, value: undefined };
+}
 export function handleDraftRequest(request: DraftRequest): DraftResult {
   const fail = (code: string, error: string): DraftResult => ({ ok: false, code, error });
   const registered = current;
