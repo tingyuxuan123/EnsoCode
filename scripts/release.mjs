@@ -25,6 +25,11 @@ export function assertReleaseRef(version, ref) {
       throw new Error('Personal tag does not match package version');
     return version;
   }
+  if (tag.startsWith('windows-v')) {
+    if (tag !== `windows-v${version}`)
+      throw new Error('Windows tag does not match package version');
+    return version;
+  }
   return assertReleaseVersion(version, tag);
 }
 

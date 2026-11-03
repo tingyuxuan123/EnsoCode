@@ -66,6 +66,64 @@ test('Mac 合并同时保留两架构 zip 的哈希、大小和兼容旧字段',
   assert.equal(arm.files.length, 1);
 });
 
+test('Windows 专用 tag 严格匹配版本，不触发 Mac 或多平台发布', async () => {
+  assert.equal(release.assertReleaseRef(version, `refs/tags/windows-v${version}`), version);
+  for (const ref of ['refs/tags/windows-v0.2.9', 'refs/tags/windows-v0.2.10-evil']) {
+    assert.throws(() => release.assertReleaseRef(version, ref));
+  }
+  assert.throws(() => assertReleaseVersion(version, `windows-v${version}`));
+  const workflow = parse(
+    await readFile(new URL('../.github/workflows/build-windows.yml', import.meta.url), 'utf8')
+  );
+  assert.deepEqual(workflow.on.push.tags, ['windows-v*']);
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.deepEqual(Object.keys(workflow.jobs), ['build-app', 'build-windows', 'publish-windows']);
+  const build = workflow.jobs['build-windows'];
+  assert.equal(build['runs-on'], 'windows-2022');
+  assert.equal(build.needs, 'build-app');
+  const steps = build.steps;
+  const appSteps = workflow.jobs['build-app'].steps;
+  const gate = appSteps.findIndex((step) => step.run === 'pnpm release:check');
+  const pack = steps.findIndex((step) => step.name === 'Build Windows');
+  assert.ok(gate >= 0 && gate < appSteps.findIndex((step) => step.run === 'pnpm build'));
+  assert.ok(pack >= 0);
+  assert.match(steps[pack].run, /--win --x64 --publish never/);
+  assert.ok(steps.some((step) => step.run?.includes('smoke-packaged-natives.cjs')));
+  assert.ok(steps.some((step) => step.run?.includes('smoke-packaged-design.cjs')));
+  assert.ok(steps.some((step) => step.run?.includes('release.mjs verify dist/release-assets')));
+  const publish = workflow.jobs['publish-windows'];
+  assert.equal(publish.needs, 'build-windows');
+  assert.deepEqual(publish.permissions, { contents: 'write' });
+  assert.match(publish.if, /github.event_name == 'push'/);
+  assert.match(publish.if, /refs\/tags\/windows-v/);
+  const publication = publish.steps.find((step) => step.name === 'Upload verified Windows draft');
+  assert.match(publication.run, /--draft/);
+  assert.match(publication.run, /--latest=false/);
+  assert.match(publication.run, /--verify-tag/);
+  const remote = publish.steps.find((step) => step.name === 'Verify remote Windows draft');
+  assert.match(remote.run, /gh release download/);
+  assert.match(remote.run, /release.mjs verify downloaded/);
+  assert.match(remote.run, /diff.*SHA256SUMS/);
+  assert.doesNotMatch(JSON.stringify(workflow), /--mac|--linux|personal-updates|APPLE_CERTIFICATE/);
+});
+
+test('仅 Windows 产物可独立校验，坏安装包与缺失清单不能发布', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-release-windows-'));
+  const windows = manifest(`EnsoCode-Setup-${version}.exe`);
+  try {
+    await writeFile(path.join(dir, windows.files[0].url), data);
+    await assert.rejects(verifyReleaseDirectory(dir, version));
+    await writeFile(path.join(dir, 'latest.yml'), stringify(windows));
+    await verifyReleaseDirectory(dir, version);
+    assert.match(await readFile(path.join(dir, 'SHA256SUMS'), 'utf8'), /latest\.yml/);
+    await assert.rejects(verifyReleaseDirectory(dir, version, { allPlatforms: true }));
+    await writeFile(path.join(dir, windows.files[0].url), Buffer.alloc(data.length));
+    await assert.rejects(verifyReleaseDirectory(dir, version));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('Mac 合并拒绝错版本、缺架构、重复文件和不可信下载地址', () => {
   for (const bad of [
     { ...intel, version: '0.2.9' },

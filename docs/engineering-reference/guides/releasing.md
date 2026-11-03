@@ -130,6 +130,24 @@ Actions 首次启用不会补跑旧 tag 事件；确认没有重复任务后可�
 
 ## 对外正式发布（仅明确授权时）
 
+### 仅 Windows 构建
+
+用户明确只要 Windows 时，递增 `package.json` 版本并推 `windows-v<version>`，
+由 `.github/workflows/build-windows.yml` 执行。该 tag 不匹配 `v*` 或 `personal-v*`，
+不会构建 Mac、Linux 或中继，不推进 `personal-updates`，不改变正式 latest。
+完整检查在 Linux runner 上执行；只在 Windows runner 上打包 x64 NSIS，验收包内原生依赖、
+设计引擎及更新清单哈希后，上传 Windows 专用 Release **草稿**并重新下载校验。
+手动触发此 workflow 仅生成 artifact；公开草稿仍需 Windows 安装、旧数据保留验收和独立授权。
+
+```bash
+git push origin HEAD:main
+git tag -a "windows-v$VERSION" -m "EnsoCode $VERSION Windows x64"
+git push origin "windows-v$VERSION"
+gh run list --repo tingyuxuan123/EnsoCode --workflow build-windows.yml --limit 5
+```
+
+### 多平台正式构建
+
 正式 `v*` 由 `.github/workflows/build.yml` 触发，多平台、Mac 两架构构建并合并清单，
 只保留草稿。正式公开 latest 仍要求独立授权、Developer ID 签名、公证和真实安装/升级验收。
 Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、
