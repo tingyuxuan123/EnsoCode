@@ -270,7 +270,8 @@ export function addSidePanelDesign(opts?: Partial<DesignReveal>): void {
     pendingDesignReveal.set(dockId, { ...opts, conversationId: ownerId });
     return;
   }
-  if (opts?.width === 'max' && sessions.activeId === dockId) side.setFullscreen(true);
+  // 「max」= 面板拉满但保留会话区；全屏会把正在对话的会话框整个盖掉
+  if (opts?.width === 'max') side.maximize(dockId);
   else if (typeof opts?.width === 'number') side.setWidth(dockId, opts.width);
   const existing = api.getPanel('design');
   if (existing) {

@@ -6,7 +6,12 @@ import type { ScreenRect } from '@/lib/guestViewOcclusion';
 import { useSessionsStore } from '@/stores/sessions';
 import { SIDE_PANEL_VERSION, splitLegacySnapshots } from './migrate';
 import { stripTransientSidePanelLayouts } from './transientPanels';
-import { resizeSidePanelWidth, SIDE_PANEL_DEFAULT_WIDTH, SIDE_PANEL_MIN_WIDTH } from './width';
+import {
+  resizeSidePanelWidth,
+  SIDE_PANEL_DEFAULT_WIDTH,
+  SIDE_PANEL_MAX_PREFERENCE,
+  SIDE_PANEL_MIN_WIDTH,
+} from './width';
 
 export { SIDE_PANEL_DEFAULT_WIDTH, SIDE_PANEL_MIN_WIDTH } from './width';
 
@@ -39,6 +44,8 @@ interface SidePanelState {
   nudgeWidth: (delta: number, workspaceWidth: number) => void;
   /** Programmatic pixel preference; actual workspace constraints still clamp display. */
   setWidth: (conversationId: string, width: number) => void;
+  /** 打开并拉到最宽，但保留会话区（不是全屏）；用户已全屏时不打断 */
+  maximize: (conversationId: string) => void;
   toggleFullscreen: () => void;
   setFullscreen: (fullscreen: boolean) => void;
   saveLayout: (conversationId: string, layout: SerializedDockview) => void;
@@ -105,6 +112,13 @@ export const useSidePanelStore = create<SidePanelState>()(
         set({
           uiByConversation: patchUi(get(), id, { width: Math.max(SIDE_PANEL_MIN_WIDTH, width) }),
           fullscreen: false,
+        });
+      },
+
+      maximize: (id) => {
+        if (get().fullscreen) return;
+        set({
+          uiByConversation: patchUi(get(), id, { open: true, width: SIDE_PANEL_MAX_PREFERENCE }),
         });
       },
 

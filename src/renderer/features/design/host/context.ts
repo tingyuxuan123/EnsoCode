@@ -283,8 +283,10 @@ export function createDesignContext(): PluginContext {
     setActivityPanelWidth: (width) => {
       updateDesignUi('panelWidth', width);
       const target = useSessionsStore.getState().activeId;
-      if (width === 'max') useSidePanelStore.getState().setFullscreen(true);
-      else if (target) useSidePanelStore.getState().setWidth(target, width);
+      if (!target) return;
+      // 画布每次挂载都会要「max」：拉满面板，但不全屏盖住会话区
+      if (width === 'max') useSidePanelStore.getState().maximize(target);
+      else useSidePanelStore.getState().setWidth(target, width);
     },
     openWorkspaceView: (id) => {
       if (id === GALLERY_VIEW_ID) openDesignGallery();

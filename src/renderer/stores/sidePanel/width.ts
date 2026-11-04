@@ -2,6 +2,8 @@ export const SIDE_PANEL_DEFAULT_WIDTH = 360;
 export const SIDE_PANEL_MIN_WIDTH = 280;
 export const CHAT_MIN_WIDTH = 360;
 export const SIDE_PANEL_HANDLE_WIDTH = 1;
+/** 「拉满」的偏好宽度：大于任何工作区，显示时由 resolveSidePanelWidth 截到会话区最小宽度之外 */
+export const SIDE_PANEL_MAX_PREFERENCE = 100_000;
 
 /**
  * 只限制显示宽度，不覆盖会话偏好；窄窗口优先保留聊天区，允许面板小于通常的最小宽度。

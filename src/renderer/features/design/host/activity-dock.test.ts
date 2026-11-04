@@ -1,7 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const { side, sessions } = vi.hoisted(() => ({
-  side: { ensureOpen: vi.fn(), setFullscreen: vi.fn(), forgetConversation: vi.fn() },
+  side: {
+    ensureOpen: vi.fn(),
+    setFullscreen: vi.fn(),
+    maximize: vi.fn(),
+    forgetConversation: vi.fn(),
+  },
   sessions: { activeId: 's', conversations: { s: { projectId: 'p' }, hidden: { projectId: 'p' } } },
 }));
 vi.mock('@/stores/sessions', () => ({ useSessionsStore: { getState: () => sessions } }));
@@ -32,7 +37,9 @@ it('defers and deduplicates a design reveal until layout restoration finishes; h
     component: 'design',
     params: { conversationId: 's' },
   });
-  expect(side.setFullscreen).toHaveBeenCalledWith(true);
+  // 拉满面板但不全屏，会话区保留
+  expect(side.maximize).toHaveBeenCalledWith('s');
+  expect(side.setFullscreen).not.toHaveBeenCalled();
   setSidePanelDesignVisible('s', false);
 });
 
