@@ -17,7 +17,13 @@ export { SIDE_PANEL_DEFAULT_WIDTH, SIDE_PANEL_MIN_WIDTH } from './width';
 
 export type ChangesMode = 'all' | 'git';
 
-export type SidePanelUi = { open: boolean; width: number };
+/** restoreWidth：拉满之前的宽度，「还原」时回到它 */
+export type SidePanelUi = { open: boolean; width: number; restoreWidth?: number };
+
+/** 面板是否处于「拉满」（展开按钮 / 设计画布） */
+export function isSidePanelExpanded(ui: SidePanelUi | undefined): boolean {
+  return Boolean(ui && ui.width >= SIDE_PANEL_MAX_PREFERENCE);
+}
 
 interface SidePanelState {
   /** 铺满中间工作区;不 persist,关面板 / 切到关着的会话时清掉 */
@@ -46,6 +52,8 @@ interface SidePanelState {
   setWidth: (conversationId: string, width: number) => void;
   /** 打开并拉到最宽，但保留会话区（不是全屏）；用户已全屏时不打断 */
   maximize: (conversationId: string) => void;
+  /** 退出拉满，回到拉满之前的宽度 */
+  unmaximize: (conversationId: string) => void;
   toggleFullscreen: () => void;
   setFullscreen: (fullscreen: boolean) => void;
   saveLayout: (conversationId: string, layout: SerializedDockview) => void;
@@ -117,8 +125,24 @@ export const useSidePanelStore = create<SidePanelState>()(
 
       maximize: (id) => {
         if (get().fullscreen) return;
+        const current = uiFor(get(), id);
         set({
-          uiByConversation: patchUi(get(), id, { open: true, width: SIDE_PANEL_MAX_PREFERENCE }),
+          uiByConversation: patchUi(get(), id, {
+            open: true,
+            width: SIDE_PANEL_MAX_PREFERENCE,
+            restoreWidth: isSidePanelExpanded(current) ? current.restoreWidth : current.width,
+          }),
+        });
+      },
+
+      unmaximize: (id) => {
+        const current = uiFor(get(), id);
+        if (!isSidePanelExpanded(current)) return;
+        set({
+          uiByConversation: patchUi(get(), id, {
+            width: current.restoreWidth ?? SIDE_PANEL_DEFAULT_WIDTH,
+            restoreWidth: undefined,
+          }),
         });
       },
 

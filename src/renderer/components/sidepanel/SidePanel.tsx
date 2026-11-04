@@ -48,13 +48,14 @@ import {
   disposeConversationResources,
   selectWorkflowAvailable,
 } from '@/lib/sidePanelDock';
+import { toggleSidePanelExpand } from '@/lib/sidePanelExpand';
 import { releaseTerminal } from '@/lib/terminalRegistry';
 import { cn } from '@/lib/utils';
 import { PluginView } from '@/plugins/PluginView';
 import { type PluginViewRef, usePluginViews } from '@/plugins/viewBridge';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
-import { useSidePanelStore } from '@/stores/sidePanel';
+import { isSidePanelExpanded, useSidePanelStore } from '@/stores/sidePanel';
 import { sanitizeSidePanelLayout } from '@/stores/sidePanel/layoutSanitize';
 import { isSubagentPanel } from '@/stores/sidePanel/transientPanels';
 import {
@@ -540,7 +541,17 @@ function SidePanelHeaderActions({
   const { t } = useI18n();
   const { conversationId, designSessionId, projectId } = useContext(PanelContext);
   const fullscreen = useSidePanelStore((s) => s.fullscreen);
-  const toggleFullscreen = useSidePanelStore((s) => s.toggleFullscreen);
+  // 宽度按活动会话记（与 App 计算面板宽度同一个键）
+  const activeId = useSessionsStore((s) => s.activeId);
+  const expanded = useSidePanelStore((s) =>
+    activeId ? isSidePanelExpanded(s.uiByConversation[activeId]) : false
+  );
+  // 「展开」= 面板拉满 + 收起项目栏，会话区保留；真正的全屏只走快捷键
+  const expandLabel = fullscreen
+    ? t('Exit side panel fullscreen')
+    : expanded
+      ? t('Restore side panel width')
+      : t('Widen side panel');
   const workflowAvailable = useWorkflowAvailable(projectId);
   const designAvailable = useDesignAvailable(conversationId, designSessionId);
   return (
@@ -548,11 +559,15 @@ function SidePanelHeaderActions({
       <button
         type="button"
         className="flex h-6 w-6 items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        onClick={toggleFullscreen}
-        aria-label={fullscreen ? t('Exit side panel fullscreen') : t('Expand side panel')}
-        title={fullscreen ? t('Exit side panel fullscreen') : t('Expand side panel')}
+        onClick={toggleSidePanelExpand}
+        aria-label={expandLabel}
+        title={expandLabel}
       >
-        {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+        {fullscreen || expanded ? (
+          <Minimize2 className="h-3.5 w-3.5" />
+        ) : (
+          <Maximize2 className="h-3.5 w-3.5" />
+        )}
       </button>
       <NewTabMenu
         compact

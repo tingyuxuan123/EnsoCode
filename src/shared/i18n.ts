@@ -536,6 +536,8 @@ export const zhTranslations: Record<string, string> = {
   'Toggle minimize to tray': '切换最小化到托盘',
   'Works while the app is in the tray': '应用在托盘时也能切换',
   'Expand side panel': '全屏右侧面板',
+  'Widen side panel': '展开右侧面板（收起项目栏）',
+  'Restore side panel width': '还原右侧面板宽度',
   'Exit side panel fullscreen': '退出右侧面板全屏',
   'New terminal tab': '新建终端标签',
   'New terminal when the side panel is focused; otherwise new conversation':

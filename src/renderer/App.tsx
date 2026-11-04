@@ -82,7 +82,14 @@ import {
 import { runSessionClean } from '@/stores/sessions/storageClean';
 import { useSettingsStore } from '@/stores/settings';
 import { flushElectronPersist } from '@/stores/settings/storage';
+import { sidebarDragState, useSidebarStore } from '@/stores/sidebar';
 import { useSidePanelStore } from '@/stores/sidePanel';
+import {
+  CHAT_MIN_WIDTH,
+  resolveSidePanelWidth,
+  SIDE_PANEL_HANDLE_WIDTH,
+  sidePanelDragSidebar,
+} from '@/stores/sidePanel/width';
 
 /** 碰撞策略:光标所在的落点优先(否则会话行的大矩形会把置顶条/输入框让给重叠面积更大的项目块) */
 const dndCollision: CollisionDetection = (args) => {
@@ -91,7 +98,6 @@ const dndCollision: CollisionDetection = (args) => {
 };
 
 const WIDTH_KEY = 'enso-sidebar-width';
-const COLLAPSED_KEY = 'enso-sidebar-collapsed';
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 420;
 
@@ -108,7 +114,9 @@ export default function App() {
     const saved = Number(localStorage.getItem(WIDTH_KEY));
     return Number.isFinite(saved) && saved >= MIN_WIDTH ? Math.min(saved, MAX_WIDTH) : 264;
   });
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1');
+  const collapsed = useSidebarStore((s) => s.collapsed);
+  const sidebarAuto = useSidebarStore((s) => s.auto);
+  const toggleSidebar = useSidebarStore((s) => s.toggle);
   const [sidebarView, setSidebarView] = useState<SidebarView>('projects');
   const { t } = useI18n();
   const chatWide = useSettingsStore((s) => s.chatWide);
@@ -147,6 +155,10 @@ export default function App() {
   useEffect(() => {
     if (sideFullscreen && !sideOpen) useSidePanelStore.getState().setFullscreen(false);
   }, [sideOpen, sideFullscreen]);
+  // 面板关掉后，为它腾宽度而自动收起的项目栏回来
+  useEffect(() => {
+    if (!sideOpen && sidebarAuto) useSidebarStore.getState().autoRestore();
+  }, [sideOpen, sidebarAuto]);
   useEffect(() => {
     document.documentElement.classList.add('enso-main-shell');
     return () => document.documentElement.classList.remove('enso-main-shell');
@@ -170,17 +182,55 @@ export default function App() {
   // 右侧面板:手柄在面板左缘,向左拖加宽;拖拽中暂停宽度 spring 动画防抖动
   const [sideResizing, setSideResizing] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const sidebarWidthRef = useRef(width);
+  sidebarWidthRef.current = width;
+  /** 面板已到上限后继续往左拖的累计距离；一次拖拽结束清零 */
+  const sideOverflowRef = useRef(0);
   const handleSideResize = useCallback((deltaX: number) => {
     const workspace = workspaceRef.current;
-    if (workspace) useSidePanelStore.getState().nudgeWidth(-deltaX, workspace.clientWidth);
+    if (!workspace) return;
+    const side = useSidePanelStore.getState();
+    const id = useSessionsStore.getState().activeId;
+    const preferred = (id ? side.uiByConversation[id]?.width : undefined) ?? side.lastWidth;
+    const sidebar = useSidebarStore.getState();
+    // 项目栏收起 / 展开带宽度动画：按动画结束后的工作区宽度算，拖动不被半途的宽度截住
+    const aside = document.querySelector<HTMLElement>('[data-slot="project-sidebar"]');
+    const settle = (collapsed: boolean) =>
+      workspace.clientWidth +
+      (aside?.getBoundingClientRect().width ?? 0) -
+      (collapsed ? 0 : sidebarWidthRef.current);
+    const workspaceWidth = settle(sidebar.collapsed);
+    const drag = sidePanelDragSidebar({
+      visible: resolveSidePanelWidth(preferred, workspaceWidth),
+      delta: -deltaX,
+      workspaceWidth,
+      overflow: sideOverflowRef.current,
+      sidebar: sidebarDragState(sidebar),
+      sidebarWidth: sidebarWidthRef.current,
+    });
+    sideOverflowRef.current = drag.overflow;
+    if (drag.action === 'collapse') {
+      sidebar.autoCollapse();
+      // 手柄补到鼠标位置：旧上限 + 越界总距离
+      const grown = settle(true);
+      const target = resolveSidePanelWidth(
+        workspaceWidth - CHAT_MIN_WIDTH - SIDE_PANEL_HANDLE_WIDTH + (drag.catchUp ?? 0),
+        grown
+      );
+      side.nudgeWidth(target - resolveSidePanelWidth(preferred, grown), grown);
+      return;
+    }
+    if (drag.action === 'restore') sidebar.autoRestore();
+    side.nudgeWidth(-deltaX, workspaceWidth);
+  }, []);
+  const handleSideResizing = useCallback((resizing: boolean) => {
+    sideOverflowRef.current = 0;
+    setSideResizing(resizing);
   }, []);
 
   useEffect(() => {
     localStorage.setItem(WIDTH_KEY, String(width));
   }, [width]);
-  useEffect(() => {
-    localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
-  }, [collapsed]);
 
   useEffect(
     () =>
@@ -343,7 +393,7 @@ export default function App() {
       }
       if (pressed === bindings['toggle-sidebar']) {
         e.preventDefault();
-        setCollapsed((v) => !v);
+        useSidebarStore.getState().toggle();
       } else if (pressed === bindings['open-settings']) {
         e.preventDefault();
         void window.electronAPI.window.openSettings();
@@ -471,7 +521,7 @@ export default function App() {
       <div className="flex min-h-0 flex-1">
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
-          onToggleSidebar={remoteNodeActive ? undefined : () => setCollapsed((v) => !v)}
+          onToggleSidebar={remoteNodeActive ? undefined : toggleSidebar}
           modeSwitch={botModeEnabled && !remoteNodeActive ? <ModeSwitch /> : undefined}
           onOpenSearch={
             remoteNodeActive
@@ -501,7 +551,7 @@ export default function App() {
           <BotView
             sidebarWidth={width}
             collapsed={collapsed}
-            onToggleCollapse={() => setCollapsed((v) => !v)}
+            onToggleCollapse={toggleSidebar}
             onResize={handleResize}
           />
         ) : (
@@ -537,7 +587,10 @@ export default function App() {
                     <ChatView />
                   </div>
                   {sideOpen && !sideFullscreen && (
-                    <ResizeHandle onResize={handleSideResize} onResizingChange={setSideResizing} />
+                    <ResizeHandle
+                      onResize={handleSideResize}
+                      onResizingChange={handleSideResizing}
+                    />
                   )}
                   <SidePanel width={sideWidth} resizing={sideResizing} />
                   <PluginUiHost />

@@ -5,6 +5,8 @@ import {
   resolveSidePanelWidth,
   SIDE_PANEL_HANDLE_WIDTH,
   SIDE_PANEL_MIN_WIDTH,
+  SIDEBAR_SNAP_DISTANCE,
+  sidePanelDragSidebar,
 } from './width';
 
 const chatReserve = CHAT_MIN_WIDTH + SIDE_PANEL_HANDLE_WIDTH;
@@ -51,5 +53,65 @@ describe('resizeSidePanelWidth', () => {
 
   it('工作区尚未量到时按偏好加减，不夹成 0', () => {
     expect(resizeSidePanelWidth(480, 20, 0)).toBe(500);
+  });
+});
+
+describe('sidePanelDragSidebar', () => {
+  const ws = 1200;
+  const max = ws - chatReserve;
+  const base = { workspaceWidth: ws, sidebarWidth: 264, overflow: 0 };
+
+  it('没拉到最宽时只是普通拖动，不动项目栏', () => {
+    expect(sidePanelDragSidebar({ ...base, visible: 500, delta: 20, sidebar: 'open' })).toEqual({
+      overflow: 0,
+      action: null,
+    });
+  });
+
+  it('拉到最宽后继续往左拖，累计越过阈值才收起项目栏；收起时带回越界总距离供手柄追上鼠标', () => {
+    const first = sidePanelDragSidebar({ ...base, visible: max, delta: 20, sidebar: 'open' });
+    expect(first).toEqual({ overflow: 20, action: null });
+    const second = sidePanelDragSidebar({
+      ...base,
+      visible: max,
+      delta: SIDEBAR_SNAP_DISTANCE,
+      overflow: first.overflow,
+      sidebar: 'open',
+    });
+    expect(second).toEqual({
+      overflow: 0,
+      action: 'collapse',
+      catchUp: 20 + SIDEBAR_SNAP_DISTANCE,
+    });
+  });
+
+  it('一次拖动跨过上限时只把越界部分计入', () => {
+    expect(
+      sidePanelDragSidebar({ ...base, visible: max - 10, delta: 30, sidebar: 'open' })
+    ).toEqual({ overflow: 20, action: null });
+  });
+
+  it('越界途中往回拖，累计清零', () => {
+    expect(
+      sidePanelDragSidebar({ ...base, visible: max, delta: -5, overflow: 30, sidebar: 'open' })
+    ).toEqual({ overflow: 0, action: null });
+  });
+
+  it('用户自己收起的项目栏不受拖动影响', () => {
+    expect(sidePanelDragSidebar({ ...base, visible: 300, delta: -200, sidebar: 'user' })).toEqual({
+      overflow: 0,
+      action: null,
+    });
+  });
+
+  it('自动收起后往右拖：会话区放得下项目栏（再留一段余量）时恢复', () => {
+    // 恢复后会话区 = ws - 面板 - 手柄 - 项目栏 - 项目栏手柄，须仍 ≥ 会话区最小宽度 + 余量
+    const roomy = ws - chatReserve - 264 - SIDE_PANEL_HANDLE_WIDTH - SIDEBAR_SNAP_DISTANCE;
+    expect(
+      sidePanelDragSidebar({ ...base, visible: roomy + 10, delta: -10, sidebar: 'auto' })
+    ).toEqual({ overflow: 0, action: 'restore' });
+    expect(
+      sidePanelDragSidebar({ ...base, visible: roomy + 20, delta: -10, sidebar: 'auto' })
+    ).toEqual({ overflow: 0, action: null });
   });
 });
