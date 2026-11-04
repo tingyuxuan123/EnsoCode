@@ -697,6 +697,14 @@ export function createWorkflowTool(deps: WorkflowToolDeps): ToolDefinition {
         if (script.trim()) throw new Error('workflow accepts either preset or script, not both');
         const preset = deps.loadPreset?.(presetId) ?? null;
         if (!preset) throw new Error(`unknown workflow preset: ${presetId}`);
+        if (preset.source === 'builtin' && preset.id === 'interrogate') {
+          const reviewer = deps.agentTypes?.find((type) => type.name === 'reviewer');
+          if (reviewer?.tools !== 'readonly' || reviewer.mcpServers?.length) {
+            throw new Error(
+              'The built-in interrogate preset needs a read-only reviewer without MCP.'
+            );
+          }
+        }
         const resolved = resolveWorkflowPresetArgs(preset, args);
         if (!resolved.ok) throw new Error(resolved.error);
         script = preset.script;

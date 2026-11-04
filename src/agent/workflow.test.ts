@@ -95,6 +95,144 @@ describe('workflowChildOutcome', () => {
 });
 
 describe('workflow tool', () => {
+  it('interrogate 不把候选当结论，也不让子代理执行报告附带的命令', async () => {
+    const proposal = {
+      title: 'Wrong default',
+      location: 'src/default.ts:9',
+      steps: 'Use an empty input and record the returned count.',
+      expected: '1',
+    };
+    const { invoke } = fakeChildren((spawn) => ({
+      runId: spawn.description,
+      text: JSON.stringify({ checks: [proposal] }),
+    }));
+    const tool = createWorkflowTool({
+      invoke,
+      emit: vi.fn(),
+      loadPreset: (id) => loadWorkflowPreset(id, []),
+      agentTypes: [{ name: 'reviewer', tools: 'readonly', allowModelOverride: false }],
+    });
+    const result = await tool.execute(
+      'review',
+      { preset: 'interrogate', args: { target: 'src/default.ts' } },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    const body = (result.details as { result: unknown }).result;
+    expect(body).toMatchObject({ status: 'needs-evidence', findings: [], checks: [proposal] });
+    const spawns = invoke.mock.calls
+      .map(([request]) => request)
+      .filter((request) => request.operation === 'spawn');
+    expect(spawns).toHaveLength(2);
+    expect(spawns.every((request) => request.agentType === 'reviewer')).toBe(true);
+    expect(spawns.every((request) => request.prompt.includes('Do not run commands'))).toBe(true);
+  });
+
+  it('interrogate 只报告能引用实际复跑证据、并经独立复核的候选', async () => {
+    const check = (title: string, line: number) => ({
+      title,
+      location: `src/default.ts:${line}`,
+      steps: 'Run the approved regression check.',
+      expected: 'count=1',
+    });
+    const checks = [check('Confirmed', 9), check('Unsupported', 12)];
+    const evidence = 'Reviewed run on this checkout: count=0 from the empty-input case.';
+    const { invoke } = fakeChildren((spawn) => ({
+      runId: spawn.description,
+      text: JSON.stringify(
+        spawn.description === 'Verify evidence'
+          ? {
+              confirmed: [
+                { id: 1, quote: 'count=0 from the empty-input case', reason: 'Expected count=1.' },
+                { id: 2, quote: 'invented failing output', reason: 'Not in the rerun.' },
+                { id: 2, quote: '0', reason: 'A single digit is not enough evidence.' },
+                { id: 999, quote: 'count=0 from the empty-input case', reason: 'Not a candidate.' },
+              ],
+            }
+          : { checks }
+      ),
+    }));
+    const tool = createWorkflowTool({
+      invoke,
+      emit: vi.fn(),
+      loadPreset: (id) => loadWorkflowPreset(id, []),
+      agentTypes: [{ name: 'reviewer', tools: 'readonly', allowModelOverride: false }],
+    });
+    const result = await tool.execute(
+      'review',
+      { preset: 'interrogate', args: { checks: JSON.stringify(checks), evidence } },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    const body = (result.details as { result: unknown }).result;
+    expect(body).toMatchObject({
+      status: 'verified',
+      findings: [{ ...checks[0], evidence: 'count=0 from the empty-input case' }],
+    });
+    expect(body).toMatchObject({ unchecked: 1 });
+    expect(invoke.mock.calls.filter(([request]) => request.operation === 'spawn')).toHaveLength(1);
+    expect(
+      invoke.mock.calls.some(
+        ([request]) =>
+          request.operation === 'spawn' &&
+          request.description === 'Verify evidence' &&
+          request.prompt.includes(evidence)
+      )
+    ).toBe(true);
+  });
+
+  it('interrogate 拒绝无原检查项的证据或过长输出，不再派发审查', async () => {
+    const invoke = vi.fn(async () => {
+      throw new Error('unexpected dispatch');
+    });
+    const tool = createWorkflowTool({
+      invoke,
+      emit: vi.fn(),
+      agentTypes: [{ name: 'reviewer', tools: 'readonly', allowModelOverride: false }],
+      loadPreset: (id) => loadWorkflowPreset(id, []),
+    });
+    for (const [args, status] of [
+      [{ evidence: 'Observed output: 0' }, 'needs-checks'],
+      [{ checks: '[]', evidence: 'a'.repeat(8001) }, 'invalid-evidence'],
+    ] as const) {
+      const result = await tool.execute(
+        'review',
+        { preset: 'interrogate', args },
+        undefined,
+        undefined,
+        undefined as never
+      );
+      expect(result.details).toMatchObject({ result: { status, findings: [] } });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('内置 interrogate 不接受被覆盖成可写或带 MCP 的 reviewer', async () => {
+    const invoke = vi.fn();
+    for (const reviewer of [
+      { name: 'reviewer', tools: 'all' as const, allowModelOverride: false },
+      {
+        name: 'reviewer',
+        tools: 'readonly' as const,
+        allowModelOverride: false,
+        mcpServers: [{ name: 'extra', transport: 'stdio' as const, command: 'unused' }],
+      },
+    ]) {
+      const tool = createWorkflowTool({
+        invoke,
+        emit: vi.fn(),
+        agentTypes: [reviewer],
+        loadPreset: (id) => loadWorkflowPreset(id, []),
+      });
+      await expect(
+        tool.execute('review', { preset: 'interrogate' }, undefined, undefined, undefined as never)
+      ).rejects.toThrow('read-only reviewer without MCP');
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it('工作流和 subagent 共用能力边界，readonly 不能承诺跑 Git 或测试', () => {
     const tool = createWorkflowTool({
       invoke: vi.fn(),
