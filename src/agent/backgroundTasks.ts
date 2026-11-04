@@ -12,6 +12,7 @@ import {
   ForegroundCommand,
   ForegroundDetachedError,
 } from './foregroundCommand';
+import { createProcessTreeKiller } from './killTree';
 import { classifyShellFailure, shellDetails } from './shell/failure';
 import { hardenedEnv } from './shell/hardenedEnv';
 import { DEFAULT_FOREGROUND_YIELD_MS, foregroundYieldMs, shellTimeoutSec } from './shell/policy';
@@ -28,13 +29,14 @@ const EMIT_INTERVAL_MS = 500;
 const MAX_TASKS = 10;
 /** task_output 阻塞等待上限（与工具描述插值同源） */
 const MAX_WAIT_MS = 10 * 60 * 1000;
-/** SIGTERM 后未退的宽限，超时 SIGKILL */
+/** 停止的两个宽限：升级强杀前、放弃等待 close 前。 */
 const KILL_GRACE_MS = 5_000;
 
 interface Task {
   info: BackgroundTaskInfo;
   sessionId: string;
   kill(signal: NodeJS.Signals): void;
+  abandon(): void;
   output: string;
   droppedChars: number;
   dirty: boolean;
@@ -48,6 +50,7 @@ interface Task {
   finalize?: () => Promise<unknown>;
   settling: boolean;
   terminationCause?: 'deadline' | 'user' | 'model';
+  terminationUnconfirmed?: boolean;
   deadlineTimer?: ReturnType<typeof setTimeout>;
   killTimer?: ReturnType<typeof setTimeout>;
 }
@@ -174,30 +177,34 @@ export class BackgroundTaskManager {
       throw new Error('Invalid timeout: must be finite positive seconds within the timer limit');
     }
     const taskId = this.reserveId();
-    // detached：独立进程组，kill 时整棵树一起清
+    // POSIX 下 detached 创建独立进程组；Windows 走 taskkill /T /F。
     const child = spawnBackground(command, cwd, spawnOpts);
-    const pid = child.pid;
+    const stopper = createProcessTreeKiller(child);
     const task = this.register(sessionId, taskId, spawnOpts?.displayCommand ?? command, {
       details: spawnOpts?.details,
       finalize: spawnOpts?.finalize,
       deadlineAt:
         spawnOpts?.timeoutSec === undefined ? undefined : Date.now() + spawnOpts.timeoutSec * 1000,
-      kill: (signal) => {
-        try {
-          if (pid) process.kill(-pid, signal);
-          else child.kill(signal);
-        } catch {
-          child.kill(signal);
-        }
+      kill: stopper.kill,
+      abandon: () => {
+        stopper.abandon();
+        child.stdin?.destroy();
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.unref();
       },
     });
     child.stdout?.on('data', (chunk: Buffer) => this.append(task, chunk));
     child.stderr?.on('data', (chunk: Buffer) => this.append(task, chunk));
     child.on('error', (error) => {
-      task.output += `\n[spawn error] ${error.message}`;
+      this.append(task, Buffer.from(`\n[process error] ${error.message}`));
     });
     // close 在 stdio 全部排空后触发；统计必须看到完整执行并晚于输出收集。
-    child.on('close', (code, signal) => this.exited(task, code, signal));
+    child.once('close', (code, signal) => {
+      const result = stopper.windowsResult;
+      if (result) void result.then((ok) => this.exited(task, code, signal, ok));
+      else this.exited(task, code, signal);
+    });
     this.announce(task);
     return taskId;
   }
@@ -212,14 +219,19 @@ export class BackgroundTaskManager {
     const task = this.register(sessionId, taskId, opts.command, {
       startedAt: opts.startedAt,
       deadlineAt: opts.deadlineAt,
+      // Adopt 只拥有 SDK / SSH 提供的取消能力，不拥有它们的 ChildProcess。
       kill: () => proc.kill(),
+      abandon: () => proc.pipe(() => {}),
     });
     this.append(task, Buffer.from(proc.output()));
     proc.pipe((chunk) => this.append(task, chunk));
     proc.done.then(
       (code) => this.exited(task, code, null),
       (error: unknown) => {
-        task.output += `\n[${error instanceof Error ? error.message : String(error)}]`;
+        this.append(
+          task,
+          Buffer.from(`\n[${error instanceof Error ? error.message : String(error)}]`)
+        );
         this.exited(task, null, null);
       }
     );
@@ -294,6 +306,7 @@ export class BackgroundTaskManager {
     command: string,
     opts: {
       kill: Task['kill'];
+      abandon: Task['abandon'];
       details?: unknown;
       finalize?: () => Promise<unknown>;
       startedAt?: number;
@@ -315,6 +328,7 @@ export class BackgroundTaskManager {
     const task: Task = {
       sessionId,
       kill: opts.kill,
+      abandon: opts.abandon,
       output: '',
       droppedChars: 0,
       dirty: false,
@@ -354,10 +368,23 @@ export class BackgroundTaskManager {
     task.logStream?.write(chunk);
   }
 
-  private exited(task: Task, code: number | null, signal: NodeJS.Signals | null): void {
+  private exited(
+    task: Task,
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    windowsTreeStopped?: boolean
+  ): void {
     if (task.info.status !== 'running' || task.settling) return;
     if (signal) task.output += `\n[terminated by ${signal}]`;
-    void this.settle(task, code === 0 ? 'done' : 'failed', code ?? undefined);
+    if (windowsTreeStopped === false) {
+      task.terminationUnconfirmed = true;
+      this.append(task, Buffer.from('\n[Windows process-tree termination was not confirmed.]'));
+    }
+    void this.settle(
+      task,
+      code === 0 && !task.terminationUnconfirmed ? 'done' : 'failed',
+      code ?? undefined
+    );
   }
 
   private announce(task: Task): void {
@@ -386,7 +413,12 @@ export class BackgroundTaskManager {
     task.info.status = status;
     task.info.exitCode = exitCode;
     task.info.tail = task.output.slice(-TAIL_LIMIT);
+    task.dirty = false;
     task.logStream?.end();
+    if (this.timer && ![...this.tasks.values()].some((entry) => entry.info.status === 'running')) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
     // 有阻塞等待者 = 结束态将经工具返回值送达模型（blockWaited 语义），无需再通知
     const hadWaiters = task.waiters.length > 0;
     if (hadWaiters) task.consumed = true;
@@ -400,13 +432,25 @@ export class BackgroundTaskManager {
     }
   }
 
-  private async settle(task: Task, status: 'done' | 'failed', exitCode?: number): Promise<void> {
+  private async settle(
+    task: Task,
+    status: 'done' | 'failed',
+    exitCode?: number,
+    abandon = false
+  ): Promise<void> {
     task.settling = true;
-    // The process has exited. RTK finalization may be slow: no timer/stop can kill it now.
+    // Once settling starts, neither timer nor stop may signal the process again.
     clearTimeout(task.deadlineTimer);
     clearTimeout(task.killTimer);
+    const finalize = task.finalize;
     try {
-      if (task.finalize) task.details = (await task.finalize()) ?? task.details;
+      if (abandon) task.abandon();
+    } catch {
+      // Closing local resources is best effort, not evidence of OS termination.
+    }
+    try {
+      if (abandon) void finalize?.().catch(() => {});
+      else if (finalize) task.details = (await finalize()) ?? task.details;
     } catch {
       // 统计失败不能改变原命令的状态或输出。
     }
@@ -433,16 +477,20 @@ export class BackgroundTaskManager {
     const outcome =
       task.terminationCause === 'deadline'
         ? `deadline reached${exitCode === undefined ? '' : `, exit ${exitCode}`}`
-        : exitCode !== undefined
-          ? `exit ${exitCode}`
-          : status;
+        : task.terminationUnconfirmed
+          ? 'failed: termination not confirmed'
+          : exitCode !== undefined
+            ? `exit ${exitCode}`
+            : status;
     const lines = [
       `Background task ${taskId} finished (${outcome}, ran ${fmtDuration(Date.now() - startedAt)}).`,
       `Command: ${notificationData(command)}`,
     ];
     if (task.killedByUser) {
       lines.push(
-        'This task was stopped by the user — do not restart it unless the user asks; briefly acknowledge the stop.'
+        task.terminationUnconfirmed
+          ? 'The user requested a stop, but termination could not be confirmed — do not restart unless the user asks.'
+          : 'This task was stopped by the user — do not restart it unless the user asks; briefly acknowledge the stop.'
       );
     }
     if (task.terminationCause === 'deadline')
@@ -530,7 +578,7 @@ export class BackgroundTaskManager {
     };
   }
 
-  /** 终止：SIGTERM 整个进程组，宽限后 SIGKILL */
+  /** 请求终止；信号、强杀宽限后仍未收口则标记失败，不声称 OS 已停止。 */
   stop(taskId: string, byUser = false): boolean {
     const task = this.tasks.get(taskId);
     if (!task) return false;
@@ -543,10 +591,27 @@ export class BackgroundTaskManager {
     task.killedByUser = cause === 'user';
     if (cause === 'model') task.consumed = true;
     clearTimeout(task.deadlineTimer);
+    const signal = (value: NodeJS.Signals) => {
+      try {
+        task.kill(value);
+      } catch (error) {
+        this.append(task, Buffer.from(`\n[stop request failed] ${String(error)}`));
+      }
+    };
     task.killTimer = setTimeout(() => {
-      if (task.info.status === 'running' && !task.settling) task.kill('SIGKILL');
-    }, KILL_GRACE_MS).unref?.();
-    task.kill('SIGTERM');
+      if (task.info.status !== 'running' || task.settling) return;
+      task.killTimer = setTimeout(() => {
+        if (task.info.status !== 'running' || task.settling) return;
+        task.terminationUnconfirmed = true;
+        this.append(
+          task,
+          Buffer.from('\n[Process termination was not confirmed before the stop deadline.]')
+        );
+        void this.settle(task, 'failed', undefined, true);
+      }, KILL_GRACE_MS).unref();
+      signal('SIGKILL');
+    }, KILL_GRACE_MS).unref();
+    signal('SIGTERM');
     return true;
   }
 
@@ -970,7 +1035,7 @@ export function createTaskTools(
             {
               type: 'text',
               text: stopped
-                ? `Stopped ${taskId}`
+                ? `Stop requested for ${taskId}`
                 : `${taskId} is not running. Known task ids: [${manager.knownIds().join(', ')}]`,
             },
           ],

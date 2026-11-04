@@ -1,6 +1,8 @@
+import { ChildProcess, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import type { BashOperations, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { BackgroundTaskInfo } from '@shared/types/agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +20,17 @@ import {
 import { ForegroundDetachedError } from './foregroundCommand';
 import { createSessionCommandTool } from './sessionShell';
 
+vi.mock('node:child_process', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:child_process')>();
+  return { ...original, spawn: vi.fn(original.spawn) };
+});
+
+const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
+
 afterEach(() => {
+  Object.defineProperty(process, 'platform', platformDescriptor);
+  vi.mocked(spawn).mockReset();
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.useRealTimers();
 });
@@ -612,6 +624,231 @@ describe('withBackground shell 环境', () => {
 });
 
 describe('BackgroundTaskManager', () => {
+  function fakeProcess(platform: NodeJS.Platform) {
+    vi.useFakeTimers();
+    Object.defineProperty(process, 'platform', { value: platform });
+    const child = Object.assign(new ChildProcess(), {
+      pid: 4242,
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(() => true),
+    });
+    vi.mocked(spawn).mockReturnValueOnce(child);
+    const killGroup = vi.spyOn(process, 'kill').mockReturnValue(true);
+    return { child, killGroup, ...makeManager() };
+  }
+
+  it('Windows 整树强杀只发一次；taskkill 或 close 都不能独自确认收口', async () => {
+    const { child, killGroup, manager, ended } = fakeProcess('win32');
+    vi.stubEnv('SystemRoot', 'D:\\Windows');
+    const taskkill = new ChildProcess();
+    vi.mocked(spawn).mockReturnValueOnce(taskkill);
+    const taskId = manager.start('s1', 'test', '/tmp', { env: {} });
+    expect(manager.stop(taskId, true)).toBe(true);
+    expect(spawn).toHaveBeenLastCalledWith(
+      'D:\\Windows\\System32\\taskkill.exe',
+      ['/PID', '4242', '/T', '/F'],
+      expect.objectContaining({ shell: false, windowsHide: true, stdio: 'ignore' })
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(killGroup).not.toHaveBeenCalled();
+    expect(child.kill).not.toHaveBeenCalled();
+    child.stdout.write('last output');
+    child.emit('close', 1, null);
+    expect(manager.snapshot('s1')[0]?.status).toBe('running');
+    taskkill.emit('exit', 0, null);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(ended).toEqual([taskId]);
+    expect(await manager.read(taskId)).toMatchObject({ status: 'failed', output: 'last output' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['throw', 'error', 'nonzero'] as const)(
+    'Windows taskkill %s 时只通过原 child 回退，不声称整树已停止',
+    async (failure) => {
+      const { child, manager, notified, ended } = fakeProcess('win32');
+      const taskkill = new ChildProcess();
+      if (failure === 'throw') {
+        vi.mocked(spawn).mockImplementationOnce(() => {
+          throw new Error('cannot spawn taskkill');
+        });
+      } else vi.mocked(spawn).mockReturnValueOnce(taskkill);
+      const taskId = manager.start('s1', 'test', '/tmp');
+      manager.stop(taskId, true);
+      if (failure === 'error') {
+        expect(taskkill.listenerCount('error')).toBeGreaterThan(0);
+        taskkill.emit('error', new Error('ENOENT'));
+      }
+      if (failure !== 'throw') taskkill.emit('exit', 1, null);
+      expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL');
+      child.emit('close', null, 'SIGKILL');
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(spawn).toHaveBeenCalledTimes(2);
+      expect(ended).toEqual([taskId]);
+      expect(notified[0]).toContain('do not restart');
+      expect(notified[0]).not.toContain('stopped by the user');
+      expect((await manager.read(taskId))?.output).toMatch(/process-tree.+not confirmed/i);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('Windows 已见 root exit 时不回退或再按 PID 强杀，close 不到仍失败收口', async () => {
+    const { child, killGroup, manager, ended } = fakeProcess('win32');
+    const taskkill = new ChildProcess();
+    vi.mocked(spawn).mockReturnValueOnce(taskkill);
+    const taskId = manager.start('s1', 'test', '/tmp');
+    expect(manager.stop(taskId)).toBe(true);
+    Object.defineProperty(child, 'exitCode', { value: 1 });
+    child.emit('exit', 1, null);
+    taskkill.emit('exit', 1, null);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(killGroup).not.toHaveBeenCalled();
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(ended).toEqual([taskId]);
+    expect(child.stdout.destroyed).toBe(true);
+    expect(manager.hasRunningInWorkspace(['s1'])).toBe(false);
+    expect(await manager.read(taskId)).toMatchObject({ status: 'failed', exitCode: undefined });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('POSIX 的 shell 已退出但 stdio 未关闭时仍强杀独立进程组', async () => {
+    const { child, killGroup, manager, ended } = fakeProcess('darwin');
+    const taskId = manager.start('s1', 'test', '/tmp');
+    expect(manager.stop(taskId)).toBe(true);
+    expect(killGroup).toHaveBeenCalledExactlyOnceWith(-4242, 'SIGTERM');
+    Object.defineProperty(child, 'signalCode', { value: 'SIGTERM' });
+    child.emit('exit', null, 'SIGTERM');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(killGroup.mock.calls).toEqual([
+      [-4242, 'SIGTERM'],
+      [-4242, 'SIGKILL'],
+    ]);
+    expect(child.kill).not.toHaveBeenCalled();
+    child.emit('close', null, 'SIGTERM');
+    expect(ended).toEqual([taskId]);
+  });
+
+  it('POSIX 活进程按宽限升级 SIGKILL；组信号失败时只回退 child', async () => {
+    const { child, killGroup, manager, ended } = fakeProcess('darwin');
+    killGroup.mockImplementationOnce(() => {
+      throw new Error('ESRCH');
+    });
+    const taskId = manager.start('s1', 'test', '/tmp');
+    const tool = createTaskTools(manager).find((candidate) => candidate.name === 'task_stop');
+    const receipt = await tool?.execute(
+      'stop',
+      { taskId },
+      undefined,
+      undefined,
+      undefined as never
+    );
+    expect(receipt?.content).toEqual([{ type: 'text', text: `Stop requested for ${taskId}` }]);
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(killGroup).toHaveBeenLastCalledWith(-4242, 'SIGKILL');
+    child.emit('close', null, 'SIGKILL');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(ended).toEqual([taskId]);
+    expect(killGroup).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('Windows 没有 PID 时回退失败也有界收口，不启动任何数值 PID 强杀', async () => {
+    const { child, manager, ended } = fakeProcess('win32');
+    Object.defineProperty(child, 'pid', { value: undefined });
+    child.kill.mockImplementation(() => {
+      throw new Error('no process');
+    });
+    const taskId = manager.start('s1', 'test', '/tmp');
+    expect(manager.stop(taskId)).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL');
+    expect(ended).toEqual([taskId]);
+  });
+
+  it('Windows 强杀工具无响应时也有界收口；迟到 error/close 不再 kill 或改变结果', async () => {
+    const { child, manager, ended } = fakeProcess('win32');
+    vi.stubEnv('SystemRoot', '\\Windows'); // rooted, but not drive-absolute
+    const taskkill = new ChildProcess();
+    const killHelper = vi.spyOn(taskkill, 'kill').mockReturnValue(true);
+    vi.mocked(spawn).mockReturnValueOnce(taskkill);
+    const taskId = manager.start('s1', 'test', '/tmp');
+    manager.stop(taskId, true);
+    expect(vi.mocked(spawn).mock.lastCall?.[0]).toBe('C:\\Windows\\System32\\taskkill.exe');
+    const wait = manager.read(taskId, 60_000);
+    child.stdout.write('before abandon');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await wait).toMatchObject({ status: 'failed' });
+    expect(killHelper).toHaveBeenCalledExactlyOnceWith('SIGKILL');
+    expect(child.stdout.destroyed).toBe(true);
+    const before = await manager.read(taskId);
+    child.stdout.emit('data', Buffer.from('late stdout'));
+    child.emit('error', new Error('late process error'));
+    child.emit('close', 0, null);
+    taskkill.emit('error', new Error('late helper error'));
+    taskkill.emit('exit', 0, null);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await manager.read(taskId)).toEqual(before);
+    expect(ended).toEqual([taskId]);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['deadline', 'user', 'model'] as const)(
+    'adopt %s 后即使没有 done / finalize 也有界收口；迟到错误及输出不能改写',
+    async (cause) => {
+      vi.useFakeTimers();
+      const { manager, ended, notified } = makeManager();
+      let output!: (chunk: Buffer) => void;
+      let fail!: (error: Error) => void;
+      const taskId = manager.adopt(
+        's1',
+        {
+          output: () => 'initial output',
+          pipe: (sink) => {
+            output = sink;
+          },
+          done: new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+          kill: vi.fn(),
+        },
+        {
+          command: 'ssh-client',
+          startedAt: Date.now(),
+          deadlineAt: cause === 'deadline' ? Date.now() + 100 : undefined,
+        }
+      );
+      const finalize = vi.fn(() => new Promise<unknown>(() => {}));
+      manager.attachFinalize(taskId, { initial: true }, finalize);
+      if (cause === 'deadline') await vi.advanceTimersByTimeAsync(100);
+      else expect(manager.stop(taskId, cause === 'user')).toBe(true);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(manager.hasRunningInWorkspace(['s1'])).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(ended).toEqual([taskId]);
+      expect(manager.hasRunningInWorkspace(['s1'])).toBe(false);
+      expect(finalize).toHaveBeenCalledOnce();
+      expect(notified).toHaveLength(cause === 'model' ? 0 : 1);
+      if (cause === 'user') expect(notified[0]).not.toContain('stopped by the user');
+      const result = await manager.read(taskId);
+      expect(result).toMatchObject({ status: 'failed', exitCode: undefined });
+      expect(result?.output).toMatch(/termination.+not confirmed/i);
+      if (cause === 'deadline')
+        expect(result?.details).toMatchObject({ shellFailure: { kind: 'deadline' } });
+      output(Buffer.from('late output'));
+      fail(new Error('late exit error'));
+      await vi.advanceTimersByTimeAsync(500);
+      expect(await manager.read(taskId)).toEqual(result);
+      expect(ended).toEqual([taskId]);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
   it.each([true, false])('主动停止不是命令失败分类（byUser=%s）', async (byUser) => {
     vi.useFakeTimers();
     const { manager } = makeManager();
