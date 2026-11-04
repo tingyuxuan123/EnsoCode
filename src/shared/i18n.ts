@@ -295,7 +295,6 @@ export const zhTranslations: Record<string, string> = {
   'Include archived': '含归档',
   Current: '当前',
   Recent: '最近',
-  'No projects active in the last {{n}} days': '最近 {{n}} 天没有活跃项目',
   Actions: '动作',
   'No matching conversations': '没有匹配的会话',
   'Search messages...': '搜索消息...',

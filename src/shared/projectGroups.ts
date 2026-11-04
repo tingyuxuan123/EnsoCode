@@ -4,7 +4,6 @@ import type { Project, ProjectGroup } from './types/project';
 export type { ProjectGroup };
 
 export const ALL_GROUP_ID = '__all__';
-export const RECENT_GROUP_ID = '__recent__';
 export const UNGROUPED_GROUP_ID = '__ungrouped__';
 
 export type GroupSelection = typeof ALL_GROUP_ID | typeof UNGROUPED_GROUP_ID | string;
@@ -35,7 +34,7 @@ export function filterProjectsByGroup<T extends Project>(
   selected: GroupSelection
 ): T[] {
   const active = projects.filter((project) => !isArchived(project.id, archivedIds));
-  if (selected === ALL_GROUP_ID || selected === RECENT_GROUP_ID) return active;
+  if (selected === ALL_GROUP_ID) return active;
   if (selected === UNGROUPED_GROUP_ID) {
     return active.filter((project) => isUngroupedProject(project, groups));
   }

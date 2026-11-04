@@ -1,11 +1,6 @@
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
-import {
-  ALL_GROUP_ID,
-  type ProjectGroup,
-  RECENT_GROUP_ID,
-  UNGROUPED_GROUP_ID,
-} from '@shared/projectGroups';
+import { ALL_GROUP_ID, type ProjectGroup, UNGROUPED_GROUP_ID } from '@shared/projectGroups';
 import { Check, ChevronDown, Pencil, Plus, TextSearch, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { type DragPayload, selectorGroupDropId } from '@/components/chat/dragDrop';
@@ -28,7 +23,6 @@ interface GroupChipsProps {
   selectedId: string;
   counts: Record<string, number>;
   totalCount: number;
-  recentCount: number;
   ungroupedCount: number;
   query: string;
   onQueryChange: (query: string) => void;
@@ -43,7 +37,6 @@ export function GroupChips({
   selectedId,
   counts,
   totalCount,
-  recentCount,
   ungroupedCount,
   query,
   onQueryChange,
@@ -187,14 +180,6 @@ export function GroupChips({
             >
               <ChipContent label={t('All')} count={totalCount} />
             </button>
-            <button
-              type="button"
-              data-selected={selectedId === RECENT_GROUP_ID || undefined}
-              onClick={() => onSelect(RECENT_GROUP_ID)}
-              className={chipClass(selectedId === RECENT_GROUP_ID, false)}
-            >
-              <ChipContent label={t('Recent')} count={recentCount} />
-            </button>
             <SortableContext
               items={ordered.map((group) => selectorGroupDropId(group.id))}
               strategy={horizontalListSortingStrategy}
@@ -225,7 +210,6 @@ export function GroupChips({
             selectedId={selectedId}
             counts={counts}
             totalCount={totalCount}
-            recentCount={recentCount}
             ungroupedCount={ungroupedCount}
             onSelect={onSelect}
             onAddGroup={onAddGroup}
@@ -361,7 +345,6 @@ function GroupMenu({
   selectedId,
   counts,
   totalCount,
-  recentCount,
   ungroupedCount,
   onSelect,
   onAddGroup,
@@ -371,7 +354,6 @@ function GroupMenu({
   selectedId: string;
   counts: Record<string, number>;
   totalCount: number;
-  recentCount: number;
   ungroupedCount: number;
   onSelect: (id: string) => void;
   onAddGroup: () => void;
@@ -398,12 +380,6 @@ function GroupMenu({
           count={totalCount}
           selected={selectedId === ALL_GROUP_ID}
           onSelect={closeAnd(() => onSelect(ALL_GROUP_ID))}
-        />
-        <GroupMenuRow
-          label={t('Recent')}
-          count={recentCount}
-          selected={selectedId === RECENT_GROUP_ID}
-          onSelect={closeAnd(() => onSelect(RECENT_GROUP_ID))}
         />
         {groups.map((group) => (
           <GroupMenuRow

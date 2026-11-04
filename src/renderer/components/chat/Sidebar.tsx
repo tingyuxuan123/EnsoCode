@@ -11,7 +11,6 @@ import { conversationDotTone } from '@shared/conversationDotTone';
 import {
   ALL_GROUP_ID,
   filterProjectsByGroup,
-  RECENT_GROUP_ID,
   sectionsForAllView,
   UNGROUPED_GROUP_ID,
 } from '@shared/projectGroups';
@@ -119,8 +118,6 @@ import {
   archivedConversationGroups,
   pinnedConversationIds,
   projectConversationIds,
-  RECENT_PROJECT_WINDOW_DAYS,
-  recentProjects,
   staleArchivedConversationIds,
 } from '@/stores/sessions/pinned';
 import {
@@ -301,12 +298,10 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
   };
   const resolvedGroupId =
     selectedGroupId === ALL_GROUP_ID ||
-    selectedGroupId === RECENT_GROUP_ID ||
     selectedGroupId === UNGROUPED_GROUP_ID ||
     projectGroups.some((group) => group.id === selectedGroupId)
       ? selectedGroupId
       : ALL_GROUP_ID;
-  const recentView = resolvedGroupId === RECENT_GROUP_ID;
   const defaultGroupId = projectGroups.find((group) => group.id === resolvedGroupId)?.id;
 
   const slicedProjects = filterProjectsByGroup(
@@ -315,15 +310,10 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
     archivedProjectIds,
     resolvedGroupId
   );
-  const recentActiveProjects = recentProjects(
-    filterProjectsByGroup(orderedProjects, projectGroups, archivedProjectIds, ALL_GROUP_ID),
-    order,
-    conversations,
-    Date.now()
+  const { pinned: pinnedProjects, rest: unpinnedProjects } = partitionPinnedProjects(
+    slicedProjects,
+    pinnedProjectIds
   );
-  const { pinned: pinnedProjects, rest: unpinnedProjects } = recentView
-    ? { pinned: [], rest: recentActiveProjects }
-    : partitionPinnedProjects(slicedProjects, pinnedProjectIds);
   const groupSections = sectionsForAllView(unpinnedProjects, projectGroups, []);
   const activeProjects = [...pinnedProjects, ...unpinnedProjects];
   const activeProjectIds = activeProjects.map((project) => project.id);
@@ -350,7 +340,6 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
       if (!action) return;
       switch (action.kind) {
         case 'move-project-to-group': {
-          if (recentView && action.beforeProjectId) break;
           setProjectGroupId(action.projectId, action.groupId);
           if (action.beforeProjectId) {
             const next = moveProject(
@@ -368,7 +357,6 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
           reorderProjectGroups(action.activeId, action.overId);
           break;
         case 'reorder-projects': {
-          if (recentView) break;
           const scope = projectReorderScope(action.activeId, action.overId, pinnedProjectIds);
           if (scope === 'pinned') {
             const next = moveProject(
@@ -894,7 +882,6 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
                   ALL_GROUP_ID
                 ).length
               }
-              recentCount={recentActiveProjects.length}
               ungroupedCount={
                 filterProjectsByGroup(
                   orderedProjects,
@@ -1203,7 +1190,7 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
                   },
                 ];
                 return (
-                  <SortableProject key={project.id} project={project} activitySorted={recentView}>
+                  <SortableProject key={project.id} project={project}>
                     {(drag) => (
                       <ContextMenu>
                         <ContextMenuTrigger
@@ -1234,13 +1221,6 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
                                       {project.kind === 'ssh' && (
                                         <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[calc(11rem/14)] font-normal text-muted-foreground">
                                           {project.sshConnectionName ?? project.sshHost}
-                                        </span>
-                                      )}
-                                      {recentView && (
-                                        <span className="mt-0.5 block truncate text-[calc(11rem/14)] font-normal text-muted-foreground">
-                                          {projectGroups.find(
-                                            (group) => group.id === project.groupId
-                                          )?.name ?? t('Ungrouped')}
                                         </span>
                                       )}
                                     </span>
@@ -1410,15 +1390,6 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
                   </SortableProject>
                 );
               };
-              if (recentView && !searching && activeProjects.length === 0) {
-                return (
-                  <p className="px-2 py-6 text-center text-[calc(11rem/14)] text-muted-foreground">
-                    {t('No projects active in the last {{n}} days', {
-                      n: RECENT_PROJECT_WINDOW_DAYS,
-                    })}
-                  </p>
-                );
-              }
               if (resolvedGroupId === ALL_GROUP_ID && projectGroups.length > 0) {
                 return (
                   <div className="space-y-4">
@@ -2002,11 +1973,9 @@ function ProjectDragPreview({
 
 function SortableProject({
   project,
-  activitySorted = false,
   children,
 }: {
   project: Project;
-  activitySorted?: boolean;
   children: (drag: {
     setNodeRef: (node: HTMLElement | null) => void;
     style: React.CSSProperties;
@@ -2015,7 +1984,6 @@ function SortableProject({
 }) {
   const { setNodeRef, transform, transition, listeners, isDragging } = useSortable({
     id: projectDragId(project.id),
-    disabled: { droppable: activitySorted },
     data: {
       type: 'project',
       projectId: project.id,
@@ -2026,7 +1994,7 @@ function SortableProject({
   return children({
     setNodeRef,
     style: {
-      transform: activitySorted ? undefined : CSS.Transform.toString(transform),
+      transform: CSS.Transform.toString(transform),
       transition,
       opacity: isDragging ? 0.4 : undefined,
     },

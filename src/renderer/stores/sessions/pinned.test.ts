@@ -122,20 +122,12 @@ describe('脏 order 只列根会话', () => {
     ]);
   });
 
-  it('项目活跃排序与最近窗口不被 child/btw 的新输出推高', () => {
+  it('项目活跃排序不被 child/btw 的新输出推高', () => {
     const projects = [{ id: 'p1' }, { id: 'p2' }];
     expect(sortProjectsByActivity(projects, dirtyOrder, sessions)).toEqual([
       projects[1],
       projects[0],
     ]);
-    const now = 20 * 86_400_000;
-    const recent = {
-      ...sessions,
-      child: { ...sessions.child, messages: [{ timestamp: now }] },
-      btw: { ...sessions.btw, messages: [{ timestamp: now }] },
-      other: { ...sessions.other, messages: [{ timestamp: now - 1 }] },
-    };
-    expect(pinned.recentProjects(projects, dirtyOrder, recent, now)).toEqual([projects[1]]);
   });
 
   it('角标排除 child/btw 的提问、审批与能力确认，父会话仍可等待', () => {
@@ -252,39 +244,6 @@ describe('sortProjectsByActivity', () => {
       projects[3],
       projects[0],
     ]);
-  });
-});
-
-describe('recentProjects', () => {
-  const DAY = 24 * 60 * 60 * 1000;
-  const now = 20 * DAY;
-
-  it('只保留 7 天内有未归档会话的项目，空项目和更早的项目不出现', () => {
-    const projects = [{ id: 'old' }, { id: 'new' }, { id: 'empty' }, { id: 'edge' }];
-    const sessions = {
-      stale: conv('old', 1, now - 8 * DAY),
-      latest: conv('new', 1, now - DAY),
-      boundary: conv('edge', 1, now - 7 * DAY),
-    };
-    expect(
-      pinned
-        .recentProjects(projects, ['stale', 'latest', 'boundary'], sessions, now)
-        .map((project) => project.id)
-    ).toEqual(['new', 'edge']);
-  });
-
-  it('归档会话和会话置顶不能把过期项目留在最近', () => {
-    const projects = [{ id: 'old' }, { id: 'live' }];
-    const sessions = {
-      archived: conv('old', 1, now, { archived: true, pinned: true }),
-      stale: conv('old', 1, now - 8 * DAY),
-      current: conv('live', 1, now - 2 * DAY),
-    };
-    expect(
-      pinned
-        .recentProjects(projects, ['archived', 'stale', 'current'], sessions, now)
-        .map((project) => project.id)
-    ).toEqual(['live']);
   });
 });
 

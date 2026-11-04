@@ -4,7 +4,6 @@ import {
   applyProjectGroupPatch,
   filterProjectsByGroup,
   type ProjectGroup,
-  RECENT_GROUP_ID,
   sectionsForAllView,
   UNGROUPED_GROUP_ID,
 } from './projectGroups';
@@ -22,15 +21,6 @@ interface GroupSection {
 const asSections = (x: unknown) => x as GroupSection[];
 
 describe('filterProjectsByGroup', () => {
-  it('最近视图的候选仍是全部未归档项目，时间窗口由调用方再筛', () => {
-    const projects = [p('a', 'work'), p('b', 'play'), p('c'), p('d', 'ghost')];
-    expect(
-      filterProjectsByGroup(projects, [g('work', 1), g('play', 2)], ['b'], RECENT_GROUP_ID).map(
-        (project) => project.id
-      )
-    ).toEqual(['a', 'c', 'd']);
-  });
-
   it('ALL：返回所有未归档项目，保持原序；归档项目排除', () => {
     const projects = [p('a'), p('b'), p('c')];
     expect(filterProjectsByGroup(projects, [], [], ALL_GROUP_ID).map((x) => x.id)).toEqual([
