@@ -15,6 +15,7 @@ try {
     envFile: false,
     publicDir: false,
     appType: 'custom',
+    optimizeDeps: { noDiscovery: true },
     server: { middlewareMode: true, hmr: false, watch: null },
     resolve: { alias: { '@shared': join(root, 'src/shared') } },
   });

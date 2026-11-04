@@ -191,12 +191,17 @@ describe('本地插件作者工具', () => {
     const cwd = temp;
     const env = { ...process.env, TMPDIR: scratch, TEMP: scratch, TMP: scratch };
     const cli = join(repositoryRoot, 'scripts/plugin-author.mjs');
-    await exec(process.execPath, [cli, 'init', 'new-plugin', '--id', 'local.test.plugin'], {
-      cwd,
-      env,
-    });
+    const initialized = await exec(
+      process.execPath,
+      [cli, 'init', 'new-plugin', '--id', 'local.test.plugin'],
+      {
+        cwd,
+        env,
+      }
+    );
     const result = await exec(process.execPath, [cli, 'validate', 'new-plugin'], { cwd, env });
     expect(result.stdout).toContain('local.test.plugin v0.1.0');
+    expect(initialized.stderr + result.stderr).not.toMatch(/dependency scan|vite:dep-scan/);
     expect(await readdir(scratch)).toEqual([]);
 
     // Only the parent supplies development dependencies, never the installable source directory.
