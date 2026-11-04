@@ -809,7 +809,8 @@ export function AppearanceSettings() {
             >
               <SelectValue>{paletteOptions[lightPalette]}</SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            {/* Open beside the trigger so both palettes fit when space below is tight. */}
+            <SelectPopup alignItemWithTrigger={false}>
               <SelectItem value="ocean">{paletteOptions.ocean}</SelectItem>
               <SelectItem value="mint-light">{paletteOptions['mint-light']}</SelectItem>
             </SelectPopup>
