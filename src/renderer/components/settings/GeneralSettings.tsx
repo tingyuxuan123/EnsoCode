@@ -1,10 +1,11 @@
 import { AUTO_RETRY_LIMIT_OPTIONS, UNLIMITED_AUTO_RETRY } from '@shared/autoRetry';
 import { isValidProxyUrl, type ProxyMode } from '@shared/proxy';
 import { type TerminalShell, terminalShellsForPlatform } from '@shared/terminalShell';
-import type { UpdateStatus } from '@shared/types/updater';
 import type { WindowsLocalShell } from '@shared/windowsLocalShell';
 import { isAbsolutePathLike } from '@shared/worktreeRoot';
 import * as React from 'react';
+import { ReleaseNotesDialog } from '@/components/app/ReleaseNotesDialog';
+import { useUpdateStatus } from '@/components/app/UpdateBannerState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -629,17 +630,14 @@ function ProxySection() {
 }
 
 /** 更新小节:当前版本 + 检查按钮 + 状态/进度 + 自动下载开关 */
-function UpdateSection() {
+export function UpdateSection() {
   const { t } = useI18n();
   const autoUpdate = useSettingsStore((s) => s.autoUpdate);
   const setAutoUpdate = useSettingsStore((s) => s.setAutoUpdate);
   const autoRestartWhenIdle = useSettingsStore((s) => s.autoRestartWhenIdle);
   const setAutoRestartWhenIdle = useSettingsStore((s) => s.setAutoRestartWhenIdle);
-  const [status, setStatus] = React.useState<UpdateStatus | null>(null);
-
-  React.useEffect(() => {
-    return window.electronAPI.updater.onStatus(setStatus);
-  }, []);
+  const { status, notes, download, downloadPending, canShowNotes, showNotes, closeNotes } =
+    useUpdateStatus();
 
   const statusText = (): string | null => {
     if (!status) return null;
@@ -687,25 +685,31 @@ function UpdateSection() {
             <p className="mt-0.5 break-words text-[calc(12rem/14)] text-muted-foreground">{text}</p>
           )}
         </div>
-        {status?.status === 'downloaded' ? (
-          <Button
-            size="sm"
-            onClick={() => void window.electronAPI.updater.quitAndInstall()}
-            className="shrink-0"
-          >
-            {t('Restart to update')}
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => void window.electronAPI.updater.checkForUpdates()}
-            className="shrink-0"
-          >
-            {t('Check for updates')}
-          </Button>
-        )}
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {canShowNotes && (
+            <Button variant="outline" size="sm" onClick={showNotes}>
+              {t('Release notes')}
+            </Button>
+          )}
+          {status?.status === 'downloaded' ? (
+            <Button size="sm" onClick={() => void window.electronAPI.updater.quitAndInstall()}>
+              {t('Restart to update')}
+            </Button>
+          ) : status?.status === 'available' && !autoUpdate ? (
+            <Button size="sm" disabled={downloadPending} onClick={() => void download()}>
+              {t('Download')}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void window.electronAPI.updater.checkForUpdates()}
+            >
+              {t('Check for updates')}
+            </Button>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-between gap-[16px] py-[10px]">
         <div className="min-w-0">
@@ -742,6 +746,7 @@ function UpdateSection() {
           }}
         />
       </div>
+      <ReleaseNotesDialog info={status?.status === 'error' ? null : notes} onClose={closeNotes} />
     </div>
   );
 }

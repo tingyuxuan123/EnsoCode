@@ -59,6 +59,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate personal release notes
+        if: github.event_name == 'push'
+        run: node scripts/personal-release.mjs notes > /dev/null
+
       - name: Run release gates
         run: pnpm release:check
         env:
@@ -208,16 +212,18 @@ jobs:
           set -euo pipefail
           node scripts/release.mjs version
           node scripts/release.mjs verify release-assets
+          node scripts/personal-release.mjs notes > "$RUNNER_TEMP/personal-release-notes.md"
           EXISTING=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
             --jq '.[] | select(.tag_name == env.RELEASE_TAG) | if .draft then "draft" else "published" end')
           if [ "$EXISTING" = published ]; then
             echo 'Refusing to overwrite a published release.'; exit 1
           elif [ "$EXISTING" = draft ]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/personal-release-notes.md"
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" release-assets/* --clobber
           else
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
               --draft --prerelease --latest=false --title "$RELEASE_TAG — 个人更新" \
-              --notes 'Mac arm64 同证书个人更新。由 tag 触发 CI 构建并校验；非正式 latest，未公证。安装与重启由用户操作。' \
+              --notes-file "$RUNNER_TEMP/personal-release-notes.md" \
               release-assets/*
           fi
 

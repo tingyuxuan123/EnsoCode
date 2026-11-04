@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash, X509Certificate } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { parse, stringify } from 'yaml';
 import * as personalRelease from './personal-release.mjs';
 import * as release from './release.mjs';
@@ -207,6 +210,10 @@ test('个人 tag 自动构建，受信 main 校验先于证书使用，手动构
   const trusted = steps.findIndex((step) => step.name === 'Validate trusted release ref');
   assert.ok(trusted >= 0 && trusted < gate);
   assert.match(steps[trusted].run, /merge-base --is-ancestor/);
+  const notes = steps.findIndex((step) => step.name === 'Validate personal release notes');
+  assert.ok(trusted < notes && notes < signing);
+  assert.match(steps[notes].if, /github.event_name == 'push'/);
+  assert.match(steps[notes].run, /node scripts\/personal-release\.mjs notes/);
   const imported = steps[signing];
   assert.equal(imported.env.LOCAL_SIGNING_CERTIFICATE, `\${{ secrets.LOCAL_SIGNING_CERTIFICATE }}`);
   assert.equal(imported.env.LOCAL_SIGNING_PASSWORD, `\${{ secrets.LOCAL_SIGNING_PASSWORD }}`);
@@ -287,7 +294,7 @@ test('sudo 内部也有硬截止，不依赖普通用户终止 root 子进程', 
     // Fake sudo records argv only; this test never requests privileges or touches a keychain.
     await writeFile(
       path.join(dir, 'sudo'),
-      `#!${process.execPath}\nrequire('fs').writeFileSync(${JSON.stringify(output)},JSON.stringify(process.argv.slice(2)));\n`,
+      `#!${process.execPath}\nimport('node:fs').then(fs => fs.writeFileSync(${JSON.stringify(output)},JSON.stringify(process.argv.slice(2))));\n`,
       { mode: 0o700 }
     );
     process.env.PATH = `${dir}${path.delimiter}${previousPath}`;
@@ -366,6 +373,9 @@ test('个人发布仅 tag 触发写权限，下载验收后公开并推进清单
     draft >= 0 && draft < verify && verify < open && open < publicVerify && publicVerify < feed
   );
   assert.match(steps[draft].run, /--draft/);
+  assert.match(steps[draft].run, /node scripts\/personal-release\.mjs notes/);
+  assert.match(steps[draft].run, /gh release edit.*--notes-file/);
+  assert.equal(steps[draft].run.match(/--notes-file/g)?.length, 2);
   assert.match(steps[verify].run, /gh release download/);
   assert.match(steps[verify].run, /shasum -a 256 -c/);
   assert.match(steps[verify].run, /codesign --verify/);
@@ -398,21 +408,23 @@ test('个人安装包只使用独立 generic 更新源，正式 GitHub 更新源
 test('个人清单只在安装包校验后生成，使用不可变个人 Release URL且保留校验值', async () => {
   const file = new URL('./personal-release.mjs', import.meta.url);
   assert.ok(existsSync(file), '需要个人更新清单生成器');
-  const { preparePersonalFeed } = await import(file.href);
+  const { preparePersonalFeed, readPersonalReleaseNotes } = await import(file.href);
   const dir = await mkdtemp(path.join(tmpdir(), 'enso-personal-feed-'));
   try {
     const source = path.join(dir, 'package');
     const output = path.join(dir, 'feed');
-    const { mkdir } = await import('node:fs/promises');
+    const notes = path.join(dir, 'release-notes');
     await mkdir(source);
+    await mkdir(notes);
+    await writeFile(path.join(notes, `${version}.md`), `# EnsoCode ${version}\n\n- 修复真实问题\n`);
     await writeFile(
       path.join(source, 'latest-mac.yml'),
       stringify({ ...arm, path: arm.files[0].url, sha512 })
     );
-    await assert.rejects(preparePersonalFeed(source, output, version));
+    await assert.rejects(preparePersonalFeed(source, output, version, notes));
     assert.equal(existsSync(path.join(output, 'latest-mac.yml')), false);
     await writeFile(path.join(source, arm.files[0].url), data);
-    await preparePersonalFeed(source, output, version);
+    await preparePersonalFeed(source, output, version, notes);
     const feed = parse(await readFile(path.join(output, 'latest-mac.yml'), 'utf8'));
     const url = `https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v${version}/${arm.files[0].url}`;
     assert.equal(feed.version, version);
@@ -420,15 +432,99 @@ test('个人清单只在安装包校验后生成，使用不可变个人 Release
     assert.equal(feed.path, url);
     assert.equal(feed.files[0].sha512, sha512);
     assert.equal(feed.files[0].size, data.length);
-    assert.match(feed.releaseNotes, /个人测试/);
+    assert.equal(feed.releaseNotes, await readPersonalReleaseNotes(version, notes));
+    assert.match(feed.releaseNotes, /修复真实问题/);
+    assert.match(feed.releaseNotes, /信任 EnsoCode Local Signing 证书/);
+    await assert.rejects(
+      preparePersonalFeed(source, path.join(dir, 'missing-notes'), version, dir)
+    );
+    assert.equal(existsSync(path.join(dir, 'missing-notes', 'latest-mac.yml')), false);
     await writeFile(path.join(source, arm.files[0].url), Buffer.alloc(data.length, 1));
-    await assert.rejects(preparePersonalFeed(source, path.join(dir, 'corrupt'), version));
-    await assert.rejects(preparePersonalFeed(source, output, '0.2.11'));
+    await assert.rejects(preparePersonalFeed(source, path.join(dir, 'corrupt'), version, notes));
+    await assert.rejects(preparePersonalFeed(source, output, '0.2.11', notes));
     await writeFile(
       path.join(source, 'latest-mac.yml'),
       stringify(manifest('https://evil.example/a.zip'))
     );
-    await assert.rejects(preparePersonalFeed(source, path.join(dir, 'unsafe'), version));
+    await assert.rejects(preparePersonalFeed(source, path.join(dir, 'unsafe'), version, notes));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('个人日志必须是版本匹配、有正文的有限大小 UTF-8 文件', async () => {
+  const { readPersonalReleaseNotes } = personalRelease;
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-personal-notes-'));
+  const file = path.join(dir, `${version}.md`);
+  try {
+    await assert.rejects(() => readPersonalReleaseNotes(version, dir));
+    for (const bad of [
+      ' ',
+      `# EnsoCode ${version}\n \n`,
+      '# EnsoCode 0.2.11\n\n- Mismatched',
+      `# EnsoCode ${version}\n\n${'长'.repeat(16384)}`,
+      Buffer.concat([Buffer.from(`# EnsoCode ${version}\n\n`), Buffer.from([0xff])]),
+    ]) {
+      await writeFile(file, bad);
+      await assert.rejects(() => readPersonalReleaseNotes(version, dir));
+    }
+    await writeFile(file, `# EnsoCode ${version}\r\n\r\n- Real changes\r\n`);
+    assert.match(await readPersonalReleaseNotes(version, dir), /\n\n- Real changes\n/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI 按仓库版本读取日志，输出与 feed 同源的正文和安全说明', async () => {
+  // Keep the fixture under the repo for dependency resolution, without requiring notes for
+  // every future non-personal (e.g. Windows-only) package version just to run the test suite.
+  const dir = await mkdtemp(fileURLToPath(new URL('../.personal-notes-cli-', import.meta.url)));
+  try {
+    const scripts = path.join(dir, 'scripts');
+    const notes = path.join(dir, 'release-notes');
+    await mkdir(scripts);
+    await mkdir(notes);
+    for (const name of ['personal-release.mjs', 'release.mjs']) {
+      await copyFile(new URL(name, import.meta.url), path.join(scripts, name));
+    }
+    await writeFile(path.join(dir, 'package.json'), JSON.stringify({ version }));
+    const source = `# EnsoCode ${version}\n\n- Actual CLI changes\n`;
+    await writeFile(path.join(notes, `${version}.md`), source);
+    const { stdout } = await promisify(execFile)(process.execPath, [
+      path.join(scripts, 'personal-release.mjs'),
+      'notes',
+    ]);
+    assert.equal(stdout, await personalRelease.readPersonalReleaseNotes(version, notes));
+    assert.ok(stdout.startsWith(source.trimEnd()));
+    assert.match(stdout, /Mac arm64/);
+    assert.match(stdout, /未公证/);
+    assert.match(stdout, /安装与重启由用户操作/);
+    await writeFile(path.join(dir, 'package.json'), JSON.stringify({ version: '0.2.11' }));
+    await assert.rejects(
+      promisify(execFile)(process.execPath, [path.join(scripts, 'personal-release.mjs'), 'notes'])
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('个人日志拒绝符号链接文件与目录', { skip: process.platform === 'win32' }, async () => {
+  const { readPersonalReleaseNotes } = personalRelease;
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-personal-notes-link-'));
+  try {
+    const notes = path.join(dir, 'notes');
+    const alias = path.join(dir, 'notes-alias');
+    const outside = path.join(dir, 'valid.md');
+    const file = path.join(notes, `${version}.md`);
+    const valid = `# EnsoCode ${version}\n\n- Real changes\n`;
+    await mkdir(notes);
+    await writeFile(outside, valid);
+    await symlink(outside, file);
+    await assert.rejects(() => readPersonalReleaseNotes(version, notes));
+    await rm(file);
+    await writeFile(file, valid);
+    await symlink(notes, alias, 'dir');
+    await assert.rejects(() => readPersonalReleaseNotes(version, alias));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

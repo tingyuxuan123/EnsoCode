@@ -255,12 +255,46 @@ class AutoUpdaterService {
 
 /** electron-updater 的 UpdateInfo 收窄成可序列化的白名单形状 */
 function projectInfo(info: electronUpdater.UpdateInfo): UpdateStatus['info'] {
-  const notes = typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined;
+  const notes = normalizeReleaseNotes(info.releaseNotes);
   return {
     version: info.version,
     ...(notes ? { releaseNotes: notes } : {}),
-    ...(info.releaseName ? { releaseName: info.releaseName } : {}),
+    ...(typeof info.releaseName === 'string' ? { releaseName: info.releaseName } : {}),
   };
+}
+
+const MAX_RELEASE_NOTES_LENGTH = 32_768;
+
+/** Feeds may contain a string or versioned notes; never stringify arbitrary manifest objects. */
+function normalizeReleaseNotes(value: unknown): string | undefined {
+  const clean = (text: unknown): string | undefined => {
+    if (typeof text !== 'string' || text.length > MAX_RELEASE_NOTES_LENGTH) return;
+    return text.replace(/\r\n?/g, '\n').trim() || undefined;
+  };
+  if (!Array.isArray(value)) return clean(value);
+  const sections: string[] = [];
+  const seen = new Set<string>();
+  let length = 0;
+  for (const entry of value.slice(0, 100)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const { version, note } = entry;
+    if (
+      typeof version !== 'string' ||
+      version.length > 128 ||
+      !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(version) ||
+      seen.has(version)
+    )
+      continue;
+    const text = clean(note);
+    if (!text) continue;
+    const section = `## ${version}\n\n${text}`;
+    const nextLength = length + section.length + (sections.length ? 2 : 0);
+    if (nextLength > MAX_RELEASE_NOTES_LENGTH) continue;
+    sections.push(section);
+    seen.add(version);
+    length = nextLength;
+  }
+  return sections.join('\n\n') || undefined;
 }
 
 export const autoUpdaterService = new AutoUpdaterService();

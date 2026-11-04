@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   quit: vi.fn(),
   check: vi.fn(async () => undefined),
+  download: vi.fn(async () => undefined),
   window: { on: vi.fn(), once: vi.fn() },
 }));
 
@@ -15,6 +16,7 @@ vi.mock('electron-updater', () => ({
         mocks.listeners.set(event, listener),
       quitAndInstall: mocks.quit,
       checkForUpdates: mocks.check,
+      downloadUpdate: mocks.download,
     },
   },
 }));
@@ -49,6 +51,65 @@ describe('AutoUpdater installation failure recovery', () => {
     service.init(mocks.window as never, false);
     return service;
   }
+
+  it('关闭自动更新仍可手动检查并下载；可用及已下载状态保留真实日志', async () => {
+    const service = await setup();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(mocks.check).not.toHaveBeenCalled();
+    await service.checkForUpdates();
+    expect(mocks.check).toHaveBeenCalledOnce();
+    const info = { version: '0.2.13', releaseNotes: ' \r\n## 修复\r\n\r\n- 新行为  ' };
+    mocks.listeners.get('update-available')!(info);
+    expect(mocks.send.mock.lastCall?.[2]).toEqual({
+      status: 'available',
+      info: { version: '0.2.13', releaseNotes: '## 修复\n\n- 新行为' },
+    });
+    await service.downloadUpdate();
+    expect(mocks.download).toHaveBeenCalledOnce();
+    mocks.listeners.get('update-downloaded')!(info);
+    expect(mocks.send.mock.lastCall?.[2]).toEqual({
+      status: 'downloaded',
+      info: { version: '0.2.13', releaseNotes: '## 修复\n\n- 新行为' },
+    });
+  });
+
+  it('版本数组仅保留干净、可区分的日志；空白、错误类型或过长的日志不投影', async () => {
+    await setup();
+    const available = mocks.listeners.get('update-available')!;
+    const version = '0.2.13';
+    available({
+      version,
+      releaseNotes: [
+        null,
+        'text only',
+        { version: 42, note: 'not a version' },
+        { version: '0.2.14\n<img>', note: 'bad heading' },
+        { version, note: null },
+        { version, note: '   ' },
+        { version, note: ' \r\nChanges since last version ' },
+        { version, note: 'duplicate' },
+        { version: '0.2.12', note: ['not a string'] },
+        { version: '0.2.12', note: 'Older fix' },
+        { version: '0.2.11', note: 'a'.repeat(32769) },
+      ],
+    });
+    expect(mocks.send.mock.lastCall?.[2]).toEqual({
+      status: 'available',
+      info: {
+        version,
+        releaseNotes: '## 0.2.13\n\nChanges since last version\n\n## 0.2.12\n\nOlder fix',
+      },
+    });
+    for (const releaseNotes of [
+      ' \r\n ',
+      'x'.repeat(32769),
+      false,
+      [null, { version, note: '' }],
+    ]) {
+      available({ version, releaseNotes });
+      expect(mocks.send.mock.lastCall?.[2]).toEqual({ status: 'available', info: { version } });
+    }
+  });
 
   it('下载后只忽略迟到检查状态，不能吞掉原生安装器的错误', async () => {
     const service = await setup();

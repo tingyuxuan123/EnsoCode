@@ -32,6 +32,12 @@ CI 结束才判断成功；queued / in_progress / artifact 上传成功都不是
   `https://raw.githubusercontent.com/tingyuxuan123/EnsoCode/personal-updates/`。
 - 正式包仍使用 GitHub latest；个人流程绝不改变正式 latest，不为个人 URL 放宽正式清单校验。
 - 旧正式包不会自动切到个人源；仅首次迁移需要用户手动安装一次同证书个人包。
+- 新个人发布必须在同一 tag 提交中提供 `release-notes/<version>.md`。首行严格为
+  `# EnsoCode <version>`，其后填写实际变更，使用 UTF-8 Markdown，最多 24 KiB；不能是符号链接。
+  [日志格式及未发布草稿](../../../release-notes/README.md)不能替代该版本文件。
+  `node scripts/personal-release.mjs notes` 按 `package.json` 版本校验并附加个人证书、非正式发布和重启说明。
+  CI 在使用私钥前拒绝不合规的日志；Release 正文和个人清单 `releaseNotes` 都使用这一份内容。
+  手动 main 构建不发布，因此不要求本版本日志；旧清单无需补写。
 
 ## GitHub Actions 个人发布
 
@@ -103,7 +109,8 @@ GitHub API token 与 Git SSH 推送权限独立；无权限时请用户在本机
 ### 2. 递增、检查、提交和 tag
 
 ```bash
-# 先独立提交经过检查的功能/修复，再递增 package.json 版本并单独提交发布版本。
+# 先独立提交经过检查的功能/修复，再递增 package.json 版本，编写对应日志并单独提交发布版本。
+node scripts/personal-release.mjs notes
 pnpm release:check
 VERSION=$(node -p "require('./package.json').version")
 TAG="personal-v$VERSION"
@@ -156,6 +163,12 @@ Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID
 
 ## 软件内安装验收（用户操作）
 
+- `available` 和 `downloaded` 的更新日志应包含仓库对应版本的实际变更及个人通道安全说明，
+  与 GitHub Release 正文一致。Markdown 和正式 GitHub feed 的 HTML 都按不可信内容处理：
+  只保留安全排版，不加载图片等资源；仅允许无内嵌凭证的 http(s) 链接经现有系统浏览器
+  安全出口打开，不复用聊天动作或本地文件跳转。
+- 关闭自动更新后，先手动检查；收到 `available` 后应能手动下载，完成后仍可查看日志和重启。
+  晚开的设置窗口仅展示订阅后实际收到的状态；不假装已经读取下载快照，不新增通用 IPC。
 - 真正升级前由用户正常退出/重启；保留旧应用与 userData 备份，不删除设置和会话。
 - 更新完成后核对运行版本、旧设置/会话/项目和本次功能；不能把下载完成当作安装完成。
 - ZIP 下载后仍可能在 Squirrel 签名验证阶段失败，错误必须允许覆盖 downloaded 状态。
@@ -165,7 +178,10 @@ Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID
   先短时探测，不等待长时间无进展下载；不得跳过签名或哈希验收。
 
 回归：`scripts/release.test.mjs`、`src/main/services/updater/AutoUpdater.test.ts`、
-`src/renderer/components/app/UpdateBanner.test.tsx`。
+`src/renderer/components/app/UpdateBanner.test.tsx`、
+`src/renderer/components/settings/GeneralSettings.updates.test.tsx`。
+这些测试覆盖日志来源、手动操作和失败 UI，不代表 Windows NSIS 的安装、旧数据保留或系统浏览器
+实际打开已验收；个人 feed 仍仅用于 Mac arm64，Windows workflow 和发布规则不变。
 
 ## 结束时必须交代
 

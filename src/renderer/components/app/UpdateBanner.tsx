@@ -1,24 +1,22 @@
 import type { UpdateStatus } from '@shared/types/updater';
 import { AlertTriangle, Download, RotateCw, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useI18n } from '@/i18n';
+import { useSettingsStore } from '@/stores/settings';
+import { ReleaseNotesDialog } from './ReleaseNotesDialog';
+import { useUpdateStatus } from './UpdateBannerState';
 
-/** 主窗口顶部更新横幅:下载完成后提示重启(下载进度用小条,可关闭) */
+/** 主窗口更新状态；日志仅来自当前订阅，关闭自动更新后仍可手动下载。 */
 export function UpdateBanner() {
   const { t } = useI18n();
-  const [status, setStatus] = useState<UpdateStatus | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const autoUpdate = useSettingsStore((state) => state.autoUpdate);
+  const { status, notes, download, downloadPending, canShowNotes, showNotes, closeNotes } =
+    useUpdateStatus();
+  const [dismissed, setDismissed] = useState<UpdateStatus | null>(null);
 
-  useEffect(() => {
-    return window.electronAPI.updater.onStatus((next) => {
-      setStatus(next);
-      if (next.status === 'downloaded' || next.status === 'downloading' || next.status === 'error')
-        setDismissed(false);
-    });
-  }, []);
-
-  if (dismissed || !status) return null;
+  if (!status || status === dismissed) return null;
   if (
+    status.status !== 'available' &&
     status.status !== 'downloaded' &&
     status.status !== 'downloading' &&
     status.status !== 'error'
@@ -26,6 +24,7 @@ export function UpdateBanner() {
     return null;
 
   const version = status.info?.version;
+  const isAvailable = status.status === 'available';
   const isDownloaded = status.status === 'downloaded';
   const isError = status.status === 'error';
 
@@ -46,10 +45,31 @@ export function UpdateBanner() {
               ? t('New version {{version}} is ready — restart to update.', {
                   version: version ?? '',
                 })
-              : t('Downloading update… {{percent}}%', {
-                  percent: Math.round(status.progress?.percent ?? 0),
-                })}
+              : isAvailable
+                ? t('New version {{version}} found', { version: version ?? '' })
+                : t('Downloading update… {{percent}}%', {
+                    percent: Math.round(status.progress?.percent ?? 0),
+                  })}
         </span>
+        {canShowNotes && (
+          <button
+            type="button"
+            onClick={showNotes}
+            className="shrink-0 rounded-md px-2.5 py-1 text-primary hover:bg-primary/10"
+          >
+            {t('Release notes')}
+          </button>
+        )}
+        {isAvailable && !autoUpdate && (
+          <button
+            type="button"
+            disabled={downloadPending}
+            onClick={() => void download()}
+            className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {t('Download')}
+          </button>
+        )}
         {isDownloaded && (
           <button
             type="button"
@@ -61,13 +81,17 @@ export function UpdateBanner() {
         )}
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={() => {
+            closeNotes();
+            setDismissed(status);
+          }}
           className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
           title={t('Close')}
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
+      <ReleaseNotesDialog info={isError ? null : notes} onClose={closeNotes} />
     </div>
   );
 }
