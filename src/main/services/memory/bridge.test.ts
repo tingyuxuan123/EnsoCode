@@ -198,7 +198,14 @@ describe('executeMemoryOp', () => {
         if (kind === 'query') return Float32Array.from([0.9, 0, 0.44]);
         const t = text.toLowerCase();
         if (t.includes('kafka')) return Float32Array.from([0, 0, 1]);
-        if (t.includes('redis')) return Float32Array.from([1, t.includes('cluster') ? 0.1 : 0, 0]);
+        // replica 略偏，让两路通道都把 primary 排第一，避免 RRF 并列。
+        // kafka 的 MMR 胜出余量约 0.003；调排序参数后若翻转，先检查这份 fixture。
+        if (t.includes('redis'))
+          return Float32Array.from([
+            1,
+            t.includes('cluster') ? 0.1 : t.includes('replica') ? 0.01 : 0,
+            0,
+          ]);
         return Float32Array.from([0, 1, 0]);
       },
     };

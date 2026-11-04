@@ -86,6 +86,7 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 
 - 混排 score 仅用于排序，对外返回 rank 与可选向量余弦 relevance；FTS 命中不填伪相关度，
   旧历史 score 不能继续当百分比展示。显式匹配年份加分最多 0.1，不降低语义权重。
+- 向量距离相同时按记忆 rowid（插入序）排，不用随机 UUID 决胜，也不改原始相关度。
 - deep 辅助使用有界超时和真实 AbortSignal，远端完整链路传到 worker，本地传到 llama；
   不只丢弃 Promise 结果。降级原因与是否使用模型辅助必须可观察；检索次数沿用 appearances。
 - KG 重试复用 failed 列、幂等重置，关闭时不启动抽取。冷库管理操作使用临时句柄并关闭，

@@ -393,6 +393,33 @@ describe('searchMemories — hybrid', () => {
   });
 });
 
+describe('searchMemories — 向量通道同距离', () => {
+  it('距离相同时按插入顺序排列，不按 UUID 排序，也不改变原始相关度', async () => {
+    const same: Embedder = {
+      model: 'same',
+      dim: 3,
+      embed: async () => Float32Array.from([1, 0, 0]),
+    };
+    const inserted: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const memory = await add(`alpha item ${i}`, 'global', same);
+      // UUID 字典序故意与 rowid 相反，避免随机 ID 恰好有序导致假绿。
+      const id = `00000000-0000-4000-8000-${String(8 - i).padStart(12, '0')}`;
+      db.prepare('UPDATE memories SET id = ? WHERE id = ?').run(id, memory.id);
+      inserted.push(id);
+    }
+    const hits = await searchMemories(db, {
+      q: 'zzzz',
+      spaceIds: ['global'],
+      embedder: same,
+      limit: 8,
+      mmr: false,
+    });
+    expect(ids(hits)).toEqual(inserted);
+    expect(hits.map((hit) => hit.relevance)).toEqual(Array(8).fill(1));
+  });
+});
+
 describe('searchMemories — MMR 去冗余', () => {
   // 三条 redis 近似记忆共享同一向量方向，一条 kafka 异题但与查询仍有中等相关；再加一条只命中 FTS
   // 的长杂项垄底（min-max 归一化后它是 0，避免 kafka 被归一化压到 0 失去可比性）
@@ -403,7 +430,13 @@ describe('searchMemories — MMR 去冗余', () => {
       if (kind === 'query') return Float32Array.from([0.9, 0, 0.44]);
       const t = text.toLowerCase();
       if (t.includes('kafka')) return Float32Array.from([0, 0, 1]);
-      if (t.includes('redis')) return Float32Array.from([1, t.includes('cluster') ? 0.1 : 0, 0]);
+      // replica 略偏，让两路通道都把 primary 排第一，避免 RRF 并列影响 MMR。
+      if (t.includes('redis'))
+        return Float32Array.from([
+          1,
+          t.includes('cluster') ? 0.1 : t.includes('replica') ? 0.01 : 0,
+          0,
+        ]);
       return Float32Array.from([0, 1, 0]);
     },
   };
