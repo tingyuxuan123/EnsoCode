@@ -4,7 +4,7 @@ import { MenuItem, MenuLabel, MenuPanel, MenuSeparator, Switch, useDismiss } fro
 import { approvalModes, presets, thinkingLevels, vendors, virtualModels } from './data';
 import { useWorkbench } from './Workbench';
 
-const pill = 'flex h-7 min-w-0 shrink items-center gap-1 rounded-control px-2 text-[12px] text-muted hover:bg-hover hover:text-surface-foreground';
+const pill = 'flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-control px-2 text-[12px] text-muted hover:bg-hover hover:text-surface-foreground';
 
 function Popover({ trigger, children, align = 'left', width = 'w-72', open, setOpen }: { trigger: ReactNode; children: ReactNode; align?: 'left' | 'right'; width?: string; open: boolean; setOpen: (value: boolean) => void }) {
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
@@ -326,7 +326,7 @@ export function Composer({ onSend, initial = '', running = false, locked = false
         )}
         <textarea aria-label="输入消息" disabled={locked} placeholder={placeholder} rows={2} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} className="block h-[64px] w-full bg-transparent px-3.5 pb-1 pt-3 text-[14px] leading-6 outline-none placeholder:text-faint" />
         {draft.length > 2000 && <p className="px-3.5 text-[11px] text-faint">{draft.length} 字符</p>}
-        <div className="flex items-center gap-1 px-2 pb-2 pt-0.5">
+        <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-0.5">
           <button aria-label="添加图片" title="添加图片" onClick={() => setImages(Math.min(images + 1, 4))} className="flex size-7 shrink-0 items-center justify-center rounded-control text-muted hover:bg-hover"><span className="icon-[lucide--image-plus] size-3.5" /></button>
           <button aria-label="语音输入" title={recording ? '停止录音' : '按住 Space 说话'} onClick={() => { setRecording(!recording); if (recording) setDraft(`${draft}把审批按钮放到右侧`); }} className={`flex size-7 shrink-0 items-center justify-center rounded-control hover:bg-hover ${recording ? 'bg-danger-soft text-danger' : 'text-muted'}`}><span className={`${recording ? 'icon-[lucide--square]' : 'icon-[lucide--mic]'} size-3.5`} /></button>
           {recording && <span className="shrink-0 text-[11px] text-danger">请说话 · 再次点击结束</span>}

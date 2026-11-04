@@ -24,6 +24,13 @@ export const projects: Project[] = [
   { id: 'design', name: 'design-system', local: true, group: '', sessions: [] },
   { id: 'relay', name: 'relay-service', local: false, host: '生产服务器', group: 'remote', sessions: [{ id: 's6', title: '中继握手超时排查', time: '5 天', dot: 'idle' }] },
 ];
+/** 临时会话：独立于项目的会话，不进入项目树；保留到手动删除 */
+export type TempChat = { id: string; title: string; time: string; dot: Dot };
+export const temporaryChats: TempChat[] = [
+  { id: 'sc1', title: '试一段正则表达式', time: '20 分钟', dot: 'idle' },
+  { id: 'sc2', title: '把这串 JSON 整理成表格', time: '昨天', dot: 'unread' },
+];
+
 export const activeSessionIds = ['s1', 's2'];
 export const archivedCount = 12;
 

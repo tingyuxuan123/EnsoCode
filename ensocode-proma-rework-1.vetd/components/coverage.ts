@@ -5,12 +5,12 @@ export type FeatureGroup = { id: string; name: string; description: string; feat
 export const featureGroups: FeatureGroup[] = [
   {
     id: 'workspace', name: '项目与会话', description: '组织仓库、会话、分组和隔离工作区。', features: [
-      { id: 'workspace-shell', name: '工作台外壳', surfaces: '窗口标题栏、展开/收起导航、阅读宽度、面板尺寸与布局恢复', source: 'src/renderer/App.tsx', status: 'partial', route: '/' },
+      { id: 'workspace-shell', name: '工作台外壳', surfaces: '图标轨（品牌/侧栏开关/搜索/Code·Bot/询问/设置 + 悬浮气泡，已不放在线文件与终端入口）、标题栏、阅读宽度、面板尺寸与布局恢复', source: 'src/renderer/App.tsx;src/renderer/components/app/AppRail.tsx', status: 'partial', route: '/' },
       { id: 'project-add', name: '添加项目', surfaces: '本地目录、最近项目、SSH 连接、远程目录浏览、加载/失败', source: 'src/renderer/components/chat/AddProjectDialog.tsx', status: 'partial', route: '/projects' },
       { id: 'project-settings', name: '项目设置', surfaces: '别名、路径、分组、默认模型/思考、工具继承、子代理权限、撤销信任', source: 'src/renderer/components/chat/ProjectSettingsDialog.tsx', status: 'partial', route: '/project-settings' },
       { id: 'project-groups', name: '项目分组', surfaces: '新建/编辑、颜色/图标、分组默认模型、批量移入、排序', source: 'src/renderer/components/chat/GroupEditorDialog.tsx', status: 'partial', route: '/project-group' },
       { id: 'session-organize', name: '会话管理', surfaces: '新建、重命名、置顶、归档/恢复、删除、项目右键菜单', source: 'src/renderer/components/chat/Sidebar.tsx', status: 'partial', route: '/new-task' },
-      { id: 'scratch-chats', name: '临时会话', surfaces: '新建入口与独立列表已同步；独立工作区标识、搜索、手机端和删除边界待补齐', source: 'src/renderer/components/chat/Sidebar.tsx;src/renderer/components/chat/WorkspaceBadge.tsx', status: 'partial', route: '/' },
+      { id: 'scratch-chats', name: '临时会话与侧栏视图', surfaces: '顶部「项目 \| 临时对话」分段、各视图新建入口、临时会话空态、⌘N 跟随视图、搜索/通知选到另一类会话时跟随切换；独立工作区徽标、手机端待补', source: 'src/renderer/components/chat/Sidebar.tsx;src/renderer/stores/sessions/sidebarDirectory.ts', status: 'partial', route: '/conversations' },
       { id: 'session-import', name: '导入历史会话', surfaces: '来源选择、会话列表、导入进度、重复与失败', source: 'src/renderer/components/chat/ImportSessionDialog.tsx', status: 'partial', route: '/project-import' },
       { id: 'global-search', name: '全局搜索', surfaces: '当前/全部项目、归档、正文命中、设置项、浏览器标签、无结果', source: 'src/renderer/components/search/WorkspaceSearchDialog.tsx', status: 'partial', route: '/search' },
       { id: 'conversation-find', name: '会话内查找与轮次导航', surfaces: '匹配高亮、上下项、轮次预览和跳转', source: 'src/renderer/components/chat/ChatFindBar.tsx;src/renderer/components/chat/NavRail.tsx', status: 'partial', route: '/chat-find' },

@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import ensoMark from '../assets/enso-mark.svg';
 import { useWorkbench } from './Workbench';
@@ -18,6 +19,23 @@ export function TrafficLights() {
   );
 }
 
+/** 图标轨上按钮的右侧悬浮提示：图标不带文字，名称与快捷键放在气泡里（hover 才出现） */
+export function RailTip({ label, shortcut, children }: { label: string; shortcut?: string; children: ReactNode }) {
+  return (
+    <span className="group/rail relative flex">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-[44px] top-1/2 z-50 hidden -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-[6px] border border-line bg-surface px-2 py-1 text-[12px] text-surface-foreground shadow-md group-hover/rail:flex"
+      >
+        {label}
+        {shortcut && <span className="text-[11px] text-faint">{shortcut}</span>}
+      </span>
+    </span>
+  );
+}
+
+/** 图标轨里的 Code / Bot 入口（竖排两个图标）；Code 时 Bot 图标右上角显示待处理数 */
 export function ModeSwitch({ className = '' }: { className?: string }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -27,15 +45,23 @@ export function ModeSwitch({ className = '' }: { className?: string }) {
     { value: 'bot', label: 'Bot', icon: 'icon-[lucide--bot-message-square]', to: '/bot' },
   ];
   return (
-    <div role="radiogroup" aria-label="切换 Code / Bot 模式" className={`flex h-8 items-center rounded-control bg-control/60 p-[3px] ${className}`}>
+    <div role="radiogroup" aria-label="切换 Code / Bot 模式" aria-orientation="vertical" className={`flex shrink-0 flex-col gap-2 ${className}`}>
       {options.map((option) => {
         const active = (option.value === 'bot') === bot;
         return (
-          <button key={option.value} role="radio" aria-checked={active} title="切换模式" onClick={() => navigate(option.to)} className={`relative flex h-full flex-1 items-center justify-center gap-1.5 rounded-[4px] px-2.5 text-[12px] font-medium ${active ? 'bg-surface text-surface-foreground' : 'text-muted hover:text-surface-foreground'}`}>
-            <span className={`${option.icon} size-3.5`} />
-            {option.label}
-            {option.value === 'bot' && !bot && <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-danger text-[10px] text-white">2</span>}
-          </button>
+          <RailTip key={option.value} label={option.label} shortcut="⌘⇧M">
+            <button
+              role="radio"
+              aria-checked={active}
+              aria-label={option.label}
+              onClick={() => navigate(option.to)}
+              className={`relative flex size-9 items-center justify-center rounded-[6px] transition-colors ${active ? 'text-primary' : 'text-muted hover:bg-hover hover:text-surface-foreground'}`}
+            >
+              {active && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-primary-soft" />}
+              <span className={`relative ${option.icon} size-[19px]`} />
+              {option.value === 'bot' && !bot && <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-danger text-[10px] text-white">2</span>}
+            </button>
+          </RailTip>
         );
       })}
     </div>
@@ -80,16 +106,7 @@ export function TitleBar() {
         </div>
       )}
       {remote && <span className="flex-1 text-[12px] font-medium text-muted">EnsoCode</span>}
-      {bot && (
-        <>
-          <div className="flex-1" />
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="pointer-events-auto w-[168px]">
-              <ModeSwitch />
-            </div>
-          </div>
-        </>
-      )}
+      {bot && <span className="flex-1 text-[12px] font-medium text-muted">EnsoCode</span>}
       <div className="ml-auto flex items-center gap-1">
         <button className={`flex size-7 items-center justify-center rounded-control hover:bg-hover ${chatWide ? 'text-surface-foreground' : 'text-muted'}`} onClick={() => setChatWide(!chatWide)} aria-label={chatWide ? '恢复两侧留白' : '铺满两侧'} title={chatWide ? '恢复两侧留白' : '铺满两侧'}>
           <span className={`${chatWide ? 'icon-[lucide--fold-horizontal]' : 'icon-[lucide--unfold-horizontal]'} size-4`} />
@@ -106,54 +123,45 @@ export function TitleBar() {
 /** 兼容旧名称 */
 export const WindowBar = TitleBar;
 
-const railButton = 'relative flex size-9 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-surface-foreground disabled:pointer-events-none disabled:opacity-40';
+const railButton = 'relative flex size-9 items-center justify-center rounded-[6px] text-muted transition-colors hover:bg-hover hover:text-surface-foreground disabled:pointer-events-none disabled:opacity-40';
 
-/** 56px 全局图标轨：品牌 / 侧栏开关 /（收起时）搜索 / 工作区工具 / 技能与模型中心 / 询问 Enso / 设置 */
+/** 56px 全局图标轨：品牌 / 侧栏开关 /（收起时）搜索 / 分隔线 / Code·Bot / 询问 Enso / 设置；图标不带文字 */
 export function AppRail() {
   const { pathname } = useLocation();
-  const { compact, setCompact, openSideTab, setSearchOpen, setNotice } = useWorkbench();
+  const { compact, setCompact, setSearchOpen, setNotice, botModeEnabled } = useWorkbench();
   const remote = pathname.startsWith('/remote');
-  const bot = pathname.startsWith('/bot');
-  const tools = [
-    { kind: 'files', icon: 'icon-[lucide--folder-open]', label: '文件' },
-    { kind: 'changes', icon: 'icon-[lucide--file-diff]', label: '改动' },
-    { kind: 'terminal', icon: 'icon-[lucide--square-terminal]', label: '终端' },
-    { kind: 'browser', icon: 'icon-[lucide--globe]', label: '浏览器' },
-  ];
   return (
     <nav aria-label="EnsoCode" className="flex w-[56px] shrink-0 flex-col items-center gap-2 bg-panel pb-3 pt-3">
-      <Link to="/" title="EnsoCode" className="mb-1 flex size-8 items-center justify-center">
+      <Link to="/" title="EnsoCode" aria-label="EnsoCode" className="mb-1 flex size-8 items-center justify-center">
         <EnsoMark className="size-6" />
       </Link>
       {!remote && (
-        <button className={railButton} aria-pressed={!compact} title={compact ? '展开侧边栏 (⌘B)' : '折叠侧边栏 (⌘B)'} onClick={() => setCompact(!compact)}>
-          <span className="icon-[lucide--panel-left] size-[18px]" />
-        </button>
+        <RailTip label={compact ? '展开侧边栏' : '折叠侧边栏'} shortcut="⌘B">
+          <button className={railButton} aria-pressed={!compact} aria-label={compact ? '展开侧边栏' : '折叠侧边栏'} onClick={() => setCompact(!compact)}>
+            <span className="icon-[lucide--panel-left] size-[18px]" />
+          </button>
+        </RailTip>
       )}
       {compact && !remote && (
-        <button className={railButton} title="搜索任意内容 (⌘K)" onClick={() => setSearchOpen(true)}>
-          <span className="icon-[lucide--search] size-[18px]" />
-        </button>
+        <RailTip label="搜索任意内容" shortcut="⌘K">
+          <button className={railButton} aria-label="搜索任意内容" onClick={() => setSearchOpen(true)}>
+            <span className="icon-[lucide--search] size-[18px]" />
+          </button>
+        </RailTip>
       )}
-      <div className="my-1 w-5 border-t border-border" aria-hidden />
-      {!remote && !bot && tools.map((tool) => (
-        <button key={tool.kind} className={railButton} title={tool.label} aria-label={tool.label} onClick={() => openSideTab(tool.kind)}>
-          <span className={`${tool.icon} size-[19px]`} />
-        </button>
-      ))}
-      <Link to="/settings-skills" className={railButton} title="技能" aria-label="技能">
-        <span className="icon-[lucide--blocks] size-[19px]" />
-      </Link>
-      <Link to="/settings-providers" className={railButton} title="模型中心" aria-label="模型中心">
-        <span className="icon-[lucide--server] size-[19px]" />
-      </Link>
+      {!remote && <div data-slot="app-rail-separator" className="my-1 w-5 border-t border-line" aria-hidden />}
+      {botModeEnabled && !remote && <ModeSwitch />}
       <div className="flex-1" />
-      <button className={`${railButton} text-primary hover:text-primary`} title="询问 Enso" aria-label="询问 Enso" onClick={() => setNotice('询问 Enso：打开一个由 Enso 系统 Agent 接手的新会话，可解答产品能力并帮你配置团队。设计预览不调用模型。')}>
-        <span className="icon-[lucide--sparkles] size-[19px]" />
-      </button>
-      <Link to="/settings-general" className={railButton} title="设置 (⌘,)" aria-label="设置">
-        <span className="icon-[lucide--settings-2] size-[19px]" />
-      </Link>
+      <RailTip label="询问 Enso">
+        <button className={`${railButton} text-primary hover:text-primary`} aria-label="询问 Enso" onClick={() => setNotice('询问 Enso：打开一个由 Enso 系统 Agent 接手的新会话，可解答产品能力并帮你配置团队。设计预览不调用模型。')}>
+          <span className="icon-[lucide--sparkles] size-[19px]" />
+        </button>
+      </RailTip>
+      <RailTip label="设置" shortcut="⌘,">
+        <Link to="/settings-general" className={railButton} aria-label="设置">
+          <span className="icon-[lucide--settings-2] size-[19px]" />
+        </Link>
+      </RailTip>
     </nav>
   );
 }

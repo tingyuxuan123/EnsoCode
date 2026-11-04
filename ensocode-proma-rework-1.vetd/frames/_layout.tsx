@@ -11,7 +11,7 @@ import { AppRail, CodeSidebar, Notice, SidePanel, StatusBar, TitleBar, Workbench
 /**
  * 路由前缀决定外壳：
  * - /settings*  独立设置窗口（真实应用为 960×680 的单独窗口）
- * - /bot*       Bot 模式：标题栏居中模式切换 + 图标轨 + Bot 侧栏
+ * - /bot*       Bot 模式：图标轨 Code/Bot 入口 + Bot 侧栏（标题栏不再居中放切换）
  * - /remote*    远程节点：整块换成对方的目录与会话
  * - /phone*     手机伴侣：独立移动布局，不套桌面外壳
  * - 其余        Code 模式主窗口：56 图标轨 + 264 侧栏 + 对话 + 360 右侧停靠面板

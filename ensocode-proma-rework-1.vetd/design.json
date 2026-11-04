@@ -2,9 +2,9 @@
 	"version": 1,
 	"type": "vetta-design",
 	"canvas": {
-		"zoom": 0.4132879590691098,
-		"x": -1187.1345270549104,
-		"y": -116.80963015374681
+		"x": -32065.94620937825,
+		"y": -1096.5081812213507,
+		"zoom": 0.7876907345942965
 	},
 	"frames": [
 		{
@@ -38,8 +38,8 @@
 		{
 			"id": "background-agents",
 			"file": "frames/background-agents.tsx",
-			"x": 6080,
-			"y": 0,
+			"x": 6212,
+			"y": 4,
 			"width": 1440,
 			"height": 900,
 			"title": "后台 Agent · 展开状态",
@@ -274,6 +274,20 @@
 			}
 		},
 		{
+			"id": "conversations",
+			"file": "frames/conversations.tsx",
+			"x": 136010,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "临时对话视图 · 侧栏分段",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "临时对话视图 · 侧栏分段"
+			}
+		},
+		{
 			"id": "coverage",
 			"file": "frames/coverage.tsx",
 			"x": 9120,
@@ -304,8 +318,8 @@
 		{
 			"id": "index",
 			"file": "frames/index.tsx",
-			"x": 0,
-			"y": 0,
+			"x": -80,
+			"y": 1,
 			"width": 1440,
 			"height": 900,
 			"title": "对话工作台",

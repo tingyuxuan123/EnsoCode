@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { MenuItem, MenuLabel, MenuPanel, MenuSeparator, StatusDot, useDismiss } from './Controls';
-import { activeSessionIds, archivedCount, groups, projects, type Project, type Session } from './data';
-import { ModeSwitch } from './Shell';
+import { activeSessionIds, archivedCount, groups, projects, temporaryChats, type Project, type Session, type TempChat } from './data';
 import { useWorkbench } from './Workbench';
 
 function SectionLabel({ children }: { children: string }) {
@@ -153,13 +152,18 @@ function NodeSwitcher() {
 
 /** Code 模式侧栏（chat/Sidebar.tsx）。宽度默认 264，可拖 200–420 */
 export function CodeSidebar() {
-  const { compact, botModeEnabled, setSearchOpen, setProjectDialog, setDialogProject } = useWorkbench();
+  const { compact, setSearchOpen, setProjectDialog, setDialogProject } = useWorkbench();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const setSidebarView = (next: 'projects' | 'conversations') => navigate(next === 'conversations' ? '/conversations' : '/');
   const [folded, setFolded] = useState<string[]>(['phone', 'design']);
   const [addMenu, setAddMenu] = useState(false);
   const [chip, setChip] = useState('all');
   const [chipSearch, setChipSearch] = useState(false);
   const [query, setQuery] = useState('');
+  const [temporary, setTemporary] = useState<TempChat[]>(temporaryChats);
   const addRef = useDismiss<HTMLDivElement>(addMenu, () => setAddMenu(false));
+  const temporaryView = pathname === '/conversations';
   if (compact) return null;
   const all = projects.flatMap((project) => project.sessions);
   const active = all.filter((session) => activeSessionIds.includes(session.id));
@@ -172,28 +176,35 @@ export function CodeSidebar() {
   return (
     <aside aria-label="项目与会话" className="flex w-[264px] shrink-0 flex-col bg-sidebar">
       <div className="flex shrink-0 items-center gap-2 px-3 pt-3">
-        {botModeEnabled ? (
-          <>
-            <ModeSwitch className="h-9 flex-1" />
-            <button onClick={() => setSearchOpen(true)} title="搜索任意内容 (⌘K)" className="flex size-9 shrink-0 items-center justify-center rounded-control text-muted hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--search] size-4" /></button>
-          </>
-        ) : (
-          <button onClick={() => setSearchOpen(true)} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-control border border-line bg-surface px-2.5 text-[13px] text-muted hover:bg-hover">
-            <span className="icon-[lucide--search] size-4" />
-            <span className="flex-1 text-left">搜索任意内容</span>
-            <span className="text-[11px]">⌘K</span>
-          </button>
-        )}
+          <div role="tablist" aria-label="侧栏视图" className="flex h-9 min-w-0 flex-1 items-center rounded-[6px] bg-control/60 p-[3px] text-[13px]">
+            {[{ id: 'projects', label: '项目' }, { id: 'conversations', label: '临时对话' }].map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={temporaryView === (tab.id === 'conversations')}
+                onClick={() => { setSidebarView(tab.id as 'projects' | 'conversations'); setQuery(''); }}
+                className={`h-full flex-1 rounded-[4px] transition-colors ${temporaryView === (tab.id === 'conversations') ? 'bg-surface font-medium text-surface-foreground' : 'text-muted hover:text-surface-foreground'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setSearchOpen(true)} title="搜索任意内容 (⌘K)" aria-label="搜索任意内容" className="flex size-9 shrink-0 items-center justify-center rounded-[6px] bg-control/60 text-muted hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--search] size-4" /></button>
       </div>
-      <Link to="/new-task" className="mx-3 mt-3 flex h-9 shrink-0 items-center gap-2 rounded-control px-1.5 hover:bg-hover">
-        <span className="icon-[lucide--circle-plus] size-[17px] text-primary" />
-        <span className="text-[14px]">新建任务</span>
-        <span className="ml-auto rounded border border-border px-1 text-[11px] text-muted">⌘N</span>
-      </Link>
-      <button onClick={() => setNotice('新建了一个临时会话：不属于任何项目，删掉即清空（设计预览）。')} className="mx-3 mt-1 flex h-8 shrink-0 items-center gap-2 rounded-control px-1.5 text-[13px] text-muted hover:bg-hover hover:text-surface-foreground">
-        <span className="icon-[lucide--message-square-plus] size-4 shrink-0" />
-        <span>开始临时会话</span>
-      </button>
+      {!temporaryView ? (
+        <Link to="/new-task" className="mx-3 mt-3 flex h-9 shrink-0 items-center gap-2 rounded-control px-1.5 hover:bg-hover">
+          <span className="icon-[lucide--circle-plus] size-[17px] text-primary" />
+          <span className="text-[14px]">新建任务</span>
+          <span className="ml-auto rounded border border-border px-1 text-[11px] text-muted">⌘N</span>
+        </Link>
+      ) : (
+        <button onClick={() => setTemporary([{ id: `sc${temporary.length + 1}`, title: '新的临时会话', time: '刚刚', dot: 'idle' }, ...temporary])} className="mx-3 mt-3 flex h-9 shrink-0 items-center gap-2 rounded-control px-1.5 text-left hover:bg-hover">
+          <span className="icon-[lucide--message-square-plus] size-[17px] text-primary" />
+          <span className="text-[14px]">开始临时会话</span>
+          <span className="ml-auto rounded border border-border px-1 text-[11px] text-muted">⌘N</span>
+        </button>
+      )}
+      {!temporaryView && (
       <div ref={addRef} className="relative mt-4 flex shrink-0 items-center gap-1 px-4 text-[12px] text-muted">
         <span className="flex-1">项目</span>
         <button title={folded.length === projects.length ? '全部展开' : '全部折叠'} onClick={() => setFolded(folded.length === projects.length ? [] : projects.map((project) => project.id))} className="flex size-6 items-center justify-center rounded-control hover:bg-hover hover:text-surface-foreground"><span className="icon-[lucide--chevrons-up-down] size-3.5" /></button>
@@ -205,6 +216,8 @@ export function CodeSidebar() {
           </MenuPanel>
         )}
       </div>
+      )}
+      {!temporaryView && (
       <div className="flex shrink-0 items-center gap-1 px-3 pb-1 pt-2">
         {chipSearch ? (
           <label className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-full bg-control/60 pl-2.5 pr-1 text-[12px] text-muted focus-within:ring-1 focus-within:ring-primary/45">
@@ -227,6 +240,21 @@ export function CodeSidebar() {
           </>
         )}
       </div>
+      )}
+      {temporaryView && (
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-3 pb-2 pt-1" data-slot="scratch-section">
+          <div className="flex items-center justify-between pr-1">
+            <SectionLabel>临时会话</SectionLabel>
+            <button onClick={() => setTemporary([{ id: `sc${temporary.length + 1}`, title: '新的临时会话', time: '刚刚', dot: 'idle' }, ...temporary])} title="开始临时会话" aria-label="开始临时会话" className="flex size-5 items-center justify-center rounded hover:bg-hover"><span className="icon-[lucide--plus] size-3.5" /></button>
+          </div>
+          <p className="px-2 pb-1 text-[11px] text-faint">临时会话会一直保留，直到你删除它。</p>
+          <div className="flex flex-col gap-y-0.5">
+            {temporary.length === 0 && <p className="rounded-control border border-dashed px-3 py-6 text-center text-[13px] text-muted">还没有会话</p>}
+            {temporary.map((chat) => <SessionRow key={chat.id} session={chat} active={chat.id === 'sc1'} />)}
+          </div>
+        </div>
+      )}
+      {!temporaryView && (
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-2 pt-1">
         {!query && chip === 'all' && (
           <div>
@@ -263,17 +291,8 @@ export function CodeSidebar() {
           );
         }) : scoped.map((project) => <ProjectNode key={project.id} project={project} folded={folded.includes(project.id)} onToggle={() => toggle(project.id)} />)}
         {!scoped.length && <p className="px-2 py-6 text-center text-[12px] text-muted">没有匹配的会话</p>}
-        <div className="mt-3" data-slot="scratch-section">
-          <div className="group flex items-center justify-between pr-1">
-            <SectionLabel>临时会话</SectionLabel>
-            <button onClick={() => setNotice('新建了一个临时会话（设计预览）。')} title="开始临时会话" aria-label="开始临时会话" className="flex size-5 items-center justify-center rounded hover:bg-hover"><span className="icon-[lucide--plus] size-3.5" /></button>
-          </div>
-          <p className="px-2 pb-1 text-[11px] text-faint">临时会话会一直保留，直到你删除它。</p>
-          <div className="flex flex-col gap-y-0.5">
-            <SessionRow session={{ id: 'sc1', title: '试一段正则表达式', time: '20 分钟', dot: 'idle' }} active={false} />
-          </div>
-        </div>
       </div>
+      )}
       <div className="flex shrink-0 flex-col gap-1 px-3 pb-3 pt-2">
         <NodeSwitcher />
         <button onClick={() => setProjectDialog('archive')} title={`已归档 (${archivedCount})`} className="flex h-8 items-center gap-2 rounded-control px-2 text-[12px] text-muted hover:bg-hover hover:text-surface-foreground">
