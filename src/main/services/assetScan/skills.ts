@@ -63,23 +63,36 @@ export function readSkillsRoot(root: string, groupName: string): DiscoveredSkill
   return skills;
 }
 
-/** spawn 前斜杠菜单用：与 worker 的 DefaultResourceLoader 同一套 pi 发现规则（agentDir、settings、
- * 项目信任一致），未安装的包跳过不装。includeHarness 对应「加载项目内其它工具目录」，追加在 pi 根之后 */
+/** spawn 前斜杠菜单用：与 worker 使用同一套 pi 发现规则，未安装的包跳过不装。
+ * 显式路径排在 pi 默认发现之后、harness 根之前，并且不受本地扫描开关影响。 */
 export async function listProjectSkills(
   cwd: string,
-  options: { agentDir: string; trustedProjectCode?: readonly string[]; includeHarness?: boolean }
+  options: {
+    agentDir: string;
+    trustedProjectCode?: readonly string[];
+    includeLocal?: boolean;
+    includeHarness?: boolean;
+    additionalSkillPaths?: readonly string[];
+  }
 ): Promise<{ name: string; description: string }[]> {
   const { agentDir } = options;
-  const { settingsManager } = createProjectSettingsManager(
-    cwd,
-    agentDir,
-    options.trustedProjectCode ?? []
-  );
-  const resolved = await new DefaultPackageManager({ cwd, agentDir, settingsManager }).resolve(
-    async () => 'skip'
-  );
+  const localSkillPaths: string[] = [];
+  if (options.includeLocal !== false) {
+    const { settingsManager } = createProjectSettingsManager(
+      cwd,
+      agentDir,
+      options.trustedProjectCode ?? []
+    );
+    const resolved = await new DefaultPackageManager({ cwd, agentDir, settingsManager }).resolve(
+      async () => 'skip'
+    );
+    for (const entry of resolved.skills) {
+      if (entry.enabled) localSkillPaths.push(entry.path);
+    }
+  }
   const skillPaths = [
-    ...resolved.skills.filter((entry) => entry.enabled).map((entry) => entry.path),
+    ...localSkillPaths,
+    ...(options.additionalSkillPaths ?? []),
     ...(options.includeHarness ? resolveHarnessSkillRoots(cwd) : []),
   ];
   return loadSkills({ cwd, agentDir, skillPaths, includeDefaults: false }).skills.map(

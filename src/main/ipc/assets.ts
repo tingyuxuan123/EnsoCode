@@ -27,6 +27,7 @@ import { collectAssetImport, scanLocalAssets } from '../services/assetScan';
 import { listProjectSkills } from '../services/assetScan/skills';
 import { resolveLocalCwdForBrowser } from '../services/browserFileRoot';
 import { listInstalledPluginInfo } from '../services/claudePlugins';
+import { bundledDesignSkillPaths } from '../services/design/appPaths';
 import {
   deleteInstruction,
   readInstruction,
@@ -36,6 +37,7 @@ import {
 import { listMcpOccupancyTools } from '../services/mcpOccupancy';
 import { getMcpToolCatalog } from '../services/mcpToolCatalog';
 import { readSystemPrompt, writeSystemPrompt } from '../services/systemPromptStore';
+import { getSourceAuthorityRegistry } from './agent';
 import { readSettings } from './settings';
 
 function settingsState(): Record<string, unknown> {
@@ -95,22 +97,21 @@ export function registerAssetHandlers(): void {
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.ASSETS_LIST_PROJECT_SKILLS, (_event, cwd: unknown) => {
-    if (typeof cwd !== 'string' || !cwd) return [];
-    // 与 spawn 同一来源读开关、agentDir 与项目信任：菜单预览与实际注入的 skill 集合保持一致
+  ipcMain.handle(IPC_CHANNELS.ASSETS_LIST_PROJECT_SKILLS, (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || !projectId) return [];
+    const project = getSourceAuthorityRegistry()?.project(projectId);
+    if (project?.state !== 'active' || project.kind === 'ssh' || project.kind === 'bot-home') {
+      return [];
+    }
     const state = readSettingsState();
-    const projects: unknown[] = Array.isArray(state?.projects) ? state.projects : [];
-    const project = projects.find(
-      (entry): entry is { id: string } =>
-        Boolean(entry) &&
-        typeof entry === 'object' &&
-        (entry as { path?: unknown }).path === cwd &&
-        typeof (entry as { id?: unknown }).id === 'string'
-    );
-    return listProjectSkills(cwd, {
+    // 临时会话只预览内置技能，不扫描共用的 scratch 父目录。
+    const includeLocal = project.kind !== 'scratch' && state?.loadLocalSkills !== false;
+    return listProjectSkills(project.canonicalPath, {
       agentDir: path.join(agentDataDir(), 'pi-agent'),
-      trustedProjectCode: projectTrustedCode(projects, project?.id),
-      includeHarness: state?.loadHarnessAssets === true,
+      trustedProjectCode: projectTrustedCode(state?.projects, projectId),
+      includeLocal,
+      includeHarness: includeLocal && state?.loadHarnessAssets === true,
+      additionalSkillPaths: bundledDesignSkillPaths(state),
     }).catch((error: unknown) => {
       console.error('[assets] list project skills failed:', error);
       return [];

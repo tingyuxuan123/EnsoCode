@@ -11,7 +11,8 @@ import { McpToolCatalogStore } from './mcpToolCatalog';
 import { pickSubagentModelRefs } from './subagentModels';
 
 vi.mock('../../agent/index?modulePath', () => ({ default: '/tmp/agent.js' }));
-vi.mock('./design/appPaths', () => ({
+vi.mock('./design/appPaths', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./design/appPaths')>()),
   getDesignPaths: () => ({ skillsDir: '/fixture/design-skills' }),
 }));
 const settingsMock = vi.hoisted(() => ({

@@ -129,6 +129,29 @@ describe('listProjectSkills', () => {
     expect(await names(cwd, { agentDir })).toEqual([]);
   });
 
+  it('空项目在启动会话前也能发现随应用提供的设计技能', async () => {
+    const { cwd, agentDir } = setup();
+    const bundled = path.join(tmp, 'bundled');
+    writeSkill(bundled, 'vetta-ui-design', 'name: vetta-ui-design\ndescription: Design canvas');
+    expect(await listProjectSkills(cwd, { agentDir, additionalSkillPaths: [bundled] })).toEqual([
+      { name: 'vetta-ui-design', description: 'Design canvas' },
+    ]);
+  });
+
+  it('关闭本地技能扫描时仍保留显式注入的内置技能', async () => {
+    const { cwd, agentDir } = setup();
+    const bundled = path.join(tmp, 'bundled');
+    writeSkill(bundled, 'vetta-ui-design', 'name: vetta-ui-design\ndescription: Design canvas');
+    writeSkill(
+      path.join(cwd, '.agents', 'skills'),
+      'project-skill',
+      'name: project-skill\ndescription: local'
+    );
+    expect(
+      await names(cwd, { agentDir, includeLocal: false, additionalSkillPaths: [bundled] })
+    ).toEqual(['vetta-ui-design']);
+  });
+
   it('列出 pi settings 里 skills 条目指向的目录', async () => {
     const { cwd, agentDir } = setup();
     const extra = path.join(tmp, 'extra-skills');

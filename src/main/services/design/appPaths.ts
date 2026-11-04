@@ -10,3 +10,8 @@ export function getDesignPaths(): DesignResourcePaths {
     userDataPath: app.getPath('userData'),
   });
 }
+
+/** Shared by local session startup and the pre-spawn skill menu. */
+export function bundledDesignSkillPaths(state: Record<string, unknown> | undefined): string[] {
+  return state?.designEnabled === false ? [] : [getDesignPaths().skillsDir];
+}

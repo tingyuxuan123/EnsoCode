@@ -36,6 +36,9 @@ Open Vetta 的业务代码保留在 `src/renderer/features/design/vetta/`，宿�
 
 ## UI 与项目
 
+- 首轮前的技能菜单与本地会话启动共用 Main 的内置技能路径：设计开关默认开启时，新项目
+  无需先发消息或复制 SKILL.md 就能发现 `vetta-ui-design`。项目技能扫描关闭不影响显式
+  注入的内置技能；预览只接收项目 ID，SSH 不扫描本机，scratch 不扫描共用父目录。
 - 画廊只在本机 Code 模式/designEnabled 下可用；状态不持久，选择会话退出。header 独立
   订阅，不能让上游每次 render 发布的新 ReactNode 反向触发整个画廊重渲染。
 - 项目创建仅收名称，Main 落在 Documents/EnsoCode/Designs；现有 source authority 登记。

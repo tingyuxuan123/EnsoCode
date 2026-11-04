@@ -229,6 +229,7 @@ export function ChatView() {
     (localBranch?.id === chrome?.parentId ? localBranch?.branch : undefined);
   const skills = useSettingsStore((state) => state.skills);
   const loadLocalSkills = useSettingsStore((state) => state.loadLocalSkills);
+  const designEnabled = useSettingsStore((state) => state.designEnabled);
   const planAvailable = useSettingsStore((state) =>
     isBuiltinToolEnabledForProject(
       state.disabledBuiltinTools,
@@ -237,26 +238,28 @@ export function ChatView() {
       'plan'
     )
   );
-  const [projectSkills, setProjectSkills] = useState<{ name: string; description: string }[]>([]);
+  const [skillPreview, setSkillPreview] = useState<{
+    projectId: string;
+    skills: { name: string; description: string }[];
+  }>();
+  const projectId = project?.id;
+  const projectKind = project?.kind;
 
   useEffect(() => {
-    if (!project?.path || project.kind === 'scratch' || !loadLocalSkills) {
-      setProjectSkills([]);
-      return;
-    }
+    setSkillPreview(undefined);
+    if (!projectId || projectKind === 'ssh') return;
+    if (!designEnabled && (projectKind === 'scratch' || !loadLocalSkills)) return;
     let cancelled = false;
     window.electronAPI.assets
-      .listProjectSkills(project.path)
+      .listProjectSkills(projectId)
       .then((listed) => {
-        if (!cancelled) setProjectSkills(listed);
+        if (!cancelled) setSkillPreview({ projectId, skills: listed });
       })
-      .catch(() => {
-        if (!cancelled) setProjectSkills([]);
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [project?.path, project?.kind, loadLocalSkills]);
+  }, [projectId, projectKind, loadLocalSkills, designEnabled]);
 
   const chromeCommands = chrome?.commands;
   const slashCommands = useMemo(() => {
@@ -279,7 +282,8 @@ export function ChatView() {
         name: `/skill:${skill.name}`,
         description: skill.description,
       }));
-    const fromProject = projectSkills.map((skill) => ({
+    const preview = skillPreview && skillPreview.projectId === projectId ? skillPreview.skills : [];
+    const fromProject = preview.map((skill) => ({
       name: `/skill:${skill.name}`,
       description: skill.description,
     }));
@@ -292,7 +296,7 @@ export function ChatView() {
       ...fromProject,
       ...chromeCommands,
     ]);
-  }, [t, skills, projectSkills, chromeCommands, planAvailable]);
+  }, [t, skills, skillPreview, projectId, chromeCommands, planAvailable]);
 
   const timelineRef = useRef<MessageTimelineHandle>(null);
   const planning =

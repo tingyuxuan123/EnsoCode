@@ -120,7 +120,7 @@ import { type MemberAgentType, memberSpawnDescription } from './bots/botAgentTyp
 import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
-import { getDesignPaths } from './design/appPaths';
+import { bundledDesignSkillPaths, getDesignPaths } from './design/appPaths';
 import { resolveGlobalInstruction } from './instructionStore';
 import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
 import { getMcpOAuthStore } from './mcpOAuthStore';
@@ -1020,7 +1020,7 @@ export function spawnSession(
     ...enabledSkillPaths(preset),
     ...(bot ? [] : plugins.skillPaths),
     ...(native?.skillPaths ?? []),
-    ...(!remote && state?.designEnabled !== false ? [getDesignPaths().skillsDir] : []),
+    ...(remote ? [] : bundledDesignSkillPaths(state)),
   ];
   const mcpServers = enabledMcpServers(nativePreset ? undefined : preset);
   const mcpNames = new Set(mcpServers.map((server) => server.name));
