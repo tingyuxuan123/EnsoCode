@@ -2015,6 +2015,7 @@ export const zhTranslations: Record<string, string> = {
   'Move to background': '转为后台',
   'Moving to background…': '正在转后台…',
   'Moved to background': '已转后台',
+  'System reminders': '系统提醒',
   'Timeout deadline': '达到截止时间',
   'Background unavailable': '后台配额已满',
   'Command failed': '命令失败',

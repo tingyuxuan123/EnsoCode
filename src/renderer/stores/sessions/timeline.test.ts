@@ -1032,6 +1032,61 @@ describe('buildTimeline', () => {
     expect(buildTimeline(messages, false)[1]).not.toHaveProperty('shellFailure');
   });
 
+  describe('工具结果前捎带的系统提醒', () => {
+    const toolWith = (name: string, text: string, isError = false) =>
+      buildTimeline(
+        [
+          user('跑一下'),
+          {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'n1', name, arguments: { command: 'node cdp.mjs' } }],
+          },
+          {
+            role: 'toolResult',
+            toolCallId: 'n1',
+            toolName: name,
+            isError,
+            content: [{ type: 'text', text }],
+          },
+        ],
+        false
+      )[1];
+    const reminder = '<system-reminder>\nThe todo list has not been updated.\n</system-reminder>';
+    const update = '<background-task-update>\ntask-1 done\n</background-task-update>';
+
+    it('失败命令的输出只留真实错误，提醒单独带出', () => {
+      expect(toolWith('bash', `${reminder}\n\nCDP_UNREACHABLE (9222)`, true)).toMatchObject({
+        state: 'error',
+        output: 'CDP_UNREACHABLE (9222)',
+        notices: [{ tag: 'system-reminder', text: 'The todo list has not been updated.' }],
+      });
+    });
+
+    it('连续多个前导提醒按顺序剥离；只有提醒时输出为空', () => {
+      expect(toolWith('grep', `${update}\n\n${reminder}\n\nfound`)).toMatchObject({
+        output: 'found',
+        notices: [
+          { tag: 'background-task-update', text: 'task-1 done' },
+          { tag: 'system-reminder', text: 'The todo list has not been updated.' },
+        ],
+      });
+      expect(toolWith('grep', reminder)).toMatchObject({ output: null });
+    });
+
+    it('不在开头的同名标签属于真实输出，原样保留', () => {
+      const text = `line 1\n${reminder}`;
+      const row = toolWith('bash', text);
+      expect(row).toMatchObject({ output: text });
+      expect(row).not.toHaveProperty('notices');
+    });
+
+    it('codemode 的脚本头在提醒之后也能剥掉', () => {
+      expect(
+        toolWith('codemode', `${reminder}\n\nScript completed\nWall time 1s\nOutput:\nok`)
+      ).toMatchObject({ output: 'ok' });
+    });
+  });
+
   it('运行中的阻塞等待带调用 id 与等待类型，供「不等了」', () => {
     const call = (id: string, name: string, args: Record<string, unknown>): TimelineMessage => ({
       role: 'assistant',
@@ -3629,14 +3684,17 @@ describe('消息类工具行（联系主 agent / 联系队员 / 子代理发消�
     });
   });
 
-  it('只剥投递回执：捎带的系统提醒与发送失败回执照常显示', () => {
+  it('剥掉投递回执；捎带的系统提醒单独带出，发送失败回执照常显示', () => {
     const notice =
       '<background-task-update>\nMessage from coworker "B":\nhi\n</background-task-update>';
     expect(
       toolFor('message_coworker', { to: 'B', text: 'x' }, [
         resultOf('message_coworker', `${notice}\n\n(delivered to coworker "B" — async)`),
       ])
-    ).toMatchObject({ output: notice });
+    ).toMatchObject({
+      output: null,
+      notices: [{ tag: 'background-task-update', text: 'Message from coworker "B":\nhi' }],
+    });
     const failed = '(unknown coworker "C" — peers: B)';
     expect(
       toolFor('message_coworker', { to: 'C', text: 'x' }, [resultOf('message_coworker', failed)])
@@ -3681,7 +3739,8 @@ describe('消息类工具行（联系主 agent / 联系队员 / 子代理发消�
     expect(tools[1]).toMatchObject({
       summary: '核对 ASR · 先别改 **接口**',
       sentMessage: '先别改 **接口**',
-      output: reminder,
+      output: null,
+      notices: [{ tag: 'system-reminder', text: 'x' }],
     });
     expect(tools[2]).toMatchObject({ summary: '收尾', sentMessage: '收尾', output: withReport });
   });
@@ -3771,11 +3830,12 @@ describe('ask_user 询问用户行', () => {
     });
   });
 
-  it('自定义回答原样带出；回执前捎带的系统提醒照常显示', () => {
+  it('自定义回答原样带出；回执前捎带的系统提醒单独带出', () => {
     const notice =
       '<background-task-update>\nMessage from coworker "B":\nhi\n</background-task-update>';
     expect(ask(args, { text: `${notice}\n\n都不要，用 F` })).toMatchObject({
-      output: notice,
+      output: null,
+      notices: [{ tag: 'background-task-update', text: 'Message from coworker "B":\nhi' }],
       ask: { answer: '都不要，用 F', autoSelected: false },
     });
   });

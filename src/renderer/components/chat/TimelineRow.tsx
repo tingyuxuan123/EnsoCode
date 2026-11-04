@@ -125,6 +125,7 @@ import { SubagentResult } from './SubagentResult';
 import { parseSubagentReceipt } from './subagentReceipt';
 import { TerminalOutput } from './TerminalOutput';
 import { TodoList } from './TodoBar';
+import { ToolNotices } from './ToolNotices';
 import { ToolSummaryRow } from './ToolSummaryRow';
 import { TurnFilesFooter } from './TurnFilesCard';
 import { toolLineDelta } from './toolLineDelta';
@@ -2104,9 +2105,17 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
         ? summarizeSandboxCalls(sandbox.calls)
         : summary;
   const hasBody = Boolean(item.output || item.source || sentMessage || item.ask);
+  const notices = item.notices ?? [];
   // 子代理等待行：运行中可展开看在等的子代理各自在干什么
   const waitProgress = item.state === 'running' && item.waiting === 'subagent' && !host;
-  const expandable = hasDiff || hasWrite || hasFileChanges || hasBody || waitProgress || hasImage;
+  const expandable =
+    hasDiff ||
+    hasWrite ||
+    hasFileChanges ||
+    hasBody ||
+    waitProgress ||
+    hasImage ||
+    notices.length > 0;
   // edit 的 diff 与 write 的内容只在本轮直播（running）且开启 expandLiveEdits 时默认展开；
   // 历史会话挂载时全部折叠——否则切会话时视口内成排 FileDiff 同步解析+高亮，
   // 主线程阻塞几秒白屏
@@ -2375,6 +2384,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
               <RtkToolStatsBar value={item.rtk} />
             </ToolContentScroller>
           )}
+          <ToolNotices notices={notices} />
         </div>
       )}
     </div>

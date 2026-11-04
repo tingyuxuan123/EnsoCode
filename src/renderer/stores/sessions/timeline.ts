@@ -75,6 +75,8 @@ export type TimelineItem =
       state: 'running' | 'reviewing' | 'ok' | 'error';
       /** Scoped rich result cards; only design tools can populate this projection. */
       designCards?: CardDescriptor[];
+      /** 工具结果前捎带的系统提醒（已从 output 剥离），折叠展示；没有则缺省 */
+      notices?: ToolNotice[];
       designArgs?: Record<string, unknown>;
       /** read 到图片时的绝对路径，展开后按原文件渲染（含 svg / 动图）；其它缺省 */
       imagePath?: string;
@@ -696,11 +698,39 @@ export interface AskUserView {
   autoSelected: boolean;
 }
 
-/** 工具结果前捎带的系统提醒块（withSystemReminders 注入），不是回答的一部分 */
-const LEADING_NOTICE = /^\s*<(system-reminder|background-task-update)>[\s\S]*?<\/\1>/;
+export type ToolNoticeTag = 'system-reminder' | 'background-task-update';
+
+/** 工具结果前捎带的系统提醒块；正文不带标签 */
+export interface ToolNotice {
+  tag: ToolNoticeTag;
+  text: string;
+}
+
+/** 工具结果前捎带的系统提醒块（withSystemReminders 注入），不是工具输出的一部分 */
+const LEADING_NOTICE = /^\s*<(system-reminder|background-task-update)>([\s\S]*?)<\/\1>/;
+
+/**
+ * 只剥开头连续的提醒块：Main 用 prependToolText 把它们拼在输出最前面；
+ * 输出中间出现的同名标签属于真实内容（如 cat 到的文件），原样保留。
+ */
+export function splitLeadingNotices(output: string | null): {
+  notices: ToolNotice[];
+  output: string | null;
+} {
+  if (!output) return { notices: [], output };
+  const notices: ToolNotice[] = [];
+  let rest = output;
+  for (let block = LEADING_NOTICE.exec(rest); block; block = LEADING_NOTICE.exec(rest)) {
+    notices.push({ tag: block[1] as ToolNoticeTag, text: block[2].trim() });
+    rest = rest.slice(block[0].length);
+  }
+  if (notices.length === 0) return { notices, output };
+  return { notices, output: rest.replace(/^\n+/, '') || null };
+}
+
 const AUTO_SELECTED = / \(auto-selected: no response in time\)$/;
 
-/** ask_user 的问题与选项取自参数，回答取自回执；回执里捎带的提醒留给调用方照常显示 */
+/** ask_user 的问题与选项取自参数，回答取自回执（捎带的提醒已由调用方先剥离） */
 function extractAsk(
   name: string,
   args: unknown,
@@ -717,17 +747,11 @@ function extractAsk(
     : [];
   const ask = { question: question.trim(), options: shown, answer: null, autoSelected: false };
   if (!answered || !output) return { ask, output };
-  let rest = output;
-  const notices: string[] = [];
-  for (let block = LEADING_NOTICE.exec(rest); block; block = LEADING_NOTICE.exec(rest)) {
-    notices.push(block[0].trim());
-    rest = rest.slice(block[0].length);
-  }
-  const reply = rest.trim();
+  const reply = output.trim();
   const answer = reply.replace(AUTO_SELECTED, '');
   return {
     ask: { ...ask, answer: answer || null, autoSelected: answer !== reply },
-    output: notices.join('\n\n') || null,
+    output: null,
   };
 }
 
@@ -1196,7 +1220,8 @@ function buildMessageTimeline(
               ? formatApplyPatchOutcome(result.applyPatchOutcome)
               : result.output
             : (partial ?? null) || null;
-          const output = part.name === 'codemode' ? stripCodemodeHeader(rawOutput) : rawOutput;
+          const { notices, output: cleanOutput } = splitLeadingNotices(rawOutput);
+          const output = part.name === 'codemode' ? stripCodemodeHeader(cleanOutput) : cleanOutput;
           const sandboxView =
             part.name === 'exec'
               ? parseSandboxOutput(output)
@@ -1273,6 +1298,7 @@ function buildMessageTimeline(
                       summarizeArgs(call.args, cwd)),
             source: execSource,
             output: sent ? stripDeliveryReceipt(output) : asked ? asked.output : output,
+            ...(notices.length > 0 ? { notices } : {}),
             nestedPending: nestedPendingCount(part.id, pendingApprovals) || undefined,
             ...(imagePath ? { imagePath } : {}),
             ...(sandboxTool ? { sandbox: sandboxView } : {}),
