@@ -59,6 +59,10 @@ Windows 的标题栏内容为原生按钮预留区域，优先使用 `titlebar-a
 标题栏配色转换成 RGB，经 `window:set-title-bar-appearance` 同步；Main 只接受经过校验的
 两种颜色，并且只允许该窗口的工作区 renderer 更新。
 
+标题栏默认透明，采样时必须先铺原始不透明 `--shell`，再叠加标题栏底色；直接丢弃
+透明像素的 alpha 会把 `rgba(0, 0, 0, 0)` 变成原生按钮区的黑底。主题监听须覆盖
+`data-light-palette`，不能只观察明暗模式 class。回归：`useNativeWindowControls.test.tsx`。
+
 Windows 顶层 `BrowserWindow` 必须保持不透明：Electron 43 的透明窗口会强制关闭
 粗边框，并使用特殊的最大化路径。主窗口的 workbench `WebContentsView` 与其 HTML
 仍保持透明，所以 guest 网页垫底和菜单遮挡仍沿原有视图叠层处理。macOS/Linux 的

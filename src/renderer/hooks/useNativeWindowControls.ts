@@ -16,8 +16,12 @@ export function useNativeWindowControls(ref: RefObject<HTMLElement | null>): voi
     canvas.width = canvas.height = 1;
     const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) return;
-    const rgb = (color: string): string => {
+    const rgb = (color: string, background?: string): string => {
       context.clearRect(0, 0, 1, 1);
+      if (background) {
+        context.fillStyle = background;
+        context.fillRect(0, 0, 1, 1);
+      }
       context.fillStyle = color;
       context.fillRect(0, 0, 1, 1);
       const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
@@ -28,8 +32,11 @@ export function useNativeWindowControls(ref: RefObject<HTMLElement | null>): voi
     const sync = () => {
       frame = 0;
       const style = getComputedStyle(header);
+      // 标题栏默认透明，透出 --shell；直接丢弃透明像素的 alpha 会得到黑色。
+      // Native controls cannot be transparent: composite over the solid shell token.
+      const shell = getComputedStyle(document.documentElement).getPropertyValue('--shell').trim();
       const appearance: TitleBarAppearance = {
-        color: rgb(style.backgroundColor),
+        color: rgb(style.backgroundColor, shell),
         symbolColor: rgb(style.color),
       };
       const key = JSON.stringify(appearance);
@@ -48,7 +55,7 @@ export function useNativeWindowControls(ref: RefObject<HTMLElement | null>): voi
     const observer = new MutationObserver(schedule);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class', 'style', 'data-accent'],
+      attributeFilter: ['class', 'style', 'data-accent', 'data-light-palette'],
     });
     observer.observe(header, { attributes: true, attributeFilter: ['class'] });
     const media = window.matchMedia('(prefers-color-scheme: dark)');
