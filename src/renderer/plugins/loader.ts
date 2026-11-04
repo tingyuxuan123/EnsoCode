@@ -1,7 +1,13 @@
 import * as React from 'react';
-import { type ComponentType, createElement, type ReactElement } from 'react';
+import {
+  Component,
+  type ComponentType,
+  createElement,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { type DraftRequest, type DraftResult, handleDraftRequest } from './draftBridge';
-import { type PluginSlotEntry, registerPluginSlot } from './registry';
+import { type PluginSlotEntry, pluginSlotKey, registerPluginSlot } from './registry';
 import { hasActivePluginGesture } from './userGesture';
 export interface PluginRendererDeps {
   importModule(pluginId: string, rel: string): Promise<{ onLoad?: (enso: unknown) => unknown }>;
@@ -124,12 +130,61 @@ export async function loadPluginRenderer(
   }
   return { dispose };
 }
+interface SlotBoundaryProps {
+  entry: PluginSlotEntry;
+  children?: ReactNode;
+  fallback: ReactNode;
+  retryPhase?: boolean | string;
+}
+
+class PluginSlotErrorBoundary extends Component<
+  SlotBoundaryProps,
+  { failed: boolean; retryPhase?: boolean | string }
+> {
+  state = { failed: false, retryPhase: this.props.retryPhase };
+
+  static getDerivedStateFromProps(
+    { retryPhase }: SlotBoundaryProps,
+    state: PluginSlotErrorBoundary['state']
+  ) {
+    // A partial stream can fail to parse. Retry at its next phase, not on each chunk.
+    return state.retryPhase === retryPhase ? null : { failed: false, retryPhase };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    const { pluginId, slot } = this.props.entry;
+    console.warn(`[plugin] ${pluginId} failed to render ${slot}`, error);
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
 export function PluginSlotView({
   entry,
   props,
+  fallback = null,
+  retryPhase,
 }: {
   entry: PluginSlotEntry;
   props: Record<string, unknown>;
+  fallback?: ReactNode;
+  retryPhase?: boolean | string;
 }): ReactElement {
-  return createElement(entry.component as ComponentType<Record<string, unknown>>, props);
+  return createElement(
+    PluginSlotErrorBoundary,
+    {
+      // A new registration after reload must not inherit the previous component's error.
+      key: pluginSlotKey(entry),
+      entry,
+      fallback,
+      retryPhase,
+    },
+    createElement(entry.component as ComponentType<Record<string, unknown>>, props)
+  );
 }

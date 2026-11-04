@@ -1,4 +1,5 @@
 import { parsePluginToolName } from '@shared/extensionPlugins/toolName';
+import type { ReactNode } from 'react';
 import { PluginSlotView } from './loader';
 import {
   pluginBlock,
@@ -32,21 +33,38 @@ export function PluginToolCardSlot({
   const parsed = parsePluginToolName(name);
   const entry = parsed && pluginToolCard(parsed.pluginId, parsed.toolName);
   return entry && parsed ? (
-    <PluginSlotView entry={entry} props={{ toolName: parsed.toolName, output, state }} />
+    <PluginSlotView
+      entry={entry}
+      props={{ toolName: parsed.toolName, output, state }}
+      retryPhase={state}
+    />
   ) : null;
 }
 export function PluginBlock({
   pluginId,
   lang,
   source,
+  streaming = false,
+  fallback = null,
 }: {
   pluginId: string;
   lang: string;
   source: string;
+  streaming?: boolean;
+  fallback?: ReactNode;
 }) {
   usePluginSlotsVersion();
   const entry = pluginBlock(pluginId, lang);
-  return entry ? <PluginSlotView entry={entry} props={{ language: lang, source }} /> : null;
+  return entry ? (
+    <PluginSlotView
+      entry={entry}
+      props={{ language: lang, source }}
+      fallback={fallback}
+      retryPhase={streaming}
+    />
+  ) : (
+    fallback
+  );
 }
 export function PluginComposerSlots({
   side,
