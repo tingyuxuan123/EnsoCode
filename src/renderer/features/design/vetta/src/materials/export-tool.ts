@@ -99,9 +99,9 @@ export function registerExportTool(ctx: PluginContext, options: ExportToolOption
 			if (format !== "pdf" && format !== "images") {
 				return { ok: false, error: 'Pass `format`: "pdf" or "images".' };
 			}
-			const controller = getCanvasController(session.cwd);
+			const controller = getCanvasController(session.cwd, session.botChatId);
 			if (!controller) {
-				ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
+				if (!session.botChatId) ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
 				return {
 					ok: false,
 					retryable: true,

@@ -26,7 +26,12 @@ export async function dispatchDesignTool(
   const context: PluginAgentHandlerContext<any> & { signal: AbortSignal } = {
     invocationId: request.requestId,
     plugin: { id: ctx.plugin?.id ?? 'vetta-ui-design', contributionId: tool.id },
-    session: { id: request.session.sessionId, cwd: request.session.cwd, scenario: 'conversation' },
+    session: {
+      id: request.session.sessionId,
+      cwd: request.session.cwd,
+      botChatId: request.session.botChatId ?? null,
+      scenario: 'conversation',
+    },
     model: { provider: '', id: '', api: '', input: [] },
     conversation: { messages: [], messageCount: 0 },
     runtime: {

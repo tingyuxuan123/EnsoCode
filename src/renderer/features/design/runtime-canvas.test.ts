@@ -17,6 +17,11 @@ const request = (tool: 'vetd_create' | 'vetd_status' | 'vetd_screenshot' | 'vetd
   session: { sessionId: 'b', cwd: '/b' },
 });
 const open = vi.fn();
+const botCanvas = vi.hoisted(() => ({ visible: false, open: vi.fn() }));
+vi.mock('./host/bot-canvas', () => ({
+  isViewedBotDesignChat: () => botCanvas.visible,
+  revealBotDesign: botCanvas.open,
+}));
 const ctx = {
   plugin: { id: 'vetta-ui-design' },
   fs: {
@@ -36,6 +41,8 @@ beforeEach(() => {
   designTools.clear();
   localStorage.clear();
   open.mockReset();
+  botCanvas.visible = false;
+  botCanvas.open.mockReset();
   setCanvasController(a);
   setDesignViewingCwd('/b');
 });
@@ -151,6 +158,47 @@ it('rejects background rendered tools and create without changing the foreground
   expect(handler).not.toHaveBeenCalled();
   expect(open).not.toHaveBeenCalled();
   expect(getCanvasController()).toBe(a);
+});
+
+it('opens a Bot tool canvas in the active chat without opening the Code dock', async () => {
+  setDesignViewingCwd(null);
+  botCanvas.visible = true;
+  register('vetd_create', () => ({ ok: true, vetdPath: '/b/ride.vetd' }));
+  const base = request('vetd_create');
+  const pending = dispatchDesignTool(
+    { ...base, session: { ...base.session, botChatId: 'chat-b' } },
+    new AbortController().signal,
+    ctx
+  );
+  await vi.waitFor(() =>
+    expect(botCanvas.open).toHaveBeenCalledWith({
+      chatId: 'chat-b',
+      sessionId: 'b',
+      cwd: '/b',
+      path: '/b/ride.vetd',
+    })
+  );
+  setCanvasController({ ...b, botChatId: 'chat-b' } as CanvasController);
+  expect(text(await pending)).toMatchObject({ ok: true });
+  expect(open).not.toHaveBeenCalled();
+});
+
+it('does not use the Code canvas for a background Bot chat in the same workspace', async () => {
+  setCanvasController(b);
+  const handler = vi.fn();
+  register('vetd_screenshot', handler);
+  const base = request('vetd_screenshot');
+  expect(
+    text(
+      await dispatchDesignTool(
+        { ...base, session: { ...base.session, botChatId: 'chat-b' } },
+        new AbortController().signal,
+        ctx
+      )
+    )
+  ).toMatchObject({ ok: false, retryable: true });
+  expect(handler).not.toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
 });
 
 it('background status and file-only tools do not wait for or switch the canvas', async () => {

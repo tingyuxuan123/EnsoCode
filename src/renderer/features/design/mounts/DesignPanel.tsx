@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { effectiveKeybindings } from '@/lib/keybindings';
 import { useSettingsStore } from '@/stores/settings';
+import type { BotDesignTarget } from '../host/bot-canvas';
 import { resolveDesignRoot } from '../host/paths';
 import { useDesignRegistry } from '../host/registry';
 import { __ActivityTabContext } from '../host/sdk';
@@ -16,10 +17,12 @@ function CanvasMount({
   sessionId,
   cwd,
   component: Canvas,
+  bot,
 }: {
   sessionId: string;
   cwd: string;
   component: PluginActivityTabContribution['component'];
+  bot?: { chatId: string; path: string };
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -35,13 +38,13 @@ function CanvasMount({
         .catch((error) => console.warn('[design] canvas report failed', error));
     };
     const stop = onCanvasController((controller) =>
-      report(controller !== null && getCanvasController(cwd) === controller)
+      report(controller !== null && getCanvasController(cwd, bot?.chatId ?? null) === controller)
     );
     return () => {
       stop();
       report(false);
     };
-  }, [sessionId, cwd]);
+  }, [sessionId, cwd, bot?.chatId]);
   return (
     <DesignRoot>
       <div
@@ -79,12 +82,35 @@ function CanvasMount({
           );
         }}
       >
-        <__ActivityTabContext.Provider value={{ cwd, active: true, sessionId }}>
+        <__ActivityTabContext.Provider value={{ cwd, active: true, sessionId, bot }}>
           <Canvas />
         </__ActivityTabContext.Provider>
       </div>
     </DesignRoot>
   );
+}
+
+export function BotDesignPanel({ target }: { target: BotDesignTarget }) {
+  const tab = useCanvasContribution();
+  if (!tab) return null;
+  return (
+    <CanvasMount
+      key={`${target.sessionId}:${target.projectId ?? ''}:${target.path}`}
+      sessionId={target.sessionId}
+      cwd={target.cwd}
+      bot={target}
+      component={tab.component}
+    />
+  );
+}
+
+function useCanvasContribution(): PluginActivityTabContribution | undefined {
+  const contributions = useDesignRegistry((state) => state.contributions);
+  return contributions.find(
+    (item) =>
+      item.kind === 'activity-tab' &&
+      (item.value as PluginActivityTabContribution).id === CANVAS_TAB_ID
+  )?.value as PluginActivityTabContribution | undefined;
 }
 
 /** Active-only residency: upstream's controller is a singleton, not per dock. */
@@ -95,12 +121,7 @@ export function DesignPanel({
   conversationId: string;
   active: boolean;
 }) {
-  const contributions = useDesignRegistry((state) => state.contributions);
-  const tab = contributions.find(
-    (item) =>
-      item.kind === 'activity-tab' &&
-      (item.value as PluginActivityTabContribution).id === CANVAS_TAB_ID
-  )?.value as PluginActivityTabContribution | undefined;
+  const tab = useCanvasContribution();
   const [ready, setReady] = useState<{ id: string; requestedCwd: string; cwd: string } | null>(
     null
   );

@@ -10,6 +10,7 @@ import {
   parseArtifactTarget,
   resolveArtifactFile,
   resolveArtifacts,
+  resolveDesignArtifacts,
   textPathCandidates,
   turnBounds,
   turnOfReply,
@@ -84,6 +85,19 @@ describe('turnBounds / turnOfReply', () => {
   it('按最终回复文本定位最近一轮，找不到返回 null', () => {
     expect(turnOfReply(messages, ' done x.md ')).toEqual({ start: 3, end: 6 });
     expect(turnOfReply(messages, 'nope')).toBeNull();
+  });
+  it('按群条目时间排除后来同文的回复，缺少时间无法区分时不猜', () => {
+    const repeated = [
+      text('user', 'q1'),
+      { ...text('assistant', 'done'), timestamp: 10 },
+      text('user', 'q2'),
+      { ...text('assistant', 'done'), timestamp: 30 },
+    ];
+    expect(turnOfReply(repeated, 'done', 20)).toEqual({ start: 1, end: 2 });
+    expect(turnOfReply(repeated, 'done', 40)).toEqual({ start: 3, end: 4 });
+    expect(
+      turnOfReply([...repeated.slice(0, 3), text('assistant', 'done')], 'done', 40)
+    ).toBeNull();
   });
 });
 
@@ -195,5 +209,113 @@ describe('resolveArtifacts', () => {
     expect(resolveArtifactFile(root, path.join(base, 'secret.txt'))).toBeNull();
     expect(resolveArtifactFile(root, 'escape.txt')).toBeNull();
     expect(resolveArtifactFile(root, 'docs')).toBeNull();
+  });
+});
+
+describe('resolveDesignArtifacts', () => {
+  let base = '';
+  let root = '';
+  const bundle = (dir: string) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, 'design.json'), '{}');
+  };
+  const create = (value: unknown, isError = false): ProjectedMessage => ({
+    ...text('toolResult', JSON.stringify(value)),
+    toolName: 'vetd_create',
+    isError,
+  });
+  beforeEach(() => {
+    base = realpathSync(mkdtempSync(path.join(tmpdir(), 'bot-designs-')));
+    root = path.join(base, 'ws');
+    mkdirSync(root);
+  });
+  afterEach(() => rmSync(base, { recursive: true, force: true }));
+
+  it('只从本轮路径、创建结果与投影设计卡片发现设计，以真实目录去重', () => {
+    for (const name of ['write', 'create', 'created design', 'card', 'unmentioned']) {
+      bundle(path.join(root, `${name}.vetd`));
+    }
+    symlinkSync(path.join(root, 'write.vetd'), path.join(root, 'alias.vetd'));
+    const messages: ProjectedMessage[] = [
+      call('write', { path: 'alias.vetd/design.json' }),
+      create({ ok: true, vetdPath: path.join(root, 'create.vetd') }),
+      create({ ok: false, created: true, vetdPath: 'created design.vetd' }),
+      {
+        role: 'toolResult',
+        toolName: 'vetd_screenshot',
+        content: [],
+        designCards: [
+          { type: 'screenshot', key: 'a', title: 'A', payload: { vetdPath: 'card.vetd' } },
+        ],
+      },
+      text('assistant', '交稿 `write.vetd`'),
+    ];
+    expect(resolveDesignArtifacts(root, artifactCandidates(messages), messages, 'session')).toEqual(
+      ['write', 'create', 'created design', 'card'].map((name) => ({
+        rel: `${name}.vetd`,
+        name: `${name}.vetd`,
+        sessionId: 'session',
+      }))
+    );
+  });
+
+  it('拒绝越界路径、非设计目录、无效 manifest 和失败或畸形的工具结果', () => {
+    bundle(path.join(base, 'outside.vetd'));
+    symlinkSync(path.join(base, 'outside.vetd'), path.join(root, 'escaped.vetd'));
+    mkdirSync(path.join(root, 'link.vetd'));
+    symlinkSync(
+      path.join(base, 'outside.vetd', 'design.json'),
+      path.join(root, 'link.vetd/design.json')
+    );
+    mkdirSync(path.join(root, 'folder.vetd/design.json'), { recursive: true });
+    mkdirSync(path.join(root, 'empty.vetd'));
+    writeFileSync(path.join(root, 'file.vetd'), '{}');
+    bundle(path.join(root, 'valid.vetd'));
+    symlinkSync(path.join(root, 'valid.vetd'), path.join(base, 'outside-alias.vetd'));
+    mkdirSync(path.join(root, 'copied.vetd'));
+    symlinkSync(
+      path.join(root, 'valid.vetd/design.json'),
+      path.join(root, 'copied.vetd/design.json')
+    );
+    symlinkSync(
+      path.join(base, 'outside.vetd', 'design.json'),
+      path.join(root, 'valid.vetd/out.json')
+    );
+    const messages: ProjectedMessage[] = [
+      create({ ok: false, vetdPath: 'valid.vetd' }),
+      create({ ok: true, vetdPath: 'valid.vetd' }, true),
+      create({ ok: true, vetdPath: ['valid.vetd'] }),
+      { ...text('toolResult', '{invalid json'), toolName: 'vetd_create' },
+      { ...create({ ok: true, vetdPath: 'valid.vetd' }), toolName: 'read' },
+    ];
+    expect(
+      resolveDesignArtifacts(
+        root,
+        [
+          '../outside.vetd',
+          'escaped.vetd',
+          'link.vetd',
+          'folder.vetd',
+          'empty.vetd',
+          'file.vetd',
+          'valid.vetd/out.json',
+          '../outside-alias.vetd',
+          'copied.vetd',
+        ],
+        messages,
+        'session'
+      )
+    ).toEqual([]);
+  });
+
+  it('每轮最多 8 张设计卡片，工作区根不存在时为空', () => {
+    const candidates = Array.from({ length: 12 }, (_, i) => `design-${i}.vetd`);
+    for (const name of candidates) bundle(path.join(root, name));
+    expect(resolveDesignArtifacts(root, candidates, [], 'session').map((item) => item.rel)).toEqual(
+      candidates.slice(0, 8)
+    );
+    expect(resolveDesignArtifacts(path.join(base, 'missing'), candidates, [], 'session')).toEqual(
+      []
+    );
   });
 });

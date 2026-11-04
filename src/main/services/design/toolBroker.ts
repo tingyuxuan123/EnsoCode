@@ -29,6 +29,8 @@ export interface DesignToolCall {
   sessionId: string;
   /** 由调用方从会话权威记录推导，不采信 worker / renderer。 */
   cwd: string;
+  /** Bot 聊天归属同样由 Main 推导，不能按相同 cwd 猜测。 */
+  botChatId?: string;
   tool: DesignToolName;
   params: unknown;
   timeoutMs: number;
@@ -131,7 +133,11 @@ export class DesignToolBroker {
         requestId,
         tool: call.tool,
         params: call.params,
-        session: { sessionId: call.sessionId, cwd: call.cwd },
+        session: {
+          sessionId: call.sessionId,
+          cwd: call.cwd,
+          ...(call.botChatId ? { botChatId: call.botChatId } : {}),
+        },
       });
     } catch {
       this.pending

@@ -49,7 +49,8 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 - fs readDir/readFile/readBinaryFile/writeFile/stat/rename/delete/createDirectory/
   listFilesRecursive/saveAs/watchDirectory；回调传监听目录字符串，不传 watchId。
   resolveRoot 的记录才可成为已知根；路径必须本地 POSIX 绝对路径，拒绝根外、点段、NUL、
-  反斜线、SSH。最长根匹配；scan 返回的 relPath 相对扫描目录，IPC rel 相对权威根。
+  反斜线、SSH。最长根匹配；同一个路径以最近重新验证的引用优先，避免群新会话
+  继续命中已经结束的会话。scan 返回的 relPath 相对扫描目录，IPC rel 相对权威根。
 - storage list/readFile/writeFile/commit/readSnapshot 与 readJsonFile/writeJsonFile。
 - capture offscreen/release：URL 仅允许已启动引擎端口的 `http://127.0.0.1`，换算为
   engineId + path/query/hash，不把 URL 发给 Main。
@@ -81,7 +82,7 @@ conversation.abort、official.projects.open/rename/remove 等写操作、officia
 | gallery/open-demo.ts、DesignSystemDemo.tsx | 任意 node 写临时 HTML 并用系统命令打开 | P3 使用宿主 Dialog 内无脚本 iframe；先清洗主动元素/导航/外部资源并加严格 CSP，保留安全 html/body 展示属性。不写临时 HTML，不拉系统浏览器。 |
 | style.css | 上游由插件包扫描工具类并全量 scope | 显式限定 Tailwind 扫描目录并单文件编译后 scope；宿主与插件不交叉产出工具类。 |
 | cards/file-url.ts、ScreenshotSwiper.tsx | 同步生成 vetta-file://local 特权 URL | 经 SDK fs.readBinaryFile → MIME 校验 → blob URL；卡片卸载/替换时释放，弹层独立持有 URL，避免虚拟卡片卸载把预览清掉。 |
-| canvas/design-runtime.ts、canvas/CanvasTab.tsx | 模块级单画布 controller | 保留单例，新增订阅及 mounted cwd；tools/assets/direction/export/history 及 tool-gate 用 `getCanvasController(cwd)` 隔离项目（包括嵌套项目）。仅活跃 dock 挂载，presence 只报告匹配该挂载 cwd 的 controller。 |
+| canvas/design-runtime.ts、canvas/CanvasTab.tsx | 模块级单画布 controller | 保留单例；工具按 mounted cwd 和 Main 推导的 Bot 话题归属取 controller。同目录的 Bot 话题与 Code 也不能互用画布。仅活跃 dock 挂载，presence 只报告该挂载归属的 controller。 |
 | canvas/FrameView.tsx、interaction/InteractionView.tsx | 刷新原 iframe 的 src | 端口变化换 iframe key，FrameView 重绑 bridge 并重置加载基线；Main 按 frame 首次引擎 origin 锁定导航。sandbox/allow 与上游一致（这两处均未设置）。 |
 | canvas/bridge-client.ts、interaction/nav-bridge.ts、shared/frame-origin.ts | 主要按 source 匹配，未校验 origin，父→子用 `*` | 本地同时要求已登记 iframe、固定 `http://127.0.0.1:<port>` origin 和 `vetd:true`，含 space/HMR；父→子只投递该 origin，截图/元素回应必须匹配请求画框。冷 iframe 的元素查询还须等待 rendered（不只 ready），避免命中 lazy frame 提交前的空 div；重挂/重新 ready 清除渲染标记，等待有上限。 |
 | mockup/ExportMockupDialog.tsx | 自建 z-1000 模态及 Escape 监听 | 业务工作台不改，外壳改宿主 Dialog Header/Panel/Footer、层级/焦点、body portal 内补 scope 根。其它上游 PluginPortal 已有标记；选中追问 portal 目标在画布内。 |

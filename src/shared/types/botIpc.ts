@@ -388,9 +388,19 @@ export interface BotArtifact {
   kind: BotArtifactKind;
 }
 
+export interface BotDesignArtifact {
+  /** 相对工作区根的真实 .vetd 目录路径 */
+  rel: string;
+  name: string;
+  /** 产出该设计的权威会话 ID */
+  sessionId: string;
+  /** 历史 Bot 会话已结束且无独立 worktree 时，预览沿用仍有效的权威项目。 */
+  projectId?: string;
+}
+
 /** media：该轮 send_image 发出的图（含展示用的失败项），最多 4 张 */
 export type BotArtifactsResult =
-  | { ok: true; artifacts: BotArtifact[]; media: BotMediaItem[] }
+  | { ok: true; artifacts: BotArtifact[]; media: BotMediaItem[]; designs?: BotDesignArtifact[] }
   | BotIpcError;
 
 /** 读文件产物用 rel；读 send_image 图用 mediaId（thumb = 缩略图） */

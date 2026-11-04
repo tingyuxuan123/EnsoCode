@@ -18,12 +18,17 @@ export class DesignPaths {
 
   remember(info: DesignRootInfo): void {
     const path = validateAbsolute(info.path);
-    this.roots.set(JSON.stringify(info.ref), { ...info, path });
+    const key = JSON.stringify(info.ref);
+    // Bot members and successive group sessions can share a path. An older
+    // session may already have ended, even though the shared directory remains.
+    this.roots.delete(key);
+    this.roots.set(key, { ...info, path });
   }
 
   map(path: string): { root: DesignRootRef; rel: string } {
     const normalized = validateAbsolute(path);
     const root = [...this.roots.values()]
+      .reverse()
       .sort((a, b) => b.path.length - a.path.length)
       .find(
         (candidate) =>

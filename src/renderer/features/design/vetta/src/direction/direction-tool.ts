@@ -161,7 +161,7 @@ export function registerDirectionTool(ctx: PluginContext, options: DirectionTool
 		},
 		scope_use: options.scopeUse,
 		handler: async ({ host, session, trigger }) => {
-			const controller = getCanvasController(session.cwd);
+			const controller = getCanvasController(session.cwd, session.botChatId);
 			if (!controller) {
     return { ok: false, retryable: true, error: "No design is open on the canvas. EnsoCode P1 has no canvas mount; vetd_direction requires the P2 Design panel. Do not repeatedly retry until it is available." };
 			}

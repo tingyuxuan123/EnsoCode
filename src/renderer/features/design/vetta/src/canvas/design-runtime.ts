@@ -13,6 +13,7 @@ export type FrameActivity = "reading" | "modifying" | "creating" | "updated";
 export interface CanvasController {
 	/** EnsoCode's mounted workspace identity (distinct from a nested design path). */
 	cwd?: string;
+	botChatId?: string;
 	session: DesignSession;
 	/** 当前打开设计的备注（vetd_notes / vetd_status 都从这里读写）。 */
 	notes: NotesStore;
@@ -54,7 +55,8 @@ export function setCanvasController(next: CanvasController | null): void {
 	for (const listener of controllerListeners) listener(next);
 }
 
-export function getCanvasController(cwd?: string): CanvasController | null {
+export function getCanvasController(cwd?: string, botChatId?: string | null): CanvasController | null {
+	if (botChatId !== undefined && (controller?.botChatId ?? null) !== botChatId) return null;
 	// EnsoCode tools may run for a background/child session in this window.
 	// Filter at every read, not only before the handler's first asynchronous step.
 	if (cwd !== undefined) {

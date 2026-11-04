@@ -2,6 +2,11 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { designTools } from './host/registry';
 import { dispatchDesignTool } from './runtime-dispatch';
 
+vi.mock('./host/bot-canvas', () => ({
+  isViewedBotDesignChat: () => false,
+  revealBotDesign: vi.fn(),
+}));
+
 beforeEach(() => designTools.clear());
 it('dispatches input, authoritative session and cancellation signal', async () => {
   const abort = new AbortController();

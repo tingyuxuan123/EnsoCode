@@ -2,6 +2,8 @@
 	"plugin.name": "Design",
 	"plugin.description": "Design UI mockups on an infinite canvas: frames are real React code, select any element to have Enso edit it, saves hot-reload instantly.",
 	"tab.label": "Design",
+	"bot.card.open": "View design",
+	"bot.card.unavailable": "This design is no longer available in the chat workspace.",
 	"fileExplorer.openCanvas": "Open in design canvas",
 	"tool.vetd_create": "New design",
 	"tool.vetd_screenshot": "Design screenshot",

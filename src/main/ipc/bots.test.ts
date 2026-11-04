@@ -1950,6 +1950,104 @@ describe('群话题', () => {
   });
 });
 
+describe('Bot 设计产物 IPC', () => {
+  it.each(['direct', 'group'] as const)('只返回 %s 权威会话所请求的轮次的设计', async (kind) => {
+    const designer = await createBot('Alice');
+    const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+      kind,
+      members: kind === 'direct' ? [designer] : [designer, await createBot('Bob')],
+      ...(kind === 'group' ? { bossBotId: designer } : {}),
+      workspace: { kind: kind === 'direct' ? 'member-home' : 'chat-home' },
+    });
+    const chatId = (created.chat as { id: string }).id;
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    const registry = mocks.registry as SourceAuthorityRegistry;
+    const session = services.host.ensureSession(chatId, designer);
+    if (!session.ok) throw new Error(session.error);
+    const { conversationId } = session;
+    const project = registry.project(registry.conversation(conversationId)!.projectId)!;
+    const root = project.canonicalPath;
+    const dir = join(mocks.root, 'agent', 'sessions');
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, 'designs.jsonl');
+    const replies = ['首稿完成', '定稿完成', '首稿完成'];
+    const messages = replies.flatMap((reply, i) => {
+      const name = `draft-${i}.vetd`;
+      mkdirSync(join(root, name), { recursive: true });
+      writeFileSync(join(root, name, 'design.json'), '{}');
+      return [
+        { role: 'user', content: `需求 ${i}` },
+        {
+          role: 'toolResult',
+          toolName: 'vetd_create',
+          content: [{ type: 'text', text: JSON.stringify({ ok: true, vetdPath: name }) }],
+        },
+        { role: 'assistant', timestamp: i * 10 + 1, content: [{ type: 'text', text: reply }] },
+      ];
+    });
+    const lines = [
+      { type: 'session', version: 3, id: 'designs', cwd: root },
+      ...messages.map((message, i) => ({
+        type: 'message',
+        id: `m${i}`,
+        parentId: i ? `m${i - 1}` : null,
+        message,
+      })),
+    ];
+    writeFileSync(file, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+    registry.markReady(conversationId, file, { providerId: 'p', modelId: 'm' });
+
+    const target = (turn: number) => {
+      if (kind === 'direct') return { chatId, conversationId, messageIndex: 3 * turn + 2 };
+      const entry = services.chats.appendEntry(chatId, {
+        kind: 'bot',
+        id: `entry-${turn}`,
+        at: turn * 10 + 2,
+        botId: designer,
+        conversationId,
+        turnId: `turn-${turn}`,
+        text: replies[turn],
+      });
+      return { chatId, entryId: entry!.id };
+    };
+    expect(
+      await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, { ...target(1), sessionId: 'forged' })
+    ).toEqual({
+      ok: true,
+      artifacts: [],
+      media: [],
+      designs: [{ rel: 'draft-1.vetd', name: 'draft-1.vetd', sessionId: conversationId }],
+    });
+    if (kind === 'group') {
+      const first = target(0);
+      expect(await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, first)).toEqual({
+        ok: true,
+        artifacts: [],
+        media: [],
+        designs: [{ rel: 'draft-0.vetd', name: 'draft-0.vetd', sessionId: conversationId }],
+      });
+      expect(registry.endBotConversation(conversationId)?.lifecycle).toBe('ended');
+      expect(await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, first)).toMatchObject({
+        ok: true,
+        designs: [{ rel: 'draft-0.vetd', sessionId: conversationId, projectId: project.projectId }],
+      });
+    } else {
+      // Even if a remote path happens to exist locally, it is not a local workspace.
+      const remote = vi.spyOn(registry, 'project').mockReturnValue({ ...project, kind: 'ssh' });
+      try {
+        expect(await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, target(1))).toEqual({
+          ok: true,
+          artifacts: [],
+          media: [],
+        });
+      } finally {
+        remote.mockRestore();
+      }
+    }
+  });
+});
+
 describe('私聊切换对话', () => {
   it('列出对话带标题与时间；切回旧对话先停当前回合并提炼记忆，再续用原会话', async () => {
     const alice = await createBot('Alice');

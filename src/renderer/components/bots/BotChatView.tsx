@@ -1,7 +1,7 @@
 import type { BotChat, BotProfile } from '@shared/types/bot';
 import { findVirtualModel } from '@shared/virtualModels';
 import { motion } from 'framer-motion';
-import { Globe, Info, MessageSquarePlus, Shield, Sparkles } from 'lucide-react';
+import { Globe, Info, LayoutTemplate, MessageSquarePlus, Shield, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { APPROVAL_MODE_META } from '@/components/chat/ApprovalModePicker';
@@ -10,6 +10,9 @@ import { CHAT_COL } from '@/components/chat/MessageTimeline';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import { sidePanelWidthTransition } from '@/components/sidepanel/sidePanelWidthAnim';
 import { addToast } from '@/components/ui/toast';
+import { useBotDesignCanvas } from '@/features/design/host/bot-canvas';
+import { useTranslation as useDesignTranslation } from '@/features/design/host/translation';
+import { BotDesignPanel } from '@/features/design/mounts/DesignPanel';
 import { useSpeechStatus } from '@/hooks/useSpeechStatus';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -64,6 +67,7 @@ export function useModelLabel(bot: BotProfile | undefined): string {
 /** chat 为当前话题（群）或私聊；group 为根群，群级信息（成员面板、浏览器、工作区）按它展示 */
 export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: BotChat }) {
   const { t } = useI18n();
+  const { t: designT } = useDesignTranslation();
   const bots = useBotsStore((s) => s.bots);
   const chats = useBotsStore((s) => s.chats);
   const sessions = useBotsStore((s) => s.sessions);
@@ -73,7 +77,12 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
   const runtime = useBotsStore((s) => s.runtime[chat.id]);
   const markRead = useBotsStore((s) => s.markRead);
   const panelOpen = useBotsStore((s) => s.panelOpen);
-  const panelTab = useBotsStore((s) => s.panelTab);
+  const selectedTab = useBotsStore((s) => s.panelTab);
+  const designEnabled = useSettingsStore((s) => s.designEnabled);
+  const design = useBotDesignCanvas((s) =>
+    designEnabled && s.target?.chatId === chat.id ? s.target : null
+  );
+  const panelTab = selectedTab === 'design' && !design ? 'info' : selectedTab;
   const browserTabCount = useBotsStore((s) => s.browserTabs[group.id]?.tabs.length ?? 0);
   const panelWidth = useBotsStore((s) => s.panelWidth);
   const skillCatalog = useSettingsStore((s) => s.skills);
@@ -413,32 +422,48 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
           style={{ width }}
         >
           <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 border-b px-2">
-            {(['info', 'browser'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => useBotsStore.getState().setPanelTab(tab)}
-                className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[calc(11rem/14)] transition-colors',
-                  panelTab === tab
-                    ? 'bg-brand/10 font-medium text-foreground dark:bg-brand/15'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {tab === 'info' ? (
-                  <Info className="h-3.5 w-3.5" />
-                ) : (
-                  <Globe className="h-3.5 w-3.5" />
-                )}
-                {tab === 'info' ? t(direct ? 'Member' : 'Group info') : t('Browser')}
-                {tab === 'browser' && browserTabCount > 0 && (
-                  <span className="text-muted-foreground tabular-nums">{browserTabCount}</span>
-                )}
-              </button>
-            ))}
+            {(['info', 'browser', 'design'] as const)
+              .filter((tab) => tab !== 'design' || design)
+              .map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  aria-pressed={panelTab === tab}
+                  onClick={() => useBotsStore.getState().setPanelTab(tab)}
+                  className={cn(
+                    'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[calc(11rem/14)] transition-colors',
+                    panelTab === tab
+                      ? 'bg-brand/10 font-medium text-foreground dark:bg-brand/15'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {tab === 'info' ? (
+                    <Info className="h-3.5 w-3.5" />
+                  ) : tab === 'design' ? (
+                    <LayoutTemplate className="h-3.5 w-3.5" />
+                  ) : (
+                    <Globe className="h-3.5 w-3.5" />
+                  )}
+                  {tab === 'info'
+                    ? t(direct ? 'Member' : 'Group info')
+                    : tab === 'browser'
+                      ? t('Browser')
+                      : designT('tab.label')}
+                  {tab === 'browser' && browserTabCount > 0 && (
+                    <span className="text-muted-foreground tabular-nums">{browserTabCount}</span>
+                  )}
+                </button>
+              ))}
           </div>
           {panelTab === 'browser' ? (
             <BotBrowserPanel chatId={group.id} visible={panelOpen} />
+          ) : panelTab === 'design' ? (
+            panelOpen &&
+            design && (
+              <div className="min-h-0 flex-1">
+                <BotDesignPanel target={design} />
+              </div>
+            )
           ) : direct ? (
             <BotProfilePanel botId={direct.id} chat={chat} onOpenHistory={openConversation} />
           ) : (

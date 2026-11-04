@@ -131,8 +131,21 @@ export async function loadCover(vetdPath: string): Promise<string | null> {
 	return typeof value === "string" ? value : null;
 }
 
+const coverListeners = new Map<string, Set<(dataUrl: string) => void>>();
+
+export function onCoverSaved(vetdPath: string, listener: (dataUrl: string) => void): () => void {
+	const listeners = coverListeners.get(vetdPath) ?? new Set();
+	listeners.add(listener);
+	coverListeners.set(vetdPath, listeners);
+	return () => {
+		listeners.delete(listener);
+		if (!listeners.size) coverListeners.delete(vetdPath);
+	};
+}
+
 export async function saveCover(vetdPath: string, dataUrl: string): Promise<void> {
 	await runStore("readwrite", (store) => store.put(dataUrl, vetdPath), COVER_STORE);
+	for (const listener of coverListeners.get(vetdPath) ?? []) listener(dataUrl);
 }
 
 export async function deleteCover(vetdPath: string): Promise<void> {

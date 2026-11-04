@@ -9,6 +9,7 @@ import type {
   BotArtifactReadResult,
   BotArtifactsResult,
   BotArtifactTarget,
+  BotDesignArtifact,
   BotSearchResult,
 } from '@shared/types/botIpc';
 import { app, BrowserWindow, shell } from 'electron';
@@ -19,6 +20,7 @@ import {
   parseArtifactTarget,
   resolveArtifactFile,
   resolveArtifacts,
+  resolveDesignArtifacts,
   turnBounds,
   turnOfReply,
 } from '../services/bots/artifacts';
@@ -86,18 +88,20 @@ interface TurnContent {
   mediaDir: string;
   artifacts: BotArtifact[];
   media: BotMediaItem[];
+  designs?: BotDesignArtifact[];
 }
 
 /** 由聊天 + 条目 / 会话消息标识推导该轮消息与工作区根；会话必须属于该聊天 */
 async function artifactsOf(
   { chats }: ContentServices,
   request: unknown,
-  limit = BOT_ARTIFACT_LIMIT
+  { limit = BOT_ARTIFACT_LIMIT, includeDesigns = false } = {}
 ): Promise<TurnContent | null> {
   const target = parseArtifactTarget(request);
   const chat = target ? chats.get(target.chatId) : undefined;
   if (!target || !chat) return null;
   let conversationId: string;
+  let groupReply: { text: string; at: number } | undefined;
   let locate: (messages: readonly ProjectedMessage[]) => { start: number; end: number } | null;
   let fallback: readonly ProjectedMessage[] = [];
   if ('entryId' in target) {
@@ -116,6 +120,7 @@ async function artifactsOf(
     }
     if (entry?.kind !== 'bot') return null;
     conversationId = entry.conversationId;
+    groupReply = entry;
     locate = (messages) => turnOfReply(messages, entry.text);
     fallback = [{ role: 'assistant', content: [{ type: 'text', text: entry.text }] }];
   } else {
@@ -133,10 +138,17 @@ async function artifactsOf(
   const root = worktree?.path ?? project.canonicalPath;
   const stamp = JSON.stringify([conversation, project, worktree]);
   let turn = fallback;
+  let designTurn = fallback;
   try {
     const messages = await readMessages(conversation.sessionFile);
     const range = locate(messages);
     if (range) turn = messages.slice(range.start, range.end);
+    if (includeDesigns && groupReply) {
+      const found = turnOfReply(messages, groupReply.text, groupReply.at);
+      if (found) designTurn = messages.slice(found.start, found.end);
+    } else {
+      designTurn = turn;
+    }
   } catch {
     // 会话文件缺失 / 损坏：群条目仍可按回复正文提到的路径出卡片
   }
@@ -154,18 +166,32 @@ async function artifactsOf(
   const media = sendImageItems(turn).filter(
     (item) => !item.ok || mediaFile(mediaDir, item.mediaId) !== null
   );
-  if (project.kind === 'ssh') return { root: null, mediaDir, artifacts: [], media };
+  if (project.kind === 'ssh' || !root) return { root: null, mediaDir, artifacts: [], media };
   // 同一个工作区文件已作为图片发出：不再重复出文件卡片
   const sent = new Set(
     media.flatMap((item) => (item.source === 'file' && item.name ? [item.name] : []))
   );
+  const candidates = artifactCandidates(turn);
+  const designProjectId =
+    conversation.lifecycle === 'ended' && !worktree && project.state === 'active'
+      ? project.projectId
+      : undefined;
+  const designs = includeDesigns
+    ? resolveDesignArtifacts(
+        root,
+        designTurn === turn ? candidates : artifactCandidates(designTurn),
+        designTurn,
+        conversation.conversationId
+      ).map((item) => (designProjectId ? { ...item, projectId: designProjectId } : item))
+    : [];
   return {
     root,
     mediaDir,
-    artifacts: resolveArtifacts(root, artifactCandidates(turn), limit).filter(
+    artifacts: resolveArtifacts(root, candidates, limit).filter(
       (artifact) => !sent.has(artifact.rel)
     ),
     media,
+    ...(designs.length ? { designs } : {}),
   };
 }
 
@@ -210,7 +236,7 @@ export async function phoneFileSource(
   target: BotArtifactTarget
 ): Promise<PairFileSource | null> {
   if (!phoneFileAccess(services, target)) return null;
-  const found = await artifactsOf(services, target, PAIR_FILE_LIST_LIMIT);
+  const found = await artifactsOf(services, target, { limit: PAIR_FILE_LIST_LIMIT });
   return found?.root && phoneFileAccess(services, target)
     ? { root: found.root, artifacts: found.artifacts }
     : null;
@@ -220,8 +246,10 @@ export async function listArtifacts(
   services: ContentServices,
   request: unknown
 ): Promise<BotArtifactsResult> {
-  const found = await artifactsOf(services, request);
-  return found ? { ok: true, artifacts: found.artifacts, media: found.media } : INVALID;
+  const found = await artifactsOf(services, request, { includeDesigns: true });
+  if (!found) return INVALID;
+  const { artifacts, media, designs } = found;
+  return { ok: true, artifacts, media, ...(designs ? { designs } : {}) };
 }
 
 /** rel 必须出现在 Main 重新推导的该条产物清单里，再按工作区根二次校验 */

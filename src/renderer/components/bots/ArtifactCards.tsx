@@ -4,6 +4,7 @@ import type {
   BotArtifactOpenAction,
   BotArtifactReadResult,
   BotArtifactTarget,
+  BotDesignArtifact,
 } from '@shared/types/botIpc';
 import { ExternalLink, FolderOpen, ImageOff, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -14,12 +15,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings';
+import { BotDesignCard } from './BotDesignCard';
 
 interface TurnArtifacts {
   artifacts: BotArtifact[];
   media: BotMediaItem[];
+  designs: BotDesignArtifact[];
 }
-const EMPTY: TurnArtifacts = { artifacts: [], media: [] };
+const EMPTY: TurnArtifacts = { artifacts: [], media: [], designs: [] };
 
 /** 只缓存非空结果：轮次刚结束时文件可能还没落盘，空结果下次挂载再问 */
 const cache = new Map<string, TurnArtifacts>();
@@ -44,8 +48,13 @@ function useArtifacts(target: BotArtifactTarget): TurnArtifacts {
       .list(JSON.parse(key) as BotArtifactTarget)
       .then((result) => {
         if (!alive || !result.ok) return;
-        const found = { artifacts: result.artifacts, media: result.media ?? [] };
-        if (found.artifacts.length > 0 || found.media.length > 0) cache.set(key, found);
+        const found = {
+          artifacts: result.artifacts,
+          media: result.media ?? [],
+          designs: result.designs ?? [],
+        };
+        if (found.artifacts.length || found.media.length || found.designs.length)
+          cache.set(key, found);
         setArtifacts(found);
       })
       .catch(() => {});
@@ -75,9 +84,21 @@ function useOpenArtifact(target: BotArtifactTarget) {
 
 /** 该轮产生或提到、且位于聊天工作区内的文件；路径由 Main 推导，这里只传标识 */
 export function ArtifactCards({ target }: { target: BotArtifactTarget }) {
-  const { artifacts, media } = useArtifacts(target);
+  const { artifacts, media, designs } = useArtifacts(target);
+  const designEnabled = useSettingsStore((state) => state.designEnabled);
   return (
     <>
+      {designEnabled && designs.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {designs.map((design) => (
+            <BotDesignCard
+              key={`${design.sessionId}:${design.rel}`}
+              target={target}
+              design={design}
+            />
+          ))}
+        </div>
+      )}
       {media.length > 0 && <MediaStrip target={target} media={media} />}
       {artifacts.length > 0 && <FileCards target={target} artifacts={artifacts} />}
     </>

@@ -13,7 +13,7 @@ import { restoreDesign } from "./restore";
 
 interface HistoryToolsOptions {
 	/** 无画布场景下解析目标 .vetd（显式参数 > 打开的画布 > cwd 里唯一那份）。 */
-	resolveVetdPath(host: { fs: PluginContext["fs"] }, cwd: string, explicit?: string): Promise<string>;
+	resolveVetdPath(host: { fs: PluginContext["fs"] }, session: { cwd: string; botChatId?: string | null }, explicit?: string): Promise<string>;
 	scopeUse: readonly ("project" | "conversation")[];
 }
 
@@ -45,7 +45,7 @@ ctx.agent.registerTool<HistoryInput>({
 	scope_use: SCOPE_USE,
 	handler: async ({ host, session, trigger }) => {
 		try {
-			const designDir = await resolveVetdPath(host, session.cwd, trigger.input.design);
+			const designDir = await resolveVetdPath(host, session, trigger.input.design);
 			const commits = await listHistory(ctx, designDir, trigger.input.limit ?? 30);
 			return {
 				ok: true,
@@ -94,12 +94,12 @@ ctx.agent.registerTool<RestoreInput>({
 		const version = trigger.input.version?.trim();
 		if (!version) return { ok: false, error: "Pass a `version` from vetd_history." };
 		try {
-			const designDir = await resolveVetdPath(host, session.cwd, trigger.input.design);
+			const designDir = await resolveVetdPath(host, session, trigger.input.design);
 			const target = (await listHistory(ctx, designDir, 200)).find((commit) => commit.sha === version);
 			if (!target) {
 				return { ok: false, error: `No version "${version}" in this design's history. Call vetd_history first.` };
 			}
-			const controller = getCanvasController(session.cwd);
+			const controller = getCanvasController(session.cwd, session.botChatId);
 			const outcome = await restoreDesign(ctx, designDir, target, {
 				session: controller?.session.dirPath === designDir ? controller.session : null,
 			});

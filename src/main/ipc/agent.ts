@@ -1554,6 +1554,7 @@ export function registerAgentHandlers(): void {
         );
         return;
       }
+      const botChatId = sourceAuthority?.conversation(sessionId)?.bot?.chatId ?? undefined;
       const controller = new AbortController();
       const timeoutMs = designToolTimeoutMs(tool);
       const timer = setTimeout(() => {
@@ -1575,6 +1576,7 @@ export function registerAgentHandlers(): void {
           const result = await getDesignToolBroker().request({
             sessionId,
             cwd,
+            botChatId,
             tool,
             params,
             timeoutMs,

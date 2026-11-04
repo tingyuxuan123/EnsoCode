@@ -110,7 +110,7 @@ function loadView(): BotView {
   return raw ? { kind: 'chat', chatId: raw } : null;
 }
 
-export type BotPanelTab = 'info' | 'browser';
+export type BotPanelTab = 'info' | 'browser' | 'design';
 
 function loadBrowserTabs(): Record<string, ChatBrowserTabs> {
   try {
@@ -903,7 +903,7 @@ export const useBotsStore = create<BotsState>()((set, get) => {
     },
 
     setPanelTab: (panelTab) => {
-      localStorage.setItem(PANEL_TAB_KEY, panelTab);
+      if (panelTab !== 'design') localStorage.setItem(PANEL_TAB_KEY, panelTab);
       set({ panelTab });
     },
 

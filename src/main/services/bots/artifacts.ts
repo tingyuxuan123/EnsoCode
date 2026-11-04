@@ -2,7 +2,12 @@ import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { ProjectedMessage } from '@shared/types/agent';
 import { isBotId } from '@shared/types/bot';
-import type { BotArtifact, BotArtifactKind, BotArtifactTarget } from '@shared/types/botIpc';
+import type {
+  BotArtifact,
+  BotArtifactKind,
+  BotArtifactTarget,
+  BotDesignArtifact,
+} from '@shared/types/botIpc';
 
 /** 每条消息最多展示的产物卡片数 */
 export const BOT_ARTIFACT_LIMIT = 8;
@@ -136,15 +141,29 @@ const replyText = (message: ProjectedMessage): string =>
 /** 群 bot 条目 = 成员会话一轮的最终回复：按文本找最近的那一轮 */
 export function turnOfReply(
   messages: readonly ProjectedMessage[],
-  text: string
+  text: string,
+  at?: number
 ): { start: number; end: number } | null {
   const target = text.trim();
   if (!target) return null;
+  let match: { start: number; end: number; timestamp?: number } | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'assistant' && replyText(messages[i]) === target)
-      return turnBounds(messages, i);
+    const message = messages[i];
+    if (message.role !== 'assistant' || replyText(message) !== target) continue;
+    const range = turnBounds(messages, i);
+    if (!range || at === undefined) return range;
+    // 群条目可能重复同一句回复：不能把后来的设计挂到较早的条目。
+    const timestamp = message.timestamp;
+    if (timestamp !== undefined && timestamp > at) continue;
+    if (match) {
+      if (timestamp === undefined || match.timestamp === undefined || timestamp === match.timestamp)
+        return null;
+    } else {
+      match = { ...range, timestamp };
+    }
+    i = range.start;
   }
-  return null;
+  return match && { start: match.start, end: match.end };
 }
 
 function realRootOf(root: string): string | null {
@@ -155,13 +174,18 @@ function realRootOf(root: string): string | null {
   }
 }
 
+function relativeInside(root: string, file: string): string | null {
+  const rel = path.relative(root, file);
+  return rel && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
+    ? rel
+    : null;
+}
+
 /** 解析符号链接后必须仍在根内且是普通文件 */
 function insideFile(realRoot: string, abs: string): { real: string; size: number } | null {
   try {
     const real = realpathSync(abs);
-    const rel = path.relative(realRoot, real);
-    if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel))
-      return null;
+    if (!relativeInside(realRoot, real)) return null;
     const stat = statSync(real);
     return stat.isFile() ? { real, size: stat.size } : null;
   } catch {
@@ -192,6 +216,88 @@ export function resolveArtifacts(
       size: file.size,
       kind: artifactKind(name),
     });
+  }
+  return out;
+}
+
+function* designPaths(
+  candidates: readonly string[],
+  messages: readonly ProjectedMessage[]
+): Iterable<string> {
+  yield* candidates;
+  for (const message of messages) {
+    if (message.role !== 'toolResult' || message.isError) continue;
+    if (message.toolName === 'vetd_create') {
+      for (const part of message.content) {
+        if (part.type !== 'text') continue;
+        try {
+          const value: unknown = JSON.parse(part.text);
+          // created:true 表示目录已落盘，即使自动打开画布失败。
+          if (
+            value &&
+            typeof value === 'object' &&
+            (('ok' in value && value.ok === true) ||
+              ('created' in value && value.created === true)) &&
+            'vetdPath' in value &&
+            typeof value.vetdPath === 'string'
+          )
+            yield value.vetdPath;
+        } catch {
+          // 忽略非 JSON / 已截断的文本块。
+        }
+      }
+    }
+    for (const { payload } of message.designCards ?? []) {
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        'vetdPath' in payload &&
+        typeof payload.vetdPath === 'string'
+      )
+        yield payload.vetdPath;
+    }
+  }
+}
+
+/** 只认这轮提到的 .vetd 目录或其中的文件，不扫描工作区。 */
+export function resolveDesignArtifacts(
+  root: string,
+  candidates: readonly string[],
+  messages: readonly ProjectedMessage[],
+  sessionId: string
+): BotDesignArtifact[] {
+  const realRoot = realRootOf(root);
+  if (!realRoot) return [];
+  const seen = new Set<string>();
+  const out: BotDesignArtifact[] = [];
+  for (const candidate of designPaths(candidates, messages)) {
+    if (!candidate || candidate.startsWith('~')) continue;
+    const absolute = path.resolve(root, candidate);
+    let bundle = absolute;
+    while (path.extname(bundle) !== '.vetd' && path.dirname(bundle) !== bundle)
+      bundle = path.dirname(bundle);
+    if (
+      path.extname(bundle) !== '.vetd' ||
+      (!relativeInside(root, bundle) && !relativeInside(realRoot, bundle))
+    )
+      continue;
+    try {
+      const real = realpathSync(bundle);
+      const rel = relativeInside(realRoot, real);
+      if (
+        !rel ||
+        path.extname(real) !== '.vetd' ||
+        seen.has(real) ||
+        (bundle !== absolute && !insideFile(real, absolute)) ||
+        !insideFile(real, path.join(real, 'design.json'))
+      )
+        continue;
+      seen.add(real);
+      out.push({ rel: rel.split(path.sep).join('/'), name: path.basename(real), sessionId });
+      if (out.length === BOT_ARTIFACT_LIMIT) break;
+    } catch {
+      // 单个目录缺失或不可访问不影响同一轮的其他设计。
+    }
   }
   return out;
 }

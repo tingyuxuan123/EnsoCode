@@ -6,6 +6,7 @@ import {
 } from '../vetta/src/canvas/design-runtime';
 import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
 import { findVetdFiles } from '../vetta/src/vetd/discover';
+import { isViewedBotDesignChat, revealBotDesign } from './bot-canvas';
 import type { PluginContext } from './types';
 
 const WAIT_MS = 60_000;
@@ -27,8 +28,14 @@ export class DesignCanvasUnavailable extends Error {
     super(message);
   }
 }
-function assertViewing(cwd: string): void {
-  if (!isDesignViewingCwd(cwd))
+type ToolSession = DesignToolRequestEvent['session'];
+
+function isViewing({ cwd, botChatId }: ToolSession): boolean {
+  return botChatId ? isViewedBotDesignChat(botChatId) : isDesignViewingCwd(cwd);
+}
+
+function assertViewing(session: ToolSession): void {
+  if (!isViewing(session))
     throw new DesignCanvasUnavailable(
       'The design canvas is viewing another project (or switching sessions). Ask the user to switch back to this session, then retry. No canvas was switched.'
     );
@@ -74,18 +81,23 @@ export function acquireDesignCanvas(signal: AbortSignal): Promise<() => void> {
 }
 
 async function openCanvas(
-  cwd: string,
+  session: ToolSession,
   path: string,
   ctx: PluginContext,
   signal: AbortSignal
 ): Promise<void> {
+  const { cwd, botChatId, sessionId } = session;
   signal.throwIfAborted();
-  assertViewing(cwd);
+  assertViewing(session);
   if (!path.startsWith(`${cwd.replace(/\/+$/, '')}/`))
     throw new DesignCanvasUnavailable('The requested design is outside this session workspace.');
-  if (getCanvasController(cwd)?.session.vetdPath === path) return;
-  setPendingDesignPath(path, cwd);
-  ctx.ui.openActivityTab(CANVAS_TAB_ID, { cwd, width: 'max' });
+  const isOpen = () => getCanvasController(cwd, botChatId ?? null)?.session.vetdPath === path;
+  if (isOpen()) return;
+  if (botChatId) revealBotDesign({ chatId: botChatId, sessionId, cwd, path });
+  else {
+    setPendingDesignPath(path, cwd);
+    ctx.ui.openActivityTab(CANVAS_TAB_ID, { cwd, width: 'max' });
+  }
   await new Promise<void>((resolve, reject) => {
     let unsubscribe = () => {};
     let done = false;
@@ -111,14 +123,14 @@ async function openCanvas(
     );
     signal.addEventListener('abort', cancel, { once: true });
     unsubscribe = onCanvasController(() => {
-      if (!isDesignViewingCwd(cwd)) {
+      if (!isViewing(session)) {
         finish(
           new DesignCanvasUnavailable(
             'The user switched to another project. Switch back to this session before retrying.',
             path
           )
         );
-      } else if (getCanvasController(cwd)?.session.vetdPath === path) finish();
+      } else if (isOpen()) finish();
     });
     // onCanvasController immediately replays, including an already-ready controller.
     if (done) unsubscribe();
@@ -131,7 +143,7 @@ export function usesDesignCanvas(request: DesignToolRequestEvent): boolean {
   return (
     renderedTools.has(request.tool) ||
     request.tool === 'vetd_create' ||
-    (request.tool === 'vetd_status' && isDesignViewingCwd(request.session.cwd))
+    (request.tool === 'vetd_status' && isViewing(request.session))
   );
 }
 export async function prepareDesignCanvas(
@@ -139,22 +151,23 @@ export async function prepareDesignCanvas(
   ctx: PluginContext,
   signal: AbortSignal
 ): Promise<void> {
-  const cwd = request.session.cwd;
+  const { cwd, botChatId } = request.session;
+  const targetKey = botChatId ? `${cwd}\0${botChatId}` : cwd;
   if (request.tool === 'vetd_create') {
     // Reject BEFORE scaffolding: a background create must not steal the foreground dock.
-    assertViewing(cwd);
+    assertViewing(request.session);
     return;
   }
   if (!renderedTools.has(request.tool) && request.tool !== 'vetd_status') return;
-  if (request.tool === 'vetd_status' && !isDesignViewingCwd(cwd)) return;
-  assertViewing(cwd);
-  const created = createdTargets.get(cwd);
+  if (request.tool === 'vetd_status' && !isViewing(request.session)) return;
+  assertViewing(request.session);
+  const created = createdTargets.get(targetKey);
   if (created) {
-    await openCanvas(cwd, created, ctx, signal);
-    createdTargets.delete(cwd);
+    await openCanvas(request.session, created, ctx, signal);
+    createdTargets.delete(targetKey);
     return;
   }
-  if (getCanvasController(cwd)) return;
+  if (getCanvasController(cwd, botChatId ?? null)) return;
   const files = await findVetdFiles(ctx.fs, cwd);
   signal.throwIfAborted();
   if (!files.length) {
@@ -163,8 +176,13 @@ export async function prepareDesignCanvas(
       'No design was found in this session workspace. Open a design here, then retry.'
     );
   }
-  const remembered = localStorage.getItem(`vetta-ui-design:file:${cwd}`);
-  await openCanvas(cwd, files.find((path) => path === remembered) ?? files[0], ctx, signal);
+  const remembered = localStorage.getItem(`vetta-ui-design:file:${targetKey}`);
+  await openCanvas(
+    request.session,
+    files.find((path) => path === remembered) ?? files[0],
+    ctx,
+    signal
+  );
 }
 
 export async function finishDesignCreate(
@@ -183,10 +201,12 @@ export async function finishDesignCreate(
     typeof result.vetdPath !== 'string'
   )
     return result;
-  createdTargets.set(request.session.cwd, result.vetdPath);
+  const { cwd, botChatId } = request.session;
+  const targetKey = botChatId ? `${cwd}\0${botChatId}` : cwd;
+  createdTargets.set(targetKey, result.vetdPath);
   try {
-    await openCanvas(request.session.cwd, result.vetdPath, ctx, signal);
-    createdTargets.delete(request.session.cwd);
+    await openCanvas(request.session, result.vetdPath, ctx, signal);
+    createdTargets.delete(targetKey);
     return result;
   } catch (error) {
     signal.throwIfAborted();
