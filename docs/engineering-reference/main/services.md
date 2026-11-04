@@ -90,6 +90,8 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   不只丢弃 Promise 结果。降级原因与是否使用模型辅助必须可观察；检索次数沿用 appearances。
 - KG 重试复用 failed 列、幂等重置，关闭时不启动抽取。冷库管理操作使用临时句柄并关闭，
   不提前占用宿主全局 db，否则正常开库的蒸馏/向量/KG 恢复钩子会被跳过。
+- KG Level 1 输出预算为 4096 tokens；仅输出不可解析时在同一次任务尝试内提示只输出 JSON，
+  最多补一次。供应商报错直接交给任务层，不额外请求，也不额外累计任务尝试次数。
 
 回归：`streamGuard.test.ts`、`streamGuard.sdk.test.ts`、`backgroundTasks.test.ts`、
 `ensoCompact/extract.test.ts`、`supervisor.agentDispatch.test.ts`、`pendingNotifications.test.ts`、

@@ -45,7 +45,7 @@ export interface KgExtraction {
   relations: KgRelation[];
 }
 
-/** 抽取策略接口：Level 1 一枪；Level 2（三步法）留此接口后续接入，失败时 fallback Level 1 */
+/** 抽取策略接口：Level 1 单步抽取；Level 2（三步法）留此接口后续接入，失败时 fallback Level 1 */
 export type KgExtractor = (text: string, complete: Complete) => Promise<KgExtraction>;
 
 // ---------------------------------------------------------------------------
@@ -206,15 +206,19 @@ export function normalizeExtraction(x: {
   return { entities: [...byKey.values()], relations };
 }
 
-/** Level 1：schema 在 system、正文在 user；模型输出不可解析即抛，由任务层按暂时性失败处理 */
+/** Level 1：schema 在 system、正文在 user；不可解析时提示 JSON 补一次，仍失败则交给任务层 */
 export const extractLevel1: KgExtractor = async (text, complete) => {
-  const parsed = parseKgResponse(
-    await complete(KG_EXTRACT_SYSTEM, kgExtractLevel1Prompt(text), {
-      maxTokens: KG_EXTRACT_MAX_TOKENS,
-    })
-  );
-  if (!parsed) throw new Error('model output is not parseable JSON');
-  return parsed;
+  const call = (nudge: boolean) =>
+    complete(
+      KG_EXTRACT_SYSTEM,
+      nudge ? `${kgExtractLevel1Prompt(text)}\n\nOutput JSON only` : kgExtractLevel1Prompt(text),
+      { maxTokens: KG_EXTRACT_MAX_TOKENS }
+    );
+  const parsed = parseKgResponse(await call(false));
+  if (parsed) return parsed;
+  const retried = parseKgResponse(await call(true));
+  if (!retried) throw new Error('model output is not parseable JSON');
+  return retried;
 };
 
 // ---------------------------------------------------------------------------

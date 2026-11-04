@@ -457,7 +457,9 @@ describe('kg 任务：幂等、续跑、失败不影响记忆', () => {
   it('extractLevel1 用 system schema，正文在 user，并限制 maxTokens', async () => {
     let system: string | null = null;
     let maxTokens: number | undefined;
+    let calls = 0;
     const x = await extractLevel1('Sarah uses Docker.', async (s, u, opts) => {
+      calls += 1;
       system = s;
       maxTokens = opts?.maxTokens;
       expect(u).toContain('Sarah uses Docker.');
@@ -465,7 +467,62 @@ describe('kg 任务：幂等、续跑、失败不影响记忆', () => {
       return sample;
     });
     expect(system).toContain('"entities"');
-    expect(maxTokens).toBeGreaterThanOrEqual(1024);
+    expect(maxTokens).toBe(4096);
     expect(x.entities).toHaveLength(3);
+    expect(calls).toBe(1);
+  });
+
+  it('首次输出不可解析时提示只输出 JSON，补一次成功仍算同一任务尝试并写入图谱', async () => {
+    const memory = await create('Sarah uses Kubernetes with Docker.');
+    const job = ensureKgJob(db, memory.id)!;
+    const prompts: string[] = [];
+    const done = await runKgJob(db, job, {
+      complete: async (_system, user) => {
+        prompts.push(user);
+        return prompts.length === 1 ? 'not json' : sample;
+      },
+    });
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toBe(`${prompts[0]}\n\nOutput JSON only`);
+    expect(done).toMatchObject({ status: 'done', attempts: 1, failed: 0, error: null });
+    expect(listEntityNames(db, memory.id).sort()).toEqual(['Docker', 'Kubernetes', 'Sarah']);
+    expect(count('entity_relations')).toBe(2);
+  });
+
+  it('两次输出都不可解析时停止兜底，任务只累计一次失败尝试', async () => {
+    const memory = await create('Docker invalid output');
+    let calls = 0;
+    const done = await runKgJob(db, ensureKgJob(db, memory.id)!, {
+      complete: async () => {
+        calls += 1;
+        return 'not json';
+      },
+    });
+    expect(calls).toBe(2);
+    expect(done).toMatchObject({ status: 'pending', attempts: 1, failed: 0 });
+    expect(count('entities')).toBe(0);
+  });
+
+  it('供应商报错不触发 JSON 兜底，错误原样交给任务层处理', async () => {
+    let calls = 0;
+    await expect(
+      extractLevel1('Docker provider error', async () => {
+        calls += 1;
+        throw new Error('provider down');
+      })
+    ).rejects.toThrow('provider down');
+    expect(calls).toBe(1);
+  });
+
+  it('JSON 兜底请求报错后不继续请求', async () => {
+    let calls = 0;
+    await expect(
+      extractLevel1('Docker fallback error', async () => {
+        calls += 1;
+        if (calls === 1) return 'not json';
+        throw new Error('provider down');
+      })
+    ).rejects.toThrow('provider down');
+    expect(calls).toBe(2);
   });
 });
