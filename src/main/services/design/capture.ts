@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { DesignCaptureRequest, DesignCaptureResponse } from '@shared/types/design';
 import { BrowserWindow, nativeImage, session } from 'electron';
+import { encodeCapturedImage, prefersNativeCapture } from './captureImage';
 import { DesignServiceError, record } from './errors';
 import { capturePath } from './parsers';
 
@@ -190,24 +191,29 @@ export class DesignCaptureService {
       }
     }
     const format = request.format ?? 'jpeg';
-    const screenshot: unknown = await bounded(
-      contents.debugger.sendCommand('Page.captureScreenshot', {
-        format,
-        ...(format === 'jpeg'
-          ? { quality: Math.max(1, Math.round((request.quality ?? 0.92) * 100)) }
-          : {}),
-        captureBeyondViewport: false,
-        fromSurface: true,
-      })
-    );
-    if (!record(screenshot) || typeof screenshot.data !== 'string')
-      throw new DesignServiceError('FAILED', 'Capture returned no image');
+    let data: string;
+    if (prefersNativeCapture()) {
+      data = encodeCapturedImage(await bounded(contents.capturePage()), format, request.quality);
+    } else {
+      const screenshot: unknown = await bounded(
+        contents.debugger.sendCommand('Page.captureScreenshot', {
+          format,
+          ...(format === 'jpeg'
+            ? { quality: Math.max(1, Math.round((request.quality ?? 0.92) * 100)) }
+            : {}),
+          captureBeyondViewport: false,
+          fromSurface: true,
+        })
+      );
+      if (!record(screenshot) || typeof screenshot.data !== 'string')
+        throw new DesignServiceError('FAILED', 'Capture returned no image');
+      data = screenshot.data;
+    }
     const scaleFactor =
-      nativeImage.createFromBuffer(Buffer.from(screenshot.data, 'base64')).getSize().width /
-      request.width;
+      nativeImage.createFromBuffer(Buffer.from(data, 'base64')).getSize().width / request.width;
     return {
       ok: true,
-      dataUrl: `data:image/${format};base64,${screenshot.data}`,
+      dataUrl: `data:image/${format};base64,${data}`,
       scaleFactor,
       ...(probe === undefined ? {} : { probe }),
     };

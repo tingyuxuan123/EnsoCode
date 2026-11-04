@@ -1,13 +1,31 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, expect, it, vi } from 'vitest';
 
-const mock = vi.hoisted(() => ({ created: vi.fn(), calls: [] as string[], navigation: vi.fn() }));
+const mock = vi.hoisted(() => ({
+  created: vi.fn(),
+  calls: [] as string[],
+  navigation: vi.fn(),
+  native: vi.fn(() => false),
+}));
+vi.mock('./captureImage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./captureImage')>()),
+  prefersNativeCapture: mock.native,
+}));
 vi.mock('electron', () => {
   class FakeWindow {
     private destroyed = false;
     webContents = Object.assign(new EventEmitter(), {
       setWindowOpenHandler: vi.fn(),
       setZoomFactor: vi.fn(),
+      capturePage: vi.fn(async () => {
+        mock.calls.push('capturePage');
+        return {
+          isEmpty: () => false,
+          getScaleFactors: () => [1],
+          toPNG: () => Buffer.from('native'),
+          toJPEG: () => Buffer.from('native-jpeg'),
+        };
+      }),
       executeJavaScript: vi.fn(async (script: string) => {
         mock.calls.push(script);
         if (script === 'bad-probe') throw new Error('bad');
@@ -59,6 +77,7 @@ import { DesignCaptureService } from './capture';
 afterEach(() => {
   mock.calls.length = 0;
   vi.clearAllMocks();
+  mock.native.mockReturnValue(false);
 });
 it('只能捕获已登记 engine，窗口沙箱无 preload，导航与新窗口均拦截', async () => {
   const service = new DesignCaptureService((_owner, id) =>
@@ -125,6 +144,28 @@ it('同 key 串行复用，CDP 截图，不调用 capturePage，release 幂等',
     ]);
     expect(await service.request(1, { op: 'release', sessionKey: 'key' })).toEqual({ ok: true });
     expect(await service.request(1, { op: 'release', sessionKey: 'key' })).toEqual({ ok: true });
+  } finally {
+    service.dispose();
+  }
+});
+it('Windows 隐藏窗口改用 capturePage，不走会挂起的 CDP 截图', async () => {
+  mock.native.mockReturnValue(true);
+  const service = new DesignCaptureService(() => ({ port: 12345 }));
+  try {
+    expect(
+      await service.request(1, {
+        op: 'offscreen',
+        engineId: 'engine',
+        path: '/',
+        width: 100,
+        height: 100,
+        format: 'png',
+      })
+    ).toMatchObject({
+      dataUrl: `data:image/png;base64,${Buffer.from('native').toString('base64')}`,
+      scaleFactor: 1,
+    });
+    expect(mock.calls).toEqual(['http://127.0.0.1:12345/', 'capturePage']);
   } finally {
     service.dispose();
   }
