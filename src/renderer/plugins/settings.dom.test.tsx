@@ -37,10 +37,15 @@ it('list 的只读错误到达设置页面，恢复后清除提示并显示正�
     );
     expect(container.textContent).toContain('registry.corrupt');
     expect(container.textContent).not.toContain('No Enso plugins installed');
+    const install = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Install from folder'
+    );
+    expect(install?.disabled).toBe(true);
     list.mockResolvedValue({ plugins: [] });
     await act(async () => changed());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.textContent).toContain('No Enso plugins installed');
+    expect(install?.disabled).toBe(false);
   } finally {
     await act(async () => root.unmount());
     vi.unstubAllGlobals();

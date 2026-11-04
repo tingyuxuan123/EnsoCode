@@ -36,6 +36,47 @@ export const zhTranslations: Record<string, string> = {
   'Decision models only allow or block when highly confident. Everything else asks you.':
     '决策模型只在高置信时才放行或拦截，其余情况都会询问你。',
   'Enso plugins': 'Enso 插件',
+  Extensions: '扩展',
+  'Back to conversation': '返回对话',
+  'Manage your skills, MCP connections, and installed plugins.':
+    '管理技能、MCP 连接和已安装的插件。',
+  'Bring your tools into the conversation': '把常用工具带进对话',
+  'Reuse skills, connect MCP tools, or install your own EnsoCode plugins.':
+    '复用技能、连接 MCP 工具，或安装自己编写的插件。',
+  'Search extensions': '搜索扩展',
+  'Clear search': '清除搜索',
+  'Add extension': '添加扩展',
+  'Extension type': '扩展类型',
+  'MCP connections': 'MCP 连接',
+  'Install plugin from folder': '从文件夹安装插件',
+  'Install plugin from ZIP': '从 ZIP 安装插件',
+  'Install plugin from link': '从链接安装插件',
+  'Enter an HTTPS ZIP link. You will review the plugin and its permissions before installing.':
+    '输入 HTTPS ZIP 链接。安装前可以预览插件与权限。',
+  'No extensions in this category': '此分类暂无扩展',
+  'Use Add extension to import a skill, connect MCP, or install a plugin.':
+    '使用「添加扩展」导入技能、连接 MCP 或安装插件。',
+  'Try another search term.': '试试其他关键词。',
+  'Skill and MCP changes apply to new conversations. Existing conversations keep the extensions they loaded.':
+    '技能和 MCP 的变更在新会话生效，现有会话保留已加载的扩展。',
+  'Writing your own plugin? Install the folder that contains enso-plugin.json.':
+    '自己编写插件？选择包含 enso-plugin.json 的文件夹安装。',
+  'Use in conversation': '在对话中使用',
+  'Copy command': '复制命令',
+  'Start a new conversation to use newly enabled skills.': '新启用的技能可在新会话中使用。',
+  'No declared host permissions': '未声明宿主 API 权限',
+  'Pending permission approval': '权限待批准',
+  'Plugin crashed': '插件运行异常',
+  'Loading plugins…': '正在加载插件…',
+  'Manage Claude Code plugins': '管理 Claude Code 插件',
+  'Remove extension?': '移除此扩展？',
+  'This removes the entry from EnsoCode without deleting the original files.':
+    '只从 EnsoCode 移除登记，不删除原始文件。',
+  'Could not revoke authorization': '无法撤销授权',
+  Status: '状态',
+  Version: '版本',
+  Connected: '已连接',
+  'Not connected': '未连接',
   'Plugin registry is read-only. Restore the registry file before managing plugins.':
     '插件登记表已进入只读状态，请恢复登记表文件后再管理插件。',
   'Includes ui.js: full main-interface access': '包含 ui.js：拥有完整主界面权限',
@@ -55,6 +96,8 @@ export const zhTranslations: Record<string, string> = {
   'Plugin is not enabled': '插件未启用',
   'Preview URL': '预览链接',
   'Review plugin installation': '确认插件安装',
+  'Plugin main runs with full Node.js access. ui.js has the same access as the main interface. Install only plugins you fully trust. Permissions restrict Enso host APIs, not the plugin’s own code; this is not an OS sandbox.':
+    '插件主进程拥有完整的 Node.js 访问权限；ui.js 与主界面同权。只安装完全信任的插件。权限只限制 Enso 宿主 API，不限制插件自身的代码；这不是操作系统沙箱。',
   Revoke: '撤销',
   'Set (leave blank to keep)': '设置（留空则保持不变）',
   'The first time the AI clicks or types in an app, EnsoCode asks you. Apps you always allow are listed here; it can then read everything in their windows.':

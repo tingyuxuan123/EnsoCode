@@ -22,6 +22,8 @@ import { ChatView } from '@/components/chat/ChatView';
 import { requestFocusComposer } from '@/components/chat/composerMentionBridge';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import { Sidebar } from '@/components/chat/Sidebar';
+import { ExtensionsPage } from '@/components/extensions/ExtensionsPage';
+import { isExtensionsSessionNavigation } from '@/components/extensions/extensionNavigation';
 import { RemoteNodeView } from '@/components/nodes/RemoteNodeView';
 import { OauthCredentialBootstrap } from '@/components/oauth/OauthCredentialBootstrap';
 import { Onboarding } from '@/components/onboarding/Onboarding';
@@ -108,6 +110,11 @@ export default function App() {
   useAutoArchiveScan();
   useDockBadge();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const closeWorkspacePage = useCallback(() => {
+    setExtensionsOpen(false);
+    closeDesignGallery();
+  }, []);
   const [closeRequestId, setCloseRequestId] = useState<string | null>(null);
   useWindowsWindowChrome();
   const [width, setWidth] = useState(() => {
@@ -129,6 +136,8 @@ export default function App() {
   useEffect(() => {
     const previous = lastSessionSelection.current;
     if (previous.id !== activeConversationId || previous.tab !== activeTabId) closeDesignGallery();
+    if (isExtensionsSessionNavigation(previous, { id: activeConversationId, tab: activeTabId }))
+      setExtensionsOpen(false);
     lastSessionSelection.current = { id: activeConversationId, tab: activeTabId };
   }, [activeConversationId, activeTabId]);
   const activeProjectId = useSessionsStore((s) =>
@@ -235,9 +244,10 @@ export default function App() {
   useEffect(
     () =>
       window.electronAPI.window.onAgentComposerPrefill((prefill) => {
+        closeWorkspacePage();
         useSessionsStore.getState().prefillAgent(prefill.typeKey, prefill.prompt);
       }),
-    []
+    [closeWorkspacePage]
   );
 
   useEffect(
@@ -268,6 +278,10 @@ export default function App() {
   });
   const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
   const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
+  const extensionsActive = extensionsOpen && !remoteNodeActive && !botModeActive && !galleryActive;
+  useEffect(() => {
+    if (remoteNodeActive || botModeActive || galleryActive) setExtensionsOpen(false);
+  }, [botModeActive, galleryActive, remoteNodeActive]);
   const { t: designT } = useDesignTranslation();
   useEffect(() => {
     if (!galleryAvailable) closeDesignGallery();
@@ -300,11 +314,11 @@ export default function App() {
     () =>
       window.electronAPI.agent.onFocusSession((sessionId) => {
         if (useSessionsStore.getState().conversations[sessionId]) {
-          closeDesignGallery();
+          closeWorkspacePage();
           showLocalCodeView();
         }
       }),
-    []
+    [closeWorkspacePage]
   );
 
   const handleResize = useCallback((deltaX: number) => {
@@ -317,7 +331,7 @@ export default function App() {
     const bindings = effectiveKeybindings(keybindings);
     // 主会话 + coworker 循环切换;无 coworker 时不动
     const cycleTab = (direction: 1 | -1) => {
-      closeDesignGallery();
+      closeWorkspacePage();
       const sessions = useSessionsStore.getState();
       const parent = sessions.activeId ? sessions.conversations[sessions.activeId] : null;
       if (!parent) return;
@@ -328,7 +342,7 @@ export default function App() {
       sessions.selectTab(parent.id, tabs[(current + direction + tabs.length) % tabs.length]);
     };
     const startNewConversation = () => {
-      closeDesignGallery();
+      closeWorkspacePage();
       const sessions = useSessionsStore.getState();
       const active = sessions.activeId ? sessions.conversations[sessions.activeId] : null;
       const projectId = newSidebarConversationProjectId(
@@ -353,7 +367,7 @@ export default function App() {
       // 远程节点 / Bot 模式：本机 Code 会话相关的快捷键不响应（新对话/tab 切换/右侧面板/查找）
       const remote = useRemoteNodesStore.getState().activeNodeId !== 'local' || isBotModeActive();
       if (
-        useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID &&
+        (extensionsActive || useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
         [
           'toggle-side-panel',
           'toggle-side-panel-fullscreen',
@@ -430,16 +444,16 @@ export default function App() {
         requestOpenChatFind();
       } else if (pressed === bindings['search-workspace']) {
         e.preventDefault();
-        closeDesignGallery();
+        closeWorkspacePage();
         setSearchOpen(true);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [keybindings, sidebarView]);
+  }, [closeWorkspacePage, extensionsActive, keybindings, sidebarView]);
 
   useEffect(() => {
-    if (!sideOpen || !sideFullscreen || galleryActive) return;
+    if (!sideOpen || !sideFullscreen || galleryActive || extensionsActive) return;
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
@@ -449,7 +463,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
-  }, [sideOpen, sideFullscreen, galleryActive]);
+  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive]);
 
   // 拖拽：侧栏项目排序 / 会话拖入 Composer / 拖到 Pinned 区。
   // 6px 启动阈值：行点击与行内按钮不受影响。onDragEnd 在 Sidebar 的 useDndMonitor 里。
@@ -471,14 +485,16 @@ export default function App() {
         leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题
-          !remoteNodeActive && !botModeActive && !galleryActive ? (
+          extensionsActive ? (
+            <span className="truncate font-medium text-sm">{t('Extensions')}</span>
+          ) : !remoteNodeActive && !botModeActive && !galleryActive ? (
             <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
           ) : undefined
         }
         actions={
           galleryActive ? (
             <DesignGalleryHeader side="right" />
-          ) : (
+          ) : extensionsActive ? undefined : (
             <>
               <button
                 type="button"
@@ -529,7 +545,7 @@ export default function App() {
               : botModeActive
                 ? () => useBotsStore.getState().setSearchOpen(true)
                 : () => {
-                    closeDesignGallery();
+                    closeWorkspacePage();
                     setSearchOpen(true);
                   }
           }
@@ -559,16 +575,25 @@ export default function App() {
             <div
               className="flex min-h-0 shrink-0"
               onClickCapture={(event) => {
-                if (isDesignSessionSelection(event.target)) closeDesignGallery();
+                if (isDesignSessionSelection(event.target)) closeWorkspacePage();
               }}
             >
               <Sidebar
                 width={collapsed ? undefined : width}
                 collapsed={collapsed}
                 view={sidebarView}
-                onViewChange={setSidebarView}
-                onOpenSearch={() => {
+                onViewChange={(view) => {
+                  if (extensionsActive) setExtensionsOpen(false);
+                  setSidebarView(view);
+                }}
+                extensionsActive={extensionsActive}
+                onToggleExtensions={() => {
                   closeDesignGallery();
+                  setExtensionsOpen(!extensionsActive);
+                }}
+                onOpenChat={closeWorkspacePage}
+                onOpenSearch={() => {
+                  closeWorkspacePage();
                   setSearchOpen(true);
                 }}
               />
@@ -583,16 +608,26 @@ export default function App() {
                 <DesignGallery />
               ) : (
                 <>
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div
+                    className={cn(
+                      'min-h-0 min-w-0 flex-1 flex-col',
+                      extensionsActive ? 'hidden' : 'flex'
+                    )}
+                  >
                     <ChatView />
                   </div>
-                  {sideOpen && !sideFullscreen && (
+                  {extensionsActive && <ExtensionsPage onBack={closeWorkspacePage} />}
+                  {sideOpen && !sideFullscreen && !extensionsActive && (
                     <ResizeHandle
                       onResize={handleSideResize}
                       onResizingChange={handleSideResizing}
                     />
                   )}
-                  <SidePanel width={sideWidth} resizing={sideResizing} />
+                  <SidePanel
+                    width={sideWidth}
+                    resizing={sideResizing}
+                    workspaceHidden={extensionsActive}
+                  />
                   <PluginUiHost />
                 </>
               )}

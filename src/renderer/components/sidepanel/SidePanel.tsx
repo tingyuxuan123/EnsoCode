@@ -813,9 +813,12 @@ function ConversationDock({
 export function SidePanel({
   width: preferredWidth,
   resizing = false,
+  workspaceHidden = false,
 }: {
   width: number;
   resizing?: boolean;
+  /** Workspace pages hide the dock without dropping browser/workflow subscriptions or layout. */
+  workspaceHidden?: boolean;
 }) {
   const { t } = useI18n();
   const activeIdForUi = useSessionsStore((s) => s.activeId);
@@ -917,7 +920,9 @@ export function SidePanel({
 
   return (
     <>
-      {cover ? <div className="shrink-0" style={{ width }} aria-hidden /> : null}
+      {cover && !workspaceHidden ? (
+        <div className="shrink-0" style={{ width }} aria-hidden />
+      ) : null}
       <motion.aside
         ref={asideRef}
         data-slot="side-panel"
@@ -933,7 +938,8 @@ export function SidePanel({
           if (!fullscreen) setCover(false);
         }}
         className={cn(
-          'flex min-h-0 flex-col overflow-hidden',
+          'min-h-0 flex-col overflow-hidden',
+          workspaceHidden ? 'hidden' : 'flex',
           // 平时透明让底层挖孔透出 guest；全屏盖在 ChatView 上、收起动画中必须实底
           open && !cover ? 'bg-transparent' : 'bg-panel',
           cover ? 'absolute inset-y-0 right-0' : 'relative shrink-0',
@@ -964,7 +970,7 @@ export function SidePanel({
                   key={id}
                   conversationId={id}
                   hidden={id !== activeId}
-                  visible={id === activeId && open}
+                  visible={id === activeId && open && !workspaceHidden}
                 />
               ))}
             </div>

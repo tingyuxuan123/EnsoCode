@@ -41,13 +41,14 @@ import {
   Pin,
   PinOff,
   Plus,
+  Puzzle,
   RefreshCw,
   Search,
   Settings,
   Trash2,
 } from 'lucide-react';
 import type * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AddProjectDialog } from '@/components/chat/AddProjectDialog';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
@@ -162,9 +163,21 @@ interface SidebarProps {
   view: SidebarView;
   onViewChange: (view: SidebarView) => void;
   onOpenSearch?: () => void;
+  extensionsActive: boolean;
+  onToggleExtensions: () => void;
+  onOpenChat: () => void;
 }
 
-export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: SidebarProps) {
+export function Sidebar({
+  width,
+  collapsed,
+  view,
+  onViewChange,
+  onOpenSearch,
+  extensionsActive,
+  onToggleExtensions,
+  onOpenChat,
+}: SidebarProps) {
   const { t, locale } = useI18n();
   const projects = useSettingsStore((state) => state.projects);
   const regularProjects = projects.filter((project) => project.kind !== 'scratch');
@@ -188,8 +201,22 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
   const activeProjectId = activeId ? conversations[activeId]?.projectId : undefined;
   const temporaryView = view === 'conversations';
   const order = sidebarViewOrder(allOrder, conversations, projects, view);
-  const newConversation = useSessionsStore((state) => state.newConversation);
-  const selectConversation = useSessionsStore((state) => state.selectConversation);
+  const newConversationAction = useSessionsStore((state) => state.newConversation);
+  const selectConversationAction = useSessionsStore((state) => state.selectConversation);
+  const newConversation = useCallback(
+    (projectId: string) => {
+      onOpenChat();
+      return newConversationAction(projectId);
+    },
+    [newConversationAction, onOpenChat]
+  );
+  const selectConversation = useCallback(
+    (conversationId: string) => {
+      onOpenChat();
+      return selectConversationAction(conversationId);
+    },
+    [onOpenChat, selectConversationAction]
+  );
   const removeConversation = useSessionsStore((state) => state.removeConversation);
   const togglePinConversation = useSessionsStore((state) => state.togglePinConversation);
   const toggleArchiveConversation = useSessionsStore((state) => state.toggleArchiveConversation);
@@ -778,7 +805,10 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
           <button
             type="button"
             disabled={!newTaskProjectId}
-            onClick={() => newTaskProjectId && void newConversation(newTaskProjectId)}
+            onClick={() => {
+              if (!newTaskProjectId) return;
+              void newConversation(newTaskProjectId);
+            }}
             className="mx-[12px] mt-[12px] flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
           >
             <CirclePlus className="size-[calc(17rem/14)] shrink-0 text-brand" />
@@ -794,7 +824,9 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
           <button
             type="button"
             disabled={!scratchProject}
-            onClick={() => void startTemporaryChat()}
+            onClick={() => {
+              void startTemporaryChat();
+            }}
             className="mx-[12px] mt-[12px] flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent disabled:opacity-50"
           >
             <MessageSquarePlus className="size-[calc(17rem/14)] shrink-0 text-brand" />
@@ -806,6 +838,19 @@ export function Sidebar({ width, collapsed, view, onViewChange, onOpenSearch }: 
             )}
           </button>
         )}
+        <button
+          type="button"
+          data-slot="extensions-nav"
+          aria-pressed={extensionsActive}
+          onClick={onToggleExtensions}
+          className={cn(
+            'mx-[12px] mt-1 flex h-[calc(36rem/14)] shrink-0 items-center gap-2 rounded-md px-1.5 text-left text-[calc(14rem/14)] transition-colors',
+            extensionsActive ? 'bg-brand/10 font-medium text-brand' : 'hover:bg-accent'
+          )}
+        >
+          <Puzzle className="size-[calc(17rem/14)] shrink-0" />
+          {t('Extensions')}
+        </button>
         {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}
         {!temporaryView && (
           <>
