@@ -7,12 +7,7 @@ import { designResourcePaths } from './paths';
 vi.mock('./appPaths', () => ({ getDesignPaths: vi.fn() }));
 
 import { getDesignPaths } from './appPaths';
-import {
-  DesignEngineService,
-  materializeEngine,
-  spawnableNpm,
-  validBuildOutput,
-} from './engine';
+import { DesignEngineService, materializeEngine, spawnableNpm, validBuildOutput } from './engine';
 import { designDirectory } from './roots';
 
 vi.mock('./roots', () => ({ designDirectory: vi.fn(), resolveDesignRoot: vi.fn() }));
