@@ -33,6 +33,22 @@ describe("老分享包", () => {
 });
 
 describe("分享包导入的预验证", () => {
+	it.each(["C:/项目", "C:/", "/"])("规范绝对目标 %s 使用单个分隔符写入", async (target) => {
+		const writeFile = vi.fn(async () => {});
+		const ctx = { fs: { stat: async () => null, writeFile } } as unknown as PluginContext;
+		const expected = `${target.replace(/\/$/, "")}/app.vetd`;
+		expect(await importPackagedVetd(ctx, parsePackagedVetd(legacyPackage()), target, "app.vetdz")).toBe(expected);
+		expect(writeFile).toHaveBeenCalledWith(`${expected}/frames/index.tsx`, expect.any(String), "base64");
+		expect(writeFile).toHaveBeenCalledWith(`${expected}/design.json`, expect.any(String));
+	});
+	it.each(["c:/项目", "C:项目", "C:\\项目", "//server/share", "/C:/项目", "C:/项目/../a", "C:/项目/./a", "C:/a\0"])("不规范目标 %s 不读取或写入", async (target) => {
+		const stat = vi.fn(async () => null);
+		const writeFile = vi.fn();
+		const ctx = { fs: { stat, writeFile } } as unknown as PluginContext;
+		await expect(importPackagedVetd(ctx, parsePackagedVetd(legacyPackage()), target, "app.vetdz")).rejects.toThrow();
+		expect(stat).not.toHaveBeenCalled();
+		expect(writeFile).not.toHaveBeenCalled();
+	});
 	it.each([null, {}, { version: 2, type: "vetta-design", frames: [] }, { version: 1, type: "vetta-design", frames: [null] }, {
 		version: 1, type: "vetta-design", canvas: { x: 0, y: 0, zoom: 1e8 }, frames: [],
 	}, {

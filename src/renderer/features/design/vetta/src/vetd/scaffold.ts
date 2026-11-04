@@ -56,6 +56,7 @@ export async function scaffoldDesign(
 	interactionMode?: InteractionMode | null,
 ): Promise<ScaffoldResult> {
 	const name = sanitizeDesignName(rawName);
+	cwd = cwd.replace(/\/+$/, "");
 	let vetdPath = `${cwd}/${name}.vetd`;
 	let suffix = 1;
 	while ((await fs.stat(vetdPath)) !== null) {

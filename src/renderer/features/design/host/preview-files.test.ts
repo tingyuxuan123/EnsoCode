@@ -49,6 +49,42 @@ beforeEach(() => {
 });
 
 describe('设计文件预览的权威根和所属会话', () => {
+  it.each(['C:/项目', 'C:/'])(
+    'Windows %s preview/import/open keep SDK paths and ref+rel IPC',
+    async (root) => {
+      h.rootPath = root;
+      const base = root.replace(/\/$/, '');
+      const loaded = await loadDesignPreviewFile('owner', '设计.vetdz');
+      expect(loaded.file.path).toBe(`${base}/设计.vetdz`);
+      expect(h.fs).toHaveBeenLastCalledWith({
+        op: 'readBinaryFile',
+        root: { kind: 'session', sessionId: 'owner' },
+        rel: '设计.vetdz',
+      });
+      h.fs.mockImplementation(async (request: { op: string }) =>
+        request.op === 'stat' ? { ok: true, stat: null } : { ok: true }
+      );
+      expect(
+        await loaded.actions.importPackage({
+          manifestJson: '{"version":1,"type":"vetta-design","frames":[]}',
+          designFiles: new Map(),
+          snapshotHtml: null,
+          historyZip: null,
+        })
+      ).toBe(`${base}/设计.vetd`);
+      expect(h.fs).toHaveBeenLastCalledWith({
+        op: 'writeFile',
+        root: { kind: 'session', sessionId: 'owner' },
+        rel: '设计.vetd/design.json',
+        content: expect.any(String),
+        encoding: 'utf8',
+      });
+      expect(h.pending).toHaveBeenLastCalledWith(`${base}/设计.vetd`, root);
+      await openDesignDirectory('owner', '目录/设计.vetd');
+      expect(h.pending).toHaveBeenLastCalledWith(`${base}/目录/设计.vetd`, root);
+      loaded.dispose();
+    }
+  );
   it('先resolveRoot，按session标识读取二进制，PluginPreviewFile展示规范路径且释放URL幂等', async () => {
     const loaded = await loadDesignPreviewFile('owner', 'nested/share.vetdz');
     expect(h.fs).toHaveBeenCalledWith({

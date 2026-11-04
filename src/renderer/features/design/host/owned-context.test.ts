@@ -31,6 +31,23 @@ it('同一规范cwd的不同会话历史仍使用精确owner引用，不走最�
   }
   expect(fallback).not.toHaveBeenCalled();
 });
+it.each(['C:/项目', 'C:/'])(
+  'Windows owner %s keeps history relative and pinned to its session',
+  async (path) => {
+    const ctx = {} as PluginContext;
+    const root = { kind: 'session' as const, sessionId: 'windows-owner' };
+    bindDesignContextOwner(ctx, { root: { ref: root, path }, validate: async () => {} });
+    await runHistoryCommand(ctx, { cmd: 'log', dir: `${path.replace(/\/$/, '')}/设计.vetd` });
+    expect(script).toHaveBeenCalledWith({
+      script: 'history',
+      root,
+      designRel: '设计.vetd',
+      payload: { cmd: 'log' },
+    });
+    await expect(runHistoryCommand(ctx, { cmd: 'log', dir: 'D:/设计.vetd' })).rejects.toThrow();
+    expect(fallback).not.toHaveBeenCalled();
+  }
+);
 it('owner离开、worktree/symlink规范根改变后，既有context的历史操作拒绝且不回退授权', async () => {
   let canonicalRoot = '/canonical';
   const ctx = {} as PluginContext;

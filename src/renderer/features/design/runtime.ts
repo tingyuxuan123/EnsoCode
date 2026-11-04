@@ -66,8 +66,8 @@ export function startDesignRuntime(): Promise<void> {
       const previous = hookQueues.get(event.sessionId) ?? Promise.resolve();
       const next = previous
         .then(async () => {
-          await resolveDesignRoot({ kind: 'session', sessionId: event.sessionId });
-          await dispatchDesignHook(event, ctx);
+          const root = await resolveDesignRoot({ kind: 'session', sessionId: event.sessionId });
+          await dispatchDesignHook({ ...event, cwd: root.path }, ctx);
         })
         .catch((error) => console.warn('[design] hook failed', error));
       hookQueues.set(event.sessionId, next);
