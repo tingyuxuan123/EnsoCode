@@ -1,7 +1,15 @@
 import type { BotChat, BotProfile } from '@shared/types/bot';
 import { findVirtualModel } from '@shared/virtualModels';
 import { motion } from 'framer-motion';
-import { Globe, Info, LayoutTemplate, MessageSquarePlus, Shield, Sparkles } from 'lucide-react';
+import {
+  Columns3,
+  Globe,
+  Info,
+  LayoutTemplate,
+  MessageSquarePlus,
+  Shield,
+  Sparkles,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { APPROVAL_MODE_META } from '@/components/chat/ApprovalModePicker';
@@ -19,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { startDesktopVoiceSession } from '@/lib/voiceSession';
 import { useBotsStore } from '@/stores/bots';
 import { activeDelegations, delegationLiveTarget, pendingOwners } from '@/stores/bots/delegations';
+import { taskNeedsAttention } from '@/stores/bots/groupBoard';
 import { chatSummary, type PendingItem, pendingItems } from '@/stores/bots/selectors';
 import { groupReadMark } from '@/stores/bots/unread';
 import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
@@ -43,6 +52,7 @@ import { MemberBusyBar } from './BotPresence';
 import { BotProfilePanel } from './BotProfilePanel';
 import { chatErrorText, chatTitle } from './botText';
 import { DelegationCard } from './DelegationCard';
+import { TaskBoard } from './GroupBoard';
 import { GroupInfoPanel } from './GroupInfoPanel';
 import { GroupTimeline } from './GroupTimeline';
 import { LiveSessionDialog, LiveSessionTimeline, type MessageFocus } from './LiveSessionTimeline';
@@ -65,7 +75,15 @@ export function useModelLabel(bot: BotProfile | undefined): string {
 }
 
 /** chat 为当前话题（群）或私聊；group 为根群，群级信息（成员面板、浏览器、工作区）按它展示 */
-export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: BotChat }) {
+export function BotChatView({
+  chat,
+  group = chat,
+  workspaceHidden = false,
+}: {
+  chat: BotChat;
+  group?: BotChat;
+  workspaceHidden?: boolean;
+}) {
   const { t } = useI18n();
   const { t: designT } = useDesignTranslation();
   const bots = useBotsStore((s) => s.bots);
@@ -82,7 +100,25 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
   const design = useBotDesignCanvas((s) =>
     designEnabled && s.target?.chatId === chat.id ? s.target : null
   );
-  const panelTab = selectedTab === 'design' && !design ? 'info' : selectedTab;
+  const isGroup = group.kind === 'group';
+  const panelTab =
+    (selectedTab === 'design' && !design) || (selectedTab === 'board' && !isGroup)
+      ? 'info'
+      : selectedTab;
+  const boardOpen = panelOpen && panelTab === 'board';
+  const focus = useBotsStore((s) => (s.focus?.chatId === chat.id ? s.focus : null));
+  const clearFocus = useBotsStore((s) => s.clearFocus);
+  const tasks = useBotsStore((s) => (isGroup ? s.tasks[group.id] : undefined));
+  const attentionIds = useMemo(
+    () =>
+      new Set(
+        tasks?.filter((task) => taskNeedsAttention(task, delegations)).map((task) => task.id)
+      ),
+    [tasks, delegations]
+  );
+  useEffect(() => {
+    if (boardOpen) void useBotsStore.getState().refreshTasks(group.id);
+  }, [group.id, boardOpen]);
   const browserTabCount = useBotsStore((s) => s.browserTabs[group.id]?.tabs.length ?? 0);
   const panelWidth = useBotsStore((s) => s.panelWidth);
   const skillCatalog = useSettingsStore((s) => s.skills);
@@ -114,8 +150,6 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
   const [history, setHistory] = useState<{ id: string; title: string } | null>(null);
   const [historyFocus, setHistoryFocus] = useState<MessageFocus | undefined>();
   const [live, setLive] = useState<{ id: string; botId: string; title: string } | null>(null);
-  const focus = useBotsStore((s) => (s.focus?.chatId === chat.id ? s.focus : null));
-  const clearFocus = useBotsStore((s) => s.clearFocus);
 
   const byId = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots]);
   const names = useMemo(() => Object.fromEntries(bots.map((bot) => [bot.id, bot.name])), [bots]);
@@ -412,18 +446,27 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
         ref={asideRef}
         initial={false}
         animate={{ width: targetW }}
-        style={{ maxWidth: `max(0px, calc(100% - ${CHAT_MIN_WIDTH + SIDE_PANEL_HANDLE_WIDTH}px))` }}
-        transition={sidePanelWidthTransition({ skip: resizing, cover: false, targetW })}
-        className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-line border-l bg-background"
+        style={{
+          maxWidth: `max(0px, calc(100% - ${CHAT_MIN_WIDTH + SIDE_PANEL_HANDLE_WIDTH}px))`,
+        }}
+        transition={sidePanelWidthTransition({
+          skip: resizing,
+          cover: false,
+          targetW,
+        })}
+        className={cn(
+          'relative flex min-h-0 shrink-0 flex-col overflow-clip border-line bg-background',
+          panelOpen && 'border-l'
+        )}
       >
         {/* 内容固定目标宽度，开合动画只裁切不重排 */}
         <div
           className={cn('flex h-full min-h-0 flex-col', !panelOpen && 'invisible')}
           style={{ width }}
         >
-          <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 border-b px-2">
-            {(['info', 'browser', 'design'] as const)
-              .filter((tab) => tab !== 'design' || design)
+          <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
+            {(['info', 'board', 'browser', 'design'] as const)
+              .filter((tab) => (tab !== 'design' || design) && (tab !== 'board' || isGroup))
               .map((tab) => (
                 <button
                   key={tab}
@@ -431,7 +474,7 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
                   aria-pressed={panelTab === tab}
                   onClick={() => useBotsStore.getState().setPanelTab(tab)}
                   className={cn(
-                    'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[calc(11rem/14)] transition-colors',
+                    'flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[calc(11rem/14)] transition-colors',
                     panelTab === tab
                       ? 'bg-brand/10 font-medium text-foreground dark:bg-brand/15'
                       : 'text-muted-foreground hover:text-foreground'
@@ -439,6 +482,8 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
                 >
                   {tab === 'info' ? (
                     <Info className="h-3.5 w-3.5" />
+                  ) : tab === 'board' ? (
+                    <Columns3 className="h-3.5 w-3.5" />
                   ) : tab === 'design' ? (
                     <LayoutTemplate className="h-3.5 w-3.5" />
                   ) : (
@@ -446,17 +491,28 @@ export function BotChatView({ chat, group = chat }: { chat: BotChat; group?: Bot
                   )}
                   {tab === 'info'
                     ? t(direct ? 'Member' : 'Group info')
-                    : tab === 'browser'
-                      ? t('Browser')
-                      : designT('tab.label')}
+                    : tab === 'board'
+                      ? t('Task board')
+                      : tab === 'browser'
+                        ? t('Browser')
+                        : designT('tab.label')}
                   {tab === 'browser' && browserTabCount > 0 && (
                     <span className="text-muted-foreground tabular-nums">{browserTabCount}</span>
                   )}
                 </button>
               ))}
           </div>
-          {panelTab === 'browser' ? (
-            <BotBrowserPanel chatId={group.id} visible={panelOpen} />
+          {panelTab === 'board' ? (
+            boardOpen && (
+              <TaskBoard
+                key={group.id}
+                chat={group}
+                attentionIds={attentionIds}
+                onOpenConversation={openConversation}
+              />
+            )
+          ) : panelTab === 'browser' ? (
+            <BotBrowserPanel chatId={group.id} visible={panelOpen && !workspaceHidden} />
           ) : panelTab === 'design' ? (
             panelOpen &&
             design && (

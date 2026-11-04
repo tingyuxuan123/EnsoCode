@@ -129,6 +129,19 @@ afterEach(() => {
 });
 
 describe('Bot mode subscription lifecycle', () => {
+  it('未打开过的群收到任务推送也会更新看板，连续推送合并刷新', async () => {
+    const f = await fixture();
+    const tasks = [{ id: 'task-1', seq: 1, title: 'New task', status: 'todo' }];
+    const list = vi.fn(async () => ({ ok: true, tasks }));
+    Object.assign(window.electronAPI.bots, { tasks: { list } });
+    expect(f.store.getState().tasks.g).toBeUndefined();
+    for (let i = 0; i < 3; i++) f.bot({ kind: 'tasks', chatId: 'g' });
+    await vi.waitFor(() => expect(f.store.getState().tasks.g).toEqual(tasks));
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list).toHaveBeenCalledWith('g');
+    f.off();
+  });
+
   it('私聊模型回退事件显示现有 info toast', async () => {
     const f = await fixture();
     const text = 'Alice 的模型不可用，本次改用默认模型 Claude（鉴权失败）';
@@ -551,7 +564,7 @@ describe('群话题', () => {
     f.off();
   });
 
-  it('打开任务卡：切到根群、展开群信息面板，并记下要定位的任务（话题里的委派也落到根群看板）', async () => {
+  it('打开任务卡：切到根群、展开协作看板，并记下要定位的任务（话题里的委派也落到根群看板）', async () => {
     const f = await fixture();
     const root: BotChat = { ...chat, id: 'g', kind: 'group', sessions: {} };
     const thread: BotChat = { ...root, id: 't', parentId: 'g' };
@@ -567,7 +580,7 @@ describe('群话题', () => {
     const state = f.store.getState();
     expect(state.view).toEqual({ kind: 'chat', chatId: 'g' });
     expect(state.panelOpen).toBe(true);
-    expect(state.panelTab).toBe('info');
+    expect(state.panelTab).toBe('board');
     expect(state.taskFocus).toMatchObject({ chatId: 'g', taskId: 'task-1' });
 
     const nonce = state.taskFocus?.nonce ?? 0;

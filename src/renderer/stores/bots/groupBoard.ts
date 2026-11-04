@@ -19,7 +19,11 @@ export function taskColumns(tasks: readonly GroupTask[]): Record<GroupTaskStatus
     canceled: [],
     blocked: [],
   };
-  for (const task of tasks) columns[task.status].push(task);
+  for (const task of tasks) {
+    // 旧数据里的失败委派仍是 doing，展示时与新的受阻任务放在一起。
+    const status = task.status === 'doing' && stalledTaskRun(task) ? 'blocked' : task.status;
+    columns[status].push(task);
+  }
   columns.todo.sort((a, b) => a.seq - b.seq);
   columns.doing.sort((a, b) => a.seq - b.seq);
   columns.blocked.sort((a, b) => a.seq - b.seq);
@@ -126,4 +130,11 @@ export function taskBlockInfo(
     ...(humanOnly ? { humanOnly: true as const } : {}),
     since: record?.finishedAt ?? record?.blocked?.at ?? task.updatedAt,
   };
+}
+
+/** 提醒用户验收、处理执行失败，或补充只有用户需要回复的信息。 */
+export function taskNeedsAttention(task: GroupTask, delegations: readonly Delegation[]): boolean {
+  if (task.status === 'review') return true;
+  const block = taskBlockInfo(task, delegations);
+  return block?.reason === 'failed' || (block?.reason === 'need' && block.waitFor === 'human');
 }

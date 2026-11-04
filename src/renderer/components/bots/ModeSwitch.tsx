@@ -29,7 +29,15 @@ const BADGE_POP = { duration: 0.5, ease: [0.34, 1.36, 0.64, 1] } as const;
 const BADGE_CLOSE = { duration: 0.18, ease: [0.4, 0, 0.2, 1] } as const;
 
 /** 左侧图标轨 Code / Bot 入口；Code 模式下 Bot 入口显示待处理数 */
-export function ModeSwitch({ className }: { className?: string }) {
+export function ModeSwitch({
+  className,
+  inactive = false,
+  onSelect,
+}: {
+  className?: string;
+  inactive?: boolean;
+  onSelect?: () => void;
+}) {
   const { t } = useI18n();
   const mode = useAppModeStore((s) => s.mode);
   const setMode = useAppModeStore((s) => s.setMode);
@@ -47,6 +55,7 @@ export function ModeSwitch({ className }: { className?: string }) {
     const index = OPTIONS.findIndex((option) => option.value === mode);
     const next = OPTIONS[(index + step + OPTIONS.length) % OPTIONS.length].value;
     setMode(next);
+    onSelect?.();
     refs.current[next]?.focus();
   };
 
@@ -59,7 +68,7 @@ export function ModeSwitch({ className }: { className?: string }) {
       className={cn('flex shrink-0 flex-col gap-[8px]', className)}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
-        const active = mode === value;
+        const active = !inactive && mode === value;
         const badge = value === 'bot' && mode === 'code' && pending > 0;
         return (
           <RailTip key={value} label={label} shortcut={shortcut}>
@@ -71,8 +80,11 @@ export function ModeSwitch({ className }: { className?: string }) {
               role="radio"
               aria-checked={active}
               aria-label={label}
-              tabIndex={active ? 0 : -1}
-              onClick={() => setMode(value)}
+              tabIndex={mode === value ? 0 : -1}
+              onClick={() => {
+                setMode(value);
+                onSelect?.();
+              }}
               className={cn(
                 'relative flex size-[36px] items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 active

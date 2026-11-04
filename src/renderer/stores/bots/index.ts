@@ -110,7 +110,7 @@ function loadView(): BotView {
   return raw ? { kind: 'chat', chatId: raw } : null;
 }
 
-export type BotPanelTab = 'info' | 'browser' | 'design';
+export type BotPanelTab = 'info' | 'browser' | 'design' | 'board';
 
 function loadBrowserTabs(): Record<string, ChatBrowserTabs> {
   try {
@@ -152,7 +152,7 @@ interface BotsState {
   sessionHistoryLoading: Record<string, boolean>;
   reads: Record<string, number>;
   view: BotView;
-  /** 聊天右侧的成员资料 / 群信息面板 */
+  /** 聊天右侧的成员资料 / 群信息 / 协作看板等面板 */
   panelOpen: boolean;
   panelWidth: number;
   panelTab: BotPanelTab;
@@ -348,7 +348,7 @@ export const useBotsStore = create<BotsState>()((set, get) => {
         if (event.chatId) void get().loadLatest(event.chatId);
         break;
       case 'tasks':
-        if (event.chatId && get().tasks[event.chatId]) void get().refreshTasks(event.chatId);
+        if (event.chatId) void get().refreshTasks(event.chatId);
         break;
       case 'reminder':
         // Main 已取消搁置；提醒到点的聊天标为未读
@@ -583,11 +583,12 @@ export const useBotsStore = create<BotsState>()((set, get) => {
         }
       }),
 
-    refreshTasks: async (chatId) => {
-      const result = await window.electronAPI.bots.tasks.list(chatId).catch(() => null);
-      if (!result?.ok) return;
-      set((state) => ({ tasks: { ...state.tasks, [chatId]: result.tasks } }));
-    },
+    refreshTasks: (chatId) =>
+      coalesce(`tasks:${chatId}`, async () => {
+        const result = await window.electronAPI.bots.tasks.list(chatId).catch(() => null);
+        if (!result?.ok || result.enabled === false) return;
+        set((state) => ({ tasks: { ...state.tasks, [chatId]: result.tasks } }));
+      }),
 
     refreshInbox: () =>
       coalesce('inbox', async () => {
@@ -903,7 +904,8 @@ export const useBotsStore = create<BotsState>()((set, get) => {
     },
 
     setPanelTab: (panelTab) => {
-      if (panelTab !== 'design') localStorage.setItem(PANEL_TAB_KEY, panelTab);
+      if (panelTab === 'info' || panelTab === 'browser')
+        localStorage.setItem(PANEL_TAB_KEY, panelTab);
       set({ panelTab });
     },
 
@@ -912,7 +914,7 @@ export const useBotsStore = create<BotsState>()((set, get) => {
       const view = get().view;
       if (view?.kind !== 'chat' || view.chatId !== root) get().setView({ kind: 'chat', chatId });
       if (!get().panelOpen) get().togglePanel();
-      get().setPanelTab('info');
+      get().setPanelTab('board');
       set({ taskFocus: { chatId: root, taskId, nonce: Date.now() } });
     },
 

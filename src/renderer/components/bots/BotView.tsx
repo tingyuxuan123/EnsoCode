@@ -41,10 +41,17 @@ interface BotViewProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onResize: (deltaX: number) => void;
+  workspaceHidden?: boolean;
 }
 
 /** Bot 模式整块内容区：成员/群聊侧栏 + 聊天 / 收件箱 */
-export function BotView({ sidebarWidth, collapsed, onToggleCollapse, onResize }: BotViewProps) {
+export function BotView({
+  sidebarWidth,
+  collapsed,
+  onToggleCollapse,
+  onResize,
+  workspaceHidden,
+}: BotViewProps) {
   const { t } = useI18n();
   const view = useBotsStore((s) => s.view);
   const chats = useBotsStore((s) => s.chats);
@@ -190,7 +197,12 @@ export function BotView({ sidebarWidth, collapsed, onToggleCollapse, onResize }:
       {view?.kind === 'inbox' ? (
         <BotInbox />
       ) : chat ? (
-        <BotChatView key={thread?.id ?? chat.id} chat={thread ?? chat} group={chat} />
+        <BotChatView
+          key={thread?.id ?? chat.id}
+          chat={thread ?? chat}
+          group={chat}
+          workspaceHidden={workspaceHidden}
+        />
       ) : (
         <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-background px-8 text-center">
           <Bot className="h-8 w-8 text-muted-foreground" />

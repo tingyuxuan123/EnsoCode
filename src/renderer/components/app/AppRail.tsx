@@ -1,5 +1,5 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import { PanelLeft, Ruler, Search, Settings2, Sparkles } from 'lucide-react';
+import { Columns3, PanelLeft, Ruler, Search, Settings2, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
@@ -18,6 +18,8 @@ interface AppRailProps {
   onOpenSearch?: () => void;
   /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
   designGallery?: { label: string; active: boolean; onToggle(): void };
+  /** 本机全局看板，独立于当前 Code / Bot 聊天。 */
+  collaborationBoard?: { active: boolean; attention?: number; onToggle(): void };
 }
 
 const RAIL_BUTTON =
@@ -33,6 +35,7 @@ export function AppRail({
   modeSwitch,
   onOpenSearch,
   designGallery,
+  collaborationBoard,
 }: AppRailProps) {
   const { t } = useI18n();
   const keybindings = useSettingsStore((s) => s.keybindings);
@@ -93,6 +96,32 @@ export function AppRail({
             aria-pressed={designGallery.active}
           >
             <Ruler className="size-[19px]" />
+          </button>
+        </RailTip>
+      )}
+      {collaborationBoard && (
+        <RailTip label={t('Collaboration board')}>
+          <button
+            type="button"
+            onClick={collaborationBoard.onToggle}
+            className={cn(RAIL_BUTTON, collaborationBoard.active && 'bg-accent text-foreground')}
+            aria-label={t('Collaboration board')}
+            aria-description={
+              collaborationBoard.attention
+                ? t('{{n}} tasks need your attention', { n: collaborationBoard.attention })
+                : undefined
+            }
+            aria-pressed={collaborationBoard.active}
+          >
+            <Columns3 className="size-[19px]" />
+            {!!collaborationBoard.attention && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -top-1 -right-1 min-w-3.5 rounded-full bg-warning/20 px-0.5 text-center font-semibold text-[calc(9rem/14)] text-foreground tabular-nums"
+              >
+                {collaborationBoard.attention > 99 ? '99+' : collaborationBoard.attention}
+              </span>
+            )}
           </button>
         </RailTip>
       )}

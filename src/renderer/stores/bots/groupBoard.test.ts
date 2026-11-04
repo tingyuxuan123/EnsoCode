@@ -6,6 +6,7 @@ import {
   chatRoutines,
   taskBlockInfo,
   taskColumns,
+  taskNeedsAttention,
   taskRunRows,
 } from './groupBoard';
 
@@ -36,6 +37,40 @@ describe('taskColumns', () => {
     expect(columns.review.map((t) => t.seq)).toEqual([7, 8]);
     expect(columns.done.map((t) => t.seq)).toEqual([5, 4]);
     expect(columns.canceled.map((t) => t.seq)).toEqual([6]);
+  });
+});
+
+describe('taskNeedsAttention', () => {
+  it('只提示待验收、执行失败和等人回复，不把普通待办或等成员回复算进去', () => {
+    expect(taskNeedsAttention(task(1, 'review'), [])).toBe(true);
+    for (const status of ['todo', 'doing', 'done', 'canceled'] as const)
+      expect(taskNeedsAttention(task(2, status), [])).toBe(false);
+    const blocked: GroupTask = {
+      ...task(3, 'blocked'),
+      assigneeBotId: 'worker',
+      delegationId: 'd',
+      blockedReason: 'need',
+      blockedNeed: '地址',
+    };
+    const record = {
+      id: 'd',
+      parentBotId: 'boss',
+      blocked: { need: '地址', waitFor: 'parent', at: 1 },
+    } as Delegation;
+    expect(taskNeedsAttention(blocked, [record])).toBe(false);
+    expect(taskNeedsAttention(blocked, [])).toBe(true);
+    expect(taskNeedsAttention({ ...blocked, blockedStreak: { worker: 3 } }, [record])).toBe(true);
+    expect(taskNeedsAttention({ ...blocked, blockedReason: 'failed' }, [])).toBe(true);
+    expect(
+      taskNeedsAttention(
+        {
+          ...blocked,
+          status: 'doing',
+          runs: [{ id: 'd', botId: 'worker', trigger: 'delegate', state: 'failed', createdAt: 1 }],
+        },
+        []
+      )
+    ).toBe(true);
   });
 });
 

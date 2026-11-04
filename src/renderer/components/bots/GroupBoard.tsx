@@ -1,4 +1,10 @@
-import type { BotChat, BotProfile, Delegation, GroupTask } from '@shared/types/bot';
+import type {
+  BotChat,
+  BotProfile,
+  Delegation,
+  GroupTask,
+  GroupTaskStatus,
+} from '@shared/types/bot';
 import {
   GROUP_TASK_TEXT_MAX,
   GROUP_TASK_TITLE_MAX,
@@ -7,6 +13,7 @@ import {
 } from '@shared/types/bot';
 import {
   Check,
+  ChevronDown,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -62,6 +69,15 @@ import { TaskRuns } from './TaskRuns';
 /** 已完成 / 已取消 / 终态委派默认只显示最近几条 */
 const RECENT = 5;
 
+const TASK_LABELS: Record<GroupTaskStatus, string> = {
+  todo: 'To do',
+  doing: 'Doing',
+  blocked: 'Stuck tasks',
+  review: 'Awaiting review',
+  done: 'Completed',
+  canceled: 'Canceled',
+};
+
 const stamp = (at: number) =>
   new Date(at).toLocaleString([], {
     month: '2-digit',
@@ -102,9 +118,11 @@ function Group({
 /** 群任务看板：按状态分组；新建、编辑、指派（以人类身份 @ 成员）、完成、验收、取消、删除 */
 export function TaskBoard({
   chat,
+  attentionIds,
   onOpenConversation,
 }: {
   chat: BotChat;
+  attentionIds: ReadonlySet<string>;
   onOpenConversation: (conversationId: string, title: string) => void;
 }) {
   const { t } = useI18n();
@@ -114,32 +132,39 @@ export function TaskBoard({
   const [editing, setEditing] = useState<GroupTask | 'new' | null>(null);
   const [deleting, setDeleting] = useState<GroupTask | null>(null);
   const [returning, setReturning] = useState<{ task: GroupTask; rework: boolean } | null>(null);
-  const taskFocus = useBotsStore((s) => s.taskFocus);
+  const taskFocus = useBotsStore((s) => (s.taskFocus?.chatId === chat.id ? s.taskFocus : null));
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [revealedTaskId, setRevealedTaskId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
-  const now = useNow(Boolean(tasks?.some((task) => task.status === 'blocked')));
+  const now = useNow(
+    Boolean(tasks?.some((task) => task.status === 'blocked' || stalledTaskRun(task)))
+  );
   const byId = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots]);
   const members = chat.members.flatMap((id) => {
     const bot = byId.get(id);
     return bot && bot.archivedAt === undefined ? [bot] : [];
   });
 
+  // 从时间线 / 收件箱定位卡片：先解除筛选和历史截断，再滚动高亮。
   useEffect(() => {
-    void useBotsStore.getState().refreshTasks(chat.id);
-  }, [chat.id]);
-
-  // 打开任务卡（时间线 #N、收件箱）：滚到卡片并短暂高亮；看板还没加载完就等加载后再消费
-  useEffect(() => {
-    if (!taskFocus || taskFocus.chatId !== chat.id || !tasks) return;
-    useBotsStore.getState().clearTaskFocus(taskFocus.nonce);
-    if (!tasks.some((task) => task.id === taskFocus.taskId)) return;
-    setHighlight(taskFocus.taskId);
-    requestAnimationFrame(() =>
-      boardRef.current
-        ?.querySelector(`[data-task-id="${CSS.escape(taskFocus.taskId)}"]`)
-        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (!taskFocus || !tasks) return;
+    const target = boardRef.current?.querySelector(
+      `[data-task-id="${CSS.escape(taskFocus.taskId)}"]`
     );
-  }, [taskFocus, tasks, chat.id]);
+    if (target) {
+      setAttentionOnly(false);
+      setRevealedTaskId(taskFocus.taskId);
+      setHighlight(taskFocus.taskId);
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+        behavior: reduceMotion ? 'instant' : 'smooth',
+      });
+    }
+    useBotsStore.getState().clearTaskFocus(taskFocus.nonce);
+  }, [taskFocus, tasks]);
 
   useEffect(() => {
     if (!highlight) return;
@@ -156,8 +181,10 @@ export function TaskBoard({
   const api = window.electronAPI.bots.tasks;
   const ref = (task: GroupTask) => ({ chatId: chat.id, id: task.id });
 
-  if (!tasks) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-  const columns = taskColumns(tasks);
+  const filtered = attentionOnly && !taskFocus;
+  const columns = taskColumns(
+    filtered ? (tasks ?? []).filter((task) => attentionIds.has(task.id)) : (tasks ?? [])
+  );
   const card = (task: GroupTask) => (
     <TaskCard
       key={task.id}
@@ -182,47 +209,65 @@ export function TaskBoard({
       onReply={(text) => replyToTask(chat.id, task.id, text, t)}
     />
   );
+  const renderGroup = (status: GroupTaskStatus) => {
+    const items = columns[status];
+    if (items.length === 0) return null;
+    const revealed = items.findIndex((task) => task.id === (taskFocus?.taskId ?? revealedTaskId));
+    const limit = status === 'done' ? Math.max(RECENT, revealed + 1) : undefined;
+    return (
+      <Group key={status} title={t(TASK_LABELS[status])} count={items.length} limit={limit}>
+        {(shown) => items.slice(0, shown).map(card)}
+      </Group>
+    );
+  };
   return (
-    <div ref={boardRef}>
-      <Button size="xs" variant="outline" className="mb-3" onClick={() => setEditing('new')}>
-        <Plus />
-        {t('New task')}
-      </Button>
-      {tasks.length === 0 && (
-        <p className="text-muted-foreground text-[calc(11rem/14)]">
-          {t('No tasks yet. Members can also add and claim tasks with the board tool.')}
-        </p>
-      )}
-      {columns.todo.length > 0 && (
-        <Group title={t('To do')} count={columns.todo.length}>
-          {() => columns.todo.map(card)}
-        </Group>
-      )}
-      {columns.doing.length > 0 && (
-        <Group title={t('Doing')} count={columns.doing.length}>
-          {() => columns.doing.map(card)}
-        </Group>
-      )}
-      {columns.blocked.length > 0 && (
-        <Group title={t('Stuck tasks')} count={columns.blocked.length}>
-          {() => columns.blocked.map(card)}
-        </Group>
-      )}
-      {columns.review.length > 0 && (
-        <Group title={t('Awaiting review')} count={columns.review.length}>
-          {() => columns.review.map(card)}
-        </Group>
-      )}
-      {columns.done.length > 0 && (
-        <Group title={t('Completed')} count={columns.done.length} limit={RECENT}>
-          {(shown) => columns.done.slice(0, shown).map(card)}
-        </Group>
-      )}
-      {columns.canceled.length > 0 && (
-        <Group title={t('Canceled')} count={columns.canceled.length} limit={0}>
-          {(shown) => columns.canceled.slice(0, shown).map(card)}
-        </Group>
-      )}
+    <div data-slot="group-task-board" className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-line border-b px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <h2 className="min-w-0 flex-1 truncate font-semibold text-sm">{t('Task board')}</h2>
+          <Button size="xs" onClick={() => setEditing('new')}>
+            <Plus />
+            {t('New task')}
+          </Button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {[false, true].map((attention) => (
+            <Button
+              key={String(attention)}
+              size="xs"
+              variant={filtered === attention ? 'secondary' : 'ghost'}
+              aria-pressed={filtered === attention}
+              onClick={() => setAttentionOnly(attention)}
+            >
+              {t(attention ? 'Needs your attention' : 'All tasks')}
+              <span className="text-muted-foreground tabular-nums">
+                {attention ? attentionIds.size : (tasks?.length ?? 0)}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div ref={boardRef} className="min-h-0 flex-1 overflow-auto p-3">
+        {!tasks ? (
+          <Loader2
+            aria-label={t('Loading')}
+            className="h-4 w-4 animate-spin text-muted-foreground"
+          />
+        ) : filtered && attentionIds.size === 0 ? (
+          <p className="rounded-md border border-dashed p-4 text-muted-foreground text-sm">
+            {t('No tasks need your attention')}
+          </p>
+        ) : (
+          <>
+            {tasks.length === 0 && (
+              <p className="mb-3 rounded-md border border-dashed p-4 text-muted-foreground text-sm">
+                {t('No tasks yet. Members can also add and claim tasks with the board tool.')}
+              </p>
+            )}
+            {(['todo', 'doing', 'blocked', 'review', 'done', 'canceled'] as const).map(renderGroup)}
+          </>
+        )}
+      </div>
       {editing && (
         <TaskEditor
           chatId={chat.id}
@@ -311,6 +356,8 @@ function TaskCard({
   onReply: (text: string) => Promise<boolean>;
 }) {
   const { t } = useI18n();
+  const [showDetails, setShowDetails] = useState(false);
+  const canShowDetails = Boolean(task.detail || task.result || task.returnReason);
   const open = task.status === 'todo' || task.status === 'doing' || task.status === 'blocked';
   const review = task.status === 'review';
   // 执行失败：仍由执行人负责，只能重试、改派或取消
@@ -330,9 +377,31 @@ function TaskCard({
     >
       <div className="flex items-start gap-1.5">
         <span className="shrink-0 text-muted-foreground">#{task.seq}</span>
-        <span className="min-w-0 flex-1 break-words font-medium text-sm">{task.title}</span>
+        {canShowDetails ? (
+          <button
+            type="button"
+            aria-expanded={showDetails}
+            title={t(showDetails ? 'Hide task details' : 'Show task details')}
+            className="flex min-w-0 flex-1 items-start gap-1 text-left font-medium text-sm hover:text-brand"
+            onClick={() => setShowDetails((shown) => !shown)}
+          >
+            <span className="min-w-0 break-words">{task.title}</span>
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                'mt-0.5 size-3.5 shrink-0 text-muted-foreground',
+                showDetails && 'rotate-180'
+              )}
+            />
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 break-words font-medium text-sm">{task.title}</span>
+        )}
         <Menu>
-          <MenuTrigger className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted group-hover:opacity-100 data-popup-open:opacity-100">
+          <MenuTrigger
+            aria-label={t('Task actions')}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 data-popup-open:opacity-100 pointer-coarse:opacity-100"
+          >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </MenuTrigger>
           <MenuPopup align="end">
@@ -383,7 +452,12 @@ function TaskCard({
         </Menu>
       </div>
       {task.detail && (
-        <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground">
+        <div
+          className={cn(
+            'mt-1 whitespace-pre-wrap break-words text-muted-foreground',
+            !showDetails && 'line-clamp-3'
+          )}
+        >
           {task.detail}
         </div>
       )}
@@ -396,12 +470,14 @@ function TaskCard({
               : 'bg-success/10'
           )}
         >
-          <div className="line-clamp-3 whitespace-pre-wrap">{task.result}</div>
+          <div className={cn('whitespace-pre-wrap break-words', !showDetails && 'line-clamp-3')}>
+            {task.result}
+          </div>
         </div>
       )}
       {task.returnReason && (
         <div className="mt-1 rounded bg-warning/10 px-1.5 py-1 text-foreground">
-          <div className="line-clamp-3 whitespace-pre-wrap">
+          <div className={cn('whitespace-pre-wrap break-words', !showDetails && 'line-clamp-3')}>
             {t('Returned: {{reason}}', { reason: task.returnReason })}
           </div>
         </div>
@@ -428,7 +504,7 @@ function TaskCard({
       )}
       {task.check && <CheckBadge check={task.check} className="mt-1" />}
       {review && (
-        <div className="mt-1.5 flex gap-1.5">
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
           <Button size="xs" onClick={onAccept}>
             <Check />
             {t('Accept result')}

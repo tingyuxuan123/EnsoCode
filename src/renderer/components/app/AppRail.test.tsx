@@ -24,6 +24,31 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
 const modeSwitch = createElement('div', { 'data-testid': 'mode' });
 
 describe('AppRail 精简导航', () => {
+  it('全局协作看板在设计入口下方，没有设计入口时仍显示', () => {
+    const props = {
+      collaborationBoard: { active: true, attention: 3, onToggle: vi.fn() },
+      designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
+    };
+    expect(railItems({ modeSwitch, ...props })).toEqual([
+      '---',
+      'mode',
+      'Design',
+      'Collaboration board',
+      'Ask Enso',
+      'Settings',
+    ]);
+    expect(railItems({ collaborationBoard: props.collaborationBoard })).toEqual([
+      'Collaboration board',
+      'Ask Enso',
+      'Settings',
+    ]);
+    const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
+    expect(
+      document.querySelector('[aria-label="Collaboration board"]')?.getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(document.querySelector('[aria-label="Collaboration board"]')?.textContent).toBe('3');
+  });
+
   it('设计入口只在宿主允许时出现，并反映画廊的切换状态', () => {
     const onToggle = vi.fn();
     const props = { designGallery: { label: 'Design', active: false, onToggle } };
