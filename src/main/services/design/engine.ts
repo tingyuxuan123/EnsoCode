@@ -121,6 +121,26 @@ export async function findNpm(): Promise<string | null> {
   }
   return null;
 }
+/**
+ * Node ≥18.20.2 拒绝对 .bat/.cmd 直接 spawn（同步抛 `spawn EINVAL`），Windows 上 PATH 里的
+ * npm 恰好是 npm.cmd。改用同目录 Node 自带的 npm-cli.js 走 Electron 的 Node，
+ * 保持「固定可执行文件 + 无 shell」这条边界，不引入 shell:true。
+ */
+export async function spawnableNpm(
+  npm: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath
+): Promise<{ file: string; args: string[]; env: NodeJS.ProcessEnv }> {
+  if (platform !== 'win32' || !/\.(?:cmd|bat)$/i.test(npm)) return { file: npm, args, env: {} };
+  const cli = path.join(path.dirname(npm), 'node_modules/npm/bin/npm-cli.js');
+  if (!(await exists(cli)))
+    throw new DesignServiceError(
+      'NPM_UNAVAILABLE',
+      `npm CLI script is missing next to ${npm}; install Node.js from nodejs.org to install design dependencies`
+    );
+  return { file: execPath, args: [cli, ...args], env: { ELECTRON_RUN_AS_NODE: '1' } };
+}
 interface Engine {
   id: string;
   dir: string;
@@ -326,15 +346,8 @@ export class DesignEngineService {
     await checkedPath(dir, 'package.json');
     await checkedPath(dir, 'package-lock.json');
     await checkedPath(dir, 'node_modules');
-    return this.job(
-      owner,
-      npm,
-      ['install', ...packages, '--no-audit', '--no-fund'],
-      dir,
-      {},
-      600000,
-      output
-    );
+    const launch = await spawnableNpm(npm, ['install', ...packages, '--no-audit', '--no-fund']);
+    return this.job(owner, launch.file, launch.args, dir, launch.env, 600000, output);
   }
   private async ensureDependencies(
     owner: number,

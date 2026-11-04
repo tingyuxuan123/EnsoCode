@@ -7,7 +7,12 @@ import { designResourcePaths } from './paths';
 vi.mock('./appPaths', () => ({ getDesignPaths: vi.fn() }));
 
 import { getDesignPaths } from './appPaths';
-import { DesignEngineService, materializeEngine, validBuildOutput } from './engine';
+import {
+  DesignEngineService,
+  materializeEngine,
+  spawnableNpm,
+  validBuildOutput,
+} from './engine';
 import { designDirectory } from './roots';
 
 vi.mock('./roots', () => ({ designDirectory: vi.fn(), resolveDesignRoot: vi.fn() }));
@@ -30,6 +35,37 @@ it('未预装依赖时给出 prepare 提示，不隐式联网安装引擎', asyn
   await expect(materializeEngine(paths)).rejects.toMatchObject({
     code: 'ENGINE_UNAVAILABLE',
     message: expect.stringContaining('pnpm design:prepare'),
+  });
+});
+it('Windows 的 npm.cmd 改走 Node 执行 npm-cli.js，不再直接 spawn 批处理', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'design-npm-'));
+  temps.push(dir);
+  await mkdir(path.join(dir, 'node_modules/npm/bin'), { recursive: true });
+  await writeFile(path.join(dir, 'node_modules/npm/bin/npm-cli.js'), '');
+  const npmCmd = path.join(dir, 'npm.cmd');
+  await writeFile(npmCmd, '@echo off\n');
+  const args = ['install', 'recharts@2', '--no-audit', '--no-fund'];
+  const launch = await spawnableNpm(npmCmd, args, 'win32', 'C:\\app\\electron.exe');
+  expect(launch).toEqual({
+    file: 'C:\\app\\electron.exe',
+    args: [path.join(dir, 'node_modules/npm/bin/npm-cli.js'), ...args],
+    env: { ELECTRON_RUN_AS_NODE: '1' },
+  });
+});
+it('找不到同目录 npm-cli.js 时给出可读错误，不回退到 shell', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'design-npm-'));
+  temps.push(dir);
+  const npmCmd = path.join(dir, 'npm.cmd');
+  await writeFile(npmCmd, '@echo off\n');
+  await expect(
+    spawnableNpm(npmCmd, ['install'], 'win32', 'C:\\app\\electron.exe')
+  ).rejects.toMatchObject({ code: 'NPM_UNAVAILABLE' });
+});
+it('macOS/Linux 仍直接执行 PATH 里的 npm', async () => {
+  await expect(spawnableNpm('/usr/local/bin/npm', ['install', 'x'], 'darwin')).resolves.toEqual({
+    file: '/usr/local/bin/npm',
+    args: ['install', 'x'],
+    env: {},
   });
 });
 it('并发物化复用且模板内容变化会升级目录，不改旧引擎', async () => {
