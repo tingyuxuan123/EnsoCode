@@ -1,0 +1,141 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "A standalone light theme study for EnsoCode, an Electron coding agent workbench; use the supplied white-and-green chat reference while preserving the workspace rail, project sessions, agent timeline, composer, and dockable Git changes.",
+		"screens": [
+			"编程工作台：项目会话、Agent 回复、可打开的 Git 改动面板",
+			"主题样式：颜色令牌、表面层次与控件状态"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 1573155799,
+	"at": "2026-11-04T04:35:54.273Z",
+	"options": [
+		"mint-paper",
+		"night-patch",
+		"ledger-thread"
+	],
+	"choice": {
+		"proposalId": "mint-paper"
+	},
+	"allow": [
+		"tell-shadow",
+		"tell-gradient"
+	],
+	"intent": {
+		"stated": {
+			"mood": "以用户给出的聊天工作台截图为准：瓷白内容区、柔灰侧栏、圆润、白色浮起的选中会话、清新的绿色与浅绿色状态",
+			"colour": "瓷白、雾灰、鲜绿",
+			"emphasis": "沿用参考图的清透观感，主题用于 EnsoCode 桌面编程工作台",
+			"brand": "EnsoCode",
+			"boldness": "restrained"
+		},
+		"questions": [],
+		"answers": null
+	},
+	"obvious": "A stock blue-gray IDE with Inter, a tree with rectangular rows, and a grid of equal boxed tool results.",
+	"proposals": [
+		{
+			"id": "mint-paper",
+			"name": "薄荷白",
+			"idea": "On these screens, EnsoCode’s Agent turn with its dockable Git evidence becomes one mint-edged change receipt in the conversation, with the files and actual diff a click away.",
+			"departs": "Porcelain white, a raised selected conversation and a single vivid green diff mark carry the user's supplied reference without turning the workspace into a messaging clone.",
+			"theme": "light",
+			"colours": {
+				"ground": "#ffffff",
+				"panel": "#f6f7f6",
+				"text": "#18221d",
+				"muted": "#59655f",
+				"accent": "#08763e",
+				"onAccent": "#ffffff",
+				"extra": {
+					"field": "#f1f6f2",
+					"mint": "#e7f7ec",
+					"signal": "#10bf59",
+					"line": "#e4eae6",
+					"inset": "#eff2f0",
+					"quiet": "#627068",
+					"danger": "#a33c41",
+					"danger-soft": "#fbeff0",
+					"receipt": "#fbfefb",
+					"rim": "#dceae0"
+				}
+			},
+			"type": {
+				"display": "Schibsted Grotesk",
+				"text": "DM Sans",
+				"class": "grotesk-tight"
+			},
+			"layout": "A 56px utility rail and 276px project list, a calm conversation with one substantial evidence receipt; a narrow dock opens without covering the conversation. The appearance route uses the same window chrome.",
+			"radius": 20,
+			"shell": "rail",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "shadow",
+					"reason": "User reference has a lifted active session, a rounded window and a light edge on the primary result; keep remaining surfaces flat."
+				},
+				{
+					"device": "texture",
+					"reason": "The Git receipt is a single paper-like object with a barely visible top-left light and grain, not a tinted chat background."
+				}
+			]
+		},
+		{
+			"id": "night-patch",
+			"name": "琥珀底片",
+			"idea": "On these screens, EnsoCode’s parkable workflow and Git panels become a dark contact sheet for comparing one change against its neighboring tool results.",
+			"departs": "A charcoal work surface, amber evidence markers and a condensed title emphasize a review-first flow with the dock expanded.",
+			"theme": "dark",
+			"colours": {
+				"ground": "#201e1b",
+				"panel": "#2c2822",
+				"text": "#f2ede4",
+				"muted": "#b7aa97",
+				"accent": "#f2b456",
+				"onAccent": "#211a10",
+				"extra": {}
+			},
+			"type": {
+				"display": "Barlow Condensed",
+				"text": "Barlow",
+				"class": "condensed-heavy"
+			},
+			"layout": "The tool dock sits wide beside the thread and an always visible rail holds project switching.",
+			"radius": 8,
+			"shell": "split",
+			"breaks": "",
+			"devices": []
+		},
+		{
+			"id": "ledger-thread",
+			"name": "蓝墨案卷",
+			"idea": "On these screens, EnsoCode’s local-first sessions by repository become a single chronological engineering ledger where the project tree collapses into a project switcher.",
+			"departs": "Ink blue on archival sand, an editorial heading and a top switcher replace the grey IDE framing.",
+			"theme": "light",
+			"colours": {
+				"ground": "#f3eee5",
+				"panel": "#e9e0d1",
+				"text": "#252a34",
+				"muted": "#525764",
+				"accent": "#21478c",
+				"onAccent": "#ffffff",
+				"extra": {}
+			},
+			"type": {
+				"display": "Young Serif",
+				"text": "Public Sans",
+				"class": "serif-display"
+			},
+			"layout": "A top project switcher leaves the left edge for timestamps; the artifact opens as a sheet beside the ledger.",
+			"radius": 4,
+			"shell": "topbar",
+			"breaks": "",
+			"devices": []
+		}
+	],
+	"redraws": []
+}

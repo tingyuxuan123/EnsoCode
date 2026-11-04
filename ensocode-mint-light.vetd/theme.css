@@ -1,0 +1,55 @@
+@import "@fontsource-variable/schibsted-grotesk";
+@import "@fontsource-variable/dm-sans";
+
+@theme {
+	--color-surface: #ffffff;
+	--color-panel: #f6f7f6;
+	--color-surface-foreground: #18221d;
+	--color-muted: #59655f;
+	--color-primary: #08763e;
+	--color-primary-foreground: #ffffff;
+	--color-field: #f1f6f2;
+	--color-mint: #e7f7ec;
+	--color-signal: #10bf59;
+	--color-line: #e4eae6;
+	--color-inset: #eff2f0;
+	--color-quiet: #627068;
+	--color-danger: #a33c41;
+	--color-danger-soft: #fbeff0;
+	--color-receipt: #fbfefb;
+	--color-rim: #dceae0;
+	--color-traffic-red: #ff6058;
+	--color-traffic-yellow: #ffbd2e;
+	--color-traffic-green: #28c840;
+	--radius-card: 20px;
+	--radius-window: 28px;
+	--radius-control: 12px;
+	--shadow-window: 0 28px 68px -28px rgb(23 50 33 / .23), 0 0 0 1px rgb(25 55 34 / .05);
+	--shadow-selection: 0 5px 14px -5px rgb(21 48 31 / .17), inset 0 0 0 1px var(--color-line);
+	--font-display: "Schibsted Grotesk Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "DM Sans Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+}
+
+.mint-shell :where(button:not(:disabled), a) { cursor: pointer; }
+.mint-shell :where(button, a, input, textarea):focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 3px;
+}
+
+.git-receipt {
+	background: radial-gradient(ellipse at 4% 0%, var(--color-mint), transparent 61%), var(--color-receipt);
+	box-shadow: inset 0 1px 0 var(--color-surface), inset 0 -1px 0 var(--color-rim), 0 7px 20px -17px rgb(27 78 46 / .38);
+	isolation: isolate;
+}
+
+.git-receipt::before {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23989898' filter='url(%23n)' d='M0 0h150v150H0z'/%3E%3C/svg%3E");
+	content: "";
+	mix-blend-mode: multiply;
+	opacity: .045;
+	pointer-events: none;
+	z-index: -1;
+}

@@ -1,0 +1,55 @@
+/* Preview overlay for the real EnsoCode renderer; not an installed theme. */
+html.enso-main-shell[data-preview-theme='mint-light']:not(.dark) {
+  --shell: #f3f5f4;
+  --panel: #fdfefd;
+  --color-nav: #f6f7f6;
+  --background: #ffffff;
+  --foreground: #18221d;
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: #ffffff;
+  --popover-foreground: var(--foreground);
+  --primary: #08763e;
+  --primary-foreground: #ffffff;
+  --brand: var(--primary);
+  --brand-foreground: var(--primary-foreground);
+  --secondary: #edf1ee;
+  --secondary-foreground: #34433b;
+  --muted: #f0f3f1;
+  --muted-foreground: #58655d;
+  --accent: #e7f4ec;
+  --accent-foreground: #175533;
+  --success: #08763e;
+  --success-foreground: #ffffff;
+  --border: #e0e7e2;
+  --input: #ccd9d0;
+  --ring: var(--primary);
+  --radius: 9px;
+  --mint-preview-signal: #0ebc58;
+  --mint-preview-bubble: #eaf6ee;
+  --mint-preview-selection-shadow: 0 2px 7px rgb(23 53 37 / 0.08);
+  --mint-preview-composer-shadow: 0 4px 14px rgb(23 53 37 / 0.055);
+}
+
+html[data-preview-theme='mint-light']:not(.dark) [data-slot='conversation-row'].bg-accent {
+  background: var(--card);
+  color: var(--accent-foreground);
+  box-shadow:
+    inset 2px 0 var(--mint-preview-signal),
+    inset 0 0 0 1px var(--border),
+    var(--mint-preview-selection-shadow);
+}
+
+html[data-preview-theme='mint-light']:not(.dark) [data-slot='chat-view'] .group\/user > .bg-muted {
+  border-radius: 14px 14px 5px 14px;
+  background-color: var(--mint-preview-bubble);
+}
+
+html[data-preview-theme='mint-light']:not(.dark) [data-slot='chat-view'] [data-slot='composer'] {
+  border-radius: 17px;
+  box-shadow: var(--mint-preview-composer-shadow);
+}
+
+html[data-preview-theme='mint-light']:not(.dark) [data-slot='composer'] button.bg-brand {
+  border-radius: 50%;
+}

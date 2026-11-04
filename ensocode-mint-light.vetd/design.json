@@ -1,0 +1,45 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.7047143172456156,
+		"x": -204.13221455970427,
+		"y": -8.54970037933657
+	},
+	"frames": [
+		{
+			"id": "appearance",
+			"file": "frames/appearance.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "薄荷白 · 主题样式",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "薄荷白 · 主题样式"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "薄荷白 · 编程工作台",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "薄荷白 · 编程工作台"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"statusBar": "none",
+	"interactionMode": "desktop"
+}
