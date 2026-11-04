@@ -2300,6 +2300,7 @@ function ConversationRow({
     <div
       data-slot="conversation-row"
       data-pinned={pinned ? 'true' : 'false'}
+      data-active={active ? 'true' : undefined}
       className={cn(
         // 会话行与项目行共用图标/文字基准，worktree 与浏览器/终端计数在第二行
         'group grid min-h-[calc(36rem/14)] cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md py-1.5 pr-2 pl-2 text-[calc(13rem/14)] transition-colors',
