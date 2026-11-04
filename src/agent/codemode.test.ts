@@ -17,6 +17,7 @@ type Handler = (event: Record<string, unknown>) => unknown;
 function fakePi() {
   const handlers = new Map<string, Handler[]>();
   const registered: ToolDefinition[] = [];
+  const activeTools = ['codemode', 'read', 'subagent', 'ask_user'];
   const pi = {
     on: (event: string, handler: Handler) => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
@@ -24,6 +25,7 @@ function fakePi() {
     registerTool: (tool: ToolDefinition) => registered.push(tool),
     appendEntry: () => {},
     getAllTools: () => [],
+    getActiveTools: () => activeTools,
     getSettings: () => ({}),
   } as unknown as ExtensionAPI;
   const emit = async (event: string, payload: Record<string, unknown>) => {
@@ -31,7 +33,7 @@ function fakePi() {
     for (const handler of handlers.get(event) ?? []) result = (await handler(payload)) ?? result;
     return result as { block?: boolean; reason?: string } | undefined;
   };
-  return { pi, registered, emit, handlers };
+  return { pi, registered, emit, handlers, activeTools };
 }
 
 const server = (name: string, toolNames?: string[]): McpServerSpawnConfig => ({
@@ -128,6 +130,30 @@ describe('renderMcpServersSection', () => {
 });
 
 describe('CodemodeHost', () => {
+  it('每轮只提示当前已声明的顶层专用工具，并在工具禁用后清除旧清单', async () => {
+    const { emit, activeTools } = install(
+      new CodemodeHost({ codemode: true, deferredServers: [] })
+    );
+    const sections: Record<string, string> = {};
+    const event = { systemPromptOptions: { sections } };
+    await emit('before_agent_start', event);
+    expect(sections.codemode_forbidden_tools ?? '').toContain('`subagent`');
+    expect(sections.codemode_forbidden_tools).toContain('`ask_user`');
+    expect(sections.codemode_forbidden_tools).not.toContain('`read`');
+    expect(sections.codemode_forbidden_tools).not.toContain('`workflow`');
+    expect(sections.codemode_forbidden_tools).toContain('top-level');
+    activeTools.splice(0, activeTools.length, 'read');
+    await emit('before_agent_start', event);
+    expect(sections).not.toHaveProperty('codemode_forbidden_tools');
+  });
+
+  it('tool_search 模式不注入 Codemode 限制提示', async () => {
+    const { emit } = install(new CodemodeHost({ codemode: false, deferredServers: [server('a')] }));
+    const sections: Record<string, string> = {};
+    await emit('before_agent_start', { systemPromptOptions: { sections } });
+    expect(sections).not.toHaveProperty('codemode_forbidden_tools');
+    expect(sections.mcp_servers).toContain('tool_search');
+  });
   it('开 codemode 时注册 codemode 并激活；关 codemode 有按需 server 时改用 tool_search', () => {
     const on = new CodemodeHost({ codemode: true, deferredServers: [] });
     expect(on.activeToolNames()).toEqual(['codemode']);

@@ -18,6 +18,7 @@ export const CODEMODE_MAX_TIMEOUT_MS = 600_000;
 export const CODEMODE_MAX_NESTED_CALLS = 64;
 const DEFERRED_CONNECT_BUDGET_MS = 20_000;
 const SECTION_NAME = 'mcp_servers';
+const TOP_LEVEL_SECTION_NAME = 'codemode_forbidden_tools';
 const SECTION_LINE_MAX = 600;
 const SECTION_MAX = 6000;
 /** 同 pi：每个 server 摘要上限 250 字符 */
@@ -209,9 +210,20 @@ export class CodemodeHost {
     else createToolSearchExtension()(activating);
 
     const section = renderMcpServersSection(deferredServers, codemode ? 'codemode' : 'tool_search');
-    if (section) {
+    if (section || codemode) {
       pi.on('before_agent_start', (event) => {
-        event.systemPromptOptions.sections[SECTION_NAME] = section;
+        const sections = event.systemPromptOptions.sections;
+        if (section) sections[SECTION_NAME] = section;
+        if (!codemode) return;
+        const active = pi.getActiveTools();
+        const names = active.includes(CODEMODE_TOOL_NAME)
+          ? [...new Set(active.filter((name) => CODEMODE_FORBIDDEN_TOOLS.has(name)))].sort()
+          : [];
+        if (names.length) {
+          sections[TOP_LEVEL_SECTION_NAME] =
+            'The following active tools cannot be called from a codemode script via tools.*. ' +
+            `Call them directly as top-level tools: ${names.map((name) => `\`${name}\``).join(', ')}.`;
+        } else delete sections[TOP_LEVEL_SECTION_NAME];
       });
     }
 
