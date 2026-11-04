@@ -24,6 +24,7 @@ import { McpEditDialog } from '@/components/settings/McpEditDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -180,7 +181,8 @@ function ExtensionItem({ entry, onOpen }: { entry: Entry; onOpen: () => void }) 
 }
 
 export function ExtensionsPage({ onBack }: { onBack: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const authorGuideTitle = locale === 'zh' ? '开发自己的插件' : 'Build your own plugin';
   const native = useNativePluginManager();
   const skills = useSettingsStore((state) => state.skills);
   const mcpServers = useSettingsStore((state) => state.mcpServers);
@@ -202,6 +204,7 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
     null
   );
   const [urlOpen, setUrlOpen] = useState(false);
+  const [authorGuideOpen, setAuthorGuideOpen] = useState(false);
   const [url, setUrl] = useState('');
 
   useEffect(() => useMcpStatusStore.getState().bind(), []);
@@ -355,6 +358,10 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
                 >
                   <Link2 />
                   {t('Install plugin from link')}
+                </MenuItem>
+                <MenuItem onClick={() => setAuthorGuideOpen(true)}>
+                  <FileCode2 />
+                  {authorGuideTitle}
                 </MenuItem>
                 <MenuSeparator />
                 <MenuItem onClick={() => setAssetImport('skill')}>
@@ -774,6 +781,35 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={authorGuideOpen} onOpenChange={setAuthorGuideOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{authorGuideTitle}</DialogTitle>
+            <DialogDescription>
+              {locale === 'zh'
+                ? '在 EnsoCode 源码目录运行以下命令。校验不会执行插件代码。'
+                : 'Run these commands from an EnsoCode source checkout. Validation does not run plugin code.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+              <code>
+                {
+                  'pnpm plugin:init ./my-plugin --id local.myplugin\npnpm plugin:validate ./my-plugin'
+                }
+              </code>
+            </pre>
+            <p className="mt-3 text-muted-foreground text-sm">
+              {locale === 'zh'
+                ? '校验通过后，从「添加扩展 → 从文件夹安装插件」选择生成的目录，查看权限并确认安装，然后手动启用。'
+                : 'After validation, choose Add extension → Install plugin from folder. Review permissions and confirm installation. Enable it explicitly afterward.'}
+            </p>
+          </DialogPanel>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>{t('Close')}</DialogClose>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <NativePluginFlows manager={native} />

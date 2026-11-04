@@ -163,6 +163,19 @@ it('文件夹和 ZIP 安装都进入原有预览流程', async () => {
   expect(fixture.stage).toHaveBeenCalledWith('zip');
 });
 
+it('作者指南展示本地模板和校验命令，不触发安装', async () => {
+  await act(async () => button('Add extension').click());
+  const guide = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((entry) =>
+    entry.textContent?.includes('Build your own plugin')
+  );
+  expect(guide).toBeDefined();
+  await act(async () => guide?.click());
+  expect(document.body.textContent).toContain('pnpm plugin:init');
+  expect(document.body.textContent).toContain('pnpm plugin:validate');
+  expect(document.body.textContent).toContain('Enable it explicitly');
+  expect(fixture.stage).not.toHaveBeenCalled();
+});
+
 it('链接安装先收集地址，不接受明文 HTTP 和带凭证的地址', async () => {
   await act(async () => button('Add extension').click());
   await act(async () =>

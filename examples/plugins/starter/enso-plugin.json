@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "enso.example.starter",
+  "name": "Enso Plugin Starter",
+  "version": "0.1.0",
+  "main": "main.mjs",
+  "renderer": "ui.js",
+  "permissions": ["ui.slot", "composer.draft"],
+  "contributes": {
+    "methods": [{ "name": "greeting", "timeoutMs": 2000 }]
+  }
+}

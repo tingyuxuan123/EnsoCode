@@ -12,11 +12,28 @@
 
 安装版不一定包含当前工作区尚未发布的功能。如果没有主侧栏「扩展」入口，使用下面保留的「设置 → 插件」入口；是否存在入口不能代替实际 API 兼容验证。
 
-### 从完整示例开始
+### 从本地模板开始
+
+在本仓库（Node.js 22+，已准备开发依赖）运行：
+
+```bash
+pnpm plugin:init ../my-plugin --id org.example.hello
+pnpm plugin:validate ../my-plugin
+```
+
+`init` 生成清单、`main.mjs`、`ui.js` 和可选的类型检查文件。目标必须不存在或为空，上级目录须已存在，路径不能经过符号链接（例如 macOS 的 `/tmp` 可改用 `/private/tmp`）。
+`validate` 对目录使用与安装预览相同的清单、版本与资源路径检查；输出警告，失败时返回非零退出码。它不执行或导入插件脚本，也不检查 JS 语法、导出和运行时注册；通过不代表插件受信任或能运行。
+
+然后用 **扩展 → 添加扩展 → 从文件夹安装** 选择生成目录（也可用 **设置 → 插件 → Enso plugins**）。检查权限预览，确认安装，再手动启用。回到本机 Code 会话，输入框右侧的「插入问候」会把文本写到草稿，不会发送给模型。两个命令都不会安装或启用插件。
+
+[`enso-plugin.d.ts`](../examples/plugins/starter/enso-plugin.d.ts) 是本 fork 的独立作者声明；模板用 JSDoc 引用本地副本，没有运行时 SDK。`PluginActivate` 对应 Node `activate`，`PluginOnLoad` 对应 `ui.js`，`PluginViewApi` 对应侧栏 HTML 的 `window.enso`。声明不提供会话消息、桌面命令、事件订阅或动态工具；工具只能给清单已声明的条目注册处理器。
+如需在仓库外进行 JS 类型检查，从插件目录的上级开发目录提供 TypeScript 与 React 19 的 `@types/react`，然后执行 `tsc -p my-plugin/jsconfig.json`。不要把 `node_modules` 放进待安装目录；没有这些类型依赖也可静态校验和安装。
+
+### 更多完整示例
 
 本文后面的清单与 API 片段分别用于说明接口，**不是都能单独复制成一个完整插件**。入口脚本注册的工具、方法、补全必须与清单声明及权限匹配。
 
-初次开发建议复制 [`examples/plugins/snippets`](../examples/plugins/snippets)，保留其中配套的三个文件：
+如需学习补全，可复制 [`examples/plugins/snippets`](../examples/plugins/snippets)，保留其中配套的三个文件：
 
 ```text
 my-snippets/

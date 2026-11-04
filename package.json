@@ -25,6 +25,8 @@
     "knowledge:check": "npx tsx scripts/knowledge.ts check",
     "knowledge:clean": "npx tsx scripts/knowledge.ts clean",
     "knowledge:compact": "npx tsx scripts/knowledge.ts compact",
+    "plugin:init": "node scripts/plugin-author.mjs init",
+    "plugin:validate": "node scripts/plugin-author.mjs validate",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

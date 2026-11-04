@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "checkJs": true,
+    "strict": true,
+    "noEmit": true,
+    "types": []
+  },
+  "files": ["main.mjs", "ui.js", "enso-plugin.d.ts"]
+}
