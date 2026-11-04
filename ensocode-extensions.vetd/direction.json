@@ -1,0 +1,103 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "EnsoCode is a local-first desktop coding-agent workbench. Design a pinned Extensions screen for skills and MCP connections, borrowing Open Vetta's restrained banner and browsable catalog while keeping the existing EnsoCode ocean-blue shell.",
+		"screens": [
+			"Extensions catalog: installed and curated views, search, source and readiness, clickable item details"
+		],
+		"keep": [
+			"palette",
+			"type"
+		],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 700068446,
+	"at": "2026-11-04T07:15:38.545Z",
+	"options": [
+		"mint-extension-library",
+		"connection-workbench",
+		"slash-command-sheet"
+	],
+	"choice": {
+		"proposalId": "mint-extension-library"
+	},
+	"allow": [
+		"tell-gradient",
+		"tell-gradient-text",
+		"tell-shadow",
+		"tell-glass",
+		"tell-font-count",
+		"tell-mono"
+	],
+	"intent": {
+		"stated": {
+			"mood": "参考 Open Vetta「能力」页：轻量横幅、低边界图标条目、紧凑的目录工具栏；保留 EnsoCode 的工作台外壳。",
+			"emphasis": "「扩展」放在主侧边栏，位于项目列表上方；先看设计稿。",
+			"brand": "EnsoCode",
+			"boldness": "restrained"
+		},
+		"questions": [],
+		"answers": null
+	},
+	"obvious": "A generic extension store with a giant promotional header and bordered marketplace cards under the main navigation.",
+	"proposals": [
+		{
+			"id": "mint-extension-library",
+			"name": "薄荷白扩展目录",
+			"idea": "On this screen, EnsoCode's in-conversation /skill commands and its project-local SKILL.md imports become physical objects paired with the desktop's MCP connections.",
+			"departs": "A small tactile banner like Open Vetta's Ability page, then flat grouped rows and one compact catalog toolbar, inside the current app shell.",
+			"theme": "light",
+			"colours": null,
+			"type": null,
+			"layout": "Keep the live rail, project sidebar, title and status bar; put the Extensions item just above the project list and use the entire content pane for the catalog. A drawer gives detail without losing the list.",
+			"radius": 8,
+			"shell": "sidebar",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "shadow",
+					"reason": "A tight physical edge under the three small objects in the reference-inspired banner, and a lifted detail drawer."
+				},
+				{
+					"device": "texture",
+					"reason": "Only the mint banner has subtle dotted drafting-paper texture, supporting the code cards instead of decorating the whole UI."
+				},
+				{
+					"device": "mono",
+					"reason": "Show real slash-command syntax and SKILL.md as code in the two small banner objects."
+				}
+			]
+		},
+		{
+			"id": "connection-workbench",
+			"name": "连接工作台",
+			"idea": "On this screen, EnsoCode's current-session versus new-session extension loading becomes a two-sided view of installed settings and actual usage requirements.",
+			"departs": "Instead of browse-first cards, a tight ledger sits next to a permanently visible inspector for source, permissions and when changes take effect.",
+			"theme": "dark",
+			"colours": null,
+			"type": null,
+			"layout": "Main sidebar selects Extensions; a split content well pairs a searchable two-column ledger with a persistent detail inspector.",
+			"radius": 8,
+			"shell": "split",
+			"breaks": "",
+			"devices": []
+		},
+		{
+			"id": "slash-command-sheet",
+			"name": "对话命令页",
+			"idea": "On this screen, EnsoCode's project-local design and CDP skills become a compact command sheet you can read while starting a task.",
+			"departs": "Uses command signatures and documentation snippets, not store tiles or a promotional banner; highlights the action for getting an extension into a chat.",
+			"theme": "light",
+			"colours": null,
+			"type": null,
+			"layout": "Keep the left sidebar, pair a wide command list with a narrow conversational usage column, with an inline selected-row expansion.",
+			"radius": 8,
+			"shell": "rail",
+			"breaks": "",
+			"devices": []
+		}
+	],
+	"redraws": []
+}

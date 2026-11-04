@@ -1,0 +1,52 @@
+@import "@fontsource-variable/schibsted-grotesk";
+
+/* Colours and surface hierarchy follow the running app's mintLight.css. */
+@theme {
+	--font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+	--font-display: "Schibsted Grotesk Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+	--font-mono: "SFMono-Regular", Consolas, monospace;
+	--color-surface: #ffffff;
+	--color-surface-foreground: #17211a;
+	--color-panel: #f3f6f4;
+	--color-sidebar: #f6f8f7;
+	--color-muted: #5b675e;
+	--color-faint: #6a756d;
+	--color-primary: #106c3e;
+	--color-primary-foreground: #ffffff;
+	--color-mint: #e3f6e9;
+	--color-banner: #edf5ef;
+	--color-banner-rim: #d6e5da;
+	--color-hover: #edf1ee;
+	--color-selected: #e5ede7;
+	--color-line: #e6ebe7;
+	--color-border: #d7dfd9;
+	--color-input: #c9d4cc;
+	--color-code: #f1f4f2;
+	--color-danger: #b2403d;
+	--color-danger-soft: #f9eeee;
+	--color-warning: #8c5c18;
+	--color-warning-soft: #f7f1e5;
+	--color-traffic-red: #ed6b62;
+	--color-traffic-yellow: #edbb55;
+	--color-traffic-green: #65bb76;
+	--radius-control: 8px;
+	--radius-card: 8px;
+	--shadow-object: 0 1px 2px rgb(18 46 30 / .05), 0 10px 24px -12px rgb(18 46 30 / .2);
+	--shadow-float: 0 1px 2px rgb(18 46 30 / .05), 0 20px 48px -16px rgb(18 46 30 / .22);
+}
+
+:root { font-family: var(--font-sans); color: var(--color-surface-foreground); color-scheme: light; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), a { cursor: pointer; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+input, textarea { outline: none; }
+code, pre { font-family: var(--font-mono); }
+.enso-mark { display: block; width: 20px; height: 20px; border: 3px solid currentColor; border-right-color: transparent; border-radius: 50%; transform: rotate(28deg); }
+.banner-grain { background-image: radial-gradient(var(--color-banner-rim) .7px, transparent .7px); background-size: 8px 8px; }
+.detail-copy p { line-height: 1.9; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { border-radius: 8px; background: var(--color-border); }
+::selection { background: var(--color-mint); }

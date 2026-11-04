@@ -1,0 +1,59 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.41064466552090795,
+		"x": 292.62876915366303,
+		"y": 260.468033609883
+	},
+	"frames": [
+		{
+			"id": "detail",
+			"file": "frames/detail.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "扩展 · 技能详情",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "扩展 · 技能详情"
+			}
+		},
+		{
+			"id": "discover",
+			"file": "frames/discover.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "扩展 · 精选",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "扩展 · 精选"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 3041,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "扩展 · 已添加",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "扩展 · 已添加"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"statusBar": "none",
+	"interactionMode": "desktop"
+}
