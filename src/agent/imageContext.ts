@@ -76,11 +76,6 @@ function replaceImages(message: ContextMessage, source: string): ContextMessage 
 
 const isText = (b: unknown): b is { type: 'text'; text?: string } =>
   isRecord(b) && b.type === 'text';
-const isThinking = (
-  b: unknown
-): b is { type: 'thinking'; thinking?: string; thinkingSignature?: string } =>
-  isRecord(b) && b.type === 'thinking';
-
 function fillToolResultText(message: ContextMessage): ContextMessage {
   if (message.role !== 'toolResult' || !Array.isArray(message.content)) return message;
   let changed = false;
@@ -90,22 +85,6 @@ function fillToolResultText(message: ContextMessage): ContextMessage {
     return { ...block, text: '' };
   });
   return changed ? { ...message, content } : message;
-}
-
-/** xAI openai-responses：reasoning 后必须有 message item，否则下一轮请求在 SDK 里对 undefined 读 length。 */
-function ensureTextBeforeToolCalls(message: ContextMessage): ContextMessage {
-  if (message.role !== 'assistant' || !Array.isArray(message.content)) return message;
-  const content = message.content;
-  const signedThinking = content.some(
-    (block) => isThinking(block) && typeof block.thinkingSignature === 'string'
-  );
-  const hasTool = content.some(isToolCall);
-  const hasText = content.some((block) => isText(block) && typeof block.text === 'string');
-  if (!signedThinking || !hasTool || hasText) return message;
-  const insertAt = content.findIndex(isToolCall);
-  const next = [...content];
-  next.splice(insertAt < 0 ? content.length : insertAt, 0, { type: 'text', text: '' });
-  return { ...message, content: next };
 }
 
 /** 会被 convertToLlm 变成 user 消息、从而截断工具调用链的角色。 */
@@ -149,14 +128,14 @@ export function dropUnpairedToolResults(messages: ContextMessage[]): ContextMess
   return out ?? messages;
 }
 
-/** context 钩子入口：孤儿 toolResult 丢弃 + 图片占位 + 补齐会让 xAI/Responses 重放崩掉的残缺块。 */
+/** 通用清洗只处理孤儿 toolResult、历史图片和残缺的工具结果文本。 */
 export function sanitizeContextMessages(messages: ContextMessage[]): ContextMessage[] {
   const pruned = pruneHistoricalImages(dropUnpairedToolResults(messages));
   let out: ContextMessage[] | undefined;
   for (let i = 0; i < pruned.length; i++) {
     const message = pruned[i];
     if (!message) continue;
-    const next = ensureTextBeforeToolCalls(fillToolResultText(message));
+    const next = fillToolResultText(message);
     if (next === message) continue;
     out ??= [...pruned];
     out[i] = next;

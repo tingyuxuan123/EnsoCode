@@ -196,6 +196,7 @@ import { McpManager } from './mcp';
 import { partitionMcpNamespaces } from './mcpNames';
 import { createMessageCoworkerTool } from './messageCoworker';
 import { createMessageMainTool } from './messageMain';
+import { installModelContextCompat } from './modelContextCompat';
 import { ParentNotifier } from './notify';
 import {
   installOauthPoolSelector,
@@ -854,6 +855,7 @@ export async function initializeWorkerRuntime(runtime: ModelRuntime): Promise<Mo
   await refreshWorkerProviderModels(runtime, ANTIGRAVITY_PROVIDER_ID);
   await refreshWorkerProviderModels(runtime, DEVIN_PROVIDER_ID);
   await refreshWorkerProviderModels(runtime, CURSOR_PROVIDER_ID);
+  installModelContextCompat(runtime);
   return runtime;
 }
 

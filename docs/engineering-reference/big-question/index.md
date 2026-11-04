@@ -25,6 +25,7 @@
 | [enso-compact-token-limit-fallback.md](enso-compact-token-limit-fallback.md) | Smart Compact 开着仍报 Auto-compaction failed: Summarization failed: Input token limit exceeded |
 | [responses-compaction-routing-key.md](responses-compaction-routing-key.md) | 普通对话可用，默认压缩却报 invalid codex request / invalid_responses_request |
 | [responses-sse-eof-terminal-event.md](responses-sse-eof-terminal-event.md) | 新开对话可用，旧会话反复报 OpenAI Responses stream ended before a terminal response event |
+| [vendor-context-padding.md](vendor-context-padding.md) | Kimi 工具续轮报 text content is empty，但持久化历史没有空文本 |
 | [tool-prepare-arguments-schema-drift.md](tool-prepare-arguments-schema-drift.md) | 工具单测全绿，真机上模型每次调用都被判参数不合法 |
 | [design-canvas-session-scope.md](design-canvas-session-scope.md) | B 的设计工具读到 A 画布；create 已报 opened，controller 却仍未就绪 |
 | [code-search-protocol-and-evidence.md](code-search-protocol-and-evidence.md) | 代码搜索反复耗尽预算或报坏 JSON，已命中代码也全部丢失 |

@@ -142,7 +142,7 @@ describe('pruneHistoricalImages', () => {
 });
 
 describe('sanitizeContextMessages', () => {
-  it('signed thinking 后直接 toolCall、没有 text 时补空 text，避免后续轮次 TypeError', () => {
+  it('通用清洗不为 signed thinking 后的 toolCall 添加 assistant 文本', () => {
     const thinking = {
       type: 'thinking',
       thinking: 'wait',
@@ -155,7 +155,7 @@ describe('sanitizeContextMessages', () => {
       toolResult('c1', 'browser_cdp', { type: 'text' }),
     ];
     const out = sanitizeContextMessages(messages);
-    expect(out[1]?.content).toEqual([thinking, { type: 'text', text: '' }, call]);
+    expect(out[1]?.content).toEqual([thinking, call]);
     const resultParts = Array.isArray(out[2]?.content) ? out[2].content : [];
     expect((resultParts[0] as { text?: string } | undefined)?.text).toBe('');
   });
