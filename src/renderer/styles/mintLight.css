@@ -1,0 +1,242 @@
+/*
+ * 薄荷白（mint-light）：桌面可选浅色方案。设置 store 只在浅色外观下挂
+ * html[data-light-palette]，深色与同步终端配色不受影响。只换肤，不改布局与尺寸。
+ *
+ * 设计约束：
+ * - 灰阶与绿色同一色相（OKLCH h≈155）；灰阶几乎无彩度，只在叠放时透出一点绿。
+ * - 绿色只给三类：发送、当前选中、运行/完成状态。悬停、徽标、模型选择保持中性。
+ * - 圆角三档：8 行与控件、12 浮层与气泡、16 输入框与对话框；胶囊与圆形另计。
+ * - 层次靠两层带绿灰的投影，不再叠描边。
+ *
+ * Mint Light keeps green for send, current selection and run state only. Greys share
+ * the green hue at near-zero chroma; radii follow 8 / 12 / 16.
+ */
+@layer base {
+  html[data-light-palette='mint-light'] {
+    /* 绿色梯度（OKLCH L 递减，C 适中，h 155） */
+    --mint-50: #f2faf4;
+    --mint-100: #e3f6e9;
+    --mint-200: #c7ead1;
+    --mint-300: #9ed7b1;
+    --mint-500: #349d62;
+    --mint-600: #13804a;
+    --mint-700: #106c3e;
+    --mint-800: #135230;
+    --mint-900: #123923;
+
+    /* 表面：雾灰外壳 → 瓷白内容；面板与内容同色，只靠外壳一级分层 */
+    --shell: #f3f6f4;
+    --panel: #ffffff;
+    --background: #ffffff;
+    --card: #ffffff;
+    --popover: #ffffff;
+    --foreground: #17211a;
+    --card-foreground: var(--foreground);
+    --popover-foreground: var(--foreground);
+
+    /* 中性控件与悬停：不带绿，避免每次悬停都染色 */
+    --secondary: #e9eeeb;
+    --secondary-foreground: #2c3830;
+    --muted: #f1f4f2;
+    --muted-foreground: #5b675e;
+    --accent: #edf1ee;
+    --accent-foreground: var(--foreground);
+    --border: #dee5e0;
+    --input: #c9d4cc;
+
+    /* 主操作与状态 */
+    --primary: var(--mint-700);
+    --primary-foreground: #ffffff;
+    --brand: var(--mint-700);
+    --brand-foreground: #ffffff;
+    --ring: var(--mint-500);
+    --success: var(--mint-600);
+    --success-foreground: #ffffff;
+    --destructive: #b2403d;
+    --destructive-foreground: #ffffff;
+    --warning: #9a6416;
+    --warning-foreground: #ffffff;
+    --info: #307093;
+    --info-foreground: #ffffff;
+
+    /* 圆角三档：rounded-sm/md/lg = 8，xl = 12，2xl/3xl = 16 */
+    --radius: 8px;
+    --radius-xl: 12px;
+    --radius-2xl: 16px;
+    --radius-3xl: 16px;
+
+    /* 投影：同一绿灰色源，近处一层收边、远处一层托起 */
+    --elevation-float: 0 1px 2px rgb(18 46 30 / 0.05), 0 12px 32px -12px rgb(18 46 30 / 0.2);
+    --mint-lift:
+      0 0 0 0.5px rgb(18 46 30 / 0.08), 0 1px 2px rgb(18 46 30 / 0.06),
+      0 3px 8px -3px rgb(18 46 30 / 0.08);
+    --mint-composer-shadow: 0 1px 2px rgb(18 46 30 / 0.04), 0 8px 24px -12px rgb(18 46 30 / 0.16);
+    --mint-focus-halo: 0 0 0 3px rgb(52 157 98 / 0.12);
+    --mint-tip-shadow: 0 1px 2px rgb(18 46 30 / 0.05), 0 4px 12px -4px rgb(18 46 30 / 0.14);
+    --mint-dialog-shadow: 0 1px 3px rgb(18 46 30 / 0.06), 0 24px 64px -20px rgb(18 46 30 / 0.3);
+    --mint-bubble: #e8f7ec;
+  }
+
+  /* With wallpaper the regular nav token must still inherit surface alpha. */
+  html[data-light-palette='mint-light']:not(.bg-image-enabled) {
+    --color-nav: #f6f8f7;
+  }
+}
+
+/* ── 侧栏：当前会话 ─────────────────────────────────────────────
+ * 只用白色卡片和轻投影托起，不加描边或色条。会话树线在这一行断开，
+ * 不从卡片中间穿过；上下两段仍是统一的灰色细线。
+ */
+html[data-light-palette='mint-light'] [data-slot='conversation-row'][data-active='true'] {
+  background-color: var(--color-card);
+  box-shadow: var(--mint-lift);
+}
+
+html[data-light-palette='mint-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::before,
+html[data-light-palette='mint-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::after {
+  background-color: transparent;
+}
+
+/* 分组标签：选中用浅薄荷底与深绿字，不再是整块近黑 */
+html[data-light-palette='mint-light'] [data-slot='project-sidebar'] button[data-selected].rounded-full {
+  background-color: var(--mint-100);
+  color: var(--mint-900);
+  box-shadow: inset 0 0 0 1px var(--mint-200);
+}
+
+/* 新建任务 / 新对话图标与工具栏同色，绿色留给真正的状态 */
+html[data-light-palette='mint-light'] [data-slot='project-sidebar'] svg.text-brand,
+html[data-light-palette='mint-light'] [data-slot='app-rail'] button.text-brand {
+  color: var(--color-foreground);
+}
+
+/* ── 会话区 ──────────────────────────────────────────────────── */
+html[data-light-palette='mint-light'] [data-slot='chat-view'] .group\/user > .bg-muted {
+  border-radius: 12px 12px 4px 12px;
+  background-color: oklch(from var(--mint-bubble) l c h / var(--bg-panel-alpha, 1));
+}
+
+/* ── 输入框：16px 圆角，聚焦时浅绿边与柔光，不用整圈深绿 ────────── */
+html[data-light-palette='mint-light'] [data-slot='composer'] {
+  border-radius: 16px;
+  box-shadow: var(--mint-composer-shadow);
+}
+
+html[data-light-palette='mint-light'] [data-slot='composer']:focus-within {
+  border-color: var(--mint-300);
+  box-shadow: var(--mint-composer-shadow), var(--mint-focus-halo);
+}
+
+/* 发送：空闲时中性灰，有内容才亮起深绿，成为输入区唯一的强调 */
+html[data-light-palette='mint-light'] [data-slot='composer'] button.bg-brand,
+html[data-light-palette='mint-light'] [data-slot='composer'] button.bg-foreground {
+  border-radius: 9999px;
+  transition:
+    background-color var(--duration-quick) var(--ease-out),
+    border-color var(--duration-quick) var(--ease-out),
+    color var(--duration-quick) var(--ease-out);
+}
+
+html[data-light-palette='mint-light'] [data-slot='composer'] button.bg-brand:not(:disabled):hover {
+  border-color: var(--mint-800);
+  background-color: var(--mint-800);
+}
+
+html[data-light-palette='mint-light'] [data-slot='composer'] button.bg-brand:disabled {
+  opacity: 1;
+  border-color: transparent;
+  background-color: var(--color-secondary);
+  color: var(--color-faint);
+}
+
+/* 模型选择保持中性，绿色不出现在常驻控件上 */
+html[data-light-palette='mint-light'] [data-model-picker='trigger'] .text-primary {
+  color: inherit;
+}
+
+/* ── 设置窗口 ────────────────────────────────────────────────────
+ * 主题模式卡：选中仍是绿，但用浅边与薄荷底托住，不用 2px 深绿框；边宽不变，尺寸不动。
+ * 标题栏「询问 Enso」与主窗口图标轨同为中性。
+ */
+html[data-light-palette='mint-light'] [data-slot='settings-window'] button[aria-pressed='true'].border-2 {
+  border-color: var(--mint-300);
+  background-color: var(--mint-50);
+  color: var(--mint-800);
+  box-shadow: var(--mint-lift);
+}
+
+html[data-light-palette='mint-light'] [data-slot='settings-window'] .drag-region button.text-primary {
+  border-color: var(--color-border);
+  background-color: var(--color-card);
+  color: var(--color-foreground);
+}
+
+html[data-light-palette='mint-light'] [data-slot='settings-window'] .drag-region button.text-primary:hover {
+  background-color: var(--color-accent);
+}
+
+/* ── 代码视图：选中行与行号由默认蓝紫换成薄荷 ──────────────────
+ * selection-base 在 shadow 的 :host 上声明，文档侧对宿主的声明优先；
+ * 它只参与选中行底色与选中行号颜色，不影响增删改的 diff 配色。
+ */
+html[data-light-palette='mint-light'] diffs-container {
+  --diffs-selection-base: var(--mint-500);
+}
+
+/* ── 浮层：圆角归档并带同源投影，浮起来而不是贴着 ──────────────
+ * 菜单/弹出层/选择/提示条 12（内边距 6，菜单项 6，保持同心）；小提示 8；对话框 16。
+ * 带 text-balance 的 popover 是提示样式，按小提示处理。
+ */
+html[data-light-palette='mint-light']
+  :is(
+    [data-slot='menu-popup'],
+    [data-slot='context-menu-popup'],
+    [data-slot='context-menu-sub-popup'],
+    [data-slot='combobox-popup'],
+    [data-slot='popover-popup']:not(.text-balance),
+    [data-slot='select-popup'] > span,
+    [data-slot='toast-popup']
+  ) {
+  border-radius: 12px;
+  box-shadow: var(--elevation-float);
+}
+
+html[data-light-palette='mint-light']
+  :is(
+    [data-slot='menu-popup'],
+    [data-slot='context-menu-popup'],
+    [data-slot='context-menu-sub-popup'],
+    [data-slot='combobox-popup'],
+    [data-slot='popover-popup']:not(.text-balance),
+    [data-slot='toast-popup']
+  )::before {
+  border-radius: 11px;
+}
+
+html[data-light-palette='mint-light']
+  :is([data-slot='tooltip-popup'], [data-slot='popover-popup'].text-balance) {
+  border-radius: 8px;
+  box-shadow: var(--mint-tip-shadow);
+}
+
+html[data-light-palette='mint-light']
+  :is([data-slot='tooltip-popup'], [data-slot='popover-popup'].text-balance)::before {
+  border-radius: 7px;
+}
+
+html[data-light-palette='mint-light']
+  :is([data-slot='dialog-popup'], [data-slot='alert-dialog-popup'], [data-slot='command-dialog-popup']) {
+  border-radius: 16px;
+  box-shadow: var(--mint-dialog-shadow);
+}
+
+/* 命令面板的 ::before 带底色，必须与外框同心，否则 16px 角后会露出旧的小圆角 */
+html[data-light-palette='mint-light']
+  :is([data-slot='dialog-popup'], [data-slot='alert-dialog-popup'], [data-slot='command-dialog-popup'])::before {
+  border-radius: 15px;
+}
+
+html[data-light-palette='mint-light'] [data-slot='dialog-footer'] {
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
+}

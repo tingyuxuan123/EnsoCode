@@ -18,6 +18,7 @@ import {
 } from '@shared/fileOpening';
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
+import { type LightPalette, parseLightPalette } from '@shared/lightPalette';
 import {
   DEFAULT_MAX_ACTIVE_COWORKERS,
   normalizeMaxActiveCoworkers,
@@ -97,19 +98,30 @@ function applyTerminalFont(fontFamily: string, fontSize: number): void {
   root.style.setProperty('--font-size-base', `${fontSize}px`);
 }
 
-// Apply app theme (dark/light mode)
-function applyAppTheme(theme: Theme, terminalTheme: string): void {
+// Keep the desktop light palette independent of dark/system/terminal mode.
+function applyAppTheme(theme: Theme, terminalTheme: string, lightPalette: LightPalette): void {
+  const root = document.documentElement;
+  if (theme === 'sync-terminal') {
+    delete root.dataset.lightPalette;
+    applyTerminalThemeToApp(terminalTheme, true);
+    return;
+  }
+
+  clearTerminalThemeFromApp();
   const isDark =
     resolveColorScheme(theme, {
       prefersDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
       terminalIsDark: isTerminalThemeDark(terminalTheme),
     }) === 'dark';
-  document.documentElement.classList.toggle('dark', isDark);
+  root.classList.toggle('dark', isDark);
+  if (!isDark && lightPalette === 'mint-light') root.dataset.lightPalette = lightPalette;
+  else delete root.dataset.lightPalette;
 }
 
 // Apply settings side effects (theme / font / lang) — 初次加载与多窗口同步时调用
 function applySettings(state: {
   theme: Theme;
+  lightPalette: LightPalette;
   accentColor?: AccentColor;
   terminalTheme: string;
   terminalFontFamily: string;
@@ -117,12 +129,7 @@ function applySettings(state: {
   language: Locale;
   chatWide?: boolean;
 }): void {
-  if (state.theme === 'sync-terminal') {
-    applyTerminalThemeToApp(state.terminalTheme, true);
-  } else {
-    clearTerminalThemeFromApp();
-    applyAppTheme(state.theme, state.terminalTheme);
-  }
+  applyAppTheme(state.theme, state.terminalTheme, state.lightPalette);
   applyTerminalFont(state.terminalFontFamily, state.terminalFontSize);
   document.documentElement.lang = normalizeLocale(state.language) === 'zh' ? 'zh-CN' : 'en';
   document.documentElement.dataset.accent = resolveAccentColor(state.accentColor);
@@ -141,6 +148,7 @@ function clampNumber(value: number, min: number, max: number, fallback: number):
 
 const initialState = {
   theme: 'system' as Theme,
+  lightPalette: 'ocean' as LightPalette,
   accentColor: DEFAULT_ACCENT_COLOR,
   language: getDefaultLocale(),
   fileOpenRules: [] as FileOpenRule[],
@@ -275,14 +283,16 @@ export const useSettingsStore = create<SettingsState>()(
       ...initialState,
 
       setTheme: (theme) => {
-        const terminalTheme = get().terminalTheme;
-        if (theme === 'sync-terminal') {
-          applyTerminalThemeToApp(terminalTheme, true);
-        } else {
-          clearTerminalThemeFromApp();
-          applyAppTheme(theme, terminalTheme);
-        }
+        const { terminalTheme, lightPalette } = get();
+        applyAppTheme(theme, terminalTheme, lightPalette);
         set({ theme });
+      },
+
+      setLightPalette: (value) => {
+        const lightPalette = parseLightPalette(value) ?? 'ocean';
+        const { theme, terminalTheme } = get();
+        applyAppTheme(theme, terminalTheme, lightPalette);
+        set({ lightPalette });
       },
 
       setAccentColor: (accentColor) => {
@@ -1280,7 +1290,7 @@ void refreshProjectAuthorityProjection();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   const state = useSettingsStore.getState();
   if (state.theme === 'system') {
-    applyAppTheme('system', state.terminalTheme);
+    applyAppTheme('system', state.terminalTheme, state.lightPalette);
   }
 });
 

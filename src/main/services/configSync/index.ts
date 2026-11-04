@@ -57,6 +57,7 @@ type ConfigSyncFieldPolicy = { mode: 'portable' } | { mode: 'excluded'; reason: 
 /** Every persisted settings field must be deliberately classified before it can drift into sync. */
 export const CONFIG_SYNC_FIELD_POLICY = {
   theme: { mode: 'portable' },
+  lightPalette: { mode: 'portable' },
   language: { mode: 'portable' },
   terminalTheme: { mode: 'portable' },
   terminalFontSize: { mode: 'portable' },

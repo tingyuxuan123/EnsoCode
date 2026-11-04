@@ -93,6 +93,7 @@ describe('config sync portable preference contract', () => {
   it('将安全的通用偏好列为 portable，并明确保留本机背景资源与设备策略', () => {
     const portable = [
       'theme',
+      'lightPalette',
       'accentColor',
       'language',
       'terminalTheme',
@@ -176,6 +177,7 @@ describe('config sync portable preference contract', () => {
   it('接受所有可移植偏好的合法域值', () => {
     const input = bundle({
       theme: 'sync-terminal',
+      lightPalette: 'mint-light',
       accentColor: 'teal',
       language: 'zh',
       terminalTheme: 'Dracula',
@@ -249,6 +251,7 @@ describe('config sync portable preference contract', () => {
   it('拒绝越界、非法枚举和错误结构的可移植偏好', () => {
     const cases: Array<[string, unknown]> = [
       ['theme', 'neon'],
+      ['lightPalette', 'neon'],
       ['accentColor', 'neon'],
       ['language', 'fr'],
       ['terminalFontSize', 0],
@@ -271,6 +274,15 @@ describe('config sync portable preference contract', () => {
     for (const [field, value] of cases) {
       expect(() => validateBundle(bundle({ [field]: value })), field).toThrow();
     }
+  });
+
+  it('imports the light palette without changing the local theme mode', () => {
+    const current = { ...baseState(), theme: 'dark' };
+    const imported = bundle({ lightPalette: 'mint-light' });
+    expect(planImport(current, imported, 'merge').state).toMatchObject({
+      theme: 'dark',
+      lightPalette: 'mint-light',
+    });
   });
 
   it('合并智能压缩档位并计入设置摘要，丢弃已移除的 bash 拦截开关', () => {

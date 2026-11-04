@@ -23,6 +23,7 @@ type SettingsDataKey = Exclude<keyof SettingsState, SettingsActionKey>;
 /** SettingsState 新增持久字段时，此 Record 会在编译期要求说明对应产品面。 */
 export const SETTINGS_DATA_COVERAGE = {
   theme: surfaces('appearance.theme'),
+  lightPalette: excluded('Desktop light palette; user-selected appearance preference.'),
   accentColor: surfaces('appearance.accent'),
   language: surfaces('general.language'),
   terminalTheme: surfaces('appearance.terminal-theme'),
@@ -167,6 +168,7 @@ export const SETTINGS_DATA_COVERAGE = {
 /** SettingsState 新增 action 时，此 Record 会在编译期要求登记或明确排除。 */
 export const SETTINGS_ACTION_COVERAGE = {
   setTheme: surfaces('appearance.theme'),
+  setLightPalette: excluded('Desktop light palette; user-selected appearance preference.'),
   setAccentColor: surfaces('appearance.accent'),
   setLanguage: surfaces('general.language'),
   setTerminalTheme: surfaces('appearance.terminal-theme'),

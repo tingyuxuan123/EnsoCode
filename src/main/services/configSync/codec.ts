@@ -7,6 +7,7 @@ import {
 import { parseAccentColor } from '@shared/accentColor';
 import { isReservedAgentTypeName } from '@shared/builtinAgents';
 import { parseCompactStrategy } from '@shared/compactStrategy';
+import { parseLightPalette } from '@shared/lightPalette';
 import { parseOauthAccountPool } from '@shared/oauthAccountPool';
 import { parseSmartCompactMode } from '@shared/smartCompactMode';
 import { STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine';
@@ -81,6 +82,7 @@ const STATE_KEYS = [
   'disabledBuiltinTools',
   'subagentAllowedModes',
   'theme',
+  'lightPalette',
   'accentColor',
   'language',
   'terminalTheme',
@@ -943,6 +945,8 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     !['light', 'dark', 'system', 'sync-terminal'].includes(String(state.theme))
   )
     throw new Error('Invalid state.theme');
+  if (state.lightPalette !== undefined && parseLightPalette(state.lightPalette) === null)
+    throw new Error('Invalid state.lightPalette');
   if (state.accentColor !== undefined && parseAccentColor(state.accentColor) === null)
     throw new Error('Invalid state.accentColor');
   if (state.language !== undefined && !['en', 'zh'].includes(String(state.language)))

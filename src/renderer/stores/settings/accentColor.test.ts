@@ -8,14 +8,17 @@ const documentElement = {
   classList: { toggle: vi.fn() },
   style: { setProperty: vi.fn(), removeProperty: vi.fn() },
 };
+let systemDark = false;
+const mediaChange = vi.fn();
+const settingsRead = vi.fn<() => Promise<Record<string, unknown> | null>>(async () => null);
 
 vi.stubGlobal('navigator', { language: 'en-US' });
 vi.stubGlobal('document', { documentElement });
 vi.stubGlobal('window', {
-  matchMedia: () => ({ matches: false, addEventListener: vi.fn() }),
+  matchMedia: () => ({ matches: systemDark, addEventListener: mediaChange }),
   electronAPI: {
     settings: {
-      read: vi.fn(async () => null),
+      read: settingsRead,
       writeKey: vi.fn(async () => true),
       onChanged: vi.fn(),
     },
@@ -29,11 +32,59 @@ vi.stubGlobal('window', {
 
 let settings: typeof SettingsModule;
 
-describe('accent color setting', () => {
-  beforeAll(async () => {
-    settings = await import('./index');
+beforeAll(async () => {
+  settings = await import('./index');
+});
+
+describe('desktop light palette', () => {
+  it('is opt-in and restores the selected palette only for non-terminal light appearance', () => {
+    const store = settings.useSettingsStore.getState();
+    expect(store.lightPalette).toBe('ocean');
+    store.setTheme('light');
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
+    store.setLightPalette('mint-light');
+    expect(documentElement.dataset.lightPalette).toBe('mint-light');
+    store.setTheme('dark');
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
+    expect(settings.useSettingsStore.getState().lightPalette).toBe('mint-light');
+    store.setTerminalTheme('GitHub Light Default');
+    store.setTheme('sync-terminal');
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
+    store.setTheme('system');
+    expect(documentElement.dataset.lightPalette).toBe('mint-light');
+    const notifySystemChange = mediaChange.mock.calls.find(([event]) => event === 'change')?.[1];
+    expect(notifySystemChange).toBeTypeOf('function');
+    systemDark = true;
+    notifySystemChange?.();
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
+    systemDark = false;
+    notifySystemChange?.();
+    expect(documentElement.dataset.lightPalette).toBe('mint-light');
+    store.setLightPalette('ocean');
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
   });
 
+  it('hydrates saved preferences and rejects an unknown or missing palette', async () => {
+    const store = settings.useSettingsStore;
+    for (const [saved, expected] of [
+      [{ lightPalette: 'mint-light' }, 'mint-light'],
+      [{ lightPalette: { palette: 'mint-light' } }, 'ocean'],
+      [{ lightPalette: 'mint-light' }, 'mint-light'],
+      [{}, 'ocean'],
+    ] as const) {
+      settingsRead.mockResolvedValueOnce({
+        'enso-settings': { version: 18, state: { theme: 'light', ...saved } },
+      });
+      await store.persist.rehydrate();
+      expect(store.getState().lightPalette).toBe(expected);
+      expect(documentElement.dataset.lightPalette).toBe(
+        expected === 'ocean' ? undefined : expected
+      );
+    }
+  });
+});
+
+describe('accent color setting', () => {
   it('缺省晴空蓝，切换时写入 html[data-accent]', () => {
     expect(settings.useSettingsStore.getState().accentColor).toBe('ocean');
     settings.useSettingsStore.getState().setAccentColor('teal');

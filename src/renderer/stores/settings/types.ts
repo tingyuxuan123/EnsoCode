@@ -82,6 +82,7 @@ export type BackgroundSizeMode = 'cover' | 'contain' | 'repeat' | 'center';
 export interface SettingsState {
   // UI
   theme: Theme;
+  lightPalette: import('@shared/lightPalette').LightPalette;
   /** 界面强调色；写入 `html[data-accent]`，缺省 violet */
   accentColor: import('@shared/accentColor').AccentColor;
   language: Locale;
@@ -338,6 +339,7 @@ export interface SettingsState {
 
   // Setters
   setTheme: (theme: Theme) => void;
+  setLightPalette: (palette: import('@shared/lightPalette').LightPalette) => void;
   setAccentColor: (accent: import('@shared/accentColor').AccentColor) => void;
   setLanguage: (language: Locale) => void;
   setTerminalTheme: (theme: string) => void;

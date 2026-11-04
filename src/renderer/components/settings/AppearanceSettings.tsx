@@ -1,3 +1,4 @@
+import type { LightPalette } from '@shared/lightPalette';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@shared/localImage';
 import {
   ChevronLeft,
@@ -31,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
 import {
   defaultDarkTheme,
@@ -630,6 +632,8 @@ export function AppearanceSettings() {
   const {
     theme,
     setTheme,
+    lightPalette,
+    setLightPalette,
     accentColor,
     setAccentColor,
     terminalTheme,
@@ -646,6 +650,13 @@ export function AppearanceSettings() {
     toggleFavoriteTerminalTheme,
   } = useSettingsStore();
   const { t } = useI18n();
+  const colorScheme = useColorScheme();
+  const usesMintAccent =
+    theme !== 'sync-terminal' && colorScheme === 'light' && lightPalette === 'mint-light';
+  const paletteOptions: Record<LightPalette, string> = {
+    ocean: t('Ocean Light'),
+    'mint-light': t('Mint Light'),
+  };
 
   const themeModeOptions: {
     value: Theme;
@@ -773,13 +784,46 @@ export function AppearanceSettings() {
             </button>
           ))}
         </div>
+
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 pt-2"
+          data-settings-row="appearance.lightPalette"
+        >
+          <div>
+            <h4 id="appearance-light-palette" className="text-[calc(14rem/14)] font-medium">
+              {t('Light palette')}
+            </h4>
+            <p className="mt-[2px] text-[calc(12rem/14)] leading-[calc(20rem/14)] text-muted-foreground">
+              {t('Used in light mode or when the system is light.')}
+            </p>
+          </div>
+          <Select
+            value={lightPalette}
+            onValueChange={(value) => {
+              if (value !== null) setLightPalette(value);
+            }}
+          >
+            <SelectTrigger
+              aria-labelledby="appearance-light-palette"
+              className="w-[calc(140rem/14)]"
+            >
+              <SelectValue>{paletteOptions[lightPalette]}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="ocean">{paletteOptions.ocean}</SelectItem>
+              <SelectItem value="mint-light">{paletteOptions['mint-light']}</SelectItem>
+            </SelectPopup>
+          </Select>
+        </div>
       </section>
 
       <section className="space-y-[12px] border-t border-line pt-[20px]">
         <div data-settings-row="appearance.accent">
           <h4 className="text-[calc(14rem/14)] font-medium">{t('Accent color')}</h4>
           <p className="mt-[2px] text-[calc(12rem/14)] leading-[calc(20rem/14)] text-muted-foreground">
-            {t('Highlight color used across the interface')}
+            {usesMintAccent
+              ? t('Mint Light uses its own green accent.')
+              : t('Highlight color used across the interface')}
           </p>
         </div>
 
@@ -792,7 +836,8 @@ export function AppearanceSettings() {
               title={option.label}
               aria-label={option.label}
               aria-pressed={accentColor === option.value}
-              className="flex flex-col items-center gap-[6px] rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              disabled={usesMintAccent}
+              className="flex flex-col items-center gap-[6px] rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
             >
               <span
                 style={{ backgroundColor: option.swatch }}

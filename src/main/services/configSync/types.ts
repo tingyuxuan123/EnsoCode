@@ -2,6 +2,7 @@ import type { AccentColor } from '@shared/accentColor';
 import type { CompactStrategy } from '@shared/compactStrategy';
 import type { DefaultModelRef } from '@shared/defaultModel';
 import type { Locale } from '@shared/i18n';
+import type { LightPalette } from '@shared/lightPalette';
 import type { SmartCompactMode } from '@shared/smartCompactMode';
 import type { StatusLineSegmentId } from '@shared/statusLine';
 import type {
@@ -98,6 +99,7 @@ export interface ConfigSyncState {
   disabledBuiltinTools?: string[];
   subagentAllowedModes?: ('task' | 'coworker')[];
   theme?: 'light' | 'dark' | 'system' | 'sync-terminal';
+  lightPalette?: LightPalette;
   accentColor?: AccentColor;
   language?: Locale;
   terminalTheme?: string;
