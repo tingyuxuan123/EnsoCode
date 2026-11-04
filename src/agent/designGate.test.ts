@@ -51,7 +51,8 @@ describe('design gate', () => {
       const links = join(cwd, 'links');
       await mkdir(join(links, '.hidden', 'secret.vetd'), { recursive: true });
       await writeFile(join(links, '.hidden', 'secret.vetd', 'design.json'), '{}');
-      await symlink(join(links, '.hidden'), join(links, 'public-link'));
+      // 'junction' is the unprivileged Windows directory link; POSIX ignores the type.
+      await symlink(join(links, '.hidden'), join(links, 'public-link'), 'junction');
       expect(await new DesignPresence().has(links)).toBe(false);
       expect(await new DesignPresence({ maxDepth: 0 }).has(cwd)).toBe(false);
       await writeFile(join(links, 'legacy.vetd'), '{}');

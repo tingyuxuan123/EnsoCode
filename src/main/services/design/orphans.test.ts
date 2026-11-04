@@ -31,7 +31,7 @@ const record = {
 const args = (entry = record) => [
   '--import',
   engineWatchdogImport(entry.parentPid, entry.token),
-  `${entry.engineRoot}/node_modules/vite/bin/vite.js`,
+  path.join(entry.engineRoot, 'node_modules/vite/bin/vite.js'),
   '--host',
   '127.0.0.1',
   '--port',
@@ -102,7 +102,12 @@ it('PID 复用到无关进程不发信号；坏文件/链接不跟随，记录�
   expect(killed).toEqual([entry.pid]);
   const unrelated = path.join(dir, 'outside.json');
   await writeFile(unrelated, JSON.stringify(entry));
-  await symlink(unrelated, path.join(registry.directory, `${token}.json`));
+  // Unprivileged Windows cannot create file symlinks; the dead-record path still runs there.
+  await symlink(unrelated, path.join(registry.directory, `${token}.json`)).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (process.platform !== 'win32' || error.code !== 'EPERM') throw error;
+    }
+  );
   await writeFile(path.join(registry.directory, 'dead.json'), '{invalid');
   registry.cleanup(
     () => ({ command: `node ${args(entry).join(' ')}`, group: entry.pid }),
@@ -112,7 +117,7 @@ it('PID 复用到无关进程不发信号；坏文件/链接不跟随，记录�
   expect(await readdir(registry.directory)).toEqual([]);
   expect(JSON.parse(await readFile(unrelated, 'utf8'))).toEqual(entry);
 });
-it.skipIf(process.platform === 'win32')('SIGKILL 父进程后 watchdog 回收独立进程组', async () => {
+it('SIGKILL 父进程后 watchdog 回收独立进程组', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'design-orphan-live-'));
   temps.push(dir);
   const root = path.join(dir, 'engine', 'a'.repeat(20));

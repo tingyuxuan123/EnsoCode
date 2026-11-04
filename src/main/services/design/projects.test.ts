@@ -36,7 +36,8 @@ it('never adopts an existing symlink or overwrites a directory when naming a pro
   await mkdir(workspace);
   await mkdir(path.join(dir, 'outside'));
   await writeFile(path.join(dir, 'outside/keep'), 'mine');
-  await symlink(path.join(dir, 'outside'), path.join(workspace, 'Weekend'));
+  // 'junction' is the unprivileged Windows directory link; POSIX ignores the type.
+  await symlink(path.join(dir, 'outside'), path.join(workspace, 'Weekend'), 'junction');
   expect(await service.request({ op: 'create', name: 'Weekend' })).toMatchObject({
     project: { path: path.join(workspace, 'Weekend-1') },
   });

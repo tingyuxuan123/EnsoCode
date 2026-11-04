@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { lstat, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -17,8 +17,12 @@ it('refuses a symlink encoded in a Git tree before checkout changes the design',
   try {
     await git('init', '--initial-branch=main');
     await writeFile(path.join(dir, 'keep.txt'), 'mine');
-    await symlink('../outside', path.join(dir, 'linked'));
-    await git('add', 'linked');
+    // Encode the symlink directly in the index: no filesystem symlink privilege is needed
+    // (Windows), and the tree entry is exactly what a hostile history pack would carry.
+    await writeFile(path.join(dir, 'target.txt'), '../outside');
+    const blob = (await git('hash-object', '-w', path.join(dir, 'target.txt'))).stdout.trim();
+    await rm(path.join(dir, 'target.txt'));
+    await git('update-index', '--add', '--cacheinfo', `120000,${blob},linked`);
     await git(
       '-c',
       'user.name=Test',
@@ -29,7 +33,6 @@ it('refuses a symlink encoded in a Git tree before checkout changes the design',
       'unsafe'
     );
     const sha = (await git('rev-parse', 'HEAD')).stdout.trim();
-    await unlink(path.join(dir, 'linked'));
     const runner = path.resolve(
       import.meta.dirname,
       '../../../../resources/design/history-runner/runner.mjs'

@@ -38,7 +38,8 @@ it('遍历跳过隐藏项/默认目录/自定义目录/符号链接并精确匹�
     await writeFile(path.join(dir, sub, 'design.json'), '{}');
   }
   await writeFile(path.join(dir, 'src', 'design.json.bak'), '{}');
-  await symlink(path.join(dir, 'src'), path.join(dir, 'link'));
+  // 'junction' is the unprivileged Windows directory link; POSIX ignores the type.
+  await symlink(path.join(dir, 'src'), path.join(dir, 'link'), 'junction');
   expect(
     await designFsAtRoot(dir, {
       root,

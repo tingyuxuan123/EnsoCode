@@ -49,8 +49,9 @@ describe('设计路径边界', () => {
     temps.push(outside);
     await mkdir(path.join(root, 'a.vetd'));
     await writeFile(path.join(outside, 'secret'), 'secret');
-    await symlink(outside, path.join(root, 'a.vetd', 'escape'));
-    await symlink(root, path.join(root, 'a.vetd', 'inside'));
+    // 'junction' is the unprivileged Windows directory link; POSIX ignores the type.
+    await symlink(outside, path.join(root, 'a.vetd', 'escape'), 'junction');
+    await symlink(root, path.join(root, 'a.vetd', 'inside'), 'junction');
     await expect(checkedPath(root, 'a.vetd/escape/secret')).rejects.toMatchObject({
       code: 'OUT_OF_ROOT',
     });

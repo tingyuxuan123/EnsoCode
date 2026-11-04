@@ -74,11 +74,23 @@ it('并发物化复用且模板内容变化会升级目录，不改旧引擎', a
   });
   await mkdir(path.join(paths.engineTemplate, 'node_modules/vite/bin'), { recursive: true });
   await writeFile(path.join(paths.engineTemplate, 'node_modules/vite/bin/vite.js'), 'vite');
-  await symlink('bin/vite.js', path.join(paths.engineTemplate, 'node_modules/vite/cli'));
+  // Unprivileged Windows cannot create file symlinks (and npm there writes .cmd shims instead);
+  // keep the rest of the materialization contract running on every platform.
+  const linked = await symlink(
+    'bin/vite.js',
+    path.join(paths.engineTemplate, 'node_modules/vite/cli')
+  ).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (process.platform === 'win32' && error.code === 'EPERM') return false;
+      throw error;
+    }
+  );
   await writeFile(path.join(paths.engineTemplate, 'package-lock.json'), '{}');
   const [a, b] = await Promise.all([materializeEngine(paths), materializeEngine(paths)]);
   expect(a).toEqual(b);
-  expect(await readlink(path.join(a.root, 'node_modules/vite/cli'))).toBe('bin/vite.js');
+  if (linked)
+    expect(await readlink(path.join(a.root, 'node_modules/vite/cli'))).toBe('bin/vite.js');
   await writeFile(path.join(paths.engineTemplate, 'package-lock.json'), '{"version":2}');
   const c = await materializeEngine(paths);
   expect(c.root).not.toBe(a.root);

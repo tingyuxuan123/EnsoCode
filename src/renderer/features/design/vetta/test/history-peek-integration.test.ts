@@ -11,6 +11,7 @@ import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { designPaths } from '../../host/paths';
+import { toDesignSdkPath } from '@shared/design/paths';
 import { promisify } from "node:util";
 import type { PluginContext } from "@vetta-org/plugin-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,7 +80,8 @@ beforeEach(async () => {
 	process.env.HOME = home;
 	reloads = 0;
 
-	design = await mkdtemp(join(tmpdir(), "vetd-peek-design-"));
+	// Production roots arrive SDK-normalised from resolveRoot (`C:/…` on Windows).
+	design = toDesignSdkPath(await mkdtemp(join(tmpdir(), "vetd-peek-design-")));
  designPaths.remember({ ref: { kind: 'session', sessionId: 'peek-test' }, path: design });
  vi.stubGlobal('electronAPI', { design: { script: async (request: { payload: Record<string, unknown> }) => ({ ok: true, result: await runner({ ...request.payload, dir: design }) }) } });
 	await mkdir(join(design, "frames"), { recursive: true });
