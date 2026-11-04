@@ -88,8 +88,10 @@ test('Windows 专用 tag 严格匹配版本，不触发 Mac 或多平台发布',
   const appSteps = workflow.jobs['build-app'].steps;
   const gate = appSteps.findIndex((step) => step.run === 'pnpm release:check');
   const pack = steps.findIndex((step) => step.name === 'Build Windows');
+  const designPaths = steps.findIndex((step) => step.name === 'Verify Windows design paths');
   assert.ok(gate >= 0 && gate < appSteps.findIndex((step) => step.run === 'pnpm build'));
-  assert.ok(pack >= 0);
+  assert.ok(designPaths >= 0 && designPaths < pack);
+  assert.match(steps[designPaths].run, /windowsDesignPath\.test\.ts/);
   assert.match(steps[pack].run, /--win --x64 --publish never/);
   assert.ok(steps.some((step) => step.run?.includes('smoke-packaged-natives.cjs')));
   assert.ok(steps.some((step) => step.run?.includes('smoke-packaged-design.cjs')));

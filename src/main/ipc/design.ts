@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { toDesignSdkPath } from '@shared/design/paths';
 import type { DesignCanvasPresence, DesignResult } from '@shared/types/design';
 import { IPC_CHANNELS } from '@shared/types/ipc';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
@@ -131,7 +132,9 @@ export function createDesignHandlers(deps: {
     }),
     resolveRoot: guard(async (_event, raw) => {
       const ref = parseRoot(raw);
-      return ref ? { ok: true, root: await resolveDesignRoot(ref) } : invalid();
+      if (!ref) return invalid();
+      const root = await resolveDesignRoot(ref);
+      return { ok: true, root: { ...root, path: toDesignSdkPath(root.path) } };
     }),
     fs: guard(async (_event, raw) => {
       const request = parseFs(raw);

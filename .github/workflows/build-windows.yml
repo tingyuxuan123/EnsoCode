@@ -114,6 +114,13 @@ jobs:
         env:
           npm_config_arch: x64
 
+      - name: Verify Windows design paths
+        run: >-
+          pnpm exec vitest run src/shared/design/paths.test.ts
+          src/renderer/features/design/host/paths.test.ts
+          src/main/services/design/windowsDesignPath.test.ts
+          --maxWorkers=2 --testTimeout=15000
+
       - name: Build Windows
         run: pnpm exec electron-builder --win --x64 --publish never
 

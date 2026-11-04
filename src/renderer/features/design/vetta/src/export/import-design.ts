@@ -1,5 +1,6 @@
 import type { PluginContext } from "@vetta-org/plugin-sdk";
 import { assertDesignArchivePath, decodeDesignArchive } from "@shared/design/archive";
+import { validateDesignAbsolutePath } from "@shared/design/paths";
 import { strFromU8 } from "fflate";
 import { HISTORY_ENTRY, unpackHistoryFromShare } from "../history/history-transfer";
 import { emptyManifest, manifestPathOf, type VetdManifest } from "../vetd/manifest-types";
@@ -134,8 +135,7 @@ export async function importPackagedVetd(
 	const files = [...packaged.designFiles].map(([rel, bytes]) => [rel, bytes.slice()] as const);
 	const manifestJson = packaged.manifestJson;
 	const historyZip = packaged.historyZip?.slice();
-	if (!targetDir.startsWith("/") || targetDir.includes("\\") || targetDir.includes("\0") || targetDir.split("/").some((part) => part === "." || part === "..")) invalid();
-	targetDir = targetDir.replace(/\/+$/, "");
+	targetDir = validateDesignAbsolutePath(targetDir).replace(/\/+$/, "");
 	const baseName = sanitizeDesignName(sourceFileName.replace(/\.(?:vetdz|vetd)$/i, "").replace(/-share$/i, ""));
 	let vetdPath = `${targetDir}/${baseName}.vetd`;
 	let suffix = 1;

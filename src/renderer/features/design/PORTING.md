@@ -48,8 +48,10 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 
 - fs readDir/readFile/readBinaryFile/writeFile/stat/rename/delete/createDirectory/
   listFilesRecursive/saveAs/watchDirectory；回调传监听目录字符串，不传 watchId。
-  resolveRoot 的记录才可成为已知根；路径必须本地 POSIX 绝对路径，拒绝根外、点段、NUL、
-  反斜线、SSH。最长根匹配；同一个路径以最近重新验证的引用优先，避免群新会话
+  resolveRoot 的记录才可成为已知根；SDK 路径为本地绝对路径（POSIX `/…` 或 Windows `C:/…`，
+  盘根保留 `C:/`），拒绝根外、点段、NUL、反斜线、UNC、设备路径与 SSH。仅 Main 的
+  resolveRoot 回包转换盘符与分隔符，Main 文件服务仍使用原生 realpath，IPC 请求仍用根引用 + 相对路径。
+  最长根匹配；同一个路径以最近重新验证的引用优先，避免群新会话
   继续命中已经结束的会话。scan 返回的 relPath 相对扫描目录，IPC rel 相对权威根。
 - storage list/readFile/writeFile/commit/readSnapshot 与 readJsonFile/writeJsonFile。
 - capture offscreen/release：URL 仅允许已启动引擎端口的 `http://127.0.0.1`，换算为
@@ -100,7 +102,8 @@ conversation.abort、official.projects.open/rename/remove 等写操作、officia
 onToolCancel abort，取消后不返回成功。文本/JSON → text，显式图片 → base64+mimeType，
 cards → details.cards；异常 respondTool `{ok:false,error}`。上游业务 `{ok:false}` 保留为文本结果。
 当前查看会话（含 child tab）变化重新 registerRuntime；旧异步 resolve 回包不覆盖新会话。
-工具 cwd 使用 resolveRoot 的规范路径，避免 `/tmp` 与 `/private/tmp` 分裂身份。宿主
+工具与 hook 的 cwd 使用 resolveRoot 的规范路径，避免 `/tmp` 与 `/private/tmp` 分裂身份，
+以及 Windows 原生路径绕过 SDK 格式。宿主
 `host/canvas-target.ts` 对 create/截图/方向/素材/导出及前台 status 串行租用单画布，排队与
 打开等待各最多 60 秒，完成、超时、取消均释放。调用 cwd 与当前查看 cwd 相同（含同项目
 designer 子会话）才可选择设计；其它项目的后台调用返回 `{ok:false,retryable:true}`，请用户

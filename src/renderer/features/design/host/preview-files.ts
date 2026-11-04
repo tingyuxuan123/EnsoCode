@@ -198,10 +198,11 @@ export async function loadDesignPreviewFile(
       },
       async importPackage(packaged) {
         await guard();
+        const sourcePath = absolute(root, rel);
         const path = await importPackagedVetd(
           boundContext(owner, root, guard),
           packaged,
-          absolute(root, rel).slice(0, absolute(root, rel).lastIndexOf('/')),
+          sourcePath.slice(0, sourcePath.lastIndexOf('/') + 1),
           file.name
         );
         await guard();

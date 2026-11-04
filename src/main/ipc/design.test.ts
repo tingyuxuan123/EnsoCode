@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { DesignCaptureService } from '../services/design/capture';
 import { DesignEngineService } from '../services/design/engine';
 import { DesignServiceError } from '../services/design/errors';
+import * as roots from '../services/design/roots';
 import { DesignScriptService } from '../services/design/scripts';
 import { DesignStorage } from '../services/design/storage';
 import { DesignWatchService } from '../services/design/watch';
@@ -29,6 +30,33 @@ vi.mock('../services/agentHost', () => ({ setDesignCanvasCwds: vi.fn() }));
 import { createDesignHandlers } from './design';
 
 const temps: string[] = [];
+it.each([
+  ['c:\\工作区\\app', 'C:/工作区/app'],
+  ['c:\\', 'C:/'],
+  ['/private/work', '/private/work'],
+])('resolveRoot exposes SDK paths without mutating native authority: %s', async (native, sdk) => {
+  const { handlers, event } = await fixture();
+  const ref = { kind: 'session' as const, sessionId: 's' };
+  const root = { ref, path: native };
+  vi.spyOn(roots, 'resolveDesignRoot').mockResolvedValue(root);
+  expect(await handlers.resolveRoot(event, ref)).toEqual({ ok: true, root: { ref, path: sdk } });
+  expect(root.path).toBe(native);
+});
+it.each([
+  '\\\\server\\share',
+  '\\\\?\\C:\\work',
+  '\\\\.\\C:\\work',
+  '//server/share',
+  'C:work',
+  'C:\\work\\..\\secret',
+  'C:\\work\\.\\app',
+  'C:\\work\0app',
+])('resolveRoot rejects unsupported native roots: %s', async (path) => {
+  const { handlers, event } = await fixture();
+  const ref = { kind: 'session' as const, sessionId: 's' };
+  vi.spyOn(roots, 'resolveDesignRoot').mockResolvedValue({ ref, path });
+  expect(await handlers.resolveRoot(event, ref)).toMatchObject({ ok: false });
+});
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.clearAllMocks();

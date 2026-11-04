@@ -18,19 +18,23 @@ import { listRegisteredDesignTools, setDesignViewingSession, startDesignRuntime 
 afterEach(() => vi.unstubAllGlobals());
 it('activates upstream headlessly, registers all tools and replies through design IPC', async () => {
   let invoke: ((event: DesignToolRequestEvent) => void) | undefined;
+  let hook: ((event: DesignHookEvent) => void) | undefined;
   const respondTool = vi.fn(async (_response: unknown) => ({ ok: true }));
   const registerRuntime = vi.fn(async (_registration: unknown) => ({ ok: true }));
   vi.stubGlobal('electronAPI', {
     design: {
       storage: async () => ({ ok: true, data: null }),
       network: async () => ({ ok: false, error: 'offline', code: 'FAILED' }),
-      resolveRoot: async (ref: unknown) => ({ ok: true, root: { ref, path: '/work' } }),
+      resolveRoot: async (ref: unknown) => ({ ok: true, root: { ref, path: 'C:/工作区' } }),
       onToolRequest: (listener: typeof invoke) => {
         invoke = listener;
         return () => {};
       },
       onToolCancel: (_listener: (event: DesignToolCancelEvent) => void) => () => {},
-      onHook: (_listener: (event: DesignHookEvent) => void) => () => {},
+      onHook: (listener: (event: DesignHookEvent) => void) => {
+        hook = listener;
+        return () => {};
+      },
       registerRuntime,
       respondTool,
     },
@@ -73,4 +77,20 @@ it('activates upstream headlessly, registers all tools and replies through desig
     ok: true,
     result: { content: [{ type: 'text' }] },
   });
+  designHooks.clear();
+  const handler = vi.fn(async () => {});
+  designHooks.set('windows-hook', {
+    id: 'windows-hook',
+    eventName: 'Stop',
+    scope_use: ['conversation'],
+    handler,
+  });
+  hook?.({ event: 'stop', sessionId: 's', cwd: 'C:\\工作区' });
+  await vi.waitFor(() => expect(handler).toHaveBeenCalled());
+  expect(handler).toHaveBeenCalledWith(
+    expect.objectContaining({
+      session: expect.objectContaining({ id: 's', cwd: 'C:/工作区' }),
+      event: expect.objectContaining({ eventName: 'Stop', cwd: 'C:/工作区' }),
+    })
+  );
 });
