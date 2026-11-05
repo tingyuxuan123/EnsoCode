@@ -90,6 +90,24 @@ it.each([{ canCreate: false }, { deviceReadOnly: true }, { connState: 'offline' 
   }
 );
 
+it('同步超时后给出可重试的失败态，而不是一直显示加载中', () => {
+  const retry = vi.fn();
+  const waiting = render({ view: null, syncing: true, onRetrySync: retry });
+  expect(waiting).not.toContain('没读到会话历史');
+  const failed = render({
+    view: null,
+    syncing: true,
+    syncFailed: true,
+    onRetrySync: retry,
+  });
+  expect(failed).toContain('没读到会话历史');
+  expect(failed).toContain('重试');
+  // 有本地缓存正文时不盖失败态：正文仍可看
+  const cached = emptyGuestView();
+  cached.messages.set(0, { role: 'user', content: [{ type: 'text', text: 'hi' }] });
+  expect(render({ view: cached, syncing: true, syncFailed: true })).not.toContain('没读到会话历史');
+});
+
 it('keeps current progress in the shared task dock, including read-only conversations', () => {
   const view = emptyGuestView();
   view.messages.set(20, {

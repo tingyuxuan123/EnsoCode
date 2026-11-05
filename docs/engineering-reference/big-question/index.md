@@ -12,6 +12,7 @@
 | [browser-devtools-close-layout.md](browser-devtools-close-layout.md) | 关闭 DevTools 后网页下方留白、更多菜单被原生网页盖住 |
 | [ios-pwa-header-blur.md](ios-pwa-header-blur.md) | Safari 正常，独立 PWA 顶部标题模糊；透明遮罩又留下灰色状态栏 |
 | [pair-web-replaced-loop.md](pair-web-replaced-loop.md) | 同一配对多个 Web 页面互踢，连接状态反复切换、页面闪烁 |
+| [pair-sync-retry-deadlock.md](pair-sync-retry-deadlock.md) | 手机远程一直停在「正在读取历史…」：快照请求丢了，重试订阅也不重新索要 |
 | [dedupe-identity.md](dedupe-identity.md) | 去重没生效，同一个东西导入了三份 |
 | [agent-end-run-scoped-messages.md](agent-end-run-scoped-messages.md) | 多轮对话后历史消息消失，只剩最近一轮 |
 | [checkpoint-cross-session-wipe.md](checkpoint-cross-session-wipe.md) | 「回退+文件」不还原文件，无报错 |

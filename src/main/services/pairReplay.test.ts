@@ -535,6 +535,25 @@ describe('pairHost session-sync 接线', () => {
     });
   });
 
+  it('首轮快照请求丢失后，后续重试订阅会再次索要快照，不让手机一直等一个不会来的应答', async () => {
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
+    // 手机按同一 requestId 每 10s 重试一次；紧跟首轮的突发重复（peer-joined + onopen）只吃一次
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
+    expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1);
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
+
+    // 补要的快照到达后仍按最初 requestId 兑现，手机端不需要换号
+    forwardAgentEvent(snapshotEvent());
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
+    expect((await sentPayloads())[0]).toMatchObject({
+      type: 'session-sync',
+      mode: 'snapshot',
+      requestId: 'lost',
+    });
+  });
+
   it('桌面自发快照只通知版本失效，不重发已完成请求的正文快照', async () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'initial' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));

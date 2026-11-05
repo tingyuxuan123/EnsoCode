@@ -158,6 +158,7 @@ describe('PairClient 缓存与续传', () => {
       onProviders: vi.fn(),
       onSession: vi.fn(),
       onSync: vi.fn(),
+      onSyncFailed: vi.fn(),
       onGhostSession: vi.fn(),
     };
     client = new PairClient(device, events, null, cache);
@@ -726,6 +727,28 @@ describe('PairClient 缓存与续传', () => {
     await vi.advanceTimersByTimeAsync(20_000);
     expect(socket.sent.filter((item) => item.type === 'subscribe')).toHaveLength(count + 1);
     expect(events.onSync).toHaveBeenLastCalledWith('synced');
+  });
+
+  it('同步应答始终不来时有界重试后明确失败，手动重试仍能接上正文', async () => {
+    const socket = await start();
+    expect(events.onSync).toHaveBeenLastCalledWith('syncing');
+    const count = socket.sent.filter((item) => item.type === 'subscribe').length;
+
+    await vi.advanceTimersByTimeAsync(10_000 * 10);
+    expect(events.onSyncFailed).toHaveBeenCalledWith('s', true);
+    // 重试有界：失败后不再空转，不能一边显示加载态一边无限发 subscribe
+    const sent = socket.sent.filter((item) => item.type === 'subscribe').length;
+    expect(sent).toBe(count + 6);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(socket.sent.filter((item) => item.type === 'subscribe')).toHaveLength(sent);
+
+    client.retrySync();
+    await settle();
+    expect(events.onSyncFailed).toHaveBeenLastCalledWith('s', false);
+    replay(socket);
+    await settle();
+    expect(events.onSync).toHaveBeenLastCalledWith('synced');
+    expect(client.getSession('s')?.messages.get(0)).toEqual(text('old'));
   });
 
   it('仅展示旧缓存不重复写盘；前后台重复flush不刷新过期时间', async () => {

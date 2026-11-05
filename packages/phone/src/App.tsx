@@ -147,6 +147,8 @@ export function App() {
   const [view, setView] = useState<SessionView | null>(null);
   /** 订阅会话同步中（subscribe 已发、snapshot 未回）：此时时间线可能是陈旧的 */
   const [syncing, setSyncing] = useState(false);
+  /** 等同步应答超时的会话：桌面端给不出正文时显示可重试的失败态，不永久转圈 */
+  const [syncFailedId, setSyncFailedId] = useState<string | null>(null);
   /** 上滑翻页在途的会话 */
   const [historyPending, setHistoryPending] = useState<ReadonlySet<string>>(new Set());
   /** 马上发送：本地乐观上墙，等权威 user 消息到达再收掉 */
@@ -508,6 +510,8 @@ export function App() {
           );
       },
       onSync: (state) => setSyncing(state === 'syncing'),
+      onSyncFailed: (sessionId, failed) =>
+        setSyncFailedId((prev) => (failed ? sessionId : prev === sessionId ? null : prev)),
       onGhostSession: (id) => {
         // 订阅的会话已在桌面被删：跳回列表态，由 firstId 兑底选最近一条
         if (id === activeIdRef.current) setActiveId(null);
@@ -1100,6 +1104,11 @@ export function App() {
         connState={state}
         stateLabel={connectionLabel}
         syncing={syncing && Boolean(subscribedId)}
+        syncFailed={syncFailedId !== null && syncFailedId === subscribedId}
+        onRetrySync={() => {
+          setSyncFailedId(null);
+          clientRef.current?.retrySync();
+        }}
         onOpenDrawer={openDrawer}
         drawerDocked={docked}
         onNewSession={() => !process && void newBotSession(chat.id)}
@@ -1309,6 +1318,11 @@ export function App() {
             connState={state}
             stateLabel={connectionLabel}
             syncing={syncing && Boolean(activeId)}
+            syncFailed={syncFailedId !== null && syncFailedId === activeId}
+            onRetrySync={() => {
+              setSyncFailedId(null);
+              clientRef.current?.retrySync();
+            }}
             onOpenDrawer={openDrawer}
             drawerDocked={docked}
             onNewSession={() => {

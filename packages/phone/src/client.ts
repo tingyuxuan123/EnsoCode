@@ -92,6 +92,13 @@ export type BotChatStateFrame = Extract<HostToPhone, { type: 'bot-chat-state' }>
 export type BotSendResultFrame = Extract<HostToPhone, { type: 'bot-send-result' }>;
 
 const VOICE_TIMEOUT_MS = 60_000;
+/** 会话同步应答的重试间隔；host 侧按同一节奏补要快照 */
+const SYNC_RETRY_MS = 10_000;
+/**
+ * 同步应答最多重试次数。桌面端始终给不出该会话正文（resume 被拒、worker 没有该会话、
+ * 快照请求丢失）时必须有终态：交给上层显示可重试的失败态，不能永久停在「正在读取历史」。
+ */
+const SYNC_RETRY_LIMIT = 6;
 /** 约 200ms 一块：桌面边收边识别 */
 const VOICE_CHUNK_SAMPLES = SPEECH_SAMPLE_RATE / 5;
 const SPEECH_ERRORS: readonly string[] = [
@@ -111,6 +118,8 @@ export interface ClientEvents {
   onPushConfig?(vapidPublicKey: string): void;
   /** 订阅到快照或增量确认之间为 syncing；旧内容仍可展示 */
   onSync?(state: SyncState): void;
+  /** 等待同步应答超时（failed=true）或重新开始订阅（false）：上层显示可重试的失败态 */
+  onSyncFailed?(sessionId: string, failed: boolean): void;
   /** 订阅的会话已被桌面删除（曾在目录、现在消失）：上层应跳离该会话 */
   onGhostSession?(sessionId: string): void;
   /** 上滑翻页在途变化 */
@@ -187,6 +196,10 @@ export class PairClient {
   } | null = null;
   private freshSessionId: string | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 当前 pendingSync 已经重试过几次（换订阅/拿到应答时归零） */
+  private syncAttempts = 0;
+  /** 已经向用户报过「同步超时」的会话；重新订阅或迟到应答到达时清除 */
+  private syncFailedId: string | null = null;
   private receiveQueue = Promise.resolve();
   private sendQueue = Promise.resolve();
   private cacheReady = false;
@@ -1135,6 +1148,8 @@ export class PairClient {
   private setSync(next: SyncTracking): void {
     const changed = next.state !== this.sync.state;
     this.sync = next;
+    // 同步真正落定（应答兑现、目录判定幽灵、回到列表）时撤销失败态，迟到应答也能自愈
+    if (next.state === 'synced') this.setSyncFailed(null);
     if (changed) this.events.onSync?.(next.state);
   }
 
@@ -1151,6 +1166,8 @@ export class PairClient {
   subscribe(sessionId: string | null, opts?: { fresh?: boolean }): void {
     if (this.closed || this.revoked) return;
     this.stopSyncRetry();
+    this.syncAttempts = 0;
+    this.setSyncFailed(null);
     this.subscribedId = sessionId;
     if (opts?.fresh) this.freshSessionId = sessionId;
     else if (sessionId !== this.freshSessionId || (sessionId && this.baselines.has(sessionId)))
@@ -1197,13 +1214,38 @@ export class PairClient {
     if (this.pendingSync) this.armSyncRetry(command, this.pendingSync.requestId);
   }
 
+  /** 报一次同步失败/撤销：同一会话不重复报，避免上层状态抖动 */
+  private setSyncFailed(sessionId: string | null): void {
+    if (this.syncFailedId === sessionId) return;
+    const previous = this.syncFailedId;
+    this.syncFailedId = sessionId;
+    if (sessionId) this.events.onSyncFailed?.(sessionId, true);
+    else if (previous) this.events.onSyncFailed?.(previous, false);
+  }
+
+  /** 失败态下的手动重试：重新订阅当前会话（新 requestId + 重新起算重试次数） */
+  retrySync(): void {
+    if (this.closed || this.revoked) return;
+    const id = this.subscribedId;
+    if (!id) return;
+    this.subscribe(id);
+  }
+
   private armSyncRetry(command: PhoneToHost, requestId: string): void {
     this.syncTimer = setTimeout(() => {
-      if (this.closed || this.revoked || this.pendingSync?.requestId !== requestId) return;
+      const pending = this.pendingSync;
+      if (this.closed || this.revoked || !pending || pending.requestId !== requestId) return;
+      if (this.syncAttempts >= SYNC_RETRY_LIMIT) {
+        // 保留 pendingSync：迟到的应答仍可兑现；只是不再空转，交给上层显示失败态
+        this.stopSyncRetry();
+        this.setSyncFailed(pending.sessionId);
+        return;
+      }
+      this.syncAttempts += 1;
       // 重试沿用 requestId：慢快照仍可兑现，不被不断换号的重试饿死。
       this.send(command);
       this.armSyncRetry(command, requestId);
-    }, 10_000);
+    }, SYNC_RETRY_MS);
   }
 
   private stopSyncRetry(): void {

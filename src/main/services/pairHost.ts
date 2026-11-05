@@ -159,6 +159,8 @@ interface Connection {
     revision: number;
     answered?: boolean;
   };
+  /** 同一个未答 sync 已经吃掉几次重复订阅：突发重复只吃一次，之后的重试必须再要快照 */
+  syncRetries?: number;
   syncRevision: number;
   syncLiveRevision?: number;
   /** 该连接用过 session-sync；之后 live 事件带 cursor，不受 pendingSync 应答影响 */
@@ -1256,8 +1258,13 @@ async function handleFrame(
           );
           conn.pendingSync.answered = true;
           conn.syncLiveRevision = revision;
-        } else if (!waiting) {
-          snapshotForPhone(sessionId, true);
+        } else {
+          // 手机按同一 requestId 每 10s 重试。紧跟首轮的突发重复（peer-joined + onopen）
+          // 只吃一次，避免重复打 worker；之后仍在等就再要一次快照：首轮请求丢在
+          // resume/spawn 线上时，重试必须能自愈，否则手机永远等一个不会来的应答。
+          const retries = waiting ? (conn.syncRetries ?? 0) + 1 : 0;
+          conn.syncRetries = retries;
+          if (!waiting || retries > 1) snapshotForPhone(sessionId, true);
         }
       } else if (command.sessionId) {
         // 历史会话在 worker 里没有投影，先请渲染层恢复（与桌面点开会话同路径）。

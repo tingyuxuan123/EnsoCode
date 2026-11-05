@@ -64,6 +64,9 @@ interface Props {
   notice?: string | null;
   /** 订阅会话同步中：标题旁状态灯用 amber pulse */
   syncing?: boolean;
+  /** 等同步应答超时且本机没有正文：显示可重试的失败态，不永久转圈 */
+  syncFailed?: boolean;
+  onRetrySync?: () => void;
   canCreate: boolean;
   onOpenDrawer(): void;
   /** 大屏横屏侧栏已常驻：左上不再显示抽屉入口（bot.onBack 仍优先显示返回） */
@@ -422,6 +425,21 @@ export function ChatScreen(props: Props) {
             <p className="text-muted-foreground text-sm">
               {props.connState === 'online' ? '从左上角选择会话，或新建一个' : props.stateLabel}
             </p>
+          </div>
+        ) : view === null && props.syncFailed ? (
+          // 桌面端一直给不出这个会话的正文（resume 被拒 / 快照始终没回）：
+          // 有界重试已耗尽，明确失败并让用户重试，而不是永远转圈
+          <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              没读到会话历史：桌面端没有回应这个会话。请确认桌面端仍在运行后重试。
+            </p>
+            <button
+              type="button"
+              onClick={props.onRetrySync}
+              className="rounded-md border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
+            >
+              重试
+            </button>
           </div>
         ) : (
           <MessageTimeline
