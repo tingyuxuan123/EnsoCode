@@ -73,11 +73,22 @@ it('explains idle-boundary hot toggles and labels only spawn-bound tools', () =>
   );
   expect(html).not.toContain('Turning a tool on applies to new sessions');
   expect(html).toContain(
-    'Isolated sandbox, workspace write access and goal tools keep their spawn-time configuration.'
+    'Script orchestration, workspace write access and goal tools keep their spawn-time configuration.'
   );
-  expect(html).toMatch(/Isolated sandbox<span data-spawn-only/);
+  expect(html).toMatch(/Script orchestration<span data-spawn-only/);
+  expect(html).not.toContain('Isolated sandbox');
   expect(html).not.toMatch(/Code search<span data-spawn-only/);
   expect(html).not.toMatch(/Browser<span data-spawn-only/);
+});
+
+it('script orchestration keeps the persisted tool id when toggled', () => {
+  renderToStaticMarkup(<BuiltinToolsSettings />);
+  const script = controls.switches.find(
+    (control) => control['aria-label'] === 'Script orchestration'
+  );
+  expect(script?.checked).toBe(true);
+  script?.onCheckedChange?.(false);
+  expect(controls.toggleBuiltinTool).toHaveBeenCalledWith('isolated_sandbox', false);
 });
 
 it('LCU 独立行紧邻 Computer，展示新会话限制且不加入内置工具清单', () => {

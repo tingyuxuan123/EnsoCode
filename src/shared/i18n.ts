@@ -112,8 +112,8 @@ export const zhTranslations: Record<string, string> = {
   'Temporary chats are kept until you delete them.': '临时会话会保留，直到你主动删除。',
   'Open sessions apply tool changes when the current turn finishes. Running tools and agents are not stopped.':
     '已打开会话会在当前回合结束后应用工具开关，不会停止正在运行的工具或代理。',
-  'Isolated sandbox, workspace write access and goal tools keep their spawn-time configuration.':
-    '隔离沙箱、工作区写入权限和目标工具仍沿用会话启动时的配置。',
+  'Script orchestration, workspace write access and goal tools keep their spawn-time configuration.':
+    '脚本工具编排、工作区写入权限和目标工具仍沿用会话启动时的配置。',
   'Computer is ready. Open sessions can use it after the current turn finishes.':
     '桌面工具已就绪，已打开会话可在当前回合结束后使用。',
   'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to EnsoCode, then restart.':
@@ -1522,7 +1522,7 @@ export const zhTranslations: Record<string, string> = {
   'Add candidate': '添加候选',
   'Final fallback: Exa (keyless hosted search). Not a chain entry; always last.':
     '最终兜底：Exa（免 key 托管搜索）。不是链条目，永远在最后。',
-  'Isolated sandbox': '隔离沙箱',
+  'Script orchestration': '脚本工具编排',
   Memory: '记忆',
   'Durable knowledge the agent can search and write across sessions. Stored locally in a SQLite database.':
     '可跨会话检索与写入的持久知识,本地存放在一个 SQLite 库里。',
@@ -1780,8 +1780,8 @@ export const zhTranslations: Record<string, string> = {
     '长期记忆:agent 可跨会话检索、记录与归纳持久的决策、偏好与经验',
   'Plan mode: research read-only, submit a plan for approval, then carry it out after approval':
     'Plan 模式：只读调研并提交计划，审批通过后再执行',
-  'Run JavaScript in an isolated sandbox that can call session tools. Intermediate reads and edits stay out of the chat; only the returned value is added to the conversation.':
-    '在隔离沙箱里跑 JavaScript，并可调用会话工具。中间的读取和修改不会进对话，只有返回值会留下。',
+  'Use JavaScript to batch session tool calls and filter results before adding them to the conversation. Changes made through tools take real effect.':
+    '用 JavaScript 批量调用会话工具，筛选结果后再带回对话，减少上下文占用。通过工具执行的修改会真实生效。',
   Workflow: '工作流',
   'Run a JavaScript workflow that fans work out across subagents.':
     '运行一段扇出子代理的 JavaScript 工作流。',

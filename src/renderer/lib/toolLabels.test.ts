@@ -11,6 +11,13 @@ describe('toolLabel', () => {
     expect(toolLabel('bash', zh)).toBe('bash');
   });
 
+  it('脚本工具编排统一命名，兼容历史 exec 工具记录', () => {
+    for (const name of ['codemode', 'exec']) {
+      expect(toolLabel(name, zh)).toBe('脚本工具编排');
+      expect(toolLabel(name, (key) => getTranslation('en', key))).toBe('Script orchestration');
+    }
+  });
+
   it('映射表里的词条都有中文', () => {
     for (const key of [
       ...Object.values(TOOL_LABEL_KEYS),

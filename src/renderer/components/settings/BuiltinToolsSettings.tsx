@@ -317,7 +317,7 @@ export function BuiltinToolsSettings() {
         </p>
         <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t(
-            'Isolated sandbox, workspace write access and goal tools keep their spawn-time configuration.'
+            'Script orchestration, workspace write access and goal tools keep their spawn-time configuration.'
           )}
         </p>
       </div>

@@ -40,4 +40,9 @@ describe('human approval fallback', () => {
     expect(render({ protected: 'secret' })).not.toContain('Always allow this session');
     expect(render({ phase: 'reviewing' })).not.toContain('Always allow this session');
   });
+  it('labels nested tool approvals as script orchestration', () => {
+    const html = render({ toolCallId: 'script/1' });
+    expect(html).toContain('Script orchestration › bash');
+    expect(html).not.toContain('Isolated sandbox');
+  });
 });

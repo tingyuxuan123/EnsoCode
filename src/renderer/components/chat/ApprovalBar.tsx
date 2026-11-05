@@ -99,7 +99,7 @@ export function ApprovalBar({
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate font-mono">
             {active.toolCallId && isNestedToolCallId(active.toolCallId)
-              ? `${t('Isolated sandbox')} › ${toolLabel(active.tool, t)}`
+              ? `${t('Script orchestration')} › ${toolLabel(active.tool, t)}`
               : toolLabel(active.tool, t)}
           </span>
         </span>

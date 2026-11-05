@@ -71,9 +71,9 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
   },
   {
     id: 'isolated_sandbox',
-    name: 'Isolated sandbox',
+    name: 'Script orchestration',
     description:
-      'Run JavaScript in an isolated sandbox that can call session tools. Intermediate reads and edits stay out of the chat; only the returned value is added to the conversation.',
+      'Use JavaScript to batch session tool calls and filter results before adding them to the conversation. Changes made through tools take real effect.',
   },
   {
     id: 'computer',
