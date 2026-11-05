@@ -1,13 +1,37 @@
-version: 0.2.46
+version: 0.2.53
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.46/EnsoCode-0.2.46-arm64-mac.zip
-    sha512: +Pa0xwE5Lfea7Uyu34rd743ZZcM8PL+7sSS9B6ibbfNWH5nE+MXC8Ki0XyJwvFYN57NIeAeT28djFfcdBGslPA==
-    size: 183309591
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.46/EnsoCode-0.2.46-arm64.dmg
-    sha512: Ai0QXSg2LJdYLH225tcf9vmrq/cuqhqYKFI/EXTsGwCbJu9OnLIJSHilhzmoPTWs9T1JPaWLQUPFKZ4Fq+2IIQ==
-    size: 178104780
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.46/EnsoCode-0.2.46-arm64-mac.zip
-sha512: +Pa0xwE5Lfea7Uyu34rd743ZZcM8PL+7sSS9B6ibbfNWH5nE+MXC8Ki0XyJwvFYN57NIeAeT28djFfcdBGslPA==
-releaseDate: 2026-11-04T06:55:34.047Z
-releaseName: EnsoCode 0.2.46 — 个人测试
-releaseNotes: 个人测试通道 0.2.46：仅供信任 EnsoCode Local Signing 证书的 Mac 使用。不是正式发布。
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.53/EnsoCode-0.2.53-arm64-mac.zip
+    sha512: gItvucJx2tbfHt0WVOri1uDZu86xwXz2HhyPVGRmfsPIXv24/CNu+DcCjarACH744hzeI8A+ozLqeHAplZhBAA==
+    size: 183333093
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.53/EnsoCode-0.2.53-arm64.dmg
+    sha512: PoBh52EpmH9Qjrma8PBqQOxRAxYe0xa0mf0t1xlRRW1f+pbPyFAhWlwI07WzZZCAwPggT4mzc18C+VZrcIM3+g==
+    size: 178121843
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.53/EnsoCode-0.2.53-arm64-mac.zip
+sha512: gItvucJx2tbfHt0WVOri1uDZu86xwXz2HhyPVGRmfsPIXv24/CNu+DcCjarACH744hzeI8A+ozLqeHAplZhBAA==
+releaseDate: 2026-11-05T00:19:12.454Z
+releaseName: EnsoCode 0.2.53 — 个人测试
+releaseNotes: >
+  # EnsoCode 0.2.53
+
+
+  本次 Mac arm64 个人版包含自 0.2.46 以来的桌面更新。
+
+
+  - **Bot
+  设计交稿**：私聊和群聊可在消息里预览设计封面、点击打开画布；支持视觉输入的模型可以截图并读图。内置设计技能在本地项目首轮发消息前即可从技能菜单选择。
+
+  - **协作看板**：左侧全局栏新增跨群看板，可按群聊或待处理事项筛选，并跳回原群定位任务。
+
+  - **扩展管理**：Code 侧栏新增扩展入口，集中管理技能、MCP 和插件；新增本地插件作者模板与静态校验，并隔离插件界面的局部异常。
+
+  - **更新体验**：查看当前更新版本的发布说明；关闭自动更新后仍可手动检查和下载。
+
+  - **工作台与稳定性**：改进薄荷白浅色方案选择器，工具输出显示系统提醒；改善知识图谱异常结果重试、向量检索同分排序及 Codemode
+  顶层工具提示，并加入按证据复核的审查预设。
+
+
+  ---
+
+
+  个人测试通道 0.2.53：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
