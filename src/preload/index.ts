@@ -281,6 +281,7 @@ import type {
   SpeechStatusDto,
   SpeechTranscribeResult,
 } from '@shared/types/speech';
+import type { TaskBoardNavigation, TaskBoardWindowResult } from '@shared/types/taskBoard';
 import type { UpdateStatus } from '@shared/types/updater';
 import type {
   WorkflowPresetDraft,
@@ -1243,6 +1244,22 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.NODES_MESSAGE, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.NODES_MESSAGE, listener);
     },
+  },
+
+  taskBoard: {
+    open: (): Promise<TaskBoardWindowResult> => ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_OPEN),
+    focusMain: (): Promise<TaskBoardWindowResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_FOCUS_MAIN),
+    navigate: (target: TaskBoardNavigation): Promise<TaskBoardWindowResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_NAVIGATE, target),
+    /** 只通知有待处理目标；消费与推送不重复触发导航。 */
+    onNavigate: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
+    },
+    consumeNavigation: (): Promise<TaskBoardNavigation | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_NAVIGATION_CONSUME),
   },
 
   window: {

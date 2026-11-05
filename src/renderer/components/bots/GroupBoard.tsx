@@ -37,6 +37,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Menu,
   MenuItem,
@@ -47,10 +48,18 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from '@/components/ui/menu';
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { Z_INDEX } from '@/lib/z-index';
 import { useBotsStore } from '@/stores/bots';
 import { formatElapsed, isRetried } from '@/stores/bots/delegations';
 import {
@@ -127,11 +136,7 @@ export function TaskBoard({
 }) {
   const { t } = useI18n();
   const tasks = useBotsStore((s) => s.tasks[chat.id]);
-  const bots = useBotsStore((s) => s.bots);
-  const delegations = useBotsStore((s) => s.delegations);
-  const [editing, setEditing] = useState<GroupTask | 'new' | null>(null);
-  const [deleting, setDeleting] = useState<GroupTask | null>(null);
-  const [returning, setReturning] = useState<{ task: GroupTask; rework: boolean } | null>(null);
+  const [creating, setCreating] = useState(false);
   const taskFocus = useBotsStore((s) => (s.taskFocus?.chatId === chat.id ? s.taskFocus : null));
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [revealedTaskId, setRevealedTaskId] = useState<string | null>(null);
@@ -140,11 +145,7 @@ export function TaskBoard({
   const now = useNow(
     Boolean(tasks?.some((task) => task.status === 'blocked' || stalledTaskRun(task)))
   );
-  const byId = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots]);
-  const members = chat.members.flatMap((id) => {
-    const bot = byId.get(id);
-    return bot && bot.archivedAt === undefined ? [bot] : [];
-  });
+  const { card, dialogs } = useTaskManagement(chat, onOpenConversation, now);
 
   // 从时间线 / 收件箱定位卡片：先解除筛选和历史截断，再滚动高亮。
   useEffect(() => {
@@ -172,42 +173,9 @@ export function TaskBoard({
     return () => clearTimeout(timer);
   }, [highlight]);
 
-  const run = async (action: () => Promise<{ ok: boolean; error?: string }>, failed: string) => {
-    const result = await action();
-    if (!result.ok)
-      addToast({ type: 'error', title: failed, description: taskErrorText(result.error ?? '', t) });
-    void useBotsStore.getState().refreshTasks(chat.id);
-  };
-  const api = window.electronAPI.bots.tasks;
-  const ref = (task: GroupTask) => ({ chatId: chat.id, id: task.id });
-
   const filtered = attentionOnly && !taskFocus;
   const columns = taskColumns(
     filtered ? (tasks ?? []).filter((task) => attentionIds.has(task.id)) : (tasks ?? [])
-  );
-  const card = (task: GroupTask) => (
-    <TaskCard
-      key={task.id}
-      task={task}
-      bots={byId}
-      members={members}
-      onOpenConversation={onOpenConversation}
-      block={taskBlockInfo(task, delegations)}
-      now={now}
-      highlighted={highlight === task.id}
-      onEdit={() => setEditing(task)}
-      onAssign={(botId) =>
-        void run(() => api.assign({ ...ref(task), botId }), t('Task not assigned'))
-      }
-      onComplete={() => void run(() => api.complete(ref(task)), t('Task not updated'))}
-      onAccept={() =>
-        void run(() => api.review({ ...ref(task), accept: true }), t('Task not updated'))
-      }
-      onReturn={(rework) => setReturning({ task, rework })}
-      onCancel={() => void run(() => api.cancel(ref(task)), t('Task not updated'))}
-      onDelete={() => setDeleting(task)}
-      onReply={(text) => replyToTask(chat.id, task.id, text, t)}
-    />
   );
   const renderGroup = (status: GroupTaskStatus) => {
     const items = columns[status];
@@ -216,7 +184,9 @@ export function TaskBoard({
     const limit = status === 'done' ? Math.max(RECENT, revealed + 1) : undefined;
     return (
       <Group key={status} title={t(TASK_LABELS[status])} count={items.length} limit={limit}>
-        {(shown) => items.slice(0, shown).map(card)}
+        {(shown) =>
+          items.slice(0, shown).map((task) => card(task, { highlighted: highlight === task.id }))
+        }
       </Group>
     );
   };
@@ -225,7 +195,7 @@ export function TaskBoard({
       <div className="shrink-0 border-line border-b px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <h2 className="min-w-0 flex-1 truncate font-semibold text-sm">{t('Task board')}</h2>
-          <Button size="xs" onClick={() => setEditing('new')}>
+          <Button size="xs" onClick={() => setCreating(true)}>
             <Plus />
             {t('New task')}
           </Button>
@@ -268,13 +238,88 @@ export function TaskBoard({
           </>
         )}
       </div>
+      {creating && (
+        <TaskEditor
+          chatId={chat.id}
+          onClose={(saved) => {
+            setCreating(false);
+            if (saved) void useBotsStore.getState().refreshTasks(chat.id);
+          }}
+        />
+      )}
+      {dialogs}
+    </div>
+  );
+}
+
+/** Same task actions and lifecycle in both the group and the independent board. */
+function useTaskManagement(
+  chat: BotChat,
+  onOpenConversation: ((conversationId: string, title: string) => void) | undefined,
+  now: number
+) {
+  const { t } = useI18n();
+  const bots = useBotsStore((s) => s.bots);
+  const delegations = useBotsStore((s) => s.delegations);
+  const [editing, setEditing] = useState<GroupTask | null>(null);
+  const [deleting, setDeleting] = useState<GroupTask | null>(null);
+  const [returning, setReturning] = useState<{ task: GroupTask; rework: boolean } | null>(null);
+  const byId = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots]);
+  const members = (chat.members ?? []).flatMap((id) => {
+    const bot = byId.get(id);
+    return bot && bot.archivedAt === undefined ? [bot] : [];
+  });
+  const refresh = () => void useBotsStore.getState().refreshTasks(chat.id);
+  const run = async (action: () => Promise<{ ok: boolean; error?: string }>, failed: string) => {
+    try {
+      const result = await action();
+      if (!result.ok)
+        addToast({
+          type: 'error',
+          title: failed,
+          description: taskErrorText(result.error ?? '', t),
+        });
+    } catch {
+      addToast({ type: 'error', title: failed });
+    }
+    refresh();
+  };
+  const api = window.electronAPI.bots.tasks;
+  const ref = (task: GroupTask) => ({ chatId: chat.id, id: task.id });
+
+  const card = (task: GroupTask, options?: { highlighted?: boolean; expanded?: boolean }) => (
+    <TaskCard
+      key={task.id}
+      task={task}
+      bots={byId}
+      members={members}
+      onOpenConversation={onOpenConversation}
+      block={taskBlockInfo(task, delegations)}
+      now={now}
+      {...options}
+      onEdit={() => setEditing(task)}
+      onAssign={(botId) =>
+        void run(() => api.assign({ ...ref(task), botId }), t('Task not assigned'))
+      }
+      onComplete={() => void run(() => api.complete(ref(task)), t('Task not updated'))}
+      onAccept={() =>
+        void run(() => api.review({ ...ref(task), accept: true }), t('Task not updated'))
+      }
+      onReturn={(rework) => setReturning({ task, rework })}
+      onCancel={() => void run(() => api.cancel(ref(task)), t('Task not updated'))}
+      onDelete={() => setDeleting(task)}
+      onReply={(text) => replyToTask(chat.id, task.id, text, t)}
+    />
+  );
+  const dialogs = (
+    <>
       {editing && (
         <TaskEditor
           chatId={chat.id}
-          task={editing === 'new' ? undefined : editing}
+          task={editing}
           onClose={(saved) => {
             setEditing(null);
-            if (saved) void useBotsStore.getState().refreshTasks(chat.id);
+            if (saved) refresh();
           }}
         />
       )}
@@ -295,10 +340,11 @@ export function TaskBoard({
               .then((result) => {
                 if (result.ok) {
                   setReturning(null);
-                  void useBotsStore.getState().refreshTasks(chat.id);
+                  refresh();
                 }
                 return result.ok ? null : taskErrorText(result.error, t);
               })
+              .catch(() => t('Task not updated'))
           }
         />
       )}
@@ -314,7 +360,19 @@ export function TaskBoard({
           if (task) void run(() => api.remove(ref(task)), t('Task not deleted'));
         }}
       />
-    </div>
+    </>
+  );
+  return { card, dialogs };
+}
+
+export function ManagedTaskDetail({ chat, task }: { chat: BotChat; task: GroupTask }) {
+  const now = useNow(task.status === 'blocked' || Boolean(stalledTaskRun(task)));
+  const { card, dialogs } = useTaskManagement(chat, undefined, now);
+  return (
+    <>
+      {card(task, { expanded: true })}
+      {dialogs}
+    </>
   );
 }
 
@@ -334,16 +392,18 @@ function TaskCard({
   block,
   now,
   highlighted,
+  expanded,
 }: {
   task: GroupTask;
   bots: Map<string, BotProfile>;
   members: BotProfile[];
-  onOpenConversation: (conversationId: string, title: string) => void;
+  onOpenConversation?: (conversationId: string, title: string) => void;
   /** 卡住的原因、等谁、从何时起 */
   block?: TaskBlockInfo;
   now: number;
   /** 刚从时间线 / 收件箱打开 */
   highlighted?: boolean;
+  expanded?: boolean;
   onEdit: () => void;
   onAssign: (botId: string) => void;
   onComplete: () => void;
@@ -356,34 +416,50 @@ function TaskCard({
   onReply: (text: string) => Promise<boolean>;
 }) {
   const { t } = useI18n();
-  const [showDetails, setShowDetails] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const showDetails = expanded || detailOpen;
   const canShowDetails = Boolean(task.detail || task.result || task.returnReason);
   const open = task.status === 'todo' || task.status === 'doing' || task.status === 'blocked';
   const review = task.status === 'review';
   // 执行失败：仍由执行人负责，只能重试、改派或取消
   const stalled = stalledTaskRun(task);
+  const canAssign =
+    open && (!task.delegationId || task.status === 'blocked' || stalled) && members.length > 0;
+  const assignLabel = t(task.assigneeBotId ? 'Reassign to' : 'Assign to');
+  const assignItems = () =>
+    members.map((bot) => (
+      <MenuItem
+        key={bot.id}
+        disabled={bot.id === task.assigneeBotId}
+        onClick={() => onAssign(bot.id)}
+      >
+        <BotAvatar bot={bot} size="xs" />
+        {bot.name}
+      </MenuItem>
+    ));
   const assignee = task.assigneeBotId ? bots.get(task.assigneeBotId) : undefined;
   const creator =
     task.createdBy === 'human' ? t('You') : (bots.get(task.createdBy)?.name ?? t('Deleted member'));
   return (
     <div
       data-slot="bot-card"
-      data-task-id={task.id}
+      data-task-id={expanded ? undefined : task.id}
       className={cn(
         'group rounded-md border bg-card px-2.5 py-2 text-[calc(11rem/14)] transition-shadow',
-        !open && !review && 'opacity-75',
+        !expanded && !open && !review && 'opacity-75',
+        expanded && 'space-y-2 border-0 bg-transparent p-0 text-xs',
         highlighted && 'ring-2 ring-brand/60'
       )}
     >
       <div className="flex items-start gap-1.5">
         <span className="shrink-0 text-muted-foreground">#{task.seq}</span>
-        {canShowDetails ? (
+        {canShowDetails && !expanded ? (
           <button
             type="button"
             aria-expanded={showDetails}
             title={t(showDetails ? 'Hide task details' : 'Show task details')}
             className="flex min-w-0 flex-1 items-start gap-1 text-left font-medium text-sm hover:text-brand"
-            onClick={() => setShowDetails((shown) => !shown)}
+            onClick={() => setDetailOpen((shown) => !shown)}
           >
             <span className="min-w-0 break-words">{task.title}</span>
             <ChevronDown
@@ -400,7 +476,11 @@ function TaskCard({
         <Menu>
           <MenuTrigger
             aria-label={t('Task actions')}
-            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 data-popup-open:opacity-100 pointer-coarse:opacity-100"
+            className={cn(
+              'shrink-0 rounded p-1 text-muted-foreground hover:bg-muted',
+              !expanded &&
+                'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-popup-open:opacity-100 pointer-coarse:opacity-100'
+            )}
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </MenuTrigger>
@@ -409,28 +489,15 @@ function TaskCard({
               <Pencil />
               {t('Edit')}
             </MenuItem>
-            {open &&
-              (!task.delegationId || task.status === 'blocked' || stalled) &&
-              members.length > 0 && (
-                <MenuSub>
-                  <MenuSubTrigger>
-                    <UserPlus />
-                    {task.assigneeBotId ? t('Reassign to') : t('Assign to')}
-                  </MenuSubTrigger>
-                  <MenuSubPopup>
-                    {members.map((bot) => (
-                      <MenuItem
-                        key={bot.id}
-                        disabled={bot.id === task.assigneeBotId}
-                        onClick={() => onAssign(bot.id)}
-                      >
-                        <BotAvatar bot={bot} size="xs" />
-                        {bot.name}
-                      </MenuItem>
-                    ))}
-                  </MenuSubPopup>
-                </MenuSub>
-              )}
+            {!expanded && canAssign && (
+              <MenuSub>
+                <MenuSubTrigger>
+                  <UserPlus />
+                  {assignLabel}
+                </MenuSubTrigger>
+                <MenuSubPopup>{assignItems()}</MenuSubPopup>
+              </MenuSub>
+            )}
             {open && !stalled && (
               <MenuItem onClick={onComplete}>
                 <Check />
@@ -451,6 +518,15 @@ function TaskCard({
           </MenuPopup>
         </Menu>
       </div>
+      {expanded && canAssign && block?.reason !== 'failed' && (
+        <Menu>
+          <MenuTrigger render={<Button size="xs" variant="outline" />}>
+            <UserPlus />
+            {assignLabel}
+          </MenuTrigger>
+          <MenuPopup align="start">{assignItems()}</MenuPopup>
+        </Menu>
+      )}
       {task.detail && (
         <div
           className={cn(
@@ -709,49 +785,84 @@ function ReturnDialog({
   );
 }
 
-function TaskEditor({
+export function TaskEditor({
   chatId,
+  groups,
   task,
   onClose,
 }: {
-  chatId: string;
+  chatId?: string;
+  groups?: readonly BotChat[];
   task?: GroupTask;
-  onClose: (saved: boolean) => void;
+  onClose: (saved: boolean, savedChatId?: string) => void;
 }) {
   const { t } = useI18n();
+  const [selectedChatId, setSelectedChatId] = useState(
+    chatId ?? (groups?.length === 1 ? groups[0].id : '')
+  );
   const [title, setTitle] = useState(task?.title ?? '');
   const [detail, setDetail] = useState(task?.detail ?? '');
   const [check, setCheck] = useState(task?.check?.text ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const groupItems = groups?.map((group) => ({ value: group.id, label: group.title }));
   const save = async () => {
+    if (busy) return;
+    if (!selectedChatId || (groups && !groups.some((group) => group.id === selectedChatId)))
+      return setError(t('Choose a group for this task.'));
     if (!title.trim()) return setError(t('Enter a title.'));
     setBusy(true);
     try {
       const result = await window.electronAPI.bots.tasks.save({
-        chatId,
+        chatId: selectedChatId,
         title: title.trim(),
         detail: detail.trim(),
         check: check.trim(),
         ...(task ? { id: task.id } : {}),
       });
-      if (result.ok) onClose(true);
+      if (result.ok) onClose(true, selectedChatId);
       else setError(taskErrorText(result.error, t));
+    } catch {
+      setError(t('Task not updated'));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose(false)}>
+    <Dialog open onOpenChange={(open) => !open && !busy && onClose(false)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{task ? t('Edit task #{{n}}', { n: task.seq }) : t('New task')}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4">
+          {groups && !task && (
+            <div className="space-y-1">
+              <Label>{t('Task group')}</Label>
+              <Select
+                items={groupItems}
+                value={selectedChatId}
+                onValueChange={(id) => setSelectedChatId(id ?? '')}
+                disabled={busy}
+              >
+                <SelectTrigger aria-label={t('Task group')}>
+                  <SelectValue placeholder={t('Choose a group')} />
+                </SelectTrigger>
+                <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL} alignItemWithTrigger={false}>
+                  {groupItems?.map((group) => (
+                    <SelectItem key={group.value} value={group.value}>
+                      {group.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </div>
+          )}
           <div>
             <FieldLabel>{t('Task title')}</FieldLabel>
             <Input
+              aria-label={t('Task title')}
               value={title}
+              disabled={busy}
               maxLength={GROUP_TASK_TITLE_MAX}
               onChange={(event) => setTitle(event.target.value)}
             />
@@ -759,8 +870,10 @@ function TaskEditor({
           <div>
             <FieldLabel>{t('Details')}</FieldLabel>
             <Textarea
+              aria-label={t('Details')}
               rows={4}
               value={detail}
+              disabled={busy}
               maxLength={GROUP_TASK_TEXT_MAX}
               onChange={(event) => setDetail(event.target.value)}
             />
@@ -768,7 +881,9 @@ function TaskEditor({
           <div>
             <FieldLabel>{t('Acceptance check (optional)')}</FieldLabel>
             <Input
+              aria-label={t('Acceptance check (optional)')}
               value={check}
+              disabled={busy}
               maxLength={TASK_CHECK_TEXT_MAX}
               onChange={(event) => setCheck(event.target.value)}
             />
@@ -781,7 +896,7 @@ function TaskEditor({
           {error && <p className="text-destructive text-sm">{error}</p>}
         </DialogPanel>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onClose(false)}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => onClose(false)}>
             {t('Cancel')}
           </Button>
           <Button size="sm" disabled={busy} onClick={() => void save()}>

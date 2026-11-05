@@ -30,6 +30,7 @@ import { registerResourceHandlers } from './resources';
 import { registerSettingsHandlers } from './settings';
 import { registerSpeechHandlers } from './speech';
 import { registerSshConnectionHandlers } from './sshConnections';
+import { registerTaskBoardHandlers } from './taskBoard';
 import { registerTerminalHandlers } from './terminal';
 import { registerUpdaterHandlers } from './updater';
 import { registerUsageHandlers } from './usage';
@@ -41,6 +42,7 @@ export function registerIpcHandlers(): void {
   registerSettingsHandlers();
   registerModelDirectoryHandlers();
   registerWindowHandlers();
+  registerTaskBoardHandlers();
   registerProviderHandlers();
   registerAssetHandlers();
   registerConfigSyncHandlers();

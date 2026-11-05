@@ -142,6 +142,7 @@ import { botAssistantModelCandidates, titleModelCandidates } from '../services/t
 import { getUsagePricing, loadUsageSession } from '../services/usage/usageService';
 import { sendToAllWindows } from '../windows/createAppWindow';
 import { isMainWebContents } from '../windows/MainWindow';
+import { isTaskBoardWebContents } from '../windows/TaskBoardWindow';
 import {
   getSourceAuthorityRegistry,
   readSessionHistoryFile,
@@ -973,9 +974,21 @@ async function switchBotSession(services: BotServices, request: unknown): Promis
 
 type Handler = (sender: number, request: unknown, bots: BotServices) => unknown;
 
+/** 独立看板仅能管理任务，不能借共享 preload 获得其他 Bot 写权限。 */
+const TASK_BOARD_WRITES = new Set<string>([
+  IPC_CHANNELS.BOT_TASK_SAVE,
+  IPC_CHANNELS.BOT_TASK_ASSIGN,
+  IPC_CHANNELS.BOT_TASK_COMPLETE,
+  IPC_CHANNELS.BOT_TASK_CANCEL,
+  IPC_CHANNELS.BOT_TASK_DELETE,
+  IPC_CHANNELS.BOT_TASK_REVIEW,
+  IPC_CHANNELS.BOT_TASK_REPLY,
+  IPC_CHANNELS.BOT_DELEGATION_RETRY,
+]);
+
 /**
  * 开关关闭时一律返回 whenDisabled 且不创建任何 Bot 服务（列表类返回空 + enabled:false）；
- * write 另要求主窗口。
+ * write 另要求主窗口；独立看板只授予显式列举的任务管理写能力。
  */
 function handle(
   channel: string,
@@ -984,7 +997,12 @@ function handle(
   whenDisabled: unknown = DISABLED
 ): void {
   ipcMain.handle(channel, async (event, request: unknown) => {
-    if (kind === 'write' && !isMainWebContents(event.sender.id)) return UNAVAILABLE;
+    if (
+      kind === 'write' &&
+      !isMainWebContents(event.sender.id) &&
+      !(TASK_BOARD_WRITES.has(channel) && isTaskBoardWebContents(event.sender.id))
+    )
+      return UNAVAILABLE;
     if (!botModeEnabled()) return whenDisabled;
     try {
       const bots = getBotServices();

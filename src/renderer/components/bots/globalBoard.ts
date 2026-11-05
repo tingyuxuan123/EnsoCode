@@ -14,12 +14,18 @@ export interface GlobalTaskRow {
 }
 
 type BoardStatus = 'todo' | 'doing' | 'blocked' | 'review' | 'done';
+type BoardColumns = Record<BoardStatus, GlobalTaskRow[]>;
+interface BoardProjection {
+  columns: BoardColumns;
+  total: number;
+  attention: number;
+}
 
 export function globalBoard(
   chats: readonly BotChat[],
   tasks: Record<string, GroupTask[]>,
   delegations: readonly Delegation[]
-) {
+): BoardProjection {
   const rows = new Map<GroupTask, GlobalTaskRow>();
   const seen = new Map<string, Set<string>>();
   let attention = 0;
@@ -48,4 +54,44 @@ export function globalBoard(
     total: rows.size,
     attention,
   };
+}
+
+export function filterBoard(
+  { columns }: BoardProjection,
+  filters: { groupId?: string; assignee?: string | null; query?: string; attentionOnly?: boolean }
+): BoardProjection {
+  const terms = filters.query?.trim().toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+  let total = 0;
+  let attention = 0;
+  const match = (row: GlobalTaskRow) => {
+    const { group, task, needsAttention } = row;
+    if (filters.groupId && group.id !== filters.groupId) return false;
+    if (filters.assignee !== undefined && (task.assigneeBotId ?? null) !== filters.assignee)
+      return false;
+    if (filters.attentionOnly && !needsAttention) return false;
+    if (terms.length) {
+      const text = [
+        `#${task.seq}`,
+        task.title,
+        task.detail,
+        task.result,
+        task.returnReason,
+        group.title,
+      ]
+        .join('\n')
+        .toLowerCase();
+      if (!terms.every((term) => text.includes(term))) return false;
+    }
+    total++;
+    if (needsAttention) attention++;
+    return true;
+  };
+  const filtered = {
+    todo: columns.todo.filter(match),
+    doing: columns.doing.filter(match),
+    blocked: columns.blocked.filter(match),
+    review: columns.review.filter(match),
+    done: columns.done.filter(match),
+  };
+  return { columns: filtered, total, attention };
 }

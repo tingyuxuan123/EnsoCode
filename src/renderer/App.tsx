@@ -16,7 +16,6 @@ import { TitleBar } from '@/components/app/TitleBar';
 import { UpdateBanner } from '@/components/app/UpdateBanner';
 import { WorkbenchTitle } from '@/components/app/WorkbenchTitle';
 import { BotView } from '@/components/bots/BotView';
-import { GlobalTaskBoard } from '@/components/bots/GlobalTaskBoard';
 import { globalBoard, rootBoardGroups } from '@/components/bots/globalBoard';
 import { ModeSwitch } from '@/components/bots/ModeSwitch';
 import { requestOpenChatFind } from '@/components/chat/ChatFindBar';
@@ -41,7 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { ToastProvider } from '@/components/ui/toast';
+import { addToast, ToastProvider } from '@/components/ui/toast';
 import { DesignRuntimeHost } from '@/features/design/DesignRuntimeHost';
 import { useDesignRegistry } from '@/features/design/host/registry';
 import { useTranslation as useDesignTranslation } from '@/features/design/host/translation';
@@ -58,6 +57,7 @@ import { useAutoArchiveScan } from '@/hooks/useAutoArchiveScan';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useDockBadge } from '@/hooks/useDockBadge';
 import { useGenerationStallTimeout } from '@/hooks/useGenerationStallTimeout';
+import { useTaskBoardNavigation } from '@/hooks/useTaskBoardNavigation';
 import { useWindowsWindowChrome } from '@/hooks/useWindowsWindowChrome';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, eventToBinding, isEventInSidePanel } from '@/lib/keybindings';
@@ -113,10 +113,8 @@ export default function App() {
   useDockBadge();
   const [searchOpen, setSearchOpen] = useState(false);
   const [extensionsOpen, setExtensionsOpen] = useState(false);
-  const [boardOpen, setBoardOpen] = useState(false);
   const closeWorkspacePage = useCallback(() => {
     setExtensionsOpen(false);
-    setBoardOpen(false);
     closeDesignGallery();
   }, []);
   const [closeRequestId, setCloseRequestId] = useState<string | null>(null);
@@ -142,7 +140,6 @@ export default function App() {
     if (previous.id !== activeConversationId || previous.tab !== activeTabId) closeDesignGallery();
     if (isExtensionsSessionNavigation(previous, { id: activeConversationId, tab: activeTabId })) {
       setExtensionsOpen(false);
-      setBoardOpen(false);
     }
     lastSessionSelection.current = { id: activeConversationId, tab: activeTabId };
   }, [activeConversationId, activeTabId]);
@@ -284,11 +281,9 @@ export default function App() {
   });
   const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
   const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
-  const boardActive = boardOpen && !remoteNodeActive && !galleryActive;
   const extensionsActive = extensionsOpen && !remoteNodeActive && !botModeActive && !galleryActive;
   useEffect(() => {
     if (remoteNodeActive || botModeActive || galleryActive) setExtensionsOpen(false);
-    if (remoteNodeActive || galleryActive) setBoardOpen(false);
   }, [botModeActive, galleryActive, remoteNodeActive]);
   const { t: designT } = useDesignTranslation();
   useEffect(() => {
@@ -336,17 +331,7 @@ export default function App() {
     };
   }, [botModeEnabled, closeWorkspacePage]);
 
-  const openGroupBoard = (chatId: string, taskId?: string) => {
-    closeWorkspacePage();
-    useAppModeStore.getState().setMode('bot');
-    const state = useBotsStore.getState();
-    if (taskId) state.openTask(chatId, taskId);
-    else {
-      state.setView({ kind: 'chat', chatId });
-      state.setPanelTab('board');
-      if (!state.panelOpen) state.togglePanel();
-    }
-  };
+  useTaskBoardNavigation(closeWorkspacePage);
 
   // Code 会话通知点击：当前在远程节点或 Bot 模式时先切回本机 Code，会话由 sessions store 选中
   useEffect(
@@ -407,9 +392,7 @@ export default function App() {
       // 远程节点 / Bot 模式：本机 Code 会话相关的快捷键不响应（新对话/tab 切换/右侧面板/查找）
       const remote = useRemoteNodesStore.getState().activeNodeId !== 'local' || isBotModeActive();
       if (
-        (boardActive ||
-          extensionsActive ||
-          useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
+        (extensionsActive || useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
         [
           'toggle-side-panel',
           'toggle-side-panel-fullscreen',
@@ -493,10 +476,10 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [boardActive, closeWorkspacePage, extensionsActive, keybindings, sidebarView]);
+  }, [closeWorkspacePage, extensionsActive, keybindings, sidebarView]);
 
   useEffect(() => {
-    if (!sideOpen || !sideFullscreen || galleryActive || extensionsActive || boardActive) return;
+    if (!sideOpen || !sideFullscreen || galleryActive || extensionsActive) return;
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
@@ -506,7 +489,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
-  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive, boardActive]);
+  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive]);
 
   // 拖拽：侧栏项目排序 / 会话拖入 Composer / 拖到 Pinned 区。
   // 6px 启动阈值：行点击与行内按钮不受影响。onDragEnd 在 Sidebar 的 useDndMonitor 里。
@@ -528,9 +511,7 @@ export default function App() {
         leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题
-          boardActive ? (
-            <span className="truncate font-medium text-sm">{t('Collaboration board')}</span>
-          ) : extensionsActive ? (
+          extensionsActive ? (
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
           ) : !remoteNodeActive && !botModeActive && !galleryActive ? (
             <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
@@ -539,7 +520,7 @@ export default function App() {
         actions={
           galleryActive ? (
             <DesignGalleryHeader side="right" />
-          ) : extensionsActive || boardActive ? undefined : (
+          ) : extensionsActive ? undefined : (
             <>
               <button
                 type="button"
@@ -582,19 +563,8 @@ export default function App() {
       <div className="flex min-h-0 flex-1">
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
-          onToggleSidebar={
-            remoteNodeActive
-              ? undefined
-              : () => {
-                  if (boardActive) closeWorkspacePage();
-                  toggleSidebar();
-                }
-          }
-          modeSwitch={
-            botModeEnabled && !remoteNodeActive ? (
-              <ModeSwitch inactive={boardActive} onSelect={() => setBoardOpen(false)} />
-            ) : undefined
-          }
+          onToggleSidebar={remoteNodeActive ? undefined : toggleSidebar}
+          modeSwitch={botModeEnabled && !remoteNodeActive ? <ModeSwitch /> : undefined}
           onOpenSearch={
             remoteNodeActive
               ? undefined
@@ -626,42 +596,41 @@ export default function App() {
           collaborationBoard={
             !remoteNodeActive
               ? {
-                  active: boardActive,
+                  active: false,
                   attention: boardAttention,
                   onToggle: () => {
-                    closeWorkspacePage();
-                    setBoardOpen(!boardActive);
+                    void window.electronAPI.taskBoard
+                      .open()
+                      .then((result) => {
+                        if (!result.ok) throw new Error(result.error);
+                      })
+                      .catch((error: unknown) => {
+                        addToast({
+                          type: 'error',
+                          title: t('Collaboration board'),
+                          description: error instanceof Error ? error.message : String(error),
+                        });
+                      });
                   },
                 }
               : undefined
           }
         />
-        {boardActive && (
-          <GlobalTaskBoard
-            enabled={botModeEnabled}
-            onBack={closeWorkspacePage}
-            onOpenTask={openGroupBoard}
-            onOpenGroup={(chatId) => openGroupBoard(chatId)}
-          />
-        )}
         {remoteNodeActive ? (
           // 远程节点态：整块换成对方的目录与会话；本机 Sidebar/ChatView/SidePanel 卸载
           <RemoteNodeView nodeId={activeNodeId} sidebarWidth={width} />
         ) : botModeActive ? (
           // Bot 模式：成员/群聊侧栏 + 聊天区；Code 侧栏/会话/右侧面板卸载
-          <div className={boardActive ? 'hidden' : 'contents'}>
-            <BotView
-              sidebarWidth={width}
-              collapsed={collapsed}
-              onToggleCollapse={toggleSidebar}
-              onResize={handleResize}
-              workspaceHidden={boardActive}
-            />
-          </div>
+          <BotView
+            sidebarWidth={width}
+            collapsed={collapsed}
+            onToggleCollapse={toggleSidebar}
+            onResize={handleResize}
+          />
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={dndCollision}>
             <div
-              className={cn('min-h-0 shrink-0', boardActive ? 'hidden' : 'flex')}
+              className="flex min-h-0 shrink-0"
               onClickCapture={(event) => {
                 if (isDesignSessionSelection(event.target)) closeWorkspacePage();
               }}
@@ -686,14 +655,11 @@ export default function App() {
                 }}
               />
             </div>
-            {!collapsed && !boardActive && <ResizeHandle onResize={handleResize} />}
+            {!collapsed && <ResizeHandle onResize={handleResize} />}
             {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
             <div
               ref={workspaceRef}
-              className={cn(
-                'relative min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t border-line',
-                boardActive ? 'hidden' : 'flex'
-              )}
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-line border-l border-t"
             >
               {galleryActive ? (
                 <DesignGallery />
@@ -717,7 +683,7 @@ export default function App() {
                   <SidePanel
                     width={sideWidth}
                     resizing={sideResizing}
-                    workspaceHidden={extensionsActive || boardActive}
+                    workspaceHidden={extensionsActive}
                   />
                   <PluginUiHost />
                 </>

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   registry: null as unknown,
   settings: {} as Record<string, unknown>,
   isMain: vi.fn(() => true),
+  isTaskBoard: vi.fn(() => false),
   spawnSession: vi.fn((..._args: unknown[]) => ({ ok: true })),
   promptSession: vi.fn((..._args: unknown[]) => ({ ok: true })),
   steerSession: vi.fn((..._args: unknown[]) => ({ ok: true })),
@@ -44,6 +45,7 @@ vi.mock('electron', () => ({
   shell: { openPath: async () => '' },
 }));
 vi.mock('../windows/MainWindow', () => ({ isMainWebContents: mocks.isMain }));
+vi.mock('../windows/TaskBoardWindow', () => ({ isTaskBoardWebContents: mocks.isTaskBoard }));
 vi.mock('../windows/createAppWindow', () => ({ sendToAllWindows: vi.fn() }));
 vi.mock('../services/notifications', () => ({ notifyBotChat: vi.fn(async () => {}) }));
 vi.mock('../services/oauthProviders', () => ({
@@ -126,6 +128,7 @@ beforeEach(async () => {
   mocks.setSessionThinking.mockClear();
   mocks.isMain.mockReturnValue(true);
   mocks.workerReady = true;
+  mocks.isTaskBoard.mockReturnValue(false);
   vi.resetModules();
   const { registerBotHandlers } = await import('./bots');
   registerBotHandlers();
@@ -730,6 +733,65 @@ describe('群任务看板 IPC', () => {
     const chat = created.chat as { id: string; version: number };
     return { alice, bob, carol, chatId: chat.id, version: chat.version };
   }
+
+  const taskBoardWrites = [
+    IPC_CHANNELS.BOT_TASK_SAVE,
+    IPC_CHANNELS.BOT_TASK_ASSIGN,
+    IPC_CHANNELS.BOT_TASK_COMPLETE,
+    IPC_CHANNELS.BOT_TASK_CANCEL,
+    IPC_CHANNELS.BOT_TASK_DELETE,
+    IPC_CHANNELS.BOT_TASK_REVIEW,
+    IPC_CHANNELS.BOT_TASK_REPLY,
+    IPC_CHANNELS.BOT_DELEGATION_RETRY,
+  ];
+
+  it.each(taskBoardWrites)('未授权 renderer 不能调用任务写通道 %s', async (channel) => {
+    mocks.isMain.mockReturnValue(false);
+    expect(await call(channel, null)).toEqual({ ok: false, error: 'unavailable' });
+  });
+
+  it.each(taskBoardWrites)('独立看板获准调用限定通道 %s，但仍校验输入', async (channel) => {
+    mocks.isMain.mockReturnValue(false);
+    mocks.isTaskBoard.mockReturnValue(true);
+    expect(await call(channel, null)).toEqual({ ok: false, error: 'invalid' });
+  });
+
+  it.each([
+    IPC_CHANNELS.BOT_CREATE,
+    IPC_CHANNELS.BOT_UPDATE,
+    IPC_CHANNELS.BOT_DELETE,
+    IPC_CHANNELS.BOT_CHAT_CREATE,
+    IPC_CHANNELS.BOT_SEND,
+    IPC_CHANNELS.BOT_CHAT_DELETE,
+    IPC_CHANNELS.BOT_NOTES_SAVE,
+    IPC_CHANNELS.BOT_ROUTINE_SAVE,
+    IPC_CHANNELS.BOT_CHAT_INTERJECT_QUEUED,
+    IPC_CHANNELS.BOT_DELEGATION_CANCEL,
+  ])('独立看板不能获得其他 Bot 写权限 %s', async (channel) => {
+    mocks.isMain.mockReturnValue(false);
+    mocks.isTaskBoard.mockReturnValue(true);
+    expect(await call(channel, null)).toEqual({ ok: false, error: 'unavailable' });
+  });
+
+  it('独立看板的任务变更可被主界面读取，开关关闭后不再写入', async () => {
+    const { chatId } = await team();
+    mocks.isMain.mockReturnValue(false);
+    mocks.isTaskBoard.mockReturnValue(true);
+    const saved = await call(IPC_CHANNELS.BOT_TASK_SAVE, { chatId, title: 'Window task' });
+    expect(saved).toMatchObject({ ok: true, task: { title: 'Window task' } });
+    const id = (saved.task as { id: string }).id;
+    expect(await call(IPC_CHANNELS.BOT_TASK_COMPLETE, { chatId, id })).toMatchObject({ ok: true });
+    mocks.isMain.mockReturnValue(true);
+    expect(await call(IPC_CHANNELS.BOT_TASKS_LIST, { chatId })).toMatchObject({
+      ok: true,
+      tasks: [{ id, status: 'done' }],
+    });
+    mocks.settings.botModeEnabled = false;
+    expect(await call(IPC_CHANNELS.BOT_TASK_SAVE, { chatId, title: 'Blocked' })).toEqual({
+      ok: false,
+      error: 'disabled',
+    });
+  });
 
   it('入参收窄、新建 / 编辑 / 完成 / 删除，删除群时清理任务文件', async () => {
     const { chatId } = await team();

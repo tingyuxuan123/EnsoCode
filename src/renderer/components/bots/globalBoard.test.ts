@@ -1,6 +1,6 @@
 import type { BotChat, GroupTask } from '@shared/types/bot';
 import { describe, expect, it } from 'vitest';
-import { globalBoard, rootBoardGroups } from './globalBoard';
+import { filterBoard, globalBoard, rootBoardGroups } from './globalBoard';
 
 const chat = (id: string, extra?: Partial<BotChat>): BotChat => ({
   id,
@@ -82,5 +82,27 @@ describe('全局协作看板投影', () => {
     expect(columns.review[0]?.needsAttention).toBe(true);
     expect(columns.done.map(({ task }) => task.id)).toEqual(['done-later', 'done-earlier']);
     expect([total, attention]).toEqual([6, 2]);
+  });
+
+  it('搜索与群、执行人、待处理条件取交集，计数只反映可见任务', () => {
+    const board = globalBoard(
+      [chat('a'), chat('b')],
+      {
+        a: [
+          { ...task('t1', 1), detail: 'Run SMOKE tests', assigneeBotId: 'bot' },
+          task('t2', 2, 'review'),
+        ],
+        b: [{ ...task('t3', 1, 'review'), result: 'smoke passed', assigneeBotId: 'bot' }],
+      },
+      []
+    );
+    const scoped = filterBoard(board, { query: ' smoke ', assignee: 'bot', attentionOnly: true });
+    expect(scoped.columns.review.map(({ task }) => task.id)).toEqual(['t3']);
+    expect(scoped.total).toBe(1);
+    expect(scoped.attention).toBe(1);
+    expect(filterBoard(board, { query: '#2' }).columns.review[0]?.task.id).toBe('t2');
+    expect(filterBoard(board, { assignee: null }).total).toBe(1);
+    expect(filterBoard(board, { groupId: 'a', query: 'passed' }).total).toBe(0);
+    expect(board.total).toBe(3);
   });
 });

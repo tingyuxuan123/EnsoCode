@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DispatchMainEvent } from '../shared/types/agent';
 import { IPC_CHANNELS } from '../shared/types/ipc';
+import type { ElectronAPI } from './index';
 import './index';
 
 const mocks = vi.hoisted(() => ({
@@ -20,13 +20,8 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn() },
 }));
 
-type DispatchApi = {
-  agentDispatch: {
-    onEvent(callback: (event: DispatchMainEvent) => void): () => void;
-  };
-};
-
-const electronAPI = mocks.exposeInMainWorld.mock.calls[0]?.[1] as DispatchApi;
+const electronAPI = mocks.exposeInMainWorld.mock.calls[0]?.[1] as ElectronAPI;
+const { taskBoard } = electronAPI;
 
 const event = {
   dispatchId: '66666666-6666-4666-8666-666666666666',
@@ -70,5 +65,37 @@ describe('preload agentDispatch.onEvent', () => {
 
     unsubscribe();
     expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.AGENT_DISPATCH_EVENT, listener);
+  });
+});
+
+describe('preload taskBoard', () => {
+  beforeEach(() => {
+    mocks.invoke.mockClear();
+    mocks.on.mockClear();
+    mocks.removeListener.mockClear();
+  });
+
+  it('仅暴露 typed 窗口 API，导航只传群 / 任务标识', () => {
+    void taskBoard.open();
+    void taskBoard.focusMain();
+    const target = { kind: 'task', chatId: 'group-id', taskId: 'task-id' } as const;
+    void taskBoard.navigate(target);
+    void taskBoard.consumeNavigation();
+    expect(mocks.invoke.mock.calls).toEqual([
+      [IPC_CHANNELS.TASK_BOARD_OPEN],
+      [IPC_CHANNELS.TASK_BOARD_FOCUS_MAIN],
+      [IPC_CHANNELS.TASK_BOARD_NAVIGATE, target],
+      [IPC_CHANNELS.TASK_BOARD_NAVIGATION_CONSUME],
+    ]);
+  });
+
+  it('导航通知可取消订阅，不把 Electron event 暴露给 renderer', () => {
+    const callback = vi.fn();
+    const off = taskBoard.onNavigate(callback);
+    const listener = mocks.on.mock.calls[0]?.[1] as (event: unknown) => void;
+    listener({ sender: 'internal' });
+    expect(callback).toHaveBeenCalledExactlyOnceWith();
+    off();
+    expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
   });
 });

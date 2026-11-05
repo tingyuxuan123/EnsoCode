@@ -75,7 +75,7 @@ export function TaskRuns({
 }: {
   runs: readonly GroupTaskRun[];
   bots: Map<string, BotProfile>;
-  onOpenConversation: (conversationId: string, title: string) => void;
+  onOpenConversation?: (conversationId: string, title: string) => void;
 }) {
   const { t } = useI18n();
   const delegations = useBotsStore((s) => s.delegations);
@@ -128,7 +128,7 @@ export function TaskRuns({
                   </button>
                 )}
                 <span className="flex-1" />
-                {record && (
+                {record && onOpenConversation && (
                   <Button
                     size="xs"
                     variant="ghost"

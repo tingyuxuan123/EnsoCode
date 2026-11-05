@@ -66,6 +66,12 @@ export const IPC_CHANNELS = {
   /** main → settings renderer：打开后切分类并闪行 */
   SETTINGS_DEEP_LINK: 'settings:deep-link',
   SETTINGS_DEEP_LINK_CONSUME: 'settings:deep-link-consume',
+  TASK_BOARD_OPEN: 'taskboard:open',
+  TASK_BOARD_FOCUS_MAIN: 'taskboard:focus-main',
+  TASK_BOARD_NAVIGATE: 'taskboard:navigate',
+  /** 唤醒主工作区；具体目标由主工作区原子消费，冷启动也不丢失。 */
+  TASK_BOARD_NAVIGATION: 'taskboard:navigation',
+  TASK_BOARD_NAVIGATION_CONSUME: 'taskboard:navigation-consume',
   WINDOW_POPUP_MENU: 'window:popup-menu',
   APP_CLOSE_REQUEST: 'app:close-request',
   APP_CLOSE_RESPONSE: 'app:close-response',
