@@ -1235,6 +1235,12 @@ export class PairClient {
     this.syncTimer = setTimeout(() => {
       const pending = this.pendingSync;
       if (this.closed || this.revoked || !pending || pending.requestId !== requestId) return;
+      // 连接本身不健康（半开死链/断网，close 事件还没到）：这不是「桌面端没回应」，
+      // 不计入重试次数也不白发 subscribe，等连接恢复后按剩余次数继续。
+      if (this.ws?.readyState !== 1) {
+        this.armSyncRetry(command, requestId);
+        return;
+      }
       if (this.syncAttempts >= SYNC_RETRY_LIMIT) {
         // 保留 pendingSync：迟到的应答仍可兑现；只是不再空转，交给上层显示失败态
         this.stopSyncRetry();

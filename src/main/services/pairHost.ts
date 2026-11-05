@@ -118,6 +118,13 @@ import {
 import { onSpeechAvailabilityChange, openSpeechSession, speechAvailable } from './speech/service';
 
 /**
+ * 同一未答 sync 的重复订阅在这个窗口内视为同一批突发（socket onopen 与 peer-joined 抢跑），
+ * 只打一次 worker。窗口之外的重复订阅（手机每 10s 的定时重试、重连重订阅）必须重新要快照：
+ * 首轮请求可能丢在 resume/spawn 线上，靠重试自愈，不能让手机等一个不会来的应答。
+ */
+const SYNC_BURST_DEDUPE_MS = 1_500;
+
+/**
  * 手机第二屏 host：跑在 main，不依赖窗口焦点。
  * 连中继（每台已配对设备一条 WSS）、解密白名单命令打进 agentHost、
  * 加密下发 agent 事件与目录。中继只见密文。
@@ -159,8 +166,8 @@ interface Connection {
     revision: number;
     answered?: boolean;
   };
-  /** 同一个未答 sync 已经吃掉几次重复订阅：突发重复只吃一次，之后的重试必须再要快照 */
-  syncRetries?: number;
+  /** 上一次为该未答 sync 要快照的时刻：只有极短窗口内的重复才算同一批突发 */
+  syncAskedAt?: number;
   syncRevision: number;
   syncLiveRevision?: number;
   /** 该连接用过 session-sync；之后 live 事件带 cursor，不受 pendingSync 应答影响 */
@@ -1214,12 +1221,15 @@ async function handleFrame(
         console.warn('[pair] subscribe rejected: bot mode disabled');
         return;
       }
+      // 只有「同一个未答 sync」且还在突发窗口内的重复订阅才吞掉；窗口外一律重新要快照。
+      // requestId 不参与去重：手机上换号重订阅时 pendingSync 已换成最新号，在途快照到达即按新号兑现。
       const waiting =
         Boolean(command.sessionId) &&
         Boolean(command.sync) &&
         conn.pendingSync !== undefined &&
         !conn.pendingSync.answered &&
-        conn.pendingSync.sessionId === command.sessionId;
+        conn.pendingSync.sessionId === command.sessionId &&
+        Date.now() - (conn.syncAskedAt ?? 0) < SYNC_BURST_DEDUPE_MS;
       const revision = ++conn.syncRevision;
       if (conn.subscribedId !== command.sessionId) {
         conn.fileSubscriptionEpoch++;
@@ -1259,12 +1269,11 @@ async function handleFrame(
           conn.pendingSync.answered = true;
           conn.syncLiveRevision = revision;
         } else {
-          // 手机按同一 requestId 每 10s 重试。紧跟首轮的突发重复（peer-joined + onopen）
-          // 只吃一次，避免重复打 worker；之后仍在等就再要一次快照：首轮请求丢在
-          // resume/spawn 线上时，重试必须能自愈，否则手机永远等一个不会来的应答。
-          const retries = waiting ? (conn.syncRetries ?? 0) + 1 : 0;
-          conn.syncRetries = retries;
-          if (!waiting || retries > 1) snapshotForPhone(sessionId, true);
+          // 突发窗口外的重试必须再要一次快照：首轮请求丢在 resume/spawn 线上时靠它自愈。
+          if (!waiting) {
+            conn.syncAskedAt = Date.now();
+            snapshotForPhone(sessionId, true);
+          }
         }
       } else if (command.sessionId) {
         // 历史会话在 worker 里没有投影，先请渲染层恢复（与桌面点开会话同路径）。

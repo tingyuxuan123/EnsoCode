@@ -15,7 +15,11 @@ vi.mock('@/components/chat/Composer', () => ({
   Composer: ({ focusKey }: { focusKey: string }) =>
     createElement('div', { 'data-draft-key': focusKey }),
 }));
-vi.mock('@/components/chat/MessageTimeline', () => ({ MessageTimeline: () => null, CHAT_COL: '' }));
+vi.mock('@/components/chat/MessageTimeline', () => ({
+  MessageTimeline: ({ busy }: { busy?: boolean }) =>
+    createElement('div', { 'data-timeline': '', 'data-busy': String(Boolean(busy)) }),
+  CHAT_COL: '',
+}));
 vi.mock('@/components/chat/ApprovalBar', () => ({ ApprovalBar: () => null }));
 vi.mock('@/components/chat/AskBar', () => ({ AskBar: () => null }));
 vi.mock('@/components/chat/GoalBar', () => ({ GoalBar: () => null }));
@@ -106,6 +110,42 @@ it('同步超时后给出可重试的失败态，而不是一直显示加载中'
   const cached = emptyGuestView();
   cached.messages.set(0, { role: 'user', content: [{ type: 'text', text: 'hi' }] });
   expect(render({ view: cached, syncing: true, syncFailed: true })).not.toContain('没读到会话历史');
+});
+
+it('有缓存正文时同步失败仍保留正文，并给出不遮挡的重试入口', () => {
+  const retry = vi.fn();
+  const cached = emptyGuestView();
+  cached.messages.set(0, { role: 'user', content: [{ type: 'text', text: 'cached body' }] });
+  const html = render({ view: cached, syncing: true, syncFailed: true, onRetrySync: retry });
+  // 正文继续渲染：失败态不接管时间线，也不假装还在同步
+  expect(html).toContain('data-timeline');
+  expect(html).toContain('data-busy="false"');
+  expect(html).not.toContain('没读到会话历史');
+  // 非遮挡的失败提示 + 可操作的重试按钮
+  expect(html).toContain('data-sync-failed-banner');
+  expect(html).toContain('未读到最新历史');
+  expect(html).toContain('重试');
+  // 顶栏状态灯不能继续宣称「同步中…」
+  expect(html).not.toContain('同步中…');
+  expect(html).toContain('未读到最新历史');
+  expect(html).toContain('data-sync-state="failed"');
+  expect(html).not.toContain('animate-pulse bg-warning');
+});
+
+it('连接不在线时同步失败提示优先归因连接状态，不宣称桌面端没有回应', () => {
+  const cached = emptyGuestView();
+  cached.messages.set(0, { role: 'user', content: [{ type: 'text', text: 'cached body' }] });
+  const offline = render({
+    view: cached,
+    connState: 'host-offline',
+    stateLabel: '与桌面连接已断开',
+    syncing: true,
+    syncFailed: true,
+  });
+  expect(offline).toContain('data-timeline');
+  expect(offline).not.toContain('桌面端没有回应');
+  expect(offline).not.toContain('未读到最新历史');
+  expect(offline).toContain('与桌面连接已断开');
 });
 
 it('keeps current progress in the shared task dock, including read-only conversations', () => {

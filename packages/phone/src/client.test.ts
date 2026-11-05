@@ -751,6 +751,37 @@ describe('PairClient 缓存与续传', () => {
     expect(client.getSession('s')?.messages.get(0)).toEqual(text('old'));
   });
 
+  it('同步超时失败后，迟到的应答仍兑现正文并撤销失败态', async () => {
+    const socket = await start();
+    await vi.advanceTimersByTimeAsync(10_000 * 10);
+    expect(events.onSyncFailed).toHaveBeenCalledWith('s', true);
+    // 失败后停表，但 pendingSync 保留：同一 requestId 的迟到应答仍可兑现
+    replay(socket, 1, [
+      { type: 'message-upsert', sessionId: 's', index: 0, message: text('late') },
+    ]);
+    await settle();
+    expect(events.onSyncFailed).toHaveBeenLastCalledWith('s', false);
+    expect(events.onSync).toHaveBeenLastCalledWith('synced');
+    expect(client.getSession('s')?.messages.get(0)).toEqual(text('late'));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(events.onSyncFailed).toHaveBeenCalledTimes(2);
+  });
+
+  it('连接不健康期间的重试不累计失败次数，恢复连接后才计时', async () => {
+    const socket = await start();
+    const before = socket.sent.filter((item) => item.type === 'subscribe').length;
+    // 半开死链：close 还没到，但这条连接已经发不出东西
+    socket.readyState = 0;
+    await vi.advanceTimersByTimeAsync(10_000 * 10);
+    // 不是「桌面端没回应」，离线期间不能再累计重试，也不能白发 subscribe
+    expect(events.onSyncFailed).not.toHaveBeenCalled();
+    expect(socket.sent.filter((item) => item.type === 'subscribe')).toHaveLength(before);
+
+    socket.readyState = 1;
+    await vi.advanceTimersByTimeAsync(10_000 * 7);
+    expect(events.onSyncFailed).toHaveBeenCalledWith('s', true);
+  });
+
   it('仅展示旧缓存不重复写盘；前后台重复flush不刷新过期时间', async () => {
     await start();
     client.flushCache();

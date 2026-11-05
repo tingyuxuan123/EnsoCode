@@ -511,11 +511,16 @@ describe('pairHost session-sync 接线', () => {
     });
   });
 
+  /** 突发去重窗口之外：手机的定时重试与重连重订阅都发生在这个间隔之后 */
+  const burstGap = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 1_700));
+
   it('重复 subscribe 只用最新 requestId，snapshot 帧先于后续 live 帧', async () => {
     const metaCalls = vi.mocked(requestPairMeta).mock.calls.length;
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'old' } });
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'latest' } });
     await vi.waitFor(() => expect(requestPairMeta).toHaveBeenCalledTimes(metaCalls + 2));
+    // 突发窗口内的重复（哪怕换了 requestId）只打一次 worker：pendingSync 已换成最新号，
+    // 在途的这一次快照到达时会按最新 requestId 兑现
     expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1);
 
     forwardAgentEvent(snapshotEvent());
@@ -535,12 +540,19 @@ describe('pairHost session-sync 接线', () => {
     });
   });
 
-  it('首轮快照请求丢失后，后续重试订阅会再次索要快照，不让手机一直等一个不会来的应答', async () => {
+  it('紧跟首轮的突发重复订阅只打一次 worker，不重复 resume', async () => {
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
-    // 手机按同一 requestId 每 10s 重试一次；紧跟首轮的突发重复（peer-joined + onopen）只吃一次
+    // onopen + peer-joined 抢跑：毫秒级重复订阅属于同一批突发
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
     expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('首轮快照请求丢失后，第一条 10s 定时重试就重新索要快照', async () => {
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
+    // 手机每 10s 用同一 requestId 重试一次，落在突发窗口之外
+    await burstGap();
     await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'lost' } });
     await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
 
@@ -551,6 +563,43 @@ describe('pairHost session-sync 接线', () => {
       type: 'session-sync',
       mode: 'snapshot',
       requestId: 'lost',
+    });
+  });
+
+  it('应答曾在线上丢失：同号重订阅超出突发窗口后仍重新要快照', async () => {
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'answered' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
+    forwardAgentEvent(snapshotEvent());
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
+    hostMocks.socket?.send.mockClear();
+
+    // 手机没收到这条应答，10s 后用同一 requestId 重订阅：已答过也不再算突发重复
+    await burstGap();
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'answered' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
+    forwardAgentEvent(snapshotEvent());
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
+    expect((await sentPayloads())[0]).toMatchObject({
+      type: 'session-sync',
+      requestId: 'answered',
+    });
+  });
+
+  it('A→B→A 切会话不被突发去重吞掉，应答只兑现最后一次订阅', async () => {
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'a1' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(1));
+    await receive({ type: 'subscribe', sessionId: 's2', sync: { requestId: 'b1' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(2));
+    await receive({ type: 'subscribe', sessionId: 's1', sync: { requestId: 'a2' } });
+    await vi.waitFor(() => expect(hostMocks.requestSnapshot).toHaveBeenCalledTimes(3));
+
+    forwardAgentEvent(snapshotEvent());
+    await vi.waitFor(async () => expect(await sentPayloads()).toHaveLength(1));
+    const payload = (await sentPayloads())[0];
+    expect(payload).toMatchObject({
+      type: 'session-sync',
+      sessionId: 's1',
+      requestId: 'a2',
     });
   });
 

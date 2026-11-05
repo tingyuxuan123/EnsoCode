@@ -145,6 +145,9 @@ export function ChatScreen(props: Props) {
   const running = view?.status === 'running';
   const bot = props.bot;
   const readOnly = Boolean(bot?.readOnly || props.deviceReadOnly || props.connState === 'replaced');
+  /** 同步有界重试已耗尽：本机缓存正文照常显示，但不能再宣称「同步中…」 */
+  const syncFailed = Boolean(props.syncFailed);
+  const syncing = Boolean(props.syncing) && !syncFailed;
   const entries = useMemo(
     () => (view ? [...view.messages.entries()].sort((a, b) => a[0] - b[0]) : []),
     [view]
@@ -321,14 +324,31 @@ export function ChatScreen(props: Props) {
                 props.connState !== 'unauthorized' &&
                 props.connState !== 'replaced' && (
                   <span
+                    data-sync-state={
+                      props.connState !== 'online'
+                        ? 'conn'
+                        : syncFailed
+                          ? 'failed'
+                          : syncing
+                            ? 'syncing'
+                            : 'ok'
+                    }
                     className={cn(
                       'h-1.5 w-1.5 shrink-0 rounded-full',
-                      props.connState === 'online' && !props.syncing
+                      props.connState === 'online' && !syncing && !syncFailed
                         ? 'bg-success'
-                        : 'animate-pulse bg-warning'
+                        : syncFailed
+                          ? 'bg-warning'
+                          : 'animate-pulse bg-warning'
                     )}
                     title={
-                      props.connState === 'online' && props.syncing ? '同步中…' : props.stateLabel
+                      props.connState !== 'online'
+                        ? props.stateLabel
+                        : syncFailed
+                          ? '未读到最新历史'
+                          : syncing
+                            ? '同步中…'
+                            : props.stateLabel
                     }
                   />
                 )}
@@ -365,6 +385,30 @@ export function ChatScreen(props: Props) {
           <div className="flex shrink-0 items-center justify-center gap-1.5 border-b border-warning/20 bg-warning/10 px-3 py-1.5 text-warning text-xs">
             <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
             <span>{props.stateLabel}</span>
+          </div>
+        )}
+
+        {/*
+         * 本机已有缓存正文但同步有界重试耗尽：正文继续显示，这里只挂一条不遮挡的提示，
+         * 让用户知道看到的是旧内容并且可以重试。连接不在线时归因给连接状态（那条横幅已在上面），
+         * 不能宣称「桌面端没有回应」。
+         */}
+        {syncFailed && view !== null && props.connState === 'online' && (
+          <div
+            data-sync-failed-banner=""
+            className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-warning/20 bg-warning/10 px-3 py-1.5 text-center text-warning text-xs"
+          >
+            {/* 窄屏一行放不下时先省略正文，按钮必须始终可点 */}
+            <span className="min-w-0 flex-1 truncate">
+              未读到最新历史：桌面端没有回应这次同步，下面是缓存内容。
+            </span>
+            <button
+              type="button"
+              onClick={props.onRetrySync}
+              className="shrink-0 rounded-md border border-warning/40 px-2 py-0.5 font-medium transition-colors hover:bg-warning/15"
+            >
+              重试
+            </button>
           </div>
         )}
 
@@ -426,20 +470,24 @@ export function ChatScreen(props: Props) {
               {props.connState === 'online' ? '从左上角选择会话，或新建一个' : props.stateLabel}
             </p>
           </div>
-        ) : view === null && props.syncFailed ? (
+        ) : view === null && syncFailed ? (
           // 桌面端一直给不出这个会话的正文（resume 被拒 / 快照始终没回）：
           // 有界重试已耗尽，明确失败并让用户重试，而不是永远转圈
           <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-6 text-center">
             <p className="text-sm text-muted-foreground">
-              没读到会话历史：桌面端没有回应这个会话。请确认桌面端仍在运行后重试。
+              {props.connState === 'online'
+                ? '没读到会话历史：桌面端没有回应这个会话。请确认桌面端仍在运行后重试。'
+                : `${props.stateLabel}。恢复连接后会自动继续读取历史。`}
             </p>
-            <button
-              type="button"
-              onClick={props.onRetrySync}
-              className="rounded-md border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
-            >
-              重试
-            </button>
+            {props.connState === 'online' && (
+              <button
+                type="button"
+                onClick={props.onRetrySync}
+                className="rounded-md border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
+              >
+                重试
+              </button>
+            )}
           </div>
         ) : (
           <MessageTimeline
@@ -447,7 +495,7 @@ export function ChatScreen(props: Props) {
             ref={timelineRef}
             items={timeline}
             // 本地已有正文就不要盖「正在读取历史」；无正文且同步中才是加载态
-            busy={view === null ? Boolean(props.syncing) : running}
+            busy={view === null ? syncing : running}
             loading={view === null}
             running={running}
             error={undefined}
