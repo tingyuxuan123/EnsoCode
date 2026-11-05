@@ -3132,6 +3132,7 @@ export const zhTranslations: Record<string, string> = {
   'Delegations in progress · {{n}}': '进行中的委派 · {{n}}',
   '{{name}} (on behalf of {{owner}}) needs you': '{{name}} 替 {{owner}} 执行 · 需要你处理',
   'Collaboration board': '协作看板',
+  'Older completed tasks are kept in the group board.': '更早的已完成任务仍保留在原群任务看板中。',
   'Task board': '任务看板',
   'All group chats': '全部群聊',
   'Back to workspace': '返回工作区',

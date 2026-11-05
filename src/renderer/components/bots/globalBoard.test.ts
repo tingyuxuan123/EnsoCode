@@ -2,6 +2,9 @@ import type { BotChat, GroupTask } from '@shared/types/bot';
 import { describe, expect, it } from 'vitest';
 import { filterBoard, globalBoard, rootBoardGroups } from './globalBoard';
 
+const NOW = Date.UTC(2026, 10, 5, 12);
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+
 const chat = (id: string, extra?: Partial<BotChat>): BotChat => ({
   id,
   title: id,
@@ -24,7 +27,7 @@ const task = (id: string, seq: number, status: GroupTask['status'] = 'todo'): Gr
   status,
   createdBy: 'human',
   createdAt: 1,
-  updatedAt: seq,
+  updatedAt: NOW + seq,
 });
 
 describe('全局协作看板投影', () => {
@@ -74,7 +77,8 @@ describe('全局协作看板投影', () => {
           task('canceled', 5, 'canceled'),
         ],
       },
-      []
+      [],
+      NOW
     );
     expect(columns.todo.map(({ task }) => task.id)).toEqual(['todo-first', 'todo-later']);
     expect(columns.doing).toEqual([]);
@@ -104,5 +108,35 @@ describe('全局协作看板投影', () => {
     expect(filterBoard(board, { assignee: null }).total).toBe(1);
     expect(filterBoard(board, { groupId: 'a', query: 'passed' }).total).toBe(0);
     expect(board.total).toBe(3);
+  });
+
+  it('仅隐藏完成超过七天的任务，恰好七天仍展示，不删除缓存或影响未完成任务', () => {
+    const cutoff = NOW - WEEK;
+    const recent = { ...task('recent', 1, 'done'), updatedAt: NOW - 1 };
+    const boundary = { ...task('boundary', 2, 'done'), updatedAt: cutoff };
+    const expired = { ...task('expired', 3, 'done'), title: 'expired', updatedAt: cutoff - 1 };
+    const oldTodo = { ...task('old-todo', 4), updatedAt: cutoff - 1 };
+    const oldDoing = { ...task('old-doing', 5, 'doing'), updatedAt: cutoff - 1 };
+    const oldReview = { ...task('old-review', 6, 'review'), updatedAt: cutoff - 1 };
+    const oldBlocked = {
+      ...task('old-blocked', 7, 'blocked'),
+      blockedReason: 'need' as const,
+      blockedNeed: 'Waiting for your reply',
+      updatedAt: cutoff - 1,
+    };
+    const cache = { a: [recent, boundary, expired, oldTodo, oldDoing, oldReview, oldBlocked] };
+    const board = globalBoard([chat('a')], cache, [], NOW);
+    expect(board.columns.done.map(({ task }) => task.id)).toEqual(['recent', 'boundary']);
+    expect(board.total).toBe(6);
+    expect(board.attention).toBe(2);
+    expect(board.columns.todo[0]?.task.id).toBe('old-todo');
+    expect(board.columns.doing[0]?.task.id).toBe('old-doing');
+    expect(board.columns.review[0]?.task.id).toBe('old-review');
+    expect(board.columns.blocked[0]?.task.id).toBe('old-blocked');
+    expect(filterBoard(board, { query: 'expired' }).total).toBe(0);
+    expect(cache.a).toEqual([recent, boundary, expired, oldTodo, oldDoing, oldReview, oldBlocked]);
+    expect(
+      globalBoard([chat('a')], cache, [], NOW + 1).columns.done.map(({ task }) => task.id)
+    ).toEqual(['recent']);
   });
 });

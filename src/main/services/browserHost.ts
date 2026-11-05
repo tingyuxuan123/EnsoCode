@@ -240,6 +240,7 @@ interface Tab {
   operationSignal?: AbortSignal;
   emulationQueue: Promise<void>;
   emulationKey?: string;
+  emulationOverridesVisibleSize?: boolean;
 }
 
 const EMPTY_STATE: BrowserTabState = {
@@ -691,6 +692,12 @@ export class BrowserHost {
         const device = tab.device;
         const commands = device.enabled
           ? [
+              // CDP 的 visible size override 会被截图恢复成未缩放的逻辑尺寸，
+              // 使原生绘制区域溢出设备框。可见时先清掉隐藏态的 override，
+              // 只让 WebContentsView.setBounds 管绘制尺寸；逻辑 viewport 照常模拟。
+              ...(panel && tab.emulationOverridesVisibleSize
+                ? [{ method: 'Emulation.clearDeviceMetricsOverride', params: {} }]
+                : []),
               {
                 method: 'Emulation.setDeviceMetricsOverride',
                 params: {
@@ -701,6 +708,7 @@ export class BrowserHost {
                   screenWidth: metrics.width,
                   screenHeight: metrics.height,
                   scale: metrics.scale,
+                  dontSetVisibleSize: Boolean(panel),
                   screenOrientation: {
                     type:
                       device.orientation === 'landscape' ? 'landscapePrimary' : 'portraitPrimary',
@@ -748,6 +756,11 @@ export class BrowserHost {
             tab.emulationKey = undefined;
             throw new Error(`Device emulation failed: ${command.method}`);
           }
+          if (result === undefined) continue;
+          if (command.method === 'Emulation.clearDeviceMetricsOverride')
+            tab.emulationOverridesVisibleSize = false;
+          else if (command.method === 'Emulation.setDeviceMetricsOverride' && !panel)
+            tab.emulationOverridesVisibleSize = true;
         }
       });
     tab.emulationQueue = task;

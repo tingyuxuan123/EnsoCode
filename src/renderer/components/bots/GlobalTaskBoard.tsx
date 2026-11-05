@@ -28,8 +28,15 @@ import { cn } from '@/lib/utils';
 import { useBotsStore } from '@/stores/bots';
 import { taskBlockInfo } from '@/stores/bots/groupBoard';
 import { BotAvatar } from './BotAvatar';
+import { useNow } from './DelegationCard';
 import { ManagedTaskDetail, TaskEditor } from './GroupBoard';
-import { filterBoard, type GlobalTaskRow, globalBoard, rootBoardGroups } from './globalBoard';
+import {
+  filterBoard,
+  type GlobalTaskRow,
+  globalBoard,
+  isBoardTaskRecent,
+  rootBoardGroups,
+} from './globalBoard';
 
 interface GlobalTaskBoardProps {
   enabled: boolean;
@@ -135,9 +142,10 @@ function ActiveBoard({ onBack, onOpenTask, onOpenGroup }: Omit<GlobalTaskBoardPr
   const [creating, setCreating] = useState(false);
   const [selection, setSelection] = useState<{ groupId: string; taskId: string } | null>(null);
   const group = groups.find((item) => item.id === groupId);
+  const now = useNow(true);
   const board = useMemo(
-    () => globalBoard(groups, tasks, delegations),
-    [groups, tasks, delegations]
+    () => globalBoard(groups, tasks, delegations, now),
+    [groups, tasks, delegations, now]
   );
   const scoped = useMemo(
     () =>
@@ -157,7 +165,10 @@ function ActiveBoard({ onBack, onOpenTask, onOpenGroup }: Omit<GlobalTaskBoardPr
     ? groups.find((item) => item.id === selection.groupId)
     : undefined;
   const selectedTask =
-    selectedGroup && tasks[selectedGroup.id]?.find((task) => task.id === selection?.taskId);
+    selectedGroup &&
+    tasks[selectedGroup.id]?.find(
+      (task) => task.id === selection?.taskId && isBoardTaskRecent(task, now)
+    );
   const selectedStatus =
     selectedTask && (taskBlockInfo(selectedTask, delegations) ? 'blocked' : selectedTask.status);
   const selectedLabel = COLUMNS.find(([status]) => status === selectedStatus)?.[1] ?? 'Canceled';
@@ -427,7 +438,17 @@ function ActiveBoard({ onBack, onOpenTask, onOpenGroup }: Omit<GlobalTaskBoardPr
                     >
                       <h2 className="flex min-h-11 shrink-0 items-center gap-2 px-3 py-2 font-medium text-sm">
                         <Icon className={cn('size-3.5 shrink-0', colour)} />
-                        <span>{t(title)}</span>
+                        <span>
+                          {t(title)}
+                          {status === 'done' && (
+                            <span
+                              className="ml-1.5 font-normal text-muted-foreground text-xs"
+                              title={t('Older completed tasks are kept in the group board.')}
+                            >
+                              {t('Last 7 days')}
+                            </span>
+                          )}
+                        </span>
                         <span className="ml-auto text-muted-foreground tabular-nums">
                           {rows.length}
                         </span>

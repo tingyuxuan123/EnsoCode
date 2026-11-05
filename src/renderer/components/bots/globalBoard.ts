@@ -21,10 +21,18 @@ interface BoardProjection {
   attention: number;
 }
 
+const COMPLETED_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** 仅过滤独立看板的展示；现有任务用完成 / 验收后的 updatedAt 计时，原始记录不变。 */
+export function isBoardTaskRecent(task: GroupTask, now: number): boolean {
+  return task.status !== 'done' || task.updatedAt >= now - COMPLETED_VISIBLE_MS;
+}
+
 export function globalBoard(
   chats: readonly BotChat[],
   tasks: Record<string, GroupTask[]>,
-  delegations: readonly Delegation[]
+  delegations: readonly Delegation[],
+  now = Date.now()
 ): BoardProjection {
   const rows = new Map<GroupTask, GlobalTaskRow>();
   const seen = new Map<string, Set<string>>();
@@ -33,7 +41,7 @@ export function globalBoard(
     const ids = seen.get(group.id) ?? new Set<string>();
     seen.set(group.id, ids);
     for (const task of tasks[group.id] ?? []) {
-      if (task.status === 'canceled' || ids.has(task.id)) continue;
+      if (task.status === 'canceled' || ids.has(task.id) || !isBoardTaskRecent(task, now)) continue;
       ids.add(task.id);
       const needsAttention = taskNeedsAttention(task, delegations);
       if (needsAttention) attention++;

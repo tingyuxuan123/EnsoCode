@@ -157,6 +157,10 @@ Tailwind 的 `h-11` 会算成 38.5px 而不是 44px，与 `trafficLightPosition:
   （`backgroundThrottling: false` 不够）。亮着的 tab 关掉 focus emulation。
 - 被遮挡 / 隐藏的 view `capturePage` 报 `UnknownVizError`；截图走 CDP
   `Page.captureScreenshot` + `captureBeyondViewport`。
+- 可见的设备预览用 `dontSetVisibleSize: true`，原生绘制尺寸只由 `WebContentsView.setBounds`
+  控制；从隐藏态恢复时先清掉 CDP 留下的尺寸覆盖。Electron 43/macOS 实测，不分开这两个尺寸，
+  `Page.captureScreenshot` 恢复视图时会按未缩放的逻辑尺寸绘制，网页背景会溢出设备框的右侧和底部，
+  但 `getBounds()` 仍然返回正确的框尺寸。验收要看系统窗口截图，而不是只查 DOM 或 `getBounds()`。
 - **首次 `dom-ready` 之前 `debugger.attach` 会让 Main 段错误**（SIGSEGV）。`Tab.ready`
   门住所有 CDP 调用。
 - 渲染层 CDP 截图只拍 renderer webContents，看不到兄弟 view；验叠层要 `screencapture`。

@@ -114,6 +114,9 @@ vi.mock('electron', () => ({
     setBounds(bounds: unknown) {
       this.bounds = bounds;
     }
+    getBounds() {
+      return this.bounds;
+    }
     setVisible(visible: boolean) {
       this.visible = visible;
     }
@@ -348,6 +351,52 @@ it('关闭 DevTools 后即使尺寸没变也重新应用设备模拟', async () 
       expect.objectContaining({ width: 393, height: 852 })
     )
   );
+});
+
+it('缩放设备预览截图后原生绘制区域仍与设备框一致，隐藏时保留逻辑视口', async () => {
+  const { host, win } = await setup();
+  const contents = mock.contents[0];
+  const guest = win.contentView.children.find((view) => view.webContents === contents);
+  const frame = { x: 100, y: 100, width: 243, height: 528 };
+  let emulatedVisibleSize: { width: number; height: number } | null = null;
+  let paintedSize = { width: frame.width, height: frame.height };
+  // Electron 43 真机复现：截图恢复的是 CDP 的 visible size override，而不是
+  // WebContentsView.getBounds()。逻辑 393×852 被当作绘制尺寸时会向右下溢出。
+  contents.debugger.sendCommand.mockImplementation(
+    async (
+      method: string,
+      params: { width: number; height: number; dontSetVisibleSize?: boolean }
+    ) => {
+      if (method === 'Emulation.setDeviceMetricsOverride') {
+        if (!params.dontSetVisibleSize)
+          emulatedVisibleSize = { width: params.width, height: params.height };
+      } else if (method === 'Emulation.clearDeviceMetricsOverride') {
+        emulatedVisibleSize = null;
+      } else if (method === 'Page.captureScreenshot') {
+        const { width, height } = guest.getBounds();
+        paintedSize = emulatedVisibleSize ?? { width, height };
+        return { data: 'screenshot' };
+      }
+      return {};
+    }
+  );
+  host.setViewport('tab-a', 'conv', frame);
+  await host.setDevice('tab-a', 'conv', { enabled: true, profileId: 'iphone-14-pro' });
+
+  await host.invoke('conv', 'screenshot', { tabId: 'tab-a' });
+
+  expect(guest.bounds).toEqual(frame);
+  expect(paintedSize).toEqual({ width: frame.width, height: frame.height });
+  expect(host.state('tab-a').device).toMatchObject({ width: 393, height: 852 });
+
+  host.setViewport('tab-a', 'conv', null);
+  await host.setDevice('tab-a', 'conv', { enabled: true, profileId: 'iphone-14-pro' });
+  expect(emulatedVisibleSize).toEqual({ width: 393, height: 852 });
+
+  host.setViewport('tab-a', 'conv', frame);
+  await host.invoke('conv', 'screenshot', { tabId: 'tab-a' });
+  expect(paintedSize).toEqual({ width: frame.width, height: frame.height });
+  await host.dispose();
 });
 
 it('面板可见性上报不抢 agent 当前 tab，也不为空面板建空 tab', async () => {

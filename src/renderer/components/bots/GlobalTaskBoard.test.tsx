@@ -18,7 +18,10 @@ vi.mock('@/i18n', () => ({
 }));
 vi.mock('./BotFields', () => ({ FieldLabel: () => null }));
 vi.mock('./BotAvatar', () => ({ BotAvatar: () => null }));
-vi.mock('./DelegationCard', () => ({ useNow: () => 100, CheckBadge: () => null }));
+vi.mock('./DelegationCard', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./DelegationCard')>()),
+  CheckBadge: () => null,
+}));
 vi.mock('@/stores/settings', async () => ({
   useSettingsStore: (await import('zustand')).create(() => ({ keybindings: {} })),
 }));
@@ -26,6 +29,8 @@ vi.mock('@/stores/settings', async () => ({
 const alpha = { id: 'a', kind: 'group', title: 'Alpha' } as BotChat;
 const beta = { ...alpha, id: 'b', title: 'Beta' };
 const thread = { ...alpha, id: 'thread', parentId: 'a', title: 'Alpha topic' };
+const NOW = Date.UTC(2026, 10, 5, 12);
+const WEEK = 7 * 24 * 60 * 60 * 1000;
 const task: GroupTask = {
   id: 'shared-task',
   seq: 1,
@@ -35,7 +40,7 @@ const task: GroupTask = {
   assigneeBotId: 'bot',
   createdBy: 'human',
   createdAt: 1,
-  updatedAt: 1,
+  updatedAt: NOW,
 };
 const onOpenTask = vi.fn();
 const onOpenGroup = vi.fn();
@@ -80,6 +85,8 @@ const fill = async (label: string, value: string) => {
 
 describe('全局协作看板', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     vi.clearAllMocks();
     list.mockImplementation(async (id) => ({
@@ -112,6 +119,7 @@ describe('全局协作看板', () => {
     await act(async () => root.unmount());
     host.remove();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('按状态展示来自不同根群的任务，保留来源和执行人，不重复显示话题', async () => {
@@ -236,6 +244,58 @@ describe('全局协作看板', () => {
     await render();
     expect(cards()).toHaveLength(2);
     expect(cards()[0]?.querySelector('time')).toBeNull();
+  });
+
+  it('完成列与总数只含最近七天，搜索不带回旧任务，原始数据仍保留', async () => {
+    list.mockImplementation(async (id) => ({
+      ok: true,
+      enabled: true,
+      tasks:
+        id === 'a'
+          ? [
+              {
+                ...task,
+                id: 'recent',
+                title: 'Recent delivery',
+                status: 'done',
+                updatedAt: NOW - WEEK,
+              },
+              {
+                ...task,
+                id: 'old',
+                title: 'Old delivery',
+                status: 'done',
+                updatedAt: NOW - WEEK - 1,
+              },
+            ]
+          : [],
+    }));
+    await render();
+    expect(cards().map((card) => card.dataset.taskId)).toEqual(['recent']);
+    expect(host.textContent).toContain('1 tasks · 2 groups');
+    expect(host.textContent).toContain('Last 7 days');
+    await fill('Search tasks', 'Old delivery');
+    expect(cards()).toHaveLength(0);
+    expect(useBotsStore.getState().tasks.a).toHaveLength(2);
+  });
+
+  it('窗口持续打开也会隐藏刚超过七天的已完成卡片及详情，不重新拉任务', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    list.mockImplementation(async (id) => ({
+      ok: true,
+      enabled: true,
+      tasks: id === 'a' ? [{ ...task, status: 'done', updatedAt: NOW - WEEK + 1 }] : [],
+    }));
+    await render();
+    await click('Release checklist');
+    expect(host.querySelector('aside')).not.toBeNull();
+    list.mockClear();
+    await act(async () => vi.advanceTimersByTime(30_000));
+    expect(cards()).toHaveLength(0);
+    expect(host.querySelector('aside')).toBeNull();
+    expect(list).not.toHaveBeenCalled();
+    expect(useBotsStore.getState().tasks.a).toHaveLength(1);
   });
 
   it('新建时必须选择群，保存失败保留输入并允许重试', async () => {
