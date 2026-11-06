@@ -11,6 +11,30 @@ import { DelegationStore } from './delegationStore';
 import type { MemberTaskClassifier } from './memberTaskClassifier';
 
 let root: string;
+it('托管补充以稳定身份记入执行账本，重复消息不重复追加，重启不伪报已完成', async () => {
+  const f = fixture();
+  const sent = f.service.delegate(f.parent, { to: 'Bob', task: 'Fix login' });
+  if (!sent.ok) throw new Error(sent.error);
+  await vi.advanceTimersByTimeAsync(0);
+  const input = {
+    delegationId: sent.delegationId,
+    text: 'Safari only',
+    deliveryId: 'followup-stable',
+  };
+  expect(await f.service.interject(input)).toEqual({ ok: true });
+  expect(await f.service.interject(input)).toEqual({ ok: true });
+  expect(f.store.get(sent.delegationId)?.appends).toEqual([
+    expect.objectContaining({ text: 'Safari only', deliveryId: 'followup-stable' }),
+  ]);
+  const store = new DelegationStore(join(root, 'delegations.jsonl'));
+  const recovered = new DelegationService({ ...f.deps, store });
+  expect(store.get(sent.delegationId)).toMatchObject({
+    state: 'failed',
+    failure: 'interrupted',
+    appends: [{ deliveryId: 'followup-stable', ok: false }],
+  });
+  recovered.dispose();
+});
 beforeEach(() => {
   vi.useFakeTimers();
   root = mkdtempSync(join(tmpdir(), 'delegate-service-'));

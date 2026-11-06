@@ -11,6 +11,9 @@
 
 ## Bot 宿主的投递边界
 
+本地群任务托管的根群授权、编号直通、回执记账、提醒去重和受控恢复契约见
+[本地群任务托管](../guides/task-supervision.md)。托管不等于自动重放命令，也不替代审批。
+
 - `status: idle` 不是回合终态：worker 还会发送 session-meta、turn-completed。Bot 槽位、结果归属与队列只在终态结算；但中断、命令失败等路径只有 idle/failed，宿主在宽限期后兜底结算并 pump，无宿主轮次的会话回到 idle 时也要 pump，否则排队投递与并发槽永久挂起。
 - deliveryId 是「某会话的一次投递」的身份，按会话去重：群聊一轮里人类/例行/委派结果的 deliveryId 只给首个投递，接力一律新生成；命中去重（`duplicate`）对群当前成员按失败写 system 条目并推进，不能当作已发出。
 - 委派结果使用稳定 delegationId，worker 开始处理后确认；重启通过 jsonl 用户消息去重，不以“已入队”当作已投递。

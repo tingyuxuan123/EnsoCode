@@ -185,6 +185,38 @@ describe('chat inputs', () => {
     expect(parseChatUpdateInput({ chatId: A, routing: { mode: 1 } })).toBeNull();
   });
 
+  it('更新聊天的任务托管只接受 boolean，不支持在创建或克隆时授权', () => {
+    for (const taskSupervision of [true, false])
+      expect(parseChatUpdateInput({ chatId: A, expectedVersion: 2, taskSupervision })).toEqual({
+        chatId: A,
+        expectedVersion: 2,
+        taskSupervision,
+      });
+    expect(parseChatUpdateInput({ chatId: A })).not.toHaveProperty('taskSupervision');
+    for (const taskSupervision of [
+      undefined,
+      null,
+      'true',
+      'false',
+      0,
+      1,
+      [],
+      {},
+      { enabled: true },
+    ])
+      expect(parseChatUpdateInput({ chatId: A, taskSupervision })).toBeNull();
+    expect(
+      parseChatCreateInput({
+        kind: 'group',
+        members: [A, B],
+        bossBotId: A,
+        workspace: { kind: 'chat-home' },
+        taskSupervision: true,
+      })
+    ).toBeNull();
+    expect(parseChatCloneInput({ chatId: A, title: 'copy', taskSupervision: true })).toBeNull();
+  });
+
   it('routing.muted 为成员 id 数组（去重）', () => {
     expect(parseChatUpdateInput({ chatId: A, routing: { muted: [A, A] } })?.routing).toEqual({
       muted: [A],

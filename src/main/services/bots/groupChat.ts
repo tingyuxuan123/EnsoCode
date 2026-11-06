@@ -110,6 +110,8 @@ interface GroupChatDeps {
   emit: (event: BotEvent) => void;
   retryImages?: (chatId: string, mediaIds: string[]) => NonNullable<BotDeliverOptions['images']>;
   responder?: GroupResponderSelector;
+  /** 明确的已指派任务补充先直通原执行；undefined 表示仍走普通群路由。 */
+  routeTask?: (chatId: string, entry: HumanEntry) => Promise<BotSendResult | undefined>;
   /** 接力整批结束（无人在回复、无排队、无待路由消息）；用户停止的批次不报 */
   onBatchSettled?: (batch: GroupBatchSettled) => void;
   /** 输入框引用（@聊天 / $技能）：按被投递成员展开，附在增量之后 */
@@ -357,6 +359,10 @@ export class GroupChatService {
         at: Date.now(),
       });
       if (entry?.kind !== 'human') return { ok: false, error: 'timeline-write-failed' };
+      if (options.source === 'human') {
+        const routed = await this.deps.routeTask?.(chatId, entry);
+        if (routed !== undefined) return routed;
+      }
       const round = this.round(chatId);
       if (round.routing) {
         // 选人期间又来人类消息：放弃本次结果，对合并后的消息重新判定

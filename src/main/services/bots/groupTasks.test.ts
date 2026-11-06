@@ -51,6 +51,44 @@ const systemTexts = () =>
     .filter((entry) => entry.kind === 'system')
     .map((entry) => (entry.kind === 'system' ? entry.text : ''));
 
+it('群任务直通保留投递身份交给当前执行去重，不把同一补充变成新任务', async () => {
+  const task = added();
+  const running: Delegation = {
+    id: '11111111-1111-4111-8111-111111111111',
+    taskId: task.id,
+    chatId,
+    parentConversationId: 'parent',
+    childConversationId: 'child',
+    parentBotId: alice,
+    targetBotId: bob,
+    task: 'Fix login',
+    context: '',
+    state: 'running',
+    depth: 1,
+    createdAt: 1,
+  };
+  legacy = [running];
+  service.sync(running);
+  const interject = vi.fn(async () => ({ ok: true as const }));
+  service = new GroupTaskService({
+    store: new GroupTaskStore(join(root, 'chats')),
+    chats,
+    bots,
+    emit,
+    delegations: () => legacy,
+    interject,
+  });
+  expect(
+    await service.reply(chatId, task.id, 'Safari only', { deliveryId: 'stable-followup' })
+  ).toMatchObject({ ok: true });
+  expect(interject).toHaveBeenCalledWith({
+    delegationId: running.id,
+    text: 'Safari only',
+    deliveryId: 'stable-followup',
+  });
+  expect(service.list(chatId)).toHaveLength(1);
+});
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'group-task-service-'));
   bots = new BotStore(join(root, 'bots'));

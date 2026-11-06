@@ -1033,6 +1033,47 @@ it('回合收尾时追加被 deferred：原回合结束不结算，追加跑完�
   f.groups.dispose();
 });
 
+it('托管任务失败留在看板等待人工处理，不唤醒委派者自行重跑', async () => {
+  const f = fixture(['林经理', '阿后'], undefined, true);
+  const { boss, child } = await handOver(f);
+  f.chats.update(f.chat.id, (chat) => ({ ...chat, taskSupervision: true }));
+  f.observe(child, { type: 'turn-failed', turnId: 'failed', error: 'worker-exited' });
+  await settle();
+  expect(task1(f).status).toBe('blocked');
+  expect(resultsTo(f, boss)).toHaveLength(0);
+  expect(f.delegations.list()).toHaveLength(1);
+  f.delegations.dispose();
+  f.groups.dispose();
+});
+
+it('真人托管补充改排到下一回合时，交付仍保留原回合报告', async () => {
+  const f = fixture(['林经理', '阿后'], undefined, true);
+  const { boss, sent, child } = await handOver(f);
+  const deliveryId = 'task-followup:deferred';
+  expect(
+    await f.delegations.interject({
+      delegationId: sent.delegationId,
+      text: '补验 hover',
+      deliveryId,
+    })
+  ).toEqual({ ok: true });
+  f.observe(child, { type: 'delivery-deferred', deliveryId });
+  const original = '原报告：按钮已修复'.repeat(600);
+  f.reply(child, original);
+  await settle();
+  expect(f.to(child).at(-1)).toMatchObject({ deliveryId });
+  f.start(child);
+  f.reply(child, '补充报告：hover 已通过');
+  await settle();
+  expect(latest(f)).toMatchObject({
+    state: 'completed',
+    result: `${original}\n\n补充报告：hover 已通过`,
+  });
+  expect(resultsTo(f, boss)).toHaveLength(1);
+  f.delegations.dispose();
+  f.groups.dispose();
+});
+
 it('重复投递：同一追加再发一次不重复执行，返回同一回执', async () => {
   const f = fixture(['林经理', '阿后'], undefined, true);
   const { boss, child } = await handOver(f);

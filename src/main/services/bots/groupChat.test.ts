@@ -35,6 +35,44 @@ const host = {
   },
 };
 const entries = () => chats.readEntries(id);
+it('任务直通先于智能选人，保留人类消息并按 deliveryId 去重，不启动群接力', async () => {
+  const routeTask = vi.fn(async () => ({ ok: true as const }));
+  const select = vi.fn();
+  group.dispose();
+  group = new GroupChatService({
+    bots,
+    chats,
+    host,
+    emit,
+    routeTask,
+    responder: { timeoutMs: () => 1000, select },
+  });
+  const options = { deliveryId: 'task-human', source: 'human' as const };
+  expect(await group.send(id, '#1 只修 Safari', options)).toEqual({ ok: true });
+  expect(await group.send(id, '#1 只修 Safari', options)).toMatchObject({ duplicate: true });
+  expect(routeTask).toHaveBeenCalledTimes(1);
+  expect(select).not.toHaveBeenCalled();
+  expect(deliver).not.toHaveBeenCalled();
+  expect(entries().filter((entry) => entry.kind === 'human')).toHaveLength(1);
+  expect(group.state(id)).toMatchObject({ current: null });
+});
+
+it.each(['bot', 'background'] as const)(
+  '任务直通投递失败不再兜底重派；%s 来源不能触发真人补充',
+  async (source) => {
+    const routeTask = vi.fn(async () => ({ ok: false as const, error: 'offline' }));
+    group.dispose();
+    group = new GroupChatService({ bots, chats, host, emit, routeTask });
+    expect(await group.send(id, '#1 补充', { source: 'human' })).toEqual({
+      ok: false,
+      error: 'offline',
+    });
+    expect(deliver).not.toHaveBeenCalled();
+    await group.send(id, '#1 非人类消息', { source });
+    expect(routeTask).toHaveBeenCalledTimes(1);
+    expect(deliver).toHaveBeenCalledTimes(1);
+  }
+);
 const done = async (botId: string, text: string, ok = true, deliveryId?: string) => {
   finish({
     deliveryId,

@@ -74,6 +74,27 @@ describe('BotChatStore chats', () => {
     expect(store.update(chat.id, (draft) => ({ ...draft, id: 'other' }))).toBeUndefined();
   });
 
+  it('任务托管默认关闭，群显式开启后重载保留，私聊更新不能授权', () => {
+    const chat = group();
+    expect(chat).not.toHaveProperty('taskSupervision');
+    expect(new BotChatStore(root, now).get(chat.id)).not.toHaveProperty('taskSupervision');
+    expect(
+      store.update(chat.id, (draft) => ({ ...draft, taskSupervision: true as const }))
+    ).toMatchObject({ taskSupervision: true });
+    expect(new BotChatStore(root, now).get(chat.id)).toMatchObject({ taskSupervision: true });
+    store.update(chat.id, (draft) => ({ ...draft, taskSupervision: undefined }));
+    expect(new BotChatStore(root, now).get(chat.id)).not.toHaveProperty('taskSupervision');
+    const direct = store.create({
+      kind: 'direct',
+      title: 'd',
+      members: [BOT_A],
+      bossBotId: null,
+      workspace: { kind: 'member-home' },
+    })!;
+    store.update(direct.id, (draft) => ({ ...draft, taskSupervision: true as const }));
+    expect(new BotChatStore(root, now).get(direct.id)).not.toHaveProperty('taskSupervision');
+  });
+
   it('removes the chat directory', () => {
     const chat = group();
     store.appendEntry(chat.id, { id: 'e1', at: 1, kind: 'system', text: 'hi' });
@@ -104,6 +125,37 @@ describe('BotChatStore chats', () => {
 });
 
 describe('BotChatStore threads', () => {
+  it('任务托管随根群同步已有与新话题，但不影响另一群，话题不能自行开启或关闭', () => {
+    const parent = group();
+    const thread = store.createThread(parent.id)!;
+    const other = group();
+    const otherThread = store.createThread(other.id)!;
+    expect(thread).not.toHaveProperty('taskSupervision');
+    store.update(thread.id, (draft) => ({ ...draft, taskSupervision: true as const }));
+    expect(store.get(thread.id)).not.toHaveProperty('taskSupervision');
+    expect(store.get(parent.id)).not.toHaveProperty('taskSupervision');
+
+    store.update(parent.id, (draft) => ({ ...draft, taskSupervision: true as const }));
+    expect(store.get(thread.id)).toMatchObject({ taskSupervision: true });
+    const newThread = store.createThread(parent.id)!;
+    expect(newThread).toMatchObject({ taskSupervision: true });
+    store.update(thread.id, (draft) => ({ ...draft, taskSupervision: undefined }));
+    expect(store.get(thread.id)).toMatchObject({ taskSupervision: true });
+    expect(store.get(parent.id)).toMatchObject({ taskSupervision: true });
+    expect(store.get(other.id)).not.toHaveProperty('taskSupervision');
+    expect(store.get(otherThread.id)).toEqual(otherThread);
+    const enabled = new BotChatStore(root, now);
+    expect(enabled.get(parent.id)).toMatchObject({ taskSupervision: true });
+    expect(enabled.get(thread.id)).toMatchObject({ taskSupervision: true });
+    expect(enabled.get(newThread.id)).toMatchObject({ taskSupervision: true });
+
+    store.update(parent.id, (draft) => ({ ...draft, taskSupervision: undefined }));
+    const disabled = new BotChatStore(root, now);
+    for (const id of [parent.id, thread.id, newThread.id])
+      expect(disabled.get(id)).not.toHaveProperty('taskSupervision');
+    expect(disabled.get(otherThread.id)).toEqual(otherThread);
+  });
+
   it('建话题：复制根群配置、独立时间线与会话，只能挂在根群下', () => {
     const parent = group();
     store.update(parent.id, (draft) => {

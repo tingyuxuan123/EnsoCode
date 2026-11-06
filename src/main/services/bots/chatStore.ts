@@ -41,6 +41,7 @@ const THREAD_SHARED = [
   'bossBotId',
   'workspace',
   'routing',
+  'taskSupervision',
   'archivedAt',
 ] as const;
 /** 倒读时每隔这么多 seq 记一个行首偏移，深翻页直接从附近开始读 */

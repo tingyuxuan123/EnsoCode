@@ -280,6 +280,7 @@ export function parseChatUpdateInput(value: unknown): ChatUpdateInput | null {
     'members',
     'bossBotId',
     'routing',
+    'taskSupervision',
     'workspace',
     'settled',
     'snoozedUntil',
@@ -299,6 +300,10 @@ export function parseChatUpdateInput(value: unknown): ChatUpdateInput | null {
     if (input[key] === undefined) continue;
     if (typeof input[key] !== 'boolean') return null;
     result[key] = input[key];
+  }
+  if (Object.hasOwn(input, 'taskSupervision')) {
+    if (typeof input.taskSupervision !== 'boolean') return null;
+    result.taskSupervision = input.taskSupervision;
   }
   if (input.snoozedUntil !== undefined) {
     if (input.snoozedUntil !== null && !(seq(input.snoozedUntil) && input.snoozedUntil > 0))

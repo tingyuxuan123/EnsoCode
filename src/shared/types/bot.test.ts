@@ -181,6 +181,37 @@ describe('parseBotChat', () => {
     expect(parseBotChat(group)).toEqual(group);
   });
 
+  it('任务托管只认群上的严格 true，旧群、关闭与脏值都不带授权', () => {
+    expect(parseBotChat({ ...group, taskSupervision: true })).toMatchObject({
+      taskSupervision: true,
+    });
+    expect(
+      parseBotChat({
+        ...group,
+        parentId: '55555555-5555-4555-8555-555555555555',
+        taskSupervision: true,
+      })
+    ).toMatchObject({ taskSupervision: true });
+    expect(parseBotChat(group)).not.toHaveProperty('taskSupervision');
+    for (const bad of [false, null, 0, 1, 'true', 'false', [], {}, { enabled: true }])
+      expect(parseBotChat({ ...group, taskSupervision: bad })).not.toHaveProperty(
+        'taskSupervision'
+      );
+  });
+
+  it('私聊即使持久化了 taskSupervision:true 也不保留授权', () => {
+    const direct = parseBotChat({
+      ...group,
+      kind: 'direct',
+      members: [BOT_A],
+      bossBotId: null,
+      workspace: { kind: 'member-home' },
+      taskSupervision: true,
+    });
+    expect(direct).toMatchObject({ kind: 'direct', members: [BOT_A] });
+    expect(direct).not.toHaveProperty('taskSupervision');
+  });
+
   it('keeps settle / snooze times and the pin order only while pinned', () => {
     expect(parseBotChat({ ...group, settledAt: 5, snoozedUntil: 9, pinOrder: 2 })).toMatchObject({
       settledAt: 5,

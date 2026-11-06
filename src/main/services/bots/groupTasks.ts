@@ -73,6 +73,7 @@ interface Deps {
   interject?: (input: {
     delegationId: string;
     text: string;
+    deliveryId?: string;
   }) => Promise<{ ok: true } | { ok: false; error: string }>;
   now?: () => number;
   /** 开工进度延后多久写（测试用），缺省 60 秒 */
@@ -581,7 +582,12 @@ export class GroupTaskService {
    * 任务卡回复框（人）：缺信息卡住 → 原执行人在任务会话里接着做；执行中 → 插入当前执行；
    * 执行失败只能重试 / 改派 / 取消；其他状态只记评论
    */
-  async reply(chatId: string, ref: string, input: string): Promise<TaskResult> {
+  async reply(
+    chatId: string,
+    ref: string,
+    input: string,
+    options?: { deliveryId: string }
+  ): Promise<TaskResult> {
     const found = this.resolve(chatId, 'human', ref);
     if (!found.ok) return found;
     const task = found.task;
@@ -598,7 +604,7 @@ export class GroupTaskService {
     const line = `${this.name('human')} ${block || running ? '回复了' : '评论了'} ${label(task)}：${short(text)}`;
     if (block === 'need' && task.delegationId) {
       // 新执行落盘时 sync 写「用户 回复了 …，X 接着做」一行；没成就什么都不写
-      this.humanReply = { taskId: task.id, text };
+      if (!options) this.humanReply = { taskId: task.id, text };
       let sent: { ok: true } | { ok: false; error: string };
       try {
         sent = this.deps.reply?.({ chatId, delegationId: task.delegationId, text }) ?? {
@@ -610,12 +616,16 @@ export class GroupTaskService {
       }
       if (!sent.ok) return sent;
     } else if (running) {
-      const sent = (await this.deps.interject?.({ delegationId: running.id, text })) ?? {
+      const sent = (await this.deps.interject?.({
+        delegationId: running.id,
+        text,
+        ...(options ? { deliveryId: options.deliveryId } : {}),
+      })) ?? {
         ok: false as const,
         error: 'Reply is unavailable.',
       };
       if (!sent.ok) return sent;
-      this.changed(chatId, line);
+      if (!options) this.changed(chatId, line);
     } else this.changed(chatId, line);
     return { ok: true, task: this.deps.store.find(this.board(chatId), task.id) ?? task };
   }

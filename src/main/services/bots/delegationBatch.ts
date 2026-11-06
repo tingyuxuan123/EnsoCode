@@ -1,6 +1,7 @@
 import type { Delegation } from '../../../shared/types/bot';
 
 type NameOf = (botId: string) => string;
+export const TASK_FOLLOWUP_PREFIX = 'task-followup:';
 
 export const isActiveDelegation = (record: Delegation) =>
   record.state === 'queued' || record.state === 'running';
@@ -52,17 +53,17 @@ export const delegationResultBody = (record: Delegation) =>
         ? `${record.error ?? 'check'}\n\n${record.result}`
         : (record.error ?? record.failure ?? record.state)) + missedAppends(record);
 
-export function batchResultText(batch: readonly Delegation[], nameOf: NameOf): string {
+export function batchResultText(
+  batch: readonly Delegation[],
+  nameOf: NameOf,
+  deliveryId = batchDeliveryId(batch)
+): string {
   const items = batch.map(
     (record) =>
       `<delegation-result id="${record.id}" from="${escapeXml(nameOf(record.targetBotId))}" status="${record.state}">${escapeXml(delegationResultBody(record))}</delegation-result>`
   );
   return batch.length > 1
-    ? [
-        `<delegation-results id="${batchDeliveryId(batch)}">`,
-        ...items,
-        '</delegation-results>',
-      ].join('\n')
+    ? [`<delegation-results id="${deliveryId}">`, ...items, '</delegation-results>'].join('\n')
     : items[0];
 }
 

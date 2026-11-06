@@ -78,6 +78,8 @@ export interface BotChat {
   bossBotId: BotId | null;
   workspace: BotChatWorkspace;
   routing: BotChatRouting;
+  /** 仅群：本地任务托管的显式授权，话题跟随根群；缺省关闭 */
+  taskSupervision?: true;
   pinned: boolean;
   archivedAt?: number;
   /** 搁置 / 结案：侧栏移到「已搁置」，有新消息时自动取消 */
@@ -609,6 +611,7 @@ export function parseBotChat(value: unknown): BotChat | undefined {
   if (chat.pinned && isSeq(value.pinOrder)) chat.pinOrder = value.pinOrder;
   if (isSeq(value.epochSeq)) chat.epochSeq = value.epochSeq;
   if (chat.kind === 'group') {
+    if (value.taskSupervision === true) chat.taskSupervision = true;
     if (isBotChatId(value.parentId) && value.parentId !== chat.id) chat.parentId = value.parentId;
     else if (isBotChatId(value.activeThreadId)) chat.activeThreadId = value.activeThreadId;
     const threadTitle = str(value.threadTitle).trim().slice(0, BOT_THREAD_TITLE_MAX);

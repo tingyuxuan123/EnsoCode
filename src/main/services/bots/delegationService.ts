@@ -32,6 +32,7 @@ import {
   delegationBatches,
   delegationResultBody,
   escapeXml,
+  TASK_FOLLOWUP_PREFIX,
 } from './delegationBatch';
 import { delegatedBotPermissions, delegationPolicy } from './delegationPolicy';
 import type { DelegationStore } from './delegationStore';
@@ -661,9 +662,18 @@ export class DelegationService {
           !this.held.has(item.id)
       );
     if (!record || this.settling.has(record.id)) return;
+    const previous = this.outcomes.get(record.id);
+    const text =
+      previous?.ok &&
+      event.ok &&
+      previous.text &&
+      previous.text !== event.text &&
+      record.appends?.some((item) => item.deliveryId.startsWith(TASK_FOLLOWUP_PREFIX))
+        ? [previous.text, event.text].filter(Boolean).join('\n\n')
+        : event.text;
     const outcome: TurnOutcome = {
       ok: event.ok,
-      text: event.text,
+      text,
       ...(event.error ? { error: event.error } : {}),
     };
     const id = event.deliveryId;
@@ -1135,15 +1145,43 @@ export class DelegationService {
   async interject(input: {
     delegationId: string;
     text: string;
+    deliveryId?: string;
   }): Promise<{ ok: true } | { ok: false; error: string }> {
     const record = this.deps.store.get(input.delegationId);
     if (!record || !active(record) || this.held.has(record.id))
       return { ok: false, error: 'This run has ended.' };
-    const sent = await this.deps.host.deliverConversation(
-      record.childConversationId,
-      `From a human on the task card:\n${input.text}`,
-      { source: 'human', deliveryId: randomUUID() }
-    );
+    const deliveryId = input.deliveryId ?? randomUUID();
+    // 托管直通先记账再投递；重启时未消费的补充按原规则标失败，不能伪报已完成或盲目重放。
+    if (input.deliveryId) {
+      const previous = record.appends?.find((item) => item.deliveryId === deliveryId);
+      if (previous)
+        return previous.ok === false
+          ? { ok: false, error: 'Follow-up delivery was interrupted.' }
+          : { ok: true };
+      if ((record.appends?.length ?? 0) >= DELEGATION_APPENDS_MAX)
+        return { ok: false, error: 'Too many follow-ups in this run; wait for its result.' };
+      this.save({
+        ...record,
+        appends: [...(record.appends ?? []), { at: Date.now(), text: input.text, deliveryId }],
+      });
+    }
+    let sent: BotDeliverResult;
+    try {
+      sent = await this.deps.host.deliverConversation(
+        record.childConversationId,
+        `From a human on the task card:\n${input.text}`,
+        { source: 'human', deliveryId }
+      );
+    } catch (cause) {
+      sent = { ok: false, error: String(cause) };
+    }
+    if (input.deliveryId) {
+      if (!sent.ok) this.appendFailed(record.id, deliveryId);
+      else if (this.deps.host.hasStartedDelivery(record.childConversationId, deliveryId)) {
+        if (this.appendOwner(record.childConversationId, deliveryId)) this.accepted.add(deliveryId);
+        this.receipt(deliveryId, 'accepted');
+      }
+    }
     return sent.ok ? { ok: true } : { ok: false, error: sent.error };
   }
 
@@ -1244,7 +1282,16 @@ export class DelegationService {
         batch.some(active) ||
         batch.every((record) => record.deliveredAt !== undefined) ||
         this.delivering.has(deliveryId) ||
-        (parentConversationId && head.parentConversationId !== parentConversationId) ||
+        (parentConversationId && head.parentConversationId !== parentConversationId)
+      )
+        continue;
+      // 托管失败只进看板和提醒。不能以「结果回流」自动唤醒父模型，间接重派有副作用的工作。
+      const suppressed = new Set(batch.filter((record) => this.awaitHumanRecovery(record)));
+      if (suppressed.size) this.delivered([...suppressed]);
+      const reportable = batch.filter((record) => !suppressed.has(record));
+      if (
+        !reportable.length ||
+        reportable.every((record) => record.deliveredAt !== undefined) ||
         this.deps.host.isBusy(head.parentConversationId)
       )
         continue;
@@ -1284,7 +1331,11 @@ export class DelegationService {
       }
       this.delivering.add(deliveryId);
       try {
-        const text = batchResultText(batch, (id) => this.deps.bots.get(id)?.name ?? id);
+        const text = batchResultText(
+          reportable,
+          (id) => this.deps.bots.get(id)?.name ?? id,
+          deliveryId
+        );
         const sent =
           parent.bot?.chatId &&
           this.deps.chats.get(parent.bot.chatId)?.kind === 'group' &&
@@ -1303,6 +1354,16 @@ export class DelegationService {
         this.delivering.delete(deliveryId);
       }
     }
+  }
+
+  private awaitHumanRecovery(record: Delegation): boolean {
+    return (
+      record.state === 'failed' &&
+      record.depth === 1 &&
+      !!record.taskId &&
+      !!record.chatId &&
+      this.deps.chats.rootOf(record.chatId)?.taskSupervision === true
+    );
   }
 
   dispose(): void {

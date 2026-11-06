@@ -15,7 +15,7 @@ import {
   Plus,
   UserMinus,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
@@ -118,6 +119,7 @@ export function GroupInfoPanel({
   const [turns, setTurns] = useState(String(chat.routing.maxTurnsPerBot));
   const [adding, setAdding] = useState(false);
   const [tab, setTab] = useState('info');
+  const supervisionDescriptionId = useId();
   useEffect(() => {
     setTitle(chat.title);
     setHops(String(chat.routing.maxHops));
@@ -382,6 +384,35 @@ export function GroupInfoPanel({
               </Button>
             )}
           </PanelSection>
+
+          {chat.kind === 'group' && !chat.parentId && (
+            <div className="mt-5 border-y py-2">
+              <label className="flex items-center justify-between gap-3 text-sm">
+                <span>{t('Task supervision (local)')}</span>
+                <Switch
+                  aria-label={t('Task supervision (local)')}
+                  aria-describedby={supervisionDescriptionId}
+                  checked={chat.taskSupervision === true}
+                  onCheckedChange={(taskSupervision) => void update({ taskSupervision })}
+                />
+              </label>
+              <div
+                id={supervisionDescriptionId}
+                className="mt-1.5 space-y-1 text-[calc(11rem/14)] text-muted-foreground"
+              >
+                <p>
+                  {t(
+                    'Start a plain-text message with a task number (for example, #3 Safari only) to follow up on a delegation in progress or waiting for input. Get a reminder if execution is interrupted or goes quiet.'
+                  )}
+                </p>
+                <p>
+                  {t(
+                    'Runs locally while the app is open and the computer is awake. Interrupted work is not replayed automatically. Does not start to-dos or replace approvals.'
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
           <PanelSection title={t('Group notes')}>
             <NotesEditor

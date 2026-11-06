@@ -142,6 +142,42 @@ async function createBot(name: string): Promise<string> {
 }
 
 describe('bots IPC', () => {
+  it('托管必须通过根群显式授权，关闭清除；私聊/话题拒绝且开启不执行待办', async () => {
+    const a = await createBot('Alice');
+    const b = await createBot('Bob');
+    const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+      kind: 'group',
+      title: 'Supervised',
+      members: [a, b],
+      bossBotId: a,
+      workspace: { kind: 'chat-home' },
+    });
+    const chat = created.chat as { id: string; version: number };
+    expect(
+      (await call(IPC_CHANNELS.BOT_CHAT_UPDATE, { chatId: chat.id, taskSupervision: true })).chat
+    ).toMatchObject({ taskSupervision: true });
+    expect(mocks.promptSession).not.toHaveBeenCalled();
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    const thread = services.chats.createThread(chat.id)!;
+    expect(
+      await call(IPC_CHANNELS.BOT_CHAT_UPDATE, { chatId: thread.id, taskSupervision: false })
+    ).toMatchObject({ ok: false });
+    const direct = services.chats.create({
+      kind: 'direct',
+      title: '',
+      members: [a],
+      bossBotId: null,
+      workspace: { kind: 'member-home' },
+    })!;
+    expect(
+      await call(IPC_CHANNELS.BOT_CHAT_UPDATE, { chatId: direct.id, taskSupervision: true })
+    ).toMatchObject({ ok: false });
+    expect(
+      (await call(IPC_CHANNELS.BOT_CHAT_UPDATE, { chatId: chat.id, taskSupervision: false })).chat
+    ).not.toHaveProperty('taskSupervision');
+    expect(services.chats.get(thread.id)).not.toHaveProperty('taskSupervision');
+  });
   it('loads the configured capacity when services start and applies subsequent changes live', async () => {
     const { getBotServices, syncBotModeServices } = await import('./bots');
     mocks.settings.botModeEnabled = false;

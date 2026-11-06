@@ -121,6 +121,7 @@ import {
   readBotSessionSummary,
 } from '../services/bots/sessionMessages';
 import { createSmartRouter, type SmartRouterDeps } from '../services/bots/smartRouter';
+import { TaskSupervisor } from '../services/bots/taskSupervisor';
 import { createTeam } from '../services/bots/teamCreate';
 import { ThreadTitler } from '../services/bots/threadTitler';
 import { browserHost } from '../services/browserHost';
@@ -187,6 +188,7 @@ interface BotServices {
   scheduler: RoutineScheduler;
   runner: RoutineRunner;
   tasks: GroupTaskService;
+  supervisor: TaskSupervisor;
   usage: BotUsageService;
   snooze: ChatSnoozeTimer;
   inbox: BotInboxService;
@@ -224,6 +226,8 @@ export function emitBotEvent(event: BotEvent): void {
   if (event.kind === 'catalog' || event.kind === 'chat') services?.scheduler.refresh();
   if (event.kind === 'chat') services?.snooze.refresh();
   if (event.kind !== 'inbox') services?.inbox.onBotEvent(event);
+  if (['delegation', 'tasks', 'silence', 'chat'].includes(event.kind))
+    services?.supervisor.scheduleSweep();
   try {
     sendToAllWindows(IPC_CHANNELS.BOT_EVENT, event);
   } catch {
@@ -513,6 +517,7 @@ export function getBotServices(): BotServices | null {
   );
   const taskStore = new GroupTaskStore(path.join(userData, 'bot-chats'));
   let titlerRef: ThreadTitler | undefined;
+  let supervisorRef: TaskSupervisor | undefined;
   const composerRefs = createComposerRefs({
     bots,
     chats,
@@ -572,6 +577,7 @@ export function getBotServices(): BotServices | null {
         .filter((task) => task.status !== 'done' && task.status !== 'canceled'),
     }),
     responder: createSmartRouter(routingDeps),
+    routeTask: (chatId, entry) => supervisorRef?.route(chatId, entry) ?? Promise.resolve(undefined),
   });
   host.onDiscard((scope) => {
     if (scope.chatId) groups.discard(scope.chatId);
@@ -647,6 +653,21 @@ export function getBotServices(): BotServices | null {
     },
   });
   delegationsRef = delegations;
+  const supervisor = new TaskSupervisor({
+    chats,
+    bots,
+    tasks,
+    delegations: () => delegationStore.list(),
+    silences: () => host.silences(),
+    emit: emitBotEvent,
+    language: () => (String(readSettingsState()?.language ?? 'zh').startsWith('zh') ? 'zh' : 'en'),
+    notify: (chatId, text) =>
+      notifyQuietly(chatId, (lang) => ({
+        title: lang === 'zh' ? '任务托管 · 需要处理' : 'Task supervision · Needs attention',
+        body: text,
+      })),
+  });
+  supervisorRef = supervisor;
   // 群话题 AI 命名：复用设置里的标题总结开关与标题模型回退链（群话题没有会话模型这一级）
   const titler = new ThreadTitler({
     chats,
@@ -766,6 +787,7 @@ export function getBotServices(): BotServices | null {
     scheduler,
     runner,
     tasks,
+    supervisor,
     usage,
     composerRefs,
     snooze,
@@ -776,7 +798,10 @@ export function getBotServices(): BotServices | null {
       titler.dispose();
     },
   };
-  if (botModeEnabled()) scheduler.start();
+  if (botModeEnabled()) {
+    scheduler.start();
+    supervisor.start();
+  }
   snooze.refresh();
   return services;
 }
@@ -787,9 +812,11 @@ export function syncBotModeServices(): void {
     const current = getBotServices();
     current?.host.setMaxRunningTurns(readSettingsState()?.botMaxRunningTurns);
     current?.scheduler.start();
+    current?.supervisor.start();
   } else if (services) {
     const previous = services;
     previous.host.freeze();
+    previous.supervisor.dispose();
     previous.scheduler.stop();
     previous.groups.dispose();
     previous.delegations.disable();
@@ -1820,6 +1847,7 @@ export function registerBotHandlers(): void {
       const current = input ? services.chats.get(input.chatId) : undefined;
       // 话题的群配置随根群级联，不能单独改
       if (!input || !current || current.parentId) return INVALID;
+      if (input.taskSupervision !== undefined && current.kind !== 'group') return INVALID;
       if (input.expectedVersion !== undefined && input.expectedVersion !== current.version) {
         return { ok: false, error: 'conflict' };
       }
@@ -1855,6 +1883,8 @@ export function registerBotHandlers(): void {
         if (input.members) draft.members = input.members;
         if (input.bossBotId !== undefined) draft.bossBotId = input.bossBotId;
         if (input.routing) draft.routing = { ...draft.routing, ...input.routing };
+        if (input.taskSupervision === true) draft.taskSupervision = true;
+        if (input.taskSupervision === false) delete draft.taskSupervision;
         if (workspace) draft.workspace = workspace;
         if (workspaceChanged) draft.sessions = {};
         return applyChatFlags(draft, input, at);

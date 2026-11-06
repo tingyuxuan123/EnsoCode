@@ -2794,6 +2794,11 @@ export const zhTranslations: Record<string, string> = {
   'Routing limits': '路由上限',
   '@ relay limit': '@ 接力上限',
   'Replies per member': '每人回复次数',
+  'Task supervision (local)': '任务托管（本地）',
+  'Start a plain-text message with a task number (for example, #3 Safari only) to follow up on a delegation in progress or waiting for input. Get a reminder if execution is interrupted or goes quiet.':
+    '以任务编号开头发纯文本（如「#3 仅改 Safari」），补充直达执行中或等待答复的委派负责人。执行中断或长时间无输出时提醒处理。',
+  'Runs locally while the app is open and the computer is awake. Interrupted work is not replayed automatically. Does not start to-dos or replace approvals.':
+    '仅在应用运行且电脑唤醒时生效。中断后不自动重放，不自动执行待办，也不代替审批。',
   'Group memory': '群记忆',
   'No group memories yet': '还没有群记忆',
   'Core notes': '核心笔记',

@@ -111,6 +111,8 @@ export interface BotChatUpdateInput {
   members?: string[];
   bossBotId?: string | null;
   routing?: Partial<BotChat['routing']>;
+  /** 根群的本地任务托管开关；false 清除授权 */
+  taskSupervision?: boolean;
   /** 变更后所有成员下次投递开新会话，旧会话只读保留 */
   workspace?: BotChatWorkspaceInput;
 }
