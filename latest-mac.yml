@@ -1,22 +1,31 @@
-version: 0.2.58
+version: 0.2.59
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.58/EnsoCode-0.2.58-arm64-mac.zip
-    sha512: XJfeHwA8+TtjyfbWS7RgB6uB3saIPIm9ltgCYWY5/hAKwHO3lzB7qgnP8dsknbcHWdGspXwezZlEk3w12lRaJQ==
-    size: 183347589
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.58/EnsoCode-0.2.58-arm64.dmg
-    sha512: Ujp+4zyhZcWg3PS1BV8sAGFq4n0+6I1mp8QnM9F76iSjX3Ak5dUGQ/DaNR0EJ6JrkYh9P1/nt7tDJ2xDpWup9g==
-    size: 178143842
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.58/EnsoCode-0.2.58-arm64-mac.zip
-sha512: XJfeHwA8+TtjyfbWS7RgB6uB3saIPIm9ltgCYWY5/hAKwHO3lzB7qgnP8dsknbcHWdGspXwezZlEk3w12lRaJQ==
-releaseDate: 2026-11-06T07:23:12.525Z
-releaseName: EnsoCode 0.2.58 — 个人测试
-releaseNotes: |
-  # EnsoCode 0.2.58
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.59/EnsoCode-0.2.59-arm64-mac.zip
+    sha512: Rl/CByv79dlssGTzE4q1HTfn+HfW8eViImGV9Jr8QuQflznZCP29YMlfMH/hK5GHvZT3vT4UQ7dDIHnZi4H69w==
+    size: 183348189
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.59/EnsoCode-0.2.59-arm64.dmg
+    sha512: X+dA3fihbBXSybOXclK+bik4sHhH24GBTr0rqH/L/Qw+QMFfcYZ6Zs2nMenl00igZqVGVbJC2FX61VQbn9LxGg==
+    size: 178145815
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.59/EnsoCode-0.2.59-arm64-mac.zip
+sha512: Rl/CByv79dlssGTzE4q1HTfn+HfW8eViImGV9Jr8QuQflznZCP29YMlfMH/hK5GHvZT3vT4UQ7dDIHnZi4H69w==
+releaseDate: 2026-11-06T07:36:12.302Z
+releaseName: EnsoCode 0.2.59 — 个人测试
+releaseNotes: >
+  # EnsoCode 0.2.59
 
-  - **从 Bot 聊天直接打开工作区设计稿**：右侧新增常驻「设计稿」入口。不需要先收到交稿消息，就能浏览、刷新并打开当前工作区的 `.vetd` 设计。缺少 `design.json` 但保留主题和画框源码的设计，也能发现并在打开时恢复。
-  - **群聊里的图片交稿更容易看见**：图片产物直接显示缩略图，点击缩略图或正文中的文件链接可打开原图，不会读取该消息未交付的文件。
-  - **设计成员先建画布再交稿**：独立视觉任务先加载设计技能、复用或创建画布，再编写画框并截图验稿。修复群委派的画布归属，避免在正确的话题中误报画布被其他项目占用。
+
+  - **从 Bot 聊天直接打开工作区设计稿**：右侧「设计稿」列出当前工作区的 `.vetd` 设计。缺少 `design.json`
+  但保留主题和画框源码的设计，也能发现并在打开时恢复。
+
+  - **群聊图片交稿可直接预览**：点击缩略图或正文文件链接打开原图，不会读取该消息未交付的文件。
+
+  - **设计成员先建画布再交稿**：独立视觉任务先加载设计技能、复用或创建画布，再编写画框并截图验稿；修复群委派的画布归属，避免误报画布被其他项目占用。
+
+  - 修复发布检查中 OAuth 测试的模块隔离竞态，不改变应用的登录行为。
+
 
   ---
 
-  个人测试通道 0.2.58：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+
+  个人测试通道 0.2.59：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
