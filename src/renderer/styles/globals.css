@@ -2,6 +2,7 @@
 @import "@fontsource-variable/inter";
 @import "./shared.css";
 @import "./mintLight.css";
+@import "./cloudLight.css";
 /* The plugin owns a separately compiled, scoped utilities/theme sheet. */
 @source not "../features/design/vetta";
 

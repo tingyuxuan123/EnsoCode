@@ -114,7 +114,7 @@ function applyAppTheme(theme: Theme, terminalTheme: string, lightPalette: LightP
       terminalIsDark: isTerminalThemeDark(terminalTheme),
     }) === 'dark';
   root.classList.toggle('dark', isDark);
-  if (!isDark && lightPalette === 'mint-light') root.dataset.lightPalette = lightPalette;
+  if (!isDark && lightPalette !== 'ocean') root.dataset.lightPalette = lightPalette;
   else delete root.dataset.lightPalette;
 }
 

@@ -64,11 +64,27 @@ describe('desktop light palette', () => {
     expect(documentElement.dataset.lightPalette).toBeUndefined();
   });
 
+  it('applies Cloud Light with the same light-only rule', () => {
+    const store = settings.useSettingsStore.getState();
+    store.setTheme('light');
+    store.setLightPalette('cloud-light');
+    expect(settings.useSettingsStore.getState().lightPalette).toBe('cloud-light');
+    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    store.setTheme('dark');
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
+    store.setTheme('light');
+    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    store.setLightPalette('ocean');
+    expect(documentElement.dataset.lightPalette).toBeUndefined();
+  });
+
   it('hydrates saved preferences and rejects an unknown or missing palette', async () => {
     const store = settings.useSettingsStore;
     for (const [saved, expected] of [
       [{ lightPalette: 'mint-light' }, 'mint-light'],
       [{ lightPalette: { palette: 'mint-light' } }, 'ocean'],
+      [{ lightPalette: 'cloud-light' }, 'cloud-light'],
+      [{ lightPalette: 'cloud' }, 'ocean'],
       [{ lightPalette: 'mint-light' }, 'mint-light'],
       [{}, 'ocean'],
     ] as const) {

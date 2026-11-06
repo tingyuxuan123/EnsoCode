@@ -222,6 +222,12 @@ describe('config sync portable preference contract', () => {
     expect(validateBundle(input).state).toMatchObject(input.state);
   });
 
+  it('accepts every desktop light palette', () => {
+    for (const lightPalette of ['ocean', 'mint-light', 'cloud-light'] as const) {
+      expect(validateBundle(bundle({ lightPalette })).state).toMatchObject({ lightPalette });
+    }
+  });
+
   it('接受运行时定义的全部智能压缩档位，并丢弃已移除的 bash 拦截开关', () => {
     for (const smartCompactMode of SMART_COMPACT_MODES) {
       const input = bundle({ bashInterceptEnabled: true, smartCompactMode });
