@@ -1,31 +1,22 @@
-version: 0.2.59
+version: 0.2.60
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.59/EnsoCode-0.2.59-arm64-mac.zip
-    sha512: Rl/CByv79dlssGTzE4q1HTfn+HfW8eViImGV9Jr8QuQflznZCP29YMlfMH/hK5GHvZT3vT4UQ7dDIHnZi4H69w==
-    size: 183348189
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.59/EnsoCode-0.2.59-arm64.dmg
-    sha512: X+dA3fihbBXSybOXclK+bik4sHhH24GBTr0rqH/L/Qw+QMFfcYZ6Zs2nMenl00igZqVGVbJC2FX61VQbn9LxGg==
-    size: 178145815
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.59/EnsoCode-0.2.59-arm64-mac.zip
-sha512: Rl/CByv79dlssGTzE4q1HTfn+HfW8eViImGV9Jr8QuQflznZCP29YMlfMH/hK5GHvZT3vT4UQ7dDIHnZi4H69w==
-releaseDate: 2026-11-06T07:36:12.302Z
-releaseName: EnsoCode 0.2.59 — 个人测试
-releaseNotes: >
-  # EnsoCode 0.2.59
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.60/EnsoCode-0.2.60-arm64-mac.zip
+    sha512: ib3CaO0fX3TRqfluh3TXzQlNqycngQaQtIet1VnIgUSVm8It0gs38jPU0USFOKcFMCa26lOUGUAGkY2PF80JRA==
+    size: 183360424
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.60/EnsoCode-0.2.60-arm64.dmg
+    sha512: 9HBE8siCAhkq4zPsXPRBArm8Q+4CY0ka2MGRDA/P0nWh4YZjETc5Bzb57vayWP3rNsZ04EQk9iswoEgEXx766g==
+    size: 178163333
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.60/EnsoCode-0.2.60-arm64-mac.zip
+sha512: ib3CaO0fX3TRqfluh3TXzQlNqycngQaQtIet1VnIgUSVm8It0gs38jPU0USFOKcFMCa26lOUGUAGkY2PF80JRA==
+releaseDate: 2026-11-06T08:47:40.732Z
+releaseName: EnsoCode 0.2.60 — 个人测试
+releaseNotes: |
+  # EnsoCode 0.2.60
 
-
-  - **从 Bot 聊天直接打开工作区设计稿**：右侧「设计稿」列出当前工作区的 `.vetd` 设计。缺少 `design.json`
-  但保留主题和画框源码的设计，也能发现并在打开时恢复。
-
-  - **群聊图片交稿可直接预览**：点击缩略图或正文文件链接打开原图，不会读取该消息未交付的文件。
-
-  - **设计成员先建画布再交稿**：独立视觉任务先加载设计技能、复用或创建画布，再编写画框并截图验稿；修复群委派的画布归属，避免误报画布被其他项目占用。
-
-  - 修复发布检查中 OAuth 测试的模块隔离竞态，不改变应用的登录行为。
-
+  - **多个项目可以同时使用设计画布**：侧栏「设计」标签上新增「在新窗口打开画布」，把当前会话的画布弹到独立窗口。该会话的新建、截图、方向和素材等设计操作都在这个窗口里完成，主窗口切到别的项目也能同时设计，不再提示画布被其他项目占用。主窗口里对应位置显示「画布已在独立窗口中打开」，可一键切回；关闭独立窗口后恢复原来的方式。
+  - 独立窗口里的备注派活仍发到所属会话，运行状态和「修改中 / 已更新」提示与主窗口同步；窗口只能访问自己会话的项目目录，进入托盘模式时会一并关闭。
+  - 首版暂不支持 SSH 项目和 Bot 会话。
 
   ---
 
-
-  个人测试通道 0.2.59：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
-  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+  个人测试通道 0.2.60：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
