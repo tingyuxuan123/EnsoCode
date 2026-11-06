@@ -40,3 +40,7 @@ fake runtime（报 `unknown oauth provider`）。凡跑这条链的测试文件�
 `vi.mock('./modelDirectory', () => ({ refreshModelDirectory: async () => {}, ... }))`
 （参照 `oauthProviders.test.ts`、`settings.test.ts`、`agentHost.test.ts`、
 `capabilityGateway.test.ts` 的既有 mock 块）。
+
+登录/登出还会动态导入 `agentHost` 失效代码搜索配置，同样能在测试重置模块时把
+旧 OAuth runtime 拉回缓存。通知测试 mock 此后台依赖，并在切换 fake runtime 前后
+等待动态导入收束；代码搜索的失效行为由 `oauthProviders.codeSearch.test.ts` 独立验收。

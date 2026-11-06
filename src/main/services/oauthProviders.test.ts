@@ -31,6 +31,11 @@ vi.mock('./proxyConfig', () => ({
 vi.mock('./modelDirectory', () => ({
   refreshModelDirectory: async () => {},
 }));
+// 登录/登出还会后台导入 agentHost；其静态依赖也会把 oauthProviders 拉回模块缓存。
+// 代际失效行为由 oauthProviders.codeSearch.test.ts 单独验证。
+vi.mock('./agentHost', () => ({
+  pushCodeSearchConfig: () => {},
+}));
 
 /** 造一个可解码的 JWT（只有 payload 有意义，签名不校验） */
 function fakeJwt(payload: Record<string, unknown>): string {
@@ -1344,6 +1349,7 @@ describe('登录事件安全边界', () => {
 
 describe('登录成功凭证失效通知', () => {
   it('done 发给发起窗口后，credentials-changed 广播到其它 renderer', async () => {
+    await vi.dynamicImportSettled();
     vi.resetModules();
     let loggedIn = false;
     interface FakeProvider {
@@ -1429,6 +1435,7 @@ describe('登录成功凭证失效通知', () => {
       expect(sourceSend).not.toHaveBeenCalledWith(IPC_CHANNELS.OAUTH_CREDENTIALS_CHANGED);
     } finally {
       electronMocks.windows.splice(0);
+      await vi.dynamicImportSettled();
       vi.doUnmock('@earendil-works/pi-coding-agent');
       vi.resetModules();
     }
