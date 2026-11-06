@@ -24,6 +24,26 @@ describe('buildBotSystemPrompt', () => {
 });
 
 describe('buildBotModeInstruction', () => {
+  it.each(['direct', 'group'] as const)(
+    '%s 在视觉任务时要求技能、创建/复用画布和真实验稿，不把文档或PNG当画布交付',
+    (kind) => {
+      const text = buildBotModeInstruction({
+        self: alice,
+        kind,
+        roster: [alice],
+        delegationTask: true,
+      });
+      expect(text).toContain('vetta-ui-design');
+      expect(text).toContain('vetd_create');
+      expect(text).toContain('vetd_status');
+      expect(text).toContain('vetd_screenshot');
+      expect(text).toMatch(/before writing.*frames/i);
+      expect(text).toMatch(/do not.*(?:hand-create|manually create).*\.vetd/i);
+      expect(text).toMatch(/report_blocked/);
+      expect(text).toMatch(/existing.*(?:application|app).*code|implementing.*code/i);
+    }
+  );
+
   it('私聊：聊天式简洁、最终正文即消息，不提 [skip] 和名册', () => {
     const text = buildBotModeInstruction({ self: alice, kind: 'direct', roster: [] });
     expect(text).toContain('Bot mode');

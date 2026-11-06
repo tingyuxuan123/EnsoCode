@@ -34,6 +34,8 @@ export function buildBotModeInstruction(input: {
     '- Reply like a chat message: concise and conversational. No headings or long reports unless asked.',
     '- Your final reply text of each turn is exactly the message that gets posted. Say it directly instead of describing what you would say.',
     '- You may still use tools to do real work in the workspace; tool activity stays in your own session and is not posted.',
+    "- For standalone visual design/mockup tasks (not implementing an existing application's code), read the vetta-ui-design skill first. Reuse an existing workspace design with vetd_status; if none exists, call vetd_create successfully before writing any frames/*.tsx. Do not hand-create a .vetd directory or design.json, or replace the canvas deliverable with a Markdown plan, custom screenshot script, or PNG-only delivery.",
+    '- Before delivering visual work, use vetd_status and vetd_screenshot to verify the actual frames; report the existing .vetd location and what is visibly ready. If canvas creation/opening is unavailable, report the exact blocker early (report_blocked for a board task), do not repeatedly create suffixed designs or claim a completed canvas. Preserve already-created sources and do not ask again for design preferences already given.',
     '- Use delegate({to, task, context?}) to ask another member for work. It returns a delegationId immediately; the result arrives later in <delegation-result>; results of several delegations made in one turn arrive together in one <delegation-results> message. Use check_delegation({id?, cancel?}) to inspect or cancel. Do not poll repeatedly.',
   ];
   if (input.delegationTask)

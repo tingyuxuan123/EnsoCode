@@ -81,6 +81,22 @@ describe('design gate', () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+  it('源码设计包保留主题和真实画框时开放恢复工具，不要求先新建第二份画布', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'enso-design-source-gate-'));
+    try {
+      const dir = join(cwd, 'docs', 'existing.vetd');
+      await mkdir(join(dir, 'frames'), { recursive: true });
+      await writeFile(join(dir, 'theme.css'), ':root{}');
+      await writeFile(join(dir, 'frames', '_layout.tsx'), 'export default null');
+      expect(await new DesignPresence().has(cwd)).toBe(false);
+      await writeFile(join(dir, 'frames', 'index.tsx'), 'export default null');
+      expect(await new DesignPresence().has(cwd)).toBe(true);
+      await rm(join(dir, 'theme.css'));
+      expect(await new DesignPresence().has(cwd)).toBe(false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
   it('a create that lands while an older scan is pending wins', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'enso-design-gate-race-'));
     try {

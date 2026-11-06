@@ -1,6 +1,7 @@
 import { opendir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { InlineExtension } from '@earendil-works/pi-coding-agent';
+import { sourceDesignFile } from '@shared/design/sourceBundle';
 import { DESIGN_TOOL_NAMES, type DesignToolName } from '@shared/types/design';
 
 /** Upstream tool-gate.ts: skill activation is NOT a gate input. */
@@ -52,6 +53,8 @@ export class DesignPresence {
   }
   private async scan(cwd: string): Promise<boolean> {
     let remaining = this.limits.maxEntries ?? 10_000;
+    const themes = new Set<string>();
+    const frames = new Set<string>();
     const walk = async (rel: string, depth: number): Promise<boolean> => {
       if (remaining <= 0 || depth > (this.limits.maxDepth ?? 32)) return false;
       const dir = await opendir(join(cwd, rel)).catch(() => null);
@@ -64,7 +67,15 @@ export class DesignPresence {
         )
           continue;
         const file = rel ? `${rel}/${entry.name}` : entry.name;
-        if (entry.isFile() && isDesignPath(file)) return true;
+        if (entry.isFile()) {
+          if (isDesignPath(file)) return true;
+          const source = sourceDesignFile(file);
+          if (source) {
+            const { bundle, kind } = source;
+            (kind === 'theme' ? themes : frames).add(bundle);
+            if (themes.has(bundle) && frames.has(bundle)) return true;
+          }
+        }
         if (entry.isDirectory() && (await walk(file, depth + 1))) return true;
         // Dirent symlinks are never traversed; presence is a visibility hint, not path authority.
       }

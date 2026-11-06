@@ -993,6 +993,60 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
         expect.objectContaining({ ok: true })
       );
     });
+    it('Bot 委派设计路由到其权威所属话题，而非隐藏的 Code 画布', async () => {
+      const authority = getSourceAuthorityRegistry()!;
+      const root = authority.conversation(parent.sessionId)!;
+      vi.spyOn(authority, 'conversation').mockReturnValue({
+        ...root,
+        bot: { botId: 'designer', chatId: null, delegationId: 'first-delegation' },
+      });
+      const executionOf = vi.fn(() => ({ chatId: 'current-topic' }));
+      mocks.getBotServices.mockReturnValue({
+        delegations: { executionOf, chatIdOf: () => 'old-topic' },
+      });
+      try {
+        invoke('bot-delegation-create');
+        await Promise.resolve();
+        expect(executionOf).toHaveBeenCalledWith(parent.sessionId);
+        expect(mocks.designRequest).toHaveBeenCalledWith(
+          expect.objectContaining({
+            cwd: '/repo',
+            sessionId: parent.sessionId,
+            botChatId: 'current-topic',
+            tool: 'vetd_create',
+          })
+        );
+      } finally {
+        mocks.getBotServices.mockReturnValue(null);
+      }
+    });
+    it('普通 Bot 设计保留直接群聊标识；Code 来源的成员委派不伪造群聊归属', async () => {
+      const authority = getSourceAuthorityRegistry()!;
+      const root = authority.conversation(parent.sessionId)!;
+      const conversation = vi.spyOn(authority, 'conversation');
+      conversation.mockReturnValue({ ...root, bot: { botId: 'designer', chatId: 'group-topic' } });
+      invoke('bot-direct-create');
+      await Promise.resolve();
+      expect(mocks.designRequest).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botChatId: 'group-topic' })
+      );
+      conversation.mockReturnValue({
+        ...root,
+        bot: { botId: 'designer', chatId: null, delegationId: 'code-delegation' },
+      });
+      mocks.getBotServices.mockReturnValue({
+        delegations: { executionOf: () => ({ chatId: null }), chatIdOf: () => 'stale-topic' },
+      });
+      try {
+        invoke('code-member-create');
+        await Promise.resolve();
+        expect(mocks.designRequest).toHaveBeenLastCalledWith(
+          expect.objectContaining({ botChatId: undefined })
+        );
+      } finally {
+        mocks.getBotServices.mockReturnValue(null);
+      }
+    });
     it('deduplicates, binds cancellation, rejects timeout and suppresses late replies; disabling aborts pending calls', async () => {
       vi.useFakeTimers();
       try {

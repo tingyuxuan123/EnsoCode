@@ -1554,7 +1554,17 @@ export function registerAgentHandlers(): void {
         );
         return;
       }
-      const botChatId = sourceAuthority?.conversation(sessionId)?.bot?.chatId ?? undefined;
+      const bot = sourceAuthority?.conversation(sessionId)?.bot;
+      // Task delegates are independent root sessions with chatId:null. Route
+      // their canvas to the current authoritative execution's topic, not Code.
+      const delegations = bot?.delegationId ? getBotServices()?.delegations : undefined;
+      const execution = delegations?.executionOf(sessionId);
+      const botChatId =
+        bot?.chatId ??
+        (execution
+          ? execution.chatId
+          : bot?.delegationId && delegations?.chatIdOf(bot.delegationId)) ??
+        undefined;
       const controller = new AbortController();
       const timeoutMs = designToolTimeoutMs(tool);
       const timer = setTimeout(() => {
