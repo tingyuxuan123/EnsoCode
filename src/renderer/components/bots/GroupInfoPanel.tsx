@@ -119,6 +119,8 @@ export function GroupInfoPanel({
   const [turns, setTurns] = useState(String(chat.routing.maxTurnsPerBot));
   const [adding, setAdding] = useState(false);
   const [tab, setTab] = useState('info');
+  // 保存期间锁住托管开关：连点会带着过期 expectedVersion 再发一次，只换来冲突提示
+  const [supervisionSaving, setSupervisionSaving] = useState(false);
   const supervisionDescriptionId = useId();
   useEffect(() => {
     setTitle(chat.title);
@@ -393,7 +395,11 @@ export function GroupInfoPanel({
                   aria-label={t('Task supervision (local)')}
                   aria-describedby={supervisionDescriptionId}
                   checked={chat.taskSupervision === true}
-                  onCheckedChange={(taskSupervision) => void update({ taskSupervision })}
+                  disabled={supervisionSaving}
+                  onCheckedChange={(taskSupervision) => {
+                    setSupervisionSaving(true);
+                    void update({ taskSupervision }).finally(() => setSupervisionSaving(false));
+                  }}
                 />
               </label>
               <div

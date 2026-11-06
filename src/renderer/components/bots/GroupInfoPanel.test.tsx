@@ -123,4 +123,23 @@ describe('群信息的本地任务托管', () => {
     await render({ ...chat, kind: 'direct', workspace: { kind: 'member-home' } });
     expect(toggle()).toBeNull();
   });
+
+  it('保存中锁住开关，连点不会用过期版本再发一次更新', async () => {
+    let finish: (value: { ok: true; chat: BotChat }) => void = () => {};
+    updateChat.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    await render();
+    await act(async () => toggle()?.click());
+    expect(toggle()?.hasAttribute('data-disabled')).toBe(true);
+    await act(async () => toggle()?.click());
+    expect(updateChat).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ ok: true, chat }));
+    expect(toggle()?.hasAttribute('data-disabled')).toBe(false);
+    await act(async () => toggle()?.click());
+    expect(updateChat).toHaveBeenCalledTimes(2);
+  });
 });
