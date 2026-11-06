@@ -23,12 +23,14 @@ interface Deps {
 const SWEEP_DEBOUNCE_MS = 750;
 const SWEEP_INTERVAL_MS = 30_000;
 
+// 任务号的前后边界：空白、中英文句读、括号或紧挨着的汉字（中文常不加空格）。
+const TASK_REF_PATTERN =
+  /(?<=^|[\s(（,，、;；:：]|\p{Script=Han})(?:(issue|pr)\s+)?#[1-9]\d*(?=[\s:：,，.。、;；!！?？)）]|\p{Script=Han}|$)/giu;
+
 function hasAnotherTaskReference(text: string): boolean {
-  if (/任务\s*#\d+(?=[\s:：,，)）]|$)/u.test(text)) return true;
-  // 只匹配有分隔边界的纯数字编号；带字母的色值、链接片段、显式 issue/PR 引用不是任务号。
-  for (const [, external] of text.matchAll(
-    /(?:^|[\s(（,，])(?:(issue|pr)\s+)?#\d+(?=[\s:：,，)）]|$)/giu
-  )) {
+  // 只匹配有分隔边界、不以 0 开头的纯数字编号；带字母的色值、#000、链接片段、
+  // 显式 issue/PR 引用不是任务号。宁可多判退回普通路由，也不把另一个任务的话送错执行。
+  for (const [, external] of text.matchAll(TASK_REF_PATTERN)) {
     if (!external) return true;
   }
   return false;

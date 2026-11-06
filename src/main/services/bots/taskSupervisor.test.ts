@@ -112,9 +112,15 @@ describe('明确任务引用，不猜测消息归属', () => {
   it.each(['#1 只修 Safari', '任务 #1：只修 Safari', 'task #1: Safari only'])('%s', (text) => {
     expect(parseTaskFollowup(text)).toMatchObject({ seq: 1 });
   });
-  it.each(['按钮颜色改成 #2563eb', '顺便看下 issue #12', '看下 (Issue #12) 里的备注'])(
-    '正文里的非任务引用原样直通：%s',
-    (text) => expect(parseTaskFollowup(`#3 ${text}`)).toEqual({ seq: 3, text })
+  it.each([
+    '按钮颜色改成 #2563eb',
+    '顺便看下 issue #12',
+    '看下 (Issue #12) 里的备注',
+    // 任务编号不以 0 开头，纯数字色值 #000 不可能是任务号
+    '背景改成 #000',
+    '边框用 #0f0f0f。',
+  ])('正文里的非任务引用原样直通：%s', (text) =>
+    expect(parseTaskFollowup(`#3 ${text}`)).toEqual({ seq: 3, text })
   );
   it.each([
     '#1',
@@ -123,6 +129,15 @@ describe('明确任务引用，不猜测消息归属', () => {
     '#1 和 #2 一起做',
     '#1 顺便处理任务#2：补上用例',
     '#1 先看 issue #12，再处理 #2',
+    // 中文/英文句读同样是任务号边界，和空格分隔的写法结果一致
+    '#1 先别动 #2。',
+    '#1 参考 #2、#3',
+    '#1 先做完#2；再说',
+    '#1 和#2一样处理',
+    '#1 同 #2！',
+    '#1 要不要等 #2？',
+    '#1 same as #2.',
+    '#1 same as #2!',
     '比较 #1 的结果',
     'https://host/#1 x',
     '```\n#1 code\n```',
