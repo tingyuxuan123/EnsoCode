@@ -873,6 +873,9 @@ export const IPC_PRODUCT_COVERAGE = {
   BOT_ARTIFACTS_LIST: excluded('Bot mode artifact cards UI.'),
   BOT_ARTIFACT_READ: excluded('Bot mode artifact preview UI.'),
   BOT_ARTIFACT_OPEN: excluded('Bot mode artifact reveal / open UI.'),
+  BOT_DESIGN_WORKSPACE: excluded(
+    'Bot desktop design panel resolves its current workspace without starting a member session.'
+  ),
   BOT_FILE_SEARCH: excluded('Bot mode composer @file completion.'),
   BOT_CHAT_SAVE_PASTED_TEXT: excluded('Bot mode composer long paste saved as a chat-scoped txt.'),
   BOT_REWIND: excluded('Bot mode direct chat rewind UI.'),

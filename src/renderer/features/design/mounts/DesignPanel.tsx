@@ -19,7 +19,7 @@ function CanvasMount({
   component: Canvas,
   bot,
 }: {
-  sessionId: string;
+  sessionId: string | null;
   cwd: string;
   component: PluginActivityTabContribution['component'];
   bot?: { chatId: string; path: string };
@@ -82,7 +82,9 @@ function CanvasMount({
           );
         }}
       >
-        <__ActivityTabContext.Provider value={{ cwd, active: true, sessionId, bot }}>
+        <__ActivityTabContext.Provider
+          value={{ cwd, active: true, sessionId: sessionId ?? undefined, bot }}
+        >
           <Canvas />
         </__ActivityTabContext.Provider>
       </div>
@@ -96,7 +98,7 @@ export function BotDesignPanel({ target }: { target: BotDesignTarget }) {
   return (
     <CanvasMount
       key={`${target.sessionId}:${target.projectId ?? ''}:${target.path}`}
-      sessionId={target.sessionId}
+      sessionId={target.sessionId ?? null}
       cwd={target.cwd}
       bot={target}
       component={tab.component}

@@ -843,10 +843,15 @@ export class BotSessionHost {
 
   /** 聊天工作区在本机的目录；direct 的 member-home 取唯一成员 home */
   workspacePath(chatId: string): string | undefined {
+    return this.workspaceRoot(chatId)?.cwd;
+  }
+
+  /** 只解析工作区的项目权威，不为查看已有文件创建成员会话。 */
+  workspaceRoot(chatId: string): { cwd: string; projectId: string } | undefined {
     const chat = this.deps.chats.get(chatId);
     if (!chat) return undefined;
     const workspace = this.resolveWorkspace(chat, chat.members[0]);
-    return workspace.ok ? workspace.cwd : undefined;
+    return workspace.ok ? { cwd: workspace.cwd, projectId: workspace.projectId } : undefined;
   }
 
   ensureSession(

@@ -168,6 +168,7 @@ import type {
   BotChatWriteResult,
   BotDelegationRetryResult,
   BotDelegationsResult,
+  BotDesignWorkspaceResult,
   BotDraftInput,
   BotEvent,
   BotFileSearchRequest,
@@ -1452,6 +1453,8 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.BOT_SEND, request),
     openWorkspace: (target: { chatId: string } | { botId: string }): Promise<BotActionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.BOT_OPEN_WORKSPACE, target),
+    designWorkspace: (request: { chatId: string }): Promise<BotDesignWorkspaceResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.BOT_DESIGN_WORKSPACE, request),
     sessionHistory: (request: {
       conversationId: string;
       beforeIndex?: number;

@@ -1,3 +1,4 @@
+import { sourceDesignFile } from "@shared/design/sourceBundle";
 import type { PluginFsApi, PluginFsFileRef } from "@vetta-org/plugin-sdk";
 import { MANIFEST_FILE } from "./manifest-types";
 import { migrateLegacyDesign } from "./migrate";
@@ -25,35 +26,47 @@ function insideDesign(relPath: string): boolean {
 
 /**
  * 从递归文件列表里认出设计。宿主的递归列举只回文件，所以设计包这个**目录**靠它
- * 里面的 design.json 反推。
+ * 里面的 design.json 反推。无 manifest 但 theme + 真实 frame 尚在的源码包也可打开，
+ * 由 DesignSession 原有的 reconcile 恢复 manifest；扫描阶段不写文件。
  */
 export function pickDesignPaths(files: PluginFsFileRef[]): DiscoveredDesigns {
-	const bundles: string[] = [];
+	const bundles = new Set<string>();
+	const themes = new Set<string>();
+	const frames = new Set<string>();
 	const legacyFiles: string[] = [];
 	/** 落单的旁挂目录推出来的 `x.vetd`，等确认没有同名条目后才算数。 */
 	const orphanSidecars: string[] = [];
 	for (const file of files) {
 		const rel = file.relPath.replaceAll("\\", "/");
 		const path = file.path.replaceAll("\\", "/");
+		// Only the outermost design is a candidate; embedded examples/assets are its content.
+		const source = sourceDesignFile(rel);
+		if (source) {
+			const dir = path.slice(0, path.length - (rel.length - source.bundle.length));
+			(source.kind === "theme" ? themes : frames).add(dir);
+		}
 		if (rel.endsWith(BUNDLE_MANIFEST_SUFFIX)) {
-			bundles.push(path.slice(0, path.length - `/${MANIFEST_FILE}`.length));
+			const parent = rel.slice(0, -`/${MANIFEST_FILE}`.length);
+			if (!insideDesign(parent)) bundles.add(path.slice(0, -`/${MANIFEST_FILE}`.length));
 			continue;
 		}
 		if (rel.endsWith(LEGACY_SIDECAR_MANIFEST_SUFFIX)) {
 			// `…/x.vetd.d/design.json` → `…/x.vetd`
-			orphanSidecars.push(path.slice(0, path.length - `.d/${MANIFEST_FILE}`.length));
+			const parent = rel.slice(0, -`.d/${MANIFEST_FILE}`.length);
+			if (!insideDesign(parent)) orphanSidecars.push(path.slice(0, path.length - `.d/${MANIFEST_FILE}`.length));
 			continue;
 		}
 		// 包内部的东西都是设计内容，不会自己又是一份设计。
 		if (insideDesign(rel)) continue;
 		if (file.name.endsWith(".vetd")) legacyFiles.push(file.path);
 	}
+	for (const dir of themes) if (frames.has(dir)) bundles.add(dir);
 	// 同名的设计包或 v1 文件还在，说明迁移没停在那个窗口里，旁挂目录交给正常路径处理。
 	const claimed = new Set([...bundles, ...legacyFiles.map((path) => path.replaceAll("\\", "/"))]);
 	for (const path of orphanSidecars) {
 		if (!claimed.has(path)) legacyFiles.push(path);
 	}
-	return { bundles: bundles.sort(), legacyFiles: [...new Set(legacyFiles)].sort() };
+	return { bundles: [...bundles].sort(), legacyFiles: [...new Set(legacyFiles)].sort() };
 }
 
 /**

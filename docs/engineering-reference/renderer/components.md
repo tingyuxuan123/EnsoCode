@@ -144,6 +144,8 @@
 PNG 等图片产物直接显示缩略图，接近视口才请求；Main 复用现有 `bots.artifacts.read` 的 `variant: 'thumb'`，长边不超过 480、data URL 不超过 200000 字符。点击正文或缩略图再按原 target + rel 读取原图；已结束的成员会话仍走 Bot 产物授权，不借 Code 会话复活。
 回归：`ArtifactCards.test.tsx`、`Markdown.fileOpening.test.tsx`、`ipc/bots.test.ts`；验收同时检查文字链接与缩略图，不能以工具读图成功代替用户可见。
 
+右侧「设计稿」是工作区入口，不依赖任何交稿消息或活跃成员会话。用 `bots.designWorkspace({ chatId })` 获取 Main 权威的项目根，再复用设计扫描；群话题共享根群工作区，画布归属仍是当前话题。源码包若保留 `theme.css` 和有效 `frames/*.tsx`，即使缺 `design.json` 也列出；扫描不写文件，显式打开时由 `DesignSession` 重建。无会话画布不创建假会话，也不操作隐藏的 Code 输入框。
+
 ## 时间线初始高度不能取首条消息
 
 `MessageTimeline` 切会话会重挂 Virtuoso 并定位 `LAST`。必须提供 `defaultItemHeight` 初始估算，不能让首条长文本的探测高度外推到全部消息；实际行高仍动态测量，不能改成 `fixedItemHeight`。

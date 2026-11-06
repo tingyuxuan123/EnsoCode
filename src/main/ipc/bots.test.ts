@@ -82,6 +82,7 @@ vi.mock('../services/agentHost', () => ({
 }));
 vi.mock('./agent', () => ({
   getSourceAuthorityRegistry: () => mocks.registry,
+  pluginProjectRoot: () => null,
   readSessionHistoryFile: vi.fn(),
   setBotWorkerEventObserver: vi.fn(),
 }));
@@ -2049,6 +2050,161 @@ describe('群话题', () => {
 });
 
 describe('Bot 设计产物 IPC', () => {
+  it.each(['direct', 'group'] as const)(
+    '无需消息或成员会话即可解析 %s 的设计工作区，话题沿用根群',
+    async (kind) => {
+      const a = await createBot('Alice');
+      const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+        kind,
+        members: kind === 'direct' ? [a] : [a, await createBot('Bob')],
+        ...(kind === 'group' ? { bossBotId: a } : {}),
+        workspace: { kind: kind === 'direct' ? 'member-home' : 'chat-home' },
+      });
+      const chatId = (created.chat as { id: string }).id;
+      const { getBotServices } = await import('./bots');
+      const services = getBotServices()!;
+      const before = services.chats.get(chatId)!;
+      expect(before.sessions).toEqual({});
+      const found = await call('bots:design-workspace', { chatId });
+      expect(found).toMatchObject({
+        ok: true,
+        root: { ref: { kind: 'project', projectId: expect.any(String) }, path: expect.any(String) },
+      });
+      const root = found.root as { ref: { projectId: string }; path: string };
+      expect(root.path).toBe(services.host.workspacePath(chatId));
+      expect(
+        (mocks.registry as SourceAuthorityRegistry).project(root.ref.projectId)?.canonicalPath
+      ).toBe(root.path);
+      if (kind === 'group') {
+        const topic = services.chats.createThread(chatId)!;
+        expect(await call('bots:design-workspace', { chatId: topic.id })).toEqual(found);
+        expect(services.chats.get(topic.id)?.sessions).toEqual({});
+      }
+      expect(services.chats.get(chatId)?.sessions).toEqual({});
+      expect(services.chats.readEntries(chatId)).toEqual([]);
+      expect(mocks.spawnSession).not.toHaveBeenCalled();
+      expect(mocks.promptSession).not.toHaveBeenCalled();
+    }
+  );
+
+  it('设计工作区只接受聊天标识：拒绝任意路径、无效/禁用入口和非主窗口，不创建会话', async () => {
+    const a = await createBot('Alice');
+    const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+      kind: 'direct',
+      members: [a],
+      workspace: { kind: 'member-home' },
+    });
+    const chatId = (created.chat as { id: string }).id;
+    for (const bad of [
+      null,
+      [],
+      { chatId: 'bad' },
+      { chatId, path: '/tmp' },
+      { chatId, projectId: 'forged' },
+      { chatId, sessionId: 'forged' },
+    ]) {
+      expect(await call('bots:design-workspace', bad)).toMatchObject({ ok: false });
+    }
+    mocks.isMain.mockReturnValue(false);
+    expect(await call('bots:design-workspace', { chatId })).toEqual({
+      ok: false,
+      error: 'unavailable',
+    });
+    mocks.isMain.mockReturnValue(true);
+    mocks.settings.designEnabled = false;
+    expect(await call('bots:design-workspace', { chatId })).toEqual({
+      ok: false,
+      error: 'disabled',
+    });
+    mocks.settings.designEnabled = true;
+    mocks.settings.botModeEnabled = false;
+    expect(await call('bots:design-workspace', { chatId })).toEqual({
+      ok: false,
+      error: 'disabled',
+    });
+    expect(mocks.spawnSession).not.toHaveBeenCalled();
+  });
+
+  it('设计工作区跟随改绑项目，旧项目或 SSH / 已删除项目不能成为本地设计根', async () => {
+    const a = await createBot('Alice');
+    const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+      kind: 'direct',
+      members: [a],
+      workspace: { kind: 'member-home' },
+    });
+    const chatId = (created.chat as { id: string }).id;
+    const registry = mocks.registry as SourceAuthorityRegistry;
+    const root = join(mocks.root, 'project');
+    mkdirSync(root);
+    const project = registry.createProject({ path: root, requestId: 'design-workspace-project' });
+    if (!project.accepted) throw new Error(project.error);
+    expect(
+      await call(IPC_CHANNELS.BOT_CHAT_UPDATE, {
+        chatId,
+        workspace: { kind: 'project', projectId: project.value.projectId },
+      })
+    ).toMatchObject({ ok: true });
+    expect(await call('bots:design-workspace', { chatId })).toMatchObject({
+      ok: true,
+      root: { ref: { kind: 'project', projectId: project.value.projectId }, path: root },
+    });
+    const get = vi.spyOn(registry, 'project');
+    try {
+      get.mockReturnValue({ ...project.value, kind: 'ssh' });
+      expect(await call('bots:design-workspace', { chatId })).toMatchObject({ ok: false });
+      get.mockReturnValue({ ...project.value, state: 'removed' });
+      expect(await call('bots:design-workspace', { chatId })).toMatchObject({ ok: false });
+    } finally {
+      get.mockRestore();
+    }
+  });
+
+  it('设计工作区解析在途改绑时丢弃旧根，不把旧项目交给面板', async () => {
+    const a = await createBot('Alice');
+    const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+      kind: 'direct',
+      members: [a],
+      workspace: { kind: 'member-home' },
+    });
+    const chatId = (created.chat as { id: string }).id;
+    const dir = join(mocks.root, 'moved-project');
+    mkdirSync(dir);
+    const project = (mocks.registry as SourceAuthorityRegistry).createProject({
+      path: dir,
+      requestId: 'moved',
+    });
+    if (!project.accepted) throw new Error(project.error);
+    const roots = await import('../services/design/roots');
+    const original = roots.resolveDesignRoot;
+    let ready = false;
+    let release = () => {};
+    const gate = new Promise<void>((done) => {
+      release = done;
+    });
+    const resolve = vi.spyOn(roots, 'resolveDesignRoot').mockImplementationOnce(async (ref) => {
+      const root = await original(ref);
+      ready = true;
+      await gate;
+      return root;
+    });
+    try {
+      const pending = call(IPC_CHANNELS.BOT_DESIGN_WORKSPACE, { chatId });
+      await vi.waitFor(() => expect(ready).toBe(true));
+      expect(
+        await call(IPC_CHANNELS.BOT_CHAT_UPDATE, {
+          chatId,
+          workspace: { kind: 'project', projectId: project.value.projectId },
+        })
+      ).toMatchObject({ ok: true });
+      release();
+      expect(await pending).toEqual({ ok: false, error: 'unavailable' });
+      expect(mocks.spawnSession).not.toHaveBeenCalled();
+    } finally {
+      release();
+      resolve.mockRestore();
+    }
+  });
+
   it('PNG 产物提供限尺寸缩略图，原图与缩略图均限于原条目的权威文件', async () => {
     const designer = await createBot('Alice');
     const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {

@@ -9,6 +9,7 @@ import { BOT_NOTES_MAX_CHARS } from '@shared/bots/notes';
 import { isSkipReply } from '@shared/bots/router';
 import { assignTeamNames } from '@shared/bots/team';
 import type { SessionIdentity } from '@shared/builtinAgents';
+import { toDesignSdkPath } from '@shared/design/paths';
 import { BUILTIN_AGENT_TYPES, IPC_CHANNELS } from '@shared/types';
 import { type AttachedImage, isDeliveryId } from '@shared/types/agent';
 import type { SkillEntry } from '@shared/types/assets';
@@ -125,6 +126,7 @@ import { TaskSupervisor } from '../services/bots/taskSupervisor';
 import { createTeam } from '../services/bots/teamCreate';
 import { ThreadTitler } from '../services/bots/threadTitler';
 import { browserHost } from '../services/browserHost';
+import { resolveDesignRoot } from '../services/design/roots';
 import { searchFiles } from '../services/fileSearch';
 import { resolveGlobalInstruction } from '../services/instructionStore';
 import { setBotAvatarResolver } from '../services/localImageProtocol';
@@ -2122,6 +2124,27 @@ export function registerBotHandlers(): void {
   handle(IPC_CHANNELS.BOT_ARTIFACTS_LIST, 'read', (_sender, request, services) =>
     listArtifacts(services, request)
   );
+  handle(IPC_CHANNELS.BOT_DESIGN_WORKSPACE, 'read', async (sender, request, services) => {
+    if (!isMainWebContents(sender)) return UNAVAILABLE;
+    if (readSettingsState()?.designEnabled === false) return DISABLED;
+    const input = objectInput(request);
+    if (!input || Object.keys(input).some((key) => key !== 'chatId') || !isBotId(input.chatId))
+      return INVALID;
+    const workspace = services.host.workspaceRoot(input.chatId);
+    if (!workspace) return UNAVAILABLE;
+    const ref = { kind: 'project' as const, projectId: workspace.projectId };
+    const root = await resolveDesignRoot(ref);
+    // 异步 realpath/stat 期间切换工作区或关闭功能，不把旧根交给面板。
+    const current = services.host.workspaceRoot(input.chatId);
+    if (
+      !botModeEnabled() ||
+      readSettingsState()?.designEnabled === false ||
+      current?.projectId !== workspace.projectId ||
+      current.cwd !== workspace.cwd
+    )
+      return UNAVAILABLE;
+    return { ok: true, root: { ref, path: toDesignSdkPath(root.path) } };
+  });
   handle(IPC_CHANNELS.BOT_ARTIFACT_READ, 'read', (_sender, request, services) =>
     readArtifact(services, request)
   );

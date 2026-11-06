@@ -20,7 +20,6 @@ import { sidePanelWidthTransition } from '@/components/sidepanel/sidePanelWidthA
 import { addToast } from '@/components/ui/toast';
 import { useBotDesignCanvas } from '@/features/design/host/bot-canvas';
 import { useTranslation as useDesignTranslation } from '@/features/design/host/translation';
-import { BotDesignPanel } from '@/features/design/mounts/DesignPanel';
 import { useSpeechStatus } from '@/hooks/useSpeechStatus';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -50,6 +49,7 @@ import {
 import { BotLiveStatus } from './BotLiveStatus';
 import { MemberBusyBar } from './BotPresence';
 import { BotProfilePanel } from './BotProfilePanel';
+import { BotWorkspaceDesigns } from './BotWorkspaceDesigns';
 import { chatErrorText, chatTitle } from './botText';
 import { DelegationCard } from './DelegationCard';
 import { TaskBoard } from './GroupBoard';
@@ -97,12 +97,19 @@ export function BotChatView({
   const panelOpen = useBotsStore((s) => s.panelOpen);
   const selectedTab = useBotsStore((s) => s.panelTab);
   const designEnabled = useSettingsStore((s) => s.designEnabled);
+  const workspaceProjectId = chat.workspace.kind === 'project' ? chat.workspace.projectId : null;
+  const workspaceProjectPath = useSettingsStore(
+    (s) => s.projects.find((p) => p.id === workspaceProjectId)?.path
+  );
+  const designWorkspaceKey = JSON.stringify([chat.id, chat.workspace, workspaceProjectPath]);
   const design = useBotDesignCanvas((s) =>
-    designEnabled && s.target?.chatId === chat.id ? s.target : null
+    designEnabled && s.target?.chatId === chat.id && s.workspaceKey === designWorkspaceKey
+      ? s.target
+      : null
   );
   const isGroup = group.kind === 'group';
   const panelTab =
-    (selectedTab === 'design' && !design) || (selectedTab === 'board' && !isGroup)
+    (selectedTab === 'design' && !designEnabled) || (selectedTab === 'board' && !isGroup)
       ? 'info'
       : selectedTab;
   const boardOpen = panelOpen && panelTab === 'board';
@@ -466,7 +473,7 @@ export function BotChatView({
         >
           <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
             {(['info', 'board', 'browser', 'design'] as const)
-              .filter((tab) => (tab !== 'design' || design) && (tab !== 'board' || isGroup))
+              .filter((tab) => (tab !== 'design' || designEnabled) && (tab !== 'board' || isGroup))
               .map((tab) => (
                 <button
                   key={tab}
@@ -495,7 +502,7 @@ export function BotChatView({
                       ? t('Task board')
                       : tab === 'browser'
                         ? t('Browser')
-                        : designT('tab.label')}
+                        : designT('workspace.tab')}
                   {tab === 'browser' && browserTabCount > 0 && (
                     <span className="text-muted-foreground tabular-nums">{browserTabCount}</span>
                   )}
@@ -514,12 +521,7 @@ export function BotChatView({
           ) : panelTab === 'browser' ? (
             <BotBrowserPanel chatId={group.id} visible={panelOpen && !workspaceHidden} />
           ) : panelTab === 'design' ? (
-            panelOpen &&
-            design && (
-              <div className="min-h-0 flex-1">
-                <BotDesignPanel target={design} />
-              </div>
-            )
+            panelOpen && !workspaceHidden && <BotWorkspaceDesigns chat={chat} target={design} />
           ) : direct ? (
             <BotProfilePanel botId={direct.id} chat={chat} onOpenHistory={openConversation} />
           ) : (

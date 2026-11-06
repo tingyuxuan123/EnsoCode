@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-const { sessions, settings, reveal } = vi.hoisted(() => ({
+const { sessions, settings, reveal, mode, insert, attachment } = vi.hoisted(() => ({
+  insert: vi.fn(),
+  attachment: vi.fn(),
+  mode: { bot: false },
   sessions: {
     activeId: 'b',
     conversations: {
@@ -36,6 +39,14 @@ vi.mock('@/lib/sidePanelDock', () => ({
   addSidePanelDesign: reveal,
   setSidePanelDesignVisible: vi.fn(),
 }));
+vi.mock('@/stores/bots/mode', () => ({
+  isBotModeActive: () => mode.bot,
+  showLocalCodeView: vi.fn(),
+}));
+vi.mock('./composer', () => ({
+  insertDesignComposerText: insert,
+  setDesignPromptAttachment: attachment,
+}));
 
 import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
 import { createDesignContext, emitDesignConversation } from './context';
@@ -43,11 +54,27 @@ import { captureDesign, startEngine } from './engine';
 import { designPaths } from './paths';
 
 afterEach(() => {
+  mode.bot = false;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
   sessions.conversations.b.worktree = undefined;
   sessions.conversations.b.parentId = undefined;
   settings.projects[1].path = '/b';
+});
+it('rejects Bot canvas prompts, insertions and attachments instead of falling back to hidden Code', async () => {
+  mode.bot = true;
+  emitDesignConversation({
+    type: 'conversation-changed',
+    conversation: { id: 'b', cwd: '/b', sessionPath: null, model: null, isStreaming: false },
+  });
+  const ctx = createDesignContext();
+  expect(() => ctx.conversation.insertText('do not send')).toThrow('No matching design composer');
+  expect(() => ctx.ui.setPromptAttachment(null)).toThrow('No matching design composer');
+  await expect(ctx.conversation.sendPrompt('do not send')).rejects.toThrow(
+    'No active design conversation'
+  );
+  expect(insert).not.toHaveBeenCalled();
+  expect(attachment).not.toHaveBeenCalled();
 });
 it('gallery session navigation candidates are newest first, rather than object insertion order', async () => {
   settings.projects[1].path = '/a';

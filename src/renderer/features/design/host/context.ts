@@ -2,7 +2,7 @@ import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import type { DesignResult, DesignRootRef } from '@shared/types/design';
 import { addToast } from '@/components/ui/toast';
 import { addSidePanelDesign, setSidePanelDesignVisible } from '@/lib/sidePanelDock';
-import { showLocalCodeView } from '@/stores/bots/mode';
+import { isBotModeActive, showLocalCodeView } from '@/stores/bots/mode';
 import { readMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { oauthCredentialContext, useOauthCredentialStore } from '@/stores/oauthCredentials';
 import { useSessionsStore } from '@/stores/sessions';
@@ -101,6 +101,8 @@ export function createDesignContext(): PluginContext {
     );
   };
   const promptTarget = () => {
+    // Bot canvases (including sessionless workspace previews) never own the hidden Code composer.
+    if (isBotModeActive()) return null;
     const state = useSessionsStore.getState();
     return resolveDesignPromptTarget(
       viewedDesignSessionId(state.conversations, state.activeId),

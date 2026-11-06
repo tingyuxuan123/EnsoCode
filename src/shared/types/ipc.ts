@@ -525,6 +525,8 @@ export const IPC_CHANNELS = {
   BOT_ARTIFACTS_LIST: 'bots:artifacts-list',
   BOT_ARTIFACT_READ: 'bots:artifact-read',
   BOT_ARTIFACT_OPEN: 'bots:artifact-open',
+  /** 本机 Bot 设计面板：只收 chatId，解析当前聊天工作区，不启动成员会话。 */
+  BOT_DESIGN_WORKSPACE: 'bots:design-workspace',
   /** 输入框 @文件补全：只收 chatId + 查询词，工作区根由 Main 推导 */
   BOT_FILE_SEARCH: 'bots:file-search',
   BOT_CHAT_SAVE_PASTED_TEXT: 'bots:chat-save-pasted-text',

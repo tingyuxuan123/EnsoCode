@@ -4,11 +4,12 @@ import { isViewedBotDesignChat, revealBotDesign, useBotDesignCanvas } from './bo
 const state = vi.hoisted(() => ({
   botMode: true,
   designEnabled: true,
+  projects: [{ id: 'p', path: '/group' }],
   panelOpen: false,
   view: { kind: 'chat', chatId: 'group' },
   chats: [
-    { id: 'group', activeThreadId: 'topic' },
-    { id: 'topic', parentId: 'group' },
+    { id: 'group', activeThreadId: 'topic', workspace: { kind: 'project', projectId: 'p' } },
+    { id: 'topic', parentId: 'group', workspace: { kind: 'project', projectId: 'p' } },
   ],
   setPanelTab: vi.fn(),
   togglePanel: vi.fn(),
@@ -31,6 +32,9 @@ it('reveals the active topic, not the root group or a sibling sharing its direct
   expect(state.togglePanel).not.toHaveBeenCalled();
   revealBotDesign(target);
   expect(useBotDesignCanvas.getState().target).toEqual(target);
+  expect(useBotDesignCanvas.getState().workspaceKey).toBe(
+    JSON.stringify(['topic', { kind: 'project', projectId: 'p' }, '/group'])
+  );
   expect(state.togglePanel).toHaveBeenCalledOnce();
   expect(state.setPanelTab).toHaveBeenCalledWith('design');
 });

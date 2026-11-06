@@ -50,6 +50,38 @@ describe("isPureDesignProject", () => {
 });
 
 describe("pickDesignPaths", () => {
+	it("discovers nested source-only bundles with theme and a real frame without mutating them", () => {
+		expect(pickDesignPaths([
+			ref("docs/design/real.vetd/frames/home.tsx"),
+			ref("docs/design/real.vetd/theme.css"),
+			ref("docs/design/real.vetd/frames/about.tsx"),
+		]).bundles).toEqual(["/proj/docs/design/real.vetd"]);
+	});
+	it("deduplicates source-only, manifest and repeated recursive entries", () => {
+		expect(pickDesignPaths([
+			ref("a.vetd/theme.css"), ref("a.vetd/frames/home.tsx"),
+			ref("a.vetd/design.json"), ref("a.vetd/design.json"),
+			ref("b.vetd/theme.css"), ref("b.vetd/frames/home.tsx"), ref("b.vetd/theme.css"),
+		]).bundles).toEqual(["/proj/a.vetd", "/proj/b.vetd"]);
+	});
+	it("does not treat ordinary folders, layout-only, missing-theme or nested bundle content as designs", () => {
+		expect(pickDesignPaths([
+			ref("ordinary/theme.css"), ref("ordinary/frames/home.tsx"),
+			ref("layout.vetd/theme.css"), ref("layout.vetd/frames/_layout.tsx"), ref("layout.vetd/frames/_other.tsx"),
+			ref("no-theme.vetd/frames/home.tsx"),
+			ref("deep.vetd/theme.css"), ref("deep.vetd/frames/nested/home.tsx"),
+			ref("empty-name.vetd/theme.css"), ref("empty-name.vetd/frames/.tsx"),
+			ref("outer.vetd/assets/inner.vetd/theme.css"), ref("outer.vetd/assets/inner.vetd/frames/home.tsx"),
+			ref("outer.vetd/assets/manifest.vetd/design.json"),
+			ref("outer.vetd.d/assets/inner.vetd/design.json"),
+		]).bundles).toEqual([]);
+	});
+	it("normalizes Windows source-only paths", () => {
+		expect(pickDesignPaths([
+			{ name: "theme.css", path: "C:\\proj\\a.vetd\\theme.css", relPath: "a.vetd\\theme.css" },
+			{ name: "home.tsx", path: "C:\\proj\\a.vetd\\frames\\home.tsx", relPath: "a.vetd\\frames\\home.tsx" },
+		]).bundles).toEqual(["C:/proj/a.vetd"]);
+	});
 	it("按 design.json 反推设计包目录并排序", () => {
 		expect(
 			pickDesignPaths([

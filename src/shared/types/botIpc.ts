@@ -19,6 +19,12 @@ import type {
   GroupEntry,
   GroupTask,
 } from './bot';
+import type { DesignRootInfo } from './design';
+
+/** 工作区设计列表不依赖消息/成员会话，根由 Main 根据聊天绑定推导。 */
+export type BotDesignWorkspaceResult =
+  | { ok: true; root: DesignRootInfo & { ref: { kind: 'project'; projectId: string } } }
+  | BotIpcError;
 
 export type BotDelegationsResult =
   | { ok: true; delegations: Delegation[]; enabled: boolean }
