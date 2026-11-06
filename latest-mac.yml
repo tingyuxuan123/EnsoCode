@@ -1,36 +1,22 @@
-version: 0.2.54
+version: 0.2.55
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.54/EnsoCode-0.2.54-arm64-mac.zip
-    sha512: RrKLQahI+JlN3RT8X2rIuoXDPHefL8ZKNOSQvFebZ9Q7gmYc3a/vnOFOFkhFjeuRQBv/qiYjQNx1FXJYj6g/OA==
-    size: 183339268
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.54/EnsoCode-0.2.54-arm64.dmg
-    sha512: MI37pH7zCBF9UNJC31SO9z2e7ipe3lVsz0tBtRIBr+AwoOh847Yrfjiehv1fy3LM5dVvkbFV1ogd5OJSUI4lmw==
-    size: 178128707
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.54/EnsoCode-0.2.54-arm64-mac.zip
-sha512: RrKLQahI+JlN3RT8X2rIuoXDPHefL8ZKNOSQvFebZ9Q7gmYc3a/vnOFOFkhFjeuRQBv/qiYjQNx1FXJYj6g/OA==
-releaseDate: 2026-11-05T08:30:18.049Z
-releaseName: EnsoCode 0.2.54 — 个人测试
-releaseNotes: >
-  # EnsoCode 0.2.54
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.55/EnsoCode-0.2.55-arm64-mac.zip
+    sha512: qDaOsu7KCp7+Nwa13f3gQ6f5Tq76/Jqg5/6aInRdKEw7eUqSGK7lfBxdTjarq8WPeSy3rUDJWbIJYFyYZEtFiA==
+    size: 183338872
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.55/EnsoCode-0.2.55-arm64.dmg
+    sha512: AxnZGSkpuuSRDoKwbRCLFVjGiYkipHGpUnW565qDKhzetOPSH44zc3E1Q9qgs5XGATNWUhX0JNFd7Du/rOOBig==
+    size: 178129616
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.55/EnsoCode-0.2.55-arm64-mac.zip
+sha512: qDaOsu7KCp7+Nwa13f3gQ6f5Tq76/Jqg5/6aInRdKEw7eUqSGK7lfBxdTjarq8WPeSy3rUDJWbIJYFyYZEtFiA==
+releaseDate: 2026-11-06T02:30:07.870Z
+releaseName: EnsoCode 0.2.55 — 个人测试
+releaseNotes: |
+  # EnsoCode 0.2.55
 
-
-  - **独立协作看板**：点击左侧入口打开独立窗口，不再替换当前工作区；再次打开会唤回已有窗口，窗口尺寸和位置可保留。
-
-  - **直接管理任务**：可在看板中选择群聊并新建任务，按标题、详情或编号搜索，按群聊、执行人和待处理事项筛选；卡住的任务单独展示。
-
-  - **就地查看和处理**：点击卡片展开任务详情和历次执行记录，可直接编辑、指派、验收、退回或取消；需要查看完整对话时，返回原群并定位任务。
-
-  - **手机远程同步**：修复会话可能持续停留在“正在读取历史”的问题；已有缓存正文时，同步失败也会明确显示并支持重试，避免重试被突发请求去重吞掉。
-
-  - **界面说明**：将脚本编排入口从容易误解的“隔离沙盒”调整为准确的功能名称。
-
-
-  Windows x64 构建还包含此前 0.2.53 中的 Bot 设计交稿预览、跨群任务入口、扩展管理和更新日志改进。本轮 Windows
-  安装、旧数据保留及自动更新尚待实机验收，Windows 发布先保留草稿；Mac arm64 个人版按原证书独立发布，不改变 Windows Latest。
-
+  - **新浅色方案「云白」**：在「设置 → 外观 → 浅色方案」中可选。冷灰外壳衬托白色工作区，自己发出的消息为亮蓝圆角气泡，输入框和弹层采用更圆润的样式；蓝色只用于消息、发送和聚焦。仅在浅色外观下生效，深色和同步终端配色不受影响。
+  - **协作看板**：已完成任务仅展示最近七天，列表更聚焦。
+  - **内置浏览器**：修复设备预览在截图后网页背景溢出设备框的问题。
 
   ---
 
-
-  个人测试通道 0.2.54：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
-  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+  个人测试通道 0.2.55：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
