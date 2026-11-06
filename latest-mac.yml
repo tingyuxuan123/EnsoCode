@@ -1,22 +1,22 @@
-version: 0.2.55
+version: 0.2.57
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.55/EnsoCode-0.2.55-arm64-mac.zip
-    sha512: qDaOsu7KCp7+Nwa13f3gQ6f5Tq76/Jqg5/6aInRdKEw7eUqSGK7lfBxdTjarq8WPeSy3rUDJWbIJYFyYZEtFiA==
-    size: 183338872
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.55/EnsoCode-0.2.55-arm64.dmg
-    sha512: AxnZGSkpuuSRDoKwbRCLFVjGiYkipHGpUnW565qDKhzetOPSH44zc3E1Q9qgs5XGATNWUhX0JNFd7Du/rOOBig==
-    size: 178129616
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.55/EnsoCode-0.2.55-arm64-mac.zip
-sha512: qDaOsu7KCp7+Nwa13f3gQ6f5Tq76/Jqg5/6aInRdKEw7eUqSGK7lfBxdTjarq8WPeSy3rUDJWbIJYFyYZEtFiA==
-releaseDate: 2026-11-06T02:30:07.870Z
-releaseName: EnsoCode 0.2.55 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.57/EnsoCode-0.2.57-arm64-mac.zip
+    sha512: FULqXjtP71O49uuVnxk4767QLIHWdPdS4+aySaVt5heZk68N+rIvgmMhq2D0IhOVE68//cmcl6a9w+z2Kk5RJQ==
+    size: 183346069
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.57/EnsoCode-0.2.57-arm64.dmg
+    sha512: ejuOpuv4dcKn7/6Se8B2BoGwgeswnY1PumA0x8PDfLcSXEzBwsTZUNOtUCyN73WxIf7Psj4hsY1TYeeQ7Xi3/g==
+    size: 178141089
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.57/EnsoCode-0.2.57-arm64-mac.zip
+sha512: FULqXjtP71O49uuVnxk4767QLIHWdPdS4+aySaVt5heZk68N+rIvgmMhq2D0IhOVE68//cmcl6a9w+z2Kk5RJQ==
+releaseDate: 2026-11-06T04:50:30.735Z
+releaseName: EnsoCode 0.2.57 — 个人测试
 releaseNotes: |
-  # EnsoCode 0.2.55
+  # EnsoCode 0.2.57
 
-  - **新浅色方案「云白」**：在「设置 → 外观 → 浅色方案」中可选。冷灰外壳衬托白色工作区，自己发出的消息为亮蓝圆角气泡，输入框和弹层采用更圆润的样式；蓝色只用于消息、发送和聚焦。仅在浅色外观下生效，深色和同步终端配色不受影响。
-  - **协作看板**：已完成任务仅展示最近七天，列表更聚焦。
-  - **内置浏览器**：修复设备预览在截图后网页背景溢出设备框的问题。
+  - **任务编号识别更准确**：`#1 先别动 #2。`、`#1 和#2一样` 这类带中英文句读或紧挨汉字的写法，和空格分隔一样识别为提到了另一个任务，退回普通群路由，不会把话送错执行；`#000` 这类纯数字色值保留在补充正文里。
+  - **任务托管提醒更合理**：长时间无输出按每一段静默提醒一次，恢复输出后再次静默会重新提醒。同一轮检查出多个需要处理的任务时，群时间线逐条记录，系统通知合并为一条并列出任务号，不再连发。
+  - **任务托管开关**：保存期间暂时锁住，连续点击不再弹出版本冲突提示。后台巡检不再反复读取群聊历史文件。
 
   ---
 
-  个人测试通道 0.2.55：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+  个人测试通道 0.2.57：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
