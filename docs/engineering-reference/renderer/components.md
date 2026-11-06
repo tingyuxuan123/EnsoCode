@@ -137,6 +137,13 @@
 悬停与键盘聚焦只改变操作区可见性，不改变行高或正文折行；无 hover 的触屏常显。
 文件改动汇总与宿主 `turnFooter` 仍在正文下方完整展示。回归：`TimelineRow.actions.test.tsx`。
 
+## Bot 群聊设计交付必须可见、可点
+
+群聊正文没有 Code 的 `MarkdownLinkContext`，不能裸渲染本地交稿链接：它会显示下划线但点击无效。
+`GroupTimeline` 把正文交给 `ArtifactCards`，通过 `MarkdownLocalLinkContext` 复用该条消息的产物预览；只匹配 Main 返回的清单，绝对路径用 `workspaceRoot` 转相对标识，不能导航 `file://` 或扩大到任意工作区文件。
+PNG 等图片产物直接显示缩略图，接近视口才请求；Main 复用现有 `bots.artifacts.read` 的 `variant: 'thumb'`，长边不超过 480、data URL 不超过 200000 字符。点击正文或缩略图再按原 target + rel 读取原图；已结束的成员会话仍走 Bot 产物授权，不借 Code 会话复活。
+回归：`ArtifactCards.test.tsx`、`Markdown.fileOpening.test.tsx`、`ipc/bots.test.ts`；验收同时检查文字链接与缩略图，不能以工具读图成功代替用户可见。
+
 ## 时间线初始高度不能取首条消息
 
 `MessageTimeline` 切会话会重挂 Virtuoso 并定位 `LAST`。必须提供 `defaultItemHeight` 初始估算，不能让首条长文本的探测高度外推到全部消息；实际行高仍动态测量，不能改成 `fixedItemHeight`。

@@ -26,7 +26,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Markdown } from '@/components/chat/Markdown';
 import { mentionChipClass } from '@/components/chat/MentionChip';
 import { CHAT_COL } from '@/components/chat/MessageTimeline';
 import { USER_BUBBLE } from '@/components/chat/TimelineRow';
@@ -616,10 +615,7 @@ const EntryRow = memo(function EntryRow({
                 )}
               </div>
             )}
-            <div className="text-sm">
-              <Markdown text={entry.text} />
-            </div>
-            <ArtifactCards target={{ chatId, entryId: entry.id }} />
+            <ArtifactCards target={{ chatId, entryId: entry.id }} text={entry.text} />
             <TurnProcess
               entry={entry}
               onOpen={() => onOpenConversation(entry.conversationId, bot?.name ?? '')}

@@ -7,8 +7,9 @@ import type {
   BotDesignArtifact,
 } from '@shared/types/botIpc';
 import { ExternalLink, FolderOpen, ImageOff, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Markdown } from '@/components/chat/Markdown';
+import { useEffect, useRef, useState } from 'react';
+import { Markdown, MarkdownLocalLinkContext } from '@/components/chat/Markdown';
+import { toWorkspaceRelativePath } from '@/components/chat/markdownLinks';
 import { ReadFileView } from '@/components/chat/ReadFileView';
 import { fileTypeIcon, fileTypeIconClass } from '@/components/sidepanel/fileIcons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -22,6 +23,7 @@ interface TurnArtifacts {
   artifacts: BotArtifact[];
   media: BotMediaItem[];
   designs: BotDesignArtifact[];
+  workspaceRoot?: string;
 }
 const EMPTY: TurnArtifacts = { artifacts: [], media: [], designs: [] };
 
@@ -40,7 +42,7 @@ const sizeText = (size: number) =>
 
 function useArtifacts(target: BotArtifactTarget): TurnArtifacts {
   const key = JSON.stringify(target);
-  const [artifacts, setArtifacts] = useState<TurnArtifacts>(() => cache.get(key) ?? EMPTY);
+  const [state, setArtifacts] = useState(() => ({ key, value: cache.get(key) ?? EMPTY }));
   useEffect(() => {
     if (cache.has(key)) return;
     let alive = true;
@@ -52,17 +54,18 @@ function useArtifacts(target: BotArtifactTarget): TurnArtifacts {
           artifacts: result.artifacts,
           media: result.media ?? [],
           designs: result.designs ?? [],
+          workspaceRoot: result.workspaceRoot,
         };
         if (found.artifacts.length || found.media.length || found.designs.length)
           cache.set(key, found);
-        setArtifacts(found);
+        setArtifacts({ key, value: found });
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [key]);
-  return artifacts;
+  return state.key === key ? state.value : (cache.get(key) ?? EMPTY);
 }
 
 function useOpenArtifact(target: BotArtifactTarget) {
@@ -83,11 +86,34 @@ function useOpenArtifact(target: BotArtifactTarget) {
 }
 
 /** 该轮产生或提到、且位于聊天工作区内的文件；路径由 Main 推导，这里只传标识 */
-export function ArtifactCards({ target }: { target: BotArtifactTarget }) {
-  const { artifacts, media, designs } = useArtifacts(target);
+export function ArtifactCards({ target, text }: { target: BotArtifactTarget; text?: string }) {
+  const { t } = useI18n();
+  const { artifacts, media, designs, workspaceRoot } = useArtifacts(target);
   const designEnabled = useSettingsStore((state) => state.designEnabled);
+  const [preview, setPreview] = useState<{ key: string; artifact: BotArtifact } | null>(null);
+  const key = JSON.stringify(target);
+  const open = useOpenArtifact(target);
+  const openLink = (file: string) => {
+    const rel = toWorkspaceRelativePath(file, workspaceRoot);
+    const artifact =
+      rel === null ? undefined : artifacts.find((item) => item.rel.replace(/\\/g, '/') === rel);
+    if (!artifact) {
+      addToast({ type: 'error', title: t('Could not open the file') });
+    } else if (PREVIEWABLE.has(artifact.kind)) {
+      setPreview({ key, artifact });
+    } else {
+      open(artifact, artifact.kind === 'pdf' ? 'preview' : 'open');
+    }
+  };
   return (
     <>
+      {text !== undefined && (
+        <MarkdownLocalLinkContext.Provider value={openLink}>
+          <div className="text-sm">
+            <Markdown text={text} />
+          </div>
+        </MarkdownLocalLinkContext.Provider>
+      )}
       {designEnabled && designs.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {designs.map((design) => (
@@ -100,7 +126,19 @@ export function ArtifactCards({ target }: { target: BotArtifactTarget }) {
         </div>
       )}
       {media.length > 0 && <MediaStrip target={target} media={media} />}
-      {artifacts.length > 0 && <FileCards target={target} artifacts={artifacts} />}
+      {artifacts.length > 0 && (
+        <FileCards
+          target={target}
+          artifacts={artifacts}
+          onPreview={(artifact) => setPreview({ key, artifact })}
+        />
+      )}
+      <ArtifactPreviewDialog
+        target={target}
+        artifact={preview?.key === key ? preview.artifact : null}
+        onOpen={open}
+        onClose={() => setPreview(null)}
+      />
     </>
   );
 }
@@ -294,13 +332,30 @@ function MediaPreviewDialog({
   );
 }
 
-function FileCards({ target, artifacts }: { target: BotArtifactTarget; artifacts: BotArtifact[] }) {
+function FileCards({
+  target,
+  artifacts,
+  onPreview,
+}: {
+  target: BotArtifactTarget;
+  artifacts: BotArtifact[];
+  onPreview: (artifact: BotArtifact) => void;
+}) {
   const { t } = useI18n();
   const open = useOpenArtifact(target);
-  const [preview, setPreview] = useState<BotArtifact | null>(null);
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5" data-bot-artifacts="">
       {artifacts.map((artifact) => {
+        if (artifact.kind === 'image') {
+          return (
+            <ArtifactImageCard
+              key={artifact.rel}
+              target={target}
+              artifact={artifact}
+              onOpen={() => onPreview(artifact)}
+            />
+          );
+        }
         const Icon = fileTypeIcon(artifact.name, false);
         const canPreview = PREVIEWABLE.has(artifact.kind) || artifact.kind === 'pdf';
         return (
@@ -314,7 +369,7 @@ function FileCards({ target, artifacts }: { target: BotArtifactTarget; artifacts
               title={artifact.rel}
               disabled={!canPreview}
               onClick={() =>
-                artifact.kind === 'pdf' ? open(artifact, 'preview') : setPreview(artifact)
+                artifact.kind === 'pdf' ? open(artifact, 'preview') : onPreview(artifact)
               }
               className="flex min-w-0 items-center gap-1.5 text-left enabled:hover:underline disabled:cursor-default"
             >
@@ -343,12 +398,107 @@ function FileCards({ target, artifacts }: { target: BotArtifactTarget; artifacts
           </div>
         );
       })}
-      <ArtifactPreviewDialog
-        target={target}
-        artifact={preview}
-        onOpen={open}
-        onClose={() => setPreview(null)}
-      />
+    </div>
+  );
+}
+
+/** 普通 PNG 交稿也直接可见；缩略图失败不影响用同一授权入口打开原图。 */
+function ArtifactImageCard({
+  target,
+  artifact,
+  onOpen,
+}: {
+  target: BotArtifactTarget;
+  artifact: BotArtifact;
+  onOpen: () => void;
+}) {
+  const { t } = useI18n();
+  const open = useOpenArtifact(target);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [state, setContent] = useState<{ key: string; content: BotArtifactReadResult } | null>(
+    null
+  );
+  const key = JSON.stringify({ ...target, rel: artifact.rel });
+  const content = state?.key === key ? state.content : null;
+  useEffect(() => {
+    let active = true;
+    let requested = false;
+    const load = () => {
+      if (!active || requested) return;
+      requested = true;
+      void window.electronAPI.bots.artifacts
+        .read({ ...JSON.parse(key), variant: 'thumb' })
+        .then((content) => {
+          if (active) setContent({ key, content });
+        })
+        .catch(() => {
+          if (active) setContent({ key, content: { ok: false, error: 'unavailable' } });
+        });
+    };
+    let observer: IntersectionObserver | undefined;
+    if (typeof IntersectionObserver !== 'undefined' && cardRef.current) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return;
+          observer?.disconnect();
+          load();
+        },
+        { rootMargin: '160px' }
+      );
+      observer.observe(cardRef.current);
+    } else load();
+    return () => {
+      active = false;
+      observer?.disconnect();
+    };
+  }, [key]);
+  return (
+    <div
+      ref={cardRef}
+      data-slot="bot-card"
+      data-bot-artifact-image=""
+      className="w-40 max-w-full overflow-hidden rounded-md border bg-card"
+    >
+      <button
+        type="button"
+        title={artifact.rel}
+        onClick={onOpen}
+        className="block w-full text-left hover:bg-muted"
+      >
+        <span className="flex h-40 items-center justify-center bg-muted/50">
+          {content?.ok && content.kind === 'image' ? (
+            <img
+              src={content.dataUrl}
+              alt={artifact.name}
+              className="h-full w-full object-contain"
+            />
+          ) : content ? (
+            <ImageOff className="size-5 text-muted-foreground" />
+          ) : (
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          )}
+        </span>
+        <span className="block truncate px-2 pt-1.5 text-xs">{artifact.name}</span>
+      </button>
+      <div className="flex items-center gap-1 px-2 pb-1.5 text-muted-foreground text-[calc(11rem/14)]">
+        <span className="min-w-0 flex-1">{sizeText(artifact.size)}</span>
+        <button
+          type="button"
+          title={t('Show in Finder')}
+          onClick={() => open(artifact, 'reveal')}
+          className="rounded p-0.5 hover:bg-muted hover:text-foreground"
+        >
+          <FolderOpen className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          title={t('Open with default app')}
+          onClick={() => open(artifact, 'open')}
+          className="rounded p-0.5 hover:bg-muted hover:text-foreground"
+        >
+          <ExternalLink className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

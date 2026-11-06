@@ -402,12 +402,19 @@ export interface BotDesignArtifact {
 
 /** media：该轮 send_image 发出的图（含展示用的失败项），最多 4 张 */
 export type BotArtifactsResult =
-  | { ok: true; artifacts: BotArtifact[]; media: BotMediaItem[]; designs?: BotDesignArtifact[] }
+  | {
+      ok: true;
+      artifacts: BotArtifact[];
+      media: BotMediaItem[];
+      designs?: BotDesignArtifact[];
+      /** 仅供正文绝对链接匹配产物；读取仍只接受 target + 清单中的 rel。SSH 不提供。 */
+      workspaceRoot?: string;
+    }
   | BotIpcError;
 
 /** 读文件产物用 rel；读 send_image 图用 mediaId（thumb = 缩略图） */
 export type BotArtifactReadRequest = BotArtifactTarget &
-  ({ rel: string } | { mediaId: string; variant?: 'thumb' | 'full' });
+  ({ rel: string; variant?: 'thumb' | 'full' } | { mediaId: string; variant?: 'thumb' | 'full' });
 
 export type BotArtifactReadResult =
   | { ok: true; kind: 'image'; dataUrl: string }

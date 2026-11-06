@@ -120,6 +120,9 @@ export interface MarkdownLinkContextValue {
  */
 export const MarkdownLinkContext = createContext<MarkdownLinkContextValue | null>(null);
 
+/** Bot 等无 Code 会话面板的宿主复用自己的授权产物预览，不直接导航 file://。 */
+export const MarkdownLocalLinkContext = createContext<((path: string) => void) | null>(null);
+
 function revealErrorDescription(error: string, t: (key: string) => string): string {
   switch (error) {
     case 'invalid-path':
@@ -410,18 +413,25 @@ function MarkdownAnchor({
   node?: unknown;
 }) {
   const { t } = useI18n();
+  const openArtifactLink = useContext(MarkdownLocalLinkContext);
   const { classification, line } = classifyFileReference(href ?? '');
   const { linkContext, openLocal, preview, ssh } = useLocalFileOpen(
     classification.kind === 'local' ? classification.path : null,
     line
   );
-  const local = classification.kind === 'local' && linkContext !== null;
+  const local =
+    classification.kind === 'local' && (linkContext !== null || openArtifactLink !== null);
   const codeText = local ? soleInlineCodeText(node) : null;
+
+  const open = () => {
+    if (linkContext) void openLocal(false);
+    else if (classification.kind === 'local') openArtifactLink?.(classification.path);
+  };
 
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (classification.kind === 'external') return;
     event.preventDefault();
-    if (local) void openLocal(false);
+    if (local) open();
   };
 
   const anchorElement = (
@@ -441,7 +451,7 @@ function MarkdownAnchor({
       onKeyDown={(event) => {
         if (local && event.key === 'Enter') {
           event.preventDefault();
-          void openLocal(false);
+          open();
         }
       }}
     >
@@ -669,7 +679,8 @@ export function Markdown({
   activeNth?: number;
 }) {
   const linkContext = useContext(MarkdownLinkContext);
-  const allowLocalMarkdownLinks = linkContext !== null;
+  const localLinkHandler = useContext(MarkdownLocalLinkContext);
+  const allowLocalMarkdownLinks = linkContext !== null || localLinkHandler !== null;
   const ctx = useMemo(
     () => ({ text, streaming, searchQuery, activeNth }),
     [text, streaming, searchQuery, activeNth]

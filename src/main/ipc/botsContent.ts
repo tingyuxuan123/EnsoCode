@@ -248,8 +248,14 @@ export async function listArtifacts(
 ): Promise<BotArtifactsResult> {
   const found = await artifactsOf(services, request, { includeDesigns: true });
   if (!found) return INVALID;
-  const { artifacts, media, designs } = found;
-  return { ok: true, artifacts, media, ...(designs ? { designs } : {}) };
+  const { artifacts, media, designs, root } = found;
+  return {
+    ok: true,
+    artifacts,
+    media,
+    ...(designs ? { designs } : {}),
+    ...(root ? { workspaceRoot: root } : {}),
+  };
 }
 
 /** rel 必须出现在 Main 重新推导的该条产物清单里，再按工作区根二次校验 */
@@ -304,11 +310,14 @@ export async function readArtifact(
   if (artifact.kind === 'image') {
     if (size > IMAGE_MAX) return { ok: false, error: 'too-large' };
     const mime = IMAGE_MIME[path.extname(file).slice(1).toLowerCase()] ?? 'image/png';
-    return {
-      ok: true,
-      kind: 'image',
-      dataUrl: `data:${mime};base64,${readFileSync(file).toString('base64')}`,
-    };
+    const data = readFileSync(file);
+    const variant =
+      request && typeof request === 'object' && 'variant' in request ? request.variant : undefined;
+    const dataUrl =
+      variant === 'thumb'
+        ? fitDataUrl(data, mime, THUMB_MAX_CHARS, THUMB_EDGE)
+        : `data:${mime};base64,${data.toString('base64')}`;
+    return dataUrl ? { ok: true, kind: 'image', dataUrl } : { ok: false, error: 'too-large' };
   }
   if (artifact.kind === 'markdown' || artifact.kind === 'html' || artifact.kind === 'text') {
     if (size > TEXT_MAX) return { ok: false, error: 'too-large' };

@@ -2049,6 +2049,64 @@ describe('群话题', () => {
 });
 
 describe('Bot 设计产物 IPC', () => {
+  it('PNG 产物提供限尺寸缩略图，原图与缩略图均限于原条目的权威文件', async () => {
+    const designer = await createBot('Alice');
+    const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
+      kind: 'group',
+      members: [designer, await createBot('Bob')],
+      bossBotId: designer,
+      workspace: { kind: 'chat-home' },
+    });
+    const chatId = (created.chat as { id: string }).id;
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    const registry = mocks.registry as SourceAuthorityRegistry;
+    const session = services.host.ensureSession(chatId, designer);
+    if (!session.ok) throw new Error(session.error);
+    const { conversationId } = session;
+    const root = registry.project(registry.conversation(conversationId)!.projectId)!.canonicalPath;
+    const png = Buffer.from('a real file within the authorized workspace');
+    writeFileSync(join(root, 'home.png'), png);
+    writeFileSync(join(root, 'unmentioned.png'), png);
+    const entry = services.chats.appendEntry(chatId, {
+      kind: 'bot',
+      id: 'image-reply',
+      at: 10,
+      botId: designer,
+      conversationId,
+      turnId: 'turn',
+      text: `[首页](file://${root}/home.png)`,
+    })!;
+    const target = { chatId, entryId: entry.id };
+    const fit = vi
+      .spyOn(await import('../services/bots/mediaImage'), 'fitDataUrl')
+      .mockReturnValue('data:image/jpeg;base64,c21hbGw=');
+    try {
+      registry.endBotConversation(conversationId);
+      expect(await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, target)).toMatchObject({
+        ok: true,
+        workspaceRoot: root,
+        artifacts: [{ rel: 'home.png', kind: 'image' }],
+      });
+      expect(
+        await call(IPC_CHANNELS.BOT_ARTIFACT_READ, { ...target, rel: 'home.png', variant: 'thumb' })
+      ).toEqual({ ok: true, kind: 'image', dataUrl: 'data:image/jpeg;base64,c21hbGw=' });
+      expect(fit).toHaveBeenCalledWith(png, 'image/png', 200_000, 480);
+      expect(await call(IPC_CHANNELS.BOT_ARTIFACT_READ, { ...target, rel: 'home.png' })).toEqual({
+        ok: true,
+        kind: 'image',
+        dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+      });
+      for (const rel of ['../home.png', 'unmentioned.png', join(root, 'home.png')]) {
+        expect(
+          await call(IPC_CHANNELS.BOT_ARTIFACT_READ, { ...target, rel, variant: 'thumb' })
+        ).toEqual({ ok: false, error: 'invalid' });
+      }
+    } finally {
+      fit.mockRestore();
+    }
+  });
+
   it.each(['direct', 'group'] as const)('只返回 %s 权威会话所请求的轮次的设计', async (kind) => {
     const designer = await createBot('Alice');
     const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
@@ -2113,6 +2171,7 @@ describe('Bot 设计产物 IPC', () => {
       await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, { ...target(1), sessionId: 'forged' })
     ).toEqual({
       ok: true,
+      workspaceRoot: root,
       artifacts: [],
       media: [],
       designs: [{ rel: 'draft-1.vetd', name: 'draft-1.vetd', sessionId: conversationId }],
@@ -2121,6 +2180,7 @@ describe('Bot 设计产物 IPC', () => {
       const first = target(0);
       expect(await call(IPC_CHANNELS.BOT_ARTIFACTS_LIST, first)).toEqual({
         ok: true,
+        workspaceRoot: root,
         artifacts: [],
         media: [],
         designs: [{ rel: 'draft-0.vetd', name: 'draft-0.vetd', sessionId: conversationId }],
