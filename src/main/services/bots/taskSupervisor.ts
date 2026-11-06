@@ -59,6 +59,9 @@ export class TaskSupervisor {
   private timer?: ReturnType<typeof setInterval>;
   private scheduledSweep?: ReturnType<typeof setTimeout>;
   private disposed = false;
+  /** 已确认在时间线上的提醒（按会话 + id，同一人类消息 id 可出现在不同话题）；
+   *  跨重启仍以时间线为准，这里只省掉每轮巡检的回读。 */
+  private readonly noticed = new Set<string>();
   constructor(private readonly deps: Deps) {}
 
   start(): void {
@@ -246,8 +249,13 @@ export class TaskSupervisor {
 
   /** 写一条稳定 id 的时间线提醒；只有本次新写入才返回 true，由调用方决定是否发系统通知。 */
   private notice(chatId: string, id: string, text: string): boolean {
+    const key = JSON.stringify([chatId, id]);
     try {
-      if (!this.enabled(chatId) || this.deps.chats.findEntry(chatId, id)) return false;
+      if (!this.enabled(chatId) || this.noticed.has(key)) return false;
+      if (this.deps.chats.findEntry(chatId, id)) {
+        this.noticed.add(key);
+        return false;
+      }
       const saved = this.deps.chats.appendEntry(chatId, {
         id,
         kind: 'system',
@@ -255,6 +263,7 @@ export class TaskSupervisor {
         text,
       });
       if (!saved) return false;
+      this.noticed.add(key);
       this.deps.emit({ kind: 'timeline', chatId, seq: saved.seq });
       return true;
     } catch (cause) {

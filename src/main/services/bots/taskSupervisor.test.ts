@@ -375,6 +375,19 @@ describe('Main 侧看护，不自动重放有副作用的工作', () => {
     expect(f.notify).toHaveBeenCalledTimes(1);
   });
 
+  it('已写过的提醒记在内存里，后续巡检不再回读时间线文件', () => {
+    const f = fixture();
+    f.task.status = 'blocked';
+    f.task.blockedReason = 'need';
+    f.record.state = 'blocked';
+    const find = vi.spyOn(f.chats, 'findEntry');
+    f.supervisor.sweep();
+    f.supervisor.sweep();
+    f.supervisor.sweep();
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(f.notify).toHaveBeenCalledTimes(1);
+  });
+
   it('同一段静默只提醒一次；恢复输出后再次静默会重新提醒', () => {
     const f = fixture();
     f.silence(1);
