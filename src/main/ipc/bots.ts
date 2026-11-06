@@ -656,8 +656,9 @@ export function getBotServices(): BotServices | null {
   const supervisor = new TaskSupervisor({
     chats,
     bots,
-    tasks,
-    delegations: () => delegationStore.list(),
+    taskStore,
+    replyTask: (...args) => tasks.reply(...args),
+    delegations: delegationStore,
     silences: () => host.silences(),
     emit: emitBotEvent,
     language: () => (String(readSettingsState()?.language ?? 'zh').startsWith('zh') ? 'zh' : 'en'),

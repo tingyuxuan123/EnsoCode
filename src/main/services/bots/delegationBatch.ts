@@ -56,14 +56,22 @@ export const delegationResultBody = (record: Delegation) =>
 export function batchResultText(
   batch: readonly Delegation[],
   nameOf: NameOf,
-  deliveryId = batchDeliveryId(batch)
+  awaitingHumanRecovery?: ReadonlySet<string>
 ): string {
   const items = batch.map(
     (record) =>
-      `<delegation-result id="${record.id}" from="${escapeXml(nameOf(record.targetBotId))}" status="${record.state}">${escapeXml(delegationResultBody(record))}</delegation-result>`
+      `<delegation-result id="${record.id}" from="${escapeXml(nameOf(record.targetBotId))}" status="${record.state}">${
+        awaitingHumanRecovery?.has(record.id)
+          ? 'Awaiting human recovery. Do not retry or re-delegate this task.'
+          : escapeXml(delegationResultBody(record))
+      }</delegation-result>`
   );
   return batch.length > 1
-    ? [`<delegation-results id="${deliveryId}">`, ...items, '</delegation-results>'].join('\n')
+    ? [
+        `<delegation-results id="${batchDeliveryId(batch)}">`,
+        ...items,
+        '</delegation-results>',
+      ].join('\n')
     : items[0];
 }
 

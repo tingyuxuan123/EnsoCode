@@ -65,11 +65,18 @@ function fixture() {
   }));
   const emit = vi.fn();
   const notify = vi.fn();
+  const taskStore = {
+    list: (id: string) => (id === chat.id ? [task] : []),
+    find: (id: string, ref: string) =>
+      id === chat.id && ref === `#${task.seq}` ? task : undefined,
+  };
+  const delegations = { get: (id: string) => (id === record.id ? record : undefined) };
   const supervisor = new TaskSupervisor({
     chats,
     bots,
-    tasks: { list: () => [task], reply },
-    delegations: () => [record],
+    taskStore,
+    replyTask: reply,
+    delegations,
     silences: () => silences,
     emit,
     notify,
@@ -92,6 +99,8 @@ function fixture() {
     emit,
     notify,
     supervisor,
+    taskStore,
+    delegations,
     entry,
     silence: () => {
       silences = [{ conversationId: 'child', botId: b.bot.id, chatId: chat.id, since: 1 }];
@@ -103,11 +112,17 @@ describe('明确任务引用，不猜测消息归属', () => {
   it.each(['#1 只修 Safari', '任务 #1：只修 Safari', 'task #1: Safari only'])('%s', (text) => {
     expect(parseTaskFollowup(text)).toMatchObject({ seq: 1 });
   });
+  it.each(['按钮颜色改成 #2563eb', '顺便看下 issue #12', '看下 (Issue #12) 里的备注'])(
+    '正文里的非任务引用原样直通：%s',
+    (text) => expect(parseTaskFollowup(`#3 ${text}`)).toEqual({ seq: 3, text })
+  );
   it.each([
     '#1',
     '#0 x',
     '#01 x',
     '#1 和 #2 一起做',
+    '#1 顺便处理任务#2：补上用例',
+    '#1 先看 issue #12，再处理 #2',
     '比较 #1 的结果',
     'https://host/#1 x',
     '```\n#1 code\n```',
@@ -132,6 +147,18 @@ describe('明确任务引用，不猜测消息归属', () => {
     const ids = f.reply.mock.calls.map((call) => call[3]!.deliveryId);
     expect(ids.every((id) => id.length <= 128)).toBe(true);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  it('定向补充只读取本群一张原始任务和对应委派，不派生历史或克隆全集', async () => {
+    const f = fixture();
+    const allTasks = vi.spyOn(f.taskStore, 'list');
+    const task = vi.spyOn(f.taskStore, 'find');
+    const record = vi.spyOn(f.delegations, 'get');
+    await f.supervisor.route(f.chat.id, f.entry());
+    expect(allTasks).not.toHaveBeenCalled();
+    expect(task).toHaveBeenCalledExactlyOnceWith(f.chat.id, '#1');
+    expect(record).toHaveBeenCalledExactlyOnceWith(f.task.delegationId);
+    expect(f.reply).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -226,6 +253,51 @@ describe('明确任务引用，不猜测消息归属', () => {
 });
 
 describe('Main 侧看护，不自动重放有副作用的工作', () => {
+  it('未挂委派的旧任务不补 runs，巡检只读取当前任务绑定的委派', () => {
+    const f = fixture();
+    f.silence();
+    const list = vi.spyOn(f.taskStore, 'list').mockReturnValue([
+      ...Array.from({ length: 1000 }, (_, index) => ({
+        ...f.task,
+        id: `legacy-${index}`,
+        delegationId: undefined,
+      })),
+      f.task,
+    ]);
+    const get = vi.spyOn(f.delegations, 'get');
+    f.supervisor.sweep();
+    expect(list).toHaveBeenCalledExactlyOnceWith(f.chat.id);
+    expect(get).toHaveBeenCalledExactlyOnceWith(f.record.id);
+    expect(f.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('销毁取消尚未触发的巡检，不在之后扫描或发通知', async () => {
+    const f = fixture();
+    f.silence();
+    const list = vi.spyOn(f.chats, 'list');
+    f.supervisor.scheduleSweep();
+    f.supervisor.dispose();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(list).not.toHaveBeenCalled();
+    expect(f.notify).not.toHaveBeenCalled();
+  });
+  it('跨异步事件的突发更新在最后一次变更后只巡检一次', async () => {
+    const f = fixture();
+    const list = vi.spyOn(f.chats, 'list');
+    f.silence();
+    f.supervisor.scheduleSweep();
+    await vi.advanceTimersByTimeAsync(350);
+    f.supervisor.scheduleSweep();
+    await vi.advanceTimersByTimeAsync(350);
+    f.supervisor.scheduleSweep();
+    await vi.advanceTimersByTimeAsync(749);
+    expect(list).not.toHaveBeenCalled();
+    expect(f.notify).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(f.notify).toHaveBeenCalledTimes(1);
+  });
+
   it('提醒落盘失败不能中断任务主链路，下次巡检仍可补发', () => {
     const f = fixture();
     f.silence();
@@ -260,8 +332,9 @@ describe('Main 侧看护，不自动重放有副作用的工作', () => {
     const another = new TaskSupervisor({
       chats: reloaded,
       bots: f.bots,
-      tasks: { list: () => [f.task], reply: f.reply },
-      delegations: () => [f.record],
+      taskStore: f.taskStore,
+      replyTask: f.reply,
+      delegations: f.delegations,
       silences: () => [],
       emit: f.emit,
       notify: f.notify,

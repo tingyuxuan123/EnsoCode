@@ -1285,16 +1285,17 @@ export class DelegationService {
         (parentConversationId && head.parentConversationId !== parentConversationId)
       )
         continue;
-      // 托管失败只进看板和提醒。不能以「结果回流」自动唤醒父模型，间接重派有副作用的工作。
-      const suppressed = new Set(batch.filter((record) => this.awaitHumanRecovery(record)));
-      if (suppressed.size) this.delivered([...suppressed]);
-      const reportable = batch.filter((record) => !suppressed.has(record));
+      // 托管失败不单独唤醒父模型；若同批还有交付，则保留失败身份但不传失败细节。
+      const awaitingHuman = new Set(
+        batch.filter((record) => this.awaitHumanRecovery(record)).map((record) => record.id)
+      );
       if (
-        !reportable.length ||
-        reportable.every((record) => record.deliveredAt !== undefined) ||
-        this.deps.host.isBusy(head.parentConversationId)
-      )
+        batch.every((record) => awaitingHuman.has(record.id) || record.deliveredAt !== undefined)
+      ) {
+        this.delivered(batch);
         continue;
+      }
+      if (this.deps.host.isBusy(head.parentConversationId)) continue;
       const parent = this.deps.authority.conversation(head.parentConversationId);
       if (!parent || parent.lifecycle === 'ended') {
         if (head.chatId && this.deps.chats.get(head.chatId)?.kind === 'group')
@@ -1332,9 +1333,9 @@ export class DelegationService {
       this.delivering.add(deliveryId);
       try {
         const text = batchResultText(
-          reportable,
+          batch,
           (id) => this.deps.bots.get(id)?.name ?? id,
-          deliveryId
+          awaitingHuman
         );
         const sent =
           parent.bot?.chatId &&

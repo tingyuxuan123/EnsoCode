@@ -1046,6 +1046,48 @@ it('托管任务失败留在看板等待人工处理，不唤醒委派者自行�
   f.groups.dispose();
 });
 
+it.each([false, true])(
+  '托管批次完整保留失败身份，但只在有可回流结果时唤醒父会话（全部失败=%s）',
+  async (allFailed) => {
+    const f = fixture(['吴经理', '小设', '阿全'], undefined, true);
+    f.chats.update(f.chat.id, (chat) => ({ ...chat, taskSupervision: true }));
+    const { boss, sent, children } = await bossDelegatesBoth(f)();
+    f.fail(children[0]);
+    await settle();
+    expect(resultsTo(f, boss)).toHaveLength(0);
+    if (allFailed) f.fail(children[1]);
+    else f.reply(children[1], '代码验收通过');
+    await settle();
+
+    if (allFailed) expect(resultsTo(f, boss)).toHaveLength(0);
+    else {
+      const batchId = f.delegations.list()[0].batchId;
+      const [result] = resultsTo(f, boss);
+      expect(resultsTo(f, boss)).toHaveLength(1);
+      expect(result.deliveryId).toBe(batchId);
+      expect(result.text).toContain(`<delegation-results id="${batchId}">`);
+      expect(result.text).toContain(
+        `<delegation-result id="${sent[0]}" from="小设" status="failed">`
+      );
+      expect(result.text).toContain(
+        'Awaiting human recovery. Do not retry or re-delegate this task.'
+      );
+      expect(result.text).not.toContain('boom');
+      expect(result.text).toContain(
+        `<delegation-result id="${sent[1]}" from="阿全" status="completed">代码验收通过`
+      );
+      f.start(boss);
+      f.reply(boss, '只完成一项，另一项等人工处理');
+      await settle();
+      expect(resultsTo(f, boss)).toHaveLength(1);
+    }
+    expect(f.entries().filter((entry) => entry.kind === 'delegation')).toHaveLength(2);
+    expect(f.delegations.list().every((record) => record.deliveredAt !== undefined)).toBe(true);
+    f.delegations.dispose();
+    f.groups.dispose();
+  }
+);
+
 it('真人托管补充改排到下一回合时，交付仍保留原回合报告', async () => {
   const f = fixture(['林经理', '阿后'], undefined, true);
   const { boss, sent, child } = await handOver(f);

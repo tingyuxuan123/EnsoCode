@@ -1,29 +1,40 @@
 import { createHash } from 'node:crypto';
-import {
-  type BotChat,
-  type Delegation,
-  GROUP_TASK_TEXT_MAX,
-  type GroupEntry,
-  type GroupTask,
-} from '../../../shared/types/bot';
+import { type BotChat, GROUP_TASK_TEXT_MAX, type GroupEntry } from '../../../shared/types/bot';
 import type { BotEvent, BotSendResult, BotSilence } from '../../../shared/types/botIpc';
 import type { BotStore } from './botStore';
 import type { BotChatStore } from './chatStore';
 import { TASK_FOLLOWUP_PREFIX } from './delegationBatch';
+import type { DelegationStore } from './delegationStore';
+import type { GroupTaskStore } from './groupTaskStore';
 import type { GroupTaskService } from './groupTasks';
 
 interface Deps {
   chats: BotChatStore;
   bots: BotStore;
-  tasks: Pick<GroupTaskService, 'list' | 'reply'>;
-  delegations: () => readonly Delegation[];
+  taskStore: Pick<GroupTaskStore, 'list' | 'find'>;
+  replyTask: GroupTaskService['reply'];
+  delegations: Pick<DelegationStore, 'get'>;
   silences: () => readonly BotSilence[];
   emit: (event: BotEvent) => void;
   notify: (chatId: string, text: string) => void;
   language?: () => 'zh' | 'en';
 }
 
-/** 首部的单一任务编号才是直通意图；多编号、正文中的编号和裸编号不猜测。 */
+const SWEEP_DEBOUNCE_MS = 750;
+const SWEEP_INTERVAL_MS = 30_000;
+
+function hasAnotherTaskReference(text: string): boolean {
+  if (/任务\s*#\d+(?=[\s:：,，)）]|$)/u.test(text)) return true;
+  // 只匹配有分隔边界的纯数字编号；带字母的色值、链接片段、显式 issue/PR 引用不是任务号。
+  for (const [, external] of text.matchAll(
+    /(?:^|[\s(（,，])(?:(issue|pr)\s+)?#\d+(?=[\s:：,，)）]|$)/giu
+  )) {
+    if (!external) return true;
+  }
+  return false;
+}
+
+/** 首部的单一任务编号才是直通意图；第二个任务编号和裸编号不猜测。 */
 export function parseTaskFollowup(text: string): { seq: number; text: string } | undefined {
   const match = /^(?:任务\s*|task\s+)?#([1-9]\d*)(?=[\s:：,，])[\s:：,，]+([\s\S]+)$/iu.exec(
     text.trim()
@@ -31,7 +42,12 @@ export function parseTaskFollowup(text: string): { seq: number; text: string } |
   if (!match) return undefined;
   const seq = Number(match[1]);
   const body = match[2].trim();
-  if (!Number.isSafeInteger(seq) || !body || body.length > GROUP_TASK_TEXT_MAX || /#\d/u.test(body))
+  if (
+    !Number.isSafeInteger(seq) ||
+    !body ||
+    body.length > GROUP_TASK_TEXT_MAX ||
+    hasAnotherTaskReference(body)
+  )
     return undefined;
   return { seq, text: body };
 }
@@ -39,35 +55,37 @@ export function parseTaskFollowup(text: string): { seq: number; text: string } |
 /** 本地群任务托管：只跟进已授权任务，不认领待办、不自动重试、不代替审批。 */
 export class TaskSupervisor {
   private timer?: ReturnType<typeof setInterval>;
+  private scheduledSweep?: ReturnType<typeof setTimeout>;
   private disposed = false;
-  private sweepPending = false;
   constructor(private readonly deps: Deps) {}
 
   start(): void {
     if (this.disposed || this.timer) return;
     this.sweep();
-    this.timer = setInterval(() => this.sweep(), 30_000);
+    this.timer = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS);
     this.timer.unref?.();
   }
 
   dispose(): void {
     this.disposed = true;
     clearInterval(this.timer);
+    clearTimeout(this.scheduledSweep);
     this.timer = undefined;
+    this.scheduledSweep = undefined;
   }
 
   scheduleSweep(): void {
-    if (this.disposed || this.sweepPending) return;
-    this.sweepPending = true;
-    queueMicrotask(() => {
-      this.sweepPending = false;
-      this.sweep();
-    });
+    if (this.disposed) return;
+    clearTimeout(this.scheduledSweep);
+    this.scheduledSweep = setTimeout(() => this.sweep(), SWEEP_DEBOUNCE_MS);
+    this.scheduledSweep.unref?.();
   }
 
   /** 只从权威任务/执行/静默记录派生提醒；稳定时间线 id 同时作为跨重启去重标记。 */
   sweep(): void {
     if (this.disposed) return;
+    clearTimeout(this.scheduledSweep);
+    this.scheduledSweep = undefined;
     try {
       this.scan();
     } catch (cause) {
@@ -76,52 +94,51 @@ export class TaskSupervisor {
   }
 
   private scan(): void {
-    if (!this.deps.chats.list().some((chat) => !chat.parentId && this.enabled(chat.id))) return;
+    const roots = this.deps.chats.list().filter((chat) => !chat.parentId && this.enabled(chat.id));
+    if (!roots.length) return;
     const silent = new Set(this.deps.silences().map((item) => item.conversationId));
-    const tasks = new Map<string, Map<string, GroupTask>>();
-    for (const record of this.deps.delegations()) {
-      if (!record.chatId || !record.taskId || record.depth !== 1) continue;
-      if (
-        record.state !== 'failed' &&
-        record.state !== 'blocked' &&
-        !(record.state === 'running' && silent.has(record.childConversationId))
-      )
-        continue;
-      const root = this.enabled(record.chatId);
-      if (!root) continue;
-      let byId = tasks.get(root.id);
-      if (!byId) {
-        byId = new Map(this.deps.tasks.list(root.id).map((task) => [task.id, task]));
-        tasks.set(root.id, byId);
+    const en = this.deps.language?.() === 'en';
+    // 只读托管根群的原始任务快照，不为无历史任务派生 runs，也不克隆全部委派。
+    for (const root of roots)
+      for (const task of this.deps.taskStore.list(root.id)) {
+        if (
+          !task.delegationId ||
+          (task.status !== 'blocked' && (task.status !== 'doing' || !silent.size))
+        )
+          continue;
+        const record = this.deps.delegations.get(task.delegationId);
+        if (
+          !record?.chatId ||
+          record.taskId !== task.id ||
+          record.depth !== 1 ||
+          record.targetBotId !== task.assigneeBotId ||
+          this.enabled(record.chatId)?.id !== root.id
+        )
+          continue;
+        let phase: string;
+        let text: string;
+        if (record.state === 'failed' && task.status === 'blocked') {
+          phase = 'interrupted';
+          text = en
+            ? `Task #${task.seq} needs recovery. Check the last tool results, then confirm retry, reassign or cancel on the task card. No commands were replayed automatically.`
+            : `任务 #${task.seq} 执行中断或失败。请先核对最后的工具结果，再在任务卡确认重试、改派或取消；托管不会自动重放命令。`;
+        } else if (record.state === 'blocked' && task.status === 'blocked') {
+          phase = 'need';
+          text = en
+            ? `Task #${task.seq} is waiting for information. Reply on its task card, or send “#${task.seq} your answer” in the group.`
+            : `任务 #${task.seq} 正在等补充信息。可在任务卡回答，或在群里发送“#${task.seq} 你的答复”交回原负责人。`;
+        } else if (
+          record.state === 'running' &&
+          task.status === 'doing' &&
+          silent.has(record.childConversationId)
+        ) {
+          phase = 'silence';
+          text = en
+            ? `Task #${task.seq} has produced no output for a while. Check the execution or stop it on the task card; no automatic restart was performed.`
+            : `任务 #${task.seq} 已长时间没有输出。请在任务卡查看执行详情或停止处理；托管未自动重启任务。`;
+        } else continue;
+        this.notice(record.chatId, `task-supervision:${record.id}:${phase}`, text, true);
       }
-      const task = byId.get(record.taskId);
-      if (!task || task.delegationId !== record.id || task.assigneeBotId !== record.targetBotId)
-        continue;
-      const en = this.deps.language?.() === 'en';
-      let phase: string;
-      let text: string;
-      if (record.state === 'failed' && task.status === 'blocked') {
-        phase = 'interrupted';
-        text = en
-          ? `Task #${task.seq} needs recovery. Check the last tool results, then confirm retry, reassign or cancel on the task card. No commands were replayed automatically.`
-          : `任务 #${task.seq} 执行中断或失败。请先核对最后的工具结果，再在任务卡确认重试、改派或取消；托管不会自动重放命令。`;
-      } else if (record.state === 'blocked' && task.status === 'blocked') {
-        phase = 'need';
-        text = en
-          ? `Task #${task.seq} is waiting for information. Reply on its task card, or send “#${task.seq} your answer” in the group.`
-          : `任务 #${task.seq} 正在等补充信息。可在任务卡回答，或在群里发送“#${task.seq} 你的答复”交回原负责人。`;
-      } else if (
-        record.state === 'running' &&
-        task.status === 'doing' &&
-        silent.has(record.childConversationId)
-      ) {
-        phase = 'silence';
-        text = en
-          ? `Task #${task.seq} has produced no output for a while. Check the execution or stop it on the task card; no automatic restart was performed.`
-          : `任务 #${task.seq} 已长时间没有输出。请在任务卡查看执行详情或停止处理；托管未自动重启任务。`;
-      } else continue;
-      this.notice(record.chatId, `task-supervision:${record.id}:${phase}`, text, true);
-    }
   }
 
   async route(
@@ -152,12 +169,12 @@ export class TaskSupervisor {
       );
       return { ok: true as const };
     };
-    const task = this.deps.tasks.list(root.id).find((item) => item.seq === followup.seq);
+    const task = this.deps.taskStore.find(root.id, `#${followup.seq}`);
     if (!task?.delegationId || !task.assigneeBotId || !root.members.includes(task.assigneeBotId))
       return unavailable();
     const bot = this.deps.bots.get(task.assigneeBotId);
     if (!bot || bot.archivedAt !== undefined) return unavailable();
-    const record = this.deps.delegations().find((item) => item.id === task.delegationId);
+    const record = this.deps.delegations.get(task.delegationId);
     if (
       !record ||
       record.taskId !== task.id ||
@@ -174,7 +191,7 @@ export class TaskSupervisor {
     if (!running && !waiting) return unavailable();
     let result: BotSendResult;
     try {
-      result = await this.deps.tasks.reply(chatId, task.id, followup.text, {
+      result = await this.deps.replyTask(chatId, task.id, followup.text, {
         deliveryId: `${TASK_FOLLOWUP_PREFIX}${createHash('sha256')
           .update(JSON.stringify([chatId, entry.id]))
           .digest('hex')}`,
