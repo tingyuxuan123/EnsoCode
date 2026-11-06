@@ -101,7 +101,14 @@ test('Windows 专用 tag 严格匹配版本，不触发 Mac 或多平台发布',
   assert.deepEqual(publish.permissions, { contents: 'write' });
   assert.match(publish.if, /github.event_name == 'push'/);
   assert.match(publish.if, /refs\/tags\/windows-v/);
+  assert.equal(publish.concurrency.group, 'windows-latest');
   const publication = publish.steps.find((step) => step.name === 'Upload verified Windows draft');
+  const newer = publish.steps.find(
+    (step) => step.name === 'Require a newer release than current Latest'
+  );
+  assert.ok(newer && publish.steps.indexOf(newer) < publish.steps.indexOf(publication));
+  assert.match(newer.run, /releases\/latest/);
+  assert.match(newer.run, /sort -V/);
   assert.match(publication.run, /--draft/);
   assert.match(publication.run, /--latest=false/);
   assert.match(publication.run, /--verify-tag/);
@@ -109,6 +116,21 @@ test('Windows 专用 tag 严格匹配版本，不触发 Mac 或多平台发布',
   assert.match(remote.run, /gh release download/);
   assert.match(remote.run, /release.mjs verify downloaded/);
   assert.match(remote.run, /diff.*SHA256SUMS/);
+  const publishIndex = publish.steps.findIndex((step) => step.name === 'Publish Windows release');
+  const publicIndex = publish.steps.findIndex(
+    (step) => step.name === 'Verify public Windows assets'
+  );
+  const latestIndex = publish.steps.findIndex(
+    (step) => step.name === 'Promote Windows release to Latest'
+  );
+  assert.ok(publishIndex > publish.steps.indexOf(remote));
+  assert.ok(publicIndex > publishIndex && latestIndex > publicIndex);
+  assert.match(publish.steps[publishIndex].run, /--draft=false --prerelease=false --latest=false/);
+  assert.match(publish.steps[publicIndex].run, /curl.*--fail.*--location/);
+  assert.match(publish.steps[publicIndex].run, /release.mjs verify public-assets/);
+  assert.match(publish.steps[publicIndex].run, /cmp.*SHA256SUMS/);
+  assert.match(publish.steps[latestIndex].run, /--latest=true/);
+  assert.match(publish.steps[latestIndex].run, /releases\/latest/);
   assert.doesNotMatch(JSON.stringify(workflow), /--mac|--linux|personal-updates|APPLE_CERTIFICATE/);
 });
 
@@ -127,6 +149,23 @@ test('仅 Windows 产物可独立校验，坏安装包与缺失清单不能发�
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('Windows Latest 防倒退执行真实 shell：按数字比较，旧版与同版本拒绝', async () => {
+  const workflow = parse(
+    await readFile(new URL('../.github/workflows/build-windows.yml', import.meta.url), 'utf8')
+  );
+  const step = workflow.jobs['publish-windows'].steps.find(
+    (step) => step.name === 'Require a newer release than current Latest'
+  );
+  const run = (current, tag) =>
+    promisify(execFile)('bash', ['-c', `gh() { printf '%s\\n' "$CURRENT_TAG"; }; ${step.run}`], {
+      env: { ...process.env, CURRENT_TAG: current, TAG: tag, GITHUB_REPOSITORY: 'test/repo' },
+    });
+  await run('windows-v0.2.9', 'windows-v0.2.10');
+  await run('v0.2.9', 'windows-v0.3.0');
+  for (const current of ['windows-v0.2.10', 'windows-v0.10.0', 'v1.0.0', 'unexpected'])
+    await assert.rejects(run(current, 'windows-v0.2.10'));
 });
 
 test('Mac 合并拒绝错版本、缺架构、重复文件和不可信下载地址', () => {

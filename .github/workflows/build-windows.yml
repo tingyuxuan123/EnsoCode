@@ -154,6 +154,9 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    concurrency:
+      group: windows-latest
+      cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ github.ref_name }}
@@ -181,6 +184,19 @@ jobs:
           name: windows-installer
           path: release-assets/
 
+      - name: Require a newer release than current Latest
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          [[ "$CURRENT" =~ ^(windows-)?v([0-9]+\.[0-9]+\.[0-9]+)$ ]]
+          CURRENT_VERSION=${BASH_REMATCH[2]}
+          NEXT_VERSION=${TAG#windows-v}
+          if [[ "$CURRENT_VERSION" == "$NEXT_VERSION" ]] || \
+            [[ "$(printf '%s\n' "$CURRENT_VERSION" "$NEXT_VERSION" | sort -V | tail -n 1)" != "$NEXT_VERSION" ]]; then
+            echo "Refusing to replace Latest ($CURRENT) with an equal or older version ($TAG)."
+            exit 1
+          fi
+
       - name: Upload verified Windows draft
         run: |
           set -euo pipefail
@@ -191,7 +207,7 @@ jobs:
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" --verify-tag --draft --prerelease --latest=false \
               --title "EnsoCode ${TAG#windows-v} — Windows x64" \
-              --notes 'Windows x64 only. Verified installer, native dependencies, bundled design engine and checksums. Draft pending Windows installation and data-retention acceptance; not an automatic-update release.'
+              --notes 'Windows x64 only. CI verifies the installer, native dependencies, bundled design engine and downloaded asset checksums before automatic publication as Latest. Windows installation, upgrade and old-data retention have not been manually verified by this workflow.'
           fi
           gh release upload "$TAG" release-assets/* --clobber
 
@@ -203,4 +219,31 @@ jobs:
           node scripts/release.mjs verify downloaded
           diff release-assets/SHA256SUMS downloaded/SHA256SUMS
           test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true
-          echo "Verified Windows-only draft: $TAG. Installation acceptance is still required." >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified Windows-only draft: $TAG." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish Windows release
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false --prerelease=false --latest=false
+
+      - name: Verify public Windows assets
+        run: |
+          set -euo pipefail
+          mkdir public-assets
+          for file in release-assets/*; do
+            name=${file##*/}
+            curl --fail --location --retry 3 --connect-timeout 15 --max-time 300 \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$name" \
+              --output "public-assets/$name"
+          done
+          (cd public-assets && sha256sum -c SHA256SUMS)
+          cmp release-assets/SHA256SUMS public-assets/SHA256SUMS
+          node scripts/release.mjs verify public-assets
+
+      - name: Promote Windows release to Latest
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --latest=true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = "$TAG"
+          test "$(gh release view "$TAG" --json isDraft,isPrerelease --jq '.isDraft == false and .isPrerelease == false')" = true
+          echo "Published Windows release as Latest: $TAG. Manual Windows installation/upgrade acceptance is not performed by CI." >> "$GITHUB_STEP_SUMMARY"

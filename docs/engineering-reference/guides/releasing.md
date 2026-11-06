@@ -141,10 +141,16 @@ Actions 首次启用不会补跑旧 tag 事件；确认没有重复任务后可�
 
 用户明确只要 Windows 时，递增 `package.json` 版本并推 `windows-v<version>`，
 由 `.github/workflows/build-windows.yml` 执行。该 tag 不匹配 `v*` 或 `personal-v*`，
-不会构建 Mac、Linux 或中继，不推进 `personal-updates`，不改变正式 latest。
+不会构建 Mac、Linux 或中继，不推进 `personal-updates`。按用户长期授权（2026-11-06），
+Windows tag 构建通过全部 CI 验收后自动公开为非 prerelease 并设置为 **Latest**。
 完整检查在 Linux runner 上执行；只在 Windows runner 上打包 x64 NSIS，验收包内原生依赖、
 设计引擎及更新清单哈希后，上传 Windows 专用 Release **草稿**并重新下载校验。
-手动触发此 workflow 仅生成 artifact；公开草稿仍需 Windows 安装、旧数据保留验收和独立授权。
+草稿远端校验通过后自动公开，匿名重新下载核对哈希后才推进 Latest，并查询 GitHub API 核验。
+Windows 发布 job 串行化，且只允许比当前 Latest 更新的版本，避免旧构建晚到覆盖新版本。
+公开后若匿名校验失败，CI 报失败且不推进 Latest；已公开的资产仍不可覆盖，修复须用新版本。
+手动触发此 workflow 仍仅生成 artifact，不公开；个人版仍只公开 prerelease，不改变 Latest。
+Windows 安装、旧数据保留及自动升级的人工验收不再作为公开前置条件，但必须如实说明未验收，
+不能用 CI 通过代替真机安装结论。此规则只影响后续 tag 使用的新 workflow，旧 tag 的运行不会自动更新。
 
 ```bash
 git push origin HEAD:main
@@ -181,13 +187,13 @@ Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID
 `src/renderer/components/app/UpdateBanner.test.tsx`、
 `src/renderer/components/settings/GeneralSettings.updates.test.tsx`。
 这些测试覆盖日志来源、手动操作和失败 UI，不代表 Windows NSIS 的安装、旧数据保留或系统浏览器
-实际打开已验收；个人 feed 仍仅用于 Mac arm64，Windows workflow 和发布规则不变。
+实际打开已验收；个人 feed 仍仅用于 Mac arm64。
 
 ## 结束时必须交代
 
 - 源码 SHA、分支、版本、tag 以及是否推送。
 - CI run URL 与实际状态，不冒称本地成功或沿用旧构建报告。
 - 检查、签名/哈希、原生依赖和必要的双模型验收证据。
-- Release 是草稿还是公开、个人清单当前版本；正式 latest 必须未变。
+- Release 是草稿还是公开、个人清单当前版本；仅个人版发版时正式 Latest 必须未变，Windows 发版则核对 Latest 是否指向本次 tag。
 - 是否实际安装/重启及旧数据验收；未安装要明确说明。
 - 外部阻塞具体在哪一步，需要用户做什么；CI 失败不回退本机打包。
