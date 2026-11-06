@@ -102,8 +102,11 @@ function fixture() {
     taskStore,
     delegations,
     entry,
-    silence: () => {
-      silences = [{ conversationId: 'child', botId: b.bot.id, chatId: chat.id, since: 1 }];
+    silence: (since = 1) => {
+      silences = [{ conversationId: 'child', botId: b.bot.id, chatId: chat.id, since }];
+    },
+    speak: () => {
+      silences = [];
     },
   };
 }
@@ -368,6 +371,55 @@ describe('Main 侧看护，不自动重放有副作用的工作', () => {
     expect(f.reply).not.toHaveBeenCalled();
     f.task.status = 'done';
     f.record.id = 'old';
+    f.supervisor.sweep();
+    expect(f.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('同一段静默只提醒一次；恢复输出后再次静默会重新提醒', () => {
+    const f = fixture();
+    f.silence(1);
+    f.supervisor.sweep();
+    f.supervisor.sweep();
+    expect(f.notify).toHaveBeenCalledExactlyOnceWith(
+      f.chat.id,
+      expect.stringContaining('长时间没有输出')
+    );
+    f.speak();
+    f.supervisor.sweep();
+    f.silence(5);
+    f.supervisor.sweep();
+    f.supervisor.sweep();
+    expect(f.notify).toHaveBeenCalledTimes(2);
+    expect(f.chats.readEntries(f.chat.id).filter((item) => item.kind === 'system')).toHaveLength(2);
+  });
+
+  it('同一轮检查出的多条提醒合并成一条系统通知，时间线仍逐条记录', () => {
+    const f = fixture();
+    f.task.status = 'blocked';
+    f.task.blockedReason = 'need';
+    f.record.state = 'blocked';
+    const second: GroupTask = {
+      ...f.task,
+      id: '22222222-2222-4222-8222-222222222222',
+      seq: 2,
+      delegationId: 'run-2',
+    };
+    const secondRecord: Delegation = {
+      ...f.record,
+      id: 'run-2',
+      taskId: second.id,
+      childConversationId: 'child-2',
+    };
+    vi.spyOn(f.taskStore, 'list').mockReturnValue([f.task, second]);
+    vi.spyOn(f.delegations, 'get').mockImplementation((id) =>
+      id === f.record.id ? f.record : id === secondRecord.id ? secondRecord : undefined
+    );
+    f.supervisor.sweep();
+    expect(f.notify).toHaveBeenCalledExactlyOnceWith(
+      f.chat.id,
+      expect.stringMatching(/2 个托管任务[\s\S]*#1[\s\S]*#2/u)
+    );
+    expect(f.chats.readEntries(f.chat.id).filter((item) => item.kind === 'system')).toHaveLength(2);
     f.supervisor.sweep();
     expect(f.notify).toHaveBeenCalledTimes(1);
   });

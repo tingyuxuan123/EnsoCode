@@ -98,8 +98,11 @@ export class TaskSupervisor {
   private scan(): void {
     const roots = this.deps.chats.list().filter((chat) => !chat.parentId && this.enabled(chat.id));
     if (!roots.length) return;
-    const silent = new Set(this.deps.silences().map((item) => item.conversationId));
+    // since 是这段静默前最后一次输出的时间，恢复输出后再静默会变，用来区分每一段静默
+    const silent = new Map(this.deps.silences().map((item) => [item.conversationId, item.since]));
     const en = this.deps.language?.() === 'en';
+    // 同一轮新写的提醒按会话合并成一条系统通知，避免开启托管或批量中断时连发
+    const alerts = new Map<string, { seqs: number[]; text: string }>();
     // 只读托管根群的原始任务快照，不为无历史任务派生 runs，也不克隆全部委派。
     for (const root of roots)
       for (const task of this.deps.taskStore.list(root.id)) {
@@ -119,6 +122,7 @@ export class TaskSupervisor {
           continue;
         let phase: string;
         let text: string;
+        const since = silent.get(record.childConversationId);
         if (record.state === 'failed' && task.status === 'blocked') {
           phase = 'interrupted';
           text = en
@@ -129,18 +133,32 @@ export class TaskSupervisor {
           text = en
             ? `Task #${task.seq} is waiting for information. Reply on its task card, or send “#${task.seq} your answer” in the group.`
             : `任务 #${task.seq} 正在等补充信息。可在任务卡回答，或在群里发送“#${task.seq} 你的答复”交回原负责人。`;
-        } else if (
-          record.state === 'running' &&
-          task.status === 'doing' &&
-          silent.has(record.childConversationId)
-        ) {
-          phase = 'silence';
+        } else if (record.state === 'running' && task.status === 'doing' && since !== undefined) {
+          phase = `silence:${since}`;
           text = en
             ? `Task #${task.seq} has produced no output for a while. Check the execution or stop it on the task card; no automatic restart was performed.`
             : `任务 #${task.seq} 已长时间没有输出。请在任务卡查看执行详情或停止处理；托管未自动重启任务。`;
         } else continue;
-        this.notice(record.chatId, `task-supervision:${record.id}:${phase}`, text, true);
+        if (!this.notice(record.chatId, `task-supervision:${record.id}:${phase}`, text)) continue;
+        const alert = alerts.get(record.chatId);
+        if (alert) alert.seqs.push(task.seq);
+        else alerts.set(record.chatId, { seqs: [task.seq], text });
       }
+    for (const [chatId, { seqs, text }] of alerts) {
+      const refs = seqs.map((seq) => `#${seq}`);
+      try {
+        this.deps.notify(
+          chatId,
+          seqs.length === 1
+            ? text
+            : en
+              ? `${seqs.length} supervised tasks need attention: ${refs.join(', ')}. See the group timeline.`
+              : `${seqs.length} 个托管任务需要处理：${refs.join('、')}。详情见群时间线。`
+        );
+      } catch (cause) {
+        console.warn('[bots] task supervision notify failed', cause);
+      }
+    }
   }
 
   async route(
@@ -166,8 +184,7 @@ export class TaskSupervisor {
         noticeId,
         en
           ? `Task #${followup.seq} has no execution that can receive this follow-up. Check its status on the task board.`
-          : `任务 #${followup.seq} 当前没有可接收补充的委派执行。请到任务看板查看状态。`,
-        false
+          : `任务 #${followup.seq} 当前没有可接收补充的委派执行。请到任务看板查看状态。`
       );
       return { ok: true as const };
     };
@@ -209,7 +226,7 @@ export class TaskSupervisor {
       : en
         ? `Task #${task.seq}: follow-up was not confirmed. Check the task card before retrying.`
         : `任务 #${task.seq}：补充未确认送达，请查看任务卡后再决定是否重发。`;
-    this.notice(chatId, noticeId, text, false);
+    this.notice(chatId, noticeId, text);
     // 人类消息已在群时间线，不把投递失败当作聊天发送失败；结果由同一时间线的提示表达。
     return { ok: true };
   }
@@ -227,20 +244,22 @@ export class TaskSupervisor {
       : undefined;
   }
 
-  private notice(chatId: string, id: string, text: string, notify: boolean): void {
+  /** 写一条稳定 id 的时间线提醒；只有本次新写入才返回 true，由调用方决定是否发系统通知。 */
+  private notice(chatId: string, id: string, text: string): boolean {
     try {
-      if (!this.enabled(chatId) || this.deps.chats.findEntry(chatId, id)) return;
+      if (!this.enabled(chatId) || this.deps.chats.findEntry(chatId, id)) return false;
       const saved = this.deps.chats.appendEntry(chatId, {
         id,
         kind: 'system',
         at: Date.now(),
         text,
       });
-      if (!saved) return;
+      if (!saved) return false;
       this.deps.emit({ kind: 'timeline', chatId, seq: saved.seq });
-      if (notify) this.deps.notify(chatId, text);
+      return true;
     } catch (cause) {
       console.warn('[bots] task supervision notice failed', cause);
+      return false;
     }
   }
 }
