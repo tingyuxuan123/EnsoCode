@@ -1,7 +1,10 @@
 import type { DesignToolRequestEvent } from '@shared/types/design';
-import { useSessionsStore } from '@/stores/sessions';
 import { setDesignViewingCwd } from './host/canvas-target';
-import { createDesignContext, emitDesignConversation } from './host/context';
+import {
+  createDesignContext,
+  type DesignContextHost,
+  emitDesignConversation,
+} from './host/context';
 import { resolveDesignRoot } from './host/paths';
 import { designTools } from './host/registry';
 import { dispatchDesignHook, dispatchDesignTool } from './runtime-dispatch';
@@ -22,10 +25,14 @@ export function listRegisteredDesignTools(): Array<{
     parameters: tool.parameters,
   }));
 }
-export function startDesignRuntime(): Promise<void> {
+/**
+ * 每个 renderer 只激活一次。宿主由窗口注入：主窗口传 main-host，独立设计窗口传
+ * 只转发派活的宿主。本文件不导入任何主窗口 store。
+ */
+export function startDesignRuntime(host: DesignContextHost): Promise<void> {
   if (started) return started;
   const attempt = (async () => {
-    const ctx = createDesignContext();
+    const ctx = createDesignContext(host);
     const plugin = (await import('./vetta/src/index')).default;
     await plugin.activate(ctx);
     // Listeners subscribe only after a successful activation, so a retry never doubles them.
@@ -85,10 +92,14 @@ export function startDesignRuntime(): Promise<void> {
   started = guarded;
   return guarded;
 }
-export async function setDesignViewingSession(id: string | null): Promise<void> {
+export async function setDesignViewingSession(
+  id: string | null,
+  host: DesignContextHost,
+  streaming: boolean
+): Promise<void> {
   viewingSessionId = id;
   setDesignViewingCwd(null);
-  await startDesignRuntime();
+  await startDesignRuntime(host);
   if (viewingSessionId !== id) return;
   const root = id
     ? await resolveDesignRoot({ kind: 'session', sessionId: id }).catch(() => null)
@@ -101,9 +112,36 @@ export async function setDesignViewingSession(id: string | null): Promise<void> 
       cwd: root?.path ?? null,
       sessionPath: null,
       model: null,
-      isStreaming: id ? useSessionsStore.getState().conversations[id]?.status === 'running' : false,
+      isStreaming: Boolean(id && streaming),
     },
   });
   const result = await window.electronAPI.design.registerRuntime({ viewingSessionId: id });
   if (!result.ok) throw new Error(result.error);
+}
+
+/**
+ * 独立设计窗口：运行时固定服务 Main 绑定的会话。Main 登记时忽略这里上报的会话，
+ * 只按窗口绑定路由；这里仍按同一会话发出，便于和 conversation 状态保持一致。
+ */
+export async function bindDesignWindowSession(
+  sessionId: string,
+  streaming: boolean,
+  host: DesignContextHost
+): Promise<string> {
+  viewingSessionId = sessionId;
+  await startDesignRuntime(host);
+  const root = await resolveDesignRoot({ kind: 'session', sessionId });
+  emitDesignConversation({
+    type: 'conversation-changed',
+    conversation: {
+      id: sessionId,
+      cwd: root.path,
+      sessionPath: null,
+      model: null,
+      isStreaming: streaming,
+    },
+  });
+  const result = await window.electronAPI.design.registerRuntime({ viewingSessionId: sessionId });
+  if (!result.ok) throw new Error(result.error);
+  return root.path;
 }

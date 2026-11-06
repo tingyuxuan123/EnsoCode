@@ -11,6 +11,7 @@ import {
   emitDesignConversation,
   syncDesignConversationActivity,
 } from './context';
+import { createMainDesignHost } from './main-host';
 import { useDesignRegistry } from './registry';
 
 const { state, send, settings } = vi.hoisted(() => {
@@ -61,7 +62,7 @@ it.each(['idle', 'running', 'changed', 'race'])(
   'notes -> SDK -> session.send obeys owner and idle gate (%s)',
   async (mode) => {
     vi.useFakeTimers();
-    setPluginCtx(createDesignContext());
+    setPluginCtx(createDesignContext(createMainDesignHost()));
     useDesignRegistry.setState({ canvasSessionId: 'owner' });
     emitDesignConversation({
       type: 'conversation-changed',

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   dock: { hide: vi.fn(), show: vi.fn(async () => undefined) },
   hibernate: { release: () => {} },
   win: null as null | Record<string, ReturnType<typeof vi.fn>>,
+  closeDesignWindows: vi.fn(),
 }));
 Object.assign(process, { resourcesPath: '/resources' });
 
@@ -47,6 +48,7 @@ vi.mock('../windows/MainWindow', () => ({
   isMainWindowAlive: () => mocks.win !== null,
 }));
 vi.mock('../windows/SettingsWindow', () => ({ getSettingsWindow: () => null }));
+vi.mock('../windows/DesignWindow', () => ({ closeAllDesignWindows: mocks.closeDesignWindows }));
 vi.mock('./appCloseConfirm', () => ({ allowAppQuit: vi.fn(), bypassNextCloseConfirm: vi.fn() }));
 vi.mock('./browserHost', () => ({
   browserHost: {
@@ -96,6 +98,8 @@ describe('app server mode dock visibility', () => {
     mocks.hibernate.release();
     await entering;
     expect(mocks.dock.hide).toHaveBeenCalledTimes(1);
+    // 主窗口销毁后独立设计窗口既收不到会话状态也无法派活，一并关闭。
+    expect(mocks.closeDesignWindows).toHaveBeenCalled();
 
     leaveServerMode();
     expect(mocks.dock.show).toHaveBeenCalledTimes(1);

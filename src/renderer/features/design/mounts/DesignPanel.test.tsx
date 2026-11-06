@@ -5,12 +5,13 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { useDesignRegistry } from '../host/registry';
 import { useActivityTab } from '../vetta/sdk/activity-tab';
 import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
-import { BotDesignPanel } from './DesignPanel';
+import { BotDesignPanel, DesignPanel } from './DesignPanel';
 
 const h = vi.hoisted(() => ({
   report: vi.fn(async () => ({ ok: true })),
   controller: {},
   listener: null as ((controller: object | null) => void) | null,
+  poppedOut: false,
 }));
 vi.mock('./DesignRoot', () => ({
   DesignRoot: ({ children }: { children: ReactNode }) => children,
@@ -28,10 +29,40 @@ vi.mock('../vetta/src/canvas/design-runtime', () => ({
   },
 }));
 vi.mock('../host/shortcuts', () => ({ dispatchDesignShortcut: vi.fn() }));
+vi.mock('./DesignWindowControls', () => ({
+  useDesignWindowOpen: () => h.poppedOut,
+  DesignWindowPlaceholder: ({ sessionId }: { sessionId: string }) =>
+    createElement('div', { 'data-slot': 'design-window-placeholder' }, sessionId),
+}));
 
 afterEach(() => {
   useDesignRegistry.setState({ contributions: [], canvasSessionId: null });
   vi.unstubAllGlobals();
+  h.poppedOut = false;
+});
+
+it('shows a placeholder instead of a second canvas once the session is popped out', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const resolveRoot = vi.fn();
+  vi.stubGlobal('electronAPI', { design: { reportCanvas: h.report, resolveRoot } });
+  h.poppedOut = true;
+  const Canvas = vi.fn(() => null);
+  useDesignRegistry.setState({
+    contributions: [{ kind: 'activity-tab', value: { id: CANVAS_TAB_ID, component: Canvas } }],
+  });
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  await act(async () =>
+    root.render(createElement(DesignPanel, { conversationId: 'b', active: true }))
+  );
+  expect(container.querySelector('[data-slot="design-window-placeholder"]')?.textContent).toBe('b');
+  expect(Canvas).not.toHaveBeenCalled();
+  expect(resolveRoot).not.toHaveBeenCalled();
+  await act(async () =>
+    root.render(createElement(DesignPanel, { conversationId: 'b', active: false }))
+  );
+  expect(container.innerHTML).toBe('');
+  await act(async () => root.unmount());
 });
 
 it('mounts a project-only Bot canvas and reports null rather than inventing a worker session', async () => {

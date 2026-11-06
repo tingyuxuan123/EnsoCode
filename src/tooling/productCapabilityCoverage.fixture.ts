@@ -926,6 +926,15 @@ export const IPC_PRODUCT_COVERAGE = {
   DESIGN_TOOL_RESPONSE: excluded('Internal design tool bridge response.'),
   DESIGN_HOOK: excluded('Internal design session hook push.'),
   DESIGN_CANVAS_PRESENCE: excluded('Design canvas mount state feeding the vetd_* tool gate.'),
+  DESIGN_WINDOW_OPEN: excluded('Pop a session canvas out into a standalone design window (UI).'),
+  DESIGN_WINDOW_LIST: excluded('Main window query of popped-out design canvases.'),
+  DESIGN_WINDOWS_CHANGED: excluded('Popped-out design canvas list push.'),
+  DESIGN_WINDOW_INFO: excluded('Design window bound-session handshake.'),
+  DESIGN_WINDOW_PUSH_STATE: excluded('Internal relay of session activity to a design window.'),
+  DESIGN_WINDOW_STATE: excluded('Internal session activity push to a design window.'),
+  DESIGN_WINDOW_PROMPT: excluded('Design window note handoff relayed to the main composer.'),
+  DESIGN_WINDOW_PROMPT_REQUEST: excluded('Internal design window prompt relay request.'),
+  DESIGN_WINDOW_PROMPT_RESPONSE: excluded('Internal design window prompt relay response.'),
 } satisfies Record<keyof typeof IPC_CHANNELS, CoverageDisposition>;
 
 export const AUTHORITATIVE_COVERAGE_SOURCES = {

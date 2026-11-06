@@ -89,7 +89,7 @@ it('opens the current route using only the live engine registered to the sender'
   });
   expect(open).toHaveBeenLastCalledWith('https://example.com/');
 });
-async function fixture(trusted = true) {
+async function fixture(trusted = true, dedicated: Record<number, string> = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'design-ipc-'));
   temps.push(dir);
   const send = vi.fn();
@@ -110,6 +110,7 @@ async function fixture(trusted = true) {
       sessionId === 'ssh' ? null : `/projects/${sessionId}`
     ),
     canvasCwds: vi.fn(),
+    dedicatedSession: (senderId: number): string | null => dedicated[senderId] ?? null,
   };
   const handlers = createDesignHandlers(deps);
   const once = vi.fn();
@@ -149,7 +150,7 @@ it('内部服务抛错被包装，窗口销毁级联释放 broker/engine/watch/c
     vi.spyOn(service, 'releaseOwner')
   );
   expect(await handlers.registerRuntime(event, { viewingSessionId: 's' })).toEqual({ ok: true });
-  expect(broker.register).toHaveBeenCalledWith(7, { viewingSessionId: 's' });
+  expect(broker.register).toHaveBeenCalledWith(7, { viewingSessionId: 's' }, false);
   expect(once).toHaveBeenCalledOnce();
   once.mock.calls[0]?.[1]();
   for (const release of releases) expect(release).toHaveBeenCalledWith(7);
@@ -195,4 +196,66 @@ it('异步 cwd 解析不能覆盖新上报或复活已销毁窗口', async () =>
   expect(deps.canvasCwds).toHaveBeenLastCalledWith(['/projects/b']);
   once.mock.calls[0]?.[1]();
   expect(deps.canvasCwds).toHaveBeenLastCalledWith([]);
+});
+it('独立设计窗口按 Main 绑定的会话登记运行时，忽略 Renderer 上报的会话', async () => {
+  const { handlers, event } = await fixture(true, { 7: 'bound' });
+  expect(await handlers.registerRuntime(event, { viewingSessionId: 'other' })).toEqual({
+    ok: true,
+  });
+  expect(broker.register).toHaveBeenCalledWith(7, { viewingSessionId: 'bound' }, true);
+  expect(await handlers.registerRuntime(event, { viewingSessionId: null })).toEqual({ ok: true });
+  expect(broker.register).toHaveBeenLastCalledWith(7, { viewingSessionId: 'bound' }, true);
+});
+it('主窗口登记仍是普通运行时', async () => {
+  const { handlers, event } = await fixture();
+  await handlers.registerRuntime(event, { viewingSessionId: 's' });
+  expect(broker.register).toHaveBeenCalledWith(7, { viewingSessionId: 's' }, false);
+});
+it('独立设计窗口只能上报自己绑定会话的画布', async () => {
+  const { handlers, event, deps } = await fixture(true, { 7: 'bound' });
+  expect(await handlers.canvasPresence(event, { sessionId: 'other', open: true })).toMatchObject({
+    ok: false,
+    code: 'INVALID_ARGUMENT',
+  });
+  expect(deps.canvasCwds).not.toHaveBeenCalled();
+  expect(await handlers.canvasPresence(event, { sessionId: 'bound', open: true })).toEqual({
+    ok: true,
+  });
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith(['/projects/bound']);
+  expect(await handlers.canvasPresence(event, { sessionId: null, open: false })).toEqual({
+    ok: true,
+  });
+  expect(deps.canvasCwds).toHaveBeenLastCalledWith([]);
+});
+it('独立设计窗口只能访问自己绑定会话的根，画廊项目服务不开放', async () => {
+  const { handlers, event } = await fixture(true, { 7: 'bound' });
+  const resolve = vi
+    .spyOn(roots, 'resolveDesignRoot')
+    .mockImplementation(async (ref) => ({ ref, path: '/projects/x' }));
+  const other = [
+    { kind: 'session', sessionId: 'other' },
+    { kind: 'project', projectId: 'p' },
+  ];
+  for (const root of other) {
+    expect(await handlers.resolveRoot(event, root)).toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect(await handlers.fs(event, { op: 'readFile', root, rel: 'a.txt' })).toMatchObject({
+      code: 'PERMISSION_DENIED',
+    });
+    expect(await handlers.watch(event, { root, rel: 'a.vetd' })).toMatchObject({
+      code: 'PERMISSION_DENIED',
+    });
+    expect(await handlers.engine(event, { op: 'start', root, designRel: 'a.vetd' })).toMatchObject({
+      code: 'PERMISSION_DENIED',
+    });
+    expect(
+      await handlers.shell(event, { op: 'showItemInFolder', root, rel: 'a.vetd' })
+    ).toMatchObject({ code: 'PERMISSION_DENIED' });
+  }
+  expect(resolve).not.toHaveBeenCalled();
+  expect(await handlers.projects(event, { op: 'list' })).toMatchObject({
+    code: 'PERMISSION_DENIED',
+  });
+  const own = { kind: 'session', sessionId: 'bound' };
+  expect(await handlers.resolveRoot(event, own)).toMatchObject({ ok: true });
+  expect(resolve).toHaveBeenCalledWith(own);
 });

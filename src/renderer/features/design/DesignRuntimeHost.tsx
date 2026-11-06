@@ -5,9 +5,12 @@ import { useSettingsStore } from '@/stores/settings';
 import { viewedDesignSessionId } from './host/activity-route';
 import { emitDesignConversation, syncDesignConversationActivity } from './host/context';
 import { useDesignLocale } from './host/locale';
+import { createMainDesignHost } from './host/main-host';
 import { createDesignToolActivity } from './host/tool-activity';
 import { setDesignViewingSession } from './runtime';
 import './vetta/src/style.css';
+
+const mainHost = createMainDesignHost();
 
 /** The runtime stays alive independently of canvas mounts. */
 export function DesignRuntimeHost() {
@@ -21,7 +24,10 @@ export function DesignRuntimeHost() {
     botMode ? null : viewedDesignSessionId(state.conversations, state.activeId)
   );
   useEffect(() => {
-    void setDesignViewingSession(viewingSessionId).catch((error) =>
+    const streaming = viewingSessionId
+      ? useSessionsStore.getState().conversations[viewingSessionId]?.status === 'running'
+      : false;
+    void setDesignViewingSession(viewingSessionId, mainHost, streaming).catch((error) =>
       console.warn('[design] runtime unavailable', error)
     );
   }, [viewingSessionId]);

@@ -10,6 +10,7 @@ import type {
 import { DockviewReact, themeDark, themeLight } from 'dockview-react';
 import { motion } from 'framer-motion';
 import {
+  AppWindow,
   Bot,
   FolderOpen,
   GitCompare,
@@ -35,6 +36,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { viewedDesignSessionId } from '@/features/design/host/activity-route';
 import { useDesignRegistry } from '@/features/design/host/registry';
 import { DesignPanel } from '@/features/design/mounts/DesignPanel';
+import { useOpenDesignWindow } from '@/features/design/mounts/DesignWindowControls';
 import { useDesignCwd } from '@/features/design/mounts/useDesignCwd';
 import { CANVAS_TAB_ID } from '@/features/design/vetta/src/tab-ids';
 import { useI18n } from '@/i18n';
@@ -271,6 +273,32 @@ function useDesignAvailable(conversationId?: string, sessionId = conversationId)
   return Boolean(cwd && (available || attached));
 }
 
+/** 设计 tab 上的「在新窗口打开画布」：多个项目各占一个画布，互不排队。 */
+function DesignPopOutButton({ active, sessionId }: { active: boolean; sessionId?: string }) {
+  const { t } = useI18n();
+  const open = useOpenDesignWindow();
+  if (!sessionId) return null;
+  return (
+    <button
+      type="button"
+      data-slot="design-pop-out"
+      className={cn(
+        'flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-control hover:text-foreground focus-visible:opacity-100',
+        !active && 'opacity-0 group-hover/tab:opacity-100'
+      )}
+      aria-label={t('Open canvas in new window')}
+      title={t('Open canvas in new window')}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        open(sessionId);
+      }}
+    >
+      <AppWindow className="h-3 w-3" />
+    </button>
+  );
+}
+
 function addWorkflowPanel(
   api: DockviewApi,
   conversationId: string | undefined,
@@ -345,6 +373,7 @@ function PluginViewPanel(
 /** 与 CoworkerTabs 同款 chip:圆角、bg-muted 激活、hover 出关闭 */
 function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null }>) {
   const { t } = useI18n();
+  const { conversationId, designSessionId } = useContext(PanelContext);
   const [active, setActive] = useState(props.api.isActive);
   const [title, setTitle] = useState(props.api.title ?? '');
   const [favicon, setFavicon] = useState<string | null>(props.params.favicon ?? null);
@@ -401,6 +430,16 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <SquareTerminal className="h-3 w-3 shrink-0" />
       )}
       <span className="max-w-32 truncate">{props.api.id === 'design' ? t('Design') : title}</span>
+      {props.api.id === 'design' && (
+        <DesignPopOutButton
+          active={active}
+          sessionId={
+            designSessionId ??
+            (props.params as { conversationId?: string }).conversationId ??
+            conversationId
+          }
+        />
+      )}
       <button
         type="button"
         className={cn(

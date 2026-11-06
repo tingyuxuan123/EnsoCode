@@ -47,6 +47,11 @@ interface Runtime {
   viewingSessionId: string | null;
   /** 最近一次登记的顺序号；同条件多个窗口时取最新。 */
   order: number;
+  /**
+   * 独立设计窗口：由 Main 按窗口绑定的会话登记，只服务那一个会话。
+   * 它优先于正在看同一会话的主窗口，且绝不作为其它会话的兜底。
+   */
+  dedicated: boolean;
 }
 
 /** 单次工具结果的总量上限（图片 base64 计入）。 */
@@ -54,7 +59,8 @@ const MAX_RESULT_CHARS = 32 * 1024 * 1024;
 
 /**
  * worker 的 vetd_* 工具调用经 Main 转给 Renderer 设计运行时执行（设计稿 D1）。
- * 路由：正在看该会话的窗口 → 主窗口 → 最近登记的窗口。只认被询问窗口的回复。
+ * 路由：绑定该会话的独立设计窗口 → 正在看该会话的窗口 → 主窗口 → 最近登记的普通窗口。
+ * 只认被询问窗口的回复。
  */
 export class DesignToolBroker {
   private readonly runtimes = new Map<number, Runtime>();
@@ -72,10 +78,11 @@ export class DesignToolBroker {
     return this.pending.size;
   }
 
-  register(senderId: number, registration: DesignRuntimeRegistration): void {
+  register(senderId: number, registration: DesignRuntimeRegistration, dedicated = false): void {
     this.runtimes.set(senderId, {
       viewingSessionId: registration.viewingSessionId,
       order: ++this.order,
+      dedicated,
     });
   }
 
@@ -206,10 +213,14 @@ export class DesignToolBroker {
     const newest = (list: Array<[DesignRuntimeSink, Runtime]>) =>
       list.reduce((a, b) => (b[1].order > a[1].order ? b : a))[0];
     const viewing = sessionId ? live.filter(([, r]) => r.viewingSessionId === sessionId) : [];
+    const dedicated = viewing.filter(([, r]) => r.dedicated);
+    if (dedicated.length) return newest(dedicated);
     if (viewing.length) return newest(viewing);
+    const shared = live.filter(([, r]) => !r.dedicated);
+    if (shared.length === 0) return null;
     const fallbackId = this.deps.fallbackId();
-    const fallback = live.find(([target]) => target.id === fallbackId);
-    return fallback ? fallback[0] : newest(live);
+    const fallback = shared.find(([target]) => target.id === fallbackId);
+    return fallback ? fallback[0] : newest(shared);
   }
 }
 

@@ -550,6 +550,18 @@ export function pluginProjectRoot(sessionId: string): string | null {
   return authoritativeSpawnCwd(sessionId);
 }
 
+/**
+ * 独立设计窗口的绑定目标：子会话 tab 归到根会话；只接受设计功能开启时本机、
+ * 非 Bot、未结束的会话。与 design-invoke 一样按根会话路由工具调用。
+ */
+export function designWindowSessionId(sessionId: string): string | null {
+  if (readSettingsState()?.designEnabled === false) return null;
+  const rootId = agentSessionIndex.workspaceRoot(sessionId);
+  const conversation = sourceAuthority?.conversation(rootId);
+  if (!conversation || conversation.bot || conversation.lifecycle === 'ended') return null;
+  return pluginProjectRoot(rootId) ? rootId : null;
+}
+
 /** 旁路会话继承父会话工作区；路径由 Main 从权威记录推导，不采信 renderer。 */
 export function resolveConversationWorkspace(conversationId: string): {
   cwd: string;

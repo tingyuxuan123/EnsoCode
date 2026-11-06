@@ -51,7 +51,11 @@ vi.mock('./composer', () => ({
 import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
 import { createDesignContext, emitDesignConversation } from './context';
 import { captureDesign, startEngine } from './engine';
+import { createMainDesignHost } from './main-host';
 import { designPaths } from './paths';
+import { useDesignRegistry } from './registry';
+
+const mainContext = () => createDesignContext(createMainDesignHost());
 
 afterEach(() => {
   mode.bot = false;
@@ -67,7 +71,7 @@ it('rejects Bot canvas prompts, insertions and attachments instead of falling ba
     type: 'conversation-changed',
     conversation: { id: 'b', cwd: '/b', sessionPath: null, model: null, isStreaming: false },
   });
-  const ctx = createDesignContext();
+  const ctx = mainContext();
   expect(() => ctx.conversation.insertText('do not send')).toThrow('No matching design composer');
   expect(() => ctx.ui.setPromptAttachment(null)).toThrow('No matching design composer');
   await expect(ctx.conversation.sendPrompt('do not send')).rejects.toThrow(
@@ -78,16 +82,17 @@ it('rejects Bot canvas prompts, insertions and attachments instead of falling ba
 });
 it('gallery session navigation candidates are newest first, rather than object insertion order', async () => {
   settings.projects[1].path = '/a';
-  expect(
-    (await createDesignContext().official.sessions.list('/a')).map((item) => item.path)
-  ).toEqual(['b.jsonl', 'a.jsonl']);
+  expect((await mainContext().official.sessions.list('/a')).map((item) => item.path)).toEqual([
+    'b.jsonl',
+    'a.jsonl',
+  ]);
 });
 it('gallery navigation never treats a coworker as a root conversation', async () => {
   settings.projects[1].path = '/a';
   sessions.conversations.b.parentId = 'a';
-  expect(
-    (await createDesignContext().official.sessions.list('/a')).map((item) => item.path)
-  ).toEqual(['a.jsonl']);
+  expect((await mainContext().official.sessions.list('/a')).map((item) => item.path)).toEqual([
+    'a.jsonl',
+  ]);
 });
 it('opens the viewed session using its authoritative cwd even when the stored cwd is an alias', () => {
   sessions.conversations.b.worktree = { path: '/tmp/b' };
@@ -101,7 +106,7 @@ it('opens the viewed session using its authoritative cwd even when the stored cw
       isStreaming: false,
     },
   });
-  createDesignContext().ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/private/tmp/b' });
+  mainContext().ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/private/tmp/b' });
   expect(reveal).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'b' }));
   expect(sessions.selectConversation).not.toHaveBeenCalled();
 });
@@ -110,7 +115,7 @@ it('a late background open cannot steal the canvas before the viewing effect cat
     type: 'conversation-changed',
     conversation: { id: 'a', cwd: '/a', sessionPath: null, model: null, isStreaming: false },
   });
-  createDesignContext().ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/a' });
+  mainContext().ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/a' });
   expect(sessions.selectConversation).not.toHaveBeenCalled();
   expect(reveal).not.toHaveBeenCalled();
 });
@@ -218,4 +223,30 @@ it('maps an interaction preview URL to an engine id and route without widening e
   await handle.stop();
   await expect(ui.openExternal('http://127.0.0.1:5312/')).rejects.toThrow();
   expect(shell).toHaveBeenCalledTimes(2);
+});
+it('a design-window host only forwards prompts; main-window-only APIs fail without touching sessions', async () => {
+  emitDesignConversation({
+    type: 'conversation-changed',
+    conversation: { id: 'b', cwd: '/b', sessionPath: null, model: null, isStreaming: false },
+  });
+  const sendPrompt = vi.fn(async () => ({ status: 'sent' as const }));
+  const ctx = createDesignContext({ conversation: { sendPrompt } });
+  const canvas = { sessionId: 'b', cwd: '/b', skipIfStreaming: true };
+  await expect(ctx.conversation.sendPrompt('handle notes', canvas)).resolves.toEqual({
+    status: 'sent',
+  });
+  expect(sendPrompt).toHaveBeenCalledWith('handle notes', canvas);
+  expect(() => ctx.conversation.insertText('x')).toThrow(/not supported/);
+  expect(() => ctx.conversation.createSession('/b')).toThrow(/not supported/);
+  expect(() => ctx.ui.setPromptAttachment(null)).toThrow(/not supported/);
+  expect(() => ctx.official.sessions.list('/b')).toThrow(/not supported/);
+  ctx.ui.openActivityTab(CANVAS_TAB_ID, { cwd: '/b' });
+  ctx.ui.setActivityTabVisible(CANVAS_TAB_ID, true, { cwd: '/b' });
+  ctx.ui.setActivityPanelWidth('max');
+  expect(useDesignRegistry.getState().ui[`activity:/b:${CANVAS_TAB_ID}`]).toMatchObject({
+    open: true,
+  });
+  expect(useDesignRegistry.getState().ui[`visible:/b:${CANVAS_TAB_ID}`]).toBe(true);
+  expect(sessions.selectConversation).not.toHaveBeenCalled();
+  expect(reveal).not.toHaveBeenCalled();
 });

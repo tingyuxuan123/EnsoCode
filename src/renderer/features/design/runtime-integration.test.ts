@@ -38,16 +38,16 @@ it('a failed runtime registration is retried on the next session change without 
     .mockResolvedValueOnce({ ok: false, error: 'not ready', code: 'FAILED' })
     .mockResolvedValue({ ok: true });
   const subscriptions = stubDesignApi(registerRuntime);
-  await expect(setDesignViewingSession('s1')).rejects.toThrow('not ready');
-  await expect(setDesignViewingSession('s2')).resolves.toBeUndefined();
+  await expect(setDesignViewingSession('s1', {}, false)).rejects.toThrow('not ready');
+  await expect(setDesignViewingSession('s2', {}, false)).resolves.toBeUndefined();
   expect(registerRuntime).toHaveBeenLastCalledWith({ viewingSessionId: 's2' });
-  await startDesignRuntime();
+  await startDesignRuntime({});
   expect(subscriptions.tool).toBe(1);
 });
 
 it('worker-side vetd_* schemas match what the upstream runtime registers (drift guard)', async () => {
   stubDesignApi(async () => ({ ok: true }));
-  await startDesignRuntime();
+  await startDesignRuntime({});
   const registered = new Map(
     listRegisteredDesignTools().map((tool) => [tool.name, JSON.parse(JSON.stringify(tool))])
   );

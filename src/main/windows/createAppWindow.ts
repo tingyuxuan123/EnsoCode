@@ -128,7 +128,7 @@ function attachWebContentsHandlers(win: BrowserWindow, contents: WebContents, en
   });
 
   installPluginViewNavigationGuard(contents);
-  if (entry === 'index')
+  if (entry === 'index' || entry === 'design')
     installDesignNavigationGuard(
       contents,
       () => new Set([...runningDesignEnginePorts(contents.id), ...designPreviewPorts(contents.id)])

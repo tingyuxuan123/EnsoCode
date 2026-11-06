@@ -167,4 +167,46 @@ describe('DesignToolBroker', () => {
     expect(a.sent.length + b.sent.length).toBe(1);
     expect([...a.sent, ...b.sent][0].channel).toBe(IPC_CHANNELS.DESIGN_HOOK);
   });
+
+  describe('dedicated design windows', () => {
+    it('win over a main window viewing the same session, regardless of registration order', () => {
+      const { broker, add } = setup(7);
+      const main = add(7);
+      const dedicated = add(9);
+      broker.register(9, { viewingSessionId: 's1' }, true);
+      // The main window re-registers on every session switch and becomes "newest".
+      broker.register(7, { viewingSessionId: 's1' });
+      void broker.request(base).catch(() => {});
+      expect(main.sent).toHaveLength(0);
+      expect(dedicated.sent[0]?.channel).toBe(IPC_CHANNELS.DESIGN_TOOL_REQUEST);
+      expect(broker.emitHook({ event: 'stop', sessionId: 's1', cwd: '/work/p' })).toBe(true);
+      expect(dedicated.sent.at(-1)?.channel).toBe(IPC_CHANNELS.DESIGN_HOOK);
+      expect(main.sent).toHaveLength(0);
+    });
+
+    it('never receive calls for other sessions, even as the only or newest runtime', async () => {
+      const { broker, add } = setup(null);
+      const dedicated = add(9);
+      broker.register(9, { viewingSessionId: 'other' }, true);
+      await expect(broker.request(base)).rejects.toMatchObject({ code: 'NO_RUNTIME' });
+      expect(broker.emitHook({ event: 'stop', sessionId: 's1', cwd: '/work/p' })).toBe(false);
+      const main = add(3);
+      broker.register(3, { viewingSessionId: null });
+      broker.register(9, { viewingSessionId: 'other' }, true);
+      void broker.request(base).catch(() => {});
+      expect(main.sent).toHaveLength(1);
+      expect(dedicated.sent).toHaveLength(0);
+    });
+
+    it('lets the session fall back to the main window once its window closes', () => {
+      const { broker, add } = setup(7);
+      const main = add(7);
+      add(9);
+      broker.register(7, { viewingSessionId: null });
+      broker.register(9, { viewingSessionId: 's1' }, true);
+      broker.releaseOwner(9);
+      void broker.request(base).catch(() => {});
+      expect(main.sent).toHaveLength(1);
+    });
+  });
 });

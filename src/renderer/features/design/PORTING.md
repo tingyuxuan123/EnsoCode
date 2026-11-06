@@ -119,6 +119,28 @@ create 成功须等精确新设计 controller 就绪；若已创建但未打开�
 可能失败。上游 getter 按 cwd 再次过滤，覆盖 handler 内 await 后重新读取的竞态；已发出
 的文件/引擎 IPC 仍不能撤销。回归见 `runtime-canvas.test.ts`。
 
+### 独立设计窗口（多项目并行，2026-11-06）
+
+单例 controller、画布租约和 `assertViewing` 都是 renderer 模块级状态，所以“多项目同时用
+画布”按**多窗口**实现，而不是在一个窗口里放多个 controller：设计 tab 上的“在新窗口打开画布”
+把该根会话的画布弹到 `design.html`（`src/renderer/design-window.tsx`），每个窗口各有一份
+controller / 租约 / 引擎。Main 记录窗口绑定的会话，broker 把该会话的 `vetd_*` 与 hooks 只投给
+它；主窗口里同会话的 Dock 改为占位，不再挂第二个 controller。
+
+- `createDesignContext(host?)` 的窗口相关能力由 `DesignContextHost` 注入：主窗口用
+  `host/main-host.ts`（会话选择、侧栏、Composer、画廊）；设计窗口只转发 `sendPrompt`，
+  `insertText` / `createSession` / `setPromptAttachment` / `official.sessions|navigation`
+  显式报不支持。设计窗口不得导入 sessions / sidePanel store，见
+  `docs/engineering-reference/big-question/persisted-store-second-window.md`。
+- 运行状态与工具活动（“修改中 / 已更新”、备注派活的忙碌闸门）只存在于主窗口的会话投影，
+  由 `DesignWindowRelay` 经 Main 推给设计窗口；只跟踪根会话的消息，designer 子会话的读写
+  不点亮帧。备注派活经 Main 交给主窗口的 `deliverDesignPrompt`，与主窗口画布同一路径。
+- 首版不支持：SSH 项目、Bot 会话、同一项目多个根会话共用一个设计窗口（只按会话 id 绑定）。
+- 真机（隔离 CDP 9333 + 顺序 fake provider）：A 主窗口 / B 独立窗口并行 create → apply_patch
+  写帧 → screenshot 都成功，主窗口 activeId 全程不变；关闭设计窗口后 B 回落到主窗口的原有
+  “请切回会话”提示。写帧后立即截图偶发 “not on the canvas yet”（可重试，重试成功），
+  属既有对账时序，主窗口同样可能出现。未做两厂商真实模型验证：本次未改工具 schema 与提示词。
+
 隔离假 provider 对照（2026-11-03，HEAD `4a3ae51b` 与修复版）：同一响应并列两个
 codemode，第二个均受本轮初始工具表限制；不能当作真实模型“收到结果后的下一响应”。
 临时 provider 每收到 tool_result 才发下一 codemode，权威 child 历史确认两个独立

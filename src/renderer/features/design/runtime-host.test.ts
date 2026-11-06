@@ -39,7 +39,7 @@ it('activates upstream headlessly, registers all tools and replies through desig
       respondTool,
     },
   });
-  await startDesignRuntime();
+  await startDesignRuntime({});
   expect(
     listRegisteredDesignTools()
       .map((tool) => tool.name)
@@ -63,7 +63,7 @@ it('activates upstream headlessly, registers all tools and replies through desig
     useDesignRegistry.getState().contributions.some((item) => item.kind === 'activity-tab')
   ).toBe(true);
   // DesignRuntimeHost always reports the viewed session on mount (null included).
-  await setDesignViewingSession(null);
+  await setDesignViewingSession(null, {}, false);
   expect(registerRuntime).toHaveBeenCalledWith({ viewingSessionId: null });
   invoke?.({
     requestId: 'sizes',

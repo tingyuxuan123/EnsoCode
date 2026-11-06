@@ -347,3 +347,55 @@ export interface DesignCanvasPresence {
   sessionId: string | null;
   open: boolean;
 }
+
+/**
+ * 独立设计窗口：把某个本地会话的画布弹到单独窗口，让多个项目同时使用画布。
+ * 窗口绑定的会话由 Main 记录，Renderer 只能查询，不能自报。
+ */
+export type DesignWindowResult = { ok: true } | { ok: false; error: string };
+
+export type DesignWindowInfo =
+  | { ok: true; sessionId: string; streaming: boolean }
+  | { ok: false; error: string };
+
+/** 主窗口按会话投影算出的画布活动（与 vetta ConversationEvent 的两类工具事件同形）。 */
+export type DesignWindowActivityEvent =
+  | {
+      type: 'tool-call-args';
+      toolCallId: string;
+      toolName: 'read' | 'edit' | 'write';
+      args: { path: string };
+    }
+  | {
+      type: 'tool-call-end';
+      toolCallId: string;
+      toolName: 'read' | 'edit' | 'write';
+      isError: boolean;
+    };
+
+/** 主窗口 → Main → 独立设计窗口：运行状态与工具活动。 */
+export interface DesignWindowState {
+  sessionId: string;
+  streaming: boolean;
+  events: DesignWindowActivityEvent[];
+}
+
+/** 独立设计窗口发起的派活；会话由 Main 按窗口绑定补全。 */
+export interface DesignWindowPromptInput {
+  text: string;
+  skipIfStreaming?: boolean;
+}
+
+export interface DesignWindowPromptRequest {
+  requestId: string;
+  sessionId: string;
+  text: string;
+  skipIfStreaming: boolean;
+}
+
+export interface DesignWindowPromptResult {
+  status: 'sent' | 'queued' | 'failed';
+  error?: string;
+}
+
+export type DesignWindowPromptResponse = DesignWindowPromptResult & { requestId: string };

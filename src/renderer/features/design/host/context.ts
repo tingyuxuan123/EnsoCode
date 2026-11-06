@@ -1,25 +1,10 @@
-import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import type { DesignResult, DesignRootRef } from '@shared/types/design';
 import { addToast } from '@/components/ui/toast';
-import { addSidePanelDesign, setSidePanelDesignVisible } from '@/lib/sidePanelDock';
-import { isBotModeActive, showLocalCodeView } from '@/stores/bots/mode';
-import { readMaterializedProviders } from '@/stores/modelDirectory/useProviders';
-import { oauthCredentialContext, useOauthCredentialStore } from '@/stores/oauthCredentials';
-import { useSessionsStore } from '@/stores/sessions';
-import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
-import { useSidePanelStore } from '@/stores/sidePanel';
 import type { ConversationEvent, ConversationState } from '../vetta/sdk/conversation';
 import type { PluginFsApi } from '../vetta/sdk/fs';
 import type { PluginNetworkResponse } from '../vetta/sdk/network';
-import { CANVAS_TAB_ID, GALLERY_VIEW_ID } from '../vetta/src/tab-ids';
-import {
-  resolveDesignActivitySession,
-  resolveDesignPromptTarget,
-  viewedDesignSessionId,
-} from './activity-route';
-import { isDesignViewingCwd, setDesignViewingCwd } from './canvas-target';
-import { insertDesignComposerText, setDesignPromptAttachment } from './composer';
+import { setDesignViewingCwd } from './canvas-target';
 import { captureDesign, designEngineRoute, releaseDesignCapture } from './engine';
 import { designPaths, resolveDesignRoot } from './paths';
 import { createGalleryProject, listGalleryProjects, setGalleryProjectArchived } from './projects';
@@ -30,11 +15,9 @@ import {
   registerContribution,
   registerInMap,
   updateDesignUi,
-  useDesignRegistry,
 } from './registry';
 import { translate } from './translation';
 import type { PluginContext } from './types';
-import { closeDesignGallery, openDesignGallery } from './workspace-view';
 
 export function unsupported(api: string): never {
   throw new Error(`EnsoCode design host: ${api} is not supported in P1`);
@@ -83,33 +66,38 @@ export async function prepareDesignRoots(refs: DesignRootRef[]): Promise<void> {
   await Promise.all(refs.map(resolveDesignRoot));
 }
 
-export function createDesignContext(): PluginContext {
-  const activityTarget = (cwd?: string) => {
-    const state = useSessionsStore.getState();
-    const viewed = viewedDesignSessionId(state.conversations, state.activeId);
-    if (cwd === undefined) return viewed === currentConversation.id ? viewed : null;
-    // Main has already resolved the viewed session's root. Its stored worktree
-    // path can still be an alias (/tmp versus /private/tmp on macOS).
-    if (viewed === currentConversation.id && cwd === currentConversation.cwd) return viewed;
-    return resolveDesignActivitySession(
-      Object.keys(state.conversations).map((id) => ({
-        id,
-        cwd: designConversationCwd(id),
-      })),
-      viewed,
-      cwd
-    );
-  };
-  const promptTarget = () => {
-    // Bot canvases (including sessionless workspace previews) never own the hidden Code composer.
-    if (isBotModeActive()) return null;
-    const state = useSessionsStore.getState();
-    return resolveDesignPromptTarget(
-      viewedDesignSessionId(state.conversations, state.activeId),
-      useDesignRegistry.getState().canvasSessionId,
-      currentConversation.id
-    );
-  };
+/** 当前设计会话（conversation-changed 最近一次的快照）。 */
+export function currentDesignConversation(): ConversationState {
+  return currentConversation;
+}
+
+type HostUi = Pick<
+  PluginContext['ui'],
+  | 'openActivityTab'
+  | 'setActivityTabVisible'
+  | 'setActivityPanelWidth'
+  | 'openWorkspaceView'
+  | 'setPromptAttachment'
+>;
+type HostConversation = Pick<
+  PluginContext['conversation'],
+  'sendPrompt' | 'createSession' | 'insertText'
+>;
+
+/**
+ * 依赖具体窗口的 SDK 能力由宿主注入：主窗口用会话 / 侧栏 / Composer（main-host），
+ * 独立设计窗口只转发派活。本文件不得导入 sessions、sidePanel 等主窗口 store。
+ * 未提供的能力调用时显式报不支持。
+ */
+export interface DesignContextHost {
+  /** openActivityTab / setActivityPanelWidth 在核心登记状态之后调用；其余整体替换。 */
+  ui?: Partial<HostUi>;
+  conversation?: Partial<HostConversation>;
+  sessions?: Partial<PluginContext['official']['sessions']>;
+  navigation?: Partial<PluginContext['official']['navigation']>;
+}
+
+export function createDesignContext(host?: DesignContextHost): PluginContext {
   const fs: PluginFsApi = {
     async readDir(path) {
       const mapped = designPaths.map(path);
@@ -250,57 +238,20 @@ export function createDesignContext(): PluginContext {
         open: true,
         ...options,
       });
-      if (id !== CANVAS_TAB_ID) return;
-      // Explicit-cwd requests can arrive late from background/cancelled tools.
-      const state = useSessionsStore.getState();
-      const viewed = viewedDesignSessionId(state.conversations, state.activeId);
-      if (
-        options?.cwd &&
-        (!isDesignViewingCwd(options.cwd) || !viewed || currentConversation.id !== viewed)
-      )
-        return;
-      const target = activityTarget(options?.cwd);
-      if (!target) return;
-      const sessions = useSessionsStore.getState();
-      const parentId = sessions.conversations[target]?.parentId;
-      if (parentId) {
-        sessions.selectConversation(parentId);
-        sessions.selectTab(parentId, target);
-      } else if (sessions.activeId !== target) sessions.selectConversation(target);
-      updateDesignUi(`visible:${designConversationCwd(target)}:${id}`, true);
-      addSidePanelDesign({
-        conversationId: target,
-        title: translate('tab.label'),
-        width: options?.width,
-      });
+      host?.ui?.openActivityTab?.(id, options);
     },
-    setActivityTabVisible: (id, visible, options) => {
-      const target = activityTarget(options?.cwd);
-      updateDesignUi(
-        `visible:${target ? designConversationCwd(target) : (options?.cwd ?? currentConversation.cwd)}:${id}`,
-        visible
-      );
-      if (id === CANVAS_TAB_ID && target) setSidePanelDesignVisible(target, visible);
-    },
+    setActivityTabVisible:
+      host?.ui?.setActivityTabVisible ??
+      ((id, visible, options) =>
+        updateDesignUi(`visible:${options?.cwd ?? currentConversation.cwd}:${id}`, visible)),
     setActivityPanelWidth: (width) => {
       updateDesignUi('panelWidth', width);
-      const target = useSessionsStore.getState().activeId;
-      if (!target) return;
-      // 画布每次挂载都会要「max」：拉满面板，但不全屏盖住会话区
-      if (width === 'max') useSidePanelStore.getState().maximize(target);
-      else useSidePanelStore.getState().setWidth(target, width);
+      host?.ui?.setActivityPanelWidth?.(width);
     },
-    openWorkspaceView: (id) => {
-      if (id === GALLERY_VIEW_ID) openDesignGallery();
-      else throw new Error(`Unknown design workspace view: ${id}`);
-    },
+    ...(host?.ui?.openWorkspaceView ? { openWorkspaceView: host.ui.openWorkspaceView } : {}),
     setWorkspaceViewHeader: (id, header) => updateDesignUi(`header:${id}`, header),
     setWorkspaceViewBadge: (id, badge) => updateDesignUi(`badge:${id}`, badge),
-    setPromptAttachment: (attachment) => {
-      const id = promptTarget();
-      if (!id) throw new Error('No matching design composer');
-      setDesignPromptAttachment(id, attachment);
-    },
+    ...(host?.ui?.setPromptAttachment ? { setPromptAttachment: host.ui.setPromptAttachment } : {}),
     previewImage: (ref, group) => updateDesignUi('imagePreview', { ref, group }),
     previewFile: (file, group) => updateDesignUi('filePreview', { file, group }),
     notify: (options) => {
@@ -342,66 +293,18 @@ export function createDesignContext(): PluginContext {
         },
       };
     },
-    async sendPrompt(text, canvas) {
-      const state = useSessionsStore.getState();
-      const id = promptTarget();
-      if (!id) throw new Error('No active design conversation');
-      const session = state.conversations[id];
-      const cwd = designConversationCwd(id);
-      if (!session || !cwd) throw new Error('Design conversation workspace is unavailable');
-      if (
-        canvas &&
-        (canvas.sessionId !== id || (canvas.cwd !== cwd && canvas.cwd !== currentConversation.cwd))
-      ) {
-        throw new Error('The design canvas is no longer in the active conversation');
-      }
-      if (
-        canvas?.skipIfStreaming &&
-        (session.status === 'running' || session.spawning || session.compaction)
-      )
-        return { status: 'failed' };
-      const settings = useSettingsStore.getState();
-      const project = settings.projects.find((item) => item.id === session.projectId);
-      const model = resolveChatModel({
-        defaultModel: settings.defaultModel,
-        ...scopedDefaultModels(project, settings.projectGroups),
-        lastProviderId: session.lastProviderId,
-        lastModelId: session.lastModelId,
-        providers: readMaterializedProviders(),
-        credentials: oauthCredentialContext(useOauthCredentialStore.getState().snapshot),
-        virtualModels: settings.virtualModels,
-      });
-      if (model.source === 'none')
-        throw new Error('Design prompt requires an available session model');
-      const error = await useSessionsStore.getState().send(
-        text,
-        {
-          providerId: model.providerId,
-          modelId: model.modelId,
-          cwd,
-        },
-        undefined,
-        id
-      );
-      return error
-        ? { status: 'failed', error: { message: error } }
-        : { status: session.status === 'running' ? 'queued' : 'sent' };
-    },
-    async createSession(cwd) {
-      const project = useSettingsStore
-        .getState()
-        .projects.find((p) => p.path === cwd && p.kind !== 'ssh');
-      if (!project) throw new Error('Design session requires an existing local project');
-      const id = await useSessionsStore.getState().newConversation(project.id);
-      if (!id) throw new Error('Could not create design conversation');
-      await resolveDesignRoot({ kind: 'session', sessionId: id });
-      return { id, cwd, sessionPath: null, model: null, isStreaming: false };
-    },
-    insertText: (text) => {
-      const id = promptTarget();
-      if (!id) throw new Error('No matching design composer');
-      insertDesignComposerText(id, text);
-    },
+    sendPrompt: (text, canvas) =>
+      host?.conversation?.sendPrompt
+        ? host.conversation.sendPrompt(text, canvas)
+        : unsupported('conversation.sendPrompt'),
+    createSession: (cwd, options) =>
+      host?.conversation?.createSession
+        ? host.conversation.createSession(cwd, options)
+        : unsupported('conversation.createSession'),
+    insertText: (text) =>
+      host?.conversation?.insertText
+        ? host.conversation.insertText(text)
+        : unsupported('conversation.insertText'),
     async abort() {
       unsupported('conversation.abort');
     },
@@ -470,52 +373,7 @@ export function createDesignContext(): PluginContext {
         unarchive: (cwd) => setGalleryProjectArchived(cwd, false),
       }),
       sessions: subset<PluginContext['official']['sessions']>('official.sessions', {
-        async list(cwd) {
-          const state = useSessionsStore.getState();
-          return Object.values(state.conversations)
-            .filter(
-              (c) =>
-                !c.parentId &&
-                !c.btwParentId &&
-                !c.historyOnly &&
-                designConversationCwd(c.id) === cwd &&
-                c.sessionFile
-            )
-            .map((c) => ({
-              path: c.sessionFile!,
-              cwd,
-              modifiedAt: c.lastActiveAt ?? c.createdAt,
-              access: {
-                readHistory: true,
-                interactiveResume: c.status !== 'running',
-                rename: true,
-                delete: true,
-              },
-            }))
-            .sort((a, b) => b.modifiedAt - a.modifiedAt);
-        },
-        async listRunningCwds() {
-          return [
-            ...new Set(
-              Object.values(useSessionsStore.getState().conversations)
-                .filter((c) => c.status === 'running')
-                .map((c) => designConversationCwd(c.id))
-                .filter((cwd): cwd is string => Boolean(cwd))
-            ),
-          ];
-        },
-        async open(input) {
-          const state = useSessionsStore.getState();
-          const conversation = Object.values(state.conversations).find(
-            (c) => c.sessionFile === input.sessionPath && designConversationCwd(c.id) === input.cwd
-          );
-          if (!conversation) throw new Error('Design session not found');
-          if (conversation.parentId || conversation.btwParentId || conversation.historyOnly)
-            throw new Error('Gallery navigation requires a root conversation');
-          showLocalCodeView();
-          closeDesignGallery();
-          state.selectConversation(conversation.id);
-        },
+        ...host?.sessions,
       }),
       shell: {
         async showItemInFolder(path) {
@@ -523,34 +381,7 @@ export function createDesignContext(): PluginContext {
         },
       },
       navigation: subset<PluginContext['official']['navigation']>('official.navigation', {
-        async open(input) {
-          if (input.target !== 'new-session' || !input.cwd)
-            throw new Error('Unsupported design navigation target');
-          const project = useSettingsStore
-            .getState()
-            .projects.find((entry) => entry.kind !== 'ssh' && entry.path === input.cwd);
-          if (!project) throw new Error('Local design project not found');
-          await resolveDesignRoot({ kind: 'project', projectId: project.id });
-          showLocalCodeView();
-          closeDesignGallery();
-          const id = await useSessionsStore.getState().newConversation(project.id);
-          if (!id) throw new Error('Could not create design conversation');
-          // This is a user-initiated navigation, never an automatic send. Append to
-          // an existing empty session's local draft rather than discarding it.
-          if (input.draft)
-            useSessionsStore.setState((state) => {
-              const conversation = state.conversations[id];
-              if (!conversation) return state;
-              return {
-                conversations: {
-                  ...state.conversations,
-                  [id]: { ...conversation, draftText: input.draft, draftAppend: true },
-                },
-              };
-            });
-          updateDesignUi('navigation', { ...input, sessionId: id });
-          return input;
-        },
+        ...host?.navigation,
       }),
     }),
     i18n: {
@@ -569,13 +400,4 @@ export function createDesignContext(): PluginContext {
     getAgentMode: () => 'code',
     onAgentModeChanged: () => ({ dispose() {} }),
   };
-}
-
-export function designConversationCwd(id: string): string | undefined {
-  const state = useSessionsStore.getState();
-  const conversation = state.conversations[id];
-  const project = useSettingsStore
-    .getState()
-    .projects.find((p) => p.id === conversation?.projectId);
-  return sessionWorkspaceCwd(project, id, state.conversations);
 }

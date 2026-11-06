@@ -13,6 +13,7 @@ import { registerCompactionHandlers } from './compaction';
 import { registerComputerHandlers } from './computer';
 import { registerConfigSyncHandlers } from './configSync';
 import { registerDesignHandlers } from './design';
+import { registerDesignWindowHandlers } from './designWindow';
 import { registerExtensionPluginHandlers } from './extensionPlugins';
 import { registerFileHandlers } from './files';
 import { registerFilesWorkspaceHandlers } from './filesWorkspace';
@@ -57,6 +58,7 @@ export function registerIpcHandlers(): void {
   registerComputerHandlers();
   registerExtensionPluginHandlers();
   registerDesignHandlers();
+  registerDesignWindowHandlers();
   registerFileHandlers();
   registerFilesWorkspaceHandlers();
   registerGitHandlers();

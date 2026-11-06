@@ -23,6 +23,21 @@ input: {
 单例窗口的模式见 `SettingsWindow.ts`：模块级变量持有引用，已存在则 `restore()` + `focus()`，
 `closed` 事件里置空。
 
+### 独立设计窗口（按会话多实例）
+
+`DesignWindow.ts` 按根会话各开一个 `design` 入口窗口，可同时开多个，让不同项目的画布互不排队。
+要点：
+
+- 窗口绑定的会话只记在 Main（`designWindowSession(webContentsId)`），Renderer 只能经
+  `designWindow.info()` 查询；`registerRuntime` / `canvasPresence` 一律以绑定为准，不采信上报值。
+- `ipc/design.ts` 的 trusted 额外放行“设计窗口 + 顶层 frame + 停留在 design 入口”，导航守卫和
+  CSP 与主入口一致；主 frame 的 `will-navigate` / `will-redirect` 直接拒绝。
+- `DesignToolBroker` 把绑定窗口当专属运行时：同会话优先于主窗口，且绝不作为其它会话的兜底。
+- 第二个 renderer **不能导入持久化到 settings.json 的主窗口 store**（sessions、sidePanel），
+  否则会把旧快照写回、覆盖主窗口数据，见
+  [persisted-store-second-window](../big-question/persisted-store-second-window.md)。
+  会话状态由主窗口经 Main 推送（`DESIGN_WINDOW_PUSH_STATE`），派活经 Main 交回主窗口执行。
+
 ## 设计 iframe 的双层导航边界
 
 主入口 CSP 的 `frame-src` 只允许 `'self'`（既有插件 shell）和 `http://127.0.0.1:*`；

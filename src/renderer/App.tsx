@@ -42,6 +42,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { addToast, ToastProvider } from '@/components/ui/toast';
 import { DesignRuntimeHost } from '@/features/design/DesignRuntimeHost';
+import { DesignWindowRelay } from '@/features/design/DesignWindowRelay';
 import { useDesignRegistry } from '@/features/design/host/registry';
 import { useTranslation as useDesignTranslation } from '@/features/design/host/translation';
 import {
@@ -501,6 +502,7 @@ export default function App() {
     // 不能给外壳刷实底：浏览器 guest 沉到 workbench 之下时，这里任何不透明像素都会盖住挖孔
     <div className="relative isolate flex h-screen flex-col text-foreground">
       <DesignRuntimeHost />
+      <DesignWindowRelay />
       <DesignGlobalSlots />
       {/* 全局 toast 出口（addToast 依赖；不挂则静默失效） */}
       <ToastProvider />

@@ -29,6 +29,7 @@
 | [vendor-context-padding.md](vendor-context-padding.md) | Kimi 工具续轮报 text content is empty，但持久化历史没有空文本 |
 | [tool-prepare-arguments-schema-drift.md](tool-prepare-arguments-schema-drift.md) | 工具单测全绿，真机上模型每次调用都被判参数不合法 |
 | [design-canvas-session-scope.md](design-canvas-session-scope.md) | B 的设计工具读到 A 画布；create 已报 opened，controller 却仍未就绪 |
+| [persisted-store-second-window.md](persisted-store-second-window.md) | 独立设计窗口开着时，主窗口当前会话被悄悄改掉；第二个窗口的旧会话快照写回 settings.json |
 | [code-search-protocol-and-evidence.md](code-search-protocol-and-evidence.md) | 代码搜索反复耗尽预算或报坏 JSON，已命中代码也全部丢失 |
 | [hashline-stale-recovery.md](hashline-stale-recovery.md) | 文件远处变动使旧 TAG 失效；恢复必须证明上下文唯一且不改变行号坐标系 |
 | [session-before-compact-return-and-eviction-range.md](session-before-compact-return-and-eviction-range.md) | 持续记忆压缩：overflow 轮直接失败 / 走了原生摘要；memory#2 起静默丢旧史、split-turn 前缀无覆盖 |

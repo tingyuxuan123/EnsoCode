@@ -250,6 +250,13 @@ import type {
   DesignWatchEvent,
   DesignWatchRequest,
   DesignWatchResponse,
+  DesignWindowInfo,
+  DesignWindowPromptInput,
+  DesignWindowPromptRequest,
+  DesignWindowPromptResponse,
+  DesignWindowPromptResult,
+  DesignWindowResult,
+  DesignWindowState,
 } from '@shared/types/design';
 import type { SessionChangeSnapshots } from '@shared/types/fileChanges';
 import type {
@@ -1778,6 +1785,30 @@ const electronAPI = {
     /** 画布挂载/卸载或切换会话时上报；Main 推导 cwd 并更新 worker 的工具门控。 */
     reportCanvas: (presence: DesignCanvasPresence): Promise<DesignResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.DESIGN_CANVAS_PRESENCE, presence),
+  },
+  /** 独立设计窗口：按会话弹出画布。绑定会话由 Main 记录，Renderer 不能自报。 */
+  designWindow: {
+    /** 主窗口：为该会话（子会话 tab 归到根会话）打开或聚焦独立设计窗口。 */
+    open: (sessionId: string): Promise<DesignWindowResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WINDOW_OPEN, sessionId),
+    /** 主窗口：已弹出的根会话 id。 */
+    list: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WINDOW_LIST),
+    onChanged: (callback: (sessions: string[]) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_WINDOWS_CHANGED, callback),
+    /** 主窗口：把弹出会话的运行状态与工具活动推给它的设计窗口。 */
+    pushState: (state: DesignWindowState): Promise<DesignWindowResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WINDOW_PUSH_STATE, state),
+    onPromptRequest: (callback: (request: DesignWindowPromptRequest) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_WINDOW_PROMPT_REQUEST, callback),
+    respondPrompt: (response: DesignWindowPromptResponse): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WINDOW_PROMPT_RESPONSE, response),
+    /** 设计窗口：自己绑定的会话与最近的运行状态。 */
+    info: (): Promise<DesignWindowInfo> => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WINDOW_INFO),
+    onState: (callback: (state: DesignWindowState) => void): (() => void) =>
+      subscribeDesign(IPC_CHANNELS.DESIGN_WINDOW_STATE, callback),
+    /** 设计窗口：把派活交给主窗口，按绑定会话发送。 */
+    prompt: (input: DesignWindowPromptInput): Promise<DesignWindowPromptResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DESIGN_WINDOW_PROMPT, input),
   },
 };
 

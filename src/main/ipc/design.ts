@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { toDesignSdkPath } from '@shared/design/paths';
-import type { DesignCanvasPresence, DesignResult } from '@shared/types/design';
+import type { DesignCanvasPresence, DesignResult, DesignRootRef } from '@shared/types/design';
 import { IPC_CHANNELS } from '@shared/types/ipc';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { setDesignCanvasCwds } from '../services/agentHost';
@@ -38,6 +38,7 @@ import { checkedPath } from '../services/design/security';
 import { DesignStorage } from '../services/design/storage';
 import { DesignWatchService } from '../services/design/watch';
 import { getWindowWebContents, sendToWindow } from '../windows/createAppWindow';
+import { designWindowSession } from '../windows/DesignWindow';
 import { getMainWindow } from '../windows/MainWindow';
 import { isTrustedPluginSender } from './extensionPlugins';
 
@@ -68,6 +69,8 @@ export function createDesignHandlers(deps: {
   storage: DesignStorage;
   projectRoot(sessionId: string): string | null | Promise<string | null>;
   canvasCwds(cwds: string[]): void;
+  /** 独立设计窗口绑定的根会话（Main 权威）；主窗口等其它 sender 返回 null。 */
+  dedicatedSession(senderId: number): string | null;
   projects?: DesignProjectsService;
   preview?: DesignPreviewService;
 }) {
@@ -115,10 +118,25 @@ export function createDesignHandlers(deps: {
         return failure(error);
       }
     };
+  /** 独立设计窗口只服务绑定会话：其它会话 / 项目的根一律拒绝（纵深防御，不依赖 Renderer 自律）。 */
+  const scope = (event: SenderEvent, root: DesignRootRef) => {
+    const bound = deps.dedicatedSession(event.sender.id);
+    if (bound && (root.kind !== 'session' || root.sessionId !== bound))
+      throw new DesignServiceError(
+        'PERMISSION_DENIED',
+        'A design window can only access its own session workspace'
+      );
+  };
+  const mainOnly = (event: SenderEvent) => {
+    if (deps.dedicatedSession(event.sender.id))
+      throw new DesignServiceError('PERMISSION_DENIED', 'Not available in a design window');
+  };
   return {
     canvasPresence: guard(async (event, raw) => {
       const request = parseCanvasPresence(raw);
       if (!request) return invalid();
+      const bound = deps.dedicatedSession(event.sender.id);
+      if (bound && request.sessionId !== null && request.sessionId !== bound) return invalid();
       const entry: DesignCanvasPresence & { cwd?: string } = { ...request };
       canvases.set(event.sender.id, entry);
       if (entry.open && entry.sessionId) {
@@ -133,12 +151,15 @@ export function createDesignHandlers(deps: {
     resolveRoot: guard(async (_event, raw) => {
       const ref = parseRoot(raw);
       if (!ref) return invalid();
+      scope(_event, ref);
       const root = await resolveDesignRoot(ref);
       return { ok: true, root: { ...root, path: toDesignSdkPath(root.path) } };
     }),
     fs: guard(async (_event, raw) => {
       const request = parseFs(raw);
-      return request ? designFs(request) : invalid();
+      if (!request) return invalid();
+      scope(_event, request.root);
+      return designFs(request);
     }),
     saveAs: guard(async (event, raw) => {
       const request = parseSaveAs(raw);
@@ -151,6 +172,7 @@ export function createDesignHandlers(deps: {
       return request && owner ? designOpenFiles(owner, request) : invalid();
     }),
     projects: guard(async (_event, raw) => {
+      mainOnly(_event);
       const request = parseProjects(raw);
       return request && deps.projects ? deps.projects.request(request) : invalid();
     }),
@@ -160,7 +182,9 @@ export function createDesignHandlers(deps: {
     }),
     watch: guard(async (event, raw) => {
       const request = parseWatch(raw);
-      return request ? deps.watch.start(event.sender.id, request) : invalid();
+      if (!request) return invalid();
+      scope(event, request.root);
+      return deps.watch.start(event.sender.id, request);
     }),
     unwatch: guard(async (event, raw) => {
       if (!token(raw)) return invalid();
@@ -169,7 +193,9 @@ export function createDesignHandlers(deps: {
     }),
     engine: guard(async (event, raw) => {
       const request = parseEngine(raw);
-      return request ? deps.engine.request(event.sender.id, request) : invalid();
+      if (!request) return invalid();
+      if ('root' in request) scope(event, request.root);
+      return deps.engine.request(event.sender.id, request);
     }),
     capture: guard(async (event, raw) => {
       const request = parseCapture(raw);
@@ -177,7 +203,9 @@ export function createDesignHandlers(deps: {
     }),
     script: guard(async (event, raw) => {
       const request = parseScript(raw);
-      return request ? deps.scripts.request(event.sender.id, request) : invalid();
+      if (!request) return invalid();
+      scope(event, request.root);
+      return deps.scripts.request(event.sender.id, request);
     }),
     storage: guard(async (_event, raw) => {
       const request = parseStorage(raw);
@@ -207,6 +235,7 @@ export function createDesignHandlers(deps: {
           );
         await shell.openExternal(url.href);
       } else {
+        scope(event, request.root);
         const root = await resolveDesignRoot(request.root);
         shell.showItemInFolder(await checkedPath(root.path, request.rel));
       }
@@ -215,7 +244,13 @@ export function createDesignHandlers(deps: {
     registerRuntime: guard(async (event, raw) => {
       const request = parseRegistration(raw);
       if (!request) return invalid();
-      getDesignToolBroker().register(event.sender.id, request);
+      // 独立设计窗口只服务 Main 绑定的会话：不采信 Renderer 上报的 viewingSessionId。
+      const bound = deps.dedicatedSession(event.sender.id);
+      getDesignToolBroker().register(
+        event.sender.id,
+        bound ? { viewingSessionId: bound } : request,
+        Boolean(bound)
+      );
       return { ok: true };
     }),
     toolResponse: guard(async (event, raw) =>
@@ -227,22 +262,37 @@ export function createDesignHandlers(deps: {
 export function registerDesignHandlers(): void {
   // This is eager even though design handlers/services are lazy: clean previous crashes on startup.
   new EnginePidRegistry(getDesignPaths().engineBase).cleanup();
-  const expected =
+  const entryUrl = (entry: string) =>
     !app.isPackaged && process.env.ELECTRON_RENDERER_URL
-      ? `${process.env.ELECTRON_RENDERER_URL}/index.html`
-      : pathToFileURL(join(import.meta.dirname, '../renderer/index.html')).href;
+      ? `${process.env.ELECTRON_RENDERER_URL}/${entry}.html`
+      : pathToFileURL(join(import.meta.dirname, `../renderer/${entry}.html`)).href;
+  const expected = entryUrl('index');
+  const expectedDesign = entryUrl('design');
   const owner = (id: number) =>
     BrowserWindow.getAllWindows().find(
       (win) => !win.isDestroyed() && getWindowWebContents(win).id === id
     ) ?? null;
   const trusted = (event: SenderEvent) => {
     const main = getMainWindow();
-    return isTrustedPluginSender(event, {
-      mainId: main && !main.isDestroyed() ? getWindowWebContents(main).id : null,
-      settingsId: null,
-      mainUrl: expected,
-      settingsUrl: '',
-    });
+    if (
+      isTrustedPluginSender(event, {
+        mainId: main && !main.isDestroyed() ? getWindowWebContents(main).id : null,
+        settingsId: null,
+        mainUrl: expected,
+        settingsUrl: '',
+      })
+    )
+      return true;
+    // 独立设计窗口：同样要求顶层 frame 且停留在应用自己的 design 入口。
+    return (
+      designWindowSession(event.sender.id) !== null &&
+      isTrustedPluginSender(event, {
+        mainId: event.sender.id,
+        settingsId: null,
+        mainUrl: expectedDesign,
+        settingsUrl: '',
+      })
+    );
   };
   const send = (id: number, channel: string, event: unknown) => {
     const win = owner(id);
@@ -278,6 +328,7 @@ export function registerDesignHandlers(): void {
       preview,
       projectRoot: async (sessionId) => (await import('./agent')).pluginProjectRoot(sessionId),
       canvasCwds: setDesignCanvasCwds,
+      dedicatedSession: designWindowSession,
     });
     dispose = () => {
       getDesignToolBroker().dispose();

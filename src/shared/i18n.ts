@@ -3297,6 +3297,13 @@ export const zhTranslations: Record<string, string> = {
   Unnamed: '未命名',
   'Group settings and member personas only. Memory, sessions, timeline, tasks, routines, models, skills and MCP are not included.':
     '只含群配置和成员人设，不含记忆、会话、时间线、看板、例行任务、模型、技能和 MCP。',
+  'Open canvas in new window': '在新窗口打开画布',
+  'This canvas is open in a separate window.': '画布已在独立窗口中打开',
+  'Design requests from this session go to that window, so other projects can use the canvas at the same time.':
+    '这个会话的设计请求都会发到那个窗口，其他项目可以同时使用画布。',
+  'Show window': '切到该窗口',
+  'Could not open design window': '无法打开设计窗口',
+  'This design window is no longer available.': '这个设计窗口已不可用。',
 };
 
 export function normalizeLocale(input?: string): Locale {
