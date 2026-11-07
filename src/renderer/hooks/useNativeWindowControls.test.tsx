@@ -3,7 +3,14 @@
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
+import {
+  acquireNativeCaptionScrim,
+  releaseNativeCaptionScrim,
+  resetNativeCaptionScrim,
+} from '@/lib/nativeCaptionScrim';
 import { useNativeWindowControls } from './useNativeWindowControls';
+
+const SCRIM = 'rgba(0, 0, 0, 0.75)';
 
 let root: Root | undefined;
 afterEach(() => {
@@ -11,6 +18,7 @@ afterEach(() => {
   root = undefined;
   document.body.replaceChildren();
   document.documentElement.removeAttribute('data-light-palette');
+  resetNativeCaptionScrim();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -30,14 +38,33 @@ function mountHeader(backgroundColor: string) {
 
   // happy-dom has no canvas renderer. Model only the opaque and transparent fills used here.
   let pixel: number[] = [];
+  const parse = (value: string) => {
+    const inner = /^rgba?\(([^)]+)\)$/i.exec(value)?.[1];
+    if (!inner) return null;
+    const parts = inner
+      .split(/[,/\s]+/)
+      .filter(Boolean)
+      .map(Number);
+    if (parts.length < 3 || parts.some((part) => Number.isNaN(part))) return null;
+    return [parts[0], parts[1], parts[2], parts[3] ?? 1] as const;
+  };
   const context = {
     fillStyle: '',
     clearRect() {
       pixel = [0, 0, 0, 0];
     },
     fillRect() {
-      const [r, g, b, a = 1] = this.fillStyle.match(/\d+/g)?.map(Number) ?? [];
-      if (r !== undefined && a === 1) pixel = [r, g, b, 255];
+      const color = parse(this.fillStyle);
+      if (!color) return;
+      const [r, g, b, alpha] = color;
+      if (alpha <= 0) return;
+      const [dr, dg, db, da = 0] = pixel;
+      const dstAlpha = da / 255;
+      const outAlpha = alpha + dstAlpha * (1 - alpha);
+      if (outAlpha <= 0) return;
+      const blend = (src: number, dst: number) =>
+        Math.round((src * alpha + dst * dstAlpha * (1 - alpha)) / outAlpha);
+      pixel = [blend(r, dr), blend(g, dg), blend(b, db), Math.round(outAlpha * 255)];
     },
     getImageData: () => ({ data: pixel }),
   };
@@ -80,6 +107,32 @@ it('标题栏有不透明底色时仍使用自身的底色', () => {
   frames.shift()?.(0);
   expect(setTitleBarAppearance).toHaveBeenCalledExactlyOnceWith({
     color: '#20262c',
+    symbolColor: '#17211a',
+  });
+});
+
+it('全窗口压暗浮层打开时原生按钮区跟着压暗，关掉后恢复', async () => {
+  const { frames, setTitleBarAppearance } = mountHeader('rgba(0, 0, 0, 0)');
+  frames.shift()?.(0);
+  expect(setTitleBarAppearance).toHaveBeenLastCalledWith({
+    color: '#eaf1f5',
+    symbolColor: '#17211a',
+  });
+
+  acquireNativeCaptionScrim(SCRIM);
+  await vi.waitFor(() => expect(frames).toHaveLength(1));
+  frames.shift()?.(1);
+  // 浅色外壳 #eaf1f5 叠 75% 黑之后的实际底色，符号色随之翻成浅色。
+  expect(setTitleBarAppearance).toHaveBeenLastCalledWith({
+    color: '#3b3c3d',
+    symbolColor: '#ffffff',
+  });
+
+  releaseNativeCaptionScrim(SCRIM);
+  await vi.waitFor(() => expect(frames).toHaveLength(1));
+  frames.shift()?.(2);
+  expect(setTitleBarAppearance).toHaveBeenLastCalledWith({
+    color: '#eaf1f5',
     symbolColor: '#17211a',
   });
 });

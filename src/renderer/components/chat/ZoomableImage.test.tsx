@@ -3,6 +3,7 @@ import { parseHTML } from 'linkedom';
 import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getNativeCaptionScrim, resetNativeCaptionScrim } from '@/lib/nativeCaptionScrim';
 import { ZoomableImage } from './ZoomableImage';
 
 const harness = vi.hoisted(() => ({
@@ -67,6 +68,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await act(async () => root.unmount());
+  resetNativeCaptionScrim();
   vi.unstubAllGlobals();
 });
 describe('图片复制与预览', () => {
@@ -161,5 +163,21 @@ describe('图片复制与预览', () => {
       window.dispatchEvent(event);
     });
     expect(container.querySelectorAll('img')).toHaveLength(1);
+  });
+  it('放大预览打开时按遮罩压暗原生按钮区，关闭后恢复', async () => {
+    await act(async () => root.render(<ZoomableImage src="data:image/png;base64,AQID" />));
+    expect(getNativeCaptionScrim()).toBeNull();
+    await act(async () =>
+      container
+        .querySelector('button:not([role])')
+        ?.dispatchEvent(new window.Event('click', { bubbles: true }))
+    );
+    expect(getNativeCaptionScrim()).toBe('rgba(0, 0, 0, 0.75)');
+    await act(async () => {
+      const event = new window.Event('keydown');
+      Object.assign(event, { key: 'Escape' });
+      window.dispatchEvent(event);
+    });
+    expect(getNativeCaptionScrim()).toBeNull();
   });
 });

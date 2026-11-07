@@ -78,6 +78,13 @@ Windows 的标题栏内容为原生按钮预留区域，优先使用 `titlebar-a
 透明像素的 alpha 会把 `rgba(0, 0, 0, 0)` 变成原生按钮区的黑底。主题监听须覆盖
 `data-light-palette`，不能只观察明暗模式 class。回归：`useNativeWindowControls.test.tsx`。
 
+全窗口压暗浮层（看图放大的 `bg-black/75`）画在 renderer 里，原生按钮却在它之上，
+不处理就会在压暗的界面上留一块亮底。这类浮层用 `useNativeCaptionScrim` 登记遮罩色，
+采样时按 `--shell` → 标题栏底色 → 遮罩的顺序合成，符号色改按最终底色的明暗取
+`WINDOWS_SYMBOL_COLOR`（与创建窗口时同一份常量）。遮罩的 class 和登记的 CSS 颜色是
+两处声明，改一处必须同步另一处。回归：`useNativeWindowControls.test.tsx`、
+`ZoomableImage.test.tsx`。
+
 Windows 顶层 `BrowserWindow` 必须保持不透明：Electron 43 的透明窗口会强制关闭
 粗边框，并使用特殊的最大化路径。主窗口的 workbench `WebContentsView` 与其 HTML
 仍保持透明，所以 guest 网页垫底和菜单遮挡仍沿原有视图叠层处理。macOS/Linux 的

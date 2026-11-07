@@ -6,11 +6,15 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { addToast } from '@/components/ui/toast';
+import { useNativeCaptionScrim } from '@/hooks/useNativeCaptionScrim';
 import { useOverlayGuard } from '@/hooks/useOverlayGuard';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
 import { copyImageToClipboard } from './imageClipboard';
+
+/** 与遮罩的 `bg-black/75` 一致：Windows 原生按钮区按同一层压暗，不留亮底。 */
+const LIGHTBOX_SCRIM = 'rgba(0, 0, 0, 0.75)';
 
 interface ZoomableImageProps {
   src: string;
@@ -25,6 +29,7 @@ export function ZoomableImage({ src, className, frameClassName, onError }: Zooma
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   useOverlayGuard(open);
+  useNativeCaptionScrim(open, LIGHTBOX_SCRIM);
 
   useEffect(() => {
     if (!open) return;

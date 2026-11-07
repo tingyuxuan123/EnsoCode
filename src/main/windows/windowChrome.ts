@@ -1,4 +1,4 @@
-import { WINDOW_TITLE_BAR_HEIGHT } from '@shared/windowControls';
+import { WINDOW_TITLE_BAR_HEIGHT, WINDOWS_SYMBOL_COLOR } from '@shared/windowControls';
 import type { BrowserWindowConstructorOptions } from 'electron';
 
 /**
@@ -23,7 +23,7 @@ export function windowChromeOptions(
       backgroundColor: color,
       titleBarOverlay: {
         color,
-        symbolColor: dark ? '#ffffff' : '#111111',
+        symbolColor: dark ? WINDOWS_SYMBOL_COLOR.onDark : WINDOWS_SYMBOL_COLOR.onLight,
         height: WINDOW_TITLE_BAR_HEIGHT,
       },
     };

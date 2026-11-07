@@ -1,6 +1,12 @@
 export const WINDOW_TITLE_BAR_HEIGHT = 44;
 export const WINDOWS_CAPTION_BUTTONS_WIDTH = 138;
 
+/**
+ * Windows 原生窗口按钮的符号色：创建窗口与运行时同步共用一份，避免两边漂移。
+ * 键的含义是「标题栏底色暗/亮时符号取什么色」，不是系统主题。
+ */
+export const WINDOWS_SYMBOL_COLOR = { onDark: '#ffffff', onLight: '#111111' } as const;
+
 export interface TitleBarAppearance {
   color: string;
   symbolColor: string;
