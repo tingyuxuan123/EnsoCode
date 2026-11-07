@@ -423,7 +423,7 @@ export function App() {
       onCommandRejected: (command, error) => {
         if (error === READ_ONLY_ERROR) rejectedReadOnly();
         const rejected = phoneCommandRejection(command, error);
-        setBotNotice(rejected.notice);
+        if (rejected.notice) setBotNotice(rejected.notice);
         if (rejected.clearQueueEchoes) setQueueEchoes([]);
       },
       onCatalog: (entries, order) => {

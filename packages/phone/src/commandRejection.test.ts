@@ -22,4 +22,10 @@ describe('phone 命令拒绝反馈', () => {
     expect(appendEchoMessages([], echoes, 's')).toEqual([]);
     expect(phoneCommandRejection('prompt', 'offline').clearQueueEchoes).toBe(false);
   });
+  it.each(['offline', 'connection changed', 'handshake timeout'])(
+    '后台 presence 上报失败（%s）不提示用户：息屏/亮屏换链时属正常，host 新连接默认可见',
+    (error) => {
+      expect(phoneCommandRejection('presence', error).notice).toBeNull();
+    }
+  );
 });
