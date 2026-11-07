@@ -25,7 +25,7 @@ const SWEEP_INTERVAL_MS = 30_000;
 
 // 任务号的前后边界：空白、中英文句读、括号或紧挨着的汉字（中文常不加空格）。
 const TASK_REF_PATTERN =
-  /(?<=^|[\s(（,，、;；:：]|\p{Script=Han})(?:(issue|pr)\s+)?#[1-9]\d*(?=[\s:：,，.。、;；!！?？)）]|\p{Script=Han}|$)/giu;
+  /(?<=^|[\s(（,，.。、;；:：!！?？]|\p{Script=Han})(?:(issue|pr)\s+)?#[1-9]\d*(?=[\s:：,，.。、;；!！?？)）]|\p{Script=Han}|$)/giu;
 
 function hasAnotherTaskReference(text: string): boolean {
   // 只匹配有分隔边界、不以 0 开头的纯数字编号；带字母的色值、#000、链接片段、

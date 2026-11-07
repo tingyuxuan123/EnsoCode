@@ -1,5 +1,6 @@
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ProjectedMessage } from '@shared/types/agent';
 import { isBotId } from '@shared/types/bot';
 import type {
@@ -17,7 +18,7 @@ const ID_MAX = 200;
 const WRITE_TOOLS = new Set(['write', 'edit']);
 const DELIMITERS = /[\s`'"<>()[\]{}|,;，。；：、！？（）《》「」“”‘’*]+/u;
 const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/\S+/giu;
-const FILE_URL_RE = /file:\/\/(\/[^\s`'"<>()[\]]+)/giu;
+const FILE_URL_RE = /\bfile:\/\/[^\s`'"<>()[\]]+/giu;
 const BARE_FILE_RE = /^[^/]*\p{L}[^/]*\.[A-Za-z0-9]{1,10}$/u;
 
 const KINDS: Record<string, BotArtifactKind> = {};
@@ -65,21 +66,31 @@ export function parseArtifactTarget(input: unknown): BotArtifactTarget | null {
     : null;
 }
 
-const decode = (value: string): string => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
 /** 正文里出现的路径：绝对路径、含目录的相对路径、带扩展名的文件名（是否存在由解析阶段判断） */
 export function textPathCandidates(text: string): string[] {
+  const urls: string[] = [];
   const cleaned = text
-    .replace(FILE_URL_RE, (_match, file: string) => ` ${decode(file)} `)
+    .replace(FILE_URL_RE, (url: string) => {
+      try {
+        // Keep decoded whitespace within one candidate; Windows file URLs have a /C:/ prefix,
+        // which is not itself a native path. Node also rejects encoded separators and userinfo.
+        const parsed = new URL(url);
+        const file = fileURLToPath(parsed, { windows: /^\/[A-Za-z]:\//.test(parsed.pathname) });
+        return ` \0${urls.push(file) - 1}\0 `;
+      } catch {
+        return ' ';
+      }
+    })
     .replace(URL_RE, ' ');
   const out: string[] = [];
   for (const raw of cleaned.split(DELIMITERS)) {
+    const urlIndex = /^\0(\d+)\0$/.exec(raw);
+    if (urlIndex) {
+      const file = urls[Number(urlIndex[1])];
+      if (file && !out.includes(file)) out.push(file);
+      if (out.length >= TEXT_CANDIDATE_LIMIT) break;
+      continue;
+    }
     const token = raw.replace(/[.:!?。]+$/u, '').replace(/:\d+(?::\d+)?$/u, '');
     if (!token || token.startsWith('-') || token.startsWith('~')) continue;
     const looksLikePath = token.includes('/') ? /[^/]/u.test(token) : BARE_FILE_RE.test(token);

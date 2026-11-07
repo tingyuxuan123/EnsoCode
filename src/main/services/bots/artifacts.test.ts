@@ -1,8 +1,17 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { ProjectedMessage } from '@shared/types/agent';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   artifactCandidates,
   artifactKind,
@@ -15,6 +24,30 @@ import {
   turnBounds,
   turnOfReply,
 } from './artifacts';
+
+const { leafLinks } = vi.hoisted(() => ({ leafLinks: new Map<string, string>() }));
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof import('node:fs')>();
+  return {
+    ...fs,
+    realpathSync: new Proxy(fs.realpathSync, {
+      apply(target, receiver, args) {
+        if (typeof args[0] === 'string') args[0] = leafLinks.get(args[0]) ?? args[0];
+        return Reflect.apply(target, receiver, args);
+      },
+    }),
+  };
+});
+// Manifest leaf links exercise bundle-local authority, not just workspace containment.
+const leafLink = (target: string, alias: string) => {
+  if (process.platform === 'win32') {
+    linkSync(target, alias);
+    leafLinks.set(alias, target);
+  } else {
+    symlinkSync(target, alias);
+  }
+};
+afterEach(() => leafLinks.clear());
 
 const text = (role: string, value: string): ProjectedMessage => ({
   role,
@@ -42,6 +75,15 @@ describe('textPathCandidates', () => {
   });
   it('普通单词、版本号之外的无扩展名单词不算', () => {
     expect(textPathCandidates('hello world, done!')).toEqual([]);
+  });
+  it('标准 file URL 还原本机路径，保留编码空格和中文而不拆成多个候选', () => {
+    const file = path.join(tmpdir(), 'enso qa', '首页 图.png');
+    expect(textPathCandidates(`[首页](${pathToFileURL(file).href})`)).toEqual([file]);
+  });
+  it('拒绝带凭证或编码路径分隔符的 file URL，不把非法 URL 当相对路径', () => {
+    expect(
+      textPathCandidates('file://user:secret@localhost/hidden.png file:///tmp/a%2Fb.png')
+    ).toEqual([]);
   });
 });
 
@@ -158,15 +200,18 @@ describe('isOpenableArtifact', () => {
 describe('resolveArtifacts', () => {
   let base = '';
   let root = '';
+  let outside = '';
   beforeEach(() => {
     base = realpathSync(mkdtempSync(path.join(tmpdir(), 'bot-artifacts-')));
     root = path.join(base, 'ws');
+    outside = path.join(base, 'outside');
     mkdirSync(path.join(root, 'docs'), { recursive: true });
+    mkdirSync(outside);
     writeFileSync(path.join(root, 'docs', 'r.md'), '# hi');
     writeFileSync(path.join(root, 'page.html'), '<p>x</p>');
-    writeFileSync(path.join(base, 'secret.txt'), 'secret');
-    symlinkSync(path.join(base, 'secret.txt'), path.join(root, 'escape.txt'));
-    symlinkSync(path.join(root, 'page.html'), path.join(root, 'alias.html'));
+    writeFileSync(path.join(outside, 'secret.txt'), 'secret');
+    symlinkSync(outside, path.join(root, 'escape'), 'junction');
+    symlinkSync(path.join(root, 'docs'), path.join(root, 'alias'), 'junction');
   });
   afterEach(() => rmSync(base, { recursive: true, force: true }));
 
@@ -174,22 +219,22 @@ describe('resolveArtifacts', () => {
     const result = resolveArtifacts(root, [
       'docs/r.md',
       path.join(root, 'page.html'),
-      '../secret.txt',
-      path.join(base, 'secret.txt'),
-      'escape.txt',
+      '../outside/secret.txt',
+      path.join(outside, 'secret.txt'),
+      'escape/secret.txt',
       'missing.md',
       'docs',
       './docs/../docs/r.md',
     ]);
     expect(result).toEqual([
-      { rel: 'docs/r.md', name: 'r.md', size: 4, kind: 'markdown' },
+      { rel: path.join('docs', 'r.md'), name: 'r.md', size: 4, kind: 'markdown' },
       { rel: 'page.html', name: 'page.html', size: 8, kind: 'html' },
     ]);
   });
 
   it('工作区内的符号链接按真实目标去重', () => {
-    expect(resolveArtifacts(root, ['alias.html', 'page.html']).map((a) => a.rel)).toEqual([
-      'page.html',
+    expect(resolveArtifacts(root, ['alias/r.md', 'docs/r.md']).map((a) => a.rel)).toEqual([
+      path.join('docs', 'r.md'),
     ]);
   });
 
@@ -205,9 +250,9 @@ describe('resolveArtifacts', () => {
 
   it('resolveArtifactFile 只接受根内的相对路径', () => {
     expect(resolveArtifactFile(root, 'docs/r.md')).toBe(path.join(root, 'docs', 'r.md'));
-    expect(resolveArtifactFile(root, '../secret.txt')).toBeNull();
-    expect(resolveArtifactFile(root, path.join(base, 'secret.txt'))).toBeNull();
-    expect(resolveArtifactFile(root, 'escape.txt')).toBeNull();
+    expect(resolveArtifactFile(root, '../outside/secret.txt')).toBeNull();
+    expect(resolveArtifactFile(root, path.join(outside, 'secret.txt'))).toBeNull();
+    expect(resolveArtifactFile(root, 'escape/secret.txt')).toBeNull();
     expect(resolveArtifactFile(root, 'docs')).toBeNull();
   });
 });
@@ -235,7 +280,7 @@ describe('resolveDesignArtifacts', () => {
     for (const name of ['write', 'create', 'created design', 'card', 'unmentioned']) {
       bundle(path.join(root, `${name}.vetd`));
     }
-    symlinkSync(path.join(root, 'write.vetd'), path.join(root, 'alias.vetd'));
+    symlinkSync(path.join(root, 'write.vetd'), path.join(root, 'alias.vetd'), 'junction');
     const messages: ProjectedMessage[] = [
       call('write', { path: 'alias.vetd/design.json' }),
       create({ ok: true, vetdPath: path.join(root, 'create.vetd') }),
@@ -261,9 +306,9 @@ describe('resolveDesignArtifacts', () => {
 
   it('拒绝越界路径、非设计目录、无效 manifest 和失败或畸形的工具结果', () => {
     bundle(path.join(base, 'outside.vetd'));
-    symlinkSync(path.join(base, 'outside.vetd'), path.join(root, 'escaped.vetd'));
+    symlinkSync(path.join(base, 'outside.vetd'), path.join(root, 'escaped.vetd'), 'junction');
     mkdirSync(path.join(root, 'link.vetd'));
-    symlinkSync(
+    leafLink(
       path.join(base, 'outside.vetd', 'design.json'),
       path.join(root, 'link.vetd/design.json')
     );
@@ -271,13 +316,10 @@ describe('resolveDesignArtifacts', () => {
     mkdirSync(path.join(root, 'empty.vetd'));
     writeFileSync(path.join(root, 'file.vetd'), '{}');
     bundle(path.join(root, 'valid.vetd'));
-    symlinkSync(path.join(root, 'valid.vetd'), path.join(base, 'outside-alias.vetd'));
+    symlinkSync(path.join(root, 'valid.vetd'), path.join(base, 'outside-alias.vetd'), 'junction');
     mkdirSync(path.join(root, 'copied.vetd'));
-    symlinkSync(
-      path.join(root, 'valid.vetd/design.json'),
-      path.join(root, 'copied.vetd/design.json')
-    );
-    symlinkSync(
+    leafLink(path.join(root, 'valid.vetd/design.json'), path.join(root, 'copied.vetd/design.json'));
+    leafLink(
       path.join(base, 'outside.vetd', 'design.json'),
       path.join(root, 'valid.vetd/out.json')
     );
