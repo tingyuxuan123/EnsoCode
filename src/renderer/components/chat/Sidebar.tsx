@@ -50,7 +50,7 @@ import {
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AddProjectDialog } from '@/components/chat/AddProjectDialog';
+import { AddProjectDialog, type AddProjectResult } from '@/components/chat/AddProjectDialog';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { ConversationStatusIndicator } from '@/components/chat/ConversationStatusIndicator';
 import { ConversationTitleEdit } from '@/components/chat/ConversationTitleEdit';
@@ -446,12 +446,12 @@ export function Sidebar({
     path: string;
     sshHost?: string;
   } | null>(null);
-  const handleAddProject = (request: {
+  const handleAddProject = async (request: {
     path: string;
     sshConnectionId?: string;
     sshHost?: string;
     groupId?: string;
-  }) => {
+  }): Promise<AddProjectResult> => {
     const knownIds = new Set(projects.map((project) => project.id));
     if (request.sshConnectionId) {
       setPendingProject({
@@ -460,13 +460,13 @@ export function Sidebar({
         sshHost: request.sshHost,
       });
     }
-    void addProject(
+    return addProject(
       request.path,
       request.sshConnectionId ? { sshConnectionId: request.sshConnectionId } : undefined,
       request.groupId ?? defaultGroupId
     )
-      .then((project) => {
-        if (!project) return;
+      .then(async (project) => {
+        if (!project) return { ok: false as const, error: t('Failed to add project') };
         if (archivedProjectIds.includes(project.id)) {
           const next = archivedProjectIds.filter((id) => id !== project.id);
           setArchivedProjectIds(next);
@@ -481,18 +481,18 @@ export function Sidebar({
           });
           const latest = projectConversationIds(order, conversations, project.id)[0];
           if (latest) {
-            void selectConversation(latest);
-            return;
+            await selectConversation(latest);
+            return { ok: true as const };
           }
         }
-        void newConversation(project.id);
+        await newConversation(project.id);
+        return { ok: true as const };
       })
       .catch((error: unknown) => {
-        addToast({
-          type: 'error',
-          title: t('Failed to add project'),
-          description: error instanceof Error ? error.message : String(error),
-        });
+        return {
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        };
       })
       .finally(() => setPendingProject(null));
   };

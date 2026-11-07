@@ -83,14 +83,15 @@ describe('TaskBar 输入框上方的固定按钮条', () => {
     directory.entries = [];
     const html = renderBar('many', [task('running'), { ...task('running'), taskId: 't2' }], []);
     expect(html).toContain('data-task-dock-button="bash"');
-    expect(html).toContain('Background Bash');
+    expect(html).toContain('Background commands');
+    expect(html).not.toContain('Background Bash');
     expect(html).not.toContain('pnpm dev');
   });
 
   it('按钮直接显示运行数，失败给红点', () => {
     directory.entries = [];
     const html = renderBar('state', [task('running'), { ...task('failed'), taskId: 't2' }], []);
-    expect(html).toMatch(/data-task-dock-button="bash"[^>]*>.*Background Bash.*·.*1/s);
+    expect(html).toMatch(/data-task-dock-button="bash"[^>]*>.*Background commands.*·.*1/s);
     expect(html).toContain('data-task-dock-failed');
   });
 

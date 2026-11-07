@@ -1,5 +1,6 @@
 import { useI18n } from '@/i18n';
 import type { ToolNotice } from '@/stores/sessions/timeline';
+import { backgroundNotificationDisplay } from './backgroundNotification';
 
 /** 工具结果前捎带给模型的系统提醒：不是工具输出，默认收起，需要时可展开核对 */
 export function ToolNotices({ notices }: { notices: ToolNotice[] }) {
@@ -14,7 +15,13 @@ export function ToolNotices({ notices }: { notices: ToolNotice[] }) {
         {t('System reminders')} · {notices.length}
       </summary>
       <pre className="mt-1 whitespace-pre-wrap font-mono leading-relaxed">
-        {notices.map((notice) => notice.text).join('\n\n')}
+        {notices
+          .map((notice) =>
+            notice.tag === 'background-task-update'
+              ? backgroundNotificationDisplay(notice.text).detail
+              : notice.text
+          )
+          .join('\n\n')}
       </pre>
     </details>
   );

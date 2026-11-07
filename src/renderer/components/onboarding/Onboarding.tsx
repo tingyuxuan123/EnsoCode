@@ -64,6 +64,63 @@ export function Onboarding() {
   const [providerOpen, setProviderOpen] = React.useState(false);
   const [setupOpen, setSetupOpen] = React.useState(false);
   const [presetOpen, setPresetOpen] = React.useState(false);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const nestedOpen = React.useRef(false);
+  nestedOpen.current = Boolean(importKind || providerOpen || setupOpen || presetOpen);
+  React.useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previous = document.activeElement;
+    const focusable = () =>
+      [
+        ...dialog.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+        ),
+      ].filter(
+        (element) =>
+          element.tabIndex >= 0 && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+      );
+    const focusFirst = () => (focusable()[0] ?? dialog).focus();
+    const nestedHasFocus = () => {
+      const activeDialog = document.activeElement?.closest('[role="dialog"], [role="alertdialog"]');
+      return Boolean(activeDialog && activeDialog !== dialog && !dialog.contains(activeDialog));
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Existing nested Dialogs own focus while open, including their portalled popups.
+      if (nestedOpen.current || nestedHasFocus() || event.key !== 'Tab') return;
+      const items = focusable();
+      const first = items[0];
+      const last = items.at(-1);
+      if (
+        !first ||
+        (event.shiftKey ? document.activeElement === first : document.activeElement === last) ||
+        !dialog.contains(document.activeElement)
+      ) {
+        event.preventDefault();
+        (event.shiftKey ? (last ?? dialog) : (first ?? dialog)).focus();
+      }
+    };
+    const onFocus = (event: FocusEvent) => {
+      if (!nestedOpen.current && !nestedHasFocus() && !dialog.contains(event.target as Node))
+        focusFirst();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusin', onFocus);
+    focusFirst();
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('focusin', onFocus);
+      // Restore after React removes the modal DOM, without stealing another dialog's focus.
+      queueMicrotask(() => {
+        if (
+          previous instanceof HTMLElement &&
+          previous.isConnected &&
+          (document.activeElement === document.body || dialog.contains(document.activeElement))
+        )
+          previous.focus();
+      });
+    };
+  }, []);
   const step = STEPS[stepIndex];
 
   const finish = () => setOnboarded(true);
@@ -128,7 +185,14 @@ export function Onboarding() {
       data-enso-float=""
       data-slot="onboarding"
     >
-      <div className="relative flex w-[620px] max-w-full flex-col overflow-hidden rounded-[6px] border border-border bg-popover">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('Welcome to EnsoCode')}
+        tabIndex={-1}
+        className="relative flex w-[620px] max-w-full flex-col overflow-hidden rounded-[6px] border border-border bg-popover"
+      >
         <button
           type="button"
           onClick={finish}

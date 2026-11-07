@@ -69,7 +69,7 @@ interface TaskBarProps {
 type DockKind = 'bash' | 'agent' | 'todo';
 
 /**
- * 输入框上方的固定按钮条：「后台 Bash」「后台 Agent」「当前进度」各一枚，任务再多也只占一行。
+ * 输入框上方的固定按钮条：「后台命令」「后台 Agent」「当前进度」各一枚，任务再多也只占一行。
  * 按钮直接带运行数与失败红点；点开在输入框上方弹出列表，可在「运行中 / 全部」间切换。
  * 子代理入口来自持久 child metadata：会话派过子代理就保留，全部结束后仍可回看。
  */
@@ -119,7 +119,7 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly, todos }: TaskBa
       {open === 'bash' && bash && (
         <DockPanel
           icon={TerminalSquare}
-          title={t('Background Bash')}
+          title={t('Background commands')}
           summary={bash}
           onClose={() => setOpen(null)}
         >
@@ -166,7 +166,7 @@ export function TaskBar({ sessionId, tasks, subagents, readOnly, todos }: TaskBa
           <DockButton
             kind="bash"
             icon={TerminalSquare}
-            label={t('Background Bash')}
+            label={t('Background commands')}
             summary={bash}
             open={open === 'bash'}
             onClick={() => toggle('bash')}

@@ -105,6 +105,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { ApprovalReviewBar } from './ApprovalReviewBar';
 import { AskUserResult } from './AskUserResult';
+import { backgroundNotificationDisplay } from './backgroundNotification';
 import { CodeBlock } from './CodeBlock';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CopyButton } from './CopyButton';
@@ -723,7 +724,11 @@ function UserText({
         ) : (
           <TerminalSquare className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         )}
-        <span className="whitespace-pre-wrap">{block[2]}</span>
+        <span className="whitespace-pre-wrap">
+          {block[1] === 'background-task-update' || block[1] === 'agent-notification'
+            ? backgroundNotificationDisplay(block[2]).detail
+            : block[2]}
+        </span>
       </div>
     );
   }
@@ -1526,9 +1531,10 @@ function TaskNoteRow({ item }: { item: Extract<TimelineItem, { kind: 'task-note'
   const [expanded, setExpanded] = useState(false);
   /** undefined=未读, null=文件不存在, string=内容。占位文案在渲染时 t()，切语言才会更新 */
   const [log, setLog] = useState<string | null | undefined>(undefined);
+  const display = backgroundNotificationDisplay(item.detail);
   const match = /^Background task (\S+) finished \((.+?), ran (.+?)\)/.exec(item.summary);
   const text = match ? `${match[1]} · ${match[2]} · ${match[3]}` : item.summary;
-  const logPath = /read (\/.+?\.log) for the complete log/.exec(item.detail)?.[1] ?? null;
+  const logPath = display.logPath;
 
   useEffect(() => {
     if (!expanded || !logPath || log !== undefined) return;
@@ -1547,7 +1553,7 @@ function TaskNoteRow({ item }: { item: Extract<TimelineItem, { kind: 'task-note'
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center gap-3"
-        title={item.detail}
+        title={display.detail}
       >
         <span className="h-px flex-1 bg-border" />
         <span className="flex shrink-0 items-center gap-1.5 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:text-foreground">
@@ -1560,7 +1566,7 @@ function TaskNoteRow({ item }: { item: Extract<TimelineItem, { kind: 'task-note'
       {expanded && (
         <div className="mt-1.5 rounded-lg border border-border/60 bg-muted/20">
           <pre className="border-b border-border/60 px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {item.detail}
+            {display.detail}
           </pre>
           <pre className="scroll-stable scroll-pill max-h-64 overflow-auto px-3 py-2 font-mono text-[calc(11rem/14)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {logPath

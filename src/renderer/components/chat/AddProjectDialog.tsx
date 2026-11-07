@@ -182,6 +182,8 @@ function RemoteDirBrowser({
   );
 }
 
+export type AddProjectResult = { ok: true } | { ok: false; error: string };
+
 interface AddProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -190,7 +192,7 @@ interface AddProjectDialogProps {
     sshConnectionId?: string;
     sshHost?: string;
     groupId?: string;
-  }) => void;
+  }) => Promise<AddProjectResult>;
   groups?: readonly ProjectGroup[];
   defaultGroupId?: string;
 }
@@ -215,6 +217,9 @@ export function AddProjectDialog({
   const [browserOpen, setBrowserOpen] = React.useState(false);
   const [recent, setRecent] = React.useState<RecentProject[]>([]);
   const [formError, setFormError] = React.useState('');
+  const errorId = React.useId();
+  const [submitting, setSubmitting] = React.useState(false);
+  const submittingRef = React.useRef(false);
   const [hostKey, setHostKey] = React.useState<SshHostKeyChallenge | null>(null);
   const [afterTrust, setAfterTrust] = React.useState<'submit' | 'browse' | null>(null);
   const [hostKeyRetry, setHostKeyRetry] = React.useState(0);
@@ -269,8 +274,15 @@ export function AddProjectDialog({
   }, []);
 
   const handleBrowse = async () => {
-    const selected = await window.electronAPI.dialog.selectDirectory();
-    if (selected) setPathValue(selected);
+    try {
+      const selected = await window.electronAPI.dialog.selectDirectory();
+      if (selected) {
+        setPathValue(selected);
+        setFormError('');
+      }
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : t('Failed to add project'));
+    }
   };
 
   const canSubmit =
@@ -278,231 +290,266 @@ export function AddProjectDialog({
       ? pathValue.trim().length > 0
       : sshConnectionId.length > 0 && sshPath.trim().startsWith('/');
 
-  const submitSsh = () => {
-    const connection = connections.find((item) => item.id === sshConnectionId);
-    onAdd({
-      path: sshPath.trim(),
-      sshConnectionId,
-      sshHost: connection?.name,
-      ...(groupId ? { groupId } : {}),
-    });
-    onOpenChange(false);
+  const projectError = (message: string) =>
+    /\b(?:ENOENT|ENOTDIR|EACCES|EPERM)\b|Project path is not a directory/.test(message)
+      ? t('The directory does not exist or cannot be accessed.')
+      : message;
+
+  const submitProject = async (testConnection = true) => {
+    if (!canSubmit || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setFormError('');
+    try {
+      const connection = connections.find((item) => item.id === sshConnectionId);
+      if (mode === 'ssh' && testConnection) {
+        const result = await window.electronAPI.sshConnections.test(sshConnectionId);
+        if (!result.ok) {
+          const challenge = hostKeyFromSshFailure(result, connection);
+          if (challenge) {
+            setAfterTrust('submit');
+            setHostKey(challenge);
+          } else setFormError(result.error);
+          return;
+        }
+      }
+      const result = await onAdd({
+        path: mode === 'ssh' ? sshPath.trim() : pathValue.trim(),
+        ...(mode === 'ssh' ? { sshConnectionId, sshHost: connection?.name } : {}),
+        ...(groupId ? { groupId } : {}),
+      });
+      if (result.ok) onOpenChange(false);
+      else setFormError(projectError(result.error));
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? projectError(error.message) : t('Failed to add project')
+      );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) return;
-    if (mode !== 'ssh') {
-      onAdd({ path: pathValue.trim(), ...(groupId ? { groupId } : {}) });
-      onOpenChange(false);
-      return;
-    }
-    setFormError('');
-    const connection = connections.find((item) => item.id === sshConnectionId);
-    void window.electronAPI.sshConnections.test(sshConnectionId).then((result) => {
-      if (!result.ok) {
-        const challenge = hostKeyFromSshFailure(result, connection);
-        if (challenge) {
-          setAfterTrust('submit');
-          setHostKey(challenge);
-          return;
-        }
-        setFormError(result.error);
-        return;
-      }
-      submitSsh();
-    });
+    if (!hostKey && !trusting) void submitProject();
   };
 
   const trustHost = async () => {
-    if (!hostKey) return;
+    if (!hostKey || trusting || submittingRef.current) return;
     setTrusting(true);
-    const trusted = await window.electronAPI.sshConnections.trustHost(sshConnectionId);
-    setTrusting(false);
-    if (!trusted.ok) {
-      setFormError(trusted.error || t('Could not save host key.'));
+    try {
+      const trusted = await window.electronAPI.sshConnections.trustHost(sshConnectionId);
+      if (!trusted.ok) {
+        setFormError(trusted.error || t('Could not save host key.'));
+        setHostKey(null);
+        setAfterTrust(null);
+        return;
+      }
+      const resume = afterTrust;
       setHostKey(null);
       setAfterTrust(null);
-      return;
+      if (resume === 'browse') setHostKeyRetry((value) => value + 1);
+      else if (resume === 'submit') await submitProject(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : t('Could not save host key.'));
+      setHostKey(null);
+      setAfterTrust(null);
+    } finally {
+      setTrusting(false);
     }
-    const resume = afterTrust;
-    setHostKey(null);
-    setAfterTrust(null);
-    if (resume === 'browse') {
-      setHostKeyRetry((value) => value + 1);
-      return;
-    }
-    if (resume === 'submit') submitSsh();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!submittingRef.current && !trusting) onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-w-lg">
         <form onSubmit={handleSubmit} className="flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{t('Add project')}</DialogTitle>
-            <DialogDescription>
-              {t('Add a local directory as the conversation working folder.')}
-            </DialogDescription>
-          </DialogHeader>
+          <fieldset disabled={submitting || trusting} className="contents">
+            <DialogHeader>
+              <DialogTitle>{t('Add project')}</DialogTitle>
+              <DialogDescription>
+                {t('Add a local directory as the conversation working folder.')}
+              </DialogDescription>
+            </DialogHeader>
 
-          <DialogPanel className="space-y-4">
-            <Tabs value={mode} onValueChange={(value) => setMode(value as 'local' | 'ssh')}>
-              <TabsList>
-                <TabsTab value="local">{t('Local directory')}</TabsTab>
-                <TabsTab value="ssh">{t('Remote (SSH)')}</TabsTab>
-              </TabsList>
-            </Tabs>
-            {mode === 'ssh' ? (
-              <>
-                <Field className="w-full">
-                  <FieldLabel>{t('SSH connection')}</FieldLabel>
-                  {connections.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      {t('Add an SSH connection in Settings first.')}
-                    </p>
-                  ) : (
-                    <Select
-                      items={[
-                        { value: '', label: t('Select an SSH connection') },
-                        ...connections.map((connection) => ({
-                          value: connection.id,
-                          label: `${connection.name} (${connection.user ? `${connection.user}@` : ''}${connection.host})`,
-                        })),
-                      ]}
-                      value={sshConnectionId}
-                      onValueChange={(value) => setSshConnectionId(value ?? '')}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                        <SelectItem value="">{t('Select an SSH connection')}</SelectItem>
-                        {connections.map((connection) => (
-                          <SelectItem key={connection.id} value={connection.id}>
-                            {connection.name} ({connection.user ? `${connection.user}@` : ''}
-                            {connection.host})
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                  )}
-                </Field>
-                <Field className="w-full">
-                  <FieldLabel>{t('Remote directory')}</FieldLabel>
-                  <div className="flex w-full gap-2">
-                    <Input
-                      value={sshPath}
-                      onChange={(event) => setSshPath(event.target.value)}
-                      placeholder="/home/user/project"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      className="min-w-0 flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={!sshConnectionId}
-                      onClick={() => setBrowserOpen((open) => !open)}
-                    >
-                      {t('Browse')}
-                    </Button>
-                  </div>
-                </Field>
-                {browserOpen && sshConnectionId && (
-                  <RemoteDirBrowser
-                    connectionId={sshConnectionId}
-                    initialPath={sshPath.trim() || undefined}
-                    hostKeyRetry={hostKeyRetry}
-                    fallbackHost={connections.find((item) => item.id === sshConnectionId)}
-                    onSelect={(selected) => {
-                      setSshPath(selected);
-                      setBrowserOpen(false);
-                    }}
-                    onClose={() => setBrowserOpen(false)}
-                    onHostKey={(challenge) => {
-                      setAfterTrust('browse');
-                      setHostKey(challenge);
-                    }}
-                  />
-                )}
-                <p className="text-[calc(11rem/14)] text-muted-foreground">
-                  {t('Tools run on the remote host; chat history stays local.')}
-                </p>
-                {formError && <p className="text-destructive text-[calc(11rem/14)]">{formError}</p>}
-              </>
-            ) : (
-              <Field className="w-full">
-                <FieldLabel>{t('Working directory')}</FieldLabel>
-                <Autocomplete
-                  value={pathValue}
-                  onValueChange={(value) => setPathValue(value ?? '')}
-                  items={items}
-                  filter={filterProject}
-                  itemToStringValue={(item) => item.path}
-                >
-                  <div className="flex w-full gap-2">
-                    <div className="min-w-0 flex-1">
-                      <AutocompleteInput
-                        placeholder={t('Type a path or select from recent projects...')}
-                        showClear={!!pathValue}
-                        showTrigger
+            <DialogPanel className="space-y-4">
+              <Tabs value={mode} onValueChange={(value) => setMode(value as 'local' | 'ssh')}>
+                <TabsList>
+                  <TabsTab value="local">{t('Local directory')}</TabsTab>
+                  <TabsTab value="ssh">{t('Remote (SSH)')}</TabsTab>
+                </TabsList>
+              </Tabs>
+              {mode === 'ssh' ? (
+                <>
+                  <Field className="w-full">
+                    <FieldLabel>{t('SSH connection')}</FieldLabel>
+                    {connections.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {t('Add an SSH connection in Settings first.')}
+                      </p>
+                    ) : (
+                      <Select
+                        items={[
+                          { value: '', label: t('Select an SSH connection') },
+                          ...connections.map((connection) => ({
+                            value: connection.id,
+                            label: `${connection.name} (${connection.user ? `${connection.user}@` : ''}${connection.host})`,
+                          })),
+                        ]}
+                        value={sshConnectionId}
+                        onValueChange={(value) => setSshConnectionId(value ?? '')}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+                          <SelectItem value="">{t('Select an SSH connection')}</SelectItem>
+                          {connections.map((connection) => (
+                            <SelectItem key={connection.id} value={connection.id}>
+                              {connection.name} ({connection.user ? `${connection.user}@` : ''}
+                              {connection.host})
+                            </SelectItem>
+                          ))}
+                        </SelectPopup>
+                      </Select>
+                    )}
+                  </Field>
+                  <Field className="w-full">
+                    <FieldLabel>{t('Remote directory')}</FieldLabel>
+                    <div className="flex w-full gap-2">
+                      <Input
+                        value={sshPath}
+                        onChange={(event) => {
+                          setSshPath(event.target.value);
+                          setFormError('');
+                        }}
+                        aria-invalid={!!formError}
+                        aria-describedby={formError ? errorId : undefined}
+                        placeholder="/home/user/project"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        className="min-w-0 flex-1"
                       />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!sshConnectionId}
+                        onClick={() => setBrowserOpen((open) => !open)}
+                      >
+                        {t('Browse')}
+                      </Button>
                     </div>
-                    <Button type="button" variant="outline" onClick={() => void handleBrowse()}>
-                      {t('Browse')}
-                    </Button>
-                  </div>
-                  <AutocompletePopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                    <AutocompleteEmpty>{t('No matching projects found')}</AutocompleteEmpty>
-                    <AutocompleteList>
-                      {(project: RecentProject) => (
-                        <AutocompleteItem key={project.path} value={project} className="gap-2">
-                          <span className="min-w-0 flex-1 truncate" title={project.path}>
-                            {project.displayPath}
-                          </span>
-                          <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
-                            {project.sourceName}
-                          </span>
-                        </AutocompleteItem>
-                      )}
-                    </AutocompleteList>
-                  </AutocompletePopup>
-                </Autocomplete>
-              </Field>
-            )}
-            {groups.length > 0 && (
-              <Field>
-                <FieldLabel>{t('Project group')}</FieldLabel>
-                <Select
-                  items={groupItems}
-                  value={groupId ?? ''}
-                  onValueChange={(value) => setGroupId(value || undefined)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                    {groupItems.map((item) => (
-                      <SelectItem key={item.value || 'ungrouped'} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              </Field>
-            )}
-          </DialogPanel>
+                  </Field>
+                  {browserOpen && sshConnectionId && (
+                    <RemoteDirBrowser
+                      connectionId={sshConnectionId}
+                      initialPath={sshPath.trim() || undefined}
+                      hostKeyRetry={hostKeyRetry}
+                      fallbackHost={connections.find((item) => item.id === sshConnectionId)}
+                      onSelect={(selected) => {
+                        setSshPath(selected);
+                        setBrowserOpen(false);
+                      }}
+                      onClose={() => setBrowserOpen(false)}
+                      onHostKey={(challenge) => {
+                        setAfterTrust('browse');
+                        setHostKey(challenge);
+                      }}
+                    />
+                  )}
+                  <p className="text-[calc(11rem/14)] text-muted-foreground">
+                    {t('Tools run on the remote host; chat history stays local.')}
+                  </p>
+                </>
+              ) : (
+                <Field className="w-full">
+                  <FieldLabel>{t('Working directory')}</FieldLabel>
+                  <Autocomplete
+                    value={pathValue}
+                    onValueChange={(value) => {
+                      setPathValue(value ?? '');
+                      setFormError('');
+                    }}
+                    items={items}
+                    filter={filterProject}
+                    itemToStringValue={(item) => item.path}
+                  >
+                    <div className="flex w-full gap-2">
+                      <div className="min-w-0 flex-1">
+                        <AutocompleteInput
+                          aria-invalid={!!formError}
+                          aria-describedby={formError ? errorId : undefined}
+                          placeholder={t('Type a path or select from recent projects...')}
+                          showClear={!!pathValue}
+                          showTrigger
+                        />
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => void handleBrowse()}>
+                        {t('Browse')}
+                      </Button>
+                    </div>
+                    <AutocompletePopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+                      <AutocompleteEmpty>{t('No matching projects found')}</AutocompleteEmpty>
+                      <AutocompleteList>
+                        {(project: RecentProject) => (
+                          <AutocompleteItem key={project.path} value={project} className="gap-2">
+                            <span className="min-w-0 flex-1 truncate" title={project.path}>
+                              {project.displayPath}
+                            </span>
+                            <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
+                              {project.sourceName}
+                            </span>
+                          </AutocompleteItem>
+                        )}
+                      </AutocompleteList>
+                    </AutocompletePopup>
+                  </Autocomplete>
+                </Field>
+              )}
+              {formError && (
+                <p id={errorId} role="alert" className="text-destructive text-[calc(11rem/14)]">
+                  {formError}
+                </p>
+              )}
+              {groups.length > 0 && (
+                <Field>
+                  <FieldLabel>{t('Project group')}</FieldLabel>
+                  <Select
+                    items={groupItems}
+                    value={groupId ?? ''}
+                    onValueChange={(value) => setGroupId(value || undefined)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+                      {groupItems.map((item) => (
+                        <SelectItem key={item.value || 'ungrouped'} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </Field>
+              )}
+            </DialogPanel>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              {t('Cancel')}
-            </Button>
-            <Button type="submit" size="sm" disabled={!canSubmit}>
-              {t('Add')}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                {t('Cancel')}
+              </Button>
+              <Button type="submit" size="sm" disabled={!canSubmit || submitting || trusting}>
+                {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {submitting ? t('Adding project…') : t('Add')}
+              </Button>
+            </DialogFooter>
+          </fieldset>
         </form>
       </DialogContent>
       <SshHostKeyDialog
