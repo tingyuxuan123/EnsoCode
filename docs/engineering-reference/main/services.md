@@ -64,6 +64,8 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   operations 和本地传输包装命令不套用这层设置，以免破坏 SSH 认证。回归见 `sessionShell.test.ts`
   和 `backgroundTasks.test.ts`。
 - `dismiss-child` 与同一 child 的创建命令共用串行门；创建失败或已换代时清理幂等，
+  有效父代清理已消失的 child 仍回流 `coworker-update: dismissed`，让界面撤掉死标签；
+  有实体时必须匹配完整 child 身份，旧代际不得误关新实体。
   清理异常不得把父会话标成 failed。旧形状 `resume-coworker` 的恢复异常同样只记日志，
   不得因按 parent 排队而把失败归给父会话，也不得伪报恢复成功。仍须验证 exact 父代和完整 child 身份。
 - 未投递通知在去抖前写入 `sessions/pending-notifications/`，JSON 大小、条数和文本均有上限，

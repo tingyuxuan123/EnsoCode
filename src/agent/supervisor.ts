@@ -1728,10 +1728,14 @@ export class SessionSupervisor {
         return;
       case 'dismiss-child': {
         this.must(command.parent);
-        // spawn 被拒或 child 已换代时清理是 no-op，仍保留 exact 父代与 child 身份校验。
+        // 已无实体也要回流关闭确认；有实体时仍保留完整 child 身份校验，不能误关新代。
         const child = this.sessions.get(command.child.sessionId);
+        if (!child) {
+          await this.dismissCoworker(command.parent.sessionId, command.child.sessionId);
+          return;
+        }
         if (
-          !child?.childIdentity ||
+          !child.childIdentity ||
           !isSameChildSessionIdentity(command.child, child.childIdentity)
         ) {
           return;

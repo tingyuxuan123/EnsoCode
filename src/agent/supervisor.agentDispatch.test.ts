@@ -2516,6 +2516,11 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
         { type: 'dismiss-child', parent, child },
         { type: 'dismiss-child', parent, child },
         {
+          type: 'dismiss-child',
+          parent: { ...parent, generation: 'stale' },
+          child: { ...child, parent: { ...parent, generation: 'stale' } },
+        },
+        {
           type: 'dismiss-coworker',
           parent: { ...parent, generation: 'stale' },
           coworkerId: child.sessionId,
@@ -2534,6 +2539,19 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       expect(current.prompt).toHaveBeenCalledWith('continue after rejected child', undefined);
       expect(events.filter((e) => e.type === 'status' && e.status === 'failed')).toEqual([]);
       expect(events.filter((e) => e.type === 'child-ended')).toEqual([]);
+      // 实体已经消失也要给有效父代关闭确认；旧父代不得产生任何确认。
+      expect(
+        events.filter((e) => e.type === 'coworker-update' && e.coworker.status === 'dismissed')
+      ).toEqual([
+        expect.objectContaining({
+          identity: parent,
+          coworker: expect.objectContaining({ id: child.sessionId, status: 'dismissed' }),
+        }),
+        expect.objectContaining({
+          identity: parent,
+          coworker: expect.objectContaining({ id: child.sessionId, status: 'dismissed' }),
+        }),
+      ]);
     } finally {
       await supervisor.shutdown();
     }
@@ -2574,6 +2592,9 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       });
       await settle();
       expect(current.dispose).not.toHaveBeenCalled();
+      expect(
+        events.filter((e) => e.type === 'coworker-update' && e.coworker.status === 'dismissed')
+      ).toEqual([]);
       expect(events.filter((e) => e.type === 'status' && e.status === 'failed')).toEqual([]);
       supervisor.handleCommand({ type: 'dismiss-child', parent, child });
       await settle();
