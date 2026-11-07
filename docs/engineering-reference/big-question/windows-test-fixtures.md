@@ -9,6 +9,8 @@
 ## 根因
 
 - Git 的系统 `core.autocrlf=true` 将 LF 源码变成 CRLF，formatter、文档预算和源码副本比较同时失败。
+- 旧 checkout 的 `designer.md` 仍可含 CRLF；按 `\n\n` 提取角色块会静默回退短版，造成 Windows
+  与 CI 注入不同提示。设计提示入口在提取前统一换行，回归显式覆盖 LF、CRLF 与缺失边界。
 - 无管理员/开发者模式的 Windows 不能创建普通文件符号链接，但能创建目录 junction。
 - 用本机 `node:path` 解释模拟 macOS 身份、Linux PATH 或远端 SSH 路径会改变测试目标语义。
 - POSIX mode、shebang、`/bin/sh` 和 `O_NOFOLLOW` 不是 Windows 能力。

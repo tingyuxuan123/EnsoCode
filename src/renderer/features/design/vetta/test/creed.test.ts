@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CREED_CHECK, CREED_ITEMS, CREED_LINE } from "../src/creed";
+import { corePrinciplesBlock, CREED_CHECK, CREED_ITEMS, CREED_LINE } from "../src/creed";
 import { renderAppSheet } from "../src/direction/sheet";
 import { appInputFrom } from "../src/direction/record";
 import { chosenApp } from "./proposal-fixture";
@@ -13,6 +13,15 @@ import { chosenApp } from "./proposal-fixture";
 const designer = readFileSync(join(__dirname, "../../../../../../resources/design/agents/designer.md"), "utf8");
 
 describe("八荣八耻", () => {
+	it.each(["\n", "\r\n"])("完整版边界不依赖 checkout 换行：%j", (eol) => {
+		const normalized = designer.replace(/\r\n/g, "\n");
+		const input = normalized.replace(/\n/g, eol);
+		expect(corePrinciplesBlock(input)).toBe(normalized.split("\n\nYou are the visual design specialist")[0].trim());
+	});
+	it("没有完整正文边界时只回退短版，不注入角色任务", () => {
+		expect(corePrinciplesBlock("unrelated document")).toBe(CREED_LINE);
+		expect(corePrinciplesBlock("## Core principles\nmissing end")).toBe(CREED_LINE);
+	});
 	it("角色提示把它放在最前面，并写明只有用户的话能压过它", () => {
 		const first = designer.indexOf("## Core principles: the eight prides and shames");
 		expect(first).toBe(0);

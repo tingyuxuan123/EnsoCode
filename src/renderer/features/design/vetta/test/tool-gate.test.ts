@@ -6,6 +6,7 @@
  * 调用注定报错。工具表本身是这条防线的硬边界。
  */
 import type { PluginContext, PluginFsFileRef } from "@vetta-org/plugin-sdk";
+import designer from "@design-agent/agents/designer.md?raw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setCanvasController } from "../src/canvas/design-runtime";
 import { resetDesignPresence, setDesignPresence } from "../src/vetd/design-presence";
@@ -145,10 +146,10 @@ describe("设计工具闸门", () => {
 		expect(operation.type).toBe("addBlock");
 		// 插件只能改自己名下的块。
 		expect(operation.block.id).toMatch(/^plugin\.vetta-ui-design\./);
-		expect(operation.block.content).toMatch(/Core principles .*they outrank the style defaults/);
-		expect(operation.block.content).toContain("only the user's words outrank them");
-		expect(operation.block.content).toContain("1 one thing seen first");
-		expect(operation.block.content).toContain("8 colour with a source");
+		const expected = designer.replace(/\r\n/g, "\n").split("\n\nYou are the visual design specialist")[0];
+		expect(operation.block.content).toBe(expected.trim());
+		expect(operation.block.content).toContain("Only the user's words outrank them");
+		expect(operation.block.content.match(/^\d\. Take pride in /gm)).toHaveLength(8);
 		expect(operation.block.content).not.toContain("You are the visual design specialist");
 	});
 });

@@ -26,8 +26,9 @@ export const CREED_CHECK = "Then ask of the image: is one thing seen first? does
  * 完整版从 designer.md 取，只有一份正文：设计师 agent 靠 systemPromptPath 读到它，其余 agent
  * 靠这一段注入系统提示读到它。大多数人用默认 agent，不能让优化只对"设计师"生效。
  */
-export function corePrinciplesBlock(): string {
-	const start = designer.indexOf("## Core principles");
-	const end = designer.indexOf("\n\nYou are the visual design specialist");
-	return start >= 0 && end > start ? designer.slice(start, end).trim() : CREED_LINE;
+export function corePrinciplesBlock(source = designer): string {
+	const text = source.replace(/\r\n/g, "\n");
+	const start = text.indexOf("## Core principles");
+	const end = text.indexOf("\n\nYou are the visual design specialist", start);
+	return start >= 0 && end > start ? text.slice(start, end).trim() : CREED_LINE;
 }
