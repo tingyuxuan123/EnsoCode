@@ -1,0 +1,13 @@
+/* vetd:placeholder-theme — a neutral placeholder, not a palette.
+ * Replace this whole file with your direction's theme.css (Tailwind v4 @theme
+ * tokens, used by every frame as bg-primary, text-surface-foreground, …)
+ * before the first frame. */
+@theme {
+	--color-primary: #3d3d3d;
+	--color-primary-foreground: #ffffff;
+	--color-surface: #f5f5f5;
+	--color-surface-foreground: #171717;
+	--color-panel: #ebebeb;
+	--color-muted: #616161;
+	--color-danger: #b42318;
+}

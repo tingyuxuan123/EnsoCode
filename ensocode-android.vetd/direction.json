@@ -1,0 +1,39 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "Android companion for EnsoCode, a desktop coding-agent workbench: see running tasks, approve tool actions, start tasks, review diffs from the phone",
+		"screens": [
+			"新建任务（欢迎页 + 输入框）",
+			"任务列表抽屉（项目、会话、状态筛选）",
+			"会话详情（对话、工具调用、审批请求）",
+			"改动审查（diff）",
+			"任务看板（等你处理 / 运行中 / 已完成，子代理与工作流）",
+			"连接电脑（扫码 / 6 位验证码）"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "mobile"
+	},
+	"seed": 514766854,
+	"at": "2026-11-07T03:31:40.254Z",
+	"options": [],
+	"choice": null,
+	"allow": [],
+	"redraws": [],
+	"intent": {
+		"stated": {
+			"mood": "完全照搬 Vetta Android 客户端（open-vetta apps/mobile/client-android）的风格：黑白底色、Liquid Glass 浮动圆形/胶囊按钮、无框列表、彩色状态小图标、新建页紫到蓝的渐变晕光与两行大字问候",
+			"goAhead": true,
+			"preferences": [
+				{
+					"question": "你想做的 App 是做什么的？",
+					"answer": "就是我当项目的安卓版本（EnsoCode 的安卓端）"
+				}
+			]
+		},
+		"questions": [],
+		"answers": null
+	},
+	"proposals": []
+}

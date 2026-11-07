@@ -1,0 +1,73 @@
+@import "@fontsource-variable/roboto";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* EnsoCode Android — 照搬 Vetta Android 客户端（VettaTheme.kt / WorkStyle.kt）的浅色主题：
+ * 黑白为底，强调靠反色的墨黑胶囊；彩色只留给状态（蓝=运行、黄=等你、红=出错、绿=完成）。 */
+@theme {
+	--font-sans: "Roboto Variable", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", "SF Mono", Consolas, monospace;
+
+	/* 页面与表面 */
+	--color-page: #f4f5f7;
+	--color-card: #ffffff;
+	--color-card2: #f0f1f3;
+	--color-line: #e3e5e8;
+
+	/* 墨色层级 */
+	--color-ink: #0b0c0e;
+	--color-ink2: #3f444b;
+	--color-dim: #6b7077;
+	--color-faint: #9aa0a6;
+
+	/* 反色胶囊：用户气泡、主按钮 */
+	--color-pill: #0b0c0e;
+	--color-pill-ink: #ffffff;
+
+	/* 状态色 */
+	--color-green: #16a34a;
+	--color-blue: #2563eb;
+	--color-yellow: #e0a100;
+	--color-red: #dc2626;
+	--color-orange: #d97706;
+	/* 黄色上的字：黄色本身在浅底上读不清，徽标里的字用深一档的琥珀 */
+	--color-yellow-ink: #9a6b00;
+	/* 扫码取景框：相机画面的近黑 */
+	--color-camera: #101215;
+
+	/* 新任务页的晨光：左上紫、右侧蓝；问候第二行的渐变 */
+	--color-dawn: #d6e2fb;
+	--color-dawn-side: #e6defa;
+	--color-greet-a: #6d3fd6;
+	--color-greet-b: #2f55d4;
+
+	/* 兼容通用名 */
+	--color-primary: #0b0c0e;
+	--color-primary-foreground: #ffffff;
+	--color-surface: #f4f5f7;
+	--color-surface-foreground: #0b0c0e;
+	--color-muted: #6b7077;
+	--color-danger: #dc2626;
+
+	--radius-sheet: 26px;
+}
+
+/* Liquid Glass：半透明白底、顶边一道亮发丝、柔和投影把它从内容上托起来（Glass.kt） */
+@utility glass {
+	background-color: rgb(255 255 255 / 0.86);
+	border: 0.75px solid rgb(0 0 0 / 0.05);
+	box-shadow:
+		inset 0 1px 0 #ffffff,
+		0 10px 24px -8px rgb(0 0 0 / 0.16),
+		0 2px 6px rgb(0 0 0 / 0.05);
+	backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/* 反色主胶囊也带一点玻璃的高光 */
+@utility glass-ink {
+	background-color: var(--color-pill);
+	color: var(--color-pill-ink);
+	box-shadow:
+		inset 0 1px 0 rgb(255 255 255 / 0.18),
+		0 10px 24px -8px rgb(0 0 0 / 0.3),
+		0 2px 6px rgb(0 0 0 / 0.08);
+}

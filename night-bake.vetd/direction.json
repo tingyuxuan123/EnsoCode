@@ -1,0 +1,31 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "Night-shift bake scheduling app for a four-person sourdough bakery: tonight's oven loads, dough batches with hydration and proof state, deck oven timers.",
+		"screens": [
+			"今晚的炉次时间线",
+			"一个面团的批次详情：水合、折叠、温度记录",
+			"炉前：装炉顺序与烘烤计时"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "mobile"
+	},
+	"seed": 1419070472,
+	"at": "2026-11-04T12:48:06.328Z",
+	"options": [],
+	"choice": null,
+	"allow": [],
+	"redraws": [],
+	"intent": {
+		"stated": {
+			"colour": "dark",
+			"emphasis": "今晚的时间线与面团状态",
+			"boldness": "expressive"
+		},
+		"questions": [],
+		"answers": null
+	},
+	"proposals": []
+}

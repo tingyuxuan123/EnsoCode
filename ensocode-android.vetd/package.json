@@ -1,0 +1,12 @@
+{
+	"name": "ensocode-android",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@fontsource-variable/jetbrains-mono": "^5.3.0",
+		"@fontsource-variable/roboto": "^5.3.0",
+		"react": "19.1.1",
+		"react-dom": "19.1.1",
+		"react-router": "^7.9.1"
+	}
+}

@@ -1,0 +1,101 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 1.4715177646857693,
+		"x": -2171.8221168242567,
+		"y": -186.6091540789489
+	},
+	"frames": [
+		{
+			"id": "board",
+			"file": "frames/board.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "任务看板",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "任务看板"
+			}
+		},
+		{
+			"id": "changes",
+			"file": "frames/changes.tsx",
+			"x": 492,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "改动审查",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "改动审查"
+			}
+		},
+		{
+			"id": "home",
+			"file": "frames/home.tsx",
+			"x": 984,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "任务列表",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "任务列表"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 1476,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "新任务",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "新任务"
+			}
+		},
+		{
+			"id": "pair",
+			"file": "frames/pair.tsx",
+			"x": 1968,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "连接电脑",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "连接电脑"
+			}
+		},
+		{
+			"id": "session",
+			"file": "frames/session.tsx",
+			"x": 2460,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "会话",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "会话"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 412,
+		"height": 915
+	},
+	"statusBar": "flat",
+	"interactionMode": "mobile"
+}

@@ -1,0 +1,16 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"x": 0,
+		"y": 0,
+		"zoom": 1
+	},
+	"frames": [],
+	"defaultFrameSize": {
+		"width": 390,
+		"height": 844
+	},
+	"statusBar": "island",
+	"interactionMode": "mobile"
+}
