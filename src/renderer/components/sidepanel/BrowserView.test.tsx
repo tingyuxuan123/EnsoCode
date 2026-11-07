@@ -14,6 +14,7 @@ const harness = vi.hoisted(() => ({
   reload: vi.fn(),
   setDesignMode: vi.fn(),
   setViewport: vi.fn(),
+  setDevToolsViewport: vi.fn(),
   setDevice: vi.fn(),
   frame: null as (() => void) | null,
   t: (key: string) => key,
@@ -145,6 +146,11 @@ async function click(text: string, index = 0) {
 beforeEach(async () => {
   const dom = parseHTML('<html><body><div id="root"></div></body></html>');
   vi.stubGlobal('window', dom.window);
+  Object.defineProperty(dom.window, 'devicePixelRatio', {
+    value: 1,
+    writable: true,
+    configurable: true,
+  });
   vi.stubGlobal('document', dom.document);
   Object.defineProperty(dom.document, 'visibilityState', { value: 'visible' });
   Object.defineProperty(dom.window.HTMLElement.prototype, 'isConnected', {
@@ -165,6 +171,7 @@ beforeEach(async () => {
   harness.frame = null;
   browserState = state;
   harness.setViewport.mockReset().mockImplementation(async () => browserState);
+  harness.setDevToolsViewport.mockReset().mockImplementation(async () => browserState);
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn((callback: () => void) => {
@@ -203,7 +210,7 @@ beforeEach(async () => {
         setDesignMode: harness.setDesignMode,
         setViewport: harness.setViewport,
         setDevice: harness.setDevice,
-        setDevToolsViewport: vi.fn(async () => browserState),
+        setDevToolsViewport: harness.setDevToolsViewport,
       },
     },
   });
@@ -343,6 +350,31 @@ describe('BrowserView controls', () => {
       'exact-tab',
       'owner',
       expect.any(Object),
+      false
+    );
+  });
+  it('界面缩放变化但 CSS 矩形不变时也重报，DIP 换算仍只由 Main 完成', async () => {
+    await emit({ url: 'https://example.com/', devtoolsOpen: true });
+    await act(async () => harness.frame?.());
+    harness.setViewport.mockClear();
+    harness.setDevToolsViewport.mockClear();
+    await act(async () => harness.frame?.());
+    expect(harness.setViewport).not.toHaveBeenCalled();
+    expect(harness.setDevToolsViewport).not.toHaveBeenCalled();
+    Object.defineProperty(window, 'devicePixelRatio', { value: 1.5 });
+    await act(async () => harness.frame?.());
+    expect(harness.setViewport).toHaveBeenCalledOnce();
+    expect(harness.setViewport).toHaveBeenCalledWith(
+      'exact-tab',
+      'owner',
+      { x: 0, y: 0, width: 500, height: 500 },
+      false
+    );
+    expect(harness.setDevToolsViewport).toHaveBeenCalledOnce();
+    expect(harness.setDevToolsViewport).toHaveBeenCalledWith(
+      'exact-tab',
+      'owner',
+      { x: 0, y: 0, width: 500, height: 500 },
       false
     );
   });

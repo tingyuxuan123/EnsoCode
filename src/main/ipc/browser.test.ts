@@ -51,10 +51,11 @@ vi.mock('../windows/SettingsWindow', () => ({ isSettingsWebContents: (id: number
 import { IPC_CHANNELS } from '@shared/types';
 import { registerBrowserHandlers } from './browser';
 
-const sender = (id: number) => {
+const sender = (id: number, zoom = 1) => {
   const listeners: Record<string, ((...args: any[]) => void)[]> = {};
   return {
     id,
+    getZoomFactor: () => zoom,
     on(name: string, fn: (...args: any[]) => void) {
       listeners[name] = [...(listeners[name] ?? []), fn];
     },
@@ -91,6 +92,41 @@ it('浮层 / 矩形上报只认主窗口 renderer', () => {
 
 it('不再注册互斥控制权切换接口', () => {
   expect(mocks.handlers.has('browser:set-control')).toBe(false);
+});
+
+it.each([
+  [IPC_CHANNELS.BROWSER_SET_VIEWPORT, 'setViewport'],
+  [IPC_CHANNELS.BROWSER_SET_DEVTOOLS_VIEWPORT, 'setDevToolsViewport'],
+] as const)(
+  '%s 根据可信上报方的实际缩放换算 CSS px，不采信 renderer 缩放参数',
+  (channel, method) => {
+    const handler = mocks.handlers.get(channel)!;
+    const event = { sender: sender(1, 1.5) };
+    handler(event, 'tab', 'conv', { x: 301, y: 45, width: 511, height: 653 }, false);
+    expect(mocks.host[method]).toHaveBeenLastCalledWith(
+      'tab',
+      'conv',
+      { x: 452, y: 68, width: 766, height: 979 },
+      false
+    );
+    handler(event, 'tab', 'conv', null, true);
+    expect(mocks.host[method]).toHaveBeenLastCalledWith('tab', 'conv', null, true);
+    handler(event, 'tab', 'conv', { x: 1, y: 2, width: 3, height: 4, zoom: 1 }, false);
+    expect(mocks.host[method]).toHaveBeenLastCalledWith('tab', 'conv', null, false);
+  }
+);
+
+it('未授权的上报不读取缩放，不操作原生视图', () => {
+  const untrusted = { ...sender(2), getZoomFactor: vi.fn(() => 2) };
+  mocks.handlers.get(IPC_CHANNELS.BROWSER_SET_VIEWPORT)!(
+    { sender: untrusted },
+    'tab',
+    'conv',
+    { x: 1, y: 2, width: 300, height: 200 },
+    false
+  );
+  expect(untrusted.getZoomFactor).not.toHaveBeenCalled();
+  expect(mocks.host.setViewport).not.toHaveBeenCalled();
 });
 
 it('上报方崩溃 / 销毁 / 整页重载后清掉浮层闩锁', () => {

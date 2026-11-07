@@ -503,6 +503,11 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
 
 ## browserHost：内嵌浏览器宿主
 
+面板矩形上报使用 CSS px，`ipc/browser.ts` 校验后按发送方 `getZoomFactor()` 换为原生 DIP；
+四条边分别取整，guest 与停靠 DevTools 走同一换算。Renderer 的 DPR 仅触发缓存失效，
+不能作为坐标换算率（它还含显示器缩放）。壁纸挖孔仍保留 CSS 坐标，不做二次换算。
+回归：`shared/browser/viewport.test.ts`、`ipc/browser.test.ts`、`BrowserView.test.tsx`。
+
 `browserHost.ts` 持有 `persist:enso[-dev]-browser` 独立 session 与 tab 表（按 agent
 `sessionId` 记「当前 tab」）。worker 经 `browser-invoke` 事件调用，Main 回 `browser-result`。
 

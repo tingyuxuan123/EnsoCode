@@ -213,11 +213,16 @@ export function BrowserView({
   useEffect(() => {
     let raf = 0;
     let disposed = false;
+    let lastPixelRatio = window.devicePixelRatio;
     const root = document.getElementById('root');
     // 挂载即全量重推：矩形 / covered 靠首帧必发，浮层状态靠这一次显式同步
     syncOverlayGuard();
     const tick = () => {
       if (disposed) return;
+      // 页面缩放会改变 DPR；即使 CSS 矩形没动，也让 Main 按新 zoom 重新换算。
+      // DPR 只用于失效缓存，不能作为换算率（它还包含显示器缩放）。
+      const zoomChanged = lastPixelRatio !== window.devicePixelRatio;
+      lastPixelRatio = window.devicePixelRatio;
       const stageBox = readBox(stageRef.current);
       const nextStage = stageBox ? { width: stageBox.width, height: stageBox.height } : null;
       const prevStage = lastStage.current;
@@ -235,6 +240,7 @@ export function BrowserView({
         rect !== null && (!hasPageRef.current || isCoveredBy(rect, overlayBoxes(document, root)));
       if (
         lastSent.current === undefined ||
+        (rect !== null && zoomChanged) ||
         !sameRect(lastSent.current, rect) ||
         covered !== lastCovered.current
       ) {
@@ -253,6 +259,7 @@ export function BrowserView({
       const dtCovered = dtRect !== null && isCoveredBy(dtRect, overlayBoxes(document, root));
       if (
         lastDt.current === undefined ||
+        (dtRect !== null && zoomChanged) ||
         !sameRect(lastDt.current, dtRect) ||
         dtCovered !== lastDtCovered.current
       ) {
