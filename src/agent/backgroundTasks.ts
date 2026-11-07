@@ -141,7 +141,7 @@ export function detachedWaitNote(reason: DetachReason, subject: string): string 
 }
 
 /**
- * 后台任务管理（grok-build 对齐）：detached 进程组、内存环形+磁盘全量双写、
+ * 后台任务管理（grok-build 对齐）：POSIX detached 进程组、内存环形+磁盘全量双写、
  * 结束自动通知（幂等抑制）、阻塞等待、配额与护栏。
  */
 export class BackgroundTaskManager {
@@ -657,14 +657,18 @@ function spawnBackground(
   spawnOpts?: { file?: string; argsPrefix?: string[]; env?: NodeJS.ProcessEnv }
 ) {
   const env = spawnOpts?.env ?? process.env;
+  // POSIX needs a group for descendant cleanup. On Windows, detached creates a new
+  // console where PowerShell can exit 0 without executing; taskkill /T owns cleanup.
+  const detached = process.platform !== 'win32';
   if (spawnOpts?.file) {
     return spawn(spawnOpts.file, [...(spawnOpts.argsPrefix ?? []), command], {
       cwd,
       env,
-      detached: true,
+      detached,
+      windowsHide: true,
     });
   }
-  return spawn(command, { shell: true, cwd, env, detached: true });
+  return spawn(command, { shell: true, cwd, env, detached, windowsHide: true });
 }
 
 export type BackgroundLaunch = {

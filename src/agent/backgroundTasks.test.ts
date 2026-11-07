@@ -1,11 +1,16 @@
 import { ChildProcess, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
-import type { BashOperations, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import {
+  type BashOperations,
+  createLocalBashOperations,
+  type ToolDefinition,
+} from '@earendil-works/pi-coding-agent';
 import type { BackgroundTaskInfo } from '@shared/types/agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { bashPath, posixShell } from '../../test/helpers/shell';
 import {
   attachBackgroundCommandHooks,
   BackgroundTaskManager,
@@ -62,6 +67,14 @@ const until = (pred: () => boolean, ms = 5000) =>
       }
     }, 50);
   });
+
+const bashLaunch = () => ({ file: posixShell(), argsPrefix: ['-c'] });
+const posixCommandTool = () =>
+  createSessionCommandTool({
+    cwd: process.cwd(),
+    preference: 'bash',
+    operations: createLocalBashOperations({ shellPath: posixShell() }),
+  }) as unknown as ToolDefinition;
 
 describe('withForegroundBashTimeout', () => {
   it('前台未指定 timeout 不注入 kill 截止', () => {
@@ -425,7 +438,11 @@ describe('withBackground 命令变换(远程会话用)', () => {
       { prepare: async () => ({ command: wrappedCommand }) }
     );
     const { manager, ended, notified, started } = makeManager();
-    const wrapped = withBackground(base, manager, 's1', '/tmp');
+    const wrapped = withBackground(base, manager, 's1', tmpdir(), (command, cwd) => ({
+      command,
+      cwd,
+      ...bashLaunch(),
+    }));
 
     await wrapped.execute(
       't1',
@@ -438,6 +455,7 @@ describe('withBackground 命令变换(远程会话用)', () => {
 
     expect(started[0].command).toBe(originalCommand);
     expect(started[0].command).not.toContain('RTK_DB_PATH');
+    expect(await manager.read(ended[0])).toMatchObject({ status: 'done', exitCode: 0 });
     expect(notified[0]).toContain(`Command: ${originalCommand}`);
     expect(notified[0]).not.toContain('RTK_DB_PATH');
   });
@@ -621,6 +639,97 @@ describe('withBackground shell 环境', () => {
       }
     }
   );
+});
+
+describe.skipIf(process.platform !== 'win32')('Windows 后台真实进程', () => {
+  const powershell = path.win32.join(
+    process.env.SystemRoot ?? 'C:\\Windows',
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe'
+  );
+  const argsPrefix = ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'];
+
+  it('PowerShell 后台 exit 0 必须同时捕获输出、写入目标文件和全量日志', async () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'enso-bg-win-'));
+    const { manager, ended } = makeManager(cwd);
+    let taskId: string | undefined;
+    try {
+      // QA: detached Windows PowerShell 曾直接 exit 0，命令和文件写入均未执行。
+      taskId = manager.start(
+        's1',
+        '[Console]::Out.WriteLine("stdout-marker"); [Console]::Error.WriteLine("stderr-marker"); ' +
+          '[IO.File]::WriteAllText((Join-Path (Get-Location) "result.txt"), "disk-marker")',
+        cwd,
+        { file: powershell, argsPrefix, timeoutSec: 10 }
+      );
+      const result = await manager.read(taskId, 15_000);
+      expect(result).toMatchObject({ status: 'done', exitCode: 0 });
+      expect(result?.output).toContain('stdout-marker');
+      expect(result?.output).toContain('stderr-marker');
+      expect(readFileSync(path.join(cwd, 'result.txt'), 'utf8')).toBe('disk-marker');
+      await until(() => readFileSync(result!.logPath, 'utf8') === result!.output);
+    } finally {
+      if (taskId && !ended.includes(taskId)) {
+        manager.stop(taskId, true);
+        await until(() => ended.includes(taskId!), 15_000);
+      }
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  }, 35_000);
+
+  it('停止非 detached PowerShell 时 taskkill 同时终止子孙进程', async () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'enso-bg-win-tree-'));
+    const { manager, ended } = makeManager(cwd);
+    const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
+    let taskId: string | undefined;
+    const pids: number[] = [];
+    const alive = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    try {
+      writeFileSync(
+        path.join(cwd, 'descendant.cjs'),
+        'require("node:fs").writeFileSync("grandchild.pid", String(process.pid)); setInterval(() => {}, 1000);'
+      );
+      writeFileSync(
+        path.join(cwd, 'parent.cjs'),
+        'require("node:fs").writeFileSync("parent.pid", String(process.pid)); ' +
+          'require("node:child_process").spawn(process.execPath, ["descendant.cjs"], { stdio: "inherit" }); setInterval(() => {}, 1000);'
+      );
+      taskId = manager.start(
+        's1',
+        '[IO.File]::WriteAllText((Join-Path (Get-Location) "root.pid"), [string]$PID); ' +
+          `& ${quote(process.execPath)} ${quote(path.join(cwd, 'parent.cjs'))}`,
+        cwd,
+        { file: powershell, argsPrefix, timeoutSec: 15 }
+      );
+      await until(() => existsSync(path.join(cwd, 'grandchild.pid')), 10_000);
+      for (const file of ['root.pid', 'parent.pid', 'grandchild.pid']) {
+        const pid = Number(readFileSync(path.join(cwd, file), 'utf8'));
+        expect(pid).toBeGreaterThan(0);
+        pids.push(pid);
+      }
+      expect(pids.every(alive)).toBe(true);
+      expect(manager.stop(taskId, true)).toBe(true);
+      expect((await manager.read(taskId, 12_000))?.status).toBe('failed');
+      await until(() => !pids.some(alive));
+    } finally {
+      if (taskId && !ended.includes(taskId)) {
+        manager.stop(taskId, true);
+        await until(() => ended.includes(taskId!), 15_000);
+      }
+      // Only owned, still-live processes may need emergency test cleanup.
+      for (const pid of pids.filter(alive)) process.kill(pid, 'SIGKILL');
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  }, 45_000);
 });
 
 describe('BackgroundTaskManager', () => {
@@ -1000,7 +1109,7 @@ describe('BackgroundTaskManager', () => {
 
   it('显式后台 timeout 生效并正常通知；deadline 不被随后 user stop 覆盖', async () => {
     const { manager, notified, ended } = makeManager();
-    const taskId = manager.start('s1', 'sleep 30', '/tmp', { timeoutSec: 0.05 });
+    const taskId = manager.start('s1', 'sleep 30', tmpdir(), { ...bashLaunch(), timeoutSec: 0.05 });
     await until(() => ended.includes(taskId), 1500);
     expect((await manager.read(taskId))?.details).toMatchObject({
       shellFailure: { kind: 'deadline' },
@@ -1051,7 +1160,8 @@ describe('BackgroundTaskManager', () => {
     const finalized = new Promise<unknown>((resolve) => {
       finishFinalize = resolve;
     });
-    const taskId = manager.start('s1', 'printf finalized; sleep 0.2', '/tmp', {
+    const taskId = manager.start('s1', 'printf finalized; sleep 0.2', tmpdir(), {
+      ...bashLaunch(),
       details: { rtk: { status: 'pending', originalCommand: 'echo finalized' } },
       finalize: () => finalized,
     });
@@ -1079,7 +1189,7 @@ describe('BackgroundTaskManager', () => {
 
   it('workspace busy scope includes descendant tasks even without a live session', async () => {
     const { manager, ended } = makeManager();
-    const taskId = manager.start('root::cw-child', 'sleep 30', tmpdir());
+    const taskId = manager.start('root::cw-child', 'sleep 30', tmpdir(), bashLaunch());
     try {
       expect(manager.hasRunningInWorkspace(['root'])).toBe(true);
       expect(manager.hasRunningInWorkspace(['roo'])).toBe(false);
@@ -1093,7 +1203,7 @@ describe('BackgroundTaskManager', () => {
 
   it('任务完成:输出捕获、exit 事件、未知情则自动通知(含 log 路径)', async () => {
     const { manager, notified, ended } = makeManager();
-    const taskId = manager.start('s1', 'echo hello-bg', '/tmp');
+    const taskId = manager.start('s1', 'echo hello-bg', tmpdir(), bashLaunch());
     await until(() => ended.length === 1);
     expect(ended).toEqual([taskId]);
     expect(notified).toHaveLength(1);
@@ -1124,12 +1234,13 @@ describe('BackgroundTaskManager', () => {
       },
       mkdtempSync(path.join(tmpdir(), 'enso-bg-'))
     );
-    const first = manager.start('s1', 'true', '/tmp');
+    const launch = bashLaunch();
+    const first = manager.start('s1', 'true', tmpdir(), launch);
     expect(levels.at(-1)).toEqual({ sessionId: 's1', ids: [first], statuses: ['running'] });
     await until(() => levels.at(-1)?.statuses[0] === 'done');
-    for (let i = 0; i < 9; i++) manager.start('s2', 'sleep 5', '/tmp');
+    for (let i = 0; i < 9; i++) manager.start('s2', 'sleep 30', tmpdir(), launch);
     // 第 11 个触发配额清理：s1 的已完成任务被移除，s1 必须收到空快照
-    manager.start('s2', 'sleep 5', '/tmp');
+    manager.start('s2', 'sleep 30', tmpdir(), launch);
     expect(levels.filter((level) => level.sessionId === 's1').at(-1)).toEqual({
       sessionId: 's1',
       ids: [],
@@ -1140,7 +1251,7 @@ describe('BackgroundTaskManager', () => {
 
   it('阻塞等待拿到结束态 → consumed,不再自动通知', async () => {
     const { manager, notified } = makeManager();
-    const taskId = manager.start('s1', 'sleep 0.2 && echo done-x', '/tmp');
+    const taskId = manager.start('s1', 'sleep 0.2 && echo done-x', tmpdir(), bashLaunch());
     const result = await manager.read(taskId, 5000);
     expect(result?.status).toBe('done');
     // 等潜在的通知路径跑完
@@ -1221,12 +1332,12 @@ describe('BackgroundTaskManager', () => {
 
   it('模型 task_stop → consumed 不通知;用户停止 → 通知含勿重启提示', async () => {
     const { manager, notified, ended } = makeManager();
-    const byModel = manager.start('s1', 'sleep 30', '/tmp');
+    const byModel = manager.start('s1', 'sleep 30', tmpdir(), bashLaunch());
     manager.stop(byModel);
     await until(() => ended.includes(byModel));
     expect(notified).toHaveLength(0);
 
-    const byUser = manager.start('s1', 'sleep 30', '/tmp');
+    const byUser = manager.start('s1', 'sleep 30', tmpdir(), bashLaunch());
     manager.stop(byUser, true);
     await until(() => ended.includes(byUser));
     expect(notified).toHaveLength(1);
@@ -1235,7 +1346,7 @@ describe('BackgroundTaskManager', () => {
 
   it('task_output 阻塞时插话提前返回，任务继续跑，结束后照常通知', async () => {
     const { manager, notified, ended } = makeManager();
-    const taskId = manager.start('s1', 'sleep 0.6 && echo late', '/tmp');
+    const taskId = manager.start('s1', 'sleep 0.6 && echo late', tmpdir(), bashLaunch());
     const tool = createTaskTools(manager, 's1').find((item) => item.name === 'task_output');
     const t0 = Date.now();
     const reading = tool?.execute(
@@ -1258,7 +1369,7 @@ describe('BackgroundTaskManager', () => {
 
   it('task_output 用户「不等了」：只结束这一次等待', async () => {
     const { manager, ended } = makeManager();
-    const taskId = manager.start('s1', 'sleep 30', '/tmp');
+    const taskId = manager.start('s1', 'sleep 30', tmpdir(), bashLaunch());
     try {
       const tool = createTaskTools(manager, 's1').find((item) => item.name === 'task_output');
       const reading = tool?.execute(
@@ -1282,7 +1393,7 @@ describe('BackgroundTaskManager', () => {
 
   it('有界等待超时后任务结束仍会通知', async () => {
     const { manager, notified, ended } = makeManager();
-    const taskId = manager.start('s1', 'sleep 0.4', '/tmp');
+    const taskId = manager.start('s1', 'sleep 0.4', tmpdir(), bashLaunch());
     expect((await manager.read(taskId, 50))?.status).toBe('running');
     await until(() => ended.includes(taskId));
     expect(notified).toHaveLength(1);
@@ -1290,9 +1401,11 @@ describe('BackgroundTaskManager', () => {
 });
 
 describe('前台命令转后台', () => {
-  const shell = (manager: BackgroundTaskManager, sessionId = 's1') =>
+  const shell = (manager: BackgroundTaskManager, sessionId = 's1', native = false) =>
     withBackground(
-      createSessionCommandTool({ cwd: process.cwd() }) as unknown as ToolDefinition,
+      native
+        ? (createSessionCommandTool({ cwd: process.cwd() }) as unknown as ToolDefinition)
+        : posixCommandTool(),
       manager,
       sessionId,
       process.cwd()
@@ -1311,11 +1424,11 @@ describe('前台命令转后台', () => {
 
   it('用户转后台：工具立即返回任务回执，同一进程继续跑完并通知模型', async () => {
     const { manager, started, ended, notified } = makeManager();
-    const { pending, updates } = run(
-      shell(manager),
-      't1',
-      'echo before-bg; sleep 0.5; echo after-bg'
-    );
+    const command =
+      process.platform === 'win32'
+        ? 'Write-Output before-bg; Start-Sleep -Milliseconds 1500; Write-Output after-bg'
+        : 'echo before-bg; sleep 0.5; echo after-bg';
+    const { pending, updates } = run(shell(manager, 's1', true), 't1', command);
     await until(() => updates.join('').includes('before-bg'));
 
     const taskId = manager.backgroundForeground('s1', 't1', 'user');
@@ -1328,7 +1441,7 @@ describe('前台命令转后台', () => {
     expect(result.details).toMatchObject({ backgroundTaskId: taskId });
     expect(started[0]).toMatchObject({
       taskId,
-      command: 'echo before-bg; sleep 0.5; echo after-bg',
+      command,
       status: 'running',
     });
 
@@ -1365,7 +1478,7 @@ describe('前台命令转后台', () => {
   it('子代理的前台命令按子会话登记：父会话插话不牵连，任务仍归父会话', async () => {
     const { manager, started } = makeManager();
     const childShell = withBackground(
-      createSessionCommandTool({ cwd: process.cwd() }) as unknown as ToolDefinition,
+      posixCommandTool(),
       manager,
       'parent',
       process.cwd(),
@@ -1393,7 +1506,7 @@ describe('前台命令转后台', () => {
 
   it('包装层推迟的 finalize 在后台任务结束时执行并更新 details', async () => {
     const { manager, ended } = makeManager();
-    const base = createSessionCommandTool({ cwd: process.cwd() }) as unknown as ToolDefinition;
+    const base = posixCommandTool();
     let finalized = 0;
     const deferring: ToolDefinition = {
       ...base,
@@ -1411,18 +1524,31 @@ describe('前台命令转后台', () => {
         }
       },
     };
-    const { pending, updates } = run(
-      withBackground(deferring, manager, 's1', process.cwd()),
-      't1',
-      'echo go; sleep 0.3'
-    );
-    await until(() => updates.join('').includes('go'));
-    const taskId = manager.backgroundForeground('s1', 't1', 'user') as string;
-    const result = await pending;
-    expect(result.details).toEqual({ stage: 'pending', backgroundTaskId: taskId });
-    expect(finalized).toBe(0);
-    await until(() => ended.includes(taskId));
-    expect(finalized).toBe(1);
-    expect((await manager.read(taskId))?.details).toEqual({ stage: 'final' });
+    const gateDir = mkdtempSync(path.join(tmpdir(), 'enso-bg-finalize-'));
+    const gate = path.join(gateDir, 'release');
+    const shellGate = `'${bashPath(gate).replaceAll("'", "'\\''")}'`;
+    try {
+      const { pending, updates } = run(
+        withBackground(deferring, manager, 's1', process.cwd()),
+        't1',
+        `echo go; while [ ! -f ${shellGate} ]; do sleep 0.05; done`
+      );
+      await until(() => updates.join('').includes('go'));
+      const taskId = manager.backgroundForeground('s1', 't1', 'user');
+      expect(taskId).toMatch(/^task-/);
+      const result = await pending;
+      expect(result.details).toEqual({ stage: 'pending', backgroundTaskId: taskId });
+      expect(finalized).toBe(0);
+      writeFileSync(gate, 'release');
+      await until(() => ended.includes(taskId!));
+      expect(finalized).toBe(1);
+      expect(await manager.read(taskId!)).toMatchObject({
+        status: 'done',
+        details: { stage: 'final' },
+      });
+    } finally {
+      manager.stopAll();
+      rmSync(gateDir, { recursive: true, force: true });
+    }
   });
 });
