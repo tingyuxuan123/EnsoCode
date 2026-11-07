@@ -8,6 +8,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Server,
   Trash2,
 } from 'lucide-react';
@@ -32,6 +33,11 @@ import { NewSessionBadge } from './NewSessionBadge';
 import { AccountUsageBlock } from './OauthProvidersDialog';
 import { ProviderEditDialog } from './ProviderEditDialog';
 import { ProviderSetupWizard } from './ProviderSetupWizard';
+import {
+  createProviderModelFetcher,
+  type ProviderFetchStatus,
+  type ProviderFetchSummary,
+} from './providerFetch';
 import { SubagentModelsSettings } from './SubagentModelsSettings';
 import { TitleSummaryPicker } from './TitleSummaryPicker';
 import { VirtualModelsSettings } from './VirtualModelsSettings';
@@ -59,6 +65,51 @@ export function ProvidersSettings() {
     providerId: string;
     message: string;
   } | null>(null);
+  const [refreshingModels, setRefreshingModels] = React.useState(false);
+  const [fetchStatuses, setFetchStatuses] = React.useState<Record<string, ProviderFetchStatus>>({});
+  const [fetchSummary, setFetchSummary] = React.useState<ProviderFetchSummary | null>(null);
+  const refreshingRef = React.useRef(false);
+  const [modelFetcher] = React.useState(() =>
+    createProviderModelFetcher({
+      api: {
+        listModels: (config) => window.electronAPI.providers.listModels(config),
+        modelMeta: (query) => window.electronAPI.providers.modelMeta(query),
+      },
+      getProviders: () => useSettingsStore.getState().providers,
+      updateModels: (id, models) => useSettingsStore.getState().updateProvider(id, { models }),
+      onStatus: (id, status) => setFetchStatuses((current) => ({ ...current, [id]: status })),
+    })
+  );
+
+  const refreshAllModels = async () => {
+    // ref 同步挡住 React 下一次渲染前的连续点击。
+    if (refreshingRef.current || useSettingsStore.getState().providers.length === 0) return;
+    refreshingRef.current = true;
+    setRefreshingModels(true);
+    setFetchStatuses({});
+    setFetchSummary(null);
+    try {
+      setFetchSummary(await modelFetcher.refresh());
+    } finally {
+      refreshingRef.current = false;
+      setRefreshingModels(false);
+    }
+  };
+
+  const fetchStatusText = (status: ProviderFetchStatus) => {
+    switch (status.state) {
+      case 'queued':
+        return t('Waiting to refresh models');
+      case 'fetching':
+        return t('Refreshing provider models...');
+      case 'success':
+        return t('Fetched {{count}} models', { count: status.count });
+      case 'error':
+        return t('Model refresh failed: {{message}}', { message: status.message });
+      case 'skipped':
+        return t('Skipped: provider changed or removed');
+    }
+  };
 
   /** 账号展示跟随非持久凭证快照 revision；跨窗口 invalidation 后会自动重拉。 */
   const oauthRevision = useOauthCredentialStore((state) => state.snapshot.revision);
@@ -143,7 +194,16 @@ export function ProvidersSettings() {
             {t('Manage model API providers for this app')}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={providers.length === 0 || refreshingModels}
+            onClick={() => void refreshAllModels()}
+          >
+            <RefreshCw className={cn('h-4 w-4 mr-1.5', refreshingModels && 'animate-spin')} />
+            {t('Refresh all models')}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
             <HardDriveDownload className="h-4 w-4 mr-1.5" />
             {t('Import from local apps')}
@@ -154,6 +214,24 @@ export function ProvidersSettings() {
           </Button>
         </div>
       </div>
+      {(refreshingModels || fetchSummary) && (
+        <p
+          role="status"
+          className={cn(
+            'text-[calc(12rem/14)] text-muted-foreground',
+            !refreshingModels && fetchSummary?.failed && 'text-destructive'
+          )}
+        >
+          {refreshingModels
+            ? t('Refreshing provider models...')
+            : fetchSummary &&
+              t('Model refresh: {{success}} succeeded, {{failed}} failed, {{skipped}} skipped', {
+                success: fetchSummary.success,
+                failed: fetchSummary.failed,
+                skipped: fetchSummary.skipped,
+              })}
+        </p>
+      )}
       <DefaultModelPicker />
       <VirtualModelsSettings />
       <TitleSummaryPicker />
@@ -205,6 +283,7 @@ export function ProvidersSettings() {
                 </div>
                 <div className="mt-1.5 space-y-1 border-l pl-3">
                   {group.providers.map((provider) => {
+                    const fetchStatus = fetchStatuses[provider.id];
                     const isSubscription = Boolean(provider.oauthAccountKey);
                     const modelCount = modelCountById.get(provider.id) ?? provider.models.length;
                     const account =
@@ -279,6 +358,16 @@ export function ProvidersSettings() {
                             {isClassifierOnlyProvider(provider) && (
                               <p className="mt-1 text-[calc(12rem/14)] text-muted-foreground">
                                 {t('Classification only, not for chat')}
+                              </p>
+                            )}
+                            {fetchStatus && (
+                              <p
+                                className={cn(
+                                  'mt-1 break-words text-[calc(12rem/14)] text-muted-foreground',
+                                  fetchStatus.state === 'error' && 'text-destructive'
+                                )}
+                              >
+                                {fetchStatusText(fetchStatus)}
                               </p>
                             )}
                             {provider.oauthAccountKey && !provider.oauthAccountPool && (

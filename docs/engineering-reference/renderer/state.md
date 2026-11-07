@@ -79,6 +79,10 @@ commands 不持久化，commands 仍由 snapshot / commands 事件恢复到内�
 
 ## 订阅要选片，不要整取
 
+模型中心批量刷新复用单项 IPC，API 条目仍只传凭证引用；回包后按最新 store 合并模型，
+端点、凭证或账号身份变更时丢弃旧结果，删除条目不复活。OAuth 只重拉 Main 权威目录，
+不把目录元数据写成用户覆盖。回归：`providerFetch.test.ts`、`ProvidersSettings.test.tsx`。
+
 ```tsx
 // 正确：只在 providers 变化时重渲染
 const providers = useSettingsStore((state) => state.providers);

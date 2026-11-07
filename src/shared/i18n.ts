@@ -823,6 +823,13 @@ export const zhTranslations: Record<string, string> = {
   'Deselect all': '全不选',
   '{{enabled}}/{{total}} enabled': '已启用 {{enabled}}/{{total}}',
   'Fetch models': '拉取模型',
+  'Refresh all models': '拉取全部模型',
+  'Waiting to refresh models': '等待拉取模型',
+  'Refreshing provider models...': '正在拉取供应商模型…',
+  'Model refresh failed: {{message}}': '模型拉取失败：{{message}}',
+  'Skipped: provider changed or removed': '已跳过：供应商配置已更改或删除',
+  'Model refresh: {{success}} succeeded, {{failed}} failed, {{skipped}} skipped':
+    '模型拉取完成：成功 {{success}} 项，失败 {{failed}} 项，跳过 {{skipped}} 项',
   'Test connection': '测试连接',
   Authorize: '授权',
   Authorizing: '授权中...',
