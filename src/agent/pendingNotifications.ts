@@ -58,13 +58,24 @@ export class PendingNotificationStore {
     if (!name || !this.directory()) return [];
     let fd: number | undefined;
     try {
-      fd = openSync(path.join(this.dir, name), constants.O_RDONLY | constants.O_NOFOLLOW);
-      const stat = fstatSync(fd);
-      if (!stat.isFile() || stat.size > MAX_BYTES) return [];
+      const file = path.join(this.dir, name);
+      const before = lstatSync(file, { bigint: true });
+      // O_NOFOLLOW is unavailable on Windows; never follow a linked leaf there either.
+      if (before.isSymbolicLink() || !before.isFile()) return [];
+      fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const stat = fstatSync(fd, { bigint: true });
+      if (
+        !stat.isFile() ||
+        stat.dev !== before.dev ||
+        stat.ino !== before.ino ||
+        stat.size > BigInt(MAX_BYTES)
+      )
+        return [];
       // 即使检查后文件继续增长，也只读取有界内容。
-      const buffer = Buffer.alloc(stat.size + 1);
+      const size = Number(stat.size);
+      const buffer = Buffer.alloc(size + 1);
       const bytes = readSync(fd, buffer, 0, buffer.length, 0);
-      if (bytes > stat.size) return [];
+      if (bytes > size) return [];
       return bounded(JSON.parse(buffer.subarray(0, bytes).toString('utf8')));
     } catch {
       return [];

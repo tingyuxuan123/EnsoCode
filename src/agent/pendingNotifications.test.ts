@@ -1,17 +1,45 @@
 import {
   existsSync,
+  fstatSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PendingNotificationStore } from './pendingNotifications';
+
+const leafFixture = vi.hoisted(() => ({
+  symlink: undefined as string | undefined,
+  beforeOpen: undefined as (() => void) | undefined,
+  opened: undefined as number | undefined,
+}));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    // Only the selected leaf's metadata is simulated; directory guards and all IO remain real.
+    lstatSync: ((...args: Parameters<typeof actual.lstatSync>) => {
+      const stat = actual.lstatSync(...args);
+      return stat && args[0] === leafFixture.symlink
+        ? Object.assign(stat, { isSymbolicLink: () => true, isFile: () => false })
+        : stat;
+    }) as typeof actual.lstatSync,
+    openSync: ((...args: Parameters<typeof actual.openSync>) => {
+      leafFixture.beforeOpen?.();
+      const fd = actual.openSync(...args);
+      leafFixture.opened = fd;
+      return fd;
+    }) as typeof actual.openSync,
+  };
+});
 
 describe('PendingNotificationStore', () => {
   let root: string;
@@ -20,7 +48,40 @@ describe('PendingNotificationStore', () => {
     root = mkdtempSync(path.join(tmpdir(), 'enso-pending-'));
     dir = path.join(root, 'pending');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  afterEach(() => {
+    leafFixture.symlink = undefined;
+    leafFixture.beforeOpen = undefined;
+    leafFixture.opened = undefined;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('即使 O_NOFOLLOW 缺失也拒绝叶符号链接，不交付其文件内容', () => {
+    mkdirSync(dir);
+    const file = path.join(dir, 'parent.json');
+    writeFileSync(file, '["must not be delivered"]');
+    leafFixture.symlink = file;
+    expect(new PendingNotificationStore(dir).load('parent')).toEqual([]);
+    expect(leafFixture.opened).toBeUndefined();
+  });
+
+  it('检查与 open 之间被替换为另一个普通文件时拒绝内容并关闭 fd', () => {
+    mkdirSync(dir);
+    const file = path.join(dir, 'parent.json');
+    const replacement = path.join(dir, 'replacement.json');
+    writeFileSync(file, '["approved"]');
+    writeFileSync(replacement, '["swapped!"]');
+    const before = lstatSync(file, { bigint: true });
+    expect(lstatSync(replacement, { bigint: true }).ino).not.toBe(before.ino);
+    leafFixture.beforeOpen = () => {
+      leafFixture.beforeOpen = undefined;
+      renameSync(replacement, file);
+    };
+    expect(new PendingNotificationStore(dir).load('parent')).toEqual([]);
+    expect(leafFixture.opened).toBeTypeOf('number');
+    expect(() => fstatSync(leafFixture.opened!)).toThrow(
+      expect.objectContaining({ code: 'EBADF' })
+    );
+  });
 
   it('原子保留父子通知，重建 store 可读，消费后移除文件', () => {
     const store = new PendingNotificationStore(dir);
@@ -74,13 +135,18 @@ describe('PendingNotificationStore', () => {
       expect(store.load(id)).toEqual([]);
     }
     expect(existsSync(dir)).toBe(false);
-    symlinkSync(outside, dir);
+    symlinkSync(outside, dir, process.platform === 'win32' ? 'junction' : 'dir');
     store.save('parent', ['bad']);
     expect(store.load('secret')).toEqual([]);
     expect(existsSync(path.join(outside, 'parent.json'))).toBe(false);
-    rmSync(dir);
+    rmSync(dir, { recursive: true });
     mkdirSync(dir);
-    symlinkSync(secret, path.join(dir, 'parent.json'));
+    // Windows junctions also exercise a linked leaf without requiring file-symlink privileges.
+    symlinkSync(
+      process.platform === 'win32' ? outside : secret,
+      path.join(dir, 'parent.json'),
+      process.platform === 'win32' ? 'junction' : 'file'
+    );
     expect(store.load('parent')).toEqual([]);
     store.save('parent', ['safe']);
     expect(readFileSync(secret, 'utf8')).toBe('["do not read"]');

@@ -1,5 +1,6 @@
 import {
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -11,8 +12,36 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrowserHistoryStore } from './browserHistory';
+
+const fsFixture = vi.hoisted(() => ({
+  leafLink: undefined as { path: string; junction: string } | undefined,
+  swapOnOpen: undefined as { path: string; replacement: string } | undefined,
+}));
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof import('node:fs')>();
+  return {
+    ...fs,
+    lstatSync: new Proxy(fs.lstatSync, {
+      apply(target, receiver, args) {
+        const link = fsFixture.leafLink;
+        if (link && args[0] === link.path) args[0] = link.junction;
+        return Reflect.apply(target, receiver, args);
+      },
+    }),
+    openSync: new Proxy(fs.openSync, {
+      apply(target, receiver, args) {
+        const swap = fsFixture.swapOnOpen;
+        if (swap && args[0] === swap.path) {
+          fsFixture.swapOnOpen = undefined;
+          fs.renameSync(swap.replacement, swap.path);
+        }
+        return Reflect.apply(target, receiver, args);
+      },
+    }),
+  };
+});
 
 let directory: string;
 let filePath: string;
@@ -21,7 +50,11 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'enso-browser-history-'));
   filePath = join(directory, 'history.json');
 });
-afterEach(() => rmSync(directory, { recursive: true, force: true }));
+afterEach(() => {
+  fsFixture.leafLink = undefined;
+  fsFixture.swapOnOpen = undefined;
+  rmSync(directory, { recursive: true, force: true });
+});
 
 const visit = (url: string, at: number, tabId = 'tab-a', conversationId = 'conversation-a') => ({
   conversationId,
@@ -158,9 +191,33 @@ describe('BrowserHistoryStore', () => {
     expect(readFileSync(backup, 'utf8')).toBe(previous);
     expect(readFileSync(filePath, 'utf8')).not.toBe(previous);
     const alias = join(directory, 'alias.json');
-    symlinkSync(filePath, alias);
+    if (process.platform === 'win32') {
+      // A readable leaf with the lstat of a link reproduces Windows' lack of O_NOFOLLOW
+      // without needing privileges to create a file symlink.
+      const junction = join(directory, 'junction');
+      const target = join(directory, 'target');
+      mkdirSync(target);
+      symlinkSync(target, junction, 'junction');
+      linkSync(filePath, alias);
+      fsFixture.leafLink = { path: alias, junction };
+    } else {
+      symlinkSync(filePath, alias);
+    }
+    expect(lstatSync(alias).isSymbolicLink()).toBe(true);
     expect(new BrowserHistoryStore({ filePath: alias }).query('conversation-a', {}).total).toBe(0);
     expect(readdirSync(directory).some((name) => name.endsWith('.tmp'))).toBe(false);
+  });
+
+  it('读历史拒绝在 lstat 与 open 之间被替换的普通文件', async () => {
+    const store = new BrowserHistoryStore({ filePath });
+    store.record(visit('https://example.com/original', 1));
+    await store.flush();
+    const replacement = join(directory, 'replacement.json');
+    const other = new BrowserHistoryStore({ filePath: replacement });
+    other.record(visit('https://example.com/replacement', 2));
+    await other.flush();
+    fsFixture.swapOnOpen = { path: filePath, replacement };
+    expect(new BrowserHistoryStore({ filePath }).query('conversation-a', {}).total).toBe(0);
   });
 
   it('坏 limit 和无效访问字段不能突破记录上限或污染存储', async () => {

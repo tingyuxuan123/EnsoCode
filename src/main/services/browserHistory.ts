@@ -3,6 +3,7 @@ import {
   closeSync,
   constants,
   fstatSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -81,9 +82,18 @@ export class BrowserDataFile {
   read(): unknown {
     let fd: number | undefined;
     try {
+      // Windows does not expose O_NOFOLLOW; also verify the opened file's identity.
+      const before = lstatSync(this.filePath, { bigint: true });
+      if (!before.isFile() || before.isSymbolicLink()) return undefined;
       fd = openSync(this.filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
-      const stat = fstatSync(fd);
-      if (!stat.isFile() || stat.size > MAX_FILE_BYTES) return undefined;
+      const stat = fstatSync(fd, { bigint: true });
+      if (
+        !stat.isFile() ||
+        stat.dev !== before.dev ||
+        stat.ino !== before.ino ||
+        stat.size > MAX_FILE_BYTES
+      )
+        return undefined;
       return JSON.parse(readFileSync(fd, 'utf8')) as unknown;
     } catch {
       return undefined;
