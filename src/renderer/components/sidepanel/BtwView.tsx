@@ -291,17 +291,19 @@ export function BtwView({
             onSend={(payload) => {
               if (!selectedProviderId || !effectiveModelId || !project) return false;
               timelineRef.current?.scrollToBottom();
-              void useSessionsStore.getState().send(
-                payload.text,
-                {
-                  providerId: selectedProviderId,
-                  modelId: effectiveModelId,
-                  cwd: project.path,
-                },
-                payload.images,
-                sessionId
-              );
-              return true;
+              return useSessionsStore
+                .getState()
+                .send(
+                  payload.text,
+                  {
+                    providerId: selectedProviderId,
+                    modelId: effectiveModelId,
+                    cwd: project.path,
+                  },
+                  payload.images,
+                  sessionId
+                )
+                .then((error) => !error);
             }}
             onAbort={() => void useSessionsStore.getState().abort(sessionId)}
           />

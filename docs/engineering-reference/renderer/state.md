@@ -75,7 +75,7 @@ commands 不持久化，commands 仍由 snapshot / commands 事件恢复到内�
 
 订阅条目的凭证是 `oauthAccountKey`，`apiKey` 为空。只认 `apiKey` 会把已登录订阅全部滤掉，手机新建会话就只剩 API-key 服务。OAuth 快照从未 ready 到 ready 也要重新推目录，否则登录完成后手机仍看不到订阅。
 
-密钥、baseUrl、oauthAccountKey 仍只留在 renderer / main，不下发手机。
+`baseUrl`、`oauthAccountKey` 不下发手机。已保存的 API Key 与 MCP env/headers 明文由 Main 持有，桌面 settings 读回的是进程内不透明引用；按原字段传回 Main 可用于原条目和原连接，不可作为真实密钥使用。
 
 ## 订阅要选片，不要整取
 

@@ -20,6 +20,8 @@ import { globalBoard, rootBoardGroups } from '@/components/bots/globalBoard';
 import { ModeSwitch } from '@/components/bots/ModeSwitch';
 import { requestOpenChatFind } from '@/components/chat/ChatFindBar';
 import { ChatView } from '@/components/chat/ChatView';
+import { composerDrafts } from '@/components/chat/composerDraft';
+import { bindComposerDraftCleanup } from '@/components/chat/composerDraftCleanup';
 import { requestFocusComposer } from '@/components/chat/composerMentionBridge';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import { Sidebar } from '@/components/chat/Sidebar';
@@ -112,6 +114,7 @@ export default function App() {
   useGenerationStallTimeout();
   useAutoArchiveScan();
   useDockBadge();
+  useEffect(() => bindComposerDraftCleanup(useSessionsStore.subscribe, composerDrafts.delete), []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [extensionsOpen, setExtensionsOpen] = useState(false);
   const closeWorkspacePage = useCallback(() => {

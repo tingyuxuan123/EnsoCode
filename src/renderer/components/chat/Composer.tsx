@@ -40,6 +40,7 @@ import {
   pickPluginCandidate,
   usePluginTriggerCandidates,
 } from '../../plugins/triggers';
+import { composerDrafts as drafts } from './composerDraft';
 import {
   registerComposerFocus,
   registerComposerInsert,
@@ -88,7 +89,7 @@ interface ComposerProps {
   chatCandidates?: ChatMentionCandidate[];
   /** 浏览不自动 spawn：用户开始打字/聚焦输入框时再拉 worker */
   onActivate?: () => void;
-  onSend: (payload: ComposerPayload) => boolean | undefined;
+  onSend: (payload: ComposerPayload) => boolean | undefined | Promise<boolean | undefined>;
   onAbort: () => void;
   /** 排队消息数；运行中且输入为空时，发送快捷键改为 steer 队首一条 */
   queuedCount?: number;
@@ -111,15 +112,6 @@ interface ComposerProps {
   /** 超长纯文本粘贴落盘为 txt；不传（如 ssh 项目）则保持插入正文 */
   savePastedText?: (text: string) => Promise<PastedTextFileResult>;
 }
-
-interface ComposerDraft {
-  segments: MentionSegment[];
-  images: AttachedImage[];
-  slash: string | null;
-  recipient?: AgentTypeMentionCandidate;
-}
-
-const drafts = new Map<string, ComposerDraft>();
 
 export function Composer({
   cwd,
@@ -165,7 +157,10 @@ export function Composer({
   const [recipient, setRecipient] = useState<AgentTypeMentionCandidate | undefined>(
     initialRecipient
   );
-  const prevFocusKeyRef = useRef(focusKey);
+  const prevFocusKeyRef = useRef<string | undefined>(undefined);
+  const restoringDraft = useRef(false);
+  const sendingRef = useRef(false);
+  const [sending, setSending] = useState(false);
   const [dragging, setDragging] = useState(false);
 
   // 侧栏拖入(dnd-kit):会话/项目行落到输入区插 mention chip。
@@ -258,6 +253,15 @@ export function Composer({
   const handleEditorState = useCallback(
     (state: MentionEditorState) => {
       pluginEditRevision.current++;
+      if (!restoringDraft.current && focusKey && prevFocusKeyRef.current === focusKey) {
+        const current = pluginStateRef.current;
+        drafts.set(focusKey, {
+          segments: state.segments,
+          images: current.images,
+          slash: current.slash,
+          recipient: current.recipient,
+        });
+      }
       if (state.plainText.trim() || state.hasMentions) onActivate?.();
       setEditorPlain(state.plainText);
       setEditorHasMentions(state.hasMentions);
@@ -284,23 +288,29 @@ export function Composer({
       setSkillQuery(state.skillQuery);
       setPluginQuery(state.pluginQuery);
     },
-    [onActivate]
+    [onActivate, focusKey]
   );
 
+  // Metadata changes also write through; text is saved synchronously by handleEditorState.
+  useLayoutEffect(() => {
+    if (!focusKey || prevFocusKeyRef.current !== focusKey) return;
+    drafts.set(focusKey, {
+      segments: editorRef.current?.getSegments() ?? [],
+      images,
+      slash,
+      recipient,
+    });
+  }, [images, slash, recipient, focusKey]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: focusKey is a switch signal; values are captured at switch time.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = prevFocusKeyRef.current;
     if (previous !== focusKey) {
-      if (previous) {
-        drafts.set(previous, {
-          segments: editorRef.current?.getSegments() ?? [],
-          images,
-          slash,
-          recipient,
-        });
-      }
       const draft = focusKey ? drafts.get(focusKey) : undefined;
+      restoringDraft.current = true;
+      prevFocusKeyRef.current = focusKey;
       editorRef.current?.setSegments(draft?.segments ?? []);
+      restoringDraft.current = false;
       boundIds.current = new Set(
         (draft?.segments ?? [])
           .filter((segment) => segment.type === 'ui-element' && segment.imageId)
@@ -309,7 +319,6 @@ export function Composer({
       setImages(draft?.images ?? []);
       setSlash(draft?.slash ?? null);
       setRecipient(draft?.recipient);
-      prevFocusKeyRef.current = focusKey;
       setMentionQuery(null);
       setSlashQuery(null);
       setSkillQuery(null);
@@ -448,7 +457,8 @@ export function Composer({
           : slashResults.length;
 
   const applySlashSubcommand = useCallback(
-    (name: string, sendNow: boolean) => {
+    async (name: string, sendNow: boolean) => {
+      if (sendingRef.current) return;
       const segments: MentionSegment[] = [{ type: 'text', text: name }];
       editorRef.current?.setSegments(segments);
       if (!sendNow) return;
@@ -458,7 +468,20 @@ export function Composer({
         images,
         recipient,
       });
-      if (onSend(payload) === false) return;
+      sendingRef.current = true;
+      setSending(true);
+      let accepted = false;
+      try {
+        accepted = (await onSend(payload)) !== false;
+      } catch {
+        /* Keep the draft for retry. */
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
+      }
+      if (!accepted) return;
+      if (focusKey) drafts.delete(focusKey);
+      if (prevFocusKeyRef.current !== focusKey) return;
       editorRef.current?.clear();
       setImages([]);
       setSlash(null);
@@ -467,7 +490,7 @@ export function Composer({
       setSlashQuery(null);
       setSkillQuery(null);
     },
-    [images, onSend, recipient, slash]
+    [images, onSend, recipient, slash, focusKey]
   );
 
   const pickActive = useCallback(
@@ -522,8 +545,8 @@ export function Composer({
     running && queuedCount > 0 && onSteerQueued !== undefined && enterToSend && !!sendBinding;
   const steerable = steerAvailable && !hasContent && !agentRecipient && !locked;
 
-  const handleSend = () => {
-    if (!hasContent) return;
+  const handleSend = async () => {
+    if (!hasContent || locked || sendingRef.current) return;
     const payload = createEditorPayload({
       segments: editorRef.current?.getSegments() ?? [],
       slash,
@@ -538,8 +561,21 @@ export function Composer({
     const outgoing = attached
       ? { ...payload, text: [payload.text, attached.text].filter(Boolean).join('\n\n') }
       : payload;
-    if (onSend(outgoing) === false) return;
+    sendingRef.current = true;
+    setSending(true);
+    let accepted = false;
+    try {
+      accepted = (await onSend(outgoing)) !== false;
+    } catch {
+      /* Keep the draft for retry. */
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+    if (!accepted) return;
+    if (focusKey) drafts.delete(focusKey);
     attached?.onConsumed();
+    if (prevFocusKeyRef.current !== focusKey) return;
     editorRef.current?.clear();
     setImages([]);
     setSlash(null);
@@ -861,7 +897,7 @@ export function Composer({
                           ? t('Message will queue until this round finishes…')
                           : t('Type @ to choose a file or Agent')
             }
-            disabled={locked}
+            disabled={locked || sending}
             onStateChange={handleEditorState}
             onChipActivate={(segment) => {
               if (segment.type === 'ui-element') {
@@ -999,7 +1035,7 @@ export function Composer({
               size="icon"
               className="size-[calc(32rem/14)] shrink-0 rounded-[6px] border-brand bg-brand text-brand-foreground shadow-none hover:bg-brand/90 disabled:opacity-35"
               onClick={handleSend}
-              disabled={!hasContent || locked}
+              disabled={!hasContent || locked || sending}
               aria-label={agentRecipient ? t('Send only to the selected Agent') : t('Send')}
               title={
                 agentRecipient

@@ -671,28 +671,33 @@ export function ChatView() {
               ) {
                 return false;
               }
+              let accepted = Promise.resolve(false);
               routeComposerPayload(payload, {
                 dispatchAgent: (typeKey, task) => {
-                  void useSessionsStore
+                  accepted = useSessionsStore
                     .getState()
-                    .dispatchAgent(typeKey, task, parentSelectedModel);
+                    .dispatchAgent(typeKey, task, parentSelectedModel)
+                    .then((result) => result.accepted);
                 },
                 sendCoding: (text, images) => {
                   if (!project) return;
                   // 发送后强制回到跟随（ref-chat-b 的 post-submit scroll）
                   timelineRef.current?.scrollToBottom();
-                  void useSessionsStore.getState().send(
-                    text,
-                    {
-                      providerId: selectedProviderId,
-                      modelId: effectiveModelId,
-                      cwd: project.path,
-                    },
-                    images
-                  );
+                  accepted = useSessionsStore
+                    .getState()
+                    .send(
+                      text,
+                      {
+                        providerId: selectedProviderId,
+                        modelId: effectiveModelId,
+                        cwd: project.path,
+                      },
+                      images
+                    )
+                    .then((error) => !error);
                 },
               });
-              return true;
+              return accepted;
             }}
             onAbort={() => void useSessionsStore.getState().abort()}
           />
