@@ -441,6 +441,10 @@ export const zhTranslations: Record<string, string> = {
   'No Composer for this selection': '没有可接收圈选的输入框',
   'Add to conversation': '添加到对话',
   'Browser data': '浏览器数据',
+  'Open chat links in built-in browser': '在内置浏览器打开聊天链接',
+  'Open HTTP(S) links in a new tab. Ctrl/Cmd-click uses your system browser. Only when the Browser tool is enabled for the project.':
+    '在新标签页打开 HTTP(S) 链接。按住 Ctrl / ⌘ 点击则使用系统浏览器。仅在该项目启用浏览器工具时生效。',
+  'Could not open link in built-in browser': '无法在内置浏览器中打开链接',
   'Enso Browser': 'Enso 浏览器',
   'Your agent can explore the web with you.': '让 Agent 和你一起探索网页。',
   'Browse the web': '浏览网页',

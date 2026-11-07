@@ -1,5 +1,6 @@
 import { SMART_COMPACT_MODES } from '@shared/smartCompactMode';
 import { describe, expect, it } from 'vitest';
+import { CONFIG_SYNC_COMMIT_FIELDS, SETTINGS_STATE_FIELDS } from '../../ipc/settings';
 import { validateBundle } from './codec';
 import { CONFIG_SYNC_FIELD_POLICY, SYNC_FIELDS } from './index';
 import { planImport } from './merge';
@@ -25,6 +26,21 @@ const bundle = (state: Partial<ConfigSyncBundle['state']>): ConfigSyncBundle => 
 });
 
 describe('config sync portable preference contract', () => {
+  it('聊天链接浏览器偏好可本机持久化，但不导出、导入或参与同步提交', () => {
+    expect(SETTINGS_STATE_FIELDS).toContain('openLinksInBuiltinBrowser');
+    expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('openLinksInBuiltinBrowser', {
+      mode: 'excluded',
+      reason: expect.stringContaining('device-local'),
+    });
+    expect(SYNC_FIELDS).not.toContain('openLinksInBuiltinBrowser');
+    expect(CONFIG_SYNC_COMMIT_FIELDS).not.toContain('openLinksInBuiltinBrowser');
+    expect(() =>
+      validateBundle({
+        ...bundle({}),
+        state: { ...baseState(), openLinksInBuiltinBrowser: false },
+      })
+    ).toThrow();
+  });
   it('design feature policy is device-local and not accepted from imported bundles', () => {
     expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('designEnabled', {
       mode: 'excluded',

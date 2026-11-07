@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { classifyMarkdownLink, splitFileLineRef, toWorkspaceRelativePath } from './markdownLinks';
+import {
+  classifyMarkdownLink,
+  parseMarkdownHttpUrl,
+  splitFileLineRef,
+  toWorkspaceRelativePath,
+} from './markdownLinks';
+
+describe('parseMarkdownHttpUrl', () => {
+  it.each([
+    ['https://example.com/a%20b?q=1#section', 'https://example.com/a%20b?q=1#section'],
+    [' HTTP://EXAMPLE.COM ', 'http://example.com/'],
+    ['https://例子.测试', 'https://xn--fsqu00a.xn--0zwm56d/'],
+  ])('仅解析完整 http(s) 网页地址：%s', (value, expected) => {
+    expect(parseMarkdownHttpUrl(value)).toBe(expected);
+  });
+
+  it.each([
+    '',
+    '//example.com',
+    'https:example.com',
+    'http://',
+    'https://[broken',
+    'https://exam\nple.com',
+    'javascript:alert(1)',
+    'data:text/html,hello',
+    'file:///C:/workspace/index.html',
+    'mailto:a@example.com',
+    'https%3A%2F%2Fexample.com',
+    'src/a.ts',
+  ])('不把其它协议、坏地址或本地文件分流到 browser：%s', (value) => {
+    expect(parseMarkdownHttpUrl(value)).toBeNull();
+  });
+});
 
 describe('splitFileLineRef', () => {
   it('拆出路径与起始行号', () => {

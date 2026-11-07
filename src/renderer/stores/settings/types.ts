@@ -94,6 +94,8 @@ export interface SettingsState {
    */
   fileOpenRules: FileOpenRule[];
   contextMenuOpen: ContextMenuOpen;
+  /** Code 聊天 http(s) 链接默认在所属会话内置浏览器新 tab 打开；设备本地，缺省 true。 */
+  openLinksInBuiltinBrowser: boolean;
 
   // Terminal appearance
   terminalTheme: string;

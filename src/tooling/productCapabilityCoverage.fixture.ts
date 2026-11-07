@@ -85,6 +85,7 @@ export const SETTINGS_DATA_COVERAGE = {
   openChangesOnFileEdit: excluded('Renderer side-panel preference; not an Enso capability.'),
   fileOpenRules: excluded('Device-local user file opening preferences; not an Enso capability.'),
   contextMenuOpen: excluded('Device-local preference for right-clicking chat file links.'),
+  openLinksInBuiltinBrowser: excluded('Device-local browser preference for Code chat links.'),
   compactReadOnlyTools: excluded('Renderer timeline density preference; not an Enso capability.'),
   expandLiveEdits: excluded('Renderer timeline expansion preference; not an Enso capability.'),
   expandLiveReasoning: excluded(

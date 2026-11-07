@@ -153,6 +153,7 @@ const initialState = {
   language: getDefaultLocale(),
   fileOpenRules: [] as FileOpenRule[],
   contextMenuOpen: normalizeContextMenuOpen(undefined),
+  openLinksInBuiltinBrowser: true,
   terminalTheme: 'Dracula',
   terminalFontSize: 14,
   terminalFontFamily: 'ui-monospace, SF Mono, Menlo, Monaco, Consolas, monospace',
@@ -329,6 +330,8 @@ export const useSettingsStore = create<SettingsState>()(
       setWorktreeRoot: (worktreeRoot) => set({ worktreeRoot: worktreeRoot.trim() }),
       setFileOpenRules: (rules) => set({ fileOpenRules: normalizeFileOpenRules(rules) }),
       setContextMenuOpen: (value) => set({ contextMenuOpen: normalizeContextMenuOpen(value) }),
+      setOpenLinksInBuiltinBrowser: (openLinksInBuiltinBrowser) =>
+        set({ openLinksInBuiltinBrowser }),
 
       toggleFavoriteTerminalTheme: (theme) =>
         set((state) => ({

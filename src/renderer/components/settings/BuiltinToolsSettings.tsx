@@ -232,6 +232,10 @@ export function BuiltinToolsSettings() {
   const { t } = useI18n();
   const disabled = useSettingsStore((state) => state.disabledBuiltinTools);
   const toggle = useSettingsStore((state) => state.toggleBuiltinTool);
+  const openLinksInBuiltinBrowser = useSettingsStore((state) => state.openLinksInBuiltinBrowser);
+  const setOpenLinksInBuiltinBrowser = useSettingsStore(
+    (state) => state.setOpenLinksInBuiltinBrowser
+  );
   const subagentAllowedModes = useSettingsStore((state) => state.subagentAllowedModes);
   const setSubagentAllowedModes = useSettingsStore((state) => state.setSubagentAllowedModes);
   const exploreFoldEnabled = useSettingsStore((state) => state.exploreFoldEnabled);
@@ -445,6 +449,26 @@ export function BuiltinToolsSettings() {
             ) : null}
             {tool.id === 'browser' ? (
               <div className="space-y-2">
+                <div
+                  className="flex items-center gap-3"
+                  data-settings-row="tools.openLinksInBuiltinBrowser"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[calc(12rem/14)] font-medium">
+                      {t('Open chat links in built-in browser')}
+                    </p>
+                    <p className="text-muted-foreground text-[calc(12rem/14)]">
+                      {t(
+                        'Open HTTP(S) links in a new tab. Ctrl/Cmd-click uses your system browser. Only when the Browser tool is enabled for the project.'
+                      )}
+                    </p>
+                  </div>
+                  <Switch
+                    aria-label={t('Open chat links in built-in browser')}
+                    checked={openLinksInBuiltinBrowser}
+                    onCheckedChange={setOpenLinksInBuiltinBrowser}
+                  />
+                </div>
                 <p className="text-muted-foreground text-[calc(12rem/14)]">
                   {t(
                     'Cookies and site storage of the built-in browser, separate from the app itself.'

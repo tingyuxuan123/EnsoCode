@@ -18,6 +18,7 @@ interface SettingsSlice
       | 'chatWide'
       | 'virtualModels'
       | 'disabledBuiltinTools'
+      | 'openLinksInBuiltinBrowser'
       | 'voiceInputDevice'
       | 'projects'
     > {
@@ -62,6 +63,7 @@ let state: SettingsSlice = {
   chatWide: false,
   virtualModels: [],
   disabledBuiltinTools: [],
+  openLinksInBuiltinBrowser: false,
   voiceInputDevice: 'default',
 };
 

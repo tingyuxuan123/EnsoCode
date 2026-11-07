@@ -68,6 +68,10 @@ export const CONFIG_SYNC_FIELD_POLICY = {
   worktreeRoot: { mode: 'excluded', reason: 'device-local worktree storage path' },
   fileOpenRules: { mode: 'excluded', reason: 'device-local file opening applications and paths' },
   contextMenuOpen: { mode: 'excluded', reason: 'device-local file link opening application' },
+  openLinksInBuiltinBrowser: {
+    mode: 'excluded',
+    reason: 'device-local chat link browser preference',
+  },
   favoriteTerminalThemes: { mode: 'portable' },
   statusLineSegments: { mode: 'portable' },
   loadLocalSkills: { mode: 'portable' },

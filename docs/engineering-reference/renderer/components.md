@@ -141,6 +141,10 @@
 只识别与 `completionText` 对应的完整头尾包络，报告内的 usage 样例不剥离；未知或损坏格式保留原文。
 回归：`agentNotification.test.ts`、`TimelineRow.actions.test.tsx`。
 
+Code 聊天 HTTP(S) 链接可按设备本地偏好在所属会话的新浏览器 tab 打开；项目禁用 browser、
+无有效会话或带 Ctrl/Cmd 等修饰键时保留外链行为。本地文件与 Bot 产物仍走原授权链路，
+手机设置桩固定关闭此偏好。回归：`Markdown.fileOpening.test.tsx`、`sidePanelDock.test.ts`。
+
 ## Bot 群聊设计交付必须可见、可点
 
 群聊正文没有 Code 的 `MarkdownLinkContext`，不能裸渲染本地交稿链接：它会显示下划线但点击无效。

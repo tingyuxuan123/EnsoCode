@@ -17,6 +17,9 @@ vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: unknown) => unknown) =>
     select({ designEnabled: true, contextMenuOpen: [], projects: [] }),
 }));
+vi.mock('@/stores/sessions', () => ({
+  useSessionsStore: (select: (state: unknown) => unknown) => select({ conversations: {} }),
+}));
 vi.mock('@/components/ui/dialog', () => {
   const Wrap = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return {

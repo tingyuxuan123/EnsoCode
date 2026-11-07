@@ -9,6 +9,24 @@ const PROTOCOL_RE = /^[a-z][a-z\d+.-]*:/i;
 const SAFE_EXTERNAL_PROTOCOL_RE = /^(?:https?|ircs?|mailto|xmpp):/i;
 const WINDOWS_ABSOLUTE_RE = /^(?:[a-z]:[\\/]|\\\\)/i;
 
+/** 仅接管完整 http(s) 地址，不推断协议、不把本地/产物链接升级为浏览器导航。 */
+export function parseMarkdownHttpUrl(raw: string): string | null {
+  const value = raw.trim();
+  if (
+    !/^https?:\/\//i.test(value) ||
+    [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)
+  )
+    return null;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 拆开 `path:line` / `path:start-end` 形式的文件引用，行号取起始行 */
 export function splitFileLineRef(value: string): { path: string; line?: number } {
   const match = /^(.*?):(\d+)(?:-\d+)?$/.exec(value);

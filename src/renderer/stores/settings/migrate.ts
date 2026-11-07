@@ -69,6 +69,10 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     'contextMenuOpen' in source || 'contextMenuOpen' in current
       ? { contextMenuOpen: normalizeContextMenuOpen(source.contextMenuOpen) }
       : {};
+  const browserLinkOpening =
+    'openLinksInBuiltinBrowser' in source || 'openLinksInBuiltinBrowser' in current
+      ? { openLinksInBuiltinBrowser: source.openLinksInBuiltinBrowser !== false }
+      : {};
   // 本机已安装 LCU 的既有加载行为默认保留；旧配置或坏类型只有显式 false 才关闭。
   const lcu =
     'lcuEnabled' in source || 'lcuEnabled' in current
@@ -86,6 +90,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...codeSearch,
     ...fileOpening,
     ...contextMenuOpening,
+    ...browserLinkOpening,
     ...lcu,
     ...design,
     ...lightAppearance,

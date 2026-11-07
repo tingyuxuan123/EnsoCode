@@ -6,6 +6,8 @@ import { BuiltinToolsSettings } from './BuiltinToolsSettings';
 const controls = vi.hoisted(() => ({
   lcuEnabled: true,
   designEnabled: true,
+  openLinksInBuiltinBrowser: true,
+  setOpenLinksInBuiltinBrowser: vi.fn(),
   setDesignEnabled: vi.fn(),
   setLcuEnabled: vi.fn(),
   toggleBuiltinTool: vi.fn(),
@@ -28,6 +30,8 @@ vi.mock('@/stores/settings', () => ({
       designEnabled: controls.designEnabled,
       setDesignEnabled: controls.setDesignEnabled,
       toggleBuiltinTool: controls.toggleBuiltinTool,
+      openLinksInBuiltinBrowser: controls.openLinksInBuiltinBrowser,
+      setOpenLinksInBuiltinBrowser: controls.setOpenLinksInBuiltinBrowser,
     }),
 }));
 vi.mock('@/components/ui/switch', () => ({
@@ -60,6 +64,8 @@ vi.mock('@/components/chat/ModelPicker', () => ({ ModelPicker: () => null }));
 
 beforeEach(() => {
   controls.lcuEnabled = true;
+  controls.openLinksInBuiltinBrowser = true;
+  controls.setOpenLinksInBuiltinBrowser.mockClear();
   controls.switches = [];
   controls.setLcuEnabled.mockClear();
   controls.setDesignEnabled.mockClear();
@@ -89,6 +95,19 @@ it('script orchestration keeps the persisted tool id when toggled', () => {
   expect(script?.checked).toBe(true);
   script?.onCheckedChange?.(false);
   expect(controls.toggleBuiltinTool).toHaveBeenCalledWith('isolated_sandbox', false);
+});
+
+it('聊天链接偏好独立于 browser 工具开关，并解释 Ctrl/Cmd 外部打开', () => {
+  const html = renderToStaticMarkup(<BuiltinToolsSettings />);
+  expect(html).toContain('data-settings-row="tools.openLinksInBuiltinBrowser"');
+  expect(html).toContain('Ctrl/Cmd-click uses your system browser.');
+  const links = controls.switches.find(
+    (control) => control['aria-label'] === 'Open chat links in built-in browser'
+  );
+  expect(links?.checked).toBe(true);
+  links?.onCheckedChange?.(false);
+  expect(controls.setOpenLinksInBuiltinBrowser).toHaveBeenCalledWith(false);
+  expect(controls.toggleBuiltinTool).not.toHaveBeenCalled();
 });
 
 it('LCU 独立行紧邻 Computer，展示新会话限制且不加入内置工具清单', () => {

@@ -4,6 +4,7 @@ import {
   resolveDisabledBuiltinTools,
 } from '@shared/types/builtinTools';
 import type { DockviewApi } from 'dockview-react';
+import { parseMarkdownHttpUrl } from '@/components/chat/markdownLinks';
 import { releaseTerminal } from '@/lib/terminalRegistry';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
@@ -255,6 +256,19 @@ export function addSidePanelBrowser(opts?: {
     title: opts?.title ?? 'Browser',
     params: { conversationId: ownerId, projectId: conversation.projectId },
   });
+}
+
+/** 用户点击网页链接：每次新建所属会话的 tab，失败交还调用者提示，不静默吞掉。 */
+export async function openSidePanelBrowserUrl(conversationId: string, raw: string): Promise<void> {
+  if (!useSessionsStore.getState().conversations[conversationId]) {
+    throw new Error('Conversation is unavailable.');
+  }
+  const url = parseMarkdownHttpUrl(raw);
+  if (!url) throw new Error('Invalid URL');
+  const tabId = `browser:${crypto.randomUUID()}`;
+  addSidePanelBrowser({ conversationId, tabId });
+  const result = await window.electronAPI.browser.navigate(tabId, conversationId, url);
+  if (!result.ok) throw new Error(result.error || 'Navigation failed');
 }
 
 /** Single design surface per dock; defer until fromJSON has finished. */

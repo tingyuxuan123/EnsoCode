@@ -1,4 +1,5 @@
 import { previewImageMime } from '@shared/markdownPreviewImage';
+import { isBuiltinToolEnabledForProject } from '@shared/types/builtinTools';
 import { FolderOpen } from 'lucide-react';
 import type { Root } from 'mdast';
 import {
@@ -23,16 +24,22 @@ import {
 } from '@/components/ui/context-menu';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
-import { openSidePanelFile } from '@/lib/sidePanelDock';
+import { openSidePanelBrowserUrl, openSidePanelFile } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
 import { parsePluginFence } from '@/plugins/registry';
 import { PluginBlock } from '@/plugins/slots';
+import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { CodeBlock } from './CodeBlock';
 import { CopyButton } from './CopyButton';
 import { highlightNode } from './highlightQuery';
 import { MermaidRenderer } from './MermaidRenderer';
-import { classifyMarkdownLink, splitFileLineRef, toWorkspaceRelativePath } from './markdownLinks';
+import {
+  classifyMarkdownLink,
+  parseMarkdownHttpUrl,
+  splitFileLineRef,
+  toWorkspaceRelativePath,
+} from './markdownLinks';
 
 /**
  * 解析代码围栏的 info 串。除了纯语言名（```ts），agent 常输出
@@ -419,6 +426,21 @@ function MarkdownAnchor({
     classification.kind === 'local' ? classification.path : null,
     line
   );
+  const browserEnabled = useSettingsStore(
+    (state) =>
+      state.openLinksInBuiltinBrowser === true &&
+      isBuiltinToolEnabledForProject(
+        state.disabledBuiltinTools,
+        state.projects,
+        linkContext?.projectId,
+        'browser'
+      )
+  );
+  const hasConversation = useSessionsStore(
+    (state) =>
+      linkContext !== null &&
+      state.conversations[linkContext.conversationId]?.projectId === linkContext.projectId
+  );
   const local =
     classification.kind === 'local' && (linkContext !== null || openArtifactLink !== null);
   const codeText = local ? soleInlineCodeText(node) : null;
@@ -429,7 +451,31 @@ function MarkdownAnchor({
   };
 
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (classification.kind === 'external') return;
+    if (classification.kind === 'external') {
+      // 保留 Cmd/Ctrl、其它修饰键及非主键点击的原有系统浏览器行为。
+      if (
+        !browserEnabled ||
+        !hasConversation ||
+        !linkContext ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const url = parseMarkdownHttpUrl(href ?? '');
+      if (!url) return;
+      event.preventDefault();
+      void openSidePanelBrowserUrl(linkContext.conversationId, url).catch((error: unknown) => {
+        addToast({
+          type: 'error',
+          title: t('Could not open link in built-in browser'),
+          description: error instanceof Error ? error.message : String(error),
+        });
+      });
+      return;
+    }
     event.preventDefault();
     if (local) open();
   };
