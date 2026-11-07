@@ -1,7 +1,10 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createLocalBashOperations } from '@earendil-works/pi-coding-agent';
+import {
+  createLocalBashOperations,
+  createPowerShellToolDefinition,
+} from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSessionCommandTool, resolveSessionShellKind } from './sessionShell';
 
@@ -74,6 +77,67 @@ describe('createSessionCommandTool', () => {
   it('不传 platform 时按 process.platform 判断', () => {
     const tool = createSessionCommandTool({ cwd: '/tmp' });
     expect(tool.name).toBe(process.platform === 'win32' ? 'powershell' : 'bash');
+  });
+
+  describe('PowerShell 版本提示', () => {
+    const resolved = (shell: string) => () => ({ shell, args: ['-NoProfile', '-Command'] });
+
+    it('解析到 pwsh 时告诉模型是 PowerShell 7+', () => {
+      const tool = createSessionCommandTool({
+        cwd: '/tmp',
+        platform: 'win32',
+        resolvePowerShell: resolved('C:\\Program Files\\PowerShell\\7\\pwsh.exe'),
+      });
+      expect(tool.description).toContain('PowerShell 7+');
+      expect(tool.description).not.toContain('5.1');
+    });
+
+    it('回落到 Windows PowerShell 时告诉模型是 5.1 及其不支持的写法', () => {
+      const tool = createSessionCommandTool({
+        cwd: '/tmp',
+        platform: 'win32',
+        resolvePowerShell: resolved(
+          'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+        ),
+      });
+      expect(tool.description).toContain('Windows PowerShell 5.1');
+      expect(tool.description).toContain('&&');
+      expect(tool.description).toContain('UTF-16');
+    });
+
+    it('按文件名识别 pwsh，不区分大小写', () => {
+      const tool = createSessionCommandTool({
+        cwd: '/tmp',
+        platform: 'win32',
+        resolvePowerShell: resolved('D:\\Tools\\PWSH.EXE'),
+      });
+      expect(tool.description).toContain('PowerShell 7+');
+    });
+
+    it('找不到 PowerShell 时保留原描述，不在建工具时抛错', () => {
+      const tool = createSessionCommandTool({
+        cwd: '/tmp',
+        platform: 'win32',
+        resolvePowerShell: () => {
+          throw new Error('No PowerShell executable found');
+        },
+      });
+      expect(tool.name).toBe('powershell');
+      expect(tool.description).toBe(createPowerShellToolDefinition('/tmp').description);
+    });
+
+    it('bash 会话不探测 PowerShell', () => {
+      const resolvePowerShell = vi.fn(resolved('pwsh.exe'));
+      createSessionCommandTool({
+        cwd: '/tmp',
+        platform: 'win32',
+        preference: 'bash',
+        resolvePowerShell,
+      });
+      createSessionCommandTool({ cwd: '/tmp', platform: 'win32', remote: true, resolvePowerShell });
+      createSessionCommandTool({ cwd: '/tmp', platform: 'darwin', resolvePowerShell });
+      expect(resolvePowerShell).not.toHaveBeenCalled();
+    });
   });
 
   it.skipIf(process.platform === 'win32')('本地前台 bash 不执行继承的启动 rc', async () => {
