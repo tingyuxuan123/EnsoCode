@@ -78,7 +78,8 @@ describe('device file chunks', () => {
       chunks.push(data);
       offset += data.length;
     }
-    expect(Buffer.concat(chunks)).toEqual(bytes);
+    // Deep equality enumerates over a million Buffer entries on the release runner.
+    expect(Buffer.concat(chunks).equals(bytes), 'chunks reconstruct the exact bytes').toBe(true);
     expect(await read(files[1].id)).toMatchObject({ size: 0, offset: 0, data: '' });
     expect((await read(files[1].id, 1)).error).toBe('invalid');
   });
