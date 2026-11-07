@@ -28,12 +28,12 @@ export default function Board() {
 				lead="back"
 				to="/"
 				title="任务看板"
-				detail="1 个等你 · 3 个运行中 · 2 个后台"
+				detail="2 个等你 · 3 个运行中 · 2 个后台"
 			/>
 			<div className="min-h-0 flex-1 overflow-hidden pb-8">
 				<GroupTitle
 					title="等你处理"
-					count={1}
+					count={2}
 				/>
 				<div className="bg-yellow/[0.09] px-5 py-3">
 					<Link
@@ -60,13 +60,25 @@ export default function Board() {
 						</Link>
 					</div>
 				</div>
+				<Link
+					to="/ask"
+					className="flex items-start gap-2 bg-yellow/[0.09] px-5 py-3 shadow-[inset_0_0.75px_0_var(--color-line)]"
+				>
+					<div className="min-w-0 flex-1">
+						<div className="truncate text-[16px] leading-[22px] font-medium">首页 Hero 用哪张截图</div>
+						<div className="mt-0.5 truncate text-[13px] leading-[18px] text-ink2">它在问你：浅色还是深色截图？</div>
+					</div>
+					<span className="flex h-[22px] shrink-0 items-center">
+						<StatusGlyph status="waiting" />
+					</span>
+				</Link>
 
 				<GroupTitle
 					title="运行中"
 					count={3}
 				/>
 				<Link
-					to="/session"
+					to="/queue"
 					className="flex items-start gap-2 px-5 py-2.5"
 				>
 					<div className="min-w-0 flex-1">
@@ -91,7 +103,7 @@ export default function Board() {
 					</span>
 				</Link>
 				<Link
-					to="/session"
+					to="/goal"
 					className="flex items-start gap-2 px-5 py-2.5"
 				>
 					<div className="min-w-0 flex-1">

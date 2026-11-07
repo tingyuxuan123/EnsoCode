@@ -83,7 +83,7 @@ export default function Session() {
 				<div className="flex items-center gap-2">
 					<span className="icon-[mdi--help] size-[18px] animate-pulse text-yellow" />
 					<h2 className="flex-1 text-[15px] leading-5 font-semibold">它想运行一条命令</h2>
-					<span className="text-[12px] leading-4 text-dim">手动审批</span>
+					<span className="text-[12px] leading-4 text-dim">全程审批</span>
 				</div>
 				<div className="mt-3 rounded-[14px] bg-card2 px-3.5 py-3 font-mono text-[14px] leading-5">
 					<span className="text-dim">$ </span>
@@ -97,7 +97,7 @@ export default function Session() {
 						允许
 					</button>
 				</div>
-				<button className="mt-2 w-full py-2 text-[14px] leading-5 font-medium text-ink2">本会话内都允许这条命令</button>
+				<button className="mt-2 w-full py-2 text-[14px] leading-5 font-medium text-ink2">本会话总是允许</button>
 			</section>
 		</div>
 	);

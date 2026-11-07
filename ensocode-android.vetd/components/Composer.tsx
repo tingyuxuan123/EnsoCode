@@ -1,8 +1,16 @@
 /**
  * 输入框（Composer.kt）：白底圆角 24 的输入条，左边附件、右边语音，
- * 外侧一枚 48 的墨黑发送键。`meta` 在下面放审批模式和上下文占用。
+ * 外侧一枚 48 的墨黑发送键；`running` 时换成停止键。`meta` 在下面放审批模式和上下文占用。
  */
-export function Composer({ placeholder, meta = false }: { placeholder: string; meta?: boolean }) {
+export function Composer({
+	placeholder,
+	meta = false,
+	running = false,
+}: {
+	placeholder: string;
+	meta?: boolean;
+	running?: boolean;
+}) {
 	return (
 		<div className="relative px-3 pt-2 pb-6">
 			<div className="flex items-end gap-2">
@@ -22,17 +30,17 @@ export function Composer({ placeholder, meta = false }: { placeholder: string; m
 					</button>
 				</div>
 				<button
-					aria-label="发送"
+					aria-label={running ? "停止" : "发送"}
 					className="flex size-12 shrink-0 items-center justify-center rounded-full bg-pill text-pill-ink"
 				>
-					<span className="icon-[lucide--arrow-up] size-[22px]" />
+					<span className={`${running ? "icon-[mdi--stop]" : "icon-[lucide--arrow-up]"} size-[22px]`} />
 				</button>
 			</div>
 			{meta && (
 				<div className="mt-2 flex items-center gap-4 px-3 text-[12px] leading-4 text-dim">
 					<span className="flex items-center gap-1">
 						<span className="icon-[lucide--shield-check] size-3.5" />
-						手动审批
+						全程审批
 					</span>
 					<span className="flex items-center gap-1.5">
 						<span className="relative h-1 w-10 overflow-hidden rounded-full bg-line">

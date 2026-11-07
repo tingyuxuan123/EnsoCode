@@ -5,8 +5,8 @@ export default function Layout() {
 	return (
 		<div className="relative h-full overflow-hidden bg-page font-sans text-ink antialiased">
 			<Outlet />
-			<div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
-				<span className="h-1 w-[108px] rounded-full bg-ink/80" />
+			<div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 flex justify-center">
+				<span className="h-1 w-[108px] rounded-full bg-white opacity-85 mix-blend-difference" />
 			</div>
 		</div>
 	);

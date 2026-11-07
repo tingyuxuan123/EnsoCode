@@ -34,6 +34,13 @@
 	/* 扫码取景框：相机画面的近黑 */
 	--color-camera: #101215;
 
+	/* Vetta 深色主题（VettaTheme.kt Dark）：通知栏用 */
+	--color-night: #0a0b0d;
+	--color-night-card: #1c1f23;
+	--color-night-line: #24272c;
+	--color-night-ink: #f4f5f6;
+	--color-night-dim: #8b9096;
+
 	/* 新任务页的晨光：左上紫、右侧蓝；问候第二行的渐变 */
 	--color-dawn: #d6e2fb;
 	--color-dawn-side: #e6defa;

@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { StatusBar } from "@vetta/ios";
 import { Composer } from "../components/Composer";
 import { AgentAvatar } from "../components/Enso";
+import { Dawn } from "../components/HomeChrome";
 import { SessionMeta } from "../components/SessionMeta";
 import { StatusGlyph } from "../components/StatusGlyph";
 import { TopBar } from "../components/TopBar";
@@ -16,13 +17,7 @@ export default function NewTask() {
 	const glance = [...waiting, ...running].slice(0, 3);
 	return (
 		<div className="relative flex h-full flex-col overflow-hidden bg-page">
-			<div
-				className="pointer-events-none absolute inset-x-0 top-0 h-[560px]"
-				style={{
-					background:
-						"radial-gradient(90% 62% at 0% 0%, var(--color-dawn-side) 0%, transparent 70%), radial-gradient(85% 58% at 100% 6%, var(--color-dawn) 0%, transparent 72%)",
-				}}
-			/>
+			<Dawn />
 			<StatusBar
 				variant="flat"
 				tone="dark"
@@ -41,11 +36,14 @@ export default function NewTask() {
 						今天让它做点什么？
 					</span>
 				</h1>
-				<button className="glass mt-5 flex h-10 items-center gap-1.5 self-start rounded-full px-3.5 text-[14px] font-medium">
+				<Link
+					to="/new-config"
+					className="glass mt-5 flex h-10 items-center gap-1.5 self-start rounded-full px-3.5 text-[14px] font-medium"
+				>
 					<span className="icon-[lucide--folder] size-4" />
 					EnsoCode
 					<span className="icon-[lucide--chevrons-up-down] size-3.5 text-dim" />
-				</button>
+				</Link>
 				<div className="flex-1" />
 				<section className="glass overflow-hidden rounded-[26px]">
 					<div className="flex items-center gap-2.5 pt-3.5 pr-4 pb-1 pl-3.5">
@@ -58,7 +56,7 @@ export default function NewTask() {
 					{glance.map((s, i) => (
 						<Link
 							key={s.id}
-							to="/session"
+							to={s.to}
 							className={`flex items-center gap-3 px-4 py-3 ${
 								s.status === "waiting" ? "bg-yellow/[0.09]" : ""
 							} ${i > 0 ? "shadow-[inset_0_0.75px_0_var(--color-line)]" : ""}`}
@@ -80,7 +78,7 @@ export default function NewTask() {
 						to="/board"
 						className="mx-4 flex items-center gap-2 py-3 text-[15px] leading-5 text-ink2 shadow-[inset_0_0.75px_0_var(--color-line)]"
 					>
-						<span className="flex-1">还有 4 个 · 查看全部</span>
+						<span className="flex-1">还有 2 个 · 查看全部</span>
 						<span className="icon-[lucide--chevron-right] size-[18px]" />
 					</Link>
 				</section>
