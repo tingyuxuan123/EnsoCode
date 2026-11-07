@@ -1,3 +1,4 @@
+import { parseLeadingSkillCommands } from '@shared/skillCommands';
 import { type LucideIcon, SlashSquare, Sparkles, Target } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,8 @@ export function slashLabel(name: string): string {
 
 /** 句首 /cmd 拆成胶囊名 + 其余正文 */
 export function splitSlashCommand(text: string): { slash: string | null; rest: string } {
+  const chain = parseLeadingSkillCommands(text);
+  if (chain.commands.length > 1) return { slash: chain.commands.join(' '), rest: chain.rest };
   const skill = /^\/skill:(\S+)(?:\s+([\s\S]*))?$/.exec(text);
   if (skill) return { slash: `/skill:${skill[1]}`, rest: skill[2] ?? '' };
   const command = /^\/([A-Za-z][\w:-]*)(?:\s+([\s\S]*))?$/.exec(text);

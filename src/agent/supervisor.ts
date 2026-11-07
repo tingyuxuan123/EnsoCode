@@ -244,6 +244,7 @@ import { branchSessionFromPersistedFile, resolveForkLeafId } from './sessionFork
 import { createSessionCommandTool } from './sessionShell';
 import { MAX_SHELL_TIMEOUT_SEC } from './shell/policy';
 import { type SilentTurnKind, silentTurnKind } from './silentTurn';
+import { skillChainExtension } from './skillChainExtension';
 import { assignCompactRoute, providerKeyFor, smartCompactInlineExtension } from './smartCompact';
 import {
   createSshExecutor,
@@ -540,6 +541,7 @@ async function createSessionResourceLoader(options: {
   cwd: string;
   agentDir: string;
   noSkills: boolean;
+  skillChains?: boolean;
   designGate?: InlineExtension;
   /** 类型化子代理:不装项目扩展(扩展注册的工具与 systemPrompt 注入是给主会话的,漏进去会让它误以为要再委派) */
   noExtensions?: boolean;
@@ -678,6 +680,9 @@ async function createSessionResourceLoader(options: {
         ? [appendSystemPromptExtension('subagent-contract', SUBAGENT_CONTRACT_PROMPT)]
         : []),
       ...(options.progressPreamble ? [progressPreambleExtension] : []),
+      // Last input hook: disk/plugin transforms run first and `handled` short-circuits.
+      // custom-persona remains last overall for its before_agent_start contract.
+      ...(options.skillChains ? [skillChainExtension(() => loader.getSkills().skills)] : []),
       ...(persona
         ? [
             {
@@ -703,7 +708,8 @@ async function createSessionResourceLoader(options: {
           ...(harness ? readHarnessRuleFiles(options.cwd) : []),
         ]),
   };
-  return createLcuResourceLoader(loaderOptions, options.lcuEnabled);
+  const loader = await createLcuResourceLoader(loaderOptions, options.lcuEnabled);
+  return loader;
 }
 
 /** Enso 不走 pi 的会话切换流程，session_shutdown 要自己发（Claude 插件的 SessionEnd hook 靠它） */
@@ -2394,6 +2400,7 @@ export class SessionSupervisor {
     let visibleDesignNames = designToolNames(!disabledTools.includes('design') && !remote, false);
     let refreshDesignTools = () => {};
     const resourceLoader = await createSessionResourceLoader({
+      skillChains: !botMode,
       designGate: designGateExtension({
         cwd,
         enabled: () =>
@@ -2838,6 +2845,7 @@ export class SessionSupervisor {
               this.oauthPoolRecovery()
             )
           : await createSessionResourceLoader({
+              skillChains: !botMode,
               ...(childDesign
                 ? {
                     designGate: designGateExtension({

@@ -470,6 +470,79 @@ describe('applyAgentEvent', () => {
     expect(afterAssistant.messages.some((message) => message.optimistic)).toBe(false);
   });
 
+  it('多技能权威回显只消费匹配的一条并保留并发同文消息，重复快照不误消费', () => {
+    const command = '/skill:a /skill:b 任务';
+    const echo = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: command }],
+      optimistic: true,
+    };
+    const delivered = {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: formatSkillChain(
+            ['/skill:a', '/skill:b'],
+            [
+              { name: 'a', location: '/a', content: 'A' },
+              { name: 'b', location: '/b', content: 'B' },
+            ],
+            '任务'
+          ),
+        },
+      ],
+    };
+    const after = applyAgentEvent(
+      { ...base, messages: [echo, { ...echo, deliveryId: 'second' }] },
+      's1',
+      { type: 'message-upsert', identity: identity(), seq: 1, index: 0, message: delivered }
+    );
+    expect(after.messages).toHaveLength(2);
+    expect(after.messages[0]).toEqual(delivered);
+    expect(after.messages[1]?.deliveryId).toBe('second');
+    const repeated = applyAgentEvent(after, 's1', {
+      type: 'snapshot',
+      sessions: [{ ...snapshot(), messages: [delivered] }],
+    });
+    expect(repeated.messages).toHaveLength(2);
+    expect(repeated.messages[1]?.deliveryId).toBe('second');
+  });
+  it('多技能空白归一化及图片提示不留下重复回显，但技能顺序不同不能配对', () => {
+    const echo = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: '/skill:a\t/skill:b\n任务' }],
+      optimistic: true,
+    };
+    const wrongOrder = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: '/skill:b /skill:a 任务' }],
+      optimistic: true,
+    };
+    const text = formatSkillChain(
+      ['/skill:a', '/skill:b'],
+      [
+        { name: 'a', location: '/a', content: 'A' },
+        { name: 'b', location: '/b', content: 'B' },
+      ],
+      '任务'
+    );
+    const after = applyAgentEvent({ ...base, messages: [echo, wrongOrder] }, 's1', {
+      type: 'message-upsert',
+      identity: identity(),
+      seq: 1,
+      index: 0,
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: `<role>\ninternal\n</role>\n\n${text}\n\n[Image resized]` },
+        ],
+      },
+    });
+    expect(after.messages).toHaveLength(2);
+    expect(after.messages[1]).toEqual(wrongOrder);
+  });
+
   it('tail snapshot records its absolute base and keeps the optimistic tail', () => {
     const optimistic = {
       ...assistant('in flight'),
@@ -1787,3 +1860,5 @@ describe('background-tasks-level', () => {
     expect(state.backgroundTasks).toEqual([task('t1', 'running')]);
   });
 });
+
+import { formatSkillChain } from '@shared/skillCommands';

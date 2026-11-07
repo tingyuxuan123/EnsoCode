@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer';
 import { composerDrafts, createComposerDrafts } from './composerDraft';
+import type { ComposerPayload } from './mentionComposer';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/stores/settings', () => ({
@@ -37,7 +38,10 @@ afterEach(async () => {
   for (const key of ['draft-a', 'draft-b', 'draft-send']) composerDrafts.delete(key);
 });
 
-const render = (focusKey: string, onSend = vi.fn(() => true)) =>
+const render = (
+  focusKey: string,
+  onSend: (payload: ComposerPayload) => boolean = vi.fn(() => true)
+) =>
   act(async () => {
     root.render(
       <Composer
@@ -61,6 +65,52 @@ async function type(text: string) {
 }
 
 describe('Composer draft lifecycle', () => {
+  it('直接输入或粘贴完整前缀链产生多个chips且不吞任务正文', async () => {
+    const onSend = vi.fn((_payload: ComposerPayload) => false);
+    await render('draft-send', onSend);
+    await type('/skill:a /skill:中文 任务 /skill:not-leading');
+    expect(container.querySelectorAll('[aria-label="Remove"]')).toHaveLength(2);
+    expect(container.querySelector('[contenteditable]')?.textContent).toBe(
+      '任务 /skill:not-leading'
+    );
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.click()
+    );
+    expect(onSend.mock.calls[0]?.[0]).toMatchObject({
+      text: '/skill:a /skill:中文 任务 /skill:not-leading',
+    });
+  });
+  it.each(['rejected', 'throws'])(
+    '多技能chips首挂载、失败%s保留、单独删除并重试仍发送原命令',
+    async (mode) => {
+      composerDrafts.set('draft-send', {
+        segments: [{ type: 'text', text: '任务' }],
+        images: [],
+        slash: '/skill:a /skill:b',
+      });
+      const onSend = vi.fn((_payload: ComposerPayload) => {
+        if (mode === 'throws') throw new Error('transport failed');
+        return false;
+      });
+      await render('draft-send', onSend);
+      expect(container.querySelectorAll('[aria-label="Remove"]')).toHaveLength(2);
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.click()
+      );
+      expect(onSend.mock.calls[0]?.[0]).toMatchObject({ text: '/skill:a /skill:b 任务' });
+      expect(createComposerDrafts(() => localStorage).get('draft-send')?.slash).toBe(
+        '/skill:a /skill:b'
+      );
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[aria-label="Remove"]')!.click()
+      );
+      expect(container.querySelectorAll('[aria-label="Remove"]')).toHaveLength(1);
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.click()
+      );
+      expect(onSend.mock.calls[1]?.[0]).toMatchObject({ text: '/skill:b 任务' });
+    }
+  );
   it('restores on first mount, writes while editing, and isolates focusKey switches', async () => {
     composerDrafts.set('draft-a', {
       segments: [{ type: 'text', text: '原草稿😀' }],

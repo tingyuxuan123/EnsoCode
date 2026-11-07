@@ -59,6 +59,7 @@ import type { ComposerPayload, MentionSegment } from './mentionComposer';
 import { createEditorPayload, mentionPopupLayout, resolvePopupKeyAction } from './mentionComposer';
 import { SlashChip } from './SlashChip';
 import { filterComposerCommands } from './skillCompletion';
+import { appendSlash, foldLeadingSkills, removeSlash, slashChain } from './slashChain';
 import { VoiceInputButton } from './VoiceInputButton';
 
 interface ComposerProps {
@@ -253,6 +254,37 @@ export function Composer({
   const handleEditorState = useCallback(
     (state: MentionEditorState) => {
       pluginEditRevision.current++;
+      const first = state.segments[0];
+      const folded =
+        !restoringDraft.current && !composingRef.current && first?.type === 'text'
+          ? foldLeadingSkills(first.text, pluginStateRef.current.slash)
+          : null;
+      if (folded && first?.type === 'text') {
+        const selection = window.getSelection();
+        const offset =
+          selection?.anchorNode?.nodeType === Node.TEXT_NODE ? selection.anchorOffset : undefined;
+        pluginStateRef.current.slash = folded.slash;
+        setSlash(folded.slash);
+        editorRef.current?.setSegments([
+          { type: 'text', text: folded.rest },
+          ...state.segments.slice(1),
+        ]);
+        const node = composerRef.current?.querySelector('[contenteditable]')?.firstChild;
+        if (selection && offset !== undefined && node?.nodeType === Node.TEXT_NODE) {
+          const range = document.createRange();
+          range.setStart(
+            node,
+            Math.min(
+              folded.rest.length,
+              Math.max(0, offset - (first.text.length - folded.rest.length))
+            )
+          );
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        return;
+      }
       if (!restoringDraft.current && focusKey && prevFocusKeyRef.current === focusKey) {
         const current = pluginStateRef.current;
         drafts.set(focusKey, {
@@ -512,7 +544,7 @@ export function Composer({
         editorRef.current?.consumeToken(skillQuery !== null ? '$' : '/');
         setSlashQuery(null);
         setSkillQuery(null);
-        setSlash(item.name);
+        setSlash((current) => appendSlash(current, item.name));
       } else if (popupKind === 'slash-sub') {
         const item = subResults[activeIndex];
         if (!item) return;
@@ -669,7 +701,7 @@ export function Composer({
     }
     if (event.key === 'Backspace' && slash && content.length === 0 && !editorHasMentions) {
       event.preventDefault();
-      setSlash(null);
+      setSlash(removeSlash(slash, slashChain(slash).length - 1));
       return;
     }
     // 文件/会话卡片是 cE=false 原子块，Backspace 浏览器原生整块删除；
@@ -755,7 +787,7 @@ export function Composer({
                   editorRef.current?.consumeToken(skillQuery !== null ? '$' : '/');
                   setSlashQuery(null);
                   setSkillQuery(null);
-                  setSlash(item.name);
+                  setSlash((current) => appendSlash(current, item.name));
                 } else {
                   applySlashSubcommand(item.name, false);
                 }
@@ -861,14 +893,18 @@ export function Composer({
           {recipient && (
             <MentionChip recipient={recipient} onRemove={() => setRecipient(undefined)} />
           )}
-          {slash && (
+          {slashChain(slash).map((name, index) => (
             <SlashChip
-              name={slash}
+              // biome-ignore lint/suspicious/noArrayIndexKey: Identical command tokens can repeat in legacy drafts; their ordered occurrence is their identity.
+              key={`${index}-${name}`}
+              name={name}
               className="mt-0.5 shrink-0"
               trailing={
                 <button
                   type="button"
-                  onClick={() => setSlash(null)}
+                  onClick={() =>
+                    setSlash((current) => (current ? removeSlash(current, index) : null))
+                  }
                   className="rounded-sm opacity-70 hover:opacity-100"
                   aria-label={t('Remove')}
                 >
@@ -876,7 +912,7 @@ export function Composer({
                 </button>
               }
             />
-          )}
+          ))}
           <MentionEditor
             ref={editorRef}
             className="text-[calc(14rem/14)] leading-[calc(24rem/14)]"

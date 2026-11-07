@@ -12,6 +12,17 @@ function storage() {
 }
 
 describe('composer drafts (not session history)', () => {
+  it('旧版string草稿仍可读，多技能只持久化命令不保存技能正文', () => {
+    const disk = storage();
+    const draft = {
+      segments: [{ type: 'text' as const, text: '任务' }],
+      images: [],
+      slash: '/skill:a /skill:b',
+    };
+    createComposerDrafts(() => disk).set('a', draft);
+    expect(createComposerDrafts(() => disk).get('a')).toEqual(draft);
+    expect([...disk.values.values()].join('')).not.toContain('<skill');
+  });
   it('survives a new repository with Unicode and ordered mentions isolated by focusKey', () => {
     const disk = storage();
     const drafts = createComposerDrafts(() => disk);

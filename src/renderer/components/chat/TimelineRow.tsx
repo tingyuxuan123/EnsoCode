@@ -5,6 +5,7 @@ import { isBtwIsolationPrompt } from '@shared/btw';
 import { toLocalImageUrl } from '@shared/localImage';
 import { type PlanNoteKind, parsePlanMessage, splitPlanPrefix } from '@shared/planMode';
 import { SHELL_FAILURE_DISPLAY } from '@shared/shellFailure';
+import { parseSkillInvocation } from '@shared/skillCommands';
 import type {
   AgentRunProgress,
   AgentSessionCustomEntry,
@@ -123,6 +124,7 @@ import { ReadFileView } from './ReadFileView';
 import { RtkToolStatsBar } from './RtkToolStatsBar';
 import { SlashChip, slashChipClass, splitSlashCommand } from './SlashChip';
 import { SubagentResult } from './SubagentResult';
+import { slashChain } from './slashChain';
 import { parseSubagentReceipt } from './subagentReceipt';
 import { TerminalOutput } from './TerminalOutput';
 import { TodoList } from './TodoBar';
@@ -330,10 +332,6 @@ function isFromMainAgent(text: string): boolean {
   return MAIN_AGENT_BLOCK.test(role ? text.slice(role[0].length) : text);
 }
 
-/** pi 把 /skill:name 展开成整段 XML；气泡里显示高亮 tag，点击看正文 */
-const SKILL_BLOCK =
-  /^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/;
-
 function SkillTag({ name, content }: { name: string; content: string }) {
   const { t } = useI18n();
   return (
@@ -366,9 +364,8 @@ function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
 }
 
 function SkillInvocation({ text }: { text: string }) {
-  const match = SKILL_BLOCK.exec(text);
-  if (!match) return null;
-  const [, name, , content, userMessage] = match;
+  const parsed = parseSkillInvocation(text);
+  if (!parsed) return null;
   return (
     <ChipBubble chip={<SkillTag name={name} content={content} />} extra={userMessage?.trim()} />
   );
@@ -377,7 +374,22 @@ function SkillInvocation({ text }: { text: string }) {
 function SlashInvocation({ text }: { text: string }) {
   const parsed = splitSlashCommand(text);
   if (!parsed.slash) return null;
-  return <ChipBubble chip={<SlashChip name={parsed.slash} />} extra={parsed.rest.trim()} />;
+  return (
+    <ChipBubble
+      chip={
+        <span className="inline-flex flex-wrap gap-1">
+          {slashChain(parsed.slash).map((name, index) => (
+            <SlashChip
+              // biome-ignore lint/suspicious/noArrayIndexKey: 旧草稿中的重复命令没有独立 id，消息顺序固定。
+              key={`${index}-${name}`}
+              name={name}
+            />
+          ))}
+        </span>
+      }
+      extra={parsed.rest.trim()}
+    />
+  );
 }
 
 /** 侧边栏触发的预设工作流：卡片展示名称与参数，块后给模型的说明不显示 */
@@ -673,6 +685,7 @@ function UserText({
   }
   const workflowPreset = parseWorkflowPresetMessage(text);
   if (workflowPreset) return <WorkflowPresetInvocation preset={workflowPreset} />;
+  if (parseSkillInvocation(text)) return <SkillInvocation text={text} />;
   const refs = splitMentionRefs(text);
   const hasRefs = refs.files.length > 0 || refs.chats.length > 0;
   if (hasRefs) {
@@ -681,7 +694,13 @@ function UserText({
       <div className={USER_BUBBLE}>
         {parsed.slash ? (
           <>
-            <SlashChip name={parsed.slash} />
+            {slashChain(parsed.slash).map((name, index) => (
+              <SlashChip
+                // biome-ignore lint/suspicious/noArrayIndexKey: 重复命令按不可变消息中的出现次序区分。
+                key={`${index}-${name}`}
+                name={name}
+              />
+            ))}
             {parsed.rest.trim() ? (
               <span className="ml-1.5 align-middle">
                 <InlineMentionText
@@ -699,7 +718,6 @@ function UserText({
       </div>
     );
   }
-  if (SKILL_BLOCK.test(text)) return <SkillInvocation text={text} />;
   if (splitSlashCommand(text).slash) return <SlashInvocation text={text} />;
   const migrated = WORKSPACE_MIGRATED_PREFIX.exec(text);
   if (migrated) {

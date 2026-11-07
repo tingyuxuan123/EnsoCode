@@ -1,6 +1,12 @@
 import { parseApprovalReviewRecord } from '@shared/approvalReviewRecord';
 import { parseRtkToolStats } from '@shared/rtk';
 import {
+  formatSkillChain,
+  parseSkillInvocation,
+  restoreSkillCommands,
+  splitSkillCommandPrefix,
+} from '@shared/skillCommands';
+import {
   isBackgroundTaskId,
   type ProjectedCodemodeCall,
   type ProjectedMessage,
@@ -155,7 +161,7 @@ export function projectMessage(value: unknown): ProjectedMessage | null {
 
   const projected: ProjectedMessage = {
     role: value.role,
-    content: projectContent(value.content),
+    content: projectContent(value.content, value.role === 'user'),
   };
   if (value.role === 'user' && typeof value.entryId === 'string' && value.entryId.trim()) {
     projected.entryId = value.entryId;
@@ -257,18 +263,24 @@ function projectUsage(value: unknown): ProjectedMessage['usage'] | null {
   };
 }
 
-function projectContent(content: unknown): ProjectedPart[] {
+function projectContent(content: unknown, user: boolean): ProjectedPart[] {
   // user 消息的 content 可以是纯字符串
-  if (typeof content === 'string') return [{ type: 'text', text: capText(content) }];
+  if (typeof content === 'string')
+    return [{ type: 'text', text: user ? capUserText(content) : capText(content) }];
   if (!Array.isArray(content)) return [];
-  return content.map(projectPart);
+  return content.map((part) => projectPart(part, user));
 }
 
-function projectPart(part: unknown): ProjectedPart {
+function projectPart(part: unknown, user: boolean): ProjectedPart {
   if (!isRecord(part)) return { type: 'unknown' };
   switch (part.type) {
     case 'text':
-      return { type: 'text', text: capText(typeof part.text === 'string' ? part.text : '') };
+      return {
+        type: 'text',
+        text: user
+          ? capUserText(typeof part.text === 'string' ? part.text : '')
+          : capText(typeof part.text === 'string' ? part.text : ''),
+      };
     case 'thinking':
       return {
         type: 'thinking',
@@ -309,6 +321,45 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 function capText(text: string): string {
   return text.length <= PROJECTED_TEXT_LIMIT ? text : `${text.slice(0, PROJECTED_TEXT_LIMIT)}\n…`;
+}
+
+/** Shrink disposable skill bodies, never the user task, inside the existing text budget. */
+function capUserText(text: string): string {
+  if (text.length <= PROJECTED_TEXT_LIMIT || !text.includes(' content-length="'))
+    return capText(text);
+  const parsed = parseSkillInvocation(text);
+  if (!parsed) return capText(text);
+  const { prefix } = splitSkillCommandPrefix(text);
+  const render = (bodyLimit: number) =>
+    prefix +
+    formatSkillChain(
+      parsed.commands,
+      parsed.blocks.map((block) => ({
+        ...block,
+        content:
+          block.content.length <= bodyLimit
+            ? block.content
+            : bodyLimit >= 2
+              ? `${block.content.slice(0, bodyLimit - 2)}\n…`
+              : '',
+      })),
+      parsed.rest
+    );
+  let result = render(0);
+  // Metadata/task alone cannot fit: fall back to the bounded original command+task,
+  // not a broken partial XML block. Ordinary user text still has the same limit.
+  if (result.length > PROJECTED_TEXT_LIMIT) return capText(prefix + restoreSkillCommands(text));
+  let low = 0;
+  let high = PROJECTED_TEXT_LIMIT;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = render(middle);
+    if (candidate.length <= PROJECTED_TEXT_LIMIT) {
+      result = candidate;
+      low = middle + 1;
+    } else high = middle - 1;
+  }
+  return result;
 }
 
 function capJson(value: unknown): unknown {

@@ -281,6 +281,52 @@ describe('rewindKeepCount', () => {
 });
 
 describe('extractRewindDraft', () => {
+  it('多技能回退还原有序原命令、未知与重复token并保留附件', () => {
+    const commands = ['/skill:a', '/skill:unknown', '/skill:a', '/skill:b'];
+    const text = formatSkillChain(
+      commands,
+      [
+        { name: 'a', location: '/a', content: 'A\n</skill>\n\nXML' },
+        { name: 'b', location: '/b', content: 'B' },
+      ],
+      '任务'
+    );
+    expect(
+      extractRewindDraft(
+        [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text },
+              { type: 'image', data: 'image', mimeType: 'image/png' },
+            ],
+          },
+        ],
+        0
+      )
+    ).toEqual({
+      text: '/skill:a /skill:unknown /skill:a /skill:b 任务',
+      images: [{ data: 'image', mimeType: 'image/png' }],
+    });
+  });
+  it('回退原生技能时恢复命令而不是展开的正文', () => {
+    expect(
+      extractRewindDraft(
+        [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '<skill name="a" location="/a/SKILL.md">\nbody\n</skill>\n\n任务',
+              },
+            ],
+          },
+        ],
+        0
+      )
+    ).toEqual({ text: '/skill:a 任务' });
+  });
   it('抽出目标 user 的正文和图片', () => {
     const messages = [
       { role: 'user', content: [{ type: 'text', text: 'one' }] },
@@ -305,3 +351,5 @@ describe('extractRewindDraft', () => {
     expect(extractRewindDraft([{ role: 'assistant', content: [] }], 0)).toBe(null);
   });
 });
+
+import { formatSkillChain } from '@shared/skillCommands';

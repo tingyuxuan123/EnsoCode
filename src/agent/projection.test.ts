@@ -1,7 +1,100 @@
+import {
+  formatSkillChain,
+  parseSkillInvocation,
+  restoreSkillCommands,
+} from '@shared/skillCommands';
 import { describe, expect, it } from 'vitest';
 import { PROJECTED_FILE_CHANGE_LIMIT, PROJECTED_TEXT_LIMIT, projectMessage } from './projection';
 
 describe('projectMessage', () => {
+  it.each(['string', 'parts'])(
+    '40K双技能%s投影按总预算裁技能而不损坏长度或丢掉用户任务',
+    (shape) => {
+      const commands = ['/skill:a', '/skill:b'];
+      const task = '用户任务\n<xml>保留原文</xml>';
+      const expanded = formatSkillChain(
+        commands,
+        [
+          { name: 'a', location: '/a', content: 'A'.repeat(20000) },
+          { name: 'b', location: '/b', content: 'B'.repeat(20000) },
+        ],
+        task
+      );
+      const raw = {
+        role: 'user',
+        content:
+          shape === 'string'
+            ? expanded
+            : [
+                { type: 'text', text: expanded },
+                { type: 'image', data: 'image', mimeType: 'image/png' },
+              ],
+      };
+      const projected = projectMessage(raw);
+      const part = projected?.content[0];
+      if (part?.type !== 'text') throw new Error('Expected text projection');
+      expect(part.text.length).toBeLessThanOrEqual(PROJECTED_TEXT_LIMIT);
+      expect(parseSkillInvocation(part.text)?.blocks.map((block) => block.name)).toEqual([
+        'a',
+        'b',
+      ]);
+      expect(parseSkillInvocation(part.text)?.rest).toBe(task);
+      expect(restoreSkillCommands(part.text)).toBe(`/skill:a /skill:b ${task}`);
+      expect(
+        parseSkillInvocation(part.text)?.blocks.every((block) => block.content.endsWith('…'))
+      ).toBe(true);
+      expect(shape === 'string' ? raw.content : (raw.content as { text: string }[])[0]?.text).toBe(
+        expanded
+      );
+      if (shape === 'parts')
+        expect(projected?.content[1]).toEqual({
+          type: 'image',
+          data: 'image',
+          mimeType: 'image/png',
+        });
+    }
+  );
+  it('大技能投影保留plan/role前缀且未知重复命令仍能恢复', () => {
+    const commands = ['/skill:unknown', '/skill:a', '/skill:a', '/skill:b'];
+    const prefix = '<plan-mode>\nPlan mode is ON\n</plan-mode>\n\n<role>\ninternal\n</role>\n\n';
+    const expanded =
+      prefix +
+      formatSkillChain(
+        commands,
+        [
+          { name: 'a', location: '/a', content: 'A'.repeat(20000) },
+          { name: 'b', location: '/b', content: 'B'.repeat(20000) },
+        ],
+        '原任务'
+      );
+    const part = projectMessage({ role: 'user', content: expanded })?.content[0];
+    if (part?.type !== 'text') throw new Error('Expected text projection');
+    expect(part.text.startsWith(prefix)).toBe(true);
+    expect(part.text.length).toBeLessThanOrEqual(PROJECTED_TEXT_LIMIT);
+    expect(restoreSkillCommands(part.text)).toBe(`${commands.join(' ')} 原任务`);
+  });
+  it('用户任务本身超限时仍用既有正文上限，不为技能扩大投影预算', () => {
+    const task = '任务'.repeat(PROJECTED_TEXT_LIMIT);
+    const expanded = formatSkillChain(
+      ['/skill:a', '/skill:b'],
+      [
+        { name: 'a', location: '/a', content: 'A'.repeat(20000) },
+        { name: 'b', location: '/b', content: 'B'.repeat(20000) },
+      ],
+      task
+    );
+    const part = projectMessage({ role: 'user', content: expanded })?.content[0];
+    if (part?.type !== 'text') throw new Error('Expected text projection');
+    expect(part.text.length).toBeLessThanOrEqual(PROJECTED_TEXT_LIMIT + 2);
+    expect(part.text.startsWith('/skill:a /skill:b 任务')).toBe(true);
+    expect(part.text.endsWith('\n…')).toBe(true);
+    expect(part.text).not.toContain('<skill');
+  });
+  it('损坏长度的超长XML只走原有普通文本截断，不重组或隐藏用户内容', () => {
+    const malformed = `<skill name="a" location="/a" content-length="999999">\n${'正文'.repeat(20000)}\n</skill>\n\n用户任务`;
+    const part = projectMessage({ role: 'user', content: malformed })?.content[0];
+    expect(part).toEqual({ type: 'text', text: `${malformed.slice(0, PROJECTED_TEXT_LIMIT)}\n…` });
+  });
   it('仅 vetd_ 工具结果提取有界设计卡片、白名单克隆，不透传 details', () => {
     const card = {
       type: 'vetta-ui-design:screenshot',

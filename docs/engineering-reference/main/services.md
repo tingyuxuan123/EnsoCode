@@ -382,6 +382,8 @@ let lastScan: { scanId: string; byId: Map<string, Cached> } | null = null;
 
 实现在 `assetScan/index.ts` 的 `skillNameKey` / `mcpKey` / `seenInstructionHashes`。
 
+Code 的开头连续 `/skill:name` 由最后一个内联 input 扩展按 loader 权威技能目录展开，插件的 transform/handled 语义先行；Bot 和无前缀的 Pi 原生单技能不变，worker plan/role 前缀后的单技能由扩展补展开。新块沿用 Pi XML，仅添加 `content-length`（正文 UTF-16 长度），解析必须验证安全整数、精确闭合和分隔符，坏长度整条按普通正文保留；投影在既有单段预算内优先裁技能正文并重算长度、保留用户任务，不改权威源，技能正文不进设置。
+
 重复项**标记而不丢弃**：候选带 `duplicated` 和 `duplicateReason`
 （`registered` / `same-content` / `same-name`），界面上置灰且默认不勾选，
 用户仍可手动选。三层都要拦：扫描标记、collect 批内去重、store 落库前再判一次。

@@ -1,3 +1,4 @@
+import { restoreSkillCommands } from '@shared/skillCommands';
 import type { AttachedImage } from '@shared/types/agent';
 import type { MentionSegment } from './mentionComposer';
 import { splitSlashCommand } from './SlashChip';
@@ -28,7 +29,7 @@ export function applyInjectedDraft(
       images: [...current.images, ...(injected.images ?? [])],
     };
   }
-  const parsed = splitSlashCommand(injected.text ?? '');
+  const parsed = splitSlashCommand(restoreSkillCommands(injected.text ?? ''));
   return {
     slash: parsed.slash,
     segments: parsed.rest ? [{ type: 'text', text: parsed.rest }] : [],

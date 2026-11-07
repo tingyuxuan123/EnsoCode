@@ -5,6 +5,7 @@ import type { MentionSegment } from './mentionComposer';
 export interface ComposerDraft {
   segments: MentionSegment[];
   images: AttachedImage[];
+  /** Existing v1 string wire: one command or ordered space-separated /skill: commands, never bodies. */
   slash: string | null;
   recipient?: AgentTypeMentionCandidate;
 }

@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { applyInjectedDraft } from './injectedDraft';
 
 describe('applyInjectedDraft', () => {
+  it('回退多技能时全部恢复为chips，撤回追加不替换已有链', () => {
+    const empty = { segments: [], images: [], slash: null };
+    const restored = applyInjectedDraft(empty, { text: '/skill:a /skill:b 任务' });
+    expect(restored).toEqual({
+      slash: '/skill:a /skill:b',
+      segments: [{ type: 'text', text: '任务' }],
+      images: [],
+    });
+    expect(applyInjectedDraft(restored, { text: '补充' }, true).slash).toBe('/skill:a /skill:b');
+  });
   const image = { data: 'image', mimeType: 'image/png' };
   const current = {
     segments: [{ type: 'text' as const, text: 'editing' }],

@@ -197,10 +197,12 @@ export function extractRewindDraft(
   if (keep === null) return null;
   const target = messages[keep];
   if (target?.role !== 'user' || !Array.isArray(target.content)) return null;
-  const text = target.content
-    .filter((part) => part.type === 'text' && typeof part.text === 'string')
-    .map((part) => part.text)
-    .join('');
+  const text = restoreSkillCommands(
+    target.content
+      .filter((part) => part.type === 'text' && typeof part.text === 'string')
+      .map((part) => part.text)
+      .join('')
+  );
   const images = target.content.flatMap((part) =>
     part.type === 'image' && part.data && part.mimeType
       ? [{ data: part.data, mimeType: part.mimeType }]
@@ -209,3 +211,5 @@ export function extractRewindDraft(
   if (!text && images.length === 0) return {};
   return { ...(text ? { text } : {}), ...(images.length > 0 ? { images } : {}) };
 }
+
+import { restoreSkillCommands } from '@shared/skillCommands';
