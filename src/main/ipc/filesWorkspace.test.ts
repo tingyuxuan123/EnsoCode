@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { bashPath, posixShell } from '../../../test/helpers/shell';
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, request: unknown) => Promise<unknown>>(),
@@ -330,7 +331,7 @@ it('SSH 工作区不误开本机路径', async () => {
   expect(mocks.openPath).not.toHaveBeenCalled();
 });
 it('拒绝软链接指向工作区外的新建路径', async () => {
-  symlinkSync(os.tmpdir(), path.join(root, 'escape'));
+  symlinkSync(os.tmpdir(), path.join(root, 'escape'), 'junction');
   expect(await invoke(IPC_CHANNELS.FILES_CREATE, { rel: 'escape', name: 'never-create' })).toEqual({
     ok: false,
     error: 'invalid-path',
@@ -343,12 +344,27 @@ it('相对路径复制也必须验证路径', async () => {
 });
 function remote() {
   mocks.project.kind = 'ssh';
+  // SSH's filesystem is POSIX even when the test client runs on Windows. Git Bash
+  // executes the unchanged production scripts against real temporary files/junctions.
+  const shell = process.platform === 'win32' ? posixShell() : undefined;
+  mocks.project.canonicalPath = bashPath(root);
   mocks.exec.mockImplementation(async (args: string[]) => {
-    const result = spawnSync(args[0], args.slice(1), {
-      encoding: 'utf8',
-      env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LC_ALL: 'C' },
-      timeout: 10_000,
-    });
+    const result = spawnSync(
+      shell ?? args[0],
+      shell ? ['-c', 'exec "$@"', 'enso', ...args] : args.slice(1),
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: shell
+            ? `${path.resolve(shell, '../../usr/bin')}${path.delimiter}${process.env.PATH ?? ''}`
+            : '/usr/bin:/bin:/usr/sbin:/sbin',
+          LC_ALL: 'C',
+        },
+        timeout: 10_000,
+      }
+    );
+    if (result.error) throw result.error;
     return { code: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
   });
 }
@@ -363,7 +379,7 @@ it('SSH 创建同名文件报告冲突且不覆盖', { timeout: 20_000 }, async 
 });
 it('Windows 客户端也拒绝删除 SSH 根目录', async () => {
   remote();
-  const remoteRoot = root;
+  const remoteRoot = mocks.project.canonicalPath;
   const original = path.resolve;
   const spy = vi
     .spyOn(path, 'resolve')
@@ -406,7 +422,7 @@ it('SSH 重命名不将源移动到已有目录内', { timeout: 20_000 }, async 
 });
 it('SSH 拒绝软链接逃逸', { timeout: 20_000 }, async () => {
   remote();
-  symlinkSync(os.tmpdir(), path.join(root, 'escape'));
+  symlinkSync(os.tmpdir(), path.join(root, 'escape'), 'junction');
   expect(await invoke(IPC_CHANNELS.FILES_ABS, { rel: 'escape' })).toEqual({
     ok: false,
     error: 'invalid-path',

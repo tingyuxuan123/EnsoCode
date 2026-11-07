@@ -68,9 +68,11 @@ afterAll(() => rmSync(mock.dir, { recursive: true, force: true }));
 it('file 导航清除旧 HTTP 持久化；请求与页内导航守住工作区边界', async () => {
   setBrowserFileRootResolver(() => mock.dir);
   const host = new BrowserHost();
-  writeFileSync(join(mock.dir, 'index.html'), 'ok');
+  const pages = join(mock.dir, 'pages');
+  mkdirSync(pages);
+  writeFileSync(join(pages, 'index.html'), 'ok');
   await host.userNavigate('tab', 'conversation', 'https://example.com');
-  const file = pathToFileURL(join(mock.dir, 'index.html')).href;
+  const file = pathToFileURL(join(pages, 'index.html')).href;
   await host.userNavigate('tab', 'conversation', file);
   expect(JSON.parse(readFileSync(join(mock.dir, 'browser-tabs.json'), 'utf8'))).not.toHaveProperty(
     'tab'
@@ -94,20 +96,29 @@ it('file 导航清除旧 HTTP 持久化；请求与页内导航守住工作区�
   expect(callback).toHaveBeenLastCalledWith({ cancel: false });
   mock.request({ url: file, webContentsId: 999 }, callback);
   expect(callback).toHaveBeenLastCalledWith({ cancel: true });
-  rmSync(join(mock.dir, 'index.html'));
-  symlinkSync('/etc/passwd', join(mock.dir, 'index.html'));
-  mock.request({ url: file, webContentsId: 42 }, callback);
-  expect(callback).toHaveBeenLastCalledWith({ cancel: true });
+  const outside = mkdtempSync(join(tmpdir(), 'browser-host-outside-'));
+  try {
+    writeFileSync(join(outside, 'index.html'), 'private');
+    rmSync(pages, { recursive: true });
+    symlinkSync(outside, pages, 'junction');
+    mock.request({ url: file, webContentsId: 42 }, callback);
+    expect(callback).toHaveBeenLastCalledWith({ cancel: true });
+  } finally {
+    rmSync(pages, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
 });
 
 it('模型导航可预览当前工作区文件，但不读取越界、缺失、目录或符号链接逃逸目标', async () => {
   const root = join(mock.dir, 'workspace');
+  const outsideDir = join(mock.dir, 'outside');
   mkdirSync(root);
+  mkdirSync(outsideDir);
   const preview = join(root, 'preview.html');
-  const outside = join(mock.dir, 'outside.html');
+  const outside = join(outsideDir, 'outside.html');
   writeFileSync(preview, '<h1>Workspace preview</h1>');
   writeFileSync(outside, 'private');
-  symlinkSync(outside, join(root, 'escape.html'));
+  symlinkSync(outsideDir, join(root, 'escape'), 'junction');
   setBrowserFileRootResolver((id) => (id === 'preview-conversation' ? root : null));
   const host = new BrowserHost();
   const file = pathToFileURL(preview).href;
@@ -120,7 +131,12 @@ it('模型导航可预览当前工作区文件，但不读取越界、缺失、�
   });
   expect(mock.url).toBe(file);
 
-  for (const target of [outside, root, join(root, 'missing.html'), join(root, 'escape.html')]) {
+  for (const target of [
+    outside,
+    root,
+    join(root, 'missing.html'),
+    join(root, 'escape/outside.html'),
+  ]) {
     await expect(
       host.invoke('preview-conversation', 'navigate', { url: pathToFileURL(target).href })
     ).rejects.toThrow(/security restriction/i);

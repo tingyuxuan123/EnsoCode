@@ -84,18 +84,22 @@ describe('device file chunks', () => {
   });
 
   it('never serves unmentioned, forged, outside, directory or escaping-symlink candidates', async () => {
-    writeFileSync(path.join(root, 'ok.txt'), 'allowed');
+    const filesDir = path.join(root, 'files');
+    const outside = path.join(tmp, 'outside');
+    mkdirSync(filesDir);
+    mkdirSync(outside);
+    writeFileSync(path.join(filesDir, 'ok.txt'), 'allowed');
     writeFileSync(path.join(root, 'secret.txt'), 'secret');
-    writeFileSync(path.join(tmp, 'outside.txt'), 'outside');
-    symlinkSync(path.join(tmp, 'outside.txt'), path.join(root, 'link.txt'));
-    const { list, read } = fixture(['ok.txt', '../outside.txt', 'link.txt', '.']);
+    writeFileSync(path.join(outside, 'ok.txt'), 'outside');
+    symlinkSync(outside, path.join(root, 'link'), 'junction');
+    const { list, read } = fixture(['files/ok.txt', '../outside/ok.txt', 'link/ok.txt', '.']);
     const files = (await list()).files;
-    expect(files.map((file) => file.rel)).toEqual(['ok.txt']);
+    expect(files.map((file) => file.rel)).toEqual(['files/ok.txt']);
     vi.mocked(open).mockClear();
     expect((await read('f'.repeat(64))).error).toBe('not-found');
     expect((await read(files[0].id, 0, { sessionId: 'other' })).error).toBe('not-found');
-    unlinkSync(path.join(root, 'ok.txt'));
-    symlinkSync(path.join(tmp, 'outside.txt'), path.join(root, 'ok.txt'));
+    rmSync(filesDir, { recursive: true });
+    symlinkSync(outside, filesDir, 'junction');
     expect((await read(files[0].id)).error).toBe('not-found');
     expect(open).not.toHaveBeenCalled();
   });

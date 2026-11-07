@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AgentWorkerEvent } from '@shared/types/agent';
@@ -79,8 +80,9 @@ vi.mock('@earendil-works/pi-coding-agent', async (original) => {
 import { SessionSupervisor } from './supervisor';
 
 const dirs: string[] = [];
-afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+afterEach(async () => {
+  for (const dir of dirs.splice(0))
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
   mocks.options.length = 0;
 });
 const model = {

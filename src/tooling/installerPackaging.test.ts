@@ -147,7 +147,7 @@ describe('installer packaging', () => {
 
   it('copies the koffi platform binding sibling and unpacks its .node', () => {
     expect(yml).toMatch(
-      /- from: node_modules\/\.pnpm\/koffi@[^/\s]+\/node_modules\/@koromix\n\s+to: node_modules\/@koromix\n/
+      /- from: node_modules\/\.pnpm\/koffi@[^/\s]+\/node_modules\/@koromix\r?\n\s+to: node_modules\/@koromix\r?\n/
     );
     const unpack = yml.split(/^asarUnpack:/m)[1]?.split(/^[a-z]/m)[0] ?? '';
     expect(unpack).toContain('- node_modules/@koromix/**/*.node');

@@ -1,5 +1,6 @@
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -11,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BotChat } from '@shared/types/bot';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BotChatStore } from './chatStore';
 import {
   mediaFile,
@@ -22,6 +23,20 @@ import {
   sniffImage,
   storeMedia,
 } from './media';
+
+const { leafLinks } = vi.hoisted(() => ({ leafLinks: new Map<string, string>() }));
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof import('node:fs')>();
+  return {
+    ...fs,
+    lstatSync: new Proxy(fs.lstatSync, {
+      apply(target, receiver, args) {
+        if (typeof args[0] === 'string') args[0] = leafLinks.get(args[0]) ?? args[0];
+        return Reflect.apply(target, receiver, args);
+      },
+    }),
+  };
+});
 
 const BOT_A = '11111111-1111-4111-8111-111111111111';
 const BOT_B = '22222222-2222-4222-8222-222222222222';
@@ -42,7 +57,10 @@ beforeEach(() => {
   media = join(root, 'chat', 'media');
   mkdirSync(workspace, { recursive: true });
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => {
+  leafLinks.clear();
+  rmSync(root, { recursive: true, force: true });
+});
 
 describe('sniffImage', () => {
   it('recognizes formats by magic bytes, not by extension', () => {
@@ -58,19 +76,25 @@ describe('sniffImage', () => {
 describe('resolveWorkspaceImage', () => {
   it('rejects traversal, absolute, home and outside-pointing symlinks', () => {
     writeFileSync(join(workspace, 'ok.png'), png('ok'));
-    writeFileSync(join(root, 'secret.png'), png('secret'));
-    symlinkSync(join(root, 'secret.png'), join(workspace, 'link.png'));
-    mkdirSync(join(workspace, 'shots'));
-    symlinkSync(join(workspace, 'ok.png'), join(workspace, 'shots', 'inside.png'));
+    const outside = join(root, 'outside');
+    const images = join(workspace, 'images');
+    mkdirSync(outside);
+    mkdirSync(images);
+    writeFileSync(join(outside, 'secret.png'), png('secret'));
+    writeFileSync(join(images, 'inside.png'), png('inside'));
+    symlinkSync(outside, join(workspace, 'link'), 'junction');
+    symlinkSync(images, join(workspace, 'shots'), 'junction');
     expect(resolveWorkspaceImage(workspace, 'ok.png')).toMatch(/ok\.png$/);
-    expect(resolveWorkspaceImage(workspace, './shots/inside.png')).toMatch(/ok\.png$/);
+    expect(resolveWorkspaceImage(workspace, './shots/inside.png')).toBe(
+      realpathSync(join(images, 'inside.png'))
+    );
     for (const bad of [
-      '../secret.png',
-      'shots/../../secret.png',
-      join(root, 'secret.png'),
+      '../outside/secret.png',
+      'shots/../../outside/secret.png',
+      join(outside, 'secret.png'),
       join(workspace, 'ok.png'),
       '~/secret.png',
-      'link.png',
+      'link/secret.png',
       'missing.png',
       'shots',
       '',
@@ -134,7 +158,16 @@ describe('mediaFile', () => {
     expect(mediaFile(media, stored.mediaId)).toBe(join(media, stored.mediaId));
     writeFileSync(join(root, 'outside'), 'x');
     const linked = `${'e'.repeat(64)}.png`;
-    symlinkSync(join(root, 'outside'), join(media, linked));
+    const alias = join(media, linked);
+    if (process.platform === 'win32') {
+      // Use the exact leaf's link metadata; all other filesystem operations remain real.
+      const junction = join(root, 'junction');
+      symlinkSync(workspace, junction, 'junction');
+      linkSync(join(root, 'outside'), alias);
+      leafLinks.set(alias, junction);
+    } else {
+      symlinkSync(join(root, 'outside'), alias);
+    }
     for (const bad of [
       '../outside',
       '../../etc/passwd',

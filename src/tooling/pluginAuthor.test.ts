@@ -85,9 +85,11 @@ describe('本地插件作者工具', () => {
   });
   it('未引用的 symlink 和硬链接仍拒绝', async () => {
     const dir = await fixture();
-    const outside = join(temp, 'outside');
+    const outsideDir = join(temp, 'outside');
+    await mkdir(outsideDir);
+    const outside = join(outsideDir, 'secret');
     await writeFile(outside, 'outside');
-    await symlink(outside, join(dir, 'escape'));
+    await symlink(outsideDir, join(dir, 'escape'), 'junction');
     expect((await validatePluginDirectory(dir, hostVersion)).ok).toBe(false);
     await rm(join(dir, 'escape'));
     await link(outside, join(dir, 'hardlink'));
@@ -96,7 +98,7 @@ describe('本地插件作者工具', () => {
   });
   it('源目录 symlink 拒绝', async () => {
     const dir = await fixture();
-    await symlink(dir, join(temp, 'alias'));
+    await symlink(dir, join(temp, 'alias'), 'junction');
     expect((await validatePluginDirectory(join(temp, 'alias'), hostVersion)).ok).toBe(false);
   });
   it.each([false, true])(
@@ -134,7 +136,7 @@ describe('本地插件作者工具', () => {
   it('目标及祖先 symlink 均不允许写出目录', async () => {
     const outside = join(temp, 'outside');
     await mkdir(outside);
-    await symlink(outside, join(temp, 'alias'));
+    await symlink(outside, join(temp, 'alias'), 'junction');
     for (const dir of [join(temp, 'alias'), join(temp, 'alias', 'new')])
       await expect(initPlugin(dir, 'local.test.plugin', { repositoryRoot })).rejects.toThrow();
     expect(await readdir(outside)).toEqual([]);

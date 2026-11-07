@@ -1,5 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// FakeDesktopBackend exposes macOS app identities even on Windows CI. Validate those
+// with POSIX semantics, but preserve native join/dirname for real allowlist fixtures.
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:path')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      isAbsolute: actual.posix.isAbsolute,
+      normalize: actual.posix.normalize,
+    },
+  };
+});
+
 vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(async () => {}) },
   desktopCapturer: { getSources: vi.fn(async () => []) },
@@ -422,26 +436,27 @@ describe('ComputerHost', () => {
     async (change) => {
       const backend = new FakeDesktopBackend();
       const original = (await backend.appForTarget('w1'))!;
-      let answer!: (value: 'always') => void;
+      const answer = Promise.withResolvers<'always'>();
+      const prompted = Promise.withResolvers<'prompt-open'>();
       const auth = new AppAuthorizer({
         file: path.join(mkdtempSync(path.join(tmpdir(), 'enso-host-race-')), 'apps.json'),
-        prompt: () =>
-          new Promise((resolve) => {
-            answer = resolve;
-          }),
+        prompt: () => {
+          prompted.resolve('prompt-open');
+          return answer.promise;
+        },
       });
       const host = new ComputerHost(() => backend, undefined, { authorizer: auth });
       const pending = host.invoke('s1', 'run', {
         code: 'const w = await desktop.window("w1"); await w.type("secret")',
       });
-      while (!answer) await new Promise((resolve) => setImmediate(resolve));
+      await expect(Promise.race([prompted.promise, pending])).resolves.toBe('prompt-open');
       if (change === 'pid') backend.windowsList[0].pid = 999;
       if (change === 'path')
         backend.appForTarget = async () => ({ ...original, path: '/Other/Safari.app' });
       if (change === 'windowId')
         backend.appForTarget = async () => ({ ...original, windowId: 'replaced' });
       if (change === 'revoked') auth.revoke(appIdentityKey(original));
-      answer('always');
+      answer.resolve('always');
       await expect(pending).rejects.toThrow(/changed|did not answer/);
       expect(backend.inputs).toEqual([]);
     }

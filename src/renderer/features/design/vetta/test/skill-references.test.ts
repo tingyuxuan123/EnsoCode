@@ -63,7 +63,9 @@ describe("vetta-ui-design skill references", () => {
 	it("keeps the skill body that loads on every invocation within its budget", () => {
 		// SKILL.md 每次 invoke_skill 都整份进上下文；审美规则的细节归方向表和按需读的
 		// references。超了先删重复的说明，而不是调高这个数。
-		const bytes = Buffer.byteLength(readFileSync(join(SKILL_DIR, "SKILL.md"), "utf8"));
+		const skill = readFileSync(join(SKILL_DIR, "SKILL.md"), "utf8");
+		// Measure the canonical LF document, even in a checkout made before .gitattributes.
+		const bytes = Buffer.byteLength(skill.replace(/\r\n/g, "\n"));
 		expect(bytes).toBeLessThanOrEqual(32_000);
 	});
 });

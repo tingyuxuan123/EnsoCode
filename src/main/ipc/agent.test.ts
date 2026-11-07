@@ -296,7 +296,7 @@ describe('agent IPC Main identity boundary', () => {
       mocks.spawnSession.mockClear();
       mocks.credentials.mockImplementationOnce(async () => {
         rmSync(cwd, { recursive: true, force: true });
-        symlinkSync(root, cwd);
+        symlinkSync(root, cwd, process.platform === 'win32' ? 'junction' : 'dir');
         return new Set();
       });
       expect(await mocks.handlers.get(IPC_CHANNELS.AGENT_SPAWN)!(event, request)).toMatchObject({
@@ -780,7 +780,7 @@ describe('agent IPC Main identity boundary', () => {
           baseIndex: 0,
         });
         expect(mocks.readChildHistory).toHaveBeenLastCalledWith('child', beforeIndex, {
-          sessionDir: '/tmp/agent/sessions',
+          sessionDir: path.join('/tmp', 'agent', 'sessions'),
           persistedConversation: expect.any(Function),
         });
       }

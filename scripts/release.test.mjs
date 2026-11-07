@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createHash, X509Certificate } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
@@ -159,9 +159,20 @@ test('Windows Latest 防倒退执行真实 shell：按数字比较，旧版与�
     (step) => step.name === 'Require a newer release than current Latest'
   );
   const run = (current, tag) =>
-    promisify(execFile)('bash', ['-c', `gh() { printf '%s\\n' "$CURRENT_TAG"; }; ${step.run}`], {
-      env: { ...process.env, CURRENT_TAG: current, TAG: tag, GITHUB_REPOSITORY: 'test/repo' },
-    });
+    // Git is already required by these integration tests; resolve its bundled Bash on Windows
+    // rather than requiring a manual PATH edit (or accidentally invoking the WSL launcher).
+    promisify(execFile)(
+      process.platform === 'win32'
+        ? path.resolve(
+            execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim(),
+            '../../../bin/bash.exe'
+          )
+        : 'bash',
+      ['-c', `gh() { printf '%s\\n' "$CURRENT_TAG"; }; ${step.run}`],
+      {
+        env: { ...process.env, CURRENT_TAG: current, TAG: tag, GITHUB_REPOSITORY: 'test/repo' },
+      }
+    );
   await run('windows-v0.2.9', 'windows-v0.2.10');
   await run('v0.2.9', 'windows-v0.3.0');
   for (const current of ['windows-v0.2.10', 'windows-v0.10.0', 'v1.0.0', 'unexpected'])

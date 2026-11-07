@@ -51,8 +51,10 @@ function harness(initialMode: ApprovalMode = 'full', checkExecutedDefinition = f
   mkdirSync(path.dirname(unrelated));
   writeFileSync(installed, '// trusted fixture');
   writeFileSync(unrelated, '// unrelated fixture');
-  const alias = path.join(root, 'installed-alias.ts');
-  symlinkSync(installed, alias);
+  // A directory junction exercises the same realpath identity without Windows symlink privileges.
+  const aliasDir = path.join(root, 'installed-alias');
+  symlinkSync(path.dirname(installed), aliasDir, process.platform === 'win32' ? 'junction' : 'dir');
+  const alias = path.join(aliasDir, path.basename(installed));
   const canonicalInstalled = realpathSync(installed);
   let current = true;
   let mode = initialMode;

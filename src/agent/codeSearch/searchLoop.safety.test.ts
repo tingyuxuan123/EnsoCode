@@ -87,21 +87,27 @@ describe('code_search evidence safety and budget edges', () => {
     'hard-fails an ANSWER containing a valid file followed by %s',
     async (unsafe) => {
       writeFileSync(join(root, 'a.ts'), 'SAFE_FIRST_FILE\n');
-      writeFileSync(join(root, 'b.ts'), 'ORIGINAL_SECOND_FILE\n');
-      writeFileSync(join(temporary, 'outside.ts'), 'OUTSIDE_WORKSPACE\n');
+      mkdirSync(join(root, 'second'));
+      writeFileSync(join(root, 'second/b.ts'), 'ORIGINAL_SECOND_FILE\n');
+      mkdirSync(join(temporary, 'outside'));
+      writeFileSync(join(temporary, 'outside/b.ts'), 'OUTSIDE_WORKSPACE\n');
       let calls = 0;
       let delivered = '';
       const result = await search({
         async complete(_system, messages) {
-          if (calls++ === 0) return exec([read('a.ts'), read('b.ts')]);
+          if (calls++ === 0) return exec([read('a.ts'), read('second/b.ts')]);
           delivered = messages.at(-1)?.content ?? '';
           if (unsafe === 'symlink race') {
-            rmSync(join(root, 'b.ts'));
-            symlinkSync(join(temporary, 'outside.ts'), join(root, 'b.ts'));
+            rmSync(join(root, 'second'), { recursive: true });
+            symlinkSync(
+              join(temporary, 'outside'),
+              join(root, 'second'),
+              process.platform === 'win32' ? 'junction' : 'dir'
+            );
           }
           return answer([
             '/codebase/a.ts',
-            unsafe === 'traversal' ? '/codebase/../outside.ts' : '/codebase/b.ts',
+            unsafe === 'traversal' ? '/codebase/../outside/b.ts' : '/codebase/second/b.ts',
           ]);
         },
       });

@@ -14,6 +14,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GitRepository, parseGitStatus, validateGitPath } from './gitVersionControl';
 
+// A history test launches multiple real Git processes; full-suite load on Windows can
+// exceed Vitest's 5s default before these children have exited and released their files.
+vi.setConfig({ testTimeout: 30_000 });
+
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 let root: string;

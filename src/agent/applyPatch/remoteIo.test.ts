@@ -3,6 +3,7 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { bashPath, posixShell } from '../../../test/helpers/shell';
 import type { SshExecOptions, SshExecRawResult, SshExecResult, SshExecutor } from '../ssh/executor';
 import { createRemoteApplyPatchIo, executeApplyPatch, PatchMutationUncertainError } from './index';
 
@@ -52,7 +53,9 @@ function fakeExecutor(
 function runLocal(command: string[] | string, options?: SshExecOptions): Promise<SshExecRawResult> {
   if (!Array.isArray(command)) throw new Error('local test executor requires argv');
   return new Promise((resolve, reject) => {
-    const child = spawn(command[0], command.slice(1), { signal: options?.signal });
+    const child = spawn(command[0] === 'sh' ? posixShell() : command[0], command.slice(1), {
+      signal: options?.signal,
+    });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
@@ -86,26 +89,28 @@ function localShellExecutor(): SshExecutor {
 describe('远端 apply_patch IO', () => {
   it('本机 sh 实际执行绝对路径脚本，并在相对/绝对同目标时保持零写', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'enso-remote-patch-')));
-    const target = path.join(root, 'nested', 'file.txt');
-    const io = createRemoteApplyPatchIo(root, localShellExecutor());
+    const remoteRoot = bashPath(root);
+    const target = path.posix.join(remoteRoot, 'nested', 'file.txt');
+    const localTarget = path.join(root, 'nested', 'file.txt');
+    const io = createRemoteApplyPatchIo(remoteRoot, localShellExecutor());
     try {
       await io.write(target, Buffer.from('created\n'), { exclusive: true });
-      expect(await readFile(target, 'utf8')).toBe('created\n');
+      expect(await readFile(localTarget, 'utf8')).toBe('created\n');
       expect(await io.inspect(target)).toMatchObject({
         kind: 'file',
         raw: Buffer.from('created\n'),
       });
       await io.write(target, Buffer.from('updated\n'), { exclusive: false });
-      expect(await readFile(target, 'utf8')).toBe('updated\n');
+      expect(await readFile(localTarget, 'utf8')).toBe('updated\n');
       await io.remove(target);
 
       await expectFailed(
         executeApplyPatch(
-          root,
+          remoteRoot,
           patch(
             '*** Add File: same.txt',
             '+relative',
-            `*** Add File: ${path.join(root, 'same.txt')}`,
+            `*** Add File: ${path.posix.join(remoteRoot, 'same.txt')}`,
             '+absolute'
           ),
           { io }

@@ -4,16 +4,32 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { bashTestPath, posixShell } from '../../../test/helpers/shell';
 import { BackgroundTaskManager, withBackground } from '../backgroundTasks';
 import { ForegroundDetachedError } from '../foregroundCommand';
 import { createSessionCommandTool } from '../sessionShell';
 import { toBashRuntimePath, withRtkOptimization } from './index';
 import { bindPowerShellRtk } from './powershell';
 
+const fixtureBinaries = vi.hoisted(() => new Set<string>());
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    // Windows cannot exec a shebang. Only adapt our registered JS executable fixtures;
+    // RTK still gets a real child process, stdout, exit codes, deadlines and cancellation.
+    spawn: ((file: string, args: string[], options: import('node:child_process').SpawnOptions) =>
+      process.platform === 'win32' && fixtureBinaries.has(file)
+        ? actual.spawn(process.execPath, [file, ...args], options)
+        : actual.spawn(file, args, options)) as typeof actual.spawn,
+  };
+});
+
 const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  fixtureBinaries.clear();
 });
 
 function tempDir(name: string): string {
@@ -30,8 +46,15 @@ function fakeRtk(body: string): string {
     `#!/usr/bin/env node\nif (process.env.ENSO_FAKE_RTK_WARMUP) process.exit(0);\n${body}\n`
   );
   chmodSync(file, 0o755);
+  fixtureBinaries.add(file);
   // macOS 首次执行新建的可执行文件要过安全评估，负载高时可达秒级，会挤爆被测的真实超时；在此预付
-  spawnSync(file, [], { env: { ...process.env, ENSO_FAKE_RTK_WARMUP: '1' } });
+  spawnSync(
+    process.platform === 'win32' ? process.execPath : file,
+    process.platform === 'win32' ? [file] : [],
+    {
+      env: { ...process.env, ENSO_FAKE_RTK_WARMUP: '1' },
+    }
+  );
   return file;
 }
 
@@ -161,7 +184,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
 
     expect(calls).toHaveLength(1);
     expect(calls[0].command).not.toBe('git status');
-    expect(calls[0].command).toContain(binaryPath);
+    expect(calls[0].command).toContain(toBashRuntimePath(binaryPath));
     expect(calls[0].command).toContain('RTK_DB_PATH');
     expect(calls[0].command).toContain('RTK_RECALL');
     expect(result.details).toEqual({
@@ -846,7 +869,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
     });
 
     await execute(wrapped, 'git status');
-    const outcome = spawnSync('/bin/sh', ['-c', String(calls[0].command)]);
+    const outcome = spawnSync(posixShell(), ['-c', String(calls[0].command)]);
 
     expect(outcome.status).toBe(7);
   });
@@ -865,12 +888,14 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
     });
 
     await execute(wrapped, 'env FOO=bar git status');
-    const outcome = spawnSync('/bin/sh', ['-c', String(calls[0].command)], {
-      env: { PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin` },
+    const outcome = spawnSync(posixShell(), ['-c', String(calls[0].command)], {
+      env: { ...process.env, PATH: bashTestPath() },
     });
 
     expect(outcome.status).toBe(9);
-    expect(calls[0].command).toContain(`PATH='${path.dirname(binaryPath)}':"$PATH"`);
+    expect(calls[0].command).toContain(
+      `PATH='${toBashRuntimePath(path.dirname(binaryPath))}':"$PATH"`
+    );
   });
 
   it('Windows bundled 路径转换为 Git Bash 可执行的 MSYS 路径', () => {
@@ -931,7 +956,7 @@ if (process.argv[2] === 'gain') throw new Error('gain should not run');
     const recall = await execute(wrapped, 'rtk recall abc123');
     await execute(wrapped, 'rtk config recall disabled');
 
-    expect(calls[0].command).toContain(binaryPath);
+    expect(calls[0].command).toContain(toBashRuntimePath(binaryPath));
     expect(calls[0].command).toContain(path.join(dataDir, 'recall.db'));
     expect(calls[1]).toEqual({ command: 'rtk config recall disabled' });
     expect(recall.details).toMatchObject({
@@ -952,11 +977,11 @@ process.exit(12);
     });
 
     const result = await execute(wrapped, '  rtk   git diff   --no-compact  ');
-    const outcome = spawnSync('/bin/sh', ['-c', String(calls[0].command)], {
-      env: { PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin` },
+    const outcome = spawnSync(posixShell(), ['-c', String(calls[0].command)], {
+      env: { ...process.env, PATH: bashTestPath() },
     });
 
-    expect(calls[0].command).toContain(binaryPath);
+    expect(calls[0].command).toContain(toBashRuntimePath(binaryPath));
     expect(outcome.status).toBe(11);
     expect(result.details).toMatchObject({
       rtk: {
@@ -1033,7 +1058,7 @@ if (process.argv[2] === 'gain') process.stdout.write(JSON.stringify({ summary: {
         rewrittenCommand: 'rtk git status',
       },
     });
-    expect(launch?.command).toContain(binaryPath);
+    expect(launch?.command).toContain(toBashRuntimePath(binaryPath));
     expect(await launch?.finalize?.()).toEqual({
       rtk: {
         status: 'compressed',

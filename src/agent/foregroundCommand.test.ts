@@ -1,5 +1,6 @@
 import { type BashOperations, createLocalBashOperations } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { posixShell } from '../../test/helpers/shell';
 import {
   attachForegroundFailureDetails,
   bindForegroundCommand,
@@ -154,7 +155,7 @@ function setup(timeoutAction: 'background' | 'kill' = 'background', adoptError?:
   });
   const controller = new AbortController();
   bindForegroundCommand(controller.signal, command);
-  const ops = withDetachableExec(createLocalBashOperations());
+  const ops = withDetachableExec(createLocalBashOperations({ shellPath: posixShell() }));
   const seen: string[] = [];
   const run = (script: string, timeout?: number) => {
     if (timeoutAction === 'background')

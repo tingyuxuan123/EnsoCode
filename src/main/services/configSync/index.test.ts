@@ -1,5 +1,6 @@
-import {
+import fs, {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -17,6 +18,11 @@ import { CONFIG_SYNC_FIELD_POLICY, SYNC_FIELDS } from './index';
 import type { ConfigSyncBundle } from './types';
 
 const userData = mkdtempSync(join(tmpdir(), 'enso-config-service-'));
+
+vi.mock('node:fs', async (original) => {
+  const actual = await original<typeof import('node:fs')>();
+  return { ...actual, lstatSync: vi.fn(actual.lstatSync) };
+});
 
 vi.mock('electron', () => ({
   app: { getPath: () => userData, on: vi.fn() },
@@ -388,19 +394,25 @@ describe('config sync sender-bound import flow', () => {
       modelId: 'model-1',
     });
     const exported = join(userData, 'smart-compact.enso-config');
-    expect(await service.exportConfigToPath({ includeSecrets: false }, exported)).toMatchObject({
-      ok: true,
-    });
-    expect(statSync(exported).mode & 0o777).toBe(0o600);
-    const decoded = await decodeBundle(readFileSync(exported));
-    expect(decoded.state).toMatchObject({
-      smartCompactEnabled: true,
-      compactStrategy: 'continuous-memory',
-      smartCompactModel: { providerId: 'smart-provider', modelId: 'model-1' },
-    });
-    settings.patchSettingsState('smartCompactEnabled', false);
-    settings.patchSettingsState('compactStrategy', 'standard');
-    settings.patchSettingsState('smartCompactModel', null);
+    try {
+      expect(await service.exportConfigToPath({ includeSecrets: false }, exported)).toMatchObject({
+        ok: true,
+      });
+      // Windows chmod cannot express POSIX group/other privacy; owner read/write
+      // and the decoded on-disk payload remain observable on both platforms.
+      const permissionMask = process.platform === 'win32' ? 0o600 : 0o777;
+      expect(statSync(exported).mode & permissionMask).toBe(0o600);
+      const decoded = await decodeBundle(readFileSync(exported));
+      expect(decoded.state).toMatchObject({
+        smartCompactEnabled: true,
+        compactStrategy: 'continuous-memory',
+        smartCompactModel: { providerId: 'smart-provider', modelId: 'model-1' },
+      });
+    } finally {
+      settings.patchSettingsState('smartCompactEnabled', false);
+      settings.patchSettingsState('compactStrategy', 'standard');
+      settings.patchSettingsState('smartCompactModel', null);
+    }
   });
 
   it('导出拒绝覆盖符号链接且不修改链接目标', async () => {
@@ -409,12 +421,29 @@ describe('config sync sender-bound import flow', () => {
     const target = join(userData, 'export-target.txt');
     const link = join(userData, 'linked-export.enso-config');
     writeFileSync(target, 'keep-private-data');
-    symlinkSync(target, link);
+    if (process.platform === 'win32') {
+      // Preserve a readable leaf and change only the metadata unavailable without
+      // Windows symlink privileges; removing the guard would overwrite this file.
+      writeFileSync(link, 'keep-private-data');
+      vi.mocked(lstatSync).mockImplementation((path, options) => {
+        const info = fs.lstatSync(path, options);
+        if (path === link && info) {
+          info.isFile = () => false;
+          info.isSymbolicLink = () => true;
+        }
+        return info;
+      });
+    } else symlinkSync(target, link);
 
-    await expect(service.exportConfigToPath({ includeSecrets: false }, link)).resolves.toEqual({
-      ok: false,
-      error: 'The selected file is a symbolic link. Choose a different location.',
-    });
+    try {
+      await expect(service.exportConfigToPath({ includeSecrets: false }, link)).resolves.toEqual({
+        ok: false,
+        error: 'The selected file is a symbolic link. Choose a different location.',
+      });
+      expect(readFileSync(link, 'utf8')).toBe('keep-private-data');
+    } finally {
+      vi.mocked(lstatSync).mockImplementation(fs.lstatSync);
+    }
     expect(readFileSync(target, 'utf8')).toBe('keep-private-data');
   });
 
@@ -516,7 +545,7 @@ describe('config sync sender-bound import flow', () => {
     mkdirSync(good, { recursive: true });
     writeFileSync(join(good, 'SKILL.md'), '# good skill 2');
     const linked = join(userData, 'linked-skill');
-    symlinkSync(good, linked);
+    symlinkSync(good, linked, 'junction');
     settings.patchSettingsState('skills', [
       { id: 'good2', name: 'Good2', description: '', path: good, source: 'local', enabled: true },
       {

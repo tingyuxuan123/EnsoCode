@@ -95,16 +95,17 @@ describe('plugin host capability gate', () => {
     await expect(
       gate.handle('a.b', 'fs.readText', { path: '../secret' }, inv())
     ).rejects.toMatchObject({ code: 'INVALID_ARGS' });
-    symlinkSync(join(outside, 'secret'), join(root, 'docs', 'link'));
+    symlinkSync(outside, join(root, 'docs', 'link'), 'junction');
     await expect(
-      gate.handle('a.b', 'fs.readText', { path: 'docs/link' }, inv())
+      gate.handle('a.b', 'fs.readText', { path: 'docs/link/secret' }, inv())
     ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
   it('rejects symlink alias from authorized scope to unauthorized scope inside project', async () => {
-    writeFileSync(join(root, 'private'), 'private');
-    symlinkSync(join(root, 'private'), join(root, 'docs', 'link'));
+    mkdirSync(join(root, 'private'));
+    writeFileSync(join(root, 'private', 'secret'), 'private');
+    symlinkSync(join(root, 'private'), join(root, 'docs', 'link'), 'junction');
     await expect(
-      gate.handle('a.b', 'fs.readText', { path: 'docs/link' }, inv())
+      gate.handle('a.b', 'fs.readText', { path: 'docs/link/secret' }, inv())
     ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
   it('enforces live plan policy for every fs write and MCP call', async () => {

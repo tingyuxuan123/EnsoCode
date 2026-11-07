@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import type {
@@ -289,7 +290,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       expect(tools.some((tool) => tool.name === 'computer')).toBe(true);
     } finally {
       await supervisor.shutdown();
-      rmSync(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
     }
   });
 
@@ -386,7 +387,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       expect(events).toContainEqual(expect.objectContaining({ type: 'design-cancel' }));
     } finally {
       await supervisor.shutdown();
-      rmSync(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
     }
   });
 
@@ -624,7 +625,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       } finally {
         await supervisor.shutdown();
         executor?.mockRestore();
-        rmSync(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
       }
     }
   );
@@ -1562,7 +1563,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     ).rejects.toThrow(/exists/i);
     expect(events.some((event) => event.type === 'approval-request')).toBe(false);
     await supervisor.shutdown();
-    rmSync(cwd, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
   });
 
   it('旧 hashline bool 回落 apply_patch，warm 同 generation 不被后续模式改写', async () => {
@@ -2726,7 +2727,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       });
     } finally {
       await supervisor.shutdown();
-      rmSync(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
     }
   });
 

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { diffHead, type GitDiffHost } from './gitDiff';
 
@@ -33,7 +34,7 @@ function host(opts: {
       return { code: 1, stdout: '', stderr: 'unexpected' };
     },
     async readFile(absPath) {
-      const rel = absPath.replace(/^\/repo\//, '');
+      const rel = path.relative(path.resolve('/repo'), absPath).split(path.sep).join('/');
       return opts.files?.[rel] ?? null;
     },
   };

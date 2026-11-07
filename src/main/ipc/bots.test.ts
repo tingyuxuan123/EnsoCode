@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import type { HostToPhone } from '@enso/pair';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -466,7 +466,7 @@ describe('bots IPC', () => {
       error: 'invalid',
     });
     const found = await call(IPC_CHANNELS.BOT_FILE_SEARCH, { chatId, query: 'a.ts' });
-    expect(found).toMatchObject({ ok: true, files: [{ relativePath: 'src/a.ts' }] });
+    expect(found).toMatchObject({ ok: true, files: [{ relativePath: join('src', 'a.ts') }] });
 
     const sent = await send({ files: ['src/a.ts'], chats: [otherId], text: '看 @src/a.ts' });
     expect(sent).toMatchObject({ ok: true });
@@ -2071,10 +2071,10 @@ describe('Bot 设计产物 IPC', () => {
         root: { ref: { kind: 'project', projectId: expect.any(String) }, path: expect.any(String) },
       });
       const root = found.root as { ref: { projectId: string }; path: string };
-      expect(root.path).toBe(services.host.workspacePath(chatId));
+      expect(realpathSync(root.path)).toBe(realpathSync(services.host.workspacePath(chatId)!));
       expect(
         (mocks.registry as SourceAuthorityRegistry).project(root.ref.projectId)?.canonicalPath
-      ).toBe(root.path);
+      ).toBe(normalize(root.path));
       if (kind === 'group') {
         const topic = services.chats.createThread(chatId)!;
         expect(await call('bots:design-workspace', { chatId: topic.id })).toEqual(found);
@@ -2146,7 +2146,10 @@ describe('Bot 设计产物 IPC', () => {
     ).toMatchObject({ ok: true });
     expect(await call('bots:design-workspace', { chatId })).toMatchObject({
       ok: true,
-      root: { ref: { kind: 'project', projectId: project.value.projectId }, path: root },
+      root: {
+        ref: { kind: 'project', projectId: project.value.projectId },
+        path: normalize(root).replaceAll('\\', '/'),
+      },
     });
     const get = vi.spyOn(registry, 'project');
     try {

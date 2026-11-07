@@ -96,7 +96,12 @@ describe('openMemoryDb', () => {
     expect(hasVec(broken)).toBe(false);
     expect(broken.pragma('user_version', { simple: true })).toBe(MEMORY_SCHEMA_VERSION);
     broken.close();
-    expect(hasVec(openMemoryDb(path.join(dir, 'off.db'), { vecExtensionPath: null }))).toBe(false);
+    const off = openMemoryDb(path.join(dir, 'off.db'), { vecExtensionPath: null });
+    try {
+      expect(hasVec(off)).toBe(false);
+    } finally {
+      off.close();
+    }
   });
 
   it('vecTableName rejects unsafe dimensions', () => {

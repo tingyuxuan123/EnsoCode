@@ -40,7 +40,6 @@ beforeEach(() => {
   writeFileSync(join(workspace, 'a.txt'), 'a');
   writeFileSync(join(workspace, 'src', 'b.ts'), 'b');
   writeFileSync(join(root, 'secret.txt'), 's');
-  symlinkSync(join(root, 'secret.txt'), join(workspace, 'link.txt'));
   mkdirSync(join(root, 'skills', 'review'), { recursive: true });
   writeFileSync(join(root, 'skills', 'review', 'SKILL.md'), '---\nname: review\n---\nReview it.');
   bots = new BotStore(join(root, 'bots'));
@@ -105,13 +104,17 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe('insideWorkspace', () => {
   it('只接受工作区内真实存在的相对路径', () => {
+    const outside = join(root, 'outside');
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'secret.txt'), 's');
+    symlinkSync(outside, join(workspace, 'link'), 'junction');
     expect(insideWorkspace(workspace, 'a.txt')).toBe(true);
     expect(insideWorkspace(workspace, 'src/')).toBe(true);
     expect(insideWorkspace(workspace, 'src/b.ts#L3-L5')).toBe(true);
     expect(insideWorkspace(workspace, '../secret.txt')).toBe(false);
     expect(insideWorkspace(workspace, 'src/../../secret.txt')).toBe(false);
     expect(insideWorkspace(workspace, join(root, 'secret.txt'))).toBe(false);
-    expect(insideWorkspace(workspace, 'link.txt')).toBe(false);
+    expect(insideWorkspace(workspace, 'link/secret.txt')).toBe(false);
     expect(insideWorkspace(workspace, 'missing.txt')).toBe(false);
     expect(insideWorkspace(workspace, '')).toBe(false);
   });

@@ -1,12 +1,12 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DelegationOp } from './delegation';
 import type { MemoryInvoker } from './memory';
 import { createSendImageTool, normalizeSendImageParams } from './sendImage';
 
-const CWD = '/work/repo';
+const CWD = resolve('/work/repo');
 const sent = (n: number) => ({
   type: 'message',
   message: {
@@ -48,7 +48,7 @@ describe('normalizeSendImageParams', () => {
     expect(
       normalizeSendImageParams({ file_path: `${CWD}/docs/a.png`, text: ' 设置页 ' }, CWD)
     ).toEqual({
-      path: 'docs/a.png',
+      path: join('docs', 'a.png'),
       caption: '设置页',
     });
     expect(normalizeSendImageParams({ screenshot: true, caption: null }, CWD)).toEqual({
@@ -57,7 +57,7 @@ describe('normalizeSendImageParams', () => {
     expect(normalizeSendImageParams({ screenshot: 'latest' }, CWD)).toEqual({ screenshot: 1 });
     expect(normalizeSendImageParams({ screenshot: ' 2 ' }, CWD)).toEqual({ screenshot: 2 });
     expect(normalizeSendImageParams({ image: '/etc/x.png', screenshot: false }, CWD)).toEqual({
-      path: '/etc/x.png',
+      path: resolve('/etc/x.png'),
     });
     expect(normalizeSendImageParams({ path: '  ', screenshot: 'nope' }, CWD)).toEqual({
       screenshot: 'nope',
@@ -70,7 +70,7 @@ describe('normalizeSendImageParams', () => {
       path: join(homedir(), 'Desktop/a.png'),
     });
     expect(normalizeSendImageParams({ path: '../other/a.png' }, CWD)).toEqual({
-      path: '/work/other/a.png',
+      path: resolve(CWD, '../other/a.png'),
     });
     expect(normalizeSendImageParams({ path: './docs/../a.png' }, CWD)).toEqual({ path: 'a.png' });
   });
@@ -130,8 +130,12 @@ describe('execute', () => {
   it('asks for approval before sending a file outside the workspace', async () => {
     const { invoke, confirm, run } = setup([user]);
     await run({ path: '/tmp/shot.png' });
-    expect(confirm).toHaveBeenCalledWith('/tmp/shot.png', undefined, 'call');
-    expect(invoke).toHaveBeenCalledWith('send_image', { path: '/tmp/shot.png' }, undefined);
+    expect(confirm).toHaveBeenCalledWith(resolve('/tmp/shot.png'), undefined, 'call');
+    expect(invoke).toHaveBeenCalledWith(
+      'send_image',
+      { path: resolve('/tmp/shot.png') },
+      undefined
+    );
     confirm.mockClear();
     await run({ path: 'a.png' });
     await run({ screenshot: 1 });
@@ -152,13 +156,16 @@ describe('execute', () => {
       const cwd = join(root, 'ws');
       mkdirSync(cwd);
       writeFileSync(join(root, 'secret.png'), 'x');
-      symlinkSync(join(root, 'secret.png'), join(cwd, 'link.png'));
+      const outside = join(root, 'outside');
+      mkdirSync(outside);
+      writeFileSync(join(outside, 'secret.png'), 'x');
+      symlinkSync(outside, join(cwd, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
       const { invoke, confirm, run } = setup([user], cwd);
-      await run({ path: 'link.png' });
-      expect(confirm).toHaveBeenCalledWith(join(root, 'secret.png'), undefined, 'call');
+      await run({ path: 'link/secret.png' });
+      expect(confirm).toHaveBeenCalledWith(join(outside, 'secret.png'), undefined, 'call');
       expect(invoke).toHaveBeenCalledWith(
         'send_image',
-        { path: join(root, 'secret.png') },
+        { path: join(outside, 'secret.png') },
         undefined
       );
     } finally {

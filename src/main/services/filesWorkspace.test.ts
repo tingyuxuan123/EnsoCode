@@ -88,8 +88,10 @@ describe('local mutate', () => {
     const from = path.join(tmp, 'source');
     const to = path.join(tmp, 'link');
     writeFileSync(from, 'keep');
-    symlinkSync(path.join(tmp, 'missing'), to);
+    symlinkSync(path.join(tmp, 'missing'), to, 'junction');
+    expect(existsSync(to)).toBe(false);
     expect(renameLocal(from, to)).toBe('exists');
+    expect(readFileSync(from, 'utf8')).toBe('keep');
   });
 
   it('删除文件，拒绝删 cwd 根', () => {

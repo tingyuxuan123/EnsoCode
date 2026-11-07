@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import type { ExtensionToolContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { withPlanGate } from '../planMode';
@@ -65,7 +66,7 @@ describe('code_search 内置工具', () => {
     expect(result.structuredContent).toMatchObject({ status: 'success', files: outcome.files });
     expect(result.content[0]).toMatchObject({
       type: 'text',
-      text: expect.stringContaining('/workspace/worktree/src/a.ts'),
+      text: expect.stringContaining(resolve(ctx.cwd, 'src/a.ts')),
     });
   });
 

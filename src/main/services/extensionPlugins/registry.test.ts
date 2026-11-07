@@ -1,9 +1,11 @@
-import {
+import fs, {
   chmodSync,
   linkSync,
+  lstatSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -11,10 +13,15 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { basename, join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PluginRecord } from './lifecycle';
 import { readRegistry, writeRegistry } from './registry';
+
+vi.mock('node:fs', async (original) => {
+  const actual = await original<typeof import('node:fs')>();
+  return { ...actual, lstatSync: vi.fn(actual.lstatSync) };
+});
 
 const roots: string[] = [];
 const temp = () => {
@@ -51,7 +58,7 @@ describe('原子私有插件登记表', () => {
     ).toEqual(
       backups
         .slice(-5)
-        .map((path) => path.split('/').at(-1)!)
+        .map((path) => basename(path))
         .sort()
     );
   });
@@ -77,7 +84,12 @@ describe('原子私有插件登记表', () => {
     expect(readdirSync(root).filter((name) => !name.endsWith('.corrupt'))).toEqual([
       'registry.json',
     ]);
-    expect(statSync(join(root, 'registry.json')).mode & 0o777).toBe(0o600);
+    const permissionMask = process.platform === 'win32' ? 0o600 : 0o777;
+    expect(statSync(join(root, 'registry.json')).mode & permissionMask).toBe(0o600);
+    expect(JSON.parse(readFileSync(join(root, 'registry.json'), 'utf8'))).toEqual({
+      version: 1,
+      plugins: [valid],
+    });
   });
   it('旧版坏记录、危险路径、非有限时间和未知registry version不可授权', () => {
     const root = temp();
@@ -102,15 +114,34 @@ describe('原子私有插件登记表', () => {
   it('拒绝目标链接且不读取/改写链接源，不使用可预测tmp', () => {
     const root = temp();
     const outside = join(temp(), 'outside');
-    writeFileSync(outside, JSON.stringify({ version: 1, plugins: [valid] }));
-    symlinkSync(outside, join(root, 'registry.json'));
-    expect(readRegistry(root).plugins).toEqual([]);
-    expect(() => writeRegistry(root, { version: 1, plugins: [] })).toThrow();
+    const content = JSON.stringify({ version: 1, plugins: [valid] });
+    const target = join(realpathSync(root), 'registry.json');
+    writeFileSync(outside, content);
+    if (process.platform === 'win32') {
+      // A readable leaf is real; only its link metadata needs symlink privileges.
+      writeFileSync(target, content);
+      vi.mocked(lstatSync).mockImplementation((path, options) => {
+        const info = fs.lstatSync(path, options);
+        if (path === target && info) {
+          info.isFile = () => false;
+          info.isSymbolicLink = () => true;
+        }
+        return info;
+      });
+    } else symlinkSync(outside, target);
+    try {
+      expect(readRegistry(root).plugins).toEqual([]);
+      expect(() => writeRegistry(root, { version: 1, plugins: [] })).toThrow();
+      expect(readFileSync(target, 'utf8')).toBe(content);
+    } finally {
+      vi.mocked(lstatSync).mockImplementation(fs.lstatSync);
+    }
     expect(JSON.parse(readFileSync(outside, 'utf8')).plugins).toHaveLength(1);
-    rmSync(join(root, 'registry.json'));
-    linkSync(outside, join(root, 'registry.json'));
+    rmSync(target);
+    linkSync(outside, target);
     expect(readRegistry(root).plugins).toEqual([]);
     expect(() => writeRegistry(root, { version: 1, plugins: [] })).toThrow();
+    expect(readFileSync(outside, 'utf8')).toBe(content);
   });
   it('坏写入保留旧registry，已存在的可预测tmp不被覆盖', () => {
     const root = temp();

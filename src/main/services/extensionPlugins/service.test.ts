@@ -244,7 +244,13 @@ describe('desktop plugin service', () => {
         { key: 'url', value: 'https://example.com' },
       ],
     });
-    expect(statSync(join(root, 'config/enso.test.json')).mode & 0o777).toBe(0o600);
+    const configPath = join(root, 'config/enso.test.json');
+    const permissionMask = process.platform === 'win32' ? 0o600 : 0o777;
+    expect(statSync(configPath).mode & permissionMask).toBe(0o600);
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({
+      token: 'fake-secret',
+      url: 'https://example.com',
+    });
     expect(s.setConfig('enso.test', { unknown: 'x' }).ok).toBe(false);
     await s.uninstall('enso.test');
     expect(existsSync(join(root, 'config/enso.test.json'))).toBe(false);

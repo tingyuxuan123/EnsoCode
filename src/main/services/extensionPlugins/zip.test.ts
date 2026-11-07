@@ -9,11 +9,17 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import fsPromises, { lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { extractZip } from './zip';
+
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof import('node:fs/promises')>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
 
 interface Input {
   name: string;
@@ -100,15 +106,26 @@ describe('安全 ZIP 解压', () => {
       ]),
       join(root, 'out')
     );
-    expect(statSync(join(root, 'out/bin/x')).mode & 0o7777).toBe(0o700);
-    expect(statSync(join(root, 'out/plain')).mode & 0o7777).toBe(0o600);
+    const executable = join(root, 'out/bin/x');
+    const plain = join(root, 'out/plain');
+    if (process.platform === 'win32') {
+      expect(statSync(executable).mode & 0o600).toBe(0o600);
+      expect(statSync(plain).mode & 0o600).toBe(0o600);
+    } else {
+      expect(statSync(executable).mode & 0o7777).toBe(0o700);
+      expect(statSync(plain).mode & 0o7777).toBe(0o600);
+    }
+    expect(readFileSync(executable, 'utf8')).toBe('x');
+    expect(readFileSync(plain, 'utf8')).toBe('x');
   });
   it('非 Unix 生成者的 external attributes 不授予执行权限', async () => {
     await extractZip(
       archive([{ name: 'bin', data: 'x', mode: 0o100755, madeBy: 0x0014 }]),
       join(root, 'out')
     );
-    expect(statSync(join(root, 'out/bin')).mode & 0o777).toBe(0o600);
+    const permissionMask = process.platform === 'win32' ? 0o600 : 0o777;
+    expect(statSync(join(root, 'out/bin')).mode & permissionMask).toBe(0o600);
+    expect(readFileSync(join(root, 'out/bin'), 'utf8')).toBe('x');
   });
   it.each([
     '../escape',
@@ -160,7 +177,7 @@ describe('安全 ZIP 解压', () => {
     const out = join(root, 'out');
     mkdirSync(outside);
     mkdirSync(out);
-    symlinkSync(outside, join(out, 'nested'));
+    symlinkSync(outside, join(out, 'nested'), 'junction');
     await expect(extractZip(archive([{ name: 'nested/x', data: 'pwn' }]), out)).rejects.toThrow();
     expect(existsSync(join(outside, 'x'))).toBe(false);
     writeFileSync(join(out, 'existing'), 'keep');
@@ -170,8 +187,25 @@ describe('安全 ZIP 解压', () => {
   it('输入 symlink/hardlink 拒绝，不误删用户源', async () => {
     const file = archive([{ name: 'a', data: 'a' }]);
     const linked = join(root, 'linked.zip');
-    symlinkSync(file, linked);
-    await expect(extractZip(linked, join(root, 'out'))).rejects.toThrow();
+    if (process.platform === 'win32') {
+      writeFileSync(linked, readFileSync(file));
+      // Only leaf metadata is simulated; archive IO and rejection remain real.
+      vi.mocked(lstat).mockImplementation(async (path, options) => {
+        const info = await fsPromises.lstat(path, options);
+        if (path === linked) {
+          info.isFile = () => false;
+          info.isSymbolicLink = () => true;
+        }
+        return info;
+      });
+    } else symlinkSync(file, linked);
+    try {
+      await expect(extractZip(linked, join(root, 'out'))).rejects.toThrow();
+      expect(existsSync(join(root, 'out'))).toBe(false);
+      expect(readFileSync(linked)).toEqual(readFileSync(file));
+    } finally {
+      vi.mocked(lstat).mockImplementation(fsPromises.lstat);
+    }
     rmSync(linked);
     linkSync(file, linked);
     await expect(extractZip(linked, join(root, 'out'))).rejects.toThrow();

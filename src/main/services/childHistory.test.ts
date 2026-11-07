@@ -1,9 +1,36 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import type { realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChildConversationMetadata } from '@shared/types/agent';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readChildHistory } from './childHistory';
+
+const { leafLinks } = vi.hoisted(() => ({ leafLinks: new Map<string, string>() }));
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof import('node:fs/promises')>();
+  return {
+    ...fs,
+    realpath: (file: Parameters<typeof realpath>[0]) =>
+      fs.realpath(typeof file === 'string' ? (leafLinks.get(file) ?? file) : file),
+  };
+});
+function leafLink(target: string, alias: string): void {
+  if (process.platform === 'win32') {
+    linkSync(target, alias);
+    leafLinks.set(alias, target);
+  } else {
+    symlinkSync(target, alias);
+  }
+}
 
 const instanceId = '11111111-1111-4111-8111-111111111111';
 const generation = '22222222-2222-4222-8222-222222222222';
@@ -86,7 +113,10 @@ describe('child 历史只读分流', () => {
     mkdirSync(sessionDir);
     records = { parent: { id: 'parent' } };
   });
-  afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+  afterEach(() => {
+    leafLinks.clear();
+    rmSync(tmp, { recursive: true, force: true });
+  });
 
   it('普通 child 返回白名单尾窗和绝对游标，分页且不改写无换行 JSONL', async () => {
     ordinary();
@@ -180,18 +210,25 @@ describe('child 历史只读分流', () => {
 
   it('拒绝越界路径、文件/目录 symlink 逃逸和父会话文件别名', async () => {
     ordinary();
-    const outside = path.join(tmp, 'outside.jsonl');
+    const outsideDir = path.join(tmp, 'outside');
+    mkdirSync(outsideDir);
+    const outside = path.join(outsideDir, 'outside.jsonl');
     writeFileSync(outside, JSON.stringify(piHeader));
     const link = path.join(sessionDir, 'link.jsonl');
-    symlinkSync(outside, link);
+    leafLink(outside, link);
     const dirLink = path.join(sessionDir, 'linked-dir');
-    symlinkSync(tmp, dirLink);
+    symlinkSync(outsideDir, dirLink, 'junction');
     for (const file of [outside, link, path.join(dirLink, 'outside.jsonl'), sessionDir]) {
       records[childId].sessionFile = file;
       expect(await read()).toMatchObject({ ok: false, code: 'unavailable' });
     }
     ordinary();
     records.parent.sessionFile = records[childId].sessionFile;
+    expect(await read()).toMatchObject({ ok: false, code: 'unavailable' });
+    const parentAlias = path.join(sessionDir, 'parent-alias.jsonl');
+    const parentFile = String(records.parent.sessionFile);
+    leafLink(parentFile, parentAlias);
+    records[childId].sessionFile = parentAlias;
     expect(await read()).toMatchObject({ ok: false, code: 'unavailable' });
   });
 

@@ -36,7 +36,11 @@ describe('LocalWorkspace 边界', () => {
 
   it('拒绝搜索子目录里的符号链接', async () => {
     mkdirSync(join(root, 'outside'));
-    symlinkSync(join(root, 'outside'), join(root, 'link'));
+    symlinkSync(
+      join(root, 'outside'),
+      join(root, 'link'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
     await expect(LocalWorkspace.create(root, 'link', signal)).rejects.toMatchObject({
       code: 'path',
     });
@@ -47,7 +51,11 @@ describe('LocalWorkspace 边界', () => {
     try {
       writeFileSync(join(outside, 'secret.txt'), 'needle outside');
       write('inside.txt', 'needle inside');
-      symlinkSync(join(outside, 'secret.txt'), join(root, 'leak.txt'));
+      symlinkSync(
+        outside,
+        join(root, 'leak.txt'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      );
       const workspace = await LocalWorkspace.create(root, undefined, signal);
       const output = await workspace.execute({ op: 'rg', pattern: 'needle' });
       expect(output).toContain('inside.txt');
@@ -160,7 +168,7 @@ describe('fence 覆盖 cwd → root 祖先', () => {
       writeFileSync(join(outside, 'a.ts'), 'needle outside');
       const workspace = await LocalWorkspace.create(root, 'src/deep', signal);
       renameSync(join(root, 'src'), join(root, 'src-real'));
-      symlinkSync(outside, join(root, 'src'));
+      symlinkSync(outside, join(root, 'src'), process.platform === 'win32' ? 'junction' : 'dir');
       await expect(
         workspace.execute({ op: 'readfile', path: '/codebase/a.ts' })
       ).rejects.toMatchObject({ code: 'path' });
@@ -228,7 +236,8 @@ describe('预算耗尽降级为 partial，不终止整次搜索', () => {
     expect(output).toContain('/codebase/renderer/z-last.ts:1:');
     expect(output).not.toContain('[PARTIAL]');
     expect(workspace.partial).toBe(false);
-  });
+    // Real per-file fence/IO on Windows exceeds 5s under the full suite's parallel load.
+  }, 20_000);
 
   it('多条命令累计超过不同文件总预算时返回 partial 而不是抛错', async () => {
     const saved = LIMITS.totalFilesVisited;

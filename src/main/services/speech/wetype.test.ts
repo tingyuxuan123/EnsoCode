@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWetypeChannelPool,
   loadWetypeIdentity,
@@ -219,9 +219,11 @@ function poolWith(factory: (n: number) => ReturnType<typeof pooledFake>, keepali
 }
 
 const packet: WetypeVoicePacket = { voiceId: 'v', seq: 1, totalBytes: 1, isEnd: false };
-const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 0) => vi.advanceTimersByTimeAsync(ms);
 
 describe('wetype channel pool', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
   it('hands a prewarmed channel to the next lease and keeps it for reuse after close', async () => {
     const { pool, opened } = poolWith((n) => pooledFake(n));
     pool.prewarm();

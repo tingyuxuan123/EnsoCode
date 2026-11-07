@@ -21,7 +21,8 @@ describe('应用隔离目录的压缩预留设置', () => {
     expect(await writeCompactReserveTokens(file, 20000)).toEqual({ ok: true });
     expect(await json()).toEqual({ compaction: { reserveTokens: 20000 } });
     expect(await readCompactReserveTokens(file)).toEqual({ ok: true, value: 20000 });
-    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    // Windows mode only models owner read/write; POSIX additionally verifies group/other denial.
+    expect((await stat(file)).mode & (process.platform === 'win32' ? 0o600 : 0o777)).toBe(0o600);
     expect(await readdir(join(dir, 'pi-agent'))).toEqual(['settings.json']);
   });
 

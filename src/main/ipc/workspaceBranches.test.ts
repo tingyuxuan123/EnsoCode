@@ -274,7 +274,7 @@ describe('workspace branch IPC', () => {
   );
   it('accepts canonical repo aliases without dropping affected bindings', async () => {
     const alias = join(mocks.root, 'repo-alias');
-    symlinkSync(mocks.repo, alias);
+    symlinkSync(mocks.repo, alias, process.platform === 'win32' ? 'junction' : 'dir');
     mocks.projects.get('p').canonicalPath = alias;
     expect(await invoke('worktree:branches', 'isolated-a')).toMatchObject({
       ok: true,

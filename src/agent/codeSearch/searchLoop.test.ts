@@ -331,15 +331,22 @@ describe('runCodeSearch 循环', () => {
   it('降级前证据文件被换成符号链接时通过最终 fence 硬失败，不读取链接或返回缓存', async () => {
     const outside = mkdtempSync(join(tmpdir(), 'enso-code-search-loop-outside-'));
     try {
-      write('a.ts', 'verified evidence\n');
+      write('evidence/a.ts', 'verified evidence\n');
       writeFileSync(join(outside, 'a.ts'), 'OUTSIDE_BODY\n');
       const completion = scripted([
-        () => command({ command1: { op: 'readfile', path: '/codebase/a.ts', start: 1, end: 1 } }),
+        () =>
+          command({
+            command1: { op: 'readfile', path: '/codebase/evidence/a.ts', start: 1, end: 1 },
+          }),
         (_system, messages) => {
           expect(JSON.stringify(messages)).toContain('verified evidence');
           if (completion.calls === 2) {
-            rmSync(join(root, 'a.ts'));
-            symlinkSync(join(outside, 'a.ts'), join(root, 'a.ts'));
+            rmSync(join(root, 'evidence'), { recursive: true });
+            symlinkSync(
+              outside,
+              join(root, 'evidence'),
+              process.platform === 'win32' ? 'junction' : 'dir'
+            );
           }
           return '[TOOL_CALLS] restricted_exec{"command1":';
         },

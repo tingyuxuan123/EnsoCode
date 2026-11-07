@@ -124,7 +124,7 @@ describe("设计工具闸门", () => {
 		expect((await run(providers[0])).every((effect) => effect.enabled)).toBe(false);
 	});
 
-	it("设计语境里把八荣八耻注入系统提示，普通代码仓库里不注入（任何 agent 都生效）", async () => {
+	it("设计语境里注入八条核心原则，普通代码仓库里不注入（任何 agent 都生效）", async () => {
 		const providers: Provider[] = [];
 		const files = [ref("src/pages/home.tsx")];
 		const ctx = {
@@ -145,8 +145,10 @@ describe("设计工具闸门", () => {
 		expect(operation.type).toBe("addBlock");
 		// 插件只能改自己名下的块。
 		expect(operation.block.id).toMatch(/^plugin\.vetta-ui-design\./);
-		expect(operation.block.content).toContain("Core principles: the eight prides and shames");
-		expect(operation.block.content).toMatch(/Only the user's words outrank them/);
+		expect(operation.block.content).toMatch(/Core principles .*they outrank the style defaults/);
+		expect(operation.block.content).toContain("only the user's words outrank them");
+		expect(operation.block.content).toContain("1 one thing seen first");
+		expect(operation.block.content).toContain("8 colour with a source");
 		expect(operation.block.content).not.toContain("You are the visual design specialist");
 	});
 });

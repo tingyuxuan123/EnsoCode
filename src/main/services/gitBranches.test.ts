@@ -14,6 +14,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'enso-branches-'));
   repo = join(root, 'repo');
   git(root, 'init', '-q', '-b', 'main', repo);
+  git(repo, 'config', 'core.autocrlf', 'false');
   git(repo, 'config', 'user.name', 'test');
   git(repo, 'config', 'user.email', 'test@example.com');
   writeFileSync(join(repo, 'file.txt'), 'main\n');
@@ -147,9 +148,9 @@ describe('workspace branches', () => {
     const other = join(root, 'other workspace');
     git(repo, 'worktree', 'add', other, 'feature');
     const snapshot = await readWorkspaceBranches(repo);
-    expect(snapshot.branches.find((branch) => branch.name === 'feature')?.worktreePath).toBe(
-      realpathSync(other)
-    );
+    expect(
+      realpathSync(snapshot.branches.find((branch) => branch.name === 'feature')!.worktreePath!)
+    ).toBe(realpathSync(other));
     await expect(switchWorkspaceBranch(repo, 'feature', false)).rejects.toMatchObject({
       code: 'occupied',
     });

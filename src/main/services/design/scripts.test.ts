@@ -14,9 +14,11 @@ import { SCAN_SCRIPT, validateHistoryPack } from './scripts';
 const temps: string[] = [];
 it('standalone runner ships the exact bounded decoder source used by Main and Renderer', async () => {
   const root = path.resolve(import.meta.dirname, '../../../..');
-  expect(
-    await readFile(path.join(root, 'resources/design/history-runner/source/archive.ts'), 'utf8')
-  ).toBe(await readFile(path.join(root, 'src/shared/design/archive.ts'), 'utf8'));
+  const source = async (file: string) =>
+    (await readFile(path.join(root, file), 'utf8')).replace(/\r\n/g, '\n');
+  expect(await source('resources/design/history-runner/source/archive.ts')).toBe(
+    await source('src/shared/design/archive.ts')
+  );
 });
 afterEach(async () => {
   await Promise.all(temps.splice(0).map((p) => rm(p, { recursive: true, force: true })));

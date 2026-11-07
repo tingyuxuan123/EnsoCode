@@ -98,8 +98,18 @@ describe('安全插件 staging/commit', () => {
     chmodSync(join(src, 'main.js'), 0o755);
     const result = await stagePlugin(temp(), { kind: 'dir', path: src }, '0.2.37');
     if (!result.ok) throw new Error(result.error);
-    expect(statSync(join(result.staged.pluginRoot, 'main.js')).mode & 0o7777).toBe(0o700);
-    expect(statSync(join(result.staged.pluginRoot, 'enso-plugin.json')).mode & 0o7777).toBe(0o600);
+    const main = join(result.staged.pluginRoot, 'main.js');
+    const manifestPath = join(result.staged.pluginRoot, 'enso-plugin.json');
+    if (process.platform === 'win32') {
+      // Windows chmod exposes owner read/write, not POSIX execute or ACL privacy.
+      expect(statSync(main).mode & 0o600).toBe(0o600);
+      expect(statSync(manifestPath).mode & 0o600).toBe(0o600);
+    } else {
+      expect(statSync(main).mode & 0o7777).toBe(0o700);
+      expect(statSync(manifestPath).mode & 0o7777).toBe(0o600);
+    }
+    expect(readFileSync(main, 'utf8')).toBe('safe');
+    expect(JSON.parse(readFileSync(manifestPath, 'utf8'))).toEqual(manifest);
   });
   it('目录复制至私有 staging，源改变不影响安装，commit 后清理 staging', async () => {
     const root = temp();
@@ -122,13 +132,13 @@ describe('安全插件 staging/commit', () => {
       const root = temp();
       const outside = temp();
       if (kind === 'root') {
-        symlinkSync(src, join(outside, 'src'));
+        symlinkSync(src, join(outside, 'src'), 'junction');
         expect(
           (await stagePlugin(root, { kind: 'dir', path: join(outside, 'src') }, '0.2.37')).ok
         ).toBe(false);
       } else {
         if (kind === 'hardlink') linkSync(join(src, 'main.js'), join(src, 'linked'));
-        else symlinkSync(outside, join(src, kind === 'skipped' ? '.git' : 'escape'));
+        else symlinkSync(outside, join(src, kind === 'skipped' ? '.git' : 'escape'), 'junction');
         expect((await stagePlugin(root, { kind: 'dir', path: src }, '0.2.37')).ok).toBe(false);
       }
       expect(existsSync(join(src, 'main.js'))).toBe(true);
@@ -168,7 +178,7 @@ describe('安全插件 staging/commit', () => {
     expect((await stagePlugin(root, { kind: 'dir', path: root }, '0.2.37')).ok).toBe(false);
     const parent = temp();
     const target = plugin();
-    symlinkSync(target, join(parent, 'root'));
+    symlinkSync(target, join(parent, 'root'), 'junction');
     expect(
       (await stagePlugin(join(parent, 'root'), { kind: 'dir', path: plugin() }, '0.2.37')).ok
     ).toBe(false);

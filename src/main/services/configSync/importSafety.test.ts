@@ -1,11 +1,28 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import fs, {
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { encodeBundle } from './codec';
 import type { ConfigSyncBundle } from './types';
 
-const userData = mkdtempSync(`${tmpdir()}/enso-config-safety-`);
-const settingsPath = `${userData}/settings.json`;
+const userData = mkdtempSync(join(tmpdir(), 'enso-config-safety-'));
+const settingsPath = join(userData, 'settings.json');
+
+vi.mock('node:fs', async (original) => {
+  const actual = await original<typeof import('node:fs')>();
+  return {
+    ...actual,
+    copyFileSync: vi.fn(actual.copyFileSync),
+    renameSync: vi.fn(actual.renameSync),
+  };
+});
 
 vi.mock('electron', () => ({
   app: { getPath: () => userData, on: vi.fn() },
@@ -57,14 +74,13 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  chmodSync(userData, 0o700);
   service.clearConfigSyncTokens();
   rmSync(userData, { recursive: true, force: true });
 });
 
-async function writeIncoming(name: string): Promise<string> {
-  const file = `${userData}/${name}.enso-config`;
-  writeFileSync(file, await encodeBundle(emptyBundle()));
+async function writeIncoming(name: string, bundle = emptyBundle()): Promise<string> {
+  const file = join(userData, `${name}.enso-config`);
+  writeFileSync(file, await encodeBundle(bundle));
   return file;
 }
 
@@ -127,21 +143,49 @@ describe('config sync import safety', () => {
     });
   });
 
-  it('备份或原子写入失败时不改变 settings 主状态', async () => {
+  it.each(['backup', 'rename'])('%s 失败时不改变 settings 磁盘及缓存主状态', async (stage) => {
     const before = persistedState();
-    const opened = await service.openImportForSender(35, await writeIncoming('readonly'));
+    const beforeCache = structuredClone(settings.readSettings());
+    const incoming = emptyBundle();
+    incoming.state.terminalFontSize = before.terminalFontSize === 21 ? 22 : 21;
+    const opened = await service.openImportForSender(35, await writeIncoming('readonly', incoming));
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
-    await service.previewImportForSender(35, opened.token, undefined, 'merge');
+    await expect(
+      service.previewImportForSender(35, opened.token, undefined, 'merge')
+    ).resolves.toMatchObject({ ok: true });
 
-    chmodSync(userData, 0o500);
+    // chmod does not remove directory write access on Windows (or for POSIX
+    // root). Inject only the failing boundary; all other disk IO stays real.
+    if (stage === 'backup') {
+      vi.mocked(copyFileSync).mockImplementation((source, destination, mode) => {
+        if (
+          dirname(String(destination)) === userData &&
+          basename(String(destination)).startsWith('settings.config-sync-backup-')
+        )
+          throw Object.assign(new Error('backup denied'), { code: 'EACCES' });
+        fs.copyFileSync(source, destination, mode);
+      });
+    } else {
+      vi.mocked(renameSync).mockImplementation((source, destination) => {
+        if (destination === settingsPath)
+          throw Object.assign(new Error('rename denied'), { code: 'EACCES' });
+        fs.renameSync(source, destination);
+      });
+    }
     try {
       await expect(service.commitImportForSender(35, opened.token, 'merge')).resolves.toMatchObject(
-        { ok: false }
+        {
+          ok: false,
+          error:
+            stage === 'backup' ? 'Unable to create settings backup.' : 'Unable to write settings.',
+        }
       );
     } finally {
-      chmodSync(userData, 0o700);
+      vi.mocked(copyFileSync).mockImplementation(fs.copyFileSync);
+      vi.mocked(renameSync).mockImplementation(fs.renameSync);
     }
     expect(persistedState()).toEqual(before);
+    expect(settings.readSettings()).toEqual(beforeCache);
   });
 });

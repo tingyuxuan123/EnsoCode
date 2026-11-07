@@ -30,10 +30,10 @@ it('scratch 浏览器只能以本会话目录为根，不接受 worktree 或指�
     expect(policy.assertBrowserUrl(pathToFileURL(inside).href, cwd).protocol).toBe('file:');
     expect(() => policy.assertBrowserUrl(pathToFileURL(outside).href, cwd)).toThrow();
     expect(resolveLocalUnderCwd(cwd, `../${sibling}/secret.html`)).toBeNull();
-    symlinkSync(outside, path.join(cwd, 'escape.html'));
-    expect(resolveLocalUnderCwd(cwd, 'escape.html')).toBeNull();
+    symlinkSync(path.join(root, sibling), path.join(cwd, 'escape'), 'junction');
+    expect(resolveLocalUnderCwd(cwd, 'escape/secret.html')).toBeNull();
     expect(() =>
-      policy.assertBrowserUrl(pathToFileURL(path.join(cwd, 'escape.html')).href, cwd)
+      policy.assertBrowserUrl(pathToFileURL(path.join(cwd, 'escape/secret.html')).href, cwd)
     ).toThrow();
     expect(
       policy.pickBrowserFileRoot({
@@ -42,7 +42,7 @@ it('scratch 浏览器只能以本会话目录为根，不接受 worktree 或指�
       })
     ).toBeNull();
     rmSync(path.join(root, id), { recursive: true });
-    symlinkSync(path.join(root, sibling), path.join(root, id), 'dir');
+    symlinkSync(path.join(root, sibling), path.join(root, id), 'junction');
     expect(policy.pickBrowserFileRoot({ conversation, project })).toBeNull();
   } finally {
     rmSync(root, { recursive: true, force: true });

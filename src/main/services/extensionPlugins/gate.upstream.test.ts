@@ -101,9 +101,9 @@ describe('PluginHostGate', () => {
   });
 
   it('拒绝经符号链接逃出项目根', async () => {
-    symlinkSync(join(outside, 'x.txt'), join(root, 'docs', 'link.txt'));
+    symlinkSync(outside, join(root, 'docs', 'link'), 'junction');
     await expect(
-      gate.handle('a.b', 'fs.readText', { path: 'docs/link.txt' }, agentCall())
+      gate.handle('a.b', 'fs.readText', { path: 'docs/link/x.txt' }, agentCall())
     ).rejects.toMatchObject({
       code: 'PERMISSION_DENIED',
     });

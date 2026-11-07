@@ -54,10 +54,10 @@ describe('fileMentionContext', () => {
     const root = tempRoot();
     const outside = tempRoot();
     writeFileSync(path.join(outside, 'secret.txt'), 'secret');
-    symlinkSync(path.join(outside, 'secret.txt'), path.join(root, 'escape.txt'));
+    symlinkSync(outside, path.join(root, 'escape'), 'junction');
 
     expect(() => readFileMentionSnapshot(root, mention('../secret.txt'))).toThrow(/escapes/);
-    expect(() => readFileMentionSnapshot(root, mention('escape.txt'))).toThrow(/outside/);
+    expect(() => readFileMentionSnapshot(root, mention('escape/secret.txt'))).toThrow(/outside/);
   });
 
   it('rejects oversized and binary files', () => {

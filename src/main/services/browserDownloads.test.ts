@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import {
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -19,6 +20,34 @@ import { BrowserDownloads } from './browserDownloads';
 
 const { reveal } = vi.hoisted(() => ({ reveal: vi.fn() }));
 vi.mock('electron', () => ({ shell: { showItemInFolder: reveal } }));
+const { leafLinks } = vi.hoisted(() => ({ leafLinks: new Map<string, string>() }));
+vi.mock('node:fs', async (original) => {
+  const fs = await original<typeof import('node:fs')>();
+  return {
+    ...fs,
+    lstatSync: new Proxy(fs.lstatSync, {
+      apply(target, receiver, args) {
+        if (typeof args[0] === 'string') args[0] = leafLinks.get(args[0]) ?? args[0];
+        return Reflect.apply(target, receiver, args);
+      },
+    }),
+  };
+});
+
+function leafLink(target: string, alias: string): void {
+  if (process.platform !== 'win32') {
+    symlinkSync(target, alias);
+    return;
+  }
+  // Make the exact leaf readable as it would be when followed, but expose link metadata to lstat.
+  const backing = mkdtempSync(join(dirname(target), 'leaf-link-'));
+  const junction = join(backing, 'junction');
+  const targetDir = join(backing, 'target');
+  mkdirSync(targetDir);
+  symlinkSync(targetDir, junction, 'junction');
+  copyFileSync(target, alias);
+  leafLinks.set(alias, junction);
+}
 
 class MockDownload extends EventEmitter {
   filename = 'report.pdf';
@@ -70,6 +99,7 @@ beforeEach(() => {
   reveal.mockReset();
 });
 afterEach(() => {
+  leafLinks.clear();
   manager.dispose();
   rmSync(directory, { recursive: true, force: true });
 });
@@ -139,7 +169,8 @@ describe('BrowserDownloads', () => {
     writeFileSync(join(downloadDir, 'report.pdf'), 'existing');
     const outside = join(directory, 'outside');
     writeFileSync(outside, 'secret');
-    symlinkSync(outside, join(downloadDir, 'report (1).pdf'));
+    leafLink(outside, join(downloadDir, 'report (1).pdf'));
+    expect(lstatSync(join(downloadDir, 'report (1).pdf')).isSymbolicLink()).toBe(true);
     const first = new MockDownload();
     const second = new MockDownload();
     manager.accept(first.item(), owner);
@@ -160,7 +191,7 @@ describe('BrowserDownloads', () => {
   it('下载目录本身为符号链接时拒绝接收，不写出目录边界', () => {
     const outside = join(directory, 'outside');
     mkdirSync(outside);
-    symlinkSync(outside, downloadDir);
+    symlinkSync(outside, downloadDir, 'junction');
     const item = new MockDownload();
     expect(() => manager.accept(item.item(), owner)).toThrow();
     expect(item.cancel).toHaveBeenCalledOnce();
@@ -264,13 +295,14 @@ describe('BrowserDownloads', () => {
     await expect(manager.action(owner.conversationId, id, 'reveal')).rejects.toThrow();
     const outside = join(directory, 'outside');
     writeFileSync(outside, 'secret');
-    symlinkSync(outside, item.savePath);
+    leafLink(outside, item.savePath);
+    expect(lstatSync(item.savePath).isSymbolicLink()).toBe(true);
     await expect(manager.action(owner.conversationId, id, 'reveal')).rejects.toThrow();
     rmSync(downloadDir, { recursive: true });
     const replacement = join(directory, 'replacement');
     mkdirSync(replacement);
     writeFileSync(join(replacement, entries()[0].filename), 'other file');
-    symlinkSync(replacement, downloadDir);
+    symlinkSync(replacement, downloadDir, 'junction');
     await expect(manager.action(owner.conversationId, id, 'reveal')).rejects.toThrow();
     expect(reveal).toHaveBeenCalledOnce();
   });

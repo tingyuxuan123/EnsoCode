@@ -51,7 +51,7 @@ describe('scratch workspace boundary', () => {
     mkdirSync(sibling);
     const file = path.join(sibling, 'kept.txt');
     writeFileSync(file, 'keep');
-    symlinkSync(sibling, path.join(scratch, id), 'dir');
+    symlinkSync(sibling, path.join(scratch, id), 'junction');
     expect(resolveScratchWorkspace(scratch, id, { create: true })).toBeNull();
     removeScratchWorkspace(scratch, id);
     expect(existsSync(file)).toBe(true);
@@ -64,7 +64,7 @@ describe('scratch workspace boundary', () => {
     const file = path.join(outside, id, 'kept.txt');
     writeFileSync(file, 'keep');
     rmSync(scratch, { recursive: true });
-    symlinkSync(outside, scratch, 'dir');
+    symlinkSync(outside, scratch, 'junction');
     expect(resolveScratchWorkspace(scratch, id)).toBeNull();
     removeScratchWorkspace(scratch, id);
     expect(existsSync(file)).toBe(true);

@@ -116,7 +116,7 @@ describe('removeConversationSessionFiles', () => {
     mkdirSync(outside);
     const protectedFile = path.join(outside, `${CONVERSATION_ID}.json`);
     writeFileSync(protectedFile, 'keep');
-    symlinkSync(outside, pending);
+    symlinkSync(outside, pending, 'junction');
     removeConversationSessionFiles({ sessionDir, conversationId: CONVERSATION_ID });
     expect(existsSync(protectedFile)).toBe(true);
   });

@@ -40,7 +40,7 @@ function resolveSpecifier(from: string, spec: string): string | null {
     path.join(stripped, 'index.ts'),
     path.join(stripped, 'index.tsx'),
   ])
-    if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return candidate;
+    if (/\.(ts|tsx)$/.test(candidate) && existsSync(candidate)) return path.resolve(candidate);
   return null; // css / json / assets
 }
 

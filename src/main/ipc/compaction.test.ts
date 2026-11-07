@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerCompactionHandlers } from './compaction';
@@ -47,10 +48,8 @@ describe('压缩设置 IPC 来源边界', () => {
     expect(await invoke(IPC_CHANNELS.COMPACTION_RESERVE_TOKENS_SET, id, 20000)).toEqual({
       ok: true,
     });
-    expect(mocks.read).toHaveBeenCalledWith('/isolated-user-data/agent/pi-agent/settings.json');
-    expect(mocks.write).toHaveBeenCalledWith(
-      '/isolated-user-data/agent/pi-agent/settings.json',
-      20000
-    );
+    const file = path.join('/isolated-user-data', 'agent', 'pi-agent', 'settings.json');
+    expect(mocks.read).toHaveBeenCalledWith(file);
+    expect(mocks.write).toHaveBeenCalledWith(file, 20000);
   });
 });

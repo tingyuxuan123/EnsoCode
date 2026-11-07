@@ -2,7 +2,21 @@ import * as fs from 'node:fs';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// App identities come from the macOS backend, while allowlist files live on the test host.
+// Keep native join/dirname for the real temporary files; only identity validation is POSIX.
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:path')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      isAbsolute: actual.posix.isAbsolute,
+      normalize: actual.posix.normalize,
+    },
+  };
+});
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
@@ -27,8 +41,20 @@ const textEdit = {
   path: '/System/Applications/TextEdit.app',
 };
 
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function tempDirectory(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'enso-apps-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
 function tempFile(): string {
-  return path.join(mkdtempSync(path.join(tmpdir(), 'enso-apps-')), 'apps.json');
+  return path.join(tempDirectory(), 'apps.json');
 }
 
 function authorizer(file: string, answers: AppPromptAnswer[]) {
@@ -56,6 +82,12 @@ describe('normalizeAppIdentity', () => {
     expect(normalizeAppIdentity({ ...textEdit, bundleId: 'bad id;rm' })).toBeNull();
     expect(normalizeAppIdentity(null)).toBeNull();
     expect(normalizeAppIdentity('TextEdit')).toBeNull();
+  });
+
+  it('macOS app 身份不把 Windows 盘符路径当作绝对路径', () => {
+    expect(
+      normalizeAppIdentity({ ...textEdit, path: 'C:\\Applications\\TextEdit.app' })
+    ).toBeNull();
   });
 
   it('不在 .app 里的窗口程序以可执行文件路径作身份（不能因此跳过授权）', () => {
@@ -155,19 +187,20 @@ describe('AppAuthorizer', () => {
   });
   it('aborted calls cannot reuse existing grants or store a late approval', async () => {
     const controller = new AbortController();
-    let answer!: (value: AppPromptAnswer) => void;
+    const answer = Promise.withResolvers<AppPromptAnswer>();
+    const prompted = Promise.withResolvers<'prompt-open'>();
     const auth = new AppAuthorizer({
       file: tempFile(),
-      prompt: () =>
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
+      prompt: () => {
+        prompted.resolve('prompt-open');
+        return answer.promise;
+      },
     });
     const pending = auth.authorize('s1', textEdit, controller.signal);
-    await Promise.resolve();
+    await expect(Promise.race([prompted.promise, pending])).resolves.toBe('prompt-open');
     controller.abort();
-    answer('always');
-    await expect(pending).rejects.toThrow();
+    answer.resolve('always');
+    await expect(pending).rejects.toMatchObject({ code: 'app-prompt-dismissed' });
     expect(auth.list()).toEqual([]);
     await expect(auth.authorize('s1', textEdit, controller.signal)).rejects.toThrow();
   });
@@ -184,19 +217,20 @@ describe('AppAuthorizer', () => {
   });
 
   it('revoking while a prompt is open cannot resurrect a grant', async () => {
-    let answer!: (value: AppPromptAnswer) => void;
+    const answer = Promise.withResolvers<AppPromptAnswer>();
+    const prompted = Promise.withResolvers<'prompt-open'>();
     const auth = new AppAuthorizer({
       file: tempFile(),
-      prompt: () =>
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
+      prompt: () => {
+        prompted.resolve('prompt-open');
+        return answer.promise;
+      },
     });
     const pending = auth.authorize('s1', textEdit);
-    await Promise.resolve();
+    await expect(Promise.race([prompted.promise, pending])).resolves.toBe('prompt-open');
     auth.revoke(appIdentityKey(textEdit));
-    answer('always');
-    await expect(pending).rejects.toThrow();
+    answer.resolve('always');
+    await expect(pending).rejects.toMatchObject({ code: 'app-prompt-dismissed' });
     expect(auth.list()).toEqual([]);
   });
 
@@ -312,7 +346,7 @@ describe('AppAuthorizer', () => {
   });
 
   it('始终允许但名单写盘失败：本次 session 仍放行，不让动作失败', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'enso-apps-'));
+    const dir = tempDirectory();
     const blocker = path.join(dir, 'not-a-dir');
     writeFileSync(blocker, 'x');
     const { auth, prompts } = authorizer(path.join(blocker, 'apps.json'), ['always']);

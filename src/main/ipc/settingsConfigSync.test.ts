@@ -50,7 +50,9 @@ describe('config sync settings transaction', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(statSync(result.backupPath as string).mode & 0o777).toBe(0o600);
+    expect(
+      statSync(result.backupPath as string).mode & (process.platform === 'win32' ? 0o600 : 0o777)
+    ).toBe(0o600);
     const persisted = JSON.parse(readFileSync(path.join(userData, 'settings.json'), 'utf8'));
     expect(persisted['enso-settings'].state).toMatchObject({
       theme: 'dark',

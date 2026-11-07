@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -224,7 +225,7 @@ describe('SessionSupervisor compact failure', () => {
 
     afterEach(async () => {
       await supervisor.shutdown();
-      rmSync(dir, { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
     });
 
     async function switchModel(selection = next) {

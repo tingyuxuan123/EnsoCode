@@ -49,7 +49,7 @@ describe('packagedArch', () => {
     writeFileSync(path.join(root, 'universal'), fat(ARM64, X86_64));
     writeFileSync(path.join(root, 'a', 'b', 'wrong.node'), thin(ARM64));
     writeFileSync(path.join(root, 'a', 'readme.txt'), 'hello');
-    symlinkSync(path.join(root, 'a', 'b', 'wrong.node'), path.join(root, 'link.node'));
+    symlinkSync(path.join(root, 'a', 'b'), path.join(root, 'link'), 'junction');
     expect(findArchMismatches(root, 'x64')).toEqual([
       { file: path.join('a', 'b', 'wrong.node'), archs: ['arm64'] },
     ]);

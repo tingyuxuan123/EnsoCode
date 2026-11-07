@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { PAIR_PREVIEW_STATIC_ORIGIN } from './pairPreviewPolicy';
 import {
@@ -40,29 +41,39 @@ it('保留入口相对目录，返回白名单 MIME 和隔离响应头，绝不�
 });
 
 it('拒绝根外入口、符号链接逃逸以及根目录被调包', async () => {
-  const outside = join(temp, 'outside.html');
+  const outsideDir = join(temp, 'outside');
+  await mkdir(outsideDir);
+  const outside = join(outsideDir, 'index.html');
   await writeFile(outside, 'secret');
   await expect(createPairPreviewStaticFiles(root, outside)).rejects.toThrow();
-  await symlink(outside, join(root, 'escape.html'));
-  await expect(createPairPreviewStaticFiles(root, join(root, 'escape.html'))).rejects.toThrow();
+  await symlink(outsideDir, join(root, 'escape'), 'junction');
+  await expect(
+    createPairPreviewStaticFiles(root, join(root, 'escape/index.html'))
+  ).rejects.toThrow();
   const files = await createPairPreviewStaticFiles(root, join(root, 'pages', 'index.html'));
-  expect((await files.respond(request('/escape.html'))).status).toBe(404);
+  expect((await files.respond(request('/escape/index.html'))).status).toBe(404);
   await rm(root, { recursive: true });
   await mkdir(join(temp, 'replacement'));
   await writeFile(join(temp, 'replacement', 'app.js'), 'secret');
-  await symlink(join(temp, 'replacement'), root);
+  await symlink(join(temp, 'replacement'), root, 'junction');
   expect((await files.respond(request('/app.js'))).status).toBe(404);
   files.close();
 });
 
 it('每次读取重新校验链接，拒绝目录链接逃逸和秘密/服务端源码', async () => {
+  const assets = join(root, 'assets');
+  const outside = join(temp, 'outside');
+  await mkdir(assets);
+  await mkdir(outside);
+  await writeFile(join(assets, 'app.js'), 'safe');
+  await writeFile(join(outside, 'app.js'), 'private');
   const files = await createPairPreviewStaticFiles(root, join(root, 'pages', 'index.html'));
-  await writeFile(join(temp, 'secret.js'), 'private');
-  await rm(join(root, 'app.js'));
-  await symlink(join(temp, 'secret.js'), join(root, 'app.js'));
-  await symlink(temp, join(root, 'linked'));
-  expect((await files.respond(request('/app.js'))).status).toBe(404);
-  expect((await files.respond(request('/linked/secret.js'))).status).toBe(404);
+  expect((await files.respond(request('/assets/app.js'))).status).toBe(200);
+  await rm(assets, { recursive: true });
+  await symlink(outside, assets, 'junction');
+  await symlink(outside, join(root, 'linked'), 'junction');
+  expect((await files.respond(request('/assets/app.js'))).status).toBe(404);
+  expect((await files.respond(request('/linked/app.js'))).status).toBe(404);
   for (const name of ['.env', 'server.ts', 'server.py', 'credentials.json', 'private.pem']) {
     await writeFile(join(root, name), 'SECRET');
     expect((await files.respond(request(`/${name}`))).status).toBe(404);
@@ -113,8 +124,11 @@ it.each(['dist', 'build'])(
     expect(script.status).toBe(200);
     expect(await script.text()).toBe('window.built = true;');
     expect((await files.respond(request('/app.js'))).status).toBe(404);
-    await symlink(join(root, 'app.js'), join(outputRoot, 'escape.js'));
-    expect((await files.respond(request('/escape.js'))).status).toBe(404);
+    const siblings = join(root, 'siblings');
+    await mkdir(siblings);
+    await writeFile(join(siblings, 'app.js'), 'window.project = true;');
+    await symlink(siblings, join(outputRoot, 'escape'), 'junction');
+    expect((await files.respond(request('/escape/app.js'))).status).toBe(404);
     files.close();
   }
 );
@@ -123,7 +137,7 @@ it('构建入口缩小挂载前仍检查原授权根，产物目录调包后不�
   const outside = join(temp, 'outside');
   await mkdir(outside);
   await writeFile(join(outside, 'index.html'), 'secret');
-  await symlink(outside, join(root, 'dist'));
+  await symlink(outside, join(root, 'dist'), 'junction');
   await expect(
     createPairPreviewStaticFiles(root, join(root, 'dist', 'index.html'))
   ).rejects.toThrow();
@@ -132,7 +146,7 @@ it('构建入口缩小挂载前仍检查原授权根，产物目录调包后不�
   await writeFile(join(root, 'dist', 'index.html'), 'safe');
   const files = await createPairPreviewStaticFiles(root, join(root, 'dist', 'index.html'));
   await rm(join(root, 'dist'), { recursive: true });
-  await symlink(outside, join(root, 'dist'));
+  await symlink(outside, join(root, 'dist'), 'junction');
   expect((await files.respond(request('/index.html'))).status).toBe(404);
   files.close();
 });
@@ -145,11 +159,14 @@ it('Vite @fs 仅放行根内前端资源及从项目解析出的唯一 env.mjs�
   await writeFile(join(vite, 'dist', 'client', 'env.mjs'), 'export const env = {};');
   await writeFile(join(vite, 'dist', 'client', 'other.mjs'), 'SECRET');
   await mkdir(join(root, 'node_modules'));
-  await symlink(vite, join(root, 'node_modules', 'vite'));
-  await writeFile(join(root, 'App.tsx'), 'export default function App() {}');
+  await symlink(vite, join(root, 'node_modules', 'vite'), 'junction');
+  const source = join(root, 'src');
+  const app = join(source, 'App.tsx');
+  await mkdir(source);
+  await writeFile(app, 'export default function App() {}');
   const authority = await createPairPreviewServerFiles(root, origin);
-  const fsUrl = (path: string) => `${origin}@fs${path}`;
-  expect(await authority.allowsRequest(fsUrl(join(root, 'App.tsx')), 'script')).toBe(true);
+  const fsUrl = (path: string) => `${origin}@fs${pathToFileURL(path).pathname}`;
+  expect(await authority.allowsRequest(fsUrl(app), 'script')).toBe(true);
   expect(
     await authority.allowsRequest(fsUrl(join(vite, 'dist', 'client', 'env.mjs')), 'script')
   ).toBe(true);
@@ -158,12 +175,14 @@ it('Vite @fs 仅放行根内前端资源及从项目解析出的唯一 env.mjs�
   ).toBe(false);
   await writeFile(join(root, 'credentials.json'), 'SECRET');
   expect(await authority.allowsRequest(fsUrl(join(root, 'credentials.json')), 'xhr')).toBe(false);
-  expect(await authority.allowsRequest(fsUrl(join(root, 'App.tsx')), 'mainFrame')).toBe(false);
-  expect(await authority.allowsRequest(fsUrl(join(root, 'App.tsx')), 'subFrame')).toBe(false);
-  await rm(join(root, 'App.tsx'));
-  await writeFile(join(temp, 'outside.tsx'), 'SECRET');
-  await symlink(join(temp, 'outside.tsx'), join(root, 'App.tsx'));
-  expect(await authority.allowsRequest(fsUrl(join(root, 'App.tsx')), 'script')).toBe(false);
+  expect(await authority.allowsRequest(fsUrl(app), 'mainFrame')).toBe(false);
+  expect(await authority.allowsRequest(fsUrl(app), 'subFrame')).toBe(false);
+  const outside = join(temp, 'outside');
+  await mkdir(outside);
+  await writeFile(join(outside, 'App.tsx'), 'SECRET');
+  await rm(source, { recursive: true });
+  await symlink(outside, source, 'junction');
+  expect(await authority.allowsRequest(fsUrl(app), 'script')).toBe(false);
   authority.close();
   expect(
     await authority.allowsRequest(fsUrl(join(vite, 'dist', 'client', 'env.mjs')), 'script')

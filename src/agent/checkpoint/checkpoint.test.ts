@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,13 +27,15 @@ beforeEach(() => {
   runGit(root, 'init', '-q', '-b', 'main');
   runGit(root, 'config', 'user.name', 'test');
   runGit(root, 'config', 'user.email', 'test@test');
+  // Assert checkpoint bytes, not the developer machine's checkout newline preference.
+  runGit(root, 'config', 'core.autocrlf', 'false');
   writeFileSync(join(root, 'a.txt'), 'v1\n');
   runGit(root, 'add', '.');
   runGit(root, 'commit', '-q', '-m', 'init');
 });
 
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
 });
 
 describe('createCheckpoint / restoreCheckpoint', () => {

@@ -13,6 +13,7 @@ import {
 } from './pairPreview';
 
 describe('paired remote preview authority and lifecycle', () => {
+  let temp: string;
   let root: string;
   let now: number;
   let source: PairPreviewSource;
@@ -39,7 +40,9 @@ describe('paired remote preview authority and lifecycle', () => {
       : { role, content: [{ type: 'text', text: value }] };
   beforeEach(() => {
     vi.useFakeTimers();
-    root = mkdtempSync(path.join(os.tmpdir(), 'enso-pair-preview-'));
+    temp = mkdtempSync(path.join(os.tmpdir(), 'enso-pair-preview-'));
+    root = path.join(temp, 'workspace');
+    mkdirSync(root);
     writeFileSync(path.join(root, 'index.html'), '<h1>hello</h1>');
     now = 1000;
     source = { root, stamp: 'authority-1', messages: [] };
@@ -66,7 +69,7 @@ describe('paired remote preview authority and lifecycle', () => {
   });
   afterEach(() => {
     for (const pair of ['one', 'two', 'three']) port.release(pair);
-    rmSync(root, { recursive: true, force: true });
+    rmSync(temp, { recursive: true, force: true });
     vi.useRealTimers();
   });
   async function command(command: PairPreviewCommand, pair = 'one') {
@@ -99,12 +102,15 @@ describe('paired remote preview authority and lifecycle', () => {
     writeFileSync(path.join(root, 'dist/index.html'), 'dist');
     writeFileSync(path.join(root, 'page.html'), 'page');
     writeFileSync(path.join(root, 'secret.html'), 'secret');
-    symlinkSync(os.tmpdir(), path.join(root, 'escape'));
+    const outside = path.join(temp, 'outside');
+    mkdirSync(outside);
+    writeFileSync(path.join(outside, 'outside.html'), 'outside');
+    symlinkSync(outside, path.join(root, 'escape'), 'junction');
     source.messages = [
       text('user', 'secret.html http://127.0.0.1:8000/'),
       text(
         'assistant',
-        'page.html http://localhost:5173/app http://0.0.0.0:3000/ http://[::1]:6000/'
+        'page.html escape/outside.html http://localhost:5173/app http://0.0.0.0:3000/ http://[::1]:6000/'
       ),
       text('toolResult', 'http://127.0.0.1:9000/ready'),
       text(
@@ -116,7 +122,7 @@ describe('paired remote preview authority and lifecycle', () => {
     expect(result.entries.map((entry) => entry.label)).toEqual(
       expect.arrayContaining([
         'index.html',
-        'dist/index.html',
+        path.join('dist', 'index.html'),
         'page.html',
         'http://127.0.0.1:5173/app',
         'http://127.0.0.1:3000/',

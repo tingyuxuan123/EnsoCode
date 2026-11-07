@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,10 +8,15 @@ const mocks = vi.hoisted(() => ({
   execFile: vi.fn(),
   spawn: vi.fn(),
   getFileIcon: vi.fn(),
+  accessSync: vi.fn(),
 }));
 
 vi.mock('node:child_process', () => ({ execFile: mocks.execFile, spawn: mocks.spawn }));
 vi.mock('electron', () => ({ app: { getFileIcon: mocks.getFileIcon } }));
+vi.mock('node:fs', async (original) => ({
+  ...(await original<typeof import('node:fs')>()),
+  accessSync: mocks.accessSync,
+}));
 
 import { buildLaunchArgs, createOpenInApps } from './openInApps';
 
@@ -28,7 +33,7 @@ function mockBundles(resolved: Record<string, string>, iconless: string[] = []) 
         );
       }
       if (cmd === 'plutil') {
-        return iconless.some((bundle) => args[3].startsWith(bundle))
+        return iconless.some((bundle) => args[3].replaceAll('\\', '/').startsWith(bundle))
           ? cb(new Error('No value at that key path'))
           : cb(null, 'AppIcon\n');
       }
@@ -63,6 +68,9 @@ describe('createOpenInApps', () => {
   beforeEach(() => {
     mocks.execFile.mockReset();
     mocks.spawn.mockReset();
+    mocks.accessSync.mockReset().mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
     mocks.getFileIcon.mockReset().mockResolvedValue({
       isEmpty: () => false,
       toDataURL: () => 'data:image/png;base64,icon',
@@ -92,7 +100,9 @@ describe('createOpenInApps', () => {
     ]);
     expect(mocks.execFile).toHaveBeenCalledWith(
       'sips',
-      expect.arrayContaining(['/Applications/Sublime Text.app/Contents/Resources/AppIcon.icns']),
+      expect.arrayContaining([
+        path.join('/Applications/Sublime Text.app', 'Contents', 'Resources', 'AppIcon.icns'),
+      ]),
       expect.anything(),
       expect.any(Function)
     );
@@ -111,17 +121,16 @@ describe('createOpenInApps', () => {
   });
 
   it('Linux 只认 PATH 上可执行的二进制', async () => {
-    for (const [name, mode] of [
-      ['code', 0o755],
-      ['ghostty', 0o755],
-      ['cursor', 0o644],
-    ] as const) {
-      writeFileSync(path.join(binDir, name), '');
-      chmodSync(path.join(binDir, name), mode);
-    }
+    // Linux permission semantics are not represented by Windows chmod/access(X_OK).
+    // Inject the OS probe, not the discovery/launch result.
+    const linuxBin = '/fixture-bin';
+    mocks.accessSync.mockImplementation((file: string) => {
+      if (![path.join(linuxBin, 'code'), path.join(linuxBin, 'ghostty')].includes(file))
+        throw new Error('EACCES');
+    });
     const apps = await createOpenInApps({
       platform: 'linux',
-      env: { PATH: `/missing:${binDir}` },
+      env: { PATH: `/missing:${linuxBin}` },
     }).list();
     expect(apps).toEqual([
       { id: 'vscode', name: 'VS Code', kind: 'editor' },
@@ -157,14 +166,16 @@ describe('createOpenInApps', () => {
   });
 
   it('Linux 终端按注册参数带工作目录 detached 启动', async () => {
-    writeFileSync(path.join(binDir, 'ghostty'), '');
-    chmodSync(path.join(binDir, 'ghostty'), 0o755);
+    const linuxBin = '/fixture-bin';
+    mocks.accessSync.mockImplementation((file: string) => {
+      if (file !== path.join(linuxBin, 'ghostty')) throw new Error('ENOENT');
+    });
     const child = mockSpawn();
     await expect(
-      createOpenInApps({ platform: 'linux', env: { PATH: binDir } }).open('ghostty', '/repo')
+      createOpenInApps({ platform: 'linux', env: { PATH: linuxBin } }).open('ghostty', '/repo')
     ).resolves.toEqual({ ok: true });
     expect(mocks.spawn).toHaveBeenCalledWith(
-      path.join(binDir, 'ghostty'),
+      path.join(linuxBin, 'ghostty'),
       ['--working-directory=/repo'],
       expect.objectContaining({ cwd: '/repo', detached: true, stdio: 'ignore' })
     );

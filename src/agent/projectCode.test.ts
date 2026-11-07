@@ -134,10 +134,10 @@ describe('createProjectSettingsManager', () => {
 });
 
 describe('LCU 独立加载开关', () => {
-  function fixture() {
+  function fixture(entry = 'extension.mjs') {
     const cwd = tmp();
     const agentDir = tmp();
-    const extensionPath = join(tmp(), 'lcu/pi/extension.mjs');
+    const extensionPath = join(tmp(), 'lcu/pi', entry);
     const marker = join(tmp(), 'lcu-loaded');
     write(
       extensionPath,
@@ -156,6 +156,18 @@ describe('LCU 独立加载开关', () => {
         execute: async () => ({ content: [{type:'text',text:'other'}], details: {} }) });`
     );
     return { cwd, agentDir, extensionPath, marker };
+  }
+
+  function linkDirectory(target: string, alias: string) {
+    symlinkSync(target, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  }
+
+  function discoverableAlias(f: ReturnType<typeof fixture>): string {
+    const source = dirname(f.extensionPath);
+    const alias = join(f.agentDir, 'extensions/cua');
+    write(join(source, 'package.json'), JSON.stringify({ pi: { extensions: ['extension.mjs'] } }));
+    linkDirectory(source, alias);
+    return join(alias, 'extension.mjs');
   }
 
   async function loadLcu(
@@ -198,8 +210,7 @@ describe('LCU 独立加载开关', () => {
 
   it('阻止已信任项目显式引用和全局自动发现的符号链接别名', async () => {
     const f = fixture();
-    const alias = join(f.agentDir, 'extensions/cua.js');
-    symlinkSync(f.extensionPath, alias);
+    const alias = discoverableAlias(f);
     write(join(f.cwd, '.pi/settings.json'), JSON.stringify({ extensions: [alias] }));
     expect(await loadLcu(f, false, listProjectCodeSources(f.cwd))).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
@@ -226,7 +237,7 @@ describe('LCU 独立加载开关', () => {
 
   it('坏配置不让自动发现的 LCU 绕过关闭，仍不改写坏文件', async () => {
     const f = fixture();
-    symlinkSync(f.extensionPath, join(f.agentDir, 'extensions/cua.js'));
+    discoverableAlias(f);
     const file = join(f.agentDir, 'settings.json');
     write(file, '{broken');
     expect(await loadLcu(f, false)).toEqual(['other']);
@@ -283,25 +294,27 @@ describe('LCU 独立加载开关', () => {
   it('自动发现目录的 manifest 引用安装入口及其别名也被关闭', async () => {
     const f = fixture();
     const dir = join(f.agentDir, 'extensions/lcu-adapter');
-    write(join(dir, 'package.json'), JSON.stringify({ pi: { extensions: ['./launch.mjs'] } }));
-    symlinkSync(f.extensionPath, join(dir, 'launch.mjs'));
+    write(
+      join(dir, 'package.json'),
+      JSON.stringify({ pi: { extensions: ['./alias/extension.mjs'] } })
+    );
+    linkDirectory(dirname(f.extensionPath), join(dir, 'alias'));
     expect(await loadLcu(f, false)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
   it('安装入口自身为符号链接时，自动发现的目录包仍能排除它', async () => {
     const f = fixture();
-    const original = readFileSync(f.extensionPath, 'utf8');
-    rmSync(f.extensionPath);
-    const target = join(tmp(), 'release.mjs');
-    write(target, original);
-    symlinkSync(target, f.extensionPath);
-    const packageDir = dirname(f.extensionPath);
+    const packageDir = join(tmp(), 'release');
+    write(join(packageDir, 'extension.mjs'), readFileSync(f.extensionPath, 'utf8'));
+    const installDir = dirname(f.extensionPath);
+    rmSync(installDir, { recursive: true });
+    linkDirectory(packageDir, installDir);
     write(
       join(packageDir, 'package.json'),
       JSON.stringify({ pi: { extensions: ['extension.mjs'] } })
     );
-    symlinkSync(packageDir, join(f.agentDir, 'extensions/lcu'));
+    linkDirectory(packageDir, join(f.agentDir, 'extensions/lcu'));
     expect(await loadLcu(f, false)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
@@ -320,9 +333,9 @@ describe('LCU 独立加载开关', () => {
   });
 
   it('目录包的 index 入口是 LCU 符号链接时也不能绕过关闭', async () => {
-    const f = fixture();
-    const root = tmp();
-    symlinkSync(f.extensionPath, join(root, 'index.ts'));
+    const f = fixture('index.ts');
+    const root = join(tmp(), 'index-alias');
+    linkDirectory(dirname(f.extensionPath), root);
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ packages: [root] }));
     expect(await loadLcu(f, false)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);

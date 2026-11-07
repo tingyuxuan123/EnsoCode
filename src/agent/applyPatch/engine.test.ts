@@ -113,7 +113,7 @@ describe('apply_patch 引擎', () => {
     expect(result.details).toMatchObject({
       kind: 'apply_patch',
       status: 'success',
-      applied: ['nested/add.txt', 'update.txt', 'delete.txt'],
+      applied: [path.join('nested', 'add.txt'), 'update.txt', 'delete.txt'],
       uncertain: [],
     });
     expect(await text('nested/add.txt')).toBe('added\n');
@@ -188,7 +188,7 @@ describe('apply_patch 引擎', () => {
       patch('*** Update File: old.txt', '*** Move to: new/renamed.txt', '@@', '-old', '+new')
     );
     expect(result.details.fileChanges).toEqual([
-      { path: 'new/renamed.txt', oldText: '', newText: 'new\n', type: 'add' },
+      { path: path.join('new', 'renamed.txt'), oldText: '', newText: 'new\n', type: 'add' },
       { path: 'old.txt', oldText: 'old\n', newText: '', type: 'delete' },
     ]);
     expect(await text('new/renamed.txt')).toBe('new\n');
@@ -345,7 +345,7 @@ describe('apply_patch 引擎', () => {
         cwd,
         patch(`*** Update File: ${source}`, '*** Move to: moved/target.txt', '@@', ' source')
       );
-      expect(result.details.applied).toEqual(['moved/target.txt', source]);
+      expect(result.details.applied).toEqual([path.join('moved', 'target.txt'), source]);
       expect(await text('moved/target.txt')).toBe('source\n');
       await expect(readFile(source, 'utf8')).rejects.toThrow();
     } finally {
@@ -447,8 +447,16 @@ describe('apply_patch 引擎', () => {
     const actual = path.join(outside, 'actual');
     await mkdir(actual);
     await writeFile(path.join(actual, 'victim.txt'), 'safe\n');
-    await symlink(actual, path.join(outside, 'linked'));
-    await symlink(path.join(actual, 'victim.txt'), path.join(outside, 'leaf.txt'));
+    await symlink(
+      actual,
+      path.join(outside, 'linked'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+    await symlink(
+      process.platform === 'win32' ? actual : path.join(actual, 'victim.txt'),
+      path.join(outside, 'leaf.txt'),
+      process.platform === 'win32' ? 'junction' : 'file'
+    );
     try {
       await expectFailed(
         executeApplyPatch(
@@ -503,8 +511,16 @@ describe('apply_patch 引擎', () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), 'enso-apply-outside-'));
     try {
       await writeFile(path.join(outside, 'victim.txt'), 'safe\n');
-      await symlink(outside, path.join(cwd, 'linked'));
-      await symlink(path.join(outside, 'victim.txt'), path.join(cwd, 'leaf.txt'));
+      await symlink(
+        outside,
+        path.join(cwd, 'linked'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      );
+      await symlink(
+        process.platform === 'win32' ? outside : path.join(outside, 'victim.txt'),
+        path.join(cwd, 'leaf.txt'),
+        process.platform === 'win32' ? 'junction' : 'file'
+      );
       await expectFailed(
         executeApplyPatch(cwd, patch('*** Update File: linked/victim.txt', '@@', '-safe', '+bad'))
       );

@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,6 +20,19 @@ import {
 } from './stripPackagedNatives.mjs';
 
 const dirs: string[] = [];
+
+function writeUnfixedHelper(file: string) {
+  // Windows only records writability; make chmod observable there too.
+  writeFileSync(file, 'x', { mode: process.platform === 'win32' ? 0o444 : 0o644 });
+}
+
+function expectHelperPermissions(file: string) {
+  // Windows chmod cannot represent execute bits. Verify its supported owner
+  // permissions and unchanged bytes instead; POSIX keeps the executable check.
+  const mask = process.platform === 'win32' ? 0o600 : 0o111;
+  expect(statSync(file).mode & mask).toBe(mask);
+  expect(readFileSync(file, 'utf8')).toBe('x');
+}
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -96,10 +117,12 @@ describe('stripPackagedNatives', () => {
     for (const name of ['darwin-arm64', 'darwin-x64', 'win32-x64']) {
       mkdirSync(path.join(root, name));
     }
-    writeFileSync(path.join(root, 'darwin-arm64', 'spawn-helper'), 'x', { mode: 0o644 });
-    writeFileSync(path.join(root, 'darwin-x64', 'spawn-helper'), 'x', { mode: 0o644 });
-    expect(ensurePtyHelpersExecutable(root)).toHaveLength(2);
-    expect(statSync(path.join(root, 'darwin-x64', 'spawn-helper')).mode & 0o111).toBe(0o111);
+    const helpers = ['darwin-arm64', 'darwin-x64'].map((dir) =>
+      path.join(root, dir, 'spawn-helper')
+    );
+    for (const helper of helpers) writeUnfixedHelper(helper);
+    expect(ensurePtyHelpersExecutable(root).sort()).toEqual(helpers);
+    for (const helper of helpers) expectHelperPermissions(helper);
     expect(ensurePtyHelpersExecutable(path.join(root, 'nope'))).toEqual([]);
   });
 
@@ -115,7 +138,7 @@ describe('stripPackagedNatives', () => {
     writeFileSync(path.join(prebuilds, 'darwin-arm64.node'), 'keep');
     writeFileSync(path.join(prebuilds, 'linux-x64.node'), 'drop');
     mkdirSync(path.join(ptyPrebuilds, 'darwin-arm64'), { recursive: true });
-    writeFileSync(path.join(ptyPrebuilds, 'darwin-arm64', 'spawn-helper'), 'x', { mode: 0o644 });
+    writeUnfixedHelper(path.join(ptyPrebuilds, 'darwin-arm64', 'spawn-helper'));
     mkdirSync(path.join(ptyPrebuilds, 'darwin-x64'), { recursive: true });
     for (const dir of ['darwin/prebuilds/darwin-arm64', 'darwin/prebuilds/darwin-x64']) {
       mkdirSync(path.join(tuiNative, dir), { recursive: true });
@@ -132,9 +155,7 @@ describe('stripPackagedNatives', () => {
     });
     expect(readdirSync(prebuilds)).toEqual(['darwin-arm64.node']);
     expect(readdirSync(ptyPrebuilds)).toEqual(['darwin-arm64']);
-    expect(statSync(path.join(ptyPrebuilds, 'darwin-arm64', 'spawn-helper')).mode & 0o111).toBe(
-      0o111
-    );
+    expectHelperPermissions(path.join(ptyPrebuilds, 'darwin-arm64', 'spawn-helper'));
     expect(readdirSync(path.join(tuiNative, 'darwin', 'prebuilds'))).toEqual(['darwin-arm64']);
     expect(readdirSync(path.join(tuiNative, 'win32', 'prebuilds'))).toEqual([]);
     expect(readdirSync(levelPrebuilds)).toEqual(['darwin-x64+arm64']);

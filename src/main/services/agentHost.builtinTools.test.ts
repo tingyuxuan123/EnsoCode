@@ -130,7 +130,7 @@ it('插件资源只给本机普通父会话，插件预设附角色和指令，�
   ).toBe(true);
   expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
     pluginTools: [descriptor],
-    skillPaths: ['/fixture/plugin-skill', '/tmp/resources/design/skills'],
+    skillPaths: ['/fixture/plugin-skill', join('/tmp', 'resources', 'design', 'skills')],
     systemPrompt: 'plugin persona',
     instruction: { content: 'plugin instruction' },
   });
@@ -197,7 +197,7 @@ it('design switch controls bundled skills and hot tool loadout even over project
   worker.emit('spawn');
   spawnSession(identity, request, new Set(), undefined, 'project');
   expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
-    skillPaths: ['/tmp/resources/design/skills'],
+    skillPaths: [join('/tmp', 'resources', 'design', 'skills')],
   });
   settings.state.designEnabled = false;
   settings.state.projects = [{ id: 'project', disabledBuiltinTools: [] }];
@@ -229,13 +229,13 @@ it('designer availability, bundled skill and exact proof follow the effective pa
       remote,
     });
   expect(configuredAgentTypes(new Set()).find((entry) => entry.name === 'designer')).toMatchObject({
-    skillPaths: ['/tmp/resources/design/skills'],
+    skillPaths: [join('/tmp', 'resources', 'design', 'skills')],
   });
   const resolved = resolveDesigner();
   expect(resolved.ok).toBe(true);
   if (!resolved.ok) throw new Error(resolved.error);
   expect(resolved.expectedToolIds).toEqual(expect.arrayContaining([...DESIGN_TOOL_NAMES]));
-  expect(resolved.config.skillPaths).toEqual(['/tmp/resources/design/skills']);
+  expect(resolved.config.skillPaths).toEqual([join('/tmp', 'resources', 'design', 'skills')]);
   expect(resolved.config.skillBindingIds).toHaveLength(1);
   const remote = resolveDesigner(true);
   expect(remote.ok && remote.expectedToolIds.some((id) => id.startsWith('vetd_'))).toBe(false);

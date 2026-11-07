@@ -93,10 +93,11 @@ it('Agents 坏 frontmatter 和悬空链接不阻断其他来源，沿用目录�
   const root = skill('.agents', 'bad', 'bad');
   fs.writeFileSync(path.join(root, 'SKILL.md'), '---\nname: [invalid\n---\nbody');
   const linked = skill('.agents', 'real', 'real');
-  fs.symlinkSync(linked, path.join(fixture.dir, '.agents', 'skills', 'linked'));
+  fs.symlinkSync(linked, path.join(fixture.dir, '.agents', 'skills', 'linked'), 'junction');
   fs.symlinkSync(
     path.join(fixture.dir, 'missing'),
-    path.join(fixture.dir, '.agents', 'skills', 'dangling')
+    path.join(fixture.dir, '.agents', 'skills', 'dangling'),
+    'junction'
   );
   skill('.claude', 'other', 'other');
   const scan = scanLocalAssets();

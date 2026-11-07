@@ -123,7 +123,7 @@ describe('voiceCorrectionModelIdFromSettings', () => {
 
 describe('resolveChatModelFile', () => {
   it('derives a path under modelsRoot from an identifier, never from a renderer path', () => {
-    const root = '/user-data/memory/chat-models';
+    const root = path.resolve('/user-data/memory/chat-models');
     const resolved = resolveChatModelFile(root, 'local:gemma-4-e2b');
     expect(resolved).toBe(path.join(root, 'local_gemma-4-e2b', 'gemma-4-E2B-it-UD-Q4_K_XL.gguf'));
     expect(path.resolve(resolved!).startsWith(path.resolve(root) + path.sep)).toBe(true);

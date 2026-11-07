@@ -165,7 +165,8 @@ describe('readPluginComponents', () => {
         id: 'plugin:demo@mkt:local',
         name: 'local',
         transport: 'stdio',
-        command: path.join(root(), 'server'),
+        // Plugin placeholder expansion preserves the command's authored slash, not host separators.
+        command: `${root()}/server`,
         args: ['--data', dataDir],
       },
     ]);

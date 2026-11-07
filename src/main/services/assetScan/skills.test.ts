@@ -75,7 +75,7 @@ describe('readSkillsRoot', () => {
     const root = path.join(tmp, 'skills');
     fs.mkdirSync(root);
     const linked = path.join(root, 'surge');
-    fs.symlinkSync(real, linked);
+    fs.symlinkSync(real, linked, 'junction');
     expect(readSkillsRoot(root, 'Claude Code')).toEqual([
       {
         name: 'Surge',
@@ -89,9 +89,15 @@ describe('readSkillsRoot', () => {
   it('跳过悬空符号链接和指向文件的符号链接', () => {
     const root = path.join(tmp, 'skills');
     fs.mkdirSync(root);
-    fs.symlinkSync(path.join(tmp, 'missing'), path.join(root, 'dangling'));
+    fs.symlinkSync(path.join(tmp, 'missing'), path.join(root, 'dangling'), 'junction');
     fs.writeFileSync(path.join(tmp, 'plain.txt'), 'not a skill');
-    fs.symlinkSync(path.join(tmp, 'plain.txt'), path.join(root, 'filelink'));
+    // Windows can create directory reparse points without symlink privileges;
+    // a junction to a file remains a link that cannot contain SKILL.md.
+    fs.symlinkSync(
+      path.join(tmp, 'plain.txt'),
+      path.join(root, 'filelink'),
+      process.platform === 'win32' ? 'junction' : 'file'
+    );
     expect(readSkillsRoot(root, 'x')).toEqual([]);
   });
 });
