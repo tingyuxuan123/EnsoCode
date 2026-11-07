@@ -59,6 +59,13 @@ function renderPreview(text: string): string {
 }
 
 describe('FileMarkdownPreview：README 常见 HTML 布局落进最终 DOM', () => {
+  it('文件预览显式重置聊天变量，不跟随聊天设置', () => {
+    const html = renderPreview('# 标题\n\n正文 `code`\n');
+    expect(html).toContain('--chat-body-scale:1');
+    expect(html).toContain('--chat-headings-scale:1');
+    expect(html).toContain('--chat-code-block-weight:400');
+    expect(html).toContain('--chat-inline-code-scale:1');
+  });
   it('<p align> 与 <h1 align> 保留 align 属性', () => {
     const html = renderPreview('<p align="center">centered</p>\n\n<h1 align="center">Title</h1>\n');
     expect(html).toContain('align="center"');

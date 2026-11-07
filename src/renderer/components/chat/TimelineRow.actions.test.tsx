@@ -81,6 +81,20 @@ const render = (item: TimelineItem) =>
   act(async () => root.render(createElement(TimelineRow, { item })));
 
 describe('回复正文的紧凑操作区', () => {
+  it.each(['普通用户正文', '/skill:a /skill:b 技能后的正文'])(
+    '聊天排版只缩放用户正文，不连带缩放技能芯片或消息元信息：%s',
+    async (text) => {
+      await render({ kind: 'user', key: 'user-typography', text, images: [] });
+      const body = container.querySelector<HTMLElement>('[data-user-body-typography]');
+      expect(body).not.toBeNull();
+      expect(body?.getAttribute('style')).toContain('--chat-body-scale');
+      expect(body?.getAttribute('style')).toContain('--chat-body-weight');
+      expect(body?.style.lineHeight).toContain('--chat-body-scale');
+      expect(body?.textContent).toBe(text.startsWith('/skill:') ? '技能后的正文' : text);
+      expect(body?.querySelector('svg')).toBeNull();
+    }
+  );
+
   it('子代理完成通知用 Markdown 展示报告，把用量放在底栏且不改原文', async () => {
     const report = '## 验证完成\n\n- **所有检查通过**';
     const text = [

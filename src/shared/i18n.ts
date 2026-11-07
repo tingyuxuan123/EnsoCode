@@ -827,6 +827,17 @@ export const zhTranslations: Record<string, string> = {
   'Deselect all': '全不选',
   '{{enabled}}/{{total}} enabled': '已启用 {{enabled}}/{{total}}',
   'Fetch models': '拉取模型',
+  'Chat typography': '聊天排版',
+  'Chat body, headings, tables, code blocks and inline code font size and weight':
+    '聊天正文、标题、表格、代码块和行内代码的字号与字重',
+  'Chat body': '聊天正文',
+  'Chat headings': '聊天标题',
+  'Chat tables': '聊天表格',
+  'Code blocks': '代码块',
+  'Inline code': '行内代码',
+  'Restore default typography': '恢复默认排版',
+  'Adjust chat text proportionally in Code and Bot. File previews and the interface are unchanged.':
+    '在 Code 和 Bot 中等比调整聊天文字，不影响文件预览与界面。',
   'Refresh all models': '拉取全部模型',
   'Waiting to refresh models': '等待拉取模型',
   'Refreshing provider models...': '正在拉取供应商模型…',

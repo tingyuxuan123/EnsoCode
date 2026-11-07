@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { CHAT_TYPOGRAPHY_DEFAULTS } from '@shared/chatTypography';
 import { expect, it } from 'vitest';
 import { useSettingsStore } from './settings-store';
 
@@ -11,6 +12,10 @@ import { useSettingsStore } from './settings-store';
 
 const repoRoot = path.resolve(import.meta.dirname, '../../../..');
 const phoneSrc = path.join(repoRoot, 'packages/phone/src');
+
+it('手机设置桩包含完整的默认聊天排版，不改变原渲染比例', () => {
+  expect(useSettingsStore.getState().chatTypography).toEqual(CHAT_TYPOGRAPHY_DEFAULTS);
+});
 
 /** 构建期被 vite alias 换成桩的模块：真实实现不进 PWA，不参与记账 */
 const STUBBED = [

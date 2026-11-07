@@ -85,6 +85,8 @@ export interface SettingsState {
   lightPalette: import('@shared/lightPalette').LightPalette;
   /** 界面强调色；写入 `html[data-accent]`，缺省 violet */
   accentColor: import('@shared/accentColor').AccentColor;
+  /** 聊天正文/标题/表格/块代码/行内代码的完整排版偏好；不影响文件预览与shell。 */
+  chatTypography: import('@shared/chatTypography').ChatTypography;
   language: Locale;
 
   /**
@@ -343,6 +345,7 @@ export interface SettingsState {
   setTheme: (theme: Theme) => void;
   setLightPalette: (palette: import('@shared/lightPalette').LightPalette) => void;
   setAccentColor: (accent: import('@shared/accentColor').AccentColor) => void;
+  setChatTypography: (typography: import('@shared/chatTypography').ChatTypography) => void;
   setLanguage: (language: Locale) => void;
   setTerminalTheme: (theme: string) => void;
   setTerminalFontSize: (size: number) => void;
@@ -390,6 +393,7 @@ export interface SettingsState {
   setProxyMode: (mode: ProxyMode) => void;
   setCustomProxyUrl: (url: string) => void;
   setOpenChangesOnFileEdit: (value: boolean) => void;
+  setOpenLinksInBuiltinBrowser: (value: boolean) => void;
   setCompactReadOnlyTools: (value: boolean) => void;
   setExpandLiveEdits: (value: boolean) => void;
   setExpandLiveReasoning: (value: boolean) => void;

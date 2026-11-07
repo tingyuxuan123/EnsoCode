@@ -25,6 +25,7 @@ export const SETTINGS_DATA_COVERAGE = {
   theme: surfaces('appearance.theme'),
   lightPalette: excluded('Desktop light palette; user-selected appearance preference.'),
   accentColor: surfaces('appearance.accent'),
+  chatTypography: excluded('Renderer chat typography preference; not an Enso capability.'),
   language: surfaces('general.language'),
   terminalTheme: surfaces('appearance.terminal-theme'),
   terminalFontSize: surfaces('appearance.terminal-font-size'),
@@ -171,6 +172,7 @@ export const SETTINGS_ACTION_COVERAGE = {
   setTheme: surfaces('appearance.theme'),
   setLightPalette: excluded('Desktop light palette; user-selected appearance preference.'),
   setAccentColor: surfaces('appearance.accent'),
+  setChatTypography: excluded('Renderer chat typography preference; not an Enso capability.'),
   setLanguage: surfaces('general.language'),
   setTerminalTheme: surfaces('appearance.terminal-theme'),
   setTerminalFontSize: surfaces('appearance.terminal-font-size'),
@@ -236,6 +238,7 @@ export const SETTINGS_ACTION_COVERAGE = {
   setOpenChangesOnFileEdit: excluded('Renderer side-panel preference; not an Enso capability.'),
   setFileOpenRules: excluded('Device-local user file opening preferences; not an Enso capability.'),
   setContextMenuOpen: excluded('Device-local preference for right-clicking chat file links.'),
+  setOpenLinksInBuiltinBrowser: excluded('Device-local browser preference for Code chat links.'),
   setCompactReadOnlyTools: excluded(
     'Renderer timeline density preference; not an Enso capability.'
   ),

@@ -5,6 +5,7 @@ import {
   DEFAULT_BOT_MAX_RUNNING_TURNS,
   normalizeBotMaxRunningTurns,
 } from '@shared/bots/concurrency';
+import { chatTypographyVariables, normalizeChatTypography } from '@shared/chatTypography';
 import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
   type DefaultModelRef,
@@ -98,6 +99,12 @@ function applyTerminalFont(fontFamily: string, fontSize: number): void {
   root.style.setProperty('--font-size-base', `${fontSize}px`);
 }
 
+function applyChatTypography(value: unknown): void {
+  for (const [key, cssValue] of Object.entries(chatTypographyVariables(value))) {
+    document.documentElement.style.setProperty(key, cssValue);
+  }
+}
+
 // Keep the desktop light palette independent of dark/system/terminal mode.
 function applyAppTheme(theme: Theme, terminalTheme: string, lightPalette: LightPalette): void {
   const root = document.documentElement;
@@ -123,6 +130,7 @@ function applySettings(state: {
   theme: Theme;
   lightPalette: LightPalette;
   accentColor?: AccentColor;
+  chatTypography?: unknown;
   terminalTheme: string;
   terminalFontFamily: string;
   terminalFontSize: number;
@@ -131,6 +139,7 @@ function applySettings(state: {
 }): void {
   applyAppTheme(state.theme, state.terminalTheme, state.lightPalette);
   applyTerminalFont(state.terminalFontFamily, state.terminalFontSize);
+  applyChatTypography(state.chatTypography);
   document.documentElement.lang = normalizeLocale(state.language) === 'zh' ? 'zh-CN' : 'en';
   document.documentElement.dataset.accent = resolveAccentColor(state.accentColor);
   document.documentElement.classList.toggle('enso-chat-wide', Boolean(state.chatWide));
@@ -150,6 +159,7 @@ const initialState = {
   theme: 'system' as Theme,
   lightPalette: 'ocean' as LightPalette,
   accentColor: DEFAULT_ACCENT_COLOR,
+  chatTypography: normalizeChatTypography(undefined),
   language: getDefaultLocale(),
   fileOpenRules: [] as FileOpenRule[],
   contextMenuOpen: normalizeContextMenuOpen(undefined),
@@ -299,6 +309,12 @@ export const useSettingsStore = create<SettingsState>()(
       setAccentColor: (accentColor) => {
         document.documentElement.dataset.accent = accentColor;
         set({ accentColor });
+      },
+
+      setChatTypography: (value) => {
+        const chatTypography = normalizeChatTypography(value);
+        applyChatTypography(chatTypography);
+        set({ chatTypography });
       },
 
       setLanguage: (language) => {
@@ -1102,6 +1118,7 @@ export const useSettingsStore = create<SettingsState>()(
       merge: (persisted, current) => mergeSettingsState(persisted, current),
       partialize: (state) => ({
         ...state,
+        chatTypography: normalizeChatTypography(state.chatTypography),
         fileOpenRules: normalizeFileOpenRules(state.fileOpenRules),
         contextMenuOpen: normalizeContextMenuOpen(state.contextMenuOpen),
       }),

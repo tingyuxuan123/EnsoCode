@@ -1,3 +1,4 @@
+import { CHAT_TYPOGRAPHY_DEFAULTS, chatTypographyVariables } from '@shared/chatTypography';
 import {
   classifyPreviewImageSrc,
   normalizeRemoteImageUrl,
@@ -12,6 +13,7 @@ import { MarkdownCtx, markdownComponents } from '@/components/chat/Markdown';
 import { buildFilePreviewSanitizeSchema, rehypeRejectUnsafeImageSrc } from './filePreviewSanitize';
 
 const REMARK_PLUGINS = [remarkGfm];
+const PREVIEW_TYPOGRAPHY = chatTypographyVariables(CHAT_TYPOGRAPHY_DEFAULTS);
 const SANITIZE_SCHEMA = buildFilePreviewSanitizeSchema();
 const REHYPE_PLUGINS = [
   rehypeRaw,
@@ -126,18 +128,20 @@ export function FileMarkdownPreview({
   const ctx = useMemo(() => ({ text, streaming: false, searchQuery: '', activeNth: -1 }), [text]);
   return (
     <MarkdownCtx.Provider value={ctx}>
-      <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS as never}
-        components={components}
-        // react-markdown 自带的 urlTransform 默认协议白名单不含 `data:`，会把我们
-        // 在 rehype-sanitize 里明确放行的 data: 图片 URI（及图片解析后注入的结果）撑空。
-        // href/img.src 的协议安全已由 buildFilePreviewSanitizeSchema 与
-        // rehypeRejectUnsafeImageSrc 在前面的 rehype 阶段处理完毕，这里直接透传不再二次抦截。
-        urlTransform={(url) => url}
-      >
-        {text}
-      </ReactMarkdown>
+      <div data-file-markdown="" style={PREVIEW_TYPOGRAPHY}>
+        <ReactMarkdown
+          remarkPlugins={REMARK_PLUGINS}
+          rehypePlugins={REHYPE_PLUGINS as never}
+          components={components}
+          // react-markdown 自带的 urlTransform 默认协议白名单不含 `data:`，会把我们
+          // 在 rehype-sanitize 里明确放行的 data: 图片 URI（及图片解析后注入的结果）撑空。
+          // href/img.src 的协议安全已由 buildFilePreviewSanitizeSchema 与
+          // rehypeRejectUnsafeImageSrc 在前面的 rehype 阶段处理完毕，这里直接透传不再二次抦截。
+          urlTransform={(url) => url}
+        >
+          {text}
+        </ReactMarkdown>
+      </div>
     </MarkdownCtx.Provider>
   );
 }

@@ -1,4 +1,5 @@
 import type { TerminalPalette } from '@enso/pair';
+import { normalizeChatTypography } from '@shared/chatTypography';
 import type { Locale } from '@shared/i18n';
 import { normalizeTimelinePrefs, type PairTimelinePrefs } from '@shared/pair/timelinePrefs';
 import { useSyncExternalStore } from 'react';
@@ -16,6 +17,7 @@ interface SettingsSlice
       SettingsState,
       | 'contextMenuOpen'
       | 'chatWide'
+      | 'chatTypography'
       | 'virtualModels'
       | 'disabledBuiltinTools'
       | 'openLinksInBuiltinBrowser'
@@ -61,6 +63,7 @@ let state: SettingsSlice = {
   // Desktop-only entry points stay unavailable; shared components still need defined values.
   contextMenuOpen: [],
   chatWide: false,
+  chatTypography: normalizeChatTypography(undefined),
   virtualModels: [],
   disabledBuiltinTools: [],
   openLinksInBuiltinBrowser: false,

@@ -233,6 +233,12 @@ const STATIC_CATALOG: SettingsSearchEntry[] = [
   },
   { id: 'shortcuts.root', category: 'shortcuts', title: 'Shortcuts' },
   { id: 'appearance.theme', category: 'appearance', title: 'Theme mode' },
+  {
+    id: 'appearance.chatTypography',
+    category: 'appearance',
+    title: 'Chat typography',
+    description: 'Chat body, headings, tables, code blocks and inline code font size and weight',
+  },
   { id: 'providers.root', category: 'providers', title: 'Model Providers' },
   { id: 'presets.root', category: 'presets', title: 'Presets' },
   { id: 'agents.root', category: 'agents', title: 'Agent types' },

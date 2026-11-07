@@ -1,3 +1,4 @@
+import { chatBodyTypographyStyle, chatInlineCodeTypographyStyle } from '@shared/chatTypography';
 import { previewImageMime } from '@shared/markdownPreviewImage';
 import { isBuiltinToolEnabledForProject } from '@shared/types/builtinTools';
 import { FolderOpen } from 'lucide-react';
@@ -513,7 +514,10 @@ function MarkdownAnchor({
 
   if (codeText !== null) {
     return (
-      <span className="mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/60 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-[calc(11rem/14)]">
+      <span
+        style={chatInlineCodeTypographyStyle}
+        className="mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-border/60 bg-muted/70 py-px pr-0.5 pl-1 align-baseline font-mono text-[calc(11rem/14)]"
+      >
         {anchor}
         {!ssh && (
           <button
@@ -562,6 +566,10 @@ export function markdownUrlTransform(value: string, key?: string, allowLocal = t
 }
 
 /** 模块级稳定引用：react-markdown 按组件类型协调子树，内联对象每帧都会拆掉 CodeBlock */
+const smallHeadingStyle = { fontWeight: 'var(--chat-small-heading-weight, 400)' };
+const smallHeadingSizeStyle = {
+  fontSize: 'calc(1em * var(--chat-small-heading-relative-scale, 1))',
+};
 export const markdownComponents: Components = {
   p: ({ children }) => {
     const { searchQuery, activeNth } = useContext(MarkdownCtx);
@@ -582,9 +590,46 @@ export const markdownComponents: Components = {
       {children}
     </ol>
   ),
-  h1: ({ children }) => <h1 className="mt-3 mb-1.5 text-base font-semibold">{children}</h1>,
-  h2: ({ children }) => <h2 className="mt-3 mb-1.5 text-base font-semibold">{children}</h2>,
-  h3: ({ children }) => <h3 className="mt-2 mb-1 text-sm font-semibold">{children}</h3>,
+  // 内层缩放保留宿主已有 h1-h3 的级别字号覆盖（Code 与 Bot baseline 不同）。
+  h1: ({ children }) => (
+    <h1
+      className="mt-3 mb-1.5 text-base font-semibold"
+      style={{ fontWeight: 'var(--chat-headings-weight, 600)' }}
+    >
+      <span style={{ fontSize: 'calc(1em * var(--chat-headings-scale, 1))' }}>{children}</span>
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2
+      className="mt-3 mb-1.5 text-base font-semibold"
+      style={{ fontWeight: 'var(--chat-headings-weight, 600)' }}
+    >
+      <span style={{ fontSize: 'calc(1em * var(--chat-headings-scale, 1))' }}>{children}</span>
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3
+      className="mt-2 mb-1 text-sm font-semibold"
+      style={{ fontWeight: 'var(--chat-headings-weight, 600)' }}
+    >
+      <span style={{ fontSize: 'calc(1em * var(--chat-headings-scale, 1))' }}>{children}</span>
+    </h3>
+  ),
+  h4: ({ children }) => (
+    <h4 style={smallHeadingStyle}>
+      <span style={smallHeadingSizeStyle}>{children}</span>
+    </h4>
+  ),
+  h5: ({ children }) => (
+    <h5 style={smallHeadingStyle}>
+      <span style={smallHeadingSizeStyle}>{children}</span>
+    </h5>
+  ),
+  h6: ({ children }) => (
+    <h6 style={smallHeadingStyle}>
+      <span style={smallHeadingSizeStyle}>{children}</span>
+    </h6>
+  ),
   blockquote: ({ children, node }) => {
     const { t } = useI18n();
     const props = node?.properties as Record<string, unknown> | undefined;
@@ -633,6 +678,7 @@ export const markdownComponents: Components = {
           type="button"
           onClick={onClick}
           title={value}
+          style={chatInlineCodeTypographyStyle}
           className="mx-0.5 inline-flex max-w-full items-center rounded-[5px] border border-border/60 bg-muted/70 px-1 py-px align-baseline font-mono text-[calc(11rem/14)] text-foreground transition-colors hover:bg-muted hover:text-brand"
         >
           <span className="truncate">{value}</span>
@@ -647,7 +693,10 @@ export const markdownComponents: Components = {
       );
     }
     return (
-      <code className="mx-0.5 rounded-[5px] bg-muted/70 px-1 py-px font-mono text-[calc(11rem/14)]">
+      <code
+        style={chatInlineCodeTypographyStyle}
+        className="mx-0.5 rounded-[5px] bg-muted/70 px-1 py-px font-mono text-[calc(11rem/14)]"
+      >
         {children}
       </code>
     );
@@ -689,7 +738,15 @@ export const markdownComponents: Components = {
     const raw = start !== undefined && end !== undefined ? text.slice(start, end) : null;
     return (
       <div className="group/table relative my-2 min-w-0 max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-        <table className="w-max min-w-full border-collapse leading-[1.6]">{children}</table>
+        <table
+          style={{
+            fontSize: 'calc(1em * var(--chat-table-relative-scale, 1))',
+            fontWeight: 'var(--chat-table-weight, 400)',
+          }}
+          className="w-max min-w-full border-collapse leading-[1.6]"
+        >
+          {children}
+        </table>
         {raw && !streaming && (
           <CopyButton
             text={raw}
@@ -700,7 +757,10 @@ export const markdownComponents: Components = {
     );
   },
   th: ({ children }) => (
-    <th className="max-w-md min-w-16 border-b border-border px-2.5 py-1.5 text-left font-medium whitespace-normal break-words">
+    <th
+      style={{ fontWeight: 'var(--chat-table-header-weight, 500)' }}
+      className="max-w-md min-w-16 border-b border-border px-2.5 py-1.5 text-left font-medium whitespace-normal break-words"
+    >
       {children}
     </th>
   ),
@@ -737,7 +797,11 @@ export function Markdown({
   );
   return (
     <MarkdownCtx.Provider value={ctx}>
-      <div className={streaming ? 't-stream-live' : undefined}>
+      <div
+        data-chat-typography=""
+        style={chatBodyTypographyStyle}
+        className={streaming ? 't-stream-live' : undefined}
+      >
         <ReactMarkdown
           remarkPlugins={REMARK_PLUGINS}
           components={markdownComponents}

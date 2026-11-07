@@ -1,4 +1,5 @@
 import { type AccentColor, resolveAccentColor } from '@shared/accentColor';
+import { normalizeChatTypography } from '@shared/chatTypography';
 import {
   CODE_SEARCH_DEFAULT_OFF_SETTINGS_VERSION,
   parseCodeSearchAccountKey,
@@ -94,6 +95,9 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...lcu,
     ...design,
     ...lightAppearance,
+    ...('chatTypography' in source || 'chatTypography' in current
+      ? { chatTypography: normalizeChatTypography(source.chatTypography) }
+      : {}),
     editMode,
     accentColor,
   } as T;

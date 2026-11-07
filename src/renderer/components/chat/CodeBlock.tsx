@@ -1,3 +1,4 @@
+import { chatCodeBlockTypographyStyle } from '@shared/chatTypography';
 import { useEffect, useState } from 'react';
 import { CopyButton } from './CopyButton';
 import { codeToHtml } from './snippetHighlighter';
@@ -48,7 +49,11 @@ export function CodeBlock({
   if (html == null) {
     return (
       <div className="group/code relative">
-        <pre className="my-2 overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-[calc(11rem/14)] leading-relaxed">
+        <pre
+          data-chat-code=""
+          style={chatCodeBlockTypographyStyle}
+          className="my-2 overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-[calc(11rem/14)] leading-relaxed"
+        >
           <code>{code}</code>
         </pre>
         {copy}
@@ -58,6 +63,8 @@ export function CodeBlock({
   return (
     <div className="group/code relative">
       <div
+        data-chat-code=""
+        style={chatCodeBlockTypographyStyle}
         className="my-2 overflow-x-auto rounded-md border text-[calc(11rem/14)] leading-relaxed [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:p-3 [&_pre]:font-mono"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: shiki 输出的受控 HTML（本地生成，无用户注入）
         dangerouslySetInnerHTML={{ __html: html }}

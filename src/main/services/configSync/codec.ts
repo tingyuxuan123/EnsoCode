@@ -6,6 +6,7 @@ import {
 } from 'node:crypto';
 import { parseAccentColor } from '@shared/accentColor';
 import { isReservedAgentTypeName } from '@shared/builtinAgents';
+import { parseChatTypography } from '@shared/chatTypography';
 import { parseCompactStrategy } from '@shared/compactStrategy';
 import { parseLightPalette } from '@shared/lightPalette';
 import { parseOauthAccountPool } from '@shared/oauthAccountPool';
@@ -84,6 +85,7 @@ const STATE_KEYS = [
   'theme',
   'lightPalette',
   'accentColor',
+  'chatTypography',
   'language',
   'terminalTheme',
   'terminalFontSize',
@@ -949,6 +951,8 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     throw new Error('Invalid state.lightPalette');
   if (state.accentColor !== undefined && parseAccentColor(state.accentColor) === null)
     throw new Error('Invalid state.accentColor');
+  if (state.chatTypography !== undefined && parseChatTypography(state.chatTypography) === null)
+    throw new Error('Invalid state.chatTypography');
   if (state.language !== undefined && !['en', 'zh'].includes(String(state.language)))
     throw new Error('Invalid state.language');
   for (const key of [

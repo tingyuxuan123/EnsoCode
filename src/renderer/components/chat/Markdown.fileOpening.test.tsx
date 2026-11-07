@@ -91,6 +91,34 @@ vi.mock('@/components/ui/dialog', () => {
 
 let root: Root;
 let container: HTMLElement;
+describe('聊天Markdown排版范围', () => {
+  it('正文、各级标题、表格、行内代码分别消费聊天变量，保留原标题baseline', async () => {
+    await render(
+      '# 一级\n\n## 二级\n\n### 三级\n\n#### 四级\n\n##### 五级\n\n###### 六级\n\n正文 `value`\n\n| 表头 |\n| --- |\n| 数据 |'
+    );
+    expect(container.querySelector('[data-chat-typography]')?.getAttribute('style')).toContain(
+      '--chat-body-scale'
+    );
+    for (const level of [1, 2, 3, 4, 5, 6]) {
+      expect(container.querySelector(`h${level} span`)?.getAttribute('style')).toContain(
+        level <= 3 ? '--chat-headings-scale' : '--chat-small-heading-relative-scale'
+      );
+    }
+    expect(container.querySelector('h1')?.className).toContain('text-base');
+    expect(container.querySelector('h3')?.className).toContain('text-sm');
+    expect(container.querySelector('table')?.getAttribute('style')).toContain(
+      '--chat-table-relative-scale'
+    );
+    expect(container.querySelector('th')?.getAttribute('style')).toContain(
+      '--chat-table-header-weight'
+    );
+    expect(container.querySelector('code')?.getAttribute('style')).toContain(
+      '--chat-inline-code-scale'
+    );
+  });
+});
+const context = { conversationId: 'child', projectId: 'project', cwd: 'C:/workspace' };
+
 async function render(text: string, authorized = true) {
   await act(async () =>
     root.render(

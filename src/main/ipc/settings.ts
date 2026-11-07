@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { parseChatTypography } from '@shared/chatTypography';
 import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
   type ContextMenuOpen,
@@ -52,6 +53,7 @@ export const SETTINGS_STATE_FIELDS = [
   'theme',
   'lightPalette',
   'accentColor',
+  'chatTypography',
   'language',
   'terminalTheme',
   'terminalFontSize',
@@ -392,6 +394,11 @@ function scheduleWrite(
     const state = objectRecord(store?.state);
     if (state) {
       let normalized = state;
+      if ('chatTypography' in state) {
+        const typography = parseChatTypography(state.chatTypography);
+        if (!typography) return false;
+        normalized = { ...normalized, chatTypography: typography };
+      }
       if ('fileOpenRules' in state) {
         const rules = parseFileOpenRules(state.fileOpenRules);
         if (!rules) return false;
@@ -650,6 +657,10 @@ export function patchSettingsState(
     targetValue = resolveEditMode(undefined, value);
   } else if (targetField === 'editMode' && !isEditMode(value)) {
     return { ok: false, error: 'Invalid edit mode' };
+  } else if (targetField === 'chatTypography') {
+    const typography = parseChatTypography(value);
+    if (!typography) return { ok: false, error: 'Invalid chat typography' };
+    targetValue = typography;
   } else if (targetField === 'fileOpenRules') {
     const rules = parseFileOpenRules(value);
     if (!rules) return { ok: false, error: 'Invalid file open rules' };

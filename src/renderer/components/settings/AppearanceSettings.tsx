@@ -51,6 +51,7 @@ import {
   type Theme,
   useSettingsStore,
 } from '@/stores/settings';
+import { ChatTypographySettings } from './ChatTypographySettings';
 import { fontWeightOptions } from './constants';
 
 /** 背景图设置区：百分比滑块行（拖动时本地预览，松手才写 store，避免拖动中频繁 IPC） */
@@ -872,6 +873,7 @@ export function AppearanceSettings() {
       </section>
 
       {/* Terminal Section */}
+      <ChatTypographySettings />
       <section className="space-y-[12px] border-t border-line pt-[20px]">
         <div>
           <h4 className="text-[calc(14rem/14)] font-medium">{t('Terminal')}</h4>

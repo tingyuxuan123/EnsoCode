@@ -51,6 +51,11 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 开关轨道/拇指/位移也要同比例缩放，避免大字号裁切和重叠；窗口标题栏等原生几何除外。
 回归见 `src/renderer/styles/typographyScale.test.ts`。
 
+聊天排版由 `shared/chatTypography.ts` 集中定义正文、标题、表格、代码块与行内代码的字号/字重。
+`--chat-*` 变量按原宿主基线等比应用，不能修改根字号；用户正文单独包文本，避免芯片、元信息或
+嵌套 Markdown 二次放大。文件预览显式重置默认变量，聊天设置不影响它。偏好本机容错、导入严格校验，
+回归：`chatTypography.test.ts`、`CodeBlock.test.tsx`、`TimelineRow.actions.test.tsx`。
+
 ## 设置页的数据布局
 
 设置窗口包含固定侧栏，多列统计和排行按内容区的 `@container` 宽度切换，不能只按整个窗口的 `sm`/`md` 断点。长模型名、项目名不能参与表格的最小内容宽度计算：表格使用固定列布局、名称省略并保留完整提示；字号放大后确需更宽时，仅在表格内部滚动，不撑宽页面或覆盖相邻排行。至少验收 720px 窗口、默认 960px 窗口、长名称和大字号。回归见 `usage/RankingTable.test.tsx` 与 `usage/UsageCharts.test.tsx`（相对 `src/renderer/components/settings/`）。

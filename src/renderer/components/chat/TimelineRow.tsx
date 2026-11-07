@@ -2,6 +2,7 @@ import { splitChatReferences } from '@shared/bots/composerRefs';
 import { parseBotInjectedMessage } from '@shared/bots/injectedMessage';
 import { stripBotNotesUpdate } from '@shared/bots/notes';
 import { isBtwIsolationPrompt } from '@shared/btw';
+import { chatBodyTypographyStyle } from '@shared/chatTypography';
 import { toLocalImageUrl } from '@shared/localImage';
 import { type PlanNoteKind, parsePlanMessage, splitPlanPrefix } from '@shared/planMode';
 import { SHELL_FAILURE_DISPLAY } from '@shared/shellFailure';
@@ -355,11 +356,28 @@ function SkillTag({ name, content }: { name: string; content: string }) {
   );
 }
 
+function UserBody({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span
+      data-user-body-typography
+      style={{
+        ...chatBodyTypographyStyle,
+        lineHeight: 'calc(24rem / 14 * var(--chat-body-scale, 1))',
+      }}
+      className={className}
+    >
+      {children}
+    </span>
+  );
+}
+
 function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
   return (
     <div className="max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]">
       {chip}
-      {extra ? <span className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</span> : null}
+      {extra ? (
+        <UserBody className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</UserBody>
+      ) : null}
     </div>
   );
 }
@@ -368,7 +386,30 @@ function SkillInvocation({ text }: { text: string }) {
   const parsed = parseSkillInvocation(text);
   if (!parsed) return null;
   return (
-    <ChipBubble chip={<SkillTag name={name} content={content} />} extra={userMessage?.trim()} />
+    <ChipBubble
+      chip={
+        <span className="inline-flex flex-wrap gap-1">
+          {parsed.commands.map((command, index) => {
+            const block = parsed.blocks.find((item) => `/skill:${item.name}` === command);
+            return block ? (
+              <SkillTag
+                // biome-ignore lint/suspicious/noArrayIndexKey: 同一历史技能命令可重复，出现次序属于不可变消息内容。
+                key={`${index}-${command}`}
+                name={block.name}
+                content={block.content}
+              />
+            ) : (
+              <SlashChip
+                // biome-ignore lint/suspicious/noArrayIndexKey: 重复命令按不可变消息中的出现次序区分。
+                key={`${index}-${command}`}
+                name={command}
+              />
+            );
+          })}
+        </span>
+      }
+      extra={parsed.rest.trim()}
+    />
   );
 }
 
@@ -712,11 +753,13 @@ function UserText({
           <ClipboardList className="h-3 w-3" />
           {t('Plan feedback')}
         </p>
-        <InlineMentionText
-          text={planMessage.feedback}
-          searchQuery={searchQuery}
-          activeNth={activeNth}
-        />
+        <UserBody>
+          <InlineMentionText
+            text={planMessage.feedback}
+            searchQuery={searchQuery}
+            activeNth={activeNth}
+          />
+        </UserBody>
       </div>
     );
   }
@@ -739,17 +782,19 @@ function UserText({
               />
             ))}
             {parsed.rest.trim() ? (
-              <span className="ml-1.5 align-middle">
+              <UserBody className="ml-1.5 align-middle">
                 <InlineMentionText
                   text={parsed.rest.trim()}
                   searchQuery={searchQuery}
                   activeNth={activeNth}
                 />
-              </span>
+              </UserBody>
             ) : null}
           </>
         ) : (
-          <InlineMentionText text={refs.body} searchQuery={searchQuery} activeNth={activeNth} />
+          <UserBody>
+            <InlineMentionText text={refs.body} searchQuery={searchQuery} activeNth={activeNth} />
+          </UserBody>
         )}
         <MentionRefChips files={refs.files} chats={refs.chats} />
       </div>
@@ -764,7 +809,9 @@ function UserText({
         <WorkspaceMigratedBanner note={migrated[1]} />
         {remainder && (
           <div className={cn(USER_BUBBLE, 'whitespace-pre-wrap')}>
-            <InlineMentionText text={remainder} searchQuery={searchQuery} activeNth={activeNth} />
+            <UserBody>
+              <InlineMentionText text={remainder} searchQuery={searchQuery} activeNth={activeNth} />
+            </UserBody>
           </div>
         )}
       </div>
@@ -816,7 +863,9 @@ function UserText({
         <Markdown text={body} searchQuery={searchQuery} activeNth={activeNth} />
       ) : (
         <CollapsibleUserText text={body}>
-          <InlineMentionText text={body} searchQuery={searchQuery} activeNth={activeNth} />
+          <UserBody>
+            <InlineMentionText text={body} searchQuery={searchQuery} activeNth={activeNth} />
+          </UserBody>
         </CollapsibleUserText>
       )}
     </div>

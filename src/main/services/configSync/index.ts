@@ -58,6 +58,7 @@ type ConfigSyncFieldPolicy = { mode: 'portable' } | { mode: 'excluded'; reason: 
 export const CONFIG_SYNC_FIELD_POLICY = {
   theme: { mode: 'portable' },
   lightPalette: { mode: 'portable' },
+  chatTypography: { mode: 'portable' },
   language: { mode: 'portable' },
   terminalTheme: { mode: 'portable' },
   terminalFontSize: { mode: 'portable' },

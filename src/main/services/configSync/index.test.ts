@@ -12,6 +12,8 @@ import fs, {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizeChatTypography } from '@shared/chatTypography';
+import { IPC_CHANNELS } from '@shared/types';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { decodeBundle, encodeBundle, validateBundle } from './codec';
 import { CONFIG_SYNC_FIELD_POLICY, SYNC_FIELDS } from './index';
@@ -62,6 +64,56 @@ afterAll(() => {
 });
 
 describe('config sync sender-bound import flow', () => {
+  it('聊天排版经临时文件导出、预览、提交后保留完整偏好，Main拒绝恶意写入', async () => {
+    const typography = normalizeChatTypography({
+      body: { fontSize: 22, fontWeight: 500 },
+      codeBlock: { fontSize: 16, fontWeight: 600 },
+    });
+    const file = join(userData, 'chat-typography.enso-config');
+    try {
+      expect(settings.patchSettingsState('chatTypography', typography)).toMatchObject({ ok: true });
+      expect(await service.exportConfigToPath({ includeSecrets: false }, file)).toMatchObject({
+        ok: true,
+      });
+      const exported = await decodeBundle(readFileSync(file));
+      expect(exported.state.chatTypography).toEqual(typography);
+      settings.patchSettingsState('chatTypography', normalizeChatTypography(undefined));
+      const opened = await service.openImportForSender(74, file);
+      expect(opened.ok).toBe(true);
+      if (!opened.ok) return;
+      expect(
+        await service.previewImportForSender(74, opened.token, undefined, 'merge')
+      ).toMatchObject({ ok: true });
+      expect(await service.commitImportForSender(74, opened.token, 'merge')).toMatchObject({
+        ok: true,
+      });
+      expect(
+        JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8'))['enso-settings'].state
+          .chatTypography
+      ).toEqual(typography);
+      expect(
+        settings.patchSettingsState('chatTypography', { body: { fontSize: '999vw' } })
+      ).toMatchObject({ ok: false });
+      const { ipcMain } = await import('electron');
+      settings.registerSettingsHandlers();
+      const writeKey = vi
+        .mocked(ipcMain.handle)
+        .mock.calls.find(([channel]) => channel === IPC_CHANNELS.SETTINGS_WRITE_KEY)?.[1];
+      expect(writeKey).toBeDefined();
+      expect(
+        await writeKey?.({ sender: {} } as Electron.IpcMainInvokeEvent, 'enso-settings', {
+          state: { chatTypography: {} },
+        })
+      ).toBe(false);
+      expect(
+        JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8'))['enso-settings'].state
+          .chatTypography
+      ).toEqual(typography);
+    } finally {
+      settings.patchSettingsState('chatTypography', normalizeChatTypography(undefined));
+      settings.flushSettings();
+    }
+  });
   it.each([
     { change: 'same', mode: 'merge' },
     { change: 'changed', mode: 'merge' },

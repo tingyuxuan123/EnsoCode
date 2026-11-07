@@ -26,6 +26,35 @@ const bundle = (state: Partial<ConfigSyncBundle['state']>): ConfigSyncBundle => 
 });
 
 describe('config sync portable preference contract', () => {
+  it('完整聊天排版对象可同步，恶意值、部分对象和额外属性导入时拒绝', () => {
+    const typography = {
+      body: { fontSize: 15, fontWeight: 400 },
+      headings: { fontSize: 18, fontWeight: 600 },
+      table: { fontSize: 15, fontWeight: 400 },
+      codeBlock: { fontSize: 11, fontWeight: 400 },
+      inlineCode: { fontSize: 11, fontWeight: 400 },
+    };
+    expect(SETTINGS_STATE_FIELDS).toContain('chatTypography');
+    expect(SYNC_FIELDS).toContain('chatTypography');
+    expect(CONFIG_SYNC_COMMIT_FIELDS).toContain('chatTypography');
+    const input = { ...bundle({}), state: { ...baseState(), chatTypography: typography } };
+    expect(validateBundle(input).state).toHaveProperty('chatTypography', typography);
+    for (const invalid of [
+      {},
+      { ...typography, body: { fontSize: 'calc(100vw)', fontWeight: 400 } },
+      { ...typography, shell: 99 },
+    ]) {
+      expect(() =>
+        validateBundle({ ...input, state: { ...input.state, chatTypography: invalid } })
+      ).toThrow();
+    }
+    for (const mode of ['merge', 'replace'] as const) {
+      expect(planImport({}, validateBundle(input), mode).state).toHaveProperty(
+        'chatTypography',
+        typography
+      );
+    }
+  });
   it('聊天链接浏览器偏好可本机持久化，但不导出、导入或参与同步提交', () => {
     expect(SETTINGS_STATE_FIELDS).toContain('openLinksInBuiltinBrowser');
     expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('openLinksInBuiltinBrowser', {
