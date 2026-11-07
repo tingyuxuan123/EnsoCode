@@ -5,6 +5,7 @@ import engineIndexHtml from "@design-engine/index.html?raw";
 import enginePackageJson from "@design-engine/package.json?raw";
 import enginePackageLockJson from "@design-engine/package-lock.json?raw";
 import engineBridge from "@design-engine/src/bridge.ts?raw";
+import engineCrossDrive from "@design-engine/src/cross-drive.ts?raw";
 import engineIosStatusBar from "@design-engine/src/ios/StatusBar.tsx?raw";
 import engineMain from "@design-engine/src/main.tsx?raw";
 import enginePreloadable from "@design-engine/src/preloadable.tsx?raw";
@@ -30,6 +31,7 @@ export const ENGINE_FILES: Record<string, string> = {
 	"src/ios/StatusBar.tsx": engineIosStatusBar,
 	"src/preloadable.tsx": enginePreloadable,
 	"src/bridge.ts": engineBridge,
+	"src/cross-drive.ts": engineCrossDrive,
 	"src/round-frame.ts": engineRoundFrame,
 	"src/routes.ts": engineRoutes,
 	"src/status-bar-probe.ts": engineStatusBarProbe,

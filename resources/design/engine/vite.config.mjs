@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { absolutizeCrossDriveImports } from "./src/cross-drive.ts";
 
 const engineRoot = dirname(fileURLToPath(import.meta.url));
 const designRoot = resolve(process.env.VETD_SRC ?? resolve(process.cwd(), "design"));
@@ -59,6 +60,25 @@ function vetdThemeSource() {
 				"/*__VETD_SOURCE__*/",
 				`@source "${designRootPosix}";\n@source not "${designRootPosix}/design.json";`,
 			);
+		},
+	};
+}
+
+/**
+ * Windows: the engine is materialized on C: (userData) while designs often live on
+ * another drive. import.meta.glob then emits `../../…/E:/frames/x.tsx`, which import
+ * analysis cannot resolve — the entry fails to compile and every frame renders blank.
+ * `post` runs after vite's glob expansion and before import analysis.
+ */
+function vetdCrossDriveGlob() {
+	const mainId = `${engineRoot.replaceAll("\\", "/")}/src/main.tsx`;
+	return {
+		name: "vetd-cross-drive-glob",
+		enforce: "post",
+		transform(code, id) {
+			if (id.replaceAll("\\", "/").split("?")[0] !== mainId) return null;
+			const next = absolutizeCrossDriveImports(code);
+			return next === code ? null : { code: next, map: null };
 		},
 	};
 }
@@ -191,6 +211,7 @@ export default defineConfig(({ command }) => ({
 		react(command === "serve" ? { babel: { plugins: [vetdSourceAttr] } } : {}),
 		vetdThemeSource(),
 		vetdWatchDesign(),
+		vetdCrossDriveGlob(),
 		tailwindcss(),
 	],
 	resolve: {
