@@ -69,9 +69,17 @@ function projectIdentity(
 ): string {
   if (project.kind === 'ssh') return `ssh:${project.sshConnectionId}:${project.canonicalPath}`;
   if (project.kind === 'scratch') return `scratch:${project.canonicalPath}`;
-  return project.kind === 'bot-home'
-    ? `bot-home:${project.canonicalPath}`
-    : `local:${project.canonicalPath}`;
+  if (project.kind === 'bot-home') return `bot-home:${project.canonicalPath}`;
+  // realpath on Windows preserves drive-letter casing. Normalize only local keys;
+  // retain component case for case-sensitive Windows directories and all SSH paths.
+  const localPath =
+    process.platform === 'win32'
+      ? path.win32
+          .normalize(project.canonicalPath)
+          .replace(/^[a-z]:/i, (drive) => drive.toLowerCase())
+          .replace(/\\+$/, '')
+      : project.canonicalPath;
+  return `local:${localPath}`;
 }
 
 function normalizeStoredProject(project: ProjectAuthority): { canonicalPath: string } {
@@ -189,7 +197,7 @@ export class SourceAuthorityRegistry {
   ): AuthorityMutationResult<ProjectAuthorityProjection> {
     const canonicalPath = realpathSync(request.path);
     if (!statSync(canonicalPath).isDirectory()) throw new Error('Project path is not a directory.');
-    const existing = this.findActiveByIdentity(`local:${canonicalPath}`);
+    const existing = this.findActiveByIdentity(projectIdentity({ canonicalPath }));
     if (existing) return { accepted: true, value: { ...existing } };
     return this.insertProject({
       projectId: this.randomUuid(),
@@ -629,12 +637,7 @@ export class SourceAuthorityRegistry {
       try {
         const canonicalPath = realpathSync(project.path);
         if (!statSync(canonicalPath).isDirectory()) continue;
-        const existing = [...this.projects.values()].find(
-          (candidate) =>
-            candidate.state === 'active' &&
-            candidate.kind !== 'ssh' &&
-            candidate.canonicalPath === canonicalPath
-        );
+        const existing = this.findActiveByIdentity(projectIdentity({ canonicalPath }));
         if (existing) {
           if (existing.projectId !== project.id) remap.set(project.id, existing.projectId);
           continue;

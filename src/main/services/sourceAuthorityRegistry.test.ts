@@ -63,7 +63,7 @@ describe('SourceAuthorityRegistry', () => {
     symlinkSync(
       path.join(project.canonicalPath, id),
       path.join(project.canonicalPath, other),
-      'dir'
+      'junction'
     );
     expect(create(other).accepted).toBe(false);
     expect(registry.conversation(other)).toBeUndefined();
@@ -78,7 +78,7 @@ describe('SourceAuthorityRegistry', () => {
     const outside = path.join(root, 'outside');
     mkdirSync(outside);
     rmSync(scratch, { recursive: true });
-    symlinkSync(outside, scratch, 'dir');
+    symlinkSync(outside, scratch, 'junction');
     const reloaded = new SourceAuthorityRegistry({ registryFile });
     expect(reloaded.project(project.projectId)?.canonicalPath).toBe(scratch);
     expect(reloaded.ensureScratchProject(scratch)).toBeUndefined();
@@ -533,6 +533,144 @@ describe('SourceAuthorityRegistry', () => {
     ).toHaveLength(1);
   });
 
+  it.skipIf(process.platform !== 'win32')('Windows 本地盘符大小写与分隔符变体复用同一项目', () => {
+    const root = temporary();
+    const projectPath = path.join(root, 'project');
+    mkdirSync(projectPath);
+    const registry = new SourceAuthorityRegistry({
+      registryFile: path.join(root, 'registry.json'),
+    });
+    const created = registry.createProject({ requestId: 'p1', path: projectPath });
+    expect(created.accepted).toBe(true);
+    for (const drive of [projectPath[0].toLowerCase(), projectPath[0].toUpperCase()]) {
+      const again = registry.createProject({
+        requestId: 'p2',
+        path: `${drive}${projectPath.slice(1)}`.replaceAll('\\', '/'),
+      });
+      expect(again).toEqual(created);
+    }
+    expect(registry.projection().projects).toHaveLength(1);
+  });
+
+  it.skipIf(process.platform !== 'win32')(
+    'Windows 重启合并旧本地盘符重复映射，离线目录也保留并重映射完整会话',
+    () => {
+      const root = temporary();
+      // Directory is unavailable at restart: identity must not depend on successful realpath.
+      const projectPath = path.join(root, 'offline-project');
+      const keeperId = '11111111-1111-4111-8111-111111111111';
+      const duplicateId = '22222222-2222-4222-8222-222222222222';
+      const conversationId = '33333333-3333-4333-8333-333333333333';
+      const registryFile = path.join(root, 'registry.json');
+      const conversation = {
+        conversationId,
+        projectId: duplicateId,
+        kind: 'root',
+        lifecycle: 'ready',
+        version: 3,
+        sessionFile: path.join(root, 'history.jsonl'),
+        selection: { providerId: 'p', modelId: 'm', revision: 2 },
+        forkedFrom: { conversationId: keeperId, entryId: 'leaf' },
+      };
+      writeFileSync(
+        registryFile,
+        JSON.stringify({
+          migrationVersion: 1,
+          projects: [
+            { projectId: keeperId, canonicalPath: projectPath, state: 'active', version: 1 },
+            {
+              projectId: duplicateId,
+              canonicalPath: `${projectPath[0].toLowerCase()}${projectPath.slice(1).replaceAll('\\', '/')}///`,
+              state: 'active',
+              version: 2,
+            },
+          ],
+          conversations: [conversation],
+        })
+      );
+      const registry = new SourceAuthorityRegistry({ registryFile });
+      expect(registry.project(keeperId)?.state).toBe('active');
+      expect(registry.project(duplicateId)).toMatchObject({ state: 'removed', version: 3 });
+      expect(registry.conversation(conversationId)).toEqual({
+        ...conversation,
+        projectId: keeperId,
+        version: 4,
+      });
+      const reloaded = new SourceAuthorityRegistry({ registryFile });
+      expect(reloaded.projection()).toEqual(registry.projection());
+    }
+  );
+
+  it.skipIf(process.platform !== 'win32')('Windows 遗留盘符重复只迁入首个项目，会话不丢失', () => {
+    const root = temporary();
+    const keeperId = '11111111-1111-4111-8111-111111111111';
+    const duplicateId = '22222222-2222-4222-8222-222222222222';
+    const conversationId = '33333333-3333-4333-8333-333333333333';
+    const registry = new SourceAuthorityRegistry({
+      registryFile: path.join(root, 'registry.json'),
+      legacySettings: () => ({
+        'enso-settings': {
+          state: {
+            projects: [
+              { id: keeperId, path: root[0].toUpperCase() + root.slice(1) },
+              { id: duplicateId, path: root[0].toLowerCase() + root.slice(1) },
+            ],
+          },
+        },
+        'enso-conversations': {
+          state: { conversations: { [conversationId]: { projectId: duplicateId } } },
+        },
+      }),
+    });
+    expect(registry.project(duplicateId)).toBeUndefined();
+    expect(registry.conversation(conversationId)?.projectId).toBe(keeperId);
+  });
+
+  it('本地离线身份保留路径组件大小写，不能误合并 case-sensitive 目录', () => {
+    const root = temporary();
+    const registryFile = path.join(root, 'registry.json');
+    const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+    // Missing directories isolate lexical identity from realpath's normal case resolution.
+    const projects = ['offline-project', 'Offline-Project'].map((name, i) => ({
+      projectId: ids[i],
+      canonicalPath: path.join(root, name),
+      state: 'active',
+      version: 1,
+    }));
+    writeFileSync(
+      registryFile,
+      JSON.stringify({ migrationVersion: 1, projects, conversations: [] })
+    );
+    const registry = new SourceAuthorityRegistry({ registryFile });
+    expect(registry.projection().projects).toEqual(projects);
+    expect(new SourceAuthorityRegistry({ registryFile }).projection().projects).toEqual(projects);
+  });
+
+  it('SSH 大小写不同的远端路径在创建和重启后仍是不同项目', () => {
+    const root = temporary();
+    const registryFile = path.join(root, 'registry.json');
+    const resolveSshConnection = () => ({ host: 'host' });
+    const registry = new SourceAuthorityRegistry({ registryFile, resolveSshConnection });
+    const upper = registry.createProject({
+      requestId: 'p1',
+      path: '/srv/App',
+      kind: 'ssh',
+      sshConnectionId: 'connection',
+    });
+    const lower = registry.createProject({
+      requestId: 'p2',
+      path: '/srv/app',
+      kind: 'ssh',
+      sshConnectionId: 'connection',
+    });
+    expect(upper.accepted && lower.accepted).toBe(true);
+    if (!upper.accepted || !lower.accepted) return;
+    expect(upper.value.projectId).not.toBe(lower.value.projectId);
+    const reloaded = new SourceAuthorityRegistry({ registryFile, resolveSshConnection });
+    expect(reloaded.project(upper.value.projectId)?.state).toBe('active');
+    expect(reloaded.project(lower.value.projectId)?.state).toBe('active');
+  });
+
   it('merges persisted local duplicates onto the earliest project and remaps conversations', () => {
     const root = temporary();
     const projectPath = path.join(root, 'project');
@@ -596,7 +734,7 @@ describe('SourceAuthorityRegistry', () => {
     const projectPath = path.join(root, 'project');
     const linkPath = path.join(root, 'alias');
     mkdirSync(projectPath);
-    symlinkSync(projectPath, linkPath);
+    symlinkSync(projectPath, linkPath, 'junction');
     const registryFile = path.join(root, 'registry.json');
     writeFileSync(
       registryFile,
