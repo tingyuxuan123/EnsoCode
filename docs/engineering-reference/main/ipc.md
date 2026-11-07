@@ -139,6 +139,10 @@ null 删除覆盖字段；留空不改变 pi 默认。设置页标明新启动�
 读最新盘面后仅修改目标字段并原子替换；坏 JSON 不覆盖，锁/IO 失败返回结构化结果。
 回归：`compaction.test.ts`、`piCompactionSettings.test.ts`、`compactionSettings.test.ts`。
 
+## 设置凭证投影
+
+`settings:read`、本地 provider/MCP 导入确认不得返回已保存或扫描到的凭证明文。`settingsSecrets.ts` 在 Main 生成不透明引用，回写时按条目、字段、连接目标还原；未修改的配置不覆盖真实值，更换端点需要重新录入。导入引用短时有效，成功保存后绑定条目，删除凭证后不可重放。`settings.json` 仍存既有权威配置格式，不写入这些进程内引用。新录入的值只经写入或连接测试发送给 Main，写入方也接收脱敏刷新。
+
 ## preload 的构建约束
 
 preload 产物是 **ESM**（`out/preload/index.mjs`），窗口配置里的路径必须与之一致：

@@ -1,5 +1,6 @@
 import { commitPendingModel, mergeFetchedModels } from '@shared/modelEntry';
 import { baseUrlAfterApiChange, isClassifierOnlyProvider } from '@shared/providerCatalog';
+import { isSecretReference } from '@shared/secretReference';
 import type { ModelEntry, ModelMeta, ModelProvider } from '@shared/types';
 import { MODEL_API_KINDS } from '@shared/types';
 import { CircleCheck, CircleX, Eye, EyeOff, ListPlus, Loader2, Plus, Zap } from 'lucide-react';
@@ -67,7 +68,9 @@ export function ProviderApiForm({
   const { t } = useI18n();
   const [name, setName] = React.useState(initialValue.name);
   const [api, setApi] = React.useState(initialValue.api);
-  const [apiKey, setApiKey] = React.useState(initialValue.apiKey);
+  const storedKey = isSecretReference(initialValue.apiKey);
+  const [apiKey, setApiKey] = React.useState(storedKey ? '' : initialValue.apiKey);
+  const [keyEdited, setKeyEdited] = React.useState(false);
   const [baseUrl, setBaseUrl] = React.useState(initialValue.baseUrl);
   const [models, setModels] = React.useState<ModelEntry[]>(initialValue.models);
   const [newModel, setNewModel] = React.useState('');
@@ -134,7 +137,12 @@ export function ProviderApiForm({
     );
   };
 
-  const apiConfig = { api, apiKey: apiKey.trim(), baseUrl: baseUrl.trim() };
+  const keyValue = storedKey && !keyEdited ? initialValue.apiKey : apiKey.trim();
+  const needsReentry =
+    storedKey &&
+    !keyEdited &&
+    (api !== initialValue.api || baseUrl.trim() !== initialValue.baseUrl.trim());
+  const apiConfig = { api, apiKey: keyValue, baseUrl: baseUrl.trim() };
 
   const handleFetchModels = async () => {
     setBusy('fetch');
@@ -267,7 +275,11 @@ export function ProviderApiForm({
                 <Input
                   type={showKey ? 'text' : 'password'}
                   value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
+                  onChange={(event) => {
+                    setKeyEdited(true);
+                    setApiKey(event.target.value);
+                  }}
+                  placeholder={storedKey && !keyEdited ? '••••••••' : undefined}
                   className="[&_input]:pr-10"
                 />
                 <button
@@ -278,6 +290,27 @@ export function ProviderApiForm({
                   {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {storedKey && !keyEdited && (
+                <div className="flex w-full items-center justify-between gap-2 text-muted-foreground text-xs">
+                  <span>{t('Stored credentials stay on this computer.')}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setKeyEdited(true);
+                      setApiKey('');
+                    }}
+                  >
+                    {t('Clear')}
+                  </Button>
+                </div>
+              )}
+              {needsReentry && (
+                <p className="text-destructive text-xs">
+                  {t('Re-enter stored credentials after changing the connection.')}
+                </p>
+              )}
             </Field>
           </>
         )}
@@ -301,7 +334,7 @@ export function ProviderApiForm({
                 variant="ghost"
                 size="sm"
                 className="h-6 gap-1 px-2 text-[calc(12rem/14)]"
-                disabled={busy !== null}
+                disabled={busy !== null || needsReentry}
                 onClick={handleFetchModels}
               >
                 {busy === 'fetch' ? (
@@ -412,7 +445,7 @@ export function ProviderApiForm({
               type="button"
               variant="outline"
               size="sm"
-              disabled={busy !== null}
+              disabled={busy !== null || needsReentry}
               onClick={handleTest}
             >
               {busy === 'test' ? (
@@ -467,12 +500,12 @@ export function ProviderApiForm({
           </Button>
           <Button
             size="sm"
-            disabled={saveDisabled || !name.trim()}
+            disabled={saveDisabled || !name.trim() || needsReentry}
             onClick={() =>
               onSave({
                 name: name.trim(),
                 api,
-                apiKey: apiKey.trim(),
+                apiKey: keyValue,
                 baseUrl: baseUrl.trim(),
                 models: commitPendingModel(models, newModel),
               })

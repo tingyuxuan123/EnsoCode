@@ -4,7 +4,7 @@ import {
   parseStartOauthWizardRequest,
 } from '@shared/capabilities/types';
 import type { ModelMetaQuery, ProviderApiConfig } from '@shared/types';
-import { IPC_CHANNELS } from '@shared/types';
+import { IPC_CHANNELS, MODEL_API_KINDS } from '@shared/types';
 import { ipcMain } from 'electron';
 import { listClassifierModels } from '../services/classifierModels';
 import { queryModelMeta } from '../services/modelMeta';
@@ -21,6 +21,8 @@ import {
 } from '../services/oauthProviders';
 import { listModels, testProvider } from '../services/providerApi';
 import { collectImport, scanLocalProviders } from '../services/providerScan';
+import { settingsSecrets } from '../services/settingsSecrets';
+import { readSettings } from './settings';
 
 function toApiConfig(input: unknown): ProviderApiConfig | null {
   if (!input || typeof input !== 'object') return null;
@@ -28,7 +30,17 @@ function toApiConfig(input: unknown): ProviderApiConfig | null {
   if (typeof api !== 'string' || typeof apiKey !== 'string' || typeof baseUrl !== 'string') {
     return null;
   }
-  return { api: api as ProviderApiConfig['api'], apiKey, baseUrl };
+  const kind = MODEL_API_KINDS.find((value) => value === api);
+  if (!kind) return null;
+  try {
+    const packed = readSettings()?.['enso-settings'];
+    const state = packed && typeof packed === 'object' && 'state' in packed ? packed.state : null;
+    const providers =
+      state && typeof state === 'object' && 'providers' in state ? state.providers : [];
+    return settingsSecrets.apiConfig({ api: kind, apiKey, baseUrl }, providers);
+  } catch {
+    return null;
+  }
 }
 
 // 当前最大订阅 catalog 为 155 项；256 项留出增长余量，同时把单次 IPC 的字符串载荷
@@ -75,7 +87,7 @@ export function registerProviderHandlers(): void {
       return collectImport(
         scanId,
         candidateIds.filter((id): id is string => typeof id === 'string')
-      );
+      ).map((provider) => settingsSecrets.provider(provider, true));
     }
   );
 

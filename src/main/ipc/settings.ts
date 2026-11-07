@@ -30,6 +30,7 @@ import {
   parseTraySleepPolicy,
   type TraySleepPolicy,
 } from '../services/pairPowerKeepAlive';
+import { settingsSecrets } from '../services/settingsSecrets';
 import { deleteSystemPrompt, isSystemPromptId } from '../services/systemPromptStore';
 import { getWindowWebContents, sendToWindow } from '../windows/createAppWindow';
 
@@ -868,7 +869,7 @@ export function removeProjectAndConversations(
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.SETTINGS_READ, async () => {
-    return readSettings();
+    return settingsSecrets.project(readSettings());
   });
 
   // 按键合并写：只更新单个顶层键,避免多 store 并发 read-modify-write 互相覆盖
@@ -878,12 +879,36 @@ export function registerSettingsHandlers(): void {
     const next = { ...current };
     if (value === undefined) delete next[name];
     else next[name] = value;
-    return scheduleWrite(next, event.sender);
+    if (name !== 'enso-settings') return scheduleWrite(next, event.sender);
+    try {
+      const resolved = settingsSecrets.restoreSettings(next, current);
+      const written = scheduleWrite(
+        resolved,
+        event.sender,
+        settingsSecrets.needsRefresh(next) ? 'all-renderers' : 'exclude-sender'
+      );
+      if (written) settingsSecrets.didWrite(resolved, next);
+      return written;
+    } catch {
+      return false;
+    }
   });
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_WRITE, async (event, data: unknown) => {
     const record = objectRecord(data);
-    return record ? scheduleWrite(record, event.sender) : false;
+    try {
+      if (!record) return false;
+      const resolved = settingsSecrets.restoreSettings(record, readSettings());
+      const written = scheduleWrite(
+        resolved,
+        event.sender,
+        settingsSecrets.needsRefresh(record) ? 'all-renderers' : 'exclude-sender'
+      );
+      if (written) settingsSecrets.didWrite(resolved, record);
+      return written;
+    } catch {
+      return false;
+    }
   });
 
   app.on('before-quit', () => {

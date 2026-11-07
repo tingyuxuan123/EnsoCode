@@ -6,6 +6,7 @@ import {
   MAX_MCP_CONNECT_TIMEOUT_SEC,
   parseMcpTimeoutSec,
 } from '@shared/mcpTimeout';
+import { isSecretReference } from '@shared/secretReference';
 import type { McpServerEntry, McpTransport } from '@shared/types';
 import { MCP_TRANSPORTS } from '@shared/types';
 import * as React from 'react';
@@ -247,6 +248,21 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
     Boolean(name.trim()) && (transport === 'stdio' ? Boolean(command.trim()) : Boolean(url.trim()));
   const canSave = mode === 'json' ? Boolean(jsonText.trim()) : formCanSave;
 
+  const validStoredDestination = (
+    next: Pick<McpServerEntry, 'transport' | 'command' | 'args' | 'url' | 'env' | 'headers'>
+  ) => {
+    const identity = (value: typeof next) =>
+      JSON.stringify([value.transport, value.command, value.args ?? [], value.url]);
+    const retained = [...Object.values(next.env ?? {}), ...Object.values(next.headers ?? {})].some(
+      isSecretReference
+    );
+    if (retained && (server === 'new' || !server || identity(server) !== identity(next))) {
+      setError(t('Re-enter stored credentials after changing the connection.'));
+      return false;
+    }
+    return true;
+  };
+
   const handleSave = () => {
     if (!server || !canSave) return;
 
@@ -260,6 +276,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
         setError(t('JSON must describe a single MCP server'));
         return;
       }
+      if (!parsed.servers.every(validStoredDestination)) return;
       if (creating) {
         const single = parsed.servers.length === 1;
         const added = addMcpServers(
@@ -308,6 +325,7 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
             ...serverOptions(),
           };
 
+    if (!validStoredDestination(data)) return;
     if (creating) {
       const added = addMcpServers([
         { ...data, id: crypto.randomUUID(), source: 'Manual', enabled: true },
@@ -330,6 +348,15 @@ export function McpEditDialog({ server, onClose }: McpEditDialogProps) {
         </DialogHeader>
 
         <DialogPanel className="space-y-4">
+          {server &&
+            server !== 'new' &&
+            [...Object.values(server.env ?? {}), ...Object.values(server.headers ?? {})].some(
+              isSecretReference
+            ) && (
+              <p className="text-muted-foreground text-xs">
+                {t('Stored credentials stay on this computer.')}
+              </p>
+            )}
           <Tabs value={mode} onValueChange={(value) => switchMode(value as EditorMode)}>
             <TabsList>
               <TabsTab value="form">{t('Form')}</TabsTab>

@@ -16,6 +16,10 @@ const mocks = vi.hoisted(() => ({
   respondOauthPrompt: vi.fn(() => true),
   cancelOauthLogin: vi.fn(() => true),
   reopenOauthLogin: vi.fn(() => true),
+  listModels: vi.fn(async () => ({ ok: true, models: [] })),
+  testProvider: vi.fn(async () => ({ ok: true, latencyMs: 1, message: '' })),
+  settings: null as Record<string, unknown> | null,
+  collected: [] as Array<{ candidateId: string; api: string; apiKey: string; baseUrl: string }>,
 }));
 
 vi.mock('electron', () => ({
@@ -39,12 +43,17 @@ vi.mock('../services/oauthProviders', () => ({
   respondOauthPrompt: mocks.respondOauthPrompt,
   startOauthLogin: mocks.startOauthLogin,
 }));
-vi.mock('../services/providerApi', () => ({ listModels: vi.fn(), testProvider: vi.fn() }));
+vi.mock('../services/providerApi', () => ({
+  listModels: mocks.listModels,
+  testProvider: mocks.testProvider,
+}));
+vi.mock('./settings', () => ({ readSettings: () => mocks.settings }));
 vi.mock('../services/providerScan', () => ({
-  collectImport: vi.fn(),
+  collectImport: () => mocks.collected,
   scanLocalProviders: vi.fn(),
 }));
 
+import { settingsSecrets } from '../services/settingsSecrets';
 import { registerProviderHandlers } from './providers';
 
 function modelMetaHandler(): (...args: unknown[]) => unknown {
@@ -58,12 +67,60 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  mocks.settings = null;
+  mocks.collected = [];
+  mocks.listModels.mockClear();
+  mocks.testProvider.mockClear();
   mocks.queryModelMeta.mockClear();
   mocks.readStoredOauthCredentialKeys.mockClear();
   mocks.startOauthLogin.mockClear();
   mocks.respondOauthPrompt.mockClear();
   mocks.cancelOauthLogin.mockClear();
   mocks.reopenOauthLogin.mockClear();
+});
+
+describe('provider credential handles', () => {
+  it('Main 解引用已保存凭证做连接测试，外部端点不能借用该 key', async () => {
+    const provider = {
+      id: 'p',
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.example',
+      apiKey: 'private-provider-key',
+    };
+    mocks.settings = { 'enso-settings': { state: { providers: [provider] } } };
+    const config = settingsSecrets.provider(provider);
+    const handler = mocks.handlers.get(IPC_CHANNELS.PROVIDERS_TEST)!;
+    expect(await handler({}, config, 'model')).toMatchObject({ ok: true });
+    expect(mocks.testProvider).toHaveBeenCalledWith(
+      { api: provider.api, baseUrl: provider.baseUrl, apiKey: provider.apiKey },
+      'model'
+    );
+    expect(
+      await handler({}, { ...config, baseUrl: 'https://different.example' }, 'model')
+    ).toMatchObject({ ok: false });
+    expect(mocks.testProvider).toHaveBeenCalledTimes(1);
+  });
+  it('确认导入 IPC 不返回明文凭证，仍可在 Main 拉取模型', async () => {
+    mocks.collected = [
+      {
+        candidateId: 'c',
+        api: 'anthropic-messages',
+        baseUrl: 'https://api.example',
+        apiKey: 'private-import-key',
+      },
+    ];
+    const handler = mocks.handlers.get(IPC_CHANNELS.PROVIDERS_COLLECT_IMPORT)!;
+    const result = (await handler({}, 'scan', ['c'])) as typeof mocks.collected;
+    expect(JSON.stringify(result)).not.toContain('private-import-key');
+    expect(
+      await mocks.handlers.get(IPC_CHANNELS.PROVIDERS_LIST_MODELS)!({}, result[0])
+    ).toMatchObject({ ok: true });
+    expect(mocks.listModels).toHaveBeenCalledWith({
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.example',
+      apiKey: 'private-import-key',
+    });
+  });
 });
 
 describe('providers:model-meta query limits', () => {

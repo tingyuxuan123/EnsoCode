@@ -156,6 +156,24 @@ async function mount(server: McpServerEntry | 'new') {
 }
 
 describe.each(['http', 'sse'] as const)('MCP %s 请求头编辑契约', (transport) => {
+  it('更换地址时拒绝复用已保存的请求头引用，要求重新输入而不是静默保存失败', async () => {
+    const stored = {
+      ...fixture(transport),
+      headers: { Authorization: 'enso-secret:11111111-1111-4111-8111-111111111111' },
+    };
+    const ui = await mount(stored);
+    await ui.click('JSON');
+    await ui.json({
+      type: transport,
+      url: 'https://different.example/service',
+      headers: stored.headers,
+    });
+    await ui.click('Save');
+    expect(harness.updateMcpServer).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(
+      'Re-enter stored credentials after changing the connection.'
+    );
+  });
   it('打开 JSON 模式回显已有请求头', async () => {
     const ui = await mount(fixture(transport));
     await ui.click('JSON');

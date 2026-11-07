@@ -36,6 +36,7 @@ import {
 } from '../services/instructionStore';
 import { listMcpOccupancyTools } from '../services/mcpOccupancy';
 import { getMcpToolCatalog } from '../services/mcpToolCatalog';
+import { settingsSecrets } from '../services/settingsSecrets';
 import { readSystemPrompt, writeSystemPrompt } from '../services/systemPromptStore';
 import { getSourceAuthorityRegistry } from './agent';
 import { readSettings } from './settings';
@@ -93,7 +94,7 @@ export function registerAssetHandlers(): void {
       return collectAssetImport(
         scanId,
         candidateIds.filter((id): id is string => typeof id === 'string')
-      );
+      ).map((asset) => (asset.kind === 'mcp' ? settingsSecrets.mcp(asset, true) : asset));
     }
   );
 
