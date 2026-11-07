@@ -13,7 +13,7 @@ import type {
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as SettingsModule from '../settings';
 import type * as SessionsModule from './index';
-import { MESSAGE_CACHE_TTL_MS } from './messageCache';
+import { chatSurfaceBusy, chatTimelineActivity, MESSAGE_CACHE_TTL_MS } from './messageCache';
 
 let onCapabilityAsk: ((request: CapabilityAskRequest) => void) | undefined;
 let onAgentEvent: ((event: RendererAgentEvent) => void) | undefined;
@@ -3645,6 +3645,48 @@ describe('parent history tail hydrate', () => {
     vi.useRealTimers();
   });
 
+  it('从空草稿派发 Enso 时，主会话不切换也会读空尾窗并结束加载', async () => {
+    const id = 'enso-config-parent';
+    const generation = '11111111-1111-4111-8111-111111111111';
+    const store = sessionsModule.useSessionsStore;
+    store.setState((state) => ({
+      activeId: id,
+      conversations: {
+        ...state.conversations,
+        [id]: {
+          ...state.conversations.parent,
+          id,
+          generation,
+          lastSeq: 0,
+          status: 'idle',
+          started: false,
+          spawning: false,
+          sessionFile: undefined,
+          activeTabId: undefined,
+          historyLoadAttempted: undefined,
+          messages: [],
+        },
+      },
+    }));
+    readParentHistoryTail.mockResolvedValueOnce({ ok: true, messages: [], baseIndex: 0 });
+    onAgentEvent?.({
+      type: 'parent-ready',
+      identity: { sessionId: id, generation },
+      seq: 1,
+      sessionFile: '/tmp/enso-config-parent.jsonl',
+      model: { providerId: 'provider-1', modelId: 'model-1' },
+    });
+
+    expect(chatTimelineActivity(store.getState().conversations[id])).toBe('loading');
+    await vi.waitFor(() => {
+      const parent = store.getState().conversations[id];
+      expect(chatTimelineActivity(parent)).toBeNull();
+      expect(chatSurfaceBusy(parent)).toBe(false);
+    });
+    expect(store.getState().activeId).toBe(id);
+    expect(readParentHistoryTail.mock.calls.filter(([target]) => target === id)).toHaveLength(1);
+  });
+
   it('spawn 中仍能上屏尾巴，且不写 historyOnly', async () => {
     let resolveTail: ((value: ParentHistoryTailResult) => void) | undefined;
     readParentHistoryTail.mockImplementation(
@@ -3663,6 +3705,7 @@ describe('parent history tail hydrate', () => {
           spawning: false,
           sessionFile: '/tmp/cold.jsonl',
           messages: [],
+          historyLoadAttempted: undefined,
           generation: 'stale-generation',
         },
       },
@@ -3836,6 +3879,7 @@ describe('parent history tail hydrate', () => {
           status: 'idle',
           sessionFile: '/tmp/empty.jsonl',
           messages: [],
+          historyLoadAttempted: undefined,
         },
       },
       order: ['parent', 'empty'],

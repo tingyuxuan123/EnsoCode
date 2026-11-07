@@ -1824,6 +1824,15 @@ export const useSessionsStore = create<SessionsState>()(
               : {}),
           });
         });
+        if (event.type === 'parent-ready') {
+          // 派发 Enso 等一次性任务会就地启动主会话，但不会给主会话写入普通消息。
+          // 当前视图没切换，仍需读一次尾窗；确认历史为空后才能解除加载和输入忙碌态。
+          const state = get();
+          const parent = state.conversations[id];
+          if (parent && viewedFromState(state) === id && needsHistoryHydration(parent)) {
+            void hydrateParentHistoryTail(id);
+          }
+        }
         if (event.type === 'parent-rejected' && event.reason.startsWith(STALE_SESSION_ERROR)) {
           void recoverStaleSession(id, event.reason);
         }

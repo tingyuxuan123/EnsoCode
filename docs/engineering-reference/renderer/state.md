@@ -143,6 +143,10 @@ expect(store.getState().conversations.ended.messages).toHaveLength(before);
 [big-question/optimistic-echo-blocks-snapshot.md](../big-question/optimistic-echo-blocks-snapshot.md)）。
 同理，任何「本地是否已有数据、要不要去拉」的判断都要过滤 `optimistic` 条目。
 
+从空草稿派发 Enso 等一次性任务时，主会话会就地启动，普通消息却只写入 child。
+当前主会话收到 `parent-ready` 后，如果仍缺权威正文，要主动补读只读尾窗，不能只依赖切换会话触发。
+空尾窗也必须结束加载，不能让已完成的派发继续显示「加载中」。回归：`sessions/index.test.ts`。
+
 ## 乐观回显的收回：文本匹配 + 投递回执
 
 回显先按文本匹配被同文 user upsert 消费（`sameUserText`，已覆盖 `<role>` 前缀、
