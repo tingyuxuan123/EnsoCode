@@ -214,7 +214,8 @@ export function BotChatView({
   const livePending = live ? pending.filter((item) => item.conversationId === live.id) : [];
   const liveTitle = live?.title ?? liveBot?.name ?? t('Deleted member');
   const liveQueued =
-    live && delegations.find((item) => item.childConversationId === live.id)?.state === 'queued';
+    live &&
+    delegations.some((item) => item.childConversationId === live.id && item.state === 'queued');
 
   /**
    * 委派「查看过程」与成员回复共用此回调：排队/进行中的委派子会话看实时投影
@@ -230,6 +231,21 @@ export function BotChatView({
       setHistory({ id: conversationId, title });
     }
   }, []);
+
+  /** 忙碌条 / 正在回复入口也按委派状态分流；普通成员群会话首次查看时补载正文。 */
+  const openLiveConversation = useCallback(
+    (conversationId: string, botId: string) => {
+      const state = useBotsStore.getState();
+      const title = byId.get(botId)?.name ?? t('Deleted member');
+      if (state.delegations.some((item) => item.childConversationId === conversationId)) {
+        openConversation(conversationId, title);
+        return;
+      }
+      if (!state.sessions[conversationId]) void state.trackSession(conversationId);
+      setLive({ id: conversationId, botId, title });
+    },
+    [byId, openConversation, t]
+  );
 
   useEffect(() => {
     markRead(summary.key, readMark);
@@ -399,9 +415,7 @@ export function BotChatView({
             onLoadAround={(seq) => useBotsStore.getState().loadAround(chat.id, seq)}
             onJumpLatest={() => void useBotsStore.getState().jumpLatest(chat.id)}
             onOpenConversation={openConversation}
-            onOpenLive={(id, botId) =>
-              setLive({ id, botId, title: byId.get(botId)?.name ?? t('Deleted member') })
-            }
+            onOpenLive={openLiveConversation}
           />
         )}
 
@@ -419,9 +433,7 @@ export function BotChatView({
                 chatId={chat.id}
                 memberIds={chat.members}
                 bots={byId}
-                onOpenLive={(id, botId) =>
-                  setLive({ id, botId, title: byId.get(botId)?.name ?? t('Deleted member') })
-                }
+                onOpenLive={openLiveConversation}
               />
             )}
             <BotComposer

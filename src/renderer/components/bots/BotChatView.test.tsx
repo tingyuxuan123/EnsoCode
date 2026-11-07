@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { BotChat } from '@shared/types/bot';
+import type { BotChat, BotProfile, Delegation } from '@shared/types/bot';
 import { act, createElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -8,11 +8,11 @@ import { BotChatView } from './BotChatView';
 
 const h = vi.hoisted(() => ({
   state: {
-    bots: [],
+    bots: [] as BotProfile[],
     chats: [],
-    sessions: {},
+    sessions: {} as Record<string, unknown>,
     queue: [],
-    delegations: [],
+    delegations: [] as Delegation[],
     timelines: {},
     runtime: {},
     reads: {},
@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
     loadLatest: vi.fn(),
     refreshRuntime: vi.fn(),
     setPanelTab: vi.fn(),
+    trackSession: vi.fn(),
   },
   canvas: { target: null as BotDesignTarget | null, workspaceKey: null as string | null },
   settings: {
@@ -59,10 +60,10 @@ vi.mock('@/stores/bots/selectors', () => ({
   pendingItems: () => [],
 }));
 vi.mock('@/stores/bots/unread', () => ({ groupReadMark: () => undefined }));
-vi.mock('@/stores/bots/delegations', () => ({
+vi.mock('@/stores/bots/delegations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/stores/bots/delegations')>()),
   activeDelegations: () => [],
   pendingOwners: () => new Map(),
-  delegationLiveTarget: () => null,
 }));
 vi.mock('framer-motion', () => ({
   motion: {
@@ -80,17 +81,39 @@ vi.mock('./BotAvatar', () => ({ BotAvatar: () => null, GroupAvatar: () => null }
 vi.mock('./BotBrowserPanel', () => ({ BotBrowserPanel: () => null }));
 vi.mock('./BotComposer', () => ({ BotComposer: () => null }));
 vi.mock('./BotLiveStatus', () => ({ BotLiveStatus: () => null }));
-vi.mock('./BotPresence', () => ({ MemberBusyBar: () => null }));
+vi.mock('./BotPresence', () => ({
+  MemberBusyBar: ({
+    onOpenLive,
+  }: {
+    onOpenLive: (conversationId: string, botId: string) => void;
+  }) =>
+    createElement(
+      'button',
+      { type: 'button', 'data-busy-member': true, onClick: () => onOpenLive('child', 'worker') },
+      '阿全 · 排队中 · #15 续做'
+    ),
+}));
 vi.mock('./BotProfilePanel', () => ({ BotProfilePanel: () => null }));
 vi.mock('./DelegationCard', () => ({ DelegationCard: () => null }));
 vi.mock('./GroupBoard', () => ({ TaskBoard: () => null }));
 vi.mock('./GroupInfoPanel', () => ({ GroupInfoPanel: () => null }));
 vi.mock('./GroupTimeline', () => ({ GroupTimeline: () => null }));
 vi.mock('./LiveSessionTimeline', () => ({
-  LiveSessionDialog: () => null,
+  LiveSessionDialog: ({
+    conversationId,
+    emptyTitle,
+  }: {
+    conversationId: string | null;
+    emptyTitle?: string;
+  }) =>
+    conversationId &&
+    createElement('div', { 'data-live-session': conversationId, 'data-empty-title': emptyTitle }),
   LiveSessionTimeline: () => null,
 }));
-vi.mock('./SessionHistoryDialog', () => ({ SessionHistoryDialog: () => null }));
+vi.mock('./SessionHistoryDialog', () => ({
+  SessionHistoryDialog: ({ conversationId }: { conversationId: string | null }) =>
+    conversationId && createElement('div', { 'data-history-session': conversationId }),
+}));
 vi.mock('./SessionSwitcher', () => ({ SessionSwitcher: () => null }));
 vi.mock('./SilenceNote', () => ({ SilenceNote: () => null }));
 vi.mock('./ThreadSwitcher', () => ({ ThreadSwitcher: () => null }));
@@ -121,6 +144,9 @@ const render = () => act(async () => root.render(createElement(BotChatView, { ch
 beforeEach(() => {
   vi.clearAllMocks();
   h.state.panelTab = 'info';
+  h.state.bots = [];
+  h.state.sessions = {};
+  h.state.delegations = [];
   h.settings.designEnabled = true;
   h.canvas.target = null;
   h.canvas.workspaceKey = null;
@@ -173,4 +199,82 @@ it('hides the entry and falls back to info only when design is disabled', async 
     'Group info'
   );
   expect(container.textContent).not.toContain('设计稿');
+});
+
+const delegation = (patch: Partial<Delegation> = {}): Delegation => ({
+  id: 'run',
+  parentConversationId: 'parent',
+  parentBotId: 'boss',
+  targetBotId: 'worker',
+  chatId: chat.id,
+  task: '#15 续做',
+  context: '',
+  childConversationId: 'child',
+  state: 'queued',
+  depth: 1,
+  createdAt: 100,
+  ...patch,
+});
+
+const clickBusyMember = () =>
+  act(async () => container.querySelector<HTMLButtonElement>('[data-busy-member]')?.click());
+
+it.each(['queued', 'running'] as const)(
+  '底部打开尚未缓存的 %s 委派时补载过程，而不是展示空白新对话',
+  async (state) => {
+    h.state.delegations = [delegation({ state })];
+    await render();
+    await clickBusyMember();
+    expect(container.querySelector('[data-live-session]')?.getAttribute('data-live-session')).toBe(
+      'child'
+    );
+    expect(h.state.trackSession).toHaveBeenCalledWith('child');
+    expect(container.querySelector('[data-history-session]')).toBeNull();
+  }
+);
+
+it.each(['failed', 'completed', 'canceled', 'blocked'] as const)(
+  '底部打开已 %s 的委派时与任务看板一样读取历史过程',
+  async (state) => {
+    h.state.delegations = [delegation({ state })];
+    await render();
+    await clickBusyMember();
+    expect(
+      container.querySelector('[data-history-session]')?.getAttribute('data-history-session')
+    ).toBe('child');
+    expect(container.querySelector('[data-live-session]')).toBeNull();
+    expect(h.state.trackSession).not.toHaveBeenCalled();
+  }
+);
+
+it('成员普通群会话仍打开实时过程，首次查看时补载正文', async () => {
+  await render();
+  await clickBusyMember();
+  expect(container.querySelector('[data-live-session]')?.getAttribute('data-live-session')).toBe(
+    'child'
+  );
+  expect(h.state.trackSession).toHaveBeenCalledWith('child');
+});
+
+it('已缓存的委派过程不重新初始化会话投影', async () => {
+  h.state.delegations = [delegation({ state: 'running' })];
+  h.state.sessions = { child: { messages: ['已有过程'] } };
+  await render();
+  await clickBusyMember();
+  expect(container.querySelector('[data-live-session]')?.getAttribute('data-live-session')).toBe(
+    'child'
+  );
+  expect(h.state.trackSession).not.toHaveBeenCalled();
+});
+
+it('worker 退出后续做复用原会话时，按当前排队执行显示占位而非新对话提示', async () => {
+  h.state.delegations = [
+    delegation({ id: 'old', state: 'failed', createdAt: 50, finishedAt: 90 }),
+    delegation(),
+  ];
+  await render();
+  await clickBusyMember();
+  expect(container.querySelector('[data-live-session]')?.getAttribute('data-empty-title')).toBe(
+    'Queued and has not started yet'
+  );
 });
