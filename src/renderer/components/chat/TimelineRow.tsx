@@ -106,6 +106,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { ApprovalReviewBar } from './ApprovalReviewBar';
 import { AskUserResult } from './AskUserResult';
+import { parseAgentNotification, type SubagentNotice } from './agentNotification';
 import { backgroundNotificationDisplay } from './backgroundNotification';
 import { CodeBlock } from './CodeBlock';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -604,6 +605,42 @@ function CollapsibleUserText({ text, children }: { text: string; children: React
   );
 }
 
+/** 子代理报告沿用正文 Markdown；内部调用提示不占报告区，用量另列底栏。 */
+function SubagentNotification({ notices }: { notices: SubagentNotice[] }) {
+  const { t } = useI18n();
+  return (
+    <div className="w-full min-w-0 space-y-2">
+      {notices.map((notice) => (
+        <div
+          key={notice.header}
+          data-subagent-report
+          className="min-w-0 rounded-lg border border-dashed border-border/60 px-3 py-2"
+        >
+          <div className="mb-2 flex items-start gap-2 text-[calc(11rem/14)] text-muted-foreground">
+            <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 break-words">{notice.header}</span>
+          </div>
+          {notice.report && (
+            <div className="min-w-0 text-sm text-foreground">
+              <Markdown text={notice.report} />
+            </div>
+          )}
+          <div
+            data-subagent-usage
+            className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[calc(11rem/14)] text-muted-foreground"
+          >
+            <span>{t('{{count}} tokens', { count: formatTokens(notice.usage.tokens) })}</span>
+            <span>{t('{{count}} tool calls', { count: notice.usage.toolUses })}</span>
+            <span>
+              {t('took {{duration}}', { duration: formatDuration(notice.usage.durationMs) })}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 用户气泡：识别合成标记,渲染成系统事件行 / 角色块 / 来源徽章而非原始 XML */
 function UserText({
   text,
@@ -735,6 +772,8 @@ function UserText({
   }
   const block = SYNTHETIC_BLOCK.exec(text);
   if (block) {
+    const notices = block[1] === 'agent-notification' ? parseAgentNotification(block[2]) : null;
+    if (notices) return <SubagentNotification notices={notices} />;
     return (
       <div className="flex w-full items-start gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-[calc(11rem/14)] text-muted-foreground">
         {block[1].startsWith('coworker-') || block[1] === 'agent-notification' ? (

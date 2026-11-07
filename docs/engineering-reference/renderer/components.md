@@ -137,6 +137,10 @@
 悬停与键盘聚焦只改变操作区可见性，不改变行高或正文折行；无 hover 的触屏常显。
 文件改动汇总与宿主 `turnFooter` 仍在正文下方完整展示。回归：`TimelineRow.actions.test.tsx`。
 
+子代理完成通知只在 Renderer 投影为 Markdown 报告与用量底栏，不改写 Main/worker 的原通知。
+只识别与 `completionText` 对应的完整头尾包络，报告内的 usage 样例不剥离；未知或损坏格式保留原文。
+回归：`agentNotification.test.ts`、`TimelineRow.actions.test.tsx`。
+
 ## Bot 群聊设计交付必须可见、可点
 
 群聊正文没有 Code 的 `MarkdownLinkContext`，不能裸渲染本地交稿链接：它会显示下划线但点击无效。

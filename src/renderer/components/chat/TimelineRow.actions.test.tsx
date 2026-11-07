@@ -20,7 +20,12 @@ const state = {
   forkFromMessage: harness.fork,
 };
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, values?: Record<string, string | number>) =>
+      key.replace(/\{\{(\w+)\}\}/g, (match, name: string) => String(values?.[name] ?? match)),
+  }),
+}));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: object) => unknown) => select({}),
 }));
@@ -30,7 +35,7 @@ vi.mock('@/stores/sessions', () => ({
   }),
 }));
 vi.mock('./Markdown', () => ({
-  Markdown: ({ text }: { text: string }) => <p>{text}</p>,
+  Markdown: ({ text }: { text: string }) => <p data-markdown>{text}</p>,
   LocalFileTrigger: ({ path, children }: { path: string; children: ReactNode }) => (
     <span data-local-file={path}>{children}</span>
   ),
@@ -76,6 +81,41 @@ const render = (item: TimelineItem) =>
   act(async () => root.render(createElement(TimelineRow, { item })));
 
 describe('回复正文的紧凑操作区', () => {
+  it('子代理完成通知用 Markdown 展示报告，把用量放在底栏且不改原文', async () => {
+    const report = '## 验证完成\n\n- **所有检查通过**';
+    const text = [
+      '<agent-notification>',
+      'Subagent "测试" (agentId a, runId r) succeeded after 3.5s.',
+      report,
+      '<usage>subagent_tokens: 1300\ntool_uses: 2\nduration_ms: 3500</usage>',
+      'Use subagent report with runId r for the full result.',
+      '</agent-notification>',
+    ].join('\n');
+    const item: TimelineItem = { kind: 'user', key: 'notice', text, images: [] };
+    await render(item);
+    expect(container.querySelector('[data-subagent-report] [data-markdown]')?.textContent).toBe(
+      report
+    );
+    const footer = container.querySelector('[data-subagent-usage]');
+    expect(footer?.textContent).toContain('1.3K tokens');
+    expect(footer?.textContent).toContain('2 tool calls');
+    expect(footer?.textContent).toContain('3.5s');
+    expect(container.textContent).not.toContain('Use subagent report');
+    expect(container.textContent).not.toContain('<usage>');
+    expect(item.text).toBe(text);
+  });
+
+  it('未知子代理通知维持原文展示，不误吞后台任务或普通消息', async () => {
+    await render({
+      kind: 'user',
+      key: 'legacy-notice',
+      text: '<agent-notification>旧版本通知：请保留全部内容</agent-notification>',
+      images: [],
+    });
+    expect(container.textContent).toContain('旧版本通知：请保留全部内容');
+    expect(container.querySelector('[data-subagent-report]')).toBeNull();
+  });
+
   it.each([
     [
       '请看 @"C:\\workspace\\中文目录\\a b.pdf" 再总结',
