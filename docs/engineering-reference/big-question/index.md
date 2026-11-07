@@ -22,6 +22,8 @@
 | [queued-prompt-vs-compaction.md](queued-prompt-vs-compaction.md) | 排队消息 / 打断后发送报 Cannot submit a prompt while compaction is in progress |
 | [worktree-move-races.md](worktree-move-races.md) | 会话切到隔离 worktree 后，文件仍写进主工作树；新命令被 worker 静默丢弃 |
 | [cdp-hidden-window-input.md](cdp-hidden-window-input.md) | CDP 拖拽/点击时好时坏，eval/截图全正常，极易误判为产品 bug |
+| [windows-detached-powershell.md](windows-detached-powershell.md) | Windows 后台 PowerShell 返回 exit 0、无输出且命令未执行 |
+| [windows-test-fixtures.md](windows-test-fixtures.md) | Windows 全量测试因链接权限、路径、换行及占用文件失败；O_NOFOLLOW 缺失漏读链接 |
 | [optimistic-echo-blocks-snapshot.md](optimistic-echo-blocks-snapshot.md) | 冷会话回来先发一句后，聊天区只剩这一句、计时器在走、工具卡不出现；worker 其实在正常干活 |
 | [enso-compact-token-limit-fallback.md](enso-compact-token-limit-fallback.md) | Smart Compact 开着仍报 Auto-compaction failed: Summarization failed: Input token limit exceeded |
 | [responses-compaction-routing-key.md](responses-compaction-routing-key.md) | 普通对话可用，默认压缩却报 invalid codex request / invalid_responses_request |

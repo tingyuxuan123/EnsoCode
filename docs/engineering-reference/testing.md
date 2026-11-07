@@ -86,6 +86,25 @@ beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'enso-xxx-')); })
 afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 ```
 
+## 跨平台夹具与完整门禁
+
+- 仓库文本由 `.gitattributes` 固定为 LF。源码副本或文档字节预算比较先规范化 CRLF，
+  不因 Windows checkout 调高预算；不要关闭 formatter 来获得绿色门禁。
+- 本机路径用 `node:path` 构造；Git/协议里约定的 `/` 与远端 POSIX 路径不能套用本机盘符。
+  隔离 Git 仓库显式设置 `core.autocrlf=false`，不读取用户级换行偏好。
+- Windows 真实目录链接使用 junction，无须管理员权限。文件链接专属的拒绝行为可在
+  没有创建权限的宿主上精确模拟该叶的元数据，其余文件读写、目标不被修改和边界断言保持真实。
+  不全局跳过符号链接测试，也不把文件链接换成目录就声称覆盖了同一场景。
+- POSIX shell 集成测试在 Windows 使用 Git for Windows，按 `git --exec-path` 推导
+  自带 shell；Vitest 共用 `test/helpers/shell.ts`。不依赖 Bash 在用户 PATH 上，也不误用 WSL launcher。
+- 模拟 macOS/Linux 后端时只替换对应 OS 探测/路径语义，本机临时文件仍走真实文件系统。
+  Windows 的 `mode` 不等价于 POSIX 权限或 ACL；不要断言 Windows chmod 能设置 `0600`。
+- 定时器语义用 fake timers；真实子进程集成只按实际负载设局部预算，不修改产品 deadline。
+  清理前等待子进程完成并关闭 SQLite/fd，Windows 文件占用不能靠 `force` 掩盖。
+
+`O_NOFOLLOW` 在 Windows Node 上可能不存在，相关文件读取必须同时验证链接元数据和
+打开前后文件身份，见 [Windows 测试夹具与文件身份](big-question/windows-test-fixtures.md)。
+
 ## 用例风格
 
 - 用中文描述行为，说清**场景**而不是复述实现：
