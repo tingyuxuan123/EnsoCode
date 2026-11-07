@@ -1,0 +1,58 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"x": -3199,
+		"y": 21,
+		"zoom": 1
+	},
+	"frames": [
+		{
+			"id": "concepts",
+			"file": "frames/concepts.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1600,
+			"height": 1000,
+			"title": "标志方案",
+			"meta": {
+				"width": 1600,
+				"height": 1000,
+				"title": "标志方案"
+			}
+		},
+		{
+			"id": "running",
+			"file": "frames/running.tsx",
+			"x": 3360,
+			"y": 0,
+			"width": 1600,
+			"height": 1000,
+			"title": "运行中 · 动态图标",
+			"meta": {
+				"width": 1600,
+				"height": 1000,
+				"title": "运行中 · 动态图标"
+			}
+		},
+		{
+			"id": "system",
+			"file": "frames/system.tsx",
+			"x": 1680,
+			"y": 0,
+			"width": 1600,
+			"height": 1000,
+			"title": "A 雨帘 · 用在各处",
+			"meta": {
+				"width": 1600,
+				"height": 1000,
+				"title": "A 雨帘 · 用在各处"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1600,
+		"height": 1000
+	},
+	"interactionMode": "other"
+}

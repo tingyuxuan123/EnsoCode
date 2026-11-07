@@ -4,11 +4,12 @@
  */
 export function Composer({
 	placeholder,
-	meta = false,
+	meta,
 	running = false,
 }: {
 	placeholder: string;
-	meta?: boolean;
+	/** 输入框下的会话统计（SessionStatsLine）：审批模式、上下文占用、用量、缓存命中 */
+	meta?: { mode: string; context: number; tokens: string; cache: string };
 	running?: boolean;
 }) {
 	return (
@@ -37,18 +38,28 @@ export function Composer({
 				</button>
 			</div>
 			{meta && (
-				<div className="mt-2 flex items-center gap-4 px-3 text-[12px] leading-4 text-dim">
+				<div className="mt-2 flex items-center gap-3.5 px-3 text-[12px] leading-4 text-dim tabular-nums">
 					<span className="flex items-center gap-1">
 						<span className="icon-[lucide--shield-check] size-3.5" />
-						全程审批
+						{meta.mode}
 					</span>
 					<span className="flex items-center gap-1.5">
 						<span className="relative h-1 w-10 overflow-hidden rounded-full bg-line">
-							<span className="absolute inset-y-0 left-0 w-[38%] rounded-full bg-ink2" />
+							<span
+								className="absolute inset-y-0 left-0 rounded-full bg-ink2"
+								style={{ width: `${meta.context}%` }}
+							/>
 						</span>
-						上下文 38%
+						{meta.context}%
 					</span>
-					<span className="ml-auto">@ 文件 · / 技能</span>
+					<span className="flex items-center gap-1">
+						<span className="icon-[lucide--coins] size-3.5" />
+						{meta.tokens}
+					</span>
+					<span className="flex items-center gap-1">
+						<span className="icon-[lucide--database] size-3.5" />
+						{meta.cache}
+					</span>
 				</div>
 			)}
 		</div>

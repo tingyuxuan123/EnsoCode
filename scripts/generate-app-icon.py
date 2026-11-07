@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Rasterize the EnsoCode app icon into png / icns / ico. Run from repo root."""
+"""Legacy renderer retained for reference; generate-app-icon.mjs is authoritative.
+
+The old ensō geometry below is not used. Direct execution delegates to Node,
+which generates Eaves PNG / ICO / ICNS / tray / PWA assets on all platforms.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +14,11 @@ import struct
 import subprocess
 import tempfile
 from pathlib import Path
+
+# Delegate before importing Pillow, including on machines without Python imaging.
+if __name__ == "__main__":
+    subprocess.run(["node", str(Path(__file__).with_suffix(".mjs"))], check=True)
+    raise SystemExit(0)
 
 from PIL import Image, ImageDraw, ImageFilter
 

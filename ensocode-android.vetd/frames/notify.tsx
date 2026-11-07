@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { StatusBar } from "@vetta/ios";
 import { BotAvatar } from "../components/BotAvatar";
-import { Enso } from "../components/Enso";
+import { EavesMark } from "../components/Eaves";
 import { bots } from "../components/data";
 
 /** 一条通知的抬头：应用、来源、时间，和安卓通知栏一样小而淡。 */
@@ -12,12 +12,12 @@ function Source({ from, time, icon }: { from: string; time: string; icon?: React
 	return (
 		<div className="flex items-center gap-2 text-[12px] leading-4 text-night-dim">
 			{icon ?? (
-				<Enso
+				<EavesMark
 					size={14}
 					className="text-night-ink"
 				/>
 			)}
-			<span>EnsoCode</span>
+			<span>Eaves</span>
 			<span>·</span>
 			<span className="min-w-0 truncate">{from}</span>
 			<span className="ml-auto shrink-0">{time}</span>
@@ -94,7 +94,7 @@ export default function Notify() {
 
 				<section className="rounded-[24px] bg-night-card px-4 pt-3.5 pb-3">
 					<Source
-						from="EnsoCode 安卓版"
+						from="Eaves 安卓版"
 						time="6 分钟"
 						icon={
 							<BotAvatar
@@ -123,7 +123,7 @@ export default function Notify() {
 					to="/home"
 					className="flex items-center gap-3 rounded-[24px] bg-night-card px-4 py-3.5"
 				>
-					<Enso
+					<EavesMark
 						size={16}
 						className="text-night-ink"
 					/>

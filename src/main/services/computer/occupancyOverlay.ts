@@ -1,4 +1,5 @@
 import { app, BrowserWindow, globalShortcut, screen } from 'electron';
+import { APP_DISPLAY_NAME } from '../appMenu';
 import type { OccupancyDeps } from './occupancy';
 import { hidSecondsSinceLastEvent } from './occupancyHid';
 
@@ -7,7 +8,7 @@ const BAR_COLOR = '#147ce5';
 
 function bannerHtml(): string {
   const zh = app.getLocale().toLowerCase().startsWith('zh');
-  const name = app.getName() || 'EnsoCode';
+  const name = APP_DISPLAY_NAME;
   const title = zh ? `${name} 正在使用你的电脑` : `${name} is using your computer`;
   const hint = zh ? 'Esc 取消' : 'Esc to cancel';
   return (

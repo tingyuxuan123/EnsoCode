@@ -189,7 +189,7 @@ export function Onboarding() {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t('Welcome to EnsoCode')}
+        aria-label={t('Welcome to Eaves')}
         tabIndex={-1}
         className="relative flex w-[620px] max-w-full flex-col overflow-hidden rounded-[6px] border border-border bg-popover"
       >
@@ -227,7 +227,7 @@ export function Onboarding() {
               <div className="flex items-center gap-[8px]">
                 <Wand2 className="size-[calc(20rem/14)] text-primary" />
                 <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
-                  {t('Welcome to EnsoCode')}
+                  {t('Welcome to Eaves')}
                 </h2>
               </div>
               <p className="text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">

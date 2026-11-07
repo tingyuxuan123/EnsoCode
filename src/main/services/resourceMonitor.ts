@@ -31,6 +31,7 @@ import { app, session, webContents } from 'electron';
 import { readSettings } from '../ipc/settings';
 import { isMainWebContents } from '../windows/MainWindow';
 import { isSettingsWebContents } from '../windows/SettingsWindow';
+import { APP_DISPLAY_NAME } from './appMenu';
 import { partitionName } from './browserHost';
 import type { ScanRootSpec, StorageWorkerData, StorageWorkerMessage } from './storageScanWorker';
 
@@ -128,7 +129,7 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
       role === 'agent'
         ? 'Agent worker'
         : role === 'main'
-          ? app.getName()
+          ? APP_DISPLAY_NAME
           : role === 'gpu'
             ? 'GPU'
             : kinds.main.has(m.pid)

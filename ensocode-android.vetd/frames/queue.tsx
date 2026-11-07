@@ -2,6 +2,7 @@ export const frame = { width: 412, height: 915, title: "消息队列" };
 
 import { StatusBar } from "@vetta/ios";
 import { Composer } from "../components/Composer";
+import { CoworkerTabs } from "../components/CoworkerTabs";
 import { TopBar } from "../components/TopBar";
 import { Code, Prose, Steps, TurnHead, UserBubble } from "../components/Turn";
 
@@ -26,9 +27,10 @@ export default function Queue() {
 				lead="drawer"
 				to="/home"
 				title="工作流面板显示运行进度"
-				detail="EnsoCode · Claude Opus 5.5 · 高"
+				detail="Eaves · Claude Opus 5.5 · 高"
 				menu
 			/>
+			<CoworkerTabs background="2 子代理 · 2 后台" />
 			<div className="min-h-0 flex-1 overflow-hidden px-5 pt-2">
 				<UserBubble>给工作流面板加上运行进度：每个审查员一格，完成打勾。</UserBubble>
 				<article className="flex flex-col gap-2.5">
@@ -57,7 +59,7 @@ export default function Queue() {
 						className={q.open ? "bg-card2/60" : ""}
 					>
 						<div className="flex items-start gap-3 px-4 py-2.5">
-							<span className="mt-0.5 w-4 shrink-0 text-right text-[13px] leading-5 text-faint tabular-nums">{i + 1}</span>
+							<span className="w-4 shrink-0 text-right text-[13px] leading-5 text-faint tabular-nums">{i + 1}</span>
 							<p className={`min-w-0 flex-1 text-[14px] leading-5 ${q.open ? "" : "truncate"}`}>{q.text}</p>
 							{!q.open && <span className="icon-[mdi--dots-vertical] size-5 shrink-0 text-ink2" />}
 						</div>
@@ -83,6 +85,7 @@ export default function Queue() {
 			<Composer
 				placeholder="继续说，会排进队列"
 				running
+				meta={{ mode: "自动接受编辑", context: 62, tokens: "1.25M", cache: "81%" }}
 			/>
 		</div>
 	);

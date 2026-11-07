@@ -1,5 +1,7 @@
 # Phone PWA → 原生 App 计划（Capacitor）
 
+> **2026-11-07 更新**：安卓端改走 Kotlin + Compose 原生路线，见 [`android-native-app.md`](android-native-app.md)。本文的 Capacitor 方案不再推进；其中的 iOS 审核、Demo 模式、推送取舍等分析仍可作为参考。
+
 **日期**：2026-02-27
 **状态**：计划阶段，未落地
 **范围**：`packages/phone`（配对手机端 PWA）打包为 iOS / Android 原生 app 并上架

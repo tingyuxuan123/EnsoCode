@@ -2,8 +2,8 @@ import { layoutMockup } from "./layout";
 import type { MockupLayout, MockupOptions, MockupRect, MockupShot } from "./types";
 
 /** Brand wordmark. Baked into the bitmap, so it is deliberately not localized. */
-const BRAND_NAME = "EnsoCode";
-const BRAND_TAGLINE = "Designed with EnsoCode";
+const BRAND_NAME = "Eaves";
+const BRAND_TAGLINE = "Designed with Eaves";
 
 function roundRectPath(g: CanvasRenderingContext2D, rect: MockupRect, radius: number): void {
 	const r = Math.max(0, Math.min(radius, rect.width / 2, rect.height / 2));

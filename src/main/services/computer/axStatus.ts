@@ -7,7 +7,7 @@ export function describeAxOutcome(input: {
   nodeCount: number;
 }): string | null {
   if (!input.trusted || input.status === AX_API_DISABLED) {
-    return 'AX tcc-denied — grant Accessibility to EnsoCode, then restart. Do not click traffic lights.';
+    return 'AX tcc-denied — grant Accessibility to Eaves, then restart. Do not click traffic lights.';
   }
   if (input.status === AX_CANNOT_COMPLETE) {
     return 'AX timeout — tree walk exceeded 2.5s; retry ax() on Finder/Settings, or use screenshot coordinates.';

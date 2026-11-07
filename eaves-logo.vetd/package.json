@@ -1,0 +1,13 @@
+{
+	"name": "eaves-logo",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@fontsource-variable/fraunces": "^5.3.0",
+		"@fontsource-variable/noto-serif-sc": "^5.3.1",
+		"@fontsource-variable/roboto": "^5.3.0",
+		"react": "19.1.1",
+		"react-dom": "19.1.1",
+		"react-router": "^7.9.1"
+	}
+}

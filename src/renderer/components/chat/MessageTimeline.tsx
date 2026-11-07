@@ -23,6 +23,7 @@ import {
   type TimelineItem,
 } from '@/stores/sessions/timeline';
 import { useSettingsStore } from '@/stores/settings';
+import { EavesWorkingIcon } from './EavesWorkingIcon';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
@@ -598,7 +599,7 @@ export function MessageTimeline({
     <div className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
       {busy && (
         <div className="flex min-h-[calc(26rem/14)] items-center gap-2 text-[calc(13rem/14)]">
-          <LoadingDots />
+          <EavesWorkingIcon />
           <span className="t-shimmer" data-text={loading ? t('Loading…') : t('Working…')}>
             {loading ? t('Loading…') : t('Working…')}
           </span>
@@ -858,15 +859,6 @@ function HistoryPageHeader({
         </p>
       )}
     </div>
-  );
-}
-
-function LoadingDots() {
-  return (
-    <span className="relative flex size-[calc(22rem/14)] shrink-0 items-center justify-center">
-      <span className="absolute size-2 animate-ping rounded-full bg-brand/50" />
-      <span className="relative size-2 rounded-full bg-brand" />
-    </span>
   );
 }
 

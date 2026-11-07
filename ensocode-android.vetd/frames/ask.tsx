@@ -54,8 +54,10 @@ export default function Ask() {
 				<p className="mt-2.5 text-[17px] leading-6 font-medium">Hero 用浅色还是深色截图？</p>
 				<div className="mt-3 grid grid-cols-2 gap-2.5">
 					{shots.map((s, i) => (
-						<button
+						<div
 							key={s.file}
+							role="radio"
+							aria-checked={i === 0}
 							className={`overflow-hidden rounded-[18px] bg-card text-left ${
 								i === 0 ? "shadow-[inset_0_0_0_2px_var(--color-ink)]" : "shadow-[inset_0_0_0_0.75px_var(--color-line)]"
 							}`}
@@ -70,7 +72,7 @@ export default function Ask() {
 								<span className="min-w-0 flex-1 truncate font-mono text-[11px] text-dim">{s.file}</span>
 								{i === 0 && <span className="icon-[lucide--check] size-4 shrink-0" />}
 							</div>
-						</button>
+						</div>
 					))}
 				</div>
 				<button className="mt-2.5 w-full rounded-[16px] bg-card2 px-4 py-3 text-left text-[15px] leading-5">两张都放，跟随系统主题切换</button>

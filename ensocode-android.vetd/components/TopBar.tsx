@@ -17,6 +17,7 @@ export function TopBar({
 	title,
 	detail,
 	menu = false,
+	detailTo,
 	children,
 }: {
 	lead: keyof typeof leads;
@@ -24,9 +25,22 @@ export function TopBar({
 	title: string;
 	detail?: string;
 	menu?: boolean;
+	/** 标题区可点时去哪（切线程、切模型） */
+	detailTo?: string;
 	children?: ReactNode;
 }) {
 	const l = leads[lead];
+	const heading = (
+		<>
+			<div className="truncate text-[17px] leading-[22px] font-medium">{title}</div>
+			{detail && (
+				<div className="flex items-center gap-0.5 text-[12px] leading-4 text-dim">
+					<span className="truncate">{detail}</span>
+					{menu && <span className="icon-[lucide--chevron-down] size-3.5 shrink-0" />}
+				</div>
+			)}
+		</>
+	);
 	return (
 		<header className="relative flex h-14 items-center gap-1 pr-4 pl-1">
 			<Link
@@ -36,15 +50,16 @@ export function TopBar({
 			>
 				<span className={`${l.icon} size-6`} />
 			</Link>
-			<div className="min-w-0 flex-1">
-				<div className="truncate text-[17px] leading-[22px] font-medium">{title}</div>
-				{detail && (
-					<div className="flex items-center gap-0.5 text-[12px] leading-4 text-dim">
-						<span className="truncate">{detail}</span>
-						{menu && <span className="icon-[lucide--chevron-down] size-3.5 shrink-0" />}
-					</div>
-				)}
-			</div>
+			{detailTo ? (
+				<Link
+					to={detailTo}
+					className="min-w-0 flex-1"
+				>
+					{heading}
+				</Link>
+			) : (
+				<div className="min-w-0 flex-1">{heading}</div>
+			)}
 			{children}
 		</header>
 	);

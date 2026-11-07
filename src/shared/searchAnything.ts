@@ -255,7 +255,7 @@ const STATIC_CATALOG: SettingsSearchEntry[] = [
     category: 'tools',
     title: 'LCU computer control',
     description:
-      'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart EnsoCode to apply changes to open sessions.',
+      'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart Eaves to apply changes to open sessions.',
   },
   {
     id: 'tools.rtkEnabled',

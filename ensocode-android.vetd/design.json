@@ -2,9 +2,9 @@
 	"version": 1,
 	"type": "vetta-design",
 	"canvas": {
-		"zoom": 1.4715177646857693,
-		"x": -10496.372495132233,
-		"y": -3.5834099143592084
+		"zoom": 1.0042768461593834,
+		"x": -3859.675097200625,
+		"y": 246.02438901736252
 	},
 	"frames": [
 		{
@@ -89,6 +89,34 @@
 				"width": 412,
 				"height": 915,
 				"title": "空态"
+			}
+		},
+		{
+			"id": "goal-paused",
+			"file": "frames/goal-paused.tsx",
+			"x": 8364,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "目标 · 已暂停",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "目标 · 已暂停"
+			}
+		},
+		{
+			"id": "goal-set",
+			"file": "frames/goal-set.tsx",
+			"x": 8856,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "设定目标",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "设定目标"
 			}
 		},
 		{
@@ -218,6 +246,20 @@
 			}
 		},
 		{
+			"id": "preview",
+			"file": "frames/preview.tsx",
+			"x": 9348,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "网页预览",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "网页预览"
+			}
+		},
+		{
 			"id": "queue",
 			"file": "frames/queue.tsx",
 			"x": 4920,
@@ -232,6 +274,34 @@
 			}
 		},
 		{
+			"id": "rewind",
+			"file": "frames/rewind.tsx",
+			"x": 9840,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "回退",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "回退"
+			}
+		},
+		{
+			"id": "session-menu",
+			"file": "frames/session-menu.tsx",
+			"x": 10332,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "会话菜单",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "会话菜单"
+			}
+		},
+		{
 			"id": "session",
 			"file": "frames/session.tsx",
 			"x": 2460,
@@ -243,6 +313,34 @@
 				"width": 412,
 				"height": 915,
 				"title": "会话"
+			}
+		},
+		{
+			"id": "tasks",
+			"file": "frames/tasks.tsx",
+			"x": 10824,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "后台与协作",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "后台与协作"
+			}
+		},
+		{
+			"id": "threads",
+			"file": "frames/threads.tsx",
+			"x": 11316,
+			"y": 0,
+			"width": 412,
+			"height": 915,
+			"title": "线程",
+			"meta": {
+				"width": 412,
+				"height": 915,
+				"title": "线程"
 			}
 		}
 	],

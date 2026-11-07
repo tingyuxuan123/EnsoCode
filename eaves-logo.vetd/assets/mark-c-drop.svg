@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#000">
+  <!-- 檐角滴下的雨，一滴比一滴小 -->
+  <circle cx="80" cy="46" r="5"/>
+  <circle cx="80" cy="64" r="3.8"/>
+  <circle cx="80" cy="79" r="2.8"/>
+</svg>

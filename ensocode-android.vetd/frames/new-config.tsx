@@ -24,7 +24,7 @@ export default function NewConfig() {
 				<div className="flex gap-2 px-5">
 					<button className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-card px-4 text-[14px] font-medium">
 						<span className="icon-[lucide--folder] size-4 shrink-0" />
-						<span className="min-w-0 flex-1 truncate text-left">EnsoCode</span>
+						<span className="min-w-0 flex-1 truncate text-left">Eaves</span>
 						<span className="icon-[lucide--chevrons-up-down] size-3.5 shrink-0 text-dim" />
 					</button>
 					<button className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-card px-4 text-[14px] font-medium">
@@ -37,8 +37,10 @@ export default function NewConfig() {
 				<SheetLabel>模型</SheetLabel>
 				<div className="mx-3 overflow-hidden rounded-[20px] bg-card">
 					{models.map((m, i) => (
-						<button
+						<div
 							key={m.name}
+							role="radio"
+							aria-checked={i === 0}
 							className={`flex w-full items-center gap-3 px-4 py-3 text-left ${
 								i > 0 ? "shadow-[inset_0_0.75px_0_var(--color-line)]" : ""
 							}`}
@@ -48,7 +50,7 @@ export default function NewConfig() {
 								<div className="truncate text-[12px] leading-4 text-dim">{m.provider}</div>
 							</div>
 							{i === 0 && <span className="icon-[lucide--check] size-5 shrink-0" />}
-						</button>
+						</div>
 					))}
 				</div>
 
@@ -69,8 +71,10 @@ export default function NewConfig() {
 				<SheetLabel>审批模式</SheetLabel>
 				<div className="mx-3 overflow-hidden rounded-[20px] bg-card">
 					{approvalModes.map((m, i) => (
-						<button
+						<div
 							key={m.id}
+							role="radio"
+							aria-checked={i === 0}
 							className={`flex w-full items-center gap-3 px-4 py-3 text-left ${
 								i > 0 ? "shadow-[inset_0_0.75px_0_var(--color-line)]" : ""
 							}`}
@@ -80,7 +84,7 @@ export default function NewConfig() {
 								<div className="truncate text-[12px] leading-4 text-dim">{m.detail}</div>
 							</div>
 							{i === 0 && <span className="icon-[lucide--check] size-5 shrink-0" />}
-						</button>
+						</div>
 					))}
 				</div>
 			</Sheet>

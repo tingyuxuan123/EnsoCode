@@ -20,7 +20,7 @@ describe('TitleBar centered content', () => {
   it('renders centered content as an overlay sibling of title and actions', () => {
     setPlatform('win32');
     const html = render({
-      title: 'EnsoCode',
+      title: 'Eaves',
       centered,
       actions: createElement('button', { type: 'button' }, 'act'),
     });
@@ -29,13 +29,13 @@ describe('TitleBar centered content', () => {
     expect(html).toContain('pointer-events-auto');
     expect(html).toContain('data-testid="mode-switch"');
     // 标题不被居中内容替换，仍在左侧
-    expect(html).toContain('EnsoCode');
+    expect(html).toContain('Eaves');
     expect(html).toContain('act');
   });
 
   it('keeps the window drag region under the overlay', () => {
     setPlatform('win32');
-    const html = render({ title: 'EnsoCode', centered });
+    const html = render({ title: 'Eaves', centered });
     // 覆盖层 pointer-events:none，空处仍可拖动窗口
     expect(html).toContain('pointer-events-none absolute inset-0');
     expect(html).toContain('no-drag');
@@ -43,9 +43,9 @@ describe('TitleBar centered content', () => {
 
   it('macOS: hides the title beside traffic lights when centered', () => {
     setPlatform('darwin');
-    const html = render({ title: 'EnsoCode', centered });
+    const html = render({ title: 'Eaves', centered });
     expect(html).toContain('data-testid="mode-switch"');
-    expect(html).not.toContain('EnsoCode');
+    expect(html).not.toContain('Eaves');
     // 红绿灯预留仍在
     expect(html).toContain('pl-[84px]');
   });
@@ -53,11 +53,11 @@ describe('TitleBar centered content', () => {
   it('heading replaces the title but stays inside the drag region', () => {
     setPlatform('darwin');
     const html = render({
-      title: 'EnsoCode',
+      title: 'Eaves',
       heading: createElement('span', { 'data-testid': 'heading' }, 'Session'),
     });
     expect(html).toContain('data-testid="heading"');
-    expect(html).not.toContain('>EnsoCode<');
+    expect(html).not.toContain('>Eaves<');
     // 只读标题不能挡住窗口拖拽
     expect(html).not.toContain('no-drag');
   });
@@ -65,12 +65,12 @@ describe('TitleBar centered content', () => {
   it('leading still replaces the title and stays left (no centering)', () => {
     setPlatform('win32');
     const html = render({
-      title: 'EnsoCode',
+      title: 'Eaves',
       leading: createElement('span', { 'data-testid': 'lead' }),
     });
     expect(html).toContain('data-testid="lead"');
     expect(html).not.toContain('absolute inset-0');
-    expect(html).not.toContain('EnsoCode');
+    expect(html).not.toContain('Eaves');
   });
 
   it('preserves titles and platform-specific caption controls', () => {

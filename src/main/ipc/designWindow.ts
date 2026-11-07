@@ -128,7 +128,7 @@ export function createDesignWindowHandlers(deps: {
       )
         return Promise.resolve(failed('invalid'));
       const origin = deps.mainId();
-      if (origin === null) return Promise.resolve(failed('主窗口不可用，请先打开 EnsoCode 主窗口'));
+      if (origin === null) return Promise.resolve(failed('主窗口不可用，请先打开 Eaves 主窗口'));
       const requestId = randomUUID();
       const { promise, resolve } = Promise.withResolvers<DesignWindowPromptResult>();
       const timer = setTimeout(() => {
@@ -157,7 +157,7 @@ export function createDesignWindowHandlers(deps: {
       if (!deps.sendToMain(IPC_CHANNELS.DESIGN_WINDOW_PROMPT_REQUEST, request)) {
         pending.delete(requestId);
         clearTimeout(timer);
-        return Promise.resolve(failed('主窗口不可用，请先打开 EnsoCode 主窗口'));
+        return Promise.resolve(failed('主窗口不可用，请先打开 Eaves 主窗口'));
       }
       return promise;
     },

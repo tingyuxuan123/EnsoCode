@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 雨帘：檐口，两端翘角（粗） -->
+  <path d="M12 23 Q16 31 26 32 L74 32 Q84 31 88 23" stroke-width="8"/>
+  <!-- 檐下的雨丝：比檐口细，断成长短交错的几段，读成雨而不是柱子 -->
+  <path d="M31 45 V56 M31 64 V72 M50 45 V58 M69 45 V50 M69 58 V76" stroke-width="6"/>
+</svg>

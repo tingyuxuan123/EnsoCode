@@ -1,7 +1,7 @@
 export const frame = { width: 412, height: 915, title: "电脑离线" };
 
 import { StatusBar } from "@vetta/ios";
-import { Enso } from "../components/Enso";
+import { EavesMark } from "../components/Eaves";
 import { Dawn } from "../components/HomeChrome";
 import { LinkPill } from "../components/LinkPill";
 import { SessionMeta } from "../components/SessionMeta";
@@ -29,14 +29,14 @@ export default function Offline() {
 			/>
 			<main className="relative flex min-h-0 flex-1 flex-col px-6 pt-5 pb-3">
 				<span className="flex size-10 items-center justify-center rounded-full bg-card text-faint">
-					<Enso size={22} />
+					<EavesMark size={22} />
 				</span>
 				<h1 className="mt-5 text-[34px] leading-[42px] font-semibold tracking-[-0.01em]">
 					<span className="block">电脑睡着了</span>
 					<span className="block text-dim">任务都还在</span>
 				</h1>
 				<p className="mt-4 text-[15px] leading-[22px] text-ink2">
-					{computer} 没有响应，可能合上了盖子或断了网。保持 EnsoCode 开着，它醒来后这里会自动重连。
+					{computer} 没有响应，可能合上了盖子或断了网。保持 Eaves 开着，它醒来后这里会自动重连。
 				</p>
 				<div className="flex-1" />
 				<section className="glass overflow-hidden rounded-[26px] opacity-60">

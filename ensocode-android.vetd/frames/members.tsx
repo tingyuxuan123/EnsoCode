@@ -15,7 +15,7 @@ const direct = [
 	{ bot: bots.lin, text: "设计已派给小设，FCM 推送排在阿全那里。", time: "2 分钟" },
 	{ bot: bots.she, text: "第一档的 8 个页面画好 5 个了。", time: "5 分钟" },
 	{ bot: bots.ce, text: "回归跑完了：38 通过，2 失败。", time: "6 分钟" },
-	{ bot: bots.quan, text: "排队中 · 等林经理那边的任务交接", time: "12 分钟" },
+	{ bot: bots.quan, text: "等 Firebase 配置，推送先停在这里。", time: "12 分钟" },
 	{ bot: bots.yun, text: "relay 内存占用回落到 180 MB。", time: "昨天" },
 ];
 
@@ -80,7 +80,7 @@ export default function Members() {
 					</span>
 					<div className="min-w-0 flex-1">
 						<div className="flex items-baseline gap-2">
-							<span className="truncate text-[16px] leading-[22px] font-medium">EnsoCode 安卓版</span>
+							<span className="truncate text-[16px] leading-[22px] font-medium">Eaves 安卓版</span>
 							<span className="ml-auto shrink-0 text-[12px] leading-4 text-dim">刚刚</span>
 						</div>
 						<div className="truncate text-[13px] leading-[18px] text-ink2">林经理：先派设计，小设接一下。</div>

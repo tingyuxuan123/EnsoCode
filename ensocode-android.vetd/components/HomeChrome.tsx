@@ -3,17 +3,17 @@ import { LinkPill } from "./LinkPill";
 import { computer } from "./data";
 
 const entries = [
-	{ to: "/", icon: "icon-[lucide--square-pen]", title: "新任务", detail: "EnsoCode" },
+	{ to: "/", icon: "icon-[lucide--square-pen]", title: "新任务", detail: "Eaves" },
 	{ to: "/board", icon: "icon-[lucide--layout-dashboard]", title: "任务看板", detail: "2 个等你" },
 	{ to: "/members", icon: "icon-[lucide--users]", title: "成员", detail: "2 条待处理" },
 	{ to: "/pair", icon: "icon-[lucide--scan-line]", title: "连接电脑", detail: computer },
 ];
 
-/** 首页最上面：EnsoCode 字标、连接状态、关闭。 */
+/** 首页最上面：Eaves 字标、连接状态、关闭。 */
 export function HomeHeader({ online = true }: { online?: boolean }) {
 	return (
 		<header className="relative flex items-center py-2 pr-4 pl-5">
-			<h1 className="text-[22px] leading-7 font-bold">EnsoCode</h1>
+			<h1 className="text-[22px] leading-7 font-bold">Eaves</h1>
 			<LinkPill
 				online={online}
 				compact

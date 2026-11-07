@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Eaves「运行中」：檐口不动，雨丝从檐下落，中间那一滴不断成形、落下。
+       减少动态效果时停在静止的标志上。 -->
+  <style>
+    .e { fill: none; stroke: #6b7077; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+    .s { fill: none; stroke: #6b7077; stroke-width: 6; stroke-linecap: round; }
+    .r1 { stroke-dasharray: 9 12; animation: f21 1s linear infinite; }
+    .r3 { stroke-dasharray: 13 10; animation: f23 1.15s linear infinite; animation-delay: -0.4s; }
+    .d { fill: #16a34a; transform-box: fill-box; transform-origin: center; animation: drop 1.2s infinite; animation-delay: -0.45s; }
+    @keyframes f21 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -21; } }
+    @keyframes f23 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -23; } }
+    @keyframes drop {
+      0%   { transform: translateY(0) scale(0); opacity: 1; animation-timing-function: ease-out; }
+      30%  { transform: translateY(2px) scale(1); opacity: 1; animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+      85%  { opacity: 1; }
+      100% { transform: translateY(22px) scale(1); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .r1, .r3, .d { animation: none; }
+      .d { transform: translateY(9px); }
+    }
+  </style>
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.2" stop-color="#fff"/>
+      <stop offset="0.72" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="rain" maskUnits="userSpaceOnUse" x="0" y="40" width="100" height="46">
+      <rect x="0" y="40" width="100" height="46" fill="url(#fade)"/>
+    </mask>
+  </defs>
+  <path class="e" d="M12 23 Q16 31 26 32 L74 32 Q84 31 88 23"/>
+  <g mask="url(#rain)">
+    <path class="s r1" d="M31 30 V100"/>
+    <path class="s r3" d="M69 30 V100"/>
+  </g>
+  <path class="s" d="M50 45 V58"/>
+  <circle class="d" cx="50" cy="61" r="4.5"/>
+</svg>

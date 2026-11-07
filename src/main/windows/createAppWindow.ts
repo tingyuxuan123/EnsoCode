@@ -260,7 +260,6 @@ export function createAppWindow(options: CreateWindowOptions): BrowserWindow {
         windowsTaskbarAppDetails({
           execPath: process.execPath,
           appId,
-          displayName: app.getName(),
         })
       );
     } catch (error) {

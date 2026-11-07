@@ -69,7 +69,7 @@ describe('windowsTaskbarAppDetails', () => {
     );
     expect(details.appIconIndex).toBe(0);
     expect(details.relaunchCommand).toContain('EnsoCode.exe');
-    expect(details.relaunchDisplayName).toBe('EnsoCode');
+    expect(details.relaunchDisplayName).toBe('Eaves');
   });
 
   it('quotes relaunchCommand when the path has spaces', () => {

@@ -3,7 +3,7 @@ export const frame = { width: 412, height: 915, title: "新任务" };
 import { Link } from "react-router";
 import { StatusBar } from "@vetta/ios";
 import { Composer } from "../components/Composer";
-import { AgentAvatar } from "../components/Enso";
+import { AgentAvatar } from "../components/Eaves";
 import { Dawn } from "../components/HomeChrome";
 import { SessionMeta } from "../components/SessionMeta";
 import { StatusGlyph } from "../components/StatusGlyph";
@@ -41,7 +41,7 @@ export default function NewTask() {
 					className="glass mt-5 flex h-10 items-center gap-1.5 self-start rounded-full px-3.5 text-[14px] font-medium"
 				>
 					<span className="icon-[lucide--folder] size-4" />
-					EnsoCode
+					Eaves
 					<span className="icon-[lucide--chevrons-up-down] size-3.5 text-dim" />
 				</Link>
 				<div className="flex-1" />

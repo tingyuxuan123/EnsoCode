@@ -73,9 +73,10 @@ export default function Group() {
 			<TopBar
 				lead="back"
 				to="/members"
-				title="EnsoCode 安卓版"
+				title="Eaves 安卓版"
 				detail="线程：v1 规划 · 林经理主持"
 				menu
+				detailTo="/threads"
 			>
 				<div className="flex -space-x-2">
 					{members.map((m) => (

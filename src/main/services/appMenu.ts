@@ -1,6 +1,6 @@
-import { Menu, type MenuItemConstructorOptions } from 'electron';
+import { app, Menu, type MenuItemConstructorOptions } from 'electron';
 
-export const APP_DISPLAY_NAME = 'EnsoCode';
+export const APP_DISPLAY_NAME = 'Eaves';
 
 /**
  * Electron 默认 appMenu 用 app.name（package.json name = enso-code）拼 About/Hide/Quit。
@@ -30,6 +30,7 @@ export function macAppMenuTemplate(): MenuItemConstructorOptions[] {
 }
 
 export function installAppMenu(): void {
+  app.setAboutPanelOptions({ applicationName: APP_DISPLAY_NAME });
   if (process.platform !== 'darwin') return;
   Menu.setApplicationMenu(Menu.buildFromTemplate(macAppMenuTemplate()));
 }

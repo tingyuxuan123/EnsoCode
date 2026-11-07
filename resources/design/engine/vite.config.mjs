@@ -1,13 +1,13 @@
 // Vetta Design Engine — shared vite template (materialized to ~/.vetta/design-engine/<version>/).
 // The design bundle dir (x.vetd/) is mounted via the VETD_SRC env var; the engine itself
 // never contains user content. See ADR-0053.
-import { readdirSync, watch } from "node:fs";
-import { dirname, resolve, relative } from "node:path";
+import { createReadStream, readdirSync, statSync, watch } from "node:fs";
+import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { absolutizeCrossDriveImports } from "./src/cross-drive.ts";
+import { absolutizeCrossDriveImports, contentTypeOf, crossDriveFsPath } from "./src/cross-drive.ts";
 
 const engineRoot = dirname(fileURLToPath(import.meta.url));
 const designRoot = resolve(process.env.VETD_SRC ?? resolve(process.cwd(), "design"));
@@ -72,9 +72,35 @@ function vetdThemeSource() {
  */
 function vetdCrossDriveGlob() {
 	const mainId = `${engineRoot.replaceAll("\\", "/")}/src/main.tsx`;
+	const cwdDrive = /^([A-Za-z]):/.exec(process.cwd())?.[1] ?? null;
+	const allowed = [designRoot, engineRoot].map((root) => resolve(root).toLowerCase() + sep);
 	return {
 		name: "vetd-cross-drive-glob",
 		enforce: "post",
+		// vite 提供 `/@fs/E:/…` 原始文件时去掉盘符、从进程所在盘找：设计稿里的图片
+		// 和字体（x.vetd/node_modules 里的 woff2）在另一个盘上时全部 404 落到 index.html。
+		// 只放行设计目录与引擎目录里的静态文件。
+		configureServer(server) {
+			server.middlewares.use((req, res, next) => {
+				const path = crossDriveFsPath(req.url ?? "", cwdDrive);
+				if (!path) return next();
+				const file = resolve(path);
+				if (!allowed.some((root) => file.toLowerCase().startsWith(root))) return next();
+				let size;
+				try {
+					const stat = statSync(file);
+					if (!stat.isFile()) return next();
+					size = stat.size;
+				} catch {
+					return next();
+				}
+				res.setHeader("Content-Type", contentTypeOf(file));
+				res.setHeader("Content-Length", String(size));
+				res.setHeader("Cache-Control", "no-cache");
+				res.setHeader("Access-Control-Allow-Origin", "*");
+				createReadStream(file).on("error", next).pipe(res);
+			});
+		},
 		transform(code, id) {
 			if (id.replaceAll("\\", "/").split("?")[0] !== mainId) return null;
 			const next = absolutizeCrossDriveImports(code);

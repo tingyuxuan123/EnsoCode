@@ -1,7 +1,7 @@
 export const frame = { width: 412, height: 915, title: "连接电脑" };
 
 import { StatusBar } from "@vetta/ios";
-import { Enso } from "../components/Enso";
+import { EavesMark } from "../components/Eaves";
 import { TopBar } from "../components/TopBar";
 
 const corners = [
@@ -40,14 +40,14 @@ export default function Pair() {
 					))}
 					<span className="absolute inset-x-12 top-[46%] h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
 					<div className="absolute inset-x-0 bottom-9 flex flex-col items-center gap-2 text-white/75">
-						<Enso
+						<EavesMark
 							size={22}
 							className="text-white/60"
 						/>
 						<span className="text-[13px] leading-[18px]">对准电脑上的二维码</span>
 					</div>
 				</div>
-				<p className="mt-4 px-1 text-[15px] leading-[22px] text-ink2">在电脑上打开 EnsoCode → 设置 → 手机，扫描出现的二维码即可配对。</p>
+				<p className="mt-4 px-1 text-[15px] leading-[22px] text-ink2">在电脑上打开 Eaves → 设置 → 手机，扫描出现的二维码即可配对。</p>
 
 				<h2 className="mt-7 px-1 text-[15px] leading-5 font-semibold text-dim">或手动连接</h2>
 				<label className="mt-3 block px-1 text-[12px] leading-4 text-dim">电脑的局域网地址</label>

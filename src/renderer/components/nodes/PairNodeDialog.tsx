@@ -24,7 +24,7 @@ interface PairNodeDialogProps {
 
 /** 与 main 侧 NodePairError 对应的用户可读文案键 */
 const ERROR_KEYS: Record<NodePairError, string> = {
-  'invalid-uri': 'That is not an EnsoCode pairing link.',
+  'invalid-uri': 'That is not an Eaves pairing link.',
   'expired-or-claimed': 'This pairing link has expired or was already used. Generate a new one.',
   'relay-unreachable': 'Could not reach the relay. Check your network and try again.',
 };

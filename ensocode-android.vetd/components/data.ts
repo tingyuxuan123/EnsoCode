@@ -17,15 +17,15 @@ export const model = "Claude Opus 5.5";
 export const thinking = "高";
 
 export const sessions: Session[] = [
-	{ id: "s1", title: "会话恢复后时间线为空", project: "EnsoCode", time: "刚刚", status: "waiting", pinned: true, to: "/session" },
+	{ id: "s1", title: "会话恢复后时间线为空", project: "Eaves", time: "刚刚", status: "waiting", pinned: true, to: "/session" },
 	{ id: "s4", title: "首页 Hero 用哪张截图", project: "ensocode-site", time: "4 分钟前", status: "waiting", to: "/ask" },
-	{ id: "s2", title: "工作流面板显示运行进度", project: "EnsoCode", time: "2 分钟前", status: "running", to: "/queue" },
-	{ id: "s3", title: "Windows 版 CI 签名失败排查", project: "EnsoCode", time: "6 分钟前", status: "running", to: "/goal" },
+	{ id: "s2", title: "工作流面板显示运行进度", project: "Eaves", time: "2 分钟前", status: "running", to: "/queue" },
+	{ id: "s3", title: "Windows 版 CI 签名失败排查", project: "Eaves", time: "6 分钟前", status: "running", to: "/goal" },
 	{ id: "s8", title: "终端主题跟随桌面同步", project: "pi-extensions", time: "25 分钟前", status: "error", to: "/session" },
-	{ id: "s5", title: "子代理报告被截断", project: "EnsoCode", time: "1 小时前", status: "done", to: "/session" },
+	{ id: "s5", title: "子代理报告被截断", project: "Eaves", time: "1 小时前", status: "done", to: "/session" },
 	{ id: "s6", title: "解释 apply_patch 的格式", time: "2 小时前", status: "done", to: "/session" },
-	{ id: "s7", title: "MCP env 明文只保留在 Main", project: "EnsoCode", time: "昨天", status: "done", to: "/session" },
-	{ id: "s9", title: "发布 personal-v0.9.4", project: "EnsoCode", time: "周三", status: "done", to: "/session" },
+	{ id: "s7", title: "MCP env 明文只保留在 Main", project: "Eaves", time: "昨天", status: "done", to: "/session" },
+	{ id: "s9", title: "发布 personal-v0.9.4", project: "Eaves", time: "周三", status: "done", to: "/session" },
 ];
 
 export type BotState = "idle" | "running" | "queued";

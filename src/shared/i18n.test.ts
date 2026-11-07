@@ -9,6 +9,15 @@ import {
 } from './i18n';
 import { BUILTIN_TOOLS } from './types/builtinTools';
 
+it('translates the Eaves display name without falling back to English keys', () => {
+  expect(translate('zh', 'Welcome to Eaves')).toBe('欢迎使用 Eaves');
+  expect(translate('zh', 'Open inside Eaves')).toBe('在 Eaves 内打开');
+  expect(translate('zh', 'That is not an Eaves pairing link.')).toBe('这不是 Eaves 配对链接。');
+  expect(translate('zh', 'This file is not a valid Eaves team file.')).toBe(
+    '该文件不是有效的 Eaves 团队文件。'
+  );
+});
+
 /** 间接映射表里的 t() key。删孤儿时漏看这些会把正在用的词条删掉。 */
 const MAPPED_I18N_KEYS = [
   // VoiceInputSettings.MODEL_TEXT

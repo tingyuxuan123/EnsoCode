@@ -27,6 +27,7 @@ export default function BotChat() {
 				title="小测"
 				detail="测试 · 线程：会话恢复回归"
 				menu
+				detailTo="/threads"
 			/>
 			<div className="min-h-0 flex-1 overflow-hidden px-5 pt-2">
 				<UserBubble>把会话恢复相关的回归跑一遍，有失败给我截图。</UserBubble>

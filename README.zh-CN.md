@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="build/icons/256x256.png" width="96" alt="EnsoCode" />
+  <img src="build/icons/256x256.png" width="96" alt="Eaves" />
 </p>
 
-<h1 align="center">EnsoCode</h1>
+<h1 align="center">Eaves</h1>
 
 <p align="center">
   <b>把项目、模型和 Coding Agent，放进同一个桌面工作台。</b>
@@ -34,13 +34,13 @@
 ---
 
 <p align="center">
-  <img src="docs/readme/workspace-current.png" alt="当前 EnsoCode 工作台：项目导航、任务输入框与源码预览" width="1100" />
+  <img src="docs/readme/workspace-current.png" alt="当前 Eaves 工作台：项目导航、任务输入框与源码预览" width="1100" />
 </p>
 <p align="center"><sub>当前浅色工作台：项目导航、新任务和源码文件并排展示。</sub></p>
 
 ## 关于这个版本
 
-本仓库起源于 [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode)，现在由我独立维护。在保留 EnsoCode 名称和原项目基础能力的同时，这个版本按自己的使用习惯持续调整界面、交互和开发方向，并使用独立的个人发布通道。**它不是上游官方发行版。**
+本仓库起源于 [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode)，现在以 Eaves 名称由我独立维护。在原项目基础能力之上，这个版本按自己的使用习惯持续调整界面、交互和开发方向，并使用独立的个人发布通道。**它不是上游官方发行版。**
 
 我希望它首先是一个自己愿意每天打开的工作台：项目和会话切换顺手，模型可以自由选择，任务能够分工，执行过程看得见，最后的改动也方便审查。不必为了完成一件事，在一堆窗口之间来回切换。
 
@@ -88,7 +88,7 @@
 需要隔离工作目录时，可以使用 Git Worktree。Agent 上下文独立，不代表并行修改同一批文件就不会冲突。
 
 <p align="center">
-  <img src="docs/readme/workflows-current.png" alt="当前 EnsoCode 深色工作台：展开并行审查预设的工作流面板" width="1100" />
+  <img src="docs/readme/workflows-current.png" alt="当前 Eaves 深色工作台：展开并行审查预设的工作流面板" width="1100" />
 </p>
 <p align="center"><sub>深色模式下的工作流面板：配置并行审查，或选择多角度调研。</sub></p>
 
@@ -111,7 +111,7 @@
 3. 添加项目，创建会话。
 4. 描述任务，确认执行操作，审查最终改动。
 
-不需要注册 EnsoCode 账号。模型请求发往你配置的供应商或端点，产生的模型费用由对应服务收取。
+不需要注册 Eaves 账号。模型请求发往你配置的供应商或端点，产生的模型费用由对应服务收取。
 
 ### 关于个人更新通道
 

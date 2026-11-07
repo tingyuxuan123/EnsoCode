@@ -2,7 +2,7 @@ export const frame = { width: 412, height: 915, title: "会话" };
 
 import { Link } from "react-router";
 import { StatusBar } from "@vetta/ios";
-import { AgentAvatar } from "../components/Enso";
+import { AgentAvatar } from "../components/Eaves";
 import { TopBar } from "../components/TopBar";
 import { model } from "../components/data";
 
@@ -22,15 +22,16 @@ export default function Session() {
 				lead="drawer"
 				to="/home"
 				title="会话恢复后时间线为空"
-				detail={`EnsoCode · ${model} · 高`}
+				detail={`Eaves · ${model} · 高`}
 				menu
 			>
-				<button
-					aria-label="更多"
+				<Link
+					to="/session-menu"
+					aria-label="会话菜单"
 					className="flex size-10 items-center justify-center rounded-full text-ink2"
 				>
 					<span className="icon-[mdi--dots-vertical] size-6" />
-				</button>
+				</Link>
 			</TopBar>
 			<div className="min-h-0 flex-1 overflow-hidden px-5 pt-2">
 				<p className="pb-4 text-center text-[11px] leading-[14px] text-faint">今天 14:02</p>
@@ -42,7 +43,7 @@ export default function Session() {
 				<article className="flex flex-col gap-2.5">
 					<div className="flex items-center gap-2">
 						<AgentAvatar size={22} />
-						<span className="text-[15px] leading-5 font-semibold">EnsoCode</span>
+						<span className="text-[15px] leading-5 font-semibold">Eaves</span>
 						<span className="text-[12px] leading-4 text-dim">3 分钟前</span>
 					</div>
 					<button className="flex items-center gap-2 rounded-[14px] bg-card2/60 px-3 py-2.5 text-[14px] leading-5 text-dim">

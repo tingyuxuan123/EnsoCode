@@ -52,7 +52,7 @@ it('names a modal dialog, loops Tab in both directions, blocks background focus 
   await act(async () => root.render(<Onboarding />));
   const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
   expect(dialog?.getAttribute('aria-modal')).toBe('true');
-  expect(dialog?.getAttribute('aria-label')).toBe('Welcome to EnsoCode');
+  expect(dialog?.getAttribute('aria-label')).toBe('Welcome to Eaves');
   const close = container.querySelector<HTMLButtonElement>('[aria-label="Close"]')!;
   const next = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent === 'Get started'

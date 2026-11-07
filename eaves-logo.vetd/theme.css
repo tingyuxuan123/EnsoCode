@@ -1,0 +1,36 @@
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/noto-serif-sc";
+@import "@fontsource-variable/roboto";
+
+/* Eaves 标志稿：沿用安卓设计稿的黑白基调；唯一的颜色是那滴雨，取自界面里「运行中」的蓝。 */
+@theme {
+	--font-sans: "Roboto Variable", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+	--font-display: "Fraunces Variable", "Noto Serif SC Variable", "Songti SC", serif;
+	--font-cn: "Noto Serif SC Variable", "Songti SC", "SimSun", serif;
+
+	--color-paper: #f4f5f7;
+	--color-card: #ffffff;
+	--color-card2: #f0f1f3;
+	--color-line: #e3e5e8;
+	--color-ink: #0b0c0e;
+	--color-ink2: #3f444b;
+	--color-dim: #6b7077;
+	--color-faint: #9aa0a6;
+
+	--color-night: #0a0b0d;
+	--color-night-card: #1c1f23;
+	--color-night-ink: #f4f5f6;
+	--color-night-dim: #8b9096;
+
+	/* 雨：浅色界面用深一档，深色界面和图标底上用亮一档 */
+	--color-rain: #3b82f6;
+	--color-rain-deep: #2563eb;
+	/* 桌面端截图里的强调色（「生成中」那颗点），只用来对照新旧 */
+	--color-green: #16a34a;
+
+	--color-primary: #0b0c0e;
+	--color-primary-foreground: #ffffff;
+	--color-surface: #f4f5f7;
+	--color-surface-foreground: #0b0c0e;
+	--color-muted: #6b7077;
+}

@@ -2,7 +2,7 @@ export const frame = { width: 412, height: 915, title: "任务看板" };
 
 import { Link } from "react-router";
 import { StatusBar } from "@vetta/ios";
-import { AgentAvatar } from "../components/Enso";
+import { AgentAvatar } from "../components/Eaves";
 import { SessionMeta } from "../components/SessionMeta";
 import { StatusGlyph } from "../components/StatusGlyph";
 import { TopBar } from "../components/TopBar";
@@ -157,7 +157,7 @@ export default function Board() {
 				<div className="px-5 py-2.5">
 					<div className="truncate text-[16px] leading-[22px] font-medium text-ink2">子代理报告被截断</div>
 					<SessionMeta
-						project="EnsoCode"
+						project="Eaves"
 						time="1 小时前"
 					/>
 				</div>

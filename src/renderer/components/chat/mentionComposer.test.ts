@@ -28,7 +28,7 @@ const registry: AgentTypeCandidate[] = [
   {
     typeKey: 'agent:enso',
     displayName: 'Enso',
-    description: 'EnsoCode system agent for product capabilities and team setup',
+    description: 'Eaves system agent for product capabilities and team setup',
     source: 'system',
     locked: true,
     canDisable: false,

@@ -1,5 +1,6 @@
 import type { ComputerAppIdentity } from '@shared/computer/types';
 import { app, dialog } from 'electron';
+import { APP_DISPLAY_NAME } from '../appMenu';
 import type { AppPromptAnswer } from './appAuthorization';
 
 /**
@@ -11,7 +12,7 @@ export async function promptComputerAppAccess(
   signal: AbortSignal
 ): Promise<AppPromptAnswer> {
   const zh = app.getLocale().toLowerCase().startsWith('zh');
-  const name = app.getName() || 'EnsoCode';
+  const name = APP_DISPLAY_NAME;
   const options = {
     type: 'question' as const,
     message: zh

@@ -312,7 +312,7 @@ export function buildAgentTypeRegistrySnapshot(input: {
     {
       typeKey: ENSO_AGENT_TYPE_KEY,
       displayName: 'Enso',
-      description: 'EnsoCode system agent for product capabilities and team setup',
+      description: 'Eaves system agent for product capabilities and team setup',
       source: 'system',
       locked: true,
       canDisable: false,

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AgentAvatar } from "./Enso";
+import { AgentAvatar, RunningMark } from "./Eaves";
 
 /** 用户自己的消息：反色胶囊，右下角收尖（ChatBlocks.kt UserBubble）。 */
 export function UserBubble({ children }: { children: ReactNode }) {
@@ -10,8 +10,8 @@ export function UserBubble({ children }: { children: ReactNode }) {
 	);
 }
 
-/** 一轮回复的抬头：头像、名字、时间；进行中再跟一个转圈和它在做什么。 */
-export function TurnHead({ name = "EnsoCode", time, live }: { name?: string; time: string; live?: string }) {
+/** 一轮回复的抬头：头像、名字、时间；进行中再跟雨帘和它在做什么。 */
+export function TurnHead({ name = "Eaves", time, live }: { name?: string; time: string; live?: string }) {
 	return (
 		<div className="flex items-center gap-2">
 			<AgentAvatar
@@ -22,7 +22,7 @@ export function TurnHead({ name = "EnsoCode", time, live }: { name?: string; tim
 			<span className="text-[12px] leading-4 text-dim">{time}</span>
 			{live && (
 				<span className="flex min-w-0 items-center gap-1.5 text-[12px] leading-4 text-dim">
-					<span className="size-3 shrink-0 animate-spin rounded-full border-[1.5px] border-dim border-t-transparent" />
+					<RunningMark size={12} />
 					<span className="truncate">{live}</span>
 				</span>
 			)}
@@ -35,7 +35,7 @@ export function Steps({ children, live = false }: { children: ReactNode; live?: 
 	return (
 		<div className="flex items-center gap-2 rounded-[14px] bg-card2/60 px-3 py-2.5 text-[14px] leading-5 text-dim">
 			{live ? (
-				<span className="size-3 shrink-0 animate-spin rounded-full border-[1.5px] border-dim border-t-transparent" />
+				<RunningMark size={12} />
 			) : (
 				<span className="icon-[lucide--circle-check] size-4 shrink-0" />
 			)}
