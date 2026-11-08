@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "maxSamples": 192000,
+  "maxChars": 600000,
+  "cases": [
+    {
+      "name": "empty",
+      "samples": [],
+      "samplesPerChunk": 4,
+      "encoded": [],
+      "pcm": []
+    },
+    {
+      "name": "clipping-nan-and-endianness",
+      "samples": [
+        0,
+        1,
+        -1,
+        2,
+        -2,
+        0.5,
+        -0.5,
+        "NaN",
+        "+Infinity",
+        "-Infinity"
+      ],
+      "samplesPerChunk": 20,
+      "encoded": [
+        "AAD_fwCA_38AgABAAMAAAP9_AIA"
+      ],
+      "pcm": [
+        [
+          0,
+          32767,
+          -32768,
+          32767,
+          -32768,
+          16384,
+          -16384,
+          0,
+          32767,
+          -32768
+        ]
+      ]
+    },
+    {
+      "name": "rounding-asymmetry",
+      "samples": [
+        0.1,
+        -0.1,
+        0.3,
+        -0.3,
+        0.0000152587890625,
+        -0.0000152587890625,
+        0.99999,
+        -0.99999
+      ],
+      "samplesPerChunk": 3,
+      "encoded": [
+        "zQwz82Ym",
+        "mtkAAAAA",
+        "_38AgA"
+      ],
+      "pcm": [
+        [
+          3277,
+          -3277,
+          9830
+        ],
+        [
+          -9830,
+          0,
+          0
+        ],
+        [
+          32767,
+          -32768
+        ]
+      ]
+    },
+    {
+      "name": "short-final-chunk",
+      "samples": [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        -0.25,
+        -0.5,
+        -0.75,
+        -1,
+        0
+      ],
+      "samplesPerChunk": 4,
+      "encoded": [
+        "AAAAIABA_18",
+        "_38A4ADAAKA",
+        "AIAAAA"
+      ],
+      "pcm": [
+        [
+          0,
+          8192,
+          16384,
+          24575
+        ],
+        [
+          32767,
+          -8192,
+          -16384,
+          -24576
+        ],
+        [
+          -32768,
+          0
+        ]
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "length": 191999,
+      "pattern": [
+        0,
+        0.3,
+        -0.3,
+        1,
+        -1
+      ],
+      "chunks": [
+        {
+          "chars": 511998,
+          "sha256": "ba5158da56e40bf73980b6170dc15fa7ef4bc625c697cbd07bd82b56deff2b44",
+          "samples": 191999,
+          "pcmSha256": "a1bb755f783fd4a4b97968489081e315a8ba801027f16cb83b76940a97fadf47"
+        }
+      ]
+    },
+    {
+      "length": 192000,
+      "pattern": [
+        0,
+        0.3,
+        -0.3,
+        1,
+        -1
+      ],
+      "chunks": [
+        {
+          "chars": 512000,
+          "sha256": "66335874620f1ef857afaf2b8a3101a9619b5fed80d258d4fe5732399f621400",
+          "samples": 192000,
+          "pcmSha256": "98778857d4c4cdaef4c68661d17b29c4a9f1a418642580272a9c935ec9d8f6f5"
+        }
+      ]
+    },
+    {
+      "length": 192001,
+      "pattern": [
+        0,
+        0.3,
+        -0.3,
+        1,
+        -1
+      ],
+      "chunks": [
+        {
+          "chars": 512000,
+          "sha256": "66335874620f1ef857afaf2b8a3101a9619b5fed80d258d4fe5732399f621400",
+          "samples": 192000,
+          "pcmSha256": "98778857d4c4cdaef4c68661d17b29c4a9f1a418642580272a9c935ec9d8f6f5"
+        },
+        {
+          "chars": 3,
+          "sha256": "cb1ad2119d8fafb69566510ee712661f9f14b83385006ef92aec47f523a38358",
+          "samples": 1,
+          "pcmSha256": "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    "",
+    "AA",
+    "AAAA",
+    "!!!!",
+    "A",
+    "AA=A"
+  ]
+}

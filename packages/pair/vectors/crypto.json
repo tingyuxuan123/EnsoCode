@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "box": {
+    "hostSecretKey": "ByZFZIOiweD_Hj1ce5q52PcWNVRzkrHQ7w4tTGuKqcg",
+    "hostPublicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "ephSecretKey": "R2aFpMPiASA_Xn2cu9r5GDdWdZSz0vEQL05tjKvK6Qg",
+    "ephPublicKey": "kDQxUjgPqJBdj1oPpAdSlarFxDvHWdmB-pm7D_RWl3U",
+    "nonce": "ZYSjwuEAHz5dfJu62fgXNlV0k7LR8A8u",
+    "contentKey": "l7bV9BMyUXCPrs3sCypJaIemxeQDIkFgf5693PsaOVg",
+    "boxed": "G4d6fYxixZF7LaykEJwcrzg3XzM8qjwptS64hGjCwfB2psfGGLiINBe78-_wKICQ",
+    "boxedKey": "kDQxUjgPqJBdj1oPpAdSlarFxDvHWdmB-pm7D_RWl3U.ZYSjwuEAHz5dfJu62fgXNlV0k7LR8A8u.G4d6fYxixZF7LaykEJwcrzg3XzM8qjwptS64hGjCwfB2psfGGLiINBe78-_wKICQ"
+  },
+  "invalidBoxedKeys": [
+    "",
+    "a.b",
+    "a.b.c.d",
+    "!!!!.AA.AA"
+  ],
+  "invalidFrames": [
+    {
+      "name": "empty",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "frame": ""
+    },
+    {
+      "name": "below-minimum",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "frame": "ATVUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VQ"
+    },
+    {
+      "name": "version",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "frame": "AjVUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VUrAfUtkTGU1hMbIFaHZjFCn3TSbSEmyYH5iBiCmaH3AvGSAgFZbvQ"
+    },
+    {
+      "name": "tag-tampered",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "frame": "ATVUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VUrAfUtkTGU1hMbIFaHZjFCn3TSbSEmyYH5iBiCmaH3AvGSAgFZbvA"
+    },
+    {
+      "name": "nonce-tampered",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "frame": "ATRUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VUrAfUtkTGU1hMbIFaHZjFCn3TSbSEmyYH5iBiCmaH3AvGSAgFZbvQ"
+    },
+    {
+      "name": "wrong-key",
+      "key": "DCtKaYinxuUEI0JhgJ--3fwbOll4l7bV9BMyUXCPrs0",
+      "frame": "ATVUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VUrAfUtkTGU1hMbIFaHZjFCn3TSbSEmyYH5iBiCmaH3AvGSAgFZbvQ"
+    },
+    {
+      "name": "key-length",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-OrQ",
+      "frame": "ATVUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VUrAfUtkTGU1hMbIFaHZjFCn3TSbSEmyYH5iBiCmaH3AvGSAgFZbvQ"
+    },
+    {
+      "name": "authenticated-non-json",
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "frame": "AcfmBSRDYoGgv979HOcomIUTFABaH-Jx6KgVtN7I1pt48DSjn4w_FPySZPFq"
+    }
+  ]
+}

@@ -1,0 +1,1306 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": true
+    },
+    {
+      "name": "replay",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "session-檐下",
+            "status": "idle"
+          }
+        ]
+      },
+      "accepted": true
+    },
+    {
+      "name": "zero-event-replay",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 2,
+        "events": []
+      },
+      "accepted": true
+    },
+    {
+      "name": "unknown-event-fields-preserved",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "future-event",
+            "sessionId": "session-檐下",
+            "future": 42
+          }
+        ]
+      },
+      "accepted": true
+    },
+    {
+      "name": "bounded-identities",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+        "cursor": {
+          "epoch": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "seq": 9007199254740991
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": true
+    },
+    {
+      "name": "null",
+      "input": null,
+      "accepted": false
+    },
+    {
+      "name": "array",
+      "input": [],
+      "accepted": false
+    },
+    {
+      "name": "number",
+      "input": 42,
+      "accepted": false
+    },
+    {
+      "name": "unknown-type",
+      "input": {
+        "type": "other",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "unknown-mode",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "other",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "empty-session",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "empty-request",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "long-request",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "long-session",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "outer-extra",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        },
+        "extra": true
+      },
+      "accepted": false
+    },
+    {
+      "name": "wrong-branch",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        },
+        "fromSeq": 0
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": null,
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": [],
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "e",
+          "seq": -1
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "e",
+          "seq": 0.5
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "e",
+          "seq": 9007199254740992
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-cursor",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "e",
+          "seq": 0,
+          "extra": true
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-snapshot-container",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": null
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-snapshot-container",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "wrong",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-snapshot-container",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": []
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-snapshot-container",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            },
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "other",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "other"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": null,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": null,
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": {},
+              "baseIndex": 4
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": -1
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 0.5
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-session-snapshot",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "identity": {
+                "sessionId": "session-檐下",
+                "generation": "generation-1"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": []
+                }
+              ],
+              "baseIndex": 9007199254740992
+            }
+          ]
+        }
+      },
+      "accepted": false
+    },
+    {
+      "name": "optional-identity-and-extra-inner-fields",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-1",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 0
+        },
+        "mode": "snapshot",
+        "snapshot": {
+          "type": "snapshot",
+          "future": true,
+          "sessions": [
+            {
+              "sessionId": "session-檐下",
+              "messages": [],
+              "baseIndex": 0,
+              "future": true
+            }
+          ]
+        }
+      },
+      "accepted": true
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": []
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          null
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          []
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "",
+            "sessionId": "session-檐下"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "status"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "other"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-replay-events",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "sessionId": "session-檐下"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-fromSeq",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": -1,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "session-檐下",
+            "status": "idle"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-fromSeq",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 0.5,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "session-檐下",
+            "status": "idle"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-fromSeq",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 3,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "session-檐下",
+            "status": "idle"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "invalid-fromSeq",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 9007199254740992,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "session-檐下",
+            "status": "idle"
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "name": "replay-extra-key",
+      "input": {
+        "type": "session-sync",
+        "sessionId": "session-檐下",
+        "requestId": "request-2",
+        "cursor": {
+          "epoch": "epoch-1",
+          "seq": 2
+        },
+        "mode": "replay",
+        "fromSeq": 1,
+        "events": [
+          {
+            "type": "status",
+            "sessionId": "session-檐下",
+            "status": "idle"
+          }
+        ],
+        "snapshot": {}
+      },
+      "accepted": false
+    }
+  ]
+}

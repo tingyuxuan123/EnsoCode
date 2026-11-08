@@ -1,0 +1,1093 @@
+{
+  "version": 1,
+  "key": "rczrCilIZ4alxOMCIUBffp282_oZOFd2lbTT8hEwT24",
+  "legacyNonce": "5QQjQmGAn77d_Bs6",
+  "prefixRecipe": "8 bytes: uint32_be(0x70656572) || uint32_be(index); nonce = prefix || uint32_be(counter)",
+  "sequences": [
+    {
+      "name": "window-64-reset-and-no-downgrade",
+      "local": {
+        "role": "host",
+        "announce": true,
+        "requireModern": false,
+        "prefix": "DSxLaomox-Y",
+        "challenge": "JURjgqHA3_4"
+      },
+      "steps": [
+        {
+          "op": "takeHello",
+          "expected": {
+            "hello": true,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "takeHello",
+          "expected": {
+            "hello": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAARi53Em-4QmIBITXRw6qZwQ5uK5JUScakhklZrR1XYOu8qDXff7vTRI3q5YsKqfJGHC0BxUbtJWVI0wITf5XDBseDX4SYMd26lRW0CdL8ePp6GGqXl2WlFpmssYvLA4",
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AQ0sS2qJqMfmAAAAARi53Em-4QmIBITXRw6qZwQ5uK5JUScakhklZrR1XYOu8qDXff7vTRI3q5YsKqfJGHC0BxUbtJWVI0wITf5XDBseDX4SYMd26lRW0CdL8ePp6GGqXl2WlFpmssYvLA4",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAAYbN30Vq-9ItxDrv5thC9SdxO3Ri8kVXUXCJ2fRW9Lop_Qfz9UU5i2oChLOmBOI8uKYeO7RK_HknDCPWFGxLI2KgBzcoJr8lM68wLpbYL6xTMJGt39gju2xmluSGUJeBcwjRyzlG",
+          "expected": {
+            "accepted": true,
+            "trusted": false,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAAu_jas5vluaECxPlXT0o84vctdCdqfEuXHjx4XOYned9ko6TTGWRHAeyletwiA-r73M8PW-wTepUxZO7bwl0ygDSh-6UV_WcUCcaS0N9TfkaZzgsQNNjXSk98XyNWpt6T4cl9CQ8k3maHsDoDRKOIcc",
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAAifIIyLU-B0gILyRBbUtD7q_tM89Uio-OmBp6EaHGb50w21ITyPokgofZ1_Bg1r3mVa5GMybm6ZbBKGUQGvq1YI84aaKiJmKUf9ELU1YFJ-Yqw4WDqBKvTkaqycvOnupyF5YczMQBjsW00xjRR0wy1Pd_yMKKGiX",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAAifIIyLU-B0gILyRBbUtD7q_tM89Uio-OmBp6EaHGb50w21ITyPokgofZ1_Bg1r3mVa5GMybm6ZbBKGUQGvq1YI84aaKiJmKUf9ELU1YFJ-Yqw4WDqBKvTkaqycvOnupyF5YczMQBjsW00xjRR0wy1Pd_yMKKGiX",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAARjGr2z-DNdPShibE4-A0z2nm5KVWYkiTbZW2NdRNt8-cP_RH1SC5brXEQmJM51ZbuQqxi5b9uQN2IB18NaIRXruUoq7TLkHLYGlSPFe9ByJIKUyOKOZJTPo2ycJ6wywbMEcNJL2ZHCTk46CypB93TOGho0WSwtb3",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAB9wX5tIfqPT30qECZFWpzG6CLQrS2hyFiqT6s9E4YDiQOxPNxaeudwVtWa8ZWjsmvjbi9_8vubVTjIkcvYLbz_sqijglXDUFL2hvhVYmVpiLNp9iPTYcsWJFDpCd2-OP-NwYLmcn28TeF47NKpusIJizCoyrnRoP",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAABhcSzak-XVhQPUxOJUM--fdDwnKlALlGcfQRRwxxQUwTCddKuccpY_C4Oe7KmY7PtZzUIwadYoeXD0MCko85OfvQB8TN4iYbn1sJky1vo29N_D4wa19y5EpUKoW9cPmrxRojfTsOSSQ0Vz2-0YnQuBDzxnnB0rCi",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAB9wX5tIfqPT30qECZFWpzG6CLQrS2hyFiqT6s9E4YDiQOxPNxaeudwVtWa8ZWjsmvjbi9_8vubVTjIkcvYLbz_sqijglXDUFL2hvhVYmVpiLNp9iPTYcsWJFDpCd2-OP-NwYLmcn28TeF47NKpusIJizCoyrnRoP",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "reset",
+          "challenge": "PVx7mrnY9xY",
+          "expected": {
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "takeHello",
+          "expected": {
+            "hello": true,
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAARjGr2z-DNdPShibE4-A0z2nm5KVWYkiTbZW2NdRNt8-cP_RH1SC5brXEQmJM51ZbuQqxi5b9uQN2IB18NaIRXruUoq7TLkHLYGlSPFe9ByJIKUyOKOZJTPo2ycJ6wywbMEcNJL2ZHCTk46CypB93TOGho0WSwtb3",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAR8ZW9UfBi8c0zJoE-F1W1nYJ5H5u4hBI_qQoTCf2CpCfOhcRhOFUS3qOPNRQN8eQ_NQey5nyi31HkSF-gfYVv7gIUW3m4ZsZUGSzwuqAJKEp6i0iJ-e-rxZYHgywUnZf2fBuJUh2ZZaIXAeF9sjI7qQRxsnNBRCh",
+          "expected": {
+            "accepted": true,
+            "trusted": false,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAASOFRBfijH8EKuYDoTBkjDKXVDCPHt05o9YXgzDWqrZHNwtsVmp1nR6Rg6ocfDd6Py14sKAfG45AiPzPSNdxxX7n5Wjk5EZgIcN98dt0ZYui40u3qp8rZnk0J-wRmyORJBvx81U-6KwP_FrP64BWfjbu2PNsKmjTd",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZLzmfUMFYdGEnAxqOlCvob3XrOvcR4Jp46sBBfBBesUmpgRk1HQ",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAA2CgIHeSBxlM8KSRAA4CXKbnSBziXH7bcmMTL7aRTgzLk6rVRrJGTtLvPAR-O7JHhzJwI5oAB3Y3RebR2yDdOUD1he5JjtKM0KXe08_hiXfvEVjv2IkBabCF2G8GvjI_ih1Rpir0I4fyfpGv0oL3RXQ",
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "malformed-reflected-and-tampered",
+      "local": {
+        "role": "guest",
+        "announce": false,
+        "requireModern": true,
+        "prefix": "DSxLaomox-Y",
+        "challenge": "JURjgqHA3_4"
+      },
+      "steps": [
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAATfOj2iaxHUAz5dvdhZBlY9T1LtN",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAAQLma51UsSUQFtxaOYB1dEyOSg",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAAW2J5mzTgVg3oQHDezKdc8qdSA",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZkWEqnb-9UCca_HUyhRdB1RtzfDjb5ZX-R4lh",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2Tnf8Ugp5Pv5yBQQ_RiYZ3JelyTah1AcQf3LYJ8Y2w",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevwgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rJCV3o_JF4CcYf5ekc6hAn9V7ZrZILVwIAIN-HQZe",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpueUyevhF8rO6dWFhHdZN4D1w9PgHJcaTU3UhKLz5NgdX2ftMIyOg9FbkRLoVJux1GEOviQ",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rJCV3o_JF4CcYf5ekIvc-gitcn7PEu-ssGfo7F0OGxmXOtVi9bSsTTS4w8A",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AQ0sS2qJqMfmAAAAARi53Em-4QmIBIbAWACuPAVztKYHBCdA1Qg0eao2CIPm7PLJPr3vH0s5-8Q0Mu2vZyqIREBUn77ANg9LAvING2B2dA4bJYwc_D9gvHFC1MpgXxqQ2Lkf0bqxtJqMSteE9mCameAr",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rOShMkeFA8FZuWuqkc6jgkWTXz938VE5rYF1qnP7t",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RsDpFg82ft7rJCV3o_JF4CcYf5ekc6iR0ds8TzrrzgrSpqm38DlQ",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAAD_tl70VcQkuvIn3XC9JLsCWtlXE7mI1jl-cjvXSVvdCi9htbYNAn3O4o20_-aMIgeTkkbP0y_iiynM1_2rRKw6Q6FaH4Oax1l3ofXIxJCf0YlSjwU8-m__avnMKBaxkBT-5aWTD",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtvpFg82ft7rJCV3o_JF4CcYf5ekc6jcPTwV-jLLy-YuOARTFD7f",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rERx62ftMYp5sKJSfzMetM32NJ8johQ",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rJCV3o_JF4CcYf5ekIvc-2GUMnPCa7eQknAuKqTjZN2k1C8511FHwJg",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZLzmfUMFYdGEnAxqOlCvob3XrOvcR4Jp46sBBfBBesUmpgRk1HQ",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rJCV3o_JF4CcYf5ekIvc-2GUMtMSspf4oNMZ1jb8f-6sQLV6Y1kfDy2IlLvXeEMRM",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": true,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rJCV3o_JF4CcYf5ekIvc-2GUMtMSspf4oNMZ1jb8f-6sQLV6Y1kfDy2IlLvXeEMRN",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAADAAAAASKZl30qlPz-UG0T7mrTr2TnZMRy8dDgoHlKWeosMIta0MUo3Tq-4ORpu-UyevMgiP2pMBoCP9BWrnI11pt8RtzpFg82ft7rJCV3o_JF4CcYf5ekIvc-2GUMtMSspf4oNMZ1jb8f-6sQLV6Y1kfDy2IlLvXeEMRN",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAARi53Em-4QmIBITXRw6qZwQ5uK5JUScakhklZrR1XYOu8qDXff7vQhI3q5YsKqfJGHC0BxUbtJWVI0wITf5XDBseDX4SYMd26lRW0Ccarp8HH3Hl_a1yydyIXfBrSvbs05oLpeBkUj6-obPBFzH8gFs",
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "legacy-to-modern",
+      "local": {
+        "role": "guest",
+        "announce": false,
+        "requireModern": false,
+        "prefix": "DSxLaomox-Y",
+        "challenge": "JURjgqHA3_4"
+      },
+      "steps": [
+        {
+          "op": "takeHello",
+          "expected": {
+            "hello": false,
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "snapshot"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZL_6c1ETK5LS1xWO5pTDud-giAZsRS-IlMBP",
+            "ready": false,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZK_1ZkAMLJqE2UotbgarrbvQ4aOlZ1yg_woGXqo0TAbLwPZA2Ccc",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "catalog",
+              "entries": []
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZK_1ZkAMLJqE2UotbgarrbvQ4aOlZ1yg_woGXqo0TAbLwPZA2Ccc",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "catalog",
+              "entries": []
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 0
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAAFAAAAAc5SE3t58jdc-GqE0rf7AptBQLysk6SX6T_probEt69AdAi9LcfdJTmm9tPfBgdJoI-xkt1wfa28k7Q-O8wg7qOpSRbOhax8dOd4wFh1RXYACq8EgKwwtT8JdwOvQgMNk3oml3Wt",
+          "expected": {
+            "accepted": true,
+            "trusted": false,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZK_1ZkAMLJqE2UotbgarrbvQ4aOlZ1yg_woGXqo0TAbLwPZA2Ccc",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAARi53Em-4QmIBITXRw6qZwQ5uK5JUScakhklZrR1XYOu8qDXff7vQhI3q5YsKqfJGHC0BxUbtJWVI0wITf5XDBseDX4SYMd26lRW0Ccarp8HH3Hl_a1yydyIXfBrSvbs05oLpeBkUj6-obPBFzH8gFs",
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAAFAAAAAvl70u_E23Y3rL6sW87YpKzcJ0_EHT9KYDEferYrYHMRX3Po4n4Mg-Fai03cw6lodvhI2R9tAaaVETOOnStjdZuLLeBXNPOZXwNxLNzrVuSGmBz_GOYDJq4Ed5VuycyLFWI9w3BSKDTwbQAKflFpG0ueTSDcsnA9",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "reset",
+          "challenge": "PVx7mrnY9xY",
+          "expected": {
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AeUEI0JhgJ--3fwbOgzW9A4iNqehZK_1ZkAMLJqE2UotbgarrbvQ4aOlZ1yg_woGXqo0TAbLwPZA2Ccc",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "takeHello",
+          "expected": {
+            "hello": true,
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix-budget-127-128-129-no-eviction",
+      "local": {
+        "role": "host",
+        "announce": true,
+        "requireModern": false,
+        "prefix": "DSxLaomox-Y",
+        "challenge": "JURjgqHA3_4"
+      },
+      "steps": [
+        {
+          "op": "prefixRange",
+          "first": 1,
+          "count": 127,
+          "counter": 1,
+          "challenge": "WXiXttX0EzI",
+          "payload": {
+            "type": "probe",
+            "id": "vector"
+          },
+          "expected": {
+            "accepted": 127,
+            "trusted": 0,
+            "framesSha256": "f7bce01aa8bb009fd4ddde3e7b154364d40e9c1ae22e27e6c5cc6d9b2b8e3fbe",
+            "first": {
+              "index": 1,
+              "accepted": true,
+              "trusted": false,
+              "ready": false,
+              "failed": false,
+              "pins": 1
+            },
+            "last": {
+              "index": 127,
+              "accepted": true,
+              "trusted": false,
+              "ready": false,
+              "failed": false,
+              "pins": 1
+            },
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "prefixRange",
+          "first": 128,
+          "count": 1,
+          "counter": 1,
+          "challenge": "WXiXttX0EzI",
+          "payload": {
+            "type": "probe",
+            "id": "vector"
+          },
+          "expected": {
+            "accepted": 1,
+            "trusted": 0,
+            "framesSha256": "2c01b24f5448ceb2c8cdcb614b5248efccf959dbf55be14a8d9f7872db788a3d",
+            "first": {
+              "index": 128,
+              "accepted": true,
+              "trusted": false,
+              "ready": false,
+              "failed": false,
+              "pins": 1
+            },
+            "last": {
+              "index": 128,
+              "accepted": true,
+              "trusted": false,
+              "ready": false,
+              "failed": false,
+              "pins": 1
+            },
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAAYbN30Vq-9ItxDrv5thC9SdxO3Ri8kVXUXCJ2fRW9Lop_Qfz9UU5i2oChLOmBOI8uKYeO7RK_HknDCPWFGxLI2KgBzcoJr8lM68wLpbYL6xTMJGt39gju2xmluSGUJeBcwjRyzlG",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "prefixRange",
+          "first": 129,
+          "count": 1,
+          "counter": 1,
+          "challenge": "WXiXttX0EzI",
+          "payload": {
+            "type": "probe",
+            "id": "vector"
+          },
+          "expected": {
+            "accepted": 0,
+            "trusted": 0,
+            "framesSha256": "255367c4d28f6fe54e0a6d400de246b1a36f8320c48a5aad2da298e2f3c0ad3f",
+            "first": {
+              "index": 129,
+              "accepted": false,
+              "trusted": false,
+              "ready": false,
+              "failed": true,
+              "pins": 1
+            },
+            "last": {
+              "index": 129,
+              "accepted": false,
+              "trusted": false,
+              "ready": false,
+              "failed": true,
+              "pins": 1
+            },
+            "ready": false,
+            "failed": true,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAABAAAAAifIIyLU-B0gILyRBbUtD7q_tM89Uio-OmBp6EaHGb50w21ITyPokgofZ1_Bg1r3mVa5GMybm6ZbBKGUQGvq1YI84aaKiJmKUf9ELU1YFJ-Yqw4WX_8xCWtFNodMvLy5caV8Nr6G",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": true,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": true,
+            "ready": false,
+            "failed": true,
+            "pins": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "challenge-has-one-prefix-owner",
+      "local": {
+        "role": "host",
+        "announce": true,
+        "requireModern": false,
+        "prefix": "DSxLaomox-Y",
+        "challenge": "JURjgqHA3_4"
+      },
+      "steps": [
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAAKAAAAAddTE9n--5RN2iTbvwk5KNaGtsZ4dpSyK_UG-JGq2llK-BKyftmqCYRvhy0x3JeiP4Cjt1YP6HofYCxVLpWzQ6_1hReVG8oM_YasaaioBJnZUmoauWRPUcpCoLSgi_0pm0NwEive7VUWuNsfcz8ztPvWxlhoSQS3",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAALAAAAAWsZVZ7iG6Qu1xHY3CmxPGViP8myHv0C4wdjExKZrZn8EiM9janiSmENLtYrBy5GKtIVUYRnT8deSIliS_mdRFra9i3ARA0v5ajUMi2VMbsoOXe1OQMa55WCnZmW6YPWbte-eh384U5TE0poBvWRnUkcqjuta7HF",
+          "expected": {
+            "accepted": true,
+            "trusted": false,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAARi53Em-4QmIBITXRw6qZwQ5uK5JUScakhklZrR1XYOu8qDXff7vTRI3q5YsKqfJGHC0BxUbtJWVI0wITf5XDBseDX4SYMd26lRW0Ccarp8HH3Hl_a1yydyIXfBrSvbs07ctsAuVtPx4XJiL3ZBM5us",
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "reset",
+          "challenge": "PVx7mrnY9xY",
+          "expected": {
+            "ready": false,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAALAAAAAhovQjuNEPXpxB0vOuMtEH2fsu2oLyIZOdN8NLmIqBqu7haGk_SKHRoJJlXPRmXtuYGVmEw0DQ5Pu6ylRyCCmVHYSfpykywGIKxVRHjeFedejmliYWqGt6OcvT7gr-_Y6jUuAhUYhJ6N-M0L8a6JIGY1Hc3zGLnL",
+          "expected": {
+            "accepted": true,
+            "trusted": true,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAAKAAAAAmaASENGNEA2ZxA2MkM2N_56ZpG4yGDw7c5VGItraNVy43Lmxp_z1jTQKehtrpUf6WV33u9MfxLkXSZHHF9n0u90O8c8yrlha0mlnYdRixJDp5B5Ojl9fZy3TnKg7bqGdXKGC96bmwJPJDUVixv9EkkUpy_MuooA",
+          "expected": {
+            "accepted": true,
+            "trusted": false,
+            "error": false,
+            "payload": {
+              "type": "probe",
+              "id": "vector"
+            },
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": false,
+            "frame": "AQ0sS2qJqMfmAAAAAu_jas5vluaECxPlXT0o84vctdCdqfEuXHjx4XOYned9ko6TTGWRHAeyletwiA-r73M8PW-wTepUxZO7bwl0ygDIhMTJXfa6SC09JkN9TfkaZzgsQNNjXSk98XyNWpt6T2Ga-nbN0bQru8UdKwGWvFc",
+            "ready": true,
+            "failed": false,
+            "pins": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "pin-persistence-fails-closed",
+      "local": {
+        "role": "host",
+        "announce": true,
+        "requireModern": false,
+        "prefix": "DSxLaomox-Y",
+        "challenge": "JURjgqHA3_4",
+        "pinFails": true
+      },
+      "steps": [
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAAMAAAAATHaoD2x_mFsBuU_Kvb-Y_PKIr_VXCzf33UWFxufb4MyPPQNTGyTw1oeYpMvI99rOMr-Ztw4EprQpTYfZ2jqYsD4_7P40drtS1ugxSmaEUBnPPxwgVh4NwJjBCeT4CBsO5g_3XLy",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": true,
+            "pins": 1
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "AXBlZXIAAAAMAAAAAuZjQH8EUUQj8IyKKrxhmNuK1kcmNDgjI8BEoqerccBA9jZSWnNm4O6oyQ92ThXeZzYGXsN3oyPGe9jnUEM8lbWyFUAKXfD7G6laSp8A3afC5KRAqzvlK7Wlj3ZSQtYEz8mtyB0YxK8AIcDGqfIpaAfggG4Rq7M1",
+          "expected": {
+            "accepted": false,
+            "trusted": false,
+            "error": false,
+            "ready": false,
+            "failed": true,
+            "pins": 1
+          }
+        },
+        {
+          "op": "seal",
+          "payload": {
+            "type": "replay-hello"
+          },
+          "expected": {
+            "error": true,
+            "ready": false,
+            "failed": true,
+            "pins": 1
+          }
+        }
+      ]
+    }
+  ],
+  "counterCases": [
+    {
+      "value": 0,
+      "next": 1
+    },
+    {
+      "value": 1,
+      "next": 2
+    },
+    {
+      "value": 4294967294,
+      "next": 4294967295
+    },
+    {
+      "value": 4294967295,
+      "error": true
+    },
+    {
+      "value": -1,
+      "error": true
+    },
+    {
+      "value": 1.5,
+      "error": true
+    },
+    {
+      "value": 9007199254740991,
+      "error": true
+    }
+  ],
+  "bootstrap": [
+    {
+      "type": "replay-hello",
+      "command": true,
+      "response": true
+    },
+    {
+      "type": "snapshot",
+      "command": true,
+      "response": false
+    },
+    {
+      "type": "subscribe",
+      "command": true,
+      "response": false
+    },
+    {
+      "type": "history",
+      "command": true,
+      "response": true
+    },
+    {
+      "type": "direct-offer",
+      "command": true,
+      "response": false
+    },
+    {
+      "type": "direct-ice",
+      "command": true,
+      "response": true
+    },
+    {
+      "type": "direct-close",
+      "command": true,
+      "response": false
+    },
+    {
+      "type": "probe",
+      "command": true,
+      "response": false
+    },
+    {
+      "type": "prompt",
+      "command": false,
+      "response": false
+    },
+    {
+      "type": "approval-respond",
+      "command": false,
+      "response": false
+    },
+    {
+      "type": "presence",
+      "command": false,
+      "response": false
+    },
+    {
+      "type": "voice-chunk",
+      "command": false,
+      "response": false
+    },
+    {
+      "type": "file-list",
+      "command": false,
+      "response": false
+    },
+    {
+      "type": "diff-request",
+      "command": false,
+      "response": false
+    },
+    {
+      "type": "unknown",
+      "command": false,
+      "response": false
+    }
+  ]
+}

@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "base64": [
+    {
+      "hex": "",
+      "encoded": "",
+      "accepted": [
+        "",
+        " \t\r\n"
+      ]
+    },
+    {
+      "hex": "00",
+      "encoded": "AA",
+      "accepted": [
+        "AA",
+        "AA==",
+        " \tAA==\r\n"
+      ]
+    },
+    {
+      "hex": "ff",
+      "encoded": "_w",
+      "accepted": [
+        "_w",
+        "/w==",
+        " \t/w==\r\n"
+      ]
+    },
+    {
+      "hex": "00ff",
+      "encoded": "AP8",
+      "accepted": [
+        "AP8",
+        "AP8=",
+        " \tAP8=\r\n"
+      ]
+    },
+    {
+      "hex": "fbffff",
+      "encoded": "-___",
+      "accepted": [
+        "-___",
+        "+///",
+        " \t+///\r\n"
+      ]
+    },
+    {
+      "hex": "0001027f80ff",
+      "encoded": "AAECf4D_",
+      "accepted": [
+        "AAECf4D_",
+        "AAECf4D/",
+        " \tAAECf4D/\r\n"
+      ]
+    },
+    {
+      "hex": "1f3e5d7c9bbad9f81736557493b2d1f00f2e4d6c8baac9e80726456483a2c1",
+      "encoded": "Hz5dfJu62fgXNlV0k7LR8A8uTWyLqsnoByZFZIOiwQ"
+    },
+    {
+      "hex": "203f5e7d9cbbdaf91837567594b3d2f1102f4e6d8cabcae90827466584a3c2e1",
+      "encoded": "ID9efZy72vkYN1Z1lLPS8RAvTm2Mq8rpCCdGZYSjwuE"
+    },
+    {
+      "hex": "21405f7e9dbcdbfa1938577695b4d3f211304f6e8daccbea0928476685a4c3e201",
+      "encoded": "IUBffp282_oZOFd2lbTT8hEwT26NrMvqCShHZoWkw-IB"
+    }
+  ],
+  "invalidBase64": [
+    "A",
+    "A===",
+    "AA=A",
+    "!!!!",
+    "a.b",
+    "💧",
+    "AA\u0000"
+  ],
+  "invites": [
+    {
+      "uri": "enso://pair?relay=https%3A%2F%2Frelay.example.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "https://relay.example.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://relay.example.test/#relay=https%3A%2F%2Frelay.example.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "https://relay.example.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "  enso://pair?relay=https%3A%2F%2Frelay.example.test%2F&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI  ",
+      "relay": "https://relay.example.test/",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://relay.example.test/#pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "https://relay.example.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://relay.example.test:443/path?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "https://relay.example.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://relay.example.test:8443/path?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "https://relay.example.test:8443",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "http://localhost:80/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "http://localhost",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "http://localhost:8787/#pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "relay": "http://localhost:8787",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://web.example.test/?relay=https%3A%2F%2Fquery.test&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw#relay=https%3A%2F%2Ffirst.test%3A8443%2Fa%2F&relay=https%3A%2F%2Fsecond.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw",
+      "relay": "https://first.test:8443/a/",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://web.example.test/?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw",
+      "relay": "https://first.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://web.example.test/?pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw#pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw",
+      "relay": "https://web.example.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "https://web.example.test/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI#",
+      "relay": "https://web.example.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    },
+    {
+      "uri": "enso://pair?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw",
+      "relay": "https://first.test",
+      "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+    }
+  ],
+  "invalidInvites": [
+    "",
+    "not a pair uri",
+    "ftp://relay.example.test/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "enso://other?relay=https%3A%2F%2Frelay.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "ENSO://pair?relay=https%3A%2F%2Frelay.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "enso://pair?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "enso://pair?relay=https%3A%2F%2Frelay.test",
+    "enso://pair?relay=&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "https://relay.example.test/#pk=",
+    "https://relay.example.test/#pk=!!!!",
+    "https://relay.example.test/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI#unrelated=1",
+    "https://relay.example.test/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI#relay=https%3A%2F%2Frelay.test",
+    "https://[invalid/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
+  ],
+  "frames": [
+    {
+      "key": "CypJaIemxeQDIkFgf5693PsaOVh3lrXU8xIxUG-Orcw",
+      "nonce": "NVRzkrHQ7w4tTGuK",
+      "plaintext": "{\"type\":\"probe\",\"id\":\"fixed-1\",\"at\":0}",
+      "frame": "ATVUc5Kx0O8OLUxritObHLlaGl-5lkGFejk5VUrAfUtkTGU1hMbIFaHZjFCn3TSbSEmyYH5iBiCmaH3AvGSAgFZbvQ"
+    },
+    {
+      "key": "DCtKaYinxuUEI0JhgJ--3fwbOll4l7bV9BMyUXCPrs0",
+      "nonce": "NlV0k7LR8A8uTWyL",
+      "plaintext": "{\"type\":\"prompt\",\"sessionId\":\"会话-一\",\"text\":\"檐下 🌧️ café\\n第二行\",\"nested\":{\"yes\":true}}",
+      "frame": "ATZVdJOy0fAPLk1si7ceUE1Suc5qvM_cw3qHqCC_vNHMNGimbi7AQWnbXq1gVqUDeBRCnLdvbKX03f_By0IGJG3U6iUZB0toF8NzqPnuts4jxSigoa8Nuup-hNYTFBQF-Ako-0TRWdDL7qAVzQk8BTx8g7Wj8glqA7FNCix0WYod_EK4YoM"
+    },
+    {
+      "key": "DSxLaomox-YFJENigaC_3v0cO1p5mLfW9RQzUnGQr84",
+      "nonce": "N1Z1lLPS8RAvTm2M",
+      "plaintext": "{\"type\":\"snapshot\",\"empty\":[],\"nil\":null,\"number\":-0.5}",
+      "frame": "ATdWdZSz0vEQL05tjFy6ghY80tK3H52yiGmfAZArl--uLRUvouvoaIR_d7P0FtTGRVryuxkiB83xzsxtfMQXWaGoDrVin_zOf1I6o2x5N0HF00gw"
+    },
+    {
+      "key": "Di1Ma4qpyOcGJURjgqHA3_4dPFt6mbjX9hU0U3KRsM8",
+      "nonce": "OFd2lbTT8hEwT26N",
+      "plaintext": "[\"JSON\",42,false,null]",
+      "frame": "AThXdpW00_IRME9ujXvmJgorQc8pYTJ_xS0fhCoZu33op09JANQMUrtYlCjWtjJbVftz"
+    }
+  ]
+}

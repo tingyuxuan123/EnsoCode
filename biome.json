@@ -66,6 +66,9 @@
       "!!.zvec-grep",
       "!.hce",
       "!temp",
+      "!android/**/build",
+      "!android/.gradle",
+      "!android/.kotlin",
       "!*.vetd",
       "!docs/project-history/**/*.html",
       "!packages/relay-go/frontend/assets",
@@ -76,6 +79,10 @@
     ]
   },
   "overrides": [
+    {
+      "includes": ["packages/pair/vectors/*.json"],
+      "json": { "formatter": { "enabled": false } }
+    },
     {
       "includes": ["build/**/*.svg"],
       "linter": { "rules": { "a11y": { "noSvgWithoutTitle": "off" } } }
