@@ -1,0 +1,31 @@
+Eaves Android third-party assets
+
+Lucide icon paths
+Copyright (c) 2026 Lucide Icons and Contributors
+https://github.com/lucide-icons/lucide
+ISC License; derived Feather icons additionally retain:
+Copyright (c) 2013-present Cole Bemis
+Full license texts: LUCIDE.txt
+
+Material Design Icons (sort, pin, help, exclamation-thick, dots-vertical)
+Copyright (c) Pictogrammers
+https://github.com/Templarian/MaterialDesign
+Apache License, Version 2.0; full text: APACHE-2.0.txt
+
+Icon paths have been converted from SVG to Kotlin ImageVector by Eaves;
+rounded rectangles / circles are represented by equivalent path geometry.
+
+JetBrains Mono Regular 2.304 (unmodified)
+Copyright 2020 The JetBrains Mono Project Authors
+https://github.com/JetBrains/JetBrainsMono/tree/v2.304
+SIL Open Font License 1.1; full text: JETBRAINS-MONO-OFL.txt
+TTF SHA-256: a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f
+
+TweetNaCl Java 1.1.2 (org.purejava:tweetnacl-java, unmodified)
+Copyright (c) 2014-present tom zhou<appnet.link@gmail.com>
+https://github.com/InstantWebP2P/tweetnacl-java
+Maven distribution: https://github.com/purejava/tweetnacl-java/tree/v1.1.2
+MIT License; full text: TWEETNACL-JAVA-MIT.txt
+Multiplatform Markdown Renderer (Material 3) 0.39.0
+https://github.com/mikepenz/multiplatform-markdown-renderer
+Apache License 2.0; full text: APACHE-2.0.txt

@@ -29,6 +29,9 @@
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
+修改 `android/` 时还需在该目录运行 `./gradlew check`；有模拟器或真机时另跑
+`./gradlew :app:connectedDebugAndroidTest`。Windows 使用 `gradlew.bat`。
+
 一个可独立描述的修复、功能或重构使用一个独立提交，不把无关改动混在一起。
 
 ## 关键边界

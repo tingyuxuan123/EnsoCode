@@ -22,9 +22,12 @@
  * - 支持通过 prompt 里的指令触发工具调用，用来验 Enso 能力链路
  * - 记录每次请求，验收脚本可核对「worker 是否真的发出了请求」
  */
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.FAKE_PROVIDER_PORT || 8899);
+const holdText = process.env.FAKE_PROVIDER_HOLD_TEXT;
+const holdMs = Math.min(30_000, Math.max(0, Number(process.env.FAKE_PROVIDER_HOLD_MS) || 0));
 const requests = [];
 /** 接下来 N 次模型请求直接返回指定状态码（验证自动重试链路）：GET /__fail?count=2&status=503 */
 const failNext = { count: 0, status: 503 };
@@ -175,6 +178,14 @@ const server = createServer((req, res) => {
     try {
       parsed = JSON.parse(body);
     } catch {}
+    const lastUser = Array.isArray(parsed?.messages)
+      ? parsed.messages.findLast((message) => message?.role === 'user')
+      : null;
+    const userImages = Array.isArray(lastUser?.content)
+      ? lastUser.content.filter(
+          (part) => part?.type === 'image' && typeof part.source?.data === 'string'
+        )
+      : [];
     requests.push({
       at: Date.now(),
       url,
@@ -185,6 +196,11 @@ const server = createServer((req, res) => {
         parsed?.messages?.at(-1)?.content?.[0]?.text ?? parsed?.messages?.at(-1)?.content ?? ''
       ).slice(0, 120),
       toolNames: Array.isArray(parsed?.tools) ? parsed.tools.map((t) => t.name) : [],
+      // Only digests/MIME, never image bytes or arbitrary request bodies.
+      lastUserImages: userImages.map((part) => ({
+        mimeType: part.source.media_type,
+        sha256: createHash('sha256').update(Buffer.from(part.source.data, 'base64')).digest('hex'),
+      })),
       // 用来区分请求实际用了哪个 provider 条目的凭证（AC12/AC18 需要）
       authKey: String(req.headers['x-api-key'] || req.headers.authorization || '').slice(-6),
     });
@@ -199,7 +215,13 @@ const server = createServer((req, res) => {
 
     const messages = parsed?.messages;
     const calls = hasToolResult(messages) ? [] : parseToolDirectives(messages);
-    sse(res, calls.length > 0 ? toolUseReply(calls) : textReply('fake-ok'));
+    const reply = () => sse(res, calls.length > 0 ? toolUseReply(calls) : textReply('fake-ok'));
+    if (holdMs && holdText && messageText(messages?.at(-1)).includes(holdText)) {
+      const timer = setTimeout(reply, holdMs);
+      res.once('close', () => clearTimeout(timer));
+    } else {
+      reply();
+    }
   });
 });
 

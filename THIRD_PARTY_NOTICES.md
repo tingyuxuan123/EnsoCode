@@ -1,5 +1,40 @@
 # Third-party notices
 
+## Eaves Android icons
+
+The native Android icons in `android/app/src/main/java/io/github/tingyuxuan123/eaves/ui/EnsoIcons.kt`
+are converted from the design document's Lucide (ISC, with applicable Feather MIT
+attribution) and Pictogrammers Material Design Icons (Apache-2.0) paths. Applicable
+licenses and attribution are bundled in `android/app/src/main/assets/licenses/`;
+see also `android/NOTICE`. JetBrains Mono Regular 2.304 is bundled unmodified under
+the SIL Open Font License 1.1, with the full license in the same assets directory.
+No Vetta Android platform code is copied in this increment.
+
+## Eaves Android Markdown
+
+The session UI uses [Multiplatform Markdown Renderer](https://github.com/mikepenz/multiplatform-markdown-renderer)
+Material 3 version 0.39.0 under Apache-2.0. Its license is bundled at
+`assets/licenses/APACHE-2.0.txt`. Eaves disables remote images and link launching in session text.
+
+## Eaves Android NaCl box
+
+`android/pair` uses the unmodified Maven Central dependency
+`org.purejava:tweetnacl-java:1.1.2` (MIT), the purejava distribution of Tom Zhou's
+[TweetNaCl Java port](https://github.com/InstantWebP2P/tweetnacl-java).
+Distribution source: [purejava v1.1.2](https://github.com/purejava/tweetnacl-java/tree/v1.1.2),
+commit `cf79479ccb3c1ecce75c0eee6571759ed6fe19ba`. The published source JAR's
+`TweetNaclFast.java` matches that tag. The binary JAR SHA-256 is
+`c404c71211424ac151af2c7351e9dee5fbddf7a48252e4a1c2d33a840cd61072`.
+The dependency has no runtime transitive dependencies. Eaves wraps its explicit
+nonce API with JCA secure randomness and an all-zero X25519 shared-secret check;
+no curve implementation is copied into Eaves source.
+
+Copyright (c) 2014-present tom zhou<appnet.link@gmail.com>
+
+The complete upstream MIT license is bundled with the APK at
+`assets/licenses/TWEETNACL-JAVA-MIT.txt` (source:
+`android/app/src/main/assets/licenses/TWEETNACL-JAVA-MIT.txt`).
+
 ## Devin code search
 
 The bounded code-search loop, local workspace reader, and private Devin/Windsurf

@@ -1,0 +1,53 @@
+Eaves Android
+
+Visual reference: ensocode-android.vetd, whose theme is based on Vetta Android.
+No Vetta platform implementation has been copied in this increment.
+
+Lucide icons (the path data in EnsoIcons.kt)
+Source: https://github.com/lucide-icons/lucide
+Copyright (c) 2026 Lucide Icons and Contributors
+ISC License
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+Material Design Icons (sort, pin, help, exclamation-thick, dots-vertical)
+Source: https://github.com/Templarian/MaterialDesign
+Copyright (c) Pictogrammers
+Licensed under Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+Distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing
+permissions and limitations under the License.
+
+Full Lucide / Feather and Apache-2.0 license texts are included in the APK under
+assets/licenses/ and in the corresponding android/app/src/main/assets/licenses/.
+Kotlin ImageVector conversion and equivalent rounded-rectangle paths are Eaves
+modifications of the original SVG icon geometry.
+
+JetBrains Mono Regular 2.304 (unmodified)
+Copyright 2020 The JetBrains Mono Project Authors
+Source: https://github.com/JetBrains/JetBrainsMono/tree/v2.304
+SIL Open Font License 1.1; see assets/licenses/JETBRAINS-MONO-OFL.txt.
+
+TweetNaCl Java 1.1.2 (org.purejava:tweetnacl-java)
+Copyright (c) 2014-present tom zhou<appnet.link@gmail.com>
+Java port originating at https://github.com/InstantWebP2P/tweetnacl-java
+Maven distribution: https://github.com/purejava/tweetnacl-java/tree/v1.1.2
+MIT License; full text is included in assets/licenses/TWEETNACL-JAVA-MIT.txt.
+Used unmodified for NaCl box key exchange in android/pair. Eaves supplies secure
+random nonces and rejects all-zero X25519 shared secrets before invoking box.
+
+Multiplatform Markdown Renderer (Material 3) 0.39.0
+Source: https://github.com/mikepenz/multiplatform-markdown-renderer
+Apache License 2.0; full text is included in assets/licenses/APACHE-2.0.txt.
+Rendered links are inert and remote image fetching is disabled in Eaves sessions.
