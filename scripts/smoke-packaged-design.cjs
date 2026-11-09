@@ -8,6 +8,7 @@ const {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -47,7 +48,9 @@ function assertDesignDistribution(resources) {
 
 function smoke(resources) {
   const root = assertDesignDistribution(resources);
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'enso-packaged-design-'));
+  // Windows TEMP may use an 8.3 alias (RUNNER~1). Vite resolves its HTML entry to
+  // the long path; keep root, VETD_SRC and outDir in that same canonical tree.
+  const tmp = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'enso-packaged-design-')));
   try {
     const engine = path.join(tmp, 'engine');
     const design = path.join(tmp, 'example.vetd');

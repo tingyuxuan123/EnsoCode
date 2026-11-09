@@ -152,6 +152,11 @@ Windows 发布 job 串行化，且只允许比当前 Latest 更新的版本，�
 Windows 安装、旧数据保留及自动升级的人工验收不再作为公开前置条件，但必须如实说明未验收，
 不能用 CI 通过代替真机安装结论。此规则只影响后续 tag 使用的新 workflow，旧 tag 的运行不会自动更新。
 
+包内设计引擎冒烟先用 `realpathSync.native` 规范化临时目录，再派生引擎目录、`VETD_SRC` 和输出目录。
+Windows runner 的 `TEMP` 可能含 `RUNNER~1` 短路径；混用短路径与 Vite 解析出的长路径会让
+HTML 产物名带 `../`，导致 `vite:build-html` 失败。回归见 `scripts/prepare-design-engine.test.mjs` 的
+真实别名目录子进程测试；不要跳过编译门兜底。
+
 ```bash
 git push origin HEAD:main
 git tag -a "windows-v$VERSION" -m "EnsoCode $VERSION Windows x64"

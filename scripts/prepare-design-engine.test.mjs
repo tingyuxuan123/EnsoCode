@@ -1,45 +1,53 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { prepareDesignEngine, stripForeignDesignPackages } from './prepare-design-engine.mjs';
+
+const distributionFiles = [
+  'LICENSE',
+  'NOTICE',
+  'UPSTREAM.md',
+  'engine/package.json',
+  'engine/vite.config.mjs',
+  'engine/src/main.tsx',
+  'engine/node_modules/vite/bin/vite.js',
+  'skills/vetta-ui-design/SKILL.md',
+  'agents/designer.md',
+  'history-runner/runner.mjs',
+  'history-runner/source/runner-entry.ts',
+  'history-runner/source/archive.ts',
+  'history-runner/source/isomorphic-git-join.js',
+  'history-runner/source/build-tools.package.json',
+  'history-runner/source/build-tools.package-lock.json',
+  'history-runner/source/vite.runner.config.ts',
+  'history-runner/LICENSES/fflate-MIT.txt',
+  'history-runner/LICENSES/isomorphic-git-MIT.txt',
+  'history-runner/LICENSES/LGPL-3.0.txt',
+  'history-runner/LICENSES/GPL-3.0.txt',
+];
+
+async function distributionFixture(t) {
+  const root = await fixture(t);
+  for (const file of distributionFiles) {
+    const target = path.join(root, 'design', file);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, 'shipped source/license fixture');
+  }
+  return root;
+}
 
 test('packaged design distribution requires preferred source, rebuild inputs and full licenses', async (t) => {
   const { assertDesignDistribution } = createRequire(import.meta.url)(
     './smoke-packaged-design.cjs'
   );
-  const root = await fixture(t);
-  const files = [
-    'LICENSE',
-    'NOTICE',
-    'UPSTREAM.md',
-    'engine/package.json',
-    'engine/vite.config.mjs',
-    'engine/src/main.tsx',
-    'engine/node_modules/vite/bin/vite.js',
-    'skills/vetta-ui-design/SKILL.md',
-    'agents/designer.md',
-    'history-runner/runner.mjs',
-    'history-runner/source/runner-entry.ts',
-    'history-runner/source/archive.ts',
-    'history-runner/source/isomorphic-git-join.js',
-    'history-runner/source/build-tools.package.json',
-    'history-runner/source/build-tools.package-lock.json',
-    'history-runner/source/vite.runner.config.ts',
-    'history-runner/LICENSES/fflate-MIT.txt',
-    'history-runner/LICENSES/isomorphic-git-MIT.txt',
-    'history-runner/LICENSES/LGPL-3.0.txt',
-    'history-runner/LICENSES/GPL-3.0.txt',
-  ];
-  for (const file of files) {
-    const target = path.join(root, 'design', file);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, 'shipped source/license fixture');
-  }
+  const root = await distributionFixture(t);
   assert.doesNotThrow(() => assertDesignDistribution(root));
-  for (const file of files) {
+  for (const file of distributionFiles) {
     const target = path.join(root, 'design', file);
     await rm(target);
     assert.throws(() => assertDesignDistribution(root), { code: 'ENOENT' }, file);
@@ -47,6 +55,41 @@ test('packaged design distribution requires preferred source, rebuild inputs and
     assert.throws(() => assertDesignDistribution(root), /Empty distribution file/, file);
     await writeFile(target, 'restored fixture');
   }
+});
+
+test('packaged design smoke gives the build canonical paths when the temp directory is aliased', async (t) => {
+  const root = await distributionFixture(t);
+  const realTemp = path.join(root, 'long-temp-directory');
+  const alias = path.join(root, 'temp-alias');
+  await mkdir(realTemp);
+  await symlink(realTemp, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  await writeFile(path.join(root, 'design/engine/package.json'), '{}');
+  await writeFile(
+    path.join(root, 'design/engine/node_modules/vite/bin/vite.js'),
+    `const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const engine = fs.realpathSync.native(process.cwd());
+const output = process.argv[process.argv.indexOf('--outDir') + 1];
+assert.equal(process.env.VETD_SRC, path.join(path.dirname(engine), 'example.vetd'));
+assert.equal(output, path.join(path.dirname(engine), 'output'));
+fs.mkdirSync(path.join(output, 'assets'), { recursive: true });
+fs.writeFileSync(path.join(output, 'assets/smoke.js'), 'EnsoPackagedDesignSmoke');`
+  );
+  await writeFile(
+    path.join(root, 'design/history-runner/runner.mjs'),
+    `console.log(JSON.stringify({ ok: true, committed: true }));`
+  );
+  const output = execFileSync(
+    process.execPath,
+    [fileURLToPath(new URL('./smoke-packaged-design.cjs', import.meta.url)), root],
+    {
+      env: { ...process.env, TMPDIR: alias, TMP: alias, TEMP: alias },
+      encoding: 'utf8',
+    }
+  );
+  assert.match(output, /Vite compiled the fixture/);
+  assert.match(output, /history commit/);
 });
 
 async function fixture(t) {
