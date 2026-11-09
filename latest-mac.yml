@@ -1,22 +1,59 @@
-version: 0.2.60
+version: 0.2.66
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.60/EnsoCode-0.2.60-arm64-mac.zip
-    sha512: ib3CaO0fX3TRqfluh3TXzQlNqycngQaQtIet1VnIgUSVm8It0gs38jPU0USFOKcFMCa26lOUGUAGkY2PF80JRA==
-    size: 183360424
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.60/EnsoCode-0.2.60-arm64.dmg
-    sha512: 9HBE8siCAhkq4zPsXPRBArm8Q+4CY0ka2MGRDA/P0nWh4YZjETc5Bzb57vayWP3rNsZ04EQk9iswoEgEXx766g==
-    size: 178163333
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.60/EnsoCode-0.2.60-arm64-mac.zip
-sha512: ib3CaO0fX3TRqfluh3TXzQlNqycngQaQtIet1VnIgUSVm8It0gs38jPU0USFOKcFMCa26lOUGUAGkY2PF80JRA==
-releaseDate: 2026-11-06T08:47:40.732Z
-releaseName: EnsoCode 0.2.60 — 个人测试
-releaseNotes: |
-  # EnsoCode 0.2.60
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.66/Eaves-0.2.66-arm64-mac.zip
+    sha512: JiR+XfECIAmn25Ncnx6YQHX7lCj2MUB8jEtpB039A/y6LRdhp1b/weqG8SBZ/tzGabvgw92cv1W0uc6uo9BVlg==
+    size: 183098793
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.66/Eaves-0.2.66-arm64.dmg
+    sha512: zxbxL78szw2E+s0iHoYsrJRCHOMWT48vvztiihmy+U9Q2xxg0zl5Mg6PX4LnoaJ2l+VxYEsSZGG0zJ0uWL/62g==
+    size: 177752240
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.66/Eaves-0.2.66-arm64-mac.zip
+sha512: JiR+XfECIAmn25Ncnx6YQHX7lCj2MUB8jEtpB039A/y6LRdhp1b/weqG8SBZ/tzGabvgw92cv1W0uc6uo9BVlg==
+releaseDate: 2026-11-09T01:42:32.713Z
+releaseName: EnsoCode 0.2.66 — 个人测试
+releaseNotes: >
+  # EnsoCode 0.2.66
 
-  - **多个项目可以同时使用设计画布**：侧栏「设计」标签上新增「在新窗口打开画布」，把当前会话的画布弹到独立窗口。该会话的新建、截图、方向和素材等设计操作都在这个窗口里完成，主窗口切到别的项目也能同时设计，不再提示画布被其他项目占用。主窗口里对应位置显示「画布已在独立窗口中打开」，可一键切回；关闭独立窗口后恢复原来的方式。
-  - 独立窗口里的备注派活仍发到所属会话，运行状态和「修改中 / 已更新」提示与主窗口同步；窗口只能访问自己会话的项目目录，进入托盘模式时会一并关闭。
-  - 首版暂不支持 SSH 项目和 Bot 会话。
+
+  本次为 Mac arm64 个人更新，汇总自个人版 0.2.60 以来的桌面改进。
+
+
+  ## 新功能与体验
+
+
+  - **Eaves 新名称与图标**：桌面应用更新为 Eaves 品牌，包含应用、托盘与运行状态图标；沿用原有应用标识和个人签名证书。
+
+  - **聊天排版**：在「设置 → 外观」分别调整正文、标题、表格、代码块和行内代码的字号与字重，支持预览、恢复默认和配置同步。
+
+  - **Code 会话多技能**：输入框可叠加多个 `/skill:` 并按顺序展开，草稿、失败重发和回退保留技能与任务正文。
+
+  - **模型中心**：可一次拉取全部供应商模型，分别显示刷新结果，单家失败不阻断其他供应商。
+
+  - **聊天网页链接**：默认在会话内置浏览器打开，按住 Ctrl 点击可改用系统浏览器，也可在设置中关闭该行为。
+
+  - **子代理完成报告**：正文使用 Markdown 展示，token、工具次数和耗时单独显示。
+
+
+  ## 修复与稳定性
+
+
+  - 保存聊天草稿，发送失败时保留输入；改进项目错误提示、首次引导焦点、任务通知和侧栏拖动反馈。
+
+  - 修复从空聊天派活后加载状态不结束、关闭已无运行实体的子代理后标签页残留的问题。
+
+  - 修复非默认界面缩放下内置浏览器与停靠 DevTools 的原生视图位置偏移。
+
+  - 改进 Bot 成员实时会话与历史记录的加载，修复文件链接解析及有歧义的任务跟进处理。
+
+  - 收紧历史与提醒文件的身份校验，避免已保存的供应商与 MCP 凭据从 Main 泄露到界面层。
+
+  - 手机网页端不再把尽力而为的在线状态上报失败显示为命令错误，并补充配对协议的共享测试向量与回环测试。
+
+
+  本次仅发布 Mac 桌面个人包，不发布 Android APK 或 Windows 新版本；Android 原生伴侣的开发与人工验收另行进行。
+
 
   ---
 
-  个人测试通道 0.2.60：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+
+  个人测试通道 0.2.66：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
