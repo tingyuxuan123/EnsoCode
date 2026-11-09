@@ -1,6 +1,6 @@
 {
   "name": "enso-code",
-  "version": "0.2.65",
+  "version": "0.2.66",
   "description": "Eaves - Electron Multi-Window Scaffold",
   "main": "./out/main/index.js",
   "author": {
