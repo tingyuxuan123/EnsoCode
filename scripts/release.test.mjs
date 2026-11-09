@@ -134,6 +134,28 @@ test('Windows 专用 tag 严格匹配版本，不触发 Mac 或多平台发布',
   assert.doesNotMatch(JSON.stringify(workflow), /--mac|--linux|personal-updates|APPLE_CERTIFICATE/);
 });
 
+test('Windows 手动安装提供目录选择，默认不强制全用户安装', async () => {
+  const config = parse(await readFile(new URL('../electron-builder.yml', import.meta.url), 'utf8'));
+  assert.deepEqual(config.win.target, ['nsis']);
+  assert.equal(config.nsis.oneClick, false);
+  assert.equal(config.nsis.allowToChangeInstallationDirectory, true);
+  assert.notEqual(config.nsis.perMachine, true);
+  assert.notEqual(config.nsis.selectPerMachineByDefault, true);
+});
+
+test('Windows 应用内升级保持静默，跳过安装向导并沿用已注册目录', async () => {
+  const config = parse(await readFile(new URL('../electron-builder.yml', import.meta.url), 'utf8'));
+  assert.equal(config.nsis.include, 'build/installer.nsh');
+  const installer = await readFile(new URL('../build/installer.nsh', import.meta.url), 'utf8');
+  // 合约检查，不代表已在 Windows 上完成安装/升级验收。
+  // SetSilent 只作用于 electron-updater 的 --updated；不覆盖 $INSTDIR，保留 NSIS 的注册表恢复逻辑。
+  assert.match(
+    installer,
+    /!macro customInit\s+\$\{if\} \$\{isUpdated\}\s+SetSilent silent\s+\$\{endif\}\s+!macroend/
+  );
+  assert.doesNotMatch(installer, /StrCpy\s+\$INSTDIR\b/);
+});
+
 test('仅 Windows 产物可独立校验，坏安装包与缺失清单不能发布', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'enso-release-windows-'));
   const windows = manifest(`EnsoCode-Setup-${version}.exe`);

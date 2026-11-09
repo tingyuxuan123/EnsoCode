@@ -135,6 +135,9 @@ win:
     - nsis
 nsis:
   artifactName: ${productName}-Setup-${version}.exe
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  include: build/installer.nsh
 linux:
   target:
     - AppImage
