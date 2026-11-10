@@ -190,7 +190,7 @@ func TestStaticIndex(t *testing.T) {
 	}
 	defer res.Body.Close()
 	b, _ := io.ReadAll(res.Body)
-	if res.StatusCode != 200 || !bytes.Contains(b, []byte("enso-relay")) && !bytes.Contains(b, []byte("EnsoCode")) {
+	if res.StatusCode != 200 || !bytes.Contains(b, []byte("小满")) {
 		t.Fatalf("index %d %s", res.StatusCode, b)
 	}
 	res, err = http.Get(hs.URL + "/not-a-real-route")
