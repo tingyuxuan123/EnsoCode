@@ -1,59 +1,47 @@
-version: 0.2.66
+version: 0.2.69
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.66/Eaves-0.2.66-arm64-mac.zip
-    sha512: JiR+XfECIAmn25Ncnx6YQHX7lCj2MUB8jEtpB039A/y6LRdhp1b/weqG8SBZ/tzGabvgw92cv1W0uc6uo9BVlg==
-    size: 183098793
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.66/Eaves-0.2.66-arm64.dmg
-    sha512: zxbxL78szw2E+s0iHoYsrJRCHOMWT48vvztiihmy+U9Q2xxg0zl5Mg6PX4LnoaJ2l+VxYEsSZGG0zJ0uWL/62g==
-    size: 177752240
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.66/Eaves-0.2.66-arm64-mac.zip
-sha512: JiR+XfECIAmn25Ncnx6YQHX7lCj2MUB8jEtpB039A/y6LRdhp1b/weqG8SBZ/tzGabvgw92cv1W0uc6uo9BVlg==
-releaseDate: 2026-11-09T01:42:32.713Z
-releaseName: EnsoCode 0.2.66 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.69/Xiaoman-0.2.69-arm64-mac.zip
+    sha512: pm3bm2B5B+hQ7PBFqZALOnPvNokGZJFUIvR06Et5pz2aokuStIgnqn8GcI7ayxjo6AQnvAKLzdCFowBjPEJQMw==
+    size: 183118382
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.69/Xiaoman-0.2.69-arm64.dmg
+    sha512: PQm8bMNt2wV/IVHHTOjiGhNp6g4qbyXUjhxlyXWzdmtZqsLeHfXDl52qQHoAeS9Dy0mCocvxZYK5uXynzf0Q3w==
+    size: 177752853
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.69/Xiaoman-0.2.69-arm64-mac.zip
+sha512: pm3bm2B5B+hQ7PBFqZALOnPvNokGZJFUIvR06Et5pz2aokuStIgnqn8GcI7ayxjo6AQnvAKLzdCFowBjPEJQMw==
+releaseDate: 2026-11-10T08:32:18.388Z
+releaseName: 小满 0.2.69 — 个人测试
 releaseNotes: >
-  # EnsoCode 0.2.66
+  # 小满 0.2.69
 
 
-  本次为 Mac arm64 个人更新，汇总自个人版 0.2.60 以来的桌面改进。
+  ## 修复设计截图重复展示
 
 
-  ## 新功能与体验
+  - 批量校验多个设计画框时，聊天中只展示本次的一张总览图，不再同时加载每个画框的全部历史截图。
+
+  - 单帧截图默认只加载最新版本，点击「查看历史截图」后才加载旧版本；已有历史截图仍保留。
+
+  - 截图已被轮换清理或读取失败时结束加载占位，避免一直显示「截图中」。
+
+  - 兼容部分模型自动补齐的空可选帧参数，避免只请求批量截图却被误判为参数冲突。
 
 
-  - **Eaves 新名称与图标**：桌面应用更新为 Eaves 品牌，包含应用、托盘与运行状态图标；沿用原有应用标识和个人签名证书。
-
-  - **聊天排版**：在「设置 → 外观」分别调整正文、标题、表格、代码块和行内代码的字号与字重，支持预览、恢复默认和配置同步。
-
-  - **Code 会话多技能**：输入框可叠加多个 `/skill:` 并按顺序展开，草稿、失败重发和回退保留技能与任务正文。
-
-  - **模型中心**：可一次拉取全部供应商模型，分别显示刷新结果，单家失败不阻断其他供应商。
-
-  - **聊天网页链接**：默认在会话内置浏览器打开，按住 Ctrl 点击可改用系统浏览器，也可在设置中关闭该行为。
-
-  - **子代理完成报告**：正文使用 Markdown 展示，token、工具次数和耗时单独显示。
+  ## 工作台更名为「小满」
 
 
-  ## 修复与稳定性
+  - 统一桌面界面、设置、托盘、安装包及手机端源码中的对外名称，并更新双语 README。
+
+  - Mac 应用显示为「小满.app」，下载文件使用 ASCII 前缀 `Xiaoman`。
+
+  - 保留应用 ID、运行时名称、数据目录、配对协议、GitHub 仓库和个人签名证书；Windows 可执行文件仍为
+  `Eaves.exe`，以兼容旧快捷方式。
 
 
-  - 保存聊天草稿，发送失败时保留输入；改进项目错误提示、首次引导焦点、任务通知和侧栏拖动反馈。
-
-  - 修复从空聊天派活后加载状态不结束、关闭已无运行实体的子代理后标签页残留的问题。
-
-  - 修复非默认界面缩放下内置浏览器与停靠 DevTools 的原生视图位置偏移。
-
-  - 改进 Bot 成员实时会话与历史记录的加载，修复文件链接解析及有歧义的任务跟进处理。
-
-  - 收紧历史与提醒文件的身份校验，避免已保存的供应商与 MCP 凭据从 Main 泄露到界面层。
-
-  - 手机网页端不再把尽力而为的在线状态上报失败显示为命令错误，并补充配对协议的共享测试向量与回环测试。
-
-
-  本次仅发布 Mac 桌面个人包，不发布 Android APK 或 Windows 新版本；Android 原生伴侣的开发与人工验收另行进行。
+  本次仅发布 Mac arm64 个人更新通道，不改变正式 Latest；未包含工作区中其它未提交功能。安装、重启及旧数据升级验收仍由用户完成。
 
 
   ---
 
 
-  个人测试通道 0.2.66：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.69：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
