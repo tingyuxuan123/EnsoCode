@@ -1,6 +1,6 @@
 {
   "name": "enso-code",
-  "version": "0.2.68",
+  "version": "0.2.69",
   "description": "小满 - AI 协作工作台",
   "main": "./out/main/index.js",
   "author": {
