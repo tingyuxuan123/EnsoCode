@@ -170,6 +170,8 @@
 	"card.screenshot.title": "Design screenshot",
 	"card.screenshot.open": "View full size",
 	"card.screenshot.capturing": "Capturing…",
+	"card.screenshot.showHistory": "Show previous screenshots",
+	"card.screenshot.hideHistory": "Hide previous screenshots",
 	"card.screenshot.prev": "Previous",
 	"card.screenshot.next": "Next",
 	"create.done": "Design created: {{path}}",

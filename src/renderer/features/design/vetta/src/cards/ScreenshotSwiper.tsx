@@ -33,7 +33,7 @@ export function ScreenshotSwiper({
 	leadingSkeleton: boolean;
 }) {
 	const { t } = useTranslation();
-	const [loaded, setLoaded] = useState<{ id: string; url: string }[]>([]);
+	const [loaded, setLoaded] = useState<{ paths: string; refs: { id: string; url: string }[] }>();
 	const paths = snapshots.map((snapshot) => snapshot.path).join("\0");
 	useEffect(() => {
 		let disposed = false;
@@ -45,10 +45,13 @@ export function ScreenshotSwiper({
 				handles.push(handle);
 				return { id: path, url: handle.url };
 			} catch (error) { console.warn("[design] screenshot read failed", error); return null; }
-		}) : []).then((refs) => { if (!disposed) setLoaded(refs.filter((ref) => ref !== null)); });
+		}) : []).then((refs) => { if (!disposed) setLoaded({ paths, refs: refs.filter((ref) => ref !== null) }); });
 		return () => { disposed = true; for (const handle of handles) handle.dispose(); };
 	}, [paths]);
-	const group = loaded.filter((ref) => snapshots.some((snapshot) => snapshot.path === ref.id));
+	const group = loaded?.paths === paths ? loaded.refs : [];
+	const loading = paths !== "" && loaded?.paths !== paths;
+	const showSkeleton = leadingSkeleton || loading;
+	if (group.length === 0 && !showSkeleton) return null;
 
 	return (
 		<div className="py-1">
@@ -56,9 +59,9 @@ export function ScreenshotSwiper({
 				className="gap-2"
 				prevLabel={t("card.screenshot.prev")}
 				nextLabel={t("card.screenshot.next")}
-				resetKey={`${snapshots.length}:${leadingSkeleton}`}
+				resetKey={`${group.length}:${showSkeleton}`}
 			>
-				{(leadingSkeleton || (snapshots.length > 0 && group.length === 0)) && <CaptureSkeleton />}
+				{showSkeleton && <CaptureSkeleton />}
 				{group.map((ref) => (
 					<button
 						key={ref.id}

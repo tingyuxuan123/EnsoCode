@@ -5,11 +5,14 @@ vi.mock("@vetta-org/plugin-sdk", () => ({
 }));
 
 const readDir = vi.fn();
+const { toVettaFileUrl } = vi.hoisted(() => ({
+	toVettaFileUrl: vi.fn(async (_path: string) => ({ url: 'data:image/png;base64,AA==', dispose() {} })),
+}));
 vi.mock("../src/plugin-context", () => ({
 	getPluginCtx: () => ({ fs: { readDir }, ui: { previewImage: vi.fn() } }),
 }));
 // URL provisioning belongs to the EnsoCode P2 card mount, not swiper layout.
-vi.mock('../src/cards/file-url', () => ({ toVettaFileUrl: async () => ({ url: 'data:image/png;base64,AA==', dispose() {} }) }));
+vi.mock('../src/cards/file-url', () => ({ toVettaFileUrl }));
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -25,6 +28,7 @@ let frameSeq = 0;
 
 beforeEach(() => {
 	readDir.mockReset();
+	toVettaFileUrl.mockClear();
 	host = document.createElement("div");
 	document.body.appendChild(host);
 	root = createRoot(host);
@@ -111,4 +115,53 @@ describe("ScreenshotCard 高度稳定性", () => {
 		await flush();
 		expect(host.querySelectorAll("img"), "落空的重扫不该抹掉已有版本").toHaveLength(1);
 	});
+});
+
+it("默认只读取最新版本，主动展开才读取旧截图", async () => {
+	frameSeq++;
+	const old = entry(`frame${frameSeq}-1.png`);
+	const latest = entry(`frame${frameSeq}-2.png`);
+	readDir.mockResolvedValue([old, latest]);
+	await act(async () => root.render(<ScreenshotCard {...makeProps(false)} />));
+	await flush();
+	expect(toVettaFileUrl.mock.calls.map(([path]) => path)).toEqual([latest.path]);
+	expect(host.querySelectorAll("img")).toHaveLength(1);
+
+	const history = host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+	expect(history).not.toBeNull();
+	await act(async () => history?.click());
+	await flush();
+	expect(toVettaFileUrl.mock.calls.map(([path]) => path)).toContain(old.path);
+	expect(host.querySelectorAll("img")).toHaveLength(2);
+
+	await act(async () => history?.click());
+	await flush();
+	expect(host.querySelectorAll("img")).toHaveLength(1);
+});
+
+it("总览卡直接加载对应批次的截图，不扫描历史或加载原图", async () => {
+	const props = makeProps(false);
+	props.descriptor.payload = { dirPath: "/w/d.vetd", overviewCapturedAt: 42 };
+	await act(async () => root.render(<ScreenshotCard {...props} />));
+	await flush();
+	expect(readDir).not.toHaveBeenCalled();
+	expect(toVettaFileUrl.mock.calls.map(([path]) => path)).toEqual([
+		"/w/d.vetd/.snapshots/verification-overview-42.png",
+	]);
+	expect(host.querySelectorAll("img")).toHaveLength(1);
+});
+
+it("总览已被轮换清理时不会无限显示截图中", async () => {
+	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	try {
+		toVettaFileUrl.mockRejectedValueOnce(new Error("ENOENT"));
+		const props = makeProps(false);
+		props.descriptor.payload = { dirPath: "/w/d.vetd", overviewCapturedAt: 42 };
+		await act(async () => root.render(<ScreenshotCard {...props} />));
+		await flush();
+		expect(toVettaFileUrl).toHaveBeenCalledTimes(1);
+		expect(host.innerHTML).toBe("");
+	} finally {
+		warn.mockRestore();
+	}
 });

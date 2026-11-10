@@ -8,7 +8,7 @@ import {
 } from "./canvas/design-runtime";
 import { CREED_CHECK, CREED_LINE } from "./creed";
 import { captureFrameOffscreen, offscreenRasterSupported } from "./canvas/offscreen-raster";
-import { screenshotCardDescriptor, SCREENSHOT_TOOL_NAME } from "./cards/screenshot-card";
+import { screenshotCardDescriptor, screenshotOverviewDescriptor, SCREENSHOT_OVERVIEW_ID, SCREENSHOT_TOOL_NAME } from "./cards/screenshot-card";
 import { pruneSnapshots, snapshotPath } from "./cards/snapshots";
 import { ASSETS, PAGE_SECTORS } from "./direction/deal";
 import {
@@ -510,6 +510,7 @@ export function registerDesignTools(ctx: PluginContext): void {
 			}
 
 			let overviewPath: string | null = null;
+			let overviewCapturedAt: number | undefined;
 			if (successful.length > 1) {
 				const sheet = await composeVerificationSheet(
 					successful.map((result) => ({
@@ -520,9 +521,10 @@ export function registerDesignTools(ctx: PluginContext): void {
 					})),
 				);
 				if (sheet) {
-					overviewPath = snapshotPath(dirPath, "verification-overview", Date.now());
+					overviewCapturedAt = Date.now();
+					overviewPath = snapshotPath(dirPath, SCREENSHOT_OVERVIEW_ID, overviewCapturedAt);
 					await host.fs.writeFile(overviewPath, sheet.split(",")[1] ?? "", "base64");
-					await pruneSnapshots(host.fs, dirPath, "verification-overview");
+					await pruneSnapshots(host.fs, dirPath, SCREENSHOT_OVERVIEW_ID);
 				}
 			} else if (successful.length === 1) {
 				overviewPath = successful[0].path;
@@ -546,7 +548,9 @@ export function registerDesignTools(ctx: PluginContext): void {
 				note: overviewPath
 					? `Read the overview path once and compare all captured frames together. ${CREED_CHECK}${stalledFrames.length > 0 ? ` Stop blind edits on stalled frames: ${stalledFrames.join(", ")}.` : ""}`
 					: "The overview could not be composed in this host. Read the per-frame paths listed in `frames`.",
-				cards: successful.map((result) => screenshotCardDescriptor(vetdPath, dirPath, result.frame)),
+				cards: overviewCapturedAt !== undefined
+					? [screenshotOverviewDescriptor(vetdPath, dirPath, overviewCapturedAt)]
+					: successful.map((result) => screenshotCardDescriptor(vetdPath, dirPath, result.frame)),
 			};
 		},
 	});

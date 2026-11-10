@@ -251,6 +251,18 @@ focus、scrollTo；临时切回 hidden 时失败，clip 时原生滚动始终为
 程序化约束为 540px 宽后，右上组保留 10.5px 右边距、底栏中心误差为零；这不是原生分栏
 拖动验收，后者被 MANUAL_FOCUS_REQUIRED 拦截且未执行，不宣称通过。
 
+### 批量截图不再把历史版本全量挂进聊天
+
+`vetd_screenshot` 的批量结果原本给每个 frame 返回一张卡；卡片扫描 `.snapshots`
+后又并行读取该帧最多 20 个历史版本，因此一次 `all:true` 会在聊天里铺出大量近似图片。
+这不是模型一次读了所有旧图：工具结果仍是路径与检查信息，图片二进制由卡片挂载读取。
+现在总览合成成功只返回本批次一张总览卡，以捕获时间定位；合成失败或仅一张成功时保留
+逐帧卡。单帧及旧会话卡默认只读最新版本，主动展开历史后才读取旧图，不删除历史文件。
+图片被轮换清理或读取失败时结束骨架占位；卸载后迟到的二进制读取仍释放 object URL。
+回归见 `screenshot-batch-tool.test.ts`、`screenshot-card-stability.test.tsx` 和
+`host/card-url-lifecycle.test.tsx`。隔离 Electron + 假 provider 已确认双帧捕获返回一张
+总览卡、展开工作记录后 DOM 仅一张总览图；未替代两厂商模型自主调用验收。
+
 ## P3 宿主接线与安全差异
 
 - AppRail 新增“设计”，只在本机 Code 模式且 designEnabled 开启时可用。注册的 GalleryView

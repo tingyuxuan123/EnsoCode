@@ -170,6 +170,8 @@
 	"card.screenshot.title": "设计截图",
 	"card.screenshot.open": "查看大图",
 	"card.screenshot.capturing": "截图中…",
+	"card.screenshot.showHistory": "查看历史截图",
+	"card.screenshot.hideHistory": "收起历史截图",
 	"card.screenshot.prev": "上一屏",
 	"card.screenshot.next": "下一屏",
 	"create.done": "已创建设计：{{path}}",

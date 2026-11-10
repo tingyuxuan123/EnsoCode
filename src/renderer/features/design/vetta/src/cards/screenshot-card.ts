@@ -5,10 +5,17 @@ export const SCREENSHOT_CARD_TYPE = "vetta-ui-design:screenshot";
 
 export const SCREENSHOT_TOOL_NAME = "vetd_screenshot";
 
-/** Payload carries STABLE REFERENCES only — the renderer scans `.snapshots` for the versions. */
+export const SCREENSHOT_OVERVIEW_ID = "verification-overview";
+
+/** Payloads carry references only — never image data. */
 export interface ScreenshotCardPayload {
 	dirPath: string;
 	frameId: string;
+}
+
+interface ScreenshotOverviewPayload {
+	dirPath: string;
+	overviewCapturedAt: number;
 }
 
 /**
@@ -22,5 +29,16 @@ export function screenshotCardDescriptor(vetdPath: string, dirPath: string, fram
 		key: `${vetdPath}#${frameId}`,
 		title: frameId,
 		payload: { dirPath, frameId } satisfies ScreenshotCardPayload,
+	};
+}
+
+/** One preview per batch, anchored to the exact sheet written by that call. */
+export function screenshotOverviewDescriptor(vetdPath: string, dirPath: string, overviewCapturedAt: number): CardDescriptor {
+	return {
+		type: SCREENSHOT_CARD_TYPE,
+		// Empty suffix is batch-only: valid frame ids are non-empty, so keys cannot collide.
+		key: `${vetdPath}#`,
+		title: SCREENSHOT_OVERVIEW_ID,
+		payload: { dirPath, overviewCapturedAt } satisfies ScreenshotOverviewPayload,
 	};
 }

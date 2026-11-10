@@ -1,9 +1,9 @@
-import type { PluginCardProps } from "@vetta-org/plugin-sdk";
+import { type PluginCardProps, useTranslation } from "@vetta-org/plugin-sdk";
 import { useEffect, useState } from "react";
 import { getPluginCtx } from "../plugin-context";
 import { ScreenshotSwiper } from "./ScreenshotSwiper";
-import type { ScreenshotCardPayload } from "./screenshot-card";
-import { listSnapshots, type Snapshot } from "./snapshots";
+import { SCREENSHOT_OVERVIEW_ID, type ScreenshotCardPayload } from "./screenshot-card";
+import { listSnapshots, type Snapshot, snapshotPath } from "./snapshots";
 
 // 消息列表是虚拟化的：卡片滚出视野会卸载、滚回来会重挂载。没有缓存的话重挂载要先渲染
 // 空态再等目录扫描回来，卡片高度会跳一下；用缓存同步画出上次的结果，扫描只做对账。
@@ -58,13 +58,42 @@ function useSnapshots(dirPath: string | undefined, frameId: string | undefined, 
 	return { snapshots, scanning: cacheKey !== "" && scannedToken !== token };
 }
 
-/** 一个 frame 的截图卡：历史版本横排（最新在左），截图进行中最前面占一个骨架位。 */
-export function ScreenshotCard({ descriptor, pending }: PluginCardProps) {
-	const payload = (descriptor.payload ?? {}) as Partial<ScreenshotCardPayload>;
-	const { snapshots, scanning } = useSnapshots(payload.dirPath, payload.frameId, pending);
+/** 单帧及旧会话的卡片只读最新一张；点开历史时才读取旧图。 */
+function FrameScreenshotCard({ dirPath, frameId, pending }: ScreenshotCardPayload & { pending: boolean }) {
+	const { t } = useTranslation();
+	const [showHistory, setShowHistory] = useState(false);
+	const { snapshots, scanning } = useSnapshots(dirPath, frameId, pending);
 	// 扫描在途时保留骨架位。卡片区一旦塌成 0 再弹回来，虚拟列表的总高度就跟着一缩一涨，
 	// 整页会剧烈上下弹跳——窄屏下卡片占视口比例更大，更明显。
 	const placeholder = pending || (scanning && snapshots.length === 0);
 	if (snapshots.length === 0 && !placeholder) return null;
-	return <ScreenshotSwiper snapshots={snapshots} leadingSkeleton={placeholder} />;
+	return (
+		<>
+			<ScreenshotSwiper snapshots={showHistory ? snapshots : snapshots.slice(0, 1)} leadingSkeleton={placeholder} />
+			{snapshots.length > 1 && (
+				<button
+					type="button"
+					aria-expanded={showHistory}
+					className="rounded px-1 text-xs text-muted-foreground hover:text-foreground"
+					onClick={() => setShowHistory((visible) => !visible)}
+				>
+					{t(showHistory ? "card.screenshot.hideHistory" : "card.screenshot.showHistory")}
+				</button>
+			)}
+		</>
+	);
+}
+
+export function ScreenshotCard({ descriptor, pending }: PluginCardProps) {
+	const { payload } = descriptor;
+	if (!payload || typeof payload !== "object" || !("dirPath" in payload) || typeof payload.dirPath !== "string") return null;
+	const { dirPath } = payload;
+	if ("overviewCapturedAt" in payload) {
+		const capturedAt = payload.overviewCapturedAt;
+		if (typeof capturedAt !== "number" || !Number.isSafeInteger(capturedAt) || capturedAt <= 0) return null;
+		const path = snapshotPath(dirPath, SCREENSHOT_OVERVIEW_ID, capturedAt);
+		return <ScreenshotSwiper snapshots={[{ path, capturedAt }]} leadingSkeleton={false} />;
+	}
+	if (!("frameId" in payload) || typeof payload.frameId !== "string" || !payload.frameId) return null;
+	return <FrameScreenshotCard key={`${dirPath}#${payload.frameId}`} dirPath={dirPath} frameId={payload.frameId} pending={pending} />;
 }
