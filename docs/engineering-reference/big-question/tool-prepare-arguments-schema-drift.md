@@ -35,6 +35,16 @@ pi 的工具执行顺序是 **`prepareArguments` → JSON schema 校验（TypeBo
 
 回归覆盖完整占位载荷、对象/JSON 字符串、两次归一幂等，以及 `prepareArguments → schema → execute → Main parse`；真正成对的演进参数保持不变。隔离真机用 OpenAI `gpt-4.1-mini` 与 xAI `grok-4.6` 直接调用完整占位载荷，两者均返回 `inserted`。
 
+## 截图工具的互斥可选参数也会被填空
+
+`vetd_screenshot` 真机验收中，GPT 发送 `{frame: '', frames: ['', ''], all: true}`。
+这些字段能通过类型校验，但 renderer 会把空字符串和空列表也计为选择模式，报只能选一种。
+在 worker 的 `prepareArguments` 中先完成通用类型归一，再仅移除空 `frame` 和全空字符串
+`frames`；非空冲突、混合脏列表和错误类型保持原样，仍由既有校验拒绝，不放宽导出等其它工具。
+回归见 `src/agent/tools/design.test.ts`。隔离 Electron/CDP 9333 重启 worker 后，
+DeepSeek `auto/deepseek-v4.1-flash` 与 OpenAI `auto/gpt-6.1-sol` 都自主完成一次批量截图、
+一次总览 read 并识别 alpha/beta；GPT 复验仍带全空可选字段，工具已正常执行。
+
 ## 相关代码
 
 - `src/shared/memory/toolParams.ts` — `normalizeMemoryCaptureParams` / `parseMemoryCaptureRequest`

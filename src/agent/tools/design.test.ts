@@ -149,4 +149,26 @@ describe('DesignInvoker', () => {
       )
     ).rejects.toThrow();
   });
+
+  it.each([
+    [{ frame: '', frames: [''], all: true }, { all: true }],
+    [
+      { frame: 'login', frames: '[]', all: false },
+      { frame: 'login', all: false },
+    ],
+    [{ frame: ' ', frames: ['detail'] }, { frames: ['detail'] }],
+    [{ frame: '', frames: [] }, {}],
+    [
+      { frame: 'login', frames: ['detail'], all: true },
+      { frame: 'login', frames: ['detail'], all: true },
+    ],
+    [
+      { frames: [42], all: true },
+      { frames: [42], all: true },
+    ],
+  ])('截图工具仅移除空的可选帧选择，不改写有效参数：%j', (raw, expected) => {
+    const invoker = new DesignInvoker(identity, vi.fn());
+    const screenshot = createDesignTools(invoker).find((tool) => tool.name === 'vetd_screenshot')!;
+    expect(screenshot.prepareArguments?.(raw)).toEqual(expected);
+  });
 });

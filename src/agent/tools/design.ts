@@ -147,12 +147,26 @@ function assertArguments(value: unknown, schema: DesignArgumentSchema, path = 'a
     throw new Error(`${path} is not allowed`);
 }
 
+function omitEmptyScreenshotSelectors(params: unknown): unknown {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return params;
+  const result = { ...params } as Record<string, unknown>;
+  const blank = (value: unknown) => typeof value === 'string' && value.trim() === '';
+  // Some models fill inactive optional fields (e.g. frame: '', frames: [''], all: true).
+  // Leave non-empty conflicts and invalid types for the usual validation.
+  if (blank(result.frame)) delete result.frame;
+  if (Array.isArray(result.frames) && result.frames.every(blank)) delete result.frames;
+  return result;
+}
+
 export function createDesignTools(
   invoker: DesignInvoker,
   options: { created?: () => void } = {}
 ): ToolDefinition[] {
   return DESIGN_TOOL_SCHEMAS.map(({ name, description, parameters }) => {
-    const prepare = (raw: unknown) => normalizeArgument(raw ?? {}, parameters);
+    const prepare = (raw: unknown) => {
+      const params = normalizeArgument(raw ?? {}, parameters);
+      return name === 'vetd_screenshot' ? omitEmptyScreenshotSelectors(params) : params;
+    };
     return {
       name,
       label: name.replaceAll('_', ' '),

@@ -263,6 +263,10 @@ focus、scrollTo；临时切回 hidden 时失败，clip 时原生滚动始终为
 `host/card-url-lifecycle.test.tsx`。隔离 Electron + 假 provider 已确认双帧捕获返回一张
 总览卡、展开工作记录后 DOM 仅一张总览图；未替代两厂商模型自主调用验收。
 
+0.2.69 发版前补验：隔离 Electron/CDP 9333 中，DeepSeek 与 GPT 均一次批量截图、一次
+总览 read，识别 alpha/beta。GPT 暴露的空可选帧参数在 worker `prepareArguments` 修复后
+复验通过；真实聊天 DOM 只有一张已加载总览图，不把同轮旧版本自动读入模型。
+
 ## P3 宿主接线与安全差异
 
 - AppRail 新增“设计”，只在本机 Code 模式且 designEnabled 开启时可用。注册的 GalleryView
