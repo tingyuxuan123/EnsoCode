@@ -1,5 +1,5 @@
 appId: com.j3n5en.enso-code
-productName: Eaves
+productName: 小满
 directories:
   buildResources: build
 extraResources:
@@ -106,6 +106,8 @@ asarUnpack:
   # ripgrep 二进制不能从 asar 内执行
   - node_modules/@vscode/ripgrep/bin/**
 mac:
+  # 更新清单只接受安全的 ASCII 文件名；显示品牌与下载文件名分离。
+  artifactName: Xiaoman-${version}-${arch}-mac.${ext}
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -122,23 +124,28 @@ mac:
   # @electron/osx-sign 递归遍历 Contents（含 extraResources/design），自动签 Mach-O/.node。
   # afterPack 先裁掉其它平台/架构 optional 包，再由现有签名与 deep/strict 验收门兜底。
   extendInfo:
-    NSMicrophoneUsageDescription: Eaves uses the microphone for voice input. Speech is transcribed locally on this Mac.
-    NSAppleEventsUsageDescription: Eaves uses Apple Events to activate app windows for the computer tool.
+    NSMicrophoneUsageDescription: 小满 uses the microphone for voice input. Speech is transcribed locally on this Mac.
+    NSAppleEventsUsageDescription: 小满 uses Apple Events to activate app windows for the computer tool.
     # 内置浏览器/终端要访问用户的局域网站点（vite dev server、NAS、打印机等）。
     # macOS 15+ 起本地网络访问受 TCC 管控，缺这条不会弹授权框，直接 EHOSTUNREACH。
-    NSLocalNetworkUsageDescription: Eaves uses the local network to open your dev servers and other devices on this network.
+    NSLocalNetworkUsageDescription: 小满 uses the local network to open your dev servers and other devices on this network.
   target:
     - dmg
     - zip
+dmg:
+  artifactName: Xiaoman-${version}-${arch}.${ext}
 win:
+  # 保留旧可执行文件名，避免自动升级后旧快捷方式/固定任务栏失效。
+  executableName: Eaves
   target:
     - nsis
 nsis:
-  artifactName: ${productName}-Setup-${version}.exe
+  artifactName: Xiaoman-Setup-${version}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   include: build/installer.nsh
 linux:
+  artifactName: Xiaoman-${version}-${arch}.${ext}
   target:
     - AppImage
     - deb

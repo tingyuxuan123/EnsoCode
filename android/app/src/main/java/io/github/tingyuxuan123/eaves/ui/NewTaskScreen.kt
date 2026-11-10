@@ -119,7 +119,7 @@ private fun TaskGlanceCard(glance: TaskGlance, onTask: (String) -> Unit, onBoard
         Row(Modifier.padding(start = 14.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(24.dp).background(c.card, CircleShape), contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.eaves_running_small), "Eaves 运行中", Modifier.size(20.dp))
+                Image(painterResource(R.drawable.eaves_running_small), "小满运行中", Modifier.size(20.dp))
             }
             Label("任务看板", 15, 20, weight = FontWeight.SemiBold)
         }

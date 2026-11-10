@@ -151,7 +151,7 @@ export function PairScreen({
         <span className="mb-2 flex size-11 items-center justify-center rounded-[12px] bg-muted text-foreground">
           <EnsoMark className="size-6" />
         </span>
-        <h1 className="font-semibold text-[15px]">连接到 EnsoCode</h1>
+        <h1 className="font-semibold text-[15px]">连接到小满</h1>
         <p className="text-[12px] text-muted-foreground leading-5">
           在桌面端「设置 → 手机」生成配对码，扫码或粘贴。
         </p>

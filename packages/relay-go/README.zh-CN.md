@@ -1,4 +1,4 @@
-# enso-relay（Go）
+# 小满中继（Go）
 
 <p align="right"><a href="README.md">English</a></p>
 
@@ -6,7 +6,7 @@
 
 **自建仍推荐 Cloudflare Worker。** 没有或不想用 CF 时再用本二进制。完整说明见 [`../relay/README.zh-CN.md`](../relay/README.zh-CN.md)。
 
-Linux amd64 / arm64 随应用 [GitHub Release](https://github.com/J3n5en/EnsoCode/releases/latest) 一起构建，并挂到同一个 Release。
+Linux amd64 / arm64 构建随上游 [GitHub Release](https://github.com/J3n5en/EnsoCode/releases/latest) 发布。
 
 ## 运行
 

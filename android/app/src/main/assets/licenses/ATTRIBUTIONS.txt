@@ -1,4 +1,4 @@
-Eaves Android third-party assets
+小满 Android third-party assets
 
 Lucide icon paths
 Copyright (c) 2026 Lucide Icons and Contributors

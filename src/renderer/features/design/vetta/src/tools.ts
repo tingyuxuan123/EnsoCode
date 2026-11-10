@@ -354,7 +354,7 @@ export function registerDesignTools(ctx: PluginContext): void {
 					ok: false,
 					retryable: true,
 					error:
-      "The design canvas is not open. EnsoCode P1 registers design tools without mounting the canvas; screenshots require the P2 Design panel. Do not repeatedly retry until the canvas is available.",
+      "The design canvas is not open. 小满 P1 registers design tools without mounting the canvas; screenshots require the P2 Design panel. Do not repeatedly retry until the canvas is available.",
 				};
 			}
 			const known = controller.session.manifest.frames.map((frame) => frame.id);

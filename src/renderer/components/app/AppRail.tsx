@@ -46,7 +46,7 @@ export function AppRail({
   return (
     <nav
       data-slot="app-rail"
-      aria-label="Eaves"
+      aria-label="小满"
       // 固定像素宽：根字号可调（--font-size-base），图标轨不随 rem 缩放
       className="flex w-[56px] shrink-0 flex-col items-center gap-[8px] bg-shell py-[12px]"
     >

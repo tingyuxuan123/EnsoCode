@@ -49,7 +49,7 @@ class DesignPreviewActivity : ComponentActivity() {
 
 // Exact model copy from frames/new-config.tsx, only in the debug APK.
 private val configSample = DesktopLinkState(phase = LinkPhase.Online, readOnly = false,
-    projects = listOf(DesktopProject("sample-project", "Eaves")),
+    projects = listOf(DesktopProject("sample-project", "小满")),
     providers = listOf(
         DesktopProvider("sample-anthropic", "Anthropic", listOf(DesktopModel("sample-opus", "Claude Opus 5.5"))),
         DesktopProvider("sample-openai", "OpenAI", listOf(DesktopModel("sample-gpt", "GPT-6.1"))),
@@ -60,27 +60,27 @@ private val configSample = DesktopLinkState(phase = LinkPhase.Online, readOnly =
 private val sample = NewTaskUiState(
     greeting = "下午好，tingyu",
     model = "Claude Opus 5.5 · 高",
-    project = "Eaves",
+    project = "小满",
     online = true,
     computer = "tingyu 的 MacBook Pro",
     pendingMemberCount = 2,
     tasks = listOf(
-        TaskSummary("s1", "会话恢复后时间线为空", "Eaves", "刚刚", TaskStatus.Waiting, pinned = true),
+        TaskSummary("s1", "会话恢复后时间线为空", "小满", "刚刚", TaskStatus.Waiting, pinned = true),
         TaskSummary("s4", "首页 Hero 用哪张截图", "ensocode-site", "4 分钟前", TaskStatus.Waiting),
-        TaskSummary("s2", "工作流面板显示运行进度", "Eaves", "2 分钟前", TaskStatus.Running),
-        TaskSummary("s3", "Windows 版 CI 签名失败排查", "Eaves", "6 分钟前", TaskStatus.Running),
+        TaskSummary("s2", "工作流面板显示运行进度", "小满", "2 分钟前", TaskStatus.Running),
+        TaskSummary("s3", "Windows 版 CI 签名失败排查", "小满", "6 分钟前", TaskStatus.Running),
         TaskSummary("s8", "终端主题跟随桌面同步", "pi-extensions", "25 分钟前", TaskStatus.Error),
-        TaskSummary("s5", "子代理报告被截断", "Eaves", "1 小时前", TaskStatus.Done),
+        TaskSummary("s5", "子代理报告被截断", "小满", "1 小时前", TaskStatus.Done),
         TaskSummary("s6", "解释 apply_patch 的格式", null, "2 小时前", TaskStatus.Done),
-        TaskSummary("s7", "MCP env 明文只保留在 Main", "Eaves", "昨天", TaskStatus.Done),
-        TaskSummary("s9", "发布 personal-v0.9.4", "Eaves", "周三", TaskStatus.Done),
+        TaskSummary("s7", "MCP env 明文只保留在 Main", "小满", "昨天", TaskStatus.Done),
+        TaskSummary("s9", "发布 personal-v0.9.4", "小满", "周三", TaskStatus.Done),
     ),
 )
 
 private fun part(type: String, text: String) = JsonObject(mapOf("type" to JsonPrimitive(type), "text" to JsonPrimitive(text)))
 
 private val queueSample = SessionSpecimen(
-    header = SessionHeader("工作流面板显示运行进度", "Eaves · Claude Opus 5.5 · 高"),
+    header = SessionHeader("工作流面板显示运行进度", "小满 · Claude Opus 5.5 · 高"),
     state = DesktopSessionState(SessionTimeline("queue-specimen", status = "running", messages = listOf(
         SessionMessage(0, "user", listOf(part("text", "给工作流面板加上运行进度：每个审查员一格，完成打勾。"))),
         SessionMessage(1, "assistant", listOf(part("thinking", "检查工作流进度"),
@@ -94,7 +94,7 @@ private val queueSample = SessionSpecimen(
 
 // Original TSX copies and screenshot assets remain a debug-only design specimen.
 private val approvalSample = SessionSpecimen(
-    header = SessionHeader("会话恢复后时间线为空", "Eaves · Claude Opus 5.5 · 高"),
+    header = SessionHeader("会话恢复后时间线为空", "小满 · Claude Opus 5.5 · 高"),
     state = DesktopSessionState(SessionTimeline("approval-specimen", messages = listOf(
         SessionMessage(0, "user", listOf(part("text", "恢复会话后时间线是空的，但 jsonl 里明明有记录。帮我查根因，修好并补测试。"))),
         SessionMessage(1, "assistant", listOf(part("thinking", "检查 reducer 与回放事件"),

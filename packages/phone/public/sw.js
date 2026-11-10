@@ -17,7 +17,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'EnsoCode', body: '', sessionId: '' };
+  let payload = { title: '小满', body: '', sessionId: '' };
   try {
     payload = { ...payload, ...event.data.json() };
   } catch {

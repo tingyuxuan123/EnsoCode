@@ -1,4 +1,4 @@
-/** Native EnsoCode plugin author types (manifest schemaVersion 1). No runtime SDK is required. */
+/** Author types for native 小满 plugins (manifest schemaVersion 1). No runtime SDK is required. */
 type Awaitable<T> = T | Promise<T>;
 type Dispose = () => void;
 

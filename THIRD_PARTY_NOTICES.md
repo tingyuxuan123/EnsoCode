@@ -1,6 +1,6 @@
 # Third-party notices
 
-## Eaves Android icons
+## 小满 Android icons
 
 The native Android icons in `android/app/src/main/java/io/github/tingyuxuan123/eaves/ui/EnsoIcons.kt`
 are converted from the design document's Lucide (ISC, with applicable Feather MIT
@@ -10,13 +10,13 @@ see also `android/NOTICE`. JetBrains Mono Regular 2.304 is bundled unmodified un
 the SIL Open Font License 1.1, with the full license in the same assets directory.
 No Vetta Android platform code is copied in this increment.
 
-## Eaves Android Markdown
+## 小满 Android Markdown
 
 The session UI uses [Multiplatform Markdown Renderer](https://github.com/mikepenz/multiplatform-markdown-renderer)
 Material 3 version 0.39.0 under Apache-2.0. Its license is bundled at
-`assets/licenses/APACHE-2.0.txt`. Eaves disables remote images and link launching in session text.
+`assets/licenses/APACHE-2.0.txt`. 小满 disables remote images and link launching in session text.
 
-## Eaves Android NaCl box
+## 小满 Android NaCl box
 
 `android/pair` uses the unmodified Maven Central dependency
 `org.purejava:tweetnacl-java:1.1.2` (MIT), the purejava distribution of Tom Zhou's
@@ -25,9 +25,9 @@ Distribution source: [purejava v1.1.2](https://github.com/purejava/tweetnacl-jav
 commit `cf79479ccb3c1ecce75c0eee6571759ed6fe19ba`. The published source JAR's
 `TweetNaclFast.java` matches that tag. The binary JAR SHA-256 is
 `c404c71211424ac151af2c7351e9dee5fbddf7a48252e4a1c2d33a840cd61072`.
-The dependency has no runtime transitive dependencies. Eaves wraps its explicit
+The dependency has no runtime transitive dependencies. 小满 wraps its explicit
 nonce API with JCA secure randomness and an all-zero X25519 shared-secret check;
-no curve implementation is copied into Eaves source.
+no curve implementation is copied into 小满 source.
 
 Copyright (c) 2014-present tom zhou<appnet.link@gmail.com>
 
@@ -51,7 +51,7 @@ Original protocol references identified by the upstream NOTICE:
 - `packages/host-runtime/src/code-search/backends/windsurf-protocol.ts`
 - `packages/host-runtime/src/code-search/completion-port.ts`
 
-EnsoCode, dsh-devin-search and Piwin are independent of Devin/Windsurf. Offline
+小满, dsh-devin-search and Piwin are independent of Devin/Windsurf. Offline
 fixtures do not establish live compatibility, account entitlements, pricing,
 service availability, or continued authorization. Source-code licensing does
 not grant rights to use a provider's service or third-party code assets.
@@ -107,7 +107,7 @@ app-screen rules and Unsplash photo index, and Hallmark-derived design
 references. Those applicable MIT components are described below. Other upstream
 NOTICE entries describe Open Vetta's own runtime, sandbox and model distribution;
 this design port does not import those binaries or services. Open Vetta and
-EnsoCode are independent; source licensing grants no trademark or image rights.
+小满 are independent; source licensing grants no trademark or image rights.
 
 ## taste-skill
 

@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openNotificationSettings() {
         try { startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)) }
-        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(this, "请在系统设置中管理檐下通知。", Toast.LENGTH_SHORT).show() }
+        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(this, "请在系统设置中管理小满通知。", Toast.LENGTH_SHORT).show() }
     }
 
     private fun consumeNotice(value: Intent) {

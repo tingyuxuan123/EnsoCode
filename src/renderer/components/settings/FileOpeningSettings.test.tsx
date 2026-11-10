@@ -120,7 +120,7 @@ afterEach(async () => {
 
 describe('FileOpeningSettings', () => {
   it('显示默认行为和可执行文件安全说明，并规范化新扩展名', async () => {
-    expect(container.textContent).toContain('By default, supported files open inside Eaves');
+    expect(container.textContent).toContain('By default, supported files open inside 小满');
     expect(container.textContent).toContain('Executable and installer files are always revealed');
     await enter(' MD ');
     await click('Add');

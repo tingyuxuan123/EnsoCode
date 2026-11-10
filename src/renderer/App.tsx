@@ -512,7 +512,7 @@ export default function App() {
       <BackgroundLayer />
       <OauthCredentialBootstrap />
       <TitleBar
-        title="Eaves"
+        title="小满"
         leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题

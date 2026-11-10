@@ -1,4 +1,4 @@
-# vetta-ui-design → EnsoCode（P1–P3）
+# vetta-ui-design → 小满（P1–P3）
 
 ## 基准与边界
 
@@ -7,7 +7,7 @@
 `vetta/vendor/taste-skill` 整体复制，含 LICENSE、UPSTREAM.md 与 library JSON。
 补入上游 plugin.json（静态契约测试使用）和 Apache-2.0 LICENSE。
 
-行为差距：EnsoCode 没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
+行为差距：小满没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
 执行工具和登记贡献，P2-UI 将画布、截图卡和样机工作台接入渲染层，不增加 preload 暴露。
 `host/` 负责 SDK 兼容、绝对路径拆分与 IPC；Main 仍负责权威根、realpath、写白名单。
 P3 补齐画廊、文件树和分享包预览；新增 Main 项目/原生选择/独立预览能力，仍不开放通用 command。
@@ -67,7 +67,7 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 - official projects.list 使用已有项目并 resolveRoot，sessions.list/listRunningCwds/open
   使用已知会话投影和 sessionWorkspaceCwd（含 worktree），shell.showItemInFolder 走 design.shell。
 
-明确不支持（调用抛 `EnsoCode design host: … is not supported in P1`）：
+明确不支持（调用抛 `小满 design host: … is not supported in P1`）：
 任意 command.run/spawn、fs.move、storage blobs、multipart/PUT/PATCH/DELETE 网络请求、
 conversation.abort、official.projects.open/rename/remove 等写操作、official.dialog.saveCopy、
 其它未实现 official 域；ui.captureRegion/createQrCode/sidebar 订阅。
@@ -195,9 +195,9 @@ conversation 接了查看会话的运行状态边沿（供 notes 闸口），尚
 - cover-compose-abort/gallery-catalog-refresh/gallery-skeleton：上游文件级 jsdom 指令改 happy-dom；
   文件级环境优先于 project 默认，否则全量测试仍会寻找未安装的 jsdom。
 - engine-recovery-ui：补 onPendingDesignPath fake 及函数型取消订阅。
-- runner-host/history-machine/payload-transfer 测试改 EnsoCode IPC fake；history-peek 使用真实已构建 runner 加 IPC fake。
+- runner-host/history-machine/payload-transfer 测试改用宿主 IPC fake；history-peek 使用真实已构建 runner 加 IPC fake。
 - file-url 测试覆盖异步二进制读取、MIME 拒绝及幂等释放；frame-handoff 覆盖端口改变重建 DOM；notes-auto-dispatch 覆盖所属会话及锚点。assets/direction 文案断言改为 P2 面板提示；entry-lazy 检查固定 IPC 而非 raw runner 动态加载。
-- 仅跳过 engine-manager 的 3 条 ~/.vetta 迁移/旧 readiness 测试：EnsoCode 明确不迁移该目录，Main 引擎服务另测；退出事件测试继续跑。
+- 仅跳过 engine-manager 的 3 条 ~/.vetta 迁移/旧 readiness 测试：小满明确不迁移该目录，Main 引擎服务另测；退出事件测试继续跑。
 
 新增 paths/results/context/runtime-dispatch/完整入口激活测试，包含 RED 后 GREEN 的路径映射、
 结果转换、分发与 cards 保留断言。P2 集成已进行 Claude/GPT 真实模型验证，详细结果与
@@ -213,14 +213,14 @@ P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个�
 具备插件根标记、Header/Panel/Footer 与宿主 z=51。隔离实例已关闭、数据目录已删除。
 完整画框/依赖 controller 的工具/两厂商模型联合真机验收由主任务继续，不能把本节替代 P2 验收清单。
 
-## 品牌替换（P2 集成）
+## 设计功能的品牌文案
 
-上游界面把 agent 称作 “Vetta”，导出样机默认画 Vetta 图标与 “Designed By Vetta”。EnsoCode 中：
+上游界面把 agent 称作 “Vetta”，导出样机默认画 Vetta 图标与 “Designed By Vetta”。小满中：
 
-- `locales/{zh,en}.json` 中 18 处 “Vetta” 换成聊天界面上的 agent 名 “Enso”；插件名改为“设计 / Design”，样机开关文案改为 EnsoCode。
+- `locales/{zh,en}.json` 中 18 处 “Vetta” 换成聊天界面上的 agent 名 “Enso”；插件名改为“设计 / Design”，样机开关使用小满标识。
 - `canvas/NotesLayer.tsx`、`canvas/NotesDrawer.tsx` 写死的批注作者名改为 “Enso”。
-- `mockup/render.ts` 水印文字改为 “EnsoCode / Designed with EnsoCode”；`mockup/brand-logo.ts` 换成 `build/icons/128x128.png`（常量名保持不变以减少 diff）。
-- `assets/assets-tool.ts` 外部图片 API 的 User-Agent 如实标明 EnsoCode。
+- `mockup/render.ts` 水印文字为 “小满 / Designed with 小满”；`mockup/brand-logo.ts` 使用 `build/icons/128x128.png`（常量名保持不变以减少 diff）。
+- `assets/assets-tool.ts` 外部图片 API 的 User-Agent 使用 ASCII 标识 `Xiaoman-Design`。
 - `vetd/check-sources.ts` 中引用按钮文案的提示同步为“让 Enso 去做”。
 - 保留：`.vetdz` 保存对话框的文件类型名 “Vetta Design”（上游格式名）、给模型看的工具描述与技能正文（漂移测试要求与上游一致）。
 - `test/skill-presentation.test.ts` 的插件名断言同步改为“设计”。
@@ -299,7 +299,7 @@ P3 真机（隔离 CDP 9333）：画廊列项目和风格、跨项目卡片回�
 隐藏/恢复保留原目录；96KB 双画框分享包导出/导入保留源码和 history，文件树只读预览实际渲染
 两个不同页面。独立 CSP 探针证实脚本可运行、parent DOM 与网络均拒绝、electronAPI 为 undefined。
 历史抽屉恢复后源码回到旧标题并新增 restoredFrom 提交，旧版本查看有只读横幅。
-样机对话框实际编码产出 1968×1668 PNG 和单页 PDF（有效 header/EOF），标识为 EnsoCode。
+当时的样机对话框实际编码产出 1968×1668 PNG 和单页 PDF（有效 header/EOF），使用旧标识 EnsoCode。
 原生保存面板已触发，但因多份同二进制 Electron 无法可靠通过 CUA 绑定，未点击用户其它实例；
 产物验收使用临时 saveAs 适配落到隔离设计包，Main 原生选择/保存的取消与精确字节写入另有服务测试。
 这不等同于已完成原生面板手动验收或签名安装包发布。

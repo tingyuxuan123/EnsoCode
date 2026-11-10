@@ -130,16 +130,16 @@ jobs:
       - name: Verify personal Mac package
         run: |
           set -euo pipefail
-          APP=dist/mac-arm64/Eaves.app
+          APP=dist/mac-arm64/小满.app
           codesign --verify --deep --strict "$APP"
           REQUIREMENT="identifier \"com.j3n5en.enso-code\" and certificate root = H\"$MAC_SIGNING_IDENTITY\""
           codesign --verify -R="$REQUIREMENT" "$APP"
           DMG=$(find dist -maxdepth 1 -name '*.dmg' -type f | head -1)
           test -n "$DMG"
           hdiutil verify "$DMG"
-          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Eaves" \
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/小满" \
             scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
-          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Eaves" \
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/小满" \
             scripts/smoke-packaged-design.cjs "$PWD/$APP/Contents/Resources"
           # 不把 builder-debug 等未上传文件写进发布校验和。
           mkdir -p dist/release-assets
@@ -222,7 +222,7 @@ jobs:
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" release-assets/* --clobber
           else
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --draft --prerelease --latest=false --title "$RELEASE_TAG — 个人更新" \
+              --draft --prerelease --latest=false --title "小满 ${RELEASE_TAG#personal-v} — 个人更新" \
               --notes-file "$RUNNER_TEMP/personal-release-notes.md" \
               release-assets/*
           fi
@@ -235,16 +235,16 @@ jobs:
           cmp release-assets/SHA256SUMS remote-assets/SHA256SUMS
           node scripts/release.mjs verify remote-assets
           VERSION=$(node -p "require('./package.json').version")
-          ditto -x -k "remote-assets/Eaves-$VERSION-arm64-mac.zip" remote-app
-          APP=remote-app/Eaves.app
+          ditto -x -k "remote-assets/Xiaoman-$VERSION-arm64-mac.zip" remote-app
+          APP=remote-app/小满.app
           codesign --verify --deep --strict "$APP"
           REQUIREMENT="identifier \"com.j3n5en.enso-code\" and certificate root = H\"$EXPECTED_SHA1\""
           codesign --verify -R="$REQUIREMENT" "$APP"
-          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Eaves" \
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/小满" \
             scripts/smoke-packaged-natives.cjs "$PWD/$APP/Contents/Resources"
-          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Eaves" \
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/小满" \
             scripts/smoke-packaged-design.cjs "$PWD/$APP/Contents/Resources"
-          hdiutil verify "remote-assets/Eaves-$VERSION-arm64.dmg"
+          hdiutil verify "remote-assets/Xiaoman-$VERSION-arm64.dmg"
 
       - name: Publish personal prerelease
         run: |

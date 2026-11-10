@@ -96,7 +96,7 @@ export class DesignToolBroker {
     const target = this.pick(call.sessionId);
     if (!target)
       return Promise.reject(
-        new DesignToolError('NO_RUNTIME', 'Design runtime is not available; open Eaves window')
+        new DesignToolError('NO_RUNTIME', 'Design runtime is not available; open 小满 window')
       );
     const requestId = randomUUID();
     const { promise, resolve, reject } = Promise.withResolvers<DesignToolResult>();

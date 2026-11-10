@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Authoritative Eaves artwork. Run from any directory: node scripts/generate-app-icon.mjs.
+/** Authoritative 小满 artwork. Run from any directory: node scripts/generate-app-icon.mjs.
  * Uses the existing sharp installation (including pnpm's unhoisted store); installs nothing.
  * ICNS uses native PNG chunks, so neither Pillow nor macOS iconutil is required.
  */
@@ -212,6 +212,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const files = await generateIcons();
   for (const file of files) console.log(`wrote ${file}`);
   console.log(
-    `Verified ${files.length} Eaves assets; ICNS generated with PNG chunks (no iconutil needed).`
+    `Verified ${files.length} 小满 assets; ICNS generated with PNG chunks (no iconutil needed).`
   );
 }

@@ -6,12 +6,12 @@ import { EavesWorkingIcon } from './EavesWorkingIcon';
 const render = () => renderToStaticMarkup(createElement(EavesWorkingIcon));
 
 describe('EavesWorkingIcon', () => {
-  it('renders an accessible 22px Eaves mark without changing the footer footprint', () => {
+  it('renders an accessible 22px 小满 mark without changing the footer footprint', () => {
     const html = render();
     expect(html).toContain('<svg');
     expect(html).toContain('viewBox="0 0 100 100"');
     expect(html).toContain('role="img"');
-    expect(html).toMatch(/aria-label="[^"]+"/);
+    expect(html).toContain('aria-label="小满"');
     expect(html).toContain('size-[calc(22rem/14)] shrink-0');
     expect(html).toContain('d="M10 22 Q14 31 25 32 L75 32 Q86 31 90 22"');
     expect(html).not.toContain('animate-ping');

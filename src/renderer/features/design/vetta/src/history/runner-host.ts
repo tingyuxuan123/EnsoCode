@@ -4,7 +4,7 @@ import { designEnginePath } from '../../../host/engine';
 import { ownedDesignContextPath } from '../../../host/owned-context';
 
 export async function ensureRunner(_ctx: PluginContext, _cwd: string): Promise<string> {
-  throw new Error('EnsoCode owns the history runner; call runHistoryCommand instead');
+  throw new Error('小满 owns the history runner; call runHistoryCommand instead');
 }
 export async function runHistoryCommand<T>(ctx: PluginContext, request: Record<string, unknown>): Promise<T> {
   const { dir, out: _out, from: _from, ...payload } = request;

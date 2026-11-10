@@ -2,7 +2,7 @@
 """Legacy renderer retained for reference; generate-app-icon.mjs is authoritative.
 
 The old ensō geometry below is not used. Direct execution delegates to Node,
-which generates Eaves PNG / ICO / ICNS / tray / PWA assets on all platforms.
+which generates 小满 PNG / ICO / ICNS / tray / PWA assets on all platforms.
 """
 
 from __future__ import annotations

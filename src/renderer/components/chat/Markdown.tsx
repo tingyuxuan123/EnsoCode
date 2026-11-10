@@ -140,7 +140,7 @@ function revealErrorDescription(error: string, t: (key: string) => string): stri
     case 'unavailable':
       return t('The linked file or folder is unavailable.');
     case 'unsupported-viewer':
-      return t('This file format cannot be previewed inside Eaves.');
+      return t('This file format cannot be previewed inside 小满.');
     case 'too-large':
       return t('The image is too large to preview.');
     case 'invalid-application':

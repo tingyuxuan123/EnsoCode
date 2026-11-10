@@ -20,7 +20,7 @@ import { translate } from './translation';
 import type { PluginContext } from './types';
 
 export function unsupported(api: string): never {
-  throw new Error(`EnsoCode design host: ${api} is not supported in P1`);
+  throw new Error(`小满 design host: ${api} is not supported in P1`);
 }
 /** All unimplemented SDK members fail explicitly (never expose a generic IPC). */
 function subset<T extends object>(name: string, members: Partial<T>): T {

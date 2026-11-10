@@ -1,4 +1,4 @@
-# EnsoCode 中继
+# 小满中继
 
 <p align="right"><a href="README.md">English</a></p>
 
@@ -42,7 +42,7 @@ pnpm --filter @enso/relay release:dev      # 开发副本 enso-relay-dev.j3.do
 
 ## 方式二：Go 单二进制
 
-适合没有 Cloudflare 的机器。中继二进制随应用 [GitHub Release](https://github.com/J3n5en/EnsoCode/releases/latest) 一起发布：
+适合没有 Cloudflare 的机器。中继二进制随上游 [GitHub Release](https://github.com/J3n5en/EnsoCode/releases/latest) 一起发布：
 
 - `enso-relay-linux-amd64`（x86_64）
 - `enso-relay-linux-arm64`（aarch64）
@@ -130,7 +130,7 @@ Cloudflare 部署会构建 PWA；Go 中继需更新包含新版 PWA 的二进制
 文件必须在该会话的本地工作区内，并被助手生成、修改或在回复里提及；未列出时可让助手
 把结果保存到项目目录并写出文件名。暂不支持 SSH 工作区，单文件最多 50 MiB。
 下载使用现有端到端加密连接（直连或中继），每块 384 KiB，不新增公开文件 URL，
-也不把文件保存在中继服务器上。电脑必须保持 EnsoCode 运行并在线。
+也不把文件保存在中继服务器上。电脑必须保持小满运行并在线。
 
 ---
 

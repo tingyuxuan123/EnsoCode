@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const port = process.env.ENSO_CDP_PORT || '9222';
 const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
 const page = targets.find((target) => target.type === 'page' && target.url.includes('index.html'));
-assert.ok(page, 'EnsoCode main window not found');
+assert.ok(page, '小满 main window not found');
 
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 let id = 0;

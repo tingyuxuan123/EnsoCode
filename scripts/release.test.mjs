@@ -18,8 +18,8 @@ const version = '0.2.10';
 const data = Buffer.from('test installer');
 const sha512 = createHash('sha512').update(data).digest('base64');
 const manifest = (url) => ({ version, files: [{ url, sha512, size: data.length }] });
-const arm = manifest(`EnsoCode-${version}-arm64-mac.zip`);
-const intel = manifest(`EnsoCode-${version}-mac.zip`);
+const arm = manifest(`Xiaoman-${version}-arm64-mac.zip`);
+const intel = manifest(`Xiaoman-${version}-mac.zip`);
 
 test('版本与 tag 必须一致，手动分支构建也必须使用合法稳定版本', () => {
   assert.equal(assertReleaseVersion(version, `v${version}`), version);
@@ -479,6 +479,33 @@ test('个人安装包只使用独立 generic 更新源，正式 GitHub 更新源
   assert.equal(official.publish.releaseType, 'draft');
 });
 
+test('打包显示小满但沿用既有系统标识和可更新的 ASCII 安装包名', async () => {
+  const config = parse(await readFile(new URL('../electron-builder.yml', import.meta.url), 'utf8'));
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(config.productName, '小满');
+  assert.equal(config.appId, 'com.j3n5en.enso-code');
+  assert.equal(pkg.name, 'enso-code');
+  assert.equal(pkg.productName, undefined);
+  assert.equal(config.extraMetadata?.productName, undefined);
+  assert.equal(config.publish.repo, 'EnsoCode');
+  assert.equal(config.win.executableName, 'Eaves');
+  assert.equal(config.nsis.artifactName, `Xiaoman-Setup-\${version}.\${ext}`);
+  assert.equal(config.mac.artifactName, `Xiaoman-\${version}-\${arch}-mac.\${ext}`);
+  assert.equal(config.dmg.artifactName, `Xiaoman-\${version}-\${arch}.\${ext}`);
+});
+
+test('旧品牌日志仍可读取，但输出使用小满且证书原名不变', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'enso-legacy-notes-'));
+  try {
+    await writeFile(path.join(dir, `${version}.md`), `# EnsoCode ${version}\n\n- 旧版真实变更\n`);
+    const notes = await personalRelease.readPersonalReleaseNotes(version, dir);
+    assert.ok(notes.startsWith(`# 小满 ${version}\n\n- 旧版真实变更\n`));
+    assert.match(notes, /信任 EnsoCode Local Signing 证书/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('个人清单只在安装包校验后生成，使用不可变个人 Release URL且保留校验值', async () => {
   const file = new URL('./personal-release.mjs', import.meta.url);
   assert.ok(existsSync(file), '需要个人更新清单生成器');
@@ -490,7 +517,7 @@ test('个人清单只在安装包校验后生成，使用不可变个人 Release
     const notes = path.join(dir, 'release-notes');
     await mkdir(source);
     await mkdir(notes);
-    await writeFile(path.join(notes, `${version}.md`), `# EnsoCode ${version}\n\n- 修复真实问题\n`);
+    await writeFile(path.join(notes, `${version}.md`), `# 小满 ${version}\n\n- 修复真实问题\n`);
     await writeFile(
       path.join(source, 'latest-mac.yml'),
       stringify({ ...arm, path: arm.files[0].url, sha512 })
@@ -502,6 +529,7 @@ test('个人清单只在安装包校验后生成，使用不可变个人 Release
     const feed = parse(await readFile(path.join(output, 'latest-mac.yml'), 'utf8'));
     const url = `https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v${version}/${arm.files[0].url}`;
     assert.equal(feed.version, version);
+    assert.equal(feed.releaseName, `小满 ${version} — 个人测试`);
     assert.equal(feed.files[0].url, url);
     assert.equal(feed.path, url);
     assert.equal(feed.files[0].sha512, sha512);
@@ -534,15 +562,15 @@ test('个人日志必须是版本匹配、有正文的有限大小 UTF-8 文件'
     await assert.rejects(() => readPersonalReleaseNotes(version, dir));
     for (const bad of [
       ' ',
-      `# EnsoCode ${version}\n \n`,
-      '# EnsoCode 0.2.11\n\n- Mismatched',
-      `# EnsoCode ${version}\n\n${'长'.repeat(16384)}`,
-      Buffer.concat([Buffer.from(`# EnsoCode ${version}\n\n`), Buffer.from([0xff])]),
+      `# 小满 ${version}\n \n`,
+      '# 小满 0.2.11\n\n- Mismatched',
+      `# 小满 ${version}\n\n${'长'.repeat(16384)}`,
+      Buffer.concat([Buffer.from(`# 小满 ${version}\n\n`), Buffer.from([0xff])]),
     ]) {
       await writeFile(file, bad);
       await assert.rejects(() => readPersonalReleaseNotes(version, dir));
     }
-    await writeFile(file, `# EnsoCode ${version}\r\n\r\n- Real changes\r\n`);
+    await writeFile(file, `# 小满 ${version}\r\n\r\n- Real changes\r\n`);
     assert.match(await readPersonalReleaseNotes(version, dir), /\n\n- Real changes\n/);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -562,7 +590,7 @@ test('CLI 按仓库版本读取日志，输出与 feed 同源的正文和安全�
       await copyFile(new URL(name, import.meta.url), path.join(scripts, name));
     }
     await writeFile(path.join(dir, 'package.json'), JSON.stringify({ version }));
-    const source = `# EnsoCode ${version}\n\n- Actual CLI changes\n`;
+    const source = `# 小满 ${version}\n\n- Actual CLI changes\n`;
     await writeFile(path.join(notes, `${version}.md`), source);
     const { stdout } = await promisify(execFile)(process.execPath, [
       path.join(scripts, 'personal-release.mjs'),
@@ -590,7 +618,7 @@ test('个人日志拒绝符号链接文件与目录', { skip: process.platform =
     const alias = path.join(dir, 'notes-alias');
     const outside = path.join(dir, 'valid.md');
     const file = path.join(notes, `${version}.md`);
-    const valid = `# EnsoCode ${version}\n\n- Real changes\n`;
+    const valid = `# 小满 ${version}\n\n- Real changes\n`;
     await mkdir(notes);
     await writeFile(outside, valid);
     await symlink(outside, file);

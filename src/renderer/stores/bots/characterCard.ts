@@ -56,7 +56,7 @@ export function buildCharacterCard(
       post_history_instructions: '',
       alternate_greetings: [] as string[],
       tags: [] as string[],
-      creator: 'EnsoCode',
+      creator: '小满',
       character_version: '',
       extensions: {
         enso: {

@@ -1,4 +1,4 @@
-# enso-relay (Go)
+# 小满 relay (Go)
 
 <p align="right"><a href="README.zh-CN.md">简体中文</a></p>
 
@@ -6,7 +6,7 @@ Single-process relay, **protocol-compatible** with the `packages/relay` Cloudfla
 
 **Recommended self-hosting is still the Cloudflare Worker.** Use this binary when you do not have (or do not want) Cloudflare. Full guide: [`../relay/README.md`](../relay/README.md).
 
-Linux amd64 / arm64 builds are attached to each [GitHub Release](https://github.com/J3n5en/EnsoCode/releases/latest).
+Linux amd64 / arm64 builds are attached to the upstream [GitHub Releases](https://github.com/J3n5en/EnsoCode/releases/latest).
 
 ## Run
 

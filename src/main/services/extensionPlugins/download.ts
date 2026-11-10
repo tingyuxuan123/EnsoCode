@@ -123,7 +123,7 @@ function defaultFetch(
         method: 'GET',
         headers: {
           host: url.host,
-          'user-agent': 'EnsoCode-plugin-installer',
+          'user-agent': 'Xiaoman-plugin-installer',
           accept: 'application/zip',
           'accept-encoding': 'identity',
         },

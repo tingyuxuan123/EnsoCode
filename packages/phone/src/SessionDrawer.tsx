@@ -599,7 +599,7 @@ export function SessionDrawer({
               )}
               {pushAvailability === 'ok' && connected && !pushConfigReady && (
                 <p className="mt-1 pl-6 text-[11px] text-muted-foreground">
-                  需先升级桌面端 EnsoCode 才能开启推送。
+                  需先升级桌面端小满才能开启推送。
                 </p>
               )}
               {pushAvailability === 'needs-install' && (

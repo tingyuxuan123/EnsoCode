@@ -1,8 +1,8 @@
 ---
 name: project-knowledge
 description: >
-  Navigate EnsoCode's long-term engineering conventions, layer boundaries, testing rules,
-  historical decisions, and high-cost pitfalls. Use before non-trivial or cross-layer changes,
+  Navigate 小满 project knowledge: long-term engineering conventions, layer boundaries,
+  testing rules, historical decisions, and high-cost pitfalls. Use before non-trivial or cross-layer changes,
   when adding IPC or session/worker behavior, when debugging state/history/input issues,
   when a fix reveals a reusable rule, when preparing a desktop release/update, or when the user asks to search or capture project knowledge.
   项目知识导航、踩坑检索、根因沉淀、TDD、发版、推送更新、打包升级和工程约定。

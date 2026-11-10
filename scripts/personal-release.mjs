@@ -37,11 +37,15 @@ export async function readPersonalReleaseNotes(version, notesDirectory = release
       .decode(data.subarray(0, offset))
       .replace(/\r\n?/g, '\n')
       .trimEnd();
-    const heading = `# EnsoCode ${version}`;
-    if (!content.startsWith(`${heading}\n`) || !content.slice(heading.length).trim()) {
+    const heading = `# 小满 ${version}`;
+    // 已发布的历史日志保留原文；重新读取时统一显示新品牌，不改变版本/正文校验。
+    const sourceHeading = [heading, `# EnsoCode ${version}`].find((candidate) =>
+      content.startsWith(`${candidate}\n`)
+    );
+    if (!sourceHeading || !content.slice(sourceHeading.length).trim()) {
       throw new Error(`Personal release notes require '${heading}' and a non-empty body`);
     }
-    return `${content}\n\n---\n\n个人测试通道 ${version}：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。\n`;
+    return `${heading}${content.slice(sourceHeading.length)}\n\n---\n\n个人测试通道 ${version}：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。\n`;
   } finally {
     await file.close();
   }
@@ -77,7 +81,7 @@ export async function preparePersonalFeed(artifactDir, outputDir, version, notes
     path: zip.url,
     sha512: zip.sha512,
     releaseDate: manifest.releaseDate,
-    releaseName: `EnsoCode ${version} — 个人测试`,
+    releaseName: `小满 ${version} — 个人测试`,
     releaseNotes: await readPersonalReleaseNotes(version, notesDirectory),
   };
   await mkdir(outputDir, { recursive: true });

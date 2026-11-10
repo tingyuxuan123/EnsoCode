@@ -4,7 +4,7 @@
 
 - Windows computer use：`win.ax()` / `getState()` 报 `AX_WORKER_EXITED`（软失败后显示 `AX worker-exited`），截图正常。
 - 同一份 UIA 代码在 vitest（纯 Node）里全绿，`node` 下用 `worker_threads` 跑构建产物也能返回节点。
-- 改用进程内 `worker_threads` 兜底会把整个 EnsoCode 带崩。
+- 改用进程内 `worker_threads` 兜底会导致整个应用崩溃。
 
 ## 根因
 

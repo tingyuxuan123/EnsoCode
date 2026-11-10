@@ -1,6 +1,6 @@
 # 内置代码搜索
 
-`code_search` 是普通本地父会话的可选工具。它复用 EnsoCode 的 Devin OAuth
+`code_search` 是普通本地父会话的可选工具。它复用小满的 Devin OAuth
 账号，不是 MCP、不创建普通子代理，也不构建向量索引。
 
 ## 使用与数据边界

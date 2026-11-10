@@ -57,7 +57,7 @@ export function ComputerAllowedAppsList({
       <p className="font-medium text-sm">{t('Apps the AI may control')}</p>
       <p className="text-muted-foreground text-xs">
         {t(
-          'The first time the AI clicks or types in an app, Eaves asks you. Apps you always allow are listed here; it can then read everything in their windows.'
+          'The first time the AI clicks or types in an app, 小满 asks you. Apps you always allow are listed here; it can then read everything in their windows.'
         )}
       </p>
       {apps?.length === 0 && (

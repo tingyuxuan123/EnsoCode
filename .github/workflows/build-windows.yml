@@ -136,7 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/release-assets
-          cp dist/Eaves-Setup-*.exe dist/*.blockmap dist/latest.yml dist/release-assets/
+          cp dist/Xiaoman-Setup-*.exe dist/*.blockmap dist/latest.yml dist/release-assets/
           node scripts/release.mjs verify dist/release-assets
 
       - name: Upload installer
@@ -206,7 +206,7 @@ jobs:
           node scripts/release.mjs verify release-assets
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" --verify-tag --draft --prerelease --latest=false \
-              --title "Eaves ${TAG#windows-v} — Windows x64" \
+              --title "小满 ${TAG#windows-v} — Windows x64" \
               --notes 'Windows x64 only. CI verifies the installer, native dependencies, bundled design engine and downloaded asset checksums before automatic publication as Latest. Windows installation, upgrade and old-data retention have not been manually verified by this workflow.'
           fi
           gh release upload "$TAG" release-assets/* --clobber

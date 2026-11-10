@@ -129,7 +129,7 @@ export function ResourcesSettings() {
           {t('Resources')}
         </h3>
         <p className="text-[calc(13rem/14)] text-muted-foreground">
-          {t('CPU, memory and disk usage of Eaves and the processes it started.')}
+          {t('CPU, memory and disk usage of 小满 and the processes it started.')}
         </p>
       </div>
       <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
@@ -255,7 +255,7 @@ function UsageMeter({
     <div className="space-y-3 rounded-[6px] border p-4">
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <div className="text-[calc(12rem/14)] text-muted-foreground">Eaves</div>
+          <div className="text-[calc(12rem/14)] text-muted-foreground">小满</div>
           <div className="font-mono text-2xl font-semibold">{format(app)}</div>
         </div>
         <div className="text-right">

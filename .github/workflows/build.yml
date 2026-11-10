@@ -162,7 +162,7 @@ jobs:
 
       - name: Verify Mac signature and notarization
         run: |
-          APP=$(find dist -maxdepth 2 -name Eaves.app -type d | head -1)
+          APP=$(find dist -maxdepth 2 -name '小满.app' -type d | head -1)
           codesign --verify --deep --strict "$APP"
           if [ "$MAC_NOTARIZE" = true ]; then
             codesign -dv --verbose=2 "$APP" 2>&1 | grep 'Authority=Developer ID Application:'
@@ -175,8 +175,8 @@ jobs:
           if [ "${{ matrix.arch }}" = x64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
             sudo softwareupdate --install-rosetta --agree-to-license
           fi
-          APP=$(ls -d dist/mac*/Eaves.app | head -1)
-          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Eaves" scripts/smoke-packaged-natives.cjs "$APP/Contents/Resources"
+          APP=$(ls -d dist/mac*/小满.app | head -1)
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/小满" scripts/smoke-packaged-natives.cjs "$APP/Contents/Resources"
 
       - name: Upload latest-mac.yml
         uses: actions/upload-artifact@v6
@@ -528,7 +528,7 @@ jobs:
             echo "各平台安装包见下方 Assets，或访问 [Releases](https://github.com/${{ github.repository }}/releases/tag/${TAG})。"
             echo ""
             echo "- macOS: \`.dmg\`（Apple Silicon / Intel）"
-            echo "- Windows: \`Eaves-Setup-${VERSION}.exe\`"
+            echo "- Windows: \`Xiaoman-Setup-${VERSION}.exe\`"
             echo "- Linux: \`.AppImage\` / \`.deb\`"
             echo "- 自建中继: \`enso-relay-linux-amd64\` / \`enso-relay-linux-arm64\`"
             echo ""

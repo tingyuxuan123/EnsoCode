@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
 describe('macAppMenuTemplate', () => {
   it('sets the About panel display name without renaming the app identity', () => {
     installAppMenu();
-    expect(app.setAboutPanelOptions).toHaveBeenCalledWith({ applicationName: 'Eaves' });
+    expect(app.setAboutPanelOptions).toHaveBeenCalledWith({ applicationName: '小满' });
   });
 
   it('labels app menu items with the product name instead of the package name', () => {
@@ -19,9 +19,9 @@ describe('macAppMenuTemplate', () => {
     expect(appMenu.label).toBe(APP_DISPLAY_NAME);
     const items = appMenu.submenu as { role?: string; label?: string }[];
     const labelOf = (role: string) => items.find((item) => item.role === role)?.label;
-    expect(labelOf('about')).toBe('About Eaves');
-    expect(labelOf('hide')).toBe('Hide Eaves');
-    expect(labelOf('quit')).toBe('Quit Eaves');
+    expect(labelOf('about')).toBe('About 小满');
+    expect(labelOf('hide')).toBe('Hide 小满');
+    expect(labelOf('quit')).toBe('Quit 小满');
     expect(JSON.stringify(macAppMenuTemplate())).not.toContain('enso-code');
   });
 

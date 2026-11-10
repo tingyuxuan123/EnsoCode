@@ -465,7 +465,7 @@ export function ChatScreen(props: Props) {
             <span className="mb-3 flex size-11 items-center justify-center rounded-[13px] border border-brand/20 bg-brand/8 text-brand dark:bg-brand/14">
               <EnsoMark className="size-6" />
             </span>
-            <p className="font-semibold text-[22px] tracking-tight">EnsoCode</p>
+            <p className="font-semibold text-[22px] tracking-tight">小满</p>
             <p className="text-muted-foreground text-sm">
               {props.connState === 'online' ? '从左上角选择会话，或新建一个' : props.stateLabel}
             </p>
@@ -499,7 +499,7 @@ export function ChatScreen(props: Props) {
             loading={view === null}
             running={running}
             error={undefined}
-            emptyTitle={props.projectName || 'EnsoCode'}
+            emptyTitle={props.projectName || '小满'}
             // 手机端不虚拟化：见 MessageTimeline 里 virtualize 的说明
             virtualize={false}
             historyLoading={props.historyLoading}

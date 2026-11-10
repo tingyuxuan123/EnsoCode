@@ -9,9 +9,9 @@ import org.junit.Test
 
 class FilePreviewTest {
     @Test fun `utf8 text is shown and invalid bytes fall back to binary`() {
-        val text = previewFile("README.md", "# 檐下\n\n- 一条".toByteArray())
+        val text = previewFile("README.md", "# 小满\n\n- 一条".toByteArray())
         assertEquals(FileKind.Text, text.kind)
-        assertEquals("# 檐下\n\n- 一条", text.text)
+        assertEquals("# 小满\n\n- 一条", text.text)
         assertEquals(FileKind.Binary, previewFile("blob.bin", byteArrayOf(1, 0, 2, 0)).kind)
         assertEquals(FileKind.Binary, previewFile("broken.txt", byteArrayOf(0xC3.toByte())).kind)
     }

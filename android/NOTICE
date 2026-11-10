@@ -1,4 +1,4 @@
-Eaves Android
+小满 Android
 
 Visual reference: ensocode-android.vetd, whose theme is based on Vetta Android.
 No Vetta platform implementation has been copied in this increment.
@@ -44,10 +44,10 @@ Copyright (c) 2014-present tom zhou<appnet.link@gmail.com>
 Java port originating at https://github.com/InstantWebP2P/tweetnacl-java
 Maven distribution: https://github.com/purejava/tweetnacl-java/tree/v1.1.2
 MIT License; full text is included in assets/licenses/TWEETNACL-JAVA-MIT.txt.
-Used unmodified for NaCl box key exchange in android/pair. Eaves supplies secure
+Used unmodified for NaCl box key exchange in android/pair. 小满 supplies secure
 random nonces and rejects all-zero X25519 shared secrets before invoking box.
 
 Multiplatform Markdown Renderer (Material 3) 0.39.0
 Source: https://github.com/mikepenz/multiplatform-markdown-renderer
 Apache License 2.0; full text is included in assets/licenses/APACHE-2.0.txt.
-Rendered links are inert and remote image fetching is disabled in Eaves sessions.
+Rendered links are inert and remote image fetching is disabled in 小满 sessions.

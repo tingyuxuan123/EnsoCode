@@ -1,7 +1,7 @@
 {
   "name": "enso-code",
   "version": "0.2.68",
-  "description": "Eaves - Electron Multi-Window Scaffold",
+  "description": "小满 - AI 协作工作台",
   "main": "./out/main/index.js",
   "author": {
     "name": "EnsoAI Team",

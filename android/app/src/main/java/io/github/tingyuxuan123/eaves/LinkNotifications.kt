@@ -42,7 +42,7 @@ internal class LinkNotifications(private val context: Context) {
                 .setData(android.net.Uri.Builder().scheme("eaves-internal").authority("stop-watch").appendPath(token).build())
                 .putExtra(EXTRA_TOKEN, token), FLAGS)
         return Notification.Builder(context, LINK_CHANNEL).setSmallIcon(R.drawable.eaves_notification)
-            .setContentTitle("檐下 · 后台连接").setContentText(status)
+            .setContentTitle("小满 · 后台连接").setContentText(status)
             .setContentIntent(open(token)).setOngoing(true).setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_SERVICE).setVisibility(Notification.VISIBILITY_PRIVATE)
             .addAction(Notification.Action.Builder(null, "停止后台连接", stop).build()).build()
@@ -63,7 +63,7 @@ internal class LinkNotifications(private val context: Context) {
             }
             val channel = if (notice.kind == TaskNoticeKind.Done) DONE_CHANNEL else ATTENTION_CHANNEL
             val public = Notification.Builder(context, channel).setSmallIcon(R.drawable.eaves_notification)
-                .setContentTitle("檐下有任务更新").setContentText("解锁后打开查看").build()
+                .setContentTitle("小满有任务更新").setContentText("解锁后打开查看").build()
             val notification = Notification.Builder(context, channel).setSmallIcon(R.drawable.eaves_notification)
                 .setContentTitle(notice.title).setContentText(body).setStyle(Notification.BigTextStyle().bigText(body))
                 .setContentIntent(open(token, notice.sessionId)).setAutoCancel(true).setOnlyAlertOnce(true)

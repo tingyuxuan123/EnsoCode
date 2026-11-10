@@ -92,7 +92,7 @@ internal fun PairScreen(
             ScannerGuide(paired = state.paired, scanner = if (specimen == null && !state.paired && !state.busy) scanner else null)
             Label(if (state.paired) if (state.watchActive) "配对已保存。后台提醒已开启，离开应用后仍会保持连接。"
                 else "配对已保存在这台手机上。未开启后台提醒时，离开应用会暂停连接。"
-                else "在电脑上打开 Eaves → 设置 → 手机，扫描出现的二维码即可配对。", 15, 22,
+                else "在电脑上打开小满 → 设置 → 手机，扫描出现的二维码即可配对。", 15, 22,
                 Modifier.padding(start = 4.dp, end = 4.dp, top = 16.dp), color = c.ink2)
             if (specimen == null) {
                 if (state.paired) {

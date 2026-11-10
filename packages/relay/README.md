@@ -1,4 +1,4 @@
-# EnsoCode relay
+# 小满 relay
 
 <p align="right"><a href="README.zh-CN.md">简体中文</a></p>
 
@@ -39,7 +39,7 @@ Pushes to `dev` that touch `packages/relay`, `packages/phone`, or `packages/pair
 
 ## Option 2: Go binary
 
-For a machine without Cloudflare. Binaries are attached to each [GitHub Release](https://github.com/J3n5en/EnsoCode/releases/latest):
+For a machine without Cloudflare. Binaries are attached to the upstream [GitHub Releases](https://github.com/J3n5en/EnsoCode/releases/latest):
 
 - `enso-relay-linux-amd64` (x86_64)
 - `enso-relay-linux-arm64` (aarch64)

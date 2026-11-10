@@ -9,7 +9,7 @@ export function EavesWorkingIcon() {
     <svg
       viewBox="0 0 100 100"
       role="img"
-      aria-label="Eaves · 檐下"
+      aria-label="小满"
       className="size-[calc(22rem/14)] shrink-0"
       fill="none"
       stroke="currentColor"

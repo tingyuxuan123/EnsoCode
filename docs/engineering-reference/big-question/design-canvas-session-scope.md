@@ -14,7 +14,7 @@ DOM 同时只有一个画布，因此不能据此排除跨会话串状态。
 ## 根因
 
 上游每窗口只有一个活动画布，工具直接读模块级 controller，默认它就是调用者的工作区。
-EnsoCode 每会话一个 Dock，工具运行时又常驻窗口并承接 child/后台请求：窗口身份不等于
+小满每会话一个 Dock，工具运行时又常驻窗口并承接 child/后台请求：窗口身份不等于
 会话 cwd。create 仅发 cwd-scoped pending open，React 挂载、扫描、引擎启动均异步，
 返回时没有验证 controller 是否已接管目标设计。前置检查也不足以覆盖 handler 中 await
 后再次读取单例的情况。尚无证据证明原始真机是哪次挂载/路由竞态延长了旧 controller。

@@ -299,7 +299,7 @@ export async function withSessionGitWorkspace<T>(
   if (frozen) {
     throw new GitOperationError(
       'workspace-blocked',
-      'Git 操作结束但工作区未能解锁，请重启 Eaves 后刷新 Git 状态。'
+      'Git 操作结束但工作区未能解锁，请重启小满后刷新 Git 状态。'
     );
   }
   if (!outcome.ok) throw outcome.error;
@@ -525,7 +525,7 @@ export function registerWorktreeHandlers(): void {
             code: applied ? 'git-error' : 'busy',
             workspaceBlocked: true,
             ...(applied ? { changed: applied } : {}),
-            error: `${applied ? 'Branch switched, but the workspace' : 'Workspace'} remains blocked. Restart Eaves to recover.${result.ok ? '' : ` ${result.error}`}`,
+            error: `${applied ? 'Branch switched, but the workspace' : 'Workspace'} remains blocked. Restart 小满 to recover.${result.ok ? '' : ` ${result.error}`}`,
           }
         : result;
     }

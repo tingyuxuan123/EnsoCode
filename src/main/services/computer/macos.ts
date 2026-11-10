@@ -100,7 +100,7 @@ export class MacosDesktopBackend implements DesktopBackend {
       axPermission: ax,
       detail:
         capture === 'denied' || ax === 'denied'
-          ? 'Grant Screen Recording and Accessibility to Eaves, then restart the app.'
+          ? 'Grant Screen Recording and Accessibility to 小满, then restart the app.'
           : native
             ? undefined
             : 'Native desktop bridge unavailable; screenshots still work.',
@@ -144,7 +144,7 @@ export class MacosDesktopBackend implements DesktopBackend {
     if ((await capturePermission()) === 'denied') {
       throw new PermissionError(
         'capture',
-        'Screen Recording is denied. Enable it for Eaves in System Settings.'
+        'Screen Recording is denied. Enable it for 小满 in System Settings.'
       );
     }
     const types = target === 'desktop' ? (['screen'] as const) : (['window'] as const);
@@ -236,7 +236,7 @@ export class MacosDesktopBackend implements DesktopBackend {
     if (axPermission() !== 'granted') {
       throw new PermissionError(
         kind,
-        'Accessibility is denied. Enable it for Eaves in System Settings, then restart.'
+        'Accessibility is denied. Enable it for 小满 in System Settings, then restart.'
       );
     }
     const native = await this.nativeOrNull();
@@ -352,7 +352,7 @@ export class MacosDesktopBackend implements DesktopBackend {
       if (!isSkyClickUnavailable(error)) throw error;
       // 激活包被拒（1002 多见于辅助功能授权失效）：不要偷偷改成前台
       throw new BackgroundUnavailableError(
-        `macOS refused background focus for this app (${error instanceof Error ? error.message : String(error)}); Eaves may have lost Accessibility permission`
+        `macOS refused background focus for this app (${error instanceof Error ? error.message : String(error)}); 小满 may have lost Accessibility permission`
       );
     } finally {
       // Every action restores synthetic focus, including abort and failed input.
