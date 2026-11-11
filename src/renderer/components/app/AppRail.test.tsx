@@ -24,6 +24,15 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
 const modeSwitch = createElement('div', { 'data-testid': 'mode' });
 
 describe('AppRail 精简导航', () => {
+  it('超级助理不依赖 Bot 开关，独立入口反映选中状态', () => {
+    const props = { superAssistant: { active: true, onToggle: vi.fn() } };
+    expect(railItems(props)).toEqual(['Super Assistant', 'Ask Enso', 'Settings']);
+    const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
+    expect(
+      document.querySelector('[aria-label="Super Assistant"]')?.getAttribute('aria-pressed')
+    ).toBe('true');
+  });
+
   it('全局协作看板在设计入口下方，没有设计入口时仍显示', () => {
     const props = {
       collaborationBoard: { active: true, attention: 3, onToggle: vi.fn() },

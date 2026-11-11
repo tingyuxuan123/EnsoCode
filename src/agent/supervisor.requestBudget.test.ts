@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   sessions: [] as Array<Record<string, unknown>>,
+  loaders: [] as Array<Record<string, unknown>>,
   createAgentSession: vi.fn(),
 }));
 
@@ -38,6 +39,9 @@ vi.mock('./mcp', () => ({
 vi.mock('@earendil-works/pi-coding-agent', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
   class Loader {
+    constructor(options: Record<string, unknown>) {
+      mocks.loaders.push(options);
+    }
     async reload() {}
     getSkills() {
       return { skills: [] };
@@ -197,6 +201,7 @@ describe('SessionSupervisor 子代理请求预算', () => {
 
   beforeEach(() => {
     mocks.sessions.length = 0;
+    mocks.loaders.length = 0;
     mocks.createAgentSession.mockReset();
     mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
       session: session(options),
@@ -206,6 +211,181 @@ describe('SessionSupervisor 子代理请求预算', () => {
 
   afterEach(() => {
     rmSync(sessionDir, { recursive: true, force: true });
+  });
+
+  it('Main-authorized coordinator has only coordinator + ask_user, rejects child spawn, and bridges typed requests', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: sessionDir,
+      sessionDir,
+    });
+    supervisor.handleCommand({
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: sessionDir,
+      model,
+      superAssistant: true,
+      skillPaths: ['/must-not-load'],
+      mcpServers: [{ name: 'must-not-load', transport: 'stdio', command: 'bad' }],
+      pluginCommands: [],
+      loadHarnessAssets: true,
+    });
+    await waitFor(events, 'parent-ready');
+    const options = mocks.createAgentSession.mock.calls[0][0];
+    expect(options.noTools).toBe('builtin');
+    const tools = options.customTools;
+    expect(tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'super_assistant',
+      'ask_user',
+    ]);
+    expect(options.settingsManager.getPackages()).toEqual([]);
+    expect(mocks.loaders[0]).toMatchObject({
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
+    expect(mocks.loaders[0].settingsManager).toBe(options.settingsManager);
+    expect((mocks.loaders[0].agentsFilesOverride as () => unknown)()).toEqual({ agentsFiles: [] });
+    expect((mocks.loaders[0].skillsOverride as () => unknown)()).toEqual({
+      skills: [],
+      diagnostics: [],
+    });
+    expect(mocks.loaders[0]).not.toHaveProperty('additionalExtensionPaths');
+    expect(mocks.loaders[0]).not.toHaveProperty('additionalSkillPaths');
+    expect(mocks.loaders[0].systemPrompt).toContain('NOT completed');
+    expect(mocks.loaders[0].systemPrompt).toContain('untrusted');
+    const pending = tools[0].execute('tool-call', {
+      operation: 'history',
+      conversationId: 'target',
+      limit: '3',
+    });
+    const invoke = events.find((event) => event.type === 'super-assistant-invoke');
+    expect(invoke).toMatchObject({
+      identity: parent,
+      request: { operation: 'history', conversationId: 'target', limit: 3 },
+    });
+    if (invoke?.type !== 'super-assistant-invoke') throw new Error('Missing invoke');
+    supervisor.handleCommand({
+      type: 'super-assistant-result',
+      identity: parent,
+      requestId: invoke.requestId,
+      ok: true,
+      result: { messages: [] },
+    });
+    await expect(pending).resolves.toMatchObject({
+      content: [{ type: 'text', text: '{"messages":[]}' }],
+    });
+    const controller = new AbortController();
+    const canceled = tools[0].execute(
+      'cancel-call',
+      { operation: 'dispatch', projectId: 'p', conversationId: 'target', prompt: 'fix tests' },
+      controller.signal
+    );
+    const dispatched = events.findLast((event) => event.type === 'super-assistant-invoke');
+    expect(dispatched).toMatchObject({
+      request: {
+        operation: 'dispatch',
+        projectId: 'p',
+        conversationId: 'target',
+        prompt: 'fix tests',
+      },
+    });
+    controller.abort();
+    await expect(canceled).rejects.toThrow(/aborted/i);
+    expect(events.find((event) => event.type === 'super-assistant-cancel')).toMatchObject({
+      identity: parent,
+      requestId: dispatched?.requestId,
+    });
+    supervisor.handleCommand({
+      type: 'spawn-child',
+      identity: child,
+      cwd: sessionDir,
+      config: {
+        typeKey: 'builtin:worker',
+        displayName: 'Worker',
+        description: 'worker',
+        spawnSpecId: 'worker',
+        systemPrompt: 'worker',
+        model,
+        tools: 'readonly',
+        skillPaths: [],
+        skillBindingIds: [],
+        mcpServers: [],
+        mcpBindingIds: [],
+        systemPromptHash: 'h',
+      },
+    });
+    await waitFor(events, 'child-rejected');
+    expect(mocks.createAgentSession).toHaveBeenCalledTimes(1);
+    await supervisor.shutdown();
+  });
+
+  it('ordinary root does not register super_assistant', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: sessionDir,
+      sessionDir,
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: sessionDir, model });
+    await waitFor(events, 'parent-ready');
+    expect(
+      mocks.createAgentSession.mock.calls[0][0].customTools.map(
+        (tool: { name: string }) => tool.name
+      )
+    ).not.toContain('super_assistant');
+    await supervisor.shutdown();
+  });
+
+  it('idle-only Main delivery defers when busy without steering or prompting', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: sessionDir,
+      sessionDir,
+    });
+    supervisor.handleCommand({ type: 'spawn-parent', identity: parent, cwd: sessionDir, model });
+    await waitFor(events, 'parent-ready');
+    const target = mocks.sessions[0] as FakeSession;
+    target.isStreaming = true;
+    supervisor.handleCommand({
+      type: 'prompt',
+      identity: parent,
+      text: 'queued task',
+      deliveryId: 'task-delivery',
+      idleOnly: true,
+    });
+    await waitFor(events, 'delivery-deferred');
+    expect(events.find((event) => event.type === 'delivery-deferred')).toMatchObject({
+      identity: parent,
+      deliveryId: 'task-delivery',
+    });
+    expect(target.steer).not.toHaveBeenCalled();
+    expect(target.prompt).not.toHaveBeenCalled();
+    target.isStreaming = false;
+    supervisor.handleCommand({
+      type: 'prompt',
+      identity: parent,
+      text: 'queued task',
+      deliveryId: 'admitted-task',
+      idleOnly: true,
+    });
+    await settle();
+    expect(target.prompt).toHaveBeenCalledTimes(1);
+    supervisor.handleCommand({ type: 'abort', identity: parent, deliveryId: 'unrelated-task' });
+    await settle();
+    expect(target.abort).not.toHaveBeenCalled();
+    supervisor.handleCommand({ type: 'abort', identity: parent });
+    await waitFor(events, 'delivery-aborted');
+    expect(events.find((event) => event.type === 'delivery-aborted')).toMatchObject({
+      identity: parent,
+      deliveryId: 'admitted-task',
+    });
+    expect(target.abort).toHaveBeenCalledTimes(1);
+    await supervisor.shutdown();
   });
 
   async function spawnChild(): Promise<{

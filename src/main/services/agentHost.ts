@@ -294,7 +294,7 @@ let browserCancellationListener:
   | null = null;
 const browserSessionTools = new Map<
   string,
-  { generation: string; enabled: boolean; designEnabled: boolean }
+  { generation: string; enabled: boolean; designEnabled: boolean; restricted?: true }
 >();
 let designSettingsListener: (() => void) | undefined;
 export function setDesignSettingsListener(listener: () => void): void {
@@ -580,15 +580,19 @@ export function sendAgentCommand(command: AgentCommand): { ok: boolean; error?: 
   ) {
     browserCancellationListener?.(command.identity, 'resume');
   }
-  if (command.type === 'spawn-parent' && !builtinToolScopes.has(command.identity)) {
+  if (
+    command.type === 'spawn-parent' &&
+    (command.superAssistant || !builtinToolScopes.has(command.identity))
+  ) {
     browserSessionTools.set(command.identity.sessionId, {
       generation: command.identity.generation,
-      enabled: !command.disabledTools?.includes('browser'),
-      designEnabled: !command.disabledTools?.includes('design'),
+      enabled: !command.superAssistant && !command.disabledTools?.includes('browser'),
+      designEnabled: !command.superAssistant && !command.disabledTools?.includes('design'),
+      ...(command.superAssistant ? { restricted: true } : {}),
     });
   } else if (command.type === 'set-builtin-tools') {
     const policy = browserSessionTools.get(command.identity.sessionId);
-    if (policy?.generation === command.identity.generation) {
+    if (policy?.generation === command.identity.generation && !policy.restricted) {
       policy.enabled = !command.disabledTools.includes('browser');
       policy.designEnabled = !command.disabledTools.includes('design');
     }
@@ -952,6 +956,8 @@ export function spawnSession(
   /** 由 main 从会话权威派生，渲染层不可伪造 */
   projectId?: string,
   options?: {
+    /** Only Main's authenticated fixed coordinator may set this. */
+    superAssistant?: true;
     rolePrompt?: string;
     extraDisabledTools?: readonly string[];
     omitDispatchTools?: boolean;
@@ -982,6 +988,19 @@ export function spawnSession(
     { allowVirtual: true }
   );
   if (!resolved.ok) return { ok: false, error: resolved.error };
+  if (options?.superAssistant) {
+    if (!worker && workerExited) startAgentWorker();
+    return sendAgentCommand({
+      type: 'spawn-parent',
+      superAssistant: true,
+      identity,
+      cwd: request.cwd,
+      model: resolved.selection.config,
+      ...(request.resumeFile ? { resumeFile: request.resumeFile } : {}),
+      ...(request.reasoningEnabled ? { reasoningEnabled: true } : {}),
+      ...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
+    });
+  }
   const reviewer = resolveApprovalReviewer(authenticatedAccountKeys);
   if (!reviewer.ok) {
     if (request.approvalMode === 'assistant') return { ok: false, error: reviewer.error };

@@ -77,7 +77,8 @@ const pickSuggestion = (prompt: string) => {
   if (insertComposerText(prompt)) requestFocusComposer();
 };
 
-export function ChatView() {
+export function ChatView({ superAssistantId }: { superAssistantId?: string } = {}) {
+  const isAssistant = superAssistantId !== undefined;
   const { t } = useI18n();
   const providers = useMaterializedProviders();
   const virtualModels = useSettingsStore((state) => state.virtualModels);
@@ -93,8 +94,10 @@ export function ChatView() {
     voiceInputEnabled &&
     speechStatus?.state !== 'unsupported' &&
     speechStatus?.models.find((model) => model.id === voiceModel)?.state === 'ready';
-  const chrome = useSessionsStore(useShallow(selectChatChrome));
-  const designAttachment = useDesignComposer((state) => state.bySession[chrome?.id ?? '']);
+  const chrome = useSessionsStore(useShallow((state) => selectChatChrome(state, superAssistantId)));
+  const designAttachment = useDesignComposer((state) =>
+    isAssistant ? undefined : state.bySession[chrome?.id ?? '']
+  );
   const memberName = useMemberName(chrome?.displayedParentId ? chrome.agentType : undefined);
   const pinnedTodos = usePinnedTodos(chrome?.id ?? '');
   const oauthSnapshot = useOauthCredentialStore((state) => state.snapshot);
@@ -106,10 +109,10 @@ export function ChatView() {
   const parentProjectId = chrome?.parentProjectId;
   const chatCandidates = useMemo(
     () =>
-      parentId !== undefined && parentProjectId !== undefined
+      !isAssistant && parentId !== undefined && parentProjectId !== undefined
         ? toChatMentionCandidates(candidateConversations, parentProjectId, parentId)
         : [],
-    [candidateConversations, parentId, parentProjectId]
+    [candidateConversations, isAssistant, parentId, parentProjectId]
   );
   // 会话显式选择优先；新草稿沿 项目默认 → 分组默认 → 全局默认，不再退化到 providers 第一项。
   const conversationProject = useMemo(
@@ -247,7 +250,7 @@ export function ChatView() {
 
   useEffect(() => {
     setSkillPreview(undefined);
-    if (!projectId || projectKind === 'ssh') return;
+    if (isAssistant || !projectId || projectKind === 'ssh') return;
     if (!designEnabled && (projectKind === 'scratch' || !loadLocalSkills)) return;
     let cancelled = false;
     window.electronAPI.assets
@@ -259,11 +262,11 @@ export function ChatView() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, projectKind, loadLocalSkills, designEnabled]);
+  }, [projectId, projectKind, loadLocalSkills, designEnabled, isAssistant]);
 
   const chromeCommands = chrome?.commands;
   const slashCommands = useMemo(() => {
-    if (!chromeCommands) return [];
+    if (isAssistant || !chromeCommands) return [];
     const goal = {
       name: '/goal',
       description: t('Set a session goal (/goal <objective> · pause · resume · clear)'),
@@ -296,7 +299,7 @@ export function ChatView() {
       ...fromProject,
       ...chromeCommands,
     ]);
-  }, [t, skills, skillPreview, projectId, chromeCommands, planAvailable]);
+  }, [t, skills, skillPreview, projectId, chromeCommands, planAvailable, isAssistant]);
 
   const timelineRef = useRef<MessageTimelineHandle>(null);
   const planning =
@@ -382,36 +385,47 @@ export function ChatView() {
   return (
     <div data-slot="chat-view" className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
       <WorktreeMissingDialog conversationId={chrome.parentId} />
-      <CoworkerTabs
-        parentId={chrome.parentId}
-        displayedId={chrome.id}
-        trailing={
-          project ? (
-            <WorkspaceBadge
-              project={project}
-              conversationId={chrome.parentId}
-              path={toolCwd ?? ''}
-              branch={branch}
-              openDisabled={chrome.parentWorktreeMissing}
-            >
-              {statusDot}
-            </WorkspaceBadge>
-          ) : (
-            <div className="flex min-w-0 shrink-0 items-center">{statusDot}</div>
-          )
-        }
-      />
+      {!isAssistant && (
+        <CoworkerTabs
+          parentId={chrome.parentId}
+          displayedId={chrome.id}
+          trailing={
+            project ? (
+              <WorkspaceBadge
+                project={project}
+                conversationId={chrome.parentId}
+                path={toolCwd ?? ''}
+                branch={branch}
+                openDisabled={chrome.parentWorktreeMissing}
+              >
+                {statusDot}
+              </WorkspaceBadge>
+            ) : (
+              <div className="flex min-w-0 shrink-0 items-center">{statusDot}</div>
+            )
+          }
+        />
+      )}
       <ChatSessionTimeline
         conversationId={chrome.id}
         cwd={toolCwd}
         emptyTitle={
-          project?.kind === 'scratch'
-            ? t('Temporary chats')
-            : project
-              ? projectDisplayName(project)
-              : '小满'
+          isAssistant
+            ? t('What should we work on?')
+            : project?.kind === 'scratch'
+              ? t('Temporary chats')
+              : project
+                ? projectDisplayName(project)
+                : '小满'
         }
-        onSuggestion={project ? pickSuggestion : undefined}
+        emptyDescription={
+          isAssistant
+            ? t(
+                'Tell the assistant what you need. It can find an existing Code conversation or start one in the right project.'
+              )
+            : undefined
+        }
+        onSuggestion={!isAssistant && project ? pickSuggestion : undefined}
         timelineRef={timelineRef}
       />
 
@@ -506,6 +520,7 @@ export function ChatView() {
             </div>
           )}
           <Composer
+            allowMentions={!isAssistant}
             attachment={
               designAttachment
                 ? {
@@ -542,7 +557,13 @@ export function ChatView() {
             }
             voice={voiceReady ? startDesktopVoiceSession : undefined}
             requestMicAccess={window.electronAPI.speech.requestMicAccess}
-            placeholder={planning ? t('Describe the task — a plan comes first') : undefined}
+            placeholder={
+              isAssistant
+                ? t('Message Super Assistant…')
+                : planning
+                  ? t('Describe the task — a plan comes first')
+                  : undefined
+            }
             injectedDraft={chrome.draftText}
             injectedImages={chrome.draftImages}
             injectedDraftAppend={chrome.draftAppend}
@@ -550,7 +571,7 @@ export function ChatView() {
             queuedCount={chrome.queuedMessages?.length ?? 0}
             onSteerQueued={() => useSessionsStore.getState().steerQueued(chrome.id)}
             initialRecipient={
-              chrome.prefillAgentTypeKey === ENSO_AGENT_TYPE_KEY
+              !isAssistant && chrome.prefillAgentTypeKey === ENSO_AGENT_TYPE_KEY
                 ? ENSO_PREFILL_CANDIDATE
                 : undefined
             }
@@ -562,65 +583,67 @@ export function ChatView() {
                 {!chrome.displayedParentId && (
                   <>
                     {/* 放不下时按 rank 逐个收成图标，再逐个收进「…」：预设 → 审批 → 工作区 → 计划 */}
-                    <CollapsingToolbar
-                      items={[
-                        {
-                          id: 'preset',
-                          rank: 0,
-                          render: (compact) => (
-                            <PresetPicker
-                              compact={compact}
-                              presetId={chrome.presetId ?? 'default'}
-                              disabled={chrome.started}
-                              onSelect={(presetId) =>
-                                useSessionsStore.getState().setPreset(chrome.id, presetId)
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          id: 'worktree',
-                          rank: 2,
-                          render: (compact) => (
-                            <WorktreePicker
-                              compact={compact}
-                              conversationId={chrome.id}
-                              onBranchChange={handleBranchChange}
-                            />
-                          ),
-                        },
-                        ...(planAvailable || chrome.planState?.active
-                          ? [
-                              {
-                                id: 'plan',
-                                rank: 3,
-                                render: (compact: boolean) => (
-                                  <PlanModeToggle
-                                    compact={compact}
-                                    active={chrome.planState?.active ?? false}
-                                    onToggle={(active) =>
-                                      useSessionsStore.getState().setPlanMode(chrome.id, active)
-                                    }
-                                  />
-                                ),
-                              },
-                            ]
-                          : []),
-                        {
-                          id: 'approval',
-                          rank: 1,
-                          render: (compact) => (
-                            <ApprovalModePicker
-                              compact={compact}
-                              mode={chrome.approvalMode ?? 'full'}
-                              onSelect={(mode) =>
-                                useSessionsStore.getState().setApprovalMode(chrome.id, mode)
-                              }
-                            />
-                          ),
-                        },
-                      ]}
-                    />
+                    {!isAssistant && (
+                      <CollapsingToolbar
+                        items={[
+                          {
+                            id: 'preset',
+                            rank: 0,
+                            render: (compact) => (
+                              <PresetPicker
+                                compact={compact}
+                                presetId={chrome.presetId ?? 'default'}
+                                disabled={chrome.started}
+                                onSelect={(presetId) =>
+                                  useSessionsStore.getState().setPreset(chrome.id, presetId)
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            id: 'worktree',
+                            rank: 2,
+                            render: (compact) => (
+                              <WorktreePicker
+                                compact={compact}
+                                conversationId={chrome.id}
+                                onBranchChange={handleBranchChange}
+                              />
+                            ),
+                          },
+                          ...(planAvailable || chrome.planState?.active
+                            ? [
+                                {
+                                  id: 'plan',
+                                  rank: 3,
+                                  render: (compact: boolean) => (
+                                    <PlanModeToggle
+                                      compact={compact}
+                                      active={chrome.planState?.active ?? false}
+                                      onToggle={(active) =>
+                                        useSessionsStore.getState().setPlanMode(chrome.id, active)
+                                      }
+                                    />
+                                  ),
+                                },
+                              ]
+                            : []),
+                          {
+                            id: 'approval',
+                            rank: 1,
+                            render: (compact) => (
+                              <ApprovalModePicker
+                                compact={compact}
+                                mode={chrome.approvalMode ?? 'full'}
+                                onSelect={(mode) =>
+                                  useSessionsStore.getState().setApprovalMode(chrome.id, mode)
+                                }
+                              />
+                            ),
+                          },
+                        ]}
+                      />
+                    )}
                     <div
                       className="ml-auto min-w-0 max-w-full shrink-0 [&_[data-model-picker=trigger]]:max-w-full"
                       data-slot="composer-model"
@@ -671,6 +694,7 @@ export function ChatView() {
               ) {
                 return false;
               }
+              if (isAssistant && payload.recipient) return false;
               let accepted = Promise.resolve(false);
               routeComposerPayload(payload, {
                 dispatchAgent: (typeKey, task) => {
@@ -692,14 +716,15 @@ export function ChatView() {
                         modelId: effectiveModelId,
                         cwd: project.path,
                       },
-                      images
+                      images,
+                      chrome.id
                     )
                     .then((error) => !error);
                 },
               });
               return accepted;
             }}
-            onAbort={() => void useSessionsStore.getState().abort()}
+            onAbort={() => void useSessionsStore.getState().abort(chrome.id)}
           />
           <StatsLine conversationId={chrome.id} />
         </div>

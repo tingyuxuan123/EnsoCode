@@ -19,6 +19,15 @@ vi.mock('@/stores/remoteNodes', () => ({
 }));
 afterEach(() => vi.unstubAllGlobals());
 
+it('超级助理模式独立持久化，不依赖 Bot 开关', async () => {
+  vi.stubGlobal('localStorage', { getItem: () => 'assistant', setItem: vi.fn() });
+  vi.resetModules();
+  const { useAppModeStore } = await import('./mode');
+  expect(useAppModeStore.getState().mode).toBe('assistant');
+  useAppModeStore.getState().setMode('code');
+  expect(useAppModeStore.getState().mode).toBe('code');
+});
+
 it('主话题通知即使当前看子话题也打开主话题，不沿用侧栏最近选择', async () => {
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
   const { openBotNotification } = await import('./mode');

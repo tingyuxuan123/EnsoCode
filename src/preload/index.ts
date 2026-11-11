@@ -62,6 +62,7 @@ import type {
 } from '@shared/resources';
 import type { BrowserSearchTab } from '@shared/searchAnything';
 import type { SettingsDeepLink } from '@shared/settingsDeepLink';
+import type { SuperAssistantSnapshot } from '@shared/superAssistant';
 import type {
   AssetOccupancyRow,
   CollectedAsset,
@@ -313,6 +314,20 @@ import type {
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const electronAPI = {
+  superAssistant: {
+    open: (): Promise<{ ok: boolean; conversationId?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SUPER_ASSISTANT_OPEN),
+    snapshot: (): Promise<SuperAssistantSnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SUPER_ASSISTANT_SNAPSHOT),
+    cancel: (taskId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SUPER_ASSISTANT_CANCEL, taskId),
+    onChanged: (listener: (snapshot: SuperAssistantSnapshot) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, snapshot: SuperAssistantSnapshot) =>
+        listener(snapshot);
+      ipcRenderer.on(IPC_CHANNELS.SUPER_ASSISTANT_CHANGED, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SUPER_ASSISTANT_CHANGED, handler);
+    },
+  },
   env: {
     platform: process.platform,
   },

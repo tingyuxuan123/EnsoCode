@@ -120,6 +120,7 @@ import {
   upsertOutOfRange,
 } from './reducer';
 import { applyConversationReload } from './reload';
+import { reconcileSuperAssistantAuthority } from './superAssistantProjection';
 import { isPairViewed, nextUnread } from './unread';
 import {
   DIRTY_MAIN_TREE,
@@ -222,6 +223,8 @@ function startGoalPrompt(objective: string): string {
 }
 
 export interface Conversation extends SessionProjection {
+  /** Main-owned coordinator: persisted for history, excluded from ordinary Code lists. */
+  superAssistant?: boolean;
   id: string;
   projectId: string;
   /** 首条消息的截断，作为列表展示名 */
@@ -1026,7 +1029,7 @@ export const useSessionsStore = create<SessionsState>()(
       }
       window.electronAPI.agent.onFocusSession((sessionId) => {
         const conversation = get().conversations[sessionId];
-        if (!conversation) return;
+        if (!conversation || conversation.superAssistant) return;
         const parentId = conversation.parentId;
         get().selectConversation(parentId ?? sessionId);
         if (parentId) get().selectTab(parentId, sessionId);
@@ -3487,7 +3490,7 @@ export const useSessionsStore = create<SessionsState>()(
 
         acquireObservation(id) {
           const conversation = get().conversations[id];
-          if (!conversation?.parentId || !conversation.child) return () => {};
+          if (!conversation) return () => {};
           const token = Symbol(id);
           const pins = observationPins.get(id) ?? new Set<symbol>();
           const first = pins.size === 0;
@@ -3502,7 +3505,8 @@ export const useSessionsStore = create<SessionsState>()(
                   if (current?.generation !== conversation.generation) return;
                   set((state) => patch(state, id, { historyError: error ?? undefined }));
                 });
-            } else void loadChildHistory(id);
+            } else if (conversation.parentId) void loadChildHistory(id);
+            else void hydrateParentHistoryTail(id);
           }
           return () => {
             if (!pins.delete(token) || observationPins.get(id) !== pins || pins.size > 0) return;
@@ -4250,16 +4254,23 @@ export const useSessionsStore = create<SessionsState>()(
 
 async function syncConversationProjectIds(): Promise<void> {
   const authority = await window.electronAPI.sourceAuthority.read();
-  const conversations = useSessionsStore.getState().conversations;
-  const next = remapConversationProjectIds(conversations, authority.conversations);
-  if (next !== conversations) useSessionsStore.setState({ conversations: next });
+  applyConversationAuthority(authority.conversations);
+}
+
+function applyConversationAuthority(rows: readonly ConversationAuthorityProjection[]): void {
+  const state = useSessionsStore.getState();
+  const conversations = remapConversationProjectIds(state.conversations, rows);
+  const next = reconcileSuperAssistantAuthority(
+    { conversations, order: state.order, activeId: state.activeId },
+    rows
+  );
+  if (next.conversations !== state.conversations || next.order !== state.order)
+    useSessionsStore.setState(next);
 }
 
 void syncConversationProjectIds();
 window.electronAPI.sourceAuthority.onChanged((projection) => {
-  const conversations = useSessionsStore.getState().conversations;
-  const next = remapConversationProjectIds(conversations, projection.conversations);
-  if (next !== conversations) useSessionsStore.setState({ conversations: next });
+  applyConversationAuthority(projection.conversations);
 });
 
 // 标题总结开关关闭：在飞与失败残留一起清掉，否则转圈/红叹号会在关闭后继续挂在侧栏

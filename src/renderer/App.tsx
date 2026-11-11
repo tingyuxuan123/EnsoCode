@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
 import { StatusBar } from '@/components/app/StatusBar';
+import { SuperAssistantView } from '@/components/app/SuperAssistantView';
 import { TitleBar } from '@/components/app/TitleBar';
 import { UpdateBanner } from '@/components/app/UpdateBanner';
 import { WorkbenchTitle } from '@/components/app/WorkbenchTitle';
@@ -117,6 +118,7 @@ export default function App() {
   useEffect(() => bindComposerDraftCleanup(useSessionsStore.subscribe, composerDrafts.delete), []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const [assistantActivityOpen, setAssistantActivityOpen] = useState(true);
   const closeWorkspacePage = useCallback(() => {
     setExtensionsOpen(false);
     closeDesignGallery();
@@ -252,6 +254,7 @@ export default function App() {
     () =>
       window.electronAPI.window.onAgentComposerPrefill((prefill) => {
         closeWorkspacePage();
+        if (useAppModeStore.getState().mode === 'assistant') showLocalCodeView();
         useSessionsStore.getState().prefillAgent(prefill.typeKey, prefill.prompt);
       }),
     [closeWorkspacePage]
@@ -277,18 +280,22 @@ export default function App() {
   const activeNodeId = useRemoteNodesStore((s) => s.activeNodeId);
   const remoteNodeActive = activeNodeId !== 'local';
   const botModeActive = useBotModeActive();
+  const appMode = useAppModeStore((s) => s.mode);
+  const assistantModeActive = appMode === 'assistant' && !remoteNodeActive;
   const designEnabled = useSettingsStore((s) => s.designEnabled);
   const galleryAvailable = isDesignGalleryAvailable({
     designEnabled,
     remoteNodeActive,
-    botModeActive,
+    botModeActive: botModeActive || assistantModeActive,
   });
   const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
   const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
-  const extensionsActive = extensionsOpen && !remoteNodeActive && !botModeActive && !galleryActive;
+  const extensionsActive =
+    extensionsOpen && !remoteNodeActive && !botModeActive && !assistantModeActive && !galleryActive;
   useEffect(() => {
-    if (remoteNodeActive || botModeActive || galleryActive) setExtensionsOpen(false);
-  }, [botModeActive, galleryActive, remoteNodeActive]);
+    if (remoteNodeActive || botModeActive || assistantModeActive || galleryActive)
+      setExtensionsOpen(false);
+  }, [botModeActive, assistantModeActive, galleryActive, remoteNodeActive]);
   const { t: designT } = useDesignTranslation();
   useEffect(() => {
     if (!galleryAvailable) closeDesignGallery();
@@ -310,7 +317,6 @@ export default function App() {
       if (state.tasks[group.id] === undefined) void state.refreshTasks(group.id);
     }
   }, [botModeEnabled, boardGroups, remoteNodeActive]);
-  const appMode = useAppModeStore((s) => s.mode);
   // 关闭实验开关或切到远程节点：回到 Code（设置未水合前 botModeEnabled 恒为 false，不能据此回退）
   useEffect(() => {
     const hydrated = useSettingsStore.persist?.hasHydrated?.() ?? true;
@@ -344,6 +350,8 @@ export default function App() {
         if (useSessionsStore.getState().conversations[sessionId]) {
           closeWorkspacePage();
           showLocalCodeView();
+          if (useSessionsStore.getState().conversations[sessionId]?.superAssistant)
+            useAppModeStore.getState().setMode('assistant');
         }
       }),
     [closeWorkspacePage]
@@ -395,6 +403,27 @@ export default function App() {
       }
       // 远程节点 / Bot 模式：本机 Code 会话相关的快捷键不响应（新对话/tab 切换/右侧面板/查找）
       const remote = useRemoteNodesStore.getState().activeNodeId !== 'local' || isBotModeActive();
+      const assistant = useAppModeStore.getState().mode === 'assistant' && !remote;
+      if (assistant && pressed === bindings['toggle-side-panel']) {
+        e.preventDefault();
+        setAssistantActivityOpen((open) => !open);
+        return;
+      }
+      if (
+        assistant &&
+        [
+          'new-conversation',
+          'new-side-tab',
+          'new-btw-tab',
+          'next-tab',
+          'prev-tab',
+          'toggle-sidebar',
+          'toggle-side-panel-fullscreen',
+          'close-side-tab',
+          'search-workspace',
+        ].some((key) => pressed === bindings[key as keyof typeof bindings])
+      )
+        return;
       if (
         (extensionsActive || useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
         [
@@ -487,7 +516,7 @@ export default function App() {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
-      if (isBotModeActive()) return;
+      if (isBotModeActive() || useAppModeStore.getState().mode === 'assistant') return;
       e.preventDefault();
       useSidePanelStore.getState().setFullscreen(false);
     };
@@ -516,7 +545,14 @@ export default function App() {
         leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题
-          extensionsActive ? (
+          assistantModeActive ? (
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-semibold text-sm">{t('Super Assistant')}</span>
+              <span className="truncate text-muted-foreground text-[10px]">
+                {t('One conversation for your local projects')}
+              </span>
+            </span>
+          ) : extensionsActive ? (
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
           ) : !remoteNodeActive && !botModeActive && !galleryActive ? (
             <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
@@ -548,11 +584,23 @@ export default function App() {
                   type="button"
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-                    (botModeActive ? botPanelOpen : sideOpen)
+                    (
+                      assistantModeActive
+                        ? assistantActivityOpen
+                        : botModeActive
+                          ? botPanelOpen
+                          : sideOpen
+                    )
                       ? 'text-foreground'
                       : 'text-muted-foreground'
                   )}
-                  onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
+                  onClick={
+                    assistantModeActive
+                      ? () => setAssistantActivityOpen((open) => !open)
+                      : botModeActive
+                        ? toggleBotPanel
+                        : toggleSidePanel
+                  }
                   aria-label={t('Toggle side panel')}
                   title={t('Toggle side panel')}
                 >
@@ -567,11 +615,12 @@ export default function App() {
       {/* 平铺外壳：图标轨 + 侧栏 + 工作区，分栏只用 1px 细线，不再做浮起的圆角卡片 */}
       <div className="flex min-h-0 flex-1">
         <AppRail
-          sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
-          onToggleSidebar={remoteNodeActive ? undefined : toggleSidebar}
+          sidebarCollapsed={remoteNodeActive || assistantModeActive ? undefined : collapsed}
+          onToggleSidebar={remoteNodeActive || assistantModeActive ? undefined : toggleSidebar}
           modeSwitch={botModeEnabled && !remoteNodeActive ? <ModeSwitch /> : undefined}
+          onBackToCode={assistantModeActive && !botModeEnabled ? showLocalCodeView : undefined}
           onOpenSearch={
-            remoteNodeActive
+            remoteNodeActive || assistantModeActive
               ? undefined
               : botModeActive
                 ? () => {
@@ -582,6 +631,17 @@ export default function App() {
                     closeWorkspacePage();
                     setSearchOpen(true);
                   }
+          }
+          superAssistant={
+            !remoteNodeActive
+              ? {
+                  active: assistantModeActive,
+                  onToggle: () => {
+                    closeWorkspacePage();
+                    useAppModeStore.getState().setMode(assistantModeActive ? 'code' : 'assistant');
+                  },
+                }
+              : undefined
           }
           designGallery={
             galleryAvailable
@@ -624,6 +684,19 @@ export default function App() {
         {remoteNodeActive ? (
           // 远程节点态：整块换成对方的目录与会话；本机 Sidebar/ChatView/SidePanel 卸载
           <RemoteNodeView nodeId={activeNodeId} sidebarWidth={width} />
+        ) : assistantModeActive ? (
+          <SuperAssistantView
+            activityOpen={assistantActivityOpen}
+            onOpenConversation={(conversationId) => {
+              if (!useSessionsStore.getState().conversations[conversationId]) {
+                addToast({ type: 'error', title: t('Conversation is no longer available') });
+                return;
+              }
+              closeWorkspacePage();
+              useSessionsStore.getState().selectConversation(conversationId);
+              showLocalCodeView();
+            }}
+          />
         ) : botModeActive ? (
           // Bot 模式：成员/群聊侧栏 + 聊天区；Code 侧栏/会话/右侧面板卸载
           <BotView

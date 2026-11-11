@@ -21,6 +21,16 @@
 - 委派按目标成员自身的工具、skill、MCP 执行，审批档取双方更严并持久化，嵌套/恢复沿用该审批档；readonly 父会话的子代理仍继承 workspace_write 禁用。
 - Bot 停用先冻结投递，再取消委派和排队项、清路由、退订并停止调度；排队取消按 deliveryId 结算，不能清掉同会话另一项的审批计时器。
 
+## 超级助理的派发边界
+
+- 总控是 Main 在 scratch 载体中登记的唯一根会话；它的模型只能调用协调工具和 `ask_user`。不能挂载项目/全局可执行资源，不进入普通 Code 目录，也不占用 Code 的当前选中会话。
+- 协调工具仅按已登记的本机普通 Code 项目/根会话 ID 路由。只读历史限量投影，并校验文件真实路径；新会话在首次权威投影中携带模型和审批配置。目标 worktree 丢失或切换期间不回退到项目根。
+- 任务账本由 Main 管理。忙时保留队列，worker 的 idle-only 准入再次拒绝插话竞态。仅精确 generation 与 delivery 回执进入执行；普通 idle 或子会话结束只能唤醒队列，不能结算父任务。取消也按 delivery 键确认。
+- 任务的「本轮已结束」是执行轮终态，不保证需求验收通过。重启不重放未结算的投递；在线总控的终态通知只携带任务 ID 和状态，不拼目标正文作为用户指令。
+- Responses 严格工具 schema 可能要求模型填满所有属性；总控工具把可选字段声明为可空，在 schema 校验前只去除当前操作无关的已知字段。必填字段仍按操作检查，未知字段仍被拒绝；Main 继续严格校验闭集协议。
+
+回归：`superAssistantHost.test.ts`、`superAssistantHistory.test.ts`、`superAssistantProtocol.test.ts`、`superAssistantProjection.test.ts`。
+
 ## agentHost：worker 生命周期与命令下发
 
 `agentHost.ts` 托管唯一的 agent worker（`utilityProcess.fork(out/main/agent.js)`，

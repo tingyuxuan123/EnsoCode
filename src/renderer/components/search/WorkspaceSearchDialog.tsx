@@ -181,25 +181,27 @@ export function WorkspaceSearchDialog({
     const viewed = activeId ? conversations[activeId] : undefined;
     const viewedChild = viewed?.activeTabId;
     const currentId = viewedChild && conversations[viewedChild] ? viewedChild : activeId;
-    return Object.values(conversations).map((conversation) => {
-      const project = projects.find((item) => item.id === conversation.projectId);
-      return conversationToSearchDoc({
-        conversationId: conversation.id,
-        projectId: conversation.projectId,
-        projectName:
-          project?.kind === 'scratch'
-            ? t('Temporary chats')
-            : (project?.name ?? conversation.projectId),
-        title: conversation.title,
-        lastActiveAt: conversationActivityAt(conversation),
-        archived: conversation.archived,
-        isDraftEmpty: isDraftEmptyConversation(conversation),
-        isCurrent: conversation.id === currentId,
-        parentConversationId: conversation.parentId,
-        coworkerId: conversation.parentId ? conversation.id : undefined,
-        messages: conversation.messages,
+    return Object.values(conversations)
+      .filter((conversation) => !conversation.superAssistant)
+      .map((conversation) => {
+        const project = projects.find((item) => item.id === conversation.projectId);
+        return conversationToSearchDoc({
+          conversationId: conversation.id,
+          projectId: conversation.projectId,
+          projectName:
+            project?.kind === 'scratch'
+              ? t('Temporary chats')
+              : (project?.name ?? conversation.projectId),
+          title: conversation.title,
+          lastActiveAt: conversationActivityAt(conversation),
+          archived: conversation.archived,
+          isDraftEmpty: isDraftEmptyConversation(conversation),
+          isCurrent: conversation.id === currentId,
+          parentConversationId: conversation.parentId,
+          coworkerId: conversation.parentId ? conversation.id : undefined,
+          messages: conversation.messages,
+        });
       });
-    });
   }, [activeId, conversations, open, projects, t]);
 
   const hotHits = useMemo(
@@ -209,7 +211,12 @@ export function WorkspaceSearchDialog({
 
   const recent = useMemo(
     () =>
-      open ? recentConversations(Object.values(conversations), { scope, currentProjectId }) : [],
+      open
+        ? recentConversations(
+            Object.values(conversations).filter((conversation) => !conversation.superAssistant),
+            { scope, currentProjectId }
+          )
+        : [],
     [conversations, currentProjectId, open, scope]
   );
 

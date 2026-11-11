@@ -1,5 +1,14 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import { Columns3, PanelLeft, Ruler, Search, Settings2, Sparkles } from 'lucide-react';
+import {
+  Columns3,
+  Orbit,
+  PanelLeft,
+  Ruler,
+  Search,
+  Settings2,
+  Sparkles,
+  SquareTerminal,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
@@ -20,6 +29,9 @@ interface AppRailProps {
   designGallery?: { label: string; active: boolean; onToggle(): void };
   /** 本机全局看板，独立于当前 Code / Bot 聊天。 */
   collaborationBoard?: { active: boolean; attention?: number; onToggle(): void };
+  /** 与 Code / Bot 同级，始终可以从本机图标轨打开。 */
+  superAssistant?: { active: boolean; onToggle(): void };
+  onBackToCode?: () => void;
 }
 
 const RAIL_BUTTON =
@@ -36,6 +48,8 @@ export function AppRail({
   onOpenSearch,
   designGallery,
   collaborationBoard,
+  superAssistant,
+  onBackToCode,
 }: AppRailProps) {
   const { t } = useI18n();
   const keybindings = useSettingsStore((s) => s.keybindings);
@@ -86,6 +100,31 @@ export function AppRail({
         />
       )}
       {modeSwitch}
+      {onBackToCode && (
+        <RailTip label={t('Back to Code')}>
+          <button
+            type="button"
+            className={RAIL_BUTTON}
+            aria-label={t('Back to Code')}
+            onClick={onBackToCode}
+          >
+            <SquareTerminal className="size-[19px]" />
+          </button>
+        </RailTip>
+      )}
+      {superAssistant && (
+        <RailTip label={t('Super Assistant')}>
+          <button
+            type="button"
+            onClick={superAssistant.onToggle}
+            className={cn(RAIL_BUTTON, superAssistant.active && 'bg-brand/10 text-brand')}
+            aria-label={t('Super Assistant')}
+            aria-pressed={superAssistant.active}
+          >
+            <Orbit className="size-[19px]" />
+          </button>
+        </RailTip>
+      )}
       {designGallery && (
         <RailTip label={designGallery.label}>
           <button

@@ -28,12 +28,14 @@ export function ChatSessionTimeline({
   conversationId,
   cwd,
   emptyTitle,
+  emptyDescription,
   onSuggestion,
   timelineRef,
 }: {
   conversationId: string;
   cwd?: string;
   emptyTitle: string;
+  emptyDescription?: string;
   onSuggestion?: (prompt: string) => void;
   timelineRef: RefObject<MessageTimelineHandle | null>;
 }) {
@@ -259,6 +261,7 @@ export function ChatSessionTimeline({
             lastOutputAt={lastOutputAt}
             error={terminalErrorText(messages, error)}
             emptyTitle={emptyTitle}
+            emptyDescription={emptyDescription}
             onSuggestion={onSuggestion}
             onRetryResume={
               !started && sessionFile && status === 'failed'

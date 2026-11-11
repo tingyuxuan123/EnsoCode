@@ -89,6 +89,7 @@ type Source = {
   hiddenCoworkerIds?: readonly string[];
   ended?: boolean;
   historyOnly?: boolean;
+  superAssistant?: boolean;
 };
 
 function lastActiveAt(conversation: Source): number | undefined {
@@ -142,7 +143,7 @@ export function selectSidebarConversations(
   const prints: string[] = [];
   for (const [id, conversation] of Object.entries(conversations)) {
     if (!conversation) continue;
-    if (conversation.btwParentId) continue;
+    if (conversation.btwParentId || conversation.superAssistant) continue;
     const entry = project(
       conversation,
       conversationHasRunningChild(
@@ -196,6 +197,7 @@ export function selectChatCandidateConversations(
       !conversation ||
       conversation.parentId ||
       conversation.btwParentId ||
+      conversation.superAssistant ||
       !conversation.sessionFile
     )
       continue;

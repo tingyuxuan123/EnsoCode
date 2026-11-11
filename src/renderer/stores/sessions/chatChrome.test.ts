@@ -26,6 +26,21 @@ const conv = (id: string, extra: Partial<Conversation> = {}): Conversation =>
   }) as Conversation;
 
 describe('selectChatChrome', () => {
+  it('显式会话不沿用 Code 的选中会话或 coworker tab', () => {
+    const state = {
+      activeId: 'code',
+      conversations: {
+        code: conv('code', { activeTabId: 'cw' }),
+        cw: conv('cw', { parentId: 'code' }),
+        assistant: conv('assistant'),
+      },
+    };
+    expect(selectChatChrome(state, 'assistant')?.id).toBe('assistant');
+    expect(selectChatChrome(state, 'missing')).toBeNull();
+    expect(selectChatChrome(state)?.id).toBe('cw');
+    expect(state.activeId).toBe('code');
+  });
+
   it('只改 messages / lastSeq 时切片字段引用不变', () => {
     const parent = conv('parent', {
       messages: [{ role: 'assistant', content: [{ type: 'thinking', text: 'a' }] }],

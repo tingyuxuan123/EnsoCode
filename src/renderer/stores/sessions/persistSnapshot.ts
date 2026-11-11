@@ -135,7 +135,8 @@ function entryOf(conversation: PersistableConversation): PersistedEntry {
 export function cachedPartializeSessions(state: SessionsPersistSlice): SessionsPersistSlice {
   const keep = (id: string): boolean =>
     Boolean(state.conversations[id]) && !state.conversations[id]?.btwParentId;
-  const listed = (id: string): boolean => keep(id) && !state.conversations[id]?.parentId;
+  const listed = (id: string): boolean =>
+    keep(id) && !state.conversations[id]?.parentId && !state.conversations[id]?.superAssistant;
   const previous = cached;
   const next = new Map<string, PersistedEntry>();
   let changed = !previous;

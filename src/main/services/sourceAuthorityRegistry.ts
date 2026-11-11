@@ -25,6 +25,7 @@ import type {
   RemoveProjectAuthorityRequest,
   SelectProjectAuthorityRequest,
   SourceAuthorityProjection,
+  SuperAssistantExecutionConfig,
   UpdateConversationSelectionRequest,
 } from '@shared/types/agent';
 import { resolveScratchWorkspace } from './scratchWorkspace';
@@ -357,6 +358,65 @@ export class SourceAuthorityRegistry {
     }
   }
 
+  /** Main-only: a fresh ordinary Code target with enough metadata for renderer adoption. */
+  createSuperAssistantTarget(
+    projectId: string,
+    title: string,
+    executionConfig?: SuperAssistantExecutionConfig
+  ): ConversationAuthorityProjection | undefined {
+    const project = this.projects.get(projectId);
+    if (!project || (project.kind && project.kind !== 'local') || project.state !== 'active')
+      return undefined;
+    const value: ConversationAuthority = {
+      conversationId: this.randomUuid(),
+      projectId,
+      kind: 'root',
+      lifecycle: 'draft',
+      version: 1,
+      dispatchedBySuperAssistant: true,
+      displayTitle: title,
+      createdAt: Date.now(),
+      ...(executionConfig
+        ? {
+            executionConfig: { ...executionConfig },
+            selection: {
+              providerId: executionConfig.providerId,
+              modelId: executionConfig.modelId,
+              revision: 1,
+            },
+          }
+        : {}),
+    };
+    this.conversations.set(value.conversationId, value);
+    this.commit();
+    return this.copyConversation(value);
+  }
+
+  /** Main-only: one persistent coordinator in the isolated scratch carrier. */
+  ensureSuperAssistant(projectId: string): ConversationAuthorityProjection | undefined {
+    const existing = [...this.conversations.values()].find((value) => value.superAssistant);
+    if (existing)
+      return existing.lifecycle !== 'ended' ? this.copyConversation(existing) : undefined;
+    const project = this.projects.get(projectId);
+    if (project?.kind !== 'scratch' || project.state !== 'active') return undefined;
+    const conversationId = this.randomUuid();
+    if (!resolveScratchWorkspace(project.canonicalPath, conversationId, { create: true }))
+      return undefined;
+    const value: ConversationAuthority = {
+      conversationId,
+      projectId,
+      kind: 'root',
+      lifecycle: 'draft',
+      version: 1,
+      superAssistant: true,
+      displayTitle: '超级助理',
+      createdAt: Date.now(),
+    };
+    this.conversations.set(conversationId, value);
+    this.commit();
+    return this.copyConversation(value);
+  }
+
   createConversation(
     request: CreateConversationAuthorityRequest
   ): AuthorityMutationResult<ConversationAuthorityProjection> {
@@ -480,7 +540,12 @@ export class SourceAuthorityRegistry {
     request: ConversationAuthorityRequest
   ): AuthorityMutationResult<ConversationAuthorityProjection> {
     const conversation = this.conversations.get(request.conversationId);
-    if (!conversation || conversation.bot || conversation.version !== request.version) {
+    if (
+      !conversation ||
+      conversation.bot ||
+      conversation.superAssistant ||
+      conversation.version !== request.version
+    ) {
       return { accepted: false, error: 'Conversation authority is stale or unavailable.' };
     }
     this.conversations.delete(conversation.conversationId);
