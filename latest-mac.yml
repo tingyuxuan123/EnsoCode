@@ -1,47 +1,37 @@
-version: 0.2.69
+version: 0.2.70
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.69/Xiaoman-0.2.69-arm64-mac.zip
-    sha512: pm3bm2B5B+hQ7PBFqZALOnPvNokGZJFUIvR06Et5pz2aokuStIgnqn8GcI7ayxjo6AQnvAKLzdCFowBjPEJQMw==
-    size: 183118382
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.69/Xiaoman-0.2.69-arm64.dmg
-    sha512: PQm8bMNt2wV/IVHHTOjiGhNp6g4qbyXUjhxlyXWzdmtZqsLeHfXDl52qQHoAeS9Dy0mCocvxZYK5uXynzf0Q3w==
-    size: 177752853
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.69/Xiaoman-0.2.69-arm64-mac.zip
-sha512: pm3bm2B5B+hQ7PBFqZALOnPvNokGZJFUIvR06Et5pz2aokuStIgnqn8GcI7ayxjo6AQnvAKLzdCFowBjPEJQMw==
-releaseDate: 2026-11-10T08:32:18.388Z
-releaseName: 小满 0.2.69 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.70/Xiaoman-0.2.70-arm64-mac.zip
+    sha512: iaXgWPaLc0MB8FtnSZ1RyzY50tg+8Hm/G/T8ZCtLci6Iov0nX17PlseNv4Daa0Eze8OJQwvkgFiO9kZJFbvLog==
+    size: 183132140
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.70/Xiaoman-0.2.70-arm64.dmg
+    sha512: Y9aL2k+StBostj0cki2aChIti/LQbqIgHeTJbMonlnSKA041UsxB1VXXizk/T28aQy7vrPsqHOdAO49C3Wb7TA==
+    size: 177776533
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.70/Xiaoman-0.2.70-arm64-mac.zip
+sha512: iaXgWPaLc0MB8FtnSZ1RyzY50tg+8Hm/G/T8ZCtLci6Iov0nX17PlseNv4Daa0Eze8OJQwvkgFiO9kZJFbvLog==
+releaseDate: 2026-11-11T00:41:36.731Z
+releaseName: 小满 0.2.70 — 个人测试
 releaseNotes: >
-  # 小满 0.2.69
+  # 小满 0.2.70
 
 
-  ## 修复设计截图重复展示
+  ## 新增「超级助理」
 
 
-  - 批量校验多个设计画框时，聊天中只展示本次的一张总览图，不再同时加载每个画框的全部历史截图。
+  - 从桌面左侧图标轨打开固定入口。在一处交代多个本机 Code 项目的需求，超级助理会检索项目和会话，按需续用已有会话或新建会话派发。原有 Code 与
+  Bot 工作区保留。
 
-  - 单帧截图默认只加载最新版本，点击「查看历史截图」后才加载旧版本；已有历史截图仍保留。
+  - 目标会话忙时，任务排队等待，不会插话打断当前轮次。右侧「执行动态」显示等待处理、排队、执行和结束状态，可筛选、查看结果、停止任务或跳回原会话。
 
-  - 截图已被轮换清理或读取失败时结束加载占位，避免一直显示「截图中」。
+  - 状态由实际投递和执行回执决定。「本轮已结束」不代表需求已经验收；应用重启不会自动重放尚未结算的任务。
 
-  - 兼容部分模型自动补齐的空可选帧参数，避免只请求批量截图却被误判为参数冲突。
-
-
-  ## 工作台更名为「小满」
+  - 首版仅支持本机 Code 项目，不含 SSH 项目、群聊任务、定时调度和复杂工作流。
 
 
-  - 统一桌面界面、设置、托盘、安装包及手机端源码中的对外名称，并更新双语 README。
-
-  - Mac 应用显示为「小满.app」，下载文件使用 ASCII 前缀 `Xiaoman`。
-
-  - 保留应用 ID、运行时名称、数据目录、配对协议、GitHub 仓库和个人签名证书；Windows 可执行文件仍为
-  `Eaves.exe`，以兼容旧快捷方式。
-
-
-  本次仅发布 Mac arm64 个人更新通道，不改变正式 Latest；未包含工作区中其它未提交功能。安装、重启及旧数据升级验收仍由用户完成。
+  本次仅发布 Mac arm64 个人更新版，不改变正式 Latest。安装和重启由用户自行完成。
 
 
   ---
 
 
-  个人测试通道 0.2.69：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.70：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
