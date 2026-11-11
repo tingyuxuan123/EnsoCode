@@ -5,7 +5,7 @@ import { openTarget } from '@/stores/bots/delegations';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSettingsStore } from '@/stores/settings';
 
-export type AppMode = 'code' | 'bot' | 'assistant';
+export type AppMode = 'code' | 'bot';
 
 const MODE_KEY = 'enso-mode';
 
@@ -14,9 +14,8 @@ interface AppModeState {
   setMode: (mode: AppMode) => void;
 }
 
-const storedMode = localStorage.getItem(MODE_KEY);
 export const useAppModeStore = create<AppModeState>()((set) => ({
-  mode: storedMode === 'bot' || storedMode === 'assistant' ? storedMode : 'code',
+  mode: localStorage.getItem(MODE_KEY) === 'bot' ? 'bot' : 'code',
   setMode: (mode) => {
     localStorage.setItem(MODE_KEY, mode);
     set({ mode });

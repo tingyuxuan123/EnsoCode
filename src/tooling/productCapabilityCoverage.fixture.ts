@@ -939,12 +939,6 @@ export const IPC_PRODUCT_COVERAGE = {
   DESIGN_WINDOW_PROMPT: excluded('Design window note handoff relayed to the main composer.'),
   DESIGN_WINDOW_PROMPT_REQUEST: excluded('Internal design window prompt relay request.'),
   DESIGN_WINDOW_PROMPT_RESPONSE: excluded('Internal design window prompt relay response.'),
-  SUPER_ASSISTANT_OPEN: excluded(
-    'Dedicated desktop coordinator workspace; not a general Enso app action.'
-  ),
-  SUPER_ASSISTANT_SNAPSHOT: excluded('Coordinator-owned execution activity snapshot.'),
-  SUPER_ASSISTANT_CHANGED: excluded('Coordinator execution activity push to the local main UI.'),
-  SUPER_ASSISTANT_CANCEL: excluded('Explicit user cancellation in the coordinator workspace.'),
 } satisfies Record<keyof typeof IPC_CHANNELS, CoverageDisposition>;
 
 export const AUTHORITATIVE_COVERAGE_SOURCES = {

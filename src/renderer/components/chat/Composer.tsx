@@ -88,7 +88,6 @@ interface ComposerProps {
   onInitialRecipientConsumed?: () => void;
   /** @ 弹窗的过去会话候选（宿主从 sessions store 算好传入，保持本组件与 store 解耦） */
   chatCandidates?: ChatMentionCandidate[];
-  allowMentions?: boolean;
   /** 浏览不自动 spawn：用户开始打字/聚焦输入框时再拉 worker */
   onActivate?: () => void;
   onSend: (payload: ComposerPayload) => boolean | undefined | Promise<boolean | undefined>;
@@ -133,7 +132,6 @@ export function Composer({
   initialRecipient,
   onInitialRecipientConsumed,
   chatCandidates,
-  allowMentions = true,
   onActivate,
   onSend,
   onAbort,
@@ -238,7 +236,7 @@ export function Composer({
   const [editorPlain, setEditorPlain] = useState('');
   const [editorHasMentions, setEditorHasMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const mentionGroups = useMentionSearch(cwd, allowMentions ? mentionQuery : null, chatCandidates);
+  const mentionGroups = useMentionSearch(cwd, mentionQuery, chatCandidates);
   const mentionItems = useMemo(
     () => flattenMentionRoot(mentionGroups, mentionQuery ?? ''),
     [mentionGroups, mentionQuery]
@@ -445,7 +443,7 @@ export function Composer({
   );
 
   const popupKind =
-    allowMentions && mentionQuery !== null && mentionItems.length > 0
+    mentionQuery !== null && mentionItems.length > 0
       ? 'mention'
       : pluginQuery !== null && pluginItems.length > 0
         ? 'plugin'

@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { safeSuperAssistantSessionFile } from './superAssistantHistory';
+import { resolveLegacyDispatchedHistoryFile } from './legacyDispatchedHistory';
 
-describe('super assistant history boundary', () => {
+describe('legacy dispatched Code history boundary', () => {
   it('accepts exact registered session files but denies missing/outside/symlink replacements', () => {
     const temp = mkdtempSync(path.join(tmpdir(), 'super-history-'));
     try {
@@ -14,13 +14,15 @@ describe('super assistant history boundary', () => {
       writeFileSync(file, '{}');
       const outside = path.join(temp, 'secret');
       writeFileSync(outside, 'secret');
-      expect(safeSuperAssistantSessionFile(sessions, file)).toBe(realpathSync(file));
-      expect(safeSuperAssistantSessionFile(sessions, outside)).toBeNull();
-      expect(safeSuperAssistantSessionFile(sessions, path.join(sessions, 'missing'))).toBeNull();
+      expect(resolveLegacyDispatchedHistoryFile(sessions, file)).toBe(realpathSync(file));
+      expect(resolveLegacyDispatchedHistoryFile(sessions, outside)).toBeNull();
+      expect(
+        resolveLegacyDispatchedHistoryFile(sessions, path.join(sessions, 'missing'))
+      ).toBeNull();
       const link = path.join(sessions, 'link.jsonl');
       symlinkSync(outside, link);
-      expect(safeSuperAssistantSessionFile(sessions, link)).toBeNull();
-      expect(safeSuperAssistantSessionFile(sessions, sessions)).toBeNull();
+      expect(resolveLegacyDispatchedHistoryFile(sessions, link)).toBeNull();
+      expect(resolveLegacyDispatchedHistoryFile(sessions, sessions)).toBeNull();
     } finally {
       rmSync(temp, { recursive: true, force: true });
     }

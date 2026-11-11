@@ -52,7 +52,6 @@ import { parseRequestBodyUsage, type RequestBodyUsage } from '../requestBodyUsag
 import { parseRtkToolStats, type RtkToolStats } from '../rtk';
 import { parseSmartCompactMode, type SmartCompactMode } from '../smartCompactMode';
 import { parseSshTimeoutSeconds } from '../sshTimeout';
-import { parseSuperAssistantRequest, type SuperAssistantRequest } from '../superAssistantProtocol';
 import {
   isWebSearchChainEntry,
   WEB_SEARCH_CHAIN_MAX,
@@ -901,15 +900,19 @@ export interface ConversationAuthority {
   selection?: DefaultModelRef & { revision: number };
   forkedFrom?: ConversationForkOrigin;
   bot?: ConversationBotBinding;
-  /** Main-only fixed coordinator role; never accepted from renderer requests. */
+  /** Legacy-only: retired coordinator marker in persisted authority records. */
   superAssistant?: true;
+  /** Legacy-only: dispatched root marker in persisted authority records. */
   dispatchedBySuperAssistant?: true;
+  /** Legacy-only: title stored by the retired coordinator. */
   displayTitle?: string;
+  /** Legacy-only: creation time stored by the retired coordinator. */
   createdAt?: number;
-  /** Main-assigned initialization only; atomically accompanies dispatched root adoption. */
+  /** Legacy-only: initialization snapshot for previously dispatched roots. */
   executionConfig?: SuperAssistantExecutionConfig;
 }
 
+/** Legacy-only persisted Super Assistant dispatch configuration. */
 export interface SuperAssistantExecutionConfig {
   providerId: string;
   modelId: string;
@@ -1201,8 +1204,6 @@ export type AgentCommand =
       rolePrompt?: string;
       /** 仅普通 parent：替换 pi 默认提示词开头的角色段落，其余运行时内容保留 */
       systemPrompt?: string;
-      /** Main-only authority flag; never accepted from renderer spawn input. */
-      superAssistant?: true;
       botMode?: boolean;
       /** Bot 群聊成员会话：挂 group_tasks / group_history 工具（私聊 / 委派子会话不挂） */
       botGroupTasks?: boolean;
@@ -1271,8 +1272,6 @@ export type AgentCommand =
       deliveryId?: string;
       /** Bot 插话仅允许进入活轮；不再忙时交回 Main 重新准入。 */
       activeOnly?: true;
-      /** Main scheduler delivery: never steer an already-busy conversation. */
-      idleOnly?: true;
     }
   | { type: 'set-model'; identity: SessionIdentity; model: SpawnModelConfig }
   | { type: 'set-thinking'; identity: SessionIdentity; level: ThinkingLevel }
@@ -1345,14 +1344,6 @@ export type AgentCommand =
       error?: string;
     }
   | {
-      type: 'super-assistant-result';
-      identity: SessionIdentity;
-      requestId: string;
-      ok: boolean;
-      result?: unknown;
-      error?: string;
-    }
-  | {
       type: 'memory-result' | 'delegation-result';
       identity: SessionIdentity | ChildSessionIdentity;
       requestId: string;
@@ -1387,7 +1378,7 @@ export type AgentCommand =
       entryId?: string;
       userIndexFromEnd?: number;
     }
-  | { type: 'abort'; identity: SessionIdentity; deliveryId?: string }
+  | { type: 'abort'; identity: SessionIdentity }
   | {
       /** 标题总结：一次性补全，不创建会话、不落盘；worker 按序尝试 candidates（递增超时），
        *  任一成功回 title-generated，全失败回 title-failed */
@@ -1891,7 +1882,6 @@ export type AgentWorkerEvent =
   | { type: 'delivery-settled'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'delivery-rejected'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'delivery-deferred'; identity: SessionIdentity; seq: number; deliveryId: string }
-  | { type: 'delivery-aborted'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'status'; identity: SessionIdentity; seq: number; status: NodeStatus; error?: string }
   | {
       type: 'message-upsert';
@@ -2049,19 +2039,6 @@ export type AgentWorkerEvent =
   | {
       type: 'browser-cancel';
       identity: SessionIdentity | ChildSessionIdentity;
-      seq: number;
-      requestId: string;
-    }
-  | {
-      type: 'super-assistant-invoke';
-      identity: SessionIdentity;
-      seq: number;
-      requestId: string;
-      request: SuperAssistantRequest;
-    }
-  | {
-      type: 'super-assistant-cancel';
-      identity: SessionIdentity;
       seq: number;
       requestId: string;
     }
@@ -3419,7 +3396,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'remote',
           'rolePrompt',
           'systemPrompt',
-          'superAssistant',
           'botMode',
           'botGroupTasks',
           'botRoutines',
@@ -3482,7 +3458,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
             value.approvalReviewerClassifier === undefined)) ||
         (value.rolePrompt !== undefined && !isNonEmptyString(value.rolePrompt)) ||
         (value.systemPrompt !== undefined && !isNonEmptyString(value.systemPrompt)) ||
-        (value.superAssistant !== undefined && value.superAssistant !== true) ||
         (value.botMode !== undefined && typeof value.botMode !== 'boolean') ||
         (value.botGroupTasks !== undefined && typeof value.botGroupTasks !== 'boolean') ||
         (value.botRoutines !== undefined && typeof value.botRoutines !== 'boolean') ||
@@ -3647,13 +3622,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         'images',
         'deliveryId',
         'activeOnly',
-        'idleOnly',
       ]) &&
         parseAnySessionIdentity(value.identity) &&
         typeof value.text === 'string' &&
         images !== null &&
-        (value.idleOnly === undefined ||
-          (value.type === 'prompt' && value.idleOnly === true && isDeliveryId(value.deliveryId))) &&
         (value.text.length > 0 || images.length > 0) &&
         (value.activeOnly === undefined ||
           (value.type === 'steer' &&
@@ -3805,7 +3777,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     case 'browser-result':
     case 'design-result':
-    case 'super-assistant-result':
     case 'memory-result':
     case 'delegation-result':
     case 'computer-result':
@@ -3813,7 +3784,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
       if (
         !hasOnlyKeys(value, ['type', 'identity', 'requestId', 'ok', 'result', 'error']) ||
         !parseAnySessionIdentity(value.identity) ||
-        (value.type === 'super-assistant-result' && !parseSessionIdentity(value.identity)) ||
         !isNonEmptyString(value.requestId) ||
         typeof value.ok !== 'boolean'
       ) {
@@ -3895,12 +3865,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     }
     case 'abort':
-      return hasOnlyKeys(value, ['type', 'identity', 'deliveryId']) &&
-        parseAnySessionIdentity(value.identity) &&
-        (value.deliveryId === undefined ||
-          (parseSessionIdentity(value.identity) && isDeliveryId(value.deliveryId)))
-        ? (value as unknown as AgentCommand)
-        : null;
     case 'abort-retry':
     case 'retry':
     case 'release-parent':
@@ -4237,19 +4201,6 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         isNonEmptyString(value.requestId)
         ? (value as unknown as AgentWorkerEvent)
         : null;
-    case 'super-assistant-cancel':
-      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
-        parseSessionIdentity(value.identity) &&
-        isNonEmptyString(value.requestId)
-        ? (value as unknown as AgentWorkerEvent)
-        : null;
-    case 'super-assistant-invoke':
-      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'request']) &&
-        parseSessionIdentity(value.identity) &&
-        isNonEmptyString(value.requestId) &&
-        parseSuperAssistantRequest(value.request)
-        ? (value as unknown as AgentWorkerEvent)
-        : null;
     case 'memory-invoke':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'op', 'params']) &&
         isNonEmptyString(value.requestId) &&
@@ -4313,7 +4264,6 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
     case 'delivery-settled':
     case 'delivery-rejected':
     case 'delivery-deferred':
-    case 'delivery-aborted':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'deliveryId']) &&
         isDeliveryId(value.deliveryId)
         ? (value as unknown as AgentWorkerEvent)

@@ -268,6 +268,42 @@ describe('agent IPC Main identity boundary', () => {
     expect(mocks.dispatchHost.resolveSubagentModel).toBe(resolveSubagentModelSelection);
   });
 
+  it('retired coordinator IPC is no longer registered', () => {
+    for (const channel of [
+      'super-assistant:open',
+      'super-assistant:snapshot',
+      'super-assistant:cancel',
+    ])
+      expect(mocks.handlers.has(channel)).toBe(false);
+  });
+
+  it('generic spawn cannot reactivate a persisted retired coordinator', async () => {
+    const authority = getSourceAuthorityRegistry()!;
+    vi.spyOn(authority, 'conversation').mockReturnValue({
+      conversationId: 'retired',
+      projectId: 'p',
+      kind: 'root',
+      lifecycle: 'ready',
+      version: 1,
+      superAssistant: true,
+    });
+    vi.spyOn(authority, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/repo',
+      state: 'active',
+      version: 1,
+    });
+    expect(
+      await mocks.handlers.get(IPC_CHANNELS.AGENT_SPAWN)!(event, {
+        sessionId: 'retired',
+        providerId: 'provider',
+        modelId: 'model',
+        cwd: '/repo',
+      })
+    ).toMatchObject({ ok: false });
+    expect(mocks.spawnSession).not.toHaveBeenCalled();
+  });
+
   it('scratch spawn覆写共享根/伪造worktree，凭证等待后目录被换成symlink则拒绝', async () => {
     const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'enso-scratch-ipc-')));
     const authority = getSourceAuthorityRegistry()!;

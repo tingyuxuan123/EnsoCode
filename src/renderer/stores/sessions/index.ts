@@ -88,6 +88,10 @@ import {
 } from './conversationRewind';
 import { canSelectCoworkerTab } from './coworkerTabPolicy';
 import {
+  hideRetiredCoordinator,
+  restoreLegacyDispatchedConversations,
+} from './legacyDispatchedConversations';
+import {
   bodyLastActiveAt,
   btwHotSessionIds,
   evictColdMessages,
@@ -120,7 +124,6 @@ import {
   upsertOutOfRange,
 } from './reducer';
 import { applyConversationReload } from './reload';
-import { reconcileSuperAssistantAuthority } from './superAssistantProjection';
 import { isPairViewed, nextUnread } from './unread';
 import {
   DIRTY_MAIN_TREE,
@@ -223,7 +226,7 @@ function startGoalPrompt(objective: string): string {
 }
 
 export interface Conversation extends SessionProjection {
-  /** Main-owned coordinator: persisted for history, excluded from ordinary Code lists. */
+  /** Legacy coordinator metadata; kept off the ordinary Code lists. */
   superAssistant?: boolean;
   id: string;
   projectId: string;
@@ -2660,9 +2663,9 @@ export const useSessionsStore = create<SessionsState>()(
         },
 
         selectConversation(id) {
-          if (!get().conversations[id]) return;
-          const pendingAgentPrefill = get().pendingAgentPrefill;
           const local = get().conversations[id];
+          if (!local || local.superAssistant) return;
+          const pendingAgentPrefill = get().pendingAgentPrefill;
           const epoch = ++conversationSelectionEpoch;
           set((state) => ({
             activeId: id,
@@ -3490,7 +3493,7 @@ export const useSessionsStore = create<SessionsState>()(
 
         acquireObservation(id) {
           const conversation = get().conversations[id];
-          if (!conversation) return () => {};
+          if (!conversation?.parentId || !conversation.child) return () => {};
           const token = Symbol(id);
           const pins = observationPins.get(id) ?? new Set<symbol>();
           const first = pins.size === 0;
@@ -3505,8 +3508,7 @@ export const useSessionsStore = create<SessionsState>()(
                   if (current?.generation !== conversation.generation) return;
                   set((state) => patch(state, id, { historyError: error ?? undefined }));
                 });
-            } else if (conversation.parentId) void loadChildHistory(id);
-            else void hydrateParentHistoryTail(id);
+            } else void loadChildHistory(id);
           }
           return () => {
             if (!pins.delete(token) || observationPins.get(id) !== pins || pins.size > 0) return;
@@ -4238,7 +4240,10 @@ export const useSessionsStore = create<SessionsState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (!error) openPersistWriteGate('enso-conversations');
         // 刷新时 worker 仍活着：只补当前正在看的会话正文。其它会话点开再 snapshot。
-        const state = useSessionsStore.getState();
+        const loaded = useSessionsStore.getState();
+        const state = hideRetiredCoordinator(loaded);
+        if (state !== loaded)
+          useSessionsStore.setState({ activeId: state.activeId, order: state.order });
         const viewed = viewedFromState(state);
         if (viewed) {
           void hydrateParentHistoryTail(viewed);
@@ -4260,11 +4265,15 @@ async function syncConversationProjectIds(): Promise<void> {
 function applyConversationAuthority(rows: readonly ConversationAuthorityProjection[]): void {
   const state = useSessionsStore.getState();
   const conversations = remapConversationProjectIds(state.conversations, rows);
-  const next = reconcileSuperAssistantAuthority(
+  const next = restoreLegacyDispatchedConversations(
     { conversations, order: state.order, activeId: state.activeId },
     rows
   );
-  if (next.conversations !== state.conversations || next.order !== state.order)
+  if (
+    next.conversations !== state.conversations ||
+    next.order !== state.order ||
+    next.activeId !== state.activeId
+  )
     useSessionsStore.setState(next);
 }
 

@@ -25,7 +25,6 @@ import type {
   RemoveProjectAuthorityRequest,
   SelectProjectAuthorityRequest,
   SourceAuthorityProjection,
-  SuperAssistantExecutionConfig,
   UpdateConversationSelectionRequest,
 } from '@shared/types/agent';
 import { resolveScratchWorkspace } from './scratchWorkspace';
@@ -131,12 +130,14 @@ export class SourceAuthorityRegistry {
     };
   }
 
-  /** renderer / 手机可见部分：不含 bot-home 项目与 bot 会话 */
+  /** renderer / 手机可见部分：不含 bot-home 项目、Bot 会话和已退役的总控。 */
   rendererProjection(): SourceAuthorityProjection {
     const full = this.projection();
     return {
       projects: full.projects.filter((project) => project.kind !== 'bot-home'),
-      conversations: full.conversations.filter((conversation) => !conversation.bot),
+      conversations: full.conversations.filter(
+        (conversation) => !conversation.bot && !conversation.superAssistant
+      ),
     };
   }
 
@@ -164,6 +165,7 @@ export class SourceAuthorityRegistry {
     const project = conversation ? this.projects.get(conversation.projectId) : undefined;
     if (
       conversation?.kind !== 'root' ||
+      conversation.superAssistant ||
       conversation.lifecycle === 'ended' ||
       project?.state !== 'active'
     )
@@ -358,65 +360,6 @@ export class SourceAuthorityRegistry {
     }
   }
 
-  /** Main-only: a fresh ordinary Code target with enough metadata for renderer adoption. */
-  createSuperAssistantTarget(
-    projectId: string,
-    title: string,
-    executionConfig?: SuperAssistantExecutionConfig
-  ): ConversationAuthorityProjection | undefined {
-    const project = this.projects.get(projectId);
-    if (!project || (project.kind && project.kind !== 'local') || project.state !== 'active')
-      return undefined;
-    const value: ConversationAuthority = {
-      conversationId: this.randomUuid(),
-      projectId,
-      kind: 'root',
-      lifecycle: 'draft',
-      version: 1,
-      dispatchedBySuperAssistant: true,
-      displayTitle: title,
-      createdAt: Date.now(),
-      ...(executionConfig
-        ? {
-            executionConfig: { ...executionConfig },
-            selection: {
-              providerId: executionConfig.providerId,
-              modelId: executionConfig.modelId,
-              revision: 1,
-            },
-          }
-        : {}),
-    };
-    this.conversations.set(value.conversationId, value);
-    this.commit();
-    return this.copyConversation(value);
-  }
-
-  /** Main-only: one persistent coordinator in the isolated scratch carrier. */
-  ensureSuperAssistant(projectId: string): ConversationAuthorityProjection | undefined {
-    const existing = [...this.conversations.values()].find((value) => value.superAssistant);
-    if (existing)
-      return existing.lifecycle !== 'ended' ? this.copyConversation(existing) : undefined;
-    const project = this.projects.get(projectId);
-    if (project?.kind !== 'scratch' || project.state !== 'active') return undefined;
-    const conversationId = this.randomUuid();
-    if (!resolveScratchWorkspace(project.canonicalPath, conversationId, { create: true }))
-      return undefined;
-    const value: ConversationAuthority = {
-      conversationId,
-      projectId,
-      kind: 'root',
-      lifecycle: 'draft',
-      version: 1,
-      superAssistant: true,
-      displayTitle: '超级助理',
-      createdAt: Date.now(),
-    };
-    this.conversations.set(conversationId, value);
-    this.commit();
-    return this.copyConversation(value);
-  }
-
   createConversation(
     request: CreateConversationAuthorityRequest
   ): AuthorityMutationResult<ConversationAuthorityProjection> {
@@ -437,7 +380,8 @@ export class SourceAuthorityRegistry {
         return existing.projectId === project.projectId &&
           existing.kind === 'root' &&
           existing.lifecycle !== 'ended' &&
-          !existing.bot
+          !existing.bot &&
+          !existing.superAssistant
           ? { accepted: true, value: this.copyConversation(existing) }
           : { accepted: false, error: 'Conversation authority is stale or unavailable.' };
       }
@@ -573,7 +517,7 @@ export class SourceAuthorityRegistry {
     forkedFrom?: ConversationAuthority['forkedFrom']
   ): void {
     const conversation = this.conversations.get(conversationId);
-    if (!conversation || conversation.lifecycle === 'ended') return;
+    if (!conversation || conversation.superAssistant || conversation.lifecycle === 'ended') return;
     conversation.lifecycle = 'ready';
     conversation.sessionFile = sessionFile;
     if (forkedFrom) conversation.forkedFrom = { ...forkedFrom };
@@ -593,6 +537,7 @@ export class SourceAuthorityRegistry {
     const project = conversation ? this.projects.get(conversation.projectId) : undefined;
     return conversation &&
       !conversation.bot &&
+      !conversation.superAssistant &&
       conversation.lifecycle !== 'ended' &&
       conversation.version === request.version &&
       project?.state === 'active'

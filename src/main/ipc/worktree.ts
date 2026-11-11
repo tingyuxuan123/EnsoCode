@@ -48,15 +48,8 @@ import { agentSessionIndex } from './capabilities';
 let registry: WorktreeRegistry | null = null;
 const busyWorktrees = new Map<string, Promise<void>>();
 const bindingConversations = new Map<string, Promise<void>>();
-let worktreeOperationEpoch = 0;
-
-/** Detect even a complete freeze/thaw while an async headless admission was pending. */
-export function currentWorktreeOperationEpoch(): number {
-  return worktreeOperationEpoch;
-}
 
 function lockWorktree(worktreePath: string): () => void {
-  worktreeOperationEpoch += 1;
   let release!: () => void;
   busyWorktrees.set(
     worktreePath,
@@ -630,7 +623,6 @@ export function registerWorktreeHandlers(): void {
         return { ok: false, error: 'conversation already has a worktree operation' };
       }
       let release!: () => void;
-      worktreeOperationEpoch += 1;
       bindingConversations.set(
         conversationId,
         new Promise<void>((resolve) => {

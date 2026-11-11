@@ -15,57 +15,62 @@ afterEach(() => {
 });
 
 describe('SourceAuthorityRegistry', () => {
-  it('Main creates a unique persistent coordinator, renderer cannot claim its role', () => {
+  it('retired coordinator stays on disk but is hidden and cannot be selected or spawned', () => {
     const root = temporary();
     const registryFile = path.join(root, 'registry.json');
     const registry = new SourceAuthorityRegistry({ registryFile });
-    const project = registry.ensureScratchProject(path.join(root, 'scratch'))!;
-    const coordinator = registry.ensureSuperAssistant(project.projectId)!;
-    expect(coordinator.superAssistant).toBe(true);
-    expect(registry.ensureSuperAssistant(project.projectId)?.conversationId).toBe(
-      coordinator.conversationId
+    const scratch = registry.ensureScratchProject(path.join(root, 'scratch'))!;
+    const coordinatorId = '11111111-1111-4111-8111-111111111111';
+    const targetId = '22222222-2222-4222-8222-222222222222';
+    const history = path.join(root, 'coordinator.jsonl');
+    writeFileSync(history, 'preserved history\n');
+    const coordinator = {
+      conversationId: coordinatorId,
+      projectId: scratch.projectId,
+      kind: 'root',
+      lifecycle: 'ready',
+      version: 1,
+      sessionFile: history,
+      superAssistant: true,
+    };
+    const target = {
+      ...coordinator,
+      conversationId: targetId,
+      superAssistant: undefined,
+      dispatchedBySuperAssistant: true,
+    };
+    mkdirSync(path.join(scratch.canonicalPath, coordinatorId));
+    writeFileSync(
+      registryFile,
+      JSON.stringify({
+        migrationVersion: 1,
+        projects: [scratch],
+        conversations: [coordinator, target],
+      })
     );
+    const before = readFileSync(registryFile, 'utf8');
+    const reopened = new SourceAuthorityRegistry({ registryFile });
+    expect(reopened.rendererProjection().conversations.map((row) => row.conversationId)).toEqual([
+      targetId,
+    ]);
+    expect(reopened.spawnCwd(coordinatorId)).toBeNull();
     expect(
-      new SourceAuthorityRegistry({ registryFile }).ensureSuperAssistant(project.projectId)
-        ?.conversationId
-    ).toBe(coordinator.conversationId);
-    const ordinary = registry.createConversation({
-      requestId: 'ordinary',
-      projectId: project.projectId,
-      projectVersion: project.version,
-    });
-    expect(ordinary.accepted && ordinary.value.superAssistant).not.toBe(true);
+      reopened.selectConversation({ requestId: 's', conversationId: coordinatorId, version: 1 })
+        .accepted
+    ).toBe(false);
     expect(
-      registry.removeConversation({
-        requestId: 'remove',
-        conversationId: coordinator.conversationId,
-        version: coordinator.version,
+      reopened.createConversation({
+        requestId: 'c',
+        conversationId: coordinatorId,
+        projectId: scratch.projectId,
+        projectVersion: scratch.version,
       }).accepted
     ).toBe(false);
+    expect(readFileSync(registryFile, 'utf8')).toBe(before);
+    expect(readFileSync(history, 'utf8')).toBe('preserved history\n');
+    expect(reopened.conversation(coordinatorId)?.sessionFile).toBe(history);
   });
-  it('Main target creation marks only new ordinary local roots and atomically projects metadata', () => {
-    const root = temporary();
-    const seen: unknown[] = [];
-    const registry = new SourceAuthorityRegistry({
-      registryFile: path.join(root, 'registry.json'),
-      onChanged: (value) => seen.push(value),
-    });
-    const project = registry.createProject({ requestId: 'p', path: root });
-    if (!project.accepted) throw new Error('project not created');
-    const target = registry.createSuperAssistantTarget(
-      project.value.projectId,
-      'Implement feature'
-    )!;
-    expect(target).toMatchObject({
-      dispatchedBySuperAssistant: true,
-      displayTitle: 'Implement feature',
-      kind: 'root',
-    });
-    expect(target.superAssistant).toBeUndefined();
-    expect(seen.at(-1)).toMatchObject({ conversations: [target] });
-    const scratch = registry.ensureScratchProject(path.join(root, 'scratch'))!;
-    expect(registry.createSuperAssistantTarget(scratch.projectId, 'No')).toBeUndefined();
-  });
+
   it('无普通项目也可登记 scratch，幂等且可选但不可由 renderer 创建或删除', () => {
     const root = temporary();
     const registry = new SourceAuthorityRegistry({

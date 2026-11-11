@@ -24,13 +24,29 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
 const modeSwitch = createElement('div', { 'data-testid': 'mode' });
 
 describe('AppRail 精简导航', () => {
-  it('超级助理不依赖 Bot 开关，独立入口反映选中状态', () => {
-    const props = { superAssistant: { active: true, onToggle: vi.fn() } };
-    expect(railItems(props)).toEqual(['Super Assistant', 'Ask Enso', 'Settings']);
+  it('模式入口紧跟分隔符，全局入口按 看板 → 设置 排布', () => {
+    const props = {
+      sidebarCollapsed: true,
+      onToggleSidebar: vi.fn(),
+      onOpenSearch: vi.fn(),
+      modeSwitch,
+      designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
+      collaborationBoard: { active: false, onToggle: vi.fn() },
+    };
+    expect(railItems(props)).toEqual([
+      'Expand sidebar',
+      'Search anything',
+      '---',
+      'mode',
+      'Design',
+      'Collaboration board',
+      'Ask Enso',
+      'Settings',
+    ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
-    expect(
-      document.querySelector('[aria-label="Super Assistant"]')?.getAttribute('aria-pressed')
-    ).toBe('true');
+    const brand = document.querySelector('[data-slot="app-rail"]')?.firstElementChild;
+    expect(brand?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100');
+    expect(brand?.nextElementSibling?.getAttribute('aria-label')).toBe('Expand sidebar');
   });
 
   it('全局协作看板在设计入口下方，没有设计入口时仍显示', () => {

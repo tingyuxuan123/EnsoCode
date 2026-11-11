@@ -1,8 +1,4 @@
 export const IPC_CHANNELS = {
-  SUPER_ASSISTANT_OPEN: 'super-assistant:open',
-  SUPER_ASSISTANT_SNAPSHOT: 'super-assistant:snapshot',
-  SUPER_ASSISTANT_CANCEL: 'super-assistant:cancel',
-  SUPER_ASSISTANT_CHANGED: 'super-assistant:changed',
   EXTENSION_PLUGINS_LIST: 'extension-plugins:list',
   EXTENSION_PLUGINS_CHANGED: 'extension-plugins:changed',
   EXTENSION_PLUGINS_COMMIT: 'extension-plugins:commit',

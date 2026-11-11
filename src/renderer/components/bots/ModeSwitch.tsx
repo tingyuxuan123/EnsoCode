@@ -52,10 +52,7 @@ export function ModeSwitch({
     const step = ARROW_STEP[event.key];
     if (!step) return;
     event.preventDefault();
-    const index = Math.max(
-      0,
-      OPTIONS.findIndex((option) => option.value === mode)
-    );
+    const index = OPTIONS.findIndex((option) => option.value === mode);
     const next = OPTIONS[(index + step + OPTIONS.length) % OPTIONS.length].value;
     setMode(next);
     onSelect?.();
@@ -83,7 +80,7 @@ export function ModeSwitch({
               role="radio"
               aria-checked={active}
               aria-label={label}
-              tabIndex={mode === value || (mode === 'assistant' && value === 'code') ? 0 : -1}
+              tabIndex={mode === value ? 0 : -1}
               onClick={() => {
                 setMode(value);
                 onSelect?.();

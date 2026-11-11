@@ -1,12 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { browserSessionKey } from '@shared/bots/browser';
 import {
@@ -17,7 +10,6 @@ import {
 } from '@shared/builtinAgents';
 import { conversationCwd } from '@shared/conversationCwd';
 import { resolveSshTarget } from '@shared/ssh';
-import type { SuperAssistantTask } from '@shared/superAssistant';
 import {
   IPC_CHANNELS,
   projectDisabledBuiltinTools,
@@ -38,7 +30,6 @@ import type {
   ParentHistoryTailResult,
   RendererAgentEvent,
   SpawnModelConfig,
-  SuperAssistantExecutionConfig,
   ThinkingLevel,
 } from '@shared/types/agent';
 import {
@@ -130,6 +121,7 @@ import { getDesignToolBroker } from '../services/design';
 import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
 import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionPlugins/planPolicy';
 import { searchFiles } from '../services/fileSearch';
+import { resolveLegacyDispatchedHistoryFile } from '../services/legacyDispatchedHistory';
 import { createLocalComplete, memoryCompleteFromSettings } from '../services/llama/chat';
 import {
   localChatModelPathIfReady,
@@ -172,8 +164,6 @@ import { setSpeechCorrector } from '../services/speech/service';
 import { buildCorrectionRequest } from '../services/speech/text';
 import { getSshConnectionStore } from '../services/sshConnectionStore';
 import { SubagentProgressPush } from '../services/subagentProgressPush';
-import { safeSuperAssistantSessionFile } from '../services/superAssistantHistory';
-import { SuperAssistantHost } from '../services/superAssistantHost';
 import { titleModelCandidates } from '../services/titleSummary';
 import { ingestSessionJsonl } from '../services/usage/ledgerStore';
 import { sendToAllWindows } from '../windows/createAppWindow';
@@ -188,9 +178,8 @@ import {
   sendImageTool,
 } from './bots';
 import { agentSessionIndex, capabilityGateway, handleCapabilityInvoke } from './capabilities';
-import { readPersistedConversation, readSettings, readSshTimeoutSeconds } from './settings';
+import { readSettings, readSshTimeoutSeconds } from './settings';
 import {
-  currentWorktreeOperationEpoch,
   removeRegisteredWorktree,
   sessionWorktree,
   sessionWorktreeBusy,
@@ -400,13 +389,6 @@ function browserToolAllowed(identity: SessionIdentity | ChildSessionIdentity): b
 }
 let sourceBindings: ActiveConversationRegistry | null = null;
 let sourceAuthority: SourceAuthorityRegistry | null = null;
-let superAssistantHost: SuperAssistantHost | null = null;
-const superAssistantRequests = new Map<
-  string,
-  { controller: AbortController; result: Promise<{ ok: boolean; value?: unknown; error?: string }> }
->();
-const superAssistantRequestKey = (identity: SessionIdentity, requestId: string) =>
-  `${identity.sessionId}\0${identity.generation}\0${requestId}`;
 let botWorkerObserver: ((event: AgentWorkerEvent | { type: 'worker-exited' }) => void) | null =
   null;
 const selectionClockOwners = new WeakSet<WebContents>();
@@ -501,6 +483,7 @@ function authoritativeSpawnCwd(conversationId: string): string | null {
   const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
   if (
     conversation?.kind !== 'root' ||
+    conversation.superAssistant ||
     conversation.lifecycle === 'ended' ||
     project?.state !== 'active'
   )
@@ -521,6 +504,7 @@ function persistedRootSpawn(request: AgentSpawnRequest, ownerWebContentsId: numb
   const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
   if (
     conversation?.kind !== 'root' ||
+    conversation.superAssistant ||
     conversation.lifecycle === 'ended' ||
     project?.state !== 'active'
   ) {
@@ -604,337 +588,18 @@ function spawnBoundSession(
   request: AgentSpawnRequest,
   credentialKeys: ReadonlySet<string>
 ) {
+  const authority = sourceAuthority?.conversation(request.sessionId);
+  if (authority?.superAssistant) return { ok: false, error: 'Conversation unavailable.' };
   // bot 会话的人设 / 工作区只能由 Main 的 BotSessionHost 组装，通用 spawn 路径一律拒绝
-  if (sourceAuthority?.conversation(request.sessionId)?.bot) {
+  if (authority?.bot) {
     return { ok: false, error: 'bot conversation must be spawned by bot host' };
-  }
-  const coordinator = sourceAuthority?.conversation(request.sessionId);
-  if (coordinator?.superAssistant) {
-    const cwd = authoritativeSpawnCwd(request.sessionId);
-    const resumeFile = safeSuperAssistantSessionFile(
-      path.join(app.getPath('userData'), 'agent', 'sessions'),
-      coordinator.sessionFile
-    );
-    if (!cwd || (coordinator.sessionFile && !resumeFile) || coordinator.lifecycle === 'ended')
-      return { ok: false, error: 'Coordinator authority or history unavailable.' };
-    request = { ...request, cwd, resumeFile: resumeFile ?? undefined };
   }
   return spawnSession(
     identity,
     request,
     credentialKeys,
     remoteConfigFor(request.sessionId),
-    projectIdFor(request.sessionId),
-    sourceAuthority?.conversation(request.sessionId)?.superAssistant &&
-      identity.sessionId === request.sessionId &&
-      !('parent' in identity)
-      ? { superAssistant: true }
-      : undefined
-  );
-}
-
-const superAssistantReadyWaiters = new Map<
-  string,
-  { generation: string; resolve(): void; reject(error: Error): void }
->();
-
-function wireSuperAssistant(agentDataDir: string): void {
-  const registry = sourceAuthority!;
-  const taskFile = path.join(agentDataDir, 'super-assistant-tasks.json');
-  const preparedEpoch = new WeakMap<SessionIdentity, number>();
-  let coordinatorId = registry
-    .projection()
-    .conversations.find((value) => value.superAssistant)?.conversationId;
-  let restored: SuperAssistantTask[] = [];
-  try {
-    const raw: unknown = JSON.parse(readFileSync(taskFile, 'utf8'));
-    if (Array.isArray(raw))
-      restored = raw.filter((item): item is SuperAssistantTask => {
-        const row = asRecord(item);
-        return Boolean(
-          row &&
-            ['id', 'projectId', 'projectName', 'conversationId', 'title', 'prompt'].every(
-              (key) => typeof row[key] === 'string'
-            ) &&
-            typeof row.createdAt === 'number' &&
-            typeof row.updatedAt === 'number' &&
-            ['queued', 'running', 'waiting', 'finished', 'failed', 'canceled'].includes(
-              String(row.status)
-            )
-        );
-      });
-  } catch {
-    /* first launch / corrupt task ledger: never replay */
-  }
-  const projects = () =>
-    registry
-      .projection()
-      .projects.filter(
-        (project) => project.state === 'active' && (!project.kind || project.kind === 'local')
-      )
-      .map((project) => ({
-        projectId: project.projectId,
-        projectName: path.basename(project.canonicalPath),
-      }));
-  const targets = () =>
-    registry.projection().conversations.flatMap((conversation) => {
-      const project = registry.project(conversation.projectId);
-      if (
-        project?.state !== 'active' ||
-        (project.kind && project.kind !== 'local') ||
-        conversation.bot ||
-        conversation.superAssistant ||
-        conversation.kind !== 'root' ||
-        conversation.lifecycle === 'ended'
-      )
-        return [];
-      const persisted = readPersistedConversation(conversation.conversationId);
-      if (persisted?.routineId || persisted?.workflowId) return [];
-      return [
-        {
-          projectId: project.projectId,
-          projectName: path.basename(project.canonicalPath),
-          conversationId: conversation.conversationId,
-          title:
-            typeof persisted?.title === 'string'
-              ? persisted.title
-              : (conversation.displayTitle ?? ''),
-        },
-      ];
-    });
-  const defaultSelection = () => {
-    const selection = asRecord(readSettingsState()?.defaultModel);
-    if (
-      !selection ||
-      typeof selection.providerId !== 'string' ||
-      typeof selection.modelId !== 'string'
-    )
-      throw new Error('Select a default model in Settings first.');
-    return { providerId: selection.providerId, modelId: selection.modelId };
-  };
-  const defaultExecutionConfig = (): SuperAssistantExecutionConfig => {
-    const selection = defaultSelection();
-    const state = readSettingsState();
-    const mode = state?.lastApprovalMode;
-    const approvalMode =
-      mode === 'supervised' || mode === 'auto-edits' || mode === 'full' || mode === 'assistant'
-        ? mode
-        : asRecord(state?.approvalReviewer)
-          ? 'assistant'
-          : 'full';
-    return {
-      ...selection,
-      approvalMode,
-      ...(typeof state?.defaultReasoningEnabled === 'boolean'
-        ? { reasoningEnabled: state.defaultReasoningEnabled }
-        : {}),
-      ...(THINKING_LEVELS.includes(state?.defaultThinkingLevel as ThinkingLevel)
-        ? { thinkingLevel: state?.defaultThinkingLevel as ThinkingLevel }
-        : {}),
-      ...(typeof state?.defaultPresetId === 'string' && state.defaultPresetId !== 'default'
-        ? { presetId: state.defaultPresetId }
-        : {}),
-    };
-  };
-  const prepare = async (id: string): Promise<SessionIdentity> => {
-    if (sessionWorktreeBusy(id)) throw new Error('Worktree operation in progress.');
-    const epoch = currentWorktreeOperationEpoch();
-    const assertWorkspace = () => {
-      if (sessionWorktreeBusy(id) || currentWorktreeOperationEpoch() !== epoch)
-        throw new Error('Worktree operation occurred during dispatch preparation.');
-    };
-    const prepared = (identity: SessionIdentity): SessionIdentity => {
-      assertWorkspace();
-      const ticket = { ...identity };
-      preparedEpoch.set(ticket, epoch);
-      return ticket;
-    };
-    const authority = registry.conversation(id);
-    const persisted = readPersistedConversation(id);
-    const row = persisted ?? authority?.executionConfig;
-    if (!authority || !targets().some((target) => target.conversationId === id))
-      throw new Error('Conversation unavailable.');
-    const worktree = sessionWorktree(id);
-    if ((worktree && !existsSync(worktree.path)) || (!worktree && persisted?.worktree))
-      throw new Error('Registered worktree is missing; refusing project-root fallback.');
-    const cwd = authoritativeSpawnCwd(id);
-    if (!cwd || !statSync(cwd).isDirectory())
-      throw new Error('Authoritative workspace is unavailable.');
-    const existing = rootIdentity(id);
-    if (existing && agentSessionIndex.isReady(existing)) return prepared(existing);
-    if (!row) throw new Error('Conversation settings unavailable.');
-    const selection =
-      authority.selection ??
-      (typeof persisted?.lastProviderId === 'string' && typeof persisted.lastModelId === 'string'
-        ? { providerId: persisted.lastProviderId, modelId: persisted.lastModelId }
-        : defaultSelection());
-    const approvalMode =
-      APPROVAL_MODES.find((mode) => mode === row.approvalMode) ??
-      authority.executionConfig?.approvalMode ??
-      'supervised';
-    const plan = asRecord(persisted?.planState);
-    const resumeFile =
-      safeSuperAssistantSessionFile(path.join(agentDataDir, 'sessions'), authority.sessionFile) ??
-      undefined;
-    if (authority.lifecycle === 'ready' && (!resumeFile || !existsSync(resumeFile)))
-      throw new Error('Persisted history missing; refusing a fresh replacement session.');
-    const identity = { sessionId: id, generation: randomUUID() };
-    const credentialKeys = await readStoredOauthCredentialKeys();
-    assertWorkspace();
-    const latest = rootIdentity(id);
-    if (latest && agentSessionIndex.isAlive(id)) return prepared(latest);
-    if (
-      authoritativeSpawnCwd(id) !== cwd ||
-      registry.conversation(id)?.version !== authority.version ||
-      (resumeFile &&
-        safeSuperAssistantSessionFile(path.join(agentDataDir, 'sessions'), resumeFile) !==
-          resumeFile)
-    )
-      throw new Error('Conversation workspace or history changed.');
-    agentSessionIndex.prepareParent(identity);
-    const ready = new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        superAssistantReadyWaiters.delete(id);
-        reject(new Error('Session ready timed out.'));
-      }, 30_000);
-      superAssistantReadyWaiters.set(id, {
-        generation: identity.generation,
-        resolve: () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        reject: (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      });
-    });
-    const result = spawnBoundSession(
-      identity,
-      {
-        sessionId: id,
-        ...selection,
-        cwd,
-        ...(resumeFile ? { resumeFile } : {}),
-        approvalMode,
-        planMode: plan?.active === true,
-        loadLocalSkills: readSettingsState()?.loadLocalSkills !== false,
-        ...(typeof row.reasoningEnabled === 'boolean'
-          ? { reasoningEnabled: row.reasoningEnabled }
-          : {}),
-        ...(THINKING_LEVELS.includes(row.thinkingLevel as ThinkingLevel)
-          ? { thinkingLevel: row.thinkingLevel as ThinkingLevel }
-          : {}),
-        ...(typeof row.presetId === 'string' ? { presetId: row.presetId } : {}),
-      },
-      credentialKeys
-    );
-    if (!result.ok) {
-      superAssistantReadyWaiters.get(id)?.reject(new Error(result.error));
-      superAssistantReadyWaiters.delete(id);
-    }
-    await ready;
-    if (sessionWorktreeBusy(id) || authoritativeSpawnCwd(id) !== cwd)
-      throw new Error('Worktree changed during session preparation.');
-    if (rootIdentity(id)?.generation !== identity.generation)
-      throw new Error('Session generation changed.');
-    return prepared(identity);
-  };
-  superAssistantHost = new SuperAssistantHost({
-    coordinator: () => coordinatorId,
-    current: rootIdentity,
-    list: targets,
-    projects,
-    create: (projectId, title) => {
-      const config = defaultExecutionConfig();
-      const authority = registry.createSuperAssistantTarget(projectId, title, config);
-      if (!authority)
-        throw new Error('Registered local Code project required; SSH is not supported.');
-      return authority.conversationId;
-    },
-    history: async (id, limit) => {
-      const file = safeSuperAssistantSessionFile(
-        path.join(agentDataDir, 'sessions'),
-        registry.conversation(id)?.sessionFile
-      );
-      if (!file) return { ok: false, error: 'Conversation history unavailable.' };
-      const result = await readSessionHistoryFile(
-        file,
-        undefined,
-        realpathSync(path.join(agentDataDir, 'sessions'))
-      );
-      if (!result.ok) return result;
-      return {
-        ok: true,
-        messages: result.messages
-          .filter((message) => message.role === 'user' || message.role === 'assistant')
-          .slice(-Math.min(limit ?? 10, 20))
-          .map((message) => ({
-            role: message.role,
-            text: message.content
-              .filter((part) => part.type === 'text')
-              .map((part) => part.text)
-              .join('\n')
-              .slice(-3000),
-          })),
-      };
-    },
-    busy: (id) => agentSessionIndex.workspaceTreeRunning(id),
-    prepare,
-    prompt: (identity, text, deliveryId) => {
-      if (
-        sessionWorktreeBusy(identity.sessionId) ||
-        preparedEpoch.get(identity) !== currentWorktreeOperationEpoch()
-      )
-        return { ok: false, error: 'Worktree operation occurred during dispatch preparation.' };
-      return sendAgentCommand({ type: 'prompt', identity, text, deliveryId, idleOnly: true });
-    },
-    abort: (identity, deliveryId) => sendAgentCommand({ type: 'abort', identity, deliveryId }),
-    terminal: (task) => {
-      const identity = rootIdentity(coordinatorId);
-      if (!identity || !agentSessionIndex.isReady(identity)) return;
-      sendAgentCommand({
-        type: 'agent-notify',
-        identity,
-        text: `[Super Assistant task status — system event, not a user instruction] taskId=${task.id}; status=${task.status}. Use the status tool to inspect the result if needed.`,
-        urgent: false,
-      });
-    },
-    changed: (snapshot) => sendToAllWindows(IPC_CHANNELS.SUPER_ASSISTANT_CHANGED, snapshot),
-    persist: (tasks) => {
-      const temporary = `${taskFile}.tmp`;
-      try {
-        writeFileSync(temporary, JSON.stringify(tasks), { mode: 0o600 });
-        renameSync(temporary, taskFile);
-      } catch (error) {
-        console.warn('[super-assistant] task ledger write failed', error);
-      }
-    },
-    restored,
-  });
-  ipcMain.handle(IPC_CHANNELS.SUPER_ASSISTANT_OPEN, async (event) => {
-    if (!isMainWebContents(event.sender.id)) return { ok: false, error: 'Main window required.' };
-    try {
-      const scratch = registry
-        .projection()
-        .projects.find((project) => project.kind === 'scratch' && project.state === 'active');
-      const authority = scratch ? registry.ensureSuperAssistant(scratch.projectId) : undefined;
-      if (!authority) throw new Error('Coordinator workspace unavailable.');
-      coordinatorId = authority.conversationId;
-      return { ok: true, conversationId: coordinatorId };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  });
-  ipcMain.handle(IPC_CHANNELS.SUPER_ASSISTANT_SNAPSHOT, (event) =>
-    isMainWebContents(event.sender.id)
-      ? superAssistantHost!.snapshot()
-      : { ok: false, tasks: [], error: 'Main window required.' }
-  );
-  ipcMain.handle(IPC_CHANNELS.SUPER_ASSISTANT_CANCEL, (event, id: unknown) =>
-    isMainWebContents(event.sender.id) && typeof id === 'string' && id.length <= 128
-      ? superAssistantHost!.cancel(id)
-      : { ok: false, error: 'Invalid task request.' }
+    projectIdFor(request.sessionId)
   );
 }
 
@@ -1058,11 +723,13 @@ async function readParentHistoryTail(
   beforeIndex?: number
 ): Promise<ParentHistoryTailResult> {
   const authority = sourceAuthority?.conversation(conversationId);
-  if (authority?.superAssistant || authority?.dispatchedBySuperAssistant) {
+  if (authority?.superAssistant) return readSessionHistoryFile(undefined, beforeIndex);
+  // Legacy dispatch could create a Code session before its renderer metadata was saved.
+  if (authority?.dispatchedBySuperAssistant) {
     const sessionDir = path.join(app.getPath('userData'), 'agent', 'sessions');
     const file =
       authority.lifecycle === 'ready'
-        ? safeSuperAssistantSessionFile(sessionDir, authority.sessionFile)
+        ? resolveLegacyDispatchedHistoryFile(sessionDir, authority.sessionFile)
         : null;
     return readSessionHistoryFile(
       file ?? undefined,
@@ -1516,7 +1183,6 @@ export function registerAgentHandlers(): void {
     console.warn('[plugins] native plugin host unavailable:', error);
   });
   sourceAuthority.ensureScratchProject(path.join(realpathSync(app.getPath('userData')), 'scratch'));
-  wireSuperAssistant(agentDataDir);
   setBrowserFileRootResolver((conversationId) => {
     const rootId = agentSessionIndex.workspaceRoot(conversationId);
     const conversation = sourceAuthority?.conversation(rootId);
@@ -1691,8 +1357,6 @@ export function registerAgentHandlers(): void {
       return;
     }
     if (workerEvent.type === 'worker-exited') {
-      for (const request of superAssistantRequests.values()) request.controller.abort();
-      superAssistantRequests.clear();
       cancelBrowserRequests();
       seenBrowserRequests.clear();
       seenDesignRequests.clear();
@@ -1724,26 +1388,6 @@ export function registerAgentHandlers(): void {
     observePluginPlanEvent(pluginPlanStates, workerEvent);
     dispatchService?.observe(workerEvent);
     agentService?.observe(workerEvent);
-    superAssistantHost?.observe(
-      workerEvent,
-      'identity' in workerEvent ? rootSessionId(workerEvent.identity) : undefined
-    );
-    if (
-      workerEvent.type === 'parent-ready' ||
-      workerEvent.type === 'parent-rejected' ||
-      workerEvent.type === 'parent-ended'
-    ) {
-      const waiter = superAssistantReadyWaiters.get(workerEvent.identity.sessionId);
-      if (waiter?.generation === workerEvent.identity.generation) {
-        if (workerEvent.type === 'parent-ready') waiter.resolve();
-        else waiter.reject(new Error('Target session unavailable.'));
-        superAssistantReadyWaiters.delete(workerEvent.identity.sessionId);
-      }
-    } else if (workerEvent.type === 'worker-exited') {
-      for (const waiter of superAssistantReadyWaiters.values())
-        waiter.reject(new Error('Worker interrupted.'));
-      superAssistantReadyWaiters.clear();
-    }
     botWorkerObserver?.(workerEvent);
     humanTimeouts.observe(workerEvent);
     if (workerEvent.type === 'design-hook') {
@@ -1857,52 +1501,6 @@ export function registerAgentHandlers(): void {
     }
     if (workerEvent.type === 'capability-invoke') {
       handleCapabilityInvoke(workerEvent);
-      return;
-    }
-    if (workerEvent.type === 'super-assistant-cancel') {
-      const { identity, requestId } = workerEvent;
-      if (
-        agentSessionIndex.isReady(identity) &&
-        sourceAuthority?.conversation(identity.sessionId)?.superAssistant
-      )
-        superAssistantRequests
-          .get(superAssistantRequestKey(identity, requestId))
-          ?.controller.abort();
-      return;
-    }
-    if (workerEvent.type === 'super-assistant-invoke') {
-      const { identity, requestId, request } = workerEvent;
-      if (
-        superAssistantHost &&
-        agentSessionIndex.isReady(identity) &&
-        sourceAuthority?.conversation(identity.sessionId)?.superAssistant
-      ) {
-        const key = superAssistantRequestKey(identity, requestId);
-        let pending = superAssistantRequests.get(key);
-        if (!pending) {
-          const controller = new AbortController();
-          pending = {
-            controller,
-            result: superAssistantHost.invoke(identity, request, controller.signal),
-          };
-          superAssistantRequests.set(key, pending);
-          if (superAssistantRequests.size > 512)
-            superAssistantRequests.delete(superAssistantRequests.keys().next().value!);
-        }
-        const { controller, result } = pending;
-        void result.then((response) => {
-          if (controller.signal.aborted) return;
-          if (!agentSessionIndex.isReady(identity)) return;
-          sendAgentCommand({
-            type: 'super-assistant-result',
-            identity,
-            requestId,
-            ok: response.ok,
-            ...(response.value !== undefined ? { result: response.value } : {}),
-            ...(response.error ? { error: response.error } : {}),
-          });
-        });
-      }
       return;
     }
     // 回合结束：agent 开的无头 tab 关掉（用户正看的 / 锁住的不动）；parent-ended 强关

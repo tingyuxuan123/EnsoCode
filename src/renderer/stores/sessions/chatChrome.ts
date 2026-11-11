@@ -63,14 +63,12 @@ export function displayedConversationId(state: SessionsSlice): string | null {
 }
 
 /** 聊天框/工具条用的会话切片：不含 messages，思考流式时字段引用保持稳定。 */
-export function selectChatChrome(state: SessionsSlice, rootId?: string): ChatChrome | null {
-  const id = rootId ?? state.activeId;
-  const parent = id ? state.conversations[id] : undefined;
+export function selectChatChrome(state: SessionsSlice): ChatChrome | null {
+  const parent = state.activeId ? state.conversations[state.activeId] : undefined;
   if (!parent) return null;
-  const displayed =
-    rootId === undefined && parent.activeTabId
-      ? (state.conversations[parent.activeTabId] ?? parent)
-      : parent;
+  const displayed = parent.activeTabId
+    ? (state.conversations[parent.activeTabId] ?? parent)
+    : parent;
   return {
     id: displayed.id,
     parentId: parent.id,

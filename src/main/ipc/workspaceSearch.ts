@@ -27,12 +27,7 @@ export function registerWorkspaceSearchHandlers(): void {
       sessionDir,
       listReady: () =>
         projection.conversations.flatMap((conversation) => {
-          if (
-            conversation.superAssistant ||
-            conversation.lifecycle !== 'ready' ||
-            !conversation.sessionFile
-          )
-            return [];
+          if (conversation.lifecycle !== 'ready' || !conversation.sessionFile) return [];
           return [
             {
               conversationId: conversation.conversationId,

@@ -46,7 +46,7 @@ export class MemoryInvoker<Op extends string = MemoryOp> {
   constructor(
     private readonly identity: SessionIdentity | ChildSessionIdentity,
     private readonly emit: (request: MemoryInvokeRequest<Op>) => void,
-    private readonly options: { timeoutMs?: number; emitCancel?: (requestId: string) => void } = {}
+    private readonly options: { timeoutMs?: number } = {}
   ) {}
 
   invoke(op: Op, params: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -55,15 +55,10 @@ export class MemoryInvoker<Op extends string = MemoryOp> {
     const { promise, resolve, reject } = Promise.withResolvers<unknown>();
     const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const timer = setTimeout(
-      () => cancel(new Error(`Memory action ${op} timed out after ${timeoutMs}ms`)),
+      () => settle(new Error(`Memory action ${op} timed out after ${timeoutMs}ms`)),
       timeoutMs
     );
-    const onAbort = () => cancel(new Error('Memory action aborted'));
-    const cancel = (error: Error) => {
-      if (!this.pending.has(requestId)) return;
-      settle(error);
-      this.options.emitCancel?.(requestId);
-    };
+    const onAbort = () => settle(new Error('Memory action aborted'));
     const settle = (outcome: unknown) => {
       if (!this.pending.delete(requestId)) return;
       clearTimeout(timer);
@@ -71,7 +66,7 @@ export class MemoryInvoker<Op extends string = MemoryOp> {
       if (outcome instanceof Error) reject(outcome);
       else resolve(outcome);
     };
-    this.pending.set(requestId, { resolve: settle, reject: cancel });
+    this.pending.set(requestId, { resolve: settle, reject: settle });
     signal?.addEventListener('abort', onAbort, { once: true });
     try {
       this.emit({ identity: this.identity, requestId, op, params });
@@ -86,7 +81,7 @@ export class MemoryInvoker<Op extends string = MemoryOp> {
     const entry = this.pending.get(result.requestId);
     if (!entry) return false;
     if (result.ok) entry.resolve(result.result);
-    else entry.resolve(new Error(result.error || 'Memory action failed'));
+    else entry.reject(new Error(result.error || 'Memory action failed'));
     return true;
   }
 

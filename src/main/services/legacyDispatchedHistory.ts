@@ -2,7 +2,7 @@ import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /** Exact realpath containment: a replaced journal must never disclose another workspace's files. */
-export function safeSuperAssistantSessionFile(
+export function resolveLegacyDispatchedHistoryFile(
   sessionDir: string,
   file: string | undefined
 ): string | null {

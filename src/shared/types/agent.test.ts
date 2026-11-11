@@ -186,6 +186,47 @@ const model = {
 };
 const task = { text: 'Configure theme', images: [], fileMentions: [] };
 
+describe('retired Super Assistant worker protocol', () => {
+  it('rejects coordinator spawn flags without rejecting ordinary parent spawn', () => {
+    const spawn = { type: 'spawn-parent', identity: parent, cwd: '/tmp', model };
+    expect(parseAgentCommand(spawn)).toEqual(spawn);
+    expect(parseAgentCommand({ ...spawn, superAssistant: true })).toBeNull();
+  });
+
+  it('rejects coordinator results', () => {
+    expect(
+      parseAgentCommand({
+        type: 'super-assistant-result',
+        identity: parent,
+        requestId: 'request-1',
+        ok: true,
+        result: [],
+      })
+    ).toBeNull();
+  });
+
+  it.each([
+    { type: 'super-assistant-invoke', request: { operation: 'list' } },
+    { type: 'super-assistant-cancel' },
+  ])('rejects $type events', (event) => {
+    expect(
+      parseAgentWorkerEvent({ ...event, identity: parent, seq: 1, requestId: 'request-1' })
+    ).toBeNull();
+  });
+
+  it('rejects the retired idle-only prompt flag', () => {
+    expect(
+      parseAgentCommand({
+        type: 'prompt',
+        identity: parent,
+        text: 'run',
+        deliveryId: RECEIPT_ID,
+        idleOnly: true,
+      })
+    ).toBeNull();
+  });
+});
+
 describe('approval reviewer classifier protocol boundaries', () => {
   const classifier = { provider: 'typesafe', modelId: 'jev', apiKey: 'fixture-secret' };
   it('allows exactly classifier-only management fields, on spawn and live updates', () => {

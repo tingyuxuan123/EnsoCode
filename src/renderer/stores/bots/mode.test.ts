@@ -19,12 +19,10 @@ vi.mock('@/stores/remoteNodes', () => ({
 }));
 afterEach(() => vi.unstubAllGlobals());
 
-it('超级助理模式独立持久化，不依赖 Bot 开关', async () => {
+it('历史遗留的 assistant 值回退到 code', async () => {
   vi.stubGlobal('localStorage', { getItem: () => 'assistant', setItem: vi.fn() });
   vi.resetModules();
   const { useAppModeStore } = await import('./mode');
-  expect(useAppModeStore.getState().mode).toBe('assistant');
-  useAppModeStore.getState().setMode('code');
   expect(useAppModeStore.getState().mode).toBe('code');
 });
 

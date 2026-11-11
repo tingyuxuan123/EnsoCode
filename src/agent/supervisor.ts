@@ -19,7 +19,6 @@ import {
   type PromptTemplate,
   type ResourceDiagnostic,
   SessionManager,
-  SettingsManager,
   shouldCompact,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
@@ -62,7 +61,6 @@ import { computeStats, toUsageTotals } from '@shared/sessionStats';
 import type { SmartCompactMode } from '@shared/smartCompactMode';
 import { buildSshShellCommand, shellQuote } from '@shared/ssh';
 import { DEFAULT_SSH_TIMEOUT_SECONDS } from '@shared/sshTimeout';
-import { parseSuperAssistantRequest } from '@shared/superAssistantProtocol';
 import { replacePersonaParagraph } from '@shared/systemPrompt';
 import type {
   AgentCommand,
@@ -293,7 +291,6 @@ import { createMemoryTools, MemoryInvoker } from './tools/memory';
 import { createPluginTools, PluginToolInvoker } from './tools/pluginTools';
 import { createRoutineProposeTool } from './tools/routinePropose';
 import { confirmOutsideImage, createSendImageTool } from './tools/sendImage';
-import { createSuperAssistantTool, SUPER_ASSISTANT_PROMPT } from './tools/superAssistant';
 import { createWebTools } from './tools/web';
 import { createVirtualChooser, resolveClassifierModel } from './virtualClassifier';
 import { registerVirtualModel } from './virtualModels';
@@ -391,7 +388,6 @@ interface ManagedSession {
   browser?: BrowserInvoker;
   design?: DesignInvoker;
   memory?: MemoryInvoker;
-  superAssistant?: MemoryInvoker<'invoke'>;
   delegation?: MemoryInvoker<DelegationOp>;
   agentControl?: AgentControlInvoker;
   /** 已因不支持 adaptive 降级过的模型（虚拟模型下每个成员各降一次） */
@@ -450,7 +446,6 @@ interface ManagedSession {
   pendingBuiltinTools?: readonly string[];
   /** 下一条 prompt 产生的 user 消息的投递回执；id 为 null 表示该投递无乐观回显 */
   promptDelivery?: { id: string | null };
-  scheduledDeliveryId?: string;
   /** 已入 pi steer 队列、尚未上屏的投递回执，与 pi 队列同序 */
   steerDeliveries?: { id: string | null; detach?: () => boolean }[];
   pendingBranch?: string;
@@ -499,7 +494,6 @@ const PENDING_COUNTERS: Record<PendingCounterKey, true> = {
   browser: true,
   design: true,
   memory: true,
-  superAssistant: true,
   delegation: true,
   agentControl: true,
   computer: true,
@@ -755,15 +749,13 @@ function createEnsoResourceLoader(
   agentDir: string,
   branchContext: InlineExtension,
   silentTurnRecovery: InlineExtension,
-  oauthPoolRecovery?: InlineExtension,
-  coordinatorSettings?: SettingsManager
+  oauthPoolRecovery?: InlineExtension
 ): DefaultResourceLoader {
   return new DefaultResourceLoader({
     cwd,
     agentDir,
     // noExtensions 挡不住项目包解析（缺包会自动安装），同样用未信任的 settings
-    settingsManager:
-      coordinatorSettings ?? createProjectSettingsManager(cwd, agentDir, []).settingsManager,
+    settingsManager: createProjectSettingsManager(cwd, agentDir, []).settingsManager,
     noExtensions: true,
     noSkills: true,
     noPromptTemplates: true,
@@ -776,7 +768,7 @@ function createEnsoResourceLoader(
       silentTurnRecovery,
       ...(oauthPoolRecovery ? [oauthPoolRecovery] : []),
     ],
-    systemPrompt: coordinatorSettings ? SUPER_ASSISTANT_PROMPT : ENSO_SYSTEM_PROMPT,
+    systemPrompt: ENSO_SYSTEM_PROMPT,
     skillsOverride: () => ({ skills: [], diagnostics: [] }),
     promptsOverride: () => ({ prompts: [], diagnostics: [] }),
 
@@ -1147,12 +1139,7 @@ export class SessionSupervisor {
     this.pluginMcp = new PluginMcpGateway({
       session: (identity) => {
         const managed = this.sessions.get(identity.sessionId);
-        if (
-          !managed ||
-          !isSameGeneration(managed.identity, identity) ||
-          managed.childIdentity ||
-          managed.superAssistant
-        )
+        if (!managed || !isSameGeneration(managed.identity, identity) || managed.childIdentity)
           return null;
         return {
           gate: managed.gate,
@@ -1311,7 +1298,6 @@ export class SessionSupervisor {
     managed.browser?.cancelAll('Session released');
     managed.design?.cancelAll('Session released');
     managed.memory?.cancelAll('Session released');
-    managed.superAssistant?.cancelAll('Session released');
     managed.delegation?.cancelAll('Session released');
     managed.agentControl?.close('Session released');
     managed.computer?.cancelAll('Session released');
@@ -1690,10 +1676,6 @@ export class SessionSupervisor {
   ): Promise<void> {
     switch (command.type) {
       case 'spawn-parent':
-        if (command.superAssistant) {
-          await this.spawnSuperAssistant(command);
-          return;
-        }
         await this.spawn(
           command.identity,
           command.cwd,
@@ -1830,34 +1812,6 @@ export class SessionSupervisor {
       }
       case 'prompt': {
         const managed = this.must(command.identity);
-        if (command.idleOnly && command.deliveryId) {
-          if (
-            managed.status === 'running' ||
-            managed.session.isStreaming ||
-            managed.session.isRetrying ||
-            managed.session.isCompacting ||
-            managed.roundPending ||
-            managed.promptDelivery ||
-            managed.scheduledDeliveryId
-          ) {
-            this.options.emit({
-              type: 'delivery-deferred',
-              identity: managed.identity,
-              seq: ++managed.seq,
-              deliveryId: command.deliveryId,
-            });
-            return;
-          }
-          managed.plan?.supersede();
-          managed.scheduledDeliveryId = command.deliveryId;
-          this.promptFresh(
-            managed,
-            command.text,
-            command.images?.map((image) => ({ type: 'image' as const, ...image })),
-            command.deliveryId
-          );
-          return;
-        }
         managed.plan?.supersede();
         const images = command.images?.map((image) => ({ type: 'image' as const, ...image }));
         if (await this.interruptRetryIfAny(managed)) {
@@ -2077,12 +2031,6 @@ export class SessionSupervisor {
         managed.design?.resolve(command);
         return;
       }
-      case 'super-assistant-result': {
-        const managed = this.must(command.identity);
-        if (managed.childIdentity || !managed.superAssistant) return;
-        managed.superAssistant.resolve(command);
-        return;
-      }
       case 'memory-result': {
         const managed = this.must(command.identity);
         if (!managed.memory?.resolve(command)) {
@@ -2284,18 +2232,6 @@ export class SessionSupervisor {
       }
       case 'abort': {
         const managed = this.must(command.identity);
-        if (command.deliveryId && managed.scheduledDeliveryId !== command.deliveryId) return;
-        if (managed.scheduledDeliveryId) {
-          const deliveryId = managed.scheduledDeliveryId;
-          managed.scheduledDeliveryId = undefined;
-          if (managed.promptDelivery?.id === deliveryId) managed.promptDelivery = undefined;
-          this.options.emit({
-            type: 'delivery-aborted',
-            identity: managed.identity,
-            seq: ++managed.seq,
-            deliveryId,
-          });
-        }
         const uiBlock = Symbol('abort');
         managed.extensionUIBlock = uiBlock;
         this.codeSearch.cancelSession(managed.identity.sessionId);
@@ -2309,7 +2245,6 @@ export class SessionSupervisor {
         managed.browser?.cancelAll('Browser action aborted');
         managed.design?.cancelAll('Design action aborted');
         managed.memory?.cancelAll('Memory action aborted');
-        managed.superAssistant?.cancelAll('Super Assistant action aborted');
         managed.delegation?.cancelAll('Delegation action aborted');
         managed.currentTurnId = undefined;
         // 用户中止：预算 Run 就此结束，不再补交报告，之后的回合也不再计数
@@ -2338,118 +2273,6 @@ export class SessionSupervisor {
         await this.releaseParent(this.must(command.identity), 'released');
         return;
     }
-  }
-
-  private async spawnSuperAssistant(
-    command: Extract<AgentCommand, { type: 'spawn-parent' }>
-  ): Promise<void> {
-    const { identity, cwd, model, resumeFile } = command;
-    const existing = this.sessions.get(identity.sessionId);
-    if (existing) {
-      if (
-        !isSameGeneration(existing.identity, identity) ||
-        !existing.superAssistant ||
-        existing.childIdentity
-      )
-        throw new Error('Super Assistant identity is already reserved.');
-      this.options.emit({
-        type: 'parent-ready',
-        identity,
-        seq: ++existing.seq,
-        sessionFile: requiredSessionFile(existing.session),
-        model: settingsModelRef(model),
-      });
-      return;
-    }
-    const runtime = await this.getRuntime();
-    const baseModel = await resolveSessionModel(runtime, model);
-    const piModel = applyReasoningToModel(
-      { ...baseModel },
-      command.reasoningEnabled ?? false,
-      model.modelId
-    );
-    let managed: ManagedSession | undefined;
-    // SDK resolves packages before applying noExtensions. An empty settings backend prevents
-    // both project and global package installation, even when the cwd contains settings files.
-    const settingsManager = SettingsManager.inMemory();
-    // Reuse the locked Enso loader: no project/global discovery, packages, executable extensions or skills.
-    const loader = createEnsoResourceLoader(
-      cwd,
-      this.options.agentDir,
-      this.branchContextExtension(() => managed),
-      silentTurnRecoveryExtension(() => {}),
-      this.oauthPoolRecovery(),
-      settingsManager
-    );
-    await loader.reload();
-    const gate = new ApprovalGate(
-      'full',
-      () => {},
-      () => {}
-    );
-    const asks = this.createAskManager(identity);
-    const bridge = new MemoryInvoker<'invoke'>(
-      identity,
-      (request) => {
-        if (!managed || managed.childIdentity || this.sessions.get(identity.sessionId) !== managed)
-          throw new Error('Super Assistant root is not ready.');
-        const parsed = parseSuperAssistantRequest(request.params);
-        if (!parsed) throw new Error('Invalid Super Assistant request.');
-        this.options.emit({
-          type: 'super-assistant-invoke',
-          identity,
-          seq: ++managed.seq,
-          requestId: request.requestId,
-          request: parsed,
-        });
-      },
-      {
-        emitCancel: (requestId) => {
-          if (!managed || this.sessions.get(identity.sessionId) !== managed) return;
-          this.options.emit({
-            type: 'super-assistant-cancel',
-            identity,
-            seq: ++managed.seq,
-            requestId,
-          });
-        },
-      }
-    );
-    const tools = [
-      createSuperAssistantTool({
-        invoke: (request, signal) => bridge.invoke('invoke', request, signal),
-      }),
-      createAskTool(asks),
-    ];
-    const { session } = await createAgentSession({
-      cwd,
-      agentDir: this.options.agentDir,
-      modelRuntime: runtime,
-      model: piModel,
-      settingsManager,
-      thinkingLevel: command.reasoningEnabled ? (command.thinkingLevel ?? 'medium') : 'off',
-      resourceLoader: loader,
-      noTools: 'builtin',
-      customTools: tools,
-      sessionManager: resumeFile
-        ? SessionManager.open(resumeFile, this.options.sessionDir, cwd)
-        : SessionManager.create(cwd, this.options.sessionDir),
-    });
-    if (isCursorModel(piModel)) attachCursorBridgeToSession(session, tools, cwd);
-    else ensureAssistantUsage(session.messages as unknown[]);
-    managed = this.registerManagedSession(identity, session, gate, model.modelId, {
-      resumeFile,
-      asks,
-      toolIds: tools.map((tool) => tool.name),
-    });
-    managed.superAssistant = bridge;
-    this.options.emit({
-      type: 'parent-ready',
-      identity,
-      seq: ++managed.seq,
-      sessionFile: requiredSessionFile(session),
-      model: settingsModelRef(model),
-    });
   }
 
   private publishCompactRoute(
@@ -2513,11 +2336,7 @@ export class SessionSupervisor {
     this.publishCompactRoute(smartCompactSummaryModel, smartCompactMode);
     const existing = this.sessions.get(sessionId);
     if (existing) {
-      if (
-        !isSameGeneration(existing.identity, identity) ||
-        existing.childIdentity ||
-        existing.superAssistant
-      ) {
+      if (!isSameGeneration(existing.identity, identity) || existing.childIdentity) {
         throw new Error('Parent session identity is already reserved by another generation.');
       }
       this.options.emit({
@@ -4819,7 +4638,6 @@ export class SessionSupervisor {
 
   /** 本轮成功收口。budget：子代理因请求预算被强制停止，带上标记（及补报告的错误）交回已有输出。 */
   private completeTurn(managed: ManagedSession, budget?: { error?: string }): void {
-    managed.scheduledDeliveryId = undefined;
     const turnId = managed.currentTurnId ?? randomUUID();
     managed.currentTurnId = undefined;
     // 预算只管一次 Run：收口即清零，之后用户自己发起的回合不计数
@@ -5077,18 +4895,7 @@ export class SessionSupervisor {
   ): void {
     this.flushPendingMcpTools(managed);
     this.flushPendingBuiltinTools(managed);
-    const scheduled = deliveryId !== undefined && managed.scheduledDeliveryId === deliveryId;
     if (managed.session.isStreaming) {
-      if (scheduled) {
-        managed.scheduledDeliveryId = undefined;
-        this.options.emit({
-          type: 'delivery-deferred',
-          identity: managed.identity,
-          seq: ++managed.seq,
-          deliveryId,
-        });
-        return;
-      }
       void this.steerTracked(managed, text, images, deliveryId).catch((error) => {
         this.failTurn(managed, toErrorMessage(error));
       });
@@ -5099,27 +4906,9 @@ export class SessionSupervisor {
     void this.promptTracked(
       managed,
       consumeRole(managed, text),
-      scheduled
-        ? {
-            images,
-            expandPromptTemplates: false,
-            preflightResult: (disposition) => {
-              if (disposition !== 'handled' || managed.scheduledDeliveryId !== deliveryId) return;
-              managed.scheduledDeliveryId = undefined;
-              this.options.emit({
-                type: 'delivery-rejected',
-                identity: managed.identity,
-                seq: ++managed.seq,
-                deliveryId,
-              });
-            },
-          }
-        : images
-          ? { images }
-          : undefined,
+      images ? { images } : undefined,
       deliveryId
     ).catch((error) => {
-      if (scheduled && managed.scheduledDeliveryId !== deliveryId) return;
       this.failTurn(managed, toErrorMessage(error));
     });
   }
@@ -5253,17 +5042,6 @@ export class SessionSupervisor {
   }
 
   private failTurn(managed: ManagedSession, error: string, undelivered = false): void {
-    if (managed.scheduledDeliveryId && managed.promptDelivery?.id === managed.scheduledDeliveryId) {
-      const deliveryId = managed.scheduledDeliveryId;
-      managed.promptDelivery = undefined;
-      this.options.emit({
-        type: 'delivery-rejected',
-        identity: managed.identity,
-        seq: ++managed.seq,
-        deliveryId,
-      });
-    }
-    managed.scheduledDeliveryId = undefined;
     const turnId = managed.currentTurnId ?? randomUUID();
     managed.currentTurnId = undefined;
     managed.settlePending = false;
@@ -5579,7 +5357,6 @@ export class SessionSupervisor {
       managed.browser?.cancelAll('Enso worker shutdown');
       managed.design?.cancelAll('Enso worker shutdown');
       managed.memory?.cancelAll('Enso worker shutdown');
-      managed.superAssistant?.cancelAll('Enso worker shutdown');
       managed.delegation?.cancelAll('Enso worker shutdown');
       managed.agentControl?.close('Enso worker shutdown');
       managed.currentTurnId = undefined;
