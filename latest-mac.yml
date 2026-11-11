@@ -1,37 +1,36 @@
-version: 0.2.70
+version: 0.2.71
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.70/Xiaoman-0.2.70-arm64-mac.zip
-    sha512: iaXgWPaLc0MB8FtnSZ1RyzY50tg+8Hm/G/T8ZCtLci6Iov0nX17PlseNv4Daa0Eze8OJQwvkgFiO9kZJFbvLog==
-    size: 183132140
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.70/Xiaoman-0.2.70-arm64.dmg
-    sha512: Y9aL2k+StBostj0cki2aChIti/LQbqIgHeTJbMonlnSKA041UsxB1VXXizk/T28aQy7vrPsqHOdAO49C3Wb7TA==
-    size: 177776533
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.70/Xiaoman-0.2.70-arm64-mac.zip
-sha512: iaXgWPaLc0MB8FtnSZ1RyzY50tg+8Hm/G/T8ZCtLci6Iov0nX17PlseNv4Daa0Eze8OJQwvkgFiO9kZJFbvLog==
-releaseDate: 2026-11-11T00:41:36.731Z
-releaseName: 小满 0.2.70 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.71/Xiaoman-0.2.71-arm64-mac.zip
+    sha512: y/8/UVpj0WE/TeAQvIu+vrju6uHso8KCeB+96LghZug9tl5WWzbVFFLrTtNOr4UpwHvHnkRbdBOcqfgdj47K7A==
+    size: 183118699
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.71/Xiaoman-0.2.71-arm64.dmg
+    sha512: WDOLcSB1V07FmDTWGqocNYczDr1fjGwJvpX2OziPjM08+BW+PpWTtf2tvCKx9ZF/Hnakn3RU0nWw4aFeZuEMhg==
+    size: 177748273
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.71/Xiaoman-0.2.71-arm64-mac.zip
+sha512: y/8/UVpj0WE/TeAQvIu+vrju6uHso8KCeB+96LghZug9tl5WWzbVFFLrTtNOr4UpwHvHnkRbdBOcqfgdj47K7A==
+releaseDate: 2026-11-11T02:37:01.072Z
+releaseName: 小满 0.2.71 — 个人测试
 releaseNotes: >
-  # 小满 0.2.70
+  # 小满 0.2.71
 
 
-  ## 新增「超级助理」
+  ## 移除超级助理
 
 
-  - 从桌面左侧图标轨打开固定入口。在一处交代多个本机 Code 项目的需求，超级助理会检索项目和会话，按需续用已有会话或新建会话派发。原有 Code 与
-  Bot 工作区保留。
+  - 移除左侧「超级助理 / Super Assistant」入口、专属工作区和跨项目协调派发能力，保留原有 Code、Bot、设计及普通 Agent 功能。
 
-  - 目标会话忙时，任务排队等待，不会插话打断当前轮次。右侧「执行动态」显示等待处理、排队、执行和结束状态，可筛选、查看结果、停止任务或跳回原会话。
+  - 旧超级助理的对话文件与任务账本保留在本地，但不再显示、启动或恢复投递。
 
-  - 状态由实际投递和执行回执决定。「本轮已结束」不代表需求已经验收；应用重启不会自动重放尚未结算的任务。
+  - 超级助理曾创建的普通 Code 会话仍可打开，保留原有历史、模型、推理与审批设置；补齐不完整旧缓存时不覆盖已有完整模型选择。
 
-  - 首版仅支持本机 Code 项目，不含 SSH 项目、群聊任务、定时调度和复杂工作流。
+  - 曾停留在超级助理模式的旧设置会回到 Code，不影响其他导航入口的顺序。
 
 
-  本次仅发布 Mac arm64 个人更新版，不改变正式 Latest。安装和重启由用户自行完成。
+  本次仅发布 Mac arm64 同证书个人更新版，不改变正式 Latest。安装和重启由用户自行完成。
 
 
   ---
 
 
-  个人测试通道 0.2.70：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.71：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
