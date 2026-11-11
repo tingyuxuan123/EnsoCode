@@ -287,6 +287,7 @@ import { createEnsoAppTool, EnsoAppInvoker } from './tools/ensoApp';
 import { createEnsoCapabilitiesTool } from './tools/ensoCapabilities';
 import { createGroupHistoryTool } from './tools/groupHistory';
 import { createGroupTasksTool } from './tools/groupTasks';
+import { createImageGenerationTools, ImageGenerationInvoker } from './tools/imageGeneration';
 import { createMemoryTools, MemoryInvoker } from './tools/memory';
 import { createPluginTools, PluginToolInvoker } from './tools/pluginTools';
 import { createRoutineProposeTool } from './tools/routinePropose';
@@ -387,6 +388,7 @@ interface ManagedSession {
   ensoApp?: EnsoAppInvoker;
   browser?: BrowserInvoker;
   design?: DesignInvoker;
+  imageGeneration?: ImageGenerationInvoker;
   memory?: MemoryInvoker;
   delegation?: MemoryInvoker<DelegationOp>;
   agentControl?: AgentControlInvoker;
@@ -982,6 +984,7 @@ export class SessionSupervisor {
   /** undefined 跟随会话；空数组表示已配置但全部不可用，直接走 Exa。 */
   private webSearchChain: readonly WebSearchChainEntry[] | undefined;
   private readonly codeSearch = new CodeSearchHost();
+  private imageGeneration = { generate: false, edit: false };
   /** Spawn is asynchronous; only the matching generation may consume this update. */
   private readonly pendingBuiltinTools = new Map<
     string,
@@ -1297,6 +1300,7 @@ export class SessionSupervisor {
     managed.ensoApp?.cancelAll('Session released');
     managed.browser?.cancelAll('Session released');
     managed.design?.cancelAll('Session released');
+    managed.imageGeneration?.cancelAll('Session released');
     managed.memory?.cancelAll('Session released');
     managed.delegation?.cancelAll('Session released');
     managed.agentControl?.close('Session released');
@@ -1526,6 +1530,20 @@ export class SessionSupervisor {
       }
       return;
     }
+    if (command.type === 'set-image-generation-config') {
+      if (
+        this.imageGeneration.generate === command.generate &&
+        this.imageGeneration.edit === command.edit
+      )
+        return;
+      this.imageGeneration = { generate: command.generate, edit: command.edit };
+      for (const managed of this.sessions.values()) {
+        if (!managed.imageGeneration) continue;
+        managed.pendingBuiltinTools ??= managed.builtinDisabledTools;
+        this.flushPendingBuiltinTools(managed);
+      }
+      return;
+    }
     if (command.type === 'set-web-search-config') {
       this.webSearchChain =
         (command.configured ?? command.chain.length > 0) ? command.chain : undefined;
@@ -1590,6 +1608,7 @@ export class SessionSupervisor {
         ? command.child
         : command.type === 'browser-result' ||
             command.type === 'design-result' ||
+            command.type === 'image-generation-result' ||
             command.type === 'memory-result' ||
             command.type === 'delegation-result' ||
             command.type === 'computer-result'
@@ -2018,6 +2037,12 @@ export class SessionSupervisor {
         }
         return;
       }
+      case 'image-generation-result': {
+        const managed = this.sessions.get(command.identity.sessionId);
+        if (managed && isSameGeneration(managed.identity, command.identity))
+          managed.imageGeneration?.resolve(command);
+        return;
+      }
       case 'design-result': {
         const managed = this.sessions.get(command.identity.sessionId);
         if (
@@ -2244,6 +2269,7 @@ export class SessionSupervisor {
         managed.ensoApp?.cancelAll('Enso capability invocation aborted');
         managed.browser?.cancelAll('Browser action aborted');
         managed.design?.cancelAll('Design action aborted');
+        managed.imageGeneration?.cancelAll('Image generation aborted');
         managed.memory?.cancelAll('Memory action aborted');
         managed.delegation?.cancelAll('Delegation action aborted');
         managed.currentTurnId = undefined;
@@ -3166,6 +3192,32 @@ export class SessionSupervisor {
       }
     );
     const design = this.createDesignInvoker(identity, () => managedRef);
+    const imageGeneration =
+      !remote && !botMode && toolEnabled(WORKSPACE_WRITE_TOOL_ID)
+        ? new ImageGenerationInvoker(
+            identity,
+            ({ requestId, tool, params }) => {
+              if (!managedRef) throw new Error('Image generation session is not ready');
+              this.options.emit({
+                type: 'image-generation-invoke',
+                identity,
+                seq: ++managedRef.seq,
+                requestId,
+                tool,
+                params,
+              });
+            },
+            (requestId) => {
+              if (managedRef)
+                this.options.emit({
+                  type: 'image-generation-cancel',
+                  identity,
+                  seq: ++managedRef.seq,
+                  requestId,
+                });
+            }
+          )
+        : undefined;
     // 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件，同 browser 桥。
     const memory = new MemoryInvoker(identity, (request) => {
       const managed = managedRef ?? this.sessions.get(sessionId);
@@ -3264,6 +3316,28 @@ export class SessionSupervisor {
           ]
         : []),
       ...builtin('web', createWebTools({ chain: () => this.webSearchChain })),
+      ...(imageGeneration
+        ? builtin(
+            'image_generation',
+            createImageGenerationTools(imageGeneration).map((tool) => {
+              const approved = withApproval(gate, 'command', tool);
+              return {
+                ...approved,
+                execute: (...args: Parameters<Def['execute']>) => {
+                  if (
+                    !(tool.name === 'edit_image'
+                      ? this.imageGeneration.edit
+                      : this.imageGeneration.generate)
+                  )
+                    throw new Error(
+                      'Configure the image model in Settings → Built-in tools before generating or editing images.'
+                    );
+                  return approved.execute(...args);
+                },
+              };
+            })
+          )
+        : []),
       ...(!remote && !botMode
         ? builtin('code_search', [
             createCodeSearchTool({
@@ -3451,6 +3525,7 @@ export class SessionSupervisor {
     if (rolePrompt && !resumeFile) managedRef.pendingRole = rolePrompt;
     managedRef.browser = browser;
     managedRef.design = design;
+    managedRef.imageGeneration = imageGeneration;
     managedRef.memory = memory;
     {
       const managed = managedRef;
@@ -3480,7 +3555,10 @@ export class SessionSupervisor {
         if (!this.codeSearch.accountKey) enabledBuiltins.delete('code_search');
         const active = session.getActiveToolNames();
         const next = nextActiveToolNames(active, builtinGroups, enabledBuiltins).filter(
-          (name) => !isDesignToolName(name) || (!remote && visibleDesignNames.includes(name))
+          (name) =>
+            (!isDesignToolName(name) || (!remote && visibleDesignNames.includes(name))) &&
+            (name !== 'generate_image' || this.imageGeneration.generate) &&
+            (name !== 'edit_image' || this.imageGeneration.edit)
         );
         if (next.length !== active.length || next.some((name, index) => name !== active[index])) {
           session.setActiveToolsByName(next);
@@ -5356,6 +5434,7 @@ export class SessionSupervisor {
       managed.ensoApp?.cancelAll('Enso worker shutdown');
       managed.browser?.cancelAll('Enso worker shutdown');
       managed.design?.cancelAll('Enso worker shutdown');
+      managed.imageGeneration?.cancelAll('Enso worker shutdown');
       managed.memory?.cancelAll('Enso worker shutdown');
       managed.delegation?.cancelAll('Enso worker shutdown');
       managed.agentControl?.close('Enso worker shutdown');

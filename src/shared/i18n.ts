@@ -5,6 +5,24 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  'Image generation': '图像生成',
+  'Generate and edit images with an OpenAI-compatible image service.':
+    '通过 OpenAI 兼容的图像服务生图和改图。',
+  'Generate image': '生成图片',
+  'Edit image': '编辑图片',
+  'Text to image': '文生图',
+  'Image to image': '图生图',
+  'Image service': '图像服务',
+  'Select image service': '选择图像服务',
+  'Image service unavailable': '图像服务不可用',
+  'Image model ID': '图像模型 ID',
+  'Manage image services': '管理模型服务',
+  Saved: '已保存',
+  'Image file unavailable': '图片文件已移动或不可用',
+  'Choose an API-key provider with OpenAI-compatible /images/generations and /images/edits endpoints. Include the version in its Base URL (for example /v1). Image model IDs can be entered even if absent from the chat model list. OAuth chat subscriptions are not image API keys.':
+    '选择使用 API Key、提供 OpenAI 兼容生图或改图接口的服务。Base URL 需包含版本路径（如 /v1）。模型 ID 可以直接填，不必出现在聊天模型列表里。OAuth 聊天订阅不能当作图像 API Key。',
+  'Ask in chat to generate or edit an image. Prompts and reference images are sent to the selected service and each call may incur a charge. No automatic retries. Results are saved in .xiaoman/images inside the workspace; previous versions remain in chat. Local Code sessions only; not SSH, bots or subagents. Tool changes apply after the current turn.':
+    '在聊天中直接提出生图或改图要求。提示词和参考图会发送给所选服务，调用可能计费，不会自动重试。结果保存在工作区的 .xiaoman/images，历史图片仍可在聊天中查看。仅支持本地 Code 会话，不适用于 SSH、Bot 或子代理。工具变更在当前回合结束后生效。',
   'Auto-managed review timed out. Please decide.': '自动托管复核超时，请你确认。',
   'Auto-managed review failed. Please decide.': '自动托管复核失败，请你确认。',
   'Auto-managed review returned no valid decision. Please decide.':

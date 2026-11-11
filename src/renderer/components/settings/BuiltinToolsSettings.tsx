@@ -16,6 +16,7 @@ import {
   FoldVertical,
   Globe,
   GripVertical,
+  ImagePlus,
   ListTodo,
   type LucideIcon,
   MessageCircleQuestion,
@@ -55,6 +56,7 @@ import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
 import { CodeSearchSettings } from './CodeSearchSettings';
 import { ComputerAllowedApps } from './ComputerAllowedApps';
+import { ImageGenerationSettings } from './ImageGenerationSettings';
 import { NewSessionBadge } from './NewSessionBadge';
 import {
   enabledOccupancyTotal,
@@ -77,6 +79,7 @@ const TOOL_ICON: Record<string, LucideIcon> = {
   browser: Globe,
   web: Search,
   code_search: Search,
+  image_generation: ImagePlus,
   background_tasks: SquareTerminal,
   memory: Brain,
   isolated_sandbox: Box,
@@ -381,6 +384,7 @@ export function BuiltinToolsSettings() {
                 )}
               </div>
             ) : null}
+            {tool.id === 'image_generation' ? <ImageGenerationSettings /> : null}
             {tool.id === 'computer' && computerEnabled ? (
               <div className="space-y-2" data-settings-row="tools.computer">
                 {capabilities && computerPermissionGuideKind(capabilities) === 'unsupported' ? (

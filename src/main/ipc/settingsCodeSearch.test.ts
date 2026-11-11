@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 const userData = mkdtempSync(path.join(tmpdir(), 'enso-settings-code-search-'));
 const pushCodeSearchConfig = vi.fn(async () => {});
 const pushBuiltinTools = vi.fn();
+const pushImageGenerationConfig = vi.fn();
 
 vi.mock('electron', () => ({
   app: { getPath: () => userData, on: vi.fn() },
@@ -24,6 +25,7 @@ vi.mock('../services/agentHost', () => ({
   pushModelDirectory: vi.fn(),
   pushWebSearchConfig: vi.fn(),
   pushCodeSearchConfig,
+  pushImageGenerationConfig,
 }));
 vi.mock('../services/oauthProviders', () => ({
   readStoredOauthCredentialKeys: async () => new Set(['devin', 'devin#2']),
@@ -44,6 +46,25 @@ afterAll(() => {
 });
 
 describe('codeSearchAccountKey 设置字段', () => {
+  it('生图选型沿用脱敏服务引用并触发可用性推送，配置同步不带出本机 id', async () => {
+    pushImageGenerationConfig.mockClear();
+    expect(
+      settings.patchSettingsState('imageGeneration', {
+        textToImage: { providerId: 'image-provider', modelId: 'gpt-image-1' },
+        imageToImage: null,
+      }).ok
+    ).toBe(true);
+    await vi.waitFor(() => expect(pushImageGenerationConfig).toHaveBeenCalled());
+    expect(settings.readSettings()?.['enso-settings']).toMatchObject({
+      state: {
+        imageGeneration: {
+          textToImage: { providerId: 'image-provider', modelId: 'gpt-image-1' },
+          imageToImage: null,
+        },
+      },
+    });
+    expect(settings.CONFIG_SYNC_COMMIT_FIELDS).not.toContain('imageGeneration');
+  });
   it('登记为设备本地字段，不参与 config-sync 指纹与回写', () => {
     expect(settings.SETTINGS_STATE_FIELDS).toContain('codeSearchAccountKey');
     expect(settings.CONFIG_SYNC_COMMIT_FIELDS).not.toContain('codeSearchAccountKey');

@@ -6,6 +6,7 @@ import type {
 } from '@shared/defaultModel';
 import type { ContextMenuOpen, FileOpenRule } from '@shared/fileOpening';
 import type { Locale } from '@shared/i18n';
+import type { ImageGenerationSettings } from '@shared/imageGeneration';
 import type { ProxyMode } from '@shared/proxy';
 import type { StatusLineSegmentId } from '@shared/statusLine';
 import type { TerminalShell } from '@shared/terminalShell';
@@ -322,6 +323,7 @@ export interface SettingsState {
   webSearchChain: WebSearchChainEntry[];
   /** 代码搜索固定使用的 Devin 订阅账号 key；null = 未选择，仅存本机，不自动切号。 */
   codeSearchAccountKey: string | null;
+  imageGeneration: ImageGenerationSettings;
   /** 被关闭的内置工作流预设（id 集合;默认全开） */
   disabledWorkflowPresets: string[];
   /** 统一 subagent 工具允许创建的 Agent 模式。 */
@@ -506,6 +508,7 @@ export interface SettingsState {
   toggleBuiltinTool: (id: string, enabled: boolean) => void;
   setWebSearchChain: (entries: WebSearchChainEntry[]) => void;
   setCodeSearchAccountKey: (key: string | null) => void;
+  setImageGeneration: (value: ImageGenerationSettings) => void;
   toggleWorkflowPreset: (id: string, enabled: boolean) => void;
   setSubagentAllowedModes: (modes: AgentMode[]) => void;
 

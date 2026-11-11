@@ -137,6 +137,9 @@ export const SETTINGS_DATA_COVERAGE = {
   disabledBuiltinAgentTypes: surfaces('agent-types.toggle-builtin'),
   disabledBuiltinTools: surfaces('tools.toggle-builtin'),
   webSearchChain: surfaces('tools.toggle-builtin'),
+  imageGeneration: excluded(
+    'Desktop image provider/model selection; no mobile or agent settings API.'
+  ),
   codeSearchAccountKey: excluded(
     'Code search cloud account selection is device-local and requires explicit consent.'
   ),
@@ -331,6 +334,7 @@ export const SETTINGS_ACTION_COVERAGE = {
   toggleBuiltinAgentType: surfaces('agent-types.toggle-builtin'),
   toggleBuiltinTool: surfaces('tools.toggle-builtin'),
   setWebSearchChain: surfaces('tools.toggle-builtin'),
+  setImageGeneration: excluded('Desktop-only image provider/model settings.'),
   setCodeSearchAccountKey: excluded(
     'Code search cloud account selection is a desktop-only safety preference.'
   ),
@@ -385,6 +389,9 @@ export const BUILTIN_TOOL_COVERAGE: Readonly<Record<string, CoverageDisposition>
   browser: surfaces('coding-tools.browser'),
   design: excluded('Desktop UI design canvas; controlled by the designEnabled setting.'),
   web: surfaces('coding-tools.web'),
+  image_generation: excluded(
+    'Local Code image tools require user-configured image API/model settings.'
+  ),
   code_search: excluded(
     'Opt-in local code search sends selected code to Devin; enabled only by the user in desktop settings.'
   ),

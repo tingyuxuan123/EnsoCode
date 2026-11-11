@@ -30,6 +30,18 @@ describe('isPrivateOrReservedIp', () => {
   it('公网 IPv6 不算私有', () => {
     expect(isPrivateOrReservedIp('2001:4860:4860::8888')).toBe(false);
   });
+  it('IPv6 压缩/展开/十六进制映射不能绕过私有地址规则', () => {
+    for (const ip of [
+      '::ffff:7f00:1',
+      '0:0:0:0:0:ffff:a9fe:a9fe',
+      '0:0:0:0:0:0:0:1',
+      'febf::1',
+      'ff02::1',
+    ])
+      expect(isPrivateOrReservedIp(ip), ip).toBe(true);
+    expect(isAllowedRemoteImageUrl('http://[::ffff:7f00:1]/x.png')).toBe(false);
+    expect(isPrivateOrReservedIp('::ffff:808:808')).toBe(false);
+  });
 });
 
 describe('isAllowedRemoteImageUrl', () => {

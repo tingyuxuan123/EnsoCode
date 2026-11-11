@@ -82,6 +82,14 @@ SOFTWARE.
 
 ## Open Vetta design subsystem
 
+The image-generation tools and OpenAI-compatible image request protocol in
+`src/agent/tools/imageGeneration.ts` and `src/main/services/imageGeneration/`
+are also adapted from Open Vetta's `image-gen` preset and
+`openai-compatible-image-provider.ts` (Apache-2.0, Copyright 2026 Vetta).
+小满 replaces the upstream host, storage and credential integrations; it does
+not include or confer access to Vetta's subscription image service. The full
+Apache-2.0 license and upstream NOTICE are distributed in `resources/design/`.
+
 The design subsystem source, Vite engine, history runner, designer preset and
 skill documentation are ported from Open Vetta's `vetta-ui-design` plugin
 (`package.json` 0.1.15 / `plugin.json` 0.7.6), licensed under Apache-2.0.

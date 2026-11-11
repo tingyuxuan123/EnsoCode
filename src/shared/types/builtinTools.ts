@@ -58,6 +58,11 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
     description: 'Search workspace code with your existing Devin subscription. Default off.',
   },
   {
+    id: 'image_generation',
+    name: 'Image generation',
+    description: 'Generate and edit images with an OpenAI-compatible image service.',
+  },
+  {
     id: 'background_tasks',
     name: 'Background tasks',
     description:
@@ -102,6 +107,7 @@ export const HOT_BUILTIN_TOOL_IDS = [
   'design',
   'web',
   'code_search',
+  'image_generation',
   'background_tasks',
   'memory',
   'computer',

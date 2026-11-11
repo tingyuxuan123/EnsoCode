@@ -1324,6 +1324,7 @@ export type AgentCommand =
   | { type: 'forget-notifications'; conversationId: string }
   | { type: 'set-web-search-config'; chain: WebSearchChainEntry[]; configured?: boolean }
   | { type: 'set-code-search-config'; config: CodeSearchConfig }
+  | { type: 'set-image-generation-config'; generate: boolean; edit: boolean }
   /** 统一模型目录 + 自定义 provider 全量注册信息。载荷在 worker 内再收窄。 */
   | { type: 'set-model-directory'; snapshot: unknown; customProviders: unknown }
   | { type: 'compact'; identity: SessionIdentity; instructions?: string }
@@ -1336,7 +1337,7 @@ export type AgentCommand =
       envelope: CapabilityExecutionEnvelope;
     }
   | {
-      type: 'browser-result' | 'design-result';
+      type: 'browser-result' | 'design-result' | 'image-generation-result';
       identity: SessionIdentity | ChildSessionIdentity;
       requestId: string;
       ok: boolean;
@@ -1818,6 +1819,8 @@ export type RendererAgentEvent =
               | 'browser-cancel'
               | 'design-invoke'
               | 'design-cancel'
+              | 'image-generation-invoke'
+              | 'image-generation-cancel'
               | 'design-hook'
               | 'plugin-tool-invoke'
               | 'plugin-tool-cancel';
@@ -2025,6 +2028,20 @@ export type AgentWorkerEvent =
   | {
       type: 'design-cancel';
       identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      requestId: string;
+    }
+  | {
+      type: 'image-generation-invoke';
+      identity: SessionIdentity;
+      seq: number;
+      requestId: string;
+      tool: import('../imageGeneration').ImageToolName;
+      params: unknown;
+    }
+  | {
+      type: 'image-generation-cancel';
+      identity: SessionIdentity;
       seq: number;
       requestId: string;
     }
@@ -3727,6 +3744,12 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
       return hasExactKeys(value, ['type', 'config']) && parseCodeSearchConfig(value.config)
         ? (value as unknown as AgentCommand)
         : null;
+    case 'set-image-generation-config':
+      return hasExactKeys(value, ['type', 'generate', 'edit']) &&
+        typeof value.generate === 'boolean' &&
+        typeof value.edit === 'boolean'
+        ? (value as unknown as AgentCommand)
+        : null;
     case 'set-web-search-config':
       return hasOnlyKeys(value, ['type', 'chain', 'configured']) &&
         (value.configured === undefined || typeof value.configured === 'boolean') &&
@@ -3777,6 +3800,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     case 'browser-result':
     case 'design-result':
+    case 'image-generation-result':
     case 'memory-result':
     case 'delegation-result':
     case 'computer-result':
@@ -4184,6 +4208,12 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         isDesignToolName(value.tool)
         ? (value as unknown as AgentWorkerEvent)
         : null;
+    case 'image-generation-invoke':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'tool', 'params']) &&
+        isNonEmptyString(value.requestId) &&
+        (value.tool === 'generate_image' || value.tool === 'edit_image')
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
     case 'design-hook':
       return hasOnlyKeys(value, ['type', 'identity', 'seq', 'event', 'prompt']) &&
         (value.event === 'prompt-submit' || value.event === 'stop') &&
@@ -4191,6 +4221,7 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
           (value.event === 'prompt-submit' && typeof value.prompt === 'string'))
         ? (value as unknown as AgentWorkerEvent)
         : null;
+    case 'image-generation-cancel':
     case 'design-cancel':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
         isNonEmptyString(value.requestId)

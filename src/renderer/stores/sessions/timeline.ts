@@ -1,4 +1,5 @@
 import type { ApprovalReviewRecord } from '@shared/approvalReviewRecord';
+import { generatedImageFromOutput, isImageToolName } from '@shared/imageGeneration';
 import { IMAGE_EXTENSIONS, mediaExtension } from '@shared/localImage';
 import { firstProgram, isReadOnlyCommand } from '@shared/readOnlyCommand';
 import type { RtkToolStats } from '@shared/rtk';
@@ -1258,8 +1259,13 @@ function buildMessageTimeline(
           const live = !result && running && messageIndex === lastTurnIndex;
           const liveCommand = live && (part.name === 'bash' || part.name === 'powershell');
           const waiting = live ? blockingWaitKind(part.name, part.arguments) : null;
-          const imagePath =
-            part.name === 'read' && !result?.isError
+          const generatedImage =
+            isImageToolName(part.name) && result && !result.isError
+              ? generatedImageFromOutput(output ?? '')
+              : null;
+          const imagePath = generatedImage
+            ? readImagePreviewPath({ path: generatedImage.path }, cwd)
+            : part.name === 'read' && !result?.isError
               ? readImagePreviewPath(part.arguments, cwd)
               : null;
           const codeSearchQuery =
@@ -2031,7 +2037,10 @@ function isTurnTailRow(item: TimelineItem): boolean {
 function isWorklogPinnedRow(item: TimelineItem): boolean {
   return (
     item.kind === 'tool' &&
-    (item.name === 'ask_user' || item.name === 'submit_plan' || item.name.startsWith('goal_'))
+    (item.name === 'ask_user' ||
+      item.name === 'submit_plan' ||
+      item.name.startsWith('goal_') ||
+      (isImageToolName(item.name) && Boolean(item.imagePath) && item.state === 'ok'))
   );
 }
 

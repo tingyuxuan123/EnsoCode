@@ -70,6 +70,7 @@ import {
   isAgentWorkerReady,
   isBrowserSessionToolEnabled,
   isDesignSessionToolEnabled,
+  isImageGenerationSessionEnabled,
   pluginHostMcpServers,
   promptChildSession,
   promptSession,
@@ -121,6 +122,9 @@ import { getDesignToolBroker } from '../services/design';
 import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
 import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionPlugins/planPolicy';
 import { searchFiles } from '../services/fileSearch';
+import { generateImage } from '../services/imageGeneration/service';
+import { ImageGenerationBridge } from '../services/imageGenerationBridge';
+import { resolveImageProvider } from '../services/imageGenerationConfig';
 import { resolveLegacyDispatchedHistoryFile } from '../services/legacyDispatchedHistory';
 import { createLocalComplete, memoryCompleteFromSettings } from '../services/llama/chat';
 import {
@@ -274,6 +278,7 @@ function cancelBrowserRequests(
   identity?: SessionIdentity,
   phase?: 'abort' | 'release' | 'resume'
 ): void {
+  if (phase !== 'resume') imageGenerationBridge.cancel(identity);
   if (phase !== 'resume') cancelDesignRequests(identity);
   if (identity && phase === 'resume') {
     pausedBrowserGenerations.delete(browserGenerationKey(identity));
@@ -1101,6 +1106,33 @@ async function runAgentControl(
 
 /** Main keeps the latest folded Plan state per live generation, for that-generation plugin policy. */
 const pluginPlanStates = new PluginPlanStates();
+const imageGenerationBridge = new ImageGenerationBridge({
+  allowed: (identity) => {
+    if (
+      'parent' in identity ||
+      !currentBrowserIdentity(identity) ||
+      !isImageGenerationSessionEnabled(identity) ||
+      rootSessionId(identity) !== identity.sessionId ||
+      !pluginPlanStates.allows(identity)
+    )
+      return false;
+    const conversation = sourceAuthority?.conversation(identity.sessionId);
+    if (!conversation || conversation.bot || conversation.lifecycle === 'ended') return false;
+    const state = readSettingsState();
+    return !resolveDisabledBuiltinTools(state?.disabledBuiltinTools, {
+      disabledBuiltinTools: projectDisabledBuiltinTools(
+        state?.projects,
+        projectIdFor(identity.sessionId)
+      ),
+    }).includes('image_generation');
+  },
+  cwd: (identity) => pluginProjectRoot(identity.sessionId),
+  config: (tool) => resolveImageProvider(readSettingsState(), tool),
+  run: generateImage,
+  reply: ({ identity, requestId }, result) => {
+    sendAgentCommand({ type: 'image-generation-result', identity, requestId, ok: true, result });
+  },
+});
 const pluginMcp = new PluginMcpRequests((command) => sendAgentCommand(command).ok);
 
 function pluginTargetIdentity(sessionId: string | null) {
@@ -1357,6 +1389,7 @@ export function registerAgentHandlers(): void {
       return;
     }
     if (workerEvent.type === 'worker-exited') {
+      imageGenerationBridge.reset();
       cancelBrowserRequests();
       seenBrowserRequests.clear();
       seenDesignRequests.clear();
@@ -1544,6 +1577,14 @@ export function registerAgentHandlers(): void {
         clearTimeout(pending.timer);
         pending.controller.abort();
       }
+      return;
+    }
+    if (workerEvent.type === 'image-generation-invoke') {
+      void imageGenerationBridge.invoke(workerEvent);
+      return;
+    }
+    if (workerEvent.type === 'image-generation-cancel') {
+      imageGenerationBridge.cancel(workerEvent.identity, workerEvent.requestId);
       return;
     }
     if (workerEvent.type === 'design-cancel') {

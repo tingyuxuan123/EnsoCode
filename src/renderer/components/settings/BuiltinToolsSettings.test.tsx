@@ -24,6 +24,8 @@ vi.mock('@/stores/settings', () => ({
       disabledBuiltinTools: ['memory', 'computer', 'code_search'],
       subagentAllowedModes: ['task'],
       webSearchChain: [],
+      providers: [],
+      imageGeneration: { textToImage: null, imageToImage: null },
       editMode: 'apply_patch',
       lcuEnabled: controls.lcuEnabled,
       setLcuEnabled: controls.setLcuEnabled,

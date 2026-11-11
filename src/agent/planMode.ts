@@ -221,7 +221,8 @@ export function withPlanGate(
       // including codemode calls which share this wrapper; installation is not plan approval.
       if (name.startsWith('plugin_'))
         throw denied('native plugin tools are disabled while planning');
-      if (DENIED_TOOLS.has(name)) throw denied(`${name} is disabled while planning`);
+      if (DENIED_TOOLS.has(name) || name === 'generate_image' || name === 'edit_image')
+        throw denied(`${name} is disabled while planning`);
       if (name === 'computer' && normalizeComputerParams(params)?.readOnly !== true) {
         throw denied('computer only runs with read_only: true while planning');
       }

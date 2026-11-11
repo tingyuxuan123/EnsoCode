@@ -116,6 +116,7 @@ import { ChatSessionContext, useChatHost } from './chatHost';
 import { EditDiff } from './EditDiff';
 import { EnsoMark } from './EnsoMark';
 import { DiffCount } from './FlipMetricValue';
+import { GeneratedImageCard } from './GeneratedImageCard';
 import { renderHighlighted, useChatSearchHighlight } from './highlightQuery';
 import { LocalFileTrigger, Markdown } from './Markdown';
 import { MemoryCaptureResult, MemorySearchResults } from './MemorySearchResults';
@@ -2376,6 +2377,16 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
           sessionId={parentId}
         />
       )}
+      {(item.name === 'generate_image' || item.name === 'edit_image') &&
+        item.imagePath &&
+        item.state === 'ok' && (
+          <GeneratedImageCard
+            key={item.imagePath}
+            path={item.imagePath}
+            output={item.output ?? ''}
+            sessionId={parentId ?? undefined}
+          />
+        )}
       {expanded && expandable && (
         <div
           data-slot="tool-details"

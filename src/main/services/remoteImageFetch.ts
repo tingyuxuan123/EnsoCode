@@ -36,6 +36,7 @@ const ALLOWED_CONTENT_TYPES = new Set([
 export type RemoteImageFetchResult = { ok: true; dataUrl: string } | { ok: false; error: string };
 
 export interface RemoteImageFetchOptions {
+  signal?: AbortSignal;
   maxBytes?: number;
   timeoutMs?: number;
   maxRedirects?: number;
@@ -65,10 +66,12 @@ export async function fetchRemoteImageDataUrl(
     isAllowedUrl = isAllowedRemoteImageUrl,
     isAllowedAddress = (ip: string) => !isPrivateOrReservedIp(ip),
     resolveHost = defaultResolveHost,
+    signal,
   } = options;
 
   let current = url;
   for (let redirects = 0; redirects <= maxRedirects; redirects++) {
+    if (signal?.aborted) return { ok: false, error: 'aborted' };
     if (!isAllowedUrl(current)) return { ok: false, error: 'blocked-address' };
     let parsed: URL;
     try {
@@ -83,8 +86,9 @@ export async function fetchRemoteImageDataUrl(
     } catch {
       return { ok: false, error: 'unavailable' };
     }
+    if (signal?.aborted) return { ok: false, error: 'aborted' };
     if (!isAllowedAddress(address)) return { ok: false, error: 'blocked-address' };
-    const result = await fetchOnce(parsed, address, { maxBytes, timeoutMs });
+    const result = await fetchOnce(parsed, address, { maxBytes, timeoutMs, signal });
     if (result.kind === 'redirect') {
       current = new URL(result.location, parsed).toString();
       continue;
@@ -105,15 +109,20 @@ type FetchOnceResult =
 function fetchOnce(
   parsed: URL,
   address: string,
-  opts: { maxBytes: number; timeoutMs: number }
+  opts: { maxBytes: number; timeoutMs: number; signal?: AbortSignal }
 ): Promise<FetchOnceResult> {
   return new Promise((resolve) => {
     const isHttps = parsed.protocol === 'https:';
     const client = isHttps ? https : http;
     let settled = false;
+    const onAbort = () => {
+      finish({ kind: 'error', error: 'aborted' });
+      req.destroy();
+    };
     const finish = (result: FetchOnceResult) => {
       if (settled) return;
       settled = true;
+      opts.signal?.removeEventListener('abort', onAbort);
       resolve(result);
     };
     const req = client.get(
@@ -179,5 +188,7 @@ function fetchOnce(
       finish({ kind: 'error', error: 'timeout' });
     });
     req.on('error', () => finish({ kind: 'error', error: 'unavailable' }));
+    opts.signal?.addEventListener('abort', onAbort, { once: true });
+    if (opts.signal?.aborted) onAbort();
   });
 }

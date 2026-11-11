@@ -25,6 +25,48 @@ function listen(
 }
 
 describe('fetchRemoteImageDataUrl', () => {
+  it('上游返回 IPv4-mapped IPv6 环回地址时不会连接', async () => {
+    let hit = false;
+    const port = await listen((_req, res) => {
+      hit = true;
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]));
+    });
+    expect(await fetchRemoteImageDataUrl(`http://[::ffff:7f00:1]:${port}/x.png`)).toEqual({
+      ok: false,
+      error: 'blocked-address',
+    });
+    expect(hit).toBe(false);
+  });
+  it('已经取消时不解析 DNS 或连接网络', async () => {
+    let resolved = false;
+    const result = await fetchRemoteImageDataUrl('https://images.example.com/a.png', {
+      signal: AbortSignal.abort(),
+      resolveHost: async () => {
+        resolved = true;
+        throw new Error('No network in tests');
+      },
+    });
+    expect(result).toEqual({ ok: false, error: 'aborted' });
+    expect(resolved).toBe(false);
+  });
+
+  it('下载途中取消会关闭请求，而不是等到超时', async () => {
+    const controller = new AbortController();
+    const port = await listen((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      res.write(Buffer.from([0x89, 0x50]));
+      controller.abort();
+    });
+    const result = await fetchRemoteImageDataUrl(`http://127.0.0.1:${port}/a.png`, {
+      signal: controller.signal,
+      isAllowedUrl: () => true,
+      isAllowedAddress: () => true,
+      timeoutMs: 500,
+    });
+    expect(result).toEqual({ ok: false, error: 'aborted' });
+  });
+
   it('URL 本身就是内网字面量 IP：直接拒绝，不发起连接', async () => {
     const port = await listen((_req, res) => res.end('should not reach'));
     const result = await fetchRemoteImageDataUrl(`http://127.0.0.1:${port}/a.png`);

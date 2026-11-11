@@ -19,6 +19,7 @@ import {
 } from '@shared/fileOpening';
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
+import { parseImageGenerationSettings } from '@shared/imageGeneration';
 import { type LightPalette, parseLightPalette } from '@shared/lightPalette';
 import {
   DEFAULT_MAX_ACTIVE_COWORKERS,
@@ -267,6 +268,7 @@ const initialState = {
   disabledBuiltinTools: [...DEFAULT_DISABLED_BUILTIN_TOOLS] as string[],
   webSearchChain: [] as WebSearchChainEntry[],
   codeSearchAccountKey: null as string | null,
+  imageGeneration: parseImageGenerationSettings(null),
   disabledWorkflowPresets: [] as string[],
   subagentAllowedModes: ['task', 'coworker'] as import('@shared/types/agent').AgentMode[],
   onboarded: false,
@@ -833,6 +835,7 @@ export const useSettingsStore = create<SettingsState>()(
       setWebSearchChain: (entries) => set({ webSearchChain: parseWebSearchChain(entries) }),
       setCodeSearchAccountKey: (key) =>
         set({ codeSearchAccountKey: parseCodeSearchAccountKey(key) }),
+      setImageGeneration: (value) => set({ imageGeneration: parseImageGenerationSettings(value) }),
 
       toggleWorkflowPreset: (id, enabled) =>
         set((state) => ({

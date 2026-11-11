@@ -185,6 +185,10 @@ export const CONFIG_SYNC_FIELD_POLICY = {
     mode: 'excluded',
     reason: 'references a device-local Devin subscription account',
   },
+  imageGeneration: {
+    mode: 'excluded',
+    reason: 'references per-installation image provider entries',
+  },
   webSearchChain: {
     mode: 'excluded',
     // 链条目引用本机 provider 条目 id（自定义 provider 是安装期 uuid），跨机导出会悬空；

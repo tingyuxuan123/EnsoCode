@@ -121,6 +121,7 @@ import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
 import { bundledDesignSkillPaths, getDesignPaths } from './design/appPaths';
+import { resolveImageProvider } from './imageGenerationConfig';
 import { resolveGlobalInstruction } from './instructionStore';
 import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
 import { getMcpOAuthStore } from './mcpOAuthStore';
@@ -322,6 +323,13 @@ export function isDesignSessionToolEnabled(identity: SessionIdentity): boolean {
   return policy?.generation === identity.generation && policy.designEnabled === true;
 }
 
+export function isImageGenerationSessionEnabled(identity: SessionIdentity): boolean {
+  return (
+    builtinToolScopes.has(identity) &&
+    parentToolProfiles.get(identity.sessionId)?.workspaceWrite === true
+  );
+}
+
 export function setBrowserCancellationListener(
   listener: (identity?: SessionIdentity, phase?: BrowserCancellationPhase) => void
 ): void {
@@ -393,6 +401,7 @@ export function startAgentWorker(): void {
     pushModelDirectory();
     pushWebSearchConfig();
     replayCodeSearchConfig();
+    pushImageGenerationConfig();
   });
   child.on('message', (raw) => {
     if (worker !== child) return;
@@ -2141,6 +2150,17 @@ export function pushWebSearchConfig(): void {
   worker.postMessage({
     type: 'set-web-search-config',
     ...resolveWebSearchConfig(),
+  } satisfies AgentCommand);
+}
+
+/** Availability only; image endpoint/key/model selection remain Main-owned and resolve per call. */
+export function pushImageGenerationConfig(): void {
+  if (!worker || !workerReady) return;
+  const state = readSettingsState();
+  worker.postMessage({
+    type: 'set-image-generation-config',
+    generate: resolveImageProvider(state, 'generate_image') !== null,
+    edit: resolveImageProvider(state, 'edit_image') !== null,
   } satisfies AgentCommand);
 }
 

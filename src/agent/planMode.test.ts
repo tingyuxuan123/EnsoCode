@@ -80,7 +80,7 @@ describe('withPlanGate', () => {
     expect(edit.execute).toHaveBeenCalled();
   });
 
-  it.each(['edit', 'write', 'apply_patch', 'todo', 'workflow'])(
+  it.each(['edit', 'write', 'apply_patch', 'todo', 'workflow', 'generate_image', 'edit_image'])(
     '规划与待审期间拒绝 %s',
     async (name) => {
       for (const state of [planning, reviewing]) {

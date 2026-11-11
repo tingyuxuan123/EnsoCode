@@ -6,6 +6,7 @@ import {
 } from '@shared/codeSearch';
 import { resolveCompactStrategy } from '@shared/compactStrategy';
 import { normalizeContextMenuOpen, normalizeFileOpenRules } from '@shared/fileOpening';
+import { parseImageGenerationSettings } from '@shared/imageGeneration';
 import { parseLightPalette } from '@shared/lightPalette';
 import { extractModelOverrides, referencedModelIds } from '@shared/modelDirectory';
 import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine';
@@ -89,6 +90,9 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...voice,
     ...search,
     ...codeSearch,
+    ...('imageGeneration' in source
+      ? { imageGeneration: parseImageGenerationSettings(source.imageGeneration) }
+      : {}),
     ...fileOpening,
     ...contextMenuOpening,
     ...browserLinkOpening,

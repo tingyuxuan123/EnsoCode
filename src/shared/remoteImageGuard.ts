@@ -30,12 +30,21 @@ export function isPrivateIPv4(ip: string): boolean {
 
 /** 环回 ::1、链路本地 fe80::/10、唯一本地 fc00::/7、IPv4 映射地址回退到 IPv4 规则 */
 export function isPrivateIPv6(ip: string): boolean {
-  const lower = ip.toLowerCase();
+  let lower: string;
+  try {
+    lower = new URL(`http://[${ip}]`).hostname.slice(1, -1).toLowerCase();
+  } catch {
+    return true;
+  }
   if (lower === '::1' || lower === '::') return true;
-  if (lower.startsWith('fe80:') || lower.startsWith('fe8') || lower.startsWith('fe9')) return true;
+  if (/^fe[89ab]/.test(lower) || lower.startsWith('ff')) return true;
   if (/^f[cd][0-9a-f]{0,2}:/.test(lower)) return true;
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  if (mapped) return isPrivateIPv4(mapped[1]);
+  const mapped = /^::ffff:([0-9a-f]+):([0-9a-f]+)$/.exec(lower);
+  if (mapped) {
+    const high = Number.parseInt(mapped[1], 16);
+    const low = Number.parseInt(mapped[2], 16);
+    return isPrivateIPv4(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+  }
   return false;
 }
 

@@ -21,6 +21,7 @@ import {
   parseContextMenuOpen,
   parseFileOpenRules,
 } from '@shared/fileOpening';
+import { parseImageGenerationSettings } from '@shared/imageGeneration';
 import { normalizeSshTimeoutSeconds } from '@shared/sshTimeout';
 import { IPC_CHANNELS, isEditMode, resolveEditMode } from '@shared/types';
 import { app, BrowserWindow, ipcMain } from 'electron';
@@ -143,6 +144,7 @@ export const SETTINGS_STATE_FIELDS = [
   'disabledBuiltinTools',
   'webSearchChain',
   'codeSearchAccountKey',
+  'imageGeneration',
   'disabledWorkflowPresets',
   'subagentAllowedModes',
   'memoryEmbeddingModel',
@@ -225,6 +227,7 @@ const CONFIG_SYNC_EXCLUDED_STATE_FIELDS = new Set<SettingsStateField>([
   'webSearchChain',
   // 引用本机 OAuth 账号，跨机必然悬空；账号撤销必须由本机实时核验
   'codeSearchAccountKey',
+  'imageGeneration',
 ]);
 
 export const CONFIG_SYNC_COMMIT_FIELDS = SETTINGS_STATE_FIELDS.filter(
@@ -409,6 +412,11 @@ function scheduleWrite(
         if (!config) return false;
         normalized = { ...normalized, contextMenuOpen: config };
       }
+      if ('imageGeneration' in state)
+        normalized = {
+          ...normalized,
+          imageGeneration: parseImageGenerationSettings(state.imageGeneration),
+        };
       data = { ...data, 'enso-settings': { ...store, state: normalized } };
     }
     const previous = readSettings();
@@ -485,6 +493,7 @@ function scheduleWrite(
           pushModelDirectory,
           pushWebSearchConfig,
           pushCodeSearchConfig,
+          pushImageGenerationConfig,
         }) => {
           pushApprovalReviewer(await readStoredOauthCredentialKeys());
           pushCompactRoute(await readStoredOauthCredentialKeys());
@@ -495,6 +504,7 @@ function scheduleWrite(
           pushModelDirectory();
           pushWebSearchConfig();
           void pushCodeSearchConfig();
+          pushImageGenerationConfig();
         }
       )
       .catch(() => {});
@@ -620,6 +630,7 @@ export function commitSettingsTransaction(
         pushModelDirectory,
         pushWebSearchConfig,
         pushCodeSearchConfig,
+        pushImageGenerationConfig,
       }) => {
         pushApprovalReviewer(await readStoredOauthCredentialKeys());
         pushCompactRoute(await readStoredOauthCredentialKeys());
@@ -630,6 +641,7 @@ export function commitSettingsTransaction(
         pushModelDirectory();
         pushWebSearchConfig();
         void pushCodeSearchConfig();
+        pushImageGenerationConfig();
       }
     )
     .catch(() => {});
@@ -669,6 +681,8 @@ export function patchSettingsState(
     const config = parseContextMenuOpen(value);
     if (!config) return { ok: false, error: 'Invalid context menu opening' };
     targetValue = config;
+  } else if (targetField === 'imageGeneration') {
+    targetValue = parseImageGenerationSettings(value);
   } else if (targetField === 'codeSearchAccountKey') {
     // 只接受显式 devin / devin#n；任意键不能借设置变成 auth.json 的账号引用
     if (value === null) {
