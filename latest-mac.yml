@@ -1,29 +1,30 @@
-version: 0.2.71
+version: 0.2.72
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.71/Xiaoman-0.2.71-arm64-mac.zip
-    sha512: y/8/UVpj0WE/TeAQvIu+vrju6uHso8KCeB+96LghZug9tl5WWzbVFFLrTtNOr4UpwHvHnkRbdBOcqfgdj47K7A==
-    size: 183118699
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.71/Xiaoman-0.2.71-arm64.dmg
-    sha512: WDOLcSB1V07FmDTWGqocNYczDr1fjGwJvpX2OziPjM08+BW+PpWTtf2tvCKx9ZF/Hnakn3RU0nWw4aFeZuEMhg==
-    size: 177748273
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.71/Xiaoman-0.2.71-arm64-mac.zip
-sha512: y/8/UVpj0WE/TeAQvIu+vrju6uHso8KCeB+96LghZug9tl5WWzbVFFLrTtNOr4UpwHvHnkRbdBOcqfgdj47K7A==
-releaseDate: 2026-11-11T02:37:01.072Z
-releaseName: 小满 0.2.71 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.72/Xiaoman-0.2.72-arm64-mac.zip
+    sha512: VDHvb05FQ4fPwYbf0CV6+p6Ki5ilIHRpi2iNHvSm2pgPqWyHBRYi4BvqXvWvUOxKFLaHIl78dL5WAHptLLuT+Q==
+    size: 183132808
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.72/Xiaoman-0.2.72-arm64.dmg
+    sha512: EXhy3h2y5vmb8HhxSrReX61wvcNiAzk1IX1RTxW/jC6HJWJkI7DTHEhDlBDaMK63kKoGAG+E4TLYqxS5N4Eaxw==
+    size: 177774367
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.72/Xiaoman-0.2.72-arm64-mac.zip
+sha512: VDHvb05FQ4fPwYbf0CV6+p6Ki5ilIHRpi2iNHvSm2pgPqWyHBRYi4BvqXvWvUOxKFLaHIl78dL5WAHptLLuT+Q==
+releaseDate: 2026-11-11T03:43:34.404Z
+releaseName: 小满 0.2.72 — 个人测试
 releaseNotes: >
-  # 小满 0.2.71
+  # 小满 0.2.72
 
 
-  ## 移除超级助理
+  ## 聊天生图与改图
 
 
-  - 移除左侧「超级助理 / Super Assistant」入口、专属工作区和跨项目协调派发能力，保留原有 Code、Bot、设计及普通 Agent 功能。
+  - 本地 Code 会话可以生成图片，也可以按要求编辑已有成图或工作区内的参考图。
 
-  - 旧超级助理的对话文件与任务账本保留在本地，但不再显示、启动或恢复投递。
+  - 在「设置 → 内置工具 → 图像生成」分别为文生图、图生图选用已添加的 OpenAI 兼容图像服务和模型。不需要 Vetta 订阅。
 
-  - 超级助理曾创建的普通 Code 会话仍可打开，保留原有历史、模型、推理与审批设置；补齐不完整旧缓存时不覆盖已有完整模型选择。
+  - 成图在聊天里预览；点击「编辑图片」把引用填入草稿，由你补充要求并发送。原图和新图分开保存在工作区的
+  `.xiaoman/images/`，重开聊天仍可查看。
 
-  - 曾停留在超级助理模式的旧设置会回到 Code，不影响其他导航入口的顺序。
+  - 提示词和参考图只发往配置的图片服务，调用可能计费，失败不会自动重试。
 
 
   本次仅发布 Mac arm64 同证书个人更新版，不改变正式 Latest。安装和重启由用户自行完成。
@@ -32,5 +33,5 @@ releaseNotes: >
   ---
 
 
-  个人测试通道 0.2.71：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.72：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
