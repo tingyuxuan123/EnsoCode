@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
 describe('macAppMenuTemplate', () => {
   it('sets the About panel display name without renaming the app identity', () => {
     installAppMenu();
-    expect(app.setAboutPanelOptions).toHaveBeenCalledWith({ applicationName: '小满' });
+    expect(app.setAboutPanelOptions).toHaveBeenCalledWith({ applicationName: 'Collabra' });
   });
 
   it('labels app menu items with the product name instead of the package name', () => {
@@ -19,9 +19,9 @@ describe('macAppMenuTemplate', () => {
     expect(appMenu.label).toBe(APP_DISPLAY_NAME);
     const items = appMenu.submenu as { role?: string; label?: string }[];
     const labelOf = (role: string) => items.find((item) => item.role === role)?.label;
-    expect(labelOf('about')).toBe('About 小满');
-    expect(labelOf('hide')).toBe('Hide 小满');
-    expect(labelOf('quit')).toBe('Quit 小满');
+    expect(labelOf('about')).toBe('About Collabra');
+    expect(labelOf('hide')).toBe('Hide Collabra');
+    expect(labelOf('quit')).toBe('Quit Collabra');
     expect(JSON.stringify(macAppMenuTemplate())).not.toContain('enso-code');
   });
 

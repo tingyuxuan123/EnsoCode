@@ -22,7 +22,7 @@ internal fun MemberDesignPreview(frame: String) {
     )
     val texts = listOf("设计已派给小设，FCM 推送排在阿全那里。", "第一档的 8 个页面画好 5 个了。",
         "回归跑完了：38 通过，2 失败。", "等 Firebase 配置，推送先停在这里。", "relay 内存占用回落到 180 MB。")
-    val group = DesktopBotChat("group", "group", "小满 安卓版", listOf("lin", "she", "quan", "ce"), "lin", now, 7,
+    val group = DesktopBotChat("group", "group", "Collabra 安卓版", listOf("lin", "she", "quan", "ce"), "lin", now, 7,
         lastText = "林经理：先派设计，小设接一下。", threadTitle = "v1 规划")
     val direct = members.mapIndexed { index, member -> DesktopBotChat("direct-${member.id}", "direct", member.name,
         listOf(member.id), null, now - listOf(2L, 5L, 6L, 12L, 1440L)[index] * 60_000, 0,

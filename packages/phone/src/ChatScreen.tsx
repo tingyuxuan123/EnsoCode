@@ -24,7 +24,6 @@ import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { AskBar } from '@/components/chat/AskBar';
 import { Composer } from '@/components/chat/Composer';
 import { ChatHostContext } from '@/components/chat/chatHost';
-import { EnsoMark } from '@/components/chat/EnsoMark';
 import { GoalBar } from '@/components/chat/GoalBar';
 import { MessageQueue } from '@/components/chat/MessageQueue';
 import {
@@ -463,9 +462,9 @@ export function ChatScreen(props: Props) {
         {sessionId === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
             <span className="mb-3 flex size-11 items-center justify-center rounded-[13px] border border-brand/20 bg-brand/8 text-brand dark:bg-brand/14">
-              <EnsoMark className="size-6" />
+              <img src="/icons/logo-192.png" alt="Collabra" className="size-6" />
             </span>
-            <p className="font-semibold text-[22px] tracking-tight">小满</p>
+            <p className="font-semibold text-[22px] tracking-tight">Collabra</p>
             <p className="text-muted-foreground text-sm">
               {props.connState === 'online' ? '从左上角选择会话，或新建一个' : props.stateLabel}
             </p>
@@ -499,7 +498,7 @@ export function ChatScreen(props: Props) {
             loading={view === null}
             running={running}
             error={undefined}
-            emptyTitle={props.projectName || '小满'}
+            emptyTitle={props.projectName || 'Collabra'}
             // 手机端不虚拟化：见 MessageTimeline 里 virtualize 的说明
             virtualize={false}
             historyLoading={props.historyLoading}

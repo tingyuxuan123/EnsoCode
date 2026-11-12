@@ -69,7 +69,7 @@ describe('windowsTaskbarAppDetails', () => {
     );
     expect(details.appIconIndex).toBe(0);
     expect(details.relaunchCommand).toContain('EnsoCode.exe');
-    expect(details.relaunchDisplayName).toBe('小满');
+    expect(details.relaunchDisplayName).toBe('Collabra');
   });
 
   it('quotes relaunchCommand when the path has spaces', () => {

@@ -5,6 +5,63 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  'Image studio': '图片工作台',
+  Auto: '自动',
+  Ready: '准备就绪',
+  Resolution: '分辨率',
+  'Output format': '格式',
+  'Search conversations': '搜索对话',
+  'Close image studio': '关闭图片工作台',
+  'Image history': '生图历史',
+  'Close image history': '关闭生图历史',
+  'Drawing settings': '画图设置',
+  'Options apply to this studio only; your image service defaults stay unchanged.':
+    '参数仅用于本工作台，不改变图片服务的默认配置。',
+  Quantity: '数量',
+  '1 image': '1 张',
+  '{{n}} images': '{{n}} 张',
+  '{{n}} images · Each image may be billed': '{{n}} 张 · 每张可能计费',
+  'Images are generated one by one. Each may be billed; a failure stops the batch without retrying.':
+    '按所选数量逐张生成，每张可能计费；失败即停止，不自动重试。',
+  'Choose how many images to generate in drawing settings. Creations are saved by conversation.':
+    '在画图设置里选择生成数量；成图按会话归档',
+  'Images generated': '已生成',
+  'Up to 300 seconds per image': '每张最长 300 秒',
+  'One image per call. Failed requests are not retried automatically.':
+    '一次调用只出一张，失败不自动重试。',
+  'Aspect ratio': '比例',
+  '1 image · Each call may be billed': '1 张 · 每次调用可能计费',
+  'Configure image service': '配置图片服务',
+  'Your image conversations will appear here.': '图片会话会保存在这里',
+  'Reverse time order': '切换时间排序',
+  'Main session': '主会话',
+  'Not configured': '尚未配置',
+  'What would you like to draw today?': '今天想画点什么？',
+  'One image at a time. Settings below, creations saved by conversation.':
+    '一次出一张，参数在画图设置里；成图按会话归档',
+  'A watercolor cat in the afternoon': '水彩风格的猫咪午后',
+  'A cyberpunk night market': '赛博朋克夜市街景',
+  'A minimal product poster on a cream background': '极简产品海报，奶油色背景',
+  'Up to 300 seconds': '最长 300 秒',
+  'Image generation failed': '图片生成失败',
+  'Connect your image service to start drawing.': '连接图片服务后，即可开始画图。',
+  'Reference image': '参考图',
+  'Reference image · A new file will be created': '参考图 · 改图将另存为新文件',
+  'Remove reference image': '移除参考图',
+  'Image prompt': '图片提示词',
+  'Describe your image, or add a reference image…': '描述你想生成的画面，或添加参考图…',
+  'Add reference image': '添加参考图',
+  Draw: '画图',
+  'Stop generating': '停止生成',
+  'By time': '按时间',
+  'Generated images will appear here.': '生成的图片会显示在这里',
+  'Service default': '服务默认尺寸',
+  'Saved in .xiaoman/images/ by conversation. Originals stay unchanged.':
+    '按会话归档在 .xiaoman/images/，原图不被覆盖',
+  'This permanently deletes this image conversation, its generated images and imported references from this device.':
+    '将从本机永久删除此图片会话、所有成图和导入的参考图。',
+  'This cannot be undone. Export images you want to keep first.':
+    '此操作无法撤销，请先下载需要保留的图片。',
   'OpenAI-compatible image generation': 'OpenAI 兼容图片生成',
   'Configure an image endpoint independently from chat providers. Credentials stay encrypted on this device.':
     '独立接入 OpenAI 兼容出图接口，无需添加到聊天模型服务；密钥加密保存在本机。',
@@ -116,7 +173,7 @@ export const zhTranslations: Record<string, string> = {
   'Manage your skills, MCP connections, and installed plugins.':
     '管理技能、MCP 连接和已安装的插件。',
   'Bring your tools into the conversation': '把常用工具带进对话',
-  'Reuse skills, connect MCP tools, or install your own 小满 plugins.':
+  'Reuse skills, connect MCP tools, or install your own Collabra plugins.':
     '复用技能、连接 MCP 工具，或安装自己编写的插件。',
   'Search extensions': '搜索扩展',
   'Clear search': '清除搜索',
@@ -145,8 +202,8 @@ export const zhTranslations: Record<string, string> = {
   'Loading plugins…': '正在加载插件…',
   'Manage Claude Code plugins': '管理 Claude Code 插件',
   'Remove extension?': '移除此扩展？',
-  'This removes the entry from 小满 without deleting the original files.':
-    '只从小满移除登记，不删除原始文件。',
+  'This removes the entry from Collabra without deleting the original files.':
+    '只从Collabra移除登记，不删除原始文件。',
   'Could not revoke authorization': '无法撤销授权',
   Status: '状态',
   Version: '版本',
@@ -175,8 +232,8 @@ export const zhTranslations: Record<string, string> = {
     '插件主进程拥有完整的 Node.js 访问权限；ui.js 与主界面同权。只安装完全信任的插件。权限只限制 Enso 宿主 API，不限制插件自身的代码；这不是操作系统沙箱。',
   Revoke: '撤销',
   'Set (leave blank to keep)': '设置（留空则保持不变）',
-  'The first time the AI clicks or types in an app, 小满 asks you. Apps you always allow are listed here; it can then read everything in their windows.':
-    'AI 首次点击或输入某个应用时，小满会询问你。永久允许的应用会列在这里；之后它可以读取这些应用窗口里的全部内容。',
+  'The first time the AI clicks or types in an app, Collabra asks you. Apps you always allow are listed here; it can then read everything in their windows.':
+    'AI 首次点击或输入某个应用时，Collabra会询问你。永久允许的应用会列在这里；之后它可以读取这些应用窗口里的全部内容。',
   'The plugin and its private data will be removed.': '插件及其私有数据都会被删除。',
   Uninstall: '卸载',
   'Uninstall plugin?': '卸载插件？',
@@ -191,8 +248,8 @@ export const zhTranslations: Record<string, string> = {
     '脚本工具编排、工作区写入权限和目标工具仍沿用会话启动时的配置。',
   'Computer is ready. Open sessions can use it after the current turn finishes.':
     '桌面工具已就绪，已打开会话可在当前回合结束后使用。',
-  'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to 小满, then restart.':
-    '代理可以截取窗口并控制键盘鼠标。请授予小满屏幕录制和辅助功能权限后重启。',
+  'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to Collabra, then restart.':
+    '代理可以截取窗口并控制键盘鼠标。请授予Collabra屏幕录制和辅助功能权限后重启。',
   'The code search tool switch takes effect when the current turn finishes. Account selection stays on this device.':
     '代码搜索开关在当前回合结束后生效，账号选择仅保留在本机。',
   'Semantic similarity': '语义相似度',
@@ -341,12 +398,12 @@ export const zhTranslations: Record<string, string> = {
     '勾选文件链接右键菜单中显示的打开方式，可添加多个应用。',
   'Configure how local workspace file links open by extension.':
     '按扩展名配置本地工作区文件链接的打开方式。',
-  'By default, supported files open inside 小满; other files are revealed in the file manager.':
-    '默认在小满内打开支持的文件，其他文件在文件管理器中显示。',
+  'By default, supported files open inside Collabra; other files are revealed in the file manager.':
+    '默认在Collabra内打开支持的文件，其他文件在文件管理器中显示。',
   'Executable and installer files are always revealed in the file manager.':
     '可执行文件和安装包始终在文件管理器中显示。',
   'File extension': '文件扩展名',
-  'Open inside 小满': '在小满内打开',
+  'Open inside Collabra': '在Collabra内打开',
   'Reveal in file manager': '在文件管理器中显示',
   'System default application': '系统默认应用',
   'Selected application': '指定应用',
@@ -359,7 +416,7 @@ export const zhTranslations: Record<string, string> = {
   'Choose an application before saving this rule.': '保存此规则前请选择应用。',
   'This extension already has an opening rule.': '此扩展名已有打开规则。',
   'Image preview': '图片预览',
-  'This file format cannot be previewed inside 小满.': '此文件格式无法在小满内预览。',
+  'This file format cannot be previewed inside Collabra.': '此文件格式无法在Collabra内预览。',
   'The image is too large to preview.': '图片过大，无法预览。',
   Updates: '更新',
   'Application update settings': '应用更新设置',
@@ -624,8 +681,8 @@ export const zhTranslations: Record<string, string> = {
   'Download progress': '下载进度',
   'RTK command compression': 'RTK 命令压缩',
   'LCU computer control': 'LCU 电脑控制',
-  'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart 小满 to apply changes to open sessions.':
-    '允许加载本机已安装的 LCU Pi 扩展，与内置「电脑操控」独立，不会安装 LCU。新建或冷恢复会话时生效；已打开的会话请重启小满后继续。',
+  'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart Collabra to apply changes to open sessions.':
+    '允许加载本机已安装的 LCU Pi 扩展，与内置「电脑操控」独立，不会安装 LCU。新建或冷恢复会话时生效；已打开的会话请重启Collabra后继续。',
   'Compress supported command output before it enters the model context. Takes effect on new conversations.':
     '在受支持的命令输出进入模型上下文前进行压缩。新会话生效。',
   'Protected action confirmation': '受保护操作确认',
@@ -829,7 +886,7 @@ export const zhTranslations: Record<string, string> = {
   'Preset is locked after the conversation starts': '对话开始后预设已锁定，不能中途替换',
   Path: '路径',
   // Onboarding
-  'Welcome to 小满': '欢迎使用小满',
+  'Welcome to Collabra': '欢迎使用Collabra',
   'Import your providers and assets from local AI apps to get started. You can skip any step.':
     '从本地 AI 应用导入模型服务与资源即可开始，每一步都可跳过。',
   'Sign in with a provider subscription, or import API providers from local AI apps':
@@ -1112,8 +1169,8 @@ export const zhTranslations: Record<string, string> = {
   'Inherits the conversation model and provides product capabilities':
     '继承当前对话模型，并提供产品能力',
   'This Agent name is reserved': '此 Agent 名称为系统保留名称',
-  '小满 system agent for product capabilities and team setup':
-    '用于产品能力与团队组建的小满系统 Agent',
+  'Collabra system agent for product capabilities and team setup':
+    '用于产品能力与团队组建的Collabra系统 Agent',
   'Fast read-only recon; returns compressed findings': '快速只读调研，返回精简结论',
   'Implements a self-contained coding subtask end to end': '端到端实现自包含编码子任务',
   'Reviews code or diffs; read-only, returns prioritized issues':
@@ -2023,12 +2080,12 @@ export const zhTranslations: Record<string, string> = {
   Accessibility: '辅助功能',
   'Open Screen Recording settings': '打开屏幕录制设置',
   'Open Accessibility settings': '打开辅助功能设置',
-  'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to 小满, then restart the app.':
-    '电脑操控需要屏幕录制才能截窗，需要辅助功能才能读无障碍树或点击。请把这两项授权给小满，然后重启应用。',
+  'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to Collabra, then restart the app.':
+    '电脑操控需要屏幕录制才能截窗，需要辅助功能才能读无障碍树或点击。请把这两项授权给Collabra，然后重启应用。',
   'Grant Computer permissions': '授权电脑操控权限',
   'Show permission guide': '打开权限引导',
-  'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to 小满, then restart. Only new sessions pick up the tool.':
-    'Agent 可以截取窗口并控制键鼠。请把屏幕录制和辅助功能授权给小满，然后重启。只有新会话会拿到这个工具。',
+  'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to Collabra, then restart. Only new sessions pick up the tool.':
+    'Agent 可以截取窗口并控制键鼠。请把屏幕录制和辅助功能授权给Collabra，然后重启。只有新会话会拿到这个工具。',
   'Computer is ready. Start a new session to use it.': '电脑操控已就绪。开一个新会话即可使用。',
   'Capture: granted': '截屏:已授权',
   'Capture: denied': '截屏:未授权',
@@ -2528,7 +2585,7 @@ export const zhTranslations: Record<string, string> = {
     '会话在对方电脑上运行，用的是对方的项目、模型与密钥。',
   'On the other computer open Settings → Devices, generate a pairing code and copy the link. Paste it here.':
     '在对方电脑打开「设置 → 设备」，生成配对码并复制链接，粘到这里。',
-  'That is not a 小满 pairing link.': '这不是小满配对链接。',
+  'That is not a Collabra pairing link.': '这不是Collabra配对链接。',
   'This pairing link has expired or was already used. Generate a new one.':
     '配对链接已过期或已被使用，请重新生成。',
   'Could not reach the relay. Check your network and try again.':
@@ -2536,11 +2593,11 @@ export const zhTranslations: Record<string, string> = {
   // 设置 → 设备（原「手机」页扩充）
   Devices: '设备',
   'Allow connections': '允许连入',
-  'Let your phone or another 小满 desktop connect to this computer. Keep this app running.':
-    '让手机或另一台运行小满的桌面连到这台电脑。需保持本应用运行。',
+  'Let your phone or another Collabra desktop connect to this computer. Keep this app running.':
+    '让手机或另一台运行Collabra的桌面连到这台电脑。需保持本应用运行。',
   'Generate pairing code': '生成配对码',
-  'On another 小满 desktop, paste the link below into Settings → Devices → Connect to a node.':
-    '在另一台桌面的小满应用中，把下方链接粘到「设置 → 设备 → 连接到节点」。',
+  'On another Collabra desktop, paste the link below into Settings → Devices → Connect to a node.':
+    '在另一台桌面的Collabra应用中，把下方链接粘到「设置 → 设备 → 连接到节点」。',
   'Generate a pairing code to let a phone or another desktop connect.':
     '生成配对码，让手机或另一台桌面连入。',
   'Waiting for device': '等待设备',
@@ -2551,8 +2608,8 @@ export const zhTranslations: Record<string, string> = {
   'Click to switch: view-only devices cannot send, approve or stop.':
     '点击切换：只读设备不能发送、审批或停止。',
   Copied: '已复制',
-  'Browse and drive conversations on another 小满 desktop. Its agent, keys and history stay there.':
-    '浏览并操控另一台桌面的小满会话。Agent、密钥与历史都留在对方机器上。',
+  'Browse and drive conversations on another Collabra desktop. Its agent, keys and history stay there.':
+    '浏览并操控另一台桌面的Collabra会话。Agent、密钥与历史都留在对方机器上。',
   'Connected nodes': '已连接的节点',
   'No connected nodes': '还没有连接节点',
   'Each connecting computer needs its own pairing code from the other desktop.':
@@ -2693,8 +2750,8 @@ export const zhTranslations: Record<string, string> = {
   'When off, this project uses its own explicit Agent mode permission mask.':
     '关闭后，此项目使用自己明确配置的 Agent 模式权限掩码。',
   Resources: '资源',
-  'CPU, memory and disk usage of 小满 and the processes it started.':
-    '小满及其启动的进程占用的 CPU、内存和磁盘。',
+  'CPU, memory and disk usage of Collabra and the processes it started.':
+    'Collabra及其启动的进程占用的 CPU、内存和磁盘。',
   RAM: '内存',
   Storage: '存储',
   'App processes': '应用进程',
@@ -3377,7 +3434,7 @@ export const zhTranslations: Record<string, string> = {
   'Import team (JSON)': '导入团队（JSON）',
   'This team file is too large.': '团队文件过大。',
   'This team file comes from an unsupported version.': '团队文件版本不受支持。',
-  'This file is not a valid 小满 team file.': '该文件不是有效的小满团队文件。',
+  'This file is not a valid Collabra team file.': '该文件不是有效的Collabra团队文件。',
   'Uncheck members you do not need; the owner stays': '可取消不需要的成员，群主保留',
   'Delegates to {{names}}': '可委派给 {{names}}',
   '"{{from}}" is taken, renamed to "{{to}}"': '「{{from}}」已被占用，已改名为「{{to}}」',

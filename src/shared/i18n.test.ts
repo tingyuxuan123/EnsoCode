@@ -9,12 +9,12 @@ import {
 } from './i18n';
 import { BUILTIN_TOOLS } from './types/builtinTools';
 
-it('translates 小满 branding without falling back to English keys', () => {
-  expect(translate('zh', 'Welcome to 小满')).toBe('欢迎使用小满');
-  expect(translate('zh', 'Open inside 小满')).toBe('在小满内打开');
-  expect(translate('zh', 'That is not a 小满 pairing link.')).toBe('这不是小满配对链接。');
-  expect(translate('zh', 'This file is not a valid 小满 team file.')).toBe(
-    '该文件不是有效的小满团队文件。'
+it('translates Collabra branding without falling back to English keys', () => {
+  expect(translate('zh', 'Welcome to Collabra')).toBe('欢迎使用Collabra');
+  expect(translate('zh', 'Open inside Collabra')).toBe('在Collabra内打开');
+  expect(translate('zh', 'That is not a Collabra pairing link.')).toBe('这不是Collabra配对链接。');
+  expect(translate('zh', 'This file is not a valid Collabra team file.')).toBe(
+    '该文件不是有效的Collabra团队文件。'
   );
 });
 

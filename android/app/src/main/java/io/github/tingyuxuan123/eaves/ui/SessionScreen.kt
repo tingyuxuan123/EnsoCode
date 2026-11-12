@@ -392,7 +392,7 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
             Box(Modifier.size(22.dp).background(c.card, CircleShape), contentAlignment = Alignment.Center) {
                 Image(painterResource(R.drawable.eaves_mark), null, Modifier.size(18.dp))
             }
-            Label("小满", 15, 20, weight = FontWeight.SemiBold)
+            Label("Collabra", 15, 20, weight = FontWeight.SemiBold)
             val time = specimen?.turnTime ?: turn.timestamp?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
             if (time != null) Label(time, 12, 16, color = c.dim)
         }

@@ -50,7 +50,7 @@ const SEARCH_SOURCES = ["photos", "openverse", "wikimedia", "nasa"] as const;
 type SearchSource = (typeof SEARCH_SOURCES)[number];
 const MAX_RESULTS = 12;
 /** Wikimedia 要求带可识别的 User-Agent，否则会限流或拒绝。 */
-const HEADERS = { "User-Agent": "Xiaoman-Design/1.0 (design mockups; https://github.com/tingyuxuan123/EnsoCode)" };
+const HEADERS = { "User-Agent": "Collabra-Design/1.0 (design mockups; https://github.com/tingyuxuan123/EnsoCode)" };
 const SEARCH_TIMEOUT_MS = 15_000;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 /** 联系表里每张缩略图的显示宽度。 */
@@ -211,7 +211,7 @@ export function registerAssetsTool(ctx: PluginContext, options: { scopeUse: read
 		timeoutMs: 120_000,
 		handler: async ({ host, session, trigger }) => {
 			const controller = getCanvasController(session.cwd, session.botChatId);
-   if (!controller) return { ok: false, retryable: true, error: "No design is open on the canvas. 小满 P1 has no canvas mount; vetd_assets requires the P2 Design panel. Do not repeatedly retry until it is available." };
+   if (!controller) return { ok: false, retryable: true, error: "No design is open on the canvas. Collabra P1 has no canvas mount; vetd_assets requires the P2 Design panel. Do not repeatedly retry until it is available." };
 			const { dirPath } = controller.session;
 			const input = trigger.input;
 			try {

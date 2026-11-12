@@ -1,0 +1,86 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.72762760534156,
+		"x": 165.93208262190734,
+		"y": 34.77005216942405
+	},
+	"frames": [
+		{
+			"id": "dark",
+			"file": "frames/dark.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "深色主题",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "深色主题"
+			}
+		},
+		{
+			"id": "history",
+			"file": "frames/history.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "右侧生成历史",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "右侧生成历史"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 3040,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "图片工作台 · 空状态",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "图片工作台 · 空状态"
+			}
+		},
+		{
+			"id": "settings",
+			"file": "frames/settings.tsx",
+			"x": 4560,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "画图设置弹窗",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "画图设置弹窗"
+			}
+		},
+		{
+			"id": "thread",
+			"file": "frames/thread.tsx",
+			"x": 6080,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "对话与成图",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "对话与成图"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"interactionMode": "desktop"
+}

@@ -56,6 +56,8 @@ import {
 import { DesignGallery, DesignGalleryHeader } from '@/features/design/mounts/DesignGallery';
 import { DesignGlobalSlots } from '@/features/design/mounts/DesignGlobalSlots';
 import { GALLERY_VIEW_ID } from '@/features/design/vetta/src/tab-ids';
+import { ImageStudio } from '@/features/imageStudio/ImageStudio';
+import { useImageStudioStore } from '@/features/imageStudio/store';
 import { useAutoArchiveScan } from '@/hooks/useAutoArchiveScan';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useDockBadge } from '@/hooks/useDockBadge';
@@ -120,6 +122,7 @@ export default function App() {
   const closeWorkspacePage = useCallback(() => {
     setExtensionsOpen(false);
     closeDesignGallery();
+    useImageStudioStore.getState().setOpen(false);
   }, []);
   const [closeRequestId, setCloseRequestId] = useState<string | null>(null);
   useWindowsWindowChrome();
@@ -171,10 +174,6 @@ export default function App() {
   useEffect(() => {
     if (sideFullscreen && !sideOpen) useSidePanelStore.getState().setFullscreen(false);
   }, [sideOpen, sideFullscreen]);
-  // 面板关掉后，为它腾宽度而自动收起的项目栏回来
-  useEffect(() => {
-    if (!sideOpen && sidebarAuto) useSidebarStore.getState().autoRestore();
-  }, [sideOpen, sidebarAuto]);
   useEffect(() => {
     document.documentElement.classList.add('enso-main-shell');
     return () => document.documentElement.classList.remove('enso-main-shell');
@@ -206,11 +205,17 @@ export default function App() {
     const workspace = workspaceRef.current;
     if (!workspace) return;
     const side = useSidePanelStore.getState();
+    const studio = useImageStudioStore.getState();
     const id = useSessionsStore.getState().activeId;
-    const preferred = (id ? side.uiByConversation[id]?.width : undefined) ?? side.lastWidth;
+    const preferred = studio.open
+      ? studio.historyWidth
+      : ((id ? side.uiByConversation[id]?.width : undefined) ?? side.lastWidth);
+    const nudgeWidth = studio.open ? studio.nudgeHistoryWidth : side.nudgeWidth;
     const sidebar = useSidebarStore.getState();
     // 项目栏收起 / 展开带宽度动画：按动画结束后的工作区宽度算，拖动不被半途的宽度截住
-    const aside = document.querySelector<HTMLElement>('[data-slot="project-sidebar"]');
+    const aside = document.querySelector<HTMLElement>(
+      studio.open ? '[data-slot="image-studio-sidebar"]' : '[data-slot="project-sidebar"]'
+    );
     const settle = (collapsed: boolean) =>
       workspace.clientWidth +
       (aside?.getBoundingClientRect().width ?? 0) -
@@ -233,11 +238,11 @@ export default function App() {
         workspaceWidth - CHAT_MIN_WIDTH - SIDE_PANEL_HANDLE_WIDTH + (drag.catchUp ?? 0),
         grown
       );
-      side.nudgeWidth(target - resolveSidePanelWidth(preferred, grown), grown);
+      nudgeWidth(target - resolveSidePanelWidth(preferred, grown), grown);
       return;
     }
     if (drag.action === 'restore') sidebar.autoRestore();
-    side.nudgeWidth(-deltaX, workspaceWidth);
+    nudgeWidth(-deltaX, workspaceWidth);
   }, []);
   const handleSideResizing = useCallback((resizing: boolean) => {
     sideOverflowRef.current = 0;
@@ -285,7 +290,23 @@ export default function App() {
   });
   const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
   const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
-  const extensionsActive = extensionsOpen && !remoteNodeActive && !botModeActive && !galleryActive;
+  const studioOpen = useImageStudioStore((s) => s.open);
+  const studioHistoryOpen = useImageStudioStore((s) => s.historyOpen);
+  const studioTitle = useImageStudioStore((s) =>
+    s.activeId ? s.sessions[s.activeId]?.title : undefined
+  );
+  const studioActive = studioOpen && !remoteNodeActive && !botModeActive && !galleryActive;
+  const activePanelOpen = studioActive ? studioHistoryOpen : sideOpen;
+  // 与 Code 共用自动收放：只恢复为当前面板临时收起的侧栏，不覆盖用户手动收起。
+  useEffect(() => {
+    if (!activePanelOpen && sidebarAuto) useSidebarStore.getState().autoRestore();
+  }, [activePanelOpen, sidebarAuto]);
+  const extensionsActive =
+    extensionsOpen && !remoteNodeActive && !botModeActive && !galleryActive && !studioActive;
+  useEffect(() => {
+    if (remoteNodeActive || botModeActive || galleryActive)
+      useImageStudioStore.getState().setOpen(false);
+  }, [remoteNodeActive, botModeActive, galleryActive]);
   useEffect(() => {
     if (remoteNodeActive || botModeActive || galleryActive) setExtensionsOpen(false);
   }, [botModeActive, galleryActive, remoteNodeActive]);
@@ -395,6 +416,24 @@ export default function App() {
       }
       // 远程节点 / Bot 模式：本机 Code 会话相关的快捷键不响应（新对话/tab 切换/右侧面板/查找）
       const remote = useRemoteNodesStore.getState().activeNodeId !== 'local' || isBotModeActive();
+      // 图片工作台接管自己的新建、输入和历史快捷键，不能落到隐藏的 Code 会话。
+      if (
+        useImageStudioStore.getState().open &&
+        !remote &&
+        [
+          'new-conversation',
+          'new-side-tab',
+          'next-tab',
+          'prev-tab',
+          'toggle-side-panel',
+          'toggle-side-panel-fullscreen',
+          'new-btw-tab',
+          'close-side-tab',
+          'find-in-chat',
+          'focus-composer',
+        ].some((key) => pressed === bindings[key as keyof typeof bindings])
+      )
+        return;
       if (
         (extensionsActive || useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
         [
@@ -483,7 +522,7 @@ export default function App() {
   }, [closeWorkspacePage, extensionsActive, keybindings, sidebarView]);
 
   useEffect(() => {
-    if (!sideOpen || !sideFullscreen || galleryActive || extensionsActive) return;
+    if (!sideOpen || !sideFullscreen || galleryActive || extensionsActive || studioActive) return;
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
@@ -493,7 +532,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
-  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive]);
+  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive, studioActive]);
 
   // 拖拽：侧栏项目排序 / 会话拖入 Composer / 拖到 Pinned 区。
   // 6px 启动阈值：行点击与行内按钮不受影响。onDragEnd 在 Sidebar 的 useDndMonitor 里。
@@ -512,18 +551,33 @@ export default function App() {
       <BackgroundLayer />
       <OauthCredentialBootstrap />
       <TitleBar
-        title="小满"
+        title="Collabra"
         leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
           // 远程节点 / Bot 模式不显示本机会话标题
-          extensionsActive ? (
+          studioActive ? (
+            <span className="truncate text-[calc(13rem/14)] font-medium">
+              {studioTitle || t('Image studio')}
+            </span>
+          ) : extensionsActive ? (
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
           ) : !remoteNodeActive && !botModeActive && !galleryActive ? (
             <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
           ) : undefined
         }
         actions={
-          galleryActive ? (
+          studioActive ? (
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={t('Image history')}
+              title={t('Image history')}
+              aria-pressed={studioHistoryOpen}
+              onClick={() => useImageStudioStore.getState().toggleHistory()}
+            >
+              <PanelRight className="size-4" />
+            </button>
+          ) : galleryActive ? (
             <DesignGalleryHeader side="right" />
           ) : extensionsActive ? undefined : (
             <>
@@ -569,7 +623,20 @@ export default function App() {
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
           onToggleSidebar={remoteNodeActive ? undefined : toggleSidebar}
-          modeSwitch={botModeEnabled && !remoteNodeActive ? <ModeSwitch /> : undefined}
+          modeSwitch={
+            botModeEnabled && !remoteNodeActive ? (
+              <ModeSwitch
+                only="code"
+                inactive={studioActive || galleryActive || extensionsActive}
+                onSelect={closeWorkspacePage}
+              />
+            ) : undefined
+          }
+          botModeSwitch={
+            botModeEnabled && !remoteNodeActive ? (
+              <ModeSwitch only="bot" onSelect={closeWorkspacePage} />
+            ) : undefined
+          }
           onOpenSearch={
             remoteNodeActive
               ? undefined
@@ -594,6 +661,30 @@ export default function App() {
                       closeWorkspacePage();
                       openDesignGallery();
                     }
+                  },
+                }
+              : undefined
+          }
+          imageStudio={
+            !remoteNodeActive
+              ? {
+                  active: studioActive,
+                  onToggle: () => {
+                    const next = !studioActive;
+                    closeWorkspacePage();
+                    if (next) showLocalCodeView();
+                    useImageStudioStore.getState().setOpen(next);
+                  },
+                }
+              : undefined
+          }
+          codeWorkspace={
+            !remoteNodeActive
+              ? {
+                  active: !studioActive && !galleryActive && !extensionsActive && !botModeActive,
+                  onToggle: () => {
+                    closeWorkspacePage();
+                    showLocalCodeView();
                   },
                 }
               : undefined
@@ -631,6 +722,16 @@ export default function App() {
             collapsed={collapsed}
             onToggleCollapse={toggleSidebar}
             onResize={handleResize}
+          />
+        ) : studioActive ? (
+          <ImageStudio
+            collapsed={collapsed}
+            sidebarWidth={width}
+            onResize={handleResize}
+            onHistoryResize={handleSideResize}
+            onHistoryResizingChange={handleSideResizing}
+            workspaceRef={workspaceRef}
+            onClose={closeWorkspacePage}
           />
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={dndCollision}>

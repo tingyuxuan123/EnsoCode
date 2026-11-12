@@ -30,7 +30,7 @@ describe('ComputerAllowedApps', () => {
   it('empty state explains that only first-input confirmation grants access', () => {
     const html = renderToStaticMarkup(<ComputerAllowedAppsList apps={[]} onRevoke={() => {}} />);
     expect(html).toContain('No apps are always allowed yet.');
-    expect(html).toContain('小满 asks you.');
+    expect(html).toContain('Collabra asks you.');
     expect(html).not.toContain('<button');
   });
 });

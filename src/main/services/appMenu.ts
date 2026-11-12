@@ -1,6 +1,6 @@
 import { app, Menu, type MenuItemConstructorOptions } from 'electron';
 
-export const APP_DISPLAY_NAME = '小满';
+export const APP_DISPLAY_NAME = 'Collabra';
 
 /**
  * Electron 默认 appMenu 用 app.name（package.json name = enso-code）拼 About/Hide/Quit。

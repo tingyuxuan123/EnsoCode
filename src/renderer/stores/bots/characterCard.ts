@@ -56,7 +56,7 @@ export function buildCharacterCard(
       post_history_instructions: '',
       alternate_greetings: [] as string[],
       tags: [] as string[],
-      creator: '小满',
+      creator: 'Collabra',
       character_version: '',
       extensions: {
         enso: {

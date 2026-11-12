@@ -1,0 +1,164 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "A dedicated image-generation studio inside a desktop AI coding workbench: one charged generation per call, prompts plus reference images, results archived per session workspace with edit lineage.",
+		"screens": [
+			"生成舞台：提示词编排、参考图、尺寸与质量参数、单张大图结果",
+			"成图档案：按会话工作区归档的联系印样网格",
+			"成图详情与改图血统链",
+			"生成中动效与失败/未配置状态"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 222858030,
+	"at": "2026-11-12T01:10:39.421Z",
+	"options": [
+		"darkroom",
+		"contact-sheet",
+		"two-channel"
+	],
+	"choice": {
+		"proposalId": "contact-sheet"
+	},
+	"allow": [
+		"tell-mono",
+		"tell-gradient",
+		"tell-shadow"
+	],
+	"intent": {
+		"stated": {
+			"mood": "专业创作工具，不花哨",
+			"emphasis": "一次一张的成图和它的参数读数",
+			"preferences": [
+				{
+					"question": "这个模块的入口形态？",
+					"answer": "从左侧图标轨进入的全屏工作台，和设计画廊同级"
+				}
+			]
+		},
+		"questions": [],
+		"answers": null
+	},
+	"obvious": "深灰蓝的通用创作工具：Inter 字体、左侧缩略图列表、底部居中提示词输入条、四列结果卡片网格、右侧白色参数卡、靛蓝强调色、圆角 12px。",
+	"proposals": [
+		{
+			"id": "darkroom",
+			"name": "暗房",
+			"idea": "在这几屏里，「一次调用只出一张、300 秒、不重试也不退费」成为暗房：一次只冲一张，成图挂成一张有边、有颗粒的实体印张，琥珀安全灯是画面里唯一的颜色，提示词是一句对讲机里的话。",
+			"departs": "不用网格罗列结果，也没有右侧白色参数卡：一张印张占据画面，参数作为暗房日志写在它下面；配色从冷灰蓝换成近黑与琥珀。",
+			"theme": "dark",
+			"colours": {
+				"ground": "#141311",
+				"panel": "#1c1a17",
+				"text": "#f2ece1",
+				"muted": "#a2988a",
+				"accent": "#e9a13b",
+				"onAccent": "#151310",
+				"extra": {
+					"log": "#6f6659",
+					"safelight": "#f2b559"
+				}
+			},
+			"type": {
+				"display": "EB Garamond",
+				"text": "Hanken Grotesk",
+				"class": "serif-light-large"
+			},
+			"layout": "保留 56px 图标轨；左侧一条竖排胶片条列出本会话已冲的印张，中间一张接近满高的印张（带纸边与细颗粒），印张下方一行暗房日志（尺寸/质量/耗时/是否改图），底部一条单行提示词对讲机，右侧无面板——服务与模型作为日志首行读出。",
+			"radius": 6,
+			"shell": "split",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "gradient",
+					"reason": "安全灯是这间屋子里唯一的光源，暗角与灯光决定印张看起来被「照」出来而不是被「摆」出来。"
+				},
+				{
+					"device": "texture",
+					"reason": "印张是实体相纸：细颗粒与纸边是它的可信度，也是与旁边聊天界面区分开的东西。"
+				}
+			]
+		},
+		{
+			"id": "contact-sheet",
+			"name": "联系印样室",
+			"idea": "在这几屏里，「图落在当前会话工作目录的 .xiaoman/images/<UUID>，永不覆盖，历史靠 JSONL 小引用重建」成为联系印样室：每张成图是一帧带编号、尺寸与血统的纸样，按工作区→会话归档成一本可翻的档案。",
+			"departs": "主角从「提示词输入框」换成「已经冲好的印样」：档案先行、生图后置；暗色台面换成纸色，等宽字体承担编号与参数。",
+			"theme": "light",
+			"colours": {
+				"ground": "#eae7e0",
+				"panel": "#f4f2ec",
+				"text": "#221f1b",
+				"muted": "#6d6558",
+				"accent": "#7d0c14",
+				"onAccent": "#fdf6f2",
+				"extra": {
+					"paper": "#f8f6f1",
+					"rule": "#d6d1c6"
+				}
+			},
+			"type": {
+				"display": "IBM Plex Mono",
+				"text": "IBM Plex Sans",
+				"class": "mono"
+			},
+			"layout": "保留 56px 图标轨；左侧工作区→会话的目录树（带印样计数），主区是一张联系印样表：纸底、按 3 列排布、每帧左上角是真实 UUID 尾号与实发尺寸、选中帧抬出一张印样卡；右侧一条窄档案栏写该帧的服务、模型、提示词、父图；底部一条「新印样」输入行，只占一行，不抢主角。",
+			"radius": 3,
+			"shell": "split",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "档案里的编号、UUID、实发像素和路径本身就是数据，等宽字让它们可被逐位比对。"
+				},
+				{
+					"device": "texture",
+					"reason": "纸底与轻微纸纹让档案读起来是「一叠印样」，而不是又一个卡片网格。"
+				}
+			]
+		},
+		{
+			"id": "two-channel",
+			"name": "双通道台",
+			"idea": "在这几屏里，「文生图与改图是两套独立模型，尺寸策略还要把 1536x1024 换算成实发 2048x1360」成为双通道仪表台：参数不是下拉框，而是能读出实发像素的仪表，两个通道各有自己的读数。",
+			"departs": "参数变成一等公民而不是右侧的次要面板：画面左侧是两块通道仪表，右侧是唯一的大图；柔和的通用配色换成白底＋海军蓝读数与单一橙色游标。",
+			"theme": "light",
+			"colours": {
+				"ground": "#f1f3f6",
+				"panel": "#ffffff",
+				"text": "#1f2b4d",
+				"muted": "#626a7e",
+				"accent": "#f7941d",
+				"onAccent": "#23190b",
+				"extra": {
+					"navy": "#1f2b4d",
+					"readout": "#eef1f6",
+					"thread": "#c3cbe5"
+				}
+			},
+			"type": {
+				"display": "Hanken Grotesk",
+				"text": "Public Sans",
+				"class": "grotesk-tight"
+			},
+			"layout": "保留 56px 图标轨；左栏宽 300px 是两块通道卡（通道 A 文生图 / 通道 B 改图），各带模型读数、长边档位游标（1K/2K/4K）与实时换算的实发像素、质量步进、可展开的额外 JSON 折页；中间是一张大图与它下面一行「本次计费一次」的确认；右缘一条竖直血统线把改图分支挂在原图旁边。",
+			"radius": 10,
+			"shell": "split",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "tracked-caps",
+					"reason": "仪表刻度标签（实发像素、长边、质量）需要一眼分辨出「这是读数不是文案」。"
+				},
+				{
+					"device": "shadow",
+					"reason": "大图与通道卡是桌面上被拿起的两件东西，只有它们有投影，其余用色阶分层。"
+				}
+			]
+		}
+	],
+	"redraws": []
+}

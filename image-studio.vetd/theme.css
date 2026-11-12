@@ -1,0 +1,127 @@
+@import "@fontsource-variable/inter";
+
+/*
+ * 沿用小满的语义 token（src/renderer/styles/globals.css）：
+ * 界面只用 background / foreground / card / primary / secondary / muted /
+ * border / shell / panel 这些名字，所以浅色、深色以及薄荷白等可选浅色方案
+ * 都能直接切换，不需要为图片工作台单独做一套配色。
+ */
+@theme {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-shell: var(--shell);
+	--color-panel: var(--panel);
+	--color-nav: color-mix(in srgb, var(--shell) 33%, var(--panel));
+	--color-line: color-mix(in srgb, var(--border) 55%, var(--panel));
+	--color-brand: var(--primary);
+	--radius-sm: var(--radius);
+	--radius-md: var(--radius);
+	--radius-lg: var(--radius);
+	--font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+}
+
+:root {
+	/* 晴空碧海（ocean-light） */
+	--background: rgb(245 248 250);
+	--foreground: rgb(27 38 50);
+	--card: rgb(245 248 250);
+	--popover: rgb(255 255 255);
+	--primary: rgb(64 138 191);
+	--primary-foreground: rgb(255 255 255);
+	--secondary: rgb(221 231 238);
+	--muted: rgb(228 236 241);
+	--muted-foreground: rgb(87 102 117);
+	--accent: rgb(223 231 236);
+	--destructive: rgb(173 75 83);
+	--success: rgb(54 120 90);
+	--warning: rgb(166 117 37);
+	--border: rgb(205 219 228);
+	--input: rgb(205 219 228);
+	--ring: rgb(64 138 191);
+	--shell: rgb(234 241 245);
+	--panel: rgb(245 248 250);
+	--radius: 6px;
+}
+
+.dark {
+	/* 远山暮霭（ocean-dark） */
+	--background: rgb(23 27 32);
+	--foreground: rgb(226 232 237);
+	--card: rgb(23 27 32);
+	--popover: rgb(34 41 48);
+	--primary: rgb(100 156 196);
+	--primary-foreground: rgb(255 255 255);
+	--secondary: rgb(48 56 62);
+	--muted: rgb(32 39 45);
+	--muted-foreground: rgb(163 176 187);
+	--accent: rgb(51 61 70);
+	--destructive: rgb(214 104 112);
+	--success: rgb(104 176 140);
+	--warning: rgb(214 168 92);
+	--border: rgb(59 70 80);
+	--input: rgb(59 70 80);
+	--ring: rgb(114 165 202);
+	--shell: rgb(32 38 44);
+	--panel: rgb(23 27 32);
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* 生成中的占位：五个错相漂移的色块 + 呼吸图标，与聊天里的成图占位一致。 */
+@keyframes drift {
+	0% { transform: translate3d(0, 0, 0) scale(1); }
+	50% { transform: translate3d(7%, -9%, 0) scale(1.14); }
+	100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+.drift {
+	animation: drift 19s ease-in-out infinite;
+}
+
+@keyframes breathe {
+	50% { opacity: .42; }
+}
+
+.breathe {
+	animation: breathe 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.drift,
+	.breathe {
+		animation: none;
+	}
+}
+
+:where(button, a, input, textarea):focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}

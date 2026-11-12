@@ -95,7 +95,7 @@ export function createEnsoCapabilitiesTool(): ToolDefinition {
     name: 'enso_capabilities',
     label: 'Enso capabilities',
     description:
-      'List compact 小满 capability summaries or describe one full public contract. Describe ' +
+      'List compact Collabra capability summaries or describe one full public contract. Describe ' +
       'returns schemas and details without internal ids or secrets.',
     promptSnippet:
       'enso_capabilities: list when the catalog is not in context or the user asks about capabilities; ' +

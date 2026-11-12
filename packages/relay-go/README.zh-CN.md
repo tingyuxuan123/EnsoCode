@@ -1,4 +1,4 @@
-# 小满中继（Go）
+# Collabra 中继（Go）
 
 <p align="right"><a href="README.md">English</a></p>
 

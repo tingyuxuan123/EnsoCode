@@ -44,7 +44,7 @@ export function WorkbenchTitle({
       >
         {showBrand && !sidebarCollapsed && (
           <span className="truncate pr-3 text-[calc(12rem/14)] font-medium text-muted-foreground max-[650px]:hidden">
-            小满
+            Collabra
             <span className="ml-2 font-normal text-muted-foreground/80">{t('Workbench')}</span>
           </span>
         )}

@@ -17,5 +17,5 @@ it('rejects unknown roots and does not send an IPC', async () => {
   expect(script).not.toHaveBeenCalled();
 });
 it('does not allow renderer-owned runner materialization', async () => {
-  await expect(ensureRunner({} as PluginContext, '/work')).rejects.toThrow('小满 owns');
+  await expect(ensureRunner({} as PluginContext, '/work')).rejects.toThrow('Collabra owns');
 });

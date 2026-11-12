@@ -422,6 +422,21 @@ export const IPC_PRODUCT_COVERAGE = {
     'User-only read-only image service discovery; never generates a paid image.'
   ),
   IMAGE_PROVIDER_CHANGED: excluded('Cross-window invalidation for image service settings.'),
+  IMAGE_STUDIO_LIST: excluded(
+    'Desktop-only image studio session list; user surface, no model tool.'
+  ),
+  IMAGE_STUDIO_CREATE: excluded('User-only creation of a local image studio session.'),
+  IMAGE_STUDIO_READ: excluded('Desktop-only read of one local image studio session.'),
+  IMAGE_STUDIO_GENERATE: excluded(
+    'User-triggered paid image generation confined to the desktop studio UI.'
+  ),
+  IMAGE_STUDIO_CANCEL: excluded('User-only cancel of an in-flight studio generation.'),
+  IMAGE_STUDIO_IMPORT_REFERENCE: excluded(
+    'User-picked reference image import through a native dialog.'
+  ),
+  IMAGE_STUDIO_IMAGE: excluded('Desktop-only preview read of one recorded studio image.'),
+  IMAGE_STUDIO_REMOVE: excluded('User-only deletion of a local studio session directory.'),
+  IMAGE_STUDIO_CHANGED: excluded('Cross-window invalidation for image studio sessions.'),
   SETTINGS_READ: excluded('Internal persistence read; Enso uses typed domain handlers.'),
   SETTINGS_WRITE: excluded('Raw whole-settings write is forbidden to Enso.'),
   SETTINGS_WRITE_KEY: excluded('Raw store-key write is replaced by controlled field patches.'),

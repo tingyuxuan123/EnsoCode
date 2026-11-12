@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="build/icons/256x256.png" width="96" alt="小满" />
+  <img src="build/icons/256x256.png" width="96" alt="Collabra" />
 </p>
 
-<h1 align="center">小满</h1>
+<h1 align="center">Collabra</h1>
 
 <p align="center">
   <b>Your projects, models, and coding agents — one desktop workspace.</b>
@@ -34,15 +34,15 @@
 ---
 
 <p align="center">
-  <img src="docs/readme/workspace-current.png" alt="小满 workspace with project navigation and the new-task composer" width="1100" />
+  <img src="docs/readme/workspace-current.png" alt="Collabra workspace with project navigation and the new-task composer" width="1100" />
 </p>
 <p align="center"><sub>The current workspace in light mode: project navigation and a new task, using an isolated sample project.</sub></p>
 
 ## About this version
 
-This repository started as a fork of [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode) and is now independently maintained here as 小满. It builds on the original project, with its own interface, development priorities, and personal release channel. It is **not an official upstream distribution**.
+This repository started as a fork of [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode) and is now independently maintained here as Collabra. It builds on the original project, with its own interface, development priorities, and personal release channel. It is **not an official upstream distribution**.
 
-The product name is now 小满. The GitHub repository name, app IDs, storage paths, pairing protocol, and personal signing certificate are unchanged to preserve compatibility with existing data, devices, and updates.
+The product name is now Collabra. The GitHub repository name, app IDs, storage paths, pairing protocol, and personal signing certificate are unchanged to preserve compatibility with existing data, devices, and updates.
 
 The focus is a workspace you can use every day: move between projects and conversations, choose the right model, delegate work, and review the result without scattering everything across separate windows.
 
@@ -90,7 +90,7 @@ Connect your own providers and endpoints rather than committing to one model ser
 Git worktrees are available for tasks that need separate working trees. Separate agent contexts alone do not isolate concurrent file edits.
 
 <p align="center">
-  <img src="docs/readme/workflows-current.png" alt="小满 dark-mode workspace with an isolated sample project" width="1100" />
+  <img src="docs/readme/workflows-current.png" alt="Collabra dark-mode workspace with an isolated sample project" width="1100" />
 </p>
 <p align="center"><sub>The same task workspace in dark mode. Workflow presets are available from the side panel.</sub></p>
 
@@ -113,7 +113,7 @@ The current personal release channel targets **macOS on Apple Silicon**, with `.
 3. Add a project and start a conversation.
 4. Describe the task, review the proposed actions, and inspect the resulting changes.
 
-No 小满 account is required. Model requests go to the provider or endpoint you configure, and any usage charges belong to that service.
+No Collabra account is required. Model requests go to the provider or endpoint you configure, and any usage charges belong to that service.
 
 ### Personal updates
 

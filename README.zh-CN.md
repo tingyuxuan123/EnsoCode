@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="build/icons/256x256.png" width="96" alt="小满" />
+  <img src="build/icons/256x256.png" width="96" alt="Collabra" />
 </p>
 
-<h1 align="center">小满</h1>
+<h1 align="center">Collabra</h1>
 
 <p align="center">
   <b>把项目、模型和 Coding Agent，放进同一个桌面工作台。</b>
@@ -34,15 +34,15 @@
 ---
 
 <p align="center">
-  <img src="docs/readme/workspace-current.png" alt="小满工作台：项目导航与新任务输入框" width="1100" />
+  <img src="docs/readme/workspace-current.png" alt="Collabra工作台：项目导航与新任务输入框" width="1100" />
 </p>
 <p align="center"><sub>当前浅色工作台：使用隔离示例项目展示项目导航与新任务。</sub></p>
 
 ## 关于这个版本
 
-本仓库起源于 [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode)，现在以「小满」为名由我独立维护。在原项目基础能力之上，这个版本按自己的使用习惯持续调整界面、交互和开发方向，并使用独立的个人发布通道。**它不是上游官方发行版。**
+本仓库起源于 [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode)，现在以「Collabra」为名由我独立维护。在原项目基础能力之上，这个版本按自己的使用习惯持续调整界面、交互和开发方向，并使用独立的个人发布通道。**它不是上游官方发行版。**
 
-产品现名「小满」。GitHub 仓库名、应用 ID、存储路径、配对协议和个人签名证书保持不变，以兼容已有数据、设备和更新。
+产品现名「Collabra」。GitHub 仓库名、应用 ID、存储路径、配对协议和个人签名证书保持不变，以兼容已有数据、设备和更新。
 
 我希望它首先是一个自己愿意每天打开的工作台：项目和会话切换顺手，模型可以自由选择，任务能够分工，执行过程看得见，最后的改动也方便审查。不必为了完成一件事，在一堆窗口之间来回切换。
 
@@ -90,7 +90,7 @@
 需要隔离工作目录时，可以使用 Git Worktree。Agent 上下文独立，不代表并行修改同一批文件就不会冲突。
 
 <p align="center">
-  <img src="docs/readme/workflows-current.png" alt="小满深色工作台：隔离示例项目的新任务界面" width="1100" />
+  <img src="docs/readme/workflows-current.png" alt="Collabra深色工作台：隔离示例项目的新任务界面" width="1100" />
 </p>
 <p align="center"><sub>同一任务工作区的深色模式。工作流预设可从右侧面板打开。</sub></p>
 
@@ -113,7 +113,7 @@
 3. 添加项目，创建会话。
 4. 描述任务，确认执行操作，审查最终改动。
 
-不需要注册小满账号。模型请求发往你配置的供应商或端点，产生的模型费用由对应服务收取。
+不需要注册Collabra账号。模型请求发往你配置的供应商或端点，产生的模型费用由对应服务收取。
 
 ### 关于个人更新通道
 

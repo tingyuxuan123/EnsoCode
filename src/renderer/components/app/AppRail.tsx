@@ -1,5 +1,14 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import { Columns3, PanelLeft, Ruler, Search, Settings2, Sparkles } from 'lucide-react';
+import {
+  Columns3,
+  Image,
+  PanelLeft,
+  Ruler,
+  Search,
+  Settings2,
+  Sparkles,
+  SquareTerminal,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
@@ -14,10 +23,15 @@ interface AppRailProps {
   onToggleSidebar?: () => void;
   /** Code / Bot 模式入口常驻图标轨，侧栏收起后仍可切换 */
   modeSwitch?: ReactNode;
+  /** Bot 入口单独置于看板上方，保留原来的模式切换行为。 */
+  botModeSwitch?: ReactNode;
   /** 侧栏收起时补上的搜索入口（展开时搜索在侧栏顶部） */
   onOpenSearch?: () => void;
   /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
   designGallery?: { label: string; active: boolean; onToggle(): void };
+  imageStudio?: { active: boolean; onToggle(): void };
+  /** Bot 未启用时也常驻 Code 入口，不依赖当前模块。 */
+  codeWorkspace?: { active: boolean; onToggle(): void };
   /** 本机全局看板，独立于当前 Code / Bot 聊天。 */
   collaborationBoard?: { active: boolean; attention?: number; onToggle(): void };
 }
@@ -33,8 +47,11 @@ export function AppRail({
   sidebarCollapsed,
   onToggleSidebar,
   modeSwitch,
+  botModeSwitch,
   onOpenSearch,
   designGallery,
+  imageStudio,
+  codeWorkspace,
   collaborationBoard,
 }: AppRailProps) {
   const { t } = useI18n();
@@ -46,7 +63,7 @@ export function AppRail({
   return (
     <nav
       data-slot="app-rail"
-      aria-label="小满"
+      aria-label="Collabra"
       // 固定像素宽：根字号可调（--font-size-base），图标轨不随 rem 缩放
       className="flex w-[56px] shrink-0 flex-col items-center gap-[8px] bg-shell py-[12px]"
     >
@@ -86,6 +103,32 @@ export function AppRail({
         />
       )}
       {modeSwitch}
+      {!modeSwitch && codeWorkspace && (
+        <RailTip label="Code">
+          <button
+            type="button"
+            className={cn(RAIL_BUTTON, codeWorkspace.active && 'bg-accent text-foreground')}
+            aria-label="Code"
+            aria-pressed={codeWorkspace.active}
+            onClick={codeWorkspace.onToggle}
+          >
+            <SquareTerminal className="size-[19px]" />
+          </button>
+        </RailTip>
+      )}
+      {imageStudio && (
+        <RailTip label={t('Image studio')}>
+          <button
+            type="button"
+            onClick={imageStudio.onToggle}
+            className={cn(RAIL_BUTTON, imageStudio.active && 'bg-accent text-foreground')}
+            aria-label={t('Image studio')}
+            aria-pressed={imageStudio.active}
+          >
+            <Image className="size-[19px]" />
+          </button>
+        </RailTip>
+      )}
       {designGallery && (
         <RailTip label={designGallery.label}>
           <button
@@ -99,6 +142,7 @@ export function AppRail({
           </button>
         </RailTip>
       )}
+      {botModeSwitch}
       {collaborationBoard && (
         <RailTip label={t('Collaboration board')}>
           <button

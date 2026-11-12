@@ -123,7 +123,7 @@ function defaultFetch(
         method: 'GET',
         headers: {
           host: url.host,
-          'user-agent': 'Xiaoman-plugin-installer',
+          'user-agent': 'Collabra-plugin-installer',
           accept: 'application/zip',
           'accept-encoding': 'identity',
         },

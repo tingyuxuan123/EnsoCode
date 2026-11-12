@@ -1311,7 +1311,7 @@ export function App() {
         ) : (
           <ChatScreen
             sessionId={activeId}
-            title={entry?.title || (activeId ? '会话' : '小满')}
+            title={entry?.title || (activeId ? '会话' : 'Collabra')}
             projectName={entry?.projectName ?? ''}
             cwd={entry?.cwd}
             view={view}

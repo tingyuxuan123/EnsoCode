@@ -118,7 +118,7 @@ it('LCU 独立行紧邻 Computer，展示新会话限制且不加入内置工具
   expect(html).toMatch(/LCU computer control<span data-spawn-only/);
   expect(html).toContain('aria-label="LCU computer control"');
   expect(html).toContain(
-    'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart 小满 to apply changes to open sessions.'
+    'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart Collabra to apply changes to open sessions.'
   );
   expect(html.indexOf('LCU computer control')).toBeGreaterThan(html.indexOf('Computer'));
   expect(html.indexOf('LCU computer control')).toBeLessThan(html.indexOf('Explore fold'));

@@ -112,7 +112,7 @@ function AllowConnectionsSection() {
           <h4 className="font-medium text-[calc(14rem/14)]">{t('Allow connections')}</h4>
           <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t(
-              'Let your phone or another 小满 desktop connect to this computer. Keep this app running.'
+              'Let your phone or another Collabra desktop connect to this computer. Keep this app running.'
             )}
           </p>
         </div>
@@ -169,7 +169,7 @@ function AllowConnectionsSection() {
             </p>
             <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
               {t(
-                'On another 小满 desktop, paste the link below into Settings → Devices → Connect to a node.'
+                'On another Collabra desktop, paste the link below into Settings → Devices → Connect to a node.'
               )}
             </p>
             <p className="mt-1 text-muted-foreground text-[calc(12rem/14)]">
@@ -244,7 +244,7 @@ function ConnectToNodesSection() {
           <h4 className="font-medium text-[calc(14rem/14)]">{t('Connect to a node')}</h4>
           <p className="text-muted-foreground text-[calc(13rem/14)]">
             {t(
-              'Browse and drive conversations on another 小满 desktop. Its agent, keys and history stay there.'
+              'Browse and drive conversations on another Collabra desktop. Its agent, keys and history stay there.'
             )}
           </p>
         </div>

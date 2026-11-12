@@ -1,4 +1,4 @@
-小满 Android third-party assets
+Collabra Android third-party assets
 
 Lucide icon paths
 Copyright (c) 2026 Lucide Icons and Contributors

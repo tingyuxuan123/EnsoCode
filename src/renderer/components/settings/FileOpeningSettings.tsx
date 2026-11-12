@@ -37,7 +37,7 @@ function TargetPicker({
 }) {
   const { t } = useI18n();
   const labels: Record<Target, string> = {
-    internal: t('Open inside 小满'),
+    internal: t('Open inside Collabra'),
     reveal: t('Reveal in file manager'),
     system: t('System default application'),
     application: t('Selected application'),
@@ -189,7 +189,7 @@ export function FileOpeningSettings() {
         </p>
         <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t(
-            'By default, supported files open inside 小满; other files are revealed in the file manager.'
+            'By default, supported files open inside Collabra; other files are revealed in the file manager.'
           )}
         </p>
         <p className="text-[calc(12rem/14)] text-muted-foreground">

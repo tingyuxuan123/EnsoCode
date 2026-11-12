@@ -77,7 +77,7 @@ function trayIcon() {
 }
 
 function trayToggleLabel(zh: boolean): string {
-  if (trayClickAction(active) === 'show') return zh ? '打开小满' : 'Show 小满';
+  if (trayClickAction(active) === 'show') return zh ? '打开Collabra' : 'Show Collabra';
   return zh ? '最小化到托盘' : 'Minimize to tray';
 }
 
@@ -131,7 +131,7 @@ function rebuildTrayMenu(): void {
       },
     ])
   );
-  tray.setToolTip('小满');
+  tray.setToolTip('Collabra');
 }
 
 function handleTrayActivate(): void {

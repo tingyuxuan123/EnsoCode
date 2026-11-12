@@ -30,7 +30,7 @@ export function buildBotModeInstruction(input: {
   const lines = [
     '# Bot mode',
     '',
-    `You are chatting as "${input.self.name}" in 小满 Bot mode.`,
+    `You are chatting as "${input.self.name}" in Collabra Bot mode.`,
     '- Reply like a chat message: concise and conversational. No headings or long reports unless asked.',
     '- Your final reply text of each turn is exactly the message that gets posted. Say it directly instead of describing what you would say.',
     '- You may still use tools to do real work in the workspace; tool activity stays in your own session and is not posted.',

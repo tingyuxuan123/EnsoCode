@@ -1,4 +1,4 @@
-# 小满 — Android
+# Collabra — Android
 
 Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创建纯文字任务、查看会话、处理审批和提问、发送文字或图片、排队、插话和停止、管理会话目标、查看任务看板、重试与压缩上下文**。
 

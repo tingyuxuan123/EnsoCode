@@ -95,7 +95,7 @@ function ExtensionsBanner() {
           {t('Bring your tools into the conversation')}
         </h2>
         <p className="mt-2 max-w-[30rem] text-muted-foreground text-sm leading-relaxed">
-          {t('Reuse skills, connect MCP tools, or install your own 小满 plugins.')}
+          {t('Reuse skills, connect MCP tools, or install your own Collabra plugins.')}
         </p>
       </div>
       <div
@@ -737,7 +737,7 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
           if (!open) setRemoveTarget(null);
         }}
         title={t('Remove extension?')}
-        description={t('This removes the entry from 小满 without deleting the original files.')}
+        description={t('This removes the entry from Collabra without deleting the original files.')}
         confirmLabel={t('Remove')}
         onConfirm={() => {
           if (removeTarget?.kind === 'skill') removeSkill(removeTarget.id);
@@ -789,8 +789,8 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
             <DialogTitle>{authorGuideTitle}</DialogTitle>
             <DialogDescription>
               {locale === 'zh'
-                ? '在小满源码目录运行以下命令。校验不会执行插件代码。'
-                : 'Run these commands from a 小满 source checkout. Validation does not run plugin code.'}
+                ? '在Collabra源码目录运行以下命令。校验不会执行插件代码。'
+                : 'Run these commands from a Collabra source checkout. Validation does not run plugin code.'}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>

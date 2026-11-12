@@ -312,7 +312,7 @@ export function buildAgentTypeRegistrySnapshot(input: {
     {
       typeKey: ENSO_AGENT_TYPE_KEY,
       displayName: 'Enso',
-      description: '小满 system agent for product capabilities and team setup',
+      description: 'Collabra system agent for product capabilities and team setup',
       source: 'system',
       locked: true,
       canDisable: false,

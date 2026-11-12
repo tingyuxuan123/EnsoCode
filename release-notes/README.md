@@ -1,9 +1,9 @@
 # 个人更新日志
 
 个人发布时，将确认要随包发布的内容写入 `release-notes/<version>.md`。文件名中的版本与
-`package.json` 和 `personal-v<version>` tag 一致，新日志首行严格为 `# 小满 <version>`；
+`package.json` 和 `personal-v<version>` tag 一致，新日志首行严格为 `# Collabra <version>`；
 之后填写实际变更。使用 UTF-8 Markdown，正文不能为空，整个文件最多 24 KiB，不能是符号链接。
-历史版本保留原有的 `# EnsoCode <version>` 标题，校验仍兼容。
+历史版本保留原有的 `# 小满 <version>` 或 `# EnsoCode <version>` 标题，校验仍兼容。
 
 提交发布版本前运行 `node scripts/personal-release.mjs notes`。CI 将同一份版本日志及自动附加
 的通道安全说明写入 GitHub Release 正文和个人 feed。草稿或 README 不能替代版本文件；

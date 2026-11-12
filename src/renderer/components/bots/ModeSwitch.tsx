@@ -33,10 +33,12 @@ export function ModeSwitch({
   className,
   inactive = false,
   onSelect,
+  only,
 }: {
   className?: string;
   inactive?: boolean;
   onSelect?: () => void;
+  only?: AppMode;
 }) {
   const { t } = useI18n();
   const mode = useAppModeStore((s) => s.mode);
@@ -56,10 +58,82 @@ export function ModeSwitch({
     const next = OPTIONS[(index + step + OPTIONS.length) % OPTIONS.length].value;
     setMode(next);
     onSelect?.();
-    refs.current[next]?.focus();
+    const nextButton =
+      refs.current[next] ??
+      event.currentTarget
+        .closest('[data-slot="app-rail"]')
+        ?.querySelector<HTMLButtonElement>(`[data-app-mode="${next}"]`);
+    nextButton?.focus();
   };
 
-  return (
+  const buttons = OPTIONS.filter((option) => !only || option.value === only).map(
+    ({ value, label, Icon }) => {
+      const active = !inactive && mode === value;
+      const badge = value === 'bot' && mode === 'code' && pending > 0;
+      return (
+        <RailTip key={value} label={label} shortcut={shortcut}>
+          <button
+            ref={(el) => {
+              refs.current[value] = el;
+            }}
+            type="button"
+            {...(only
+              ? { 'aria-pressed': active }
+              : { role: 'radio' as const, 'aria-checked': active })}
+            aria-label={label}
+            data-app-mode={value}
+            onKeyDown={only ? onKeyDown : undefined}
+            tabIndex={only || mode === value ? 0 : -1}
+            onClick={() => {
+              setMode(value);
+              onSelect?.();
+            }}
+            className={cn(
+              'relative flex size-[36px] items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              active ? 'text-brand' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            )}
+          >
+            {active && (
+              <motion.span
+                layoutId={pillId}
+                aria-hidden
+                className="absolute inset-0 rounded-md bg-brand/10 dark:bg-brand/15"
+                transition={reduceMotion ? { duration: 0 } : springStandard}
+              />
+            )}
+            <Icon className="relative size-[19px]" />
+            <AnimatePresence>
+              {badge && (
+                <motion.span
+                  className="-top-1.5 -right-1.5 pointer-events-none absolute"
+                  initial={reduceMotion ? false : { x: -8, y: 12 }}
+                  animate={{ x: 0, y: 0 }}
+                  transition={BADGE_SLIDE}
+                >
+                  <motion.span
+                    className="block"
+                    initial={reduceMotion ? false : { scale: 0, opacity: 0, filter: 'blur(2px)' }}
+                    animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
+                    exit={
+                      reduceMotion
+                        ? { opacity: 0, transition: { duration: 0 } }
+                        : { scale: 0, opacity: 0, filter: 'blur(2px)', transition: BADGE_CLOSE }
+                    }
+                    transition={BADGE_POP}
+                  >
+                    <CountBadge count={pending} className="block" />
+                  </motion.span>
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+        </RailTip>
+      );
+    }
+  );
+  return only ? (
+    buttons
+  ) : (
     <div
       role="radiogroup"
       aria-label={t('Switch mode')}
@@ -67,68 +141,7 @@ export function ModeSwitch({
       onKeyDown={onKeyDown}
       className={cn('flex shrink-0 flex-col gap-[8px]', className)}
     >
-      {OPTIONS.map(({ value, label, Icon }) => {
-        const active = !inactive && mode === value;
-        const badge = value === 'bot' && mode === 'code' && pending > 0;
-        return (
-          <RailTip key={value} label={label} shortcut={shortcut}>
-            <button
-              ref={(el) => {
-                refs.current[value] = el;
-              }}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              aria-label={label}
-              tabIndex={mode === value ? 0 : -1}
-              onClick={() => {
-                setMode(value);
-                onSelect?.();
-              }}
-              className={cn(
-                'relative flex size-[36px] items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                active
-                  ? 'text-brand'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              )}
-            >
-              {active && (
-                <motion.span
-                  layoutId={pillId}
-                  aria-hidden
-                  className="absolute inset-0 rounded-md bg-brand/10 dark:bg-brand/15"
-                  transition={reduceMotion ? { duration: 0 } : springStandard}
-                />
-              )}
-              <Icon className="relative size-[19px]" />
-              <AnimatePresence>
-                {badge && (
-                  <motion.span
-                    className="-top-1.5 -right-1.5 pointer-events-none absolute"
-                    initial={reduceMotion ? false : { x: -8, y: 12 }}
-                    animate={{ x: 0, y: 0 }}
-                    transition={BADGE_SLIDE}
-                  >
-                    <motion.span
-                      className="block"
-                      initial={reduceMotion ? false : { scale: 0, opacity: 0, filter: 'blur(2px)' }}
-                      animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
-                      exit={
-                        reduceMotion
-                          ? { opacity: 0, transition: { duration: 0 } }
-                          : { scale: 0, opacity: 0, filter: 'blur(2px)', transition: BADGE_CLOSE }
-                      }
-                      transition={BADGE_POP}
-                    >
-                      <CountBadge count={pending} className="block" />
-                    </motion.span>
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </RailTip>
-        );
-      })}
+      {buttons}
     </div>
   );
 }

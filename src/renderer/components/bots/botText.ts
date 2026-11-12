@@ -13,7 +13,7 @@ export function teamFileErrorText(error: TeamFileError | string, t: TFunction): 
     case 'unsupported-version':
       return t('This team file comes from an unsupported version.');
     case 'invalid':
-      return t('This file is not a valid 小满 team file.');
+      return t('This file is not a valid Collabra team file.');
     default:
       return error;
   }

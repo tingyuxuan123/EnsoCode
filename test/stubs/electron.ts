@@ -56,6 +56,9 @@ export const nativeImage = {
   createFromBuffer: (buf: Buffer) => ({
     getSize: () => ({ width: 100, height: 50 }),
     crop: () => ({ toPNG: () => buf }),
+    isEmpty: () => buf.length === 0,
+    resize: () => ({ toPNG: () => buf }),
+    toPNG: () => buf,
   }),
 };
 

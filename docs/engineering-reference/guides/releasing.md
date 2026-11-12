@@ -25,8 +25,8 @@ CI 结束才判断成功；queued / in_progress / artifact 上传成功都不是
 
 ## 版本、仓库与更新源
 
-- 产品显示名统一为「小满」；下载资产使用 ASCII 前缀 `Xiaoman`，沿用现有清单的安全文件名规则。
-  Mac 包内为 `小满.app`，Windows 保留 `Eaves.exe` 以兼容旧快捷方式；系统 appId、包名、
+- 产品显示名统一为「Collabra」；下载资产使用 ASCII 前缀 `Collabra`，沿用现有清单的安全文件名规则。
+  Mac 包内为 `Collabra.app`，二进制为 `Contents/MacOS/Collabra`，Windows 保留 `Eaves.exe` 以兼容旧快捷方式；系统 appId、包名、
   数据目录、配对协议、GitHub 仓库和签名证书不因品牌改名而变化。CI 路径须与 builder 配置同步。
 - `package.json` 是版本权威；个人 tag 为 `personal-v<version>`，正式 tag 为 `v<version>`。
 - 版本必须大于已安装和已公开版本。不要移动已有 tag；失败需要改代码时用新版本。
@@ -36,8 +36,8 @@ CI 结束才判断成功；queued / in_progress / artifact 上传成功都不是
 - 正式包仍使用 GitHub latest；个人流程绝不改变正式 latest，不为个人 URL 放宽正式清单校验。
 - 旧正式包不会自动切到个人源；仅首次迁移需要用户手动安装一次同证书个人包。
 - 新个人发布必须在同一 tag 提交中提供 `release-notes/<version>.md`。首行严格为
-  `# 小满 <version>`，其后填写实际变更，使用 UTF-8 Markdown，最多 24 KiB；不能是符号链接。
-  历史日志保留原有 `# EnsoCode <version>` 标题，校验仍兼容。
+  `# Collabra <version>`，其后填写实际变更，使用 UTF-8 Markdown，最多 24 KiB；不能是符号链接。
+  历史日志保留原有 `# 小满 <version>` 或 `# EnsoCode <version>` 标题，校验仍兼容，读取输出统一为 Collabra。
   [日志格式及未发布草稿](../../../release-notes/README.md)不能替代该版本文件。
   `node scripts/personal-release.mjs notes` 按 `package.json` 版本校验并附加个人证书、非正式发布和重启说明。
   CI 在使用私钥前拒绝不合规的日志；Release 正文和个人清单 `releaseNotes` 都使用这一份内容。
@@ -121,7 +121,7 @@ TAG="personal-v$VERSION"
 git ls-remote --tags origin "refs/tags/$TAG"
 # 仅当 tag 不存在且工作区干净时创建，不移动或强推旧 tag。
 git push origin HEAD:main
-git tag -a "$TAG" -m "小满 $VERSION personal update"
+git tag -a "$TAG" -m "Collabra $VERSION personal update"
 git push origin "$TAG"
 ```
 
@@ -163,7 +163,7 @@ HTML 产物名带 `../`，导致 `vite:build-html` 失败。回归见 `scripts/p
 
 ```bash
 git push origin HEAD:main
-git tag -a "windows-v$VERSION" -m "小满 $VERSION Windows x64"
+git tag -a "windows-v$VERSION" -m "Collabra $VERSION Windows x64"
 git push origin "windows-v$VERSION"
 gh run list --repo tingyuxuan123/EnsoCode --workflow build-windows.yml --limit 5
 ```

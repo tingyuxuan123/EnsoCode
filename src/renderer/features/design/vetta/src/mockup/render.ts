@@ -2,8 +2,8 @@ import { layoutMockup } from "./layout";
 import type { MockupLayout, MockupOptions, MockupRect, MockupShot } from "./types";
 
 /** Brand wordmark. Baked into the bitmap, so it is deliberately not localized. */
-const BRAND_NAME = "小满";
-const BRAND_TAGLINE = "Designed with 小满";
+const BRAND_NAME = "Collabra";
+const BRAND_TAGLINE = "Designed with Collabra";
 
 function roundRectPath(g: CanvasRenderingContext2D, rect: MockupRect, radius: number): void {
 	const r = Math.max(0, Math.min(radius, rect.width / 2, rect.height / 2));

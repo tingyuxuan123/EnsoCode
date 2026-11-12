@@ -37,10 +37,10 @@ export async function readPersonalReleaseNotes(version, notesDirectory = release
       .decode(data.subarray(0, offset))
       .replace(/\r\n?/g, '\n')
       .trimEnd();
-    const heading = `# 小满 ${version}`;
+    const heading = `# Collabra ${version}`;
     // 已发布的历史日志保留原文；重新读取时统一显示新品牌，不改变版本/正文校验。
-    const sourceHeading = [heading, `# EnsoCode ${version}`].find((candidate) =>
-      content.startsWith(`${candidate}\n`)
+    const sourceHeading = [heading, `# 小满 ${version}`, `# EnsoCode ${version}`].find(
+      (candidate) => content.startsWith(`${candidate}\n`)
     );
     if (!sourceHeading || !content.slice(sourceHeading.length).trim()) {
       throw new Error(`Personal release notes require '${heading}' and a non-empty body`);
@@ -81,7 +81,7 @@ export async function preparePersonalFeed(artifactDir, outputDir, version, notes
     path: zip.url,
     sha512: zip.sha512,
     releaseDate: manifest.releaseDate,
-    releaseName: `小满 ${version} — 个人测试`,
+    releaseName: `Collabra ${version} — 个人测试`,
     releaseNotes: await readPersonalReleaseNotes(version, notesDirectory),
   };
   await mkdir(outputDir, { recursive: true });

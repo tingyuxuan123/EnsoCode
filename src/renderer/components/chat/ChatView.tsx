@@ -346,7 +346,7 @@ export function ChatView() {
   if (!chrome) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1 bg-background text-center">
-        <p className="text-lg font-medium">小满</p>
+        <p className="text-lg font-medium">Collabra</p>
         <p className="text-sm text-muted-foreground">
           {t('Create or select a project to start a conversation')}
         </p>
@@ -409,7 +409,7 @@ export function ChatView() {
             ? t('Temporary chats')
             : project
               ? projectDisplayName(project)
-              : '小满'
+              : 'Collabra'
         }
         onSuggestion={project ? pickSuggestion : undefined}
         timelineRef={timelineRef}
@@ -713,7 +713,7 @@ const ENSO_PREFILL_CANDIDATE: AgentTypeMentionCandidate = {
   typeKey: ENSO_AGENT_TYPE_KEY,
   label: 'Enso',
   displayName: 'Enso',
-  description: '小满 system agent for product capabilities and team setup',
+  description: 'Collabra system agent for product capabilities and team setup',
   source: 'system',
   locked: true,
   canDisable: false,

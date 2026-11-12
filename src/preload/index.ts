@@ -21,11 +21,18 @@ import type {
   CompactReserveTokensReadResult,
   CompactReserveTokensResult,
 } from '@shared/compactionSettings';
+import type { GeneratedImage } from '@shared/imageGeneration';
 import type {
   ImageProviderResult,
   ImageProviderSettings,
   ImageProviderView,
 } from '@shared/imageProvider';
+import type {
+  ImageStudioGenerateRequest,
+  ImageStudioResult,
+  ImageStudioSession,
+  ImageStudioSummary,
+} from '@shared/imageStudio';
 import type {
   ChatModelDto,
   DistillableSessionDto,
@@ -318,6 +325,35 @@ import type {
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const electronAPI = {
+  imageStudio: {
+    list: (): Promise<ImageStudioResult<ImageStudioSummary[]>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_LIST),
+    create: (): Promise<ImageStudioResult<ImageStudioSession>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_CREATE),
+    read: (sessionId: string): Promise<ImageStudioResult<ImageStudioSession>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_READ, sessionId),
+    generate: (
+      request: ImageStudioGenerateRequest
+    ): Promise<ImageStudioResult<ImageStudioSession>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_GENERATE, request),
+    cancel: (sessionId: string): Promise<ImageStudioResult<null>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_CANCEL, sessionId),
+    importReference: (sessionId: string): Promise<ImageStudioResult<GeneratedImage | null>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_IMPORT_REFERENCE, sessionId),
+    image: (
+      sessionId: string,
+      imageId: string,
+      variant: 'thumb' | 'original' = 'original'
+    ): Promise<ImageStudioResult<{ dataUrl: string }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_IMAGE, sessionId, imageId, variant),
+    remove: (sessionId: string): Promise<ImageStudioResult<null>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_STUDIO_REMOVE, sessionId),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.IMAGE_STUDIO_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.IMAGE_STUDIO_CHANGED, listener);
+    },
+  },
   imageProvider: {
     read: (): Promise<ImageProviderResult<ImageProviderView>> =>
       ipcRenderer.invoke(IPC_CHANNELS.IMAGE_PROVIDER_READ),

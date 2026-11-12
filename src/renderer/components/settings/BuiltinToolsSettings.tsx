@@ -396,7 +396,7 @@ export function BuiltinToolsSettings() {
                     {capabilities?.platform === 'darwin' && (
                       <p className="text-muted-foreground text-[calc(12rem/14)]">
                         {t(
-                          'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to 小满, then restart the app.'
+                          'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to Collabra, then restart the app.'
                         )}
                       </p>
                     )}
@@ -502,7 +502,7 @@ export function BuiltinToolsSettings() {
           icon={Monitor}
           title={t('LCU computer control')}
           description={t(
-            'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart 小满 to apply changes to open sessions.'
+            'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart Collabra to apply changes to open sessions.'
           )}
           control={
             <Switch
@@ -626,7 +626,7 @@ function ComputerPermissionGuideDialog({
               : kind === 'ready'
                 ? t('Computer is ready. Open sessions can use it after the current turn finishes.')
                 : t(
-                    'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to 小满, then restart.'
+                    'The agent can screenshot windows and control the mouse and keyboard. Grant Screen Recording and Accessibility to Collabra, then restart.'
                   )}
           </DialogDescription>
         </DialogHeader>
@@ -639,7 +639,7 @@ function ComputerPermissionGuideDialog({
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
               <p>
                 {t(
-                  'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to 小满, then restart the app.'
+                  'Computer needs Screen Recording to capture windows and Accessibility to inspect or click them. Grant both to Collabra, then restart the app.'
                 )}
               </p>
             </div>

@@ -16,6 +16,7 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
     .map((el) => {
       if (el.getAttribute('data-slot') === 'app-rail-separator') return '---';
       if (el.getAttribute('data-testid') === 'mode') return 'mode';
+      if (el.getAttribute('data-testid') === 'bot-mode') return 'Bot';
       return el.tagName === 'BUTTON' ? el.getAttribute('aria-label') : null;
     })
     .filter(Boolean);
@@ -24,6 +25,48 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
 const modeSwitch = createElement('div', { 'data-testid': 'mode' });
 
 describe('AppRail 精简导航', () => {
+  it('Bot 移到设计下方、看板正上方，画图仍保留在 Code 下方', () => {
+    expect(
+      railItems({
+        modeSwitch,
+        botModeSwitch: createElement('div', { 'data-testid': 'bot-mode' }),
+        imageStudio: { active: false, onToggle: vi.fn() },
+        designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
+        collaborationBoard: { active: false, onToggle: vi.fn() },
+      })
+    ).toEqual([
+      '---',
+      'mode',
+      'Image studio',
+      'Design',
+      'Bot',
+      'Collaboration board',
+      'Ask Enso',
+      'Settings',
+    ]);
+  });
+  it('未开启 Bot 时 Code 仍有常驻入口，可从图片工作台切回', () => {
+    const props = {
+      codeWorkspace: { active: false, onToggle: vi.fn() },
+      imageStudio: { active: true, onToggle: vi.fn() },
+    };
+    expect(railItems(props)).toEqual(['Code', 'Image studio', 'Ask Enso', 'Settings']);
+    const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
+    expect(document.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe(
+      'false'
+    );
+  });
+  it('图片工作台是独立入口，位于设计入口前并反映选中状态', () => {
+    const props = {
+      imageStudio: { active: true, onToggle: vi.fn() },
+      designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
+    };
+    expect(railItems(props)).toEqual(['Image studio', 'Design', 'Ask Enso', 'Settings']);
+    const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
+    expect(
+      document.querySelector('[aria-label="Image studio"]')?.getAttribute('aria-pressed')
+    ).toBe('true');
+  });
   it('模式入口紧跟分隔符，全局入口按 看板 → 设置 排布', () => {
     const props = {
       sidebarCollapsed: true,
@@ -45,7 +88,7 @@ describe('AppRail 精简导航', () => {
     ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
     const brand = document.querySelector('[data-slot="app-rail"]')?.firstElementChild;
-    expect(brand?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100');
+    expect(brand?.querySelector('img')?.getAttribute('src')).toContain('brand-mark.png');
     expect(brand?.nextElementSibling?.getAttribute('aria-label')).toBe('Expand sidebar');
   });
 

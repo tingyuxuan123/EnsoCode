@@ -150,7 +150,7 @@ class SessionMenuScreenTest {
         val reads = mutableListOf<Pair<String, Long>>()
         var lists = 0
         val empty = io.github.tingyuxuan123.eaves.mirror.DesktopFilesState()
-        val body = "# 小满\nhello".toByteArray()
+        val body = "# Collabra\nhello".toByteArray()
         val state = mutableStateOf(idle.copy(files = empty))
         compose.setContent { EnsoTheme {
             SessionScreen(SessionHeader("菜单测试"), state.value, LinkPhase.Online, true,
@@ -172,7 +172,7 @@ class SessionMenuScreenTest {
             entries = state.value.files!!.entries,
             chunk = io.github.tingyuxuan123.eaves.mirror.DesktopFileChunk(
                 "f1", "README.md", 6_000, 0, body))) }
-        compose.onNodeWithText("# 小满\nhello").assertIsDisplayed()
+        compose.onNodeWithText("# Collabra\nhello").assertIsDisplayed()
         compose.onNodeWithText("加载更多").performClick()
         assertEquals("f1" to body.size.toLong(), reads.last())
         // Read-only connections may browse; nothing in this sheet writes to the workspace.

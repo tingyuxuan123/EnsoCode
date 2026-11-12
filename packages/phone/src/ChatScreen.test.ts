@@ -68,10 +68,12 @@ it('offers new-session in direct Bot and Code, but not the read-only group proce
   expect(render({ bot: { readOnly: true } })).not.toContain('aria-label="新建会话"');
 });
 
-it('没有选中会话时的空态用对外品牌「小满」而不是旧英文名', () => {
+it('没有选中会话时的空态用对外品牌「Collabra」，图标走应用图标而不是内联旧 logo', () => {
   const html = render({ sessionId: null });
-  expect(html).toContain('小满');
+  expect(html).toContain('Collabra');
   expect(html).not.toContain('EnsoCode');
+  expect(html).toContain('src="/icons/logo-192.png"');
+  expect(html).toContain('alt="Collabra"');
 });
 
 it('Code 和 Bot 都能看到本地握手发送失败，而不是只有 Bot notice', () => {

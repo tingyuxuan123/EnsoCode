@@ -2,7 +2,6 @@ import { claimPairing, type PairedDevice, parsePairUri } from '@enso/pair';
 
 import { Camera, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { EnsoMark } from '@/components/chat/EnsoMark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createQrScanner } from './qr';
@@ -149,9 +148,9 @@ export function PairScreen({
     <div className="mx-auto flex h-full w-full max-w-[420px] flex-col items-center justify-center gap-5 px-6 pt-safe pb-safe">
       <div className="flex flex-col items-center gap-1.5 text-center">
         <span className="mb-2 flex size-11 items-center justify-center rounded-[12px] bg-muted text-foreground">
-          <EnsoMark className="size-6" />
+          <img src="/icons/logo-192.png" alt="Collabra" className="size-6" />
         </span>
-        <h1 className="font-semibold text-[15px]">连接到小满</h1>
+        <h1 className="font-semibold text-[15px]">连接到 Collabra</h1>
         <p className="text-[12px] text-muted-foreground leading-5">
           在桌面端「设置 → 手机」生成配对码，扫码或粘贴。
         </p>

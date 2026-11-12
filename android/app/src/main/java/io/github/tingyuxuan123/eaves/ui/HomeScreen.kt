@@ -59,7 +59,7 @@ internal fun HomeScreen(
         Column(Modifier.fillMaxSize().designTopInset().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Label("小满", 22, 28, weight = FontWeight.Bold)
+                Label("Collabra", 22, 28, weight = FontWeight.Bold)
                 Row(Modifier.padding(start = 8.dp).height(30.dp).clip(CircleShape)
                     .border(.75.dp, c.line, CircleShape).clickable(onClick = onPair)
                     .padding(horizontal = 9.dp).semantics {

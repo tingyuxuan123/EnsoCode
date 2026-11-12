@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Authoritative 小满 artwork. Run from any directory: node scripts/generate-app-icon.mjs.
+/** Authoritative Collabra artwork. Run from any directory: node scripts/generate-app-icon.mjs.
  * Uses the existing sharp installation (including pnpm's unhoisted store); installs nothing.
  * ICNS uses native PNG chunks, so neither Pillow nor macOS iconutil is required.
  */
@@ -14,9 +14,8 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
 const SIZES = [16, 32, 48, 64, 128, 256, 512];
 const ICO_SIZES = [256, 128, 64, 48, 32, 16];
-const BG = '#0B0C0E';
-const FG = '#F4F5F6';
-const DROP = '#3B82F6';
+const ARTWORK = new URL('../assets/branding/collabra-logo.png', import.meta.url);
+const BG = '#FFFFFF';
 
 export function loadSharp() {
   try {
@@ -37,26 +36,25 @@ export function loadSharp() {
   }
 }
 
-// Exact geometry from eaves-logo.vetd/assets/mark-a-{body,drop}.svg; do not read
-// design files at generation time, so the shipped icon has a self-contained source.
-function mark(body, drop) {
-  return `<g fill="none" stroke="${body}" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M12 23 Q16 31 26 32 L74 32 Q84 31 88 23" stroke-width="8"/>
-  <path d="M31 45 V56 M31 64 V72 M50 45 V58 M69 45 V50 M69 58 V76" stroke-width="6"/>
-</g><circle cx="50" cy="70" r="4.5" fill="${drop}"/>`;
+function svg(png, size = 1024) {
+  // Embed the supplied raster, not a hand-redrawn approximation of the logo.
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image width="${size}" height="${size}" href="data:image/png;base64,${png.toString('base64')}"/></svg>\n`;
 }
 
-function svg(content, size = 1024) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">\n${content}\n</svg>\n`;
-}
-
-function appSvg({ rounded = true, maskable = false } = {}) {
-  // AppIcon: 22.5% corners; mark's 100-unit box occupies 60% of the card.
-  // Maskable PWA icons retain the former extra 80% safe-zone inset.
-  const scale = maskable ? 0.48 : 0.6;
-  const inset = (100 - scale * 100) / 2;
-  return svg(`<rect width="100" height="100" rx="${rounded ? 22.5 : 0}" fill="${BG}"/>
-<g transform="translate(${inset} ${inset}) scale(${scale})">${mark(FG, DROP)}</g>`);
+async function desktopCard(sharp, artwork) {
+  // Dock / installer assets need their own visible surface; in-app marks and
+  // system templates deliberately keep the original transparent artwork.
+  const backing =
+    Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs><linearGradient id="surface" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#F4F5F9"/></linearGradient></defs>
+<rect width="1024" height="1024" rx="230" fill="url(#surface)"/>
+<rect x="1.5" y="1.5" width="1021" height="1021" rx="228.5" fill="none" stroke="#E1E4EB" stroke-width="3"/>
+</svg>`);
+  const mark = await sharp(artwork).resize(880, 880).png().toBuffer();
+  return sharp(backing)
+    .composite([{ input: mark, left: 72, top: 72 }])
+    .png()
+    .toBuffer();
 }
 
 /** Windows Shell layout: PNG at 256, 32-bit DIB + AND mask below 256.
@@ -157,33 +155,69 @@ export async function generateIcons(root = ROOT) {
     return png;
   };
 
-  const app = appSvg();
-  const tray = svg(mark('#000000', '#000000'), 64);
-  await write('build/icon.svg', app);
-  await write('build/enso-mark.svg', svg(mark(BG, '#2563EB')));
-  await write('build/trayTemplate.svg', tray);
+  const app = await readFile(ARTWORK);
+  const { width, height } = await sharp(app).metadata();
+  assert.equal(width, 1024, 'Collabra source width');
+  assert.equal(height, 1024, 'Collabra source height');
+  const desktop = await desktopCard(sharp, app);
+  // System templates use only alpha; discard faint generation dust and let
+  // macOS / Android apply their own tint to the retained logo silhouette.
+  const alpha = await sharp(app).extractChannel('alpha').threshold(96).toBuffer();
+  const mono = await sharp({ create: { width, height, channels: 3, background: '#000000' } })
+    .joinChannel(alpha)
+    .png()
+    .toBuffer();
+  await write('build/icon.svg', svg(desktop));
+  await write('build/enso-mark.svg', svg(app));
+  await writePng('build/brand-mark.png', app, 128);
+  await write('build/trayTemplate.svg', svg(mono));
   const pngs = new Map();
-  pngs.set(1024, await writePng('build/icon.png', app, 1024));
+  pngs.set(1024, await writePng('build/icon.png', desktop, 1024));
   for (const size of SIZES) {
-    pngs.set(size, await writePng(`build/icons/${size}x${size}.png`, app, size));
+    pngs.set(size, await writePng(`build/icons/${size}x${size}.png`, desktop, size));
   }
-  await writePng('build/icon-win.png', app, 256);
-  await writePng('build/trayTemplate.png', tray, 22);
-  await writePng('build/trayTemplate@2x.png', tray, 44);
+  await writePng('build/icon-win.png', desktop, 256);
+  await writePng('build/trayTemplate.png', mono, 22);
+  await writePng('build/trayTemplate@2x.png', mono, 44);
   await write('build/icon.ico', await ico(sharp, pngs));
   await write('build/icon.icns', icns(pngs));
+  // In-app phone UI keeps transparency; installed PWA icons below stay opaque.
+  await writePng('packages/phone/public/icons/logo-192.png', app, 192);
   for (const [name, size] of [
     ['apple-touch-icon', 180],
     ['icon-192', 192],
     ['icon-512', 512],
     ['icon-maskable-512', 512],
   ]) {
+    // PWA home-screen icons must be opaque. Extra inset protects maskable icons.
+    let phone = sharp(app);
+    if (name.includes('maskable'))
+      phone = phone
+        .resize(820, 820)
+        .extend({ top: 102, bottom: 102, left: 102, right: 102, background: BG });
     await writePng(
       `packages/phone/public/icons/${name}.png`,
-      appSvg({ rounded: false, maskable: name.includes('maskable') }),
+      await phone.flatten({ background: BG }).png().toBuffer(),
       size,
       true
     );
+  }
+
+  // Preserve existing Android resource identifiers; only replace their artwork.
+  const drawable = 'android/app/src/main/res/drawable-nodpi';
+  await writePng(`${drawable}/eaves_mark.png`, app, 128);
+  await writePng(`${drawable}/eaves_running_small.png`, app, 96);
+  await writePng(`${drawable}/eaves_notification.png`, mono, 96);
+  for (const [name, source] of [
+    ['foreground', app],
+    ['monochrome', mono],
+  ]) {
+    const adaptive = await sharp(source)
+      .resize(320, 320)
+      .extend({ top: 56, bottom: 56, left: 56, right: 56, background: '#00000000' })
+      .png()
+      .toBuffer();
+    await writePng(`${drawable}/eaves_launcher_${name}.png`, adaptive, 432);
   }
 
   // Read every generated PNG back through sharp, not just metadata/file existence.
@@ -212,6 +246,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const files = await generateIcons();
   for (const file of files) console.log(`wrote ${file}`);
   console.log(
-    `Verified ${files.length} 小满 assets; ICNS generated with PNG chunks (no iconutil needed).`
+    `Verified ${files.length} Collabra assets; ICNS generated with PNG chunks (no iconutil needed).`
   );
 }

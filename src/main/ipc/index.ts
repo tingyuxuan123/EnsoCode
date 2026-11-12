@@ -19,6 +19,7 @@ import { registerFileHandlers } from './files';
 import { registerFilesWorkspaceHandlers } from './filesWorkspace';
 import { registerGitHandlers } from './git';
 import { registerImageProviderHandlers } from './imageGeneration';
+import { registerImageStudioHandlers } from './imageStudio';
 import { registerMcpHandlers } from './mcp';
 import { registerMemoryHandlers } from './memory';
 import { registerModelDirectoryHandlers } from './modelDirectory';
@@ -47,6 +48,7 @@ export function registerIpcHandlers(): void {
   registerTaskBoardHandlers();
   registerProviderHandlers();
   registerImageProviderHandlers();
+  registerImageStudioHandlers();
   registerAssetHandlers();
   registerConfigSyncHandlers();
   registerCapabilityHandlers();

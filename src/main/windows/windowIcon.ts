@@ -71,7 +71,7 @@ export function windowsTaskbarAppDetails(input: {
     appIconPath: exe,
     appIconIndex: 0,
     relaunchCommand: quoted,
-    relaunchDisplayName: input.displayName ?? '小满',
+    relaunchDisplayName: input.displayName ?? 'Collabra',
   };
 }
 
