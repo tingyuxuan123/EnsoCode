@@ -1,37 +1,53 @@
-version: 0.2.72
+version: 0.2.74
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.72/Xiaoman-0.2.72-arm64-mac.zip
-    sha512: VDHvb05FQ4fPwYbf0CV6+p6Ki5ilIHRpi2iNHvSm2pgPqWyHBRYi4BvqXvWvUOxKFLaHIl78dL5WAHptLLuT+Q==
-    size: 183132808
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.72/Xiaoman-0.2.72-arm64.dmg
-    sha512: EXhy3h2y5vmb8HhxSrReX61wvcNiAzk1IX1RTxW/jC6HJWJkI7DTHEhDlBDaMK63kKoGAG+E4TLYqxS5N4Eaxw==
-    size: 177774367
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.72/Xiaoman-0.2.72-arm64-mac.zip
-sha512: VDHvb05FQ4fPwYbf0CV6+p6Ki5ilIHRpi2iNHvSm2pgPqWyHBRYi4BvqXvWvUOxKFLaHIl78dL5WAHptLLuT+Q==
-releaseDate: 2026-11-11T03:43:34.404Z
-releaseName: 小满 0.2.72 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.74/Collabra-0.2.74-arm64-mac.zip
+    sha512: MKzHb/wCJPgEKbC0ZTkHzYSPlLTsaT/2XJ8KzUe61wFYcZAWJPYYeJCfcLGewbjI1HUVJWSjxmCtPsNehwGOWQ==
+    size: 183856317
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.74/Collabra-0.2.74-arm64.dmg
+    sha512: iDAGhxN531TeqA6BuVsTE8TXUJwffUxo09aSwriNTnXemYVv9O2VKSclU9pvlp0rVwdfP78XVzKKap7Vv350dA==
+    size: 178952200
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.74/Collabra-0.2.74-arm64-mac.zip
+sha512: MKzHb/wCJPgEKbC0ZTkHzYSPlLTsaT/2XJ8KzUe61wFYcZAWJPYYeJCfcLGewbjI1HUVJWSjxmCtPsNehwGOWQ==
+releaseDate: 2026-11-12T04:36:56.861Z
+releaseName: Collabra 0.2.74 — 个人测试
 releaseNotes: >
-  # 小满 0.2.72
+  # Collabra 0.2.74
 
 
-  ## 聊天生图与改图
+  ## 全新品牌
 
 
-  - 本地 Code 会话可以生成图片，也可以按要求编辑已有成图或工作区内的参考图。
+  - 产品正式更名为 Collabra，桌面端、手机端与文档统一使用新的蓝紫渐变图标和品牌名称。
 
-  - 在「设置 → 内置工具 → 图像生成」分别为文生图、图生图选用已添加的 OpenAI 兼容图像服务和模型。不需要 Vetta 订阅。
-
-  - 成图在聊天里预览；点击「编辑图片」把引用填入草稿，由你补充要求并发送。原图和新图分开保存在工作区的
-  `.xiaoman/images/`，重开聊天仍可查看。
-
-  - 提示词和参考图只发往配置的图片服务，调用可能计费，失败不会自动重试。
+  - 保留原有应用标识、数据目录、配对协议、签名证书和更新通道；Windows 保留兼容旧快捷方式的可执行文件名。
 
 
-  本次仅发布 Mac arm64 同证书个人更新版，不改变正式 Latest。安装和重启由用户自行完成。
+  ## 独立图片工作台
+
+
+  - 新增独立图片会话，可直接生成图片、导入参考图改图，并查看和管理本地生图历史；不占用 Code 聊天会话。
+
+  - 支持模型、比例、分辨率、质量和 1–10 张批量生成；每张生成后即时保存和展示，取消时保留已有结果。
+
+  - 生成过程复用聊天生图动效，支持图片预览、复制和下载；草稿与参考图不会被迟到回包清除。
+
+  - 独立图片服务统一管理连接和模型，凭证加密保存在本机，不借用聊天凭证；失败不自动重试，每张图片请求可能计费。
+
+
+  ## 交互与兼容
+
+
+  - Code、图片工作台、设计、Bot 与看板入口统一整理，切换到图片工作台不丢失已有会话。
+
+  - 本次同时发布 Windows x64 正式更新和 Mac arm64 同证书个人更新；Windows 推进 Latest，Mac 个人版仅推进
+  personal-updates。
+
+
+  安装、重启及旧数据保留的真机升级验收由用户自行完成；发布成功不代表已经安装。
 
 
   ---
 
 
-  个人测试通道 0.2.72：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.74：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
