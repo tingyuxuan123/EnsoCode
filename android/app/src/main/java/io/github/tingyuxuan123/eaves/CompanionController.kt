@@ -5,6 +5,7 @@ import io.github.tingyuxuan123.eaves.mirror.PairCredentialStore
 import io.github.tingyuxuan123.eaves.mirror.PairCredentials
 import io.github.tingyuxuan123.eaves.mirror.LinkPhase
 import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
+import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
 import io.github.tingyuxuan123.eaves.mirror.SessionImage
 import io.github.tingyuxuan123.eaves.mirror.QueueCommand
 import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
@@ -20,6 +21,7 @@ import io.github.tingyuxuan123.eaves.mirror.taskStopBaseline
 import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction
 import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput
 import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
+import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.eaves.mirror.PairException
 import io.github.tingyuxuan123.eaves.mirror.PairFailure
 import kotlinx.coroutines.CancellationException
@@ -47,6 +49,9 @@ internal interface CompanionLink : AutoCloseable {
     fun submitText(sessionId: String, text: String, steer: Boolean) = Unit
     fun submitImages(sessionId: String, text: String, images: List<SessionImage>) = Unit
     fun stopSession(sessionId: String) = Unit
+    fun setSessionModel(sessionId: String, providerId: String, modelId: String) = Unit
+    fun setSessionReasoning(sessionId: String, enabled: Boolean) = Unit
+    fun setSessionThinking(sessionId: String, level: TaskThinkingLevel) = Unit
     fun queueAction(sessionId: String, command: QueueCommand, messageId: String?, text: String?) = Unit
     fun goalAction(sessionId: String, command: GoalCommand, expected: DesktopGoal?, text: String?) = Unit
     fun maintain(sessionId: String, command: SessionMaintenanceCommand, baseline: MaintenanceBaseline, text: String?) = Unit
@@ -66,6 +71,16 @@ internal interface CompanionLink : AutoCloseable {
     fun sendBotMessage(chatId: String, text: String, deliveryId: String) = Unit
     fun stopBotChat(chatId: String) = Unit
     fun changeBotThread(rootId: String, command: BotThreadCommand, targetId: String?, expectedActiveId: String) = Unit
+    fun requestBotNewSession(chatId: String) = Unit
+    fun confirmBotNewSession(chatId: String) = Unit
+    fun retryBotEntry(chatId: String, entryId: String) = Unit
+    fun dismissBotInboxItem(key: String) = Unit
+    fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) = Unit
+    fun openBotDirect(botId: String) = Unit
+    fun loadBotArtifacts(target: DesktopBotArtifactTarget) = Unit
+    fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String?, rel: String?) = Unit
+    fun listBotFiles(target: DesktopBotArtifactTarget) = Unit
+    fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) = Unit
     fun createTask(request: TaskLaunch) = Unit
     fun dismissCreation(sessionId: String?) = Unit
 }
@@ -193,7 +208,11 @@ internal class CompanionController(
             selectedSession = null
             connection?.selectSession(null)
         } else if (!mutable.value.busy && mutable.value.paired && mutable.value.link.phase == LinkPhase.Online &&
-            mutable.value.link.catalog.any { it.id == sessionId && !it.archived }) {
+            (mutable.value.link.catalog.any { it.id == sessionId && !it.archived } ||
+                mutable.value.link.bots?.let { bots -> bots.enabled == true &&
+                    ((bots.chats + bots.threads).any { !it.archived && sessionId in it.sessions.values } ||
+                        bots.activity.any { it.conversationId == sessionId } ||
+                        bots.inbox.any { it.conversationId == sessionId && it.kind in setOf("approval", "ask") }) } == true)) {
             selectedSession = sessionId
             connection?.selectSession(sessionId)
         }
@@ -228,6 +247,20 @@ internal class CompanionController(
 
     fun stopSession(sessionId: String) {
         if (currentSession(writing = true) == sessionId) connection?.stopSession(sessionId)
+    }
+
+    fun setSessionModel(sessionId: String, providerId: String, modelId: String) {
+        if (visible && currentSession(writing = true) == sessionId) {
+            connection?.setSessionModel(sessionId, providerId, modelId)
+        }
+    }
+
+    fun setSessionReasoning(sessionId: String, enabled: Boolean) {
+        if (visible && currentSession(writing = true) == sessionId) connection?.setSessionReasoning(sessionId, enabled)
+    }
+
+    fun setSessionThinking(sessionId: String, level: TaskThinkingLevel) {
+        if (visible && currentSession(writing = true) == sessionId) connection?.setSessionThinking(sessionId, level)
     }
 
     fun queueAction(sessionId: String, command: QueueCommand, messageId: String?, text: String?) {
@@ -336,6 +369,32 @@ internal class CompanionController(
         if (visible && state.paired && !state.busy && state.link.phase == LinkPhase.Online && !state.link.readOnly) {
             connection?.changeBotThread(rootId, command, targetId, expectedActiveId)
         }
+    }
+
+    private fun botWritable(): Boolean = mutable.value.let {
+        visible && it.paired && !it.busy && it.link.phase == LinkPhase.Online && !it.link.readOnly && it.link.bots?.enabled == true
+    }
+
+    fun requestBotNewSession(chatId: String) { if (botWritable()) connection?.requestBotNewSession(chatId) }
+    fun confirmBotNewSession(chatId: String) { if (botWritable()) connection?.confirmBotNewSession(chatId) }
+    fun retryBotEntry(chatId: String, entryId: String) { if (botWritable()) connection?.retryBotEntry(chatId, entryId) }
+    fun dismissBotInboxItem(key: String) { if (botWritable()) connection?.dismissBotInboxItem(key) }
+    fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) {
+        if (botWritable()) connection?.createBotGroup(title, memberIds, bossBotId)
+    }
+    fun openBotDirect(botId: String) { if (botWritable()) connection?.openBotDirect(botId) }
+    private fun botReadable(): Boolean = mutable.value.let {
+        visible && it.paired && !it.busy && it.link.phase == LinkPhase.Online && it.link.bots?.enabled == true
+    }
+    fun loadBotArtifacts(target: DesktopBotArtifactTarget) {
+        if (botReadable()) connection?.loadBotArtifacts(target)
+    }
+    fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String?, rel: String?) {
+        if (botReadable()) connection?.loadBotArtifactImage(target, mediaId, rel)
+    }
+    fun listBotFiles(target: DesktopBotArtifactTarget) { if (botReadable()) connection?.listBotFiles(target) }
+    fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) {
+        if (botReadable()) connection?.readBotFile(target, fileId, offset)
     }
 
     fun createTask(request: TaskLaunch) {

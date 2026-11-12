@@ -78,26 +78,12 @@ internal fun NewTaskConfigSheet(
                     Box(Modifier.weight(1f)) { ConfigPill("桌面默认预设", EnsoIcon.Sliders, false) {} }
                 }
                 SheetLabel("模型")
-                val selectedProvider = config.provider(providers)
-                val selectedModel = config.model(providers)
-                val choices = remember(providers) { providers.orEmpty().flatMap { provider -> provider.models.map { provider to it } } }
-                Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)) {
-                    when {
-                        providers == null -> ConfigNotice("正在读取桌面模型…")
-                        choices.isEmpty() -> ConfigNotice("桌面没有可用模型，请先在电脑端添加。")
-                        else -> LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                            itemsIndexed(choices) { index, (provider, model) ->
-                                if (index > 0) Hairline()
-                                ConfigOption(model.label, provider.name,
-                                    selected = selectedProvider?.id == provider.id && selectedModel?.id == model.id,
-                                    enabled = enabled) { onChange(config.copy(providerId = provider.id, modelId = model.id)) }
-                            }
-                        }
-                    }
+                ModelChoices(providers, config.provider(providers)?.id, config.model(providers)?.id, enabled) { providerId, modelId ->
+                    onChange(config.copy(providerId = providerId, modelId = modelId))
                 }
                 if (projects.isNullOrEmpty()) ConfigNotice(if (projects == null) "正在读取桌面项目…" else "没有可新建任务的本地项目，请先在电脑端添加。")
                 if ((config.projectId != null && config.project(projects) == null) ||
-                    (config.providerId != null && (selectedProvider == null || selectedModel == null))) {
+                    (config.providerId != null && (config.provider(providers) == null || config.model(providers) == null))) {
                     ConfigNotice("原选项已不可用，请重新选择。")
                 }
                 Row(Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -125,6 +111,29 @@ internal fun NewTaskConfigSheet(
                         ConfigOption(mode.title(), mode.detail(), config.approvalMode == mode, enabled) {
                             onChange(config.copy(approvalMode = mode))
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ModelChoices(
+    providers: List<DesktopProvider>?, providerId: String?, modelId: String?, enabled: Boolean,
+    onSelect: (String, String) -> Unit,
+) {
+    val choices = remember(providers) { providers.orEmpty().flatMap { provider -> provider.models.map { provider to it } } }
+    Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Enso.colors.card)) {
+        when {
+            providers == null -> ConfigNotice("正在读取桌面模型…")
+            choices.isEmpty() -> ConfigNotice("桌面没有可用模型，请先在电脑端添加。")
+            else -> LazyColumn(Modifier.heightIn(max = 240.dp)) {
+                itemsIndexed(choices) { index, (provider, model) ->
+                    if (index > 0) Hairline()
+                    ConfigOption(model.label, provider.name,
+                        selected = providerId == provider.id && modelId == model.id, enabled = enabled) {
+                        onSelect(provider.id, model.id)
                     }
                 }
             }

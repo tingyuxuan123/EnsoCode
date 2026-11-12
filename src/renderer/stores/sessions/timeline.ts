@@ -19,6 +19,7 @@ import type { CardDescriptor } from '@/features/design/vetta/sdk/ui';
 import { unwrapMcpProxyCall } from '@/lib/mcpToolName';
 import { isMissingFileRead } from './missingFileRead';
 import type { TimelineMessage } from './reducer';
+import { buildTurnWaterfall, type TurnWaterfall } from './turnWaterfall';
 
 /** edit 工具的单个替换块（pi edit 工具参数 edits[] 的元素） */
 export interface EditBlock {
@@ -54,6 +55,7 @@ export type TimelineItem =
       turnEnd?: boolean;
       /** 本轮完结时的整轮活跃用时（毫秒） */
       turnDurationMs?: number;
+      waterfall?: TurnWaterfall;
     }
   | {
       kind: 'thinking';
@@ -997,6 +999,7 @@ function buildMessageTimeline(
   let replyModelFailed = false;
   let turnUserTimestamp: number | undefined;
   let turnHadAskUser = false;
+  let turnStartIndex: number | undefined;
   let currentTurnUserItem: Extract<TimelineItem, { kind: 'user' }> | undefined;
   messages.forEach((message, messageIndex) => {
     const isLastMessage = messageIndex === lastMessageIndex;
@@ -1015,6 +1018,7 @@ function buildMessageTimeline(
       return;
     }
     if (message.role === 'user') {
+      turnStartIndex = messageIndex + 1;
       turnUserTimestamp = message.timestamp;
       turnHadAskUser = false;
       turnActiveMs = 0;
@@ -1130,6 +1134,13 @@ function buildMessageTimeline(
     // 「流式中」= 最后一个有内容的 part：pi 流式时 thinking/text 后面常已跟着
     // 空占位 part，按「最后一个 part」判会把正在生成的块误判为已完结
     const lastActiveIndex = findLastActivePartIndex(message.content);
+    const lastTextIndex = message.content.findLastIndex(
+      (part) => part.type === 'text' && !!part.text.trim()
+    );
+    const waterfall =
+      isLastStepOfTurn && turnSettled && turnStartIndex !== undefined && lastTextIndex >= 0
+        ? buildTurnWaterfall(messages, turnStartIndex, messageIndex)
+        : undefined;
     message.content.forEach((part, partIndex) => {
       const key = `${absIndex}-${partIndex}`;
       const isStreamingPart = isLastMessage && partIndex === lastActiveIndex;
@@ -1157,6 +1168,7 @@ function buildMessageTimeline(
                 ? {
                     turnEnd: true,
                     ...(turnDurationMs !== undefined ? { turnDurationMs } : {}),
+                    ...(waterfall && partIndex === lastTextIndex ? { waterfall } : {}),
                   }
                 : {}),
             });
@@ -1188,6 +1200,7 @@ function buildMessageTimeline(
                 ? {
                     turnEnd: true,
                     ...(turnDurationMs !== undefined ? { turnDurationMs } : {}),
+                    ...(waterfall && partIndex === lastTextIndex ? { waterfall } : {}),
                   }
                 : {}),
             });
@@ -1704,6 +1717,7 @@ export function isCoreToolRow(item: Extract<TimelineItem, { kind: 'tool' }>): bo
       item.writeContent ||
       item.fileChanges?.length ||
       item.designCards?.length ||
+      (isImageToolName(item.name) && item.state === 'running') ||
       (item.name === 'vetd_screenshot' && item.state === 'running') ||
       (item.imagePath && item.state !== 'error') ||
       item.name === 'todo' ||

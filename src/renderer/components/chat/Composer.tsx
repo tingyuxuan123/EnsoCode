@@ -47,6 +47,7 @@ import {
   registerComposerInsertImage,
   registerComposerInsertText,
   registerComposerInsertUiElement,
+  registerComposerInsertUiElements,
 } from './composerMentionBridge';
 import { COMPOSER_DROP_ID } from './dragDrop';
 import { HoldToTalk, HoldToTalkToggle } from './HoldToTalk';
@@ -181,11 +182,26 @@ export function Composer({
     const unsubText = registerComposerInsertText((text) => editorRef.current?.insertText(text));
     const unsubFocus = registerComposerFocus(() => editorRef.current?.focus());
     const unsubUi = registerComposerInsertUiElement((candidate, image) => {
-      if (image) {
-        setImages((current) => [...current, { ...image, id: candidate.imageId }]);
-      }
+      if (image) setImages((current) => [...current, { ...image, id: candidate.imageId }]);
       editorRef.current?.insertMention(candidate);
       editorRef.current?.focus();
+    });
+    const unsubBatch = registerComposerInsertUiElements((items, owner) => {
+      const editor = editorRef.current;
+      if (!editor || pluginStateRef.current.focusKey !== owner || sendingRef.current) return false;
+      const segments = editor.getSegments();
+      if (segments.length) segments.push({ type: 'text', text: '\n\n' });
+      for (const { candidate, note } of items) {
+        const { kind: _kind, ...fields } = candidate;
+        segments.push({ type: 'ui-element', ...fields });
+        segments.push({ type: 'text', text: note?.trim() ? `\n${note.trim()}\n` : '\n' });
+      }
+      const attachments = items.flatMap(({ candidate, image }) =>
+        image ? [{ ...image, id: candidate.imageId }] : []
+      );
+      editor.setSegments(segments);
+      if (attachments.length) setImages((current) => [...current, ...attachments]);
+      return true;
     });
     const unsubImage = registerComposerInsertImage((image) => {
       setImages((current) => [...current, { data: image.data, mimeType: image.mimeType }]);
@@ -196,6 +212,7 @@ export function Composer({
       unsubText();
       unsubFocus();
       unsubUi();
+      unsubBatch();
       unsubImage();
     };
   }, [isolated]);

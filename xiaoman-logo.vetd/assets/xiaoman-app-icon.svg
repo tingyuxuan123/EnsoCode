@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">小满应用图标：一粒带笑的青麦</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#517144"/>
+      <stop offset="1" stop-color="#2b452d"/>
+    </linearGradient>
+    <linearGradient id="grain" x1="0" y1="0" x2="0.82" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#f0f3ab"/>
+      <stop offset="1" stop-color="#c2d773"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0.75" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#c4e37e"/>
+      <stop offset="1" stop-color="#81b65b"/>
+    </linearGradient>
+    <filter id="texture" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.65" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <clipPath id="tile-edge">
+      <rect x="3" y="3" width="122" height="122" rx="29"/>
+    </clipPath>
+    <path id="kernel" d="M99 64c0 24-18 39-44 39-5 0-9-.4-13-1.2l-17 9.8c-3.2 1.8-6.8-1.1-5.8-4.6l3.6-13.4C15 87.2 11 78.6 11 68.3 11 46 31.5 32.5 57.3 31 81.5 29.6 99 43 99 64Z"/>
+  </defs>
+  <rect x="3" y="3" width="122" height="122" rx="29" fill="url(#tile)"/>
+  <g clip-path="url(#tile-edge)" opacity=".13" style="mix-blend-mode:soft-light">
+    <rect x="3" y="3" width="122" height="122" filter="url(#texture)"/>
+  </g>
+  <rect x="3.55" y="3.55" width="120.9" height="120.9" rx="28.45" fill="none" stroke="#c3d8a2" stroke-opacity=".26" stroke-width="1.1"/>
+  <g transform="translate(17.1 9.1) scale(.85)">
+    <use href="#kernel" transform="translate(0 3)" fill="#243c25" opacity=".72"/>
+    <path d="M56 34C61.2 17.5 77 10.3 95 12.2c1.6.2 2.5 1.7 2 3.2C92.6 30 76.2 42 59 39.2c-2.8-.4-4-2.5-3-5.2Z" fill="url(#leaf)"/>
+    <path d="M66 29.8c5.2-5.3 12.5-8.6 20.3-9.5" fill="none" stroke="#e8f0a3" stroke-opacity=".54" stroke-width="1.9" stroke-linecap="round"/>
+    <use href="#kernel" fill="url(#grain)"/>
+    <path d="M20.8 59.6c5.8-11.8 17.8-18.8 33-20" fill="none" stroke="#f8f8ce" stroke-opacity=".8" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M42.5 61.5v5m25-6.5v5m-17.3 7.9c2.8 3.4 7.6 3.2 10.2-.4" fill="none" stroke="#304829" stroke-width="5.6" stroke-linecap="round"/>
+    <path d="m31.8 74.8 4.6 1m37.5-2 4.7-1.1" fill="none" stroke="#9eaf50" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+</svg>

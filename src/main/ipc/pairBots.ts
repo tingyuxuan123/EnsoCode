@@ -10,6 +10,7 @@ import { BotActivityTracker } from '../services/bots/activityTracker';
 import {
   type ActivityBinding,
   botSessionAccess,
+  fitBotArtifactsFrame,
   fitGroupTimelineFrame,
   pairActivityItems,
   summarizeBotChat,
@@ -22,10 +23,12 @@ import {
   type PairReply,
   setPairBotPort,
 } from '../services/pairHost';
+import { parsePhoneCommand } from '../services/pairPolicy';
 import { projectParentHistoryAll, resolveParentHistoryFile } from '../services/sessionHistoryTail';
 import { getSourceAuthorityRegistry } from './agent';
 import {
   botModeEnabled,
+  createBotChat,
   createBotThread,
   getBotServices,
   newBotSession,
@@ -65,6 +68,93 @@ const newSessionRequests = new Map<
 >();
 
 type Services = NonNullable<ReturnType<typeof getBotServices>>;
+type GroupCreateCommand = Extract<PairBotCommand, { type: 'bot-group-create' }>;
+type GroupCreateReply = Extract<HostToPhone, { type: 'bot-group-create-result' }>;
+type DirectOpenCommand = Extract<PairBotCommand, { type: 'bot-direct-open' }>;
+type DirectOpenReply = Extract<HostToPhone, { type: 'bot-direct-open-result' }>;
+/** Process-local retry window: bounded memory, never evict unexpired identities to accept writes. */
+const GROUP_CREATE_CACHE_MS = 10 * 60_000;
+const GROUP_CREATE_CACHE_LIMIT = 1024;
+const groupCreateRequests = new Map<
+  string,
+  { fingerprint: string; result: GroupCreateReply; at: number }
+>();
+
+function groupCreateResult(
+  pairId: string,
+  command: GroupCreateCommand,
+  services: Services | null
+): GroupCreateReply {
+  const base = { type: 'bot-group-create-result' as const, requestId: command.requestId };
+  // Disabled mode revokes writes even for a previously successful request.
+  if (!services) return { ...base, ok: false, error: 'disabled' };
+  const parsed = parsePhoneCommand(command);
+  if (!parsed.ok) return { ...base, ok: false, error: 'invalid-request' };
+  const now = Date.now();
+  for (const [key, entry] of groupCreateRequests) {
+    if (now - entry.at > GROUP_CREATE_CACHE_MS) groupCreateRequests.delete(key);
+  }
+  const key = JSON.stringify([pairId, command.requestId.toLowerCase()]);
+  const fingerprint = JSON.stringify([command.title, command.memberIds, command.bossBotId]);
+  const previous = groupCreateRequests.get(key);
+  if (previous)
+    return previous.fingerprint === fingerprint
+      ? { ...previous.result, requestId: command.requestId }
+      : { ...base, ok: false, error: 'invalid-request' };
+  if (groupCreateRequests.size >= GROUP_CREATE_CACHE_LIMIT)
+    return { ...base, ok: false, error: 'session-busy' };
+  let result: GroupCreateReply;
+  try {
+    const created = createBotChat(services, {
+      kind: 'group',
+      title: command.title.trim(),
+      members: command.memberIds,
+      bossBotId: command.bossBotId,
+      workspace: { kind: 'chat-home' },
+    });
+    result = created.ok
+      ? { ...base, ok: true, chatId: created.chat.id }
+      : { ...base, ok: false, error: created.error };
+  } catch {
+    result = { ...base, ok: false, error: 'failed' };
+  }
+  // Creation is synchronous: the identity is recorded before any directory/reply await.
+  groupCreateRequests.set(key, { fingerprint, result, at: now });
+  return result;
+}
+
+/**
+ * 打开成员私聊：复用桌面 createBotChat 的 direct 唯一规则与 member-home 工作区。
+ * 已有未归档私聊直接返回同一 id（按 botId 天然幂等）；已归档私聊不自动复活也不另建，
+ * Bot 已归档 / 不存在 / Bot 模式关闭都明确拒绝。
+ */
+function directOpenResult(services: Services | null, command: DirectOpenCommand): DirectOpenReply {
+  const base = { type: 'bot-direct-open-result' as const, requestId: command.requestId };
+  if (!services) return { ...base, ok: false, error: 'disabled' };
+  const parsed = parsePhoneCommand(command);
+  if (!parsed.ok) return { ...base, ok: false, error: 'invalid-request' };
+  const bot = services.bots.get(command.botId);
+  if (!bot) return { ...base, ok: false, error: 'invalid' };
+  if (bot.archivedAt !== undefined) return { ...base, ok: false, error: 'bot-archived' };
+  const directs = services.chats
+    .list()
+    .filter((chat) => chat.kind === 'direct' && chat.members[0] === command.botId);
+  const existing = directs.find((chat) => chat.archivedAt === undefined);
+  if (existing) return { ...base, ok: true, chatId: existing.id };
+  if (directs.length > 0) return { ...base, ok: false, error: 'chat-archived' };
+  try {
+    const created = createBotChat(services, {
+      kind: 'direct',
+      members: [command.botId],
+      workspace: { kind: 'member-home' },
+    });
+    return created.ok
+      ? { ...base, ok: true, chatId: created.chat.id }
+      : { ...base, ok: false, error: created.error };
+  } catch {
+    return { ...base, ok: false, error: 'failed' };
+  }
+}
 
 /** 本进程是否下发过 Bot 目录：关闭 Bot 模式后据此通知手机隐藏分段 */
 let announced = false;
@@ -108,6 +198,8 @@ function catalogFrame(services: Services): HostToPhone {
     enabled: true,
     newSession: true,
     threads: true,
+    groupCreate: true,
+    directOpen: true,
     bots: services.bots
       .list()
       .map((bot) =>
@@ -187,6 +279,7 @@ function inboxFrame(services: Services): HostToPhone {
       kind: item.kind,
       chatId: item.chatId,
       ...(item.botId ? { botId: item.botId } : {}),
+      ...(item.conversationId ? { conversationId: item.conversationId } : {}),
       ...(item.ownerBotId ? { ownerBotId: item.ownerBotId } : {}),
       ...(item.text ? { text: item.text } : {}),
       ...(item.since !== undefined ? { since: item.since } : {}),
@@ -296,6 +389,18 @@ function threadResult(services: Services | null, command: ThreadCommand): Thread
 
 async function handle(pairId: string, command: PairBotCommand, reply: PairReply): Promise<void> {
   const services = enabledServices();
+  if (command.type === 'bot-direct-open') {
+    const result = directOpenResult(services, command);
+    if (result.ok && services) await replyDirectory(services, reply);
+    await reply(result);
+    return;
+  }
+  if (command.type === 'bot-group-create') {
+    const result = groupCreateResult(pairId, command, services);
+    if (result.ok && services) await replyDirectory(services, reply);
+    await reply(result);
+    return;
+  }
   if (command.type === 'bot-thread-create' || command.type === 'bot-thread-select') {
     const result = threadResult(services, command);
     // 先推目录：手机按根群 activeThreadId 换视图，回执到达时已对齐
@@ -366,12 +471,14 @@ async function handle(pairId: string, command: PairBotCommand, reply: PairReply)
     }
     case 'bot-artifacts': {
       const found = await phoneArtifacts(services, command.target);
-      await reply({
-        type: 'bot-artifacts',
-        target: command.target,
-        artifacts: found?.artifacts ?? [],
-        media: found?.media ?? [],
-      });
+      await reply(
+        fitBotArtifactsFrame({
+          type: 'bot-artifacts',
+          target: command.target,
+          artifacts: found?.artifacts ?? [],
+          media: found?.media ?? [],
+        })
+      );
       return;
     }
     case 'bot-artifact-image': {

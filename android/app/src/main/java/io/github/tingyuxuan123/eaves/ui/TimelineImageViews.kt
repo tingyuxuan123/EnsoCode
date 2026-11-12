@@ -39,7 +39,7 @@ internal fun TimelineImageStrip(images: List<TimelineImage>, modifier: Modifier 
     var opened by remember { mutableStateOf<TimelineImage?>(null) }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         images.take(4).forEachIndexed { index, image ->
-            val bitmap = remember(image.data) { decodeTimelineImage(image) }
+            val bitmap = remember(image.data) { decodeTimelineImage(image, maxEdge = 320) }
             val shape = RoundedCornerShape(14.dp)
             if (bitmap == null) {
                 Box(Modifier.size(96.dp).clip(shape).background(c.card2), contentAlignment = Alignment.Center) {

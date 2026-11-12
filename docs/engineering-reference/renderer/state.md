@@ -151,15 +151,17 @@ expect(store.getState().conversations.ended.messages).toHaveLength(before);
 当前主会话收到 `parent-ready` 后，如果仍缺权威正文，要主动补读只读尾窗，不能只依赖切换会话触发。
 空尾窗也必须结束加载，不能让已完成的派发继续显示「加载中」。回归：`sessions/index.test.ts`。
 
-## 乐观回显的收回：文本匹配 + 投递回执
+## 乐观回显的收回：优先按投递 ID
 
-回显先按文本匹配被同文 user upsert 消费（`sameUserText`，已覆盖 `<role>` 前缀、
-`/skill:` 展开、图片缩放提示、超长正文截断）。worker / pi 任何新的正文改写都会让
-匹配失效，回显滞留在尾部：`chatTimelineBusy` 恒真，三点 loading 不停、回复被挡在回显之上，
-重启从 jsonl 重读才恢复。兜底是 `deliveryId` 回执：renderer 随 prompt/steer 下发
-`deliveryId`，worker 按 pi 投递顺序（新 prompt 自身的 user 消息先于滞留 steer）配对，
-user upsert 之后发 `delivery-settled`，reducer 按 id 收回。worker 里所有注入 user 消息的
-调用都必须走 `promptTracked` / `steerTracked`，否则队列错位。
+renderer 随 prompt/steer 下发 `deliveryId`，worker 按 pi 投递顺序配对并在 user upsert
+同时带回 ID。reducer 先按 ID 消费回显；旧事件缺 ID 时才兼容 `sameUserText`（角色、技能、
+图片提示等会改写正文）。`delivery-settled` 仍作为独立回执；worker 内部注入也必须走带投递
+占位的入口，不能把无 ID 的新消息错配给另一条。历史 snapshot/reload 不能按同文吞掉本代已获
+`delivery-steer-queued` 的回显。撤回走精确会话代际与投递 ID，只有 worker 确认从 Pi 队列移除
+并回 `delivery-withdrawn`，reducer 才移除回显并恢复原草稿和图片。
+
+耗时瀑布使用 worker 实测时间。并行工具的 `toolResult.timestamp` 是 Pi 批次结果的投影时刻，
+不等于各自实际结束时刻；只用 `toolCompletedAt` 与 `toolDurationMs` 画区间，旧投影缺端点时不猜。
 
 侧栏 Files 按会话常驻（`mountedIds` 只增不减）。`evictColdMessages` 会把隐藏会话的
 `messages` 置空；此时对时间线做「已见 write」占位，会把空数组当成权威历史。

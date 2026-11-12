@@ -50,4 +50,5 @@ random nonces and rejects all-zero X25519 shared secrets before invoking box.
 Multiplatform Markdown Renderer (Material 3) 0.39.0
 Source: https://github.com/mikepenz/multiplatform-markdown-renderer
 Apache License 2.0; full text is included in assets/licenses/APACHE-2.0.txt.
-Rendered links are inert and remote image fetching is disabled in 小满 sessions.
+Only user-activated HTTP/HTTPS links may open externally; remote image fetching
+and application/file deep links remain disabled in 小满 sessions.

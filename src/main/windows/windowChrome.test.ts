@@ -8,14 +8,15 @@ describe('windowChromeOptions', () => {
       titleBarStyle: 'hidden',
       thickFrame: true,
       transparent: false,
-      titleBarOverlay: { color: '#ffffff', symbolColor: '#111111', height: 44 },
+      backgroundColor: '#ffffff',
+      titleBarOverlay: { color: '#00000000', symbolColor: '#111111', height: 44 },
     });
   });
 
   it('uses a dark initial surface for native controls and normal Windows windows', () => {
     expect(windowChromeOptions('win32', false, true)).toMatchObject({
       backgroundColor: '#202020',
-      titleBarOverlay: { color: '#202020', symbolColor: '#ffffff', height: 44 },
+      titleBarOverlay: { color: '#00000000', symbolColor: '#ffffff', height: 44 },
     });
   });
 

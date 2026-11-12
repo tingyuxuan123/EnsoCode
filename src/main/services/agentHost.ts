@@ -121,6 +121,7 @@ import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
 import { bundledDesignSkillPaths, getDesignPaths } from './design/appPaths';
+import { independentImageProvider } from './imageGeneration/providerHost';
 import { resolveImageProvider } from './imageGenerationConfig';
 import { resolveGlobalInstruction } from './instructionStore';
 import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
@@ -1362,6 +1363,16 @@ export function steerSession(
   });
 }
 
+/** Never replay a withdrawal against a replacement worker. */
+export function withdrawSteer(
+  identity: SessionIdentity,
+  deliveryId: string
+): { ok: boolean; error?: string } {
+  if (!worker || !workerReady) return { ok: false, error: 'Agent worker is not running.' };
+  worker.postMessage({ type: 'withdraw-steer', identity, deliveryId } satisfies AgentCommand);
+  return { ok: true };
+}
+
 const pendingCompletions = new Map<
   string,
   { resolve: (text: string) => void; reject: (error: Error) => void }
@@ -2159,8 +2170,8 @@ export function pushImageGenerationConfig(): void {
   const state = readSettingsState();
   worker.postMessage({
     type: 'set-image-generation-config',
-    generate: resolveImageProvider(state, 'generate_image') !== null,
-    edit: resolveImageProvider(state, 'edit_image') !== null,
+    generate: resolveImageProvider(state, 'generate_image', independentImageProvider()) !== null,
+    edit: resolveImageProvider(state, 'edit_image', independentImageProvider()) !== null,
   } satisfies AgentCommand);
 }
 

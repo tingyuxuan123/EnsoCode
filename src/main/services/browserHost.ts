@@ -1094,6 +1094,7 @@ export class BrowserHost {
     }
     const msg = parseDesignBinding(parsed);
     if (!msg) return;
+    const url = tab.view.webContents.getURL();
     if (msg.type === 'cancelled') {
       await this.setDesignMode(tab.id, false);
       this.emitDesign({ type: 'cancelled', conversationId: tab.ownerSessionId, tabId: tab.id });
@@ -1116,10 +1117,12 @@ export class BrowserHost {
       const data = typeof composed === 'string' ? composed : '';
       if (!data) return;
       await this.setDesignMode(tab.id, false);
+      if (tab.view.webContents.isDestroyed() || tab.view.webContents.getURL() !== url) return;
       this.emitDesign({
         type: 'annotated',
         conversationId: tab.ownerSessionId,
         tabId: tab.id,
+        url,
         payload: { label: 'annotation', path: 'scribble', text: '' },
         image: { data, mimeType: 'image/png' },
       });
@@ -1136,10 +1139,12 @@ export class BrowserHost {
     } catch {}
     if (seq !== tab.pickSeq) return;
     await this.setDesignMode(tab.id, false);
+    if (tab.view.webContents.isDestroyed() || tab.view.webContents.getURL() !== url) return;
     this.emitDesign({
       type: 'picked',
       conversationId: tab.ownerSessionId,
       tabId: tab.id,
+      url,
       payload,
       ...(image ? { image } : {}),
     });

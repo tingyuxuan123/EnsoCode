@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   dismissCoworkerSession: vi.fn(() => ({ ok: true })),
   promptSession: vi.fn(),
   steerSession: vi.fn(),
+  withdrawSteer: vi.fn(() => ({ ok: true })),
   abortSession: vi.fn(),
   setPairAgentBridge: vi.fn(),
   configurePairSessionHost: vi.fn(),
@@ -127,6 +128,7 @@ vi.mock('../services/agentHost', () => ({
   spawnChildSession: vi.fn(),
   spawnSession: mocks.spawnSession,
   steerSession: mocks.steerSession,
+  withdrawSteer: mocks.withdrawSteer,
   stopBackgroundTask: vi.fn(),
   backgroundForegroundTool: vi.fn(),
   summarizeConversationTitle: mocks.summarizeConversationTitle,
@@ -801,6 +803,23 @@ describe('agent IPC Main identity boundary', () => {
       expect(await invoke('conv-1', 'hi', undefined, deliveryId)).toMatchObject({ ok: false });
       expect(send).not.toHaveBeenCalled();
     });
+  });
+
+  it('仅将匹配当前代际的有效撤回请求发给 worker', () => {
+    const identity = { sessionId: 'conv-1', generation: 'gen-1' };
+    mocks.currentIdentity.mockReturnValue(identity);
+    const invoke = (generation: unknown, deliveryId: unknown) =>
+      mocks.handlers.get(IPC_CHANNELS.AGENT_WITHDRAW_STEER)?.(
+        event,
+        'conv-1',
+        generation,
+        deliveryId
+      );
+    expect(invoke('old', 'd-1')).toMatchObject({ ok: false });
+    expect(invoke('gen-1', { id: 'd-1' })).toMatchObject({ ok: false });
+    expect(mocks.withdrawSteer).not.toHaveBeenCalled();
+    expect(invoke('gen-1', 'd-1')).toEqual({ ok: true });
+    expect(mocks.withdrawSteer).toHaveBeenCalledWith(identity, 'd-1');
   });
 
   describe('已结束 child 的只读历史读取', () => {

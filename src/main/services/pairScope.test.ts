@@ -90,6 +90,34 @@ describe('配对作用域', () => {
     expect(commandAllowedForScope('read', 'bot-delegation-cancel')).toBe(false);
   });
 
+  it('rejects group creation with its correlated result on read-only devices', () => {
+    expect(commandAllowedForScope('read', 'bot-group-create')).toBe(false);
+    expect(
+      scopeRejection({
+        type: 'bot-group-create',
+        requestId: 'r',
+        title: 'Team',
+        memberIds: [],
+        bossBotId: 'a',
+      })
+    ).toEqual({
+      type: 'bot-group-create-result',
+      requestId: 'r',
+      ok: false,
+      error: 'read-only',
+    });
+  });
+
+  it('rejects direct open with its correlated result on read-only devices', () => {
+    expect(commandAllowedForScope('read', 'bot-direct-open')).toBe(false);
+    expect(scopeRejection({ type: 'bot-direct-open', requestId: 'r', botId: 'b' })).toEqual({
+      type: 'bot-direct-open-result',
+      requestId: 'r',
+      ok: false,
+      error: 'read-only',
+    });
+  });
+
   it('rejects new-session with the original request identity', () => {
     expect(commandAllowedForScope('read', 'bot-new-session')).toBe(false);
     expect(

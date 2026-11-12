@@ -1,9 +1,12 @@
 ---
 name: vetta-ui-design
-description: "Build and edit design documents (.vetd) on the Vetta design canvas — app screens, landing pages, slides, posters, infographics. Use when the user asks for a UI design, mockup, screen, deck, or poster, or attaches a design frame/element from the canvas. Frames are real React (TSX) routes, not pictures. Do NOT use for ordinary front-end work in the user's own codebase — building, styling or reworking pages of a real app is that repo's job, and none of the vetd_* tools or canvas rules here apply to it."
+description: "Build editable .vetd/TSX designs: UI mockups, slides, poster layouts, infographics or attached canvas frames. Not for drawing/generating pictures, illustrated posters (海报) or wallpapers: use generate_image/edit_image when available. Poster alone does not imply a canvas. Implement existing app pages in that repo, not on this canvas."
 ---
 
 # Vetta UI Design
+
+Drawn posters/pictures use `generate_image`, not this workflow. A canvas is for
+explicit editable layouts; never silently replace a picture with TSX/HTML/SVG.
 
 A design document is ONE directory — `login-app.vetd/` — holding everything:
 

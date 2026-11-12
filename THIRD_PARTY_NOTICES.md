@@ -86,6 +86,13 @@ The image-generation tools and OpenAI-compatible image request protocol in
 `src/agent/tools/imageGeneration.ts` and `src/main/services/imageGeneration/`
 are also adapted from Open Vetta's `image-gen` preset and
 `openai-compatible-image-provider.ts` (Apache-2.0, Copyright 2026 Vetta).
+The flowing image-generation placeholder in `GeneratedImageSkeleton.tsx`, the
+image-overlay toolbar and SVG action glyphs in `GeneratedImageCard.tsx`, and their
+styles in `styles/shared.css` are adapted from the same preset's `GenerationSkeleton`,
+`SwiperItem`, `IconButton`, icons and animation stylesheet, with full reduced-motion support.
+The placeholder's `gallery-bold` glyph is from [Solar](https://www.figma.com/community/file/1166831539721848736)
+by 480 Design, used unmodified via [Iconify](https://api.iconify.design/solar/gallery-bold.svg)
+under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 小满 replaces the upstream host, storage and credential integrations; it does
 not include or confer access to Vetta's subscription image service. The full
 Apache-2.0 license and upstream NOTICE are distributed in `resources/design/`.

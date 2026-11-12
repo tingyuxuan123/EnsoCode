@@ -5,11 +5,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.tingyuxuan123.eaves.mirror.CreationPhase
 import io.github.tingyuxuan123.eaves.mirror.DesktopCreation
@@ -42,6 +44,21 @@ class NewTaskConfigTest {
     private val projects = listOf(DesktopProject("p", "真实项目"))
     private val providers = listOf(DesktopProvider("provider", "真实服务", listOf(
         DesktopModel("m1", "模型一"), DesktopModel("m2", "模型二"))))
+
+    @Test fun tappingHeaderModelOpensSettingsAndUsesChosenModelForNewTask() {
+        val live = DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers)
+        var sent: TaskLaunch? = null
+        compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
+            live = live, onCreateTask = { sent = it }) }
+        compose.onNodeWithText("模型一 · 高").performTouchInput { click() }
+        compose.onNodeWithText("新任务设置").assertIsDisplayed()
+        compose.onNodeWithText("模型二").performClick()
+        compose.onNodeWithContentDescription("关闭新任务设置").performClick()
+        compose.onNodeWithText("模型二 · 高").assertIsDisplayed()
+        compose.onNodeWithContentDescription("任务描述").performTextInput("使用所选模型")
+        compose.onNodeWithContentDescription("发送").performClick()
+        assertEquals("m2", sent?.modelId)
+    }
 
     @Test fun choicesApplyImmediatelyAndDoNotAdvertiseUnknownPresets() {
         val config = mutableStateOf(TaskConfiguration())

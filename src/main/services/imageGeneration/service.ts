@@ -20,6 +20,11 @@ import {
   type ImageGenerationResult,
   isGeneratedImageId,
 } from '@shared/imageGeneration';
+import {
+  type ImageProviderSettings,
+  imageOutputParams,
+  parseImageProviderSettings,
+} from '@shared/imageProvider';
 import { sniffImageMime } from '@shared/imageSniff';
 import {
   fetchRemoteImageDataUrl,
@@ -50,6 +55,7 @@ export interface ImageProviderConfig {
   baseUrl: string;
   apiKey: string;
   modelId: string;
+  output?: ImageProviderSettings;
 }
 
 export interface ImageGenerationDeps {
@@ -151,6 +157,11 @@ async function run(
 ): Promise<ImageGenerationResult> {
   const { baseUrl, apiKey, modelId } = readConfig(config);
   const parsed = readInput(input);
+  const output =
+    config.output === undefined ? undefined : parseImageProviderSettings(config.output);
+  if (config.output !== undefined && !output)
+    throw new GenerationError('Invalid image output settings');
+  const params = output ? imageOutputParams(output, input.size) : { size: parsed.size };
   const workspace = await resolveWorkspace(cwd);
   const source = await readSourceImage(parsed, workspace);
 
@@ -168,11 +179,11 @@ async function run(
     ...(source
       ? {
           headers: { Authorization: `Bearer ${apiKey}` },
-          body: buildEditForm(modelId, parsed, source),
+          body: buildEditForm(modelId, parsed, source, params),
         }
       : {
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: modelId, prompt: parsed.prompt, n: 1, size: parsed.size }),
+          body: JSON.stringify({ ...params, model: modelId, prompt: parsed.prompt, n: 1 }),
         }),
   });
 
@@ -427,12 +438,20 @@ function readFileBounded(file: string, label: string, root: string): Buffer {
   }
 }
 
-function buildEditForm(modelId: string, parsed: ParsedInput, source: ImageBytes): FormData {
+function buildEditForm(
+  modelId: string,
+  parsed: ParsedInput,
+  source: ImageBytes,
+  params: Record<string, unknown>
+): FormData {
   const form = new FormData();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined)
+      form.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+  }
   form.set('model', modelId);
   form.set('prompt', parsed.prompt);
   form.set('n', '1');
-  form.set('size', parsed.size);
   form.set(
     'image',
     new Blob([new Uint8Array(source.bytes)], { type: source.mimeType }),

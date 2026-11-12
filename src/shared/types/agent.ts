@@ -1273,6 +1273,7 @@ export type AgentCommand =
       /** Bot 插话仅允许进入活轮；不再忙时交回 Main 重新准入。 */
       activeOnly?: true;
     }
+  | { type: 'withdraw-steer'; identity: SessionIdentity; deliveryId: string }
   | { type: 'set-model'; identity: SessionIdentity; model: SpawnModelConfig }
   | { type: 'set-thinking'; identity: SessionIdentity; level: ThinkingLevel }
   | {
@@ -1650,6 +1651,8 @@ export interface ProjectedMessage {
   todos?: TodoItem[];
   /** 工具执行耗时（仅 toolResult 消息带；worker 按 tool_execution_start/end 打点，不含排队） */
   toolDurationMs?: number;
+  /** 实际 tool_execution_end 时刻；toolResult.timestamp 可能是并行批次一起写入的时间。 */
+  toolCompletedAt?: number;
   /** subagent 工具 toolResult 的执行元数据 */
   subagentMeta?: { modelId?: string; outputTokens?: number; steps?: number };
   /** Hashline edit 成功结果：补丁前后全文（不含 patch） */
@@ -1884,6 +1887,8 @@ export type AgentWorkerEvent =
     }
   | { type: 'delivery-settled'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'delivery-rejected'; identity: SessionIdentity; seq: number; deliveryId: string }
+  | { type: 'delivery-steer-queued'; identity: SessionIdentity; seq: number; deliveryId: string }
+  | { type: 'delivery-withdrawn'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'delivery-deferred'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'status'; identity: SessionIdentity; seq: number; status: NodeStatus; error?: string }
   | {
@@ -1892,6 +1897,7 @@ export type AgentWorkerEvent =
       seq: number;
       index: number;
       message: ProjectedMessage;
+      deliveryId?: string;
     }
   | {
       type: 'turn-completed';
@@ -2387,6 +2393,11 @@ function isProjectedCodemodeCalls(value: unknown): value is ProjectedCodemodeCal
 }
 
 function hasValidProjectedMetadata(value: Record<string, unknown>): boolean {
+  if (
+    value.toolCompletedAt !== undefined &&
+    (value.role !== 'toolResult' || !isSequence(value.toolCompletedAt))
+  )
+    return false;
   if (
     value.designCards !== undefined &&
     (value.role !== 'toolResult' ||
@@ -3652,6 +3663,12 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         ? (value as unknown as AgentCommand)
         : null;
     }
+    case 'withdraw-steer':
+      return hasExactKeys(value, ['type', 'identity', 'deliveryId']) &&
+        parseAnySessionIdentity(value.identity) &&
+        isDeliveryId(value.deliveryId)
+        ? (value as unknown as AgentCommand)
+        : null;
     case 'set-model':
       return hasExactKeys(value, ['type', 'identity', 'model']) &&
         parseAnySessionIdentity(value.identity) &&
@@ -4294,6 +4311,8 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         : null;
     case 'delivery-settled':
     case 'delivery-rejected':
+    case 'delivery-steer-queued':
+    case 'delivery-withdrawn':
     case 'delivery-deferred':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'deliveryId']) &&
         isDeliveryId(value.deliveryId)
@@ -4305,6 +4324,7 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         : null;
     case 'message-upsert':
       return isSequence(value.index) &&
+        (value.deliveryId === undefined || isDeliveryId(value.deliveryId)) &&
         isRecord(value.message) &&
         hasValidProjectedMetadata(value.message)
         ? (value as unknown as AgentWorkerEvent)

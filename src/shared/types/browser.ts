@@ -89,6 +89,7 @@ export type BrowserDesignModeEvent =
       type: 'picked';
       conversationId: string;
       tabId: string;
+      url?: string;
       payload: {
         label: string;
         path: string;
@@ -105,6 +106,7 @@ export type BrowserDesignModeEvent =
       type: 'annotated';
       conversationId: string;
       tabId: string;
+      url?: string;
       payload: {
         label: string;
         path: string;

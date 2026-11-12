@@ -1,5 +1,7 @@
 export const WINDOW_TITLE_BAR_HEIGHT = 44;
 export const WINDOWS_CAPTION_BUTTONS_WIDTH = 138;
+/** 只透明化按钮底板，让工作区绘制的背景和遮罩从下方透出。 */
+export const WINDOWS_CAPTION_BACKGROUND = '#00000000';
 
 /**
  * Windows 原生窗口按钮的符号色：创建窗口与运行时同步共用一份，避免两边漂移。
@@ -8,15 +10,16 @@ export const WINDOWS_CAPTION_BUTTONS_WIDTH = 138;
 export const WINDOWS_SYMBOL_COLOR = { onDark: '#ffffff', onLight: '#111111' } as const;
 
 export interface TitleBarAppearance {
+  /** 窗口的不透明兜底色，不是原生按钮的底板颜色。 */
   color: string;
   symbolColor: string;
 }
 
 /**
- * 原生标题栏只接受不透明 RGB 颜色；渲染层不能借外观同步修改高度或其他窗口属性。
+ * 窗口兜底色和按钮符号色只接受不透明 RGB；透明按钮底板由主进程固定设置。
  *
- * Native title bars accept opaque RGB colors only; appearance updates cannot change
- * the height or any other window properties supplied by the renderer.
+ * Keep the renderer-provided window fallback and caption glyph colors opaque.
+ * The main process owns the transparent caption background and native geometry.
  */
 export function parseTitleBarAppearance(raw: unknown): TitleBarAppearance | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;

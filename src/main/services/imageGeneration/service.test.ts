@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseImageGenerationResult } from '@shared/imageGeneration';
+import { DEFAULT_IMAGE_PROVIDER } from '@shared/imageProvider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateImage, type ImageProviderConfig } from './service';
 
@@ -124,6 +125,70 @@ async function waitFor(predicate: () => boolean, label: string): Promise<void> {
 }
 
 describe('generateImage · 请求形态', () => {
+  it('独立输出设置对 JSON 和 multipart 都生效，额外参数不能覆盖必需字段', async () => {
+    const cwd = await makeDir();
+    const source = await putSourceImage(cwd, `${randomUUID()}.png`, PNG);
+    const output = {
+      ...DEFAULT_IMAGE_PROVIDER,
+      sizeMode: '2k' as const,
+      quality: 'high',
+      extraParams:
+        '{"output_format":"png","background":"auto","model":"evil","n":9,"prompt":"evil","image":"evil","meta":{"x":1}}',
+    };
+    const { impl, calls } = fakeFetch(() => b64Response(PNG));
+    await generateImage(
+      { prompt: 'cat', size: '1536x1024' },
+      cwd,
+      { ...CONFIG, output },
+      undefined,
+      { fetch: impl }
+    );
+    await generateImage(
+      { prompt: 'cat', size: '1536x1024', sourceImagePath: source },
+      cwd,
+      { ...CONFIG, output },
+      undefined,
+      { fetch: impl }
+    );
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
+      model: 'gpt-image-1',
+      prompt: 'cat',
+      n: 1,
+      size: '2048x1360',
+      quality: 'high',
+      output_format: 'png',
+      background: 'auto',
+      meta: { x: 1 },
+    });
+    const form = calls[1].init.body as FormData;
+    expect(form.get('size')).toBe('2048x1360');
+    expect(form.get('quality')).toBe('high');
+    expect(form.get('model')).toBe('gpt-image-1');
+    expect(form.get('meta')).toBe('{"x":1}');
+    expect(form.get('image')).toBeInstanceOf(Blob);
+  });
+  it('不传尺寸模式在两种请求中均删除 size 字段', async () => {
+    const cwd = await makeDir();
+    const source = await putSourceImage(cwd, `${randomUUID()}.png`, PNG);
+    const output = { ...DEFAULT_IMAGE_PROVIDER, sizeMode: 'omit' as const };
+    const { impl, calls } = fakeFetch(() => b64Response(PNG));
+    await generateImage(
+      { prompt: 'cat', size: '1536x1024' },
+      cwd,
+      { ...CONFIG, output },
+      undefined,
+      { fetch: impl }
+    );
+    await generateImage(
+      { prompt: 'cat', sourceImagePath: source },
+      cwd,
+      { ...CONFIG, output },
+      undefined,
+      { fetch: impl }
+    );
+    expect(JSON.parse(String(calls[0].init.body))).not.toHaveProperty('size');
+    expect((calls[1].init.body as FormData).has('size')).toBe(false);
+  });
   it('文本生图走 JSON generations，并把图片落到 .xiaoman/images/<uuid>.png', async () => {
     const cwd = await makeDir();
     const { impl, calls } = fakeFetch(() => b64Response(PNG));

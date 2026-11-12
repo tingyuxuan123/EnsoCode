@@ -21,6 +21,7 @@ import {
   editLatestAssistantForRetry,
   silentTurnRecoveryExtension,
   steerActiveSession,
+  steerWithWithdrawal,
 } from './sessionAdapter';
 import { POST_TOOL_EMPTY_NUDGE, SILENT_TURN_NUDGE } from './silentTurn';
 
@@ -329,6 +330,29 @@ describe('Pi session adapter integration', () => {
     expect(current.requests).toEqual([]);
     expect(current.session.getSteeringMessages()).toEqual([]);
     expect(current.manager.getBranch().filter((entry) => entry.type === 'message')).toEqual([]);
+  });
+
+  it('detachable steering removes the exact duplicate in the real Pi queue', async () => {
+    const current = await harness(['wait-for-abort']);
+    const original = current.session.prompt('original');
+    await current.streamStarted;
+    await current.session.steer('same');
+    let detach: (() => boolean) | undefined;
+    expect(
+      await steerWithWithdrawal(current.session, 'same', undefined, (remove) => {
+        detach = remove;
+      })
+    ).toBe('queued');
+    expect(current.session.getSteeringMessages()).toEqual(['same', 'same']);
+    expect(detach?.()).toBe(true);
+    expect(detach?.()).toBe(false);
+    expect(current.session.getSteeringMessages()).toEqual(['same']);
+    await current.session.abort();
+    await original;
+    await current.session.prompt('next');
+    const latest = current.requests.at(-1);
+    expect(latest && contextText(latest)).toContain('same');
+    expect(current.session.getSteeringMessages()).toEqual([]);
   });
 
   it('guarded steer rechecks activity after an async input hook without leaving queued input', async () => {

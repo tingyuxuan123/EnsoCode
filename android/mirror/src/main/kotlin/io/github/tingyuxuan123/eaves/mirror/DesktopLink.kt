@@ -30,8 +30,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -104,17 +106,26 @@ class DesktopLink internal constructor(
     private var authoritativeGoal: DesktopGoal? = null
     private var goalEpochFloor = 0L
     private var goalEvidence: GoalEvidence? = null
+    private var modelEvidence: ModelEvidence? = null
+    private var thinkingEvidence: ModelEvidence? = null
     private var maintenanceEvidence: MaintenanceEvidence? = null
     private var rewindEvidence: RewindEvidence? = null
     private var taskStopEvidence: TaskStopEvidence? = null
     private var fileListPending: FileListPending? = null
     private var fileReadPending: FileReadPending? = null
+    private var botFileListPending: BotFileListPending? = null
+    private var botFileReadPending: BotFileReadPending? = null
+    // A bot artifact frame carries no request id: once a target went silent, its late answer could not
+    // be told apart from a new request's, so this generation never asks for that target again.
+    private val silentBotArtifacts = LinkedHashSet<DesktopBotArtifactTarget>()
     private var previewPending: PreviewPending? = null
     private var botCatalogSentAt: Long? = null
     private var botInboxSentAt: Long? = null
     private var botTimelineSent: BotTimelineSent? = null
     // A bot write's answer is either a delivery-id receipt or a generic scope denial; both need order.
     private val botWrites = mutableListOf<BotWrite>()
+    // The newest write of each kind, keyed by command: a denial carries no id of its own.
+    private val botWriteEvidence = mutableMapOf<BotWriteKind, BotWrite>()
     private var attemptId = 0L
     private var pendingCreation: PendingCreation? = null
     // Caller writes cannot outlive their visible UI generation while waiting for the actor.
@@ -122,8 +133,9 @@ class DesktopLink internal constructor(
     // These actions also capture authorization for a specific authenticated baseline.
     @Volatile private var creationAuthority: Any? = null
     @Volatile private var sessionWriteAuthority: Any? = null
+    // Rotate even when a changed catalog later returns to the same configuration (A → B → A).
+    @Volatile private var modelTarget: ModelTarget? = null
     private val imageCommandQueued = AtomicBoolean()
-    private var botStopWrite: BotWrite? = null
 
     init {
         scope.launch {
@@ -255,6 +267,46 @@ class DesktopLink internal constructor(
         if (!disposed.get()) events.trySend(Event.WriteGoal(sessionId, epoch, authority, command, expected, normalized))
     }
 
+    /** Toggle reasoning for the selected desktop session without an optimistic catalog change. */
+    fun setReasoning(sessionId: String, enabled: Boolean) = setThinkingConfig(sessionId, enabled, null)
+
+    /** Sets the stored thinking level even if reasoning is currently disabled. */
+    fun setThinking(sessionId: String, level: TaskThinkingLevel) = setThinkingConfig(sessionId, null, level)
+
+    private fun setThinkingConfig(sessionId: String, enabled: Boolean?, level: TaskThinkingLevel?) {
+        val authority = sessionWriteAuthority ?: return
+        val target = modelTarget?.takeIf { it.sessionId == sessionId } ?: return
+        val baseline = state.value
+        val session = baseline.session ?: return
+        val task = baseline.catalog.find { it.id == sessionId } ?: return
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly || session.loading || session.error ||
+            session.timeline.sessionId != sessionId || task.archived || task.parentId != null ||
+            task.modelTarget() != target ||
+            session.modelAttempt?.phase == SessionCommandPhase.Waiting || session.thinkingAttempt?.phase == SessionCommandPhase.Waiting ||
+            target.matchesThinking(enabled, level)) return
+        val epoch = session.timeline.cursor?.get("epoch").linkString() ?: return
+        events.trySend(Event.WriteThinking(sessionId, epoch, authority, enabled, level, target,
+            session.thinkingAttempt?.id, session.modelAttempt?.id))
+    }
+
+    /** Selects the desktop's next-turn model; never interrupts the current turn or changes the catalog optimistically. */
+    fun setModel(sessionId: String, providerId: String, modelId: String) {
+        val authority = sessionWriteAuthority ?: return
+        val target = modelTarget?.takeIf { it.sessionId == sessionId } ?: return
+        val baseline = state.value
+        val session = baseline.session ?: return
+        val task = baseline.catalog.find { it.id == sessionId } ?: return
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly || session.loading || session.error ||
+            session.timeline.sessionId != sessionId || task.archived || task.parentId != null ||
+            task.modelTarget() != target ||
+            session.modelAttempt?.phase == SessionCommandPhase.Waiting ||
+            session.thinkingAttempt?.phase == SessionCommandPhase.Waiting ||
+            !baseline.hasModel(providerId, modelId) || task.providerId == providerId && task.modelId == modelId) return
+        val epoch = session.timeline.cursor?.get("epoch").linkString() ?: return
+        events.trySend(Event.WriteModel(sessionId, epoch, authority, providerId, modelId,
+            target, session.modelAttempt?.id, session.thinkingAttempt?.id))
+    }
+
     /**
      * Retry or compact the selected session. The caller hands back the exact baseline it saw so an
      * old screen can never resend after the actor's epoch, attempt or compaction moved underneath it.
@@ -328,6 +380,28 @@ class DesktopLink internal constructor(
             fileId.length !in 1..FILE_TEXT_LIMIT || fileId.isBlank() || offset !in 0..MAX_SAFE_INTEGER ||
             baseline.session?.timeline?.sessionId != sessionId || baseline.session.files?.reading == true) return
         events.trySend(Event.ReadFile(sessionId, fileId, offset))
+    }
+
+    /**
+     * List one message's artifact files. It is a read, so a read-only device may ask; the projection
+     * is bound to [target] and replaced as soon as another message's artifacts are opened.
+     */
+    fun listBotFiles(target: DesktopBotArtifactTarget) {
+        val baseline = state.value
+        val bots = baseline.bots
+        if (disposed.get() || baseline.phase != LinkPhase.Online || !botTargetValid(target) ||
+            (bots?.filesTarget == target && bots.files?.listing == true)) return
+        events.trySend(Event.ListBotFiles(target))
+    }
+
+    /** Read one bounded block of a file id the desktop listed for exactly this message. */
+    fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) {
+        val baseline = state.value
+        val bots = baseline.bots ?: return
+        if (disposed.get() || baseline.phase != LinkPhase.Online || !botTargetValid(target) ||
+            bots.filesTarget != target || bots.files?.reading == true ||
+            fileId.length !in 1..FILE_TEXT_LIMIT || fileId.isBlank() || offset !in 0..MAX_SAFE_INTEGER) return
+        events.trySend(Event.ReadBotFile(target, fileId, offset))
     }
 
     /** Read-only listing of the selected session's preview targets; it never needs a write scope. */
@@ -440,6 +514,108 @@ class DesktopLink internal constructor(
         }
     }
 
+    /**
+     * Start a fresh conversation. The host answers `needsConfirmation` when the group is busy; the
+     * phone owns the request id and never resets the timeline by itself.
+     */
+    fun requestBotNewSession(chatId: String) {
+        val authority = creationAuthority ?: return
+        val baseline = state.value
+        val bots = baseline.bots
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly ||
+            bots?.enabled != true || !bots.newSessionEnabled || bots.writeBusy ||
+            bots.botChat(chatId) == null || !botIdValid(chatId)) return
+        events.trySend(Event.NewBotSession(chatId, null, authority))
+    }
+
+    /** The confirmed second phase: only for the attempt the host asked about, and always a new request. */
+    fun confirmBotNewSession(chatId: String) {
+        val authority = creationAuthority ?: return
+        val baseline = state.value
+        val bots = baseline.bots
+        val attempt = bots?.newSession
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly ||
+            bots?.enabled != true || !bots.newSessionEnabled || bots.writeBusy ||
+            attempt == null || attempt.phase != BotNewSessionPhase.NeedsConfirmation || attempt.chatId != chatId ||
+            !botIdValid(chatId)) return
+        events.trySend(Event.NewBotSession(chatId, attempt.requestId, authority))
+    }
+
+    /** Re-run one failed system row of the open group timeline; nothing else is retryable. */
+    fun retryBotEntry(chatId: String, entryId: String) {
+        val authority = creationAuthority ?: return
+        val baseline = state.value
+        val bots = baseline.bots
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly ||
+            bots?.enabled == false || bots == null || bots.writeBusy || bots.timelineChatId != chatId ||
+            !botIdValid(chatId) || !botIdValid(entryId)) return
+        val entry = bots.timeline.firstOrNull { it.id == entryId }
+        if (entry?.kind != "system" || entry.failure == null) return
+        events.trySend(Event.RetryBotEntry(chatId, entryId, authority))
+    }
+
+    /** Drop one inbox row the host marked dismissible; only the next table proves it is gone. */
+    fun dismissBotInboxItem(key: String) {
+        val authority = creationAuthority ?: return
+        val baseline = state.value
+        val bots = baseline.bots
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly ||
+            bots?.enabled == false || bots == null || !botIdValid(key) ||
+            bots.inboxDismiss?.phase == SessionCommandPhase.Waiting ||
+            bots.inbox.none { it.key == key && it.dismissible }) return
+        events.trySend(Event.DismissBotInbox(key, authority))
+    }
+
+    /** Create a group from listed members; the phone never invents the chat or opens it early. */
+    fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) {
+        val authority = creationAuthority ?: return
+        val baseline = state.value
+        val bots = baseline.bots
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly ||
+            bots?.enabled != true || !bots.groupCreateEnabled || bots.writeBusy) return
+        val normalized = botTitleText(title) ?: return
+        val members = memberIds.toList()
+        if (members.size !in 2..BOT_CHAT_MEMBER_LIMIT || members.size != members.toSet().size ||
+            members.any { !botIdValid(it) } || bossBotId !in members) return
+        val usable = bots.members.filter { !it.archived }.map { it.id }.toSet()
+        if (!members.all { it in usable }) return
+        events.trySend(Event.CreateBotGroup(normalized, members, bossBotId, authority))
+    }
+
+    /**
+     * Open (or reuse) the direct chat of one listed member. The host answers with the chat id it
+     * settled on; the phone never invents the chat or opens it before that receipt.
+     */
+    fun openBotDirect(botId: String) {
+        val authority = creationAuthority ?: return
+        val baseline = state.value
+        val bots = baseline.bots
+        if (disposed.get() || baseline.phase != LinkPhase.Online || baseline.readOnly ||
+            bots?.enabled != true || !bots.directOpenEnabled || bots.writeBusy ||
+            botId.length !in 1..BOT_TEXT_LIMIT || botId.isBlank()) return
+        // Only a member the catalog listed and did not archive is a direct-chat target.
+        if (bots.members.none { it.id == botId && !it.archived }) return
+        events.trySend(Event.OpenBotDirect(botId, authority))
+    }
+
+    /** Read one message's artifact list and images; it is a read, so a read-only device may ask. */
+    fun loadBotArtifacts(target: DesktopBotArtifactTarget) {
+        val baseline = state.value
+        if (disposed.get() || baseline.phase != LinkPhase.Online || !botTargetValid(target) ||
+            baseline.bots?.artifacts?.phase == SessionCommandPhase.Waiting) return
+        events.trySend(Event.LoadBotArtifacts(target))
+    }
+
+    /** Load one full-size image by media id or artifact path; the host echoes only the request id. */
+    fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String? = null, rel: String? = null,
+        requestId: String = UUID.randomUUID().toString()) {
+        val baseline = state.value
+        if (disposed.get() || baseline.phase != LinkPhase.Online || !botTargetValid(target) ||
+            (mediaId == null) == (rel == null) || !BOT_DELIVERY_ID.matches(requestId) ||
+            baseline.bots?.artifactImage?.phase == SessionCommandPhase.Waiting) return
+        events.trySend(Event.LoadBotArtifactImage(target, mediaId, rel, requestId))
+    }
+
     override fun close() {
         if (disposed.compareAndSet(false, true)) events.trySend(Event.Dispose)
     }
@@ -494,11 +670,15 @@ class DesktopLink internal constructor(
             }
             is Event.WriteQueue -> writeQueue(event)
             is Event.WriteGoal -> writeGoal(event)
+            is Event.WriteModel -> writeModel(event)
+            is Event.WriteThinking -> writeThinking(event)
             is Event.WriteMaintenance -> writeMaintenance(event)
             is Event.WriteRewind -> writeRewind(event)
             is Event.WriteTaskStop -> writeTaskStop(event)
             is Event.ListFiles -> requestFileList(event.sessionId)
             is Event.ReadFile -> requestFileRead(event)
+            is Event.ListBotFiles -> requestBotFileList(event.target)
+            is Event.ReadBotFile -> requestBotFileRead(event)
             is Event.ListPreviews -> requestPreviewList(event.sessionId)
             is Event.OpenPreview -> requestPreviewOpen(event)
             is Event.PreviewAction -> requestPreviewAction(event)
@@ -511,6 +691,13 @@ class DesktopLink internal constructor(
             is Event.BotSend -> writeBotSend(event)
             is Event.BotStop -> writeBotStop(event)
             is Event.ChangeBotThread -> writeBotThread(event)
+            is Event.NewBotSession -> writeBotNewSession(event)
+            is Event.RetryBotEntry -> writeBotRetry(event)
+            is Event.DismissBotInbox -> writeBotDismiss(event)
+            is Event.CreateBotGroup -> writeBotGroupCreate(event)
+            is Event.OpenBotDirect -> writeBotDirectOpen(event)
+            is Event.LoadBotArtifacts -> requestBotArtifacts(event.target)
+            is Event.LoadBotArtifactImage -> requestBotArtifactImage(event)
             is Event.Open -> {
                 if (active(event.connection) && phase == LinkPhase.Connecting) {
                     val connection = event.connection
@@ -576,11 +763,20 @@ class DesktopLink internal constructor(
         botTimelineSent = null
         // An in-flight bot write belongs to that generation too; its receipt can never arrive here.
         botWrites.clear()
-        botStopWrite = null
+        botWriteEvidence.clear()
+        // Bot files, artifact reads and their silences all belong to one authenticated connection.
+        clearBotFiles()
         current?.let { connection ->
             cancelTimer(connection, Timer.BotSend)
             cancelTimer(connection, Timer.BotStop)
             cancelTimer(connection, Timer.BotThread)
+            cancelTimer(connection, Timer.BotNewSession)
+            cancelTimer(connection, Timer.BotRetry)
+            cancelTimer(connection, Timer.BotDismiss)
+            cancelTimer(connection, Timer.BotGroupCreate)
+            cancelTimer(connection, Timer.BotDirectOpen)
+            cancelTimer(connection, Timer.BotArtifacts)
+            cancelTimer(connection, Timer.BotArtifactImage)
         }
         val previous = mutableState.value
         if (phase == LinkPhase.Revoked || disposing) failedResponses.clear()
@@ -597,6 +793,11 @@ class DesktopLink internal constructor(
                     queue.copy(phase = SessionCommandPhase.Unconfirmed) else queue },
                 goalReady = false,
                 goalAttempt = it.goalAttempt.withoutGoalEvidence(),
+                modelReady = false,
+                modelAttempt = it.modelAttempt?.let { model -> if (model.phase == SessionCommandPhase.Waiting)
+                    model.copy(phase = SessionCommandPhase.Unconfirmed) else model },
+                thinkingAttempt = it.thinkingAttempt?.let { attempt -> if (attempt.phase == SessionCommandPhase.Waiting)
+                    attempt.copy(phase = SessionCommandPhase.Unconfirmed) else attempt },
                 maintenance = it.maintenance?.let { attempt -> if (attempt.phase == SessionCommandPhase.Waiting)
                     attempt.copy(phase = SessionCommandPhase.Unconfirmed) else attempt },
                 rewind = it.rewind?.let { attempt -> if (attempt.phase == SessionCommandPhase.Waiting)
@@ -724,6 +925,9 @@ class DesktopLink internal constructor(
         queueEvidence = null
         queueDeadline = null
         clearGoalAuthority()
+        modelTarget = null
+        modelEvidence = null
+        thinkingEvidence = null
         maintenanceEvidence = null
         rewindEvidence = null
         taskStopEvidence = null
@@ -743,6 +947,8 @@ class DesktopLink internal constructor(
             cancelTimer(connection, Timer.Responses)
             cancelTimer(connection, Timer.SessionCommands)
             cancelTimer(connection, Timer.QueueCommands)
+            cancelTimer(connection, Timer.ModelCommands)
+            cancelTimer(connection, Timer.ThinkingCommands)
             cancelTimer(connection, Timer.Maintenance)
             cancelTimer(connection, Timer.Rewind)
             cancelTimer(connection, Timer.TaskStop)
@@ -1116,6 +1322,133 @@ class DesktopLink internal constructor(
         mutableState.value = state.copy(session = session.copy(context = context, usage = usage))
     }
 
+    private fun DesktopLinkState.hasModel(providerId: String, modelId: String): Boolean =
+        providers?.find { it.id == providerId }?.models?.any { it.id == modelId } == true
+
+    private fun DesktopTask.modelTarget() = ModelTarget(id, providerId, modelId, reasoningEnabled, thinkingLevel)
+
+    private fun thinkingCommand(enabled: Boolean?) = if (enabled != null) "set-reasoning" else "set-thinking"
+
+    private fun writeModel(event: Event.WriteModel) {
+        if (!visible || event.authority !== sessionWriteAuthority || event.target !== modelTarget) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val session = state.session ?: return
+        val task = state.catalog.find { it.id == event.sessionId } ?: return
+        if (state.readOnly || session.loading || session.error || pendingSync != null ||
+            selectedSession != event.sessionId || session.timeline.sessionId != event.sessionId ||
+            task.archived || task.parentId != null || session.timeline.cursor?.get("epoch").linkString() != event.epoch ||
+            session.modelAttempt?.phase == SessionCommandPhase.Waiting || session.modelAttempt?.id != event.previousAttemptId ||
+            session.thinkingAttempt?.phase == SessionCommandPhase.Waiting || session.thinkingAttempt?.id != event.previousThinkingAttemptId ||
+            !state.hasModel(event.providerId, event.modelId) ||
+            task.providerId == event.providerId && task.modelId == event.modelId) return
+        val attempt = DesktopModelAttempt(++attemptId, event.providerId, event.modelId, SessionCommandPhase.Waiting)
+        if (!send(connection, buildJsonObject {
+                put("type", "set-model"); put("sessionId", event.sessionId)
+                put("providerId", event.providerId); put("modelId", event.modelId)
+            })) {
+            // send may retire the connection. Keep the choice, not the pre-send state or an automatic retry.
+            val after = mutableState.value
+            after.session?.takeIf { it.timeline.sessionId == event.sessionId }?.let {
+                mutableState.value = after.copy(session = it.copy(modelAttempt = attempt.copy(phase = SessionCommandPhase.Unconfirmed)))
+            }
+            return
+        }
+        modelEvidence = ModelEvidence(attempt.id, event.epoch, connection.latestSequence,
+            nowMillis() + RESPONSE_TIMEOUT_MS, connection)
+        mutableState.value = state.copy(session = session.copy(modelAttempt = attempt))
+        arm(connection, Timer.ModelCommands, RESPONSE_TIMEOUT_MS)
+    }
+
+    private fun writeThinking(event: Event.WriteThinking) {
+        if (!visible || event.authority !== sessionWriteAuthority || event.target !== modelTarget) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val session = state.session ?: return
+        val task = state.catalog.find { it.id == event.sessionId } ?: return
+        if (state.readOnly || session.loading || session.error || pendingSync != null ||
+            selectedSession != event.sessionId || session.timeline.sessionId != event.sessionId ||
+            task.archived || task.parentId != null || session.timeline.cursor?.get("epoch").linkString() != event.epoch ||
+            session.thinkingAttempt?.phase == SessionCommandPhase.Waiting || session.thinkingAttempt?.id != event.previousAttemptId ||
+            session.modelAttempt?.phase == SessionCommandPhase.Waiting || session.modelAttempt?.id != event.previousModelAttemptId ||
+            event.target.matchesThinking(event.enabled, event.level)) return
+        val attempt = DesktopThinkingAttempt(++attemptId, event.enabled, event.level, SessionCommandPhase.Waiting)
+        if (!send(connection, buildJsonObject {
+                put("type", thinkingCommand(event.enabled))
+                put("sessionId", event.sessionId)
+                event.enabled?.let { put("enabled", it) }
+                event.level?.let { put("level", it.wire) }
+            })) {
+            val after = mutableState.value
+            after.session?.takeIf { it.timeline.sessionId == event.sessionId }?.let {
+                mutableState.value = after.copy(session = it.copy(thinkingAttempt = attempt.copy(phase = SessionCommandPhase.Unconfirmed)))
+            }
+            return
+        }
+        thinkingEvidence = ModelEvidence(attempt.id, event.epoch, connection.latestSequence,
+            nowMillis() + RESPONSE_TIMEOUT_MS, connection)
+        mutableState.value = state.copy(session = session.copy(thinkingAttempt = attempt))
+        arm(connection, Timer.ThinkingCommands, RESPONSE_TIMEOUT_MS)
+    }
+
+    private fun finishThinking(phase: SessionCommandPhase) {
+        current?.let { cancelTimer(it, Timer.ThinkingCommands) }
+        if (phase != SessionCommandPhase.Unconfirmed) thinkingEvidence = null
+        val state = mutableState.value
+        val session = state.session ?: return
+        val attempt = session.thinkingAttempt ?: return
+        mutableState.value = state.copy(session = session.copy(thinkingAttempt = attempt.copy(phase = phase)))
+    }
+
+    private fun thinkingCatalog(connection: Connection, sequence: Long) {
+        if (!online(connection)) return
+        val session = mutableState.value.session ?: return
+        val target = modelTarget ?: return
+        val evidence = thinkingEvidence ?: return
+        val attempt = session.thinkingAttempt ?: return
+        if (session.timeline.sessionId != target.sessionId || selectedSession != target.sessionId ||
+            attempt.id != evidence.attemptId || attempt.phase != SessionCommandPhase.Waiting ||
+            evidence.generation !== connection || session.loading || session.error || pendingSync != null ||
+            sequence <= evidence.afterSequence || session.timeline.cursor?.get("epoch").linkString() != evidence.epoch) return
+        if (nowMillis() >= evidence.deadline) finishThinking(SessionCommandPhase.Unconfirmed)
+        else if (target.matchesThinking(attempt.enabled, attempt.level)) finishThinking(SessionCommandPhase.Observed)
+    }
+
+    private fun finishModel(phase: SessionCommandPhase) {
+        current?.let { cancelTimer(it, Timer.ModelCommands) }
+        // Keep a timed-out association only for an ordered scope denial, never a late confirmation.
+        if (phase != SessionCommandPhase.Unconfirmed) modelEvidence = null
+        val state = mutableState.value
+        val session = state.session ?: return
+        val attempt = session.modelAttempt ?: return
+        mutableState.value = state.copy(session = session.copy(modelAttempt = attempt.copy(phase = phase)))
+    }
+
+    /** Publish configuration authority before its UI projection so a caller cannot bind old UI to new settings. */
+    private fun refreshModelTarget(connection: Connection, catalog: DesktopRead.Catalog, sequence: Long) {
+        val id = selectedSession
+        val floor = subscriptionCatalogFloor
+        val task = if (id == connection.lastSyncSession && id in catalog.modelTargets && floor != null && sequence > floor)
+            catalog.tasks.find { it.id == id } else null
+        val target = task?.modelTarget()
+        if (target != modelTarget) modelTarget = target
+    }
+
+    /** Only a later authenticated, complete root row in this subscription/epoch can observe the exact pair. */
+    private fun modelCatalog(connection: Connection, sequence: Long) {
+        if (!online(connection)) return
+        val session = mutableState.value.session ?: return
+        val target = modelTarget ?: return
+        if (session.timeline.sessionId != target.sessionId || selectedSession != target.sessionId) return
+        val evidence = modelEvidence ?: return
+        val attempt = session.modelAttempt ?: return
+        if (attempt.id != evidence.attemptId || attempt.phase != SessionCommandPhase.Waiting ||
+            evidence.generation !== connection || session.loading || session.error || pendingSync != null ||
+            sequence <= evidence.afterSequence || session.timeline.cursor?.get("epoch").linkString() != evidence.epoch) return
+        if (nowMillis() >= evidence.deadline) finishModel(SessionCommandPhase.Unconfirmed)
+        else if (target.providerId == attempt.providerId && target.modelId == attempt.modelId) finishModel(SessionCommandPhase.Observed)
+    }
+
     private fun writeMaintenance(event: Event.WriteMaintenance) {
         if (!visible || event.authority !== sessionWriteAuthority) return
         val connection = current?.takeIf(::online) ?: return
@@ -1415,12 +1748,16 @@ class DesktopLink internal constructor(
         if (bots.timelineChatId != chatId) {
             cancelTimer(connection, Timer.BotRefresh)
             connection.botTimelineDirty = false
+            // Another chat's message artifacts are not this screen's files.
+            clearBotFiles()
         }
         mutableState.value = state.copy(bots = bots.copy(timelineChatId = chatId, timelineRequested = true,
             timelineLoading = !refresh, timelineError = null,
             timeline = if (fresh) emptyList() else bots.timeline,
             timelineLastSeq = if (fresh) 0 else bots.timelineLastSeq,
-            timelineHasOlder = if (fresh) false else bots.timelineHasOlder))
+            timelineHasOlder = if (fresh) false else bots.timelineHasOlder,
+            files = if (bots.timelineChatId == chatId) bots.files else null,
+            filesTarget = if (bots.timelineChatId == chatId) bots.filesTarget else null))
         arm(connection, Timer.BotTimeline, BOT_RESPONSE_WINDOW_MS)
     }
 
@@ -1433,9 +1770,10 @@ class DesktopLink internal constructor(
             it.botTimelineDirty = false
         }
         botTimelineSent = null
+        clearBotFiles()
         mutableState.value = state.copy(bots = bots.copy(timelineChatId = null, timelineRequested = false,
             timelineLoading = false, timelineError = null, timeline = emptyList(), timelineLastSeq = 0,
-            timelineHasOlder = false))
+            timelineHasOlder = false, files = null, filesTarget = null))
     }
 
     private fun botTimelineChanged(connection: Connection, frame: JsonObject) {
@@ -1464,8 +1802,7 @@ class DesktopLink internal constructor(
         if (state.readOnly || chatId.length !in 1..BOT_TEXT_LIMIT || chatId.isBlank()) return
         val text = botMessageText(event.text) ?: return
         val bots = state.bots ?: DesktopBotsState()
-        if (bots.enabled == false || bots.send?.phase == SessionCommandPhase.Waiting ||
-            bots.threadAction?.phase == SessionCommandPhase.Waiting) return
+        if (bots.enabled == false || bots.writeBusy) return
         val command = buildJsonObject {
             put("type", "bot-send")
             put("chatId", chatId)
@@ -1487,20 +1824,22 @@ class DesktopLink internal constructor(
         val chatId = event.chatId
         if (state.readOnly || chatId.length !in 1..BOT_TEXT_LIMIT || chatId.isBlank()) return
         val bots = state.bots ?: DesktopBotsState()
-        if (bots.enabled == false || bots.stop?.phase == SessionCommandPhase.Waiting ||
-            bots.threadAction?.phase == SessionCommandPhase.Waiting) return
+        if (bots.enabled == false || bots.writeBusy) return
         if (!send(connection, buildJsonObject { put("type", "bot-stop"); put("chatId", chatId) })) return
-        noteBotWrite(BotWriteKind.Stop, connection, chatId, null)
-        botStopWrite = botWrites.last()
+        noteBotWrite(BotWriteKind.Stop, connection, chatId, chatId)
         mutableState.value = state.copy(bots = bots.copy(
             stop = DesktopBotStopAttempt(chatId, SessionCommandPhase.Waiting), error = null))
         arm(connection, Timer.BotStop, BOT_STOP_TIMEOUT_MS)
     }
 
     /** Generic denials carry no id, so the send order is what keeps a late denial off a newer attempt. */
-    private fun noteBotWrite(kind: BotWriteKind, connection: Connection, chatId: String, deliveryId: String?) {
+    private fun noteBotWrite(kind: BotWriteKind, connection: Connection, chatId: String?, ref: String?) {
         if (botWrites.size >= BOT_WRITE_LIMIT) botWrites.removeAt(0)
-        botWrites.add(BotWrite(kind, connection, chatId, deliveryId, connection.latestSequence))
+        val entry = BotWrite(kind, connection, chatId, ref, connection.latestSequence)
+        botWrites.add(entry)
+        // Both the write order and the newest attempt of each kind are needed to keep a late denial
+        // from settling an attempt that replaced the one it answers.
+        botWriteEvidence[kind] = entry
     }
 
     private fun writeBotThread(event: Event.ChangeBotThread) {
@@ -1510,8 +1849,7 @@ class DesktopLink internal constructor(
         val bots = state.bots ?: return
         val active = bots.activeBotThread(event.rootId) ?: return
         if (state.readOnly || bots.enabled != true || !bots.threadsEnabled || active.id != event.expectedActiveId ||
-            bots.threadAction?.phase == SessionCommandPhase.Waiting || bots.send?.phase == SessionCommandPhase.Waiting ||
-            bots.stop?.phase == SessionCommandPhase.Waiting || event.rootId.length !in 1..128) return
+            bots.writeBusy || event.rootId.length !in 1..128) return
         val target = event.targetId
         when (event.command) {
             BotThreadCommand.Create -> if (target != null) return
@@ -1557,6 +1895,364 @@ class DesktopLink internal constructor(
         mutableState.value = state.copy(bots = bots.copy(threadAction = action.copy(phase = SessionCommandPhase.Unconfirmed)))
     }
 
+    /** The answer names the chat and the request id; `needsConfirmation` is a question, not an error. */
+    private fun botNewSessionResult(connection: Connection, frame: JsonObject, sequence: Long) {
+        val ok = frame["ok"].desktopFlag() ?: return
+        val error = frame["error"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_TEXT_LIMIT }
+        if (!ok && error == "read-only") {
+            connection.noteScopeDenial(sequence)
+            sessionWriteAuthority = null
+            mutableState.value = mutableState.value.copy(readOnly = true)
+        }
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.newSession ?: return
+        if (attempt.chatId != frame["chatId"].linkString() ||
+            attempt.requestId != frame["requestId"].linkString()) return
+        if (attempt.phase != BotNewSessionPhase.Waiting && attempt.phase != BotNewSessionPhase.Unconfirmed) return
+        val needsConfirmation = frame["needsConfirmation"].desktopFlag() ?: false
+        // A success that still asks a question is not an answer this phone can act on.
+        if (ok && needsConfirmation) return
+        cancelTimer(connection, Timer.BotNewSession)
+        botWrites.removeAll { it.kind == BotWriteKind.NewSession && it.ref == attempt.requestId }
+        val phase = when {
+            ok -> BotNewSessionPhase.Observed
+            needsConfirmation -> BotNewSessionPhase.NeedsConfirmation
+            else -> BotNewSessionPhase.Rejected
+        }
+        mutableState.value = state.copy(bots = bots.copy(newSession = attempt.copy(phase = phase,
+            error = if (phase == BotNewSessionPhase.Rejected) error else null)))
+    }
+
+    private fun botNewSessionTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.newSession?.takeIf { it.phase == BotNewSessionPhase.Waiting } ?: return
+        mutableState.value = state.copy(bots = bots.copy(
+            newSession = attempt.copy(phase = BotNewSessionPhase.Unconfirmed)))
+    }
+
+    /** A retry names both the chat and the row, so nothing else can settle or re-target it. */
+    private fun botRetryResult(connection: Connection, frame: JsonObject, sequence: Long) {
+        val ok = frame["ok"].desktopFlag() ?: return
+        val error = frame["error"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_TEXT_LIMIT }
+        if (!ok && error == "read-only") {
+            connection.noteScopeDenial(sequence)
+            sessionWriteAuthority = null
+            mutableState.value = mutableState.value.copy(readOnly = true)
+        }
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.retry ?: return
+        if (attempt.chatId != frame["chatId"].linkString() || attempt.entryId != frame["entryId"].linkString()) return
+        if (attempt.phase != SessionCommandPhase.Waiting && attempt.phase != SessionCommandPhase.Unconfirmed) return
+        cancelTimer(connection, Timer.BotRetry)
+        botWrites.removeAll {
+            it.kind == BotWriteKind.Retry && it.ref == attempt.entryId && it.chatId == attempt.chatId
+        }
+        mutableState.value = state.copy(bots = bots.copy(retry = attempt.copy(
+            phase = if (ok) SessionCommandPhase.Observed else SessionCommandPhase.Rejected,
+            error = if (ok) null else error)))
+    }
+
+    private fun botRetryTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.retry?.takeIf { it.phase == SessionCommandPhase.Waiting } ?: return
+        mutableState.value = state.copy(bots = bots.copy(
+            retry = attempt.copy(phase = SessionCommandPhase.Unconfirmed)))
+    }
+
+    private fun botDismissTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.inboxDismiss?.takeIf { it.phase == SessionCommandPhase.Waiting } ?: return
+        mutableState.value = state.copy(bots = bots.copy(
+            inboxDismiss = attempt.copy(phase = SessionCommandPhase.Unconfirmed)))
+    }
+
+    private fun botGroupCreateTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.groupCreate?.takeIf { it.phase == SessionCommandPhase.Waiting } ?: return
+        mutableState.value = state.copy(bots = bots.copy(
+            groupCreate = attempt.copy(phase = SessionCommandPhase.Unconfirmed)))
+    }
+
+    private fun botDirectOpenTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.directOpen?.takeIf { it.phase == SessionCommandPhase.Waiting } ?: return
+        mutableState.value = state.copy(bots = bots.copy(
+            directOpen = attempt.copy(phase = SessionCommandPhase.Unconfirmed)))
+    }
+
+    /** The receipt names the reused or created chat; success without it is not this receipt. */
+    private fun botDirectOpenResult(connection: Connection, frame: JsonObject, sequence: Long) {
+        val ok = frame["ok"].desktopFlag() ?: return
+        val error = frame["error"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_TEXT_LIMIT }
+        if (!ok && error == "read-only") {
+            connection.noteScopeDenial(sequence)
+            sessionWriteAuthority = null
+            mutableState.value = mutableState.value.copy(readOnly = true)
+        }
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.directOpen ?: return
+        if (attempt.requestId != frame["requestId"].linkString()) return
+        if (attempt.phase != SessionCommandPhase.Waiting && attempt.phase != SessionCommandPhase.Unconfirmed) return
+        // The host always names the chat it reused or created; without it this is not that receipt.
+        val chatId = if (!ok) null else desktopFileName(frame["chatId"], BOT_TEXT_LIMIT) ?: return
+        cancelTimer(connection, Timer.BotDirectOpen)
+        botWrites.removeAll { it.kind == BotWriteKind.DirectOpen && it.ref == attempt.requestId }
+        mutableState.value = state.copy(bots = bots.copy(directOpen = attempt.copy(
+            phase = if (ok) SessionCommandPhase.Observed else SessionCommandPhase.Rejected,
+            chatId = chatId ?: attempt.chatId, error = if (ok) null else error)))
+    }
+
+    /** The receipt names only the request id; the new chat itself only ever arrives in the directory. */
+    private fun botGroupCreateResult(connection: Connection, frame: JsonObject, sequence: Long) {
+        val ok = frame["ok"].desktopFlag() ?: return
+        val error = frame["error"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_TEXT_LIMIT }
+        if (!ok && error == "read-only") {
+            connection.noteScopeDenial(sequence)
+            sessionWriteAuthority = null
+            mutableState.value = mutableState.value.copy(readOnly = true)
+        }
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.groupCreate ?: return
+        if (attempt.requestId != frame["requestId"].linkString()) return
+        if (attempt.phase != SessionCommandPhase.Waiting && attempt.phase != SessionCommandPhase.Unconfirmed) return
+        // A successful creation always names the new chat; without it this is not that receipt, so
+        // the attempt stays open for the real one (or its timeout) instead of claiming success.
+        val chatId = if (!ok) null else desktopFileName(frame["chatId"], BOT_TEXT_LIMIT) ?: return
+        cancelTimer(connection, Timer.BotGroupCreate)
+        botWrites.removeAll { it.kind == BotWriteKind.GroupCreate && it.ref == attempt.requestId }
+        mutableState.value = state.copy(bots = bots.copy(groupCreate = attempt.copy(
+            phase = if (ok) SessionCommandPhase.Observed else SessionCommandPhase.Rejected,
+            chatId = chatId ?: attempt.chatId, error = if (ok) null else error)))
+    }
+
+    private fun botArtifactsTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.artifacts?.takeIf { it.phase == SessionCommandPhase.Waiting } ?: return
+        // The answer carries no request id, so asking this target again could swallow the late frame
+        // of this very attempt. The suppression lasts until a new generation or the late answer.
+        if (silentBotArtifacts.size >= BOT_SILENT_TARGET_LIMIT) {
+            silentBotArtifacts.firstOrNull()?.let(silentBotArtifacts::remove)
+        }
+        silentBotArtifacts.add(attempt.target)
+        mutableState.value = state.copy(bots = bots.copy(artifacts = attempt.copy(
+            phase = SessionCommandPhase.Unconfirmed, error = BOT_NO_RESPONSE)))
+    }
+
+    private fun botArtifactImageTimeout() {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.artifactImage?.takeIf { it.phase == SessionCommandPhase.Waiting } ?: return
+        mutableState.value = state.copy(bots = bots.copy(artifactImage = attempt.copy(
+            phase = SessionCommandPhase.Unconfirmed, error = BOT_NO_RESPONSE)))
+    }
+
+    /** The host echoes the whole target, so a list for another message never lands here. */
+    private fun botArtifactsResult(connection: Connection, frame: JsonObject) {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.artifacts ?: return
+        if (attempt.phase != SessionCommandPhase.Waiting && attempt.phase != SessionCommandPhase.Unconfirmed) return
+        if (desktopBotArtifactTarget(frame["target"]) != attempt.target) return
+        val artifacts = desktopBotArtifacts(frame["artifacts"])
+        val media = desktopBotMedia(frame["media"])
+        cancelTimer(connection, Timer.BotArtifacts)
+        silentBotArtifacts.remove(attempt.target)
+        mutableState.value = state.copy(bots = bots.copy(artifacts = if (artifacts == null || media == null) {
+            attempt.copy(phase = SessionCommandPhase.Rejected, error = BOT_INVALID_ERROR)
+        } else attempt.copy(phase = SessionCommandPhase.Observed, artifacts = artifacts, media = media,
+            error = null)))
+    }
+
+    /** Only the request id comes back; an unusable data URL is an error, never a blank image. */
+    private fun botArtifactImageResult(connection: Connection, frame: JsonObject) {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val attempt = bots.artifactImage ?: return
+        if (attempt.requestId != frame["requestId"].linkString()) return
+        if (attempt.phase != SessionCommandPhase.Waiting && attempt.phase != SessionCommandPhase.Unconfirmed) return
+        cancelTimer(connection, Timer.BotArtifactImage)
+        val error = frame["error"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_TEXT_LIMIT }
+        val dataUrl = frame["dataUrl"].linkString()
+        val usable = dataUrl != null && dataUrl.length <= BOT_IMAGE_DATA_LIMIT && dataUrl.startsWith("data:image/")
+        mutableState.value = state.copy(bots = bots.copy(artifactImage = if (error != null) {
+            attempt.copy(phase = SessionCommandPhase.Rejected, error = error)
+        } else if (usable) attempt.copy(phase = SessionCommandPhase.Observed, dataUrl = dataUrl, error = null)
+        else attempt.copy(phase = SessionCommandPhase.Rejected, error = BOT_INVALID_ERROR)))
+    }
+
+    /** An awaited new conversation: re-sent never, and a late matching answer still settles it. */
+    private fun writeBotNewSession(event: Event.NewBotSession) {
+        if (!visible || event.authority !== creationAuthority) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val chatId = event.chatId
+        if (state.readOnly || bots.enabled != true || !bots.newSessionEnabled || bots.botChat(chatId) == null ||
+            bots.writeBusy || chatId.length !in 1..BOT_TEXT_LIMIT) return
+        val confirmOf = event.confirmedFor
+        if (confirmOf != null) {
+            // The second phase belongs to the attempt the host asked about, never to a newer one.
+            val asked = bots.newSession ?: return
+            if (asked.phase != BotNewSessionPhase.NeedsConfirmation || asked.chatId != chatId ||
+                asked.requestId != confirmOf) return
+        }
+        val requestId = UUID.randomUUID().toString()
+        if (!send(connection, buildJsonObject {
+            put("type", "bot-new-session")
+            put("chatId", chatId)
+            put("requestId", requestId)
+            if (confirmOf != null) put("confirmed", true)
+        })) return
+        noteBotWrite(BotWriteKind.NewSession, connection, chatId, requestId)
+        mutableState.value = state.copy(bots = bots.copy(
+            newSession = DesktopBotNewSession(requestId, chatId, BotNewSessionPhase.Waiting), error = null))
+        arm(connection, Timer.BotNewSession, BOT_SEND_TIMEOUT_MS)
+    }
+
+    private fun writeBotRetry(event: Event.RetryBotEntry) {
+        if (!visible || event.authority !== creationAuthority) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val chatId = event.chatId
+        val entryId = event.entryId
+        if (state.readOnly || bots.enabled == false || bots.writeBusy || bots.timelineChatId != chatId ||
+            chatId.length !in 1..BOT_TEXT_LIMIT || entryId.length !in 1..BOT_TEXT_LIMIT) return
+        // Only a failed system row of the open page is retryable; nothing else is worth a command.
+        val entry = bots.timeline.firstOrNull { it.id == entryId } ?: return
+        if (entry.kind != "system" || entry.failure == null) return
+        if (!send(connection, buildJsonObject {
+            put("type", "bot-retry"); put("chatId", chatId); put("entryId", entryId)
+        })) return
+        noteBotWrite(BotWriteKind.Retry, connection, chatId, entryId)
+        mutableState.value = state.copy(bots = bots.copy(
+            retry = DesktopBotRetry(chatId, entryId, SessionCommandPhase.Waiting), error = null))
+        arm(connection, Timer.BotRetry, BOT_SEND_TIMEOUT_MS)
+    }
+
+    /** Dismissal has no receipt: the next authoritative inbox table is the only proof. */
+    private fun writeBotDismiss(event: Event.DismissBotInbox) {
+        if (!visible || event.authority !== creationAuthority) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val key = event.key
+        if (state.readOnly || bots.enabled == false || key.length !in 1..BOT_TEXT_LIMIT ||
+            bots.inboxDismiss?.phase == SessionCommandPhase.Waiting ||
+            bots.inbox.none { it.key == key && it.dismissible }) return
+        if (!send(connection, buildJsonObject { put("type", "bot-inbox-dismiss"); put("key", key) })) return
+        noteBotWrite(BotWriteKind.Dismiss, connection, null, key)
+        mutableState.value = state.copy(bots = bots.copy(
+            inboxDismiss = DesktopBotInboxDismiss(key, SessionCommandPhase.Waiting), error = null))
+        arm(connection, Timer.BotDismiss, BOT_DISMISS_TIMEOUT_MS)
+    }
+
+    private fun writeBotGroupCreate(event: Event.CreateBotGroup) {
+        if (!visible || event.authority !== creationAuthority) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val title = botTitleText(event.title) ?: return
+        val members = event.memberIds
+        if (state.readOnly || bots.enabled != true || !bots.groupCreateEnabled || bots.writeBusy ||
+            members.size !in 2..BOT_CHAT_MEMBER_LIMIT || members.size != members.toSet().size ||
+            members.any { it.length !in 1..BOT_TEXT_LIMIT || it.isBlank() } || event.bossBotId !in members) return
+        // A member has to be listed and not archived, otherwise the host would refuse the group anyway.
+        val usable = bots.members.filter { !it.archived }.map { it.id }.toSet()
+        if (!members.all { it in usable }) return
+        val requestId = UUID.randomUUID().toString()
+        if (!send(connection, buildJsonObject {
+            put("type", "bot-group-create")
+            put("requestId", requestId)
+            put("title", title)
+            putJsonArray("memberIds") { members.forEach { add(it) } }
+            put("bossBotId", event.bossBotId)
+        })) return
+        noteBotWrite(BotWriteKind.GroupCreate, connection, null, requestId)
+        mutableState.value = state.copy(bots = bots.copy(groupCreate = DesktopBotGroupCreate(requestId, title,
+            members, event.bossBotId, SessionCommandPhase.Waiting), error = null))
+        arm(connection, Timer.BotGroupCreate, BOT_SEND_TIMEOUT_MS)
+    }
+
+    /** Opening a direct chat is a write: same foreground authority and the same receipt discipline. */
+    private fun writeBotDirectOpen(event: Event.OpenBotDirect) {
+        if (!visible || event.authority !== creationAuthority) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        val botId = event.botId
+        if (state.readOnly || bots.enabled != true || !bots.directOpenEnabled || bots.writeBusy ||
+            botId.length !in 1..BOT_TEXT_LIMIT || botId.isBlank() ||
+            bots.members.none { it.id == botId && !it.archived }) return
+        val requestId = UUID.randomUUID().toString()
+        if (!send(connection, buildJsonObject {
+            put("type", "bot-direct-open")
+            put("requestId", requestId)
+            put("botId", botId)
+        })) return
+        noteBotWrite(BotWriteKind.DirectOpen, connection, null, requestId)
+        mutableState.value = state.copy(bots = bots.copy(directOpen = DesktopBotDirectOpen(
+            requestId, botId, SessionCommandPhase.Waiting), error = null))
+        arm(connection, Timer.BotDirectOpen, BOT_SEND_TIMEOUT_MS)
+    }
+
+    /** An artifact list is one read of one message; a silent window is reported, never re-sent. */
+    private fun requestBotArtifacts(target: DesktopBotArtifactTarget) {
+        if (!visible) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: DesktopBotsState()
+        if (!botTargetValid(target) || bots.artifacts?.phase == SessionCommandPhase.Waiting ||
+            target in silentBotArtifacts) return
+        if (!send(connection, buildJsonObject {
+            put("type", "bot-artifacts"); putJsonObject("target") { putBotTarget(target) }
+        })) return
+        mutableState.value = state.copy(bots = bots.copy(
+            artifacts = DesktopBotArtifacts(target, SessionCommandPhase.Waiting), error = null))
+        arm(connection, Timer.BotArtifacts, BOT_ARTIFACT_TIMEOUT_MS)
+    }
+
+    private fun requestBotArtifactImage(event: Event.LoadBotArtifactImage) {
+        if (!visible) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: DesktopBotsState()
+        val mediaId = event.mediaId
+        val rel = event.rel
+        if (!botTargetValid(event.target) || (mediaId == null) == (rel == null) ||
+            mediaId != null && mediaId.length !in 1..BOT_TEXT_LIMIT ||
+            rel != null && (rel.length !in 1..BOT_PATH_LIMIT || rel.isBlank()) ||
+            !BOT_DELIVERY_ID.matches(event.requestId) ||
+            bots.artifactImage?.phase == SessionCommandPhase.Waiting) return
+        if (!send(connection, buildJsonObject {
+            put("type", "bot-artifact-image")
+            put("requestId", event.requestId)
+            putJsonObject("target") { putBotTarget(event.target) }
+            mediaId?.let { put("mediaId", it) }
+            rel?.let { put("rel", it) }
+        })) return
+        mutableState.value = state.copy(bots = bots.copy(artifactImage = DesktopBotArtifactImage(
+            event.requestId, event.target, mediaId, rel, SessionCommandPhase.Waiting), error = null))
+        arm(connection, Timer.BotArtifactImage, BOT_ARTIFACT_TIMEOUT_MS)
+    }
+
+    private fun JsonObjectBuilder.putBotTarget(target: DesktopBotArtifactTarget) {
+        put("chatId", target.chatId)
+        target.entryId?.let { put("entryId", it) }
+        target.conversationId?.let { put("conversationId", it) }
+        target.messageIndex?.let { put("messageIndex", it) }
+    }
+
     private fun botSendTimeout() {
         val state = mutableState.value
         val bots = state.bots ?: return
@@ -1592,7 +2288,7 @@ class DesktopLink internal constructor(
             frame["deliveryId"].linkString() != attempt.deliveryId) return
         if (attempt.phase != SessionCommandPhase.Waiting && attempt.phase != SessionCommandPhase.Unconfirmed) return
         cancelTimer(connection, Timer.BotSend)
-        botWrites.removeAll { it.kind == BotWriteKind.Send && it.deliveryId == attempt.deliveryId }
+        botWrites.removeAll { it.kind == BotWriteKind.Send && it.ref == attempt.deliveryId }
         mutableState.value = state.copy(bots = bots.copy(send = attempt.copy(
             phase = if (ok) SessionCommandPhase.Observed else SessionCommandPhase.Rejected,
             error = if (ok) null else error)))
@@ -1609,7 +2305,7 @@ class DesktopLink internal constructor(
         var updated = bots.copy(chatStates = bots.chatStates + (next.chatId to next), error = null)
         val stop = updated.stop
         // current == null is the desktop's own "nothing running" answer, even with a queue still listed.
-        val evidence = botStopWrite?.takeIf { it.generation === connection }
+        val evidence = botWriteEvidence[BotWriteKind.Stop]?.takeIf { it.generation === connection }
         if (stop != null && stop.phase == SessionCommandPhase.Waiting && stop.chatId == next.chatId &&
             next.current == null && evidence?.chatId == stop.chatId && sequence > evidence.afterSequence) {
             cancelTimer(connection, Timer.BotStop)
@@ -1630,22 +2326,59 @@ class DesktopLink internal constructor(
             it.kind == kind && it.generation === connection && it.afterSequence < sequence
         }?.also { botWrites.remove(it) }
         val settleable = setOf(SessionCommandPhase.Waiting, SessionCommandPhase.Unconfirmed)
-        if (kind == BotWriteKind.Send) {
-            val attempt = bots.send ?: return
-            val matches = entry?.deliveryId == attempt.deliveryId
-            if (!matches || attempt.phase !in settleable) return
-            cancelTimer(connection, Timer.BotSend)
-            mutableState.value = state.copy(bots = bots.copy(
-                send = attempt.copy(phase = SessionCommandPhase.Rejected)))
-        } else {
-            val attempt = bots.stop ?: return
-            val matches = entry != null && entry === botStopWrite
-            if (!matches || attempt.phase !in settleable) return
-            cancelTimer(connection, Timer.BotStop)
-            mutableState.value = state.copy(bots = bots.copy(
-                stop = attempt.copy(phase = SessionCommandPhase.Rejected)))
-        }
+        val settled = when (kind) {
+            // The receipt names the delivery id, so the denial has to name the same attempt.
+            BotWriteKind.Send -> bots.send?.takeIf { it.phase in settleable && entry?.ref == it.deliveryId }
+                ?.let { bots.copy(send = it.copy(phase = SessionCommandPhase.Rejected)) }
+            // Every other command is identified only by order: the denial answers the write it was sent
+            // for, so the newest attempt of that kind is the one it may settle.
+            else -> {
+                val evidence = botWriteEvidence[kind]?.takeIf { it.generation === connection }
+                if (entry == null || entry !== evidence) null
+                else when (kind) {
+                    BotWriteKind.Stop -> bots.stop
+                        ?.takeIf { it.phase in settleable && evidence.ref == it.chatId }
+                        ?.let { bots.copy(stop = it.copy(phase = SessionCommandPhase.Rejected)) }
+                    BotWriteKind.NewSession -> bots.newSession
+                        ?.takeIf { it.phase == BotNewSessionPhase.Waiting || it.phase == BotNewSessionPhase.Unconfirmed }
+                        ?.takeIf { evidence.ref == it.requestId }
+                        ?.let { bots.copy(newSession = it.copy(phase = BotNewSessionPhase.Rejected)) }
+                    BotWriteKind.Retry -> bots.retry
+                        ?.takeIf { it.phase in settleable && evidence.ref == it.entryId && evidence.chatId == it.chatId }
+                        ?.let { bots.copy(retry = it.copy(phase = SessionCommandPhase.Rejected)) }
+                    BotWriteKind.Dismiss -> bots.inboxDismiss
+                        ?.takeIf { it.phase in settleable && evidence.ref == it.key }
+                        ?.let { bots.copy(inboxDismiss = it.copy(phase = SessionCommandPhase.Rejected)) }
+                    BotWriteKind.GroupCreate -> bots.groupCreate
+                        ?.takeIf { it.phase in settleable && evidence.ref == it.requestId }
+                        ?.let { bots.copy(groupCreate = it.copy(phase = SessionCommandPhase.Rejected)) }
+                    BotWriteKind.DirectOpen -> bots.directOpen
+                        ?.takeIf { it.phase in settleable && evidence.ref == it.requestId }
+                        ?.let { bots.copy(directOpen = it.copy(phase = SessionCommandPhase.Rejected)) }
+                    BotWriteKind.Send -> null
+                }
+            }
+        } ?: return
+        cancelTimer(connection, botWriteTimer(kind))
+        mutableState.value = state.copy(bots = settled)
     }
+
+    private fun botWriteTimer(kind: BotWriteKind) = when (kind) {
+        BotWriteKind.Send -> Timer.BotSend
+        BotWriteKind.Stop -> Timer.BotStop
+        BotWriteKind.NewSession -> Timer.BotNewSession
+        BotWriteKind.Retry -> Timer.BotRetry
+        BotWriteKind.Dismiss -> Timer.BotDismiss
+        BotWriteKind.GroupCreate -> Timer.BotGroupCreate
+        BotWriteKind.DirectOpen -> Timer.BotDirectOpen
+    }
+
+    private fun botIdValid(value: String) = value.length in 1..BOT_TEXT_LIMIT && value.isNotBlank()
+
+    private fun botTargetValid(target: DesktopBotArtifactTarget) = target.valid && botIdValid(target.chatId) &&
+        (target.entryId == null || botIdValid(target.entryId)) &&
+        (target.conversationId == null || botIdValid(target.conversationId)) &&
+        (target.messageIndex == null || target.messageIndex in 0..MAX_SAFE_INTEGER)
 
     /** A silent request is reported once; the association survives so a late frame still lands. */
     private fun botTimeout(kind: Timer) {
@@ -1684,6 +2417,12 @@ class DesktopLink internal constructor(
             "bot-send-result" -> botSendResult(connection, frame, sequence)
             "bot-event" -> botTimelineChanged(connection, frame)
             "bot-thread-result" -> botThreadResult(connection, frame, sequence)
+            "bot-new-session-result" -> botNewSessionResult(connection, frame, sequence)
+            "bot-retry-result" -> botRetryResult(connection, frame, sequence)
+            "bot-group-create-result" -> botGroupCreateResult(connection, frame, sequence)
+            "bot-direct-open-result" -> botDirectOpenResult(connection, frame, sequence)
+            "bot-artifacts" -> botArtifactsResult(connection, frame)
+            "bot-artifact-image" -> botArtifactImageResult(connection, frame)
         }
         return true
     }
@@ -1701,6 +2440,9 @@ class DesktopLink internal constructor(
         }
         mutableState.value = state.copy(bots = settled.copy(enabled = enabled,
             threadsEnabled = enabled && frame["threads"].desktopFlag() == true,
+            newSessionEnabled = enabled && frame["newSession"].desktopFlag() == true,
+            groupCreateEnabled = enabled && frame["groupCreate"].desktopFlag() == true,
+            directOpenEnabled = enabled && frame["directOpen"].desktopFlag() == true,
             members = if (enabled) desktopBotMembers(frame["bots"]) ?: bots.members else emptyList()))
     }
 
@@ -1724,7 +2466,21 @@ class DesktopLink internal constructor(
         val bots = state.bots ?: DesktopBotsState()
         val settled = bots.copy(inboxRequested = false, error = null)
         val items = desktopBotInbox(frame["items"])
-        mutableState.value = state.copy(bots = if (items == null) settled else settled.copy(inbox = items))
+        if (items == null) {
+            mutableState.value = state.copy(bots = settled)
+            return
+        }
+        var next = settled.copy(inbox = items)
+        // The missing key in an authoritative table is the only proof a dismissal went through.
+        val dismiss = next.inboxDismiss
+        val pending = dismiss?.phase == SessionCommandPhase.Waiting ||
+            dismiss?.phase == SessionCommandPhase.Unconfirmed
+        if (dismiss != null && pending && items.none { it.key == dismiss.key }) {
+            cancelTimer(connection, Timer.BotDismiss)
+            botWrites.removeAll { it.kind == BotWriteKind.Dismiss && it.ref == dismiss.key }
+            next = next.copy(inboxDismiss = dismiss.copy(phase = SessionCommandPhase.Observed))
+        }
+        mutableState.value = state.copy(bots = next)
     }
 
     /** The frame's `now` is the host clock; an unusable table leaves the previous one in place. */
@@ -1772,6 +2528,8 @@ class DesktopLink internal constructor(
             sessionId.length !in 1..FILE_TEXT_LIMIT) return
         val files = session.files ?: DesktopFilesState()
         if (files.listing) return // One listing in flight; a repeat click is not a second request.
+        // The host holds a single file operation per connection, so the two projections never overlap.
+        if (state.bots?.files?.listing == true) return
         val requestId = UUID.randomUUID().toString()
         if (!send(connection, buildJsonObject {
             put("type", "file-list")
@@ -1799,6 +2557,7 @@ class DesktopLink internal constructor(
             event.fileId.isBlank() || event.offset !in 0..MAX_SAFE_INTEGER) return
         val files = session.files ?: DesktopFilesState()
         if (files.reading) return // One read in flight; the next block waits for this one.
+        if (state.bots?.files?.reading == true) return
         val requestId = UUID.randomUUID().toString()
         if (!send(connection, buildJsonObject {
             put("type", "file-read")
@@ -1910,6 +2669,195 @@ class DesktopLink internal constructor(
         val files = session.files ?: DesktopFilesState()
         if (!files.reading) return
         mutableState.value = state.copy(session = session.copy(files = files.copy(reading = false,
+            readError = FILE_TIMEOUT_ERROR)))
+    }
+
+    /** A file projection belongs to one message: another target starts from an empty one. */
+    private fun botFilesFor(bots: DesktopBotsState, target: DesktopBotArtifactTarget): DesktopFilesState =
+        if (bots.filesTarget == target) bots.files ?: DesktopFilesState() else DesktopFilesState()
+
+    /**
+     * Listing one message's artifact files is a read, so a read-only host still answers it. The target
+     * travels as the host's own nested object; a phone path never does.
+     */
+    private fun requestBotFileList(target: DesktopBotArtifactTarget) {
+        if (!visible) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        if (!botTargetValid(target)) return
+        val bots = state.bots ?: DesktopBotsState()
+        val files = botFilesFor(bots, target)
+        if (files.listing) return // One listing in flight; a repeat click is not a second request.
+        // The host holds a single file operation per connection, so the two projections never overlap.
+        if (state.session?.files?.listing == true) return
+        val requestId = UUID.randomUUID().toString()
+        if (!send(connection, buildJsonObject {
+            put("type", "file-list")
+            put("requestId", requestId)
+            putJsonObject("target") { putJsonObject("bot") { putBotTarget(target) } }
+        })) {
+            // A local failure is not an empty listing; never claim success either way.
+            if (current === connection) localBotFileError(target, listError = FILE_SEND_ERROR)
+            return
+        }
+        // The previous message's in-flight block is not this projection's answer.
+        if (bots.filesTarget != target) clearBotFileRead()
+        botFileListPending = BotFileListPending(requestId, target, connection)
+        mutableState.value = state.copy(bots = bots.copy(filesTarget = target,
+            files = files.copy(listing = true, listError = null)))
+        arm(connection, Timer.BotFileList, FILE_TIMEOUT_MS)
+    }
+
+    /** One block of one desktop-authored file id; the display-only `rel` never travels back. */
+    private fun requestBotFileRead(event: Event.ReadBotFile) {
+        if (!visible) return
+        val connection = current?.takeIf(::online) ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        if (bots.filesTarget != event.target || !botTargetValid(event.target) ||
+            event.fileId.length !in 1..FILE_TEXT_LIMIT || event.fileId.isBlank() ||
+            event.offset !in 0..MAX_SAFE_INTEGER) return
+        val files = bots.files ?: DesktopFilesState()
+        if (files.reading) return // One read in flight; the next block waits for this one.
+        if (state.session?.files?.reading == true) return
+        val requestId = UUID.randomUUID().toString()
+        if (!send(connection, buildJsonObject {
+            put("type", "file-read")
+            put("requestId", requestId)
+            putJsonObject("target") { putJsonObject("bot") { putBotTarget(event.target) } }
+            put("fileId", event.fileId)
+            put("offset", event.offset)
+        })) {
+            if (current === connection) localBotFileError(event.target, readError = FILE_SEND_ERROR)
+            return
+        }
+        botFileReadPending = BotFileReadPending(requestId, event.target, event.fileId, event.offset, connection)
+        mutableState.value = state.copy(bots = bots.copy(files = files.copy(reading = true,
+            readingFileId = event.fileId, readOffset = event.offset, readError = null)))
+        arm(connection, Timer.BotFileRead, FILE_TIMEOUT_MS)
+    }
+
+    private fun finishBotFileList() {
+        current?.let { cancelTimer(it, Timer.BotFileList) }
+        botFileListPending = null
+    }
+
+    private fun clearBotFileRead() {
+        current?.let { cancelTimer(it, Timer.BotFileRead) }
+        botFileReadPending = null
+    }
+
+    /** Bot file traffic belongs to one connection, one chat and one message. */
+    private fun clearBotFiles() {
+        botFileListPending = null
+        botFileReadPending = null
+        silentBotArtifacts.clear()
+        current?.let { connection ->
+            cancelTimer(connection, Timer.BotFileList)
+            cancelTimer(connection, Timer.BotFileRead)
+        }
+    }
+
+    /** A local send failure is never an answer; only the projection of that same message may carry it. */
+    private fun localBotFileError(target: DesktopBotArtifactTarget, listError: String? = null,
+                                  readError: String? = null) {
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        if (bots.filesTarget != target) return
+        val files = bots.files ?: DesktopFilesState()
+        mutableState.value = state.copy(bots = bots.copy(files = files.copy(
+            listing = if (listError == null) files.listing else false,
+            listError = listError ?: files.listError,
+            reading = if (readError == null) files.reading else false,
+            readError = readError ?: files.readError)))
+    }
+
+    /**
+     * A bot file answer names only its request id and never the target, so the pending association
+     * decides the projection. It is claimed before the session gate: bot files need no Code session.
+     */
+    private fun botFileFrame(connection: Connection, frame: JsonObject): Boolean {
+        val type = frame["type"].linkString() ?: return false
+        if (type != "file-list-result" && type != "file-read-result") return false
+        if (!online(connection)) return true
+        return if (type == "file-list-result") botFileListResult(connection, frame)
+        else botFileReadResult(connection, frame)
+    }
+
+    /** @return true when this frame names the bot request that was sent, even if its target moved. */
+    private fun botFileListResult(connection: Connection, frame: JsonObject): Boolean {
+        val pending = botFileListPending ?: return false
+        if (pending.generation !== connection || frame["requestId"].linkString() != pending.requestId) return false
+        val state = mutableState.value
+        val bots = state.bots ?: return true
+        if (bots.filesTarget != pending.target) return true
+        val files = bots.files ?: DesktopFilesState()
+        finishBotFileList()
+        val error = frame["error"].linkString()
+        if (error != null) {
+            // The host's own reason is user-facing; the last good listing stays visible.
+            mutableState.value = state.copy(bots = bots.copy(files = files.copy(listing = false,
+                listError = error.takeIf { it.isNotEmpty() } ?: FILE_INVALID_ERROR)))
+            return true
+        }
+        val entries = desktopFileEntries(frame["files"])
+        mutableState.value = state.copy(bots = bots.copy(files = files.copy(listing = false,
+            listError = if (entries == null) FILE_INVALID_ERROR else null,
+            entries = entries ?: files.entries)))
+        return true
+    }
+
+    /** Only the requested offset, a non-negative size and one bounded standard Base64 block are a chunk. */
+    private fun botFileReadResult(connection: Connection, frame: JsonObject): Boolean {
+        val pending = botFileReadPending ?: return false
+        if (pending.generation !== connection || frame["requestId"].linkString() != pending.requestId) return false
+        val state = mutableState.value
+        val bots = state.bots ?: return true
+        if (bots.filesTarget != pending.target) return true
+        val files = bots.files ?: DesktopFilesState()
+        clearBotFileRead()
+        val error = frame["error"].linkString()
+        if (error != null) {
+            mutableState.value = state.copy(bots = bots.copy(files = files.copy(reading = false,
+                readError = error.takeIf { it.isNotEmpty() } ?: FILE_INVALID_ERROR)))
+            return true
+        }
+        // A missing name falls back to the listing; a malformed one invalidates the whole answer.
+        val named = "name" in frame
+        val name = if (named) desktopFileName(frame["name"])
+        else files.entries.find { it.id == pending.fileId }?.name
+        val size = frame["size"].linkIndex()
+        val offset = frame["offset"].linkIndex()
+        val data = desktopFileData(frame["data"])
+        val next = if ((named && name == null) || size == null || offset != pending.offset || data == null) {
+            // A drifted or malformed block is an error, not a shorter file.
+            files.copy(reading = false, readError = FILE_INVALID_ERROR)
+        } else files.copy(reading = false, readError = null, readOffset = offset,
+            chunk = DesktopFileChunk(pending.fileId, name, size, offset, data))
+        mutableState.value = state.copy(bots = bots.copy(files = next))
+        return true
+    }
+
+    /** The association survives the timeout so a late, still matching answer is accepted. */
+    private fun botFileListTimeout() {
+        val pending = botFileListPending ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        if (bots.filesTarget != pending.target) return
+        val files = bots.files ?: DesktopFilesState()
+        if (!files.listing) return
+        mutableState.value = state.copy(bots = bots.copy(files = files.copy(listing = false,
+            listError = FILE_TIMEOUT_ERROR)))
+    }
+
+    private fun botFileReadTimeout() {
+        val pending = botFileReadPending ?: return
+        val state = mutableState.value
+        val bots = state.bots ?: return
+        if (bots.filesTarget != pending.target) return
+        val files = bots.files ?: DesktopFilesState()
+        if (!files.reading) return
+        mutableState.value = state.copy(bots = bots.copy(files = files.copy(reading = false,
             readError = FILE_TIMEOUT_ERROR)))
     }
 
@@ -2159,24 +3107,33 @@ class DesktopLink internal constructor(
         }
         val queueRejection = rejection != null && QueueCommand.entries.any { it.wire == rejection }
         val goalRejection = rejection != null && GoalCommand.entries.any { it.wire == rejection }
+        val modelRejection = rejection == "set-model"
+        val thinkingRejection = rejection == "set-reasoning" || rejection == "set-thinking"
         val maintenanceRejection = rejection != null && SessionMaintenanceCommand.entries.any { it.wire == rejection }
         val rewindRejection = rejection == "rewind"
         val taskStopRejection = rejection != null && SessionTaskKind.entries.any { it.wire == rejection }
-        val botSendRejection = rejection == "bot-send"
-        val botStopRejection = rejection == "bot-stop"
-        if (queueRejection || goalRejection || maintenanceRejection || rewindRejection || taskStopRejection ||
-            botSendRejection || botStopRejection ||
+        val botWriteRejection = when (rejection) {
+            "bot-send" -> BotWriteKind.Send
+            "bot-stop" -> BotWriteKind.Stop
+            "bot-new-session" -> BotWriteKind.NewSession
+            "bot-retry" -> BotWriteKind.Retry
+            "bot-inbox-dismiss" -> BotWriteKind.Dismiss
+            "bot-group-create" -> BotWriteKind.GroupCreate
+            "bot-direct-open" -> BotWriteKind.DirectOpen
+            else -> null
+        }
+        if (queueRejection || goalRejection || modelRejection || thinkingRejection || maintenanceRejection || rewindRejection || taskStopRejection ||
+            botWriteRejection != null ||
             rejection in setOf("approval-respond", "ask-respond", "prompt", "steer", "abort", "spawn")) {
             // The denial is authoritative for this connection even if its originating request timed out.
             mutableState.value = mutableState.value.copy(readOnly = true)
             pendingCreation?.firstText = null
             sessionWriteAuthority = null
         }
-        if (botSendRejection || botStopRejection) {
+        if (botWriteRejection != null) {
             connection.noteScopeDenial(sequence)
             // Bot writes are independent of the selected session, so this never waits for one.
-            rejectBotWrite(connection, sequence,
-                if (botSendRejection) BotWriteKind.Send else BotWriteKind.Stop)
+            rejectBotWrite(connection, sequence, botWriteRejection)
             return
         }
         if (queueRejection) {
@@ -2196,6 +3153,23 @@ class DesktopLink internal constructor(
                 attempt.command.wire == rejection && sequence > evidence.afterSequence) {
                 finishGoal(SessionCommandPhase.Rejected)
             }
+            return
+        }
+        if (thinkingRejection) {
+            connection.noteScopeDenial(sequence)
+            val attempt = mutableState.value.session?.thinkingAttempt
+            val evidence = thinkingEvidence
+            if (attempt != null && evidence != null && evidence.generation === connection &&
+                attempt.id == evidence.attemptId && sequence > evidence.afterSequence &&
+                rejection == thinkingCommand(attempt.enabled)) finishThinking(SessionCommandPhase.Rejected)
+            return
+        }
+        if (modelRejection) {
+            connection.noteScopeDenial(sequence)
+            val attempt = mutableState.value.session?.modelAttempt
+            val evidence = modelEvidence
+            if (attempt != null && evidence != null && evidence.generation === connection &&
+                attempt.id == evidence.attemptId && sequence > evidence.afterSequence) finishModel(SessionCommandPhase.Rejected)
             return
         }
         if (maintenanceRejection) {
@@ -2277,6 +3251,10 @@ class DesktopLink internal constructor(
                     queueDeadline = null
                     cancelTimer(connection, Timer.QueueCommands)
                     clearGoalAuthority(connection.latestSequence)
+                    modelEvidence = null
+                    cancelTimer(connection, Timer.ModelCommands)
+                    thinkingEvidence = null
+                    cancelTimer(connection, Timer.ThinkingCommands)
                     maintenanceEvidence = null
                     cancelTimer(connection, Timer.Maintenance)
                 }
@@ -2287,6 +3265,10 @@ class DesktopLink internal constructor(
                         session.queueAttempt.copy(phase = SessionCommandPhase.Unconfirmed) else session.queueAttempt,
                     goalReady = !epochChanged && session.goalReady,
                     goalAttempt = if (epochChanged) session.goalAttempt.withoutGoalEvidence() else session.goalAttempt,
+                    modelAttempt = if (epochChanged && session.modelAttempt?.phase == SessionCommandPhase.Waiting)
+                        session.modelAttempt.copy(phase = SessionCommandPhase.Unconfirmed) else session.modelAttempt,
+                    thinkingAttempt = if (epochChanged && session.thinkingAttempt?.phase == SessionCommandPhase.Waiting)
+                        session.thinkingAttempt.copy(phase = SessionCommandPhase.Unconfirmed) else session.thinkingAttempt,
                     maintenance = if (epochChanged && session.maintenance?.phase == SessionCommandPhase.Waiting)
                         session.maintenance.copy(phase = SessionCommandPhase.Unconfirmed) else session.maintenance,
                     rewind = if (epochChanged && session.rewind?.phase == SessionCommandPhase.Waiting)
@@ -2592,6 +3574,17 @@ class DesktopLink internal constructor(
         if (read is DesktopRead.Host && next !== beforeRead && next.readOnly) {
             next = next.unconfirmedRewind().unconfirmedTaskStop()
         }
+        if (next !== beforeRead) when (read) {
+            is DesktopRead.Catalog, DesktopRead.InvalidCatalog -> {
+                if (read is DesktopRead.Catalog) refreshModelTarget(connection, read, sequence) else modelTarget = null
+                next.session?.let { session ->
+                    val ready = modelTarget?.sessionId == session.timeline.sessionId
+                    if (ready != session.modelReady) next = next.copy(session = session.copy(modelReady = ready))
+                }
+            }
+            is DesktopRead.Providers -> if (next.providers != beforeRead.providers) modelTarget = modelTarget?.copy()
+            else -> Unit
+        }
         mutableState.value = next
         if (justAuthenticated && selectedSession != null) requestSync(connection, useCursor = true)
         if (read is DesktopRead.Host && next !== beforeRead) refreshSessionWriteAuthority()
@@ -2600,9 +3593,13 @@ class DesktopLink internal constructor(
             queueCatalog(connection, read, sequence)
             goalCatalog(connection, read, sequence)
             usageCatalog(connection, read, sequence)
+            modelCatalog(connection, sequence)
+            thinkingCatalog(connection, sequence)
         }
         if (read == DesktopRead.InvalidCatalog && next !== beforeRead) goalCatalog(connection, null, sequence)
-        if (read == null && !botFrame(connection, opened.payload, sequence)) sessionFrame(connection, opened.payload, sequence)
+        // Bot files are independent of the selected Code session, so they are routed before its gate.
+        if (read == null && !botFileFrame(connection, opened.payload) &&
+            !botFrame(connection, opened.payload, sequence)) sessionFrame(connection, opened.payload, sequence)
     }
 
     /** FrameReplay already authenticated the wire packet and strips the replay envelope. */
@@ -2671,11 +3668,15 @@ class DesktopLink internal constructor(
             Timer.Creation -> finishCreation(CreationPhase.Unconfirmed)
             Timer.QueueCommands -> finishQueue(SessionCommandPhase.Unconfirmed)
             Timer.GoalCommands -> finishGoal(SessionCommandPhase.Unconfirmed)
+            Timer.ModelCommands -> finishModel(SessionCommandPhase.Unconfirmed)
+            Timer.ThinkingCommands -> finishThinking(SessionCommandPhase.Unconfirmed)
             Timer.Maintenance -> finishMaintenance(SessionCommandPhase.Unconfirmed)
             Timer.Rewind -> finishRewind(SessionCommandPhase.Unconfirmed)
             Timer.TaskStop -> finishTaskStop(SessionCommandPhase.Unconfirmed)
             Timer.FileList -> fileListTimeout()
             Timer.FileRead -> fileReadTimeout()
+            Timer.BotFileList -> botFileListTimeout()
+            Timer.BotFileRead -> botFileReadTimeout()
             Timer.Preview -> previewTimeout()
             Timer.BotCatalog, Timer.BotInbox, Timer.BotTimeline -> botTimeout(event.kind)
             Timer.BotRefresh -> {
@@ -2689,6 +3690,13 @@ class DesktopLink internal constructor(
             Timer.BotSend -> botSendTimeout()
             Timer.BotStop -> botStopTimeout()
             Timer.BotThread -> botThreadTimeout()
+            Timer.BotNewSession -> botNewSessionTimeout()
+            Timer.BotRetry -> botRetryTimeout()
+            Timer.BotDismiss -> botDismissTimeout()
+            Timer.BotGroupCreate -> botGroupCreateTimeout()
+            Timer.BotDirectOpen -> botDirectOpenTimeout()
+            Timer.BotArtifacts -> botArtifactsTimeout()
+            Timer.BotArtifactImage -> botArtifactImageTimeout()
             Timer.SessionCommands -> {
                 val now = nowMillis()
                 val textExpired = textDeadline?.let { it <= now } == true
@@ -2829,7 +3837,9 @@ class DesktopLink internal constructor(
             return when (read) {
                 is DesktopRead.Host -> state.copy(hostName = read.name ?: state.hostName, readOnly = read.readOnly)
                 is DesktopRead.Catalog -> state.copy(catalog = read.tasks, catalogReady = true)
-                DesktopRead.InvalidCatalog -> state.copy()
+                DesktopRead.InvalidCatalog -> state.copy(catalog = Collections.unmodifiableList(state.catalog.map {
+                    if (it.providerId == null && it.modelId == null) it else it.copy(providerId = null, modelId = null)
+                }))
                 is DesktopRead.Projects -> state.copy(projects = read.projects)
                 is DesktopRead.Providers -> state.copy(providers = read.providers)
             }
@@ -2854,6 +3864,10 @@ class DesktopLink internal constructor(
             val messageId: String?, val text: String?, val item: DesktopQueuedMessage?) : Event
         data class WriteGoal(val sessionId: String, val epoch: String, val authority: Any, val command: GoalCommand,
             val expected: DesktopGoal?, val text: String?) : Event
+        data class WriteModel(val sessionId: String, val epoch: String, val authority: Any, val providerId: String,
+            val modelId: String, val target: ModelTarget, val previousAttemptId: Long?, val previousThinkingAttemptId: Long?) : Event
+        data class WriteThinking(val sessionId: String, val epoch: String, val authority: Any, val enabled: Boolean?,
+            val level: TaskThinkingLevel?, val target: ModelTarget, val previousAttemptId: Long?, val previousModelAttemptId: Long?) : Event
         data class WriteMaintenance(val sessionId: String, val command: SessionMaintenanceCommand,
             val baseline: MaintenanceBaseline, val text: String?, val authority: Any) : Event
         data class WriteRewind(val sessionId: String, val userIndexFromEnd: Long, val restoreFiles: Boolean,
@@ -2862,6 +3876,8 @@ class DesktopLink internal constructor(
             val baseline: TaskStopBaseline, val authority: Any) : Event
         data class ListFiles(val sessionId: String) : Event
         data class ReadFile(val sessionId: String, val fileId: String, val offset: Long) : Event
+        data class ListBotFiles(val target: DesktopBotArtifactTarget) : Event
+        data class ReadBotFile(val target: DesktopBotArtifactTarget, val fileId: String, val offset: Long) : Event
         data class ListPreviews(val sessionId: String) : Event
         data class OpenPreview(val sessionId: String, val entryId: String, val width: Int, val height: Int) : Event
         data class PreviewAction(val sessionId: String, val action: DesktopPreviewAction) : Event
@@ -2875,6 +3891,15 @@ class DesktopLink internal constructor(
         data class BotStop(val chatId: String, val authority: Any) : Event
         data class ChangeBotThread(val rootId: String, val command: BotThreadCommand, val targetId: String?,
             val expectedActiveId: String, val authority: Any) : Event
+        data class NewBotSession(val chatId: String, val confirmedFor: String?, val authority: Any) : Event
+        data class RetryBotEntry(val chatId: String, val entryId: String, val authority: Any) : Event
+        data class DismissBotInbox(val key: String, val authority: Any) : Event
+        data class CreateBotGroup(val title: String, val memberIds: List<String>, val bossBotId: String,
+            val authority: Any) : Event
+        data class OpenBotDirect(val botId: String, val authority: Any) : Event
+        data class LoadBotArtifacts(val target: DesktopBotArtifactTarget) : Event
+        data class LoadBotArtifactImage(val target: DesktopBotArtifactTarget, val mediaId: String?,
+            val rel: String?, val requestId: String) : Event
         data class Open(val connection: Connection) : Event
         data class Text(val connection: Connection, val value: String) : Event
         data class Binary(val connection: Connection, val value: ByteString) : Event
@@ -2882,12 +3907,19 @@ class DesktopLink internal constructor(
         data class Deadline(val connection: Connection?, val kind: Timer) : Event
     }
 
-    private enum class Timer { Connect, Authenticate, Ping, Pong, Retire, Retry, SessionSync, History, Responses, SessionCommands, QueueCommands, GoalCommands, Maintenance, Rewind, TaskStop, FileList, FileRead, Preview, BotCatalog, BotInbox, BotTimeline, BotRefresh, BotSend, BotStop, BotThread, Creation }
+    private enum class Timer { Connect, Authenticate, Ping, Pong, Retire, Retry, SessionSync, History, Responses, SessionCommands, QueueCommands, GoalCommands, ModelCommands, ThinkingCommands, Maintenance, Rewind, TaskStop, FileList, FileRead, BotFileList, BotFileRead, Preview, BotCatalog, BotInbox, BotTimeline, BotRefresh, BotSend, BotStop, BotThread, BotNewSession, BotRetry, BotDismiss, BotGroupCreate, BotDirectOpen, BotArtifacts, BotArtifactImage, Creation }
     private enum class SessionCommand(val wire: String) { Prompt("prompt"), Steer("steer"), Abort("abort") }
     private data class TextEvidence(val command: SessionCommand, val epoch: String, val sequence: Long, val firstNewIndex: Long)
     private data class QueueEvidence(val attemptId: Long, val epoch: String, val afterSequence: Long, val originalIds: Set<String>)
     private data class GoalEvidence(val attemptId: Long, val epoch: String, val afterSequence: Long, val deadline: Long,
         val previousText: String?)
+    private data class ModelTarget(val sessionId: String, val providerId: String?, val modelId: String?,
+        val reasoningEnabled: Boolean?, val thinkingLevel: TaskThinkingLevel?) {
+        fun matchesThinking(enabled: Boolean?, level: TaskThinkingLevel?) =
+            enabled != null && reasoningEnabled == enabled || level != null && thinkingLevel == level
+    }
+    private data class ModelEvidence(val attemptId: Long, val epoch: String, val afterSequence: Long, val deadline: Long,
+        val generation: Connection)
     private data class MaintenanceEvidence(val attemptId: Long, val command: SessionMaintenanceCommand, val epoch: String,
         val afterCursor: Long, val afterFrame: Long, val generation: Connection)
     private data class RewindEvidence(val attemptId: Long, val afterSequence: Long, val generation: Connection)
@@ -2896,12 +3928,17 @@ class DesktopLink internal constructor(
     private data class FileListPending(val requestId: String, val sessionId: String, val generation: Connection)
     private data class FileReadPending(val requestId: String, val sessionId: String, val fileId: String,
         val offset: Long, val generation: Connection)
+    private data class BotFileListPending(val requestId: String, val target: DesktopBotArtifactTarget,
+        val generation: Connection)
+    private data class BotFileReadPending(val requestId: String, val target: DesktopBotArtifactTarget,
+        val fileId: String, val offset: Long, val generation: Connection)
     private data class PreviewPending(val requestId: String, val sessionId: String, val request: PreviewRequest,
         val generation: Connection)
     private data class BotTimelineSent(val chatId: String, val beforeSeq: Long?, val at: Long)
-    private enum class BotWriteKind { Send, Stop }
-    private data class BotWrite(val kind: BotWriteKind, val generation: Connection, val chatId: String,
-        val deliveryId: String?, val afterSequence: Long)
+    private enum class BotWriteKind { Send, Stop, NewSession, Retry, Dismiss, GroupCreate, DirectOpen }
+    private data class BotWrite(val kind: BotWriteKind, val generation: Connection, val chatId: String?,
+        /** What this write answers with: a delivery id, a request id, an entry id or an inbox key. */
+        val ref: String?, val afterSequence: Long)
     private enum class PreviewRequest(val wire: String) {
         List("preview-list"), Open("preview-open"), Frame("preview-frame"), Refresh("preview-refresh"),
         Close("preview-close"), Input("preview-input")
@@ -2956,12 +3993,20 @@ class DesktopLink internal constructor(
         // A bot send has a real receipt; a stop only ever shows up as the next running state.
         const val BOT_SEND_TIMEOUT_MS = 15_000L
         const val BOT_STOP_TIMEOUT_MS = 10_000L
+        // A dismissal has no receipt either: only the next authoritative inbox table proves it.
+        const val BOT_DISMISS_TIMEOUT_MS = 10_000L
+        // An artifact list or a full image costs a workspace read and an encode on the host.
+        const val BOT_ARTIFACT_TIMEOUT_MS = 20_000L
         // Denials carry no id, so only a bounded run of recent bot writes can be matched to them.
         const val BOT_WRITE_LIMIT = 8
+        // Only a handful of targets can be silently unanswered inside one generation.
+        const val BOT_SILENT_TARGET_LIMIT = 8
         const val BOT_NO_RESPONSE = "没有收到桌面响应"
         const val BOT_INVALID_ERROR = "无效的响应"
         val BOT_FRAME_TYPES = setOf("bot-catalog", "bot-chats", "bot-inbox", "bot-activity", "group-timeline",
-            "bot-chat-state", "bot-send-result", "bot-event", "bot-thread-result")
+            "bot-chat-state", "bot-send-result", "bot-event", "bot-thread-result", "bot-new-session-result",
+            "bot-retry-result", "bot-group-create-result", "bot-direct-open-result", "bot-artifacts",
+            "bot-artifact-image")
         val BOT_REFRESH_EVENTS = setOf("chat", "timeline", "queue", "delegation")
         val BOT_DELIVERY_ID = Regex("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
         const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L

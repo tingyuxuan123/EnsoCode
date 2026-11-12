@@ -1,0 +1,21 @@
+@import "@fontsource-variable/figtree";
+
+@theme {
+	--font-sans: "Figtree Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+	--color-primary: #263e28;
+	--color-primary-foreground: #eef4d2;
+	--color-surface: #f7f6ed;
+	--color-surface-foreground: #242e23;
+	--color-panel: #edeee0;
+	--color-muted: #58644f;
+	--color-border: #d8ddcc;
+	--color-danger: #9e3b31;
+}
+
+.icon-specimen {
+	filter: drop-shadow(5px 22px 18px rgb(39 59 32 / 0.16));
+}
+
+.mark-ink {
+	mask: url("./assets/xiaoman-mark.svg") center / contain no-repeat;
+}

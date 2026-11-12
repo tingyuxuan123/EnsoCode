@@ -26,6 +26,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { appendSystemPromptExtension, SUBAGENT_CONTRACT_PROMPT } from './childContract';
 import { promptCatalogExtension } from './promptCatalog';
 import { createCodeSearchTool } from './tools/codeSearch';
+import { createImageGenerationTools } from './tools/imageGeneration';
 
 const model = getModel('openai', 'gpt-4o-mini');
 if (!model) throw new Error('Test model is not available in the bundled Pi catalog.');
@@ -162,13 +163,24 @@ it.each([false, true])(
         retry: { enabled: false },
         compaction: { enabled: false },
       }),
-      customTools: [codeSearch],
+      customTools: [codeSearch, ...createImageGenerationTools({ invoke: vi.fn() })],
     });
     cleanups.unshift(() => session.dispose());
-    session.setActiveToolsByName(['read', 'grep', 'code_search', 'mcp__docs__get']);
+    session.setActiveToolsByName([
+      'read',
+      'grep',
+      'code_search',
+      'mcp__docs__get',
+      'generate_image',
+    ]);
     await session.prompt('First turn');
     const prompt = getCurrentSystemPrompt(requests[0]!.messages);
     expect(prompt).toContain('<tool_catalog>');
+    expect(prompt).toContain('<image_generation_routing>');
+    expect(prompt).toContain('not vetd_create');
+    expect(getCurrentTools(requests[0]!.messages).map((tool) => tool.name)).toContain(
+      'generate_image'
+    );
     expect(prompt).toContain('- mcp__docs__get: Fetch documentation.');
     expect(prompt.match(/<tool_catalog>/g)).toHaveLength(1);
     expect(prompt).toContain(skillDescription);
@@ -191,6 +203,7 @@ it.each([false, true])(
     session.setActiveToolsByName(['read', 'grep', 'code_search', 'mcp__docs__search']);
     await session.prompt('Added and switched');
     const second = getCurrentSystemPrompt(requests[1]!.messages);
+    expect(second).not.toContain('<image_generation_routing>');
     expect(second).toContain('- mcp__docs__search:');
     expect(second).not.toContain('- mcp__docs__get:');
     api!.registerTool({ ...tool('mcp__docs__search'), exposure: 'hidden' });

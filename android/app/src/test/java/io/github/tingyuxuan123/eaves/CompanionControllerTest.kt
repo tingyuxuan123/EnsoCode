@@ -6,6 +6,8 @@ import io.github.tingyuxuan123.eaves.mirror.PairCredentialStore
 import io.github.tingyuxuan123.eaves.mirror.PairCredentials
 import io.github.tingyuxuan123.eaves.mirror.DesktopTask
 import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
+import io.github.tingyuxuan123.eaves.mirror.DesktopBotChat
+import io.github.tingyuxuan123.eaves.mirror.DesktopBotsState
 import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
 import io.github.tingyuxuan123.eaves.mirror.TaskApprovalMode
 import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
@@ -59,6 +61,7 @@ class CompanionControllerTest {
         val goals = mutableListOf<Triple<GoalCommand, DesktopGoal?, String?>>()
         val maintenance = mutableListOf<Triple<SessionMaintenanceCommand, MaintenanceBaseline, String?>>()
         val rewinds = mutableListOf<Triple<Long, Boolean, RewindBaseline>>()
+        val botOpens = mutableListOf<String>()
         override fun setVisible(visible: Boolean) { foreground = visible }
         override fun setBackgroundAllowed(allowed: Boolean) { watchChanges.add(allowed) }
         override fun reconnect() { reconnects++ }
@@ -66,6 +69,7 @@ class CompanionControllerTest {
         override fun selectSession(sessionId: String?) { selected.add(sessionId) }
         override fun respondAsk(sessionId: String, requestId: String, answer: String) { answers.add(Triple(sessionId, requestId, answer)) }
         override fun createTask(request: TaskLaunch) { launches.add(request) }
+        override fun openBotDirect(botId: String) { botOpens.add(botId) }
         override fun goalAction(sessionId: String, command: GoalCommand, expected: DesktopGoal?, text: String?) {
             goals.add(Triple(command, expected, text))
         }
@@ -193,6 +197,37 @@ class CompanionControllerTest {
         assertEquals(listOf(Triple("s1", "request", "回复")), link.answers)
         controller.selectSession(null)
         assertEquals(listOf("s1", null), link.selected)
+    }
+
+    @Test fun `成员私聊只订阅桌面目录绑定且关闭成员模式不接受伪造会话`() = runTest {
+        val link = Link(); val controller = controller(Store(credentials()), link)
+        val bots = DesktopBotsState(enabled = true, chats = listOf(
+            DesktopBotChat("direct", "direct", "", listOf("bot"), null, 0, 0, sessions = mapOf("bot" to "member-session"))))
+        runCurrent(); controller.setVisible(true)
+        link.state.value = DesktopLinkState(phase = LinkPhase.Online, bots = bots)
+        runCurrent()
+        controller.selectSession("forged")
+        controller.selectSession("member-session")
+        assertEquals(listOf("member-session"), link.selected)
+        controller.selectSession(null)
+        link.state.value = link.state.value.copy(bots = bots.copy(enabled = false))
+        runCurrent(); controller.selectSession("member-session")
+        assertEquals(listOf("member-session", null), link.selected)
+    }
+
+    @Test fun `首次单聊不会跨后台只读或离线转发`() = runTest {
+        val link = Link(); val controller = controller(Store(credentials()), link)
+        runCurrent()
+        link.state.value = DesktopLinkState(phase = LinkPhase.Online, readOnly = false, bots = DesktopBotsState(enabled = true))
+        runCurrent(); controller.openBotDirect("bot")
+        assertTrue(link.botOpens.isEmpty())
+        controller.setVisible(true); controller.openBotDirect("bot")
+        assertEquals(listOf("bot"), link.botOpens)
+        link.state.value = link.state.value.copy(readOnly = true)
+        runCurrent(); controller.openBotDirect("bot")
+        link.state.value = link.state.value.copy(phase = LinkPhase.Offline, readOnly = false)
+        runCurrent(); controller.openBotDirect("bot")
+        assertEquals(listOf("bot"), link.botOpens)
     }
 
     @Test fun `创建只从在线可操作且未订阅其他会话的入口转发`() = runTest {

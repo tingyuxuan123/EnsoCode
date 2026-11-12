@@ -5,6 +5,7 @@ import {
   type AgentSessionCustomEntry,
   type ApprovalRequestInfo,
   type AskRequestInfo,
+  type AttachedImage,
   type BackgroundTaskInfo,
   type DispatchMainEvent,
   type NodeStatus,
@@ -16,6 +17,7 @@ import {
   type SubagentRunSettlement,
   shouldApplyDispatchMainEvent,
 } from '@shared/types/agent';
+import { extractRewindDraft } from './conversationRewind';
 import { extractEdits, extractWriteContent } from './timeline';
 
 /**
@@ -28,6 +30,10 @@ export type TimelineMessage = ProjectedMessage & {
   deliveryId?: string;
   /** worker 明确拒收；只有这种乐观回显可以本地撤回。 */
   deliveryRejected?: boolean;
+  /** Generation in which the worker confirmed that this delivery was enqueued. */
+  steerPending?: string;
+  /** Original composer text, before goal and workspace hints were added. */
+  withdrawDraftText?: string;
 };
 
 export function canWithdrawMessage(message: TimelineMessage | undefined): boolean {
@@ -35,6 +41,21 @@ export function canWithdrawMessage(message: TimelineMessage | undefined): boolea
     message?.role === 'user' &&
       message.optimistic &&
       message.deliveryRejected &&
+      message.deliveryId &&
+      !message.entryId
+  );
+}
+
+export function canRequestSteerWithdrawal(
+  message: TimelineMessage | undefined,
+  generation?: string
+): boolean {
+  return Boolean(
+    generation &&
+      message?.role === 'user' &&
+      message.optimistic &&
+      message.steerPending === generation &&
+      !message.deliveryRejected &&
       message.deliveryId &&
       !message.entryId
   );
@@ -104,12 +125,14 @@ function authoritativeLength(messages: readonly TimelineMessage[]): number {
  */
 export function retainedOptimisticTail(
   local: readonly TimelineMessage[],
-  authoritative: readonly ProjectedMessage[]
+  authoritative: readonly ProjectedMessage[],
+  generation?: string
 ): TimelineMessage[] {
   const leftover = leftoverSnapshotUserTexts(local, authoritative);
   return local.filter((message) => {
     if (!message.optimistic || message.role !== 'user') return false;
     if (message.deliveryRejected) return true;
+    if (generation && message.steerPending === generation) return true;
     const text = textOf(message);
     const matched = leftover.findIndex(
       (delivered) => sameUserText(text, delivered) || sameUserText(delivered, text)
@@ -224,6 +247,9 @@ export interface SessionProjection {
   status: NodeStatus;
   error?: string;
   messages: TimelineMessage[];
+  draftText?: string;
+  draftImages?: AttachedImage[];
+  draftAppend?: boolean;
   customEntries: AgentSessionCustomEntry[];
   commands: SlashCommand[];
   lastSeq: number;
@@ -369,7 +395,11 @@ export function applyAgentEvent(
     );
     // 乐观回显是 worker 尚未确认的本地尾巴：快照里已有同文本 user 消息的视为已送达消费掉，
     // 其余（仍在途的 steer/prompt）保留浮在权威消息之后，不能被整段快照抹掉。
-    const tail = retainedOptimisticTail(state.messages, snapshot.messages);
+    const tail = retainedOptimisticTail(
+      state.messages,
+      snapshot.messages,
+      snapshot.identity.generation
+    );
     const snapBase = snapshot.baseIndex ?? 0;
     const localBase = state.historyBaseIndex ?? 0;
     const authLen = authoritativeLength(state.messages);
@@ -475,6 +505,40 @@ export function applyAgentEvent(
       };
     case 'workspace-branch-context-consumed':
       return { ...state, generation: state.generation ?? identity.generation, lastSeq: event.seq };
+    case 'delivery-steer-queued':
+      return {
+        ...current,
+        messages: current.messages.map((message) =>
+          message.role === 'user' &&
+          message.optimistic &&
+          !message.entryId &&
+          !message.deliveryRejected &&
+          message.deliveryId === event.deliveryId
+            ? { ...message, steerPending: identity.generation }
+            : message
+        ),
+        lastSeq: event.seq,
+      };
+    case 'delivery-withdrawn': {
+      const index = current.messages.findIndex(
+        (message) =>
+          message.deliveryId === event.deliveryId &&
+          canRequestSteerWithdrawal(message, identity.generation)
+      );
+      if (index === -1) return { ...current, lastSeq: event.seq };
+      const message = current.messages[index];
+      const draft = extractRewindDraft([message], 0);
+      return {
+        ...current,
+        messages: current.messages.toSpliced(index, 1),
+        draftText: [current.draftText, message.withdrawDraftText ?? draft?.text]
+          .filter(Boolean)
+          .join('\n\n'),
+        draftImages: [...(current.draftImages ?? []), ...(draft?.images ?? [])],
+        draftAppend: true,
+        lastSeq: event.seq,
+      };
+    }
     case 'delivery-rejected':
       return {
         ...current,
@@ -483,7 +547,11 @@ export function applyAgentEvent(
           message.optimistic &&
           !message.entryId &&
           message.deliveryId === event.deliveryId
-            ? { ...message, deliveryRejected: true }
+            ? {
+                ...message,
+                deliveryRejected: true,
+                ...(message.steerPending ? { steerPending: undefined } : {}),
+              }
             : message
         ),
         lastSeq: event.seq,
@@ -547,7 +615,10 @@ export function applyAgentEvent(
           (message) =>
             message.role === 'user' &&
             !message.deliveryRejected &&
-            sameUserText(textOf(message), deliveredText)
+            (event.deliveryId
+              ? message.deliveryId === event.deliveryId
+              : message.steerPending !== current.generation &&
+                sameUserText(textOf(message), deliveredText))
         );
         if (matched !== -1) tail = tail.toSpliced(matched, 1);
       }

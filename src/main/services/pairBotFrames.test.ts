@@ -2,6 +2,7 @@ import type { BotChat, BotProfile, GroupEntry } from '@shared/types/bot';
 import { describe, expect, it } from 'vitest';
 import {
   botSessionAccess,
+  fitBotArtifactsFrame,
   fitGroupTimelineFrame,
   pairActivityItems,
   summarizeBotChat,
@@ -161,6 +162,29 @@ describe('群时间线帧裁剪', () => {
     expect(Buffer.byteLength(JSON.stringify(frame))).toBeLessThan(5_000);
     expect(frame.entries).toHaveLength(1);
     expect(frame.entries[0].seq).toBe(1);
+  });
+});
+
+describe('成员产物帧裁剪', () => {
+  it('keeps every openable image when their thumbnails exceed the frame budget', () => {
+    const media = Array.from({ length: 20 }, (_, index) => ({
+      ok: true as const,
+      source: 'upload' as const,
+      mediaId: `image-${index}`,
+      thumb: `data:image/png;base64,${'A'.repeat(60_000)}`,
+    }));
+    const result = fitBotArtifactsFrame({
+      type: 'bot-artifacts',
+      target: { chatId: CHAT, entryId: 'reply' },
+      artifacts: [],
+      media,
+    });
+    expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThan(850_000);
+    expect(result.media.map((item) => (item.ok ? item.mediaId : null))).toEqual(
+      media.map((item) => item.mediaId)
+    );
+    expect(result.media[0]).toEqual(media[0]);
+    expect(result.media.at(-1)).not.toHaveProperty('thumb');
   });
 });
 

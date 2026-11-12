@@ -80,6 +80,34 @@ export function insertUiElementMention(
   return true;
 }
 
+export interface ComposerUiElementInsert {
+  candidate: UiElementMentionCandidate;
+  image?: AttachedImage;
+  /** 选区后面紧跟的备注文字，作为普通文本插进同一个 Composer */
+  note?: string;
+}
+
+type InsertUiElements = (items: readonly ComposerUiElementInsert[], owner: string) => boolean;
+let insertUiElements: InsertUiElements | null = null;
+
+export function registerComposerInsertUiElements(fn: InsertUiElements): () => void {
+  insertUiElements = fn;
+  return () => {
+    if (insertUiElements === fn) insertUiElements = null;
+  };
+}
+
+/**
+ * 多点标注一次合并：先确认 Composer 在线（离线时一条都不插，调用方保留清单），
+ * 再按顺序插入「位置引用卡片 + 备注」，最后统一聚焦输入框，绝不自动发送。
+ */
+export function insertUiElementMentions(
+  items: readonly ComposerUiElementInsert[],
+  conversationId: string
+): boolean {
+  return items.length > 0 && (insertUiElements?.(items, conversationId) ?? false);
+}
+
 export function registerComposerInsertImage(fn: (image: AttachedImage) => void): () => void {
   insertImage = fn;
   return () => {

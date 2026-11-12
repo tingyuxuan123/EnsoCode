@@ -5,10 +5,67 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  'OpenAI-compatible image generation': 'OpenAI 兼容图片生成',
+  'Configure an image endpoint independently from chat providers. Credentials stay encrypted on this device.':
+    '独立接入 OpenAI 兼容出图接口，无需添加到聊天模型服务；密钥加密保存在本机。',
+  'Your previous image provider selection still works until you save an independent image connection.':
+    '尚未保存独立图片配置，仍沿用旧版图片服务选型。保存下方新配置后，请填写对应的图片 API Key。',
+  'API address and authentication. Changing the address clears the saved key.':
+    '接口地址与鉴权信息。更换地址后需要重新填写 Key，不会把旧密钥发送到新服务。',
+  'API address': 'API 地址',
+  'Include the version segment, such as /v1. Requests use /images/generations and /images/edits.':
+    '填写包含版本段的根地址（例如 /v1），请求其下的 /images/generations 与 /images/edits。',
+  'Enter a new key to replace the saved key': '输入新的 Key 以替换',
+  'Enter image API key': '输入图片服务 API Key',
+  'The saved key is encrypted locally and is never sent back to this form.':
+    'Key 使用系统钥匙串加密保存在本机，不回显已保存的明文，输入新值即可替换。',
+  'System keychain unavailable. API keys cannot be saved without encryption.':
+    '系统钥匙串不可用，无法加密保存 Key；不会降级明文保存。',
+  'Not tested': '尚未检测',
+  'The first model is the default. Add model IDs manually or fetch them from the endpoint.':
+    '第一个为默认模型，可手动添加模型 ID 或从接口获取；列表中的模型可供文生图和图生图选择。',
+  'No image models. Add a model ID below.': '还没有图片模型，请在下方添加模型 ID。',
+  'Image model IDs': '图片模型 ID',
+  'Model IDs, separated by commas': '手动输入模型 ID，可用逗号分隔多个',
+  'Supports image editing': '支持图生图',
+  'Use /images/edits for existing images. Turn this off if the endpoint does not support editing.':
+    '通过 /images/edits 修改已有图片，接口不支持编辑时请关闭。',
+  'Use first model': '使用第一个模型',
+  'Text to image model': '文生图模型',
+  'Image to image model': '图生图模型',
+  'Output parameters': '输出参数',
+  'These options apply to both image generation and editing.':
+    '控制发送给接口的尺寸、质量等参数，对文生图和图生图都生效。',
+  'Image dimensions': '图片尺寸',
+  'Fixed dimensions': '固定尺寸',
+  'Do not send': '不传',
+  '1K / 2K / 4K keep the requested aspect ratio and scale the long edge to 1024 / 2048 / 3840, aligned to 16 pixels.':
+    '保持 Agent 请求的宽高比，长边缩放到 1024 / 2048 / 3840，并按 16 像素对齐。',
+  'Image quality': '质量',
+  'Sent as quality: gpt-image supports low / medium / high; dall-e-3 supports standard / hd.':
+    '透传为 quality 参数。gpt-image 系列支持 low / medium / high，dall-e-3 支持 standard / hd。',
+  'Extra parameters (JSON)': '额外参数（JSON）',
+  'Merged into the request body. Can override size and quality, but not model, prompt, n, image or mask.':
+    '合并进请求体，可覆盖尺寸与质量；model、prompt、n、image、mask 不可覆盖。',
+  'Enter a JSON object with valid output parameters.': '请输入合法的 JSON 对象，尺寸参数须有效。',
+  'Preview: actual parameters for an Agent request of 1536x1024':
+    '示例：Agent 请求 1536x1024 时实际发送的参数',
+  'Unsaved preview': '当前为预览，尚未保存',
+  'Image calls may be billed. Prompts and reference images go to the selected endpoint; requests are never retried automatically. Local Code sessions only.':
+    '图片调用可能计费；提示词和参考图会发往配置的接口，失败不会自动重试。目前仅支持本地 Code 会话。',
+  'Import image models': '导入图片模型',
+  'Select models supported by your image endpoint. A model list may also contain chat models.':
+    '请选择图片接口实际支持的模型，返回列表中也可能包含聊天模型。',
+  Connection: '连接',
+  'Connection successful': '连接成功',
+  'Add selected models': '添加所选模型',
   'Image generation': '图像生成',
   'Generate and edit images with an OpenAI-compatible image service.':
     '通过 OpenAI 兼容的图像服务生图和改图。',
   'Generate image': '生成图片',
+  'Generating image…': '正在生成图片…',
+  'Image processing': '图像处理中',
+  'Editing image…': '正在编辑图片…',
   'Edit image': '编辑图片',
   'Text to image': '文生图',
   'Image to image': '图生图',
@@ -455,6 +512,16 @@ export const zhTranslations: Record<string, string> = {
   'Enso is in control': 'Enso 正在接管',
   'Toggle Developer Tools': '开关开发者工具',
   'Toggle Design Mode': '开关圈选模式',
+  'Multi-point annotation': '多点标注',
+  'Annotation list is full. Add it to the conversation or remove a selection.':
+    '标注清单已满，请添加到对话或移除一条标注。',
+  Annotations: '标注清单',
+  Region: '框选区域',
+  'Note for selection': '为这条标注写备注',
+  'Remove annotation': '移除这条标注',
+  'Clear annotations': '清空标注',
+  'Pick several elements or regions, then add them together.':
+    '连续选取多个元素或框选区域，写好备注后一起加入对话。',
   'Selected UI element': '圈选的界面元素',
   'No Composer for this selection': '没有可接收圈选的输入框',
   'Add to conversation': '添加到对话',
@@ -991,6 +1058,9 @@ export const zhTranslations: Record<string, string> = {
   'New Folder': '新建文件夹',
   'Copy Path': '复制路径',
   'Copy image': '复制图片',
+  'Download image': '下载图片',
+  'Could not download image': '下载图片失败',
+  'Image actions': '图片操作',
   'Image copied': '图片已复制',
   'Could not copy image': '复制图片失败',
   'Copy failed': '复制失败',
@@ -2183,6 +2253,14 @@ export const zhTranslations: Record<string, string> = {
   'ran {{count}} commands': '跑了 {{count}} 条命令',
   'total {{duration}}': '总计 {{duration}}',
   'took {{duration}}': '用时 {{duration}}',
+  'Turn timing': '本轮耗时',
+  'Model request': '模型请求',
+  'Tool execution': '工具执行',
+  'Unattributed wait': '未归因等待',
+  'First token {{duration}}': '等待首字 {{duration}}',
+  'Thinking {{duration}}': '思考 {{duration}}',
+  'Generation {{duration}}': '生成 {{duration}}',
+  'Slowest step': '最慢步骤',
   'read {{count}} files': '读了 {{count}} 个文件',
   'searched {{count}} times': '搜索 {{count}} 次',
   '{{count}} other calls': '其他 {{count}} 次调用',

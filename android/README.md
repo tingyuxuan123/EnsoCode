@@ -47,15 +47,28 @@ Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创�
   超时、断线或切会话即清空列表，不自动重试。图片仅预览，不提供下载/分享。
 - 会话时间线里的图片附件按权威投影直接显示（最多 4 张缩略图，点开看大图）；Base64 不合法或解码失败的附件保留占位，
   不会渲染破图。校验与解码使用 `java.util.Base64`（API 26+），因此规则可在 JVM 单测覆盖。
-- `members` 页面读取 Bot 模式推送的目录：收件箱（待审批/提问/委派中断/额度/例程）、成员（运行态）、群聊与私聊列表；
-  点开群聊按 `bot-chat-open` / `bot-timeline` 拉取群时间线（本批只投影 human/bot/system 文本，delegation/progress 丢弃），
+- 会话时间线使用权威 `todo` 结果的结构化待办（旧结果仅回退解析可验证的完整清单），不把工具参数当成已执行状态。
+  对齐旧手机网页的每轮工作摘要：思考、调用、通知和已替换的待办折成一行，保留可展开的细节和失败计数。
+  展开的思考与工具步骤沿用 PC 端图标分类，读取、检索、终端和网页工具不再共用一个图标。
+  回复、最新待办、工具返回图片和上下文压缩摘要仍各自可见；执行中不收走正在输出的正文。
+- `members` 页面按设计分为收件箱、群聊、单聊，头像、叠放头像、运行点和相对时间来自真实目录；
+  点开群聊按 `bot-chat-open` / `bot-timeline` 拉取全屏群时间线，支持 human/bot/system 与 delegation/progress 委派进度卡，
   可「加载更早」。`bot-event` 只触发打开群聊的合并只读刷新，关闭聊天后停止刷新；不重发业务写入。
-  桌面关闭 Bot 模式时明确说明而不是显示空列表。私聊可发送文字，历史与过程订阅尚未接入，不把无数据伪装成空历史。
+  桌面关闭 Bot 模式时明确说明而不是显示空列表。私聊使用 `chat.sessions` 的权威 conversationId 订阅既有快照/增量/历史，
+  可查看真实正文、执行记录、待办与图片；收件箱审批/提问打开对应成员会话，复用既有请求过期、只读和待确认门控。
+- 尚无单聊时用 `bot-direct-open`（桌面声明 `directOpen=true`）按成员 ID 首次打开；既有单聊保持原 ID，不恢复归档单聊。
+  右下「新群聊」选择 2–64 位成员、主持人与群名（最多 200 字），通过 `bot-group-create` 新建独立聊天工作区。
+  等匹配回执与目录同时确认后才打开，不乐观新建；桌面按设备+requestId 提供进程内 10 分钟幂等，超时不会自动重发。
+- 会话菜单「新对话」使用 `bot-new-session`：正在工作的群聊需二次确认，成功后靠权威目录/时间线刷新。
+  失败系统行可 `bot-retry`；可忽略的收件箱行等待 `bot-inbox` 真正移除，不在手机自行删除。
+- 回复的产物入口读取 `bot-artifacts`，图片用 `bot-artifact-image`；文本/Markdown 用 `file-list` / `file-read` 的 bot target，
+  只把桌面签发的 opaque fileId 用作读取参数，rel 仅用于展示。分块只保存在内存，支持图片与 Markdown/文本预览；
+  HTML 作为文本，不执行脚本；PDF、下载、分享仍未接入。只读可查看产物，断线或切聊天清空文件投影。
 - 会话内可向成员发消息（`bot-send`，UI 生成 UUID deliveryId，按 `bot-send-result` 结算 ok/失败）与停止群聊当前轮（`bot-stop`，
   以晚于发送的 `bot-chat-state.current` 变空为观测，不承诺队列已清空）。发送前做 JS trim 与 32000 字符上限。
   草稿保留到匹配 deliveryId 的成功应答；关闭聊天再打开仍保留，确认不会擦掉后来编辑的文字，仅存在当前页面进程内存。
   15s/10s 超时只标未确认、不自动重发；只读连接与后台一律拒绝写入，过期 UI 动作不能跨可见性/认证代际执行。
-  图片发送与 Bot 产物留待后续批次。
+  成员发图与语音输入尚未接入，入口不会伪装可用。
 - 群聊「话题」入口只在桌面认证目录声明 `threads=true` 时出现，列出主话题和该根群下未归档的子线程。
   新建/切换使用原有 `bot-thread-create` / `bot-thread-select`，按根群 ID + requestId 匹配回执，
   并等待认证目录的实际选中项再打开正文；不修改本地权威目录，不自动重试。新线程可能复用桌面上现有空话题。
@@ -92,8 +105,10 @@ Kotlin JSON 兼容层在库解析前校验裸 token / 控制字符，并保留�
 解析失败只抛通用错误，不附带可能包含解密明文的库异常。
 
 **尚未实现**：预设选择、SSH/worktree 新建、新任务/插话/队列图片、拍照、队列重排、改动审查、多电脑管理、离线目录缓存、通知内直接操作/静默时段/成员提醒、
-WebRTC / 分片 / 语音、Bot 私聊历史/委派卡/新对话/产物/收件箱处理，以及正式签名发布。
-Markdown 不加载远程图片、不打开链接。详细缺口和验证边界见 [实现与验收状态](IMPLEMENTATION_STATUS.md)。
+WebRTC / 分片 / 语音、成员发图/语音、Bot PDF/下载分享/成员配置编辑，以及正式签名发布。
+Markdown 正文支持长按选择；围栏和缩进代码块右上角「复制」写入完整代码，即使超出屏宽也不会截断。
+网页链接在用户点击后才交给 Android 打开，仅接受有主机名的 HTTP/HTTPS；不打开 `file:`、`intent:`、`enso:` 等协议，
+也不加载远程图片。详细缺口和验证边界见 [实现与验收状态](IMPLEMENTATION_STATUS.md)。
 已用 Android 模拟器的实际 App、Go 中继和 TS fake host 验证配对、目录、会话审批/回答、发送/插话/停止、配置创建、重启和解绑；
 真实 Electron/Main/worker 的隔离本地联调由下述脚本覆盖；未对实体手机、真实厂商模型或线上中继完成验收。
 
@@ -121,6 +136,16 @@ cd android
 ```
 
 Windows 使用 `gradlew.bat`。根目录的 pnpm 检查不覆盖 Kotlin。
+
+设备测试请在专用、未配对的模拟器上运行，并用 `ANDROID_SERIAL` 指定设备。`connectedDebugAndroidTest`
+可能在测试后卸载目标 App，清除原有配对；只更新手动验收用的模拟器时，使用 `adb install -r`。
+
+若默认 ADB server 是其它账户（例如 root）启动，模拟器可能持续 `unauthorized`，不要为测试重置用户的配对或杀掉其它工具的 server。
+可用当前账户另开端口，例如 `adb -P 5038 start-server`，并在本次进程设置 `ADB_SERVER_SOCKET=tcp:127.0.0.1:5038`
+与 `ANDROID_ADB_SERVER_PORT=5038`，保持 CLI 和 Gradle 都使用同一 server。验收完只停止本次创建的 server。
+
+成员会话不在 Code 任务目录中；私聊/收件箱跳转只用已认证 `bot-chats.sessions` 或 `bot-inbox.conversationId`，
+不能把 Code catalog 当所有合法会话的白名单，也不要从收件箱 key 字符串猜会话 ID。聊天 title 和成员职位可为空，不能因此丢弃整条目录。
 
 仅在受限网络需要时，把代理设在**当前进程的 JVM 系统参数**，不要把个人代理写进仓库。
 
@@ -182,10 +207,14 @@ node scripts/android-desktop-smoke.mjs
 EAVES_DESKTOP_IMAGE_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 额外验证设定 → 暂停当前自动目标 → 继续 → 清除，以及两次实际 worker 请求
 EAVES_DESKTOP_GOAL_SMOKE=1 node scripts/android-desktop-smoke.mjs
+# 额外验证已启动会话的思考开关和深度、模型切换：目录确认，下一轮实际走新服务和模型
+EAVES_DESKTOP_MODEL_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 创建一次性成员与群聊：手机发送，验证群正文刷新和当前轮停止
 EAVES_DESKTOP_BOT_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # Bot 烟测中再验证创建话题 → 空时间线 → 切回主话题
 EAVES_DESKTOP_BOT_SMOKE=1 EAVES_DESKTOP_BOT_THREADS_SMOKE=1 node scripts/android-desktop-smoke.mjs
+# 另验手机首次单聊 → 发送 → 再订阅同一历史，以及手机新建两人群（可与 threads 合用）
+EAVES_DESKTOP_BOT_SMOKE=1 EAVES_DESKTOP_BOT_MEMBERS_SMOKE=1 node scripts/android-desktop-smoke.mjs
 ```
 
 脚本启动当前源码的 Electron dev / Main / worker，使用临时 userData、临时项目、随机且非 9222 的 CDP 端口、
@@ -214,6 +243,9 @@ adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es 
 adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame pair
 adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame session
 adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame ask
+adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame members
+adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame group
+adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame bot
 ```
 
 样例仅来自 `ensocode-android.vetd/components/data.ts`，源码和 Activity 都在 `src/debug/`，不会进入 release。debug 样例的发送按钮也不可用。系统切换深色模式可比较相同页面的深色分支。

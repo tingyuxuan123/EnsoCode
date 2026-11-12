@@ -52,12 +52,12 @@ class DesktopBotsTest {
             assertEquals(listOf("""{"type":"bot-inbox-request"}"""), f.sent())
             assertTrue(f.bots!!.inboxRequested)
             f.push("bot-inbox", """"items":[
-                {"key":"i1","kind":"approval","chatId":"c1","botId":"b1","text":"允许?","createdAt":3,"dismissible":false},
+                {"key":"i1","kind":"approval","chatId":"c1","botId":"b1","text":"允许?","createdAt":3,"dismissible":false,"conversationId":"delegated-session"},
                 {"key":"i2","kind":"routine-blocked","chatId":null,"createdAt":0,"dismissible":true}]""")
             val bots = f.bots!!
             assertFalse(bots.inboxRequested)
             assertNull(bots.error)
-            assertEquals(listOf(DesktopBotInboxItem("i1", "approval", "c1", "b1", "允许?", 3, false),
+            assertEquals(listOf(DesktopBotInboxItem("i1", "approval", "c1", "b1", "允许?", 3, false, "delegated-session"),
                 DesktopBotInboxItem("i2", "routine-blocked", null, null, null, 0, true)), bots.inbox)
             assertTrue(f.commands().isEmpty())
         }
@@ -74,7 +74,9 @@ class DesktopBotsTest {
                 {"id":"c2","kind":"direct","title":"私聊","members":["b1"],"bossBotId":null,
                  "updatedAt":0,"lastSeq":0}]""")
             assertEquals(listOf(
-                DesktopBotChat("c1", "group", "Team", listOf("b1", "b2"), "b1", 5, 9, "root", "hi", "running"),
+                // 每个成员当前会话跟着聊天一起下发，私聊直接复用它的会话订阅。
+                DesktopBotChat("c1", "group", "Team", listOf("b1", "b2"), "b1", 5, 9, "root", "hi", "running",
+                    sessions = mapOf("b1" to "cv1")),
                 DesktopBotChat("c2", "direct", "私聊", listOf("b1"), null, 0, 0)), f.bots!!.chats)
             f.push("bot-activity", """"now":1000,"items":[
                 {"conversationId":"cv1","botId":"b1","chatId":"c1","state":"tool","startedAt":900,
@@ -89,7 +91,7 @@ class DesktopBotsTest {
         }
     }
 
-    @Test fun `opening a chat projects only human bot and system timeline rows`() = runTest {
+    @Test fun `opening a chat projects every known row kind and drops unknown ones`() = runTest {
         fixture { f ->
             f.ready()
             f.link.openBotChat("c1")
@@ -109,10 +111,15 @@ class DesktopBotsTest {
                  "delegationId":"d1","phase":"started","text":"p"},
                 {"seq":6,"id":"e6","at":15,"kind":"reaction","text":"?"}]""")
             val bots = f.bots!!
+            // 委派与进度行也投影（带各自的结构字段），未知的 reaction 整行丢弃。
             assertEquals(listOf(
                 DesktopGroupEntry(1, "e1", 10, "human", "hi", null),
-                DesktopGroupEntry(2, "e2", 11, "bot", "hello", "b1"),
-                DesktopGroupEntry(3, "e3", 12, "system", "joined", null)), bots.timeline)
+                DesktopGroupEntry(2, "e2", 11, "bot", "hello", "b1", conversationId = "cv1"),
+                DesktopGroupEntry(3, "e3", 12, "system", "joined", null),
+                DesktopGroupEntry(4, "e4", 13, "delegation", "", delegationId = "d1", from = "b1",
+                    to = "b2", state = "running"),
+                DesktopGroupEntry(5, "e5", 14, "progress", "p", "b1", delegationId = "d1", taskId = "k",
+                    taskSeq = 1, phase = "started")), bots.timeline)
             assertFalse(bots.timelineRequested)
             assertFalse(bots.timelineLoading)
             assertNull(bots.timelineError)
@@ -230,7 +237,9 @@ class DesktopBotsTest {
                 "row",
                 {"id":"good","name":"duplicate","title":"t","avatarColor":"#1","status":"running"},
                 {"id":"max","name":"n","title":"t","avatarColor":"#1","status":"queued"}]""")
-            assertEquals(listOf("good", "max"), f.bots!!.members.map { it.id })
+            // A bot's role is optional: a missing title is an empty role, not a broken row.
+            assertEquals(listOf("good", "no-title", "max"), f.bots!!.members.map { it.id })
+            assertEquals("", f.bots!!.members[1].title)
             // The first row of a duplicate id wins; a later duplicate is not a second member.
             assertEquals("n", f.bots!!.members.first().name)
             assertNull(f.bots!!.error)

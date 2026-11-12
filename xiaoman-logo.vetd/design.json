@@ -1,0 +1,31 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"x": 227.58240052833185,
+		"y": 137.1404745411196,
+		"zoom": 0.6383329518422279
+	},
+	"frames": [
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": -144,
+			"y": -12,
+			"width": 1280,
+			"height": 900,
+			"title": "小满 · 新标志",
+			"meta": {
+				"width": 1280,
+				"height": 900,
+				"title": "小满 · 新标志"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1280,
+		"height": 900
+	},
+	"statusBar": "none",
+	"interactionMode": "other"
+}

@@ -2,7 +2,7 @@
 @import "@fontsource-variable/noto-serif-sc";
 @import "@fontsource-variable/roboto";
 
-/* Eaves 标志稿：沿用安卓设计稿的黑白基调；唯一的颜色是那滴雨，取自界面里「运行中」的蓝。 */
+/* 小满：黑底、白圈、蓝滴。唯一的颜色是那滴水，取自界面里「运行中」的蓝。 */
 @theme {
 	--font-sans: "Roboto Variable", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 	--font-display: "Fraunces Variable", "Noto Serif SC Variable", "Songti SC", serif;
@@ -10,7 +10,6 @@
 
 	--color-paper: #f4f5f7;
 	--color-card: #ffffff;
-	--color-card2: #f0f1f3;
 	--color-line: #e3e5e8;
 	--color-ink: #0b0c0e;
 	--color-ink2: #3f444b;
@@ -22,10 +21,9 @@
 	--color-night-ink: #f4f5f6;
 	--color-night-dim: #8b9096;
 
-	/* 雨：浅色界面用深一档，深色界面和图标底上用亮一档 */
+	/* 雨：浅色界面用深一档，图标底和深色界面上用亮一档 */
 	--color-rain: #3b82f6;
 	--color-rain-deep: #2563eb;
-	/* 桌面端截图里的强调色（「生成中」那颗点），只用来对照新旧 */
 	--color-green: #16a34a;
 
 	--color-primary: #0b0c0e;
@@ -33,4 +31,66 @@
 	--color-surface: #f4f5f7;
 	--color-surface-foreground: #0b0c0e;
 	--color-muted: #6b7077;
+	--color-border: #e3e5e8;
+}
+
+/* ── 运行中：一滴落下，圈往外扩一圈涟漪，2.6 秒一轮 ── */
+@keyframes mark-drop-in {
+	0% {
+		transform: translateY(-14%) scale(0.6);
+		opacity: 0;
+	}
+	8% {
+		transform: translateY(0) scale(1);
+		opacity: 1;
+	}
+	44% {
+		transform: translateY(0) scale(1);
+		opacity: 1;
+	}
+	58% {
+		transform: translateY(4%) scale(0.9);
+		opacity: 0;
+	}
+	100% {
+		transform: translateY(-14%) scale(0.6);
+		opacity: 0;
+	}
+}
+
+@keyframes mark-ripple-out {
+	0% {
+		transform: scale(0.45);
+		opacity: 0;
+	}
+	8% {
+		transform: scale(0.5);
+		opacity: 0.55;
+	}
+	62% {
+		transform: scale(1.25);
+		opacity: 0;
+	}
+	100% {
+		transform: scale(1.25);
+		opacity: 0;
+	}
+}
+
+.mark-drop {
+	animation: mark-drop-in 2.6s ease-in-out infinite;
+}
+
+.mark-ripple {
+	animation: mark-ripple-out 2.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mark-drop,
+	.mark-ripple {
+		animation: none;
+	}
+	.mark-ripple {
+		opacity: 0;
+	}
 }

@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -24,7 +24,9 @@ const runner = `${pkg}.test/androidx.test.runner.AndroidJUnitRunner`;
 const output = path.join(root, 'temp/eaves-real-desktop');
 const botMode = process.env.EAVES_DESKTOP_BOT_SMOKE === '1';
 const threadMode = botMode && process.env.EAVES_DESKTOP_BOT_THREADS_SMOKE === '1';
-const temporary = await mkdtemp(path.join(tmpdir(), 'eaves-real-desktop-'));
+const memberMode = botMode && process.env.EAVES_DESKTOP_BOT_MEMBERS_SMOKE === '1';
+// macOS aliases /var to /private/var; the worker records the canonical cwd.
+const temporary = await realpath(await mkdtemp(path.join(tmpdir(), 'eaves-real-desktop-')));
 const profile = path.join(temporary, 'profile');
 const project = path.join(temporary, 'selected-project');
 const children = [];
@@ -65,6 +67,9 @@ function start(binary, args, env = {}) {
     cwd: root,
     env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
+    // electron-vite spawns Electron. On POSIX the whole fixture needs its own process group;
+    // killing only the wrapper leaves Electron holding the inherited pipes and stalls cleanup.
+    detached: process.platform !== 'win32',
     windowsHide: true,
   });
   children.push(child);
@@ -483,7 +488,31 @@ try {
         `Bot fixture mismatch: human=${firstMessages.length}, bot=${timeline.entries?.filter((entry) => entry.kind === 'bot').length}, workerRequests=${workerRequests.length}, probes=${botConnectivityProbes}`
       );
     }
+    if (memberMode) {
+      instrument('verifyMemberCreationAndDirectHistory', {
+        eavesDesktopExpectedId: expectedId,
+        eavesDesktopBotMembers: '1',
+      });
+      const snapshot = await evaluate('window.electronAPI.bots.chats()');
+      const direct = snapshot?.chats?.filter((row) => row.kind === 'direct');
+      const created = snapshot?.chats?.filter(
+        (row) => row.title === 'Android created member group'
+      );
+      if (
+        !snapshot?.ok ||
+        direct?.length !== 1 ||
+        Object.keys(direct[0].sessions).length !== 1 ||
+        created?.length !== 1 ||
+        created[0].members.length !== 2 ||
+        created[0].bossBotId !== direct[0].members[0]
+      ) {
+        throw new Error(
+          'Desktop did not persist the same direct session and exactly one two-member group'
+        );
+      }
+    }
   }
+  const modelMode = process.env.EAVES_DESKTOP_MODEL_SMOKE === '1';
   const shellTool = ['powershell', 'bash'].find((name) =>
     requests.requests[0]?.toolNames?.includes(name)
   );
@@ -492,6 +521,7 @@ try {
     eavesDesktopExpectedId: expectedId,
     eavesDesktopTaskId: evidence.id,
     eavesDesktopTool: shellTool,
+    ...(modelMode ? { eavesDesktopModel: '1' } : {}),
   });
   const afterApproval = await inspect();
   if (
@@ -506,12 +536,39 @@ try {
   ) {
     throw new Error('Main authoritative history did not confirm command denial');
   }
+  if (modelMode) {
+    await waitUntil(async () => (await inspect()).status === 'idle', {
+      timeout: 15_000,
+      interval: 100,
+    });
+    const beforeSwitch = (await endpoint()).count;
+    instrument('verifySessionModelSwitch', {
+      eavesDesktopExpectedId: expectedId,
+      eavesDesktopTaskId: evidence.id,
+      eavesDesktopModel: '1',
+    });
+    const switched = await inspect();
+    const dispatched = (await endpoint()).requests.slice(beforeSwitch);
+    if (
+      switched.providerId !== 'loopback-A' ||
+      switched.modelId !== 'fake-model-1' ||
+      dispatched.length !== 1 ||
+      dispatched[0].model !== 'fake-model-1' ||
+      dispatched[0].authKey !== 'fake-A'
+    ) {
+      throw new Error(
+        'Existing session did not dispatch its next turn through the newly selected model'
+      );
+    }
+  }
   for (const name of [
     'desktop-config.png',
     'desktop-timeline.png',
     'desktop-restored.png',
     'desktop-approval.png',
     'desktop-queue.png',
+    ...(memberMode ? ['desktop-member-direct.png', 'desktop-member-created-group.png'] : []),
+    ...(modelMode ? ['desktop-session-model.png', 'desktop-session-thinking.png'] : []),
     ...(imageMode ? ['desktop-image-draft.png', 'desktop-image-sent.png'] : []),
     ...(goalMode
       ? ['desktop-goal-set.png', 'desktop-goal-active.png', 'desktop-goal-paused.png']
@@ -548,6 +605,12 @@ try {
   if (!records.some((r) => r.type === 'thinking_level_change' && r.thinkingLevel === 'medium')) {
     throw new Error('Worker journal did not apply the selected thinking level');
   }
+  if (
+    modelMode &&
+    !records.some((r) => r.type === 'thinking_level_change' && r.thinkingLevel === 'high')
+  ) {
+    throw new Error('Worker journal did not apply the existing session’s new thinking level');
+  }
   const messages = evidence.history?.ok ? evidence.history.messages : [];
   const initialUsers = messages.filter(
     (message) =>
@@ -576,6 +639,12 @@ try {
         commandApprovalShownAndDenied: true,
         commandDenialConfirmedByMainHistory: true,
         queueEditAndAutomaticDrainConfirmedByMainHistory: true,
+        ...(modelMode
+          ? {
+              sessionModelSwitchConfirmedByCatalogAndWorker: true,
+              sessionThinkingChangeConfirmedByCatalogAndWorker: true,
+            }
+          : {}),
         ...(imageMode ? { androidPhotoPickerImageMatchedWorkerDispatch: true } : {}),
         ...(goalMode
           ? { goalSetPauseResumeClearConfirmed: true, goalKickoffAndResumeRequests: 2 }
@@ -584,6 +653,9 @@ try {
           ? { botSendAndStopConfirmed: true, botWorkerRequests: 2, botConnectivityProbes }
           : {}),
         ...(threadMode ? { botThreadCreatedAndRootRestored: true } : {}),
+        ...(memberMode
+          ? { botDirectOpenedSentAndResubscribed: true, botGroupCreatedFromAndroid: true }
+          : {}),
       },
       null,
       2
@@ -619,13 +691,21 @@ try {
     }
   }
   for (const child of children.reverse()) {
-    if (!child.pid || child.exitCode !== null) continue;
-    if (process.platform === 'win32')
-      spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-        windowsHide: true,
-        timeout: 10_000,
-      });
-    else child.kill('SIGTERM');
+    if (!child.pid) continue;
+    if (process.platform === 'win32') {
+      if (child.exitCode === null)
+        spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+          windowsHide: true,
+          timeout: 10_000,
+        });
+    } else {
+      try {
+        // Disposable-only group, just like Windows /T /F. Electron can intercept SIGTERM.
+        process.kill(-child.pid, 'SIGKILL');
+      } catch (error) {
+        if (error?.code !== 'ESRCH') clean = false;
+      }
+    }
   }
   try {
     await rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

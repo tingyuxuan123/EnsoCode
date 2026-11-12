@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer';
 import { composerDrafts, createComposerDrafts } from './composerDraft';
+import { insertUiElementMentions } from './composerMentionBridge';
 import type { ComposerPayload } from './mentionComposer';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
@@ -65,6 +66,36 @@ async function type(text: string) {
 }
 
 describe('Composer draft lifecycle', () => {
+  it('appends browser picks after the draft as an ordered batch with their own attachments', async () => {
+    const onSend = vi.fn((_payload: ComposerPayload) => false);
+    await render('draft-send', onSend);
+    await type('Original draft');
+    const items = ['Save', 'Cancel'].map((label, i) => ({
+      candidate: {
+        kind: 'ui-element' as const,
+        id: label,
+        label,
+        path: `#${label}`,
+        text: label,
+        imageId: `img-${i}`,
+      },
+      image: { data: ['YQ==', 'Yg=='][i], mimeType: 'image/png' },
+      note: `Note ${i + 1}`,
+    }));
+    expect(insertUiElementMentions(items, 'draft-a')).toBe(false);
+    await act(async () => {
+      expect(insertUiElementMentions(items, 'draft-send')).toBe(true);
+    });
+    expect(onSend).not.toHaveBeenCalled();
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click()
+    );
+    const payload = onSend.mock.calls[0]?.[0];
+    expect(payload?.text).toMatch(
+      /Original draft[\s\S]*Selected UI element "Save"[\s\S]*Note 1[\s\S]*Selected UI element "Cancel"[\s\S]*Note 2/
+    );
+    expect(payload?.images).toEqual(items.map((item) => item.image));
+  });
   it('直接输入或粘贴完整前缀链产生多个chips且不吞任务正文', async () => {
     const onSend = vi.fn((_payload: ComposerPayload) => false);
     await render('draft-send', onSend);

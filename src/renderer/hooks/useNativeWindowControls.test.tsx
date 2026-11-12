@@ -111,7 +111,7 @@ it('标题栏有不透明底色时仍使用自身的底色', () => {
   });
 });
 
-it('全窗口压暗浮层打开时原生按钮区跟着压暗，关掉后恢复', async () => {
+it('全窗口压暗浮层只调整符号对比色，不把遮罩重复画到窗口底色', async () => {
   const { frames, setTitleBarAppearance } = mountHeader('rgba(0, 0, 0, 0)');
   frames.shift()?.(0);
   expect(setTitleBarAppearance).toHaveBeenLastCalledWith({
@@ -122,9 +122,9 @@ it('全窗口压暗浮层打开时原生按钮区跟着压暗，关掉后恢复'
   acquireNativeCaptionScrim(SCRIM);
   await vi.waitFor(() => expect(frames).toHaveLength(1));
   frames.shift()?.(1);
-  // 浅色外壳 #eaf1f5 叠 75% 黑之后的实际底色，符号色随之翻成浅色。
+  // 按钮底板透明，遮罩由 renderer 统一绘制；窗口底色不能跟着压暗，否则会重复叠色。
   expect(setTitleBarAppearance).toHaveBeenLastCalledWith({
-    color: '#3b3c3d',
+    color: '#eaf1f5',
     symbolColor: '#ffffff',
   });
 

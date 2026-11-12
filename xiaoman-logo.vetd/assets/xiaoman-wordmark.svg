@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="80" viewBox="10 11 192 80" role="img" aria-labelledby="title">
+  <title id="title">小满</title>
+  <g fill="none" stroke="#263e28" stroke-width="8.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M50 17v57c0 8-4 12-12 12h-5M32 41c-3.3 11-8.6 21.2-16 28m50-28c7.4 7.3 13.3 16.3 18 26"/>
+    <g transform="translate(15 0) scale(.88 1)">
+      <path d="m106 24 11 7m-16 12 12 7m-11 31c5.3-5.5 10-12.8 14-21m17-32h71m-52-11v19m33-19v19m-53 10h72m-69 39V58h66v20c0 5.3-3.4 8-9 8h-3"/>
+      <path d="M155 47v11c0 8.4-3.3 14.4-9.4 19m9-13.7c3.1 2.5 5.8 5.6 8.3 9.1M179 47v11c0 8.4-3.3 14.4-9.4 19m9-13.7c3.8 2.8 7.1 6.5 10 10" stroke-width="7.2"/>
+    </g>
+  </g>
+</svg>

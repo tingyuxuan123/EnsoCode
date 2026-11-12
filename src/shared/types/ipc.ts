@@ -1,4 +1,9 @@
 export const IPC_CHANNELS = {
+  IMAGE_PROVIDER_READ: 'image-provider:read',
+  IMAGE_PROVIDER_UPDATE: 'image-provider:update',
+  IMAGE_PROVIDER_SET_KEY: 'image-provider:set-key',
+  IMAGE_PROVIDER_MODELS: 'image-provider:models',
+  IMAGE_PROVIDER_CHANGED: 'image-provider:changed',
   EXTENSION_PLUGINS_LIST: 'extension-plugins:list',
   EXTENSION_PLUGINS_CHANGED: 'extension-plugins:changed',
   EXTENSION_PLUGINS_COMMIT: 'extension-plugins:commit',
@@ -211,6 +216,7 @@ export const IPC_CHANNELS = {
   AGENT_SPAWN: 'agent:spawn',
   AGENT_PROMPT: 'agent:prompt',
   AGENT_STEER: 'agent:steer',
+  AGENT_WITHDRAW_STEER: 'agent:withdraw-steer',
   AGENT_ABORT: 'agent:abort',
   AGENT_ABORT_RETRY: 'agent:abort-retry',
   AGENT_RETRY: 'agent:retry',

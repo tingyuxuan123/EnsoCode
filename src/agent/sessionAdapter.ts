@@ -22,23 +22,59 @@ export async function steerActiveSession(
   prepareText: (text: string) => string = (text) => text
 ): Promise<'queued' | 'handled' | 'deferred'> {
   if (!session.isStreaming || session.isRetrying) return 'deferred';
+  const deferred = new Error('active turn ended before steering');
+  const guarded = interceptSteeringQueue(session, onQueued, (input) => {
+    if (!session.isStreaming || session.isRetrying) throw deferred;
+    return prepareText(input);
+  });
+  if (!guarded) throw new Error('Unsupported Pi steering adapter');
+  try {
+    return await guarded.steer(text, images);
+  } catch (error) {
+    if (error === deferred) return 'deferred';
+    throw error;
+  }
+}
+
+/** Preserve ordinary steer behavior when the SDK does not expose a detachable queue. */
+export function steerWithWithdrawal(
+  session: AgentSession,
+  text: string,
+  images: Parameters<AgentSession['steer']>[1],
+  onQueued: (detach: () => boolean) => void
+): Promise<'queued' | 'handled' | 'deferred'> | undefined {
+  const deferred = new Error('active turn ended before detachable steering');
+  const proxy = interceptSteeringQueue(session, onQueued, (input) => {
+    if (!session.isStreaming || session.isRetrying) throw deferred;
+    return input;
+  });
+  return proxy?.steer(text, images).catch((error: unknown) => {
+    if (error === deferred) return 'deferred' as const;
+    throw error;
+  });
+}
+
+function interceptSteeringQueue(
+  session: AgentSession,
+  onQueued: (detach: () => boolean) => void,
+  prepareText: (input: string) => string
+): AgentSession | undefined {
   const adapter = session as unknown as {
     _queueSteer: (text: string, images: Parameters<AgentSession['steer']>[1]) => Promise<void>;
     _emitQueueUpdate: () => void;
   };
   const queue = (session.agent as unknown as { steeringQueue?: { messages?: unknown[] } })
     .steeringQueue;
-  if (!Array.isArray(queue?.messages) || typeof adapter._queueSteer !== 'function')
-    throw new Error('Unsupported Pi steering adapter');
+  if (!Array.isArray(queue?.messages) || typeof adapter._queueSteer !== 'function') return;
   const pendingQueue = queue as { messages: unknown[] };
-  const deferred = new Error('active turn ended before steering');
-  const guarded = new Proxy(session, {
+  return new Proxy(session, {
     get(target, key, receiver) {
       if (key !== '_queueSteer') return Reflect.get(target, key, receiver);
       return (input: string, attached: Parameters<AgentSession['steer']>[1]) => {
-        if (!target.isStreaming || target.isRetrying) throw deferred;
         const queuedText = prepareText(input);
+        const previousLength = pendingQueue.messages.length;
         const result = adapter._queueSteer(queuedText, attached);
+        if (pendingQueue.messages.length !== previousLength + 1) return result;
         const message = pendingQueue.messages.at(-1);
         onQueued(() => {
           const messages = pendingQueue.messages;
@@ -46,7 +82,7 @@ export async function steerActiveSession(
           if (index < 0) return false;
           messages.splice(index, 1);
           const labels = session.getSteeringMessages() as string[];
-          const label = labels.indexOf(queuedText);
+          const label = labels[index] === queuedText ? index : labels.indexOf(queuedText);
           if (label >= 0) labels.splice(label, 1);
           adapter._emitQueueUpdate();
           return true;
@@ -55,12 +91,6 @@ export async function steerActiveSession(
       };
     },
   });
-  try {
-    return await guarded.steer(text, images);
-  } catch (error) {
-    if (error === deferred) return 'deferred';
-    throw error;
-  }
 }
 
 /**

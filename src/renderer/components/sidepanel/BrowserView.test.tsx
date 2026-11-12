@@ -1,12 +1,19 @@
-import type { BrowserTabState } from '@shared/types/browser';
+import type { BrowserDesignModeEvent, BrowserTabState } from '@shared/types/browser';
 import { parseHTML } from 'linkedom';
 import { act, type ComponentProps, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type BrowserSurface, BrowserView } from './BrowserView';
+import {
+  annotationScopeKey,
+  annotationsFor,
+  resetAnnotationsForTest,
+  updateAnnotationNote,
+} from './browserAnnotations';
 
 const harness = vi.hoisted(() => ({
   onState: null as ((event: { tabId: string; state: BrowserTabState }) => void) | null,
+  onDesignMode: null as ((event: BrowserDesignModeEvent) => void) | null,
   navigate: vi.fn(),
   goBack: vi.fn(),
   goForward: vi.fn(),
@@ -18,6 +25,10 @@ const harness = vi.hoisted(() => ({
   setDevice: vi.fn(),
   frame: null as (() => void) | null,
   t: (key: string) => key,
+  insertComposerImage: vi.fn(),
+  insertUiElementMention: vi.fn(),
+  insertUiElementMentions: vi.fn(),
+  requestFocusComposer: vi.fn(),
 }));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: harness.t }) }));
 vi.mock('@/stores/sessions', () => ({
@@ -34,9 +45,10 @@ vi.mock('@/stores/sidePanel', () => ({
 vi.mock('@/lib/sidePanelDockId', () => ({ resolveSidePanelDockConversationId: () => 'owner' }));
 vi.mock('@/lib/overlayGuard', () => ({ syncOverlayGuard: vi.fn() }));
 vi.mock('@/components/chat/composerMentionBridge', () => ({
-  insertComposerImage: vi.fn(),
-  insertUiElementMention: vi.fn(),
-  requestFocusComposer: vi.fn(),
+  insertComposerImage: harness.insertComposerImage,
+  insertUiElementMention: harness.insertUiElementMention,
+  insertUiElementMentions: harness.insertUiElementMentions,
+  requestFocusComposer: harness.requestFocusComposer,
 }));
 vi.mock('@/components/ui/toast', () => ({ addToast: vi.fn() }));
 vi.mock('@/components/ui/button', () => ({
@@ -132,6 +144,29 @@ async function emit(next: Partial<BrowserTabState>) {
   browserState = { ...state, ...next };
   await act(async () => harness.onState?.({ tabId: 'exact-tab', state: browserState }));
 }
+async function emitDesign(event: BrowserDesignModeEvent) {
+  await act(async () => harness.onDesignMode?.(event));
+}
+const picked = (
+  label: string,
+  image = 'png'
+): Extract<BrowserDesignModeEvent, { type: 'picked' }> => ({
+  type: 'picked',
+  conversationId: 'owner',
+  tabId: 'exact-tab',
+  payload: { label, path: `main > ${label.toLowerCase()}`, text: `${label} text` },
+  image: { data: image, mimeType: 'image/png' },
+});
+const annotated = (image = 'region-png'): BrowserDesignModeEvent => ({
+  type: 'annotated',
+  conversationId: 'owner',
+  tabId: 'exact-tab',
+  payload: { label: 'annotation', path: 'scribble', text: '' },
+  image: { data: image, mimeType: 'image/png' },
+});
+function annotationRows() {
+  return Array.from(container.querySelectorAll('[data-slot="browser-annotation"]'));
+}
 function getButton(text: string, index = 0) {
   const button = Array.from(container.querySelectorAll('button')).filter(
     (item) => item.textContent === text || item.getAttribute('aria-label') === text
@@ -190,6 +225,11 @@ beforeEach(async () => {
     browserState = { ...browserState, designMode };
     return browserState;
   });
+  harness.insertComposerImage.mockReset().mockReturnValue(true);
+  harness.insertUiElementMention.mockReset().mockReturnValue(true);
+  harness.insertUiElementMentions.mockReset().mockReturnValue(true);
+  harness.requestFocusComposer.mockReset();
+  resetAnnotationsForTest();
   harness.setDevice.mockReset().mockImplementation(async (_tabId, _conversationId, device) => {
     browserState = { ...browserState, url: 'https://example.com/', device };
     return { ok: true, result: browserState };
@@ -201,7 +241,10 @@ beforeEach(async () => {
           harness.onState = callback;
           return vi.fn();
         },
-        onDesignMode: () => vi.fn(),
+        onDesignMode: (callback: typeof harness.onDesignMode) => {
+          harness.onDesignMode = callback;
+          return vi.fn();
+        },
         navigate: harness.navigate,
         goBack: harness.goBack,
         goForward: harness.goForward,
@@ -416,5 +459,116 @@ describe('BrowserView controls', () => {
     expect(container.textContent).toContain(
       'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Enso.'
     );
+  });
+});
+
+describe('BrowserView design selections', () => {
+  it('still inserts a single selection straight into the composer', async () => {
+    await emit({ url: 'https://example.com/' });
+    await emitDesign(picked('Save'));
+    expect(harness.insertUiElementMention).toHaveBeenCalledTimes(1);
+    expect(harness.insertUiElementMention).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'Save', path: 'main > save', text: 'Save text' }),
+      { data: 'png', mimeType: 'image/png' }
+    );
+    expect(harness.insertUiElementMentions).not.toHaveBeenCalled();
+    expect(harness.requestFocusComposer).toHaveBeenCalled();
+    expect(annotationRows()).toHaveLength(0);
+  });
+
+  it('queues multi-point picks with their own notes and inserts them together', async () => {
+    const url = 'https://example.com/pricing';
+    const scope = { conversationId: 'owner', tabId: 'exact-tab', url };
+    await emit({ url });
+    await click('Multi-point annotation');
+    expect(harness.setDesignMode).toHaveBeenCalledWith('exact-tab', true);
+
+    await emitDesign(picked('Save'));
+    // Main 每次取完都会退出圈选，多点模式要重新进入才能继续选
+    expect(harness.setDesignMode).toHaveBeenLastCalledWith('exact-tab', true);
+    await emitDesign(annotated());
+    await emitDesign(picked('Cancel'));
+
+    expect(harness.insertUiElementMention).not.toHaveBeenCalled();
+    expect(harness.insertComposerImage).not.toHaveBeenCalled();
+    expect(annotationRows()).toHaveLength(3);
+
+    // 备注由清单渲染成受控输入框：linkdom 下 React onChange 不触发，直接改 store 验证回显
+    const [first] = annotationsFor(annotationScopeKey(scope));
+    await act(async () => updateAnnotationNote(annotationScopeKey(scope), first.id, '太靠左'));
+    expect((annotationRows()[0].querySelector('input') as HTMLInputElement).value).toBe('太靠左');
+    await click('Remove annotation', 1);
+    expect(annotationRows()).toHaveLength(2);
+
+    await click('Add to conversation');
+    expect(harness.insertUiElementMentions).toHaveBeenCalledTimes(1);
+    expect(harness.insertUiElementMentions).toHaveBeenCalledWith(
+      [
+        {
+          candidate: expect.objectContaining({
+            kind: 'ui-element',
+            label: 'Save',
+            text: 'Save text',
+          }),
+          image: { data: 'png', mimeType: 'image/png' },
+          note: expect.stringContaining('太靠左'),
+        },
+        {
+          candidate: expect.objectContaining({ kind: 'ui-element', label: 'Cancel' }),
+          image: { data: 'png', mimeType: 'image/png' },
+          note: expect.stringContaining(url),
+        },
+      ],
+      'owner'
+    );
+    expect(harness.insertComposerImage).not.toHaveBeenCalled();
+    expect(harness.requestFocusComposer).toHaveBeenCalled();
+    expect(annotationRows()).toHaveLength(0);
+    // 提交后退出圈选层，用户直接写自己的话再发
+    expect(harness.setDesignMode).toHaveBeenLastCalledWith('exact-tab', false);
+    expect(getButton('Multi-point annotation').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps the queue when no composer can take it', async () => {
+    harness.insertUiElementMentions.mockReturnValue(false);
+    await emit({ url: 'https://example.com/' });
+    await click('Multi-point annotation');
+    await emitDesign(picked('Save'));
+    await click('Add to conversation');
+    expect(harness.insertUiElementMentions).toHaveBeenCalledTimes(1);
+    expect(annotationRows()).toHaveLength(1);
+  });
+
+  it('ignores a delayed pick from the previous page without reopening selection', async () => {
+    await emit({ url: 'https://example.com/new' });
+    await click('Multi-point annotation');
+    harness.setDesignMode.mockClear();
+    await emitDesign({
+      ...picked('Previous page'),
+      type: 'picked',
+      url: 'https://example.com/old',
+    });
+    expect(annotationRows()).toHaveLength(0);
+    expect(harness.setDesignMode).not.toHaveBeenCalled();
+  });
+
+  it('does not turn a delayed multi-pick into a single insertion after closing the mode', async () => {
+    await emit({ url: 'https://example.com/page' });
+    await click('Multi-point annotation');
+    await click('Multi-point annotation');
+    await emitDesign(picked('Delayed'));
+    expect(annotationRows()).toHaveLength(0);
+    expect(harness.insertUiElementMention).not.toHaveBeenCalled();
+    expect(harness.setDesignMode).toHaveBeenLastCalledWith('exact-tab', false);
+  });
+
+  it('drops queued picks when the tab opens another page', async () => {
+    await emit({ url: 'https://example.com/pricing' });
+    await click('Multi-point annotation');
+    await emitDesign(picked('Save'));
+    await emitDesign(picked('Cancel'));
+    expect(annotationRows()).toHaveLength(2);
+    await emit({ url: 'https://example.com/checkout' });
+    expect(annotationRows()).toHaveLength(0);
   });
 });

@@ -44,16 +44,16 @@ export function useNativeWindowControls(ref: RefObject<HTMLElement | null>): voi
     const sync = () => {
       frame = 0;
       const style = getComputedStyle(header);
-      // 标题栏默认透明，透出 --shell；直接丢弃透明像素的 alpha 会得到黑色。
-      // Native controls cannot be transparent: composite over the solid shell token.
+      // 按钮底板透明；窗口兜底色仍要铺上实心 --shell，不能把透明像素当作黑色。
       const shell = getComputedStyle(document.documentElement).getPropertyValue('--shell').trim();
-      // 全窗口压暗浮层画在 renderer 里，原生按钮却在它之上：只有把遮罩也算进底色，
-      // 右上角才会跟着界面一起压暗。
+      const base = [shell, style.backgroundColor];
       const scrim = getNativeCaptionScrim();
-      const color = composite(context, [shell, style.backgroundColor, scrim]);
       const appearance: TitleBarAppearance = {
-        color,
-        symbolColor: scrim ? readableSymbolColor(color) : composite(context, [style.color]),
+        color: composite(context, base),
+        // 遮罩已在 renderer 里画过，只用来选择原生按钮的符号对比色。
+        symbolColor: scrim
+          ? readableSymbolColor(composite(context, [...base, scrim]))
+          : composite(context, [style.color]),
       };
       const key = JSON.stringify(appearance);
       if (key === previous) return;

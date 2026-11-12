@@ -2372,6 +2372,60 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       await supervisor.shutdown();
     });
 
+    it('Code 插话以投递 ID 撤回未消费的一条，同文案的另一条仍送达', async () => {
+      const { events, supervisor, piSession, userMessage, settled } = await spawned();
+      piSession.isStreaming = true;
+      for (const deliveryId of ['first', 'second']) {
+        supervisor.handleCommand({ type: 'steer', identity: parent, text: 'same', deliveryId });
+        await settle();
+      }
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'delivery-steer-queued', deliveryId: 'second' })
+      );
+      supervisor.handleCommand({ type: 'withdraw-steer', identity: parent, deliveryId: 'second' });
+      await settle();
+      expect(piSession.getSteeringMessages()).toEqual(['same']);
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'delivery-withdrawn', deliveryId: 'second' })
+      );
+
+      userMessage('same');
+      supervisor.handleCommand({ type: 'withdraw-steer', identity: parent, deliveryId: 'first' });
+      await settle();
+      expect(settled()).toEqual(['first']);
+      expect(events).not.toContainEqual(
+        expect.objectContaining({ type: 'delivery-withdrawn', deliveryId: 'first' })
+      );
+      await supervisor.shutdown();
+    });
+
+    it('Code 插话的输入钩子若跨过回合边界，不会留在下一轮的队列', async () => {
+      const { events, supervisor, piSession } = await spawned();
+      piSession.isStreaming = true;
+      const gate = Promise.withResolvers<void>();
+      piSession.steer.mockImplementationOnce(async function (this: typeof piSession, text) {
+        await gate.promise;
+        await this._queueSteer(text);
+        return 'queued';
+      });
+      supervisor.handleCommand({
+        type: 'steer',
+        identity: parent,
+        text: 'late hook',
+        deliveryId: 'late',
+      });
+      await settle();
+      piSession.isStreaming = false;
+      piSession.emit({ type: 'agent_settled' });
+      gate.resolve();
+      await settle();
+      expect(piSession.getSteeringMessages()).toEqual([]);
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'delivery-rejected', deliveryId: 'late' })
+      );
+      await supervisor.shutdown();
+    });
+
     it.each(['started', 'queued', 'handled', undefined] as const)(
       'prompt 抛错时，仅 preflightResult 从未回调才视为拒收并允许撤回（disposition=%s）',
       async (disposition) => {
@@ -2407,6 +2461,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       );
       const receipt = events.findIndex((event) => event.type === 'delivery-settled');
       expect(upsert).toBeGreaterThan(-1);
+      expect(events[upsert]).toMatchObject({ deliveryId: 'd1' });
       expect(receipt).toBeGreaterThan(upsert);
       expect(events[receipt]).toMatchObject({ identity: parent, deliveryId: 'd1' });
       await supervisor.shutdown();
@@ -2468,6 +2523,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
         deliveryId: 's1',
       });
       await settle();
+      expect(settled()).toEqual(['s1']); // input hook handled it without persisting a user message.
       supervisor.handleCommand({
         type: 'steer',
         identity: parent,
@@ -2476,7 +2532,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       });
       await settle();
       userMessage('queued');
-      expect(settled()).toEqual(['s2']);
+      expect(settled()).toEqual(['s1', 's2']);
       await supervisor.shutdown();
     });
   });

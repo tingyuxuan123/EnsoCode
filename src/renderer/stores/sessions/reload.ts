@@ -25,7 +25,7 @@ export function applyConversationReload(
   }
 
   if (result.source === 'tail') {
-    const tail = retainedOptimisticTail(state.messages, result.messages);
+    const tail = retainedOptimisticTail(state.messages, result.messages, state.generation);
     return {
       ...state,
       messages: tail.length > 0 ? [...result.messages, ...tail] : result.messages,
@@ -34,7 +34,11 @@ export function applyConversationReload(
   }
 
   const { snapshot, seq } = result;
-  const tail = retainedOptimisticTail(state.messages, snapshot.messages);
+  const tail = retainedOptimisticTail(
+    state.messages,
+    snapshot.messages,
+    snapshot.identity.generation
+  );
   const sameGeneration = state.generation === snapshot.identity.generation;
   const snapBase = snapshot.baseIndex ?? 0;
   const reloaded: SessionProjection = {

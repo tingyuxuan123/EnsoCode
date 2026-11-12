@@ -194,6 +194,16 @@ export type PhoneToHost =
   | { type: 'voice-cancel'; requestId: string }
   /** Bot 模式：仅桌面开启 Bot 模式时响应；旧桌面在白名单处拒绝，不影响其它帧 */
   | { type: 'bot-catalog-request' }
+  /** requestId: UUID; title: nonblank, ≤200 UTF-16 units; 2–500 distinct Bot UUIDs. */
+  | {
+      type: 'bot-group-create';
+      requestId: string;
+      title: string;
+      memberIds: string[];
+      bossBotId: string;
+    }
+  /** requestId、botId 均为 UUID；已有未归档私聊复用，归档私聊明确拒绝，不自动复活 */
+  | { type: 'bot-direct-open'; requestId: string; botId: string }
   | { type: 'bot-send'; chatId: string; text: string; images?: AttachedImage[]; deliveryId: string }
   /** 打开聊天：群聊回最新一页时间线 + 运行态 */
   | { type: 'bot-chat-open'; chatId: string }
@@ -265,6 +275,8 @@ export const PHONE_COMMAND_TYPES = [
   'voice-chunk',
   'voice-cancel',
   'bot-catalog-request',
+  'bot-group-create',
+  'bot-direct-open',
   'bot-send',
   'bot-chat-open',
   'bot-timeline',
@@ -475,6 +487,8 @@ export interface PairBotInboxItem {
     | 'task-blocked';
   chatId: string | null;
   botId?: string;
+  /** Exact authority-owned conversation for pending requests, including delegated sessions. */
+  conversationId?: string;
   /** 委派会话：botId 替 ownerBotId 执行 */
   ownerBotId?: string;
   /** 工具与摘要 / 问题 / 任务 / 例程标题或阻塞原因 */
@@ -660,6 +674,8 @@ export type HostToPhone =
       bots: PairBotMember[];
       newSession?: boolean;
       threads?: boolean;
+      groupCreate?: true;
+      directOpen?: true;
     }
   /** threads：列出的根群下的子话题（带 parentId）；旧手机只读 chats */
   | { type: 'bot-chats'; chats: PairBotChatSummary[]; threads?: PairBotChatSummary[] }
@@ -678,6 +694,21 @@ export type HostToPhone =
   /** bot-send 的应答：失败时手机提示并恢复输入 */
   | { type: 'bot-send-result'; chatId: string; deliveryId: string; ok: boolean; error?: string }
   | { type: 'bot-retry-result'; chatId: string; entryId: string; ok: boolean; error?: string }
+  | {
+      type: 'bot-group-create-result';
+      requestId: string;
+      ok: boolean;
+      chatId?: string;
+      error?: string;
+    }
+  /** bot-direct-open 的应答：chatId 为复用的已有私聊或新建私聊 */
+  | {
+      type: 'bot-direct-open-result';
+      requestId: string;
+      ok: boolean;
+      chatId?: string;
+      error?: string;
+    }
   | {
       type: 'bot-new-session-result';
       chatId: string;

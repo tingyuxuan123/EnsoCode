@@ -121,6 +121,9 @@ internal fun TopBar(
     detail: String? = null,
     showMenu: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
+    onDetailClick: (() -> Unit)? = null,
+    detailActionLabel: String? = null,
+    detailEnabled: Boolean = true,
 ) {
     Row(
         Modifier.fillMaxWidth().height(56.dp).padding(start = 4.dp, end = 16.dp),
@@ -129,7 +132,12 @@ internal fun TopBar(
         GlyphButton(lead, leadLabel, 48.dp, 24.dp, onClick = onLead)
         Column(Modifier.weight(1f)) {
             Label(title, 17, 22, weight = FontWeight.Medium, maxLines = 1)
-            if (detail != null) Row(verticalAlignment = Alignment.CenterVertically) {
+            if (detail != null) Row(
+                modifier = if (onDetailClick == null) Modifier else Modifier
+                    .semantics { if (detailActionLabel != null) contentDescription = detailActionLabel }
+                    .clickable(enabled = detailEnabled, role = Role.Button, onClick = onDetailClick),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Label(detail, 12, 16, color = Enso.colors.dim, maxLines = 1)
                 if (showMenu) Glyph(EnsoIcon.Down, Modifier.size(14.dp), Enso.colors.dim)
             }

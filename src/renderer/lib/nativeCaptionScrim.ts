@@ -1,10 +1,8 @@
 /**
  * 全窗口压暗浮层（看图放大等）的登记表。
  *
- * Windows 的原生窗口按钮画在 renderer 之上，renderer 里再深的遮罩也盖不住右上角那
- * 一块；标题栏配色只能经 `window:set-title-bar-appearance` 主动同步。这里记下当前
- * 压在标题栏上的那层遮罩，`useNativeWindowControls` 采样时把它叠进去，右上角才不会
- * 在压暗的界面上留一块亮底。
+ * Windows 按钮底板透明，遮罩由 renderer 绘制；原生按钮的符号仍画在遮罩上方。
+ * `useNativeWindowControls` 用这里的遮罩色估算对比度，让符号在明显压暗时也可见。
  *
  * 用栈而不是计数器：浮层可以嵌套，最上层那层的颜色才是标题栏实际看到的。
  */

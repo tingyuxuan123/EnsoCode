@@ -5,8 +5,13 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +30,7 @@ import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
 import io.github.tingyuxuan123.eaves.mirror.GoalCommand
 import io.github.tingyuxuan123.eaves.mirror.LinkPhase
 import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
 import io.github.tingyuxuan123.eaves.mirror.activeBotThread
 import io.github.tingyuxuan123.eaves.pair.PairEncoding
 import java.io.File
@@ -56,7 +62,13 @@ class RealDesktopLoopbackTest {
         compose.onNodeWithText("连接电脑").performClick()
         compose.onNodeWithContentDescription("配对链接").performTextInput(invite)
         compose.onNodeWithText("配对").performClick()
-        await("已连接")
+        try {
+            await("已连接")
+        } catch (error: ComposeTimeoutException) {
+            screenshot("desktop-pair-failure.png")
+            val state = (compose.activity.application as EavesApplication).companion.state.value
+            throw AssertionError("Pair failed: paired=${state.paired}, busy=${state.busy}, problem=${state.problem}, phase=${state.link.phase}", error)
+        }
         assertEquals(1, store().load()?.replayVersion)
         compose.onNodeWithContentDescription("关闭").performClick()
         compose.onNodeWithContentDescription("打开新任务设置").performClick()
@@ -118,6 +130,7 @@ class RealDesktopLoopbackTest {
             compose.onAllNodesWithText("$ echo EAVES_APPROVAL_PROBE").fetchSemanticsNodes().isEmpty() &&
                 compose.onAllNodes(hasContentDescription("发送")).fetchSemanticsNodes().isNotEmpty()
         }
+        if (args.getString("eavesDesktopModel") == "1") return // The driver keeps this fixture paired for the model test.
         compose.onNodeWithContentDescription("打开任务列表").performClick()
         compose.onNodeWithText("连接电脑").performClick()
         await("已连接")
@@ -154,6 +167,52 @@ class RealDesktopLoopbackTest {
         compose.waitUntil(45_000) {
             compose.onAllNodesWithText("排队中 · 1 条").fetchSemanticsNodes().isEmpty() &&
                 compose.onAllNodesWithText("Android queue smoke delivered.").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test fun verifySessionModelSwitch() {
+        val expected = args.getString("eavesDesktopExpectedId")
+        val taskId = args.getString("eavesDesktopTaskId")
+        assumeTrue("Only the disposable desktop model fixture", BuildConfig.DEBUG && expected != null && taskId != null &&
+            args.getString("eavesDesktopModel") == "1")
+        val saved = requireNotNull(store().load())
+        require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
+        compose.onNodeWithContentDescription("打开任务列表").performClick()
+        compose.waitUntil(45_000) { compose.onAllNodes(hasTestTag("task-$taskId")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("task-$taskId").performClick()
+        compose.waitUntil(45_000) { compose.onAllNodes(hasContentDescription("切换会话模型")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("切换会话模型").performClick()
+        fun awaitThinking(enabled: Boolean, level: TaskThinkingLevel? = null) {
+            compose.waitUntil(15_000) {
+                val link = (compose.activity.application as EavesApplication).companion.state.value.link
+                link.catalog.any { it.id == taskId && it.reasoningEnabled == enabled && (level == null || it.thinkingLevel == level) } &&
+                    link.session?.thinkingAttempt?.phase == SessionCommandPhase.Observed
+            }
+        }
+        compose.onNodeWithContentDescription("关闭思考").performScrollTo().performClick()
+        awaitThinking(false)
+        compose.onNodeWithContentDescription("开启思考").performScrollTo().performClick()
+        awaitThinking(true)
+        compose.onNodeWithContentDescription("思考深度：高").performScrollTo().performClick()
+        awaitThinking(true, TaskThinkingLevel.High)
+        screenshot("desktop-session-thinking.png")
+        await("Local default model")
+        compose.onNodeWithText("Local default model").performScrollTo().performClick()
+        compose.waitUntil(15_000) {
+            val link = (compose.activity.application as EavesApplication).companion.state.value.link
+            link.catalog.any { it.id == taskId && it.providerId == "loopback-A" && it.modelId == "fake-model-1" } &&
+                link.session?.modelAttempt?.phase == SessionCommandPhase.Observed
+        }
+        screenshot("desktop-session-model.png")
+        compose.onNodeWithContentDescription("关闭模型选择").performClick()
+        val text = "Android switched model next turn."
+        compose.onNodeWithContentDescription("会话消息").performTextInput(text)
+        compose.onNodeWithContentDescription("发送").performClick()
+        compose.waitUntil(45_000) {
+            val session = (compose.activity.application as EavesApplication).companion.state.value.link.session
+            val attempt = session?.textAttempt
+            attempt?.text == text && attempt.phase == SessionCommandPhase.Observed &&
+                session.timeline.status == "idle"
         }
     }
 
@@ -273,13 +332,13 @@ class RealDesktopLoopbackTest {
         input.performTextReplacement(held)
         send.assertIsEnabled().performClick()
         compose.waitUntil(20_000) { bots()?.chatStates?.get(chatId)?.current != null }
-        compose.onNodeWithText("停止").assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("停止").assertIsEnabled().performClick()
         compose.waitUntil(20_000) { bots()?.stop?.phase == SessionCommandPhase.Observed }
         assertNull(bots()?.chatStates?.get(chatId)?.current)
 
         if (args.getString("eavesDesktopBotThreads") == "1") {
             val rootId = requireNotNull(chatId)
-            compose.onNodeWithText("话题").performClick()
+            compose.onNodeWithContentDescription("话题").performClick()
             compose.onNodeWithText("新线程").performScrollTo().assertIsEnabled().performClick()
             compose.waitUntil(20_000) {
                 val active = bots()?.activeBotThread(rootId)
@@ -289,7 +348,7 @@ class RealDesktopLoopbackTest {
             val newTopic = requireNotNull(bots()?.activeBotThread(rootId))
             assertEquals(rootId, newTopic.parentId)
             assertEquals(emptyList<String>(), bots()?.timeline?.map { it.text })
-            compose.onNodeWithText("话题").performClick()
+            compose.onNodeWithContentDescription("话题").performClick()
             compose.onNodeWithText("主话题").performScrollTo().assertIsEnabled().performClick()
             compose.waitUntil(20_000) {
                 bots()?.activeBotThread(rootId)?.id == rootId && bots()?.threadAction?.resultId == rootId &&
@@ -297,6 +356,46 @@ class RealDesktopLoopbackTest {
             }
             await(first)
         }
+    }
+
+    @Test fun verifyMemberCreationAndDirectHistory() {
+        val expected = args.getString("eavesDesktopExpectedId")
+        assumeTrue("Only the disposable desktop Bot fixture", BuildConfig.DEBUG && expected != null &&
+            args.getString("eavesDesktopBotMembers") == "1")
+        val saved = requireNotNull(store().load())
+        require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
+        val controller = (compose.activity.application as EavesApplication).companion
+        fun link() = controller.state.value.link
+        compose.onNodeWithContentDescription("打开任务列表").performClick()
+        compose.onNodeWithText("成员").performClick()
+        await("FixtureLead")
+        compose.onNodeWithText("FixtureLead").performClick()
+        compose.waitUntil(20_000) { link().bots?.directOpen?.phase == SessionCommandPhase.Observed }
+        compose.onNodeWithContentDescription("单聊消息").performTextReplacement("Android member direct history fixture.")
+        compose.onNodeWithContentDescription("发送到成员").assertIsEnabled().performClick()
+        await("fake-ok")
+        val directId = requireNotNull(link().bots?.directOpen?.chatId)
+        val direct = requireNotNull(link().bots?.chats?.firstOrNull { it.id == directId })
+        val conversation = requireNotNull(direct.sessions[direct.members.single()])
+        assertEquals(conversation, link().session?.timeline?.sessionId)
+        screenshot("desktop-member-direct.png")
+        compose.onNodeWithContentDescription("返回成员列表").performClick()
+        compose.onNodeWithText("FixtureLead").performClick()
+        await("fake-ok")
+        compose.onNodeWithContentDescription("返回成员列表").performClick()
+        compose.onNodeWithText("新群聊").performClick()
+        compose.onNodeWithText("群聊名称").performTextReplacement("Android created member group")
+        val checkBox = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Checkbox)
+        compose.onNode(hasText("FixtureLead") and checkBox).performClick()
+        compose.onNode(hasText("FixturePeer") and checkBox).performClick()
+        compose.onNodeWithText("创建群聊").assertIsEnabled().performClick()
+        compose.waitUntil(20_000) {
+            val bots = link().bots
+            val attempt = bots?.groupCreate
+            attempt?.phase == SessionCommandPhase.Observed && bots.timelineChatId == attempt.chatId && !bots.timelineLoading
+        }
+        compose.onNodeWithText("Android created member group").assertIsDisplayed()
+        screenshot("desktop-member-created-group.png")
     }
 
     private fun await(text: String) = compose.waitUntil(45_000) {

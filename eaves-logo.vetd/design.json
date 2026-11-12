@@ -2,23 +2,37 @@
 	"version": 1,
 	"type": "vetta-design",
 	"canvas": {
-		"x": -3199,
-		"y": 21,
-		"zoom": 1
+		"x": 110.31229032579762,
+		"y": 192.04672176083182,
+		"zoom": 0.7563948534625239
 	},
 	"frames": [
 		{
-			"id": "concepts",
-			"file": "frames/concepts.tsx",
+			"id": "in-use",
+			"file": "frames/in-use.tsx",
 			"x": 0,
 			"y": 0,
 			"width": 1600,
 			"height": 1000,
-			"title": "标志方案",
+			"title": "小满 · 用在各处",
 			"meta": {
 				"width": 1600,
 				"height": 1000,
-				"title": "标志方案"
+				"title": "小满 · 用在各处"
+			}
+		},
+		{
+			"id": "mark",
+			"file": "frames/mark.tsx",
+			"x": 1680,
+			"y": 0,
+			"width": 1600,
+			"height": 1000,
+			"title": "小满 · 标志",
+			"meta": {
+				"width": 1600,
+				"height": 1000,
+				"title": "小满 · 标志"
 			}
 		},
 		{
@@ -28,25 +42,11 @@
 			"y": 0,
 			"width": 1600,
 			"height": 1000,
-			"title": "运行中 · 动态图标",
+			"title": "运行中 · 一滴一圈",
 			"meta": {
 				"width": 1600,
 				"height": 1000,
-				"title": "运行中 · 动态图标"
-			}
-		},
-		{
-			"id": "system",
-			"file": "frames/system.tsx",
-			"x": 1680,
-			"y": 0,
-			"width": 1600,
-			"height": 1000,
-			"title": "A 雨帘 · 用在各处",
-			"meta": {
-				"width": 1600,
-				"height": 1000,
-				"title": "A 雨帘 · 用在各处"
+				"title": "运行中 · 一滴一圈"
 			}
 		}
 	],

@@ -16,6 +16,26 @@ const LAST_TEXT_MAX = 120;
 export const GROUP_TIMELINE_MAX_JSON_BYTES = 850_000;
 
 type GroupTimelineFrame = Extract<HostToPhone, { type: 'group-timeline' }>;
+type BotArtifactsFrame = Extract<HostToPhone, { type: 'bot-artifacts' }>;
+
+/** Keep all media identities, dropping only optional thumbnails to leave room for the relay envelope. */
+export function fitBotArtifactsFrame(frame: BotArtifactsFrame): BotArtifactsFrame {
+  const sizeOf = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
+  const media = frame.media.map((item) => {
+    if (!item.ok || !item.thumb) return item;
+    const { thumb: _thumb, ...withoutThumb } = item;
+    return withoutThumb;
+  });
+  let bytes = sizeOf({ ...frame, media });
+  for (const [index, item] of frame.media.entries()) {
+    const delta = sizeOf(item) - sizeOf(media[index]);
+    if (delta > 0 && bytes + delta < GROUP_TIMELINE_MAX_JSON_BYTES) {
+      media[index] = item;
+      bytes += delta;
+    }
+  }
+  return { ...frame, media };
+}
 
 export function toPairBotMember(bot: BotProfile, status: PairBotRunState): PairBotMember {
   return {

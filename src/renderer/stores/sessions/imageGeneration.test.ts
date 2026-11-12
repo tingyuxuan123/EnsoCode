@@ -1,6 +1,6 @@
 import type { ProjectedMessage } from '@shared/types/agent';
 import { describe, expect, it } from 'vitest';
-import { buildTimeline, foldTimeline } from './timeline';
+import { buildTimeline, canRenderNestedRow, foldTimeline, isCoreToolRow } from './timeline';
 
 const id = '12345678-1234-4123-8123-123456789abc';
 const image = { id, path: `.xiaoman/images/${id}.png`, mimeType: 'image/png' };
@@ -22,6 +22,26 @@ const messages: ProjectedMessage[] = [
 ];
 
 describe('生图时间线', () => {
+  it.each(['generate_image', 'edit_image'])(
+    '%s 运行时保留完整产物行，不压成丢失动画的组内摘要',
+    (name) => {
+      const pending = structuredClone(messages.slice(0, 2));
+      pending[1].content = [{ type: 'toolCall', id: 'gen1', name, arguments: { prompt: 'cat' } }];
+      const tool = buildTimeline(pending, true, [], '/workspace').find(
+        (row) => row.kind === 'tool'
+      );
+      expect(tool?.state).toBe('running');
+      expect(tool?.imagePath).toBeUndefined();
+      expect(isCoreToolRow(tool!)).toBe(true);
+      expect(canRenderNestedRow(tool!)).toBe(false);
+      for (const collapseCompletedActivity of [false, true]) {
+        const rows = foldTimeline(buildTimeline(pending, true, [], '/workspace'), true, new Set(), {
+          collapseCompletedActivity,
+        });
+        expect(rows.some((row) => row.kind === 'tool' && row.name === name)).toBe(true);
+      }
+    }
+  );
   it('从权威历史结果重建图片路径，无需内存图片缓存', () => {
     const rows = buildTimeline(messages, false, [], '/workspace');
     expect(rows.find((row) => row.kind === 'tool')?.imagePath).toBe(`/workspace/${image.path}`);

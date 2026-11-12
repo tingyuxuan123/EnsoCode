@@ -18,6 +18,7 @@ import { registerExtensionPluginHandlers } from './extensionPlugins';
 import { registerFileHandlers } from './files';
 import { registerFilesWorkspaceHandlers } from './filesWorkspace';
 import { registerGitHandlers } from './git';
+import { registerImageProviderHandlers } from './imageGeneration';
 import { registerMcpHandlers } from './mcp';
 import { registerMemoryHandlers } from './memory';
 import { registerModelDirectoryHandlers } from './modelDirectory';
@@ -45,6 +46,7 @@ export function registerIpcHandlers(): void {
   registerWindowHandlers();
   registerTaskBoardHandlers();
   registerProviderHandlers();
+  registerImageProviderHandlers();
   registerAssetHandlers();
   registerConfigSyncHandlers();
   registerCapabilityHandlers();

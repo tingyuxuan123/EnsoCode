@@ -165,3 +165,103 @@
 @media (prefers-reduced-motion: reduce) {
   .t-stream-live > * { animation: none !important; }
 }
+
+/* Adapted from Open Vetta image-gen/src/style.css (Apache-2.0).
+ * Shared by desktop and PWA; no plugin runtime or extra animation library.
+ */
+@keyframes imagegen-blob-drift {
+  0% { transform: translate(0%, 0%) scale(1); }
+  25% { transform: translate(22%, -16%) scale(1.22); }
+  50% { transform: translate(-14%, 20%) scale(0.82); }
+  75% { transform: translate(16%, 14%) scale(1.12); }
+  100% { transform: translate(-20%, -10%) scale(0.94); }
+}
+.imagegen-blob-ripple {
+  animation-name: imagegen-blob-drift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  will-change: transform;
+}
+@keyframes imagegen-blob-spin {
+  to { transform: rotate(360deg); }
+}
+.imagegen-blob-spin {
+  filter: blur(26px) saturate(120%);
+  animation: imagegen-blob-spin 36s linear infinite;
+  will-change: transform;
+}
+@keyframes imagegen-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.94); }
+  50% { opacity: 0.7; transform: scale(1.04); }
+}
+.imagegen-pulse { animation: imagegen-pulse 1.8s ease-in-out infinite; }
+.imagegen-skeleton {
+  /* Open Vetta monoTheme.light, not the app's green/orange accent/status colours. */
+  background: #faf9f9;
+  border-color: rgb(0 0 0 / 10%);
+  border-radius: calc(16rem / 14);
+}
+.imagegen-label { color: white; text-shadow: 0 1px 3px rgb(0 0 0 / 40%); }
+.imagegen-label > svg { filter: drop-shadow(0 1px 3px rgb(0 0 0 / 35%)); }
+@keyframes imagegen-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.imagegen-fade-in {
+  animation: imagegen-fade-in var(--duration-slow, 400ms) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+/* Image overlay: preserve the upstream dark translucent controls in every theme.
+ * Dimensions use rem so the UI font-size preference still scales the toolbar.
+ */
+.imagegen-preview {
+  width: fit-content;
+  max-width: min(100%, 32rem);
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  border-radius: calc(12rem / 14);
+}
+.imagegen-actions {
+  position: absolute;
+  top: calc(6rem / 14);
+  right: calc(6rem / 14);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: calc(6rem / 14);
+  opacity: 1;
+  transition: opacity var(--duration-quick, 150ms);
+}
+.imagegen-action {
+  display: flex;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(8rem / 14);
+  background: rgb(0 0 0 / 42%);
+  color: rgb(255 255 255 / 90%);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: background-color var(--duration-quick, 150ms), color var(--duration-quick, 150ms);
+}
+.imagegen-action:hover { background: rgb(0 0 0 / 58%); color: white; }
+.imagegen-action:focus-visible { outline: 2px solid white; outline-offset: -3px; }
+.imagegen-action:disabled { cursor: default; opacity: 0.5; }
+.imagegen-action > svg { width: 1rem; height: 1rem; stroke-width: 1.7; }
+@media (hover: hover) and (pointer: fine) {
+  .imagegen-actions { opacity: 0; pointer-events: none; }
+  .imagegen-preview:hover .imagegen-actions,
+  .imagegen-preview:focus-within .imagegen-actions { opacity: 1; pointer-events: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .imagegen-actions, .imagegen-action { transition: none !important; }
+  .imagegen-blob-ripple,
+  .imagegen-blob-spin,
+  .imagegen-pulse,
+  .imagegen-fade-in {
+    animation: none !important;
+    will-change: auto;
+  }
+}

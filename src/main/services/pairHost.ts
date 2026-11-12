@@ -56,6 +56,7 @@ import type {
   AttachedImage,
   RendererAgentEvent,
 } from '@shared/types/agent';
+import { isBotId } from '@shared/types/bot';
 import type {
   PairCreatedSession,
   PairQueueAction,
@@ -285,6 +286,8 @@ export type PairBotCommand = Extract<
   {
     type:
       | 'bot-catalog-request'
+      | 'bot-group-create'
+      | 'bot-direct-open'
       | 'bot-send'
       | 'bot-chat-open'
       | 'bot-timeline'
@@ -1126,6 +1129,18 @@ function isCurrentSync(conn: Connection, revision: number, sessionId: string): b
   );
 }
 
+/** 结构校验失败但带合法 requestId 的创建命令：回失败回执，手机不必等到超时。 */
+function malformedCreationReply(payload: unknown): HostToPhone | null {
+  if (typeof payload !== 'object' || payload === null || !('type' in payload)) return null;
+  const requestId = 'requestId' in payload ? payload.requestId : undefined;
+  if (!isBotId(requestId)) return null;
+  if (payload.type === 'bot-group-create')
+    return { type: 'bot-group-create-result', requestId, ok: false, error: 'invalid-request' };
+  if (payload.type === 'bot-direct-open')
+    return { type: 'bot-direct-open-result', requestId, ok: false, error: 'invalid-request' };
+  return null;
+}
+
 async function handleFrame(
   conn: Connection,
   frame: Uint8Array,
@@ -1169,6 +1184,9 @@ async function handleFrame(
   const parsed = parsePhoneCommand(payload);
   if (!parsed.ok) {
     console.warn(`[pair] command rejected: ${parsed.error}`);
+    // A valid correlation identity can settle a malformed creation without reaching Bot services.
+    const rejected = malformedCreationReply(payload);
+    if (rejected) void send(conn, rejected);
     return;
   }
   const command = parsed.command;
@@ -1333,6 +1351,8 @@ async function handleFrame(
       snapshotForPhone(command.sessionId, false);
       break;
     case 'bot-catalog-request':
+    case 'bot-group-create':
+    case 'bot-direct-open':
     case 'bot-send':
     case 'bot-chat-open':
     case 'bot-timeline':

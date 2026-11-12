@@ -115,6 +115,7 @@ import {
   applyAgentEvent,
   applyDispatchEvent,
   applyHistoryPage,
+  canRequestSteerWithdrawal,
   canWithdrawMessage,
   emptyProjection,
   isVisibleGenerationOutput,
@@ -1968,7 +1969,8 @@ export const useSessionsStore = create<SessionsState>()(
       function optimisticUserMessage(
         text: string,
         images: AttachedImage[] | undefined,
-        deliveryId: string
+        deliveryId: string,
+        withdrawDraftText?: string
       ): TimelineMessage {
         return {
           role: 'user',
@@ -1979,6 +1981,7 @@ export const useSessionsStore = create<SessionsState>()(
           timestamp: Date.now(),
           optimistic: true,
           deliveryId,
+          ...(withdrawDraftText !== undefined ? { withdrawDraftText } : {}),
         };
       }
 
@@ -3302,7 +3305,12 @@ export const useSessionsStore = create<SessionsState>()(
               abortRequested: false,
               messages: [
                 ...state.conversations[id].messages,
-                optimisticUserMessage(text, images, deliveryId),
+                optimisticUserMessage(
+                  text,
+                  images,
+                  deliveryId,
+                  text !== submittedText ? submittedText : undefined
+                ),
               ],
             })
           );
@@ -4086,6 +4094,26 @@ export const useSessionsStore = create<SessionsState>()(
         },
 
         withdrawMessage(conversationId, target) {
+          if (target.kind === 'delivery') {
+            const conversation = get().conversations[conversationId];
+            if (
+              !conversation ||
+              conversation.historyOnly ||
+              conversation.rewinding ||
+              conversation.restoringFiles ||
+              conversation.workspaceMigrating
+            )
+              return;
+            const echo = conversation.messages.find((message) => message.deliveryId === target.id);
+            if (canRequestSteerWithdrawal(echo, conversation.generation)) {
+              if (conversation.generation && conversation.status === 'running') {
+                void window.electronAPI.agent
+                  .withdrawSteer?.(conversationId, conversation.generation, target.id)
+                  .catch(() => {});
+              }
+              return;
+            }
+          }
           set((state) => {
             const conversation = state.conversations[conversationId];
             if (
@@ -4115,7 +4143,9 @@ export const useSessionsStore = create<SessionsState>()(
                     ),
                   }
                 : { messages: conversation.messages.filter((item) => item !== message) }),
-              draftText: [conversation.draftText, draft.text].filter(Boolean).join('\n\n'),
+              draftText: [conversation.draftText, message?.withdrawDraftText ?? draft.text]
+                .filter(Boolean)
+                .join('\n\n'),
               draftImages: [...(conversation.draftImages ?? []), ...(draft.images ?? [])],
               draftAppend: true,
             });

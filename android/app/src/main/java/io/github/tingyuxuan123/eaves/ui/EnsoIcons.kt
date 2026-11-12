@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
-// Exact path data from the design's Iconify lucide (ISC) and mdi (Apache-2.0) icons.
+// Paths from the design's Iconify icons and the desktop's lucide-react (ISC).
 // See android/NOTICE. No full icon library is bundled.
 internal enum class EnsoIcon(val paths: String, val solid: Boolean = false) {
     Menu("M4 5h16M4 12h16M4 19h16"),
@@ -54,6 +54,14 @@ internal enum class EnsoIcon(val paths: String, val solid: Boolean = false) {
     Check("M20 6L9 17l-5-5"),
     CircleCheck("M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0Z|m9 12l2 2l4-4"),
     Terminal("m4 17l6-6l-6-6M12 19h8"),
+    Brain("M12 18V5|M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4|M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5|M17.997 5.125a4 4 0 0 1 2.526 5.77|M18 18a4 4 0 0 0 2-7.464|M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517|M6 18a4 4 0 0 1-2-7.464|M6.003 5.125a4 4 0 0 0-2.526 5.77"),
+    FileText("M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z|M14 2v5a1 1 0 0 0 1 1h5|M10 9H8|M16 13H8|M16 17H8"),
+    FolderOpen("m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"),
+    TerminalSquare("m7 11 2-2-2-2|M11 13h4|M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"),
+    FilePlus("M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z|M14 2v5a1 1 0 0 0 1 1h5|M9 15h6|M12 18v-6"),
+    BoxSelect("M5 3a2 2 0 0 0-2 2|M19 3a2 2 0 0 1 2 2|M21 19a2 2 0 0 1-2 2|M5 21a2 2 0 0 1-2-2|M9 3h1|M9 21h1|M14 3h1|M14 21h1|M3 9v1|M21 9v1|M3 14v1|M21 14v1"),
+    Bot("M12 8V4H8|M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z|M2 14h2|M20 14h2|M15 13v2|M9 13v2"),
+    Wrench("M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"),
     Timer("M10 2h4m-2 12l3-3|M20 14a8 8 0 1 1-16 0a8 8 0 0 1 16 0Z"),
     FileDiff("M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2zm3-12h6m-3 3V7M9 17h6"),
     Sort("m18 21l-4-4h3V7h-3l4-4l4 4h-3v10h3M2 19v-2h10v2M2 13v-2h7v2M2 7V5h4v2z", true),

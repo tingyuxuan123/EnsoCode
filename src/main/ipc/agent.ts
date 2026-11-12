@@ -107,6 +107,7 @@ import {
   stopSubagent,
   stopWorkflow,
   summarizeConversationTitle,
+  withdrawSteer,
 } from '../services/agentHost';
 import { validateAgentRun } from '../services/agentRunValidation';
 import { AgentService } from '../services/agentService';
@@ -122,6 +123,7 @@ import { getDesignToolBroker } from '../services/design';
 import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
 import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionPlugins/planPolicy';
 import { searchFiles } from '../services/fileSearch';
+import { independentImageProvider } from '../services/imageGeneration/providerHost';
 import { generateImage } from '../services/imageGeneration/service';
 import { ImageGenerationBridge } from '../services/imageGenerationBridge';
 import { resolveImageProvider } from '../services/imageGenerationConfig';
@@ -1127,7 +1129,7 @@ const imageGenerationBridge = new ImageGenerationBridge({
     }).includes('image_generation');
   },
   cwd: (identity) => pluginProjectRoot(identity.sessionId),
-  config: (tool) => resolveImageProvider(readSettingsState(), tool),
+  config: (tool) => resolveImageProvider(readSettingsState(), tool, independentImageProvider()),
   run: generateImage,
   reply: ({ identity, requestId }, result) => {
     sendAgentCommand({ type: 'image-generation-result', identity, requestId, ok: true, result });
@@ -2316,6 +2318,18 @@ export function registerAgentHandlers(): void {
         images as { data: string; mimeType: string }[] | undefined,
         deliveryId
       );
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_WITHDRAW_STEER,
+    (_event, sessionId: unknown, generation: unknown, deliveryId: unknown): AgentActionResult => {
+      const rejected = botControlError(sessionId);
+      if (rejected) return rejected;
+      const identity = exactIdentity(sessionId);
+      if (!identity || identity.generation !== generation || !isDeliveryId(deliveryId))
+        return { ok: false, error: 'invalid withdrawal or stale session generation' };
+      return withdrawSteer(identity, deliveryId);
     }
   );
 

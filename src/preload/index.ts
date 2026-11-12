@@ -22,6 +22,11 @@ import type {
   CompactReserveTokensResult,
 } from '@shared/compactionSettings';
 import type {
+  ImageProviderResult,
+  ImageProviderSettings,
+  ImageProviderView,
+} from '@shared/imageProvider';
+import type {
   ChatModelDto,
   DistillableSessionDto,
   EmbeddingDownloadProgressDto,
@@ -313,6 +318,26 @@ import type {
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const electronAPI = {
+  imageProvider: {
+    read: (): Promise<ImageProviderResult<ImageProviderView>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_PROVIDER_READ),
+    update: (
+      patch: Partial<ImageProviderSettings>
+    ): Promise<ImageProviderResult<ImageProviderView>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_PROVIDER_UPDATE, patch),
+    setApiKey: (
+      baseUrl: string,
+      key: string | null
+    ): Promise<ImageProviderResult<ImageProviderView>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_PROVIDER_SET_KEY, { baseUrl, key }),
+    listModels: (): Promise<ImageProviderResult<{ models: string[] }>> =>
+      ipcRenderer.invoke(IPC_CHANNELS.IMAGE_PROVIDER_MODELS),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.IMAGE_PROVIDER_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.IMAGE_PROVIDER_CHANGED, listener);
+    },
+  },
   env: {
     platform: process.platform,
   },
@@ -854,6 +879,12 @@ const electronAPI = {
       deliveryId?: string
     ): Promise<AgentActionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_STEER, sessionId, text, images, deliveryId),
+    withdrawSteer: (
+      sessionId: string,
+      generation: string,
+      deliveryId: string
+    ): Promise<AgentActionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_WITHDRAW_STEER, sessionId, generation, deliveryId),
     abort: (sessionId: string): Promise<AgentActionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_ABORT, sessionId),
     abortRetry: (sessionId: string): Promise<AgentActionResult> =>

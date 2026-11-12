@@ -143,6 +143,216 @@ async function createBot(name: string): Promise<string> {
 }
 
 describe('bots IPC', () => {
+  it('bounds the group request cache, preserves failures, expires old entries and hides exceptions', async () => {
+    const a = await createBot('Alice');
+    const b = await createBot('Bob');
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    const { registerPairBotHandlers } = await import('./pairBots');
+    registerPairBotHandlers();
+    const command = {
+      type: 'bot-group-create' as const,
+      title: 'Team',
+      memberIds: [a, b],
+      bossBotId: a,
+    };
+    const run = async (n: number) => {
+      const frames: HostToPhone[] = [];
+      const requestId = `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+      await mocks.pairPort!.handle('peer', { ...command, requestId }, async (frame) => {
+        frames.push(frame);
+        return true;
+      });
+      return frames.at(-1);
+    };
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const missing = vi.spyOn(services.bots, 'get').mockReturnValue(undefined);
+    try {
+      const failure = await run(0);
+      expect(failure).toMatchObject({ ok: false, error: 'invalid' });
+      for (let n = 1; n < 1024; n++)
+        expect(await run(n)).toMatchObject({ ok: false, error: 'invalid' });
+      missing.mockRestore();
+      expect(await run(0)).toEqual(failure);
+      expect(await run(1024)).toMatchObject({ ok: false, error: 'session-busy' });
+      expect(services.chats.list()).toHaveLength(0);
+      clock.mockReturnValue(1000 + 10 * 60_000 + 1);
+      expect(await run(1024)).toMatchObject({ ok: true });
+      const crash = vi.spyOn(services.chats, 'create').mockImplementation(() => {
+        throw new Error('secret path');
+      });
+      try {
+        expect(await run(1025)).toMatchObject({ ok: false, error: 'failed' });
+      } finally {
+        crash.mockRestore();
+      }
+      expect(await run(1025)).toMatchObject({ ok: false, error: 'failed' });
+      expect(services.chats.list()).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+      missing.mockRestore();
+    }
+  });
+  it('phone creates a shared desktop group once per pair/request, rejects changed arguments and pushes directory first', async () => {
+    const a = await createBot('Alice');
+    const b = await createBot('Bob');
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    const { registerPairBotHandlers } = await import('./pairBots');
+    registerPairBotHandlers();
+    const command = {
+      type: 'bot-group-create' as const,
+      requestId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      title: ' Team ',
+      memberIds: [a, b],
+      bossBotId: a,
+    };
+    const run = async (cmd = command, peer = 'peer') => {
+      const frames: HostToPhone[] = [];
+      await mocks.pairPort!.handle(peer, cmd, async (frame) => {
+        frames.push(frame);
+        return true;
+      });
+      return frames;
+    };
+    const [one, duplicate] = await Promise.all([run(), run()]);
+    expect(one.at(-1)).toMatchObject({
+      type: 'bot-group-create-result',
+      requestId: command.requestId,
+      ok: true,
+      chatId: expect.any(String),
+    });
+    expect(duplicate.at(-1)).toEqual(one.at(-1));
+    const uppercaseId = command.requestId.toUpperCase();
+    expect((await run({ ...command, requestId: uppercaseId })).at(-1)).toEqual({
+      ...one.at(-1),
+      requestId: uppercaseId,
+    });
+    expect(one.slice(0, 2).map((f) => f.type)).toEqual(['bot-catalog', 'bot-chats']);
+    expect(one[0]).toMatchObject({ groupCreate: true });
+    expect(one[1]).toMatchObject({
+      type: 'bot-chats',
+      chats: [expect.objectContaining({ id: services.chats.list()[0]?.id })],
+    });
+    expect(services.chats.list()).toHaveLength(1);
+    expect(services.chats.list()[0]).toMatchObject({
+      kind: 'group',
+      title: 'Team',
+      members: [a, b],
+      bossBotId: a,
+      workspace: { kind: 'chat-home' },
+    });
+    for (const patch of [{ title: 'Other' }, { memberIds: [b, a] }, { bossBotId: b }]) {
+      expect(await run({ ...command, ...patch })).toEqual([
+        {
+          type: 'bot-group-create-result',
+          requestId: command.requestId,
+          ok: false,
+          error: 'invalid-request',
+        },
+      ]);
+    }
+    expect((await run(command, 'other-peer')).at(-1)).toMatchObject({ ok: true });
+    expect(services.chats.list()).toHaveLength(2);
+    mocks.settings.botModeEnabled = false;
+    expect(await run()).toEqual([
+      {
+        type: 'bot-group-create-result',
+        requestId: command.requestId,
+        ok: false,
+        error: 'disabled',
+      },
+    ]);
+    mocks.settings.botModeEnabled = true;
+    services.bots.setArchived(b, true);
+    expect((await run({ ...command, requestId: b })).at(-1)).toMatchObject({ ok: false });
+    expect(services.chats.list()).toHaveLength(2);
+  });
+  it('phone reuses one member-home direct chat per bot, rejects archived chats and bots, and pushes directory first', async () => {
+    const a = await createBot('Alice');
+    const b = await createBot('Bob');
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    const { registerPairBotHandlers } = await import('./pairBots');
+    registerPairBotHandlers();
+    const id = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+    const run = async (cmd: { type: 'bot-direct-open'; requestId: string; botId: string }) => {
+      const frames: HostToPhone[] = [];
+      await mocks.pairPort!.handle('peer', cmd, async (frame) => {
+        frames.push(frame);
+        return true;
+      });
+      return frames;
+    };
+    const command = { type: 'bot-direct-open' as const, requestId: id(1), botId: a };
+    const first = await run(command);
+    const chat = services.chats.list()[0]!;
+    expect(first.slice(0, 3).map((frame) => frame.type)).toEqual([
+      'bot-catalog',
+      'bot-chats',
+      'bot-inbox',
+    ]);
+    expect(first[0]).toMatchObject({ directOpen: true });
+    expect(first.at(-1)).toEqual({
+      type: 'bot-direct-open-result',
+      requestId: command.requestId,
+      ok: true,
+      chatId: chat.id,
+    });
+    expect(chat).toMatchObject({
+      kind: 'direct',
+      members: [a],
+      workspace: { kind: 'member-home' },
+    });
+    // 同一 Bot 的新请求复用已有私聊，不重复建。
+    expect((await run({ ...command, requestId: id(2) })).at(-1)).toEqual({
+      type: 'bot-direct-open-result',
+      requestId: id(2),
+      ok: true,
+      chatId: chat.id,
+    });
+    expect(services.chats.list()).toHaveLength(1);
+    // 已归档私聊不自动复活、也不另建一份。
+    expect((await call(IPC_CHANNELS.BOT_CHAT_UPDATE, { chatId: chat.id, archived: true })).ok).toBe(
+      true
+    );
+    expect(await run({ ...command, requestId: id(3) })).toEqual([
+      {
+        type: 'bot-direct-open-result',
+        requestId: id(3),
+        ok: false,
+        error: 'chat-archived',
+      },
+    ]);
+    expect(services.chats.list()).toHaveLength(1);
+    expect(services.chats.get(chat.id)?.archivedAt).toBeTypeOf('number');
+    // Bot 已归档、Bot 模式关闭、未知 Bot 都拒绝，且不留下写入。
+    services.bots.setArchived(b, true);
+    expect((await run({ ...command, requestId: id(4), botId: b })).at(-1)).toEqual({
+      type: 'bot-direct-open-result',
+      requestId: id(4),
+      ok: false,
+      error: 'bot-archived',
+    });
+    expect(services.chats.list()).toHaveLength(1);
+    mocks.settings.botModeEnabled = false;
+    expect(await run({ ...command, requestId: id(5) })).toEqual([
+      {
+        type: 'bot-direct-open-result',
+        requestId: id(5),
+        ok: false,
+        error: 'disabled',
+      },
+    ]);
+    mocks.settings.botModeEnabled = true;
+    expect((await run({ ...command, requestId: id(6), botId: id(9) })).at(-1)).toEqual({
+      type: 'bot-direct-open-result',
+      requestId: id(6),
+      ok: false,
+      error: 'invalid',
+    });
+    expect(services.chats.list()).toHaveLength(1);
+  });
   it('托管必须通过根群显式授权，关闭清除；私聊/话题拒绝且开启不执行待办', async () => {
     const a = await createBot('Alice');
     const b = await createBot('Bob');
@@ -1309,6 +1519,19 @@ describe('收件箱 IPC', () => {
     expect(listed.items).toEqual([
       expect.objectContaining({ key: `approval:${identity.sessionId}:r1`, chatId, botId: alice }),
     ]);
+    const { registerPairBotHandlers } = await import('./pairBots');
+    registerPairBotHandlers();
+    const frames: HostToPhone[] = [];
+    await mocks.pairPort!.handle('peer', { type: 'bot-inbox-request' }, async (frame) => {
+      frames.push(frame);
+      return true;
+    });
+    expect(frames).toContainEqual(
+      expect.objectContaining({
+        type: 'bot-inbox',
+        items: [expect.objectContaining({ conversationId: identity.sessionId })],
+      })
+    );
     expect(
       await call(IPC_CHANNELS.BOT_INBOX_UPDATE, {
         key: `approval:${identity.sessionId}:r1`,
@@ -1362,6 +1585,25 @@ describe('群聊新对话与克隆', () => {
       return frames;
     };
   }
+
+  it('a stale phone directory cannot start a new conversation in an archived group', async () => {
+    const { chatId } = await team();
+    const { getBotServices } = await import('./bots');
+    const services = getBotServices()!;
+    services.chats.update(chatId, (chat) => ({ ...chat, archivedAt: Date.now() }));
+    const stop = vi.spyOn(services.groups, 'stop');
+    const send = await phone();
+    expect(await send(chatId, 'archived', true)).toEqual([
+      {
+        type: 'bot-new-session-result',
+        chatId,
+        requestId: 'archived',
+        ok: false,
+        error: 'chat-archived',
+      },
+    ]);
+    expect(stop).not.toHaveBeenCalled();
+  });
 
   it('phone direct reset shares desktop lifecycle, deduplicates requests and refreshes chat sessions', async () => {
     const alice = await createBot('Alice');

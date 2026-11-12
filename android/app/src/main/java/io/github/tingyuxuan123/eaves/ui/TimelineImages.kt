@@ -24,7 +24,13 @@ internal fun timelineImages(content: List<JsonObject>): List<TimelineImage> = co
     TimelineImage(data, mime)
 }
 
-internal fun decodeTimelineImage(image: TimelineImage): Bitmap? = runCatching {
+internal fun decodeTimelineImage(image: TimelineImage, maxEdge: Int = 1600): Bitmap? = runCatching {
+    if (image.data.length > MAX_IMAGE_CHARS || maxEdge !in 1..1600) return@runCatching null
     val bytes = java.util.Base64.getDecoder().decode(image.data)
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outMimeType !in IMAGE_TYPES || !validPictureDimensions(bounds.outWidth, bounds.outHeight)) return@runCatching null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight).toLong() > maxEdge.toLong() * sample) sample *= 2
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }.getOrNull()

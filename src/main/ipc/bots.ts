@@ -869,6 +869,28 @@ function activeMembers(bots: BotServices, members: readonly string[]): boolean {
   });
 }
 
+/** Desktop and Pair share validation, authoritative identities and workspace creation. */
+export function createBotChat(services: BotServices, request: unknown): BotChatWriteResult {
+  const input = parseChatCreateInput(request);
+  if (!input || !activeMembers(services, input.members)) return INVALID;
+  if (input.kind === 'direct') {
+    const existing = services.chats
+      .list()
+      .find((chat) => chat.kind === 'direct' && chat.members[0] === input.members[0]);
+    if (existing) return { ok: true, chat: existing };
+  }
+  const chatId = randomUUID();
+  const workspace = resolveWorkspaceInput(services, chatId, input.workspace);
+  if ('error' in workspace) return { ok: false, error: workspace.error };
+  const chat = services.chats.create({ ...input, workspace }, chatId);
+  if (!chat) {
+    discardNewChatHome(services, chatId, workspace);
+    return INVALID;
+  }
+  emitBotEvent({ kind: 'chat', chatId });
+  return { ok: true, chat };
+}
+
 /** 建群失败：撤掉刚建的群专属目录项目 */
 function discardNewChatHome(bots: BotServices, chatId: string, workspace: BotChatWorkspace): void {
   if (workspace.kind !== 'chat-home') return;
@@ -933,6 +955,7 @@ export async function newBotSession(
   const chatId = chatIdOf(request);
   const chat = chatId ? chats.get(chatId) : undefined;
   if (!chat) return INVALID;
+  if (chat.archivedAt !== undefined) return { ok: false, error: 'chat-archived' };
   if (resettingChats.has(chat.id)) return { ok: false, error: 'session-busy' };
   if (chat.kind === 'group' && !confirmed && groupHasPendingWork(services, chat)) {
     return { ok: false, needsConfirmation: true };
@@ -1820,26 +1843,7 @@ export function registerBotHandlers(): void {
   handle(
     IPC_CHANNELS.BOT_CHAT_CREATE,
     'write',
-    (_sender, request, services): BotChatWriteResult => {
-      const input = parseChatCreateInput(request);
-      if (!input || !activeMembers(services, input.members)) return INVALID;
-      if (input.kind === 'direct') {
-        const existing = services.chats
-          .list()
-          .find((chat) => chat.kind === 'direct' && chat.members[0] === input.members[0]);
-        if (existing) return { ok: true, chat: existing };
-      }
-      const chatId = randomUUID();
-      const workspace = resolveWorkspaceInput(services, chatId, input.workspace);
-      if ('error' in workspace) return { ok: false, error: workspace.error };
-      const chat = services.chats.create({ ...input, workspace }, chatId);
-      if (!chat) {
-        discardNewChatHome(services, chatId, workspace);
-        return INVALID;
-      }
-      emitBotEvent({ kind: 'chat', chatId });
-      return { ok: true, chat };
-    }
+    (_sender, request, services): BotChatWriteResult => createBotChat(services, request)
   );
 
   handle(

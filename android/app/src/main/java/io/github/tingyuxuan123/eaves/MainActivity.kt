@@ -44,6 +44,7 @@ import io.github.tingyuxuan123.eaves.ui.SessionScreen
 import io.github.tingyuxuan123.eaves.ui.SessionSpecimen
 import io.github.tingyuxuan123.eaves.mirror.DesktopLinkState
 import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
+import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
 import io.github.tingyuxuan123.eaves.mirror.GoalCommand
 import io.github.tingyuxuan123.eaves.mirror.MaintenanceBaseline
@@ -58,6 +59,7 @@ import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
 import io.github.tingyuxuan123.eaves.mirror.SessionImage
 import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_LIMIT
 import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
+import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
 import io.github.tingyuxuan123.eaves.mirror.SESSION_TEXT_LIMIT
 import io.github.tingyuxuan123.eaves.ui.TaskConfiguration
 import io.github.tingyuxuan123.eaves.ui.NewTaskConfigSheet
@@ -95,6 +97,8 @@ class MainActivity : ComponentActivity() {
                 onSelectSession = companion::selectSession, onSessionRetry = companion::retrySession,
                 onHistory = companion::loadHistory, onApproval = companion::respondApproval, onAsk = companion::respondAsk,
                 onSessionText = companion::submitText, onSessionStop = companion::stopSession,
+                onSessionModel = companion::setSessionModel,
+                onSessionReasoning = companion::setSessionReasoning, onSessionThinking = companion::setSessionThinking,
                 onCreateTask = companion::createTask, onDismissCreation = companion::dismissCreation,
                 onSessionQueue = companion::queueAction, onSessionImages = companion::submitImages,
                 onSessionGoal = companion::goalAction,
@@ -115,6 +119,16 @@ class MainActivity : ComponentActivity() {
                 onSendBotMessage = companion::sendBotMessage,
                 onStopBotChat = companion::stopBotChat,
                 onChangeBotThread = companion::changeBotThread,
+                onBotNewSession = companion::requestBotNewSession,
+                onBotConfirmNewSession = companion::confirmBotNewSession,
+                onBotRetryEntry = companion::retryBotEntry,
+                onBotDismissInbox = companion::dismissBotInboxItem,
+                onBotCreateGroup = companion::createBotGroup,
+                onBotOpenDirect = companion::openBotDirect,
+                onBotArtifacts = companion::loadBotArtifacts,
+                onBotArtifactImage = companion::loadBotArtifactImage,
+                onBotListFiles = companion::listBotFiles,
+                onBotReadFile = companion::readBotFile,
                 onWatch = {
                     if (state.watch.phase == WatchPhase.Active) companion.stopWatch()
                     else if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -223,6 +237,19 @@ internal fun EavesApp(
     onSendBotMessage: ((String, String, String) -> Unit)? = null,
     onStopBotChat: ((String) -> Unit)? = null,
     onChangeBotThread: ((String, BotThreadCommand, String?, String) -> Unit)? = null,
+    onSessionModel: ((String, String, String) -> Unit)? = null,
+    onSessionReasoning: ((String, Boolean) -> Unit)? = null,
+    onSessionThinking: ((String, TaskThinkingLevel) -> Unit)? = null,
+    onBotNewSession: ((String) -> Unit)? = null,
+    onBotConfirmNewSession: ((String) -> Unit)? = null,
+    onBotRetryEntry: ((String, String) -> Unit)? = null,
+    onBotDismissInbox: ((String) -> Unit)? = null,
+    onBotCreateGroup: ((String, List<String>, String) -> Unit)? = null,
+    onBotOpenDirect: ((String) -> Unit)? = null,
+    onBotArtifacts: ((DesktopBotArtifactTarget) -> Unit)? = null,
+    onBotArtifactImage: ((DesktopBotArtifactTarget, String?, String?) -> Unit)? = null,
+    onBotListFiles: ((DesktopBotArtifactTarget) -> Unit)? = null,
+    onBotReadFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)? = null,
 ) {
     var route by rememberSaveable { mutableStateOf(initialRoute) }
     var pairReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
@@ -230,6 +257,7 @@ internal fun EavesApp(
     var membersReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
     var draft by remember(pairState.paired) { mutableStateOf(state.draft) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var memberSessionId by remember(pairState.paired) { mutableStateOf<String?>(null) }
     // Keep one session's draft across the drawer and reconnects; never save message text to a Bundle.
     var sessionDraft by remember(pairState.paired) { mutableStateOf("") }
     var config by remember(pairState.paired) { mutableStateOf(TaskConfiguration()) }
@@ -309,8 +337,8 @@ internal fun EavesApp(
     val openMembers = {
         if (!creating) { membersReturn = route; route = EavesRoute.Members }
     }
-    val subscribedId = selectedId.takeIf { route == EavesRoute.Session }
-    val selectable = state.tasks.any { it.id == subscribedId }
+    val subscribedId = if (route == EavesRoute.Members) memberSessionId else selectedId.takeIf { route == EavesRoute.Session }
+    val selectable = state.tasks.any { it.id == subscribedId } || (route == EavesRoute.Members && memberSessionId != null)
     LaunchedEffect(subscribedId, pairState.paired, selectable) {
         if (subscribedId == null || !pairState.paired) onSelectSession?.invoke(null)
         else if (selectable) onSelectSession?.invoke(subscribedId)
@@ -353,7 +381,7 @@ internal fun EavesApp(
                 state.copy(draft = draft, project = config.project(live.projects)?.name ?: state.project,
                     model = config.model(live.providers)?.label?.let { model -> config.thinkingLevel?.let { "$model · ${it.title()}" } ?: model } ?: state.model,
                     composerEnabled = !creating), onHome = { if (!creating) route = EavesRoute.Home }, onPair = openPair,
-                onConfig = { if (!creating) { if (state.online) showConfig = true else openPair() } },
+                onConfig = { if (!creating) { if (state.online) { keyboard?.hide(); showConfig = true } else openPair() } },
                 onBoard = openBoard, onTask = openTask, onDraft = { draft = it },
                 onSend = config.launch(live.projects, live.providers, draft)?.takeIf {
                     state.online && state.composerAvailable && !creating &&
@@ -380,7 +408,16 @@ internal fun EavesApp(
                     onLoadOlder = { chatId, seq -> onLoadBotTimeline?.invoke(chatId, seq) },
                     writable = !live.readOnly && live.phase == LinkPhase.Online,
                     onSend = onSendBotMessage, onStop = onStopBotChat,
-                    onCloseChat = { chatId -> onCloseBotChat?.invoke(chatId) }, onThreadChange = onChangeBotThread)
+                    onCloseChat = { chatId -> onCloseBotChat?.invoke(chatId) }, onThreadChange = onChangeBotThread,
+                    session = live.session, onSelectSession = { memberSessionId = it }, onHistory = onHistory,
+                    onSessionRetry = onSessionRetry,
+                    onApproval = { requestId, decision -> subscribedId?.let { onApproval(it, requestId, decision) } },
+                    onAsk = { requestId, answer -> subscribedId?.let { onAsk(it, requestId, answer) } },
+                    onStopSession = { subscribedId?.let(onSessionStop) },
+                    onNewSession = onBotNewSession, onConfirmNewSession = onBotConfirmNewSession,
+                    onRetryEntry = onBotRetryEntry, onDismissInbox = onBotDismissInbox, onCreateGroup = onBotCreateGroup,
+                    onArtifacts = onBotArtifacts, onArtifactImage = onBotArtifactImage,
+                    onListBotFiles = onBotListFiles, onReadBotFile = onBotReadFile, onOpenDirect = onBotOpenDirect)
             }
             EavesRoute.Board -> BoardScreen(
                 live.catalog.filterNot { it.archived }, System.currentTimeMillis(), onBack = back, onTask = openTask,
@@ -389,7 +426,9 @@ internal fun EavesApp(
                 link = pairLink, onLink = onPairLink, onPair = onPair, onReconnect = onReconnect,
                 onUnpair = onUnpair, scanner = scanner, onWatch = onWatch, onNotificationSettings = onNotificationSettings)
             EavesRoute.Session -> {
-                val task = live.catalog.firstOrNull { it.id == selectedId }
+                val task = live.catalog.firstOrNull { it.id == selectedId && !it.archived }
+                val canConfigure = task != null && task.parentId == null && live.catalogReady
+                val currentConfigSession = { subscribedId?.takeIf { route == EavesRoute.Session && selectedId == it } }
                 val header = sessionSpecimen?.header ?: SessionHeader(
                     task?.title ?: selectedTitle ?: "会话", task?.projectName?.takeIf { it.isNotBlank() } ?: selectedProject,
                 )
@@ -401,6 +440,17 @@ internal fun EavesApp(
                     draft = sessionDraft, onDraft = { sessionDraft = it },
                     onText = { text, steer -> subscribedId?.let { onSessionText(it, text, steer) } },
                     onStop = { subscribedId?.let(onSessionStop) },
+                    modelProviderId = task?.providerId, modelId = task?.modelId, modelProviders = live.providers,
+                    reasoningEnabled = task?.reasoningEnabled, thinkingLevel = task?.thinkingLevel,
+                    onSetModel = onSessionModel?.takeIf { canConfigure }?.let { action -> { providerId, modelId ->
+                        currentConfigSession()?.let { action(it, providerId, modelId) }
+                    } },
+                    onSetReasoning = onSessionReasoning?.takeIf { canConfigure }?.let { action -> { enabled ->
+                        currentConfigSession()?.let { action(it, enabled) }
+                    } },
+                    onSetThinking = onSessionThinking?.takeIf { canConfigure }?.let { action -> { level ->
+                        currentConfigSession()?.let { action(it, level) }
+                    } },
                     onQueue = onSessionQueue?.let { queue -> { command, messageId, text ->
                         subscribedId?.let { queue(it, command, messageId, text) }
                     } },

@@ -234,6 +234,7 @@ import {
   editLatestAssistantForRetry,
   silentTurnRecoveryExtension,
   steerActiveSession,
+  steerWithWithdrawal,
 } from './sessionAdapter';
 import {
   EVICTION_SWEEP_INTERVAL_MS,
@@ -411,7 +412,7 @@ interface ManagedSession {
   /** 最近一次 turn_start 时刻；pi 在发起每次模型请求前触发，下一条 assistant message_start 消费 */
   requestStartMs?: number;
   toolStartAt: Map<string, number>;
-  toolDurations: Map<string, number>;
+  toolTimings: Map<string, { durationMs: number; completedAt: number }>;
   /** 流式增量合并窗口：窗口内只记下待发下标，窗口结束或遇到其他事件时发最新正文 */
   upsertTimer?: ReturnType<typeof setTimeout>;
   upsertPending?: number;
@@ -449,7 +450,7 @@ interface ManagedSession {
   /** 下一条 prompt 产生的 user 消息的投递回执；id 为 null 表示该投递无乐观回显 */
   promptDelivery?: { id: string | null };
   /** 已入 pi steer 队列、尚未上屏的投递回执，与 pi 队列同序 */
-  steerDeliveries?: { id: string | null; detach?: () => boolean }[];
+  steerDeliveries?: { id: string | null; detach?: () => boolean; withdrawable?: true }[];
   pendingBranch?: string;
   pendingBranchRequestId?: string;
   pendingVerifications?: number;
@@ -1623,10 +1624,10 @@ export class SessionSupervisor {
     if (this.workspaceSwitch.defer(scopeId, () => this.handleCommand(command))) return;
     const touched = this.sessions.get(identity.sessionId);
     if (touched) touched.lastActivityAt = Date.now();
-    // abort 必须旁路串行门：它要打断的正是占着门的那一轮，排队等于永远等不到
-    if (command.type === 'abort') {
+    // 这两种控制不能等占着门的操作完成：插话可能在异步 input hook 等待期间被取走。
+    if (command.type === 'abort' || command.type === 'withdraw-steer') {
       void this.execute(command).catch((error) => {
-        console.error('[abort] failed:', toErrorMessage(error));
+        console.error(`[${command.type}] failed:`, toErrorMessage(error));
       });
       return;
     }
@@ -1870,9 +1871,25 @@ export class SessionSupervisor {
           this.promptFresh(managed, command.text, images, command.deliveryId);
           return;
         }
-        await this.steerTracked(managed, command.text, images, command.deliveryId);
+        await this.steerTracked(managed, command.text, images, command.deliveryId, true);
         // 用户插话时长命令不阻塞投递：前台命令转后台（不杀），让 pi 在工具返回后读到插话
         this.bgTasks.backgroundAllForeground(managed.identity.sessionId, 'steer');
+        return;
+      }
+      case 'withdraw-steer': {
+        const managed = this.sessions.get(command.identity.sessionId);
+        if (!managed || !isSameGeneration(managed.identity, command.identity)) return;
+        const slot = managed.steerDeliveries?.find(
+          (item) => item.withdrawable && item.id === command.deliveryId
+        );
+        if (!slot?.detach?.()) return; // Pi already took it, or it never reached the queue.
+        managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
+        this.options.emit({
+          type: 'delivery-withdrawn',
+          identity: managed.identity,
+          seq: ++managed.seq,
+          deliveryId: command.deliveryId,
+        });
         return;
       }
       case 'abort-retry':
@@ -3723,7 +3740,7 @@ export class SessionSupervisor {
       ...(opts.requestBudget ? { requestBudget: opts.requestBudget } : {}),
       timings: [],
       toolStartAt: new Map(),
-      toolDurations: new Map(),
+      toolTimings: new Map(),
       gate,
       asks: opts.asks ?? this.createAskManager(identity, gate.humanTimeoutMs),
       pendingTaskReminders: [],
@@ -4436,7 +4453,7 @@ export class SessionSupervisor {
           managed.requestStartMs = undefined;
         }
         const deliveryId = event.message.role === 'user' ? this.takeDelivery(managed) : null;
-        this.upsertLocalMessage(managed, message);
+        this.upsertLocalMessage(managed, message, deliveryId ?? undefined);
         if (deliveryId) {
           this.options.emit({
             type: 'delivery-settled',
@@ -4577,7 +4594,11 @@ export class SessionSupervisor {
         const start = managed.toolStartAt.get(event.toolCallId);
         managed.toolStartAt.delete(event.toolCallId);
         if (start !== undefined) {
-          managed.toolDurations.set(event.toolCallId, Date.now() - start);
+          const completedAt = Date.now();
+          managed.toolTimings.set(event.toolCallId, {
+            durationMs: completedAt - start,
+            completedAt,
+          });
         }
         return;
       }
@@ -4656,7 +4677,7 @@ export class SessionSupervisor {
           if (!slot.id || !slot.detach?.()) continue;
           managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
           this.options.emit({
-            type: 'delivery-deferred',
+            type: slot.withdrawable ? 'delivery-rejected' : 'delivery-deferred',
             identity: managed.identity,
             seq: ++managed.seq,
             deliveryId: slot.id,
@@ -4754,9 +4775,13 @@ export class SessionSupervisor {
     const timing = managed.timings[index];
     let decorated = timing ? { ...message, timing } : message;
     if (decorated.role === 'toolResult' && decorated.toolCallId) {
-      const durationMs = managed.toolDurations.get(decorated.toolCallId);
-      if (durationMs !== undefined && decorated.toolDurationMs === undefined) {
-        decorated = { ...decorated, toolDurationMs: durationMs };
+      const toolTiming = managed.toolTimings.get(decorated.toolCallId);
+      if (toolTiming && decorated.toolCompletedAt === undefined) {
+        decorated = {
+          ...decorated,
+          toolDurationMs: toolTiming.durationMs,
+          toolCompletedAt: toolTiming.completedAt,
+        };
       }
     }
     return decorated;
@@ -4797,13 +4822,18 @@ export class SessionSupervisor {
     return true;
   }
 
-  private upsertLocalMessage(managed: ManagedSession, message: ProjectedMessage | null): void {
+  private upsertLocalMessage(
+    managed: ManagedSession,
+    message: ProjectedMessage | null,
+    deliveryId?: string
+  ): void {
     if (!message) return;
     const index = managed.messages.length;
     const decorated = this.withTiming(managed, index, message);
     managed.messages.push(decorated);
     this.options.emit({
       type: 'message-upsert',
+      ...(deliveryId ? { deliveryId } : {}),
       identity: managed.identity,
       seq: ++managed.seq,
       index,
@@ -5079,19 +5109,49 @@ export class SessionSupervisor {
     managed: ManagedSession,
     text: string,
     images?: { type: 'image'; data: string; mimeType: string }[],
-    deliveryId?: string
+    deliveryId?: string,
+    allowWithdrawal = false
   ): Promise<void> {
-    const slot = { id: deliveryId ?? null };
+    const slot: NonNullable<ManagedSession['steerDeliveries']>[number] = { id: deliveryId ?? null };
     managed.steerDeliveries ??= [];
     managed.steerDeliveries.push(slot);
-    return managed.session
-      .steer(withPendingPlanNote(managed, text), images)
+    const prepared = withPendingPlanNote(managed, text);
+    const detachable =
+      allowWithdrawal && deliveryId && managed.session.isStreaming
+        ? steerWithWithdrawal(managed.session, prepared, images, (detach) => {
+            slot.detach = detach;
+            slot.withdrawable = true;
+            this.options.emit({
+              type: 'delivery-steer-queued',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              deliveryId,
+            });
+          })
+        : undefined;
+    return (detachable ?? managed.session.steer(prepared, images))
       .then((disposition) => {
         // Pi 可在 input hook 中消费输入，而不向队列添加 user 消息，因此不能保留对应投递标记。
         //
         // Pi can consume input in an input hook without adding a user message to the queue, so its delivery marker must be removed.
         if (disposition === 'handled') {
           managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
+          if (deliveryId)
+            this.options.emit({
+              type: 'delivery-settled',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              deliveryId,
+            });
+        } else if (disposition === 'deferred') {
+          managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
+          if (deliveryId)
+            this.options.emit({
+              type: 'delivery-rejected',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              deliveryId,
+            });
         }
       })
       .catch((error: unknown) => {

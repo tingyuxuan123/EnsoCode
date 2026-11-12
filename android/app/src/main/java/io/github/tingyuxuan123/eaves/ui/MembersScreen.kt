@@ -1,74 +1,54 @@
 package io.github.tingyuxuan123.eaves.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotChat
-import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotsState
-import io.github.tingyuxuan123.eaves.mirror.DesktopGroupEntry
-import io.github.tingyuxuan123.eaves.mirror.SESSION_TEXT_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.botMessageText
-import io.github.tingyuxuan123.eaves.mirror.activeBotThread
-import java.text.DateFormat
-import java.util.Date
-import java.util.UUID
+import io.github.tingyuxuan123.eaves.mirror.*
 
-/**
- * Members: inbox first, then who is on the team, then the group/direct chats. Reading is passive —
- * the desktop pushes this state; outgoing drafts wait for a deliveryId-matched host receipt.
- */
+/** One directory, one full-screen conversation. All rows come from the authenticated desktop. */
 @Composable
 internal fun MembersScreen(
     bots: DesktopBotsState?, onBack: () -> Unit, onOpenChat: (String) -> Unit, onLoadOlder: (String, Long) -> Unit,
     writable: Boolean = false, onSend: ((String, String, String) -> Unit)? = null, onStop: ((String) -> Unit)? = null,
-    onCloseChat: (String) -> Unit = {},
-    onThreadChange: ((String, BotThreadCommand, String?, String) -> Unit)? = null,
+    onCloseChat: (String) -> Unit = {}, onThreadChange: ((String, BotThreadCommand, String?, String) -> Unit)? = null,
+    session: DesktopSessionState? = null, onSelectSession: (String?) -> Unit = {},
+    onHistory: () -> Unit = {}, onSessionRetry: () -> Unit = {},
+    onApproval: (String, String) -> Unit = { _, _ -> }, onAsk: (String, String) -> Unit = { _, _ -> },
+    onStopSession: () -> Unit = {}, onNewSession: ((String) -> Unit)? = null,
+    onConfirmNewSession: ((String) -> Unit)? = null, onRetryEntry: ((String, String) -> Unit)? = null,
+    onDismissInbox: ((String) -> Unit)? = null, onCreateGroup: ((String, List<String>, String) -> Unit)? = null,
+    onArtifacts: ((DesktopBotArtifactTarget) -> Unit)? = null,
+    onArtifactImage: ((DesktopBotArtifactTarget, String?, String?) -> Unit)? = null,
+    onListBotFiles: ((DesktopBotArtifactTarget) -> Unit)? = null,
+    onReadBotFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)? = null,
+    onOpenDirect: ((String) -> Unit)? = null,
+    initialChatId: String? = null,
 ) {
-    val c = Enso.colors
-    var openRootId by remember { mutableStateOf<String?>(null) }
-    var displayedId by remember { mutableStateOf<String?>(null) }
+    var openRootId by remember { mutableStateOf(initialChatId) }
+    var displayedId by remember { mutableStateOf(initialChatId) }
+    var processId by remember { mutableStateOf<String?>(null) }
     var showThreads by remember { mutableStateOf(false) }
-    val closeChat by rememberUpdatedState(onCloseChat)
-    val openChatId = displayedId
-    DisposableEffect(openChatId) {
-        onDispose { openChatId?.let(closeChat) }
-    }
+    var showCreate by remember { mutableStateOf(false) }
+    var priorCreateId by remember { mutableStateOf<String?>(null) }
+    var openingDirect by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
     var drafts by remember { mutableStateOf(emptyMap<String, BotMessageDraft>()) }
+    val closeChat by rememberUpdatedState(onCloseChat)
+    val openChat by rememberUpdatedState(onOpenChat)
+    val selectSession by rememberUpdatedState(onSelectSession)
     val receipt = bots?.send
     LaunchedEffect(receipt) {
         if (receipt != null) drafts[receipt.chatId]?.let { draft ->
@@ -76,232 +56,203 @@ internal fun MembersScreen(
             if (next != draft) drafts = drafts + (receipt.chatId to next)
         }
     }
-    Column(Modifier.fillMaxSize().background(c.page).designTopInset().designBottomInset(24.dp)) {
-        TopBar("成员", EnsoIcon.Back, "返回", onBack,
-            when {
-                bots == null -> "正在读取桌面成员…"
-                bots.enabled == false -> "桌面未开启成员模式"
-                else -> listOfNotNull(
-                    bots.inbox.size.takeIf { it > 0 }?.let { "$it 条待处理" },
-                    bots.members.size.takeIf { it > 0 }?.let { "${it} 位成员" },
-                ).joinToString(" · ").ifBlank { "暂无待处理" }
-            })
-        if (bots == null || bots.enabled == null) {
-            MembersHint(bots?.error ?: "正在读取桌面成员…")
-            return@Column
-        }
-        if (bots.enabled == false) {
-            MembersHint("桌面已关闭成员模式。开启后可在这里查看收件箱和群聊。")
-            return@Column
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-            item(key = "members-inbox-title") { MemberGroup("等你处理", bots.inbox.size) }
-            items(bots.inbox.size, key = { "inbox-${bots.inbox[it].key}" }) { index ->
-                val item = bots.inbox[index]
-                Column(Modifier.fillMaxWidth().background(c.yellow.copy(alpha = .09f))
-                    .padding(horizontal = 20.dp, vertical = 10.dp)) {
-                    Label(inboxTitle(item.kind), 15, 20, weight = FontWeight.Medium)
-                    item.text?.let { Label(it, 13, 18, Modifier.padding(top = 2.dp), color = c.ink2, maxLines = 3) }
-                    Label(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(item.createdAt)), 12, 16,
-                        Modifier.padding(top = 3.dp), color = c.dim)
-                }
-            }
-            if (bots.inbox.isEmpty()) item(key = "members-inbox-empty") { MembersHint("没有待处理的请求") }
-            item(key = "members-team-title") { MemberGroup("成员", bots.members.size) }
-            items(bots.members.size, key = { "member-${bots.members[it].id}" }) { index ->
-                val member = bots.members[index]
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 9.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(memberDot(member.status)))
-                    Column(Modifier.weight(1f)) {
-                        Label(member.name, 15, 20, weight = FontWeight.Medium, maxLines = 1)
-                        Label(member.title, 12, 16, color = c.dim, maxLines = 1)
-                    }
-                    Label(memberStatus(member.status), 12, 16, color = c.dim)
-                }
-            }
-            item(key = "members-chats-title") { MemberGroup("群聊与私聊", bots.chats.size) }
-            items(bots.chats.size, key = { "chat-${bots.chats[it].id}" }) { index ->
-                val chat = bots.chats[index]
-                Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}
-                    .clickable(role = Role.Button) {
-                        openRootId = chat.id
-                        val target = bots.activeBotThread(chat.id) ?: chat
-                        displayedId = target.id
-                        // The desktop only returns group timelines for bot-chat-open.
-                        if (chat.kind == "group") onOpenChat(target.id)
-                    }
-                    .padding(horizontal = 20.dp, vertical = 10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Label(chat.title, 16, 22, Modifier.weight(1f), weight = FontWeight.Medium, maxLines = 1)
-                        Label(if (chat.kind == "group") "群聊" else "私聊", 12, 16, color = c.dim)
-                    }
-                    chat.lastText?.let { Label(it, 13, 18, Modifier.padding(top = 2.dp), color = c.ink2, maxLines = 1) }
-                }
-            }
-            if (bots.chats.isEmpty()) item(key = "members-chats-empty") { MembersHint("桌面还没有群聊或私聊") }
-            bots.error?.let { item(key = "members-error") { MembersHint(it) } }
+    val root = bots?.chats?.firstOrNull { it.id == openRootId && !it.archived }
+    val active = root?.let { bots.activeBotThread(it.id) }
+    val action = bots?.threadAction?.takeIf { it.rootId == root?.id }
+    val threadWaiting = action?.phase == SessionCommandPhase.Waiting
+    LaunchedEffect(active?.id, action?.requestId, action?.phase) {
+        if (active != null && !threadWaiting && active.id != displayedId && processId == null) displayedId = active.id
+        if (action?.phase == SessionCommandPhase.Observed && active?.id == action.resultId) showThreads = false
+    }
+    val chat = if (root == null) null else (bots.chats + bots.threads).firstOrNull { it.id == displayedId && !it.archived }
+    val enabledChat = chat?.takeIf { bots?.enabled == true }
+    val directId = enabledChat?.takeIf { it.kind == "direct" }?.let { it.sessions[it.members.firstOrNull()] }
+    val conversationId = enabledChat?.let { processId ?: directId }
+    DisposableEffect(enabledChat?.id, conversationId) {
+        if (enabledChat?.kind == "group" && conversationId == null) openChat(enabledChat.id)
+        if (conversationId != null) selectSession(conversationId)
+        onDispose {
+            if (enabledChat?.kind == "group" && conversationId == null) closeChat(enabledChat.id)
+            if (conversationId != null) selectSession(null)
         }
     }
-    val current = bots ?: return
-    val root = current.chats.firstOrNull { it.id == openRootId && !it.archived } ?: return
-    if (current.enabled != true) return
-    val active = current.activeBotThread(root.id)
-    val threadAction = current.threadAction?.takeIf { it.rootId == root.id }
-    val waiting = threadAction?.phase == SessionCommandPhase.Waiting
-    LaunchedEffect(active?.id, threadAction?.requestId, threadAction?.phase) {
-        if (active != null && !waiting && active.id != displayedId) {
-            displayedId = active.id
-            onOpenChat(active.id)
-        }
-        if (threadAction?.phase == SessionCommandPhase.Observed && active?.id == threadAction.resultId) showThreads = false
+    val close = { openRootId = null; displayedId = null; processId = null; showThreads = false }
+    val chatBack = { if (processId != null) { processId = null; displayedId = active?.id ?: displayedId } else close() }
+    BackHandler(enabled = enabledChat != null && !showThreads, onBack = chatBack)
+    val open: (DesktopBotChat, String?) -> Unit = { target, requestSession ->
+        openingDirect = null
+        processId = requestSession
+        openRootId = target.parentId ?: target.id
+        displayedId = if (requestSession == null) bots?.activeBotThread(target.id)?.id ?: target.id else target.id
     }
-    val chat = current.chats.firstOrNull { it.id == displayedId } ?: current.threads.firstOrNull { it.id == displayedId }
-        ?: return
-    val threadAvailable = root.kind == "group" && current.threadsEnabled && active != null
-    if (showThreads && threadAvailable) {
-        BotThreadPicker(root, current.threads.filter { it.parentId == root.id }, requireNotNull(active), threadAction,
-            writable = writable && onThreadChange != null && current.send?.phase != SessionCommandPhase.Waiting &&
-                current.stop?.phase != SessionCommandPhase.Waiting, onDismiss = { showThreads = false }, onChoose = { command, id ->
-                onThreadChange?.invoke(root.id, command, id, active.id)
-            })
+    val created = bots?.groupCreate
+    LaunchedEffect(created?.requestId, created?.phase, bots?.chats, showCreate) {
+        if (showCreate && created?.phase == SessionCommandPhase.Observed && created.requestId != priorCreateId) {
+            bots.chats.firstOrNull { it.id == created.chatId }?.let { showCreate = false; open(it, null) }
+        }
+    }
+    val direct = bots?.directOpen
+    LaunchedEffect(direct, bots?.chats, openingDirect) {
+        val requested = openingDirect ?: return@LaunchedEffect
+        if (direct?.botId != requested.first || direct.requestId == requested.second) return@LaunchedEffect
+        when (direct.phase) {
+            SessionCommandPhase.Observed -> bots.chats.firstOrNull { it.id == direct.chatId && it.kind == "direct" &&
+                !it.archived && it.members.firstOrNull() == direct.botId }?.let { open(it, null) }
+            SessionCommandPhase.Rejected -> {
+                openingDirect = null
+                notice = if (direct.error == "chat-archived") "这段单聊已归档，请先在电脑端恢复。" else "电脑未能打开单聊。"
+            }
+            SessionCommandPhase.Unconfirmed -> { openingDirect = null; notice = "打开单聊未确认，请先检查电脑。" }
+            else -> Unit
+        }
+    }
+    if (enabledChat != null && root != null) {
+        val threadAvailable = root.kind == "group" && bots.threadsEnabled && active != null && processId == null
+        MemberConversation(enabledChat, root, bots, session?.takeIf { it.timeline.sessionId == conversationId },
+            conversationId = conversationId, process = processId != null, writable = writable && !threadWaiting,
+            draft = drafts[enabledChat.id] ?: BotMessageDraft(), onDraft = { drafts = drafts + (enabledChat.id to it) },
+            onBack = chatBack, onSend = onSend, onStop = onStop, onStopSession = onStopSession,
+            onOlder = { onLoadOlder(enabledChat.id, it) }, onHistory = onHistory, onSessionRetry = onSessionRetry,
+            onApproval = onApproval, onAsk = onAsk, onThreads = if (threadAvailable) ({ showThreads = true }) else null,
+            onNewSession = onNewSession, onConfirmNewSession = onConfirmNewSession, onRetryEntry = onRetryEntry,
+            onArtifacts = onArtifacts, onArtifactImage = onArtifactImage, onListBotFiles = onListBotFiles, onReadBotFile = onReadBotFile)
+        if (showThreads && threadAvailable) BotThreadPicker(root, bots.threads.filter { it.parentId == root.id },
+            requireNotNull(active), action, writable && onThreadChange != null && (!bots.writeBusy || threadWaiting),
+            onDismiss = { showThreads = false }, onChoose = { command, id -> onThreadChange?.invoke(root.id, command, id, active.id) })
     } else {
-        ChatTimelineSheet(chat, current, onDismiss = { openRootId = null; displayedId = null; showThreads = false },
-            onOlder = { seq -> onLoadOlder(chat.id, seq) }, writable = writable && !waiting && (active == null || active.id == chat.id),
-            onSend = onSend, onStop = onStop, onThreads = if (threadAvailable) ({ showThreads = true }) else null,
-            draft = drafts[chat.id] ?: BotMessageDraft(), onDraft = { drafts = drafts + (chat.id to it) })
+        MembersDirectory(bots, onBack, onOpen = open, onNotice = { notice = it }, onOpenMember = { member ->
+            when {
+                !writable -> notice = "当前连接不可写，不能首次打开单聊。"
+                bots?.directOpenEnabled != true || onOpenDirect == null -> notice = "请先在电脑端打开与${member.name}的单聊。"
+                !bots.writeBusy -> { openingDirect = member.id to direct?.requestId; onOpenDirect(member.id) }
+            }
+        },
+            onNewGroup = {
+                when {
+                    !writable -> notice = "当前连接不可写，请先连接电脑。"
+                    bots?.groupCreateEnabled != true || onCreateGroup == null -> notice = "请升级电脑端以支持手机新建群聊。"
+                    else -> { priorCreateId = created?.requestId; showCreate = true }
+                }
+            }, onDismissInbox = onDismissInbox.takeIf { writable })
     }
+    if (showCreate && bots?.enabled == true) NewBotGroupSheet(bots, writable && onCreateGroup != null,
+        onDismiss = { showCreate = false }, onCreate = { title, members, boss -> onCreateGroup?.invoke(title, members, boss) })
+    notice?.let { text -> AlertDialog(onDismissRequest = { notice = null }, title = { Text("成员") }, text = { Text(text) },
+        confirmButton = { TextButton(onClick = { notice = null }) { Text("知道了") } }) }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChatTimelineSheet(
-    chat: DesktopBotChat, bots: DesktopBotsState, onDismiss: () -> Unit, onOlder: (Long) -> Unit,
-    writable: Boolean, onSend: ((String, String, String) -> Unit)?, onStop: ((String) -> Unit)?,
-    draft: BotMessageDraft, onDraft: (BotMessageDraft) -> Unit,
-    onThreads: (() -> Unit)?,
-) {
+private fun MembersDirectory(bots: DesktopBotsState?, onBack: () -> Unit, onOpen: (DesktopBotChat, String?) -> Unit,
+    onOpenMember: (DesktopBotMember) -> Unit,
+    onNotice: (String) -> Unit, onNewGroup: () -> Unit, onDismissInbox: ((String) -> Unit)?) {
     val c = Enso.colors
-    val entries = bots.timeline.takeIf { bots.timelineChatId == chat.id }.orEmpty()
-    val state = bots.chatStates[chat.id]
-    val send = bots.send?.takeIf { it.chatId == chat.id }
-    val stop = bots.stop?.takeIf { it.chatId == chat.id }
-    val sending = bots.send?.phase == SessionCommandPhase.Waiting
-    val stopping = bots.stop?.phase == SessionCommandPhase.Waiting
-    val canSend = writable && onSend != null && botMessageText(draft.text) != null && !sending && !stopping
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.page, contentColor = c.ink, scrimColor = Color.Black.copy(alpha = .35f),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Label(chat.threadTitle ?: chat.title, 17, 22, Modifier.weight(1f), weight = FontWeight.SemiBold, maxLines = 1)
-                if (onThreads != null) Label("话题", 14, 20, Modifier.clip(CircleShape)
-                    .clickable(role = Role.Button, onClick = onThreads).padding(12.dp), color = c.ink2)
-                GlyphButton(EnsoIcon.Close, "关闭会话", 40.dp, 20.dp, tint = c.dim, onClick = onDismiss)
-            }
-            val older = bots.timelineHasOlder && bots.timelineChatId == chat.id && !bots.timelineLoading
-            if (older && entries.isNotEmpty()) Box(Modifier.fillMaxWidth().heightIn(min = 40.dp)
-                .clickable(role = Role.Button) { onOlder(entries.first().seq) }, contentAlignment = Alignment.Center) {
-                Label("加载更早的消息", 13, 18, color = c.dim)
-            }
-            if (bots.timelineLoading && bots.timelineChatId == chat.id) MembersHint("正在加载会话…")
-            bots.timelineError?.takeIf { bots.timelineChatId == chat.id }?.let { MembersHint(it) }
-            if (chat.kind == "direct") MembersHint("私聊历史暂未接入，可以发送文字。")
-            else if (entries.isEmpty() && !bots.timelineLoading && bots.timelineError == null) {
-                MembersHint("这个会话还没有可显示的消息。")
-            }
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp).padding(horizontal = 16.dp)) {
-                items(entries.size, key = { "entry-${entries[it].id}" }) { index ->
-                    GroupEntryRow(entries[index], bots)
-                }
-            }
-            state?.let { running ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Label(
-                        if (running.current != null) "正在处理" + (if (running.queue.isNotEmpty()) " · 队列 ${running.queue.size}" else "")
-                        else if (running.queue.isNotEmpty()) "排队 ${running.queue.size} 条" else "空闲",
-                        12, 16, Modifier.weight(1f), color = c.dim,
-                    )
-                    if (running.current != null) Box(Modifier.heightIn(min = 34.dp).clip(CircleShape).background(c.card2)
-                        .clickable(writable && onStop != null && !stopping && !sending, role = Role.Button) { onStop?.invoke(chat.id) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        Label(if (stopping) "正在停止…" else "停止", 13, 18,
-                            color = if (writable) c.red else c.dim, weight = FontWeight.Medium)
+    val members = bots?.members.orEmpty().filterNot { it.archived }
+    val groups = bots?.chats.orEmpty().filter { it.kind == "group" && it.parentId == null && !it.archived }
+    Box(Modifier.fillMaxSize().background(c.page).designTopInset().designBottomInset(24.dp)) {
+        Column(Modifier.fillMaxSize()) {
+            TopBar("成员", EnsoIcon.Back, "返回", onBack, when (bots?.enabled) {
+                false -> "桌面未开启成员模式"
+                true -> "${members.size} 位成员 · ${groups.size} 个群聊"
+                null -> "正在读取桌面成员…"
+            })
+            when (bots?.enabled) {
+                null -> MembersHint(bots?.error ?: "正在读取桌面成员…")
+                false -> MembersHint("桌面已关闭成员模式。开启后可在这里查看收件箱和群聊。")
+                true -> LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 100.dp)) {
+                    item { MemberSection("收件箱", first = true) }
+                    itemsIndexed(bots.inbox, key = { _, item -> "inbox-${item.key}" }) { index, item ->
+                        if (index > 0) Hairline()
+                        val member = members.firstOrNull { it.id == item.botId }
+                        val target = (bots.chats + bots.threads).firstOrNull { it.id == item.chatId && !it.archived }
+                        Row(Modifier.fillMaxWidth().background(c.yellow.copy(alpha = .09f)).clickable(role = Role.Button) {
+                            if (target != null) {
+                                val requestSession = if (item.kind in setOf("approval", "ask"))
+                                    item.conversationId ?: target.sessions[item.botId] else null
+                                val directSession = target.takeIf { it.kind == "direct" }?.let { it.sessions[it.members.firstOrNull()] }
+                                onOpen(target, requestSession?.takeUnless { it == directSession })
+                            }
+                            else onNotice("此提醒没有可打开的会话，请在电脑端处理。")
+                        }.padding(horizontal = 20.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            MemberAvatar(member, 36.dp)
+                            Column(Modifier.weight(1f)) {
+                                Label(listOfNotNull(member?.name, inboxTitle(item.kind)).joinToString(" "), 13, 18, color = c.ink2)
+                                Label(item.text ?: inboxTitle(item.kind), 15, 20, weight = FontWeight.Medium, maxLines = 1)
+                            }
+                            if (item.dismissible && onDismissInbox != null) GlyphButton(EnsoIcon.Close, "忽略提醒", 40.dp, 16.dp,
+                                tint = c.dim, onClick = if (bots.inboxDismiss?.phase != SessionCommandPhase.Waiting)
+                                    ({ onDismissInbox(item.key) }) else null)
+                            else Glyph(EnsoIcon.Waiting, Modifier.size(16.dp), c.yellow)
+                        }
+                    }
+                    if (bots.inbox.isEmpty()) item { MembersHint("没有待处理的请求") }
+                    item { MemberSection("群聊") }
+                    items(groups, key = { "group-${it.id}" }) { group ->
+                        DirectoryRow(group.title.ifBlank { "群聊" }, null, group.lastText ?: "还没有消息", group.updatedAt, onClick = { onOpen(group, null) }) {
+                            GroupAvatars(group.members.mapNotNull { id -> members.firstOrNull { it.id == id } }, diagonal = true)
+                        }
+                    }
+                    if (groups.isEmpty()) item { MembersHint("还没有群聊") }
+                    item { MemberSection("单聊") }
+                    items(members, key = { "member-${it.id}" }) { member ->
+                        val direct = bots.chats.firstOrNull { it.kind == "direct" && !it.archived && it.members.firstOrNull() == member.id }
+                        DirectoryRow(member.name, member.title,
+                            direct?.lastText ?: if (direct == null) "尚未开始单聊" else "点击继续单聊",
+                            direct?.updatedAt, member.status, onClick = {
+                                if (direct != null) onOpen(direct, null)
+                                else onOpenMember(member)
+                            }) { MemberAvatar(member, 44.dp) }
+                    }
+                    if (members.isEmpty()) item { MembersHint("电脑端还没有成员。") }
+                    bots.error?.let { item { MembersHint(it) } }
+                    bots.inboxDismiss?.takeIf { it.phase == SessionCommandPhase.Unconfirmed }?.let {
+                        item { MembersHint("忽略操作未确认，请先检查电脑。") }
                     }
                 }
             }
-            val notice = when (send?.phase) {
-                SessionCommandPhase.Waiting -> "正在发送…"
-                SessionCommandPhase.Unconfirmed -> "发送未确认，请先检查桌面。"
-                SessionCommandPhase.Rejected -> "桌面拒绝发送" + (send.error?.let { "：$it" } ?: "。")
-                else -> when (stop?.phase) {
-                    SessionCommandPhase.Unconfirmed -> "停止未确认，请检查桌面。"
-                    SessionCommandPhase.Rejected -> "桌面拒绝了停止。"
-                    else -> null
-                }
-            }
-            notice?.let { MembersHint(it) }
-            if (!writable) MembersHint("只读连接：可以查看，不能发送或停止。")
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                BasicTextField(draft.text, { if (it.length <= SESSION_TEXT_LIMIT) onDraft(draft.copy(text = it)) },
-                    Modifier.weight(1f).heightIn(min = 48.dp).clip(CircleShape).background(c.card)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .semantics { contentDescription = "群聊消息" },
-                    readOnly = !writable, singleLine = false, maxLines = 4,
-                    textStyle = ensoText(15, 21).copy(color = c.ink), cursorBrush = SolidColor(c.ink),
-                    decorationBox = { field -> Box {
-                        if (draft.text.isEmpty()) Label("发消息给成员…", 15, 21, color = c.dim, maxLines = 1)
-                        field()
-                    } })
-                Box(Modifier.size(48.dp).clip(CircleShape).background(if (canSend) c.pill else c.card2)
-                    .clickable(enabled = canSend, role = Role.Button) {
-                        val deliveryId = UUID.randomUUID().toString()
-                        onDraft(draft.submitted(deliveryId))
-                        onSend?.invoke(chat.id, draft.text, deliveryId)
-                    }.semantics { contentDescription = "发送到成员" }, contentAlignment = Alignment.Center) {
-                    Glyph(EnsoIcon.ArrowUp, Modifier.size(22.dp), if (canSend) c.pillInk else c.dim)
-                }
-            }
+        }
+        if (bots?.enabled == true) Row(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 8.dp)
+            .height(56.dp).glass().clickable(role = Role.Button, onClick = onNewGroup).padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Glyph(EnsoIcon.Plus, Modifier.size(20.dp))
+            Label("新群聊", 15, 20, weight = FontWeight.Medium)
         }
     }
 }
 
 @Composable
-private fun GroupEntryRow(entry: DesktopGroupEntry, bots: DesktopBotsState) {
+private fun DirectoryRow(title: String, detail: String?, summary: String, time: Long?, status: String? = null,
+    onClick: () -> Unit, avatar: @Composable () -> Unit) {
     val c = Enso.colors
-    val human = entry.kind == "human"
-    val system = entry.kind == "system"
-    val name = if (human) "你" else entry.botId?.let { id -> bots.members.firstOrNull { it.id == id }?.name } ?: "成员"
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        horizontalAlignment = if (human) Alignment.End else Alignment.Start) {
-        if (!system) {
-            Label(name, 11, 14, color = c.dim)
-        }
-        Box(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(16.dp))
-            .background(if (human) c.pill else c.card).padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Label(entry.text, 14, 20, color = if (human) c.pillInk else if (system) c.dim else c.ink)
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        avatar()
+        Column(Modifier.weight(1f)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val titleLimit = maxWidth * .54f
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Label(title, 16, 22, if (detail.isNullOrEmpty()) Modifier.weight(1f) else Modifier.widthIn(max = titleLimit),
+                        weight = FontWeight.Medium, maxLines = 1)
+                    if (!detail.isNullOrEmpty()) Label(detail, 13, 18, Modifier.weight(1f), color = c.dim, maxLines = 1)
+                    time?.takeIf { it > 0 }?.let { Label(memberTime(it), 12, 16, color = c.dim) }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (status == "running" || status == "queued") Label(if (status == "running") "运行中" else "排队中",
+                    13, 18, color = if (status == "running") c.blue else c.dim)
+                Label(summary, 13, 18, color = c.ink2, maxLines = 1)
+            }
         }
     }
 }
 
 @Composable
-private fun MemberGroup(title: String, count: Int) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Label(title, 15, 20, weight = FontWeight.SemiBold, color = Enso.colors.dim)
-        Label(count.toString(), 13, 18, color = Enso.colors.faint)
-    }
-}
-
-@Composable
-private fun MembersHint(text: String) = Label(text, 13, 18,
-    Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = Enso.colors.dim)
+private fun MemberSection(title: String, first: Boolean = false) = Label(title, 15, 20,
+    Modifier.padding(start = 20.dp, end = 20.dp, top = if (first) 8.dp else 24.dp, bottom = 6.dp),
+    color = Enso.colors.dim, weight = FontWeight.SemiBold)
 
 private fun inboxTitle(kind: String) = when (kind) {
-    "approval" -> "等你审批"
+    "approval" -> "请求批准"
     "ask" -> "在问你"
     "delegation-interrupted" -> "协作被中断"
     "budget" -> "额度提醒"
@@ -310,17 +261,4 @@ private fun inboxTitle(kind: String) = when (kind) {
     "silence" -> "很久没有动静"
     "task-blocked" -> "任务受阻"
     else -> "待处理"
-}
-
-private fun memberStatus(status: String) = when (status) {
-    "running" -> "进行中"
-    "queued" -> "排队中"
-    else -> "空闲"
-}
-
-@Composable
-private fun memberDot(status: String) = when (status) {
-    "running" -> Enso.colors.blue
-    "queued" -> Enso.colors.yellow
-    else -> Enso.colors.faint
 }

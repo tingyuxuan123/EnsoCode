@@ -88,6 +88,7 @@ vi.mock('./pushNotifier', async (importOriginal) => ({
 import {
   forwardAgentEvent,
   type PairBotPort,
+  setDeviceScope,
   setPairAgentBridge,
   setPairBotPort,
   setPairResumeListener,
@@ -844,6 +845,76 @@ describe('pairHost Bot 会话接线', () => {
       expect.any(Function)
     );
     expect((await sentPayloads())[0]).toEqual({ type: 'bot-chats', chats: [] });
+  });
+
+  it('routes authenticated group creation only with operate scope and correlates invalid payloads', async () => {
+    const a = '11111111-1111-4111-8111-111111111111';
+    const b = '22222222-2222-4222-8222-222222222222';
+    const command = {
+      type: 'bot-group-create',
+      requestId: a,
+      title: 'Team',
+      memberIds: [a, b],
+      bossBotId: a,
+    };
+    await receive({ ...command, title: ' ' });
+    await vi.waitFor(async () =>
+      expect(await sentPayloads()).toContainEqual({
+        type: 'bot-group-create-result',
+        requestId: a,
+        ok: false,
+        error: 'invalid-request',
+      })
+    );
+    expect(port.handle).not.toHaveBeenCalled();
+    expect(setDeviceScope('pair-bot', 'read')).toEqual({ ok: true });
+    await receive(command);
+    await vi.waitFor(async () =>
+      expect(await sentPayloads()).toContainEqual({
+        type: 'bot-group-create-result',
+        requestId: a,
+        ok: false,
+        error: 'read-only',
+      })
+    );
+    expect(port.handle).not.toHaveBeenCalled();
+    expect(setDeviceScope('pair-bot', 'operate')).toEqual({ ok: true });
+    await receive(command);
+    await vi.waitFor(() =>
+      expect(port.handle).toHaveBeenCalledWith('pair-bot', command, expect.any(Function))
+    );
+  });
+
+  it('routes direct open only with operate scope and correlates invalid payloads', async () => {
+    const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const botId = '11111111-1111-4111-8111-111111111111';
+    const command = { type: 'bot-direct-open', requestId, botId };
+    await receive({ ...command, botId: 'forged' });
+    await vi.waitFor(async () =>
+      expect(await sentPayloads()).toContainEqual({
+        type: 'bot-direct-open-result',
+        requestId,
+        ok: false,
+        error: 'invalid-request',
+      })
+    );
+    expect(port.handle).not.toHaveBeenCalled();
+    expect(setDeviceScope('pair-bot', 'read')).toEqual({ ok: true });
+    await receive(command);
+    await vi.waitFor(async () =>
+      expect(await sentPayloads()).toContainEqual({
+        type: 'bot-direct-open-result',
+        requestId,
+        ok: false,
+        error: 'read-only',
+      })
+    );
+    expect(port.handle).not.toHaveBeenCalled();
+    expect(setDeviceScope('pair-bot', 'operate')).toEqual({ ok: true });
+    await receive(command);
+    await vi.waitFor(() =>
+      expect(port.handle).toHaveBeenCalledWith('pair-bot', command, expect.any(Function))
+    );
   });
 
   it('普通会话仍走 renderer 恢复', async () => {

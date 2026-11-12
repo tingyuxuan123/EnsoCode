@@ -77,6 +77,90 @@ describe('applyHistoryPage', () => {
 });
 
 describe('applyAgentEvent', () => {
+  it('keeps a live steer through a snapshot containing an older identical message', () => {
+    const identity = { sessionId: 's', generation: 'g' };
+    const message = { role: 'user' as const, content: [{ type: 'text' as const, text: 'same' }] };
+    const echo = { ...message, optimistic: true, deliveryId: 'a', steerPending: 'g' };
+    const next = applyAgentEvent({ ...emptyProjection, generation: 'g', messages: [echo] }, 's', {
+      type: 'snapshot',
+      partial: true,
+      sessions: [{ identity, status: 'running', messages: [message], commands: [] }],
+    });
+    expect(next.messages).toEqual([message, echo]);
+  });
+
+  it('does not consume an unacknowledged duplicate when a different steer is delivered', () => {
+    const identity = { sessionId: 's', generation: 'g' };
+    const message = { role: 'user' as const, content: [{ type: 'text' as const, text: 'same' }] };
+    const next = applyAgentEvent(
+      {
+        ...emptyProjection,
+        generation: 'g',
+        messages: [
+          { ...message, optimistic: true, deliveryId: 'a', steerPending: 'g' },
+          { ...message, optimistic: true, deliveryId: 'b' },
+        ],
+      },
+      's',
+      { type: 'message-upsert', identity, seq: 1, index: 0, message, deliveryId: 'a' }
+    );
+    expect(next.messages).toEqual([message, { ...message, optimistic: true, deliveryId: 'b' }]);
+  });
+
+  it('only a confirmed withdrawal restores the exact pending steer and its attachment', () => {
+    const identity = { sessionId: 's', generation: 'g' };
+    const image = { data: 'YQ==', mimeType: 'image/png' };
+    const state = {
+      ...emptyProjection,
+      generation: 'g',
+      draftText: 'new draft',
+      messages: ['a', 'b'].map((deliveryId) => ({
+        role: 'user' as const,
+        content: [
+          { type: 'text' as const, text: 'decorated' },
+          { type: 'image' as const, ...image },
+        ],
+        optimistic: true,
+        deliveryId,
+        withdrawDraftText: 'original',
+      })),
+    };
+    const queued = applyAgentEvent(state, 's', {
+      type: 'delivery-steer-queued',
+      identity,
+      seq: 1,
+      deliveryId: 'b',
+    });
+    expect(queued.messages[1]).toHaveProperty('steerPending', 'g');
+    expect(queued.draftText).toBe('new draft');
+    const stale = applyAgentEvent(queued, 's', {
+      type: 'delivery-withdrawn',
+      identity: { ...identity, generation: 'old' },
+      seq: 2,
+      deliveryId: 'b',
+    });
+    expect(stale).toBe(queued);
+    const withdrawn = applyAgentEvent(queued, 's', {
+      type: 'delivery-withdrawn',
+      identity,
+      seq: 2,
+      deliveryId: 'b',
+    });
+    expect(withdrawn.messages).toEqual([state.messages[0]]);
+    expect(withdrawn).toMatchObject({
+      draftText: 'new draft\n\noriginal',
+      draftImages: [image],
+      draftAppend: true,
+    });
+    expect(
+      applyAgentEvent(withdrawn, 's', {
+        type: 'delivery-withdrawn',
+        identity,
+        seq: 3,
+        deliveryId: 'b',
+      }).draftText
+    ).toBe(withdrawn.draftText);
+  });
   it('完整保留 subagent 的结构化活动投影', () => {
     const event: RendererAgentEvent = {
       type: 'subagent-update',

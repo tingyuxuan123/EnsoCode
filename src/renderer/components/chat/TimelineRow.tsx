@@ -90,7 +90,7 @@ import {
   userIndexFromEndForTurnKey,
 } from '@/stores/sessions/conversationRewind';
 import { isMissingFileRead } from '@/stores/sessions/missingFileRead';
-import { canWithdrawMessage } from '@/stores/sessions/reducer';
+import { canRequestSteerWithdrawal, canWithdrawMessage } from '@/stores/sessions/reducer';
 import { formatDuration, formatTokens } from '@/stores/sessions/stats';
 import {
   exploreStepsKey,
@@ -103,6 +103,7 @@ import {
   type TimelineItem,
   thinkingRowExpanded,
 } from '@/stores/sessions/timeline';
+import { sameTurnWaterfall } from '@/stores/sessions/turnWaterfall';
 import { useSettingsStore } from '@/stores/settings';
 import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { ApprovalReviewBar } from './ApprovalReviewBar';
@@ -117,6 +118,7 @@ import { EditDiff } from './EditDiff';
 import { EnsoMark } from './EnsoMark';
 import { DiffCount } from './FlipMetricValue';
 import { GeneratedImageCard } from './GeneratedImageCard';
+import { GeneratedImageSkeleton } from './GeneratedImageSkeleton';
 import { renderHighlighted, useChatSearchHighlight } from './highlightQuery';
 import { LocalFileTrigger, Markdown } from './Markdown';
 import { MemoryCaptureResult, MemorySearchResults } from './MemorySearchResults';
@@ -134,6 +136,7 @@ import { TodoList } from './TodoBar';
 import { ToolNotices } from './ToolNotices';
 import { ToolSummaryRow } from './ToolSummaryRow';
 import { TurnFilesFooter } from './TurnFilesCard';
+import { TurnWaterfallDetails } from './TurnWaterfallDetails';
 import { toolLineDelta } from './toolLineDelta';
 import { shouldCollapseUserQuery, USER_QUERY_MAX_HEIGHT } from './userQueryCollapse';
 import { ZoomableImage } from './ZoomableImage';
@@ -193,7 +196,8 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
             perfEqual(a.perf, b.perf) &&
             a.timestamp === b.timestamp &&
             a.turnEnd === b.turnEnd &&
-            a.turnDurationMs === b.turnDurationMs)) &&
+            a.turnDurationMs === b.turnDurationMs &&
+            sameTurnWaterfall(a.waterfall, b.waterfall))) &&
         (a.kind !== 'thinking' || (b.kind === 'thinking' && a.durationMs === b.durationMs))
       );
     case 'tool':
@@ -1248,7 +1252,14 @@ function WithdrawButton({ messageIndex }: { messageIndex: number }) {
     )
       return undefined;
     const message = conversation.messages[messageIndex - (conversation.historyBaseIndex ?? 0)];
-    return canWithdrawMessage(message) ? message.deliveryId : undefined;
+    const generation =
+      'generation' in conversation && typeof conversation.generation === 'string'
+        ? conversation.generation
+        : undefined;
+    return canWithdrawMessage(message) ||
+      (conversation.status === 'running' && canRequestSteerWithdrawal(message, generation))
+      ? message?.deliveryId
+      : undefined;
   });
   if (!conversationId || !deliveryId) return null;
   return (
@@ -1520,6 +1531,7 @@ function TextRow({
           </div>
         )}
       </div>
+      {item.waterfall && !item.streaming && <TurnWaterfallDetails waterfall={item.waterfall} />}
       {item.turnEnd &&
         !item.streaming &&
         (host?.turnFooter ? (
@@ -2377,6 +2389,8 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
           sessionId={parentId}
         />
       )}
+      {(item.name === 'generate_image' || item.name === 'edit_image') &&
+        item.state === 'running' && <GeneratedImageSkeleton editing={item.name === 'edit_image'} />}
       {(item.name === 'generate_image' || item.name === 'edit_image') &&
         item.imagePath &&
         item.state === 'ok' && (

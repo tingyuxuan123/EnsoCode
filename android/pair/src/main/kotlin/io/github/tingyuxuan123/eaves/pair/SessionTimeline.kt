@@ -47,7 +47,14 @@ data class SessionMessage(
     val timestamp: Long? = null,
     val toolCallId: String? = null,
     val toolName: String? = null,
+    /** Null means no usable metadata; an empty list is an explicit checklist clear. */
+    val todos: List<SessionTodo>? = null,
+    val isError: Boolean = false,
 )
+
+data class SessionTodo(val content: String, val status: SessionTodoStatus)
+
+enum class SessionTodoStatus { Pending, InProgress, Completed }
 
 data class SessionApproval(
     val requestId: String,
@@ -77,6 +84,9 @@ object SessionTimelineReducer {
     private const val MAX_MESSAGES = 1_000
     private const val MAX_PAGE_MESSAGES = 2 * MAX_MESSAGES
     private const val MAX_CONTENT_WEIGHT = 4_000_000
+    private const val CONTENT_NODE_WEIGHT = 32 // Structural charge, separate from text weight.
+    private const val MAX_TODOS = 64
+    private const val MAX_TODO_CHARS = 4_096
     private const val MAX_JSON_DEPTH = 128 // Match WireJson's input nesting limit.
     private const val MAX_PENDING_REQUESTS = 128
     private const val MAX_PENDING_TEXT = 1_000_000
@@ -263,20 +273,45 @@ object SessionTimelineReducer {
         val message = value as? JsonObject ?: return null
         val role = message["role"].token() ?: return null
         val parts = message["content"] as? JsonArray ?: return null
-        if (jsonWeight(parts, MAX_CONTENT_WEIGHT) == null) return null
+        val contentWeight = jsonWeight(parts, MAX_CONTENT_WEIGHT) ?: return null
         val content = parts.map { (it as? JsonObject)?.takeIf { part -> part["type"].token() != null } ?: return null }
         val timestamp = message["timestamp"]?.let { it.timestamp() ?: return null }
         val toolCallId = message["toolCallId"]?.let { it.text(MAX_TOKEN_CHARS) ?: return null }
         val toolName = message["toolName"]?.let { it.text(MAX_TOKEN_CHARS) ?: return null }
-        return SessionMessage(index, role, content, timestamp, toolCallId, toolName)
+        val isToolResult = role == "toolResult"
+        val todos = if (isToolResult && toolName == "todo") {
+            // Optional metadata must never make an otherwise valid message exceed its budget.
+            readTodos(message["todos"])?.takeIf { todoWeight(it) <= MAX_CONTENT_WEIGHT - contentWeight }
+        } else null
+        val isError = isToolResult && message["isError"].boolean() == true
+        return SessionMessage(index, role, content, timestamp, toolCallId, toolName, todos, isError)
+    }
+
+    private fun readTodos(value: JsonElement?): List<SessionTodo>? {
+        val rows = value as? JsonArray ?: return null
+        if (rows.size > MAX_TODOS) return null
+        if (rows.isEmpty()) return emptyList()
+        return rows.mapNotNull { row ->
+            val item = row as? JsonObject ?: return@mapNotNull null
+            val content = item["content"].text(MAX_TODO_CHARS) ?: return@mapNotNull null
+            val status = when (item["status"].text()) {
+                "pending" -> SessionTodoStatus.Pending
+                "in_progress" -> SessionTodoStatus.InProgress
+                "completed" -> SessionTodoStatus.Completed
+                else -> return@mapNotNull null
+            }
+            SessionTodo(content, status)
+        }.takeIf { it.isNotEmpty() }
     }
 
     private fun withMessages(previous: SessionTimeline, messages: List<SessionMessage>, emptyBase: Long): SessionTimeline {
         var first = messages.size
         var remaining = MAX_CONTENT_WEIGHT
         while (first > 0 && messages.size - first < MAX_MESSAGES) {
-            val weight = jsonWeight(JsonArray(messages[first - 1].content), remaining) ?: break
-            remaining -= weight
+            val message = messages[first - 1]
+            val metadataWeight = todoWeight(message.todos)
+            val contentWeight = jsonWeight(JsonArray(message.content), remaining - metadataWeight) ?: break
+            remaining -= metadataWeight + contentWeight
             first--
         }
         val kept = if (first == 0) messages else messages.subList(first, messages.size).toList()
@@ -285,10 +320,14 @@ object SessionTimelineReducer {
         else previous.copy(baseIndex = base, messages = kept)
     }
 
+    // Empty lists share a singleton; preserve the explicit clear even when content fills the budget.
+    private fun todoWeight(todos: List<SessionTodo>?): Int = if (todos.isNullOrEmpty()) 0 else
+        CONTENT_NODE_WEIGHT + todos.sumOf { 2 * CONTENT_NODE_WEIGHT + 2 * it.content.length }
+
     /** Bound large text and many tiny nested objects without reserializing retained content. */
     private fun jsonWeight(value: JsonElement, budget: Int, depth: Int = 0): Int? {
-        if (depth >= MAX_JSON_DEPTH || budget < 32) return null
-        var remaining = budget - 32 // Conservative per-node structural charge.
+        if (depth >= MAX_JSON_DEPTH || budget < CONTENT_NODE_WEIGHT) return null
+        var remaining = budget - CONTENT_NODE_WEIGHT
         when (value) {
             is JsonObject -> for ((key, child) in value) {
                 if (key.length > remaining / 2) return null

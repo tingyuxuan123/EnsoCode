@@ -19,7 +19,9 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.Eaves">
         <service android:name=".LinkService" android:exported="false" android:foregroundServiceType="remoteMessaging" />
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
+        <!-- Compose handles IME insets; system panning would move the composer a second time. -->
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

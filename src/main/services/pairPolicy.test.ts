@@ -746,6 +746,67 @@ describe('Bot 模式上行命令', () => {
     });
   });
 
+  it('validates group creation identities, title and strict fields', () => {
+    const a = '11111111-1111-4111-8111-111111111111';
+    const b = '22222222-2222-4222-8222-222222222222';
+    const command = {
+      type: 'bot-group-create',
+      requestId: a,
+      title: ' Team ',
+      memberIds: [a, b],
+      bossBotId: a,
+    };
+    expect(parsePhoneCommand(command)).toEqual({ ok: true, command });
+    expect(parsePhoneCommand({ ...command, title: 'x'.repeat(200) }).ok).toBe(true);
+    const sixtyFive = Array.from(
+      { length: 65 },
+      (_, index) => `${index.toString(16).padStart(8, '0')}-2222-4222-8222-222222222222`
+    );
+    expect(
+      parsePhoneCommand({ ...command, memberIds: sixtyFive.slice(0, 64), bossBotId: sixtyFive[0] })
+        .ok
+    ).toBe(true);
+    expect(
+      parsePhoneCommand({ ...command, memberIds: sixtyFive, bossBotId: sixtyFive[0] }).ok
+    ).toBe(false);
+    for (const patch of [
+      { requestId: 'not-uuid' },
+      { requestId: 1 },
+      { title: '' },
+      { title: '  ' },
+      { title: 'x'.repeat(201) },
+      { title: null },
+      { memberIds: [a] },
+      { memberIds: [a, a] },
+      { memberIds: [a, 'bad'] },
+      { memberIds: 'bad' },
+      { memberIds: Array(501).fill(a) },
+      { bossBotId: b.replace(/2/g, '3') },
+      { bossBotId: null },
+      { workspace: { kind: 'project', projectId: 'forged' } },
+    ])
+      expect(parsePhoneCommand({ ...command, ...patch }).ok, JSON.stringify(patch)).toBe(false);
+  });
+
+  it('validates direct-open identities and rejects unknown fields', () => {
+    const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const botId = '11111111-1111-4111-8111-111111111111';
+    const command = { type: 'bot-direct-open', requestId, botId };
+    expect(parsePhoneCommand(command)).toEqual({ ok: true, command });
+    expect(parsePhoneCommand({ ...command, requestId: requestId.toUpperCase() }).ok).toBe(true);
+    for (const patch of [
+      { requestId: 'not-uuid' },
+      { requestId: 1 },
+      { botId: 'not-uuid' },
+      { botId: null },
+      { title: 'Team' },
+      { memberIds: [botId] },
+      { workspace: { kind: 'member-home' } },
+    ])
+      expect(parsePhoneCommand({ ...command, ...patch }).ok, JSON.stringify(patch)).toBe(false);
+    expect(parsePhoneCommand({ type: 'bot-direct-open', requestId }).ok).toBe(false);
+  });
+
   it('坏输入被拒', () => {
     const bad = [
       { type: 'bot-send', chatId, text: 'hi' },

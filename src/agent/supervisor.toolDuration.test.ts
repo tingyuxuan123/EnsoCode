@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
-import type { AgentWorkerEvent, ProjectedMessage } from '@shared/types/agent';
+import type { AgentWorkerEvent } from '@shared/types/agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -307,8 +307,14 @@ describe('SessionSupervisor tool duration', () => {
     });
     parentSession.emit({ type: 'message_start', message: toolResult('write-1', 'write') });
 
-    expect((lastUpsert(events, 'bash-1').message as ProjectedMessage).toolDurationMs).toBe(5_000);
-    expect((lastUpsert(events, 'write-1').message as ProjectedMessage).toolDurationMs).toBe(200);
+    expect(lastUpsert(events, 'bash-1').message).toMatchObject({
+      toolDurationMs: 5_000,
+      toolCompletedAt: 1_005_000,
+    });
+    expect(lastUpsert(events, 'write-1').message).toMatchObject({
+      toolDurationMs: 200,
+      toolCompletedAt: 1_005_200,
+    });
     await supervisor.shutdown();
   });
 

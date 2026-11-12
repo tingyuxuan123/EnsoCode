@@ -11,6 +11,7 @@ import {
 import { isMediaId } from '@shared/bots/sendImage';
 import { takeSnapshotTail } from '@shared/snapshotTail';
 import { isDeliveryId, THINKING_LEVELS } from '@shared/types/agent';
+import { isBotId } from '@shared/types/bot';
 import { parseArtifactTarget } from './bots/artifacts';
 
 /**
@@ -68,6 +69,47 @@ function parseBotCommand(v: Record<string, unknown>): CommandCheck {
   switch (v.type) {
     case 'bot-catalog-request':
       return { ok: true, command: { type: 'bot-catalog-request' } };
+    case 'bot-group-create': {
+      const { requestId, title, memberIds, bossBotId } = v;
+      if (
+        !Object.keys(v).every((key) =>
+          ['type', 'requestId', 'title', 'memberIds', 'bossBotId'].includes(key)
+        ) ||
+        !isBotId(requestId) ||
+        typeof title !== 'string' ||
+        !title.trim() ||
+        title.length > 200 ||
+        !Array.isArray(memberIds) ||
+        memberIds.length < 2 ||
+        // Match the native companion's bounded chat-member directory projection.
+        memberIds.length > 64 ||
+        !memberIds.every(isBotId) ||
+        new Set(memberIds).size !== memberIds.length ||
+        !isBotId(bossBotId) ||
+        !memberIds.includes(bossBotId)
+      )
+        return { ok: false, error: 'invalid group-create request' };
+      return {
+        ok: true,
+        command: {
+          type: 'bot-group-create',
+          requestId,
+          title,
+          memberIds: [...memberIds],
+          bossBotId,
+        },
+      };
+    }
+    case 'bot-direct-open': {
+      const { requestId, botId } = v;
+      if (
+        !Object.keys(v).every((key) => ['type', 'requestId', 'botId'].includes(key)) ||
+        !isBotId(requestId) ||
+        !isBotId(botId)
+      )
+        return { ok: false, error: 'invalid direct-open request' };
+      return { ok: true, command: { type: 'bot-direct-open', requestId, botId } };
+    }
     case 'bot-inbox-request':
       return { ok: true, command: { type: 'bot-inbox-request' } };
     case 'bot-inbox-dismiss':

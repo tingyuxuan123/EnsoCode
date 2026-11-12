@@ -8,16 +8,19 @@ import {
   Globe,
   History,
   Info,
+  ListPlus,
   MonitorSmartphone,
   RotateCw,
   Square,
   SquareArrowOutUpRight,
   SquareDashedMousePointer,
+  X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   insertComposerImage,
   insertUiElementMention,
+  insertUiElementMentions,
   requestFocusComposer,
 } from '@/components/chat/composerMentionBridge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +41,16 @@ import {
 import { BrowserDownloadsPanel } from './BrowserDownloadsPanel';
 import { BrowserHistoryPanel } from './BrowserHistoryPanel';
 import { BrowserNewTab } from './BrowserNewTab';
+import {
+  addAnnotation,
+  annotationMentionInsert,
+  annotationScopeKey,
+  clearAnnotations,
+  pruneAnnotations,
+  removeAnnotation,
+  updateAnnotationNote,
+  useBrowserAnnotations,
+} from './browserAnnotations';
 import { browserDeviceFrame, deviceStageClip, resolveBrowserAddress } from './browserUi';
 import { isCoveredBy, overlayBoxes } from './overlayCover';
 
@@ -126,6 +139,8 @@ export function BrowserView({
   const [stage, setStage] = useState<Size | null>(null);
   const [stageBackground, setStageBackground] = useState<BrowserStageBackground>('default');
   const [liveSize, setLiveSize] = useState<Size | null>(null);
+  // 多点标注：开启后每次选取先入清单，最后一次性合并进 Composer
+  const [multi, setMulti] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const lastSent = useRef<Rect | null | undefined>(undefined);
@@ -146,6 +161,36 @@ export function BrowserView({
   showsPageRef.current = showsPage;
   const lastHole = useRef<Rect | null>(null);
   const tabId = panelApi.id;
+  const annotationScope = { conversationId, tabId, url: state.url };
+  const annotationKey = annotationScopeKey(annotationScope);
+  const annotations = useBrowserAnnotations(annotationScope);
+  const multiRef = useRef(false);
+  const discardLatePick = useRef(false);
+  const modeRequest = useRef(Promise.resolve());
+  const requestDesignMode = useCallback(
+    (enabled: boolean) => {
+      modeRequest.current = modeRequest.current
+        .then(async () => {
+          setState(await window.electronAPI.browser.setDesignMode(tabId, enabled));
+        })
+        .catch(() => {});
+    },
+    [tabId]
+  );
+  const setMultiMode = useCallback(
+    (enabled: boolean) => {
+      discardLatePick.current = !enabled;
+      multiRef.current = enabled;
+      setMulti(enabled);
+      requestDesignMode(enabled);
+    },
+    [requestDesignMode]
+  );
+  const visibleForPick = useRef(false);
+  visibleForPick.current = hostVisible && panelApi.isActive && panelApi.isVisible;
+  // 圈选事件不带页面地址，队列却要按页面隔离，所以从 ref 里取当前 url
+  const urlRef = useRef(state.url);
+  urlRef.current = state.url;
   const device = state.device?.enabled ? state.device : null;
   const shownDevice: BrowserDevice | null =
     device && liveSize ? { ...device, width: liveSize.width, height: liveSize.height } : device;
@@ -162,8 +207,45 @@ export function BrowserView({
 
   useEffect(() => {
     return window.electronAPI.browser.onDesignMode((event) => {
-      if (event.tabId !== tabId) return;
-      if (event.type === 'cancelled') return;
+      if (event.tabId !== tabId || event.conversationId !== conversationId) return;
+      if (event.type === 'cancelled') {
+        // 页面里 Esc 退出圈选：清单留着，停止自动重新进入
+        if (multiRef.current) setMultiMode(false);
+        return;
+      }
+      if (discardLatePick.current) return;
+      if (event.url !== undefined && event.url !== urlRef.current) return;
+      if (multiRef.current) {
+        if (!visibleForPick.current || !panelApi.isActive || !panelApi.isVisible) {
+          setMultiMode(false);
+          return;
+        }
+        const payload = event.payload;
+        const region = event.type === 'annotated';
+        const fallback = event.type === 'annotated' ? 'annotation' : 'element';
+        const entry = addAnnotation({
+          conversationId,
+          tabId,
+          url: urlRef.current,
+          kind: region ? 'region' : 'element',
+          label: payload.label || payload.tag || fallback,
+          path: payload.path || payload.tag || fallback,
+          text: payload.text || payload.label || payload.tag || fallback,
+          ...(event.image ? { image: event.image } : {}),
+          ...(payload.rect ? { rect: payload.rect } : {}),
+        });
+        if (!entry) {
+          addToast({
+            type: 'warning',
+            title: t('Annotation list is full. Add it to the conversation or remove a selection.'),
+          });
+          setMultiMode(false);
+          return;
+        }
+        // Main 每次取完都会关掉圈选；多点模式重新打开，用户接着点下一个
+        requestDesignMode(true);
+        return;
+      }
       let inserted = false;
       if (event.type === 'annotated') {
         inserted = event.image ? insertComposerImage(event.image) : false;
@@ -187,18 +269,27 @@ export function BrowserView({
       if (!inserted) addToast({ type: 'warning', title: t('No Composer for this selection') });
       else requestFocusComposer();
     });
-  }, [tabId, t]);
+  }, [conversationId, panelApi, requestDesignMode, setMultiMode, tabId, t]);
+
+  useEffect(() => {
+    pruneAnnotations({ conversationId, tabId, url: state.url });
+  }, [conversationId, tabId, state.url]);
+
+  useEffect(() => {
+    if (!hostVisible && multiRef.current) setMultiMode(false);
+  }, [hostVisible, setMultiMode]);
 
   useEffect(() => {
     if (!state.designMode) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      void window.electronAPI.browser.setDesignMode(tabId, false).then(setState);
+      if (multiRef.current) setMultiMode(false);
+      else requestDesignMode(false);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [state.designMode, tabId]);
+  }, [state.designMode, requestDesignMode, setMultiMode]);
 
   useEffect(() => {
     if (!editing) setAddress(state.url);
@@ -235,6 +326,7 @@ export function BrowserView({
         panelApi.isActive &&
         panelApi.isVisible &&
         document.visibilityState === 'visible';
+      if (!visible && multiRef.current) setMultiMode(false);
       const rect = visible ? readBox(hostRef.current) : null;
       const covered =
         rect !== null && (!hasPageRef.current || isCoveredBy(rect, overlayBoxes(document, root)));
@@ -289,7 +381,7 @@ export function BrowserView({
         void window.electronAPI.browser.setDevToolsViewport(tabId, conversationId, null);
       }
     };
-  }, [conversationId, tabId, panelApi, hostVisible]);
+  }, [conversationId, tabId, panelApi, hostVisible, setMultiMode]);
 
   const navigate = async (raw: string): Promise<boolean> => {
     const target = resolveBrowserAddress(raw);
@@ -332,6 +424,26 @@ export function BrowserView({
 
   const toggleDevice = () =>
     void browserAction(() => applyDevice(device ? { enabled: false } : DEFAULT_BROWSER_DEVICE));
+
+  /** 多点模式开关：开启即进入圈选，关闭顺手收起圈选层，免得继续往清单里加 */
+  const toggleMulti = () => {
+    setMultiMode(!multiRef.current);
+  };
+
+  /**
+   * 清单一次性合并进当前 Composer：位置引用 + 备注 + 截图按顺序插入，
+   * 不自动发送（保留用户确认）；Composer 不在线时一条都不插，清单原样留着。
+   */
+  const submitAnnotations = () => {
+    if (annotations.length === 0) return;
+    if (!insertUiElementMentions(annotations.map(annotationMentionInsert), conversationId)) {
+      addToast({ type: 'warning', title: t('No Composer for this selection') });
+      return;
+    }
+    clearAnnotations(annotationKey);
+    setMultiMode(false);
+    requestFocusComposer();
+  };
 
   /** 拖拽设备框边缘：框保持居中，边缘跟手需要按 2 倍位移换算逻辑尺寸 */
   const onDeviceResize =
@@ -486,14 +598,30 @@ export function BrowserView({
           size="icon-xs"
           className={cn(iconButton, state.designMode && 'bg-muted text-foreground')}
           disabled={!state.tabId || state.devtoolsOpen}
-          onClick={() =>
-            void window.electronAPI.browser.setDesignMode(tabId, !state.designMode).then(setState)
-          }
+          onClick={() => {
+            if (multiRef.current) setMultiMode(false);
+            else {
+              discardLatePick.current = state.designMode;
+              requestDesignMode(!state.designMode);
+            }
+          }}
           aria-label={t('Toggle Design Mode')}
           title={t('Toggle Design Mode')}
           aria-pressed={state.designMode}
         >
           <SquareDashedMousePointer className="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={cn(iconButton, multi && 'bg-muted text-foreground')}
+          disabled={!state.tabId || state.devtoolsOpen}
+          onClick={toggleMulti}
+          aria-label={t('Multi-point annotation')}
+          title={t('Multi-point annotation')}
+          aria-pressed={multi}
+        >
+          <ListPlus className="size-4" />
         </Button>
         <Menu>
           <MenuTrigger
@@ -555,6 +683,92 @@ export function BrowserView({
           className="break-words border-b bg-destructive/10 px-3 py-1 text-[calc(11rem/14)] text-destructive"
         >
           {error}
+        </div>
+      )}
+      {(multi || annotations.length > 0) && (
+        <div
+          data-slot="browser-annotation-list"
+          className="shrink-0 border-b bg-muted/30 px-2 py-1.5"
+        >
+          <div className="flex items-center gap-2">
+            <ListPlus className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="shrink-0 text-[calc(11rem/14)] font-medium">{t('Annotations')}</span>
+            <span className="shrink-0 text-[calc(11rem/14)] tabular-nums text-muted-foreground">
+              {annotations.length}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[calc(11rem/14)] text-muted-foreground">
+              {t('Pick several elements or regions, then add them together.')}
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={annotations.length === 0}
+              onClick={submitAnnotations}
+              title={t('Add to conversation')}
+            >
+              {t('Add to conversation')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={iconButton}
+              disabled={annotations.length === 0}
+              onClick={() => clearAnnotations(annotationKey)}
+              aria-label={t('Clear annotations')}
+              title={t('Clear annotations')}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+          {annotations.length > 0 && (
+            <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto">
+              {annotations.map((entry, index) => (
+                <li
+                  key={entry.id}
+                  data-slot="browser-annotation"
+                  data-kind={entry.kind}
+                  className="flex items-center gap-2"
+                >
+                  <span className="w-4 shrink-0 text-right text-[calc(10rem/14)] tabular-nums text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  {entry.image && (
+                    <img
+                      src={`data:${entry.image.mimeType};base64,${entry.image.data}`}
+                      alt=""
+                      className="size-6 shrink-0 rounded border border-border/70 object-cover"
+                    />
+                  )}
+                  <span
+                    className="max-w-28 shrink-0 truncate text-[calc(11rem/14)]"
+                    title={`${entry.path}${entry.text ? ` · ${entry.text}` : ''}`}
+                  >
+                    {entry.kind === 'region' ? t('Region') : entry.label}
+                  </span>
+                  <input
+                    value={entry.note}
+                    onChange={(event) =>
+                      updateAnnotationNote(annotationKey, entry.id, event.target.value)
+                    }
+                    placeholder={t('Note for selection')}
+                    aria-label={t('Note for selection')}
+                    spellCheck={false}
+                    className="h-6 min-w-0 flex-1 rounded-md border border-border/70 bg-background px-2 text-[calc(11rem/14)] text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/72 focus:border-ring focus:ring-2 focus:ring-ring/25"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className={iconButton}
+                    onClick={() => removeAnnotation(annotationKey, entry.id)}
+                    aria-label={t('Remove annotation')}
+                    title={t('Remove annotation')}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col" data-slot="browser-native-stack">

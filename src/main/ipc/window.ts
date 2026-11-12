@@ -1,6 +1,6 @@
 import { IPC_CHANNELS } from '@shared/types';
 import { parseAgentSummonRequest } from '@shared/types/mentions';
-import { parseTitleBarAppearance } from '@shared/windowControls';
+import { parseTitleBarAppearance, WINDOWS_CAPTION_BACKGROUND } from '@shared/windowControls';
 import { BrowserWindow, dialog, ipcMain, Menu } from 'electron';
 import { agentTypeRegistrySnapshot } from '../services/agentHost';
 import {
@@ -79,7 +79,10 @@ export function registerWindowHandlers(): void {
       return { ok: false, error: 'Only the window renderer may update its title bar' };
     }
     try {
-      win.setTitleBarOverlay(appearance);
+      win.setTitleBarOverlay({
+        color: WINDOWS_CAPTION_BACKGROUND,
+        symbolColor: appearance.symbolColor,
+      });
       win.setBackgroundColor(appearance.color);
       return { ok: true };
     } catch (error) {

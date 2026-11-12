@@ -37,6 +37,10 @@ class DesignPreviewActivity : ComponentActivity() {
             else -> EavesRoute.NewTask
         }
         setContent {
+            if (frame in setOf("members", "group", "bot")) {
+                MemberDesignPreview(frame ?: "members")
+                return@setContent
+            }
             EavesApp(route, state = if (frame == "empty") sample.copy(tasks = emptyList()) else sample,
                 pairSpecimen = PairSpecimen("192.168.1.24:47821", "48219"),
                 initialShowConfig = frame == "new-config",

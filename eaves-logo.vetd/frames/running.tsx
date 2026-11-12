@@ -1,58 +1,28 @@
-export const frame = { width: 1600, height: 1000, title: "运行中 · 动态图标" };
+export const frame = { width: 1600, height: 1000, title: "运行中 · 一滴一圈" };
 
-import brand from "../assets/running-brand.svg";
-import brandS from "../assets/running-brand-s.svg";
-import dark from "../assets/running-dark.svg";
-import darkS from "../assets/running-dark-s.svg";
-import light from "../assets/running-light.svg";
-import lightS from "../assets/running-light-s.svg";
-import { Mark } from "../components/Mark";
-
-const files = {
-	light: { large: light, small: lightS },
-	dark: { large: dark, small: darkS },
-	brand: { large: brand, small: brandS },
-};
-
-/** 24px 及以下自动换小尺寸版：线条更粗、雨滴更大，原尺寸下也看得出在下雨。 */
-function Running({ tone, size }: { tone: keyof typeof files; size: number }) {
-	const src = size <= 24 ? files[tone].small : files[tone].large;
-	return (
-		<img
-			src={src}
-			alt="运行中"
-			width={size}
-			height={size}
-			className="shrink-0"
-			style={{ width: size, height: size }}
-		/>
-	);
-}
+import { Mark, RunningMark } from "../components/Mark";
 
 const timing = [
-	{ part: "檐口", how: "不动。图标的轮廓始终是标志本身，一眼认得出是谁在干活" },
-	{ part: "两侧雨丝", how: "匀速下落，1 秒和 1.15 秒两种周期错开，不会齐步走；从檐下淡入，到底部淡出" },
-	{ part: "中间那一滴", how: "1.2 秒一轮：先在檐下长出来，再加速落下、淡出，像真的雨滴" },
-	{ part: "小尺寸版", how: "24px 及以下换一套：线条加粗、雨滴放大且从不缩到看不见，去掉中间那根短线" },
+	{ part: "中间那一滴", how: "2.6 秒一轮：从上方 14% 处落下，停住、涟漪散尽后淡出，再落下一滴" },
+	{ part: "涟漪", how: "和那一滴同时出生，从 0.5 倍扩到 1.25 倍，1.4 秒散完——它就是标志的圈再大一圈" },
+	{ part: "圈本身", how: "不动。停手的那一刻涟漪消失，剩下的正好是静止的标志" },
+	{ part: "24 像素及以下", how: "只留滴落的节奏，涟漪不画：2 像素的一圈看不见，只会把圈糊脏" },
 	{ part: "减少动态效果", how: "系统开了「减少动态效果」时停住，就是静止的标志" },
 ];
 
 const sizes = [16, 20, 24, 32, 48];
 
-/** 运行中的动态图标：替换桌面端时间线里「生成中…」前面的那个绿点，安卓端的运行中状态也用它。 */
+/** 干活的节奏就是水滴的节奏：一滴落下，涟漪扩开，再一滴。 */
 export default function RunningFrame() {
 	return (
 		<div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)] bg-paper font-sans text-ink">
 			<section className="flex flex-col px-24 pt-20 pb-16">
-				<h1 className="font-display text-[52px] leading-[60px] font-medium tracking-[-0.02em]">运行中：檐下在下雨</h1>
+				<h1 className="font-cn text-[50px] leading-[60px] font-semibold tracking-[0.01em]">运行中：一滴，一圈</h1>
 				<p className="mt-4 max-w-[600px] text-[17px] leading-[28px] text-ink2">
-					Agent 干活的时候，屋檐下的雨就一直在下；停了，雨也就停了。
+					它在干活的时候，就一滴一滴地落：每落一滴，圈往外扩一圈。停了，水也就静了。
 				</p>
 				<div className="mt-10 flex items-center gap-14">
-					<Running
-						tone="light"
-						size={300}
-					/>
+					<RunningMark size={300} />
 					<div className="flex flex-col items-center gap-8">
 						<Mark
 							size={96}
@@ -89,9 +59,9 @@ export default function RunningFrame() {
 					</div>
 					<div className="flex items-center gap-3 text-[13px]">
 						<span className="w-10 text-[12px] text-faint">换成</span>
-						<Running
-							tone="brand"
+						<RunningMark
 							size={22}
+							ripple={false}
 						/>
 						<span className="text-ink2">生成中…</span>
 						<span className="font-mono text-[11px] text-dim">12s</span>
@@ -99,15 +69,17 @@ export default function RunningFrame() {
 				</div>
 				<div className="flex items-center gap-3 rounded-[20px] bg-night px-6 py-5 text-[13px]">
 					<span className="w-10 text-[12px] text-night-dim">深色</span>
-					<Running
-						tone="dark"
+					<RunningMark
 						size={22}
+						color="var(--color-night-dim)"
+						drop="var(--color-rain)"
+						ripple={false}
 					/>
 					<span className="text-night-ink">生成中…</span>
 					<span className="font-mono text-[11px] text-night-dim">12s</span>
 				</div>
 				<p className="text-[14px] leading-[22px] text-dim">
-					檐口和雨丝用正文的次级灰，那一滴跟随桌面的强调色（截图里是绿）。尺寸和现在的 22px 占位一致，换上去不会挤动文字。
+					圈用正文的次级灰，那一滴用界面里的蓝。尺寸和现在的 22px 占位一致，换上去不会挤动文字。
 				</p>
 
 				<h2 className="mt-6 text-[15px] leading-5 font-medium text-dim">安卓端</h2>
@@ -115,11 +87,11 @@ export default function RunningFrame() {
 					<div className="flex items-center gap-3 px-5 py-3.5">
 						<div className="min-w-0 flex-1">
 							<div className="truncate text-[16px] leading-[22px] font-medium">工作流面板显示运行进度</div>
-							<div className="text-[12px] leading-4 text-ink2">EnsoCode　2 分钟前</div>
+							<div className="text-[12px] leading-4 text-ink2">小满　2 分钟前</div>
 						</div>
-						<Running
-							tone="light"
+						<RunningMark
 							size={20}
+							ripple={false}
 						/>
 					</div>
 					<div className="flex items-center gap-2 px-5 pt-1 pb-4 text-[12px]">
@@ -127,11 +99,11 @@ export default function RunningFrame() {
 							size={18}
 							drop="var(--color-rain-deep)"
 						/>
-						<span className="text-[15px] font-semibold">Eaves</span>
+						<span className="text-[15px] font-semibold">小满</span>
 						<span className="text-dim">2 分钟前</span>
-						<Running
-							tone="light"
+						<RunningMark
 							size={16}
+							ripple={false}
 						/>
 						<span className="text-dim">正在运行测试</span>
 					</div>
@@ -144,9 +116,9 @@ export default function RunningFrame() {
 							key={s}
 							className="flex flex-col items-center gap-2"
 						>
-							<Running
-								tone="light"
+							<RunningMark
 								size={s}
+								ripple={s >= 32}
 							/>
 							<figcaption className="text-[12px] leading-4 text-dim tabular-nums">{s}</figcaption>
 						</figure>

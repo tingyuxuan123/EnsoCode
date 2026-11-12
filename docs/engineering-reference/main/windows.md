@@ -62,7 +62,8 @@ frame: isMac,
 ...(isWindows && {
   transparent: false,
   thickFrame: true,
-  titleBarOverlay: { color, symbolColor, height: 44 },
+  backgroundColor: color,
+  titleBarOverlay: { color: '#00000000', symbolColor, height: 44 },
 }),
 ...(isMac && { trafficLightPosition: TRAFFIC_LIGHT_POSITION }),
 ```
@@ -70,20 +71,19 @@ frame: isMac,
 macOS 保留系统红绿灯；Windows 通过 Window Controls Overlay 保留原生窗口按钮，
 让系统识别最大化按钮并提供 Windows 11 贴靠布局；Linux 由 `TitleBar.tsx` 自绘。
 Windows 的标题栏内容为原生按钮预留区域，优先使用 `titlebar-area-width`，独立
-`WebContentsView` 没有该几何信息时按 138 DIP 预留。`useNativeWindowControls` 把实际
-标题栏配色转换成 RGB，经 `window:set-title-bar-appearance` 同步；Main 只接受经过校验的
-两种颜色，并且只允许该窗口的工作区 renderer 更新。
+`WebContentsView` 没有该几何信息时按 138 DIP 预留。原生按钮底板在创建和更新时均保持
+透明，让 renderer 绘制的背景、壁纸和弹窗遮罩自然延伸到右上角。不要把底板重新刷成
+主题实色，也不要为了底板透明而把顶层窗口改透明。`window:set-title-bar-appearance`
+只同步不透明的窗口兜底色和按钮符号色，并且只允许该窗口的工作区 renderer 更新。
 
-标题栏默认透明，采样时必须先铺原始不透明 `--shell`，再叠加标题栏底色；直接丢弃
-透明像素的 alpha 会把 `rgba(0, 0, 0, 0)` 变成原生按钮区的黑底。主题监听须覆盖
-`data-light-palette`，不能只观察明暗模式 class。回归：`useNativeWindowControls.test.tsx`。
+标题栏默认透明，计算窗口兜底色时必须先铺原始不透明 `--shell`，再叠加标题栏底色；
+直接丢弃透明像素的 alpha 会得到黑色。主题监听须覆盖 `data-light-palette`，不能只观察
+明暗模式 class。回归：`windowChrome.test.ts`、`ipc/window.test.ts`、`useNativeWindowControls.test.tsx`。
 
-全窗口压暗浮层（看图放大的 `bg-black/75`）画在 renderer 里，原生按钮却在它之上，
-不处理就会在压暗的界面上留一块亮底。这类浮层用 `useNativeCaptionScrim` 登记遮罩色，
-采样时按 `--shell` → 标题栏底色 → 遮罩的顺序合成，符号色改按最终底色的明暗取
-`WINDOWS_SYMBOL_COLOR`（与创建窗口时同一份常量）。遮罩的 class 和登记的 CSS 颜色是
-两处声明，改一处必须同步另一处。回归：`useNativeWindowControls.test.tsx`、
-`ZoomableImage.test.tsx`。
+明显压暗全窗口的浮层（例如看图放大）仍用 `useNativeCaptionScrim` 登记遮罩色，
+因为原生按钮符号画在遮罩之上。合成后的颜色只用于选择有对比度的符号色，不能再次
+写入窗口兜底色，否则会重复叠色。遮罩 class 和登记的 CSS 颜色需保持一致。
+回归：`useNativeWindowControls.test.tsx`、`ZoomableImage.test.tsx`。
 
 Windows 顶层 `BrowserWindow` 必须保持不透明：Electron 43 的透明窗口会强制关闭
 粗边框，并使用特殊的最大化路径。主窗口的 workbench `WebContentsView` 与其 HTML

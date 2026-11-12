@@ -411,6 +411,17 @@ export const BUILTIN_AGENT_TYPE_COVERAGE: Readonly<Record<string, CoverageDispos
 
 /** 每条 IPC 单独登记；传输/lifecycle 必须逐项给出排除理由，不按目录 blanket 排除。 */
 export const IPC_PRODUCT_COVERAGE = {
+  IMAGE_PROVIDER_READ: excluded(
+    'Desktop-only independent image service settings; returns no credentials.'
+  ),
+  IMAGE_PROVIDER_UPDATE: excluded('Desktop-only image connection/model/output settings.'),
+  IMAGE_PROVIDER_SET_KEY: excluded(
+    'User-only encrypted image API key write/clear; no model capability.'
+  ),
+  IMAGE_PROVIDER_MODELS: excluded(
+    'User-only read-only image service discovery; never generates a paid image.'
+  ),
+  IMAGE_PROVIDER_CHANGED: excluded('Cross-window invalidation for image service settings.'),
   SETTINGS_READ: excluded('Internal persistence read; Enso uses typed domain handlers.'),
   SETTINGS_WRITE: excluded('Raw whole-settings write is forbidden to Enso.'),
   SETTINGS_WRITE_KEY: excluded('Raw store-key write is replaced by controlled field patches.'),
@@ -510,6 +521,9 @@ export const IPC_PRODUCT_COVERAGE = {
   AGENT_SPAWN: excluded('Lazy worker lifecycle command behind conversation send.'),
   AGENT_PROMPT: surfaces('conversations.send'),
   AGENT_STEER: surfaces('conversations.queue.send-now'),
+  AGENT_WITHDRAW_STEER: excluded(
+    'Local user withdrawal of an unconsumed steer; not model-callable.'
+  ),
   AGENT_ABORT: surfaces('conversations.abort'),
   AGENT_ABORT_RETRY: surfaces('conversations.abort'),
   AGENT_RETRY: surfaces('conversations.retry-turn'),

@@ -66,7 +66,9 @@ internal fun NewTaskScreen(
         Dawn()
         Column(Modifier.fillMaxSize().designTopInset().designBottomInset(24.dp).imePadding()) {
             TopBar("新任务", EnsoIcon.Menu, "打开任务列表", onHome,
-                detail = state.model ?: state.connectionLabel ?: "连接电脑后选择模型", showMenu = state.model != null)
+                detail = state.model ?: state.connectionLabel ?: "连接电脑后选择模型", showMenu = state.online,
+                onDetailClick = onConfig.takeIf { state.online }, detailActionLabel = "切换新任务模型",
+                detailEnabled = state.composerEnabled)
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
                     .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 12.dp)) {
@@ -168,6 +170,7 @@ internal fun Composer(
     dimAction: Boolean = false,
     onAttach: (() -> Unit)? = null,
     attachmentAvailable: Boolean = false,
+    actionLabel: String = if (running) "停止" else "发送",
 ) {
     val c = Enso.colors
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
@@ -193,7 +196,7 @@ internal fun Composer(
             )
             GlyphButton(EnsoIcon.Mic, "语音输入（尚未接入）", 36.dp, 22.dp)
         }
-        GlyphButton(if (running) EnsoIcon.Stop else EnsoIcon.ArrowUp, if (running) "停止" else "发送", 48.dp, 22.dp,
+        GlyphButton(if (running) EnsoIcon.Stop else EnsoIcon.ArrowUp, actionLabel, 48.dp, 22.dp,
             Modifier.background(c.pill.copy(alpha = if (dimAction) .35f else 1f), CircleShape), c.pillInk, onAction)
     }
 }

@@ -12,8 +12,10 @@ import io.github.tingyuxuan123.eaves.mirror.RewindBaseline
 import io.github.tingyuxuan123.eaves.mirror.SessionTaskKind
 import io.github.tingyuxuan123.eaves.mirror.TaskStopBaseline
 import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
+import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.eaves.mirror.RelayPairingClient
 import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
+import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
 import io.github.tingyuxuan123.eaves.mirror.SessionImage
 import io.github.tingyuxuan123.eaves.mirror.QueueCommand
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +49,10 @@ class EavesApplication : Application() {
                     override fun submitImages(sessionId: String, text: String, images: List<SessionImage>) =
                         link.submitImages(sessionId, text, images)
                     override fun stopSession(sessionId: String) = link.stopSession(sessionId)
+                    override fun setSessionModel(sessionId: String, providerId: String, modelId: String) =
+                        link.setModel(sessionId, providerId, modelId)
+                    override fun setSessionReasoning(sessionId: String, enabled: Boolean) = link.setReasoning(sessionId, enabled)
+                    override fun setSessionThinking(sessionId: String, level: TaskThinkingLevel) = link.setThinking(sessionId, level)
                     override fun queueAction(sessionId: String, command: QueueCommand, messageId: String?, text: String?) =
                         link.queueAction(sessionId, command, messageId, text)
                     override fun goalAction(sessionId: String, command: GoalCommand, expected: DesktopGoal?, text: String?) =
@@ -77,6 +83,17 @@ class EavesApplication : Application() {
                     override fun stopBotChat(chatId: String) = link.stopBotChat(chatId)
                     override fun changeBotThread(rootId: String, command: BotThreadCommand, targetId: String?, expectedActiveId: String) =
                         link.changeBotThread(rootId, command, targetId, expectedActiveId)
+                    override fun requestBotNewSession(chatId: String) = link.requestBotNewSession(chatId)
+                    override fun confirmBotNewSession(chatId: String) = link.confirmBotNewSession(chatId)
+                    override fun retryBotEntry(chatId: String, entryId: String) = link.retryBotEntry(chatId, entryId)
+                    override fun dismissBotInboxItem(key: String) = link.dismissBotInboxItem(key)
+                    override fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) = link.createBotGroup(title, memberIds, bossBotId)
+                    override fun openBotDirect(botId: String) = link.openBotDirect(botId)
+                    override fun loadBotArtifacts(target: DesktopBotArtifactTarget) = link.loadBotArtifacts(target)
+                    override fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String?, rel: String?) =
+                        link.loadBotArtifactImage(target, mediaId, rel)
+                    override fun listBotFiles(target: DesktopBotArtifactTarget) = link.listBotFiles(target)
+                    override fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) = link.readBotFile(target, fileId, offset)
                     override fun createTask(request: TaskLaunch) = link.createTask(request)
                     override fun dismissCreation(sessionId: String?) = link.dismissCreation(sessionId)
                     override fun close() = link.close()

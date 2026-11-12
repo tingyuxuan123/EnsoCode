@@ -27,7 +27,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,25 +37,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
-import com.mikepenz.markdown.model.markdownPadding
 import io.github.tingyuxuan123.eaves.R
 import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
+import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
+import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
 import io.github.tingyuxuan123.eaves.mirror.LinkPhase
 import io.github.tingyuxuan123.eaves.mirror.QueueCommand
 import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
@@ -127,6 +122,14 @@ internal fun SessionScreen(
     onOpenPreview: ((String, Int, Int) -> Unit)? = null,
     onPreviewAction: ((DesktopPreviewAction) -> Unit)? = null,
     onPreviewInput: ((DesktopPreviewInput) -> Unit)? = null,
+    modelProviderId: String? = null,
+    modelId: String? = null,
+    modelProviders: List<DesktopProvider>? = null,
+    onSetModel: ((String, String) -> Unit)? = null,
+    reasoningEnabled: Boolean? = null,
+    thinkingLevel: TaskThinkingLevel? = null,
+    onSetReasoning: ((Boolean) -> Unit)? = null,
+    onSetThinking: ((TaskThinkingLevel) -> Unit)? = null,
 ) {
     val c = Enso.colors
     val timeline = state?.timeline
@@ -137,6 +140,35 @@ internal fun SessionScreen(
     val pendingResponses = state?.pendingResponses.orEmpty()
     val online = phase == LinkPhase.Online
     val writable = online && !readOnly && state?.loading == false && !state.error
+    val canSetModel = writable && onSetModel != null && state.modelReady
+    var showModels by remember(timeline?.sessionId, timeline?.cursor?.get("epoch"), canSetModel) { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val modelLabel = modelId?.let { id ->
+        modelProviders?.firstOrNull { it.id == modelProviderId }?.models?.firstOrNull { it.id == id }?.label ?: id
+    } ?: "选择模型".takeIf { canSetModel }
+    val headerDetail = listOfNotNull(modelLabel, thinkingLevel?.title()?.takeIf { reasoningEnabled == true },
+        header.detail).joinToString(" · ").ifEmpty { null }
+    val modelPhase = state?.modelAttempt?.phase
+    val thinkingPhase = state?.thinkingAttempt?.phase
+    val configuring = modelPhase == SessionCommandPhase.Waiting || thinkingPhase == SessionCommandPhase.Waiting
+    val modelStatus = when (modelPhase) {
+        SessionCommandPhase.Waiting -> "等待电脑确认模型切换…"
+        SessionCommandPhase.Unconfirmed -> "未确认模型切换，请检查电脑端后再试。"
+        SessionCommandPhase.Rejected -> "电脑未接受模型切换。"
+        else -> null
+    }
+    val thinkingStatus = when (thinkingPhase) {
+        SessionCommandPhase.Waiting -> "等待电脑确认思考设置…"
+        SessionCommandPhase.Unconfirmed -> "未确认思考设置，请检查电脑端后再试。"
+        SessionCommandPhase.Rejected -> "电脑未接受思考设置。"
+        else -> null
+    }
+    val configStatus = when {
+        modelPhase == SessionCommandPhase.Waiting -> modelStatus
+        thinkingPhase == SessionCommandPhase.Waiting -> thinkingStatus
+        (state?.thinkingAttempt?.id ?: -1) > (state?.modelAttempt?.id ?: -1) -> thinkingStatus
+        else -> modelStatus
+    }
     val isSpecimen = specimen != null
     val goals = remember(timeline?.sessionId) { SessionPanels() }
     val goal = state?.goal
@@ -154,8 +186,10 @@ internal fun SessionScreen(
         val panelLimit = maxHeight * .55f
         val queueLimit = maxHeight * .32f
         Column(Modifier.fillMaxSize()) {
-            TopBar(header.title, EnsoIcon.Menu, "打开任务列表", onDrawer, header.detail,
-                showMenu = isSpecimen && approval != null, trailing = when {
+            TopBar(header.title, EnsoIcon.Menu, "打开任务列表", onDrawer, headerDetail,
+                showMenu = canSetModel || isSpecimen && approval != null,
+                onDetailClick = if (canSetModel) ({ keyboard?.hide(); showModels = true }) else null,
+                detailActionLabel = "切换会话模型", trailing = when {
                     onGoal != null || onMaintain != null || onRewind != null || onStopTask != null ||
                         onListFiles != null || onListPreviews != null || onOpenPreview != null -> ({
                         GlyphButton(EnsoIcon.More, "会话菜单", 44.dp, 24.dp, tint = c.ink2) {
@@ -171,6 +205,8 @@ internal fun SessionScreen(
             }
             if (!online && !isSpecimen) Label("连接已暂停 · 会话暂不可操作", 13, 18,
                 Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = c.dim)
+            if (!showModels && configStatus != null) Label(configStatus, 12, 16,
+                Modifier.padding(horizontal = 20.dp, vertical = 4.dp), color = c.dim)
             LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
                 reverseLayout = true, verticalArrangement = Arrangement.Top) {
                 if (terminalError != null) item(key = "session-error") {
@@ -178,7 +214,13 @@ internal fun SessionScreen(
                 }
                 items(turns.asReversed(), key = { "turn-${it.index}" }) { turn ->
                     if (turn.user) UserTurn(turn)
-                    else AssistantTurn(turn, approval, specimen)
+                    else when (val block = turn.blocks.singleOrNull()) {
+                        is SessionBlock.Compaction -> TimelineDisclosure("上下文已压缩", block.summary,
+                            EnsoIcon.Compress, Modifier.padding(vertical = 8.dp))
+                        is SessionBlock.Notice -> TimelineDisclosure(block.kind.title, block.detail,
+                            EnsoIcon.Terminal, Modifier.padding(vertical = 8.dp))
+                        else -> AssistantTurn(turn, approval, specimen, state?.running == true && turn.index == turns.lastOrNull()?.index)
+                    }
                 }
                 if (state != null && (state.loadingHistory || (state.hasMoreHistory && state.timeline.baseIndex > 0))) {
                     item(key = "session-history") {
@@ -234,6 +276,15 @@ internal fun SessionScreen(
         SessionMenuPanels(goals, state, writable, readOnly, onGoal, onMaintain, onRewind, onStopTask,
             onListFiles, onReadFile, onListPreviews, onOpenPreview, onPreviewAction, onPreviewInput)
     }
+    if (showModels && canSetModel) SessionModelSheet(
+        modelProviders, modelProviderId, modelId, state.running,
+        enabled = !configuring, status = configStatus,
+        onDismiss = { showModels = false }, onSelect = { provider, model ->
+            if (provider != modelProviderId || model != modelId) onSetModel(provider, model)
+        },
+        reasoningEnabled = reasoningEnabled, thinkingLevel = thinkingLevel,
+        onReasoning = onSetReasoning, onThinking = onSetThinking,
+    )
 }
 
 @Composable
@@ -248,8 +299,10 @@ private fun SessionComposer(
     val keyboard = LocalSoftwareKeyboardController.current
     val running = state?.running == true
     val canEdit = writable && (running || state?.canPrompt == true)
+    val configWaiting = state?.modelAttempt?.phase == SessionCommandPhase.Waiting ||
+        state?.thinkingAttempt?.phase == SessionCommandPhase.Waiting
     val tooLong = draft.length > SESSION_TEXT_LIMIT
-    val canSend = canEdit && draft.isNotBlank() && !tooLong && state.textAttempt?.phase != SessionCommandPhase.Waiting &&
+    val canSend = canEdit && !configWaiting && draft.isNotBlank() && !tooLong && state.textAttempt?.phase != SessionCommandPhase.Waiting &&
         state.queueAttempt?.phase != SessionCommandPhase.Waiting && !state.goalLaunchWaiting() && !state.maintenanceWaiting()
     val canStop = writable && running && state.stopPhase != SessionCommandPhase.Waiting
     val hasPictures = pictures.pictures.isNotEmpty()
@@ -262,7 +315,7 @@ private fun SessionComposer(
         } }
     }
     val fits = check != null && budget?.first == check && budget?.second == true
-    val maySubmitPictures = writable && idle && fits && !pictures.loading && !waiting &&
+    val maySubmitPictures = writable && idle && fits && !pictures.loading && !waiting && !configWaiting &&
         state.queueAttempt?.phase != SessionCommandPhase.Waiting && !state.goalLaunchWaiting() &&
             !state.maintenanceWaiting() && onSendPictures != null
     val canPick = writable && idle && !waiting && !pictures.loading && pictures.pictures.size < SESSION_IMAGE_LIMIT
@@ -314,23 +367,26 @@ private data class PictureBudgetInput(val sessionId: String, val text: String, v
 @Composable
 private fun UserTurn(turn: SessionTurn) {
     val c = Enso.colors
-    Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 20.dp), horizontalArrangement = Arrangement.End) {
-        val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp)
-        Column(Modifier.clip(shape).background(c.pill).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 20.dp), horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The web conversation uses a quiet blue-grey user bubble, not the primary button colour.
+        Column(Modifier.clip(RoundedCornerShape(12.dp)).background(if (c.dark) c.card2 else Color(0xFFDFE8EF))
+            .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             turn.blocks.forEach { block -> when (block) {
-                is SessionBlock.Prose -> Label(block.text, 16, 22, color = c.pillInk)
+                is SessionBlock.Prose -> Label(block.text, 16, 24, color = c.ink)
                 is SessionBlock.Images -> TimelineImageStrip(block.images, Modifier.padding(top = 2.dp))
-                SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.pillInk)
-                is SessionBlock.Steps -> Unit
+                SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.ink2)
+                else -> Unit
             } }
         }
+        turn.timestamp?.let { Label(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)), 12, 18, color = c.dim) }
     }
 }
 
 @Composable
-private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specimen: SessionSpecimen?) {
+private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specimen: SessionSpecimen?, running: Boolean) {
     val c = Enso.colors
+    val blocks = remember(turn.blocks, running) { sessionWorklogBlocks(turn.blocks, running) }
     Column(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(22.dp).background(c.card, CircleShape), contentAlignment = Alignment.Center) {
@@ -340,9 +396,13 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
             val time = specimen?.turnTime ?: turn.timestamp?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
             if (time != null) Label(time, 12, 16, color = c.dim)
         }
-        turn.blocks.forEachIndexed { index, block -> when (block) {
+        blocks.forEach { block -> when (block) {
             is SessionBlock.Prose -> SessionMarkdown(block.text)
-            is SessionBlock.Steps -> StepGroup(turn.index, index, block.steps, specimen?.steps)
+            is SessionBlock.Worklog -> SessionWorklogRow(block, specimen?.steps) { SessionMarkdown(it) }
+            is SessionBlock.Steps -> Unit // Rendered only inside a worklog.
+            is SessionBlock.Todos -> SessionTodoCard(block.items)
+            is SessionBlock.Notice -> TimelineDisclosure(block.kind.title, block.detail, EnsoIcon.Terminal)
+            is SessionBlock.Compaction -> TimelineDisclosure("上下文已压缩", block.summary, EnsoIcon.Compress)
             is SessionBlock.Images -> TimelineImageStrip(block.images)
             SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.dim)
         } }
@@ -372,51 +432,7 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
 }
 
 @Composable
-private fun SessionMarkdown(text: String) {
-    val c = Enso.colors
-    // Session content is untrusted Markdown. The renderer's image transformer is no-op, and no
-    // link, remote image or deep link may launch anything from an agent message.
-    val inertLinks = remember { object : UriHandler { override fun openUri(uri: String) = Unit } }
-    CompositionLocalProvider(LocalUriHandler provides inertLinks) {
-        val prose = ensoText(15, 24)
-        Markdown(content = text, modifier = Modifier.fillMaxWidth(),
-            padding = markdownPadding(list = 2.dp, listItemTop = 2.dp, listItemBottom = 2.dp, listIndent = 12.dp),
-            colors = markdownColor(text = c.ink, codeBackground = c.card2),
-            typography = markdownTypography(text = prose, paragraph = prose, ordered = prose, bullet = prose, list = prose,
-                h1 = ensoText(24, 32, FontWeight.SemiBold), h2 = ensoText(22, 30, FontWeight.SemiBold),
-                h3 = ensoText(20, 28, FontWeight.SemiBold), h4 = ensoText(18, 26, FontWeight.SemiBold),
-                h5 = ensoText(17, 24, FontWeight.Medium), h6 = ensoText(16, 24, FontWeight.Medium), quote = prose,
-                code = ensoText(13, 20, font = Enso.mono), inlineCode = ensoText(14, 20, font = Enso.mono)))
-    }
-}
-
-@Composable
-private fun StepGroup(turn: Long, index: Int, steps: List<SessionStep>, description: String?) {
-    val c = Enso.colors
-    var expanded by remember(turn, index) { mutableStateOf(false) }
-    val shape = RoundedCornerShape(14.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(c.card2.copy(alpha = .6f))) {
-        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { expanded = !expanded }
-            .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }
-            .padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Glyph(if (description != null) EnsoIcon.CircleCheck else EnsoIcon.Terminal, Modifier.size(16.dp), c.dim)
-            Label(description ?: "${steps.size} 个工作步骤", 14, 20, Modifier.weight(1f), color = c.dim)
-            Glyph(if (expanded) EnsoIcon.Down else EnsoIcon.Right, Modifier.size(16.dp), c.faint)
-        }
-        if (expanded) Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            steps.forEach { step ->
-                Label(step.name, 13, 18, weight = FontWeight.Medium)
-                step.detail?.let { Label(it, 13, 18, color = c.dim) }
-                step.result?.let { Label(it, 13, 18, color = c.dim) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ApprovalPanel(request: SessionApproval, writable: Boolean, pending: Boolean, modifier: Modifier,
+internal fun ApprovalPanel(request: SessionApproval, writable: Boolean, pending: Boolean, modifier: Modifier,
     specimen: SessionSpecimen?, respond: (String, String) -> Unit) {
     val c = Enso.colors
     val remaining = secondsLeft(request.expiresAt, specimen != null)
@@ -453,7 +469,7 @@ private fun ApprovalPanel(request: SessionApproval, writable: Boolean, pending: 
 }
 
 @Composable
-private fun AskPanel(request: SessionAsk, writable: Boolean, pending: Boolean, modifier: Modifier,
+internal fun AskPanel(request: SessionAsk, writable: Boolean, pending: Boolean, modifier: Modifier,
     specimen: SessionSpecimen?, respond: (String, String) -> Unit) {
     val c = Enso.colors
     val remaining = secondsLeft(request.expiresAt, specimen != null)

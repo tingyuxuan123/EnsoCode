@@ -1,4 +1,5 @@
 import type { InlineExtension, ToolInfo } from '@earendil-works/pi-coding-agent';
+import { imageGenerationRouting } from './imageGenerationRouting';
 import { oneLine } from './mcpNames';
 
 export type CatalogTool = Pick<ToolInfo, 'name' | 'description' | 'namespace'>;
@@ -72,6 +73,9 @@ export const promptCatalogExtension = {
     pi.on('before_agent_start', (event) => {
       const options = event.systemPromptOptions;
       const active = new Set(options.selectedTools);
+      const imageRouting = imageGenerationRouting(active);
+      if (imageRouting) options.sections.image_generation_routing = imageRouting;
+      else delete options.sections.image_generation_routing;
       const extra = pi
         .getAllTools()
         .filter((item) => active.has(item.name) && !Object.hasOwn(options.toolSnippets, item.name));

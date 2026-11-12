@@ -25,6 +25,11 @@ data class DesktopTask(
     val pinned: Boolean = false,
     val archived: Boolean = false,
     val projectId: String? = null,
+    val providerId: String? = null,
+    val modelId: String? = null,
+    val parentId: String? = null,
+    val reasoningEnabled: Boolean? = null,
+    val thinkingLevel: TaskThinkingLevel? = null,
 )
 
 data class DesktopProject(val id: String, val name: String)
@@ -90,12 +95,17 @@ data class DesktopSessionState(
     val taskStop: DesktopTaskStopAttempt? = null,
     val files: DesktopFilesState? = null,
     val preview: DesktopPreviewState? = null,
+    val modelAttempt: DesktopModelAttempt? = null,
+    val modelReady: Boolean = false,
+    val thinkingAttempt: DesktopThinkingAttempt? = null,
 ) {
     val running get() = timeline.status == "running"
     val canPrompt get() = timeline.status in setOf("idle", "failed", "error")
 }
 
 enum class SessionCommandPhase { Waiting, Observed, Unconfirmed, Rejected }
+data class DesktopModelAttempt(val id: Long, val providerId: String, val modelId: String, val phase: SessionCommandPhase)
+data class DesktopThinkingAttempt(val id: Long, val enabled: Boolean?, val level: TaskThinkingLevel?, val phase: SessionCommandPhase)
 data class SessionTextAttempt(
     val id: Long,
     val text: String,
@@ -253,6 +263,12 @@ fun compactionInstructions(text: String): String? = jsTrimText(text)
 /** A bot message is trimmed like the desktop does, so the bound applies to what the host would store. */
 fun botMessageText(text: String): String? = jsTrimText(text)?.takeIf { it.length <= SESSION_TEXT_LIMIT }
 
+/**
+ * A member group's title. The host bounds the raw text and trims afterwards, so an overlong run of
+ * whitespace is refused instead of being trimmed down to a valid title.
+ */
+internal fun botTitleText(text: String): String? = text.takeIf { it.length <= BOT_TITLE_LIMIT }?.let(::jsTrimText)
+
 private fun jsTrimText(text: String): String? =
     text.trim { it in '\u0009'..'\u000D' || it in '\u2000'..'\u200A' || when (it) {
         ' ', '\u00A0', '\u1680', '\u2028', '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF' -> true
@@ -277,7 +293,7 @@ internal sealed interface DesktopRead {
     // are display-only: a valid full row without the key proves the desktop has nothing to show.
     data class Catalog(val tasks: List<DesktopTask>, val queues: Map<String, List<DesktopQueuedMessage>?>,
         val goals: Map<String, DesktopGoal?>, val contexts: Map<String, DesktopContextUsage?>,
-        val usages: Map<String, DesktopUsageTotals?>) : DesktopRead {
+        val usages: Map<String, DesktopUsageTotals?>, val modelTargets: Set<String>) : DesktopRead {
         override val kind = Kind.Catalog
     }
     data object InvalidCatalog : DesktopRead { override val kind = Kind.Catalog }
@@ -310,6 +326,13 @@ private fun JsonElement?.metadataString(): String? = linkString()?.takeIf {
 /** A non-empty, bounded name or id; blank values would name nothing the user can open. */
 internal fun desktopFileName(value: JsonElement?, limit: Int = FILE_TEXT_LIMIT): String? =
     value.linkString()?.takeIf { it.length in 1..limit && it.isNotBlank() }
+
+/**
+ * A required, bounded text that is allowed to be empty: a direct chat has no title at all and a bot
+ * profile's role is optional, yet both are still typed text on the wire.
+ */
+internal fun desktopText(value: JsonElement?, limit: Int): String? =
+    value.linkString()?.takeIf { it.length <= limit }
 
 /** @return null when the table itself is unusable; an unreadable row only drops itself. */
 internal fun desktopFileEntries(value: JsonElement?): List<DesktopFileEntry>? {
@@ -504,6 +527,7 @@ private fun desktopCatalogRead(payload: JsonObject): DesktopRead.Catalog? {
     val goals = mutableMapOf<String, DesktopGoal?>()
     val contexts = mutableMapOf<String, DesktopContextUsage?>()
     val usages = mutableMapOf<String, DesktopUsageTotals?>()
+    val modelTargets = mutableSetOf<String>()
     val tasks = entries.mapNotNull { element ->
         val entry = element as? JsonObject ?: return@mapNotNull null
         val id = entry["id"].metadataString() ?: return@mapNotNull null
@@ -520,6 +544,8 @@ private fun desktopCatalogRead(payload: JsonObject): DesktopRead.Catalog? {
         val asks = entry.count("pendingAskCount") ?: return@mapNotNull null
         val pinned = entry.flag("pinned") ?: return@mapNotNull null
         val archived = entry.flag("archived") ?: return@mapNotNull null
+        // A malformed parent must not turn a coworker into a configurable root session.
+        val parentId = if ("parentId" in entry) entry["parentId"].metadataString() ?: return@mapNotNull null else null
         if (!seen.add(id)) return@mapNotNull null
         // A slim row for an unrelated subscription cannot prove that the selected queue is empty.
         if ("projectName" in entry || "queued" in entry) queues[id] = desktopQueue(entry)
@@ -533,16 +559,34 @@ private fun desktopCatalogRead(payload: JsonObject): DesktopRead.Catalog? {
             contexts[id] = desktopContextUsage(entry["context"])
             usages[id] = desktopUsageTotals(entry["usageTotals"])
         }
-        DesktopTask(id, title, projectName, updatedAt, status, approvals, asks, pinned, archived, entry["projectId"].metadataString())
+        // Only a full, configurable row can describe the settings. Missing/dirty fields stay
+        // unknown, not a locally chosen default, and don't affect the rest of the row.
+        val configurable = !archived && parentId == null && "projectName" in entry
+        if (configurable) modelTargets.add(id)
+        val providerId = entry["providerId"].metadataString().takeIf { configurable }
+        val modelId = entry["modelId"].metadataString().takeIf { providerId != null }
+        val reasoning = when (entry["reasoningEnabled"]) {
+            JsonPrimitive(true) -> true
+            JsonPrimitive(false) -> false
+            else -> null
+        }.takeIf { configurable }
+        val thinking = entry["thinkingLevel"].linkString()?.let { wire -> TaskThinkingLevel.entries.find { it.wire == wire } }
+            .takeIf { configurable }
+        DesktopTask(id, title, projectName, updatedAt, status, approvals, asks, pinned, archived,
+            entry["projectId"].metadataString(), providerId.takeIf { modelId != null }, modelId, parentId, reasoning, thinking)
     }
     duplicates.forEach {
         queues[it] = null
         goals.remove(it)
         contexts.remove(it)
         usages.remove(it)
+        modelTargets.remove(it)
     }
-    return DesktopRead.Catalog(Collections.unmodifiableList(tasks), Collections.unmodifiableMap(queues),
-        Collections.unmodifiableMap(goals), Collections.unmodifiableMap(contexts), Collections.unmodifiableMap(usages))
+    val unambiguousTasks = tasks.map { if (it.id in duplicates)
+        it.copy(providerId = null, modelId = null, reasoningEnabled = null, thinkingLevel = null) else it }
+    return DesktopRead.Catalog(Collections.unmodifiableList(unambiguousTasks), Collections.unmodifiableMap(queues),
+        Collections.unmodifiableMap(goals), Collections.unmodifiableMap(contexts), Collections.unmodifiableMap(usages),
+        Collections.unmodifiableSet(modelTargets))
 }
 
 private fun desktopGoal(value: JsonElement?): DesktopGoal? {
@@ -630,6 +674,8 @@ data class DesktopBotChat(
     val activeThreadId: String? = null,
     val threadTitle: String? = null,
     val archived: Boolean = false,
+    /** 各成员当前在用的会话；私聊直接复用这个会话的订阅，没有就是还没开过。 */
+    val sessions: Map<String, String> = emptyMap(),
 )
 
 /** One unfinished inbox entry; `kind` is not restricted so a newer host stays readable. */
@@ -641,6 +687,7 @@ data class DesktopBotInboxItem(
     val text: String?,
     val createdAt: Long,
     val dismissible: Boolean,
+    val conversationId: String? = null,
 )
 
 /** One member conversation that is running or queued; `now` in the frame is the host clock. */
@@ -653,14 +700,34 @@ data class DesktopBotActivityItem(
     val startedAt: Long?,
 )
 
-/** One group timeline row the phone can render as text; delegation and progress are not projected. */
+/** One system row's retryable failure: `mode` is resume (same conversation) or deliver (hand off again). */
+data class DesktopGroupFailure(val botId: String, val conversationId: String?, val mode: String)
+
+/**
+ * One group timeline row. `kind` is human/bot/system/delegation/progress and only the fields of that
+ * kind are set; a delegation row's body is the desktop's `summary`, so the card always has text.
+ */
 data class DesktopGroupEntry(
     val seq: Long,
     val id: String,
     val at: Long,
     val kind: String,
     val text: String,
-    val botId: String?,
+    val botId: String? = null,
+    val conversationId: String? = null,
+    val delegationId: String? = null,
+    val from: String? = null,
+    val to: String? = null,
+    /** Delegation state; an unknown value is kept verbatim so a newer host still renders. */
+    val state: String? = null,
+    val taskId: String? = null,
+    val taskSeq: Long? = null,
+    /** Progress phase (started/blocked/delivered), kept verbatim for the same reason. */
+    val phase: String? = null,
+    /** The desktop's "new conversation" divider. */
+    val newConversation: Boolean = false,
+    val failure: DesktopGroupFailure? = null,
+    val retryOf: String? = null,
 )
 
 /** One chat's running state: `current` is the bot of the active turn, `queue` the waiting turns. */
@@ -693,6 +760,82 @@ data class DesktopBotThreadAction(
     val phase: SessionCommandPhase, val resultId: String? = null, val error: String? = null,
 )
 
+/**
+ * One "new conversation" attempt. The desktop answers `needsConfirmation` for a busy group, and the
+ * confirmed phase is a second request with its own id (the host de-duplicates by request id).
+ */
+enum class BotNewSessionPhase { Waiting, NeedsConfirmation, Observed, Rejected, Unconfirmed }
+
+data class DesktopBotNewSession(
+    val requestId: String, val chatId: String, val phase: BotNewSessionPhase, val error: String? = null,
+)
+
+/** One retry of a failed system row; it carries no delivery id, only the row it names. */
+data class DesktopBotRetry(
+    val chatId: String, val entryId: String, val phase: SessionCommandPhase, val error: String? = null,
+)
+
+/** One inbox dismissal; only the next authoritative table can prove the row is gone. */
+data class DesktopBotInboxDismiss(val key: String, val phase: SessionCommandPhase)
+
+/**
+ * One "open the direct chat of this member" write. The host reuses an existing chat or creates one,
+ * and always names it; the phone never invents or opens the chat by itself.
+ */
+data class DesktopBotDirectOpen(
+    val requestId: String, val botId: String, val phase: SessionCommandPhase, val chatId: String? = null,
+    val error: String? = null,
+)
+
+/** One group creation: the phone never invents the chat, it waits for the receipt and the directory. */
+data class DesktopBotGroupCreate(
+    val requestId: String, val title: String, val memberIds: List<String>, val bossBotId: String,
+    val phase: SessionCommandPhase, val chatId: String? = null, val error: String? = null,
+)
+
+/** One artifact of one message; `rel` is the host's own workspace-relative id and never a phone path. */
+data class DesktopBotArtifact(val rel: String, val name: String, val size: Long, val kind: String)
+
+/** One `send_image` item: a loadable media id (with an optional thumbnail) or the host's reason. */
+data class DesktopBotMedia(
+    val source: String, val mediaId: String? = null, val thumb: String? = null, val error: String? = null,
+    val name: String? = null, val caption: String? = null,
+)
+
+/**
+ * Where one message's artifacts hang: a group entry, or one assistant message of a conversation.
+ * Exactly one of the two shapes is valid; the network form is built from the set fields.
+ */
+data class DesktopBotArtifactTarget(
+    val chatId: String,
+    val entryId: String? = null,
+    val conversationId: String? = null,
+    val messageIndex: Long? = null,
+) {
+    val valid: Boolean get() = if (entryId != null) conversationId == null && messageIndex == null
+    else conversationId != null && messageIndex != null
+}
+
+/** One message's artifact list and images; the host echoes the target, which is what settles it. */
+data class DesktopBotArtifacts(
+    val target: DesktopBotArtifactTarget,
+    val phase: SessionCommandPhase,
+    val artifacts: List<DesktopBotArtifact> = emptyList(),
+    val media: List<DesktopBotMedia> = emptyList(),
+    val error: String? = null,
+)
+
+/** One full-size image: `mediaId` (send_image) or `rel` (image artifact), never both. */
+data class DesktopBotArtifactImage(
+    val requestId: String,
+    val target: DesktopBotArtifactTarget,
+    val mediaId: String? = null,
+    val rel: String? = null,
+    val phase: SessionCommandPhase,
+    val dataUrl: String? = null,
+    val error: String? = null,
+)
+
 /** The whole bot projection of one authenticated connection. */
 data class DesktopBotsState(
     val catalogRequested: Boolean = false,
@@ -718,6 +861,24 @@ data class DesktopBotsState(
     val threadsEnabled: Boolean = false,
     val threads: List<DesktopBotChat> = emptyList(),
     val threadAction: DesktopBotThreadAction? = null,
+    /** The host's catalog says the phone may start a fresh conversation. */
+    val newSessionEnabled: Boolean = false,
+    val newSession: DesktopBotNewSession? = null,
+    val retry: DesktopBotRetry? = null,
+    val inboxDismiss: DesktopBotInboxDismiss? = null,
+    val groupCreateEnabled: Boolean = false,
+    val groupCreate: DesktopBotGroupCreate? = null,
+    /** The host's catalog says the phone may open a member's direct chat by itself. */
+    val directOpenEnabled: Boolean = false,
+    val directOpen: DesktopBotDirectOpen? = null,
+    val artifacts: DesktopBotArtifacts? = null,
+    val artifactImage: DesktopBotArtifactImage? = null,
+    /**
+     * The opened message's artifact files; `filesTarget` names the message it belongs to, so a
+     * projection is never shown for a message the user already left. Null means nothing opened yet.
+     */
+    val files: DesktopFilesState? = null,
+    val filesTarget: DesktopBotArtifactTarget? = null,
 )
 
 /** Null when the root is no longer an advertised group. A missing/archived child is never selected. */
@@ -728,6 +889,17 @@ fun DesktopBotsState.activeBotThread(rootId: String): DesktopBotChat? {
     return threads.firstOrNull { it.id == root.activeThreadId && it.parentId == root.id && !it.archived } ?: root
 }
 
+/** A chat the host listed, root or topic; the phone never writes to a chat it was not told about. */
+fun DesktopBotsState.botChat(chatId: String): DesktopBotChat? =
+    chats.firstOrNull { it.id == chatId } ?: threads.firstOrNull { it.id == chatId }
+
+/** At most one chat write may be outstanding: they all mutate the same group's round. */
+val DesktopBotsState.writeBusy: Boolean
+    get() = send?.phase == SessionCommandPhase.Waiting || stop?.phase == SessionCommandPhase.Waiting ||
+        threadAction?.phase == SessionCommandPhase.Waiting || newSession?.phase == BotNewSessionPhase.Waiting ||
+        retry?.phase == SessionCommandPhase.Waiting || groupCreate?.phase == SessionCommandPhase.Waiting ||
+        directOpen?.phase == SessionCommandPhase.Waiting
+
 /** Upper bound on one bot table push; a larger table is not a valid answer. */
 internal const val BOT_TABLE_LIMIT = 256
 
@@ -736,6 +908,9 @@ internal const val BOT_PAGE_LIMIT = 512
 
 /** Bot, chat, inbox and conversation ids share the desktop's 512 UTF-16 code-unit bound. */
 internal const val BOT_TEXT_LIMIT = 512
+
+/** The host bounds a group title's raw text at 200 characters before trimming it. */
+internal const val BOT_TITLE_LIMIT = 200
 
 /** Inbox and run-state kinds are opaque, bounded tokens; a newer host still renders. */
 internal const val BOT_KIND_LIMIT = 64
@@ -749,6 +924,21 @@ internal const val BOT_SUMMARY_LIMIT = 4_096
 /** One timeline entry's text; longer text is not something the phone renders. */
 internal const val BOT_ENTRY_TEXT_LIMIT = 8_192
 
+/** One message lists at most this many artifacts; a larger table is not a valid answer. */
+internal const val BOT_ARTIFACT_LIMIT = 256
+
+/** One turn may carry the host's own maximum of 20 images; a longer table is not this turn's. */
+internal const val BOT_MEDIA_LIMIT = 20
+
+/** A workspace-relative artifact path or file name is one display line, not a document. */
+internal const val BOT_PATH_LIMIT = 1_024
+
+/** A thumbnail data URL is display-only; an oversized one is dropped, not the whole row. */
+internal const val BOT_THUMB_LIMIT = 200_000
+
+/** The host compresses a full image to at most 700k chars; anything longer is not a displayable image. */
+internal const val BOT_IMAGE_DATA_LIMIT = 1_000_000
+
 /** One running-state push: at most this many chats are kept, each with at most this many queued turns. */
 internal const val BOT_CHAT_STATE_LIMIT = 64
 internal const val BOT_CHAT_QUEUE_LIMIT = 64
@@ -758,7 +948,9 @@ internal const val BOT_CHAT_QUEUE_TEXT_LIMIT = 4_096
 
 internal val BOT_MEMBER_STATUSES = setOf("idle", "running", "queued")
 internal val BOT_CHAT_KINDS = setOf("direct", "group")
-internal val BOT_ENTRY_KINDS = setOf("human", "bot", "system")
+internal val BOT_ENTRY_KINDS = setOf("human", "bot", "system", "delegation", "progress")
+internal val BOT_MEDIA_SOURCES = setOf("file", "web", "desktop", "upload")
+internal val BOT_FAILURE_MODES = setOf("resume", "deliver")
 
 /** A boolean flag that must be present: a missing or non-boolean value is not "false". */
 internal fun JsonElement?.desktopFlag(): Boolean? =
@@ -782,7 +974,9 @@ internal fun desktopBotMembers(value: JsonElement?): List<DesktopBotMember>? {
         val row = element as? JsonObject ?: return@mapNotNull null
         val id = desktopFileName(row["id"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
         val name = desktopFileName(row["name"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
-        val title = desktopFileName(row["title"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+        // A bot's role is optional in the profile; the host sends "" rather than dropping the field.
+        val title = if ("title" !in row) ""
+        else desktopText(row["title"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
         val avatarColor = desktopFileName(row["avatarColor"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
         val status = row["status"].linkString()?.takeIf { it in BOT_MEMBER_STATUSES } ?: return@mapNotNull null
         val archived = row.flag("archived") ?: return@mapNotNull null
@@ -790,6 +984,25 @@ internal fun desktopBotMembers(value: JsonElement?): List<DesktopBotMember>? {
         if (!seen.add(id)) return@mapNotNull null
         DesktopBotMember(id, name, title, avatarColor, status, archived)
     })
+}
+
+/**
+ * The desktop always sends `sessions` (possibly empty), and it is how the phone reaches a member's
+ * private conversation. A table that is not an object is unusable, so its whole chat row is dropped;
+ * a bad pair only drops itself.
+ */
+private fun desktopBotSessions(row: JsonObject): Map<String, String>? {
+    if ("sessions" !in row) return emptyMap()
+    val raw = row["sessions"] as? JsonObject ?: return null
+    if (raw.size > BOT_CHAT_MEMBER_LIMIT) return null
+    val sessions = mutableMapOf<String, String>()
+    for ((botId, value) in raw) {
+        if (botId.length !in 1..BOT_TEXT_LIMIT || botId.isBlank()) continue
+        val conversationId = (value as? JsonObject)?.get("conversationId").botOptionalText(BOT_TEXT_LIMIT)
+            ?: continue
+        sessions[botId] = conversationId
+    }
+    return Collections.unmodifiableMap(sessions)
 }
 
 /** @return null when the table itself is unusable; an unreadable row only drops itself. */
@@ -800,7 +1013,8 @@ internal fun desktopBotChats(value: JsonElement?): List<DesktopBotChat>? {
         val row = element as? JsonObject ?: return@mapNotNull null
         val id = desktopFileName(row["id"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
         val kind = row["kind"].linkString()?.takeIf { it in BOT_CHAT_KINDS } ?: return@mapNotNull null
-        val title = desktopFileName(row["title"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+        // The desktop creates a direct chat with an empty title, so the key is typed but may be blank.
+        val title = desktopText(row["title"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
         val memberRows = row["members"] as? JsonArray ?: return@mapNotNull null
         if (memberRows.size > BOT_CHAT_MEMBER_LIMIT) return@mapNotNull null
         val members = mutableListOf<String>()
@@ -817,10 +1031,11 @@ internal fun desktopBotChats(value: JsonElement?): List<DesktopBotChat>? {
         val status = row["status"].linkString()?.takeIf { it.length in 1..BOT_KIND_LIMIT }
         val lastText = (row["last"] as? JsonObject)?.get("text").botOptionalText(BOT_SUMMARY_LIMIT)
         val archived = row.flag("archived") ?: return@mapNotNull null
+        val sessions = desktopBotSessions(row) ?: return@mapNotNull null
         if (!seen.add(id)) return@mapNotNull null
         DesktopBotChat(id, kind, title, Collections.unmodifiableList(members), bossBotId, updatedAt, lastSeq,
             parentId, lastText, status, row["activeThreadId"].botOptionalText(BOT_TEXT_LIMIT),
-            row["threadTitle"].botOptionalText(BOT_TEXT_LIMIT), archived)
+            row["threadTitle"].botOptionalText(BOT_TEXT_LIMIT), archived, sessions)
     })
 }
 
@@ -838,7 +1053,7 @@ internal fun desktopBotInbox(value: JsonElement?): List<DesktopBotInboxItem>? {
         if (!seen.add(key)) return@mapNotNull null
         DesktopBotInboxItem(key, kind, row["chatId"].botOptionalText(BOT_TEXT_LIMIT),
             row["botId"].botOptionalText(BOT_TEXT_LIMIT), row["text"].botOptionalText(BOT_SUMMARY_LIMIT),
-            createdAt, dismissible)
+            createdAt, dismissible, row["conversationId"].botOptionalText(BOT_TEXT_LIMIT))
     })
 }
 
@@ -882,7 +1097,24 @@ internal fun desktopBotActivity(payload: JsonObject): DesktopBotActivityFrame? {
     return DesktopBotActivityFrame(now, Collections.unmodifiableList(items))
 }
 
-/** Only human/bot/system rows are projected; delegation, progress and unknown kinds are dropped. */
+/**
+ * A retryable failure needs a member and a known mode; anything else only makes that one row
+ * non-retryable, because its text is still the message the user needs to read.
+ */
+private fun desktopGroupFailure(value: JsonElement?): DesktopGroupFailure? {
+    val row = value as? JsonObject ?: return null
+    val botId = desktopFileName(row["botId"], BOT_TEXT_LIMIT) ?: return null
+    val mode = row["mode"].linkString()?.takeIf { it in BOT_FAILURE_MODES } ?: return null
+    val conversationId = if ("conversationId" !in row) null
+    else row["conversationId"].botOptionalText(BOT_TEXT_LIMIT) ?: return null
+    return DesktopGroupFailure(botId, conversationId, mode)
+}
+
+/**
+ * human/bot/system/delegation/progress rows are projected; unknown kinds are dropped so a newer
+ * host's row never renders as a broken one. Each kind's own required fields are what make a row
+ * usable, so a row missing them is dropped instead of shown half-built.
+ */
 internal fun desktopGroupEntries(value: JsonElement?): List<DesktopGroupEntry>? {
     val rows = (value as? JsonArray)?.takeIf { it.size <= BOT_PAGE_LIMIT } ?: return null
     return Collections.unmodifiableList(rows.mapNotNull { element ->
@@ -891,10 +1123,90 @@ internal fun desktopGroupEntries(value: JsonElement?): List<DesktopGroupEntry>? 
         val id = desktopFileName(row["id"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
         val at = row["at"].linkIndex() ?: return@mapNotNull null
         val kind = row["kind"].linkString()?.takeIf { it in BOT_ENTRY_KINDS } ?: return@mapNotNull null
-        val text = row["text"].linkString()?.takeIf { it.length <= BOT_ENTRY_TEXT_LIMIT } ?: return@mapNotNull null
-        val botId = if (kind == "bot") desktopFileName(row["botId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
-        else null
-        DesktopGroupEntry(seq, id, at, kind, text, botId)
+        val text = row["text"].linkString()?.takeIf { it.length <= BOT_ENTRY_TEXT_LIMIT }
+        when (kind) {
+            // The desktop keeps a delegation's body in `summary`; the phone shows one single body.
+            "delegation" -> {
+                val summary = (if ("summary" !in row) "" else row["summary"].linkString() ?: return@mapNotNull null)
+                    .takeIf { it.length <= BOT_ENTRY_TEXT_LIMIT } ?: return@mapNotNull null
+                val delegationId = desktopFileName(row["delegationId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                val from = desktopFileName(row["from"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                val to = desktopFileName(row["to"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                val state = row["state"].linkString()
+                    ?.takeIf { it.isNotBlank() && it.length <= BOT_KIND_LIMIT } ?: return@mapNotNull null
+                DesktopGroupEntry(seq, id, at, kind, summary, delegationId = delegationId, from = from, to = to,
+                    state = state, taskId = row["taskId"].botOptionalText(BOT_TEXT_LIMIT))
+            }
+            "progress" -> {
+                val body = text ?: return@mapNotNull null
+                val botId = desktopFileName(row["botId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                val delegationId = desktopFileName(row["delegationId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                val taskId = desktopFileName(row["taskId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                val taskSeq = row["taskSeq"].linkIndex() ?: return@mapNotNull null
+                val phase = row["phase"].linkString()
+                    ?.takeIf { it.isNotBlank() && it.length <= BOT_KIND_LIMIT } ?: return@mapNotNull null
+                DesktopGroupEntry(seq, id, at, kind, body, botId, delegationId = delegationId, taskId = taskId,
+                    taskSeq = taskSeq, phase = phase)
+            }
+            "bot" -> {
+                val body = text ?: return@mapNotNull null
+                val botId = desktopFileName(row["botId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null
+                DesktopGroupEntry(seq, id, at, kind, body, botId,
+                    conversationId = row["conversationId"].botOptionalText(BOT_TEXT_LIMIT))
+            }
+            "system" -> {
+                val body = text ?: return@mapNotNull null
+                DesktopGroupEntry(seq, id, at, kind, body,
+                    newConversation = row["newConversation"].desktopFlag() == true,
+                    failure = desktopGroupFailure(row["failure"]),
+                    retryOf = row["retryOf"].botOptionalText(BOT_TEXT_LIMIT))
+            }
+            else -> DesktopGroupEntry(seq, id, at, kind, text ?: return@mapNotNull null)
+        }
+    })
+}
+
+/** @return null when the frame's own target is unusable; a bad row only drops itself. */
+internal fun desktopBotArtifactTarget(value: JsonElement?): DesktopBotArtifactTarget? {
+    val row = value as? JsonObject ?: return null
+    val chatId = desktopFileName(row["chatId"], BOT_TEXT_LIMIT) ?: return null
+    val entryId = row["entryId"].botOptionalText(BOT_TEXT_LIMIT)
+    if (entryId != null) return if ("conversationId" in row || "messageIndex" in row) null
+    else DesktopBotArtifactTarget(chatId, entryId = entryId)
+    val conversationId = desktopFileName(row["conversationId"], BOT_TEXT_LIMIT) ?: return null
+    val messageIndex = row["messageIndex"].linkIndex() ?: return null
+    return DesktopBotArtifactTarget(chatId, conversationId = conversationId, messageIndex = messageIndex)
+}
+
+/** @return null when the table itself is unusable; an unreadable row only drops itself. */
+internal fun desktopBotArtifacts(value: JsonElement?): List<DesktopBotArtifact>? {
+    val rows = (value as? JsonArray)?.takeIf { it.size <= BOT_ARTIFACT_LIMIT } ?: return null
+    return Collections.unmodifiableList(rows.mapNotNull { element ->
+        val row = element as? JsonObject ?: return@mapNotNull null
+        val rel = desktopFileName(row["rel"], BOT_PATH_LIMIT) ?: return@mapNotNull null
+        val name = desktopFileName(row["name"], BOT_PATH_LIMIT) ?: return@mapNotNull null
+        val size = row["size"].linkIndex() ?: return@mapNotNull null
+        val kind = row["kind"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_KIND_LIMIT }
+            ?: return@mapNotNull null
+        DesktopBotArtifact(rel, name, size, kind)
+    })
+}
+
+/** @return null when the table itself is unusable; an unreadable row only drops itself. */
+internal fun desktopBotMedia(value: JsonElement?): List<DesktopBotMedia>? {
+    val rows = (value as? JsonArray)?.takeIf { it.size <= BOT_MEDIA_LIMIT } ?: return null
+    return Collections.unmodifiableList(rows.mapNotNull { element ->
+        val row = element as? JsonObject ?: return@mapNotNull null
+        val source = row["source"].linkString()?.takeIf { it in BOT_MEDIA_SOURCES } ?: return@mapNotNull null
+        val ok = row.flag("ok") ?: return@mapNotNull null
+        val mediaId = if (ok) desktopFileName(row["mediaId"], BOT_TEXT_LIMIT) ?: return@mapNotNull null else null
+        val error = if (ok) null
+        else row["error"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_KIND_LIMIT }
+            ?: return@mapNotNull null
+        // A thumbnail is display-only: an oversized one only costs the thumbnail.
+        val thumb = row["thumb"].linkString()?.takeIf { it.isNotBlank() && it.length <= BOT_THUMB_LIMIT }
+        DesktopBotMedia(source, mediaId, if (ok) thumb else null, error,
+            row["name"].botOptionalText(BOT_PATH_LIMIT), row["caption"].botOptionalText(BOT_SUMMARY_LIMIT))
     })
 }
 
