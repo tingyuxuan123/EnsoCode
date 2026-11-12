@@ -659,7 +659,7 @@ export function AppearanceSettings() {
       ? {
           ocean: null,
           'mint-light': t('Mint Light uses its own green accent.'),
-          'cloud-light': t('Cloud Light uses its own blue accent.'),
+          'cloud-light': t('Cloud Light uses its own monochrome accent.'),
         }[lightPalette]
       : null;
   const paletteOptions: Record<LightPalette, string> = {

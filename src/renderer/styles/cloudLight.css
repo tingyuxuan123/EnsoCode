@@ -3,57 +3,50 @@
  * html[data-light-palette]，深色与同步终端配色不受影响。只换肤，不改布局与尺寸。
  *
  * 设计约束：
- * - 三级表面：冷灰外壳（标题栏/图标轨）→ 浅灰导航 → 纯白工作区；工作区左上角圆起，像一张放在外壳上的纸。
- * - 灰阶近乎无彩（zinc），外壳带一丝冷蓝，与强调蓝同源。
- * - 饱和亮蓝只给三类：自己发出的消息、发送按钮、聚焦/选中态；图标与悬停保持中性。
+ * - 配色对齐 Open Vetta 的 mono 浅色：纸白工作区、近白导航、纯白输入框与浮层。
+ * - 中性黑白灰，不再给外壳、文字、描边染蓝；正文与次要文字拉开明度。
+ * - 主操作用黑底白字；用户消息与选中行用轻灰填充，不抢正文。
  * - 圆角：10 行与控件、14 浮层、18 输入框与对话框；用户气泡近胶囊。
  * - 层次靠中性柔和投影，选中靠填充而不是描边。
  *
- * Cloud Light: zinc neutrals on a cool shell, white workspace, vivid blue only for the
- * user's own messages, send and focus. Radii 10 / 14 / 18; user bubbles are near-pills.
+ * Cloud Light follows Open Vetta's mono light palette, not its Classic indigo palette.
+ * Keep the existing geometry; use neutral surfaces and monochrome actions.
  */
 @layer base {
   html[data-light-palette='cloud-light'] {
-    --cloud-blue-50: #eff4ff;
-    --cloud-blue-100: #dde8ff;
-    --cloud-blue-200: #c2d4ff;
-    --cloud-blue-400: #5b8cff;
-    --cloud-blue-600: #1b5ef7;
-    --cloud-blue-700: #1550d6;
-
-    /* 表面：冷灰外壳 → 浅灰导航 → 白色工作区 */
-    --shell: #e8ebef;
-    --panel: #ffffff;
-    --background: #ffffff;
-    --card: #ffffff;
+    /* 来源：open-vetta shared/theme/themes/mono.ts（light） */
+    --shell: #f8f8f8;
+    --panel: #faf9f9;
+    --background: #faf9f9;
+    --card: #f8f8f8;
     --popover: #ffffff;
-    --foreground: #18181b;
+    --foreground: #000000;
     --card-foreground: var(--foreground);
     --popover-foreground: var(--foreground);
 
     /* 中性控件与悬停 */
-    --secondary: #ececef;
-    --secondary-foreground: #27272a;
-    --muted: #f4f4f5;
-    --muted-foreground: #63636b;
-    --accent: #ebebee;
+    --secondary: #f1f0f0;
+    --secondary-foreground: var(--foreground);
+    --muted: #fafafa;
+    --muted-foreground: #525252;
+    --accent: #e8e8e8;
     --accent-foreground: var(--foreground);
-    --border: #e4e4e7;
-    --input: #d4d4d8;
+    --border: #e4e4e4;
+    --input: #e4e4e4;
 
     /* 主操作与状态 */
-    --primary: var(--cloud-blue-600);
+    --primary: #000000;
     --primary-foreground: #ffffff;
-    --brand: var(--cloud-blue-600);
+    --brand: var(--primary);
     --brand-foreground: #ffffff;
-    --ring: var(--cloud-blue-400);
+    --ring: var(--primary);
     --success: #15803d;
     --success-foreground: #ffffff;
     --destructive: #c2362f;
     --destructive-foreground: #ffffff;
     --warning: #a15c07;
     --warning-foreground: #ffffff;
-    --info: var(--cloud-blue-600);
+    --info: #2660cc;
     --info-foreground: #ffffff;
 
     /* 圆角：rounded-sm/md/lg = 10，xl = 14，2xl/3xl = 18 */
@@ -62,23 +55,26 @@
     --radius-2xl: 18px;
     --radius-3xl: 18px;
 
-    /* 投影：中性冷灰，近处收边、远处托起 */
-    --elevation-float: 0 1px 2px rgb(24 24 32 / 0.05), 0 12px 32px -12px rgb(24 24 32 / 0.2);
-    --cloud-lift: 0 0 0 0.5px rgb(24 24 32 / 0.06), 0 1px 3px rgb(24 24 32 / 0.08);
-    --cloud-composer-shadow: 0 1px 2px rgb(24 24 32 / 0.04), 0 10px 28px -14px rgb(24 24 32 / 0.18);
-    --cloud-focus-halo: 0 0 0 3px rgb(27 94 247 / 0.1);
-    --cloud-tip-shadow: 0 1px 2px rgb(24 24 32 / 0.05), 0 4px 12px -4px rgb(24 24 32 / 0.14);
-    --cloud-dialog-shadow: 0 1px 3px rgb(24 24 32 / 0.06), 0 24px 64px -20px rgb(24 24 32 / 0.3);
-    --cloud-row-active: #e4e4e8;
+    /* 投影也去掉冷蓝；选中灰对应 mono 浅色的 7% 黑色填充。 */
+    --elevation-float: 0 1px 2px rgb(0 0 0 / 0.05), 0 12px 32px -12px rgb(0 0 0 / 0.16);
+    --cloud-lift: 0 0 0 0.5px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.06);
+    --cloud-composer-shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 6px 18px -12px rgb(0 0 0 / 0.12);
+    --cloud-focus-border: #b4b4b4;
+    --cloud-focus-halo: 0 0 0 3px rgb(0 0 0 / 0.04);
+    --cloud-tip-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px -4px rgb(0 0 0 / 0.12);
+    --cloud-dialog-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 24px 64px -20px rgb(0 0 0 / 0.24);
+    --cloud-row-active: rgb(0 0 0 / 0.07);
+    --cloud-action-hover: #262626;
+    --cloud-send-inactive: #b4b4b4;
   }
 
   /* With wallpaper the regular nav token must still inherit surface alpha. */
   html[data-light-palette='cloud-light']:not(.bg-image-enabled) {
-    --color-nav: #f2f3f5;
+    --color-nav: #f8f8f8;
   }
 }
 
-/* ── 外壳：导航与工作区组成一张左上圆角的纸，放在冷灰外壳上 ─────────
+/* ── 外壳：保留导航与工作区的左上圆角，不改尺寸 ──────────────────
  * 侧栏展开时圆角落在侧栏；收起后落在工作区。只改圆角与描边，不动尺寸。
  */
 html[data-light-palette='cloud-light'] [data-slot='project-sidebar']:not([aria-hidden='true']) {
@@ -94,7 +90,7 @@ html[data-light-palette='cloud-light']
 
 /* 图标轨：当前项是外壳上的一块白色小卡，图标中性 */
 html[data-light-palette='cloud-light'] [data-slot='app-rail'] button[aria-pressed='true'] {
-  background-color: var(--color-card);
+  background-color: var(--color-popover);
   color: var(--color-foreground);
   box-shadow: var(--cloud-lift);
 }
@@ -114,35 +110,36 @@ html[data-light-palette='cloud-light'] .enso-conv-tree [data-slot='conversation-
   background-color: transparent;
 }
 
-/* ── 会话区：自己发出的消息是饱和蓝近胶囊，白字 ─────────────────── */
+/* ── 会话区：浅灰消息、黑字，避免一整块高饱和色压过回复正文 ──────── */
 html[data-light-palette='cloud-light'] [data-slot='chat-view'] .group\/user > .bg-muted {
   border-radius: 22px;
-  background-color: var(--cloud-blue-600);
-  color: #ffffff;
+  background-color: var(--color-secondary);
+  color: var(--color-foreground);
   font-weight: 500;
 }
 
 html[data-light-palette='cloud-light'] [data-slot='chat-view'] .group\/user > .bg-muted ::selection {
-  background-color: rgb(255 255 255 / 0.32);
+  background-color: rgb(0 0 0 / 0.12);
 }
 
 html[data-light-palette='cloud-light'] [data-slot='chat-view'] .group\/user > .bg-muted :is(a, code) {
   color: inherit;
 }
 
-/* ── 输入框：18px 圆角白卡，浅灰边与柔和投影；聚焦时浅蓝边与淡光晕 ── */
+/* ── 输入框：白卡放在纸白工作区上，聚焦也只用中性灰 ─────────────── */
 html[data-light-palette='cloud-light'] [data-slot='composer'] {
   border-radius: 18px;
   border-color: var(--color-border);
+  background-color: var(--color-popover);
   box-shadow: var(--cloud-composer-shadow);
 }
 
 html[data-light-palette='cloud-light'] [data-slot='composer']:focus-within {
-  border-color: var(--cloud-blue-200);
+  border-color: var(--cloud-focus-border);
   box-shadow: var(--cloud-composer-shadow), var(--cloud-focus-halo);
 }
 
-/* 发送：空闲是浅灰圆钮，有内容才亮起蓝色 */
+/* 发送：空闲为浅灰圆钮，有内容才变成黑底白字。 */
 html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-brand,
 html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-foreground {
   border-radius: 9999px;
@@ -153,15 +150,15 @@ html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-foregrou
 }
 
 html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-brand:not(:disabled):hover {
-  border-color: var(--cloud-blue-700);
-  background-color: var(--cloud-blue-700);
+  border-color: var(--cloud-action-hover);
+  background-color: var(--cloud-action-hover);
 }
 
 html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-brand:disabled {
   opacity: 1;
   border-color: transparent;
-  background-color: var(--color-secondary);
-  color: var(--color-faint);
+  background-color: rgb(180 180 180 / 0.22);
+  color: var(--cloud-send-inactive);
 }
 
 /* 模型选择保持中性 */
@@ -169,11 +166,11 @@ html[data-light-palette='cloud-light'] [data-model-picker='trigger'] .text-prima
   color: inherit;
 }
 
-/* ── 设置窗口：主题模式卡选中用浅蓝底与柔投影，不用 2px 深蓝框；边宽不变 ── */
+/* ── 设置窗口：中性灰选中态；边宽不变，不再混入蓝色 ──────────────── */
 html[data-light-palette='cloud-light'] [data-slot='settings-window'] button[aria-pressed='true'].border-2 {
-  border-color: var(--cloud-blue-200);
-  background-color: var(--cloud-blue-50);
-  color: var(--cloud-blue-700);
+  border-color: var(--cloud-focus-border);
+  background-color: var(--color-secondary);
+  color: var(--color-foreground);
   box-shadow: var(--cloud-lift);
 }
 

@@ -495,7 +495,7 @@ export const zhTranslations: Record<string, string> = {
   'Used in light mode or when the system is light.':
     '在浅色模式下使用，跟随系统时仅在系统为浅色时生效。',
   'Mint Light uses its own green accent.': '薄荷白使用主题自带的绿色强调色。',
-  'Cloud Light uses its own blue accent.': '云白使用主题自带的蓝色强调色。',
+  'Cloud Light uses its own monochrome accent.': '云白使用主题自带的黑白强调色。',
   'No favorite themes yet. Click the heart icon to add favorites.':
     '暂无收藏主题。点击爱心图标添加收藏。',
   'No themes found': '未找到主题',

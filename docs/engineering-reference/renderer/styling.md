@@ -71,6 +71,7 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 - 桌面浅色方案独立保存在 `lightPalette`，默认为 `ocean`。`mint-light` 只在显式浅色或跟随浅色系统时设置 `html[data-light-palette]`，用主题自带的绿色，不覆盖用户为其他模式设置的强调色。
   - 薄荷白全部样式在 `styles/mintLight.css`，只换肤不改尺寸：灰阶与绿色同色相，`--accent` 保持中性；绿色只给发送、当前选中、运行/完成状态；圆角 8 / 12 / 16（行与控件 / 浮层与气泡 / 输入框与对话框）。组件覆盖优先挂 `data-slot`、`data-model-picker`、`aria-pressed` 等稳定属性。
   - 该文件的组件规则不在 `@layer` 内，会压过 Tailwind 工具类（包括 `hover:`、`disabled:`），写覆盖时要显式处理这些状态。改浮层圆角要连 `::before` 一起改：命令面板的 `::before` 带底色，只改外框会在角上露出旧圆角。代码视图选中色用宿主 `diffs-container` 上的 `--diffs-selection-base`（文档侧声明压过 shadow `:host`），不要改 `--diffs-modified-*`，那会连带 diff 的修改色。
+  - `cloud-light`（云白）遵循相同的浅色生效边界，配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、黑色主操作、浅灰用户消息；不用冷蓝外壳、饱和蓝气泡或蓝色聚焦光晕。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
 
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
 在 `system`/`light`/`dark` 下改配色方案看不到界面变化，这是设计如此，不是 bug。
