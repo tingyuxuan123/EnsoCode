@@ -1,4 +1,6 @@
-# 小满原生插件
+# Collabra 原生插件
+
+本次工作区移植以 `J3n5en/EnsoCode@c221f690`（0.3.5）为固定基线；安装版是否具备新 API 取决于实际发布版本。工程边界见 [移植记录](project-history/2026-11-13-plugin-port.md)。
 
 原生插件是含 `enso-plugin.json` 的目录；安装会复制到应用私有数据目录，不继续引用源目录。
 它与 Claude Code 插件互不替代：设置 → 插件里两类插件分区管理。
@@ -19,6 +21,8 @@
 ```bash
 pnpm plugin:init ../my-plugin --id org.example.hello
 pnpm plugin:validate ../my-plugin
+pnpm plugin:testing ../my-plugin
+pnpm plugin:pack ../my-plugin --out ../my-plugin.zip
 ```
 
 `init` 生成清单、`main.mjs`、`ui.js` 和可选的类型检查文件。目标必须不存在或为空，上级目录须已存在，路径不能经过符号链接（例如 macOS 的 `/tmp` 可改用 `/private/tmp`）。
@@ -26,7 +30,10 @@ pnpm plugin:validate ../my-plugin
 
 然后用 **扩展 → 添加扩展 → 从文件夹安装** 选择生成目录（也可用 **设置 → 插件 → Enso plugins**）。检查权限预览，确认安装，再手动启用。回到本机 Code 会话，输入框右侧的「插入问候」会把文本写到草稿，不会发送给模型。两个命令都不会安装或启用插件。
 
-[`enso-plugin.d.ts`](../examples/plugins/starter/enso-plugin.d.ts) 是本 fork 的独立作者声明；模板用 JSDoc 引用本地副本，没有运行时 SDK。`PluginActivate` 对应 Node `activate`，`PluginOnLoad` 对应 `ui.js`，`PluginViewApi` 对应侧栏 HTML 的 `window.enso`。声明不提供会话消息、桌面命令、事件订阅或动态工具；工具只能给清单已声明的条目注册处理器。
+`plugin:pack` 复用安装校验，不执行代码，产出固定顺序/时间戳的 ZIP 并输出 SHA-256；排除隐藏文件、`node_modules`、`test/`、ZIP 与测试桩，排除后仍须通过安装校验，不覆盖已有输出。
+`plugin:testing` 写入零依赖 `enso-testing.mjs` 和 `test/main.test.mjs`（已有文件不覆盖）。在插件目录执行 `node --test`；`mountMain(activate,{config?,host?})` 返回 tool/command/fire/schedule/method 等调用方法与 `calls` 宿主调用记录。它不验证权限、Electron 或真实模型。
+
+[`enso-plugin.d.ts`](../examples/plugins/starter/enso-plugin.d.ts) 是本 fork 的独立作者声明；模板用 JSDoc 引用本地副本，没有运行时 SDK。`PluginActivate` 对应 Node `activate`，`PluginOnLoad` 对应 `ui.js`，`PluginViewApi` 对应侧栏 HTML 的 `window.enso`。声明包括命令、事件、定时任务、会话和产物 API；工具可给清单静态条目注册处理器，也可在清单动态配额内注册。仓库类型入口为 [`types/enso-plugin.d.ts`](../types/enso-plugin.d.ts)。
 如需在仓库外进行 JS 类型检查，从插件目录的上级开发目录提供 TypeScript 与 React 19 的 `@types/react`，然后执行 `tsc -p my-plugin/jsconfig.json`。不要把 `node_modules` 放进待安装目录；没有这些类型依赖也可静态校验和安装。
 
 ### 更多完整示例
@@ -46,7 +53,7 @@ my-snippets/
 2. 手动启用插件，回到本机 Code 项目对话。
 3. 点击输入框的「插入时间」，应当把日期写进草稿；输入 `#review` 并选择补全，应当写入审查提示词。这些动作不需要向模型发送消息。
 4. 停用插件，按钮与补全应撤销。
-5. 开发自己的版本时修改清单的 `id`、`name` 和实现；每次改源码后重新安装。运行的是安装副本，不支持保存源文件即热更新。
+5. 开发自己的版本时修改清单的 `id`、`name` 和实现；在插件详情启用「开发模式」，源码保存并停止改动约 400ms 后自动重装安装副本。扩大权限不会自动同意，须手动重新安装确认。开发开关只在内存保留，重启后关闭。
 
 最近核验（2026-11-04）：当前二开工作区的隔离 Electron 开发实例已通过上述 `snippets` 安装、启用、按钮写入、Node 补全与停用清理流程；相关加载、草稿、挂点、子进程等专项测试 21 项通过。此记录不代表本文每个 API、Windows/macOS 的所有安装版本或模型自主调用工具均已完成真机验收。
 
@@ -68,7 +75,7 @@ my-snippets/
 新插件默认停用，需显式开启。URL 下载不等于信任代码；私有仓库与需认证下载不支持。
 
 相同 id 再安装视为更新。授权范围扩大时旧版本继续运行，新版本等待单独批准；拒绝则保留旧版。
-未扩权更新也需要安装预览确认。配置页的空密钥输入表示保持旧值，Clear value 表示显式删除。
+手动更新需要安装预览确认。市场来源默认允许未扩权更新自动安装，可在扩展页关闭；插件正忙则延后，扩大权限仍进入待批准。GitHub/其他链接来源只检查并提示，不自动安装。配置页的空密钥输入表示保持旧值，Clear value 表示显式删除。
 卸载会删除插件安装副本、私有数据及配置。停用/卸载立即撤销宿主挂点、补全、侧栏桥及旧渲染 API。
 插件必须自行在卸载清理函数里撤销它直接创建的监听器、计时器等；宿主无法把任意同权代码变成沙箱。
 登记表缺失视为首次安装；已存在但损坏/无法读取（包括单条记录无效或重复）时不覆盖原件，能安全读取的内容按内容哈希备份为 `.corrupt` 文件：相同内容只备份一次，最多保留最近 5 份。插件管理进入只读并在设置页显示错误及恢复提示，拒绝安装、启停、卸载及配置写入，需人工恢复后重启。
@@ -102,19 +109,63 @@ my-snippets/
 | `fs.read` / `fs.write` | 宿主文件 API 的项目相对目录范围；`.` 表示项目全部；需相应权限 |
 | `net.domains` | `net.fetch` 允许的主机名，不含协议或路径；需 `net.fetch` |
 | `mcp.tools` | 精确 `server/tool` 白名单，如 `["bce/enhance_prompt"]`；需 `mcp.call`；不接受裸工具名或通配符，同名工具在其他 server 上不会获授权 |
-| `contributes.agentTools` | `{name, description, parameters}`；需 `agent.tool`；schema 必须完整声明 `type: "object"`、properties 及各参数类型 |
+| `contributes.agentTools` | `{name, description, parameters, timeoutMs?, readOnly?}`；需 `agent.tool`；schema 必须完整声明 `type: "object"`、properties 及各参数类型 |
 | `contributes.views` | `{id, title, entry}`；entry 为自包含 `.html`；需 `ui.view` |
 | `contributes.triggers` | `{symbol: "#", name}`；需 `ui.slot`；`@` 与 `/` 属于宿主 |
 | `contributes.skills` | 本插件 skill 目录列表 |
 | `contributes.mcpServers` | `{name, command, args, env}` stdio 服务；需 `mcp.server`；支持 `${ENSO_PLUGIN_ROOT}` 占位符 |
-| `contributes.presets` | `{id, name, skills, mcpServers, instruction?, systemPrompt?}`，仅引用本插件资源；正文为 Markdown 相对路径 |
+| `contributes.presets` | `{id, name, skills, mcpServers, workflows?, agentTypes?, instruction?, systemPrompt?, systemPromptTail?, boostPrompt?, refusalRetryPrompt?, refusalRetry?, model?, thinkingLevel?, approvalMode?, disabledTools?}`，仅引用本插件资源；正文为 Markdown 相对路径；审批取更严档位 |
 | `contributes.methods` | `{name, timeoutMs}`；renderer 方法超时 1000–120000ms，未声明默认 2000ms |
-| `contributes.configuration` | `{key, title, description?, secret?}`，最多 20 项，每值最多 4096 字符 |
+| `contributes.configuration` | `{key, title, type?, description?, secret?, default?, multiline?, options?, min?, max?, pathKind?}`，支持 string/number/boolean/enum/path；缺省 string，secret 仅 string；最多 20 项 |
+| `contributes.commands` | `{id, title, key?}`，输入框 `/` 菜单与快捷键；用户可改键，内置快捷键优先 |
+| `contributes.statusItems` | `{id, text, tooltip?, command?}`，输入框底栏状态项，最多 8 项，可动态更新 |
+| `contributes.fileViewers` | `{id, title, entry, extensions, default?}`，按扩展名在文件侧栏沙箱查看文本；需 `ui.view` |
+| `contributes.workflows` | `<id>.js` 相对路径；项目/设置/全局目录优先于插件，插件优先于内置 |
+| `contributes.agentTypes` | 插件子代理类型，可由插件预设圈定；`modelMode: "agent_pick"` 时允许主代理选模型 |
+| `contributes.themes` | `{id, name, path, css?}`；JSON 浅/深色调色板，可选 CSS 要单独同意样式能力 |
+| `contributes.events` / `schedules` / `exports` | 事件观察或拦截、定时任务与插件间导出方法，见下文 |
 
 工具的本地名为小写字母开头的字母/数字/下划线，不得含 `__`。
 模型侧名称为 `plugin_<id 的点换成横线>__<本地名>`，总长不超过 64。
 MCP 服务名由宿主增加插件命名空间。同类贡献 id/name 不能重复。
 `mcp.tools` 中 server 是宿主实际 MCP 服务名，插件调用宿主 MCP 时来自用户配置中已启用的服务，并非仅限插件自声明的服务。按最后一个 `/` 分隔 server 与 tool：server 为非空、无控制字符、长度不超过 128 的字符串，保留中文、空格及 `/`；tool 仅允许 1–64 个 ASCII 字母、数字、`_`、`.`、`-`，精确匹配两部分，不做 trim 或大小写转换。插件贡献的服务使用 `plugin-<插件 id 的点换成横线>-<本地服务名>`。
+
+### 预设、工作流和子代理
+
+插件预设以 `plugin:<插件 id>:<预设 id>` 寻址。可直接选用，也可在自建预设中通过 `pluginPresetId` 叠加：保留用户预设的指令、技能和 MCP，再加载插件贡献；真尾按用户在前、插件在后拼接。停用叠加插件后退回用户预设；直接选用已停用插件预设会明确失败。
+
+技能、MCP、workflow 和子代理类型若被插件某个预设点名，只在该预设（或叠加它的用户预设）生效；未被点名的条目才对所有本机会话生效。模型与 thinking 可由预设指定，权限模式不得比用户当前设置更宽。`disabledTools` 与用户禁用列表合并，不能用热更新解除会话已经固定的禁用项。
+
+`workflows` 文件名就是预设 ID，必须是合法的 `<id>.js`；同 ID 优先级为项目 → 设置目录 → 全局目录 → 插件 → 内置。文件按 Main 校验后的显式允许列表交给 worker，不扫描插件目录里的其他脚本。
+
+本机原生插件不下发到 SSH、Bot/成员、归档或结束的会话。跨会话 API 的目标同样由 Main 权威目录复查，不能仅用 ID 形状或任意路径绕过。
+
+### 事件、会话自动化与常驻
+
+清单声明后使用 `events.on(name, handler)`；`contributes.events` 区分 observe 与 intercept。事件包括会话开始/结束、回合开始/结束、压缩、工具调用/结果、用户输入、上下文占用、会话状态和模型切换。
+
+- `before_agent_start` 拦截结果只允许 `{append}` 追加当轮系统提示词，不允许取消本轮；总追加文本上限 16K 字符。
+- `model_select` 只通知模型标识与切换来源，不发送凭证。
+- `session_status` 由 Main 汇总（error > waiting > running > idle），worker 不能伪造同名宿主事件。
+- 子会话带明确 `ctx.agent` 来源；不允许插件向子会话注入回合或改写子会话输入/结果，工具拦截预算独立受限。
+- 观察事件、拦截、调度有时限与连续失败熔断；不要把它们当成必然送达的任务队列。
+
+`session.list/status/focus/focusSubagent/openChildRun/create` 只使用会话标识；跨项目列表需 `session.readAll`，切换/创建遵守对应授权与真实用户操作。创建时 `presetId` 只能引用本插件预设。
+`session.inject({text,images?,sessionId?,deliverAs?,triggerTurn?})` 与 `session.abort(sessionId?)` 需要 `agent.inject`；注入最多 4 张支持格式图片。跨会话注入必须由用户额外同意；空闲会话可由真实窗口启动后接收，不能把 UI 乐观显示当执行成功。
+
+声明 `resident` / `process.background` 后可常驻；定时任务用 `schedules.register(id,handler)`。常驻进程可按授权更新状态项、侧栏事件，不能因此取得草稿或文件写入会话上下文。停用、更新和退出会取消调用并收敛进程树；更新等旧进程退出后才启动新版本。
+
+### 状态项、侧栏事件和文件查看器
+
+`ui.status.update(id,{text?,tooltip?,tone?,visible?})` 更新本插件声明的底栏状态项，可关联本插件命令；状态只在内存保留。
+`ui.view.open(viewId?)` 打开/聚焦已声明侧栏，`ui.view.emit(name,data?)` 向本插件已打开页面推送事件；常驻和定时任务也可发送。需 `ui.view`，每条数据最多 256KB，与状态更新共享每秒 20 次限流；没打开的页面不缓存事件。
+
+HTML 中 `enso.on(name,listener)` / `onTheme(listener)` 返回取消函数，`enso.storage.get/set/remove` 同步读写页面快照，写入异步持久化。文件查看器同样运行在沙箱，额外有 `enso.file:{rel,text,onChange,update}`；读取的是当前文件编辑区（含未保存内容），`enso.file.update(text)` 只修改这个编辑区，不直接写盘，不能访问任意磁盘文件。插件脚本开始执行时桥已就绪，不需要等待额外 ready 事件。
+
+### 主题
+
+主题 JSON 的 `light` / `dark` 均需 canvas/surface/sunken/border/borderStrong/text/textMuted/textSubtle/accent 调色板，可附安全 CSS token、固定素材槽与背景图。相对素材 URL 只在本插件包内解析，任意本机路径不会暴露给页面。附加 CSS 属于额外样式能力，扩大时要重新授权。
+用户显式选择插件主题才覆盖当前主题；停用、卸载或加载失败时恢复原有 Collabra 配色，不改写薄荷白、cloud-light 等既有主题设置。
 
 ## Node 入口
 
@@ -139,7 +190,7 @@ export function activate(enso) {
 | `composer.readDraft()` / `insertText()` / `replaceDraft()` | 当前调用所属窗口的草稿；需 `composer.draft`，见下 |
 | `mcp.tools()` / `mcp.call(server, tool, args)` | 仅暴露白名单工具；沿当前会话、worker generation、取消与审批边界，不能绕过 Plan/当前会话限制 |
 
-`ctx` 包含 `sessionId`（可能为 null）、`projectRoot`、`invocationId`、`signal`。
+`ctx` 包含 `sessionId`（可能为 null）、`projectRoot`、`invocationId`、`signal`、`agent`（主会话为 null；子会话带来源）和 `progress(text)`。工具可用 `artifacts.write({name,text|base64,mime?})` 写入插件产物，模型工具结果和界面只传产物标识，不暴露任意路径。
 宿主 API 每次回到 Main 校验；调用超时/取消后权限上下文失效。子进程不继承完整宿主环境。
 插件同权代码不受这些宿主 API 约束，切勿把上表作为资源隔离承诺。
 
@@ -169,12 +220,14 @@ export function onLoad(enso) {
 
 | slot | 额外注册字段 | props |
 | --- | --- | --- |
-| `composer.left` / `composer.right` | 无 | `{position, sessionId, draft, busy}` |
-| `message.action` | `position: "right"` | `{position, text}`；正文右侧动作区 |
+| `composer.left` / `composer.right` | 无 | `{position, sessionId, draft, busy, presetId?}` |
+| `message.action` | `position: "left"` 或 `"right"` | `{position, text, messageIndex?, sessionId?}` |
 | `tool.card` | 本插件已声明的 `toolName` | `{toolName, output, state}` |
 | `block` | 本地 `language` | `{language, source}` |
+| `thinking.body` | 无 | `{text, streaming, itemKey}`，替换思考正文；失败回落文字 |
+| `message.leaf` | 无 | `{source, final, messageIndex, sessionId, Markdown}`，在回复正文叶子后追加内容 |
 
-不支持左侧 message.action、composer.activity/dock 等未接入挂点。
+不支持 composer.activity/dock 等未接入挂点。渲染模块提供 `theme` 和 `onTheme(listener)`，挂载时读当前值，后续变化订阅回调。
 工具卡只能命中本插件的工具，不能替换内置工具或其他插件工具。
 代码块语言必须写为 `<pluginId>:<language>`，例如 `enso.example.wordstats:bars`，不占用通用 `mermaid` 等语言。
 停用后的代码块回退普通代码显示。

@@ -60,3 +60,4 @@
 所以排查时先问：**我看到的现象，是我改的那层造成的，还是下面某层的默认行为？**
 用真机验证（CDP 读计算样式、读 IPC 返回值）比盯着代码猜快得多，
 方法见 [../shared/conventions.md](../shared/conventions.md) 的"本地调试真机验证"。
+| [plugin-iframe-nav-guard-spin.md](plugin-iframe-nav-guard-spin.md) | 打开插件侧栏面板后整个应用无响应，CDP 也连不上；主进程 100% CPU，单测全绿 |
