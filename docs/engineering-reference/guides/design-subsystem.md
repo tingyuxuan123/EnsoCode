@@ -41,6 +41,9 @@ Open Vetta 的业务代码保留在 `src/renderer/features/design/vetta/`，宿�
   注入的内置技能；预览只接收项目 ID，SSH 不扫描本机，scratch 不扫描共用父目录。
 - 画廊只在本机 Code 模式/designEnabled 下可用；状态不持久，选择会话退出。header 独立
   订阅，不能让上游每次 render 发布的新 ReactNode 反向触发整个画廊重渲染。
+- 画廊是全屏接管：打开时 App 不渲染聊天项目侧栏及其拖拽手柄，画廊从图标轨右侧铺满；
+  侧栏宽度和折叠偏好只留在 state / localStorage 里，退出画廊原样恢复。不能把这个占用
+  问题做成永久的全局折叠设置，也不改生图工作台自己的会话侧栏。
 - 项目创建仅收名称，Main 落在 Documents/EnsoCode/Designs；现有 source authority 登记。
   “隐藏”只影响设计画廊，可恢复，不删除目录/会话或撤销项目权限。坏来源单独跳过。
 - 画廊只导航 root 会话；child 按父+tab 路由，不能直接设为根 activeId。

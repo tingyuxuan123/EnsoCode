@@ -739,33 +739,39 @@ export default function App() {
           />
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={dndCollision}>
-            <div
-              className="flex min-h-0 shrink-0"
-              onClickCapture={(event) => {
-                if (isDesignSessionSelection(event.target)) closeWorkspacePage();
-              }}
-            >
-              <Sidebar
-                width={collapsed ? undefined : width}
-                collapsed={collapsed}
-                view={sidebarView}
-                onViewChange={(view) => {
-                  if (extensionsActive) setExtensionsOpen(false);
-                  setSidebarView(view);
-                }}
-                extensionsActive={extensionsActive}
-                onToggleExtensions={() => {
-                  closeDesignGallery();
-                  setExtensionsOpen(!extensionsActive);
-                }}
-                onOpenChat={closeWorkspacePage}
-                onOpenSearch={() => {
-                  closeWorkspacePage();
-                  setSearchOpen(true);
-                }}
-              />
-            </div>
-            {!collapsed && <ResizeHandle onResize={handleResize} />}
+            {/* 画廊是全屏接管：不渲染聊天项目侧栏和它的手柄，让画廊从图标轨右侧铺满。
+                只是这次渲染不挂载，宽度和折叠偏好仍留在 state / localStorage 里。 */}
+            {!galleryActive && (
+              <>
+                <div
+                  className="flex min-h-0 shrink-0"
+                  onClickCapture={(event) => {
+                    if (isDesignSessionSelection(event.target)) closeWorkspacePage();
+                  }}
+                >
+                  <Sidebar
+                    width={collapsed ? undefined : width}
+                    collapsed={collapsed}
+                    view={sidebarView}
+                    onViewChange={(view) => {
+                      if (extensionsActive) setExtensionsOpen(false);
+                      setSidebarView(view);
+                    }}
+                    extensionsActive={extensionsActive}
+                    onToggleExtensions={() => {
+                      closeDesignGallery();
+                      setExtensionsOpen(!extensionsActive);
+                    }}
+                    onOpenChat={closeWorkspacePage}
+                    onOpenSearch={() => {
+                      closeWorkspacePage();
+                      setSearchOpen(true);
+                    }}
+                  />
+                </div>
+                {!collapsed && <ResizeHandle onResize={handleResize} />}
+              </>
+            )}
             {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
             <div
               ref={workspaceRef}
