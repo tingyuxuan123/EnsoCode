@@ -26,7 +26,12 @@ type DesignReveal = { conversationId: string; title?: string; width?: number | '
 const pendingDesignReveal = new Map<string, DesignReveal>();
 type PluginViewReveal = { conversationId: string; pluginId: string; viewId: string; title: string };
 const pendingPluginViews = new Map<string, Map<string, PluginViewReveal>>();
-const pendingBrowserReveal: { conversationId: string; tabId?: string; ownerId?: string }[] = [];
+const pendingBrowserReveal: {
+  conversationId: string;
+  tabId?: string;
+  ownerId?: string;
+  background?: boolean;
+}[] = [];
 const pendingWorkflowReveal: {
   conversationId: string;
   ownerId: string;
@@ -100,6 +105,19 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
         addSidePanelSubagent({ ...item, childConversationId: item.childConversationId });
       } else addSidePanelSubagentDirectory(item.parentConversationId);
     }
+    const due = pendingBrowserReveal.filter((item) => item.conversationId === conversationId);
+    pendingBrowserReveal.splice(
+      0,
+      pendingBrowserReveal.length,
+      ...pendingBrowserReveal.filter((item) => item.conversationId !== conversationId)
+    );
+    for (const item of due) {
+      addSidePanelBrowser({
+        conversationId: item.ownerId ?? item.conversationId,
+        tabId: item.tabId,
+        background: item.background,
+      });
+    }
   });
   if (pendingFilesReveal.delete(conversationId)) {
     // 等 onReady 里的布局恢复完再建，免得被 fromJSON 覆盖
@@ -108,18 +126,6 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
       if (projectId && docks.get(conversationId) === api) {
         revealFilesPanel(api, conversationId, projectId);
       }
-    });
-  }
-  const due = pendingBrowserReveal.filter((item) => item.conversationId === conversationId);
-  pendingBrowserReveal.splice(
-    0,
-    pendingBrowserReveal.length,
-    ...pendingBrowserReveal.filter((item) => item.conversationId !== conversationId)
-  );
-  for (const item of due) {
-    addSidePanelBrowser({
-      conversationId: item.ownerId ?? item.conversationId,
-      tabId: item.tabId,
     });
   }
   const workflowDue = pendingWorkflowReveal.filter(
@@ -236,6 +242,8 @@ export function addSidePanelBrowser(opts?: {
   title?: string;
   conversationId?: string;
   tabId?: string;
+  /** Agent 导航/恢复通知只登记面板，不抢用户输入焦点或当前正在查看的 tab。 */
+  background?: boolean;
 }): void {
   const sessions = useSessionsStore.getState();
   const ownerId = opts?.conversationId ?? sessions.activeId;
@@ -247,12 +255,17 @@ export function addSidePanelBrowser(opts?: {
   useSidePanelStore.getState().ensureOpen(dockId);
   const tabId = opts?.tabId ?? `browser:${crypto.randomUUID()}`;
   if (!api) {
-    pendingBrowserReveal.push({ conversationId: dockId, tabId, ownerId });
+    pendingBrowserReveal.push({
+      conversationId: dockId,
+      tabId,
+      ownerId,
+      background: opts?.background,
+    });
     return;
   }
   const existing = api.getPanel(tabId);
   if (existing) {
-    existing.focus();
+    if (!opts?.background) existing.focus();
     return;
   }
   api.addPanel({
@@ -260,6 +273,8 @@ export function addSidePanelBrowser(opts?: {
     component: 'browser',
     title: opts?.title ?? 'Browser',
     params: { conversationId: ownerId, projectId: conversation.projectId },
+    // 空 dock 的首个页必须成为 active 才会上报 viewport；激活不等于调用 focus()。
+    ...(opts?.background ? { inactive: api.panels.length > 0 } : {}),
   });
 }
 

@@ -147,3 +147,75 @@ it('模型导航可预览当前工作区文件，但不读取越界、缺失、�
   );
   expect(mock.url).toBe(file);
 });
+
+it('WPS 页面重复拼接的编辑器静态资源仅修正同一 CDN 的路径，不重载文档', async () => {
+  const host = new BrowserHost();
+  const page = 'https://ap.wps.com/l/test-document';
+  await host.userNavigate('wps', 'wps-conversation', page);
+  const callback = vi.fn();
+
+  mock.request(
+    {
+      url: 'https://global-static.wpscdn.com/docs/weboffice-static/weboffice-static/js/chunk/editor.zh-CN.js?v=1',
+      webContentsId: 42,
+      resourceType: 'script',
+    },
+    callback
+  );
+
+  expect(callback).toHaveBeenCalledWith({
+    redirectURL:
+      'https://global-static.wpscdn.com/docs/weboffice-static/js/chunk/editor.zh-CN.js?v=1',
+  });
+  expect(mock.url).toBe(page);
+});
+
+it('WPS 重复 CSS 路径同样修正，正常路径不再重定向', async () => {
+  const host = new BrowserHost();
+  await host.userNavigate('wps-css', 'wps-css-conversation', 'https://ap.wps.com/l/test-document');
+  const callback = vi.fn();
+  const correct = 'https://global-static.wpscdn.com/docs/weboffice-static/js/editor.zh-CN.css';
+  mock.request(
+    {
+      url: correct.replace('/js/', '/weboffice-static/js/'),
+      webContentsId: 42,
+      resourceType: 'stylesheet',
+    },
+    callback
+  );
+  expect(callback).toHaveBeenLastCalledWith({ redirectURL: correct });
+
+  mock.request({ url: correct, webContentsId: 42, resourceType: 'stylesheet' }, callback);
+
+  expect(callback).toHaveBeenLastCalledWith({ cancel: false });
+});
+
+const wpsPage = 'https://ap.wps.com/l/test-document';
+const duplicateWpsScript =
+  'https://global-static.wpscdn.com/docs/weboffice-static/weboffice-static/js/editor.js';
+it.each([
+  ['https://other.example/', 42, 'script', duplicateWpsScript],
+  ['https://ap.wps.com.evil.example/', 42, 'script', duplicateWpsScript],
+  [wpsPage, 999, 'script', duplicateWpsScript],
+  [wpsPage, 42, 'mainFrame', duplicateWpsScript],
+  [wpsPage, 42, 'xhr', duplicateWpsScript],
+  [
+    wpsPage,
+    42,
+    'script',
+    'https://evil.example/docs/weboffice-static/weboffice-static/js/editor.js',
+  ],
+  [wpsPage, 42, 'image', duplicateWpsScript.replace('.js', '.png')],
+])(
+  'WPS 兼容规则不改其他站点、未知归属、文档导航或API请求：%s / %s / %s',
+  async (page, webContentsId, resourceType, url) => {
+    const host = new BrowserHost();
+    await host.userNavigate('wps-scope', 'wps-scope-conversation', page);
+    const callback = vi.fn();
+
+    mock.request({ url, webContentsId, resourceType }, callback);
+
+    expect(callback).toHaveBeenCalledWith({ cancel: false });
+    expect(mock.url).toBe(page);
+  }
+);

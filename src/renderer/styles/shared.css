@@ -41,32 +41,37 @@
       0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.6);
   }
 
-  /* 强调色预设：默认晴空蓝写在 :root/.dark，其余由设置写入 html[data-accent] */
-  html[data-accent='violet'] {
+  /* 显式浅色强调色比单一 light-palette 更具体，不能被主题默认 brand 覆盖。
+   * ocean 仅在浅色显式赋值，深色仍保留上游默认紫色。
+   */
+  html:not(.dark)[data-accent='ocean'] {
+    --brand: rgb(64 138 191);
+  }
+  html:not(.dark)[data-accent='violet'] {
     --brand: rgb(124 78 214);
   }
   html.dark[data-accent='violet'] {
     --brand: rgb(167 139 250);
   }
-  html[data-accent='indigo'] {
+  html:not(.dark)[data-accent='indigo'] {
     --brand: rgb(79 70 229);
   }
   html.dark[data-accent='indigo'] {
     --brand: rgb(129 132 248);
   }
-  html[data-accent='teal'] {
+  html:not(.dark)[data-accent='teal'] {
     --brand: rgb(13 138 136);
   }
   html.dark[data-accent='teal'] {
     --brand: rgb(69 190 186);
   }
-  html[data-accent='amber'] {
+  html:not(.dark)[data-accent='amber'] {
     --brand: rgb(180 116 12);
   }
   html.dark[data-accent='amber'] {
     --brand: rgb(230 178 84);
   }
-  html[data-accent='graphite'] {
+  html:not(.dark)[data-accent='graphite'] {
     --brand: rgb(60 66 80);
   }
   html.dark[data-accent='graphite'] {

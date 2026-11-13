@@ -60,7 +60,8 @@ describe('Cloud Light neutral palette', () => {
     const composer = declarations(`${scope} [data-slot='composer']`);
     expect(composer['background-color']).toBe('var(--color-popover)');
     const focused = declarations(`${scope} [data-slot='composer']:focus-within`);
-    expect(resolve(focused['border-color'])).toBe('#b4b4b4');
+    expect(focused['border-color']).toBe('var(--cloud-focus-border)');
+    expect(tokens['--cloud-focus-border']).toBe('var(--selection-border)');
     const inactive = declarations(`${scope} [data-slot='composer'] button.bg-brand:disabled`);
     expect(resolve(inactive.color)).toBe('#b4b4b4');
     expect(inactive['background-color']).toBe('rgb(180 180 180 / 0.22)');
@@ -72,12 +73,11 @@ describe('Cloud Light neutral palette', () => {
     const indicator = declarations(`${sidebar} [data-slot='tab-indicator']`);
 
     // --muted / --background are nearly identical to navigation in this palette.
-    // Use remapped surface tokens so wallpaper opacity remains effective as well.
+    // The neutral track follows wallpaper; persistent selection keeps its own alpha.
     expect(track['background-color']).toBe('var(--color-secondary)');
-    expect(indicator['background-color']).toBe('var(--color-popover)');
+    expect(indicator['background-color']).toBe('var(--selection)');
     expect(resolve(track['background-color'])).toBe('#f1f0f0');
-    expect(resolve(indicator['background-color'])).toBe('#ffffff');
-    expect(indicator['box-shadow']).toBe('var(--cloud-lift)');
+    expect(indicator['box-shadow']).toBe('inset 0 0 0 1px var(--selection-border)');
 
     for (const styles of [track, indicator]) {
       for (const property of ['height', 'width', 'padding', 'margin', 'border-radius']) {

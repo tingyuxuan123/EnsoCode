@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
 import {
   defaultDarkTheme,
@@ -656,16 +655,6 @@ export function AppearanceSettings() {
     toggleFavoriteTerminalTheme,
   } = useSettingsStore();
   const { t } = useI18n();
-  const colorScheme = useColorScheme();
-  // 自带强调色的浅色方案，仅在实际生效（浅色外观、非同步终端）时锁定强调色选择
-  const paletteAccentNote =
-    theme !== 'sync-terminal' && colorScheme === 'light'
-      ? {
-          ocean: null,
-          'mint-light': t('Mint Light uses its own green accent.'),
-          'cloud-light': t('Cloud Light uses its own monochrome accent.'),
-        }[lightPalette]
-      : null;
   const paletteOptions: Record<LightPalette, string> = {
     ocean: t('Ocean Light'),
     'mint-light': t('Mint Light'),
@@ -858,7 +847,7 @@ export function AppearanceSettings() {
         <div data-settings-row="appearance.accent">
           <h4 className="text-[calc(14rem/14)] font-medium">{t('Accent color')}</h4>
           <p className="mt-[2px] text-[calc(12rem/14)] leading-[calc(20rem/14)] text-muted-foreground">
-            {paletteAccentNote ?? t('Highlight color used across the interface')}
+            {t('Highlight color used across the interface')}
           </p>
         </div>
 
@@ -867,12 +856,12 @@ export function AppearanceSettings() {
             <button
               type="button"
               key={option.value}
+              data-accent-option={option.value}
               onClick={() => setAccentColor(option.value)}
               title={option.label}
               aria-label={option.label}
               aria-pressed={accentColor === option.value}
-              disabled={paletteAccentNote !== null}
-              className="flex flex-col items-center gap-[6px] rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
+              className="flex flex-col items-center gap-[6px] rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <span
                 style={{ backgroundColor: option.swatch }}

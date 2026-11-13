@@ -33,7 +33,7 @@ className="text-red-500"
   `foreground`，边框取品牌色 45%；不经过壁纸 alpha 重映射。active 时不要让通用 `hover:bg-accent`
   覆盖它（把 hover 放到 inactive 分支，或 active 显式 `hover:bg-selection`）。
 - 不按 `[aria-pressed=true]` 全局刷色：侧栏展开、工具开启、当前工作区是不同的状态；在所属组件
-  显式选择样式。云白/薄荷已有的中性或绿色表面例外继续由各自主题文件管理。
+  显式选择样式。云白/薄荷的中性表面和状态色由主题文件管理，不能强行覆盖用户选择的强调色。
 
 桌面/手机共用 `shared.css` 的 `@custom-variant dark (&:where(.dark, .dark *))`，让所有
 `dark:` 工具类与 settings store 的 `html.dark` 一致，不能另跟随系统媒体查询。
@@ -93,10 +93,10 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
   色值回归见 `upstreamDark.test.ts`，主题驱动/选择契约见 `selection.test.ts`。
 - `sync-terminal`：调 `applyTerminalThemeToApp()`，把 ghostty 终端主题的配色
   写进全局 CSS 变量，让整个界面跟随终端配色。
-- 桌面浅色方案独立保存在 `lightPalette`，默认为 `cloud-light`（`shared/lightPalette.ts` 的 `DEFAULT_LIGHT_PALETTE`）；旧配置缺字段或非法值也回退云白，已有合法选择不变。`mint-light` 只在显式浅色或跟随浅色系统时设置 `html[data-light-palette]`，用主题自带的绿色，不覆盖用户为其他模式设置的强调色。
-  - 薄荷白全部样式在 `styles/mintLight.css`，只换肤不改尺寸：灰阶与绿色同色相，`--accent` 保持中性；绿色只给发送、当前选中、运行/完成状态；圆角 8 / 12 / 16（行与控件 / 浮层与气泡 / 输入框与对话框）。组件覆盖优先挂 `data-slot`、`data-model-picker`、`aria-pressed` 等稳定属性。
+- 桌面浅色方案独立保存在 `lightPalette`，默认为 `cloud-light`（`shared/lightPalette.ts` 的 `DEFAULT_LIGHT_PALETTE`）；旧配置缺字段或非法值也回退云白，已有合法选择不变。三个浅色方案均支持已保存的强调色：不禁用设置按钮；`shared.css` 的 `html:not(.dark)[data-accent=...]` 比浅色方案默认 `brand` 更具体，包含 ocean，深色默认仍沿用上游。方案只在显式浅色或系统浅色时生效，不影响深色/终端同步。回归：`lightAccent.test.ts`、`AppearanceSettings.accent.test.tsx`。
+  - 薄荷白全部样式在 `styles/mintLight.css`，只换肤不改尺寸：灰阶与绿色同色相，`--accent` 保持中性；发送/选择/聚焦跟随用户强调色，运行/完成仍用绿色状态语义；圆角 8 / 12 / 16（行与控件 / 浮层与气泡 / 输入框与对话框）。组件覆盖优先挂 `data-slot`、`data-model-picker`、`aria-pressed` 等稳定属性。
   - 该文件的组件规则不在 `@layer` 内，会压过 Tailwind 工具类（包括 `hover:`、`disabled:`），写覆盖时要显式处理这些状态。改浮层圆角要连 `::before` 一起改：命令面板的 `::before` 带底色，只改外框会在角上露出旧圆角。代码视图选中色用宿主 `diffs-container` 上的 `--diffs-selection-base`（文档侧声明压过 shadow `:host`），不要改 `--diffs-modified-*`，那会连带 diff 的修改色。
-  - `cloud-light`（云白）遵循相同的浅色生效边界，配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、黑色主操作、浅灰用户消息；不用冷蓝外壳、饱和蓝气泡或蓝色聚焦光晕。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
+  - `cloud-light`（云白）配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、中性普通主操作、浅灰用户消息；发送/当前选中/聚焦跟随用户强调色，不给外壳或用户气泡染色。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
 
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
 在 `system`/`light`/`dark` 下改配色方案看不到界面变化，这是设计如此，不是 bug。

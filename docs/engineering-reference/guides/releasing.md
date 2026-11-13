@@ -185,6 +185,11 @@ Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID
 - 关闭自动更新后，先手动检查；收到 `available` 后应能手动下载，完成后仍可查看日志和重启。
   晚开的设置窗口仅展示订阅后实际收到的状态；不假装已经读取下载快照，不新增通用 IPC。
 - 真正升级前由用户正常退出/重启；保留旧应用与 userData 备份，不删除设置和会话。
+- Windows 点击「重启以更新」应显示 NSIS 安装进度，沿用已注册安装范围和目录，跳过选择页及
+  完成页，按 `--force-run` 自动重开。`--updated` 不是静默标记，不能用 `SetSilent silent`
+  隐藏整个安装过程；普通退出时的后台升级仍尊重 electron-updater 传入的 `/S`。
+  目录页虽会跳过升级，上游 `instFilesPre` 仍可能追加产品子目录；升级也须跳过该路径改写。
+  `scripts/release.test.mjs` 只检查脚本合约，进度可见、UAC、自定义旧目录和自动重开仍需 Windows 实机验收。
 - 更新完成后核对运行版本、旧设置/会话/项目和本次功能；不能把下载完成当作安装完成。
 - ZIP 下载后仍可能在 Squirrel 签名验证阶段失败，错误必须允许覆盖 downloaded 状态。
 - 可检查 `~/Library/Caches/enso-code-updater/pending/update-info.json`、ZIP SHA-512，

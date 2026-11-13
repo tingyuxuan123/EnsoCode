@@ -1,6 +1,7 @@
 import type { DockviewApi } from 'dockview-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  addSidePanelBrowser,
   bindSidePanelDock,
   disposeConversationResources,
   openSidePanelBrowserUrl,
@@ -27,9 +28,13 @@ vi.mock('@/stores/sidePanel', () => ({
 }));
 vi.mock('@/lib/terminalRegistry', () => ({ releaseTerminal: vi.fn() }));
 
-function fakeDock() {
+function fakeDock(hasPanels = false) {
   const addPanel = vi.fn();
-  const api = { panels: [], getPanel: () => undefined, addPanel } as unknown as DockviewApi;
+  const api = {
+    panels: hasPanels ? [{ id: 'existing' }] : [],
+    getPanel: () => undefined,
+    addPanel,
+  } as unknown as DockviewApi;
   return { api, addPanel };
 }
 
@@ -82,6 +87,7 @@ describe('openSidePanelBrowserUrl', () => {
     const tabId = harness.navigate.mock.calls[0][0];
     const { api, addPanel } = fakeDock();
     bindSidePanelDock('cold', api);
+    await Promise.resolve();
     expect(addPanel).toHaveBeenCalledWith(
       expect.objectContaining({ id: tabId, params: { conversationId: 'cold', projectId: 'p' } })
     );
@@ -111,6 +117,60 @@ describe('openSidePanelBrowserUrl', () => {
     await expect(openSidePanelBrowserUrl('parent', 'https://example.com/')).rejects.toThrow(
       'IPC unavailable'
     );
+  });
+});
+
+describe('浏览器自动展示与用户输入焦点', () => {
+  it('自动导航完成通知不重新聚焦已存在的浏览器面板', () => {
+    const focus = vi.fn();
+    const api = {
+      panels: [],
+      getPanel: () => ({ focus }),
+      addPanel: vi.fn(),
+    } as unknown as DockviewApi;
+    bindSidePanelDock('parent', api);
+
+    addSidePanelBrowser({ conversationId: 'parent', tabId: 'browser:existing', background: true });
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(api.addPanel).not.toHaveBeenCalled();
+  });
+
+  it('自动新建的面板不激活，避免打断用户正在输入或查看的面板', () => {
+    const { api, addPanel } = fakeDock(true);
+    bindSidePanelDock('parent', api);
+
+    addSidePanelBrowser({ conversationId: 'parent', tabId: 'browser:new', background: true });
+
+    expect(addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'browser:new', component: 'browser', inactive: true })
+    );
+  });
+
+  it('冷 dock 挂载后仍保留自动展示不抢焦点的意图', async () => {
+    addSidePanelBrowser({ conversationId: 'cold', tabId: 'browser:cold', background: true });
+    const { api, addPanel } = fakeDock(true);
+
+    bindSidePanelDock('cold', api);
+    await Promise.resolve();
+
+    expect(addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'browser:cold', inactive: true })
+    );
+  });
+
+  it('用户明确打开已存在的浏览器面板时仍可聚焦', () => {
+    const focus = vi.fn();
+    const api = {
+      panels: [],
+      getPanel: () => ({ focus }),
+      addPanel: vi.fn(),
+    } as unknown as DockviewApi;
+    bindSidePanelDock('parent', api);
+
+    addSidePanelBrowser({ conversationId: 'parent', tabId: 'browser:existing' });
+
+    expect(focus).toHaveBeenCalledOnce();
   });
 });
 

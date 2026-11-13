@@ -61,6 +61,7 @@ import {
 import { assertAllowedUrl } from '@shared/browser/urlPolicy';
 import type { BrowserViewport } from '@shared/browser/viewport';
 import { effectiveBrowserViewport } from '@shared/browser/viewport';
+import { wpsStaticResourceRedirect } from '@shared/browser/wpsCompatibility';
 import { mergeBrowserSearchTabs } from '@shared/searchAnything';
 import type { BrowserOp } from '@shared/types/agent';
 import type {
@@ -609,12 +610,20 @@ export class BrowserHost {
     return this.state(tabId);
   }
 
-  private ensureWorkbenchOnTop(window: BrowserWindow): void {
+  private syncViewStack(window: BrowserWindow, raised: WebContentsView[]): void {
     const workbench = getWorkbenchView(window);
-    if (!workbench) return;
-    const bounds = pinnedWorkbenchBounds(window);
-    if (bounds) workbench.setBounds(bounds);
-    window.contentView.addChildView(workbench);
+    if (workbench) {
+      const bounds = pinnedWorkbenchBounds(window);
+      if (bounds) workbench.setBounds(bounds);
+    }
+    const stack = workbench ? [workbench, ...raised] : raised;
+    const { contentView } = window;
+    const offset = contentView.children.length - stack.length;
+    // addChildView(existing) 会重挂原生视图；即使最终层级相同，也可能打断焦点/绘制。
+    // 只在目标层级真的改变时调整，不能每次 viewport/dom-ready 都先提 workbench 再提 guest。
+    if (offset >= 0 && stack.every((view, index) => contentView.children[offset + index] === view))
+      return;
+    for (const view of stack) contentView.addChildView(view);
   }
 
   /**
@@ -670,8 +679,7 @@ export class BrowserHost {
         (error: unknown) => console.warn('[browser] emulation failed', error)
       );
     }
-    this.ensureWorkbenchOnTop(window);
-    for (const view of raise) contentView.addChildView(view);
+    this.syncViewStack(window, raise);
   }
 
   private applyEmulation(tab: Tab, panel: BrowserViewport | null, strict = false): Promise<void> {
@@ -1189,11 +1197,30 @@ export class BrowserHost {
       );
       // Also covers frames, subresources, reload and network-backed history loads.
       this.guestSession.webRequest.onBeforeRequest(
-        { urls: ['file://*/*'] },
+        {
+          urls: [
+            'file://*/*',
+            'https://global-static.wpscdn.com/docs/weboffice-static/weboffice-static/js/*',
+          ],
+        },
         (details, callback) => {
           const tab = [...this.tabs.values()].find(
             (entry) => entry.view.webContents.id === details.webContentsId
           );
+          if (!details.url.startsWith('file:')) {
+            // 页面归属取自 Main 持有的 tab，不采信请求方传入的 referrer。
+            // 只修正静态资源 URL；未知归属或非匹配资源仍按原请求处理。
+            let redirectURL: string | undefined;
+            try {
+              redirectURL = wpsStaticResourceRedirect(
+                details.url,
+                tab?.view.webContents.getURL(),
+                details.resourceType
+              );
+            } catch {}
+            callback(redirectURL ? { redirectURL } : { cancel: false });
+            return;
+          }
           try {
             if (!tab) throw new Error('Unknown file request owner');
             this.allowUrl(details.url, tab.ownerSessionId);

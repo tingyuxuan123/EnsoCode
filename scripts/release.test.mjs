@@ -143,17 +143,51 @@ test('Windows 手动安装提供目录选择，默认不强制全用户安装', 
   assert.notEqual(config.nsis.selectPerMachineByDefault, true);
 });
 
-test('Windows 应用内升级保持静默，跳过安装向导并沿用已注册目录', async () => {
+test('Windows 重启升级显示进度并自动结束，不把 --updated 强制变成静默安装', async () => {
   const config = parse(await readFile(new URL('../electron-builder.yml', import.meta.url), 'utf8'));
   assert.equal(config.nsis.include, 'build/installer.nsh');
   const installer = await readFile(new URL('../build/installer.nsh', import.meta.url), 'utf8');
   // 合约检查，不代表已在 Windows 上完成安装/升级验收。
-  // SetSilent 只作用于 electron-updater 的 --updated；不覆盖 $INSTDIR，保留 NSIS 的注册表恢复逻辑。
+  // 不覆盖 /S：正常退出时的后台安装仍由 electron-updater 决定是否静默。
+  assert.doesNotMatch(installer, /^\s*SetSilent\b/m);
   assert.match(
     installer,
-    /!macro customInit\s+\$\{if\} \$\{isUpdated\}\s+SetSilent silent\s+\$\{endif\}\s+!macroend/
+    /!macro customInit\s+\$\{if\} \$\{isUpdated\}\s+SetAutoClose true\s+\$\{endif\}\s+!macroend/
+  );
+});
+
+test('Windows 升级免选安装范围，保留原目录；手动安装仍使用原目录选择处理', async () => {
+  const installer = await readFile(new URL('../build/installer.nsh', import.meta.url), 'utf8');
+  assert.match(
+    installer,
+    /!macro customInstallMode\s+\$\{if\} \$\{isUpdated\}\s+\$\{if\} \$installMode == "all"\s+StrCpy \$isForceMachineInstall "1"\s+\$\{else\}\s+StrCpy \$isForceCurrentInstall "1"\s+\$\{endif\}\s+\$\{endif\}\s+!macroend/
+  );
+  // electron-builder 的 instFilesPre 会追加产品目录名，升级不能改写用户已有的自定义路径。
+  assert.match(
+    installer,
+    /!macro customPageAfterChangeDir\s+!ifdef allowToChangeInstallationDirectory\s+!undef MUI_PAGE_CUSTOMFUNCTION_PRE\s+!define MUI_PAGE_CUSTOMFUNCTION_PRE collabraInstFilesPre\s+Function collabraInstFilesPre\s+\$\{ifNot\} \$\{isUpdated\}\s+Call instFilesPre\s+\$\{endif\}\s+FunctionEnd\s+!endif\s+!macroend/
   );
   assert.doesNotMatch(installer, /StrCpy\s+\$INSTDIR\b/);
+});
+
+test('Windows 升级完成免点 Finish，按 --force-run 重开；手动安装保留运行复选框', async () => {
+  const installer = await readFile(new URL('../build/installer.nsh', import.meta.url), 'utf8');
+  assert.match(
+    installer,
+    /Function collabraFinishPre\s+\$\{if\} \$\{isUpdated\}\s+\$\{if\} \$\{isForceRun\}\s+Call collabraStartApp\s+\$\{endif\}\s+Abort\s+\$\{endif\}\s+FunctionEnd/
+  );
+  // 上游 StartApp 宏内声明全局变量，installSection 已展开过一次；再次展开会让 NSIS 编译失败。
+  // 使用 assisted installer 的默认启动函数体，保留非管理员启动与 --updated 参数。
+  assert.doesNotMatch(installer, /^\s*!insertmacro StartApp\b/m);
+  assert.match(
+    installer,
+    /Function collabraStartApp\s+\$\{if\} \$\{isUpdated\}\s+StrCpy \$1 "--updated"\s+\$\{else\}\s+StrCpy \$1 ""\s+\$\{endif\}\s+\$\{StdUtils.ExecShellAsUser\} \$0 "\$launchLink" "open" "\$1"\s+FunctionEnd/
+  );
+  assert.match(installer, /!define MUI_PAGE_CUSTOMFUNCTION_PRE collabraFinishPre/);
+  assert.match(
+    installer,
+    /!ifndef HIDE_RUN_AFTER_FINISH\s+!define MUI_FINISHPAGE_RUN\s+!define MUI_FINISHPAGE_RUN_FUNCTION "collabraStartApp"\s+!endif\s+!insertmacro MUI_PAGE_FINISH/
+  );
 });
 
 test('仅 Windows 产物可独立校验，坏安装包与缺失清单不能发布', async () => {

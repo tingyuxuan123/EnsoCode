@@ -10,6 +10,7 @@
 | [ui-component-classname.md](ui-component-classname.md) | 输入框左侧一大片留白、图标不见了 |
 | [dialog-layering.md](dialog-layering.md) | 弹窗内的下拉点开没反应 |
 | [browser-devtools-close-layout.md](browser-devtools-close-layout.md) | 关闭 DevTools 后网页下方留白、更多菜单被原生网页盖住 |
+| [wps-editor-static-path.md](wps-editor-static-path.md) | WPS 国际分享表白屏、看似刷新；重复静态路径 404，不能直接归因于 UA 或语言 |
 | [ios-pwa-header-blur.md](ios-pwa-header-blur.md) | Safari 正常，独立 PWA 顶部标题模糊；透明遮罩又留下灰色状态栏 |
 | [pair-web-replaced-loop.md](pair-web-replaced-loop.md) | 同一配对多个 Web 页面互踢，连接状态反复切换、页面闪烁 |
 | [pair-sync-retry-deadlock.md](pair-sync-retry-deadlock.md) | 手机远程一直停在「正在读取历史…」：快照请求丢了，重试订阅也不重新索要 |

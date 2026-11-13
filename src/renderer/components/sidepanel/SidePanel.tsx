@@ -873,6 +873,7 @@ export function SidePanel({
       addSidePanelBrowser({
         conversationId: event.conversationId,
         tabId: event.tabId,
+        background: true,
       });
     });
     const stopClosed = window.electronAPI.browser.onTabClosed((event) => {

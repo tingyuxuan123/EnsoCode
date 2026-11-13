@@ -198,6 +198,40 @@ it('covered 闩锁同样在上报方消失后回落', async () => {
   expect(raised(win)).toBe(true);
 });
 
+it('重复 viewport 上报不重挂已正确排列的原生视图', async () => {
+  const { host, win } = await setup();
+  const before = [...win.contentView.children];
+  const addChildView = vi.spyOn(win.contentView, 'addChildView');
+
+  host.setViewport('tab-a', 'conv', viewport);
+  host.setDevToolsViewport('tab-a', 'conv', null);
+  mock.contents[0].emit('dom-ready');
+
+  expect(win.contentView.children).toEqual(before);
+  expect(raised(win)).toBe(true);
+  expect(addChildView).not.toHaveBeenCalled();
+  await host.dispose();
+});
+
+it('只改变网页矩形不重挂原生视图，浮层切换后同样保持幂等', async () => {
+  const { host, win } = await setup();
+  host.setOverlayActive(true);
+  const before = [...win.contentView.children];
+  const addChildView = vi.spyOn(win.contentView, 'addChildView');
+  const nextViewport = { ...viewport, width: viewport.width - 20 };
+
+  host.setViewport('tab-a', 'conv', nextViewport);
+
+  const guest = win.contentView.children.find((view) => view.webContents === mock.contents[0]);
+  expect(guest.bounds).toEqual(nextViewport);
+  expect(win.contentView.children).toEqual(before);
+  expect(raised(win)).toBe(false);
+  expect(addChildView).not.toHaveBeenCalled();
+  host.setOverlayActive(false);
+  expect(raised(win)).toBe(true);
+  await host.dispose();
+});
+
 const openDockedDevtools = (host: BrowserHost) => {
   host.setDevTools('tab-a', true);
   host.setDevToolsViewport('tab-a', 'conv', viewport);

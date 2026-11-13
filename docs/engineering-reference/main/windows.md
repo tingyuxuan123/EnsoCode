@@ -120,7 +120,7 @@ renderer 被杀、GPU 丢表面的观感都一样，**未在真机二分，不�
 - win32 启动时把 `CalculateNativeWinOcclusion` 合并进 `disable-features`（未证实是否仍有效）。
 - 最小化 / 空矩形不写 workbench bounds；`restore` / `show` / `maximize` / `unmaximize` /
   `display-metrics-changed` 立即同步，并 `setImmediate` 再同步一次。
-- `browserHost.ensureWorkbenchOnTop` 走同一套 bounds。
+- `browserHost.syncViewStack` 走同一套 bounds。
 - `restore` 只在「刚从 minimize 回来」时尝试 `show()`，避免和 unmaximize 的 `restore` 搅在一起。
 - `render-process-gone` 除 `clean-exit` 外都 reload（含 Windows 后台 `killed`），60s 内最多 3 次。
 - `child-process-gone` 打日志，便于下次对照 GPU / utility 是否先死。
@@ -194,6 +194,14 @@ Tailwind 的 `h-11` 会算成 38.5px 而不是 44px，与 `trafficLightPosition:
 - `covered` 由 `BrowserView.tsx` 的 rAF tick 算：空页占位，或带浮层标记的可见盒子与网页
   矩形相交（`overlayCover.ts`，不区分是否 portal 到 `#root` 外）。`locked` 仅为标签保留标记，
   不参与覆盖或人工输入门控。不要为弹层整页隐藏 guest，也不要用原生菜单绕。
+- 布局层级已经正确时不重新 `addChildView(existing)`：比较当前顶部视图序列后再调整，
+  避免 viewport / dom-ready 重复上报时反复重挂 workbench 和 guest；矩形更新仍正常执行。
+- Code 侧栏收到 Agent 导航 / 恢复的 `browser:reveal` 时，后台登记面板，不调用已有面板
+  `focus()`；有其它面板时新页使用 `inactive`，空 dock 首个页须 active 才会上报 viewport。
+  冷 dock 等 `fromJSON` 恢复后再重放，并保留后台意图。用户明确点击打开仍可激活。
+  回归见 `sidePanelDock.browser.test.ts`（真实 Dockview 的焦点/光标/可见性）、
+  `sidePanelDock.test.ts` 和 `browserHost.zorder.test.ts`；原生焦点 / IME 仍需真机验收，
+  不以视图顺序单测通过宣称当前安装版已经修复。
 - 挖孔要求网页矩形之上的 DOM **全部透明**：主外壳、workspace 卡片、设备预览舞台底色都不能
   在洞内刷不透明底色，否则菜单 / Dialog 一开，沉底后的 guest 被盖住，网页表现为整块空白
   （`BackgroundLayer` 的实心底只在洞外生效）。设备预览的舞台底色由 `deviceStageClip` 在框内挖空。

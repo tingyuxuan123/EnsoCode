@@ -14,6 +14,10 @@
 | `snippets` | `#review` / `#tests` 补全、输入框右按钮、回复右侧操作；读草稿后带 generation/rev 写入 |
 | `notes` | 侧栏 `+` → Local Notes；opaque-origin sandbox 页面经固定 MessagePort 调本插件，私有目录保存便签 |
 
+### 待接入验证（不可安装）
+
+[`kdocs-tasks/README.md`](kdocs-tasks/README.md) 是“金山文档需求助手”的申请与测试副本准备指南，目前仅有文档，没有插件清单或运行时代码。需要先确认企业服务商准入、官方授权和目标文件读写能力；不属于上述无需网络/凭证的可运行示例。
+
 配置与完整 API 见 [开发文档](../../docs/plugins.md)。不要把真实 MCP、token 或开发机配置放进示例。
 在仓库运行 `pnpm plugin:init ../my-plugin --id org.example.hello` 可生成一份独立模板，再运行 `pnpm plugin:validate ../my-plugin` 静态检查。校验不执行插件，也不代替桌面的预览确认与手动启用。
 若自行扩展示例调用宿主 MCP，需同时申请 `"mcp.call"` 并声明精确配对，例如 `"mcp": {"tools": ["demo/lookup"]}`；只有 server `demo` 的 `lookup` 获授权，其他 server 上的同名工具不在授权内。现有离线示例不申请该权限。

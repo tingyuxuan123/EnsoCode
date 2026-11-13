@@ -45,12 +45,15 @@ async function settle() {
       .map(a=>a.finished.catch(()=>{})));
   })()`);
 }
-async function ready(previousTimeOrigin) {
+async function ready(previousTimeOrigin, client = rpc, storeRequired = true) {
   await waitUntil(
     async () => {
       try {
-        return await evaluate(`Boolean(window.__stores?.settings && document.readyState === "complete"
-        && performance.timeOrigin !== ${JSON.stringify(previousTimeOrigin ?? null)})`);
+        return await evaluate(
+          `Boolean(${storeRequired ? 'window.__stores?.settings' : 'true'} && document.readyState === "complete"
+        && performance.timeOrigin !== ${JSON.stringify(previousTimeOrigin ?? null)})`,
+          client
+        );
       } catch (error) {
         if (/context.*destroyed|Cannot find context/i.test(error.message)) return false;
         throw error;
@@ -75,6 +78,7 @@ const original = await evaluate(`(()=>{
 })()`);
 const temp = mkdtempSync(path.join(tmpdir(), 'enso-theme-selection-'));
 let restorationError;
+let settingsRpc;
 try {
   await evaluate(`(async()=>{
     const resources=performance.getEntriesByType('resource').map(e=>e.name);
@@ -216,6 +220,131 @@ try {
   assert.equal(fallback.bg, fallback.expected.bg);
   assert.equal(fallback.color, fallback.expected.color);
   results.push({ check: 'Code remains selected with Bot disabled', passed: true });
+
+  // Use the real settings buttons, not only root-token self-comparisons: light
+  // palettes used to disable these and override --brand even after store updates.
+  await evaluate('window.electronAPI.window.openSettings()');
+  const settingsPage = await waitUntil(
+    async () => {
+      try {
+        return selectPage(await fetchJson(port, '/json/list'), 'settings.html');
+      } catch (error) {
+        if (error.code === 'NO_PAGE') return false;
+        throw error;
+      }
+    },
+    { timeout: 15000 }
+  );
+  settingsRpc = await connect(settingsPage.webSocketDebuggerUrl, {
+    expectedPort: port,
+    timeout: 20000,
+  });
+  await waitUntil(
+    () =>
+      evaluate(
+        `document.readyState==='complete' && Boolean(document.querySelector('[data-slot=settings-navigation]'))`,
+        settingsRpc
+      ),
+    { timeout: 15000 }
+  );
+  const categoryIndex = await evaluate(
+    `Array.from(document.querySelectorAll('[data-slot=settings-navigation] button')).findIndex(b=>['Appearance','外观'].includes(b.textContent.trim()))`,
+    settingsRpc
+  );
+  assert.ok(categoryIndex >= 0, 'appearance settings category');
+  click(`[data-slot=settings-navigation] button:nth-child(${categoryIndex + 1})`, 'settings.html');
+  await waitUntil(
+    () => evaluate(`Boolean(document.querySelector('[data-accent-option=teal]'))`, settingsRpc),
+    { timeout: 15000 }
+  );
+  const lightAccents = {
+    ocean: 'rgb(64, 138, 191)',
+    indigo: 'rgb(79, 70, 229)',
+    violet: 'rgb(124, 78, 214)',
+    teal: 'rgb(13, 138, 136)',
+    amber: 'rgb(180, 116, 12)',
+    graphite: 'rgb(60, 66, 80)',
+  };
+  for (const palette of ['ocean', 'mint-light', 'cloud-light']) {
+    await evaluate(
+      `(()=>{const s=window.__stores.settings.getState();s.setBackgroundImageEnabled(false);s.setTheme('light');s.setLightPalette(${JSON.stringify(palette)});})()`
+    );
+    await waitUntil(
+      () =>
+        evaluate(
+          `(document.documentElement.dataset.lightPalette||'ocean')===${JSON.stringify(palette)} && !document.documentElement.classList.contains('dark')`,
+          settingsRpc
+        ),
+      { timeout: 10000 }
+    );
+    const surface = await evaluate(
+      `getComputedStyle(document.documentElement).getPropertyValue('--background').trim()`
+    );
+    for (const [accent, expected] of Object.entries(lightAccents)) {
+      const selector = `[data-accent-option="${accent}"]`;
+      await evaluate(
+        `document.querySelector('${selector}').scrollIntoView({block:'center'})`,
+        settingsRpc
+      );
+      click(selector, 'settings.html');
+      const hasAccent = `(document.documentElement.dataset.accent===${JSON.stringify(accent)} && getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()===${JSON.stringify(expected.replaceAll(', ', ' '))})`;
+      await waitUntil(() => evaluate(hasAccent), { timeout: 10000 });
+      await waitUntil(() => evaluate(hasAccent, settingsRpc), { timeout: 10000 });
+      const data = await evaluate(
+        `(()=>{const b=document.querySelector('${selector}');return {enabled:!b.disabled,selected:b.getAttribute('aria-pressed')};})()`,
+        settingsRpc
+      );
+      assert.equal(data.enabled, true, `${palette}/${accent}: interactive`);
+      assert.equal(data.selected, 'true', `${palette}/${accent}: selected`);
+      const styles = await evaluate(
+        `(()=>{const css=getComputedStyle(document.documentElement);const b=document.querySelector('[data-slot=app-rail] button[data-rail-view=code]');return {surface:css.getPropertyValue('--background').trim(),icon:getComputedStyle(b).color};})()`
+      );
+      assert.equal(styles.surface, surface, `${palette}: neutral surface unchanged`);
+      await waitUntil(
+        () =>
+          evaluate(
+            `getComputedStyle(document.querySelector('[data-slot=app-rail] button[data-rail-view=code]')).color===${JSON.stringify(expected)}`
+          ),
+        { timeout: 10000 }
+      );
+      results.push({ check: 'light settings click + both windows', palette, accent, passed: true });
+    }
+    // The Main broadcast above proves the write was persisted; reload both renderers.
+    const origin = await evaluate('performance.timeOrigin');
+    await rpc.send('Page.reload');
+    await ready(origin);
+    await waitUntil(
+      () =>
+        evaluate(
+          `window.__stores.settings.getState().accentColor==='graphite' && window.__stores.settings.getState().lightPalette===${JSON.stringify(palette)}`
+        ),
+      { timeout: 10000 }
+    );
+    const settingsOrigin = await evaluate('performance.timeOrigin', settingsRpc);
+    await settingsRpc.send('Page.reload');
+    await ready(settingsOrigin, settingsRpc, false);
+    await waitUntil(
+      () =>
+        evaluate(
+          `document.readyState==='complete' && Boolean(document.querySelector('[data-slot=settings-navigation]'))`,
+          settingsRpc
+        ),
+      { timeout: 15000 }
+    );
+    click(
+      `[data-slot=settings-navigation] button:nth-child(${categoryIndex + 1})`,
+      'settings.html'
+    );
+    await waitUntil(
+      () =>
+        evaluate(
+          `Boolean(document.querySelector('[data-accent-option=graphite][aria-pressed=true]'))`,
+          settingsRpc
+        ),
+      { timeout: 10000 }
+    );
+    results.push({ check: 'light accent survives renderer reload', palette, passed: true });
+  }
   console.table(results);
 } finally {
   await rpc.send('Emulation.setEmulatedMedia', { features: [] }).catch(() => {});
@@ -229,6 +358,7 @@ try {
     restorationError = error;
   });
   rpc.close();
+  settingsRpc?.close();
   rmSync(temp, { recursive: true, force: true });
 }
 if (restorationError) throw new Error('Profile restoration failed', { cause: restorationError });

@@ -5,7 +5,7 @@
  * 设计约束：
  * - 配色对齐 Open Vetta 的 mono 浅色：纸白工作区、近白导航、纯白输入框与浮层。
  * - 中性黑白灰，不再给外壳、文字、描边染蓝；正文与次要文字拉开明度。
- * - 主操作用黑底白字；用户消息与选中行用轻灰填充，不抢正文。
+ * - 普通主操作与用户消息保持中性；用户可选强调色作用于发送、当前选中与聚焦。
  * - 圆角：10 行与控件、14 浮层、18 输入框与对话框；用户气泡近胶囊。
  * - 层次靠中性柔和投影，选中靠填充而不是描边。
  *
@@ -39,7 +39,7 @@
     --primary-foreground: #ffffff;
     --brand: var(--primary);
     --brand-foreground: #ffffff;
-    --ring: var(--primary);
+    --ring: var(--brand);
     --success: #15803d;
     --success-foreground: #ffffff;
     --destructive: #c2362f;
@@ -59,12 +59,11 @@
     --elevation-float: 0 1px 2px rgb(0 0 0 / 0.05), 0 12px 32px -12px rgb(0 0 0 / 0.16);
     --cloud-lift: 0 0 0 0.5px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.06);
     --cloud-composer-shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 6px 18px -12px rgb(0 0 0 / 0.12);
-    --cloud-focus-border: #b4b4b4;
-    --cloud-focus-halo: 0 0 0 3px rgb(0 0 0 / 0.04);
+    --cloud-focus-border: var(--selection-border);
+    --cloud-focus-halo: 0 0 0 3px color-mix(in oklch, var(--brand) 8%, transparent);
     --cloud-tip-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px -4px rgb(0 0 0 / 0.12);
     --cloud-dialog-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 24px 64px -20px rgb(0 0 0 / 0.24);
-    --cloud-row-active: rgb(0 0 0 / 0.07);
-    --cloud-action-hover: #262626;
+    --cloud-action-hover: color-mix(in oklch, var(--brand) 85%, black);
     --cloud-send-inactive: #b4b4b4;
   }
 
@@ -88,31 +87,31 @@ html[data-light-palette='cloud-light']
   border-top-left-radius: 14px;
 }
 
-/* 图标轨：当前项是外壳上的一块白色小卡，图标中性 */
-html[data-light-palette='cloud-light'] [data-slot='app-rail'] button[aria-pressed='true'] {
+/* 普通开关保持白卡；工作区导航交回共享强调色选中态。 */
+html[data-light-palette='cloud-light'] [data-slot='app-rail'] button[aria-pressed='true']:not([data-rail-view]) {
   background-color: var(--color-popover);
   color: var(--color-foreground);
   box-shadow: var(--cloud-lift);
 }
 
 html[data-light-palette='cloud-light'] [data-slot='project-sidebar'] svg.text-brand,
-html[data-light-palette='cloud-light'] [data-slot='app-rail'] button.text-brand {
+html[data-light-palette='cloud-light'] [data-slot='app-rail'] button.text-brand:not([data-rail-view]) {
   color: var(--color-foreground);
 }
 
-/* 侧栏分段：通用 muted/background 在云白中近乎同色，改用灰轨与白色选中块。 */
+/* 侧栏分段：灰轨与强调色淡染选中块，避免方案覆盖用户选择。 */
 html[data-light-palette='cloud-light'] [data-slot='project-sidebar'] [data-slot='tabs-list'] {
   background-color: var(--color-secondary);
 }
 
 html[data-light-palette='cloud-light'] [data-slot='project-sidebar'] [data-slot='tab-indicator'] {
-  background-color: var(--color-popover);
-  box-shadow: var(--cloud-lift);
+  background-color: var(--selection);
+  box-shadow: inset 0 0 0 1px var(--selection-border);
 }
 
-/* ── 侧栏：当前会话用中性灰填充托出，不加描边、色条或投影 ──────── */
+/* ── 侧栏：当前会话用强调色淡染，不加描边、色条或投影 ────────── */
 html[data-light-palette='cloud-light'] [data-slot='conversation-row'][data-active='true'] {
-  background-color: var(--cloud-row-active);
+  background-color: var(--selection);
 }
 
 html[data-light-palette='cloud-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::before,
@@ -136,7 +135,7 @@ html[data-light-palette='cloud-light'] [data-slot='chat-view'] .group\/user > .b
   color: inherit;
 }
 
-/* ── 输入框：白卡放在纸白工作区上，聚焦也只用中性灰 ─────────────── */
+/* ── 输入框：白卡放在纸白工作区上，聚焦色跟随强调色 ────────────── */
 html[data-light-palette='cloud-light'] [data-slot='composer'] {
   border-radius: 18px;
   border-color: var(--color-border);
@@ -149,7 +148,7 @@ html[data-light-palette='cloud-light'] [data-slot='composer']:focus-within {
   box-shadow: var(--cloud-composer-shadow), var(--cloud-focus-halo);
 }
 
-/* 发送：空闲为浅灰圆钮，有内容才变成黑底白字。 */
+/* 发送：空闲为浅灰圆钮，有内容才使用强调色。 */
 html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-brand,
 html[data-light-palette='cloud-light'] [data-slot='composer'] button.bg-foreground {
   border-radius: 9999px;
@@ -176,11 +175,11 @@ html[data-light-palette='cloud-light'] [data-model-picker='trigger'] .text-prima
   color: inherit;
 }
 
-/* ── 设置窗口：中性灰选中态；边宽不变，不再混入蓝色 ──────────────── */
+/* ── 设置窗口：强调色选中态，边宽/尺寸不变 ─────────────────────── */
 html[data-light-palette='cloud-light'] [data-slot='settings-window'] button[aria-pressed='true'].border-2 {
-  border-color: var(--cloud-focus-border);
-  background-color: var(--color-secondary);
-  color: var(--color-foreground);
+  border-color: var(--selection-border);
+  background-color: var(--selection);
+  color: var(--selection-foreground);
   box-shadow: var(--cloud-lift);
 }
 
