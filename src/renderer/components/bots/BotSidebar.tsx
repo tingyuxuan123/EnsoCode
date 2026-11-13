@@ -25,6 +25,7 @@ import {
   Users,
 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import {
   ContextMenu,
@@ -59,8 +60,10 @@ import {
   rollupThreads,
   snoozeTimes,
   sortChats,
+  workingCodeBotIds,
 } from '@/stores/bots/selectors';
 import { isUnread, unreadMark } from '@/stores/bots/unread';
+import { useSessionsStore } from '@/stores/sessions';
 import { BotAvatar, GroupAvatar } from './BotAvatar';
 import { BotSearchButton } from './BotSearchDialog';
 import { chatErrorText, chatTitle } from './botText';
@@ -98,6 +101,7 @@ export function BotSidebar({
   const queue = useBotsStore((s) => s.queue);
   const sessions = useBotsStore((s) => s.sessions);
   const delegations = useBotsStore((s) => s.delegations);
+  const codeBotIds = useSessionsStore(useShallow((s) => workingCodeBotIds(s.conversations)));
   const timelines = useBotsStore((s) => s.timelines);
   const reads = useBotsStore((s) => s.reads);
   const view = useBotsStore((s) => s.view);
@@ -118,14 +122,14 @@ export function BotSidebar({
   );
   const delegated = useMemo(() => {
     const chatIds = new Set<string>();
-    const botIds = new Set<string>();
+    const botIds = new Set(codeBotIds);
     for (const item of delegations) {
       if (!isActiveDelegation(item.state)) continue;
       if (item.chatId) chatIds.add(item.chatId);
       botIds.add(item.targetBotId);
     }
     return { chatIds, botIds };
-  }, [delegations]);
+  }, [delegations, codeBotIds]);
   const rows = useMemo(
     () =>
       rollupThreads(

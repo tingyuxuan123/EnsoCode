@@ -5,6 +5,7 @@ import { OauthCredentialBootstrap } from '@/components/oauth/OauthCredentialBoot
 import { SettingsContent } from '@/components/settings';
 import { ToastProvider } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import './styles/globals.css';
 
 function SettingsApp() {
@@ -13,6 +14,7 @@ function SettingsApp() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-shell" data-slot="settings-window">
       <OauthCredentialBootstrap />
+      <PluginThemeHost />
       <TitleBar title={t('Settings')} actions={<SummonEnsoButton label={false} />} />
       <main className="min-h-0 flex-1 overflow-hidden">
         <SettingsContent />

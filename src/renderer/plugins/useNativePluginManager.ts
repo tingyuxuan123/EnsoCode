@@ -4,9 +4,10 @@ import type {
   ExtensionPluginSummary,
 } from '@shared/extensionPlugins/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { coerceConfigValue } from './configValue';
 
 type PluginApi = Window['electronAPI']['extensionPlugins'];
-type PluginStageKind = 'dir' | 'zip' | 'url';
+type PluginStageKind = 'dir' | 'zip' | 'url' | 'market' | 'restage';
 type ConfigDraft = Record<string, string | null>;
 type Config = { pluginId: string; fields: ExtensionPluginConfigField[]; draft: ConfigDraft };
 type OperationResult = { ok: boolean; error?: string; reason?: string };
@@ -68,7 +69,11 @@ async function discard(api: PluginApi, token: string): Promise<void> {
 
 /** Renderer-only management for the native registry; Main remains the install authority. */
 export function useNativePluginManager() {
-  const api = typeof window === 'undefined' ? undefined : window.electronAPI?.extensionPlugins;
+  const api =
+    typeof window === 'undefined' ||
+    (window.electronAPI && 'remote' in window.electronAPI && window.electronAPI.remote)
+      ? undefined
+      : window.electronAPI?.extensionPlugins;
   const sessionRef = useRef<Session | null>(null);
   const [plugins, setPlugins] = useState<ExtensionPluginSummary[]>([]);
   const [loading, setLoading] = useState(!!api);
@@ -177,7 +182,11 @@ export function useNativePluginManager() {
       const result =
         kind === 'url'
           ? await session.api.stageFromUrl(url.trim())
-          : await session.api.pickAndStage(kind);
+          : kind === 'market'
+            ? await session.api.marketStage(url)
+            : kind === 'restage'
+              ? await session.api.restage(url)
+              : await session.api.pickAndStage(kind);
       requireSuccess(result);
       if (!result.ok || 'cancelled' in result) return;
       if (
@@ -259,7 +268,15 @@ export function useNativePluginManager() {
     run('config:save', async (session) => {
       if (!configuring) return;
       const { pluginId, fields, draft } = configuring;
-      const patch = pluginConfigPatch(fields, draft);
+      const rawPatch = pluginConfigPatch(fields, draft);
+      const patch: Record<string, string | number | boolean | null> = {};
+      for (const [key, value] of Object.entries(rawPatch)) {
+        const field = fields.find((item) => item.key === key);
+        if (!field) continue;
+        const parsed = coerceConfigValue({ ...field, type: field.type ?? 'string' }, value);
+        if (!parsed.ok) throw new Error(`${field.title}: ${parsed.error}`);
+        patch[key] = parsed.value;
+      }
       if (Object.keys(patch).length) requireSuccess(await session.api.configSet(pluginId, patch));
       if (sessionRef.current === session) await loadConfig(session, pluginId);
     });
@@ -301,6 +318,11 @@ export function useNativePluginManager() {
     registryError,
     busy,
     stage,
+    checkUpdates: () => mutate('check-updates', ({ api }) => api.checkUpdates()),
+    setDevWatch: (pluginId: string, on: boolean) =>
+      mutate(`dev:${pluginId}`, ({ api }) => api.setDevWatch(pluginId, on)),
+    setCrossSessionInject: (pluginId: string, on: boolean) =>
+      mutate(`inject:${pluginId}`, ({ api }) => api.setCrossSessionInject(pluginId, on)),
     preview,
     cancelPreview,
     confirmInstall,

@@ -82,7 +82,8 @@ import { addSidePanelChanges } from '@/lib/sidePanelDock';
 import { stripAnsi } from '@/lib/terminalText';
 import { SUBAGENT_OP_LABEL_KEYS, TOOL_LABEL_KEYS, toolLabel } from '@/lib/toolLabels';
 import { cn } from '@/lib/utils';
-import { PluginToolCardSlot } from '@/plugins/slots';
+import { PluginArtifactsCard } from '@/plugins/artifactViews';
+import { PluginMessageActions, PluginThinkingBody, PluginToolCardSlot } from '@/plugins/slots';
 import { useSessionsStore } from '@/stores/sessions';
 import {
   canShowConversationFork,
@@ -941,6 +942,7 @@ export const TimelineRow = memo(function TimelineRow({
       const isCollapsed = item.collapsed === true;
       return (
         <div
+          data-enso="message-user"
           className={cn('group/user flex flex-col gap-1.5', fromMain ? 'items-start' : 'items-end')}
         >
           {item.images.map((image, index) => (
@@ -1517,6 +1519,12 @@ function TextRow({
   activeNth?: number;
 }) {
   const host = useChatHost();
+  const localSessionId = useSessionsStore((state) => displayedConversation(state)?.id ?? null);
+  const pluginProps = {
+    text: item.text,
+    messageIndex: Number(item.key.split('-')[0]),
+    sessionId: host ? host.sessionId : localSessionId,
+  };
   return (
     <div className="text-[calc(15rem/14)] leading-[calc(27rem/14)] [&_h1]:text-[calc(18rem/14)] [&_h2]:text-[calc(18rem/14)] [&_h3]:text-[calc(16rem/14)]">
       <div data-reply-body="" className="group/reply relative pr-[calc(56rem/14)]">
@@ -1525,13 +1533,16 @@ function TextRow({
           streaming={item.streaming}
           searchQuery={searchQuery}
           activeNth={activeNth}
+          leaf={{ messageIndex: pluginProps.messageIndex, sessionId: pluginProps.sessionId }}
         />
         {!item.streaming && (
           <div
             data-reply-actions=""
             className="absolute top-0 right-0 flex items-center gap-1 text-muted-foreground transition-opacity duration-(--duration-quick) ease-(--ease-out) motion-reduce:transition-none [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:opacity-0 group-hover/reply:pointer-events-auto group-hover/reply:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
           >
+            <PluginMessageActions position="left" {...pluginProps} />
             <CopyButton text={item.text} className={replyActionClass} />
+            <PluginMessageActions position="right" {...pluginProps} />
             {item.turnEnd && <ForkButton messageIndex={Number(item.key.split('-')[0])} />}
           </div>
         )}
@@ -1584,7 +1595,7 @@ function ThinkingRow({
   const expanded = thinkingRowExpanded(userToggled, streaming, expandLiveReasoning);
   const lastLine = streaming && !expanded ? lastNonEmptyLine(text) : null;
   return (
-    <div>
+    <div data-enso="thinking" data-live={streaming ? '' : undefined}>
       <ToolSummaryRow
         icon={nested ? undefined : Brain}
         kind={streaming ? t('Thinking') : t('Thought')}
@@ -1607,7 +1618,7 @@ function ThinkingRow({
         expanded={expanded}
         onToggle={() => setUserToggled(!expanded)}
       />
-      {expanded && <ReasoningBody text={text} streaming={streaming} />}
+      {expanded && <ReasoningBody text={text} streaming={streaming} itemKey={itemKey} />}
     </div>
   );
 }
@@ -1617,8 +1628,16 @@ function ThinkingRow({
  * 长思考不封顶会把答复和输入框整体推出视口，所以只在框内滚动；
  * 流式期间若用户没往回滚，就跟着最新 token 走。
  */
-function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }) {
-  const bodyRef = useRef<HTMLParagraphElement>(null);
+function ReasoningBody({
+  text,
+  streaming,
+  itemKey,
+}: {
+  text: string;
+  streaming: boolean;
+  itemKey: string;
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null);
   /** 默认贴底；用户向上翻看历史推理时暂停自动跟随 */
   const stickToBottom = useRef(true);
   // useLayoutEffect：推理块本身是个小滚动区，等 paint 之后再贴底会先画一帧旧位置，
@@ -1630,7 +1649,7 @@ function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }
     body.scrollTop = body.scrollHeight;
   }, [text, streaming]);
   return (
-    <p
+    <div
       ref={bodyRef}
       onScroll={() => {
         const body = bodyRef.current;
@@ -1644,8 +1663,8 @@ function ReasoningBody({ text, streaming }: { text: string; streaming: boolean }
         streaming ? 'max-h-28' : 'max-h-[min(16rem,38vh)]'
       )}
     >
-      {text}
-    </p>
+      <PluginThinkingBody text={text} streaming={streaming} itemKey={itemKey} />
+    </div>
   );
 }
 
@@ -2518,6 +2537,9 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                 </>
               )}
               {item.approvalReview && <ApprovalReviewBar value={item.approvalReview} />}
+              {!!item.pluginArtifacts?.length && (
+                <PluginArtifactsCard artifacts={item.pluginArtifacts} />
+              )}
               <PluginToolCardSlot
                 name={item.name}
                 output={item.output ?? null}

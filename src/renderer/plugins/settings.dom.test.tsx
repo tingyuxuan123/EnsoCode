@@ -5,6 +5,71 @@ import { expect, it, vi } from 'vitest';
 import { NativePluginsSection } from './NativePluginsSection';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: (select: (state: unknown) => unknown) =>
+    select({ pluginAutoUpdate: true, setPluginAutoUpdate: vi.fn() }),
+}));
+vi.mock('@/components/ui/switch', () => ({
+  Switch: ({
+    checked,
+    onCheckedChange,
+    ...props
+  }: {
+    checked: boolean;
+    onCheckedChange?: (value: boolean) => void;
+  }) =>
+    createElement('button', {
+      type: 'button',
+      ...props,
+      role: 'switch',
+      'aria-checked': checked,
+      onClick: () => onCheckedChange?.(!checked),
+    }),
+}));
+vi.mock('@/components/ui/button', () => ({
+  Button: ({
+    children,
+    variant: _variant,
+    size: _size,
+    ...props
+  }: {
+    children?: import('react').ReactNode;
+    variant?: string;
+    size?: string;
+  }) => createElement('button', { ...props, type: 'button' }, children),
+}));
+it('stages a webpage installation request once and never commits it automatically', async () => {
+  const dom = parseHTML('<html><body><div id="root"></div></body></html>');
+  const stageFromUrl = vi.fn().mockResolvedValue({ ok: true, cancelled: true });
+  const commit = vi.fn();
+  vi.stubGlobal(
+    'window',
+    Object.assign(dom.window, {
+      electronAPI: {
+        extensionPlugins: {
+          list: vi.fn().mockResolvedValue({ plugins: [] }),
+          onChanged: () => () => {},
+          stageFromUrl,
+          commit,
+        },
+      },
+    })
+  );
+  vi.stubGlobal('document', dom.document);
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const root = createRoot(dom.document.getElementById('root')!);
+  const request = { serial: 1, pluginInstallUrl: 'https://example.com/plugin.zip' };
+  try {
+    await act(async () => root.render(createElement(NativePluginsSection, { request })));
+    expect(stageFromUrl).toHaveBeenCalledExactlyOnceWith(request.pluginInstallUrl);
+    await act(async () => root.render(createElement(NativePluginsSection, { request })));
+    expect(stageFromUrl).toHaveBeenCalledTimes(1);
+    expect(commit).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root.unmount());
+    vi.unstubAllGlobals();
+  }
+});
 
 it('list 的只读错误到达设置页面，恢复后清除提示并显示正常空列表', async () => {
   const dom = parseHTML('<html><body><div id="root"></div></body></html>');

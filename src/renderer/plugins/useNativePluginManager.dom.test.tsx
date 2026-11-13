@@ -6,6 +6,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { type NativePluginManager, useNativePluginManager } from './useNativePluginManager';
 
 const preview: ExtensionPluginInstallPreview = {
+  env: [],
+  interop: [],
+  resident: false,
+  styles: false,
+  events: [],
+  schedules: [],
   token: 'preview-token',
   id: 'test.plugin',
   name: 'Test plugin',

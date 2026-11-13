@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { LocalAssetImportDialog } from '@/components/settings/LocalAssetImportDialog';
 import { McpEditDialog } from '@/components/settings/McpEditDialog';
+import { PluginMarket } from '@/components/settings/PluginMarket';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -54,6 +55,7 @@ import {
   PLUGIN_TRUST_WARNING,
   PluginRegistryAlert,
 } from '@/plugins/NativePluginFlows';
+import { PluginManagementDetails } from '@/plugins/PluginManagementDetails';
 import { isNativePluginUrl, useNativePluginManager } from '@/plugins/useNativePluginManager';
 import { useMcpStatusStore } from '@/stores/mcpStatus';
 import { useSettingsStore } from '@/stores/settings';
@@ -206,6 +208,9 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
   const [urlOpen, setUrlOpen] = useState(false);
   const [authorGuideOpen, setAuthorGuideOpen] = useState(false);
   const [url, setUrl] = useState('');
+  const [marketOpen, setMarketOpen] = useState(false);
+  const pluginAutoUpdate = useSettingsStore((state) => state.pluginAutoUpdate);
+  const setPluginAutoUpdate = useSettingsStore((state) => state.setPluginAutoUpdate);
 
   useEffect(() => useMcpStatusStore.getState().bind(), []);
 
@@ -302,6 +307,28 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
           </p>
         </header>
         <ExtensionsBanner />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            variant={marketOpen ? 'secondary' : 'outline'}
+            onClick={() => setMarketOpen((open) => !open)}
+          >
+            {t(marketOpen ? 'Hide plugin market' : 'Browse plugin market')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!native.canManage || !!native.busy}
+            onClick={() => void native.checkUpdates()}
+          >
+            {t('Check plugin updates')}
+          </Button>
+          <label className="ml-auto flex items-center gap-2 text-xs">
+            {t('Automatically update plugins')}
+            <Switch checked={pluginAutoUpdate} onCheckedChange={setPluginAutoUpdate} />
+          </label>
+        </div>
+        {marketOpen && <PluginMarket manager={native} />}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="relative w-[236px] max-w-full">
@@ -610,6 +637,7 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
                     />
                   </div>
                   <p className="break-all font-mono text-muted-foreground text-xs">{plugin.id}</p>
+                  <PluginManagementDetails plugin={plugin} manager={native} />
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">{t('Permissions')}</h3>
                     <p className="break-words text-muted-foreground text-xs">

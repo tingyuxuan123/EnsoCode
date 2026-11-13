@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyProjection } from '@/stores/sessions/reducer';
 import { BotSidebar } from './BotSidebar';
 
-const store = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const store = vi.hoisted(() => ({
+  state: {} as Record<string, unknown>,
+  code: { conversations: {} as Record<string, unknown> },
+}));
+vi.mock('@/stores/sessions', () => ({
+  useSessionsStore: (select: (state: unknown) => unknown) => select(store.code),
+}));
 vi.mock('@/stores/bots', () => ({
   useBotsStore: (select: (state: unknown) => unknown) => select(store.state),
   useBotPendingCount: () => 0,
@@ -88,6 +94,7 @@ const renderRows = () =>
 
 describe('BotSidebar running dots', () => {
   beforeEach(() => {
+    store.code = { conversations: {} };
     store.state = {
       bots: ['Parent', 'Target', 'Other'].map(bot),
       chats: [
@@ -103,6 +110,74 @@ describe('BotSidebar running dots', () => {
       reads: {},
       view: null,
     };
+  });
+
+  const codeChild = (patch: Record<string, unknown> = {}) => ({
+    parentId: 'code-parent',
+    status: 'running',
+    child: {
+      parentId: 'code-parent',
+      agentTypeKey: 'bot:Target',
+      agentInstanceName: 'plugin-core-port',
+      mode: 'coworker',
+    },
+    ...patch,
+  });
+
+  it.each(['coworker', 'task'])('Code 中的 %s 只点亮实际执行成员并显示工作中', (mode) => {
+    const child = codeChild();
+    store.code.conversations = {
+      'code-parent': {},
+      child: { ...child, child: { ...child.child, mode } },
+    };
+    expect(renderRows()).toMatchObject({ Target: true, Parent: false, Group: false });
+    const row = renderDocument().querySelector('[aria-label="Target"]');
+    expect(row?.textContent).toContain('Working');
+  });
+
+  it('成员没有私聊时，也展示 Code 协作者的工作状态', () => {
+    store.code.conversations = {
+      'code-parent': {},
+      child: codeChild({ child: { parentId: 'code-parent', agentTypeKey: 'bot:Other' } }),
+    };
+    expect(renderRows()).toMatchObject({ Other: true, Target: false });
+    expect(renderDocument().querySelector('[aria-label="Other"]')?.textContent).toContain(
+      'Working'
+    );
+  });
+
+  it.each([
+    { status: 'idle' },
+    { status: 'failed' },
+    { status: 'idle', spawning: true },
+    { ended: true },
+    { historyOnly: true },
+    { child: { parentId: 'another-parent', agentTypeKey: 'bot:Target' } },
+    { child: { parentId: 'code-parent', agentTypeKey: 'builtin:worker' } },
+    { child: undefined, coworkerName: 'Target' },
+  ])('待命、已结束或非成员子会话不误报工作中：%j', (patch) => {
+    store.code.conversations = { 'code-parent': {}, child: codeChild(patch) };
+    expect(renderRows()).toMatchObject({ Target: false, Parent: false, Group: false });
+  });
+
+  it('Code 中同一成员只要还有运行实例就保持工作中，全部结束后恢复原状态', () => {
+    store.code.conversations = {
+      'code-parent': {},
+      first: codeChild({ status: 'idle' }),
+      second: codeChild(),
+    };
+    expect(renderRows().Target).toBe(true);
+    store.code.conversations.second = codeChild({ status: 'idle' });
+    expect(renderRows().Target).toBe(false);
+    expect(renderDocument().querySelector('[aria-label="Target"]')?.textContent).not.toContain(
+      'Working'
+    );
+  });
+
+  it('已搁置的成员也显示 Code 中的工作状态', () => {
+    store.state.chats = [{ ...chat('TargetDM', 'direct', ['Target']), settledAt: 2 }];
+    store.code.conversations = { 'code-parent': {}, child: codeChild() };
+    expect(renderRows().Target).toBe(true);
   });
 
   it.each(['queued', 'running'] as const)(

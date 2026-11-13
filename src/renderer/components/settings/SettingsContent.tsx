@@ -68,6 +68,9 @@ export function SettingsContent() {
   const { t } = useI18n();
   const [activeCategory, setActiveCategory] = React.useState<SettingsCategory>('general');
   const [flashRowId, setFlashRowId] = React.useState<string | null>(null);
+  const [pluginRequest, setPluginRequest] = React.useState<
+    { serial: number; pluginId?: string; pluginInstallUrl?: string } | undefined
+  >();
   // 提炼写入记忆后让记忆库重新拉数据（两个组件各自持有列表）
   const [memoryRevision, setMemoryRevision] = React.useState(0);
   const disabledBuiltinTools = useSettingsStore((state) => state.disabledBuiltinTools);
@@ -81,6 +84,12 @@ export function SettingsContent() {
   const applyLink = React.useCallback((link: SettingsDeepLink) => {
     setActiveCategory(link.category);
     setFlashRowId(link.rowId);
+    if (link.category === 'plugins')
+      setPluginRequest((before) => ({
+        serial: (before?.serial ?? 0) + 1,
+        pluginId: link.pluginId,
+        pluginInstallUrl: link.pluginInstallUrl,
+      }));
   }, []);
 
   React.useEffect(() => {
@@ -176,7 +185,7 @@ export function SettingsContent() {
         {activeCategory === 'appearance' && <AppearanceSettings />}
         {activeCategory === 'providers' && <ProvidersSettings />}
         {activeCategory === 'skills' && <SkillsSettings />}
-        {activeCategory === 'plugins' && <PluginsSettings />}
+        {activeCategory === 'plugins' && <PluginsSettings request={pluginRequest} />}
         {activeCategory === 'mcp' && <McpSettings />}
         {activeCategory === 'instructions' && <InstructionsSettings />}
         {activeCategory === 'presets' && <PresetsSettings />}

@@ -30,6 +30,7 @@ export function StatusBar() {
   return (
     <footer
       data-slot="status-bar"
+      data-enso="status-line"
       className="flex h-[calc(24rem/14)] shrink-0 items-center gap-3 border-t border-line bg-shell px-4 text-[calc(11rem/14)] text-muted-foreground"
     >
       <span className="flex min-w-0 items-center gap-1.5">

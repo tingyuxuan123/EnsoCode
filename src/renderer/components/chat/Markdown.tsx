@@ -1,6 +1,7 @@
 import { chatBodyTypographyStyle, chatInlineCodeTypographyStyle } from '@shared/chatTypography';
 import { previewImageMime } from '@shared/markdownPreviewImage';
 import { isBuiltinToolEnabledForProject } from '@shared/types/builtinTools';
+import type { Element } from 'hast';
 import { FolderOpen } from 'lucide-react';
 import type { Root } from 'mdast';
 import {
@@ -27,8 +28,9 @@ import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { openSidePanelBrowserUrl, openSidePanelFile } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
-import { parsePluginFence } from '@/plugins/registry';
-import { PluginBlock } from '@/plugins/slots';
+import { type PluginSlotEntry, parsePluginFence, pluginMessageLeaf } from '@/plugins/registry';
+import { PluginBlock, PluginMessageLeaf } from '@/plugins/slots';
+import { usePluginSlotsVersion } from '@/plugins/usePluginSlots';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { CodeBlock } from './CodeBlock';
@@ -48,6 +50,7 @@ import {
  */
 function parseFenceLang(info?: string): string | undefined {
   if (!info) return undefined;
+  if (parsePluginFence(info)) return info;
   const last = info.split(':').at(-1) ?? info;
   const ext = /\.(\w+)$/.exec(last)?.[1];
   if (ext) return ext;
@@ -108,6 +111,7 @@ export const MarkdownCtx = createContext<{
   streaming: boolean;
   searchQuery: string;
   activeNth: number;
+  leafSlot?: { messageIndex: number; sessionId: string | null; entry: PluginSlotEntry } | null;
 }>({ text: '', streaming: false, searchQuery: '', activeNth: -1 });
 
 export interface MarkdownLinkContextValue {
@@ -773,23 +777,25 @@ export const markdownComponents: Components = {
 };
 
 /** assistant 正文的 markdown 渲染，样式内联为 Tailwind（项目未引入 typography 插件） */
-export function Markdown({
+function MarkdownView({
   text,
   streaming = false,
   searchQuery = '',
   activeNth = -1,
+  leafSlot = null,
 }: {
   text: string;
   streaming?: boolean;
   searchQuery?: string;
   activeNth?: number;
+  leafSlot?: { messageIndex: number; sessionId: string | null; entry: PluginSlotEntry } | null;
 }) {
   const linkContext = useContext(MarkdownLinkContext);
   const localLinkHandler = useContext(MarkdownLocalLinkContext);
   const allowLocalMarkdownLinks = linkContext !== null || localLinkHandler !== null;
   const ctx = useMemo(
-    () => ({ text, streaming, searchQuery, activeNth }),
-    [text, streaming, searchQuery, activeNth]
+    () => ({ text, streaming, searchQuery, activeNth, leafSlot }),
+    [text, streaming, searchQuery, activeNth, leafSlot]
   );
   const urlTransform = useMemo(
     () => (value: string, key: string) => markdownUrlTransform(value, key, allowLocalMarkdownLinks),
@@ -804,7 +810,7 @@ export function Markdown({
       >
         <ReactMarkdown
           remarkPlugins={REMARK_PLUGINS}
-          components={markdownComponents}
+          components={leafSlot ? leafMarkdownComponents : markdownComponents}
           urlTransform={urlTransform}
         >
           {text}
@@ -812,4 +818,112 @@ export function Markdown({
       </div>
     </MarkdownCtx.Provider>
   );
+}
+function LeafAddon({ node }: { node?: Element }) {
+  const { text, streaming, leafSlot } = useContext(MarkdownCtx);
+  if (!leafSlot) return null;
+  const children = node?.children ?? [];
+  const blockAt = children.findIndex(
+    (child) =>
+      child.type === 'element' &&
+      [
+        'p',
+        'ul',
+        'ol',
+        'pre',
+        'table',
+        'blockquote',
+        'div',
+        'li',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+      ].includes(child.tagName)
+  );
+  const inline = blockAt < 0 ? children : children.slice(0, blockAt);
+  const start = inline[0]?.position?.start.offset;
+  const end = inline.at(-1)?.position?.end.offset;
+  if (start == null || end == null) return null;
+  const source = text.slice(start, end);
+  if (!source.trim()) return null;
+  const final = !streaming || (node?.position?.end.offset ?? end) < text.trimEnd().length;
+  return (
+    <div className="empty:hidden whitespace-normal">
+      <PluginMessageLeaf
+        {...leafSlot}
+        source={source}
+        final={final}
+        Markdown={LeafTranslationMarkdown}
+      />
+    </div>
+  );
+}
+function LeafTranslationMarkdown({ text }: { text: string }) {
+  return <MarkdownView text={text} />;
+}
+/** Keep all fork rendering/link behavior, adding only leaf addons to the existing elements. */
+const leafMarkdownComponents: Components = { ...markdownComponents };
+const leafComponentMap = leafMarkdownComponents as Record<
+  string,
+  React.ComponentType<Record<string, unknown>>
+>;
+for (const tag of ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'th', 'td'] as const) {
+  const Base = markdownComponents[tag] as React.ComponentType<Record<string, unknown>>;
+  leafComponentMap[tag] = (
+    props: Record<string, unknown> & { node?: Element; children?: ReactNode }
+  ) => {
+    if (tag === 'li' || tag === 'th' || tag === 'td') {
+      const Tag = tag;
+      return Base ? (
+        <Base {...props}>
+          {props.children}
+          <LeafAddon node={props.node} />
+        </Base>
+      ) : (
+        <Tag>
+          {props.children}
+          <LeafAddon node={props.node} />
+        </Tag>
+      );
+    }
+    return (
+      <>
+        {Base ? <Base {...props} /> : null}
+        <LeafAddon node={props.node} />
+      </>
+    );
+  };
+}
+function MarkdownLeafHost({
+  leaf,
+  ...props
+}: {
+  text: string;
+  streaming?: boolean;
+  searchQuery?: string;
+  activeNth?: number;
+  leaf: { messageIndex: number; sessionId: string | null };
+}) {
+  usePluginSlotsVersion();
+  const entry = pluginMessageLeaf();
+  const leafSlot = useMemo(
+    () => (entry ? { messageIndex: leaf.messageIndex, sessionId: leaf.sessionId, entry } : null),
+    [entry, leaf.messageIndex, leaf.sessionId]
+  );
+  return <MarkdownView {...props} leafSlot={leafSlot} />;
+}
+export function Markdown({
+  leaf,
+  ...props
+}: {
+  text: string;
+  streaming?: boolean;
+  searchQuery?: string;
+  activeNth?: number;
+  leaf?: { messageIndex: number; sessionId: string | null };
+}) {
+  return leaf ? <MarkdownLeafHost {...props} leaf={leaf} /> : <MarkdownView {...props} />;
 }

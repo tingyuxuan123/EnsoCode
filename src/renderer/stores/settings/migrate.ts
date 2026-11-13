@@ -98,6 +98,18 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...browserLinkOpening,
     ...lcu,
     ...design,
+    ...('pluginAutoUpdate' in source || 'pluginAutoUpdate' in current
+      ? { pluginAutoUpdate: source.pluginAutoUpdate !== false }
+      : {}),
+    ...('pluginTheme' in source || 'pluginTheme' in current
+      ? {
+          pluginTheme:
+            typeof source.pluginTheme === 'string' &&
+            /^[a-z][a-z0-9]*(?:\.[a-z0-9]+)+\/[a-zA-Z0-9_-]+$/.test(source.pluginTheme)
+              ? source.pluginTheme
+              : '',
+        }
+      : {}),
     ...lightAppearance,
     ...('chatTypography' in source || 'chatTypography' in current
       ? { chatTypography: normalizeChatTypography(source.chatTypography) }

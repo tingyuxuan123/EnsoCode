@@ -1,5 +1,11 @@
 import { expect, it, vi } from 'vitest';
-import { createViewBridge, decodeUtf8Base64, validViewInit } from './viewBridge';
+import {
+  createViewBridge,
+  decodeUtf8Base64,
+  validViewInit,
+  viewFileEdit,
+  viewStoragePatch,
+} from './viewBridge';
 
 it('forwards only valid MessagePort requests and returns errors', async () => {
   const call = vi.fn(async () => 'ok');
@@ -47,4 +53,18 @@ it('侧栏以父 frame 收到消息时的激活为准，忽略 iframe 自报手�
   active = true;
   await handle({ id: 2, method: 'draft' });
   expect(call).toHaveBeenLastCalledWith('draft', null, true);
+});
+it('validates storage/file messages without prototype keys or unbounded payloads', () => {
+  expect(viewStoragePatch({ type: 'enso-storage', patch: { good: 'value', gone: null } })).toEqual({
+    good: 'value',
+    gone: null,
+  });
+  expect(
+    viewStoragePatch({ type: 'enso-storage', patch: JSON.parse('{"__proto__":"evil"}') })
+  ).toBeNull();
+  expect(viewStoragePatch({ type: 'enso-storage', patch: { bad: 1 } })).toBeNull();
+  expect(viewFileEdit({ type: 'enso-file-edit', text: 'new' })).toBe('new');
+  expect(
+    viewFileEdit({ type: 'enso-file-edit', text: 'x'.repeat(2 * 1024 * 1024 + 1) })
+  ).toBeNull();
 });

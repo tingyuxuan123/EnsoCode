@@ -8,7 +8,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/i18n';
+import { formatConfigValue } from './configValue';
 import type { NativePluginManager } from './useNativePluginManager';
 
 export const PLUGIN_TRUST_WARNING =
@@ -61,18 +64,70 @@ export function NativePluginConfigForm({ manager }: { manager: NativePluginManag
             <p className="text-muted-foreground text-[calc(12rem/14)]">{field.description}</p>
           )}
           <span className="flex items-center gap-2">
-            <Input
-              aria-label={field.title}
-              type={field.secret ? 'password' : 'text'}
-              autoComplete="off"
-              disabled={disabled}
-              value={
-                draft[field.key] === null
-                  ? ''
-                  : (draft[field.key] ?? (field.secret ? '' : (field.value ?? '')))
-              }
-              onChange={(event) => setConfigValue(field.key, event.target.value)}
-            />
+            {field.type === 'boolean' ? (
+              <Switch
+                aria-label={field.title}
+                disabled={disabled}
+                checked={
+                  (draft[field.key] ?? field.value ?? String(field.default ?? false)) === 'true'
+                }
+                onCheckedChange={(value) => setConfigValue(field.key, String(value))}
+              />
+            ) : field.type === 'enum' ? (
+              <select
+                aria-label={field.title}
+                disabled={disabled}
+                className="w-full rounded border bg-background p-2"
+                value={draft[field.key] ?? field.value ?? formatConfigValue(field.default)}
+                onChange={(event) => setConfigValue(field.key, event.target.value)}
+              >
+                <option value="" />
+                {field.options?.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : field.multiline ? (
+              <Textarea
+                aria-label={field.title}
+                disabled={disabled}
+                value={draft[field.key] ?? field.value ?? formatConfigValue(field.default)}
+                onChange={(event) => setConfigValue(field.key, event.target.value)}
+              />
+            ) : (
+              <Input
+                aria-label={field.title}
+                type={field.secret ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                min={field.min}
+                max={field.max}
+                autoComplete="off"
+                disabled={disabled}
+                value={
+                  draft[field.key] === null
+                    ? ''
+                    : (draft[field.key] ??
+                      (field.secret ? '' : (field.value ?? formatConfigValue(field.default))))
+                }
+                onChange={(event) => setConfigValue(field.key, event.target.value)}
+              />
+            )}
+            {field.type === 'path' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={() =>
+                  void window.electronAPI.extensionPlugins
+                    .pickPath(field.pathKind ?? 'file')
+                    .then((result) => {
+                      if (result.ok && result.path !== null) setConfigValue(field.key, result.path);
+                    })
+                }
+              >
+                {t('Browse')}
+              </Button>
+            )}
             {field.set && (
               <Button
                 variant="ghost"
@@ -140,6 +195,23 @@ export function NativePluginFlows({
                 <Detail label="Host fs.write" items={preview.fsWrite} />
                 <Detail label="Host net.fetch" items={preview.netDomains} />
                 <Detail label="Host MCP tools" items={preview.mcpTools} />
+                <Detail label="Environment variables" items={preview.env ?? []} />
+                <Detail label="Plugin interop" items={preview.interop ?? []} />
+                <Detail
+                  label="Agent events"
+                  items={(preview.events ?? []).map(
+                    (event) =>
+                      `${event.event} · ${event.mode}${event.failClosed ? ' · fail closed' : ''}`
+                  )}
+                />
+                <Detail
+                  label="Schedules"
+                  items={(preview.schedules ?? []).map(
+                    (schedule) => `${schedule.id} · ${schedule.intervalSeconds}s`
+                  )}
+                />
+                {preview.resident && <p>{t('Runs in the background')}</p>}
+                {preview.styles && <p>{t('Theme CSS can change the entire interface')}</p>}
                 <Detail
                   label="MCP"
                   items={preview.mcpServers.map(

@@ -48,7 +48,7 @@ export function CodeBlock({
 
   if (html == null) {
     return (
-      <div className="group/code relative">
+      <div data-enso="code-block" className="group/code relative">
         <pre
           data-chat-code=""
           style={chatCodeBlockTypographyStyle}
@@ -61,7 +61,7 @@ export function CodeBlock({
     );
   }
   return (
-    <div className="group/code relative">
+    <div data-enso="code-block" className="group/code relative">
       <div
         data-chat-code=""
         style={chatCodeBlockTypographyStyle}

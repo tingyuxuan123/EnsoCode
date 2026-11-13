@@ -9,7 +9,7 @@ import { useSettingsStore } from '@/stores/settings';
 /** ✓/●/○ 清单；时间线 todo 行与输入框上方「当前进度」弹层共用 */
 export function TodoList({ todos }: { todos: TodoItem[] }) {
   return (
-    <ul className="space-y-[8px] text-[calc(13rem/14)] leading-[calc(20rem/14)]">
+    <ul data-enso="todo" className="space-y-[8px] text-[calc(13rem/14)] leading-[calc(20rem/14)]">
       {todos.map((todo) => (
         <li key={todo.content} className="flex items-start gap-[10px]">
           {todo.status === 'completed' ? (

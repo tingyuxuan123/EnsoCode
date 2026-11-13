@@ -72,6 +72,8 @@ import {
   closeActiveSidePanelTab,
 } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
+import { PluginNotices } from '@/plugins/PluginNotices';
+import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { PluginUiHost } from '@/plugins/PluginUiHost';
 import { useBotsStore } from '@/stores/bots';
 import {
@@ -542,7 +544,9 @@ export default function App() {
 
   return (
     // 不能给外壳刷实底：浏览器 guest 沉到 workbench 之下时，这里任何不透明像素都会盖住挖孔
-    <div className="relative isolate flex h-screen flex-col text-foreground">
+    <div data-enso="canvas" className="relative isolate flex h-screen flex-col text-foreground">
+      <PluginThemeHost />
+      <PluginNotices />
       <DesignRuntimeHost />
       <DesignWindowRelay />
       <DesignGlobalSlots />
@@ -766,6 +770,7 @@ export default function App() {
             <div
               ref={workspaceRef}
               data-slot="workbench-main"
+              data-enso="main"
               className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-line border-l border-t"
             >
               {galleryActive ? (

@@ -13,6 +13,8 @@ import {
   type KeybindingAction,
 } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
+import { type PluginCommandRef, pluginCommandRefs } from '@/plugins/commands';
+import { resolvePluginKeybindings } from '@/plugins/keybindings';
 import { useSettingsStore } from '@/stores/settings';
 
 export function KeybindingsSettings() {
@@ -28,7 +30,97 @@ export function KeybindingsSettings() {
         </p>
       </div>
       <KeybindingsSection />
+      <PluginKeybindingsSection />
     </div>
+  );
+}
+function PluginKeybindingsSection() {
+  const { t } = useI18n();
+  const [commands, setCommands] = React.useState<PluginCommandRef[]>([]);
+  const [capturing, setCapturing] = React.useState<string | null>(null);
+  const overrides = useSettingsStore((state) => state.keybindings);
+  const setKeybinding = useSettingsStore((state) => state.setKeybinding);
+  const resetKeybinding = useSettingsStore((state) => state.resetKeybinding);
+  React.useEffect(() => {
+    const api = window.electronAPI.extensionPlugins;
+    if (!api) return;
+    let generation = 0;
+    const load = async () => {
+      const mine = ++generation;
+      try {
+        const result = await api.list();
+        if (mine === generation)
+          setCommands(result.registryError ? [] : pluginCommandRefs(result.plugins));
+      } catch {
+        if (mine === generation) setCommands([]);
+      }
+    };
+    void load();
+    const unsubscribe = api.onChanged(() => void load());
+    return () => {
+      generation++;
+      unsubscribe();
+    };
+  }, []);
+  const { rows } = resolvePluginKeybindings(commands, overrides, effectiveKeybindings(overrides));
+  if (!rows.length) return null;
+  return (
+    <section className="space-y-3">
+      <h4 className="font-medium text-sm">{t('Plugin shortcuts')}</h4>
+      <div className="divide-y rounded-lg border">
+        {rows.map((row) => (
+          <div key={row.action} className="flex items-center gap-2 p-3 text-xs">
+            <span className="mr-auto">
+              {row.command.title} · {row.command.pluginName}
+            </span>
+            {row.conflict && (
+              <span className="text-destructive">
+                {t('Shortcut conflict')}: {row.conflict}
+              </span>
+            )}
+            <button
+              type="button"
+              className="rounded border px-2 py-1"
+              onClick={() => setCapturing(row.action)}
+              onBlur={() => setCapturing(null)}
+              onKeyDown={(event) => {
+                if (capturing !== row.action) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.key === 'Escape') {
+                  setCapturing(null);
+                  return;
+                }
+                if (event.key === 'Backspace' || event.key === 'Delete') {
+                  setKeybinding(row.action, '');
+                  setCapturing(null);
+                  return;
+                }
+                const binding = eventToBinding(event);
+                if (!binding) return;
+                setKeybinding(row.action, binding);
+                setCapturing(null);
+              }}
+            >
+              {capturing === row.action
+                ? t('Press shortcut…')
+                : row.binding
+                  ? formatBinding(row.binding)
+                  : t('No shortcut')}
+            </button>
+            {row.custom && (
+              <button
+                type="button"
+                title={t('Reset to default')}
+                onClick={() => resetKeybinding(row.action)}
+              >
+                <RotateCcw className="size-3.5" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

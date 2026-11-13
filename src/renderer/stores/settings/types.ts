@@ -83,6 +83,10 @@ export type BackgroundSizeMode = 'cover' | 'contain' | 'repeat' | 'center';
 export interface SettingsState {
   // UI
   theme: Theme;
+  /** Explicit plugin palette; empty preserves the local Collabra light palettes. */
+  pluginTheme: string;
+  /** Device-local; expanded permissions still require explicit approval. */
+  pluginAutoUpdate: boolean;
   lightPalette: import('@shared/lightPalette').LightPalette;
   /** 界面强调色；写入 `html[data-accent]`，缺省 violet */
   accentColor: import('@shared/accentColor').AccentColor;
@@ -351,6 +355,8 @@ export interface SettingsState {
 
   // Setters
   setTheme: (theme: Theme) => void;
+  setPluginTheme: (theme: string) => void;
+  setPluginAutoUpdate: (enabled: boolean) => void;
   setLightPalette: (palette: import('@shared/lightPalette').LightPalette) => void;
   setAccentColor: (accent: import('@shared/accentColor').AccentColor) => void;
   setChatTypography: (typography: import('@shared/chatTypography').ChatTypography) => void;

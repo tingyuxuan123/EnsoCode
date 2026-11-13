@@ -38,7 +38,7 @@ it('rejects foreign namespaces, builtin tools and unmounted slots', () => {
     { slot: 'tool.card', toolName: 'plugin_c-d__read' },
     { slot: 'tool.card', toolName: 'read' + '__x' },
     { slot: 'block', language: 'c.d:chart' },
-    { slot: 'message.action', position: 'left' },
+    { slot: 'message.action', position: 'middle' },
     { slot: 'composer.dock' },
     { slot: 'unknown' },
   ])

@@ -6,18 +6,78 @@ import {
   pluginComposerSlots,
   pluginMessageActions,
   pluginSlotKey,
+  pluginThinkingBody,
   pluginToolCard,
 } from './registry';
 import { usePluginSlotsVersion } from './usePluginSlots';
 
-export function PluginMessageActions({ position, text }: { position: 'right'; text: string }) {
+export function PluginMessageActions({
+  position,
+  text,
+  messageIndex,
+  sessionId,
+}: {
+  position: 'left' | 'right';
+  text: string;
+  messageIndex?: number;
+  sessionId?: string | null;
+}) {
   usePluginSlotsVersion();
   return (
     <>
       {pluginMessageActions(position).map((entry) => (
-        <PluginSlotView key={pluginSlotKey(entry)} entry={entry} props={{ position, text }} />
+        <PluginSlotView
+          key={pluginSlotKey(entry)}
+          entry={entry}
+          props={{ position, text, messageIndex, sessionId }}
+        />
       ))}
     </>
+  );
+}
+export function PluginThinkingBody({
+  text,
+  streaming,
+  itemKey,
+}: {
+  text: string;
+  streaming: boolean;
+  itemKey: string;
+}) {
+  usePluginSlotsVersion();
+  const entry = pluginThinkingBody();
+  return entry ? (
+    <PluginSlotView
+      entry={entry}
+      props={{ text, streaming, itemKey }}
+      fallback={text}
+      retryPhase={streaming}
+    />
+  ) : (
+    text
+  );
+}
+export function PluginMessageLeaf({
+  entry,
+  source,
+  final,
+  messageIndex,
+  sessionId,
+  Markdown,
+}: {
+  entry: import('./registry').PluginSlotEntry;
+  source: string;
+  final: boolean;
+  messageIndex: number;
+  sessionId: string | null;
+  Markdown: (props: { text: string }) => unknown;
+}) {
+  return (
+    <PluginSlotView
+      entry={entry}
+      props={{ source, final, messageIndex, sessionId, Markdown }}
+      retryPhase={final}
+    />
   );
 }
 export function PluginToolCardSlot({
@@ -71,11 +131,13 @@ export function PluginComposerSlots({
   sessionId,
   draft,
   busy,
+  presetId,
 }: {
   side: 'left' | 'right';
   sessionId: string | null;
   draft: string;
   busy: boolean;
+  presetId?: string;
 }) {
   usePluginSlotsVersion();
   return (
@@ -84,7 +146,7 @@ export function PluginComposerSlots({
         <PluginSlotView
           key={pluginSlotKey(entry)}
           entry={entry}
-          props={{ position: side, sessionId, draft, busy }}
+          props={{ position: side, sessionId, draft, busy, presetId }}
         />
       ))}
     </>

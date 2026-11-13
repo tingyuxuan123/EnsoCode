@@ -24,6 +24,8 @@ const pendingFileOpens = new Map<string, FileTarget>();
 const pendingFilesReveal = new Set<string>();
 type DesignReveal = { conversationId: string; title?: string; width?: number | 'max' };
 const pendingDesignReveal = new Map<string, DesignReveal>();
+type PluginViewReveal = { conversationId: string; pluginId: string; viewId: string; title: string };
+const pendingPluginViews = new Map<string, Map<string, PluginViewReveal>>();
 const pendingBrowserReveal: { conversationId: string; tabId?: string; ownerId?: string }[] = [];
 const pendingWorkflowReveal: {
   conversationId: string;
@@ -84,6 +86,9 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
   queueMicrotask(() => {
     if (docks.get(conversationId) !== api) return;
     const design = pendingDesignReveal.get(conversationId);
+    const pluginViews = pendingPluginViews.get(conversationId);
+    pendingPluginViews.delete(conversationId);
+    for (const view of pluginViews?.values() ?? []) openSidePanelPluginView(view);
     if (design) {
       pendingDesignReveal.delete(conversationId);
       addSidePanelDesign(design);
@@ -309,6 +314,36 @@ export function setSidePanelDesignVisible(conversationId: string, visible: boole
   );
   pendingDesignReveal.delete(dockId);
   docks.get(dockId)?.getPanel('design')?.api.close();
+}
+/** Open only a Main-authorized registered view in its conversation-owned dock. */
+export function openSidePanelPluginView(opts: PluginViewReveal): void {
+  const conversations = useSessionsStore.getState().conversations;
+  if (!conversations[opts.conversationId]) return;
+  const dockId = resolveSidePanelDockConversationId(conversations, opts.conversationId);
+  useSidePanelStore.getState().ensureOpen(dockId);
+  const api = docks.get(dockId);
+  const id = `plugin:${opts.pluginId}:${opts.viewId}`;
+  if (!api) {
+    let pending = pendingPluginViews.get(dockId);
+    if (!pending) {
+      pending = new Map();
+      pendingPluginViews.set(dockId, pending);
+    }
+    pending.set(id, opts);
+    return;
+  }
+  const existing = api.getPanel(id);
+  if (existing) {
+    existing.api.updateParameters({ conversationId: opts.conversationId });
+    existing.focus();
+    return;
+  }
+  api.addPanel({
+    id,
+    component: 'plugin',
+    title: opts.title,
+    params: { conversationId: opts.conversationId, pluginId: opts.pluginId, viewId: opts.viewId },
+  });
 }
 
 export function addSidePanelBtw(opts?: { title?: string }): void {

@@ -24,6 +24,7 @@ import {
   DialogPanel,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { addToast } from '@/components/ui/toast';
 import {
   flattenMentionRoot,
   type MentionFolderId,
@@ -32,6 +33,14 @@ import {
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, eventToBinding, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
+import {
+  pluginCommandFor,
+  pluginCommands,
+  runPluginCommand,
+  usePluginSlashCommands,
+} from '@/plugins/commands';
+import { resolvePluginKeybindings } from '@/plugins/keybindings';
+import { PluginStatusItems } from '@/plugins/statusItems';
 import { useSettingsStore } from '@/stores/settings';
 import { registerDraftTarget } from '../../plugins/draftBridge';
 import { PluginComposerSlots } from '../../plugins/slots';
@@ -69,6 +78,7 @@ interface ComposerProps {
   running: boolean;
   busy: boolean;
   focusKey?: string;
+  presetId?: string;
   /** 挂载/切会话时是否自动聚焦。移动端置 false，否则一进会话就弹出键盘挡住内容 */
   autoFocus?: boolean;
   /**
@@ -121,6 +131,7 @@ export function Composer({
   running,
   busy,
   focusKey,
+  presetId,
   autoFocus = true,
   enterToSend = true,
   toolbar,
@@ -400,7 +411,34 @@ export function Composer({
   }, [injectedDraft, injectedImages, injectedDraftAppend]);
 
   const subQuery = slashSubcommandQuery(slash, editorPlain.replaceAll('\uFFFC', ''));
-  const slashResults = filterComposerCommands(commands, slashQuery, skillQuery);
+  const pluginSlash = usePluginSlashCommands();
+  const slashResults = filterComposerCommands(
+    isolated ? commands : [...commands, ...pluginSlash],
+    slashQuery,
+    skillQuery
+  );
+  useEffect(() => {
+    if (isolated) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.repeat || locked || busy) return;
+      const overrides = useSettingsStore.getState().keybindings;
+      const binding = eventToBinding(event);
+      const command = binding
+        ? resolvePluginKeybindings(
+            pluginCommands(),
+            overrides,
+            effectiveKeybindings(overrides)
+          ).byBinding.get(binding)
+        : undefined;
+      if (!command) return;
+      event.preventDefault();
+      void runPluginCommand(command, focusKey ?? null).then((error) => {
+        if (error) addToast({ title: error });
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isolated, locked, busy, focusKey]);
   const subResults =
     slashQuery === null && skillQuery === null && subQuery !== null
       ? filterSlashSubcommands(slash, subQuery)
@@ -558,6 +596,15 @@ export function Composer({
       } else if (popupKind === 'slash') {
         const item = slashResults[activeIndex];
         if (!item) return;
+        const command = !isolated && pluginCommandFor(item.name);
+        if (command) {
+          editorRef.current?.consumeToken('/');
+          setSlashQuery(null);
+          void runPluginCommand(command, focusKey ?? null).then((error) => {
+            if (error) addToast({ title: error });
+          });
+          return;
+        }
         editorRef.current?.consumeToken(skillQuery !== null ? '$' : '/');
         setSlashQuery(null);
         setSkillQuery(null);
@@ -582,6 +629,8 @@ export function Composer({
       skillQuery,
       subResults,
       applySlashSubcommand,
+      focusKey,
+      isolated,
     ]
   );
 
@@ -739,7 +788,7 @@ export function Composer({
   };
 
   return (
-    <div ref={composerRef} className="relative">
+    <div ref={composerRef} data-enso="composer" className="relative">
       {popupKind === 'mention' && (
         <MentionPicker
           id={mentionPickerId}
@@ -1055,10 +1104,12 @@ export function Composer({
               />
             ) : null}
             {toolbar}
+            {!isolated && <PluginStatusItems sessionId={focusKey ?? null} />}
             {!isolated && (
               <PluginComposerSlots
                 side="left"
                 sessionId={focusKey ?? null}
+                presetId={presetId}
                 draft={editorPlain.replaceAll('\uFFFC', '')}
                 busy={busy || locked}
               />
@@ -1068,6 +1119,7 @@ export function Composer({
             <PluginComposerSlots
               side="right"
               sessionId={focusKey ?? null}
+              presetId={presetId}
               draft={editorPlain.replaceAll('\uFFFC', '')}
               busy={busy || locked}
             />

@@ -965,6 +965,7 @@ export function SidePanel({
       <motion.aside
         ref={asideRef}
         data-slot="side-panel"
+        data-enso="side-panel"
         initial={false}
         animate={{ width: targetW }}
         style={

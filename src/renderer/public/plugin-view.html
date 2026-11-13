@@ -9,9 +9,31 @@
       let port = null;
       let sequence = 0;
       let theme = 'light';
+      let file = null;
+      const store = Object.create(null);
+      const themeListeners = new Set();
+      const fileListeners = new Set();
+      const eventListeners = new Map();
+      const emit = (listeners, value) => { for (const listener of listeners || []) { try { listener(value); } catch {} } };
+      const subscribe = (listeners, listener) => { if (typeof listener !== 'function') return () => {}; listeners.add(listener); return () => listeners.delete(listener); };
+      const storage = Object.freeze({
+        get(key) { return Object.hasOwn(store, key) ? store[key] : null; },
+        set(key, value) { const name = String(key); const text = String(value); store[name] = text; port?.postMessage({ type: 'enso-storage', patch: { [name]: text } }); },
+        remove(key) { delete store[key]; port?.postMessage({ type: 'enso-storage', patch: { [key]: null } }); },
+      });
+      try { Object.defineProperty(window, 'localStorage', { configurable: false, value: Object.freeze({ getItem: storage.get, setItem: storage.set, removeItem: storage.remove, clear() { for (const key of Object.keys(store)) storage.remove(key); }, key(index) { return Object.keys(store)[index] ?? null; }, get length() { return Object.keys(store).length; } }) }); } catch {}
+      const fileApi = Object.freeze({
+        get rel() { return file?.rel || ''; }, get text() { return file?.text || ''; },
+        onChange(listener) { return subscribe(fileListeners, listener); },
+        update(text) { if (!file || !port) return; file = { rel: file.rel, text: String(text) }; port.postMessage({ type: 'enso-file-edit', text: file.text }); },
+      });
       const pending = new Map();
       Object.defineProperty(window, 'enso', { configurable: false, writable: false, value: Object.freeze({
         get theme() { return theme; },
+        get file() { return file ? fileApi : null; },
+        storage,
+        onTheme(listener) { return subscribe(themeListeners, listener); },
+        on(name, listener) { if (typeof name !== 'string' || !name) return () => {}; let list = eventListeners.get(name); if (!list) { list = new Set(); eventListeners.set(name, list); } return subscribe(list, listener); },
         call(method, args) {
           if (!port) return Promise.reject(new Error('bridge not ready'));
           const id = ++sequence;
@@ -23,7 +45,12 @@
         if (port || event.source !== window.parent || !nonce || !data || data.type !== 'enso-view-init' || data.nonce !== nonce || typeof data.html !== 'string' || event.ports.length !== 1) return;
         window.removeEventListener('message', initialize);
         port = event.ports[0]; theme = data.theme === 'dark' ? 'dark' : 'light';
+        if (data.file && typeof data.file.rel === 'string' && typeof data.file.text === 'string') file = { rel: data.file.rel, text: data.file.text };
+        if (data.storage && typeof data.storage === 'object') for (const [key, value] of Object.entries(data.storage)) if (typeof value === 'string') store[key] = value;
         port.onmessage = ({ data: reply }) => {
+          if (reply?.type === 'enso-theme') { if (reply.theme !== 'dark' && reply.theme !== 'light') return; theme = reply.theme; document.documentElement.dataset.theme = theme; emit(themeListeners, theme); return; }
+          if (reply?.type === 'enso-view-event') { emit(eventListeners.get(reply.name), reply.data); return; }
+          if (reply?.type === 'enso-file') { if (!file || typeof reply.rel !== 'string' || typeof reply.text !== 'string' || (reply.rel === file.rel && reply.text === file.text)) return; file = { rel: reply.rel, text: reply.text }; emit(fileListeners, file); return; }
           const entry = reply && pending.get(reply.id);
           if (!entry) return;
           pending.delete(reply.id);

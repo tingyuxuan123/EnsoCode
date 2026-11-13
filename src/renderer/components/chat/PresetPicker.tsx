@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useEnabledPluginPresets } from '@/plugins/usePluginPresets';
+import { pluginPresetModel, useEnabledPluginPresets } from '@/plugins/usePluginPresets';
 import { useSettingsStore } from '@/stores/settings';
 
 interface PresetPickerProps {
   presetId: string;
   onSelect: (presetId: string) => void;
+  onModel?: (model: { providerId: string; modelId: string }) => void;
   /** 会话已开始后预设固化，不能中途替换（skill/MCP/指令在 spawn 时注入） */
   disabled?: boolean;
   /** composer 工具行放不下时只留图标 */
@@ -17,7 +18,13 @@ interface PresetPickerProps {
 }
 
 /** composer 工具行的预设选择：pill 触发 + 默认/自定义预设列表（会话开始前可选，之后只读） */
-export function PresetPicker({ presetId, onSelect, disabled, compact = false }: PresetPickerProps) {
+export function PresetPicker({
+  presetId,
+  onSelect,
+  onModel,
+  disabled,
+  compact = false,
+}: PresetPickerProps) {
   const { t } = useI18n();
   const presets = useSettingsStore((state) => state.presets);
   const pluginPresets = useEnabledPluginPresets();
@@ -73,6 +80,8 @@ export function PresetPicker({ presetId, onSelect, disabled, compact = false }: 
               type="button"
               onClick={() => {
                 onSelect(option.id);
+                const model = pluginPresetModel(option.id, pluginPresets);
+                if (model) onModel?.(model);
                 setOpen(false);
               }}
               className={cn(

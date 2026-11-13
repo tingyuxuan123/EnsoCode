@@ -466,6 +466,24 @@ describe('typed Agent child projection', () => {
     expect(reusedId).toBe(emptyId);
     expect(createConversation).not.toHaveBeenCalled();
   });
+  it('插件强制创建新会话不能复用用户已有草稿', async () => {
+    nextConversationId = 'user-draft';
+    const original = await sessionsModule.useSessionsStore.getState().newConversation('project');
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        [original!]: { ...state.conversations[original!], draftText: 'keep user draft' },
+      },
+    }));
+    nextConversationId = 'plugin-new';
+    const created = await sessionsModule.useSessionsStore
+      .getState()
+      .newConversation('project', { forceNew: true });
+    expect(created).toBe('plugin-new');
+    expect(sessionsModule.useSessionsStore.getState().conversations[original!].draftText).toBe(
+      'keep user draft'
+    );
+  });
 
   it('点击系统通知按正常选中流程打开会话：激活权威选择并清未读', async () => {
     const onFocusSession = vi.mocked(window.electronAPI.agent.onFocusSession);

@@ -3,8 +3,29 @@ import { stripBotNotesUpdate } from '@shared/bots/notes';
 import type { ApprovalRequestInfo, AskRequestInfo, ProjectedMessage } from '@shared/types/agent';
 import type { BotChat, GroupEntry } from '@shared/types/bot';
 import type { BotQueueItem } from '@shared/types/botIpc';
+import type { Conversation } from '../sessions';
 import type { BotSessions } from './projection';
 import { directMarker, isUnread, readKey } from './unread';
+
+/** Code 雇佣的成员只按 Main child 身份关联；待命实例不是工作中。 */
+export function workingCodeBotIds(conversations: Record<string, Conversation>): Set<string> {
+  const ids = new Set<string>();
+  for (const conversation of Object.values(conversations)) {
+    const child = conversation.child;
+    if (
+      conversation.status !== 'running' ||
+      conversation.ended ||
+      conversation.historyOnly ||
+      !child ||
+      conversation.parentId !== child.parentId ||
+      !conversations[child.parentId] ||
+      !child.agentTypeKey.startsWith('bot:')
+    )
+      continue;
+    ids.add(child.agentTypeKey.slice('bot:'.length));
+  }
+  return ids;
+}
 
 export interface SessionOwner {
   chatId: string;

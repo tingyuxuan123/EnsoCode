@@ -42,6 +42,7 @@ import {
   type XtermTheme,
 } from '@/lib/ghosttyTheme';
 import { cn } from '@/lib/utils';
+import { usePluginThemesStore } from '@/stores/pluginThemes';
 import {
   ACCENT_COLORS,
   type AccentColor,
@@ -631,6 +632,9 @@ const ACCENT_LABELS = {
 } as const satisfies Record<AccentColor, string>;
 
 export function AppearanceSettings() {
+  const pluginTheme = useSettingsStore((state) => state.pluginTheme);
+  const setPluginTheme = useSettingsStore((state) => state.setPluginTheme);
+  const pluginThemes = usePluginThemesStore((state) => state.themes);
   const {
     theme,
     setTheme,
@@ -762,6 +766,25 @@ export function AppearanceSettings() {
       <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
         {t('Appearance')}
       </h3>
+      <section className="space-y-2" data-settings-row="appearance.pluginTheme">
+        <h4 className="font-medium text-sm">{t('Plugin theme')}</h4>
+        <select
+          aria-label={t('Plugin theme')}
+          className="w-full rounded border bg-background p-2 text-sm"
+          value={pluginTheme}
+          onChange={(event) => setPluginTheme(event.target.value)}
+        >
+          <option value="">{t('Use Collabra theme')}</option>
+          {pluginTheme && !pluginThemes?.some((theme) => theme.id === pluginTheme) && (
+            <option value={pluginTheme}>{t('Plugin theme unavailable')}</option>
+          )}
+          {pluginThemes?.map((theme) => (
+            <option key={theme.id} value={theme.id}>
+              {theme.name} · {theme.source.pluginName}
+            </option>
+          ))}
+        </select>
+      </section>
       {/* Theme Mode Section */}
       <section className="space-y-[12px]">
         <div data-settings-row="appearance.theme">

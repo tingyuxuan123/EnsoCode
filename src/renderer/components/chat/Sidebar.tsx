@@ -763,6 +763,7 @@ export function Sidebar({
       animate={{ width: collapsed ? 0 : width }}
       transition={springStandard}
       data-slot="project-sidebar"
+      data-enso="sidebar"
       aria-hidden={collapsed || undefined}
       className="flex shrink-0 flex-col overflow-hidden border-t border-line bg-nav"
     >

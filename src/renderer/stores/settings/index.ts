@@ -158,6 +158,8 @@ function clampNumber(value: number, min: number, max: number, fallback: number):
 
 const initialState = {
   theme: 'light' as Theme,
+  pluginTheme: '',
+  pluginAutoUpdate: true,
   lightPalette: DEFAULT_LIGHT_PALETTE,
   accentColor: DEFAULT_ACCENT_COLOR,
   chatTypography: normalizeChatTypography(undefined),
@@ -295,6 +297,8 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       ...initialState,
+      setPluginTheme: (pluginTheme) => set({ pluginTheme }),
+      setPluginAutoUpdate: (pluginAutoUpdate) => set({ pluginAutoUpdate }),
 
       setTheme: (theme) => {
         const { terminalTheme, lightPalette } = get();

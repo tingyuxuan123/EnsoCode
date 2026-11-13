@@ -1,4 +1,5 @@
 import type { ApprovalReviewRecord } from '@shared/approvalReviewRecord';
+import type { PluginArtifactInfo } from '@shared/extensionPlugins/protocol';
 import { generatedImageFromOutput, isImageToolName } from '@shared/imageGeneration';
 import { IMAGE_EXTENSIONS, mediaExtension } from '@shared/localImage';
 import { firstProgram, isReadOnlyCommand } from '@shared/readOnlyCommand';
@@ -113,6 +114,7 @@ export type TimelineItem =
       /** 前台命令被移交为后台任务时的任务 id；其它缺省 */
       backgroundTaskId?: string;
       shellFailure?: ShellFailure;
+      pluginArtifacts?: PluginArtifactInfo[];
       /** submit_plan 提交的计划；其它工具缺省 */
       plan?: { title: string; text: string } | null;
       /** 联系主 agent / 队员、子代理 send 发出的正文，或子代理 spawn 交代的任务；其它工具缺省 */
@@ -941,6 +943,7 @@ function buildMessageTimeline(
       approvalReview?: ApprovalReviewRecord;
       backgroundTaskId?: string;
       shellFailure?: ShellFailure;
+      pluginArtifacts?: PluginArtifactInfo[];
     }
   >();
   const designCardsByCall = new Map<string, CardDescriptor[]>();
@@ -966,6 +969,7 @@ function buildMessageTimeline(
         rtk: message.rtk,
         approvalReview: message.approvalReview,
         backgroundTaskId: message.backgroundTaskId,
+        pluginArtifacts: message.pluginArtifacts,
         shellFailure: message.isError ? message.shellFailure : undefined,
       });
     }
@@ -1348,6 +1352,7 @@ function buildMessageTimeline(
             ...(waiting ? { waiting } : {}),
             ...(result?.backgroundTaskId ? { backgroundTaskId: result.backgroundTaskId } : {}),
             ...(result?.shellFailure ? { shellFailure: result.shellFailure } : {}),
+            ...(result?.pluginArtifacts ? { pluginArtifacts: result.pluginArtifacts } : {}),
             ...(part.name === 'submit_plan'
               ? { plan: extractSubmittedPlan(part.name, part.arguments) }
               : {}),

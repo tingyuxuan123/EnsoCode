@@ -1,30 +1,63 @@
 import { Puzzle, Settings2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { PluginMarket } from '@/components/settings/PluginMarket';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { useSettingsStore } from '@/stores/settings';
 import {
   NativePluginConfigForm,
   NativePluginFlows,
   PLUGIN_TRUST_WARNING,
   PluginRegistryAlert,
 } from './NativePluginFlows';
+import { PluginIcon } from './PluginIcon';
+import { PluginManagementDetails } from './PluginManagementDetails';
 import { isNativePluginUrl, useNativePluginManager } from './useNativePluginManager';
 
 export { PLUGIN_TRUST_WARNING, PluginRegistryAlert } from './NativePluginFlows';
 export { pluginConfigPatch } from './useNativePluginManager';
 
 /** This list is independent of Claude Code plugins and settings.json. */
-export function NativePluginsSection() {
+export function NativePluginsSection({
+  request,
+}: {
+  request?: { serial: number; pluginId?: string; pluginInstallUrl?: string };
+}) {
   const { t } = useI18n();
   const manager = useNativePluginManager();
   const { plugins, busy, error, loading, registryError, canManage, configuring } = manager;
   const [url, setUrl] = useState('');
+  const [marketOpen, setMarketOpen] = useState(false);
+  const pluginAutoUpdate = useSettingsStore((state) => state.pluginAutoUpdate);
+  const setPluginAutoUpdate = useSettingsStore((state) => state.setPluginAutoUpdate);
   const disabled = !!busy || !canManage;
   const flowOpen = !!manager.preview || !!manager.removing || !!configuring;
+  const consumedRequest = useRef<number | null>(null);
+  const focusedRequest = useRef<number | null>(null);
+  useEffect(() => {
+    if (!request || !canManage || busy || consumedRequest.current === request.serial) return;
+    consumedRequest.current = request.serial;
+    if (request.pluginInstallUrl) void manager.stage('url', request.pluginInstallUrl);
+  }, [request, canManage, busy, manager.stage]);
+  useEffect(() => {
+    if (
+      !request?.pluginId ||
+      loading ||
+      !plugins.some((plugin) => plugin.id === request.pluginId) ||
+      focusedRequest.current === request.serial
+    )
+      return;
+    const element = document.querySelector(`[data-plugin-id="${CSS.escape(request.pluginId)}"]`);
+    if (element instanceof HTMLElement) {
+      focusedRequest.current = request.serial;
+      element.scrollIntoView({ block: 'center' });
+      element.dataset.settingsFlash = 'true';
+    }
+  }, [request, loading, plugins]);
   return (
     <section className="space-y-3" data-settings-row="plugins.enso">
       <div className="flex flex-wrap items-start justify-between gap-[16px]">
@@ -58,6 +91,24 @@ export function NativePluginsSection() {
       <p className="rounded-[6px] border border-warning/40 bg-warning/5 p-3 text-[calc(12rem/14)]">
         {t(PLUGIN_TRUST_WARNING)}
       </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" onClick={() => setMarketOpen((open) => !open)}>
+          {t(marketOpen ? 'Hide plugin market' : 'Browse plugin market')}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => void manager.checkUpdates()}
+        >
+          {t('Check plugin updates')}
+        </Button>
+        <label className="ml-auto flex items-center gap-2 text-xs">
+          {t('Automatically update plugins')}
+          <Switch checked={pluginAutoUpdate} onCheckedChange={setPluginAutoUpdate} />
+        </label>
+      </div>
+      {marketOpen && <PluginMarket manager={manager} />}
       <div className="flex gap-2">
         <Input
           aria-label={t('Plugin URL')}
@@ -88,8 +139,17 @@ export function NativePluginsSection() {
         </div>
       )}
       {plugins.map((plugin) => (
-        <div key={plugin.id} className="space-y-2 rounded-[6px] border border-line p-3">
+        <div
+          key={plugin.id}
+          data-plugin-id={plugin.id}
+          className="space-y-2 rounded-[6px] border border-line p-3"
+        >
           <div className="flex items-center gap-2">
+            <PluginIcon
+              pluginId={plugin.id}
+              icon={plugin.icon}
+              className="size-7 shrink-0 object-contain"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-[calc(13rem/14)]">
                 {plugin.name} <span className="text-muted-foreground">{plugin.version}</span>
@@ -130,6 +190,7 @@ export function NativePluginsSection() {
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
+          <PluginManagementDetails plugin={plugin} manager={manager} />
           {plugin.pendingVersion && (
             <div className="space-y-2 rounded-[6px] border border-warning/40 p-3 text-[calc(12rem/14)]">
               <p>

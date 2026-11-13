@@ -32,6 +32,8 @@ import {
   registerFilesTabCloser,
 } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
+import { fileViewerKey, pluginFileViewersFor, usePluginFileViewers } from '@/plugins/fileViewers';
+import { PluginFrame } from '@/plugins/PluginView';
 import { useSessionsStore } from '@/stores/sessions';
 import { hasAuthoritativeMessages } from '@/stores/sessions/messageCache';
 import { buildTimeline, completedEditWriteFingerprint } from '@/stores/sessions/timeline';
@@ -91,6 +93,7 @@ interface OpenDoc {
   designPreview?: boolean;
   /** 同 tab 内的 source/preview 切换（仅 Markdown）；undefined 视为 source */
   viewMode?: 'source' | 'preview';
+  pluginViewer?: string;
 }
 
 const EMPTY_MESSAGES: ProjectedMessage[] = [];
@@ -102,6 +105,7 @@ interface FilesViewProps {
 
 export function FilesView({ conversationId, projectId }: FilesViewProps) {
   const { t } = useI18n();
+  const pluginViewers = usePluginFileViewers();
   const fileOptions = useCodeHighlightOptions(FILE_OPTIONS);
   const req = useMemo(() => ({ conversationId, projectId }), [conversationId, projectId]);
   const workspaceRevision = useSessionsStore(
@@ -260,12 +264,23 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
           dirty: false,
           conflict: false,
           viewMode,
+          ...(viewMode === undefined
+            ? {
+                pluginViewer: pluginFileViewersFor(rel, pluginViewers).find(
+                  (viewer) => viewer.default
+                )
+                  ? fileViewerKey(
+                      pluginFileViewersFor(rel, pluginViewers).find((viewer) => viewer.default)!
+                    )
+                  : undefined,
+              }
+            : {}),
         },
       ]);
       setActiveRel(rel);
       void window.electronAPI.workspaceFiles.watchStart({ ...req, rel });
     },
-    [designAvailable, failToast, readFile, req]
+    [designAvailable, failToast, readFile, req, pluginViewers]
   );
 
   const [confirmClose, setConfirmClose] = useState<null | {
@@ -643,6 +658,10 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
   }, [activeRel, save]);
 
   const active = openDocs.find((doc) => doc.rel === activeRel) ?? null;
+  const availableViewers = active ? pluginFileViewersFor(active.rel, pluginViewers) : [];
+  const pluginViewer = availableViewers.find(
+    (viewer) => fileViewerKey(viewer) === active?.pluginViewer
+  );
   const editOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       enabledSelectionAction: true,
@@ -1072,6 +1091,32 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
             </div>
           )}
           <div className="relative min-h-0 flex-1">
+            {active &&
+              !active.preview &&
+              !active.designPreview &&
+              !active.tooLarge &&
+              availableViewers.length > 0 && (
+                <select
+                  aria-label={t('File viewer')}
+                  className="absolute top-2 left-2 z-10 max-w-56 rounded border bg-background p-1 text-xs"
+                  value={pluginViewer ? fileViewerKey(pluginViewer) : ''}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setOpenDocs((docs) =>
+                      docs.map((doc) =>
+                        doc.rel === active.rel ? { ...doc, pluginViewer: value || undefined } : doc
+                      )
+                    );
+                  }}
+                >
+                  <option value="">{t('View Source')}</option>
+                  {availableViewers.map((viewer) => (
+                    <option key={fileViewerKey(viewer)} value={fileViewerKey(viewer)}>
+                      {viewer.title} · {viewer.pluginName}
+                    </option>
+                  ))}
+                </select>
+              )}
             {active && !active.preview && !active.tooLarge && isMarkdownRel(active.rel) && (
               <div className="absolute top-2 right-2 z-10">
                 <Button
@@ -1107,6 +1152,28 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
               <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
                 {t('This file is too large to open in the editor.')}
               </div>
+            ) : pluginViewer ? (
+              <PluginFrame
+                key={`${pluginViewer.pluginId}:${pluginViewer.id}:${pluginViewer.build ?? ''}:${active.rel}`}
+                pluginId={pluginViewer.pluginId}
+                entry={pluginViewer.entry}
+                title={pluginViewer.title}
+                sessionId={conversationId}
+                file={{
+                  rel: active.rel,
+                  text: active.draft,
+                  onEdit: (text) => {
+                    if (workspaceMigrating) return;
+                    setOpenDocs((docs) =>
+                      docs.map((doc) =>
+                        doc.rel === active.rel
+                          ? { ...doc, draft: text, dirty: text !== doc.contents }
+                          : doc
+                      )
+                    );
+                  },
+                }}
+              />
             ) : active.preview || (active.viewMode === 'preview' && isMarkdownRel(active.rel)) ? (
               <div className="h-full overflow-auto px-3 py-2 text-sm">
                 <FileMarkdownPreview

@@ -1,6 +1,15 @@
 import type { ExtensionPluginSummary } from '@shared/extensionPlugins/types';
 import { useEffect, useState } from 'react';
 export type PluginPresetOption = ExtensionPluginSummary['presets'][number] & { pluginName: string };
+export function pluginPresetModel(
+  presetId: string,
+  presets: readonly { id: string; model?: { providerId: string; modelId: string } }[]
+): { providerId: string; modelId: string } | null {
+  const model = presets.find((preset) => preset.id === presetId)?.model;
+  return model?.providerId && model.modelId
+    ? { providerId: model.providerId, modelId: model.modelId }
+    : null;
+}
 export function useEnabledPluginPresets(): PluginPresetOption[] {
   const [presets, setPresets] = useState<PluginPresetOption[]>([]);
   useEffect(() => {

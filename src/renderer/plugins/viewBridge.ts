@@ -46,7 +46,59 @@ export function validViewInit(
 export function decodeUtf8Base64(base64: string): string {
   return new TextDecoder().decode(Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)));
 }
+export function viewStoragePatch(data: unknown): Record<string, string | null> | null {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('type' in data) ||
+    data.type !== 'enso-storage' ||
+    !('patch' in data) ||
+    !data.patch ||
+    typeof data.patch !== 'object' ||
+    Array.isArray(data.patch)
+  )
+    return null;
+  const entries = Object.entries(data.patch);
+  if (entries.length > 256) return null;
+  let size = 0;
+  for (const [key, value] of entries) {
+    if (
+      !key ||
+      key.length > 256 ||
+      ['__proto__', 'constructor', 'prototype'].includes(key) ||
+      (value !== null && typeof value !== 'string')
+    )
+      return null;
+    size += new TextEncoder().encode(key + (value ?? '')).length;
+    if (size > 128 * 1024) return null;
+  }
+  return Object.fromEntries(entries);
+}
+export const viewThemePush = (theme: 'light' | 'dark') => ({ type: 'enso-theme' as const, theme });
+export const viewEventPush = (name: string, data: unknown) => ({
+  type: 'enso-view-event' as const,
+  name,
+  data,
+});
+export const viewFilePush = (rel: string, text: string) => ({
+  type: 'enso-file' as const,
+  rel,
+  text,
+});
+export function viewFileEdit(data: unknown): string | null {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('type' in data) ||
+    data.type !== 'enso-file-edit' ||
+    !('text' in data) ||
+    typeof data.text !== 'string'
+  )
+    return null;
+  return new TextEncoder().encode(data.text).length <= 2 * 1024 * 1024 ? data.text : null;
+}
 export interface PluginViewRef {
+  build?: string;
   pluginId: string;
   pluginName: string;
   id: string;

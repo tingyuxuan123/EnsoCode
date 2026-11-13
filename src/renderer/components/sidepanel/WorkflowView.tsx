@@ -35,6 +35,7 @@ const SOURCE_LABEL: Record<WorkflowPresetSummary['source'], string> = {
   custom: 'Custom',
   global: 'Global',
   builtin: 'Built-in',
+  plugin: 'Plugin',
 };
 
 /** 以一条普通用户消息触发：模型按 id 调 workflow 工具，结果自然回到会话里。 */

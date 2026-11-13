@@ -377,6 +377,8 @@ interface SessionsState {
     options?: {
       forkedFrom?: { conversationId: string; entryId: string };
       worktreeFromConversationId?: string;
+      /** 插件明确创建独立会话，不能复用用户尚未发送的草稿会话。 */
+      forceNew?: boolean;
     }
   ): Promise<string | null>;
   /** 会话切到隔离 worktree（composer 选择器/右键菜单入口）。
@@ -2508,7 +2510,7 @@ export const useSessionsStore = create<SessionsState>()(
               .map((conversation) => conversation.conversationId)
           );
           const existing =
-            options?.forkedFrom || sourceId !== undefined
+            options?.forceNew || options?.forkedFrom || sourceId !== undefined
               ? undefined
               : get().order.find((id) => {
                   const conversation = get().conversations[id];

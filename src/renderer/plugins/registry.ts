@@ -3,12 +3,14 @@ export type PluginSlotName =
   | 'tool.card'
   | 'block'
   | 'composer.left'
-  | 'composer.right';
+  | 'composer.right'
+  | 'thinking.body'
+  | 'message.leaf';
 export interface PluginSlotEntry {
   pluginId: string;
   slot: PluginSlotName;
   component: (props: Record<string, unknown>) => unknown;
-  position?: 'right';
+  position?: 'left' | 'right';
   toolName?: string;
   language?: string;
 }
@@ -32,14 +34,20 @@ export function subscribePluginSlots(listener: () => void): () => void {
 export function registerPluginSlot(entry: PluginSlotEntry): () => void {
   if (!/^[a-z][a-z0-9]*(\.[a-z0-9]+)+$/.test(entry.pluginId)) throw new Error('Invalid plugin id');
   if (
-    !['message.action', 'tool.card', 'block', 'composer.left', 'composer.right'].includes(
-      entry.slot
-    )
+    ![
+      'message.action',
+      'tool.card',
+      'block',
+      'composer.left',
+      'composer.right',
+      'thinking.body',
+      'message.leaf',
+    ].includes(entry.slot)
   )
     throw new Error('Unknown slot');
   if (typeof entry.component !== 'function') throw new Error('Slot requires a component');
-  if (entry.slot === 'message.action' && entry.position !== 'right')
-    throw new Error('Only right message actions are supported');
+  if (entry.slot === 'message.action' && entry.position !== 'right' && entry.position !== 'left')
+    throw new Error('Message actions require a position');
   if (
     entry.slot === 'tool.card' &&
     (!entry.toolName || !/^[a-z][a-z0-9_]*$/.test(entry.toolName) || entry.toolName.includes('__'))
@@ -74,6 +82,8 @@ export const pluginMessageActions = (position: 'left' | 'right') =>
   entries.filter((item) => item.slot === 'message.action' && item.position === position);
 export const pluginComposerSlots = (side: 'left' | 'right') =>
   entries.filter((item) => item.slot === `composer.${side}`);
+export const pluginThinkingBody = () => entries.find((item) => item.slot === 'thinking.body');
+export const pluginMessageLeaf = () => entries.find((item) => item.slot === 'message.leaf');
 export const pluginToolCard = (pluginId: string, toolName: string) =>
   entries.find(
     (item) => item.slot === 'tool.card' && item.pluginId === pluginId && item.toolName === toolName

@@ -8,6 +8,10 @@ import {
 } from './NativePluginsSection';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: (select: (state: unknown) => unknown) =>
+    select({ pluginAutoUpdate: true, setPluginAutoUpdate: vi.fn() }),
+}));
 it('登记表错误明确显示只读及恢复提示，而非仅显示空列表', () => {
   const html = renderToStaticMarkup(
     createElement(PluginRegistryAlert, { error: '坏文件；备份：registry.corrupt' })
@@ -19,8 +23,22 @@ it('登记表错误明确显示只读及恢复提示，而非仅显示空列表'
 });
 it('keeps secrets blank without losing explicit deletion or plain values', () => {
   const fields = [
-    { key: 'secret', title: 'Secret', secret: true, description: '', set: true },
-    { key: 'plain', title: 'Plain', secret: false, description: '', set: false },
+    {
+      key: 'secret',
+      title: 'Secret',
+      type: 'string' as const,
+      secret: true,
+      description: '',
+      set: true,
+    },
+    {
+      key: 'plain',
+      title: 'Plain',
+      type: 'string' as const,
+      secret: false,
+      description: '',
+      set: false,
+    },
   ];
   expect(pluginConfigPatch(fields, { secret: '', plain: 'x', injected: 'bad' })).toEqual({
     plain: 'x',

@@ -624,7 +624,7 @@ export function MessageTimeline({
 
   return (
     <ChatSearchHighlightContext.Provider value={searchHighlight}>
-      <div className="@container relative min-h-0 flex-1">
+      <div data-enso="timeline" className="@container relative min-h-0 flex-1">
         <NavRail items={navItems} activeKey={activeNavKey} onJump={jumpTo} />
         {items.length === 0 && !busy ? (
           <EmptyReveal
