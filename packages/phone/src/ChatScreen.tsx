@@ -219,9 +219,12 @@ export function ChatScreen(props: Props) {
           started,
           spawning: false,
           messages,
+          historyBaseIndex: entries[0]?.[0] ?? 0,
+          historyLoading: props.historyLoading,
           queuedMessages: props.queued?.map((q) => ({ id: q.id, text: q.text })),
         }
-      : null
+      : null,
+    props.hasOlder ? props.onLoadOlder : undefined
   );
   const pinnedTodos = usePinnedTodos(sessionId ?? '');
 

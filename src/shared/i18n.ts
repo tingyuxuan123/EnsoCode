@@ -2271,6 +2271,22 @@ export const zhTranslations: Record<string, string> = {
   'Pause goal': '暂停目标',
   'Resume goal': '继续目标',
   'Clear goal': '清除目标',
+  'View goal steps': '查看目标步骤',
+  'Goal steps': '目标执行步骤',
+  'Auto runs {{current}}/{{limit}}': '自动续跑 {{current}}/{{limit}}',
+  '{{limit}} is the automatic-run safety limit, not a predefined task list. These are the actual runs and tool actions from this conversation.':
+    '{{limit}} 是自动续跑的安全上限，不是预设的任务清单。下方展示本会话实际执行的轮次和工具操作。',
+  'Only loaded history is shown. Earlier runs may not be listed yet.':
+    '当前仅展示已加载的历史，较早的轮次可能尚未列出。',
+  'Load earlier runs': '加载更早轮次',
+  'No goal runs in the loaded history yet.': '已加载的历史中暂无目标执行记录。',
+  'Goal kickoff': '目标启动',
+  'Goal resumed': '恢复目标',
+  'Auto run {{n}}': '自动续跑第 {{n}} 轮',
+  'Run ended': '轮次结束',
+  'Waiting to start': '等待开始',
+  '{{n}} tool actions': '{{n}} 次工具操作',
+  'No reply yet': '暂无回复',
   Plan: '计划',
   'Plan mode is on: read-only research, then a plan for your approval':
     'Plan 模式已开启：只读调研，产出计划交你审批',

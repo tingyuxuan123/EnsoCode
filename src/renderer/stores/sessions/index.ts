@@ -50,6 +50,8 @@ import { useWorkflowRunsStore } from '@/stores/workflowRuns';
 /** 会话目标(pi-goal 式):active 时每次轮次收束自动续跑一次,直到终止信号或安全限制 */
 export interface SessionGoal {
   text: string;
+  /** 设定时间，用于隔离同名旧目标的历史；旧数据可缺省。 */
+  createdAt?: number;
   status: 'active' | 'paused' | 'completed' | 'blocked' | 'waiting';
   /** 终止/暂停原因(goal 信号的 note 或安全限制说明) */
   note?: string;
@@ -87,6 +89,7 @@ import {
   shouldSendRewindCommand,
 } from './conversationRewind';
 import { canSelectCoworkerTab } from './coworkerTabPolicy';
+import { GOAL_AUTO_TURN_LIMIT } from './goalSteps';
 import {
   hideRetiredCoordinator,
   restoreLegacyDispatchedConversations,
@@ -2034,7 +2037,7 @@ export const useSessionsStore = create<SessionsState>()(
           return;
         }
         // 自动轮数上限:防无界烧钱
-        if (goal.autoTurns >= 25) {
+        if (goal.autoTurns >= GOAL_AUTO_TURN_LIMIT) {
           set((state) =>
             patch(state, id, {
               goal: { ...goal, status: 'paused', note: 'automatic-turn limit (25) reached' },
@@ -3803,6 +3806,7 @@ export const useSessionsStore = create<SessionsState>()(
             patch(state, conversationId, {
               goal: {
                 text: text.trim(),
+                createdAt: Date.now(),
                 status: 'active',
                 autoTurns: 0,
                 noProgressRuns: 0,

@@ -48,3 +48,29 @@ it('adapts queue withdrawal to queue-remove without inventing a delivery command
   useSessionsStore.getState().withdrawMessage('session', { kind: 'delivery', id: 'optimistic' });
   expect(actions.removeQueuedMessage).toHaveBeenCalledTimes(1);
 });
+
+it('目标详情只补读当前手机会话，切走后释放补读回调', async () => {
+  const loadOlder = vi.fn();
+  setDisplayedConversation(
+    {
+      id: 'phone',
+      projectId: '',
+      status: 'idle',
+      started: true,
+      spawning: false,
+      messages: [],
+      historyBaseIndex: 80,
+      historyLoading: true,
+    },
+    loadOlder
+  );
+  expect(useSessionsStore.getState().conversations.phone.historyLoading).toBe(true);
+  expect(typeof useSessionsStore.getState().loadOlderHistory).toBe('function');
+  await useSessionsStore.getState().loadOlderHistory('other');
+  expect(loadOlder).not.toHaveBeenCalled();
+  await useSessionsStore.getState().loadOlderHistory('phone');
+  expect(loadOlder).toHaveBeenCalledOnce();
+  setDisplayedConversation(null);
+  await useSessionsStore.getState().loadOlderHistory('phone');
+  expect(loadOlder).toHaveBeenCalledOnce();
+});

@@ -12,6 +12,7 @@ import type { TimelineMessage } from '@/stores/sessions/reducer';
 
 export interface SessionGoal {
   text: string;
+  createdAt?: number;
   status: 'active' | 'paused' | 'completed' | 'blocked' | 'waiting';
   note?: string;
   autoTurns: number;
@@ -37,6 +38,8 @@ export interface Conversation {
   parentId?: string;
   historyOnly?: boolean;
   historyBaseIndex?: number;
+  historyLoading?: boolean;
+  historyError?: string;
   rewinding?: boolean;
   restoringFiles?: boolean;
   workspaceMigrating?: boolean;
@@ -63,9 +66,11 @@ type SessionsSlice = {
   forkFromMessage(conversationId: string, userIndexFromEnd: number): Promise<string | null>;
   rewind(sessionId: string, anchor: string | number, restoreFiles?: boolean): void;
   withdrawMessage(conversationId: string, target: { kind: 'queue' | 'delivery'; id: string }): void;
+  loadOlderHistory(conversationId: string): Promise<void>;
 } & Omit<QueueActions, 'rewind'>;
 
 let rewindAction: QueueActions['rewind'] = () => {};
+let loadOlderAction: (() => void) | undefined;
 
 const state: SessionsSlice = {
   activeId: null,
@@ -90,6 +95,9 @@ const state: SessionsSlice = {
   pauseGoal: () => {},
   resumeGoal: () => {},
   clearGoal: () => {},
+  loadOlderHistory: async (conversationId) => {
+    if (state.activeId === conversationId) loadOlderAction?.();
+  },
   withdrawMessage: (conversationId, target) => {
     if (target.kind === 'queue') state.removeQueuedMessage(conversationId, target.id);
   },
@@ -103,7 +111,11 @@ export function setQueueActions(actions: QueueActions): void {
 }
 
 /** 由 ChatScreen 在渲染前同步当前会话，供复用组件内部读取 */
-export function setDisplayedConversation(next: Conversation | null): void {
+export function setDisplayedConversation(
+  next: Conversation | null,
+  onLoadOlder?: () => void
+): void {
+  loadOlderAction = next ? onLoadOlder : undefined;
   if (!next) {
     state.activeId = null;
     state.conversations = {};

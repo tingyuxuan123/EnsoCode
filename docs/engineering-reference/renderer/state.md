@@ -34,6 +34,15 @@ commands 不持久化，commands 仍由 snapshot / commands 事件恢复到内�
 `TimelineRow` 的 memo 比较必须包含 `turnEnd`，否则正文与耗时未变时，最终页脚不会随收口更新。
 回归：`timeline.test.ts`、`turnFileChanges.test.ts`、`TimelineRow.turnEnd.test.tsx`。
 
+## 目标步骤详情
+
+目标条的 `autoTurns / 25` 是自动续跑计数与安全上限，不是预设任务清单。
+`goalSteps` 从会话正文中的目标启动 / 恢复 / 续跑消息投影实际轮次、回复和工具操作，不另存正文日志。
+详情仅展示已加载历史；尾窗按当前批次计数校准编号，更早记录经既有历史分页补读，不生成占位“未来步骤”。
+新目标以 `createdAt` 隔离同名旧记录，旧数据取最近一次启动；弹窗状态同时绑定会话和目标。
+手机复用此组件时，纯模块的 store 类型引用仍经 `@/stores/sessions` alias，补读转接手机现有回调。
+回归：`goalSteps.test.ts`、`GoalBar.test.tsx`、手机 `stubs/sessions-store.test.ts`。
+
 ## 子代理只读观察
 
 - 子代理正文继续使用 `sessions` 同一份会话投影，不以截短 progress 或 TaskBar 活动拼接第二份日志。
