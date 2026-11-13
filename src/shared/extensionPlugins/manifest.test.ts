@@ -7,20 +7,36 @@ import { parsePluginToolName, pluginToolName } from './toolName';
 const base = { schemaVersion: 1, id: 'enso.test', name: 'Test', version: '1.0.0', permissions: [] };
 const parse = (patch: object = {}) => parseExtensionPluginManifest({ ...base, ...patch }, '0.2.37');
 describe('native plugin manifest', () => {
-  it.each(['systemPromptTail', 'boostPrompt', 'refusalRetry', 'refusalRetryPrompt'])(
-    '拒绝未实现的预设字段 %s',
+  // 上游 0.3.5 起预设支持真尾、boost 与推脱补发，按新契约校验而不是拒绝
+  it.each(['systemPromptTail', 'boostPrompt', 'refusalRetryPrompt'])(
+    '按上游契约接受预设字段 %s',
     (key) => {
-      expect(
-        parse({
-          contributes: {
-            presets: [
-              { id: 'review', name: 'Review', [key]: key === 'refusalRetry' ? false : 'prompt.md' },
-            ],
-          },
-        }).ok
-      ).toBe(false);
+      const result = parse({
+        contributes: {
+          presets: [{ id: 'review', name: 'Review', [key]: 'prompt.md' }],
+        },
+      });
+      expect(result.ok && result.manifest.contributes.presets[0]).toMatchObject({
+        [key]: 'prompt.md',
+      });
     }
   );
+  it('推脱补发开关必须有正文', () => {
+    expect(
+      parse({
+        contributes: { presets: [{ id: 'review', name: 'Review', refusalRetry: true }] },
+      }).ok
+    ).toBe(false);
+    expect(
+      parse({
+        contributes: {
+          presets: [
+            { id: 'review', name: 'Review', refusalRetry: true, refusalRetryPrompt: 'prompt.md' },
+          ],
+        },
+      }).ok
+    ).toBe(true);
+  });
   it('MCP 授权必须同时绑定 server 和 tool', () => {
     expect(parse({ permissions: ['mcp.call'], mcp: { tools: ['write_data'] } }).ok).toBe(false);
     expect(parse({ permissions: ['mcp.call'], mcp: { tools: ['s/write_data'] } }).ok).toBe(true);

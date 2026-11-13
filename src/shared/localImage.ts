@@ -17,6 +17,40 @@ const POSIX_HOST = 'posix';
 
 /** 远程图片代理的保留 host */
 export const REMOTE_FETCH_HOST = 'remote-fetch';
+export const PLUGIN_ASSET_HOST = 'plugin-asset';
+export function pluginAssetUrl(pluginId: string, rel: string, build: string): string {
+  return `${LOCAL_IMAGE_SCHEME}://${PLUGIN_ASSET_HOST}/${encodeURIComponent(pluginId)}/${rel.split('/').map(encodeURIComponent).join('/')}?v=${encodeURIComponent(build)}`;
+}
+export function parsePluginAssetUrl(url: URL): { pluginId: string; rel: string } | null {
+  if (
+    url.protocol !== `${LOCAL_IMAGE_SCHEME}:` ||
+    url.hostname !== PLUGIN_ASSET_HOST ||
+    url.username ||
+    url.password ||
+    url.port
+  )
+    return null;
+  const parts: string[] = [];
+  for (const raw of url.pathname.slice(1).split('/')) {
+    let part: string;
+    try {
+      part = decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
+    if (!part || part === '.' || part === '..' || /[\\/\0]/.test(part)) return null;
+    parts.push(part);
+  }
+  const pluginId = parts.shift();
+  if (
+    !pluginId ||
+    pluginId.length > 40 ||
+    !/^[a-z][a-z0-9]*(\.[a-z0-9]+)+$/.test(pluginId) ||
+    !parts.length
+  )
+    return null;
+  return { pluginId, rel: parts.join('/') };
+}
 
 /** 成员头像的保留 host：只按 botId 寻址，路径由 Main 推导；v 为头像版本（缓存失效） */
 export const BOT_AVATAR_HOST = 'bot-avatar';
@@ -80,7 +114,8 @@ export function toLocalImageUrl(filePath: string): string {
 /** local-image:// URL → 本地绝对路径；形状不合法返回 null */
 export function localImageUrlToPath(url: URL): string | null {
   const host = url.hostname;
-  if (!host || host === REMOTE_FETCH_HOST || host === BOT_AVATAR_HOST) return null;
+  if (!host || host === REMOTE_FETCH_HOST || host === BOT_AVATAR_HOST || host === PLUGIN_ASSET_HOST)
+    return null;
   const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   if (host === POSIX_HOST) {
     return `/${segments.join('/')}`;

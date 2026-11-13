@@ -31,8 +31,34 @@ import { type CodeSearchConfig, parseCodeSearchConfig } from '../codeSearch';
 import { type CompactStrategy, parseCompactStrategy } from '../compactStrategy';
 import type { DefaultModelRef } from '../defaultModel';
 import { isDesignToolResult } from '../design/toolResult';
+import { parsePluginArtifactInfo } from '../extensionPlugins/artifacts';
+import {
+  AGENT_END_TEXT_MAX,
+  BEFORE_AGENT_START_PROMPT_MAX,
+  CONTEXT_PART_ITEMS,
+  CONTEXT_PART_KINDS,
+  CONTEXT_USAGE_BUCKETS,
+  type InterceptPayload,
+  isChildInterceptEvent,
+  isInterceptEvent,
+  PLUGIN_EVENTS,
+  PLUGIN_INTERCEPT_EVENTS,
+  type PluginEventName,
+  type PluginInterceptEvent,
+} from '../extensionPlugins/events';
+import {
+  PLUGIN_INJECT_MAX_CHARS,
+  PLUGIN_PROGRESS_MAX_CHARS,
+  type PluginAgentSource,
+  type PluginArtifactInfo,
+  type PluginInjectImage,
+  type PluginMessageSource,
+  parsePluginAgentSource,
+  parsePluginInjectImages,
+  parsePluginMessageSource,
+} from '../extensionPlugins/protocol';
 import { parsePluginToolName } from '../extensionPlugins/toolName';
-import type { PluginToolDescriptor } from '../extensionPlugins/types';
+import type { PluginEventPlan, PluginToolDescriptor } from '../extensionPlugins/types';
 import { parseMaxActiveCoworkers } from '../maxActiveCoworkers';
 import {
   isCodexAccountKey,
@@ -1186,6 +1212,8 @@ export type AgentCommand =
       /** 已启用 Claude 插件的 command hooks；远程会话不下发 */
       pluginHooks?: PluginHookSpawn[];
       pluginTools?: PluginToolDescriptor[];
+      pluginEvents?: PluginEventPlan;
+      workflowPresetFiles?: string[];
       instruction?: { path: string; content: string };
       approvalMode?: ApprovalMode;
       /** 助手代审模型；仅 approvalMode=assistant 时有意义 */
@@ -1447,6 +1475,25 @@ export type AgentCommand =
   | { type: 'pin-sessions'; sessionIds: string[] }
   | { type: 'warm-mcp'; servers: McpServerSpawnConfig[] }
   | {
+      type: 'plugin-intercept-result';
+      identity: SessionIdentity;
+      requestId: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    }
+  | { type: 'plugin-tool-progress'; identity: SessionIdentity; requestId: string; text: string }
+  | {
+      type: 'plugin-inject';
+      identity: SessionIdentity;
+      pluginId: string;
+      pluginName: string;
+      text: string;
+      images?: PluginInjectImage[];
+      deliverAs: 'steer' | 'followUp' | 'nextTurn';
+      triggerTurn: boolean;
+    }
+  | {
       type: 'plugin-tool-result';
       identity: SessionIdentity;
       requestId: string;
@@ -1632,6 +1679,8 @@ export function parseShellFailure(value: unknown): ShellFailure | undefined {
 }
 
 export interface ProjectedMessage {
+  pluginArtifacts?: PluginArtifactInfo[];
+  pluginSource?: PluginMessageSource;
   /** Persisted user entry identity, absent on unconfirmed messages. */
   entryId?: string;
   rtk?: RtkToolStats;
@@ -1835,7 +1884,9 @@ export type RendererAgentEvent =
               | 'image-generation-cancel'
               | 'design-hook'
               | 'plugin-tool-invoke'
-              | 'plugin-tool-cancel';
+              | 'plugin-tool-cancel'
+              | 'plugin-event'
+              | 'plugin-intercept';
           }
         >
       | { type: 'session-reloaded' }
@@ -1852,7 +1903,28 @@ export type WorkspaceLockEvent =
   | { type: 'workspace-lock-result'; requestId: string; ok: boolean; error?: string }
   | { type: 'workspace-unlock-result'; requestId: string; ok: boolean; error?: string };
 
+export type PluginInterceptRequest =
+  | { event: 'before_compact'; payload: { reason: string } }
+  | {
+      [E in PluginInterceptEvent]: { event: E; payload: InterceptPayload[E] };
+    }[PluginInterceptEvent];
+
 export type AgentWorkerEvent =
+  | {
+      type: 'plugin-event';
+      identity: SessionIdentity;
+      seq: number;
+      event: PluginEventName;
+      data: unknown;
+      agent?: PluginAgentSource;
+    }
+  | ({
+      type: 'plugin-intercept';
+      identity: SessionIdentity;
+      seq: number;
+      requestId: string;
+      agent?: PluginAgentSource;
+    } & PluginInterceptRequest)
   | {
       type: 'plugin-mcp-result';
       identity: SessionIdentity;
@@ -1875,6 +1947,7 @@ export type AgentWorkerEvent =
       toolName: string;
       fingerprint: string;
       args: Record<string, unknown>;
+      agent?: PluginAgentSource;
     }
   | { type: 'plugin-tool-cancel'; identity: SessionIdentity; seq: number; requestId: string }
   | {
@@ -2251,12 +2324,26 @@ function isPluginToolList(value: unknown): value is PluginToolDescriptor[] {
   return value.every((tool) => {
     if (
       !isRecord(tool) ||
-      !hasExactKeys(tool, ['name', 'description', 'parameters', 'pluginId', 'fingerprint']) ||
+      !hasOnlyKeys(tool, [
+        'name',
+        'description',
+        'parameters',
+        'pluginId',
+        'fingerprint',
+        'timeoutMs',
+        'readOnly',
+      ]) ||
       typeof tool.name !== 'string' ||
       typeof tool.description !== 'string' ||
       tool.description.length > 1024 ||
       parsePluginToolName(tool.name)?.pluginId !== tool.pluginId ||
       !pluginFingerprint(tool.fingerprint) ||
+      (tool.readOnly !== undefined && typeof tool.readOnly !== 'boolean') ||
+      (tool.timeoutMs !== undefined &&
+        (typeof tool.timeoutMs !== 'number' ||
+          !Number.isInteger(tool.timeoutMs) ||
+          tool.timeoutMs < 1000 ||
+          tool.timeoutMs > 600_000)) ||
       !isRecord(tool.parameters) ||
       tool.parameters.type !== 'object' ||
       !boundedJson(tool.parameters) ||
@@ -2267,6 +2354,178 @@ function isPluginToolList(value: unknown): value is PluginToolDescriptor[] {
     return true;
   });
 }
+function isPluginEventPlan(value: unknown): value is PluginEventPlan {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ['observe', 'intercept', 'inject']) ||
+    typeof value.inject !== 'boolean' ||
+    !Array.isArray(value.observe) ||
+    !Array.isArray(value.intercept)
+  )
+    return false;
+  if (
+    value.observe.length > PLUGIN_EVENTS.length ||
+    !value.observe.every(
+      (event) => typeof event === 'string' && (PLUGIN_EVENTS as readonly string[]).includes(event)
+    ) ||
+    new Set(value.observe).size !== value.observe.length ||
+    value.intercept.length > PLUGIN_INTERCEPT_EVENTS.length
+  )
+    return false;
+  const events = new Set<string>();
+  for (const item of value.intercept) {
+    if (
+      !isRecord(item) ||
+      !hasOnlyKeys(item, ['event', 'tools']) ||
+      typeof item.event !== 'string' ||
+      !isInterceptEvent(item.event) ||
+      events.has(item.event)
+    )
+      return false;
+    events.add(item.event);
+    if (
+      item.tools !== undefined &&
+      (!Array.isArray(item.tools) ||
+        item.tools.length > 64 ||
+        !item.tools.every((name) => isNonEmptyString(name) && name.length <= 256) ||
+        new Set(item.tools).size !== item.tools.length)
+    )
+      return false;
+  }
+  return true;
+}
+const hasPluginAgentKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean => {
+  if (value.agent === undefined) return hasExactKeys(value, keys);
+  const identity = value.identity;
+  return (
+    hasExactKeys(value, [...keys, 'agent']) &&
+    isRecord(identity) &&
+    typeof identity.sessionId === 'string' &&
+    parsePluginAgentSource(value.agent, identity.sessionId) !== null
+  );
+};
+const isPluginInterceptPayload = (event: string, payload: unknown): boolean => {
+  if (!isRecord(payload)) return false;
+  if (event === 'before_agent_start')
+    return (
+      hasExactKeys(payload, ['prompt', 'kind']) &&
+      typeof payload.prompt === 'string' &&
+      payload.prompt.length <= BEFORE_AGENT_START_PROMPT_MAX &&
+      (payload.kind === 'user' || payload.kind === 'custom')
+    );
+  if (event === 'before_compact')
+    return (
+      hasExactKeys(payload, ['reason']) &&
+      isNonEmptyString(payload.reason) &&
+      payload.reason.length <= 64
+    );
+  if (event === 'tool_call' || event === 'tool_result')
+    return (
+      hasExactKeys(
+        payload,
+        event === 'tool_call'
+          ? ['toolCallId', 'toolName', 'input']
+          : ['toolCallId', 'toolName', 'input', 'content', 'isError']
+      ) &&
+      isNonEmptyString(payload.toolCallId) &&
+      payload.toolCallId.length <= 512 &&
+      isNonEmptyString(payload.toolName) &&
+      payload.toolName.length <= 256 &&
+      isRecord(payload.input) &&
+      boundedJson(payload.input) &&
+      (event === 'tool_call' ||
+        (typeof payload.content === 'string' && typeof payload.isError === 'boolean'))
+    );
+  return (
+    event === 'input' &&
+    hasExactKeys(payload, ['text', 'source']) &&
+    typeof payload.text === 'string' &&
+    isNonEmptyString(payload.source) &&
+    payload.source.length <= 32
+  );
+};
+const isPluginTokenCount = (value: unknown): boolean =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+const isPluginTokenRecord = (value: unknown, keys: readonly string[]): boolean =>
+  isRecord(value) &&
+  hasExactKeys(value, keys) &&
+  keys.every((key) => isPluginTokenCount(value[key]));
+const isPluginObserveData = (event: string, data: unknown): boolean => {
+  if (!isRecord(data)) return false;
+  if (isInterceptEvent(event)) return isPluginInterceptPayload(event, data);
+  if (event === 'agent_start') return hasExactKeys(data, []);
+  if (event === 'agent_end')
+    return (
+      hasOnlyKeys(data, ['text']) &&
+      (data.text === undefined ||
+        (typeof data.text === 'string' && data.text.length <= AGENT_END_TEXT_MAX))
+    );
+  if (event === 'model_select') {
+    const model = (value: unknown) =>
+      isRecord(value) &&
+      hasExactKeys(value, ['provider', 'modelId']) &&
+      isNonEmptyString(value.provider) &&
+      value.provider.length <= 256 &&
+      isNonEmptyString(value.modelId) &&
+      value.modelId.length <= 256;
+    return (
+      hasOnlyKeys(data, ['provider', 'modelId', 'previous', 'source']) &&
+      model({ provider: data.provider, modelId: data.modelId }) &&
+      (data.previous === undefined || model(data.previous)) &&
+      (data.source === 'set' || data.source === 'cycle' || data.source === 'restore')
+    );
+  }
+  if (event === 'context_usage')
+    return (
+      hasOnlyKeys(data, [
+        'used',
+        'estimated',
+        'contextWindow',
+        'percent',
+        'buckets',
+        'usage',
+        'parts',
+        'turns',
+      ]) &&
+      isPluginTokenCount(data.used) &&
+      typeof data.estimated === 'boolean' &&
+      (data.contextWindow === undefined || isPluginTokenCount(data.contextWindow)) &&
+      (data.percent === undefined || isPluginTokenCount(data.percent)) &&
+      isPluginTokenRecord(data.buckets, CONTEXT_USAGE_BUCKETS) &&
+      (data.usage === undefined ||
+        isPluginTokenRecord(data.usage, ['input', 'output', 'cacheRead', 'cacheWrite'])) &&
+      (data.turns === undefined || isSequence(data.turns)) &&
+      (data.parts === undefined ||
+        (Array.isArray(data.parts) &&
+          data.parts.length <= CONTEXT_PART_KINDS.length &&
+          data.parts.every(
+            (part) =>
+              isRecord(part) &&
+              hasExactKeys(part, ['kind', 'tokens', 'items']) &&
+              (CONTEXT_PART_KINDS as readonly unknown[]).includes(part.kind) &&
+              isPluginTokenCount(part.tokens) &&
+              Array.isArray(part.items) &&
+              part.items.length <= CONTEXT_PART_ITEMS &&
+              part.items.every(
+                (item) =>
+                  isRecord(item) &&
+                  hasOnlyKeys(item, ['name', 'tag', 'n', 'tokens']) &&
+                  typeof item.name === 'string' &&
+                  item.name.length <= 1024 &&
+                  typeof item.tag === 'string' &&
+                  item.tag.length <= 32 &&
+                  (item.n === undefined || isSequence(item.n)) &&
+                  isPluginTokenCount(item.tokens)
+              )
+          )))
+    );
+  return (
+    (event === 'session_start' || event === 'session_end' || event === 'after_compact') &&
+    hasExactKeys(data, ['reason']) &&
+    isNonEmptyString(data.reason) &&
+    data.reason.length <= 64
+  );
+};
 function pluginMcpServers(value: unknown): value is McpServerSpawnConfig[] {
   return (
     Array.isArray(value) &&
@@ -2402,6 +2661,15 @@ function isProjectedCodemodeCalls(value: unknown): value is ProjectedCodemodeCal
 }
 
 function hasValidProjectedMetadata(value: Record<string, unknown>): boolean {
+  if (value.pluginSource !== undefined && !parsePluginMessageSource(value.pluginSource))
+    return false;
+  if (
+    value.pluginArtifacts !== undefined &&
+    (!Array.isArray(value.pluginArtifacts) ||
+      value.pluginArtifacts.length > 32 ||
+      value.pluginArtifacts.some((artifact) => !parsePluginArtifactInfo(artifact)))
+  )
+    return false;
   if (
     value.toolCompletedAt !== undefined &&
     (value.role !== 'toolResult' || !isSequence(value.toolCompletedAt))
@@ -3424,6 +3692,8 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'pluginCommands',
           'pluginHooks',
           'pluginTools',
+          'pluginEvents',
+          'workflowPresetFiles',
           'instruction',
           'approvalMode',
           'approvalReviewer',
@@ -3464,6 +3734,11 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           parsePluginCommands(value.pluginCommands) === null) ||
         (value.pluginHooks !== undefined && parsePluginHooks(value.pluginHooks) === null) ||
         (value.pluginTools !== undefined && !isPluginToolList(value.pluginTools)) ||
+        (value.pluginEvents !== undefined && !isPluginEventPlan(value.pluginEvents)) ||
+        (value.workflowPresetFiles !== undefined &&
+          (!Array.isArray(value.workflowPresetFiles) ||
+            value.workflowPresetFiles.length > 200 ||
+            !value.workflowPresetFiles.every(isNonEmptyString))) ||
         (value.rtkEnabled !== undefined && typeof value.rtkEnabled !== 'boolean') ||
         (value.lcuEnabled !== undefined && typeof value.lcuEnabled !== 'boolean') ||
         (value.planMode !== undefined && typeof value.planMode !== 'boolean') ||
@@ -3839,6 +4114,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'memory-result':
     case 'delegation-result':
     case 'computer-result':
+    case 'plugin-intercept-result':
     case 'plugin-tool-result': {
       if (
         !hasOnlyKeys(value, ['type', 'identity', 'requestId', 'ok', 'result', 'error']) ||
@@ -3955,6 +4231,39 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         : null;
     case 'warm-mcp':
       return hasExactKeys(value, ['type', 'servers']) && Array.isArray(value.servers)
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'plugin-tool-progress':
+      return hasExactKeys(value, ['type', 'identity', 'requestId', 'text']) &&
+        parseSessionIdentity(value.identity) &&
+        isNonEmptyString(value.requestId) &&
+        typeof value.text === 'string' &&
+        value.text.length <= PLUGIN_PROGRESS_MAX_CHARS
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'plugin-inject':
+      return hasOnlyKeys(value, [
+        'type',
+        'identity',
+        'pluginId',
+        'pluginName',
+        'text',
+        'images',
+        'deliverAs',
+        'triggerTurn',
+      ]) &&
+        parseSessionIdentity(value.identity) &&
+        isNonEmptyString(value.pluginId) &&
+        value.pluginId.length <= 128 &&
+        isNonEmptyString(value.pluginName) &&
+        value.pluginName.length <= 256 &&
+        isNonEmptyString(value.text) &&
+        value.text.length <= PLUGIN_INJECT_MAX_CHARS &&
+        parsePluginInjectImages(value.images) !== null &&
+        (value.deliverAs === 'steer' ||
+          value.deliverAs === 'followUp' ||
+          value.deliverAs === 'nextTurn') &&
+        typeof value.triggerTurn === 'boolean'
         ? (value as unknown as AgentCommand)
         : null;
     case 'plugin-mcp-list':
@@ -4298,7 +4607,7 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'plugin-tool-invoke':
-      return hasExactKeys(value, [
+      return hasPluginAgentKeys(value, [
         'type',
         'identity',
         'seq',
@@ -4320,6 +4629,33 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
         parseSessionIdentity(value.identity) &&
         isNonEmptyString(value.requestId)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'plugin-event':
+      return hasPluginAgentKeys(value, ['type', 'identity', 'seq', 'event', 'data']) &&
+        parseSessionIdentity(value.identity) &&
+        typeof value.event === 'string' &&
+        (PLUGIN_EVENTS as readonly string[]).includes(value.event) &&
+        (value.event === 'before_compact'
+          ? value.agent !== undefined && isPluginInterceptPayload(value.event, value.data)
+          : isPluginObserveData(value.event, value.data))
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'plugin-intercept':
+      return hasPluginAgentKeys(value, [
+        'type',
+        'identity',
+        'seq',
+        'requestId',
+        'event',
+        'payload',
+      ]) &&
+        parseSessionIdentity(value.identity) &&
+        isNonEmptyString(value.requestId) &&
+        typeof value.event === 'string' &&
+        (value.event === 'before_compact' || isInterceptEvent(value.event)) &&
+        (value.agent === undefined || isChildInterceptEvent(value.event)) &&
+        isPluginInterceptPayload(value.event, value.payload)
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'workspace-branch-context-consumed':

@@ -9,6 +9,11 @@ const grant = (patch: Partial<PluginGrant> = {}): PluginGrant => ({
   mcp: [{ name: 'demo', command: 'node', args: ['server.js'], envKeys: [] }],
   mcpTools: ['search_context'],
   renderer: false,
+  env: [],
+  interop: [],
+  intercepts: [],
+  resident: false,
+  styles: false,
   ...patch,
 });
 
@@ -52,7 +57,25 @@ describe('upstream grantExpands compatibility', () => {
     ],
     ['新增 renderer', { renderer: true }],
     ['可调用的 MCP 工具变多', { mcpTools: ['search_context', 'enhance_prompt'] }],
+    ['新增透传环境变量', { env: ['JAVA_HOME'] }],
+    ['新增可调用的插件', { interop: ['other.plugin'] }],
+    ['新增拦截事件', { intercepts: ['tool_call'] }],
+    ['改为常驻', { resident: true }],
   ])('%s 算扩大', (_label, patch) => {
     expect(grantExpands(grant(), grant(patch))).toBe(true);
+  });
+
+  it('旧记录没有新增字段时按空处理', () => {
+    const legacy = {
+      permissions: grant().permissions,
+      fsRead: grant().fsRead,
+      fsWrite: grant().fsWrite,
+      netDomains: grant().netDomains,
+      mcp: grant().mcp,
+      mcpTools: grant().mcpTools,
+      renderer: false,
+    } as unknown as PluginGrant;
+    expect(grantExpands(legacy, legacy)).toBe(false);
+    expect(grantExpands(legacy, grant({ resident: true }))).toBe(true);
   });
 });

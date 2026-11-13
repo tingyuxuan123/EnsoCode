@@ -66,6 +66,13 @@ export interface Preset {
   instructionId?: string;
   /** 自定义开头角色段落的外部正文 UUID 引用；缺省使用 pi 默认，工具及后续规则不变 */
   systemPromptId?: string;
+  /** 自建预设可选叠加的原生插件预设；插件失效时仍可单独使用自建预设。 */
+  pluginPresetId?: string;
+  /** 提示词正文仍放外部存储，不把大段文本写入 settings。 */
+  systemPromptTailId?: string;
+  boostPromptId?: string;
+  refusalRetryPromptId?: string;
+  refusalRetry?: boolean;
 }
 
 export const DEFAULT_PRESET_ID = 'default';

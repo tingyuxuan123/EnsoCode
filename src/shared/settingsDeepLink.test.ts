@@ -2,6 +2,35 @@ import { describe, expect, it } from 'vitest';
 import { parseSettingsDeepLink } from './settingsDeepLink';
 
 describe('parseSettingsDeepLink', () => {
+  it('安装链接限定插件页并沿HTTPS安装地址校验，插件定位不允许磁盘路径', () => {
+    expect(
+      parseSettingsDeepLink({
+        category: 'plugins',
+        rowId: 'plugins.enso',
+        pluginInstallUrl: 'https://example.com/plugin.zip',
+        pluginId: 'a.b',
+      })
+    ).toEqual({
+      category: 'plugins',
+      rowId: 'plugins.enso',
+      pluginInstallUrl: 'https://example.com/plugin.zip',
+      pluginId: 'a.b',
+    });
+    expect(
+      parseSettingsDeepLink({
+        category: 'general',
+        rowId: 'general.language',
+        pluginInstallUrl: 'https://example.com/a.zip',
+      })
+    ).toBeNull();
+    expect(
+      parseSettingsDeepLink({
+        category: 'plugins',
+        rowId: 'plugins.enso',
+        pluginId: '../../secret',
+      })
+    ).toBeNull();
+  });
   it('解析合法深链', () => {
     expect(parseSettingsDeepLink({ category: 'general', rowId: 'general.language' })).toEqual({
       category: 'general',
