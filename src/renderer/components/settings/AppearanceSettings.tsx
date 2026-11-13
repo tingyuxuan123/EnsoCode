@@ -1,7 +1,6 @@
-import type { LightPalette } from '@shared/lightPalette';
-import { LIGHT_PALETTES } from '@shared/lightPalette';
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@shared/localImage';
 import {
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   FolderOpen,
@@ -33,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { useI18n } from '@/i18n';
 import {
   defaultDarkTheme,
@@ -51,6 +51,13 @@ import {
   type Theme,
   useSettingsStore,
 } from '@/stores/settings';
+import { AppearanceThemeCards } from './AppearanceThemeCards';
+import {
+  buildThemeEntries,
+  type ThemeEntry,
+  themeEntryId,
+  themeSelectionPatch,
+} from './appearanceThemes';
 import { ChatTypographySettings } from './ChatTypographySettings';
 import { fontWeightOptions } from './constants';
 
@@ -655,11 +662,7 @@ export function AppearanceSettings() {
     toggleFavoriteTerminalTheme,
   } = useSettingsStore();
   const { t } = useI18n();
-  const paletteOptions: Record<LightPalette, string> = {
-    ocean: t('Ocean Light'),
-    'mint-light': t('Mint Light'),
-    'cloud-light': t('Cloud Light'),
-  };
+  const colorScheme = useColorScheme();
 
   const themeModeOptions: {
     value: Theme;
@@ -726,6 +729,18 @@ export function AppearanceSettings() {
 
   const showEmptyFavoritesHint = showFavoritesOnly && favoriteTerminalThemes.length === 0;
 
+  const themeEntries = React.useMemo(
+    () => buildThemeEntries({ pluginThemes, pluginTheme, mode: colorScheme }),
+    [pluginThemes, pluginTheme, colorScheme]
+  );
+  const selectedThemeId = themeEntryId(pluginTheme, lightPalette);
+
+  const handleThemeEntrySelect = (entry: ThemeEntry) => {
+    const patch = themeSelectionPatch(entry);
+    if (patch.pluginTheme !== undefined) setPluginTheme(patch.pluginTheme);
+    if (patch.lightPalette !== undefined) setLightPalette(patch.lightPalette);
+  };
+
   const previewTheme = React.useMemo(() => {
     return getXtermTheme(terminalTheme) ?? defaultDarkTheme;
   }, [terminalTheme]);
@@ -755,25 +770,48 @@ export function AppearanceSettings() {
       <h3 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
         {t('Appearance')}
       </h3>
-      <section className="space-y-2" data-settings-row="appearance.pluginTheme">
-        <h4 className="font-medium text-sm">{t('Plugin theme')}</h4>
-        <select
-          aria-label={t('Plugin theme')}
-          className="w-full rounded border bg-background p-2 text-sm"
-          value={pluginTheme}
-          onChange={(event) => setPluginTheme(event.target.value)}
-        >
-          <option value="">{t('Use Collabra theme')}</option>
-          {pluginTheme && !pluginThemes?.some((theme) => theme.id === pluginTheme) && (
-            <option value={pluginTheme}>{t('Plugin theme unavailable')}</option>
-          )}
-          {pluginThemes?.map((theme) => (
-            <option key={theme.id} value={theme.id}>
-              {theme.name} · {theme.source.pluginName}
-            </option>
-          ))}
-        </select>
+      <section className="space-y-[12px]" data-settings-row="appearance.themes">
+        <div>
+          <h4 className="text-[calc(14rem/14)] font-medium">{t('Themes')}</h4>
+          <p className="mt-[2px] text-[calc(12rem/14)] leading-[calc(20rem/14)] text-muted-foreground">
+            {t(
+              'Built-in light themes apply in light mode. A plugin theme overrides light and dark until you pick a built-in theme again.'
+            )}
+          </p>
+        </div>
+
+        <AppearanceThemeCards
+          entries={themeEntries}
+          selectedId={selectedThemeId}
+          onSelect={handleThemeEntrySelect}
+        />
+
+        <div>
+          <Button
+            variant="link"
+            size="sm"
+            data-slot="appearance-more-themes"
+            className="gap-[4px] px-0 text-[calc(12rem/14)]"
+            onClick={() =>
+              void window.electronAPI.window.openSettings({
+                category: 'plugins',
+                rowId: 'plugins.enso',
+              })
+            }
+          >
+            {t('Get more themes')}
+            <ArrowUpRight className="size-[calc(12rem/14)]" />
+          </Button>
+        </div>
       </section>
+
+      <div className="border-t border-line pt-[20px]">
+        <h4 className="text-[calc(14rem/14)] font-medium">{t('Personalization')}</h4>
+        <p className="mt-[2px] text-[calc(12rem/14)] leading-[calc(20rem/14)] text-muted-foreground">
+          {t('Mode, accent, typography and surfaces for the selected theme.')}
+        </p>
+      </div>
+
       {/* Theme Mode Section */}
       <section className="space-y-[12px]">
         <div data-settings-row="appearance.theme">
@@ -805,41 +843,6 @@ export function AppearanceSettings() {
               <span className="text-[calc(13rem/14)] font-medium">{option.label}</span>
             </button>
           ))}
-        </div>
-
-        <div
-          className="flex flex-wrap items-center justify-between gap-3 pt-2"
-          data-settings-row="appearance.lightPalette"
-        >
-          <div>
-            <h4 id="appearance-light-palette" className="text-[calc(14rem/14)] font-medium">
-              {t('Light palette')}
-            </h4>
-            <p className="mt-[2px] text-[calc(12rem/14)] leading-[calc(20rem/14)] text-muted-foreground">
-              {t('Used in light mode or when the system is light.')}
-            </p>
-          </div>
-          <Select
-            value={lightPalette}
-            onValueChange={(value) => {
-              if (value !== null) setLightPalette(value);
-            }}
-          >
-            <SelectTrigger
-              aria-labelledby="appearance-light-palette"
-              className="w-[calc(140rem/14)]"
-            >
-              <SelectValue>{paletteOptions[lightPalette]}</SelectValue>
-            </SelectTrigger>
-            {/* Open beside the trigger so every palette fits when space below is tight. */}
-            <SelectPopup alignItemWithTrigger={false}>
-              {LIGHT_PALETTES.map((palette) => (
-                <SelectItem key={palette} value={palette}>
-                  {paletteOptions[palette]}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
         </div>
       </section>
 

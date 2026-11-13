@@ -29,9 +29,7 @@ export const zhTranslations: Record<string, string> = {
   'Plugin shortcuts': '插件快捷键',
   'Plugin suggestions': '插件建议',
   'Shortcut conflict': '快捷键冲突',
-  'Plugin theme': '插件主题',
   'Plugin theme unavailable': '插件主题当前不可用',
-  'Use Collabra theme': '使用 Collabra 主题',
   'Theme CSS can change the entire interface': '主题 CSS 可以修改整个界面',
   'Image studio': '图片工作台',
   Auto: '自动',
@@ -516,12 +514,17 @@ export const zhTranslations: Record<string, string> = {
   PowerShell: 'PowerShell',
   'Git Bash': 'Git Bash',
   Light: '浅色',
-  'Light palette': '浅色方案',
+  Themes: '主题',
+  'Built-in light themes apply in light mode. A plugin theme overrides light and dark until you pick a built-in theme again.':
+    '内置浅色主题只在浅色外观下生效。插件主题会同时覆盖浅色与深色界面，重新选中内置主题后恢复原配色。',
+  'Get more themes': '获取更多主题',
+  Personalization: '个性化',
+  'Mode, accent, typography and surfaces for the selected theme.':
+    '为选中主题调整外观模式、强调色、排版与背景。',
+  Plugin: '插件',
   'Ocean Light': '晴空碧海',
   'Mint Light': '薄荷白',
   'Cloud Light': '云白（默认）',
-  'Used in light mode or when the system is light.':
-    '在浅色模式下使用，跟随系统时仅在系统为浅色时生效。',
   'Mint Light uses its own green accent.': '薄荷白使用主题自带的绿色强调色。',
   'Cloud Light uses its own monochrome accent.': '云白使用主题自带的黑白强调色。',
   'No favorite themes yet. Click the heart icon to add favorites.':

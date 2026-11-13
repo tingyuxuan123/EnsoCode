@@ -98,6 +98,13 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
   - 该文件的组件规则不在 `@layer` 内，会压过 Tailwind 工具类（包括 `hover:`、`disabled:`），写覆盖时要显式处理这些状态。改浮层圆角要连 `::before` 一起改：命令面板的 `::before` 带底色，只改外框会在角上露出旧圆角。代码视图选中色用宿主 `diffs-container` 上的 `--diffs-selection-base`（文档侧声明压过 shadow `:host`），不要改 `--diffs-modified-*`，那会连带 diff 的修改色。
   - `cloud-light`（云白）配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、中性普通主操作、浅灰用户消息；发送/当前选中/聚焦跟随用户强调色，不给外壳或用户气泡染色。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
 
+设置 → 外观 的「主题」卡片网格是内置方案与插件主题的统一入口：三张内置浅色卡 + 已启用插件的
+主题卡（按当前浅/深外观取插件自带 `light`/`dark` 调色板预览）。选内置卡写入 `lightPalette`
+并清空 `pluginTheme`；选插件主题只写 `pluginTheme`，不改既有浅色方案；已选主题被停用或卸载时
+保留一张不可选占位卡（覆盖规则见 `docs/plugins.md`）。内置卡预览色与浅色方案 CSS 同源，改配色
+要同时改 `components/settings/appearanceThemes.ts` 的 `BUILTIN_THEME_PREVIEW`，漂移回归见
+`appearanceThemes.test.ts` 与 `AppearanceThemeCards.test.tsx`。
+
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
 在 `system`/`light`/`dark` 下改配色方案看不到界面变化，这是设计如此，不是 bug。
 
