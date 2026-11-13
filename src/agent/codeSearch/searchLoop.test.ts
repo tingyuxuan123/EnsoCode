@@ -546,4 +546,21 @@ describe('runCodeSearch 循环', () => {
     const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
     expect(result).toMatchObject({ status: 'error', code: 'login', files: [] });
   });
+
+  it('答案引用敏感路径时只跳过该引用，保留其余已验证结果', async () => {
+    write('a.ts', 'verified needle\n');
+    const completion = scripted([
+      () =>
+        answer([
+          { path: '/codebase/node_modules/pkg/index.js', ranges: [{ start: 1, end: 1 }] },
+          { path: '/codebase/credentials.ts', ranges: [{ start: 1, end: 1 }] },
+          { path: '/codebase/a.ts', ranges: [{ start: 1, end: 1 }] },
+        ]),
+    ]);
+    const result = await runCodeSearch({ query: 'needle' }, root, completion, signal);
+    expect(result.files.map((file) => file.path)).toEqual(['a.ts']);
+    expect(result.content).toContain('verified needle');
+    expect(result.status).toBe('partial');
+    expect(result.warnings.join('\n')).toContain('not verified');
+  });
 });

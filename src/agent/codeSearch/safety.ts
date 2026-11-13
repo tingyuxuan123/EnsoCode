@@ -71,7 +71,17 @@ export async function boundedBody(
   try {
     while (true) {
       check(signal);
-      const { done, value } = await abortable(reader.read(), signal);
+      // 传输层可能在响应体中段断开（undici 抛 TypeError/UND_ERR_*）；这类原始错误不是
+      // DevinError，若直接上抛会被 safeError 折成无信息的兜底文案。归为 network 才能重试并定位。
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await abortable(reader.read(), signal);
+      } catch (error) {
+        check(signal);
+        if (error instanceof DevinError) throw error;
+        return fail('network', 'Devin stream interrupted before the response completed.');
+      }
+      const { done, value } = chunk;
       check(signal);
       if (done) break;
       bytes += value.length;

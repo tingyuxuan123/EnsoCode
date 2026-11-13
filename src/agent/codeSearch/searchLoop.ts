@@ -96,6 +96,14 @@ const POLICY_DENIAL = new Set([
   'Symlinks are excluded from code_search.',
   'Read window exceeds 400 lines.',
 ]);
+/**
+ * 最终重读阶段可以只跳过单条引用的失败。这里只放“模型点到不该读的普通文件”这一类；
+ * 越界、符号链接竞争、路径逃逸和文件身份变化必须让整次搜索失败，避免把逃逸尝试降级成 partial。
+ */
+const BENIGN_SKIP = new Set([
+  'Sensitive or generated paths are excluded.',
+  'Ignored paths are excluded.',
+]);
 /** 单个文件不可读：只影响这条命令，回执说明后继续搜索（不是越界或路径竞争） */
 const UNREADABLE_FILE = new Set([
   'File is not regular text or exceeds 512 KiB.',
@@ -386,9 +394,13 @@ export async function runCodeSearch(
         const missing = ['ENOENT', 'ENOTDIR'].includes(
           String((error as NodeJS.ErrnoException).code)
         );
+        // 最终重读只是把已观察到的引用转成片段。模型点到“名字像密钥”或已被 .gitignore
+        // 忽略的正常文件时只跳过该引用；越界、符号链接竞争和文件身份变化是安全信号，
+        // 仍然让整次搜索失败（取消也致命）。
         if (
           missing ||
-          (error instanceof DevinError && error.message === 'Answer range exceeds file length.')
+          (error instanceof DevinError &&
+            (error.code === 'bounds' || BENIGN_SKIP.has(error.message)))
         ) {
           skipped = true;
           continue;

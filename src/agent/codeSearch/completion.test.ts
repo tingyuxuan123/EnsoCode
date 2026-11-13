@@ -117,4 +117,45 @@ describe('WindsurfCompletion', () => {
     ).rejects.toMatchObject({ code: 'network' });
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
+
+  it('响应体读流中断按 network 归类，不泄漏原始传输错误', async () => {
+    const fetcher = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith(JWT_PATH)
+        ? new Response(new Uint8Array(jwtBody))
+        : new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new TypeError('terminated'));
+              },
+            })
+          )
+    );
+    const completion = new WindsurfCompletion(session(), { fetch: fetcher, retryDelayMs: 0 });
+    await expect(
+      completion.complete('system', [], '[]', new AbortController().signal)
+    ).rejects.toMatchObject({ code: 'network' });
+  });
+
+  it('响应体读流中断后重试一次即可拿到结果', async () => {
+    let streamCalls = 0;
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith(JWT_PATH)) return new Response(new Uint8Array(jwtBody));
+      streamCalls += 1;
+      if (streamCalls === 1) {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new TypeError('other side closed'));
+            },
+          })
+        );
+      }
+      return new Response(new Uint8Array(streamBody));
+    });
+    const completion = new WindsurfCompletion(session(), { fetch: fetcher, retryDelayMs: 0 });
+    await expect(
+      completion.complete('system', [], '[]', new AbortController().signal)
+    ).resolves.toBe('search answer');
+    expect(streamCalls).toBe(2);
+  });
 });
