@@ -75,6 +75,7 @@ import {
   promptChildSession,
   promptSession,
   readSettingsState,
+  registerPluginSessionBridge,
   releaseParentSession,
   reloadSession,
   requestSnapshot,
@@ -92,6 +93,9 @@ import {
   sendDelegationResultToSession,
   sendDesignResultToSession,
   sendMemoryResultToSession,
+  sendPluginInterceptResultToSession,
+  sendPluginToolProgressToSession,
+  sendPluginToolResultToSession,
   setAgentEventListener,
   setBrowserCancellationListener,
   setDesignSettingsListener,
@@ -120,8 +124,12 @@ import { readChildHistory as readPersistedChildHistory } from '../services/child
 import { computerHost } from '../services/computerHost';
 import { reloadConversation } from '../services/conversationReload';
 import { getDesignToolBroker } from '../services/design';
+import { getExtensionPlugins } from '../services/extensionPlugins';
+import type { McpTarget } from '../services/extensionPlugins/gate';
 import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
 import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionPlugins/planPolicy';
+import { SessionStateTracker } from '../services/extensionPlugins/sessionState';
+import { listAllSessions, listProjectSessions } from '../services/extensionPlugins/sessions';
 import { searchFiles } from '../services/fileSearch';
 import { independentImageProvider } from '../services/imageGeneration/providerHost';
 import { generateImage } from '../services/imageGeneration/service';
@@ -229,7 +237,11 @@ let dispatchService: AgentDispatchService | null = null;
 let agentService: AgentService | null = null;
 const pendingAgentControl = new Map<string, AbortController>();
 const pendingComputer = new Map<string, AbortController>();
-const pendingPluginTools = new Map<string, AbortController>();
+const pendingPluginTools = new Map<
+  string,
+  { identity: SessionIdentity; root: SessionIdentity; controller: AbortController }
+>();
+const pluginSessionStates = new SessionStateTracker();
 interface PendingBrowser {
   identity: SessionIdentity | ChildSessionIdentity;
   controller: AbortController;
@@ -282,6 +294,24 @@ function cancelBrowserRequests(
 ): void {
   if (phase !== 'resume') imageGenerationBridge.cancel(identity);
   if (phase !== 'resume') cancelDesignRequests(identity);
+  if (phase !== 'resume') {
+    for (const [requestId, entry] of pendingPluginTools) {
+      if (
+        identity &&
+        !(
+          entry.identity.sessionId === identity.sessionId &&
+          entry.identity.generation === identity.generation
+        ) &&
+        !(
+          entry.root.sessionId === identity.sessionId &&
+          entry.root.generation === identity.generation
+        )
+      )
+        continue;
+      pendingPluginTools.delete(requestId);
+      entry.controller.abort();
+    }
+  }
   if (identity && phase === 'resume') {
     pausedBrowserGenerations.delete(browserGenerationKey(identity));
     return;
@@ -429,6 +459,22 @@ export function setBotWorkerEventObserver(
 }
 
 function broadcastAgentEvent(event: RendererAgentEvent): void {
+  for (const change of pluginSessionStates.observe(event)) {
+    const conversation = sourceAuthority?.conversation(change.sessionId);
+    if (!conversation || !localPluginConversation(change.sessionId)) continue;
+    const generation = agentSessionIndex.currentIdentity(change.sessionId)?.generation;
+    void import('../services/extensionPlugins')
+      .then(({ getExtensionPlugins }) =>
+        getExtensionPlugins().dispatchEvent({
+          sessionId: change.sessionId,
+          generation,
+          projectRoot: pluginProjectRoot(change.sessionId),
+          event: 'session_status',
+          data: change,
+        })
+      )
+      .catch((error) => console.warn('[plugins] session_status failed:', error));
+  }
   try {
     sendToAllWindows(IPC_CHANNELS.AGENT_EVENT, event);
   } catch {
@@ -590,20 +636,29 @@ export function resolveConversationWorkspace(conversationId: string): {
   return { cwd, projectId: conversation.projectId, ...(remote ? { remote } : {}) };
 }
 
-function spawnBoundSession(
+async function spawnBoundSession(
   identity: SessionIdentity,
   request: AgentSpawnRequest,
   credentialKeys: ReadonlySet<string>
 ) {
+  try {
+    const { getExtensionPlugins } = await import('../services/extensionPlugins');
+    await getExtensionPlugins().prepareForSpawn();
+  } catch {
+    /* A failed plugin must not prevent the ordinary session from starting. */
+  }
   const authority = sourceAuthority?.conversation(request.sessionId);
   if (authority?.superAssistant) return { ok: false, error: 'Conversation unavailable.' };
   // bot 会话的人设 / 工作区只能由 Main 的 BotSessionHost 组装，通用 spawn 路径一律拒绝
   if (authority?.bot) {
     return { ok: false, error: 'bot conversation must be spawned by bot host' };
   }
+  const currentCwd = authoritativeSpawnCwd(request.sessionId);
+  if (!currentCwd || authority?.lifecycle === 'ended' || sessionWorktreeBusy(request.sessionId))
+    return { ok: false, error: 'conversation authority changed' };
   return spawnSession(
     identity,
-    request,
+    { ...request, cwd: currentCwd },
     credentialKeys,
     remoteConfigFor(request.sessionId),
     projectIdFor(request.sessionId)
@@ -1138,19 +1193,41 @@ const imageGenerationBridge = new ImageGenerationBridge({
 const pluginMcp = new PluginMcpRequests((command) => sendAgentCommand(command).ok);
 
 function pluginTargetIdentity(sessionId: string | null) {
-  if (!sessionId) return null;
+  if (!sessionId || !localPluginConversation(sessionId)) return null;
   const identity = agentSessionIndex.currentIdentity(sessionId);
   return identity && !('parent' in identity) ? identity : null;
 }
 
+function localPluginConversation(sessionId: string): boolean {
+  const conversation = sourceAuthority?.conversation(sessionId);
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  return (
+    !!conversation &&
+    conversation.kind === 'root' &&
+    conversation.lifecycle !== 'ended' &&
+    !conversation.bot &&
+    !conversation.superAssistant &&
+    project?.state === 'active' &&
+    project.kind !== 'ssh' &&
+    project.kind !== 'bot-home'
+  );
+}
+export function pluginSessionGeneration(sessionId: string): string | null {
+  const identity = pluginTargetIdentity(sessionId);
+  return identity && agentSessionIndex.isReady(identity) ? identity.generation : null;
+}
+
 /** Everything a plugin asks Main to do on behalf of a session re-checks that session's live state. */
-async function pluginInvocationPolicy(target: {
-  sessionId: string | null;
-  projectRoot: string | null;
-}) {
+async function pluginInvocationPolicy(target: McpTarget) {
   const blocked = { allowWrite: false, allowMcpCall: false };
   const identity = pluginTargetIdentity(target.sessionId);
   if (!identity || !target.projectRoot) return blocked;
+  if (
+    target.agent ||
+    target.sessionGeneration !== identity.generation ||
+    target.projectRoot !== pluginProjectRoot(identity.sessionId)
+  )
+    return blocked;
   if (!agentSessionIndex.isReady(identity)) return blocked;
   if (!pluginPlanStates.allows(identity)) return blocked;
   return { allowWrite: true, allowMcpCall: true };
@@ -1162,19 +1239,70 @@ function pluginMcpServers() {
 
 async function wireNativePluginHost(): Promise<void> {
   // 插件宿主只在真正需要时加载；测试与无插件场景不需要它的独立进程入口。
-  const { getExtensionPlugins, setPluginInvocationPolicy, setPluginMcpBridge } = await import(
-    '../services/extensionPlugins'
-  );
+  const {
+    getExtensionPlugins,
+    setPluginInvocationPolicy,
+    setPluginMcpBridge,
+    setPluginSessionDirectory,
+  } = await import('../services/extensionPlugins');
   setPluginInvocationPolicy(pluginInvocationPolicy);
+  registerPluginSessionBridge((sessionId) => {
+    const identity = pluginTargetIdentity(sessionId);
+    return identity &&
+      agentSessionIndex.isReady(identity) &&
+      localPluginConversation(sessionId) &&
+      pluginProjectRoot(sessionId)
+      ? identity
+      : undefined;
+  });
+  const sessionSource = () => ({
+    conversations: (sourceAuthority?.projection().conversations ?? []).filter((conversation) =>
+      localPluginConversation(conversation.conversationId)
+    ),
+    persisted: (id: string) => agentSessionIndex.persistedConversation(id),
+    running: (id: string) => agentSessionIndex.workspaceTreeRunning(id),
+    state: (id: string) => pluginSessionStates.status(id).state,
+  });
+  setPluginSessionDirectory({
+    list: (origin) =>
+      localPluginConversation(origin) ? listProjectSessions({ ...sessionSource(), origin }) : [],
+    listAll: () =>
+      listAllSessions({
+        ...sessionSource(),
+        projects: (sourceAuthority?.projection().projects ?? []).filter(
+          (project) => project.kind !== 'ssh'
+        ),
+      }),
+    status: (id) => {
+      if (!localPluginConversation(id))
+        return { sessionId: id, state: 'idle', pendingAsks: 0, pendingApprovals: 0 };
+      const status = pluginSessionStates.status(id);
+      return status.state === 'idle' && agentSessionIndex.workspaceTreeRunning(id)
+        ? { ...status, state: 'running' }
+        : status;
+    },
+  });
   setPluginMcpBridge({
     mcpTools: (_target, signal) => {
       const identity = pluginTargetIdentity(_target.sessionId);
-      if (!identity) return Promise.reject(new Error('Plugin MCP session is unavailable'));
+      if (
+        !identity ||
+        _target.agent ||
+        !agentSessionIndex.isReady(identity) ||
+        _target.sessionGeneration !== identity.generation
+      )
+        return Promise.reject(new Error('Plugin MCP session is unavailable'));
       return pluginMcp.list({ identity, servers: pluginMcpServers() }, signal);
     },
     mcpCall: (_target, server, tool, args, signal) => {
       const identity = pluginTargetIdentity(_target.sessionId);
-      if (!identity) return Promise.reject(new Error('Plugin MCP session is unavailable'));
+      if (
+        !identity ||
+        _target.agent ||
+        !agentSessionIndex.isReady(identity) ||
+        _target.sessionGeneration !== identity.generation
+      )
+        return Promise.reject(new Error('Plugin MCP session is unavailable'));
       return pluginMcp.call({ identity, servers: pluginMcpServers(), server, tool, args }, signal);
     },
   });
@@ -1401,7 +1529,7 @@ export function registerAgentHandlers(): void {
       pendingAgentControl.clear();
       for (const controller of pendingComputer.values()) controller.abort();
       pendingComputer.clear();
-      for (const controller of pendingPluginTools.values()) controller.abort();
+      for (const entry of pendingPluginTools.values()) entry.controller.abort();
       pendingPluginTools.clear();
       computerHost.closeAll();
       for (const targetId of pendingWorktreeForks.keys()) discardForkWorktree(targetId);
@@ -1874,37 +2002,136 @@ export function registerAgentHandlers(): void {
       return;
     }
     if (workerEvent.type === 'plugin-tool-cancel') {
-      pendingPluginTools.get(workerEvent.requestId)?.abort();
+      const pending = pendingPluginTools.get(workerEvent.requestId);
+      if (pending && sameBrowserIdentity(pending.identity, workerEvent.identity))
+        pending.controller.abort();
+      return;
+    }
+    if (workerEvent.type === 'plugin-event' || workerEvent.type === 'plugin-intercept') {
+      const { identity } = workerEvent;
+      const current = agentSessionIndex.currentIdentity(identity.sessionId);
+      if (
+        !current ||
+        current.generation !== identity.generation ||
+        !agentSessionIndex.isAlive(identity.sessionId)
+      )
+        return;
+      const sessionId = rootSessionId(identity);
+      // A child cannot pretend to be the root or inject/transform its own input.
+      if (!localPluginConversation(sessionId)) return;
+      if (
+        sessionId !== identity.sessionId &&
+        (!workerEvent.agent || workerEvent.agent.sessionId !== identity.sessionId)
+      )
+        return;
+      const projectRoot = pluginProjectRoot(sessionId);
+      const agent = workerEvent.agent;
+      const generation = agentSessionIndex.currentIdentity(sessionId)?.generation;
+      if (!generation) return;
+      if (workerEvent.type === 'plugin-event') {
+        void getExtensionPlugins()
+          .dispatchEvent({
+            sessionId,
+            projectRoot,
+            generation,
+            event: workerEvent.event,
+            data: workerEvent.data,
+            ...(agent ? { agent } : {}),
+          })
+          .catch((error) => console.warn('[plugins] event failed:', error));
+      } else {
+        const { requestId, event, payload } = workerEvent;
+        if (agent && event !== 'tool_call') return;
+        const service = getExtensionPlugins();
+        const task =
+          event === 'before_compact'
+            ? service.dispatchEvent({ sessionId, projectRoot, generation, event, data: payload })
+            : service.intercept({
+                sessionId,
+                projectRoot,
+                generation,
+                event,
+                payload,
+                ...(agent ? { agent } : {}),
+              });
+        void Promise.resolve(task).then(
+          (result) =>
+            sendPluginInterceptResultToSession(identity, requestId, {
+              ok: true,
+              ...(event === 'before_compact' ? {} : { result: result ?? {} }),
+            }),
+          (error: unknown) =>
+            sendPluginInterceptResultToSession(identity, requestId, {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            })
+        );
+      }
       return;
     }
     if (workerEvent.type === 'plugin-tool-invoke') {
       const { identity, requestId, toolName, fingerprint, args } = workerEvent;
+      const current = agentSessionIndex.currentIdentity(identity.sessionId);
+      if (
+        !current ||
+        current.generation !== identity.generation ||
+        !agentSessionIndex.isAlive(identity.sessionId)
+      )
+        return;
+      const sessionId = rootSessionId(identity);
+      if (!localPluginConversation(sessionId)) return;
+      if (
+        sessionId !== identity.sessionId &&
+        (!workerEvent.agent || workerEvent.agent.sessionId !== identity.sessionId)
+      )
+        return;
       const controller = new AbortController();
-      pendingPluginTools.set(requestId, controller);
+      if (pendingPluginTools.has(requestId)) return;
+      const root = agentSessionIndex.currentIdentity(sessionId);
+      if (!root) return;
+      const entry = { identity, root, controller };
+      pendingPluginTools.set(requestId, entry);
+      const stillCurrent = () =>
+        pendingPluginTools.get(requestId) === entry &&
+        !controller.signal.aborted &&
+        agentSessionIndex.currentIdentity(identity.sessionId)?.generation === identity.generation &&
+        agentSessionIndex.currentIdentity(root.sessionId)?.generation === root.generation &&
+        agentSessionIndex.isAlive(identity.sessionId) &&
+        !pausedBrowserGenerations.has(browserGenerationKey(identity)) &&
+        !pausedBrowserGenerations.has(browserGenerationKey(root));
       void (async () => {
         const { getExtensionPlugins } = await import('../services/extensionPlugins');
         return getExtensionPlugins().callTool({
           toolName,
           fingerprint,
           args,
-          sessionId: identity.sessionId,
-          projectRoot: pluginProjectRoot(identity.sessionId),
+          sessionId,
+          generation: root.generation,
+          projectRoot: pluginProjectRoot(sessionId),
+          ...(workerEvent.agent ? { agent: workerEvent.agent } : {}),
           signal: controller.signal,
+          onProgress: (text: string) => {
+            if (stillCurrent() && typeof text === 'string' && text.length <= 16 * 1024)
+              sendPluginToolProgressToSession(identity, requestId, text);
+          },
         });
       })()
         .then(
-          (result) =>
-            sendAgentCommand({ type: 'plugin-tool-result', identity, requestId, ok: true, result }),
-          (error: unknown) =>
-            sendAgentCommand({
-              type: 'plugin-tool-result',
-              identity,
-              requestId,
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-            })
+          (result) => {
+            if (stillCurrent())
+              sendPluginToolResultToSession(identity, requestId, { ok: true, result });
+          },
+          (error: unknown) => {
+            if (stillCurrent())
+              sendPluginToolResultToSession(identity, requestId, {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+              });
+          }
         )
-        .finally(() => pendingPluginTools.delete(requestId));
+        .finally(() => {
+          if (pendingPluginTools.get(requestId) === entry) pendingPluginTools.delete(requestId);
+        });
       return;
     }
     if (workerEvent.type === 'computer-cancel') {

@@ -15,7 +15,6 @@ import {
 import { runningDesignEnginePorts } from '../services/design/engine';
 import { installDesignNavigationGuard } from '../services/design/navigation';
 import { designPreviewPorts } from '../services/design/preview';
-import { installPluginViewNavigationGuard } from '../services/extensionPlugins/viewNavigation';
 import { shouldReloadRenderer } from './rendererGone';
 import { attachPinnedWorkbenchBoundsSync, attachWindowsRestoreWake } from './win32Restore';
 import { windowChromeOptions } from './windowChrome';
@@ -127,7 +126,10 @@ function attachWebContentsHandlers(win: BrowserWindow, contents: WebContents, en
     return { action: 'deny' };
   });
 
-  installPluginViewNavigationGuard(contents);
+  // 插件侧栏帧不再注册 will-frame-navigate 监听：Electron 43 在沙箱子帧上被同步
+  // 咨询导航时会让主进程陷入原生自旋（实测：同一 iframe 无监听正常、有监听卡死）。
+  // 该帧的边界改由 sandbox="allow-scripts"、壳页面 CSP(frame-src/navigate-to 'none')
+  // 与一次性 nonce + event.source 校验共同约束，不依赖 Main 侧导航拦截。
   if (entry === 'index' || entry === 'design')
     installDesignNavigationGuard(
       contents,

@@ -12,6 +12,15 @@ import { focusMainWindow } from '../windows/MainWindow';
 import { openSettingsWindow } from '../windows/SettingsWindow';
 import { parseOpenSettingsRequest } from './searchAnything';
 
+let pendingDeepLink: ReturnType<typeof parseOpenSettingsRequest> = null;
+export function openSettingsDeepLink(raw: unknown): void {
+  const link = parseOpenSettingsRequest(raw);
+  const win = openSettingsWindow();
+  if (!link) return;
+  pendingDeepLink = link;
+  sendToWindow(win, IPC_CHANNELS.SETTINGS_DEEP_LINK, link);
+}
+
 /** 窗口控制：所有 handler 作用于发起 IPC 的窗口，天然支持多窗口 */
 export function registerWindowHandlers(): void {
   const senderWindow = (event: Electron.IpcMainInvokeEvent): BrowserWindow | null => {
@@ -101,14 +110,8 @@ export function registerWindowHandlers(): void {
     }
   });
 
-  let pendingDeepLink: ReturnType<typeof parseOpenSettingsRequest> = null;
-
   ipcMain.handle(IPC_CHANNELS.WINDOW_OPEN_SETTINGS, (_event, raw: unknown) => {
-    const link = parseOpenSettingsRequest(raw);
-    const win = openSettingsWindow();
-    if (!link) return;
-    pendingDeepLink = link;
-    sendToWindow(win, IPC_CHANNELS.SETTINGS_DEEP_LINK, link);
+    openSettingsDeepLink(raw);
   });
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_DEEP_LINK_CONSUME, () => {

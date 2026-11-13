@@ -1,9 +1,10 @@
 import path from 'node:path';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
+import { pluginInstallSettingsLink } from '@shared/extensionPlugins/pluginProtocol';
 import { app, type BrowserWindow } from 'electron';
-
 import { registerIpcHandlers } from './ipc';
 import { consumeTrayReenterAfterUpdate, readSettings } from './ipc/settings';
+import { createPluginInstallInbox } from './protocol/pluginInstall';
 import { agentWorkerAlive, startAgentWorker, stopAgentWorkerForQuit } from './services/agentHost';
 import { installAppMenu } from './services/appMenu';
 import { attachAppQuitDrain } from './services/appQuitDrain';
@@ -78,10 +79,17 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
+const pluginInstallInbox = createPluginInstallInbox(process.platform);
+pluginInstallInbox.noteArgv(process.argv);
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (typeof url === 'string') pluginInstallInbox.noteLink(url);
+});
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    pluginInstallInbox.noteArgv(argv);
     restoreFromSecondInstance();
   });
   app.on('child-process-gone', (_event, details) => {
@@ -110,6 +118,12 @@ if (!gotTheLock) {
     });
 
     registerIpcHandlers();
+    if (app.isPackaged) app.setAsDefaultProtocolClient('enso');
+    pluginInstallInbox.start((url) => {
+      void import('./ipc/window').then(({ openSettingsDeepLink }) =>
+        openSettingsDeepLink(pluginInstallSettingsLink(url))
+      );
+    });
     setTrayToggleHandler(() => {
       if (isServerMode()) leaveServerMode();
       else void enterServerMode();

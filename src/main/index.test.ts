@@ -27,6 +27,7 @@ vi.mock('electron', () => ({
     getPath: (name: string) => (name === 'appData' ? '/system-app-data' : '/tmp'),
     setPath: mocks.setPath,
     requestSingleInstanceLock: () => true,
+    setAsDefaultProtocolClient: vi.fn(),
     quit: vi.fn(),
     whenReady: () => Promise.resolve(),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {

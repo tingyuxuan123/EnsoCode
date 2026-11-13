@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createExtensionPluginHandlers, isTrustedPluginSender } from './extensionPlugins';
+import {
+  createExtensionPluginHandlers,
+  isTrustedPluginSender,
+  parseConfigPatch,
+  parseViewStatePatch,
+} from './extensionPlugins';
 
 vi.mock('../windows/createAppWindow', () => ({
   getWindowWebContents: vi.fn(),
@@ -22,6 +27,59 @@ const trust = {
   settingsUrl: 'file:///app/renderer/settings.html',
 };
 describe('privileged native plugin IPC', () => {
+  it('UI宿主调用只携带Main捕获的代际，拒绝renderer伪造证明', async () => {
+    const callUi = vi.fn(async () => null);
+    const h = createExtensionPluginHandlers({
+      trusted: () => true,
+      service: () => ({ callUi }) as never,
+      pick: vi.fn(),
+      projectRoot: () => '/project',
+      sessionGeneration: () => 'authoritative-generation',
+      draft: () => ({ respond: vi.fn() }) as never,
+    });
+    const input = { pluginId: 'a.b', method: 'command.run', sessionId: 's', payload: { id: 'go' } };
+    await h.call(event(), input);
+    expect(callUi).toHaveBeenCalledWith(
+      expect.objectContaining({ generation: 'authoritative-generation' })
+    );
+    expect(await h.call(event(), { ...input, generation: 'forged' })).toMatchObject({ ok: false });
+  });
+  it('类型配置与侧栏状态按 unknown 收窄，拒绝污染键和超大 UTF-8', () => {
+    expect(parseConfigPatch({ name: 'demo', count: 2, enabled: false, token: null })).toEqual({
+      name: 'demo',
+      count: 2,
+      enabled: false,
+      token: null,
+    });
+    for (const raw of [{ number: Number.NaN }, { nested: {} }, JSON.parse('{"__proto__":"bad"}')])
+      expect(parseConfigPatch(raw)).toBeNull();
+    expect(parseViewStatePatch({ draft: 'text', deleted: null })).toEqual({
+      draft: 'text',
+      deleted: null,
+    });
+    expect(parseViewStatePatch({ x: '中'.repeat(400_000) })).toBeNull();
+    expect(parseViewStatePatch(JSON.parse('{"__proto__":"bad"}'))).toBeNull();
+  });
+  it('市场安装与来源重装继续绑定发起窗口，不接收任意磁盘路径', async () => {
+    const stage = vi.fn(async () => ({ ok: true }));
+    const restage = vi.fn(async () => ({ ok: true }));
+    const h = createExtensionPluginHandlers({
+      trusted: () => true,
+      service: () => ({ stage, restage }) as never,
+      pick: vi.fn(),
+      projectRoot: () => null,
+      draft: () => ({ respond: vi.fn() }) as never,
+    });
+    await h.marketStage(event(), 'a.b', '2.0.0');
+    expect(stage).toHaveBeenCalledWith(
+      { kind: 'market', id: 'a.b', version: '2.0.0' },
+      7,
+      undefined
+    );
+    await h.restage(event(), 'a.b');
+    expect(restage).toHaveBeenCalledWith('a.b', 7, undefined);
+    expect(await h.restage(event(), '/etc/passwd')).toMatchObject({ ok: false });
+  });
   it('list 透传登记表只读状态与插件数组', async () => {
     const result = { plugins: [], registryError: '只读；备份：registry.corrupt' };
     const h = createExtensionPluginHandlers({

@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ExtensionPluginInstallPreview } from '@shared/extensionPlugins/types';
@@ -6,6 +7,7 @@ import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, webContents } from 'electron';
 import type { DraftBroker } from '../services/extensionPlugins/draftBroker';
 import type { ExtensionPluginService, UiCallMethod } from '../services/extensionPlugins/service';
+import { setPluginAssetResolver } from '../services/localImageProtocol';
 import { getWindowWebContents, sendToAllWindows } from '../windows/createAppWindow';
 import { getMainWindow } from '../windows/MainWindow';
 import { getSettingsWindow } from '../windows/SettingsWindow';
@@ -48,10 +50,60 @@ const id = (v: unknown): v is string =>
   typeof v === 'string' && v.length <= 40 && /^[a-z][a-z0-9]*(\.[a-z0-9]+)+$/.test(v);
 const token = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 128;
 const methods = ['command.run', 'trigger.candidates', 'trigger.pick', 'renderer.call'] as const;
+const CONFIG_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+const safeKey = (key: string) => !['__proto__', 'constructor', 'prototype'].includes(key);
+export function parseConfigPatch(
+  raw: unknown
+): Record<string, string | number | boolean | null> | null {
+  if (!record(raw) || Object.keys(raw).length > 20) return null;
+  const patch: Record<string, string | number | boolean | null> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!CONFIG_KEY.test(key) || !safeKey(key)) return null;
+    if (
+      value === null ||
+      typeof value === 'boolean' ||
+      (typeof value === 'string' && Buffer.byteLength(value) <= 4096) ||
+      (typeof value === 'number' && Number.isFinite(value))
+    )
+      patch[key] = value;
+    else return null;
+  }
+  return patch;
+}
+export function parseViewStatePatch(raw: unknown): Record<string, string | null> | null {
+  if (!record(raw) || Object.keys(raw).length > 500) return null;
+  const patch: Record<string, string | null> = {};
+  let size = 0;
+  for (const [key, value] of Object.entries(raw)) {
+    if (
+      !key ||
+      key.length > 256 ||
+      key.includes('\0') ||
+      !safeKey(key) ||
+      (value !== null && typeof value !== 'string')
+    )
+      return null;
+    size += Buffer.byteLength(key) + (typeof value === 'string' ? Buffer.byteLength(value) : 0);
+    if (size > 1024 * 1024) return null;
+    patch[key] = value;
+  }
+  return patch;
+}
+const artifactId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value) && !value.includes('..');
 const mime: Record<string, string> = {
   '.js': 'text/javascript',
   '.mjs': 'text/javascript',
   '.html': 'text/html',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.woff2': 'font/woff2',
 };
 type Handler = (event: PluginSenderEvent, ...args: unknown[]) => unknown;
 interface HandlerDeps {
@@ -59,7 +111,10 @@ interface HandlerDeps {
   service(): ExtensionPluginService;
   draft(): DraftBroker;
   projectRoot(sessionId: string): string | null;
+  sessionGeneration?(sessionId: string): string | null;
   signal?(event: PluginSenderEvent): AbortSignal;
+  pickPath?(event: PluginSenderEvent, kind: 'file' | 'directory'): Promise<string | null>;
+  save?(event: PluginSenderEvent, name: string): Promise<string | null>;
   pick(
     event: PluginSenderEvent,
     kind: 'dir' | 'zip'
@@ -91,6 +146,101 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
   const invalid = { ok: false, error: '参数不合法' };
   return {
     list: guard(() => deps.service().list()),
+    registryNotice: guard(() => deps.service().registryNotice()),
+    dismissRegistryNotice: guard(() => {
+      deps.service().dismissRegistryNotice();
+      return { ok: true };
+    }),
+    restage: guard((e, pluginId) =>
+      id(pluginId) ? deps.service().restage(pluginId, e.sender.id, deps.signal?.(e)) : invalid
+    ),
+    checkUpdates: guard(async () => ({ ok: true, ...(await deps.service().checkUpdates()) })),
+    marketList: guard((_e, refresh) =>
+      refresh === undefined || typeof refresh === 'boolean'
+        ? deps.service().marketList(refresh === true)
+        : invalid
+    ),
+    marketStage: guard((e, pluginId, version) =>
+      id(pluginId) &&
+      (version === undefined ||
+        (typeof version === 'string' && version.length > 0 && version.length <= 40))
+        ? deps
+            .service()
+            .stage(
+              { kind: 'market', id: pluginId, ...(version ? { version } : {}) },
+              e.sender.id,
+              deps.signal?.(e)
+            )
+        : invalid
+    ),
+    marketSetMirror: guard((_e, enabled) => {
+      if (typeof enabled !== 'boolean') return invalid;
+      deps.service().setMarketChinaMirror(enabled);
+      return { ok: true };
+    }),
+    readme: guard((_e, raw) =>
+      record(raw) && id(raw.id) && (raw.from === 'installed' || raw.from === 'market')
+        ? deps.service().readme(raw.id, raw.from)
+        : invalid
+    ),
+    setCrossSessionInject: guard((_e, pluginId, enabled) =>
+      id(pluginId) && typeof enabled === 'boolean'
+        ? deps.service().setCrossSessionInject(pluginId, enabled)
+        : invalid
+    ),
+    setDevWatch: guard((_e, pluginId, enabled) =>
+      id(pluginId) && typeof enabled === 'boolean'
+        ? deps.service().setDevWatch(pluginId, enabled)
+        : invalid
+    ),
+    logs: guard(async (_e, pluginId) =>
+      id(pluginId) || pluginId === 'extension-plugins'
+        ? { ok: true, text: await deps.service().logs(pluginId) }
+        : invalid
+    ),
+    artifactsList: guard((_e, pluginId) =>
+      pluginId === undefined || id(pluginId)
+        ? { ok: true, artifacts: deps.service().listArtifacts(pluginId) }
+        : invalid
+    ),
+    artifactRead: guard((_e, value) => {
+      if (!artifactId(value)) return invalid;
+      const service = deps.service();
+      const info = service.artifactInfo(value);
+      const path = info ? service.artifactPath(value) : null;
+      if (!info || !path) return { ok: false, error: '产出不存在' };
+      if (info.size > 8 * 1024 * 1024) return { ok: false, error: '产出过大' };
+      const bytes = readFileSync(path);
+      if (bytes.byteLength > 8 * 1024 * 1024) return { ok: false, error: '产出过大' };
+      return { ok: true, info, base64: bytes.toString('base64') };
+    }),
+    artifactDelete: guard((_e, value) =>
+      artifactId(value) ? { ok: deps.service().deleteArtifact(value) } : invalid
+    ),
+    artifactSave: guard(async (e, value) => {
+      if (!artifactId(value) || !deps.save) return invalid;
+      const info = deps.service().artifactInfo(value);
+      if (!info || !deps.service().artifactPath(value)) return { ok: false, error: '产出不存在' };
+      const destination = await deps.save(e, info.name.split(/[/\\]/).pop() || 'artifact');
+      if (!destination) return { ok: true, cancelled: true };
+      if (!deps.trusted(e)) return deny;
+      const source = deps.service().artifactPath(value);
+      if (!source) return { ok: false, error: '产出不存在' };
+      await copyFile(source, destination);
+      return { ok: true };
+    }),
+    viewStateGet: guard((_e, pluginId) =>
+      id(pluginId) ? { ok: true, state: deps.service().viewStateGet(pluginId) } : invalid
+    ),
+    viewStateSet: guard((_e, pluginId, patch) => {
+      const parsed = parseViewStatePatch(patch);
+      return id(pluginId) && parsed ? deps.service().viewStateSet(pluginId, parsed) : invalid;
+    }),
+    pickPath: guard(async (e, kind) => {
+      if ((kind !== 'file' && kind !== 'directory') || !deps.pickPath) return invalid;
+      const path = await deps.pickPath(e, kind);
+      return deps.trusted(e) ? { ok: true, path } : deny;
+    }),
     pickAndStage: guard(async (e, kind) => {
       if (kind !== 'dir' && kind !== 'zip') return invalid;
       const picked = await deps.pick(e, kind);
@@ -129,14 +279,8 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
       id(pluginId) ? deps.service().configView(pluginId) : invalid
     ),
     configSet: guard((_e, pluginId, patch) => {
-      if (
-        !id(pluginId) ||
-        !record(patch) ||
-        Object.keys(patch).length > 20 ||
-        !Object.values(patch).every((v) => v === null || typeof v === 'string')
-      )
-        return invalid;
-      return deps.service().setConfig(pluginId, patch as Record<string, string | null>);
+      const parsed = parseConfigPatch(patch);
+      return id(pluginId) && parsed ? deps.service().setConfig(pluginId, parsed) : invalid;
     }),
     call: guard(async (e, raw) => {
       if (
@@ -160,6 +304,10 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
           payload: raw.payload,
           sessionId: raw.sessionId as string | null,
           projectRoot: typeof raw.sessionId === 'string' ? deps.projectRoot(raw.sessionId) : null,
+          generation:
+            typeof raw.sessionId === 'string'
+              ? (deps.sessionGeneration?.(raw.sessionId) ?? undefined)
+              : undefined,
           origin: e.sender.id,
           gesture: raw.gesture === true,
         }),
@@ -216,9 +364,16 @@ export function registerExtensionPluginHandlers(): void {
   for (const contents of webContents.getAllWebContents()) owners.attach(contents);
   const load = () =>
     (handlers ??= Promise.all([import('../services/extensionPlugins'), import('./agent')]).then(
-      ([{ getExtensionPlugins, getDraftBroker }, { pluginProjectRoot }]) => {
+      ([
+        { getExtensionPlugins, getDraftBroker },
+        { pluginProjectRoot, pluginSessionGeneration },
+      ]) => {
+        setPluginAssetResolver((id, rel) => getExtensionPlugins().assetMediaPath(id, rel));
         getExtensionPlugins().onChange(() =>
           sendToAllWindows(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED)
+        );
+        getExtensionPlugins().onNotice((notice) =>
+          sendToAllWindows(IPC_CHANNELS.EXTENSION_PLUGINS_NOTICE, notice)
         );
         releaseOwner = (id) => {
           getExtensionPlugins().releaseOwner(id);
@@ -229,9 +384,28 @@ export function registerExtensionPluginHandlers(): void {
           service: getExtensionPlugins,
           draft: getDraftBroker,
           projectRoot: pluginProjectRoot,
+          sessionGeneration: pluginSessionGeneration,
           signal: (event) => {
             const contents = webContents.fromId(event.sender.id);
             return contents ? owners.signal(contents) : AbortSignal.abort();
+          },
+          pickPath: async (event, kind) => {
+            const owner = BrowserWindow.getAllWindows().find(
+              (w) => getWindowWebContents(w).id === event.sender.id
+            );
+            if (!owner) throw new Error('窗口不可用');
+            const result = await dialog.showOpenDialog(owner, {
+              properties: [kind === 'file' ? 'openFile' : 'openDirectory'],
+            });
+            return result.canceled ? null : (result.filePaths[0] ?? null);
+          },
+          save: async (event, name) => {
+            const owner = BrowserWindow.getAllWindows().find(
+              (w) => getWindowWebContents(w).id === event.sender.id
+            );
+            if (!owner) throw new Error('窗口不可用');
+            const result = await dialog.showSaveDialog(owner, { defaultPath: name });
+            return result.canceled ? null : (result.filePath ?? null);
           },
           pick: async (event, kind) => {
             const owner = BrowserWindow.getAllWindows().find(
@@ -248,6 +422,24 @@ export function registerExtensionPluginHandlers(): void {
     ));
   const channels: [string, keyof ReturnType<typeof createExtensionPluginHandlers>][] = [
     [IPC_CHANNELS.EXTENSION_PLUGINS_LIST, 'list'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_REGISTRY_NOTICE, 'registryNotice'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_DISMISS_REGISTRY_NOTICE, 'dismissRegistryNotice'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_RESTAGE, 'restage'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_CHECK_UPDATES, 'checkUpdates'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_MARKET_LIST, 'marketList'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_MARKET_STAGE, 'marketStage'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_MARKET_SET_MIRROR, 'marketSetMirror'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_README, 'readme'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_SET_CROSS_SESSION_INJECT, 'setCrossSessionInject'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_SET_DEV_WATCH, 'setDevWatch'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_LOGS, 'logs'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACTS_LIST, 'artifactsList'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACT_READ, 'artifactRead'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACT_DELETE, 'artifactDelete'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACT_SAVE, 'artifactSave'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_STATE_GET, 'viewStateGet'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_STATE_SET, 'viewStateSet'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_PICK_PATH, 'pickPath'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_PICK_AND_STAGE, 'pickAndStage'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_URL, 'stageUrl'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_COMMIT, 'commit'],

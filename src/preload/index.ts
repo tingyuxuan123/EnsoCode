@@ -1732,6 +1732,76 @@ const electronAPI = {
   extensionPlugins: {
     list: (): Promise<ExtensionPluginListResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_LIST),
+    registryNotice: (): Promise<RegistryNotice | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_REGISTRY_NOTICE),
+    dismissRegistryNotice: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_DISMISS_REGISTRY_NOTICE),
+    onNotice: (callback: (notice: ExtensionPluginNotice) => void): (() => void) => {
+      const listener = (_event: unknown, notice: ExtensionPluginNotice) => callback(notice);
+      ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_NOTICE, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTENSION_PLUGINS_NOTICE, listener);
+    },
+    onViewEvent: (
+      callback: (event: { pluginId: string; name: string; data: unknown }) => void
+    ): (() => void) => {
+      const listener = (_event: unknown, event: Parameters<typeof callback>[0]) => callback(event);
+      ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_EVENT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_EVENT, listener);
+    },
+    restage: (id: string): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_RESTAGE, id),
+    checkUpdates: (): Promise<{
+      ok: boolean;
+      checked?: number;
+      available?: number;
+      error?: string;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CHECK_UPDATES),
+    marketList: (refresh = false): Promise<ExtensionPluginMarketList> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_MARKET_LIST, refresh),
+    marketStage: (id: string, version?: string): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_MARKET_STAGE, id, version),
+    marketSetChinaMirror: (on: boolean): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_MARKET_SET_MIRROR, on),
+    readme: (request: {
+      id: string;
+      from: 'installed' | 'market';
+    }): Promise<{ ok: true; text: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_README, request),
+    setCrossSessionInject: (
+      id: string,
+      allowed: boolean
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_SET_CROSS_SESSION_INJECT, id, allowed),
+    setDevWatch: (id: string, on: boolean): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_SET_DEV_WATCH, id, on),
+    logs: (id: string): Promise<{ ok: true; text: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_LOGS, id),
+    artifactsList: (
+      pluginId?: string
+    ): Promise<{ ok: true; artifacts: PluginArtifactInfo[] } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACTS_LIST, pluginId),
+    artifactRead: (
+      id: string
+    ): Promise<
+      { ok: true; info: PluginArtifactInfo; base64: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACT_READ, id),
+    artifactDelete: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACT_DELETE, id),
+    artifactSave: (id: string): Promise<{ ok: boolean; cancelled?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_ARTIFACT_SAVE, id),
+    viewStateGet: (
+      id: string
+    ): Promise<{ ok: true; state: Record<string, string> } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_STATE_GET, id),
+    viewStateSet: (
+      id: string,
+      patch: Record<string, string | null>
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_STATE_SET, id, patch),
+    pickPath: (
+      kind: 'file' | 'directory'
+    ): Promise<{ ok: true; path: string | null } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_PICK_PATH, kind),
     onChanged: (callback: () => void): (() => void) => {
       const listener = () => callback();
       ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
@@ -1759,7 +1829,7 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_GET, id),
     configSet: (
       id: string,
-      patch: Record<string, string | null>
+      patch: Record<string, string | number | boolean | null>
     ): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_SET, id, patch),
     call: (request: {
@@ -1781,7 +1851,16 @@ const electronAPI = {
       callback: (request: {
         requestId: string;
         sessionId: string;
-        op: 'readDraft' | 'insertText' | 'replaceDraft';
+        op:
+          | 'readDraft'
+          | 'insertText'
+          | 'replaceDraft'
+          | 'focusSession'
+          | 'focusSubagent'
+          | 'openChildRun'
+          | 'createSession'
+          | 'ensureSession'
+          | 'openPluginView';
         payload: Record<string, unknown>;
       }) => void
     ): (() => void) => {
@@ -1890,10 +1969,14 @@ export type ElectronAPI = typeof electronAPI;
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
 import type { ComputerAllowedApp, ComputerCapabilities } from '@shared/computer/types';
+import type { PluginArtifactInfo } from '@shared/extensionPlugins/protocol';
 import type {
   ExtensionPluginConfigField,
   ExtensionPluginInstallPreview,
   ExtensionPluginListResult,
+  ExtensionPluginMarketList,
+  ExtensionPluginNotice,
+  RegistryNotice,
 } from '@shared/extensionPlugins/types';
 
 type PluginStageResult =

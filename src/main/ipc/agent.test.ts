@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
     | undefined
     | ((identity?: { sessionId: string; generation: string }, phase?: string) => void),
   isAlive: vi.fn(() => true),
+  isReady: vi.fn(() => true),
+  workspaceTreeRunning: vi.fn(() => false),
   sendComputerResult: vi.fn(),
   computerInvoke: vi.fn(),
   computerCloseAll: vi.fn(),
@@ -59,6 +61,30 @@ const mocks = vi.hoisted(() => ({
   scheduleMemoryDistill: vi.fn(async () => undefined),
   getBotServices: vi.fn((): unknown => null),
   maybeNotifyBot: vi.fn(async (_event: { type: string }) => {}),
+  pluginDispatchEvent: vi.fn(async () => undefined),
+  pluginIntercept: vi.fn(async () => ({ append: 'safe context' })),
+  pluginCallTool: vi.fn(async (_input: unknown) => ({ content: 'ok' })),
+  pluginInterceptResult: vi.fn(),
+  pluginToolResult: vi.fn(),
+  pluginToolProgress: vi.fn(),
+  registerPluginSessionBridge: vi.fn(),
+  setPluginSessionDirectory: vi.fn(),
+  setPluginInvocationPolicy: vi.fn(),
+  setPluginMcpBridge: vi.fn(),
+}));
+
+vi.mock('../services/extensionPlugins', () => ({
+  getExtensionPlugins: () => ({
+    sessionResources: () => ({}),
+    refreshLocal: vi.fn(async () => {}),
+    dispatchEvent: mocks.pluginDispatchEvent,
+    intercept: mocks.pluginIntercept,
+    callTool: mocks.pluginCallTool,
+  }),
+  setPluginInvocationPolicy: mocks.setPluginInvocationPolicy,
+  setPluginMcpBridge: mocks.setPluginMcpBridge,
+  setPluginSessionDirectory: mocks.setPluginSessionDirectory,
+  setPluginSessionBridge: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -136,6 +162,10 @@ vi.mock('../services/agentHost', () => ({
   sendBrowserResultToSession: mocks.sendBrowserResult,
   sendDesignResultToSession: mocks.sendDesignResult,
   sendComputerResultToSession: mocks.sendComputerResult,
+  registerPluginSessionBridge: mocks.registerPluginSessionBridge,
+  sendPluginInterceptResultToSession: mocks.pluginInterceptResult,
+  sendPluginToolResultToSession: mocks.pluginToolResult,
+  sendPluginToolProgressToSession: mocks.pluginToolProgress,
 }));
 vi.mock('../services/design', () => ({
   getDesignToolBroker: () => ({ request: mocks.designRequest, emitHook: mocks.designHook }),
@@ -186,6 +216,8 @@ vi.mock('./capabilities', () => ({
   agentSessionIndex: {
     currentIdentity: mocks.currentIdentity,
     isAlive: mocks.isAlive,
+    isReady: mocks.isReady,
+    workspaceTreeRunning: mocks.workspaceTreeRunning,
     childProof: mocks.childProof,
     prepareParent: mocks.prepareParent,
     observe: vi.fn(),
@@ -240,6 +272,211 @@ const sender = {
 const event = { sender };
 
 describe('agent IPC Main identity boundary', () => {
+  it('plugin bridge excludes SSH and Bot identities from inject, directory and status', async () => {
+    const authority = getSourceAuthorityRegistry()!;
+    const local = { sessionId: 'local', generation: '11111111-1111-4111-8111-111111111111' };
+    const remote = { ...local, sessionId: 'remote' };
+    const bot = { ...local, sessionId: 'bot' };
+    const rows = [local, remote, bot].map((identity) => ({
+      conversationId: identity.sessionId,
+      projectId: identity.sessionId,
+      kind: 'root' as const,
+      lifecycle: 'ready' as const,
+      version: 1,
+      ...(identity === bot ? { bot: { botId: 'b', chatId: null } } : {}),
+    }));
+    vi.spyOn(authority, 'conversation').mockImplementation((id) =>
+      rows.find((row) => row.conversationId === id)
+    );
+    vi.spyOn(authority, 'project').mockImplementation((id) => ({
+      projectId: id,
+      canonicalPath: '/tmp',
+      state: 'active',
+      version: 1,
+      ...(id === 'remote' ? { kind: 'ssh' as const } : {}),
+    }));
+    vi.spyOn(authority, 'projection').mockReturnValue({
+      conversations: rows,
+      projects: rows.map((row) => ({
+        projectId: row.projectId,
+        canonicalPath: '/tmp',
+        state: 'active',
+        version: 1,
+        ...(row.projectId === 'remote' ? { kind: 'ssh' as const } : {}),
+      })),
+    } as ReturnType<typeof authority.projection>);
+    mocks.currentIdentity.mockImplementation((id) =>
+      [local, remote, bot].find((identity) => identity.sessionId === id)
+    );
+    await vi.waitFor(() => expect(mocks.registerPluginSessionBridge).toHaveBeenCalled());
+    const lookup = mocks.registerPluginSessionBridge.mock.calls.at(-1)![0];
+    expect(lookup('remote')).toBeUndefined();
+    expect(lookup('bot')).toBeUndefined();
+    const directory = mocks.setPluginSessionDirectory.mock.calls.at(-1)![0];
+    expect(directory.listAll().map((row: { id: string }) => row.id)).not.toContain('remote');
+    expect(directory.listAll().map((row: { id: string }) => row.id)).not.toContain('bot');
+    expect(directory.status('remote')).toEqual({
+      sessionId: 'remote',
+      state: 'idle',
+      pendingAsks: 0,
+      pendingApprovals: 0,
+    });
+  });
+  it('routes plugin observe/intercept and progress to current generation without broadcasting internals', async () => {
+    registerAgentHandlers();
+    mocks.pluginDispatchEvent.mockClear();
+    mocks.pluginInterceptResult.mockClear();
+    const identity = {
+      sessionId: 'plugin-parent',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    const authority = getSourceAuthorityRegistry()!;
+    vi.spyOn(authority, 'conversation').mockReturnValue({
+      conversationId: identity.sessionId,
+      projectId: 'p',
+      kind: 'root',
+      lifecycle: 'ready',
+      version: 1,
+    });
+    vi.spyOn(authority, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/tmp',
+      state: 'active',
+      version: 1,
+    });
+    mocks.currentIdentity.mockImplementation((id) =>
+      id === identity.sessionId ? identity : undefined
+    );
+    mocks.isAlive.mockReturnValue(true);
+    const emit = mocks.setAgentEventListener.mock.calls.at(-1)![0];
+    emit({
+      type: 'plugin-event',
+      identity,
+      seq: 1,
+      event: 'model_select',
+      data: { provider: 'p', modelId: 'm', source: 'set' },
+    });
+    emit({
+      type: 'plugin-intercept',
+      identity,
+      seq: 2,
+      requestId: 'intercept-1',
+      event: 'before_agent_start',
+      payload: { prompt: 'hi', kind: 'user' },
+    });
+    await vi.waitFor(() => expect(mocks.pluginDispatchEvent).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(mocks.pluginInterceptResult).toHaveBeenCalledWith(identity, 'intercept-1', {
+        ok: true,
+        result: { append: 'safe context' },
+      })
+    );
+  });
+
+  it('stopping a plugin generation cancels its pending call and suppresses late progress/results', async () => {
+    const identity = {
+      sessionId: 'plugin-running',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    const authority = getSourceAuthorityRegistry()!;
+    vi.spyOn(authority, 'conversation').mockReturnValue({
+      conversationId: identity.sessionId,
+      projectId: 'p',
+      kind: 'root',
+      lifecycle: 'ready',
+      version: 1,
+    });
+    vi.spyOn(authority, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/tmp',
+      state: 'active',
+      version: 1,
+    });
+    mocks.currentIdentity.mockReturnValue(identity);
+    mocks.isAlive.mockReturnValue(true);
+    mocks.pluginToolProgress.mockClear();
+    mocks.pluginToolResult.mockClear();
+    const pending = Promise.withResolvers<{ content: string }>();
+    mocks.pluginCallTool.mockReturnValueOnce(pending.promise);
+    const emit = mocks.setAgentEventListener.mock.calls.at(-1)![0];
+    emit({
+      type: 'plugin-tool-invoke',
+      identity,
+      seq: 1,
+      requestId: 'pending-plugin',
+      toolName: 'plugin_example-demo__read',
+      fingerprint: 'f'.repeat(64),
+      args: {},
+    });
+    await vi.waitFor(() => expect(mocks.pluginCallTool).toHaveBeenCalled());
+    const call = mocks.pluginCallTool.mock.calls.at(-1)![0] as unknown as {
+      signal: AbortSignal;
+      onProgress(text: string): void;
+    };
+    mocks.browserCancellationListener?.(identity, 'abort');
+    expect(call.signal.aborted).toBe(true);
+    call.onProgress('late');
+    pending.resolve({ content: 'late' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(mocks.pluginToolProgress).not.toHaveBeenCalled();
+    expect(mocks.pluginToolResult).not.toHaveBeenCalled();
+  });
+
+  it('plugin mutation policy and MCP bridge reject stale generations and all child mutation requests', async () => {
+    const identity = {
+      sessionId: 'plugin-policy',
+      generation: '11111111-1111-4111-8111-111111111111',
+    };
+    const authority = getSourceAuthorityRegistry()!;
+    vi.spyOn(authority, 'conversation').mockReturnValue({
+      conversationId: identity.sessionId,
+      projectId: 'p',
+      kind: 'root',
+      lifecycle: 'ready',
+      version: 1,
+    });
+    vi.spyOn(authority, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/tmp',
+      state: 'active',
+      version: 1,
+    });
+    mocks.currentIdentity.mockReturnValue(identity);
+    mocks.isReady.mockReturnValue(true);
+    const emit = mocks.setAgentEventListener.mock.calls.at(-1)![0];
+    emit({ type: 'plan-state', identity, seq: 1, state: undefined });
+    await vi.waitFor(() => expect(mocks.setPluginInvocationPolicy).toHaveBeenCalled());
+    const policy = mocks.setPluginInvocationPolicy.mock.calls.at(-1)![0];
+    expect(
+      await policy({
+        sessionId: identity.sessionId,
+        projectRoot: '/tmp',
+        sessionGeneration: identity.generation,
+      })
+    ).toEqual({ allowWrite: true, allowMcpCall: true });
+    expect(await policy({ sessionId: identity.sessionId, projectRoot: '/tmp' })).toEqual({
+      allowWrite: false,
+      allowMcpCall: false,
+    });
+    expect(
+      await policy({ sessionId: identity.sessionId, projectRoot: '/tmp', sessionGeneration: 'old' })
+    ).toEqual({ allowWrite: false, allowMcpCall: false });
+    expect(
+      await policy({
+        sessionId: identity.sessionId,
+        projectRoot: '/tmp',
+        sessionGeneration: identity.generation,
+        agent: { kind: 'subagent', sessionId: `${identity.sessionId}::child`, name: 'Scout' },
+      })
+    ).toEqual({ allowWrite: false, allowMcpCall: false });
+    const bridge = mocks.setPluginMcpBridge.mock.calls.at(-1)![0];
+    await expect(
+      bridge.mcpTools(
+        { sessionId: identity.sessionId, projectRoot: '/tmp', sessionGeneration: 'old' },
+        new AbortController().signal
+      )
+    ).rejects.toThrow();
+  });
   beforeEach(() => {
     mocks.dispatchHost.resolveSubagentModel = undefined;
     mocks.handlers.clear();
