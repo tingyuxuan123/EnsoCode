@@ -145,6 +145,20 @@ Code 聊天 HTTP(S) 链接可按设备本地偏好在所属会话的新浏览器
 无有效会话或带 Ctrl/Cmd 等修饰键时保留外链行为。本地文件与 Bot 产物仍走原授权链路，
 手机设置桩固定关闭此偏好。回归：`Markdown.fileOpening.test.tsx`、`sidePanelDock.test.ts`。
 
+## Code / Bot 工作模式入口
+
+工作模式入口固定在主 `TitleBar` 右上角（`ModeSwitch` → `data-slot="mode-switch"`），
+是图标 + 文字的分段控件，与右侧聊天宽度 / 面板按钮之间用 `titlebar-mode-separator` 细线分隔。
+左侧 `AppRail` 只留侧栏开关、图片工作台、设计、看板等功能导航，不再有第二份 Code / Bot 入口。
+
+- 选中态 `bg-selection` + `text-brand`；`aria-pressed`、`data-app-mode`、`data-rail-view`
+  沿用图标轨的稳定钩子，验收脚本按全局 `button[data-rail-view]` 定位，不能只在 `app-rail` 作用域里查。
+- `inactive`：画廊 / 生图 / 扩展页不是工作模式，两个分段都不标当前选中，但点击仍会把宿主带回
+  Code 对话或 Bot 视图。
+- 门控不绕：`botModeEnabled` 关闭时只保留 Code（用来退出画廊 / 生图），远程节点接管时完全不渲染；
+  不能只关模块不切模式，也不能因此让 Bot 绕过开关或本机限制。
+- 回归：`ModeSwitch.test.tsx`、`App.mode-entry.test.tsx`、`AppRail.test.tsx`。
+
 ## Bot 成员过程入口统一分流
 
 输入框上方成员忙碌条与任务看板的「查看过程」使用同一委派状态分流：排队 / 执行中补载缺失的会话投影，已结束读取历史；普通成员群会话仍看实时投影。不要直接设置弹窗目标而跳过补载，否则冷会话会显示空白新对话。续做可复用同一子会话，排队提示不能只看该会话的第一条旧执行记录。回归：`BotChatView.test.tsx`。

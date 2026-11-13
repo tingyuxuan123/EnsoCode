@@ -1,15 +1,5 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import {
-  Columns3,
-  Image,
-  PanelLeft,
-  Ruler,
-  Search,
-  Settings2,
-  Sparkles,
-  SquareTerminal,
-} from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Image, PanelLeft, Ruler, Search, Settings2, Sparkles, SquareKanban } from 'lucide-react';
 import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
@@ -21,17 +11,11 @@ interface AppRailProps {
   /** 侧栏是否收起；仅在可收起的视图（Code / Bot）传入 */
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
-  /** Code / Bot 模式入口常驻图标轨，侧栏收起后仍可切换 */
-  modeSwitch?: ReactNode;
-  /** Bot 入口单独置于看板上方，保留原来的模式切换行为。 */
-  botModeSwitch?: ReactNode;
   /** 侧栏收起时补上的搜索入口（展开时搜索在侧栏顶部） */
   onOpenSearch?: () => void;
   /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
   designGallery?: { label: string; active: boolean; onToggle(): void };
   imageStudio?: { active: boolean; onToggle(): void };
-  /** Bot 未启用时也常驻 Code 入口，不依赖当前模块。 */
-  codeWorkspace?: { active: boolean; onToggle(): void };
   /** 本机全局看板，独立于当前 Code / Bot 聊天。 */
   collaborationBoard?: { active: boolean; attention?: number; onToggle(): void };
 }
@@ -41,18 +25,16 @@ const RAIL_BUTTON =
 const RAIL_SELECTED = 'bg-selection text-brand hover:bg-selection hover:text-brand';
 
 /**
- * 全局图标轨（56px）：品牌、侧栏开关、收起时的搜索、分隔符、模式切换、Enso 与设置。
+ * 全局图标轨（56px）：品牌、侧栏开关、收起时的搜索、分隔符、功能模块、Enso 与设置。
+ * Code / Bot 是工作模式，入口固定在主标题栏右上角，图标轨不再重复。
  * 图标不带文字，名称走右侧悬浮提示。
  */
 export function AppRail({
   sidebarCollapsed,
   onToggleSidebar,
-  modeSwitch,
-  botModeSwitch,
   onOpenSearch,
   designGallery,
   imageStudio,
-  codeWorkspace,
   collaborationBoard,
 }: AppRailProps) {
   const { t } = useI18n();
@@ -96,27 +78,12 @@ export function AppRail({
           </button>
         </RailTip>
       )}
-      {(onToggleSidebar || modeSwitch) && (
+      {onToggleSidebar && (
         <div
           data-slot="app-rail-separator"
           className="my-1 w-5 border-t border-border"
           aria-hidden
         />
-      )}
-      {modeSwitch}
-      {!modeSwitch && codeWorkspace && (
-        <RailTip label="Code">
-          <button
-            type="button"
-            className={cn(RAIL_BUTTON, codeWorkspace.active && RAIL_SELECTED)}
-            aria-label="Code"
-            data-rail-view="code"
-            aria-pressed={codeWorkspace.active}
-            onClick={codeWorkspace.onToggle}
-          >
-            <SquareTerminal className="size-[19px]" />
-          </button>
-        </RailTip>
       )}
       {imageStudio && (
         <RailTip label={t('Image studio')}>
@@ -146,7 +113,6 @@ export function AppRail({
           </button>
         </RailTip>
       )}
-      {botModeSwitch}
       {collaborationBoard && (
         <RailTip label={t('Collaboration board')}>
           <button
@@ -162,7 +128,7 @@ export function AppRail({
             }
             aria-pressed={collaborationBoard.active}
           >
-            <Columns3 className="size-[19px]" />
+            <SquareKanban className="size-[19px]" />
             {!!collaborationBoard.attention && (
               <span
                 aria-hidden

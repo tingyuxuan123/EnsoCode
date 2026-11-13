@@ -64,6 +64,7 @@ export function TitleBar({ title, className, actions, leading, heading, centered
   return (
     <header
       ref={headerRef}
+      data-slot="title-bar"
       data-native-window-controls={isWindows || undefined}
       style={
         {
@@ -81,7 +82,8 @@ export function TitleBar({ title, className, actions, leading, heading, centered
       {leading ? (
         <div className="no-drag flex items-center">{leading}</div>
       ) : heading ? (
-        <div className="flex min-w-0 flex-1 items-center">{heading}</div>
+        // 窄窗口/大字号下标题行必须自己裁切：项目徽标是 shrink-0，溢出会画到右侧的动作控件下面
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">{heading}</div>
       ) : !centered || !isMac ? (
         <span className="flex items-center gap-2 text-[calc(12rem/14)] font-medium text-muted-foreground">
           {title}
@@ -97,7 +99,14 @@ export function TitleBar({ title, className, actions, leading, heading, centered
         </div>
       )}
 
-      {actions && <div className="no-drag ml-auto flex items-center gap-1">{actions}</div>}
+      {actions && (
+        <div
+          data-slot="title-bar-actions"
+          className="no-drag ml-auto flex items-center gap-1 pl-[8px]"
+        >
+          {actions}
+        </div>
+      )}
 
       {!isMac && !isWindows && (
         <div className={cn('no-drag flex h-full items-center', !actions && 'ml-auto')}>

@@ -187,16 +187,17 @@ try {
         s.setBackgroundImagePath(${JSON.stringify(wallpaper)});s.setBackgroundOpacity(${opacity ?? 0.85});s.setBackgroundImageEnabled(${opacity !== null});})()`);
       await settle();
       for (const view of ['code', 'images', 'design', 'bot']) {
-        click(`[data-slot="app-rail"] button[data-rail-view="${view}"]`);
+        // Code / Bot 是工作模式，入口在标题栏分段控件；画图 / 设计仍在左侧图标轨。
+        click(`button[data-rail-view="${view}"]`);
         await settle();
         const data = await evaluate(`(()=>{
-          const b=document.querySelector('[data-slot=app-rail] button[data-rail-view="${view}"]');
-          const fill=b.querySelector('[data-slot=rail-selection]')||b;
+          const b=document.querySelector('button[data-rail-view="${view}"]');
+          const fill=b.querySelector('[data-slot=mode-switch-selection]')||b;
           const p=document.createElement('span');document.body.append(p);
           p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';
           const expected={color:getComputedStyle(p).color,background:getComputedStyle(p).backgroundColor};p.remove();
           return {pressed:b.getAttribute('aria-pressed'),color:getComputedStyle(b).color,background:getComputedStyle(fill).backgroundColor,expected,
-            count:document.querySelectorAll('[data-slot=app-rail] button[data-rail-view][aria-pressed=true]').length};
+            count:document.querySelectorAll('button[data-rail-view][aria-pressed=true]').length};
         })()`);
         assert.equal(data.pressed, 'true', `${view}: active state`);
         assert.equal(data.count, 1, `${view}: exactly one workspace selected`);
@@ -210,11 +211,11 @@ try {
       }
     }
   }
-  click('[data-slot="app-rail"] button[data-rail-view="code"]');
+  click('button[data-rail-view="code"]');
   await evaluate(`window.__stores.settings.getState().setBotModeEnabled(false)`);
   await settle();
   const fallback = await evaluate(
-    `(()=>{const b=document.querySelector('[data-slot=app-rail] button[data-rail-view=code]');const p=document.createElement('span');p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();return {active:b.getAttribute('aria-pressed'),color:getComputedStyle(b).color,bg:getComputedStyle(b).backgroundColor,expected};})()`
+    `(()=>{const b=document.querySelector('button[data-rail-view=code]');const fill=b.querySelector('[data-slot=mode-switch-selection]')||b;const p=document.createElement('span');p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();return {active:b.getAttribute('aria-pressed'),color:getComputedStyle(b).color,bg:getComputedStyle(fill).backgroundColor,expected};})()`
   );
   assert.equal(fallback.active, 'true');
   assert.equal(fallback.bg, fallback.expected.bg);
@@ -297,13 +298,13 @@ try {
       assert.equal(data.enabled, true, `${palette}/${accent}: interactive`);
       assert.equal(data.selected, 'true', `${palette}/${accent}: selected`);
       const styles = await evaluate(
-        `(()=>{const css=getComputedStyle(document.documentElement);const b=document.querySelector('[data-slot=app-rail] button[data-rail-view=code]');return {surface:css.getPropertyValue('--background').trim(),icon:getComputedStyle(b).color};})()`
+        `(()=>{const css=getComputedStyle(document.documentElement);const b=document.querySelector('button[data-rail-view=code]');return {surface:css.getPropertyValue('--background').trim(),icon:getComputedStyle(b).color};})()`
       );
       assert.equal(styles.surface, surface, `${palette}: neutral surface unchanged`);
       await waitUntil(
         () =>
           evaluate(
-            `getComputedStyle(document.querySelector('[data-slot=app-rail] button[data-rail-view=code]')).color===${JSON.stringify(expected)}`
+            `getComputedStyle(document.querySelector('button[data-rail-view=code]')).color===${JSON.stringify(expected)}`
           ),
         { timeout: 10000 }
       );

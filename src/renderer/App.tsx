@@ -542,6 +542,64 @@ export default function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
+  // Code / Bot 是工作模式，入口固定在标题栏右上角：远程节点接管本机界面时不提供，
+  // Bot 还受实验开关门控（关闭时只留 Code，仍能从画廊 / 生图回到 Code 对话）。
+  const modeEntry = remoteNodeActive ? undefined : (
+    <ModeSwitch
+      includeBot={botModeEnabled}
+      inactive={studioActive || galleryActive || extensionsActive}
+      onSelect={closeWorkspacePage}
+    />
+  );
+  // 模式入口右侧的显示控制：图片历史、画廊 header、聊天宽度与右侧面板。
+  const viewActions = studioActive ? (
+    <button
+      type="button"
+      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+      aria-label={t('Image history')}
+      title={t('Image history')}
+      aria-pressed={studioHistoryOpen}
+      onClick={() => useImageStudioStore.getState().toggleHistory()}
+    >
+      <PanelRight className="size-4" />
+    </button>
+  ) : galleryActive ? (
+    <DesignGalleryHeader side="right" />
+  ) : extensionsActive ? undefined : (
+    <>
+      <button
+        type="button"
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
+          chatWide ? 'text-foreground' : 'text-muted-foreground'
+        )}
+        onClick={() => useSettingsStore.getState().setChatWide(!chatWide)}
+        aria-label={chatWide ? t('Use reading width') : t('Use full chat width')}
+        title={chatWide ? t('Use reading width') : t('Use full chat width')}
+      >
+        {chatWide ? (
+          <FoldHorizontal className="h-4 w-4" />
+        ) : (
+          <UnfoldHorizontal className="h-4 w-4" />
+        )}
+      </button>
+      {!remoteNodeActive && (
+        <button
+          type="button"
+          className={cn(
+            'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
+            (botModeActive ? botPanelOpen : sideOpen) ? 'text-foreground' : 'text-muted-foreground'
+          )}
+          onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
+          aria-label={t('Toggle side panel')}
+          title={t('Toggle side panel')}
+        >
+          <PanelRight className="h-4 w-4" />
+        </button>
+      )}
+    </>
+  );
+
   return (
     // 不能给外壳刷实底：浏览器 guest 沉到 workbench 之下时，这里任何不透明像素都会盖住挖孔
     <div data-enso="canvas" className="relative isolate flex h-screen flex-col text-foreground">
@@ -570,55 +628,19 @@ export default function App() {
           ) : undefined
         }
         actions={
-          studioActive ? (
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label={t('Image history')}
-              title={t('Image history')}
-              aria-pressed={studioHistoryOpen}
-              onClick={() => useImageStudioStore.getState().toggleHistory()}
-            >
-              <PanelRight className="size-4" />
-            </button>
-          ) : galleryActive ? (
-            <DesignGalleryHeader side="right" />
-          ) : extensionsActive ? undefined : (
+          modeEntry || viewActions ? (
             <>
-              <button
-                type="button"
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-                  chatWide ? 'text-foreground' : 'text-muted-foreground'
-                )}
-                onClick={() => useSettingsStore.getState().setChatWide(!chatWide)}
-                aria-label={chatWide ? t('Use reading width') : t('Use full chat width')}
-                title={chatWide ? t('Use reading width') : t('Use full chat width')}
-              >
-                {chatWide ? (
-                  <FoldHorizontal className="h-4 w-4" />
-                ) : (
-                  <UnfoldHorizontal className="h-4 w-4" />
-                )}
-              </button>
-              {!remoteNodeActive && (
-                <button
-                  type="button"
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-                    (botModeActive ? botPanelOpen : sideOpen)
-                      ? 'text-foreground'
-                      : 'text-muted-foreground'
-                  )}
-                  onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
-                  aria-label={t('Toggle side panel')}
-                  title={t('Toggle side panel')}
-                >
-                  <PanelRight className="h-4 w-4" />
-                </button>
+              {modeEntry}
+              {modeEntry && viewActions && (
+                <span
+                  aria-hidden
+                  data-slot="titlebar-mode-separator"
+                  className="mx-[3px] h-4 w-px shrink-0 bg-border"
+                />
               )}
+              {viewActions}
             </>
-          )
+          ) : undefined
         }
       />
       <UpdateBanner />
@@ -627,20 +649,6 @@ export default function App() {
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
           onToggleSidebar={remoteNodeActive ? undefined : toggleSidebar}
-          modeSwitch={
-            botModeEnabled && !remoteNodeActive ? (
-              <ModeSwitch
-                only="code"
-                inactive={studioActive || galleryActive || extensionsActive}
-                onSelect={closeWorkspacePage}
-              />
-            ) : undefined
-          }
-          botModeSwitch={
-            botModeEnabled && !remoteNodeActive ? (
-              <ModeSwitch only="bot" onSelect={closeWorkspacePage} />
-            ) : undefined
-          }
           onOpenSearch={
             remoteNodeActive
               ? undefined
@@ -678,17 +686,6 @@ export default function App() {
                     closeWorkspacePage();
                     if (next) showLocalCodeView();
                     useImageStudioStore.getState().setOpen(next);
-                  },
-                }
-              : undefined
-          }
-          codeWorkspace={
-            !remoteNodeActive
-              ? {
-                  active: !studioActive && !galleryActive && !extensionsActive && !botModeActive,
-                  onToggle: () => {
-                    closeWorkspacePage();
-                    showLocalCodeView();
                   },
                 }
               : undefined
