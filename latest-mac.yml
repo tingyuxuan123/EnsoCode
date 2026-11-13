@@ -1,56 +1,49 @@
-version: 0.2.75
+version: 0.2.76
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.75/Collabra-0.2.75-arm64-mac.zip
-    sha512: 7cS5aYQ+HhW7058/kwJ+w2a5q2ODY4HEkK0mFkqY7xl6xV4brmzMlml6Vj2aW48aMyNHWS8Y+WMyRjehhTvqFw==
-    size: 183860020
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.75/Collabra-0.2.75-arm64.dmg
-    sha512: QeiSZxS/immA98kDfGVTEAeeNlNgRd6/HrwA73uO9n6Zsf/25n0hRyaoBPqgAuKgKA2OE+nzLDgCAHxwZ6Fdxw==
-    size: 178997230
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.75/Collabra-0.2.75-arm64-mac.zip
-sha512: 7cS5aYQ+HhW7058/kwJ+w2a5q2ODY4HEkK0mFkqY7xl6xV4brmzMlml6Vj2aW48aMyNHWS8Y+WMyRjehhTvqFw==
-releaseDate: 2026-11-13T01:13:31.108Z
-releaseName: Collabra 0.2.75 — 个人测试
-releaseNotes: >
-  # Collabra 0.2.75
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.76/Collabra-0.2.76-arm64-mac.zip
+    sha512: 9MHO0ks1JTVX4XQndQXLyBKmcxwB8Vo841Sjc5wENxaH8Wb8Fg2gfg6cyEQRd5SL257slaL6mk16uyl6IR65Xg==
+    size: 183935726
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.76/Collabra-0.2.76-arm64.dmg
+    sha512: 5noibckxYnJlnm0GY7jsIBuRf+wk4ss3GS17lr8Y7D6u1+KcPcw4FgMDjsWwiQxBqWbcr8PHGn6ui9t0q3cPOQ==
+    size: 179046689
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.76/Collabra-0.2.76-arm64-mac.zip
+sha512: 9MHO0ks1JTVX4XQndQXLyBKmcxwB8Vo841Sjc5wENxaH8Wb8Fg2gfg6cyEQRd5SL257slaL6mk16uyl6IR65Xg==
+releaseDate: 2026-11-13T05:20:26.222Z
+releaseName: Collabra 0.2.76 — 个人测试
+releaseNotes: |
+  # Collabra 0.2.76
 
+  ## 原生插件全面升级
 
-  ## 上下文与长任务
+  - 插件可按扩展名接管文件查看器、在输入框底栏显示状态、给命令设置默认快捷键，并可在侧栏打开自己的页面、向页面推送事件。
+  - 插件可贡献 workflow 预设、子代理类型与插件预设；自建预设可叠加插件预设，模型、思考档位与更严格的审批档位会随预设生效。
+  - 新增全量事件与自动化接口：回合开始前追加本轮提示词、模型切换通知、会话状态订阅、按插件预设新建会话、向会话注入文本或图片、中止本轮，以及常驻进程里的定时任务。
+  - 插件工具可声明只读并回传进度，模型工具结果可附带产物文件；界面只拿产物标识，不暴露磁盘路径。
+  - 插件可提供主题（浅/深色调色板、可选素材与背景），只有用户显式选择时才覆盖当前配色；停用或卸载即恢复原有主题。
 
+  ## 自己写插件更容易
 
-  - 新增默认开启的保守微压缩：只清理较早的成功纯文本读取和搜索结果，保留最近五条；不调用模型，时间线和磁盘原文保留。
+  - 新增 `pnpm plugin:pack`：复用安装校验打出可复现的 ZIP 并输出 SHA-256，不执行代码、不覆盖已有文件。
+  - 新增 `pnpm plugin:testing`：生成零依赖测试桩，可在插件目录直接 `node --test`。
+  - 新增 `pnpm plugin:validate` 之外的作者类型声明 `types/enso-plugin.d.ts`，`examples/plugins/starter` 同步更新。
+  - 插件可从文件夹安装后开启「开发模式」，改动保存即自动重装；扩大权限不会自动同意，必须手动确认。
+  - 支持 `enso://install-plugin?url=<https 地址>` 网页唤起安装，只打开确认预览，不自动安装或启用。
 
-  - 可在设置中关闭后续微压缩，并在上下文检查器查看当前分支清理的结果条数和字符数；关闭不会恢复已经清理的模型上下文，也不代表确定的费用或 token 节省。
+  ## 插件市场与更新
 
-  - 模型因实际输出上限截断时，最多自动续写三次；截断的工具参数不会执行或重放。续写会产生额外模型请求，可能增加费用。
+  - 市场按分类展示，卡片网格与详情页可看截图、权限和说明；已安装插件与市场都可查看使用说明。
+  - 市场来源的未扩权更新可自动安装（默认开启，可关闭）；扩大权限的更新仍需单独批准，正忙时延后。GitHub 等其它来源只提示不自动安装。
 
-  - 修复排队消息将仍在产出的回合误判为挂起的问题；远端单次流式请求新增不随持续输出重置的 60 分钟硬截止，本地推理不受此限制。
+  ## 安全与兼容
 
-  - 稳定工具声明顺序，放宽正常中文网页正文的内联预算，并在后台通知队列溢出时明确告知累计丢弃数量。
-
-
-  ## 连接与记忆
-
-
-  - 远程连接的周期心跳连续两次超时才判定断开，减少短暂延迟导致的误断；手机网页兼容新旧连接接管关闭码，避免自动重连互相抢占。
-
-  - 恢复 BGE-M3 的 8192 token 原生上下文上限，减少长记忆被过早截断；超限时仅记录不含正文的诊断，不自动重建已有向量。
-
-
-  ## 品牌与界面
-
-
-  - 内置助手、回复标题、召唤入口、设计批注和中英文文案进一步统一为 Collabra，保留原有授权身份、兼容标识和用户自定义名称。
-
-  - 云白配色调整为中性黑白灰，改善输入框、侧栏切换和选中态的层次，并完善品牌运行图标。
-
+  - 新安装的插件默认停用，安装预览不执行任何插件代码；插件登记表损坏时只读并备份，不会清空已有插件。
+  - 安装链接只接受 HTTPS，下载逐跳校验域名与地址；解压、符号链接与文件读写沿原有边界。
+  - 插件对本机会话的写入、MCP 调用与跨会话注入继续校验实时代际、Plan 状态与用户授权，子会话默认不能变更。
+  - 侧栏与文件查看器仍在 sandbox 框架内运行，配对协议、远程节点和 Bot 不接入本机原生插件。
 
   本次仅发布 Mac arm64 同证书个人更新，推进 personal-updates，不改变正式 Latest。
-
   安装、重启及旧数据保留的真机升级验收由用户自行完成；发布成功不代表已经安装。
-
 
   ---
 
-
-  个人测试通道 0.2.75：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
-  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+  个人测试通道 0.2.76：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
