@@ -28,7 +28,13 @@ const BADGE_POP = { duration: 0.5, ease: [0.34, 1.36, 0.64, 1] } as const;
 const BADGE_CLOSE = { duration: 0.18, ease: [0.4, 0, 0.2, 1] } as const;
 
 /**
- * 主标题栏右上角的紧凑工作模式分段控件 `[ >_ Code | Bot ]`；图标 + 文字，不做下拉。
+ * 主标题栏中部的紧凑工作模式分段控件 `[ >_ Code | Bot ]`；图标 + 文字，不做下拉。
+ *
+ * 视觉对齐上游（J3n5en/EnsoCode `src/renderer/components/bots/ModeSwitch.tsx`）：
+ * 轨道只一层淡底，选中分段是一枚独立的内容区色胶囊 + 小阴影，
+ * 文字用前景色；尺寸按 fork 的 rem 比例缩放，跟随界面字号。
+ * 轨道取中性 secondary 而不是 muted：cloud-light 里 `--muted ≈ --background`，
+ * 用 muted 会让轨道和胶囊都看不见。
  *
  * - `inactive`：画廊 / 生图 / 扩展页不是工作模式，两个分段都不标成当前选中，
  *   但点击仍然会把宿主带回对应的 Code 对话或 Bot 视图。
@@ -76,7 +82,8 @@ export function ModeSwitch({
       data-slot="mode-switch"
       onKeyDown={onKeyDown}
       className={cn(
-        'flex shrink-0 items-center gap-[2px] rounded-[6px] bg-muted/55 p-[2px]',
+        // 高度跟随界面字号，但不能超过标题栏固定 44px（红绿灯按 44px 对齐）
+        'flex h-[calc(28rem/14)] max-h-[36px] shrink-0 rounded-[calc(8rem/14)] bg-secondary/60 p-[calc(2rem/14)]',
         className
       )}
     >
@@ -101,8 +108,8 @@ export function ModeSwitch({
               onSelect?.();
             }}
             className={cn(
-              'relative flex h-[calc(22rem/14)] shrink-0 items-center gap-[5px] rounded-[4px] px-[8px] font-medium text-[calc(12rem/14)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              active ? 'text-brand' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              'relative flex shrink-0 items-center gap-[calc(6rem/14)] rounded-[calc(6rem/14)] px-[calc(10rem/14)] font-medium text-[calc(12rem/14)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
             {active && (
@@ -110,11 +117,11 @@ export function ModeSwitch({
                 layoutId={pillId}
                 aria-hidden
                 data-slot="mode-switch-selection"
-                className="absolute inset-0 rounded-[4px] bg-selection"
+                className="absolute inset-0 rounded-[calc(6rem/14)] bg-background shadow-xs"
                 transition={reduceMotion ? { duration: 0 } : springStandard}
               />
             )}
-            <Icon className="relative size-[calc(13rem/14)]" />
+            <Icon className="relative size-[calc(14rem/14)]" />
             <span className="relative">{label}</span>
             <AnimatePresence>
               {badge && (

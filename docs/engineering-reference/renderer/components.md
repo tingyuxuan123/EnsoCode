@@ -147,12 +147,15 @@ Code 聊天 HTTP(S) 链接可按设备本地偏好在所属会话的新浏览器
 
 ## Code / Bot 工作模式入口
 
-工作模式入口固定在主 `TitleBar` 右上角（`ModeSwitch` → `data-slot="mode-switch"`），
-是图标 + 文字的分段控件，与右侧聊天宽度 / 面板按钮之间用 `titlebar-mode-separator` 细线分隔。
+工作模式入口固定在主 `TitleBar` 居中位置（`ModeSwitch` → `data-slot="mode-switch"`，经 `title-bar-center`
+绝对居中通道，与上游一致），是淡色轨道 + 内容色胶囊的分段控件；不再贴右上角，也不再用
+`titlebar-mode-separator` 与聊天宽度 / 面板按钮之间画分隔线。
 左侧 `AppRail` 只留侧栏开关、图片工作台、设计、看板等功能导航，不再有第二份 Code / Bot 入口。
 
-- 选中态 `bg-selection` + `text-brand`；`aria-pressed`、`data-app-mode`、`data-rail-view`
-  沿用图标轨的稳定钩子，验收脚本按全局 `button[data-rail-view]` 定位，不能只在 `app-rail` 作用域里查。
+- 分段轨道是 `bg-secondary/60`；选中胶囊是 `bg-background` + `shadow-xs` + `text-foreground`，
+  未选中为 `text-muted-foreground`，不再用图标轨的 `bg-selection` / `text-brand`（那套仍留在 `AppRail`）。
+  `aria-pressed`、`data-app-mode`、`data-rail-view` 沿用图标轨的稳定钩子，
+  验收脚本按全局 `button[data-rail-view]` 定位，不能只在 `app-rail` 作用域里查。
 - `inactive`：画廊 / 生图 / 扩展页不是工作模式，两个分段都不标当前选中，但点击仍会把宿主带回
   Code 对话或 Bot 视图。
 - 门控不绕：`botModeEnabled` 关闭时只保留 Code（用来退出画廊 / 生图），远程节点接管时完全不渲染；

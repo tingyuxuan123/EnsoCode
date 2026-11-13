@@ -1,7 +1,7 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
 import { WINDOWS_CAPTION_BUTTONS_WIDTH } from '@shared/windowControls';
 import { Copy, Minus, Sparkles, Square, X } from 'lucide-react';
-import { type CSSProperties, useRef } from 'react';
+import { useRef } from 'react';
 import { useNativeWindowControls } from '@/hooks/useNativeWindowControls';
 import { useWindowMaximized } from '@/hooks/useWindowMaximized';
 import { useI18n } from '@/i18n';
@@ -66,12 +66,7 @@ export function TitleBar({ title, className, actions, leading, heading, centered
       ref={headerRef}
       data-slot="title-bar"
       data-native-window-controls={isWindows || undefined}
-      style={
-        {
-          '--titlebar-left-inset': isMac ? '84px' : '12px',
-          ...(isWindows ? { paddingRight: nativeControlsInset } : {}),
-        } as CSSProperties
-      }
+      style={isWindows ? { paddingRight: nativeControlsInset } : undefined}
       className={cn(
         // 固定像素高度：红绿灯位置 (y:16) 按 44px 高度对齐，不随 rem 缩放
         'drag-region relative flex h-[44px] shrink-0 items-center bg-transparent',
@@ -83,7 +78,19 @@ export function TitleBar({ title, className, actions, leading, heading, centered
         <div className="no-drag flex items-center">{leading}</div>
       ) : heading ? (
         // 窄窗口/大字号下标题行必须自己裁切：项目徽标是 shrink-0，溢出会画到右侧的动作控件下面
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden">{heading}</div>
+        <div
+          data-slot="title-bar-heading"
+          data-center-reserve={centered ? 'true' : undefined}
+          className={cn(
+            'flex min-w-0 flex-1 items-center overflow-hidden',
+            // 居中的模式分段压在绝对定位通道里，标题必须提前收住，不能画到它下面。
+            // 4.8rem = 分段控件一半宽（随界面字号缩放），40px = 红绿灯把窗口中心
+            // 推离内容起点后的偏移加间隙。
+            centered && 'max-w-[calc(50%-4.8rem-40px)]'
+          )}
+        >
+          {heading}
+        </div>
       ) : !centered || !isMac ? (
         <span className="flex items-center gap-2 text-[calc(12rem/14)] font-medium text-muted-foreground">
           {title}
@@ -92,6 +99,7 @@ export function TitleBar({ title, className, actions, leading, heading, centered
 
       {centered && (
         <div
+          data-slot="title-bar-center"
           className="pointer-events-none absolute inset-0 flex items-center justify-center"
           style={isWindows ? { right: nativeControlsInset } : undefined}
         >

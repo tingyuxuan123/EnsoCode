@@ -97,6 +97,7 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
   - 薄荷白全部样式在 `styles/mintLight.css`，只换肤不改尺寸：灰阶与绿色同色相，`--accent` 保持中性；发送/选择/聚焦跟随用户强调色，运行/完成仍用绿色状态语义；圆角 8 / 12 / 16（行与控件 / 浮层与气泡 / 输入框与对话框）。组件覆盖优先挂 `data-slot`、`data-model-picker`、`aria-pressed` 等稳定属性。
   - 该文件的组件规则不在 `@layer` 内，会压过 Tailwind 工具类（包括 `hover:`、`disabled:`），写覆盖时要显式处理这些状态。改浮层圆角要连 `::before` 一起改：命令面板的 `::before` 带底色，只改外框会在角上露出旧圆角。代码视图选中色用宿主 `diffs-container` 上的 `--diffs-selection-base`（文档侧声明压过 shadow `:host`），不要改 `--diffs-modified-*`，那会连带 diff 的修改色。
   - `cloud-light`（云白）配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、中性普通主操作、浅灰用户消息；发送/当前选中/聚焦跟随用户强调色，不给外壳或用户气泡染色。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
+  - 云白的 `--muted`（`#fafafa`）与 `--background`（`#faf9f9`）几乎同色，可见中性面是 `--secondary` / `--accent`。需要「中性浅色选中块或分段轨道」时用 `bg-secondary`（常驻选中仍优先 `bg-selection`），不要照搬上游的 `bg-muted`——胶囊和轨道会在云白下整体消失。标题栏 Code/Bot 分段与聊天页签按上游结构（淡轨道 + 独立内容色胶囊、圆角浅色胶囊页签），令牌走 fork 语义；回归见 `ModeSwitch.test.tsx`、`CoworkerTabs.test.tsx`。背景图模式下 `bg-background` 胶囊会被面板 alpha 重映射，探针要比 `var(--color-background)` 而不是 `var(--background)`。
 
 设置 → 外观 的「主题」卡片网格是内置方案与插件主题的统一入口：三张内置浅色卡 + 已启用插件的
 主题卡（按当前浅/深外观取插件自带 `light`/`dark` 调色板预览）。选内置卡写入 `lightPalette`

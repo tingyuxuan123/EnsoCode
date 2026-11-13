@@ -13,7 +13,7 @@ import { useSidebarStore } from '@/stores/sidebar';
 import App from './App';
 
 /**
- * Code / Bot 是工作模式，入口固定在主标题栏右上角，左侧图标轨只留功能导航。
+ * Code / Bot 是工作模式，按上游组织居中承载在标题栏中部，左侧图标轨只留功能导航。
  * 这里挂真实 App + 真实 TitleBar / AppRail / ModeSwitch，其余重型子页面换成标记，
  * 验证入口位置、两种模式切换、从设计画廊 / 生图回到 Code 对话以及既有门控。
  */
@@ -67,6 +67,7 @@ const shell = vi.hoisted(() => {
     remoteNodes: [] as { nodeId: string; hostOnline: boolean }[],
     sidebar: { width: undefined as number | undefined, collapsed: false, mounts: 0 },
     botView: null as { sidebarWidth?: number; collapsed?: boolean } | null,
+    workbenchTitle: null as object | null,
     mark: (slot: string) => () => <div data-slot={slot} />,
   };
 });
@@ -111,7 +112,12 @@ vi.mock('@/components/sidepanel/SidePanel', () => ({
 vi.mock('@/components/app/StatusBar', () => ({ StatusBar: shell.mark('status-bar') }));
 vi.mock('@/components/app/BackgroundLayer', () => ({ BackgroundLayer: () => null }));
 vi.mock('@/components/app/UpdateBanner', () => ({ UpdateBanner: () => null }));
-vi.mock('@/components/app/WorkbenchTitle', () => ({ WorkbenchTitle: () => null }));
+vi.mock('@/components/app/WorkbenchTitle', () => ({
+  WorkbenchTitle: (props: object) => {
+    shell.workbenchTitle = props;
+    return null;
+  },
+}));
 vi.mock('@/components/extensions/ExtensionsPage', () => ({ ExtensionsPage: () => null }));
 vi.mock('@/components/nodes/RemoteNodeView', () => ({
   RemoteNodeView: shell.mark('remote-node'),
@@ -167,7 +173,7 @@ let root: Root;
 
 const titleBar = () => container.querySelector('[data-slot="title-bar"]');
 const rail = () => container.querySelector('[data-slot="app-rail"]');
-/** 标题栏右上角的分段控件；左侧图标轨不该再有同款入口。 */
+/** 标题栏中部的分段控件；左侧图标轨不该再有同款入口。 */
 const modeSwitch = () => titleBar()?.querySelector('[data-slot="mode-switch"]') ?? null;
 const segment = (mode: 'code' | 'bot') =>
   modeSwitch()?.querySelector<HTMLButtonElement>(`[data-rail-view="${mode}"]`) ?? null;
@@ -201,6 +207,7 @@ beforeEach(() => {
   );
   shell.sidebar = { width: undefined, collapsed: false, mounts: 0 };
   shell.botView = null;
+  shell.workbenchTitle = null;
   shell.remoteNodes = [];
   localStorage.setItem('enso-sidebar-width', '264');
   localStorage.removeItem('enso-mode');
@@ -228,7 +235,7 @@ async function mountApp(): Promise<void> {
   await act(() => root.render(<App />));
 }
 
-describe('Code / Bot 模式入口固定在标题栏右上角', () => {
+describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
   it('左侧图标轨只留功能导航，不再重复 Code / Bot 入口', async () => {
     await mountApp();
     expect(railEntry('code')).toBeNull();
@@ -240,31 +247,33 @@ describe('Code / Bot 模式入口固定在标题栏右上角', () => {
     expect(railEntry('board')).not.toBeNull();
   });
 
-  it('Bot 开启时标题栏有 Code / Bot 分段，位于聊天宽度与右侧面板按钮左侧', async () => {
+  it('Bot 开启时 Code / Bot 分段由标题栏中部承载，右侧动作区只留显示控制', async () => {
     await setBotModeEnabled(true);
     await mountApp();
     expect(modeSwitch()).not.toBeNull();
     expect(segment('code')?.getAttribute('aria-pressed')).toBe('true');
     expect(segment('bot')?.getAttribute('aria-pressed')).toBe('false');
 
+    // 上游把分段控件放进标题栏的居中通道，而不是挤在右侧动作行尾。
+    const center = titleBar()?.querySelector('[data-slot="title-bar-center"]');
+    expect(center?.contains(modeSwitch() as Node)).toBe(true);
     const actions = titleBar()?.querySelector('[data-slot="title-bar-actions"]');
-    const children = [...(actions?.children ?? [])];
-    const switchIndex = children.findIndex((child) => child.contains(modeSwitch() as Node));
-    const widthToggle = titleBar()?.querySelector('button[aria-label="Use full chat width"]');
-    const panelToggle = titleBar()?.querySelector('button[aria-label="Toggle side panel"]');
-    expect(switchIndex).toBe(0);
-    expect(widthToggle).not.toBeNull();
-    expect(panelToggle).not.toBeNull();
-    // 模式切换与显示控制之间只有分隔线，没有别的可点控件
-    const separator = children[1];
-    expect(separator?.getAttribute('aria-hidden')).toBe('true');
-    expect(separator?.getAttribute('data-slot')).toBe('titlebar-mode-separator');
-    expect(separator?.querySelector('button')).toBeNull();
-    // 显示控制都在分段控件右侧
-    expect(
-      (modeSwitch() as Node).compareDocumentPosition(widthToggle as Node) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(actions?.contains(modeSwitch() as Node)).toBe(false);
+    expect(actions?.querySelector('[data-slot="titlebar-mode-separator"]')).toBeNull();
+    expect(actions?.querySelector('button[aria-label="Use full chat width"]')).not.toBeNull();
+    expect(actions?.querySelector('button[aria-label="Toggle side panel"]')).not.toBeNull();
+  });
+
+  it('远程节点让位给对方的目录时不渲染紧凑标题（标题来自本机会话）', async () => {
+    await setBotModeEnabled(true);
+    shell.workbenchTitle = null;
+    shell.remoteNodes = [{ nodeId: 'node-remote', hostOnline: true }];
+    act(() => useRemoteNodesStore.setState({ activeNodeId: 'node-remote' }));
+    await mountApp();
+    await act(async () => {});
+    expect(present('remote-node')).not.toBeNull();
+    expect(modeSwitch()).toBeNull();
+    expect(shell.workbenchTitle).toBeNull();
   });
 
   it('Bot、图片工作台、设计画廊里模式分段都在原位', async () => {

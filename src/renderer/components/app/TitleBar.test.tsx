@@ -48,6 +48,25 @@ describe('TitleBar centered content', () => {
     expect(html).toContain('no-drag');
   });
 
+  it('marks the centered lane so the mode switch has one stable visual carrier', () => {
+    setPlatform('darwin');
+    const html = render({ title: 'Eaves', centered });
+    expect(html).toContain('data-slot="title-bar-center"');
+    expect(html).toContain('data-testid="mode-switch"');
+  });
+
+  it('caps a long heading before the centered lane instead of letting it run underneath', () => {
+    setPlatform('darwin');
+    const heading = createElement('span', { 'data-testid': 'heading' }, 'Session');
+    const centeredHtml = render({ title: 'Eaves', heading, centered });
+    const plainHtml = render({ title: 'Eaves', heading });
+    // 居中通道出现时标题预留空间，不能被居中的分段控件盖住
+    expect(centeredHtml).toContain('data-slot="title-bar-heading"');
+    expect(centeredHtml).toContain('data-center-reserve="true"');
+    expect(plainHtml).toContain('data-slot="title-bar-heading"');
+    expect(plainHtml).not.toContain('data-center-reserve');
+  });
+
   it('macOS: hides the title beside traffic lights when centered', () => {
     setPlatform('darwin');
     const html = render({ title: 'Eaves', centered });

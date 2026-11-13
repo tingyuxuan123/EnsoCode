@@ -144,3 +144,56 @@ describe('协作者标签操作语义', () => {
     expect(html).toContain('aria-label="Reopen collaborator"');
   });
 });
+
+describe('会话页签条', () => {
+  const render = (displayedId: string) =>
+    parseHTML(
+      renderToStaticMarkup(createElement(CoworkerTabs, { parentId: 'parent', displayedId }))
+    ).document;
+  const tabs = (displayedId: string) => [
+    ...render(displayedId).querySelectorAll<HTMLElement>('[role="tab"]'),
+  ];
+
+  it('页签条是 tablist，选中态由 aria-selected 表达而不是只有样式', () => {
+    const document = render('parent');
+    expect(document.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(tabs('parent').map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'true',
+      'false',
+    ]);
+  });
+
+  it('选中协作者页签后选中态跟着切换', () => {
+    expect(tabs('coworker').map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'false',
+      'true',
+    ]);
+  });
+
+  it('主会话页签显示真实会话标题，不再写死占位名', () => {
+    const [parent] = tabs('parent');
+    expect(parent.textContent).toBe('Main');
+  });
+
+  it('协作者页签为悬停操作预留右缘槽位，操作不会压住标题', () => {
+    const document = render('parent');
+    const lane = document.querySelector('[data-slot="tab-action-lane"]');
+    const actions = document.querySelector('[data-slot="tab-actions"]');
+    expect(lane).not.toBeNull();
+    // 槽位默认放状态点，悬停时由操作组接管
+    expect(lane?.children).toHaveLength(1);
+    // 操作组与状态点共用同一槽位；槽位宽度固定，悬停只换内容
+    expect(lane?.className).toContain('w-[calc(35rem/14)]');
+    expect(actions).not.toBeNull();
+    expect(lane?.closest('[role="tab"]')).not.toBeNull();
+  });
+
+  it('选中页签是浅色胶囊，未选中页签只在悬停出淡底', () => {
+    const [parent, coworker] = tabs('parent');
+    // 中性 secondary 底：cloud-light 下 muted 与 background 几乎同色，胶囊会看不见。
+    expect(parent.className).toContain('bg-secondary');
+    expect(parent.className).toContain('rounded-[calc(6rem/14)]');
+    expect(coworker.className).not.toContain('bg-secondary ');
+    expect(coworker.className).toContain('hover:bg-secondary/50');
+  });
+});

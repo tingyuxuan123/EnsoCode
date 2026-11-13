@@ -21,6 +21,14 @@ assert.ok(
 const profile = selectPage(await fetchJson(port, '/json/list'), 'index.html');
 const rpc = await connect(profile.webSocketDebuggerUrl, { expectedPort: port, timeout: 20000 });
 const results = [];
+/** 每段等待都带步骤名：WAIT_TIMEOUT 必须能指出卡在哪一步，而不是只报超时。 */
+async function step(label, work) {
+  try {
+    return await work();
+  } catch (error) {
+    throw new Error(`STUCK_AT: ${label}`, { cause: error });
+  }
+}
 async function evaluate(expression, client = rpc) {
   const response = await client.send('Runtime.evaluate', {
     expression,
@@ -46,20 +54,24 @@ async function settle() {
   })()`);
 }
 async function ready(previousTimeOrigin, client = rpc, storeRequired = true) {
-  await waitUntil(
-    async () => {
-      try {
-        return await evaluate(
-          `Boolean(${storeRequired ? 'window.__stores?.settings' : 'true'} && document.readyState === "complete"
+  await step(
+    `${storeRequired ? 'renderer' : 'settings renderer'} ready after reload (origin ${previousTimeOrigin ?? 'initial'})`,
+    () =>
+      waitUntil(
+        async () => {
+          try {
+            return await evaluate(
+              `Boolean(${storeRequired ? 'window.__stores?.settings' : 'true'} && document.readyState === "complete"
         && performance.timeOrigin !== ${JSON.stringify(previousTimeOrigin ?? null)})`,
-          client
-        );
-      } catch (error) {
-        if (/context.*destroyed|Cannot find context/i.test(error.message)) return false;
-        throw error;
-      }
-    },
-    { timeout: 15000 }
+              client
+            );
+          } catch (error) {
+            if (/context.*destroyed|Cannot find context/i.test(error.message)) return false;
+            throw error;
+          }
+        },
+        { timeout: 15000 }
+      )
   );
 }
 // The first import of a rarely-used UI control can make Vite optimize a new
@@ -102,9 +114,12 @@ try {
     ));
     window.__themeSelectionFixture={host,dispose(){root.unmount();host.remove();delete window.__themeSelectionFixture;}};
   })()`);
-  await waitUntil(
-    () => evaluate(`Boolean(window.__themeSelectionFixture?.host.querySelector('[role=switch]'))`),
-    { timeout: 10000 }
+  await step('shared-control fixture mounted', () =>
+    waitUntil(
+      () =>
+        evaluate(`Boolean(window.__themeSelectionFixture?.host.querySelector('[role=switch]'))`),
+      { timeout: 10000 }
+    )
   );
 
   for (const [appTheme, terminalTheme, forcedDark] of [
@@ -190,23 +205,42 @@ try {
         // Code / Bot 是工作模式，入口在标题栏分段控件；画图 / 设计仍在左侧图标轨。
         click(`button[data-rail-view="${view}"]`);
         await settle();
+        // 两个承载层的选中样式不同：图标轨用 brand 文字 + selection 底，
+        // 标题栏模式分段用前景色文字 + 内容区色胶囊（上游风格）。
+        const modeSegment = view === 'code' || view === 'bot';
         const data = await evaluate(`(()=>{
           const b=document.querySelector('button[data-rail-view="${view}"]');
-          const fill=b.querySelector('[data-slot=mode-switch-selection]')||b;
+          const fill=${modeSegment ? "b.querySelector('[data-slot=mode-switch-selection]')" : 'b'};
           const p=document.createElement('span');document.body.append(p);
-          p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';
+          p.style.color=${modeSegment ? "'var(--foreground)'" : "'var(--brand)'"};
+          // 模式胶囊的承载令牌是 --color-background（背景图模式下会被面板 alpha 重映射），
+          // 直接比 --background 会漏掉透明化机制。
+          p.style.backgroundColor=${modeSegment ? "'var(--color-background)'" : "'var(--selection)'"};
           const expected={color:getComputedStyle(p).color,background:getComputedStyle(p).backgroundColor};p.remove();
-          return {pressed:b.getAttribute('aria-pressed'),color:getComputedStyle(b).color,background:getComputedStyle(fill).backgroundColor,expected,
-            count:document.querySelectorAll('button[data-rail-view][aria-pressed=true]').length};
+          const tint=document.createElement('span');tint.style.backgroundColor='var(--selection)';
+          document.body.append(tint);const selection=getComputedStyle(tint).backgroundColor;tint.remove();
+          return {pressed:b.getAttribute('aria-pressed'),pill:Boolean(fill),color:getComputedStyle(b).color,background:getComputedStyle(fill).backgroundColor,expected,
+            selection,count:document.querySelectorAll('button[data-rail-view][aria-pressed=true]').length};
         })()`);
         assert.equal(data.pressed, 'true', `${view}: active state`);
+        assert.equal(data.pill, true, `${view}: selected segment has its own visual carrier`);
         assert.equal(data.count, 1, `${view}: exactly one workspace selected`);
-        assert.equal(data.color, data.expected.color, `${view}: brand persists on hover`);
+        assert.equal(
+          data.color,
+          data.expected.color,
+          `${view}: active text uses the ${modeSegment ? 'foreground' : 'brand'} token`
+        );
         assert.equal(
           data.background,
           data.expected.background,
-          `${view}: selection survives wallpaper`
+          `${view}: ${modeSegment ? 'pill stays the content surface' : 'selection survives wallpaper'}`
         );
+        if (modeSegment)
+          assert.notEqual(
+            data.background,
+            data.selection,
+            `${view}: pill is the content surface, not the selection tint`
+          );
         results.push({ check: 'navigation', accent, wallpaper: opacity, view, passed: true });
       }
     }
@@ -215,11 +249,14 @@ try {
   await evaluate(`window.__stores.settings.getState().setBotModeEnabled(false)`);
   await settle();
   const fallback = await evaluate(
-    `(()=>{const b=document.querySelector('button[data-rail-view=code]');const fill=b.querySelector('[data-slot=mode-switch-selection]')||b;const p=document.createElement('span');p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();return {active:b.getAttribute('aria-pressed'),color:getComputedStyle(b).color,bg:getComputedStyle(fill).backgroundColor,expected};})()`
+    `(()=>{const b=document.querySelector('button[data-rail-view=code]');const fill=b.querySelector('[data-slot=mode-switch-selection]');const p=document.createElement('span');p.style.color='var(--foreground)';p.style.backgroundColor='var(--color-background)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();const t=document.createElement('span');t.style.backgroundColor='var(--selection)';document.body.append(t);const selection=getComputedStyle(t).backgroundColor;t.remove();return {active:b.getAttribute('aria-pressed'),pill:Boolean(fill),color:getComputedStyle(b).color,bg:fill?getComputedStyle(fill).backgroundColor:null,expected,selection,count:document.querySelectorAll('[data-rail-view][aria-pressed=true]').length};})()`
   );
   assert.equal(fallback.active, 'true');
+  assert.equal(fallback.pill, true, 'Code keeps its capsule with Bot disabled');
+  assert.equal(fallback.count, 1, 'only Code is selected with Bot disabled');
   assert.equal(fallback.bg, fallback.expected.bg);
   assert.equal(fallback.color, fallback.expected.color);
+  assert.notEqual(fallback.bg, fallback.selection, 'Code pill is not the selection tint');
   results.push({ check: 'Code remains selected with Bot disabled', passed: true });
 
   // Use the real settings buttons, not only root-token self-comparisons: light
@@ -297,17 +334,19 @@ try {
       );
       assert.equal(data.enabled, true, `${palette}/${accent}: interactive`);
       assert.equal(data.selected, 'true', `${palette}/${accent}: selected`);
+      // Code / Bot 分段不再用强调色。图标轨的 brand 图标在 cloud-light 被方案改成
+      // foreground，不能用来验证强调色，这里直接在主窗口渲染一个 `text-brand`
+      // 工具类节点：它验证的是编译后的 brand 工具类跟随设置窗口写入的强调色。
+      const brandProbe =
+        "(()=>{const p=document.createElement('span');p.className='text-brand';document.body.append(p);const v=getComputedStyle(p).color;p.remove();return v})()";
       const styles = await evaluate(
-        `(()=>{const css=getComputedStyle(document.documentElement);const b=document.querySelector('button[data-rail-view=code]');return {surface:css.getPropertyValue('--background').trim(),icon:getComputedStyle(b).color};})()`
+        `(()=>{const css=getComputedStyle(document.documentElement);return {surface:css.getPropertyValue('--background').trim(),icon:${brandProbe}};})()`
       );
       assert.equal(styles.surface, surface, `${palette}: neutral surface unchanged`);
-      await waitUntil(
-        () =>
-          evaluate(
-            `getComputedStyle(document.querySelector('button[data-rail-view=code]')).color===${JSON.stringify(expected)}`
-          ),
-        { timeout: 10000 }
-      );
+      assert.ok(styles.icon, `${palette}: brand utility resolves in the main window`);
+      await waitUntil(() => evaluate(`(${brandProbe})===${JSON.stringify(expected)}`), {
+        timeout: 10000,
+      });
       results.push({ check: 'light settings click + both windows', palette, accent, passed: true });
     }
     // The Main broadcast above proves the write was persisted; reload both renderers.

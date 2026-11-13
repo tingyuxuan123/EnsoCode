@@ -4,7 +4,7 @@ import {
 } from '@shared/builtinAgents';
 import { coworkerTabTone } from '@shared/conversationDotTone';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
-import { Bot, Ellipsis, MessagesSquare, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { Bot, Ellipsis, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import * as React from 'react';
 import { ConversationStatusIndicator } from '@/components/chat/ConversationStatusIndicator';
 import { ConversationTitleEdit } from '@/components/chat/ConversationTitleEdit';
@@ -43,6 +43,12 @@ import { useSessionsStore } from '@/stores/sessions';
 import { selectCoworkerTabConversations } from '@/stores/sessions/sidebarDirectory';
 import { useSettingsStore } from '@/stores/settings';
 import { ConfirmDialog } from './ConfirmDialog';
+
+/** deltaMode=1 表示按行上报；取实际行高，取不到时用 16px 的常规行高。 */
+function wheelLineHeightPx(el: HTMLElement): number {
+  const parsed = Number.parseFloat(getComputedStyle(el).lineHeight);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 16;
+}
 
 /**
  * 顶部只放可交互的持久协作者；X 关闭视图，解雇必须走操作菜单的二次确认。
@@ -88,134 +94,186 @@ export function CoworkerTabs({
     }
   }, [displayedTask, displayedId, parentId]);
 
+  // 页签条横向溢出时，普通鼠标纵向滚轮也转成横向滚动，否则右侧页签被裁掉又发现不了。
+  // React 的 onWheel 走 passive 监听无法 preventDefault，这里挂原生非 passive 监听；
+  // 触控板横滑（deltaX）、Shift+滚轮和 Ctrl+滚轮缩放都保持原生，不重复映射。
+  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.shiftKey) return;
+      const { deltaX, deltaY, deltaMode } = event;
+      // 只接管以纵向为主的滚轮；横向手势交给浏览器。
+      if (deltaY === 0 || Math.abs(deltaX) >= Math.abs(deltaY)) return;
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+      if (maxScrollLeft <= 0) return;
+      const unit =
+        deltaMode === 1 ? wheelLineHeightPx(scroller) : deltaMode === 2 ? scroller.clientWidth : 1;
+      const next = Math.min(Math.max(scroller.scrollLeft + deltaY * unit, 0), maxScrollLeft);
+      // 已到该方向的边界就放行，继续滚页面，不吞事件。
+      if (next === scroller.scrollLeft) return;
+      event.preventDefault();
+      scroller.scrollLeft = next;
+    };
+    scroller.addEventListener('wheel', onWheel, { passive: false });
+    return () => scroller.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // 与上游一致的浅色胶囊页签：选中项用中性 secondary 底 + 前景色文字，未选中只在悬停出更淡的底。
+  // 不用 muted：cloud-light 的 muted 与 background 几乎同色，胶囊会整体消失。
   const tabClass = (active: boolean) =>
     cn(
-      // 下划线页签：激活项底部 2px 强调色，非激活只在悬停时出浅底
-      'relative flex h-full min-w-0 shrink-0 items-center gap-[6px] px-[12px] text-[calc(13rem/14)] transition-colors',
+      'relative flex min-w-0 shrink-0 items-center gap-[calc(6rem/14)] rounded-[calc(6rem/14)] px-[calc(8rem/14)] py-[calc(4rem/14)] text-[calc(12rem/14)] transition-colors',
       active
-        ? 'font-medium text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-[calc(2rem/14)] after:rounded-full after:bg-brand'
-        : 'text-muted-foreground hover:text-foreground'
+        ? 'bg-secondary font-medium text-foreground'
+        : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
     );
 
   return (
     <div
       data-slot="conversation-tabs"
-      className="flex h-[calc(44rem/14)] shrink-0 items-center gap-[4px] border-b border-line px-[16px]"
+      className="flex shrink-0 items-center gap-[calc(4rem/14)] border-b border-line px-3 py-[calc(4rem/14)]"
     >
-      <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
-        <RenameableTab
-          id={parentId}
-          // 会话标题已在窗口标题栏；页签只标明主会话，重命名仍编辑真实标题
-          label={t('Main conversation')}
-          renameTitle={parentTitle || t('New conversation')}
-          className={tabClass(displayedId === parentId)}
-          leading={<MessagesSquare className="size-[calc(14rem/14)] shrink-0" />}
-          reloadDisabled={parentReloading || parentSpawning}
-          reloading={parentReloading}
-          onSelect={() => useSessionsStore.getState().selectTab(parentId, undefined)}
-        />
-        {coworkers.map((coworker) => {
-          const tone = coworkerTabTone({
-            status: coworker.status,
-            spawning: coworker.spawning,
-            pendingApprovalCount: coworker.pendingApprovalCount,
-            pendingAskCount: coworker.pendingAskCount,
-            pendingCapabilityAskCount: coworker.pendingCapabilityAskCount,
-          });
-          return (
-            <div key={coworker.id} className="group/tab flex h-full shrink-0 items-center">
-              <RenameableTab
-                id={coworker.id}
-                label={agentInstanceDisplayName(
-                  !coworker.title || coworker.title === coworker.child?.agentInstanceName
-                    ? coworker.child?.agentTypeKey
-                    : undefined,
-                  coworker.title ||
-                    coworker.child?.agentInstanceName ||
-                    coworker.coworkerName ||
-                    coworker.id
-                )}
-                className={cn(
-                  tabClass(displayedId === coworker.id),
-                  displayedId !== coworker.id && 'group-hover/tab:text-foreground'
-                )}
-                leading={<Bot className="size-[calc(14rem/14)] shrink-0" />}
-                trailing={
-                  <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center">
-                    <ConversationStatusIndicator tone={tone} size="sm" />
-                  </span>
-                }
-                reloadDisabled={coworker.reloading || coworker.spawning}
-                reloading={coworker.reloading}
-                onSelect={() => useSessionsStore.getState().selectTab(parentId, coworker.id)}
-                onViewProcess={
-                  coworker.canObserve
-                    ? () =>
-                        addSidePanelSubagent({
-                          parentConversationId: parentId,
-                          childConversationId: coworker.id,
-                        })
-                    : undefined
-                }
-                onCloseConversation={() =>
-                  useSessionsStore.getState().closeCoworkerTab(parentId, coworker.id)
-                }
-                onDismiss={() => setDismissId(coworker.id)}
-              />
-              <Menu>
-                <MenuTrigger
-                  aria-label={t('Collaborator actions')}
-                  title={t('Collaborator actions')}
-                  className="rounded p-1 text-muted-foreground opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-accent"
-                >
-                  <Ellipsis className="size-3.5" />
-                </MenuTrigger>
-                <MenuPopup align="end">
-                  {coworker.canObserve && (
-                    <MenuItem
-                      onClick={() =>
-                        addSidePanelSubagent({
-                          parentConversationId: parentId,
-                          childConversationId: coworker.id,
-                        })
-                      }
-                    >
-                      {t('View process')}
-                    </MenuItem>
+      <div
+        data-slot="conversation-tab-scroller"
+        ref={scrollerRef}
+        className="flex min-w-0 flex-1 items-center gap-[calc(4rem/14)] overflow-x-auto [scrollbar-width:none]"
+      >
+        <div
+          role="tablist"
+          aria-label={t('Conversations')}
+          className="flex shrink-0 items-center gap-[calc(4rem/14)]"
+        >
+          <RenameableTab
+            id={parentId}
+            active={displayedId === parentId}
+            // 会话标题只在页签里出现（标题栏只留品牌），双击仍可重命名
+            label={parentTitle || t('New conversation')}
+            className={tabClass(displayedId === parentId)}
+            leading={<MessageCircle className="size-[calc(12rem/14)] shrink-0" />}
+            reloadDisabled={parentReloading || parentSpawning}
+            reloading={parentReloading}
+            onSelect={() => useSessionsStore.getState().selectTab(parentId, undefined)}
+          />
+          {coworkers.map((coworker) => {
+            const tone = coworkerTabTone({
+              status: coworker.status,
+              spawning: coworker.spawning,
+              pendingApprovalCount: coworker.pendingApprovalCount,
+              pendingAskCount: coworker.pendingAskCount,
+              pendingCapabilityAskCount: coworker.pendingCapabilityAskCount,
+            });
+            return (
+              <div key={coworker.id} className="group/tab relative shrink-0">
+                <RenameableTab
+                  id={coworker.id}
+                  active={displayedId === coworker.id}
+                  label={agentInstanceDisplayName(
+                    !coworker.title || coworker.title === coworker.child?.agentInstanceName
+                      ? coworker.child?.agentTypeKey
+                      : undefined,
+                    coworker.title ||
+                      coworker.child?.agentInstanceName ||
+                      coworker.coworkerName ||
+                      coworker.id
                   )}
-                  <MenuItem
+                  className={cn(
+                    tabClass(displayedId === coworker.id),
+                    displayedId !== coworker.id && 'group-hover/tab:text-foreground'
+                  )}
+                  leading={<Bot className="size-[calc(12rem/14)] shrink-0" />}
+                  trailing={
+                    // 预留操作位：状态点与悬停操作（⋯ / ×）共用同一条右缘槽位，
+                    // 悬停时只换内容不拉宽页签，也不会压住标题文字。
+                    <span
+                      data-slot="tab-action-lane"
+                      className="flex h-3 w-[calc(35rem/14)] shrink-0 items-center justify-end"
+                    >
+                      <span className="inline-flex items-center justify-center group-hover/tab:invisible group-focus-within/tab:invisible">
+                        <ConversationStatusIndicator tone={tone} size="sm" />
+                      </span>
+                    </span>
+                  }
+                  reloadDisabled={coworker.reloading || coworker.spawning}
+                  reloading={coworker.reloading}
+                  onSelect={() => useSessionsStore.getState().selectTab(parentId, coworker.id)}
+                  onViewProcess={
+                    coworker.canObserve
+                      ? () =>
+                          addSidePanelSubagent({
+                            parentConversationId: parentId,
+                            childConversationId: coworker.id,
+                          })
+                      : undefined
+                  }
+                  onCloseConversation={() =>
+                    useSessionsStore.getState().closeCoworkerTab(parentId, coworker.id)
+                  }
+                  onDismiss={() => setDismissId(coworker.id)}
+                />
+                <div
+                  data-slot="tab-actions"
+                  className="absolute top-1/2 right-[calc(2rem/14)] flex -translate-y-1/2 items-center gap-[calc(1rem/14)] opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100"
+                >
+                  <Menu>
+                    <MenuTrigger
+                      aria-label={t('Collaborator actions')}
+                      title={t('Collaborator actions')}
+                      className="flex size-[calc(16rem/14)] items-center justify-center rounded-[calc(4rem/14)] text-muted-foreground hover:bg-accent hover:text-foreground"
+                    >
+                      <Ellipsis className="size-[calc(12rem/14)]" />
+                    </MenuTrigger>
+                    <MenuPopup align="end">
+                      {coworker.canObserve && (
+                        <MenuItem
+                          onClick={() =>
+                            addSidePanelSubagent({
+                              parentConversationId: parentId,
+                              childConversationId: coworker.id,
+                            })
+                          }
+                        >
+                          {t('View process')}
+                        </MenuItem>
+                      )}
+                      <MenuItem
+                        onClick={() =>
+                          useSessionsStore.getState().closeCoworkerTab(parentId, coworker.id)
+                        }
+                      >
+                        {t('Close conversation view')}
+                      </MenuItem>
+                      <MenuItem variant="destructive" onClick={() => setDismissId(coworker.id)}>
+                        {t('Dismiss collaborator')}
+                      </MenuItem>
+                    </MenuPopup>
+                  </Menu>
+                  <button
+                    type="button"
+                    title={t('Close conversation view')}
+                    aria-label={t('Close conversation view')}
+                    data-coworker-close={coworker.id}
+                    className="flex size-[calc(16rem/14)] items-center justify-center rounded-[calc(4rem/14)] text-muted-foreground hover:bg-accent hover:text-foreground"
                     onClick={() =>
                       useSessionsStore.getState().closeCoworkerTab(parentId, coworker.id)
                     }
                   >
-                    {t('Close conversation view')}
-                  </MenuItem>
-                  <MenuItem variant="destructive" onClick={() => setDismissId(coworker.id)}>
-                    {t('Dismiss collaborator')}
-                  </MenuItem>
-                </MenuPopup>
-              </Menu>
-              <button
-                type="button"
-                title={t('Close conversation view')}
-                aria-label={t('Close conversation view')}
-                data-coworker-close={coworker.id}
-                className="rounded p-1 text-muted-foreground opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-accent hover:text-foreground"
-                onClick={() => useSessionsStore.getState().closeCoworkerTab(parentId, coworker.id)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          );
-        })}
+                    <X className="size-[calc(12rem/14)]" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
         {hiddenCoworkers.length > 0 && (
           <Menu>
             <MenuTrigger
               aria-label={t('Reopen collaborator')}
               title={t('Reopen collaborator')}
-              className="flex shrink-0 items-center gap-1 rounded-md p-1 text-[calc(11rem/14)] text-muted-foreground hover:bg-accent"
+              className="flex shrink-0 items-center gap-[calc(4rem/14)] rounded-[calc(6rem/14)] px-[calc(6rem/14)] py-[calc(4rem/14)] text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
             >
-              <RotateCcw className="size-3.5" />
+              <RotateCcw className="size-[calc(12rem/14)]" />
               <span>{hiddenCoworkers.length}</span>
             </MenuTrigger>
             <MenuPopup align="end">
@@ -236,7 +294,7 @@ export function CoworkerTabs({
           aria-label={t('Add collaborator')}
           disabled={!parentStarted}
           onClick={() => setHiring(true)}
-          className="ml-[4px] flex size-[calc(24rem/14)] shrink-0 items-center justify-center rounded-[6px] text-faint transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+          className="ml-[calc(2rem/14)] flex size-[calc(24rem/14)] shrink-0 items-center justify-center rounded-[calc(6rem/14)] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground disabled:opacity-40"
         >
           <Plus className="size-[calc(14rem/14)]" />
         </button>
@@ -266,6 +324,7 @@ export function CoworkerTabs({
 
 function RenameableTab({
   id,
+  active,
   label,
   renameTitle,
   className,
@@ -279,6 +338,8 @@ function RenameableTab({
   onDismiss,
 }: {
   id: string;
+  /** 当前正在显示的页签；选中态同时由 aria-selected 暴露给辅助技术 */
+  active: boolean;
   label: string;
   /** 重命名时编辑的标题；缺省与 label 相同 */
   renameTitle?: string;
@@ -298,6 +359,8 @@ function RenameableTab({
   const tab = (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       className={className}
       onClick={() => {
         if (!renaming) onSelect();

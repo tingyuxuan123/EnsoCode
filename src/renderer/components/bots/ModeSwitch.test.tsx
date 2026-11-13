@@ -82,6 +82,31 @@ describe('标题栏 Code / Bot 分段控件', () => {
     expect(byLabel('Bot')?.getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('选中分段是一枚独立浅色胶囊，未选中分段不画胶囊', async () => {
+    await render();
+    const pill = (label: string) =>
+      byLabel(label)?.querySelector('[data-slot="mode-switch-selection"]') ?? null;
+    expect(pill('Code')).not.toBeNull();
+    expect(pill('Bot')).toBeNull();
+    // 视觉承载层：胶囊用内容区底色（浅色主题下就是白胶囊）+ 小阴影，
+    // 不再把强调色当成选中填充，文字也回到前景色。
+    expect(pill('Code')?.getAttribute('class')).toContain('bg-background');
+    expect(pill('Code')?.getAttribute('class')).toContain('shadow-xs');
+    expect(pill('Code')?.getAttribute('class')).not.toContain('bg-selection');
+    expect(byLabel('Code')?.getAttribute('class')).not.toContain('text-brand');
+  });
+
+  it('组外层只是一层淡底，不用重底色画分段轨道', async () => {
+    await render();
+    const group = container.querySelector('[data-slot="mode-switch"]');
+    // 轨道用中性 secondary 的淡底：cloud-light 下 muted 与 background 几乎同色，
+    // 换成 muted 轨道会整体消失，等于没有分组。
+    expect(group?.getAttribute('class')).toContain('bg-secondary/60');
+    expect(group?.getAttribute('class')).not.toContain('bg-muted');
+    // 分段与轨道同高：轨道撑起 28px，胶囊填满分段内部
+    expect(group?.getAttribute('class')).toContain('h-[calc(28rem/14)]');
+  });
+
   it('点击 Bot 切换工作模式并通知宿主退出工作台页面', async () => {
     await render({ onSelect: mode.select });
     await act(async () => byLabel('Bot')?.click());

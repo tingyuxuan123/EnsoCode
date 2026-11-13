@@ -542,7 +542,7 @@ export default function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  // Code / Bot 是工作模式，入口固定在标题栏右上角：远程节点接管本机界面时不提供，
+  // Code / Bot 是工作模式，按上游组织居中承载在标题栏：远程节点接管本机界面时不提供，
   // Bot 还受实验开关门控（关闭时只留 Code，仍能从画廊 / 生图回到 Code 对话）。
   const modeEntry = remoteNodeActive ? undefined : (
     <ModeSwitch
@@ -624,24 +624,12 @@ export default function App() {
           ) : extensionsActive ? (
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
           ) : !remoteNodeActive && !botModeActive && !galleryActive ? (
-            <WorkbenchTitle sidebarWidth={width} sidebarCollapsed={collapsed} />
+            <WorkbenchTitle />
           ) : undefined
         }
-        actions={
-          modeEntry || viewActions ? (
-            <>
-              {modeEntry}
-              {modeEntry && viewActions && (
-                <span
-                  aria-hidden
-                  data-slot="titlebar-mode-separator"
-                  className="mx-[3px] h-4 w-px shrink-0 bg-border"
-                />
-              )}
-              {viewActions}
-            </>
-          ) : undefined
-        }
+        // 工作模式分段居中承载（上游组织）；右侧只留显示控制
+        centered={modeEntry}
+        actions={viewActions}
       />
       <UpdateBanner />
       {/* 平铺外壳：图标轨 + 侧栏 + 工作区，分栏只用 1px 细线，不再做浮起的圆角卡片 */}
