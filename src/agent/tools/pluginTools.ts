@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { pluginArtifactsFromToolDetails } from '@shared/extensionPlugins/artifacts';
 import type { PluginToolResult } from '@shared/extensionPlugins/protocol';
 import type { PluginToolDescriptor } from '@shared/extensionPlugins/types';
 import type { SessionIdentity } from '@shared/types/agent';
@@ -18,6 +19,7 @@ export interface PluginToolInvokeResult {
 }
 interface Pending {
   settle(value: unknown, cancel?: boolean): void;
+  onUpdate?: (partial: { content: [{ type: 'text'; text: string }]; details: undefined }) => void;
 }
 export class PluginToolInvoker {
   private readonly pending = new Map<string, Pending>();
@@ -30,7 +32,8 @@ export class PluginToolInvoker {
     toolName: string,
     args: unknown,
     signal?: AbortSignal,
-    fingerprint = ''
+    fingerprint = '',
+    hooks?: { timeoutMs?: number; onUpdate?: Pending['onUpdate'] }
   ): Promise<unknown> {
     if (signal?.aborted) return Promise.reject(new Error('Plugin tool aborted'));
     if (!args || typeof args !== 'object' || Array.isArray(args))
@@ -52,12 +55,12 @@ export class PluginToolInvoker {
       else resolve(value);
     };
     const abort = () => settle(new Error('Plugin tool aborted'), true);
-    const timeoutMs = this.options.timeoutMs ?? 70_000;
+    const timeoutMs = hooks?.timeoutMs ?? this.options.timeoutMs ?? 70_000;
     const timer = setTimeout(
       () => settle(new Error(`Plugin tool ${toolName} timed out after ${timeoutMs}ms`), true),
       timeoutMs
     );
-    this.pending.set(requestId, { settle });
+    this.pending.set(requestId, { settle, onUpdate: hooks?.onUpdate });
     signal?.addEventListener('abort', abort, { once: true });
     try {
       this.emit({
@@ -81,6 +84,15 @@ export class PluginToolInvoker {
   cancelAll(reason = 'Plugin tool cancelled'): void {
     for (const p of [...this.pending.values()]) p.settle(new Error(reason), true);
   }
+  progress(requestId: string, text: string): void {
+    try {
+      this.pending
+        .get(requestId)
+        ?.onUpdate?.({ content: [{ type: 'text', text }], details: undefined });
+    } catch {
+      /* Progress is best effort. */
+    }
+  }
   get pendingCount(): number {
     return this.pending.size;
   }
@@ -94,21 +106,30 @@ export function createPluginTools(
     label: d.name,
     description: d.description,
     parameters: d.parameters as unknown as ToolDefinition['parameters'],
-    async execute(_id, params, signal) {
+    ...(d.readOnly ? { annotations: { readOnlyHint: true } } : {}),
+    async execute(_id, params, signal, onUpdate) {
       const result = (await invoker.invoke(
         d.name,
         params ?? {},
         signal,
-        d.fingerprint
+        d.fingerprint,
+        ...(d.timeoutMs !== undefined || onUpdate
+          ? [{ timeoutMs: (d.timeoutMs ?? 60_000) + 10_000, onUpdate }]
+          : [])
       )) as PluginToolResult;
+      const artifacts = pluginArtifactsFromToolDetails({ artifacts: result?.artifacts });
+      const text = typeof result?.content === 'string' ? result.content : '';
+      const line = artifacts.length
+        ? `[产出文件] ${artifacts.map((artifact) => `${artifact.name}（${artifact.mime}，${artifact.size}）`).join('、')}`
+        : '';
       return {
         content: [
           {
             type: 'text' as const,
-            text: typeof result?.content === 'string' ? result.content : '',
+            text: line ? (text ? `${text}\n${line}` : line) : text,
           },
         ],
-        details: result?.details,
+        details: artifacts.length ? { details: result?.details, artifacts } : result?.details,
       };
     },
   }));

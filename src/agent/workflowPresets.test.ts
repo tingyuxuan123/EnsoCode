@@ -79,6 +79,21 @@ describe('parseWorkflowPreset', () => {
 });
 
 describe('listWorkflowPresets', () => {
+  it('plugin paths are explicit file allowlists, not a directory scan', () => {
+    const dir = path.join(tmp, 'plugin');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'allowed.js'), preset('Allowed'));
+    fs.writeFileSync(path.join(dir, 'hidden.js'), preset('Hidden'));
+    const roots = workflowPresetRoots(undefined, {
+      home,
+      pluginFiles: [path.join(dir, 'allowed.js')],
+    });
+    expect(
+      listWorkflowPresets(roots).some((item) => item.id === 'allowed' && item.source === 'plugin')
+    ).toBe(true);
+    expect(listWorkflowPresets(roots).some((item) => item.id === 'hidden')).toBe(false);
+    expect(loadWorkflowPreset('hidden', roots)).toBeNull();
+  });
   it('项目 > 设置 > 全局 > 内置按 id 去重，坏文件和非法文件名不阻断其它预设', () => {
     write(cwd, 'shared.js', preset('Project shared'));
     write(home, 'shared.js', preset('Global shared'));

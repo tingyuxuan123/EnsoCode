@@ -1,4 +1,7 @@
 import { parseApprovalReviewRecord } from '@shared/approvalReviewRecord';
+import { pluginArtifactsFromToolDetails } from '@shared/extensionPlugins/artifacts';
+import { PLUGIN_MESSAGE_TYPE, parsePluginMessageSource } from '@shared/extensionPlugins/protocol';
+import { parsePluginToolName } from '@shared/extensionPlugins/toolName';
 import { parseRtkToolStats } from '@shared/rtk';
 import {
   formatSkillChain,
@@ -167,6 +170,18 @@ export function projectMessage(value: unknown): ProjectedMessage | null {
     projected.entryId = value.entryId;
   }
   if (typeof value.toolName === 'string') projected.toolName = value.toolName;
+  if (value.role === 'custom' && value.customType === PLUGIN_MESSAGE_TYPE) {
+    const source = parsePluginMessageSource(value.details);
+    if (source) projected.pluginSource = source;
+  }
+  if (
+    value.role === 'toolResult' &&
+    typeof value.toolName === 'string' &&
+    parsePluginToolName(value.toolName)
+  ) {
+    const artifacts = pluginArtifactsFromToolDetails(value.details);
+    if (artifacts.length) projected.pluginArtifacts = artifacts;
+  }
   if (typeof value.toolCallId === 'string') projected.toolCallId = value.toolCallId;
   if (typeof value.isError === 'boolean') projected.isError = value.isError;
   if (typeof value.stopReason === 'string') projected.stopReason = value.stopReason;

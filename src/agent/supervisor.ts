@@ -36,7 +36,8 @@ import {
   WORKSPACE_WRITE_TOOL_ID,
 } from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
-import type { PluginToolDescriptor } from '@shared/extensionPlugins/types';
+import type { PluginAgentSource } from '@shared/extensionPlugins/protocol';
+import type { PluginEventPlan, PluginToolDescriptor } from '@shared/extensionPlugins/types';
 import { HUMAN_REQUEST_TIMEOUT_MS } from '@shared/humanRequestTimeout';
 import { DEFAULT_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
 import { pickModelCapabilityOverrides, positiveContextWindow } from '@shared/modelCatalog';
@@ -211,6 +212,12 @@ import { outputLimitRecoveryExtension } from './outputLimitRecovery';
 import { PendingNotificationStore } from './pendingNotifications';
 import { piDocsAvailabilityExtensions } from './piDocsPrompt';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
+import {
+  childPluginEventPlan,
+  contextUsagePayload,
+  createPluginEventsExtension,
+  PluginEventInvoker,
+} from './pluginEvents';
 import { PluginMcpGateway } from './pluginMcpGateway';
 import { progressPreambleExtension } from './progressPreamble';
 import { createProjectSettingsManager } from './projectCode';
@@ -307,6 +314,8 @@ import { withWritePreflight, withWriteScope } from './writeScope';
 
 /** 子会话产物：实际 session、模型与精确工具集合。 */
 interface ChildSessionResult {
+  pluginTools?: PluginToolInvoker;
+  pluginEvents?: PluginEventInvoker;
   session: AgentSession;
   modelId: string;
   modelRef: { providerId: string; modelId: string };
@@ -339,6 +348,7 @@ interface SessionFactory {
     askManager?: AskManager;
     resumeFile?: string;
     extraTools?: unknown[];
+    pluginSource?: Omit<PluginAgentSource, 'sessionId'>;
   }): Promise<ChildSessionResult>;
 }
 
@@ -400,6 +410,7 @@ interface ManagedSession {
   adaptiveDowngraded: Set<string>;
   computer?: ComputerInvoker;
   pluginTools?: PluginToolInvoker;
+  pluginEvents?: PluginEventInvoker;
   /** 最近一次 auto_retry_start 携带的原始错误（取消重试时的终态错误文案） */
   lastRetryError?: string;
   /** 已见终态 agent_end、待 agent_settled 收口；failTurn 等提前收口时清掉，settled 不再重复收 */
@@ -506,6 +517,7 @@ const PENDING_COUNTERS: Record<PendingCounterKey, true> = {
   agentControl: true,
   computer: true,
   pluginTools: true,
+  pluginEvents: true,
 };
 
 export function hasPendingCalls(managed: ManagedSession): boolean {
@@ -573,6 +585,7 @@ async function createSessionResourceLoader(options: {
     role: Parameters<typeof createClaudeHooksExtension>[0]['role'];
     resumed?: boolean;
   };
+  pluginEvents?: PluginEventInvoker;
   exploreFold?: ReturnType<typeof createExploreFoldState>;
   microcompact?: MicrocompactOptions;
   /** codemode / tool_search 与按需 MCP；排在最前，mcp_servers 段先于 persona 强制提示词写入 */
@@ -614,6 +627,7 @@ async function createSessionResourceLoader(options: {
     // noExtensions 只挡磁盘上的项目/全局扩展；inline factory 不受影响，图片修剪对所有会话生效
     extensionFactories: [
       ...(options.codemode ? [options.codemode] : []),
+      ...(options.pluginEvents ? [createPluginEventsExtension(options.pluginEvents)] : []),
       ...(options.designGate ? [options.designGate] : []),
       promptCatalogExtension,
       ...(options.oauthPoolRecovery ? [options.oauthPoolRecovery] : []),
@@ -1290,6 +1304,7 @@ export class SessionSupervisor {
       cancelContinuousMemory(child.session.sessionManager);
       child.ensoApp?.cancelAll('Parent released');
       child.design?.cancelAll('Parent released');
+      this.closePluginSession(child, 'parent_ended');
       try {
         await child.session.abort();
       } catch {}
@@ -1317,6 +1332,7 @@ export class SessionSupervisor {
     managed.agentControl?.close('Session released');
     managed.computer?.cancelAll('Session released');
     managed.pluginTools?.cancelAll('Session released');
+    managed.pluginEvents?.cancelAll();
     this.pluginMcp.cancelSession(managed.identity);
     try {
       await managed.session.abort();
@@ -1619,6 +1635,23 @@ export class SessionSupervisor {
         });
       return;
     }
+    // Intercepts can be waiting inside prompt's input hook; their replies must not queue
+    // behind that prompt or a workspace lock. Always bind replies to the exact generation.
+    if (
+      command.type === 'plugin-tool-result' ||
+      command.type === 'plugin-tool-progress' ||
+      command.type === 'plugin-intercept-result' ||
+      command.type === 'plugin-inject'
+    ) {
+      const managed = this.sessions.get(command.identity.sessionId);
+      if (!managed || !isSameGeneration(managed.identity, command.identity)) return;
+      if (command.type === 'plugin-tool-result') managed.pluginTools?.resolve(command);
+      else if (command.type === 'plugin-tool-progress')
+        managed.pluginTools?.progress(command.requestId, command.text);
+      else if (command.type === 'plugin-intercept-result') managed.pluginEvents?.resolve(command);
+      else if (!managed.parentId) managed.pluginEvents?.deliver(command);
+      return;
+    }
     const identity =
       command.type === 'capability-result'
         ? command.child
@@ -1752,14 +1785,22 @@ export class SessionSupervisor {
           command.trustedProjectCode,
           command.pluginCommands,
           command.pluginHooks,
-          command.pluginTools ?? [],
+          (command.pluginTools ?? []).filter(
+            (tool) =>
+              !command.remote &&
+              !command.botMode &&
+              (!(command.disabledTools ?? []).includes(WORKSPACE_WRITE_TOOL_ID) ||
+                tool.readOnly === true)
+          ),
           command.botMode,
           command.botGroupTasks,
           command.protectedActions,
           command.botRoutines,
           command.botWriteLock,
           command.botDelegationTask,
-          command.lcuEnabled
+          command.lcuEnabled,
+          command.pluginEvents,
+          command.workflowPresetFiles
         );
         return;
       case 'spawn-child':
@@ -2327,6 +2368,7 @@ export class SessionSupervisor {
         managed.requestBudget?.disarm();
         managed.computer?.cancelAll('Computer action aborted');
         managed.pluginTools?.cancelAll('Plugin tool aborted');
+        managed.pluginEvents?.cancelAll();
         this.pluginMcp.cancelSession(managed.identity);
         // 立即收口投影：不 await session.abort()（内部 waitForIdle 会一直等到工具/流
         // 真正结束，工具不响应 signal 时永远等不到，UI 就卡在 running 上）。
@@ -2404,7 +2446,9 @@ export class SessionSupervisor {
     botRoutines = false,
     botWriteLock?: { label: string; ancestors: string[] },
     botDelegationTask = false,
-    lcuEnabled = true
+    lcuEnabled = true,
+    pluginEventPlan?: PluginEventPlan,
+    workflowPresetFiles: readonly string[] = []
   ): Promise<void> {
     const sessionId = identity.sessionId;
     const sessionEditMode = resolveEditMode(requestedEditMode, hashlineEditEnabled);
@@ -2475,6 +2519,19 @@ export class SessionSupervisor {
     });
     let visibleDesignNames = designToolNames(!disabledTools.includes('design') && !remote, false);
     let refreshDesignTools = () => {};
+    let managedRef: ManagedSession | undefined;
+    const pluginEventInvoker =
+      botMode || remote
+        ? undefined
+        : new PluginEventInvoker(
+            pluginEventPlan ?? { observe: [], intercept: [], inject: false },
+            (event) => {
+              const managed = managedRef ?? this.sessions.get(sessionId);
+              if (!managed || !isSameGeneration(managed.identity, identity))
+                throw new Error('Plugin session is not ready.');
+              this.options.emit({ ...event, identity: managed.identity, seq: ++managed.seq });
+            }
+          );
     const resourceLoader = await createSessionResourceLoader({
       microcompact: this.microcompactOptions,
       skillChains: !botMode,
@@ -2516,6 +2573,7 @@ export class SessionSupervisor {
       lcuEnabled,
       trustedProjectCode,
       pluginCommands,
+      pluginEvents: pluginEventInvoker,
       pluginHooks: { hooks: pluginHooks, role: { kind: 'parent' }, resumed: Boolean(resumeFile) },
       exploreFold,
       codemode: codemodeHost.extension,
@@ -2538,7 +2596,6 @@ export class SessionSupervisor {
     const toolsMs = Date.now() - toolsStart;
     if (approvalReviewer) this.setApprovalReviewer(approvalReviewer);
 
-    let managedRef: ManagedSession | undefined;
     const gate = new ApprovalGate(
       approvalMode,
       (request) => {
@@ -2816,6 +2873,7 @@ export class SessionSupervisor {
         askManager,
         resumeFile: childResume,
         extraTools = [],
+        pluginSource,
       }) => {
         const isLockedEnso = resolved?.tools === 'enso-locked';
         const typedIdentity = 'parent' in childIdentity ? childIdentity : undefined;
@@ -2849,6 +2907,76 @@ export class SessionSupervisor {
             return undefined;
           return managed;
         };
+        const childPlan = botMode || remote ? undefined : childPluginEventPlan(pluginEventPlan);
+        const pluginIdentity: SessionIdentity = {
+          sessionId: childIdentity.sessionId,
+          generation: childIdentity.generation,
+        };
+        const childAgent = pluginSource
+          ? ({ ...pluginSource, sessionId: childIdentity.sessionId } as PluginAgentSource)
+          : undefined;
+        const childEvents =
+          !isLockedEnso && childAgent && childPlan
+            ? new PluginEventInvoker(
+                childPlan,
+                (event) => {
+                  const managed = currentChild();
+                  if (!managed) throw new Error('Child plugin session is not ready.');
+                  this.options.emit({
+                    ...event,
+                    identity: pluginIdentity,
+                    seq: ++managed.seq,
+                    agent: childAgent,
+                  });
+                },
+                { childSession: true }
+              )
+            : undefined;
+        const descriptors =
+          isLockedEnso || !pluginSource
+            ? []
+            : pluginToolDescriptors.filter(
+                (descriptor) =>
+                  (toolEnabled(WORKSPACE_WRITE_TOOL_ID) &&
+                    resolved?.tools !== 'readonly' &&
+                    agentType?.tools !== 'readonly') ||
+                  descriptor.readOnly === true
+              );
+        const childPluginInvoker = descriptors.length
+          ? new PluginToolInvoker(
+              pluginIdentity,
+              (request) => {
+                const managed = currentChild();
+                if (!managed) throw new Error('Child plugin session is not ready.');
+                this.options.emit({
+                  type: 'plugin-tool-invoke',
+                  ...request,
+                  identity: pluginIdentity,
+                  seq: ++managed.seq,
+                  agent: childAgent,
+                });
+              },
+              {
+                emitCancel: (requestId) => {
+                  const managed = currentChild();
+                  if (managed)
+                    this.options.emit({
+                      type: 'plugin-tool-cancel',
+                      identity: pluginIdentity,
+                      seq: ++managed.seq,
+                      requestId,
+                    });
+                },
+              }
+            )
+          : undefined;
+        const childPluginTools = childPluginInvoker
+          ? planGated(
+              createPluginTools([...descriptors], childPluginInvoker).map((tool) =>
+                withApproval(childGate, 'command', tool as unknown as Def)
+              ) as Def[]
+            )
+          : [];
         const withVisibleDesign = (names: readonly string[]) => [
           ...names.filter((name) => !isDesignToolName(name)),
           ...visibleChildDesignNames,
@@ -2961,6 +3089,7 @@ export class SessionSupervisor {
                 },
                 resumed: Boolean(childResume),
               },
+              pluginEvents: childEvents,
               ...(childExploreFold ? { exploreFold: childExploreFold } : {}),
               codemode: childCodemode.extension,
               childContract: true,
@@ -3018,6 +3147,7 @@ export class SessionSupervisor {
                     typedIdentity?.sessionId
                   )),
               ...(typed ? typeMcpTools : wrapMcpTools(childGate)),
+              ...childPluginTools,
               ...(extraTools as Def[]),
               ...(childExploreFold ? createExploreFoldTools(childExploreFold) : []),
               ...(childDesign
@@ -3134,13 +3264,17 @@ export class SessionSupervisor {
           ],
           // Decorators clone tools; exclude MCP by identity before decoration.
           proofToolIds: [
-            ...rawSubTools.filter((tool) => !typeMcpTools.includes(tool)).map((tool) => tool.name),
+            ...rawSubTools
+              .filter((tool) => !typeMcpTools.includes(tool) && !childPluginTools.includes(tool))
+              .map((tool) => tool.name),
             ...childExtraTools,
           ],
           ...(ensoApp ? { ensoApp } : {}),
           ...(childDesign ? { design: childDesign } : {}),
           ...(isLockedEnso ? {} : { runawayGuard: childRunaway }),
           requestBudget,
+          pluginTools: childPluginInvoker,
+          pluginEvents: childEvents,
         };
       },
     };
@@ -3299,6 +3433,7 @@ export class SessionSupervisor {
       : undefined;
     const workflowRoots = workflowPresetRoots(remote ? undefined : cwd, {
       customDir: this.options.workflowDir,
+      pluginFiles: botMode || remote ? [] : workflowPresetFiles,
     });
     const workflowRuns = new Map<string, AbortController>();
     const computer = !remote
@@ -3642,6 +3777,9 @@ export class SessionSupervisor {
     }
     managedRef.computer = computer;
     managedRef.pluginTools = pluginToolInvoker;
+    managedRef.pluginEvents = pluginEventInvoker;
+    if (pluginEventInvoker?.plan.observe.includes('session_start'))
+      pluginEventInvoker.notify('session_start', { reason: resumeFile ? 'resume' : 'startup' });
     managedRef.delegation = delegation;
     this.options.emit({
       type: 'parent-ready',
@@ -3651,6 +3789,13 @@ export class SessionSupervisor {
       model: settingsModelRef(model),
     });
     checkpoints?.cleanupOldSessions();
+  }
+
+  private closePluginSession(managed: ManagedSession, reason: string): void {
+    if (managed.pluginEvents?.plan.observe.includes('session_end'))
+      managed.pluginEvents.notify('session_end', { reason });
+    managed.pluginTools?.cancelAll('Session closed');
+    managed.pluginEvents?.cancelAll();
   }
 
   private createDesignInvoker(
@@ -3964,6 +4109,11 @@ export class SessionSupervisor {
     const result = await factory.createChildSession({
       resolved: config,
       identity,
+      pluginSource: {
+        kind: 'subagent',
+        name: identity.instanceName,
+        agentType: config.displayName,
+      },
       gate,
       askManager,
       resumeFile,
@@ -4020,6 +4170,10 @@ export class SessionSupervisor {
       ...(result.requestBudget ? { requestBudget: result.requestBudget } : {}),
     });
     managedRef.design = result.design;
+    managedRef.pluginTools = result.pluginTools;
+    managedRef.pluginEvents = result.pluginEvents;
+    if (result.pluginEvents?.plan.observe.includes('session_start'))
+      result.pluginEvents.notify('session_start', { reason: resumeFile ? 'resume' : 'startup' });
     if (!resumeFile) managedRef.pendingRole = config.systemPrompt;
     managedRef.reviewSecrets = accumulateApprovalReviewSecrets(
       undefined,
@@ -4098,24 +4252,34 @@ export class SessionSupervisor {
       parent.gate.floorOptions
     );
     const askManager = this.createAskManager(identity, gate.humanTimeoutMs);
-    const { session, modelId, toolIds, proofToolIds, design, runawayGuard, requestBudget } =
-      await factory.createChildSession({
-        agentType,
-        identity,
-        modelOverride,
-        thinkingOverride: thinking,
-        gate,
-        resumeFile,
-        extraTools: [
-          createAskTool(askManager),
-          createMessageMainTool(
-            (text, urgent) => this.notifier.notify(parentId, text, { urgent }),
-            name,
-            () => this.sessions.get(coworkerId)?.parentWaiting === true
-          ),
-          this.createPeerMessageTool(parentId, name),
-        ],
-      });
+    const {
+      session,
+      modelId,
+      toolIds,
+      proofToolIds,
+      design,
+      runawayGuard,
+      requestBudget,
+      pluginTools,
+      pluginEvents,
+    } = await factory.createChildSession({
+      agentType,
+      identity,
+      pluginSource: { kind: 'coworker', name, ...(agentType ? { agentType: agentType.name } : {}) },
+      modelOverride,
+      thinkingOverride: thinking,
+      gate,
+      resumeFile,
+      extraTools: [
+        createAskTool(askManager),
+        createMessageMainTool(
+          (text, urgent) => this.notifier.notify(parentId, text, { urgent }),
+          name,
+          () => this.sessions.get(coworkerId)?.parentWaiting === true
+        ),
+        this.createPeerMessageTool(parentId, name),
+      ],
+    });
     const info: CoworkerInfo = {
       id: coworkerId,
       name,
@@ -4143,6 +4307,10 @@ export class SessionSupervisor {
       ...(requestBudget ? { requestBudget } : {}),
     });
     managed.design = design;
+    managed.pluginTools = pluginTools;
+    managed.pluginEvents = pluginEvents;
+    if (pluginEvents?.plan.observe.includes('session_start'))
+      pluginEvents.notify('session_start', { reason: resumeFile ? 'resume' : 'startup' });
     // 角色提示在首条消息前缀注入(无论来自主 agent send 还是用户 tab);resume 时 jsonl 已有
     if (!resumeFile && agentType?.systemPrompt) {
       managed.pendingRole = agentType.systemPrompt;
@@ -4162,6 +4330,7 @@ export class SessionSupervisor {
       cancelContinuousMemory(managed.session.sessionManager);
       managed.ensoApp?.cancelAll('Child dismissed');
       managed.design?.cancelAll('Child dismissed');
+      this.closePluginSession(managed, 'dismissed');
       try {
         await managed.session.abort();
       } catch {}
@@ -5466,6 +5635,11 @@ export class SessionSupervisor {
     } catch {
       occupancy = undefined;
     }
+    if (occupancy && managed.pluginEvents?.plan.observe.includes('context_usage'))
+      managed.pluginEvents.notify(
+        'context_usage',
+        contextUsagePayload(occupancy, managed.messages)
+      );
     this.options.emit({
       type: 'session-meta',
       identity: managed.identity,
@@ -5538,6 +5712,7 @@ export class SessionSupervisor {
       managed.currentTurnId = undefined;
       managed.computer?.cancelAll('Enso worker shutdown');
       managed.pluginTools?.cancelAll('Enso worker shutdown');
+      managed.pluginEvents?.cancelAll();
       this.pluginMcp.close();
       // pi 的 bash 是 detached 进程组，只在中断信号上 killProcessTree；SDK 未导出退出清理，
       // 这里同步触发中断（不等 waitForIdle），否则 worker 退出后命令成孤儿进程

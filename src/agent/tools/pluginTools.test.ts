@@ -4,6 +4,36 @@ import { createPluginTools, PluginToolInvoker } from './pluginTools';
 const identity = { sessionId: 's', generation: '11111111-1111-4111-8111-111111111111' };
 afterEach(() => vi.useRealTimers());
 describe('plugin worker Main roundtrip', () => {
+  it('forwards progress only while pending and advertises read-only tools', async () => {
+    const emit = vi.fn();
+    const onUpdate = vi.fn();
+    const invoker = new PluginToolInvoker(identity, emit);
+    const pending = invoker.invoke('plugin_a-b__read', {}, undefined, 'fp', { onUpdate });
+    const requestId = emit.mock.calls[0][0].requestId;
+    invoker.progress(requestId, 'working');
+    expect(onUpdate).toHaveBeenCalledWith({
+      content: [{ type: 'text', text: 'working' }],
+      details: undefined,
+    });
+    invoker.resolve({ requestId, ok: true, result: {} });
+    await pending;
+    invoker.progress(requestId, 'late');
+    expect(onUpdate).toHaveBeenCalledOnce();
+    const [tool] = createPluginTools(
+      [
+        {
+          name: 'plugin_a-b__read',
+          description: 'read',
+          parameters: { type: 'object' },
+          pluginId: 'a.b',
+          fingerprint: 'fp',
+          readOnly: true,
+        },
+      ],
+      invoker
+    );
+    expect(tool.annotations?.readOnlyHint).toBe(true);
+  });
   it('includes current plugin fingerprint and generation and resolves once', async () => {
     const emit = vi.fn();
     const i = new PluginToolInvoker(identity, emit);

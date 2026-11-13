@@ -12,6 +12,7 @@ import { childProfileShell, childProfileToolIds } from '@shared/childProfileTool
 import { PLAN_MODE_OFF_NOTE } from '@shared/planMode';
 import { DEFAULT_PERSONA_PROMPT } from '@shared/systemPrompt';
 import type { AgentCommand, AgentWorkerEvent } from '@shared/types/agent';
+import { parseAgentWorkerEvent } from '@shared/types/agent';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
 import { DESIGN_TOOL_NAMES } from '@shared/types/design';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -258,6 +259,157 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     mocks.createAgentSession.mockImplementation(async (options: Record<string, unknown>) => ({
       session: session(options),
     }));
+  });
+
+  it('plugin interception replies bypass prompt serialization, preserve generation and abort pending checks', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-plugin-intercept-'));
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        pluginEvents: { observe: ['session_start'], intercept: [{ event: 'input' }], inject: true },
+      });
+      await waitFor(events, 'parent-ready');
+      const extension = (
+        mocks.loaderOptions[0].extensionFactories as Array<{
+          name: string;
+          factory(pi: unknown): void;
+        }>
+      ).find((item) => item.name === 'enso-plugin-events')!;
+      const handlers = new Map<string, (event: unknown) => unknown>();
+      extension.factory({
+        on: (name: string, callback: (event: unknown) => unknown) => handlers.set(name, callback),
+        sendMessage: vi.fn(),
+      });
+      const current = mocks.sessions[0] as ReturnType<typeof session>;
+      current.prompt.mockImplementation(async () => {
+        await handlers.get('input')?.({ text: 'hi', source: 'interactive' });
+      });
+      supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'hi' });
+      await waitFor(events, 'plugin-intercept');
+      const request = events.findLast((event) => event.type === 'plugin-intercept') as Extract<
+        AgentWorkerEvent,
+        { type: 'plugin-intercept' }
+      >;
+      supervisor.handleCommand({
+        type: 'plugin-intercept-result',
+        identity: { ...parent, generation: '22222222-2222-4222-8222-222222222222' },
+        requestId: request.requestId,
+        ok: true,
+        result: { action: 'handled' },
+      });
+      supervisor.handleCommand({
+        type: 'plugin-intercept-result',
+        identity: parent,
+        requestId: request.requestId,
+        ok: true,
+        result: { action: 'transform', text: 'safe' },
+      });
+      await settle();
+      expect(current.prompt).toHaveBeenCalledOnce();
+      expect(
+        events.some((event) => event.type === 'plugin-event' && event.event === 'session_start')
+      ).toBe(true);
+    } finally {
+      await supervisor.shutdown();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('readonly parents and children only receive declared read-only plugin tools and child provenance', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-plugin-child-'));
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    const tool = {
+      name: 'plugin_example-demo__read',
+      description: 'read',
+      parameters: { type: 'object' },
+      pluginId: 'example.demo',
+      fingerprint: 'f'.repeat(64),
+      readOnly: true,
+    };
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        disabledTools: ['workspace_write'],
+        approvalMode: 'full',
+        pluginTools: [tool, { ...tool, name: 'plugin_example-demo__write', readOnly: false }],
+        pluginEvents: {
+          observe: ['session_start'],
+          intercept: [{ event: 'tool_call' }, { event: 'input' }],
+          inject: true,
+        },
+      });
+      await waitFor(events, 'parent-ready');
+      const parentTools = mocks.createAgentSession.mock.calls[0][0].customTools as ToolDefinition[];
+      expect(parentTools.map((entry) => entry.name)).not.toContain('plugin_example-demo__write');
+      const identity = { ...child, typeKey: 'builtin:worker' as const, profileId: undefined };
+      supervisor.handleCommand({
+        type: 'spawn-child',
+        identity,
+        cwd: root,
+        config: {
+          typeKey: identity.typeKey,
+          displayName: 'Worker',
+          description: 'worker',
+          spawnSpecId: 'plugin-child',
+          systemPrompt: 'worker',
+          model,
+          tools: 'all',
+          skillPaths: [],
+          skillBindingIds: [],
+          mcpServers: [],
+          mcpBindingIds: [],
+          systemPromptHash: 'hash',
+        },
+      });
+      await waitFor(events, 'child-ready');
+      const childTools = mocks.createAgentSession.mock.calls[1][0].customTools as ToolDefinition[];
+      expect(childTools.map((entry) => entry.name)).toContain(tool.name);
+      expect(childTools.map((entry) => entry.name)).not.toContain('plugin_example-demo__write');
+      const execute = childTools
+        .find((entry) => entry.name === tool.name)!
+        .execute('c', {}, undefined, undefined, undefined as never);
+      await waitFor(events, 'plugin-tool-invoke');
+      const request = events.findLast((event) => event.type === 'plugin-tool-invoke') as Extract<
+        AgentWorkerEvent,
+        { type: 'plugin-tool-invoke' }
+      >;
+      expect(request.agent).toEqual({
+        kind: 'subagent',
+        sessionId: identity.sessionId,
+        name: identity.instanceName,
+        agentType: 'Worker',
+      });
+      expect(request.fingerprint).toBe(tool.fingerprint);
+      expect(parseAgentWorkerEvent(request)).not.toBeNull();
+      supervisor.handleCommand({
+        type: 'plugin-tool-result',
+        identity,
+        requestId: request.requestId,
+        ok: true,
+        result: { content: 'ok' },
+      });
+      expect(await execute).toMatchObject({ content: [{ type: 'text', text: 'ok' }] });
+    } finally {
+      await supervisor.shutdown();
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('微压缩随资源加载且既有会话下一请求读取热更新开关', async () => {

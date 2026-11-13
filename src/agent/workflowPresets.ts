@@ -19,6 +19,7 @@ export interface WorkflowPreset extends WorkflowPresetSummary {
 export interface WorkflowPresetRoot {
   dir: string;
   source: Exclude<WorkflowPresetSource, 'builtin'>;
+  ids?: readonly string[];
 }
 
 const ARG_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
@@ -80,18 +81,29 @@ export function parseWorkflowPreset(
 
 export function workflowPresetRoots(
   localCwd: string | undefined,
-  { customDir, home = os.homedir() }: { customDir?: string; home?: string } = {}
+  {
+    customDir,
+    home = os.homedir(),
+    pluginFiles = [],
+  }: { customDir?: string; home?: string; pluginFiles?: readonly string[] } = {}
 ): WorkflowPresetRoot[] {
+  const pluginIds = new Map<string, string[]>();
+  for (const file of pluginFiles) {
+    const dir = path.dirname(file);
+    pluginIds.set(dir, [...(pluginIds.get(dir) ?? []), path.basename(file, '.js')]);
+  }
   return [
     ...(localCwd
       ? [{ dir: path.join(localCwd, '.agents', 'workflows'), source: 'project' as const }]
       : []),
     ...(customDir ? [{ dir: customDir, source: 'custom' as const }] : []),
     { dir: path.join(home, '.agents', 'workflows'), source: 'global' },
+    ...[...pluginIds].map(([dir, ids]) => ({ dir, ids, source: 'plugin' as const })),
   ];
 }
 
 function readPresetFile(root: WorkflowPresetRoot, id: string): WorkflowPreset | null {
+  if (root.ids && !root.ids.includes(id)) return null;
   try {
     const file = path.join(root.dir, `${id}.js`);
     const stat = fs.statSync(file);
@@ -103,6 +115,7 @@ function readPresetFile(root: WorkflowPresetRoot, id: string): WorkflowPreset | 
 }
 
 function rootIds(root: WorkflowPresetRoot): string[] {
+  if (root.ids) return [...root.ids].filter(isWorkflowPresetId).sort();
   try {
     return fs
       .readdirSync(root.dir)
