@@ -258,8 +258,11 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2.5 px-3 pt-3">
+    <div
+      data-slot="bot-profile-panel"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+    >
+      <div className="flex shrink-0 items-center gap-2.5 px-3 pt-3">
         <BotAvatar
           bot={{
             id: bot.id,
@@ -359,7 +362,20 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
           <TabsPanel value="abilities" className="space-y-4">
             <div>
               <FieldLabel>{t('Model')}</FieldLabel>
-              <EngineField engine={form.engine} onChange={(engine) => patch({ engine })} />
+              <EngineField
+                engine={form.engine}
+                onChange={(next) => {
+                  setForm((current) =>
+                    current
+                      ? {
+                          ...current,
+                          engine: typeof next === 'function' ? next(current.engine) : next,
+                        }
+                      : current
+                  );
+                  setEdited(true);
+                }}
+              />
             </div>
             <BotAbilityFields value={form} onChange={patch} profile={form} botId={bot.id} />
           </TabsPanel>
@@ -389,24 +405,30 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
         </div>
       </Tabs>
 
-      {dirty && (
-        <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (baseline) setForm(baseline);
-              setEdited(false);
-            }}
-          >
-            {t('Discard')}
-          </Button>
-          <Button size="sm" disabled={saving || Boolean(nameIssue)} onClick={() => void save()}>
-            {saving && <Loader2 className="animate-spin" />}
-            {t('Save')}
-          </Button>
-        </div>
-      )}
+      <div
+        data-slot="bot-profile-actions"
+        className="flex shrink-0 justify-end gap-2 border-t bg-muted/50 px-4 py-2.5"
+      >
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!dirty || saving}
+          onClick={() => {
+            if (baseline) setForm(baseline);
+            setEdited(false);
+          }}
+        >
+          {t('Discard')}
+        </Button>
+        <Button
+          size="sm"
+          disabled={!dirty || saving || Boolean(nameIssue)}
+          onClick={() => void save()}
+        >
+          {saving && <Loader2 className="animate-spin" />}
+          {t('Save')}
+        </Button>
+      </div>
 
       <ConfirmDialog
         open={confirm !== null}

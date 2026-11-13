@@ -310,7 +310,13 @@ export function NewBotDialog({
               <FieldLabel>{t('Model')}</FieldLabel>
               <EngineField
                 engine={draft.engine}
-                onChange={(engine) => patch({ engine })}
+                onChange={(next) => {
+                  setDraft((current) => ({
+                    ...current,
+                    engine: typeof next === 'function' ? next(current.engine) : next,
+                  }));
+                  setError(null);
+                }}
                 zIndex={Z_INDEX.DROPDOWN_IN_MODAL}
               />
             </div>

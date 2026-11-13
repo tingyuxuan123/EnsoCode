@@ -3,6 +3,7 @@ import type { ApprovalMode, ThinkingLevel } from '@shared/types/agent';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
 import { type BotEngine, type BotProfile, checkBotName } from '@shared/types/bot';
 import { Check } from 'lucide-react';
+import type { Dispatch, SetStateAction } from 'react';
 import { APPROVAL_MODE_META, APPROVAL_MODE_ORDER } from '@/components/chat/ApprovalModePicker';
 import { MODEL_PICKER_FORM_TRIGGER_CLASS, ModelPicker } from '@/components/chat/ModelPicker';
 import {
@@ -106,7 +107,7 @@ export function EngineField({
   zIndex,
 }: {
   engine: BotEngine | null;
-  onChange: (engine: BotEngine | null) => void;
+  onChange: Dispatch<SetStateAction<BotEngine | null>>;
   zIndex?: number;
 }) {
   const { t } = useI18n();
@@ -140,12 +141,20 @@ export function EngineField({
           modelId={engine.modelId}
           reasoningEnabled={engine.thinkingLevel !== undefined}
           thinkingLevel={engine.thinkingLevel ?? 'medium'}
-          onSelect={(providerId, modelId) => onChange({ ...engine, providerId, modelId })}
+          // 选型和思考归一化可能在同一事件中连续发生，必须合并到最新 engine。
+          onSelect={(providerId, modelId) =>
+            onChange((current) => (current ? { ...current, providerId, modelId } : current))
+          }
           onReasoningChange={(enabled) => {
-            const { thinkingLevel: _drop, ...rest } = engine;
-            onChange(enabled ? { ...rest, thinkingLevel: 'medium' } : rest);
+            onChange((current) => {
+              if (!current) return current;
+              const { thinkingLevel: _drop, ...rest } = current;
+              return enabled ? { ...rest, thinkingLevel: 'medium' } : rest;
+            });
           }}
-          onThinkingChange={(level: ThinkingLevel) => onChange({ ...engine, thinkingLevel: level })}
+          onThinkingChange={(level: ThinkingLevel) =>
+            onChange((current) => (current ? { ...current, thinkingLevel: level } : current))
+          }
           triggerClassName={MODEL_PICKER_FORM_TRIGGER_CLASS}
           zIndex={zIndex}
           side="bottom"
