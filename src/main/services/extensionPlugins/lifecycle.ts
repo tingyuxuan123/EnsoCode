@@ -1,4 +1,5 @@
 import type { PluginGrant } from '@shared/extensionPlugins/grant';
+import type { PluginInstallSource } from './install';
 
 export const PLUGIN_STATES = ['disabled', 'enabled', 'crashed'] as const;
 export type PluginState = (typeof PLUGIN_STATES)[number];
@@ -9,6 +10,9 @@ export interface PluginRecord {
   state: PluginState;
   grant: PluginGrant;
   installedAt: number;
+  source?: PluginInstallSource;
+  crossSessionInject?: boolean;
+  lastError?: { at: number; message: string };
   pending?: { version: string; dir: string; grant: PluginGrant };
 }
 export type PluginAction =

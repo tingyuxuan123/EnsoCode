@@ -7,7 +7,13 @@ const grant = {
   fsWrite: [],
   netDomains: [],
   mcp: [],
+  mcpTools: [],
   renderer: false,
+  env: [],
+  interop: [],
+  intercepts: [],
+  resident: false,
+  styles: false,
 };
 const record = (patch: Partial<PluginRecord> = {}): PluginRecord => ({
   id: 'example.demo',

@@ -25,22 +25,40 @@ interface NavigationContents {
     listener: (event: PluginNavigationEvent) => void
   ): unknown;
 }
+/**
+ * 注意：不要把本守卫挂到承载插件 iframe 的主窗口上。实测 Electron 43 在沙箱子帧
+ * 上被同步咨询导航时会让主进程原生自旋（即使回调只被调用两次、没有 preventDefault）。
+ * 插件侧栏帧的边界现由 sandbox、壳页面 CSP 与一次性 nonce 约束；本函数保留给
+ * 未来独立的插件专用窗口使用。
+ */
 export function installPluginViewNavigationGuard(contents: NavigationContents): void {
   const guard = (event: PluginNavigationEvent) => {
     if (event.isMainFrame) return;
-    const frameUrls: string[] = [];
-    for (let frame = event.frame; frame && frame !== contents.mainFrame; frame = frame.parent)
-      frameUrls.push(frame.url);
-    if (
-      shouldBlockPluginViewNavigation({
-        mainUrl: contents.getURL(),
-        url: event.url,
-        isMainFrame: event.isMainFrame,
-        frameUrls,
-        frameName: event.frame?.name,
-      })
-    )
-      event.preventDefault();
+    try {
+      const frameUrls: string[] = [];
+      const source = event.frame;
+      const seen = new Set<NavigationFrame>();
+      for (let frame = source; frame && frame !== contents.mainFrame; frame = frame.parent) {
+        // Electron 每次返回新的祖先包装器，引用比较不可靠；有界遍历只用于收集 URL。
+        // 无法确认祖先时按“非插件帧”放行，宁可少拦也不要把 Chromium 卡在重试里。
+        if (seen.has(frame) || seen.size >= 32) break;
+        seen.add(frame);
+        frameUrls.push(frame.url);
+      }
+      if (
+        shouldBlockPluginViewNavigation({
+          mainUrl: contents.getURL(),
+          url: event.url,
+          isMainFrame: false,
+          frameUrls,
+          frameName: source?.name,
+        })
+      )
+        event.preventDefault();
+    } catch {
+      // 卸载/重载后 WebFrameMain getter 会同步抛错；此时不能判定是插件帧，放行
+      // 由 sandbox/CSP 继续约束，避免在原生导航重试里反复 preventDefault 卡死主进程。
+    }
   };
   contents.on('will-frame-navigate', guard);
   contents.on('will-redirect', guard);
@@ -63,6 +81,8 @@ export function shouldBlockPluginViewNavigation(input: PluginViewNavigation): bo
     const plugin =
       input.frameName === 'enso-plugin-view' ||
       input.frameUrls.some((url) => withoutHash(url) === shell);
+    // 沙箱 iframe 的初始空文档不是插件可控内容；拦截它会让 Chromium 反复重试并卡死 Main。
+    if (input.url === 'about:blank') return false;
     return plugin && withoutHash(input.url) !== shell;
   } catch {
     return input.frameName === 'enso-plugin-view';

@@ -24,4 +24,27 @@ describe('draft response window binding', () => {
     await expect(pending).rejects.toMatchObject({ code: 'ABORTED' });
     expect(b.pendingCount).toBe(0);
   });
+
+  it('会话类操作走同一通道，并支持调用方放宽超时', async () => {
+    let requestId = '';
+    let seen: { op?: unknown; sessionId?: unknown } = {};
+    const b = new DraftBroker({
+      channel: 'draft',
+      find: (id) => ({
+        id,
+        send: (_ch, payload: unknown) => {
+          const p = payload as { requestId: string; op: string; sessionId: string };
+          requestId = p.requestId;
+          seen = p;
+        },
+        isDestroyed: () => false,
+      }),
+      timeoutMs: 1,
+    });
+    const result = b.request(9, 's1', 'createSession', { text: 'hi' }, 60_000);
+    expect(seen.op).toBe('createSession');
+    expect(seen.sessionId).toBe('s1');
+    b.respond(9, { requestId, ok: true, value: { sessionId: 'new' } });
+    await expect(result).resolves.toEqual({ sessionId: 'new' });
+  });
 });

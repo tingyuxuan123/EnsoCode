@@ -61,6 +61,9 @@ describe('upstream runPluginHost compatibility', () => {
         commands: ['refresh'],
         triggers: ['demo'],
         rendererMethods: ['ping'],
+        events: [],
+        schedules: [],
+        exports: [],
       },
     });
   });

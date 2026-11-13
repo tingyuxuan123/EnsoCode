@@ -16,16 +16,28 @@ const manifest = (patch: Partial<ExtensionPluginManifest> = {}): ExtensionPlugin
   fs: { read: ['docs'], write: ['out'] },
   net: { domains: ['api.example.com'] },
   mcp: { tools: [] },
+  resident: false,
+  env: [],
+  interop: { call: [] },
   contributes: {
     agentTools: [],
     commands: [],
     views: [],
+    fileViewers: [],
+    statusItems: [],
     triggers: [],
     skills: [],
     mcpServers: [],
+    workflows: [],
     methods: [],
     configuration: [],
     presets: [],
+    agentTypes: [],
+    events: [],
+    schedules: [],
+    themes: [],
+    exports: [],
+    dynamic: { tools: 0, commands: 0 },
   },
   ...patch,
 });
@@ -75,6 +87,27 @@ const uiCall = () =>
   gate.invocations.create({ pluginId: 'a.b', sessionId: 's1', projectRoot: root, gesture: true });
 
 describe('PluginHostGate', () => {
+  it('opens only an own declared view in a visible root session', async () => {
+    const m = manifest({ permissions: ['ui.view'] });
+    m.contributes.views = [{ id: 'report', title: 'Report', entry: 'view.js' }];
+    deps.manifest = () => m;
+    deps.sessions = { list: () => [{ id: 's1', title: 'One', updatedAt: 1, state: 'idle' }] };
+    deps.sessionUi = vi.fn(async () => null);
+    await expect(
+      gate.handle('a.b', 'ui.viewOpen', { viewId: 'report' }, agentCall())
+    ).resolves.toBeNull();
+    expect(deps.sessionUi).toHaveBeenCalledWith(
+      { sessionId: 's1', origin: null },
+      'openPluginView',
+      { pluginId: 'a.b', viewId: 'report', title: 'Report' }
+    );
+    await expect(
+      gate.handle('a.b', 'ui.viewOpen', { viewId: 'other' }, agentCall())
+    ).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    await expect(
+      gate.handle('a.b', 'ui.viewOpen', { sessionId: 'outside' }, agentCall())
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
   it('读取授权范围内的项目文件', async () => {
     await expect(
       gate.handle('a.b', 'fs.readText', { path: 'docs/a.md' }, agentCall())

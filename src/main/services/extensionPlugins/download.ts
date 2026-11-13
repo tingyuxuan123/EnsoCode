@@ -100,7 +100,11 @@ function secureUrl(url: URL): void {
     throw new Error('下载地址必须使用公开 HTTPS');
 }
 
-function defaultFetch(
+/**
+ * 校验过公网地址、并把连接钉到已校验 IP 的传输实现。
+ * 需要自己判断「能不能联网」的调用方（如插件市场）必须用它，不要用 global fetch：后者会重新解析域名。
+ */
+export function pinnedArchiveFetch(
   urlString: string,
   init: Parameters<ArchiveFetch>[1]
 ): Promise<ArchiveResponse> {
@@ -186,7 +190,7 @@ export async function downloadPluginArchive(
   options: DownloadPluginOptions
 ): Promise<void> {
   let current = url;
-  const fetcher = options.fetch ?? defaultFetch;
+  const fetcher = options.fetch ?? pinnedArchiveFetch;
   let created = false;
   const maxBytes = Math.min(options.maxBytes, 100 * 1024 * 1024);
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error('下载大小限制不合法');

@@ -14,7 +14,8 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
+import { parsePluginInstallUrl } from '@shared/extensionPlugins/installUrl';
 import {
   EXTENSION_PLUGIN_PERMISSIONS,
   isPluginRelativePath,
@@ -75,6 +76,15 @@ function valid(v: unknown): v is PluginRecord {
     typeof v.installedAt === 'number' &&
     Number.isFinite(v.installedAt) &&
     v.installedAt >= 0 &&
+    (v.source === undefined || validSource(v.source)) &&
+    (v.crossSessionInject === undefined || typeof v.crossSessionInject === 'boolean') &&
+    (v.lastError === undefined ||
+      (record(v.lastError) &&
+        typeof v.lastError.at === 'number' &&
+        Number.isFinite(v.lastError.at) &&
+        v.lastError.at >= 0 &&
+        typeof v.lastError.message === 'string' &&
+        v.lastError.message.length <= 2000)) &&
     (v.pending === undefined ||
       (record(v.pending) &&
         typeof v.pending.version === 'string' &&
@@ -84,6 +94,27 @@ function valid(v: unknown): v is PluginRecord {
         DIR.test(v.pending.dir) &&
         grant(v.pending.grant)))
   );
+}
+function validSource(v: unknown): boolean {
+  if (!record(v)) return false;
+  if (v.kind === 'dir' || v.kind === 'zip')
+    return (
+      typeof v.path === 'string' &&
+      v.path.length <= 4096 &&
+      !v.path.includes('\0') &&
+      isAbsolute(v.path)
+    );
+  if (v.kind === 'url')
+    return typeof v.url === 'string' && v.url.length <= 8192 && parsePluginInstallUrl(v.url).ok;
+  if (v.kind === 'market')
+    return (
+      typeof v.id === 'string' &&
+      ID.test(v.id) &&
+      v.id.length <= 40 &&
+      (v.version === undefined ||
+        (typeof v.version === 'string' && v.version.length > 0 && v.version.length <= 40))
+    );
+  return false;
 }
 function assertFile(path: string): ReturnType<typeof lstatSync> | undefined {
   let info: ReturnType<typeof lstatSync>;

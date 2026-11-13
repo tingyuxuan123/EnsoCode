@@ -119,9 +119,9 @@ describe('desktop plugin service', () => {
     for (const result of [
       await s.stage(source(), 1),
       await s.commit('token', 1),
-      s.setEnabled('enso.test', true),
-      s.approvePending('enso.test'),
-      s.rejectPending('enso.test'),
+      await s.setEnabled('enso.test', true),
+      await s.approvePending('enso.test'),
+      await s.rejectPending('enso.test'),
       await s.uninstall('enso.test'),
       s.setConfig('enso.test', {}),
     ])
@@ -133,7 +133,7 @@ describe('desktop plugin service', () => {
     const raw = JSON.stringify({ version: 1, plugins: [{ id: 'bad' }] });
     writeFileSync(join(root, 'registry.json'), raw);
     const { service: s } = setup(root);
-    expect(s.setEnabled('enso.test', true).ok).toBe(false);
+    expect((await s.setEnabled('enso.test', true)).ok).toBe(false);
     expect((await s.stage(source(), 1)).ok).toBe(false);
     expect(s.list()).toMatchObject({ plugins: [], registryError: expect.any(String) });
     expect(readFileSync(join(root, 'registry.json'), 'utf8')).toBe(raw);
@@ -141,7 +141,7 @@ describe('desktop plugin service', () => {
   it('一次加载失败的多个等待调用只计一次崩溃', async () => {
     const { service: s, fork } = setup();
     await install(s, {}, { 'main.mjs': 'throw new Error("load failed")' });
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     await Promise.allSettled([toolCall(s), toolCall(s), toolCall(s)]);
     expect(fork).toHaveBeenCalledTimes(1);
     expect(s.list().plugins[0].state).toBe('enabled');
@@ -160,7 +160,7 @@ describe('desktop plugin service', () => {
         'main.mjs': `export function activate(e) { e.renderer.handle('draft', () => e.composer.readDraft()); }`,
       }
     );
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     const input = {
       pluginId: 'enso.test',
       method: 'renderer.call' as const,
@@ -194,18 +194,18 @@ describe('desktop plugin service', () => {
   it('enabled tools roundtrip and version fingerprint rejects stale worker references', async () => {
     const { service: s } = setup();
     await install(s);
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     const old = s.toolsForSpawn()[0].fingerprint;
-    expect(await toolCall(s)).toEqual({ content: 'ok' });
+    expect(await toolCall(s)).toEqual({ content: 'ok', artifacts: [] });
     await install(s, { version: '2' });
     expect(s.toolsForSpawn()[0].fingerprint).not.toBe(old);
     await expect(toolCall(s, old)).rejects.toMatchObject({ code: 'STALE_PLUGIN' });
-    expect(await toolCall(s)).toEqual({ content: 'ok' });
+    expect(await toolCall(s)).toEqual({ content: 'ok', artifacts: [] });
   });
   it('permission expansion retains running old version until approval, never activates pending', async () => {
     const { service: s, fork } = setup();
     await install(s);
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     await toolCall(s);
     const count = fork.mock.calls.length;
     await install(s, {
@@ -219,8 +219,8 @@ describe('desktop plugin service', () => {
       pendingVersion: '2',
       state: 'enabled',
     });
-    expect(await toolCall(s)).toEqual({ content: 'ok' });
-    s.approvePending('enso.test');
+    expect(await toolCall(s)).toEqual({ content: 'ok', artifacts: [] });
+    await s.approvePending('enso.test');
     expect(s.list().plugins[0].version).toBe('2');
   });
   it('secret config stays private, non-secret is editable and uninstall clears owned data', async () => {
@@ -263,10 +263,47 @@ describe('desktop plugin service', () => {
       { renderer: 'ui.js', permissions: ['agent.tool', 'ui.slot'] },
       { 'ui.js': 'export function onLoad() {}', 'secret.txt': 'private' }
     );
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     expect(s.assetPath('enso.test', 'ui.js')).not.toBeNull();
     expect(s.assetPath('enso.test', 'secret.txt')).toBeNull();
     expect(s.assetPath('enso.test', '../config/enso.test.json')).toBeNull();
+  });
+  it('serves declared themes and only theme-directory image/font media, never sibling package content', async () => {
+    const { service: s } = setup();
+    await install(
+      s,
+      {
+        contributes: {
+          themes: [
+            {
+              id: 'night',
+              name: 'Night',
+              path: 'themes/night/theme.json',
+              css: 'themes/night/style.css',
+            },
+          ],
+        },
+      },
+      {
+        'themes/night/theme.json': '{}',
+        'themes/night/style.css': 'body{}',
+        'themes/night/media/paper.png': 'image',
+        'themes/night/media/font.woff2': 'font',
+        'themes/night/secret.txt': 'secret',
+        'outside/logo.png': 'outside',
+      }
+    );
+    expect(s.assetPath('enso.test', 'themes/night/theme.json')).toBeNull();
+    await s.setEnabled('enso.test', true);
+    expect(s.assetPath('enso.test', 'themes/night/theme.json')).not.toBeNull();
+    expect(s.assetPath('enso.test', 'themes/night/style.css')).not.toBeNull();
+    expect(s.assetMediaPath('enso.test', 'themes/night/media/paper.png')).not.toBeNull();
+    expect(s.assetMediaPath('enso.test', 'themes/night/media/font.woff2')).not.toBeNull();
+    expect(s.assetMediaPath('enso.test', 'outside/logo.png')).toBeNull();
+    expect(s.assetMediaPath('enso.test', 'themes/night/secret.txt')).toBeNull();
+    expect(s.assetMediaPath('enso.test', 'themes/night/../../outside/logo.png')).toBeNull();
+    await s.setEnabled('enso.test', false);
+    expect(s.assetMediaPath('enso.test', 'themes/night/media/paper.png')).toBeNull();
   });
   it('preset resources scoped correctly and unavailable selected presets fail closed', async () => {
     const { service: s } = setup();
@@ -293,7 +330,7 @@ describe('desktop plugin service', () => {
         'prompts/r.md': 'role',
       }
     );
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     expect(s.skillPathsForSpawn()).toHaveLength(1);
     expect(s.skillPathsForSpawn('plugin:enso.test:review')).toHaveLength(2);
     expect(s.presetForSpawn('plugin:enso.test:review')).toMatchObject({
@@ -301,13 +338,13 @@ describe('desktop plugin service', () => {
       instruction: { content: 'instruction' },
       systemPrompt: 'role',
     });
-    s.setEnabled('enso.test', false);
+    await s.setEnabled('enso.test', false);
     expect(s.presetForSpawn('plugin:enso.test:review')).toMatchObject({ ok: false });
   });
   it('crash threshold disables tool registry', async () => {
     const { service: s } = setup();
     await install(s);
-    s.setEnabled('enso.test', true);
+    await s.setEnabled('enso.test', true);
     for (let i = 0; i < 3; i++) s.recordCrash('enso.test');
     expect(s.list().plugins[0].state).toBe('crashed');
     expect(s.toolsForSpawn()).toEqual([]);

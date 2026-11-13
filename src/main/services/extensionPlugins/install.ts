@@ -30,7 +30,9 @@ export type StageResult = { ok: true; staged: StagedPlugin } | { ok: false; erro
 export type PluginInstallSource =
   | { kind: 'dir'; path: string }
   | { kind: 'zip'; path: string }
-  | { kind: 'url'; url: string };
+  | { kind: 'url'; url: string }
+  /** Collabra fork：插件市场来源；version 缺省按最新 */
+  | { kind: 'market'; id: string; version?: string };
 export interface StageDeps {
   fetch?: ArchiveFetch;
   resolve?: ResolveAddresses;
@@ -211,7 +213,10 @@ export async function stagePlugin(
     if (source.kind === 'dir')
       await copyTree(source.path, staging, { entries: 0, bytes: 0 }, deps.signal);
     else if (source.kind === 'zip') await extractZip(source.path, staging, { signal: deps.signal });
-    else {
+    else if (source.kind === 'market') {
+      // 市场下载由 service 的市场模块负责；安装器本身不联网
+      throw new Error('插件市场尚未接通');
+    } else {
       const parsed = parsePluginInstallUrl(source.url);
       if (!parsed.ok) throw new Error(parsed.error);
       if (

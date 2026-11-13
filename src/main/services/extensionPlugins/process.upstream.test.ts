@@ -62,6 +62,28 @@ async function readyProcess(s: ReturnType<typeof setup>) {
 }
 
 describe('upstream PluginProcess compatibility', () => {
+  it('waits for actual old exit before allowing a new generation', async () => {
+    const s = setup();
+    await readyProcess(s);
+    const old = s.child();
+    old.kill = () => true;
+    s.proc.stop();
+    let stopped = false;
+    void s.proc.whenStopped().then(() => {
+      stopped = true;
+    });
+    const next = s.proc.ready();
+    await flush();
+    expect(stopped).toBe(false);
+    expect(s.children).toHaveLength(1);
+    old.emit('exit', 0);
+    await flush();
+    expect(stopped).toBe(true);
+    expect(s.children).toHaveLength(2);
+    s.child().reply({ t: 'ready', registered });
+    await next;
+    s.proc.stop();
+  });
   it('按需拉起，spawn 后发送 init，收到 ready 后返回注册表', async () => {
     const s = setup();
     expect(s.children).toHaveLength(0);

@@ -37,10 +37,46 @@ const valid: PluginRecord = {
   version: '1.0.0',
   dir: 'abc',
   state: 'disabled',
-  grant: { permissions: [], fsRead: [], fsWrite: [], netDomains: [], mcp: [], renderer: false },
+  grant: {
+    permissions: [],
+    fsRead: [],
+    fsWrite: [],
+    netDomains: [],
+    mcp: [],
+    mcpTools: [],
+    renderer: false,
+    env: [],
+    interop: [],
+    intercepts: [],
+    resident: false,
+    styles: false,
+  },
   installedAt: 1,
 };
 describe('原子私有插件登记表', () => {
+  it('roundtrips validated sources and refuses malformed authority metadata', () => {
+    const root = temp();
+    const record = {
+      ...valid,
+      source: { kind: 'market' as const, id: valid.id, version: '2' },
+      crossSessionInject: false,
+      lastError: { at: 1, message: 'failed' },
+    };
+    writeRegistry(root, { version: 1, plugins: [record] });
+    expect(readRegistry(root).plugins).toEqual([record]);
+    for (const source of [
+      { kind: 'url', url: 'http://example.com/a.zip' },
+      { kind: 'dir', path: '../relative' },
+      { kind: 'market', id: '../bad' },
+      { kind: 'unknown' },
+    ]) {
+      writeFileSync(
+        join(root, 'registry.json'),
+        JSON.stringify({ version: 1, plugins: [{ ...valid, source }] })
+      );
+      expect(readRegistry(root).error).toContain('只读');
+    }
+  });
   it('相同损坏内容只备份一次，最多保留最近五份', () => {
     const root = temp();
     const backups: string[] = [];

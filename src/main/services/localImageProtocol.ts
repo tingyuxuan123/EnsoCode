@@ -9,12 +9,18 @@ import {
   LOCAL_IMAGE_SCHEME,
   localImageUrlToPath,
   mediaExtension,
+  PLUGIN_ASSET_HOST,
+  parsePluginAssetUrl,
   REMOTE_FETCH_HOST,
 } from '@shared/localImage';
 import { isBotId } from '@shared/types/bot';
 import { net, protocol } from 'electron';
 
 let botAvatarResolver: (botId: string) => string | null = () => null;
+let pluginAssetResolver: ((pluginId: string, rel: string) => string | null) | null = null;
+export function setPluginAssetResolver(resolver: typeof pluginAssetResolver): void {
+  pluginAssetResolver = resolver;
+}
 
 export function setBotAvatarResolver(resolve: (botId: string) => string | null): void {
   botAvatarResolver = resolve;
@@ -82,8 +88,41 @@ export function registerLocalImageProtocolHandler(): void {
     if (url.hostname === BOT_AVATAR_HOST) {
       return serveBotAvatar(decodeURIComponent(url.pathname.slice(1)));
     }
+    if (url.hostname === PLUGIN_ASSET_HOST) return servePluginAsset(url);
     return serveLocalMedia(url, request.headers.get('range'));
   });
+}
+async function servePluginAsset(url: URL): Promise<Response> {
+  const ref = parsePluginAssetUrl(url);
+  if (!ref) return new Response('Bad path', { status: 400 });
+  const ext = mediaExtension(ref.rel);
+  const fontTypes: Record<string, string> = {
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+    otf: 'font/otf',
+  };
+  const mime = isMediaPath(ref.rel) && !isVideoPath(ref.rel) ? MIME_TYPES[ext] : fontTypes[ext];
+  if (!mime) return new Response('Forbidden', { status: 403 });
+  const path = pluginAssetResolver?.(ref.pluginId, ref.rel);
+  if (!path) return new Response('Not found', { status: 404 });
+  try {
+    const info = await stat(path);
+    if (!info.isFile() || info.size > 8 * 1024 * 1024)
+      return new Response('Too large', { status: 413 });
+    const bytes = await readFile(path);
+    if (bytes.length > 8 * 1024 * 1024) return new Response('Too large', { status: 413 });
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        'Content-Type': mime,
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch {
+    return new Response('Not found', { status: 404 });
+  }
 }
 
 async function serveBotAvatar(botId: string): Promise<Response> {
