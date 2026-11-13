@@ -93,12 +93,13 @@ export function createCodeSearchTool(deps: CodeSearchToolDeps): ToolDefinition {
     description:
       'Cloud-assisted read-only code search in the current local workspace. Uses the selected Devin account; query, directory layout and selected code are sent to Devin/Windsurf. Returns bounded verified file ranges, not the internal search history.',
     promptSnippet:
-      'code_search: locate an implementation by behavior or concept when you do not yet know its file or symbol name (read-only, cloud-assisted).',
+      'code_search: FIRST choice when locating unfamiliar code — pass a sentence about the behavior or relationship to find, not a keyword. One call replaces several grep-then-read rounds (read-only, cloud-assisted).',
     promptGuidelines: [
-      'Pick the route by what you already have: a known file → read; an exact identifier or regex → grep; a behavior, data flow or relationship you can describe but not name → code_search, as the FIRST exploratory step rather than after a round of guessed grep keywords.',
-      'One code_search call replaces several guess-and-grep rounds: describe the behavior or relationship to locate, not a keyword, and add path when you can narrow the subtree.',
+      'Route by what you already have: a known file → read; an exact identifier you can type verbatim → grep; where something lives, how a flow crosses files, or why a value ends up wrong → code_search first, before a chain of keyword guesses.',
+      'About to run a second exploratory grep for the same question? Stop and call code_search once with a described query instead.',
+      'Describe the behavior or relationship and name what you expect to find (function, store, event, IPC channel); pass path to narrow the subtree — the whole workspace is the slowest and least precise default.',
       'Do not run code_search and grep on the same question in parallel: choose one route, then follow the verified paths it returns with read.',
-      'Results may be partial. Read every returned path before editing; no_matches only covers examined scope, so if the result is thin, narrow the query or switch to grep instead of repeating it.',
+      'Results may be partial and slow: read every returned path before editing, and do not repeat a query whose result was thin — narrow path or switch to grep.',
     ],
     executionMode: 'sequential',
     annotations: {
