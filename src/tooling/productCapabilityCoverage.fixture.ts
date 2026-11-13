@@ -23,6 +23,8 @@ type SettingsDataKey = Exclude<keyof SettingsState, SettingsActionKey>;
 /** SettingsState 新增持久字段时，此 Record 会在编译期要求说明对应产品面。 */
 export const SETTINGS_DATA_COVERAGE = {
   theme: surfaces('appearance.theme'),
+  pluginTheme: excluded('用户选择的本机插件主题，插件代码与样式授权不能由 Agent 修改。'),
+  pluginAutoUpdate: excluded('本机已安装插件自动更新策略，保留用户决定。'),
   lightPalette: excluded('Desktop light palette; user-selected appearance preference.'),
   accentColor: surfaces('appearance.accent'),
   chatTypography: excluded('Renderer chat typography preference; not an Enso capability.'),
@@ -176,6 +178,8 @@ export const SETTINGS_DATA_COVERAGE = {
 /** SettingsState 新增 action 时，此 Record 会在编译期要求登记或明确排除。 */
 export const SETTINGS_ACTION_COVERAGE = {
   setTheme: surfaces('appearance.theme'),
+  setPluginTheme: excluded('用户选择的本机插件主题。'),
+  setPluginAutoUpdate: excluded('本机插件更新策略由用户设置。'),
   setLightPalette: excluded('Desktop light palette; user-selected appearance preference.'),
   setAccentColor: surfaces('appearance.accent'),
   setChatTypography: excluded('Renderer chat typography preference; not an Enso capability.'),
@@ -934,6 +938,28 @@ export const IPC_PRODUCT_COVERAGE = {
   COMPUTER_ALLOWED_APPS: surfaces('coding-tools.computer'),
   COMPUTER_REVOKE_APP: surfaces('coding-tools.computer'),
   EXTENSION_PLUGINS_LIST: surfaces('tools.list'),
+  EXTENSION_PLUGINS_REGISTRY_NOTICE: excluded('只读的本地插件登记表恢复提示。'),
+  EXTENSION_PLUGINS_DISMISS_REGISTRY_NOTICE: excluded(
+    '插件登记表恢复提示确认；不允许 Agent 自动恢复或删除数据。'
+  ),
+  EXTENSION_PLUGINS_NOTICE: excluded('插件更新和授权提醒推送。'),
+  EXTENSION_PLUGINS_SET_CROSS_SESSION_INJECT: excluded('跨会话注入授权由用户显式修改。'),
+  EXTENSION_PLUGINS_SET_DEV_WATCH: excluded('用户开启的本地插件开发监听。'),
+  EXTENSION_PLUGINS_RESTAGE: surfaces('tools.list'),
+  EXTENSION_PLUGINS_CHECK_UPDATES: surfaces('tools.list'),
+  EXTENSION_PLUGINS_MARKET_LIST: surfaces('tools.list'),
+  EXTENSION_PLUGINS_MARKET_STAGE: surfaces('tools.list'),
+  EXTENSION_PLUGINS_MARKET_SET_MIRROR: surfaces('tools.list'),
+  EXTENSION_PLUGINS_README: surfaces('tools.list'),
+  EXTENSION_PLUGINS_VIEW_EVENT: excluded('插件沙箱侧栏事件推送。'),
+  EXTENSION_PLUGINS_LOGS: surfaces('tools.list'),
+  EXTENSION_PLUGINS_ARTIFACTS_LIST: excluded('插件产物界面查询，仅使用产物标识。'),
+  EXTENSION_PLUGINS_ARTIFACT_READ: excluded('插件产物界面预览，仅使用产物标识。'),
+  EXTENSION_PLUGINS_ARTIFACT_DELETE: excluded('插件产物界面删除。'),
+  EXTENSION_PLUGINS_ARTIFACT_SAVE: excluded('插件产物另存，用户原生对话框选路径。'),
+  EXTENSION_PLUGINS_VIEW_STATE_GET: excluded('插件沙箱页面私有状态读取。'),
+  EXTENSION_PLUGINS_VIEW_STATE_SET: excluded('插件沙箱页面私有状态写入。'),
+  EXTENSION_PLUGINS_PICK_PATH: excluded('用户原生路径选择用于插件配置。'),
   EXTENSION_PLUGINS_CHANGED: excluded('Push notification for the plugins settings page.'),
   EXTENSION_PLUGINS_COMMIT: surfaces('tools.list'),
   EXTENSION_PLUGINS_DISCARD: surfaces('tools.list'),

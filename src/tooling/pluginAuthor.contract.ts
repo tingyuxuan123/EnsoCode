@@ -2,6 +2,7 @@ import type {
   DraftRevision,
   DraftWrite,
   InvocationContext,
+  PluginAgentSource,
   PluginMainApi,
   PluginRendererApi,
   PluginSlot,
@@ -31,15 +32,41 @@ type SlotProps<S extends PluginSlotName> = Parameters<
   Extract<PluginSlot, { slot: S }>['component']
 >[0];
 type DotMethods<T> = { [K in keyof T & string]: `${K}.${keyof T[K] & string}` }[keyof T & string];
-type PublicRpc = DotMethods<
-  Omit<PluginMainApi, 'pluginId' | 'dataDir' | 'tools' | 'renderer' | 'triggers'>
->;
+type PublicRpc =
+  | DotMethods<
+      Omit<
+        PluginMainApi,
+        | 'pluginId'
+        | 'dataDir'
+        | 'tools'
+        | 'renderer'
+        | 'triggers'
+        | 'commands'
+        | 'events'
+        | 'schedules'
+        | 'exports'
+        | 'ui'
+        | 'artifacts'
+        | 'plugins'
+      >
+    >
+  | 'tool.progress'
+  | 'artifact.write'
+  | 'plugin.call'
+  | 'contrib.register'
+  | 'contrib.unregister'
+  | 'ui.notify'
+  | 'ui.viewEvent'
+  | 'ui.viewOpen'
+  | 'ui.statusUpdate'
+  | 'ui.clipboard'
+  | 'ui.openExternal';
 type Call = Extract<MainToPluginHost, { t: 'call' }>;
 type Flatten<T> = { [K in keyof T]: T[K] };
 
 // Compiled by the root typecheck; nothing here runs or imports a plugin at runtime.
 export type AuthorContract = [
-  Check<Equal<PublicRpc, Exclude<PluginHostApi, 'session.messages'>>>,
+  Check<Equal<PublicRpc, PluginHostApi>>,
   Check<
     Equal<
       keyof PluginMainApi,
@@ -54,13 +81,28 @@ export type AuthorContract = [
       | 'composer'
       | 'config'
       | 'mcp'
+      | 'commands'
+      | 'events'
+      | 'schedules'
+      | 'exports'
+      | 'plugins'
+      | 'artifacts'
+      | 'session'
+      | 'host'
     >
   >,
   Check<Equal<keyof PluginMainApi['tools'], 'register'>>,
   Check<
     Equal<
       InvocationContext,
-      Flatten<Pick<Call, 'sessionId' | 'projectRoot' | 'invocationId'> & { signal: AbortSignal }>
+      Flatten<
+        Pick<Call, 'sessionId' | 'projectRoot' | 'invocationId'> & {
+          signal: AbortSignal;
+          agent: PluginAgentSource | null;
+          progress(text: string): Promise<unknown>;
+          caller?: string;
+        }
+      >
     >
   >,
   Check<Equal<PluginToolResult, HostToolResult>>,
@@ -69,7 +111,12 @@ export type AuthorContract = [
   Check<Equal<ReturnType<PluginMainApi['mcp']['tools']>, ReturnType<GateDeps['mcpTools']>>>,
   Check<Equal<ReturnType<PluginMainApi['mcp']['call']>, ReturnType<GateDeps['mcpCall']>>>,
   Check<Equal<keyof PluginMainApi['composer'], DraftRequest['op']>>,
-  Check<Equal<keyof PluginRendererApi, 'React' | 'slots' | 'dispatch' | 'composer'>>,
+  Check<
+    Equal<
+      keyof PluginRendererApi,
+      'React' | 'slots' | 'dispatch' | 'composer' | 'theme' | 'onTheme'
+    >
+  >,
   Check<Equal<undefined extends PluginRendererApi['composer'] ? true : false, true>>,
   Check<Equal<Parameters<PluginRendererApi['dispatch']>[0], 'plugin.call'>>,
   Check<Equal<DraftRevision, Parameters<typeof mutateDraftReferences>[1]>>,

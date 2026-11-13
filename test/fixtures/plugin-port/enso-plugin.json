@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "collabra.verify.plugin",
+  "name": "Plugin port verification",
+  "version": "1.0.0",
+  "description": "隔离验证专用：回显工具、状态项、文件查看器、事件与主题。",
+  "main": "main.mjs",
+  "permissions": [
+    "agent.tool",
+    "agent.observe",
+    "agent.intercept",
+    "ui.view",
+    "session.read",
+    "session.create",
+    "session.focus"
+  ],
+  "contributes": {
+    "methods": [{ "name": "view", "timeoutMs": 15000 }, { "name": "create", "timeoutMs": 15000 }],
+    "agentTools": [
+      {
+        "name": "echo",
+        "description": "Return a verification message unchanged. No filesystem, network or session mutation.",
+        "readOnly": true,
+        "parameters": {
+          "type": "object",
+          "properties": { "message": { "type": "string" } },
+          "required": ["message"],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "commands": [{ "id": "ping", "title": "Verify plugin status", "key": "mod+shift+9" }],
+    "statusItems": [{ "id": "ready", "text": "Plugin ready", "command": "ping" }],
+    "views": [{ "id": "status", "title": "Verification status", "entry": "viewer.html" }],
+    "fileViewers": [
+      {
+        "id": "csv",
+        "title": "Verification CSV",
+        "entry": "viewer.html",
+        "extensions": [".csv"],
+        "default": true
+      }
+    ],
+    "events": [
+      { "event": "before_agent_start", "mode": "intercept" },
+      { "event": "agent_end", "mode": "observe" }
+    ],
+    "themes": [{ "id": "verify", "name": "Verification palette", "path": "theme.json" }],
+    "workflows": ["verify-workflow.js"],
+    "configuration": [
+      {
+        "key": "label",
+        "title": "Status label",
+        "type": "string",
+        "default": "Plugin ready",
+        "multiline": true
+      }
+    ]
+  }
+}

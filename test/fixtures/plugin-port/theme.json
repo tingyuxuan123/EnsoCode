@@ -1,0 +1,24 @@
+{
+  "light": {
+    "canvas": "#f3f8f4",
+    "surface": "#ffffff",
+    "sunken": "#e7efe9",
+    "border": "#cbd8cf",
+    "borderStrong": "#99b3a1",
+    "text": "#173823",
+    "textMuted": "#466d54",
+    "textSubtle": "#688c73",
+    "accent": "#23774a"
+  },
+  "dark": {
+    "canvas": "#142119",
+    "surface": "#1b2d22",
+    "sunken": "#101b14",
+    "border": "#344f3c",
+    "borderStrong": "#567b60",
+    "text": "#e5f2e9",
+    "textMuted": "#aec9b6",
+    "textSubtle": "#88a791",
+    "accent": "#73c591"
+  }
+}

@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Plugin verification viewer</title><body><h1>Plugin viewer ready</h1><pre id="content">Waiting for file</pre><script>
+const show = file => { document.getElementById('content').textContent = file ? `${file.rel}\n${file.text}` : 'Sidebar ready'; };
+show(window.enso.file);
+window.enso.file?.onChange(show);
+window.enso.on('verified', () => { document.getElementById('content').textContent = 'Plugin event OK'; });
+</script></body></html>

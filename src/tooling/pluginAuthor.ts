@@ -18,6 +18,8 @@ import {
 } from '@shared/extensionPlugins/manifest';
 import { version } from '../../package.json';
 import { MANIFEST_FILE, stagePlugin } from '../main/services/extensionPlugins/install';
+import { packPlugin } from './pluginPack';
+import { writePluginTesting } from './pluginTesting';
 
 type ValidationResult =
   | { ok: true; manifest: ExtensionPluginManifest; warnings: string[] }
@@ -133,13 +135,33 @@ interface CliOptions {
   stdout(text: string): void;
   stderr(text: string): void;
 }
-const usage = '用法：pnpm plugin:init <dir> --id <id> | pnpm plugin:validate <dir>';
+const usage =
+  '用法：pnpm plugin:init <dir> --id <id> | pnpm plugin:validate <dir> | pnpm plugin:pack <dir> [--out <zip>] | pnpm plugin:testing <dir>';
 export async function runPluginAuthor(
   args: readonly string[],
   options: CliOptions
 ): Promise<number> {
   const [command, directory, flag, id] = args;
   try {
+    if (
+      command === 'pack' &&
+      directory &&
+      !directory.startsWith('-') &&
+      (args.length === 2 || (args.length === 4 && flag === '--out' && id))
+    ) {
+      const result = await packPlugin(directory, {
+        hostVersion: version,
+        ...(id ? { out: id } : {}),
+      });
+      options.stdout(`${result.id} ${result.version} → ${result.file}`);
+      options.stdout(`大小 ${result.size} 字节，sha256 ${result.sha256}`);
+      return 0;
+    }
+    if (command === 'testing' && directory && !directory.startsWith('-') && args.length === 2) {
+      await writePluginTesting(directory);
+      options.stdout('已写入 enso-testing.mjs 与 test/main.test.mjs；在插件目录运行 node --test');
+      return 0;
+    }
     if (command === 'validate' && directory && !directory.startsWith('-') && args.length === 2) {
       const result = await validatePluginDirectory(directory, version);
       if (!result.ok) throw new Error(result.error);
