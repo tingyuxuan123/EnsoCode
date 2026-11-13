@@ -457,7 +457,7 @@ describe('BrowserView controls', () => {
     );
     expect(harness.navigate).not.toHaveBeenCalled();
     expect(container.textContent).toContain(
-      'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Enso.'
+      'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Collabra.'
     );
   });
 });

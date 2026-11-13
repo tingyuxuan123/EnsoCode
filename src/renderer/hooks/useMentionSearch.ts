@@ -1,4 +1,9 @@
-import { type AgentTypeCandidate, parseAgentTypeRegistrySnapshot } from '@shared/builtinAgents';
+import {
+  type AgentTypeCandidate,
+  ENSO_AGENT_TYPE_KEY,
+  parseAgentTypeRegistrySnapshot,
+  SYSTEM_ASSISTANT_DISPLAY_NAME,
+} from '@shared/builtinAgents';
 import type {
   AgentTypeMentionCandidate,
   ChatMentionCandidate,
@@ -108,7 +113,14 @@ export function toAgentMentionCandidates(
     ...candidate,
     kind: 'agent-type',
     id: candidate.typeKey,
-    label: candidate.displayName,
+    displayName:
+      candidate.typeKey === ENSO_AGENT_TYPE_KEY
+        ? SYSTEM_ASSISTANT_DISPLAY_NAME
+        : candidate.displayName,
+    label:
+      candidate.typeKey === ENSO_AGENT_TYPE_KEY
+        ? SYSTEM_ASSISTANT_DISPLAY_NAME
+        : candidate.displayName,
   }));
 }
 

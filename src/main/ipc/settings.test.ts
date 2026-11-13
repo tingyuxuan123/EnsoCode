@@ -192,6 +192,26 @@ describe('settings广播策略', () => {
     ).toBe(false);
   });
 
+  it('Microcompaction 开关可持久化，只接受布尔值，且不在配置同步提交白名单', async () => {
+    const settings = await import('./settings');
+    expect(settings.SETTINGS_STATE_FIELDS).toContain('microcompactEnabled');
+    expect(settings.CONFIG_SYNC_COMMIT_FIELDS).not.toContain('microcompactEnabled');
+    for (const bad of ['false', 0, 1, null, {}, []]) {
+      expect(settings.patchSettingsState('microcompactEnabled', bad)).toMatchObject({
+        ok: false,
+      });
+    }
+    expect(settings.patchSettingsState('microcompactEnabled', false)).toMatchObject({
+      ok: true,
+      value: false,
+    });
+    settings.flushSettings();
+    expect(
+      JSON.parse(readFileSync(path.join(userData, 'settings.json'), 'utf8'))['enso-settings'].state
+        .microcompactEnabled
+    ).toBe(false);
+  });
+
   it('旧字段写请求收敛到 canonical mode，不形成双状态', async () => {
     const { patchSettingsState, readSettings } = await import('./settings');
     expect(patchSettingsState('hashlineEditEnabled', true)).toMatchObject({

@@ -864,6 +864,8 @@ export interface ContextOccupancy {
   estimated: boolean;
   compactedMessageCount: number;
   compactionModelMismatch: boolean;
+  /** 当前分支生效的微压缩；字符差值，不代表 token 或费用节省。 */
+  microcompact?: { results: number; charsRemoved: number };
   contextWindow?: number;
   percent?: number;
   compactionEntryId?: string;
@@ -1161,6 +1163,8 @@ export type AgentCommand =
       trustedProjectCode?: string[];
       /** 探后折叠工具 + context 折叠 */
       exploreFoldEnabled?: boolean;
+      /** 保守微压缩；缺省开，只清旧的可重取文本读取/搜索结果。 */
+      microcompactEnabled?: boolean;
       /** 文件编辑工具模式；缺省 apply_patch */
       editMode?: EditMode;
       /** @deprecated 仅用于读取旧 Main 命令；新代码发送 editMode。 */
@@ -1313,7 +1317,12 @@ export type AgentCommand =
       allowThreshold?: ApprovalAllowThreshold;
     }
   /** 已打开会话的压缩摘要模型。缺省 model 表示改跟会话模型 */
-  | { type: 'set-compact-route'; model?: SpawnModelConfig; mode?: SmartCompactMode }
+  | {
+      type: 'set-compact-route';
+      model?: SpawnModelConfig;
+      mode?: SmartCompactMode;
+      microcompactEnabled?: boolean;
+    }
   | { type: 'set-max-active-coworkers'; limit: number }
   /** 自动重试次数：0 关闭，-1 无限 */
   | { type: 'set-auto-retry-limit'; limit: number }
@@ -2521,7 +2530,12 @@ export function parseContextOccupancy(value: unknown): ContextOccupancy | null {
     (value.contextWindow !== undefined &&
       !(typeof value.contextWindow === 'number' && value.contextWindow > 0)) ||
     (value.percent !== undefined && !isSequence(value.percent)) ||
-    (value.compactionEntryId !== undefined && !isNonEmptyString(value.compactionEntryId))
+    (value.compactionEntryId !== undefined && !isNonEmptyString(value.compactionEntryId)) ||
+    (value.microcompact !== undefined &&
+      (!isRecord(value.microcompact) ||
+        !hasOnlyKeys(value.microcompact, ['results', 'charsRemoved']) ||
+        !isSequence(value.microcompact.results) ||
+        !isSequence(value.microcompact.charsRemoved)))
   ) {
     return null;
   }
@@ -3397,6 +3411,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'loadHarnessAssets',
           'trustedProjectCode',
           'exploreFoldEnabled',
+          'microcompactEnabled',
           'editMode',
           'hashlineEditEnabled',
           'compactStrategy',
@@ -3457,6 +3472,8 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
             value.windowsLocalShell as string
           )) ||
         (value.exploreFoldEnabled !== undefined && typeof value.exploreFoldEnabled !== 'boolean') ||
+        (value.microcompactEnabled !== undefined &&
+          typeof value.microcompactEnabled !== 'boolean') ||
         (value.editMode !== undefined && !isEditMode(value.editMode)) ||
         (value.hashlineEditEnabled !== undefined &&
           typeof value.hashlineEditEnabled !== 'boolean') ||
@@ -3744,9 +3761,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         ? (value as unknown as AgentCommand)
         : null;
     case 'set-compact-route':
-      return hasOnlyKeys(value, ['type', 'model', 'mode']) &&
+      return hasOnlyKeys(value, ['type', 'model', 'mode', 'microcompactEnabled']) &&
         (value.model === undefined || parseSpawnModelConfig(value.model) !== null) &&
-        (value.mode === undefined || parseSmartCompactMode(value.mode) !== null)
+        (value.mode === undefined || parseSmartCompactMode(value.mode) !== null) &&
+        (value.microcompactEnabled === undefined || typeof value.microcompactEnabled === 'boolean')
         ? (value as unknown as AgentCommand)
         : null;
     case 'set-max-active-coworkers':

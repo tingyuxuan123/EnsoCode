@@ -295,11 +295,11 @@ export function Onboarding() {
           {modelReady && (
             <div className="mt-[16px] flex items-center justify-between gap-[12px] rounded-[6px] border border-line px-[12px] py-[8px]">
               <p className="text-[calc(11rem/14)] text-muted-foreground">
-                {t('Need help choosing a setup? Ask Enso.')}
+                {t('Need help choosing a setup? Ask Collabra.')}
               </p>
               <Button variant="ghost" size="sm" onClick={summonEnso}>
                 <Sparkles className="h-3.5 w-3.5" />
-                {t('Ask Enso')}
+                {t('Ask Collabra')}
               </Button>
             </div>
           )}

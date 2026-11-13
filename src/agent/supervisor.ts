@@ -196,6 +196,7 @@ import { McpManager } from './mcp';
 import { partitionMcpNamespaces } from './mcpNames';
 import { createMessageCoworkerTool } from './messageCoworker';
 import { createMessageMainTool } from './messageMain';
+import { type MicrocompactOptions, microcompactExtension } from './microcompact';
 import { installModelContextCompat } from './modelContextCompat';
 import { ParentNotifier } from './notify';
 import {
@@ -206,6 +207,7 @@ import {
   resetOauthPoolActivity,
   resolveOauthPoolModel,
 } from './oauthAccountPool';
+import { outputLimitRecoveryExtension } from './outputLimitRecovery';
 import { PendingNotificationStore } from './pendingNotifications';
 import { piDocsAvailabilityExtensions } from './piDocsPrompt';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
@@ -278,6 +280,7 @@ import {
 } from './titleSummary';
 import { createTodoTool, TodoStaleReminder } from './todo';
 import { decorateSessionTools } from './toolDecorators';
+import { installStableToolOrder } from './toolOrder';
 import { ToolOutputBudget } from './toolOutputBudget';
 import { BrowserInvoker, createBrowserTools, withNavigateApproval } from './tools/browser';
 import { createCodeSearchTool } from './tools/codeSearch';
@@ -467,6 +470,8 @@ interface ManagedSession {
   pendingYieldSchema?: unknown;
   /** 最近一次收到命令或产生事件；闲置回收的计时起点 */
   lastActivityAt: number;
+  /** 只统计会话事件，排队命令本身不算活轮产出；同一毫秒的事件也可区分。 */
+  activityNonce: number;
   contextUsage: ContextUsageTracker;
   requestBody?: RequestBodyUsage;
   unsubscribe: () => void;
@@ -569,6 +574,7 @@ async function createSessionResourceLoader(options: {
     resumed?: boolean;
   };
   exploreFold?: ReturnType<typeof createExploreFoldState>;
+  microcompact?: MicrocompactOptions;
   /** codemode / tool_search 与按需 MCP；排在最前，mcp_servers 段先于 persona 强制提示词写入 */
   codemode?: InlineExtension;
   /** 仅父会话：互斥压缩策略。 */
@@ -614,6 +620,8 @@ async function createSessionResourceLoader(options: {
       options.branchContext,
       applyPatchResultExtension,
       approvalReviewResultExtension,
+      outputLimitRecoveryExtension,
+      microcompactExtension(options.microcompact),
       {
         name: 'image-context',
         hidden: true,
@@ -768,6 +776,7 @@ function createEnsoResourceLoader(
       branchContext,
       applyPatchResultExtension,
       approvalReviewResultExtension,
+      outputLimitRecoveryExtension,
       silentTurnRecovery,
       ...(oauthPoolRecovery ? [oauthPoolRecovery] : []),
     ],
@@ -979,6 +988,7 @@ export class SessionSupervisor {
   private approvalReviewer: ApprovalReviewerSource | undefined;
   /** 所有已打开会话的压缩摘要路线；设置变更时原地改 */
   private readonly compactRoute: EnsoCompactOptions = {};
+  private readonly microcompactOptions: MicrocompactOptions = { enabled: true };
   private maxActiveCoworkers = DEFAULT_MAX_ACTIVE_COWORKERS;
   private autoRetryLimit = DEFAULT_AUTO_RETRY_LIMIT;
   private disabledWorkflowPresets: string[] = [];
@@ -1491,9 +1501,14 @@ export class SessionSupervisor {
       return;
     }
     if (command.type === 'set-compact-route') {
+      if (command.microcompactEnabled !== undefined)
+        this.microcompactOptions.enabled = command.microcompactEnabled;
       this.publishCompactRoute(command.model, command.mode);
       return;
     }
+    // 按接收顺序更新共享设置，不让门内延迟执行的 spawn 覆盖更新的关闭指令。
+    if (command.type === 'spawn-parent' && command.microcompactEnabled !== undefined)
+      this.microcompactOptions.enabled = command.microcompactEnabled;
     if (command.type === 'set-max-active-coworkers') {
       this.maxActiveCoworkers = command.limit;
       return;
@@ -1621,7 +1636,10 @@ export class SessionSupervisor {
             : command.identity;
     const scopeId =
       command.type === 'spawn-child' ? command.identity.parent.sessionId : identity.sessionId;
-    if (this.workspaceSwitch.defer(scopeId, () => this.handleCommand(command))) return;
+    // spawn 的设置快照已在首次接收时应用；工作区解锁重入时不能覆盖其后收到的设置。
+    const deferredCommand =
+      command.type === 'spawn-parent' ? { ...command, microcompactEnabled: undefined } : command;
+    if (this.workspaceSwitch.defer(scopeId, () => this.handleCommand(deferredCommand))) return;
     const touched = this.sessions.get(identity.sessionId);
     if (touched) touched.lastActivityAt = Date.now();
     // 这两种控制不能等占着门的操作完成：插话可能在异步 input hook 等待期间被取走。
@@ -1845,13 +1863,28 @@ export class SessionSupervisor {
         }
         // 投影已 idle 但 pi 仍忙：压缩中（pi 拒收 prompt）不限时等压完；仍 streaming 要么
         // agent_end 尚未回流，要么是 abort 后工具不响应信号的僵尸轮——steer 进僵尸轮永远
-        // 无人投递，故限时等空闲后走新轮；超时按失败收口，绝不静默。
-        if (!(await waitPromptable(managed.session, ZOMBIE_TURN_WAIT_MS))) {
+        // 无人投递，故限时等空闲后走新轮；仍在产出时继续等，只有静默挂死才失败。
+        let activityAt = managed.activityNonce;
+        if (
+          !(await waitPromptable(managed.session, ZOMBIE_TURN_WAIT_MS, () => {
+            if (managed.status === 'running') return true;
+            if (managed.activityNonce > activityAt) {
+              activityAt = managed.activityNonce;
+              return true;
+            }
+            return false;
+          }))
+        ) {
+          const settlePending = managed.settlePending === true;
           this.failTurn(
             managed,
             'The previous turn is still running and could not be interrupted. Please retry, or reopen the conversation to reset the session.',
             true
           );
+          // 此次投递失败不能吞掉旧轮已记录的终态，否则随后 settled 无法清掉失败状态。
+          if (settlePending && (managed.session.isStreaming || managed.session.isCompacting)) {
+            managed.settlePending = true;
+          }
           return;
         }
         this.promptFresh(managed, command.text, images, command.deliveryId);
@@ -2443,6 +2476,7 @@ export class SessionSupervisor {
     let visibleDesignNames = designToolNames(!disabledTools.includes('design') && !remote, false);
     let refreshDesignTools = () => {};
     const resourceLoader = await createSessionResourceLoader({
+      microcompact: this.microcompactOptions,
       skillChains: !botMode,
       designGate: designGateExtension({
         cwd,
@@ -2888,6 +2922,7 @@ export class SessionSupervisor {
               this.oauthPoolRecovery()
             )
           : await createSessionResourceLoader({
+              microcompact: this.microcompactOptions,
               skillChains: !botMode,
               ...(childDesign
                 ? {
@@ -3748,6 +3783,7 @@ export class SessionSupervisor {
       roundWaiters: new Set(),
       coworkers: new Map(),
       lastActivityAt: Date.now(),
+      activityNonce: 0,
       contextUsage: new UsageTracker(),
       ...(opts.factory ? { factory: opts.factory } : {}),
       ...(opts.parentId ? { parentId: opts.parentId } : {}),
@@ -4428,6 +4464,7 @@ export class SessionSupervisor {
     event: Parameters<Parameters<AgentSession['subscribe']>[0]>[0]
   ): void {
     managed.lastActivityAt = Date.now();
+    managed.activityNonce += 1;
     if (event.type !== 'message_update') this.flushStreamingUpsert(managed);
     switch (event.type) {
       case 'agent_start':
@@ -5520,6 +5557,7 @@ export class SessionSupervisor {
       await initializeWorkerRuntime(runtime);
       installOauthPoolSelector(runtime, this.selectOauthPool);
       installStreamGuard(runtime);
+      installStableToolOrder(runtime);
       return runtime;
     })();
     return this.runtimePromise;
@@ -6002,14 +6040,16 @@ export function waitIdleBounded(
  */
 export async function waitPromptable(
   session: Pick<AgentSession, 'waitForIdle' | 'isStreaming' | 'isCompacting'>,
-  zombieMs: number
+  zombieMs: number,
+  stillLive?: () => boolean
 ): Promise<boolean> {
   let waited = false;
   for (;;) {
     if (session.isCompacting) {
       await session.waitForIdle();
     } else if (session.isStreaming) {
-      if (!(await waitIdleBounded(session, zombieMs)) && !session.isCompacting) return false;
+      const idle = await waitIdleBounded(session, zombieMs);
+      if (!idle && session.isStreaming && !session.isCompacting && !stillLive?.()) return false;
     } else if (waited) {
       waited = false;
       await new Promise((resolve) => setTimeout(resolve, 0));

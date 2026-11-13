@@ -14,6 +14,8 @@ import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 export const STREAM_IDLE_TIMEOUT_MS = 300_000;
 export const LOCAL_STREAM_IDLE_TIMEOUT_MS = 900_000;
 export const STREAM_STALL_LOG_MS = 90_000;
+/** 远端单次请求硬上限，不随涓流事件重置；仅权威标记的本地推理豁免。 */
+export const STREAM_MAX_LIFETIME_MS = 3_600_000;
 
 const REPETITION_WINDOW = 16_384;
 const REPETITION_MIN_SPAN = 4_000;
@@ -29,7 +31,7 @@ export interface StreamGuardOptions {
   /** In-process injection only; no new user setting or wire protocol. */
   idleTimeoutMs?: number;
   /**
-   * Only callers with authoritative local-inference knowledge may opt into 900s.
+   * Only authoritative local-inference callers may opt into 900s idle and no lifetime cap.
    * Custom providers use derived enso-* identities. Neither a compatible API name
    * (including Ollama) nor localhost attests local execution rather than a cloud gateway.
    */
@@ -125,11 +127,13 @@ export function guardStream<TOptions extends ProviderRequestOptions>(
     let partial: AssistantMessage | undefined;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    let lifetimeTimer: ReturnType<typeof setTimeout> | undefined;
     const texts = new Map<number, { tail: string; length: number; checked: number }>();
 
     const clearTimers = () => {
       clearTimeout(idleTimer);
       clearTimeout(stallTimer);
+      clearTimeout(lifetimeTimer);
     };
     const wait = <T>(pending: Promise<T>): Promise<T | undefined> =>
       new Promise((resolve, reject) => {
@@ -183,10 +187,9 @@ export function guardStream<TOptions extends ProviderRequestOptions>(
     }
     caller?.addEventListener('abort', abort, { once: true });
 
-    const defaultIdle = () =>
-      guard.isLocalModel?.(model) ? LOCAL_STREAM_IDLE_TIMEOUT_MS : STREAM_IDLE_TIMEOUT_MS;
     const arm = (idleMs: number) => {
-      clearTimers();
+      clearTimeout(idleTimer);
+      clearTimeout(stallTimer);
       stallTimer = setTimeout(() => {
         if (finished) return;
         // Diagnostics must not turn an otherwise healthy stream into an exception.
@@ -238,12 +241,24 @@ export function guardStream<TOptions extends ProviderRequestOptions>(
     };
 
     try {
+      const local = guard.isLocalModel?.(model) === true;
       const configuredIdle = guard.idleTimeoutMs;
       const idleMs =
         typeof configuredIdle === 'number' && Number.isFinite(configuredIdle) && configuredIdle > 0
           ? configuredIdle
-          : defaultIdle();
+          : local
+            ? LOCAL_STREAM_IDLE_TIMEOUT_MS
+            : STREAM_IDLE_TIMEOUT_MS;
       arm(idleMs);
+      if (!local) {
+        lifetimeTimer = setTimeout(
+          () =>
+            fail(
+              `LLM stream timed out: still incomplete after ${STREAM_MAX_LIFETIME_MS / 60_000} minutes, so the request was aborted.`
+            ),
+          STREAM_MAX_LIFETIME_MS
+        );
+      }
       const input = inner(model, context, { ...options, signal: controller.signal } as TOptions);
       void (async () => {
         let iterator: AsyncIterator<AssistantMessageEvent> | undefined;

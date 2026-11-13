@@ -20,7 +20,7 @@ import {
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { parseImageGenerationSettings } from '@shared/imageGeneration';
-import { type LightPalette, parseLightPalette } from '@shared/lightPalette';
+import { DEFAULT_LIGHT_PALETTE, type LightPalette, parseLightPalette } from '@shared/lightPalette';
 import {
   DEFAULT_MAX_ACTIVE_COWORKERS,
   normalizeMaxActiveCoworkers,
@@ -157,8 +157,8 @@ function clampNumber(value: number, min: number, max: number, fallback: number):
 }
 
 const initialState = {
-  theme: 'system' as Theme,
-  lightPalette: 'ocean' as LightPalette,
+  theme: 'light' as Theme,
+  lightPalette: DEFAULT_LIGHT_PALETTE,
   accentColor: DEFAULT_ACCENT_COLOR,
   chatTypography: normalizeChatTypography(undefined),
   language: getDefaultLocale(),
@@ -184,6 +184,7 @@ const initialState = {
   protectedActionsInCode: false,
   editMode: 'apply_patch' as import('@shared/types').EditMode,
   compactStrategy: 'standard' as import('@shared/compactStrategy').CompactStrategy,
+  microcompactEnabled: true,
   smartCompactEnabled: false,
   smartCompactModel: null as import('@shared/defaultModel').DefaultModelRef | null,
   smartCompactMode: 'auto' as import('@shared/smartCompactMode').SmartCompactMode,
@@ -302,7 +303,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       setLightPalette: (value) => {
-        const lightPalette = parseLightPalette(value) ?? 'ocean';
+        const lightPalette = parseLightPalette(value) ?? DEFAULT_LIGHT_PALETTE;
         const { theme, terminalTheme } = get();
         applyAppTheme(theme, terminalTheme, lightPalette);
         set({ lightPalette });
@@ -393,6 +394,9 @@ export const useSettingsStore = create<SettingsState>()(
       setEditMode: (editMode) => set({ editMode }),
       setCompactStrategy: (compactStrategy) =>
         set({ compactStrategy, smartCompactEnabled: compactStrategy === 'smart' }),
+      // 只有显式 false 才关闭；脏输入（字符串、数字等）一律保持默认开启
+      setMicrocompactEnabled: (microcompactEnabled) =>
+        set({ microcompactEnabled: microcompactEnabled !== false }),
       setSmartCompactEnabled: (smartCompactEnabled) =>
         set({ smartCompactEnabled, compactStrategy: smartCompactEnabled ? 'smart' : 'standard' }),
       setSmartCompactModel: (smartCompactModel) => set({ smartCompactModel }),
@@ -1196,6 +1200,10 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (s.autoArchiveMergedWorktrees !== true && s.autoArchiveMergedWorktrees !== false) {
           useSettingsStore.setState({ autoArchiveMergedWorktrees: false });
+        }
+        // 外部手改 settings.json 可能写进 truthy 字符串等脏值；只有显式 false 才算关闭
+        if (s.microcompactEnabled !== true && s.microcompactEnabled !== false) {
+          useSettingsStore.setState({ microcompactEnabled: true });
         }
         // 老用户（升级前已有配置）视为已完成引导，避免被打扰
         if (

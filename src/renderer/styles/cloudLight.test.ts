@@ -66,6 +66,26 @@ describe('Cloud Light neutral palette', () => {
     expect(inactive['background-color']).toBe('rgb(180 180 180 / 0.22)');
   });
 
+  it('distinguishes the sidebar view switcher track and selected tab from navigation', () => {
+    const sidebar = `${scope} [data-slot='project-sidebar']`;
+    const track = declarations(`${sidebar} [data-slot='tabs-list']`);
+    const indicator = declarations(`${sidebar} [data-slot='tab-indicator']`);
+
+    // --muted / --background are nearly identical to navigation in this palette.
+    // Use remapped surface tokens so wallpaper opacity remains effective as well.
+    expect(track['background-color']).toBe('var(--color-secondary)');
+    expect(indicator['background-color']).toBe('var(--color-popover)');
+    expect(resolve(track['background-color'])).toBe('#f1f0f0');
+    expect(resolve(indicator['background-color'])).toBe('#ffffff');
+    expect(indicator['box-shadow']).toBe('var(--cloud-lift)');
+
+    for (const styles of [track, indicator]) {
+      for (const property of ['height', 'width', 'padding', 'margin', 'border-radius']) {
+        expect(styles[property], property).toBeUndefined();
+      }
+    }
+  });
+
   it('scopes every override to the opt-in palette and preserves wallpaper navigation', () => {
     root.walkRules((rule) => {
       expect(rule.selector.startsWith(scope), rule.selector).toBe(true);

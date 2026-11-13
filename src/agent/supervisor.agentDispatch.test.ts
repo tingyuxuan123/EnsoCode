@@ -260,6 +260,102 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     }));
   });
 
+  it('微压缩随资源加载且既有会话下一请求读取热更新开关', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-microcompact-supervisor-'));
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        microcompactEnabled: false,
+      });
+      await waitFor(events, 'parent-ready');
+      const extension = (
+        mocks.loaderOptions[0].extensionFactories as Array<{
+          name: string;
+          factory(pi: unknown): void;
+        }>
+      ).find((item) => item.name === 'microcompact');
+      expect(extension).toBeDefined();
+      const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+      extension!.factory({
+        on: (name: string, handler: (event: unknown, ctx: unknown) => unknown) =>
+          handlers.set(name, handler),
+      });
+      const messages = [
+        { role: 'assistant', timestamp: Date.now() },
+        ...Array.from({ length: 10 }, (_, i) => ({
+          role: 'toolResult',
+          toolName: 'read',
+          toolCallId: `micro-${i}`,
+          content: [{ type: 'text', text: 'x'.repeat(100_000) }],
+        })),
+      ];
+      const ctx = {
+        sessionManager: {
+          buildSessionProjection: () => ({
+            entries: messages.map((message, i) => ({
+              sourceEntry: { id: `entry-${i}`, type: 'message', message },
+              messages: [message],
+            })),
+          }),
+        },
+      };
+      const request = () =>
+        (handlers.get('context')?.({ messages }, ctx) as { messages?: unknown[] } | undefined)
+          ?.messages ?? messages;
+      expect(request()).toBe(messages);
+      supervisor.handleCommand({ type: 'set-compact-route', microcompactEnabled: true });
+      // 最近五条仍保留，旧结果则已被换成占位。
+      expect(request()[1]).not.toBe(messages[1]);
+      expect(request().at(-1)).toBe(messages.at(-1));
+      // 同步收到关闭后，早先排队的 spawn 快照不能再次开启所有活会话。
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        microcompactEnabled: true,
+      });
+      supervisor.handleCommand({ type: 'set-compact-route', microcompactEnabled: false });
+      await settle();
+      expect(request()).toBe(messages);
+      supervisor.handleCommand({
+        type: 'lock-workspace',
+        requestId: 'microcompact-lock',
+        conversationIds: [parent.sessionId],
+      });
+      expect(events.findLast((event) => event.type === 'workspace-lock-result')).toMatchObject({
+        ok: true,
+      });
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        microcompactEnabled: true,
+      });
+      supervisor.handleCommand({ type: 'set-compact-route', microcompactEnabled: false });
+      supervisor.handleCommand({
+        type: 'unlock-workspace',
+        requestId: 'microcompact-lock',
+        conversationIds: [parent.sessionId],
+      });
+      await settle();
+      expect(request()).toBe(messages);
+    } finally {
+      await supervisor.shutdown();
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
+    }
+  });
+
   it.each([true, false])('LCU=%s 传到资源加载层，与内置 Computer 独立', async (lcuEnabled) => {
     const events: AgentWorkerEvent[] = [];
     const root = mkdtempSync(path.join(tmpdir(), 'enso-lcu-supervisor-'));
@@ -2167,6 +2263,79 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       expect(
         events.find((event) => event.type === 'status' && event.status === 'failed' && event.error)
       ).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('活轮仍在产出时不误判僵尸，真正空闲后排队消息只发一次', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { events, supervisor, piSession } = await spawnParent();
+      const idle = Promise.withResolvers<undefined>();
+      piSession.isStreaming = true;
+      piSession.waitForIdle = vi.fn(() => idle.promise);
+      supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'queued' });
+      await vi.advanceTimersByTimeAsync(4_000);
+      piSession.emit({ type: 'turn_start' });
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(events.some((event) => event.type === 'turn-failed')).toBe(false);
+      expect(piSession.prompt).not.toHaveBeenCalled();
+
+      piSession.isStreaming = false;
+      idle.resolve(undefined);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(piSession.prompt).toHaveBeenCalledExactlyOnceWith('queued', undefined);
+      expect(piSession.steer).not.toHaveBeenCalled();
+      await supervisor.shutdown();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('活跃事件只延长一个等待窗口，随后静默挂起仍失败', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { events, supervisor, piSession } = await spawnParent();
+      piSession.isStreaming = true;
+      piSession.waitForIdle = vi.fn(() => new Promise<undefined>(() => {}));
+      supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'queued' });
+      await vi.advanceTimersByTimeAsync(4_000);
+      piSession.emit({ type: 'turn_start' });
+      await vi.advanceTimersByTimeAsync(1_001);
+      expect(events.some((event) => event.type === 'turn-failed')).toBe(false);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(events.filter((event) => event.type === 'turn-failed')).toHaveLength(1);
+      expect(piSession.prompt).not.toHaveBeenCalled();
+      await supervisor.shutdown();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('等待失败不吞掉已记录的 agent_end，原轮收束可清掉失败横幅', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { events, supervisor, piSession } = await spawnParent();
+      piSession.isStreaming = true;
+      piSession.waitForIdle = vi.fn(() => new Promise<undefined>(() => {}));
+      piSession.emit({ type: 'agent_end', willRetry: false });
+      supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'queued' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(events.filter((event) => event.type === 'turn-failed')).toHaveLength(1);
+      const failedAt = events.findIndex((event) => event.type === 'turn-failed');
+
+      piSession.isStreaming = false;
+      piSession.emit({ type: 'agent_settled' });
+      await settle();
+      expect(events.slice(failedAt + 1)).toContainEqual(
+        expect.objectContaining({ type: 'turn-completed' })
+      );
+      expect(events.filter((event) => event.type === 'status').at(-1)).toMatchObject({
+        status: 'idle',
+      });
+      expect(events.filter((event) => event.type === 'status').at(-1)).not.toHaveProperty('error');
+      await supervisor.shutdown();
     } finally {
       vi.useRealTimers();
     }

@@ -1,4 +1,7 @@
-import { effectiveDisabledBuiltinAgentTypes } from '@shared/builtinAgents';
+import {
+  agentInstanceDisplayName,
+  effectiveDisabledBuiltinAgentTypes,
+} from '@shared/builtinAgents';
 import { coworkerTabTone } from '@shared/conversationDotTone';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
 import { Bot, Ellipsis, MessagesSquare, Pencil, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
@@ -123,12 +126,15 @@ export function CoworkerTabs({
             <div key={coworker.id} className="group/tab flex h-full shrink-0 items-center">
               <RenameableTab
                 id={coworker.id}
-                label={
+                label={agentInstanceDisplayName(
+                  !coworker.title || coworker.title === coworker.child?.agentInstanceName
+                    ? coworker.child?.agentTypeKey
+                    : undefined,
                   coworker.title ||
-                  coworker.child?.agentInstanceName ||
-                  coworker.coworkerName ||
-                  coworker.id
-                }
+                    coworker.child?.agentInstanceName ||
+                    coworker.coworkerName ||
+                    coworker.id
+                )}
                 className={cn(
                   tabClass(displayedId === coworker.id),
                   displayedId !== coworker.id && 'group-hover/tab:text-foreground'

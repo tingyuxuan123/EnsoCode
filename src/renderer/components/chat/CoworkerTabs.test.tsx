@@ -69,6 +69,35 @@ beforeEach(() => {
 });
 
 describe('协作者标签操作语义', () => {
+  it('旧系统助手页签展示新品牌，不改持久化实例名', () => {
+    mock.state.conversations.coworker = {
+      id: 'coworker',
+      parentId: 'parent',
+      title: 'Enso · a1',
+      child: { mode: 'coworker', agentTypeKey: 'agent:enso', agentInstanceName: 'Enso · a1' },
+    };
+    const html = renderToStaticMarkup(
+      createElement(CoworkerTabs, { parentId: 'parent', displayedId: 'parent' })
+    );
+    expect(html).toContain('Collabra · a1');
+    expect(html).not.toContain('Enso · a1');
+    expect(mock.state.conversations.coworker).toHaveProperty(
+      'child.agentInstanceName',
+      'Enso · a1'
+    );
+  });
+  it('用户主动改过的系统助手页签标题不随品牌覆盖', () => {
+    mock.state.conversations.coworker = {
+      id: 'coworker',
+      parentId: 'parent',
+      title: 'Enso migration notes',
+      child: { mode: 'coworker', agentTypeKey: 'agent:enso', agentInstanceName: 'Enso · a1' },
+    };
+    const html = renderToStaticMarkup(
+      createElement(CoworkerTabs, { parentId: 'parent', displayedId: 'parent' })
+    );
+    expect(html).toContain('Enso migration notes');
+  });
   it.each([true, false])('雇佣类型按设计开关过滤：%s', async (designEnabled) => {
     const dom = parseHTML('<html><body><div id="root"></div></body></html>');
     vi.stubGlobal('window', dom.window);

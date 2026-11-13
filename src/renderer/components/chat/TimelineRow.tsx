@@ -2,6 +2,7 @@ import { splitChatReferences } from '@shared/bots/composerRefs';
 import { parseBotInjectedMessage } from '@shared/bots/injectedMessage';
 import { stripBotNotesUpdate } from '@shared/bots/notes';
 import { isBtwIsolationPrompt } from '@shared/btw';
+import { agentInstanceDisplayName, SYSTEM_ASSISTANT_DISPLAY_NAME } from '@shared/builtinAgents';
 import { chatBodyTypographyStyle } from '@shared/chatTypography';
 import { toLocalImageUrl } from '@shared/localImage';
 import { type PlanNoteKind, parsePlanMessage, splitPlanPrefix } from '@shared/planMode';
@@ -910,7 +911,7 @@ export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
         </span>
       )}
       <span className="shrink-0 truncate font-medium text-foreground">
-        {speaker?.name ?? 'Enso'}
+        {speaker?.name ?? SYSTEM_ASSISTANT_DISPLAY_NAME}
       </span>
       {model && (
         <span className="min-w-0 truncate text-[calc(11rem/14)] text-muted-foreground">
@@ -1060,7 +1061,9 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
       <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-[calc(11rem/14)]">
         <Bot className="h-3.5 w-3.5 shrink-0 text-primary" />
         <span className="text-muted-foreground">{t('Dispatched to')}</span>
-        <span className="font-medium">{entry.child.instanceName}</span>
+        <span className="font-medium">
+          {agentInstanceDisplayName(entry.child.typeKey, entry.child.instanceName)}
+        </span>
       </div>
     );
   }
@@ -1070,7 +1073,8 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
         <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
         <div className="min-w-0">
           <p className="font-medium">
-            {entry.child.instanceName} · {t('Completed')}
+            {agentInstanceDisplayName(entry.child.typeKey, entry.child.instanceName)} ·{' '}
+            {t('Completed')}
           </p>
           {entry.receiptSummary && (
             <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">
@@ -1087,7 +1091,8 @@ function SessionCustomRow({ entry }: { entry: AgentSessionCustomEntry }) {
         <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
         <div className="min-w-0">
           <p className="font-medium">
-            {entry.child.instanceName} · {t('Failed')}
+            {agentInstanceDisplayName(entry.child.typeKey, entry.child.instanceName)} ·{' '}
+            {t('Failed')}
           </p>
           <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{entry.message}</p>
         </div>

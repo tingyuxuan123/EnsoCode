@@ -347,9 +347,10 @@ export class PairClient {
         this.revoke();
         return;
       }
-      if (code === 1000 && reason === 'replaced' && !this.closed) {
-        // 与网络断开不同：自动重连会把另一个页面再踢掉，双方形成无限抢连。
-        // close 只停止当前客户端，不清配对 / 会话缓存；显式接管由 App 新建客户端。
+      // 与网络断开不同：自动重连会把另一个页面再踢掉，双方形成无限抢连。
+      // 新中继用应用层关闭码 4001（不带 reason 也要认）；旧中继仍发 1000 + "replaced"。
+      // close 只停止当前客户端，不清配对 / 会话缓存；显式接管由 App 新建客户端。
+      if ((code === 4001 || (code === 1000 && reason === 'replaced')) && !this.closed) {
         this.close();
         this.events.onState('replaced');
         return;

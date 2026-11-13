@@ -27,7 +27,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function fixture(loop = false) {
+async function fixture(mode: 'idle' | 'loop' | 'trickle' = 'idle') {
   const root = mkdtempSync(path.join(tmpdir(), 'enso-stream-guard-sdk-'));
   let session: AgentSession | undefined;
   cleanups.push(() => {
@@ -65,7 +65,35 @@ async function fixture(loop = false) {
   const fakeStream: Provider['streamSimple'] = (_model, _context, options) => {
     if (options?.signal) signals.push(options.signal);
     const input = createAssistantMessageEventStream();
-    if (loop) {
+    if (mode === 'trickle') {
+      const timer = setInterval(() => {
+        input.push({
+          type: 'toolcall_delta',
+          contentIndex: 0,
+          delta: '{}',
+          partial: {
+            role: 'assistant',
+            api: model.api,
+            provider: model.provider,
+            model: model.id,
+            content: [],
+            stopReason: 'pending',
+            timestamp: Date.now(),
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+          },
+        });
+      }, 60_000);
+      options?.signal?.addEventListener('abort', () => clearInterval(timer), { once: true });
+      cleanups.push(() => clearInterval(timer));
+    }
+    if (mode === 'loop') {
       const text =
         'The model is repeating the same explanation without making any further progress. '.repeat(
           80
@@ -101,7 +129,10 @@ async function fixture(loop = false) {
       stream: fakeStream as Provider['stream'],
     });
   register();
-  installStreamGuard(runtime, { idleTimeoutMs: 20, onStall: vi.fn() });
+  installStreamGuard(runtime, {
+    ...(mode === 'trickle' ? {} : { idleTimeoutMs: 20 }),
+    onStall: vi.fn(),
+  });
   // Provider replacement/refresh must not silently remove the runtime-level wrapper.
   register();
   const settingsManager = SettingsManager.inMemory({
@@ -137,6 +168,22 @@ async function fixture(loop = false) {
 }
 
 describe('real Pi SDK stream guard wiring', () => {
+  it('持续涓流触达总寿命后沿用 SDK 有限重试预算，最终回合只结算一次', async () => {
+    const h = await fixture('trickle');
+    vi.useFakeTimers();
+    const prompt = h.session.prompt('fixture task');
+    await h.started;
+    await vi.advanceTimersByTimeAsync(3 * 3_600_000 + 100);
+    expect(h.signals).toHaveLength(3);
+    expect(h.signals.every((signal) => signal.aborted)).toBe(true);
+    await prompt;
+    expect(h.events.filter((type) => type === 'auto_retry_start')).toHaveLength(2);
+    expect(h.events.filter((type) => type === 'agent_settled')).toHaveLength(1);
+    expect((h.session.messages.at(-1) as AssistantMessage).errorMessage).toMatch(/timed out/i);
+    expect(h.session.isIdle).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('idle timeout uses the existing finite autoRetry budget and settles exactly once', async () => {
     const h = await fixture();
     vi.useFakeTimers();
@@ -172,7 +219,7 @@ describe('real Pi SDK stream guard wiring', () => {
   });
 
   it('exact repetition errors do not autoRetry in the real session', async () => {
-    const h = await fixture(true);
+    const h = await fixture('loop');
     await h.session.prompt('fixture task');
     expect(h.signals).toHaveLength(1);
     expect(h.events.filter((type) => type === 'auto_retry_start')).toHaveLength(0);
@@ -197,7 +244,7 @@ describe('real Pi SDK stream guard wiring', () => {
     const routed = h.runtime.completeSimple(virtual, { messages: [] });
     await vi.advanceTimersByTimeAsync(0);
     expect(h.signals).toHaveLength(2);
-    expect(vi.getTimerCount()).toBe(4);
+    expect(vi.getTimerCount()).toBe(6);
     await vi.advanceTimersByTimeAsync(20);
     expect((await direct).errorMessage).toMatch(/timed out/i);
     expect((await routed).errorMessage).toMatch(/timed out/i);

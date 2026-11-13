@@ -100,6 +100,16 @@ html[data-light-palette='cloud-light'] [data-slot='app-rail'] button.text-brand 
   color: var(--color-foreground);
 }
 
+/* 侧栏分段：通用 muted/background 在云白中近乎同色，改用灰轨与白色选中块。 */
+html[data-light-palette='cloud-light'] [data-slot='project-sidebar'] [data-slot='tabs-list'] {
+  background-color: var(--color-secondary);
+}
+
+html[data-light-palette='cloud-light'] [data-slot='project-sidebar'] [data-slot='tab-indicator'] {
+  background-color: var(--color-popover);
+  box-shadow: var(--cloud-lift);
+}
+
 /* ── 侧栏：当前会话用中性灰填充托出，不加描边、色条或投影 ──────── */
 html[data-light-palette='cloud-light'] [data-slot='conversation-row'][data-active='true'] {
   background-color: var(--cloud-row-active);

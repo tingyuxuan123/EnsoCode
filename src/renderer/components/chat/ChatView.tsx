@@ -1,4 +1,8 @@
-import { agentTypeDisplayName, ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
+import {
+  agentTypeDisplayName,
+  ENSO_AGENT_TYPE_KEY,
+  SYSTEM_ASSISTANT_DISPLAY_NAME,
+} from '@shared/builtinAgents';
 import { conversationCwd } from '@shared/conversationCwd';
 import { conversationDotTone } from '@shared/conversationDotTone';
 import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
@@ -711,8 +715,8 @@ const ENSO_PREFILL_CANDIDATE: AgentTypeMentionCandidate = {
   kind: 'agent-type',
   id: ENSO_AGENT_TYPE_KEY,
   typeKey: ENSO_AGENT_TYPE_KEY,
-  label: 'Enso',
-  displayName: 'Enso',
+  label: SYSTEM_ASSISTANT_DISPLAY_NAME,
+  displayName: SYSTEM_ASSISTANT_DISPLAY_NAME,
   description: 'Collabra system agent for product capabilities and team setup',
   source: 'system',
   locked: true,

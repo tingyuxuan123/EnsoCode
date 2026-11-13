@@ -49,6 +49,7 @@ import {
   forgetParentToolProfile,
   isBrowserSessionToolEnabled,
   pushBuiltinTools,
+  pushCompactRoute,
   resolveAgentTypeSpawnConfig,
   resolveModelSelection,
   setDesignCanvasCwds,
@@ -60,6 +61,29 @@ import { setNativePluginResources } from './nativePluginResources';
 
 const identity = { sessionId: 'hot-parent', generation: '11111111-1111-4111-8111-111111111111' };
 const request = { sessionId: identity.sessionId, cwd: '/tmp', providerId: 'p', modelId: 'm' };
+
+it('微压缩默认启用，明确关闭在 spawn 与既有压缩路由中均保留', () => {
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  try {
+    for (const value of [undefined, false, true, 'false']) {
+      settings.state.microcompactEnabled = value;
+      expect(spawnSession(identity, request, new Set()).ok).toBe(true);
+      expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+        microcompactEnabled: value !== false,
+      });
+      pushCompactRoute(new Set());
+      expect(worker.posted.at(-1)).toMatchObject({
+        type: 'set-compact-route',
+        microcompactEnabled: value !== false,
+      });
+    }
+  } finally {
+    stopAgentWorker();
+  }
+});
+
 beforeEach(() => {
   setNativePluginResources(undefined);
   stopAgentWorker();

@@ -653,7 +653,7 @@ export function AppearanceSettings() {
   } = useSettingsStore();
   const { t } = useI18n();
   const colorScheme = useColorScheme();
-  // 非默认浅色方案自带强调色；仅在实际生效（浅色外观、非同步终端）时锁定强调色选择
+  // 自带强调色的浅色方案，仅在实际生效（浅色外观、非同步终端）时锁定强调色选择
   const paletteAccentNote =
     theme !== 'sync-terminal' && colorScheme === 'light'
       ? {

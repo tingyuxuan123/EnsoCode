@@ -5,6 +5,11 @@ import { toolResultIsError, toolResultText } from './systemReminder';
 
 export const ARTIFACT_URI_SCHEME = 'enso-artifact://';
 export const DEFAULT_MAX_INLINE_BYTES = 32 * 1024;
+/** web_fetch 单页 5 万 UTF-16 字符；160 KiB 容纳中文页、来源及续读提示，异常大结果仍外置。 */
+const TOOL_INLINE_BYTES: Readonly<Record<string, number>> = {
+  read: Number.POSITIVE_INFINITY,
+  web_fetch: 160 * 1024,
+};
 const ARTIFACT_GREP_LIMIT = 100;
 const ARTIFACT_GREP_LINE_CHARS = 500;
 
@@ -203,10 +208,11 @@ export function withToolOutputBudget(
         }
       }
       const result = await definition.execute(toolCallId, params, signal, onUpdate, ctx);
-      if (definition.name === 'read') return result;
+      const inlineBytes = Math.max(TOOL_INLINE_BYTES[definition.name] ?? 0, budget.maxInlineBytes);
+      if (inlineBytes === Number.POSITIVE_INFINITY) return result;
       const text = toolResultText(result);
       const originalBytes = Buffer.byteLength(text);
-      if (!text || originalBytes <= budget.maxInlineBytes) return result;
+      if (!text || originalBytes <= inlineBytes) return result;
       const media = result.content.filter((part) => part.type !== 'text');
       try {
         const reference = budget.write(toolCallId, text);

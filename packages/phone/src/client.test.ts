@@ -249,6 +249,47 @@ describe('PairClient 缓存与续传', () => {
     expect(Socket.all).toHaveLength(2);
   });
 
+  it('中继用 4001 顶替时也只停链：保留缓存、不重连、状态是 replaced', async () => {
+    const socket = await start();
+    const sockets = Socket.all.length;
+    socket.close(4001, 'replaced');
+    await settle();
+    expect(events.onState).toHaveBeenLastCalledWith('replaced');
+    expect(cache.clear).not.toHaveBeenCalled();
+    expect(client.getSession('s')?.messages.get(0)).toEqual(text('old'));
+
+    client.connect();
+    client.nudge('online');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(Socket.all).toHaveLength(sockets);
+    expect(events.onState).toHaveBeenLastCalledWith('replaced');
+  });
+
+  it('4001 不带 reason 也算被顶替，不能落到凭据失效', async () => {
+    const socket = await start();
+    socket.close(4001, '');
+    await settle();
+    expect(events.onState).toHaveBeenLastCalledWith('replaced');
+    expect(cache.clear).not.toHaveBeenCalled();
+    expect(events.onState).not.toHaveBeenCalledWith('unauthorized');
+  });
+
+  it('1008 仍是凭据失效，不被当成被顶替降级为 replaced', async () => {
+    const socket = await start();
+    socket.close(1008, 'revoked');
+    await settle();
+    expect(events.onState).toHaveBeenLastCalledWith('unauthorized');
+    expect(cache.clear).toHaveBeenCalledWith(device.pairId);
+  });
+
+  it('1000 且不是 replaced 时仍按普通断线重连', async () => {
+    const socket = await start();
+    socket.close(1000, '');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(Socket.all).toHaveLength(2);
+    expect(events.onState).not.toHaveBeenCalledWith('replaced');
+  });
+
   it('被接管后迟到的旧连接在线与业务回执不能复活页面', async () => {
     const socket = await start();
     socket.close(1000, 'replaced');

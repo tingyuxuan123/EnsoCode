@@ -93,6 +93,18 @@ export function ContextInspector({
           )}
         </div>
       )}
+      {/*
+        Main 下发的当前分支有效清除量；只陈述已清除的结果数与字符数，
+        不给 token / 成本节省结论，缺统计时不编造 0。
+      */}
+      {occupancy.microcompact !== undefined && occupancy.microcompact.results > 0 && (
+        <p className="text-[calc(11rem/14)] text-muted-foreground">
+          {t('Microcompaction: {{count}} results cleared · {{chars}} characters removed', {
+            count: occupancy.microcompact.results,
+            chars: occupancy.microcompact.charsRemoved,
+          })}
+        </p>
+      )}
       <ul className="flex flex-col gap-1">
         {(Object.keys(BUCKET_LABELS) as (keyof typeof BUCKET_LABELS)[]).map((id) => {
           const tokens = occupancy.buckets[id];

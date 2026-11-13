@@ -1,8 +1,11 @@
 import type { Token } from 'node-llama-cpp';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LlamaEmbeddingContextLike, LlamaModelLike } from '../../llama/runtime';
 import { createGgufEmbeddingProvider } from './gguf';
+import { resolveEmbeddingModelSpec } from './registry';
 import type { EmbeddingModelSpec } from './types';
+
+afterEach(() => vi.restoreAllMocks());
 
 const spec: EmbeddingModelSpec = {
   id: 'local:qwen3-0.6b-gguf',
@@ -102,6 +105,22 @@ function budgetModel(trainContextSize: number, vocabularyType = 'bpe') {
 }
 
 describe('createGgufEmbeddingProvider token budget', () => {
+  it.each([600, 8189])(
+    'BGE-M3 保留 %s token 后的不同结尾，不把长记忆截成相同前缀',
+    async (prefixLength) => {
+      const bge = resolveEmbeddingModelSpec('local:bge-m3-gguf');
+      if (!bge) throw new Error('BGE-M3 is not registered');
+      const fixture = budgetModel(8192, 'wpm');
+      const p = await provider(fixture.model, bge);
+      const texts = [`${'x'.repeat(prefixLength)}A`, `${'x'.repeat(prefixLength)}B`];
+      const vectors = await p.embed(texts, 'passage');
+
+      expect(fixture.seen).toEqual(texts);
+      expect(fixture.evaluated[0]).not.toEqual(fixture.evaluated[1]);
+      expect(vectors.map((vector) => vector?.length)).toEqual([1024, 1024]);
+    }
+  );
+
   it.each(['passage', 'query'] as const)('按真实 token 截断长 %s，前缀也占预算', async (kind) => {
     const fixture = budgetModel(512);
     const p = await provider(fixture.model);
@@ -173,6 +192,40 @@ describe('createGgufEmbeddingProvider token budget', () => {
     const p = await provider(fixture.model);
     await expect(p.embed(['x'], 'passage')).resolves.toEqual([null]);
     expect(fixture.seen).toEqual([]);
+  });
+});
+
+describe('createGgufEmbeddingProvider truncation warning', () => {
+  it('实际截断只告警一次，保留特殊 token 预算与向量归一化，不记录原文', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fixture = budgetModel(10, 'wpm');
+    const p = await provider(fixture.model);
+    const text = 'private-memory-content';
+    const [vector] = await p.embed([text], 'passage');
+    await p.embed([text], 'passage');
+
+    expect(fixture.evaluated.map((tokens) => tokens.length)).toEqual([10, 10]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const warning = String(warn.mock.calls[0]?.[0]);
+    expect(warning).toContain(spec.id);
+    expect(warning).toContain(String(Buffer.byteLength(text)));
+    expect(warning).toContain('8');
+    expect(warning).not.toContain(text);
+    expect(vector?.length).toBe(512);
+    const norm = Math.sqrt(
+      Array.from(vector ?? [], (value) => value * value).reduce((a, b) => a + b, 0)
+    );
+    expect(norm).toBeCloseTo(1, 5);
+  });
+
+  it('短输入与恰好占满预算不触发截断告警', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fixture = budgetModel(10, 'wpm');
+    const p = await provider(fixture.model);
+    await p.embed(['short', 'abcdefgh'], 'passage');
+
+    expect(fixture.seen).toEqual(['short', 'abcdefgh']);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

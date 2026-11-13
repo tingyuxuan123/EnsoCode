@@ -35,7 +35,7 @@ export function BrowserNewTab() {
             <Globe className="size-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-medium text-lg">{t('Enso Browser')}</h2>
+            <h2 className="font-medium text-lg">{t('Collabra Browser')}</h2>
             <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground">
               {t('Your agent can explore the web with you.')}
             </p>

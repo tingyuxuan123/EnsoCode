@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { useUsableProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
@@ -44,6 +45,8 @@ export function SmartCompactPicker() {
   const setModel = useSettingsStore((state) => state.setSmartCompactModel);
   const mode = useSettingsStore((state) => state.smartCompactMode);
   const setMode = useSettingsStore((state) => state.setSmartCompactMode);
+  const microcompactEnabled = useSettingsStore((state) => state.microcompactEnabled);
+  const setMicrocompactEnabled = useSettingsStore((state) => state.setMicrocompactEnabled);
   const candidates = useUsableProviders();
   const selectedProvider = model
     ? candidates.find((entry) => entry.id === model.providerId)
@@ -51,108 +54,139 @@ export function SmartCompactPicker() {
   const selectedModel = selectedProvider?.models.find((entry) => entry.id === model?.modelId);
 
   return (
-    <section
-      className="space-y-[10px] border-t border-line pt-[20px] first-of-type:border-t-0 first-of-type:pt-0"
-      data-settings-row="general.smartCompactEnabled"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h4 className="font-medium text-[calc(14rem/14)]">
-            {t('Context compaction strategy')}
-            <NewSessionBadge />
-          </h4>
-          <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
-            {t(
-              'Standard uses default compact. Smart compaction uses Enso verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.'
-            )}
-          </p>
-        </div>
-        <Select
-          items={Object.fromEntries(
-            COMPACT_STRATEGIES.map((value) => [value, t(STRATEGY_LABEL[value])])
-          )}
-          value={strategy}
-          onValueChange={(value) => setStrategy(value as CompactStrategy)}
-        >
-          <SelectTrigger className="w-52">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            {COMPACT_STRATEGIES.map((value) => (
-              <SelectItem key={value} value={value}>
-                {t(STRATEGY_LABEL[value])}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </div>
-
-      {(strategy === 'smart' || strategy === 'codex-native') && (
-        <div className="flex items-center justify-between gap-4" data-smart-compact-mode={mode}>
+    <>
+      <section
+        className="space-y-[10px] border-t border-line pt-[20px] first-of-type:border-t-0 first-of-type:pt-0"
+        data-settings-row="general.smartCompactEnabled"
+      >
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-muted-foreground text-[calc(12rem/14)]">{t('Compaction mode')}</p>
-            <p className="mt-0.5 text-muted-foreground/80 text-[calc(11rem/14)]">
+            <h4 className="font-medium text-[calc(14rem/14)]">
+              {t('Context compaction strategy')}
+              <NewSessionBadge />
+            </h4>
+            <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
               {t(
-                'Mode changes summary budget and how much recent tail to keep. It does not decide whether compact runs.'
+                'Standard uses default compact. Smart compaction uses Collabra verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.'
               )}
             </p>
           </div>
           <Select
             items={Object.fromEntries(
-              SMART_COMPACT_MODES.map((value) => [value, t(MODE_LABEL[value])])
+              COMPACT_STRATEGIES.map((value) => [value, t(STRATEGY_LABEL[value])])
             )}
-            value={mode}
-            onValueChange={(value) => setMode(value as SmartCompactMode)}
+            value={strategy}
+            onValueChange={(value) => setStrategy(value as CompactStrategy)}
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
-              {SMART_COMPACT_MODES.map((value) => (
+              {COMPACT_STRATEGIES.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {t(MODE_LABEL[value])}
+                  {t(STRATEGY_LABEL[value])}
                 </SelectItem>
               ))}
             </SelectPopup>
           </Select>
         </div>
-      )}
 
-      {enabled && (
-        <div className="space-y-2">
-          <p className="font-medium text-[calc(14rem/14)]">
-            {t(strategy === 'continuous-memory' ? 'Background memory model' : 'Summary model')}
-          </p>
-          {candidates.length > 0 && (
-            <div className="w-full min-w-0">
-              <ModelPicker
-                providers={candidates}
-                providerId={selectedProvider?.id ?? ''}
-                modelId={selectedModel?.id ?? ''}
-                reasoningEnabled={false}
-                thinkingLevel="medium"
-                showReasoningControls={false}
-                emptyLabel={t('Follows the session model')}
-                side="bottom"
-                triggerClassName={MODEL_PICKER_FORM_TRIGGER_CLASS}
-                onSelect={(providerId, modelId) => setModel({ providerId, modelId })}
-                onReasoningChange={() => {}}
-                onThinkingChange={() => {}}
-              />
+        {(strategy === 'smart' || strategy === 'codex-native') && (
+          <div className="flex items-center justify-between gap-4" data-smart-compact-mode={mode}>
+            <div className="min-w-0">
+              <p className="text-muted-foreground text-[calc(12rem/14)]">{t('Compaction mode')}</p>
+              <p className="mt-0.5 text-muted-foreground/80 text-[calc(11rem/14)]">
+                {t(
+                  'Mode changes summary budget and how much recent tail to keep. It does not decide whether compact runs.'
+                )}
+              </p>
             </div>
-          )}
-          {model && (!selectedProvider || !selectedModel) && (
-            <p className="text-muted-foreground text-[calc(12rem/14)]">
-              {t('Selected model is unavailable — falls back to the session model.')}
+            <Select
+              items={Object.fromEntries(
+                SMART_COMPACT_MODES.map((value) => [value, t(MODE_LABEL[value])])
+              )}
+              value={mode}
+              onValueChange={(value) => setMode(value as SmartCompactMode)}
+            >
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {SMART_COMPACT_MODES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(MODE_LABEL[value])}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+        )}
+
+        {enabled && (
+          <div className="space-y-2">
+            <p className="font-medium text-[calc(14rem/14)]">
+              {t(strategy === 'continuous-memory' ? 'Background memory model' : 'Summary model')}
             </p>
-          )}
-          {model && (
-            <Button variant="ghost" size="sm" className="self-start" onClick={() => setModel(null)}>
-              {t('Follow session model')}
-            </Button>
-          )}
+            {candidates.length > 0 && (
+              <div className="w-full min-w-0">
+                <ModelPicker
+                  providers={candidates}
+                  providerId={selectedProvider?.id ?? ''}
+                  modelId={selectedModel?.id ?? ''}
+                  reasoningEnabled={false}
+                  thinkingLevel="medium"
+                  showReasoningControls={false}
+                  emptyLabel={t('Follows the session model')}
+                  side="bottom"
+                  triggerClassName={MODEL_PICKER_FORM_TRIGGER_CLASS}
+                  onSelect={(providerId, modelId) => setModel({ providerId, modelId })}
+                  onReasoningChange={() => {}}
+                  onThinkingChange={() => {}}
+                />
+              </div>
+            )}
+            {model && (!selectedProvider || !selectedModel) && (
+              <p className="text-muted-foreground text-[calc(12rem/14)]">
+                {t('Selected model is unavailable — falls back to the session model.')}
+              </p>
+            )}
+            {model && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                onClick={() => setModel(null)}
+              >
+                {t('Follow session model')}
+              </Button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/*
+        microcompaction 与压缩策略互相独立：它不调用模型、不产生摘要，
+        只清除较早的成功纯文本 read/search 结果，所以放在策略之外单列。
+      */}
+      <section
+        className="border-t border-line pt-[20px] pb-[10px]"
+        data-settings-row="general.microcompactEnabled"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="font-medium text-[calc(13rem/14)]">{t('Microcompaction')}</p>
+            <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
+              {t(
+                'Clears only older successful text-only read and search tool results, keeps the latest 5 and never calls the model. Turning it off stops future clearing; context that is already cleared cannot be restored. Applies to open conversations on the next request.'
+              )}
+            </p>
+          </div>
+          <Switch
+            checked={microcompactEnabled}
+            onCheckedChange={(value) => setMicrocompactEnabled(value === true)}
+          />
         </div>
-      )}
-    </section>
+      </section>
+    </>
   );
 }

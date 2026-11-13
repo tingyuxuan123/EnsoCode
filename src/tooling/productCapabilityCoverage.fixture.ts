@@ -43,6 +43,9 @@ export const SETTINGS_DATA_COVERAGE = {
     'Explore-fold is a desktop session preference, not an Enso capability.'
   ),
   rtkEnabled: excluded('RTK command compression is a desktop session preference.'),
+  microcompactEnabled: excluded(
+    'Microcompaction context clearing is a device-local desktop session preference.'
+  ),
   lcuEnabled: excluded('LCU extension loading is a device-local desktop session preference.'),
   designEnabled: excluded('UI design canvas is a device-local desktop session preference.'),
   memoryEmbeddingModel: excluded('Memory embedding model choice is a desktop preference.'),
@@ -378,6 +381,9 @@ export const SETTINGS_ACTION_COVERAGE = {
   setBackgroundCodeOpacity: excluded('Appearance-only background decoration.'),
   setBackgroundSizeMode: excluded('Appearance-only background decoration.'),
   bumpBackgroundRefresh: excluded('Internal repaint nonce; not user-facing state.'),
+  setMicrocompactEnabled: excluded(
+    'Microcompaction context clearing is a device-local desktop session preference.'
+  ),
 } satisfies Record<SettingsActionKey, CoverageDisposition>;
 
 export const BUILTIN_TOOL_COVERAGE: Readonly<Record<string, CoverageDisposition>> = {

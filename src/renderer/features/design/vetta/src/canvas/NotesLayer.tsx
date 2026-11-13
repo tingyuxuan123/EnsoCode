@@ -369,7 +369,7 @@ function NoteMessageRow({ author, text }: { author: "user" | "agent"; text: stri
 			<NoteAvatar author={author} size={18} />
 			<div className="min-w-0 flex-1">
 				<span className="mb-0.5 block text-[10px] font-medium text-muted-foreground">
-					{isAgent ? "Enso" : t("notes.author.user")}
+					{isAgent ? "Collabra" : t("notes.author.user")}
 				</span>
 				<div
 					className={`rounded-lg rounded-tl-[3px] px-2 py-1.5 text-xs leading-relaxed whitespace-pre-wrap ${

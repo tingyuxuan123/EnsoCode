@@ -1,4 +1,8 @@
-import { ENSO_AGENT_TYPE_KEY, isReservedAgentTypeName } from '@shared/builtinAgents';
+import {
+  ENSO_AGENT_TYPE_KEY,
+  isReservedAgentTypeName,
+  SYSTEM_ASSISTANT_DISPLAY_NAME,
+} from '@shared/builtinAgents';
 import { SUBAGENT_MODELS_CONFIGURE_PROMPT } from '@shared/i18n';
 import { MAX_MAX_ACTIVE_COWORKERS, MIN_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
 import { isClassifierOnlyProvider } from '@shared/providerCatalog';
@@ -153,7 +157,7 @@ export function AgentTypeList({ hasSubagentModels = true }: { hasSubagentModels?
         <Bot className="h-4 w-4 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-[calc(13rem/14)] font-medium">
-            Enso
+            {SYSTEM_ASSISTANT_DISPLAY_NAME}
             <Badge variant="secondary">{t('System')}</Badge>
             <Badge variant="outline">{t('Locked')}</Badge>
           </p>

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { TitleBar } from './TitleBar';
+import { SummonEnsoButton, TitleBar } from './TitleBar';
 
 // SSR 渲染只需要 env.platform；useWindowMaximized 的 effect 不在服务端跑
 vi.stubGlobal('window', {
@@ -15,6 +15,13 @@ const setPlatform = (platform: 'darwin' | 'win32' | 'linux') => {
 const render = (props: Parameters<typeof TitleBar>[0]) =>
   renderToStaticMarkup(createElement(TitleBar, props));
 const centered = createElement('div', { 'data-testid': 'mode-switch' });
+
+it('召唤入口使用 Collabra 名称，组件和派发标识不随品牌改变', () => {
+  const html = renderToStaticMarkup(createElement(SummonEnsoButton));
+  expect(html).toContain('aria-label="Ask Collabra"');
+  expect(html).toContain('>Ask Collabra</span>');
+  expect(html).not.toContain('Ask Enso');
+});
 
 describe('TitleBar centered content', () => {
   it('renders centered content as an overlay sibling of title and actions', () => {

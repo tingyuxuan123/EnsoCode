@@ -29,7 +29,7 @@ export function NativePluginsSection() {
     <section className="space-y-3" data-settings-row="plugins.enso">
       <div className="flex flex-wrap items-start justify-between gap-[16px]">
         <div>
-          <h3 className="font-semibold text-[calc(18rem/14)]">{t('Enso plugins')}</h3>
+          <h3 className="font-semibold text-[calc(18rem/14)]">{t('Collabra plugins')}</h3>
           <p className="mt-1 text-muted-foreground text-[calc(13rem/14)]">
             {t(
               'Native plugins are separate from Claude Code plugins. New installs are disabled until you enable them.'
@@ -84,7 +84,7 @@ export function NativePluginsSection() {
       {!loading && !registryError && plugins.length === 0 && (
         <div className="rounded-[6px] border border-dashed p-6 text-center text-muted-foreground">
           <Puzzle className="mx-auto h-5 w-5" />
-          <p className="mt-2 text-[calc(13rem/14)]">{t('No Enso plugins installed')}</p>
+          <p className="mt-2 text-[calc(13rem/14)]">{t('No Collabra plugins installed')}</p>
         </div>
       )}
       {plugins.map((plugin) => (

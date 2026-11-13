@@ -11,6 +11,7 @@ import {
   type ContextOccupancy,
   type ContextOccupancyBuckets,
 } from '@shared/types/agent';
+import { collectMicrocompactStats } from './microcompact';
 
 export type { ContextOccupancy, ContextOccupancyBuckets, OccupancySkill, OccupancyTool };
 export { CONTEXT_OCCUPANCY_BUCKETS, charsToTokens };
@@ -58,6 +59,8 @@ export interface OccupancyBranchEntry {
   summary?: string;
   tokensBefore?: number;
   message?: unknown;
+  targetId?: string;
+  replacement?: unknown;
 }
 
 export interface CollectContextOccupancyInput {
@@ -134,7 +137,7 @@ export function collectContextOccupancy(input: CollectContextOccupancyInput): Co
     conversationTokens += Math.max(0, estimate(message));
   }
   const instructionText = input.agentsFiles.map((file) => file.content).join('\n');
-  return summarizeContextOccupancy({
+  const occupancy = summarizeContextOccupancy({
     systemText: input.systemPrompt,
     instructionText,
     skillTexts: input.skills.map(skillOccupancyText),
@@ -150,6 +153,8 @@ export function collectContextOccupancy(input: CollectContextOccupancyInput): Co
     contextWindow: input.contextWindow,
     compactionEntryId: compaction?.id,
   });
+  const microcompact = collectMicrocompactStats(input.branch);
+  return microcompact.results > 0 ? { ...occupancy, microcompact } : occupancy;
 }
 
 /** Pi system 消息承载系统提示与工具定义，已计入 system/tools 桶，不算对话。 */

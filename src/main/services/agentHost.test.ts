@@ -962,6 +962,23 @@ describe('resolveAgentTypeSpawnConfig 类型级推理预设', () => {
     expect(resolved.config).toMatchObject({ reasoning: 'on', thinkingLevel: 'xhigh' });
   });
 
+  it('系统助手新实例使用 Collabra 展示名，保留 locked type/profile/tools', () => {
+    setTypeSettings({});
+    const parent = resolveModelSelection('p1', 'strong', new Set());
+    if (!parent.ok) throw new Error(parent.error);
+    const resolved = resolveAgentTypeSpawnConfig('agent:enso', parent.selection, new Set());
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.config).toMatchObject({
+      typeKey: 'agent:enso',
+      displayName: 'Collabra',
+      lockedProfileId: 'enso-locked-v1',
+      tools: 'enso-locked',
+    });
+    expect(resolved.config.systemPrompt).toContain('You are Collabra');
+    expect(resolved.expectedToolIds).toEqual(['enso_capabilities', 'enso_app', 'ask_user']);
+  });
+
   it('非法取值不透传（与 configuredAgentTypes 同口径）', () => {
     setTypeSettings({ reasoning: 'auto', thinkingLevel: 'extreme' });
     const parent = resolveModelSelection('p1', 'strong', new Set());

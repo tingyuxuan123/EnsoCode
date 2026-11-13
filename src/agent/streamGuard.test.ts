@@ -116,6 +116,45 @@ describe('exact repetition detector', () => {
 });
 
 describe('stream guard lifecycle', () => {
+  it.each(['https://fixture.invalid/v1', 'http://localhost:1234/v1'])(
+    '持续涓流也在 60 分钟终止，localhost 网关不豁免：%s',
+    async (baseUrl) => {
+      const h = harness({ onStall: vi.fn() }, { ...model, baseUrl });
+      const partial = message([{ type: 'text', text: 'work so far' }]);
+      h.input.push({ type: 'start', partial });
+      for (let minute = 0; minute < 60; minute++) {
+        await vi.advanceTimersByTimeAsync(59_999);
+        expect(h.signal()?.aborted).toBe(false);
+        h.input.push({ type: 'toolcall_delta', contentIndex: 1, delta: '{}', partial });
+        await vi.advanceTimersByTimeAsync(1);
+      }
+      expect(h.signal()?.aborted).toBe(true);
+      const result = await h.output.result();
+      expect(result.stopReason).toBe('error');
+      expect(result.errorMessage).toMatch(/timed out.*60 minutes/i);
+      partial.content = [{ type: 'text', text: 'late mutation' }];
+      h.input.push({ type: 'done', reason: 'stop', message: { ...partial, stopReason: 'stop' } });
+      await h.consumed;
+      expect(result.content).toEqual([{ type: 'text', text: 'work so far' }]);
+      expect(h.events.filter((event) => event.type === 'error')).toHaveLength(1);
+      expect(h.remove).toHaveBeenCalledWith('abort', expect.any(Function));
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('权威标记的本地推理不受总寿命限制，仍可由用户取消', async () => {
+    const h = harness({ isLocalModel: () => true, onStall: vi.fn() });
+    for (let minute = 0; minute < 65; minute++) {
+      h.input.push({ type: 'toolcall_delta', contentIndex: 0, delta: '{}', partial: message() });
+      await vi.advanceTimersByTimeAsync(60_000);
+    }
+    expect(h.signal()?.aborted).toBe(false);
+    h.caller.abort('user cancellation');
+    expect((await h.output.result()).stopReason).toBe('aborted');
+    await h.consumed;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('does not dispatch inner when the caller was already aborted', async () => {
     const caller = new AbortController();
     const reason = { cause: 'user cancelled' };
@@ -486,7 +525,7 @@ describe('stream guard lifecycle', () => {
     expect(runtime.streamSimple).toBe(installed);
     const output = runtime.streamSimple({ ...model, api: 'pi-virtual' });
     expect(requests).toBe(1);
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(3);
     await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS);
     expect((await output.result()).stopReason).toBe('error');
     expect(vi.getTimerCount()).toBe(0);
@@ -517,7 +556,7 @@ describe('stream guard lifecycle', () => {
     expect(runtime.streamSimple).toBe(installedSimple);
     const simple = runtime.streamSimple(model, { messages: [] });
     const full = runtime.stream(model, { messages: [] });
-    expect(vi.getTimerCount()).toBe(4);
+    expect(vi.getTimerCount()).toBe(6);
     await vi.advanceTimersByTimeAsync(20);
     expect((await simple.result()).errorMessage).toMatch(/timed out/i);
     expect((await full.result()).errorMessage).toMatch(/timed out/i);

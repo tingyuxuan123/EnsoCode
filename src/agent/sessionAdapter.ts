@@ -135,6 +135,11 @@ export function silentTurnRecoveryExtension(
           activeNudge = undefined;
           return;
         }
+        // length 由有界输出恢复处理，不当成空回复删除，也不额外消费一次恢复请求。
+        if (event.message.role === 'assistant' && event.message.stopReason === 'length') {
+          activeNudge = undefined;
+          return;
+        }
 
         if (activeNudge) {
           if (

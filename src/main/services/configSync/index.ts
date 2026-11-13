@@ -85,6 +85,10 @@ export const CONFIG_SYNC_FIELD_POLICY = {
   editMode: { mode: 'portable' },
   hashlineEditEnabled: { mode: 'excluded', reason: 'legacy read-only edit mode migration' },
   compactStrategy: { mode: 'portable' },
+  microcompactEnabled: {
+    mode: 'excluded',
+    reason: 'device-local context clearing behavior; cleared context cannot be restored elsewhere',
+  },
   smartCompactEnabled: { mode: 'portable' },
   smartCompactModel: { mode: 'portable' },
   smartCompactMode: { mode: 'portable' },

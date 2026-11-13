@@ -14,6 +14,8 @@
   到 worker 时手动压缩正在跑，pi `prompt()` 直接抛错。
 - pi 自动压缩在 `agent_end` 之后、`_isAgentRunActive` 仍为 true 时进行，
   prompt 被当成僵尸轮只等 5 秒就失败。
+- 投影 idle 但 SDK 仍 streaming 时，活轮继续产出的事件不能被当作静默僵尸；
+  误判失败若清掉已记下的 `settlePending`，随后的 `agent_settled` 也无法清掉失败横幅。
 - `waitForIdle()` 在 `agent_settled` 发出后同步唤醒，早于扩展的 `setTimeout(0)`：
   若醒来立刻起新轮，随后启动的压缩会 `abort()` 掉这轮。
 - renderer 在压缩 end 时泵队列，不知道上一条 prompt 还在 worker 里等压完。
@@ -21,7 +23,9 @@
 ## 修法
 
 - worker `prompt` 走 `waitPromptable`：`isCompacting` 不限时 `waitForIdle`（不计僵尸时限），
-  只对纯 streaming 限时；每次等过之后让一拍 `setTimeout(0)` 再复查，给延后压缩先启动的机会。
+  只对纯 streaming 限时；等待窗口内有会话事件（用单调事件计数，不把新命令算进来），
+  或投影已恢复 running，就继续等。静默挂死仍按时失败，且保留原轮已记录的终态收束。
+  每次等过之后让一拍 `setTimeout(0)` 再复查，给延后压缩先启动的机会。
 - renderer 压缩 end 时若时间线里还有 optimistic 回显（投递在途），不泵队列、不续跑 goal，
   交给那一轮 turn-completed 泵。
 - 空闲会话换模型时，用新选模型窗口与每模型预留判断是否提前压缩；必须同时确认 SDK 空闲、
@@ -31,7 +35,7 @@
 ## 回归防线
 
 - `src/agent/supervisor.agentDispatch.test.ts`：压缩中 prompt 等压完、自动压缩超僵尸时限不失败、
-  空闲后下一个宏任务才启动的压缩。
+  空闲后下一个宏任务才启动的压缩、活轮不误判、重新静默后仍失败、原轮收束清掉失败横幅。
 - `src/renderer/stores/sessions/index.test.ts`：压缩结束时已有投递在途不再泵下一条。
 - `src/agent/supervisor.compact.test.ts`：换模型后按新窗口和每模型预留触发；压缩启动前的空档不放过后续 prompt。
 

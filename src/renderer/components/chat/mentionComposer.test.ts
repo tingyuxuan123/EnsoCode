@@ -68,6 +68,15 @@ const duplicateNames = toFileMentionCandidates([
   { name: 'index.ts', relativePath: 'src/renderer/index.ts' },
 ]);
 
+it('旧系统目录的 Enso 候选展示为 Collabra，派发 typeKey 保持不变', () => {
+  expect(toAgentMentionCandidates(registry)[0]).toMatchObject({
+    label: 'Collabra',
+    displayName: 'Collabra',
+    typeKey: 'agent:enso',
+    id: 'agent:enso',
+  });
+});
+
 describe('typed multi-entity mentions', () => {
   it('含空格和中文的 Windows/Unix 文件路径整体往返，旧无空格格式不变', () => {
     for (const path of [

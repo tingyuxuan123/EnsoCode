@@ -828,7 +828,7 @@ export function resolveAgentTypeSpawnConfig(
       ok: true,
       config: {
         typeKey,
-        displayName: 'Enso',
+        displayName: candidate.displayName,
         description: candidate.description,
         spawnSpecId: randomUUID(),
         systemPrompt: ENSO_SYSTEM_PROMPT,
@@ -1097,6 +1097,7 @@ export function spawnSession(
     ...(windowsLocalShell !== 'auto' ? { windowsLocalShell } : {}),
     rtkEnabled: state?.rtkEnabled !== false,
     lcuEnabled: state?.lcuEnabled !== false,
+    microcompactEnabled: state?.microcompactEnabled !== false,
     ...(exploreFoldEnabled ? { exploreFoldEnabled: true } : {}),
     editMode,
     ...(compactStrategy !== 'standard' ? { compactStrategy } : {}),
@@ -2088,6 +2089,7 @@ export function pushCompactRoute(authenticatedAccountKeys?: ReadonlySet<string>)
   const mode = parseSmartCompactMode(state?.smartCompactMode) ?? undefined;
   worker.postMessage({
     type: 'set-compact-route',
+    microcompactEnabled: state?.microcompactEnabled !== false,
     ...(model ? { model } : {}),
     ...(mode ? { mode } : {}),
   } satisfies AgentCommand);

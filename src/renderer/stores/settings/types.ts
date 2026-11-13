@@ -149,6 +149,12 @@ export interface SettingsState {
 
   /** 上下文压缩策略；缺省 standard，新会话生效。 */
   compactStrategy: CompactStrategy;
+  /**
+   * 保守 microcompaction：只把较早的成功纯文本 read/search 结果替换为占位符（保留最近 5 条），
+   * 不调用模型、不触发 compaction；缺省 true，独立于压缩策略。
+   * 关闭只停止后续清除，已清除的上下文无法恢复。
+   */
+  microcompactEnabled: boolean;
   /** 旧设置兼容：rehydrate 后由策略选择取代。 */
   smartCompactEnabled: boolean;
   /** 智能压缩独立模型；null = 跟随当前会话模型 */
@@ -387,6 +393,7 @@ export interface SettingsState {
   setVoiceGeminiApiKey: (value: string) => void;
   setEditMode: (value: EditMode) => void;
   setCompactStrategy: (value: CompactStrategy) => void;
+  setMicrocompactEnabled: (value: boolean) => void;
   setSmartCompactEnabled: (value: boolean) => void;
   setSmartCompactModel: (value: DefaultModelRef | null) => void;
   setSmartCompactMode: (value: import('@shared/smartCompactMode').SmartCompactMode) => void;

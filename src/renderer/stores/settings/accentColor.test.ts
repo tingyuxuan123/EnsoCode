@@ -2,10 +2,19 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as SettingsModule from './index';
 import { mergeSettingsState } from './migrate';
 
+const rootClasses = new Set<string>();
 const documentElement = {
   lang: 'en',
   dataset: {} as Record<string, string>,
-  classList: { toggle: vi.fn() },
+  classList: {
+    toggle: vi.fn((name: string, force?: boolean) => {
+      const enabled = force ?? !rootClasses.has(name);
+      if (enabled) rootClasses.add(name);
+      else rootClasses.delete(name);
+      return enabled;
+    }),
+    contains: (name: string) => rootClasses.has(name),
+  },
   style: { setProperty: vi.fn(), removeProperty: vi.fn() },
 };
 let systemDark = false;
@@ -37,11 +46,23 @@ beforeAll(async () => {
 });
 
 describe('desktop light palette', () => {
-  it('is opt-in and restores the selected palette only for non-terminal light appearance', () => {
+  it('新安装默认使用浅色云白，不依赖系统外观', () => {
     const store = settings.useSettingsStore.getState();
-    expect(store.lightPalette).toBe('ocean');
+    expect(store.theme).toBe('light');
+    expect(store.lightPalette).toBe('cloud-light');
+    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    const notifySystemChange = mediaChange.mock.calls.find(([event]) => event === 'change')?.[1];
+    expect(notifySystemChange).toBeTypeOf('function');
+    systemDark = true;
+    notifySystemChange?.();
+    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    expect(documentElement.classList.contains('dark')).toBe(false);
+    systemDark = false;
+  });
+
+  it('restores the selected palette only for non-terminal light appearance', () => {
+    const store = settings.useSettingsStore.getState();
     store.setTheme('light');
-    expect(documentElement.dataset.lightPalette).toBeUndefined();
     store.setLightPalette('mint-light');
     expect(documentElement.dataset.lightPalette).toBe('mint-light');
     store.setTheme('dark');
@@ -78,15 +99,15 @@ describe('desktop light palette', () => {
     expect(documentElement.dataset.lightPalette).toBeUndefined();
   });
 
-  it('hydrates saved preferences and rejects an unknown or missing palette', async () => {
+  it('保留已保存的配色，缺失或非法浅色方案回退云白', async () => {
     const store = settings.useSettingsStore;
     for (const [saved, expected] of [
       [{ lightPalette: 'mint-light' }, 'mint-light'],
-      [{ lightPalette: { palette: 'mint-light' } }, 'ocean'],
+      [{ lightPalette: { palette: 'mint-light' } }, 'cloud-light'],
       [{ lightPalette: 'cloud-light' }, 'cloud-light'],
-      [{ lightPalette: 'cloud' }, 'ocean'],
-      [{ lightPalette: 'mint-light' }, 'mint-light'],
-      [{}, 'ocean'],
+      [{ lightPalette: 'cloud' }, 'cloud-light'],
+      [{ lightPalette: 'ocean' }, 'ocean'],
+      [{}, 'cloud-light'],
     ] as const) {
       settingsRead.mockResolvedValueOnce({
         'enso-settings': { version: 18, state: { theme: 'light', ...saved } },
@@ -97,6 +118,16 @@ describe('desktop light palette', () => {
         expected === 'ocean' ? undefined : expected
       );
     }
+  });
+
+  it('设置入口收到非法浅色方案时同样回退云白', () => {
+    const store = settings.useSettingsStore.getState();
+    store.setTheme('light');
+    store.setLightPalette('mint-light');
+    // @ts-expect-error 外部调用可能绕过静态类型，验证运行时回退。
+    store.setLightPalette('unknown');
+    expect(settings.useSettingsStore.getState().lightPalette).toBe('cloud-light');
+    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
   });
 });
 

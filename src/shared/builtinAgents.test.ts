@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agentInstanceDisplayName,
   agentTypeDisplayName,
   buildAgentTypeRegistrySnapshot,
   ENSO_AGENT_TYPE_KEY,
@@ -62,7 +63,7 @@ describe('agentTypeDisplayName', () => {
   it('maps type keys to human-readable names', () => {
     expect(agentTypeDisplayName(`custom:${CUSTOM_ID}`, custom)).toBe('reviewer-x');
     expect(agentTypeDisplayName('builtin:scout', custom)).toBe('scout');
-    expect(agentTypeDisplayName(ENSO_AGENT_TYPE_KEY, custom)).toBe('Enso');
+    expect(agentTypeDisplayName(ENSO_AGENT_TYPE_KEY, custom)).toBe('Collabra');
   });
 
   it('keeps legacy plain names and falls back for unknown custom ids', () => {
@@ -70,6 +71,15 @@ describe('agentTypeDisplayName', () => {
     expect(agentTypeDisplayName('custom:22222222-2222-4222-8222-222222222222', custom)).toBe(
       'custom'
     );
+  });
+
+  it('旧系统协作者实例只在展示时换品牌，不改存储名或其他 Agent 名称', () => {
+    const name = 'Enso · a1';
+    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, name)).toBe('Collabra · a1');
+    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, 'Enso-1234')).toBe('Collabra-1234');
+    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, '我的配置助手')).toBe('我的配置助手');
+    expect(agentInstanceDisplayName('builtin:worker', name)).toBe(name);
+    expect(name).toBe('Enso · a1');
   });
 });
 
@@ -92,7 +102,7 @@ describe('AgentType registry and locked Enso profile', () => {
     });
     expect(snapshot.candidates[0]).toMatchObject({
       typeKey: ENSO_AGENT_TYPE_KEY,
-      displayName: 'Enso',
+      displayName: 'Collabra',
       source: 'system',
       locked: true,
       canDisable: false,
@@ -102,10 +112,40 @@ describe('AgentType registry and locked Enso profile', () => {
 
   it('保留名归一化/case-fold 供 settings 与 Main 共用', () => {
     expect(normalizeAgentTypeName('  ＥＮＳＯ  ')).toBe('enso');
-    for (const name of ['Enso', ' ENSO ', 'agent:foo', 'builtin:scout', 'custom:x']) {
+    for (const name of [
+      'Enso',
+      ' ENSO ',
+      'Collabra',
+      ' ＣＯＬＬＡＢＲＡ ',
+      'agent:foo',
+      'builtin:scout',
+      'custom:x',
+    ]) {
       expect(isReservedAgentTypeName(name), name).toBe(true);
     }
     expect(isReservedAgentTypeName('reviewer')).toBe(false);
+  });
+
+  it('新名称和旧系统目录均能收窄，标识与锁定权限仍保持不变', () => {
+    const current = buildAgentTypeRegistrySnapshot({
+      revision: 1,
+      disabledBuiltinAgentTypes: [],
+      customAgentTypes: [],
+    });
+    expect(
+      parseAgentTypeCandidate({ ...current.candidates[0], displayName: 'Collabra' })
+    ).not.toBeNull();
+    expect(
+      parseAgentTypeRegistrySnapshot({
+        ...current,
+        candidates: [{ ...current.candidates[0], displayName: 'Enso' }],
+      })
+    ).not.toBeNull();
+    expect(
+      parseAgentTypeCandidate({ ...current.candidates[0], displayName: 'Imposter' })
+    ).toBeNull();
+    expect(current.candidates[0].typeKey).toBe('agent:enso');
+    expect(parseAgentTypeCandidate({ ...current.candidates[0], locked: false })).toBeNull();
   });
 
   it('registry 过滤 disabled builtin/非法 custom；同名合法 custom 覆盖 builtin', () => {

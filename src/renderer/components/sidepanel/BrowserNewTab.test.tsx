@@ -29,6 +29,9 @@ afterEach(async () => {
 });
 
 describe('BrowserNewTab layout', () => {
+  it('内嵌浏览器使用 Collabra 品牌', () => {
+    expect(container.querySelector('h2')?.textContent).toBe('Collabra Browser');
+  });
   it('centers the content block horizontally and vertically inside the panel', () => {
     const shell = container.querySelector(':scope > div');
     const block = shell?.querySelector(':scope > div');

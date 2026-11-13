@@ -59,6 +59,10 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 - `streamGuard.ts` 包装共享 runtime 的公开流出口，不接管 session 重试或结算。
   任意事件刷新空闲时钟；90 秒只记日志，默认 300 秒无事件产生可重试超时。
   localhost 可能是云端网关，不能据地址自动放宽；900 秒只供权威本地推理调用方显式注入。
+  远端单次请求另有不随事件重置的 60 分钟总寿命，避免涓流无限刷新空闲计时；
+  仅同一权威本地推理判定可豁免，超时沿用 SDK 的有限自动重试预算。
+  工具声明顺序在共享 runtime 及公开 `onPayload` 出口稳定化；Pi 1.4 的 tools 来自
+  transcript 系统消息，不能仅排序 `Context.tools`。保留原 payload hook、权限和声明内容。
   用户取消始终为 aborted，长段正文/思考的完全周期复读为不可重试错误；不检测工具参数。
   正常终态、取消、超时都必须只结算一次，清 timer/listener，迟到数据不得改变已返回快照。
 - 后台完成通知带有界输出尾部，不代表新的用户请求。命令和输出进入通知包络前须转义；
@@ -78,6 +82,27 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   不跟随通知目录/文件链接，原子替换。新通知仅在 SDK preflight 接受后确认；恢复的旧通知
   单独保存，只搭下一次真实工具结果，不在打开会话或轮次收口时自动唤醒模型，不承诺恢复进程。
   删除会话时 Main 清盘并发送 `forget-notifications`，防止旧任务迟到重新创建孤儿文件。
+- 完成通知条数溢出时留一条累计告知（占容量一格），投递失败重排时合并旧/新告知的
+  丢弃数，不把告知当作普通任务驱逐；它只说明通知漏送，不代表任务停止或完成。
+- `web_fetch` 的 5 万字符分页使用 160 KiB 内联下限以容纳中文正文和续读提示；
+  `read` 继续自管分页，其它工具沿用会话预算，异常大网页结果仍可外置回读。
+- 输出恢复只在成功回合 `length` 且用量达到实际物理模型上限时续写，每次 agent run
+  最多追加三次；错误、取消和未知用量不猜测续跑，不改变 SDK 压缩/重试预算。
+  截断的工具调用由 SDK 拒绝，扩展仅给后续请求拆分指导，不重放调用或绕过审批。
+  `silent-turn-recovery` 不再删除 `length` 回复，避免两种恢复重复请求或丢掉思考前文。
+
+## 保守微压缩
+
+- `microcompact.ts` 只清旧的成功纯文本 `read/grep/find/ls/web_fetch/web_search` 结果，
+  保留最近五条可清结果；错误、图片/未知块、artifact 引用、shell/写入/用户回答/子代理结果不清。
+- 请求前按当前模型视图选择，并映射到权威投影的 source entry、调用身份和正文；正常完成且
+  未取消的 `turn_end` 复核后追加 `context_edit`，不改原始 JSONL 与完整时间线。
+- 默认开启的设备本地开关由 Main 经 spawn / `set-compact-route` 下发；按接收顺序应用，
+  排队执行和工作区解锁重入不得覆盖后来的关闭。关闭只阻止后续清理，不撤销既有编辑。
+- 清理统计重放当前有效编辑，只计微压缩前后的字符差；不计已被摘要移出的旧结果，
+  不重复归因其它扩展的改写，不宣称 token、费用或缓存收益。
+- 回归：`microcompact*.test.ts`、`contextOccupancy.microcompact.test.ts`、
+  `agent.microcompact.test.ts` 和 supervisor 的微压缩热更新/工作区锁用例。
 
 ## 临时会话与工具热切换
 
@@ -95,6 +120,9 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 
 ## 内置记忆的相关度、取消与失败恢复
 
+- 本地 BGE-M3 使用原生 8192 token 上限，不沿用其它 embedding 的 512 配置；否则
+  开头相同的长记忆会被截成相同前缀。仍按训练长度和特殊 token 预算截断，每个 provider
+  实例实际截断只告警一次，只记录模型与 token 数、不记录正文；不自动重建历史向量索引。
 - 混排 score 仅用于排序，对外返回 rank 与可选向量余弦 relevance；FTS 命中不填伪相关度，
   旧历史 score 不能继续当百分比展示。显式匹配年份加分最多 0.1，不降低语义权重。
 - 向量距离相同时按记忆 rowid（插入序）排，不用随机 UUID 决胜，也不改原始相关度。

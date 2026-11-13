@@ -167,7 +167,7 @@ export const zhTranslations: Record<string, string> = {
   'Confirm install': '确认安装',
   'Decision models only allow or block when highly confident. Everything else asks you.':
     '决策模型只在高置信时才放行或拦截，其余情况都会询问你。',
-  'Enso plugins': 'Enso 插件',
+  'Collabra plugins': 'Collabra 插件',
   Extensions: '扩展',
   'Back to conversation': '返回对话',
   'Manage your skills, MCP connections, and installed plugins.':
@@ -217,7 +217,7 @@ export const zhTranslations: Record<string, string> = {
   'Keep current': '保留当前版本',
   'Native plugins are separate from Claude Code plugins. New installs are disabled until you enable them.':
     '原生插件与 Claude Code 插件相互独立；新安装的插件默认停用，需要你手动启用。',
-  'No Enso plugins installed': '尚未安装 Enso 插件',
+  'No Collabra plugins installed': '尚未安装 Collabra 插件',
   'No apps are always allowed yet.': '还没有永久允许的应用。',
   'Not set': '未设置',
   'Only runs automatically when the allow probability reaches this value. Operations near the threshold may be allowed one time and not the next.':
@@ -228,8 +228,8 @@ export const zhTranslations: Record<string, string> = {
   'Plugin is not enabled': '插件未启用',
   'Preview URL': '预览链接',
   'Review plugin installation': '确认插件安装',
-  'Plugin main runs with full Node.js access. ui.js has the same access as the main interface. Install only plugins you fully trust. Permissions restrict Enso host APIs, not the plugin’s own code; this is not an OS sandbox.':
-    '插件主进程拥有完整的 Node.js 访问权限；ui.js 与主界面同权。只安装完全信任的插件。权限只限制 Enso 宿主 API，不限制插件自身的代码；这不是操作系统沙箱。',
+  'Plugin main runs with full Node.js access. ui.js has the same access as the main interface. Install only plugins you fully trust. Permissions restrict Collabra host APIs, not the plugin’s own code; this is not an OS sandbox.':
+    '插件主进程拥有完整的 Node.js 访问权限；ui.js 与主界面同权。只安装完全信任的插件。权限只限制 Collabra 宿主 API，不限制插件自身的代码；这不是操作系统沙箱。',
   Revoke: '撤销',
   'Set (leave blank to keep)': '设置（留空则保持不变）',
   'The first time the AI clicks or types in an app, Collabra asks you. Apps you always allow are listed here; it can then read everything in their windows.':
@@ -489,9 +489,9 @@ export const zhTranslations: Record<string, string> = {
   'Git Bash': 'Git Bash',
   Light: '浅色',
   'Light palette': '浅色方案',
-  'Ocean Light': '晴空碧海（默认）',
+  'Ocean Light': '晴空碧海',
   'Mint Light': '薄荷白',
-  'Cloud Light': '云白',
+  'Cloud Light': '云白（默认）',
   'Used in light mode or when the system is light.':
     '在浅色模式下使用，跟随系统时仅在系统为浅色时生效。',
   'Mint Light uses its own green accent.': '薄荷白使用主题自带的绿色强调色。',
@@ -566,7 +566,7 @@ export const zhTranslations: Record<string, string> = {
   'Navigation failed': '导航失败',
   'Agent is browsing': 'Agent 正在操作',
   'Take control': '接管',
-  'Enso is in control': 'Enso 正在接管',
+  'Collabra is in control': 'Collabra 正在接管',
   'Toggle Developer Tools': '开关开发者工具',
   'Toggle Design Mode': '开关圈选模式',
   'Multi-point annotation': '多点标注',
@@ -587,7 +587,7 @@ export const zhTranslations: Record<string, string> = {
   'Open HTTP(S) links in a new tab. Ctrl/Cmd-click uses your system browser. Only when the Browser tool is enabled for the project.':
     '在新标签页打开 HTTP(S) 链接。按住 Ctrl / ⌘ 点击则使用系统浏览器。仅在该项目启用浏览器工具时生效。',
   'Could not open link in built-in browser': '无法在内置浏览器中打开链接',
-  'Enso Browser': 'Enso 浏览器',
+  'Collabra Browser': 'Collabra 浏览器',
   'Your agent can explore the web with you.': '让 Agent 和你一起探索网页。',
   'Browse the web': '浏览网页',
   'Open websites, search, and move between tabs.': '打开网站、搜索内容，并在标签页之间切换。',
@@ -611,10 +611,10 @@ export const zhTranslations: Record<string, string> = {
   'Could not change browser control.': '无法更改浏览器控制权。',
   'Browser action failed.': '浏览器操作失败。',
   'Enter a valid web address or search term.': '请输入有效网址或搜索内容。',
-  'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Enso.':
-    '这里只能打开 HTTP、HTTPS 网址或工作区 file URL。工作区文件访问由 Enso 校验。',
-  'Enter a valid file URL without credentials or NUL characters. Enso checks workspace access.':
-    '请输入有效且不含用户名、密码或 NUL 字符的 file URL。Enso 会校验工作区访问权限。',
+  'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Collabra.':
+    '这里只能打开 HTTP、HTTPS 网址或工作区 file URL。工作区文件访问由 Collabra 校验。',
+  'Enter a valid file URL without credentials or NUL characters. Collabra checks workspace access.':
+    '请输入有效且不含用户名、密码或 NUL 字符的 file URL。Collabra 会校验工作区访问权限。',
   'Enter a valid web address without embedded credentials.': '请输入有效且不含用户名或密码的网址。',
   'Device preview': '设备预览',
   'Device preset': '设备预设',
@@ -766,8 +766,8 @@ export const zhTranslations: Record<string, string> = {
   'Context window compaction threshold; larger values compact earlier; new sessions only.':
     '上下文窗口的压缩阈值，值越大越早压缩，仅新会话生效。',
   'Context compaction strategy': '上下文压缩策略',
-  'Standard uses default compact. Smart compaction uses Enso verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.':
-    '标准使用默认压缩。智能压缩在压缩时用 Enso 验证式摘要。Codex 原生压缩在 Codex 模型上额外保存官方 Codex checkpoint，其他模型按智能压缩处理。持续记忆在后台持续记录观察，压缩时保留更多上下文；失败都回退默认压缩。切换策略从下一个会话生效。摘要模型和压缩档位对已打开的对话在下一次压缩时用最新设置。',
+  'Standard uses default compact. Smart compaction uses Collabra verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.':
+    '标准使用默认压缩。智能压缩在压缩时用 Collabra 验证式摘要。Codex 原生压缩在 Codex 模型上额外保存官方 Codex checkpoint，其他模型按智能压缩处理。持续记忆在后台持续记录观察，压缩时保留更多上下文；失败都回退默认压缩。切换策略从下一个会话生效。摘要模型和压缩档位对已打开的对话在下一次压缩时用最新设置。',
   Standard: '标准',
   'Smart compaction': '智能压缩',
   'Codex native compaction': 'Codex 原生压缩',
@@ -785,6 +785,11 @@ export const zhTranslations: Record<string, string> = {
   'Follow session model': '改跟会话模型',
   'Selected model is unavailable — falls back to the session model.':
     '所选模型已不可用——将回退到当前会话模型。',
+  Microcompaction: '微压缩',
+  'Clears only older successful text-only read and search tool results, keeps the latest 5 and never calls the model. Turning it off stops future clearing; context that is already cleared cannot be restored. Applies to open conversations on the next request.':
+    '只清除较早的、成功的纯文本 read/search 工具结果，保留最近 5 条，不调用模型。关闭后只停止后续清除，已清除的上下文无法恢复。对已打开的对话在下一次请求时生效。',
+  'Microcompaction: {{count}} results cleared · {{chars}} characters removed':
+    '微压缩：已清除 {{count}} 个结果 · {{chars}} 个字符',
   'Show read/grep/find/ls as one-line rows and fold consecutive tool calls while the agent is still running':
     'read/grep/find/ls 显示为单行，agent 运行中也折叠连续的工具调用',
   'Auto-collapse previous turns': '自动折叠历史轮次',
@@ -1163,8 +1168,8 @@ export const zhTranslations: Record<string, string> = {
   'Send only to the selected Agent': '仅发送给所选 Agent',
   Send: '发送',
   'Create or select a project to start a conversation': '创建或选择一个项目以开始对话',
-  'Ask Enso': '询问 Enso',
-  'Need help choosing a setup? Ask Enso.': '不确定如何配置？询问 Enso。',
+  'Ask Collabra': '询问 Collabra',
+  'Need help choosing a setup? Ask Collabra.': '不确定如何配置？询问 Collabra。',
   Locked: '已锁定',
   'Inherits the conversation model and provides product capabilities':
     '继承当前对话模型，并提供产品能力',
@@ -1199,8 +1204,8 @@ export const zhTranslations: Record<string, string> = {
   'Parent ready model did not match the bound model.': '父会话就绪模型与绑定模型不匹配。',
   'Child ready identity mismatch.': '子 Agent 就绪身份不匹配。',
   'Child ready profile or model mismatch.': '子 Agent 就绪配置或模型不匹配。',
-  'Locked Enso tool profile mismatch.': 'Enso 锁定工具配置不匹配。',
-  'Failed to bind the Enso capability generation.': '无法绑定 Enso 能力代次。',
+  'Locked Enso tool profile mismatch.': 'Collabra 锁定工具配置不匹配。',
+  'Failed to bind the Enso capability generation.': '无法绑定 Collabra 能力代次。',
   'Failed to prompt child Agent.': '无法向子 Agent 发送任务。',
   'Failed to record dispatch.': '无法记录派发结果。',
   // Dangerous capability confirmation summaries
@@ -1258,7 +1263,7 @@ export const zhTranslations: Record<string, string> = {
   'Delegate an arbitrary coding subtask to a subagent.': '将任意编码子任务委派给 subagent。',
   'Use the unrestricted coworker tool.': '使用不受限的 Coworker 工具。',
   'Run a background shell task.': '运行后台 shell 任务。',
-  "Browse pages in Enso's built-in browser.": '在 Enso 内嵌浏览器里浏览页面。',
+  "Browse pages in Collabra's built-in browser.": '在 Collabra 内嵌浏览器里浏览页面。',
   'Run JavaScript that calls coding-session tools, including edits.':
     '运行会调用编码会话工具（含编辑）的 JavaScript。',
   'Search and capture durable memories across coding sessions.': '跨编码会话检索与记录持久记忆。',
@@ -2039,8 +2044,8 @@ export const zhTranslations: Record<string, string> = {
     '向用户提问并等待回答(带选项/超时)',
   'Background shell task: run long commands in the background and notify on completion':
     '后台 shell 任务:长命令挂后台跑,完成时通知',
-  "Built-in browser: open pages in Enso's own Chromium, read snapshots, click and type by ref":
-    '内嵌浏览器:在 Enso 自带 Chromium 里打开页面,读快照,按 ref 点击与输入',
+  "Built-in browser: open pages in Collabra's own Chromium, read snapshots, click and type by ref":
+    '内嵌浏览器:在 Collabra 自带 Chromium 里打开页面,读快照,按 ref 点击与输入',
   'UI design canvas: create and verify standalone Vetta design documents':
     'UI 设计画布：创建与验证独立的 Vetta 设计文档',
   "Web search and fetch: search with the session model's built-in search (falls back to a keyless service) and read public pages as markdown":
@@ -2074,7 +2079,8 @@ export const zhTranslations: Record<string, string> = {
     '宿主桌面:列窗口、截图、无障碍树与键鼠。默认关闭。不是内嵌浏览器。',
   'Operate the host desktop with screenshots, accessibility, and input.':
     '用截图、无障碍树和键鼠操作宿主桌面。',
-  'Enso never receives host-desktop computer tools.': 'Enso 不会拿到宿主桌面 computer 工具。',
+  'Collabra never receives host-desktop computer tools.':
+    'Collabra 不会拿到宿主桌面 computer 工具。',
   'Ask the coding agent to use the computer tool.': '请让编程 agent 使用 computer 工具。',
   'Screen Recording': '屏幕录制',
   Accessibility: '辅助功能',
@@ -2441,8 +2447,8 @@ export const zhTranslations: Record<string, string> = {
   'Task stop': '停止后台任务',
   'Message coworker': '联系队员',
   'Message main agent': '联系主 agent',
-  'Enso app': 'Enso 应用',
-  'Enso capabilities': 'Enso 能力',
+  'Collabra app': 'Collabra 应用',
+  'Collabra capabilities': 'Collabra 能力',
   'Recall memory': '回溯记忆',
   'Memory search': '搜索记忆',
   'Memory capture': '记录记忆',
@@ -2619,7 +2625,7 @@ export const zhTranslations: Record<string, string> = {
   'Configuration transfer': '配置迁移',
   'Move models, presets, agent types, skills, MCP servers and instruction files between devices.':
     '在设备之间迁移模型、预设、子代理类型、技能、MCP 服务和指令文件。',
-  'Portable Enso configuration': '可移植 Enso 配置',
+  'Portable Collabra configuration': '可移植 Collabra 配置',
   'Export a package or preview one before importing it.': '导出配置包，或在导入前预览配置包。',
   'Import configuration': '导入配置',
   'Export configuration': '导出配置',

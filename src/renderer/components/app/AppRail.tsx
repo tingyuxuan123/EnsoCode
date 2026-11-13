@@ -170,14 +170,14 @@ export function AppRail({
         </RailTip>
       )}
       <div className="flex-1" />
-      <RailTip label={t('Ask Enso')}>
+      <RailTip label={t('Ask Collabra')}>
         <button
           type="button"
           onClick={() => {
             void window.electronAPI.window.summonAgent({ typeKey: ENSO_AGENT_TYPE_KEY });
           }}
           className={cn(RAIL_BUTTON, 'text-brand hover:text-brand')}
-          aria-label={t('Ask Enso')}
+          aria-label={t('Ask Collabra')}
         >
           <Sparkles className="size-[19px]" />
         </button>

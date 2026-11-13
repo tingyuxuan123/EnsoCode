@@ -110,7 +110,7 @@ export function ConfigSyncSettings() {
             <FileArchive className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
               <p className="text-[calc(13rem/14)] font-medium">
-                {t('Portable Enso configuration')}
+                {t('Portable Collabra configuration')}
               </p>
               <p className="text-[calc(12rem/14)] text-muted-foreground">
                 {t('Export a package or preview one before importing it.')}

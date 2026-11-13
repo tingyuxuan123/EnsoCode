@@ -9,6 +9,7 @@ import {
   ToolOutputBudget,
   withToolOutputBudget,
 } from './toolOutputBudget';
+import { formatFetchResult } from './tools/webFetch';
 
 function textTool(name: string, text: string): ToolDefinition {
   return {
@@ -116,6 +117,62 @@ describe('ToolOutputBudget', () => {
     expect(part.text).toContain(`grep(path="${ARTIFACT_URI_SCHEME}call-2"`);
     expect(part.text).toContain(`read(path="${ARTIFACT_URI_SCHEME}call-2"`);
     expect(part.text).toMatch(/not.*bash/i);
+  });
+
+  it.each(['x', '字'])('web_fetch 的正常 5 万字符分页保留正文与续读提示：%s', async (char) => {
+    const store = budget(16);
+    const page = formatFetchResult({
+      url: 'https://example.com/page',
+      status: 200,
+      contentType: 'text/plain',
+      text: char.repeat(50_000),
+      offset: 0,
+      totalChars: 100_000,
+      nextOffset: 50_000,
+      bodyCut: false,
+    });
+    const result = await withToolOutputBudget(textTool('web_fetch', page), store).execute(
+      'fetch-page',
+      {},
+      undefined,
+      undefined,
+      undefined as never
+    );
+    expect(result.content).toEqual([{ type: 'text', text: page }]);
+    expect(result.details).toEqual({ kept: true });
+  });
+
+  it('web_fetch 超大异常结果仍外置，其它工具继续遵守原预算', async () => {
+    const store = budget(16);
+    for (const [name, body] of [
+      ['web_fetch', '字'.repeat(60_000)],
+      ['web_search', 'x'.repeat(64)],
+    ]) {
+      const result = await withToolOutputBudget(textTool(name, body), store).execute(
+        name,
+        {},
+        undefined,
+        undefined,
+        undefined as never
+      );
+      expect(result.details).toMatchObject({ externalized: true });
+      const reference = (result.details as { reference: string }).reference;
+      expect(store.read(reference)).toBe(body);
+    }
+  });
+
+  it('read 自带分页不外置，显式更高的会话预算不被工具默认值降低', async () => {
+    const body = 'x'.repeat(200_000);
+    for (const [name, maxInlineBytes] of [
+      ['read', 16],
+      ['web_fetch', 250_000],
+    ] as const) {
+      const result = await withToolOutputBudget(
+        textTool(name, body),
+        budget(maxInlineBytes)
+      ).execute(name, {}, undefined, undefined, undefined as never);
+      expect(result.content).toEqual([{ type: 'text', text: body }]);
+    }
   });
 
   it('read artifact 遵守 offset/limit 并提示续读位置', async () => {

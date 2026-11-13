@@ -39,7 +39,7 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
     id: 'browser',
     name: 'Browser',
     description:
-      "Built-in browser: open pages in Enso's own Chromium, read snapshots, click and type by ref",
+      "Built-in browser: open pages in Collabra's own Chromium, read snapshots, click and type by ref",
   },
   {
     id: 'design',

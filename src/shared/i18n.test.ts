@@ -16,6 +16,10 @@ it('translates Collabra branding without falling back to English keys', () => {
   expect(translate('zh', 'This file is not a valid Collabra team file.')).toBe(
     '该文件不是有效的Collabra团队文件。'
   );
+  expect(translate('zh', 'Ask Collabra')).toBe('询问 Collabra');
+  expect(translate('zh', 'Need help choosing a setup? Ask Collabra.')).toBe(
+    '不确定如何配置？询问 Collabra。'
+  );
 });
 
 /** 间接映射表里的 t() key。删孤儿时漏看这些会把正在用的词条删掉。 */
@@ -155,7 +159,7 @@ const MODEL_CENTER_ENSO_I18N_KEYS = [
   'Default model changed: {{previous}} → {{next}}',
   'Subscription credentials could not be loaded: {{error}}',
   // Typed Agent recipient, child TAB, and parent notifications
-  'Ask Enso',
+  'Ask Collabra',
   'Type @ to choose a file or Agent',
   'Create or select a project to start a conversation',
   'Agents',
@@ -295,6 +299,11 @@ describe('dangerous capability i18n keys', () => {
 });
 
 describe('getTranslation', () => {
+  it('浅色方案仅将云白标为默认', () => {
+    expect(getTranslation('zh', 'Cloud Light')).toBe('云白（默认）');
+    expect(getTranslation('zh', 'Ocean Light')).toBe('晴空碧海');
+  });
+
   it('中文返回译文', () => {
     expect(getTranslation('zh', 'Settings')).toBe('设置');
   });

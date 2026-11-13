@@ -7,7 +7,7 @@ import {
 import { resolveCompactStrategy } from '@shared/compactStrategy';
 import { normalizeContextMenuOpen, normalizeFileOpenRules } from '@shared/fileOpening';
 import { parseImageGenerationSettings } from '@shared/imageGeneration';
-import { parseLightPalette } from '@shared/lightPalette';
+import { DEFAULT_LIGHT_PALETTE, parseLightPalette } from '@shared/lightPalette';
 import { extractModelOverrides, referencedModelIds } from '@shared/modelDirectory';
 import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine';
 import { type EditMode, type ModelEntry, resolveEditMode } from '@shared/types';
@@ -50,7 +50,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     'accentColor' in source ? resolveAccentColor(source.accentColor) : current.accentColor;
   const lightAppearance =
     'lightPalette' in source || 'lightPalette' in current
-      ? { lightPalette: parseLightPalette(source.lightPalette) ?? 'ocean' }
+      ? { lightPalette: parseLightPalette(source.lightPalette) ?? DEFAULT_LIGHT_PALETTE }
       : {};
   // 已下架的识别模型（如 enso-asr）保留当前值，与 Main 的回落一致
   const voice = isSpeechModelId(voiceModel) ? { voiceModel } : {};

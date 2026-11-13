@@ -41,7 +41,7 @@ describe('AppRail 精简导航', () => {
       'Design',
       'Bot',
       'Collaboration board',
-      'Ask Enso',
+      'Ask Collabra',
       'Settings',
     ]);
   });
@@ -50,7 +50,7 @@ describe('AppRail 精简导航', () => {
       codeWorkspace: { active: false, onToggle: vi.fn() },
       imageStudio: { active: true, onToggle: vi.fn() },
     };
-    expect(railItems(props)).toEqual(['Code', 'Image studio', 'Ask Enso', 'Settings']);
+    expect(railItems(props)).toEqual(['Code', 'Image studio', 'Ask Collabra', 'Settings']);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
     expect(document.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe(
       'false'
@@ -61,7 +61,7 @@ describe('AppRail 精简导航', () => {
       imageStudio: { active: true, onToggle: vi.fn() },
       designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
     };
-    expect(railItems(props)).toEqual(['Image studio', 'Design', 'Ask Enso', 'Settings']);
+    expect(railItems(props)).toEqual(['Image studio', 'Design', 'Ask Collabra', 'Settings']);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
     expect(
       document.querySelector('[aria-label="Image studio"]')?.getAttribute('aria-pressed')
@@ -83,7 +83,7 @@ describe('AppRail 精简导航', () => {
       'mode',
       'Design',
       'Collaboration board',
-      'Ask Enso',
+      'Ask Collabra',
       'Settings',
     ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
@@ -102,12 +102,12 @@ describe('AppRail 精简导航', () => {
       'mode',
       'Design',
       'Collaboration board',
-      'Ask Enso',
+      'Ask Collabra',
       'Settings',
     ]);
     expect(railItems({ collaborationBoard: props.collaborationBoard })).toEqual([
       'Collaboration board',
-      'Ask Enso',
+      'Ask Collabra',
       'Settings',
     ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
@@ -120,7 +120,7 @@ describe('AppRail 精简导航', () => {
   it('设计入口只在宿主允许时出现，并反映画廊的切换状态', () => {
     const onToggle = vi.fn();
     const props = { designGallery: { label: 'Design', active: false, onToggle } };
-    expect(railItems(props)).toEqual(['Design', 'Ask Enso', 'Settings']);
+    expect(railItems(props)).toEqual(['Design', 'Ask Collabra', 'Settings']);
     const markup = (active: boolean) =>
       parseHTML(
         renderToStaticMarkup(
@@ -142,7 +142,7 @@ describe('AppRail 精简导航', () => {
         onOpenSearch: vi.fn(),
         modeSwitch,
       })
-    ).toEqual(['Collapse sidebar', '---', 'mode', 'Ask Enso', 'Settings']);
+    ).toEqual(['Collapse sidebar', '---', 'mode', 'Ask Collabra', 'Settings']);
   });
 
   it('收起时搜索紧跟侧栏开关、位于分隔符上方', () => {
@@ -153,19 +153,19 @@ describe('AppRail 精简导航', () => {
         onOpenSearch: vi.fn(),
         modeSwitch,
       })
-    ).toEqual(['Expand sidebar', 'Search anything', '---', 'mode', 'Ask Enso', 'Settings']);
+    ).toEqual(['Expand sidebar', 'Search anything', '---', 'mode', 'Ask Collabra', 'Settings']);
   });
 
   it('没有模式切换时仍保留分隔符', () => {
     expect(railItems({ sidebarCollapsed: false, onToggleSidebar: vi.fn() })).toEqual([
       'Collapse sidebar',
       '---',
-      'Ask Enso',
+      'Ask Collabra',
       'Settings',
     ]);
   });
 
   it('没有侧栏操作时仅保留全局入口', () => {
-    expect(railItems({})).toEqual(['Ask Enso', 'Settings']);
+    expect(railItems({})).toEqual(['Ask Collabra', 'Settings']);
   });
 });

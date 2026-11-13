@@ -12,7 +12,7 @@ import { useI18n } from '@/i18n';
 import type { NativePluginManager } from './useNativePluginManager';
 
 export const PLUGIN_TRUST_WARNING =
-  'Plugin main runs with full Node.js access. ui.js has the same access as the main interface. Install only plugins you fully trust. Permissions restrict Enso host APIs, not the plugin’s own code; this is not an OS sandbox.';
+  'Plugin main runs with full Node.js access. ui.js has the same access as the main interface. Install only plugins you fully trust. Permissions restrict Collabra host APIs, not the plugin’s own code; this is not an OS sandbox.';
 
 export function PluginRegistryAlert({ error }: { error: string }) {
   const { t } = useI18n();

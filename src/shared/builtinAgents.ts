@@ -2,6 +2,8 @@ import { type AgentTypeEntry, BUILTIN_AGENT_TYPES, DESIGNER_AGENT_NAME } from '.
 
 export const DESIGNER_AGENT_TYPE_KEY = `builtin:${DESIGNER_AGENT_NAME}` as const;
 export const ENSO_AGENT_TYPE_KEY = 'agent:enso' as const;
+/** Display brand only; persisted type/profile/tool identifiers remain unchanged. */
+export const SYSTEM_ASSISTANT_DISPLAY_NAME = 'Collabra' as const;
 export const ENSO_LOCKED_PROFILE_ID = 'enso-locked-v1' as const;
 export const ENSO_SYSTEM_PROMPT_ID = 'enso-system-v1' as const;
 export const ENSO_LOCKED_TOOL_IDS = ['enso_capabilities', 'enso_app', 'ask_user'] as const;
@@ -58,6 +60,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const BUILTIN_NAME_PATTERN = /^[a-z][a-z0-9_-]*$/;
 const RESERVED_AGENT_NAMES: Readonly<Record<string, true>> = {
   enso: true,
+  collabra: true,
   [ENSO_AGENT_TYPE_KEY]: true,
   [ENSO_LOCKED_PROFILE_ID]: true,
   [ENSO_SYSTEM_PROMPT_ID]: true,
@@ -93,13 +96,20 @@ export function agentTypeDisplayName(
   value: string,
   customAgentTypes: readonly Pick<AgentTypeEntry, 'id' | 'name'>[]
 ): string {
-  if (value === ENSO_AGENT_TYPE_KEY) return 'Enso';
+  if (value === ENSO_AGENT_TYPE_KEY) return SYSTEM_ASSISTANT_DISPLAY_NAME;
   if (value.startsWith('builtin:')) return value.slice('builtin:'.length);
   if (value.startsWith('custom:')) {
     const id = value.slice('custom:'.length);
     return customAgentTypes.find((entry) => entry.id === id)?.name.trim() || 'custom';
   }
   return value;
+}
+
+/** Presentation only: never rewrite instanceName used for generation / resume identity. */
+export function agentInstanceDisplayName(typeKey: string | undefined, name: string): string {
+  return typeKey === ENSO_AGENT_TYPE_KEY
+    ? name.replace(/^Enso(?=$|[\s·-])/, SYSTEM_ASSISTANT_DISPLAY_NAME)
+    : name;
 }
 
 export function parseAgentTypeKey(value: unknown): AgentTypeKey | null {
@@ -227,7 +237,8 @@ export function parseAgentTypeCandidate(value: unknown): AgentTypeCandidate | nu
   if (
     typeKey === ENSO_AGENT_TYPE_KEY &&
     (candidate.source !== 'system' ||
-      candidate.displayName !== 'Enso' ||
+      (candidate.displayName !== SYSTEM_ASSISTANT_DISPLAY_NAME &&
+        candidate.displayName !== 'Enso') ||
       !candidate.locked ||
       candidate.canDisable ||
       candidate.canEdit)
@@ -311,7 +322,7 @@ export function buildAgentTypeRegistrySnapshot(input: {
   const candidates: AgentTypeCandidate[] = [
     {
       typeKey: ENSO_AGENT_TYPE_KEY,
-      displayName: 'Enso',
+      displayName: SYSTEM_ASSISTANT_DISPLAY_NAME,
       description: 'Collabra system agent for product capabilities and team setup',
       source: 'system',
       locked: true,

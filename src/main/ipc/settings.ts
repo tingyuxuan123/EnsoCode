@@ -75,6 +75,7 @@ export const SETTINGS_STATE_FIELDS = [
   'editMode',
   'hashlineEditEnabled',
   'compactStrategy',
+  'microcompactEnabled',
   'smartCompactEnabled',
   'smartCompactModel',
   'smartCompactMode',
@@ -179,6 +180,7 @@ export type SettingsStateField = (typeof SETTINGS_STATE_FIELDS)[number];
 const CONFIG_SYNC_EXCLUDED_STATE_FIELDS = new Set<SettingsStateField>([
   'designEnabled',
   'lcuEnabled',
+  'microcompactEnabled',
   'approvalAutoManage',
   'approvalAllowThreshold',
   'hashlineEditEnabled',
@@ -669,6 +671,8 @@ export function patchSettingsState(
     targetValue = resolveEditMode(undefined, value);
   } else if (targetField === 'editMode' && !isEditMode(value)) {
     return { ok: false, error: 'Invalid edit mode' };
+  } else if (targetField === 'microcompactEnabled' && typeof value !== 'boolean') {
+    return { ok: false, error: 'Invalid microcompaction toggle' };
   } else if (targetField === 'chatTypography') {
     const typography = parseChatTypography(value);
     if (!typography) return { ok: false, error: 'Invalid chat typography' };

@@ -62,7 +62,7 @@ export function resolveBrowserAddress(raw: string): BrowserResult<string> {
       return {
         ok: false,
         error:
-          'Enter a valid file URL without credentials or NUL characters. Enso checks workspace access.',
+          'Enter a valid file URL without credentials or NUL characters. Collabra checks workspace access.',
       };
     }
   }
@@ -73,7 +73,7 @@ export function resolveBrowserAddress(raw: string): BrowserResult<string> {
     return {
       ok: false,
       error:
-        'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Enso.',
+        'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Collabra.',
     };
   }
   const host = input.split(/[/?#]/, 1)[0] ?? '';

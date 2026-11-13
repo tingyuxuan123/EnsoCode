@@ -102,6 +102,21 @@ describe('config sync portable preference contract', () => {
     expect(SYNC_FIELDS).not.toContain('codeSearchAccountKey');
   });
 
+  it('Microcompaction 开关是本机行为，不随配置同步导出或提交', () => {
+    expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('microcompactEnabled', {
+      mode: 'excluded',
+      reason: expect.stringContaining('device-local'),
+    });
+    expect(SYNC_FIELDS).not.toContain('microcompactEnabled');
+    expect(CONFIG_SYNC_COMMIT_FIELDS).not.toContain('microcompactEnabled');
+    expect(() =>
+      validateBundle({
+        ...bundle({}),
+        state: { ...baseState(), microcompactEnabled: false },
+      })
+    ).toThrow();
+  });
+
   it.each(['merge', 'replace'] as const)('导入 %s 保留本机代码搜索授权，兼容缺省旧字段', (mode) => {
     expect(
       planImport(

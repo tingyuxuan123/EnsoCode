@@ -241,7 +241,7 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
         id: plugin.id,
         name: plugin.name,
         description: plugin.description,
-        source: 'Enso plugins',
+        source: 'Collabra plugins',
         version: plugin.version,
         status: plugin.pendingVersion
           ? 'Pending permission approval'

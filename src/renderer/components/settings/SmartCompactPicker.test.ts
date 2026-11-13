@@ -21,11 +21,17 @@ const harness = vi.hoisted(() => ({
     smartCompactEnabled: true,
     smartCompactModel: null as { providerId: string; modelId: string } | null,
     smartCompactMode: 'auto' as 'auto' | 'fast' | 'balanced' | 'thorough',
+    microcompactEnabled: true,
   },
   setSmartCompactEnabled: vi.fn(),
   setSmartCompactModel: vi.fn(),
   setSmartCompactMode: vi.fn(),
+  setMicrocompactEnabled: vi.fn(),
   pickerProps: null as Record<string, unknown> | null,
+  switchProps: null as {
+    checked?: boolean;
+    onCheckedChange?: (value: boolean) => void;
+  } | null,
 }));
 
 vi.mock('@/i18n', () => ({
@@ -41,10 +47,19 @@ vi.mock('@/stores/settings', () => ({
       smartCompactEnabled: harness.state.smartCompactEnabled,
       smartCompactModel: harness.state.smartCompactModel,
       smartCompactMode: harness.state.smartCompactMode,
+      microcompactEnabled: harness.state.microcompactEnabled,
       setSmartCompactEnabled: harness.setSmartCompactEnabled,
       setSmartCompactModel: harness.setSmartCompactModel,
       setSmartCompactMode: harness.setSmartCompactMode,
+      setMicrocompactEnabled: harness.setMicrocompactEnabled,
     }),
+}));
+
+vi.mock('@/components/ui/switch', () => ({
+  Switch: (props: { checked?: boolean; onCheckedChange?: (value: boolean) => void }) => {
+    harness.switchProps = props;
+    return createElement('i', { 'data-microcompact-switch': String(props.checked) });
+  },
 }));
 
 vi.mock('@/stores/oauthCredentials', () => ({
@@ -116,5 +131,29 @@ describe('SmartCompactPicker', () => {
     harness.state.smartCompactMode = 'balanced';
     const html = renderToStaticMarkup(createElement(SmartCompactPicker));
     expect(html).toContain('data-smart-compact-mode="balanced"');
+  });
+
+  it('独立于压缩策略展示 microcompaction 开关并写回设置', () => {
+    for (const enabled of [true, false]) {
+      harness.state.smartCompactEnabled = enabled;
+      harness.state.microcompactEnabled = true;
+      const html = renderToStaticMarkup(createElement(SmartCompactPicker));
+      expect(html).toContain('data-settings-row="general.microcompactEnabled"');
+      expect(html).toContain('data-microcompact-switch="true"');
+      expect(html).toContain('Microcompaction');
+      expect(html).toContain(
+        'Clears only older successful text-only read and search tool results, keeps the latest 5 and never calls the model.'
+      );
+      expect(html).toContain(
+        'Turning it off stops future clearing; context that is already cleared cannot be restored.'
+      );
+      expect(html).toContain('Applies to open conversations on the next request.');
+    }
+
+    harness.state.microcompactEnabled = false;
+    const off = renderToStaticMarkup(createElement(SmartCompactPicker));
+    expect(off).toContain('data-microcompact-switch="false"');
+    harness.switchProps?.onCheckedChange?.(true);
+    expect(harness.setMicrocompactEnabled).toHaveBeenCalledWith(true);
   });
 });
