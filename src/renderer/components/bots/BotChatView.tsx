@@ -495,7 +495,7 @@ export function BotChatView({
                   className={cn(
                     'flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[calc(11rem/14)] transition-colors',
                     panelTab === tab
-                      ? 'bg-brand/10 font-medium text-foreground dark:bg-brand/15'
+                      ? 'bg-selection font-medium text-selection-foreground'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >

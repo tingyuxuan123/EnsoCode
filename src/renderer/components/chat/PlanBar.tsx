@@ -196,7 +196,9 @@ function PlanReviewBar({
                     }}
                     className={cn(
                       'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-                      option === approvalMode ? 'bg-muted' : 'hover:bg-muted/60',
+                      option === approvalMode
+                        ? 'bg-selection text-selection-foreground'
+                        : 'hover:bg-muted/60',
                       disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent'
                     )}
                   >

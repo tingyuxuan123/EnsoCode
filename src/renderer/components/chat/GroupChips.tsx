@@ -234,7 +234,7 @@ function chipClass(selected: boolean, dropping: boolean) {
   return cn(
     'flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[calc(12rem/14)] transition-colors',
     selected
-      ? 'bg-foreground font-medium text-inverse-foreground'
+      ? 'bg-selection font-medium text-selection-foreground'
       : 'bg-control/50 text-muted-foreground hover:bg-control hover:text-foreground',
     dropping && 'bg-brand/10 text-foreground ring-1 ring-brand/40 ring-inset'
   );
@@ -444,7 +444,7 @@ function GroupMenuRow({
         className={cn(
           POPOVER_ROW_CLASS,
           selected
-            ? 'bg-brand/10 text-foreground'
+            ? 'bg-selection text-selection-foreground'
             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
         )}
       >

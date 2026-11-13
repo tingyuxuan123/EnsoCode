@@ -70,7 +70,7 @@ export function ThinkingLevelSlider({
           {/* 轨道：整宽圆角 + 极淡描边；滑块滑到末档正好压在轨道圆头上，不再探出去 */}
           <div className="absolute inset-x-0 top-[2px] h-[24px] overflow-hidden rounded-full bg-foreground/[0.08] ring-1 ring-foreground/[0.06] ring-inset">
             <div
-              className="absolute inset-y-0 left-0 overflow-hidden rounded-full bg-primary transition-[width] duration-150 ease-out motion-reduce:transition-none"
+              className="absolute inset-y-0 left-0 overflow-hidden rounded-full bg-brand transition-[width] duration-150 ease-out motion-reduce:transition-none"
               // 填充端点就是滑块圆心（同一条几何表达式），滑块压在上面，视觉上是一整条
               style={{ width: offsetOf(index) }}
             >

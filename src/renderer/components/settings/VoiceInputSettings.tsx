@@ -133,7 +133,10 @@ export function VoiceModelList() {
           return (
             <div
               key={model.id}
-              className={cn('flex items-center gap-3 px-3 py-2', active && 'bg-accent/40')}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2',
+                active && 'bg-selection text-selection-foreground'
+              )}
             >
               <button
                 type="button"
@@ -145,10 +148,10 @@ export function VoiceModelList() {
                 <span
                   className={cn(
                     'mt-1 flex size-3.5 shrink-0 items-center justify-center rounded-full border',
-                    active && 'border-primary'
+                    active && 'border-selection-border'
                   )}
                 >
-                  {active ? <span className="size-2 rounded-full bg-primary" /> : null}
+                  {active ? <span className="size-2 rounded-full bg-brand" /> : null}
                 </span>
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-1.5 text-[calc(13rem/14)]">

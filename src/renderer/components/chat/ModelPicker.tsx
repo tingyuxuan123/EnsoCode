@@ -331,7 +331,7 @@ function ModelRowContent({
         </span>
       )}
       <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-        {selected && <Check className="h-3.5 w-3.5 text-primary" />}
+        {selected && <Check className="h-3.5 w-3.5 text-brand" />}
       </span>
     </>
   );
@@ -749,7 +749,7 @@ export function ModelPicker({
       <Shuffle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">{entry.name}</span>
       <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-        {currentVirtual?.id === entry.id && <Check className="h-3.5 w-3.5 text-primary" />}
+        {currentVirtual?.id === entry.id && <Check className="h-3.5 w-3.5 text-brand" />}
       </span>
     </MenuItem>
   ));
@@ -1025,7 +1025,7 @@ export function ModelPicker({
                             )}
                             <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                               {provider.id === providerId && (
-                                <Check className="h-3.5 w-3.5 text-primary" />
+                                <Check className="h-3.5 w-3.5 text-brand" />
                               )}
                             </span>
                           </MenuSubTrigger>

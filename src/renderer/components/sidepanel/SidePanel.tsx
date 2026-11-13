@@ -370,7 +370,7 @@ function PluginViewPanel(
   ) : null;
 }
 
-/** 与 CoworkerTabs 同款 chip:圆角、bg-muted 激活、hover 出关闭 */
+/** 与 CoworkerTabs 同款 chip:圆角、selection 激活、hover 出关闭 */
 function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null }>) {
   const { t } = useI18n();
   const { conversationId, designSessionId } = useContext(PanelContext);
@@ -400,7 +400,9 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
     <div
       className={cn(
         'group/tab relative flex h-full min-w-0 items-center gap-1.5 border-r border-line pr-1.5 pl-3 text-[calc(12rem/14)]',
-        active ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-accent/50'
+        active
+          ? 'bg-selection text-selection-foreground'
+          : 'text-muted-foreground hover:bg-accent/50'
       )}
     >
       {props.api.id === 'changes' ? (

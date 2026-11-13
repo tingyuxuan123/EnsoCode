@@ -274,7 +274,7 @@ function TriState({
             className={cn(
               'h-6 flex-1 rounded-sm px-1.5 text-[calc(11rem/14)]',
               selected
-                ? 'bg-accent font-medium text-foreground'
+                ? 'bg-selection font-medium text-selection-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => onChange(option.value)}

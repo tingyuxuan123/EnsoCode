@@ -937,7 +937,7 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
                     className={cn(
                       'flex items-center gap-1.5 border-r border-line px-3 text-[calc(12rem/14)]',
                       doc.rel === activeRel
-                        ? 'bg-background font-medium'
+                        ? 'bg-selection font-medium text-selection-foreground'
                         : 'text-muted-foreground hover:bg-accent/50'
                     )}
                     onClick={() => {
@@ -1534,8 +1534,8 @@ function FileRow({
       aria-current={active ? 'true' : undefined}
       style={{ paddingLeft: 20 + depth * 12, opacity: isDragging ? 0.4 : undefined }}
       className={cn(
-        'flex w-full cursor-default items-center gap-1.5 px-2 py-1 text-left hover:bg-accent/50',
-        active && 'bg-accent font-medium text-foreground'
+        'flex w-full cursor-default items-center gap-1.5 px-2 py-1 text-left',
+        active ? 'bg-selection font-medium text-selection-foreground' : 'hover:bg-accent/50'
       )}
       onClick={() => handlers.onOpen(rel)}
     >

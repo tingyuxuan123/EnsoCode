@@ -151,7 +151,7 @@ export function BotView({
               className={cn(
                 RAIL_BUTTON,
                 view?.kind === 'inbox' &&
-                  'bg-brand/10 text-foreground hover:bg-brand/10 dark:bg-brand/15 dark:hover:bg-brand/15'
+                  'bg-selection text-selection-foreground hover:bg-selection'
               )}
               onClick={() => setView({ kind: 'inbox' })}
               title={t('Inbox')}

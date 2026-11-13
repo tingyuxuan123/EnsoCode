@@ -215,7 +215,7 @@ export function MetricToggle({
           className={cn(
             'rounded px-2 py-0.5 text-[calc(11rem/14)] transition-colors',
             value === item.id
-              ? 'bg-background text-foreground'
+              ? 'bg-selection text-selection-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >

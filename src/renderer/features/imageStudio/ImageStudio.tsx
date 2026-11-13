@@ -50,7 +50,7 @@ const chip =
   'flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground';
 const tab = 'relative flex h-full items-center gap-1.5 px-3 text-[calc(13rem/14)]';
 const activeTab =
-  'after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-primary';
+  'after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-brand';
 
 export function ImageStudio({
   collapsed,
@@ -271,7 +271,9 @@ export function ImageStudio({
                 key={item.id}
                 className={cn(
                   'group flex min-h-8 items-center rounded-md',
-                  activeId === item.id ? 'bg-accent' : 'hover:bg-accent/60'
+                  activeId === item.id
+                    ? 'bg-selection text-selection-foreground'
+                    : 'hover:bg-accent/60'
                 )}
               >
                 <button
@@ -624,7 +626,7 @@ export function ImageStudio({
                   className={cn(
                     'rounded-md px-2 py-1 text-xs',
                     filter === value
-                      ? 'bg-accent text-foreground'
+                      ? 'bg-selection text-selection-foreground'
                       : 'text-muted-foreground hover:bg-accent'
                   )}
                   onClick={() => setFilter(value)}

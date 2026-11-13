@@ -119,8 +119,8 @@ export function WorkspaceBranchList({
                 title={hint ? `${branch.name}\n${hint}` : branch.name}
                 onClick={() => onSelect(branch)}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-50',
-                  current && 'bg-primary/10'
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm disabled:opacity-50',
+                  current ? 'bg-selection text-selection-foreground' : 'hover:bg-muted'
                 )}
               >
                 {newConversation ? (
@@ -132,7 +132,7 @@ export function WorkspaceBranchList({
                   <span className="block truncate">{branch.name}</span>
                   {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
                 </span>
-                {current && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                {current && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
               </button>
             );
           })}

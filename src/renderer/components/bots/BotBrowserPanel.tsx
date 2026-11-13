@@ -48,7 +48,7 @@ export function BotBrowserPanel({ chatId, visible }: { chatId: string; visible: 
               className={cn(
                 'flex h-6 min-w-0 max-w-44 shrink items-center rounded-md text-[calc(11rem/14)]',
                 tabId === active
-                  ? 'bg-brand/10 text-foreground dark:bg-brand/15'
+                  ? 'bg-selection text-selection-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
             >

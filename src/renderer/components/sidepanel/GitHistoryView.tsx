@@ -120,8 +120,8 @@ export function GitHistoryView({
                   aria-expanded={expanded}
                   aria-controls={expanded ? `${id}-${commit.hash}` : undefined}
                   className={cn(
-                    'flex w-full min-w-0 items-start gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
-                    expanded && 'bg-brand/10 dark:bg-brand/15'
+                    'flex w-full min-w-0 items-start gap-1.5 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
+                    expanded ? 'bg-selection text-selection-foreground' : 'hover:bg-muted/50'
                   )}
                   title={`${commit.subject}\n${commit.hash}\n${commit.author} · ${commit.date}`}
                   onClick={() => {

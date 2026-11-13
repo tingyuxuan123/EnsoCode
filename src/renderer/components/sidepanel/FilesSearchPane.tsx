@@ -243,7 +243,10 @@ function ModeButton({
       type="button"
       variant="ghost"
       size="sm"
-      className={cn('h-6 flex-1 px-1 text-[calc(11rem/14)]', active && 'bg-muted')}
+      className={cn(
+        'h-6 flex-1 px-1 text-[calc(11rem/14)]',
+        active && 'bg-selection text-selection-foreground hover:bg-selection'
+      )}
       aria-pressed={active}
       onClick={onClick}
     >

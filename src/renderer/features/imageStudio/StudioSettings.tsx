@@ -59,7 +59,7 @@ function Choices<T extends string>({
           className={cn(
             'flex min-h-9 items-center gap-2 rounded-md border px-3 text-[calc(13rem/14)] outline-none focus-visible:ring-2 focus-visible:ring-ring',
             value === item.value
-              ? 'border-primary bg-primary/10 text-primary'
+              ? 'border-selection-border bg-selection text-selection-foreground'
               : 'border-border bg-card hover:bg-accent'
           )}
           onClick={() => onChange(item.value)}

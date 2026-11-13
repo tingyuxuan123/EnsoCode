@@ -167,7 +167,7 @@ export function MemoryGraphView({
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[calc(12rem/14)] transition-colors',
                 typeFilter === entry.entityType
-                  ? 'border-foreground/40 bg-accent'
+                  ? 'border-selection-border bg-selection text-selection-foreground'
                   : 'hover:bg-accent/50'
               )}
             >

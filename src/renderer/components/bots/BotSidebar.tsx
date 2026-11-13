@@ -463,7 +463,7 @@ export function BotSidebar({
               className={cn(
                 ICON_BUTTON_CLASS,
                 view?.kind === 'inbox' &&
-                  'bg-brand/10 text-foreground hover:bg-brand/10 dark:bg-brand/15 dark:hover:bg-brand/15'
+                  'bg-selection text-selection-foreground hover:bg-selection'
               )}
               onClick={() => setView({ kind: 'inbox' })}
               title={t('Inbox')}
@@ -752,7 +752,7 @@ function ChatRow({
       }}
       className={cn(
         'flex cursor-default items-start gap-2 rounded-md px-2 py-1.5 transition-colors',
-        active ? 'bg-brand/10 dark:bg-brand/15' : 'hover:bg-muted',
+        active ? 'bg-selection text-selection-foreground' : 'hover:bg-muted',
         className
       )}
     >

@@ -34,8 +34,8 @@ export function GitFileRow({
   return (
     <div
       className={cn(
-        'group flex min-w-0 items-center rounded-md pr-1 hover:bg-muted/50',
-        selected && 'bg-brand/10 dark:bg-brand/15'
+        'group flex min-w-0 items-center rounded-md pr-1',
+        selected ? 'bg-selection text-selection-foreground' : 'hover:bg-muted/50'
       )}
     >
       <button

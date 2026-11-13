@@ -328,7 +328,9 @@ function ModeChip({
       type="button"
       className={cn(
         'rounded-md px-2 py-1 text-[calc(11rem/14)] transition-colors',
-        active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50'
+        active
+          ? 'bg-selection font-medium text-selection-foreground'
+          : 'text-muted-foreground hover:bg-muted/50'
       )}
       onClick={onClick}
     >

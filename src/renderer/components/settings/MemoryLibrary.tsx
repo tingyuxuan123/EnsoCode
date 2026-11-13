@@ -524,7 +524,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       )}
 
       {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-[6px] border bg-accent/30 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-[6px] border border-selection-border bg-selection px-3 py-2 text-selection-foreground">
           <span className="text-[calc(13rem/14)]">
             {t('{{count}} selected', { count: String(selected.size) })}
           </span>

@@ -264,7 +264,8 @@ export function NewBotDialog({
                   onClick={() => applyTemplate(template)}
                   className={cn(
                     'flex flex-col items-start gap-1 rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted',
-                    source.id === template.id && 'ring-2 ring-info'
+                    source.id === template.id &&
+                      'border-selection-border bg-selection text-selection-foreground ring-2 ring-brand/20 hover:bg-selection'
                   )}
                 >
                   <BotAvatar

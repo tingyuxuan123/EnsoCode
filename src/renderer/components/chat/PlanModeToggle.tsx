@@ -29,7 +29,7 @@ export function PlanModeToggle({
         'flex h-[calc(28rem/14)] min-w-0 shrink-0 items-center gap-[4px] rounded-[6px] text-[calc(12rem/14)] transition-colors',
         compact ? 'px-[7px]' : 'px-[8px]',
         active
-          ? 'bg-primary/10 text-primary hover:bg-primary/15'
+          ? 'bg-selection text-selection-foreground hover:bg-selection'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
       )}
     >

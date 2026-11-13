@@ -109,7 +109,9 @@ export function ImportSessionDialog({ project, onClose }: ImportSessionDialogPro
                         }
                         className={cn(
                           'w-full px-2.5 py-1.5 text-left',
-                          selected?.path === session.path ? 'bg-muted' : 'hover:bg-muted/50'
+                          selected?.path === session.path
+                            ? 'bg-selection text-selection-foreground'
+                            : 'hover:bg-muted/50'
                         )}
                       >
                         <p className="truncate text-[calc(11rem/14)]">

@@ -114,37 +114,46 @@
     --radius: 6px;
   }
 
-  /* 深色：远山暮霭（ocean-dark）。整体低饱和蓝灰，内容区最深，侧栏/外壳浮一档 */
+  /* 深色沿用 J3n5en/EnsoCode 4bc6eb9c 的 Enso dark：
+   * src/shared/theme/builtinThemes.ts + derive.ts；只同步颜色，不移植布局或主题系统。
+   */
   .dark {
     color-scheme: dark;
-    --background: rgb(23 27 32);
-    --foreground: rgb(226 232 237);
-    --card: rgb(23 27 32);
-    --card-foreground: rgb(226 232 237);
-    --popover: rgb(34 41 48);
-    --popover-foreground: rgb(226 232 237);
-    --primary: rgb(100 156 196);
-    --primary-foreground: rgb(255 255 255);
-    --secondary: rgb(48 56 62);
-    --secondary-foreground: rgb(226 232 237);
-    --muted: rgb(32 39 45);
-    --muted-foreground: rgb(163 176 187);
-    --accent: rgb(51 61 70);
-    --accent-foreground: rgb(226 232 237);
-    --destructive: rgb(214 104 112);
-    --destructive-foreground: rgb(24 24 24);
-    --success: rgb(104 176 140);
-    --success-foreground: rgb(16 22 18);
-    --warning: rgb(214 168 92);
-    --warning-foreground: rgb(26 20 10);
-    --info: rgb(122 170 205);
-    --info-foreground: rgb(14 18 28);
-    --border: rgb(59 70 80);
-    --input: rgb(59 70 80);
-    --ring: rgb(114 165 202);
-    /* 外壳（侧栏/图标轨）比内容区亮一档：深色下内容最深，阅读更专注 */
-    --shell: rgb(32 38 44);
-    --panel: rgb(23 27 32);
+    --background: oklch(0.205 0.007 286);
+    --foreground: oklch(0.94 0.004 286);
+    --card: color-mix(in oklch, var(--foreground) 3%, var(--background));
+    --card-foreground: var(--foreground);
+    --popover: color-mix(in oklch, var(--foreground) 5%, var(--background));
+    --popover-foreground: var(--foreground);
+    --primary: var(--foreground);
+    --primary-foreground: var(--background);
+    --secondary: color-mix(in oklch, var(--foreground) 6%, var(--background));
+    --secondary-foreground: var(--foreground);
+    --muted: color-mix(in oklch, var(--foreground) 7%, var(--background));
+    --muted-foreground: oklch(0.74 0.008 286);
+    --accent: color-mix(in oklch, var(--foreground) 6%, transparent);
+    --accent-foreground: var(--foreground);
+    --destructive: oklch(0.396 0.141 25.72);
+    --destructive-foreground: oklch(0.985 0 0);
+    --success: oklch(0.527 0.154 150.07);
+    --success-foreground: oklch(0.985 0 0);
+    --warning: oklch(0.769 0.189 70.08);
+    --warning-foreground: oklch(0.205 0.014 285.82);
+    --info: oklch(0.623 0.214 259.81);
+    --info-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 0.07);
+    --input: oklch(1 0 0 / 0.13);
+    --ring: color-mix(in oklch, var(--brand) 50%, transparent);
+    /* 桌面默认强调色；显式 data-accent 预设仍优先，手机 PWA 不受影响。 */
+    --brand: oklch(0.7 0.16 285);
+    --brand-foreground: oklch(0.165 0.006 286);
+    --elevation-float: 0 1px 2px oklch(0 0 0 / 0.3), 0 16px 40px -12px oklch(0 0 0 / 0.55);
+    /* fork 表面映射：外壳/导航用上游 canvas，内容用 surface。 */
+    --shell: oklch(0.165 0.006 286);
+    --panel: var(--background);
+    --color-nav: var(--color-shell);
+    --color-line: var(--color-border);
+    --color-faint: oklch(0.56 0.01 286);
   }
 }
 
@@ -360,9 +369,10 @@ html.bg-image-enabled {
   --color-card: oklch(from var(--card) l c h / var(--bg-panel-alpha, 0.15));
   --color-secondary: oklch(from var(--secondary) l c h / var(--bg-panel-alpha, 0.15));
   --color-muted: oklch(from var(--muted) l c h / var(--bg-panel-alpha, 0.15));
-  --color-accent: oklch(from var(--accent) l c h / var(--bg-panel-alpha, 0.15));
-  --color-border: oklch(from var(--border) l c h / var(--bg-border-alpha, 0.4));
-  --color-input: oklch(from var(--input) l c h / var(--bg-border-alpha, 0.4));
+  /* 上游深色的 hover / 边框本身半透明：叠乘 alpha，不能把原始透明度替换掉。 */
+  --color-accent: oklch(from var(--accent) l c h / calc(alpha * var(--bg-panel-alpha, 0.15)));
+  --color-border: oklch(from var(--border) l c h / calc(alpha * var(--bg-border-alpha, 0.4)));
+  --color-input: oklch(from var(--input) l c h / calc(alpha * var(--bg-border-alpha, 0.4)));
   /* 弹出层保底不透明度，叠在内容上方时保住可读性 */
   --color-popover: oklch(from var(--popover) l c h / var(--bg-popover-alpha, 0.92));
 }

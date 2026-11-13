@@ -596,7 +596,10 @@ export function BrowserView({
         <Button
           variant="ghost"
           size="icon-xs"
-          className={cn(iconButton, state.designMode && 'bg-muted text-foreground')}
+          className={cn(
+            iconButton,
+            state.designMode && 'bg-selection text-selection-foreground hover:bg-selection'
+          )}
           disabled={!state.tabId || state.devtoolsOpen}
           onClick={() => {
             if (multiRef.current) setMultiMode(false);
@@ -614,7 +617,10 @@ export function BrowserView({
         <Button
           variant="ghost"
           size="icon-xs"
-          className={cn(iconButton, multi && 'bg-muted text-foreground')}
+          className={cn(
+            iconButton,
+            multi && 'bg-selection text-selection-foreground hover:bg-selection'
+          )}
           disabled={!state.tabId || state.devtoolsOpen}
           onClick={toggleMulti}
           aria-label={t('Multi-point annotation')}

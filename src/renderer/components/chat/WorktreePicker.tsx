@@ -474,7 +474,7 @@ export function WorktreePicker({
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
                     option.selected
-                      ? 'bg-primary/10 text-foreground'
+                      ? 'bg-selection text-selection-foreground'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
@@ -487,7 +487,7 @@ export function WorktreePicker({
                       </span>
                     )}
                   </span>
-                  {option.selected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                  {option.selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
                 </button>
               ))}
               {canAttach && candidates.length > 0 && (

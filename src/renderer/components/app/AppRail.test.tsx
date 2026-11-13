@@ -25,6 +25,36 @@ function railItems(props: Parameters<typeof AppRail>[0]) {
 const modeSwitch = createElement('div', { 'data-testid': 'mode' });
 
 describe('AppRail 精简导航', () => {
+  it.each(['Code', 'Image studio', 'Design', 'Collaboration board'])(
+    '%s 的常驻选中与悬停区分，统一使用品牌选择背景',
+    (label) => {
+      const render = (active: boolean) =>
+        parseHTML(
+          renderToStaticMarkup(
+            createElement(AppRail, {
+              codeWorkspace: { active: label === 'Code' && active, onToggle: vi.fn() },
+              imageStudio: { active: label === 'Image studio' && active, onToggle: vi.fn() },
+              designGallery: {
+                label: 'Design',
+                active: label === 'Design' && active,
+                onToggle: vi.fn(),
+              },
+              collaborationBoard: {
+                active: label === 'Collaboration board' && active,
+                onToggle: vi.fn(),
+              },
+            })
+          )
+        ).document.querySelector(`[aria-label="${label}"]`);
+      const selected = render(true);
+      expect(selected?.getAttribute('aria-pressed')).toBe('true');
+      expect(selected?.classList.contains('bg-selection')).toBe(true);
+      expect(selected?.classList.contains('text-brand')).toBe(true);
+      expect(selected?.classList.contains('hover:bg-accent')).toBe(false);
+      expect(render(false)?.classList.contains('bg-selection')).toBe(false);
+    }
+  );
+
   it('Bot 移到设计下方、看板正上方，画图仍保留在 Code 下方', () => {
     expect(
       railItems({

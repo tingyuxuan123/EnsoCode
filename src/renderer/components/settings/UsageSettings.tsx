@@ -179,7 +179,7 @@ function RangePills({
           className={cn(
             'h-[calc(26rem/14)] rounded-[4px] px-[10px] text-[calc(12rem/14)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
             value === days
-              ? 'bg-background font-medium text-foreground'
+              ? 'bg-selection font-medium text-selection-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >

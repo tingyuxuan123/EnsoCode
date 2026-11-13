@@ -808,7 +808,7 @@ export function AppearanceSettings() {
               className={cn(
                 'flex flex-col items-center gap-[8px] rounded-[6px] border-2 px-[12px] py-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 theme === option.value
-                  ? 'border-primary bg-primary/10 text-primary'
+                  ? 'border-selection-border bg-selection text-selection-foreground'
                   : 'border-transparent bg-muted/50 hover:bg-muted'
               )}
             >

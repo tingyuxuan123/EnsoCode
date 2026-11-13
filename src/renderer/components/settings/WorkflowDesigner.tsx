@@ -344,7 +344,7 @@ export function WorkflowDesigner({
                   'flex w-44 shrink-0 flex-col gap-1.5 rounded-[6px] border border-dashed bg-background/60 p-2',
                   selected.kind === 'phase' &&
                     selected.phase === pi &&
-                    'border-primary border-solid'
+                    'border-selection-border border-solid'
                 )}
               >
                 <button
@@ -373,7 +373,8 @@ export function WorkflowDesigner({
                       onClick={() => setSelection({ kind: 'step', phase: pi, step: si })}
                       className={cn(
                         'block w-full rounded-[6px] border bg-background px-2.5 py-1.5 text-left transition-colors hover:border-primary/60',
-                        active && 'border-primary ring-2 ring-primary/20',
+                        active &&
+                          'border-selection-border bg-selection text-selection-foreground ring-2 ring-brand/20',
                         invalid && !active && 'border-destructive/50'
                       )}
                     >

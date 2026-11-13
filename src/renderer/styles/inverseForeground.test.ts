@@ -11,7 +11,6 @@ const phone = readFileSync(
   'utf8'
 );
 const composer = readFileSync(new URL('../components/chat/Composer.tsx', import.meta.url), 'utf8');
-const groups = readFileSync(new URL('../components/chat/GroupChips.tsx', import.meta.url), 'utf8');
 const timeline = readFileSync(
   new URL('../components/chat/TimelineRow.tsx', import.meta.url),
   'utf8'
@@ -126,7 +125,6 @@ function luminance(color: string): number {
 
 const inverseControls = [
   { name: 'default Button', classes: buttonVariants() },
-  { name: 'selected group', classes: groups.match(/\?\s*'([^']*bg-foreground[^']*)'/)?.[1] ?? '' },
   {
     name: 'Composer stop',
     classes: composer.match(/className="([^"]*border-foreground[^"]*)"/)?.[1] ?? '',

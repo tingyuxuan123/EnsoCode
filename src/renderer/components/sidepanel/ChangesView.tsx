@@ -347,7 +347,9 @@ function ModeTab({
       aria-selected={active}
       className={cn(
         't-tab rounded-md px-2 py-1 text-[calc(11rem/14)] transition-colors',
-        active ? 'font-medium' : 'text-muted-foreground hover:bg-muted/50'
+        active
+          ? 'bg-selection font-medium text-selection-foreground'
+          : 'text-muted-foreground hover:bg-muted/50'
       )}
     >
       {children}

@@ -82,6 +82,7 @@ export function ModeSwitch({
               : { role: 'radio' as const, 'aria-checked': active })}
             aria-label={label}
             data-app-mode={value}
+            data-rail-view={value}
             onKeyDown={only ? onKeyDown : undefined}
             tabIndex={only || mode === value ? 0 : -1}
             onClick={() => {
@@ -97,7 +98,8 @@ export function ModeSwitch({
               <motion.span
                 layoutId={pillId}
                 aria-hidden
-                className="absolute inset-0 rounded-md bg-brand/10 dark:bg-brand/15"
+                data-slot="rail-selection"
+                className="absolute inset-0 rounded-md bg-selection"
                 transition={reduceMotion ? { duration: 0 } : springStandard}
               />
             )}

@@ -228,7 +228,7 @@ export function Segmented<T extends string>({
           className={cn(
             'flex-1 rounded-md px-2 py-1 transition-colors',
             value === option.value
-              ? 'bg-background font-medium text-foreground'
+              ? 'bg-selection font-medium text-selection-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -257,7 +257,9 @@ export function TeamRefField({
   const chip = (active: boolean) =>
     cn(
       'rounded-full border px-2 py-0.5 text-[calc(11rem/14)] transition-colors',
-      active ? 'border-info bg-info/10 text-foreground' : 'text-muted-foreground hover:bg-muted'
+      active
+        ? 'border-selection-border bg-selection text-selection-foreground'
+        : 'text-muted-foreground hover:bg-muted'
     );
   return (
     <div>

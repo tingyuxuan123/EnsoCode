@@ -44,12 +44,10 @@ function Choice({ selected, text, label }: { selected: boolean; text: string; la
       data-selected={selected || undefined}
       className={cn(
         'flex items-start gap-1.5 rounded-md px-2 py-1 leading-relaxed',
-        selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground'
+        selected ? 'bg-selection text-selection-foreground' : 'text-muted-foreground'
       )}
     >
-      <Icon
-        className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selected ? 'text-primary' : 'opacity-40')}
-      />
+      <Icon className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selected ? 'text-brand' : 'opacity-40')} />
       <span className="min-w-0 whitespace-pre-wrap break-words">
         {label && <span className="mr-1.5 text-muted-foreground">{label}</span>}
         {text}

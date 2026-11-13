@@ -38,6 +38,7 @@ interface AppRailProps {
 
 const RAIL_BUTTON =
   'relative flex size-[36px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40';
+const RAIL_SELECTED = 'bg-selection text-brand hover:bg-selection hover:text-brand';
 
 /**
  * 全局图标轨（56px）：品牌、侧栏开关、收起时的搜索、分隔符、模式切换、Enso 与设置。
@@ -107,8 +108,9 @@ export function AppRail({
         <RailTip label="Code">
           <button
             type="button"
-            className={cn(RAIL_BUTTON, codeWorkspace.active && 'bg-accent text-foreground')}
+            className={cn(RAIL_BUTTON, codeWorkspace.active && RAIL_SELECTED)}
             aria-label="Code"
+            data-rail-view="code"
             aria-pressed={codeWorkspace.active}
             onClick={codeWorkspace.onToggle}
           >
@@ -121,8 +123,9 @@ export function AppRail({
           <button
             type="button"
             onClick={imageStudio.onToggle}
-            className={cn(RAIL_BUTTON, imageStudio.active && 'bg-accent text-foreground')}
+            className={cn(RAIL_BUTTON, imageStudio.active && RAIL_SELECTED)}
             aria-label={t('Image studio')}
+            data-rail-view="images"
             aria-pressed={imageStudio.active}
           >
             <Image className="size-[19px]" />
@@ -134,8 +137,9 @@ export function AppRail({
           <button
             type="button"
             onClick={designGallery.onToggle}
-            className={cn(RAIL_BUTTON, designGallery.active && 'bg-accent text-foreground')}
+            className={cn(RAIL_BUTTON, designGallery.active && RAIL_SELECTED)}
             aria-label={designGallery.label}
+            data-rail-view="design"
             aria-pressed={designGallery.active}
           >
             <Ruler className="size-[19px]" />
@@ -148,8 +152,9 @@ export function AppRail({
           <button
             type="button"
             onClick={collaborationBoard.onToggle}
-            className={cn(RAIL_BUTTON, collaborationBoard.active && 'bg-accent text-foreground')}
+            className={cn(RAIL_BUTTON, collaborationBoard.active && RAIL_SELECTED)}
             aria-label={t('Collaboration board')}
+            data-rail-view="board"
             aria-description={
               collaborationBoard.attention
                 ? t('{{n}} tasks need your attention', { n: collaborationBoard.attention })

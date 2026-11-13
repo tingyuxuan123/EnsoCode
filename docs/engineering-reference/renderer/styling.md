@@ -18,7 +18,25 @@ className="text-red-500"
 
 可用语义色：`background` / `foreground` / `card` / `popover` / `primary` /
 `secondary` / `muted` / `accent` / `destructive` / `success` / `warning` / `info` /
-`border` / `input` / `ring`，各自都有 `-foreground` 配对。
+`border` / `input` / `ring`。品牌色是 `brand` / `brand-foreground`；常驻选择使用
+`selection` / `selection-foreground` / `selection-border`。
+
+### 颜色职责：主操作、悬停与选择不是同一件事
+
+- `primary` 保留主题定义（上游深色是前景白），不是用户强调色的别名；普通主按钮、徽标、
+  统计图和状态语义不要为了“统一主题色”全局换色。
+- `brand` 是用户选择的强调色。短图标、页签下划线、开关/复选/单选的已开启状态、滑块填充用它，
+  实色底必须配 `brand-foreground`。
+- `accent` 只做中性 hover/瞬时键盘高亮。上游深色只有 6% alpha，不能拿来表示常驻当前页。
+- 持久当前行、分段、筛选项统一 `bg-selection text-selection-foreground`，已有边框的选项可配
+  `border-selection-border`。`shared.css` 由原始 `brand` 派生浅色 12% / 深色 18% 淡染，文字取原始
+  `foreground`，边框取品牌色 45%；不经过壁纸 alpha 重映射。active 时不要让通用 `hover:bg-accent`
+  覆盖它（把 hover 放到 inactive 分支，或 active 显式 `hover:bg-selection`）。
+- 不按 `[aria-pressed=true]` 全局刷色：侧栏展开、工具开启、当前工作区是不同的状态；在所属组件
+  显式选择样式。云白/薄荷已有的中性或绿色表面例外继续由各自主题文件管理。
+
+桌面/手机共用 `shared.css` 的 `@custom-variant dark (&:where(.dark, .dark *))`，让所有
+`dark:` 工具类与 settings store 的 `html.dark` 一致，不能另跟随系统媒体查询。
 
 例外：确实需要固定色相的状态提示（如测试成功的绿色）写
 `text-emerald-600 dark:text-emerald-500`，两种模式都要给。
@@ -67,6 +85,12 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 `stores/settings/index.ts` 的 `applyAppTheme` 与 `applySettings`：
 
 - 前三种：切换 `<html>` 的 `dark` 类。
+- 桌面深色使用 fork 上游 `J3n5en/EnsoCode` 的默认 **Enso dark** 色值与派生公式
+  （对齐 `4bc6eb9c` 的 `src/shared/theme/builtinThemes.ts` / `derive.ts`），集中在
+  `styles/globals.css` 的 `.dark`：外壳/导航对应上游 canvas，内容对应 surface，默认紫色强调，
+  显式强调色预设仍优先。不迁移上游布局或主题系统、不改上游基础色值；共享控件及业务选择项
+  按上述颜色职责适配，不能只在 `project-sidebar` 作用域局部补色。
+  色值回归见 `upstreamDark.test.ts`，主题驱动/选择契约见 `selection.test.ts`。
 - `sync-terminal`：调 `applyTerminalThemeToApp()`，把 ghostty 终端主题的配色
   写进全局 CSS 变量，让整个界面跟随终端配色。
 - 桌面浅色方案独立保存在 `lightPalette`，默认为 `cloud-light`（`shared/lightPalette.ts` 的 `DEFAULT_LIGHT_PALETTE`）；旧配置缺字段或非法值也回退云白，已有合法选择不变。`mint-light` 只在显式浅色或跟随浅色系统时设置 `html[data-light-palette]`，用主题自带的绿色，不覆盖用户为其他模式设置的强调色。
@@ -89,6 +113,9 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 用户可开「背景图」（设置 → 外观）。实现不是透明窗口，而是
 `hooks/useBackgroundImage.ts` 给 `<html>` 挂 `bg-image-enabled` 类并写入几个 alpha 变量，
 `globals.css` 里用相对颜色把 **`--color-*` 令牌**（Tailwind 引用层）重映射成半透明：
+
+上游深色的 `--accent`、`--border`、`--input` 自带 alpha，背景图透明化必须与原始
+`alpha` 相乘，不能直接替换，否则淡 hover 与边框会变成大片亮灰/白线；不透明主题色行为不变。
 
 | 变量 | 作用范围 | 来源 |
 |------|---------|------|
@@ -121,7 +148,7 @@ inverse 令牌取原始 `--background`，仍跟随 light/dark/sync-terminal，�
   两层 `--bg-panel-alpha` 叠成近乎不透明。给卡片挂 `data-slot`，加进 `globals.css` 的置透明列表
   （`tool-details`、`welcome-suggestion`、Bot 页 `bot-card` / `bot-notice`），背景图模式下只留边框；
   带 `hover:bg-*` 的可点卡片行用 `bot-card-button`（只在非 hover 态置透明）。常驻的选中高亮
-  不要用实色 `bg-muted`，与 Code 侧栏一致用 `bg-brand/10 dark:bg-brand/15` 淡染。
+  不要用实色 `bg-muted` 或弱 hover 色，统一用 `bg-selection`。
 - **第三方组件自己刷底色**（终端、代码高亮、diff）→ 给宿主元素挂 `data-slot`，在
   `globals.css` 的 `html.bg-image-enabled` 区块加一条覆写：内部置透，宿主只刷**一层**。
   若要求与主体完全一致，底色和 alpha 都取 `var(--background)` + `var(--bg-panel-alpha)`；
@@ -136,6 +163,17 @@ inverse 令牌取原始 `--background`，仍跟随 light/dark/sync-terminal，�
 
 改完在背景图开启状态下截图对比一次；`--bg-code-alpha` 默认 0.65，`useBackgroundImage`
 只在主窗口 `App.tsx` 调用，设置窗口不挂背景。
+
+主题或持久选中态变更后，在确认 PID/`ENSO_USER_DATA_DIR` 属于隔离 dev 的前提下运行：
+
+```bash
+ENSO_CDP_PORT=9333 node scripts/verify-theme-selection.mjs
+```
+
+该脚本拒绝默认 9222，通过真实 Chromium 与共享 React 控件校验系统/应用明暗交叉组合、
+深浅终端同步与开关开启/关闭状态、
+Code/画图/设计/Bot 真实点击切换、Bot 关闭后的 Code、青绿/紫色及背景图 85%/100% 可见度；
+检查颜色而非只看 aria/class，结束卸载临时控件并还原隔离设置。完整矩阵见脚本。
 
 ## 尺寸惯例
 
