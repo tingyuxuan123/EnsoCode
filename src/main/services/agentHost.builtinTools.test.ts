@@ -50,14 +50,24 @@ import {
   isBrowserSessionToolEnabled,
   pushBuiltinTools,
   pushCompactRoute,
+  registerPluginSessionBridge,
   resolveAgentTypeSpawnConfig,
   resolveModelSelection,
+  sendPluginInterceptResultToSession,
+  sendPluginToolProgressToSession,
   setDesignCanvasCwds,
   spawnSession,
   startAgentWorker,
   stopAgentWorker,
 } from './agentHost';
+import type { PluginSessionBridge } from './extensionPlugins/service';
 import { setNativePluginResources } from './nativePluginResources';
+import {
+  type NativePluginRuntimeSource,
+  pluginAgentTypeId,
+  setNativeAgentTypeSource,
+  setNativePluginRuntimeSource,
+} from './pluginRuntime';
 
 const identity = { sessionId: 'hot-parent', generation: '11111111-1111-4111-8111-111111111111' };
 const request = { sessionId: identity.sessionId, cwd: '/tmp', providerId: 'p', modelId: 'm' };
@@ -86,6 +96,8 @@ it('微压缩默认启用，明确关闭在 spawn 与既有压缩路由中均保
 
 beforeEach(() => {
   setNativePluginResources(undefined);
+  setNativePluginRuntimeSource(null);
+  setNativeAgentTypeSource(null);
   stopAgentWorker();
   setDesignCanvasCwds([]);
   settings.state = {
@@ -102,6 +114,248 @@ beforeEach(() => {
       },
     ],
   };
+});
+
+const pluginRuntime = () => {
+  const descriptor = {
+    name: 'plugin_enso-example__check',
+    description: 'check',
+    pluginId: 'enso.example',
+    fingerprint: 'a'.repeat(64),
+    parameters: { type: 'object' },
+  };
+  const eventPlan = { observe: ['agent_end'], intercept: [{ event: 'tool_call' }], inject: true };
+  let available = true;
+  const api: ReturnType<NativePluginRuntimeSource['get']> = {
+    presetForSpawn: (id) =>
+      !id
+        ? undefined
+        : available
+          ? {
+              ok: true,
+              systemPrompt: 'plugin persona',
+              systemPromptAppend: 'plugin tail',
+              systemPromptBoost: 'plugin boost',
+              refusalRetryPrompt: 'plugin retry',
+              thinkingLevel: 'high',
+              approvalMode: 'auto-edits',
+              disabledTools: ['browser'],
+              model: { providerId: 'p', modelId: 'preset-model' },
+            }
+          : { ok: false, error: 'disabled plugin' },
+    skillPathsForSpawn: (active) =>
+      active ? ['/plugin/always', '/plugin/scoped'] : ['/plugin/always'],
+    workflowPathsForSpawn: (active) => (active ? ['/plugin/workflow.json'] : []),
+    mcpServersForSpawn: () => [],
+    toolsForSpawn: () => [descriptor],
+    eventPlanForSpawn: () => eventPlan,
+    agentTypesForSpawn: (options) =>
+      options?.activePresetId
+        ? [
+            {
+              pluginId: 'enso.example',
+              name: 'example:scoped',
+              description: 'scoped',
+              systemPrompt: 'helper',
+              tools: 'readonly',
+              skillPaths: [],
+            },
+          ]
+        : [],
+  };
+  return {
+    api,
+    descriptor,
+    eventPlan,
+    disable: () => {
+      available = false;
+    },
+  };
+};
+
+it('native runtime overlays spawn fields, scopes agent types and keeps preset tool disables during hot updates', () => {
+  const runtime = pluginRuntime();
+  setNativePluginRuntimeSource({ get: () => runtime.api, setSessionBridge: () => {} });
+  setNativeAgentTypeSource({
+    list: () => runtime.api.agentTypesForSpawn({ activePresetId: 'plugin:enso.example:review' }),
+  });
+  settings.state.providers = [
+    {
+      id: 'p',
+      name: 'P',
+      api: 'openai-completions',
+      baseUrl: 'https://example.test',
+      apiKey: 'fake',
+      enabled: true,
+      models: [{ id: 'm' }, { id: 'preset-model' }],
+    },
+  ];
+  settings.state.presets = [
+    {
+      id: 'user',
+      name: 'User',
+      skillIds: [],
+      mcpServerIds: [],
+      pluginPresetId: 'plugin:enso.example:review',
+    },
+  ];
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  expect(
+    spawnSession(
+      identity,
+      { ...request, presetId: 'user', approvalMode: 'full', thinkingLevel: 'low' },
+      new Set()
+    ).ok
+  ).toBe(true);
+  expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+    model: { modelId: 'preset-model' },
+    thinkingLevel: 'high',
+    approvalMode: 'auto-edits',
+    pluginTools: [runtime.descriptor],
+    pluginEvents: runtime.eventPlan,
+    workflowPresetFiles: ['/plugin/workflow.json'],
+    systemPrompt: 'plugin persona',
+    systemPromptAppend: 'plugin tail',
+    systemPromptBoost: 'plugin boost',
+    refusalRetryPrompt: 'plugin retry',
+    agentTypes: expect.arrayContaining([expect.objectContaining({ name: 'example:scoped' })]),
+    disabledTools: expect.arrayContaining(['browser']),
+  });
+  settings.state.disabledBuiltinTools = [];
+  pushBuiltinTools();
+  expect(worker.posted.findLast((c) => c.type === 'set-builtin-tools')).toMatchObject({
+    disabledTools: ['browser'],
+  });
+  expect(isBrowserSessionToolEnabled(identity)).toBe(false);
+  const unscoped = { ...identity, sessionId: 'unscoped' };
+  spawnSession(unscoped, { ...request, sessionId: unscoped.sessionId }, new Set());
+  const command = worker.posted.findLast((c) => c.type === 'spawn-parent');
+  expect(command).not.toHaveProperty('workflowPresetFiles');
+  expect(
+    command &&
+      command.type === 'spawn-parent' &&
+      command.agentTypes?.some((t) => t.name === 'example:scoped')
+  ).toBe(false);
+  // Resolving a known plugin type must not bypass this parent's preset scope.
+  const selected = resolveModelSelection('p', 'm', new Set());
+  if (!selected.ok) throw new Error(selected.error);
+  expect(
+    resolveAgentTypeSpawnConfig(
+      `custom:${pluginAgentTypeId('example:scoped')}`,
+      selected.selection,
+      new Set(),
+      { parentSessionId: unscoped.sessionId }
+    ).ok
+  ).toBe(false);
+  stopAgentWorker();
+});
+
+it('disabled optional overlays fall back while required plugin presets fail; remote and Bot never receive native resources', () => {
+  const runtime = pluginRuntime();
+  runtime.disable();
+  setNativePluginRuntimeSource({ get: () => runtime.api, setSessionBridge: () => {} });
+  settings.state.presets = [
+    {
+      id: 'user',
+      name: 'User',
+      skillIds: [],
+      mcpServerIds: [],
+      pluginPresetId: 'plugin:enso.example:review',
+    },
+  ];
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  expect(spawnSession(identity, { ...request, presetId: 'user' }, new Set()).ok).toBe(true);
+  expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).not.toHaveProperty(
+    'systemPrompt'
+  );
+  expect(
+    spawnSession(identity, { ...request, presetId: 'plugin:enso.example:review' }, new Set())
+  ).toMatchObject({ ok: false });
+  for (const bot of [false, true]) {
+    const owner = { ...identity, sessionId: bot ? 'bot' : 'ssh' };
+    expect(
+      spawnSession(
+        owner,
+        { ...request, sessionId: owner.sessionId },
+        new Set(),
+        bot ? undefined : { host: 'fixture', auth: 'key' },
+        undefined,
+        bot
+          ? {
+              bot: {
+                systemPrompt: 'bot persona',
+                instruction: { path: '/bot', content: 'bot' },
+                skillIds: [],
+                mcpServerIds: [],
+              },
+            }
+          : undefined
+      ).ok
+    ).toBe(true);
+    const command = worker.posted.findLast((c) => c.type === 'spawn-parent');
+    for (const field of ['pluginTools', 'pluginEvents', 'workflowPresetFiles'])
+      expect(command).not.toHaveProperty(field);
+  }
+  stopAgentWorker();
+});
+
+it('session bridge replays registration, resolves exact live identity and forwards inject/progress/intercept', () => {
+  let bridge: PluginSessionBridge | null = null;
+  registerPluginSessionBridge((id) => (id === identity.sessionId ? identity : undefined));
+  const runtime = pluginRuntime();
+  setNativePluginRuntimeSource({
+    get: () => runtime.api,
+    setSessionBridge: (value) => {
+      bridge = value;
+    },
+  });
+  const liveBridge = bridge as unknown as PluginSessionBridge;
+  const message = {
+    pluginId: 'enso.example',
+    pluginName: 'Example',
+    text: 'hello',
+    images: [],
+    deliverAs: 'nextTurn' as const,
+    triggerTurn: false,
+  };
+  expect(liveBridge.inject('missing', message)).toMatchObject({ ok: false, notRunning: true });
+  expect(
+    liveBridge.inject(identity.sessionId, { ...message, text: 'x'.repeat(64 * 1024 + 1) })
+  ).toMatchObject({ ok: false });
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  expect(liveBridge.inject(identity.sessionId, message)).toEqual({ ok: true });
+  expect(worker.posted.at(-1)).toEqual({
+    type: 'plugin-inject',
+    identity,
+    pluginId: 'enso.example',
+    pluginName: 'Example',
+    text: 'hello',
+    deliverAs: 'nextTurn',
+    triggerTurn: false,
+  });
+  sendPluginToolProgressToSession(identity, 'request', 'progress');
+  expect(worker.posted.at(-1)).toMatchObject({
+    type: 'plugin-tool-progress',
+    identity,
+    requestId: 'request',
+    text: 'progress',
+  });
+  sendPluginInterceptResultToSession(identity, 'intercept', { ok: true, result: { block: true } });
+  expect(worker.posted.at(-1)).toMatchObject({
+    type: 'plugin-intercept-result',
+    identity,
+    requestId: 'intercept',
+    result: { block: true },
+  });
+  expect(liveBridge.abort(identity.sessionId)).toEqual({ ok: true });
+  expect(worker.posted.at(-1)).toEqual({ type: 'abort', identity });
+  stopAgentWorker();
 });
 
 it('画布 cwd 在 worker 缺席时保留，ready 先重推；重启后相同集合也重推', () => {

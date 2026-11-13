@@ -16,6 +16,11 @@ interface NavigationContents {
     name: 'will-frame-navigate' | 'will-redirect',
     listener: (event: DesignNavigationEvent) => void
   ): unknown;
+  off?(
+    name: 'will-frame-navigate' | 'will-redirect',
+    listener: (event: DesignNavigationEvent) => void
+  ): unknown;
+  once?(event: 'destroyed', listener: () => void): unknown;
 }
 function engineOrigin(url: string, ports: ReadonlySet<number>): string | undefined {
   try {
@@ -54,30 +59,65 @@ export function installDesignNavigationGuard(
   const bound = new WeakMap<NavigationFrame, string>();
   const guard = (event: DesignNavigationEvent) => {
     if (event.isMainFrame) return;
-    const registered = ports();
-    let origin: string | undefined;
-    let plugin = false;
-    // Plugin views retain their existing independent navigation policy, including descendants.
-    const pluginUrl = new URL('plugin-view.html', contents.getURL()).href;
-    for (let frame = event.frame; frame && frame !== contents.mainFrame; frame = frame.parent) {
-      if (frame.name === 'enso-plugin-view' || frame.url.split('#')[0] === pluginUrl) plugin = true;
-      origin ??= bound.get(frame) ?? engineOrigin(frame.url, registered);
-    }
-    if (!origin && plugin) return;
-    if (
-      shouldBlockDesignNavigation({
-        isMainFrame: false,
-        url: event.url,
-        ports: registered,
-        origin,
-      })
-    )
-      event.preventDefault();
-    else if (event.frame) {
-      const next = engineOrigin(event.url, registered);
-      if (next) bound.set(event.frame, next);
+    try {
+      const registered = ports();
+      let origin: string | undefined;
+      let plugin = false;
+      // Plugin views retain their existing independent navigation policy, including descendants.
+      const pluginUrl = new URL('plugin-view.html', contents.getURL()).href;
+      const source = event.frame;
+      const seen = new Set<NavigationFrame>();
+      for (let frame = source; frame && frame !== contents.mainFrame; frame = frame.parent) {
+        // Electron 每次返回新的祖先包装器，引用比较不可靠；有界遍历只用于收集来源，
+        // 触顶时用已收集到的信息判定，绝不能在原生导航里反复 preventDefault。
+        if (seen.has(frame) || seen.size >= 32) break;
+        seen.add(frame);
+        if (frame.name === 'enso-plugin-view' || frame.url.split('#')[0] === pluginUrl)
+          plugin = true;
+        origin ??= bound.get(frame) ?? engineOrigin(frame.url, registered);
+      }
+      if (!origin && plugin) return;
+      if (
+        shouldBlockDesignNavigation({
+          isMainFrame: false,
+          url: event.url,
+          ports: registered,
+          origin,
+        })
+      )
+        event.preventDefault();
+      else if (source) {
+        const next = engineOrigin(event.url, registered);
+        if (next) bound.set(source, next);
+      }
+    } catch {
+      // 插件/设计 iframe 拆卸后 WebFrameMain 属性可能抛错；不能让错误冒泡到 Main，
+      // 也不在这里 preventDefault：反复阻止原生导航会让 Electron 陷入重试自旋。
     }
   };
-  contents.on('will-frame-navigate', guard);
-  contents.on('will-redirect', guard);
+  // 只有存在设计引擎帧时才挂监听：Electron 43 在沙箱子帧上被同步咨询导航时会
+  // 让主进程原生自旋（插件侧栏帧已实测），空闲窗口不应承担这个风险。
+  let attached = false;
+  const sync = () => {
+    const active = ports().size > 0;
+    if (active === attached) return;
+    attached = active;
+    if (active) {
+      contents.on('will-frame-navigate', guard);
+      contents.on('will-redirect', guard);
+    } else {
+      contents.off?.('will-frame-navigate', guard);
+      contents.off?.('will-redirect', guard);
+    }
+  };
+  sync();
+  const timer = setInterval(sync, 1000);
+  timer.unref?.();
+  contents.once?.('destroyed', () => {
+    clearInterval(timer);
+    if (attached) {
+      contents.off?.('will-frame-navigate', guard);
+      contents.off?.('will-redirect', guard);
+    }
+  });
 }

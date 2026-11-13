@@ -98,7 +98,7 @@ interface DispatchHost {
     identity: SessionIdentity,
     request: AgentSpawnRequest,
     authenticatedAccountKeys: ReadonlySet<string>
-  ): { ok: boolean; error?: string };
+  ): { ok: boolean; error?: string } | Promise<{ ok: boolean; error?: string }>;
   spawnChild(
     identity: ChildSessionIdentity,
     cwd: string,
@@ -924,7 +924,8 @@ export class AgentDispatchService {
           ? { approvalMode: persisted.approvalMode as AgentSpawnRequest['approvalMode'] }
           : {}),
       };
-      const spawned = this.options.host.spawnParent(parent, request, credentialKeys);
+      const pendingSpawn = this.options.host.spawnParent(parent, request, credentialKeys);
+      const spawned = pendingSpawn instanceof Promise ? await pendingSpawn : pendingSpawn;
       if (!spawned.ok) throw new Error(spawned.error ?? 'Failed to spawn parent container.');
       const ready = await this.waitForParent(parent);
       if (

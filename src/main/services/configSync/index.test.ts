@@ -832,6 +832,55 @@ describe('config sync sender-bound import flow', () => {
 });
 
 describe('config sync preset system prompt resources', () => {
+  it('exports and remaps every prompt slot while preserving plugin preset overlays', async () => {
+    const keys = [
+      'systemPromptId',
+      'systemPromptTailId',
+      'boostPromptId',
+      'refusalRetryPromptId',
+    ] as const;
+    const ids = keys.map((_, index) => `${index}aade2cb-d2a1-47c3-a4a2-848f28571a97`);
+    mkdirSync(join(userData, 'system-prompts'), { recursive: true });
+    for (const [index, id] of ids.entries())
+      writeFileSync(join(userData, 'system-prompts', `${id}.md`), `prompt ${index}`);
+    const preset = {
+      id: 'kit',
+      name: 'Kit',
+      skillIds: [],
+      mcpServerIds: [],
+      refusalRetry: true,
+      pluginPresetId: 'plugin:enso.example:review',
+      ...Object.fromEntries(keys.map((key, index) => [key, ids[index]])),
+    };
+    settings.patchSettingsState('presets', [preset]);
+    const file = join(userData, 'prompt-kit.enso-config');
+    await expect(
+      service.exportConfigToPath({ includeSecrets: true, password: 'correct horse' }, file)
+    ).resolves.toMatchObject({ ok: true });
+    const decoded = await decodeBundle(readFileSync(file), 'correct horse');
+    expect(decoded.resources.systemPrompts).toHaveLength(4);
+    settings.patchSettingsState('presets', []);
+    const opened = await service.openImportForSender(88, file);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    await expect(
+      service.previewImportForSender(88, opened.token, 'correct horse', 'merge')
+    ).resolves.toMatchObject({ ok: true });
+    await expect(service.commitImportForSender(88, opened.token, 'merge')).resolves.toMatchObject({
+      ok: true,
+    });
+    const persisted = JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8'))[
+      'enso-settings'
+    ].state.presets[0];
+    expect(persisted).toMatchObject({ pluginPresetId: preset.pluginPresetId, refusalRetry: true });
+    for (const [index, key] of keys.entries()) {
+      expect(persisted[key]).not.toBe(ids[index]);
+      expect(readFileSync(join(userData, 'system-prompts', `${persisted[key]}.md`), 'utf8')).toBe(
+        `prompt ${index}`
+      );
+    }
+  });
+
   const bundleWithSystemPrompt = (
     preset: { id: string; name: string; systemPromptId: string },
     content: string

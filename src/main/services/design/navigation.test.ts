@@ -6,6 +6,54 @@ import {
   shouldBlockDesignNavigation,
 } from './navigation';
 
+it('插件重载的销毁frame不让设计守卫抛错（无法核验时不冒泡，交回原生导航）', () => {
+  const handlers: ((event: DesignNavigationEvent) => void)[] = [];
+  installDesignNavigationGuard(
+    {
+      mainFrame: { url: 'file:///app/index.html', name: '', parent: null },
+      getURL: () => 'file:///app/index.html',
+      on: (_name, fn) => handlers.push(fn),
+    },
+    () => new Set([3210])
+  );
+  const preventDefault = vi.fn();
+  const event = {
+    isMainFrame: false,
+    url: 'about:blank',
+    preventDefault,
+    get frame(): never {
+      throw new Error('Render frame was disposed');
+    },
+  };
+  expect(() => handlers[0](event)).not.toThrow();
+  expect(preventDefault).not.toHaveBeenCalled();
+});
+it('没有设计引擎帧时不挂导航监听，只有出现引擎端口后才安装', async () => {
+  const ports = new Set<number>();
+  const listeners: string[] = [];
+  vi.useFakeTimers();
+  try {
+    installDesignNavigationGuard(
+      {
+        mainFrame: { url: 'file:///app/index.html', name: '', parent: null },
+        getURL: () => 'file:///app/index.html',
+        on: (name) => listeners.push(`on:${name}`),
+        off: (name) => listeners.push(`off:${name}`),
+      },
+      () => ports
+    );
+    expect(listeners).toEqual([]);
+    ports.add(3210);
+    vi.advanceTimersByTime(1100);
+    expect(listeners).toEqual(['on:will-frame-navigate', 'on:will-redirect']);
+    ports.clear();
+    vi.advanceTimersByTime(1100);
+    expect(listeners.slice(-2)).toEqual(['off:will-frame-navigate', 'off:will-redirect']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('真实主入口 frame-src 只保留插件 shell 同源和 IPv4 回环，不允许 data/blob/外网', () => {
   const html = readFileSync(new URL('../../../renderer/index.html', import.meta.url), 'utf8');
   const policy = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];

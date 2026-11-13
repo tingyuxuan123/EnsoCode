@@ -8,6 +8,7 @@ import { parseAccentColor } from '@shared/accentColor';
 import { isReservedAgentTypeName } from '@shared/builtinAgents';
 import { parseChatTypography } from '@shared/chatTypography';
 import { parseCompactStrategy } from '@shared/compactStrategy';
+import { isPluginPresetId } from '@shared/extensionPlugins/preset';
 import { parseLightPalette } from '@shared/lightPalette';
 import { parseOauthAccountPool } from '@shared/oauthAccountPool';
 import { parseSmartCompactMode } from '@shared/smartCompactMode';
@@ -162,7 +163,19 @@ const MCP_KEYS = [
   'omittedFields',
 ];
 const INSTRUCTION_KEYS = ['id', 'name', 'source', 'sourcePath', 'local', 'bytes', 'enabled'];
-const PRESET_KEYS = ['id', 'name', 'skillIds', 'mcpServerIds', 'instructionId', 'systemPromptId'];
+const PRESET_KEYS = [
+  'id',
+  'name',
+  'skillIds',
+  'mcpServerIds',
+  'instructionId',
+  'systemPromptId',
+  'pluginPresetId',
+  'systemPromptTailId',
+  'boostPromptId',
+  'refusalRetryPromptId',
+  'refusalRetry',
+];
 const AGENT_TYPE_KEYS = [
   'id',
   'name',
@@ -622,8 +635,21 @@ function validatePreset(raw: unknown): RecordValue {
   idList(entry.skillIds, 'preset.skillIds');
   idList(entry.mcpServerIds, 'preset.mcpServerIds');
   if (entry.instructionId !== undefined) stringField(entry, 'instructionId', 'preset', false);
-  if (entry.systemPromptId !== undefined) {
-    const id = stringField(entry, 'systemPromptId', 'preset');
+  if (
+    entry.pluginPresetId !== undefined &&
+    !isPluginPresetId(stringField(entry, 'pluginPresetId', 'preset'))
+  ) {
+    throw new Error('Invalid preset pluginPresetId');
+  }
+  booleanField(entry, 'refusalRetry', 'preset', false);
+  for (const key of [
+    'systemPromptId',
+    'systemPromptTailId',
+    'boostPromptId',
+    'refusalRetryPromptId',
+  ]) {
+    if (entry[key] === undefined) continue;
+    const id = stringField(entry, key, 'preset');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(id)) {
       throw new Error('Invalid preset system prompt reference');
     }
@@ -1062,7 +1088,9 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     new Map(instructions.map((entry) => [String(entry.id), Number(entry.bytes)])),
     new Set(
       presets.flatMap((entry) =>
-        typeof entry.systemPromptId === 'string' ? [entry.systemPromptId] : []
+        ['systemPromptId', 'systemPromptTailId', 'boostPromptId', 'refusalRetryPromptId'].flatMap(
+          (key) => (typeof entry[key] === 'string' ? [entry[key]] : [])
+        )
       )
     )
   );

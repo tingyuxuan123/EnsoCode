@@ -703,7 +703,16 @@ export function planImport(
         'preset instruction'
       );
     }
-    if (entry.source.systemPromptId === undefined) delete next.systemPromptId;
+    for (const key of [
+      'systemPromptId',
+      'systemPromptTailId',
+      'boostPromptId',
+      'refusalRetryPromptId',
+      'refusalRetry',
+      'pluginPresetId',
+    ]) {
+      if (entry.source[key] === undefined) delete next[key];
+    }
     return next;
   });
 

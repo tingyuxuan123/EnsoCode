@@ -39,6 +39,21 @@ const skill = () => ({
 });
 
 describe('config sync codec schema and crypto boundaries', () => {
+  it('preserves plugin preset overlays in config bundles and rejects malformed ids', () => {
+    const input = minimalBundle();
+    const preset = {
+      id: 'p',
+      name: 'P',
+      skillIds: [],
+      mcpServerIds: [],
+      pluginPresetId: 'plugin:enso.example:review',
+    };
+    input.state.presets = [preset];
+    expect(validateBundle(input).state.presets).toEqual([preset]);
+    preset.pluginPresetId = 'not-plugin';
+    expect(() => validateBundle(input)).toThrow(/pluginPresetId/);
+  });
+
   it('接受严格且引用完整的最小配置包', () => {
     const input = minimalBundle();
     expect(validateBundle(input)).toEqual(input);

@@ -529,6 +529,16 @@ function parsePresetFields(
         : undefined;
   const systemPromptId =
     typeof existing?.systemPromptId === 'string' ? existing.systemPromptId : undefined;
+  const preserved: Partial<Preset> = {};
+  for (const key of [
+    'pluginPresetId',
+    'systemPromptTailId',
+    'boostPromptId',
+    'refusalRetryPromptId',
+  ] as const) {
+    if (typeof existing?.[key] === 'string') preserved[key] = existing[key];
+  }
+  if (typeof existing?.refusalRetry === 'boolean') preserved.refusalRetry = existing.refusalRetry;
   return {
     ok: true,
     value: {
@@ -537,6 +547,7 @@ function parsePresetFields(
       mcpServerIds,
       ...(instructionId ? { instructionId } : {}),
       ...(systemPromptId ? { systemPromptId } : {}),
+      ...preserved,
     },
   };
 }

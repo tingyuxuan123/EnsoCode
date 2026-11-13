@@ -57,6 +57,8 @@ type ConfigSyncFieldPolicy = { mode: 'portable' } | { mode: 'excluded'; reason: 
 /** Every persisted settings field must be deliberately classified before it can drift into sync. */
 export const CONFIG_SYNC_FIELD_POLICY = {
   theme: { mode: 'portable' },
+  pluginTheme: { mode: 'excluded', reason: 'references a device-local installed plugin theme' },
+  pluginAutoUpdate: { mode: 'excluded', reason: 'device-local installed plugin update policy' },
   lightPalette: { mode: 'portable' },
   chatTypography: { mode: 'portable' },
   language: { mode: 'portable' },
@@ -243,6 +245,12 @@ class ExportError extends Error {}
 const MISSING_SYSTEM_PROMPT = 'A preset uses a system prompt that is missing or empty.';
 const WRITE_FAILED = 'Could not write the export file. Check that the folder is writable.';
 const SYMLINK_TARGET = 'The selected file is a symbolic link. Choose a different location.';
+const PRESET_PROMPT_KEYS = [
+  'systemPromptId',
+  'systemPromptTailId',
+  'boostPromptId',
+  'refusalRetryPromptId',
+] as const;
 
 function stateOf(settings: Record<string, unknown> | null): Record<string, unknown> {
   return persistedSettingsState(settings?.['enso-settings']) ?? {};
@@ -253,8 +261,10 @@ function referencedSystemPromptIds(value: unknown): Set<string> {
   if (!Array.isArray(value)) return ids;
   for (const preset of value) {
     if (!preset || typeof preset !== 'object') continue;
-    const id = (preset as Record<string, unknown>).systemPromptId;
-    if (typeof id === 'string' && isSystemPromptId(id)) ids.add(id);
+    for (const key of PRESET_PROMPT_KEYS) {
+      const id = (preset as Record<string, unknown>)[key];
+      if (typeof id === 'string' && isSystemPromptId(id)) ids.add(id);
+    }
   }
   return ids;
 }
@@ -416,17 +426,18 @@ function collectBundle(secretsIncluded: boolean): {
   const collectedSystemPromptIds = new Set<string>();
   for (const value of Array.isArray(state.presets) ? state.presets : []) {
     if (!value || typeof value !== 'object') continue;
-    const systemPromptId = (value as Record<string, unknown>).systemPromptId;
-    if (systemPromptId === undefined || collectedSystemPromptIds.has(String(systemPromptId))) {
-      continue;
+    for (const key of PRESET_PROMPT_KEYS) {
+      const systemPromptId = (value as Record<string, unknown>)[key];
+      if (systemPromptId === undefined || collectedSystemPromptIds.has(String(systemPromptId)))
+        continue;
+      if (typeof systemPromptId !== 'string' || !isSystemPromptId(systemPromptId)) {
+        throw new ExportError(MISSING_SYSTEM_PROMPT);
+      }
+      const result = readStoredSystemPrompt(systemPromptId);
+      if (!result.ok) throw new ExportError(MISSING_SYSTEM_PROMPT);
+      collectedSystemPromptIds.add(systemPromptId);
+      systemPrompts.push({ id: systemPromptId, content: result.content });
     }
-    if (typeof systemPromptId !== 'string' || !isSystemPromptId(systemPromptId)) {
-      throw new ExportError(MISSING_SYSTEM_PROMPT);
-    }
-    const result = readStoredSystemPrompt(systemPromptId);
-    if (!result.ok) throw new ExportError(MISSING_SYSTEM_PROMPT);
-    collectedSystemPromptIds.add(systemPromptId);
-    systemPrompts.push({ id: systemPromptId, content: result.content });
   }
   return {
     bundle: {
@@ -677,21 +688,26 @@ export async function commitImportForSender(
       usedSystemPromptIds.add(destinationId);
       systemPromptIdMap.set(resource.id, destinationId);
     }
-    const importedPromptIdsByPreset = new Map<string, string>();
+    const importedPromptIdsByPreset = new Map<
+      string,
+      Partial<Record<(typeof PRESET_PROMPT_KEYS)[number], string>>
+    >();
     for (const preset of entry.bundle.state.presets) {
-      if (!preset.systemPromptId) continue;
       const presetId = entry.plan.presetIdMap[preset.id];
-      const promptId = systemPromptIdMap.get(preset.systemPromptId);
-      if (!presetId || !promptId) throw new Error('Unable to map system prompt resource');
-      importedPromptIdsByPreset.set(presetId, promptId);
+      const mapped: Partial<Record<(typeof PRESET_PROMPT_KEYS)[number], string>> = {};
+      for (const key of PRESET_PROMPT_KEYS) {
+        if (!preset[key]) continue;
+        const promptId = systemPromptIdMap.get(preset[key]);
+        if (!presetId || !promptId) throw new Error('Unable to map system prompt resource');
+        mapped[key] = promptId;
+      }
+      if (presetId) importedPromptIdsByPreset.set(presetId, mapped);
     }
     const presets = Array.isArray(patch.presets) ? patch.presets : [];
     patch.presets = presets.map((value) => {
       if (!value || typeof value !== 'object') return value;
       const item = { ...(value as Record<string, unknown>) };
-      const promptId = importedPromptIdsByPreset.get(String(item.id));
-      if (promptId) item.systemPromptId = promptId;
-      return item;
+      return { ...item, ...importedPromptIdsByPreset.get(String(item.id)) };
     });
     for (const resource of entry.bundle.resources.systemPrompts ?? []) {
       const destinationId = systemPromptIdMap.get(resource.id);

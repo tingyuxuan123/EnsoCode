@@ -36,6 +36,8 @@ import {
   modelUsability,
 } from '@shared/defaultModel';
 import { designToolSettings } from '@shared/design/settings';
+import { presetOverlay } from '@shared/extensionPlugins/preset';
+import { PLUGIN_INJECT_MAX_CHARS } from '@shared/extensionPlugins/protocol';
 import { normalizeMaxActiveCoworkers } from '@shared/maxActiveCoworkers';
 import { mcpTimeoutsForSpawn } from '@shared/mcpTimeout';
 import { pickModelCapabilityOverrides } from '@shared/modelCatalog';
@@ -75,7 +77,7 @@ import type {
   VirtualSpawnClassifier,
   WorkerCustomProvider,
 } from '@shared/types/agent';
-import { parseAgentWorkerEvent } from '@shared/types/agent';
+import { parseAgentWorkerEvent, THINKING_LEVELS } from '@shared/types/agent';
 import type { SubagentModelEntry } from '@shared/types/assets';
 import {
   type AgentTypeEntry,
@@ -136,7 +138,14 @@ import {
   readStoredOauthCredentialKeys,
 } from './oauthProviders';
 import { PendingReloadRegistry } from './pendingReloads';
-import { enabledPlugins, type RuntimeAgentType, withPluginAgentTypes } from './pluginRuntime';
+import {
+  enabledPlugins,
+  getNativePluginRuntime,
+  type NativePluginAgentDef,
+  type RuntimeAgentType,
+  setNativePluginSessionBridge,
+  withPluginAgentTypes,
+} from './pluginRuntime';
 import { killAndWaitExit } from './processExit';
 import { bundledRtkPath } from './rtkBinary';
 import { pickSubagentModelRefs } from './subagentModels';
@@ -454,6 +463,7 @@ export function startAgentWorker(): void {
     browserSessionTools.clear();
     builtinToolScopes.clear();
     parentToolProfiles.clear();
+    parentPluginScopes.clear();
     pendingReloads.failAll('agent worker exited');
     workspaceLocks.failAll('agent worker exited');
     for (const [id, p] of pendingCompletions) {
@@ -473,6 +483,7 @@ export function stopAgentWorker(): void {
   browserSessionTools.clear();
   builtinToolScopes.clear();
   parentToolProfiles.clear();
+  parentPluginScopes.clear();
   workspaceLocks.failAll('agent worker stopped');
   worker?.kill();
   worker = null;
@@ -781,6 +792,14 @@ function resolvePhysicalModelSelection(
 }
 
 const parentToolProfiles = new Map<string, ChildProfileToolOptions>();
+const parentPluginScopes = new Map<
+  string,
+  {
+    native: boolean;
+    claude: boolean;
+    activePresetId?: string;
+  }
+>();
 const builtinToolScopes = new BuiltinToolScopes();
 
 export interface AgentTypeProfileContext {
@@ -799,6 +818,7 @@ export function rememberParentToolProfile(
 
 export function forgetParentToolProfile(sessionId: string): void {
   parentToolProfiles.delete(sessionId);
+  parentPluginScopes.delete(sessionId);
   builtinToolScopes.forget(sessionId);
   browserSessionTools.delete(sessionId);
 }
@@ -856,9 +876,18 @@ export function resolveAgentTypeSpawnConfig(
     definition = memberAgentTypes().find((entry) => entry.typeKey === typeKey);
   } else {
     const id = typeKey.slice('custom:'.length);
+    const scope = context?.parentSessionId
+      ? parentPluginScopes.get(context.parentSessionId)
+      : undefined;
+    const extension = context?.remote || scope?.native === false ? null : getNativePluginRuntime();
+    const plugins = scope?.claude === false ? { ...enabledPlugins(state), agents: [] } : undefined;
     definition = withPluginAgentTypes(
       Array.isArray(state?.agentTypes) ? state.agentTypes.filter(isAgentTypeEntry) : [],
-      state
+      state,
+      plugins,
+      context?.remote || scope?.native === false
+        ? []
+        : extension?.agentTypesForSpawn({ activePresetId: scope?.activePresetId })
     ).find((entry) => entry.id === id);
   }
   if (!definition || isReservedAgentTypeName(definition.name)) {
@@ -1001,43 +1030,53 @@ export function spawnSession(
   }
   const approvalReviewerSource = reviewer.ok ? reviewer.source : null;
   const bot = options?.bot;
-  // 原生 Enso 插件：资源只描述已启用的插件，不执行插件代码；Bot 与远程会话不并入本机插件。
-  const native = remote || bot ? null : nativePluginResources(request.presetId);
-  if (native?.preset && !native.preset.ok) return { ok: false, error: native.preset.error };
-  const nativePreset = native?.preset?.ok ? native.preset : undefined;
+  // 本机插件不并入 Bot/远程会话；读取资源不会执行插件代码。
+  const extensionPlugins = remote || bot ? null : getNativePluginRuntime();
+  const overlay = remote || bot ? undefined : presetOverlay(request.presetId, resolvePreset);
+  // 保留旧的轻量资源注入，供尚未初始化新运行时的宿主使用。
+  const native =
+    remote || bot || extensionPlugins ? null : nativePluginResources(overlay?.pluginPresetId);
+  const overlayResult = extensionPlugins?.presetForSpawn(overlay?.pluginPresetId) ?? native?.preset;
+  if (overlayResult && !overlayResult.ok && overlay?.required) {
+    return { ok: false, error: overlayResult.error };
+  }
+  const pluginPreset = overlayResult?.ok ? overlayResult : undefined;
   const preset: Preset | undefined = bot
     ? { id: 'bot', name: 'bot', skillIds: bot.skillIds, mcpServerIds: bot.mcpServerIds }
-    : nativePreset
-      ? undefined
-      : resolvePreset(request.presetId);
-  const systemPrompt = bot
-    ? { ok: true as const, content: bot.systemPrompt }
-    : nativePreset?.systemPrompt
-      ? { ok: true as const, content: nativePreset.systemPrompt }
-      : resolvePresetSystemPrompt(preset);
-  if (!systemPrompt.ok) {
+    : (overlay?.preset ?? resolvePreset(request.presetId));
+  const ownKit = bot
+    ? { ok: true as const, systemPrompt: bot.systemPrompt }
+    : resolvePresetPromptKit(preset);
+  if (!ownKit.ok) {
     return { ok: false, error: '自定义系统提示词正文读取失败，请重新保存或恢复默认。' };
   }
+  const promptKit = mergePresetPromptKit(ownKit, pluginPreset);
   const instruction = bot
     ? bot.instruction
-    : nativePreset?.instruction
-      ? nativePreset.instruction
-      : resolveGlobalInstruction(preset ? { instructionId: preset.instructionId } : undefined);
+    : pluginPresetInstruction(pluginPreset?.instruction, () =>
+        resolveGlobalInstruction(preset ? { instructionId: preset.instructionId } : undefined)
+      );
   const state = readSettingsState();
   // Claude 插件：按各自开关现读安装目录，不受预设影响
   const plugins = enabledPlugins(state);
+  const activePluginPreset = pluginPreset ? overlay?.pluginPresetId : undefined;
   const skillPaths = [
     ...enabledSkillPaths(preset),
     ...(bot ? [] : plugins.skillPaths),
-    ...(native?.skillPaths ?? []),
+    ...(extensionPlugins?.skillPathsForSpawn(activePluginPreset) ?? native?.skillPaths ?? []),
     ...(remote ? [] : bundledDesignSkillPaths(state)),
   ];
-  const mcpServers = enabledMcpServers(nativePreset ? undefined : preset);
+  const workflowPresetFiles = extensionPlugins?.workflowPathsForSpawn(activePluginPreset) ?? [];
+  const mcpServers = enabledMcpServers(preset);
   const mcpNames = new Set(mcpServers.map((server) => server.name));
-  for (const server of [...(bot ? [] : plugins.mcpServers), ...(native?.mcpServers ?? [])]) {
+  for (const server of [
+    ...(bot ? [] : plugins.mcpServers),
+    ...(extensionPlugins?.mcpServersForSpawn(activePluginPreset) ?? native?.mcpServers ?? []),
+  ]) {
     if (!mcpNames.has(server.name)) mcpServers.push(server);
     mcpNames.add(server.name);
   }
+  const pluginTools = extensionPlugins?.toolsForSpawn() ?? native?.tools ?? [];
   // hooks 在本机起进程，远程会话的 cwd 不在本机
   const pluginHooks = remote ? [] : plugins.hooks;
   const subagentModels = options?.omitDispatchTools
@@ -1045,8 +1084,19 @@ export function spawnSession(
     : configuredSubagentModels(authenticatedAccountKeys);
   const agentTypes = options?.omitDispatchTools
     ? []
-    : configuredAgentTypes(authenticatedAccountKeys, subagentModels.length > 0, plugins);
-  const extraDisabledTools = options?.extraDisabledTools ?? [];
+    : configuredAgentTypes(
+        authenticatedAccountKeys,
+        subagentModels.length > 0,
+        bot ? { ...plugins, agents: [] } : plugins,
+        remote || bot
+          ? []
+          : extensionPlugins?.agentTypesForSpawn({ activePresetId: activePluginPreset })
+      );
+  const presetOverrides = pluginPreset ? readPluginPresetOverrides(pluginPreset) : undefined;
+  // 固定禁用必须进入 scope，避免全局工具热更新重新启用插件预设禁止的工具。
+  const extraDisabledTools = [
+    ...new Set([...(options?.extraDisabledTools ?? []), ...(presetOverrides?.disabledTools ?? [])]),
+  ];
   const disabledTools = sessionDisabledTools(
     designToolSettings(state),
     projectId,
@@ -1078,6 +1128,26 @@ export function spawnSession(
   const smartCompactMode = parseSmartCompactMode(state?.smartCompactMode) ?? undefined;
   // 记忆存储语言下发给 worker：memory_search 的描述据此告诉模型该用哪种语言查
   const memoryLanguage = typeof state?.memoryLanguage === 'string' ? state.memoryLanguage : 'en';
+  const presetApplied = applyPluginPresetOverrides({
+    model: resolved.selection.config,
+    thinkingLevel: request.thinkingLevel,
+    approvalMode: request.approvalMode,
+    disabledTools,
+    preset: presetOverrides,
+    resolveModel: (model) => {
+      const next = resolveModelSelection(
+        model.providerId,
+        model.modelId,
+        authenticatedAccountKeys,
+        { allowVirtual: true }
+      );
+      return next.ok
+        ? { ok: true as const, model: next.selection.config }
+        : { ok: false as const, error: next.error };
+    },
+  });
+  if (!presetApplied.ok) return presetApplied;
+  const pluginEvents = extensionPlugins?.eventPlanForSpawn() ?? null;
   // worker 崩溃/退出后不自动拉起的话，所有会话都只能靠重启 app 恢复；在 spawn 入口按需重建
   if (!worker && workerExited) startAgentWorker();
   // Uses the caller's already-read authoritative credential keys. Queue before spawn
@@ -1087,10 +1157,10 @@ export function spawnSession(
     type: 'spawn-parent',
     identity,
     cwd: request.cwd,
-    model: resolved.selection.config,
+    model: presetApplied.model,
     ...(request.resumeFile ? { resumeFile: request.resumeFile } : {}),
     ...(request.reasoningEnabled ? { reasoningEnabled: true } : {}),
-    ...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
+    ...(presetApplied.thinkingLevel ? { thinkingLevel: presetApplied.thinkingLevel } : {}),
     ...(preset || request.loadLocalSkills === false ? { loadLocalSkills: false } : {}),
     ...(loadHarnessAssets ? { loadHarnessAssets: true } : {}),
     ...(trustedProjectCode.length > 0 ? { trustedProjectCode } : {}),
@@ -1109,17 +1179,24 @@ export function spawnSession(
     ...(mcpServers.length > 0 ? { mcpServers } : {}),
     ...(plugins.commands.length > 0 ? { pluginCommands: plugins.commands } : {}),
     ...(pluginHooks.length > 0 ? { pluginHooks } : {}),
-    ...(native && native.tools.length > 0 ? { pluginTools: native.tools } : {}),
-    ...(request.approvalMode ? { approvalMode: request.approvalMode } : {}),
+    ...(pluginTools.length > 0 ? { pluginTools } : {}),
+    ...(workflowPresetFiles.length > 0 ? { workflowPresetFiles } : {}),
+    ...(pluginEvents ? { pluginEvents } : {}),
+    ...(presetApplied.approvalMode ? { approvalMode: presetApplied.approvalMode } : {}),
     ...(request.planMode !== undefined ? { planMode: request.planMode } : {}),
     ...approvalReviewerSpawnFields(approvalReviewerSource),
     ...(agentTypes.length > 0 ? { agentTypes } : {}),
     ...(subagentModels.length > 0 ? { subagentModels } : {}),
-    ...(disabledTools.length > 0 ? { disabledTools } : {}),
+    ...(presetApplied.disabledTools.length > 0
+      ? { disabledTools: presetApplied.disabledTools }
+      : {}),
     ...(instruction ? { instruction } : {}),
     ...(remote ? { remote } : {}),
     ...(options?.rolePrompt ? { rolePrompt: options.rolePrompt } : {}),
-    ...(systemPrompt.content ? { systemPrompt: systemPrompt.content } : {}),
+    ...(promptKit.systemPrompt ? { systemPrompt: promptKit.systemPrompt } : {}),
+    ...(promptKit.systemPromptAppend ? { systemPromptAppend: promptKit.systemPromptAppend } : {}),
+    ...(promptKit.systemPromptBoost ? { systemPromptBoost: promptKit.systemPromptBoost } : {}),
+    ...(promptKit.refusalRetryPrompt ? { refusalRetryPrompt: promptKit.refusalRetryPrompt } : {}),
     ...(options?.bot ? { botMode: true } : {}),
     ...(options?.bot?.groupTasks ? { botGroupTasks: true } : {}),
     ...(options?.bot?.routines ? { botRoutines: true } : {}),
@@ -1129,8 +1206,13 @@ export function spawnSession(
   });
   if (
     sent.ok &&
-    builtinToolScopes.remember(identity, projectId, extraDisabledTools, disabledTools)
+    builtinToolScopes.remember(identity, projectId, extraDisabledTools, presetApplied.disabledTools)
   ) {
+    parentPluginScopes.set(identity.sessionId, {
+      native: !remote && !bot,
+      claude: !bot,
+      ...(activePluginPreset ? { activePresetId: activePluginPreset } : {}),
+    });
     rememberParentToolProfile(identity.sessionId, {
       editMode,
       shell: childProfileShell({
@@ -1139,19 +1221,209 @@ export function spawnSession(
         preference: windowsLocalShell,
       }),
       exploreFold: exploreFoldEnabled,
-      isolatedSandbox: !disabledTools.includes('isolated_sandbox'),
-      workspaceWrite: !disabledTools.includes(WORKSPACE_WRITE_TOOL_ID),
+      isolatedSandbox: !presetApplied.disabledTools.includes('isolated_sandbox'),
+      workspaceWrite: !presetApplied.disabledTools.includes(WORKSPACE_WRITE_TOOL_ID),
     });
   }
   return sent;
 }
 
+const APPROVAL_RANK: Record<ApprovalMode, number> = {
+  supervised: 3,
+  'auto-edits': 2,
+  assistant: 1,
+  full: 1,
+};
+
+export interface PluginPresetSpawnOverrides {
+  model?: { providerId: string; modelId: string };
+  thinkingLevel?: ThinkingLevel;
+  approvalMode?: Extract<ApprovalMode, 'supervised' | 'auto-edits'>;
+  disabledTools?: readonly string[];
+}
+
+export function pluginPresetInstruction<T>(
+  own: T | undefined,
+  global: () => T | undefined
+): T | undefined {
+  return own ?? global();
+}
+
+export function pluginSkillPathsForMenu(
+  presetId: string | undefined,
+  deps: {
+    resolve: (id?: string) => Preset | undefined;
+    claude: readonly string[];
+    extension: {
+      presetForSpawn(id?: string): { ok: boolean } | undefined;
+      skillPathsForSpawn(activePresetId?: string): string[];
+    } | null;
+  }
+): string[] {
+  const active = activePluginPresetForMenu(presetId, deps.resolve, deps.extension);
+  return [...deps.claude, ...(deps.extension?.skillPathsForSpawn(active) ?? [])];
+}
+
+function activePluginPresetForMenu(
+  presetId: string | undefined,
+  resolve: (id?: string) => Preset | undefined,
+  extension: { presetForSpawn(id?: string): { ok: boolean } | undefined } | null
+): string | undefined {
+  const { pluginPresetId } = presetOverlay(presetId, resolve);
+  return extension?.presetForSpawn(pluginPresetId)?.ok ? pluginPresetId : undefined;
+}
+
+export function menuPluginSkillPaths(presetId?: string): string[] {
+  return pluginSkillPathsForMenu(presetId, {
+    resolve: resolvePreset,
+    claude: enabledPlugins(readSettingsState()).skillPaths,
+    extension: getNativePluginRuntime(),
+  });
+}
+
+export function menuPluginWorkflowPaths(presetId?: string): string[] {
+  const extension = getNativePluginRuntime();
+  return (
+    extension?.workflowPathsForSpawn(
+      activePluginPresetForMenu(presetId, resolvePreset, extension)
+    ) ?? []
+  );
+}
+
+interface PresetPromptKit {
+  systemPrompt?: string;
+  systemPromptAppend?: string;
+  systemPromptBoost?: string;
+  refusalRetryPrompt?: string;
+}
+
+/** Own tail precedes plugin tail; other prompt slots prefer the plugin when present. */
+export function mergePresetPromptKit(
+  own: PresetPromptKit,
+  plugin?: PresetPromptKit
+): PresetPromptKit {
+  const pick = (key: keyof PresetPromptKit) => {
+    const value = plugin?.[key] || own[key];
+    return value ? { [key]: value } : {};
+  };
+  const tail = [own.systemPromptAppend, plugin?.systemPromptAppend].filter(Boolean).join('\n\n');
+  return {
+    ...pick('systemPrompt'),
+    ...(tail ? { systemPromptAppend: tail } : {}),
+    ...pick('systemPromptBoost'),
+    ...pick('refusalRetryPrompt'),
+  };
+}
+
+export function applyPluginPresetOverrides<T>(input: {
+  model: T;
+  thinkingLevel?: ThinkingLevel;
+  approvalMode?: ApprovalMode;
+  disabledTools: readonly string[];
+  preset?: PluginPresetSpawnOverrides;
+  resolveModel: (model: {
+    providerId: string;
+    modelId: string;
+  }) => { ok: true; model: T } | { ok: false; error: string };
+}):
+  | {
+      ok: true;
+      model: T;
+      thinkingLevel?: ThinkingLevel;
+      approvalMode?: ApprovalMode;
+      disabledTools: string[];
+    }
+  | { ok: false; error: string } {
+  let model = input.model;
+  if (input.preset?.model) {
+    const resolved = input.resolveModel(input.preset.model);
+    if (!resolved.ok) return resolved;
+    model = resolved.model;
+  }
+  const current = input.approvalMode;
+  const preset = input.preset?.approvalMode;
+  const approvalMode = !preset
+    ? current
+    : !current || APPROVAL_RANK[preset] > APPROVAL_RANK[current]
+      ? preset
+      : current;
+  const disabledTools = [
+    ...new Set([...input.disabledTools, ...(input.preset?.disabledTools ?? [])]),
+  ];
+  const thinkingLevel = input.preset?.thinkingLevel ?? input.thinkingLevel;
+  return {
+    ok: true,
+    model,
+    ...(thinkingLevel ? { thinkingLevel } : {}),
+    ...(approvalMode ? { approvalMode } : {}),
+    disabledTools,
+  };
+}
+
+function readPluginPresetOverrides(preset: object): PluginPresetSpawnOverrides | undefined {
+  const value = preset as {
+    model?: unknown;
+    thinkingLevel?: unknown;
+    approvalMode?: unknown;
+    disabledTools?: unknown;
+  };
+  const modelRecord =
+    value.model && typeof value.model === 'object' && !Array.isArray(value.model)
+      ? (value.model as { providerId?: unknown; modelId?: unknown })
+      : undefined;
+  const model =
+    modelRecord &&
+    typeof modelRecord.providerId === 'string' &&
+    typeof modelRecord.modelId === 'string'
+      ? { providerId: modelRecord.providerId, modelId: modelRecord.modelId }
+      : undefined;
+  const thinkingLevel = (THINKING_LEVELS as readonly unknown[]).includes(value.thinkingLevel)
+    ? (value.thinkingLevel as ThinkingLevel)
+    : undefined;
+  const approvalMode =
+    value.approvalMode === 'supervised' || value.approvalMode === 'auto-edits'
+      ? value.approvalMode
+      : undefined;
+  const disabledTools = Array.isArray(value.disabledTools)
+    ? value.disabledTools.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : undefined;
+  if (!model && !thinkingLevel && !approvalMode && !disabledTools?.length) return undefined;
+  return {
+    ...(model ? { model } : {}),
+    ...(thinkingLevel ? { thinkingLevel } : {}),
+    ...(approvalMode ? { approvalMode } : {}),
+    ...(disabledTools?.length ? { disabledTools } : {}),
+  };
+}
+
+function readPresetPrompt(id?: string): { ok: true; content?: string } | { ok: false } {
+  if (!id) return { ok: true };
+  const result = readStoredSystemPrompt(id);
+  return result.ok ? { ok: true, content: result.content } : { ok: false };
+}
+
+export function resolvePresetPromptKit(
+  preset?: Preset
+): ({ ok: true } & PresetPromptKit) | { ok: false } {
+  if (!preset) return { ok: true };
+  const role = readPresetPrompt(preset.systemPromptId);
+  const tail = readPresetPrompt(preset.systemPromptTailId);
+  const boost = readPresetPrompt(preset.boostPromptId);
+  const retry = readPresetPrompt(preset.refusalRetryPromptId);
+  if (!role.ok || !tail.ok || !boost.ok || !retry.ok) return { ok: false };
+  return {
+    ok: true,
+    ...(role.content ? { systemPrompt: role.content } : {}),
+    ...(tail.content ? { systemPromptAppend: tail.content } : {}),
+    ...(boost.content ? { systemPromptBoost: boost.content } : {}),
+    ...(preset.refusalRetry === true && retry.content ? { refusalRetryPrompt: retry.content } : {}),
+  };
+}
+
 export function resolvePresetSystemPrompt(
   preset?: Pick<Preset, 'systemPromptId'>
 ): { ok: true; content?: string } | { ok: false } {
-  if (!preset?.systemPromptId) return { ok: true };
-  const result = readStoredSystemPrompt(preset.systemPromptId);
-  return result.ok ? { ok: true, content: result.content } : { ok: false };
+  return readPresetPrompt(preset?.systemPromptId);
 }
 
 /**
@@ -1310,6 +1582,57 @@ export function sendCapabilityResultToSession(
   envelope: CapabilityExecutionEnvelope
 ): { ok: boolean; error?: string } {
   return sendAgentCommand({ type: 'capability-result', child, turnId, requestId, envelope });
+}
+
+export function sendPluginToolResultToSession(
+  identity: SessionIdentity,
+  requestId: string,
+  outcome: { ok: true; result: unknown } | { ok: false; error: string }
+): { ok: boolean; error?: string } {
+  return sendAgentCommand({ type: 'plugin-tool-result', identity, requestId, ...outcome });
+}
+
+export function sendPluginToolProgressToSession(
+  identity: SessionIdentity,
+  requestId: string,
+  text: string
+): { ok: boolean; error?: string } {
+  return sendAgentCommand({ type: 'plugin-tool-progress', identity, requestId, text });
+}
+
+export function sendPluginInterceptResultToSession(
+  identity: SessionIdentity,
+  requestId: string,
+  outcome: { ok: true; result?: unknown } | { ok: false; error: string }
+): { ok: boolean; error?: string } {
+  return sendAgentCommand({ type: 'plugin-intercept-result', identity, requestId, ...outcome });
+}
+
+export function registerPluginSessionBridge(
+  lookup: (sessionId: string) => SessionIdentity | undefined
+): void {
+  setNativePluginSessionBridge({
+    inject(sessionId, message) {
+      if (message.text.length > PLUGIN_INJECT_MAX_CHARS)
+        return { ok: false, error: '注入文本过长' };
+      const identity = lookup(sessionId);
+      if (!identity) return { ok: false, error: '会话不在运行', notRunning: true };
+      const { images, ...rest } = message;
+      const sent = sendAgentCommand({
+        type: 'plugin-inject',
+        identity,
+        ...rest,
+        ...(images.length ? { images } : {}),
+      });
+      return sent.ok ? { ok: true } : { ok: false, error: sent.error ?? '无法注入消息' };
+    },
+    abort(sessionId) {
+      const identity = lookup(sessionId);
+      if (!identity) return { ok: false, error: '会话不在运行' };
+      const sent = abortSession(identity);
+      return sent.ok ? { ok: true } : { ok: false, error: sent.error ?? '无法中止会话' };
+    },
+  });
 }
 
 export function setSessionThinking(
@@ -1744,14 +2067,16 @@ export function requestSnapshot(sessionId?: string): { ok: boolean; error?: stri
 export function configuredAgentTypes(
   authenticatedAccountKeys: ReadonlySet<string>,
   hasSubagentModels = false,
-  plugins?: ResolvedPlugins
+  plugins?: ResolvedPlugins,
+  nativePluginAgents?: readonly NativePluginAgentDef[]
 ): AgentTypeSpawnConfig[] {
   const state = readSettingsState();
   const disabled = new Set(effectiveDisabledBuiltinAgentTypes(state));
   const custom = withPluginAgentTypes(
     Array.isArray(state?.agentTypes) ? state.agentTypes.filter(isAgentTypeEntry) : [],
     state,
-    plugins
+    plugins,
+    nativePluginAgents
   );
   // 与 registry 同口径（trim + 小写）：同名 custom 覆盖 builtin
   const customNames = new Set(custom.map((entry) => entry.name.trim().toLowerCase()));
