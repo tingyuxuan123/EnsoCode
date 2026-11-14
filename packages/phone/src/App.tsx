@@ -14,7 +14,7 @@ import {
 import { parseCompactCommand } from '@shared/compactCommand';
 import { emptyGuestView } from '@shared/pair/guestProjection';
 import type { AttachedImage } from '@shared/types/agent';
-import { PanelLeft, Smartphone } from 'lucide-react';
+import { PanelLeft, Unlink } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { applyAppBadge, attentionBadgeCount } from './attentionBadge';
@@ -910,16 +910,45 @@ export function App() {
   if (state === 'unauthorized') {
     const others = devices.length > 1;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <Smartphone className="h-8 w-8 text-muted-foreground" />
-        <h1 className="font-medium text-lg">配对已失效</h1>
-        <p className="text-muted-foreground text-sm">
-          「{device.label}」已解绑此设备，
-          {others ? '可移除它并切到其他电脑。' : '请重新扫码配对。'}
-        </p>
-        <Button onClick={() => unpairDevice(device.pairId)}>
-          {others ? '移除此配对' : '重新配对'}
-        </Button>
+      // 设计稿 `expired`：配对失效 ≠ 离线，重连没用，只能重新配对
+      <div className="flex h-full flex-col overflow-hidden bg-page">
+        <div className="flex flex-1 flex-col items-center justify-center px-8 pb-16 text-center">
+          <span className="flex size-16 items-center justify-center rounded-full bg-card shadow-[0_0_0_0.75px_rgb(0_0_0/0.05)]">
+            <Unlink className="size-7 text-dim" aria-hidden />
+          </span>
+          <h1 className="mt-5 text-[22px] leading-7 font-bold tracking-[-0.01em]">配对已失效</h1>
+          <p className="mt-2 text-[14px] leading-[22px] text-dim">
+            「{device.label}」和这台手机的连接被解除了——可能是桌面端解绑，也可能太久没连过。
+          </p>
+          <div className="mt-6 flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => unpairDevice(device.pairId)}
+              className="glass-ink flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-medium"
+            >
+              <span className="icon-[lucide--scan-line] size-[18px]" aria-hidden />
+              {others ? '移除此配对' : '重新配对'}
+            </button>
+            {others && (
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="glass flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-medium"
+              >
+                <span className="icon-[lucide--monitor-smartphone] size-[18px]" aria-hidden />
+                换台电脑
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="px-4 pb-10">
+          <div className="rounded-[18px] bg-card px-4 py-3.5">
+            <p className="text-[13px] leading-[18px] font-medium">对话不会丢</p>
+            <p className="mt-1 text-[13px] leading-[20px] text-dim">
+              历史都在电脑上。重新配对后还是原来那些会话，只是这台手机要重新拿一次访问权。
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
