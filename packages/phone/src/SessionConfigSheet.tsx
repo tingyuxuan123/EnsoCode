@@ -132,27 +132,27 @@ export function SessionConfigSheet({
           </div>
 
           {reasoningOn && (
-            <Field label="推理档位">
-              <Select
-                items={(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => ({
-                  value: l,
-                  label: LEVEL_LABELS[l],
-                }))}
-                value={level}
-                onValueChange={(v) => onSetThinking(v as ThinkingLevel)}
-              >
-                <SelectTrigger className="h-12 w-full rounded-[16px] border-0 bg-card px-4 text-[15px] leading-5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                  {(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {LEVEL_LABELS[l]}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </Field>
+            <div className="pt-1">
+              <p className="px-1 pb-1.5 text-[12px] leading-4 font-medium text-dim">思考等级</p>
+              {/* 设计稿 config.tsx：分段胶囊，选中抬到白底 */}
+              <div className="flex rounded-full bg-card2 p-1">
+                {(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    aria-pressed={level === l}
+                    onClick={() => onSetThinking(l)}
+                    className={
+                      level === l
+                        ? 'flex h-9 flex-1 items-center justify-center rounded-full bg-card text-[14px] leading-5 font-medium text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]'
+                        : 'flex h-9 flex-1 items-center justify-center rounded-full text-[14px] leading-5 font-medium text-dim'
+                    }
+                  >
+                    {LEVEL_LABELS[l]}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           <p className="px-1 pt-1 text-[11px] leading-4 text-faint">
