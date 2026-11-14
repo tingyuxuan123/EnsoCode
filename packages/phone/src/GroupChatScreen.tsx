@@ -16,13 +16,13 @@ import {
   CircleAlert,
   CircleCheck,
   CirclePlay,
+  EllipsisVertical,
   ImagePlus,
   Loader2,
   Square,
-  SquarePen,
   X,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { AskBar } from '@/components/chat/AskBar';
 import { Markdown } from '@/components/chat/Markdown';
@@ -39,8 +39,11 @@ import {
   mentionOptions,
   visibleGroupEntries,
 } from './botState';
+import { ActivityRow, SayHead, SegmentLead } from './ChatRows';
+import { ConversationMenu, type ConversationMenuItem } from './ConversationMenu';
 import type { ConnState, SessionView } from './client';
 import { GroupThreadSwitcher, type GroupThreads } from './GroupThreadSwitcher';
+import { groupRows } from './groupRows';
 import { compressImages } from './image';
 import { PhoneTopBar, TopBarAction } from './PhoneTopBar';
 import { readOnlyBanner } from './readOnly';
@@ -86,6 +89,8 @@ interface Props {
   onStop(): void;
   onRetry?(entryId: string): void;
   onOpenProcess(conversationId: string): void;
+  /** 会话菜单里的「通信空间」：上来只看本群的委派来去（只读） */
+  onOpenComms?(): void;
   /** 桌面语音识别可用时由 App 下发：输入框左侧显示麦克风 */
   voice?: StartVoiceSession;
   onApproval(
@@ -214,6 +219,7 @@ export function GroupChatScreen(props: Props) {
   const [picked, setPicked] = useState<{ file: File; url: string }[]>([]);
   const [sending, setSending] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const loaded = timeline?.entries ?? [];
   const epoch =
     chat.epochSeq ??
@@ -224,6 +230,10 @@ export function GroupChatScreen(props: Props) {
   useEffect(() => setExpanded(false), [chat.id, epoch]);
   const folded = epoch > 0 && !expanded;
   const entries = visibleGroupEntries(loaded, epoch, expanded);
+  // 分层：一轮只留结论，过程折成一行活动行，段头给时间和「N 条消息，与 M 个 Bot」
+  const rows = useMemo(() => groupRows(entries, bots, Date.now()), [entries, bots]);
+  /** 点开活动行的那几轮：展开才渲染委派与进度细节 */
+  const [openTurns, setOpenTurns] = useState<Record<string, boolean>>({});
   const retryable = retryableGroupFailures(loaded, epoch);
   const members = chat.members
     .map((id) => bots.get(id))
@@ -334,58 +344,9 @@ export function GroupChatScreen(props: Props) {
     });
   };
 
-  const renderEntry = (entry: PairGroupEntry) => {
+  /** 过程细节：只有点开活动行时才渲染（L3 的展开层） */
+  const renderDetail = (entry: PairGroupEntry) => {
     switch (entry.kind) {
-      case 'human':
-        return (
-          <div key={entry.seq} className="flex flex-col items-end">
-            {entry.text && (
-              <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[14px] rounded-br-[4px] bg-card px-3 py-2 text-[13px] leading-5">
-                {withMentions(entry.text, names)}
-                {entry.truncated && (
-                  <p className="text-xs text-muted-foreground">消息过长，仅显示部分内容</p>
-                )}
-              </div>
-            )}
-            {entry.images?.length ? (
-              <BotArtifacts target={{ chatId: props.chat.id, entryId: entry.id }} />
-            ) : null}
-          </div>
-        );
-      case 'bot': {
-        const bot = bots.get(entry.botId);
-        return (
-          <div key={entry.seq} className="flex gap-2">
-            <BotAvatar bot={bot} size="sm" />
-            <div className="min-w-0 flex-1">
-              <p className="flex items-baseline gap-1.5 text-xs">
-                <span className="font-medium">{bot?.name ?? '成员'}</span>
-                <span className="text-muted-foreground">{timeOf(entry.at)}</span>
-              </p>
-              <div className="mt-0.5 min-w-0 rounded-[14px] rounded-bl-[4px] bg-muted/40 px-3 py-2 text-[13px] leading-5">
-                <Markdown text={entry.text} />
-                {entry.truncated && (
-                  <p className="text-xs text-muted-foreground">消息过长，仅显示部分内容</p>
-                )}
-              </div>
-              <BotArtifacts target={{ chatId: props.chat.id, entryId: entry.id }} />
-              <div className="mt-1.5">
-                <WebPreview target={{ bot: { chatId: props.chat.id, entryId: entry.id } }}>
-                  网页预览
-                </WebPreview>
-              </div>
-              <button
-                type="button"
-                onClick={() => props.onOpenProcess(entry.conversationId)}
-                className="mt-0.5 flex items-center gap-0.5 text-muted-foreground text-xs hover:text-foreground"
-              >
-                <ChevronRight className="h-3 w-3" />
-                查看过程
-              </button>
-            </div>
-          </div>
-        );
-      }
       case 'delegation':
         return <DelegationRow key={entry.seq} entry={entry} bots={bots} />;
       case 'progress': {
@@ -419,26 +380,143 @@ export function GroupChatScreen(props: Props) {
           </div>
         );
       }
-      case 'system':
-        return (
-          <p key={entry.seq} className="text-center text-muted-foreground text-xs">
-            {entry.text}
-            {retryable.has(entry.id) && props.onRetry && !props.deviceReadOnly && (
-              <button
-                type="button"
-                className="ml-2 underline disabled:opacity-50"
-                disabled={running || props.connState !== 'online'}
-                onClick={() => props.onRetry?.(entry.id)}
-              >
-                重试
-              </button>
-            )}
-          </p>
-        );
+      default:
+        return null;
     }
   };
 
+  /** 一条分层行：段头 / 人说的话 / 一轮的结论 / 系统信息 */
+  const renderRow = (row: (typeof rows)[number]) => {
+    if (row.kind === 'lead') return <SegmentLead key={row.key}>{row.label}</SegmentLead>;
+    if (row.kind === 'human') {
+      const entry = row.entry;
+      return (
+        <div key={row.key} className="flex flex-col items-end">
+          {entry.text && (
+            <div className="max-w-[86%] whitespace-pre-wrap break-words rounded-[20px] rounded-br-md bg-pill px-4 py-3 text-[16px] leading-[22px] text-pill-ink">
+              {withMentions(entry.text, names)}
+              {entry.truncated && (
+                <p className="text-[11px] leading-4 opacity-70">消息过长，仅显示部分内容</p>
+              )}
+            </div>
+          )}
+          {entry.images?.length ? (
+            <BotArtifacts target={{ chatId: props.chat.id, entryId: entry.id }} />
+          ) : null}
+        </div>
+      );
+    }
+    if (row.kind === 'system') {
+      const entry = row.entry;
+      return (
+        <p key={row.key} className="text-center text-[12px] leading-4 text-dim">
+          {entry.text}
+          {retryable.has(entry.id) && props.onRetry && !props.deviceReadOnly && (
+            <button
+              type="button"
+              className="ml-2 underline disabled:opacity-50"
+              disabled={running || props.connState !== 'online'}
+              onClick={() => props.onRetry?.(entry.id)}
+            >
+              重试
+            </button>
+          )}
+        </p>
+      );
+    }
+    const bot = bots.get(row.botId);
+    const open = openTurns[row.key] === true;
+    return (
+      <article key={row.key} className="flex flex-col gap-2 pb-4">
+        <SayHead name={row.name} bot={bot} time={timeOf(row.at)} />
+        <div className="min-w-0 text-[15px] leading-6">
+          <Markdown text={row.text} />
+          {row.folded.some((entry) => entry.truncated) && (
+            <p className="text-[11px] leading-4 text-dim">消息过长，仅显示部分内容</p>
+          )}
+        </div>
+        {row.activity && (
+          <ActivityRow
+            activity={row.activity}
+            live={row.activity.live}
+            onOpen={
+              row.folded.length > 0
+                ? () => setOpenTurns((prev) => ({ ...prev, [row.key]: !open }))
+                : undefined
+            }
+          />
+        )}
+        {open && <div className="flex flex-col gap-1.5">{row.folded.map(renderDetail)}</div>}
+        <BotArtifacts target={{ chatId: props.chat.id, entryId: row.entryId }} />
+        <div>
+          <WebPreview target={{ bot: { chatId: props.chat.id, entryId: row.entryId } }}>
+            网页预览
+          </WebPreview>
+        </div>
+        <button
+          type="button"
+          onClick={() => props.onOpenProcess(row.conversationId)}
+          className="flex items-center gap-0.5 self-start text-[12px] leading-4 text-dim"
+        >
+          <ChevronRight className="size-3" aria-hidden />
+          查看过程
+        </button>
+      </article>
+    );
+  };
+
   const current = state?.current ? bots.get(state.current) : undefined;
+
+  // 会话菜单（设计稿 `bot-menu.tsx`）：开新会话是破坏性的，行内写明后果；
+  // 新线程走桌面下发的 threads；离线/只读时逐个禁用并给出原因。
+  const menuItems = (): ConversationMenuItem[] => {
+    const offline = props.connState !== 'online';
+    const readOnlyHint = props.deviceReadOnly ? '此设备为只读' : undefined;
+    const blocked = readOnlyHint ?? (offline ? props.stateLabel : undefined);
+    const items: ConversationMenuItem[] = [];
+    if (!props.threads) {
+      items.push({
+        key: 'new-session',
+        label: '开新会话',
+        hint: '清掉这段上下文，从这个群重新开始',
+        icon: 'new-session',
+        danger: true,
+        disabled: Boolean(blocked) || !props.canCreate,
+        disabledHint: blocked ?? '桌面端不支持新建会话',
+        onSelect: () => {
+          props.onNewSession?.();
+          setMenuOpen(false);
+        },
+      });
+    }
+    if (props.threads) {
+      items.push({
+        key: 'thread',
+        label: '新话题',
+        hint: '在这段对话里另起一条线索',
+        icon: 'thread',
+        disabled: Boolean(props.threads.disabledHint),
+        disabledHint: props.threads.disabledHint,
+        onSelect: () => {
+          props.threads?.onCreate();
+          setMenuOpen(false);
+        },
+      });
+    }
+    if (props.onOpenComms) {
+      items.push({
+        key: 'comms',
+        label: '通信空间',
+        hint: 'Bot 之间的来去，只读',
+        icon: 'comms',
+        onSelect: () => {
+          props.onOpenComms?.();
+          setMenuOpen(false);
+        },
+      });
+    }
+    return items;
+  };
 
   return (
     <div className="phone-chat-root flex h-full min-h-0 flex-col">
@@ -459,26 +537,10 @@ export function GroupChatScreen(props: Props) {
           )
         }
       >
-        {props.threads ? (
-          <TopBarAction
-            label="新话题"
-            {...(props.threads.disabledHint ? { title: props.threads.disabledHint } : {})}
-            onClick={props.threads.disabledHint ? undefined : props.threads.onCreate}
-            disabled={Boolean(props.threads.disabledHint)}
-          >
-            <SquarePen className="size-6" aria-hidden />
-          </TopBarAction>
-        ) : (
-          <TopBarAction
-            label={props.newSessionHint ?? '新建会话'}
-            onClick={props.onNewSession}
-            disabled={
-              !props.canCreate || props.deviceReadOnly || sending || props.connState !== 'online'
-            }
-          >
-            <SquarePen className="size-6" aria-hidden />
-          </TopBarAction>
-        )}
+        {/* 一个会话只有一个入口（设计稿 bot-menu）：新建会话 / 新话题 / 通信空间都收进 ⋯ */}
+        <TopBarAction label="会话菜单" onClick={() => setMenuOpen(true)}>
+          <EllipsisVertical className="size-6" aria-hidden />
+        </TopBarAction>
       </PhoneTopBar>
 
       <div
@@ -539,7 +601,7 @@ export function GroupChatScreen(props: Props) {
             回到最新消息
           </button>
         )}
-        {entries.map(renderEntry)}
+        {rows.map(renderRow)}
         {props.activities.map((item) => (
           <BotActivityRow
             key={item.conversationId}
@@ -716,6 +778,13 @@ export function GroupChatScreen(props: Props) {
           </div>
         </div>
       </div>
+      <ConversationMenu
+        open={menuOpen}
+        title="会话"
+        aside={<span className="text-[12px] leading-4 text-dim">{chat.members.length} 名成员</span>}
+        items={menuItems()}
+        onClose={() => setMenuOpen(false)}
+      />
     </div>
   );
 }
