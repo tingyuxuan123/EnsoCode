@@ -91,6 +91,30 @@ describe('privileged native plugin IPC', () => {
     });
     expect(await h.list(event())).toEqual(result);
   });
+  it('readme 跨 IPC 统一用 text 承载正文，不把 Main 内部字段名漏给渲染层', async () => {
+    const readme = vi.fn(
+      async (): Promise<{ ok: true; markdown: string } | { ok: false; error: string }> => ({
+        ok: true,
+        markdown: '# Chat Board\n',
+      })
+    );
+    const h = createExtensionPluginHandlers({
+      trusted: () => true,
+      service: () => ({ readme }) as never,
+      pick: vi.fn(),
+      projectRoot: () => null,
+      draft: () => ({ respond: vi.fn() }) as never,
+    });
+    expect(await h.readme(event(), { id: 'enso.chatboard', from: 'market' })).toEqual({
+      ok: true,
+      text: '# Chat Board\n',
+    });
+    readme.mockResolvedValueOnce({ ok: false, error: '没有使用说明' });
+    expect(await h.readme(event(), { id: 'enso.chatboard', from: 'installed' })).toEqual({
+      ok: false,
+      error: '没有使用说明',
+    });
+  });
   it('URL 暂存传递 owner 的 AbortSignal，窗口销毁即取消', async () => {
     const controller = new AbortController();
     const stage = vi.fn(async (_source, _owner, signal: AbortSignal) => {

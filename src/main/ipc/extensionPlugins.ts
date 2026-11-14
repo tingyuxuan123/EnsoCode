@@ -2,7 +2,10 @@ import { readFileSync, statSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { ExtensionPluginInstallPreview } from '@shared/extensionPlugins/types';
+import type {
+  ExtensionPluginInstallPreview,
+  ExtensionPluginReadmeResult,
+} from '@shared/extensionPlugins/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, webContents } from 'electron';
 import type { DraftBroker } from '../services/extensionPlugins/draftBroker';
@@ -178,11 +181,16 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
       deps.service().setMarketChinaMirror(enabled);
       return { ok: true };
     }),
-    readme: guard((_e, raw) =>
-      record(raw) && id(raw.id) && (raw.from === 'installed' || raw.from === 'market')
-        ? deps.service().readme(raw.id, raw.from)
-        : invalid
-    ),
+    readme: guard(async (_e, raw) => {
+      if (!record(raw) || !id(raw.id) || (raw.from !== 'installed' && raw.from !== 'market'))
+        return invalid;
+      // Main 内部字段名是 markdown；跨 IPC 只发 text，避免渲染层读到 undefined 一直“加载中”
+      const result = await deps.service().readme(raw.id, raw.from);
+      const payload: ExtensionPluginReadmeResult = result.ok
+        ? { ok: true, text: result.markdown }
+        : { ok: false, error: result.error };
+      return payload;
+    }),
     setCrossSessionInject: guard((_e, pluginId, enabled) =>
       id(pluginId) && typeof enabled === 'boolean'
         ? deps.service().setCrossSessionInject(pluginId, enabled)

@@ -19,6 +19,7 @@ export const zhTranslations: Record<string, string> = {
   'Automatically update plugins': '自动更新插件',
   'Development mode (watch folder)': '开发模式（监听源目录）',
   Documentation: '使用说明',
+  'No documentation yet': '暂无使用说明',
   'No logs yet': '暂无日志',
   'Allow injection into other sessions': '允许向其他会话发送消息',
   'Allow this plugin to send messages to other sessions and trigger execution?':

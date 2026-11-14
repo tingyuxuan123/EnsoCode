@@ -103,6 +103,12 @@ export type ExtensionPluginMarketList =
   | { ok: true; stale: boolean; chinaMirror: boolean; plugins: ExtensionPluginMarketEntry[] }
   | { ok: false; error: string; chinaMirror: boolean };
 
+/**
+ * 使用说明的跨 IPC 结果。Main 内部（readme.ts / market.ts）用 `markdown`，
+ * 跨边界统一成 `text`：渲染层按 `text` 读，字段名漂移会在这里被类型检查拦住。
+ */
+export type ExtensionPluginReadmeResult = { ok: true; text: string } | { ok: false; error: string };
+
 /** 设置界面看到的配置项：密钥只报告是否已设置，不回显 */
 export interface ExtensionPluginConfigField {
   key: string;

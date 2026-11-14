@@ -1772,7 +1772,7 @@ const electronAPI = {
     readme: (request: {
       id: string;
       from: 'installed' | 'market';
-    }): Promise<{ ok: true; text: string } | { ok: false; error: string }> =>
+    }): Promise<ExtensionPluginReadmeResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_README, request),
     setCrossSessionInject: (
       id: string,
@@ -1983,6 +1983,7 @@ import type {
   ExtensionPluginListResult,
   ExtensionPluginMarketList,
   ExtensionPluginNotice,
+  ExtensionPluginReadmeResult,
   RegistryNotice,
 } from '@shared/extensionPlugins/types';
 
