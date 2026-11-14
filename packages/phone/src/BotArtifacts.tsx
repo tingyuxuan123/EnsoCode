@@ -82,7 +82,7 @@ export function BotArtifacts({ target }: { target: PairBotArtifactTarget }) {
                 {LABEL[item.source] && (
                   <span
                     className={cn(
-                      'absolute top-1 left-1 rounded px-1 text-[10px] leading-4',
+                      'absolute top-1 left-1 rounded px-1 text-[11px] leading-4',
                       item.source === 'desktop'
                         ? 'bg-warning text-warning-foreground'
                         : 'bg-black/60 text-white'
@@ -92,7 +92,7 @@ export function BotArtifacts({ target }: { target: PairBotArtifactTarget }) {
                   </span>
                 )}
                 {(item.caption || item.name) && (
-                  <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pt-3 pb-0.5 text-left text-[10px] text-white">
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pt-3 pb-0.5 text-left text-[11px] leading-4 text-white">
                     {item.caption ?? item.name}
                   </span>
                 )}

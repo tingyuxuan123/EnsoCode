@@ -415,7 +415,7 @@ export function SessionDrawer({
                   <span className="min-w-0 flex-1 truncate">
                     {item.section.group?.name ?? '未分组'}
                   </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground/70">
+                  <span className="shrink-0 text-[11px] leading-4 text-faint tabular-nums">
                     {item.section.projects.length}
                   </span>
                 </button>
@@ -503,7 +503,7 @@ export function SessionDrawer({
               <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-dim">
                 已归档
               </span>
-              <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+              <span className="shrink-0 text-[11px] leading-4 text-faint tabular-nums">
                 {archivedSessions.length}
               </span>
             </button>
@@ -610,8 +610,8 @@ export function SessionDrawer({
                     {isActive && (
                       <span
                         className={cn(
-                          'shrink-0 text-[10px]',
-                          connected ? 'text-muted-foreground' : 'text-destructive'
+                          'shrink-0 text-[11px] leading-4',
+                          connected ? 'text-dim' : 'text-red'
                         )}
                       >
                         {connectionLabel}
