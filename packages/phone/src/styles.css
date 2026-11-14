@@ -416,6 +416,31 @@
   border-radius: 16px;
 }
 
+/* 后台任务 / 待办胶囊（设计稿 session-bars）：去掉细边框，压成一行纸面小条 */
+.phone-dock [data-task-dock] {
+  margin-bottom: 6px;
+}
+.phone-dock [data-task-dock] > div > button,
+.phone-dock [data-task-dock-button] {
+  height: 32px;
+  border-color: transparent;
+  border-radius: 16px;
+  background-color: var(--card2);
+  padding-inline: 12px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dim);
+}
+.phone-dock [data-task-dock] > div > button:hover,
+.phone-dock [data-task-dock-button]:hover {
+  background-color: color-mix(in srgb, var(--card2) 70%, var(--line));
+}
+.dark .phone-dock [data-task-dock] > div > button,
+.dark .phone-dock [data-task-dock-button] {
+  background-color: var(--card2);
+  color: var(--dim);
+}
+
 /* 运行秒数并入消息抬头后，输入框下只留一行统计 */
 .phone-dock [data-slot="stats-line"] {
   margin-top: 2px;
