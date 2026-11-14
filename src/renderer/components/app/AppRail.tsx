@@ -6,6 +6,7 @@ import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { RailTip } from './RailTip';
+import { StatusBar } from './StatusBar';
 
 interface AppRailProps {
   /** 侧栏是否收起；仅在可收起的视图（Code / Bot）传入 */
@@ -141,6 +142,7 @@ export function AppRail({
         </RailTip>
       )}
       <div className="flex-1" />
+      <StatusBar />
       <RailTip label={t('Ask Collabra')}>
         <button
           type="button"

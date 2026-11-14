@@ -8,6 +8,7 @@ vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: object) => unknown) => select({ keybindings: {} }),
 }));
+vi.mock('./StatusBar', () => ({ StatusBar: () => null }));
 /** 按图标轨子元素顺序列出：按钮取 aria-label，分隔符记为 `---` */
 function railItems(props: Parameters<typeof AppRail>[0]) {
   const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;

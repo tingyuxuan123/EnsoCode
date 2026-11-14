@@ -1,14 +1,16 @@
-import { CircleCheck, Laptop, LoaderCircle, Monitor, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { LoaderCircle, Monitor, ShieldAlert } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSessionsStore } from '@/stores/sessions';
+import { RailTip } from './RailTip';
 import { summarizeWorkbench } from './statusBarSummary';
 
 /**
- * 窗口底部 24px 状态栏：当前节点、运行中/待处理会话数。只读摘要，不承载操作，
- * 状态全部来自现有 store，不新增数据源。
+ * 图标轨上的只读摘要：保留全局运行 / 待处理计数及远程异常，空闲时不占位。
+ * 计数始终属于本机会话，切到远程节点或其它工作模式也不丢失。
  */
 export function StatusBar() {
   const { t } = useI18n();
@@ -18,54 +20,76 @@ export function StatusBar() {
   const summary = useMemo(() => summarizeWorkbench(conversations), [conversations]);
 
   const remote = activeNodeId === 'local' ? null : nodes.find((n) => n.nodeId === activeNodeId);
-  const NodeIcon = remote ? Monitor : Laptop;
-  const nodeTone = remote
-    ? remote.hostOnline
-      ? 'bg-success'
-      : remote.connected
-        ? 'bg-warning'
-        : 'bg-muted-foreground/50'
-    : 'bg-success';
+  const remoteUnavailable = remote && !remote.hostOnline;
+  if (!remoteUnavailable && summary.waiting === 0 && summary.running === 0) return null;
 
   return (
-    <footer
-      data-slot="status-bar"
-      data-enso="status-line"
-      className="flex h-[calc(24rem/14)] shrink-0 items-center gap-3 border-t border-line bg-shell px-4 text-[calc(11rem/14)] text-muted-foreground"
+    <div
+      data-slot="workbench-status"
+      role="status"
+      aria-label={t('Workbench')}
+      aria-atomic="true"
+      className="flex shrink-0 flex-col items-center gap-1"
     >
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className={cn('size-1.5 shrink-0 rounded-full', nodeTone)} aria-hidden />
-        <NodeIcon className="size-3.5 shrink-0" />
-        <span className="truncate">{remote ? remote.label : t('Local workspace')}</span>
+      {remoteUnavailable && (
+        <StatusItem
+          status="remote"
+          label={`${remote.label} · ${remote.connected ? t('Remote desktop is offline') : t('Connecting…')}`}
+          className="text-warning"
+          icon={<Monitor className="size-[14px] shrink-0" />}
+        />
+      )}
+      {summary.waiting > 0 && (
+        <StatusItem
+          status="waiting"
+          label={`${t('This computer')} · ${t('{{count}} waiting', { count: summary.waiting })}`}
+          className="text-warning"
+          icon={<ShieldAlert className="size-[14px] shrink-0" />}
+          count={summary.waiting}
+        />
+      )}
+      {summary.running > 0 && (
+        <StatusItem
+          status="running"
+          label={`${t('This computer')} · ${t('{{count}} running', { count: summary.running })}`}
+          icon={
+            <LoaderCircle className="size-[14px] shrink-0 animate-spin text-brand motion-reduce:animate-none" />
+          }
+          count={summary.running}
+        />
+      )}
+    </div>
+  );
+}
+
+function StatusItem({
+  status,
+  label,
+  className,
+  icon,
+  count,
+}: {
+  status: string;
+  label: string;
+  className?: string;
+  icon: ReactNode;
+  count?: number;
+}) {
+  return (
+    <RailTip label={label}>
+      <span
+        role="img"
+        data-status={status}
+        aria-label={label}
+        title={label}
+        className={cn(
+          'flex min-h-[24px] w-[44px] items-center justify-center gap-[3px] text-[calc(9rem/14)] text-muted-foreground tabular-nums',
+          className
+        )}
+      >
+        {icon}
+        {count !== undefined && <span aria-hidden>{count > 99 ? '99+' : count}</span>}
       </span>
-      <span className="ml-auto flex items-center gap-3">
-        {/* 本机会话摘要；远程节点下本机会话仍在后台运行，照常显示 */}
-        {summary.waiting > 0 && (
-          <span className="flex items-center gap-1.5 text-warning">
-            <ShieldAlert className="size-3.5" />
-            {t('{{count}} waiting', { count: summary.waiting })}
-          </span>
-        )}
-        {summary.running > 0 ? (
-          <span className="flex items-center gap-1.5 text-foreground/80">
-            <LoaderCircle className="size-3.5 animate-spin text-brand motion-reduce:animate-none" />
-            {t('{{count}} running', { count: summary.running })}
-          </span>
-        ) : (
-          summary.waiting === 0 && (
-            <span className="flex items-center gap-1.5">
-              <CircleCheck className="size-3.5" />
-              {t('Idle')}
-            </span>
-          )
-        )}
-        {!remote && (
-          <span className="flex items-center gap-1">
-            {t('Data stays on this computer')}
-            <ShieldCheck className="size-3" />
-          </span>
-        )}
-      </span>
-    </footer>
+    </RailTip>
   );
 }

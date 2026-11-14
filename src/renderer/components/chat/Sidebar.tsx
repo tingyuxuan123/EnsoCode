@@ -1507,22 +1507,21 @@ export function Sidebar({
         </div>
 
         {/* 底部：当前节点（本机 / 远程）+ 归档入口 */}
-        <div className="flex shrink-0 flex-col gap-1 px-3 pt-2 pb-3">
-          <div className="flex items-center">
-            <NodeSwitcher className="h-7 px-1.5 text-[calc(11rem/14)]" />
-          </div>
+        <div
+          data-slot="sidebar-footer"
+          className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-2"
+        >
+          <NodeSwitcher className="h-[calc(32rem/14)] max-w-none flex-1 px-2 text-[calc(13rem/14)]" />
           <button
             type="button"
             data-slot="archived-button"
             onClick={openArchive}
-            className="flex h-[calc(32rem/14)] min-w-0 items-center gap-2 rounded-md px-2 text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="flex h-[calc(32rem/14)] min-w-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`${t('Archived')} (${archivedCount})`}
             title={`${t('Archived')} (${archivedCount})`}
           >
             <Archive className="h-4 w-4 shrink-0" />
-            <span className="truncate">{t('Archived')}</span>
-            {archivedCount > 0 && (
-              <span className="ml-auto text-[calc(11rem/14)] tabular-nums">{archivedCount}</span>
-            )}
+            {archivedCount > 0 && <span className="tabular-nums">{archivedCount}</span>}
           </button>
         </div>
       </div>

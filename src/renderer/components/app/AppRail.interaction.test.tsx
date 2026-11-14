@@ -9,6 +9,7 @@ vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: object) => unknown) => select({ keybindings: {} }),
 }));
 vi.mock('./RailTip', () => ({ RailTip: ({ children }: { children: ReactNode }) => children }));
+vi.mock('./StatusBar', () => ({ StatusBar: () => null }));
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
 describe('AppRail design toggle', () => {

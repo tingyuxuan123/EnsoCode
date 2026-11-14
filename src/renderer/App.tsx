@@ -11,7 +11,6 @@ import { FoldHorizontal, PanelRight, UnfoldHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
-import { StatusBar } from '@/components/app/StatusBar';
 import { TitleBar } from '@/components/app/TitleBar';
 import { UpdateBanner } from '@/components/app/UpdateBanner';
 import { WorkbenchTitle } from '@/components/app/WorkbenchTitle';
@@ -794,7 +793,6 @@ export default function App() {
           </DndContext>
         )}
       </div>
-      <StatusBar />
       {!onboarded && <Onboarding />}
       <WorkspaceSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
       <AlertDialog

@@ -171,9 +171,12 @@ describe('设计画廊占用整块工作区', () => {
     expect(gallery()).not.toBeNull();
     expect(sidebarSlot()).toBeNull();
     expect(sidebarHandle()).toBeNull();
-    // 图标导航轨和底部状态栏仍在，画廊只覆盖侧栏 + 工作区。
+    // 图标轨继续承载全局状态，最底部不再保留独立状态栏。
     expect(container.querySelector('[data-slot="app-rail"]')).not.toBeNull();
-    expect(container.querySelector('[data-slot="status-bar"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-slot="app-rail"] [data-slot="status-bar"]')
+    ).not.toBeNull();
+    expect(container.querySelectorAll('[data-slot="status-bar"]')).toHaveLength(1);
   });
 
   it('从画廊切回 Code 恢复原来的侧栏宽度和展开状态', async () => {

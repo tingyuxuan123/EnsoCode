@@ -21,11 +21,16 @@ export function NodeDot({ node, className }: { node: RemoteNodeStatus; className
       ? t('Remote desktop is offline')
       : t('Connecting…');
   return (
-    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone, className)} title={title} />
+    <span
+      role="img"
+      aria-label={title}
+      className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone, className)}
+      title={title}
+    />
   );
 }
 
-/** 侧栏顶部的节点切换：本机 / 已连节点 / 连接新节点 */
+/** 侧栏底部的节点切换：本机 / 已连节点 / 连接新节点 */
 export function NodeSwitcher({ className }: { className?: string }) {
   const { t } = useI18n();
   const nodes = useRemoteNodesStore((s) => s.nodes);
@@ -37,25 +42,34 @@ export function NodeSwitcher({ className }: { className?: string }) {
   const active = activeNodeId === 'local' ? null : nodes.find((n) => n.nodeId === activeNodeId);
   const label = active ? active.label : t('This computer');
   const Icon = active ? Monitor : Laptop;
+  const detail = active
+    ? active.hostOnline
+      ? t('Online')
+      : active.connected
+        ? t('Remote desktop is offline')
+        : t('Connecting…')
+    : t('Data stays on this computer');
 
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
+          data-slot="node-switcher"
           className={cn(
-            'flex h-7 min-w-0 max-w-48 items-center gap-1.5 rounded-md px-2 text-[calc(11rem/14)] transition-colors hover:bg-muted',
+            'flex h-7 min-w-0 max-w-48 items-center gap-1.5 rounded-md px-2 text-[calc(11rem/14)] transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             className
           )}
-          title={t('Switch node')}
+          aria-label={`${label} · ${t('Switch node')}`}
+          title={`${label} · ${t('Switch node')}\n${detail}`}
         >
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate font-medium">{label}</span>
           {active && <NodeDot node={active} />}
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+          <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-60" />
         </PopoverTrigger>
         <PopoverPopup
-          side="bottom"
+          side="top"
           align="start"
           className="w-60 [&_[data-slot=popover-viewport]]:p-1"
         >
@@ -63,6 +77,7 @@ export function NodeSwitcher({ className }: { className?: string }) {
             selected={activeNodeId === 'local'}
             icon={<Laptop className="h-3.5 w-3.5 shrink-0" />}
             label={t('This computer')}
+            description={t('Data stays on this computer')}
             onClick={() => {
               switchNode('local');
               setOpen(false);
@@ -105,12 +120,14 @@ function NodeOption({
   icon,
   label,
   hint,
+  description,
   onClick,
 }: {
   selected: boolean;
   icon: React.ReactNode;
   label: string;
   hint?: string;
+  description?: string;
   onClick: () => void;
 }) {
   return (
@@ -128,6 +145,9 @@ function NodeOption({
       <span className="min-w-0 flex-1 truncate">
         {label}
         {hint && <span className="ml-1.5 text-[calc(11rem/14)] text-muted-foreground">{hint}</span>}
+        {description && (
+          <span className="block text-[calc(11rem/14)] text-muted-foreground">{description}</span>
+        )}
       </span>
       {selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
     </button>
