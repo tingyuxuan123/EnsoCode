@@ -404,7 +404,7 @@ export function ChatScreen(props: Props) {
         {syncFailed && view !== null && props.connState === 'online' && (
           <div
             data-sync-failed-banner=""
-            className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-warning/20 bg-warning/10 px-3 py-1.5 text-center text-warning text-xs"
+            className="mx-4 mt-1 flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-[14px] bg-yellow/10 px-3 py-2 text-center text-[12px] leading-4 text-yellow-ink"
           >
             {/* 窄屏一行放不下时先省略正文，按钮必须始终可点 */}
             <span className="min-w-0 flex-1 truncate">
@@ -413,7 +413,7 @@ export function ChatScreen(props: Props) {
             <button
               type="button"
               onClick={props.onRetrySync}
-              className="shrink-0 rounded-md border border-warning/40 px-2 py-0.5 font-medium transition-colors hover:bg-warning/15"
+              className="shrink-0 rounded-full bg-card px-2.5 py-1 text-[11px] leading-4 font-medium text-ink2"
             >
               重试
             </button>
@@ -491,7 +491,7 @@ export function ChatScreen(props: Props) {
               <button
                 type="button"
                 onClick={props.onRetrySync}
-                className="rounded-md border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
+                className="rounded-full bg-pill px-4 py-2 text-[13px] leading-5 font-medium text-pill-ink"
               >
                 重试
               </button>
@@ -544,7 +544,7 @@ export function ChatScreen(props: Props) {
               />
               {bot?.outbox}
               {(props.notice || bot?.notice) && (
-                <p className="mb-1 rounded-md bg-destructive/10 px-2 py-1 text-destructive text-xs">
+                <p className="mb-1 rounded-[14px] bg-red/8 px-3 py-2 text-[12px] leading-4 text-red">
                   {props.notice || bot?.notice}
                 </p>
               )}

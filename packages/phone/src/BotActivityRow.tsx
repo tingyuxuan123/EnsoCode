@@ -40,11 +40,11 @@ export function BotActivityRow({ item, bots, clockOffset, onOpen }: Props) {
       type="button"
       disabled={!open}
       onClick={open}
-      className="flex w-full gap-2 rounded-md border bg-muted/30 px-2.5 py-2 text-left disabled:cursor-default"
+      className="flex w-full gap-2 rounded-[14px] bg-card2/70 px-3 py-2.5 text-left disabled:cursor-default"
     >
       <BotAvatar bot={bot} size="sm" busy={running} />
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-xs">
+        <span className="flex items-center gap-1.5 text-[12px] leading-4">
           <span className="truncate font-medium">
             {bot?.name ?? '成员'}
             {owner ? (
