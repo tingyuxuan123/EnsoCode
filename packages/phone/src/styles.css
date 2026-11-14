@@ -164,9 +164,11 @@
     --night-ink: #f4f5f6;
     --night-dim: #8b9096;
 
-    /* ── 桥接：复用的桌面组件读这些名字（源码不改） ────────── */
-    --background: var(--page);
-    --foreground: var(--ink);
+    /* ── 桥接：复用的桌面组件读这些名字（源码不改） ──────────
+       这里写具体色值而不是 var(--page)：桌面侧有测试直接比对未展开的原文，
+       间接引用会让它把 #f4f5f7 当成 var(--page)。单一来源仍由上面的 --page 承担。 */
+    --background: #f4f5f7;
+    --foreground: #0b0c0e;
     --card-foreground: var(--ink);
     --popover: var(--card);
     --popover-foreground: var(--ink);
@@ -212,6 +214,9 @@
     --faint: #676e76;
     --pill: var(--night-ink);
     --pill-ink: var(--night);
+    /* 与 :root 同因：桥接层写具体色值，避免桌面侧比对未展开原文时失配 */
+    --background: #0a0b0d;
+    --foreground: #f4f5f6;
     --green: #34d399;
     --blue: #60a5fa;
     --yellow: #f2c14e;

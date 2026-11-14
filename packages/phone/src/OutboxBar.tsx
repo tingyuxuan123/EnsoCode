@@ -1,4 +1,4 @@
-import { RotateCw, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { OutboxItem } from './botOutbox';
 import { rejectionText } from './readOnly';
@@ -17,27 +17,36 @@ const STATUS_TEXT = { pending: '待发送', sending: '发送中…', failed: '�
 export function OutboxBar({ items, readOnly, onRetry, onDiscard }: Props) {
   if (items.length === 0) return null;
   return (
-    <div className="mb-1 space-y-1">
+    // 设计稿 `outbox`：白卡一行，右侧给状态词；失败的那行红底 + 重试 + 删除
+    <div className="mb-1.5 space-y-1.5">
       {items.map((item) => (
         <div
           key={item.deliveryId}
           className={cn(
-            'flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px]',
-            item.status === 'failed' ? 'border-destructive/40 bg-destructive/5' : 'bg-muted/40'
+            'flex items-center gap-2 rounded-[14px] px-3 py-2.5',
+            item.status === 'failed'
+              ? 'bg-red/5 shadow-[inset_0_0_0_1px_rgb(220_38_38/0.25)]'
+              : 'bg-card'
           )}
         >
           <span
             className={cn(
-              'min-w-0 flex-1',
+              'min-w-0 flex-1 text-[13px] leading-[18px]',
               item.status === 'failed' ? 'whitespace-pre-wrap break-words select-text' : 'truncate'
             )}
           >
             {item.text || (item.images?.length ? `[${item.images.length} 张图片]` : '')}
+            {/* 失败原因必须说清（尤其只读被拦下时），但压在第二行，不抢正文 */}
+            {item.status === 'failed' && item.error && (
+              <span className="mt-0.5 block text-[11px] leading-4 text-red">
+                {STATUS_TEXT.failed}：{rejectionText(item.error) ?? item.error}
+              </span>
+            )}
           </span>
           <span
             className={cn(
-              'min-w-0 break-words',
-              item.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
+              'shrink-0 text-[11px] leading-4',
+              item.status === 'failed' ? 'text-red' : 'text-dim'
             )}
           >
             {item.error?.startsWith('outbox-discard')
@@ -45,16 +54,15 @@ export function OutboxBar({ items, readOnly, onRetry, onDiscard }: Props) {
               : item.error === 'delivery-unconfirmed'
                 ? '结果未确认'
                 : STATUS_TEXT[item.status]}
-            {item.status === 'failed' && item.error ? `：${rejectionText(item.error)}` : ''}
           </span>
           {item.status === 'failed' && !item.error?.startsWith('outbox-discard') && !readOnly && (
             <button
               type="button"
               aria-label="重试"
               onClick={() => onRetry(item.deliveryId)}
-              className="shrink-0 rounded p-0.5 text-foreground hover:bg-accent"
+              className="shrink-0 text-[12px] leading-4 font-medium text-ink2"
             >
-              <RotateCw className="h-3.5 w-3.5" />
+              重试
             </button>
           )}
           {item.status !== 'sending' && (
@@ -63,9 +71,9 @@ export function OutboxBar({ items, readOnly, onRetry, onDiscard }: Props) {
               aria-label="删除"
               disabled={item.error === 'outbox-discarding'}
               onClick={() => onDiscard(item.deliveryId)}
-              className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full text-faint disabled:opacity-40"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
             </button>
           )}
         </div>
