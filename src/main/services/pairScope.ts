@@ -7,6 +7,7 @@ const READ_SCOPE_COMMANDS: ReadonlySet<string> = new Set([
   'history',
   'file-list',
   'file-read',
+  'session-image',
   'preview-list',
   'preview-open',
   'preview-frame',

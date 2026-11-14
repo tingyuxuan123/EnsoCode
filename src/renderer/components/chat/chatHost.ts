@@ -14,6 +14,9 @@ export interface ChatSpeaker {
   image?: string;
 }
 
+/** 远程宿主读本地图片的返回：成功给 data URL，失败给机器可读错误码（由渲染层翻文案） */
+export type LocalImageLoad = { ok: true; dataUrl: string } | { ok: false; error: string };
+
 export interface ChatHost {
   sessionId: string | null;
   canRewind: boolean;
@@ -23,6 +26,12 @@ export interface ChatHost {
   /** 回复头的发言人；缺省显示 Enso（Bot 模式显示成员名与头像） */
   speaker?: ChatSpeaker;
   botSession?: boolean;
+  /**
+   * 会话里图片的远程读取（手机 PWA）：入参是工具记录的绝对路径，
+   * 实现方负责换成「会话 id + 工作区相对路径」再由 Main 校验，不把磁盘路径原样上行。
+   * 缺省 = 本机 Electron，继续用 `local-image://` 特权协议。
+   */
+  readLocalImage?: (path: string) => Promise<LocalImageLoad>;
   /** 一轮最终回复正文下方的附加内容（Bot 私聊的产物卡片）；参数为该消息绝对下标 */
   turnFooter?: (messageIndex: number) => ReactNode;
   /**

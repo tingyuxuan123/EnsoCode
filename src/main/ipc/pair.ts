@@ -16,6 +16,7 @@ import {
   revokeDevice,
   setDeviceScope,
   setPairFilePort,
+  setPairImagePort,
   setPairPreviewPort,
   setPairQueueActionListener,
   setPairResumeListener,
@@ -37,10 +38,12 @@ import {
 import { sendToAllWindows } from '../windows/createAppWindow';
 import { isMainWindowAlive } from '../windows/MainWindow';
 import { createPairFilesPort } from './pairFiles';
+import { createPairImagesPort } from './pairImages';
 import { createPairPreviewsPort } from './pairPreview';
 
 export function registerPairHandlers(): void {
   setPairFilePort(createPairFilesPort());
+  setPairImagePort(createPairImagesPort());
   setPairPreviewPort(createPairPreviewsPort(createPairPreviewBrowser));
   // 状态变化广播回设置页（配对成功、手机上下线、重连）
   setPairStatusListener(() => {

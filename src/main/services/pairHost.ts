@@ -75,6 +75,7 @@ import type { BotSessionAccess } from './pairBotFrames';
 import { PAIR_DIRECT_ENABLED, PAIR_STUN_SERVERS } from './pairDirectConfig';
 import { isDirectPeerAvailable, mainDirectPeerFactory, preloadDirectPeer } from './pairDirectPeer';
 import type { PairFileCommand, PairFilePort } from './pairFiles';
+import type { PairImagePort, SessionImageCommand, SessionImageFrame } from './pairImages';
 import { flushChangedMeta, requestPairMeta } from './pairMetaFlush';
 import { startPairNetworkWatch } from './pairNetworkWatch';
 import {
@@ -325,6 +326,13 @@ let filePort: PairFilePort | null = null;
 
 export function setPairFilePort(port: PairFilePort | null): void {
   filePort = port;
+}
+
+let imagePort: PairImagePort | null = null;
+
+/** 会话图片（read / 生成图片）预览端口：与文件端口同构，仍由 Main 按权威记录解析路径 */
+export function setPairImagePort(port: PairImagePort | null): void {
+  imagePort = port;
 }
 
 /**
@@ -1056,6 +1064,71 @@ function fileUnavailable(command: PairFileCommand, error = 'unavailable'): HostT
     : { type: 'file-read-result', requestId: command.requestId, error };
 }
 
+function sessionImageAccessible(conn: Connection, sessionId: string): boolean {
+  if (
+    sessionId !== conn.subscribedId ||
+    !catalog.some((entry) => entry.id === sessionId) ||
+    botPort?.sessionAccess(sessionId) === 'deny'
+  )
+    return false;
+  try {
+    return imagePort?.canAccess?.(sessionId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+function sessionImageUnavailable(command: SessionImageCommand, error = 'unavailable') {
+  const frame: SessionImageFrame = {
+    type: 'session-image-result',
+    requestId: command.requestId,
+    error,
+  };
+  return frame;
+}
+
+/** 单张图片一次问答即可完成：读盘/编码不阻塞本连接的收帧队列（abort/subscribe 要能用） */
+function handleSessionImageCommand(
+  conn: Connection,
+  command: SessionImageCommand,
+  generation: number,
+  ioEpoch: number
+): void {
+  const port = imagePort;
+  const current = () => connectionCurrent(conn, generation, ioEpoch);
+  if (!port || !sessionImageAccessible(conn, command.sessionId)) {
+    void send(conn, sessionImageUnavailable(command), current);
+    return;
+  }
+  const subscriptionEpoch = conn.fileSubscriptionEpoch;
+  let accessKey: string | null | undefined;
+  try {
+    accessKey = port.accessKey?.(command.sessionId);
+  } catch {
+    void send(conn, sessionImageUnavailable(command), current);
+    return;
+  }
+  // 加密前后都要重新确认：会话已切走、授权变化或端口已换时不能把旧图发出去
+  const accessible = () => {
+    try {
+      return (
+        current() &&
+        imagePort === port &&
+        conn.fileSubscriptionEpoch === subscriptionEpoch &&
+        sessionImageAccessible(conn, command.sessionId) &&
+        port.accessKey?.(command.sessionId) === accessKey
+      );
+    } catch {
+      return false;
+    }
+  };
+  const reply: PairReply = (message) =>
+    accessible() ? send(conn, message, accessible) : Promise.resolve(false);
+  void Promise.resolve()
+    .then(() => port.handle(command, reply))
+    .catch(() => reply(sessionImageUnavailable(command)));
+}
+
 function handleFileCommand(
   conn: Connection,
   command: PairFileCommand,
@@ -1213,6 +1286,9 @@ async function handleFrame(
     case 'preview-close':
     case 'preview-input':
       handlePreviewCommand(conn, command, generation, ioEpoch);
+      break;
+    case 'session-image':
+      handleSessionImageCommand(conn, command, generation, ioEpoch);
       break;
     case 'file-list':
     case 'file-read':
@@ -1601,6 +1677,7 @@ async function sendMeta(conn: Connection): Promise<void> {
     hostname: os.hostname(),
     appVersion: app.getVersion(),
     ...(filePort ? { files: true as const } : {}),
+    ...(imagePort ? { images: true as const } : {}),
     ...(previewPort ? { preview: true as const } : {}),
     ...(directReady ? { capabilities: ['direct-v1' as const], iceServers: PAIR_STUN_SERVERS } : {}),
     ...(speechAvailable() ? { voiceInput: true as const } : {}),

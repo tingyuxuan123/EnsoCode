@@ -1,5 +1,4 @@
 import { generatedImageFromOutput } from '@shared/imageGeneration';
-import { toLocalImageUrl } from '@shared/localImage';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
@@ -8,6 +7,7 @@ import { handleDraftRequest } from '@/plugins/draftBridge';
 import { requestFocusComposer } from './composerMentionBridge';
 import { copyImageToClipboard } from './imageClipboard';
 import { downloadImage } from './imageDownload';
+import { localImageErrorText, useLocalImageSource } from './localImageSource';
 import { ZoomableImage } from './ZoomableImage';
 
 /** Exact upstream image-gen action glyphs (Apache-2.0), not the app's generic icons. */
@@ -98,10 +98,13 @@ export function GeneratedImageCard({
     };
   }, []);
   const image = generatedImageFromOutput(output);
+  // 手机 PWA 没有 local-image://：经 host 按「会话 id + 相对路径」取图，加载/失败都有可见状态
+  const { state, remote, retry } = useLocalImageSource(path);
   if (!image) return null;
-  const src = toLocalImageUrl(path);
+  const src = state.status === 'local' || state.status === 'ready' ? state.src : null;
   const action = async (kind: 'copy' | 'download') => {
-    if (pending) return;
+    // 远程宿主（手机）的图片只在内存里，没有本地路径可复制/下载
+    if (pending || !src) return;
     setPending(true);
     try {
       if (kind === 'copy') {
@@ -156,9 +159,26 @@ export function GeneratedImageCard({
       data-slot="generated-image"
       aria-busy={!loaded && !failed}
     >
-      {failed ? (
+      {state.status === 'loading' ? (
+        <p data-slot="generated-image-loading" className="px-3 py-5 text-muted-foreground text-sm">
+          {t('Loading image…')}
+        </p>
+      ) : state.status === 'error' || (failed && remote) ? (
+        <div data-slot="generated-image-error" className="px-3 py-5 text-sm">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+            <span>{localImageErrorText(state.status === 'error' ? state.error : 'failed', t)}</span>
+            <button
+              type="button"
+              onClick={retry}
+              className="rounded border px-1.5 py-0.5 font-medium transition-colors hover:bg-accent"
+            >
+              {t('Retry')}
+            </button>
+          </p>
+        </div>
+      ) : failed ? (
         <p className="px-3 py-5 text-sm text-muted-foreground">{t('Image file unavailable')}</p>
-      ) : (
+      ) : src ? (
         <ZoomableImage
           src={src}
           onError={() => setFailed(true)}
@@ -169,8 +189,8 @@ export function GeneratedImageCard({
             loaded ? 'imagegen-fade-in' : 'opacity-0'
           )}
         />
-      )}
-      {loaded && !failed && (
+      ) : null}
+      {loaded && !failed && !remote && (
         <div
           className="imagegen-actions"
           data-slot="image-actions"

@@ -174,6 +174,14 @@ export const zhTranslations: Record<string, string> = {
   'Manage image services': '管理模型服务',
   Saved: '已保存',
   'Image file unavailable': '图片文件已移动或不可用',
+  'Loading image…': '正在读取图片…',
+  'Image is too large to preview on the phone': '图片太大，手机上预览不了',
+  'This image format cannot be previewed here': '这个格式预览不了',
+  'Image was changed or moved': '图片已修改或移走',
+  'This computer cannot read the file right now': '电脑现在读不到这个文件',
+  'Connection lost, try again when reconnected': '连接已断开，连上后再试',
+  'This image is outside the session folder': '这张图不在会话目录里',
+  'Could not load the image': '图片没读下来',
   'Choose an API-key provider with OpenAI-compatible /images/generations and /images/edits endpoints. Include the version in its Base URL (for example /v1). Image model IDs can be entered even if absent from the chat model list. OAuth chat subscriptions are not image API keys.':
     '选择使用 API Key、提供 OpenAI 兼容生图或改图接口的服务。Base URL 需包含版本路径（如 /v1）。模型 ID 可以直接填，不必出现在聊天模型列表里。OAuth 聊天订阅不能当作图像 API Key。',
   'Ask in chat to generate or edit an image. Prompts and reference images are sent to the selected service and each call may incur a charge. No automatic retries. Results are saved in .xiaoman/images inside the workspace; previous versions remain in chat. Local Code sessions only; not SSH, bots or subagents. Tool changes apply after the current turn.':

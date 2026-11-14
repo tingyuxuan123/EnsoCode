@@ -45,6 +45,7 @@ import { compressWithin, imageBudget } from './image';
 import { appendEchoMessages, type QueueSendEcho } from './queueSendEcho';
 import { readOnlyBanner } from './readOnly';
 import { SessionStatsLine } from './SessionStatsLine';
+import type { SessionImageLoad } from './sessionImagePort';
 import { setDisplayedConversation } from './stubs/sessions-store';
 import { WebPreview } from './WebPreview';
 
@@ -57,6 +58,8 @@ interface Props {
   view: SessionView | null;
   /** 本机时钟 − host 时钟（审批 / 提问卡剩余时间） */
   clockOffset?: number;
+  /** 会话图片：手机没有 local-image://，由 host 按「会话 id + 相对路径」读回 data URL */
+  readImage?: (rel: string) => Promise<SessionImageLoad>;
   connState: ConnState;
   stateLabel: string;
   /** Local send failure, also shown in Code mode (not only Bot conversations). */
@@ -156,7 +159,13 @@ export function ChatScreen(props: Props) {
   const artifactConversationId = props.artifacts?.conversationId;
   const host = useMemo(
     () => ({
-      ...phoneChatHost({ sessionId, bot, deviceReadOnly: props.deviceReadOnly }),
+      ...phoneChatHost({
+        sessionId,
+        bot,
+        deviceReadOnly: props.deviceReadOnly,
+        cwd: props.cwd,
+        readImage: props.readImage,
+      }),
       ...(artifactChatId && artifactConversationId
         ? {
             turnFooter: (localIndex: number) => {
@@ -178,7 +187,16 @@ export function ChatScreen(props: Props) {
           }
         : {}),
     }),
-    [sessionId, bot, props.deviceReadOnly, artifactChatId, artifactConversationId, messageIndices]
+    [
+      sessionId,
+      bot,
+      props.deviceReadOnly,
+      props.cwd,
+      props.readImage,
+      artifactChatId,
+      artifactConversationId,
+      messageIndices,
+    ]
   );
   const slashCommands = useMemo<SlashCommand[]>(() => {
     if (bot) return [];

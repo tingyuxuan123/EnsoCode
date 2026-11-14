@@ -18,6 +18,8 @@ const READ_ONLY_ALLOWED = [
   'history',
   'file-list',
   'file-read',
+  // 会话图片预览是只读操作：只读设备也要能看图
+  'session-image',
   'preview-list',
   'preview-open',
   'preview-frame',

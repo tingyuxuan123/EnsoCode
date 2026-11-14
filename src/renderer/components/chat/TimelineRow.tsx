@@ -4,7 +4,6 @@ import { stripBotNotesUpdate } from '@shared/bots/notes';
 import { isBtwIsolationPrompt } from '@shared/btw';
 import { agentInstanceDisplayName, SYSTEM_ASSISTANT_DISPLAY_NAME } from '@shared/builtinAgents';
 import { chatBodyTypographyStyle } from '@shared/chatTypography';
-import { toLocalImageUrl } from '@shared/localImage';
 import { type PlanNoteKind, parsePlanMessage, splitPlanPrefix } from '@shared/planMode';
 import { SHELL_FAILURE_DISPLAY } from '@shared/shellFailure';
 import { parseSkillInvocation } from '@shared/skillCommands';
@@ -122,6 +121,11 @@ import { DiffCount } from './FlipMetricValue';
 import { GeneratedImageCard } from './GeneratedImageCard';
 import { GeneratedImageSkeleton } from './GeneratedImageSkeleton';
 import { renderHighlighted, useChatSearchHighlight } from './highlightQuery';
+import {
+  type LocalImageSource,
+  localImageErrorText,
+  useLocalImageSource,
+} from './localImageSource';
 import { LocalFileTrigger, Markdown } from './Markdown';
 import { MemoryCaptureResult, MemorySearchResults } from './MemorySearchResults';
 import { mentionChipClass } from './MentionChip';
@@ -2202,14 +2206,78 @@ function SandboxOutput({
   );
 }
 
-/** read 图片：按原文件渲染，限制最大边，点开看全图。加载失败时退回文本详情 */
+/**
+ * read 图片：按原文件渲染，限制最大边，点开看全图。
+ * 本机（Electron）走 local-image:// 特权协议，读不到时退回文本详情；
+ * 远程宿主（手机 PWA 浏览器）没有这个协议，改为经 host 取图，
+ * 加载中与失败都有可见状态（不留空白、不静默藏掉）。
+ */
 export function ReadImagePreview({ path, fallback }: { path: string; fallback: ReactNode }) {
+  const { state, retry } = useLocalImageSource(path);
+  return (
+    <ReadImagePreviewView
+      state={state}
+      path={path}
+      fallback={fallback}
+      remote={Boolean(useChatHost()?.readLocalImage)}
+      onRetry={retry}
+    />
+  );
+}
+
+/** 纯展示层：便于按四种状态做渲染断言 */
+export function ReadImagePreviewView({
+  state,
+  path,
+  fallback,
+  remote,
+  onRetry,
+}: {
+  state: LocalImageSource;
+  path: string;
+  fallback: ReactNode;
+  remote: boolean;
+  onRetry: () => void;
+}) {
+  const { t } = useI18n();
   const [failed, setFailed] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 换图后旧的加载失败不能继续生效
+  useEffect(() => setFailed(false), [path]);
+  if (state.status === 'loading') {
+    return (
+      <div
+        data-slot="read-image-loading"
+        className="flex w-full min-w-0 items-center gap-2 px-3 py-3 text-muted-foreground text-xs"
+      >
+        <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        <span>{t('Loading image…')}</span>
+      </div>
+    );
+  }
+  if (state.status === 'error' || (failed && remote)) {
+    const error = state.status === 'error' ? state.error : 'failed';
+    return (
+      <div data-slot="read-image-error" className="w-full min-w-0 px-3 py-2 text-xs">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+          <span>{localImageErrorText(error, t)}</span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded border px-1.5 py-0.5 font-medium transition-colors hover:bg-accent"
+          >
+            {t('Retry')}
+          </button>
+        </p>
+        {fallback}
+      </div>
+    );
+  }
+  // 本机读不到原文件时保持旧行为：退回文本详情
   if (failed) return fallback;
   return (
     <div data-slot="read-image" className="w-full min-w-0 px-3 py-3">
       <ZoomableImage
-        src={toLocalImageUrl(path)}
+        src={state.src}
         onError={() => setFailed(true)}
         frameClassName="block w-full"
         className="mx-auto block max-h-80 max-w-full rounded-md bg-muted/40 object-contain"

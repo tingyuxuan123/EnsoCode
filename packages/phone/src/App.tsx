@@ -63,6 +63,7 @@ import {
 import { READ_ONLY_ERROR } from './readOnly';
 import { SessionConfigSheet } from './SessionConfigSheet';
 import { SessionDrawer } from './SessionDrawer';
+import { SessionImagePort } from './sessionImagePort';
 import {
   clearDeviceData,
   type LastView,
@@ -178,6 +179,8 @@ export function App() {
   const [pushConfigReady, setPushConfigReady] = useState(false);
   const [voiceInput, setVoiceInput] = useState(false);
   const [filesAvailable, setFilesAvailable] = useState(false);
+  /** 桌面能按权威根解析会话里的图片（旧桌面没有 images 能力，保持纯文本回退） */
+  const [imagesAvailable, setImagesAvailable] = useState(false);
   const [previewAvailable, setPreviewAvailable] = useState(false);
   /** 桌面把本设备设为只读（host-info.readOnly） */
   const [deviceReadOnly, setDeviceReadOnly] = useState(false);
@@ -235,6 +238,14 @@ export function App() {
   const previewPort = useMemo(
     () =>
       new PreviewPort((command) => {
+        if (!clientRef.current) return false;
+        clientRef.current.send(command);
+      }),
+    []
+  );
+  const imagesPort = useMemo(
+    () =>
+      new SessionImagePort((command) => {
         if (!clientRef.current) return false;
         clientRef.current.send(command);
       }),
@@ -368,8 +379,10 @@ export function App() {
     setVoiceInput(false);
     setFilesAvailable(false);
     setPreviewAvailable(false);
+    setImagesAvailable(false);
     previewPort.reset();
     filesPort.reset();
+    imagesPort.reset();
     setDeviceReadOnly(false);
     setReadOnlyRejected(false);
     setBotNewSessionSupported(false);
@@ -389,6 +402,7 @@ export function App() {
           artifactsPort.reset();
           filesPort.reset();
           previewPort.reset();
+          imagesPort.reset();
           newSessionPort.reset();
           threadPort.reset();
           setBotNewSessionSupported(false);
@@ -400,6 +414,8 @@ export function App() {
       onBotArtifactImage: (frame) => artifactsPort.receiveImage(frame),
       onFilesAvailable: setFilesAvailable,
       onFileReply: (frame) => filesPort.receive(frame),
+      onImagesAvailable: setImagesAvailable,
+      onSessionImage: (frame) => imagesPort.receive(frame),
       onPreviewAvailable: setPreviewAvailable,
       onPreviewReply: (frame) => previewPort.receive(frame),
       onBotNewSessionResult: (frame) => {
@@ -1314,6 +1330,9 @@ export function App() {
             title={entry?.title || (activeId ? '会话' : 'Collabra')}
             projectName={entry?.projectName ?? ''}
             cwd={entry?.cwd}
+            readImage={
+              imagesAvailable && activeId ? (rel) => imagesPort.load(activeId, rel) : undefined
+            }
             view={view}
             connState={state}
             stateLabel={connectionLabel}

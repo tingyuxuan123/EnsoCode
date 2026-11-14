@@ -123,6 +123,11 @@ export type PhoneToHost =
       frameId: string;
       input: PairPreviewInput;
     }
+  /**
+   * 会话里的图片（read/生成的图片文件）：手机只报工作区相对路径，
+   * host 按权威根解析、校验边界并压到手机帧预算内再回 data URL。
+   */
+  | { type: 'session-image'; requestId: string; sessionId: string; rel: string }
   | { type: 'file-list'; requestId: string; target: PairFileTarget }
   | { type: 'file-read'; requestId: string; target: PairFileTarget; fileId: string; offset: number }
   | { type: 'prompt'; sessionId: string; text: string; images?: AttachedImage[] }
@@ -239,6 +244,7 @@ export const PHONE_COMMAND_TYPES = [
   'preview-input',
   'file-list',
   'file-read',
+  'session-image',
   'prompt',
   'steer',
   'abort',
@@ -647,6 +653,8 @@ export type HostToPhone =
       appVersion: string;
       /** Missing on older desktops: file download UI must stay hidden. */
       files?: true;
+      /** 会话图片预览（read / 生成图片）：缺省（旧桌面）时手机不请求，保持纯文本回退 */
+      images?: true;
       preview?: true;
       /** 直连能力声明；缺省（旧桌面）即不支持 */
       capabilities?: DirectCapability[];
@@ -740,6 +748,8 @@ export type HostToPhone =
       media: PairBotMedia[];
     }
   | { type: 'bot-artifact-image'; requestId: string; dataUrl?: string; error?: string }
+  /** session-image 的应答：dataUrl 已压到手机单帧预算内；error 见 host 侧错误码 */
+  | { type: 'session-image-result'; requestId: string; dataUrl?: string; error?: string }
   | { type: 'file-list-result'; requestId: string; files: PairFileEntry[]; error?: string }
   | {
       type: 'file-read-result';

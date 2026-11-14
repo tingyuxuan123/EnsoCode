@@ -158,6 +158,9 @@ export interface ClientEvents {
   onBotArtifacts?(frame: Extract<HostToPhone, { type: 'bot-artifacts' }>): void;
   onBotArtifactImage?(frame: Extract<HostToPhone, { type: 'bot-artifact-image' }>): void;
   onFilesAvailable?(available: boolean): void;
+  /** 会话图片预览能力（host 旧版本不带 images 时为 false） */
+  onImagesAvailable?(available: boolean): void;
+  onSessionImage?(frame: Extract<HostToPhone, { type: 'session-image-result' }>): void;
   onFileReply?(
     frame: Extract<HostToPhone, { type: 'file-list-result' | 'file-read-result' }>
   ): void;
@@ -601,6 +604,7 @@ export class PairClient {
         this.direct.hostInfo(payload);
         this.events.onPreviewAvailable?.(payload.preview === true);
         this.events.onFilesAvailable?.(payload.files === true);
+        this.events.onImagesAvailable?.(payload.images === true);
         this.setVoiceInput(payload.voiceInput === true);
         this.events.onReadOnly?.(payload.readOnly === true);
         break;
@@ -709,6 +713,9 @@ export class PairClient {
         break;
       case 'bot-artifact-image':
         if (typeof payload.requestId === 'string') this.events.onBotArtifactImage?.(payload);
+        break;
+      case 'session-image-result':
+        if (typeof payload.requestId === 'string') this.events.onSessionImage?.(payload);
         break;
       case 'file-list-result':
       case 'file-read-result':

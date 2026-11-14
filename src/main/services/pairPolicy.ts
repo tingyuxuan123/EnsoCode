@@ -9,6 +9,7 @@ import {
   VOICE_CHUNK_MAX_INDEX,
 } from '@enso/pair';
 import { isMediaId } from '@shared/bots/sendImage';
+import { normalizeSessionImageRel } from '@shared/pair/imageRel';
 import { takeSnapshotTail } from '@shared/snapshotTail';
 import { isDeliveryId, THINKING_LEVELS } from '@shared/types/agent';
 import { isBotId } from '@shared/types/bot';
@@ -381,6 +382,28 @@ export function parsePhoneCommand(value: unknown): CommandCheck {
     case 'file-read': {
       const command = parsePairFileCommand(v);
       return command ? { ok: true, command } : { ok: false, error: 'invalid file request' };
+    }
+    case 'session-image': {
+      // 只接受会话 id + 工作区相对路径：任何绝对路径/盘符/`..` 在这里就被拒
+      if (
+        !onlyKeys(v, ['type', 'requestId', 'sessionId', 'rel']) ||
+        !isStr(v.requestId) ||
+        v.requestId.length > 100 ||
+        !isStr(v.sessionId) ||
+        v.sessionId.length > 200
+      )
+        return { ok: false, error: 'invalid image request' };
+      const rel = normalizeSessionImageRel(v.rel);
+      if (!rel) return { ok: false, error: 'invalid image path' };
+      return {
+        ok: true,
+        command: {
+          type: 'session-image',
+          requestId: v.requestId,
+          sessionId: v.sessionId,
+          rel,
+        },
+      };
     }
     case 'prompt':
     case 'steer':

@@ -15,7 +15,8 @@ import { botModeEnabled, getBotServices } from './bots';
 import { phoneFileAccessKey, phoneFileSource } from './botsContent';
 import { sessionWorktree } from './worktree';
 
-function codeContext(sessionId: string) {
+/** 会话的权威文件根（项目/工作树/浏览器目录）：手机文件与图片端口共用，不接受手机传路径 */
+export function codeFileContext(sessionId: string) {
   const authority = getSourceAuthorityRegistry();
   const conversation = authority?.conversation(sessionId);
   if (!conversation || conversation.bot) return null;
@@ -30,7 +31,7 @@ function codeContext(sessionId: string) {
 /** This is a phone service port, not a new renderer IPC or a path-bearing API. */
 export function createPairFilesPort(): PairFilePort {
   const accessKey = (target: PairFileTarget): string | null => {
-    if ('sessionId' in target) return codeContext(target.sessionId)?.stamp ?? null;
+    if ('sessionId' in target) return codeFileContext(target.sessionId)?.stamp ?? null;
     const services = botModeEnabled() ? getBotServices() : null;
     return services ? phoneFileAccessKey(services, target.bot) : null;
   };
@@ -42,13 +43,13 @@ export function createPairFilesPort(): PairFilePort {
       const source = await phoneFileSource(services, target.bot);
       return botModeEnabled() && getBotServices() === services && canAccess(target) ? source : null;
     }
-    const before = codeContext(target.sessionId);
+    const before = codeFileContext(target.sessionId);
     if (!before) return null;
     const messages = await readBotSessionMessages(
       path.join(app.getPath('userData'), 'agent', 'sessions'),
       before.conversation.sessionFile
     );
-    if (codeContext(target.sessionId)?.stamp !== before.stamp) return null;
+    if (codeFileContext(target.sessionId)?.stamp !== before.stamp) return null;
     return {
       root: before.root,
       artifacts: resolveArtifacts(
