@@ -1,83 +1,69 @@
-version: 0.2.80
+version: 0.2.81
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.80/Collabra-0.2.80-arm64-mac.zip
-    sha512: vtZfy385JB5n8sdU4hx8x+wKv1Cc/fupnrrSNw7skF9YdtM8fj94H927v6/2kaTHuAmwpSZherOFNFxwPKE8zg==
-    size: 183937679
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.80/Collabra-0.2.80-arm64.dmg
-    sha512: 1nr62uVazjxeG7izw5SON9TWXv9Ak6k9szFWBliWZRsMU9D1LsVIBhDW/injIUkCKK3IcwjwYQL5WQ6c//+Zbg==
-    size: 179046074
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.80/Collabra-0.2.80-arm64-mac.zip
-sha512: vtZfy385JB5n8sdU4hx8x+wKv1Cc/fupnrrSNw7skF9YdtM8fj94H927v6/2kaTHuAmwpSZherOFNFxwPKE8zg==
-releaseDate: 2026-11-14T01:57:14.873Z
-releaseName: Collabra 0.2.80 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.81/Collabra-0.2.81-arm64-mac.zip
+    sha512: DLZ7ceHPfn3CmKqRp8lWxiBvVNOGBfyK7gizWKkMbzoLr1MNDFGLspErJ4h0a/ZSg8S6WSvi8qJIN18DUMpMnQ==
+    size: 183945678
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.81/Collabra-0.2.81-arm64.dmg
+    sha512: lxxQOE5iv5JznKDI44D7c4sEglcgVwma3Wcm5zJ9K3wISz7adqZuNINN/Xyd+HbieteQYbPKdhY+Ffn5EUYZ9A==
+    size: 179056631
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.81/Collabra-0.2.81-arm64-mac.zip
+sha512: DLZ7ceHPfn3CmKqRp8lWxiBvVNOGBfyK7gizWKkMbzoLr1MNDFGLspErJ4h0a/ZSg8S6WSvi8qJIN18DUMpMnQ==
+releaseDate: 2026-11-14T06:44:45.216Z
+releaseName: Collabra 0.2.81 — 个人测试
 releaseNotes: >
-  # Collabra 0.2.80
+  # Collabra 0.2.81
 
 
-  ## 工作台布局更紧凑
+  ## Collabra 精选插件市场
 
 
-  - Code / Bot 模式切换统一放到标题栏中央，移除图标轨中的重复入口及重复会话标题。
+  - 接入独立签名的 Collabra 插件市场，支持主源、镜像及断网目录回退。
 
-  - 优化会话页签的样式与横向滚动，页签较多时可用滚轮浏览。
+  - 按插件 API、应用版本和平台选择最高兼容版本，并展示插件实测界面信息。
 
-  - 左侧栏底部将节点切换与归档数量合并为一行，移除全宽的本地工作区、空闲和静态数据提示栏。
-
-  - 全局运行中、待处理会话数和远程不可用提示移到图标轨，侧栏收起后仍能查看。
+  - 市场索引和安装包继续执行签名、哈希及防回滚校验；旧来源安装保持原有归属，不被同名新市场插件接管或自动覆盖。
 
 
-  ## 会话用量摘要
+  ## 扩展管理与安装
 
 
-  - 输入框下方默认只显示输入 / 输出 Token、缓存命中率和上下文占用，不再重复模型选择器的信息。
+  - 简化扩展管理与分类筛选，恢复插件图标展示，统一市场与已安装插件的详情入口。
 
-  - 已启用的统计项稳定显示，不再悬停展开挤动布局；窄窗口支持横向滚动，设置入口保持可见。
+  - 原生插件首次安装须经明确确认；预览、安装及权限状态保持一致，不因尚未安装而阻止正常首次安装。
 
-  - 上下文使用随字号缩放的细进度条，接近上限时提示警戒色；未知窗口不编造百分比，点击仍可查看上下文详情。
+  - 修复插件文档加载，并明确展示加载失败、缺少文档等结束状态。
 
-  - 仅将旧默认布局升级为三项统计，保留用户自定义开关、排序和全部关闭的选择。
-
-
-  ## 插件入口分工
+  - 改善插件主题在主窗口、设计窗口和任务看板间的应用，补充会话活动状态与插件访问边界。
 
 
-  - 设置中的“插件”更名为“Claude Code 插件”，只保留 Claude Code 已安装插件的扫描、整包开关和组件详情。
-
-  - 原生插件统一从主侧栏“扩展”管理，移除设置页重复的安装、市场和更新区域。
-
-  - “获取更多主题”、原生插件通知与旧安装深链改投主界面扩展页，继续使用原有安装预览和插件详情定位。
+  ## 多代理协作
 
 
-  ## 外观、画廊与图片工作台
+  - 多代理创建默认使用可保留上下文的 coworker 模式，便于继续交办后续任务；显式指定 task 时仍使用一次性任务模式。
 
 
-  - 外观设置使用统一的内置 / 插件主题预览卡片，并集中展示个性化设置。
-
-  - 调整深色方案、强调色和选中状态，让浅色方案与背景图模式下的界面表现更一致。
-
-  - 设计画廊接管主工作区，不再留下项目侧栏及拖拽留白；返回 Code 后保留原侧栏偏好。
-
-  - 图片工作台移除重复的通用工作区行，增加分栏展开 / 收起动画，保留生图历史入口。
+  ## Windows 同步更新
 
 
-  ## 修复与兼容
+  - 同步此前个人版的紧凑工作台布局、会话页签滚动与输入框用量摘要。
+
+  - 同步外观主题预览、设计画廊全屏工作区、图片工作台布局及分栏动画改进。
+
+  - 同步 Claude Code 插件与原生扩展入口分工，以及 Bot 模型选择、浏览器兼容性和界面响应修复。
 
 
-  - 修复 Bot 成员模型切换可能被后续思考档位更新覆盖的问题，资料保存 / 放弃操作在小窗口和大字号下保持可见。
-
-  - 修复 WPS 国际分享编辑器重复静态资源路径的兼容问题，并改善内置浏览器视图层级、布局与侧栏焦点保持。
+  ## 发布范围与验收边界
 
 
-  ## 个人版发布范围
+  - Windows x64 版通过 CI 构建、包内原生依赖和设计引擎冒烟、远端资产哈希验收后公开并推进 Latest。
 
+  - Mac arm64 版使用原个人证书，发布到个人 prerelease 与独立个人更新清单，不通过个人通道修改正式 Latest。
 
-  - 本次发布到 Mac arm64 同证书个人更新通道，不改变 Windows 正式 Latest。
-
-  - 安装、退出与重启由用户操作；发布完成不代表当前安装版已经升级。
+  - 本次发布不包含工作区中未提交的本地测试。安装、退出和重启由用户操作；发布成功不代表已完成真机安装、旧数据保留或自动升级验收。
 
 
   ---
 
 
-  个人测试通道 0.2.80：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.81：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
