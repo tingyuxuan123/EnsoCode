@@ -68,6 +68,9 @@ describe('原子私有插件登记表', () => {
       { kind: 'url', url: 'http://example.com/a.zip' },
       { kind: 'dir', path: '../relative' },
       { kind: 'market', id: '../bad' },
+      { kind: 'market', id: valid.id, marketId: 'Collabra!' },
+      { kind: 'market', id: valid.id, marketId: 'x'.repeat(33) },
+      { kind: 'market', id: valid.id, marketId: 7 },
       { kind: 'unknown' },
     ]) {
       writeFileSync(
@@ -77,6 +80,26 @@ describe('原子私有插件登记表', () => {
       expect(readRegistry(root).error).toContain('只读');
     }
   });
+  it('历史无 marketId 的市场来源仍可读取，新市场来源带 marketId 也合法', () => {
+    const root = temp();
+    const legacy = { ...valid, source: { kind: 'market' as const, id: valid.id, version: '2' } };
+    writeRegistry(root, { version: 1, plugins: [legacy] });
+    const read = readRegistry(root);
+    expect(read.error).toBeUndefined();
+    expect(read.plugins[0].source).toEqual({ kind: 'market', id: valid.id, version: '2' });
+    const current = {
+      ...valid,
+      source: { kind: 'market' as const, id: valid.id, marketId: 'collabra' },
+    };
+    writeRegistry(root, { version: 1, plugins: [current] });
+    expect(readRegistry(root).error).toBeUndefined();
+    expect(readRegistry(root).plugins[0].source).toEqual({
+      kind: 'market',
+      id: valid.id,
+      marketId: 'collabra',
+    });
+  });
+
   it('相同损坏内容只备份一次，最多保留最近五份', () => {
     const root = temp();
     const backups: string[] = [];

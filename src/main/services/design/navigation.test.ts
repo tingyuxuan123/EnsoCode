@@ -73,7 +73,7 @@ it('真实主入口 img-src 允许本页创建的 blob:（设计截图卡）与�
       ?.split(';')
       .map((part) => part.trim())
       .filter((part) => part.startsWith('img-src'))
-  ).toEqual(["img-src 'self' data: blob: local-image: https://enso-plugins.j3.do"]);
+  ).toEqual(["img-src 'self' data: blob: local-image: https://tingyuxuan123.github.io"]);
 });
 
 it('子 frame 仅允许已登记的精确 loopback origin，主 frame 不参与', () => {

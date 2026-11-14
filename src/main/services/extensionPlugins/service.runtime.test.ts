@@ -371,6 +371,7 @@ describe('complete plugin runtime', () => {
     let version = '1';
     let expands = false;
     const market = {
+      marketId: 'collabra',
       index: vi.fn(async () => ({
         ok: true,
         stale: false,

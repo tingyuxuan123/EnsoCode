@@ -432,6 +432,10 @@ Code 的开头连续 `/skill:name` 由最后一个内联 input 扩展按 loader 
 （`registered` / `same-content` / `same-name`），界面上置灰且默认不勾选，
 用户仍可手动选。三层都要拦：扫描标记、collect 批内去重、store 落库前再判一次。
 
+## 插件市场的来源身份
+
+市场身份与来源绑定属于 Main：`market/<marketId>/` 单独缓存索引与 `maxSequence`，换镜像不换身份也不清防回滚状态。renderer 只传插件 id 和版本，不传 URL；`marketId` 由 Main 按当前配置的市场盖进权威记录。历史 `kind: market` 记录没有 `marketId`，一律视为旧的上游 enso 来源：不迁移、不检查更新、不参与自动更新。`checkUpdates` / `restage` / 自动更新只处理 `source.marketId` 等于当前市场的记录；目录、ZIP、URL 来源即使同 id 也不会被市场认领。市场安装遇到同 id 的其它来源时直接拒绝（暂不提供跨市场迁移），且必须在 ID 锁内、落盘前再校验一次，避免暂存期间的并发安装被静默改来源或删包。旧插件与其数据保持可用，文档与提示不得建议用户靠卸载重装「迁移」。
+
 ## Claude Code 插件
 
 插件不拆成技能 / MCP 条目入库。设置里只存 `PluginEntry`（`name@marketplace` key + 开关），

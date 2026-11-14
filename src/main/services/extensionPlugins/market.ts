@@ -10,18 +10,25 @@ import {
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type ArchiveFetch, downloadPluginArchive, type ResolveAddresses } from './download';
-import { loadMarketIndex, type MarketIndex } from './marketIndex';
+import { loadMarketIndex, MARKET_ID, type MarketIndex } from './marketIndex';
 
-const MARKET_REPO = 'J3n5en/enso-plugins';
-const MARKET_WORKER = 'https://enso-plugins.j3.do/v1/';
+export { MARKET_ID };
 
-/** 市场 icon 是任意 https 图片，经 Worker 代理（渲染层 CSP 只放行该源） */
-export const marketIconUrl = (icon: string | undefined): string | undefined =>
-  icon?.startsWith('https://') ? `${MARKET_WORKER}icon?url=${encodeURIComponent(icon)}` : undefined;
-/** 官方索引签名公钥（SPKI PEM），可放多把用于轮换 */
+/**
+ * 自有精选市场：主源是 GitHub Pages，其余是同一个市场（同一 marketId）的镜像。
+ * 换镜像地址不改变市场身份，也不清空防回滚 sequence。
+ */
+export const MARKET_PAGES_BASE = 'https://tingyuxuan123.github.io/collabra-plugins/v1/';
+const MARKET_RAW_BASE = 'https://raw.githubusercontent.com/tingyuxuan123/collabra-plugins/dist/v1/';
+const MARKET_JSDELIVR_BASE = 'https://cdn.jsdelivr.net/gh/tingyuxuan123/collabra-plugins@dist/v1/';
+/** 市场图片只允许自有站点；相对路径按市场 v1/ 解析，不放开任意 https */
+export const MARKET_SITE_ORIGIN = 'https://tingyuxuan123.github.io';
+const MARKET_SITE_PATH = '/collabra-plugins/v1/';
+
+/** 生产签名公钥（SPKI PEM）；只信任这把，不再信任上游 key */
 const MARKET_PUBLIC_KEYS: string[] = [
   `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAQSeCYY0a9xjVf7jexky3WYRdSHbUQNhPqtCuX8LmknA=
+MCowBQYDK2VwAyEA8d7tATk4T2mJ2vbSdVPNHIxClIctNMUwIsqboL5BRUQ=
 -----END PUBLIC KEY-----`,
 ];
 
@@ -32,36 +39,66 @@ const PACKAGE_TIMEOUT_MS = 120_000;
 
 export type MarketFetch = ArchiveFetch;
 
-/** Worker 始终第一；国内镜像开启时 jsDelivr 先于 GitHub */
+/** 主源 Pages 始终第一；国内镜像开启时 jsDelivr 先于 GitHub raw */
 export function marketSources(chinaMirror: boolean): string[] {
-  const jsdelivr = `https://cdn.jsdelivr.net/gh/${MARKET_REPO}@dist/v1/`;
-  const github = `https://raw.githubusercontent.com/${MARKET_REPO}/dist/v1/`;
-  return [MARKET_WORKER, ...(chinaMirror ? [jsdelivr, github] : [github, jsdelivr])];
+  return [
+    MARKET_PAGES_BASE,
+    ...(chinaMirror
+      ? [MARKET_JSDELIVR_BASE, MARKET_RAW_BASE]
+      : [MARKET_RAW_BASE, MARKET_JSDELIVR_BASE]),
+  ];
 }
 
-export function marketPublicKeys(env: NodeJS.ProcessEnv): string[] {
-  const extra = env.ENSO_PLUGIN_MARKET_KEY?.replace(/\\n/g, '\n').trim();
-  return extra ? [...MARKET_PUBLIC_KEYS, extra] : MARKET_PUBLIC_KEYS;
+export function marketPublicKeys(): string[] {
+  return MARKET_PUBLIC_KEYS;
 }
 
+/** 开发用源覆盖：名称带 COLLABRA_，只接受 https，签名仍只认生产公钥 */
 export function envMarketSources(env: NodeJS.ProcessEnv): string[] | null {
-  const list = env.ENSO_PLUGIN_MARKET?.split(',')
+  const list = env.COLLABRA_PLUGIN_MARKET?.split(',')
     .map((s) => s.trim())
-    .filter((s) => /^https?:\/\//.test(s))
+    .filter((s) => /^https:\/\//.test(s))
     .map((s) => (s.endsWith('/') ? s : `${s}/`));
   return list && list.length > 0 ? list : null;
 }
 
+/**
+ * 把索引里的图片地址解析成 renderer 可加载的地址：
+ * 相对路径落在市场 v1/ 下，绝对地址必须是自有站点同一路径前缀，其余一律丢弃。
+ */
+export function marketIconUrl(icon: string | undefined): string | undefined {
+  if (!icon || icon.length > 1000 || icon.includes('\\')) return undefined;
+  let url: URL;
+  try {
+    // 索引里可能写 `media/x.png`（相对 v1/）或 `v1/media/x.png`（相对站点根）
+    const base = icon.startsWith('v1/')
+      ? `${MARKET_SITE_ORIGIN}/collabra-plugins/`
+      : MARKET_PAGES_BASE;
+    url = new URL(icon, base);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'https:') return undefined;
+  if (url.username || url.password || url.port) return undefined;
+  if (url.origin !== MARKET_SITE_ORIGIN) return undefined;
+  if (!url.pathname.startsWith(MARKET_SITE_PATH)) return undefined;
+  return url.href;
+}
+
 export interface PluginMarketOptions {
-  /** 插件数据目录；市场状态放在 market/ 下 */
+  /** 插件数据目录；市场状态放在 market/<marketId>/ 下 */
   root: string;
+  /** 市场身份；缓存与防回滚 sequence 都以它为键 */
+  marketId: string;
   fetch: MarketFetch;
   /** Collabra fork：DNS 结果必须校验并钉住连接；缺省用系统解析 */
   resolve?: ResolveAddresses;
   hostVersion: string;
+  /** 宿主平台，缺省用 process.platform；测试可注入 */
+  platform?: string;
   publicKeys: string[];
   sources?: (chinaMirror: boolean) => string[];
-  /** 随安装包内置的已签名索引 */
+  /** 随安装包内置的已签名索引；必须是同一市场，签名与市场身份都校验 */
   builtin?: { index: string; signature: string } | null;
 }
 
@@ -80,8 +117,16 @@ export class PluginMarket {
 
   constructor(private readonly options: PluginMarketOptions) {}
 
+  get marketId(): string {
+    return this.options.marketId;
+  }
+
+  get platform(): string {
+    return this.options.platform ?? process.platform;
+  }
+
   private get dir() {
-    return join(this.options.root, 'market');
+    return join(this.options.root, 'market', this.options.marketId);
   }
 
   private readState(): MarketState {
@@ -123,6 +168,7 @@ export class PluginMarket {
       publicKeys: this.options.publicKeys,
       minSequence,
       hostVersion: this.options.hostVersion,
+      platform: this.platform,
     });
   }
 
@@ -142,7 +188,7 @@ export class PluginMarket {
     }
   }
 
-  /** 远端依次尝试 → 磁盘缓存 → 内置索引；均需验签且不早于已见 sequence */
+  /** 远端依次尝试 → 磁盘缓存 → 内置索引；均需验签且不早于本市场已见 sequence */
   index(options: { refresh?: boolean } = {}): Promise<MarketIndexResult> {
     if (this.current && !options.refresh) return Promise.resolve({ ok: true, ...this.current });
     this.loading ??= this.load().finally(() => {
@@ -216,7 +262,11 @@ export class PluginMarket {
     const plugin = r.index.plugins.find((p) => p.id === id);
     if (!plugin) return { ok: false, error: `插件市场里没有 ${id}` };
     const entry = plugin.versions.find((v) => v.version === (version ?? plugin.latest));
-    if (!entry) return { ok: false, error: `${id} 没有可安装的版本 ${version ?? ''}`.trim() };
+    if (!entry)
+      return {
+        ok: false,
+        error: `${id} 没有适配当前应用或平台的版本 ${version ?? ''}`.trim(),
+      };
     let lastError = '无法下载插件';
     for (const base of this.sources()) {
       try {

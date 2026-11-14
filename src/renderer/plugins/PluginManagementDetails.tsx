@@ -42,6 +42,18 @@ export function PluginManagementDetails({
           {t('Event interception temporarily bypassed')}: {breaker.event}
         </p>
       ))}
+      {plugin.source?.kind === 'market' && (
+        <p data-slot="plugin-source" className="text-muted-foreground">
+          {plugin.source.marketId
+            ? t('Collabra market')
+            : t('Installed from the previous plugin market')}
+        </p>
+      )}
+      {plugin.source?.kind === 'market' && !plugin.source.marketId && (
+        <p data-slot="plugin-source-migration" className="text-warning-foreground">
+          {t('This plugin keeps working. Cross-market migration is not supported yet.')}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => setReadme(true)}>
           {t('Documentation')}

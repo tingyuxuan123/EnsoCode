@@ -112,7 +112,10 @@ function validSource(v: unknown): boolean {
       ID.test(v.id) &&
       v.id.length <= 40 &&
       (v.version === undefined ||
-        (typeof v.version === 'string' && v.version.length > 0 && v.version.length <= 40))
+        (typeof v.version === 'string' && v.version.length > 0 && v.version.length <= 40)) &&
+      // 历史记录没有 marketId（上游 enso 市场），仍要能读出来
+      (v.marketId === undefined ||
+        (typeof v.marketId === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(v.marketId)))
     );
   return false;
 }

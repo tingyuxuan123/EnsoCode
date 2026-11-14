@@ -70,8 +70,14 @@ export interface ExtensionPluginSummary {
   pendingRenderer?: boolean;
   /** 最近一次错误：崩溃停用的原因，或本次运行里最近的错误日志 */
   lastError?: { at: number; message: string };
-  /** 安装来源；有就能「从来源重新安装」。本地路径不下发 */
-  source?: { kind: 'dir' | 'zip' | 'market' } | { kind: 'url'; url: string };
+  /**
+   * 安装来源；有就能「从来源重新安装」。本地路径不下发。
+   * market 的 marketId 是权威身份：缺省表示旧的上游（enso）市场记录。
+   */
+  source?:
+    | { kind: 'dir' | 'zip' }
+    | { kind: 'market'; marketId?: string }
+    | { kind: 'url'; url: string };
   /** 目录来源才有：开发模式是否开着（改动后自动重装） */
   devWatch?: boolean;
   /** 检查更新发现的新版本（GitHub 或插件市场来源） */
@@ -95,12 +101,23 @@ export interface ExtensionPluginMarketEntry {
   screenshots?: MarketScreenshot[];
   latest: string;
   permissions: string[];
+  /** 所选兼容版本的兼容信息；testedSurfaces 只表示已实测的界面覆盖 */
+  compatibility: { minAppVersion: string; maxAppVersion?: string; testedSurfaces: string[] };
   installedVersion?: string;
+  /** 同名插件已从别的来源安装：只提示，不能从这里自动更新或覆盖 */
+  installedSource?: 'other';
   updateAvailable: boolean;
 }
 
 export type ExtensionPluginMarketList =
-  | { ok: true; stale: boolean; chinaMirror: boolean; plugins: ExtensionPluginMarketEntry[] }
+  | {
+      ok: true;
+      stale: boolean;
+      chinaMirror: boolean;
+      /** 当前生效的市场身份；UI 据此标示 Collabra 市场 */
+      marketId: string;
+      plugins: ExtensionPluginMarketEntry[];
+    }
   | { ok: false; error: string; chinaMirror: boolean };
 
 /**

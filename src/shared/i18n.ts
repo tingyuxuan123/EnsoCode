@@ -6,6 +6,18 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
 
 export const zhTranslations: Record<string, string> = {
   'Plugin market': '插件市场',
+  'Collabra plugin market': 'Collabra 精选插件市场',
+  'Collabra market': 'Collabra 市场来源',
+  'Installed from the previous plugin market': '来自旧版插件市场来源',
+  'This plugin keeps working. Cross-market migration is not supported yet.':
+    '旧插件保持可用；跨市场迁移暂不支持。',
+  'Compatible with {{version}} and later': '兼容 {{version}} 及以上版本',
+  'up to {{version}}': '最高 {{version}}',
+  'Verified surfaces': '已验证界面',
+  'No verified surface coverage yet': '尚未声明实测覆盖',
+  'Installed from another source': '已从其它来源安装',
+  'Installed from another source. The plugin keeps working; cross-market migration is not supported yet.':
+    '同名插件已从其它来源安装；旧插件保持可用，跨市场迁移暂不支持。',
   'Browse plugin market': '浏览插件市场',
   'Hide plugin market': '收起插件市场',
   'Back to installed': '返回已安装',

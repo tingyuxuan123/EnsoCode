@@ -13,7 +13,7 @@ import { BUILTIN_MARKET } from './builtinMarket';
 import { pinnedArchiveFetch, safePluginFetch } from './download';
 import { DraftBroker } from './draftBroker';
 import type { GateDeps } from './gate';
-import { envMarketSources, marketPublicKeys, PluginMarket } from './market';
+import { envMarketSources, MARKET_ID, marketPublicKeys, PluginMarket } from './market';
 import { pluginError } from './process';
 import { ExtensionPluginService, type PluginSessionBridge } from './service';
 
@@ -128,9 +128,11 @@ export function getExtensionPlugins(): ExtensionPluginService {
     },
     market: new PluginMarket({
       root,
+      // 市场身份固定为 Collabra；镜像与缓存都按它隔离，renderer 无法指定别的市场
+      marketId: MARKET_ID,
       fetch: pinnedArchiveFetch,
       hostVersion: app.getVersion(),
-      publicKeys: marketPublicKeys(process.env),
+      publicKeys: marketPublicKeys(),
       builtin: BUILTIN_MARKET,
       ...(envMarketSources(process.env)
         ? { sources: () => envMarketSources(process.env) ?? [] }

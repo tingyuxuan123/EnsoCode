@@ -24,7 +24,11 @@ const fixture = vi.hoisted(() => ({
 }));
 
 vi.mock('@/i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key, locale: fixture.locale }),
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string | number>) =>
+      params ? key.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params[name] ?? '')) : key,
+    locale: fixture.locale,
+  }),
 }));
 
 function entry(over: Partial<ExtensionPluginMarketEntry> = {}): ExtensionPluginMarketEntry {
@@ -37,6 +41,7 @@ function entry(over: Partial<ExtensionPluginMarketEntry> = {}): ExtensionPluginM
     icon: fixture.icon,
     latest: '1.0.0',
     permissions: [],
+    compatibility: { minAppVersion: '0.2.80', testedSurfaces: [] },
     updateAvailable: false,
     ...over,
   };
@@ -54,6 +59,7 @@ beforeEach(async () => {
     ok: true,
     stale: false,
     chinaMirror: false,
+    marketId: 'collabra',
     plugins: [entry()],
   }));
   (
@@ -130,12 +136,61 @@ it('图标地址更新后重新尝试加载，失败占位不会残留', async (
   expect(fallback()).toBeNull();
 });
 
+it('标题标明这是 Collabra 市场，并显示市场身份', async () => {
+  expect(container.textContent).toContain('Collabra plugin market');
+  expect(container.querySelector('[data-slot="market-id"]')?.textContent).toBe('collabra');
+});
+
+it('兼容信息来自所选版本，覆盖标记如实显示为空', async () => {
+  expect(container.querySelector('[data-slot="market-compatibility"]')?.textContent).toBe(
+    'Compatible with 0.2.80 and later · No verified surface coverage yet'
+  );
+  fixture.marketList.mockImplementation(async () => ({
+    ok: true,
+    stale: false,
+    chinaMirror: false,
+    marketId: 'collabra',
+    plugins: [
+      entry({
+        compatibility: {
+          minAppVersion: '0.2.80',
+          maxAppVersion: '0.3.0',
+          testedSurfaces: ['code', 'settings'],
+        },
+      }),
+    ],
+  }));
+  await rerender();
+  expect(container.querySelector('[data-slot="market-compatibility"]')?.textContent).toBe(
+    'Compatible with 0.2.80 and later · up to 0.3.0 · Verified surfaces: code / settings'
+  );
+});
+
+it('同名插件来自其它来源时提示需要手动迁移，且不能从市场覆盖', async () => {
+  fixture.marketList.mockImplementation(async () => ({
+    ok: true,
+    stale: false,
+    chinaMirror: false,
+    marketId: 'collabra',
+    plugins: [entry({ installedSource: 'other' })],
+  }));
+  await rerender();
+  const note = container.querySelector('[data-slot="market-source-note"]');
+  expect(note?.textContent).toContain('Installed from another source');
+  expect(note?.textContent).toContain('cross-market migration is not supported');
+  const button = [...container.querySelectorAll('button')].find((item) =>
+    item.textContent?.includes('Installed from another source')
+  );
+  expect(button?.disabled).toBe(true);
+});
+
 it('中文界面下分段显示中文名称，不显示内核小写 id', async () => {
   fixture.locale = 'zh';
   fixture.marketList.mockImplementation(async () => ({
     ok: true,
     stale: false,
     chinaMirror: false,
+    marketId: 'collabra',
     plugins: [entry({ category: 'themes' })],
   }));
   await rerender();
@@ -148,6 +203,7 @@ it('英文界面下分段显示英文名称', async () => {
     ok: true,
     stale: false,
     chinaMirror: false,
+    marketId: 'collabra',
     plugins: [entry({ category: 'productivity' })],
   }));
   await rerender();
@@ -160,6 +216,7 @@ it('点击分段仍按分类过滤面板里的条目', async () => {
     ok: true,
     stale: false,
     chinaMirror: false,
+    marketId: 'collabra',
     plugins: [
       entry({ id: 'community.themes', name: 'Theme kit', category: 'themes' }),
       entry({ id: 'community.work', name: 'Work kit', category: 'productivity' }),

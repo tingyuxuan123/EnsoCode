@@ -43,6 +43,7 @@ function MarketIcon({ src }: { src?: string }) {
 export function PluginMarket({ manager }: { manager: NativePluginManager }) {
   const { t, locale } = useI18n();
   const [plugins, setPlugins] = useState<ExtensionPluginMarketEntry[]>([]);
+  const [marketId, setMarketId] = useState('collabra');
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
   const [mirror, setMirror] = useState(false);
@@ -64,6 +65,7 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
         return;
       }
       setPlugins(result.plugins);
+      setMarketId(result.marketId);
       setStale(result.stale);
     } catch (reason) {
       if (mine === generation.current) setError(String(reason));
@@ -82,7 +84,12 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
   return (
     <section className="space-y-3" data-settings-row="plugins.market" data-slot="plugin-market">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="mr-auto font-semibold text-sm">{t('Plugin market')}</h3>
+        <h3 className="mr-auto font-semibold text-sm">
+          {t('Collabra plugin market')}{' '}
+          <span data-slot="market-id" className="font-normal text-muted-foreground text-xs">
+            {marketId}
+          </span>
+        </h3>
         <label className="flex items-center gap-2 text-xs">
           {t('China mirror')}
           <Switch
@@ -156,6 +163,25 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
               </div>
             </div>
             <p className="text-xs">{plugin.description}</p>
+            <p data-slot="market-compatibility" className="text-muted-foreground text-xs">
+              {t('Compatible with {{version}} and later', {
+                version: plugin.compatibility.minAppVersion,
+              })}
+              {plugin.compatibility.maxAppVersion
+                ? ` · ${t('up to {{version}}', { version: plugin.compatibility.maxAppVersion })}`
+                : ''}
+              {' · '}
+              {plugin.compatibility.testedSurfaces.length > 0
+                ? `${t('Verified surfaces')}: ${plugin.compatibility.testedSurfaces.join(' / ')}`
+                : t('No verified surface coverage yet')}
+            </p>
+            {plugin.installedSource === 'other' && (
+              <p data-slot="market-source-note" className="text-warning-foreground text-xs">
+                {t(
+                  'Installed from another source. The plugin keeps working; cross-market migration is not supported yet.'
+                )}
+              </p>
+            )}
             <p className="break-words font-mono text-muted-foreground text-xs">
               {plugin.permissions.join(' · ')}
             </p>
@@ -185,16 +211,19 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
                 disabled={
                   !manager.canManage ||
                   !!manager.busy ||
+                  plugin.installedSource === 'other' ||
                   (!!plugin.installedVersion && !plugin.updateAvailable)
                 }
                 onClick={() => void manager.stage('market', plugin.id)}
               >
                 {t(
-                  plugin.updateAvailable
-                    ? 'Update'
-                    : plugin.installedVersion
-                      ? 'Installed'
-                      : 'Review installation'
+                  plugin.installedSource === 'other'
+                    ? 'Installed from another source'
+                    : plugin.updateAvailable
+                      ? 'Update'
+                      : plugin.installedVersion
+                        ? 'Installed'
+                        : 'Review installation'
                 )}
               </Button>
             </div>

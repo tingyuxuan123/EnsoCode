@@ -411,7 +411,12 @@ export class ExtensionPluginService {
                 source:
                   r.source.kind === 'url'
                     ? { kind: 'url' as const, url: r.source.url }
-                    : { kind: r.source.kind },
+                    : r.source.kind === 'market'
+                      ? {
+                          kind: 'market' as const,
+                          ...(r.source.marketId ? { marketId: r.source.marketId } : {}),
+                        }
+                      : { kind: r.source.kind },
               }
             : {}),
           ...(r.source?.kind === 'dir' ? { devWatch: this.devWatchers.has(r.id) } : {}),
@@ -464,6 +469,35 @@ export class ExtensionPluginService {
     const r = this.records.find((r) => r.id === id);
     return r?.state === 'enabled' ? this.load(id, r.dir) : null;
   }
+  /** 当前配置的市场身份；来源决定更新渠道，renderer 不能指定 URL 或别的市场 */
+  private get activeMarketId(): string | undefined {
+    return this.options.market?.marketId;
+  }
+  /** 只有明确属于当前 marketId 的记录才算本市场安装 */
+  private isCurrentMarketSource(source: PluginInstallSource | undefined): boolean {
+    const marketId = this.activeMarketId;
+    return source?.kind === 'market' && marketId !== undefined && source.marketId === marketId;
+  }
+  /**
+   * 市场安装与同名已装插件的来源冲突说明。第一版不做静默迁移：
+   * 本地目录 / ZIP / URL / 旧市场来源都必须由用户显式重装才能换成 Collabra 市场。
+   */
+  private marketSourceConflict(id: string, marketId: string): string | null {
+    const existing = this.records.find((r) => r.id === id);
+    if (!existing || this.isCurrentMarketSource(existing.source)) return null;
+    const source = existing.source;
+    const label =
+      source?.kind === 'market'
+        ? `旧版插件市场来源（${source.marketId ?? 'enso'}）`
+        : source?.kind === 'dir'
+          ? '本地目录'
+          : source?.kind === 'zip'
+            ? '本地 ZIP'
+            : source?.kind === 'url'
+              ? '直接 URL'
+              : '未知来源';
+    return `${id} 已从${label}安装（${existing.version}）。来源决定更新渠道，不能用 ${marketId} 市场的同名插件覆盖或接管已有安装；旧插件保持可用，跨市场迁移暂不支持。`;
+  }
   async stage(source: PluginInstallSource, owner: number, signal?: AbortSignal) {
     if (this.registryError) return { ok: false as const, error: this.registryError };
     if (this.disposed || !Number.isSafeInteger(owner))
@@ -472,9 +506,19 @@ export class ExtensionPluginService {
     // 市场来源：先按签名索引下载到临时 zip，再走统一的 zip 安装流程（安装阶段绝不执行插件代码）
     let resolved = source;
     let tempZip: string | null = null;
+    let marketSource: Extract<PluginInstallSource, { kind: 'market' }> | null = null;
+    let marketVersion: string | null = null;
     if (source.kind === 'market') {
       const market = this.options.market;
       if (!market) return { ok: false as const, error: '当前环境不支持插件市场' };
+      const marketId = market.marketId;
+      if (source.marketId !== undefined && source.marketId !== marketId)
+        return {
+          ok: false as const,
+          error: `这个插件来自别的插件市场（${source.marketId}），当前只使用 ${marketId} 市场`,
+        };
+      const conflict = this.marketSourceConflict(source.id, marketId);
+      if (conflict) return { ok: false as const, error: conflict };
       const dir = join(this.options.root, 'tmp');
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       tempZip = join(dir, `market-${randomUUID()}.zip`);
@@ -483,6 +527,14 @@ export class ExtensionPluginService {
         rmSync(tempZip, { force: true });
         return { ok: false as const, error: downloaded.error };
       }
+      // 权威身份由 Main 盖上：即使调用方没传 marketId，也记录成这个市场
+      marketVersion = downloaded.version;
+      marketSource = {
+        kind: 'market',
+        id: source.id,
+        ...(source.version ? { version: source.version } : {}),
+        marketId,
+      };
       resolved = { kind: 'zip', path: tempZip };
     }
     let result: Awaited<ReturnType<typeof stagePlugin>>;
@@ -499,11 +551,32 @@ export class ExtensionPluginService {
       return { ok: false as const, error: '应用已关闭' };
     }
     const { staged } = result;
-    if (source.kind === 'market' && staged.manifest.id !== source.id) {
+    if (marketSource && staged.manifest.id !== marketSource.id) {
       discardStaged(this.options.root, staged);
-      return { ok: false as const, error: `市场包里的插件不是 ${source.id}` };
+      return { ok: false as const, error: `市场包里的插件不是 ${marketSource.id}` };
     }
-    this.staged.set(staged.token, { staged, at: Date.now(), owner, source });
+    if (marketSource && marketVersion !== null && staged.manifest.version !== marketVersion) {
+      // 签名目录说的版本/兼容范围必须就是包里真正安装的版本
+      discardStaged(this.options.root, staged);
+      return {
+        ok: false as const,
+        error: `市场包版本与索引不一致（索引 ${marketVersion}，包内 ${staged.manifest.version}）`,
+      };
+    }
+    if (marketSource) {
+      // 下载期间同名安装可能变了，提交前再确认一次来源
+      const conflict = this.marketSourceConflict(marketSource.id, marketSource.marketId ?? '');
+      if (conflict) {
+        discardStaged(this.options.root, staged);
+        return { ok: false as const, error: conflict };
+      }
+    }
+    this.staged.set(staged.token, {
+      staged,
+      at: Date.now(),
+      owner,
+      source: marketSource ?? source,
+    });
     const m = staged.manifest;
     const grant = grantOf(m);
     const existing = this.records.find((r) => r.id === m.id);
@@ -565,13 +638,30 @@ export class ExtensionPluginService {
     const entry = this.staged.get(token);
     if (!entry || entry.owner !== owner || this.disposed)
       return { ok: false, error: '安装已过期或应用已关闭' };
+    const { staged } = entry;
+    // 暂存到提交之间可能有别的窗口装好同 id 的插件（或换了来源）。
+    // 市场来源必须在 ID 锁内、落盘前再校验一次，否则会静默改来源并删掉别人的包。
+    if (entry.source.kind === 'market') {
+      const marketId = this.activeMarketId;
+      if (entry.source.marketId === undefined || entry.source.marketId !== marketId) {
+        this.staged.delete(token);
+        discardStaged(this.options.root, staged);
+        return { ok: false, error: '这个市场来源已不是当前生效的市场，安装已取消' };
+      }
+      const conflict = this.marketSourceConflict(staged.manifest.id, entry.source.marketId);
+      if (conflict) {
+        this.staged.delete(token);
+        discardStaged(this.options.root, staged);
+        return { ok: false, error: conflict };
+      }
+    }
     this.staged.delete(token);
-    const { manifest: m } = entry.staged;
+    const { manifest: m } = staged;
     let dir: string;
     try {
-      dir = commitStaged(this.options.root, entry.staged);
+      dir = commitStaged(this.options.root, staged);
     } catch (e) {
-      discardStaged(this.options.root, entry.staged);
+      discardStaged(this.options.root, staged);
       return { ok: false, error: e instanceof Error ? e.message : '安装失败' };
     }
     const grant = grantOf(m);
@@ -1115,8 +1205,16 @@ export class ExtensionPluginService {
     return this.withIdLock(id, async () => {
       const source = this.records.find((r) => r.id === id)?.source;
       if (!source) return { ok: false as const, error: '没有记录安装来源，请重新选择插件' };
+      if (source.kind === 'market' && !this.isCurrentMarketSource(source))
+        return {
+          ok: false as const,
+          error:
+            '这个插件来自旧版插件市场（enso），该来源已停止检查更新。旧插件保持可用；跨市场迁移暂不支持。',
+        };
+      // 「从来源重装」取当前 latest：自动更新会在 source 上留下旧 version，
+      // 直接复用会把重装永久钉死在那个旧版本。
       const result = await this.stage(
-        source.kind === 'market' ? { kind: 'market', id } : source,
+        source.kind === 'market' ? { ...source, version: undefined } : source,
         owner,
         signal
       );
@@ -1134,12 +1232,16 @@ export class ExtensionPluginService {
     const r = await market.index({ refresh });
     if (!r.ok) return { ok: false, error: r.error, chinaMirror };
     const plugins = r.index.plugins.map((p) => {
-      const installed = this.records.find((item) => item.id === p.id)?.version;
+      const record = this.records.find((item) => item.id === p.id);
+      // 安装状态按来源判断：同 id 但来自别的来源不能算本市场已安装
+      const fromMarket = record !== undefined && this.isCurrentMarketSource(record.source);
+      const installed = fromMarket ? record.version : undefined;
       const icon = marketIconUrl(p.icon);
       const screenshots = p.screenshots?.flatMap((shot) => {
         const url = marketIconUrl(shot.url);
         return url ? [{ url, alt: shot.alt }] : [];
       });
+      const selected = p.versions.find((v) => v.version === p.latest);
       return {
         id: p.id,
         name: p.name,
@@ -1151,13 +1253,21 @@ export class ExtensionPluginService {
         ...(p.category ? { category: p.category } : {}),
         ...(screenshots?.length ? { screenshots } : {}),
         latest: p.latest,
-        permissions: p.versions.find((v) => v.version === p.latest)?.permissions ?? [],
-        ...(installed ? { installedVersion: installed } : {}),
+        permissions: selected?.permissions ?? [],
+        compatibility: {
+          minAppVersion: selected?.compatibility.minAppVersion ?? '',
+          ...(selected?.compatibility.maxAppVersion
+            ? { maxAppVersion: selected.compatibility.maxAppVersion }
+            : {}),
+          testedSurfaces: [...(selected?.compatibility.testedSurfaces ?? [])],
+        },
+        ...(installed !== undefined ? { installedVersion: installed } : {}),
+        ...(record && !fromMarket ? { installedSource: 'other' as const } : {}),
         updateAvailable:
           installed !== undefined ? isNewerPluginVersion(p.latest, installed) : false,
       };
     });
-    return { ok: true, stale: r.stale, chinaMirror, plugins };
+    return { ok: true, stale: r.stale, chinaMirror, marketId: market.marketId, plugins };
   }
   setMarketChinaMirror(on: boolean): void {
     this.options.market?.setChinaMirror(on);
@@ -1166,26 +1276,26 @@ export class ExtensionPluginService {
     if (this.disposed || this.registryError) return { checked: 0, available: 0, failed: 0 };
     const records = this.records.filter((r) => !options.enabledOnly || r.state === 'enabled');
     const results: ('available' | 'current' | 'failed')[] = [];
-    if (this.options.market && records.some((r) => r.source?.kind !== 'url')) {
+    // 只有明确属于当前 marketId 的记录才查市场、才自动更新；
+    // 本地目录 / ZIP / URL 和旧市场记录即使同 id 也绝不被新市场接管。
+    const marketRecords = records.filter((r) => this.isCurrentMarketSource(r.source));
+    for (const record of this.records) {
+      if (record.source?.kind === 'url' || this.isCurrentMarketSource(record.source)) continue;
+      this.updates.delete(record.id);
+    }
+    if (this.options.market && marketRecords.length > 0) {
       const index = await this.options.market.index({ refresh: true });
-      for (const record of records.filter((r) => r.source?.kind !== 'url')) {
+      for (const record of marketRecords) {
         if (!index.ok) {
-          if (record.source?.kind === 'market') {
-            this.updates.set(record.id, { error: index.error });
-            results.push('failed');
-          }
+          this.updates.set(record.id, { error: index.error });
+          results.push('failed');
           continue;
         }
         const entry = index.index.plugins.find((p) => p.id === record.id);
-        if (!entry && record.source?.kind !== 'market') continue;
         const version =
           entry && isNewerPluginVersion(entry.latest, record.version) ? entry.latest : undefined;
         this.updates.set(record.id, version ? { version } : {});
-        if (
-          !version ||
-          record.source?.kind !== 'market' ||
-          this.options.autoUpdatePlugins?.() === false
-        ) {
+        if (!version || this.options.autoUpdatePlugins?.() === false) {
           results.push(version ? 'available' : 'current');
           continue;
         }
@@ -1236,7 +1346,9 @@ export class ExtensionPluginService {
     version: string
   ): Promise<'available' | 'current' | 'failed'> {
     if (this.records.find((r) => r.id === id)?.pending?.version === version) return 'available';
-    const result = await this.stage({ kind: 'market', id, version }, INTERNAL_OWNER);
+    const marketId = this.activeMarketId;
+    if (marketId === undefined) return 'failed';
+    const result = await this.stage({ kind: 'market', id, version, marketId }, INTERNAL_OWNER);
     if (!result.ok) {
       this.updates.set(id, { version, error: result.error });
       return 'failed';
