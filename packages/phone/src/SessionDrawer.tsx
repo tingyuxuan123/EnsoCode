@@ -16,7 +16,6 @@ import {
   Archive,
   Bell,
   ChevronRight,
-  FolderGit2,
   Laptop,
   MessageSquarePlus,
   Palette,

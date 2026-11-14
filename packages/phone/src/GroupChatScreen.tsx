@@ -113,8 +113,10 @@ const DELEGATION_TEXT: Record<PairDelegationState, string> = {
 /** 一条群消息最多带几张图（整帧要压进中继 1MB 上限） */
 const MAX_IMAGES = 4;
 
-const timeOf = (at: number): string =>
-  new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const timeOf = (at: number): string => {
+  const d = new Date(at);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 
 const PROGRESS_TONE = {
   started: { icon: CirclePlay, className: 'border-brand/50 text-brand' },
@@ -446,21 +448,26 @@ export function GroupChatScreen(props: Props) {
             }
           />
         )}
-        {open && <div className="flex flex-col gap-1.5">{row.folded.map(renderDetail)}</div>}
+        {open && (
+          <div className="flex flex-col gap-1.5">
+            {row.folded.map(renderDetail)}
+            {/* 设计稿只在活动行留一个箭头；看成员过程放进展开区，避免两个入口打架 */}
+            <button
+              type="button"
+              onClick={() => props.onOpenProcess(row.conversationId)}
+              className="flex items-center gap-0.5 self-start pt-1 text-[12px] leading-4 text-dim"
+            >
+              <ChevronRight className="size-3" aria-hidden />
+              查看过程
+            </button>
+          </div>
+        )}
         <BotArtifacts target={{ chatId: props.chat.id, entryId: row.entryId }} />
         <div>
           <WebPreview target={{ bot: { chatId: props.chat.id, entryId: row.entryId } }}>
             网页预览
           </WebPreview>
         </div>
-        <button
-          type="button"
-          onClick={() => props.onOpenProcess(row.conversationId)}
-          className="flex items-center gap-0.5 self-start text-[12px] leading-4 text-dim"
-        >
-          <ChevronRight className="size-3" aria-hidden />
-          查看过程
-        </button>
       </article>
     );
   };

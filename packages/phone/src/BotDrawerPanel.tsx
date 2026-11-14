@@ -8,7 +8,6 @@ import { CornerDownRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BotAvatar } from './BotAvatar';
 import { botListRows } from './botList';
-import { inboxLabel } from './botState';
 import { RoleChip } from './ChatRows';
 import { botTone, StatusGlyph } from './StatusGlyph';
 
@@ -19,7 +18,6 @@ interface Props {
   onSelect(chatId: string): void;
   /** 收件箱（未结束且未忽略）；提示类条目可忽略 */
   inbox?: PairBotInboxItem[];
-  onDismiss?(key: string): void;
   /** 成员实时运行态：有就替换聊天行的末条摘要 */
   activities?: PairBotActivity[];
 }
@@ -46,7 +44,6 @@ export function BotDrawerPanel({
   activeChatId,
   onSelect,
   inbox = [],
-  onDismiss,
   activities = [],
 }: Props) {
   const byId = new Map(bots.map((bot) => [bot.id, bot]));
@@ -58,51 +55,8 @@ export function BotDrawerPanel({
         {rows.length === 0 && (
           <p className="px-4 py-6 text-center text-[13px] text-dim">桌面端还没有 Bot 聊天</p>
         )}
-        {/* 收件箱：等你处理的那些事（无视会消失的提示类可忽略） */}
-        {inbox.length > 0 && (
-          <div className="pb-1">
-            <p className="px-4 pt-2 pb-1 text-[13px] leading-[18px] font-medium text-dim">
-              等你处理 · {inbox.length}
-            </p>
-            {inbox.map((item) => {
-              const member = item.botId ? byId.get(item.botId) : undefined;
-              const owner = item.ownerBotId ? byId.get(item.ownerBotId) : undefined;
-              return (
-                <div key={item.key} className="flex items-center gap-2 py-1.5 pr-2 pl-4">
-                  <button
-                    type="button"
-                    disabled={!item.chatId}
-                    onClick={() => item.chatId && onSelect(item.chatId)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                  >
-                    <BotAvatar bot={member} size="sm" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] leading-[19px] font-medium">
-                        {member?.name ?? '成员'}
-                        {owner ? ` 替 ${owner.name}` : ''}
-                        <span className="ml-1.5 font-normal text-[11px] text-yellow-ink">
-                          {inboxLabel(item, Date.now())}
-                        </span>
-                      </span>
-                      <span className="block truncate text-[12px] leading-4 text-dim">
-                        {item.text || '\u00a0'}
-                      </span>
-                    </span>
-                  </button>
-                  {item.dismissible && onDismiss && (
-                    <button
-                      type="button"
-                      onClick={() => onDismiss(item.key)}
-                      className="shrink-0 rounded-full bg-card2 px-2.5 py-1 text-[11px] font-medium text-dim"
-                    >
-                      忽略
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* 设计稿 bot.tsx 是一张纯聊天列表：「等你」只靠行内黄底 + 黄点表达，
+            不再另开一块收件箱抢首屏（同一个信息出现两次） */}
         {rows.map((row) => {
           const member = row.kind === 'direct' ? byId.get(row.members[0]) : undefined;
           const tone = botTone(
@@ -178,9 +132,6 @@ export function BotDrawerPanel({
           );
         })}
       </div>
-      <p className="shrink-0 px-4 py-2 text-center text-[11px] leading-4 text-faint pb-safe">
-        新建成员 / 群聊、例行任务请在桌面端管理
-      </p>
     </div>
   );
 }

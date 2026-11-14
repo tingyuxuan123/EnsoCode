@@ -1330,9 +1330,6 @@ export function App() {
                     activeChatId={botChatId}
                     inbox={botInbox}
                     activities={botActivity.items}
-                    onDismiss={
-                      deviceReadOnly ? undefined : (key) => send({ type: 'bot-inbox-dismiss', key })
-                    }
                     onSelect={(chatId) => {
                       setBotChatId(chatId);
                       setProcessId(null);
