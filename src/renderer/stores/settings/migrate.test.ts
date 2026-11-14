@@ -52,16 +52,15 @@ describe('代码搜索设置迁移与水合', () => {
     };
     expect(migrateSettings(previous, 16)).toEqual(expected);
     expect(migrateSettings(expected, 16)).toEqual(expected);
-    expect(migrateSettings(previous, 18)).toBe(previous);
+    expect(migrateSettings(previous, SETTINGS_VERSION)).toBe(previous);
   });
 
   it('v18 把旧默认靛蓝换成晴空蓝，保留其他显式强调色', () => {
-    expect(SETTINGS_VERSION).toBe(18);
     expect(migrateSettings({ accentColor: 'indigo' }, 17)).toEqual({ accentColor: 'ocean' });
     expect(migrateSettings({ accentColor: 'teal' }, 17)).toEqual({ accentColor: 'teal' });
     expect(migrateSettings({ theme: 'dark' }, 17)).toEqual({ theme: 'dark' });
     const current = { accentColor: 'indigo' };
-    expect(migrateSettings(current, 18)).toBe(current);
+    expect(migrateSettings(current, 18)).toEqual(current);
   });
 
   it('当前版本水合坏账号回落 null，合法账号保留且缺字段不冒充用户选择', () => {
@@ -138,8 +137,7 @@ describe('请求体状态栏段位升级', () => {
     'duration',
     'sessionTime',
   ];
-  it('新默认开启请求体，并迁移旧默认但不覆盖用户自定义 / 全关', () => {
-    expect(STATUS_LINE_PRESETS.default).toContain('requestBody');
+  it('旧默认继续迁移到当前默认，但不覆盖用户自定义 / 全关', () => {
     expect(migrateSettings({ statusLineSegments: oldDefault }, 13)).toMatchObject({
       statusLineSegments: STATUS_LINE_PRESETS.default,
     });
@@ -164,6 +162,51 @@ describe('请求体状态栏段位升级', () => {
       statusLineSegments: STATUS_LINE_PRESETS.default,
       disabledBuiltinTools: [...disabledBuiltinTools, 'code_search'],
     });
+  });
+});
+
+describe('三项用量统计默认布局升级', () => {
+  const previousDefault = [
+    'model',
+    'tokens',
+    'cache',
+    'context',
+    'requestBody',
+    'turns',
+    'speed',
+    'duration',
+    'sessionTime',
+  ];
+
+  it('v18 旧默认升级为三项统计，不修改其它设置或原对象', () => {
+    const previous = { statusLineSegments: previousDefault, theme: 'dark' };
+    expect(SETTINGS_VERSION).toBe(19);
+    expect(migrateSettings(previous, 18)).toEqual({
+      statusLineSegments: ['tokens', 'cache', 'context'],
+      theme: 'dark',
+    });
+    expect(previous.statusLineSegments).toBe(previousDefault);
+  });
+
+  it.each(
+    [
+      [],
+      ['model'],
+      ['model', 'context'],
+      [...previousDefault].reverse(),
+      ['tokens', 'cache', 'context', 'model'],
+      [...STATUS_LINE_PRESETS.full],
+    ].map((segments) => ({ segments }))
+  )('保留用户自定义、旧简洁模式和全关：$segments', ({ segments }) => {
+    const previous = { statusLineSegments: segments };
+    expect(migrateSettings(previous, 18)).toEqual(previous);
+  });
+
+  it('重复执行旧版本迁移仍保留新默认，新版本显式选择不再迁移', () => {
+    const migrated = migrateSettings({ statusLineSegments: previousDefault }, 18);
+    expect(migrateSettings(migrated, 18)).toEqual(migrated);
+    const current = { statusLineSegments: previousDefault };
+    expect(migrateSettings(current, SETTINGS_VERSION)).toBe(current);
   });
 });
 

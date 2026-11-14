@@ -1,7 +1,6 @@
 import { toUsageTotals } from '@shared/sessionStats';
 import {
   DEFAULT_STATUS_LINE_SEGMENTS,
-  isStatusLineSegmentPinned,
   STATUS_LINE_SEGMENT_IDS,
   type StatusLineSegmentId,
 } from '@shared/statusLine';
@@ -31,10 +30,10 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { fetchAccountUsage, USAGE_CACHE_TTL_MS, usageCache } from '@/hooks/useAccountUsage';
 import { type TFunction, useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { Z_INDEX } from '@/lib/z-index';
 import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import type { Conversation } from '@/stores/sessions';
 import { useSessionsStore } from '@/stores/sessions';
@@ -400,7 +399,8 @@ function buildSegmentValues(
 /** composer 下方的会话统计条：段位驱动、每段「图标 + 值」的紧凑呈现，段名只在悬停提示与设置弹层里。
  *  段位顺序 = `statusLineSegments` 数组自身顺序（用户可在设置弹层拖拽），预设不进存储，
  *  见 `statusLinePresetOf`。外层恒占一行高度：避免统计从无到有时输入框跳动；
- *  全部段位关掉时仍渲染空容器 + hover 齿轮，否则用户关完就再也打不开设置。 */
+ *  已开启且有数据的段位稳定显示，窄窗口横向滚动，不再悬停展开挤动布局。
+ *  全部段位关掉时仍渲染空容器 + 设置按钮，否则用户关完就再也打不开设置。 */
 export function StatsLine({ conversationId }: StatsLineProps) {
   const { t } = useI18n();
   const conversation = useSessionsStore((state) => state.conversations[conversationId]);
@@ -426,9 +426,6 @@ export function StatsLine({ conversationId }: StatsLineProps) {
   // 渲染层第二道防线：见 sanitizeStatusLineSegments 注释；useMemo 保持引用稳定，
   // 只在 store 里的原始值真的变化时才重新计算，不会每次 render 都产生新数组打断记忆化。
   const enabledSegments = useMemo(() => sanitizeStatusLineSegments(rawSegments), [rawSegments]);
-  const [hoveredId, setHoveredId] = useState<StatusLineSegmentId | null>(null);
-  // 上下文弹层打开期间保持展开：否则鼠标移向弹层时悬停段收起，居中的锚点横移，弹层跟着跳
-  const [contextOpen, setContextOpen] = useState(false);
 
   const accountKey = useMemo(() => {
     if (!enabledSegments.includes('usage')) return undefined;
@@ -473,55 +470,38 @@ export function StatsLine({ conversationId }: StatsLineProps) {
   return (
     <div
       data-slot="stats-line"
-      className="group relative mt-[6px] flex h-[calc(20rem/14)] items-center justify-start pr-[28px]"
+      className="relative mt-[6px] flex h-[calc(20rem/14)] min-w-0 items-center justify-start pr-[calc(28rem/14)]"
     >
       {visibleSegments.length > 0 && (
-        <div className="flex min-w-0 flex-nowrap items-center gap-[12px] overflow-hidden">
-          {visibleSegments.map((id, index) => {
+        <div className="flex min-w-0 flex-nowrap items-center gap-[calc(16rem/14)] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {visibleSegments.map((id) => {
             const value = values[id];
             if (!value) return null;
             const Icon = icons[id];
+            const label = `${t(SEGMENT_LABEL_KEYS[id])} · ${value.full}`;
+            const segmentClass = cn(
+              'flex items-center gap-[calc(5rem/14)] whitespace-nowrap rounded-sm text-[calc(11rem/14)] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              value.critical ? 'text-destructive' : 'text-muted-foreground'
+            );
             const segment = (
-              <span
-                title={`${t(SEGMENT_LABEL_KEYS[id])} · ${value.full}`}
-                onMouseEnter={() => setHoveredId(id)}
-                onMouseLeave={() => setHoveredId((current) => (current === id ? null : current))}
-                className={cn(
-                  'relative flex items-center gap-1 text-[calc(11rem/14)] tabular-nums',
-                  value.critical ? 'text-destructive' : 'text-faint'
-                )}
-              >
+              <>
                 {id === 'context' && value.percent !== undefined ? (
                   <ContextMeter percent={value.percent} critical={Boolean(value.critical)} />
                 ) : (
                   <Icon className="h-3 w-3 shrink-0 opacity-75" />
                 )}
-                {value.compact && <span className="truncate">{value.compact}</span>}
-                {hoveredId === id && id !== 'context' && (
-                  <div
-                    style={{ zIndex: Z_INDEX.TOOLTIP }}
-                    className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-1.5 w-max max-w-56 overflow-hidden rounded-md border bg-popover px-2 py-1 text-popover-foreground shadow-md"
-                  >
-                    <span className="break-words font-medium">{t(SEGMENT_LABEL_KEYS[id])}</span>
-                    <span className="ml-1 break-words text-muted-foreground">{value.full}</span>
-                  </div>
+                {value.compact && (
+                  <span className="max-w-[calc(220rem/14)] truncate">{value.compact}</span>
                 )}
-              </span>
+              </>
             );
             return (
-              // 常驻段见 isStatusLineSegmentPinned，其余悬停/聚焦时展开，降低常驻噪音
-              <span
-                key={id}
-                className={cn(
-                  'shrink-0 items-center',
-                  contextOpen || isStatusLineSegmentPinned(id, index)
-                    ? 'flex'
-                    : 'hidden group-focus-within:flex group-hover:flex'
-                )}
-              >
+              <span key={id} data-status-line-segment={id} className="flex shrink-0 items-center">
                 {id === 'context' ? (
-                  <Popover open={contextOpen} onOpenChange={setContextOpen}>
-                    <PopoverTrigger className="rounded-sm outline-none">{segment}</PopoverTrigger>
+                  <Popover>
+                    <PopoverTrigger aria-label={label} title={label} className={segmentClass}>
+                      {segment}
+                    </PopoverTrigger>
                     <PopoverPopup side="top" className="w-72 [&_[data-slot=popover-viewport]]:p-0">
                       <ContextInspector
                         occupancy={conversation.occupancy}
@@ -531,7 +511,15 @@ export function StatsLine({ conversationId }: StatsLineProps) {
                     </PopoverPopup>
                   </Popover>
                 ) : (
-                  segment
+                  <Tooltip>
+                    <TooltipTrigger render={<span />} aria-label={label} className={segmentClass}>
+                      {segment}
+                    </TooltipTrigger>
+                    <TooltipPopup side="top" className="max-w-72">
+                      <span className="font-medium">{t(SEGMENT_LABEL_KEYS[id])}</span>
+                      <span className="ml-1 text-muted-foreground">{value.full}</span>
+                    </TooltipPopup>
+                  </Tooltip>
                 )}
               </span>
             );

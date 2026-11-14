@@ -8,14 +8,19 @@ export function ContextMeter({ percent, critical }: { percent: number; critical:
   return (
     <span
       aria-hidden
-      className="h-[calc(3rem/14)] w-[40px] shrink-0 overflow-hidden rounded-full bg-control"
+      data-slot="context-meter"
+      className="h-[calc(4rem/14)] w-[calc(72rem/14)] shrink-0 overflow-hidden rounded-full bg-control"
     >
       <span
         className={cn(
           'block h-full rounded-full',
-          critical ? 'bg-destructive' : percent >= WARNING_PERCENT ? 'bg-warning' : 'bg-primary/70'
+          critical
+            ? 'bg-destructive'
+            : percent >= WARNING_PERCENT
+              ? 'bg-warning'
+              : 'bg-muted-foreground/60'
         )}
-        style={{ width: `${percent}%` }}
+        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
       />
     </span>
   );

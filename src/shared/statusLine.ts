@@ -37,9 +37,8 @@ export type StatusLinePresetId = (typeof STATUS_LINE_PRESET_IDS)[number];
 
 /**
  * 三种预设模式。数组顺序即该预设的渲染顺序，与段位声明序同一套分组逻辑。
- * - `minimal` 简洁：只留「在用什么模型」与「还剩多少上下文」这两条决策信息
- * - `default` 默认：原 StatsLine 的 5 组（tokens/cache/turns/speed/duration）超集
- *   + model + context + sessionTime，对老用户无信息回归
+ * - `minimal` 简洁：Token 用量与上下文占用
+ * - `default` 默认：Token、缓存命中率、上下文占用；模型选择器已有模型信息，不重复展示
  * - `full` 完整：全部段位
  *
  * ⚠️ `duration` 与 `sessionTime` 是**两个不同的量**，都保留：
@@ -52,32 +51,14 @@ export type StatusLinePresetId = (typeof STATUS_LINE_PRESET_IDS)[number];
 export const STATUS_LINE_PRESETS: Readonly<
   Record<StatusLinePresetId, readonly StatusLineSegmentId[]>
 > = {
-  minimal: ['model', 'context'],
-  default: [
-    'model',
-    'tokens',
-    'cache',
-    'context',
-    'requestBody',
-    'turns',
-    'speed',
-    'duration',
-    'sessionTime',
-  ],
+  minimal: ['tokens', 'context'],
+  default: ['tokens', 'cache', 'context'],
   full: STATUS_LINE_SEGMENT_IDS,
 };
 
 /** 新装/未配置时的段位序列，等价于 `default` 预设 */
 export const DEFAULT_STATUS_LINE_SEGMENTS: readonly StatusLineSegmentId[] =
   STATUS_LINE_PRESETS.default;
-
-/** 状态栏常驻的段数（用户排序即优先级），其余悬停展开 */
-const STATUS_LINE_PINNED_COUNT = 3;
-
-/** 该段是否常驻：前 N 段常驻；上下文占用是唯一需要随时留意的余量，排在哪都常驻 */
-export function isStatusLineSegmentPinned(id: StatusLineSegmentId, index: number): boolean {
-  return id === 'context' || index < STATUS_LINE_PINNED_COUNT;
-}
 
 /**
  * 当前段位序列等价于哪个预设；都不等价即 `'custom'`。

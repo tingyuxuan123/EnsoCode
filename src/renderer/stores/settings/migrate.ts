@@ -32,7 +32,7 @@ import { parseWebSearchChain } from '@shared/webSearchChain';
  */
 
 /** 当前持久化数据版本；改数据形状时 +1 并在 `migrateSettings` 里加一段 */
-export const SETTINGS_VERSION = 18;
+export const SETTINGS_VERSION = 19;
 
 export function mergeSettingsState<T extends { editMode: EditMode; accentColor: AccentColor }>(
   persisted: unknown,
@@ -139,6 +139,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * 幂等：对已是稀疏表的条目重跑 extractModelOverrides 结果不变。
  * v16 → v17：全局与项目内置工具列表补 code_search 默认关，避免升级时静默云端发送代码。
  * v17 → v18：界面默认强调色由靛蓝改为晴空蓝；旧版落盘的 indigo 即旧默认值，随之换成 ocean。
+ * v18 → v19：统计行旧默认精简为 Token / 缓存 / 上下文，保留自定义顺序、完整预设和全关。
  */
 export function migrateSettings(persisted: unknown, version: number): unknown {
   if (version >= SETTINGS_VERSION) return persisted;
@@ -258,6 +259,25 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
   }
   if (version < 18 && state.accentColor === 'indigo') {
     state = { ...state, accentColor: 'ocean' };
+  }
+  if (version < 19 && Array.isArray(state.statusLineSegments)) {
+    const segments = state.statusLineSegments;
+    // 必须冻结旧序列，不能用会随版本变化的新默认作匹配。
+    // 与旧默认完全同序的手动配置无法区分，随默认升级；其它自定义（含空数组）不动。
+    const oldDefault = [
+      'model',
+      'tokens',
+      'cache',
+      'context',
+      'requestBody',
+      'turns',
+      'speed',
+      'duration',
+      'sessionTime',
+    ];
+    if (segments.length === oldDefault.length && oldDefault.every((id, i) => segments[i] === id)) {
+      state = { ...state, statusLineSegments: [...STATUS_LINE_PRESETS.default] };
+    }
   }
   return state;
 }
