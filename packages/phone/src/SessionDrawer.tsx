@@ -55,6 +55,7 @@ import {
 } from '@/stores/sessions/sessionSwitchSlots';
 import type { StoredDevice } from './deviceList';
 import type { PushFailureReason } from './push';
+import { rowTitleClass, rowTone, StatusGlyph, waitingRowClass } from './StatusGlyph';
 import {
   getThemePreference,
   setThemePreference,
@@ -704,7 +705,10 @@ export function SessionDrawer({
   );
 }
 
-/** 置顶/归档/项目组共用的会话行（subtitle = 归档栏内联的项目名，与桌面一致） */
+/**
+ * 置顶/归档/项目组共用的会话行：无框列表，16px 标题 + 13px 副行 + 右侧状态符号。
+ * 等你处理的那条整行黄底，完成与空闲不画符号（设计稿 `sessions.tsx`）。
+ */
 function SessionRow({
   session,
   active,
@@ -718,26 +722,39 @@ function SessionRow({
   subtitle?: string;
   onSelect(id: string): void;
 }) {
+  const tone = rowTone(session);
+  const note = subtitle ?? session.projectName;
   return (
     <button
       type="button"
       onClick={() => onSelect(session.id)}
       className={cn(
-        'flex min-h-[40px] w-full items-center gap-2 rounded-md py-2 pr-2 pl-4 text-left text-[13px] transition-colors',
-        active ? 'bg-brand/10 dark:bg-brand/15' : 'hover:bg-muted/60'
+        'flex min-h-[46px] w-full items-start gap-2 py-2.5 pr-2 pl-5 text-left transition-colors',
+        tone === 'waiting' ? waitingRowClass : active ? 'bg-card2' : 'active:bg-card2'
       )}
     >
-      <StatusDot status={session.status} unread={session.unread} />
-      {session.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className="min-w-0 flex-1 truncate">
-        {session.title || '新对话'}
-        {subtitle && <span className="ml-1.5 text-[10px] text-muted-foreground">{subtitle}</span>}
-      </span>
-      {session.updatedAt && (
-        <span className="shrink-0 text-[10px] text-muted-foreground/80 tabular-nums">
-          {formatRelativeTime(session.updatedAt, 'zh', nowTick)}
+      {session.pinned && (
+        <span className="flex h-[22px] shrink-0 items-center">
+          <Pin className="size-3.5 text-yellow" aria-label="已置顶" />
         </span>
       )}
+      <span className="min-w-0 flex-1">
+        <span className={rowTitleClass(tone)}>{session.title || '新对话'}</span>
+        <span className="flex items-center gap-1.5 text-[13px] leading-[18px] text-dim">
+          <span className="truncate">{note}</span>
+          {session.updatedAt ? (
+            <>
+              <span className="text-faint">·</span>
+              <span className="shrink-0 tabular-nums">
+                {formatRelativeTime(session.updatedAt, 'zh', nowTick)}
+              </span>
+            </>
+          ) : null}
+        </span>
+      </span>
+      <span className="flex h-[22px] shrink-0 items-center">
+        <StatusGlyph tone={tone} />
+      </span>
     </button>
   );
 }
@@ -849,23 +866,5 @@ function ProjectGroup({
         </div>
       )}
     </div>
-  );
-}
-
-/** 与桌面 ConversationDot 同款 */
-function StatusDot({ status, unread }: { status: string; unread?: boolean }) {
-  const running = status === 'running';
-  const failed = !running && status === 'failed';
-  const showUnread = !running && !failed && unread === true;
-  return (
-    <span
-      className={cn(
-        'h-1.5 w-1.5 shrink-0 rounded-full',
-        running && 'animate-pulse bg-brand',
-        failed && 'bg-destructive',
-        showUnread && 'bg-green-500',
-        !running && !failed && !showUnread && 'bg-muted-foreground/30'
-      )}
-    />
   );
 }

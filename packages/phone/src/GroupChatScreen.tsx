@@ -18,7 +18,6 @@ import {
   CirclePlay,
   ImagePlus,
   Loader2,
-  PanelLeft,
   Square,
   SquarePen,
   X,
@@ -43,6 +42,7 @@ import {
 import type { ConnState, SessionView } from './client';
 import { GroupThreadSwitcher, type GroupThreads } from './GroupThreadSwitcher';
 import { compressImages } from './image';
+import { PhoneTopBar, TopBarAction } from './PhoneTopBar';
 import { readOnlyBanner } from './readOnly';
 import { WebPreview } from './WebPreview';
 
@@ -442,58 +442,44 @@ export function GroupChatScreen(props: Props) {
 
   return (
     <div className="phone-chat-root flex h-full min-h-0 flex-col">
-      <header className="flex min-h-[56px] shrink-0 items-center gap-1.5 border-b bg-background px-3 py-1.5 pt-safe">
-        {!props.drawerDocked ? (
-          <button
-            type="button"
-            onClick={props.onOpenDrawer}
-            aria-label="打开会话列表"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <PanelLeft className="h-4.5 w-4.5" />
-          </button>
-        ) : (
-          <span className="h-9 w-9 shrink-0" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-[13px]">{chat.title || '群聊'}</p>
-          {props.threads ? (
+      <PhoneTopBar
+        lead={props.drawerDocked ? 'none' : 'menu'}
+        {...(props.drawerDocked ? {} : { onLead: props.onOpenDrawer })}
+        title={chat.title || '群聊'}
+        detail={
+          props.threads ? (
             <GroupThreadSwitcher
               threads={props.threads}
               status={props.connState === 'online' ? undefined : props.stateLabel}
             />
+          ) : props.connState === 'online' ? (
+            `${chat.members.length} 位成员`
           ) : (
-            <p className="truncate text-[11px] text-muted-foreground">
-              {props.connState === 'online' ? `${chat.members.length} 位成员` : props.stateLabel}
-            </p>
-          )}
-        </div>
+            props.stateLabel
+          )
+        }
+      >
         {props.threads ? (
-          <button
-            type="button"
-            onClick={props.threads.onCreate}
+          <TopBarAction
+            label="新话题"
+            {...(props.threads.disabledHint ? { title: props.threads.disabledHint } : {})}
+            onClick={props.threads.disabledHint ? undefined : props.threads.onCreate}
             disabled={Boolean(props.threads.disabledHint)}
-            aria-label="新话题"
-            title={props.threads.disabledHint ?? '新话题'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
           >
-            <SquarePen className="h-4.5 w-4.5" />
-          </button>
+            <SquarePen className="size-6" aria-hidden />
+          </TopBarAction>
         ) : (
-          <button
-            type="button"
+          <TopBarAction
+            label={props.newSessionHint ?? '新建会话'}
             onClick={props.onNewSession}
             disabled={
               !props.canCreate || props.deviceReadOnly || sending || props.connState !== 'online'
             }
-            aria-label="新建会话"
-            title={props.newSessionHint ?? '新建会话'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
           >
-            <SquarePen className="h-4.5 w-4.5" />
-          </button>
+            <SquarePen className="size-6" aria-hidden />
+          </TopBarAction>
         )}
-      </header>
+      </PhoneTopBar>
 
       <div
         ref={scrollRef}

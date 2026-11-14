@@ -9,6 +9,12 @@
 /*
  * 与桌面端 src/renderer/styles/globals.css 同源的主题变量。
  * 去掉 Electron 专有规则（-webkit-app-region 拖拽区），补移动端适配。
+ *
+ * 手机端的视觉真值是 `collabra-pwa.vetd/theme.css`：黑白为底、强调靠反色墨黑胶囊，
+ * 彩色只留给状态。下面 :root / .dark 里那份色值是权威，@theme 只是把它映射成
+ * 工具类名（bg-page / text-ink / bg-pill …），并保留桌面组件依赖的旧名字
+ * （background / card / muted / brand …），让复用的 Composer / MessageTimeline 等
+ * 跟着一起换色，桌面源码零改动。
  */
 
 @theme {
@@ -38,17 +44,63 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-control: var(--secondary);
-  --color-line: color-mix(in srgb, var(--border) 55%, var(--background));
-  --color-faint: color-mix(in srgb, var(--muted-foreground) 86%, var(--foreground));
+  /* 设计稿的真值：三档底色之间的那条线，不是重边框 */
+  --color-line: var(--line);
+  --color-faint: var(--faint);
 
-  --radius-lg: var(--radius);
-  --radius-md: var(--radius);
-  --radius-sm: var(--radius);
-  --radius-xl: var(--radius);
-  --radius-2xl: var(--radius);
+  /* 设计稿调色板（一档一档的灰阶 + 只有状态才用的彩色） */
+  --color-page: var(--page);
+  --color-card2: var(--card2);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-dim: var(--dim);
+  --color-pill: var(--pill);
+  --color-pill-ink: var(--pill-ink);
+  --color-green: var(--green);
+  --color-blue: var(--blue);
+  --color-yellow: var(--yellow);
+  --color-yellow-ink: var(--yellow-ink);
+  --color-red: var(--red);
+  --color-orange: var(--orange);
+  --color-dawn: var(--dawn);
+  --color-dawn-side: var(--dawn-side);
+  --color-greet-a: var(--greet-a);
+  --color-greet-b: var(--greet-b);
+  --color-night: var(--night);
+  --color-night-card: var(--night-card);
+  --color-night-line: var(--night-line);
+  --color-night-ink: var(--night-ink);
+  --color-night-dim: var(--night-dim);
 
-  --font-sans: var(--font-family-sans, "Inter Variable", "PingFang SC", "Microsoft YaHei", sans-serif);
-  --font-mono: var(--font-family-mono, "JetBrains Mono", "Menlo", monospace);
+  /* 圆角阶梯：面板 26、卡片/输入 18–24、内联代码 6（不再全站 6px） */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 26px;
+  --radius-sheet: 26px;
+
+  --font-sans: var(
+    --font-family-sans,
+    "Roboto Variable",
+    "Roboto",
+    "Inter Variable",
+    "PingFang SC",
+    "Microsoft YaHei",
+    system-ui,
+    sans-serif
+  );
+  --font-mono: var(
+    --font-family-mono,
+    "JetBrains Mono Variable",
+    "JetBrains Mono",
+    "SF Mono",
+    "Menlo",
+    monospace
+  );
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-marquee: marquee 4s linear infinite alternate;
@@ -72,63 +124,104 @@
 @layer base {
   :root {
     color-scheme: light;
-    --font-family-mono: "JetBrains Mono", "Menlo", monospace;
+    --font-family-mono: "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", "Menlo", monospace;
     --font-size-base: 15px;
-    --background: oklch(0.9768 0.0038 238.42);
-    --foreground: oklch(0.2643 0.0269 248.88);
-    --card: oklch(0.9535 0.009 238.5);
-    --card-foreground: oklch(0.2643 0.0269 248.88);
-    --popover: oklch(0.985 0.003 238.42);
-    --popover-foreground: oklch(0.2643 0.0269 248.88);
-    --primary: oklch(0.6101 0.1094 242.61);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.9535 0.009 238.5);
-    --secondary-foreground: oklch(0.2643 0.0269 248.88);
-    --muted: oklch(0.9223 0.0138 238.58);
-    --muted-foreground: oklch(0.5032 0.0308 248.44);
-    --accent: oklch(0.9382 0.0083 238.49);
-    --accent-foreground: oklch(0.2643 0.0269 248.88);
-    --destructive: rgb(173 75 83);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: rgb(54 120 90);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: rgb(166 117 37);
-    --warning-foreground: oklch(0.985 0 0);
-    --info: rgb(57 124 172);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.8831 0.0196 238.68);
-    --input: oklch(0.8831 0.0196 238.68);
-    --ring: oklch(0.6101 0.1094 242.61);
-    --radius: 6px;
+
+    /* ── 设计稿真值：页面与表面 ───────────────────────────── */
+    --page: #f4f5f7;
+    --card: #ffffff;
+    --card2: #f0f1f3;
+    --line: #e3e5e8;
+
+    /* 墨色层级 */
+    --ink: #0b0c0e;
+    --ink2: #3f444b;
+    --dim: #6b7077;
+    --faint: #9aa0a6;
+
+    /* 反色胶囊：用户气泡、主按钮 */
+    --pill: #0b0c0e;
+    --pill-ink: #ffffff;
+
+    /* 状态色：蓝=运行、黄=等你、红=出错、绿=完成 */
+    --green: #16a34a;
+    --blue: #2563eb;
+    --yellow: #e0a100;
+    --yellow-ink: #9a6b00;
+    --red: #dc2626;
+    --orange: #d97706;
+
+    /* 晨光：只给配对页与新建会话页 */
+    --dawn: #cbdafb;
+    --dawn-side: #dfd2f7;
+    --greet-a: #7c3aed;
+    --greet-b: #2563eb;
+
+    /* 深色真值（浅色下不直接用，列在这里便于对照） */
+    --night: #0a0b0d;
+    --night-card: #1c1f23;
+    --night-line: #24272c;
+    --night-ink: #f4f5f6;
+    --night-dim: #8b9096;
+
+    /* ── 桥接：复用的桌面组件读这些名字（源码不改） ────────── */
+    --background: var(--page);
+    --foreground: var(--ink);
+    --card-foreground: var(--ink);
+    --popover: var(--card);
+    --popover-foreground: var(--ink);
+    --primary: var(--pill);
+    --primary-foreground: var(--pill-ink);
+    --secondary: var(--card2);
+    --secondary-foreground: var(--ink);
+    --muted: var(--card2);
+    --muted-foreground: var(--dim);
+    --accent: var(--card2);
+    --accent-foreground: var(--ink);
+    --destructive: var(--red);
+    --destructive-foreground: #ffffff;
+    --success: var(--green);
+    --success-foreground: #ffffff;
+    --warning: var(--yellow);
+    --warning-foreground: #ffffff;
+    --info: var(--blue);
+    --info-foreground: #ffffff;
+    --border: var(--line);
+    --input: var(--line);
+    --ring: var(--ink);
+    --radius: 14px;
+
+    /* 桌面用的强调色在手机端就是墨黑：强调靠反色，不用蓝 */
+    --brand: var(--pill);
+    --brand-foreground: var(--pill-ink);
+    --selection: color-mix(in srgb, var(--ink) 10%, transparent);
+    --selection-foreground: var(--ink);
+    --selection-border: color-mix(in srgb, var(--ink) 40%, transparent);
   }
 
   .dark {
     color-scheme: dark;
-    --background: oklch(0.221 0.012 251);
-    --foreground: oklch(0.926 0.009 239);
-    --card: oklch(0.266 0.014 245);
-    --card-foreground: oklch(0.926 0.009 239);
-    --popover: oklch(0.266 0.014 245);
-    --popover-foreground: oklch(0.926 0.009 239);
-    --primary: oklch(0.708 0.079 242);
-    --primary-foreground: oklch(0.221 0.012 251);
-    --secondary: oklch(0.302 0.017 245);
-    --secondary-foreground: oklch(0.926 0.009 239);
-    --muted: oklch(0.335 0.016 238);
-    --muted-foreground: oklch(0.747 0.022 241);
-    --accent: oklch(0.322 0.022 245);
-    --accent-foreground: oklch(0.926 0.009 239);
-    --destructive: rgb(214 104 112);
-    --destructive-foreground: rgb(24 24 24);
-    --success: rgb(104 176 140);
-    --success-foreground: rgb(16 22 18);
-    --warning: rgb(214 168 92);
-    --warning-foreground: rgb(26 20 10);
-    --info: rgb(122 170 205);
-    --info-foreground: rgb(14 18 28);
-    --border: oklch(0.388 0.022 247);
-    --input: oklch(0.388 0.022 247);
-    --ring: oklch(0.708 0.079 242);
+    /* 同一条规则的倒置：night 页面 + night-card 抬一档 + 反色胶囊变白底黑字 */
+    --page: var(--night);
+    --card: var(--night-card);
+    --card2: #24272c;
+    --line: #31353b;
+    --ink: var(--night-ink);
+    --ink2: #cfd4da;
+    --dim: var(--night-dim);
+    --faint: #676e76;
+    --pill: var(--night-ink);
+    --pill-ink: var(--night);
+    --green: #34d399;
+    --blue: #60a5fa;
+    --yellow: #f2c14e;
+    --yellow-ink: #f2c14e;
+    --red: #f87171;
+    --orange: #fb923c;
+    --brand: var(--pill);
+    --brand-foreground: var(--pill-ink);
+    --selection: color-mix(in srgb, var(--ink) 16%, transparent);
+    --selection-border: color-mix(in srgb, var(--ink) 45%, transparent);
   }
 }
 
@@ -199,9 +292,129 @@
   }
 }
 
+/* ── 玻璃浮层：只有底部输入区、审批/提问面板、浮动按钮是 glass ───────── */
+
+/* Liquid Glass：半透明白底、顶边一道亮发丝、柔和投影把它从内容上托起来 */
+@utility glass {
+  background-color: rgb(255 255 255 / 0.86);
+  border: 0.75px solid rgb(0 0 0 / 0.05);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 10px 24px -8px rgb(0 0 0 / 0.16),
+    0 2px 6px rgb(0 0 0 / 0.05);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/* 反色主胶囊也带一点玻璃的高光 */
+@utility glass-ink {
+  background-color: var(--pill);
+  color: var(--pill-ink);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 10px 24px -8px rgb(0 0 0 / 0.3),
+    0 2px 6px rgb(0 0 0 / 0.08);
+}
+
+/* 深色下的玻璃：白 8% 底、白 10% 发丝，投影更黑 */
+@utility glass-night {
+  background-color: rgb(255 255 255 / 0.08);
+  border: 0.75px solid rgb(255 255 255 / 0.1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 12px 28px -8px rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+/* 晨光：左上紫、右侧蓝，取自 Logo 渐变，到页面中段淡回底色 */
+.phone-dawn {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 520px;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 62% at 0% 0%, var(--dawn-side) 0%, transparent 70%),
+    radial-gradient(85% 58% at 100% 6%, var(--dawn) 0%, transparent 72%);
+}
+
+/* 渐变大字：全 app 只有配对页与新建会话页用 */
+.phone-greet {
+  background-image: linear-gradient(to right, var(--greet-a), var(--greet-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 复用的桌面输入条：手机端做成 24 圆角、发丝线、无投影 */
 .phone-dock [data-slot="composer"] {
-  border-radius: 6px;
+  border-radius: 24px;
+  border-color: var(--line);
+  background-color: var(--card);
   box-shadow: none;
+}
+
+/* ── 复用桌面组件的 scoped 外观（桌面源码零改动） ─────────────────────
+ * 只改外观，不改结构：圆角回到设计稿的阶梯、去掉 6px 方卡片、
+ * 审批/提问面板做成玻璃浮层。
+ */
+
+/* 用户气泡：反色墨黑胶囊，右下收尖 */
+.phone-chat-root div:has(> [data-user-body-typography]) {
+  border-radius: 20px;
+  border-bottom-right-radius: 6px;
+  background-color: var(--pill);
+  color: var(--pill-ink);
+}
+.phone-chat-root div:has(> [data-user-body-typography]) [data-user-body-typography] {
+  color: var(--pill-ink);
+}
+
+/* 审批 / 提问：顶替输入框的玻璃面板 */
+.phone-dock [data-slot="approval-bar"],
+.phone-dock [data-slot="ask-bar"] {
+  margin-bottom: 8px;
+  border-radius: 26px;
+  border: 0.75px solid rgb(0 0 0 / 0.05);
+  background-color: rgb(255 255 255 / 0.86);
+  padding: 14px 16px;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 10px 24px -8px rgb(0 0 0 / 0.16);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+.dark .phone-dock [data-slot="approval-bar"],
+.dark .phone-dock [data-slot="ask-bar"] {
+  border-color: rgb(255 255 255 / 0.1);
+  background-color: rgb(255 255 255 / 0.08);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 12px 28px -8px rgb(0 0 0 / 0.6);
+}
+
+/* 目标 / 后台任务 / 排队 / 重试：一行一张 14–16 圆角的小卡，不画重边框 */
+.phone-dock [data-slot="goal-bar"],
+.phone-dock [data-slot="message-queue"] {
+  margin-bottom: 6px;
+  border-radius: 16px;
+  border-color: color-mix(in srgb, var(--line) 60%, transparent);
+  background-color: var(--card);
+  padding: 8px 12px;
+}
+.phone-dock [data-slot="retry-bar"] {
+  margin-bottom: 6px;
+  border-radius: 16px;
+  border-color: color-mix(in srgb, var(--red) 25%, transparent);
+  background-color: color-mix(in srgb, var(--red) 5%, transparent);
+  padding: 8px 12px;
+}
+.phone-dock [data-task-dock] > * {
+  border-radius: 16px;
+}
+
+/* 运行秒数并入消息抬头后，输入框下只留一行统计 */
+.phone-dock [data-slot="stats-line"] {
+  margin-top: 2px;
+  color: var(--faint);
 }
 
 [data-slot="sheet-popup"].phone-sheet {
@@ -553,11 +766,11 @@
 }
 
 /* 手机端发送/停止按钮触控与视觉呈现：
- * 保持 iOS 推荐的 44px 最小触控区域，视觉上呈现 34px 控件，
- * 提升移动端触屏点击体验，与移动端输入法节奏对齐。
+ * 48px 墨黑胶囊（设计稿的「墨黑胶囊发送键」），最小可点区域 44px 以上，
+ * 与移动端输入法节奏对齐。
  */
 :root {
-  --phone-touch: 44px;
+  --phone-touch: 48px;
   --phone-ease: cubic-bezier(0.2, 0, 1, 1);
   --phone-press-duration: 120ms;
 }
@@ -571,10 +784,10 @@
   min-width: var(--phone-touch);
   min-height: var(--phone-touch);
   border: 0;
-  border-radius: 6px;
+  border-radius: 999px;
   padding: 0;
   background: transparent;
-  color: var(--brand-foreground);
+  color: var(--pill-ink);
   box-shadow: none;
   opacity: 1;
   touch-action: manipulation;
@@ -588,10 +801,10 @@
 .phone-dock [data-composer-action]::before {
   content: "";
   position: absolute;
-  inset: 5px;
-  border-radius: 6px;
-  background: var(--brand);
-  box-shadow: none;
+  inset: 1px;
+  border-radius: 999px;
+  background: var(--pill);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
   transition: background-color var(--phone-press-duration) var(--phone-ease);
 }
 
@@ -604,18 +817,16 @@
   opacity: 1;
 }
 
+/* 运行中的停止键也是墨黑胶囊；只有禁用态退回 card2 灰底 */
 .phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):disabled,
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop),
-.phone-dock [data-composer-action]:disabled,
-.phone-dock [data-composer-action="stop"] {
+.phone-dock [data-composer-action]:disabled {
   color: var(--muted-foreground);
 }
 
 .phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):disabled::before,
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop)::before,
-.phone-dock [data-composer-action]:disabled::before,
-.phone-dock [data-composer-action="stop"]::before {
+.phone-dock [data-composer-action]:disabled::before {
   background: var(--muted);
+  box-shadow: none;
 }
 
 .phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):active:not(:disabled),

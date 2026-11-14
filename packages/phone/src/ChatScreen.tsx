@@ -2,15 +2,7 @@ import type { CatalogEntry } from '@enso/pair';
 import { localCompactionNoticeIndex } from '@shared/pair/guestProjection';
 import type { AttachedImage, ProjectedMessage, SlashCommand } from '@shared/types/agent';
 import type { StartVoiceSession } from '@shared/types/speech';
-import {
-  Bot,
-  ChevronDown,
-  ChevronLeft,
-  Loader2,
-  MessageCircle,
-  PanelLeft,
-  SquarePen,
-} from 'lucide-react';
+import { Bot, Loader2, MessageCircle, SquarePen } from 'lucide-react';
 import {
   type ReactNode,
   useCallback,
@@ -42,6 +34,7 @@ import { phoneChatHost } from './chatHost';
 import type { ConnState, SessionView } from './client';
 import { FileDownloads } from './FileDownloads';
 import { compressWithin, imageBudget } from './image';
+import { PhoneTopBar, TopBarAction } from './PhoneTopBar';
 import { appendEchoMessages, type QueueSendEcho } from './queueSendEcho';
 import { readOnlyBanner } from './readOnly';
 import { SessionStatsLine } from './SessionStatsLine';
@@ -60,6 +53,8 @@ interface Props {
   clockOffset?: number;
   /** 会话图片：手机没有 local-image://，由 host 按「会话 id + 相对路径」读回 data URL */
   readImage?: (rel: string) => Promise<SessionImageLoad>;
+  /** 解码失败/同路径覆盖时作废该图缓存，重试才会重新取图 */
+  invalidateImage?: (rel: string) => void;
   connState: ConnState;
   stateLabel: string;
   /** Local send failure, also shown in Code mode (not only Bot conversations). */
@@ -165,6 +160,7 @@ export function ChatScreen(props: Props) {
         deviceReadOnly: props.deviceReadOnly,
         cwd: props.cwd,
         readImage: props.readImage,
+        invalidateImage: props.invalidateImage,
       }),
       ...(artifactChatId && artifactConversationId
         ? {
@@ -193,6 +189,7 @@ export function ChatScreen(props: Props) {
       props.deviceReadOnly,
       props.cwd,
       props.readImage,
+      props.invalidateImage,
       artifactChatId,
       artifactConversationId,
       messageIndices,
@@ -321,25 +318,17 @@ export function ChatScreen(props: Props) {
   return (
     <ChatHostContext.Provider value={host}>
       <div className="phone-chat-root flex h-full min-h-0 flex-col">
-        <header className="flex min-h-[56px] shrink-0 items-center gap-1.5 border-b bg-background px-3 py-1.5 pt-safe">
-          {bot?.onBack || !props.drawerDocked ? (
-            <button
-              type="button"
-              onClick={bot?.onBack ?? props.onOpenDrawer}
-              aria-label={bot?.onBack ? '返回群聊' : '打开会话列表'}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {bot?.onBack ? (
-                <ChevronLeft className="h-4.5 w-4.5" />
-              ) : (
-                <PanelLeft className="h-4.5 w-4.5" />
-              )}
-            </button>
-          ) : (
-            <span className="h-9 w-9 shrink-0" />
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="flex min-w-0 items-center gap-1.5">
+        <PhoneTopBar
+          lead={bot?.onBack ? 'back' : props.drawerDocked ? 'none' : 'menu'}
+          leadLabel={bot?.onBack ? '返回群聊' : '打开会话列表'}
+          {...(bot?.onBack
+            ? { onLead: bot.onBack }
+            : props.drawerDocked
+              ? {}
+              : { onLead: props.onOpenDrawer })}
+          title={props.title}
+          detail={
+            <>
               {props.connState !== 'host-offline' &&
                 props.connState !== 'unauthorized' &&
                 props.connState !== 'replaced' && (
@@ -354,12 +343,12 @@ export function ChatScreen(props: Props) {
                             : 'ok'
                     }
                     className={cn(
-                      'h-1.5 w-1.5 shrink-0 rounded-full',
+                      'mr-1 inline-block size-1.5 shrink-0 rounded-full align-middle',
                       props.connState === 'online' && !syncing && !syncFailed
-                        ? 'bg-success'
+                        ? 'bg-green'
                         : syncFailed
-                          ? 'bg-warning'
-                          : 'animate-pulse bg-warning'
+                          ? 'bg-yellow'
+                          : 'animate-pulse bg-yellow'
                     )}
                     title={
                       props.connState !== 'online'
@@ -372,19 +361,21 @@ export function ChatScreen(props: Props) {
                     }
                   />
                 )}
-              <span className="truncate font-medium text-[13px]">{props.title}</span>
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {props.projectName || props.stateLabel}
-            </p>
-          </div>
+              {subjectLine(props.projectName, props.modelLabel) || props.stateLabel}
+            </>
+          }
+          {...(props.onOpenConfig && !bot
+            ? { detailMenu: true, onDetail: props.onOpenConfig }
+            : {})}
+        >
           {sessionId && !bot && <FileDownloads key={sessionId} target={{ sessionId }} />}
           {sessionId && !bot && <WebPreview key={`preview:${sessionId}`} target={{ sessionId }} />}
           {bot?.readOnly ? (
-            <span className="h-9 w-9 shrink-0" />
+            <span className="size-12 shrink-0" />
           ) : (
-            <button
-              type="button"
+            <TopBarAction
+              label="新建会话"
+              {...(props.newSessionHint ? { title: props.newSessionHint } : {})}
               onClick={props.onNewSession}
               disabled={
                 !props.canCreate ||
@@ -392,14 +383,11 @@ export function ChatScreen(props: Props) {
                 (Boolean(bot) && sending) ||
                 props.connState !== 'online'
               }
-              aria-label="新建会话"
-              title={props.newSessionHint ?? '新建会话'}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
             >
-              <SquarePen className="h-4.5 w-4.5" />
-            </button>
+              <SquarePen className="size-6" aria-hidden />
+            </TopBarAction>
           )}
-        </header>
+        </PhoneTopBar>
 
         {props.connState === 'host-offline' && (
           <div className="flex shrink-0 items-center justify-center gap-1.5 border-b border-warning/20 bg-warning/10 px-3 py-1.5 text-warning text-xs">
@@ -594,18 +582,6 @@ export function ChatScreen(props: Props) {
                   autoFocus={false}
                   // 软键盘的「换行」就是 Enter：Enter 只换行，发送必须点按钮
                   enterToSend={false}
-                  toolbar={
-                    props.modelLabel && props.onOpenConfig ? (
-                      <button
-                        type="button"
-                        onClick={props.onOpenConfig}
-                        className="flex min-w-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <span className="truncate">{props.modelLabel}</span>
-                        <ChevronDown className="h-3 w-3 shrink-0" />
-                      </button>
-                    ) : undefined
-                  }
                   onSend={(payload) => {
                     // 手机端不支持 @mention 派发，只取文本与图片
                     void send(payload.text, payload.images);
@@ -633,6 +609,11 @@ function tabClass(active: boolean): string {
     't-tab flex min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
     active ? 'font-medium' : 'text-muted-foreground'
   );
+}
+
+/** 顶栏副行：项目 · 模型。空段自动略过，全空时由调用方回落到连接状态文案。 */
+export function subjectLine(projectName: string, modelLabel?: string): string {
+  return [projectName, modelLabel].filter((part) => Boolean(part?.trim())).join(' · ');
 }
 
 /** Composer 已把图片读成 base64，这里只在超出本张预算（整帧按张数均分）时再压一轮 */
