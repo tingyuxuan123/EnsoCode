@@ -150,6 +150,33 @@ describe('runPluginHost', () => {
     });
   });
 
+  it('enso.browser.invoke 只把 op 与 params 转给 Main', async () => {
+    const h = harness(`export function activate(enso) {
+      enso.renderer.handle('snap', async () => enso.browser.invoke('snapshot', { tabId: 'browser:1' }));
+      enso.renderer.handle('ping', async () => enso.browser.invoke('snapshot'));
+    }`);
+    await h.next((m) => m.t === 'ready');
+    h.deliver(call('5', 'renderer.call', { method: 'snap', args: null }));
+    const hostCall = await h.next((m) => m.t === 'call');
+    expect(hostCall).toMatchObject({
+      api: 'browser.invoke',
+      args: { op: 'snapshot', params: { tabId: 'browser:1' } },
+      invocationId: 'inv-5',
+    });
+    if (hostCall.t !== 'call') return;
+    h.deliver({ t: 'res', id: hostCall.id, ok: true, value: 'tree' });
+    expect(await h.next((m) => m.t === 'res' && m.id === '5')).toMatchObject({
+      ok: true,
+      value: 'tree',
+    });
+    h.deliver(call('6', 'renderer.call', { method: 'ping', args: null }));
+    expect(await h.next((m) => m.t === 'call' && m.id !== hostCall.id)).toMatchObject({
+      api: 'browser.invoke',
+      args: { op: 'snapshot', params: {} },
+      invocationId: 'inv-6',
+    });
+  });
+
   it('取消后处理器收到 abort，挂起的宿主调用被拒绝', async () => {
     const h = harness(`export function activate(enso) {
       enso.tools.register('slow', async (args, ctx) => {

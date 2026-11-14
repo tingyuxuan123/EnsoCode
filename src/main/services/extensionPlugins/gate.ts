@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import {
+  PLUGIN_BROWSER_WRITE_OPS,
+  type PluginBrowserBridgeInput,
+  parsePluginBrowserRequest,
+} from '@shared/extensionPlugins/browserBridge';
 import type { PluginSessionState, PluginSessionStatus } from '@shared/extensionPlugins/events';
 import {
   type ExtensionPluginManifest,
@@ -120,6 +125,8 @@ export interface GateDeps {
     args: Record<string, unknown>,
     signal: AbortSignal
   ): Promise<{ content: string; isError: boolean }>;
+  /** 内嵌浏览器桥；Main 侧再用目标 tab 的权威 URL 校验会话与域名 */
+  browser?(input: PluginBrowserBridgeInput): Promise<unknown>;
   now(): number;
   progress?(invocationId: string, text: string): void;
   writeArtifact?(
@@ -693,6 +700,40 @@ export class PluginHostGate {
       case 'contrib.unregister':
         this.deps.unregisterContrib?.(pluginId, a);
         return null;
+      case 'browser.invoke': {
+        permit('browser.control');
+        const inv = invocation();
+        const domains = manifest.browser?.domains ?? [];
+        if (domains.length === 0)
+          throw pluginError('PERMISSION_DENIED', '清单没有声明 browser.domains');
+        // 浏览器只属于本机根会话的工具与界面调用：子代理、远端窗口、事件、定时与插件互调都不行；
+        // 界面调用不强制手势，用户点击后的连续同步可能超过 Chromium 的短暂激活窗口。
+        if (
+          inv.agent ||
+          inv.remote ||
+          inv.kind === 'schedule' ||
+          inv.kind === 'event' ||
+          inv.kind === 'export' ||
+          !inv.sessionId
+        )
+          throw pluginError('PERMISSION_DENIED', '浏览器只能由本机根会话的工具或界面调用');
+        const request = parsePluginBrowserRequest(a);
+        if (!request) throw pluginError('INVALID_ARGS', '浏览器操作或参数不合法');
+        const bridge = this.deps.browser;
+        if (!bridge) throw pluginError('UNSUPPORTED', '当前环境不能操作浏览器');
+        if ((PLUGIN_BROWSER_WRITE_OPS as readonly string[]).includes(request.op)) {
+          await this.assertMutation(inv, 'allowWrite');
+          if (inv.cancelled) throw pluginError('ABORTED', '调用已取消');
+        }
+        return bridge({
+          ...this.invocationTarget(inv),
+          kind: inv.kind,
+          op: request.op,
+          params: request.params,
+          domains,
+          signal: inv.controller.signal,
+        });
+      }
       case 'host.capabilities':
         return (
           this.deps.capabilities?.() ?? {
@@ -703,6 +744,7 @@ export class PluginHostGate {
             clipboard: false,
             openExternal: false,
             composer: false,
+            browser: !!this.deps.browser,
           }
         );
       case 'session.list': {

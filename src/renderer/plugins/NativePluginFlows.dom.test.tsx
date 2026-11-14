@@ -37,6 +37,7 @@ const preview: ExtensionPluginInstallPreview = {
   fsRead: ['workspace/**'],
   fsWrite: ['data/**'],
   netDomains: ['api.example.com'],
+  browserDomains: ['example.com'],
   mcpServers: [{ name: 'MCP server', command: 'node', args: ['server.js'], envKeys: ['TOKEN'] }],
   mcpTools: ['mcp-tool'],
   tools: [{ name: 'plugin-tool', description: 'Tool description' }],

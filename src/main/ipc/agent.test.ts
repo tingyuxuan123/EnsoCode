@@ -71,6 +71,8 @@ const mocks = vi.hoisted(() => ({
   setPluginSessionDirectory: vi.fn(),
   setPluginInvocationPolicy: vi.fn(),
   setPluginMcpBridge: vi.fn(),
+  setPluginBrowserBridge: vi.fn(),
+  browserTabUrl: vi.fn(() => 'https://www.kdocs.cn/l/demo'),
 }));
 
 vi.mock('../services/extensionPlugins', () => ({
@@ -83,6 +85,7 @@ vi.mock('../services/extensionPlugins', () => ({
   }),
   setPluginInvocationPolicy: mocks.setPluginInvocationPolicy,
   setPluginMcpBridge: mocks.setPluginMcpBridge,
+  setPluginBrowserBridge: mocks.setPluginBrowserBridge,
   setPluginSessionDirectory: mocks.setPluginSessionDirectory,
   setPluginSessionBridge: vi.fn(),
 }));
@@ -173,6 +176,7 @@ vi.mock('../services/design', () => ({
 vi.mock('../services/browserHost', () => ({
   browserHost: {
     invoke: mocks.browserInvoke,
+    tabUrl: mocks.browserTabUrl,
     closeForSession: vi.fn(async () => {}),
     releaseActor: vi.fn(),
     forgetActor: vi.fn(),
@@ -475,6 +479,64 @@ describe('agent IPC Main identity boundary', () => {
         { sessionId: identity.sessionId, projectRoot: '/tmp', sessionGeneration: 'old' },
         new AbortController().signal
       )
+    ).rejects.toThrow();
+  });
+
+  it('冷本机主会话UI可读取表格，不唤醒worker；写策略、远端项目和旧来源仍拒绝', async () => {
+    const authority = getSourceAuthorityRegistry()!;
+    const conversation = {
+      conversationId: 'cold-ui',
+      projectId: 'p',
+      kind: 'root' as const,
+      lifecycle: 'draft' as const,
+      version: 1,
+    };
+    vi.spyOn(authority, 'conversation').mockReturnValue(conversation);
+    vi.spyOn(authority, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/tmp',
+      state: 'active',
+      version: 1,
+    });
+    mocks.currentIdentity.mockReturnValue(undefined);
+    mocks.isReady.mockReturnValue(false);
+    mocks.readSettingsState.mockReturnValue({});
+    await vi.waitFor(() => expect(mocks.setPluginBrowserBridge).toHaveBeenCalled());
+    const bridge = mocks.setPluginBrowserBridge.mock.calls.at(-1)![0];
+    const request = {
+      kind: 'ui',
+      sessionId: 'cold-ui',
+      projectRoot: '/tmp',
+      op: 'read_range',
+      params: { url: 'https://www.kdocs.cn/l/demo', address: 'A1:L201' },
+      domains: ['www.kdocs.cn'],
+      signal: new AbortController().signal,
+    };
+    mocks.browserInvoke.mockResolvedValue({
+      tabId: 'browser:1',
+      url: 'https://www.kdocs.cn/l/demo',
+      text: '需求\t负责人',
+      sheet: '需求清单2026',
+      range: { sheetId: '1', rowFrom: 0, rowTo: 200, colFrom: 0, colTo: 11 },
+    });
+    await expect(bridge(request)).resolves.toMatchObject({ text: '需求\t负责人' });
+    expect(mocks.spawnSession).not.toHaveBeenCalled();
+    expect(mocks.promptSession).not.toHaveBeenCalled();
+    await expect(bridge({ ...request, kind: 'tool' })).rejects.toThrow();
+    await expect(
+      bridge({ ...request, op: 'insert_text', params: { tabId: 'browser:1', text: '改状态' } })
+    ).rejects.toThrow();
+    await expect(bridge({ ...request, projectRoot: '/wrong' })).rejects.toThrow();
+    mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: ['browser'] });
+    await expect(bridge(request)).rejects.toThrow();
+    mocks.readSettingsState.mockReturnValue({});
+    mocks.browserInvoke.mockImplementationOnce(async (_key, _op, _params, _actor, options) => {
+      conversation.version++;
+      options.guard();
+      return {};
+    });
+    await expect(
+      bridge({ ...request, params: { ...request.params, tabId: 'browser:1' } })
     ).rejects.toThrow();
   });
   beforeEach(() => {

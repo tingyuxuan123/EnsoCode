@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "test": "node --test scripts/rtk.test.mjs scripts/release.test.mjs scripts/prepare-design-engine.test.mjs scripts/generate-app-icon.test.mjs && node --test scripts/cdp.test.mjs scripts/pair-fake-host.test.mjs && vitest run",
+    "test": "node --test scripts/rtk.test.mjs scripts/release.test.mjs scripts/prepare-design-engine.test.mjs scripts/generate-app-icon.test.mjs && node --test scripts/cdp.test.mjs scripts/pair-fake-host.test.mjs && node --test test/plugins/kdocs-tasks/*.test.mjs && vitest run",
     "pair:vectors": "node scripts/pair-vectors.mjs",
     "pair:vectors:check": "node scripts/pair-vectors.mjs --check",
     "pair:fake-host": "node scripts/pair-fake-host.mjs",

@@ -415,6 +415,11 @@ export function runPluginHost(transport: HostTransport): void {
         messages: () => hostCall('session.messages', {}),
       },
       host: { capabilities: () => hostCall('host.capabilities', {}) },
+      browser: {
+        /** op 固定闭集；params 由 Main 严格校验，插件不能自定义 CDP method 或 JS */
+        invoke: (op: string, params?: unknown) =>
+          hostCall('browser.invoke', { op, params: params ?? {} }),
+      },
       fs: {
         readText: (path: string) => hostCall('fs.readText', { path }),
         writeText: (path: string, text: string) => hostCall('fs.writeText', { path, text }),

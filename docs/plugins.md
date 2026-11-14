@@ -112,6 +112,7 @@ my-snippets/
 | `renderer` | 主界面模块，导出 `onLoad(enso)`；需要 `ui.slot` |
 | `fs.read` / `fs.write` | 宿主文件 API 的项目相对目录范围；`.` 表示项目全部；需相应权限 |
 | `net.domains` | `net.fetch` 允许的主机名，不含协议或路径；需 `net.fetch` |
+| `browser.domains` | `browser.control` 允许的精确 HTTPS 主机名；不匹配子域/通配；增加域名需重新批准 |
 | `mcp.tools` | 精确 `server/tool` 白名单，如 `["bce/enhance_prompt"]`；需 `mcp.call`；不接受裸工具名或通配符，同名工具在其他 server 上不会获授权 |
 | `contributes.agentTools` | `{name, description, parameters, timeoutMs?, readOnly?}`；需 `agent.tool`；schema 必须完整声明 `type: "object"`、properties 及各参数类型 |
 | `contributes.views` | `{id, title, entry}`；entry 为自包含 `.html`；需 `ui.view` |
@@ -190,6 +191,7 @@ export function activate(enso) {
 | `renderer.handle(method, handler)` | 供本插件 ui.js / HTML 调用 |
 | `fs.readText(path)` / `fs.writeText(path, text)` | 项目相对路径，宿主 API 检查范围、符号链接及会话状态；单文件 5MB |
 | `net.fetch(url, init?)` | 域名白名单 http(s)，禁止内嵌凭证；响应 5MB，重定向逐次验证；返回 `{status, headers, body}` |
+| `browser.invoke(op, params)` | 新宿主能力，需 `browser.control` 和非空 `browser.domains`；仅本机有效主会话，沿当前 worker generation/取消/Plan 写策略 |
 | `ui.notify(title, body?)` | 系统通知，需 `ui.notify` |
 | `config.get()` | 本插件配置对象；可在 activate 内使用，不发送给 renderer |
 | `composer.readDraft()` / `insertText()` / `replaceDraft()` | 当前调用所属窗口的草稿；需 `composer.draft`，见下 |
@@ -198,6 +200,22 @@ export function activate(enso) {
 `ctx` 包含 `sessionId`（可能为 null）、`projectRoot`、`invocationId`、`signal`、`agent`（主会话为 null；子会话带来源）和 `progress(text)`。工具可用 `artifacts.write({name,text|base64,mime?})` 写入插件产物，模型工具结果和界面只传产物标识，不暴露任意路径。
 宿主 API 每次回到 Main 校验；调用超时/取消后权限上下文失效。子进程不继承完整宿主环境。
 插件同权代码不受这些宿主 API 约束，切勿把上表作为资源隔离承诺。
+
+### 受限浏览器 API
+
+`op` 只允许 `navigate`、`snapshot`、`read`、`click`、`fill`、`press_key`、`inspect`、`copy_selection`、`insert_text`、`read_range`。不提供任意 CDP/JS、Cookie、storage、下载或跨会话 tab 管理。`navigate({url,newTab?})` 只接受精确白名单 HTTPS，返回 `{tabId,url,title}`；除 `navigate` 和 `read_range` 外，操作必须带该会话拥有的 `tabId`，Main 在动作前后及队列真正执行时核对真实页面URL。页面仍可能自己跳走，动作后的拒绝不等于已拦截第三方网络加载。
+
+`read_range({url,address,tabId?})` 仅由本机插件 UI 发起，URL 须为清单授权的金山/WPS HTTPS 文档，地址限制在 `A1:L201`。不传 tab 时打开文档，传 tab 时不得跨文档或重导航；Host 在一个队列槽位内检查就绪、编辑态、遮挡和焦点，只向固定地址框输入范围并复制，核对完整范围后返回 `{text,range,sheet,url,tabId}`。不接受任意单元格内容、selector 或 JS。此只读动作按 Main 权威项目/根会话版本授权，不依赖 worker 启动，Plan 可用；通用导航、点击、输入及实际回填仍走原有 generation 与写策略，不能借此放开模型或其它来源的写权限。
+
+`copy_selection({tabId})` 读取本次网页正常复制选区产生的纯文本，最多64KB UTF-8，超限报错不截断；可选 `range:{sheetId,rowFrom,rowTo,colFrom,colTo}` 为零基范围。固定脚本临时捕获 `DataTransfer.setData`，不调用系统剪贴板读取，不透出HTML、fileId/linkId等自定义数据；结束/取消收回钩子。复制边框等页面副作用仍存在，不把“只读”当成完全无UI变化。
+
+`insert_text({tabId,text})` 是写操作，仅向当前已聚焦的可编辑元素原生输入，不自动focus、选择或回车。拒绝密码、隐藏类型、文件、只读/禁用和零尺寸元素，允许金山画布编辑器的opacity0输入代理；与所有输入一样沿Plan、身份、取消和队列权限复查。它不是任意JS入口。
+
+`snapshot({tabId})` 返回可读快照；`inspect({tabId,selector})` 固定投影最多32项 `{tag,text,value?,truncated?,ref?,rect}`，`text`最多400字符。表单 `value` 保留空串，超过8001字符有显式 `truncated:true`，不能用截断值覆盖原文。密码/隐藏/文件输入和脚本/样式被排除，但可见业务文本仍可能敏感；不要把DOM检查当凭证或业务数据脱敏器。
+
+`click({tabId,ref})`、`fill({tabId,ref,value})`、`press_key({tabId,key})` 走真实输入和既有标签队列。导航与输入要求允许写入，Plan拒绝；只读检查免写权限，但仍要求活跃本机主会话及已就绪worker，不向子代理、remote、事件、调度和导出上下文开放。它不替插件实现业务确认、原子事务或跨次浏览器操作的全局互斥；共享tab时仍可能被人工操作打断，必要时使用本插件新建标签并在每次输入前核对。
+
+完整业务插件见 [`kdocs-tasks`](../examples/plugins/kdocs-tasks/README.md)。新增能力只在包含该实现的宿主可用；旧安装版或仅 Renderer 热更新不能获得它。
 
 ## 主界面 ui.js 与挂点
 

@@ -33,6 +33,7 @@ const preview: ExtensionPluginInstallPreview = {
   fsRead: [],
   fsWrite: [],
   netDomains: [],
+  browserDomains: [],
   mcpServers: [],
   mcpTools: [],
   tools: [],

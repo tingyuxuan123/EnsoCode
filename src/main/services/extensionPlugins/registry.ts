@@ -47,6 +47,7 @@ function grant(v: unknown): boolean {
     strings(v.fsWrite) &&
     v.fsWrite.every(isPluginRelativePath) &&
     strings(v.netDomains) &&
+    (v.browserDomains === undefined || strings(v.browserDomains)) &&
     typeof v.renderer === 'boolean' &&
     (v.mcpTools === undefined || strings(v.mcpTools)) &&
     Array.isArray(v.mcp) &&

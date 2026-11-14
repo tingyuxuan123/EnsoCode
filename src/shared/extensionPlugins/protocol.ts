@@ -142,6 +142,8 @@ export const PLUGIN_HOST_APIS = [
   'contrib.unregister',
   /** 宿主能力探测 */
   'host.capabilities',
+  /** 操作当前本机会话里的内嵌浏览器；args { op, params }，闭集见 browserBridge.ts；read_range 为冷 UI 的固定只读流程。 */
+  'browser.invoke',
   /** 列出会话及其状态；args { scope? }：缺省同项目，'all' 为所有项目（需 session.readAll）；返回 { current, sessions } */
   'session.list',
   /** 会话汇总状态；args { sessionId? } 缺省发起会话，返回 { sessionId, state, pendingAsks, pendingApprovals } */
@@ -229,4 +231,6 @@ export interface PluginHostCapabilities {
   clipboard: boolean;
   openExternal: boolean;
   composer: boolean;
+  /** 可选：旧宿主不带该字段；桌面端明确给出内嵌浏览器桥是否可用 */
+  browser?: boolean;
 }

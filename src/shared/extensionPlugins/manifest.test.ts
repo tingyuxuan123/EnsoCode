@@ -157,3 +157,51 @@ describe('native plugin manifest', () => {
     expect(parsePluginPresetId('plugin:../../x:a')).toBeUndefined();
   });
 });
+
+describe('browser.control 与 browser.domains', () => {
+  it('未声明 browser 时解析结果不新增字段', () => {
+    const result = parse();
+    if (!result.ok) throw new Error('fixture');
+    expect(result.manifest).not.toHaveProperty('browser');
+    expect(grantOf(result.manifest).browserDomains).toEqual([]);
+  });
+
+  it('声明 browser.control 必须提供非空、精确 host 的白名单', () => {
+    expect(parse({ permissions: ['browser.control'] }).ok).toBe(false);
+    expect(parse({ permissions: ['browser.control'], browser: {} }).ok).toBe(false);
+    expect(parse({ permissions: ['browser.control'], browser: { domains: [] } }).ok).toBe(false);
+    expect(parse({ permissions: ['browser.control'], browser: { domains: ['a'] } }).ok).toBe(false);
+    for (const domain of ['*.example.com', 'https://example.com', 'example.com/path', 'a.b'])
+      expect(parse({ permissions: ['browser.control'], browser: { domains: [domain] } }).ok).toBe(
+        false
+      );
+    const result = parse({
+      permissions: ['browser.control'],
+      browser: { domains: ['example.com', 'docs.example.org', 'example.com'] },
+    });
+    if (!result.ok) throw new Error('fixture');
+    expect(result.manifest.browser).toEqual({ domains: ['example.com', 'docs.example.org'] });
+  });
+
+  it('browser.domains 必须配套 browser.control 权限', () => {
+    expect(parse({ browser: { domains: ['example.com'] } }).ok).toBe(false);
+  });
+
+  it('白名单与权限都进入授权范围', () => {
+    const base = parse();
+    const next = parse({
+      permissions: ['browser.control'],
+      browser: { domains: ['example.com'] },
+    });
+    if (!base.ok || !next.ok) throw new Error('fixture');
+    expect(grantOf(next.manifest).browserDomains).toEqual(['example.com']);
+    expect(grantExpands(grantOf(base.manifest), grantOf(next.manifest))).toBe(true);
+    const wider = parse({
+      permissions: ['browser.control'],
+      browser: { domains: ['example.com', 'docs.example.org'] },
+    });
+    if (!wider.ok) throw new Error('fixture');
+    expect(grantExpands(grantOf(next.manifest), grantOf(wider.manifest))).toBe(true);
+    expect(grantExpands(grantOf(wider.manifest), grantOf(next.manifest))).toBe(false);
+  });
+});

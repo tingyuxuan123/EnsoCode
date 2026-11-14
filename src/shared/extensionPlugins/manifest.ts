@@ -40,6 +40,7 @@ export const EXTENSION_PLUGIN_PERMISSIONS = [
   'session.readAll',
   'session.focus',
   'session.create',
+  'browser.control',
 ] as const;
 export type ExtensionPluginPermission = (typeof EXTENSION_PLUGIN_PERMISSIONS)[number];
 
@@ -189,6 +190,8 @@ export interface ExtensionPluginManifest {
   permissions: ExtensionPluginPermission[];
   fs: { read: string[]; write: string[] };
   net: { domains: string[] };
+  /** 内嵌浏览器允许操作的精确主机名；只有声明了才出现在解析结果里 */
+  browser?: { domains: string[] };
   /** 允许调用的宿主 MCP 工具名（不限服务） */
   mcp: { tools: string[] };
   /** 常驻：启用即拉起，不因空闲退出 */
@@ -252,6 +255,7 @@ const MAX_PRESETS = 20;
 export const MAX_PLUGIN_AGENT_TYPES = 20;
 const MAX_SCHEDULES = 10;
 const MAX_ENV = 20;
+export const MAX_BROWSER_DOMAINS = 50;
 const TOP_LEVEL = new Set([
   'schemaVersion',
   'id',
@@ -265,6 +269,7 @@ const TOP_LEVEL = new Set([
   'permissions',
   'fs',
   'net',
+  'browser',
   'mcp',
   'resident',
   'env',
@@ -426,6 +431,16 @@ export function parseExtensionPluginManifest(
       (t) => parsePluginMcpGrant(t) !== null
     ),
   };
+  const browserRaw = raw.browser === undefined ? {} : raw.browser;
+  if (!isRecord(browserRaw)) errors.push('browser 不合法');
+  const browserDomains = stringList(
+    isRecord(browserRaw) ? browserRaw.domains : undefined,
+    'browser.domains',
+    // 只接受精确 host：通配、协议、路径与端口都拒绝
+    (d) => typeof d === 'string' && DOMAIN.test(d)
+  );
+  if (browserDomains.length > MAX_BROWSER_DOMAINS)
+    errors.push(`browser.domains 最多 ${MAX_BROWSER_DOMAINS} 项`);
 
   if (raw.resident !== undefined && typeof raw.resident !== 'boolean')
     errors.push('resident 不合法');
@@ -951,7 +966,12 @@ export function parseExtensionPluginManifest(
   need(fs.read.length > 0, 'fs.read', 'fs.read');
   need(fs.write.length > 0, 'fs.write', 'fs.write');
   need(net.domains.length > 0, 'net.fetch', 'net.domains');
+  need(browserDomains.length > 0, 'browser.control', 'browser.domains');
   need(mcp.tools.length > 0, 'mcp.call', 'mcp.tools');
+  if (raw.browser !== undefined && !permissions.includes('browser.control'))
+    errors.push('browser 需要权限 browser.control');
+  if (permissions.includes('browser.control') && browserDomains.length === 0)
+    errors.push('browser.control 需要在 browser.domains 里列出允许的精确主机名');
   if (permissions.includes('mcp.call') && mcp.tools.length === 0)
     errors.push('mcp.call 需要在 mcp.tools 里列出要调用的工具');
   if (
@@ -987,6 +1007,7 @@ export function parseExtensionPluginManifest(
       permissions,
       fs,
       net,
+      ...(browserDomains.length > 0 ? { browser: { domains: browserDomains } } : {}),
       mcp,
       resident,
       env,

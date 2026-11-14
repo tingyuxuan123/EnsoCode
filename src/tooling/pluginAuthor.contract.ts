@@ -3,6 +3,8 @@ import type {
   DraftWrite,
   InvocationContext,
   PluginAgentSource,
+  PluginBrowserOp,
+  PluginInspectEntry,
   PluginMainApi,
   PluginRendererApi,
   PluginSlot,
@@ -19,6 +21,8 @@ import type {
   PluginToolCardSlot,
 } from '../renderer/plugins/slots';
 import type { PluginTriggerItem } from '../renderer/plugins/triggers';
+import type { PluginInspectEntry as HostInspectEntry } from '../shared/browser/inspection';
+import type { PluginBrowserOp as HostBrowserOp } from '../shared/extensionPlugins/browserBridge';
 import type {
   PluginToolResult as HostToolResult,
   MainToPluginHost,
@@ -89,6 +93,7 @@ export type AuthorContract = [
       | 'artifacts'
       | 'session'
       | 'host'
+      | 'browser'
     >
   >,
   Check<Equal<keyof PluginMainApi['tools'], 'register'>>,
@@ -110,6 +115,14 @@ export type AuthorContract = [
   Check<Equal<ReturnType<PluginMainApi['config']['get']>, Promise<ReturnType<GateDeps['config']>>>>,
   Check<Equal<ReturnType<PluginMainApi['mcp']['tools']>, ReturnType<GateDeps['mcpTools']>>>,
   Check<Equal<ReturnType<PluginMainApi['mcp']['call']>, ReturnType<GateDeps['mcpCall']>>>,
+  Check<
+    Equal<
+      ReturnType<PluginMainApi['browser']['invoke']>,
+      ReturnType<NonNullable<GateDeps['browser']>>
+    >
+  >,
+  Check<Equal<PluginBrowserOp, HostBrowserOp>>,
+  Check<Equal<PluginInspectEntry, HostInspectEntry>>,
   Check<Equal<keyof PluginMainApi['composer'], DraftRequest['op']>>,
   Check<
     Equal<

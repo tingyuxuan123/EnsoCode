@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>需求助手</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    color-scheme: light;
+    --bg: #fbfbf9; --panel: #ffffff; --sunken: #f4f4f1; --text: #1f2328; --muted: #61676e;
+    --border: #e4e5e1; --border-strong: #ced0cb; --accent: #1f6feb; --accent-soft: #eaf1fd;
+    --danger: #b42318; --danger-soft: #fdecea; --warn: #8a5a00; --warn-soft: #fdf4e3;
+    --ok: #1a7f45; --ok-soft: #e9f5ee; --radius: 8px;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --bg: #1b1d1f; --panel: #232628; --sunken: #1a1c1e; --text: #e6e7e9; --muted: #a3a9ae;
+    --border: #33373a; --border-strong: #464b4f; --accent: #6aa7ff; --accent-soft: #1d2b3f;
+    --danger: #ff8f80; --danger-soft: #35211f; --warn: #e7b96a; --warn-soft: #322a1c;
+    --ok: #6ecf9b; --ok-soft: #1c2f26;
+  }
+  body { margin: 0; padding: 14px 14px 28px; background: var(--bg); color: var(--text); font: 13px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+  .wrap { display: flex; flex-direction: column; gap: 10px; } .head h1 { margin: 0; font-size: 15px; font-weight: 600; } .head p, .hint, .empty { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+  .card { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+  .card > h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  input[type='text'], textarea, select { width: 100%; font: inherit; font-size: 12.5px; color: var(--text); background: var(--sunken); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; }
+  textarea { resize: vertical; line-height: 1.5; } input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: 1px solid var(--accent); }
+  .row { display: flex; gap: 8px; align-items: flex-end; } .row .grow { flex: 1 1 auto; min-width: 0; }
+  .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn { font: inherit; font-size: 12.5px; padding: 5px 11px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer; }
+  .btn:hover:not(:disabled) { background: var(--sunken); } .btn:disabled { opacity: 0.45; cursor: default; } .btn.primary { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+  .badge { font-size: 11.5px; font-weight: 400; letter-spacing: 0; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); }
+  .badge.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; } .tasks, .changes { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .task { display: flex; flex-direction: column; gap: 4px; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+  .task-head { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; } .task-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .task-title { font-size: 12.5px; font-weight: 600; word-break: break-word; }
+  .task-meta { font-size: 11.5px; color: var(--muted); } .task-reason { font-size: 11.5px; color: var(--warn); }
+  .change { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: start; }
+  .change-label { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); }
+  .val { padding: 4px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--sunken); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+  .val.after { border-color: var(--accent); background: var(--accent-soft); } .arrow { padding-top: 3px; color: var(--muted); font-size: 12px; }
+  .alert, .notice { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+  .alert { border: 1px solid var(--danger); background: var(--danger-soft); color: var(--danger); } .notice { border: 1px solid var(--border-strong); background: var(--sunken); color: var(--muted); }
+  @media (max-width: 460px) { .change { grid-template-columns: minmax(0, 1fr); } .arrow { display: none; } }
+  [hidden] { display: none; } .hint:empty { display: none; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head">
+    <h1>需求助手</h1>
+    <p>粘贴表格链接，读取我的待办，选一条开始处理；回填前会先给你看改动。</p>
+  </header>
+  <p id="alert" class="alert" role="alert" hidden></p>
+  <p id="notice" class="notice" role="status" hidden></p>
+  <p id="busy" class="hint" role="status" aria-live="polite"></p>
+
+  <section class="card">
+    <h2>表格来源</h2>
+    <div class="field"><label for="f-url">表格链接</label><input id="f-url" type="text" autocomplete="off" spellcheck="false" placeholder="粘贴能直接编辑的表格分享链接" /></div>
+    <div class="row">
+      <div class="field grow"><label for="f-owner">只看我的需求（负责人）</label><input id="f-owner" type="text" autocomplete="off" maxlength="20" value="谢" /></div>
+      <button id="btn-load" class="btn primary" type="button">读取待办</button>
+    </div>
+    <p id="source-meta" class="hint"></p>
+    <p class="hint">点按钮才会读取，只读表格、不改内容；链接只保存在本机。</p>
+  </section>
+
+  <section class="card">
+    <h2>我的待办 <span id="conn" class="badge">未连接</span></h2>
+    <p id="tasks-empty" class="empty" hidden></p>
+    <ul id="tasks" class="tasks"></ul>
+  </section>
+
+  <section id="exec-card" class="card" hidden>
+    <h2>正在处理</h2>
+    <p id="exec-meta" class="hint"></p>
+    <p id="exec-hint" class="hint" hidden></p>
+    <div class="actions">
+      <button id="btn-send" class="btn primary" type="button">交给 Agent</button>
+      <button id="btn-reconcile" class="btn" type="button" hidden>核对表格</button>
+    </div>
+    <div class="field"><label for="f-summary">处理说明</label><textarea id="f-summary" rows="3" maxlength="500" placeholder="改了什么、影响哪里"></textarea></div>
+    <div class="field">
+      <label for="f-verification">测试情况</label>
+      <select id="f-verification"><option value="not_tested">未测试</option><option value="cannot_reproduce">无法复现</option><option value="local_passed">本地通过</option><option value="test_env_passed">测试环境通过</option></select>
+      <textarea id="f-testing" rows="2" maxlength="1000" aria-label="测试说明" placeholder="怎么测的、结果如何；未测请说明原因"></textarea>
+    </div>
+    <div class="field"><label for="f-steps">复测步骤（每行一步）</label><textarea id="f-steps" rows="3" maxlength="4000"></textarea></div>
+    <div class="row">
+      <div class="field grow"><label for="f-blocked">回填结果</label><select id="f-blocked"><option value="no">完成，待测试</option><option value="yes">受阻</option></select></div>
+      <button id="btn-preview" class="btn" type="button">预览回填</button>
+    </div>
+    <p id="form-hint" class="hint" hidden></p>
+    <p class="hint">预览只在本页显示改动，不会写进表格；回填只到“待测试”或“受阻”，验收仍由人来做。</p>
+  </section>
+
+  <section id="preview-card" class="card" hidden>
+    <h2>待确认的改动</h2>
+    <p id="preview-title" class="hint"></p>
+    <ul id="changes" class="changes"></ul>
+    <div class="actions">
+      <button id="btn-confirm" class="btn primary" type="button">确认写入表格</button>
+      <button id="btn-cancel" class="btn" type="button">先不写</button>
+    </div>
+    <p class="hint">确认只按这份内容执行一次；失败或超时不会自动重试。</p>
+  </section>
+</main>
+<script>
+(() => {
+  'use strict';
+
+  const VERIFY = ['not_tested', 'cannot_reproduce', 'local_passed', 'test_env_passed'];
+  const BAD_PHASE = ['unknown', 'partial', 'conflict', 'not_applied'];
+  const PHASE = {
+    claimed: '已领取，等待处理', delivered: '已回填，等待测试', unknown: '结果没确认，需要核对', partial: '只写进去一部分，需要核对',
+    conflict: '表格内容和预期不一致，需要核对', not_applied: '还没有写入', cancelled: '本次未写入，可重新选择需求',
+  };
+  const FIELD = { status: '状态', notes: '备注', tests: '测试情况', owner: '负责人', description: '需求正文' };
+  const REASON = {
+    already_claimed: '已经有一条需求在处理中，先把它处理完。', duplicate: '这条和已处理的需求重复，先不用再领。',
+    status_not_pending: '这条现在不是“待处理”状态。', owner_mismatch: '这条不是分给你的。',
+    missing_id: '这条缺少编号，需要先在表格里补上。', busy: '正在处理另一条需求，稍后再来。',
+  };
+  const BUSY = {
+    load: '正在读取待办…', claim: '正在准备确认…', confirm: '正在写入表格…',
+    deliver: '正在准备回填…', send: '正在提交…', reconcile: '正在核对表格…',
+  };
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    alert: $('alert'), notice: $('notice'), busy: $('busy'), conn: $('conn'), url: $('f-url'), owner: $('f-owner'),
+    load: $('btn-load'), sourceMeta: $('source-meta'), tasksEmpty: $('tasks-empty'), tasks: $('tasks'),
+    execCard: $('exec-card'), execMeta: $('exec-meta'), execHint: $('exec-hint'), send: $('btn-send'),
+    reconcile: $('btn-reconcile'), summary: $('f-summary'), verification: $('f-verification'), testing: $('f-testing'),
+    steps: $('f-steps'), blocked: $('f-blocked'), previewBtn: $('btn-preview'),
+    formHint: $('form-hint'), previewCard: $('preview-card'), previewTitle: $('preview-title'),
+    changes: $('changes'), confirm: $('btn-confirm'), cancel: $('btn-cancel'),
+  };
+  const view = { data: null, busy: '', typedUrl: false, typedOwner: false, dirty: false, formKey: '', executionId: '', hiddenToken: '' };
+  const read = { status: 'idle', message: '' };
+  const markSourceDirty = () => {
+    if (read.status === 'ok') { read.status = 'idle'; read.message = ''; }
+    if (read.status === 'idle') render();
+  };
+  const text = (value) => (value === null || value === undefined ? '' : String(value));
+  const trimmed = (value) => text(value).trim();
+  const stepsText = (value) => (Array.isArray(value) ? value.map(text).filter(Boolean).join('\n') : text(value));
+  const errorText = (error) => {
+    const message = !error ? '未知错误' : typeof error === 'string' ? error : (error.message ? String(error.message) : String(error));
+    if(/read_range|unsupported|unknown browser op|invalid browser op|不支持的浏览器|浏览器操作无效|浏览器操作或参数不合法/i.test(message))return '当前主程序尚未加载新版表格读取能力，请重启开发版后再读取。';
+    if(/会话状态不允许|不允许插件修改文件/.test(message))return '当前是计划模式或会话尚未就绪，不能开始处理或回填；读取待办不受影响。';
+    if(/插件浏览器会话不可用/.test(message))return '插件浏览器会话未就绪，请关闭需求助手后重新打开再试。';
+    if(/covered or not hittable/.test(message))return '表格被网页提示挡住了，请先在浏览器完成登录或关闭提示，再读取一次。';
+    if(/未启用浏览器/.test(message))return '请先在当前项目的工具中启用浏览器，再读取待办。';
+    return message;
+  };
+  const call = (method, args) => {
+    const bridge = window.enso;
+    if (!bridge || typeof bridge.call !== 'function') return Promise.reject(new Error('页面没连上插件，请关闭后重新打开'));
+    return bridge.call(method, args === undefined ? {} : args);
+  };
+  const mk = (tag, className, value) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className; if (value !== undefined && value !== null) node.textContent = String(value);
+    return node;
+  };
+  const executionOf = () => (typeof view.data?.execution === 'object' ? view.data.execution : null);
+  const reportOf = () => {
+    const report = executionOf()?.report;
+    return report && typeof report === 'object' ? report : {};
+  };
+  const currentPreview = () => {
+    if(read.dirty||read.status==='loading'||read.status==='error')return null;
+    const preview = view.data?.preview;
+    if (!preview || typeof preview.token !== 'string' || !preview.token) return null;
+    return view.hiddenToken === preview.token ? null : preview;
+  };
+  const isState = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
+    && ('configured' in value || 'tasks' in value || 'execution' in value || 'connected' in value);
+  const previewOf = (result) => {
+    if (!result || typeof result !== 'object') return null;
+    if ('preview' in result) return result.preview && typeof result.preview === 'object' ? result.preview : null;
+    return typeof result.token === 'string' && result.token ? result : null;
+  };
+  const friendlyReason = (value) => {
+    const raw = trimmed(value);
+    return raw ? REASON[raw] || (/[\u4e00-\u9fa5]/.test(raw) ? raw : '这条暂时不能领取。') : '';
+  };
+  const say = (message, kind) => {
+    const target = kind === 'alert' ? el.alert : el.notice;
+    const other = kind === 'alert' ? el.notice : el.alert;
+    other.hidden = true; other.textContent = '';
+    target.hidden = !message; target.textContent = message || '';
+  };
+  const absorb = (result) => {
+    if (!isState(result)) return result;
+    view.data = { ...(view.data || {}), ...result }; render(); return result;
+  };
+
+  const renderSource = () => {
+    const data = view.data || {};
+    const settings = data.settings && typeof data.settings === 'object' ? data.settings : {};
+    const url = trimmed(settings.url);
+    const owner = trimmed(settings.owner);
+    if (!view.typedUrl && url && trimmed(el.url.value) !== url) el.url.value = url;
+    if (!view.typedOwner && owner) el.owner.value = owner;
+    el.conn.textContent = data.connected ? '已连接' : '未连接';
+    el.conn.className = data.connected ? 'badge ok' : 'badge';
+    const parts = [];
+    if (url) parts.push('来源已保存');
+    if (trimmed(settings.sheet)) parts.push(`工作表：${trimmed(settings.sheet)}`);
+    if (owner) parts.push(`负责人：${owner}`);
+    el.sourceMeta.hidden = !parts.length; el.sourceMeta.textContent = parts.join(' · ');
+  };
+
+  const renderTasks = () => {
+    const data = view.data || {};
+    el.tasks.replaceChildren();
+    if (read.status !== 'ok') {
+      el.tasksEmpty.hidden = false;
+      el.tasksEmpty.textContent = read.status === 'loading' ? '正在读取待办…'
+        : read.status === 'error' ? `读取失败：${read.message || '请稍后再试'}。可再点一次“读取待办”重试。`
+        : read.dirty ? '链接或负责人已更改，需要重新读取后才能处理。'
+        : (data.configured ? '还没读取待办，点上面的“读取待办”。' : '先粘贴表格链接，点“读取待办”。');
+      return;
+    }
+    const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+    if (!tasks.length) {
+      el.tasksEmpty.hidden = false;
+      el.tasksEmpty.textContent = '暂时没有需要你处理的需求。';
+      return;
+    }
+    el.tasksEmpty.hidden = true;
+    for (const task of tasks) {
+      const item = mk('li', 'task');
+      const head = mk('div', 'task-head');
+      const main = mk('div', 'task-main');
+      main.append(mk('div', 'task-title', trimmed(task.description) || '（这条没有填写需求描述）'), mk('div', 'task-meta', `状态：${trimmed(task.status) || '待处理'}`));
+      head.append(main);
+      if (task.claimable) {
+        const start = mk('button', 'btn', '开始处理');
+        start.type = 'button'; start.disabled = !!view.busy;
+        start.addEventListener('click', () => void prepareClaim(text(task.id)));
+        head.append(start);
+      }
+      item.append(head);
+      if (!task.claimable) item.append(mk('div', 'task-reason', friendlyReason(task.reason) || '这条暂时不能领取。'));
+      el.tasks.append(item);
+    }
+  };
+
+  const renderExecution = () => {
+    const execution = executionOf();
+    el.execCard.hidden = !execution;
+    if (!execution) return;
+    const tasks = Array.isArray(view.data.tasks) ? view.data.tasks : [];
+    const bound = tasks.find((task) => text(task.id) === text(execution.taskId));
+    const title = trimmed(bound?.description) || trimmed(execution.description) || '当前需求';
+    el.execMeta.textContent = `${title} · ${PHASE[trimmed(execution.phase)] || '处理中'}`;
+    const dispatch = trimmed(execution.dispatch);
+    const editable=execution.phase==='claimed'&&!read.dirty&&read.status!=='error';
+    el.send.disabled = !!view.busy || !editable || dispatch === 'accepted' || dispatch === 'unknown';
+    el.send.textContent = dispatch === 'accepted' ? '已提交' : dispatch === 'unknown' ? '提交待确认' : '交给 Agent';
+    el.execHint.hidden = !dispatch;
+    el.execHint.textContent = dispatch === 'accepted' ? '已提交到当前对话，忙的时候会排队。' : '提交结果没确认：去当前对话看一眼，别重复点。';
+    el.reconcile.hidden = !BAD_PHASE.includes(trimmed(execution.phase));
+    el.reconcile.disabled = !!view.busy; el.previewBtn.disabled = !!view.busy||!editable; el.blocked.disabled = !!view.busy||!editable;
+    for(const field of [el.summary,el.verification,el.testing,el.steps])field.disabled=!!view.busy||!editable;
+    const report = reportOf();
+    const key = [text(execution.executionId), text(report.summary), text(report.verification), text(report.testing||report.actual), stepsText(report.steps)].join('|');
+    if (key === view.formKey || (view.dirty && view.executionId === text(execution.executionId))) return;
+    view.formKey = key; view.executionId = text(execution.executionId); view.dirty = false;
+    el.summary.value = text(report.summary).slice(0, 4000);
+    el.verification.value = VERIFY.includes(text(report.verification)) ? text(report.verification) : 'not_tested';
+    el.testing.value = text(report.testing || report.actual).slice(0, 2000);
+    el.steps.value = stepsText(report.steps).slice(0, 4000);
+    const filled = !!(trimmed(el.summary.value) || trimmed(el.testing.value) || trimmed(el.steps.value));
+    el.formHint.hidden = !filled;
+    el.formHint.textContent = filled ? '已带入 Agent 写好的报告，可以直接改。' : '';
+  };
+
+  const renderPreview = () => {
+    const preview = currentPreview();
+    el.previewCard.hidden = !preview; el.changes.replaceChildren();
+    if (!preview) return;
+    el.confirm.disabled = !!view.busy; el.cancel.disabled = !!view.busy;
+    el.confirm.textContent=preview.kind==='claim'?'确认并交给 Agent':'确认回填表格';
+    const changes = Array.isArray(preview.changes) ? preview.changes : [];
+    if (!changes.length) {
+      el.previewTitle.textContent = '没有可以写入的改动，请重新读取后再试。';
+      el.confirm.disabled = true;
+      return;
+    }
+    const tasks = Array.isArray(view.data.tasks) ? view.data.tasks : [];
+    const bound = tasks.find((task) => text(task.id) === text(preview.taskId));
+    el.previewTitle.textContent = bound ? `「${trimmed(bound.description)}」写入后：` : '写入表格后会变成：';
+    for (const change of changes) {
+      const item = mk('li', 'change');
+      item.append(mk('div', 'change-label', FIELD[text(change.field)] || '表格内容'), mk('div', 'val', trimmed(change.before) || '（空）'), mk('div', 'arrow', '→'), mk('div', 'val after', trimmed(change.after) || '（空）'));
+      el.changes.append(item);
+    }
+  };
+
+  const render = () => {
+    renderSource(); renderTasks(); renderExecution(); renderPreview();
+    el.load.disabled = !!view.busy;
+    el.url.disabled=!!view.busy;el.owner.disabled=!!view.busy;
+    el.busy.textContent = view.busy ? BUSY[view.busy] || '处理中…' : '';
+  };
+
+  const run = async (label, work) => {
+    if (view.busy) return;
+    view.busy = label;
+    say('');
+    render();
+    try { await work(); } catch (reason) { say(errorText(reason), 'alert'); } finally { view.busy = ''; render(); }
+  };
+
+  const showPreview = (result, label) => {
+    const preview = previewOf(result);
+    absorb(result);
+    if (!preview) throw new Error(`没拿到${label}内容，请重新读取后再试一次。`);
+    view.data = { ...(view.data || {}), preview };
+    view.hiddenToken = '';
+    render();
+  };
+
+  const readTasks = async () => {
+    if (view.busy) return;
+    read.status = 'loading'; read.message = ''; read.dirty = false;
+    await run('load', async () => {
+      try {
+        const url = trimmed(el.url.value);
+        if (!url) throw new Error('请先粘贴表格链接。');
+        absorb(await call('load', { url, owner: trimmed(el.owner.value) || '谢' }));
+        const data = view.data || {};
+        if (trimmed(data.error)) throw new Error(trimmed(data.error));
+        if (!Array.isArray(data.tasks)) throw new Error('没读到待办列表，请重新读取一次。');
+        read.status = 'ok'; read.dirty = false;
+        say(data.tasks.length ? `读到 ${data.tasks.length} 条待办，选一条点“开始处理”。` : '表格里暂时没有需要你处理的需求。', 'notice');
+      } catch (reason) {
+        read.status = 'error'; read.message = errorText(reason);
+        throw reason;
+      }
+    });
+  };
+
+  const prepareClaim = (taskId) => run('claim', async () => {
+    if (!taskId) throw new Error('这条需求缺少编号，没法开始处理。');
+    showPreview(await call('prepare_claim', { taskId }), '确认');
+  });
+
+  const confirmPreview = () => run('confirm', async () => {
+    const preview = currentPreview();
+    if (!preview) throw new Error('没有待确认的改动。');
+    view.hiddenToken = preview.token;
+    absorb(await call('confirm', { token: preview.token }));
+    const phase = trimmed(executionOf()?.phase);
+    if (BAD_PHASE.includes(phase)) {
+      say('写入结果没确认，请点“核对表格”看实际内容；不要重复确认。', 'alert');
+      return;
+    }
+    if (!phase) {
+      say('确认请求已提交，请以表格里的实际内容为准。', 'notice');
+      return;
+    }
+    if(phase==='claimed'&&preview.kind==='claim'){
+      try{absorb(await call('send_task',{}));}
+      catch(error){try{absorb(await call('state',{}));}catch{}throw error;}
+      say('已领取并提交到当前对话，忙的时候会排队。','notice');
+      return;
+    }
+    say('已按确认的内容更新表格。', 'notice');
+  });
+
+  const sendTask = () => run('send', async () => {
+    absorb(await call('send_task', {}));
+    const dispatch = trimmed(executionOf()?.dispatch);
+    if (dispatch === 'unknown') say('提交结果没确认：去当前对话看一眼，不要重复点。', 'alert');
+    else if (dispatch === 'accepted') say('已提交到当前对话，忙的时候会排队。', 'notice');
+    else say('提交请求已发出，请到当前对话确认。', 'notice');
+  });
+
+  const previewDelivery = () => run('deliver', async () => {
+    const summary = trimmed(el.summary.value);
+    if (!summary) { el.summary.focus(); throw new Error('请先写一句处理说明。'); }
+    const report = reportOf();
+    const extra = {};
+    if (trimmed(report.environment)) extra.environment = trimmed(report.environment);
+    if (trimmed(report.version)) extra.version = trimmed(report.version);
+    await call('save_simple_report', {
+      summary,
+      verification: el.verification.value,
+      testing: trimmed(el.testing.value),
+      steps: el.steps.value.split('\n').map((line) => line.trim()).filter(Boolean),
+      ...extra,
+    });
+    showPreview(await call('prepare_delivery', { blocked: el.blocked.value === 'yes' }), '回填预览');
+    say('预览已生成，确认后才会写进表格。', 'notice');
+  });
+
+  const reconcile = () => run('reconcile', async () => {
+    absorb(await call('reconcile', {}));
+    say('已重新核对表格，请以这里显示的实际内容为准。', 'notice');
+  });
+
+  const cancelPreview = () => {
+    const preview = currentPreview();
+    if (preview) view.hiddenToken = preview.token;
+    render();
+    say('已在本页收起预览，没有写入任何内容。', 'notice');
+  };
+
+  el.url.addEventListener('input', () => {
+    view.typedUrl = true; read.dirty = true; markSourceDirty();
+  });
+  el.owner.addEventListener('input', () => {
+    view.typedOwner = true; read.dirty = true; markSourceDirty();
+  });
+  el.load.addEventListener('click', readTasks); el.send.addEventListener('click', sendTask);
+  el.reconcile.addEventListener('click', reconcile); el.previewBtn.addEventListener('click', previewDelivery);
+  el.confirm.addEventListener('click', confirmPreview); el.cancel.addEventListener('click', cancelPreview);
+  for (const field of [el.summary, el.testing, el.steps]) field.addEventListener('input', () => { view.dirty = true; });
+
+  render();
+  void (async () => {
+    try {
+      absorb(await call('state', {}));
+      const data = view.data || {};
+      if (trimmed(data.error)) {
+        read.status = 'error'; read.message = errorText(trimmed(data.error)); say(read.message, 'alert');
+      } else {
+        read.status = data.sync?.done === true && data.connected === true ? 'ok' : 'idle';
+        read.dirty = false;
+        if (read.status === 'idle') say(data.configured ? '还没读取待办，点“读取待办”开始。' : '先粘贴表格链接，点“读取待办”开始。', 'notice');
+      }
+      render();
+    } catch (reason) { say(errorText(reason), 'alert'); }
+  })();
+})();
+</script>
+</body>
+</html>

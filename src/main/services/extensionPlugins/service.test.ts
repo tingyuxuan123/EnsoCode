@@ -293,6 +293,44 @@ describe('desktop plugin service', () => {
     expect(await s.approvePending('enso.test')).toEqual({ ok: true });
     expect(s.list().plugins[0]).toMatchObject({ version: '4', state: 'enabled' });
   });
+  it('浏览器域名白名单进入预览与授权范围，加域名要重新批准', async () => {
+    const { service: s } = setup();
+    const staged = await s.stage(
+      source({
+        permissions: ['agent.tool', 'browser.control'],
+        browser: { domains: ['example.com'] },
+      }),
+      1
+    );
+    if (!staged.ok) throw new Error(staged.error);
+    expect(staged.preview).toMatchObject({
+      permissions: expect.arrayContaining(['browser.control']),
+      browserDomains: ['example.com'],
+      expands: true,
+    });
+    expect(await s.commit(staged.preview.token, 1)).toEqual({ ok: true, enabled: true });
+    expect(s.list().plugins[0]).toMatchObject({ version: '1', state: 'enabled' });
+
+    const wider = await s.stage(
+      source({
+        version: '2',
+        permissions: ['agent.tool', 'browser.control'],
+        browser: { domains: ['example.com', 'docs.example.org'] },
+      }),
+      1
+    );
+    if (!wider.ok) throw new Error(wider.error);
+    expect(wider.preview).toMatchObject({
+      browserDomains: ['example.com', 'docs.example.org'],
+      expands: true,
+    });
+    expect(await s.commit(wider.preview.token, 1)).toEqual({ ok: true });
+    expect(s.list().plugins[0]).toMatchObject({
+      version: '1',
+      state: 'enabled',
+      pendingVersion: '2',
+    });
+  });
   it('binds one-use installation tokens to exact initiating window', async () => {
     const { service: s } = setup();
     const staged = await s.stage(source(), 7);

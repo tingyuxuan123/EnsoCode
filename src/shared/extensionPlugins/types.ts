@@ -167,6 +167,8 @@ export interface ExtensionPluginInstallPreview {
   fsRead: string[];
   fsWrite: string[];
   netDomains: string[];
+  /** 内嵌浏览器允许的精确 host；没有声明为空数组 */
+  browserDomains: string[];
   mcpServers: { name: string; command: string; args: string[]; envKeys: string[] }[];
   /** 允许调用的宿主 MCP 工具名 */
   mcpTools: string[];

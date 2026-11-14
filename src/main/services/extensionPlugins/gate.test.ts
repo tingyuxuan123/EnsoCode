@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { PluginBrowserBridgeInput } from '@shared/extensionPlugins/browserBridge';
 import type { ExtensionPluginManifest } from '@shared/extensionPlugins/manifest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type GateDeps, PluginHostGate } from './gate';
@@ -1127,5 +1128,275 @@ describe('常驻进程里的会话操作', () => {
     ).resolves.toBeNull();
     expect(inject).toHaveBeenCalledTimes(1);
     expect(abort).toHaveBeenCalledWith('a.b', 's1');
+  });
+});
+
+describe('浏览器桥 browser.invoke', () => {
+  const browserManifest = (patch: Partial<ExtensionPluginManifest> = {}) =>
+    manifest({
+      permissions: ['browser.control'],
+      browser: { domains: ['example.com'] },
+      ...patch,
+    });
+
+  const wire = (
+    handler: (input: PluginBrowserBridgeInput) => Promise<unknown> = async () => ({
+      url: 'https://example.com/',
+    })
+  ) => {
+    deps.manifest = () => browserManifest();
+    deps.browser = vi.fn(handler);
+    gate = new PluginHostGate(deps);
+    return deps.browser as unknown as ReturnType<typeof vi.fn>;
+  };
+
+  it('需要 browser.control 与清单白名单', async () => {
+    const invoke = wire();
+    deps.manifest = () => manifest({ permissions: [] });
+    gate = new PluginHostGate(deps);
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'snapshot', params: { tabId: 'browser:1' } },
+        agentCall()
+      )
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+
+    deps.manifest = () => manifest({ permissions: ['browser.control'] });
+    gate = new PluginHostGate(deps);
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'snapshot', params: { tabId: 'browser:1' } },
+        agentCall()
+      )
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('只读 op 不需要写权限，写 op 走会话策略', async () => {
+    deps.invocationPolicy = vi.fn(async () => ({ allowWrite: false, allowMcpCall: false }));
+    const invoke = wire();
+    const inv = agentCall();
+    const call = (op: string, params: Record<string, unknown>) =>
+      gate.handle('a.b', 'browser.invoke', { op, params }, inv);
+
+    for (const op of ['snapshot', 'read', 'inspect', 'copy_selection']) {
+      const params =
+        op === 'inspect' ? { tabId: 'browser:1', selector: '#main' } : { tabId: 'browser:1' };
+      await expect(call(op, params)).resolves.toBeTruthy();
+    }
+    for (const [op, params] of [
+      ['navigate', { url: 'https://example.com/' }],
+      ['click', { tabId: 'browser:1', ref: 'e1' }],
+      ['fill', { tabId: 'browser:1', ref: 'e1', value: 'x' }],
+      ['press_key', { tabId: 'browser:1', key: 'Enter' }],
+      ['insert_text', { tabId: 'browser:1', text: '需求' }],
+    ] as const)
+      await expect(call(op, params)).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect(invoke).toHaveBeenCalledTimes(4);
+
+    deps.invocationPolicy = vi.fn(async () => ({ allowWrite: true, allowMcpCall: true }));
+    gate = new PluginHostGate(deps);
+    const writeInv = agentCall();
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'navigate', params: { url: 'https://example.com/app' } },
+        writeInv
+      )
+    ).resolves.toBeTruthy();
+  });
+
+  it('参数严格校验，危险键一律拒绝', async () => {
+    const invoke = wire();
+    const inv = agentCall();
+    for (const args of [
+      { op: 'cdp', params: { tabId: 'browser:1', method: 'Runtime.evaluate' } },
+      { op: 'snapshot', params: { tabId: 'browser:1', method: 'Page.navigate' } },
+      { op: 'inspect', params: { tabId: 'browser:1', selector: 'a', expression: 'alert(1)' } },
+      { op: 'navigate', params: { url: 'https://example.com/', cookies: true } },
+      { op: 'evaluate', params: { js: 'document.cookie' } },
+      { op: 'copy_selection', params: { tabId: 'browser:1', key: 'Meta+C' } },
+      { op: 'insert_text', params: { tabId: 'browser:1', text: 'x', selector: '#cell' } },
+      { op: 'insert_text', params: { tabId: 'browser:1', text: 1 } },
+    ])
+      await expect(gate.handle('a.b', 'browser.invoke', args, inv)).rejects.toMatchObject({
+        code: 'INVALID_ARGS',
+      });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('新对话Plan界面可以固定读取范围，但通用浏览器写动作仍然拒绝', async () => {
+    deps.manifest = () => browserManifest({ browser: { domains: ['www.kdocs.cn'] } });
+    deps.invocationPolicy = vi.fn(async () => ({ allowWrite: false, allowMcpCall: false }));
+    deps.browser = vi.fn(async () => ({
+      text: '需求\t负责人',
+      range: { sheetId: '1', rowFrom: 0, rowTo: 200, colFrom: 0, colTo: 11 },
+    }));
+    gate = new PluginHostGate(deps);
+    const inv = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: 's1',
+      projectRoot: root,
+      gesture: true,
+      kind: 'ui',
+    });
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'read_range', params: { url: 'https://www.kdocs.cn/l/demo', address: 'A1:L201' } },
+        inv
+      )
+    ).resolves.toMatchObject({ text: '需求\t负责人' });
+    expect(deps.browser).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'ui', op: 'read_range' })
+    );
+    expect(deps.invocationPolicy).not.toHaveBeenCalled();
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'insert_text', params: { tabId: 'browser:1', text: '改需求' } },
+        inv
+      )
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('拒绝子会话、远端、事件、定时与插件互调', async () => {
+    const invoke = wire();
+    const params = { op: 'snapshot', params: { tabId: 'browser:1' } };
+    const childCall = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: 's1',
+      projectRoot: root,
+      gesture: false,
+      agent: { kind: 'subagent', sessionId: 's1::x', name: 'worker' },
+    });
+    const remoteCall = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: 's1',
+      projectRoot: root,
+      gesture: true,
+      remote: true,
+    });
+    const background = (['schedule', 'event', 'export'] as const).map((kind) =>
+      gate.invocations.create({
+        pluginId: 'a.b',
+        sessionId: 's1',
+        projectRoot: root,
+        gesture: false,
+        kind,
+      })
+    );
+    for (const inv of [childCall, remoteCall, ...background])
+      await expect(gate.handle('a.b', 'browser.invoke', params, inv)).rejects.toMatchObject({
+        code: 'PERMISSION_DENIED',
+      });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('界面调用不强制手势：点击后的连续同步仍可读写', async () => {
+    const invoke = wire(async () => ({ tabId: 'browser:1', url: 'https://example.com/' }));
+    // kind: 'ui' 且没有手势：用户点击触发的 Chromium 激活过期后仍要能继续同步
+    const inv = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: 's1',
+      projectRoot: root,
+      gesture: false,
+      kind: 'ui',
+    });
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'navigate', params: { url: 'https://example.com/' } },
+        inv
+      )
+    ).resolves.toMatchObject({ tabId: 'browser:1' });
+    await expect(
+      gate.handle('a.b', 'browser.invoke', { op: 'snapshot', params: { tabId: 'browser:1' } }, inv)
+    ).resolves.toBeTruthy();
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('没有会话上下文或浏览器未接通时拒绝', async () => {
+    wire();
+    const noSession = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: null,
+      projectRoot: root,
+      gesture: false,
+    });
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'snapshot', params: { tabId: 'browser:1' } },
+        noSession
+      )
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+
+    deps.browser = undefined;
+    gate = new PluginHostGate(deps);
+    await expect(
+      gate.handle(
+        'a.b',
+        'browser.invoke',
+        { op: 'snapshot', params: { tabId: 'browser:1' } },
+        agentCall()
+      )
+    ).rejects.toMatchObject({ code: 'UNSUPPORTED' });
+  });
+
+  it('取消的调用在动手前就失败', async () => {
+    const invoke = wire();
+    const inv = uiCall();
+    gate.invocations.cancel(inv);
+    await expect(
+      gate.handle('a.b', 'browser.invoke', { op: 'snapshot', params: { tabId: 'browser:1' } }, inv)
+    ).rejects.toMatchObject({ code: 'ABORTED' });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('把白名单、会话与取消信号交给 Main 桥', async () => {
+    const invoke = wire(async () => 'snapshot-text');
+    const inv = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: 's1',
+      projectRoot: root,
+      sessionGeneration: 'gen-1',
+      gesture: true,
+    });
+    await expect(
+      gate.handle('a.b', 'browser.invoke', { op: 'snapshot', params: { tabId: 'browser:1' } }, inv)
+    ).resolves.toBe('snapshot-text');
+    const [input] = invoke.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(input).toMatchObject({
+      sessionId: 's1',
+      projectRoot: root,
+      sessionGeneration: 'gen-1',
+      op: 'snapshot',
+      params: { tabId: 'browser:1' },
+      domains: ['example.com'],
+    });
+    expect(input.agent).toBeUndefined();
+    expect(input.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('能力探测如实反映浏览器桥是否接通', async () => {
+    wire();
+    await expect(gate.handle('a.b', 'host.capabilities', {}, agentCall())).resolves.toMatchObject({
+      browser: true,
+    });
+    deps.browser = undefined;
+    gate = new PluginHostGate(deps);
+    await expect(gate.handle('a.b', 'host.capabilities', {}, agentCall())).resolves.toMatchObject({
+      browser: false,
+    });
   });
 });

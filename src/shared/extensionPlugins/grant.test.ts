@@ -6,6 +6,7 @@ const grant = (patch: Partial<PluginGrant> = {}): PluginGrant => ({
   fsRead: ['docs'],
   fsWrite: [],
   netDomains: ['api.example.com'],
+  browserDomains: [],
   mcp: [{ name: 'demo', command: 'node', args: ['server.js'], envKeys: [] }],
   mcpTools: ['search_context'],
   renderer: false,
@@ -38,9 +39,18 @@ describe('upstream grantExpands compatibility', () => {
     expect(grantExpands(legacy as PluginGrant, grant())).toBe(true);
   });
 
+  it('旧记录没有浏览器域名时按空处理', () => {
+    const { browserDomains: _omit, ...legacy } = grant();
+    expect(grantExpands(legacy as PluginGrant, grant({ browserDomains: [] }))).toBe(false);
+    expect(grantExpands(legacy as PluginGrant, grant({ browserDomains: ['example.com'] }))).toBe(
+      true
+    );
+  });
+
   it.each<[string, Partial<PluginGrant>]>([
     ['新增权限', { permissions: ['agent.tool', 'fs.read', 'net.fetch', 'mcp.server', 'fs.write'] }],
     ['只加一个域名', { netDomains: ['api.example.com', 'evil.example.com'] }],
+    ['新增浏览器域名', { browserDomains: ['example.com'] }],
     ['fs 变宽', { fsRead: ['.'] }],
     ['fs 换成兄弟目录', { fsRead: ['docs2'] }],
     [

@@ -1,6 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertAllowedCdpMethod } from '@shared/browser/cdpPolicy';
+import {
+  type CopySelectionResult,
+  pageCopySelectionCleanupScript,
+  pageCopySelectionInstallScript,
+  pageCopySelectionReadScript,
+  parseCopySelectionResult,
+} from '@shared/browser/copySelection';
 import { parseDesignBinding, sanitizeUiElementPayload } from '@shared/browser/designMode';
 import { parseBrowserDevice } from '@shared/browser/devices';
 import {
@@ -14,6 +22,17 @@ import {
   resetUndockedDevtoolsPreference,
 } from '@shared/browser/devtools';
 import { pickFaviconUrl } from '@shared/browser/favicon';
+import {
+  INSERT_TEXT_MAX_BYTES,
+  pageActiveElementCheckScript,
+  parseActiveElementCheck,
+  utf8Length,
+} from '@shared/browser/insertText';
+import {
+  type PluginInspectEntry,
+  pageInspectScript,
+  parseInspectEntries,
+} from '@shared/browser/inspection';
 import {
   pageCheckedScript,
   pagePrepareInputScript,
@@ -62,6 +81,23 @@ import { assertAllowedUrl } from '@shared/browser/urlPolicy';
 import type { BrowserViewport } from '@shared/browser/viewport';
 import { effectiveBrowserViewport } from '@shared/browser/viewport';
 import { wpsStaticResourceRedirect } from '@shared/browser/wpsCompatibility';
+import {
+  isWpsDocumentUrl,
+  pageWpsRangePrepareScript,
+  pageWpsRangeRecheckScript,
+  pageWpsRangeVerifyScript,
+  pageWpsReadinessScript,
+  pageWpsSheetScript,
+  parseWpsRangeAddress,
+  parseWpsRangePrepare,
+  parseWpsRangeReady,
+  parseWpsRangeRecheck,
+  parseWpsRangeSheet,
+  parseWpsRangeVerify,
+  WPS_RANGE_READY_INTERVAL_MS,
+  WPS_RANGE_READY_TIMEOUT_MS,
+  type WpsRangeReadResult,
+} from '@shared/browser/wpsRange';
 import { mergeBrowserSearchTabs } from '@shared/searchAnything';
 import type { BrowserOp } from '@shared/types/agent';
 import type {
@@ -104,6 +140,18 @@ const SCREENSHOT_MAX_WIDTH = 1280;
  * 元素、截图为空），所以再用 CDP `Emulation.setDeviceMetricsOverride` 撑出尺寸。
  */
 const HEADLESS_BOUNDS = { width: 1280, height: 800 };
+
+/**
+ * 宿主内部 op：只给 Main 的插件桥用，不进 worker / 模型的 BrowserOp 闭集。
+ * 插件不能自报方法名或 JS，脚本由 Main 固定。
+ */
+export const BROWSER_HOST_INTERNAL_OPS = [
+  'plugin_copy_selection',
+  'plugin_insert_text',
+  'plugin_read_wps_range',
+] as const;
+export type BrowserHostInternalOp = (typeof BROWSER_HOST_INTERNAL_OPS)[number];
+export type BrowserHostOp = BrowserOp | BrowserHostInternalOp;
 
 export function partitionName(isPackaged: boolean): string {
   return `persist:${isPackaged ? 'enso' : 'enso-dev'}${PARTITION_SUFFIX}`;
@@ -239,6 +287,8 @@ interface Tab {
   queue: Promise<unknown>;
   active?: AbortController;
   operationSignal?: AbortSignal;
+  /** Main 注入的队列内权限复查，不接受页面或插件函数。 */
+  operationGuard?: () => void;
   emulationQueue: Promise<void>;
   emulationKey?: string;
   emulationOverridesVisibleSize?: boolean;
@@ -1236,10 +1286,10 @@ export class BrowserHost {
 
   async invoke(
     sessionId: string,
-    op: BrowserOp,
+    op: BrowserHostOp,
     params: unknown,
     actor?: BrowserActor,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; guard?: () => void }
   ): Promise<unknown> {
     options?.signal?.throwIfAborted();
     if (op === 'history') return this.history(sessionId, params);
@@ -1286,12 +1336,14 @@ export class BrowserHost {
       .then(async () => {
         this.assertTabActive(target);
         options?.signal?.throwIfAborted();
+        options?.guard?.();
         const controller = new AbortController();
         const signal = options?.signal
           ? AbortSignal.any([controller.signal, options.signal])
           : controller.signal;
         target.active = controller;
         target.operationSignal = signal;
+        target.operationGuard = options?.guard;
         let running: Promise<unknown> | undefined;
         let settled = false;
         let graceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1337,6 +1389,7 @@ export class BrowserHost {
             if (target.active === controller) {
               target.active = undefined;
               target.operationSignal = undefined;
+              target.operationGuard = undefined;
             }
           });
           draining = Promise.race([running, recovery]);
@@ -1345,13 +1398,26 @@ export class BrowserHost {
           const result = await Promise.race([running, aborted]);
           if (op !== 'close') this.assertTabActive(target);
           if (op === 'close' && actor) this.tabClaims.takeClosed(actor.sessionId);
-          return result;
+          // 用本次已固定的目标，不能在 await 后从共享 agent 当前指针反查。
+          return op === 'navigate' && isRecord(result) ? { ...result, tabId: target.id } : result;
+        } catch (error) {
+          if (
+            op === 'navigate' &&
+            isRecord(error) &&
+            (error.code === 'ERR_ABORTED' || error.errno === -3)
+          )
+            throw Object.assign(new Error('文档导航被中间跳转打断，需核对当前页面'), {
+              code: 'NAVIGATION_INTERRUPTED',
+              tabId: target.id,
+            });
+          throw error;
         } finally {
           removeAbort();
           if (target.active === controller && !running) {
             clearTimeout(graceTimer);
             target.active = undefined;
             target.operationSignal = undefined;
+            target.operationGuard = undefined;
           }
         }
       });
@@ -1379,6 +1445,7 @@ export class BrowserHost {
   private assertTabActive(tab: Tab): void {
     if (this.tabs.get(tab.id) !== tab) throw new Error('Browser tab is closed');
     tab.operationSignal?.throwIfAborted();
+    tab.operationGuard?.();
   }
 
   private assertSnapshotCurrent(tab: Tab, generation: number): void {
@@ -1389,7 +1456,7 @@ export class BrowserHost {
 
   private async run(
     sessionId: string,
-    op: BrowserOp,
+    op: BrowserHostOp,
     params: unknown,
     mustTab: () => Tab,
     navigateTab?: Tab
@@ -1521,6 +1588,12 @@ export class BrowserHost {
         await this.setLocked(sessionId, locked, targeted ? mustTab() : undefined);
         return { locked: mustTab().locked };
       }
+      case 'plugin_copy_selection':
+        return this.copySelection(mustTab(), params);
+      case 'plugin_insert_text':
+        return this.insertText(mustTab(), params);
+      case 'plugin_read_wps_range':
+        return this.readWpsRange(mustTab(), params);
     }
   }
 
@@ -1603,6 +1676,230 @@ export class BrowserHost {
     ]);
     this.requestReveal(sessionId, tab.id);
     return this.pageInfo(contents);
+  }
+
+  /**
+   * 插件浏览器桥：只回会话内 tab 的权威 URL，未知 tab 或跨会话直接抛错。
+   * 不暴露 cookie、storage 或任意 webContents 引用。
+   */
+  tabUrl(tabId: string, sessionId: string): string {
+    return this.ownedTab(tabId, sessionId).view.webContents.getURL();
+  }
+
+  /** 该会话当前 agent 选定的 tab；navigate 之后就是刚导航到的那个 tab */
+  agentTabId(sessionId: string): string | null {
+    return this.agentTabFor(sessionId)?.id ?? null;
+  }
+
+  /**
+   * 插件只读检查：固定 DOM 脚本经 CDP `Runtime.evaluate` 执行，
+   * 插件不能选 method、不能传 JS，页面结果再由 Main 投影一次。
+   * 走 invoke 的 tab 队列与取消信号，不绕开 tab 忙锁。
+   */
+  async inspectElements(
+    tabId: string,
+    sessionId: string,
+    selector: string,
+    actor?: BrowserActor,
+    options?: { signal?: AbortSignal; guard?: () => void }
+  ): Promise<PluginInspectEntry[]> {
+    const response = await this.invoke(
+      sessionId,
+      'cdp',
+      {
+        tabId,
+        method: 'Runtime.evaluate',
+        params: {
+          expression: pageInspectScript(selector),
+          returnByValue: true,
+          awaitPromise: false,
+          userGesture: false,
+        },
+      },
+      actor,
+      options
+    );
+    const result = isRecord(response) ? response.result : undefined;
+    const entries = parseInspectEntries(isRecord(result) ? result.value : undefined);
+    if (!entries) throw new Error('Page inspection returned an unexpected shape.');
+    return entries;
+  }
+
+  /**
+   * 插件复制选区：页面会 stopImmediatePropagation 掉 copy 监听，只能在 copy 期间
+   * 临时替换 `DataTransfer.prototype` 拿到同一次复制的 text/plain 与表格范围。
+   * 捕获脚本不接收插件 JS，也不调用原生 setData / getData（不写、不读系统剪贴板）。
+   * 成功、失败、超限与取消都由 finally 撤销 hook；脚本 token 防止页面调用冲突。
+   */
+  private async copySelection(tab: Tab, params: unknown): Promise<CopySelectionResult> {
+    // 宿主只接受 { tabId }；键盘选择器、JS、selector 等额外参数一律不进页面。
+    if (!isRecord(params) || Object.keys(params).some((key) => key !== 'tabId'))
+      throw new Error('Invalid copy_selection params');
+    const token = randomUUID();
+    const evaluate = async (expression: string): Promise<unknown> => {
+      const response = await this.cdpCommand(tab, 'Runtime.evaluate', {
+        expression,
+        returnByValue: true,
+        awaitPromise: true,
+        userGesture: false,
+      });
+      if (!isRecord(response)) throw new Error('Page copy_selection returned an unexpected shape.');
+      if (isRecord(response.exceptionDetails))
+        throw new Error('Page copy_selection script failed.');
+      return isRecord(response.result) ? response.result.value : undefined;
+    };
+    try {
+      // 安装脚本最后才改原型；安装中途失败也要走 finally 清掉可能留下的临时状态。
+      const installed = await evaluate(pageCopySelectionInstallScript(token));
+      if (!isRecord(installed) || installed.ok !== true) {
+        const reason =
+          isRecord(installed) && typeof installed.reason === 'string' ? installed.reason : '';
+        throw new Error(
+          reason === 'busy'
+            ? 'Page already has another copy_selection capture running'
+            : 'Page does not support copy_selection capture'
+        );
+      }
+      this.assertTabActive(tab);
+      const copyKey = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+      const { keyCode, modifiers } = parseBrowserKey(copyKey);
+      const inputModifiers = modifiers as NonNullable<Electron.KeyboardInputEvent['modifiers']>;
+      // 复制是只读动作：不修改单元格，也不该因为我们的合成按键作废旧 ref。
+      tab.synthetic += 1;
+      try {
+        this.sendInput(tab, { type: 'keyDown', keyCode, modifiers: inputModifiers });
+        this.sendInput(tab, { type: 'keyUp', keyCode, modifiers: inputModifiers });
+      } finally {
+        tab.synthetic -= 1;
+      }
+      this.assertTabActive(tab);
+      return parseCopySelectionResult(await evaluate(pageCopySelectionReadScript(token)));
+    } finally {
+      // 取消或页面已跳走时也不能把 hook 留在页面里；还原失败由页面自身状态说明。
+      await evaluate(pageCopySelectionCleanupScript(token)).catch(() => {});
+    }
+  }
+
+  /**
+   * 插件向当前 activeElement 原生插入文本：不自动 focus、不全选、不回车，
+   * 也不接受 ref / selector / JS。固定 DOM 脚本先验证焦点确实在可编辑控件上；
+   * 允许 opacity:0 的透明输入代理（真实 WPS F2 编辑层就是这样接收键盘的）。
+   */
+  private async insertText(tab: Tab, params: unknown): Promise<unknown> {
+    if (!isRecord(params) || Object.keys(params).some((key) => key !== 'tabId' && key !== 'text'))
+      throw new Error('Invalid insert_text params');
+    const text = params.text;
+    if (typeof text !== 'string' || utf8Length(text) > INSERT_TEXT_MAX_BYTES)
+      throw new Error('insert_text text must be a string up to 32KB UTF-8');
+    const contents = tab.view.webContents;
+    const raw: unknown = await contents.executeJavaScript(pageActiveElementCheckScript(), true);
+    this.assertTabActive(tab);
+    const check = parseActiveElementCheck(raw);
+    if (!check.ok) throw new Error(check.message);
+    tab.synthetic += 1;
+    try {
+      await contents.insertText(text);
+    } finally {
+      tab.synthetic -= 1;
+    }
+    // 插入期间人工输入可能已经改变页面；返回前再复查一次取消与 guard。
+    this.assertTabActive(tab);
+    return this.pageInfo(contents);
+  }
+
+  /**
+   * 插件只读金山/WPS 表格范围：不自行导航，只操作固定地址框（input.edit-box）。
+   * 先拒绝编辑态/焦点编辑代理/被提示遮挡；地址框 focus 由固定脚本完成并复查，
+   * 只向已确认焦点的地址框 insertText 已校验地址，Enter 前后复查焦点、URL 与 guard，
+   * 再用现成 copySelection 读回并严格核对范围与 sheetId。全程不重入 invoke。
+   */
+  private async readWpsRange(tab: Tab, params: unknown): Promise<WpsRangeReadResult> {
+    if (
+      !isRecord(params) ||
+      Object.keys(params).some((key) => key !== 'tabId' && key !== 'address')
+    )
+      throw new Error('Invalid read_range params');
+    const box = parseWpsRangeAddress(params.address);
+    if (!box)
+      throw new Error('read_range address must be a single cell or rectangle inside A1:L201');
+    const contents = tab.view.webContents;
+    const assertWpsPage = (): string => {
+      const url = contents.getURL();
+      if (!isWpsDocumentUrl(url))
+        throw new Error('read_range only works on a WPS/Kdocs HTTPS document page');
+      return url;
+    };
+    const evaluate = (expression: string): Promise<unknown> =>
+      contents.executeJavaScript(expression, true);
+
+    assertWpsPage();
+    // 纯只读 readiness：画布挂载可能晚于 loadURL；只在 loading 时等待，最多 10s。
+    // 等待只发生在输入之前，绝不重放已输入地址或 Enter。
+    const deadline = Date.now() + WPS_RANGE_READY_TIMEOUT_MS;
+    let point: { x: number; y: number } | null = null;
+    for (;;) {
+      this.assertTabActive(tab);
+      assertWpsPage();
+      const ready = parseWpsRangeReady(await evaluate(pageWpsReadinessScript()));
+      if (ready.ok) {
+        point = { x: ready.x, y: ready.y };
+        break;
+      }
+      if (ready.reason !== 'loading') throw new Error(ready.message);
+      if (Date.now() > deadline) throw new Error('表格画布加载超时，请稍后重试');
+      await sleep(WPS_RANGE_READY_INTERVAL_MS);
+    }
+    if (!point) throw new Error('无法确认地址框位置，已停止');
+    // DOM focus() 不会把键盘焦点交给 RenderWidget（Enter 会落到网格），所以用
+    // readiness 已验证的中心点发原生指针点击；不抢 OS/窗口焦点，也不用 ref。
+    await this.pointerAt(tab, point.x, point.y, true);
+    this.assertTabActive(tab);
+    assertWpsPage();
+    const prepared = parseWpsRangePrepare(await evaluate(pageWpsRangePrepareScript()));
+    if (!prepared.ok) throw new Error(prepared.message);
+    this.assertTabActive(tab);
+    assertWpsPage();
+    // prepare 与原生输入之间还有一次异步往返：只读复查焦点/全选/命中，
+    // 防止输入框 blur 后把地址写进未知元素。
+    const rechecked = parseWpsRangeRecheck(await evaluate(pageWpsRangeRecheckScript()));
+    if (!rechecked.ok) throw new Error(rechecked.message);
+    this.assertTabActive(tab);
+    assertWpsPage();
+    // 地址只写进固定脚本刚聚焦并全选的 namebox；不把地址当 JS 执行
+    tab.synthetic += 1;
+    try {
+      await contents.insertText(box.address);
+    } finally {
+      tab.synthetic -= 1;
+    }
+    this.assertTabActive(tab);
+    const verified = parseWpsRangeVerify(await evaluate(pageWpsRangeVerifyScript(box.address)));
+    if (!verified.ok) throw new Error(verified.message);
+    this.assertTabActive(tab);
+    assertWpsPage();
+    await this.pressKey(tab, 'Enter');
+    this.assertTabActive(tab);
+    assertWpsPage();
+    const sheetBefore = parseWpsRangeSheet(await evaluate(pageWpsSheetScript()));
+    if (!sheetBefore.ok) throw new Error(sheetBefore.message);
+    const copied = await this.copySelection(tab, { tabId: tab.id });
+    if (!copied.range) throw new Error('复制没有返回表格范围，已停止');
+    const { range } = copied;
+    if (
+      range.rowFrom !== box.rowFrom ||
+      range.rowTo !== box.rowTo ||
+      range.colFrom !== box.colFrom ||
+      range.colTo !== box.colTo
+    )
+      throw new Error('复制返回的范围与请求地址不一致，已停止');
+    this.assertTabActive(tab);
+    const sheetAfter = parseWpsRangeSheet(await evaluate(pageWpsSheetScript()));
+    if (!sheetAfter.ok) throw new Error(sheetAfter.message);
+    if (sheetAfter.sheet !== sheetBefore.sheet)
+      throw new Error('复制期间当前高亮工作表发生变化，已停止');
+    const url = assertWpsPage();
+    this.assertTabActive(tab);
+    return { text: copied.text, range, sheet: sheetAfter.sheet, url, tabId: tab.id };
   }
 
   private async readPage(tab: Tab, params: unknown, kind: 'text' | 'elements'): Promise<unknown> {

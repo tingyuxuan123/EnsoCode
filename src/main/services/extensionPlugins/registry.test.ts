@@ -42,6 +42,7 @@ const valid: PluginRecord = {
     fsRead: [],
     fsWrite: [],
     netDomains: [],
+    browserDomains: [],
     mcp: [],
     mcpTools: [],
     renderer: false,

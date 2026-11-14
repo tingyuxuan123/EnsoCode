@@ -6,6 +6,8 @@ export interface PluginGrant {
   fsRead: string[];
   fsWrite: string[];
   netDomains: string[];
+  /** 内嵌浏览器允许的精确 host；旧记录没有该字段按空处理 */
+  browserDomains: string[];
   mcp: { name: string; command: string; args: string[]; envKeys: string[] }[];
   mcpTools: string[];
   renderer: boolean;
@@ -24,6 +26,7 @@ export function grantOf(manifest: ExtensionPluginManifest): PluginGrant {
     fsRead: [...manifest.fs.read].sort(),
     fsWrite: [...manifest.fs.write].sort(),
     netDomains: [...manifest.net.domains].sort(),
+    browserDomains: [...(manifest.browser?.domains ?? [])].sort(),
     mcp: manifest.contributes.mcpServers.map((s) => ({
       name: s.name,
       command: s.command,
@@ -51,6 +54,8 @@ export function grantExpands(previous: PluginGrant, next: PluginGrant): boolean 
   if (next.fsRead.some((p) => !covered(p, previous.fsRead))) return true;
   if (next.fsWrite.some((p) => !covered(p, previous.fsWrite))) return true;
   if (next.netDomains.some((d) => !previous.netDomains.includes(d))) return true;
+  if ((next.browserDomains ?? []).some((d) => !(previous.browserDomains ?? []).includes(d)))
+    return true;
   const key = (s: PluginGrant['mcp'][number]) =>
     JSON.stringify([s.name, s.command, s.args, s.envKeys]);
   const known = new Set(previous.mcp.map(key));

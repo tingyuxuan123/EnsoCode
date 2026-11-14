@@ -150,7 +150,8 @@ export interface ExtensionPluginServiceOptions {
   env: NodeJS.ProcessEnv;
   /** 清单声明的环境变量从这里取值；缺省与 env 相同 */
   sourceEnv?: NodeJS.ProcessEnv;
-  capabilities?: PluginHostCapabilities;
+  /** 静态能力表，或按调用时状态求值（浏览器桥可能在服务创建之后才接通） */
+  capabilities?: PluginHostCapabilities | (() => PluginHostCapabilities);
   sessionBridge?: () => PluginSessionBridge | null;
   fork: PluginProcessDeps['fork'];
   gate: Omit<GateDeps, 'manifest' | 'config'>;
@@ -337,7 +338,9 @@ export class ExtensionPluginService {
         );
       },
       capabilities: () =>
-        options.capabilities ?? {
+        (typeof options.capabilities === 'function'
+          ? options.capabilities()
+          : options.capabilities) ?? {
           host: 'desktop',
           hostVersion: options.hostVersion,
           notify: true,
@@ -345,6 +348,7 @@ export class ExtensionPluginService {
           clipboard: !!options.gate.clipboard,
           openExternal: !!options.gate.openExternal,
           composer: true,
+          browser: !!options.gate.browser,
         },
     });
   }
@@ -590,6 +594,7 @@ export class ExtensionPluginService {
       fsRead: m.fs.read,
       fsWrite: m.fs.write,
       netDomains: m.net.domains,
+      browserDomains: m.browser?.domains ?? [],
       mcpServers: grant.mcp,
       mcpTools: m.mcp.tools,
       env: m.env,

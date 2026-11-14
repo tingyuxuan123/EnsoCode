@@ -6,6 +6,7 @@ const grant = {
   fsRead: [],
   fsWrite: [],
   netDomains: [],
+  browserDomains: [],
   mcp: [],
   mcpTools: [],
   renderer: false,

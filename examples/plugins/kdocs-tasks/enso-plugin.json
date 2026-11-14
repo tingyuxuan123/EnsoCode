@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "id": "collabra.kdocs.tasks",
+  "name": "需求助手",
+  "version": "0.2.3",
+  "description": "粘贴需求表链接，自动读取我的待办。选一条交给Agent，核对处理和测试说明后回填；不改负责人，不自动验收。",
+  "engines": { "enso": ">=0.2.81" },
+  "main": "main.mjs",
+  "renderer": "ui.js",
+  "permissions": ["agent.tool", "ui.view", "ui.slot", "agent.inject", "browser.control"],
+  "browser": { "domains": ["www.kdocs.cn", "kdocs.cn", "ap.wps.com"] },
+  "contributes": {
+    "views": [{ "id": "tasks", "title": "需求助手", "entry": "tasks.html" }],
+    "skills": ["skills/kdocs-delivery"],
+    "presets": [
+      {
+        "id": "delivery",
+        "name": "需求处理",
+        "skills": ["skills/kdocs-delivery"],
+        "mcpServers": [],
+        "instruction": "instructions.md",
+        "approvalMode": "supervised"
+      }
+    ],
+    "methods": [
+      { "name": "state", "timeoutMs": 5000 },
+      { "name": "load", "timeoutMs": 120000 },
+      { "name": "send_task", "timeoutMs": 120000 },
+      { "name": "save_simple_report", "timeoutMs": 5000 },
+      { "name": "connect", "timeoutMs": 60000 },
+      { "name": "calibrate", "timeoutMs": 30000 },
+      { "name": "test_write", "timeoutMs": 60000 },
+      { "name": "sync", "timeoutMs": 120000 },
+      { "name": "prepare_claim", "timeoutMs": 120000 },
+      { "name": "confirm", "timeoutMs": 120000 },
+      { "name": "reconcile", "timeoutMs": 120000 },
+      { "name": "save_report", "timeoutMs": 5000 },
+      { "name": "prepare_delivery", "timeoutMs": 120000 },
+      { "name": "open_view", "timeoutMs": 5000 },
+      { "name": "insert_draft", "timeoutMs": 5000 }
+    ],
+    "configuration": [
+      {
+        "key": "document_url",
+        "title": "需求表链接",
+        "description": "也可以直接在需求助手页面粘贴链接，无需在设置里配置表结构。",
+        "type": "string"
+      },
+      { "key": "owner", "title": "负责人", "type": "string", "default": "谢" }
+    ],
+    "agentTools": [
+      {
+        "name": "get_task",
+        "description": "读取当前本机主会话已领取需求的插件快照，不接收任意需求/会话/路径，不修改外部表。外部最新变化必须由界面核对。",
+        "readOnly": true,
+        "parameters": { "type": "object", "properties": {}, "additionalProperties": false }
+      },
+      {
+        "name": "build_report",
+        "description": "为当前已领取需求生成结构化交付候选，区分未测试、本地通过和测试环境通过，不声明生产部署或最终验收。返回候选，不远程回写；用户点击工具卡保存预览。",
+        "readOnly": true,
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "taskId": { "type": "string" },
+            "summary": { "type": "string" },
+            "cause": { "type": "string" },
+            "impact": { "type": "string" },
+            "reproduction": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "maxItems": 12
+            },
+            "environment": { "type": "string" },
+            "version": { "type": "string" },
+            "prerequisites": { "type": "string" },
+            "steps": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "maxItems": 12
+            },
+            "expected": { "type": "string" },
+            "actual": { "type": "string" },
+            "regression": { "type": "string" },
+            "unverified": { "type": "string" },
+            "verification": {
+              "type": "string",
+              "enum": ["not_tested", "cannot_reproduce", "local_passed", "test_env_passed"]
+            },
+            "deployment": { "type": "string", "enum": ["not_deployed", "test_only"] },
+            "evidence": { "type": "array", "items": { "type": "string" }, "maxItems": 12 }
+          },
+          "required": [
+            "taskId",
+            "summary",
+            "cause",
+            "impact",
+            "reproduction",
+            "environment",
+            "version",
+            "prerequisites",
+            "steps",
+            "expected",
+            "actual",
+            "regression",
+            "unverified",
+            "verification",
+            "deployment",
+            "evidence"
+          ]
+        }
+      }
+    ]
+  }
+}

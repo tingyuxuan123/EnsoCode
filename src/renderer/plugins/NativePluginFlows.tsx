@@ -201,6 +201,7 @@ export function NativePluginFlows({
                 <Detail label="Host fs.read" items={preview.fsRead} />
                 <Detail label="Host fs.write" items={preview.fsWrite} />
                 <Detail label="Host net.fetch" items={preview.netDomains} />
+                <Detail label="Host browser" items={preview.browserDomains} />
                 <Detail label="Host MCP tools" items={preview.mcpTools} />
                 <Detail label="Environment variables" items={preview.env ?? []} />
                 <Detail label="Plugin interop" items={preview.interop ?? []} />

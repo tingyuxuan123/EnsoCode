@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { PluginBrowserBridgeInput } from '@shared/extensionPlugins/browserBridge';
 import type { PluginHostCapabilities } from '@shared/extensionPlugins/protocol';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, clipboard, Notification, shell, utilityProcess, webContents } from 'electron';
@@ -21,10 +22,12 @@ export type { PluginSessionBridge };
 export type PluginSessionDirectory = Required<NonNullable<GateDeps['sessions']>>;
 
 export type PluginMcpBridge = Pick<GateDeps, 'mcpTools' | 'mcpCall'>;
+export type PluginBrowserBridge = (input: PluginBrowserBridgeInput) => Promise<unknown>;
 let service: ExtensionPluginService | null = null;
 let broker: DraftBroker | null = null;
 let messages: ((sessionId: string) => Promise<unknown>) | null = null;
 let mcpBridge: PluginMcpBridge | null = null;
+let browserBridge: PluginBrowserBridge | null = null;
 let invocationPolicy: GateDeps['invocationPolicy'] | null = null;
 let sessionBridge: PluginSessionBridge | null = null;
 let sessionDirectory: PluginSessionDirectory | null = null;
@@ -40,6 +43,7 @@ export function pluginHostCapabilities(input: {
   notify: boolean;
   clipboard: boolean;
   openExternal: boolean;
+  browser?: boolean;
 }): PluginHostCapabilities {
   return {
     ...input,
@@ -47,6 +51,7 @@ export function pluginHostCapabilities(input: {
     openExternal: input.host === 'desktop' && input.openExternal,
     mcp: true,
     composer: input.host === 'desktop',
+    browser: input.host === 'desktop' && input.browser === true,
   };
 }
 const ENV_KEYS = [
@@ -72,6 +77,10 @@ export function pluginHostEnv(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 export function setPluginMcpBridge(bridge: PluginMcpBridge | null): void {
   mcpBridge = bridge;
+}
+/** 内嵌浏览器桥由 Main 接通；未接通时 host.capabilities 与 browser.invoke 都明确不可用 */
+export function setPluginBrowserBridge(bridge: PluginBrowserBridge | null): void {
+  browserBridge = bridge;
 }
 export function setPluginInvocationPolicy(policy: GateDeps['invocationPolicy'] | null): void {
   invocationPolicy = policy;
@@ -99,13 +108,15 @@ export function getDraftBroker(): DraftBroker {
 export function getExtensionPlugins(): ExtensionPluginService {
   if (service) return service;
   const root = join(app.getPath('userData'), 'extension-plugins');
-  const capabilities = pluginHostCapabilities({
-    host: 'desktop',
-    hostVersion: app.getVersion(),
-    notify: Notification.isSupported(),
-    clipboard: true,
-    openExternal: true,
-  });
+  const capabilities = () =>
+    pluginHostCapabilities({
+      host: 'desktop',
+      hostVersion: app.getVersion(),
+      notify: Notification.isSupported(),
+      clipboard: true,
+      openExternal: true,
+      browser: browserBridge !== null,
+    });
   service = new ExtensionPluginService({
     root,
     hostVersion: app.getVersion(),
@@ -194,6 +205,10 @@ export function getExtensionPlugins(): ExtensionPluginService {
         mcpBridge
           ? mcpBridge.mcpCall(target, server, tool, args, signal)
           : Promise.reject(pluginError('UNSUPPORTED', 'MCP 尚未接通')),
+      browser: (input) =>
+        browserBridge
+          ? browserBridge(input)
+          : Promise.reject(pluginError('UNSUPPORTED', '浏览器尚未接通')),
       invocationPolicy: (target) =>
         invocationPolicy ? invocationPolicy(target) : Promise.reject(unsupported()),
       now: Date.now,

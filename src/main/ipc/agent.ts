@@ -9,6 +9,7 @@ import {
   type SessionIdentity,
 } from '@shared/builtinAgents';
 import { conversationCwd } from '@shared/conversationCwd';
+import type { PluginBrowserBridgeInput } from '@shared/extensionPlugins/browserBridge';
 import { resolveSshTarget } from '@shared/ssh';
 import {
   IPC_CHANNELS,
@@ -160,6 +161,11 @@ import {
   configurePairSessionHost,
   handlePairHeadlessAgentEvent,
 } from '../services/pairSessionHost';
+import {
+  createPluginBrowserBridge,
+  type PluginBrowserInspectInput,
+  type PluginBrowserRunInput,
+} from '../services/pluginBrowserBridge';
 import { remoteCandidates } from '../services/remoteModels';
 import { resolveScratchWorkspace } from '../services/scratchWorkspace';
 import { removeConversationSessionFiles } from '../services/sessionFileCleanup';
@@ -1237,15 +1243,118 @@ function pluginMcpServers() {
   return pluginHostMcpServers();
 }
 
+/**
+ * 插件浏览器桥的真实依赖：本机根会话（必须已就绪）、tab 归属与 BrowserHost 队列。
+ * 域名与 op 校验、动作前后复查都在 createPluginBrowserBridge 里，便于单测。
+ */
+function pluginBrowserDeps() {
+  const uiReadAllowed = (input: PluginBrowserBridgeInput) => {
+    if (
+      input.kind !== 'ui' ||
+      input.op !== 'read_range' ||
+      input.agent ||
+      !input.sessionId ||
+      !localPluginConversation(input.sessionId) ||
+      !input.projectRoot ||
+      input.projectRoot !== pluginProjectRoot(input.sessionId)
+    )
+      return false;
+    const state = readSettingsState() ?? {};
+    return !resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
+      disabledBuiltinTools: projectDisabledBuiltinTools(
+        state.projects,
+        projectIdFor(input.sessionId)
+      ),
+    }).includes('browser');
+  };
+  return {
+    authorizeSession: (input: PluginBrowserBridgeInput) => {
+      if (input.kind === 'ui' && input.op === 'read_range') {
+        if (!uiReadAllowed(input))
+          return {
+            ok: false as const,
+            code: 'PERMISSION_DENIED',
+            message: '当前项目或浏览器权限不允许读取这张表',
+          };
+        const conversation = sourceAuthority!.conversation(input.sessionId!)!;
+        return {
+          ok: true as const,
+          sessionKey: input.sessionId!,
+          authorityVersion: conversation.version,
+        };
+      }
+      const identity = pluginTargetIdentity(input.sessionId);
+      if (
+        !identity ||
+        input.agent ||
+        !localPluginConversation(identity.sessionId) ||
+        !agentSessionIndex.isReady(identity) ||
+        input.sessionGeneration !== identity.generation ||
+        !input.projectRoot ||
+        input.projectRoot !== pluginProjectRoot(identity.sessionId)
+      )
+        return { ok: false as const, code: 'NO_SESSION', message: '插件浏览器会话不可用' };
+      if (!currentBrowserIdentity(identity))
+        return { ok: false as const, code: 'ABORTED', message: '浏览器会话已失效' };
+      if (!browserToolAllowed(identity))
+        return { ok: false as const, code: 'PERMISSION_DENIED', message: '当前会话未启用浏览器' };
+      const actor = browserActorFor(identity.sessionId);
+      return {
+        ok: true as const,
+        sessionKey: browserKeyFor(identity.sessionId),
+        ...(actor ? { actor } : {}),
+      };
+    },
+    isSessionCurrent: (input: PluginBrowserBridgeInput, grant: { authorityVersion?: number }) => {
+      if (input.kind === 'ui' && input.op === 'read_range')
+        return (
+          uiReadAllowed(input) &&
+          sourceAuthority?.conversation(input.sessionId!)?.version === grant.authorityVersion
+        );
+      const identity = pluginTargetIdentity(input.sessionId);
+      return (
+        !!identity &&
+        currentBrowserIdentity(identity) &&
+        browserToolAllowed(identity) &&
+        input.sessionGeneration === identity.generation
+      );
+    },
+    authoritativeUrl: (sessionKey: string, tabId: string) => {
+      try {
+        return browserHost.tabUrl(tabId, sessionKey);
+      } catch {
+        // 未知 tab 与跨会话 tab 走同一句拒绝，不透露别的会话有没有这个 tab
+        return null;
+      }
+    },
+    currentTabId: (sessionKey: string) => browserHost.agentTabId(sessionKey),
+    run: (run: PluginBrowserRunInput) =>
+      browserHost.invoke(run.sessionKey, run.op, run.params, run.actor, {
+        signal: run.signal,
+        guard: run.guard,
+      }),
+    inspect: (inspect: PluginBrowserInspectInput) =>
+      browserHost.inspectElements(
+        inspect.tabId,
+        inspect.sessionKey,
+        inspect.selector,
+        inspect.actor,
+        { signal: inspect.signal, guard: inspect.guard }
+      ),
+  };
+}
+
 async function wireNativePluginHost(): Promise<void> {
   // 插件宿主只在真正需要时加载；测试与无插件场景不需要它的独立进程入口。
   const {
     getExtensionPlugins,
+    setPluginBrowserBridge,
     setPluginInvocationPolicy,
     setPluginMcpBridge,
     setPluginSessionDirectory,
   } = await import('../services/extensionPlugins');
   setPluginInvocationPolicy(pluginInvocationPolicy);
+  setPluginBrowserBridge(createPluginBrowserBridge(pluginBrowserDeps()));
   registerPluginSessionBridge((sessionId) => {
     const identity = pluginTargetIdentity(sessionId);
     return identity &&
