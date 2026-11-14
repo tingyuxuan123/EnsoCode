@@ -882,3 +882,197 @@
     scale: 1;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+ * 时间线按设计稿整形（chat.tsx / group.tsx）
+ * 手机端复用桌面 MessageTimeline，这里只改外观，不碰桌面源码。
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* 用户消息：反色胶囊，右下角收尖（稿子 UserBubble） */
+.phone-chat-root .group\/user > div:first-child {
+  border-radius: 20px;
+  border-bottom-right-radius: 6px;
+  background-color: var(--pill);
+  color: var(--pill-ink);
+  padding: 12px 16px;
+  font-size: 16px;
+  line-height: 22px;
+}
+.phone-chat-root .group\/user > div:first-child * {
+  color: inherit;
+}
+
+/* 助手正文：15/24，别用桌面的 16/27 —— 手机上读长文更费眼 */
+.phone-chat-root [class*="leading-[calc(27rem"] {
+  font-size: 15px !important;
+  line-height: 24px !important;
+}
+
+/* 工具调用：从「裸文字 + 图标」变成一行浅底活动行（稿子 ActivityRow） */
+.phone-chat-root [class*="group/tool-summary"] {
+  min-height: 0;
+  border-radius: 14px;
+  background-color: color-mix(in srgb, var(--card2) 70%, transparent);
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--dim);
+}
+.phone-chat-root [class*="group/tool"] [class*="group/tool-summary"] [class*="t-shimmer"] {
+  color: var(--dim);
+}
+
+/* 助手抬头：名字 15/20 半粗，时间 12 灰（稿子 TurnHead） */
+.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"][class*="min-h-[calc(20rem"] {
+  margin-bottom: 6px;
+  font-size: 15px;
+  line-height: 20px;
+}
+.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"][class*="min-h-[calc(20rem"] > span[class*="font-medium"] {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+/* 输入区：dock 去掉顶部分隔线，整块躺在纸面上（稿子无框列表 + 玻璃浮层） */
+.phone-dock {
+  border-top: 0 !important;
+  background-color: transparent;
+}
+
+/* 输入条压成一行：附件在左、正文居中、发送在右（稿子 Composer） */
+.phone-dock [data-slot="composer"] {
+  min-height: 52px;
+  border-radius: 26px;
+  border: 0.75px solid var(--line);
+  background-color: var(--card);
+}
+.phone-dock [data-slot="composer"] > div:first-child {
+  order: 2;
+  min-height: 52px;
+  flex: 1;
+  align-items: center;
+  padding: 14px 4px 14px 8px;
+}
+.phone-dock [data-slot="composer"] > div:first-child > div:first-child {
+  min-height: 22px;
+  max-height: 96px;
+  padding-top: 0;
+}
+.phone-dock [data-slot="composer"] > div:last-child {
+  display: contents;
+}
+.phone-dock [data-slot="composer"] > div:last-child > div:first-child {
+  order: 1;
+  flex: 0 0 auto;
+  padding-left: 8px;
+}
+.phone-dock [data-slot="composer"] > div:last-child > [data-slot="button"] {
+  order: 3;
+  margin-right: 4px;
+  align-self: center;
+}
+.phone-dock [data-slot="composer"] {
+  display: flex;
+  align-items: center;
+}
+
+/* ── 审批面板：稿子 approval.tsx 的排布 ─────────────────────────── */
+.phone-dock [data-slot="approval-bar"] {
+  padding: 16px;
+  font-size: 15px;
+  line-height: 20px;
+}
+/* 标题行：图标 + 「它想运行一条命令」15/600，倒计时靠右 */
+.phone-dock [data-slot="approval-bar"] > div:first-child > span:first-of-type {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+/* 命令块：浅灰底、14/20、深色等宽，不再用 shiki 的白底 */
+.phone-dock [data-slot="approval-bar"] > div:nth-child(2) {
+  margin-top: 10px;
+  border-radius: 14px;
+  background-color: var(--card2);
+  padding: 12px 14px;
+}
+.phone-dock [data-slot="approval-bar"] > div:nth-child(2) pre,
+.phone-dock [data-slot="approval-bar"] > div:nth-child(2) code {
+  background-color: transparent !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+}
+/* 三个决定：拒绝 / 允许 各占一半 48 高，「本会话总是允许」整行下沉 */
+.phone-dock [data-slot="approval-bar"] > div:last-child {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: stretch;
+}
+.phone-dock [data-slot="approval-bar"] > div:last-child > button {
+  height: 48px;
+  border-radius: 999px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.phone-dock [data-slot="approval-bar"] > div:last-child > button:nth-child(1) {
+  order: 1;
+  flex: 1 1 0;
+  background-color: var(--card);
+  color: var(--red);
+}
+.phone-dock [data-slot="approval-bar"] > div:last-child > button:nth-child(3) {
+  order: 2;
+  flex: 1.4 1 0;
+  background-color: var(--pill);
+  color: var(--pill-ink);
+}
+.phone-dock [data-slot="approval-bar"] > div:last-child > button:nth-child(2) {
+  order: 3;
+  flex: 1 0 100%;
+  height: 40px;
+  background-color: transparent;
+  color: var(--ink2);
+}
+
+/* ── 工作中状态：并进抬头右侧，不再单独占一行（稿子 TurnRun） ─────── */
+.phone-chat-root .enso-chat-col { position: relative; }
+.phone-chat-root .enso-chat-col:has(> div > svg.t-shimmer, > div:has(> svg) .t-shimmer) > div:first-child { padding-right: 96px; }
+.phone-chat-root .enso-chat-col > div:has(> svg):has(.t-shimmer) {
+  position: absolute;
+  top: 1px;
+  right: 16px;
+  width: auto !important;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dim);
+}
+.phone-chat-root .enso-chat-col > div:has(> svg):has(.t-shimmer) > svg { display: none; }
+
+/* 抬头头像：白圆底托 Logo，22px（稿子 AgentAvatar） */
+.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"] > span:first-child {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background-color: var(--card);
+  box-shadow: 0 0 0 0.75px rgb(0 0 0 / 0.08);
+}
+.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"] > span:first-child > img {
+  width: 16px;
+  height: 16px;
+}
+
+/* 「生成中…」是工作状态的重复播报：设计稿只留抬头那一处，这里不再单占一行 */
+.phone-chat-root .enso-chat-col > div:has(> img.collabra-working-icon) { display: none; }
+
+/* 审批里的命令：稿子是深色等宽，不做语法着色（branch/string 的彩色在这里只是噪音） */
+.phone-dock [data-slot="approval-bar"] pre,
+.phone-dock [data-slot="approval-bar"] pre span,
+.phone-dock [data-slot="approval-bar"] code,
+.phone-dock [data-slot="approval-bar"] code span {
+  color: var(--ink) !important;
+  background-color: transparent !important;
+}
