@@ -213,7 +213,7 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       }
       const candidate = {
         operation,
-        mode: params.mode ?? 'task',
+        mode: params.mode ?? 'coworker',
         ...(name ? { name } : {}),
         description: label,
         prompt,
@@ -341,18 +341,19 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
     label: 'Subagent',
     description:
       'Spawn requires non-empty description and prompt parameters; omit both for every other operation. ' +
-      'Create and control delegated agents. mode=task is one-shot; mode=coworker preserves context for multiple Runs. ' +
+      'Create and control delegated agents. Default mode=coworker preserves context for follow-up Runs; explicit mode=task is one-shot. ' +
       'All operations are Main-authorized. Spawning and sending are asynchronous unless wait:true; ' +
       'you are notified automatically when a Run finishes.',
     promptSnippet:
       'subagent: spawn requires non-empty description and prompt. Other operations omit both. ' +
-      'Spawn task/coworker agents, list owned agents, send Runs or bound messages, wait/report/stop a Run, or dismiss an Agent. Default spawn mode=task and wait=false; finished Runs notify you automatically.',
+      'Spawn task/coworker agents, list owned agents, send Runs or bound messages, wait/report/stop a Run, or dismiss an Agent. Default spawn mode=coworker and wait=false; reuse the same Agent with send for follow-up work. Finished Runs notify you automatically.',
     promptGuidelines: [
       'spawn requires non-empty description and prompt. Omit both for every other operation.',
       DELEGATION_CAPABILITY_GUIDANCE,
       'Agent and Run are different identities: use runId for wait/report/stop and agentId for send/dismiss.',
       'wait returns status only; use operation=report with runId to read the completed child findings. report works even after a task Agent closes. Never repeat wait/list to retrieve report text.',
-      'A task Agent runs exactly once and closes when its Run ends; for follow-ups spawn a new one (or use mode=coworker) instead of send.',
+      'Default to mode=coworker for delegated work that may need review or iteration. Use explicit mode=task only for genuinely one-shot work: it closes after one Run and cannot receive follow-ups.',
+      'For revisions, failed reviews, or user feedback on the same work, use send with the same agentId so the coworker retains its context; do not spawn a replacement. If you lost its id, use list to find the existing coworker before spawning a replacement. Create a new Agent only for unrelated work or when the original is closed, unavailable, or lacks the required capabilities.',
       "When not to use: if the target is already known, use the direct tool (read for a known path, grep for a specific symbol). Reserve subagents for open-ended work that spans many files, independent work that can run in parallel, or tasks matching an agent type. Once you've delegated a search, don't also run it yourself.",
       'Default to doing the work yourself in this thread: a few reads, one search, a short edit, or a single check is faster inline than delegating. Do not fan out several subagents for one small task, and keep the count low — one well-briefed subagent beats several thin ones. When independent subagents should run in parallel, spawn them all in the same message.',
       'Brief a subagent like a smart colleague who just walked into the room: it has not seen this conversation. State the goal and why, what you already learned or ruled out, and the expected answer shape and length (e.g. "report in under 200 words").',
@@ -361,7 +362,7 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
       'The user may not see the subagent result in full — relay what matters in your own reply.',
       `wait defaults to ${AGENT_WAIT_DEFAULT_MS / 60_000} minutes and is capped at ${AGENT_WAIT_MAX_MS / 60_000}. A timeout or a user interruption is not a failure and never stops the Run; the receipt lists each pending Run's progress. Use stop or dismiss explicitly to end a Run.`,
       'Use send delivery=auto to steer a running Run or start an idle coworker Run; delivery=next queues a new coworker Run.',
-      'Dismiss a coworker as soon as you no longer need it; an idle coworker keeps its session open until dismissed.',
+      'Keep a coworker available across parent turns while reviewing its work or awaiting user feedback. Do not dismiss it merely because a Run ended or you replied to the user. Dismiss when the user accepts the work, abandons it, or moves to unrelated work with no further need for that coworker; an idle coworker keeps its session open until dismissed.',
       'gate.commandRef is a Main-authorized command id, not shell text or argv.',
       'Unknown gate ids fail the run and nothing is executed.',
       ...(modelNames.length > 0
@@ -385,7 +386,12 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
           type: 'string',
           enum: ['spawn', 'send', 'wait', 'report', 'list', 'message', 'stop', 'dismiss'],
         },
-        mode: { type: 'string', enum: ['task', 'coworker'] },
+        mode: {
+          type: 'string',
+          enum: ['task', 'coworker'],
+          description:
+            'Default coworker: retains context for review, revisions and later user feedback via send. Use task explicitly only for one-shot work; it closes after one Run.',
+        },
         name: { type: 'string' },
         description: {
           type: 'string',
@@ -580,8 +586,9 @@ export class CoworkerIdleReminder {
     return [
       `These coworkers you spawned have not been used for a while:\n${due.join('\n')}\n\n` +
         'An idle coworker keeps its session open until dismissed. ' +
-        'If you no longer need one, call subagent with operation=dismiss and its agentId now; ' +
-        'if you still plan to use it, ignore this. Do not mention this reminder to the user.',
+        'If you are reviewing its work or awaiting user feedback, keep it for follow-up work via send with the same agentId. ' +
+        'Only when the user accepted or abandoned the work, or moved to unrelated work with no further need for it, call subagent with operation=dismiss and its agentId. ' +
+        'Otherwise ignore this reminder. Do not mention this reminder to the user.',
     ];
   }
 }

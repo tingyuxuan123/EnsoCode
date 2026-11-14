@@ -74,6 +74,7 @@ import { cn } from '@/lib/utils';
 import { PluginNotices } from '@/plugins/PluginNotices';
 import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { PluginUiHost } from '@/plugins/PluginUiHost';
+import { SessionActivityAttributes } from '@/plugins/SessionActivityAttributes';
 import { useBotsStore } from '@/stores/bots';
 import {
   isBotModeActive,
@@ -642,6 +643,7 @@ export default function App() {
     // 不能给外壳刷实底：浏览器 guest 沉到 workbench 之下时，这里任何不透明像素都会盖住挖孔
     <div data-enso="canvas" className="relative isolate flex h-screen flex-col text-foreground">
       <PluginThemeHost />
+      <SessionActivityAttributes />
       <PluginNotices />
       <DesignRuntimeHost />
       <DesignWindowRelay />

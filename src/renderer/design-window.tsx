@@ -12,6 +12,7 @@ import { useDesignLocale } from '@/features/design/host/locale';
 import { CanvasMount, useCanvasContribution } from '@/features/design/mounts/CanvasMount';
 import { bindDesignWindowSession } from '@/features/design/runtime';
 import { useI18n } from '@/i18n';
+import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { useSettingsStore } from '@/stores/settings';
 import '@/features/design/vetta/src/style.css';
 import './styles/globals.css';
@@ -92,6 +93,7 @@ function DesignWindowApp() {
       className="flex h-screen flex-col overflow-hidden bg-shell text-foreground"
       data-slot="design-window"
     >
+      <PluginThemeHost />
       <TitleBar title={title} />
       <div className="flex min-h-0 flex-1 overflow-hidden border-line border-t bg-background">
         {state && 'error' in state ? (

@@ -12,8 +12,10 @@ import type { DraftBroker } from '../services/extensionPlugins/draftBroker';
 import type { ExtensionPluginService, UiCallMethod } from '../services/extensionPlugins/service';
 import { setPluginAssetResolver } from '../services/localImageProtocol';
 import { getWindowWebContents, sendToAllWindows } from '../windows/createAppWindow';
+import { designWindowSession } from '../windows/DesignWindow';
 import { getMainWindow } from '../windows/MainWindow';
 import { getSettingsWindow } from '../windows/SettingsWindow';
+import { isTaskBoardWebContents } from '../windows/TaskBoardWindow';
 import { PluginOwnerLifetimes } from './extensionPluginsOwners';
 
 interface PluginSenderEvent {
@@ -111,6 +113,11 @@ const mime: Record<string, string> = {
 type Handler = (event: PluginSenderEvent, ...args: unknown[]) => unknown;
 interface HandlerDeps {
   trusted(event: PluginSenderEvent): boolean;
+  /**
+   * 只读插件摘要/素材的额外发送方：协作看板、独立设计窗口等跟随应用外观的应用窗口
+   * 也要读插件调色板（`list` + `asset`）。管理、安装、调用类通道一律不走这条路径。
+   */
+  readTrusted?(event: PluginSenderEvent): boolean;
   service(): ExtensionPluginService;
   draft(): DraftBroker;
   projectRoot(sessionId: string): string | null;
@@ -123,7 +130,11 @@ interface HandlerDeps {
     kind: 'dir' | 'zip'
   ): Promise<{ canceled: boolean; filePaths: string[] }>;
 }
-/** Every privileged operation shares the same sender/frame guard, including list/assets/draft replies. */
+/**
+ * Every privileged operation shares the same sender/frame guard, including draft replies.
+ * `list` / `asset` also accept `readTrusted` senders: windows that only follow the app
+ * appearance need the palette, and reading plugin metadata must not grant management rights.
+ */
 export function createExtensionPluginHandlers(deps: HandlerDeps) {
   const deny = {
     ok: false,
@@ -131,9 +142,9 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
     code: 'PERMISSION_DENIED',
   };
   const guard =
-    (handler: Handler): Handler =>
+    (handler: Handler, readOnly = false): Handler =>
     async (e, ...args) => {
-      if (!deps.trusted(e)) return deny;
+      if (!deps.trusted(e) && !(readOnly && deps.readTrusted?.(e))) return deny;
       try {
         return await handler(e, ...args);
       } catch (error) {
@@ -148,7 +159,7 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
     };
   const invalid = { ok: false, error: '参数不合法' };
   return {
-    list: guard(() => deps.service().list()),
+    list: guard(() => deps.service().list(), true),
     registryNotice: guard(() => deps.service().registryNotice()),
     dismissRegistryNotice: guard(() => {
       deps.service().dismissRegistryNotice();
@@ -337,7 +348,7 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
         mime: mime[extname(path).toLowerCase()] ?? 'application/octet-stream',
         base64: bytes.toString('base64'),
       };
-    }),
+    }, true),
   };
 }
 export type ExtensionPluginStageResult =
@@ -360,6 +371,25 @@ export function registerExtensionPluginHandlers(): void {
       mainUrl: expected('index'),
       settingsUrl: expected('settings'),
     });
+  };
+  /**
+   * 跟随应用外观的应用窗口（协作看板、独立设计窗口）只多读 `list` / `asset`：
+   * 发送方必须是 Main 权威登记的那个窗口、顶层 frame，且停留在自己的入口文档。
+   * 这两个窗口本身持有任务写入 / 设计服务权限，但插件管理、安装、调用、配置、
+   * draft 等通道仍然只认主窗口与设置窗口。
+   */
+  const readTrusted = (event: PluginSenderEvent) => {
+    const senderId = event.sender.id;
+    const trustedAs = (url: string) =>
+      isTrustedPluginSender(event, {
+        mainId: senderId,
+        settingsId: null,
+        mainUrl: url,
+        settingsUrl: '',
+      });
+    if (isTaskBoardWebContents(senderId)) return trustedAs(expected('taskboard'));
+    if (designWindowSession(senderId) !== null) return trustedAs(expected('design'));
+    return false;
   };
   let handlers: Promise<ReturnType<typeof createExtensionPluginHandlers>> | null = null;
   let releaseOwner: ((id: number) => void) | undefined;
@@ -389,6 +419,7 @@ export function registerExtensionPluginHandlers(): void {
         };
         return createExtensionPluginHandlers({
           trusted,
+          readTrusted,
           service: getExtensionPlugins,
           draft: getDraftBroker,
           projectRoot: pluginProjectRoot,
@@ -462,9 +493,16 @@ export function registerExtensionPluginHandlers(): void {
     [IPC_CHANNELS.EXTENSION_PLUGINS_DRAFT_RESPONSE, 'draftResponse'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_ASSET, 'asset'],
   ];
+  // 与 createExtensionPluginHandlers 的 readOnly 白名单保持一致：外层闸门先按通道键放行，
+  // 否则 readTrusted 生效前就被拦掉，看板/设计窗口读不到调色板。
+  const readOnlyChannels = new Set<string>([
+    IPC_CHANNELS.EXTENSION_PLUGINS_LIST,
+    IPC_CHANNELS.EXTENSION_PLUGINS_ASSET,
+  ]);
   for (const [channel, key] of channels)
     ipcMain.handle(channel, async (event, ...args: unknown[]) => {
-      if (!trusted(event))
+      const allowed = trusted(event) || (readOnlyChannels.has(channel) && readTrusted(event));
+      if (!allowed)
         return { ok: false, error: '仅可信本地桌面可调用插件', code: 'PERMISSION_DENIED' };
       try {
         return await (await load())[key](event, ...args);

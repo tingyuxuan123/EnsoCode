@@ -166,6 +166,7 @@ HTML 中 `enso.on(name,listener)` / `onTheme(listener)` 返回取消函数，`en
 
 主题 JSON 的 `light` / `dark` 均需 canvas/surface/sunken/border/borderStrong/text/textMuted/textSubtle/accent 调色板，可附安全 CSS token、固定素材槽与背景图。相对素材 URL 只在本插件包内解析，任意本机路径不会暴露给页面。附加 CSS 属于额外样式能力，扩大时要重新授权。
 用户显式选择插件主题才覆盖当前主题；停用、卸载或加载失败时恢复原有 Collabra 配色，不改写薄荷白、cloud-light 等既有主题设置。
+选中主题的调色板与附加 CSS 会应用到主窗口、设置、协作看板和独立设计窗口；固定素材槽与背景图依赖主窗口的 `data-enso` 挂点，只在主窗口出现，不会铺到设置或看板。
 
 ## Node 入口
 

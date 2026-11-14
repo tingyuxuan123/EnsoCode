@@ -57,20 +57,30 @@ async function load(plugin: ExtensionPluginSummary) {
 const VARS: Record<keyof ThemePalette, string[]> = {
   canvas: ['--background', '--shell', '--panel'],
   surface: ['--card', '--popover'],
-  sunken: ['--muted', '--input'],
+  sunken: ['--muted', '--input', '--secondary', '--accent'],
   border: ['--border', '--line'],
   borderStrong: ['--line-strong'],
-  text: ['--foreground', '--card-foreground', '--popover-foreground'],
+  text: [
+    '--foreground',
+    '--card-foreground',
+    '--popover-foreground',
+    '--secondary-foreground',
+    '--accent-foreground',
+  ],
   textMuted: ['--muted-foreground'],
   textSubtle: ['--text-subtle'],
   accent: ['--primary', '--brand', '--ring'],
 };
 export function pluginPaletteTokens(palette: ThemePalette): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(VARS).flatMap(([key, vars]) =>
-      vars.map((name) => [name, palette[key as keyof ThemePalette]])
-    )
-  );
+  return {
+    ...Object.fromEntries(
+      Object.entries(VARS).flatMap(([key, vars]) =>
+        vars.map((name) => [name, palette[key as keyof ThemePalette]])
+      )
+    ),
+    // Override built-in navigation colors, but retain wallpaper's surface alpha.
+    '--color-nav': 'var(--color-shell)',
+  };
 }
 /** Dedicated style tag means disabling a plugin restores the existing fork palette without mutation. */
 export function startPluginThemes(): () => void {

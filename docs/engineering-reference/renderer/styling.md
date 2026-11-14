@@ -106,6 +106,23 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 要同时改 `components/settings/appearanceThemes.ts` 的 `BUILTIN_THEME_PREVIEW`，漂移回归见
 `appearanceThemes.test.ts` 与 `AppearanceThemeCards.test.tsx`。
 
+插件调色板的 `sunken` 同时映射中性控件底色 `secondary` / hover 色 `accent`（不是品牌强调色），
+对应文字取 `text`；导航 `--color-nav` 引用 `--color-shell`，覆盖内置浅色方案的固定导航色并保留
+背景图 alpha。插件 `tokens.light/dark` 可显式覆盖这些默认映射；全部随插件样式标签一起撤销，
+不改已保存的内置方案。不要让插件作者为宿主分段、页签或设置导航逐个写 CSS 补色。
+回归见 `stores/pluginThemes.test.ts`。
+
+跟随应用外观的入口（主窗口、设置、协作看板、独立设计窗口）都在自己的组件树里挂
+`plugins/PluginThemeHost`：窗口之间不共享 `html` 主题类，漏挂的窗口会一直停在云白。宿主只加载
+light/dark 调色板与插件 CSS，样式标签清空即恢复内置配色；插件素材槽与背景图规则只认主窗口的
+`data-enso` 挂点，所以设置、看板、设计窗口不会跟着铺壁纸或装饰。会话活动属性
+（`data-enso-session` / `data-enso-activity`，素材槽的 running/waiting/error 状态）依赖 sessions
+store，只在主窗口由 `plugins/SessionActivityAttributes` 订阅，不能跟着主题宿主扩散到第二个入口。
+回归见 `plugins/pluginThemeWindows.test.ts`，`designWindowBoundary.test.ts` 同时守住宿主不得把
+sessions 依赖带进设计窗口。插件主题数据经 `extensionPlugins.list` / `asset` 读取，这两条只读
+通道额外放行 Main 权威登记的看板/设计窗口，写与管理通道仍限主窗口与设置窗口（见
+`main/windows.md`）。
+
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
 在 `system`/`light`/`dark` 下改配色方案看不到界面变化，这是设计如此，不是 bug。
 

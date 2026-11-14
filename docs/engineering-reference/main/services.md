@@ -353,7 +353,16 @@ subagent 保持跨厂商兼容的平面 schema；`prepareArguments` 在 schema �
 可选字段的空占位归一、model:thinking 拆分、schema JSON 解析和操作字段预检，产物须满足
 自身 schema 且幂等。非空串用字段在 Main RPC 前拒绝，不静默选择模型。
 wait 只返回 Run 状态；取正文必须用 `operation=report` + runId，task Agent 已 closed 仍可读取。
-回归：`subagent.control.test.ts`、`agentTypeCapabilities.test.ts`、`subagent.test.ts`。
+
+交互式 `subagent spawn` 默认 `mode=coworker`：一次 Run 完成后保留同一 child 上下文，
+同一工作的审核返工、用户反馈优先 `send` 原 agentId；忘记 id 时先 `list`，不另雇一份重新调查。
+审核中、等待用户反馈或主代理已经回复用户都不是解雇条件；用户验收、放弃或转向无关工作且不再
+需要时才 `dismiss`，闲置提醒也遵守同一边界。明确的一次性查询可显式 `mode=task`，
+仍只跑一轮自动回收；不改变 Main service 缺省 task、workflow 的一次性语义，也不复活已关闭 task。
+上下文复用不保证供应商缓存命中，不承诺固定的 token 或费用降幅。
+
+回归：`subagent.control.test.ts`、`agentTypeCapabilities.test.ts`、`subagent.test.ts`、
+`agentService.test.ts` 的工具默认派发 → 完成 → 同 child 返工用例。
 
 ## 工具目录只辅助发现，不裁剪权威说明
 

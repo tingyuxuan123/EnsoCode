@@ -14,6 +14,17 @@ input: {
 新增窗口要同时加：入口 html、入口 tsx、`electron.vite.config.ts` 的 input、
 `src/main/windows/<Name>Window.ts`。
 
+跟随应用外观的入口（`index` / `settings` / `taskboard` / `design`）还要在自己的组件树里挂
+`plugins/PluginThemeHost`：窗口之间不共享 `html` 主题类，漏挂就永远停在云白（协作看板踩过）。
+宿主只带调色板与插件 CSS；壁纸和插件素材槽仍只认主窗口的 `data-enso` 挂点，不要为了“外观一致”
+把它们铺到设置、看板或设计窗口。沙箱与预览入口（`plugin-view.html`、配对预览、设计画布 iframe、
+系统 PDF 预览）不是应用 UI，不挂宿主。
+
+插件主题数据经 `extensionPlugins.list` / `asset` 读取。这两个只读通道额外放行 Main 权威登记的
+taskboard/design 顶层入口（精确入口 URL + 顶层 frame + 窗口身份）；安装、启用、调用、配置、
+draft 等写通道继续只认主窗口与设置窗口。外层注册闸门按通道键放行、handler 内部按方法放行，
+两层必须同时打开，否则只改一层仍然被拦。回归见 `ipc/extensionPluginsTrust.test.ts`。
+
 窗口一律经 `createAppWindow()` 工厂创建，不要直接 `new BrowserWindow`。工厂统一处理了
 无边框样式、窗口状态持久化、可编辑区右键菜单、外链转系统浏览器、dev/prod 加载路径。
 

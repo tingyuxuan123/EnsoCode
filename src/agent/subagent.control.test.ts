@@ -315,7 +315,7 @@ describe('unified subagent tool', () => {
     ).rejects.toThrow(/prompt/);
   });
 
-  it('spawn 先归一化默认 task/异步，再交给 typed Main RPC', async () => {
+  it('spawn 默认保留上下文的 coworker/异步，再交给 typed Main RPC', async () => {
     const { deps, tool } = setup();
     const result = await tool.execute(
       'call-1',
@@ -327,14 +327,46 @@ describe('unified subagent tool', () => {
     expect(deps.invoke).toHaveBeenCalledWith(
       {
         operation: 'spawn',
-        mode: 'task',
+        mode: 'coworker',
         description: 'review',
         prompt: 'review this',
         wait: false,
       },
       undefined
     );
-    expect(result.details).toMatchObject({ request: { operation: 'spawn', mode: 'task' } });
+    expect(result.details).toMatchObject({ request: { operation: 'spawn', mode: 'coworker' } });
+  });
+
+  it.each([undefined, null, '', ' '])('spawn mode=%j 占位按可复用模式处理', async (mode) => {
+    const { deps, tool } = setup();
+    const input = { operation: 'spawn', description: 'implement', prompt: 'implement', mode };
+    const prepared = tool.prepareArguments?.(input);
+    expect(matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared)).toBe(true);
+    expect(tool.prepareArguments?.(prepared)).toEqual(prepared);
+    await tool.execute('placeholder-mode', prepared, undefined, undefined, {} as never);
+    expect(deps.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'spawn', mode: 'coworker', wait: false }),
+      undefined
+    );
+  });
+
+  it('明确指定 task 仍按一次性模式派发，不自动升级或接受未知模式', async () => {
+    const { deps, tool } = setup();
+    await tool.execute(
+      'explicit-task',
+      { operation: 'spawn', description: 'lookup', prompt: 'lookup once', mode: 'task' },
+      undefined,
+      undefined,
+      {} as never
+    );
+    expect(deps.invoke).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ operation: 'spawn', mode: 'task' }),
+      undefined
+    );
+    expect(() =>
+      tool.prepareArguments?.({ operation: 'spawn', prompt: 'p', mode: 'persistent' })
+    ).toThrow(/spawn fields/i);
+    expect(deps.invoke).toHaveBeenCalledTimes(1);
   });
 
   it('spawn/send 带 wait:true 被 abort 时只打断等待，仍返回 Main 的回执', async () => {
@@ -642,7 +674,7 @@ describe('unified subagent tool', () => {
     expect(deps.invoke).toHaveBeenLastCalledWith(
       {
         operation: 'spawn',
-        mode: 'task',
+        mode: 'coworker',
         description: 'x',
         prompt: 'x',
         wait: false,

@@ -103,6 +103,21 @@ describe('subagent unified control', () => {
     expect(guidelines).toContain('Do not fan out several subagents for one small task');
     expect(guidelines).toContain('one well-briefed subagent');
   });
+
+  it('工具明确默认保留上下文，同一工作返工先 send 原代理，不因回复用户而解雇', () => {
+    const tool = createUnifiedSubagentTool({ agentTypes: [], models: [], invoke: vi.fn() });
+    expect(tool.description).toMatch(/default.*coworker/i);
+    expect(tool.promptSnippet).toContain('Default spawn mode=coworker');
+    const mode = (tool.parameters as { properties: { mode: { description: string } } }).properties
+      .mode;
+    expect(mode.description).toMatch(/default.*coworker/i);
+    const guidelines = (tool.promptGuidelines ?? []).join('\n');
+    expect(guidelines).toMatch(/revisions.*user feedback.*send.*same agentId/i);
+    expect(guidelines).toMatch(/list.*before spawning a replacement/i);
+    expect(guidelines).toMatch(/Do not dismiss.*Run ended.*replied to the user/i);
+    expect(guidelines).toMatch(/explicit.*mode=task.*one-shot/i);
+    expect(guidelines).not.toContain('for follow-ups spawn a new one');
+  });
 });
 
 describe('CoworkerIdleReminder', () => {
@@ -150,6 +165,8 @@ describe('CoworkerIdleReminder', () => {
     expect(text).toContain('agentId a1');
     expect(text).toContain('3 tool calls');
     expect(text).toContain('operation=dismiss');
+    expect(text).toContain('awaiting user feedback');
+    expect(text).toContain('keep it for follow-up work');
   });
 
   it('发消息或读结果算使用并重新计数；提醒后又被使用，下次间隔翻倍', () => {

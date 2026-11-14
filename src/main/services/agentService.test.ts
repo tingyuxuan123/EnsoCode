@@ -5,6 +5,7 @@ import type {
   AgentOwnerIdentity,
 } from '@shared/types/agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createUnifiedSubagentTool } from '../../agent/subagent';
 import { AgentService, type AgentServiceOptions, type AgentServiceRuntime } from './agentService';
 
 const owner: AgentOwnerIdentity = {
@@ -240,6 +241,61 @@ describe('AgentService lifecycle', () => {
         prompt: 'do the work',
       })
     );
+  });
+
+  it('工具默认派发完成后仍可接用户返工：复用 exact child，只新增 Run，旧报告不变', async () => {
+    const { service, runtime, children } = setup();
+    const tool = createUnifiedSubagentTool({
+      agentTypes: [],
+      models: [],
+      invoke: async (request) => {
+        const base = { context, requestId: 'tool-call' };
+        if (request.operation === 'spawn') return service.spawn({ ...base, ...request });
+        if (request.operation === 'send') return service.send({ ...base, ...request });
+        throw new Error('unexpected operation');
+      },
+    });
+    const spawned = await tool.execute(
+      'initial',
+      { operation: 'spawn', description: 'implementation', prompt: 'implement first version' },
+      undefined,
+      undefined,
+      {} as never
+    );
+    const { agentId, runId } = spawned.details as { agentId: string; runId: string };
+    service.observe({
+      type: 'message-upsert',
+      identity: children[0],
+      seq: 1,
+      index: 0,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'first version ready' }] },
+    });
+    service.observe({ type: 'turn-completed', identity: children[0], seq: 2, turnId: runId });
+    const originalReport = await service.report({ context, requestId: 'review', runId });
+    expect(originalReport).toMatchObject({
+      ok: true,
+      value: { run: { status: 'succeeded' }, text: 'first version ready' },
+    });
+    expect(runtime.dismiss).not.toHaveBeenCalled();
+
+    const revised = await tool.execute(
+      'revision',
+      { operation: 'send', agentId, message: 'user feedback: revise the first version' },
+      undefined,
+      undefined,
+      {} as never
+    );
+    expect(revised.details).toMatchObject({ agentId, status: 'running' });
+    expect(revised.details).not.toHaveProperty('runId', runId);
+    expect(children).toHaveLength(1);
+    expect(runtime.prompt).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        identity: children[0],
+        agentId,
+        prompt: 'user feedback: revise the first version',
+      })
+    );
+    expect(await service.report({ context, requestId: 'reread', runId })).toEqual(originalReport);
   });
 
   it('adopts a persisted agent-tool coworker by stable instanceId after Main restart', async () => {

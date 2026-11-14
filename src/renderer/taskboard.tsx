@@ -5,6 +5,7 @@ import { TitleBar } from '@/components/app/TitleBar';
 import { GlobalTaskBoard } from '@/components/bots/GlobalTaskBoard';
 import { addToast, ToastProvider } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { useBotsStore } from '@/stores/bots';
 import { useSettingsStore } from '@/stores/settings';
 import './styles/globals.css';
@@ -37,6 +38,7 @@ function TaskBoardApp() {
       className="flex h-screen flex-col overflow-hidden bg-shell text-foreground"
       data-slot="taskboard-window"
     >
+      <PluginThemeHost />
       <TitleBar title={t('Collaboration board')} />
       <div className="flex min-h-0 flex-1 overflow-hidden border-line border-t">
         <GlobalTaskBoard
