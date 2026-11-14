@@ -1066,7 +1066,10 @@
 }
 
 /* 「生成中…」是工作状态的重复播报：设计稿只留抬头那一处，这里不再单占一行 */
-.phone-chat-root .enso-chat-col > div:has(> img.collabra-working-icon) { display: none; }
+/* 只有当同一列里已经有「工作中」那行时才隐藏它，避免把唯一的进度提示删掉 */
+.phone-chat-root .enso-chat-col:has(> div > svg .t-shimmer) > div:has(> img.collabra-working-icon) {
+  display: none;
+}
 
 /* 审批里的命令：稿子是深色等宽，不做语法着色（branch/string 的彩色在这里只是噪音） */
 .phone-dock [data-slot="approval-bar"] pre,
