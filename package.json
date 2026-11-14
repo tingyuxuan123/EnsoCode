@@ -1,6 +1,6 @@
 {
   "name": "enso-code",
-  "version": "0.2.79",
+  "version": "0.2.80",
   "description": "Collabra - AI 协作工作台",
   "main": "./out/main/index.js",
   "author": {
