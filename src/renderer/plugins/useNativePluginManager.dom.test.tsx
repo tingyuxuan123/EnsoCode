@@ -5,6 +5,18 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import { type NativePluginManager, useNativePluginManager } from './useNativePluginManager';
 
+// 用真实字典、只切换 locale：既验证 key 匹配，也验证插值后的中文文案
+const i18n = vi.hoisted(() => ({ locale: 'en' as 'en' | 'zh' }));
+vi.mock('@/i18n', async () => {
+  const { translate } = await import('@shared/i18n');
+  return {
+    useI18n: () => ({
+      t: (key: string, params?: Record<string, string | number>) =>
+        translate(i18n.locale, key, params),
+    }),
+  };
+});
+
 const preview: ExtensionPluginInstallPreview = {
   env: [],
   interop: [],
@@ -77,9 +89,10 @@ afterEach(async () => {
   await dispose?.();
   dispose = undefined;
   vi.unstubAllGlobals();
+  i18n.locale = 'en';
 });
 
-it('only stages valid HTTPS URLs and requires explicit commit without enabling the new plugin', async () => {
+it('only stages valid HTTPS URLs and leaves enabling of the new plugin to the commit', async () => {
   const view = setup();
   await view.render();
   for (const url of [
@@ -98,6 +111,50 @@ it('only stages valid HTTPS URLs and requires explicit commit without enabling t
   await act(async () => view.manager.confirmInstall(preview.token));
   expect(view.api.commit).toHaveBeenCalledExactlyOnceWith(preview.token);
   expect(view.api.setEnabled).not.toHaveBeenCalled();
+  expect(view.manager.preview).toBeNull();
+});
+
+it('reports in the interface language a plugin that installed but could not be enabled', async () => {
+  i18n.locale = 'en';
+  const view = setup();
+  await view.render();
+  await act(async () => view.manager.stage('dir'));
+  view.api.commit.mockResolvedValueOnce({
+    ok: true,
+    enabled: false,
+    warning: 'Manifest could not be loaded',
+  });
+  await act(async () => view.manager.confirmInstall(preview.token));
+  expect(view.manager.error).toBe('Installed, but enabling failed: Manifest could not be loaded');
+  expect(view.manager.preview).toBeNull();
+  expect(view.api.commit).toHaveBeenCalledTimes(1);
+  expect(view.api.setEnabled).not.toHaveBeenCalled();
+});
+
+it('localizes the partial-success message for Chinese users and keeps install success', async () => {
+  i18n.locale = 'zh';
+  const view = setup();
+  await view.render();
+  await act(async () => view.manager.stage('dir'));
+  view.api.commit.mockResolvedValueOnce({
+    ok: true,
+    enabled: false,
+    warning: '安装目录里的插件清单无法读取',
+  });
+  await act(async () => view.manager.confirmInstall(preview.token));
+  expect(view.manager.error).toBe('已安装，但启用失败：安装目录里的插件清单无法读取');
+  expect(view.manager.error).not.toContain('Installed, but enabling failed');
+  expect(view.manager.preview).toBeNull();
+  expect(view.api.commit).toHaveBeenCalledTimes(1);
+});
+
+it('stays quiet when the commit both installs and enables the plugin', async () => {
+  const view = setup();
+  await view.render();
+  await act(async () => view.manager.stage('dir'));
+  view.api.commit.mockResolvedValueOnce({ ok: true, enabled: true });
+  await act(async () => view.manager.confirmInstall(preview.token));
+  expect(view.manager.error).toBe('');
   expect(view.manager.preview).toBeNull();
 });
 

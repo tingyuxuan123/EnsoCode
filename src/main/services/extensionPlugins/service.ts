@@ -50,6 +50,7 @@ import {
 import { mergeStatusItems, type StatusPatch } from '@shared/extensionPlugins/statusItems';
 import { parsePluginToolName, pluginToolName } from '@shared/extensionPlugins/toolName';
 import type {
+  ExtensionPluginCommitResult,
   ExtensionPluginConfigField,
   ExtensionPluginInstallPreview,
   ExtensionPluginListResult,
@@ -549,18 +550,18 @@ export class ExtensionPluginService {
   releaseOwner(owner: number): void {
     for (const [token, e] of this.staged) if (e.owner === owner) this.discard(token, owner);
   }
-  /** Commit never executes plugin code. Disabled/new/pending plugins remain entirely inert. */
-  async commit(token: string, owner: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  /**
+   * 暂存与权限预览不执行插件代码。用户显式确认的首次安装随后走 setEnabled 的启用生命周期，
+   * 但 `enabled` 只代表已授权启用，不代表 worker 已就绪；更新、重装与待批准保留原启停意图。
+   */
+  async commit(token: string, owner: number): Promise<ExtensionPluginCommitResult> {
     if (this.registryError) return { ok: false, error: this.registryError };
     this.sweepStaged();
     const entry = this.staged.get(token);
     if (!entry || entry.owner !== owner) return { ok: false, error: '安装已过期或不属于此窗口' };
     return this.withIdLock(entry.staged.manifest.id, () => this.commitEntry(token, owner));
   }
-  private async commitEntry(
-    token: string,
-    owner: number
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  private async commitEntry(token: string, owner: number): Promise<ExtensionPluginCommitResult> {
     const entry = this.staged.get(token);
     if (!entry || entry.owner !== owner || this.disposed)
       return { ok: false, error: '安装已过期或应用已关闭' };
@@ -575,6 +576,8 @@ export class ExtensionPluginService {
     }
     const grant = grantOf(m);
     const existing = this.records.find((r) => r.id === m.id);
+    // 用户显式确认的首次安装安装完成后默认启用；更新、重装和内部安装保持原启用意图
+    const firstInstall = !existing && owner !== INTERNAL_OWNER;
     if (!existing)
       this.records.push({
         id: m.id,
@@ -612,21 +615,37 @@ export class ExtensionPluginService {
     if (available && !isNewerPluginVersion(available, m.version)) this.updates.delete(m.id);
     this.persist();
     this.syncBackground();
-    return { ok: true };
+    if (!firstInstall) return { ok: true };
+    if (!this.load(m.id, dir))
+      return {
+        ok: true,
+        enabled: false,
+        warning: '安装目录里的插件清单无法读取，插件已安装但保持停用',
+      };
+    const enabled = this.enableEntry(m.id);
+    return enabled.ok
+      ? { ok: true, enabled: true }
+      : { ok: true, enabled: false, warning: enabled.error };
   }
   async setEnabled(id: string, enabled: boolean) {
     if (this.registryError) return { ok: false, error: this.registryError };
     return this.withIdLock(id, async () => {
-      if (!enabled) await this.stopProcessAndWait(id);
-      else {
-        this.crashes.delete(id);
-        this.prepareFailed.delete(id);
-        this.recentErrors.delete(id);
-      }
-      const result = this.applyAndPersist(id, { type: enabled ? 'enable' : 'disable' });
+      if (enabled) return this.enableEntry(id);
+      await this.stopProcessAndWait(id);
+      const result = this.applyAndPersist(id, { type: 'disable' });
       if (result.ok) this.syncBackground();
       return result;
     });
+  }
+  /** 启用生命周期；调用方必须已持有该 id 的锁（不要在锁内再调 setEnabled）。 */
+  private enableEntry(id: string): { ok: boolean; error?: string } {
+    if (this.registryError) return { ok: false, error: this.registryError };
+    this.crashes.delete(id);
+    this.prepareFailed.delete(id);
+    this.recentErrors.delete(id);
+    const result = this.applyAndPersist(id, { type: 'enable' });
+    if (result.ok) this.syncBackground();
+    return result;
   }
   async approvePending(id: string) {
     if (this.registryError) return { ok: false, error: this.registryError };

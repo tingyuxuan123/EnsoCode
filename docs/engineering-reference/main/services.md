@@ -156,7 +156,8 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 
 **原生插件**（`services/extensionPlugins/`、`pluginHost/`、`renderer/plugins/`、[plugins.md](../../plugins.md)）
 - 安装只复制到 `userData/extension-plugins`，不引用源目录；zip/URL 下载校验公网地址、重定向、
-  解压边界与符号链接。安装/更新**不执行插件代码**，停用与待批准版本从不运行。
+  解压边界与符号链接。暂存与权限预览**不执行插件代码**；用户确认的首次安装由 `commit` 默认启用，
+  已存在插件的更新/重装保留原启停意图（原来停用不会复活），停用与待批准版本从不运行。
 - `main.mjs` 是完整 Node 子进程，`ui.js` 与主界面同权：这是信任边界，不是 OS 沙箱；界面必须明说，
   不能用清单权限暗示隔离。侧栏 HTML 才是 opaque-origin sandbox iframe。
 - 插件工具经 worker → Main → 插件进程往返，沿用 `withPlanGate` 与 `withApproval`；规划期默认拒绝

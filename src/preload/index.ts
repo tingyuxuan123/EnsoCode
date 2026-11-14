@@ -1818,7 +1818,7 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_PICK_AND_STAGE, kind),
     stageFromUrl: (url: string): Promise<PluginStageResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_URL, url),
-    commit: (token: string): Promise<{ ok: boolean; error?: string }> =>
+    commit: (token: string): Promise<ExtensionPluginCommitResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_COMMIT, token),
     discard: (token: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_DISCARD, token),
@@ -1978,6 +1978,7 @@ contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 import type { ComputerAllowedApp, ComputerCapabilities } from '@shared/computer/types';
 import type { PluginArtifactInfo } from '@shared/extensionPlugins/protocol';
 import type {
+  ExtensionPluginCommitResult,
   ExtensionPluginConfigField,
   ExtensionPluginInstallPreview,
   ExtensionPluginListResult,

@@ -65,7 +65,7 @@ export function NativePluginsSection({
           <h3 className="font-semibold text-[calc(18rem/14)]">{t('Collabra plugins')}</h3>
           <p className="mt-1 text-muted-foreground text-[calc(13rem/14)]">
             {t(
-              'Native plugins are separate from Claude Code plugins. New installs are disabled until you enable them.'
+              'Native plugins are separate from Claude Code plugins. New installs are enabled right after you confirm the install.'
             )}
           </p>
         </div>

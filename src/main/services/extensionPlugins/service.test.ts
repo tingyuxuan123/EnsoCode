@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -93,6 +95,19 @@ function source(patch: Record<string, unknown> = {}, files: Record<string, strin
   }
   return { kind: 'dir' as const, path: dir };
 }
+/** 只在服务私有目录里定位暂存副本，用来构造真实的“安装后清单读不出来”故障 */
+function findStagedFile(dir: string, name: string): string | null {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const found = findStagedFile(path, name);
+      if (found) return found;
+    } else if (entry.name === name) {
+      return path;
+    }
+  }
+  return null;
+}
 async function install(s: ExtensionPluginService, patch = {}, files = {}, owner = 1) {
   const staged = await s.stage(source(patch, files), owner);
   if (!staged.ok) throw new Error(staged.error);
@@ -174,13 +189,109 @@ describe('desktop plugin service', () => {
     });
     await expect(s.callUi({ ...input, gesture: true })).resolves.toBeNull();
   });
-  it('stages and commits without running any plugin code; new install stays disabled', async () => {
-    const { service: s, fork } = setup();
-    await install(s, {}, { 'main.mjs': 'throw new Error("must not execute before enable")' });
+  it('首次确认安装默认启用，安装阶段不执行插件代码', async () => {
+    const { service: s, fork, root } = setup();
+    const staged = await s.stage(source(), 7);
+    if (!staged.ok) throw new Error(staged.error);
+    expect(await s.commit(staged.preview.token, 7)).toEqual({ ok: true, enabled: true });
+    // 启用只登记状态，插件代码要到第一次真实调用才执行
     expect(fork).not.toHaveBeenCalled();
-    expect(s.list().plugins[0]).toMatchObject({ state: 'disabled' });
+    expect(s.list().plugins[0]).toMatchObject({ state: 'enabled' });
+    expect(s.toolsForSpawn().map((tool) => tool.name)).toEqual(['plugin_enso-test__read']);
+    expect(await toolCall(s)).toEqual({ content: 'ok', artifacts: [] });
+    const registry = JSON.parse(readFileSync(join(root, 'registry.json'), 'utf8'));
+    expect(registry.plugins[0].state).toBe('enabled');
+  });
+  it('首次安装的常驻插件随提交进入后台启动', async () => {
+    const { service: s, fork } = setup();
+    s.startBackground();
+    const staged = await s.stage(
+      source({ resident: true, permissions: ['agent.tool', 'process.background'] }),
+      7
+    );
+    if (!staged.ok) throw new Error(staged.error);
+    expect(await s.commit(staged.preview.token, 7)).toEqual({ ok: true, enabled: true });
+    await vi.waitFor(() => expect(fork).toHaveBeenCalledTimes(1));
+    expect(s.list().plugins[0]).toMatchObject({ state: 'enabled', resident: true });
+  });
+  it('取消预览、错误窗口和一次性 token 都不会启用插件', async () => {
+    const { service: s } = setup();
+    const cancelled = await s.stage(source(), 7);
+    if (!cancelled.ok) throw new Error(cancelled.error);
+    expect(s.discard(cancelled.preview.token, 7)).toBe(true);
+    expect(await s.commit(cancelled.preview.token, 7)).toMatchObject({ ok: false });
+    const foreign = await s.stage(source(), 7);
+    if (!foreign.ok) throw new Error(foreign.error);
+    expect(await s.commit(foreign.preview.token, 8)).toMatchObject({ ok: false });
+    expect(s.list().plugins).toEqual([]);
     expect(s.toolsForSpawn()).toEqual([]);
-    await expect(toolCall(s)).rejects.toMatchObject({ code: 'PLUGIN_DISABLED' });
+    const once = await s.stage(source(), 7);
+    if (!once.ok) throw new Error(once.error);
+    expect(await s.commit(once.preview.token, 7)).toEqual({ ok: true, enabled: true });
+    const snapshot = s.list().plugins[0];
+    expect(await s.commit(once.preview.token, 7)).toMatchObject({ ok: false });
+    expect(s.list().plugins[0]).toEqual(snapshot);
+  });
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    '首次安装后清单读不出来时如实返回部分成功，登记表保持停用且不重装',
+    async () => {
+      const { service: s, fork, root } = setup();
+      const staged = await s.stage(source(), 7);
+      if (!staged.ok) throw new Error(staged.error);
+      // 暂存副本的清单不可读：commitStaged 只 rename，安装目录里同样读不出来
+      const manifest = findStagedFile(root, 'enso-plugin.json');
+      if (!manifest) throw new Error('staging copy not found');
+      chmodSync(manifest, 0o000);
+      expect(await s.commit(staged.preview.token, 7)).toEqual({
+        ok: true,
+        enabled: false,
+        warning: expect.stringContaining('清单'),
+      });
+      expect(JSON.parse(readFileSync(join(root, 'registry.json'), 'utf8')).plugins[0].state).toBe(
+        'disabled'
+      );
+      // 清单不可读时不假报启用：列表不含该插件，也不提供工具或拉起进程
+      expect(s.list().plugins).toEqual([]);
+      expect(s.toolsForSpawn()).toEqual([]);
+      expect(fork).not.toHaveBeenCalled();
+      // 一次性 token 不会因此重装一次
+      expect(await s.commit(staged.preview.token, 7)).toMatchObject({ ok: false });
+      expect(JSON.parse(readFileSync(join(root, 'registry.json'), 'utf8')).plugins).toHaveLength(1);
+    }
+  );
+  it('已安装插件的重装与更新保持原启用意图，扩权仍待批准', async () => {
+    const { service: s } = setup();
+    const first = await s.stage(source(), 1);
+    if (!first.ok) throw new Error(first.error);
+    expect(await s.commit(first.preview.token, 1)).toEqual({ ok: true, enabled: true });
+    expect(await s.setEnabled('enso.test', false)).toEqual({ ok: true });
+    // 同权限重装：原来停用就继续停用
+    const again = await s.stage(source({ version: '2' }), 1);
+    if (!again.ok) throw new Error(again.error);
+    expect(await s.commit(again.preview.token, 1)).toEqual({ ok: true });
+    expect(s.list().plugins[0]).toMatchObject({ version: '2', state: 'disabled' });
+    expect(s.toolsForSpawn()).toEqual([]);
+    // 已启用时同权限重装：保持启用
+    expect(await s.setEnabled('enso.test', true)).toEqual({ ok: true });
+    const third = await s.stage(source({ version: '3' }), 1);
+    if (!third.ok) throw new Error(third.error);
+    expect(await s.commit(third.preview.token, 1)).toEqual({ ok: true });
+    expect(s.list().plugins[0]).toMatchObject({ version: '3', state: 'enabled' });
+    // 授权扩大仍然进入待批准，不因默认启用绕过
+    const grown = await s.stage(
+      source({ version: '4', permissions: ['agent.tool', 'agent.inject'] }),
+      1
+    );
+    if (!grown.ok) throw new Error(grown.error);
+    expect(await s.commit(grown.preview.token, 1)).toEqual({ ok: true });
+    expect(s.list().plugins[0]).toMatchObject({
+      version: '3',
+      state: 'enabled',
+      pendingVersion: '4',
+      pendingPermissions: expect.arrayContaining(['agent.inject']),
+    });
+    expect(await s.approvePending('enso.test')).toEqual({ ok: true });
+    expect(s.list().plugins[0]).toMatchObject({ version: '4', state: 'enabled' });
   });
   it('binds one-use installation tokens to exact initiating window', async () => {
     const { service: s } = setup();
@@ -293,8 +404,7 @@ describe('desktop plugin service', () => {
         'outside/logo.png': 'outside',
       }
     );
-    expect(s.assetPath('enso.test', 'themes/night/theme.json')).toBeNull();
-    await s.setEnabled('enso.test', true);
+    // 首次安装默认启用，主题资源随启用即可读
     expect(s.assetPath('enso.test', 'themes/night/theme.json')).not.toBeNull();
     expect(s.assetPath('enso.test', 'themes/night/style.css')).not.toBeNull();
     expect(s.assetMediaPath('enso.test', 'themes/night/media/paper.png')).not.toBeNull();
@@ -303,6 +413,7 @@ describe('desktop plugin service', () => {
     expect(s.assetMediaPath('enso.test', 'themes/night/secret.txt')).toBeNull();
     expect(s.assetMediaPath('enso.test', 'themes/night/../../outside/logo.png')).toBeNull();
     await s.setEnabled('enso.test', false);
+    expect(s.assetPath('enso.test', 'themes/night/theme.json')).toBeNull();
     expect(s.assetMediaPath('enso.test', 'themes/night/media/paper.png')).toBeNull();
   });
   it('preset resources scoped correctly and unavailable selected presets fail closed', async () => {

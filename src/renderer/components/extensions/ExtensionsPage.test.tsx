@@ -218,7 +218,7 @@ it('作者指南展示本地模板和校验命令，不触发安装', async () =
   await act(async () => guide?.click());
   expect(document.body.textContent).toContain('pnpm plugin:init');
   expect(document.body.textContent).toContain('pnpm plugin:validate');
-  expect(document.body.textContent).toContain('Enable it explicitly');
+  expect(document.body.textContent).toContain('a first install is enabled as soon as you confirm');
   expect(fixture.stage).not.toHaveBeenCalled();
 });
 

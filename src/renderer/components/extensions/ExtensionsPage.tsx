@@ -984,8 +984,8 @@ export function ExtensionsPage({
             </pre>
             <p className="mt-3 text-muted-foreground text-sm">
               {locale === 'zh'
-                ? '校验通过后，从「添加扩展 → 从文件夹安装插件」选择生成的目录，查看权限并确认安装，然后手动启用。'
-                : 'After validation, choose Add extension → Install plugin from folder. Review permissions and confirm installation. Enable it explicitly afterward.'}
+                ? '校验通过后，从「添加扩展 → 从文件夹安装插件」选择生成的目录，查看权限并确认「安装并启用」；首次安装确认后即启用，之后可随时停用。'
+                : 'After validation, choose Add extension → Install plugin from folder. Review permissions and confirm with Install and enable: a first install is enabled as soon as you confirm, and you can turn it off anytime.'}
             </p>
           </DialogPanel>
           <DialogFooter>

@@ -88,7 +88,7 @@ async function install(
   const src = source(patch, code);
   const staged = await service.stage(src, 7);
   if (!staged.ok) throw new Error(staged.error);
-  expect(await service.commit(staged.preview.token, 7)).toEqual({ ok: true });
+  expect(await service.commit(staged.preview.token, 7)).toEqual({ ok: true, enabled: true });
   expect(await service.setEnabled(staged.preview.id, true)).toEqual({ ok: true });
   return src;
 }

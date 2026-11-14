@@ -4,13 +4,20 @@ import type {
   ExtensionPluginSummary,
 } from '@shared/extensionPlugins/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useI18n } from '@/i18n';
 import { coerceConfigValue } from './configValue';
 
 type PluginApi = Window['electronAPI']['extensionPlugins'];
 type PluginStageKind = 'dir' | 'zip' | 'url' | 'market' | 'restage';
 type ConfigDraft = Record<string, string | null>;
 type Config = { pluginId: string; fields: ExtensionPluginConfigField[]; draft: ConfigDraft };
-type OperationResult = { ok: boolean; error?: string; reason?: string };
+type OperationResult = {
+  ok: boolean;
+  error?: string;
+  reason?: string;
+  enabled?: boolean;
+  warning?: string;
+};
 type Session = {
   api: PluginApi;
   busy: string | null;
@@ -69,6 +76,7 @@ async function discard(api: PluginApi, token: string): Promise<void> {
 
 /** Renderer-only management for the native registry; Main remains the install authority. */
 export function useNativePluginManager() {
+  const { t } = useI18n();
   const api =
     typeof window === 'undefined' ||
     (window.electronAPI && 'remote' in window.electronAPI && window.electronAPI.remote)
@@ -228,7 +236,16 @@ export function useNativePluginManager() {
     mutate('commit', async (session) => {
       if (session.preview?.token !== token) return;
       const result = await session.api.commit(token);
-      if (result.ok && sessionRef.current === session) takePreview(session);
+      if (result.ok && sessionRef.current === session) {
+        takePreview(session);
+        // 安装成功但启用失败：插件已装好，只如实提示，不重试安装也不假报已启用
+        if (result.enabled === false)
+          setError(
+            t('Installed, but enabling failed: {{error}}', {
+              error: result.warning ?? t('Unknown error'),
+            })
+          );
+      }
       return result;
     });
 

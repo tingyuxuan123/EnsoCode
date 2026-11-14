@@ -49,7 +49,7 @@ it('server-renders an explicit trust warning and never claims an OS sandbox', ()
   const html = renderToStaticMarkup(createElement(NativePluginsSection));
   expect(html).toContain('full Node.js access');
   expect(html).toContain('not an OS sandbox');
-  expect(html).toContain('disabled until you enable');
+  expect(html).toContain('enabled right after you confirm the install');
   expect(html).toContain('Install from folder');
   expect(html).not.toContain('enso-server');
 });

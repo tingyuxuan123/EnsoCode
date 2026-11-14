@@ -127,6 +127,19 @@ export interface ExtensionPluginConfigField {
   value?: string;
 }
 
+/**
+ * Main 的安装提交结果。安装成功后首次安装默认启用；启用失败只影响启用，
+ * 安装本身仍然成功，界面据此提示“已安装但启用失败”，不要重试提交。
+ */
+export interface ExtensionPluginCommitResult {
+  ok: boolean;
+  error?: string;
+  /** 首次安装是否已默认启用；更新、重装保持原启用意图，不带该字段 */
+  enabled?: boolean;
+  /** 已安装但启用失败的原因 */
+  warning?: string;
+}
+
 export interface ExtensionPluginInstallPreview {
   token: string;
   id: string;

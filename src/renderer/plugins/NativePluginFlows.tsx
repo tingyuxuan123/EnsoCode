@@ -189,6 +189,13 @@ export function NativePluginFlows({
                     : ''}
                 </p>
                 <p>{preview.description}</p>
+                {!preview.existingVersion && (
+                  <p>
+                    {t(
+                      'The plugin is enabled as soon as you confirm. You can turn it off anytime.'
+                    )}
+                  </p>
+                )}
                 <p className="text-warning-foreground">{t(PLUGIN_TRUST_WARNING)}</p>
                 <Detail label={t('Permissions')} items={preview.permissions} />
                 <Detail label="Host fs.read" items={preview.fsRead} />
@@ -237,7 +244,7 @@ export function NativePluginFlows({
               disabled={disabled || !preview}
               onClick={() => preview && void manager.confirmInstall(preview.token)}
             >
-              {t('Confirm install')}
+              {t(preview?.existingVersion ? 'Confirm install' : 'Install and enable')}
             </Button>
           </DialogFooter>
         </DialogContent>

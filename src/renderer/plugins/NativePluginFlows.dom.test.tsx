@@ -139,6 +139,33 @@ it('renders the full permission preview and only commits after confirmation', as
   expect(view.container.textContent).not.toContain('Review plugin installation');
 });
 
+it('labels a first install as install-and-enable and blocks a second confirm while busy', async () => {
+  const view = setup();
+  const { existingVersion: _existing, ...fresh } = preview;
+  view.api.pickAndStage.mockResolvedValue({ ok: true, preview: fresh });
+  await view.render();
+  await act(async () => view.manager.stage('dir'));
+  expect(view.container.textContent).toContain('Install and enable');
+  expect(view.container.textContent).toContain('enabled as soon as you confirm');
+  let finish!: (value: { ok: true; enabled: true }) => void;
+  view.api.commit.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  await act(async () => {
+    void view.manager.confirmInstall(fresh.token);
+  });
+  const confirm = [...view.container.querySelectorAll('button')].find(
+    (item) => item.textContent === 'Install and enable'
+  );
+  expect(confirm?.disabled).toBe(true);
+  expect(view.api.commit).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ ok: true, enabled: true }));
+  expect(view.container.textContent).not.toContain('Review plugin installation');
+});
+
 it('opens uninstall confirmation without deleting, supports cancellation, and displays failures', async () => {
   const view = setup();
   await view.render();

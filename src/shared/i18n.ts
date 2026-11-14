@@ -194,6 +194,11 @@ export const zhTranslations: Record<string, string> = {
   'Clear value': '清除',
   Configure: '配置',
   'Confirm install': '确认安装',
+  'Install and enable': '安装并启用',
+  'The plugin is enabled as soon as you confirm. You can turn it off anytime.':
+    '确认后插件会立即启用，之后随时可以关闭。',
+  'Installed, but enabling failed: {{error}}': '已安装，但启用失败：{{error}}',
+  'Unknown error': '未知错误',
   'Decision models only allow or block when highly confident. Everything else asks you.':
     '决策模型只在高置信时才放行或拦截，其余情况都会询问你。',
   'Collabra plugins': 'Collabra 插件',
@@ -247,8 +252,8 @@ export const zhTranslations: Record<string, string> = {
   'Install from folder': '从文件夹安装',
   'Install from zip': '从 ZIP 安装',
   'Keep current': '保留当前版本',
-  'Native plugins are separate from Claude Code plugins. New installs are disabled until you enable them.':
-    '原生插件与 Claude Code 插件相互独立；新安装的插件默认停用，需要你手动启用。',
+  'Native plugins are separate from Claude Code plugins. New installs are enabled right after you confirm the install.':
+    '原生插件与 Claude Code 插件相互独立；新安装的插件在你确认安装后立即启用。',
   'No Collabra plugins installed': '尚未安装 Collabra 插件',
   'No apps are always allowed yet.': '还没有永久允许的应用。',
   'Not set': '未设置',
