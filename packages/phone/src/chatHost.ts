@@ -25,6 +25,8 @@ export function phoneChatHost(input: {
     ...(input.bot ? { botSession: true } : {}),
     ...(readImage
       ? {
+          // 会话 + 执行目录：两者任一变化，同一相对路径都可能指向别的文件
+          localImageScope: [input.sessionId ?? '', cwd ?? ''].join('|'),
           readLocalImage: async (path: string) => {
             const rel = toWorkspaceRelPath(path, cwd);
             if (!rel) return { ok: false as const, error: 'outside' };

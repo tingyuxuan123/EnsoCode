@@ -139,7 +139,6 @@ export function App() {
   const [rttMs, setRttMs] = useState<number | null>(null);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   /** 桌面置顶组的手动拖拽顺序（旧桌面不下发，空 = 按活跃倒序） */
-  const [pinnedOrder, setPinnedOrder] = useState<string[]>([]);
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [projectGroups, setProjectGroups] = useState<ProjectGroupEntry[]>([]);
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
@@ -449,9 +448,8 @@ export function App() {
         if (rejected.notice) setBotNotice(rejected.notice);
         if (rejected.clearQueueEchoes) setQueueEchoes([]);
       },
-      onCatalog: (entries, order) => {
+      onCatalog: (entries) => {
         setCatalog(entries);
-        setPinnedOrder(order ?? []);
       },
       onProjects: (next, groups) => {
         setProjects(next);
@@ -820,7 +818,6 @@ export function App() {
   /** 切到另一台时清空上一台的目录/视图，等新桌面下发 */
   const resetHostState = (nextView: LastView) => {
     setCatalog([]);
-    setPinnedOrder([]);
     setProjects([]);
     setProjectGroups([]);
     setProviders([]);
@@ -1285,7 +1282,6 @@ export function App() {
         projects={projects}
         groups={projectGroups}
         catalog={catalog}
-        pinnedOrder={pinnedOrder}
         activeId={botChatId ? null : activeId}
         canCreate={state === 'online' && !deviceReadOnly}
         devices={devices}

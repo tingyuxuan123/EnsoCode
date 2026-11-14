@@ -5,12 +5,7 @@ import {
   pairProjectDisplayName,
   sshProjectLabel,
 } from '@enso/pair';
-import {
-  isDrawerActive,
-  orderPinned,
-  orderProjectSessions,
-  sortByActivity,
-} from '@shared/pair/drawerOrder';
+import { orderProjectSessions, sortByActivity } from '@shared/pair/drawerOrder';
 import {
   ALL_GROUP_ID,
   filterProjectsByGroup,
@@ -95,7 +90,6 @@ interface Props {
   groups?: ProjectGroupEntry[];
   catalog: CatalogEntry[];
   /** 桌面置顶组的手动拖拽顺序；缺省（旧桌面）按活跃倒序 */
-  pinnedOrder?: string[];
   activeId: string | null;
   canCreate: boolean;
   /** 已配对的桌面列表（切换式：一次只连活跃那台） */
@@ -133,7 +127,6 @@ export function SessionDrawer({
   projects,
   groups = [],
   catalog,
-  pinnedOrder = [],
   activeId,
   canCreate,
   devices,
@@ -208,18 +201,7 @@ export function SessionDrawer({
     resolvedGroupId
   );
   const groupSections = sectionsForAllView(projects, groups, archivedProjectIds);
-  const slicedIdSet = new Set(activeProjects.map((project) => project.id));
   const topLevel = catalog.filter((c) => !c.parentId);
-  const inSlice = (c: CatalogEntry) => !c.projectId || slicedIdSet.has(c.projectId);
-  const hasRunningChild = (id: string) =>
-    catalog.some((child) => child.parentId === id && child.status === 'running');
-  const activeSessions = sortByActivity(
-    topLevel.filter((c) => !isArchived(c) && inSlice(c) && isDrawerActive(c, hasRunningChild(c.id)))
-  );
-  const pinnedSessions = orderPinned(
-    topLevel.filter((c) => c.pinned && !isArchived(c) && inSlice(c)),
-    pinnedOrder
-  );
   const archivedSessions = sortByActivity(
     topLevel.filter((c) => {
       if (!isArchived(c)) return false;
@@ -255,7 +237,7 @@ export function SessionDrawer({
       )}
       <aside
         className={cn(
-          'flex shrink-0 flex-col border-r bg-background',
+          'flex shrink-0 flex-col bg-page',
           docked
             ? 'relative h-full w-72'
             : cn(
@@ -264,35 +246,19 @@ export function SessionDrawer({
               )
         )}
       >
-        <div
-          className={cn(
-            'flex min-h-[48px] shrink-0 items-center justify-between px-3 pt-safe',
-            groups.length === 0 && 'border-b'
-          )}
-        >
-          {botSegment ? (
-            <span className="flex rounded-md border bg-muted/40 p-0.5 text-[13px]">
-              {(['项目', 'Bot'] as const).map((label) => {
-                const selected = (label === 'Bot') === botSegment.active;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => botSegment.onChange(label === 'Bot')}
-                    className={cn(
-                      'rounded-md px-3 py-0.5 transition-colors',
-                      selected ? 'bg-background font-medium' : 'text-muted-foreground'
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+        {/* 设计稿 sessions.tsx：品牌字标 + 连接状态在头一行，不带边框 */}
+        <div className="flex min-h-[48px] shrink-0 items-center gap-2 px-5 pt-safe pb-1">
+          <img src="/icons/logo-192.png" alt="" className="size-6 shrink-0 rounded-[6px]" />
+          <h1 className="text-[22px] leading-7 font-bold tracking-[-0.01em]">Collabra</h1>
+          <span className="flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-card2 px-2">
+            <span
+              className={cn('size-1.5 shrink-0 rounded-full', connected ? 'bg-green' : 'bg-faint')}
+            />
+            <span className="truncate text-[11px] leading-4 font-medium text-ink2">
+              {connected ? '已连接' : connectionLabel}
             </span>
-          ) : (
-            <span className="font-medium text-sm">项目</span>
-          )}
+          </span>
+          <div className="flex-1" />
           {docked ? (
             pinnable && onTogglePinned ? (
               <button
@@ -327,8 +293,34 @@ export function SessionDrawer({
             </span>
           )}
         </div>
+        {/* 分段：项目 / Bot，胶囊样式（设计稿 sessions.tsx 的「编程 / Bot」） */}
+        {botSegment && (
+          <div className="shrink-0 px-5 pb-2">
+            <div className="flex w-fit rounded-full bg-card2 p-1">
+              {(['项目', 'Bot'] as const).map((label) => {
+                const selected = (label === 'Bot') === botSegment.active;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => botSegment.onChange(label === 'Bot')}
+                    className={cn(
+                      'flex h-8 items-center rounded-full px-3.5 text-[14px] leading-5 transition-colors',
+                      selected
+                        ? 'bg-card font-medium text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]'
+                        : 'font-medium text-dim'
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {!botActive && groups.length > 0 && (
-          <div className="shrink-0 border-b px-3 pb-2">
+          <div className="shrink-0 px-5 pb-2">
             <Select
               items={[
                 { value: ALL_GROUP_ID, label: '全部' },
@@ -377,48 +369,9 @@ export function SessionDrawer({
         ) : (
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
             {projects.length === 0 && (
-              <p className="rounded-md border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+              <p className="px-3 py-8 text-center text-[13px] leading-5 text-dim">
                 桌面端还没有项目
               </p>
-            )}
-
-            {activeSessions.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 px-2 py-2">
-                  <span className="font-medium text-sm">活跃中</span>
-                </div>
-                <div className="flex flex-col gap-y-0.5">
-                  {activeSessions.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      active={activeId === session.id}
-                      nowTick={nowTick}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {pinnedSessions.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 px-2 py-2">
-                  <Pin className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium text-sm">置顶</span>
-                </div>
-                <div className="flex flex-col gap-y-0.5">
-                  {pinnedSessions.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      active={activeId === session.id}
-                      nowTick={nowTick}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </div>
-              </div>
             )}
 
             {(resolvedGroupId === ALL_GROUP_ID && groups.length > 0
@@ -516,7 +469,7 @@ export function SessionDrawer({
 
         {/* 与桌面一致：归档栏固定底部（滚动区外），列表在折叠头上方向上展开 */}
         {!botActive && archivedSessions.length > 0 && (
-          <div className="shrink-0 border-t p-2">
+          <div className="shrink-0 px-3 pb-1">
             {archivedOpen && (
               <div className="mb-0.5 flex max-h-64 flex-col gap-y-0.5 overflow-y-auto">
                 {archivedSessions.map((session) => (
@@ -548,7 +501,9 @@ export function SessionDrawer({
                 />
               </span>
               <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-muted-foreground text-sm">已归档</span>
+              <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-dim">
+                已归档
+              </span>
               <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
                 {archivedSessions.length}
               </span>
@@ -556,22 +511,22 @@ export function SessionDrawer({
           </div>
         )}
 
-        <div className="shrink-0 space-y-1 border-t p-2 pb-safe">
+        <div className="shrink-0 space-y-1 px-3 pb-safe pt-2">
           {!confirmUnpair && (
             <div className="flex items-center gap-2 px-2 py-1.5">
               <Palette className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 text-muted-foreground text-sm">主题</span>
-              <div className="flex shrink-0 gap-0.5 rounded-md border p-0.5">
+              <span className="min-w-0 flex-1 text-[15px] leading-5 text-ink2">主题</span>
+              <div className="flex shrink-0 gap-0.5 rounded-full bg-card2 p-0.5">
                 {THEME_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setThemePreference(option.value)}
                     className={cn(
-                      'rounded px-2 py-1 text-[11px] transition-colors',
+                      'rounded-full px-2.5 py-1 text-[11px] leading-4 transition-colors',
                       themePref === option.value
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-accent'
+                        ? 'bg-card font-medium text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
+                        : 'text-dim'
                     )}
                   >
                     {option.label}
@@ -585,7 +540,7 @@ export function SessionDrawer({
             <div className="px-2 py-1.5">
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 text-muted-foreground text-sm">推送通知</span>
+                <span className="min-w-0 flex-1 text-[15px] leading-5 text-ink2">推送通知</span>
                 <Switch
                   checked={pushEnabled}
                   disabled={pushBusy || pushAvailability !== 'ok' || !connected || !pushConfigReady}
@@ -647,7 +602,7 @@ export function SessionDrawer({
                     type="button"
                     onClick={() => onSwitchDevice(d.pairId)}
                     className={cn(
-                      'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60',
+                      'flex min-w-0 flex-1 items-center gap-2 rounded-[14px] px-2 py-2 text-left text-[15px] leading-5 transition-colors active:bg-card2',
                       isActive ? 'text-foreground' : 'text-muted-foreground'
                     )}
                   >
@@ -689,14 +644,14 @@ export function SessionDrawer({
             <button
               type="button"
               onClick={onAddDevice}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground"
+              className="flex w-full items-center gap-2 rounded-[14px] px-2 py-2 text-left text-[15px] leading-5 text-ink2 transition-colors active:bg-card2"
             >
               <Plus className="h-4 w-4 shrink-0" />
               <span>配对新电脑</span>
             </button>
           </div>
 
-          <p className="px-2 pt-0.5 text-center text-[10px] text-muted-foreground/60">
+          <p className="px-2 pt-0.5 text-center text-[11px] leading-4 text-faint">
             版本 {__COMMIT__}
           </p>
         </div>
@@ -792,31 +747,30 @@ function ProjectGroup({
   const hidden = sessions.length - shownCount;
   return (
     <div>
-      <div className="flex w-full items-center gap-1 rounded-md px-2 py-2 transition-colors hover:bg-muted/60">
+      <div className="flex w-full items-center gap-1 px-5 pt-3 pb-1 transition-colors">
         <button
           type="button"
           onClick={onToggleFold}
           className="flex min-w-0 flex-1 items-center gap-1 text-left"
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
             <ChevronRight
               className={cn(
-                'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                'h-3.5 w-3.5 text-faint transition-transform duration-200',
                 !folded && 'rotate-90'
               )}
             />
           </span>
-          <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate font-medium text-sm">
+          <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px] font-medium text-dim">
             {name}
             {badge && (
-              <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[10px] font-normal text-muted-foreground">
+              <span className="ml-1.5 rounded-full bg-card2 px-1.5 py-0.5 text-[11px] leading-4 font-normal text-dim">
                 {badge}
               </span>
             )}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-            {sessions.length}
+          <span className="shrink-0 text-[11px] leading-4 text-faint tabular-nums">
+            {sessions.length} 个会话
           </span>
         </button>
         {canCreate && onNew && (
@@ -847,7 +801,7 @@ function ProjectGroup({
                 <button
                   type="button"
                   onClick={() => onRevealMore(nextRevealedExtra(sessions.length, revealedExtra))}
-                  className="flex-1 rounded-md py-1 text-center text-muted-foreground text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="flex-1 py-1.5 text-center text-[11px] leading-4 text-dim transition-colors active:text-ink"
                 >
                   {t('Show {{n}} more', { n: hidden })}
                 </button>
@@ -856,7 +810,7 @@ function ProjectGroup({
                 <button
                   type="button"
                   onClick={() => onRevealMore(prevRevealedExtra(revealedExtra))}
-                  className="flex-1 rounded-md py-1 text-center text-muted-foreground text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="flex-1 py-1.5 text-center text-[11px] leading-4 text-dim transition-colors active:text-ink"
                 >
                   {t('Collapse')}
                 </button>

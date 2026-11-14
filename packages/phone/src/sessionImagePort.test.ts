@@ -166,3 +166,26 @@ describe('SessionImagePort 的成功缓存失效与代次', () => {
     await expect(port.load('s1', 'a.png', '/work/old')).resolves.toEqual({ dataUrl: DATA_URL });
   });
 });
+
+describe('同 cwd 权威根换代与手动刷新', () => {
+  it('刷新（evict→load）必定产生新的 host 请求，权限撤销时拿到错误而不是旧像素', async () => {
+    const { port, sent } = makePort();
+    const first = port.load('s1', 'a.png', '/work/proj');
+    port.receive({ type: 'session-image-result', requestId: requestIdOf(sent), dataUrl: DATA_URL });
+    await expect(first).resolves.toEqual({ dataUrl: DATA_URL });
+
+    // 用户点「刷新图片」：先失效再取，绝不返回缓存
+    port.evict('s1', 'a.png', '/work/proj');
+    const refresh = port.load('s1', 'a.png', '/work/proj');
+    expect(sent).toHaveLength(2);
+    // Main 在根换代/权限撤销时重校后回 unavailable
+    port.receive({
+      type: 'session-image-result',
+      requestId: requestIdOf(sent),
+      error: 'unavailable',
+    });
+    await expect(refresh).resolves.toEqual({ error: 'unavailable' });
+    // 失败不落缓存：不会把「权限已撤销」钉死，也不会冒充旧像素
+    expect(port.peek('s1', 'a.png', '/work/proj')).toBeUndefined();
+  });
+});
