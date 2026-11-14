@@ -1,5 +1,5 @@
 import { toLocalImageUrl } from '@shared/localImage';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatHost } from './chatHost';
 
 /**
@@ -54,25 +54,32 @@ export function localImageErrorText(error: string, t: (key: string) => string): 
 export function useLocalImageSource(path: string): {
   state: LocalImageSource;
   remote: boolean;
+  /** 重试 = 先作废宿主缓存再重新取图（同路径覆盖/坏图都必须真重取） */
   retry: () => void;
+  /** 解码失败时立刻作废该图缓存，避免重试又拿回同一份坏像素 */
+  invalidate: () => void;
 } {
-  const read = useChatHost()?.readLocalImage;
+  const host = useChatHost();
+  const read = host?.readLocalImage;
   const remote = Boolean(read);
-  const [state, setState] = useState<LocalImageSource>(() =>
-    initialLocalImageSource(path, Boolean(read))
-  );
+  // 宿主可能每次渲染都传新的函数身份：只跟随「有没有远程能力」这个布尔，
+  // 否则断线时一次请求/通知会触发重渲染 → 新身份 → 再请求，永远停在加载态。
+  const readRef = useRef(read);
+  readRef.current = read;
+  const [state, setState] = useState<LocalImageSource>(() => initialLocalImageSource(path, remote));
   const [attempt, setAttempt] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试信号，path/read 变化都要重读
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 只跟随能力开关、路径与重试信号
   useEffect(() => {
-    if (!read) {
+    const load = readRef.current;
+    if (!load) {
       setState(initialLocalImageSource(path, false));
       return;
     }
     let alive = true;
     setState({ status: 'loading' });
-    read(path)
-      .then((load) => {
-        if (alive) setState(applyLocalImageLoad(load));
+    load(path)
+      .then((result) => {
+        if (alive) setState(applyLocalImageLoad(result));
       })
       .catch(() => {
         if (alive) setState({ status: 'error', error: 'failed' });
@@ -80,7 +87,14 @@ export function useLocalImageSource(path: string): {
     return () => {
       alive = false;
     };
-  }, [read, path, attempt]);
-  const retry = useCallback(() => setAttempt((value) => value + 1), []);
-  return { state, remote, retry };
+  }, [remote, path, attempt]);
+  const invalidate = useCallback(() => {
+    if (host?.invalidateLocalImage) host.invalidateLocalImage(path);
+  }, [host, path]);
+  const retry = useCallback(() => {
+    // 先失效再重取：不然手机侧的「成功缓存」会把坏图/旧图原样还回来
+    invalidate();
+    setAttempt((value) => value + 1);
+  }, [invalidate]);
+  return { state, remote, retry, invalidate };
 }

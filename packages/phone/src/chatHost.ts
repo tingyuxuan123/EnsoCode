@@ -12,8 +12,10 @@ export function phoneChatHost(input: {
   deviceReadOnly?: boolean;
   cwd?: string;
   readImage?: (rel: string) => Promise<SessionImageLoad>;
+  invalidateImage?: (rel: string) => void;
 }): ChatHost {
   const readImage = input.readImage;
+  const invalidateImage = input.invalidateImage;
   const cwd = input.cwd;
   return {
     sessionId: input.sessionId,
@@ -30,6 +32,14 @@ export function phoneChatHost(input: {
             return 'dataUrl' in result
               ? { ok: true as const, dataUrl: result.dataUrl }
               : { ok: false as const, error: result.error };
+          },
+        }
+      : {}),
+    ...(invalidateImage
+      ? {
+          invalidateLocalImage: (path: string) => {
+            const rel = toWorkspaceRelPath(path, cwd);
+            if (rel) invalidateImage(rel);
           },
         }
       : {}),

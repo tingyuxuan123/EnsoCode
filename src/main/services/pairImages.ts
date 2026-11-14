@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 import type { HostToPhone, PhoneToHost } from '@enso/pair';
 import { previewImageMime } from '@shared/markdownPreviewImage';
 import { normalizeSessionImageRel } from '@shared/pair/imageRel';
@@ -55,16 +55,29 @@ export async function readSessionImage(root: string, rel: unknown): Promise<Sess
     if (!before.isFile()) return { error: 'not-found' };
     if (before.size > SESSION_IMAGE_FILE_MAX) return { error: 'too-large' };
     if (resolveSessionImageFile(root, rel) !== file) return { error: 'changed' };
-    const data = await handle.readFile();
+    // 有界读取：文件在读取过程中增长时最多读到预算 +1 字节就判超限，
+    // 不会先把整份增长内容读进内存再判 changed（预算要是真上限）。
+    const buffer = Buffer.allocUnsafe(SESSION_IMAGE_FILE_MAX + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      const chunk = await handle.read(buffer, total, buffer.length - total, null);
+      if (chunk.bytesRead === 0) break;
+      total += chunk.bytesRead;
+      if (total > SESSION_IMAGE_FILE_MAX) return { error: 'too-large' };
+    }
     const after = await handle.stat();
     if (
       after.size !== before.size ||
       after.ino !== before.ino ||
       after.mtimeMs !== before.mtimeMs ||
-      data.length !== before.size
+      total !== before.size
     )
       return { error: 'changed' };
-    return { file, mime, data };
+    // 同路径被换成另一个 inode（删除后重建、目录整体替换）：路径现在指向别的文件，拒绝
+    const current = await stat(file).catch(() => null);
+    if (!current || current.dev !== after.dev || current.ino !== after.ino)
+      return { error: 'changed' };
+    return { file, mime, data: buffer.subarray(0, total) };
   } catch {
     return { error: 'not-found' };
   } finally {

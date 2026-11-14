@@ -2213,7 +2213,7 @@ function SandboxOutput({
  * 加载中与失败都有可见状态（不留空白、不静默藏掉）。
  */
 export function ReadImagePreview({ path, fallback }: { path: string; fallback: ReactNode }) {
-  const { state, retry } = useLocalImageSource(path);
+  const { state, retry, invalidate } = useLocalImageSource(path);
   return (
     <ReadImagePreviewView
       state={state}
@@ -2221,6 +2221,7 @@ export function ReadImagePreview({ path, fallback }: { path: string; fallback: R
       fallback={fallback}
       remote={Boolean(useChatHost()?.readLocalImage)}
       onRetry={retry}
+      onBroken={invalidate}
     />
   );
 }
@@ -2232,17 +2233,25 @@ export function ReadImagePreviewView({
   fallback,
   remote,
   onRetry,
+  onBroken,
 }: {
   state: LocalImageSource;
   path: string;
   fallback: ReactNode;
   remote: boolean;
   onRetry: () => void;
+  onBroken?: () => void;
 }) {
   const { t } = useI18n();
   const [failed, setFailed] = useState(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 换图后旧的加载失败不能继续生效
-  useEffect(() => setFailed(false), [path]);
+  /*
+   * 解码失败不是永久的：换图、或本图重新开始加载/拿到新资源（state 换代）时都清掉，
+   * 否则重试即使取回好图也会被旧的 failed 挡住。
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: path/state 是「新一次加载」的信号
+  useEffect(() => {
+    if (state.status !== 'error') setFailed(false);
+  }, [path, state]);
   if (state.status === 'loading') {
     return (
       <div
@@ -2278,7 +2287,11 @@ export function ReadImagePreviewView({
     <div data-slot="read-image" className="w-full min-w-0 px-3 py-3">
       <ZoomableImage
         src={state.src}
-        onError={() => setFailed(true)}
+        onError={() => {
+          setFailed(true);
+          // 坏像素不能留在宿主缓存里，重试必须重新取一张
+          onBroken?.();
+        }}
         frameClassName="block w-full"
         className="mx-auto block max-h-80 max-w-full rounded-md bg-muted/40 object-contain"
       />

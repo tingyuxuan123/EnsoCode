@@ -32,6 +32,11 @@ export interface ChatHost {
    * 缺省 = 本机 Electron，继续用 `local-image://` 特权协议。
    */
   readLocalImage?: (path: string) => Promise<LocalImageLoad>;
+  /**
+   * 让宿主丢弃这张图的缓存（手机 PWA）：<img> 解码失败、或同一路径的文件被覆盖时调用，
+   * 之后的重试必须真的重新取图，而不是再拿回同一份坏/旧像素。
+   */
+  invalidateLocalImage?: (path: string) => void;
   /** 一轮最终回复正文下方的附加内容（Bot 私聊的产物卡片）；参数为该消息绝对下标 */
   turnFooter?: (messageIndex: number) => ReactNode;
   /**

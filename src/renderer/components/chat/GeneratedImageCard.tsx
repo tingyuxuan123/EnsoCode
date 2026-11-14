@@ -99,7 +99,11 @@ export function GeneratedImageCard({
   }, []);
   const image = generatedImageFromOutput(output);
   // 手机 PWA 没有 local-image://：经 host 按「会话 id + 相对路径」取图，加载/失败都有可见状态
-  const { state, remote, retry } = useLocalImageSource(path);
+  const { state, remote, retry, invalidate } = useLocalImageSource(path);
+  // 新一次加载/新资源到来时清掉旧的解码失败，重试取回好图后不能被它挡住
+  useEffect(() => {
+    if (state.status !== 'error') setFailed(false);
+  }, [state]);
   if (!image) return null;
   const src = state.status === 'local' || state.status === 'ready' ? state.src : null;
   const action = async (kind: 'copy' | 'download') => {
@@ -181,7 +185,10 @@ export function GeneratedImageCard({
       ) : src ? (
         <ZoomableImage
           src={src}
-          onError={() => setFailed(true)}
+          onError={() => {
+            setFailed(true);
+            invalidate();
+          }}
           onLoad={() => setLoaded(true)}
           frameClassName="block max-w-full"
           className={cn(

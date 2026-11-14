@@ -108,3 +108,61 @@ describe('SessionImagePort', () => {
     }
   });
 });
+
+describe('SessionImagePort 的成功缓存失效与代次', () => {
+  it('evict 后同一 key 会重新请求，并用新像素替换旧缓存', async () => {
+    const { port, sent } = makePort();
+    const first = port.load('s1', 'a.png');
+    port.receive({ type: 'session-image-result', requestId: requestIdOf(sent), dataUrl: DATA_URL });
+    await expect(first).resolves.toEqual({ dataUrl: DATA_URL });
+
+    port.evict('s1', 'a.png');
+    expect(port.peek('s1', 'a.png')).toBeUndefined();
+
+    const second = port.load('s1', 'a.png');
+    expect(sent).toHaveLength(2);
+    port.receive({
+      type: 'session-image-result',
+      requestId: requestIdOf(sent),
+      dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==',
+    });
+    await expect(second).resolves.toEqual({
+      dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==',
+    });
+  });
+
+  it('evict 时在途旧回包不能重新填进缓存', async () => {
+    const { port, sent } = makePort();
+    const slow = port.load('s1', 'a.png');
+    const staleRequestId = requestIdOf(sent);
+    port.evict('s1', 'a.png');
+    // 旧请求的迟到应答
+    port.receive({ type: 'session-image-result', requestId: staleRequestId, dataUrl: DATA_URL });
+    await expect(slow).resolves.toEqual({ error: 'changed' });
+    expect(port.peek('s1', 'a.png')).toBeUndefined();
+
+    const again = port.load('s1', 'a.png');
+    expect(sent).toHaveLength(2);
+    port.receive({ type: 'session-image-result', requestId: requestIdOf(sent), dataUrl: DATA_URL });
+    await expect(again).resolves.toEqual({ dataUrl: DATA_URL });
+  });
+
+  it('会话执行目录（scope）变化后不复用旧像素', async () => {
+    const { port, sent } = makePort();
+    const first = port.load('s1', 'a.png', '/work/old');
+    port.receive({ type: 'session-image-result', requestId: requestIdOf(sent), dataUrl: DATA_URL });
+    await expect(first).resolves.toEqual({ dataUrl: DATA_URL });
+
+    const moved = port.load('s1', 'a.png', '/work/new');
+    expect(sent).toHaveLength(2);
+    expect(sent.at(-1)).toMatchObject({ type: 'session-image', rel: 'a.png' });
+    port.receive({
+      type: 'session-image-result',
+      requestId: requestIdOf(sent),
+      error: 'not-found',
+    });
+    await expect(moved).resolves.toEqual({ error: 'not-found' });
+    // 旧 scope 的缓存仍然可用（各自独立）
+    await expect(port.load('s1', 'a.png', '/work/old')).resolves.toEqual({ dataUrl: DATA_URL });
+  });
+});
