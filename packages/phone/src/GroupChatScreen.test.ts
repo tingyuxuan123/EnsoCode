@@ -67,20 +67,12 @@ const render = (patch: Partial<Parameters<typeof GroupChatScreen>[0]> = {}) =>
   );
 
 describe('phone group recovery and folding UI', () => {
-  it('shows new session and disables it for unsupported, offline, read-only or busy states', () => {
-    const button = (patch: Partial<Parameters<typeof GroupChatScreen>[0]>) =>
-      render({ onNewSession: noop, canCreate: true, ...patch }).match(
-        /<button[^>]*aria-label="新建会话"[^>]*>/
-      )?.[0];
-    expect(button({})).toBeDefined();
-    expect(button({})).not.toContain('disabled=""');
-    for (const patch of [
-      { canCreate: false },
-      { deviceReadOnly: true },
-      { connState: 'offline' as const },
-    ]) {
-      expect(button(patch)).toContain('disabled=""');
-    }
+  // 设计稿 `bot-menu`：一个会话只有一个 ⋯ 入口，新建会话不再直接露在顶栏
+  it('opens session actions from one menu entry instead of a top-bar button', () => {
+    const html = render({ onNewSession: noop, canCreate: true });
+    expect(html).toContain('aria-label="会话菜单"');
+    expect(html).not.toContain('aria-label="新建会话"');
+    expect(html).not.toContain('aria-label="新话题"');
   });
   it('folds old messages by default while keeping the current task and recovery button', () => {
     const html = render();
@@ -109,7 +101,8 @@ describe('phone group recovery and folding UI', () => {
       render({ timeline: { entries, lastSeq: 900, hasOlder: true, history: true } })
     ).toContain('回到最新消息');
   });
-  it('renders progress as one line under the member name; old phones skip unknown kinds without crashing', () => {
+  // 设计稿「消息分层」L3：progress 不再是独立一行，而是并进本轮的活动行（N 步）
+  it('folds progress into the turn activity line; old phones skip unknown kinds without crashing', () => {
     const progress = {
       id: 'p',
       seq: 5,
@@ -122,14 +115,28 @@ describe('phone group recovery and folding UI', () => {
       phase: 'started',
       text: '开工 #3『登录页』',
     } as PairGroupEntry;
+    // 同一轮里既有进度也有成员的正文：正文留下，进度并进活动行
+    const say = {
+      id: 'say',
+      seq: 6,
+      at: 6,
+      kind: 'bot',
+      botId: 'bot',
+      text: 'RUN_RESULT',
+      conversationId: 'conv',
+      turnId: 'turn',
+    } as PairGroupEntry;
     const html = render({
       bots: new Map([
         ['bot', { id: 'bot', name: 'Bob', title: '', avatarColor: '#000000', status: 'idle' }],
       ]),
-      timeline: { entries: [...entries, progress], lastSeq: 5, hasOlder: false },
+      timeline: { entries: [...entries, progress, say], lastSeq: 6, hasOlder: false },
     });
     expect(html).toContain('Bob');
-    expect(html.replace(/<[^>]+>/g, '')).toContain('开工 #3『登录页』');
+    expect(html.replace(/<[^>]+>/g, '')).toContain('RUN_RESULT');
+    // 过程文案不再出现在主线程，只留「N 步」
+    expect(html.replace(/<[^>]+>/g, '')).not.toContain('开工 #3『登录页』');
+    expect(html).toMatch(/\d+ 步/);
     const future = { ...progress, kind: 'from-the-future' } as unknown as PairGroupEntry;
     const old = render({
       timeline: { entries: [...entries, future], lastSeq: 5, hasOlder: false },
@@ -138,7 +145,8 @@ describe('phone group recovery and folding UI', () => {
     expect(old).not.toContain('开工 #3');
   });
 
-  it('styles progress by phase and marks #N; task-bound delegation results start collapsed', () => {
+  // 过程与委派结果不再单独成行，统一并进本轮活动行（见 groupRows.test.ts）
+  it('folds progress and delegation results into one activity line per turn', () => {
     const delegation = (seq: number, taskId?: string) =>
       ({
         id: `d${seq}`,
@@ -164,18 +172,28 @@ describe('phone group recovery and folding UI', () => {
       phase: 'delivered',
       text: '交付 #3：登录页做完了',
     } as PairGroupEntry;
+    const say = {
+      id: 'say',
+      seq: 8,
+      at: 8,
+      kind: 'bot',
+      botId: 'bot',
+      text: 'TURN_SAY',
+      conversationId: 'conv',
+      turnId: 'turn',
+    } as PairGroupEntry;
     const html = render({
       timeline: {
-        entries: [...entries, delegation(5, 't'), delegation(6), progress],
-        lastSeq: 7,
+        entries: [...entries, delegation(5, 't'), delegation(6), progress, say],
+        lastSeq: 8,
         hasOlder: false,
       },
     });
-    expect(html).toContain('data-phase="delivered"');
-    expect(html).toMatch(/<span[^>]*>#3<\/span>/);
-    expect(html).not.toContain('RESULT_5');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('RESULT_6');
+    const text = html.replace(/<[^>]+>/g, '');
+    // 委派结果文案不再刷屏，只在活动行里数次数
+    expect(text).not.toContain('RESULT_5');
+    expect(text).not.toContain('交付 #3：登录页做完了');
+    expect(text).toMatch(/委派 \d+ 次/);
   });
 
   it('shows the mic button only when voice is provided', () => {
@@ -198,15 +216,10 @@ describe('phone group recovery and folding UI', () => {
     const trigger = html.match(/<button[^>]*aria-label="切换话题"[^>]*>[\s\S]*?<\/button>/)?.[0];
     expect(trigger).toContain('发布清单');
     expect(trigger).not.toContain('disabled=""');
-    const create = (patch: Partial<typeof threads> & { disabledHint?: string }) =>
-      render({ threads: { ...threads, ...patch } }).match(
-        /<button[^>]*aria-label="新话题"[^>]*>/
-      )?.[0];
+    // 「新话题」不再直接露在顶栏，收进 ⋯ 菜单；顶栏只留一个入口
+    expect(html).not.toContain('aria-label="新话题"');
+    expect(html).toContain('aria-label="会话菜单"');
     expect(html).not.toContain('aria-label="新建会话"');
-    expect(create({})).not.toContain('disabled=""');
-    const blocked = create({ disabledHint: '只读设备不能切换或新建话题' });
-    expect(blocked).toContain('disabled=""');
-    expect(blocked).toContain('title="只读设备不能切换或新建话题"');
     // 只读也能看列表
     expect(
       render({ threads: { ...threads, disabledHint: 'x' } }).match(

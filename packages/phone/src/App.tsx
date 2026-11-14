@@ -31,6 +31,7 @@ import {
 } from './botState';
 import { BotThreadPort } from './botThreadPort';
 import { ChatScreen } from './ChatScreen';
+import { CommsScreen } from './CommsScreen';
 import { type ConnState, PairClient, type SessionView } from './client';
 import { phoneCommandRejection } from './commandRejection';
 import { formatOnlineConnectionLabel } from './connectionLabel';
@@ -216,6 +217,8 @@ export function App() {
   const [botChatId, setBotChatId] = useState<string | null>(initialView.botChatId);
   /** 群聊「查看过程」的成员会话（只读） */
   const [processId, setProcessId] = useState<string | null>(null);
+  /** 群聊「通信空间」（只读）：与 processId 同级，显示期间不渲染群时间线 */
+  const [commsOpen, setCommsOpen] = useState(false);
   const [timelines, setTimelines] = useState<Record<string, GroupTimelineState>>({});
   const [chatStates, setChatStates] = useState<Record<string, PairBotChatState>>({});
   /** 群成员会话投影（只取审批/提问，来自不受订阅限制的 pending 事件） */
@@ -317,6 +320,7 @@ export function App() {
       if (chat) {
         setBotChatId(chat.id);
         setProcessId(null);
+        setCommsOpen(false);
       } else {
         setBotChatId(null);
         setActiveId(sessionId);
@@ -356,6 +360,7 @@ export function App() {
       if (!id) return;
       setBotChatId(null);
       setProcessId(null);
+      setCommsOpen(false);
       setActiveId(id);
       closeDrawer();
     });
@@ -469,6 +474,7 @@ export function App() {
         setBotActivity({ items: [], offset: 0 });
         setBotChatId(null);
         setProcessId(null);
+        setCommsOpen(false);
         setBotSegment(false);
       },
       onBotChats: (chats, threads) => {
@@ -830,6 +836,7 @@ export function App() {
     setBotChatId(nextView.botChatId);
     setBotSegment(nextView.botChatId !== null);
     setProcessId(null);
+    setCommsOpen(false);
     setTimelines({});
     setChatStates({});
     setBotActivity({ items: [], offset: 0 });
@@ -1021,8 +1028,10 @@ export function App() {
     try {
       const result = await threadPort.request(command);
       if (client !== clientRef.current || botChatIdRef.current !== command.chatId) return;
-      if (result.ok) setProcessId(null);
-      else
+      if (result.ok) {
+        setProcessId(null);
+        setCommsOpen(false);
+      } else
         setBotNotice(
           result.error === READ_ONLY_ERROR
             ? '只读设备不能切换或新建话题'
@@ -1030,7 +1039,7 @@ export function App() {
               ? '未收到桌面确认，请连接后核对当前话题'
               : result.error === 'invalid'
                 ? '该话题已不存在或群已归档'
-                : `话题操作失败：${result.error ?? '请稍后重试'}`
+                : `话题操作失败：$result.error ?? '请稍后重试'`
         );
     } finally {
       if (client === clientRef.current) {
@@ -1041,6 +1050,16 @@ export function App() {
   };
 
   const renderBotScreen = (chat: PairBotChatSummary) => {
+    if (chat.kind === 'group' && commsOpen) {
+      return (
+        <CommsScreen
+          title={chat.title}
+          entries={timelines[chat.id]?.entries ?? []}
+          bots={botById}
+          onBack={() => setCommsOpen(false)}
+        />
+      );
+    }
     if (chat.kind === 'group' && !processId) {
       const pending: MemberPending[] = Object.entries(chat.sessions).flatMap(
         ([botId, { conversationId }]) => {
@@ -1085,7 +1104,7 @@ export function App() {
           voice={voice}
           onLoadOlder={() => {
             const beforeSeq = timelines[chat.id]?.entries[0]?.seq;
-            const key = `${chat.id}:${beforeSeq}`;
+            const key = `$chat.id:$beforeSeq`;
             if (state !== 'online' || beforeSeq === undefined || olderRequestRef.current) return;
             olderRequestRef.current = key;
             setOlderLoading(true);
@@ -1109,6 +1128,7 @@ export function App() {
             send({ type: 'bot-retry', chatId: chat.id, entryId });
           }}
           onOpenProcess={setProcessId}
+          onOpenComms={() => setCommsOpen(true)}
           onApproval={(sessionId, requestId, decision) =>
             send({ type: 'approval-respond', sessionId, requestId, decision })
           }
@@ -1133,9 +1153,9 @@ export function App() {
     );
     return (
       <ChatScreen
-        sessionId={subscribedId ?? `bot-chat:${chat.id}`}
+        sessionId={subscribedId ?? `bot-chat:$chat.id`}
         clockOffset={botActivity.offset}
-        title={process ? `${member?.name ?? '成员'} · 过程` : (member?.name ?? chat.title)}
+        title={process ? `$member?.name ?? '成员'· 过程` : (member?.name ?? chat.title)}
         projectName={process ? chat.title : (member?.title ?? '')}
         view={subscribedId ? view : EMPTY_VIEW}
         connState={state}
@@ -1160,7 +1180,13 @@ export function App() {
         voice={voice}
         bot={
           process
-            ? { readOnly: true, onBack: () => setProcessId(null) }
+            ? {
+                readOnly: true,
+                onBack: () => {
+                  setProcessId(null);
+                  setCommsOpen(false);
+                },
+              }
             : { chatId: chat.id, notice: botNotice, outbox: outboxBar(chat.id) }
         }
         artifacts={
@@ -1241,6 +1267,7 @@ export function App() {
         onSelect={(id) => {
           setBotChatId(null);
           setProcessId(null);
+          setCommsOpen(false);
           setActiveId(id);
           closeDrawer();
         }}
@@ -1284,6 +1311,7 @@ export function App() {
                     onSelect={(chatId) => {
                       setBotChatId(chatId);
                       setProcessId(null);
+                      setCommsOpen(false);
                       setBotNotice(null);
                       closeDrawer();
                     }}
@@ -1445,6 +1473,7 @@ export function App() {
             setComposeProjectId(null);
             setBotChatId(null);
             setProcessId(null);
+            setCommsOpen(false);
             setActiveId(sessionId);
           }}
         />

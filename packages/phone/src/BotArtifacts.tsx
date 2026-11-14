@@ -43,7 +43,9 @@ export function BotArtifacts({ target }: { target: PairBotArtifactTarget }) {
   const port = context?.port;
   const found = useSyncExternalStore(
     (listener) => port?.subscribe(listener) ?? (() => {}),
-    () => port?.get(target)
+    () => port?.get(target),
+    // 服务端/测试渲染没有 port，快照恒为 undefined；不提供会被 React 判为错误
+    () => undefined
   );
   const online = context?.online ?? false;
   // biome-ignore lint/correctness/useExhaustiveDependencies: key 是 target 的稳定身份
