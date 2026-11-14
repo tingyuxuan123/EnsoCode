@@ -438,6 +438,8 @@ export function App() {
       },
       onCommandRejected: (command, error) => {
         if (error === READ_ONLY_ERROR) rejectedReadOnly();
+        // 图片命令被本地拦下（离线/握手超时）：在途请求立刻失败，别让预览空转到超时
+        if (command === 'session-image') imagesPort.reset('offline');
         const rejected = phoneCommandRejection(command, error);
         if (rejected.notice) setBotNotice(rejected.notice);
         if (rejected.clearQueueEchoes) setQueueEchoes([]);
@@ -769,6 +771,25 @@ export function App() {
   }, [activeId, botChatId, firstId]);
 
   const entry = useMemo(() => catalog.find((c) => c.id === activeId), [catalog, activeId]);
+  /*
+   * 会话图片读取/失效回调保持稳定身份：内联函数每次渲染都换身份会让
+   * useLocalImageSource 重新发请求（断线时表现为一直「正在读取图片…」）。
+   */
+  const sessionImageCwd = entry?.cwd;
+  const activeReadImage = useMemo(
+    () =>
+      imagesAvailable && activeId
+        ? (rel: string) => imagesPort.load(activeId, rel, sessionImageCwd)
+        : undefined,
+    [imagesAvailable, activeId, sessionImageCwd, imagesPort]
+  );
+  const activeInvalidateImage = useMemo(
+    () =>
+      imagesAvailable && activeId
+        ? (rel: string) => imagesPort.evict(activeId, rel, sessionImageCwd)
+        : undefined,
+    [imagesAvailable, activeId, sessionImageCwd, imagesPort]
+  );
   // coworker tab 组：当前会话是子会话则归组到其父，否则以自身为父；无 coworker 时不显示
   const tabGroup = useMemo(() => {
     if (!entry) return undefined;
@@ -1330,9 +1351,8 @@ export function App() {
             title={entry?.title || (activeId ? '会话' : 'Collabra')}
             projectName={entry?.projectName ?? ''}
             cwd={entry?.cwd}
-            readImage={
-              imagesAvailable && activeId ? (rel) => imagesPort.load(activeId, rel) : undefined
-            }
+            readImage={activeReadImage}
+            invalidateImage={activeInvalidateImage}
             view={view}
             connState={state}
             stateLabel={connectionLabel}

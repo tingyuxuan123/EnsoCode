@@ -10,15 +10,23 @@ export function BotAvatar({
   busy,
 }: {
   bot: Pick<PairBotMember, 'name' | 'avatarColor'> | undefined;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   busy?: boolean;
 }) {
+  const box =
+    size === 'xs'
+      ? 'h-[26px] w-[26px]'
+      : size === 'sm'
+        ? 'h-7 w-7'
+        : size === 'lg'
+          ? 'h-10 w-10'
+          : 'h-9 w-9';
   return (
     <span
       aria-hidden
       className={cn(
         'flex shrink-0 overflow-hidden rounded-full bg-muted',
-        size === 'sm' ? 'h-7 w-7' : 'h-9 w-9',
+        box,
         busy && 'ring-2 ring-brand/60 ring-offset-1 ring-offset-background animate-pulse'
       )}
     >
