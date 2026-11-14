@@ -448,8 +448,9 @@
 }
 
 [data-slot="sheet-popup"].phone-sheet {
-  border-radius: 16px 16px 0 0;
-  box-shadow: none;
+  border-radius: 28px 28px 0 0;
+  background-color: var(--page);
+  box-shadow: 0 -12px 40px rgb(0 0 0 / 0.18);
 }
 
 .phone-sheet::after {
@@ -461,7 +462,7 @@
   height: 4px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: var(--border);
+  background: color-mix(in srgb, var(--faint) 60%, transparent);
 }
 
 /* 固定整个应用来提供 iOS 状态栏底色；不能固定聊天列，否则会覆盖常驻侧栏。 */
