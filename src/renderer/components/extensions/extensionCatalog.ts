@@ -46,3 +46,23 @@ export function mcpExtensionStatus(enabled: boolean, state?: McpConnectionState)
       return 'Not connected';
   }
 }
+
+export type ExtensionEmptyState = 'first-run' | 'no-results' | 'category-empty';
+
+/** 区分首次空、搜索无结果和分类为空，避免把筛选失败说成还没有安装任何扩展。 */
+export function resolveExtensionEmptyState({
+  total,
+  visible,
+  filter,
+  query,
+}: {
+  total: number;
+  visible: number;
+  filter: ExtensionFilter;
+  query: string;
+}): ExtensionEmptyState | null {
+  if (visible > 0) return null;
+  if (query.trim()) return 'no-results';
+  if (filter !== 'all') return 'category-empty';
+  return total === 0 ? 'first-run' : null;
+}

@@ -10,11 +10,12 @@ import {
   HardDriveDownload,
   Info,
   Link2,
+  MoreHorizontal,
   Plug,
   Plus,
   Puzzle,
+  RefreshCw,
   Search,
-  Terminal,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -34,7 +35,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
+import {
+  Menu,
+  MenuCheckboxItem,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from '@/components/ui/menu';
 import {
   Sheet,
   SheetClose,
@@ -55,6 +63,7 @@ import {
   PLUGIN_TRUST_WARNING,
   PluginRegistryAlert,
 } from '@/plugins/NativePluginFlows';
+import { PluginIcon } from '@/plugins/PluginIcon';
 import { PluginManagementDetails } from '@/plugins/PluginManagementDetails';
 import { isNativePluginUrl, useNativePluginManager } from '@/plugins/useNativePluginManager';
 import { useMcpStatusStore } from '@/stores/mcpStatus';
@@ -65,6 +74,7 @@ import {
   type ExtensionFilter,
   filterExtensionCatalog,
   mcpExtensionStatus,
+  resolveExtensionEmptyState,
 } from './extensionCatalog';
 
 const presentation = {
@@ -84,47 +94,8 @@ type Entry = ExtensionCatalogEntry &
 const entryKey = (entry: Entry) =>
   `${entry.kind}:${'claudePlugin' in entry ? 'claude:' : ''}${entry.id}`;
 
-function ExtensionsBanner() {
-  const { t } = useI18n();
-  return (
-    <section className="relative isolate flex min-h-[164px] items-center overflow-hidden rounded-2xl bg-brand/[0.07] px-6 py-6 sm:px-8 @min-[820px]:pr-[350px]">
-      <div
-        aria-hidden
-        className="absolute inset-y-0 right-0 hidden w-[390px] bg-[radial-gradient(circle,var(--color-border)_1px,transparent_1px)] bg-size-[8px_8px] opacity-65 @min-[820px]:block"
-      />
-      <div className="relative">
-        <h2 className="font-semibold text-[calc(21rem/14)] tracking-tight">
-          {t('Bring your tools into the conversation')}
-        </h2>
-        <p className="mt-2 max-w-[30rem] text-muted-foreground text-sm leading-relaxed">
-          {t('Reuse skills, connect MCP tools, or install your own Collabra plugins.')}
-        </p>
-      </div>
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 right-6 hidden h-[128px] w-[306px] -translate-y-1/2 @min-[820px]:block"
-      >
-        <div className="absolute top-6 left-0 flex h-24 w-[115px] -rotate-12 flex-col justify-between rounded-xl border border-border/75 bg-card p-3 shadow-sm">
-          <FileCode2 className="size-6 text-brand" />
-          <code className="text-muted-foreground text-xs">SKILL.md</code>
-        </div>
-        <div className="absolute top-6 right-0 flex h-24 w-[102px] rotate-12 flex-col items-end justify-between rounded-xl border border-border/75 bg-card p-3 shadow-sm">
-          <Plug className="size-6 text-brand" />
-          <span className="text-muted-foreground text-xs">MCP</span>
-        </div>
-        <div className="absolute top-3 left-[78px] flex h-26 w-[155px] rotate-2 flex-col justify-between rounded-xl border border-brand/20 bg-card p-3 shadow-md">
-          <div className="flex items-center justify-between text-brand">
-            <Terminal className="size-6" />
-            <Puzzle className="size-4" />
-          </div>
-          <code className="whitespace-nowrap rounded-md bg-muted px-2 py-1.5 text-[11px]">
-            enso-plugin.json
-          </code>
-        </div>
-      </div>
-    </section>
-  );
-}
+const NEW_SESSION_NOTE =
+  'Changes apply to new conversations. The current conversation keeps what it already loaded.';
 
 function EntryStatus({ status }: { status: string }) {
   const { t } = useI18n();
@@ -144,9 +115,25 @@ function EntryStatus({ status }: { status: string }) {
   );
 }
 
+/**
+ * 原生插件用安装包清单里的图标（经 asset 通道读本地文件，停用/崩溃也读得到）；
+ * 技能、MCP 和 Claude Code 插件没有原生图标，保持各自的默认图标。
+ */
+function EntryIcon({ entry, className }: { entry: Entry; className: string }) {
+  if (entry.kind === 'plugin' && 'plugin' in entry)
+    return (
+      <PluginIcon
+        pluginId={entry.plugin.id}
+        icon={entry.plugin.icon}
+        className={cn(className, 'object-contain')}
+      />
+    );
+  const Icon = presentation[entry.kind].icon;
+  return <Icon aria-hidden className={className} />;
+}
+
 function ExtensionItem({ entry, onOpen }: { entry: Entry; onOpen: () => void }) {
   const { t } = useI18n();
-  const Icon = presentation[entry.kind].icon;
   return (
     <button
       type="button"
@@ -156,7 +143,7 @@ function ExtensionItem({ entry, onOpen }: { entry: Entry; onOpen: () => void }) 
       className="group flex min-h-[86px] min-w-0 items-start gap-3 rounded-lg p-2.5 text-left transition-colors hover:bg-accent/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground/80">
-        <Icon aria-hidden className="size-5" />
+        <EntryIcon entry={entry} className="size-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
@@ -221,11 +208,29 @@ export function ExtensionsPage({
   const [authorGuideOpen, setAuthorGuideOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [marketOpen, setMarketOpen] = useState(false);
+  const [syncNotice, setSyncNotice] = useState(false);
   const pluginAutoUpdate = useSettingsStore((state) => state.pluginAutoUpdate);
   const setPluginAutoUpdate = useSettingsStore((state) => state.setPluginAutoUpdate);
   const consumedRequest = useRef<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const changeSkillEnabled = (id: string, enabled: boolean) => {
+    updateSkill(id, { enabled });
+    setSyncNotice(true);
+  };
+  const changeMcpEnabled = (id: string, enabled: boolean) => {
+    updateMcp(id, { enabled });
+    setSyncNotice(true);
+  };
 
   useEffect(() => useMcpStatusStore.getState().bind(), []);
+
+  // 市场与管理互为独立视图：切换后把唯一内容滚动区归零，避免带着市场底部的位置回到管理页。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: marketOpen 只是重发的触发器，滚动容器由 ref 读
+  useEffect(() => {
+    const content = contentRef.current;
+    if (content) content.scrollTop = 0;
+  }, [marketOpen]);
 
   useEffect(() => {
     if (!request || consumedRequest.current === request.serial || !native.canManage || native.busy)
@@ -234,6 +239,7 @@ export function ExtensionsPage({
     consumedRequest.current = request.serial;
     setQuery('');
     setFilter('plugin');
+    if (request.pluginId) setMarketOpen(false);
     if (request.pluginInstallUrl) {
       void native.stage('url', request.pluginInstallUrl);
     } else if (
@@ -309,6 +315,15 @@ export function ExtensionsPage({
   const selected = catalog.find((entry) => entryKey(entry) === selection);
   const installDisabled = !native.canManage || Boolean(native.busy);
   const showingPlugins = filter === 'all' || filter === 'plugin';
+  const emptyState =
+    visible.length || (showingPlugins && (native.loading || native.registryError))
+      ? null
+      : resolveExtensionEmptyState({
+          total: catalog.length,
+          visible: visible.length,
+          filter,
+          query,
+        });
   const closeDetail = () => setSelection(null);
   const plugin = selected && 'plugin' in selected ? selected.plugin : undefined;
   const selectedMcp = selected?.kind === 'mcp' ? selected.server : undefined;
@@ -318,203 +333,300 @@ export function ExtensionsPage({
   return (
     <main
       data-slot="extensions-page"
-      className="@container min-h-0 min-w-0 flex-1 overflow-y-auto bg-panel"
+      className="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel"
     >
-      <div className="mx-auto w-full max-w-[1104px] space-y-6 px-5 py-7 sm:px-9">
-        <header>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 mb-2 text-muted-foreground"
-            onClick={onBack}
-          >
-            <ArrowLeft />
-            {t('Back to conversation')}
-          </Button>
-          <h1 className="font-semibold text-[calc(28rem/14)] tracking-tight">{t('Extensions')}</h1>
-          <p className="mt-1 text-muted-foreground text-sm">
-            {t('Manage your skills, MCP connections, and installed plugins.')}
-          </p>
-        </header>
-        <ExtensionsBanner />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            size="sm"
-            variant={marketOpen ? 'secondary' : 'outline'}
-            onClick={() => setMarketOpen((open) => !open)}
-          >
-            {t(marketOpen ? 'Hide plugin market' : 'Browse plugin market')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!native.canManage || !!native.busy}
-            onClick={() => void native.checkUpdates()}
-          >
-            {t('Check plugin updates')}
-          </Button>
-          <label className="ml-auto flex items-center gap-2 text-xs">
-            {t('Automatically update plugins')}
-            <Switch checked={pluginAutoUpdate} onCheckedChange={setPluginAutoUpdate} />
-          </label>
-        </div>
-        {marketOpen && <PluginMarket manager={native} />}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <div className="relative w-[236px] max-w-full">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label={t('Search extensions')}
-                placeholder={t('Search extensions')}
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="bg-muted/60 [&_input]:pr-8 [&_input]:pl-8"
-              />
-              {query && (
-                <button
-                  type="button"
-                  aria-label={t('Clear search')}
-                  className="absolute inset-y-0 right-1 flex w-7 items-center justify-center text-muted-foreground hover:text-foreground"
-                  onClick={() => setQuery('')}
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
+      {/* 标题与顶部操作常驻滚动区之外，窄宽时自行换行；正文只有下面这一个纵向滚动区。 */}
+      <div
+        data-slot="extensions-header"
+        className="shrink-0 border-line border-b bg-panel pt-5 pb-3"
+      >
+        <div className="mx-auto w-full max-w-[1104px] px-5 sm:px-8">
+          <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+            <div className="min-w-0 grow basis-[calc(240rem/14)]">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2 mb-1.5 text-muted-foreground"
+                onClick={onBack}
+              >
+                <ArrowLeft />
+                {t('Back to conversation')}
+              </Button>
+              <h1 className="font-semibold text-[calc(24rem/14)] tracking-tight">
+                {t('Extensions')}
+              </h1>
+              <p className="mt-1 text-muted-foreground text-sm">
+                {t('Manage your skills, MCP connections, and installed plugins.')}
+              </p>
             </div>
-            <Menu>
-              <MenuTrigger render={<Button size="sm" className="h-[calc(32rem/14)]" />}>
-                <Plus />
-                {t('Add extension')}
-                <ChevronDown className="size-3.5" />
-              </MenuTrigger>
-              <MenuPopup align="start" className="w-max">
-                <MenuItem
-                  data-install-source="dir"
-                  disabled={installDisabled}
-                  onClick={() => void native.stage('dir')}
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+              <Menu>
+                <MenuTrigger render={<Button size="sm" />}>
+                  <Plus />
+                  {t('Add extension')}
+                  <ChevronDown className="size-3.5" />
+                </MenuTrigger>
+                <MenuPopup align="end" className="w-max">
+                  <MenuItem
+                    data-install-source="dir"
+                    disabled={installDisabled}
+                    onClick={() => void native.stage('dir')}
+                  >
+                    <FolderOpen />
+                    {t('Install plugin from folder')}
+                  </MenuItem>
+                  <MenuItem
+                    data-install-source="zip"
+                    disabled={installDisabled}
+                    onClick={() => void native.stage('zip')}
+                  >
+                    <FileArchive />
+                    {t('Install plugin from ZIP')}
+                  </MenuItem>
+                  <MenuItem
+                    data-install-source="url"
+                    disabled={installDisabled}
+                    onClick={() => {
+                      setUrl('');
+                      setUrlOpen(true);
+                    }}
+                  >
+                    <Link2 />
+                    {t('Install plugin from link')}
+                  </MenuItem>
+                  <MenuItem onClick={() => setAuthorGuideOpen(true)}>
+                    <FileCode2 />
+                    {authorGuideTitle}
+                  </MenuItem>
+                  <MenuSeparator />
+                  <MenuItem onClick={() => setAssetImport('skill')}>
+                    <HardDriveDownload />
+                    {t('Import skills from local apps')}
+                  </MenuItem>
+                  <MenuItem onClick={() => setMcpEdit('new')}>
+                    <Plug />
+                    {t('Add MCP server')}
+                  </MenuItem>
+                  <MenuItem onClick={() => setAssetImport('mcp')}>
+                    <HardDriveDownload />
+                    {t('Import MCP servers')}
+                  </MenuItem>
+                </MenuPopup>
+              </Menu>
+              <Button
+                size="sm"
+                variant={marketOpen ? 'secondary' : 'outline'}
+                onClick={() => setMarketOpen((open) => !open)}
+              >
+                {t(marketOpen ? 'Back to installed' : 'Browse plugin market')}
+              </Button>
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label={t('More extension actions')}
+                    />
+                  }
                 >
-                  <FolderOpen />
-                  {t('Install plugin from folder')}
-                </MenuItem>
-                <MenuItem
-                  data-install-source="zip"
-                  disabled={installDisabled}
-                  onClick={() => void native.stage('zip')}
-                >
-                  <FileArchive />
-                  {t('Install plugin from ZIP')}
-                </MenuItem>
-                <MenuItem
-                  data-install-source="url"
-                  disabled={installDisabled}
-                  onClick={() => {
-                    setUrl('');
-                    setUrlOpen(true);
+                  <MoreHorizontal />
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  <MenuItem
+                    disabled={!native.canManage || !!native.busy}
+                    onClick={() => void native.checkUpdates()}
+                  >
+                    <RefreshCw />
+                    {t('Check plugin updates')}
+                  </MenuItem>
+                  <MenuCheckboxItem
+                    checked={pluginAutoUpdate}
+                    onCheckedChange={setPluginAutoUpdate}
+                  >
+                    {t('Automatically update plugins')}
+                  </MenuCheckboxItem>
+                </MenuPopup>
+              </Menu>
+            </div>
+          </header>
+        </div>
+      </div>
+      <div
+        ref={contentRef}
+        data-slot="extensions-content"
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
+        <div className="mx-auto w-full max-w-[1104px] space-y-4 px-5 py-5 sm:px-8">
+          {/* 市场与管理是互斥视图；插件操作的失败提示两者都要可见，所以留在切换之外。 */}
+          {native.error && (
+            <p role="alert" className="break-words text-destructive text-sm">
+              {native.error}
+            </p>
+          )}
+          {marketOpen ? (
+            <PluginMarket manager={native} />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[180px] max-w-[280px] flex-1">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label={t('Search extensions')}
+                    placeholder={t('Search extensions')}
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="bg-muted/60 [&_input]:pr-8 [&_input]:pl-8"
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      aria-label={t('Clear search')}
+                      className="absolute inset-y-0 right-1 flex w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+                      onClick={() => setQuery('')}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+                <Tabs
+                  value={filter}
+                  onValueChange={(value) => {
+                    if (
+                      value === 'all' ||
+                      value === 'skill' ||
+                      value === 'mcp' ||
+                      value === 'plugin'
+                    )
+                      setFilter(value);
                   }}
                 >
-                  <Link2 />
-                  {t('Install plugin from link')}
-                </MenuItem>
-                <MenuItem onClick={() => setAuthorGuideOpen(true)}>
-                  <FileCode2 />
-                  {authorGuideTitle}
-                </MenuItem>
-                <MenuSeparator />
-                <MenuItem onClick={() => setAssetImport('skill')}>
-                  <HardDriveDownload />
-                  {t('Import skills from local apps')}
-                </MenuItem>
-                <MenuItem onClick={() => setMcpEdit('new')}>
-                  <Plug />
-                  {t('Add MCP server')}
-                </MenuItem>
-                <MenuItem onClick={() => setAssetImport('mcp')}>
-                  <HardDriveDownload />
-                  {t('Import MCP servers')}
-                </MenuItem>
-              </MenuPopup>
-            </Menu>
-          </div>
-          <Tabs
-            value={filter}
-            onValueChange={(value) => {
-              if (value === 'all' || value === 'skill' || value === 'mcp' || value === 'plugin')
-                setFilter(value);
-            }}
-          >
-            <TabsList aria-label={t('Extension type')}>
-              <TabsTab value="all">{t('All')}</TabsTab>
-              <TabsTab value="skill">{t('Skills')}</TabsTab>
-              <TabsTab value="mcp">MCP</TabsTab>
-              <TabsTab value="plugin">{t('Plugins')}</TabsTab>
-            </TabsList>
-          </Tabs>
-        </div>
-        {native.error && (
-          <p role="alert" className="break-words text-destructive text-sm">
-            {native.error}
-          </p>
-        )}
-        {showingPlugins && native.registryError && (
-          <PluginRegistryAlert error={native.registryError} />
-        )}
-        {showingPlugins && native.loading && (
-          <div role="status" className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Spinner />
-            {t('Loading plugins…')}
-          </div>
-        )}
-        {visible.length
-          ? EXTENSION_KINDS.map((kind) => {
-              const entries = visible.filter((entry) => entry.kind === kind);
-              if (!entries.length) return null;
-              return (
-                <section key={kind} aria-label={t(presentation[kind].label)}>
-                  <div className="flex items-baseline gap-2 border-line border-b pb-2.5">
-                    <h2 className="font-semibold text-sm">{t(presentation[kind].label)}</h2>
-                    <span className="text-muted-foreground text-xs tabular-nums">
-                      {entries.length}
-                    </span>
-                  </div>
-                  <div className="-mx-2.5 mt-2 grid gap-x-4 gap-y-1 @min-[540px]:grid-cols-2 @min-[860px]:grid-cols-3">
-                    {entries.map((entry) => (
-                      <ExtensionItem
-                        key={entryKey(entry)}
-                        entry={entry}
-                        onOpen={() => setSelection(entryKey(entry))}
-                      />
-                    ))}
-                  </div>
-                </section>
-              );
-            })
-          : !(showingPlugins && (native.loading || native.registryError)) && (
-              <div className="rounded-xl border border-line border-dashed px-5 py-10 text-center">
-                <Puzzle className="mx-auto size-6 text-muted-foreground" />
-                <p className="mt-3 font-medium text-sm">
-                  {t(query.trim() ? 'No results' : 'No extensions in this category')}
-                </p>
-                <p className="mt-1 text-muted-foreground text-xs">
-                  {t(
-                    query.trim()
-                      ? 'Try another search term.'
-                      : 'Use Add extension to import a skill, connect MCP, or install a plugin.'
-                  )}
-                </p>
+                  <TabsList aria-label={t('Extension type')}>
+                    <TabsTab value="all">{t('All')}</TabsTab>
+                    <TabsTab value="skill">{t('Skills')}</TabsTab>
+                    <TabsTab value="mcp">MCP</TabsTab>
+                    <TabsTab value="plugin">{t('Plugins')}</TabsTab>
+                  </TabsList>
+                </Tabs>
               </div>
-            )}
-        <div className="space-y-2 text-muted-foreground text-xs">
-          <p className="flex items-start gap-2">
-            <Info className="size-3.5 shrink-0" />
-            {t(
-              'Skill and MCP changes apply to new conversations. Existing conversations keep the extensions they loaded.'
-            )}
-          </p>
-          {showingPlugins && (
-            <p className="pl-5.5">
-              {t('Writing your own plugin? Install the folder that contains enso-plugin.json.')}
-            </p>
+              {syncNotice && (
+                <div
+                  data-slot="extension-notice"
+                  role="status"
+                  className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-muted-foreground text-xs"
+                >
+                  <Info className="mt-px size-3.5 shrink-0" />
+                  <span>{t(NEW_SESSION_NOTE)}</span>
+                </div>
+              )}
+              {showingPlugins && native.registryError && (
+                <PluginRegistryAlert error={native.registryError} />
+              )}
+              {showingPlugins && native.loading && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 text-muted-foreground text-sm"
+                >
+                  <Spinner />
+                  {t('Loading plugins…')}
+                </div>
+              )}
+              {visible.length
+                ? EXTENSION_KINDS.map((kind) => {
+                    const entries = visible.filter((entry) => entry.kind === kind);
+                    if (!entries.length) return null;
+                    return (
+                      <section key={kind} aria-label={t(presentation[kind].label)}>
+                        <div className="flex items-baseline gap-2 border-line border-b pb-2.5">
+                          <h2 className="font-semibold text-sm">{t(presentation[kind].label)}</h2>
+                          <span className="text-muted-foreground text-xs tabular-nums">
+                            {entries.length}
+                          </span>
+                        </div>
+                        <div className="-mx-2.5 mt-2 grid gap-x-4 gap-y-1 @min-[540px]:grid-cols-2 @min-[860px]:grid-cols-3">
+                          {entries.map((entry) => (
+                            <ExtensionItem
+                              key={entryKey(entry)}
+                              entry={entry}
+                              onOpen={() => setSelection(entryKey(entry))}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })
+                : emptyState && (
+                    <div
+                      data-slot="extensions-empty"
+                      className="rounded-xl border border-line border-dashed px-5 py-10 text-center"
+                    >
+                      {emptyState === 'first-run' ? (
+                        <Puzzle className="mx-auto size-6 text-muted-foreground" />
+                      ) : (
+                        <Search className="mx-auto size-6 text-muted-foreground" />
+                      )}
+                      <p className="mt-3 font-medium text-sm">
+                        {t(
+                          emptyState === 'first-run'
+                            ? 'Add your first extension'
+                            : emptyState === 'no-results'
+                              ? 'No results'
+                              : 'No extensions in this category'
+                        )}
+                      </p>
+                      <p className="mt-1 text-muted-foreground text-xs">
+                        {t(
+                          emptyState === 'first-run'
+                            ? 'Skills, MCP connections, and plugins you install appear here.'
+                            : emptyState === 'no-results'
+                              ? 'Try another search term.'
+                              : 'Use Add extension to import a skill, connect MCP, or install a plugin.'
+                        )}
+                      </p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        {emptyState === 'first-run' ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setAssetImport('skill')}
+                            >
+                              <HardDriveDownload />
+                              {t('Import skills')}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setMcpEdit('new')}>
+                              <Plug />
+                              {t('Connect MCP')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={installDisabled}
+                              onClick={() => void native.stage('dir')}
+                            >
+                              <FolderOpen />
+                              {t('Install plugin')}
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {query.trim() && (
+                              <Button size="sm" variant="outline" onClick={() => setQuery('')}>
+                                {t('Clear search')}
+                              </Button>
+                            )}
+                            {filter !== 'all' && (
+                              <Button size="sm" variant="outline" onClick={() => setFilter('all')}>
+                                {t('Show all extensions')}
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+            </>
           )}
         </div>
       </div>
@@ -539,7 +651,16 @@ export function ExtensionsPage({
                   <X />
                 </SheetClose>
               </div>
-              <SheetTitle className="break-words font-semibold">{selected.name}</SheetTitle>
+              <SheetTitle className="flex items-center gap-2 break-words font-semibold">
+                {plugin?.icon && (
+                  <PluginIcon
+                    pluginId={plugin.id}
+                    icon={plugin.icon}
+                    className="size-6 shrink-0 object-contain"
+                  />
+                )}
+                <span className="min-w-0 break-words">{selected.name}</span>
+              </SheetTitle>
               <SheetDescription>{selected.description || t(selected.source)}</SheetDescription>
             </SheetHeader>
             <SheetPanel className="space-y-5">
@@ -568,9 +689,10 @@ export function ExtensionsPage({
                     <Switch
                       aria-label={t('Enabled')}
                       checked={selected.skill.enabled}
-                      onCheckedChange={(enabled) => updateSkill(selected.id, { enabled })}
+                      onCheckedChange={(enabled) => changeSkillEnabled(selected.id, enabled)}
                     />
                   </div>
+                  <p className="text-muted-foreground text-xs">{t(NEW_SESSION_NOTE)}</p>
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">{t('Use in conversation')}</h3>
                     <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
@@ -604,9 +726,10 @@ export function ExtensionsPage({
                     <Switch
                       aria-label={t('Enabled')}
                       checked={selectedMcp.enabled}
-                      onCheckedChange={(enabled) => updateMcp(selectedMcp.id, { enabled })}
+                      onCheckedChange={(enabled) => changeMcpEnabled(selectedMcp.id, enabled)}
                     />
                   </div>
+                  <p className="text-muted-foreground text-xs">{t(NEW_SESSION_NOTE)}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       size="sm"

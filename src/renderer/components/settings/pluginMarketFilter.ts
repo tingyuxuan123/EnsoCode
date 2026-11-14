@@ -1,4 +1,10 @@
-import { MARKET_CATEGORIES, type MarketCategory } from '@shared/extensionPlugins/marketCategories';
+import {
+  MARKET_CATEGORIES,
+  MARKET_CATEGORY_EN_LABELS,
+  MARKET_CATEGORY_LABELS,
+  type MarketCategory,
+} from '@shared/extensionPlugins/marketCategories';
+import { getTranslation, type Locale } from '@shared/i18n';
 export interface MarketFilterItem {
   id: string;
   name: string;
@@ -10,6 +16,20 @@ export interface MarketFilterItem {
   updateAvailable: boolean;
 }
 export type MarketSection = 'all' | 'installed' | 'updates' | MarketCategory | 'other';
+
+/** 固定分段沿用 i18n 的英文原文 key；分类走两份已对齐的分类表 */
+const FIXED_SECTION_KEYS = {
+  all: 'All',
+  installed: 'Installed',
+  updates: 'Updates',
+  other: 'Other',
+} as const;
+
+export function marketSectionLabel(section: MarketSection, locale: Locale): string {
+  if (section === 'all' || section === 'installed' || section === 'updates' || section === 'other')
+    return getTranslation(locale, FIXED_SECTION_KEYS[section]);
+  return locale === 'zh' ? MARKET_CATEGORY_LABELS[section] : MARKET_CATEGORY_EN_LABELS[section];
+}
 function inSection(plugin: MarketFilterItem, section: MarketSection): boolean {
   if (section === 'all') return true;
   if (section === 'installed') return plugin.installedVersion !== undefined;

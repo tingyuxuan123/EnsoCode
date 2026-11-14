@@ -20,6 +20,17 @@ export const MARKET_CATEGORY_LABELS: Record<MarketCategory, string> = {
   fun: '休闲娱乐',
 };
 
+/** 英文界面用的分类名；与中文表同键同序，编译器保证不缺项 */
+export const MARKET_CATEGORY_EN_LABELS: Record<MarketCategory, string> = {
+  themes: 'Themes',
+  agent: 'Agent',
+  productivity: 'Productivity',
+  integrations: 'Integrations',
+  insights: 'Insights',
+  writing: 'Writing',
+  fun: 'Fun',
+};
+
 export const isMarketCategory = (value: unknown): value is MarketCategory =>
   (MARKET_CATEGORIES as readonly unknown[]).includes(value);
 

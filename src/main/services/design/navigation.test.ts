@@ -65,7 +65,7 @@ it('真实主入口 frame-src 只保留插件 shell 同源和 IPv4 回环，不�
   ).toEqual(["frame-src 'self' http://127.0.0.1:*"]);
 });
 
-it('真实主入口 img-src 允许本页创建的 blob:（设计截图卡），不放开外网', () => {
+it('真实主入口 img-src 允许本页创建的 blob:（设计截图卡）与市场图标源，不放开其他外网', () => {
   const html = readFileSync(new URL('../../../renderer/index.html', import.meta.url), 'utf8');
   const policy = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];
   expect(
@@ -73,7 +73,7 @@ it('真实主入口 img-src 允许本页创建的 blob:（设计截图卡），�
       ?.split(';')
       .map((part) => part.trim())
       .filter((part) => part.startsWith('img-src'))
-  ).toEqual(["img-src 'self' data: blob: local-image:"]);
+  ).toEqual(["img-src 'self' data: blob: local-image: https://enso-plugins.j3.do"]);
 });
 
 it('子 frame 仅允许已登记的精确 loopback origin，主 frame 不参与', () => {

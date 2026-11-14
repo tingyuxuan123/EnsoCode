@@ -1,4 +1,5 @@
 import type { ExtensionPluginMarketEntry } from '@shared/extensionPlugins/types';
+import { Puzzle } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,10 +7,41 @@ import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import type { NativePluginManager } from '@/plugins/useNativePluginManager';
 import { PluginReadmeDialog } from './PluginReadmeDialog';
-import { filterMarketPlugins, type MarketSection, marketSections } from './pluginMarketFilter';
+import {
+  filterMarketPlugins,
+  type MarketSection,
+  marketSectionLabel,
+  marketSections,
+} from './pluginMarketFilter';
+
+/** 远程图标可能过期或被拦截：失败或缺省时用中性占位，不给浏览器破图。 */
+function MarketIcon({ src }: { src?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed)
+    return (
+      <span
+        aria-hidden
+        data-slot="market-icon-fallback"
+        className="flex size-9 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground"
+      >
+        <Puzzle className="size-5" />
+      </span>
+    );
+  return (
+    <img
+      data-slot="market-icon"
+      src={src}
+      alt=""
+      referrerPolicy="no-referrer"
+      className="size-9 shrink-0 rounded object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 /** Market is a read-only catalog until an explicit stage → review → commit gesture. */
 export function PluginMarket({ manager }: { manager: NativePluginManager }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [plugins, setPlugins] = useState<ExtensionPluginMarketEntry[]>([]);
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
@@ -48,7 +80,7 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
     };
   }, [load]);
   return (
-    <section className="space-y-3" data-settings-row="plugins.market">
+    <section className="space-y-3" data-settings-row="plugins.market" data-slot="plugin-market">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="mr-auto font-semibold text-sm">{t('Plugin market')}</h3>
         <label className="flex items-center gap-2 text-xs">
@@ -83,11 +115,12 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
         {marketSections(plugins).map((item) => (
           <Button
             key={item.id}
+            data-slot="market-section"
             size="sm"
             variant={section === item.id ? 'secondary' : 'ghost'}
             onClick={() => setSection(item.id)}
           >
-            {t(item.id)} ({item.count})
+            {marketSectionLabel(item.id, locale)} ({item.count})
           </Button>
         ))}
       </div>
@@ -110,14 +143,8 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
         {filterMarketPlugins(plugins, { query, section }).map((plugin) => (
           <article key={plugin.id} className="space-y-2 rounded-lg border p-3">
             <div className="flex gap-2">
-              {plugin.icon && (
-                <img
-                  src={plugin.icon}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-9 rounded object-contain"
-                />
-              )}
+              {/* 图标地址变了就重挂，失败的占位不会跟着旧地址残留 */}
+              <MarketIcon key={plugin.icon ?? 'no-icon'} src={plugin.icon} />
               <div className="min-w-0">
                 <h4 className="truncate font-medium text-sm">
                   {plugin.name}{' '}

@@ -8,11 +8,13 @@ export const zhTranslations: Record<string, string> = {
   'Plugin market': '插件市场',
   'Browse plugin market': '浏览插件市场',
   'Hide plugin market': '收起插件市场',
+  'Back to installed': '返回已安装',
   'China mirror': '国内镜像',
   'Search plugins': '搜索插件',
   'Showing cached plugin catalog': '正在显示缓存的插件目录',
   'No plugins found': '未找到插件',
   'Review installation': '预览安装',
+  Installed: '已安装',
   'Check plugin updates': '检查插件更新',
   'Automatically update plugins': '自动更新插件',
   'Development mode (watch folder)': '开发模式（监听源目录）',
@@ -198,9 +200,14 @@ export const zhTranslations: Record<string, string> = {
   'Back to conversation': '返回对话',
   'Manage your skills, MCP connections, and installed plugins.':
     '管理技能、MCP 连接和已安装的插件。',
-  'Bring your tools into the conversation': '把常用工具带进对话',
-  'Reuse skills, connect MCP tools, or install your own Collabra plugins.':
-    '复用技能、连接 MCP 工具，或安装自己编写的插件。',
+  'More extension actions': '更多扩展操作',
+  'Add your first extension': '添加你的第一个扩展',
+  'Skills, MCP connections, and plugins you install appear here.':
+    '导入技能、连接 MCP 或安装插件后，会出现在这里。',
+  'Import skills': '导入技能',
+  'Connect MCP': '连接 MCP',
+  'Install plugin': '安装插件',
+  'Show all extensions': '查看全部扩展',
   'Search extensions': '搜索扩展',
   'Clear search': '清除搜索',
   'Add extension': '添加扩展',
@@ -215,10 +222,8 @@ export const zhTranslations: Record<string, string> = {
   'Use Add extension to import a skill, connect MCP, or install a plugin.':
     '使用「添加扩展」导入技能、连接 MCP 或安装插件。',
   'Try another search term.': '试试其他关键词。',
-  'Skill and MCP changes apply to new conversations. Existing conversations keep the extensions they loaded.':
-    '技能和 MCP 的变更在新会话生效，现有会话保留已加载的扩展。',
-  'Writing your own plugin? Install the folder that contains enso-plugin.json.':
-    '自己编写插件？选择包含 enso-plugin.json 的文件夹安装。',
+  'Changes apply to new conversations. The current conversation keeps what it already loaded.':
+    '变更在新会话生效，当前会话保持已加载的扩展不变。',
   'Use in conversation': '在对话中使用',
   'Copy command': '复制命令',
   'Start a new conversation to use newly enabled skills.': '新启用的技能可在新会话中使用。',

@@ -3,6 +3,7 @@ import {
   type ExtensionCatalogEntry,
   filterExtensionCatalog,
   mcpExtensionStatus,
+  resolveExtensionEmptyState,
 } from './extensionCatalog';
 
 const catalog: ExtensionCatalogEntry[] = [
@@ -51,5 +52,37 @@ describe('extension catalog', () => {
     expect(mcpExtensionStatus(false, 'ready')).toBe('Disabled');
     expect(mcpExtensionStatus(true, 'unauthorized')).toBe('Not authorized');
     expect(mcpExtensionStatus(true, 'error')).toBe('Connection failed');
+  });
+});
+
+describe('extension empty state', () => {
+  it('有可见条目时不进入空态', () => {
+    expect(
+      resolveExtensionEmptyState({ total: 2, visible: 1, filter: 'all', query: '' })
+    ).toBeNull();
+  });
+
+  it('目录为空、无关键词、全部分类时是首次空态', () => {
+    expect(resolveExtensionEmptyState({ total: 0, visible: 0, filter: 'all', query: '  ' })).toBe(
+      'first-run'
+    );
+  });
+
+  it('有关键词时即使目录为空也按搜索无结果提示', () => {
+    expect(resolveExtensionEmptyState({ total: 0, visible: 0, filter: 'all', query: 'zzz' })).toBe(
+      'no-results'
+    );
+    expect(
+      resolveExtensionEmptyState({ total: 3, visible: 0, filter: 'skill', query: 'zzz' })
+    ).toBe('no-results');
+  });
+
+  it('只切了分类且该分类没有条目时是分类空态，不与首次空态混用', () => {
+    expect(resolveExtensionEmptyState({ total: 0, visible: 0, filter: 'mcp', query: '' })).toBe(
+      'category-empty'
+    );
+    expect(resolveExtensionEmptyState({ total: 4, visible: 0, filter: 'plugin', query: '' })).toBe(
+      'category-empty'
+    );
   });
 });
