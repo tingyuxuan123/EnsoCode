@@ -7,7 +7,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { NativePluginsSection } from '@/plugins/NativePluginsSection';
 import { useSettingsStore } from '@/stores/settings';
 import { NewSessionBadge } from './NewSessionBadge';
 
@@ -112,11 +111,7 @@ function PluginRow({
   );
 }
 
-export function PluginsSettings({
-  request,
-}: {
-  request?: { serial: number; pluginId?: string; pluginInstallUrl?: string };
-}) {
+export function PluginsSettings() {
   const { t } = useI18n();
   const entries = useSettingsStore((state) => state.plugins);
   const addPlugins = useSettingsStore((state) => state.addPlugins);
@@ -163,7 +158,6 @@ export function PluginsSettings({
 
   return (
     <div className="space-y-[24px]" data-slot="settings-page">
-      <NativePluginsSection request={request} />
       <div
         className="flex flex-wrap items-start justify-between gap-[16px] [&>[data-slot=button]]:h-[calc(32rem/14)] [&>div>[data-slot=button]]:h-[calc(32rem/14)]"
         data-settings-row="plugins.root"

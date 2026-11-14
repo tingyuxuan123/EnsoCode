@@ -470,6 +470,8 @@ export const IPC_PRODUCT_COVERAGE = {
   WINDOW_OPEN_SETTINGS: surfaces('window.open-settings'),
   SETTINGS_DEEP_LINK: excluded('Settings window deep-link transport.'),
   SETTINGS_DEEP_LINK_CONSUME: excluded('Settings window deep-link handshake.'),
+  EXTENSIONS_DEEP_LINK: excluded('Native plugin navigation notification to the main workspace.'),
+  EXTENSIONS_DEEP_LINK_CONSUME: excluded('Main-renderer-only extension navigation handshake.'),
   TASK_BOARD_OPEN: excluded('Standalone collaboration board window UI.'),
   TASK_BOARD_FOCUS_MAIN: excluded('Collaboration board back-to-workspace window chrome.'),
   TASK_BOARD_NAVIGATE: excluded('Validated collaboration board group/task navigation UI.'),

@@ -17,7 +17,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { LocalAssetImportDialog } from '@/components/settings/LocalAssetImportDialog';
 import { McpEditDialog } from '@/components/settings/McpEditDialog';
@@ -182,7 +182,19 @@ function ExtensionItem({ entry, onOpen }: { entry: Entry; onOpen: () => void }) 
   );
 }
 
-export function ExtensionsPage({ onBack }: { onBack: () => void }) {
+export interface ExtensionPageRequest {
+  serial: number;
+  pluginId?: string;
+  pluginInstallUrl?: string;
+}
+
+export function ExtensionsPage({
+  onBack,
+  request,
+}: {
+  onBack: () => void;
+  request?: ExtensionPageRequest;
+}) {
   const { t, locale } = useI18n();
   const authorGuideTitle = locale === 'zh' ? '开发自己的插件' : 'Build your own plugin';
   const native = useNativePluginManager();
@@ -211,8 +223,26 @@ export function ExtensionsPage({ onBack }: { onBack: () => void }) {
   const [marketOpen, setMarketOpen] = useState(false);
   const pluginAutoUpdate = useSettingsStore((state) => state.pluginAutoUpdate);
   const setPluginAutoUpdate = useSettingsStore((state) => state.setPluginAutoUpdate);
+  const consumedRequest = useRef<number | null>(null);
 
   useEffect(() => useMcpStatusStore.getState().bind(), []);
+
+  useEffect(() => {
+    if (!request || consumedRequest.current === request.serial || !native.canManage || native.busy)
+      return;
+    if (request.pluginId && native.loading) return;
+    consumedRequest.current = request.serial;
+    setQuery('');
+    setFilter('plugin');
+    if (request.pluginInstallUrl) {
+      void native.stage('url', request.pluginInstallUrl);
+    } else if (
+      request.pluginId &&
+      native.plugins.some((plugin) => plugin.id === request.pluginId)
+    ) {
+      setSelection(`plugin:${request.pluginId}`);
+    }
+  }, [request, native.canManage, native.busy, native.loading, native.plugins, native.stage]);
 
   const catalog: Entry[] = [
     ...skills.map(

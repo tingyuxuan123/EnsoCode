@@ -108,6 +108,15 @@ export interface TestProviderResult { ok: boolean; latencyMs: number; message: s
 渲染层据 `ok` 分支，把 `error` 直接展示给用户
 （见 `ProviderEditDialog.tsx` 的 `status` 状态）。
 
+## 原生插件兼容导航
+
+原生插件的旧设置深链（`plugins.enso`、插件定位与安装 URL）在 `openSettingsDeepLink`
+解析后改投主窗口扩展页；普通 `plugins.root` 仍打开 Claude Code 插件设置，不复用原生管理页。
+`EXTENSIONS_DEEP_LINK` 仅是待处理通知，主 UI 再经 `EXTENSIONS_DEEP_LINK_CONSUME` 一次性读取，
+其它窗口不能消费；冷启动由初始消费兜底，推送用 `sendToWindow`，不能发给窗口空壳。
+旧协议 / 设置链接参数继续使用原有校验，不新增任意 URL 或磁盘路径入口。
+回归：`window.plugins.test.ts`、`preload/index.test.ts`、`App.mode-entry.test.tsx`。
+
 ## preload 是唯一出口
 
 `src/preload/index.ts` 通过 `contextBridge.exposeInMainWorld('electronAPI', ...)` 暴露，

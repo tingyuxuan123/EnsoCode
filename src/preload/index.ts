@@ -1358,6 +1358,13 @@ const electronAPI = {
     },
     consumeSettingsDeepLink: (): Promise<SettingsDeepLink | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_DEEP_LINK_CONSUME),
+    onExtensionsDeepLink: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.EXTENSIONS_DEEP_LINK, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTENSIONS_DEEP_LINK, listener);
+    },
+    consumeExtensionsDeepLink: (): Promise<SettingsDeepLink | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSIONS_DEEP_LINK_CONSUME),
     popupMenu: (
       items: { id: string; label: string }[],
       x: number,

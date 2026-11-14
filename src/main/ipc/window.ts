@@ -8,13 +8,23 @@ import {
   sendToWindow,
   TRAFFIC_LIGHT_POSITION,
 } from '../windows/createAppWindow';
-import { focusMainWindow } from '../windows/MainWindow';
+import { focusMainWindow, isMainWebContents } from '../windows/MainWindow';
 import { openSettingsWindow } from '../windows/SettingsWindow';
 import { parseOpenSettingsRequest } from './searchAnything';
 
 let pendingDeepLink: ReturnType<typeof parseOpenSettingsRequest> = null;
+let pendingExtensionsLink: ReturnType<typeof parseOpenSettingsRequest> = null;
 export function openSettingsDeepLink(raw: unknown): void {
   const link = parseOpenSettingsRequest(raw);
+  // 保留旧原生插件安装 / 定位链接，但不再把它们投到 Claude Code 的设置分类。
+  if (
+    link?.category === 'plugins' &&
+    (link.rowId === 'plugins.enso' || link.pluginId || link.pluginInstallUrl)
+  ) {
+    pendingExtensionsLink = link;
+    sendToWindow(focusMainWindow(), IPC_CHANNELS.EXTENSIONS_DEEP_LINK);
+    return;
+  }
   const win = openSettingsWindow();
   if (!link) return;
   pendingDeepLink = link;
@@ -117,6 +127,13 @@ export function registerWindowHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.SETTINGS_DEEP_LINK_CONSUME, () => {
     const link = pendingDeepLink;
     pendingDeepLink = null;
+    return link;
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EXTENSIONS_DEEP_LINK_CONSUME, (event) => {
+    if (!isMainWebContents(event.sender.id)) return null;
+    const link = pendingExtensionsLink;
+    pendingExtensionsLink = null;
     return link;
   });
 

@@ -24,7 +24,7 @@ import { bindComposerDraftCleanup } from '@/components/chat/composerDraftCleanup
 import { requestFocusComposer } from '@/components/chat/composerMentionBridge';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import { Sidebar } from '@/components/chat/Sidebar';
-import { ExtensionsPage } from '@/components/extensions/ExtensionsPage';
+import { type ExtensionPageRequest, ExtensionsPage } from '@/components/extensions/ExtensionsPage';
 import { isExtensionsSessionNavigation } from '@/components/extensions/extensionNavigation';
 import { RemoteNodeView } from '@/components/nodes/RemoteNodeView';
 import { OauthCredentialBootstrap } from '@/components/oauth/OauthCredentialBootstrap';
@@ -120,10 +120,45 @@ export default function App() {
   useEffect(() => bindComposerDraftCleanup(useSessionsStore.subscribe, composerDrafts.delete), []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const [extensionRequest, setExtensionRequest] = useState<ExtensionPageRequest>();
+  const extensionRequestSerial = useRef(0);
+  const extensionNavigationMounted = useRef(false);
   const closeWorkspacePage = useCallback(() => {
     setExtensionsOpen(false);
+    setExtensionRequest(undefined);
     closeDesignGallery();
     useImageStudioStore.getState().setOpen(false);
+  }, []);
+  useEffect(() => {
+    const api = window.electronAPI.window;
+    // Renderer HMR 可能先于 Main/preload 重启，旧实例不订阅尚未提供的导航能力。
+    if (
+      typeof api.onExtensionsDeepLink !== 'function' ||
+      typeof api.consumeExtensionsDeepLink !== 'function'
+    )
+      return;
+    extensionNavigationMounted.current = true;
+    const consume = () => {
+      void api.consumeExtensionsDeepLink().then((link) => {
+        // StrictMode 会清理后立即重订阅；首个异步消费结果仍属于这次挂载，不能丢掉。
+        if (!link || !extensionNavigationMounted.current) return;
+        showLocalCodeView();
+        closeDesignGallery();
+        useImageStudioStore.getState().setOpen(false);
+        setExtensionRequest({
+          serial: ++extensionRequestSerial.current,
+          pluginId: link.pluginId,
+          pluginInstallUrl: link.pluginInstallUrl,
+        });
+        setExtensionsOpen(true);
+      });
+    };
+    const off = api.onExtensionsDeepLink(consume);
+    consume();
+    return () => {
+      extensionNavigationMounted.current = false;
+      off();
+    };
   }, []);
   const [closeRequestId, setCloseRequestId] = useState<string | null>(null);
   useWindowsWindowChrome();
@@ -148,6 +183,7 @@ export default function App() {
     if (previous.id !== activeConversationId || previous.tab !== activeTabId) closeDesignGallery();
     if (isExtensionsSessionNavigation(previous, { id: activeConversationId, tab: activeTabId })) {
       setExtensionsOpen(false);
+      setExtensionRequest(undefined);
     }
     lastSessionSelection.current = { id: activeConversationId, tab: activeTabId };
   }, [activeConversationId, activeTabId]);
@@ -309,7 +345,10 @@ export default function App() {
       useImageStudioStore.getState().setOpen(false);
   }, [remoteNodeActive, botModeActive, galleryActive]);
   useEffect(() => {
-    if (remoteNodeActive || botModeActive || galleryActive) setExtensionsOpen(false);
+    if (remoteNodeActive || botModeActive || galleryActive) {
+      setExtensionsOpen(false);
+      setExtensionRequest(undefined);
+    }
   }, [botModeActive, galleryActive, remoteNodeActive]);
   const { t: designT } = useDesignTranslation();
   useEffect(() => {
@@ -743,6 +782,7 @@ export default function App() {
                     extensionsActive={extensionsActive}
                     onToggleExtensions={() => {
                       closeDesignGallery();
+                      setExtensionRequest(undefined);
                       setExtensionsOpen(!extensionsActive);
                     }}
                     onOpenChat={closeWorkspacePage}
@@ -774,7 +814,9 @@ export default function App() {
                   >
                     <ChatView />
                   </div>
-                  {extensionsActive && <ExtensionsPage onBack={closeWorkspacePage} />}
+                  {extensionsActive && (
+                    <ExtensionsPage onBack={closeWorkspacePage} request={extensionRequest} />
+                  )}
                   {sideOpen && !sideFullscreen && !extensionsActive && (
                     <ResizeHandle
                       onResize={handleSideResize}

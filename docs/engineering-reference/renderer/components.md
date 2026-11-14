@@ -180,6 +180,13 @@ Code 侧栏底部固定一行：`NodeSwitcher` 占可伸缩区域，归档入口
 折叠、切到 Bot 或画廊而丢失后台摘要。远程健康状态仍由节点入口展示。
 回归：`StatusBar.test.tsx`、`NodeSwitcher.test.tsx`、`App.gallery-layout.test.tsx`。
 
+## 插件管理入口分工
+
+设置侧栏的 `plugins` 分类显示「Claude Code 插件」，只扫描和管理 Claude Code 已安装的整包，
+不再挂载 `NativePluginsSection`。原生插件统一由主侧栏「扩展」管理；旧 `plugins.enso` 深链
+经 Main 兼容导航进入扩展页，安装 URL 继续走原有预览，通知定位打开原生插件详情。
+回归：`PluginsSettings.test.tsx`、`ExtensionsPage.test.tsx`；跨窗口契约见 [IPC 规范](../main/ipc.md)。
+
 ## Bot 成员过程入口统一分流
 
 输入框上方成员忙碌条与任务看板的「查看过程」使用同一委派状态分流：排队 / 执行中补载缺失的会话投影，已结束读取历史；普通成员群会话仍看实时投影。不要直接设置弹窗目标而跳过补载，否则冷会话会显示空白新对话。续做可复用同一子会话，排队提示不能只看该会话的第一条旧执行记录。回归：`BotChatView.test.tsx`。

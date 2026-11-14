@@ -109,6 +109,9 @@ export const IPC_CHANNELS = {
   /** main → settings renderer：打开后切分类并闪行 */
   SETTINGS_DEEP_LINK: 'settings:deep-link',
   SETTINGS_DEEP_LINK_CONSUME: 'settings:deep-link-consume',
+  /** 原生插件旧设置深链改投主窗口扩展页；通知只触发一次性消费。 */
+  EXTENSIONS_DEEP_LINK: 'extensions:deep-link',
+  EXTENSIONS_DEEP_LINK_CONSUME: 'extensions:deep-link-consume',
   TASK_BOARD_OPEN: 'taskboard:open',
   TASK_BOARD_FOCUS_MAIN: 'taskboard:focus-main',
   TASK_BOARD_NAVIGATE: 'taskboard:navigate',

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { act, createElement, type ReactNode } from 'react';
+import type { SettingsDeepLink } from '@shared/settingsDeepLink';
+import { act, createElement, type ReactNode, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDesignRegistry } from '@/features/design/host/registry';
@@ -50,6 +51,19 @@ const shell = vi.hoisted(() => {
     },
     nodes: { list: async () => ({ nodes: shell.remoteNodes, secureStorage: true }) },
     memory: { pendingWrites: async () => [], onChanged: () => () => {} },
+    window: {
+      onExtensionsDeepLink: (callback: () => void) => {
+        shell.extensionsListener = callback;
+        return () => {
+          shell.extensionsListener = null;
+        };
+      },
+      consumeExtensionsDeepLink: async () => {
+        const link = shell.extensionsPending;
+        shell.extensionsPending = null;
+        return link;
+      },
+    },
     // Bot 模式开启后 App 会订阅 Bot store；空回包足够，别让真实请求落到主进程。
     bots: {
       list: async () => ({ ok: false }),
@@ -68,6 +82,9 @@ const shell = vi.hoisted(() => {
     sidebar: { width: undefined as number | undefined, collapsed: false, mounts: 0 },
     botView: null as { sidebarWidth?: number; collapsed?: boolean } | null,
     workbenchTitle: null as object | null,
+    extensionsListener: null as (() => void) | null,
+    extensionsPending: null as SettingsDeepLink | null,
+    extensionRequest: undefined as { pluginId?: string } | undefined,
     mark: (slot: string) => () => <div data-slot={slot} />,
   };
 });
@@ -131,7 +148,12 @@ vi.mock('@/components/app/WorkbenchTitle', () => ({
     return null;
   },
 }));
-vi.mock('@/components/extensions/ExtensionsPage', () => ({ ExtensionsPage: () => null }));
+vi.mock('@/components/extensions/ExtensionsPage', () => ({
+  ExtensionsPage: ({ request }: { request?: { pluginId?: string } }) => {
+    shell.extensionRequest = request;
+    return <div data-slot="extensions-page" />;
+  },
+}));
 vi.mock('@/components/nodes/RemoteNodeView', () => ({
   RemoteNodeView: shell.mark('remote-node'),
 }));
@@ -222,6 +244,9 @@ beforeEach(() => {
   shell.botView = null;
   shell.workbenchTitle = null;
   shell.remoteNodes = [];
+  shell.extensionsListener = null;
+  shell.extensionsPending = null;
+  shell.extensionRequest = undefined;
   localStorage.setItem('enso-sidebar-width', '264');
   localStorage.removeItem('enso-mode');
   useSidebarStore.setState({ collapsed: false, auto: false });
@@ -247,6 +272,34 @@ afterEach(async () => {
 async function mountApp(): Promise<void> {
   await act(() => root.render(<App />));
 }
+
+it('冷启动待处理插件深链在 StrictMode 重订阅后不丢失', async () => {
+  shell.extensionsPending = { category: 'plugins', rowId: 'plugins.enso' };
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    )
+  );
+  expect(present('extensions-page')).not.toBeNull();
+});
+
+it('原生插件通知从 Bot 切回本机扩展页，保留详情定位', async () => {
+  await setBotModeEnabled(true);
+  useAppModeStore.getState().setMode('bot');
+  await mountApp();
+  expect(present('bot-view')).not.toBeNull();
+  shell.extensionsPending = {
+    category: 'plugins',
+    rowId: 'plugins.enso',
+    pluginId: 'enso.example.notes',
+  };
+  await act(async () => shell.extensionsListener?.());
+  expect(mode()).toBe('code');
+  expect(present('extensions-page')).not.toBeNull();
+  expect(shell.extensionRequest?.pluginId).toBe('enso.example.notes');
+});
 
 describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
   it('左侧图标轨只留功能导航，不再重复 Code / Bot 入口', async () => {

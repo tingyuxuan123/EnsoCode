@@ -200,3 +200,21 @@ it('链接安装先收集地址，不接受明文 HTTP 和带凭证的地址', a
   await act(async () => preview.click());
   expect(fixture.stage).toHaveBeenCalledExactlyOnceWith('url', 'https://example.test/plugin.zip');
 });
+
+it('旧安装深链在扩展页进入同一预览流程，重渲染不重复安装预览', async () => {
+  const request = { serial: 1, pluginInstallUrl: 'https://example.test/plugin.zip' };
+  await act(async () => root.render(<ExtensionsPage onBack={() => {}} request={request} />));
+  expect(fixture.stage).toHaveBeenCalledExactlyOnceWith('url', request.pluginInstallUrl);
+  await act(async () => root.render(<ExtensionsPage onBack={() => {}} request={request} />));
+  expect(fixture.stage).toHaveBeenCalledTimes(1);
+});
+
+it('原生插件通知定位打开扩展详情，而不是 Claude Code 设置', async () => {
+  await act(async () =>
+    root.render(
+      <ExtensionsPage onBack={() => {}} request={{ serial: 1, pluginId: fixture.native.id }} />
+    )
+  );
+  expect(document.querySelector('[data-slot="sheet-popup"]')?.textContent).toContain('Local Notes');
+  expect(fixture.stage).not.toHaveBeenCalled();
+});

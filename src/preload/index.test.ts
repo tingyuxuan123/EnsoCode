@@ -99,3 +99,18 @@ describe('preload taskBoard', () => {
     expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
   });
 });
+
+it('扩展页导航只消费 Main 校验后的待处理深链，通知可清理且不泄露 IPC event', () => {
+  mocks.invoke.mockClear();
+  mocks.on.mockClear();
+  mocks.removeListener.mockClear();
+  void electronAPI.window.consumeExtensionsDeepLink();
+  expect(mocks.invoke).toHaveBeenCalledWith(IPC_CHANNELS.EXTENSIONS_DEEP_LINK_CONSUME);
+  const callback = vi.fn();
+  const off = electronAPI.window.onExtensionsDeepLink(callback);
+  const listener = mocks.on.mock.calls[0]?.[1] as (event: unknown) => void;
+  listener({ sender: 'private' });
+  expect(callback).toHaveBeenCalledExactlyOnceWith();
+  off();
+  expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.EXTENSIONS_DEEP_LINK, listener);
+});
