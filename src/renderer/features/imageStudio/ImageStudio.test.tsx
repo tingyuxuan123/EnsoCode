@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { DEFAULT_IMAGE_STUDIO_OPTIONS, type ImageStudioTurn } from '@shared/imageStudio';
-import { act, createRef } from 'react';
+import { act, createRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImageStudio } from './ImageStudio';
@@ -97,6 +97,27 @@ afterEach(async () => {
 });
 const button = (label: string) =>
   container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+const renderStudio = async (overrides: { collapsed?: boolean; sidebarWidth?: number } = {}) =>
+  act(async () =>
+    root.render(
+      <ImageStudio
+        collapsed={overrides.collapsed ?? false}
+        sidebarWidth={overrides.sidebarWidth ?? 296}
+        onResize={onResize}
+        onHistoryResize={onHistoryResize}
+        onHistoryResizingChange={onHistoryResizingChange}
+        workspaceRef={workspaceRef}
+      />
+    )
+  );
+/** 真实动画管线靠 rAF 推进；等待若干帧后再读几何，而不是读 setState 后的固定延迟快照。 */
+const waitFrames = async (ms: number) =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
+const panelWidth = (slot: string) =>
+  Number.parseFloat(container.querySelector<HTMLElement>(`[data-slot=${slot}]`)?.style.width ?? '');
+const panel = (slot: string) => container.querySelector<HTMLElement>(`[data-slot=${slot}]`)!;
 describe('图片工作台交互', () => {
   it.each([false, true])(
     '生图/改图直接使用聊天现有黑白蓝动画，完成、失败或取消后移除，editing=%s',
@@ -238,8 +259,8 @@ describe('图片工作台交互', () => {
         measure();
       });
     });
-    const history = container.querySelector<HTMLElement>('[data-slot=image-studio-history]')!;
-    expect(history.style.width).toBe('339px');
+    await waitFrames(700);
+    expect(panelWidth('image-studio-history')).toBe(339);
     expect(useImageStudioStore.getState().historyWidth).toBe(460);
     await act(async () => {
       Object.defineProperty(workspace, 'clientWidth', { configurable: true, value: 1200 });
@@ -247,7 +268,8 @@ describe('图片工作台交互', () => {
         measure();
       });
     });
-    expect(history.style.width).toBe('460px');
+    await waitFrames(700);
+    expect(panelWidth('image-studio-history')).toBe(460);
   });
   it('与 Code 同款手柄连接左右两侧：拖动报告实际增量，关闭历史不残留右手柄', async () => {
     await act(async () => useImageStudioStore.setState({ historyOpen: true }));
@@ -270,20 +292,10 @@ describe('图片工作台交互', () => {
     expect(container.querySelectorAll('[data-slot=resize-hit]')).toHaveLength(1);
   });
   it('折叠左侧时移除其拖拽手柄，历史面板仍可单独拖动', async () => {
-    await act(async () => {
-      useImageStudioStore.setState({ historyOpen: true });
-      root.render(
-        <ImageStudio
-          collapsed
-          sidebarWidth={346}
-          onResize={onResize}
-          onHistoryResize={onHistoryResize}
-          onHistoryResizingChange={onHistoryResizingChange}
-          workspaceRef={workspaceRef}
-        />
-      );
-    });
-    expect(container.querySelector('[data-slot=image-studio-sidebar]')).toBeNull();
+    await act(async () => useImageStudioStore.setState({ historyOpen: true }));
+    await renderStudio({ collapsed: true, sidebarWidth: 346 });
+    expect(panel('image-studio-sidebar').getAttribute('aria-hidden')).toBe('true');
+    expect(panel('image-studio-sidebar').classList.contains('border-r')).toBe(false);
     expect(container.querySelectorAll('[data-slot=resize-hit]')).toHaveLength(1);
   });
   it('示例仅填入提示词，不能因为点击建议就发起收费请求', async () => {
@@ -490,5 +502,118 @@ describe('图片工作台不再复制 Code 的通用工作区行', () => {
     await act(async () => create.click());
     expect(api.create).toHaveBeenCalledOnce();
     expect(useImageStudioStore.getState().activeId).toBe('fresh');
+  });
+});
+
+/**
+ * 画图页左右分栏与 Code 共用展开/收起契约：打开 spring、收起到 0 用无过冲 tween、
+ * 拖拽与系统「减少动态」立切。这里断言可观察几何（中间帧确实存在并平滑到端点），
+ * 而不是只读 transition 配置；真机逐帧证据由 CDP 隔离实例补充。
+ */
+describe('图片工作台分栏复用 Code 的展开/收起动画', () => {
+  it('初始挂载直接到记忆宽度，不从 0 滑入', async () => {
+    await renderStudio({ collapsed: false });
+    expect(panelWidth('image-studio-sidebar')).toBe(296);
+  });
+
+  it('左侧会话栏收起/展开存在中间帧，落位后不留手柄和可点内容，宽度记忆不丢', async () => {
+    await renderStudio({ collapsed: true });
+    await waitFrames(60);
+    expect(panelWidth('image-studio-sidebar')).toBeGreaterThan(0);
+    expect(panelWidth('image-studio-sidebar')).toBeLessThan(296);
+    await waitFrames(700);
+    expect(panelWidth('image-studio-sidebar')).toBe(0);
+    const collapsed = panel('image-studio-sidebar');
+    expect(collapsed.getAttribute('aria-hidden')).toBe('true');
+    // 收起后正文让位：与 Code 项目侧栏同一手法（display:none），不残留可点区域
+    expect(collapsed.firstElementChild?.classList.contains('hidden')).toBe(true);
+    expect(collapsed.classList.contains('border-r')).toBe(false);
+    expect(container.querySelectorAll('[data-slot=resize-hit]')).toHaveLength(0);
+
+    await renderStudio({ collapsed: false });
+    await waitFrames(60);
+    expect(panelWidth('image-studio-sidebar')).toBeGreaterThan(0);
+    expect(panelWidth('image-studio-sidebar')).toBeLessThan(296);
+    await waitFrames(700);
+    expect(panelWidth('image-studio-sidebar')).toBe(296);
+    expect(panel('image-studio-sidebar').getAttribute('aria-hidden')).toBeNull();
+    expect(panel('image-studio-sidebar').firstElementChild?.classList.contains('hidden')).toBe(
+      false
+    );
+    expect(container.querySelectorAll('[data-slot=resize-hit]')).toHaveLength(1);
+  });
+
+  it('历史面板展开/收起同为动画；快速反向切换后停在目标宽度，不残留空白', async () => {
+    await act(async () => useImageStudioStore.setState({ historyOpen: true, historyWidth: 460 }));
+    await waitFrames(60);
+    expect(panelWidth('image-studio-history')).toBeGreaterThan(0);
+    expect(panelWidth('image-studio-history')).toBeLessThan(460);
+    await waitFrames(700);
+    expect(panelWidth('image-studio-history')).toBe(460);
+
+    await act(async () => useImageStudioStore.getState().toggleHistory());
+    await waitFrames(50);
+    expect(panelWidth('image-studio-history')).toBeGreaterThan(0);
+    await act(async () => useImageStudioStore.getState().toggleHistory());
+    await waitFrames(700);
+    expect(panelWidth('image-studio-history')).toBe(460);
+
+    await act(async () => useImageStudioStore.getState().toggleHistory());
+    await waitFrames(700);
+    expect(panelWidth('image-studio-history')).toBe(0);
+    const closed = panel('image-studio-history');
+    expect(closed.getAttribute('aria-hidden')).toBe('true');
+    expect(closed.classList.contains('border-l')).toBe(false);
+    expect(closed.classList.contains('invisible')).toBe(true);
+    expect(container.querySelectorAll('[data-slot=resize-hit]')).toHaveLength(1);
+  });
+
+  it('拖动分隔条时宽度立即跟手，不给 resize 加缓动', async () => {
+    function Harness() {
+      const [width, setWidth] = useState(296);
+      return (
+        <ImageStudio
+          collapsed={false}
+          sidebarWidth={width}
+          onResize={(delta) => setWidth((value) => value + delta)}
+          onHistoryResize={onHistoryResize}
+          onHistoryResizingChange={onHistoryResizingChange}
+          workspaceRef={workspaceRef}
+        />
+      );
+    }
+    await act(async () => root.render(<Harness />));
+    const hit = container.querySelector<HTMLElement>('[data-slot=resize-hit]')!;
+    await act(async () => {
+      hit.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 296 }));
+      document.dispatchEvent(new MouseEvent('mousemove', { clientX: 396 }));
+    });
+    await waitFrames(40);
+    // spring 会停在两端之间；立切必须在下一帧就是新宽度
+    expect(panelWidth('image-studio-sidebar')).toBe(396);
+    await act(async () => {
+      document.dispatchEvent(new MouseEvent('mouseup'));
+    });
+  });
+
+  it('系统减少动态时立即落位，不做布局补间', async () => {
+    const media = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await renderStudio({ collapsed: true });
+      await waitFrames(40);
+      expect(panelWidth('image-studio-sidebar')).toBe(0);
+    } finally {
+      window.matchMedia = media;
+    }
   });
 });

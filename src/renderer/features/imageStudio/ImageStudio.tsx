@@ -4,6 +4,7 @@ import {
   type ImageStudioOptions,
   studioTurnImages,
 } from '@shared/imageStudio';
+import { motion } from 'framer-motion';
 import {
   ArrowDownWideNarrow,
   ArrowUp,
@@ -40,6 +41,7 @@ import { effectiveKeybindings, eventToBinding, formatBinding } from '@/lib/keybi
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { resolveSidePanelWidth } from '@/stores/sidePanel/width';
+import { imageStudioPanelTransition, prefersReducedMotion } from './panelMotion';
 import { StudioImage, StudioThumbnail, useStudioImage } from './StudioImage';
 import { StudioSettings } from './StudioSettings';
 import { useImageStudioStore } from './store';
@@ -77,6 +79,9 @@ export function ImageStudio({
   const preferredHistoryWidth = useImageStudioStore((s) => s.historyWidth);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const historyWidth = resolveSidePanelWidth(preferredHistoryWidth, workspaceWidth);
+  const reducedMotion = prefersReducedMotion();
+  // 拖左右手柄时让宽度立切：与 Code 右侧面板一样，拖拽期间暂停宽度补间
+  const [resizing, setResizing] = useState(false);
   useEffect(() => {
     const workspace = workspaceRef.current;
     if (!workspace) return;
@@ -212,11 +217,26 @@ export function ImageStudio({
       data-slot="image-studio"
       aria-label={t('Image studio')}
     >
-      {!collapsed && (
-        <aside
-          className="flex min-h-0 shrink-0 flex-col border-r border-line bg-shell"
+      <motion.aside
+        initial={false}
+        animate={{ width: collapsed ? 0 : sidebarWidth }}
+        transition={imageStudioPanelTransition({
+          resizing,
+          reducedMotion,
+          targetW: collapsed ? 0 : sidebarWidth,
+        })}
+        aria-hidden={collapsed || undefined}
+        className={cn(
+          'flex min-h-0 shrink-0 flex-col overflow-hidden bg-shell',
+          !collapsed && 'border-r border-line'
+        )}
+        data-slot="image-studio-sidebar"
+      >
+        {/* 正文按目标宽度固定，宽度动画只裁剪外壳，收起时与 Code 项目侧栏一样整块让位 */}
+        <div
+          className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')}
           style={{ width: sidebarWidth }}
-          data-slot="image-studio-sidebar"
+          data-slot="image-studio-sidebar-body"
         >
           <div className="flex h-[44px] shrink-0 items-center px-3">
             <span className="text-[calc(13rem/14)] font-medium">{t('Conversations')}</span>
@@ -310,9 +330,9 @@ export function ImageStudio({
               </p>
             )}
           </div>
-        </aside>
-      )}
-      {!collapsed && <ResizeHandle onResize={onResize} />}
+        </div>
+      </motion.aside>
+      {!collapsed && <ResizeHandle onResize={onResize} onResizingChange={setResizing} />}
       <div
         ref={workspaceRef}
         className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t border-line bg-background"
@@ -555,15 +575,32 @@ export function ImageStudio({
           </div>
         </main>
         {historyOpen && (
-          <ResizeHandle onResize={onHistoryResize} onResizingChange={onHistoryResizingChange} />
+          <ResizeHandle
+            onResize={onHistoryResize}
+            onResizingChange={(value) => {
+              setResizing(value);
+              onHistoryResizingChange(value);
+            }}
+          />
         )}
-        {historyOpen && (
-          <aside
-            className="flex min-w-0 shrink-0 flex-col overflow-hidden border-l border-line"
-            style={{ width: historyWidth }}
-            data-slot="image-studio-history"
-            aria-label={t('Image history')}
-          >
+        {/* 与 Code 右侧面板一致：外壳常驻、宽度动画，收起时 invisible 让正文立即不可交互 */}
+        <motion.aside
+          initial={false}
+          animate={{ width: historyOpen ? historyWidth : 0 }}
+          transition={imageStudioPanelTransition({
+            resizing,
+            reducedMotion,
+            targetW: historyOpen ? historyWidth : 0,
+          })}
+          aria-hidden={!historyOpen || undefined}
+          className={cn(
+            'flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden',
+            historyOpen ? 'border-l border-line' : 'invisible'
+          )}
+          data-slot="image-studio-history"
+          aria-label={t('Image history')}
+        >
+          <div className="flex h-full min-h-0 flex-col" style={{ width: historyWidth }}>
             <div className="flex h-[44px] shrink-0 px-3">
               <span className={cn(tab, activeTab, 'font-medium')}>
                 <Image className="size-3.5" />
@@ -645,8 +682,8 @@ export function ImageStudio({
             <p className="border-t border-line px-3 py-2 text-[calc(11rem/14)] leading-relaxed text-muted-foreground">
               {t('Saved in .xiaoman/images/ by conversation. Originals stay unchanged.')}
             </p>
-          </aside>
-        )}
+          </div>
+        </motion.aside>
       </div>
       <StudioSettings
         open={settingsOpen}
