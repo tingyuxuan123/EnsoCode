@@ -2,7 +2,7 @@ import type { CatalogEntry } from '@enso/pair';
 import { localCompactionNoticeIndex } from '@shared/pair/guestProjection';
 import type { AttachedImage, ProjectedMessage, SlashCommand } from '@shared/types/agent';
 import type { StartVoiceSession } from '@shared/types/speech';
-import { Bot, Loader2, MessageCircle, SquarePen } from 'lucide-react';
+import { ArrowUp, Bot, Loader2, Lock, MessageCircle, SquarePen } from 'lucide-react';
 import {
   type ReactNode,
   useCallback,
@@ -549,9 +549,13 @@ export function ChatScreen(props: Props) {
                 </p>
               )}
               {props.deviceReadOnly ? (
-                <p className="mb-1 rounded-md bg-muted px-2 py-1 text-center text-muted-foreground text-xs">
-                  {readOnlyBanner(props.readOnlyRejected)}
-                </p>
+                // 设计稿 `readonly-device`：一条说清原因和出口的横幅，不弹窗
+                <div className="mb-2 flex items-start gap-2 rounded-[14px] bg-card2 px-3 py-2.5">
+                  <Lock className="mt-0.5 size-3.5 shrink-0 text-dim" aria-hidden />
+                  <p className="min-w-0 flex-1 text-[12px] leading-[18px] text-ink2">
+                    {readOnlyBanner(props.readOnlyRejected)}
+                  </p>
+                </div>
               ) : (
                 <>
                   <ApprovalBar
@@ -567,7 +571,22 @@ export function ChatScreen(props: Props) {
                   />
                 </>
               )}
-              {!readOnly && (
+              {readOnly ? (
+                // 只读设备不渲染真 Composer（写操作在 optimistic echo 前就拒绝），
+                // 但按设计稿保留一条灰掉的输入条，让"不能发"是可见的而不是凭空消失
+                <div className="relative shrink-0 px-3 pt-2 pb-safe">
+                  <div className="flex items-end gap-2">
+                    <div className="flex h-12 flex-1 items-center rounded-3xl border border-line bg-card2 px-4">
+                      <span className="text-[16px] leading-[22px] text-faint">
+                        只读设备，不能发送
+                      </span>
+                    </div>
+                    <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-card2 text-faint">
+                      <ArrowUp className="size-[22px]" aria-hidden />
+                    </span>
+                  </div>
+                </div>
+              ) : (
                 <Composer
                   commands={slashCommands}
                   running={running}

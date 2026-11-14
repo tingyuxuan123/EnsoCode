@@ -14,7 +14,7 @@ import {
 import { parseCompactCommand } from '@shared/compactCommand';
 import { emptyGuestView } from '@shared/pair/guestProjection';
 import type { AttachedImage } from '@shared/types/agent';
-import { PanelLeft, Unlink } from 'lucide-react';
+import { MonitorSmartphone, PanelLeft, ScanLine, Unlink } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { applyAppBadge, attentionBadgeCount } from './attentionBadge';
@@ -926,7 +926,7 @@ export function App() {
               onClick={() => unpairDevice(device.pairId)}
               className="glass-ink flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-medium"
             >
-              <span className="icon-[lucide--scan-line] size-[18px]" aria-hidden />
+              <ScanLine className="size-[18px]" aria-hidden />
               {others ? '移除此配对' : '重新配对'}
             </button>
             {others && (
@@ -935,7 +935,7 @@ export function App() {
                 onClick={() => setDrawerOpen(true)}
                 className="glass flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-medium"
               >
-                <span className="icon-[lucide--monitor-smartphone] size-[18px]" aria-hidden />
+                <MonitorSmartphone className="size-[18px]" aria-hidden />
                 换台电脑
               </button>
             )}
