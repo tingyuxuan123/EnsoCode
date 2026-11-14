@@ -182,21 +182,27 @@ export function FileDownloads({
               </p>
             )}
             {error && (
-              <p role="alert" className="text-destructive text-sm">
+              <p role="alert" className="text-[13px] leading-5 text-red">
                 {ERROR[error] ?? '文件读取失败，请刷新后重试。'}
               </p>
             )}
             {!loading && !error && files.length === 0 && (
-              <div className="rounded-md border border-dashed p-5 text-center text-muted-foreground text-sm">
+              <div className="rounded-[16px] bg-card px-4 py-6 text-center text-[13px] leading-5 text-dim">
                 还没有可下载的文件。请让助手把结果保存到项目目录，并在回复中写出文件名，再刷新列表。
               </div>
             )}
             {files.map((file) => (
-              <div key={file.id} className="flex min-w-0 items-center gap-2 rounded-md border p-3">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div
+                key={file.id}
+                className="flex min-w-0 items-center gap-3 rounded-[16px] bg-card px-3.5 py-3"
+              >
+                <FileText className="size-[22px] shrink-0 text-ink2" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{file.name}</p>
-                  <p className="truncate text-muted-foreground text-xs" title={file.rel}>
+                  <p className="truncate text-[15px] leading-5 font-medium">{file.name}</p>
+                  <p
+                    className="truncate text-[12px] leading-4 text-dim tabular-nums"
+                    title={file.rel}
+                  >
                     {file.rel} · {sizeText(file.size)}
                   </p>
                 </div>
@@ -237,7 +243,7 @@ export function FileDownloads({
               <a
                 href={ready.url}
                 download={ready.name}
-                className="flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-primary-foreground text-sm"
+                className="flex items-center justify-center gap-2 rounded-full bg-pill px-4 py-3 text-[15px] leading-5 font-medium text-pill-ink"
               >
                 <Download className="h-4 w-4" />
                 保存 {ready.name}
