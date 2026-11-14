@@ -62,13 +62,15 @@ export function useLocalImageSource(path: string): {
   const host = useChatHost();
   const read = host?.readLocalImage;
   const remote = Boolean(read);
+  // 会话/执行目录换代：同一相对路径要重新取图，不能让已挂载的旧像素留着
+  const scope = host?.localImageScope ?? '';
   // 宿主可能每次渲染都传新的函数身份：只跟随「有没有远程能力」这个布尔，
   // 否则断线时一次请求/通知会触发重渲染 → 新身份 → 再请求，永远停在加载态。
   const readRef = useRef(read);
   readRef.current = read;
   const [state, setState] = useState<LocalImageSource>(() => initialLocalImageSource(path, remote));
   const [attempt, setAttempt] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 只跟随能力开关、路径与重试信号
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 只跟随能力开关、路径、资源代次与重试信号
   useEffect(() => {
     const load = readRef.current;
     if (!load) {
@@ -87,7 +89,7 @@ export function useLocalImageSource(path: string): {
     return () => {
       alive = false;
     };
-  }, [remote, path, attempt]);
+  }, [remote, path, scope, attempt]);
   const invalidate = useCallback(() => {
     if (host?.invalidateLocalImage) host.invalidateLocalImage(path);
   }, [host, path]);

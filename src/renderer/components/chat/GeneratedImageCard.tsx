@@ -84,8 +84,8 @@ export function GeneratedImageCard({
   sessionId?: string;
 }) {
   const { t } = useI18n();
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,12 +100,11 @@ export function GeneratedImageCard({
   const image = generatedImageFromOutput(output);
   // 手机 PWA 没有 local-image://：经 host 按「会话 id + 相对路径」取图，加载/失败都有可见状态
   const { state, remote, retry, invalidate } = useLocalImageSource(path);
-  // 新一次加载/新资源到来时清掉旧的解码失败，重试取回好图后不能被它挡住
-  useEffect(() => {
-    if (state.status !== 'error') setFailed(false);
-  }, [state]);
   if (!image) return null;
   const src = state.status === 'local' || state.status === 'ready' ? state.src : null;
+  // 解码失败绑定到具体像素：换新图（重试成功）自动解除，同一张坏图持续失败
+  const failed = src !== null && failedSrc === src;
+  const loaded = src !== null && loadedSrc === src;
   const action = async (kind: 'copy' | 'download') => {
     // 远程宿主（手机）的图片只在内存里，没有本地路径可复制/下载
     if (pending || !src) return;
@@ -186,10 +185,18 @@ export function GeneratedImageCard({
         <ZoomableImage
           src={src}
           onError={() => {
-            setFailed(true);
+            setFailedSrc(src);
             invalidate();
           }}
-          onLoad={() => setLoaded(true)}
+          onLoad={(event) => {
+            // 远程宿主是浏览器解码的 data URL：complete 但 0 宽就是解不出，按失败处理
+            if (remote && event.currentTarget.naturalWidth === 0) {
+              setFailedSrc(src);
+              invalidate();
+              return;
+            }
+            setLoadedSrc(src);
+          }}
           frameClassName="block max-w-full"
           className={cn(
             'block max-h-[calc(256rem/14)] max-w-full object-contain',
@@ -197,6 +204,19 @@ export function GeneratedImageCard({
           )}
         />
       ) : null}
+      {/* 远程宿主（手机）没有文件监视：同名图被覆盖后由用户主动刷新取新版本 */}
+      {remote && state.status === 'ready' && !failed && (
+        <div className="px-3 pb-2">
+          <button
+            type="button"
+            data-slot="generated-image-refresh"
+            onClick={retry}
+            className="rounded-md border px-2 py-1 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {t('Refresh image')}
+          </button>
+        </div>
+      )}
       {loaded && !failed && !remote && (
         <div
           className="imagegen-actions"

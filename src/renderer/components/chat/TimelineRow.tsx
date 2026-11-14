@@ -2229,7 +2229,8 @@ export function ReadImagePreview({ path, fallback }: { path: string; fallback: R
 /** 纯展示层：便于按四种状态做渲染断言 */
 export function ReadImagePreviewView({
   state,
-  path,
+  // path 仅用于调用方定位（失败绑定改按 src 判定），这里不再参与渲染
+  path: _path,
   fallback,
   remote,
   onRetry,
@@ -2243,15 +2244,14 @@ export function ReadImagePreviewView({
   onBroken?: () => void;
 }) {
   const { t } = useI18n();
-  const [failed, setFailed] = useState(false);
   /*
-   * 解码失败不是永久的：换图、或本图重新开始加载/拿到新资源（state 换代）时都清掉，
-   * 否则重试即使取回好图也会被旧的 failed 挡住。
+   * 解码失败绑定到「具体那一份像素」而不是一个布尔：布尔要靠 effect 清理，
+   * 而 effect 与 <img> 的 error 事件存在先后竞态，会把刚设上的失败又清成
+   * 「成功但 0 宽」的空白。按 src 记失败后，换新像素自动解除，同像素永久失败。
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: path/state 是「新一次加载」的信号
-  useEffect(() => {
-    if (state.status !== 'error') setFailed(false);
-  }, [path, state]);
+  const activeSrc = state.status === 'ready' || state.status === 'local' ? state.src : null;
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = activeSrc !== null && failedSrc === activeSrc;
   if (state.status === 'loading') {
     return (
       <div
@@ -2287,14 +2287,38 @@ export function ReadImagePreviewView({
     <div data-slot="read-image" className="w-full min-w-0 px-3 py-3">
       <ZoomableImage
         src={state.src}
+        onLoad={(event) => {
+          // 远程宿主是浏览器自己解码的 data URL：complete 但 0 宽就是解不出，不能当成功
+          // （本机走 local-image:// 特权协议，保持原有「load 即可」语义）
+          if (remote && event.currentTarget.naturalWidth === 0) {
+            setFailedSrc(state.src);
+            onBroken?.();
+          }
+        }}
         onError={() => {
-          setFailed(true);
+          setFailedSrc(state.src);
           // 坏像素不能留在宿主缓存里，重试必须重新取一张
           onBroken?.();
         }}
         frameClassName="block w-full"
         className="mx-auto block max-h-80 max-w-full rounded-md bg-muted/40 object-contain"
       />
+      {/*
+       * 远程宿主（手机）没有文件监视：同名图片被覆盖后只能由用户主动取新版本。
+       * 这里给一个始终可见、移动端可点的刷新入口，而不是只在失败时才有。
+       */}
+      {remote && (
+        <div className="mt-1 flex justify-end">
+          <button
+            type="button"
+            data-slot="read-image-refresh"
+            onClick={onRetry}
+            className="rounded-md border px-2 py-1 text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {t('Refresh image')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

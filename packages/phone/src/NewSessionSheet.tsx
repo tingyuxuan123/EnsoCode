@@ -6,7 +6,6 @@ import {
   type ThinkingLevel,
 } from '@enso/pair';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectItem,
@@ -104,134 +103,169 @@ export function NewSessionSheet({
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent side="bottom" className="phone-sheet pb-safe">
-        <SheetHeader className="px-4 pt-7 pb-4">
-          <SheetTitle className="font-semibold text-[15px]">新建会话</SheetTitle>
+      <SheetContent side="bottom" className="phone-sheet pb-safe" showCloseButton={false}>
+        <SheetHeader className="sr-only">
+          <SheetTitle>新建会话</SheetTitle>
         </SheetHeader>
-        <div className="space-y-4 p-4 pt-0">
-          <Field label="项目">
-            <Select
-              items={projects.map((p) => ({ value: p.id, label: pairProjectListLabel(p) }))}
-              value={projectId}
-              onValueChange={(v) => setPickedProject(v as string)}
+        {/* 设计稿 new-session.tsx：晨光 + 两行问候 + 项目胶囊 + 白卡，不是下拉表 */}
+        <div className="relative min-h-[86vh] overflow-hidden bg-page">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-[520px]"
+            style={{
+              background:
+                'radial-gradient(90% 62% at 0% 0%, var(--dawn-side) 0%, transparent 70%), radial-gradient(85% 58% at 100% 6%, var(--dawn) 0%, transparent 72%)',
+            }}
+          />
+          <header className="relative flex items-center py-2 pr-4 pl-1">
+            <button
+              type="button"
+              aria-label="关闭"
+              onClick={onClose}
+              className="flex size-12 items-center justify-center rounded-full text-ink"
             >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {pairProjectListLabel(p)}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </Field>
+              <span aria-hidden className="text-[22px] leading-none">
+                ×
+              </span>
+            </button>
+            <div className="flex-1" />
+            <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-card2 px-3">
+              <span className="size-1.5 rounded-full bg-green" />
+              <span className="text-[12px] leading-4 font-medium text-ink2">
+                {projects.length > 0 ? '可以开工' : '桌面端还没有项目'}
+              </span>
+            </span>
+          </header>
 
-          <Field label="模型服务">
-            <Select
-              items={providers.map((p) => ({ value: p.id, label: p.name }))}
-              value={providerId}
-              onValueChange={(v) => {
-                setPickedProvider(v as string);
-                setPickedModel(null);
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                {providers.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </Field>
-
-          <Field label="模型">
-            <Select
-              items={provider.models.map((m) => ({ value: m.id, label: m.label ?? m.id }))}
-              value={modelId}
-              onValueChange={(v) => setPickedModel(v as string)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                {provider.models.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.label ?? m.id}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </Field>
-
-          <Field label="审批模式">
-            <Select
-              items={(Object.keys(APPROVAL_LABELS) as ApprovalMode[]).map((mode) => ({
-                value: mode,
-                label: APPROVAL_LABELS[mode],
-              }))}
-              value={approvalMode}
-              onValueChange={(v) => setApprovalMode(v as ApprovalMode)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                {(Object.keys(APPROVAL_LABELS) as ApprovalMode[]).map((mode) => (
-                  <SelectItem key={mode} value={mode}>
-                    {APPROVAL_LABELS[mode]}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </Field>
-
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground text-xs">推理</span>
-            <Switch checked={reasoningEnabled} onCheckedChange={setReasoningEnabled} />
+          <div className="relative px-5 pt-7">
+            <h1 className="text-[30px] leading-[37px] font-bold tracking-[-0.02em]">
+              早上好
+              <br />
+              <span className="phone-greet">今天做点什么</span>
+            </h1>
+            <p className="mt-3 text-[14px] leading-5 text-dim">
+              选一个项目，然后说清楚你要的结果。
+            </p>
           </div>
 
-          {reasoningEnabled && (
-            <Field label="推理档位">
-              <Select
-                items={(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => ({
-                  value: l,
-                  label: LEVEL_LABELS[l],
-                }))}
-                value={thinkingLevel}
-                onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-                  {(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {LEVEL_LABELS[l]}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </Field>
-          )}
+          {/* 项目：横向胶囊，选中即实心墨黑（稿子项目行） */}
+          <div className="relative mt-4 flex gap-2 overflow-x-auto px-5 pb-1">
+            {projects.map((p) => {
+              const active = p.id === projectId;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPickedProject(p.id)}
+                  aria-pressed={active}
+                  className={
+                    active
+                      ? 'flex h-9 shrink-0 items-center rounded-full bg-pill px-4 text-[14px] leading-5 font-medium text-pill-ink'
+                      : 'flex h-9 shrink-0 items-center rounded-full bg-card px-4 text-[14px] leading-5 font-medium text-ink2'
+                  }
+                >
+                  {pairProjectListLabel(p)}
+                </button>
+              );
+            })}
+            {projects.length === 0 && (
+              <p className="py-2 text-[13px] leading-5 text-red">请先在桌面添加项目。</p>
+            )}
+          </div>
 
-          {projects.length === 0 && (
-            <p className="text-destructive text-xs">桌面端还没有项目，请先在桌面添加。</p>
-          )}
-          {projects.length > 0 && providers.length === 0 && (
-            <p className="text-destructive text-xs">桌面端没有可用的模型服务。</p>
-          )}
+          <div className="relative mt-4 px-4">
+            <div className="rounded-[24px] bg-card p-4 shadow-[0_18px_40px_-24px_rgb(0_0_0/0.35)]">
+              <p className="text-[15px] leading-[24px] text-dim">
+                建好之后直接在会话里说要它做什么；模型和审批随时可以在会话设置里改。
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Select
+                  items={providers.flatMap((p) =>
+                    p.models.map((m) => ({
+                      value: `${p.id}\n${m.id}`,
+                      label: `${p.name} · ${m.label ?? m.id}`,
+                    }))
+                  )}
+                  value={`${providerId}\n${modelId}`}
+                  onValueChange={(v) => {
+                    const [pid, mid] = String(v).split('\n');
+                    setPickedProvider(pid ?? null);
+                    setPickedModel(mid ?? null);
+                  }}
+                >
+                  <SelectTrigger className="h-9 rounded-full border-0 bg-card2 px-3 text-[13px] leading-4">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+                    {providers.flatMap((p) =>
+                      p.models.map((m) => (
+                        <SelectItem key={`${p.id}:${m.id}`} value={`${p.id}\n${m.id}`}>
+                          {p.name} · {m.label ?? m.id}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectPopup>
+                </Select>
+                <Select
+                  items={(Object.keys(APPROVAL_LABELS) as ApprovalMode[]).map((mode) => ({
+                    value: mode,
+                    label: APPROVAL_LABELS[mode],
+                  }))}
+                  value={approvalMode}
+                  onValueChange={(v) => setApprovalMode(v as ApprovalMode)}
+                >
+                  <SelectTrigger className="h-9 rounded-full border-0 bg-card2 px-3 text-[13px] leading-4">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+                    {(Object.keys(APPROVAL_LABELS) as ApprovalMode[]).map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {APPROVAL_LABELS[mode]}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+                <span className="flex h-9 items-center gap-2 rounded-full bg-card2 px-3">
+                  <span className="text-[13px] leading-4 text-dim">推理</span>
+                  <Switch checked={reasoningEnabled} onCheckedChange={setReasoningEnabled} />
+                </span>
+                {reasoningEnabled && (
+                  <Select
+                    items={(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => ({
+                      value: l,
+                      label: LEVEL_LABELS[l],
+                    }))}
+                    value={thinkingLevel}
+                    onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}
+                  >
+                    <SelectTrigger className="h-9 rounded-full border-0 bg-card2 px-3 text-[13px] leading-4">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+                      {(Object.keys(LEVEL_LABELS) as ThinkingLevel[]).map((l) => (
+                        <SelectItem key={l} value={l}>
+                          {LEVEL_LABELS[l]}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                )}
+              </div>
+              {providers.length === 0 && (
+                <p className="mt-2 text-[12px] leading-4 text-red">桌面端没有可用的模型服务。</p>
+              )}
+            </div>
+          </div>
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={onClose}>
+          <div className="relative mt-5 flex items-center gap-2.5 px-5 pb-8">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-12 flex-1 rounded-full bg-card2 text-[15px] font-medium text-ink2"
+            >
               取消
-            </Button>
-            <Button
+            </button>
+            <button
+              type="button"
               disabled={!canCreate}
               onClick={() =>
                 onCreate({
@@ -239,25 +273,16 @@ export function NewSessionSheet({
                   providerId,
                   modelId,
                   approvalMode,
-                  // 关着就不传：pairHost 对 falsy 不透传，保持命令最小
                   ...(reasoningEnabled ? { reasoningEnabled, thinkingLevel } : {}),
                 })
               }
+              className="h-12 flex-[1.4] rounded-full bg-pill text-[15px] font-medium text-pill-ink disabled:opacity-40"
             >
-              创建
-            </Button>
+              开工
+            </button>
           </div>
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      {children}
-    </label>
   );
 }

@@ -37,6 +37,11 @@ export interface ChatHost {
    * 之后的重试必须真的重新取图，而不是再拿回同一份坏/旧像素。
    */
   invalidateLocalImage?: (path: string) => void;
+  /**
+   * 远程图片的本地资源代次（会话 id + 执行目录等已有信号）。变了就说明同一相对路径
+   * 指向的文件已经换成另一个工作树/会话资源，必须重新加载，不能沿用已挂载的旧像素。
+   */
+  localImageScope?: string;
   /** 一轮最终回复正文下方的附加内容（Bot 私聊的产物卡片）；参数为该消息绝对下标 */
   turnFooter?: (messageIndex: number) => ReactNode;
   /**

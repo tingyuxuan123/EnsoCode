@@ -21,8 +21,9 @@ interface ZoomableImageProps {
   className?: string;
   /** 点击区域；需要把图片限制在父级宽度内时传 `block w-full` */
   frameClassName?: string;
-  onError?: () => void;
-  onLoad?: () => void;
+  /** 解码失败：需要判断「解不出像素」时读 event.currentTarget.naturalWidth */
+  onError?: (event: { currentTarget: HTMLImageElement }) => void;
+  onLoad?: (event: { currentTarget: HTMLImageElement }) => void;
 }
 
 /** 消息里的图片：点击全屏预览，点遮罩或 Esc 关闭 */

@@ -175,6 +175,7 @@ export const zhTranslations: Record<string, string> = {
   Saved: '已保存',
   'Image file unavailable': '图片文件已移动或不可用',
   'Loading image…': '正在读取图片…',
+  'Refresh image': '刷新图片',
   'Image is too large to preview on the phone': '图片太大，手机上预览不了',
   'This image format cannot be previewed here': '这个格式预览不了',
   'Image was changed or moved': '图片已修改或移走',
