@@ -104,7 +104,20 @@ vi.mock('@/components/chat/Sidebar', () => ({
     return <div data-slot="project-sidebar" />;
   },
 }));
-vi.mock('@/components/chat/ChatView', () => ({ ChatView: shell.mark('chat-view') }));
+/**
+ * Code 视图只要真实页签条：这样“图片工作台不渲染通用页签条、切回 Code 恢复”
+ * 才是可观察事实，而不是只断言一个占位槽。CoworkerTabs 在空 store 下只画主会话页签。
+ */
+vi.mock('@/components/chat/ChatView', async () => {
+  const { CoworkerTabs } = await import('@/components/chat/CoworkerTabs');
+  return {
+    ChatView: () => (
+      <div data-slot="chat-view">
+        <CoworkerTabs parentId="parent" displayedId="parent" />
+      </div>
+    ),
+  };
+});
 vi.mock('@/components/chat/ChatFindBar', () => ({ requestOpenChatFind: vi.fn() }));
 vi.mock('@/components/sidepanel/SidePanel', () => ({
   SidePanel: shell.mark('side-panel'),
@@ -342,6 +355,42 @@ describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
     await click(segment('code'));
     expect(shell.sidebar).toMatchObject({ width: 264, collapsed: false });
     expect(useSidebarStore.getState()).toMatchObject({ collapsed: false, auto: false });
+  });
+
+  it('图片工作台的生图历史入口留在标题栏，不靠关掉工作台才能打开', async () => {
+    await setBotModeEnabled(true);
+    await mountApp();
+    act(() => useImageStudioStore.getState().setOpen(true));
+    expect(present('image-studio')).not.toBeNull();
+    const actions = titleBar()?.querySelector('[data-slot="title-bar-actions"]');
+    const history = actions?.querySelector<HTMLButtonElement>('button[aria-label="Image history"]');
+    expect(history).not.toBeNull();
+    await click(history ?? null);
+    expect(useImageStudioStore.getState().historyOpen).toBe(true);
+    expect(modeSwitch()).not.toBeNull();
+  });
+
+  it('图片工作台里没有 Code 的会话页签条，切回 Code 恢复、切 Bot 正常进入', async () => {
+    await setBotModeEnabled(true);
+    await mountApp();
+    expect(present('conversation-tabs')).not.toBeNull();
+
+    act(() => useImageStudioStore.getState().setOpen(true));
+    expect(present('image-studio')).not.toBeNull();
+    expect(present('conversation-tabs')).toBeNull();
+
+    await click(segment('code'));
+    expect(present('image-studio')).toBeNull();
+    expect(present('chat-view')).not.toBeNull();
+    expect(present('conversation-tabs')).not.toBeNull();
+
+    act(() => useImageStudioStore.getState().setOpen(true));
+    expect(present('conversation-tabs')).toBeNull();
+    await click(segment('bot'));
+    expect(mode()).toBe('bot');
+    expect(present('bot-view')).not.toBeNull();
+    expect(present('image-studio')).toBeNull();
+    expect(present('conversation-tabs')).toBeNull();
   });
 
   it('Bot 实验开关关闭时没有 Bot 分段，Code 入口仍能从画廊回到对话', async () => {

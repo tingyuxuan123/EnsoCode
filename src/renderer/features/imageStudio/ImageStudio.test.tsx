@@ -83,7 +83,6 @@ beforeEach(async () => {
       <ImageStudio
         collapsed={false}
         sidebarWidth={296}
-        onClose={vi.fn()}
         onResize={onResize}
         onHistoryResize={onHistoryResize}
         onHistoryResizingChange={onHistoryResizingChange}
@@ -277,7 +276,6 @@ describe('图片工作台交互', () => {
         <ImageStudio
           collapsed
           sidebarWidth={346}
-          onClose={vi.fn()}
           onResize={onResize}
           onHistoryResize={onHistoryResize}
           onHistoryResizingChange={onHistoryResizingChange}
@@ -389,5 +387,108 @@ describe('图片工作台交互', () => {
       })
     );
     expect(api.generate).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * 图片工作台是独立路由（App 按 studioActive 整块替换工作区），不该在绘图区上方再复制一份
+ * Code 的通用工作区行：那行「主会话 / 图片工作台 / 新建 + 就绪胶囊」会白占 44px 高度和一条边框。
+ * 这里只断言可观察结构：通用行元素不存在、绘图区第一块就是空态或时间线、生图自己的侧栏仍在。
+ */
+describe('图片工作台不再复制 Code 的通用工作区行', () => {
+  const existing = {
+    id: 'existing',
+    title: '既有图片会话',
+    createdAt: 1,
+    updatedAt: 2,
+    imageCount: 1,
+    references: [],
+    turns: [
+      {
+        id: 'turn',
+        prompt: '既有的猫',
+        createdAt: 1,
+        options: { ...DEFAULT_IMAGE_STUDIO_OPTIONS, model: 'actual-image-model' },
+        status: 'completed' as const,
+        images: [{ id: 'image', path: '.xiaoman/images/image.png', mimeType: 'image/png' }],
+      },
+    ],
+  };
+
+  it('空态下没有 主会话 / 图片工作台 / 就绪 整行，绘图区直接从顶栏下方开始', () => {
+    expect(container.textContent).not.toContain('Main session');
+    expect(container.querySelector('button[aria-label="Close image studio"]')).toBeNull();
+    // provider.view 已配置：旧实现这里一定是 Ready 胶囊，现在不该再出现。
+    expect(container.textContent).not.toContain('Ready');
+    const main = container.querySelector('main')!;
+    expect(main.firstElementChild?.textContent).toContain('What would you like to draw today?');
+  });
+
+  it('已有图片会话时第一块就是时间线，生图自己的侧栏头部 / 搜索 / 新建仍在', async () => {
+    await act(async () =>
+      useImageStudioStore.setState({
+        activeId: existing.id,
+        sessions: { [existing.id]: existing },
+        summaries: [
+          {
+            id: existing.id,
+            title: existing.title,
+            createdAt: existing.createdAt,
+            updatedAt: existing.updatedAt,
+            imageCount: existing.imageCount,
+          },
+        ],
+      })
+    );
+    const main = container.querySelector('main')!;
+    expect(main.firstElementChild?.getAttribute('data-slot')).toBe('studio-timeline');
+    expect(container.textContent).not.toContain('Main session');
+    expect(container.textContent).not.toContain('Ready');
+    const sidebar = container.querySelector('[data-slot=image-studio-sidebar]')!;
+    expect(sidebar.textContent).toContain('Conversations');
+    expect(sidebar.textContent).toContain('Recent');
+    expect(sidebar.querySelector('button[aria-label="Search conversations"]')).not.toBeNull();
+    expect(
+      [...sidebar.querySelectorAll('button')].some((item) =>
+        item.textContent?.includes('New conversation')
+      )
+    ).toBe(true);
+  });
+
+  it('既有会话仍能从左侧列表选中，新建会话仍走 Main 创建', async () => {
+    api.read.mockResolvedValue({ ok: true, value: existing });
+    await act(async () =>
+      useImageStudioStore.setState({
+        summaries: [
+          {
+            id: existing.id,
+            title: existing.title,
+            createdAt: existing.createdAt,
+            updatedAt: existing.updatedAt,
+            imageCount: existing.imageCount,
+          },
+        ],
+      })
+    );
+    const row = [...container.querySelectorAll<HTMLButtonElement>('button')].find((item) =>
+      item.textContent?.includes('既有图片会话')
+    )!;
+    await act(async () => row.click());
+    expect(api.read).toHaveBeenCalledWith('existing');
+    expect(container.querySelector('[data-slot=studio-timeline]')?.textContent).toContain(
+      '既有的猫'
+    );
+    expect(container.querySelector('button[aria-label="Close image studio"]')).toBeNull();
+
+    api.create.mockResolvedValue({
+      ok: true,
+      value: { ...existing, id: 'fresh', title: '', turns: [], imageCount: 0 },
+    });
+    const create = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (item) => item.textContent?.includes('New conversation') && item !== row
+    )!;
+    await act(async () => create.click());
+    expect(api.create).toHaveBeenCalledOnce();
+    expect(useImageStudioStore.getState().activeId).toBe('fresh');
   });
 });

@@ -55,7 +55,6 @@ const activeTab =
 export function ImageStudio({
   collapsed,
   sidebarWidth,
-  onClose,
   onResize,
   onHistoryResize,
   onHistoryResizingChange,
@@ -63,7 +62,6 @@ export function ImageStudio({
 }: {
   collapsed: boolean;
   sidebarWidth: number;
-  onClose(): void;
   onResize(deltaX: number): void;
   onHistoryResize(deltaX: number): void;
   onHistoryResizingChange(resizing: boolean): void;
@@ -321,44 +319,6 @@ export function ImageStudio({
         data-slot="workbench-main"
       >
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex h-[44px] shrink-0 items-center border-b border-line px-4">
-            <button
-              type="button"
-              className={cn(tab, 'text-muted-foreground hover:text-foreground')}
-              onClick={onClose}
-            >
-              {t('Main session')}
-            </button>
-            <span className={cn(tab, activeTab, 'font-medium')}>
-              <Image className="size-3.5" />
-              {t('Image studio')}
-              <button
-                type="button"
-                aria-label={t('Close image studio')}
-                onClick={onClose}
-                className="ml-1 rounded hover:bg-accent"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-            <button
-              type="button"
-              className={iconButton}
-              aria-label={t('New conversation')}
-              onClick={() => void createSession()}
-            >
-              <CirclePlus className="size-3.5" />
-            </button>
-            <span className="ml-auto hidden items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-[calc(11rem/14)] text-muted-foreground @min-[480px]:flex sm:flex">
-              <span
-                className={cn(
-                  'size-1.5 rounded-full',
-                  running ? 'bg-primary' : ready ? 'bg-success' : 'bg-muted-foreground'
-                )}
-              />
-              {t(running ? 'Generating image…' : ready ? 'Ready' : 'Not configured')}
-            </span>
-          </div>
           {!turns.length ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 text-center">
               <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">

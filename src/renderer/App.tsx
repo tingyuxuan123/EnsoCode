@@ -720,7 +720,6 @@ export default function App() {
             onHistoryResize={handleSideResize}
             onHistoryResizingChange={handleSideResizing}
             workspaceRef={workspaceRef}
-            onClose={closeWorkspacePage}
           />
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={dndCollision}>
