@@ -1,69 +1,78 @@
-version: 0.2.81
+version: 0.2.82
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.81/Collabra-0.2.81-arm64-mac.zip
-    sha512: DLZ7ceHPfn3CmKqRp8lWxiBvVNOGBfyK7gizWKkMbzoLr1MNDFGLspErJ4h0a/ZSg8S6WSvi8qJIN18DUMpMnQ==
-    size: 183945678
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.81/Collabra-0.2.81-arm64.dmg
-    sha512: lxxQOE5iv5JznKDI44D7c4sEglcgVwma3Wcm5zJ9K3wISz7adqZuNINN/Xyd+HbieteQYbPKdhY+Ffn5EUYZ9A==
-    size: 179056631
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.81/Collabra-0.2.81-arm64-mac.zip
-sha512: DLZ7ceHPfn3CmKqRp8lWxiBvVNOGBfyK7gizWKkMbzoLr1MNDFGLspErJ4h0a/ZSg8S6WSvi8qJIN18DUMpMnQ==
-releaseDate: 2026-11-14T06:44:45.216Z
-releaseName: Collabra 0.2.81 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.82/Collabra-0.2.82-arm64-mac.zip
+    sha512: jN3AwTEMNeb7ZJ/24GhFzQbHgtv2waApr1RGQgzc+oqiofb6xIlm0K+wSE7sBiFhE5qE4JwIXvSXcNCqh/aepg==
+    size: 183962972
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.82/Collabra-0.2.82-arm64.dmg
+    sha512: JgMhBXD2CAhVfQtzwrWy4i+kKuy3b/qE88kI9zqMq91JkCkkefXjlBaI1GoWtjPICg6/zA9enEApBzBHOdZAvA==
+    size: 179077513
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.82/Collabra-0.2.82-arm64-mac.zip
+sha512: jN3AwTEMNeb7ZJ/24GhFzQbHgtv2waApr1RGQgzc+oqiofb6xIlm0K+wSE7sBiFhE5qE4JwIXvSXcNCqh/aepg==
+releaseDate: 2026-11-15T05:01:03.427Z
+releaseName: Collabra 0.2.82 — 个人测试
 releaseNotes: >
-  # Collabra 0.2.81
+  # Collabra 0.2.82
 
 
-  ## Collabra 精选插件市场
+  ## 插件浏览器桥
 
 
-  - 接入独立签名的 Collabra 插件市场，支持主源、镜像及断网目录回退。
+  - 插件可在本机根会话中操作内嵌浏览器：读取页面结构、定位 WPS 表格区域、复制当前选区、插入文本。
 
-  - 按插件 API、应用版本和平台选择最高兼容版本，并展示插件实测界面信息。
+  - 浏览器只对插件声明的域名开放，tab 归属、目标 URL 与动作前后状态都会复查。
 
-  - 市场索引和安装包继续执行签名、哈希及防回滚校验；旧来源安装保持原有归属，不被同名新市场插件接管或自动覆盖。
+  - 只允许本机根会话的工具与界面调用；子代理、远端窗口、事件、定时与插件互调一律拒绝。
 
-
-  ## 扩展管理与安装
-
-
-  - 简化扩展管理与分类筛选，恢复插件图标展示，统一市场与已安装插件的详情入口。
-
-  - 原生插件首次安装须经明确确认；预览、安装及权限状态保持一致，不因尚未安装而阻止正常首次安装。
-
-  - 修复插件文档加载，并明确展示加载失败、缺少文档等结束状态。
-
-  - 改善插件主题在主窗口、设计窗口和任务看板间的应用，补充会话活动状态与插件访问边界。
+  - 写操作需通过插件写权限校验，取消的调用不会落地任何修改。
 
 
-  ## 多代理协作
+  ## 手机端按设计稿重做
 
 
-  - 多代理创建默认使用可保留上下文的 coworker 模式，便于继续交办后续任务；显式指定 task 时仍使用一次性任务模式。
+  - 配对后的手机页面换成黑白视觉基座：反色胶囊、纸面圆角卡片、玻璃审批面板，彩色只留给运行、等待、出错与完成状态。
+
+  - 会话列表改成品牌头加按项目分组；聊天屏、Bot 列表、群聊、文件列表、底部面板、新建会话与会话设置统一按稿整形。
+
+  - 会话菜单收口为一个 ⋯ 入口；配对失效改成说明性状态页，明确对话不会丢失。
+
+  - 清掉手机端低于 11px 的字号，只读状态下保留灰掉的输入条。
 
 
-  ## Windows 同步更新
+  ## 手机能看到会话里的图片
 
 
-  - 同步此前个人版的紧凑工作台布局、会话页签滚动与输入框用量摘要。
+  - 新增 session-image 只读通道，手机端可看到会话中 read
+  命中的图片和生成的图片；路径按权威工作区根校验，拒绝绝对路径、目录外引用和非常规文件。
 
-  - 同步外观主题预览、设计画廊全屏工作区、图片工作台布局及分栏动画改进。
+  - 图片解码失败可重试恢复，同路径换图会真正重新取图；缓存按会话与工作区失效，并有上限。
 
-  - 同步 Claude Code 插件与原生扩展入口分工，以及 Bot 模型选择、浏览器兼容性和界面响应修复。
+  - 会话图片读取改为有界读取，文件超限立即拒绝，不再边读边判。
+
+
+  ## Android 端
+
+
+  - 输入草稿自动保存与恢复：切换页面、退到后台或重启后回来内容还在，过期草稿自动清理。
+
+  - 新增设置页，成员页与导航随之调整。
+
+
+  ## 团队自主执行
+
+
+  - 团队成员与 Bot 的默认审批模式改为完全授权，新团队对话框补上自主执行说明，并按成员审批模式调整按钮文案。
 
 
   ## 发布范围与验收边界
 
 
-  - Windows x64 版通过 CI 构建、包内原生依赖和设计引擎冒烟、远端资产哈希验收后公开并推进 Latest。
+  - Mac arm64 版使用原个人证书，发布到个人 prerelease 与独立个人更新清单，个人通道不修改正式 Latest。
 
-  - Mac arm64 版使用原个人证书，发布到个人 prerelease 与独立个人更新清单，不通过个人通道修改正式 Latest。
-
-  - 本次发布不包含工作区中未提交的本地测试。安装、退出和重启由用户操作；发布成功不代表已完成真机安装、旧数据保留或自动升级验收。
+  - 本次发布不包含工作区中未提交的本地测试改动。安装、退出和重启由用户操作；发布成功不代表已完成真机安装、旧数据保留或自动升级验收。
 
 
   ---
 
 
-  个人测试通道 0.2.81：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.82：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
