@@ -25,11 +25,12 @@ describe('BOT_TEMPLATES', () => {
     }
   });
 
-  it('项目经理只读，运维命令一律需审批', () => {
+  it('新成员默认自主执行，项目经理仍然只读', () => {
     const pm = templateDraft(BOT_TEMPLATES[0], 'zh');
-    const ops = templateDraft(BOT_TEMPLATES[2], 'zh');
     expect(pm.tools).toBe('readonly');
-    expect(ops.approvalMode).toBe('supervised');
+    for (const locale of ['zh', 'en'] as const)
+      for (const template of BOT_TEMPLATES)
+        expect(templateDraft(template, locale).approvalMode, template.id).toBe('full');
   });
 
   it('本地化后是合法的成员模板数据', () => {

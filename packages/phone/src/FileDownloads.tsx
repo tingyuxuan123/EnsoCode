@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sheet';
 import type { FileTransferPort } from './fileTransferPort';
 import type { PreviewPort } from './previewPort';
+import { usePhoneBack } from './usePhoneBack';
 import { WebPreviewContext } from './WebPreview';
 
 export const FileDownloadsContext = createContext<{
@@ -62,9 +63,12 @@ const ERROR: Record<string, string> = {
 export function FileDownloads({
   target,
   children,
+  triggerClassName,
 }: {
   target: PairFileTarget;
   children?: ReactNode;
+  /** 覆盖默认触发按钮样式（抽屉底部的 56 玻璃圆钮），不改弹层行为 */
+  triggerClassName?: string;
 }) {
   const context = useContext(FileDownloadsContext);
   const [open, setOpen] = useState(false);
@@ -75,6 +79,14 @@ export function FileDownloads({
   const [progress, setProgress] = useState<{ id: string; bytes: number } | null>(null);
   const [ready, setReady] = useState<{ url: string; name: string } | null>(null);
   const request = useRef<AbortController | null>(null);
+  usePhoneBack(
+    Boolean(context?.available && open),
+    () => {
+      request.current?.abort();
+      setOpen(false);
+    },
+    60
+  );
   const port = context?.port;
   const online = context?.online ?? false;
   const key = JSON.stringify(target);
@@ -150,25 +162,28 @@ export function FileDownloads({
         aria-label="下载会话文件"
         title="下载会话文件"
         className={
-          children
-            ? 'flex max-w-60 items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-left text-xs'
-            : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
+          triggerClassName
+            ? triggerClassName
+            : children
+              ? 'flex max-w-60 items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-left text-xs'
+              : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
         }
       >
-        {children ?? <FolderDown className="h-4.5 w-4.5" />}
+        {children ?? <FolderDown className={triggerClassName ? 'size-6' : 'h-4.5 w-4.5'} />}
       </button>
       <Sheet open={open} onOpenChange={changeOpen}>
         <SheetContent side="bottom" className="phone-sheet pb-safe">
-          <SheetHeader className="px-4 pt-7 pb-4">
+          <SheetHeader className="px-5 pt-7 pb-4">
             <SheetTitle className="font-semibold text-[15px]">下载会话文件</SheetTitle>
             <SheetDescription>
               取回助手生成、修改或在回复中提到的工作区文件。通过加密连接传输，单文件最多 50 MB。
             </SheetDescription>
           </SheetHeader>
-          <div className="max-h-[60vh] space-y-3 overflow-y-auto px-4 pb-4">
+          <div className="max-h-[60vh] overflow-y-auto px-5 pb-4">
             <Button
               variant="outline"
               size="sm"
+              className="mb-3"
               disabled={loading || Boolean(progress) || !online}
               onClick={() => setRevision((n) => n + 1)}
             >
@@ -176,29 +191,35 @@ export function FileDownloads({
               刷新文件列表
             </Button>
             {loading && (
-              <p className="flex items-center gap-2 text-muted-foreground text-sm">
+              <p className="flex items-center gap-2 pt-3 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 正在读取文件列表…
               </p>
             )}
             {error && (
-              <p role="alert" className="text-[13px] leading-5 text-red">
+              <p role="alert" className="pt-3 text-[13px] leading-5 text-red">
                 {ERROR[error] ?? '文件读取失败，请刷新后重试。'}
               </p>
             )}
             {!loading && !error && files.length === 0 && (
-              <div className="rounded-[16px] bg-card px-4 py-6 text-center text-[13px] leading-5 text-dim">
+              <div className="mt-3 rounded-[16px] bg-card px-4 py-6 text-center text-[13px] leading-5 text-dim">
                 还没有可下载的文件。请让助手把结果保存到项目目录，并在回复中写出文件名，再刷新列表。
               </div>
             )}
-            {files.map((file) => (
+            {files.map((file, index) => (
               <div
                 key={file.id}
-                className="flex min-w-0 items-center gap-3 rounded-[16px] bg-card px-3.5 py-3"
+                className={
+                  index > 0
+                    ? 'flex min-w-0 items-center gap-3 border-line/70 border-t py-3'
+                    : 'flex min-w-0 items-center gap-3 py-3'
+                }
               >
-                <FileText className="size-[22px] shrink-0 text-ink2" aria-hidden />
+                <span className="flex w-7 shrink-0 items-center justify-center text-ink2">
+                  <FileText className="size-[22px]" aria-hidden />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] leading-5 font-medium">{file.name}</p>
+                  <p className="truncate text-[15px] leading-[21px] font-medium">{file.name}</p>
                   <p
                     className="truncate text-[12px] leading-4 text-dim tabular-nums"
                     title={file.rel}
@@ -231,6 +252,7 @@ export function FileDownloads({
               <Button
                 size="sm"
                 variant="ghost"
+                className="mt-3"
                 onClick={() => {
                   request.current?.abort();
                   setProgress(null);
@@ -243,7 +265,7 @@ export function FileDownloads({
               <a
                 href={ready.url}
                 download={ready.name}
-                className="flex items-center justify-center gap-2 rounded-full bg-pill px-4 py-3 text-[15px] leading-5 font-medium text-pill-ink"
+                className="mt-3 flex items-center justify-center gap-2 rounded-full bg-pill px-4 py-3 text-[15px] leading-5 font-medium text-pill-ink"
               >
                 <Download className="h-4 w-4" />
                 保存 {ready.name}

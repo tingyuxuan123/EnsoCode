@@ -64,4 +64,15 @@ class NavigationTest {
         compose.onNodeWithText("配对").performClick()
         compose.onNodeWithText("配对链接无效，请在电脑端重新生成二维码或复制配对链接。").assertIsDisplayed()
     }
+
+    @Test fun settingsEntryIsDiscoverableAndSystemBackReturnsToTheDrawer() {
+        compose.onNodeWithContentDescription("打开任务列表").performClick()
+        compose.onNodeWithContentDescription("设置").performClick()
+        compose.onNodeWithText("设备与通知").assertIsDisplayed()
+        compose.onNodeWithText("尚未配对").assertIsDisplayed()
+        compose.onNodeWithText("解绑这台手机").assertDoesNotExist()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithText("还没有任务").assertIsDisplayed()
+        compose.onNodeWithContentDescription("设置").assertIsDisplayed()
+    }
 }

@@ -31,7 +31,14 @@ import { AvatarButtons } from './AvatarCropDialog';
 import { coverSquare, saveBotAvatar } from './avatarImage';
 import { type AbilityForm, BotAbilityFields, DEFAULT_ABILITIES } from './BotAbilities';
 import { BotAvatar } from './BotAvatar';
-import { AVATAR_PALETTE, ColorPicker, EngineField, FieldLabel, nameError } from './BotFields';
+import {
+  AVATAR_PALETTE,
+  BotAutonomyNotice,
+  ColorPicker,
+  EngineField,
+  FieldLabel,
+  nameError,
+} from './BotFields';
 import { botErrorText } from './botText';
 import { PersonaSuggestButton } from './PersonaSuggest';
 
@@ -101,7 +108,7 @@ export function NewBotDialog({
       persona: input.persona ?? '',
       color: input.avatar?.color ?? AVATAR_PALETTE[0],
       engine: null,
-      approvalMode: input.approvalMode ?? 'auto-edits',
+      approvalMode: input.approvalMode ?? DEFAULT_ABILITIES.approvalMode,
       tools: input.tools ?? 'all',
     });
     setAvatar(null);
@@ -386,6 +393,7 @@ export function NewBotDialog({
               )}
             </div>
           </div>
+          {draft.approvalMode === 'full' && !abilitiesOpen && <BotAutonomyNotice />}
           {error && <p className="text-destructive text-sm">{error}</p>}
         </DialogPanel>
         <DialogFooter>
@@ -398,7 +406,11 @@ export function NewBotDialog({
             onClick={() => void create()}
           >
             {busy && <Loader2 className="animate-spin" />}
-            {t('Create and start chatting')}
+            {t(
+              draft.approvalMode === 'full'
+                ? 'Authorize and start chatting'
+                : 'Create and start chatting'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

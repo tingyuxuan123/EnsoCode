@@ -3,6 +3,7 @@ import { findVirtualModel } from '@shared/virtualModels';
 import { motion } from 'framer-motion';
 import {
   Columns3,
+  GitBranch,
   Globe,
   Info,
   LayoutTemplate,
@@ -36,6 +37,7 @@ import {
   resolveSidePanelWidth,
   SIDE_PANEL_HANDLE_WIDTH,
 } from '@/stores/sidePanel/width';
+import { ActiveDelegations } from './ActiveDelegations';
 import { ArtifactCards } from './ArtifactCards';
 import { botAvatarSrc } from './avatarImage';
 import { BotAvatar, GroupAvatar } from './BotAvatar';
@@ -46,12 +48,10 @@ import {
   type ChatRefOption,
   type SkillOption,
 } from './BotComposer';
-import { BotLiveStatus } from './BotLiveStatus';
 import { MemberBusyBar } from './BotPresence';
 import { BotProfilePanel } from './BotProfilePanel';
 import { BotWorkspaceDesigns } from './BotWorkspaceDesigns';
 import { chatErrorText, chatTitle } from './botText';
-import { DelegationCard } from './DelegationCard';
 import { TaskBoard } from './GroupBoard';
 import { GroupInfoPanel } from './GroupInfoPanel';
 import { GroupTimeline } from './GroupTimeline';
@@ -109,7 +109,9 @@ export function BotChatView({
   );
   const isGroup = group.kind === 'group';
   const panelTab =
-    (selectedTab === 'design' && !designEnabled) || (selectedTab === 'board' && !isGroup)
+    (selectedTab === 'design' && !designEnabled) ||
+    (selectedTab === 'board' && !isGroup) ||
+    (selectedTab === 'delegations' && chat.kind !== 'direct')
       ? 'info'
       : selectedTab;
   const boardOpen = panelOpen && panelTab === 'board';
@@ -193,6 +195,11 @@ export function BotChatView({
   const pending = useMemo(
     () => pendingItems(sessions, pendingOwners(chats, delegations), chat.id),
     [sessions, chats, delegations, chat.id]
+  );
+  // 私聊「委派」页签：只列这个聊天里仍在排队/执行的委派，结束后自然移出
+  const activeItems = useMemo(
+    () => activeDelegations(chatDelegations, chat.id),
+    [chatDelegations, chat.id]
   );
 
   /** 只读会话的发言人：委派子会话 → 目标成员；否则按会话归属或时间线条目 */
@@ -393,14 +400,7 @@ export function BotChatView({
         </header>
 
         {direct ? (
-          <>
-            <ActiveDelegations
-              items={activeDelegations(chatDelegations, chat.id)}
-              bots={byId}
-              onOpenConversation={openConversation}
-            />
-            <DirectTimeline chat={chat} bot={direct} focus={directFocus} onFocusDone={clearFocus} />
-          </>
+          <DirectTimeline chat={chat} bot={direct} focus={directFocus} onFocusDone={clearFocus} />
         ) : (
           <GroupTimeline
             chat={chat}
@@ -421,12 +421,6 @@ export function BotChatView({
 
         <div className="@container pt-1">
           <div className={cn(CHAT_COL, 'pb-3')}>
-            {direct && (summary.running || summary.queued) && (
-              <BotLiveStatus
-                conversationId={chat.sessions[direct.id]?.conversationId}
-                className="mb-2 rounded-md border bg-muted/30 px-3 py-2"
-              />
-            )}
             <PendingBars items={pending} bots={byId} showNames={chat.kind === 'group'} />
             {chat.kind === 'group' && (
               <MemberBusyBar
@@ -484,8 +478,13 @@ export function BotChatView({
           style={{ width }}
         >
           <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
-            {(['info', 'board', 'browser', 'design'] as const)
-              .filter((tab) => (tab !== 'design' || designEnabled) && (tab !== 'board' || isGroup))
+            {(['info', 'board', 'browser', 'design', 'delegations'] as const)
+              .filter(
+                (tab) =>
+                  (tab !== 'design' || designEnabled) &&
+                  (tab !== 'board' || isGroup) &&
+                  (tab !== 'delegations' || chat.kind === 'direct')
+              )
               .map((tab) => (
                 <button
                   key={tab}
@@ -505,6 +504,8 @@ export function BotChatView({
                     <Columns3 className="h-3.5 w-3.5" />
                   ) : tab === 'design' ? (
                     <LayoutTemplate className="h-3.5 w-3.5" />
+                  ) : tab === 'delegations' ? (
+                    <GitBranch className="h-3.5 w-3.5" />
                   ) : (
                     <Globe className="h-3.5 w-3.5" />
                   )}
@@ -514,9 +515,14 @@ export function BotChatView({
                       ? t('Task board')
                       : tab === 'browser'
                         ? t('Browser')
-                        : designT('workspace.tab')}
+                        : tab === 'delegations'
+                          ? t('Delegations')
+                          : designT('workspace.tab')}
                   {tab === 'browser' && browserTabCount > 0 && (
                     <span className="text-muted-foreground tabular-nums">{browserTabCount}</span>
+                  )}
+                  {tab === 'delegations' && activeItems.length > 0 && (
+                    <span className="text-muted-foreground tabular-nums">{activeItems.length}</span>
                   )}
                 </button>
               ))}
@@ -534,6 +540,12 @@ export function BotChatView({
             <BotBrowserPanel chatId={group.id} visible={panelOpen && !workspaceHidden} />
           ) : panelTab === 'design' ? (
             panelOpen && !workspaceHidden && <BotWorkspaceDesigns chat={chat} target={design} />
+          ) : panelTab === 'delegations' ? (
+            <ActiveDelegations
+              items={activeItems}
+              bots={byId}
+              onOpenConversation={openConversation}
+            />
           ) : direct ? (
             <BotProfilePanel botId={direct.id} chat={chat} onOpenHistory={openConversation} />
           ) : (
@@ -578,39 +590,6 @@ export function BotChatView({
         }
         onClose={() => setLive(null)}
       />
-    </div>
-  );
-}
-
-/** 私聊顶部：该成员发起、仍在进行的委派 */
-function ActiveDelegations({
-  items,
-  bots,
-  onOpenConversation,
-}: {
-  items: ReturnType<typeof activeDelegations>;
-  bots: Map<string, BotProfile>;
-  onOpenConversation: (conversationId: string, title: string) => void;
-}) {
-  const { t } = useI18n();
-  if (items.length === 0) return null;
-  return (
-    <div className="shrink-0 border-b bg-muted/30">
-      <div className={cn(CHAT_COL, 'py-2')}>
-        <div className="mb-1.5 text-muted-foreground text-[calc(11rem/14)]">
-          {t('Delegations in progress · {{n}}', { n: items.length })}
-        </div>
-        <div className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
-          {items.map((record) => (
-            <DelegationCard
-              key={record.id}
-              record={record}
-              bots={bots}
-              onOpenConversation={onOpenConversation}
-            />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

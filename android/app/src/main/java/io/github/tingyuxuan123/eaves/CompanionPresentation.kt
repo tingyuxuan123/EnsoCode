@@ -9,6 +9,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Device and notification settings projection: only what the desktop actually reported. */
+internal data class SettingsUiState(
+    val paired: Boolean = false,
+    val computer: String? = null,
+    val device: String? = null,
+    val connection: String = "",
+    val online: Boolean = false,
+    val readOnly: Boolean = true,
+    val watchActive: Boolean = false,
+    val watchStarting: Boolean = false,
+    val watchFailed: Boolean = false,
+    val notificationsAllowed: Boolean = false,
+    val resetRequired: Boolean = false,
+)
+
 internal fun CompanionState.taskUi(nowMillis: Long): NewTaskUiState {
     val projectNames = link.projects.orEmpty().associate { it.id to it.name }
     return NewTaskUiState(
@@ -48,6 +63,20 @@ internal fun CompanionState.pairUi(): PairUiState = PairUiState(
         CompanionProblem.Revoked -> "电脑已撤销授权，请重新配对。"
         null -> null
     },
+)
+
+internal fun CompanionState.settingsUi(notificationsAllowed: Boolean): SettingsUiState = SettingsUiState(
+    paired = paired,
+    computer = link.hostName,
+    device = deviceName,
+    connection = if (paired) phaseLabel(link.phase) else "",
+    online = paired && link.phase == LinkPhase.Online,
+    readOnly = link.readOnly,
+    watchActive = watch.phase == WatchPhase.Active,
+    watchStarting = watch.phase == WatchPhase.Starting,
+    watchFailed = watch.phase == WatchPhase.Failed,
+    notificationsAllowed = notificationsAllowed,
+    resetRequired = problem == CompanionProblem.Storage && (!paired || link.phase == LinkPhase.Revoked),
 )
 
 private fun phaseLabel(phase: LinkPhase): String = when (phase) {

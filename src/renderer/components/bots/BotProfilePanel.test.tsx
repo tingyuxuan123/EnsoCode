@@ -127,6 +127,10 @@ function button(label: string): HTMLButtonElement {
   return found!;
 }
 
+function actions(): Element | null {
+  return container.querySelector('[data-slot="bot-profile-actions"]');
+}
+
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -155,9 +159,8 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it('keeps the save actions discoverable but disabled when nothing has changed', () => {
-  expect(button('Save').disabled).toBe(true);
-  expect(button('Discard').disabled).toBe(true);
+it('does not render the save actions when nothing has changed', () => {
+  expect(actions()).toBeNull();
   expect(h.update).not.toHaveBeenCalled();
 });
 
@@ -166,6 +169,7 @@ it('keeps the selected provider/model when thinking is clamped in the same inter
   expect(container.querySelector('[data-engine]')?.textContent).toBe(
     'target-provider/limited-model/low'
   );
+  expect(actions()).not.toBeNull();
   expect(button('Save').disabled).toBe(false);
   expect(h.update).not.toHaveBeenCalled();
   await act(async () => button('Save').click());
@@ -176,17 +180,38 @@ it('keeps the selected provider/model when thinking is clamped in the same inter
       engine: { providerId: 'target-provider', modelId: 'limited-model', thinkingLevel: 'low' },
     }),
   });
-  expect(button('Save').disabled).toBe(true);
+  expect(actions()).toBeNull();
 });
 
 it('discards the model and depth together without persisting the draft', async () => {
   await act(async () => button('Select limited model').click());
+  expect(actions()).not.toBeNull();
   await act(async () => button('Discard').click());
   expect(container.querySelector('[data-engine]')?.textContent).toBe(
     'original-provider/original-model/high'
   );
-  expect(button('Save').disabled).toBe(true);
+  expect(actions()).toBeNull();
   expect(h.update).not.toHaveBeenCalled();
+});
+
+it('keeps the save actions visible while the save is in flight', async () => {
+  let resolveSave: (value: unknown) => void = () => {};
+  h.update.mockReturnValue(
+    new Promise((resolve) => {
+      resolveSave = resolve;
+    })
+  );
+  await act(async () => button('Select limited model').click());
+  await act(async () => {
+    button('Save').click();
+  });
+  expect(actions()).not.toBeNull();
+  expect(button('Save').disabled).toBe(true);
+  await act(async () => {
+    resolveSave({ ok: true, bot: { ...h.bots[0], version: 2 } });
+    await Promise.resolve();
+  });
+  expect(actions()).toBeNull();
 });
 
 it('preserves the target identity when reasoning is disabled during selection', async () => {
@@ -203,6 +228,6 @@ it('preserves the target identity when reasoning is disabled during selection', 
 
 it('does not offer a write for reselecting the same model', async () => {
   await act(async () => button('Select current model').click());
-  expect(button('Save').disabled).toBe(true);
+  expect(actions()).toBeNull();
   expect(h.update).not.toHaveBeenCalled();
 });

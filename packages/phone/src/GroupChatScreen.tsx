@@ -17,8 +17,8 @@ import {
   CircleCheck,
   CirclePlay,
   EllipsisVertical,
-  ImagePlus,
   Loader2,
+  Plus,
   Square,
   X,
 } from 'lucide-react';
@@ -557,7 +557,7 @@ export function GroupChatScreen(props: Props) {
           stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
           if (el.scrollTop < 60) loadOlder();
         }}
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3"
+        className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pt-1 pb-3"
       >
         {timeline === undefined ? (
           <p className="flex items-center justify-center gap-1.5 py-8 text-muted-foreground text-sm">
@@ -626,7 +626,7 @@ export function GroupChatScreen(props: Props) {
         )}
       </div>
 
-      <div className="phone-dock shrink-0 space-y-2 border-t px-3 pt-2 pb-safe">
+      <div className="phone-dock shrink-0 space-y-2 px-3 pt-2 pb-safe">
         {props.outbox}
         {props.notice && (
           <p className="rounded-md bg-destructive/10 px-2 py-1 text-destructive text-xs">
@@ -644,6 +644,7 @@ export function GroupChatScreen(props: Props) {
               <div key={sessionId} className="space-y-1">
                 <p className="text-muted-foreground text-xs">{bots.get(botId)?.name ?? '成员'}</p>
                 <ApprovalBar
+                  appearance="phone"
                   approvals={view.approvals}
                   clockOffset={props.clockOffset}
                   onRespond={(requestId, decision) =>
@@ -651,6 +652,7 @@ export function GroupChatScreen(props: Props) {
                   }
                 />
                 <AskBar
+                  appearance="phone"
                   asks={view.asks}
                   clockOffset={props.clockOffset}
                   onAnswer={(requestId, answer) => props.onAsk(sessionId, requestId, answer)}
@@ -659,7 +661,19 @@ export function GroupChatScreen(props: Props) {
               </div>
             ) : null
           )}
-        <div className={cn('relative', props.deviceReadOnly && 'hidden')}>
+        {!props.deviceReadOnly && (
+          <p className="pb-0.5 text-center text-[11px] leading-4 text-faint">
+            不 @ 时，会挑最合适的成员回复
+          </p>
+        )}
+        <div
+          className={cn(
+            'relative',
+            (props.deviceReadOnly ||
+              props.pending.some(({ view }) => view.approvals.length || view.asks.length)) &&
+              'hidden'
+          )}
+        >
           {options.length > 0 && (
             <div className="absolute right-0 bottom-full left-0 mb-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
               {options.map((option) => {
@@ -709,54 +723,52 @@ export function GroupChatScreen(props: Props) {
               ))}
             </div>
           )}
-          <div
-            ref={composerRef}
-            className="flex items-end gap-2 rounded-md border bg-background px-2 py-1.5 focus-within:border-brand/60"
-          >
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={(event) => {
-                pickFiles(event.target.files);
-                event.target.value = '';
-              }}
-            />
-            <button
-              type="button"
-              aria-label="添加图片"
-              disabled={picked.length >= MAX_IMAGES}
-              onClick={() => fileRef.current?.click()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground disabled:opacity-40"
-            >
-              <ImagePlus className="h-4.5 w-4.5" />
-            </button>
-            {props.voice && (
-              // 录音中按钮展开成电平条＋停止＋取消，宽度自适应，不固定 8 宽以免压住输入框
-              <span className="flex h-8 shrink-0 items-center justify-center [&>div>button]:h-8 [&>div>button]:min-w-8 [&>div>button]:rounded-full">
-                <VoiceInputButton
-                  startSession={props.voice}
-                  disabled={sending}
-                  holdScope={composerRef}
-                  onText={insertVoiceText}
-                />
-              </span>
-            )}
-            <textarea
-              ref={inputRef}
-              rows={1}
-              value={text}
-              placeholder="@ 成员，或直接说…"
-              onChange={(event) => {
-                setText(event.target.value);
-                setCaret(event.target.selectionStart ?? event.target.value.length);
-              }}
-              onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
-              className="max-h-32 min-h-6 flex-1 resize-none bg-transparent text-sm outline-none field-sizing-content"
-            />
-            {running && (
+          <div ref={composerRef} className="flex items-end gap-2">
+            <div className="flex min-h-12 min-w-0 flex-1 items-center gap-1.5 rounded-3xl border border-line bg-card p-[5px] focus-within:border-ink/60">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(event) => {
+                  pickFiles(event.target.files);
+                  event.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                aria-label="添加图片"
+                disabled={picked.length >= MAX_IMAGES}
+                onClick={() => fileRef.current?.click()}
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink disabled:opacity-40"
+              >
+                <Plus className="size-[22px]" />
+              </button>
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={text}
+                placeholder="@ 成员，或直接说…"
+                onChange={(event) => {
+                  setText(event.target.value);
+                  setCaret(event.target.selectionStart ?? event.target.value.length);
+                }}
+                onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
+                className="max-h-32 min-h-[22px] min-w-0 flex-1 resize-none bg-transparent py-[7px] text-[16px] leading-[22px] outline-none placeholder:text-dim field-sizing-content"
+              />
+              {props.voice && (
+                <span className="flex shrink-0 items-center justify-center [&_button]:min-h-9 [&_button]:min-w-9 [&_button]:rounded-full [&_svg]:size-[22px]">
+                  <VoiceInputButton
+                    startSession={props.voice}
+                    disabled={sending}
+                    holdScope={composerRef}
+                    onText={insertVoiceText}
+                  />
+                </span>
+              )}
+            </div>
+            {running && !text.trim() && picked.length === 0 ? (
               <button
                 type="button"
                 aria-label="停止"
@@ -764,24 +776,25 @@ export function GroupChatScreen(props: Props) {
                 onClick={props.onStop}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground"
               >
-                <Square className="h-3.5 w-3.5 fill-current" />
+                <Square className="size-[22px]" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label="发送"
+                data-composer-action="send"
+                disabled={
+                  (!text.trim() && picked.length === 0) ||
+                  sending ||
+                  props.newSessionBusy ||
+                  (!props.outbox && props.connState !== 'online')
+                }
+                onClick={() => void submit()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground disabled:opacity-40"
+              >
+                <ArrowUp className="size-[22px]" />
               </button>
             )}
-            <button
-              type="button"
-              aria-label="发送"
-              data-composer-action="send"
-              disabled={
-                (!text.trim() && picked.length === 0) ||
-                sending ||
-                props.newSessionBusy ||
-                (!props.outbox && props.connState !== 'online')
-              }
-              onClick={() => void submit()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground disabled:opacity-40"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
           </div>
         </div>
       </div>

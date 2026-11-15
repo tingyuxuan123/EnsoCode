@@ -1,10 +1,11 @@
 import type { AskRequestInfo } from '@shared/types/agent';
-import { MessageCircleQuestion, Send } from 'lucide-react';
+import { ArrowUp, Check, CircleHelp, MessageCircleQuestion, Send, Timer } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { RequestCountdown, useRemainingMs } from './RequestCountdown';
 
 interface AskBarProps {
+  appearance?: 'default' | 'phone';
   asks: AskRequestInfo[];
   onAnswer: (requestId: string, answer: string) => void;
   /** 本机时钟 − host 时钟（手机伴侣显示剩余时间用） */
@@ -14,14 +15,26 @@ interface AskBarProps {
 }
 
 /** composer 上方的提问条(与审批条同构):agent 经 ask_user 提问,选项一键答或自由输入 */
-export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBarProps) {
+export function AskBar({
+  asks,
+  onAnswer,
+  clockOffset,
+  autoFocus = true,
+  appearance = 'default',
+}: AskBarProps) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [responding, setResponding] = useState<string | null>(null);
+  const [picked, setPicked] = useState<{ requestId: string; value: string } | null>(null);
   const active = asks[0];
   const requestId = active?.requestId;
   const remainingMs = useRemainingMs(active?.expiresAt, clockOffset);
+  useEffect(() => {
+    if (appearance !== 'phone' || !requestId) return;
+    setText('');
+    setPicked(null);
+  }, [requestId, appearance]);
   useEffect(() => {
     if (!autoFocus || !requestId) return;
     inputRef.current?.focus();
@@ -35,6 +48,92 @@ export function AskBar({ asks, onAnswer, clockOffset, autoFocus = true }: AskBar
     setText('');
     onAnswer(active.requestId, active.selectionOnly ? value : value.trim());
   };
+
+  if (appearance === 'phone') {
+    const selected = picked?.requestId === active.requestId ? picked.value : '';
+    const submission = active.selectionOnly ? selected : text || selected;
+    return (
+      <section data-slot="ask-bar" className="mb-2">
+        <header className="flex items-center gap-2">
+          <CircleHelp className="size-[18px] shrink-0 text-yellow" />
+          <h2 className="min-w-0 flex-1 text-[15px] leading-5 font-semibold">它在问你</h2>
+          <Timer className="size-3.5 text-dim" />
+          <RequestCountdown remainingMs={remainingMs} expiredLabel="Timed out · no answer" />
+          {asks.length > 1 && <span className="text-[11px] text-dim">1/{asks.length}</span>}
+        </header>
+        <p className="mt-3 text-[15px] leading-[22px]">{active.question}</p>
+        <div role="radiogroup" aria-label={active.question} className="mt-3 flex flex-col gap-2">
+          {active.options?.map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="radio"
+              aria-checked={selected === option}
+              disabled={disabled}
+              onClick={() => {
+                setPicked({ requestId: active.requestId, value: option });
+                setText('');
+              }}
+              className="flex items-center gap-3 rounded-[16px] bg-card px-4 py-3.5 text-left text-[15px] leading-5 font-medium disabled:opacity-50"
+              style={{
+                boxShadow:
+                  selected === option
+                    ? 'inset 0 0 0 2px var(--ink)'
+                    : 'inset 0 0 0 0.75px var(--line)',
+              }}
+            >
+              <span className="min-w-0 flex-1">{option}</span>
+              {selected === option ? (
+                <Check className="size-4 shrink-0" />
+              ) : (
+                <span className="size-4 shrink-0 rounded-full border border-line" />
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          {!active.selectionOnly && (
+            <input
+              ref={inputRef}
+              value={text}
+              onChange={(event) => {
+                setText(event.target.value);
+                setPicked(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing)
+                  answer(text || selected);
+              }}
+              disabled={disabled}
+              placeholder="或者直接写你的回答"
+              aria-label="回答"
+              className="h-12 min-w-0 flex-1 rounded-3xl border border-line bg-card px-4 text-[15px] placeholder:text-dim"
+            />
+          )}
+          {active.selectionOnly && (
+            <button
+              type="button"
+              onClick={() => answer('')}
+              disabled={disabled}
+              className="h-12 flex-1 rounded-full bg-card text-[15px] text-ink2"
+            >
+              {t('Cancel')}
+            </button>
+          )}
+          <button
+            type="button"
+            data-ask-submit=""
+            onClick={() => answer(submission)}
+            disabled={disabled || !submission.trim()}
+            className="glass-ink flex h-12 shrink-0 items-center gap-1.5 rounded-full px-5 text-[15px] font-medium disabled:opacity-40"
+          >
+            回答
+            <ArrowUp className="size-[18px]" />
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div

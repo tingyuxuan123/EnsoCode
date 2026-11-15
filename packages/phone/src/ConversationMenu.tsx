@@ -1,5 +1,6 @@
 import { ChevronRight, Files, GitBranch, PlusCircle, Waypoints, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { usePhoneBack } from './usePhoneBack';
 
 /**
  * 会话菜单（设计稿 `bot-menu.tsx`）：一个会话只有一个入口，放会话级动作。
@@ -39,6 +40,7 @@ export function ConversationMenu({
   onClose(): void;
   footer?: ReactNode;
 }) {
+  usePhoneBack(open, onClose, 40);
   if (!open) return null;
   return (
     <>

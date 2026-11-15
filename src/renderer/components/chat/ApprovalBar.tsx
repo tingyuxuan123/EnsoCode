@@ -1,7 +1,16 @@
 import type { ApprovalReviewFallback } from '@shared/approvalReviewRecord';
 import { isNestedToolCallId } from '@shared/toolCallId';
 import type { ApprovalDecision, ApprovalKind, ApprovalRequestInfo } from '@shared/types/agent';
-import { FileEdit, FilePlus, Plug, ShieldAlert, TerminalSquare } from 'lucide-react';
+import {
+  Check,
+  CircleHelp,
+  FileEdit,
+  FilePlus,
+  Plug,
+  ShieldAlert,
+  TerminalSquare,
+  Timer,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { protectedActionLabel } from '@/lib/protectedAction';
@@ -17,6 +26,7 @@ const KIND_ICONS = {
 } as const;
 
 interface ApprovalBarProps {
+  appearance?: 'default' | 'phone';
   approvals: ApprovalRequestInfo[];
   onRespond: (requestId: string, decision: ApprovalDecision) => void;
   /** Enso capability approvals are one-shot and must never expose allowSession. */
@@ -63,6 +73,7 @@ export const REVIEW_FALLBACK_LABELS: Record<ApprovalReviewFallback, string> = {
 };
 /** composer 上方的审批条（ref-chat-a 形态）：只渲染队首，>1 显示 1/N；summary 全文可滚动 */
 export function ApprovalBar({
+  appearance = 'default',
   approvals,
   onRespond,
   allowSession = true,
@@ -77,6 +88,7 @@ export function ApprovalBar({
   );
   if (!active) return null;
   const Icon = KIND_ICONS[active.kind] ?? ShieldAlert;
+  const RequestIcon = appearance === 'phone' ? CircleHelp : ShieldAlert;
   const reviewing = active.phase === 'reviewing';
   const disabled =
     responding === active.requestId || (remainingMs !== undefined && remainingMs <= 0);
@@ -91,11 +103,23 @@ export function ApprovalBar({
       className="mb-[6px] rounded-[6px] border border-border/70 bg-muted/45 px-[12px] py-[8px] text-[calc(12rem/14)]"
     >
       <div className="flex items-center gap-[8px]">
-        <ShieldAlert className="size-[calc(14rem/14)] shrink-0 text-warning" />
+        <RequestIcon className="size-[calc(14rem/14)] shrink-0 text-warning" />
         <span className="shrink-0 text-[calc(11rem/14)] font-medium text-muted-foreground">
-          {reviewing ? t('Assistant reviewing…') : t('Approval required')}
+          {reviewing
+            ? t('Assistant reviewing…')
+            : appearance === 'phone'
+              ? active.kind === 'command'
+                ? '它想运行一条命令'
+                : '它需要你的批准'
+              : t('Approval required')}
         </span>
-        <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
+        <span
+          className={
+            appearance === 'phone'
+              ? 'sr-only'
+              : 'flex min-w-0 items-center gap-1 text-muted-foreground'
+          }
+        >
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate font-mono">
             {active.toolCallId && isNestedToolCallId(active.toolCallId)
@@ -109,6 +133,9 @@ export function ApprovalBar({
           </span>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-2">
+          {appearance === 'phone' && remainingMs !== undefined && (
+            <Timer className="size-3.5 text-muted-foreground" />
+          )}
           <RequestCountdown remainingMs={remainingMs} expiredLabel="Timed out · denied" />
           {approvals.length > 1 && (
             <span className="text-[calc(11rem/14)] text-muted-foreground tabular-nums">
@@ -122,11 +149,16 @@ export function ApprovalBar({
           {t(REVIEW_FALLBACK_LABELS[active.reviewFallback])}
         </p>
       )}
-      {active.summary && <SummaryView kind={active.kind} summary={active.summary} />}
+      {active.summary && (
+        <div data-approval-summary="">
+          <SummaryView kind={active.kind} summary={active.summary} />
+        </div>
+      )}
       {!reviewing && (
         <div className="mt-2 flex items-center justify-end gap-1.5">
           <button
             type="button"
+            data-approval-decision="deny"
             disabled={disabled}
             onClick={() => respond('deny')}
             className="rounded-[6px] px-[10px] py-[4px] text-[calc(12rem/14)] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
@@ -136,6 +168,7 @@ export function ApprovalBar({
           {allowSession && !active.protected && (
             <button
               type="button"
+              data-approval-decision="allowSession"
               disabled={disabled}
               onClick={() => respond('allowSession')}
               className="rounded-[6px] px-[10px] py-[4px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -145,10 +178,12 @@ export function ApprovalBar({
           )}
           <button
             type="button"
+            data-approval-decision="allow"
             disabled={disabled}
             onClick={() => respond('allow')}
             className="rounded-[6px] bg-primary px-[10px] py-[4px] text-[calc(12rem/14)] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
+            {appearance === 'phone' && <Check className="size-5" />}
             {t('Allow')}
           </button>
         </div>

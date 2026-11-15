@@ -752,6 +752,14 @@ export const zhTranslations: Record<string, string> = {
   'Even in full-access mode, ask before external sends, deletions, payments, deployments and secret-file access. Always on for Bot members not set to Full access. Takes effect on new conversations.':
     '即使在完全放行模式下，对外发送、删除、付款、部署和访问密钥文件前也要求确认。非完全放行的 Bot 成员始终开启。新会话生效。',
   'Protected actions will not ask for confirmation either.': '受保护操作也不再询问。',
+  'Use autonomous execution': '切换为自主运行',
+  'Authorize and start chatting': '授权并开始私聊',
+  'Authorize and create team': '授权并创建团队',
+  'Authorize and save': '授权并保存',
+  'Save to apply. A running turn keeps its current mode until it ends. Delegations honor the stricter mode of both members.':
+    '保存后生效；进行中的回合保持原档位，结束后同步。委派仍遵守双方中更严格的审批档位。',
+  'Autonomous execution: creating or saving authorizes enabled tools to run without per-action approval, including commands, MCP, deletions and deployments. Commands can access files and networks available to your account. Read-only and disabled-tool limits still apply; system permissions and other independent authorizations are unchanged.':
+    '自主运行：创建或保存即授权已启用工具直接执行，命令、MCP、删除和部署等操作不再逐次审批。命令可访问当前账号能访问的文件和网络。只读、禁用工具等限制仍有效；系统权限及其他独立授权不变。',
   'Protected: external send': '受保护：对外发送',
   'Protected: delete': '受保护：删除',
   'Protected: payment': '受保护：付款',
@@ -3402,6 +3410,9 @@ export const zhTranslations: Record<string, string> = {
   'View conversation': '查看会话',
   '{{name}} on behalf of {{owner}}': '{{name}} 替 {{owner}} 执行',
   'Delegations in progress · {{n}}': '进行中的委派 · {{n}}',
+  'No delegations in progress': '暂无进行中的委派',
+  'Delegations this member starts stay here until they finish':
+    '该成员发起的委派会在这里保留到结束',
   '{{name}} (on behalf of {{owner}}) needs you': '{{name}} 替 {{owner}} 执行 · 需要你处理',
   'Collaboration board': '协作看板',
   'Older completed tasks are kept in the group board.': '更早的已完成任务仍保留在原群任务看板中。',

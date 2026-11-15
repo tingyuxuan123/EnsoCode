@@ -1,19 +1,24 @@
 # renderer 层规范（React 界面）
 
-`src/renderer/` 是两个窗口共用的一套 React 代码，通过不同入口挂载不同根组件。
+`src/renderer/` 是多窗口共用的一套 React 代码，通过不同 HTML 入口挂载各自根组件。
 
 ## 结构
 
 ```
 src/renderer/
-  index.html / index.tsx        主窗口入口
-  settings.html / settings.tsx  设置窗口入口
+  index.html / index.tsx              主窗口入口
+  settings.html / settings.tsx        设置窗口入口
+  design.html / design-window.tsx     设计窗口入口
+  taskboard.html / taskboard.tsx      协作看板窗口入口
   App.tsx
   components/
-    ui/                         base-ui 封装，约 50 个，kebab-case 文件名
-    app/                        应用级组件（TitleBar）
+    ui/                         base-ui 封装，kebab-case 文件名
+    app/                        应用级组件（TitleBar 等）
+    agent/ bots/ chat/ ...      按领域组织的界面
     settings/                   设置面板与弹窗，PascalCase
-  stores/settings/              唯一 zustand store
+  features/                     design（设计画布）、imageStudio 等大功能
+  plugins/                      插件宿主与运行时
+  stores/                       settings 及按领域拆分的 zustand store
   hooks/                        useTrafficLightsGuard 等
   lib/                          utils(cn) / z-index / ghosttyTheme
   i18n.ts                       useI18n

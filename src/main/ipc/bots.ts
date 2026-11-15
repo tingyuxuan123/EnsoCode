@@ -61,6 +61,7 @@ import {
   respondApproval,
   retrySession,
   rewindSession,
+  setSessionApprovalMode,
   setSessionModel,
   setSessionReasoning,
   setSessionThinking,
@@ -312,6 +313,19 @@ function createRuntime(botsRoot: string): BotRuntimePort {
       if (!changed.ok) return changed;
       const reasoning = setSessionReasoning(identity, model.reasoningEnabled, model.thinkingLevel);
       return reasoning.ok ? setSessionThinking(identity, model.thinkingLevel) : reasoning;
+    },
+    async updateApprovalMode(conversationId, mode) {
+      const identity = rootIdentity(conversationId);
+      if (!identity) return { ok: false, error: 'stale session generation' };
+      let keys: ReadonlySet<string>;
+      try {
+        keys = await readStoredOauthCredentialKeys();
+      } catch {
+        return { ok: false, error: 'model credentials unavailable' };
+      }
+      if (rootIdentity(conversationId)?.generation !== identity.generation)
+        return { ok: false, error: 'stale session generation' };
+      return setSessionApprovalMode(identity, mode, keys);
     },
     async spawn(spec) {
       const identity = rootIdentity(spec.conversationId) ?? {

@@ -8,12 +8,13 @@ import {
 } from '@/components/chat/usageSegments';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { formatTokens } from '@/stores/sessions/stats';
 
 /** 与桌面默认状态栏同序同图标 */
 const SEGMENTS: [UsageSegmentId, LucideIcon][] = [
+  ['context', Gauge],
   ['tokens', Coins],
   ['cache', Database],
-  ['context', Gauge],
   ['speed', Zap],
 ];
 
@@ -31,7 +32,7 @@ export function SessionStatsLine({
   return (
     <div
       data-slot="stats-line"
-      className="flex min-h-6 flex-wrap items-center justify-center gap-x-3 px-1"
+      className="mt-2.5 flex min-h-4 flex-wrap items-center justify-center gap-x-3.5 px-1 text-faint"
     >
       {SEGMENTS.map(([id, Icon]) => {
         const value = values[id];
@@ -41,7 +42,7 @@ export function SessionStatsLine({
             key={id}
             className={cn(
               'flex items-center gap-1 text-[11px] tabular-nums',
-              value.critical ? 'text-destructive' : 'text-muted-foreground/80'
+              value.critical ? 'text-destructive' : 'text-faint'
             )}
           >
             {value.percent !== undefined ? (
@@ -49,7 +50,11 @@ export function SessionStatsLine({
             ) : (
               <Icon className="h-3 w-3 shrink-0 opacity-75" />
             )}
-            {value.compact}
+            {id === 'tokens' && usageTotals
+              ? formatTokens(usageTotals.inputTokens + usageTotals.outputTokens).toLowerCase()
+              : id === 'speed'
+                ? value.compact.replace('tok/s', 't/s')
+                : value.compact}
           </span>
         );
       })}

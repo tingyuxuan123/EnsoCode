@@ -15,6 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { formatRelativeTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import type { PhoneThreadEntry } from './botState';
+import { usePhoneBack } from './usePhoneBack';
 
 export interface GroupThreads {
   entries: PhoneThreadEntry[];
@@ -47,6 +48,9 @@ export function GroupThreadSwitcher({
   status?: string;
 }) {
   const [listOpen, setListOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  usePhoneBack(menuOpen, () => setMenuOpen(false), 40);
+  usePhoneBack(listOpen, () => setListOpen(false), 50);
   const [query, setQuery] = useState('');
   const { entries, currentId, rootId, disabledHint } = threads;
   const current = entries.find((entry) => entry.id === currentId);
@@ -59,7 +63,7 @@ export function GroupThreadSwitcher({
 
   return (
     <>
-      <Menu>
+      <Menu open={menuOpen} onOpenChange={setMenuOpen}>
         <MenuTrigger
           aria-label="切换话题"
           className="mt-0.5 flex max-w-full items-center gap-0.5 text-[11px] text-muted-foreground"

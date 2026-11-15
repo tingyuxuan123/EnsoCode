@@ -200,6 +200,12 @@ describe('phone group recovery and folding UI', () => {
     expect(render()).not.toContain('aria-label="语音输入"');
     expect(render({ voice: noop as never })).toContain('aria-label="语音输入"');
   });
+  it('uses a single stop action while running and keeps the routing hint above the input', () => {
+    const html = render({ chat: { ...chat, status: 'running' } });
+    expect(html).toContain('aria-label="停止"');
+    expect(html).not.toContain('aria-label="发送"');
+    expect(html).toContain('不 @ 时，会挑最合适的成员回复');
+  });
   it('shows the topic switcher only when the desktop supports threads', () => {
     expect(render({ onNewSession: noop, canCreate: true })).not.toContain('aria-label="切换话题"');
     const threads = {

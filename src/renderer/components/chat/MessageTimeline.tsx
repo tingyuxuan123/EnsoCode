@@ -596,9 +596,12 @@ export function MessageTimeline({
     />
   );
   const renderFooter = () => (
-    <div className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
+    <div data-timeline-footer="" className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
       {busy && (
-        <div className="flex min-h-[calc(26rem/14)] items-center gap-2 text-[calc(13rem/14)]">
+        <div
+          data-timeline-busy=""
+          className="flex min-h-[calc(26rem/14)] items-center gap-2 text-[calc(13rem/14)]"
+        >
           <EavesWorkingIcon />
           <span className="t-shimmer" data-text={loading ? t('Loading…') : t('Working…')}>
             {loading ? t('Loading…') : t('Working…')}

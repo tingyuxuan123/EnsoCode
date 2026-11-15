@@ -36,6 +36,9 @@ internal fun MembersScreen(
     onReadBotFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)? = null,
     onOpenDirect: ((String) -> Unit)? = null,
     initialChatId: String? = null,
+    drafts: Map<DraftKey, String> = emptyMap(),
+    onDraftEdit: (DraftKey, String) -> Unit = { _, _ -> },
+    onDraftConfirmed: (DraftKey, String) -> Unit = { _, _ -> },
 ) {
     var openRootId by remember { mutableStateOf(initialChatId) }
     var displayedId by remember { mutableStateOf(initialChatId) }
@@ -45,15 +48,19 @@ internal fun MembersScreen(
     var priorCreateId by remember { mutableStateOf<String?>(null) }
     var openingDirect by remember { mutableStateOf<Pair<String, String?>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    var drafts by remember { mutableStateOf(emptyMap<String, BotMessageDraft>()) }
+    // Text survives pages and process restarts per chat; the send attempt itself stays in memory only.
+    var localDrafts by remember { mutableStateOf(emptyMap<String, BotMessageDraft>()) }
     val closeChat by rememberUpdatedState(onCloseChat)
     val openChat by rememberUpdatedState(onOpenChat)
     val selectSession by rememberUpdatedState(onSelectSession)
     val receipt = bots?.send
     LaunchedEffect(receipt) {
-        if (receipt != null) drafts[receipt.chatId]?.let { draft ->
+        if (receipt != null) localDrafts[receipt.chatId]?.let { draft ->
             val next = draft.observe(receipt.chatId, receipt)
-            if (next != draft) drafts = drafts + (receipt.chatId to next)
+            if (next != draft) {
+                localDrafts = localDrafts + (receipt.chatId to next)
+                if (next.text != draft.text) onDraftConfirmed(DraftKey(DraftKind.Chat, receipt.chatId), draft.text)
+            }
         }
     }
     val root = bots?.chats?.firstOrNull { it.id == openRootId && !it.archived }
@@ -106,11 +113,24 @@ internal fun MembersScreen(
             else -> Unit
         }
     }
+    val chatDraftKey = enabledChat?.let { DraftKey(DraftKind.Chat, it.id) }
+    val rememberedText = chatDraftKey?.let { drafts[it] }.orEmpty()
+    LaunchedEffect(chatDraftKey, rememberedText) {
+        val id = enabledChat?.id ?: return@LaunchedEffect
+        val local = localDrafts[id] ?: BotMessageDraft()
+        if (local.submission == null && local.text != rememberedText) {
+            localDrafts = localDrafts + (id to local.copy(text = rememberedText))
+        }
+    }
     if (enabledChat != null && root != null) {
         val threadAvailable = root.kind == "group" && bots.threadsEnabled && active != null && processId == null
         MemberConversation(enabledChat, root, bots, session?.takeIf { it.timeline.sessionId == conversationId },
             conversationId = conversationId, process = processId != null, writable = writable && !threadWaiting,
-            draft = drafts[enabledChat.id] ?: BotMessageDraft(), onDraft = { drafts = drafts + (enabledChat.id to it) },
+            draft = localDrafts[enabledChat.id] ?: BotMessageDraft(text = rememberedText),
+            onDraft = { next ->
+                localDrafts = localDrafts + (enabledChat.id to next)
+                onDraftEdit(DraftKey(DraftKind.Chat, enabledChat.id), next.text)
+            },
             onBack = chatBack, onSend = onSend, onStop = onStop, onStopSession = onStopSession,
             onOlder = { onLoadOlder(enabledChat.id, it) }, onHistory = onHistory, onSessionRetry = onSessionRetry,
             onApproval = onApproval, onAsk = onAsk, onThreads = if (threadAvailable) ({ showThreads = true }) else null,

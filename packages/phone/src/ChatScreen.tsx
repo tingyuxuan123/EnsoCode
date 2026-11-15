@@ -2,7 +2,7 @@ import type { CatalogEntry } from '@enso/pair';
 import { localCompactionNoticeIndex } from '@shared/pair/guestProjection';
 import type { AttachedImage, ProjectedMessage, SlashCommand } from '@shared/types/agent';
 import type { StartVoiceSession } from '@shared/types/speech';
-import { ArrowUp, Bot, Loader2, Lock, MessageCircle, SquarePen } from 'lucide-react';
+import { ArrowUp, Bot, EllipsisVertical, Loader2, Lock } from 'lucide-react';
 import {
   type ReactNode,
   useCallback,
@@ -24,16 +24,17 @@ import {
   type MessageTimelineHandle,
 } from '@/components/chat/MessageTimeline';
 import { RetryBar } from '@/components/chat/RetryBar';
-import { TaskBar } from '@/components/chat/TaskBar';
 import { usePinnedTodos } from '@/components/chat/TodoBar';
 import { cn } from '@/lib/utils';
 import { buildTimeline } from '@/stores/sessions/timeline';
 import { BotArtifacts } from './BotArtifacts';
 import { artifactMessageTarget } from './botArtifactsPort';
+import { ConversationMenu } from './ConversationMenu';
 import { phoneChatHost } from './chatHost';
 import type { ConnState, SessionView } from './client';
 import { FileDownloads } from './FileDownloads';
 import { compressWithin, imageBudget } from './image';
+import { PhoneTaskBar } from './PhoneTaskBar';
 import { PhoneTopBar, TopBarAction } from './PhoneTopBar';
 import { appendEchoMessages, type QueueSendEcho } from './queueSendEcho';
 import { readOnlyBanner } from './readOnly';
@@ -119,6 +120,7 @@ export function ChatScreen(props: Props) {
   const { view, sessionId } = props;
   const timelineRef = useRef<MessageTimelineHandle>(null);
   const [sending, setSending] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   // tabs sliding：pill 位置/尺寸由 JS 测量写入，CSS 负责补间；首帧挂起过渡避免从 0 宽飞入
   const tabsRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLSpanElement>(null);
@@ -140,6 +142,7 @@ export function ChatScreen(props: Props) {
     }
   }, [sessionId, props.tabGroup]);
   const running = view?.status === 'running';
+  const pendingInput = Boolean(view?.approvals.length || view?.asks.length);
   const bot = props.bot;
   const readOnly = Boolean(bot?.readOnly || props.deviceReadOnly || props.connState === 'replaced');
   /** 同步有界重试已耗尽：本机缓存正文照常显示，但不能再宣称「同步中…」 */
@@ -317,7 +320,7 @@ export function ChatScreen(props: Props) {
 
   return (
     <ChatHostContext.Provider value={host}>
-      <div className="phone-chat-root flex h-full min-h-0 flex-col">
+      <div className="phone-chat-root relative flex h-full min-h-0 flex-col">
         <PhoneTopBar
           lead={bot?.onBack ? 'back' : props.drawerDocked ? 'none' : 'menu'}
           leadLabel={bot?.onBack ? '返回群聊' : '打开会话列表'}
@@ -368,23 +371,11 @@ export function ChatScreen(props: Props) {
             ? { detailMenu: true, onDetail: props.onOpenConfig }
             : {})}
         >
-          {sessionId && !bot && <FileDownloads key={sessionId} target={{ sessionId }} />}
-          {sessionId && !bot && <WebPreview key={`preview:${sessionId}`} target={{ sessionId }} />}
           {bot?.readOnly ? (
             <span className="size-12 shrink-0" />
           ) : (
-            <TopBarAction
-              label="新建会话"
-              {...(props.newSessionHint ? { title: props.newSessionHint } : {})}
-              onClick={props.onNewSession}
-              disabled={
-                !props.canCreate ||
-                readOnly ||
-                (Boolean(bot) && sending) ||
-                props.connState !== 'online'
-              }
-            >
-              <SquarePen className="size-6" aria-hidden />
+            <TopBarAction label="会话菜单" onClick={() => setMenuOpen(true)}>
+              <EllipsisVertical className="size-6" aria-hidden />
             </TopBarAction>
           )}
         </PhoneTopBar>
@@ -425,12 +416,12 @@ export function ChatScreen(props: Props) {
           <div
             ref={tabsRef}
             role="tablist"
-            className="t-tabs relative flex shrink-0 items-center justify-start gap-1 overflow-x-auto border-b px-2 py-1"
+            className="t-tabs relative flex shrink-0 items-center justify-start gap-1.5 overflow-x-auto px-4 pb-2"
           >
             <span
               ref={pillRef}
               aria-hidden="true"
-              className="t-tabs-pill pointer-events-none absolute top-0 left-0 z-0 rounded-md bg-muted"
+              className="t-tabs-pill pointer-events-none absolute top-0 left-0 z-0 rounded-full bg-pill"
             />
             <button
               type="button"
@@ -439,8 +430,7 @@ export function ChatScreen(props: Props) {
               className={tabClass(sessionId === props.tabGroup.parent.id)}
               onClick={() => props.onSelectTab?.(props.tabGroup?.parent.id ?? '')}
             >
-              <MessageCircle className="h-3 w-3 shrink-0" />
-              <span className="max-w-40 truncate">{props.tabGroup.parent.title || '新对话'}</span>
+              <span className="max-w-40 truncate">主会话</span>
             </button>
             {props.tabGroup.children.map((child) => (
               <button
@@ -467,6 +457,31 @@ export function ChatScreen(props: Props) {
             ))}
           </div>
         )}
+
+        {props.deviceReadOnly && (
+          <div className="mx-5 mb-2 flex items-start gap-2 rounded-[14px] bg-card2 px-3 py-2.5">
+            <Lock className="mt-0.5 size-3.5 shrink-0 text-dim" aria-hidden />
+            <p className="min-w-0 flex-1 text-[12px] leading-[18px] text-ink2">
+              {readOnlyBanner(props.readOnlyRejected)}
+            </p>
+          </div>
+        )}
+        {sessionId &&
+          (props.goal || view?.tasks.length || view?.subagents.length || pinnedTodos) && (
+            <div className="phone-session-bars shrink-0 px-5 pb-2">
+              {props.goal && !readOnly && (
+                <GoalBar conversationId={sessionId} goal={{ ...props.goal, noProgressRuns: 0 }} />
+              )}
+              <PhoneTaskBar
+                sessionId={sessionId}
+                tasks={view?.tasks ?? []}
+                subagents={view?.subagents ?? []}
+                readOnly={readOnly}
+                online={props.connState === 'online'}
+                todos={pinnedTodos}
+              />
+            </div>
+          )}
 
         {sessionId === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
@@ -520,7 +535,7 @@ export function ChatScreen(props: Props) {
         {sessionId !== null && (
           // 浏览器里 safe-area 为 0，用 0.5rem 兜底不贴边；standalone 下取
           // home indicator 的实际高度，不再叠加，避免下方留出多余空白
-          <div className="phone-dock @container shrink-0 border-t pt-2 pb-safe">
+          <div className="phone-dock phone-code-dock @container shrink-0 pt-2 pb-safe">
             <div className={CHAT_COL}>
               {/* 自动重试横幅：只展示不可取消（pair 桥无 abort-retry 通道，整轮 abort 已够用） */}
               {view?.retry && <RetryBar retry={view.retry} />}
@@ -531,39 +546,22 @@ export function ChatScreen(props: Props) {
                   queued={(props.queued ?? []).map((q) => ({ id: q.id, text: q.text }))}
                 />
               )}
-              {props.goal && !readOnly && (
-                <GoalBar conversationId={sessionId} goal={{ ...props.goal, noProgressRuns: 0 }} />
-              )}
-              {/* 后台任务 / subagent 胶囊：停止按钮经 stub 发 pair 命令 */}
-              <TaskBar
-                sessionId={sessionId}
-                tasks={view?.tasks ?? []}
-                subagents={view?.subagents ?? []}
-                readOnly={props.deviceReadOnly}
-                todos={pinnedTodos}
-              />
               {bot?.outbox}
               {(props.notice || bot?.notice) && (
                 <p className="mb-1 rounded-[14px] bg-red/8 px-3 py-2 text-[12px] leading-4 text-red">
                   {props.notice || bot?.notice}
                 </p>
               )}
-              {props.deviceReadOnly ? (
-                // 设计稿 `readonly-device`：一条说清原因和出口的横幅，不弹窗
-                <div className="mb-2 flex items-start gap-2 rounded-[14px] bg-card2 px-3 py-2.5">
-                  <Lock className="mt-0.5 size-3.5 shrink-0 text-dim" aria-hidden />
-                  <p className="min-w-0 flex-1 text-[12px] leading-[18px] text-ink2">
-                    {readOnlyBanner(props.readOnlyRejected)}
-                  </p>
-                </div>
-              ) : (
+              {!props.deviceReadOnly && (
                 <>
                   <ApprovalBar
+                    appearance="phone"
                     approvals={view?.approvals ?? []}
                     onRespond={props.onApproval}
                     clockOffset={props.clockOffset}
                   />
                   <AskBar
+                    appearance="phone"
                     asks={view?.asks ?? []}
                     onAnswer={props.onAsk}
                     clockOffset={props.clockOffset}
@@ -574,7 +572,7 @@ export function ChatScreen(props: Props) {
               {readOnly ? (
                 // 只读设备不渲染真 Composer（写操作在 optimistic echo 前就拒绝），
                 // 但按设计稿保留一条灰掉的输入条，让"不能发"是可见的而不是凭空消失
-                <div className="relative shrink-0 px-3 pt-2 pb-safe">
+                <div className="relative shrink-0">
                   <div className="flex items-end gap-2">
                     <div className="flex h-12 flex-1 items-center rounded-3xl border border-line bg-card2 px-4">
                       <span className="text-[16px] leading-[22px] text-faint">
@@ -586,8 +584,10 @@ export function ChatScreen(props: Props) {
                     </span>
                   </div>
                 </div>
-              ) : (
+              ) : !pendingInput ? (
                 <Composer
+                  appearance="phone"
+                  placeholder={bot ? `向 ${props.title} 提问…` : '回复 Collabra…'}
                   commands={slashCommands}
                   running={running}
                   busy={running}
@@ -610,13 +610,54 @@ export function ChatScreen(props: Props) {
                   voice={props.voice}
                   voiceMode="hold"
                 />
-              )}
-              {!readOnly && (
+              ) : null}
+              {!readOnly && !pendingInput && (
                 <SessionStatsLine usageTotals={props.usageTotals} context={props.context} />
               )}
             </div>
           </div>
         )}
+        <ConversationMenu
+          open={menuOpen}
+          title="会话"
+          onClose={() => setMenuOpen(false)}
+          items={[
+            {
+              key: 'new-session',
+              label: '开新会话',
+              hint: bot ? '清掉这段上下文，开始新一轮对话' : '选一个项目，开始新的工作',
+              icon: 'new-session',
+              danger: Boolean(bot),
+              disabled:
+                !props.canCreate ||
+                readOnly ||
+                (Boolean(bot) && sending) ||
+                props.connState !== 'online',
+              disabledHint: props.newSessionHint,
+              onSelect: () => {
+                setMenuOpen(false);
+                props.onNewSession();
+              },
+            },
+          ]}
+          footer={
+            <>
+              {sessionId && !bot && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <FileDownloads target={{ sessionId }}>文件下载</FileDownloads>
+                  <WebPreview target={{ sessionId }}>网页预览</WebPreview>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="h-12 w-full rounded-full bg-card2 text-[15px] font-medium text-ink2"
+              >
+                取消
+              </button>
+            </>
+          }
+        />
       </div>
     </ChatHostContext.Provider>
   );
@@ -625,8 +666,8 @@ export function ChatScreen(props: Props) {
 /** 与桌面 CoworkerTabs 的 tabClass 同款 */
 function tabClass(active: boolean): string {
   return cn(
-    't-tab flex min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-    active ? 'font-medium' : 'text-muted-foreground'
+    't-tab flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] leading-4 font-medium transition-colors',
+    active ? 'text-pill-ink' : 'bg-card2 text-ink2'
   );
 }
 

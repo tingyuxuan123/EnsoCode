@@ -405,30 +405,32 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
         </div>
       </Tabs>
 
-      <div
-        data-slot="bot-profile-actions"
-        className="flex shrink-0 justify-end gap-2 border-t bg-muted/50 px-4 py-2.5"
-      >
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!dirty || saving}
-          onClick={() => {
-            if (baseline) setForm(baseline);
-            setEdited(false);
-          }}
+      {(dirty || saving) && (
+        <div
+          data-slot="bot-profile-actions"
+          className="flex shrink-0 justify-end gap-2 border-t bg-muted/50 px-4 py-2.5"
         >
-          {t('Discard')}
-        </Button>
-        <Button
-          size="sm"
-          disabled={!dirty || saving || Boolean(nameIssue)}
-          onClick={() => void save()}
-        >
-          {saving && <Loader2 className="animate-spin" />}
-          {t('Save')}
-        </Button>
-      </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={saving}
+            onClick={() => {
+              if (baseline) setForm(baseline);
+              setEdited(false);
+            }}
+          >
+            {t('Discard')}
+          </Button>
+          <Button size="sm" disabled={saving || Boolean(nameIssue)} onClick={() => void save()}>
+            {saving && <Loader2 className="animate-spin" />}
+            {t(
+              form.approvalMode === 'full' && bot.approvalMode !== 'full'
+                ? 'Authorize and save'
+                : 'Save'
+            )}
+          </Button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirm !== null}

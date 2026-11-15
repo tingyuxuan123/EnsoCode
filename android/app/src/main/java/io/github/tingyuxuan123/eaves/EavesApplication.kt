@@ -3,6 +3,7 @@ package io.github.tingyuxuan123.eaves
 import android.app.Application
 import android.os.Build
 import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
+import io.github.tingyuxuan123.eaves.mirror.AndroidTextDraftStore
 import io.github.tingyuxuan123.eaves.mirror.DesktopLink
 import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
 import io.github.tingyuxuan123.eaves.mirror.GoalCommand
@@ -24,11 +25,19 @@ import kotlinx.coroutines.SupervisorJob
 
 /** One foreground link per application process; credentials never enter a Compose state. */
 class EavesApplication : Application() {
+    private val draftStore by lazy { AndroidTextDraftStore(this) }
+
+    /** Composer text kept across pages and restarts, scoped to the current pairing identity. */
+    internal val drafts by lazy {
+        DraftBook(draftStore, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    }
+
     internal val companion: CompanionController by lazy {
         val store = AndroidPairCredentialStore(this, allowLoopbackHttp = BuildConfig.DEBUG)
         val pairing = RelayPairingClient(allowLoopbackHttp = BuildConfig.DEBUG)
         val name = "${Build.MANUFACTURER} ${Build.MODEL}".take(64)
         CompanionController(store,
+            drafts = draftStore,
             claim = { link -> pairing.claim(link, name) }, revoke = pairing::revoke,
             linkFactory = { credentials, pin ->
                 val link = DesktopLink(credentials, pin, allowLoopbackHttp = BuildConfig.DEBUG)

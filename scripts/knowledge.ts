@@ -54,8 +54,12 @@ function referencedMarkdownFiles(): string[] {
   const missing = new Set<string>();
   for (const relative of files) {
     const source = readText(relative);
-    for (const match of source.matchAll(/\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
-      const target = match[1];
+    // CommonMark allows `<path with spaces#anchor>`; unwrap it before dropping the fragment.
+    for (const match of source.matchAll(/\]\((<[^>]+>|[^)#]+)(?:#[^)]+)?\)/g)) {
+      const raw = match[1] ?? '';
+      const target = (raw.startsWith('<') && raw.endsWith('>') ? raw.slice(1, -1) : raw).split(
+        '#'
+      )[0];
       if (!target || target.startsWith('http') || target.startsWith('#')) continue;
       const resolved = path.resolve(path.dirname(path.join(root, relative)), target);
       if (!existsSync(resolved)) missing.add(`${relative} -> ${target}`);
@@ -122,7 +126,7 @@ function clean(apply: boolean): number {
 }
 
 function compactPrompt(files: string[], outputDir: string): void {
-  const prompt = `You are maintaining 小满 project knowledge.\n\nFor each source file below, produce a concise replacement draft. Preserve all concrete symptoms, root causes, security boundaries, regression tests, real-device evidence, unfinished decisions, and source links. Remove chatty chronology, duplicate prose, speculative claims, and implementation detail that is no longer a contract. Keep these headings when applicable: 症状, 根因, 修法, 回归防线, 相关代码. Do not invent facts. Return one Markdown draft per source file and a short change summary.\n\nSources:\n${files.map((file) => `- ${file}`).join('\n')}`;
+  const prompt = `You are maintaining Collabra project knowledge.\n\nFor each source file below, produce a concise replacement draft. Preserve all concrete symptoms, root causes, security boundaries, regression tests, real-device evidence, unfinished decisions, and source links. Remove chatty chronology, duplicate prose, speculative claims, and implementation detail that is no longer a contract. Keep these headings when applicable: 症状, 根因, 修法, 回归防线, 相关代码. Do not invent facts. Return one Markdown draft per source file and a short change summary.\n\nSources:\n${files.map((file) => `- ${file}`).join('\n')}`;
   writeFileSync(path.join(outputDir, 'COMPACT-PROMPT.md'), prompt);
   for (const file of files)
     cpSync(path.join(root, file), path.join(outputDir, path.basename(file)));

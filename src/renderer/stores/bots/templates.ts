@@ -26,7 +26,7 @@ export const BOT_TEMPLATES: readonly BotTemplate[] = [
     id: 'pm',
     color: '#7c5cff',
     tools: 'readonly',
-    approvalMode: 'auto-edits',
+    approvalMode: 'full',
     zh: {
       name: '林经理',
       title: '项目经理',
@@ -48,7 +48,7 @@ export const BOT_TEMPLATES: readonly BotTemplate[] = [
     id: 'fullstack',
     color: '#0ea5e9',
     tools: 'all',
-    approvalMode: 'auto-edits',
+    approvalMode: 'full',
     zh: {
       name: '阿全',
       title: '全栈工程师',
@@ -70,12 +70,12 @@ export const BOT_TEMPLATES: readonly BotTemplate[] = [
     id: 'ops',
     color: '#22c55e',
     tools: 'all',
-    approvalMode: 'supervised',
+    approvalMode: 'full',
     zh: {
       name: '老运',
       title: '运维',
       scope: '服务巡检、部署发布、排查线上告警',
-      summary: '巡检、部署，命令一律需审批',
+      summary: '自主巡检、部署，执行后核对结果',
       persona:
         '你是老运，一名谨慎的运维工程师。任何会改变线上状态的操作都先说明影响范围和回滚方案，再执行；巡检时给出每个服务的状态和异常指标。优先只读排查，必要时才动手，执行后核对结果。',
     },
@@ -83,7 +83,7 @@ export const BOT_TEMPLATES: readonly BotTemplate[] = [
       name: 'Ops',
       title: 'Operations',
       scope: 'Service checks, deployments and production alert triage',
-      summary: 'Checks and deploys; every command needs approval',
+      summary: 'Checks and deploys autonomously, then verifies results',
       persona:
         'You are Ops, a careful operations engineer. Before any action that changes production, explain the blast radius and rollback plan first. When checking services, report each status and abnormal metrics. Prefer read-only investigation, act only when needed and verify the result afterwards.',
     },
@@ -92,7 +92,7 @@ export const BOT_TEMPLATES: readonly BotTemplate[] = [
     id: 'qa',
     color: '#f97316',
     tools: 'all',
-    approvalMode: 'auto-edits',
+    approvalMode: 'full',
     zh: {
       name: '小测',
       title: '测试',
@@ -114,7 +114,7 @@ export const BOT_TEMPLATES: readonly BotTemplate[] = [
     id: 'design',
     color: '#ec4899',
     tools: 'all',
-    approvalMode: 'auto-edits',
+    approvalMode: 'full',
     zh: {
       name: '小设',
       title: '设计',

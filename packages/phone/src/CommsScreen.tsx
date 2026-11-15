@@ -30,7 +30,7 @@ export function CommsScreen({
         title="通信空间"
         detail={`只读 · ${rows.length} 条`}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-8">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-1">
         <p className="pb-3 text-[12px] leading-4 text-dim">
           这是 Bot 之间的来去。只给你看谁让谁做了什么、结果如何；原始指令和本机路径留在电脑上。
         </p>
@@ -43,10 +43,14 @@ export function CommsScreen({
             {rows.map((row) => (
               <div key={row.key} className="rounded-[18px] bg-card p-3.5">
                 <div className="flex items-center gap-1.5 text-[11px] leading-4 text-faint">
-                  <BotAvatar bot={bots.get(row.fromId)} size="xs" />
+                  <span className="[&>span]:size-[18px]">
+                    <BotAvatar bot={bots.get(row.fromId)} size="xs" />
+                  </span>
                   <span className="text-ink2">{row.fromName}</span>
                   <ArrowRight className="size-3 shrink-0" aria-hidden />
-                  <BotAvatar bot={bots.get(row.toId)} size="xs" />
+                  <span className="[&>span]:size-[18px]">
+                    <BotAvatar bot={bots.get(row.toId)} size="xs" />
+                  </span>
                   <span className="text-ink2">{row.toName}</span>
                   <div className="flex-1" />
                   {row.live && <span className="size-1.5 rounded-full bg-blue" />}
@@ -57,7 +61,9 @@ export function CommsScreen({
             ))}
           </div>
         )}
-        <p className="pt-4 text-[11px] leading-4 text-faint">只读。要改指令，回单聊跟发起人说。</p>
+      </div>
+      <div className="shrink-0 px-5 pt-2 pb-10">
+        <p className="text-[11px] leading-4 text-faint">只读。要改指令，回单聊跟发起人说。</p>
       </div>
       <span className="sr-only">{title}</span>
     </div>

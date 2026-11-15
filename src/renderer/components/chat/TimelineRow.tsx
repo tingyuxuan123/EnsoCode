@@ -384,7 +384,10 @@ function UserBody({ children, className }: { children: ReactNode; className?: st
 
 function ChipBubble({ chip, extra }: { chip: ReactNode; extra?: string }) {
   return (
-    <div className="max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]">
+    <div
+      data-user-bubble=""
+      className="max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]"
+    >
       {chip}
       {extra ? (
         <UserBody className="ml-1.5 align-middle whitespace-pre-wrap">{extra}</UserBody>
@@ -759,7 +762,7 @@ function UserText({
   }
   if (planMessage?.kind === 'feedback') {
     return (
-      <div className={cn(USER_BUBBLE, 'whitespace-pre-wrap')}>
+      <div data-user-bubble="" className={cn(USER_BUBBLE, 'whitespace-pre-wrap')}>
         <p className="mb-1 flex items-center gap-1 text-[calc(11rem/14)] font-medium tracking-wide text-muted-foreground uppercase">
           <ClipboardList className="h-3 w-3" />
           {t('Plan feedback')}
@@ -782,7 +785,7 @@ function UserText({
   if (hasRefs) {
     const parsed = splitSlashCommand(refs.body);
     return (
-      <div className={USER_BUBBLE}>
+      <div data-user-bubble="" className={USER_BUBBLE}>
         {parsed.slash ? (
           <>
             {slashChain(parsed.slash).map((name, index) => (
@@ -819,7 +822,7 @@ function UserText({
       <div className="flex w-full flex-col items-end gap-1.5">
         <WorkspaceMigratedBanner note={migrated[1]} />
         {remainder && (
-          <div className={cn(USER_BUBBLE, 'whitespace-pre-wrap')}>
+          <div data-user-bubble="" className={cn(USER_BUBBLE, 'whitespace-pre-wrap')}>
             <UserBody>
               <InlineMentionText text={remainder} searchQuery={searchQuery} activeNth={activeNth} />
             </UserBody>
@@ -853,6 +856,7 @@ function UserText({
   const body = fromMain ? fromMain[1] : rest;
   return (
     <div
+      data-user-bubble={fromMain ? undefined : ''}
       className={cn(
         fromMain
           ? 'max-w-[86%] rounded-[6px] border border-primary/20 bg-primary/8 px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]'
@@ -892,10 +896,14 @@ export function isNestedRow(item: TimelineItem): boolean {
 export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
   const speaker = useChatHost()?.speaker;
   return (
-    <div className="mb-[8px] flex min-h-[calc(20rem/14)] min-w-0 items-center gap-[8px] text-[calc(12rem/14)] select-none">
+    <div
+      data-reply-header=""
+      className="mb-[8px] flex min-h-[calc(20rem/14)] min-w-0 items-center gap-[8px] text-[calc(12rem/14)] select-none"
+    >
       {speaker ? (
         speaker.image ? (
           <img
+            data-reply-avatar=""
             src={speaker.image}
             alt=""
             draggable={false}
@@ -904,6 +912,7 @@ export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
           />
         ) : (
           <span
+            data-reply-avatar=""
             className="flex size-[calc(22rem/14)] shrink-0 items-center justify-center rounded-full font-semibold text-[calc(11rem/14)] text-white"
             style={{ backgroundColor: speaker.color }}
           >
@@ -911,20 +920,26 @@ export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
           </span>
         )
       ) : (
-        <span className="flex size-[calc(17rem/14)] shrink-0 items-center justify-center text-foreground">
+        <span
+          data-reply-avatar=""
+          className="flex size-[calc(17rem/14)] shrink-0 items-center justify-center text-foreground"
+        >
           <EnsoMark className="size-[calc(17rem/14)]" />
         </span>
       )}
-      <span className="shrink-0 truncate font-medium text-foreground">
+      <span data-reply-name="" className="shrink-0 truncate font-medium text-foreground">
         {speaker?.name ?? SYSTEM_ASSISTANT_DISPLAY_NAME}
       </span>
       {model && (
-        <span className="min-w-0 truncate text-[calc(11rem/14)] text-muted-foreground">
+        <span
+          data-reply-model=""
+          className="min-w-0 truncate text-[calc(11rem/14)] text-muted-foreground"
+        >
           {model}
         </span>
       )}
       {typeof at === 'number' && (
-        <span className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
+        <span data-reply-time="" className="shrink-0 text-[calc(11rem/14)] text-muted-foreground">
           {formatClock(at)}
         </span>
       )}
@@ -1477,6 +1492,8 @@ function UserMeta({
   const autoCollapseTurns = useSettingsStore((s) => s.autoCollapseTurns);
   return (
     <div
+      data-user-meta=""
+      data-delivery-state={deliveryState}
       className={cn(
         'flex min-h-[calc(24rem/14)] items-center gap-2 text-[calc(11rem/14)] text-faint transition-opacity select-none',
         !deliveryState &&

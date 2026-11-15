@@ -9,6 +9,7 @@ import {
   type ImageResult,
 } from './botArtifactsPort';
 import { FileDownloads } from './FileDownloads';
+import { usePhoneBack } from './usePhoneBack';
 
 export const BotArtifactsContext = createContext<{
   port: BotArtifactsPort;
@@ -169,6 +170,7 @@ function ImagePreview({
   load: () => Promise<ImageResult>;
   onClose: () => void;
 }) {
+  usePhoneBack(true, onClose, 70);
   const [result, setResult] = useState<ImageResult | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 打开一次拉一次
   useEffect(() => {

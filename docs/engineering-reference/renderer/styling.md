@@ -234,3 +234,30 @@ framer-motion 的 `height` / `width` 不做 clamp。欠阻尼 spring（如 `spri
 浏览器会丢弃非法的 `-Npx`，元素停在最后一个正值，等 spring 回稳后才卸载，看起来就是“最后卡住再突然收起”。
 展开/收起统一用 `lib/motion.ts` 的 `heightVariants`（已内置无过冲 tween），调用处不要再传 spring `transition`。
 宽度收起同理（如右侧面板 `sidePanelWidthTransition`：目标为 0 时用 `easeOutLayout`）。
+
+## PWA 设计还原
+
+手机端 `packages/phone/src/styles.css` 独立使用 **16px 根字号**与 Roboto / JetBrains Mono，
+对齐 `collabra-pwa.vetd` 的 rem 几何；不要照搬桌面的 14px 或改为 15px，否则所有间距、控件一起缩小。
+状态栏和 Home 指示条由系统提供，实际页面只使用 safe-area，不在产品里画假的系统栏。
+共享聊天控件通过可选 `appearance="phone"` 和 `data-composer-*` / `data-approval-decision`
+挂点适配；不要依赖 `first-child`、按钮序号或图标类名猜结构（附件、受保护审批会改变子节点）。
+`packages/phone/test-ui/` 仅用于 Vite dev 的真实组件隔离核验，不是生产路由；构建只输出默认 index 入口。
+手机提问的选项先选后确认，草稿按 requestId 清空；`selectionOnly` 不得提交上一条问题的自由输入。
+
+全屏列表必须有可见的「返回会话」入口（常驻侧栏除外）。PWA 内部子页/面板用
+`packages/phone/src/usePhoneBack.ts` 统一注册返回层，不各自监听 `popstate`，否则一次系统返回会同时关闭多层。
+`usePhoneScreenBack` 给聊天页本身注册 rank 0 返回层（含 Code、Bot 和通知冷启动），
+不能只保护列表/弹层：聊天页 Back 必须先到根列表，而不是直接离开 PWA。
+通过工具栏打开的列表 Back 回当前聊天；通过 Back 或冷启动打开的根列表不注册此返回层，
+再次 Back 可以离开，避免聊天与列表无限循环。可见的「返回会话」按钮仍可显式重开聊天。
+内部导航只保留一个同文档 history guard；显式关闭和 StrictMode 清理须合并处理，
+失效 guard 的 Forward 要跳过而非改成空历史项。`queueMicrotask` 等浏览器原生函数通过箭头包装调用，
+不要直接挂到 port 对象后当方法调用（Chromium 会抛 `Illegal invocation`）。
+
+PWA 气泡/抬头使用共享组件的稳定 `data-user-bubble`、`data-user-meta`、
+`data-reply-header` / `data-reply-*` 与 `data-worklog-head` 标识；共享层只提供语义挂点，
+视觉规则留在 phone CSS。不用 `first-child` 推测气泡（图片先于正文），不把工作日志绝对定位到
+回复身份头里（长模型名、时间、失败计数会重叠）。手机页头后台入口使用 `PhoneTaskBar`
+的底部 Sheet，不能沿用桌面 `TaskBar` 向上展开的浮层。验收至少跑
+`packages/phone/test-ui/README.md` 的附件/长模型/运行中场景。

@@ -110,7 +110,7 @@ function loadView(): BotView {
   return raw ? { kind: 'chat', chatId: raw } : null;
 }
 
-export type BotPanelTab = 'info' | 'browser' | 'design' | 'board';
+export type BotPanelTab = 'info' | 'browser' | 'design' | 'board' | 'delegations';
 
 function loadBrowserTabs(): Record<string, ChatBrowserTabs> {
   try {

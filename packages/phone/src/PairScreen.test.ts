@@ -7,7 +7,7 @@ import { PairScreen } from './PairScreen';
 it('配对页用对外品牌「Collabra」与应用图标，不再画内联旧 logo', () => {
   const html = renderToStaticMarkup(createElement(PairScreen, { onPaired: () => {} }));
   expect(html).toContain('Collabra');
-  expect(html).toContain('src="/icons/icon-192.png"');
+  expect(html).toContain('src="/icons/logo-192.png"');
 });
 
 /**

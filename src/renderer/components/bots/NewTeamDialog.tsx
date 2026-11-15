@@ -39,7 +39,14 @@ import { useTeamTemplates } from '@/stores/bots/templateLibrary';
 import { useSettingsStore } from '@/stores/settings';
 import { AssetPickers, suggestErrorText } from './BotAbilities';
 import { BotAvatar } from './BotAvatar';
-import { ApprovalSelect, FieldLabel, nameError, Segmented, TeamRefField } from './BotFields';
+import {
+  ApprovalSelect,
+  BotAutonomyNotice,
+  FieldLabel,
+  nameError,
+  Segmented,
+  TeamRefField,
+} from './BotFields';
 import { BotProjectPicker } from './BotProjectPicker';
 import { botErrorText, chatErrorText, localProjects, teamFileErrorText } from './botText';
 
@@ -560,6 +567,9 @@ export function NewTeamDialog({
               </div>
             </>
           )}
+          {picked?.members.some((member) => member.approvalMode === 'full') && (
+            <BotAutonomyNotice />
+          )}
           {error && <p className="text-destructive text-sm">{error}</p>}
         </DialogPanel>
         <DialogFooter>
@@ -583,7 +593,11 @@ export function NewTeamDialog({
           {preview && (
             <Button size="sm" disabled={!canCreate} onClick={() => void create()}>
               {busy && <Loader2 className="animate-spin" />}
-              {t('Create team')}
+              {t(
+                picked?.members.some((member) => member.approvalMode === 'full')
+                  ? 'Authorize and create team'
+                  : 'Create team'
+              )}
             </Button>
           )}
         </DialogFooter>

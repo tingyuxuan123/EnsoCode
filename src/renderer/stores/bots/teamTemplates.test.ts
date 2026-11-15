@@ -46,6 +46,10 @@ describe('TEAM_TEMPLATES', () => {
           expect(parseTeamTemplate(data)).toEqual(data);
         });
 
+        it('团队默认自主执行，不因委派重新要求逐次审批', () => {
+          for (const member of spec.members) expect(member.approvalMode, member.key).toBe('full');
+        });
+
         it('通过团队、成员档案与群校验', () => {
           expect(parseTeamSpec(spec)).toEqual(spec);
           const ids = Object.fromEntries(spec.members.map((m, i) => [m.key, id(i + 1)]));

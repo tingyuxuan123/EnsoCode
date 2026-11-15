@@ -24,6 +24,7 @@ import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
 import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.eaves.mirror.PairException
 import io.github.tingyuxuan123.eaves.mirror.PairFailure
+import io.github.tingyuxuan123.eaves.mirror.TextDraftStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
@@ -92,6 +93,8 @@ internal data class BackgroundWatch(val phase: WatchPhase = WatchPhase.Off, val 
 internal data class CompanionState(
     val paired: Boolean = false,
     val deviceName: String? = null,
+    /** Opaque pairing identity; never rendered. Only used to scope local drafts to one pairing. */
+    val pairId: String? = null,
     val link: DesktopLinkState = DesktopLinkState(),
     val busy: Boolean = false,
     val problem: CompanionProblem? = null,
@@ -106,6 +109,7 @@ internal class CompanionController(
     private val linkFactory: (PairCredentials, () -> Unit) -> CompanionLink,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val drafts: TextDraftStore? = null,
 ) {
     private val mutable = MutableStateFlow(CompanionState(busy = true))
     val state: StateFlow<CompanionState> = mutable.asStateFlow()
@@ -439,7 +443,7 @@ internal class CompanionController(
         removeConnection()
         credentials = saved
         val mine = generation
-        mutable.value = CompanionState(paired = true, deviceName = saved.deviceName)
+        mutable.value = CompanionState(paired = true, deviceName = saved.deviceName, pairId = saved.pairId)
         val link = try { linkFactory(saved) { store.pin(saved) } } catch (_: Exception) {
             mutable.value = mutable.value.copy(link = DesktopLinkState(phase = LinkPhase.Failed))
             return
@@ -465,6 +469,11 @@ internal class CompanionController(
     private suspend fun clearAfterRevoke(saved: PairCredentials?, problem: CompanionProblem?, clearBroken: Boolean = false) {
         removeConnection()
         if (saved != null) mutable.value = mutable.value.copy(link = DesktopLinkState(phase = LinkPhase.Revoked))
+        // Unpairing or replacing the pairing must not leave the previous computer's drafts behind.
+        try {
+            withContext(io) { drafts?.clear(saved?.pairId.takeUnless { clearBroken }) }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { }
         try {
             withContext(io) { store.clear(saved?.pairId.takeUnless { clearBroken }) }
             credentials = null

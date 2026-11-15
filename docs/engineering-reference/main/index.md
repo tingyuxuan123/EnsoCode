@@ -3,7 +3,9 @@
 `src/main/` 拥有全部特权能力：文件系统、其它应用的配置读取、网络请求、窗口管理。
 渲染层的任何能力都必须经由 IPC 通道显式开放。
 
-## 结构
+## 代表性结构
+
+下列入口用于建立分层映像，不是逐文件清单；新增模块以源码和对应 reference 文档为准。
 
 ```
 src/main/
@@ -15,6 +17,12 @@ src/main/
     providers.ts        模型服务扫描 / 拉取模型 / 连通性测试 / OAuth 订阅登录
     assets.ts           技能 / MCP / 指令文件扫描与内容读写
   services/             纯逻辑，不碰 ipcMain
+    agentHost.ts        worker 生命周期、命令下发与事件广播
+    bots/               成员 / 群聊 / 委派 / 群任务宿主
+    memory/             记忆库、向量索引、蒸馏与待审批写入
+    browserHost.ts      内嵌浏览器宿主
+    pairHost.ts         手机配对、远程会话与中继
+    design/             设计画布、预览服务与引擎桥
     providerScan/       locations.ts + readers.ts + index.ts
     assetScan/          skills / mcp / instructions / ccSwitch + index.ts
     providerApi.ts      按协议分派的模型 API 调用
@@ -63,10 +71,12 @@ debounce 中的会话元数据会丢，表现得很像“持久化 bug”。
 ## 详细规范
 
 - [ipc.md](ipc.md) —— 通道三点式链路、参数校验、preload 出口
-- [services.md](services.md) —— 扫描器结构、敏感数据边界、去重身份
+- [services.md](services.md) —— Bot 宿主、agentHost、扫描器、敏感数据边界、账号池、MCP 与浏览器宿主
+- [code-search.md](code-search.md) —— 代码搜索工具协议、预算与证据回收
 - [pair-replay.md](pair-replay.md) —— 配对帧防重放、能力钉住、混合版本和隔离联调边界
+- [pair-preview.md](pair-preview.md) —— 手机端网页预览的候选推导、专用浏览器与有限输入边界
 - [pair-images.md](pair-images.md) —— 手机看会话里 read / 生成图片：为什么不能直接用 local-image://
 - [shell-scheduling.md](shell-scheduling.md) —— 命令让位与截止、进程移交、回执与失败展示
 - [windows.md](windows.md) —— 多窗口、无边框标题栏、macOS 红绿灯
 - [settings-persistence.md](settings-persistence.md) —— settings.json 缓存、防抖、原子写、多窗口广播
-- [native-modules.md](native-modules.md) —— better-sqlite3 / level 与 pnpm 构建脚本
+- [native-modules.md](native-modules.md) —— better-sqlite3 / sqlite-vec / level 与 pnpm 构建脚本

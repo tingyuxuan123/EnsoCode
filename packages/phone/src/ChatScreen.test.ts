@@ -1,5 +1,4 @@
 import { emptyGuestView } from '@shared/pair/guestProjection';
-import type { TodoItem } from '@shared/types/agent';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -23,16 +22,6 @@ vi.mock('@/components/chat/MessageTimeline', () => ({
 vi.mock('@/components/chat/ApprovalBar', () => ({ ApprovalBar: () => null }));
 vi.mock('@/components/chat/AskBar', () => ({ AskBar: () => null }));
 vi.mock('@/components/chat/GoalBar', () => ({ GoalBar: () => null }));
-vi.mock('@/components/chat/TaskBar', () => ({
-  TaskBar: ({ todos }: { todos?: { todos: TodoItem[] } | null }) =>
-    todos
-      ? createElement(
-          'button',
-          { type: 'button', 'data-task-dock-button': 'todo' },
-          `Current progress ${todos.todos.filter((item) => item.status === 'completed').length}/${todos.todos.length}`
-        )
-      : null,
-}));
 vi.mock('@/components/chat/RetryBar', () => ({ RetryBar: () => null }));
 vi.mock('@/components/chat/MessageQueue', () => ({ MessageQueue: () => null }));
 vi.mock('./SessionStatsLine', () => ({ SessionStatsLine: () => null }));
@@ -62,10 +51,17 @@ const render = (patch: Partial<Parameters<typeof ChatScreen>[0]> = {}) =>
     })
   );
 
-it('offers new-session in direct Bot and Code, but not the read-only group process', () => {
-  expect(render()).toContain('aria-label="新建会话"');
-  expect(render({ bot: undefined })).toContain('aria-label="新建会话"');
-  expect(render({ bot: { readOnly: true } })).not.toContain('aria-label="新建会话"');
+it('uses one session menu in direct Bot and Code, but not the read-only group process', () => {
+  expect(render()).toContain('aria-label="会话菜单"');
+  expect(render({ bot: undefined })).toContain('aria-label="会话菜单"');
+  expect(render({ bot: { readOnly: true } })).not.toContain('aria-label="会话菜单"');
+  expect(render()).not.toContain('aria-label="新建会话"');
+});
+
+it('pending approval replaces the input instead of stacking a disabled composer under it', () => {
+  const view = emptyGuestView();
+  view.approvals = [{ requestId: 'approval', tool: 'bash', kind: 'command', summary: 'pnpm test' }];
+  expect(render({ view })).not.toContain('data-draft-key');
 });
 
 it('没有选中会话时的空态用对外品牌「Collabra」，图标走应用图标而不是内联旧 logo', () => {
@@ -96,9 +92,7 @@ it('retains a direct Bot draft across session replacement, without merging Code 
 it.each([{ canCreate: false }, { deviceReadOnly: true }, { connState: 'offline' as const }])(
   'disables direct new-session when unavailable: %j',
   (patch) => {
-    expect(render(patch).match(/<button[^>]*aria-label="新建会话"[^>]*>/)?.[0]).toContain(
-      'disabled=""'
-    );
+    expect(render(patch)).not.toContain('aria-label="新建会话"');
   }
 );
 
@@ -170,8 +164,8 @@ it('keeps current progress in the shared task dock, including read-only conversa
   });
   for (const deviceReadOnly of [false, true]) {
     const html = render({ view, deviceReadOnly });
-    expect(html).toContain('data-task-dock-button="todo"');
-    expect(html).toContain('Current progress 1/2');
+    expect(html).toContain('data-phone-task-dock="todo"');
+    expect(html).toContain('1/2');
   }
   view.messages.set(21, {
     role: 'toolResult',
@@ -180,7 +174,7 @@ it('keeps current progress in the shared task dock, including read-only conversa
     content: [],
     todos: [{ content: 'Done', status: 'completed' }],
   });
-  expect(render({ view })).not.toContain('data-task-dock-button="todo"');
+  expect(render({ view })).not.toContain('data-phone-task-dock="todo"');
 });
 
 it('respects the host pinned-progress preference without leaking progress across sessions', () => {
@@ -191,10 +185,10 @@ it('respects the host pinned-progress preference without leaking progress across
     content: [],
     todos: [{ content: 'Unfinished', status: 'pending' }],
   });
-  expect(render({ view })).toContain('data-task-dock-button="todo"');
+  expect(render({ view })).toContain('data-phone-task-dock="todo"');
   expect(render({ sessionId: 'other', view: emptyGuestView() })).not.toContain(
-    'data-task-dock-button="todo"'
+    'data-phone-task-dock="todo"'
   );
   prefs.pinUnfinishedTodos = false;
-  expect(render({ view })).not.toContain('data-task-dock-button="todo"');
+  expect(render({ view })).not.toContain('data-phone-task-dock="todo"');
 });

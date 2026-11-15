@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, EllipsisVertical, PanelLeft, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, EllipsisVertical, Menu, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +28,7 @@ export function PhoneTopBar({
   className?: string;
   children?: ReactNode;
 }) {
-  const LeadIcon = lead === 'back' ? ChevronLeft : lead === 'close' ? X : PanelLeft;
+  const LeadIcon = lead === 'back' ? ArrowLeft : lead === 'close' ? X : Menu;
   const label =
     leadLabel ?? (lead === 'back' ? '返回' : lead === 'close' ? '关闭' : '打开会话列表');
   const heading = (
@@ -44,10 +44,7 @@ export function PhoneTopBar({
   );
   return (
     <header
-      className={cn(
-        'relative flex min-h-14 shrink-0 items-center gap-1 pr-2 pl-1 pt-safe',
-        className
-      )}
+      className={cn('phone-top-bar relative flex shrink-0 items-center gap-1 pr-3 pl-1', className)}
     >
       {lead === 'none' || !onLead ? (
         <span className="size-12 shrink-0" />

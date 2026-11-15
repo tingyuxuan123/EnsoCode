@@ -4,6 +4,7 @@ import { wrapInterjection } from '../../../shared/bots/interject';
 import { type BotDeliverySource, enqueueByLane } from '../../../shared/bots/lane';
 import type {
   AgentWorkerEvent,
+  ApprovalMode,
   AttachedImage,
   ConversationAuthority,
   ConversationBotBinding,
@@ -80,6 +81,7 @@ export interface BotSpawnSpec {
 
 export interface BotRuntimePort {
   updateEngine?(conversationId: string, engine?: BotEngine): Promise<ActionResult>;
+  updateApprovalMode?(conversationId: string, mode: ApprovalMode): Promise<ActionResult>;
   spawn(spec: BotSpawnSpec): Promise<ActionResult>;
   prompt(
     conversationId: string,
@@ -423,7 +425,7 @@ export class BotSessionHost {
     );
   }
 
-  /** 空闲立即更新；活轮不换模型，结束或下次投递时再同步。委派保留任务自己的配置。 */
+  /** 空闲同步模型与审批；活轮不变，结束或下次投递时再同步。委派保留任务自己的配置。 */
   async refreshModel(botId: string): Promise<void> {
     await Promise.all(
       [...this.live]
@@ -432,7 +434,7 @@ export class BotSessionHost {
           this.withLock(id, async () => {
             if (this.turnActive(id)) return;
             const error = await this.syncEngine(id);
-            if (error) console.warn('[bots] model update deferred:', error);
+            if (error) console.warn('[bots] configuration update deferred:', error);
           })
         )
     );
@@ -449,8 +451,34 @@ export class BotSessionHost {
     )
       return undefined;
     const previous = this.liveProfiles.get(conversationId);
-    const bot = effective ?? this.deps.bots.get(this.binding(conversationId)?.botId ?? '');
+    const authoritative =
+      this.independentSpecs.get(conversationId)?.bot ??
+      this.deps.bots.get(this.binding(conversationId)?.botId ?? '');
+    // 模型探测结果只能覆盖模型，不能把等待期间保存的审批降级覆盖回旧快照。
+    const bot =
+      effective && authoritative
+        ? { ...effective, approvalMode: authoritative.approvalMode }
+        : authoritative;
     if (!previous || !bot) return undefined;
+    if (previous.approvalMode !== bot.approvalMode) {
+      try {
+        const result = await this.deps.runtime.updateApprovalMode?.(
+          conversationId,
+          bot.approvalMode
+        );
+        if (!result?.ok) return result?.error ?? 'approval-update-failed';
+        if (
+          this.disposed ||
+          !this.live.has(conversationId) ||
+          this.liveProfiles.get(conversationId) !== previous
+        )
+          return 'session-unavailable';
+        this.liveProfiles.set(conversationId, { ...previous, approvalMode: bot.approvalMode });
+        return this.syncEngine(conversationId, effective);
+      } catch {
+        return 'approval-update-failed';
+      }
+    }
     const a = previous.engine;
     const b = bot.engine;
     if (
@@ -470,7 +498,7 @@ export class BotSessionHost {
         return 'session-unavailable';
       this.liveProfiles.set(conversationId, { ...previous, engine: b });
       // 配置可能在取凭证期间再次改变；发下一条消息前追上最后一次保存。
-      return effective ? undefined : this.syncEngine(conversationId);
+      return this.syncEngine(conversationId, effective);
     } catch {
       return 'model-update-failed';
     }
@@ -1468,11 +1496,11 @@ export class BotSessionHost {
     if (!this.live.has(conversationId)) {
       const spawned = await this.spawnLive(delivery, bot, selected);
       if (spawned) return fail(spawned);
-    } else {
-      const error = await this.syncEngine(conversationId, selected);
-      if (error) return fail(error);
-      notes = this.withNotesUpdate(delivery);
     }
+    // spawn 也会等待凭证和 worker；等待期间保存的权限变更必须先于首条 prompt。
+    const error = await this.syncEngine(conversationId, selected);
+    if (error) return fail(error);
+    notes = this.withNotesUpdate(delivery);
     if (
       this.stopping.has(conversationId) ||
       delivery.epoch !== (this.epochs.get(conversationId) ?? 0)

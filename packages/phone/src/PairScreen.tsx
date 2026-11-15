@@ -171,8 +171,8 @@ export function PairScreen({
     <div className="relative flex h-full flex-col overflow-y-auto bg-page text-ink">
       <div className="phone-dawn" />
 
-      <header className="relative flex items-center gap-2.5 px-5 pt-safe">
-        <img src="/icons/icon-192.png" alt="" className="size-[26px] shrink-0 rounded-[7px]" />
+      <header className="phone-pair-header relative flex items-center gap-2.5 px-5">
+        <img src="/icons/logo-192.png" alt="" className="size-[26px] shrink-0" />
         <span className="text-[17px] leading-6 font-semibold">Collabra</span>
         <div className="flex-1" />
         <span className="flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-card2 px-2">
@@ -272,7 +272,7 @@ export function PairScreen({
         </div>
       ) : null}
 
-      <div className="relative px-5 pt-6 pb-safe">
+      <div className="phone-pair-footer relative px-5 pt-6">
         <button
           type="button"
           onClick={() => void startScan()}

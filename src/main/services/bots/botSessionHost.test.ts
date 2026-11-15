@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { AgentWorkerEvent } from '../../../shared/types/agent';
+import type { AgentWorkerEvent, ApprovalMode } from '../../../shared/types/agent';
 import type { BotChat, BotEngine, BotProfile } from '../../../shared/types/bot';
 import { SourceAuthorityRegistry } from '../sourceAuthorityRegistry';
 import {
@@ -37,6 +37,12 @@ let probeCalls: BotProfile[] = [];
 let invalidated: Array<BotEngine | undefined> = [];
 
 class FakeRuntime implements BotRuntimePort {
+  approvals: Array<{ id: string; mode: ApprovalMode }> = [];
+  approvalResult = { ok: true } as { ok: boolean; error?: string };
+  async updateApprovalMode(id: string, mode: ApprovalMode) {
+    if (this.approvalResult.ok) this.approvals.push({ id, mode });
+    return this.approvalResult;
+  }
   engines: Array<{ id: string; engine?: BotEngine }> = [];
   modelResult = { ok: true } as { ok: boolean; error?: string };
   async updateEngine(id: string, engine?: BotEngine) {
@@ -227,6 +233,46 @@ describe('BotSessionHost.ensureSession', () => {
   });
 
   describe('model probe', () => {
+    it.each(['fallback', 'model'] as const)(
+      '模型探测返回 %s 时，投递仍遵守等待期间保存的审批降级',
+      async (kind) => {
+        let resume!: (result: Extract<typeof probeResult, { ok: true }>) => void;
+        let waiting = false;
+        host = new BotSessionHost({
+          bots,
+          chats,
+          authority: registry,
+          runtime,
+          emit: () => {},
+          probe: async () =>
+            waiting ? new Promise((resolve) => (resume = resolve)) : { ok: true },
+        });
+        const alice = bot('Alice');
+        const chat = direct(alice.id);
+        const first = await host.deliver(chat.id, alice.id, 'first');
+        if (!first.ok) throw new Error(first.error);
+        host.observe(ev({ type: 'turn-completed', turnId: 't1' }, first.conversationId));
+        await flush();
+        waiting = true;
+        const next = host.deliver(chat.id, alice.id, 'second');
+        await flush();
+        bots.update(alice.id, { approvalMode: 'supervised' }, []);
+        const prompt = runtime.prompt.bind(runtime);
+        runtime.prompt = (id, text) => {
+          expect(runtime.approvals.at(-1)).toEqual({ id, mode: 'supervised' });
+          return prompt(id, text);
+        };
+        const model = { providerId: 'p', modelId: 'available' };
+        resume(
+          kind === 'fallback'
+            ? { ok: true, fallback: { model, label: 'Default', reason: 'offline' } }
+            : { ok: true, model }
+        );
+        expect((await next).ok).toBe(true);
+        expect(host.effectiveBot(first.conversationId)?.approvalMode).toBe('supervised');
+      }
+    );
+
     it('委派按任务自己的模型探测和回退，恢复后回任务模型而非成员后来修改的模型', async () => {
       const alice = bot('Alice');
       const bob = bot('Bob');
@@ -500,6 +546,91 @@ describe('BotSessionHost.ensureSession', () => {
     await saving;
     expect(runtime.engines.map((item) => item.engine?.modelId)).toEqual(['first', 'second']);
     expect(host.effectiveBot(first.conversationId)?.engine).toEqual(latest);
+  });
+
+  it('保存自主运行后同步空闲会话，恢复受限档位同样生效', async () => {
+    const alice = bot('Alice');
+    bots.update(alice.id, { approvalMode: 'auto-edits', tools: 'readonly' }, []);
+    const chat = direct(alice.id);
+    const first = await host.deliver(chat.id, alice.id, 'hi');
+    if (!first.ok) throw new Error(first.error);
+    host.observe(ev({ type: 'turn-completed', turnId: 't1' }, first.conversationId));
+    await flush();
+
+    bots.update(alice.id, { approvalMode: 'full' }, []);
+    await host.refreshModel(alice.id);
+    expect(runtime.approvals).toEqual([{ id: first.conversationId, mode: 'full' }]);
+    expect(host.effectiveBot(first.conversationId)).toMatchObject({
+      approvalMode: 'full',
+      tools: 'readonly',
+    });
+    bots.update(alice.id, { approvalMode: 'supervised' }, []);
+    await host.refreshModel(alice.id);
+    expect(runtime.approvals.at(-1)).toEqual({ id: first.conversationId, mode: 'supervised' });
+    expect(runtime.spawns).toHaveLength(1);
+    expect(runtime.engines).toEqual([]);
+  });
+
+  it('冷启动等待 worker 时保存的审批降级，首条消息也必须遵守', async () => {
+    const alice = bot('Alice');
+    const chat = direct(alice.id);
+    let resume!: () => void;
+    const waiting = new Promise<void>((resolve) => (resume = resolve));
+    const spawn = runtime.spawn.bind(runtime);
+    runtime.spawn = async (spec) => {
+      const result = await spawn(spec);
+      await waiting;
+      return result;
+    };
+    const first = host.deliver(chat.id, alice.id, 'first');
+    await flush();
+    expect(runtime.spawns[0].bot.approvalMode).toBe('full');
+    bots.update(alice.id, { approvalMode: 'supervised' }, []);
+    await host.refreshModel(alice.id);
+    const prompt = runtime.prompt.bind(runtime);
+    runtime.prompt = (id, text) => {
+      expect(runtime.approvals.at(-1)).toEqual({ id, mode: 'supervised' });
+      return prompt(id, text);
+    };
+    resume();
+    expect((await first).ok).toBe(true);
+  });
+
+  it('活轮不更改审批，结束后同步新档位再投递下一条', async () => {
+    const alice = bot('Alice');
+    bots.update(alice.id, { approvalMode: 'auto-edits' }, []);
+    const chat = direct(alice.id);
+    const first = await host.deliver(chat.id, alice.id, 'hi');
+    if (!first.ok) throw new Error(first.error);
+    bots.update(alice.id, { approvalMode: 'full' }, []);
+    await host.refreshModel(alice.id);
+    expect(runtime.approvals).toEqual([]);
+    expect(host.effectiveBot(first.conversationId)?.approvalMode).toBe('auto-edits');
+    host.observe(ev({ type: 'turn-completed', turnId: 't1' }, first.conversationId));
+    await flush();
+    expect((await host.deliver(chat.id, alice.id, 'next')).ok).toBe(true);
+    expect(runtime.approvals.at(-1)).toEqual({ id: first.conversationId, mode: 'full' });
+    expect(host.effectiveBot(first.conversationId)?.approvalMode).toBe('full');
+  });
+
+  it('审批同步失败不投递任务、不伪造已生效，恢复后重试同步', async () => {
+    const alice = bot('Alice');
+    const chat = direct(alice.id);
+    const first = await host.deliver(chat.id, alice.id, 'hi');
+    if (!first.ok) throw new Error(first.error);
+    host.observe(ev({ type: 'turn-completed', turnId: 't1' }, first.conversationId));
+    await flush();
+    bots.update(alice.id, { approvalMode: 'supervised' }, []);
+    runtime.approvalResult = { ok: false, error: 'worker-unavailable' };
+    expect(await host.deliver(chat.id, alice.id, 'blocked')).toMatchObject({
+      ok: false,
+      error: 'worker-unavailable',
+    });
+    expect(runtime.prompts).toHaveLength(1);
+    expect(host.effectiveBot(first.conversationId)?.approvalMode).toBe('full');
+    runtime.approvalResult = { ok: true };
+    expect((await host.deliver(chat.id, alice.id, 'retry')).ok).toBe(true);
+    expect(host.effectiveBot(first.conversationId)?.approvalMode).toBe('supervised');
   });
 
   it('synchronizes the model before retrying a failed response', async () => {

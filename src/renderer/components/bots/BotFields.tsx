@@ -200,12 +200,20 @@ export function ApprovalSelect({
           ))}
         </SelectPopup>
       </Select>
-      {value === 'full' && (
-        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
-          {t('Protected actions will not ask for confirmation either.')}
-        </p>
-      )}
+      {value === 'full' && <BotAutonomyNotice />}
     </>
+  );
+}
+
+/** 创建按钮旁与能力设置共用，授权不能藏在折叠的高级选项里。 */
+export function BotAutonomyNotice() {
+  const { t } = useI18n();
+  return (
+    <p data-slot="bot-autonomy-notice" className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
+      {t(
+        'Autonomous execution: creating or saving authorizes enabled tools to run without per-action approval, including commands, MCP, deletions and deployments. Commands can access files and networks available to your account. Read-only and disabled-tool limits still apply; system permissions and other independent authorizations are unchanged.'
+      )}
+    </p>
   );
 }
 

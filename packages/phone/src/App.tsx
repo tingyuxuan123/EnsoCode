@@ -16,6 +16,7 @@ import { emptyGuestView } from '@shared/pair/guestProjection';
 import type { AttachedImage } from '@shared/types/agent';
 import { MonitorSmartphone, PanelLeft, ScanLine, Unlink } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { composerDrafts } from '@/components/chat/composerDraft';
 import { Button } from '@/components/ui/button';
 import { applyAppBadge, attentionBadgeCount } from './attentionBadge';
 import { BotArtifactsContext } from './BotArtifacts';
@@ -77,6 +78,8 @@ import {
 } from './storage';
 import { setPhoneAgentActions } from './stubs/electron-api';
 import { setQueueActions } from './stubs/sessions-store';
+import { usePhoneBack } from './usePhoneBack';
+import { usePhoneScreenBack } from './usePhoneScreenBack';
 import { shouldHoldWakeLock, syncWakeLock } from './wakeLock';
 
 /**
@@ -154,7 +157,6 @@ export function App() {
   const [historyPending, setHistoryPending] = useState<ReadonlySet<string>>(new Set());
   /** 马上发送：本地乐观上墙，等权威 user 消息到达再收掉 */
   const [queueEchoes, setQueueEchoes] = useState<QueueSendEcho[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // iPad 横屏等宽窗口：会话列表常驻左栏，不走浮层抽屉、也不自动收起
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
   // 宽屏下用户可选侧栏常驻/折叠（折叠后走浮层抽屉）；选择持久化，默认常驻
@@ -162,6 +164,16 @@ export function App() {
     () => localStorage.getItem(SIDEBAR_PINNED_KEY) !== 'off'
   );
   const docked = wide && sidebarPinned;
+  const {
+    drawerOpen,
+    backToConversation,
+    openDrawer: showDrawer,
+    closeDrawer: hideDrawer,
+  } = usePhoneScreenBack({
+    enabled: Boolean(device && !adding && state !== 'unauthorized'),
+    docked,
+    initialListOpen: !initialView.activeId && !initialView.botChatId,
+  });
   const toggleSidebarPinned = () => {
     setSidebarPinned((prev) => {
       localStorage.setItem(SIDEBAR_PINNED_KEY, prev ? 'off' : 'on');
@@ -894,6 +906,11 @@ export function App() {
     saveDevices(next);
   };
 
+  usePhoneBack(Boolean(device && adding), () => setAdding(false), 20);
+  const showCompanion = Boolean(device && !adding && state !== 'unauthorized');
+  usePhoneBack(showCompanion && processId !== null, () => setProcessId(null), 20);
+  usePhoneBack(showCompanion && commsOpen, () => setCommsOpen(false), 20);
+
   if (!device || adding) {
     return (
       <PairScreen
@@ -929,7 +946,7 @@ export function App() {
             {others && (
               <button
                 type="button"
-                onClick={() => setDrawerOpen(true)}
+                onClick={showDrawer}
                 className="glass flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-medium"
               >
                 <MonitorSmartphone className="size-[18px]" aria-hidden />
@@ -959,14 +976,14 @@ export function App() {
       localStorage.getItem(SIDEBAR_PINNED_KEY) === 'off' ||
       !window.matchMedia(WIDE_LAYOUT_QUERY).matches
     ) {
-      setDrawerOpen(false);
+      hideDrawer();
     }
   };
 
   const openDrawer = () => {
     // 恢复上次停留的标签；没记过时沿用「正在看 Bot 聊天就停 Bot」的联动
     setBotSegment(resolveDrawerSegment(botEnabled, botChatId));
-    setDrawerOpen(true);
+    showDrawer();
     if (botEnabled) send({ type: 'bot-catalog-request' });
   };
 
@@ -1277,6 +1294,7 @@ export function App() {
       <SessionDrawer
         open={docked || drawerOpen}
         docked={docked}
+        backToConversation={backToConversation}
         pinnable={wide}
         onTogglePinned={toggleSidebarPinned}
         projects={projects}
@@ -1288,6 +1306,7 @@ export function App() {
         activeDevicePairId={device.pairId}
         connected={state === 'online'}
         connectionLabel={connectionLabel}
+        deviceReadOnly={deviceReadOnly}
         onClose={() => closeDrawer()}
         onSelect={(id) => {
           setBotChatId(null);
@@ -1325,6 +1344,17 @@ export function App() {
                 },
                 panel: (
                   <BotDrawerPanel
+                    onBack={() => {
+                      setBotSegment(false);
+                      saveDrawerSegment('code');
+                    }}
+                    connectionLabel={device.label}
+                    onOpenComms={(chatId) => {
+                      setBotChatId(chatId);
+                      setProcessId(null);
+                      setCommsOpen(true);
+                      closeDrawer();
+                    }}
                     bots={bots}
                     chats={botChats}
                     activeChatId={botChatId}
@@ -1343,7 +1373,11 @@ export function App() {
             : undefined
         }
       />
-      <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div
+        inert={drawerOpen && !docked}
+        aria-hidden={drawerOpen && !docked}
+        className="flex h-full min-w-0 flex-1 flex-col"
+      >
         {state === 'replaced' && (
           <div
             role="status"
@@ -1483,13 +1517,31 @@ export function App() {
           projects={projects}
           providers={providers}
           preferredProjectId={composeProjectId}
+          connectionLabel={`${device.label} · ${STATE_LABEL[state]}`}
+          recentSessions={catalog.filter((item) => !item.parentId && !item.archived).slice(0, 2)}
+          onSelectSession={(id) => {
+            setComposing(false);
+            setComposeProjectId(null);
+            setBotChatId(null);
+            setProcessId(null);
+            setCommsOpen(false);
+            setActiveId(id);
+          }}
           onClose={() => {
             setComposing(false);
             setComposeProjectId(null);
           }}
           onCreate={(req) => {
             const sessionId = crypto.randomUUID();
-            send({ type: 'spawn', sessionId, ...req });
+            const { draft, ...spawn } = req;
+            if (draft) {
+              composerDrafts.set(sessionId, {
+                segments: draft.text ? [{ type: 'text', text: draft.text }] : [],
+                images: draft.images ?? [],
+                slash: null,
+              });
+            }
+            send({ type: 'spawn', sessionId, ...spawn });
             freshIdsRef.current.add(sessionId);
             setComposing(false);
             setComposeProjectId(null);

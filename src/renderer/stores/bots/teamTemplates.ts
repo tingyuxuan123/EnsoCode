@@ -59,7 +59,7 @@ export const TEAM_TEMPLATES: readonly TeamTemplate[] = [
         key: 'pm',
         color: '#7c5cff',
         tools: 'readonly',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: ['fe', 'be', 'qa'],
         acceptFrom: [],
         zh: {
@@ -110,7 +110,7 @@ Be concise: conclusion first, then reasoning.`,
         key: 'fe',
         color: '#0ea5e9',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: ['qa'],
         acceptFrom: ['pm'],
         zh: {
@@ -155,7 +155,7 @@ Role contract:
         key: 'be',
         color: '#22c55e',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: ['qa'],
         acceptFrom: ['pm'],
         zh: {
@@ -200,7 +200,7 @@ Role contract:
         key: 'qa',
         color: '#f97316',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: [],
         acceptFrom: ['pm', 'fe', 'be'],
         zh: {
@@ -255,7 +255,7 @@ Role contract:
         key: 'chief',
         color: '#ec4899',
         tools: 'readonly',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: ['writer', 'editor', 'visual'],
         acceptFrom: [],
         zh: {
@@ -304,7 +304,7 @@ Role contract:
         key: 'writer',
         color: '#0ea5e9',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: ['editor'],
         acceptFrom: ['chief'],
         zh: {
@@ -350,7 +350,7 @@ Role contract:
         key: 'editor',
         color: '#22c55e',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: [],
         acceptFrom: ['chief', 'writer'],
         zh: {
@@ -395,7 +395,7 @@ Role contract:
         key: 'visual',
         color: '#f97316',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: [],
         acceptFrom: ['chief', 'writer'],
         zh: {
@@ -452,7 +452,7 @@ Role contract:
         key: 'lead',
         color: '#7c5cff',
         tools: 'readonly',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: ['collector', 'analyst', 'reporter'],
         acceptFrom: [],
         zh: {
@@ -499,7 +499,7 @@ Role contract:
         key: 'collector',
         color: '#0ea5e9',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: [],
         acceptFrom: ['lead'],
         zh: {
@@ -543,7 +543,7 @@ Role contract:
         key: 'analyst',
         color: '#22c55e',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: [],
         acceptFrom: ['lead'],
         zh: {
@@ -588,7 +588,7 @@ Role contract:
         key: 'reporter',
         color: '#ec4899',
         tools: 'all',
-        approvalMode: 'auto-edits',
+        approvalMode: 'full',
         canDelegateTo: [],
         acceptFrom: ['lead'],
         zh: {

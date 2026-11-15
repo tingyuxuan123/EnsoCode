@@ -1,16 +1,18 @@
 ---
 name: project-knowledge
 description: >
-  Navigate 小满 project knowledge: long-term engineering conventions, layer boundaries,
+  Navigate Collabra (repository EnsoCode) project knowledge: long-term engineering conventions, layer boundaries,
   testing rules, historical decisions, and high-cost pitfalls. Use before non-trivial or cross-layer changes,
   when adding IPC or session/worker behavior, when debugging state/history/input issues,
   when a fix reveals a reusable rule, when preparing a desktop release/update, or when the user asks to search or capture project knowledge.
-  项目知识导航、踩坑检索、根因沉淀、TDD、发版、推送更新、打包升级和工程约定。
+  Collabra 项目知识导航、踩坑检索、根因沉淀、TDD、发版、推送更新、打包升级和工程约定。
 ---
 
 # Project Knowledge
 
-这是项目知识的导航和维护入口，不替代权威文档，也不恢复任务状态机或工作流。先按下面的场景选择最相关的文档，避免无目的地通读整个知识库。
+这是 Collabra（桌面版、手机端、Android 共用本仓库）项目知识的导航和维护入口，不替代权威文档，也不恢复任务状态机或工作流。先按下面的场景选择最相关的文档，避免无目的地通读整个知识库。
+
+路径约定：`docs/…` 从仓库根目录解析；其余裸路径（如 `main/ipc.md`、`renderer/state.md`）以 `docs/engineering-reference/` 为基准。引用优先写成仓库根目录路径，便于从任何位置打开。
 
 ## 动手前：先读什么
 
@@ -18,14 +20,22 @@ description: >
 | --- | --- |
 | 任意非平凡改动 | `AGENTS.md`、`docs/engineering-guidelines.md` |
 | 跨主进程 / preload / renderer | `docs/engineering-reference/guides/cross-layer-thinking-guide.md`、`main/ipc.md` |
-| Main、worker、child、session | `docs/engineering-reference/main/services.md`、`renderer/state.md` |
+| Main、worker、child、session、Bot / 成员 / 群聊 | `docs/engineering-reference/main/services.md`、`renderer/state.md` |
 | 新增或修改 IPC | `docs/engineering-reference/main/ipc.md` |
 | provider、skill、MCP、指令扫描 | `docs/engineering-reference/main/services.md`、`testing.md` |
-| React、Zustand、持久化 | `docs/engineering-reference/renderer/state.md`、`renderer/components.md` |
+| React、Zustand、持久化、多窗口同步 | `docs/engineering-reference/renderer/state.md`、`renderer/components.md` |
+| 中英文文案、翻译键 | `docs/engineering-reference/renderer/i18n.md`、`shared/index.md` |
 | UI、弹窗、窗口、样式 | `docs/engineering-reference/renderer/components.md`、`dialogs.md`、`styling.md`、`main/windows.md` |
+| 插件系统、自有插件市场、插件签名 | `docs/plugins.md`、`docs/engineering-reference/guides/plugin-market.md`、`main/ipc.md` |
+| 手机配对、远程会话、PWA、中继部署 | `docs/engineering-reference/main/pair-replay.md`、`pair-preview.md`、`pair-images.md`、`guides/relay-web-deploy.md` |
+| 设计画布、设计窗口、预览服务 | `docs/engineering-reference/guides/design-subsystem.md`、`main/windows.md` |
+| 图片生成、远程图片抓取 | `docs/engineering-reference/guides/image-generation.md`、`main/services.md` |
+| 代码搜索工具 | `docs/engineering-reference/main/code-search.md` |
 | 纯逻辑、协议、解析器、路径校验 | `docs/engineering-reference/testing.md` |
 | 怀疑已有类似实现 | `docs/engineering-reference/guides/code-reuse-thinking-guide.md` |
-| 发版、推送更新、打包升级、GitHub Actions / Release | `docs/engineering-reference/guides/releasing.md` |
+| 后台任务、监督与等待恢复 | `docs/engineering-reference/guides/task-supervision.md` |
+| 可复现审查、证据化验收 | `docs/engineering-reference/guides/reproducible-review.md` |
+| 发版、推送更新、打包升级、原生模块、GitHub Actions / Release | `docs/engineering-reference/guides/releasing.md`、`main/native-modules.md` |
 
 动手前至少回答：行为差距是什么、行为真正属于哪一层、哪些文件必须改、哪些相邻问题明确不做。
 
@@ -45,6 +55,15 @@ description: >
 | retry、回退、恢复行为异常 | `big-question/pi-auto-retry-willretry.md`、`checkpoint-cross-session-wipe.md` |
 | 代码搜索反复耗尽预算或报坏 JSON | `big-question/code-search-protocol-and-evidence.md` |
 | 弹窗或下拉无响应 | `big-question/dialog-layering.md`、`ui-component-classname.md` |
+| 打开插件面板后整个应用无响应 | `big-question/plugin-iframe-nav-guard-spin.md` |
+| 上下文压缩、排队发送或图片累积后报错 | `big-question/enso-compact-token-limit-fallback.md`、`queued-prompt-vs-compaction.md`、`image-context-request-body-limit.md` |
+| 手机一直读取历史、配对页反复闪烁 | `big-question/pair-sync-retry-deadlock.md`、`pair-web-replaced-loop.md` |
+| 长会话翻页卡住、滚动抖动 | `big-question/history-paging-stuck-at-top.md`、`scrollbar-gutter-streaming-jitter.md` |
+| 工具单测全绿但真机调用被判参数非法 | `big-question/tool-prepare-arguments-schema-drift.md` |
+| 模型选择器缺新模型、MCP 反复要求授权 | `big-question/model-directory-single-source.md`、`mcp-oauth-worker-refresh.md` |
+| 构建或安装包异常（CJS shim、asar 体积） | `big-question/main-cjs-shim-regex.md`、`electron-builder-platform-files.md` |
+
+完整症状清单见 `docs/engineering-reference/big-question/index.md`；新踩到的坑按该目录的表单补一行。
 
 排查应沿完整链路验证可观察事实：
 
@@ -118,7 +137,7 @@ pnpm typecheck && pnpm lint && pnpm test
 | `AGENTS.md` | 约 100 行 | 只保留高频硬规则，其余移到 `docs/engineering-guidelines.md` 或 reference |
 | `docs/engineering-guidelines.md` | 约 250 行 | 按主题拆到 `docs/engineering-reference/` |
 | 单个 `big-question` 条目 | 约 150–250 行 | 删除过程日志，只保留症状、根因、修法、回归防线和相关代码 |
-| `project-knowledge/SKILL.md` | 约 150 行 | 只保留导航、检索、沉淀和维护规则，不复制规范正文 |
+| `project-knowledge/SKILL.md` | 约 200 行 | 只保留导航、检索、沉淀和维护规则，不复制规范正文 |
 | `docs/engineering-reference/big-question/` | 不设硬上限 | 合并重复问题，按症状和根因去重 |
 | `docs/project-history/` | 不设硬上限 | 按日期归档；只保留仍有背景价值的设计和研究结论 |
 
@@ -139,7 +158,7 @@ pnpm typecheck && pnpm lint && pnpm test
 
 ### 自动维护命令
 
-项目提供三条命令：
+项目提供四条命令：
 
 ```bash
 pnpm knowledge:check
@@ -148,11 +167,12 @@ pnpm knowledge:clean -- --apply
 pnpm knowledge:compact
 ```
 
-- `knowledge:check` 只读检查文档行数、Markdown 链接和踩坑条目结构；发现问题时返回非零状态，不修改文件。
+- `knowledge:check` 只读检查文档行数、Markdown 链接和踩坑条目结构；断链返回非零状态，超行数和缺章节只告警，均不修改文件。
 - `knowledge:clean` 默认 dry-run，列出历史目录中的临时 `.jsonl` 文件；只有显式传 `-- --apply` 才移动到 `docs/knowledge-review/archive/`。
 - `knowledge:compact` 检查超长 `big-question` 条目，在 `docs/knowledge-review/compact/` 生成源文件副本和压缩提示；原文不变。
 - 设置 `OPENAI_API_KEY` 后，`knowledge:compact` 可调用兼容 Chat Completions 的模型生成草案；可选 `OPENAI_BASE_URL` 和 `OPENAI_MODEL`，模型输出仍只写入审阅目录。
 - 自动命令不会直接覆盖、删除或合并当前知识。应用模型草案前必须人工检查 diff，并确认根因、证据、风险和源码链接没有丢失。
+- 链接检查器自身有回归测试：`node --test scripts/knowledge.test.mjs`。修 Markdown 解析、路径白名单或忽略规则时先跑它。
 
 ### 安全原则
 

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { saveActiveDeviceId, saveDevices, saveLastSession } from './storage';
+import { usePhoneBack } from './usePhoneBack';
 
 vi.mock('./ChatScreen', () => ({
   ChatScreen: ({ sessionId }: { sessionId: string }) => `CODE_VIEW:${sessionId}`,
@@ -18,8 +19,10 @@ vi.mock('./SessionConfigSheet', () => ({ SessionConfigSheet: () => null }));
 vi.mock('./stubs/electron-api', () => ({ setPhoneAgentActions: () => {} }));
 vi.mock('./stubs/sessions-store', () => ({ setQueueActions: () => {} }));
 vi.mock('./push', () => ({ isPushSupported: () => false, isStandalone: () => false }));
+vi.mock('./usePhoneBack', () => ({ usePhoneBack: vi.fn() }));
 
 beforeEach(() => {
+  vi.mocked(usePhoneBack).mockClear();
   const data = new Map<string, string>();
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => data.get(key) ?? null,
@@ -56,6 +59,15 @@ it('lets an explicit launch session override the restored Bot chat', () => {
   window.location.search = '?session=notification';
   expect(renderToStaticMarkup(createElement(App))).toContain('CODE_VIEW:notification');
 });
+
+it.each(['', '?session=notification'])(
+  'registers conversation Back even without a list or overlay open (%s)',
+  (search) => {
+    window.location.search = search;
+    renderToStaticMarkup(createElement(App));
+    expect(usePhoneBack).toHaveBeenCalledWith(true, expect.any(Function), 0);
+  }
+);
 
 it.each(['', '?session=notification'])(
   'fixes the whole sidebar-and-content shell, not the conversation alone, in standalone (%s)',

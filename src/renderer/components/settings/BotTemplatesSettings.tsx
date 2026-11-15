@@ -92,7 +92,7 @@ const blankMember = (): MemberTemplateData => ({
   persona: '',
   color: AVATAR_PALETTE[0],
   tools: 'all',
-  approvalMode: 'auto-edits',
+  approvalMode: 'full',
 });
 
 const blankTeamMember = (key: string, index: number): TeamTemplateMemberData => ({
@@ -103,7 +103,7 @@ const blankTeamMember = (key: string, index: number): TeamTemplateMemberData => 
   persona: '',
   color: AVATAR_PALETTE[index % AVATAR_PALETTE.length],
   tools: 'all',
-  approvalMode: 'auto-edits',
+  approvalMode: 'full',
   canDelegateTo: [],
   acceptFrom: [],
 });

@@ -36,6 +36,7 @@ const h = vi.hoisted(() => ({
     voiceInputEnabled: false,
     projects: [{ id: 'p', path: '/work' }],
   },
+  summary: { key: 'empty', running: false, queued: false },
 }));
 vi.mock('@/stores/bots', () => ({
   useBotsStore: Object.assign((select: (s: unknown) => unknown) => select(h.state), {
@@ -56,13 +57,12 @@ vi.mock('@/stores/modelDirectory/useProviders', () => ({ useMaterializedProvider
 vi.mock('@/hooks/useSpeechStatus', () => ({ useSpeechStatus: () => ({}) }));
 vi.mock('@/lib/voiceSession', () => ({ startDesktopVoiceSession: vi.fn() }));
 vi.mock('@/stores/bots/selectors', () => ({
-  chatSummary: () => ({ key: 'empty', running: false, queued: false }),
+  chatSummary: () => h.summary,
   pendingItems: () => [],
 }));
 vi.mock('@/stores/bots/unread', () => ({ groupReadMark: () => undefined }));
 vi.mock('@/stores/bots/delegations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/stores/bots/delegations')>()),
-  activeDelegations: () => [],
   pendingOwners: () => new Map(),
 }));
 vi.mock('framer-motion', () => ({
@@ -72,15 +72,21 @@ vi.mock('framer-motion', () => ({
   },
 }));
 vi.mock('@/components/chat/ApprovalBar', () => ({ ApprovalBar: () => null }));
-vi.mock('@/components/chat/ApprovalModePicker', () => ({ APPROVAL_MODE_META: {} }));
+vi.mock('@/components/chat/ApprovalModePicker', () => ({
+  APPROVAL_MODE_META: { full: { labelKey: 'Full access' } },
+}));
 vi.mock('@/components/chat/AskBar', () => ({ AskBar: () => null }));
 vi.mock('@/components/chat/MessageTimeline', () => ({ CHAT_COL: '' }));
 vi.mock('@/components/chat/ResizeHandle', () => ({ ResizeHandle: () => null }));
 vi.mock('./ArtifactCards', () => ({ ArtifactCards: () => null }));
 vi.mock('./BotAvatar', () => ({ BotAvatar: () => null, GroupAvatar: () => null }));
 vi.mock('./BotBrowserPanel', () => ({ BotBrowserPanel: () => null }));
-vi.mock('./BotComposer', () => ({ BotComposer: () => null }));
-vi.mock('./BotLiveStatus', () => ({ BotLiveStatus: () => null }));
+vi.mock('./BotComposer', () => ({
+  BotComposer: () => createElement('div', { 'data-bot-composer': true }),
+}));
+vi.mock('./BotLiveStatus', () => ({
+  BotLiveStatus: () => createElement('div', { 'data-live-status': true }),
+}));
 vi.mock('./BotPresence', () => ({
   MemberBusyBar: ({
     onOpenLive,
@@ -94,7 +100,10 @@ vi.mock('./BotPresence', () => ({
     ),
 }));
 vi.mock('./BotProfilePanel', () => ({ BotProfilePanel: () => null }));
-vi.mock('./DelegationCard', () => ({ DelegationCard: () => null }));
+vi.mock('./DelegationCard', () => ({
+  DelegationCard: ({ record }: { record: Delegation }) =>
+    createElement('div', { 'data-delegation': record.id }),
+}));
 vi.mock('./GroupBoard', () => ({ TaskBoard: () => null }));
 vi.mock('./GroupInfoPanel', () => ({ GroupInfoPanel: () => null }));
 vi.mock('./GroupTimeline', () => ({ GroupTimeline: () => null }));
@@ -147,6 +156,8 @@ beforeEach(() => {
   h.state.bots = [];
   h.state.sessions = {};
   h.state.delegations = [];
+  h.summary.running = false;
+  h.summary.queued = false;
   h.settings.designEnabled = true;
   h.canvas.target = null;
   h.canvas.workspaceKey = null;
@@ -277,4 +288,91 @@ it('worker 退出后续做复用原会话时，按当前排队执行显示占位
   expect(container.querySelector('[data-live-session]')?.getAttribute('data-empty-title')).toBe(
     'Queued and has not started yet'
   );
+});
+
+it.each(['running', 'queued'] as const)(
+  '私聊 %s 时不在输入框上方重复展示思考和工具摘要',
+  async (status) => {
+    const bot = {
+      id: 'boss',
+      name: '林经理',
+      title: '项目经理',
+      skillIds: [],
+      avatar: { color: '#888' },
+      approvalMode: 'full',
+    } as unknown as BotProfile;
+    h.state.bots = [bot];
+    h.summary[status] = true;
+    await act(async () =>
+      root.render(
+        createElement(BotChatView, {
+          chat: { ...chat, kind: 'direct', members: ['boss'] },
+        })
+      )
+    );
+    expect(container.querySelector('[data-bot-composer]')).not.toBeNull();
+    expect(container.querySelector('[data-live-status]')).toBeNull();
+    expect(container.textContent).toContain(status === 'running' ? 'Working' : 'Queued');
+  }
+);
+
+const directChat: BotChat = { ...chat, id: 'direct', kind: 'direct', members: ['boss'] };
+const renderDirect = async () => {
+  h.state.bots = [
+    {
+      id: 'boss',
+      name: '林经理',
+      title: '项目经理',
+      skillIds: [],
+      avatar: { color: '#888' },
+      approvalMode: 'full',
+    } as unknown as BotProfile,
+  ];
+  await act(async () => root.render(createElement(BotChatView, { chat: directChat })));
+};
+
+it('私聊右侧委派 Tab 显示本聊天活动数量，不抢焦点也不再挤占正文', async () => {
+  h.state.delegations = [
+    delegation({ id: 'active', chatId: 'direct', state: 'running' }),
+    delegation({ id: 'queued', chatId: 'direct', state: 'queued' }),
+    delegation({ id: 'done', chatId: 'direct', state: 'completed' }),
+    delegation({ id: 'other', chatId: 'other', state: 'running' }),
+  ];
+  await renderDirect();
+  const tabs = [...container.querySelectorAll<HTMLButtonElement>('aside button[aria-pressed]')];
+  expect(tabs.map((tab) => tab.textContent)).toEqual([
+    'Member',
+    'Browser',
+    '设计稿',
+    'Delegations2',
+  ]);
+  expect(container.querySelector('aside button[aria-pressed="true"]')?.textContent).toBe('Member');
+  expect(container.querySelector('[data-delegation]')).toBeNull();
+  await act(async () => tabs.at(-1)?.click());
+  expect(h.state.setPanelTab).toHaveBeenCalledWith('delegations');
+  h.state.panelTab = 'delegations';
+  await renderDirect();
+  expect(
+    [...container.querySelectorAll('aside [data-delegation]')].map((card) =>
+      card.getAttribute('data-delegation')
+    )
+  ).toEqual(['active', 'queued']);
+  expect(container.querySelectorAll('[data-delegation]')).toHaveLength(2);
+  expect(container.querySelector('aside button[aria-pressed="true"]')?.textContent).toBe(
+    'Delegations2'
+  );
+});
+
+it('活动全部结束后仍留在委派 Tab 展示空态，切到群聊则回退信息页', async () => {
+  h.state.panelTab = 'delegations';
+  await renderDirect();
+  expect(container.querySelector('aside button[aria-pressed="true"]')?.textContent).toBe(
+    'Delegations'
+  );
+  expect(container.textContent).toContain('No delegations in progress');
+  await render();
+  expect(container.querySelector('aside button[aria-pressed="true"]')?.textContent).toBe(
+    'Group info'
+  );
+  expect(container.querySelector('[data-slot="active-delegations"]')).toBeNull();
 });

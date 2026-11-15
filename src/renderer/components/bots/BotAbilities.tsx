@@ -31,7 +31,7 @@ export interface AbilityForm extends AbilityValues, BudgetForm, LimitsForm {
 
 export const DEFAULT_ABILITIES: AbilityForm = {
   tools: 'all',
-  approvalMode: 'auto-edits',
+  approvalMode: 'full',
   skillIds: [],
   mcpServerIds: [],
   canDelegateTo: 'any',
@@ -89,6 +89,21 @@ export function BotAbilityFields({
           onChange={(approvalMode) => onChange({ approvalMode })}
           zIndex={zIndex}
         />
+        {value.approvalMode !== 'full' && (
+          <Button
+            size="xs"
+            variant="outline"
+            className="mt-2"
+            onClick={() => onChange({ approvalMode: 'full' })}
+          >
+            {t('Use autonomous execution')}
+          </Button>
+        )}
+        <p className="mt-1 text-muted-foreground text-[calc(11rem/14)]">
+          {t(
+            'Save to apply. A running turn keeps its current mode until it ends. Delegations honor the stricter mode of both members.'
+          )}
+        </p>
       </div>
       <AssetPickers value={value} onChange={onChange} />
       <DelegationField

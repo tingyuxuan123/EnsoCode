@@ -14,7 +14,7 @@ import type {
   UiElementMentionCandidate,
 } from '@shared/types/mentions';
 import type { StartVoiceSession } from '@shared/types/speech';
-import { ArrowUp, CircleStop, ImagePlus, SlashSquare, X } from 'lucide-react';
+import { ArrowUp, CircleStop, ImagePlus, Plus, SlashSquare, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -73,6 +73,8 @@ import { appendSlash, foldLeadingSkills, removeSlash, slashChain } from './slash
 import { VoiceInputButton } from './VoiceInputButton';
 
 interface ComposerProps {
+  /** Phone keeps the shared draft/command pipeline, with a separate round send action. */
+  appearance?: 'default' | 'phone';
   cwd?: string;
   commands: SlashCommand[];
   running: boolean;
@@ -126,6 +128,7 @@ interface ComposerProps {
 }
 
 export function Composer({
+  appearance = 'default',
   cwd,
   commands,
   running,
@@ -880,6 +883,7 @@ export function Composer({
       <div
         ref={setDropRef}
         data-slot="composer"
+        data-composer-appearance={appearance}
         className={cn(
           'rounded-[6px] border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-brand/60',
           locked && 'border-line opacity-80',
@@ -919,7 +923,7 @@ export function Composer({
           </div>
         )}
         {images.filter((image) => !image.id).length > 0 && (
-          <div className="flex flex-wrap gap-2 px-3 pt-3">
+          <div data-composer-images="" className="flex flex-wrap gap-2 px-3 pt-3">
             {images
               .filter((image) => !image.id)
               .map((image, index) => (
@@ -951,6 +955,7 @@ export function Composer({
           </div>
         )}
         <div
+          data-composer-editor=""
           className={cn(
             'flex min-h-[calc(64rem/14)] items-start gap-1.5 px-[14px] pb-[4px]',
             images.length > 0 ? 'pt-1.5' : 'pt-[12px]'
@@ -1056,8 +1061,14 @@ export function Composer({
           />
         </div>
         {agentRecipient && <p className="sr-only">{t('Send only to the selected Agent')}</p>}
-        <div className="flex items-end justify-between gap-[4px] px-[8px] pt-[2px] pb-[8px]">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-[4px]">
+        <div
+          data-composer-toolbar=""
+          className="flex items-end justify-between gap-[4px] px-[8px] pt-[2px] pb-[8px]"
+        >
+          <div
+            data-composer-tools=""
+            className="flex min-w-0 flex-1 flex-wrap items-center gap-[4px]"
+          >
             <input
               ref={imageInputRef}
               type="file"
@@ -1071,38 +1082,45 @@ export function Composer({
             />
             <button
               type="button"
+              data-composer-attach=""
               disabled={locked}
               onClick={() => imageInputRef.current?.click()}
               aria-label={t('Attach image')}
               title={t('Attach image')}
               className="flex size-[calc(28rem/14)] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
             >
-              <ImagePlus className="size-[calc(14rem/14)]" />
+              {appearance === 'phone' ? (
+                <Plus className="size-[22px]" />
+              ) : (
+                <ImagePlus className="size-[calc(14rem/14)]" />
+              )}
             </button>
-            {holdVoice ? (
-              <HoldToTalkToggle
-                active={holdToTalk}
-                disabled={locked}
-                onChange={(active) => {
-                  setHoldToTalk(active);
-                  // 按住说话时收起软键盘；切回键盘直接聚焦
-                  if (active) (document.activeElement as HTMLElement | null)?.blur();
-                  else editorRef.current?.focus();
-                }}
-              />
-            ) : voice ? (
-              <VoiceInputButton
-                startSession={voice}
-                requestMicAccess={requestMicAccess}
-                disabled={locked}
-                holdBinding={voiceHoldBinding || undefined}
-                holdScope={composerRef}
-                onText={(text) => {
-                  editorRef.current?.insertText(text);
-                  editorRef.current?.focus();
-                }}
-              />
-            ) : null}
+            <span data-composer-voice="" className="contents">
+              {holdVoice ? (
+                <HoldToTalkToggle
+                  active={holdToTalk}
+                  disabled={locked}
+                  onChange={(active) => {
+                    setHoldToTalk(active);
+                    // 按住说话时收起软键盘；切回键盘直接聚焦
+                    if (active) (document.activeElement as HTMLElement | null)?.blur();
+                    else editorRef.current?.focus();
+                  }}
+                />
+              ) : voice ? (
+                <VoiceInputButton
+                  startSession={voice}
+                  requestMicAccess={requestMicAccess}
+                  disabled={locked}
+                  holdBinding={voiceHoldBinding || undefined}
+                  holdScope={composerRef}
+                  onText={(text) => {
+                    editorRef.current?.insertText(text);
+                    editorRef.current?.focus();
+                  }}
+                />
+              ) : null}
+            </span>
             {toolbar}
             {!isolated && <PluginStatusItems sessionId={focusKey ?? null} />}
             {!isolated && (
@@ -1128,16 +1146,22 @@ export function Composer({
           {effectiveBusy && !hasContent ? (
             <Button
               variant="outline"
+              data-composer-action-button="stop"
               size="icon"
               className="size-[calc(32rem/14)] shrink-0 rounded-[6px] border-foreground bg-foreground text-inverse-foreground hover:bg-foreground/85"
               onClick={onAbort}
               aria-label={t('Stop')}
             >
-              <CircleStop className="size-[calc(16rem/14)]" />
+              {appearance === 'phone' ? (
+                <Square className="size-[22px]" />
+              ) : (
+                <CircleStop className="size-[calc(16rem/14)]" />
+              )}
             </Button>
           ) : (
             <Button
               size="icon"
+              data-composer-action-button="send"
               className="size-[calc(32rem/14)] shrink-0 rounded-[6px] border-brand bg-brand text-brand-foreground shadow-none hover:bg-brand/90 disabled:opacity-35"
               onClick={handleSend}
               disabled={!hasContent || locked || sending}

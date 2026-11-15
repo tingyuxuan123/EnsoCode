@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/roboto";
+@import "@fontsource-variable/jetbrains-mono";
 /* 强调色 token 与时间线样式与桌面共用，复用的聊天组件依赖它 */
 @import "../../../src/renderer/styles/shared.css";
 
@@ -125,7 +126,7 @@
   :root {
     color-scheme: light;
     --font-family-mono: "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", "Menlo", monospace;
-    --font-size-base: 15px;
+    --font-size-base: 16px;
 
     /* ── 设计稿真值：页面与表面 ───────────────────────────── */
     --page: #f4f5f7;
@@ -239,13 +240,13 @@
     font-size: var(--font-size-base);
     height: 100%;
     /* Safari 的状态栏/工具栏会采样页面边缘颜色，html 也要有底色，否则露出系统灰 */
-    background: var(--background);
+    background: var(--page);
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv11", "ss01", "ss03", "tnum";
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-page text-foreground;
     margin: 0;
     /*
      * 移动端不能用 100%：那是布局视口，比可见区域高，底部会被浏览器工具栏挡住。
@@ -350,29 +351,10 @@
   color: transparent;
 }
 
-/* 复用的桌面输入条：手机端做成 24 圆角、发丝线、无投影 */
-.phone-dock [data-slot="composer"] {
-  border-radius: 24px;
-  border-color: var(--line);
-  background-color: var(--card);
-  box-shadow: none;
-}
-
 /* ── 复用桌面组件的 scoped 外观（桌面源码零改动） ─────────────────────
  * 只改外观，不改结构：圆角回到设计稿的阶梯、去掉 6px 方卡片、
  * 审批/提问面板做成玻璃浮层。
  */
-
-/* 用户气泡：反色墨黑胶囊，右下收尖 */
-.phone-chat-root div:has(> [data-user-body-typography]) {
-  border-radius: 20px;
-  border-bottom-right-radius: 6px;
-  background-color: var(--pill);
-  color: var(--pill-ink);
-}
-.phone-chat-root div:has(> [data-user-body-typography]) [data-user-body-typography] {
-  color: var(--pill-ink);
-}
 
 /* 审批 / 提问：顶替输入框的玻璃面板 */
 .phone-dock [data-slot="approval-bar"],
@@ -435,6 +417,27 @@
 .phone-dock [data-task-dock-button]:hover {
   background-color: color-mix(in srgb, var(--card2) 70%, var(--line));
 }
+.phone-session-bars [data-slot="goal-bar"] {
+  margin-bottom: 8px;
+  border: 0;
+  border-radius: 14px;
+  background-color: var(--card);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.phone-session-bars [data-task-dock] {
+  margin-bottom: 0;
+}
+.phone-session-bars [data-task-dock-button] {
+  min-height: 32px;
+  border: 0;
+  border-radius: 14px;
+  background-color: var(--card2);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
 .dark .phone-dock [data-task-dock] > div > button,
 .dark .phone-dock [data-task-dock-button] {
   background-color: var(--card2);
@@ -443,8 +446,16 @@
 
 /* 运行秒数并入消息抬头后，输入框下只留一行统计 */
 .phone-dock [data-slot="stats-line"] {
-  margin-top: 2px;
+  margin-top: 10px;
   color: var(--faint);
+}
+.phone-dock [data-slot="context-meter"] {
+  width: 36px;
+  height: 4px;
+  background-color: var(--line);
+}
+.phone-dock [data-slot="context-meter"] > span {
+  background-color: var(--ink2);
 }
 
 [data-slot="sheet-popup"].phone-sheet {
@@ -464,13 +475,21 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--faint) 60%, transparent);
 }
+.phone-sheet > [data-slot="sheet-header"] {
+  padding-top: 26px;
+  padding-bottom: 12px;
+}
+[data-slot="sheet-backdrop"] {
+  background-color: color-mix(in srgb, var(--ink) 35%, transparent);
+  backdrop-filter: none;
+}
 
 /* 固定整个应用来提供 iOS 状态栏底色；不能固定聊天列，否则会覆盖常驻侧栏。 */
 @media (display-mode: standalone) {
   .phone-app-root {
     position: fixed;
     inset: 0;
-    background-color: var(--background);
+    background-color: var(--page);
   }
 }
 
@@ -806,8 +825,6 @@
   --phone-press-duration: 120ms;
 }
 
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up),
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop),
 .phone-dock [data-composer-action] {
   position: relative;
   width: var(--phone-touch);
@@ -827,8 +844,6 @@
   transition-timing-function: var(--phone-ease);
 }
 
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up)::before,
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop)::before,
 .phone-dock [data-composer-action]::before {
   content: "";
   position: absolute;
@@ -839,46 +854,47 @@
   transition: background-color var(--phone-press-duration) var(--phone-ease);
 }
 
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up) > svg,
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop) > svg,
 .phone-dock [data-composer-action] > svg {
   position: relative;
   width: 18px;
   height: 18px;
   opacity: 1;
 }
+.phone-dock [data-composer-action] {
+  background: var(--pill);
+  color: var(--pill-ink);
+}
+.phone-dock [data-composer-action]::before {
+  display: none;
+}
+.phone-dock [data-composer-action]:disabled {
+  color: color-mix(in srgb, var(--pill-ink) 50%, var(--pill));
+}
+.phone-dock [role="radio"][aria-checked="true"]:focus-visible {
+  outline: none;
+}
 
 /* 运行中的停止键也是墨黑胶囊；只有禁用态退回 card2 灰底 */
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):disabled,
 .phone-dock [data-composer-action]:disabled {
   color: var(--muted-foreground);
 }
 
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):disabled::before,
 .phone-dock [data-composer-action]:disabled::before {
   background: var(--muted);
   box-shadow: none;
 }
 
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):active:not(:disabled),
-.phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop):active:not(:disabled),
 .phone-dock [data-composer-action]:active:not(:disabled) {
   scale: 0.96;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up),
-  .phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop),
   .phone-dock [data-composer-action],
-  .phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up)::before,
-  .phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop)::before,
   .phone-dock [data-composer-action]::before {
     animation: none !important;
     transition: none !important;
   }
 
-  .phone-dock [data-slot="composer"] button:has(> svg.lucide-arrow-up):active:not(:disabled),
-  .phone-dock [data-slot="composer"] button:has(> svg.lucide-circle-stop):active:not(:disabled),
   .phone-dock [data-composer-action]:active:not(:disabled) {
     scale: 1;
   }
@@ -890,7 +906,8 @@
  * ═══════════════════════════════════════════════════════════════════ */
 
 /* 用户消息：反色胶囊，右下角收尖（稿子 UserBubble） */
-.phone-chat-root .group\/user > div:first-child {
+.phone-chat-root [data-user-bubble] {
+  max-width: calc(100% - 48px);
   border-radius: 20px;
   border-bottom-right-radius: 6px;
   background-color: var(--pill);
@@ -899,8 +916,57 @@
   font-size: 16px;
   line-height: 22px;
 }
-.phone-chat-root .group\/user > div:first-child * {
+.phone-chat-root [data-user-bubble] [data-user-body-typography] {
   color: inherit;
+}
+.phone-chat-root [data-user-body-typography] {
+  line-height: 22px !important;
+}
+.phone-chat-root [data-enso="message-user"] {
+  position: relative;
+}
+.phone-chat-root [data-user-meta]:not([data-delivery-state]) {
+  position: absolute;
+  right: 0;
+  bottom: -18px;
+  min-height: 16px;
+  font-size: 11px;
+  line-height: 16px;
+  opacity: 0;
+  pointer-events: none;
+}
+.phone-chat-root [data-reply-body] {
+  padding-right: 0;
+}
+.phone-chat-root [data-reply-actions] {
+  top: -28px;
+  opacity: 0;
+  pointer-events: none;
+}
+.phone-chat-root [data-enso="message-user"]:focus-within [data-user-meta],
+.phone-chat-root [data-enso="message-user"]:hover [data-user-meta],
+.phone-chat-root [data-reply-body]:focus-within [data-reply-actions],
+.phone-chat-root [data-reply-body]:hover [data-reply-actions] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.phone-chat-root [data-chat-typography] p {
+  line-height: 24px;
+}
+.phone-chat-root [data-chat-typography] code:not(pre code) {
+  border-radius: 6px;
+  padding-inline: 6px;
+  font-size: 13.5px !important;
+}
+.phone-chat-root .t-icon-swap {
+  display: inline-grid;
+}
+.phone-chat-root .t-icon {
+  grid-area: 1 / 1;
+}
+.phone-chat-root .t-icon-swap[data-state="a"] [data-icon="b"],
+.phone-chat-root .t-icon-swap[data-state="b"] [data-icon="a"] {
+  visibility: hidden;
 }
 
 /* 助手正文：15/24，别用桌面的 16/27 —— 手机上读长文更费眼 */
@@ -923,16 +989,40 @@
   color: var(--dim);
 }
 
-/* 助手抬头：名字 15/20 半粗，时间 12 灰（稿子 TurnHead） */
-.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"][class*="min-h-[calc(20rem"] {
+/* Header and worklog are consecutive flow rows, never absolute overlays. */
+.phone-chat-root [data-reply-header] {
   margin-bottom: 6px;
+  max-width: 100%;
   font-size: 15px;
   line-height: 20px;
 }
-.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"][class*="min-h-[calc(20rem"] > span[class*="font-medium"] {
+.phone-chat-root [data-reply-name] {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 15px;
   line-height: 20px;
   font-weight: 600;
+}
+.phone-chat-root [data-reply-model] {
+  display: none;
+}
+.phone-chat-root [data-reply-time] {
+  font-size: 12px;
+  line-height: 16px;
+}
+.phone-chat-root [data-worklog-head] {
+  position: static;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background-color: color-mix(in srgb, var(--card2) 70%, transparent);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dim);
+}
+.phone-chat-root [data-worklog-head] > :is(div, button) {
+  flex: 1 1 auto;
 }
 
 /* 输入区：dock 去掉顶部分隔线，整块躺在纸面上（稿子无框列表 + 玻璃浮层） */
@@ -941,41 +1031,153 @@
   background-color: transparent;
 }
 
-/* 输入条压成一行：附件在左、正文居中、发送在右（稿子 Composer） */
-.phone-dock [data-slot="composer"] {
-  min-height: 52px;
-  border-radius: 26px;
-  border: 0.75px solid var(--line);
-  background-color: var(--card);
-}
-.phone-dock [data-slot="composer"] > div:first-child {
-  order: 2;
-  min-height: 52px;
-  flex: 1;
+/* Match the design's 48px capsule + a separate 48px send button with an 8px gap.
+   Stable slots keep attachments/voice from accidentally changing the layout. */
+.phone-dock [data-composer-appearance="phone"] {
+  position: relative;
+  display: grid;
+  grid-template: "images images images" auto "attach editor voice" auto / 36px minmax(0, 1fr) auto;
   align-items: center;
-  padding: 14px 4px 14px 8px;
+  column-gap: 6px;
+  min-height: 48px;
+  margin-right: 56px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background-color: var(--card);
+  box-shadow: none;
 }
-.phone-dock [data-slot="composer"] > div:first-child > div:first-child {
+.phone-dock [data-composer-appearance="phone"] [data-composer-editor] {
+  grid-area: editor;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  padding: 7px 0;
+}
+.phone-dock [data-composer-editor] [contenteditable] {
   min-height: 22px;
-  max-height: 96px;
-  padding-top: 0;
+  max-height: 120px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 22px;
 }
-.phone-dock [data-slot="composer"] > div:last-child {
+.phone-dock [data-composer-editor] [contenteditable]::before {
+  color: var(--dim);
+}
+.phone-dock [data-composer-toolbar],
+.phone-dock [data-composer-tools] {
   display: contents;
 }
-.phone-dock [data-slot="composer"] > div:last-child > div:first-child {
-  order: 1;
-  flex: 0 0 auto;
-  padding-left: 8px;
+.phone-dock [data-composer-images] {
+  grid-area: images;
+  padding: 6px 6px 10px;
 }
-.phone-dock [data-slot="composer"] > div:last-child > [data-slot="button"] {
-  order: 3;
-  margin-right: 4px;
-  align-self: center;
+.phone-dock [data-composer-attach] {
+  grid-area: attach;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--ink);
 }
-.phone-dock [data-slot="composer"] {
+.phone-dock [data-composer-voice] {
+  grid-area: voice;
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+.phone-dock [data-composer-voice]:empty {
+  display: none;
+}
+.phone-dock [data-composer-voice] button {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 999px;
+  color: var(--ink);
+}
+.phone-dock [data-composer-voice] svg {
+  width: 22px;
+  height: 22px;
+}
+.phone-dock [data-slot="composer"] [data-composer-action-button] {
+  position: absolute;
+  right: -57px;
+  bottom: -1px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: var(--pill);
+  color: var(--pill-ink);
+  opacity: 1;
+}
+.phone-dock [data-slot="composer"] [data-composer-action-button]::before {
+  display: none;
+}
+.phone-dock [data-slot="composer"] [data-composer-action-button] > svg {
+  width: 22px;
+  height: 22px;
+}
+.phone-dock [data-slot="composer"] [data-composer-action-button]:disabled {
+  color: color-mix(in srgb, var(--pill-ink) 50%, var(--pill));
+}
+
+.phone-top-bar {
+  min-height: calc(56px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.phone-pair-header {
+  padding-top: calc(4px + env(safe-area-inset-top, 0px));
+}
+.phone-list-header {
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+}
+.phone-list-actions {
+  bottom: max(32px, env(safe-area-inset-bottom), var(--phone-safe-bottom, 0px));
+}
+.phone-settings [data-slot="switch"] {
+  width: 48px;
+  height: 28px;
+  padding-inline: 4px;
+}
+.phone-settings [data-slot="switch-thumb"] {
+  width: 20px;
+  height: 20px;
+}
+.phone-settings [data-slot="switch-thumb"][data-checked] {
+  translate: 20px 0;
+}
+.phone-pair-footer {
+  padding-bottom: max(32px, env(safe-area-inset-bottom), var(--phone-safe-bottom, 0px));
+}
+.phone-chat-root > .min-h-0 .enso-chat-col {
+  padding-inline: 20px;
+}
+.phone-code-dock > .enso-chat-col {
+  padding-inline: 12px;
+}
+.phone-dock.pb-safe {
+  padding-bottom: max(8px, env(safe-area-inset-bottom), var(--phone-safe-bottom, 0px));
+}
+.phone-dock [data-composer-action] > svg {
+  width: 22px;
+  height: 22px;
+}
+.dark .glass {
+  background-color: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 12px 28px -8px rgb(0 0 0 / 0.6);
+}
+.phone-dock [data-slot="ask-bar"],
+.phone-dock [data-slot="approval-bar"] {
+  max-height: min(76dvh, 680px);
+  overflow-y: auto;
+}
+.phone-dock [data-approval-summary] pre {
+  margin-top: 0;
 }
 
 /* ── 审批面板：稿子 approval.tsx 的排布 ─────────────────────────── */
@@ -992,14 +1194,14 @@
   color: var(--ink);
 }
 /* 命令块：浅灰底、14/20、深色等宽，不再用 shiki 的白底 */
-.phone-dock [data-slot="approval-bar"] > div:nth-child(2) {
+.phone-dock [data-approval-summary] {
   margin-top: 10px;
   border-radius: 14px;
   background-color: var(--card2);
   padding: 12px 14px;
 }
-.phone-dock [data-slot="approval-bar"] > div:nth-child(2) pre,
-.phone-dock [data-slot="approval-bar"] > div:nth-child(2) code {
+.phone-dock [data-approval-summary] pre,
+.phone-dock [data-approval-summary] code {
   background-color: transparent !important;
   font-size: 14px !important;
   line-height: 20px !important;
@@ -1019,19 +1221,23 @@
   font-size: 15px;
   font-weight: 500;
 }
-.phone-dock [data-slot="approval-bar"] > div:last-child > button:nth-child(1) {
+.phone-dock [data-approval-decision="deny"] {
   order: 1;
   flex: 1 1 0;
   background-color: var(--card);
-  color: var(--red);
+  color: var(--ink);
 }
-.phone-dock [data-slot="approval-bar"] > div:last-child > button:nth-child(3) {
+.phone-dock [data-approval-decision="allow"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   order: 2;
   flex: 1.4 1 0;
   background-color: var(--pill);
   color: var(--pill-ink);
 }
-.phone-dock [data-slot="approval-bar"] > div:last-child > button:nth-child(2) {
+.phone-dock [data-approval-decision="allowSession"] {
   order: 3;
   flex: 1 0 100%;
   height: 40px;
@@ -1039,36 +1245,22 @@
   color: var(--ink2);
 }
 
-/* ── 工作中状态：并进抬头右侧，不再单独占一行（稿子 TurnRun） ─────── */
-.phone-chat-root .enso-chat-col { position: relative; }
-.phone-chat-root .enso-chat-col:has(> div > svg.t-shimmer, > div:has(> svg) .t-shimmer) > div:first-child { padding-right: 96px; }
-.phone-chat-root .enso-chat-col > div:has(> svg):has(.t-shimmer) {
-  position: absolute;
-  top: 1px;
-  right: 16px;
-  width: auto !important;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dim);
-}
-.phone-chat-root .enso-chat-col > div:has(> svg):has(.t-shimmer) > svg { display: none; }
-
 /* 抬头头像：白圆底托 Logo，22px（稿子 AgentAvatar） */
-.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"] > span:first-child {
+.phone-chat-root [data-reply-avatar] {
   width: 22px;
   height: 22px;
   border-radius: 999px;
   background-color: var(--card);
   box-shadow: 0 0 0 0.75px rgb(0 0 0 / 0.08);
 }
-.phone-chat-root .enso-chat-col > div[class*="mb-[8px]"] > span:first-child > img {
+.phone-chat-root [data-reply-avatar] > img {
   width: 16px;
   height: 16px;
 }
 
 /* 「生成中…」是工作状态的重复播报：设计稿只留抬头那一处，这里不再单占一行 */
 /* 只有当同一列里已经有「工作中」那行时才隐藏它，避免把唯一的进度提示删掉 */
-.phone-chat-root .enso-chat-col:has(> div > svg .t-shimmer) > div:has(> img.collabra-working-icon) {
+.phone-chat-root [data-enso="timeline"]:has([data-worklog-status="running"]) [data-timeline-busy] {
   display: none;
 }
 

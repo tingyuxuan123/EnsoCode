@@ -11,6 +11,7 @@ import {
   ArrowUp,
   CornerDownLeft,
   Loader2,
+  Lock,
   Monitor,
   RefreshCw,
   Smartphone,
@@ -34,6 +35,7 @@ import {
 } from '@/components/ui/sheet';
 import type { PreviewPort, PreviewResult } from './previewPort';
 import { previewPoint, previewSwipe } from './previewViewport';
+import { usePhoneBack } from './usePhoneBack';
 
 export const WebPreviewContext = createContext<{
   port: PreviewPort;
@@ -60,6 +62,8 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<PairPreviewEntry[]>([]);
   const [frame, setFrame] = useState<PairPreviewFrame | null>(null);
+  /** 地址条只展示已选页面：真实条目来自 host 列表，不编造网址 */
+  const [pickedLabel, setPickedLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -75,6 +79,7 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
   const pointerRef = useRef<{ x: number; y: number; frame: PairPreviewFrame } | null>(null);
   const wheelRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pauseUntil = useRef(0);
+  usePhoneBack(Boolean(context?.available && open), () => setOpen(false), 60);
   const port = context?.port;
   const online = context?.online ?? false;
   const key = JSON.stringify(target);
@@ -90,6 +95,7 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
     setFrame(null);
     displayedFrameRef.current = null;
     setEntries([]);
+    setPickedLabel('');
     setError(null);
     setBusy(false);
     actionBusy.current = false;
@@ -167,6 +173,7 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
     const generation = epoch.current;
     setBusy(true);
     setError(null);
+    setPickedLabel(entry.label);
     actionBusy.current = true;
     const previous = idRef.current;
     idRef.current = null;
@@ -243,49 +250,33 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
       </button>
       <Sheet open={open} onOpenChange={close}>
         <SheetContent side="bottom" className="phone-sheet max-h-[95dvh] pb-safe">
-          <SheetHeader className="shrink-0 px-4 pt-7 pb-3">
-            <SheetTitle className="font-semibold text-[15px]">网页预览</SheetTitle>
-            <SheetDescription>
-              画面来自电脑上的隔离浏览器，经加密连接传输。支持点击、滚动和输入；不会把网页代码交给聊天页面执行。
+          <SheetHeader className="shrink-0 gap-1 px-5 pt-7 pb-3">
+            <div className="flex items-center gap-3">
+              <SheetTitle className="min-w-0 flex-1 text-[17px] leading-[22px] font-semibold">
+                网页预览
+              </SheetTitle>
+              {context.readOnly && (
+                <span className="shrink-0 rounded-full bg-card2 px-2.5 py-1 text-[12px] leading-4 font-medium text-ink2">
+                  只读
+                </span>
+              )}
+            </div>
+            <SheetDescription className="text-[12px] leading-4 text-dim">
+              画面来自电脑上的隔离浏览器，经加密连接传输。不会把网页代码交给聊天页面执行。
             </SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 overflow-y-auto px-4 pb-4">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy || !online}
-                onClick={() => {
-                  if (frame) void act();
-                  else setRevision((n) => n + 1);
-                }}
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                {frame ? '刷新网页' : '刷新列表'}
-              </Button>
-              {frame ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy || !online}
-                    onClick={() => void act(undefined, undefined, true)}
-                  >
-                    更新画面
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setRevision((n) => n + 1)}>
-                    选择其他页面
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-pressed={auto}
-                    onClick={() => setAuto(!auto)}
-                  >
-                    自动更新：{auto ? '开' : '关'}
-                  </Button>
-                </>
-              ) : (
+          <div className="min-h-0 overflow-y-auto px-5 pb-4">
+            {!frame && (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !online}
+                  onClick={() => setRevision((n) => n + 1)}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  刷新列表
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -299,14 +290,14 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
                   )}
                   {mobile ? '手机尺寸' : '桌面尺寸'}
                 </Button>
-              )}
-              {busy && (
-                <Loader2
-                  aria-label="预览处理中"
-                  className="h-4 w-4 animate-spin text-muted-foreground"
-                />
-              )}
-            </div>
+                {busy && (
+                  <Loader2
+                    aria-label="预览处理中"
+                    className="h-4 w-4 animate-spin text-muted-foreground"
+                  />
+                )}
+              </div>
+            )}
             {error && (
               <p role="alert" className="mb-3 text-destructive text-sm">
                 {ERRORS[error] ?? '网页预览失败，请刷新列表后重试。'}
@@ -342,11 +333,18 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
             )}
             {frame && (
               <>
-                <p className="mb-1 truncate text-muted-foreground text-xs">
-                  {frame.title || '网页'} · {frame.width} × {frame.height}
-                  {context.readOnly ? ' · 只读查看' : ' · 点击画面操作，滑动滚动'}
-                </p>
-                <div className="rounded-md border bg-white">
+                {/* 地址条：圆角上半，只展示 host 下发的真实条目名与只读态 */}
+                <div className="flex items-center gap-2 rounded-t-[18px] bg-card2 px-3.5 py-2.5">
+                  <Lock className="size-3.5 shrink-0 text-faint" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-dim">
+                    {pickedLabel || frame.title || '网页'}
+                  </span>
+                  {busy && <Loader2 aria-label="预览处理中" className="size-3.5 animate-spin" />}
+                  <span className="shrink-0 rounded-full bg-card px-2 py-0.5 text-[11px] leading-4 font-medium text-dim">
+                    {context.readOnly ? '只读' : `${frame.width}×${frame.height}`}
+                  </span>
+                </div>
+                <div className="rounded-b-[18px] bg-card">
                   <img
                     ref={imageRef}
                     src={frame.dataUrl}
@@ -430,6 +428,19 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
                       }
                     }}
                   />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setRevision((n) => n + 1)}>
+                    选择其他页面
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-pressed={auto}
+                    onClick={() => setAuto(!auto)}
+                  >
+                    自动更新：{auto ? '开' : '关'}
+                  </Button>
                 </div>
                 {!context.readOnly && (
                   <div className="mt-2 space-y-2">
@@ -518,6 +529,28 @@ export function WebPreview({ target, children }: { target: PairFileTarget; child
               </>
             )}
           </div>
+          {frame && (
+            <div className="flex shrink-0 items-center gap-2 px-5 pt-3 pb-2">
+              <button
+                type="button"
+                disabled={busy || !online}
+                onClick={() => void act()}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-card text-[15px] leading-5 font-medium disabled:opacity-40"
+              >
+                <RefreshCw className="size-[18px]" aria-hidden />
+                刷新网页
+              </button>
+              <button
+                type="button"
+                disabled={busy || !online}
+                onClick={() => void act(undefined, undefined, true)}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-pill text-[15px] leading-5 font-medium text-pill-ink disabled:opacity-40"
+              >
+                <Monitor className="size-[18px]" aria-hidden />
+                更新画面
+              </button>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </>

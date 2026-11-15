@@ -1,0 +1,44 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "Collabra PWA: the phone companion for a desktop coding-agent workbench — see running sessions, approve tool calls, reply, review diffs, and talk to teammate bots.",
+		"screens": [
+			"连接电脑（配对码 + 扫码）",
+			"会话列表（编程 / Bot、项目分组、设备）",
+			"会话详情（对话、工具步骤、改动摘要）",
+			"运行中（折叠步骤、排队消息）",
+			"审批（顶替输入框的玻璃面板）",
+			"Agent 提问（选项 + 自定义回答）",
+			"群聊（成员、任务卡、交付物）",
+			"Bot 面板（成员与待处理）",
+			"产物预览",
+			"新建会话（晨光 + 项目与模型）",
+			"会话配置（模型 / 推理 / 思考等级）",
+			"Web 预览",
+			"文件下载",
+			"连接异常（离线 / 配对失效）",
+			"深色会话"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "mobile"
+	},
+	"seed": 175030714,
+	"at": "2026-11-14T13:02:43.060Z",
+	"options": [],
+	"choice": null,
+	"allow": [],
+	"redraws": [],
+	"intent": {
+		"stated": {
+			"mood": "照搬 Vetta Android 客户端（open-vetta apps/mobile/client-android）的风格：黑白底色、Liquid Glass 浮动圆形/胶囊按钮、无框列表、彩色状态小图标、紫到蓝的渐变晕光",
+			"colour": "黑白灰为底，强调靠反墨黑胶囊；彩色只留给状态；新建页紫到蓝的渐变晨光",
+			"boldness": "expressive",
+			"goAhead": true
+		},
+		"questions": [],
+		"answers": null
+	},
+	"proposals": []
+}

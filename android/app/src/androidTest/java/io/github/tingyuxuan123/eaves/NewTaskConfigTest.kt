@@ -21,6 +21,7 @@ import io.github.tingyuxuan123.eaves.mirror.DesktopProject
 import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
 import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
 import io.github.tingyuxuan123.eaves.mirror.DesktopTask
+import io.github.tingyuxuan123.eaves.mirror.DraftKey
 import io.github.tingyuxuan123.eaves.mirror.LinkPhase
 import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
 import io.github.tingyuxuan123.eaves.mirror.SessionTextAttempt
@@ -45,11 +46,20 @@ class NewTaskConfigTest {
     private val providers = listOf(DesktopProvider("provider", "真实服务", listOf(
         DesktopModel("m1", "模型一"), DesktopModel("m2", "模型二"))))
 
+    /** Stand-in for DraftBook in the app: keeps composer text for the test and answers by key. */
+    private class DraftHost {
+        val state = mutableStateOf<Map<DraftKey, String>>(emptyMap())
+        fun edit(key: DraftKey, text: String) {
+            state.value = if (text.isBlank()) state.value - key else state.value + (key to text)
+        }
+    }
+
     @Test fun tappingHeaderModelOpensSettingsAndUsesChosenModelForNewTask() {
         val live = DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers)
+        val drafts = DraftHost()
         var sent: TaskLaunch? = null
         compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
-            live = live, onCreateTask = { sent = it }) }
+            live = live, drafts = drafts.state.value, onDraftEdit = drafts::edit, onCreateTask = { sent = it }) }
         compose.onNodeWithText("模型一 · 高").performTouchInput { click() }
         compose.onNodeWithText("新任务设置").assertIsDisplayed()
         compose.onNodeWithText("模型二").performClick()
@@ -79,8 +89,10 @@ class NewTaskConfigTest {
 
     @Test fun vanishedChosenModelDisablesCreationWithoutDiscardingDescription() {
         val live = mutableStateOf(DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers))
+        val drafts = DraftHost()
         compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
-            live = live.value, onCreateTask = { error("Unavailable model must not create") }) }
+            live = live.value, drafts = drafts.state.value, onDraftEdit = drafts::edit,
+            onCreateTask = { error("Unavailable model must not create") }) }
         compose.onNodeWithContentDescription("打开新任务设置").performClick()
         compose.onNodeWithText("模型二").performClick()
         compose.onNodeWithContentDescription("关闭新任务设置").performClick()
@@ -93,9 +105,11 @@ class NewTaskConfigTest {
 
     @Test fun confirmedCreationMovesDraftIntoSessionAndOnlyAuthorityClearsIt() {
         val live = mutableStateOf(DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers))
+        val drafts = DraftHost()
         var sent: TaskLaunch? = null
         compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
-            live = live.value, onSelectSession = {}, onCreateTask = { sent = it }) }
+            live = live.value, drafts = drafts.state.value, onDraftEdit = drafts::edit,
+            onSelectSession = {}, onCreateTask = { sent = it }) }
         compose.onNodeWithContentDescription("任务描述").performTextInput("首条任务")
         compose.onNodeWithContentDescription("发送").performClick()
         assertEquals("首条任务", sent?.text)

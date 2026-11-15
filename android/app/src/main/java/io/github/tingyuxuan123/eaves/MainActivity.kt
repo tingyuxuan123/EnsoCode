@@ -31,6 +31,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import io.github.tingyuxuan123.eaves.ui.EnsoTheme
 import io.github.tingyuxuan123.eaves.ui.HomeScreen
+import io.github.tingyuxuan123.eaves.ui.SettingsScreen
+import io.github.tingyuxuan123.eaves.mirror.DraftKey
+import io.github.tingyuxuan123.eaves.mirror.DraftKind
 import io.github.tingyuxuan123.eaves.ui.NewTaskScreen
 import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
 import io.github.tingyuxuan123.eaves.ui.PairScreen
@@ -74,6 +77,7 @@ class MainActivity : ComponentActivity() {
     private class Invite(val link: String)
     private val invite = mutableStateOf<Invite?>(null)
     private val notice = mutableStateOf<TaskNoticeOpen?>(null)
+    private val notificationsAllowed = mutableStateOf(false)
     private val companion get() = (application as EavesApplication).companion
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,14 +86,20 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) { consumeInvite(intent); consumeNotice(intent) }
         setContent {
             val state by companion.state.collectAsStateWithLifecycle()
+            val book = (application as EavesApplication).drafts
+            val drafts by book.drafts.collectAsStateWithLifecycle()
             var link by remember { mutableStateOf("") }
             val incoming = invite.value
             val pendingNotice = notice.value
             val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                notificationsAllowed.value = LinkNotifications(this).permitted()
                 if (granted) startWatch() else Toast.makeText(this, "未授予通知权限，后台提醒未开启。", Toast.LENGTH_SHORT).show()
             }
+            LaunchedEffect(state.pairId, state.paired) { book.bind(state.pairId.takeIf { state.paired }) }
             LaunchedEffect(incoming) { if (incoming != null) link = incoming.link }
             EavesApp(state = state.taskUi(System.currentTimeMillis()), pairState = state.pairUi(),
+                settings = state.settingsUi(notificationsAllowed.value),
+                drafts = drafts, onDraftEdit = book::edit, onDraftConfirmed = book::confirm,
                 pairLink = link, onPairLink = { link = it.take(8192) },
                 onPair = { companion.pair(link) }, onReconnect = companion::reconnect,
                 onUnpair = companion::unpair, openPairInvite = incoming,
@@ -142,8 +152,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() { super.onStart(); companion.setVisible(true) }
-    override fun onStop() { companion.setVisible(false); super.onStop() }
+    override fun onStart() {
+        super.onStart()
+        companion.setVisible(true)
+        notificationsAllowed.value = LinkNotifications(this).permitted()
+    }
+    override fun onStop() {
+        companion.setVisible(false)
+        (application as EavesApplication).drafts.flush()
+        super.onStop()
+    }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); consumeInvite(intent); consumeNotice(intent) }
 
     private fun startWatch() {
@@ -185,7 +203,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal enum class EavesRoute { NewTask, Home, Pair, Session, Board, Members }
+internal enum class EavesRoute { NewTask, Home, Pair, Session, Board, Members, Settings }
 internal class TaskNoticeOpen(val sessionId: String?)
 
 @Composable
@@ -202,6 +220,10 @@ internal fun EavesApp(
     openPairInvite: Any? = null,
     scanner: (@Composable () -> Unit)? = null,
     live: DesktopLinkState = DesktopLinkState(),
+    settings: SettingsUiState = SettingsUiState(),
+    drafts: Map<DraftKey, String> = emptyMap(),
+    onDraftEdit: (DraftKey, String) -> Unit = { _, _ -> },
+    onDraftConfirmed: (DraftKey, String) -> Unit = { _, _ -> },
     onSelectSession: ((String?) -> Unit)? = null,
     onSessionRetry: () -> Unit = {},
     onHistory: () -> Unit = {},
@@ -253,13 +275,17 @@ internal fun EavesApp(
 ) {
     var route by rememberSaveable { mutableStateOf(initialRoute) }
     var pairReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
+    var settingsReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
     var boardReturn by rememberSaveable { mutableStateOf(EavesRoute.NewTask) }
     var membersReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
-    var draft by remember(pairState.paired) { mutableStateOf(state.draft) }
+    val descriptionKey = DraftKey(DraftKind.NewTask, "new-task")
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var memberSessionId by remember(pairState.paired) { mutableStateOf<String?>(null) }
-    // Keep one session's draft across the drawer and reconnects; never save message text to a Bundle.
-    var sessionDraft by remember(pairState.paired) { mutableStateOf("") }
+    // Drafts live in DraftBook: per session, bounded, encrypted at rest and never in a Bundle.
+    val sessionKey = selectedId?.let { DraftKey(DraftKind.Session, it) }
+    val sessionDraft = sessionKey?.let { drafts[it] }.orEmpty()
+    val onSessionDraft: (String) -> Unit = { text -> sessionKey?.let { onDraftEdit(it, text) } }
+    val draft = drafts[descriptionKey] ?: state.draft
     var config by remember(pairState.paired) { mutableStateOf(TaskConfiguration()) }
     var showConfig by remember { mutableStateOf(initialShowConfig) }
     var confirmNew by remember { mutableStateOf(false) }
@@ -293,7 +319,7 @@ internal fun EavesApp(
         val owner = live.session?.timeline?.sessionId ?: return@LaunchedEffect
         if (owner == selectedId && observedImages?.phase == SessionCommandPhase.Observed && observedImages.imageFingerprints.isNotEmpty()) {
             val cleared = pictureDraft.observed(owner, observedImages.text, observedImages.imageFingerprints, observedImages.id)
-            if (cleared != null && sessionDraft == cleared) sessionDraft = ""
+            if (cleared != null && sessionDraft == cleared) onSessionDraft("")
         }
     }
     // A confirmed rewind may hand back the removed message; never overwrite text the user typed since.
@@ -302,7 +328,7 @@ internal fun EavesApp(
         val owner = live.session?.timeline?.sessionId ?: return@LaunchedEffect
         val text = observedRewind?.editorText ?: return@LaunchedEffect
         if (owner == selectedId && observedRewind.phase == SessionCommandPhase.Observed && sessionDraft.isBlank()) {
-            sessionDraft = text
+            onSessionDraft(text)
         }
     }
     val unavailable = { Toast.makeText(context, "此开发版本尚未接入这项功能。", Toast.LENGTH_SHORT).show() }
@@ -315,7 +341,6 @@ internal fun EavesApp(
     val openTask: (String) -> Unit = { id ->
         val task = state.tasks.firstOrNull { it.id == id }
         if (!creating && task != null && onSelectSession != null) {
-            if (selectedId != id) sessionDraft = ""
             selectedId = id
             selectedTitle = task.title
             selectedProject = task.project
@@ -328,6 +353,7 @@ internal fun EavesApp(
             EavesRoute.Session -> EavesRoute.Home
             EavesRoute.Board -> boardReturn
             EavesRoute.Members -> membersReturn
+            EavesRoute.Settings -> settingsReturn
             else -> EavesRoute.NewTask
         }
     }
@@ -336,6 +362,9 @@ internal fun EavesApp(
     }
     val openMembers = {
         if (!creating) { membersReturn = route; route = EavesRoute.Members }
+    }
+    val openSettings = {
+        if (!creating) { settingsReturn = route; route = EavesRoute.Settings }
     }
     val subscribedId = if (route == EavesRoute.Members) memberSessionId else selectedId.takeIf { route == EavesRoute.Session }
     val selectable = state.tasks.any { it.id == subscribedId } || (route == EavesRoute.Members && memberSessionId != null)
@@ -361,14 +390,16 @@ internal fun EavesApp(
         }
     }
     LaunchedEffect(creation?.sessionId, creation?.phase) {
-        if (creation?.phase == CreationPhase.Created && creation.sessionId != null) {
-            selectedId = creation.sessionId
+        val created = creation?.takeIf { it.phase == CreationPhase.Created }?.sessionId ?: return@LaunchedEffect
+        run {
+            selectedId = created
             selectedTitle = null
             selectedProject = config.project(live.projects)?.name
-            sessionDraft = launching?.text?.takeUnless {
+            val creationKey = DraftKey(DraftKind.Session, created)
+            onDraftEdit(creationKey, launching?.text?.takeUnless {
                 live.session?.textAttempt?.let { attempt -> attempt.phase == SessionCommandPhase.Observed && attempt.text == it } == true
-            }.orEmpty()
-            if (draft == launching?.text) draft = ""
+            }.orEmpty())
+            if (draft == launching?.text) onDraftEdit(descriptionKey, "")
             launching = null
             route = EavesRoute.Session
             showConfig = false
@@ -382,7 +413,7 @@ internal fun EavesApp(
                     model = config.model(live.providers)?.label?.let { model -> config.thinkingLevel?.let { "$model · ${it.title()}" } ?: model } ?: state.model,
                     composerEnabled = !creating), onHome = { if (!creating) route = EavesRoute.Home }, onPair = openPair,
                 onConfig = { if (!creating) { if (state.online) { keyboard?.hide(); showConfig = true } else openPair() } },
-                onBoard = openBoard, onTask = openTask, onDraft = { draft = it },
+                onBoard = openBoard, onTask = openTask, onDraft = { onDraftEdit(descriptionKey, it) },
                 onSend = config.launch(live.projects, live.providers, draft)?.takeIf {
                     state.online && state.composerAvailable && !creating &&
                         (creation == null || creation.phase == CreationPhase.Created) && onCreateTask != null
@@ -394,7 +425,7 @@ internal fun EavesApp(
             )
             EavesRoute.Home -> HomeScreen(
                 state, onNew = { route = EavesRoute.NewTask }, onPair = openPair, onTask = openTask,
-                onBoard = openBoard, onMembers = openMembers, onSettings = unavailable, onUnavailable = unavailable,
+                onBoard = openBoard, onMembers = openMembers, onSettings = openSettings, onUnavailable = unavailable,
             )
             EavesRoute.Members -> {
                 LaunchedEffect(live.phase) {
@@ -417,7 +448,8 @@ internal fun EavesApp(
                     onNewSession = onBotNewSession, onConfirmNewSession = onBotConfirmNewSession,
                     onRetryEntry = onBotRetryEntry, onDismissInbox = onBotDismissInbox, onCreateGroup = onBotCreateGroup,
                     onArtifacts = onBotArtifacts, onArtifactImage = onBotArtifactImage,
-                    onListBotFiles = onBotListFiles, onReadBotFile = onBotReadFile, onOpenDirect = onBotOpenDirect)
+                    onListBotFiles = onBotListFiles, onReadBotFile = onBotReadFile, onOpenDirect = onBotOpenDirect,
+                    drafts = drafts, onDraftEdit = onDraftEdit, onDraftConfirmed = onDraftConfirmed)
             }
             EavesRoute.Board -> BoardScreen(
                 live.catalog.filterNot { it.archived }, System.currentTimeMillis(), onBack = back, onTask = openTask,
@@ -425,6 +457,10 @@ internal fun EavesApp(
             EavesRoute.Pair -> PairScreen(onClose = back, specimen = pairSpecimen, state = pairState,
                 link = pairLink, onLink = onPairLink, onPair = onPair, onReconnect = onReconnect,
                 onUnpair = onUnpair, scanner = scanner, onWatch = onWatch, onNotificationSettings = onNotificationSettings)
+            EavesRoute.Settings -> SettingsScreen(settings, onBack = back,
+                onReconnect = onReconnect.takeIf { pairState.paired && !pairState.busy },
+                onWatch = onWatch, onNotificationSettings = onNotificationSettings,
+                onUnpair = onUnpair, onPair = openPair)
             EavesRoute.Session -> {
                 val task = live.catalog.firstOrNull { it.id == selectedId && !it.archived }
                 val canConfigure = task != null && task.parentId == null && live.catalogReady
@@ -437,7 +473,7 @@ internal fun EavesApp(
                     onDrawer = { route = EavesRoute.Home }, onRetry = onSessionRetry, onHistory = onHistory,
                     onApproval = { requestId, decision -> subscribedId?.let { onApproval(it, requestId, decision) } },
                     onAsk = { requestId, answer -> subscribedId?.let { onAsk(it, requestId, answer) } }, specimen = sessionSpecimen,
-                    draft = sessionDraft, onDraft = { sessionDraft = it },
+                    draft = sessionDraft, onDraft = onSessionDraft,
                     onText = { text, steer -> subscribedId?.let { onSessionText(it, text, steer) } },
                     onStop = { subscribedId?.let(onSessionStop) },
                     modelProviderId = task?.providerId, modelId = task?.modelId, modelProviders = live.providers,
