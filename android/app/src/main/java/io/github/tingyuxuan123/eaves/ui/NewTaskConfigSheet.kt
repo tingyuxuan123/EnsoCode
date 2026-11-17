@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,8 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -33,10 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.tingyuxuan123.eaves.mirror.DesktopProject
 import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
@@ -59,63 +59,76 @@ internal fun NewTaskConfigSheet(
                 Box(Modifier.size(36.dp, 4.dp).background(c.faint.copy(alpha = .6f), CircleShape))
             }
         }) {
-        BoxWithConstraints {
-            Column(Modifier.heightIn(max = maxHeight * .94f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Label("新任务设置", 17, 22, Modifier.weight(1f), weight = FontWeight.SemiBold)
-                    GlyphButton(EnsoIcon.Close, "关闭新任务设置", 40.dp, 20.dp, tint = c.dim, onClick = onDismiss)
-                }
-                Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f)) {
-                        ConfigPill(config.project(projects)?.name ?: "选择项目", EnsoIcon.Folder,
-                            enabled && !projects.isNullOrEmpty(), "切换项目") { projectMenu = true }
-                        DropdownMenu(expanded = projectMenu, onDismissRequest = { projectMenu = false }, containerColor = c.card) {
-                            projects.orEmpty().forEach { project -> DropdownMenuItem(
-                                text = { Label(project.name, 14, 20) },
-                                onClick = { onChange(config.copy(projectId = project.id)); projectMenu = false }) }
-                        }
-                    }
-                    Box(Modifier.weight(1f)) { ConfigPill("桌面默认预设", EnsoIcon.Sliders, false) {} }
-                }
-                SheetLabel("模型")
-                ModelChoices(providers, config.provider(providers)?.id, config.model(providers)?.id, enabled) { providerId, modelId ->
-                    onChange(config.copy(providerId = providerId, modelId = modelId))
-                }
-                if (projects.isNullOrEmpty()) ConfigNotice(if (projects == null) "正在读取桌面项目…" else "没有可新建任务的本地项目，请先在电脑端添加。")
-                if ((config.projectId != null && config.project(projects) == null) ||
-                    (config.providerId != null && (config.provider(providers) == null || config.model(providers) == null))) {
-                    ConfigNotice("原选项已不可用，请重新选择。")
-                }
-                Row(Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Label("思考强度", 13, 18, Modifier.weight(1f), color = c.dim, weight = FontWeight.Medium)
-                    Label("桌面默认", 12, 18,
-                        Modifier.clip(CircleShape).clickable(enabled, role = Role.Button) {
-                            onChange(config.copy(thinkingLevel = null))
-                        }.padding(horizontal = 4.dp, vertical = 4.dp), color = if (config.thinkingLevel == null) c.ink else c.dim)
-                }
-                Row(Modifier.padding(horizontal = 12.dp).background(c.card2, CircleShape).padding(4.dp)) {
-                    TaskThinkingLevel.entries.forEach { level ->
-                        val active = config.thinkingLevel == level
-                        Box(Modifier.weight(1f).height(36.dp).clip(CircleShape)
-                            .background(if (active) c.pill else c.card2)
-                            .selectable(active, enabled, Role.RadioButton) { onChange(config.copy(thinkingLevel = level)) },
-                            contentAlignment = Alignment.Center) {
-                            Label(level.title(), 14, 20, color = if (active) c.pillInk else c.ink2, weight = FontWeight.Medium)
-                        }
+        // The sheet re-measures its own constraints against the drag offset, so a panel height derived from
+        // them feeds back into the drag. Cap it from the window instead, which never follows the offset.
+        Column(Modifier.heightIn(max = sheetPanelMax()).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Label("新任务设置", 17, 22, Modifier.weight(1f), weight = FontWeight.SemiBold)
+                GlyphButton(EnsoIcon.Close, "关闭新任务设置", 40.dp, 20.dp, tint = c.dim, onClick = onDismiss)
+            }
+            Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) {
+                    ConfigPill(config.project(projects)?.name ?: "选择项目", EnsoIcon.Folder,
+                        enabled && !projects.isNullOrEmpty(), "切换项目") { projectMenu = true }
+                    DropdownMenu(expanded = projectMenu, onDismissRequest = { projectMenu = false }, containerColor = c.card) {
+                        projects.orEmpty().forEach { project -> DropdownMenuItem(
+                            text = { Label(project.name, 14, 20) },
+                            onClick = { onChange(config.copy(projectId = project.id)); projectMenu = false }) }
                     }
                 }
-                SheetLabel("审批模式")
-                ConfigGroup {
-                    TaskApprovalMode.entries.forEachIndexed { index, mode ->
-                        if (index > 0) Hairline()
-                        ConfigOption(mode.title(), mode.detail(), config.approvalMode == mode, enabled) {
-                            onChange(config.copy(approvalMode = mode))
-                        }
+                Box(Modifier.weight(1f)) { ConfigPill("桌面默认预设", EnsoIcon.Sliders, false) {} }
+            }
+            SheetLabel("模型")
+            ModelChoices(providers, config.provider(providers)?.id, config.model(providers)?.id, enabled) { providerId, modelId ->
+                onChange(config.copy(providerId = providerId, modelId = modelId))
+            }
+            if (projects.isNullOrEmpty()) ConfigNotice(if (projects == null) "正在读取桌面项目…" else "没有可新建任务的本地项目，请先在电脑端添加。")
+            if ((config.projectId != null && config.project(projects) == null) ||
+                (config.providerId != null && (config.provider(providers) == null || config.model(providers) == null))) {
+                ConfigNotice("原选项已不可用，请重新选择。")
+            }
+            Row(Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Label("思考强度", 13, 18, Modifier.weight(1f), color = c.dim, weight = FontWeight.Medium)
+                Label("桌面默认", 12, 18,
+                    Modifier.clip(CircleShape).clickable(enabled, role = Role.Button) {
+                        onChange(config.copy(thinkingLevel = null))
+                    }.padding(horizontal = 4.dp, vertical = 4.dp), color = if (config.thinkingLevel == null) c.ink else c.dim)
+            }
+            Row(Modifier.padding(horizontal = 12.dp).background(c.card2, CircleShape).padding(4.dp)) {
+                TaskThinkingLevel.entries.forEach { level ->
+                    val active = config.thinkingLevel == level
+                    Box(Modifier.weight(1f).height(36.dp).clip(CircleShape)
+                        .background(if (active) c.pill else c.card2)
+                        .selectable(active, enabled, Role.RadioButton) { onChange(config.copy(thinkingLevel = level)) },
+                        contentAlignment = Alignment.Center) {
+                        Label(level.title(), 14, 20, color = if (active) c.pillInk else c.ink2, weight = FontWeight.Medium)
+                    }
+                }
+            }
+            SheetLabel("审批模式")
+            ConfigGroup {
+                TaskApprovalMode.entries.forEachIndexed { index, mode ->
+                    if (index > 0) Hairline()
+                    ConfigOption(mode.title(), mode.detail(), config.approvalMode == mode, enabled) {
+                        onChange(config.copy(approvalMode = mode))
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Stable ceiling for the sheet body, taken from the window only: window insets inside the sheet are consumed against
+ * the drag offset, so anything read from them moves with the sheet. The reserve is the design top rhythm (47dp), the
+ * drag-handle row (18dp), the gesture bar (24dp) and the slack the sheet needs while it animates open (45dp); with the
+ * panel this far below the window the sheet height stops depending on its own offset.
+ */
+@Composable
+private fun sheetPanelMax(): Dp {
+    val density = LocalDensity.current
+    val window = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+    return (window - 134.dp).coerceAtLeast(240.dp)
 }
 
 @Composable
@@ -128,8 +141,9 @@ internal fun ModelChoices(
         when {
             providers == null -> ConfigNotice("正在读取桌面模型…")
             choices.isEmpty() -> ConfigNotice("桌面没有可用模型，请先在电脑端添加。")
-            else -> LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                itemsIndexed(choices) { index, (provider, model) ->
+            // No inner scroll: the sheet body is the one vertical scroller, so a drag here never fights it.
+            else -> Column {
+                choices.forEachIndexed { index, (provider, model) ->
                     if (index > 0) Hairline()
                     ConfigOption(model.label, provider.name,
                         selected = providerId == provider.id && modelId == model.id, enabled = enabled) {

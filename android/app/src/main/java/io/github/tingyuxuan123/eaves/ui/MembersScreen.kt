@@ -38,6 +38,8 @@ internal fun MembersScreen(
     initialChatId: String? = null,
     drafts: Map<DraftKey, String> = emptyMap(),
     onDraftEdit: (DraftKey, String) -> Unit = { _, _ -> },
+    /** 真正的发送才算一次提交；渲染输入框读草稿不算。 */
+    onDraftPin: (DraftKey) -> Unit = {},
     onDraftConfirmed: (DraftKey, String) -> Unit = { _, _ -> },
 ) {
     var openRootId by remember { mutableStateOf(initialChatId) }
@@ -128,6 +130,9 @@ internal fun MembersScreen(
             conversationId = conversationId, process = processId != null, writable = writable && !threadWaiting,
             draft = localDrafts[enabledChat.id] ?: BotMessageDraft(text = rememberedText),
             onDraft = { next ->
+                if (next.submission != null && localDrafts[enabledChat.id]?.submission == null) {
+                    onDraftPin(DraftKey(DraftKind.Chat, enabledChat.id))
+                }
                 localDrafts = localDrafts + (enabledChat.id to next)
                 onDraftEdit(DraftKey(DraftKind.Chat, enabledChat.id), next.text)
             },

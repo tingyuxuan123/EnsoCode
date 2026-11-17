@@ -172,15 +172,34 @@ internal fun SessionScreen(
     val isSpecimen = specimen != null
     val goals = remember(timeline?.sessionId) { SessionPanels() }
     val goal = state?.goal
+    // A receipt may only clear the revision that was submitted. Text equality alone cannot tell a draft
+    // edited A → B → A from an untouched A, so every local edit drops the "this is the submitted text" mark.
+    var submittedRevision by remember(timeline?.sessionId) { mutableStateOf(true) }
+    val editDraft: (String) -> Unit = { next ->
+        submittedRevision = false
+        onDraft(next)
+    }
     val textAttempt = state?.textAttempt
+    val queueAttempt = state?.queueAttempt
+    // A receipt that was already observed when this screen opened confirmed a different draft; only a
+    // transition to Observed while the screen is up may clear the composer.
+    val openingTextReceipt = remember(timeline?.sessionId) { textAttempt?.id to textAttempt?.phase }
+    val openingQueueReceipt = remember(timeline?.sessionId) { queueAttempt?.id to queueAttempt?.phase }
     LaunchedEffect(timeline?.sessionId, textAttempt?.id, textAttempt?.phase) {
         if (textAttempt?.phase == SessionCommandPhase.Observed && textAttempt.imageFingerprints.isEmpty() &&
-            pictures.pictures.isEmpty() && !pictures.loading && draft == textAttempt.text) onDraft("")
+            pictures.pictures.isEmpty() && !pictures.loading && draft == textAttempt.text && submittedRevision &&
+            (textAttempt.id to textAttempt.phase) != openingTextReceipt) {
+            submittedRevision = true
+            onDraft("")
+        }
     }
-    val queueAttempt = state?.queueAttempt
     LaunchedEffect(timeline?.sessionId, queueAttempt?.id, queueAttempt?.phase) {
         if (queueAttempt?.command == QueueCommand.Enqueue && queueAttempt.phase == SessionCommandPhase.Observed &&
-            pictures.pictures.isEmpty() && !pictures.loading && draft == queueAttempt.text) onDraft("")
+            pictures.pictures.isEmpty() && !pictures.loading && draft == queueAttempt.text && submittedRevision &&
+            (queueAttempt.id to queueAttempt.phase) != openingQueueReceipt) {
+            submittedRevision = true
+            onDraft("")
+        }
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(c.page).designTopInset().designBottomInset(28.dp).imePadding()) {
         val panelLimit = maxHeight * .55f
@@ -264,10 +283,14 @@ internal fun SessionScreen(
                     if (state != null && (state.queued.isNotEmpty() || state.queueAttempt != null)) {
                         SessionQueuePanel(state, writable && onQueue != null && state.queueReady && !state.backgroundWorkWaiting(), maxRowsHeight = queueLimit,
                             initialExpandedId = specimen?.state?.queued?.firstOrNull()?.id,
-                            onAction = { command, id, text -> onQueue?.invoke(command, id, text) })
+                            onAction = { command, id, text ->
+                                if (command == QueueCommand.Enqueue && text == draft) submittedRevision = true
+                                onQueue?.invoke(command, id, text)
+                            })
                     }
-                    SessionComposer(state, writable, readOnly, draft, onDraft, onText, onStop,
-                        onEnqueue = onQueue?.let { queue -> { text -> queue(QueueCommand.Enqueue, null, text) } },
+                    SessionComposer(state, writable, readOnly, draft, editDraft,
+                        { text, runningMode -> submittedRevision = true; onText(text, runningMode) }, onStop,
+                        onEnqueue = onQueue?.let { queue -> { text -> submittedRevision = true; queue(QueueCommand.Enqueue, null, text) } },
                         pictures = pictures, onPickPictures = onPickPictures, onRemovePicture = onRemovePicture,
                         onSendPictures = onSendPictures)
                 }
@@ -374,6 +397,9 @@ private fun UserTurn(turn: SessionTurn) {
             .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             turn.blocks.forEach { block -> when (block) {
                 is SessionBlock.Prose -> Label(block.text, 16, 24, color = c.ink)
+                is SessionBlock.Delegation -> SessionDelegationCard(block)
+                is SessionBlock.Routine -> SessionRoutineCard(block)
+                is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
                 is SessionBlock.Images -> TimelineImageStrip(block.images, Modifier.padding(top = 2.dp))
                 SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.ink2)
                 else -> Unit
@@ -402,6 +428,9 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
             is SessionBlock.Steps -> Unit // Rendered only inside a worklog.
             is SessionBlock.Todos -> SessionTodoCard(block.items)
             is SessionBlock.Notice -> TimelineDisclosure(block.kind.title, block.detail, EnsoIcon.Terminal)
+            is SessionBlock.Delegation -> SessionDelegationCard(block)
+            is SessionBlock.Routine -> SessionRoutineCard(block)
+            is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
             is SessionBlock.Compaction -> TimelineDisclosure("上下文已压缩", block.summary, EnsoIcon.Compress)
             is SessionBlock.Images -> TimelineImageStrip(block.images)
             SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.dim)

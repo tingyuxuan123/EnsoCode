@@ -61,13 +61,71 @@ class DraftBookAcceptanceTest {
         book.bind("pair-a")
         advanceUntilIdle()
         book.edit(key, "A")
-        val submitted = book.text(key)
+        // 提交必须显式 pin：读草稿文本本身不再带提交语义。
+        val submitted = requireNotNull(book.pin(key))
         book.edit(key, "B")
         book.edit(key, "A")
         book.confirm(key, submitted)
         assertEquals("The later editing revision must survive the earlier receipt", "A", book.text(key))
         book.flush()
         assertEquals("A", store.entries[key])
+    }
+
+    @Test fun `reading the draft for display never authorises a confirmation`() = runTest {
+        val store = Store()
+        val book = DraftBook(store, this, StandardTestDispatcher(testScheduler))
+        book.bind("pair-a")
+        advanceUntilIdle()
+        book.edit(key, "A")
+        // 渲染输入框时反复读 text() 是最自然的写法，它不能变成一次提交。
+        assertEquals("A", book.text(key))
+        assertEquals("A", book.text(key))
+        assertEquals("A confirmation nobody pinned must not clear anything", false, book.confirm(key, "A"))
+        assertEquals("A", book.text(key))
+        book.flush()
+        assertEquals("A", store.entries[key])
+    }
+
+    @Test fun `an explicit pin allows the matching receipt to clear the draft`() = runTest {
+        val store = Store()
+        val book = DraftBook(store, this, StandardTestDispatcher(testScheduler))
+        book.bind("pair-a")
+        advanceUntilIdle()
+        book.edit(key, "已经发出")
+        assertEquals("已经发出", book.pin(key))
+        assertEquals(true, book.confirm(key, "已经发出"))
+        assertEquals("", book.text(key))
+        advanceUntilIdle()
+        assertEquals(emptyMap<DraftKey, String>(), store.entries)
+    }
+
+    @Test fun `a receipt that arrives while the page is closed still clears the delivered draft`() = runTest {
+        val store = Store()
+        val book = DraftBook(store, this, StandardTestDispatcher(testScheduler))
+        book.bind("pair-a")
+        advanceUntilIdle()
+        book.edit(key, "离开页面后才回执")
+        assertEquals("离开页面后才回执", book.pin(key))
+        // 这段时间没有任何屏幕组合，也没有任何本地编辑；回执此时到达。
+        assertEquals(true, book.confirm(key, "离开页面后才回执"))
+        assertEquals("", book.text(key))
+        advanceUntilIdle()
+        assertEquals(emptyMap<DraftKey, String>(), store.entries)
+    }
+
+    @Test fun `an old receipt must not clear text edited after submitting, even with the same text`() = runTest {
+        val store = Store()
+        val book = DraftBook(store, this, StandardTestDispatcher(testScheduler))
+        book.bind("pair-a")
+        advanceUntilIdle()
+        book.edit(key, "已发送")
+        book.pin(key)
+        // 页面不在前台时又改了内容：这是另一个提交实例，旧回执不能清掉。
+        book.edit(key, "后来的内容")
+        assertEquals(false, book.confirm(key, "已发送"))
+        assertEquals("后来的内容", book.text(key))
+        book.flush()
+        assertEquals("后来的内容", store.entries[key])
     }
 
     @Test fun `clearing a draft while initial disk load is outstanding must not resurrect the old draft`() = runTest {

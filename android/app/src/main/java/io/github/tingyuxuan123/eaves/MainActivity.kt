@@ -99,7 +99,9 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(incoming) { if (incoming != null) link = incoming.link }
             EavesApp(state = state.taskUi(System.currentTimeMillis()), pairState = state.pairUi(),
                 settings = state.settingsUi(notificationsAllowed.value),
-                drafts = drafts, onDraftEdit = book::edit, onDraftConfirmed = book::confirm,
+                drafts = drafts, onDraftEdit = book::edit,
+                onDraftPin = { key -> book.pin(key) },
+                onDraftConfirmed = { key, text -> book.confirm(key, text) },
                 pairLink = link, onPairLink = { link = it.take(8192) },
                 onPair = { companion.pair(link) }, onReconnect = companion::reconnect,
                 onUnpair = companion::unpair, openPairInvite = incoming,
@@ -223,6 +225,8 @@ internal fun EavesApp(
     settings: SettingsUiState = SettingsUiState(),
     drafts: Map<DraftKey, String> = emptyMap(),
     onDraftEdit: (DraftKey, String) -> Unit = { _, _ -> },
+    /** 显式登记一次真实提交；读草稿文本永远不会调用它。 */
+    onDraftPin: (DraftKey) -> Unit = {},
     onDraftConfirmed: (DraftKey, String) -> Unit = { _, _ -> },
     onSelectSession: ((String?) -> Unit)? = null,
     onSessionRetry: () -> Unit = {},
@@ -368,6 +372,26 @@ internal fun EavesApp(
     }
     val subscribedId = if (route == EavesRoute.Members) memberSessionId else selectedId.takeIf { route == EavesRoute.Session }
     val selectable = state.tasks.any { it.id == subscribedId } || (route == EavesRoute.Members && memberSessionId != null)
+    val sessionSendKey = { id: String -> DraftKey(DraftKind.Session, id) }
+    // 逐字匹配回执并清掉「用户真的提交过」的那次草稿。pin 是跨页面的提交凭据：
+    // 回执在离开会话页期间到达时仍能清除已投递内容，而从没 pin 过的同文草稿不会被误清。
+    val textReceipt = live.session?.let { it.timeline.sessionId to it.textAttempt }
+    LaunchedEffect(textReceipt?.first, textReceipt?.second?.id, textReceipt?.second?.phase) {
+        val owner = textReceipt?.first ?: return@LaunchedEffect
+        val attempt = textReceipt.second ?: return@LaunchedEffect
+        if (attempt.phase == SessionCommandPhase.Observed && attempt.imageFingerprints.isEmpty()) {
+            onDraftConfirmed(sessionSendKey(owner), attempt.text)
+        }
+    }
+    val queueReceipt = live.session?.let { it.timeline.sessionId to it.queueAttempt }
+    LaunchedEffect(queueReceipt?.first, queueReceipt?.second?.id, queueReceipt?.second?.phase) {
+        val owner = queueReceipt?.first ?: return@LaunchedEffect
+        val attempt = queueReceipt.second ?: return@LaunchedEffect
+        val text = attempt.text ?: return@LaunchedEffect
+        if (attempt.command == QueueCommand.Enqueue && attempt.phase == SessionCommandPhase.Observed) {
+            onDraftConfirmed(sessionSendKey(owner), text)
+        }
+    }
     LaunchedEffect(subscribedId, pairState.paired, selectable) {
         if (subscribedId == null || !pairState.paired) onSelectSession?.invoke(null)
         else if (selectable) onSelectSession?.invoke(subscribedId)
@@ -449,7 +473,8 @@ internal fun EavesApp(
                     onRetryEntry = onBotRetryEntry, onDismissInbox = onBotDismissInbox, onCreateGroup = onBotCreateGroup,
                     onArtifacts = onBotArtifacts, onArtifactImage = onBotArtifactImage,
                     onListBotFiles = onBotListFiles, onReadBotFile = onBotReadFile, onOpenDirect = onBotOpenDirect,
-                    drafts = drafts, onDraftEdit = onDraftEdit, onDraftConfirmed = onDraftConfirmed)
+                    drafts = drafts, onDraftEdit = onDraftEdit, onDraftPin = onDraftPin,
+                    onDraftConfirmed = onDraftConfirmed)
             }
             EavesRoute.Board -> BoardScreen(
                 live.catalog.filterNot { it.archived }, System.currentTimeMillis(), onBack = back, onTask = openTask,
@@ -474,7 +499,7 @@ internal fun EavesApp(
                     onApproval = { requestId, decision -> subscribedId?.let { onApproval(it, requestId, decision) } },
                     onAsk = { requestId, answer -> subscribedId?.let { onAsk(it, requestId, answer) } }, specimen = sessionSpecimen,
                     draft = sessionDraft, onDraft = onSessionDraft,
-                    onText = { text, steer -> subscribedId?.let { onSessionText(it, text, steer) } },
+                    onText = { text, steer -> subscribedId?.let { id -> onDraftPin(sessionSendKey(id)); onSessionText(id, text, steer) } },
                     onStop = { subscribedId?.let(onSessionStop) },
                     modelProviderId = task?.providerId, modelId = task?.modelId, modelProviders = live.providers,
                     reasoningEnabled = task?.reasoningEnabled, thinkingLevel = task?.thinkingLevel,
@@ -488,7 +513,10 @@ internal fun EavesApp(
                         currentConfigSession()?.let { action(it, level) }
                     } },
                     onQueue = onSessionQueue?.let { queue -> { command, messageId, text ->
-                        subscribedId?.let { queue(it, command, messageId, text) }
+                        subscribedId?.let { id ->
+                            if (command == QueueCommand.Enqueue && text != null) onDraftPin(sessionSendKey(id))
+                            queue(id, command, messageId, text)
+                        }
                     } },
                     onGoal = onSessionGoal?.let { action -> { command, expected, text ->
                         subscribedId?.let { action(it, command, expected, text) }
@@ -531,6 +559,7 @@ internal fun EavesApp(
                     onSendPictures = onSessionImages?.let { submit -> { text ->
                         val prepared = pictureDraft.state.value
                         subscribedId?.takeIf { it == prepared.owner && !prepared.loading && prepared.pictures.isNotEmpty() }?.let { id ->
+                            onDraftPin(sessionSendKey(id))
                             pictureDraft.sent(text, live.session?.textAttempt?.id ?: 0L)
                             submit(id, text, prepared.pictures.map { it.image })
                         }

@@ -178,6 +178,170 @@ class SessionPresentationTest {
         assertTrue(!(incomplete.last() as SessionBlock.Worklog).hasAnswer)
     }
 
+    @Test fun `私聊委派结果折成卡片并保留来源状态与正文`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<delegation-result id=\"d-1\" from=\"阿全\" status=\"completed\">\n修复了安卓原始信封渲染。\n补充了回归测试。\n</delegation-result>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Delegation(SessionDelegationKind.Result, "阿全", "completed",
+            "修复了安卓原始信封渲染。\n补充了回归测试。")), turns.single().blocks)
+        assertTrue(turns.single().user)
+    }
+
+    @Test fun `委派任务保留正文与上下文并丢掉执行摘要和验收条件`() {
+        // 桌面只在末尾拼接一段说明：私聊任务尾部是 acceptance-check，群任务尾部是 previous-runs。
+        val private = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<delegation-task id=\"t-1\" from=\"林经理\" task=\"#3\" run=\"1\">\n检查 &lt;b&gt;日志\n<context>上一轮的结论</context>\n<acceptance-check>输出含 delegation</acceptance-check>\n</delegation-task>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Delegation(SessionDelegationKind.Task, "林经理", null,
+            "检查 <b>日志", "上一轮的结论")), private.single().blocks)
+        val group = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<delegation-task id=\"t-2\" from=\"林经理\">\n复核首页\n<acceptance-check>输出含 delegation</acceptance-check>\n<previous-runs>\n上次做过\n</previous-runs>\n</delegation-task>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Delegation(SessionDelegationKind.Task, "林经理", null, "复核首页")),
+            group.single().blocks)
+    }
+
+    @Test fun `批量信封逐条展开且保留每条的来源和状态`() {
+        val batch = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<delegation-results id=\"batch\">\n<delegation-result id=\"a\" from=\"阿全\" status=\"completed\">甲完成</delegation-result>\n<delegation-result id=\"b\" from=\"小雪\" status=\"failed\">乙失败</delegation-result>\n</delegation-results>"}]}
+        ]""")
+        assertEquals(listOf(
+            SessionBlock.Delegation(SessionDelegationKind.Result, "阿全", "completed", "甲完成"),
+            SessionBlock.Delegation(SessionDelegationKind.Result, "小雪", "failed", "乙失败"),
+        ), batch.single().blocks)
+        // 桌面 parseBotInjectedMessage 只认整段注入：信封后面还有正文时整段按原文展示，不折叠。
+        val trailing = "<delegation-result id=\"a\" from=\"阿全\" status=\"completed\">甲完成</delegation-result>\n请继续跟进"
+        val sequential = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":${JsonPrimitive(trailing)}}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Prose(trailing)), sequential.single().blocks)
+    }
+
+    @Test fun `笔记更新前置时仍识别整段委派信封`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<notes-updated>\n- 备忘\n</notes-updated>\n\n<delegation-result id=\"d\" from=\"阿全\" status=\"completed\">\n已完成\n</delegation-result>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Delegation(SessionDelegationKind.Result, "阿全", "completed", "已完成")),
+            turns.single().blocks)
+        assertTrue(turns.single().user)
+    }
+
+    @Test fun `委派信封后接正文时与桌面一致按原文展示`() {
+        for (text in listOf(
+            "<delegation-result id=\"d\" from=\"阿全\" status=\"completed\">已完成</delegation-result>\n还要看下首页",
+            "<delegation-task id=\"t\" from=\"林经理\">复核首页</delegation-task>\n\n顺便看日志",
+            "<routine title=\"晨报\">读报告</routine>尾巴",
+        )) {
+            val turns = wireTurns("""[
+              {"role":"user","content":[{"type":"text","text":${JsonPrimitive(text)}}]}
+            ]""")
+            assertEquals(listOf(SessionBlock.Prose(text)), turns.single().blocks)
+        }
+    }
+
+    @Test fun `例行任务信封折成标题与 prompt 的紧凑块`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<routine title=\"晨报 &amp; &quot;计划&quot;\">读 &lt;report&gt; &amp; <code>x</code></routine>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Routine("晨报 & \"计划\"", dryRun = false,
+            "读 <report> & <code>x</code>")), turns.single().blocks)
+        assertTrue(turns.single().user)
+    }
+
+    @Test fun `试运行的例行任务带标记并去掉给成员看的说明`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<routine title=\"日报\" dry-run=\"true\">[Dry run] The user triggered this routine manually as a trial run.\n\n写日报</routine>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.Routine("日报", dryRun = true, prompt = "写日报")), turns.single().blocks)
+    }
+
+    @Test fun `群消息补投折成逐条紧凑行并保留尾部真实指令`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<group-info>群成员</group-info>\n<group-message from=\"林&amp;经理\" role=\"经理\" seq=\"1\">早上好</group-message>\n<group-message from=\"侯\" role=\"开发\" seq=\"2\">&lt;done&gt;</group-message>\n请回复"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.GroupMessages(listOf(
+            GroupEntry("林&经理", "早上好"),
+            GroupEntry("侯", "<done>"),
+        ), "请回复")), turns.single().blocks)
+        val omitted = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<group-info>成员</group-info>\n（省略了 10 条更早的消息）\n<group-message from=\"林\" seq=\"11\">继续</group-message>"}]}
+        ]""")
+        assertEquals(listOf(SessionBlock.GroupMessages(listOf(GroupEntry("林", "继续")), "（省略了 10 条更早的消息）")),
+            omitted.single().blocks)
+    }
+
+    @Test fun `前置信封后接群消息补投时两段都能折叠`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"<delegation-result id=\"d\" from=\"阿全\" status=\"completed\">已完成</delegation-result>\n<group-message from=\"小林\" seq=\"1\">继续推进</group-message>"}]}
+        ]""")
+        assertEquals(listOf(
+            SessionBlock.Delegation(SessionDelegationKind.Result, "阿全", "completed", "已完成"),
+            SessionBlock.GroupMessages(listOf(GroupEntry("小林", "继续推进")), null),
+        ), turns.single().blocks)
+    }
+
+    @Test fun `例程与群消息的非协议文本原样回退不吞内容`() {
+        for (text in listOf(
+            "<routine title=\"x\">未闭合",
+            "<routine>缺少标题</routine>",
+            "<group-info>信息</group-info>",
+            "<group-message role=\"x\">缺少来源</group-message>",
+            "<group-message from=\"林\">没有闭合",
+            "请看 <routine title=\"x\">p</routine>",
+            "```xml\n<routine title=\"x\">p</routine>\n```",
+            "普通用户消息",
+        )) {
+            val turns = wireTurns("""[
+              {"role":"user","content":[{"type":"text","text":${JsonPrimitive(text)}}]}
+            ]""")
+            assertEquals(listOf(SessionBlock.Prose(text)), turns.single().blocks)
+        }
+    }
+
+    @Test fun `工具输出里的例程与群消息标签不被改写`() {
+        val sample = "<group-message from=\"林\">继续</group-message>"
+        val turns = wireTurns("""[
+          {"role":"toolResult","toolName":"bash","content":[{"type":"text","text":${JsonPrimitive(sample)}}]}
+        ]""")
+        assertEquals(sample, (turns.single().blocks.single() as SessionBlock.Steps).steps.single().result)
+    }
+
+    @Test fun `不是开头的同名标签与普通正文一样原样展示`() {
+        for (text in listOf(
+            "请看这段 <delegation-result from=\"阿全\" status=\"completed\">已完成</delegation-result>",
+            "**<delegation-result from=\"阿全\" status=\"completed\">已完成</delegation-result>**",
+            "```xml\n<delegation-result from=\"阿全\">已完成</delegation-result>\n```",
+            "标题\n<delegation-task from=\"林经理\">检查</delegation-task>",
+        )) {
+            val turns = wireTurns("""[
+              {"role":"user","content":[{"type":"text","text":${JsonPrimitive(text)}}]}
+            ]""")
+            assertEquals(listOf(SessionBlock.Prose(text)), turns.single().blocks)
+        }
+    }
+
+    @Test fun `坏信封不解析也不吞掉正文`() {
+        for (text in listOf(
+            "<delegation-result from=\"阿全\" status=\"completed\">没有闭合",
+            "<delegation-result id=\"d\" broken from=\"阿全\">已完成</delegation-result>",
+            "<delegation-results id=\"b\">\n<delegation-result id=\"a\" from=\"阿全\">甲</delegation-result>\n坏行\n</delegation-results>",
+            "<delegation-result>缺少来源</delegation-result>",
+        )) {
+            val turns = wireTurns("""[
+              {"role":"user","content":[{"type":"text","text":${JsonPrimitive(text)}}]}
+            ]""")
+            assertEquals(text, (turns.single().blocks.single() as SessionBlock.Prose).text)
+        }
+    }
+
+    @Test fun `工具输出里的委派标签不被改写`() {
+        val sample = "<delegation-result from=\"阿全\" status=\"completed\">已完成</delegation-result>"
+        val turns = wireTurns("""[
+          {"role":"toolResult","toolName":"bash","content":[{"type":"text","text":${JsonPrimitive(sample)}}]}
+        ]""")
+        assertEquals(sample, (turns.single().blocks.single() as SessionBlock.Steps).steps.single().result)
+    }
+
     private fun wireTurns(messages: String): List<SessionTurn> {
         val wire = Json.parseToJsonElement("""{
           "type":"session-sync","sessionId":"s","requestId":"r","cursor":{"epoch":"test","seq":0},"mode":"snapshot",

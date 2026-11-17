@@ -1,6 +1,7 @@
 package io.github.tingyuxuan123.eaves.mirror
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,10 +18,16 @@ class TextDraftRecordTest {
         assertEquals(entries, decoded.entries)
     }
 
-    @Test fun `同样的草稿按不同顺序写入得到同样的字节`() {
+    /**
+     * 编辑顺序是草稿内容的一部分：重启后仍要按「最近编辑」淘汰，所以同一条目不同编辑顺序必须写出不同字节，
+     * 否则解码后拿不回真正的先后。这里只要求「同样的内容 + 同样的编辑顺序」写出的字节稳定。
+     */
+    @Test fun `同样的草稿与同样的编辑顺序写出稳定的字节`() {
         val first = TextDraftRecord.encode(pair, linkedMapOf(session to "a", chat to "b"))
-        val second = TextDraftRecord.encode(pair, linkedMapOf(chat to "b", session to "a"))
+        val second = TextDraftRecord.encode(pair, linkedMapOf(session to "a", chat to "b"))
         assertTrue(first.contentEquals(second))
+        assertFalse("编辑顺序是内容，顺序不同不能写出同样的字节",
+            first.contentEquals(TextDraftRecord.encode(pair, linkedMapOf(chat to "b", session to "a"))))
     }
 
     @Test fun `不同配对身份读到的对应草稿互不相通`() {

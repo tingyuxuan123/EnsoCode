@@ -109,7 +109,7 @@ internal fun MemberConversation(
                     } else item("group-date") { ConversationDate(entries.first().at) }
                 } else {
                     items(turns.asReversed(), key = { it.index }) { turn ->
-                        if (turn.user) MemberBubble { turn.blocks.forEach { MemberBlock(it, c.pillInk) } }
+                        if (turn.user) MemberBubble { turn.blocks.forEach { MemberBlock(it, c.pillInk, member?.name) } }
                         else Column(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 MemberAvatar(member, 22.dp)
@@ -117,7 +117,7 @@ internal fun MemberConversation(
                                 turn.timestamp?.let { Label(memberClock(it), 12, 16, color = c.dim) }
                             }
                             val working = running && turn.index == turns.lastOrNull()?.index
-                            sessionWorklogBlocks(turn.blocks, working).forEach { MemberBlock(it) }
+                            sessionWorklogBlocks(turn.blocks, working).forEach { MemberBlock(it, peer = member?.name) }
                             if (!process && conversationId != null && !working && onArtifacts != null) {
                                 val target = DesktopBotArtifactTarget(chat.id, conversationId = conversationId, messageIndex = turn.index)
                                 val artifacts = bots.artifacts?.takeIf { it.target == target && it.phase == SessionCommandPhase.Observed }
@@ -217,7 +217,7 @@ private fun GroupMessage(entry: DesktopGroupEntry, byId: Map<String, DesktopBotM
     onArtifacts: (() -> Unit)?) {
     val c = Enso.colors
     when (entry.kind) {
-        "human" -> MemberBubble { Label(entry.text, 16, 22, color = c.pillInk) }
+        "human" -> MemberBubble { ConversationText(entry.text, c.pillInk) }
         "bot" -> Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val member = byId[entry.botId]
             MemberAvatar(member, 30.dp)
@@ -228,7 +228,7 @@ private fun GroupMessage(entry: DesktopGroupEntry, byId: Map<String, DesktopBotM
                     if (onArtifacts != null) Glyph(EnsoIcon.Files, Modifier.size(16.dp)
                         .clickable(role = Role.Button, onClick = onArtifacts), c.dim, "查看本轮产物")
                 }
-                SessionMarkdown(entry.text, compact = true)
+                ConversationText(entry.text)
             }
         }
         "delegation", "progress" -> {
@@ -268,6 +268,25 @@ private fun GroupMessage(entry: DesktopGroupEntry, byId: Map<String, DesktopBotM
 }
 
 @Composable
+private fun ConversationText(text: String, ink: androidx.compose.ui.graphics.Color? = null) {
+    val blocks = remember(text) { sessionMessageBlocks(text) }
+    if (blocks == null) {
+        if (ink == null) SessionMarkdown(text, compact = true) else Label(text, 16, 22, color = ink)
+        return
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        blocks.forEach { block -> when (block) {
+            is SessionBlock.Delegation -> SessionDelegationCard(block)
+            is SessionBlock.Routine -> SessionRoutineCard(block)
+            is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
+            is SessionBlock.Prose -> if (ink == null) SessionMarkdown(block.text, compact = true)
+                else Label(block.text, 16, 22, color = ink)
+            else -> Unit
+        } }
+    }
+}
+
+@Composable
 private fun ArtifactEntry(title: String = "查看本轮产物", detail: String? = null, onClick: () -> Unit) {
     val c = Enso.colors
     Row(Modifier.fillMaxWidth().padding(top = 6.dp).background(c.card, RoundedCornerShape(16.dp))
@@ -281,9 +300,12 @@ private fun ArtifactEntry(title: String = "查看本轮产物", detail: String? 
 }
 
 @Composable
-private fun MemberBlock(block: SessionBlock, bubbleInk: androidx.compose.ui.graphics.Color? = null) {
+private fun MemberBlock(block: SessionBlock, bubbleInk: androidx.compose.ui.graphics.Color? = null, peer: String? = null) {
     when (block) {
         is SessionBlock.Prose -> if (bubbleInk != null) Label(block.text, 16, 22, color = bubbleInk) else SessionMarkdown(block.text, compact = true)
+        is SessionBlock.Delegation -> SessionDelegationCard(block, peer)
+        is SessionBlock.Routine -> SessionRoutineCard(block)
+        is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
         is SessionBlock.Worklog -> Box(Modifier.fillMaxWidth().background(Enso.colors.card2.copy(alpha = .6f), RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 4.dp)) { SessionWorklogRow(block, null) { SessionMarkdown(it, compact = true) } }
         is SessionBlock.Notice -> TimelineDisclosure(block.kind.title, block.detail, EnsoIcon.Terminal)

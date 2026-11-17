@@ -29,7 +29,23 @@ internal sealed interface SessionBlock {
     }
     data class Images(val images: List<TimelineImage>) : SessionBlock
     data object ImagePlaceholder : SessionBlock
+    /** 注入的委派信封：只保留来源、状态与正文，原始 XML 与 id 不进渲染层。 */
+    data class Delegation(
+        val kind: SessionDelegationKind,
+        val from: String,
+        val status: String?,
+        val text: String,
+        val context: String? = null,
+    ) : SessionBlock
+    /** 例行任务信封：桌面 InjectedMessageCard 的 routine，只留标题与 prompt。 */
+    data class Routine(val title: String, val dryRun: Boolean, val prompt: String) : SessionBlock
+    /** 群消息补投信封：逐条紧凑行，另带尾部的真实指令。 */
+    data class GroupMessages(val entries: List<GroupEntry>, val instruction: String?) : SessionBlock
 }
+
+internal data class GroupEntry(val from: String, val text: String)
+
+internal enum class SessionDelegationKind { Task, Result }
 
 internal enum class SessionNoticeKind(val tag: String, val title: String) {
     Background("background-task-update", "后台任务通知"), Reminder("system-reminder", "系统提醒"),
@@ -84,7 +100,7 @@ internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
             flush()
             val builder = TurnBuilder(message.index, true, message.timestamp)
             for (part in message.content) when (part["type"].text()) {
-                "text" -> part["text"].text()?.takeIf { it.isNotEmpty() }?.let { builder.prose(it) }
+                "text" -> part["text"].text()?.takeIf { it.isNotEmpty() }?.let { builder.userText(it) }
                 "image" -> builder.image(part)
             }
             if (builder.blocks.isNotEmpty()) turns.add(builder.build())
@@ -169,6 +185,151 @@ private fun standaloneNotice(text: String): SessionBlock.Notice? {
     return notice.takeIf { end == trimmed.length }
 }
 
+private val ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'")
+private val ENTITY = Regex("&(amp|lt|gt|quot|apos);")
+private val ATTRIBUTE = Regex("""\s+([\w-]+)="([^"]*)"""")
+private val ENVELOPE_HEAD = Regex("""^<(routine|delegation-task|delegation-result)(\s[^>]*)?>""")
+private val BATCH_HEAD = Regex("""^<delegation-results(\s[^>]*)?>""")
+private const val BATCH_CLOSE = "</delegation-results>"
+private val RESULT_HEAD = Regex("""^<delegation-result(\s[^>]*)?>""")
+private const val RESULT_CLOSE = "</delegation-result>"
+private val NOTES_PREFIX = Regex("""^\s*<notes-updated>[\s\S]*?</notes-updated>\s*""")
+private val PREVIOUS_RUNS = Regex("""\s*<previous-runs>[\s\S]*</previous-runs>$""")
+private val ACCEPTANCE_CHECK = Regex("""\s*<acceptance-check>[\s\S]*</acceptance-check>$""")
+private val CONTEXT = Regex("""\s*<context>([\s\S]*)</context>$""")
+private val CONTEXT_MARKER = Regex("</?context>")
+private val DRY_RUN_PREFIX = Regex("""^\[Dry run\][^\n]*\n*""")
+private val GROUP_INFO = Regex("""^<group-info>[\s\S]*?</group-info>\s*""")
+private val GROUP_STATE = Regex("""^<group-state>[\s\S]*?</group-state>\s*""")
+private val GROUP_OMITTED = Regex("""^（省略了 \d+ 条更早的消息）\s*""")
+private val GROUP_MESSAGE = Regex("""^<group-message([^>]*)>([\s\S]*?)</group-message>\s*""")
+private val ROUTING_NOTE = Regex("""\n?<routing-note>([\s\S]*?)</routing-note>\s*$""")
+/** 桌面允许「前置信封 + 换行后的群消息补投」这一种续接，其它尾部正文不折叠。 */
+private val GROUP_TAIL = Regex("""\n(?=<group-info>|<group-state>|<group-message |（省略了 )""")
+
+/** 与桌面 parseBotInjectedMessage 一致：只解这些实体，一次替换，不做二次解码。 */
+private fun decode(text: String) = ENTITY.replace(text) { ENTITIES.getValue(it.groupValues[1]) }
+
+/** 只接受 key="value" 形式的完整属性串，其它写法一律当作坏信封。 */
+private fun attributes(text: String): Map<String, String>? {
+    val result = mutableMapOf<String, String>()
+    val rest = ATTRIBUTE.replace(text) { match ->
+        result[match.groupValues[1]] = decode(match.groupValues[2])
+        ""
+    }
+    return result.takeIf { rest.isBlank() }
+}
+
+/** 一条 <delegation-result>，允许后面还有批量信封的兄弟节点；返回折叠块与已消费长度。 */
+private fun readResult(source: String): Pair<SessionBlock.Delegation, Int>? {
+    val head = RESULT_HEAD.find(source) ?: return null
+    val end = source.indexOf(RESULT_CLOSE, head.range.last + 1)
+    if (end < 0) return null
+    val attrs = attributes(head.groupValues[1]) ?: return null
+    val from = attrs["from"]?.takeIf { it.isNotBlank() } ?: return null
+    val body = source.substring(head.range.last + 1, end).trim()
+    return SessionBlock.Delegation(SessionDelegationKind.Result, from, attrs["status"], decode(body)) to
+        (end + RESULT_CLOSE.length)
+}
+
+/** 一批 <delegation-results> 只在里面全是合法 delegation-result 时才识别。 */
+private fun readBatch(source: String): List<SessionBlock>? {
+    val head = BATCH_HEAD.find(source) ?: return null
+    if (!source.endsWith(BATCH_CLOSE) || source.length - BATCH_CLOSE.length < head.range.last + 1) return null
+    attributes(head.groupValues[1]) ?: return null
+    var rest = source.substring(head.range.last + 1, source.length - BATCH_CLOSE.length).trim()
+    val items = mutableListOf<SessionBlock>()
+    while (rest.isNotEmpty()) {
+        val (item, consumed) = readResult(rest) ?: return null
+        items += item
+        rest = rest.substring(consumed).trim()
+    }
+    return items.takeIf { it.isNotEmpty() }
+}
+
+/** 单条信封必须是整段文本：桌面 parseBotInjectedMessage 同样要求整段匹配。 */
+private fun readSingleEnvelope(source: String): List<SessionBlock>? {
+    val head = ENVELOPE_HEAD.find(source) ?: return null
+    val tag = head.groupValues[1]
+    val close = "</$tag>"
+    if (!source.endsWith(close)) return null
+    val end = source.length - close.length
+    if (end < head.range.last + 1) return null
+    val attrs = attributes(head.groupValues[2]) ?: return null
+    val body = source.substring(head.range.last + 1, end).trim()
+    val from = attrs["from"]?.takeIf { it.isNotBlank() }
+    return when (tag) {
+        "routine" -> {
+            val title = attrs["title"]?.takeIf { it.isNotBlank() } ?: return null
+            val dryRun = attrs["dry-run"] == "true"
+            listOf(SessionBlock.Routine(title, dryRun, decode(if (dryRun) body.replace(DRY_RUN_PREFIX, "") else body)))
+        }
+        "delegation-result" -> listOf(SessionBlock.Delegation(SessionDelegationKind.Result, from ?: return null,
+            attrs["status"], decode(body)))
+        else -> {
+            // 尾部的历次执行摘要与验收条件是给成员看的说明，不进正文
+            val task = body.replace(PREVIOUS_RUNS, "").replace(ACCEPTANCE_CHECK, "")
+            val context = CONTEXT.find(task)
+            if (context == null && CONTEXT_MARKER.containsMatchIn(task)) return null
+            listOf(SessionBlock.Delegation(SessionDelegationKind.Task, from ?: return null, attrs["status"],
+                decode((context?.let { task.substring(0, it.range.first) } ?: task).trim()),
+                context?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }?.let(::decode)))
+        }
+    }
+}
+
+/** 群消息补投：group-info / group-state 只作为上下文隐藏，逐条 group-message 折成紧凑行。 */
+private fun readGroupMessages(source: String): List<SessionBlock>? {
+    if (!source.startsWith("<group-info>") && !source.startsWith("<group-state>") &&
+        !source.startsWith("<group-message ") && GROUP_OMITTED.find(source) == null) return null
+    var rest = GROUP_INFO.replace(source, "")
+    rest = GROUP_STATE.replace(rest, "")
+    val omitted = GROUP_OMITTED.find(rest)?.value?.trim()
+    rest = GROUP_OMITTED.replace(rest, "")
+    val entries = mutableListOf<GroupEntry>()
+    while (rest.startsWith("<group-message ")) {
+        val match = GROUP_MESSAGE.find(rest) ?: return null
+        val attrs = attributes(match.groupValues[1]) ?: return null
+        val from = attrs["from"]?.takeIf { it.isNotBlank() } ?: return null
+        entries += GroupEntry(from, decode(match.groupValues[2].trim()))
+        rest = rest.substring(match.range.last + 1)
+    }
+    if (entries.isEmpty()) return null
+    ROUTING_NOTE.find(rest)?.let { rest = rest.substring(0, it.range.first) }
+    val instruction = listOfNotNull(omitted, rest.trim().takeIf { it.isNotEmpty() })
+        .joinToString("\n").let(::decode).takeIf { it.isNotEmpty() }
+    return listOf(SessionBlock.GroupMessages(entries, instruction))
+}
+
+private fun wholeInjected(source: String): List<SessionBlock>? =
+    readGroupMessages(source) ?: readBatch(source) ?: readSingleEnvelope(source)
+
+/**
+ * 与桌面 parseBotInjectedMessage 的语义一致：只折叠整段注入，或「前置信封 + 群消息补投」。
+ * 其余（信封后接正文、Markdown 包裹、代码块、非开头标签、坏信封）一律回退原文，不吞内容。
+ */
+private fun injectedBody(source: String): List<SessionBlock>? {
+    wholeInjected(source)?.let { return it }
+    for (split in GROUP_TAIL.findAll(source)) {
+        val lead = wholeInjected(source.substring(0, split.range.first).trim()) ?: continue
+        if (lead.any { it is SessionBlock.GroupMessages }) continue
+        val tail = wholeInjected(source.substring(split.range.first).trim()) ?: continue
+        if (tail.none { it is SessionBlock.GroupMessages }) continue
+        return lead + tail
+    }
+    return null
+}
+
+/** 群聊等直接渲染原始文本的位置：识别不出注入信封时返回 null，调用方按原样渲染。 */
+internal fun sessionMessageBlocks(text: String): List<SessionBlock>? {
+    val source = text.trim()
+    if (source.isEmpty()) return null
+    // 桌面在识别前先跳过 Main 追加的笔记块；只有后面真的能折成注入块时才跳过，避免吞掉真实内容。
+    val withoutNotes = NOTES_PREFIX.replace(source, "").trim()
+    if (withoutNotes != source && withoutNotes.isNotEmpty()) injectedBody(withoutNotes)?.let { return it }
+    return injectedBody(source)
+}
+
 private fun toolOutput(message: SessionMessage): ToolOutput {
     val notices = mutableListOf<SessionBlock.Notice>()
     var text = message.toolText()
@@ -223,6 +384,11 @@ private class TurnBuilder(val index: Long, val user: Boolean, val timestamp: Lon
         val previous = blocks.lastOrNull() as? SessionBlock.Prose
         if (previous == null) blocks.add(SessionBlock.Prose(text))
         else blocks[blocks.lastIndex] = SessionBlock.Prose(previous.text + "\n\n" + text)
+    }
+    /** 私聊用户消息：整段注入信封折成块，其它情况（含信封后接正文）原样作为正文。 */
+    fun userText(text: String) {
+        val injected = sessionMessageBlocks(text) ?: return prose(text)
+        blocks.addAll(injected)
     }
     fun step(value: SessionStep) {
         val previous = blocks.lastOrNull() as? SessionBlock.Steps

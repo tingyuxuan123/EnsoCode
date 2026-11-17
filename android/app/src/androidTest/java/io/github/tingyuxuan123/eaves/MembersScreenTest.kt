@@ -256,6 +256,67 @@ class MembersScreenTest {
         compose.onNodeWithText("回归通过").assertIsDisplayed()
     }
 
+    @Test fun privateChatFoldsDelegationEnvelopeInsteadOfShowingRawXml() {
+        val member = bots.members.single()
+        val direct = DesktopBotChat("dm", "direct", "私聊", listOf(member.id), null, 1_700_000_000_000, 0,
+            sessions = mapOf(member.id to "cv"))
+        val raw = "<delegation-result id=\"d-1\" from=\"小测\" status=\"completed\">回执\n真正的细节正文\n</delegation-result>"
+        val injected = SessionMessage(0, "user", listOf(buildJsonObject { put("type", "text"); put("text", raw) }))
+        val session = DesktopSessionState(SessionTimeline("cv", messages = listOf(injected)), loading = false)
+        compose.setContent { EnsoTheme {
+            MembersScreen(bots.copy(inbox = emptyList(), chats = listOf(direct)), {}, {}, { _, _ -> },
+                session = session, onSelectSession = {})
+        } }
+        compose.onNodeWithText(member.name).performClick()
+        compose.onNodeWithText("小测 → 阿全").assertIsDisplayed()
+        compose.onNodeWithText("已完成").assertIsDisplayed()
+        compose.onNodeWithText("回执").assertIsDisplayed()
+        compose.onNode(hasText("<delegation-result", substring = true)).assertDoesNotExist()
+        compose.onNodeWithText("真正的细节正文").assertDoesNotExist()
+        compose.onNodeWithText("回执").performClick()
+        compose.onNodeWithText("真正的细节正文", substring = true).assertIsDisplayed()
+    }
+
+    @Test fun groupHumanAndBotEntriesFoldDelegationEnvelopes() {
+        val rawHuman = "<delegation-task id=\"t\" from=\"林经理\" status=\"running\">检查 <context>上一轮结论</context></delegation-task>"
+        val rawBot = "<delegation-result id=\"r\" from=\"小雪\" status=\"failed\">编译失败</delegation-result>"
+        val state = mutableStateOf(bots.copy(timelineChatId = "c1", timelineRequested = true, timeline = listOf(
+            DesktopGroupEntry(1, "e1", 1_700_000_000_000, "human", rawHuman, null),
+            DesktopGroupEntry(2, "e2", 1_700_000_001_000, "bot", rawBot, "b1"))))
+        compose.setContent { EnsoTheme { MembersScreen(state.value, {}, {}, { _, _ -> }) } }
+        compose.onNodeWithText("修复登录").performClick()
+        compose.onNodeWithText("林经理 → 我").assertIsDisplayed()
+        compose.onNodeWithText("小雪 → 我").assertIsDisplayed()
+        compose.onNodeWithText("失败").assertIsDisplayed()
+        compose.onNode(hasText("<delegation-task", substring = true)).assertDoesNotExist()
+        compose.onNode(hasText("<delegation-result", substring = true)).assertDoesNotExist()
+    }
+
+    @Test fun privateChatFoldsRoutineAndGroupEnvelopesInsteadOfShowingRawXml() {
+        val member = bots.members.single()
+        val direct = DesktopBotChat("dm", "direct", "私聊", listOf(member.id), null, 1_700_000_000_000, 0,
+            sessions = mapOf(member.id to "cv"))
+        val routine = "<routine title=\"晨报\">读报告 &amp; 汇总\n第二行细节</routine>"
+        val group = "<group-info>群成员</group-info>\n<group-message from=\"林经理\" seq=\"1\">早上好，继续昨天的活</group-message>\n请回复"
+        val session = DesktopSessionState(SessionTimeline("cv", messages = listOf(
+            SessionMessage(0, "user", listOf(buildJsonObject { put("type", "text"); put("text", routine) })),
+            SessionMessage(1, "user", listOf(buildJsonObject { put("type", "text"); put("text", group) })),
+        )), loading = false)
+        compose.setContent { EnsoTheme {
+            MembersScreen(bots.copy(inbox = emptyList(), chats = listOf(direct)), {}, {}, { _, _ -> },
+                session = session, onSelectSession = {})
+        } }
+        compose.onNodeWithText(member.name).performClick()
+        compose.onNodeWithText("例行任务 · 晨报").assertIsDisplayed()
+        compose.onNodeWithText("读报告 & 汇总").assertIsDisplayed()
+        compose.onNodeWithText("群消息 · 1 条").assertIsDisplayed()
+        compose.onNodeWithText("林经理 · 早上好，继续昨天的活").assertIsDisplayed()
+        compose.onNodeWithText("请回复").assertIsDisplayed()
+        compose.onNode(hasText("<routine", substring = true)).assertDoesNotExist()
+        compose.onNode(hasText("<group-message", substring = true)).assertDoesNotExist()
+        compose.onNode(hasText("<group-info", substring = true)).assertDoesNotExist()
+    }
+
     @Test fun groupCreateOpensOnlyAfterTheDesktopDirectoryContainsTheReceiptId() {
         val member = DesktopBotMember("b2", "小测", "测试", "#16a34a", "idle")
         val state = mutableStateOf(bots.copy(groupCreateEnabled = true, members = bots.members + member))

@@ -455,6 +455,11 @@ internal class CompanionController(
                 if (next.phase != LinkPhase.Revoked) {
                     mutable.value = mutable.value.copy(link = next)
                     if (next.phase == LinkPhase.Replaced || next.phase == LinkPhase.Failed) stopWatch()
+                    // The desktop no longer recognises this phone, so the previous pairing's drafts go too.
+                    if (next.phase == LinkPhase.Replaced) scope.launch {
+                        try { withContext(io) { drafts?.clear(saved.pairId) } } catch (error: CancellationException) { throw error }
+                        catch (_: Exception) { }
+                    }
                 } else {
                     val alreadyClearing = mutable.value.busy
                     removeConnection()
@@ -470,16 +475,20 @@ internal class CompanionController(
         removeConnection()
         if (saved != null) mutable.value = mutable.value.copy(link = DesktopLinkState(phase = LinkPhase.Revoked))
         // Unpairing or replacing the pairing must not leave the previous computer's drafts behind.
-        try {
-            withContext(io) { drafts?.clear(saved?.pairId.takeUnless { clearBroken }) }
-        } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { }
+        // Credentials go first and the draft file last: a foreground flush that lands while the credential
+        // file is being deleted may rewrite drafts, so the last write of this path must be the deletion.
+        var storageFailed = false
         try {
             withContext(io) { store.clear(saved?.pairId.takeUnless { clearBroken }) }
             credentials = null
-            mutable.value = CompanionState(problem = problem)
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { mutable.value = mutable.value.copy(busy = false, problem = CompanionProblem.Storage) }
+        catch (_: Exception) { storageFailed = true }
+        try {
+            withContext(io) { drafts?.clear(saved?.pairId.takeUnless { clearBroken }) }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { storageFailed = true }
+        mutable.value = if (storageFailed) mutable.value.copy(busy = false, problem = CompanionProblem.Storage)
+        else CompanionState(problem = problem)
     }
 
     private fun removeConnection() {

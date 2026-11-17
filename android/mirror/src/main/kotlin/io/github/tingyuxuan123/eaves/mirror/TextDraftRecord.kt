@@ -5,6 +5,9 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 
 /** Versioned plaintext format used only inside the encrypted draft envelope. */
 internal object TextDraftRecord {
@@ -14,8 +17,15 @@ internal object TextDraftRecord {
     const val MAX_TOTAL = DRAFT_TOTAL_LIMIT
     const val MAX_ID_LENGTH = 512
     const val MAX_SIZE = 768 * 1024
-    private const val VERSION = 1
+
+    /**
+     * 1: text stored with `writeUTF` (65535 byte ceiling, so a full 32000 character Chinese draft could not be saved).
+     * 2: text stored as a UTF-8 byte length + raw UTF-8 bytes, and entry order kept as the order of last edit.
+     */
+    private const val VERSION = 2
+    private const val MIN_VERSION = 1
     private const val MAX_KIND = 2
+    private const val MAX_TEXT_BYTES = MAX_TEXT * 3
 
     data class Record(val pairId: String, val entries: Map<DraftKey, String>)
 
@@ -29,7 +39,7 @@ internal object TextDraftRecord {
         for ((key, text) in entries) {
             if (!isDraftKey(key)) continue
             if (text.isBlank()) continue
-            usable[key] = text.take(MAX_TEXT)
+            usable[key] = truncate(text)
         }
         val kept = LinkedHashMap<DraftKey, String>()
         usable.entries.drop((usable.size - MAX_ENTRIES).coerceAtLeast(0)).forEach { (key, text) -> kept[key] = text }
@@ -37,19 +47,26 @@ internal object TextDraftRecord {
         return kept
     }
 
+    /** Cuts to the composer ceiling without leaving half of a surrogate pair at the end. */
+    private fun truncate(text: String): String {
+        if (text.length <= MAX_TEXT) return text
+        val cut = text.take(MAX_TEXT)
+        return if (cut.last().isHighSurrogate()) cut.dropLast(1) else cut
+    }
+
     fun encode(pairId: String, entries: Map<DraftKey, String>): ByteArray {
         require(PairCredentialRecord.isRouteIdentifier(pairId)) { "Invalid draft record" }
         val normalized = normalize(entries)
-        val ordered = normalized.entries.sortedWith(compareBy({ it.key.kind.ordinal }, { it.key.id }))
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { out ->
             out.writeByte(VERSION)
             out.writeUTF(pairId)
-            out.writeByte(ordered.size)
-            ordered.forEach { (key, text) ->
+            out.writeByte(normalized.size)
+            // Iteration order is the order of last edit, so eviction still drops the oldest slot after a restart.
+            normalized.forEach { (key, text) ->
                 out.writeByte(key.kind.ordinal)
                 out.writeUTF(key.id)
-                out.writeUTF(text)
+                writeText(out, text)
             }
         }
         return bytes.toByteArray().also { require(it.size <= MAX_SIZE) { "Invalid draft record" } }
@@ -59,7 +76,8 @@ internal object TextDraftRecord {
         require(bytes.size in 2..MAX_SIZE) { "Invalid draft record" }
         return try {
             DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-                require(input.readUnsignedByte() == VERSION) { "Invalid draft record" }
+                val version = input.readUnsignedByte()
+                require(version in MIN_VERSION..VERSION) { "Invalid draft record" }
                 val pairId = input.readUTF()
                 require(PairCredentialRecord.isRouteIdentifier(pairId)) { "Invalid draft record" }
                 val count = input.readUnsignedByte()
@@ -69,7 +87,7 @@ internal object TextDraftRecord {
                     val kind = DraftKind.entries.getOrNull(input.readUnsignedByte())?.takeIf { it.ordinal <= MAX_KIND }
                         ?: throw IllegalArgumentException("Invalid draft record")
                     val id = input.readUTF()
-                    val text = input.readUTF()
+                    val text = if (version >= 2) readText(input) else input.readUTF()
                     val key = DraftKey(kind, id)
                     require(isDraftKey(key) && text.isNotBlank() && text.length <= MAX_TEXT) { "Invalid draft record" }
                     entries[key] = text
@@ -81,6 +99,29 @@ internal object TextDraftRecord {
         } catch (_: IOException) {
             throw IllegalArgumentException("Invalid draft record")
         } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("Invalid draft record")
+        }
+    }
+
+    private fun writeText(out: DataOutputStream, text: String) {
+        val encoded = text.toByteArray(Charsets.UTF_8)
+        out.writeInt(encoded.size)
+        out.write(encoded)
+    }
+
+    /** Strict UTF-8: a record that does not decode exactly is treated as unreadable, never as mojibake. */
+    private fun readText(input: DataInputStream): String {
+        val size = input.readInt()
+        require(size in 0..MAX_TEXT_BYTES) { "Invalid draft record" }
+        val encoded = ByteArray(size)
+        input.readFully(encoded)
+        return try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(encoded))
+                .toString()
+        } catch (_: CharacterCodingException) {
             throw IllegalArgumentException("Invalid draft record")
         }
     }
