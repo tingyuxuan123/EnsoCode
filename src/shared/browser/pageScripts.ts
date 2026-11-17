@@ -128,6 +128,7 @@ export const PAGE_SNAPSHOT_SCRIPT = `(() => {
   const excerpt = words.join(' ').replace(/\\s+/g, ' ').trim().slice(0, MAX_TEXT);
   if (excerpt) out.push({ role: 'text', name: excerpt, depth: 0 });
   let counter = 0;
+  const bindings = window.__ensoBrowserRefs || (window.__ensoBrowserRefs = new WeakMap());
   for (const el of document.querySelectorAll('a,button,input,select,textarea,summary,[contenteditable="true"],[onclick],[tabindex],[role]')) {
     if (out.length >= MAX) break;
     if (!isInteractive(el) || !visible(el) || !inViewport(el)) continue;
@@ -135,6 +136,7 @@ export const PAGE_SNAPSHOT_SCRIPT = `(() => {
     const kind = kindOf(el, role);
     const ref = 'e' + (++counter);
     el.setAttribute(REF_ATTR, ref);
+    bindings.set(el, ref);
     const entry = { role, name: nameOf(el), depth: 0, ref, kind };
     const value = valueOf(el);
     if (value) entry.value = value.length > 200 ? value.slice(0, 200) + '…' : value;

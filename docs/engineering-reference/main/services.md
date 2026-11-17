@@ -577,7 +577,7 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
   password 控件要进 snapshot（`kind=fill`），但**不带当前值**；file / hidden 仍排除。
 - 点 / 填 / 键 / 滚 / 选 / 拖走页内脚本与可信原生输入（`@shared/browser/pageScripts`），ref 只认最近一次快照。
   点/填前 `elementFromPoint` 检查遮挡；被挡住返回 covered，不要当 stale 重试死 ref。
-  动作后在页内等两帧或 50ms，combobox 输入最多再等 200ms 出建议。
+  底层沿用现有原生输入和短等待；动作结果的 DOM/网络稳定等待见下方 `observation` 契约。
 - 拖拽不走合成 `MouseEvent`（HTML5 DnD / 部分库不认）。Main
   页内用同一份 `DataTransfer` 发 `dragstart/dragover/drop`（原生 HTML5），然后
   `webContents.sendInputEvent` 发可信 mouseDown → 先微移 8px → 分段 mouseMove → mouseUp
@@ -595,6 +595,24 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
   取消后 2 秒仍未退出则关闭该 tab 回收队列，不在原 tab 上放行下一次操作，防止迟到点击 / 输入
   读到新信号继续执行。回归：`browserHost.capabilities.test.ts`。
 - 浏览器工具 `executionMode: 'sequential'`：navigate 会清 ref，并行必假 stale。
+- 导航、点击、填写等动作直接回有界 `observation`（新控件及 ref、变化值、消失数量、可见正文），
+  不再要求每步额外调用 snapshot。反馈保留同一存活 DOM 节点的已知 ref；显式 snapshot/read、
+  人工输入、导航及成员换人仍作废旧引用。保留 ref 同时验证 WeakMap 节点绑定，不认克隆/搬用的属性。
+  未在截断反馈中展示的新 ref 不对模型授权；密码值仍不输出。观察失败明确回 `observationError`，
+  表示动作已投递但结果待验证，禁止靠重放动作补救。
+- `browser_act` 复用 worker → Main 的 browser-invoke 闭集，不新增 renderer 通道。
+  一次最多 10 步、总预算 45 秒，同一 tab 的一个队列槽内执行；支持按 ref 或可见标签（role/nth）定位，
+  后续控件可在前一步后出现。整批参数和导航边界先校验，外网导航先审批；不开放脚本、文件上传、
+  任意路径、跨 tab 或嵌套批处理。首错、取消、人工输入即停，说明完成数，绝不自动重试已投递的输入。
+- 模型参数在 schema 校验前按 action 去掉无关占位字段、空白定位字段；Main 仍只接收严格的规范形态。
+  动作间最多等 2 秒，结合 DOM 静默 300ms 与本次新发有限网络请求；忽略 WebSocket/EventSource 和旧请求。
+  网络观察懒启且复用 debugger，不改 DevTools 互斥；未完成请求带提示返回，不冒充页面已稳定。
+  回归：`browserHost.capabilities.test.ts`、`shared/browser/actions.test.ts`、`activity.test.ts`、
+  `readingScripts.test.ts`、`agent/tools/browser.actions.test.ts`；真机页见 `test/fixtures/browser-actions.html`。
+- 2026-11-17 隔离 Electron/CDP 9333 真机：`gonshi/gpt-6.1-sol` 与
+  `auto/deepseek-v4.1-flash` 均自主完成 Start → Query → Search → 等待结果，Main 权威历史各只有
+  `browser_navigate`、`browser_act` 两次成功工具调用，`completed: 4`，无额外 snapshot/read。
+  这验证了减少模型往返的快路径，不是与 baocode 同机同任务的耗时基准，不据此宣称固定提速倍数。
 - **「当前 tab」有两个指针，不能合并**：`currentBySession` 服务布局和面板显示，可被
   renderer 的 `setViewport` / 用户导航改写；`agentBySession` 只由工具本身（隐式选中、
   显式 tabId、`tabs new|select`）推进。合并的后果是面板一可见就改写 agent 指针，

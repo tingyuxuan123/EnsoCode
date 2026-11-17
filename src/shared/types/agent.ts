@@ -241,6 +241,7 @@ export type ProtectedActionCategory = (typeof PROTECTED_ACTION_CATEGORIES)[numbe
 
 /** 内嵌浏览器操作闭集；CDP 调试另由 Main 策略校验，不能绕过正式操作。 */
 export const BROWSER_OPS = [
+  'act',
   'navigate',
   'snapshot',
   'click',

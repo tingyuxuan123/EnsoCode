@@ -29,6 +29,44 @@ const read = (scope: 'viewport' | 'document', html: string) => {
 };
 
 describe('页面已加载 DOM 读取', () => {
+  it('action feedback keeps refs only on the same surviving DOM node; cloned refs are not reused', () => {
+    const { document, window } = parseHTML(
+      '<html><body><button aria-label="Save">Save</button><input type="password" value="DO_NOT_LEAK"></body></html>'
+    );
+    const run = (id: string, preserveRefs: string[] = []) => {
+      for (const el of document.querySelectorAll('*'))
+        Object.defineProperty(el, 'getBoundingClientRect', {
+          configurable: true,
+          value: () => ({
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 20,
+            top: 0,
+            bottom: 20,
+            left: 0,
+            right: 100,
+          }),
+        });
+      return new Function(
+        'document',
+        'window',
+        'innerWidth',
+        'innerHeight',
+        'getComputedStyle',
+        `return ${pageReadScript({ scope: 'viewport' }, id, { compact: true, preserveRefs })}`
+      )(document, window, 800, 600, () => ({}));
+    };
+    const first = run('s1');
+    const refs = first.entries.map((e: { ref: string }) => e.ref);
+    expect(run('s2', refs).entries[0].ref).toBe(refs[0]);
+    const original = document.querySelector('button')!;
+    original.replaceWith(original.cloneNode(true));
+    const after = run('s3', refs);
+    expect(after.entries[0].ref).not.toBe(refs[0]);
+    expect(JSON.stringify(after)).not.toContain('DO_NOT_LEAK');
+    expect(run('s4').entries[0].ref).not.toBe(after.entries[0].ref);
+  });
   it('document 包含屏外正文但 viewport 不包含，password 当前值不读取', () => {
     const html =
       '<p>Visible</p><p id="below">Offscreen</p><input type="password" value="secret"><button>Save</button>';

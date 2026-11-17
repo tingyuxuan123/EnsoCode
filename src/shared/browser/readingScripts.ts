@@ -10,11 +10,19 @@ export const FIND_PAGE_REF_SOURCE = `const findRef = (ref, root = document) => {
   return null;
 };`;
 
-export function pageReadScript(request: ReadRequest, snapshotId: string): string {
+export function pageReadScript(
+  request: ReadRequest,
+  snapshotId: string,
+  options?: { compact?: boolean; preserveRefs?: readonly string[] }
+): string {
   return `(() => {
     ${FIND_PAGE_REF_SOURCE}
     const request = ${JSON.stringify(request)};
     const snapshotId = ${JSON.stringify(snapshotId)};
+    const compact = ${options?.compact === true};
+    const preserve = new Set(${JSON.stringify(options?.preserveRefs ?? [])});
+    const used = new Set();
+    const bindings = window.__ensoBrowserRefs || (window.__ensoBrowserRefs = new WeakMap());
     const entries = [], words = [], diagnostics = [];
     let count = 0, length = 0, scanned = 0, truncated = false;
     const visible = (el) => {
@@ -27,7 +35,7 @@ export function pageReadScript(request: ReadRequest, snapshotId: string): string
     };
     const walk = (root) => {
       for (const node of Array.from(root.childNodes || [])) {
-        if (++scanned > 30000 || length >= 500000 || entries.length >= 5000) { truncated = true; return; }
+        if (++scanned > (compact ? 10000 : 30000) || length >= (compact ? 8000 : 500000) || entries.length >= (compact ? 400 : 5000)) { truncated = true; return; }
         if (node.nodeType === 3) {
           const text = (node.textContent || '').replace(/\\s+/g, ' ').trim();
           const parent = node.parentElement;
@@ -42,11 +50,16 @@ export function pageReadScript(request: ReadRequest, snapshotId: string): string
           let role = el.getAttribute('role') || ({ a: 'link', button: 'button', select: 'combobox', textarea: 'textbox', summary: 'button' }[tag]) || 'generic';
           if (tag === 'input') role = /^(checkbox|radio)$/.test(el.type) ? el.type : /^(button|submit|reset)$/.test(el.type) ? 'button' : 'textbox';
           const name = (el.getAttribute('aria-label') || (el.labels ? Array.from(el.labels).map((label) => label.textContent || '').join(' ') : '') || el.getAttribute('placeholder') || el.getAttribute('alt') || el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 500);
-          const ref = 'e' + snapshotId + '_' + (++count);
+          const previous = el.getAttribute('data-enso-ref');
+          const ref = preserve.has(previous) && bindings.get(el) === previous && !used.has(previous) ? previous : 'e' + snapshotId + '_' + (++count);
+          used.add(ref);
+          bindings.set(el, ref);
           el.setAttribute('data-enso-ref', ref);
           const kind = tag === 'select' ? 'select' : /^(textbox|searchbox|spinbutton)$/.test(role) || el.isContentEditable ? 'fill' : 'click';
           const entry = { ref, role, name, depth: 0, kind };
           if (tag === 'input' && el.type !== 'password' && el.type !== 'file') entry.value = /^(checkbox|radio)$/.test(el.type) ? (el.checked ? 'checked' : '') : (el.value || '').slice(0, 200);
+          if (tag === 'textarea' || el.isContentEditable) entry.value = (el.value || el.innerText || '').slice(0, 200);
+          if (tag === 'select') entry.value = Array.from(el.selectedOptions || []).map((o) => o.textContent).join(', ').slice(0, 200);
           entries.push(entry);
         }
         walk(el);
@@ -60,6 +73,28 @@ export function pageReadScript(request: ReadRequest, snapshotId: string): string
     const root = request.ref ? findRef(request.ref) : document.body;
     if (!root) return { entries: [], text: '', diagnostics: ['Element ref is stale or document is not ready'], truncated: false };
     walk(root);
-    return { entries, text: words.join(' ').slice(0, 500000), diagnostics: diagnostics.slice(0, 50), truncated };
+    return { entries, text: words.join(' ').slice(0, compact ? 2000 : 500000), diagnostics: diagnostics.slice(0, 50), truncated };
+  })()`;
+}
+
+export const PAGE_ACTION_SETTLE_SCRIPT = `new Promise((resolve) => {
+      let quiet, deadline;
+      const finish = () => { clearTimeout(quiet); clearTimeout(deadline); observer.disconnect(); resolve(); };
+      const reset = () => { clearTimeout(quiet); quiet = setTimeout(() => { if (document.readyState === 'loading') reset(); else finish(); }, 300); };
+      const observer = new MutationObserver((records) => { if (records.some((r) => r.type !== 'attributes' || r.attributeName !== 'data-enso-ref')) reset(); });
+      observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+      deadline = setTimeout(finish, 2000);
+      reset();
+    })`;
+
+/** One renderer round trip: short DOM quiet period, then a bounded viewport read. */
+export function pageActionObservationScript(
+  snapshotId: string,
+  preserveRefs: readonly string[],
+  settle: boolean
+): string {
+  return `(async () => {
+    ${settle ? `await ${PAGE_ACTION_SETTLE_SCRIPT};` : ''}
+    return ${pageReadScript({ scope: 'viewport' }, snapshotId, { compact: true, preserveRefs })};
   })()`;
 }

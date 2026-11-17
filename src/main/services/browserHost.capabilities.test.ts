@@ -118,6 +118,104 @@ const open = async () => {
   return { host, tabId, contents: mock.contents[0] };
 };
 
+it('点击直接返回新控件和正文，可沿用先前已呈现的存活 ref', async () => {
+  const { host, tabId, contents } = await open();
+  let changed = false;
+  let retainedRef = '';
+  mock.exec = async (script) => {
+    if (script.includes('const snapshotId =')) {
+      const id = /const snapshotId = "([^"]+)"/.exec(script)?.[1] ?? 'x';
+      return {
+        text: changed ? 'Ready' : 'Open',
+        entries: [
+          { role: 'button', name: 'Open', depth: 0, ref: retainedRef || `e${id}_1`, kind: 'click' },
+          ...(changed
+            ? [{ role: 'textbox', name: 'Query', depth: 0, ref: `e${id}_2`, kind: 'fill' }]
+            : []),
+        ],
+        diagnostics: [],
+        truncated: false,
+      };
+    }
+    return { x: 20, y: 30 };
+  };
+  const initial = (await host.invoke('conv', 'read_elements', { tabId })) as {
+    entries: { ref: string }[];
+  };
+  const ref = initial.entries[0].ref;
+  retainedRef = ref;
+  const send = contents.sendInputEvent.bind(contents);
+  contents.sendInputEvent = (input: unknown) => {
+    send(input);
+    changed = true;
+  };
+  const clicked = (await host.invoke('conv', 'click', { tabId, ref })) as { observation: string };
+  expect(clicked.observation).toContain('Query');
+  expect(clicked.observation).toContain('Ready');
+  await expect(host.invoke('conv', 'click', { tabId, ref })).resolves.toBeDefined();
+  await host.dispose();
+});
+
+it('合批只用一个队列槽，成功按序执行，首错停止并说明已完成步骤', async () => {
+  const { host, tabId, contents } = await open();
+  mock.exec = async () => ({ text: 'Ready', entries: [], diagnostics: [], truncated: false });
+  const result = (await host.invoke('conv', 'act' as never, {
+    tabId,
+    steps: [
+      { action: 'press', key: 'Tab' },
+      { action: 'press', key: 'Enter' },
+    ],
+  })) as { completed: number; observation: string };
+  expect(result.completed).toBe(2);
+  expect(contents.inputs.filter((v) => (v as { type?: string }).type === 'keyDown')).toHaveLength(
+    2
+  );
+  contents.inputs.length = 0;
+  await expect(
+    host.invoke('conv', 'act' as never, {
+      tabId,
+      steps: [
+        { action: 'press', key: 'Tab' },
+        { action: 'click', ref: 'e999' },
+        { action: 'press', key: 'Enter' },
+      ],
+    })
+  ).rejects.toThrow(/step 2.*1 completed/is);
+  expect(contents.inputs).not.toContainEqual(expect.objectContaining({ keyCode: 'Enter' }));
+  await host.dispose();
+});
+
+it('合批拒绝坏的后续步骤、跨 tab 注入；中途人工操作后不继续发送输入', async () => {
+  const { host, tabId, contents } = await open();
+  await expect(
+    host.invoke('conv', 'act' as never, {
+      tabId,
+      steps: [
+        { action: 'press', key: 'Tab' },
+        { action: 'press', key: 'Enter', tabId: 'other' },
+      ],
+    })
+  ).rejects.toThrow();
+  expect(contents.inputs).toEqual([]);
+  const send = contents.sendInputEvent.bind(contents);
+  contents.sendInputEvent = (input: unknown) => {
+    send(input);
+    if ((input as { type?: string }).type === 'keyUp')
+      queueMicrotask(() => contents.emit('input-event', {}, { type: 'mouseDown' }));
+  };
+  await expect(
+    host.invoke('conv', 'act' as never, {
+      tabId,
+      steps: [
+        { action: 'press', key: 'Tab' },
+        { action: 'press', key: 'Enter' },
+      ],
+    })
+  ).rejects.toThrow(/changed|manual|user/i);
+  expect(contents.inputs).not.toContainEqual(expect.objectContaining({ keyCode: 'Enter' }));
+  await host.dispose();
+});
+
 it('指定 tab 仍校验归属，用户操作后普通会话及 raw CDP 无需重新授权', async () => {
   const { host, tabId, contents } = await open();
   await expect(
@@ -127,6 +225,76 @@ it('指定 tab 仍校验归属，用户操作后普通会话及 raw CDP 无需�
   expect(
     await host.invoke('conv', 'cdp', { tabId, method: 'Runtime.evaluate', params: {} })
   ).toEqual({});
+  await host.dispose();
+});
+
+it('连续操作按可见标签解析刚出现的控件，原生输入只投递一次', async () => {
+  const { host, tabId, contents } = await open();
+  let opened = false;
+  mock.exec = async (script) => {
+    if (!script.includes('const snapshotId =')) return { x: 20, y: 30 };
+    const id = /const snapshotId = "([^"]+)"/.exec(script)?.[1] ?? 'x';
+    return {
+      text: opened ? 'Ready' : '',
+      entries: [
+        { role: 'button', name: 'Open', depth: 0, ref: `e${id}_1`, kind: 'click' },
+        ...(opened
+          ? [{ role: 'textbox', name: 'Query', depth: 0, ref: `e${id}_2`, kind: 'fill' }]
+          : []),
+      ],
+      diagnostics: [],
+      truncated: false,
+    };
+  };
+  const send = contents.sendInputEvent.bind(contents);
+  contents.sendInputEvent = (input: unknown) => {
+    send(input);
+    if ((input as { type?: string }).type === 'mouseUp') opened = true;
+  };
+  const result = (await host.invoke('conv', 'act', {
+    tabId,
+    steps: [
+      { action: 'click', target: 'Open', role: 'button' },
+      { action: 'type', target: 'Query', text: 'hello' },
+    ],
+  })) as { completed: number };
+  expect(result.completed).toBe(2);
+  expect(contents.inputs.filter((input) => input === 'hello')).toHaveLength(1);
+  expect(
+    contents.inputs.filter((input) => (input as { type?: string }).type === 'mouseDown')
+  ).toHaveLength(1);
+  await host.dispose();
+});
+
+it('连续操作中止后不重放已完成的输入，不向后续步骤投递', async () => {
+  const { host, tabId, contents } = await open();
+  let started!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  mock.exec = async () => {
+    started();
+    return new Promise<never>(() => {});
+  };
+  const controller = new AbortController();
+  const act = host.invoke(
+    'conv',
+    'act',
+    {
+      tabId,
+      steps: [
+        { action: 'wait', text: 'Not here' },
+        { action: 'press', key: 'Enter' },
+      ],
+    },
+    undefined,
+    { signal: controller.signal }
+  );
+  const rejected = expect(act).rejects.toThrow(/abort/i);
+  await waiting;
+  controller.abort();
+  await rejected;
+  expect(contents.inputs).toEqual([]);
   await host.dispose();
 });
 it('用户点击可协助在途等待完成，排队操作仍可继续', async () => {
@@ -190,7 +358,9 @@ it('Agent 原生输入不误判人工操作；人工操作使旧引用失效，�
   };
   expect(next.entries[0].ref).not.toBe(first.entries[0].ref);
   mock.exec = async () => ({ x: 20, y: 30 });
-  await expect(host.invoke('conv', 'click', { tabId, ref: next.entries[0].ref })).resolves.toEqual({
+  await expect(
+    host.invoke('conv', 'click', { tabId, ref: next.entries[0].ref })
+  ).resolves.toMatchObject({
     url: 'https://example.test/',
     title: 'Page',
   });
@@ -244,9 +414,18 @@ it('Agent 滚动触发 hash 更新仅推送 URL，不让已有引用失效', asy
   };
   const urls: string[] = [];
   host.onState((_session, _id, state) => urls.push(state.url));
-  mock.exec = async () => {
+  mock.exec = async (script) => {
     contents.url = 'https://example.test/#section';
     contents.emit('did-navigate-in-page', {}, contents.url, true);
+    if (script.includes('const snapshotId ='))
+      return {
+        text: 'Save',
+        entries: [
+          { role: 'button', name: 'Save', depth: 0, ref: snapshot.entries[0].ref, kind: 'click' },
+        ],
+        diagnostics: [],
+        truncated: false,
+      };
     return 'ok';
   };
   await host.invoke('conv', 'scroll', { tabId, direction: 'down' });
@@ -434,6 +613,7 @@ it('永不 settle 的操作取消后在 grace 内保留队列，超时关闭 tab
   expect(String(queuedError)).toMatch(/closed/i);
   await queued;
   expect(contents.inputs).toHaveLength(0);
+  mock.exec = async () => 'ok';
   await expect(
     host.invoke('conv', 'navigate', { url: 'https://example.test/recovered' })
   ).resolves.toBeDefined();

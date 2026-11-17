@@ -45,6 +45,21 @@ pi 的工具执行顺序是 **`prepareArguments` → JSON schema 校验（TypeBo
 DeepSeek `auto/deepseek-v4.1-flash` 与 OpenAI `auto/gpt-6.1-sol` 都自主完成一次批量截图、
 一次总览 read 并识别 alpha/beta；GPT 复验仍带全空可选字段，工具已正常执行。
 
+## 批量工具的按动作可选字段也会被填齐
+
+`browser_act` 第一次双厂商真机检查中，DeepSeek 只传每步需要的字段，可以完成整批；GPT 则给
+click/fill/wait 每一步都填齐 schema 的所有可选字段（含空 ref、空 url、values: [] 等），触发
+严格的按 action 字段检查。GPT 回退为单步工具后虽然完成任务，批量优化实际没有生效，不能算验收通过。
+
+worker 必须在 `prepareArguments` 阶段按 action 白名单去掉**不属于该动作**的字段，再移除空白
+ref/target/role；无 target 时清掉只用于标签定位的 role/nth。不得放宽 Main：非空 ref+target 冲突、
+缺少必需载荷、坏类型和越界序列依旧拒绝。测试复用真实 GPT 载荷，覆盖归一 → schema → execute。
+验收必须读 Main 权威工具结果，确认 `browser_act` 本身无错误并报告全部步骤完成，而非只看模型说成功。
+
+回归：`src/agent/tools/browser.actions.test.ts`；实现：`src/shared/browser/actions.ts`。
+修复后重启隔离 Main/worker，两家模型均只用 navigate + act 完成四步，Main 权威历史的
+`browser_act` 均为 `isError: false`、`completed: 4`，且观察结果包含各自输入的唯一标记。
+
 ## 相关代码
 
 - `src/shared/memory/toolParams.ts` — `normalizeMemoryCaptureParams` / `parseMemoryCaptureRequest`

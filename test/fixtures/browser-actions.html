@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Browser actions smoke fixture</title>
+<style>body{font:18px system-ui;padding:32px}input,button{font:inherit;padding:12px;margin:8px}#status{padding:16px}</style>
+<h1>Browser actions smoke fixture</h1>
+<button id="start" type="button">Start</button>
+<section id="form" hidden>
+  <label>Query <input aria-label="Query" id="query"></label>
+  <button id="search" type="button">Search</button>
+</section>
+<p id="status">Not started</p>
+<script>
+  const status = document.getElementById('status');
+  window.fixtureEvents = [];
+  document.getElementById('start').onclick = () => {
+    fixtureEvents.push('start');
+    setTimeout(() => {
+      document.getElementById('form').hidden = false;
+      status.textContent = 'Ready for query';
+    }, 250);
+  };
+  document.getElementById('query').oninput = (event) => {
+    fixtureEvents.push(`input:${event.target.value}`);
+  };
+  document.getElementById('search').onclick = async () => {
+    const query = document.getElementById('query').value;
+    fixtureEvents.push(`search:${query}`);
+    const response = await fetch(`/result?query=${encodeURIComponent(query)}`);
+    status.textContent = await response.text();
+  };
+</script>
+</html>

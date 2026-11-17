@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  actionChanges,
+  BROWSER_ACTION_BUDGET_MS,
+  type BrowserAction,
+  findActionTarget,
+  parseBrowserActions,
+} from '@shared/browser/actions';
+import { BrowserActivity } from '@shared/browser/activity';
 import { assertAllowedCdpMethod } from '@shared/browser/cdpPolicy';
 import {
   type CopySelectionResult,
@@ -64,12 +72,17 @@ import {
   parseReadRequest,
   readPageSlice,
 } from '@shared/browser/reading';
-import { pageReadScript } from '@shared/browser/readingScripts';
+import {
+  PAGE_ACTION_SETTLE_SCRIPT,
+  pageActionObservationScript,
+  pageReadScript,
+} from '@shared/browser/readingScripts';
 import {
   type BrowserSnapshot,
   isKnownRef,
   parseSnapshotEntries,
   renderSnapshot,
+  type SnapshotEntry,
   snapshotRefOptions,
 } from '@shared/browser/snapshot';
 import {
@@ -296,6 +309,11 @@ interface Tab {
   ownerSessionId: string;
   createdAt: number;
   lastSnapshot?: BrowserSnapshot;
+  actionEntries?: SnapshotEntry[];
+  manualRevision: number;
+  activity: BrowserActivity;
+  networkTracking: boolean;
+  networkListenersInstalled: boolean;
   locked: boolean;
   /** webContents 首次 dom-ready 前 debugger.attach 会让 Main 段错误 */
   ready: boolean;
@@ -360,6 +378,20 @@ const paramString = (params: unknown, key: string): string => {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const USER_INPUT = new Set(['mouseDown', 'rawKeyDown', 'keyDown']);
+const ACTION_FEEDBACK_OPS: ReadonlySet<BrowserHostOp> = new Set([
+  'navigate',
+  'click',
+  'type',
+  'fill',
+  'press_key',
+  'scroll',
+  'select_option',
+  'click_xy',
+  'drag',
+  'hover',
+  'set_checked',
+  'scroll_into_view',
+]);
 
 export class BrowserHost {
   private readonly tabs = new Map<string, Tab>();
@@ -515,11 +547,13 @@ export class BrowserHost {
 
   private invalidateRefs(tab: Tab): void {
     tab.lastSnapshot = undefined;
+    tab.actionEntries = undefined;
     tab.readSnapshot = undefined;
     tab.readKey = undefined;
   }
 
-  private userInteracted(tab: Tab): void {
+  private userInteracted(tab: Tab, manual = true): void {
+    if (manual) tab.manualRevision += 1;
     tab.generation += 1;
     this.invalidateRefs(tab);
   }
@@ -1346,6 +1380,7 @@ export class BrowserHost {
     options?: { signal?: AbortSignal; guard?: () => void }
   ): Promise<unknown> {
     options?.signal?.throwIfAborted();
+    const actions = op === 'act' ? parseBrowserActions(params) : undefined;
     if (op === 'history') return this.history(sessionId, params);
     if (op === 'downloads') return this.downloads(sessionId, params);
     if (actor && this.tabClaims.takeClosed(actor.sessionId))
@@ -1381,7 +1416,9 @@ export class BrowserHost {
         : ((pointed ? this.tabs.get(pointed) : undefined) ?? this.agentTabFor(sessionId));
     if (
       !tab &&
-      (op === 'navigate' || (op === 'navigation' && isRecord(params) && params.action === 'search'))
+      (op === 'navigate' ||
+        actions?.[0]?.action === 'navigate' ||
+        (op === 'navigation' && isRecord(params) && params.action === 'search'))
     )
       tab = this.createTab(sessionId);
     if (!tab) throw new Error('No browser tab is open. Call browser_navigate first.');
@@ -1525,6 +1562,31 @@ export class BrowserHost {
     mustTab: () => Tab,
     navigateTab?: Tab
   ): Promise<unknown> {
+    if (op === 'act') return this.act(mustTab(), parseBrowserActions(params));
+    const navigation =
+      op === 'navigation' &&
+      isRecord(params) &&
+      ['back', 'forward', 'reload', 'search'].includes(String(params.action));
+    if (!ACTION_FEEDBACK_OPS.has(op) && !navigation)
+      return this.runOperation(sessionId, op, params, mustTab, navigateTab);
+    const tab = mustTab();
+    const before = tab.actionEntries;
+    await this.watchActivity(tab);
+    const since = Date.now();
+    const result = await this.runOperation(sessionId, op, params, mustTab, navigateTab);
+    return {
+      ...(isRecord(result) ? result : {}),
+      ...(await this.observeAction(tab, before, since)),
+    };
+  }
+
+  private async runOperation(
+    sessionId: string,
+    op: BrowserHostOp,
+    params: unknown,
+    mustTab: () => Tab,
+    navigateTab?: Tab
+  ): Promise<unknown> {
     switch (op) {
       case 'read_text':
         return this.readPage(mustTab(), params, 'text');
@@ -1658,6 +1720,199 @@ export class BrowserHost {
         return this.insertText(mustTab(), params);
       case 'plugin_read_wps_range':
         return this.readWpsRange(mustTab(), params);
+    }
+  }
+
+  /** Same tab queue and cancellation lease for every step; never re-enter invoke(). */
+  private async act(tab: Tab, steps: BrowserAction[]): Promise<unknown> {
+    for (const step of steps)
+      if (step.action === 'navigate') this.allowUrl(step.url!, tab.ownerSessionId);
+    const before = tab.actionEntries;
+    const revision = tab.manualRevision;
+    await this.watchActivity(tab);
+    const since = Date.now();
+    const guard = tab.operationGuard;
+    const controller = tab.active;
+    const deadline = Date.now() + BROWSER_ACTION_BUDGET_MS;
+    tab.operationGuard = () => {
+      guard?.();
+      if (tab.manualRevision !== revision)
+        throw new Error('User changed the page during browser_act; refresh before continuing.');
+      if (Date.now() >= deadline)
+        throw new Error('browser_act time budget exceeded; do not replay completed steps.');
+    };
+    const timer = setTimeout(
+      () =>
+        controller?.abort(
+          new Error(
+            'browser_act time budget exceeded; input may already have been delivered. Inspect the page; do not replay the batch.'
+          )
+        ),
+      BROWSER_ACTION_BUDGET_MS
+    );
+    let completed = 0;
+    try {
+      for (const step of steps) {
+        const started = Date.now();
+        this.assertTabActive(tab);
+        let ref = step.ref;
+        if (step.target) {
+          const until = Math.min(deadline, Date.now() + 3000);
+          do {
+            const entries = await this.scanActionState(tab, false);
+            ref = findActionTarget(entries, step);
+            if (ref) break;
+            await sleep(100);
+            this.assertTabActive(tab);
+          } while (Date.now() < until);
+          if (!ref) throw new Error(`Target not found: ${step.target}`);
+        }
+        const p = { ...step, ...(ref ? { ref } : {}) };
+        switch (step.action) {
+          case 'click':
+            await this.click(tab, ref!);
+            break;
+          case 'hover':
+            await this.pointer(tab, ref!, false);
+            break;
+          case 'type':
+          case 'fill':
+            await this.type(tab, ref!, step.text!, step.submit === true);
+            break;
+          case 'press':
+            await this.pressKey(tab, step.key!);
+            break;
+          case 'scroll':
+            await this.runOperation(tab.ownerSessionId, 'scroll', p, () => tab);
+            break;
+          case 'select':
+            await this.selectOption(tab, ref!, step.values!);
+            break;
+          case 'check':
+            await this.setChecked(tab, ref!, step.checked!);
+            break;
+          case 'wait':
+            await this.waitFor(tab, {
+              kind: 'text',
+              text: step.text,
+              timeoutMs: step.timeoutMs ?? 10000,
+            });
+            break;
+          case 'navigate':
+            await this.navigate(tab.ownerSessionId, step.url!, false, tab);
+            break;
+        }
+        completed++;
+        this.assertTabActive(tab);
+        // No full snapshot between known steps. Dynamic targets are resolved just-in-time.
+        if (completed < steps.length && step.action !== 'wait') {
+          await this.settleAction(tab, started);
+        }
+      }
+      return { completed, ...(await this.observeAction(tab, before, since)) };
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `browser_act step ${Math.min(completed + 1, steps.length)} stopped (${completed} completed). ${why} The current step may have delivered input; inspect before retrying. Later steps were not executed. Do not replay completed steps.`
+      );
+    } finally {
+      clearTimeout(timer);
+      tab.operationGuard = guard;
+    }
+  }
+
+  private async scanActionState(tab: Tab, settle: boolean): Promise<SnapshotEntry[]> {
+    const generation = tab.generation;
+    const prefix = `${tab.id.replace(/[^a-z0-9-]/gi, '').slice(-40)}-${++tab.snapshotSeq}`;
+    const refs = tab.lastSnapshot?.refs ?? [];
+    const raw: unknown = await tab.view.webContents.executeJavaScript(
+      pageActionObservationScript(prefix, refs, settle),
+      true
+    );
+    this.assertSnapshotCurrent(tab, generation);
+    const read = parsePageReadSnapshot(raw, prefix);
+    const entries: SnapshotEntry[] = [
+      ...(read.text ? [{ role: 'text', name: read.text, depth: 0 }] : []),
+      ...read.entries,
+    ];
+    this.invalidateRefs(tab);
+    tab.actionEntries = entries;
+    tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), entries);
+    return entries;
+  }
+
+  private async watchActivity(tab: Tab): Promise<void> {
+    if (tab.networkTracking || tab.devtoolsOpen || !tab.ready) return;
+    if (!tab.networkListenersInstalled) {
+      const debuggerApi = tab.view.webContents.debugger;
+      debuggerApi.on('message', (_event, method, params) => tab.activity.observe(method, params));
+      debuggerApi.on('detach', () => {
+        tab.networkTracking = false;
+        tab.activity.clear();
+      });
+      tab.networkListenersInstalled = true;
+    }
+    const result = await this.cdp(tab, 'Network.enable', {});
+    this.assertTabActive(tab);
+    tab.networkTracking = result !== undefined;
+  }
+
+  private async settleAction(tab: Tab, since: number): Promise<number> {
+    const deadline = Date.now() + 2000;
+    await tab.view.webContents.executeJavaScript(PAGE_ACTION_SETTLE_SCRIPT, true);
+    this.assertTabActive(tab);
+    while (tab.activity.pendingSince(since) && Date.now() < deadline) {
+      await sleep(100);
+      this.assertTabActive(tab);
+    }
+    return tab.activity.pendingSince(since);
+  }
+
+  private async observeAction(tab: Tab, before: SnapshotEntry[] | undefined, since: number) {
+    this.assertTabActive(tab);
+    try {
+      const previous = tab.lastSnapshot?.refs ?? [];
+      const previousEntries = new Map((tab.actionEntries ?? []).map((entry) => [entry.ref, entry]));
+      const pending = await this.settleAction(tab, since);
+      const entries = await this.scanActionState(tab, false);
+      const currentEntries = new Map(entries.map((entry) => [entry.ref, entry]));
+      const changes = actionChanges(before, entries);
+      // A truncated delta cannot silently authorize newly omitted refs.
+      if (tab.lastSnapshot)
+        tab.lastSnapshot.refs = tab.lastSnapshot.refs.filter((ref) => {
+          if (changes.refs.includes(ref)) return true;
+          const entry = currentEntries.get(ref);
+          const old = previousEntries.get(ref);
+          return Boolean(
+            previous.includes(ref) &&
+              entry &&
+              old &&
+              old.role === entry.role &&
+              old.name === entry.name &&
+              old.kind === entry.kind
+          );
+        });
+      return {
+        ...this.pageInfo(tab.view.webContents),
+        tabId: tab.id,
+        observation: changes.text,
+        ...(pending
+          ? {
+              pendingRequests: pending,
+              notice:
+                'The page is still loading; use browser_wait for a specific result. Do not repeat the action.',
+            }
+          : {}),
+      };
+    } catch (error) {
+      this.assertTabActive(tab);
+      this.invalidateRefs(tab);
+      return {
+        ...this.pageInfo(tab.view.webContents),
+        tabId: tab.id,
+        actionCompleted: true,
+        observationError: `${error instanceof Error ? error.message : String(error)} Action was already delivered; do not retry it blindly. Read browser_snapshot to verify.`,
+      };
     }
   }
 
@@ -1991,6 +2246,10 @@ export class BrowserHost {
       tab.readSnapshot = snapshot;
       tab.readKey = key;
       tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), snapshot.entries);
+      tab.actionEntries = [
+        ...(snapshot.text ? [{ role: 'text', name: snapshot.text.slice(0, 2000), depth: 0 }] : []),
+        ...snapshot.entries,
+      ];
     }
     if (!tab.readSnapshot) throw new Error('Read snapshot unavailable');
     return {
@@ -2013,6 +2272,7 @@ export class BrowserHost {
     if (!entries) throw new Error('Page snapshot returned an unexpected shape.');
     this.invalidateRefs(tab);
     tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), entries);
+    tab.actionEntries = entries;
     return tab.lastSnapshot.text;
   }
 
@@ -2361,6 +2621,10 @@ export class BrowserHost {
       favicon: null,
       pickSeq: 0,
       synthetic: 0,
+      manualRevision: 0,
+      activity: new BrowserActivity(),
+      networkTracking: false,
+      networkListenersInstalled: false,
       device: { enabled: false },
       generation: 0,
       snapshotSeq: 0,
@@ -2404,7 +2668,7 @@ export class BrowserHost {
       // a workspace or symlink changes. HTTP-only browsing keeps its history.
       if (wasFilePage || isFilePage) contents.navigationHistory.clear();
       wasFilePage = isFilePage;
-      this.userInteracted(tab);
+      this.userInteracted(tab, false);
       tab.favicon = null;
       push();
     });

@@ -2556,6 +2556,7 @@ export const zhTranslations: Record<string, string> = {
   'Browser snapshot': '浏览器 · 快照',
   'Browser click': '浏览器 · 点击',
   'Browser type': '浏览器 · 输入',
+  'Browser actions': '浏览器 · 连续操作',
   'Browser tabs': '浏览器 · 标签页',
   'Browser lock': '浏览器 · 锁定',
   'Browser fill': '浏览器 · 填写',

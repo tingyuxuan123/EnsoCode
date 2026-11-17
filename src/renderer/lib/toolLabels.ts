@@ -27,6 +27,7 @@ export const TOOL_LABEL_KEYS: Partial<Record<string, string>> = {
   browser_snapshot: 'Browser snapshot',
   browser_click: 'Browser click',
   browser_type: 'Browser type',
+  browser_act: 'Browser actions',
   browser_tabs: 'Browser tabs',
   browser_lock: 'Browser lock',
   browser_fill: 'Browser fill',

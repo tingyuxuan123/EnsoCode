@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import {
+  BROWSER_ACTION_MAX_STEPS,
+  BROWSER_ACTIONS,
+  normalizeBrowserActionSteps,
+  parseBrowserActions,
+} from '@shared/browser/actions';
 import { BROWSER_DEVICE_PIXEL_BUDGET, BROWSER_DEVICE_PROFILES } from '@shared/browser/devices';
 import { assertAllowedUrl, isLoopbackHost } from '@shared/browser/urlPolicy';
 import type { ChildSessionIdentity } from '@shared/builtinAgents';
@@ -140,6 +146,8 @@ interface ArgumentSchema {
   maximum?: number;
   /** 只收整数：归一化时取整（Main 侧 parse 不接受小数） */
   integer?: boolean;
+  minItems?: number;
+  maxItems?: number;
 }
 
 function normalizeArgument(value: unknown, definition: ArgumentSchema): unknown {
@@ -349,7 +357,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     define(
       'browser_navigate',
       'navigate',
-      'Open an HTTP(S) URL or an existing file:// URL inside the current local workspace and reveal it to the user. Files outside the workspace are denied. Localhost requires no approval. Read browser_snapshot or browser_read next.',
+      'Open an HTTP(S) URL or an existing file:// URL inside the current local workspace and reveal it to the user. Files outside the workspace are denied. Localhost requires no approval. Returns visible controls with refs and page text; use these directly, read browser_snapshot/browser_read only if more detail is needed.',
       { url: string, newTab: boolean },
       ['url'],
       { newTab: false }
@@ -363,17 +371,56 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     define(
       'browser_click',
       'click',
-      'Click an element by its latest snapshot ref. Verify the result before another click.',
+      'Click an element by its latest ref. Returns what appeared, changed or disappeared with usable refs; inspect this feedback instead of routinely calling browser_snapshot. Use browser_act for a known sequence.',
       { ref: string },
       ['ref']
     ),
     define(
       'browser_type',
       'type',
-      'Replace existing text at ref, optionally press Enter. Does not append.',
+      'Replace existing text at ref, optionally press Enter. Does not append. Returns page changes with usable refs. Prefer browser_act for a known sequence.',
       { ref: string, text: string, submit: boolean },
       ['ref', 'text'],
       { submit: false }
+    ),
+    define(
+      'browser_act',
+      'act',
+      'Run 1–10 already-decided steps in one tab with one tool round trip, then return bounded page changes and usable refs. Prefer this over separate click/type/press calls and repeated snapshots. Stops at the first failure, cancellation or manual input; never replays steps. Target a control by ref OR target (visible label), optionally role and 1-based nth; a target may appear after an earlier step. Example steps: [{action:"click",target:"Search",role:"button"},{action:"type",target:"Query",text:"hello",submit:true},{action:"wait",text:"Results"}]. Actions: click, type/fill (text), press (key), scroll (direction/amount, optional target), select (values), hover, check (checked), wait (text/timeoutMs), navigate (url, same tab). Do not batch decisions needing unseen page content or authorization. No scripts, arbitrary paths, uploads or tab switching. 45-second total budget.',
+      {
+        steps: {
+          type: 'array',
+          minItems: 1,
+          maxItems: BROWSER_ACTION_MAX_STEPS,
+          items: object(
+            {
+              action: choice(...BROWSER_ACTIONS),
+              ref: string,
+              target: {
+                type: 'string',
+                description:
+                  'Visible control label, exact match preferred. Do not combine with ref.',
+              },
+              role: string,
+              nth: bounded(1, 400, true),
+              text: string,
+              submit: boolean,
+              key: string,
+              direction: choice('up', 'down', 'left', 'right'),
+              amount: bounded(1, 5000, true),
+              values: { type: 'array', items: string },
+              checked: boolean,
+              timeoutMs: bounded(1, 10000, true),
+              url: string,
+            },
+            ['action']
+          ),
+        },
+      },
+      ['steps'],
+      {},
+      (params) => ({ op: 'act', params: { ...params, steps: parseBrowserActions(params) } }),
+      (params) => ({ ...params, steps: normalizeBrowserActionSteps(params.steps) })
     ),
     define(
       'browser_tabs',
@@ -593,14 +640,30 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
 }
 
 export function withNavigateApproval(gate: ApprovalGate, tool: ToolDefinition): ToolDefinition {
-  if (!['browser_navigate', 'browser_navigation', 'browser_history'].includes(tool.name))
+  if (
+    !['browser_navigate', 'browser_act', 'browser_navigation', 'browser_history'].includes(
+      tool.name
+    )
+  )
     return tool;
   return {
     ...tool,
     async execute(toolCallId, raw, signal, onUpdate, ctx) {
       const params = (tool.prepareArguments?.(raw) ?? raw) as Params | undefined;
       let summary = '';
-      if (tool.name === 'browser_navigate') {
+      if (tool.name === 'browser_act') {
+        const steps = parseBrowserActions(params);
+        const hosts = [
+          ...new Set(
+            steps
+              .filter((step) => step.action === 'navigate')
+              .map((step) => assertAllowedUrl(step.url!).hostname)
+              .filter((host) => host && !isLoopbackHost(host))
+          ),
+        ];
+        if (hosts.length)
+          summary = `Open ${hosts.join(', ')} in the built-in browser (browser_act)`;
+      } else if (tool.name === 'browser_navigate') {
         try {
           const host = typeof params?.url === 'string' ? assertAllowedUrl(params.url).hostname : '';
           if (host && !isLoopbackHost(host)) summary = `Open ${host} in the built-in browser`;

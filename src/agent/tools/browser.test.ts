@@ -99,6 +99,7 @@ describe('createBrowserTools', () => {
       'browser_snapshot',
       'browser_click',
       'browser_type',
+      'browser_act',
       'browser_tabs',
       'browser_lock',
       'browser_fill',
