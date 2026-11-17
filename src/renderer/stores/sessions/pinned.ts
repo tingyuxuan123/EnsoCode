@@ -29,6 +29,8 @@ interface SidebarConversation {
   status?: string;
   spawning?: boolean;
   unread?: boolean;
+  /** 静音只影响 Dock/任务栏角标，不改侧栏排序与未读 */
+  muted?: boolean;
   pendingAsks?: readonly { requestId: string }[];
   pendingApprovals?: readonly unknown[];
   pendingCapabilityAsks?: readonly unknown[];
@@ -292,13 +294,17 @@ function waitingFirst(ids: string[], conversations: Conversations): string[] {
   return [...waiting, ...ids.filter((id) => !isWaiting(id, conversations))];
 }
 
-/** Dock 角标数:order 内等你处理的会话数 */
+/** Dock 角标数:order 内等你处理的会话数(静音会话不计贡献) */
 export function waitingConversationCount(
   order: readonly string[],
   conversations: Conversations
 ): number {
-  return order.filter((id) => sidebarRoot(id, conversations) && isWaiting(id, conversations))
-    .length;
+  return order.filter(
+    (id) =>
+      sidebarRoot(id, conversations) &&
+      conversations[id]?.muted !== true &&
+      isWaiting(id, conversations)
+  ).length;
 }
 
 const DAY_MS = 86_400_000;

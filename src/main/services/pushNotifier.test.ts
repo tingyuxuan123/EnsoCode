@@ -73,4 +73,19 @@ describe('buildPushPayload', () => {
       sessionId: 's1::cw-bob',
     });
   });
+
+  it('静音会话不推送，取消静音后提问和完成都恢复', () => {
+    expect(buildPushPayload({ type: 'ask-request', identity }, '修复登录', true, true)).toBeNull();
+    expect(
+      buildPushPayload({ type: 'turn-completed', identity }, '修复登录', true, true)
+    ).toBeNull();
+    expect(buildPushPayload({ type: 'turn-failed', identity }, '修复登录', true, true)).toBeNull();
+    expect(
+      buildPushPayload({ type: 'ask-request', identity }, '修复登录', true, false)?.title
+    ).toBe('等待你的回答');
+    // 审批也一并静音：审批卡仍在桌面/手机上照常展示
+    expect(
+      buildPushPayload({ type: 'approval-request', identity }, '修复登录', true, true)
+    ).toBeNull();
+  });
 });

@@ -38,7 +38,9 @@ export function buildPushPayload(
     request?: Partial<ApprovalRequestInfo>;
   },
   sessionTitle: string | undefined,
-  notifyMainAgentOnly = true
+  notifyMainAgentOnly = true,
+  /** 会话已静音：手机/PWA 不推送，但审批卡与提问仍在界面上等答复 */
+  muted = false
 ): PushPayload | null {
   if (shouldMuteCoworkerCompletionNotification(event, notifyMainAgentOnly)) return null;
   // 代审中（reviewing）的审批可能由代审模型直接放行，不打扰真人；
@@ -48,6 +50,7 @@ export function buildPushPayload(
   if (!title) return null;
   const sessionId = event.identity?.sessionId ?? event.sessionId;
   if (!sessionId) return null;
+  if (muted) return null;
   return { title, body: sessionTitle || '会话', sessionId };
 }
 

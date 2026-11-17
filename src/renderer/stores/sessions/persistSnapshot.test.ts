@@ -41,6 +41,23 @@ describe('cachedPartializeSessions', () => {
     expect(persisted.conversations.a.hiddenCoworkerIds).toBeUndefined();
     expect(persisted.conversations.a.coworkerIds).toEqual(['child']);
   });
+
+  it('静音标记随会话元数据保留，取消后不再留下', () => {
+    const muted = cachedPartializeSessions({
+      conversations: { a: { ...conv('a'), muted: true } },
+      order: ['a'],
+      activeId: 'a',
+    });
+    expect(muted.conversations.a.muted).toBe(true);
+    expect(muted.conversations.a.messages).toEqual([]);
+    const cleared = cachedPartializeSessions({
+      conversations: { a: { ...conv('a') } },
+      order: ['a'],
+      activeId: 'a',
+    });
+    expect(cleared.conversations.a.muted).toBeUndefined();
+  });
+
   it('preserves empty worktree drafts and their names across serialization', () => {
     const worktree = {
       conversationId: 'a',

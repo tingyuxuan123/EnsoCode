@@ -7,6 +7,7 @@ import { getXtermTheme } from '@/lib/ghosttyTheme';
 import { useModelDirectoryStore } from '@/stores/modelDirectory';
 import { readMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { useOauthCredentialStore } from '@/stores/oauthCredentials';
+import { pairCatalogMuted } from '@/stores/pairCatalogMute';
 import { pairProviderSyncPlan } from '@/stores/pairCatalogProviders';
 import { useSessionsStore } from '@/stores/sessions';
 import { lastActiveAt } from '@/stores/sessions/pinned';
@@ -67,6 +68,8 @@ function buildPayload(): PairCatalogPayload {
       ...(c.parentId ? { parentId: c.parentId } : {}),
       ...(c.pinned === true ? { pinned: true } : {}),
       ...(c.archived === true ? { archived: true } : {}),
+      // 子会话/旁路跟随根会话：只看自己的字段会让静音根会话的子条目照常计角标
+      ...(pairCatalogMuted(sessions.conversations, c.id) ? { muted: true } : {}),
       // 当前模型与推理档位：手机切换器回显；缺省字段不占帧体积
       ...(c.lastProviderId ? { providerId: c.lastProviderId } : {}),
       ...(c.lastModelId ? { modelId: c.lastModelId } : {}),

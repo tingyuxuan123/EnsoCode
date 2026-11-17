@@ -6,6 +6,7 @@ import { app, BrowserWindow, Notification } from 'electron';
 import { readSettings } from '../ipc/settings';
 import { getWindowWebContents, sendToWindow } from '../windows/createAppWindow';
 import { ApprovalNotificationGate } from './approvalNotificationGate';
+import { isSessionMuted } from './sessionMuteGate';
 
 const approvalNotifications = new ApprovalNotificationGate();
 
@@ -107,8 +108,11 @@ export async function maybeNotifyBot(
   if (!isCurrent) return;
   if (!bot.enabled) return;
   if (event.type !== 'approval-request' && event.type !== 'ask-request') return;
+  // 静音在 await 前后各核一次：等窗口模块期间用户可能刚切了静音，不能迟发
+  if (isSessionMuted(event.identity.sessionId)) return;
   const { focusMainWindow, getMainWindow } = await import('../windows/MainWindow');
   if (!isCurrent()) return;
+  if (isSessionMuted(event.identity.sessionId)) return;
   if (getMainWindow()?.isFocused()) return;
   const title = `${bot.name} · ${event.type === 'ask-request' ? texts().ask : texts().approval}`;
   const body =
@@ -146,6 +150,8 @@ export async function notifyBotChat(
 export function maybeNotify(event: RendererAgentEvent): void {
   if (!approvalNotifications.observe(event)) return;
   const sessionId = (event as { identity?: { sessionId?: string } }).identity?.sessionId;
+  // 静音只停主动打扰：事件归并、未读、审批卡与提问都由 renderer 照常处理
+  if (sessionId && isSessionMuted(sessionId)) return;
   if (mainWindowFocused() && sessionId !== undefined && sessionId === viewedSessionId) return;
   if (shouldMuteCoworkerCompletionNotification(event, readNotifyMainAgentOnly())) return;
   const t = texts();

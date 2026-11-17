@@ -130,6 +130,7 @@ const hireCoworker = vi.fn(async (): Promise<{ ok: boolean; error?: string }> =>
 const summarizeTitle = vi.fn(async (): Promise<{ ok: boolean; error?: string }> => ({ ok: true }));
 const agentAbort = vi.fn(async (_id: string) => ({ ok: true }));
 const agentRelease = vi.fn(async (_id: string) => ({ ok: true }));
+const agentSetSessionMuted = vi.fn((_id: string, _muted: boolean) => undefined);
 const btwSpawn = vi.fn(async () => ({ ok: true }));
 const btwDispose = vi.fn(async () => ({ ok: true }));
 const agentRewind = vi.fn(async (): Promise<{ ok: boolean; error?: string }> => ({ ok: true }));
@@ -191,6 +192,7 @@ vi.stubGlobal('window', {
       fork: agentFork,
       steer: vi.fn(async () => ({ ok: true })),
       setPlanMode: agentSetPlanMode,
+      setSessionMuted: agentSetSessionMuted,
     },
     btw: {
       spawn: btwSpawn,
@@ -5912,5 +5914,158 @@ describe('Plan 模式', () => {
     expect(conv()).toBeUndefined();
     expect(completed[0].status).toBe('fulfilled');
     expect(sessionsModule.useSessionsStore.getState().order).not.toContain('plan-parent');
+  });
+});
+
+describe('会话静音', () => {
+  beforeAll(async () => {
+    settingsModule ??= await import('../settings');
+    sessionsModule ??= await import('./index');
+  });
+
+  beforeEach(async () => {
+    nextConversationId = 'mute-parent';
+    sourceProjection = {
+      projects: [
+        { projectId: 'project', canonicalPath: '/workspace', state: 'active', version: 1 },
+      ],
+      conversations: [],
+    };
+    sessionsModule.useSessionsStore.setState({
+      conversations: {},
+      order: [],
+      activeId: null,
+      pendingAgentPrefill: undefined,
+    });
+    settingsModule.useSettingsStore.setState({
+      projects: [{ id: 'project', name: 'Project', path: '/workspace' }],
+      autoArchiveIdleDays: 0,
+    });
+    await seedParent();
+    sessionsModule.useSessionsStore.setState((state) => {
+      const parent = state.conversations['mute-parent'];
+      return {
+        conversations: {
+          ...state.conversations,
+          'mute-parent': {
+            ...parent,
+            unread: true,
+            status: 'running',
+            pendingApprovals: [
+              { requestId: 'apr-1', tool: 'bash', kind: 'command', summary: 'pnpm test' },
+            ],
+            pendingAsks: [{ requestId: 'ask-1', question: '继续吗？' }],
+            messages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'hi' }] }],
+          },
+          'mute-parent::cw-x': {
+            ...parent,
+            id: 'mute-parent::cw-x',
+            parentId: 'mute-parent',
+            title: 'child',
+          },
+        },
+        order: ['mute-parent'],
+        activeId: 'mute-parent',
+      };
+    });
+    agentSetSessionMuted.mockClear();
+  });
+
+  const conv = (id: string) => sessionsModule.useSessionsStore.getState().conversations[id];
+
+  it('静音后立刻通知 main；正文、状态、未读、审批与提问都不动', () => {
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    const muted = conv('mute-parent');
+    expect(muted?.muted).toBe(true);
+    expect(muted?.unread).toBe(true);
+    expect(muted?.status).toBe('running');
+    expect(muted?.pendingApprovals).toHaveLength(1);
+    expect(muted?.pendingAsks).toHaveLength(1);
+    expect(muted?.messages).toHaveLength(1);
+    expect(agentSetSessionMuted).toHaveBeenCalledWith('mute-parent', true);
+
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    expect(conv('mute-parent')?.muted).toBeUndefined();
+    expect(conv('mute-parent')?.unread).toBe(true);
+    expect(agentSetSessionMuted).toHaveBeenLastCalledWith('mute-parent', false);
+  });
+
+  it('子会话不能单独静音，静音根会话即覆盖子会话', () => {
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent::cw-x');
+    expect(conv('mute-parent::cw-x')?.muted).toBeUndefined();
+    expect(agentSetSessionMuted).not.toHaveBeenCalled();
+
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    expect(agentSetSessionMuted).toHaveBeenCalledTimes(1);
+    expect(agentSetSessionMuted).toHaveBeenCalledWith('mute-parent', true);
+  });
+
+  it('归档清掉静音并告诉 main；取消归档不回填静音', () => {
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    agentSetSessionMuted.mockClear();
+    sessionsModule.useSessionsStore.getState().toggleArchiveConversation('mute-parent');
+    expect(conv('mute-parent')?.archived).toBe(true);
+    expect(conv('mute-parent')?.muted).toBeUndefined();
+    expect(agentSetSessionMuted).toHaveBeenCalledWith('mute-parent', false);
+
+    agentSetSessionMuted.mockClear();
+    sessionsModule.useSessionsStore.getState().toggleArchiveConversation('mute-parent');
+    expect(conv('mute-parent')?.archived).toBeUndefined();
+    expect(conv('mute-parent')?.muted).toBeUndefined();
+    expect(agentSetSessionMuted).not.toHaveBeenCalled();
+  });
+
+  it('闲置自动归档同样清掉静音', async () => {
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    agentSetSessionMuted.mockClear();
+    const now = Date.now();
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        'mute-parent': {
+          ...state.conversations['mute-parent'],
+          status: 'idle',
+          unread: false,
+          pendingAsks: [],
+          pendingApprovals: [],
+          lastActiveAt: now - 10 * 86_400_000,
+        },
+      },
+      activeId: null,
+    }));
+    settingsModule.useSettingsStore.setState({ autoArchiveIdleDays: 1 });
+    await sessionsModule.useSessionsStore.getState().autoArchiveStaleConversations(now);
+    expect(conv('mute-parent')?.archived).toBe(true);
+    expect(conv('mute-parent')?.muted).toBeUndefined();
+    expect(agentSetSessionMuted).toHaveBeenCalledWith('mute-parent', false);
+  });
+
+  it('删除清掉静音并告诉 main', () => {
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    agentSetSessionMuted.mockClear();
+    sessionsModule.useSessionsStore.getState().removeConversation('mute-parent');
+    expect(conv('mute-parent')).toBeUndefined();
+    expect(agentSetSessionMuted).toHaveBeenLastCalledWith('mute-parent', false);
+  });
+
+  it('静音随 partialize 持久化，未静音不写这个字段', () => {
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    const state = sessionsModule.useSessionsStore.getState();
+    const persisted = cachedPartializeSessions({
+      conversations: state.conversations,
+      order: state.order,
+      activeId: state.activeId,
+    });
+    expect(persisted.conversations['mute-parent']?.muted).toBe(true);
+    expect(persisted.conversations['mute-parent']?.messages).toEqual([]);
+    expect(persisted.conversations['mute-parent']?.pendingAsks).toEqual([]);
+
+    sessionsModule.useSessionsStore.getState().toggleMuteConversation('mute-parent');
+    const cleared = cachedPartializeSessions({
+      conversations: sessionsModule.useSessionsStore.getState().conversations,
+      order: state.order,
+      activeId: state.activeId,
+    });
+    expect(cleared.conversations['mute-parent']?.muted).toBeUndefined();
   });
 });

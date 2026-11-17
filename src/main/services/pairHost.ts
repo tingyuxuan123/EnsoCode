@@ -117,6 +117,7 @@ import {
   sendPush,
   setPushSubscription,
 } from './pushNotifier';
+import { isSessionMuted } from './sessionMuteGate';
 import { onSpeechAvailabilityChange, openSpeechSession, speechAvailable } from './speech/service';
 
 /**
@@ -1878,7 +1879,9 @@ export function forwardAgentEvent(event: RendererAgentEvent): void {
           e,
           catalog.find((entry) => entry.id === flatSessionId)?.title ??
             (flatSessionId ? botPort?.sessionTitle(flatSessionId) : undefined),
-          readNotifyMainAgentOnly()
+          readNotifyMainAgentOnly(),
+          // 静音会话不给配对设备推送；目录与时间线照常同步
+          flatSessionId ? isSessionMuted(flatSessionId) : false
         );
         if (payload) void sendPush(conn.device.pairId, payload);
       }

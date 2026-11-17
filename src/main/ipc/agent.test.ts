@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   respondApproval: vi.fn(),
   respondAsk: vi.fn(),
   prepareParent: vi.fn(),
+  isDetached: vi.fn(() => false),
+  setSessionMuteOverride: vi.fn(),
   setSessionModel: vi.fn(() => ({ ok: true })),
   forkSession: vi.fn(() => ({ ok: true })),
   sessionWorktree: vi.fn(),
@@ -98,7 +100,9 @@ vi.mock('electron', () => ({
     handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       mocks.handlers.set(channel, handler);
     }),
-    on: vi.fn(),
+    on: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
+      mocks.handlers.set(channel, handler);
+    }),
   },
 }));
 
@@ -207,6 +211,9 @@ vi.mock('../services/notifications', () => ({
   maybeNotify: vi.fn(),
   maybeNotifyBot: mocks.maybeNotifyBot,
 }));
+vi.mock('../services/sessionMuteGate', () => ({
+  setSessionMuteOverride: mocks.setSessionMuteOverride,
+}));
 vi.mock('../services/pairHost', () => ({
   forwardAgentEvent: vi.fn(),
   setPairAgentBridge: mocks.setPairAgentBridge,
@@ -221,6 +228,7 @@ vi.mock('./capabilities', () => ({
     currentIdentity: mocks.currentIdentity,
     isAlive: mocks.isAlive,
     isReady: mocks.isReady,
+    isDetached: mocks.isDetached,
     workspaceTreeRunning: mocks.workspaceTreeRunning,
     childProof: mocks.childProof,
     prepareParent: mocks.prepareParent,
@@ -555,6 +563,8 @@ describe('agent IPC Main identity boundary', () => {
     mocks.respondApproval.mockClear();
     mocks.respondAsk.mockClear();
     mocks.prepareParent.mockClear();
+    mocks.isDetached.mockReset().mockReturnValue(false);
+    mocks.setSessionMuteOverride.mockClear();
     mocks.setSessionModel.mockClear();
     mocks.coworkerOf.mockReset();
     mocks.dismissChildSession.mockClear();
@@ -567,6 +577,31 @@ describe('agent IPC Main identity boundary', () => {
 
   it('派发 host 接上子代理模型解析，模型覆盖才不会被当成档案禁止', () => {
     expect(mocks.dispatchHost.resolveSubagentModel).toBe(resolveSubagentModelSelection);
+  });
+
+  it('静音通道只接受本机主窗口顶层 frame 的已知根会话与 boolean', () => {
+    const handler = mocks.handlers.get(IPC_CHANNELS.AGENT_SESSION_MUTED)!;
+    const frame = {};
+    const sender = { id: 1, mainFrame: frame };
+    const authority = getSourceAuthorityRegistry()!;
+    vi.spyOn(authority, 'conversation').mockImplementation((id) =>
+      id === 'known'
+        ? { conversationId: 'known', projectId: 'p', kind: 'root', lifecycle: 'ready', version: 1 }
+        : undefined
+    );
+    mocks.isMainWebContents.mockReturnValue(true);
+    handler({ sender, senderFrame: frame }, 'known', true);
+    expect(mocks.setSessionMuteOverride).toHaveBeenCalledExactlyOnceWith('known', true);
+    mocks.setSessionMuteOverride.mockClear();
+    handler({ sender, senderFrame: {} }, 'known', true);
+    handler({ sender, senderFrame: undefined }, 'known', true);
+    handler({ sender, senderFrame: frame }, 'known', 'true');
+    handler({ sender, senderFrame: frame }, 'unknown', true);
+    handler({ sender, senderFrame: frame }, {}, true);
+    mocks.isMainWebContents.mockReturnValue(false);
+    handler({ sender, senderFrame: frame }, 'known', true);
+    expect(mocks.setSessionMuteOverride).not.toHaveBeenCalled();
+    mocks.isMainWebContents.mockReturnValue(true);
   });
 
   it('retired coordinator IPC is no longer registered', () => {
@@ -1087,6 +1122,17 @@ describe('agent IPC Main identity boundary', () => {
   ])('%s 透传乐观回显 deliveryId', (channel, send) => {
     const parent = { sessionId: 'conv-1', generation: 'gen-1' };
     const invoke = (...args: unknown[]) => mocks.handlers.get(channel)?.(event, ...args);
+
+    it('worker 已释放会话时拒绝而不假装投递成功', async () => {
+      mocks.currentIdentity.mockReturnValue(parent);
+      mocks.isDetached.mockReturnValue(true);
+      expect(await invoke('conv-1', 'hi', undefined, 'd-1')).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('释放'),
+      });
+      expect(mocks.isDetached).toHaveBeenCalledWith(parent);
+      expect(send).not.toHaveBeenCalled();
+    });
 
     it('合法 deliveryId 原样下发，缺省时不带', async () => {
       mocks.currentIdentity.mockReturnValue(parent);

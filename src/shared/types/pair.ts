@@ -95,6 +95,8 @@ export interface PairCatalogPayload {
     parentId?: string;
     /** 挂起的工具审批数，手机角标用 */
     pendingApprovalCount?: number;
+    /** 静音：手机/PWA 不再为这个会话发推送，主屏幕角标也不计入 */
+    muted?: boolean;
     /** 最后活动时间（末条消息或创建时间） */
     updatedAt?: number;
     /** 会话当前选用的 provider/model 与推理档位，手机切换器回显用 */

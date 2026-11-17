@@ -42,6 +42,7 @@ export interface SidebarDirectoryEntry {
   pinned?: boolean;
   archived?: boolean;
   archivedAt?: number;
+  muted?: boolean;
   createdAt: number;
   projectId: string;
   lastActiveAt?: number;
@@ -68,6 +69,7 @@ type Source = {
   pinned?: boolean;
   archived?: boolean;
   archivedAt?: number;
+  muted?: boolean;
   createdAt: number;
   projectId: string;
   lastActiveAt?: number;
@@ -111,6 +113,7 @@ function project(conversation: Source, hasRunningChild: boolean): SidebarDirecto
     pinned: conversation.pinned,
     archived: conversation.archived,
     archivedAt: conversation.archivedAt,
+    muted: conversation.muted,
     createdAt: conversation.createdAt,
     projectId: conversation.projectId,
     lastActiveAt: lastActiveAt(conversation),

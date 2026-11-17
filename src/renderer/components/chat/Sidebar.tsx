@@ -21,6 +21,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Archive,
   ArchiveRestore,
+  Bell,
+  BellOff,
   ChevronRight,
   ChevronsUpDown,
   CircleAlert,
@@ -2200,6 +2202,8 @@ interface ConversationRowProps {
     hasRunningChild?: boolean;
     pinned?: boolean;
     archived?: boolean;
+    /** 静音：只停系统通知与配对推送，行内只多一个静音标志 */
+    muted?: boolean;
     createdAt: number;
     lastActiveAt?: number;
     projectId: string;
@@ -2306,7 +2310,9 @@ function ConversationRow({
   };
   const pinned = conversation.pinned === true;
   const archived = conversation.archived === true;
+  const muted = conversation.muted === true;
   const PinIcon = pinned ? PinOff : Pin;
+  const MuteIcon = muted ? Bell : BellOff;
   const displayTitle = conversation.title || t('New conversation');
   const sourceTitle = conversation.forkedFromConversationId
     ? useSessionsStore.getState().conversations[conversation.forkedFromConversationId]?.title
@@ -2316,6 +2322,7 @@ function ConversationRow({
       data-slot="conversation-row"
       data-pinned={pinned ? 'true' : 'false'}
       data-active={active ? 'true' : undefined}
+      data-muted={muted ? 'true' : undefined}
       className={cn(
         // 会话行与项目行共用图标/文字基准，worktree 与浏览器/终端计数在第二行
         'group grid min-h-[calc(36rem/14)] cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md py-1.5 pr-2 pl-2 text-[calc(13rem/14)] transition-colors',
@@ -2364,6 +2371,13 @@ function ConversationRow({
                 </span>
               )}
             </span>
+          )}
+          {muted && !renaming && (
+            <BellOff
+              className="h-3 w-3 shrink-0 text-muted-foreground/70"
+              aria-label={t('Muted')}
+              data-enso="session-muted"
+            />
           )}
         </div>
         {!renaming && (
@@ -2492,6 +2506,13 @@ function ConversationRow({
           <ContextMenuItem onClick={() => onToggleArchive(id)}>
             {archived ? <ArchiveRestore /> : <Archive />}
             {archived ? t('Unarchive') : t('Archive')}
+          </ContextMenuItem>
+          <ContextMenuItem
+            data-enso="session-mute"
+            onClick={() => useSessionsStore.getState().toggleMuteConversation(id)}
+          >
+            <MuteIcon />
+            {muted ? t('Unmute') : t('Mute')}
           </ContextMenuItem>
           {worktree && (
             <>

@@ -50,6 +50,7 @@ type Minimal = {
   pendingCapabilityAsks?: unknown[];
   coworkerIds?: string[];
   worktree?: { path: string };
+  muted?: boolean;
 };
 
 /** 造会话:lastActive 为最后一条消息时间;省略则无消息(回落 createdAt) */
@@ -772,5 +773,15 @@ describe('等你处理优先', () => {
     const live = withWaiting({ d: approval, a: capability });
     expect(projectConversationIds(order, live, 'p1')).toEqual(['a', 'd', 'e', 'b']);
     expect(waitingConversationCount(order, live)).toBe(2);
+  });
+
+  it('静音不改变等你处理的排序与未读，但不再计入 Dock 角标', () => {
+    const approval = { pendingApprovals: [{ requestId: 'x' }] };
+    const live = withWaiting({ d: approval, a: { ...approval, muted: true, unread: true } });
+    expect(projectConversationIds(order, live, 'p1')).toEqual(['a', 'd', 'e', 'b']);
+    expect(live.a?.unread).toBe(true);
+    expect(waitingConversationCount(order, live)).toBe(1);
+    // 取消静音后重新计入
+    expect(waitingConversationCount(order, withWaiting({ d: approval, a: approval }))).toBe(2);
   });
 });
