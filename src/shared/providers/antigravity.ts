@@ -696,6 +696,50 @@ const DROPPED_SCHEMA_KEYS: Record<string, true> = {
   contentEncoding: true,
 };
 
+type SchemaRecord = Record<string, unknown>;
+const isSchemaRecord = (value: unknown): value is SchemaRecord =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+/** 只展开根定义的本地引用；深度和总引用次数双重限额，防止菱形引用指数膨胀。 */
+export function expandSchemaRefs(schema: unknown): unknown {
+  if (!isSchemaRecord(schema)) return schema;
+  let budget = 10_000;
+  const roots: SchemaRecord = { $defs: schema.$defs, definitions: schema.definitions };
+  const resolveRef = (ref: string): unknown => {
+    const match = /^#\/(\$defs|definitions)\/(.+)$/.exec(ref);
+    if (!match) return undefined;
+    let node = roots[match[1]];
+    for (const segment of match[2].split('/')) {
+      const key = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+      if (!isSchemaRecord(node) || !Object.hasOwn(node, key)) return undefined;
+      node = node[key];
+    }
+    return node;
+  };
+  const walk = (value: unknown, stack: readonly string[]): unknown => {
+    if (Array.isArray(value)) return value.map((entry) => walk(entry, stack));
+    if (!isSchemaRecord(value)) return value;
+    const out: SchemaRecord = {};
+    const ref = value.$ref;
+    if (typeof ref === 'string' && --budget >= 0 && !stack.includes(ref) && stack.length < 16) {
+      const target = resolveRef(ref);
+      if (isSchemaRecord(target)) Object.assign(out, walk(target, [...stack, ref]));
+    }
+    for (const [key, raw] of Object.entries(value)) {
+      if (key === '$ref' || (value === schema && (key === '$defs' || key === 'definitions')))
+        continue;
+      Object.defineProperty(out, key, {
+        value: walk(raw, stack),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+    return out;
+  };
+  return walk(schema, []);
+}
+
 export function normalizeToolSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalizeToolSchema);
   if (!value || typeof value !== 'object') return value;
@@ -1252,7 +1296,7 @@ export function convertTools(
       functionDeclarations: tools.map((tool) => ({
         name: tool.name,
         description: tool.description || '',
-        parameters: normalizeToolSchema(tool.parameters),
+        parameters: normalizeToolSchema(expandSchemaRefs(tool.parameters)),
       })),
     },
   ];
