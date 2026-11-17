@@ -70,6 +70,7 @@ import {
   isKnownRef,
   parseSnapshotEntries,
   renderSnapshot,
+  snapshotRefOptions,
 } from '@shared/browser/snapshot';
 import {
   dropPersistedTabsForSession,
@@ -140,6 +141,40 @@ const SCREENSHOT_MAX_WIDTH = 1280;
  * 元素、截图为空），所以再用 CDP `Emulation.setDeviceMetricsOverride` 撑出尺寸。
  */
 const HEADLESS_BOUNDS = { width: 1280, height: 800 };
+
+/**
+ * 显式 tabId 失效时可以安全回落到会话当前 tab 的 op：只读，不会把副作用落到错页。
+ * 点击 / 输入 / 导航这类宁可报错，也不猜模型指的是哪个页面；tabs 的 select/close
+ * 同样是副作用，所以这里也不收。
+ */
+const READ_ONLY_BROWSER_OPS: ReadonlySet<BrowserHostOp> = new Set<BrowserHostOp>([
+  'snapshot',
+  'read_text',
+  'read_elements',
+  'screenshot',
+  'bounding_box',
+  'wait',
+]);
+
+/** 报错里回显的可用 tab 数：够模型认出来，又不至于把错误刷成长文 */
+const TAB_SUMMARY_LIMIT = 5;
+
+export type ExplicitTabOutcome = 'use' | 'fallback' | 'reject';
+
+/**
+ * 模型显式给的 tabId 该怎么处理：还有效的直接用；会话切换 / 关 tab 之后作废的，
+ * 只读 op 静默回落到会话当前 tab（否则每次都要多绕一轮 browser_tabs），
+ * 写 op 一律拒绝——宁可报错，也不把点击输入落到猜出来的页面上。
+ */
+export function explicitTabOutcome(
+  op: BrowserHostOp,
+  known: boolean,
+  hasFallback: boolean
+): ExplicitTabOutcome {
+  if (known) return 'use';
+  if (hasFallback && READ_ONLY_BROWSER_OPS.has(op)) return 'fallback';
+  return 'reject';
+}
 
 /**
  * 宿主内部 op：只给 Main 的插件桥用，不进 worker / 模型的 BrowserOp 闭集。
@@ -453,10 +488,29 @@ export class BrowserHost {
     const tab = this.tabs.get(tabId);
     if (!tab)
       throw new Error(
-        'Browser tab is closed or unknown. Omit tabId to use the current tab, or call browser_tabs to list open tabs.'
+        `Browser tab ${tabId} is closed or unknown. Open tabs: ${this.tabSummary(conversationId)}. Omit tabId to use the current tab, or call browser_tabs to list open tabs.`
       );
     if (tab.ownerSessionId !== conversationId) throw new Error('Browser tab owner mismatch');
     return tab;
+  }
+
+  /** 会话名下还活着的 tab，一行一个 id + 标题 + 地址；没有就说没有 */
+  private tabSummary(conversationId: string): string {
+    const owned = [...this.tabs.values()].filter((tab) => tab.ownerSessionId === conversationId);
+    if (owned.length === 0) return 'none';
+    return owned
+      .slice(0, TAB_SUMMARY_LIMIT)
+      .map((tab) => {
+        const contents = tab.view.webContents;
+        if (contents.isDestroyed()) return tab.id;
+        const title = contents.getTitle().replace(/\s+/g, ' ').trim();
+        const url = contents.getURL();
+        const parts = [tab.id];
+        if (title) parts.push(`“${title.slice(0, 60)}”`);
+        if (url) parts.push(url.slice(0, 80));
+        return parts.join(' ');
+      })
+      .join('; ');
   }
 
   private invalidateRefs(tab: Tab): void {
@@ -1296,9 +1350,19 @@ export class BrowserHost {
     if (op === 'downloads') return this.downloads(sessionId, params);
     if (actor && this.tabClaims.takeClosed(actor.sessionId))
       throw new Error(BROWSER_TAB_CLOSED_NOTICE);
-    const explicit =
+    const requested =
       isRecord(params) && params.tabId !== undefined ? paramString(params, 'tabId') : undefined;
-    if (explicit) this.ownedTab(explicit, sessionId);
+    let explicit: string | undefined;
+    if (requested) {
+      const outcome = explicitTabOutcome(
+        op,
+        this.tabs.has(requested),
+        this.agentTabFor(sessionId) !== undefined
+      );
+      // 'fallback' 留给下面按「会话当前 tab」解析；'reject' 的报错里带着可用 tab 列表
+      if (outcome === 'use') explicit = this.ownedTab(requested, sessionId).id;
+      else if (outcome === 'reject') this.ownedTab(requested, sessionId);
+    }
     if (op === 'tabs') {
       return this.handleTabs(
         sessionId,
@@ -1983,7 +2047,7 @@ export class BrowserHost {
     this.assertTabActive(tab);
     this.assertRef(tab, ref);
     if (!isRecord(point) || typeof point.x !== 'number' || typeof point.y !== 'number')
-      throw interpretPageAction(ref, point) ?? new Error('Invalid target point');
+      throw interpretPageAction(ref, point, tab.lastSnapshot) ?? new Error('Invalid target point');
     await this.pointerAt(tab, point.x, point.y, click);
     return this.pageInfo(tab.view.webContents);
   }
@@ -2013,7 +2077,9 @@ export class BrowserHost {
     this.assertTabActive(tab);
     this.assertRef(tab, ref);
     if (!isRecord(prepared))
-      throw interpretPageAction(ref, prepared) ?? new Error('Could not focus input');
+      throw (
+        interpretPageAction(ref, prepared, tab.lastSnapshot) ?? new Error('Could not focus input')
+      );
     await this.pressKey(tab, process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
     this.assertRef(tab, ref);
     await this.pressKey(tab, 'Backspace');
@@ -2037,7 +2103,9 @@ export class BrowserHost {
       true
     );
     if (typeof before !== 'boolean')
-      throw interpretPageAction(ref, before) ?? new Error('Element is not checkable');
+      throw (
+        interpretPageAction(ref, before, tab.lastSnapshot) ?? new Error('Element is not checkable')
+      );
     if (before !== checked) await this.click(tab, ref);
     this.assertTabActive(tab);
     const after: unknown = await tab.view.webContents.executeJavaScript(
@@ -2103,7 +2171,7 @@ export class BrowserHost {
   private async runPage(tab: Tab, script: string, ref?: string): Promise<PageInfo> {
     if (ref) this.assertRef(tab, ref);
     const outcome: unknown = await tab.view.webContents.executeJavaScript(script, true);
-    const error = interpretPageAction(ref ?? '', outcome);
+    const error = interpretPageAction(ref ?? '', outcome, tab.lastSnapshot);
     if (error) throw error;
     return this.pageInfo(tab.view.webContents);
   }
@@ -2114,7 +2182,7 @@ export class BrowserHost {
       pageSelectOptionScript(ref, values),
       true
     );
-    if (outcome === 'stale') throw staleRef(ref);
+    if (outcome === 'stale') throw staleRef(ref, tab.lastSnapshot);
     if (outcome !== 'ok') throw new Error(`Could not select option on ${ref}`);
     return this.pageInfo(tab.view.webContents);
   }
@@ -2125,7 +2193,7 @@ export class BrowserHost {
       pageBoundingBoxScript(ref),
       true
     );
-    if (!box) throw staleRef(ref);
+    if (!box) throw staleRef(ref, tab.lastSnapshot);
     return box;
   }
 
@@ -2205,7 +2273,7 @@ export class BrowserHost {
         pageBoundingBoxScript(ref),
         true
       )) as { x: number; y: number; width: number; height: number } | null;
-      if (!box) throw staleRef(ref);
+      if (!box) throw staleRef(ref, tab.lastSnapshot);
       clip = {
         x: box.x,
         y: box.y,
@@ -2241,7 +2309,7 @@ export class BrowserHost {
   }
 
   private assertRef(tab: Tab, ref: string): void {
-    if (!isKnownRef(tab.lastSnapshot, ref)) throw staleRef(ref);
+    if (!isKnownRef(tab.lastSnapshot, ref)) throw staleRef(ref, tab.lastSnapshot);
   }
 
   private pageInfo(contents: WebContents): PageInfo {
@@ -2610,20 +2678,31 @@ export class BrowserHost {
   }
 }
 
-const staleRef = (ref: string) =>
-  new Error(`Ref ${ref} is stale or unknown. Call browser_snapshot again and use a fresh ref.`);
+const refOptionsHint = (snapshot?: BrowserSnapshot): string => {
+  const options = snapshotRefOptions(snapshot);
+  return options.length > 0 ? ` Current page has: ${options.join('; ')}.` : '';
+};
 
-export function interpretPageAction(ref: string, outcome: unknown): Error | null {
+const staleRef = (ref: string, snapshot?: BrowserSnapshot) =>
+  new Error(
+    `Ref ${ref} is stale or unknown.${refOptionsHint(snapshot)} Call browser_snapshot again and use a fresh ref.`
+  );
+
+export function interpretPageAction(
+  ref: string,
+  outcome: unknown,
+  snapshot?: BrowserSnapshot
+): Error | null {
   if (outcome === 'ok' || outcome === undefined) return null;
   if (outcome === 'covered') {
     return new Error(
-      `Element ${ref} is covered or not hittable. Call browser_snapshot again and use a fresh ref.`
+      `Element ${ref} is covered or not hittable.${refOptionsHint(snapshot)} Call browser_snapshot again and use a fresh ref.`
     );
   }
-  if (outcome === 'stale') return staleRef(ref);
+  if (outcome === 'stale') return staleRef(ref, snapshot);
   if (outcome === 'not-editable') return new Error(`Element ${ref} is not editable.`);
   if (typeof outcome === 'string') return new Error(`browser action failed: ${outcome}`);
-  return staleRef(ref);
+  return staleRef(ref, snapshot);
 }
 
 export const browserHost = new BrowserHost();

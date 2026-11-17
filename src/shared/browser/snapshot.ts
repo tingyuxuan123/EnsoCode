@@ -95,3 +95,21 @@ export function renderSnapshot(
 export function isKnownRef(snapshot: BrowserSnapshot | undefined, ref: string): boolean {
   return Boolean(snapshot && REF_PATTERN.test(ref) && snapshot.refs.includes(ref));
 }
+
+const RENDERED_REF_LINE = /^\s*- (.+?) \[ref=([^\]]+)\]/;
+
+/**
+ * 快照正文里带 ref 的条目，原样回显在「ref 已失效」的报错里：
+ * 模型不必再猜一轮、也不必为认一个元素多跑一次 browser_snapshot。
+ */
+export function snapshotRefOptions(snapshot: BrowserSnapshot | undefined, max = 30): string[] {
+  if (!snapshot || max <= 0) return [];
+  const out: string[] = [];
+  for (const line of snapshot.text.split('\n')) {
+    const match = RENDERED_REF_LINE.exec(line);
+    if (!match) continue;
+    out.push(`${match[1]!.trim()} [${match[2]!}]`);
+    if (out.length >= max) break;
+  }
+  return out;
+}

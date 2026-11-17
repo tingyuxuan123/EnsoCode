@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { BROWSER_DEVICE_PROFILES } from '@shared/browser/devices';
+import { BROWSER_DEVICE_PIXEL_BUDGET, BROWSER_DEVICE_PROFILES } from '@shared/browser/devices';
 import { assertAllowedUrl, isLoopbackHost } from '@shared/browser/urlPolicy';
 import type { ChildSessionIdentity } from '@shared/builtinAgents';
 import type { BrowserOp, SessionIdentity } from '@shared/types/agent';
@@ -134,6 +134,12 @@ interface ArgumentSchema {
   enum?: string[];
   additionalProperties?: boolean;
   description?: string;
+  /** 数值下界：既写进给模型的 schema，也在归一化时钳住，避免撞 Main 自己的校验 */
+  minimum?: number;
+  /** 数值上界，同上 */
+  maximum?: number;
+  /** 只收整数：归一化时取整（Main 侧 parse 不接受小数） */
+  integer?: boolean;
 }
 
 function normalizeArgument(value: unknown, definition: ArgumentSchema): unknown {
@@ -160,7 +166,14 @@ function normalizeArgument(value: unknown, definition: ArgumentSchema): unknown 
     value.trim() &&
     Number.isFinite(Number(value))
   )
-    return Number(value);
+    // 走下一条数值分支：模型常把数字写成字符串，转换后同样要 clamp
+    value = Number(value);
+  if (definition.type === 'number' && typeof value === 'number' && Number.isFinite(value)) {
+    let clamped = definition.integer ? Math.round(value) : value;
+    if (definition.minimum !== undefined) clamped = Math.max(definition.minimum, clamped);
+    if (definition.maximum !== undefined) clamped = Math.min(definition.maximum, clamped);
+    return clamped;
+  }
   if (definition.type === 'boolean' && typeof value === 'string') {
     if (value.trim().toLowerCase() === 'true') return true;
     if (value.trim().toLowerCase() === 'false') return false;
@@ -201,10 +214,49 @@ const string: ArgumentSchema = { type: 'string' };
 const number: ArgumentSchema = { type: 'number' };
 const boolean: ArgumentSchema = { type: 'boolean' };
 const choice = (...values: string[]): ArgumentSchema => ({ type: 'string', enum: values });
+/** 有范围的数：schema 里写给模型看，归一化时 clamp，不让越界值走到 Main 报红 */
+const bounded = (minimum: number, maximum: number, integer = false): ArgumentSchema => ({
+  type: 'number',
+  minimum,
+  maximum,
+  ...(integer ? { integer } : {}),
+});
 const object = (
   properties: Record<string, ArgumentSchema>,
   required: string[] = []
 ): ArgumentSchema => ({ type: 'object', properties, required, additionalProperties: false });
+
+const DEVICE_PROFILE_IDS: readonly string[] = BROWSER_DEVICE_PROFILES.map(
+  (profile) => profile.id as string
+);
+const RESPONSIVE_PROFILE = 'responsive';
+
+/**
+ * device 入参里 Main 会拒绝的部分，在 schema 校验之前就地修掉：
+ * 自造的 profileId 丢掉（等同 responsive，用当前布局），宽高相乘超像素预算就等比缩进去。
+ */
+function sanitizeDevice(params: Params): Params {
+  const device = params.device;
+  if (!device || typeof device !== 'object' || Array.isArray(device)) return params;
+  const record = { ...(device as Record<string, unknown>) };
+  if (
+    typeof record.profileId === 'string' &&
+    record.profileId !== RESPONSIVE_PROFILE &&
+    !DEVICE_PROFILE_IDS.includes(record.profileId)
+  )
+    delete record.profileId;
+  const { width, height } = record;
+  if (
+    typeof width === 'number' &&
+    typeof height === 'number' &&
+    width * height > BROWSER_DEVICE_PIXEL_BUDGET
+  ) {
+    const shrink = Math.sqrt(BROWSER_DEVICE_PIXEL_BUDGET / (width * height));
+    record.width = Math.max(50, Math.floor(width * shrink));
+    record.height = Math.max(50, Math.floor(height * shrink));
+  }
+  return { ...params, device: record };
+}
 
 export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
   const define = (
@@ -214,7 +266,8 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     properties: Record<string, ArgumentSchema>,
     required: string[] = [],
     defaults: Params = {},
-    dispatch?: (params: Params) => { op: BrowserOp; params: Params }
+    dispatch?: (params: Params) => { op: BrowserOp; params: Params },
+    sanitize?: (params: Params) => Params
   ): ToolDefinition => {
     const definition = object(
       {
@@ -227,7 +280,9 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       required
     );
     const prepare = (raw: unknown) => {
-      const normalized = normalizeArgument(raw ?? {}, definition);
+      const normalized = sanitize
+        ? sanitize(normalizeArgument(raw ?? {}, definition) as Params)
+        : normalizeArgument(raw ?? {}, definition);
       // 模型常把可选 tabId 填成 ""；空白等同未传，回落到当前 tab，避免 Main 报 tabId is required
       if (
         normalized &&
@@ -324,7 +379,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       'browser_tabs',
       'tabs',
       'List/create/select/close conversation tabs. Select/close by tabId or legacy 0-based index. New creates a blank tab.',
-      { action: choice('list', 'new', 'select', 'close'), index: number },
+      { action: choice('list', 'new', 'select', 'close'), index: bounded(0, 99, true) },
       [],
       { action: 'list' }
     ),
@@ -354,7 +409,11 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       'browser_scroll',
       'scroll',
       'Scroll page or ref in up/down/left/right direction by pixels; default down 400.',
-      { direction: choice('up', 'down', 'left', 'right'), amount: number, ref: string },
+      {
+        direction: choice('up', 'down', 'left', 'right'),
+        amount: bounded(1, 5000, true),
+        ref: string,
+      },
       [],
       { direction: 'down' }
     ),
@@ -369,16 +428,16 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       'browser_mouse_click_xy',
       'click_xy',
       'Click viewport CSS coordinates. Prefer a fresh ref and verify observable results.',
-      { x: number, y: number },
+      { x: bounded(0, 16384, true), y: bounded(0, 16384, true) },
       ['x', 'y']
     ),
     define('browser_drag', 'drag', 'Drag from fromRef or fromX/fromY to toRef or toX/toY.', {
       fromRef: string,
       toRef: string,
-      fromX: number,
-      fromY: number,
-      toX: number,
-      toY: number,
+      fromX: bounded(0, 16384, true),
+      fromY: bounded(0, 16384, true),
+      toX: bounded(0, 16384, true),
+      toY: bounded(0, 16384, true),
     }),
     define(
       'browser_highlight',
@@ -401,12 +460,15 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       {
         ref: string,
         fullPage: boolean,
-        clip: object({ x: number, y: number, width: number, height: number }, [
-          'x',
-          'y',
-          'width',
-          'height',
-        ]),
+        clip: object(
+          {
+            x: bounded(0, 16384, true),
+            y: bounded(0, 16384, true),
+            width: bounded(1, 8192, true),
+            height: bounded(1, 8192, true),
+          },
+          ['x', 'y', 'width', 'height']
+        ),
       }
     ),
     define(
@@ -436,11 +498,11 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
         kind: choice('text', 'elements'),
         scope,
         ref: string,
-        maxChars: number,
+        maxChars: bounded(1, 24000, true),
         cursor: string,
         role: string,
         text: string,
-        limit: number,
+        limit: bounded(1, 500, true),
       },
       [],
       { kind: 'text' },
@@ -468,36 +530,40 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
         text: string,
         ref: string,
         state: choice('present', 'absent', 'visible', 'hidden'),
-        timeoutMs: number,
+        timeoutMs: bounded(1, 30000, true),
       },
       ['kind'],
       {},
       (params) => {
         requireStr(params, params.kind === 'element' ? 'ref' : 'text');
         return { op: 'wait', params };
-      }
+      },
+      undefined
     ),
     define(
       'browser_device',
       'device',
-      `Set device layout on a tab using preset profileId (${BROWSER_DEVICE_PROFILES.map((profile) => profile.id).join(', ')}), or custom width/height, DPR, mobile/touch, orientation and preview scale. enabled=false resets desktop. Preview scale does not change logical viewport.`,
+      `Set device layout on a tab using preset profileId (${DEVICE_PROFILE_IDS.join(', ')}, or responsive for the current layout), or custom width/height, DPR, mobile/touch, orientation and preview scale. enabled=false resets desktop. Preview scale does not change logical viewport.`,
       {
         device: object(
           {
             enabled: boolean,
-            profileId: string,
-            width: number,
-            height: number,
-            deviceScaleFactor: number,
+            profileId: choice(...DEVICE_PROFILE_IDS, RESPONSIVE_PROFILE),
+            width: bounded(50, 8192, true),
+            height: bounded(50, 8192, true),
+            deviceScaleFactor: bounded(0.5, 4),
             mobile: boolean,
             touch: boolean,
             orientation: choice('portrait', 'landscape'),
-            scale: number,
+            scale: bounded(0.05, 1),
           },
           ['enabled']
         ),
       },
-      ['device']
+      ['device'],
+      {},
+      undefined,
+      sanitizeDevice
     ),
     define(
       'browser_history',

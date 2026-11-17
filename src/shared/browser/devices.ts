@@ -9,6 +9,9 @@ export const BROWSER_DEVICE_CATEGORIES: readonly { id: BrowserDeviceCategory; na
   { id: 'desktop', name: 'Desktop' },
 ];
 
+/** 单页视口像素上限：宽度 × 高度超了就拒绝，防止模拟出一个卡死 renderer 的尺寸 */
+export const BROWSER_DEVICE_PIXEL_BUDGET = 20_000_000;
+
 const phone = { category: 'phone', mobile: true, touch: true } as const;
 const foldable = { category: 'foldable', mobile: true, touch: true } as const;
 const tablet = { category: 'tablet', mobile: true, touch: true } as const;
@@ -142,7 +145,8 @@ export function parseBrowserDevice(raw: unknown): BrowserDevice {
     (orientation === 'landscape' ? width < height : width > height)
   )
     [width, height] = [height, width];
-  if (width * height > 20_000_000) throw new Error('Device viewport exceeds pixel budget');
+  if (width * height > BROWSER_DEVICE_PIXEL_BUDGET)
+    throw new Error('Device viewport exceeds pixel budget');
   return {
     enabled: true,
     ...(typeof record.profileId === 'string' ? { profileId: record.profileId } : {}),

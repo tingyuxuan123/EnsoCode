@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isKnownRef, parseSnapshotEntries, renderSnapshot } from './snapshot';
+import { isKnownRef, parseSnapshotEntries, renderSnapshot, snapshotRefOptions } from './snapshot';
 
 describe('parseSnapshotEntries', () => {
   it('accepts the in-page script output shape', () => {
@@ -79,5 +79,22 @@ describe('isKnownRef', () => {
     expect(isKnownRef(snap, 'e7')).toBe(true);
     expect(isKnownRef(snap, 'e1')).toBe(false);
     expect(isKnownRef(undefined, 'e7')).toBe(false);
+  });
+});
+
+describe('snapshotRefOptions', () => {
+  const snap = renderSnapshot({ url: 'u', title: 't' }, [
+    { role: 'heading', name: 'Hello', depth: 0 },
+    { role: 'button', name: 'Sign in', depth: 1, ref: 'e1' },
+    { role: 'textbox', name: 'Email', depth: 1, ref: 'e2', kind: 'fill', value: 'a@b' },
+  ]);
+
+  it('列出可交互元素，供 ref 失效的报错直接引用', () => {
+    expect(snapshotRefOptions(snap)).toEqual(['button "Sign in" [e1]', 'textbox "Email" [e2]']);
+  });
+
+  it('没有快照就什么也不列，条数可封顶', () => {
+    expect(snapshotRefOptions(undefined)).toEqual([]);
+    expect(snapshotRefOptions(snap, 1)).toHaveLength(1);
   });
 });

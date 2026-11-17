@@ -1,6 +1,8 @@
+import { renderSnapshot } from '@shared/browser/snapshot';
 import { describe, expect, it } from 'vitest';
 import {
   dragInputEvents,
+  explicitTabOutcome,
   hiddenTabCdpCommands,
   interpretPageAction,
   isBrowserPartition,
@@ -69,6 +71,33 @@ describe('interpretPageAction', () => {
     expect(interpretPageAction('e1', 'covered')?.message).toMatch(/covered|hittable/);
     expect(interpretPageAction('e1', 'stale')?.message).toMatch(/stale/);
     expect(interpretPageAction('e1', 'not-editable')?.message).toMatch(/not editable/);
+  });
+
+  it('ref 失效时把当前页可交互元素一起给出，模型不必再猜一轮', () => {
+    const snapshot = renderSnapshot({ url: 'https://example.com', title: 'Example' }, [
+      { role: 'button', name: 'Sign in', depth: 0, ref: 'e9' },
+    ]);
+    const message = interpretPageAction('e1', 'stale', snapshot)?.message ?? '';
+    expect(message).toContain('button "Sign in" [e9]');
+    expect(message).toMatch(/browser_snapshot/);
+  });
+});
+
+describe('explicitTabOutcome', () => {
+  it('还有效的 tabId 直接使用', () => {
+    expect(explicitTabOutcome('click', true, true)).toBe('use');
+    expect(explicitTabOutcome('snapshot', true, false)).toBe('use');
+  });
+
+  it('只读 op 遇到失效 tabId 回落到会话当前 tab', () => {
+    for (const op of ['snapshot', 'read_text', 'read_elements', 'screenshot', 'wait'] as const)
+      expect(explicitTabOutcome(op, false, true)).toBe('fallback');
+  });
+
+  it('写 op 或没有可回落 tab 时拒绝，不猜页面', () => {
+    for (const op of ['click', 'type', 'fill', 'navigate', 'press_key', 'scroll'] as const)
+      expect(explicitTabOutcome(op, false, true)).toBe('reject');
+    expect(explicitTabOutcome('snapshot', false, false)).toBe('reject');
   });
 });
 

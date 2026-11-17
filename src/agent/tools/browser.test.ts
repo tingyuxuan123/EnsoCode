@@ -387,3 +387,121 @@ describe('withNavigateApproval', () => {
     expect(inner).not.toHaveBeenCalled();
   });
 });
+
+describe('browser 工具参数在 schema 校验前归一化', () => {
+  const setup = () => {
+    const invoker = new BrowserInvoker(identity, () => {});
+    const invoke = vi.spyOn(invoker, 'invoke').mockResolvedValue({ ok: true });
+    const tools = createBrowserTools(invoker);
+    const run = async (name: string, params: unknown) => {
+      const tool = tools.find((item) => item.name === name)!;
+      await tool.execute('c', params as never, undefined, undefined, undefined as never);
+      return invoke.mock.lastCall?.[1] as Record<string, unknown>;
+    };
+    return { tools, invoke, run };
+  };
+
+  it('device.profileId 是预设枚举，模型自造的名字被丢弃而不是报错', async () => {
+    const { run } = setup();
+    const device = (await run('browser_device', {
+      device: { enabled: true, profileId: 'iPhone 15' },
+    })) as Record<string, unknown>;
+    expect(device.device).toEqual({ enabled: true });
+  });
+
+  it('device.profileId 大小写与空格归一后认得出预设', async () => {
+    const { run } = setup();
+    const params = (await run('browser_device', {
+      device: { enabled: true, profileId: ' IPHONE-12-PRO ' },
+    })) as { device: Record<string, unknown> };
+    expect(params.device.profileId).toBe('iphone-12-pro');
+  });
+
+  it('device 数值夹在 Main 接受的范围里并取整', async () => {
+    const { run } = setup();
+    const params = (await run('browser_device', {
+      device: { enabled: true, width: 99999, height: 12.6, deviceScaleFactor: 9, scale: 0 },
+    })) as { device: Record<string, unknown> };
+    expect(params.device.width).toBe(8192);
+    expect(params.device.height).toBe(50);
+    expect(params.device.deviceScaleFactor).toBe(4);
+    expect(params.device.scale).toBe(0.05);
+  });
+
+  it('device 宽高相乘超像素预算时按比例缩进去，不留给 Main 报错', async () => {
+    const { run } = setup();
+    const params = (await run('browser_device', {
+      device: { enabled: true, width: 8192, height: 8192 },
+    })) as { device: Record<string, unknown> };
+    expect(Number(params.device.width) * Number(params.device.height)).toBeLessThanOrEqual(
+      20_000_000
+    );
+    expect(params.device.width).toBeGreaterThan(50);
+  });
+
+  it('read 的 maxChars / limit 夹进 Main 的区间并取整', async () => {
+    const { run } = setup();
+    const params = (await run('browser_read', {
+      kind: 'text',
+      maxChars: 999999,
+      limit: 0.4,
+    })) as Record<string, number>;
+    expect(params.maxChars).toBe(24000);
+    expect(params.limit).toBe(1);
+    const small = (await run('browser_read', {
+      kind: 'text',
+      maxChars: 0,
+      limit: 99999,
+    })) as Record<string, number>;
+    expect(small.maxChars).toBe(1);
+    expect(small.limit).toBe(500);
+  });
+
+  it('模型把数字写成字符串时，转换后同样夹进范围', async () => {
+    const { run } = setup();
+    const params = (await run('browser_read', { kind: 'text', maxChars: '999999' })) as Record<
+      string,
+      number
+    >;
+    expect(params.maxChars).toBe(24000);
+  });
+
+  it('wait.timeoutMs 与 scroll.amount 夹进范围，不再撞 Main 的校验', async () => {
+    const { run } = setup();
+    const waited = (await run('browser_wait', {
+      kind: 'text',
+      text: 'Ready',
+      timeoutMs: 999999,
+    })) as Record<string, number>;
+    expect(waited.timeoutMs).toBe(30000);
+    const zero = (await run('browser_wait', {
+      kind: 'text',
+      text: 'Ready',
+      timeoutMs: 0,
+    })) as Record<string, number>;
+    expect(zero.timeoutMs).toBe(1);
+    const scrolled = (await run('browser_scroll', { direction: 'down', amount: 99999 })) as Record<
+      string,
+      number
+    >;
+    expect(scrolled.amount).toBe(5000);
+  });
+
+  it('发给模型的 schema 里带上 minimum / maximum / integer', () => {
+    const { tools } = setup();
+    const read = tools.find((tool) => tool.name === 'browser_read')!;
+    const props = (read.parameters as { properties: Record<string, Record<string, unknown>> })
+      .properties;
+    expect(props.maxChars).toMatchObject({ type: 'number', minimum: 1, maximum: 24000 });
+    expect(props.maxChars.integer).toBe(true);
+    const device = tools.find((tool) => tool.name === 'browser_device')!;
+    const deviceProps = (
+      device.parameters as {
+        properties: { device: { properties: Record<string, Record<string, unknown>> } };
+      }
+    ).properties.device.properties;
+    expect(deviceProps.width).toMatchObject({ minimum: 50, maximum: 8192 });
+    expect(deviceProps.profileId.enum).toContain('iphone-12-pro');
+    expect(deviceProps.profileId.enum).toContain('responsive');
+  });
+});
