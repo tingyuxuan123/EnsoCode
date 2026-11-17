@@ -12,6 +12,22 @@ const setup = () => {
 };
 
 describe('browser_act', () => {
+  it('keeps action descriptions for display but never sends display metadata to Main', async () => {
+    const { tool, invoke } = setup();
+    const raw = {
+      description: '完成登录',
+      steps: [{ action: 'click', target: '登录', description: '进入登录页' }],
+    };
+    const prepared = tool.prepareArguments!(raw as never) as typeof raw;
+    expect(prepared.description).toBe('完成登录');
+    expect(prepared.steps[0].description).toBe('进入登录页');
+    await tool.execute('c', raw as never, undefined, undefined, undefined as never);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(
+      'act',
+      { steps: [{ action: 'click', target: '登录' }] },
+      undefined
+    );
+  });
   it('accepts real GPT arguments with every optional field filled, without forwarding irrelevant fields', async () => {
     const { tool, invoke } = setup();
     const fillers = {

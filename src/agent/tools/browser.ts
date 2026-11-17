@@ -234,6 +234,39 @@ const object = (
   required: string[] = []
 ): ArgumentSchema => ({ type: 'object', properties, required, additionalProperties: false });
 
+/** User-facing intent stays in the tool-call history, never enters the executable BrowserOp. */
+function executionParams(params: Params): Params {
+  const { description: _description, ...rest } = params;
+  if (Array.isArray(rest.steps))
+    rest.steps = rest.steps.map((step: unknown) => {
+      if (!step || typeof step !== 'object' || Array.isArray(step)) return step;
+      const { description: _stepDescription, ...action } = step as Params;
+      return action;
+    });
+  return rest;
+}
+
+function prepareActions(params: Params): Params {
+  const canonical = normalizeBrowserActionSteps(params.steps);
+  if (!Array.isArray(canonical) || !Array.isArray(params.steps))
+    return { ...params, steps: canonical };
+  const original = params.steps;
+  return {
+    ...params,
+    steps: canonical.map((step: unknown, i: number) => {
+      const raw = original[i];
+      return step &&
+        typeof step === 'object' &&
+        !Array.isArray(step) &&
+        raw &&
+        typeof raw === 'object' &&
+        typeof raw.description === 'string'
+        ? { ...step, description: raw.description.trim().slice(0, 160) }
+        : step;
+    }),
+  };
+}
+
 const DEVICE_PROFILE_IDS: readonly string[] = BROWSER_DEVICE_PROFILES.map(
   (profile) => profile.id as string
 );
@@ -280,6 +313,11 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     const definition = object(
       {
         ...properties,
+        description: {
+          type: 'string',
+          description:
+            'Optional short action label in the user’s language, shown as the browser step (e.g. “Open login page”, “Fill password”). Describe intent only; never include typed values, passwords, tokens, technical IDs or JSON.',
+        },
         tabId: {
           type: 'string',
           description: 'Optional tab ID owned by this conversation; defaults to its current tab',
@@ -314,7 +352,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       async execute(_toolCallId, raw, signal) {
         const normalized = prepare(raw);
         assertArguments(normalized, definition);
-        const params = { ...defaults, ...normalized };
+        const params = { ...defaults, ...executionParams(normalized) };
         for (const key of ['ref', 'key', 'url', 'method'])
           if (required.includes(key)) requireStr(params, key);
         const request = dispatch?.(params) ?? { op, params };
@@ -395,6 +433,11 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
           items: object(
             {
               action: choice(...BROWSER_ACTIONS),
+              description: {
+                type: 'string',
+                description:
+                  'Optional short user-facing step label. Never include passwords or typed values.',
+              },
               ref: string,
               target: {
                 type: 'string',
@@ -420,7 +463,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
       ['steps'],
       {},
       (params) => ({ op: 'act', params: { ...params, steps: parseBrowserActions(params) } }),
-      (params) => ({ ...params, steps: normalizeBrowserActionSteps(params.steps) })
+      prepareActions
     ),
     define(
       'browser_tabs',
@@ -649,7 +692,7 @@ export function withNavigateApproval(gate: ApprovalGate, tool: ToolDefinition): 
   return {
     ...tool,
     async execute(toolCallId, raw, signal, onUpdate, ctx) {
-      const params = (tool.prepareArguments?.(raw) ?? raw) as Params | undefined;
+      const params = executionParams((tool.prepareArguments?.(raw) ?? raw ?? {}) as Params);
       let summary = '';
       if (tool.name === 'browser_act') {
         const steps = parseBrowserActions(params);

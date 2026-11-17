@@ -110,6 +110,7 @@ import { useSubagentRunsStore } from '@/stores/subagentRuns';
 import { ApprovalReviewBar } from './ApprovalReviewBar';
 import { AskUserResult } from './AskUserResult';
 import { parseAgentNotification, type SubagentNotice } from './agentNotification';
+import { BrowserActivityHead, BrowserActivityRow } from './BrowserActivityRow';
 import { backgroundNotificationDisplay } from './backgroundNotification';
 import { CodeBlock } from './CodeBlock';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -214,6 +215,7 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.nested === b.nested &&
         a.summary === b.summary &&
         a.output === b.output &&
+        JSON.stringify(a.browser) === JSON.stringify(b.browser) &&
         a.edits === b.edits &&
         a.writeContent === b.writeContent &&
         a.fileChanges === b.fileChanges &&
@@ -254,6 +256,10 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.stats.searches === b.stats.searches &&
         a.stats.others === b.stats.others &&
         a.exploring === b.exploring &&
+        a.browser?.count === b.browser?.count &&
+        a.browser?.thinkingMs === b.browser?.thinkingMs &&
+        a.browser?.failed === b.browser?.failed &&
+        a.browser?.warnings === b.browser?.warnings &&
         a.worklog?.status === b.worklog?.status &&
         a.worklog?.forced === b.worklog?.forced &&
         a.worklog?.durationMs === b.worklog?.durationMs &&
@@ -1009,7 +1015,11 @@ export const TimelineRow = memo(function TimelineRow({
         />
       );
     case 'tool':
-      return <ToolRow item={item} />;
+      return item.browser ? (
+        <BrowserActivityRow item={item} view={item.browser} />
+      ) : (
+        <ToolRow item={item} />
+      );
     case 'tool-group':
       return <ToolGroupRow item={item} onToggle={onToggleGroup} />;
     case 'error':
@@ -1949,6 +1959,7 @@ function ToolGroupRow({
   const { t } = useI18n();
   const compact = useSettingsStore((s) => s.compactReadOnlyTools);
   if (item.worklog) return <WorklogHead item={item} worklog={item.worklog} onToggle={onToggle} />;
+  if (item.browser) return <BrowserActivityHead item={item} onToggle={onToggle} />;
   const parts: string[] = [];
   if (item.stats.commands > 0)
     parts.push(t('ran {{count}} commands', { count: item.stats.commands }));

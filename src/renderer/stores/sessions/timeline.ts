@@ -18,6 +18,12 @@ import type { ProjectedApplyPatchOutcome, ProjectedFileChange } from '@shared/ty
 import { readDesignCards } from '@/features/design/host/cards';
 import type { CardDescriptor } from '@/features/design/vetta/sdk/ui';
 import { unwrapMcpProxyCall } from '@/lib/mcpToolName';
+import {
+  type BrowserToolView,
+  browserPresentation,
+  browserResultTab,
+  recordBrowserRefs,
+} from './browserPresentation';
 import { isMissingFileRead } from './missingFileRead';
 import type { TimelineMessage } from './reducer';
 import { buildTurnWaterfall, type TurnWaterfall } from './turnWaterfall';
@@ -77,6 +83,7 @@ export type TimelineItem =
       summary: string;
       output: string | null;
       state: 'running' | 'reviewing' | 'ok' | 'error';
+      browser?: BrowserToolView;
       /** Scoped rich result cards; only design tools can populate this projection. */
       designCards?: CardDescriptor[];
       /** 工具结果前捎带的系统提醒（已从 output 剥离），折叠展示；没有则缺省 */
@@ -143,6 +150,7 @@ export type TimelineItem =
       exploring: boolean;
       /** 连续命令组（对齐 ZCode「终端 · N 个命令」）；探索组缺省 */
       terminal?: boolean;
+      browser?: { count: number; thinkingMs: number | null; failed: number; warnings: number };
       /** 回合工作日志：本轮最终答案之前的全部过程行（思考 / 工具 / 中间叙述）；普通工具组缺省 */
       worklog?: {
         status: WorklogStatus;
@@ -986,6 +994,8 @@ function buildMessageTimeline(
     }
   }
   const items: TimelineItem[] = [];
+  const browserRefs = new Map<string, Map<string, string>>();
+  let currentBrowserTab = '';
   const spawnedAgents = new Map<string, string>();
   const subagentRuns = new Map<string, string>();
   // 每条消息之后的首个非 toolResult 角色（反向一次扫完）：用于判定「本轮末 step」
@@ -1289,10 +1299,39 @@ function buildMessageTimeline(
             part.name === 'code_search' && call.args && typeof call.args === 'object'
               ? (call.args as Record<string, unknown>).query
               : undefined;
+          const state = result
+            ? result.isError || sandboxView?.status === 'failed'
+              ? 'error'
+              : 'ok'
+            : running && messageIndex === lastTurnIndex
+              ? reviewingIds.has(part.id)
+                ? 'reviewing'
+                : 'running'
+              : running
+                ? 'ok'
+                : 'error';
+          let browser: BrowserToolView | undefined;
+          if (call.name.startsWith('browser_')) {
+            const args =
+              call.args && typeof call.args === 'object'
+                ? (call.args as Record<string, unknown>)
+                : {};
+            const tabId =
+              browserResultTab(output) ??
+              (typeof args.tabId === 'string' && args.tabId ? args.tabId : currentBrowserTab);
+            currentBrowserTab = tabId;
+            const refs = browserRefs.get(tabId) ?? new Map<string, string>();
+            browserRefs.set(tabId, refs);
+            browser = browserPresentation(call.name, call.args, output, state, refs);
+            if (['browser_navigate', 'browser_snapshot', 'browser_read'].includes(call.name))
+              refs.clear();
+            recordBrowserRefs(refs, output);
+          }
           items.push({
             kind: 'tool',
             key,
             name: call.name,
+            ...(browser ? { browser } : {}),
             ...(call.name.startsWith('vetd_')
               ? {
                   designArgs:
@@ -1325,17 +1364,7 @@ function buildMessageTimeline(
             nestedPending: nestedPendingCount(part.id, pendingApprovals) || undefined,
             ...(imagePath ? { imagePath } : {}),
             ...(sandboxTool ? { sandbox: sandboxView } : {}),
-            state: result
-              ? result.isError || sandboxView?.status === 'failed'
-                ? 'error'
-                : 'ok'
-              : running && messageIndex === lastTurnIndex
-                ? reviewingIds.has(part.id)
-                  ? 'reviewing'
-                  : 'running'
-                : running
-                  ? 'ok'
-                  : 'error',
+            state,
             // 执行失败 = 文件没改，参数里的意图 diff 不能显示成已应用
             edits: result?.isError
               ? null
@@ -1855,9 +1884,72 @@ function nestedChildren(items: TimelineItem[]): TimelineItem[] {
 
 /** 探索组展开过程时其原始行紧随组头 */
 function withExploreChildren(item: TimelineItem): TimelineItem[] {
-  return item.kind === 'tool-group' && item.explore?.steps
+  return item.kind === 'tool-group' && (item.explore?.steps || (item.browser && item.expanded))
     ? [item, ...nestedChildren(item.children)]
     : [item];
+}
+
+/** Browser steps are business activity, not generic debug cards; grouping is independent of compact mode. */
+function foldBrowserSegments(
+  rows: readonly TimelineItem[],
+  expandedKeys: ReadonlySet<string>,
+  running: boolean
+): TimelineItem[] {
+  const result: TimelineItem[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const first = rows[i];
+    if (
+      first.kind !== 'thinking' &&
+      !(first.kind === 'tool' && first.name.startsWith('browser_'))
+    ) {
+      result.push(first);
+      i++;
+      continue;
+    }
+    let end = i;
+    while (end < rows.length) {
+      const row = rows[end];
+      if (row.kind !== 'thinking' && !(row.kind === 'tool' && row.name.startsWith('browser_')))
+        break;
+      end++;
+    }
+    const children = mergeAdjacentThinking(rows.slice(i, end));
+    const tools = children.filter(
+      (row): row is Extract<TimelineItem, { kind: 'tool' }> => row.kind === 'tool'
+    );
+    const count = tools.reduce((sum, row) => sum + (row.browser?.count ?? 1), 0);
+    if (count < 2 && !tools.some((row) => (row.browser?.steps.length ?? 0) > 1))
+      result.push(...children);
+    else {
+      const thoughts = children.filter(
+        (row): row is Extract<TimelineItem, { kind: 'thinking' }> => row.kind === 'thinking'
+      );
+      const known = thoughts.filter((row) => row.durationMs !== null);
+      const key = `browser-${first.key}`;
+      result.push({
+        kind: 'tool-group',
+        key,
+        expanded: expandedKeys.has(key),
+        count: tools.length,
+        stats: { commands: 0, reads: 0, searches: 0, others: tools.length },
+        exploring:
+          (running && end === rows.length) ||
+          tools.some((row) => row.state === 'running' || row.state === 'reviewing'),
+        browser: {
+          count,
+          thinkingMs: known.length
+            ? known.reduce((sum, row) => sum + Math.max(0, row.durationMs ?? 0), 0)
+            : null,
+          failed: tools.filter((row) => row.state === 'error').length,
+          warnings: tools.filter((row) => row.browser?.warning).length,
+        },
+        children,
+      });
+    }
+    i = end;
+  }
+  return result;
 }
 
 /**
@@ -1924,6 +2016,7 @@ export function foldTimeline(
     sourceItems = nextItems;
   }
   sourceItems = pairExploreFolds(sourceItems, expandedKeys, compact);
+  sourceItems = foldBrowserSegments(sourceItems, expandedKeys, running);
   const lastUserIndex = sourceItems.findLastIndex(
     (item) => item.kind === 'user' && !item.deliveryState
   );

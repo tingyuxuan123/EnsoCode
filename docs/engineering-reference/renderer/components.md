@@ -200,6 +200,19 @@ PNG 等图片产物直接显示缩略图，接近视口才请求；Main 复用�
 
 右侧「设计稿」是工作区入口，不依赖任何交稿消息或活跃成员会话。用 `bots.designWorkspace({ chatId })` 获取 Main 权威的项目根，再复用设计扫描；群话题共享根群工作区，画布归属仍是当前话题。源码包若保留 `theme.css` 和有效 `frames/*.tsx`，即使缺 `design.json` 也列出；扫描不写文件，显式打开时由 `DesignSession` 重建。无会话画布不创建假会话，也不操作隐藏的 Code 输入框。
 
+## 浏览器过程展示面向用户，不展示协议卡片
+
+浏览器调用经 `browserPresentation` 投影为简短业务动作，优先用模型的 `description`；旧历史没有描述时，
+从工具动作和同一 tab 之前实际呈现的控件名称回退，不回显 ref、tabId、snapshotId、输入正文或 JSON。
+描述只活在调用历史，worker 执行前从顶层与批量步骤剥离，Main 仍只接收原有严格操作参数，不能将展示文字当授权。
+连续 browser/thinking 行独立成「操作浏览器 N 次 · 思考时长」组，不受普通只读工具精简开关影响；
+`browser_act` 展开为各步动作，只有权威结果确认的步骤才标完成，失败之后的步骤标未执行。
+真实失败在收起组头保留计数，动作已发送但观察失败另标「待核对」，不得因去掉 JSON 就掩盖错误。
+成功步骤不再挂通用工具名/参数/输出详情卡；原始结果仍保留在 Main/worker 历史，不改会话权威数据。
+回归：`browserPresentation.test.ts`、`timeline.browser.test.ts`、`TimelineRow.browser.test.tsx`、
+`agent/tools/browser.actions.test.ts`。隔离 Electron 真机验证 GPT/DeepSeek 的中文描述、两次工具完成四步，
+并核对实际分组展开后的可见 DOM 没有协议字段或输入值；共享聊天改动同时验手机 typecheck/build。
+
 ## 时间线初始高度不能取首条消息
 
 `MessageTimeline` 切会话会重挂 Virtuoso 并定位 `LAST`。必须提供 `defaultItemHeight` 初始估算，不能让首条长文本的探测高度外推到全部消息；实际行高仍动态测量，不能改成 `fixedItemHeight`。
