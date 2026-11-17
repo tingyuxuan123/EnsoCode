@@ -25,6 +25,36 @@ function setup(overrides: Partial<UnifiedSubagentDeps> = {}) {
 }
 
 describe('unified subagent tool', () => {
+  it('漏传 operation 仅在 description/prompt 均非空时按 spawn 归一化，保持 coworker 默认值', async () => {
+    const { tool, deps } = setup();
+    const prepared = tool.prepareArguments?.({ description: 'review', prompt: 'review this' });
+    expect(prepared).toEqual({ operation: 'spawn', description: 'review', prompt: 'review this' });
+    expect(matchesJsonSchema(tool.parameters as unknown as JsonSchema, prepared)).toBe(true);
+    await tool.execute('inferred', prepared as never, undefined, undefined, {} as never);
+    expect(deps.invoke).toHaveBeenCalledWith(
+      {
+        operation: 'spawn',
+        mode: 'coworker',
+        description: 'review',
+        prompt: 'review this',
+        wait: false,
+      },
+      undefined
+    );
+    for (const bad of [
+      {},
+      { description: 'review' },
+      { prompt: 'review' },
+      { description: 'd', prompt: '  ' },
+    ]) {
+      expect(() => tool.prepareArguments?.(bad)).toThrow(/requires operation.*operation:"spawn"/);
+    }
+    expect(() =>
+      tool.prepareArguments?.({ operation: 'spwan', description: 'd', prompt: 'p' })
+    ).toThrow(/unknown operation/);
+    expect(deps.invoke).toHaveBeenCalledTimes(1);
+  });
+
   it('已声明可选字段的 null 占位不会穿透到非 nullable schema', () => {
     const { tool } = setup();
     const prepared = tool.prepareArguments?.({

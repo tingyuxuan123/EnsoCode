@@ -21,6 +21,17 @@ const conv = (id: string, extra: { title?: string; text?: string } = {}) => ({
 });
 
 describe('cachedPartializeSessions', () => {
+  it('spawn 拒绝记录是运行态，不能跨重启阻止新代恢复', () => {
+    const persisted = cachedPartializeSessions({
+      conversations: {
+        a: { ...conv('a'), spawnRejection: { generation: 'g1', reason: 'bad model' } },
+      },
+      order: ['a'],
+      activeId: 'a',
+    });
+    expect(persisted.conversations.a.spawnRejection).toBeUndefined();
+  });
+
   it('隐藏协作者标签只活在内存，不改变成员持久化', () => {
     const persisted = cachedPartializeSessions({
       conversations: { a: { ...conv('a'), coworkerIds: ['child'], hiddenCoworkerIds: ['child'] } },

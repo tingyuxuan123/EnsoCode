@@ -290,6 +290,18 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
   const prepare = (input: unknown): Record<string, unknown> => {
     if (!isPlainObject(input)) throw invalidParams('parameters must be an object.');
     const params = { ...(clampWaitTimeout(input) as Record<string, unknown>) };
+    if (params.operation === undefined || params.operation === null) {
+      if (!nonEmptyText(params.description) || !nonEmptyText(params.prompt)) {
+        throw invalidParams(
+          'subagent requires operation. To spawn, pass operation:"spawn" with non-empty description and prompt.'
+        );
+      }
+      params.operation = 'spawn';
+    } else if (typeof params.operation !== 'string' || !OPERATIONS.includes(params.operation)) {
+      throw invalidParams(
+        `unknown operation ${JSON.stringify(params.operation)}. Expected one of: ${OPERATIONS.join(', ')}.`
+      );
+    }
     // 只归一已声明可选键的占位；未知键即使为空也不能绕过 schema 白名单。
     for (const [key, value] of Object.entries(params)) {
       if (
@@ -340,12 +352,12 @@ export function createUnifiedSubagentTool(deps: UnifiedSubagentDeps): ToolDefini
     name: 'subagent',
     label: 'Subagent',
     description:
-      'Spawn requires non-empty description and prompt parameters; omit both for every other operation. ' +
+      'Every call must pass operation, including operation:"spawn". Spawn requires non-empty description and prompt parameters; omit both for every other operation. ' +
       'Create and control delegated agents. Default mode=coworker preserves context for follow-up Runs; explicit mode=task is one-shot. ' +
       'All operations are Main-authorized. Spawning and sending are asynchronous unless wait:true; ' +
       'you are notified automatically when a Run finishes.',
     promptSnippet:
-      'subagent: spawn requires non-empty description and prompt. Other operations omit both. ' +
+      'subagent: always pass operation (operation:"spawn" to spawn). spawn requires non-empty description and prompt. Other operations omit both. ' +
       'Spawn task/coworker agents, list owned agents, send Runs or bound messages, wait/report/stop a Run, or dismiss an Agent. Default spawn mode=coworker and wait=false; reuse the same Agent with send for follow-up work. Finished Runs notify you automatically.',
     promptGuidelines: [
       'spawn requires non-empty description and prompt. Omit both for every other operation.',

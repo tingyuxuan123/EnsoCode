@@ -924,6 +924,9 @@ export class AgentDispatchService {
           ? { approvalMode: persisted.approvalMode as AgentSpawnRequest['approvalMode'] }
           : {}),
       };
+      // 回收后同代恢复也必须解除 Main 的已释放标记；与其他 spawn 路径一致。
+      if (this.options.sessionIndex.isCurrent(parent))
+        this.options.sessionIndex.prepareParent(parent);
       const pendingSpawn = this.options.host.spawnParent(parent, request, credentialKeys);
       const spawned = pendingSpawn instanceof Promise ? await pendingSpawn : pendingSpawn;
       if (!spawned.ok) throw new Error(spawned.error ?? 'Failed to spawn parent container.');

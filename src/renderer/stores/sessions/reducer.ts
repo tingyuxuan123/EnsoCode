@@ -13,6 +13,7 @@ import {
   type RendererAgentEvent,
   type SessionIdentity,
   type SlashCommand,
+  STALE_SESSION_ERROR,
   type SubagentInfo,
   type SubagentRunSettlement,
   shouldApplyDispatchMainEvent,
@@ -244,6 +245,8 @@ export interface SessionProjection {
   /** 发送出口的最近实测，独立于 token 占用；不持久化。 */
   requestBody?: RequestBodyUsage;
   generation?: string;
+  /** 同代真实 spawn 拒绝，不能被后续 STALE 覆盖或触发错误自愈。不持久化。 */
+  spawnRejection?: { generation: string; reason: string };
   status: NodeStatus;
   error?: string;
   messages: TimelineMessage[];
@@ -453,6 +456,8 @@ export function applyAgentEvent(
     identity?.sessionId === sessionId
   ) {
     if (state.generation !== undefined && state.generation !== identity.generation) return state;
+    const stale = event.reason.startsWith(STALE_SESSION_ERROR);
+    if (stale && state.spawnRejection?.generation === identity.generation) return state;
     return {
       ...settleTiming(state, now),
       generation: undefined,
@@ -464,6 +469,9 @@ export function applyAgentEvent(
       pendingAsks: [],
       // 拒绝对该代是终态：child 标 ended，重启后不再重试恢复（历史仍可读）
       ...(event.type === 'child-rejected' ? { ended: true } : {}),
+      ...(event.type === 'parent-rejected' && !stale
+        ? { spawnRejection: { generation: identity.generation, reason: event.reason } }
+        : {}),
     };
   }
 
@@ -488,6 +496,7 @@ export function applyAgentEvent(
         error: undefined,
         // 新代 ready = 成功复活，清掉上一代的终态标记
         ended: undefined,
+        spawnRejection: undefined,
         lastSeq: event.seq,
       };
     case 'parent-ended':

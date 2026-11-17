@@ -26,6 +26,7 @@ function persistOne(conversation: PersistableConversation): PersistableConversat
     lastSeq: _lastSeq,
     spawning: _spawning,
     error: _error,
+    spawnRejection: _spawnRejection,
     started: _started,
     status: _status,
     runStartedAt: _runStartedAt,

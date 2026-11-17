@@ -41,6 +41,7 @@ import {
   parseCreateConversationAuthorityRequest,
   parseTitleSummaryInput,
   parseUpdateConversationSelectionRequest,
+  STALE_SESSION_ERROR,
   THINKING_LEVELS,
 } from '@shared/types/agent';
 import { DESIGNER_AGENT_NAME } from '@shared/types/assets';
@@ -531,6 +532,8 @@ const subagentProgressPush = new SubagentProgressPush((sessionId, runs) => {
 function exactIdentity(sessionId: unknown): SessionIdentity | ChildSessionIdentity | undefined {
   return isNonEmptyString(sessionId) ? agentSessionIndex.currentIdentity(sessionId) : undefined;
 }
+
+const DETACHED_SESSION_ERROR = '会话已从后台释放（闲置回收或重启），请重新发送以恢复会话';
 
 function rootIdentity(sessionId: unknown): SessionIdentity | undefined {
   const identity = exactIdentity(sessionId);
@@ -1725,6 +1728,20 @@ export function registerAgentHandlers(): void {
       );
       sourceBindings?.invalidateBindingsForConversation(workerEvent.identity.sessionId);
     }
+    // 非 STALE 的 parent-rejected 只来自 spawn 失败：真实原因落主进程日志，renderer 侧会被后续 STALE 掩盖
+    if (
+      workerEvent.type === 'parent-rejected' &&
+      !workerEvent.reason.startsWith(STALE_SESSION_ERROR)
+    ) {
+      const selection = sourceAuthority?.conversation(workerEvent.identity.sessionId)?.selection;
+      console.warn('[agent] spawn rejected', {
+        sessionId: workerEvent.identity.sessionId,
+        generation: workerEvent.identity.generation,
+        providerId: selection?.providerId,
+        modelId: selection?.modelId,
+        reason: workerEvent.reason,
+      });
+    }
     if (workerEvent.type === 'fork-done') {
       const pending = pendingWorktreeForks.get(workerEvent.targetConversationId);
       if (
@@ -2622,6 +2639,8 @@ export function registerAgentHandlers(): void {
       ) {
         return { ok: false, error: 'invalid prompt or stale session generation' };
       }
+      if (agentSessionIndex.isDetached(identity))
+        return { ok: false, error: DETACHED_SESSION_ERROR };
       return promptSession(
         identity,
         text as string,
@@ -2650,6 +2669,8 @@ export function registerAgentHandlers(): void {
       ) {
         return { ok: false, error: 'invalid steer or stale session generation' };
       }
+      if (agentSessionIndex.isDetached(identity))
+        return { ok: false, error: DETACHED_SESSION_ERROR };
       return steerSession(
         identity,
         text as string,

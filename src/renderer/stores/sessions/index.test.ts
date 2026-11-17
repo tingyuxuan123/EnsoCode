@@ -14,6 +14,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type * as SettingsModule from '../settings';
 import type * as SessionsModule from './index';
 import { chatSurfaceBusy, chatTimelineActivity, MESSAGE_CACHE_TTL_MS } from './messageCache';
+import { cachedPartializeSessions } from './persistSnapshot';
 
 let onCapabilityAsk: ((request: CapabilityAskRequest) => void) | undefined;
 let onAgentEvent: ((event: RendererAgentEvent) => void) | undefined;
@@ -704,6 +705,123 @@ describe('typed Agent child projection', () => {
     expect(after.started).toBe(false);
     expect(after.status).toBe('failed');
     expect(after.error).toBe('unknown or stale session generation: parent');
+    expect(after.messages).toEqual([
+      expect.objectContaining({ optimistic: true, deliveryRejected: true }),
+    ]);
+  });
+
+  it('同代真实 spawn 拒绝不被 STALE 掩盖或误触发自动恢复', async () => {
+    enableRewindResumeModel();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5 * 60_000);
+    try {
+      sessionsModule.useSessionsStore.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          parent: {
+            ...state.conversations.parent,
+            generation: 'pg1',
+            started: true,
+            sessionFile: '/tmp/evicted.jsonl',
+            lastProviderId: 'p1',
+            lastModelId: 'm1',
+            messages: [
+              {
+                role: 'user' as const,
+                content: [{ type: 'text' as const, text: 'retry' }],
+                optimistic: true,
+                deliveryId: 'rejected',
+              },
+            ],
+          },
+        },
+      }));
+      onAgentEvent?.({
+        type: 'parent-rejected',
+        identity: { sessionId: 'parent', generation: 'pg1' },
+        seq: 0,
+        reason: 'oauth model not found',
+      });
+      onAgentEvent?.({
+        type: 'parent-rejected',
+        identity: { sessionId: 'parent', generation: 'pg1' },
+        seq: 0,
+        reason: 'unknown or stale session generation: parent',
+      });
+      await Promise.resolve();
+      const conversation = sessionsModule.useSessionsStore.getState().conversations.parent;
+      expect(agentSpawn).not.toHaveBeenCalled();
+      expect(conversation.error).toBe('oauth model not found');
+      expect(conversation.status).toBe('failed');
+      expect(conversation.messages).toEqual([
+        expect.objectContaining({ deliveryId: 'rejected', deliveryRejected: true }),
+      ]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('旧代 STALE 不会把新代尚未确认的回显误标成未发送', async () => {
+    const echo = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'new generation' }],
+      optimistic: true,
+      deliveryId: 'new-delivery',
+    };
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        parent: {
+          ...state.conversations.parent,
+          started: true,
+          generation: 'pg2',
+          messages: [echo],
+        },
+      },
+    }));
+    onAgentEvent?.({
+      type: 'parent-rejected',
+      identity: { sessionId: 'parent', generation: 'pg1' },
+      seq: 0,
+      reason: 'unknown or stale session generation: parent',
+    });
+    await Promise.resolve();
+    expect(sessionsModule.useSessionsStore.getState().conversations.parent.messages).toEqual([
+      echo,
+    ]);
+    expect(agentSpawn).not.toHaveBeenCalled();
+  });
+
+  it('无法恢复的 STALE 回显应变成未发送而非永久送达待确认', async () => {
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        parent: {
+          ...state.conversations.parent,
+          started: true,
+          generation: 'pg1',
+          sessionFile: undefined,
+          messages: [
+            {
+              role: 'user' as const,
+              content: [{ type: 'text' as const, text: 'unsent' }],
+              optimistic: true,
+              deliveryId: 'no-history',
+            },
+          ],
+        },
+      },
+    }));
+    onAgentEvent?.({
+      type: 'parent-rejected',
+      identity: { sessionId: 'parent', generation: 'pg1' },
+      seq: 0,
+      reason: 'unknown or stale session generation: parent',
+    });
+    await Promise.resolve();
+    expect(agentSpawn).not.toHaveBeenCalled();
+    expect(sessionsModule.useSessionsStore.getState().conversations.parent.messages).toEqual([
+      expect.objectContaining({ deliveryId: 'no-history', deliveryRejected: true }),
+    ]);
   });
 
   it('partialize never persists started and resets stale running status to idle', () => {

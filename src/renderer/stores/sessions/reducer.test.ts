@@ -77,6 +77,40 @@ describe('applyHistoryPage', () => {
 });
 
 describe('applyAgentEvent', () => {
+  it('保留本代 spawn 原因，新代 ready 后清理，旧代拒绝不能影响新代', () => {
+    const rejected = applyAgentEvent({ ...base, generation: 'g1' }, 's1', {
+      type: 'parent-rejected',
+      identity: identity(),
+      seq: 0,
+      reason: 'missing model',
+    });
+    const stale = applyAgentEvent(rejected, 's1', {
+      type: 'parent-rejected',
+      identity: identity(),
+      seq: 0,
+      reason: 'unknown or stale session generation: s1',
+    });
+    expect(stale.error).toBe('missing model');
+    expect(stale.spawnRejection).toEqual({ generation: 'g1', reason: 'missing model' });
+    const ready = applyAgentEvent(stale, 's1', {
+      type: 'parent-ready',
+      identity: identity('g2'),
+      seq: 1,
+      sessionFile: '/tmp/s1.jsonl',
+      model: { providerId: 'p', modelId: 'm' },
+    });
+    expect(ready.spawnRejection).toBeUndefined();
+    expect(ready.error).toBeUndefined();
+    expect(
+      applyAgentEvent(ready, 's1', {
+        type: 'parent-rejected',
+        identity: identity(),
+        seq: 0,
+        reason: 'old',
+      })
+    ).toBe(ready);
+  });
+
   it('keeps a live steer through a snapshot containing an older identical message', () => {
     const identity = { sessionId: 's', generation: 'g' };
     const message = { role: 'user' as const, content: [{ type: 'text' as const, text: 'same' }] };

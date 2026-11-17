@@ -1845,8 +1845,13 @@ export const useSessionsStore = create<SessionsState>()(
             void hydrateParentHistoryTail(id);
           }
         }
-        if (event.type === 'parent-rejected' && event.reason.startsWith(STALE_SESSION_ERROR)) {
-          void recoverStaleSession(id, event.reason);
+        if (
+          event.type === 'parent-rejected' &&
+          event.reason.startsWith(STALE_SESSION_ERROR) &&
+          (!currentConversation.generation ||
+            currentConversation.generation === event.identity.generation)
+        ) {
+          void recoverStaleSession(id, event.reason, event.identity.generation);
         }
         if (event.type === 'turn-completed' || event.type === 'turn-failed') {
           // 用户中断的轮次不自动续跑：清掉一次性标记后直接收口
@@ -1873,25 +1878,40 @@ export const useSessionsStore = create<SessionsState>()(
        * 被拒。自动 resume 并按原序重投被拒消息，不让用户手动点「重新恢复」再重发。
        * 同一会话窗口期内只自愈一次，异常时退回原有的 failed + 手动恢复。
        */
-      async function recoverStaleSession(id: string, reason: string): Promise<void> {
+      async function recoverStaleSession(
+        id: string,
+        reason: string,
+        generation: string
+      ): Promise<void> {
         const conversation = get().conversations[id];
+        if (!conversation) return;
+        const isUndeliveredEcho = (message: TimelineMessage): boolean =>
+          Boolean(message.optimistic && !message.deliveryRejected && message.role === 'user');
+        const now = Date.now();
         if (
-          !conversation ||
           conversation.started ||
           conversation.parentId ||
           conversation.btwParentId ||
-          !conversation.sessionFile
-        )
+          !conversation.sessionFile ||
+          conversation.spawnRejection?.generation === generation ||
+          now - (staleRecoveredAt.get(id) ?? -Infinity) < STALE_RECOVERY_WINDOW_MS
+        ) {
+          set((state) => {
+            const current = state.conversations[id];
+            if (!current?.messages.some(isUndeliveredEcho)) return state;
+            return patch(state, id, {
+              messages: current.messages.map((message) =>
+                isUndeliveredEcho(message) ? { ...message, deliveryRejected: true } : message
+              ),
+            });
+          });
           return;
-        const now = Date.now();
-        if (now - (staleRecoveredAt.get(id) ?? -Infinity) < STALE_RECOVERY_WINDOW_MS) return;
+        }
         staleRecoveredAt.set(id, now);
         set((state) => {
           const current = state.conversations[id];
           if (!current) return state;
-          const undelivered = current.messages.filter(
-            (message) => message.optimistic && !message.deliveryRejected && message.role === 'user'
-          );
+          const undelivered = current.messages.filter(isUndeliveredEcho);
           return patch(state, id, {
             status: 'idle',
             error: undefined,
