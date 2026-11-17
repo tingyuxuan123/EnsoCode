@@ -17,7 +17,7 @@ afterEach(() => {
   for (const p of live.splice(0)) p.stop();
   vi.useRealTimers();
 });
-function setup() {
+function setup(extra: { busy?: () => boolean } = {}) {
   const children: Child[] = [];
   const onExit = vi.fn();
   const p = new PluginProcess({
@@ -34,6 +34,7 @@ function setup() {
     onExit,
     idleMs: 100,
     readyTimeoutMs: 50,
+    ...(extra.busy ? { busy: extra.busy } : {}),
   });
   live.push(p);
   return { p, children, onExit };
@@ -121,5 +122,23 @@ describe('plugin process isolation lifecycle', () => {
     await ready(s);
     await vi.advanceTimersByTimeAsync(101);
     expect(s.onExit).toHaveBeenLastCalledWith({ unexpected: false });
+  });
+  it('有代理在跑时不因空闲退出，终态推给进程后重新计时', async () => {
+    vi.useFakeTimers();
+    let busy = true;
+    const s = setup({ busy: () => busy });
+    await ready(s);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(s.children[0].inbox).not.toContainEqual({ t: 'shutdown' });
+    s.p.notifyAgentRun('r1', { type: 'text', text: 'x' });
+    busy = false;
+    s.p.notifyAgentRun('r1', { type: 'end', ok: true, text: 'y' });
+    expect(s.children[0].inbox).toContainEqual({
+      t: 'agent-run',
+      runId: 'r1',
+      event: { type: 'end', ok: true, text: 'y' },
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.children[0].inbox).toContainEqual({ t: 'shutdown' });
   });
 });

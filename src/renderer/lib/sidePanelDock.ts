@@ -330,14 +330,22 @@ export function setSidePanelDesignVisible(conversationId: string, visible: boole
   pendingDesignReveal.delete(dockId);
   docks.get(dockId)?.getPanel('design')?.api.close();
 }
+/** 「右侧栏是插件 open 时才打开的」记录：只有这类侧栏才允许关页面时一并收起 */
+const pluginOpenedPanel = new Set<string>();
+
 /** Open only a Main-authorized registered view in its conversation-owned dock. */
 export function openSidePanelPluginView(opts: PluginViewReveal): void {
   const conversations = useSessionsStore.getState().conversations;
   if (!conversations[opts.conversationId]) return;
   const dockId = resolveSidePanelDockConversationId(conversations, opts.conversationId);
+  const id = `plugin:${opts.pluginId}:${opts.viewId}`;
+  const key = `${dockId}\n${id}`;
+  const panelWasOpen = useSidePanelStore.getState().uiByConversation[dockId]?.open === true;
   useSidePanelStore.getState().ensureOpen(dockId);
   const api = docks.get(dockId);
-  const id = `plugin:${opts.pluginId}:${opts.viewId}`;
+  // 用户本来就开着右侧栏时清掉旧记录，免得之后 close 收起用户自己开的栏
+  if (panelWasOpen) pluginOpenedPanel.delete(key);
+  else if (!api?.getPanel(id)) pluginOpenedPanel.add(key);
   if (!api) {
     let pending = pendingPluginViews.get(dockId);
     if (!pending) {
@@ -358,6 +366,41 @@ export function openSidePanelPluginView(opts: PluginViewReveal): void {
     component: 'plugin',
     title: opts.title,
     params: { conversationId: opts.conversationId, pluginId: opts.pluginId, viewId: opts.viewId },
+  });
+}
+
+/**
+ * 关掉本插件的侧栏页面。与 `open` 对称：
+ * - 只关 `pluginId:viewId` 这一页，别人的页面和用户自己的布局不动；
+ * - 右侧栏是为它打开的、且它仍是当前标签时一并收起；
+ * - 用户原本开着的侧栏永远不因插件 close 收起。
+ */
+export function closeSidePanelPluginView(opts: {
+  conversationId: string;
+  pluginId: string;
+  viewId: string;
+}): void {
+  const dockId = resolveSidePanelDockConversationId(
+    useSessionsStore.getState().conversations,
+    opts.conversationId
+  );
+  const id = `plugin:${opts.pluginId}:${opts.viewId}`;
+  const restore = pluginOpenedPanel.delete(`${dockId}\n${id}`);
+  const pending = pendingPluginViews.get(dockId);
+  if (pending?.delete(id) && pending.size === 0) pendingPluginViews.delete(dockId);
+  const api = docks.get(dockId);
+  const panel = api?.getPanel(id);
+  // 关之前先记下它是不是当前标签：close() 之后 activePanel 就变了
+  const active = api?.activePanel?.id === id;
+  panel?.api.close();
+  if (!restore) return;
+  // dock 还没挂载：侧栏里只可能有这个挂起的视图，可以直接收
+  if (api && (!panel || !active)) return;
+  useSidePanelStore.setState((state) => {
+    const ui = state.uiByConversation[dockId] ?? { open: true, width: state.lastWidth };
+    return ui.open
+      ? { uiByConversation: { ...state.uiByConversation, [dockId]: { ...ui, open: false } } }
+      : {};
   });
 }
 

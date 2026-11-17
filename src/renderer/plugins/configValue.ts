@@ -1,4 +1,4 @@
-import type { PluginConfigType } from '@shared/extensionPlugins/manifest';
+import { type PluginConfigType, parsePluginModelChoice } from '@shared/extensionPlugins/manifest';
 export const formatConfigValue = (value: string | number | boolean | null | undefined) =>
   value == null ? '' : String(value);
 export function coerceConfigValue(
@@ -25,6 +25,9 @@ export function coerceConfigValue(
   }
   if (field.type === 'enum' && !field.options?.includes(input))
     return { ok: false, error: 'Choose an allowed option' };
+  // 模型选择是 `<providerId>::<modelId>` 或 session/title，不能把随便一个字符串当模型存
+  if (field.type === 'model' && !parsePluginModelChoice(input))
+    return { ok: false, error: 'Choose a model from the list' };
   if (input.includes('\0') || input.length > 4096)
     return { ok: false, error: 'Invalid configuration value' };
   return { ok: true, value: input };

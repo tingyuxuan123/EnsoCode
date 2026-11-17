@@ -47,6 +47,8 @@ export type ApprovalReviewFn = (
 
 export interface ApprovalGateOptions {
   review?: ApprovalReviewFn;
+  /** 无人值守：需要人工确认的请求不建卡片、不等真人，直接按「没人能批准」拒绝 */
+  autoReject?: boolean;
   /** 受保护动作底线：开启时对外发送 / 删除 / 付款 / 部署 / 密钥类动作无视档位与会话白名单，强制真人确认 */
   protectedFloor?: boolean;
   /** bot 模式：档位为 full 时底线不生效（完全放行即真放行），按当前档位实时判断 */
@@ -97,12 +99,14 @@ export class ApprovalGate {
   /** 子会话沿用底线配置，再按自身档位判断 */
   get floorOptions(): Pick<
     ApprovalGateOptions,
-    'protectedFloor' | 'exemptFull' | 'humanTimeoutMs'
+    'protectedFloor' | 'exemptFull' | 'humanTimeoutMs' | 'autoReject'
   > {
     return {
       protectedFloor: this.options?.protectedFloor === true,
       exemptFull: this.options?.exemptFull === true,
       humanTimeoutMs: this.options?.humanTimeoutMs,
+      // 子会话沿用父会话的无人值守状态，否则子会话里仍会弹卡片等人
+      autoReject: this.options?.autoReject === true,
     };
   }
 
@@ -127,6 +131,8 @@ export class ApprovalGate {
     protectedCategory?: ProtectedActionCategory,
     context?: ApprovalReviewContext
   ): Promise<ApprovalResult> {
+    // 没人能批准：不建卡片、不进 pending，直接按拒绝收尾
+    if (this.options?.autoReject === true) return Promise.resolve('deny');
     const requestId = `apr-${this.id}-${++this.counter}`;
     const actionHash = computeApprovalActionHash({
       requestId,

@@ -1621,6 +1621,8 @@ export function registerAgentHandlers(): void {
   powerMonitor.on('resume', () => humanTimeouts.check());
 
   setAgentEventListener((workerEvent) => {
+    // Plugin side-agent output belongs only to its initiating process, never chat/history/pair.
+    if (workerEvent.type === 'plugin-agent-event') return;
     // MCP 旁路事件不属于任何会话：只转发到独立通道 / 落 token，不进 dispatch 与会话广播
     if (workerEvent.type === 'mcp-status') {
       recordMcpStatus(workerEvent);

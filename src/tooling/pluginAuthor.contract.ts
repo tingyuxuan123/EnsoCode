@@ -62,9 +62,12 @@ type PublicRpc =
   | 'ui.notify'
   | 'ui.viewEvent'
   | 'ui.viewOpen'
+  | 'ui.viewClose'
   | 'ui.statusUpdate'
   | 'ui.clipboard'
-  | 'ui.openExternal';
+  | 'ui.openExternal'
+  // cancel 不是 enso 上的方法：作者通过 signal 取消，宿主自己调用
+  | 'agent.cancel';
 type Call = Extract<MainToPluginHost, { t: 'call' }>;
 type Flatten<T> = { [K in keyof T]: T[K] };
 
@@ -94,6 +97,7 @@ export type AuthorContract = [
       | 'session'
       | 'host'
       | 'browser'
+      | 'agent'
     >
   >,
   Check<Equal<keyof PluginMainApi['tools'], 'register'>>,

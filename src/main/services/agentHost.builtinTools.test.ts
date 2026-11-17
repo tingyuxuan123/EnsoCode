@@ -355,6 +355,29 @@ it('session bridge replays registration, resolves exact live identity and forwar
   });
   expect(liveBridge.abort(identity.sessionId)).toEqual({ ok: true });
   expect(worker.posted.at(-1)).toEqual({ type: 'abort', identity });
+  expect(liveBridge.generation?.(identity.sessionId)).toBe(identity.generation);
+  expect(liveBridge.generation?.('missing')).toBeUndefined();
+  const runInput = { prompt: 'x', context: 'none' as const, timeoutMs: 60_000 };
+  expect(
+    liveBridge.agentRun?.(identity.sessionId, { ...runInput, generation: 'older' }, () => {})
+  ).toMatchObject({ ok: false });
+  expect(worker.posted.some((c) => c.type === 'plugin-agent-run')).toBe(false);
+  const started = liveBridge.agentRun?.(
+    identity.sessionId,
+    { ...runInput, generation: identity.generation },
+    () => {}
+  );
+  expect(started).toMatchObject({ ok: true });
+  expect(worker.posted.at(-1)).toMatchObject({
+    type: 'plugin-agent-run',
+    identity,
+    prompt: 'x',
+    context: 'none',
+    timeoutMs: 60_000,
+  });
+  expect(worker.posted.at(-1)).not.toHaveProperty('generation');
+  if (started?.ok) started.cancel();
+  expect(worker.posted.at(-1)).toMatchObject({ type: 'plugin-agent-cancel' });
   stopAgentWorker();
 });
 

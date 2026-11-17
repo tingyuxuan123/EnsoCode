@@ -126,6 +126,33 @@ const toolCall = (
     projectRoot: null,
   });
 describe('desktop plugin service', () => {
+  it('重启读取 v2 后可管理原插件，写回仍保留 v2、来源和授权', async () => {
+    const { service: installed, root } = setup();
+    await install(installed);
+    await installed.setEnabled('enso.test', false);
+    await installed.dispose();
+    const path = join(root, 'registry.json');
+    const file = JSON.parse(readFileSync(path, 'utf8'));
+    file.version = 2;
+    file.plugins[0].source = { kind: 'market', id: 'enso.test' };
+    const text = JSON.stringify(file);
+    writeFileSync(path, text);
+
+    const { service: restored } = setup(root);
+    expect(restored.list().registryError).toBeUndefined();
+    expect(restored.list().plugins).toMatchObject([
+      { id: 'enso.test', state: 'disabled', source: { kind: 'market' } },
+    ]);
+    expect(readFileSync(path, 'utf8')).toBe(text);
+    expect(await restored.setEnabled('enso.test', true)).toEqual({ ok: true });
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+      version: 2,
+      plugins: [{ ...file.plugins[0], state: 'enabled' }],
+    });
+    const { service: restarted } = setup(root);
+    expect(restarted.list().registryError).toBeUndefined();
+    expect(restarted.list().plugins).toMatchObject([{ id: 'enso.test', state: 'enabled' }]);
+  });
   it('损坏登记表拒绝全部写操作，不覆盖原件', async () => {
     const root = temp();
     writeFileSync(join(root, 'registry.json'), '{bad');

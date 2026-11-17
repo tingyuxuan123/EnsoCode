@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "collabra.verify.agent",
+  "name": "Readonly agent verification",
+  "version": "1.0.0",
+  "description": "仅供隔离开发验收，不安装到正式应用。",
+  "main": "main.mjs",
+  "permissions": ["agent.run", "ui.view"],
+  "contributes": {
+    "views": [{ "id": "proof", "title": "Readonly agent proof", "entry": "view.html" }],
+    "configuration": [
+      { "key": "model", "title": "Verification model", "type": "model", "default": "session" }
+    ],
+    "methods": [
+      { "name": "start", "timeoutMs": 10000 },
+      { "name": "result", "timeoutMs": 10000 },
+      { "name": "cancel", "timeoutMs": 10000 },
+      { "name": "open", "timeoutMs": 15000 },
+      { "name": "close", "timeoutMs": 15000 }
+    ]
+  }
+}

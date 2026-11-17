@@ -47,12 +47,17 @@ import {
   type PluginInterceptEvent,
 } from '../extensionPlugins/events';
 import {
+  PLUGIN_AGENT_MAX_TIMEOUT_MS,
+  PLUGIN_AGENT_PROMPT_MAX_CHARS,
+  PLUGIN_AGENT_SYSTEM_MAX_CHARS,
   PLUGIN_INJECT_MAX_CHARS,
   PLUGIN_PROGRESS_MAX_CHARS,
+  type PluginAgentRunEvent,
   type PluginAgentSource,
   type PluginArtifactInfo,
   type PluginInjectImage,
   type PluginMessageSource,
+  parsePluginAgentRunEvent,
   parsePluginAgentSource,
   parsePluginInjectImages,
   parsePluginMessageSource,
@@ -1517,6 +1522,17 @@ export type AgentCommand =
       args: Record<string, unknown>;
     }
   | { type: 'plugin-mcp-cancel'; identity: SessionIdentity; requestId: string }
+  | {
+      type: 'plugin-agent-run';
+      requestId: string;
+      identity: SessionIdentity;
+      prompt: string;
+      systemPrompt?: string;
+      context: 'conversation' | 'fork' | 'none';
+      timeoutMs: number;
+      model?: SpawnModelConfig;
+    }
+  | { type: 'plugin-agent-cancel'; requestId: string }
   /** 运行中同步代理 env；null 表示删除该键 */
   | { type: 'set-proxy-env'; env: Record<string, string | null> }
   | { type: 'design-canvas'; cwds: string[] };
@@ -1867,6 +1883,7 @@ export type RendererAgentEvent =
       | McpWorkerEvent
       | WorkspaceLockEvent
       | { type: 'plugin-mcp-result' }
+      | { type: 'plugin-agent-event' }
       | { type: 'oauth-pool-select' }
       | Extract<
           AgentWorkerEvent,
@@ -2263,7 +2280,8 @@ export type AgentWorkerEvent =
   | McpWorkerEvent
   /** sessionId：targeted 快照回带请求目标；sessions 为空时 renderer 据此收回 started */
   | { type: 'snapshot'; sessions: SessionSnapshot[]; partial?: boolean; sessionId?: string }
-  | { type: 'session-reloaded'; requestId: string; result: SessionReloadResult };
+  | { type: 'session-reloaded'; requestId: string; result: SessionReloadResult }
+  | { type: 'plugin-agent-event'; requestId: string; event: PluginAgentRunEvent };
 
 /** MCP 连接旁路事件：无 identity/seq，不属于任何会话，Main 走独立 IPC 通道转发 */
 export type McpWorkerEvent =
@@ -4293,6 +4311,37 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         isNonEmptyString(value.requestId)
         ? (value as unknown as AgentCommand)
         : null;
+    case 'plugin-agent-run':
+      return hasOnlyKeys(value, [
+        'type',
+        'requestId',
+        'identity',
+        'prompt',
+        'systemPrompt',
+        'context',
+        'timeoutMs',
+        'model',
+      ]) &&
+        isNonEmptyString(value.requestId) &&
+        parseSessionIdentity(value.identity) &&
+        isNonEmptyString(value.prompt) &&
+        value.prompt.length <= PLUGIN_AGENT_PROMPT_MAX_CHARS &&
+        (value.systemPrompt === undefined ||
+          (typeof value.systemPrompt === 'string' &&
+            value.systemPrompt.length <= PLUGIN_AGENT_SYSTEM_MAX_CHARS)) &&
+        (value.context === 'conversation' ||
+          value.context === 'fork' ||
+          value.context === 'none') &&
+        Number.isInteger(value.timeoutMs) &&
+        (value.timeoutMs as number) > 0 &&
+        (value.timeoutMs as number) <= PLUGIN_AGENT_MAX_TIMEOUT_MS &&
+        (value.model === undefined || parseSpawnModelConfig(value.model) !== null)
+        ? (value as unknown as AgentCommand)
+        : null;
+    case 'plugin-agent-cancel':
+      return hasExactKeys(value, ['type', 'requestId']) && isNonEmptyString(value.requestId)
+        ? { type: 'plugin-agent-cancel', requestId: value.requestId }
+        : null;
     case 'set-proxy-env': {
       if (!hasExactKeys(value, ['type', 'env']) || !isRecord(value.env)) return null;
       for (const entry of Object.values(value.env)) {
@@ -4405,6 +4454,12 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         : value.ok === false && isNonEmptyString(value.error))
       ? (value as unknown as AgentWorkerEvent)
       : null;
+  }
+  if (value.type === 'plugin-agent-event') {
+    if (!hasExactKeys(value, ['type', 'requestId', 'event']) || !isNonEmptyString(value.requestId))
+      return null;
+    const event = parsePluginAgentRunEvent(value.event);
+    return event ? { type: 'plugin-agent-event', requestId: value.requestId, event } : null;
   }
   if (value.type === 'session-reloaded') {
     if (

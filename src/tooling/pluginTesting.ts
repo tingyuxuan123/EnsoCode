@@ -24,7 +24,8 @@ export const PLUGIN_TESTING_SOURCE = `export async function mountMain(activate, 
     renderer: { handle: register('methods') }, exports: { handle: register('exports') },
     triggers: { register: register('triggers') },
     config: { get: api('config.get') },
-    ui: { notify: api('ui.notify'), view: { emit: api('ui.view.emit'), open: api('ui.view.open') },
+    ui: { notify: api('ui.notify'), view: { emit: api('ui.view.emit'), open: api('ui.view.open'),
+      close: api('ui.view.close') },
       status: { update: api('ui.status.update') }, clipboard: { writeText: api('ui.clipboard.writeText') },
       openExternal: api('ui.openExternal') },
     fs: { readText: api('fs.readText'), writeText: api('fs.writeText') },
@@ -32,6 +33,7 @@ export const PLUGIN_TESTING_SOURCE = `export async function mountMain(activate, 
     session: Object.fromEntries(['messages','inject','abort','list','status','focus','create'].map(k => [k,api('session.'+k)])),
     composer: Object.fromEntries(['readDraft','insertText','replaceDraft'].map(k => [k,api('composer.'+k)])),
     mcp: { tools: api('mcp.tools'), call: api('mcp.call') },
+    agent: { run: api('agent.run') },
     plugins: { call: api('plugins.call') }, host: { capabilities: api('host.capabilities') }
   };
   await activate(enso);

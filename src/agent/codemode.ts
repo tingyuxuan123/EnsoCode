@@ -97,6 +97,24 @@ export function withCodemodeTimeout(code: string): string {
 export const isDeferredMcp = (server: McpServerSpawnConfig): boolean =>
   server.loadMode === 'deferred';
 
+/** Shared by the session hook and readonly forks, which invoke tools outside that hook. */
+export function prepareCodemodeInput(
+  input: Record<string, unknown>
+): { block: true; reason: string } | undefined {
+  const code = typeof input.code === 'string' ? input.code : '';
+  if (looksLikeShellCommand(code))
+    return {
+      block: true,
+      reason: 'codemode expects JavaScript, not a shell command. Use bash for shell.',
+    };
+  if (looksLikeApplyPatchDocument(code))
+    return {
+      block: true,
+      reason: 'codemode expects JavaScript, not an apply_patch document. Use apply_patch.',
+    };
+  if (code) input.code = withCodemodeTimeout(code);
+}
+
 /** 按需服务器清单（system prompt 段）：工具名来自 Main 缓存，可能过期 */
 export function renderMcpServersSection(
   servers: readonly McpServerSpawnConfig[],
@@ -231,22 +249,9 @@ export class CodemodeHost {
     }
 
     pi.on('tool_call', async (event) => {
-      const input = event.input as Record<string, unknown>;
       if (event.toolName === CODEMODE_TOOL_NAME) {
-        const code = typeof input.code === 'string' ? input.code : '';
-        if (looksLikeShellCommand(code)) {
-          return {
-            block: true,
-            reason: 'codemode expects JavaScript, not a shell command. Use bash for shell.',
-          };
-        }
-        if (looksLikeApplyPatchDocument(code)) {
-          return {
-            block: true,
-            reason: 'codemode expects JavaScript, not an apply_patch document. Use apply_patch.',
-          };
-        }
-        if (code) input.code = withCodemodeTimeout(code);
+        const blocked = prepareCodemodeInput(event.input as Record<string, unknown>);
+        if (blocked) return blocked;
       }
       if (event.toolName === CODEMODE_TOOL_NAME || event.toolName === TOOL_SEARCH_TOOL_NAME) {
         await this.ensureDeferredTools(pi);

@@ -55,6 +55,94 @@ const valid: PluginRecord = {
   installedAt: 1,
 };
 describe('原子私有插件登记表', () => {
+  // 真实场景：上游写入 v2，本 fork 只认 v1，完整的旧插件被误判损坏。
+  it('读取上游 v2 登记表保留插件、待批准授权与来源，不改写原件或创建损坏备份', () => {
+    const root = temp();
+    const plugins = [
+      {
+        ...valid,
+        state: 'enabled',
+        crossSessionInject: true,
+        grant: { ...valid.grant, styles: true },
+        pending: { version: '2', dir: 'next', grant: { ...valid.grant, resident: true } },
+        source: { kind: 'market', id: valid.id },
+      },
+      { ...valid, id: 'enso.second', crossSessionInject: false, state: 'crashed' },
+    ];
+    const text = JSON.stringify({ version: 2, plugins });
+    writeFileSync(join(root, 'registry.json'), text);
+    const result = readRegistry(root);
+    expect(result.error).toBeUndefined();
+    expect(result.version).toBe(2);
+    expect(result.plugins).toEqual(plugins);
+    expect(readFileSync(join(root, 'registry.json'), 'utf8')).toBe(text);
+    expect(readdirSync(root)).toEqual(['registry.json']);
+  });
+  it('上游 v2 缺少后加的样式和浏览器授权时按未授权读取，也处理待批准版本', () => {
+    const root = temp();
+    const { styles: _styles, browserDomains: _browser, ...legacyGrant } = valid.grant;
+    const plugin = {
+      ...valid,
+      crossSessionInject: false,
+      grant: legacyGrant,
+      pending: { version: '2', dir: 'pending', grant: legacyGrant },
+    };
+    writeFileSync(join(root, 'registry.json'), JSON.stringify({ version: 2, plugins: [plugin] }));
+    const result = readRegistry(root);
+    expect(result.error).toBeUndefined();
+    expect(result.plugins).toEqual([
+      {
+        ...plugin,
+        grant: { ...legacyGrant, styles: false, browserDomains: [] },
+        pending: {
+          ...plugin.pending,
+          grant: { ...legacyGrant, styles: false, browserDomains: [] },
+        },
+      },
+    ]);
+  });
+  it('读取和写入 v2 仍拒绝坏授权、危险路径和重复记录并保留原件', () => {
+    const root = temp();
+    const plugin = { ...valid, crossSessionInject: false };
+    const invalidGrants = [
+      { ...valid.grant, permissions: ['root'] },
+      { ...valid.grant, env: 'HOME' },
+      { ...valid.grant, interop: [7] },
+      { ...valid.grant, intercepts: null },
+      { ...valid.grant, resident: 'true' },
+      { ...valid.grant, styles: 'true' },
+      { ...valid.grant, mcpTools: undefined },
+    ];
+    const invalidLists = [
+      ...invalidGrants.map((grant) => [{ ...plugin, grant }]),
+      [{ ...plugin, crossSessionInject: undefined }],
+      [{ ...plugin, crossSessionInject: 'true' }],
+      [{ ...plugin, dir: '../outside' }],
+      [{ ...plugin, source: { kind: 'market', id: valid.id, marketId: 'Bad!' } }],
+      [{ ...plugin, pending: { version: '2', dir: 'next', grant: invalidGrants[1] } }],
+      [plugin, plugin],
+    ];
+    for (const plugins of invalidLists) {
+      const text = JSON.stringify({ version: 2, plugins });
+      writeFileSync(join(root, 'registry.json'), text);
+      const result = readRegistry(root);
+      expect(result.error).toContain('只读');
+      expect(result.plugins).toEqual([]);
+      expect(readFileSync(join(root, 'registry.json'), 'utf8')).toBe(text);
+      expect(readFileSync(result.backupPath!, 'utf8')).toBe(text);
+      expect(() => writeRegistry(root, JSON.parse(text))).toThrow();
+      expect(readFileSync(join(root, 'registry.json'), 'utf8')).toBe(text);
+    }
+  });
+  it('v2 可以原子读写且不降级格式版本，未知版本写入不覆盖原件', () => {
+    const root = temp();
+    const file = { version: 2 as const, plugins: [{ ...valid, crossSessionInject: false }] };
+    expect(() => writeRegistry(root, file)).not.toThrow();
+    expect(readRegistry(root)).toEqual(file);
+    const text = readFileSync(join(root, 'registry.json'), 'utf8');
+    expect(() => writeRegistry(root, { ...file, version: 3 as never })).toThrow();
+    expect(readFileSync(join(root, 'registry.json'), 'utf8')).toBe(text);
+  });
   it('roundtrips validated sources and refuses malformed authority metadata', () => {
     const root = temp();
     const record = {
@@ -125,7 +213,7 @@ describe('原子私有插件登记表', () => {
   it('损坏或不支持的登记表保留原件并备份，缺失不是损坏', () => {
     const root = temp();
     expect(readRegistry(root).error).toBeUndefined();
-    for (const text of ['{broken', JSON.stringify({ version: 2, plugins: [] })]) {
+    for (const text of ['{broken', JSON.stringify({ version: 3, plugins: [] })]) {
       writeFileSync(join(root, 'registry.json'), text);
       const result = readRegistry(root);
       expect(result.error).toContain('只读');
@@ -168,7 +256,7 @@ describe('原子私有插件登记表', () => {
       plugins: [],
       error: expect.stringContaining('只读'),
     });
-    writeFileSync(join(root, 'registry.json'), JSON.stringify({ version: 2, plugins: [valid] }));
+    writeFileSync(join(root, 'registry.json'), JSON.stringify({ version: 3, plugins: [valid] }));
     expect(readRegistry(root).plugins).toEqual([]);
   });
   it('拒绝目标链接且不读取/改写链接源，不使用可预测tmp', () => {

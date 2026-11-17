@@ -16,6 +16,11 @@ import {
 import { hasPluginMcpGrant, isPluginMcpServerName } from '@shared/extensionPlugins/mcpGrant';
 import { parsePluginPresetId } from '@shared/extensionPlugins/preset';
 import {
+  PLUGIN_AGENT_DEFAULT_TIMEOUT_MS,
+  PLUGIN_AGENT_MAX_TIMEOUT_MS,
+  PLUGIN_AGENT_PROMPT_MAX_CHARS,
+  PLUGIN_AGENT_RUN_ID,
+  PLUGIN_AGENT_SYSTEM_MAX_CHARS,
   PLUGIN_INJECT_MAX_CHARS,
   type PluginAgentSource,
   type PluginArtifactInfo,
@@ -25,6 +30,7 @@ import {
   parsePluginInjectImages,
 } from '@shared/extensionPlugins/protocol';
 import { parseStatusPatch, type StatusPatch } from '@shared/extensionPlugins/statusItems';
+import type { SpawnModelConfig } from '@shared/types/agent';
 import { pluginError } from './process';
 
 export const GESTURE_TTL_MS = 30_000;
@@ -59,7 +65,8 @@ export type SessionUiOp =
   | 'openChildRun'
   | 'createSession'
   | 'ensureSession'
-  | 'openPluginView';
+  | 'openPluginView'
+  | 'closePluginView';
 
 /** 插件看到的会话：只有标识与展示字段，不含路径 */
 export interface PluginSessionInfo {
@@ -106,6 +113,8 @@ export interface GateDeps {
   fetch(url: string, init: RequestInit): Promise<Response>;
   /** 不支持系统通知时返回 false */
   notify(title: string, body: string): boolean;
+  /** 会话被用户静音：系统通知不弹，仍按成功返回 */
+  sessionMuted?(sessionId: string): boolean;
   composer(
     target: ComposerTarget,
     op: ComposerOp,
@@ -148,6 +157,16 @@ export interface GateDeps {
   ): { ok: true } | { ok: false; error: string; notRunning?: boolean };
   /** 让发起窗口启动没在运行的会话（有历史就恢复）；就绪与否由注入重试判断 */
   wakeSession?(sessionId: string, origin: number | null): Promise<void>;
+  /** Main 权威：按会话 id 取当前代次；只给 id，不接受界面传值 */
+  currentSessionGeneration?(sessionId: string): string | undefined;
+  /** 在会话旁启动只读代理；进度与终态由服务推给插件进程 */
+  agentRun?(pluginId: string, input: PluginAgentRunRequest): SessionAttempt;
+  /** 按用户在插件设置里选的模型解析代理模型；缺省表示跟随发起会话 */
+  agentModel?(
+    pluginId: string
+  ): Promise<{ ok: true; model?: SpawnModelConfig } | { ok: false; error: string }>;
+  /** 取消本插件的代理；没有这个代理返回 false */
+  agentCancel?(pluginId: string, runId: string): boolean;
   abort?(pluginId: string, sessionId: string): { ok: true } | { ok: false; error: string };
   callPlugin?(
     callerId: string,
@@ -178,6 +197,20 @@ export interface GateDeps {
     op: SessionUiOp,
     payload: Record<string, unknown>
   ): Promise<unknown>;
+}
+
+export type SessionAttempt = { ok: true } | { ok: false; error: string; notRunning?: boolean };
+
+export interface PluginAgentRunRequest {
+  runId: string;
+  sessionId: string;
+  /** 发起调用的会话代次；Main 在下发前必须与最新 lookup 精确比对 */
+  generation: string;
+  prompt: string;
+  systemPrompt?: string;
+  context: 'conversation' | 'fork' | 'none';
+  timeoutMs: number;
+  model?: SpawnModelConfig;
 }
 
 export interface InvocationInit {
@@ -457,6 +490,8 @@ export class PluginHostGate {
         if (typeof a.title !== 'string' || a.title.length === 0 || a.title.length > 200)
           throw pluginError('INVALID_ARGS', 'title 不合法');
         const body = typeof a.body === 'string' ? a.body.slice(0, 1000) : '';
+        const sessionId = this.invocations.get(invocationId)?.sessionId;
+        if (sessionId && this.deps.sessionMuted?.(sessionId)) return null;
         if (!this.deps.notify(a.title, body))
           throw pluginError('UNSUPPORTED', '当前环境不支持系统通知');
         return null;
@@ -492,7 +527,8 @@ export class PluginHostGate {
         this.deps.statusUpdate(pluginId, id, patch);
         return null;
       }
-      case 'ui.viewOpen': {
+      case 'ui.viewOpen':
+      case 'ui.viewClose': {
         permit('ui.view');
         const inv = invocation();
         const current = sessionOf(inv);
@@ -520,11 +556,14 @@ export class PluginHostGate {
             targetSessionId = candidate;
           }
         }
-        await sessionUi()(
-          { sessionId: targetSessionId, origin: inv.origin ?? null },
-          'openPluginView',
-          { pluginId, viewId: view.id, title: view.title }
-        );
+        const target = { sessionId: targetSessionId, origin: inv.origin ?? null };
+        if (api === 'ui.viewOpen')
+          await sessionUi()(target, 'openPluginView', {
+            pluginId,
+            viewId: view.id,
+            title: view.title,
+          });
+        else await sessionUi()(target, 'closePluginView', { pluginId, viewId: view.id });
         return null;
       }
       case 'composer.readDraft':
@@ -621,23 +660,81 @@ export class PluginHostGate {
           deliverAs,
           triggerTurn: a.triggerTurn === true,
         };
-        let result = bridge(pluginId, input);
-        if (!result.ok && result.notRunning && this.deps.wakeSession) {
-          try {
-            await this.deps.wakeSession(sessionId, injectInv?.origin ?? null);
-          } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error);
-            throw pluginError('INJECT_FAILED', `${result.error}，启动失败：${reason}`);
-          }
-          const deadline = this.deps.now() + WAKE_READY_MS;
-          while (!result.ok && result.notRunning && this.deps.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, WAKE_POLL_MS));
-            result = bridge(pluginId, input);
-          }
-        }
+        const result = await this.untilRunning(
+          () => bridge(pluginId, input),
+          sessionId,
+          injectInv?.origin ?? null,
+          'INJECT_FAILED'
+        );
         if (!result.ok) throw pluginError('INJECT_FAILED', result.error);
         return null;
       }
+      case 'agent.run': {
+        permit('agent.run');
+        const inv = invocation();
+        const sessionId = sessionOf(inv);
+        // 已绑定的代次必须严格一致；缺代次（冷/已释放会话）先唤醒再由 Main 权威确认
+        const pinnedGeneration = inv.sessionGeneration;
+        if (typeof a.runId !== 'string' || !PLUGIN_AGENT_RUN_ID.test(a.runId))
+          throw pluginError('INVALID_ARGS', 'runId 不合法');
+        if (
+          typeof a.prompt !== 'string' ||
+          !a.prompt.trim() ||
+          a.prompt.length > PLUGIN_AGENT_PROMPT_MAX_CHARS
+        )
+          throw pluginError('INVALID_ARGS', 'prompt 不合法或超过 64K 字符');
+        if (
+          a.systemPrompt !== undefined &&
+          (typeof a.systemPrompt !== 'string' ||
+            a.systemPrompt.length > PLUGIN_AGENT_SYSTEM_MAX_CHARS)
+        )
+          throw pluginError('INVALID_ARGS', 'systemPrompt 不合法或超过 32K 字符');
+        const context = a.context ?? 'none';
+        if (context !== 'conversation' && context !== 'fork' && context !== 'none')
+          throw pluginError('INVALID_ARGS', 'context 只能是 conversation、fork 或 none');
+        const timeoutMs = a.timeoutMs ?? PLUGIN_AGENT_DEFAULT_TIMEOUT_MS;
+        if (
+          typeof timeoutMs !== 'number' ||
+          !Number.isInteger(timeoutMs) ||
+          timeoutMs < 10_000 ||
+          timeoutMs > PLUGIN_AGENT_MAX_TIMEOUT_MS
+        )
+          throw pluginError('INVALID_ARGS', 'timeoutMs 须是 10 秒到 20 分钟的整数毫秒');
+        const run = this.deps.agentRun;
+        if (!run) throw pluginError('UNSUPPORTED', '当前环境不能运行代理');
+        const picked = (await this.deps.agentModel?.(pluginId)) ?? { ok: true };
+        if (!picked.ok) throw pluginError('AGENT_FAILED', picked.error);
+        // 等模型选择期间调用可能已被取消；不登记就不会占配额
+        if (inv.cancelled) throw pluginError('ABORTED', '调用已取消');
+        const generation = pinnedGeneration ?? (await this.ensureSessionGeneration(sessionId, inv));
+        if (inv.cancelled) throw pluginError('ABORTED', '调用已取消');
+        const input: PluginAgentRunRequest = {
+          runId: a.runId,
+          sessionId,
+          generation,
+          prompt: a.prompt,
+          ...(a.systemPrompt ? { systemPrompt: a.systemPrompt } : {}),
+          context,
+          timeoutMs,
+          ...(picked.model ? { model: picked.model } : {}),
+        };
+        const result = await this.untilRunning(
+          () => {
+            if (inv.cancelled) throw pluginError('ABORTED', '调用已取消');
+            return run(pluginId, input);
+          },
+          sessionId,
+          inv.origin ?? null,
+          'AGENT_FAILED'
+        );
+        if (!result.ok) throw pluginError('AGENT_FAILED', result.error);
+        return null;
+      }
+      case 'agent.cancel':
+        permit('agent.run');
+        if (typeof a.runId !== 'string' || !PLUGIN_AGENT_RUN_ID.test(a.runId))
+          throw pluginError('INVALID_ARGS', 'runId 不合法');
+        return this.deps.agentCancel?.(pluginId, a.runId) ?? false;
       case 'session.abort': {
         permit('agent.inject');
         const sessionId = this.targetSession(pluginId, a, optionalInvocation());
@@ -887,6 +984,54 @@ export class PluginHostGate {
       ...(inv.sessionGeneration ? { sessionGeneration: inv.sessionGeneration } : {}),
       ...(inv.agent ? { agent: inv.agent } : {}),
     };
+  }
+
+  /** 会话没在运行时让发起窗口拉起它（有历史就恢复），再在就绪期限内重试 */
+  /** 缺代次：先请发起窗口启动，再向 Main 权威轮询新代次；界面传值不参与 */
+  private async ensureSessionGeneration(sessionId: string, inv: Invocation): Promise<string> {
+    const resolve = this.deps.currentSessionGeneration;
+    if (!resolve) throw pluginError('UNSUPPORTED', '当前环境不能确认会话代次');
+    const current = resolve(sessionId);
+    if (current) return current;
+    const wake = this.deps.wakeSession;
+    if (!wake) throw pluginError('AGENT_FAILED', '会话没在运行，且当前环境不能启动会话');
+    try {
+      await wake(sessionId, inv.origin ?? null);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw pluginError('AGENT_FAILED', `会话启动失败：${reason}`);
+    }
+    const deadline = this.deps.now() + WAKE_READY_MS;
+    for (;;) {
+      if (inv.cancelled) throw pluginError('ABORTED', '调用已取消');
+      const generation = resolve(sessionId);
+      if (generation) return generation;
+      if (this.deps.now() >= deadline) break;
+      await new Promise((resolveWait) => setTimeout(resolveWait, WAKE_POLL_MS));
+    }
+    throw pluginError('AGENT_FAILED', '会话没能就绪，无法确认代次');
+  }
+
+  private async untilRunning(
+    attempt: () => SessionAttempt,
+    sessionId: string,
+    origin: number | null,
+    code: string
+  ): Promise<SessionAttempt> {
+    let result = attempt();
+    if (result.ok || !result.notRunning || !this.deps.wakeSession) return result;
+    try {
+      await this.deps.wakeSession(sessionId, origin);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw pluginError(code, `${result.error}，启动失败：${reason}`);
+    }
+    const deadline = this.deps.now() + WAKE_READY_MS;
+    while (!result.ok && result.notRunning && this.deps.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, WAKE_POLL_MS));
+      result = attempt();
+    }
+    return result;
   }
 
   /** 相对项目根解析；先 realpath，再确认仍在授权范围内，不能借符号链接逃出 */

@@ -1,5 +1,9 @@
 import { useEffect } from 'react';
-import { addSidePanelSubagent, openSidePanelPluginView } from '@/lib/sidePanelDock';
+import {
+  addSidePanelSubagent,
+  closeSidePanelPluginView,
+  openSidePanelPluginView,
+} from '@/lib/sidePanelDock';
 import { resolveSubagentTarget } from '@/lib/subagentTargets';
 import { useSessionsStore } from '@/stores/sessions';
 import { displayedConversationId } from '@/stores/sessions/chatChrome';
@@ -107,6 +111,7 @@ export function PluginUiHost() {
           'createSession',
           'ensureSession',
           'openPluginView',
+          'closePluginView',
         ].includes(request.op)
       ) {
         void handleSessionRequest(request as SessionRequest, {
@@ -170,6 +175,8 @@ export function PluginUiHost() {
             openSidePanelPluginView({ conversationId: sessionId, ...view, title: known.title });
             return true;
           },
+          closePluginView: (sessionId, view) =>
+            closeSidePanelPluginView({ conversationId: sessionId, ...view }),
         })
           .catch((error: unknown) => ({
             ok: false as const,

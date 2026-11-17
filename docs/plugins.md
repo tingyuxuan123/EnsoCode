@@ -83,6 +83,7 @@ my-snippets/
 卸载会删除插件安装副本、私有数据及配置。停用/卸载立即撤销宿主挂点、补全、侧栏桥及旧渲染 API。
 插件必须自行在卸载清理函数里撤销它直接创建的监听器、计时器等；宿主无法把任意同权代码变成沙箱。
 登记表缺失视为首次安装；已存在但损坏/无法读取（包括单条记录无效或重复）时不覆盖原件，能安全读取的内容按内容哈希备份为 `.corrupt` 文件：相同内容只备份一次，最多保留最近 5 份。插件管理进入只读并在设置页显示错误及恢复提示，拒绝安装、启停、卸载及配置写入，需人工恢复后重启。
+登记表兼容本 fork 的 v1 与上游 enso 的 v2 格式：读取时不改写磁盘，后续写回保留原版本；v2 记录缺少 `styles` / `browserDomains` 时按未授权读取，未知版本、坏记录或重复记录仍进入上面的只读状态。
 
 ## 清单
 
@@ -121,7 +122,7 @@ my-snippets/
 | `contributes.mcpServers` | `{name, command, args, env}` stdio 服务；需 `mcp.server`；支持 `${ENSO_PLUGIN_ROOT}` 占位符 |
 | `contributes.presets` | `{id, name, skills, mcpServers, workflows?, agentTypes?, instruction?, systemPrompt?, systemPromptTail?, boostPrompt?, refusalRetryPrompt?, refusalRetry?, model?, thinkingLevel?, approvalMode?, disabledTools?}`，仅引用本插件资源；正文为 Markdown 相对路径；审批取更严档位 |
 | `contributes.methods` | `{name, timeoutMs}`；renderer 方法超时 1000–120000ms，未声明默认 2000ms |
-| `contributes.configuration` | `{key, title, type?, description?, secret?, default?, multiline?, options?, min?, max?, pathKind?}`，支持 string/number/boolean/enum/path；缺省 string，secret 仅 string；最多 20 项 |
+| `contributes.configuration` | `{key, title, type?, description?, secret?, default?, multiline?, options?, min?, max?, pathKind?}`，支持 string/number/boolean/enum/path/model；缺省 string，secret 仅 string；最多 20 项；model 每插件最多一个，默认只接受 session/title |
 | `contributes.commands` | `{id, title, key?}`，输入框 `/` 菜单与快捷键；用户可改键，内置快捷键优先 |
 | `contributes.statusItems` | `{id, text, tooltip?, command?}`，输入框底栏状态项，最多 8 项，可动态更新 |
 | `contributes.fileViewers` | `{id, title, entry, extensions, default?}`，按扩展名在文件侧栏沙箱查看文本；需 `ui.view` |
@@ -158,12 +159,28 @@ MCP 服务名由宿主增加插件命名空间。同类贡献 id/name 不能重�
 `session.list/status/focus/focusSubagent/openChildRun/create` 只使用会话标识；跨项目列表需 `session.readAll`，切换/创建遵守对应授权与真实用户操作。创建时 `presetId` 只能引用本插件预设。
 `session.inject({text,images?,sessionId?,deliverAs?,triggerTurn?})` 与 `session.abort(sessionId?)` 需要 `agent.inject`；注入最多 4 张支持格式图片。跨会话注入必须由用户额外同意；空闲会话可由真实窗口启动后接收，不能把 UI 乐观显示当执行成功。
 
+### 插件只读代理
+
+`enso.agent.run({prompt,systemPrompt?,context?,timeoutMs?,onEvent?,signal?})` 需要独立的 `agent.run` 权限，在发起调用的本机主会话旁运行临时只读代理，返回 `Promise<{text,model?}>`。仅允许实际执行 `read/grep/find/ls`；不加载项目/全局包、扩展、技能、插件工具、MCP 或 hooks。需要人工批准的读取直接拒绝，不弹审批卡。插件代码本身仍是同权代码，这不是 Node 插件沙箱。
+
+- 必须在有会话的宿主调用中发起；冷会话经发起窗口唤醒并由 Main 取得实际代次，已绑定的旧代调用不能静默改投新代。SSH、Bot/成员、归档/结束会话等沿既有插件准入规则拒绝。
+- 记录只在内存，不创建 jsonl、不进入父会话正文/子代理树；运行可超过发起方法时长，插件停用、进程退出或 worker 退出时取消。每插件最多同时 2 个。
+- `prompt` ≤64K 字符，`systemPrompt` ≤32K 字符；后者作为 `<role>` 加在任务前。`timeoutMs` 是 10 秒–20 分钟的整数，默认 10 分钟。
+- `context: 'none'`（默认）不带对话；`conversation` 附最近 40 条对话文本；`fork` 保留最近实际请求的系统提示、消息和工具声明，以复用相同前缀。非只读声明只为保留前缀，调用必拒；`codemode` 只有其所有可调用的嵌套工具都只读时才允许。无可用前缀、指定其他模型或父会话模型已改变时退为 conversation，不保证供应商实际缓存命中。
+- `onEvent` 收到 `tool-start {id,name,args,parentId?}`、`tool-end {id,isError,output?}` 与 `text {text}`；args/output 各截到 4K，text 为节流后的当前完整正文（不是增量）。最终正文最多 64K 字符。
+- `signal` 取消以 `ABORTED` 拒绝，超时/模型失败/无回复以 `AGENT_FAILED` 拒绝。取消在启动 ACK 之前到达也会在登记后补发，迟到事件不再交给回调。
+- 模型不能由插件在调用里任意指定。清单可声明一个 `type: 'model'` 配置：`session` 跟随会话，`title` 依次取标题模型/全局默认/会话，或由用户在扩展配置选择 `<providerId>::<modelId>`。Main 解析模型和凭证，密钥不发给插件或 Renderer；指定模型不可用明确失败。
+
+隔离验收 fixture：[`test/fixtures/plugin-agent-run`](../test/fixtures/plugin-agent-run)，双厂商验收脚本：`scripts/verify-plugin-agent-run.mjs`（须显式启用真实模型调用，不可连正式 profile）。
+
 声明 `resident` / `process.background` 后可常驻；定时任务用 `schedules.register(id,handler)`。常驻进程可按授权更新状态项、侧栏事件，不能因此取得草稿或文件写入会话上下文。停用、更新和退出会取消调用并收敛进程树；更新等旧进程退出后才启动新版本。
 
 ### 状态项、侧栏事件和文件查看器
 
 `ui.status.update(id,{text?,tooltip?,tone?,visible?})` 更新本插件声明的底栏状态项，可关联本插件命令；状态只在内存保留。
 `ui.view.open(viewId?)` 打开/聚焦已声明侧栏，`ui.view.emit(name,data?)` 向本插件已打开页面推送事件；常驻和定时任务也可发送。需 `ui.view`，每条数据最多 256KB，与状态更新共享每秒 20 次限流；没打开的页面不缓存事件。
+
+`ui.view.close(viewId?)` 对称关闭当前会话里本插件已声明的视图（默认首个视图），不能关闭其他插件/内置页面。仅当侧栏原先收起、由本插件 open 打开，且关闭时该页面仍为活动标签时，才同时收起侧栏；用户原先打开的侧栏保持打开。
 
 HTML 中 `enso.on(name,listener)` / `onTheme(listener)` 返回取消函数，`enso.storage.get/set/remove` 同步读写页面快照，写入异步持久化。文件查看器同样运行在沙箱，额外有 `enso.file:{rel,text,onChange,update}`；读取的是当前文件编辑区（含未保存内容），`enso.file.update(text)` 只修改这个编辑区，不直接写盘，不能访问任意磁盘文件。插件脚本开始执行时桥已就绪，不需要等待额外 ready 事件。
 
@@ -192,7 +209,8 @@ export function activate(enso) {
 | `fs.readText(path)` / `fs.writeText(path, text)` | 项目相对路径，宿主 API 检查范围、符号链接及会话状态；单文件 5MB |
 | `net.fetch(url, init?)` | 域名白名单 http(s)，禁止内嵌凭证；响应 5MB，重定向逐次验证；返回 `{status, headers, body}` |
 | `browser.invoke(op, params)` | 新宿主能力，需 `browser.control` 和非空 `browser.domains`；仅本机有效主会话，沿当前 worker generation/取消/Plan 写策略 |
-| `ui.notify(title, body?)` | 系统通知，需 `ui.notify` |
+| `ui.notify(title, body?)` | 系统通知，需 `ui.notify`；发起会话静音时成功返回但不弹通知（不影响运行/正文/未读/审批） |
+| `agent.run(input)` | 临时只读代理，需 `agent.run`，见上文；取消使用 `signal`，内部 agent.cancel 不开放跨插件 run |
 | `config.get()` | 本插件配置对象；可在 activate 内使用，不发送给 renderer |
 | `composer.readDraft()` / `insertText()` / `replaceDraft()` | 当前调用所属窗口的草稿；需 `composer.draft`，见下 |
 | `mcp.tools()` / `mcp.call(server, tool, args)` | 仅暴露白名单工具；沿当前会话、worker generation、取消与审批边界，不能绕过 Plan/当前会话限制 |

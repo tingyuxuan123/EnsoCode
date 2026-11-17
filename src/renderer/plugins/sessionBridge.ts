@@ -7,7 +7,8 @@ export interface SessionRequest {
     | 'openChildRun'
     | 'createSession'
     | 'ensureSession'
-    | 'openPluginView';
+    | 'openPluginView'
+    | 'closePluginView';
   payload: Record<string, unknown>;
 }
 export interface SessionBridgeDeps {
@@ -22,6 +23,8 @@ export interface SessionBridgeDeps {
     sessionId: string,
     view: { pluginId: string; viewId: string; title: string }
   ): boolean;
+  /** 关掉本插件的侧栏页面；右侧栏是为它打开的就一并收起 */
+  closePluginView?(sessionId: string, view: { pluginId: string; viewId: string }): void;
 }
 const fail = (code: string, error: string): DraftResult => ({ ok: false, code, error });
 /** Main authenticates the plugin; this window still resolves authoritative session identities. */
@@ -67,6 +70,11 @@ export async function handleSessionRequest(
       !deps.openPluginView(req.sessionId, { pluginId, viewId, title })
     )
       return fail('NOT_FOUND', 'Plugin view not found');
+  } else if (req.op === 'closePluginView') {
+    const { pluginId, viewId } = req.payload;
+    if (typeof pluginId !== 'string' || !pluginId || typeof viewId !== 'string' || !viewId)
+      return fail('BAD_REQUEST', 'Missing plugin view identifiers');
+    deps.closePluginView?.(req.sessionId, { pluginId, viewId });
   } else if (req.op === 'createSession') {
     const presetId = typeof req.payload.presetId === 'string' ? req.payload.presetId : undefined;
     const id = await deps.create(origin.projectId, presetId);

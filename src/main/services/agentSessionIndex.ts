@@ -115,6 +115,7 @@ function identityOf(
     | { type: 'choice-classified' | 'choice-failed' }
     | { type: 'text-delta' }
     | { type: 'oauth-pool-select' }
+    | { type: 'plugin-agent-event' }
     | McpWorkerEvent
     | WorkspaceLockEvent
   >
@@ -416,6 +417,7 @@ export class AgentSessionIndex {
       event.type === 'oauth-pool-select' ||
       event.type === 'workspace-lock-result' ||
       event.type === 'plugin-mcp-result' ||
+      event.type === 'plugin-agent-event' ||
       event.type === 'workspace-unlock-result'
     )
       return false;

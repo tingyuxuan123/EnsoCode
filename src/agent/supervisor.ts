@@ -3,8 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
 import {
   type AgentSession,
+  type AgentSessionEvent,
   createAgentSession,
   createFindToolDefinition,
   createGrepToolDefinition,
@@ -23,6 +26,7 @@ import {
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { autoRetryOverrides, DEFAULT_AUTO_RETRY_LIMIT } from '@shared/autoRetry';
+import { snapshotMainConversation } from '@shared/btw';
 import {
   type ChildSessionIdentity,
   DESIGNER_AGENT_TYPE_KEY,
@@ -36,7 +40,13 @@ import {
   WORKSPACE_WRITE_TOOL_ID,
 } from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
-import type { PluginAgentSource } from '@shared/extensionPlugins/protocol';
+import {
+  PLUGIN_AGENT_ARGS_MAX_CHARS,
+  PLUGIN_AGENT_OUTPUT_MAX_CHARS,
+  PLUGIN_AGENT_TEXT_MAX_CHARS,
+  type PluginAgentRunEvent,
+  type PluginAgentSource,
+} from '@shared/extensionPlugins/protocol';
 import type { PluginEventPlan, PluginToolDescriptor } from '@shared/extensionPlugins/types';
 import { HUMAN_REQUEST_TIMEOUT_MS } from '@shared/humanRequestTimeout';
 import { DEFAULT_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
@@ -212,6 +222,7 @@ import { outputLimitRecoveryExtension } from './outputLimitRecovery';
 import { PendingNotificationStore } from './pendingNotifications';
 import { piDocsAvailabilityExtensions } from './piDocsPrompt';
 import { createSubmitPlanTool, PlanController, withPlanGate } from './planMode';
+import { forkPluginAgent, type PluginForkBase, pluginAgentText } from './pluginAgentFork';
 import {
   childPluginEventPlan,
   contextUsagePayload,
@@ -229,6 +240,7 @@ import {
   createRemoteReadPathProbe,
   withReadNotFoundHint,
 } from './readNotFound';
+import { readOnlyResourceOptions } from './readOnlyResources';
 import { withReadTruncationMeta } from './readTruncation';
 import { enqueueReminder, REMINDER_QUEUE_LIMIT } from './reminderQueue';
 import { withRequestBodyBudget } from './requestBodyBudget';
@@ -331,6 +343,7 @@ interface ChildSessionResult {
 /** 会话工厂：父 runtime/resource/tool 配置的唯一 child 创建入口。 */
 interface SessionFactory {
   cwd: string;
+  remote?: boolean;
   /** gate 验收命令执行器(远程会话走 ssh,本地会话走 /bin/sh) */
   runGate: (gate: string) => Promise<string>;
   agentTypes: AgentTypeSpawnConfig[];
@@ -349,6 +362,8 @@ interface SessionFactory {
     resumeFile?: string;
     extraTools?: unknown[];
     pluginSource?: Omit<PluginAgentSource, 'sessionId'>;
+    /** No transcript or external resources for plugin side agents. */
+    ephemeral?: boolean;
   }): Promise<ChildSessionResult>;
 }
 
@@ -378,6 +393,7 @@ function approvedDesignTools(
 
 interface ManagedSession {
   identity: SessionIdentity;
+  forkBase?: PluginForkBase;
   /** 停止/释放期间禁止扩展重开交互；代币防止旧 abort 的 finally 解开新关闭门。 */
   extensionUIBlock?: symbol;
   extensionUI?: ExtensionUIBridge;
@@ -602,8 +618,14 @@ async function createSessionResourceLoader(options: {
   childContract?: boolean;
   /** 仅父会话：工具调用前先说一句下一步打算，供用户在运行中看到进度 */
   progressPreamble?: boolean;
+  /**
+   * 只读/临时会话（插件只读代理等）：不读磁盘 settings、不加载任何磁盘资源。
+   * 见 readOnlyResources：否则 `reload()` 会按 settings 里的 packages 去安装依赖。
+   */
+  readOnlyResources?: boolean;
 }): Promise<DefaultResourceLoader> {
-  const harness = options.loadHarnessAssets && !options.remoteAgentsFiles;
+  const readOnly = options.readOnlyResources === true;
+  const harness = !readOnly && options.loadHarnessAssets && !options.remoteAgentsFiles;
   const skillPaths = harness
     ? [...options.skillPaths, ...resolveHarnessSkillRoots(options.cwd)]
     : options.skillPaths;
@@ -611,17 +633,23 @@ async function createSessionResourceLoader(options: {
   const pluginCommands = options.pluginCommands ?? [];
   const pluginHooks = options.pluginHooks;
   const loaderOptions: ConstructorParameters<typeof DefaultResourceLoader>[0] = {
+    // 只读会话先用隔离选项打底，下面只会再收紧，不会再打开磁盘资源
+    ...(readOnly ? readOnlyResourceOptions({ cwd: options.cwd, agentDir: options.agentDir }) : {}),
     cwd: options.cwd,
     agentDir: options.agentDir,
-    settingsManager: createProjectSettingsManager(
-      options.cwd,
-      options.agentDir,
-      options.trustedProjectCode ?? []
-    ).settingsManager,
-    noSkills: options.noSkills,
+    ...(readOnly
+      ? {}
+      : {
+          settingsManager: createProjectSettingsManager(
+            options.cwd,
+            options.agentDir,
+            options.trustedProjectCode ?? []
+          ).settingsManager,
+        }),
+    noSkills: readOnly || options.noSkills,
     ...(options.noExtensions ? { noExtensions: true } : {}),
-    ...(skillPaths.length > 0 ? { additionalSkillPaths: skillPaths } : {}),
-    ...(pluginCommands.length > 0
+    ...(skillPaths.length > 0 && !readOnly ? { additionalSkillPaths: skillPaths } : {}),
+    ...(pluginCommands.length > 0 && !readOnly
       ? { promptsOverride: (base) => withPluginPrompts(base, pluginCommands) }
       : {}),
     // noExtensions 只挡磁盘上的项目/全局扩展；inline factory 不受影响，图片修剪对所有会话生效
@@ -647,7 +675,7 @@ async function createSessionResourceLoader(options: {
           }));
         },
       } satisfies InlineExtension,
-      ...(options.exploreFold ? [exploreFoldExtension(options.exploreFold)] : []),
+      ...(options.exploreFold && !readOnly ? [exploreFoldExtension(options.exploreFold)] : []),
       ...piDocsAvailabilityExtensions(),
       ...(options.remoteSsh
         ? [
@@ -689,7 +717,7 @@ async function createSessionResourceLoader(options: {
               ),
             ]
           : []),
-      ...(pluginHooks && pluginHooks.hooks.length > 0
+      ...(pluginHooks && !readOnly && pluginHooks.hooks.length > 0
         ? [
             createClaudeHooksExtension({
               hooks: pluginHooks.hooks,
@@ -722,18 +750,20 @@ async function createSessionResourceLoader(options: {
           ]
         : []),
     ],
-    agentsFilesOverride: options.remoteAgentsFiles
-      ? () => ({
-          agentsFiles: [
-            ...(options.instruction ? [options.instruction] : []),
-            ...(options.remoteAgentsFiles ?? []),
-          ],
-        })
-      : sessionAgentsFilesOverride(options.agentDir, options.instruction, [
-          ...(harness ? readHarnessRuleFiles(options.cwd) : []),
-        ]),
+    agentsFilesOverride: readOnly
+      ? () => ({ agentsFiles: [] })
+      : options.remoteAgentsFiles
+        ? () => ({
+            agentsFiles: [
+              ...(options.instruction ? [options.instruction] : []),
+              ...(options.remoteAgentsFiles ?? []),
+            ],
+          })
+        : sessionAgentsFilesOverride(options.agentDir, options.instruction, [
+            ...(harness ? readHarnessRuleFiles(options.cwd) : []),
+          ]),
   };
-  const loader = await createLcuResourceLoader(loaderOptions, options.lcuEnabled);
+  const loader = await createLcuResourceLoader(loaderOptions, !readOnly && options.lcuEnabled);
   return loader;
 }
 
@@ -777,15 +807,8 @@ function createEnsoResourceLoader(
   oauthPoolRecovery?: InlineExtension
 ): DefaultResourceLoader {
   return new DefaultResourceLoader({
-    cwd,
-    agentDir,
-    // noExtensions 挡不住项目包解析（缺包会自动安装），同样用未信任的 settings
-    settingsManager: createProjectSettingsManager(cwd, agentDir, []).settingsManager,
-    noExtensions: true,
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
-    noContextFiles: true,
+    // 只读会话用内存空设置：noExtensions 挡不住包解析，缺包会 npm install（postinstall 可执行）
+    ...readOnlyResourceOptions({ cwd, agentDir }),
     extensionFactories: [
       branchContext,
       applyPatchResultExtension,
@@ -795,11 +818,6 @@ function createEnsoResourceLoader(
       ...(oauthPoolRecovery ? [oauthPoolRecovery] : []),
     ],
     systemPrompt: ENSO_SYSTEM_PROMPT,
-    skillsOverride: () => ({ skills: [], diagnostics: [] }),
-    promptsOverride: () => ({ prompts: [], diagnostics: [] }),
-
-    themesOverride: () => ({ themes: [], diagnostics: [] }),
-    agentsFilesOverride: () => ({ agentsFiles: [] }),
     appendSystemPromptOverride: () => [],
   });
 }
@@ -1026,6 +1044,7 @@ export class SessionSupervisor {
   private readonly pendingNotifications: PendingNotificationStore;
   /** 插件经宿主 MCP 的执行通道：绑定 exact generation、plan 与审批。 */
   private readonly pluginMcp: PluginMcpGateway;
+  private readonly pluginAgentRuns = new Map<string, AbortController>();
   private readonly forgottenNotifications = new Set<string>();
   private readonly notifier = new ParentNotifier(
     (sessionId) => {
@@ -1354,6 +1373,15 @@ export class SessionSupervisor {
   }
 
   handleCommand(command: AgentCommand): void {
+    // Bypass the parent's serial turn gate; a side agent must not block the parent.
+    if (command.type === 'plugin-agent-run') {
+      void this.runPluginAgent(command);
+      return;
+    }
+    if (command.type === 'plugin-agent-cancel') {
+      this.pluginAgentRuns.get(command.requestId)?.abort();
+      return;
+    }
     if (command.type === 'design-canvas') {
       designPresence.setCanvasCwds(command.cwds);
       return;
@@ -2859,6 +2887,7 @@ export class SessionSupervisor {
     // coworker 用独立门(否则审批条落错 tab、allowSession 白名单跨会话泄漏)
     const factory: SessionFactory = {
       cwd,
+      remote: Boolean(remote),
       runGate: (gateCommand) => runGateCommand(cwd, gateCommand, sshExecutor),
       agentTypes,
       subagentModels,
@@ -2874,6 +2903,7 @@ export class SessionSupervisor {
         resumeFile: childResume,
         extraTools = [],
         pluginSource,
+        ephemeral,
       }) => {
         const isLockedEnso = resolved?.tools === 'enso-locked';
         const typedIdentity = 'parent' in childIdentity ? childIdentity : undefined;
@@ -3024,7 +3054,7 @@ export class SessionSupervisor {
           throw new Error('Locked Enso child requires exact identity and ask manager.');
         }
         const childExploreFold =
-          !isLockedEnso && exploreFoldEnabled ? createExploreFoldState() : undefined;
+          !ephemeral && !isLockedEnso && exploreFoldEnabled ? createExploreFoldState() : undefined;
         const typed = Boolean(resolved || agentType);
         const childCodemode = new CodemodeHost({
           codemode: !isLockedEnso && toolEnabled('isolated_sandbox'),
@@ -3079,16 +3109,20 @@ export class SessionSupervisor {
               ...(remote ? { remoteSsh: { host: remote.host } } : {}),
               // 类型化子代理与项目资源隔离（同 noSkills/noExtensions），不追加 harness 资源
               loadHarnessAssets: resolved || agentType ? false : loadHarnessAssets,
-              lcuEnabled,
+              lcuEnabled: ephemeral ? false : lcuEnabled,
               trustedProjectCode,
-              pluginHooks: {
-                hooks: pluginHooks,
-                role: {
-                  kind: 'subagent',
-                  agentType: resolved?.displayName ?? agentType?.name ?? 'general',
-                },
-                resumed: Boolean(childResume),
-              },
+              // 临时/只读会话：连磁盘 settings 与已安装包都不碰（见 readOnlyResources）
+              readOnlyResources: ephemeral === true,
+              pluginHooks: ephemeral
+                ? undefined
+                : {
+                    hooks: pluginHooks,
+                    role: {
+                      kind: 'subagent',
+                      agentType: resolved?.displayName ?? agentType?.name ?? 'general',
+                    },
+                    resumed: Boolean(childResume),
+                  },
               pluginEvents: childEvents,
               ...(childExploreFold ? { exploreFold: childExploreFold } : {}),
               codemode: childCodemode.extension,
@@ -3197,9 +3231,11 @@ export class SessionSupervisor {
             : undefined;
         const sessionManager = safeJournal
           ? SessionManager.inMemory(cwd)
-          : childResume
-            ? SessionManager.open(childResume, this.options.sessionDir, cwd)
-            : SessionManager.create(cwd, this.options.sessionDir);
+          : ephemeral
+            ? SessionManager.inMemory(cwd)
+            : childResume
+              ? SessionManager.open(childResume, this.options.sessionDir, cwd)
+              : SessionManager.create(cwd, this.options.sessionDir);
         if (safeJournal && childResume) {
           for (const record of (await EnsoSafeJournal.restore(childResume)).records) {
             if (record.type === 'safe-user-text') {
@@ -3957,8 +3993,20 @@ export class SessionSupervisor {
     this.bindAutoRetryLimit(session);
     const stream = session.agent?.streamFunction;
     if (stream) {
-      session.agent.streamFunction = (model, context, options) =>
-        runWithRequestBodyObserver(
+      session.agent.streamFunction = (model, context, options) => {
+        if (
+          !session.isCompacting &&
+          options?.sessionId === session.sessionId &&
+          this.sessions.get(identity.sessionId) === managed
+        ) {
+          managed.forkBase = {
+            model,
+            messages: [...context.messages],
+            options,
+            stream: (m, c, o) => stream.call(session.agent, m, c, o),
+          };
+        }
+        return runWithRequestBodyObserver(
           (usage) => {
             // 共享 runtime/provider 不意味着共享会话；释放、换代或换模型后的尾回调不能污染新投影。
             if (
@@ -3978,6 +4026,7 @@ export class SessionSupervisor {
           () => stream.call(session.agent, model, context, options),
           { sessionId: session.sessionId, signal: options?.signal }
         );
+      };
     }
     if (opts.resumeFile) {
       const raw = this.transcript(managed);
@@ -4317,6 +4366,167 @@ export class SessionSupervisor {
     }
     parent.coworkers.set(name, info);
     return info;
+  }
+
+  /** Ephemeral readonly agent: its events never enter the session tree or transcript. */
+  private async runPluginAgent(
+    command: Extract<AgentCommand, { type: 'plugin-agent-run' }>
+  ): Promise<void> {
+    const { requestId } = command;
+    const emit = (event: PluginAgentRunEvent) =>
+      this.options.emit({ type: 'plugin-agent-event', requestId, event });
+    if (this.pluginAgentRuns.has(requestId)) return;
+    const controller = new AbortController();
+    this.pluginAgentRuns.set(requestId, controller);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, command.timeoutMs);
+    let child: AgentSession | undefined;
+    let gate: ApprovalGate | undefined;
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const parent = this.sessions.get(command.identity.sessionId);
+      if (
+        !parent ||
+        !isSameGeneration(parent.identity, command.identity) ||
+        !parent.factory ||
+        parent.factory.remote
+      )
+        throw new Error('这个会话不能运行插件代理');
+      gate = new ApprovalGate(
+        parent.gate.mode,
+        () => {},
+        () => {},
+        { ...parent.gate.floorOptions, autoReject: true }
+      );
+      const saved = parent.forkBase;
+      const base =
+        command.context === 'fork' &&
+        !command.model &&
+        saved &&
+        parent.session.model?.id === saved.model.id &&
+        parent.session.model?.provider === saved.model.provider
+          ? saved
+          : undefined;
+      const { session, modelId } = await parent.factory.createChildSession({
+        agentType: { name: 'plugin-agent', description: '', systemPrompt: '', tools: 'readonly' },
+        identity: {
+          sessionId: `${parent.identity.sessionId}::plugin-${randomUUID()}`,
+          generation: randomUUID(),
+        },
+        gate,
+        ephemeral: true,
+        ...(command.model ? { modelOverride: command.model } : {}),
+      });
+      child = session;
+      // A parent can be released/replaced while its resources are being resolved.
+      // Do not let a request authorized by the old generation begin on the new one.
+      if (this.sessions.get(command.identity.sessionId) !== parent)
+        throw new Error('会话代次已变化');
+      const fork = base
+        ? forkPluginAgent(base, session, parent.session.agent.state.thinkingLevel)
+        : undefined;
+      if (controller.signal.aborted) throw new Error('aborted');
+      controller.signal.addEventListener(
+        'abort',
+        () => (fork ? fork.abort() : void session.abort().catch(() => {})),
+        { once: true }
+      );
+      let lastText = '';
+      let lastTextAt = 0;
+      const onEvent = (event: AgentSessionEvent | AgentEvent) => {
+        if (controller.signal.aborted) return;
+        if (event.type === 'tool_execution_start') {
+          let args = '';
+          try {
+            args = JSON.stringify(event.args) ?? '';
+          } catch {}
+          emit({
+            type: 'tool-start',
+            id: event.toolCallId,
+            name: event.toolName,
+            args: args.slice(0, PLUGIN_AGENT_ARGS_MAX_CHARS),
+            ...('parentToolCallId' in event && event.parentToolCallId
+              ? { parentId: event.parentToolCallId }
+              : {}),
+          });
+        } else if (event.type === 'tool_execution_end') {
+          const output =
+            typeof event.result === 'string' ? event.result : pluginAgentText(event.result);
+          emit({
+            type: 'tool-end',
+            id: event.toolCallId,
+            isError: event.isError,
+            output: output.slice(0, PLUGIN_AGENT_OUTPUT_MAX_CHARS),
+          });
+        } else if (event.type === 'message_update' && event.message.role === 'assistant') {
+          const text = pluginAgentText(event.message);
+          const now = Date.now();
+          if (!text || text === lastText || now - lastTextAt < 300) return;
+          lastText = text;
+          lastTextAt = now;
+          emit({ type: 'text', text: text.slice(-PLUGIN_AGENT_TEXT_MAX_CHARS) });
+        }
+      };
+      const offChild = session.subscribe(onEvent);
+      const offFork = fork?.subscribe(onEvent);
+      unsubscribe = () => {
+        offChild();
+        offFork?.();
+      };
+      const parts: string[] = [];
+      if (fork)
+        parts.push(
+          `This is a readonly side request, invisible to the main conversation. Only ${[...fork.runnable].join('/')} can execute. Do not continue the previous task.`
+        );
+      if (command.systemPrompt) parts.push(`<role>\n${command.systemPrompt}\n</role>`);
+      if (command.context !== 'none' && !fork) {
+        const snapshot = snapshotMainConversation(parent.messages);
+        if (snapshot) parts.push(`<conversation>\n${snapshot}\n</conversation>`);
+      }
+      parts.push(command.prompt);
+      await (fork ?? session).prompt(parts.join('\n\n'));
+      if (controller.signal.aborted) throw new Error('aborted');
+      const last = [...(fork ? fork.state.messages : session.messages)]
+        .reverse()
+        .find((message): message is AssistantMessage => message.role === 'assistant');
+      if (last?.stopReason === 'error') throw new Error(last.errorMessage || '模型请求失败');
+      const text = last ? pluginAgentText(last) : '';
+      if (!text) throw new Error('代理没有给出回复');
+      emit({
+        type: 'end',
+        ok: true,
+        text: text.slice(-PLUGIN_AGENT_TEXT_MAX_CHARS),
+        model: base ? base.model.id : modelId,
+      });
+    } catch (error) {
+      const aborted = controller.signal.aborted;
+      emit({
+        type: 'end',
+        ok: false,
+        error: (timedOut
+          ? '代理运行超时'
+          : aborted
+            ? '已取消'
+            : toErrorMessage(error) || '代理运行失败'
+        ).slice(0, 4096),
+        ...(aborted && !timedOut ? { aborted: true } : {}),
+      });
+    } finally {
+      clearTimeout(timer);
+      this.pluginAgentRuns.delete(requestId);
+      unsubscribe?.();
+      gate?.cancelAll();
+      if (child) {
+        cancelContinuousMemory(child.sessionManager);
+        try {
+          releaseOauthPoolSession(child.sessionId);
+          child.dispose();
+        } catch {}
+      }
+    }
   }
 
   /** 解雇 coworker：中断并销毁会话,jsonl 留盘。返回解雇名(通知/事件用) */
@@ -4696,6 +4906,8 @@ export class SessionSupervisor {
         const timing = managed.timings[index];
         if (timing) timing.completedMs = Date.now();
         this.stampContextSnapshot(managed, event.message);
+        if (event.message.role === 'assistant' && managed.forkBase && !managed.forkBase.reply)
+          managed.forkBase.reply = event.message;
         const projected = projectMessage(event.message);
         this.replaceLastMessage(managed, projected);
         if (projected?.role === 'assistant') {
@@ -5695,6 +5907,7 @@ export class SessionSupervisor {
 
   /** worker 退出前 fail-closed 清理挂起 capability，并断开 MCP 子进程。 */
   shutdown(): Promise<void> {
+    for (const controller of this.pluginAgentRuns.values()) controller.abort();
     this.pendingBuiltinTools.clear();
     clearInterval(this.evictionTimer);
     this.workspaceSwitch.clear();

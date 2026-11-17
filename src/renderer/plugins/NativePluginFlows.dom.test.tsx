@@ -7,6 +7,11 @@ import { NativePluginFlows } from './NativePluginFlows';
 import { type NativePluginManager, useNativePluginManager } from './useNativePluginManager';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+// The model field pulls the full ModelPicker/settings graph; it has its own DOM test.
+vi.mock('@/components/settings/PluginModelConfigField', () => ({
+  PluginModelConfigField: ({ value }: { value: string }) =>
+    createElement('span', { 'data-model-value': value }),
+}));
 // Keep these tests about flow content/actions rather than Base UI's browser focus management.
 vi.mock('@/components/ui/dialog', () => {
   const Slot = ({ children }: { children?: ReactNode }) => createElement('div', null, children);

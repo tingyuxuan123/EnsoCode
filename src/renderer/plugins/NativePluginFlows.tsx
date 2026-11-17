@@ -1,3 +1,4 @@
+import { PluginModelConfigField } from '@/components/settings/PluginModelConfigField';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -72,6 +73,16 @@ export function NativePluginConfigForm({ manager }: { manager: NativePluginManag
                   (draft[field.key] ?? field.value ?? String(field.default ?? false)) === 'true'
                 }
                 onCheckedChange={(value) => setConfigValue(field.key, String(value))}
+              />
+            ) : field.type === 'model' ? (
+              // 模型选择只在 Main 解析，界面只提交 session / title / providerId::modelId
+              <PluginModelConfigField
+                value={
+                  draft[field.key] === null
+                    ? ''
+                    : (draft[field.key] ?? field.value ?? formatConfigValue(field.default))
+                }
+                onChange={(value) => setConfigValue(field.key, value)}
               />
             ) : field.type === 'enum' ? (
               <select

@@ -98,6 +98,7 @@ const tool = (service: ExtensionPluginService, onProgress?: (text: string) => vo
     fingerprint: service.toolsForSpawn()[0]?.fingerprint ?? '',
     args: {},
     sessionId: 's',
+    generation: 'g1',
     projectRoot: null,
     onProgress,
   });
@@ -567,6 +568,128 @@ describe('complete plugin runtime', () => {
     await vi.waitFor(() => expect(service.list().plugins[0].version).toBe('2'));
     expect(service.setDevWatch('enso.runtime', false)).toEqual({ ok: true });
     expect(close).toHaveBeenCalled();
+  });
+  it('agent.run 每插件限 2 个并发，终态归还配额，停用取消在跑的代理', async () => {
+    const runs: { cancel: ReturnType<typeof vi.fn>; onEvent: (event: unknown) => void }[] = [];
+    const agentRun = vi.fn(
+      (_sessionId: string, _input: { prompt: string }, onEvent: (event: unknown) => void) => {
+        const cancel = vi.fn();
+        runs.push({ cancel, onEvent });
+        return { ok: true as const, cancel };
+      }
+    );
+    const { service } = setup({
+      sessionBridge: () => ({
+        inject: () => ({ ok: true }),
+        abort: () => ({ ok: true }),
+        agentRun,
+      }),
+    });
+    await install(
+      service,
+      {
+        permissions: ['agent.tool', 'agent.run'],
+        contributes: {
+          agentTools: ['read', 'codes', 'start_one', 'one'].map((name) => ({
+            name,
+            description: name,
+            parameters: { type: 'object' },
+          })),
+        },
+      },
+      `let codes = []; let one;
+      export function activate(e) {
+        e.tools.register('read', async () => {
+          codes = [0, 1, 2].map((i) =>
+            e.agent.run({ prompt: 'p' + i }).then(() => 'ok', (error) => error.code)
+          );
+          return 'started';
+        });
+        e.tools.register('codes', async () => (await Promise.all(codes)).join(','));
+        e.tools.register('start_one', async () => {
+          one = e.agent.run({ prompt: 'again' }).then(() => 'ok', (error) => error.code);
+          return 'accepted';
+        });
+        e.tools.register('one', async () => one);
+      }`
+    );
+    const call = async (name: string) =>
+      (
+        await service.callTool({
+          toolName: `plugin_enso-runtime__${name}`,
+          fingerprint: service.toolsForSpawn()[0]?.fingerprint ?? '',
+          args: {},
+          sessionId: 's',
+          generation: 'g1',
+          projectRoot: null,
+        })
+      ).content;
+    expect((await tool(service)).content).toBe('started');
+    expect(agentRun).toHaveBeenCalledTimes(2);
+    expect(agentRun).toHaveBeenCalledWith(
+      's',
+      expect.objectContaining({
+        prompt: 'p0',
+        generation: 'g1',
+        context: 'none',
+        timeoutMs: 600_000,
+      }),
+      expect.any(Function)
+    );
+    runs[0].onEvent({ type: 'end', ok: true, text: 'a' });
+    runs[1].onEvent({ type: 'end', ok: true, text: 'b' });
+    expect(await call('codes')).toBe('ok,ok,RATE_LIMITED');
+    expect(await call('start_one')).toBe('accepted');
+    expect(agentRun).toHaveBeenCalledTimes(3);
+    runs[2].onEvent({ type: 'end', ok: true, text: 'c' });
+    expect(await call('one')).toBe('ok');
+    expect(await call('start_one')).toBe('accepted');
+    expect(runs[3].cancel).not.toHaveBeenCalled();
+    expect(await service.setEnabled('enso.runtime', false)).toEqual({ ok: true });
+    expect(runs[3].cancel).toHaveBeenCalled();
+  });
+  it('agent.run 的模型由 Main 按 type=model 配置解析', async () => {
+    const model = {
+      api: 'openai-completions' as const,
+      apiKey: 'k',
+      baseUrl: 'https://example.invalid',
+      modelId: 'm1',
+      settingsProviderId: 'p1',
+    };
+    const agentRun = vi.fn(() => ({ ok: true as const, cancel: () => {} }));
+    const resolveModel = vi.fn(async () => ({ ok: true as const, model }));
+    const { service } = setup({
+      sessionBridge: () => ({
+        inject: () => ({ ok: true }),
+        abort: () => ({ ok: true }),
+        agentRun,
+        resolveModel,
+      }),
+    });
+    await install(
+      service,
+      {
+        permissions: ['agent.tool', 'agent.run'],
+        contributes: {
+          agentTools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }],
+          configuration: [{ key: 'model', title: '模型', type: 'model', default: 'title' }],
+        },
+      },
+      `export function activate(e) {
+        e.tools.register('read', async () => {
+          void e.agent.run({ prompt: 'x', model: { apiKey: 'leak' } }).catch(() => {});
+          return 'started';
+        });
+      }`
+    );
+    expect((await tool(service)).content).toBe('started');
+    await vi.waitFor(() => expect(agentRun).toHaveBeenCalledTimes(1));
+    expect(resolveModel).toHaveBeenCalledWith('title');
+    expect(agentRun).toHaveBeenLastCalledWith(
+      's',
+      expect.objectContaining({ model }),
+      expect.any(Function)
+    );
   });
 });
 

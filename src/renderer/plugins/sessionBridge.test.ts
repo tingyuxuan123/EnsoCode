@@ -11,6 +11,7 @@ function setup() {
     prefill: vi.fn(),
     ensure: vi.fn(async () => null),
     openPluginView: vi.fn(() => false),
+    closePluginView: vi.fn(),
   };
   return deps;
 }
@@ -61,4 +62,37 @@ it('rejects missing origin sessions and unregistered plugin views', async () => 
       )
     ).ok
   ).toBe(false);
+});
+it('closes only the requested plugin view, and validates the identifiers', async () => {
+  const deps = setup();
+  await expect(
+    handleSessionRequest(
+      {
+        sessionId: 'origin',
+        op: 'closePluginView',
+        payload: { pluginId: 'local.test', viewId: 'panel' },
+      },
+      deps
+    )
+  ).resolves.toEqual({ ok: true, value: null });
+  expect(deps.closePluginView).toHaveBeenCalledWith('origin', {
+    pluginId: 'local.test',
+    viewId: 'panel',
+  });
+
+  // 发起会话不在本窗口：不能替别的窗口关页面
+  await expect(
+    handleSessionRequest(
+      { sessionId: 'missing', op: 'closePluginView', payload: { pluginId: 'p', viewId: 'v' } },
+      deps
+    )
+  ).resolves.toMatchObject({ ok: false, code: 'NO_SESSION' });
+  // 缺视图标识只报错，不乱关当前页
+  await expect(
+    handleSessionRequest(
+      { sessionId: 'origin', op: 'closePluginView', payload: { pluginId: 'p' } },
+      deps
+    )
+  ).resolves.toMatchObject({ ok: false, code: 'BAD_REQUEST' });
+  expect(deps.closePluginView).toHaveBeenCalledTimes(1);
 });

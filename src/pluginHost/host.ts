@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -6,6 +7,7 @@ import type { PluginEventName } from '@shared/extensionPlugins/events';
 import { MAX_TOOL_TIMEOUT_MS } from '@shared/extensionPlugins/manifest';
 import type {
   MainToPluginHost,
+  PluginAgentRunEvent,
   PluginAgentSource,
   PluginCallMethod,
   PluginErrorShape,
@@ -217,6 +219,10 @@ export function runPluginHost(transport: HostTransport): void {
   const scheduleHandlers = new Map<string, Handler>();
   const exportHandlers = new Map<string, Handler>();
   const written = new Map<string, string[]>();
+  const agentRuns = new Map<
+    string,
+    { onEvent?: (event: PluginAgentRunEvent) => unknown; settle(event: PluginAgentRunEvent): void }
+  >();
   const pendingRegs: Promise<unknown>[] = [];
   const pending = new Map<
     string,
@@ -230,8 +236,8 @@ export function runPluginHost(transport: HostTransport): void {
   let deactivate: (() => unknown) | null = null;
   let declared: Declared = readDeclared('', '');
 
-  const hostCall = (api: PluginHostApi, args: unknown): Promise<unknown> => {
-    const invocation = current.getStore();
+  const hostCall = (api: PluginHostApi, args: unknown, detached = false): Promise<unknown> => {
+    const invocation = detached ? undefined : current.getStore();
     if (invocation?.controller.signal.aborted)
       return Promise.reject(codedError('ABORTED', '调用已取消'));
     const id = `h${nextId++}`;
@@ -270,6 +276,74 @@ export function runPluginHost(transport: HostTransport): void {
       map.set(name, handler);
       return () => map.delete(name);
     };
+
+  /** 代理的生命周期不随发起调用结束：进度与终态由 Main 按 runId 推回 */
+  const runAgent = (input: unknown): Promise<{ text: string; model?: string }> => {
+    if (!isRecord(input)) return Promise.reject(new TypeError('agent.run 需要参数对象'));
+    const { onEvent, signal, ...args } = input;
+    if (onEvent !== undefined && typeof onEvent !== 'function')
+      return Promise.reject(new TypeError('onEvent 必须是函数'));
+    const abortSignal = signal instanceof AbortSignal ? signal : undefined;
+    if (abortSignal?.aborted) return Promise.reject(codedError('ABORTED', '调用已取消'));
+    const runId = randomUUID();
+    const cancel = () => void hostCall('agent.cancel', { runId }, true).catch(() => undefined);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      /** abort 发生但 Main 还没 ACK：Main 尚未登记 runId，ACK 后要再取消一次 */
+      let abortedEarly = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        agentRuns.delete(runId);
+        abortSignal?.removeEventListener('abort', onAbort);
+        fn();
+      };
+      const onAbort = () => {
+        abortedEarly = true;
+        // 这次可能因 runId 尚未登记而返回 false；ACK 后补发，不能让运行继续
+        cancel();
+        finish(() => reject(codedError('ABORTED', '调用已取消')));
+      };
+      agentRuns.set(runId, {
+        ...(onEvent ? { onEvent: onEvent as (event: PluginAgentRunEvent) => unknown } : {}),
+        settle: (event) => {
+          if (event.type !== 'end') return;
+          finish(() => {
+            if (!event.ok)
+              return reject(codedError(event.aborted ? 'ABORTED' : 'AGENT_FAILED', event.error));
+            resolve(event.model ? { text: event.text, model: event.model } : { text: event.text });
+          });
+        },
+      });
+      abortSignal?.addEventListener('abort', onAbort, { once: true });
+      hostCall('agent.run', { ...args, runId }).then(
+        () => {
+          // ACK 表示 Main 已登记；abort 在 ACK 之前发生时这里补一次真正的取消
+          if (abortedEarly) cancel();
+        },
+        (error: unknown) => {
+          finish(() => reject(error));
+          // 启动失败没有可残留的运行，但取消一次无害（首次 cancel 可能已成功）
+          cancel();
+        }
+      );
+    });
+  };
+
+  const emitAgentRun = (runId: string, event: PluginAgentRunEvent) => {
+    const entry = agentRuns.get(runId);
+    if (!entry) return;
+    if (event.type === 'end') return entry.settle(event);
+    try {
+      const result = entry.onEvent?.(event);
+      if (result instanceof Promise)
+        result.catch((error: unknown) =>
+          transport.send(logMessage('error', ['agent.run onEvent 失败：', error]))
+        );
+    } catch (error) {
+      transport.send(logMessage('error', ['agent.run onEvent 失败：', error]));
+    }
+  };
 
   const dynamicTool = (name: string, handler: Handler, meta: unknown) => {
     if (!declared.known) throw new TypeError('找不到清单，不能动态注册工具');
@@ -415,6 +489,7 @@ export function runPluginHost(transport: HostTransport): void {
         messages: () => hostCall('session.messages', {}),
       },
       host: { capabilities: () => hostCall('host.capabilities', {}) },
+      agent: { run: runAgent },
       browser: {
         /** op 固定闭集；params 由 Main 严格校验，插件不能自定义 CDP method 或 JS */
         invoke: (op: string, params?: unknown) =>
@@ -435,6 +510,8 @@ export function runPluginHost(transport: HostTransport): void {
             hostCall('ui.viewEvent', { name, data: data ?? null }),
           open: (input?: string | { viewId?: string; sessionId?: string }) =>
             hostCall('ui.viewOpen', typeof input === 'string' ? { viewId: input } : (input ?? {})),
+          close: (input?: string | { viewId?: string; sessionId?: string }) =>
+            hostCall('ui.viewClose', typeof input === 'string' ? { viewId: input } : (input ?? {})),
         },
         clipboard: { writeText: (text: string) => hostCall('ui.clipboard', { text }) },
         status: {
@@ -591,6 +668,10 @@ export function runPluginHost(transport: HostTransport): void {
         return;
       case 'call':
         void onCall(message);
+        return;
+      case 'agent-run':
+        if (typeof message.runId === 'string' && isRecord(message.event))
+          emitAgentRun(message.runId, message.event);
         return;
       case 'shutdown':
         void shutdown();

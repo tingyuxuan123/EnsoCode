@@ -47,6 +47,13 @@ export const zhTranslations: Record<string, string> = {
   'Plugin theme unavailable': '插件主题当前不可用',
   'Theme CSS can change the entire interface': '主题 CSS 可以修改整个界面',
   'Image studio': '图片工作台',
+  'Follow current session': '跟随当前会话',
+  'Follow title model': '跟随标题模型',
+  'Specific model': '指定模型',
+  'Model for plugin agent runs': '插件只读代理由哪个模型运行',
+  'Choose a model': '选择模型',
+  'The selected model is no longer available. Runs will fail until you pick another.':
+    '选中的模型已不可用：不重新选择，运行会失败。',
   Auto: '自动',
   Ready: '准备就绪',
   Resolution: '分辨率',

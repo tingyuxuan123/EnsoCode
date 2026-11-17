@@ -582,6 +582,32 @@ describe('bot 模式完全放行跳过受保护底线', () => {
   });
 });
 
+describe('无人值守审批门', () => {
+  it('autoReject 直接按拒绝收尾，不建卡片也不等真人', async () => {
+    const infos: ApprovalRequestInfo[] = [];
+    const onResolve = vi.fn();
+    const gate = new ApprovalGate('supervised', (info) => infos.push(info), onResolve, {
+      autoReject: true,
+    });
+    const execute = vi.fn();
+    const tool = withApproval(gate, 'command', {
+      name: 'bash',
+      label: 'Bash',
+      description: '',
+      parameters: {} as never,
+      execute,
+    });
+    await expect(
+      tool.execute('call-1', { command: 'rm -rf /' }, undefined, undefined, {} as never)
+    ).rejects.toThrow();
+    expect(infos).toEqual([]);
+    expect(execute).not.toHaveBeenCalled();
+    expect(gate.snapshot()).toEqual([]);
+    // 没有建卡片，也就没有需要通知界面撤销的 pending
+    expect(onResolve).not.toHaveBeenCalled();
+  });
+});
+
 describe('ApprovalGate 等人超时', () => {
   const tool = (gate: ApprovalGate) =>
     withApproval(gate, 'command', {

@@ -10,6 +10,7 @@ import { getMainWindow } from '../../windows/MainWindow';
 import { getSettingsWindow } from '../../windows/SettingsWindow';
 import { setNativeAgentTypeSource, setNativePluginRuntimeSource } from '../pluginRuntime';
 import { pluginUiSessionAllowed } from '../pluginSessionPolicy';
+import { isSessionMuted } from '../sessionMuteGate';
 import { BUILTIN_MARKET } from './builtinMarket';
 import { pinnedArchiveFetch, safePluginFetch } from './download';
 import { DraftBroker } from './draftBroker';
@@ -157,6 +158,7 @@ export function getExtensionPlugins(): ExtensionPluginService {
         new Notification({ title, body }).show();
         return true;
       },
+      sessionMuted: (sessionId) => isSessionMuted(sessionId),
       composer: (target, op, payload) =>
         getDraftBroker().request(target.origin, target.sessionId, op, payload),
       sessions: {
@@ -174,7 +176,8 @@ export function getExtensionPlugins(): ExtensionPluginService {
         if (!pluginUiSessionAllowed(target.sessionId, sessionDirectory?.listAll() ?? null))
           throw pluginError('NO_SESSION', '插件只能操作本机有效根会话');
         return getDraftBroker().request(
-          target.origin ?? (op === 'openPluginView' ? mainRendererId() : null),
+          target.origin ??
+            (op === 'openPluginView' || op === 'closePluginView' ? mainRendererId() : null),
           target.sessionId,
           op,
           payload,
@@ -186,6 +189,7 @@ export function getExtensionPlugins(): ExtensionPluginService {
           throw pluginError('NO_SESSION', '插件只能启动本机有效根会话');
         await getDraftBroker().request(origin ?? mainRendererId(), id, 'ensureSession', {}, 15_000);
       },
+      currentSessionGeneration: (id) => sessionBridge?.generation?.(id),
       viewEvent: (pluginId, name, data) => {
         const main = getMainWindow();
         if (main && !main.isDestroyed())

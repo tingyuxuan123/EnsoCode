@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+import type { PluginGrant } from '@shared/extensionPlugins/grant';
 import { parsePluginInstallUrl } from '@shared/extensionPlugins/installUrl';
 import {
   EXTENSION_PLUGIN_PERMISSIONS,
@@ -23,7 +24,8 @@ import {
 import { PLUGIN_STATES, type PluginRecord } from './lifecycle';
 
 export interface RegistryFile {
-  version: 1;
+  /** 已知格式：1 是本 fork 旧格式，2 是上游 enso 格式；读取和写回都保留磁盘原版本 */
+  version: 1 | 2;
   plugins: PluginRecord[];
 }
 export interface RegistryReadResult extends RegistryFile {
@@ -95,6 +97,45 @@ function valid(v: unknown): v is PluginRecord {
         DIR.test(v.pending.dir) &&
         grant(v.pending.grant)))
   );
+}
+/** 上游 v2 新增字段：mcpTools/env/interop/intercepts/resident 必填，styles 与 browserDomains 可缺省 */
+function authority(v: unknown): boolean {
+  return (
+    record(v) &&
+    strings(v.mcpTools) &&
+    strings(v.env) &&
+    strings(v.interop) &&
+    strings(v.intercepts) &&
+    typeof v.resident === 'boolean' &&
+    (v.styles === undefined || typeof v.styles === 'boolean') &&
+    (v.browserDomains === undefined || strings(v.browserDomains))
+  );
+}
+function validV2(v: unknown): v is PluginRecord {
+  return (
+    valid(v) &&
+    typeof v.crossSessionInject === 'boolean' &&
+    authority(v.grant) &&
+    (v.pending === undefined || (record(v.pending) && authority(v.pending.grant)))
+  );
+}
+type StoredGrant = Omit<PluginGrant, 'styles' | 'browserDomains'> & {
+  styles?: boolean;
+  browserDomains?: string[];
+};
+/** 只补未授权默认值，不补出任何权限 */
+function compatGrant(grant: StoredGrant): PluginGrant {
+  return {
+    ...grant,
+    styles: grant.styles ?? false,
+    browserDomains: grant.browserDomains ?? [],
+  };
+}
+function compatRecord(record: PluginRecord): PluginRecord {
+  const next: PluginRecord = { ...record, grant: compatGrant(record.grant) };
+  if (record.pending)
+    next.pending = { ...record.pending, grant: compatGrant(record.pending.grant) };
+  return next;
 }
 function validSource(v: unknown): boolean {
   if (!record(v)) return false;
@@ -204,14 +245,18 @@ export function readRegistry(root: string): RegistryReadResult {
     } finally {
       closeSync(fd);
     }
-    if (!record(raw) || raw.version !== 1 || !Array.isArray(raw.plugins))
+    if (!record(raw) || (raw.version !== 1 && raw.version !== 2) || !Array.isArray(raw.plugins))
       throw new Error('登记表格式不受支持');
+    const version = raw.version;
     if (
-      !raw.plugins.every(valid) ||
+      !raw.plugins.every(version === 2 ? validV2 : valid) ||
       new Set(raw.plugins.map((p) => p.id)).size !== raw.plugins.length
     )
       throw new Error('登记表含无效或重复记录');
-    return { version: 1, plugins: raw.plugins };
+    return {
+      version,
+      plugins: version === 2 ? raw.plugins.map(compatRecord) : raw.plugins,
+    };
   } catch (error) {
     let backupPath: string | undefined;
     // Never follow links or copy an unbounded/special file. Keep the original so a
@@ -233,9 +278,9 @@ export function readRegistry(root: string): RegistryReadResult {
 }
 export function writeRegistry(root: string, file: RegistryFile): void {
   if (
-    file.version !== 1 ||
+    (file.version !== 1 && file.version !== 2) ||
     !Array.isArray(file.plugins) ||
-    !file.plugins.every(valid) ||
+    !file.plugins.every(file.version === 2 ? validV2 : valid) ||
     new Set(file.plugins.map((p) => p.id)).size !== file.plugins.length
   )
     throw new Error('登记表记录不合法');

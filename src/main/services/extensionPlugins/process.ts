@@ -2,6 +2,7 @@ import type { EventEmitter } from 'node:events';
 import {
   type MainToPluginHost,
   PLUGIN_HOST_APIS,
+  type PluginAgentRunEvent,
   type PluginAgentSource,
   type PluginCallMethod,
   type PluginHostApi,
@@ -38,6 +39,8 @@ export interface PluginProcessDeps {
   readyTimeoutMs?: number;
   /** 常驻进程：启用即拉起，空闲也不退出 */
   resident?: boolean;
+  /** 有插件代理在跑：进程要收进度，不因空闲退出 */
+  busy?(): boolean;
 }
 interface Pending {
   resolve(value: unknown): void;
@@ -147,6 +150,14 @@ export class PluginProcess {
     this.post({ t: 'cancel', invocationId });
     this.armIdle();
   }
+
+  /** 只推给活着的进程；终态之后重新计算空闲 */
+  notifyAgentRun(runId: string, event: PluginAgentRunEvent): void {
+    if (!this.child || this.stopWait) return;
+    this.post({ t: 'agent-run', runId, event });
+    if (event.type === 'end') this.armIdle();
+  }
+
   stop(unexpected = false): void {
     const child = this.child;
     if (!child || this.stopWait) return;
@@ -332,8 +343,18 @@ export class PluginProcess {
   }
   private armIdle(): void {
     this.clearIdle();
-    if (this.deps.resident || this.pending.size || this.starting.size || !this.child) return;
-    this.idleTimer = setTimeout(() => this.stop(), this.deps.idleMs ?? 300_000);
+    if (
+      this.deps.resident ||
+      this.pending.size ||
+      this.starting.size ||
+      !this.child ||
+      this.deps.busy?.()
+    )
+      return;
+    this.idleTimer = setTimeout(
+      () => (this.deps.busy?.() ? this.clearIdle() : this.stop()),
+      this.deps.idleMs ?? 300_000
+    );
     this.idleTimer.unref?.();
   }
 }

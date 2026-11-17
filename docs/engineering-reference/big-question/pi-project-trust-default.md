@@ -18,6 +18,14 @@
 - `createProjectSettingsManager(cwd, agentDir, trusted)`：来源全部在 `trusted` 里才按 pi 默认加载；否则用只读存储把项目 settings 去掉包与命令类键，并注入 `extensions: ['!**']` 排除 `.pi/extensions` 自动发现。内容资源不受影响。
 - 所有 `DefaultResourceLoader`（父会话、子代理、锁定会话）都传这个 `settingsManager`。信任列表存在 `Project.trustedProjectCode`，Main 在 spawn 时下发；出现新来源时整个项目重新拦下。
 
+### 只读临时代理不能继承「用户已信任」的可执行资源（2026-11-16 核验）
+
+项目准入与只读隔离不是同一个边界。`createProjectSettingsManager` 刻意保留全局设置，并允许用户明确批准的项目包；临时 `agent.run` 若沿用它，即使 `noExtensions/noSkills: true`，全局包未安装或已信任项目包缓存被删除时，loader 初始化仍会安装并执行 npm 生命周期脚本。过滤工具列表和在会话开始后拒绝 bash 都挡不住初始化副作用。
+
+`src/agent/readOnlyResources.ts` 为临时只读代理和 locked 子会话提供 `SettingsManager.inMemory`，清空 packages/extensions/skills/prompts/themes、关闭磁盘发现与 context files，并用空资源 override。不要把「项目来源已批准」当成只读会话可以安装软件的授权。
+
+`src/agent/readOnlyResources.test.ts` 使用真实 SDK 与临时目录做正反对照：同一份含 npm 包的配置，旧选项确实到达 `installParsedSource`（测试截获，不联网），隔离选项则无安装尝试、无磁盘资源。这比只断言 `noExtensions: true` 更能发现回归。
+
 ## 回归防线
 
 `src/agent/projectCode.test.ts` 用真实 `DefaultResourceLoader` 验证：未信任时扩展模块不执行、`npmCommand` 不运行、项目技能照常加载；信任后加载；信任后新增来源重新拦截。

@@ -123,6 +123,7 @@ import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
 import { bundledDesignSkillPaths, getDesignPaths } from './design/appPaths';
+import { PluginAgentRuns } from './extensionPlugins/agentRuns';
 import { independentImageProvider } from './imageGeneration/providerHost';
 import { resolveImageProvider } from './imageGenerationConfig';
 import { resolveGlobalInstruction } from './instructionStore';
@@ -150,6 +151,7 @@ import { killAndWaitExit } from './processExit';
 import { bundledRtkPath } from './rtkBinary';
 import { pickSubagentModelRefs } from './subagentModels';
 import { readStoredSystemPrompt } from './systemPromptStore';
+import { titleModelCandidates } from './titleSummary';
 import { workspaceCommandBlocked } from './workspaceCommandGate';
 import { WorkspaceLockRequests } from './workspaceLockRequests';
 
@@ -448,6 +450,7 @@ export function startAgentWorker(): void {
       // 手动重读结果只回给发起 invoke 的等待者，不进普通事件流（renderer 的通用
       // snapshot 分支会顺手改 started / 清 asks，手动刷新不能有这些副作用）
       if (pendingReloads.settle(event) || workspaceLocks.settle(event)) return;
+      if (pluginAgents.settle(event)) return;
       if (settleCompletion(event) || settleChoice(event)) return;
       onEvent?.(event);
     }
@@ -466,6 +469,7 @@ export function startAgentWorker(): void {
     parentPluginScopes.clear();
     pendingReloads.failAll('agent worker exited');
     workspaceLocks.failAll('agent worker exited');
+    pluginAgents.failAll('agent worker exited');
     for (const [id, p] of pendingCompletions) {
       pendingCompletions.delete(id);
       p.reject(new Error('agent worker exited'));
@@ -485,6 +489,7 @@ export function stopAgentWorker(): void {
   parentToolProfiles.clear();
   parentPluginScopes.clear();
   workspaceLocks.failAll('agent worker stopped');
+  pluginAgents.failAll('agent worker stopped');
   worker?.kill();
   worker = null;
   workerReady = false;
@@ -528,6 +533,8 @@ export function isAgentWorkerRunning(): boolean {
 let workspaceBusy: (id: string) => boolean = () => false;
 
 const workspaceLocks = new WorkspaceLockRequests(sendAgentCommand);
+/** 插件代理在发起会话所在的 worker 里跑，用该会话的模型与只读工具 */
+const pluginAgents = new PluginAgentRuns((command) => sendAgentCommand(command).ok);
 const workspaceWorkers = new Map<string, UtilityProcess | null>();
 
 export async function freezeWorkspace(
@@ -1631,6 +1638,33 @@ export function registerPluginSessionBridge(
       if (!identity) return { ok: false, error: '会话不在运行' };
       const sent = abortSession(identity);
       return sent.ok ? { ok: true } : { ok: false, error: sent.error ?? '无法中止会话' };
+    },
+    generation(sessionId) {
+      return lookup(sessionId)?.generation;
+    },
+    agentRun(sessionId, input, onEvent) {
+      const identity = lookup(sessionId);
+      if (!identity) return { ok: false, error: '会话不在运行', notRunning: true };
+      // 精确代次：异步解析模型/唤醒后可能已换新会话，旧代调用不能投到新代
+      if (input.generation !== identity.generation)
+        return { ok: false, error: '会话代次已变化，请重新发起代理' };
+      const { generation: _generation, ...run } = input;
+      return pluginAgents.start(identity, run, onEvent);
+    },
+    async resolveModel(choice) {
+      const keys = await readStoredOauthCredentialKeys();
+      if (choice === 'title') {
+        // 标题模型 → 全局默认；都不可用就跟随会话
+        for (const ref of titleModelCandidates(readSettingsState())) {
+          const resolved = resolveModelSelection(ref.providerId, ref.modelId, keys);
+          if (resolved.ok) return { ok: true, model: resolved.selection.config };
+        }
+        return { ok: true };
+      }
+      const resolved = resolveModelSelection(choice.providerId, choice.modelId, keys);
+      return resolved.ok
+        ? { ok: true, model: resolved.selection.config }
+        : { ok: false, error: `插件设置的模型不可用：${resolved.error}` };
     },
   });
 }

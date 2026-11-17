@@ -17,6 +17,33 @@ export interface PluginAgentSource {
   name: string;
   agentType?: string;
 }
+/** 只读代理的进度与终态；end 之后不再有这个 runId 的消息 */
+export type PluginAgentRunEvent =
+  | { type: 'tool-start'; id: string; name: string; args: string; parentId?: string }
+  | { type: 'tool-end'; id: string; isError: boolean; output?: string }
+  /** 当前这条回复的完整正文（不是增量） */
+  | { type: 'text'; text: string }
+  /** model：实际使用的模型 id */
+  | { type: 'end'; ok: true; text: string; model?: string }
+  | { type: 'end'; ok: false; error: string; aborted?: boolean };
+export interface PluginAgentRunInput {
+  /** 任务正文，不超过 64K 字符 */
+  prompt: string;
+  /** 角色说明，包成 `<role>` 放在任务前；不超过 32K 字符 */
+  systemPrompt?: string;
+  /**
+   * `conversation` 附上发起会话最近若干条对话文本；
+   * `fork` 从发起会话分叉：带完整对话、同模型，复用会话的提示缓存
+   * （插件指定了模型、或会话还没发过请求时退回 `conversation`）；缺省 `none`
+   */
+  context?: 'conversation' | 'fork' | 'none';
+  /** 10 秒到 20 分钟，缺省 10 分钟 */
+  timeoutMs?: number;
+  /** 工具开始/结束与回复正文（完整正文，节流约 300ms） */
+  onEvent?: (event: Exclude<PluginAgentRunEvent, { type: 'end' }>) => unknown;
+  /** 中止后 Promise 以 ABORTED 拒绝 */
+  signal?: AbortSignal;
+}
 export interface PluginArtifactInfo {
   id: string;
   pluginId: string;
@@ -276,12 +303,19 @@ export interface PluginMainApi {
     view: {
       emit(name: string, data?: unknown): Promise<null>;
       open(input?: string | { viewId?: string; sessionId?: string }): Promise<null>;
+      /** 关掉本插件的侧栏页面；右侧栏是 `open` 为它打开的就一并收起 */
+      close(input?: string | { viewId?: string; sessionId?: string }): Promise<null>;
     };
     status: { update(id: string, patch: PluginStatusPatch): Promise<null> };
     clipboard: { writeText(text: string): Promise<null> };
     openExternal(url: string): Promise<null>;
   };
   readonly composer: ComposerApi;
+  /**
+   * 用发起会话的模型跑一个临时只读代理（read/grep/find/ls，不能改文件、不弹审批），需要 `agent.run`。
+   * 必须在带会话的宿主调用里发起；运行不随调用结束，每个插件最多同时 2 个。
+   */
+  readonly agent: { run(input: PluginAgentRunInput): Promise<{ text: string; model?: string }> };
   readonly config: { get(): Promise<Record<string, string | number | boolean>> };
   readonly mcp: {
     tools(): Promise<PluginMcpTool[]>;
