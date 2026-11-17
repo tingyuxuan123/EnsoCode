@@ -1,10 +1,20 @@
-import { Maximize2, Minimize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
+import { Download, ImageDown, Maximize2, Minimize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { addToast } from '@/components/ui/toast';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useOverlayGuard } from '@/hooks/useOverlayGuard';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
+import {
+  downloadFile,
+  exportMermaidPng,
+  mermaidExportFileName,
+  rasterizeSvg,
+  serializeSvgElement,
+  svgBlob,
+  svgMarkupToXml,
+} from './mermaidExport';
 import { decorateMermaidSvg, MERMAID_OFFSCREEN_HOST_STYLE } from './mermaidSvg';
 
 interface MermaidAPI {
@@ -43,7 +53,11 @@ function withRenderLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** 挂到 document.body 再画，避免 flowchart htmlLabels 读 firstChild 时空指针 */
-async function renderMermaidSvg(code: string, theme: string): Promise<string> {
+async function renderMermaidSvg(
+  code: string,
+  theme: string,
+  exportingPng = false
+): Promise<string> {
   return withRenderLock(async () => {
     const mermaid = await getMermaid();
     mermaid.initialize({
@@ -52,6 +66,9 @@ async function renderMermaidSvg(code: string, theme: string): Promise<string> {
       securityLevel: 'loose',
       fontFamily: 'inherit',
       suppressErrorRendering: true,
+      // Mermaid 11 gives root htmlLabels precedence over flowchart.htmlLabels.
+      // The latter alone still emits foreignObject, which cannot be rasterized safely.
+      ...(exportingPng ? { htmlLabels: false } : {}),
       flowchart: { htmlLabels: false, useMaxWidth: true },
     });
 
@@ -84,6 +101,8 @@ export function MermaidRenderer({
   className?: string;
 }) {
   const { t } = useI18n();
+  // PWA shares this renderer; keep its approved layout unchanged until its own design pass.
+  const desktopExport = Boolean(window.electronAPI?.env?.platform);
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +115,8 @@ export function MermaidRenderer({
   const panStartRef = useRef({ x: 0, y: 0 });
   const svgContentRef = useRef<HTMLDivElement>(null);
   const hasDraggedRef = useRef(false);
+  const exportingRef = useRef(false);
+  const [exporting, setExporting] = useState(false);
 
   const resolvedTheme = useColorScheme();
   const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
@@ -208,6 +229,52 @@ export function MermaidRenderer({
     if (!hasDraggedRef.current) handleExitFullscreen();
   }, [handleExitFullscreen]);
 
+  const currentSvg = useCallback(() => {
+    const svgEl = containerRef.current?.querySelector('svg');
+    return svgEl ? serializeSvgElement(svgEl) : null;
+  }, []);
+  const handleExportSvg = useCallback(() => {
+    try {
+      const markup = currentSvg();
+      if (!markup) throw new Error('No svg');
+      downloadFile(svgBlob(markup), mermaidExportFileName('svg'));
+    } catch {
+      addToast({ type: 'error', title: t('Export failed') });
+    }
+  }, [currentSvg, t]);
+  const handleExportPng = useCallback(async () => {
+    if (exportingRef.current) return;
+    exportingRef.current = true;
+    setExporting(true);
+    try {
+      const result = await exportMermaidPng({
+        currentSvg,
+        rerender: async () => svgMarkupToXml(await renderMermaidSvg(code, mermaidTheme, true)),
+        rasterize: (markup, width, height, scale) =>
+          rasterizeSvg(
+            markup,
+            width,
+            height,
+            scale,
+            mermaidTheme === 'dark' ? '#1f2020' : '#ffffff'
+          ),
+        download: downloadFile,
+      });
+      if (result.kind === 'failed') addToast({ type: 'error', title: t('Export failed') });
+      else if (result.kind === 'svg')
+        addToast({
+          type: 'warning',
+          title:
+            result.reason === 'too-large'
+              ? t('Diagram is too large for PNG, exported SVG instead')
+              : t('PNG export failed, exported SVG instead'),
+        });
+    } finally {
+      exportingRef.current = false;
+      setExporting(false);
+    }
+  }, [code, mermaidTheme, currentSvg, t]);
+
   const zoomControls = (size: 'sm' | 'md') => {
     const box = size === 'sm' ? 'h-6 w-6' : 'h-7 w-7';
     const icon = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
@@ -263,6 +330,33 @@ export function MermaidRenderer({
           </button>
         )}
         <div className="mx-0.5 h-4 w-px bg-border" />
+        {desktopExport && (
+          <button
+            type="button"
+            onClick={handleExportSvg}
+            title={t('Export SVG')}
+            className={cn(
+              'flex items-center justify-center rounded hover:bg-accent hover:text-accent-foreground',
+              box
+            )}
+          >
+            <Download className={icon} />
+          </button>
+        )}
+        {desktopExport && (
+          <button
+            type="button"
+            onClick={() => void handleExportPng()}
+            title={t('Export PNG')}
+            disabled={exporting}
+            className={cn(
+              'flex items-center justify-center rounded hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
+              box
+            )}
+          >
+            <ImageDown className={icon} />
+          </button>
+        )}
         {isFullscreen ? (
           <button
             type="button"
