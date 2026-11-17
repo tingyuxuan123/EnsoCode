@@ -2593,6 +2593,7 @@ export const zhTranslations: Record<string, string> = {
   'Drag page control': '拖动页面控件',
   'Keep browser open': '保留浏览器页面',
   'Not executed': '未执行',
+  'Needs verification': '需要核对',
   'Browser action did not finish.': '浏览器操作未完成。',
   '{{count}} to verify': '{{count}} 项待核对',
   'Browser tabs': '浏览器 · 标签页',

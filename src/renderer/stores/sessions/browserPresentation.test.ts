@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { browserPresentation, recordBrowserRefs } from './browserPresentation';
 
 describe('browser step presentation', () => {
+  it.each([null, 'Browser action aborted', 'Browser action act timed out after 60000ms'])(
+    'does not claim unconfirmed steps were never executed after interruption: %s',
+    (output) => {
+      const view = browserPresentation(
+        'browser_act',
+        {
+          steps: [
+            { action: 'click', target: 'Start' },
+            { action: 'fill', target: 'Query', text: 'value' },
+            { action: 'click', target: 'Submit' },
+          ],
+        },
+        output,
+        'error'
+      );
+      expect(view?.steps.map((step) => step.status)).toEqual(['unknown', 'unknown', 'unknown']);
+      expect(view?.count).toBe(1);
+    }
+  );
   it('prefers a short user-facing description, never raw JSON, ref IDs or typed secrets', () => {
     expect(
       browserPresentation(

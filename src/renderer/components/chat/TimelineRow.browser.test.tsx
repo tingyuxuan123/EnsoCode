@@ -46,6 +46,24 @@ function row(
 const render = (item: TimelineItem) => renderToStaticMarkup(createElement(TimelineRow, { item }));
 
 describe('browser steps are not debugging output', () => {
+  it('marks interrupted batch outcomes as unknown, never as unexecuted without evidence', () => {
+    const html = render(
+      row(
+        'browser_act',
+        {
+          steps: [
+            { action: 'click', target: 'Start' },
+            { action: 'click', target: 'Submit' },
+          ],
+        },
+        'Browser action aborted',
+        true
+      )
+    );
+    expect(html).toContain('Needs verification');
+    expect(html).not.toContain('Not executed');
+    expect(html).toContain('Browser action aborted');
+  });
   it('keeps an approval audit visible without restoring the raw JSON result card', () => {
     const item = row('browser_navigate', { description: '打开登录页' }, '{"tabId":"internal-tab"}');
     if (item.kind !== 'tool') throw new Error('missing tool');

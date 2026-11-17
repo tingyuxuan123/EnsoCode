@@ -48,7 +48,8 @@ export function BrowserActivityRow({
             key={`${item.key}:${step.ordinal}`}
             className={cn(
               'flex min-h-6 min-w-0 items-center gap-2 text-sm text-muted-foreground',
-              step.status === 'failed' && 'text-destructive'
+              step.status === 'failed' && 'text-destructive',
+              step.status === 'unknown' && 'text-amber-600 dark:text-amber-400'
             )}
           >
             <Globe aria-hidden className="size-4 shrink-0 opacity-70" />
@@ -59,6 +60,9 @@ export function BrowserActivityRow({
               {label}
             </span>
             {step.status === 'failed' && <span className="shrink-0 text-xs">{t('Failed')}</span>}
+            {step.status === 'unknown' && (
+              <span className="shrink-0 text-xs">{t('Needs verification')}</span>
+            )}
             {failed && step.status === 'pending' && (
               <span className="shrink-0 text-xs">{t('Not executed')}</span>
             )}

@@ -7,7 +7,7 @@ export interface BrowserLabel {
 export interface BrowserStepView {
   ordinal: number;
   label: BrowserLabel;
-  status: 'completed' | 'running' | 'failed' | 'pending';
+  status: 'completed' | 'running' | 'failed' | 'pending' | 'unknown';
 }
 export interface BrowserToolView {
   label: BrowserLabel;
@@ -163,18 +163,29 @@ export function browserPresentation(
       : [];
   const body = outputText(output);
   const stopped = /browser_act step (\d+) stopped \((\d+) completed\)/.exec(body);
-  const completed =
-    typeof data.completed === 'number' && Number.isSafeInteger(data.completed)
+  // 没有结果里的 completed 或 stopped 计数，就没有「哪些步骤跑过」的证据：
+  // 取消、超时、进程退出都可能已经投递输入，不能标成未执行。
+  const confirmed =
+    (typeof data.completed === 'number' && Number.isSafeInteger(data.completed)) || !!stopped;
+  const completed = !confirmed
+    ? 0
+    : typeof data.completed === 'number' && Number.isSafeInteger(data.completed)
       ? Math.max(0, Math.min(rawSteps.length, data.completed))
-      : stopped
-        ? Math.min(rawSteps.length, Number(stopped[2]))
-        : 0;
-  const failedIndex = state === 'error' ? (stopped ? Number(stopped[1]) - 1 : completed) : -1;
+      : Math.min(rawSteps.length, Number(stopped![2]));
+  const interrupted = state === 'error' && !confirmed;
+  const failedIndex =
+    state === 'error' && !interrupted ? (stopped ? Number(stopped[1]) - 1 : completed) : -1;
   const steps = rawSteps.map(
     (step, i): BrowserStepView => ({
       ordinal: i + 1,
       label: stepLabel(String(step.action), step, refs),
-      status: i < completed ? 'completed' : i === failedIndex ? 'failed' : 'pending',
+      status: interrupted
+        ? 'unknown'
+        : i < completed
+          ? 'completed'
+          : i === failedIndex
+            ? 'failed'
+            : 'pending',
     })
   );
   const error =
@@ -190,9 +201,14 @@ export function browserPresentation(
   return {
     label,
     steps,
-    count: rawSteps.length
-      ? Math.max(1, completed + (failedIndex >= completed && failedIndex < rawSteps.length ? 1 : 0))
-      : 1,
+    count: interrupted
+      ? 1
+      : rawSteps.length
+        ? Math.max(
+            1,
+            completed + (failedIndex >= completed && failedIndex < rawSteps.length ? 1 : 0)
+          )
+        : 1,
     ...(error ? { error: redact(error) } : {}),
     ...(typeof data.observationError === 'string'
       ? { warning: redact(data.observationError.slice(0, 6000)) }
