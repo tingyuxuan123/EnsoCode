@@ -1,119 +1,61 @@
-version: 0.2.83
+version: 0.2.85
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.83/Collabra-0.2.83-arm64-mac.zip
-    sha512: XHVK5QjdHRPpYUMHnvP1ZJUVdch5uF+oRhaX68mBaXJlsGtKNUpLJU2y67/sjYQt0uSLZf19J64hn8eCkEasvg==
-    size: 183980968
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.83/Collabra-0.2.83-arm64.dmg
-    sha512: S/5rmqAww71jqDvbgTgn+5TVQb7gt1dcR9chzNQ42RgyPMySPY48f92//kivvqvgcBY35cWBTttfnsuyFxfOvA==
-    size: 179086285
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.83/Collabra-0.2.83-arm64-mac.zip
-sha512: XHVK5QjdHRPpYUMHnvP1ZJUVdch5uF+oRhaX68mBaXJlsGtKNUpLJU2y67/sjYQt0uSLZf19J64hn8eCkEasvg==
-releaseDate: 2026-11-17T04:29:15.515Z
-releaseName: Collabra 0.2.83 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.85/Collabra-0.2.85-arm64-mac.zip
+    sha512: Yq4YMk+SrpXQvZardX319e627zN2vZbfZIQxMYDQrvK1tjj8R6uISljgBP7d2umE7hZsosWsdvgiPHPRIEGoOA==
+    size: 183992683
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.85/Collabra-0.2.85-arm64.dmg
+    sha512: CGZMDPp41trmzb2J1pBdyBXQxEkwHNb2lxawwTAspktl7fAD1vD8DleoyCxi6O1tLGClDcQ9XtmqbsYxQe5/Fg==
+    size: 179126168
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.85/Collabra-0.2.85-arm64-mac.zip
+sha512: Yq4YMk+SrpXQvZardX319e627zN2vZbfZIQxMYDQrvK1tjj8R6uISljgBP7d2umE7hZsosWsdvgiPHPRIEGoOA==
+releaseDate: 2026-11-17T11:18:22.236Z
+releaseName: Collabra 0.2.85 — 个人测试
 releaseNotes: >
-  # Collabra 0.2.83
+  # Collabra 0.2.85
 
 
-  ## 插件只读代理
+  ## 浏览器操作更流畅
 
 
-  - 新增 `agent.run` 权限与 `enso.agent.run`：插件可在本机主会话旁运行一个临时只读代理，
-    只允许 read/grep/find/ls，不写 jsonl、不进父会话正文与子代理树，运行结束也不留下会话。
-  - 需要人工批准的读取直接拒绝，不弹审批卡；子会话沿用父会话的无人值守状态。
+  - 已经确定的连续步骤可以一次执行，减少点击、填写与等待之间反复请求模型的时间。
 
-  - 临时代理用内存设置启动，不读磁盘上的项目/全局包、扩展、技能与 hooks，
-    不会因为 loader 初始化而去安装依赖并执行安装脚本。
-  - `context` 可选 `none` / `conversation` / `fork`；`fork` 复用最近实际请求的系统提示、
-    消息与工具声明以复用相同前缀，拿不到前缀或换了模型时退为 `conversation`。
-  - 插件不能任意指定模型：清单可声明一个 `type: 'model'` 配置，用户选择跟随会话、
-    跟随标题模型或指定 `<providerId>::<modelId>`，模型与凭证都由 Main 解析，不下发给插件。
-  - 插件停用、进程退出或 worker 退出会取消运行；每插件最多同时 2 个。
+  - 点击、填写和导航后直接返回页面变化与可继续操作的控件，不再要求每一步都重新读取整页。
+
+  - 支持定位前一步操作后才出现的输入框或按钮；结合页面变化和网络请求进行有界等待。
+
+  - 兼容模型补齐无关可选字段的调用，减少参数错误和回退为逐步操作的情况。
+
+  - 连续操作仍校验页面归属和导航权限；遇到失败、取消或人工操作立即停止，不自动重放已经发送的输入。
 
 
-  ## 插件视图与登记表
+  ## 浏览器过程更清楚
 
 
-  - `ui.view.close` 对称关闭本插件已声明的侧栏页面：只关自己那一个页面，
-    且仅在右侧栏本来就是为它打开、页面仍是当前标签时才一并收起；用户原先打开的栏保持打开。
-  - 插件登记表兼容上游 v2 格式：读取时按未授权处理缺失的 `styles` / `browserDomains`，
-    写回保留原版本；未知版本、坏记录与重复记录仍进入只读保护。
+  - 浏览器步骤按操作次数和实际思考时长收拢，展开后显示“进入登录页、填写账号、填写密码”等简短动作。
 
-  ## 会话静音
+  - 不再直接展示内部工具名、引用编号、JSON 参数和整块协议结果，也不回显密码或输入正文。
 
+  - 旧会话没有动作描述时，使用操作类型和之前实际看到的控件名称显示摘要。
 
-  - 会话右键可切换静音：不再发系统通知和配对推送，Dock 角标与手机主屏角标也不计入。
+  - 真实失败、尚未执行的步骤和需要核对的页面结果仍会明确提示，审批记录保留。
 
-  - 静音只停主动打扰：运行、未读、审批卡、提问和配对目录/时间线同步都照常。
-
-  - 子会话与旁路会话跟随根会话；归档时一并清掉静音与置顶。
-
-  - 切换静音的瞬间就生效，不必等会话数据落盘。
+  - 取消、超时或没有结果的中断不会声称“未执行”；无法确认的步骤标为“需要核对”，避免诱导原样重放。
 
 
-  ## 图表导出
+  ## 验收与更新范围
 
 
-  - Mermaid 图表可导出 SVG 或 PNG：SVG 复用当前预览的样式与内容，PNG 按 2x 独立重排。
+  - GPT 与 DeepSeek 均在隔离桌面环境完成真实浏览器验收：四个连续步骤一次执行，加上打开页面共两次工具调用。
 
-  - 图超出 canvas 上限或 PNG 失败时明确提示并改导出 SVG，不再产出空白图片。
+  - 已检查实际展开界面的动作列表，并完成桌面全量检查和手机端类型检查、构建。
 
+  - 本次发布为 Mac arm64 同证书个人版，更新个人通道，不改变正式 Latest。
 
-  ## 浏览器工具
-
-
-  - 模型给的数值参数按声明范围就地钳住（含写成字符串的数字），越界值不再直接报错。
-
-  - 自造的 device profile 会被丢弃，宽高相乘超出像素预算时等比缩进。
-
-  - 显式 tabId 失效时，只读操作回落到会话当前 tab；点击、输入、导航一律报错，不猜页面。
-
-  - ref 失效的报错会回显快照里可用的条目，少绕一轮快照查询。
-
-
-  ## 会话可靠性
-
-
-  - 同代 spawn 失败的真实原因会被保留，后续 STALE 拒绝不再覆盖它，也不会触发错误自愈。
-
-  - 闲置回收前会排空该会话排队中的命令；回收后同代恢复重新建立会话。
-
-  - 会话已从后台释放时，发送直接提示重新发送以恢复，不再假装投递成功。
-
-  - 子代理工具缺 `operation` 时，仅在 description 与 prompt 都非空时按 spawn 处理，其余明确报错。
-
-
-  ## Antigravity 工具 schema
-
-
-  - 先把本地 `$defs` / `definitions` 引用展开再归一化，避免丢定义后留下悬空 `$ref`
-    导致整个请求 400；循环引用、缺失目标和转义键都有回归。
-
-  ## Android
-
-
-  - 输入草稿改为按修订号确认：显示草稿不再产生提交语义，真实发送才钉住修订，
-    离开页面期间到达的回执也能清掉已投递草稿，不会误清刚编辑过的内容。
-  - 草稿落盘改用 UTF-8 长度前缀，保持最近编辑顺序、不切坏代理对，旧版本记录仍可读取。
-
-  - 私聊与群聊把委派、例行任务与群上下文信封折成摘要卡片，只折叠整段匹配的信封，
-    信封后接正文时与桌面一致按原文展示。
-  - 新建任务设置面板改成单一滚动，模型列表不再嵌套滚动；面板高度按窗口预留，
-    标题与关闭按钮始终可见。
-
-  ## 发布范围与验收边界
-
-
-  - Mac arm64 版使用原个人证书，发布到个人 prerelease 与独立个人更新清单；个人通道不修改正式 Latest。
-
-  - 插件只读代理由两家厂商模型真机跑通 `none` / `conversation` / `fork` 三种上下文：
-    都真实调用 read 读到文件里的 proof token，父会话消息数不变，只读文件未被改动。
-  - 同一轮真机还验证了插件视图开关与静音元数据；Mermaid 导出在隔离 Electron 里点击真实按钮，
-    核对下载 Blob 的 MIME 与解码结果（浅色/深色均生成有效 PNG）。
-  - 安装、退出和重启由用户操作；发布成功不代表已完成本机安装、旧数据保留或自动升级验收。
+  - 安装和重启由用户操作；发布成功不代表已经完成本机安装、旧数据保留或自动升级验收。
 
 
   ---
 
 
-  个人测试通道 0.2.83：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.85：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
