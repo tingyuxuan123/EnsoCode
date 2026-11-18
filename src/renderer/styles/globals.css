@@ -469,6 +469,8 @@ html.bg-image-enabled [data-slot='composer'] {
  * 只留边框、直接透出壁纸：欢迎页建议、工具详情、Bot 页的内容卡片与系统提示条。
  */
 html.bg-image-enabled [data-slot='welcome-suggestion'],
+html.bg-image-enabled [data-slot='welcome-panel'],
+html.bg-image-enabled [data-slot='working-status'],
 html.bg-image-enabled [data-slot='tool-details'],
 html.bg-image-enabled [data-slot='bot-card'],
 html.bg-image-enabled [data-slot='bot-notice'] {

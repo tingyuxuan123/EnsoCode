@@ -932,7 +932,7 @@ export function Composer({
         data-slot="composer"
         data-composer-appearance={appearance}
         className={cn(
-          'rounded-[6px] border border-border bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-brand/60',
+          'rounded-xl border border-border bg-card shadow-xs transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-smooth-out)] hover:border-foreground/15 focus-within:border-brand/60 focus-within:shadow-sm',
           locked && 'border-line opacity-80',
           (dragging || dndOver) && 'border-brand/50 bg-brand/5',
           (agentRecipient || planMode) && 'border-brand/35 shadow-brand/5'
@@ -1110,7 +1110,7 @@ export function Composer({
         {agentRecipient && <p className="sr-only">{t('Send only to the selected Agent')}</p>}
         <div
           data-composer-toolbar=""
-          className="flex items-end justify-between gap-[4px] px-[8px] pt-[2px] pb-[8px]"
+          className="flex items-end justify-between gap-[4px] border-t border-border/60 px-[8px] pt-[5px] pb-[8px]"
         >
           <div
             data-composer-tools=""

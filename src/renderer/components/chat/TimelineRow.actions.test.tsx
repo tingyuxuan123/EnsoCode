@@ -143,7 +143,7 @@ describe('回复正文的紧凑操作区', () => {
     const trigger = container.querySelector('[data-local-file]');
     expect(trigger?.getAttribute('data-local-file')).toBe(path);
     expect(trigger?.textContent).toBe(label);
-    expect(container.innerHTML).toContain('max-w-[86%] rounded-[6px] bg-muted');
+    expect(container.innerHTML).toContain('max-w-[86%] rounded-2xl bg-muted');
   });
   it('不在正文下方显示时间、耗时、TTFT 或生成速度', async () => {
     await render(reply());

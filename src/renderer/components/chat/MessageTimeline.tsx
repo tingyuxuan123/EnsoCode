@@ -2,7 +2,6 @@ import { ArrowDown, ChevronRight, FolderOpen, LoaderCircle } from 'lucide-react'
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import {
   Component,
-  memo,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -23,7 +22,8 @@ import {
   type TimelineItem,
 } from '@/stores/sessions/timeline';
 import { useSettingsStore } from '@/stores/settings';
-import { CodeKilnWorkingIcon } from './CodeKilnWorkingIcon';
+import { busyPhaseFor } from './busyStatus';
+import { EnsoMark } from './EnsoMark';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
@@ -35,10 +35,11 @@ import {
   virtuosoScrollIndex,
 } from './timelineRowOrigin';
 import { WelcomeSuggestions } from './WelcomeSuggestions';
+import { WorkingStatus } from './WorkingStatus';
 
 /** 消息和输入共用阅读列；padding 放在列上，保持容器查询断点与两侧对齐。全宽模式仍由 enso-chat-wide 覆盖。 */
 export const CHAT_COL =
-  'enso-chat-col mx-auto w-full max-w-[760px] px-[16px] @min-[36rem]:px-[24px]';
+  'enso-chat-col mx-auto w-full max-w-[860px] px-[16px] @min-[36rem]:px-[24px]';
 
 /** 可作为一轮回复开头、挂身份头的行 */
 const REPLY_ROW_KINDS: ReadonlySet<TimelineItem['kind']> = new Set([
@@ -598,18 +599,11 @@ export function MessageTimeline({
   const renderFooter = () => (
     <div data-timeline-footer="" className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
       {busy && (
-        <div
-          data-timeline-busy=""
-          className="flex min-h-[calc(26rem/14)] items-center gap-2 text-[calc(13rem/14)]"
-        >
-          <CodeKilnWorkingIcon />
-          <span className="t-shimmer" data-text={loading ? t('Loading…') : t('Working…')}>
-            {loading ? t('Loading…') : t('Working…')}
-          </span>
-          {!loading && (lastOutputAt ?? runStartedAt) !== undefined && (
-            <ElapsedTimer since={(lastOutputAt ?? runStartedAt) as number} />
-          )}
-        </div>
+        <WorkingStatus
+          loading={loading}
+          phase={busyPhaseFor(folded.at(-1))}
+          since={!loading ? (lastOutputAt ?? runStartedAt) : undefined}
+        />
       )}
       {error && (
         <div className="flex items-start gap-2">
@@ -630,58 +624,79 @@ export function MessageTimeline({
       <div data-enso="timeline" className="@container relative min-h-0 flex-1">
         <NavRail items={navItems} activeKey={activeNavKey} onJump={jumpTo} />
         {items.length === 0 && !busy ? (
-          <EmptyReveal
-            className={cn(
-              CHAT_COL,
-              'flex h-full flex-col items-start gap-[6px] overflow-y-auto pt-[40px] pb-[24px] text-left'
-            )}
-          >
-            <span className="t-stagger-line t-stagger-line--1 mb-[2px] flex items-center gap-[6px] text-[calc(11rem/14)] text-muted-foreground">
-              <FolderOpen className="size-[calc(14rem/14)] shrink-0" />
-              {onSuggestion && (
-                <>
-                  <span className="max-w-[240px] truncate">{emptyTitle}</span>
-                  <ChevronRight className="size-3 shrink-0" />
-                </>
-              )}
-              {t('New conversation')}
-            </span>
-            <p className="t-stagger-line t-stagger-line--1 text-[calc(22rem/14)] font-semibold tracking-tight">
-              {onSuggestion ? t('Start a new task') : emptyTitle}
-            </p>
-            {error ? (
-              <>
-                <p className="t-stagger-line t-stagger-line--2 max-w-md text-sm text-destructive whitespace-pre-wrap">
-                  {t(error)}
-                </p>
-                {onRetryResume && (
-                  <Button size="sm" variant="outline" onClick={onRetryResume}>
-                    {t('Retry resume')}
-                  </Button>
-                )}
-              </>
-            ) : (
-              <>
-                {emptyDescription !== '' && (
-                  <p className="t-stagger-line t-stagger-line--2 text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">
-                    {emptyDescription ??
-                      (onSuggestion
-                        ? t(
-                            'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
-                            {
-                              project: emptyTitle,
-                            }
-                          )
-                        : t('Ask the agent…'))}
-                  </p>
-                )}
-                {onSuggestion && (
-                  <div className="t-stagger-line t-stagger-line--3 mt-[14px] w-full">
-                    <WelcomeSuggestions onPick={onSuggestion} />
+          <EmptyReveal className="h-full overflow-y-auto">
+            <div className={cn(CHAT_COL, 'flex min-h-full items-center py-[calc(28rem/14)]')}>
+              <section
+                data-slot="welcome-panel"
+                className="relative w-full overflow-hidden rounded-[calc(20rem/14)] border border-border/70 bg-card/75 px-[calc(18rem/14)] py-[calc(20rem/14)] shadow-sm @min-[36rem]:px-[calc(26rem/14)] @min-[36rem]:py-[calc(24rem/14)]"
+              >
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-[18%] top-0 h-px bg-gradient-to-r from-transparent via-brand/55 to-transparent"
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -top-[calc(76rem/14)] -right-[calc(64rem/14)] size-[calc(190rem/14)] rounded-full bg-brand/[0.055] blur-3xl"
+                />
+
+                <div className="relative">
+                  <div className="t-stagger-line t-stagger-line--1 flex items-start gap-[calc(13rem/14)]">
+                    <span className="flex size-[calc(42rem/14)] shrink-0 items-center justify-center rounded-[calc(13rem/14)] border border-border/70 bg-background/80 shadow-xs">
+                      <EnsoMark className="size-[calc(21rem/14)]" />
+                    </span>
+                    <div className="min-w-0 flex-1 pt-[1px]">
+                      <span className="inline-flex min-w-0 max-w-full items-center gap-[calc(5rem/14)] rounded-full border border-border/60 bg-secondary/45 px-[calc(9rem/14)] py-[calc(4rem/14)] text-[calc(10.5rem/14)] text-muted-foreground">
+                        <FolderOpen className="size-[calc(13rem/14)] shrink-0" />
+                        {onSuggestion && (
+                          <>
+                            <span className="max-w-[220px] truncate">{emptyTitle}</span>
+                            <ChevronRight className="size-[calc(11rem/14)] shrink-0 opacity-60" />
+                          </>
+                        )}
+                        <span className="shrink-0">{t('New conversation')}</span>
+                      </span>
+                      <p className="mt-[calc(9rem/14)] text-[calc(23rem/14)] leading-[calc(29rem/14)] font-semibold tracking-[-0.025em] @min-[36rem]:text-[calc(25rem/14)] @min-[36rem]:leading-[calc(31rem/14)]">
+                        {onSuggestion ? t('Start a new task') : emptyTitle}
+                      </p>
+                    </div>
                   </div>
-                )}
-              </>
-            )}
+
+                  {error ? (
+                    <>
+                      <p className="t-stagger-line t-stagger-line--2 mt-[calc(18rem/14)] max-w-md text-sm text-destructive whitespace-pre-wrap">
+                        {t(error)}
+                      </p>
+                      {onRetryResume && (
+                        <Button size="sm" variant="outline" onClick={onRetryResume}>
+                          {t('Retry resume')}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {emptyDescription !== '' && (
+                        <p className="t-stagger-line t-stagger-line--2 mt-[calc(9rem/14)] max-w-[640px] text-[calc(13rem/14)] leading-[calc(23rem/14)] text-muted-foreground">
+                          {emptyDescription ??
+                            (onSuggestion
+                              ? t(
+                                  'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
+                                  {
+                                    project: emptyTitle,
+                                  }
+                                )
+                              : t('Ask the agent…'))}
+                        </p>
+                      )}
+                      {onSuggestion && (
+                        <div className="t-stagger-line t-stagger-line--3 mt-[calc(22rem/14)] border-t border-border/60 pt-[calc(18rem/14)]">
+                          <WelcomeSuggestions onPick={onSuggestion} />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </section>
+            </div>
           </EmptyReveal>
         ) : items.length === 0 && error ? (
           <EmptyReveal className="flex h-full flex-col items-center justify-center gap-2 text-center">
@@ -864,27 +879,6 @@ function HistoryPageHeader({
     </div>
   );
 }
-
-/** 秒级时长：45s / 2m42s */
-const formatElapsed = (ms: number): string => {
-  const whole = Math.max(0, Math.round(ms / 1000));
-  if (whole < 60) return `${whole}s`;
-  return `${Math.floor(whole / 60)}m${whole % 60}s`;
-};
-
-/** 运行中计时器：memo 隔离，每秒只重渲染这一个小组件，不波及 Virtuoso 列表 */
-const ElapsedTimer = memo(function ElapsedTimer({ since }: { since: number }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <span className="font-mono text-[calc(11rem/14)] text-muted-foreground tabular-nums">
-      {formatElapsed(Date.now() - since)}
-    </span>
-  );
-});
 
 /** 单行渲染兜底：一条消息渲染崩溃不拖垮整个时间线 */
 class RowErrorBoundary extends Component<

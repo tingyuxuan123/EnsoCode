@@ -596,7 +596,7 @@ function MentionRefChips({
 }
 
 export const USER_BUBBLE =
-  'max-w-[86%] rounded-[6px] bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]';
+  'max-w-[86%] rounded-2xl bg-muted px-[16px] py-[10px] text-[calc(14rem/14)] leading-[calc(24rem/14)]';
 
 /**
  * 用户消息长文折叠（对齐 ZCode）：超过 120px 时裁切并用遮罩渐隐，气泡底部居中一个圆形展开按钮。

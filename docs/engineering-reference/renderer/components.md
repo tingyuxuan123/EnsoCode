@@ -173,6 +173,12 @@ Code 聊天 HTTP(S) 链接可按设备本地偏好在所属会话的新浏览器
 无有效会话或带 Ctrl/Cmd 等修饰键时保留外链行为。本地文件与 Bot 产物仍走原授权链路，
 手机设置桩固定关闭此偏好。回归：`Markdown.fileOpening.test.tsx`、`sidePanelDock.test.ts`。
 
+## 动态状态与读屏播报
+
+运行状态的 `role="status"` / `aria-live` 只包阶段文案；每秒变化的视觉计时器标
+`aria-hidden="true"`。把计时器放进 atomic live region 会让读屏器每秒重播整张状态卡。
+回归：`WorkingStatus.test.tsx`。
+
 ## Code / Bot 工作模式入口
 
 工作模式入口固定在主 `TitleBar` 居中位置（`ModeSwitch` → `data-slot="mode-switch"`，经 `title-bar-center`
