@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => ({
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/stores/sessions', () => ({
   useSessionsStore: (select: (state: object) => unknown) =>
-    select({ conversations: { fixture: harness.conversation } }),
+    select({ conversations: { fixture: harness.conversation }, worktreeStatuses: {} }),
 }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: object) => unknown) =>

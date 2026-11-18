@@ -12,8 +12,10 @@ import {
   Coins,
   Cpu,
   Database,
+  Folder,
   FolderOpen,
   Gauge,
+  GitBranch,
   Hourglass,
   type LucideIcon,
   Package,
@@ -23,6 +25,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Sparkles,
+  SquareTerminal,
   Tag,
   Users,
   Wallet,
@@ -44,6 +47,7 @@ import { ContextMeter } from './ContextMeter';
 import { buildRequestBodySegment } from './requestBodySegment';
 import { StatusLineSettings } from './StatusLineSettings';
 import { resolveSessionUsageAccount } from './sessionUsageAccount';
+import { branchLabel, hostLabel, trayPlace } from './statusTray';
 import {
   buildUsageSegmentValues,
   CRITICAL_PERCENT,
@@ -56,6 +60,11 @@ export type { SegmentValue };
 
 interface StatsLineProps {
   conversationId: string;
+  /**
+   * 本地工作区当前分支。主树的分支只由 composer 的工作区选择器在切换后回报，
+   * store 里没有第二份权威记录，所以由调用方传进来；缺省时回落到会话绑定的 worktree 分支。
+   */
+  branch?: string;
 }
 
 /**
@@ -396,12 +405,48 @@ function buildSegmentValues(
   return values;
 }
 
+/** 位置托盘的主机图标：只有远端项目会用到，用终端标记而不是笔记本。 */
+const HOST_ICONS = SquareTerminal;
+
+/** tray 上的一枚安静药丸：图标 + 文字 +（可选）尾注。常态灰字，悬停浮出底色。 */
+function TrayLink({
+  icon: Icon,
+  text,
+  title,
+  trailing,
+  static: isStatic = false,
+}: {
+  icon: LucideIcon;
+  text: string;
+  title: string;
+  trailing?: string;
+  /** 只作说明、不可点（主机就是这样：它由项目推导，不是选项）。 */
+  static?: boolean;
+}) {
+  return (
+    <span
+      title={title}
+      data-static={isStatic || undefined}
+      className={cn(
+        'flex h-[calc(24rem/14)] shrink-0 items-center gap-[calc(6rem/14)] rounded-full px-[calc(8rem/14)] text-[calc(12rem/14)] text-muted-foreground tabular-nums',
+        isStatic
+          ? 'cursor-default'
+          : 'transition-colors duration-(--duration-quick) ease-(--ease-out) hover:bg-accent hover:text-foreground'
+      )}
+    >
+      <Icon className="size-[calc(13rem/14)] shrink-0 opacity-75" />
+      <span className="max-w-[calc(160rem/14)] truncate">{text}</span>
+      {trailing && <span className="shrink-0 opacity-70">{trailing}</span>}
+    </span>
+  );
+}
+
 /** composer 下方的会话统计条：段位驱动、每段「图标 + 值」的紧凑呈现，段名只在悬停提示与设置弹层里。
  *  段位顺序 = `statusLineSegments` 数组自身顺序（用户可在设置弹层拖拽），预设不进存储，
  *  见 `statusLinePresetOf`。外层恒占一行高度：避免统计从无到有时输入框跳动；
  *  已开启且有数据的段位稳定显示，窄窗口横向滚动，不再悬停展开挤动布局。
  *  全部段位关掉时仍渲染空容器 + 设置按钮，否则用户关完就再也打不开设置。 */
-export function StatsLine({ conversationId }: StatsLineProps) {
+export function StatsLine({ conversationId, branch: branchProp }: StatsLineProps) {
   const { t } = useI18n();
   const conversation = useSessionsStore((state) => state.conversations[conversationId]);
   const messages = conversation?.messages ?? [];
@@ -422,6 +467,7 @@ export function StatsLine({ conversationId }: StatsLineProps) {
     [providers, virtualModels]
   );
   const projects = useSettingsStore((state) => state.projects);
+  const statuses = useSessionsStore((state) => state.worktreeStatuses);
   const rawSegments = useSettingsStore((state) => state.statusLineSegments);
   // 渲染层第二道防线：见 sanitizeStatusLineSegments 注释；useMemo 保持引用稳定，
   // 只在 store 里的原始值真的变化时才重新计算，不会每次 render 都产生新数组打断记忆化。
@@ -467,28 +513,69 @@ export function StatsLine({ conversationId }: StatsLineProps) {
   // STATUS_LINE_SEGMENT_IDS 声明序 filter —— 那是旧契约，已被拖拽排序需求反转。
   const visibleSegments = enabledSegments.filter((id) => values[id]);
 
+  const place = trayPlace(projects.find((p) => p.id === conversation.projectId));
+  // 只有远端项目才提示「代码不在这台机器上」；本机项目这一段整段不渲染。
+  const host = hostLabel(projects.find((p) => p.id === conversation.projectId));
+  const worktreeBranch = branchProp ?? conversation.worktree?.branch;
+  const ahead = statuses[conversation.parentId ?? conversation.id]?.ahead;
+  const branch = branchLabel(worktreeBranch, ahead);
+  const hasPlace = Boolean(host || place.project || place.temporary || branch);
+
   return (
     <div
       data-slot="stats-line"
-      className="relative mt-[6px] flex h-[calc(20rem/14)] min-w-0 items-center justify-start pr-[calc(28rem/14)]"
+      // 卡片下方独立的一行：不自带底色，也不并进输入框卡片，靠页面本身的浅底立住。
+      className="mt-[4px] flex h-[calc(26rem/14)] min-w-0 items-center gap-[calc(2rem/14)] px-[calc(4rem/14)]"
     >
+      {hasPlace && (
+        <div
+          data-slot="stats-line-place"
+          className="flex min-w-0 flex-nowrap items-center gap-[calc(2rem/14)] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {host && <TrayLink icon={HOST_ICONS} text={host} title={host} static />}
+          {place.project && <TrayLink icon={Folder} text={place.project} title={place.project} />}
+          {place.temporary && (
+            <TrayLink icon={Folder} text={t('Temporary chats')} title={t('Temporary chats')} />
+          )}
+          {branch && (
+            <TrayLink
+              icon={GitBranch}
+              text={branch.name}
+              title={
+                branch.ahead > 0
+                  ? t('Ahead of upstream by {{count}} commits', { count: branch.ahead })
+                  : branch.name
+              }
+              trailing={branch.ahead > 0 ? `↑${branch.ahead}` : undefined}
+            />
+          )}
+        </div>
+      )}
       {visibleSegments.length > 0 && (
-        <div className="flex min-w-0 flex-nowrap items-center gap-[calc(16rem/14)] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          data-slot="stats-line-tray"
+          className="ml-auto flex min-w-0 flex-nowrap items-center gap-[calc(2rem/14)] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {visibleSegments.map((id) => {
             const value = values[id];
             if (!value) return null;
             const Icon = icons[id];
             const label = `${t(SEGMENT_LABEL_KEYS[id])} · ${value.full}`;
+            // tray 上的每一段都是一枚安静的药丸：常态灰字，悬停才浮出底色。
             const segmentClass = cn(
-              'flex items-center gap-[calc(5rem/14)] whitespace-nowrap rounded-sm text-[calc(11rem/14)] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'flex h-[calc(24rem/14)] shrink-0 items-center gap-[calc(6rem/14)] whitespace-nowrap rounded-full px-[calc(8rem/14)] text-[calc(12rem/14)] tabular-nums outline-none transition-colors duration-(--duration-quick) ease-(--ease-out) hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
               value.critical ? 'text-destructive' : 'text-muted-foreground'
             );
             const segment = (
               <>
                 {id === 'context' && value.percent !== undefined ? (
-                  <ContextMeter percent={value.percent} critical={Boolean(value.critical)} />
+                  <ContextMeter
+                    percent={value.percent}
+                    critical={Boolean(value.critical)}
+                    variant="ring"
+                  />
                 ) : (
-                  <Icon className="h-3 w-3 shrink-0 opacity-75" />
+                  <Icon className="size-[calc(13rem/14)] shrink-0 opacity-75" />
                 )}
                 {value.compact && (
                   <span className="max-w-[calc(220rem/14)] truncate">{value.compact}</span>
@@ -529,9 +616,9 @@ export function StatsLine({ conversationId }: StatsLineProps) {
       <Popover>
         <PopoverTrigger
           aria-label={t('Status line settings')}
-          className="-translate-y-1/2 absolute top-1/2 right-0 flex size-[calc(20rem/14)] items-center justify-center rounded-[4px] text-faint transition-colors hover:bg-muted hover:text-foreground"
+          className="flex size-[calc(24rem/14)] shrink-0 items-center justify-center rounded-full text-faint transition-colors duration-(--duration-quick) ease-(--ease-out) hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          <Settings2 className="size-[calc(12rem/14)]" />
+          <Settings2 className="size-[calc(13rem/14)]" />
         </PopoverTrigger>
         <PopoverPopup side="top" align="end" className="w-72 [&_[data-slot=popover-viewport]]:p-0">
           <StatusLineSettings icons={icons} values={values} />

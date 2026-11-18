@@ -5,17 +5,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyProjection } from '@/stores/sessions/reducer';
 import { StatsLine } from './StatsLine';
 
-const harness = vi.hoisted(() => ({ conversation: {} as object, segments: undefined as unknown }));
+const harness = vi.hoisted(() => ({
+  conversation: {} as object,
+  segments: undefined as unknown,
+  projects: [] as object[],
+  statuses: {} as Record<string, { exists: boolean; dirty: boolean; ahead: number }>,
+}));
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/stores/sessions', () => ({
   useSessionsStore: (select: (state: object) => unknown) =>
-    select({ conversations: { fixture: harness.conversation } }),
+    select({
+      conversations: { fixture: harness.conversation },
+      worktreeStatuses: harness.statuses,
+    }),
 }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: object) => unknown) =>
     select({
       virtualModels: [],
-      projects: [],
+      projects: harness.projects,
       statusLineSegments: harness.segments,
     }),
 }));
@@ -57,6 +65,8 @@ const segments = (document: ReturnType<typeof render>) => [
 beforeEach(() => {
   harness.conversation = fixture();
   harness.segments = undefined;
+  harness.projects = [];
+  harness.statuses = {};
 });
 
 describe('输入框下方的会话用量摘要', () => {
@@ -114,5 +124,70 @@ describe('输入框下方的会话用量摘要', () => {
     expect(segments(render())).toHaveLength(0);
     harness.segments = [];
     expect(render().querySelector('[aria-label="Status line settings"]')).not.toBeNull();
+  });
+});
+
+describe('托盘左侧的位置', () => {
+  const trayText = (document: ReturnType<typeof render>) =>
+    document.querySelector('[data-slot="stats-line-place"]')?.textContent ?? '';
+
+  it('是卡片下方独立的一行，不铺底色、也不并进输入框卡片', () => {
+    // 以前 StatsLine 就是 composer 之后的自立一行；位置和分组保留，但不该自己长一块灰底。
+    harness.projects = [{ id: 'p1', name: 'EnsoCode', path: '/code/EnsoCode', kind: 'local' }];
+    harness.conversation = { ...fixture(), projectId: 'p1' };
+    const tray = render().querySelector('[data-slot="stats-line"]');
+    expect(tray?.className).not.toContain('bg-muted');
+    expect(tray?.className).not.toContain('rounded-b-[6px]');
+    // 位置组和用量组仍是两个并列分组，结构不变。
+    expect(tray?.querySelector('[data-slot="stats-line-place"]')).not.toBeNull();
+    expect(tray?.querySelector('[data-slot="stats-line-tray"]')).not.toBeNull();
+  });
+
+  it('本地项目只显示项目名和分支，不挂「这台 Mac」这种常量', () => {
+    harness.projects = [{ id: 'p1', name: 'EnsoCode', path: '/code/EnsoCode', kind: 'local' }];
+    harness.conversation = {
+      ...fixture(),
+      projectId: 'p1',
+      worktree: { branch: 'main' } as never,
+    };
+    harness.statuses = { fixture: { exists: true, dirty: false, ahead: 2 } };
+    const document = render();
+    expect(trayText(document)).toContain('EnsoCode');
+    expect(trayText(document)).toContain('main');
+    expect(trayText(document)).toContain('↑2');
+    expect(trayText(document)).not.toContain('This Mac');
+    expect(trayText(document)).not.toContain('这台 Mac');
+  });
+
+  it('SSH 项目才提示远端主机，否则不知道自己改的是哪台机器', () => {
+    harness.projects = [
+      {
+        id: 'p1',
+        name: 'api',
+        path: '/srv/api',
+        kind: 'ssh',
+        sshConnectionName: 'Prod Box',
+      },
+    ];
+    harness.conversation = { ...fixture(), projectId: 'p1' };
+    const document = render();
+    expect(trayText(document)).toContain('Prod Box');
+    expect(trayText(document)).toContain('api');
+  });
+
+  it('临时会话不把承载目录冒充成项目名', () => {
+    harness.projects = [{ id: 'p1', name: 'Temporary chats', path: '/tmp/x', kind: 'scratch' }];
+    harness.conversation = { ...fixture(), projectId: 'p1' };
+    const document = render();
+    expect(trayText(document)).toContain('Temporary chats');
+    expect(trayText(document)).not.toContain('/tmp/x');
+  });
+
+  it('没有分支时不画空箭头', () => {
+    harness.projects = [{ id: 'p1', name: 'EnsoCode', path: '/code/EnsoCode', kind: 'local' }];
+    harness.conversation = { ...fixture(), projectId: 'p1' };
+    const document = render();
+    expect(trayText(document)).toContain('EnsoCode');
+    expect(trayText(document)).not.toContain('↑');
   });
 });

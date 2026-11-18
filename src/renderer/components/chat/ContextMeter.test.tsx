@@ -22,3 +22,38 @@ describe('上下文细进度条', () => {
     expect(meter?.firstElementChild?.classList.contains(tone)).toBe(true);
   });
 });
+
+describe('上下文圆环', () => {
+  const ring = (percent: number, critical = false) =>
+    parseHTML(
+      renderToStaticMarkup(createElement(ContextMeter, { percent, critical, variant: 'ring' }))
+    ).document.querySelector('[data-slot="context-meter"]');
+
+  it.each([
+    [0, false, 'text-muted-foreground/60'],
+    [16, false, 'text-muted-foreground/60'],
+    [70, false, 'text-warning'],
+    [95, true, 'text-destructive'],
+  ])('占用 %s%% 用弧长表达且带警戒色', (percent, critical, tone) => {
+    const meter = ring(percent, critical);
+    expect(meter?.getAttribute('data-variant')).toBe('ring');
+    expect(meter?.classList.contains(tone)).toBe(true);
+    // 两段圆：底色轨道 + 按占比画的弧，弧长按圆周换算
+    const circles = [...(meter?.querySelectorAll('circle') ?? [])];
+    expect(circles).toHaveLength(2);
+    const radius = Number(circles[1]?.getAttribute('r'));
+    const circumference = 2 * Math.PI * radius;
+    const [arc, rest] = (circles[1]?.getAttribute('stroke-dasharray') ?? '').split(' ').map(Number);
+    expect(arc).toBeCloseTo((percent / 100) * circumference);
+    expect(rest).toBeCloseTo(circumference);
+  });
+
+  it('超出范围时弧长夹在 0 到整圈之间', () => {
+    const full = ring(140)?.querySelectorAll('circle')[1];
+    const empty = ring(-20)?.querySelectorAll('circle')[1];
+    expect(Number(full?.getAttribute('stroke-dasharray')?.split(' ')[0])).toBeCloseTo(
+      2 * Math.PI * Number(full?.getAttribute('r'))
+    );
+    expect(Number(empty?.getAttribute('stroke-dasharray')?.split(' ')[0])).toBe(0);
+  });
+});
