@@ -463,7 +463,6 @@ describe('BotChatStore timeline', () => {
       );
     writeFileSync(file, `${lines.join('\n')}\n`);
     const reloaded = new BotChatStore(root, now);
-    const started = performance.now();
     expect(reloaded.lastSeq(chat.id)).toBe(50_000);
     expect(reloaded.readEntries(chat.id, { limit: 50 }).map((e) => e.seq)).toEqual(
       Array.from({ length: 50 }, (_, i) => 49_951 + i)
@@ -472,18 +471,31 @@ describe('BotChatStore timeline', () => {
       reloaded.readEntries(chat.id, { beforeSeq: 49_901, limit: 2 }).map((e) => e.seq)
     ).toEqual([49_899, 49_900]);
     expect(reloaded.readAfter(chat.id, 49_990)).toHaveLength(10);
+    // 计时只比较「冷启动的一次读」：新 store 各自打开一次文件，扫描量不同、固定开销相同。
+    // 早先把「尾部读 + 一次写盘」整段计时去比「冷启动全量倒读」，写盘与打开文件的成本盖过
+    // 数据量差异，慢 runner 上会随机翻车（0.2.88 的个人构建就是这样被拦住的）。
+    const coldRead = (read: (store: BotChatStore) => void): number => {
+      const store = new BotChatStore(root, now);
+      const started = performance.now();
+      read(store);
+      return performance.now() - started;
+    };
+    const tail = coldRead((store) => {
+      expect(store.readEntries(chat.id, { limit: 50 })).toHaveLength(50);
+      expect(store.readAfter(chat.id, 49_990)).toHaveLength(10);
+    });
+    // 同一个文件从头扫到尾：都只读了一次文件，差别只是扫描量。
+    const full = coldRead((store) => {
+      expect(store.readEntries(chat.id, { beforeSeq: 3, limit: 5 }).map((e) => e.seq)).toEqual([
+        1, 2,
+      ]);
+    });
+    // 绝对上界留给负载较高的 CI；相对上界确认尾部读取不随文件大小增长。
+    expect(tail).toBeLessThan(500);
+    expect(tail * 3).toBeLessThan(full);
     expect(
       reloaded.appendEntry(chat.id, { id: 'new', at: 1, kind: 'system', text: 'x' })?.seq
     ).toBe(50_001);
-    const tail = performance.now() - started;
-    const fullStarted = performance.now();
-    expect(reloaded.readEntries(chat.id, { beforeSeq: 3, limit: 5 }).map((e) => e.seq)).toEqual([
-      1, 2,
-    ]);
-    const full = performance.now() - fullStarted;
-    // 绝对上界留给负载较高的 CI；相对上界确认尾部读取不随文件大小增长
-    expect(tail).toBeLessThan(500);
-    expect(tail * 5).toBeLessThan(full);
     expect(reloaded.findEntry(chat.id, 'e123')).toMatchObject({ seq: 123 });
   });
 });
