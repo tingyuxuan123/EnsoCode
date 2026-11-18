@@ -92,6 +92,34 @@
 要点：容器 `group` + 按钮 `opacity-0 group-hover:opacity-100`；
 可伸缩文本 `min-w-0 truncate`，固定元素 `shrink-0`；禁用态用删除线加灰字。
 
+## 文件和目录图标用 Material Icon Theme
+
+文件树、文件搜索命中、文件页签和 Bot 产物卡片的图标统一走
+`src/renderer/components/sidepanel/fileIcons.tsx` 的 `<FileTypeIcon>`，
+不要自己挑 lucide 图标：
+
+```tsx
+<FileTypeIcon name={rel} />                       {/* 文件 */}
+<FileTypeIcon name={rel} isDir expanded={open} />  {/* 目录 */}
+```
+
+- 图形和映射来自 npm `material-icon-theme`，由 `scripts/generate-file-icons.mjs`
+  打包成 `src/renderer/assets/file-icons/`（`manifest.json` + `icons/` + `LICENSE`），
+  随仓库提交 —— 构建不需要那个 npm 包，也不需要联网。
+- 解析顺序跟主题一致：文件先按整名（含 `.config/graphqlrc` 这类路径键），再按从长到短的
+  复合扩展名（`a.test.ts` → `test.ts` → `ts`），最后回落到通用文件图标；目录按名字和展开状态
+  取图，项目根目录单独一套。所以传相对路径比传裸文件名匹配得更准。
+- 图标 SVG 自带配色，**不受语义令牌控制**。这是第三方主题素材，和 lucide 图标的
+  `text-*` 着色是两回事：不要把颜色改成 `text-muted-foreground` 之类的令牌，
+  也不要给图标加 `opacity` 以外的滤镜，否则「同一文件在各主题下看起来不一样」。
+- `.vetd` 设计目录和 `.vetdz` 分享文件是宿主概念，继续用 `PanelsTopLeft` +
+  `text-primary`，不进主题映射；无障碍属性统一是 `alt=""` + `aria-hidden`。
+- 图标按 `?no-inline` 走资源文件，不塞进主 chunk（全量内联会让主 chunk 多 800 KiB）。
+- 升级主题：`npm pack material-icon-theme@<版本>`，解包后
+  `node scripts/generate-file-icons.mjs package src/renderer/assets/file-icons`，
+  再跑 `fileIcons.test.tsx`（校验映射引用到的图标都有 SVG）。生成物在
+  `biome.json` 的 `files.includes` 里被排除，不要手工改单个 SVG。
+
 ## 长列表要能筛选和批量操作
 
 超过几十项的列表（如某个 provider 有 134 个模型）必须提供：搜索框过滤、

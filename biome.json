@@ -75,6 +75,7 @@
       "!src/agent/continuousMemory/vendor",
       "!src/shared/providers/devin/vendor",
       "!src/renderer/features/design/vetta",
+      "!src/renderer/assets/file-icons",
       "!resources/design"
     ]
   },

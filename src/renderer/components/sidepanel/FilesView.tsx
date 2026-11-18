@@ -40,7 +40,7 @@ import { buildTimeline, completedEditWriteFingerprint } from '@/stores/sessions/
 import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
 import { FilesSearchPane } from './FilesSearchPane';
-import { fileTypeIcon, fileTypeIconClass } from './fileIcons';
+import { FileTypeIcon } from './fileIcons';
 import { FileMarkdownPreview } from './filePreviewMarkdown';
 import { ancestorDirs, applyCompletedWrites } from './filesTreeRefresh';
 import {
@@ -950,6 +950,12 @@ export function FilesView({ conversationId, projectId }: FilesViewProps) {
                       setRenaming({ rel: doc.rel, name: fileName(doc.rel), at: 'tab' });
                     }}
                   >
+                    {!renamingHere && (
+                      <FileTypeIcon
+                        name={doc.preview ? fromPreviewKey(doc.rel) : doc.rel}
+                        className="size-3.5 shrink-0"
+                      />
+                    )}
                     {renamingHere ? (
                       <NameDraft
                         depth={0}
@@ -1438,12 +1444,7 @@ function FileTree({
               onClick={() => handlers.onToggleDir(child)}
             >
               <ChevronRight className={cn('h-3.5 w-3.5 shrink-0', expanded && 'rotate-90')} />
-              {(() => {
-                const Icon = fileTypeIcon(entry.name, true, expanded);
-                return (
-                  <Icon className={cn('h-4 w-4 shrink-0', fileTypeIconClass(entry.name, true))} />
-                );
-              })()}
+              <FileTypeIcon name={child} isDir expanded={expanded} className="h-4 w-4" />
               <span className="truncate">{entry.name}</span>
             </button>
           );
@@ -1539,10 +1540,7 @@ function FileRow({
       )}
       onClick={() => handlers.onOpen(rel)}
     >
-      {(() => {
-        const Icon = fileTypeIcon(name, false);
-        return <Icon className={cn('h-4 w-4 shrink-0', fileTypeIconClass(name, false))} />;
-      })()}
+      <FileTypeIcon name={rel} className="h-4 w-4" />
       <span className="truncate">{name}</span>
     </button>
   );

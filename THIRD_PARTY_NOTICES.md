@@ -124,6 +124,15 @@ NOTICE entries describe Open Vetta's own runtime, sandbox and model distribution
 this design port does not import those binaries or services. Open Vetta and
 小满 are independent; source licensing grants no trademark or image rights.
 
+## File and folder icons: Material Icon Theme
+
+The file and folder icons in `src/renderer/assets/file-icons/` are generated from
+[material-icon-theme](https://github.com/material-extensions/vscode-material-icon-theme)
+5.40.0 (MIT) by `scripts/generate-file-icons.mjs`. Only the default theme's name /
+extension / folder mappings and the 1133 SVGs those mappings reach are bundled, plus
+the upstream license text at `src/renderer/assets/file-icons/LICENSE`. The light and
+high-contrast variants are not bundled.
+
 ## taste-skill
 
 The design-direction library, app-screen rules, dealing/rule adaptations and

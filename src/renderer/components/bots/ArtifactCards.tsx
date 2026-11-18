@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Markdown, MarkdownLocalLinkContext } from '@/components/chat/Markdown';
 import { toWorkspaceRelativePath } from '@/components/chat/markdownLinks';
 import { ReadFileView } from '@/components/chat/ReadFileView';
-import { fileTypeIcon, fileTypeIconClass } from '@/components/sidepanel/fileIcons';
+import { FileTypeIcon } from '@/components/sidepanel/fileIcons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
@@ -356,7 +356,6 @@ function FileCards({
             />
           );
         }
-        const Icon = fileTypeIcon(artifact.name, false);
         const canPreview = PREVIEWABLE.has(artifact.kind) || artifact.kind === 'pdf';
         return (
           <div
@@ -373,9 +372,7 @@ function FileCards({
               }
               className="flex min-w-0 items-center gap-1.5 text-left enabled:hover:underline disabled:cursor-default"
             >
-              <Icon
-                className={cn('h-3.5 w-3.5 shrink-0', fileTypeIconClass(artifact.name, false))}
-              />
+              <FileTypeIcon name={artifact.rel} className="h-3.5 w-3.5" />
               <span className="truncate">{artifact.name}</span>
               <span className="shrink-0 text-muted-foreground">{sizeText(artifact.size)}</span>
             </button>

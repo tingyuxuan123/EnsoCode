@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { fileTypeIcon, fileTypeIconClass } from './fileIcons';
+import { FileTypeIcon } from './fileIcons';
 import { FileTreeMenu } from './fileTreeMenu';
 
 export interface FilesSearchFileActions {
@@ -115,7 +115,6 @@ export function FilesSearchPane({
           <p className="px-1 py-2 text-muted-foreground text-[calc(11rem/14)]">{t('No results')}</p>
         ) : result?.ok && result.mode === 'names' ? (
           result.hits.map((hit) => {
-            const Icon = fileTypeIcon(hit.name, false);
             return (
               <SearchFileMenu
                 key={hit.relativePath}
@@ -130,9 +129,7 @@ export function FilesSearchPane({
                   className="flex w-full items-start gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-muted"
                   onClick={() => onOpenFile(hit.relativePath)}
                 >
-                  <Icon
-                    className={cn('mt-0.5 size-3.5 shrink-0', fileTypeIconClass(hit.name, false))}
-                  />
+                  <FileTypeIcon name={hit.relativePath} className="mt-0.5 size-3.5" />
                   <span className="min-w-0">
                     <span className="block truncate text-[calc(11rem/14)]">{hit.name}</span>
                     <span className="block truncate text-[calc(11rem/14)] text-muted-foreground">
@@ -170,7 +167,6 @@ function contentKey(hit: FilesSearchContentHit): string {
 
 function contentHitButton(hit: FilesSearchContentHit, onOpenFile: (rel: string) => void) {
   const name = hit.relativePath.split('/').pop() || hit.relativePath;
-  const Icon = fileTypeIcon(name, false);
   return (
     <button
       type="button"
@@ -178,7 +174,7 @@ function contentHitButton(hit: FilesSearchContentHit, onOpenFile: (rel: string) 
       className="flex w-full items-start gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-muted"
       onClick={() => onOpenFile(hit.relativePath)}
     >
-      <Icon className={cn('mt-0.5 size-3.5 shrink-0', fileTypeIconClass(name, false))} />
+      <FileTypeIcon name={hit.relativePath} className="mt-0.5 size-3.5" />
       <span className="min-w-0">
         <span className="block truncate text-[calc(11rem/14)]">
           {name}
