@@ -75,7 +75,8 @@ export function ApprovalModePicker({ mode, onSelect, compact = false }: Approval
         aria-label={t(APPROVAL_MODE_META[mode].labelKey)}
         title={`${t(APPROVAL_MODE_META[mode].labelKey)}\n${t(APPROVAL_MODE_META[mode].descKey)}`}
       >
-        <CurrentIcon className="h-3 w-3 shrink-0" />
+        {/* 主图标跟工具栏其它选择器同一档（14px）；尾部的 chevron 仍用 10.5px 小箭头。 */}
+        <CurrentIcon className="size-[calc(14rem/14)] shrink-0" />
         {!compact && (
           <span className="min-w-0 truncate">{t(APPROVAL_MODE_META[mode].labelKey)}</span>
         )}
