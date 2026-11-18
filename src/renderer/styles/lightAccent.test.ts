@@ -16,6 +16,7 @@ function declarations(file: string, selector: string): Record<string, string> {
 
 describe('light palette accent overrides', () => {
   it.each([
+    ['fox', '#f2581b'],
     ['ocean', 'rgb(64 138 191)'],
     ['indigo', 'rgb(79 70 229)'],
     ['violet', 'rgb(124 78 214)'],
@@ -28,24 +29,24 @@ describe('light palette accent overrides', () => {
     ).toBe(color);
   });
 
-  it.each(['mint-light', 'cloud-light'])(
-    '%s persistent selection and focus use the chosen accent',
-    (palette) => {
-      const file = palette === 'mint-light' ? './mintLight.css' : './cloudLight.css';
-      const scope = `html[data-light-palette='${palette}']`;
-      expect(declarations(file, scope)['--ring']).toBe('var(--brand)');
-      expect(
-        declarations(file, `${scope} [data-slot='conversation-row'][data-active='true']`)[
-          'background-color'
-        ]
-      ).toBe('var(--selection)');
-      const card = declarations(
-        file,
-        `${scope} [data-slot='settings-window'] button[aria-pressed='true'].border-2`
-      );
-      expect(card['border-color']).toBe('var(--selection-border)');
-      expect(card['background-color']).toBe('var(--selection)');
-      expect(card.color).toBe('var(--selection-foreground)');
-    }
-  );
+  it.each([
+    ['kettu-light', './kettuLight.css'],
+    ['mint-light', './mintLight.css'],
+    ['cloud-light', './cloudLight.css'],
+  ])('%s persistent selection and focus use the chosen accent', (palette, file) => {
+    const scope = `html[data-light-palette='${palette}']`;
+    expect(declarations(file, scope)['--ring']).toBe('var(--brand)');
+    expect(
+      declarations(file, `${scope} [data-slot='conversation-row'][data-active='true']`)[
+        'background-color'
+      ]
+    ).toBe('var(--selection)');
+    const card = declarations(
+      file,
+      `${scope} [data-slot='settings-window'] button[aria-pressed='true'].border-2`
+    );
+    expect(card['border-color']).toBe('var(--selection-border)');
+    expect(card['background-color']).toBe('var(--selection)');
+    expect(card.color).toBe('var(--selection-foreground)');
+  });
 });

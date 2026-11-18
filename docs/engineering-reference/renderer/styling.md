@@ -29,9 +29,12 @@ className="text-red-500"
   实色底必须配 `brand-foreground`。
 - `accent` 只做中性 hover/瞬时键盘高亮。上游深色只有 6% alpha，不能拿来表示常驻当前页。
 - 持久当前行、分段、筛选项统一 `bg-selection text-selection-foreground`，已有边框的选项可配
-  `border-selection-border`。`shared.css` 由原始 `brand` 派生浅色 12% / 深色 18% 淡染，文字取原始
-  `foreground`，边框取品牌色 45%；不经过壁纸 alpha 重映射。active 时不要让通用 `hover:bg-accent`
-  覆盖它（把 hover 放到 inactive 分支，或 active 显式 `hover:bg-selection`）。
+  `border-selection-border`。选中块是**中性黑/白叠色**，不跟着强调色染（Kettu 的 bg-selected）：
+  `shared.css` 里浅色 `rgb(0 0 0 / 6%)` + 边框 `rgb(0 0 0 / 16%)`，深色 `rgb(255 255 255 / 8%)`
+  + 边框 `rgb(255 255 255 / 18%)`，文字取原始 `foreground`；不经过壁纸 alpha 重映射（手机 PWA 早就是
+  这种 `--ink` 叠色）。橙色只留给
+  发送、开关/复选/单选与焦点环。active 时不要让通用 `hover:bg-accent` 覆盖它（把 hover 放到
+  inactive 分支，或 active 显式 `hover:bg-selection`）。
 - 不按 `[aria-pressed=true]` 全局刷色：侧栏展开、工具开启、当前工作区是不同的状态；在所属组件
   显式选择样式。云白/薄荷的中性表面和状态色由主题文件管理，不能强行覆盖用户选择的强调色。
 
@@ -81,26 +84,30 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 ## 主题系统
 
 四种模式由 `theme` 字段驱动（`light` / `dark` / `system` / `sync-terminal`），
-新安装默认 `light`（浅色云白），保留已保存的主题模式；实现在
+新安装默认 `light`（浅色 Kettu 白），保留已保存的主题模式；实现在
 `stores/settings/index.ts` 的 `applyAppTheme` 与 `applySettings`：
 
 - 前三种：切换 `<html>` 的 `dark` 类。
-- 桌面深色使用 fork 上游 `J3n5en/EnsoCode` 的默认 **Enso dark** 色值与派生公式
-  （对齐 `4bc6eb9c` 的 `src/shared/theme/builtinThemes.ts` / `derive.ts`），集中在
-  `styles/globals.css` 的 `.dark`：外壳/导航对应上游 canvas，内容对应 surface，默认紫色强调，
-  显式强调色预设仍优先。不迁移上游布局或主题系统、不改上游基础色值；共享控件及业务选择项
-  按上述颜色职责适配，不能只在 `project-sidebar` 作用域局部补色。
-  色值回归见 `upstreamDark.test.ts`，主题驱动/选择契约见 `selection.test.ts`。
+- 桌面深色是 **Kettu dark**（对齐其 `src/renderer/src/styles/tokens.css` 的
+  `[data-theme='dark']`），集中在 `styles/globals.css` 的 `.dark`：侧栏 `#0e0e10` 比页面
+  `#141416` 暗一档，浮层/卡片 `#212124` 比页面亮一档（靠明度分层而不是投影），描边是白色
+  12%（细线）/ 18%（控件）的 alpha，文字 `#e6e6e7` / `#ababad`。状态色取 Kettu 的浅色版本，填充偏亮，
+  所以 `--destructive-foreground` / `--success-foreground` 用深墨 `#121213`。
+  共享控件及业务选择项按上述颜色职责适配，不能只在 `project-sidebar` 作用域局部补色。
+  色值回归见 `kettuDark.test.ts`，主题驱动/选择契约见 `selection.test.ts`。
 - `sync-terminal`：调 `applyTerminalThemeToApp()`，把 ghostty 终端主题的配色
   写进全局 CSS 变量，让整个界面跟随终端配色。
-- 桌面浅色方案独立保存在 `lightPalette`，默认为 `cloud-light`（`shared/lightPalette.ts` 的 `DEFAULT_LIGHT_PALETTE`）；旧配置缺字段或非法值也回退云白，已有合法选择不变。三个浅色方案均支持已保存的强调色：不禁用设置按钮；`shared.css` 的 `html:not(.dark)[data-accent=...]` 比浅色方案默认 `brand` 更具体，包含 ocean，深色默认仍沿用上游。方案只在显式浅色或系统浅色时生效，不影响深色/终端同步。回归：`lightAccent.test.ts`、`AppearanceSettings.accent.test.tsx`。
+- 桌面浅色方案独立保存在 `lightPalette`，默认为 `kettu-light`（`shared/lightPalette.ts` 的 `DEFAULT_LIGHT_PALETTE`）；旧配置缺字段或非法值也回退 Kettu 白，已有合法选择不变。四个浅色方案均支持已保存的强调色：不禁用设置按钮；`shared.css` 的 `html:not(.dark)[data-accent=...]` 比浅色方案默认 `brand` 更具体，包含 ocean，深色默认是狐狸橙。方案只在显式浅色或系统浅色时生效，不影响深色/终端同步。回归：`lightAccent.test.ts`、`AppearanceSettings.accent.test.tsx`。
+  - `kettu-light`（Kettu 白，默认）对齐 Kettu 的浅色令牌：纸白工作区 `#ffffff` 坐在 `#f8f8f8` 桌面上，卡片与浮层同为白、只靠黑 10% 细线分层；文字 `#1f1f1f` / `#5c5c5c` / `#686868`；`--primary` 取墨色 `#1f1f1f`（Kettu 的控件蓝只给控件，而宿主拿 `text-primary` 标建议卡图标、模型选择器与思考档位，照搬蓝色会散满整屏；实心主按钮本来就是 `bg-foreground` 的黑/白）；圆角按 Kettu 的 Scale B（5 控件 / 8 卡片与菜单 / 10 输入框与对话框）；投影只给浮层与输入框。方案自己不留 `--brand`，强调色完全交给 `html[data-accent]`。实现集中在 `styles/kettuLight.css`，回归见 `kettuLight.test.ts`。
+  - 强调色默认是 `fox`（狐狸橙 `#f2581b`，Kettu 的发送/进行中色）：浅色与深色都取这一支；深色里填充偏亮，压在上面的字用白色，其他深色预设（ocean/violet/indigo/teal/amber/graphite）各自给 `--brand-foreground` 深墨，不要靠继承。
   - 薄荷白全部样式在 `styles/mintLight.css`，只换肤不改尺寸：灰阶与绿色同色相，`--accent` 保持中性；发送/选择/聚焦跟随用户强调色，运行/完成仍用绿色状态语义；圆角 8 / 12 / 16（行与控件 / 浮层与气泡 / 输入框与对话框）。组件覆盖优先挂 `data-slot`、`data-model-picker`、`aria-pressed` 等稳定属性。
   - 该文件的组件规则不在 `@layer` 内，会压过 Tailwind 工具类（包括 `hover:`、`disabled:`），写覆盖时要显式处理这些状态。改浮层圆角要连 `::before` 一起改：命令面板的 `::before` 带底色，只改外框会在角上露出旧圆角。代码视图选中色用宿主 `diffs-container` 上的 `--diffs-selection-base`（文档侧声明压过 shadow `:host`），不要改 `--diffs-modified-*`，那会连带 diff 的修改色。
   - `cloud-light`（云白）配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、中性普通主操作、浅灰用户消息；发送/当前选中/聚焦跟随用户强调色，不给外壳或用户气泡染色。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
   - 云白的 `--muted`（`#fafafa`）与 `--background`（`#faf9f9`）几乎同色，可见中性面是 `--secondary` / `--accent`。需要「中性浅色选中块或分段轨道」时用 `bg-secondary`（常驻选中仍优先 `bg-selection`），不要照搬上游的 `bg-muted`——胶囊和轨道会在云白下整体消失。标题栏 Code/Bot 分段与聊天页签按上游结构（淡轨道 + 独立内容色胶囊、圆角浅色胶囊页签），令牌走 fork 语义；回归见 `ModeSwitch.test.tsx`、`CoworkerTabs.test.tsx`。背景图模式下 `bg-background` 胶囊会被面板 alpha 重映射，探针要比 `var(--color-background)` 而不是 `var(--background)`。
 
-设置 → 外观 的「主题」卡片网格是内置方案与插件主题的统一入口：三张内置浅色卡 + 已启用插件的
-主题卡（按当前浅/深外观取插件自带 `light`/`dark` 调色板预览）。选内置卡写入 `lightPalette`
+设置 → 外观 的「主题」卡片网格是内置方案与插件主题的统一入口：四张内置浅色卡 + 已启用插件的
+主题卡（插件卡按当前浅/深外观取自带 `light`/`dark` 调色板预览；四张内置卡在深色外观下共用
+`BUILTIN_DARK_PREVIEW` 的 Kettu dark 预览，不能继续摆浅色缩略图）。选内置卡写入 `lightPalette`
 并清空 `pluginTheme`；选插件主题只写 `pluginTheme`，不改既有浅色方案；已选主题被停用或卸载时
 保留一张不可选占位卡（覆盖规则见 `docs/plugins.md`）。内置卡预览色与浅色方案 CSS 同源，改配色
 要同时改 `components/settings/appearanceThemes.ts` 的 `BUILTIN_THEME_PREVIEW`，漂移回归见

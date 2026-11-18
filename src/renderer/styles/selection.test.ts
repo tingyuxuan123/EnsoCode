@@ -33,13 +33,15 @@ describe('persistent selection colour contract', () => {
     expect(generated).not.toContain('prefers-color-scheme');
   });
 
-  it('derives persistent fill, foreground and border from raw theme colours', async () => {
+  it('keeps persistent selection neutral in both modes, never brand-tinted', async () => {
     const tokens = decls(shared, ':root');
     const dark = decls(shared, '.dark');
-    expect(tokens['--selection']).toBe('color-mix(in oklch, var(--brand) 12%, transparent)');
-    expect(dark['--selection']).toBe('color-mix(in oklch, var(--brand) 18%, transparent)');
+    // Kettu 的选中块是黑/白叠色加细线，橙只留给发送、开关与焦点环。
+    expect(tokens['--selection']).toBe('rgb(0 0 0 / 6%)');
+    expect(dark['--selection']).toBe('rgb(255 255 255 / 8%)');
     expect(tokens['--selection-foreground']).toBe('var(--foreground)');
-    expect(tokens['--selection-border']).toBe('color-mix(in oklch, var(--brand) 45%, transparent)');
+    expect(tokens['--selection-border']).toBe('rgb(0 0 0 / 16%)');
+    expect(dark['--selection-border']).toBe('rgb(255 255 255 / 18%)');
     const generated = (await compile(`${shared}\n@tailwind utilities;`)).build([
       'bg-selection',
       'text-selection-foreground',
@@ -66,7 +68,7 @@ describe('persistent selection colour contract', () => {
   it('does not alias upstream primary or neutral hover to the selection colour', () => {
     const dark = decls(desktop, '.dark');
     expect(dark['--primary']).toBe('var(--foreground)');
-    expect(dark['--accent']).toBe('color-mix(in oklch, var(--foreground) 6%, transparent)');
+    expect(dark['--accent']).toBe('rgb(255 255 255 / 6%)');
   });
 
   it.each([

@@ -299,8 +299,9 @@ describe('dangerous capability i18n keys', () => {
 });
 
 describe('getTranslation', () => {
-  it('浅色方案仅将云白标为默认', () => {
-    expect(getTranslation('zh', 'Cloud Light')).toBe('云白（默认）');
+  it('浅色方案仅将 Kettu 浅色标为默认', () => {
+    expect(getTranslation('zh', 'Kettu Light')).toBe('Kettu 白（默认）');
+    expect(getTranslation('zh', 'Cloud Light')).toBe('云白');
     expect(getTranslation('zh', 'Ocean Light')).toBe('晴空碧海');
   });
 

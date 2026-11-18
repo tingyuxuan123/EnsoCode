@@ -7,8 +7,8 @@ import {
 } from './accentColor';
 
 describe('accentColor', () => {
-  it('默认值是晴空蓝，且在合法取值里', () => {
-    expect(DEFAULT_ACCENT_COLOR).toBe('ocean');
+  it('默认值是狐狸橙，且在合法取值里', () => {
+    expect(DEFAULT_ACCENT_COLOR).toBe('fox');
     expect(ACCENT_COLORS).toContain(DEFAULT_ACCENT_COLOR);
   });
 

@@ -31,12 +31,12 @@ vi.mock('./ChatTypographySettings', () => ({ ChatTypographySettings: () => null 
 import { AppearanceSettings } from './AppearanceSettings';
 
 describe('light palette accent selection', () => {
-  it.each(['ocean', 'mint-light', 'cloud-light'])(
+  it.each(['kettu-light', 'ocean', 'mint-light', 'cloud-light'])(
     '%s keeps every accent choice interactive',
     (palette) => {
       state.lightPalette = palette;
       const doc = parseHTML(renderToStaticMarkup(createElement(AppearanceSettings))).document;
-      for (const label of ['Ocean', 'Indigo', 'Violet', 'Teal', 'Amber', 'Graphite']) {
+      for (const label of ['Fox', 'Ocean', 'Indigo', 'Violet', 'Teal', 'Amber', 'Graphite']) {
         const button = doc.querySelector(`button[aria-label="${label}"]`);
         expect(button, label).not.toBeNull();
         expect(button?.hasAttribute('disabled'), `${palette}/${label}`).toBe(false);

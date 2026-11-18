@@ -18,6 +18,13 @@ export interface ThemePreviewPalette {
  * `mintLight.css` 同源；改配色时两处一起改，回归见 appearanceThemes.test.ts。
  */
 export const BUILTIN_THEME_PREVIEW: Record<LightPalette, ThemePreviewPalette> = {
+  'kettu-light': {
+    canvas: '#f8f8f8',
+    surface: '#ffffff',
+    sunken: '#f4f4f5',
+    border: 'rgb(0 0 0 / 10%)',
+    accent: '#1f1f1f',
+  },
   ocean: {
     canvas: 'rgb(234 241 245)',
     surface: 'rgb(245 248 250)',
@@ -41,8 +48,21 @@ export const BUILTIN_THEME_PREVIEW: Record<LightPalette, ThemePreviewPalette> = 
   },
 };
 
+/**
+ * 四套内置方案共用同一份 Kettu dark，深色外观下四张卡的预览也应是深色，
+ * 否则近黑窗口里会摆一排白缩略图。与 `styles/globals.css` 的 `.dark` 同源。
+ */
+export const BUILTIN_DARK_PREVIEW: ThemePreviewPalette = {
+  canvas: '#0e0e10',
+  surface: '#141416',
+  sunken: '#2a2a2d',
+  border: 'rgb(255 255 255 / 12%)',
+  accent: '#e6e6e7',
+};
+
 /** 内置主题的显示名就是 i18n key */
 export const BUILTIN_THEME_NAMES: Record<LightPalette, string> = {
+  'kettu-light': 'Kettu Light',
   ocean: 'Ocean Light',
   'mint-light': 'Mint Light',
   'cloud-light': 'Cloud Light',
@@ -93,7 +113,7 @@ export function buildThemeEntries(input: {
     id: builtinThemeEntryId(palette),
     palette,
     nameKey: BUILTIN_THEME_NAMES[palette],
-    preview: BUILTIN_THEME_PREVIEW[palette],
+    preview: input.mode === 'dark' ? BUILTIN_DARK_PREVIEW : BUILTIN_THEME_PREVIEW[palette],
   }));
   const plugins: PluginThemeEntry[] = (input.pluginThemes ?? []).map((theme) => {
     const palette = input.mode === 'dark' ? theme.dark : theme.light;

@@ -4,6 +4,7 @@ import type { ThemeDefinition } from '@shared/theme/types';
 import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 import {
+  BUILTIN_DARK_PREVIEW,
   BUILTIN_THEME_NAMES,
   BUILTIN_THEME_PREVIEW,
   buildThemeEntries,
@@ -76,6 +77,18 @@ describe('buildThemeEntries', () => {
     expect(dark.at(-1)?.preview).toMatchObject({ canvas: '#111113', accent: '#a78bfa' });
   });
 
+  it('四张内置卡在深色外观下都用共享的 Kettu dark 预览', () => {
+    const entries = buildThemeEntries({ pluginThemes: [], pluginTheme: '', mode: 'dark' });
+    expect(entries).toHaveLength(LIGHT_PALETTES.length);
+    for (const entry of entries) expect(entry.preview).toEqual(BUILTIN_DARK_PREVIEW);
+    expect(BUILTIN_DARK_PREVIEW).toMatchObject({
+      canvas: '#0e0e10',
+      surface: '#141416',
+      sunken: '#2a2a2d',
+      border: 'rgb(255 255 255 / 12%)',
+    });
+  });
+
   it('keeps a placeholder for a selected plugin theme that is no longer installed', () => {
     const entries = buildThemeEntries({
       pluginThemes: [pluginTheme('local.demo/mint', 'Demo Mint')],
@@ -118,7 +131,10 @@ describe('themeSelectionPatch', () => {
   const pluginEntry = rest.at(-1);
 
   it('switching to a built-in theme clears the plugin override', () => {
-    expect(themeSelectionPatch(builtinEntry)).toEqual({ pluginTheme: '', lightPalette: 'ocean' });
+    expect(themeSelectionPatch(builtinEntry)).toEqual({
+      pluginTheme: '',
+      lightPalette: 'kettu-light',
+    });
   });
 
   it('selecting a plugin theme leaves the saved built-in palette alone', () => {
@@ -139,6 +155,11 @@ describe('themeSelectionPatch', () => {
 describe('built-in preview palettes', () => {
   const cases: Array<{ palette: LightPalette; file: string; selector: string }> = [
     { palette: 'ocean', file: './../../styles/globals.css', selector: ':root' },
+    {
+      palette: 'kettu-light',
+      file: './../../styles/kettuLight.css',
+      selector: "html[data-light-palette='kettu-light']",
+    },
     {
       palette: 'mint-light',
       file: './../../styles/mintLight.css',
@@ -189,6 +210,21 @@ describe('built-in preview palettes', () => {
       expect(css, `${palette}/${token}`).toBeDefined();
       expect(normalize(BUILTIN_THEME_PREVIEW[palette][slot as keyof typeof TOKENS]), slot).toBe(
         normalize(resolve(css))
+      );
+    }
+  });
+
+  it('深色卡片预览与 globals.css 的 .dark 同源', () => {
+    const vars = declarations('./../../styles/globals.css', '.dark');
+    const resolve = (value: string): string =>
+      value.replace(/var\((--[\w-]+)\)/g, (_, name: string) => {
+        const token = vars[name];
+        if (!token) throw new Error(`dark: missing ${name}`);
+        return resolve(token);
+      });
+    for (const [slot, token] of Object.entries(TOKENS)) {
+      expect(normalize(BUILTIN_DARK_PREVIEW[slot as keyof typeof TOKENS]), slot).toBe(
+        normalize(resolve(vars[token]))
       );
     }
   });

@@ -2,31 +2,31 @@ import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine
 import { describe, expect, it } from 'vitest';
 import { mergeSettingsState, migrateSettings, SETTINGS_VERSION } from './migrate';
 
-describe('云白默认外观水合', () => {
+describe('Kettu 浅色默认外观水合', () => {
   const current = {
     editMode: 'apply_patch' as const,
-    accentColor: 'ocean' as const,
+    accentColor: 'fox' as const,
     theme: 'light' as const,
     lightPalette: 'mint-light' as const,
   };
 
-  it('旧配置缺失浅色方案时使用默认云白，不沿用窗口内的临时配色', () => {
+  it('旧配置缺失浅色方案时使用默认 Kettu 浅色，不沿用窗口内的临时配色', () => {
     expect(mergeSettingsState({}, current)).toMatchObject({
       theme: 'light',
-      lightPalette: 'cloud-light',
+      lightPalette: 'kettu-light',
     });
   });
 
   it.each([undefined, null, '', 'unknown', 12, {}, ['cloud-light']].map((value) => ({ value })))(
-    '非法浅色方案 $value 回退云白',
+    '非法浅色方案 $value 回退 Kettu 浅色',
     ({ value: lightPalette }) => {
-      expect(mergeSettingsState({ lightPalette }, current).lightPalette).toBe('cloud-light');
+      expect(mergeSettingsState({ lightPalette }, current).lightPalette).toBe('kettu-light');
     }
   );
 
   it('不覆盖已保存的主题模式和浅色方案', () => {
     for (const theme of ['light', 'dark', 'system', 'sync-terminal']) {
-      for (const lightPalette of ['ocean', 'mint-light', 'cloud-light']) {
+      for (const lightPalette of ['kettu-light', 'ocean', 'mint-light', 'cloud-light']) {
         expect(mergeSettingsState({ theme, lightPalette }, current)).toMatchObject({
           theme,
           lightPalette,
@@ -34,7 +34,7 @@ describe('云白默认外观水合', () => {
       }
       expect(mergeSettingsState({ theme }, current)).toMatchObject({
         theme,
-        lightPalette: 'cloud-light',
+        lightPalette: 'kettu-light',
       });
     }
   });

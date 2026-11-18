@@ -620,6 +620,7 @@ function ThemeCombobox({
 
 /** 色块取各预设在亮色模式下的主色，与 shared.css 的 --brand 保持一致 */
 const ACCENT_SWATCHES: Record<AccentColor, string> = {
+  fox: '#f2581b',
   ocean: 'hsl(205 50% 50%)',
   violet: 'oklch(0.54 0.2 280)',
   indigo: 'oklch(0.53 0.19 265)',
@@ -629,6 +630,7 @@ const ACCENT_SWATCHES: Record<AccentColor, string> = {
 };
 
 const ACCENT_LABELS = {
+  fox: 'Fox',
   ocean: 'Ocean',
   violet: 'Violet',
   indigo: 'Indigo',

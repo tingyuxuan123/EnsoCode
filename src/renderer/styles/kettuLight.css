@@ -1,0 +1,182 @@
+/*
+ * Kettu 白（kettu-light）：桌面默认浅色方案。与云白、薄荷白同一机制——设置 store 只在浅色外观下挂
+ * html[data-light-palette]，深色与同步终端配色不受影响。只换肤，不改布局与尺寸。
+ *
+ * 设计约束（对齐 Kettu 的浅色令牌，见其 src/renderer/src/styles/tokens.css）：
+ * - 纸白工作区 #ffffff 坐在 #f8f8f8 的桌面上；卡片与浮层同为白，层次靠 1px 细黑线，不叠色块。
+ * - 三档墨色文字 #1f1f1f / #5c5c5c / #686868；描边只有黑 10%（细线）与黑 16%（控件）。
+ * - text-primary / bg-primary 取墨色而不是 Kettu 的控件蓝：宿主用它标建议卡图标、模型选择器、
+ *   思考档位，蓝色会散满整屏；Kettu 的蓝色只给控件，而宿主控件已经走强调色。
+ * - 强调色（发送、开关与聚焦环）仍归用户选择，方案自己不留 --brand，避免和 html[data-accent]
+ *   抢；常驻选中块走 shared.css 的中性叠色，不随强调色染。
+ * - 圆角按 Kettu 的 Scale B：5 控件 / 8 卡片与菜单 / 10 输入框与对话框。
+ * - 投影很轻，只用于浮层和输入框；卡片靠细线，不靠阴影。
+ */
+@layer base {
+  html[data-light-palette='kettu-light'] {
+    --shell: #f8f8f8;
+    --panel: #ffffff;
+    --background: #ffffff;
+    --card: #ffffff;
+    --popover: #ffffff;
+    --foreground: #1f1f1f;
+    --card-foreground: var(--foreground);
+    --popover-foreground: var(--foreground);
+
+    /* 中性控件与悬停：Kettu 的中性面是 #f4f4f5，hover 只有 4% 黑 */
+    --secondary: #f4f4f5;
+    --secondary-foreground: var(--foreground);
+    --muted: #f4f4f5;
+    --muted-foreground: #5c5c5c;
+    --accent: rgb(0 0 0 / 4%);
+    --accent-foreground: var(--foreground);
+    --border: rgb(0 0 0 / 10%);
+    --input: rgb(0 0 0 / 16%);
+
+    /* 强调图标与实心主操作取墨色：Kettu 把蓝色只留给控件，宿主控件已走强调色，
+       留着控件蓝会让建议卡图标、模型选择器、思考档位整屏发蓝。 */
+    --primary: #1f1f1f;
+    --primary-foreground: #ffffff;
+    --ring: var(--brand);
+    --success: #2e7550;
+    --success-foreground: #ffffff;
+    --destructive: #ac3b2d;
+    --destructive-foreground: #ffffff;
+    --warning: #936600;
+    --warning-foreground: #ffffff;
+    --info: #48525f;
+    --info-foreground: #ffffff;
+
+    /* Scale B：3.5 复选与行内码 / 4 菜单项 / 5 控件 / 6 选项块 / 8 卡片与菜单 / 10 对话框与输入框 */
+    --radius: 5px;
+    --radius-xl: 8px;
+    --radius-2xl: 10px;
+    --radius-3xl: 10px;
+
+    --elevation-float: 0 0 0 0.5px rgb(0 0 0 / 6%), 0 10px 24px -10px rgb(0 0 0 / 14%);
+    --kettu-card-shadow: 0 0 0 0.5px rgb(0 0 0 / 6%), 0 1px 2px rgb(0 0 0 / 5%);
+    --kettu-composer-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 24px -10px rgb(0 0 0 / 14%);
+    --kettu-focus-halo: 0 0 0 3px color-mix(in oklch, var(--brand) 10%, transparent);
+    --kettu-dialog-shadow: 0 1px 3px rgb(0 0 0 / 6%), 0 24px 56px -16px rgb(0 0 0 / 22%);
+    --kettu-tip-shadow: 0 1px 2px rgb(0 0 0 / 5%), 0 12px 28px -10px rgb(0 0 0 / 16%);
+    --kettu-action-hover: color-mix(in srgb, var(--brand) 88%, black);
+    --kettu-send-inactive: #949494;
+  }
+
+  /* 导航面比工作区暗一档，壁纸模式下交回 surface alpha。 */
+  html[data-light-palette='kettu-light']:not(.bg-image-enabled) {
+    --color-nav: #f8f8f8;
+  }
+}
+
+/* ── 侧栏：灰轨 + 白胶囊选中，当前会话用强调色淡染（与 Kettu 的分段与选中一致） ── */
+html[data-light-palette='kettu-light'] [data-slot='project-sidebar'] [data-slot='tabs-list'] {
+  background-color: var(--color-secondary);
+}
+
+html[data-light-palette='kettu-light'] [data-slot='project-sidebar'] [data-slot='tab-indicator'] {
+  background-color: var(--color-popover);
+  box-shadow: var(--kettu-card-shadow);
+}
+
+html[data-light-palette='kettu-light'] [data-slot='conversation-row'][data-active='true'] {
+  background-color: var(--selection);
+}
+
+html[data-light-palette='kettu-light']
+  .enso-conv-tree
+  [data-slot='conversation-row'][data-active='true']::before,
+html[data-light-palette='kettu-light']
+  .enso-conv-tree
+  [data-slot='conversation-row'][data-active='true']::after {
+  background-color: transparent;
+}
+
+/* ── 输入框：白卡 + 细线 + 很轻的投影；聚焦描边与光晕跟随强调色 ── */
+html[data-light-palette='kettu-light'] [data-slot='composer'] {
+  border-radius: 10px;
+  border-color: var(--color-border);
+  background-color: var(--color-card);
+  box-shadow: var(--kettu-composer-shadow);
+}
+
+html[data-light-palette='kettu-light'] [data-slot='composer']:focus-within {
+  box-shadow: var(--kettu-composer-shadow), var(--kettu-focus-halo);
+}
+
+/* 没有内容可发时，发送键退回中性灰，不靠降低不透明度。 */
+html[data-light-palette='kettu-light'] [data-slot='composer'] button.bg-brand:disabled {
+  opacity: 1;
+  border-color: transparent;
+  background-color: rgb(0 0 0 / 6%);
+  color: var(--kettu-send-inactive);
+}
+
+html[data-light-palette='kettu-light'] [data-slot='composer'] button.bg-brand:not(:disabled):hover {
+  background-color: var(--kettu-action-hover);
+}
+
+/* ── 设置窗口：选中卡片用强调色淡染，边宽与尺寸不变 ── */
+html[data-light-palette='kettu-light'] [data-slot='settings-window'] button[aria-pressed='true'].border-2 {
+  border-color: var(--selection-border);
+  background-color: var(--selection);
+  color: var(--selection-foreground);
+}
+
+/* ── 浮层：菜单 8、小提示 6、对话框 10，::before 与外框同心 ── */
+html[data-light-palette='kettu-light']
+  :is(
+    [data-slot='menu-popup'],
+    [data-slot='context-menu-popup'],
+    [data-slot='context-menu-sub-popup'],
+    [data-slot='combobox-popup'],
+    [data-slot='popover-popup']:not(.text-balance),
+    [data-slot='select-popup'] > span,
+    [data-slot='toast-popup']
+  ) {
+  border-radius: 8px;
+  box-shadow: var(--elevation-float);
+}
+
+html[data-light-palette='kettu-light']
+  :is(
+    [data-slot='menu-popup'],
+    [data-slot='context-menu-popup'],
+    [data-slot='context-menu-sub-popup'],
+    [data-slot='combobox-popup'],
+    [data-slot='popover-popup']:not(.text-balance),
+    [data-slot='toast-popup']
+  )::before {
+  border-radius: 7px;
+}
+
+html[data-light-palette='kettu-light']
+  :is([data-slot='tooltip-popup'], [data-slot='popover-popup'].text-balance) {
+  border-radius: 6px;
+  box-shadow: var(--kettu-tip-shadow);
+}
+
+html[data-light-palette='kettu-light']
+  :is([data-slot='tooltip-popup'], [data-slot='popover-popup'].text-balance)::before {
+  border-radius: 5px;
+}
+
+html[data-light-palette='kettu-light']
+  :is([data-slot='dialog-popup'], [data-slot='alert-dialog-popup'], [data-slot='command-dialog-popup']) {
+  border-radius: 10px;
+  box-shadow: var(--kettu-dialog-shadow);
+}
+
+html[data-light-palette='kettu-light']
+  :is(
+    [data-slot='dialog-popup'],
+    [data-slot='alert-dialog-popup'],
+    [data-slot='command-dialog-popup']
+  )::before {
+  border-radius: 9px;
+}
+
+html[data-light-palette='kettu-light'] [data-slot='dialog-footer'] {
+  border-bottom-left-radius: 9px;
+  border-bottom-right-radius: 9px;
+}

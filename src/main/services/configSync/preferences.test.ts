@@ -283,7 +283,7 @@ describe('config sync portable preference contract', () => {
   });
 
   it('accepts every desktop light palette', () => {
-    for (const lightPalette of ['ocean', 'mint-light', 'cloud-light'] as const) {
+    for (const lightPalette of ['kettu-light', 'ocean', 'mint-light', 'cloud-light'] as const) {
       expect(validateBundle(bundle({ lightPalette })).state).toMatchObject({ lightPalette });
     }
   });

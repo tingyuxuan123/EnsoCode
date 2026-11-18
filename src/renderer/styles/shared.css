@@ -19,28 +19,36 @@
 
 @layer base {
   :root {
-    --brand: rgb(64 138 191);
+    /* 默认强调色是 Kettu 的狐狸橙；用户选择写在 html[data-accent]，见下。 */
+    --brand: #f2581b;
     --brand-foreground: rgb(255 255 255);
-    /* 常驻选择不是 hover：取原始品牌/前景色，不随壁纸面板 alpha 消失。 */
-    --selection: color-mix(in oklch, var(--brand) 12%, transparent);
+    /* 常驻选择是中性黑/白叠色加细线（Kettu 的 bg-selected），橙只留给发送、开关与焦点环。
+       不随壁纸面板 alpha 消失。 */
+    --selection: rgb(0 0 0 / 6%);
     --selection-foreground: var(--foreground);
-    --selection-border: color-mix(in oklch, var(--brand) 45%, transparent);
+    --selection-border: rgb(0 0 0 / 16%);
     /* 浮层阴影：深色下用纯黑叠两层，浅色用低饱和冷灰 */
     --elevation-float:
       0 1px 2px rgb(16 18 26 / 0.06), 0 12px 32px -12px rgb(16 18 26 / 0.16);
   }
 
   .dark {
-    --brand: rgb(114 165 202);
-    --brand-foreground: rgb(12 18 24);
-    --selection: color-mix(in oklch, var(--brand) 18%, transparent);
+    /* 深色默认强调色是 Kettu 的狐狸橙，白色压在上面（Kettu 的发送键同理）。 */
+    --brand: #f2581b;
+    --brand-foreground: #ffffff;
+    /* 深色的选中块是白 8% 叠色 + 白 18% 细线，与页面同族而不是染色。 */
+    --selection: rgb(255 255 255 / 8%);
+    --selection-border: rgb(255 255 255 / 18%);
     --elevation-float:
       0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.6);
   }
 
-  /* 显式浅色强调色比单一 light-palette 更具体，不能被主题默认 brand 覆盖。
-   * ocean 仅在浅色显式赋值，深色仍保留上游默认紫色。
+  /* 显式强调色比单一 light-palette 更具体，不能被主题默认 brand 覆盖。
+   * 深色里的填充更亮，压在上面的字色按各自明度单独给，不跟着继承。
    */
+  html:not(.dark)[data-accent='fox'] {
+    --brand: #f2581b;
+  }
   html:not(.dark)[data-accent='ocean'] {
     --brand: rgb(64 138 191);
   }
@@ -49,30 +57,43 @@
   }
   html.dark[data-accent='violet'] {
     --brand: rgb(167 139 250);
+    --brand-foreground: rgb(12 18 24);
+  }
+  html.dark[data-accent='fox'] {
+    --brand: #f2581b;
+    --brand-foreground: #ffffff;
+  }
+  html.dark[data-accent='ocean'] {
+    --brand: rgb(91 154 255);
+    --brand-foreground: rgb(12 18 24);
   }
   html:not(.dark)[data-accent='indigo'] {
     --brand: rgb(79 70 229);
   }
   html.dark[data-accent='indigo'] {
     --brand: rgb(129 132 248);
+    --brand-foreground: rgb(12 18 24);
   }
   html:not(.dark)[data-accent='teal'] {
     --brand: rgb(13 138 136);
   }
   html.dark[data-accent='teal'] {
     --brand: rgb(69 190 186);
+    --brand-foreground: rgb(12 18 24);
   }
   html:not(.dark)[data-accent='amber'] {
     --brand: rgb(180 116 12);
   }
   html.dark[data-accent='amber'] {
     --brand: rgb(230 178 84);
+    --brand-foreground: rgb(12 18 24);
   }
   html:not(.dark)[data-accent='graphite'] {
     --brand: rgb(60 66 80);
   }
   html.dark[data-accent='graphite'] {
     --brand: rgb(190 196 210);
+    --brand-foreground: rgb(12 18 24);
   }
 }
 

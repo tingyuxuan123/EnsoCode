@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 @import "./shared.css";
+@import "./kettuLight.css";
 @import "./mintLight.css";
 @import "./cloudLight.css";
 /* The plugin owns a separately compiled, scoped utilities/theme sheet. */
@@ -114,46 +115,43 @@
     --radius: 6px;
   }
 
-  /* 深色沿用 J3n5en/EnsoCode 4bc6eb9c 的 Enso dark：
-   * src/shared/theme/builtinThemes.ts + derive.ts；只同步颜色，不移植布局或主题系统。
+  /* 深色：Kettu 的深色令牌（其 [data-theme='dark']）。侧栏比页面暗一档、浮层比页面亮一档，
+   * 靠明度分层而不是投影；描边是白色细线；默认强调色（狐狸橙）在 shared.css 的 .dark。
    */
   .dark {
     color-scheme: dark;
-    --background: oklch(0.205 0.007 286);
-    --foreground: oklch(0.94 0.004 286);
-    --card: color-mix(in oklch, var(--foreground) 3%, var(--background));
+    --background: #141416;
+    --foreground: #e6e6e7;
+    --card: #212124;
     --card-foreground: var(--foreground);
-    --popover: color-mix(in oklch, var(--foreground) 5%, var(--background));
+    --popover: #212124;
     --popover-foreground: var(--foreground);
     --primary: var(--foreground);
     --primary-foreground: var(--background);
-    --secondary: color-mix(in oklch, var(--foreground) 6%, var(--background));
+    --secondary: #2a2a2d;
     --secondary-foreground: var(--foreground);
-    --muted: color-mix(in oklch, var(--foreground) 7%, var(--background));
-    --muted-foreground: oklch(0.74 0.008 286);
-    --accent: color-mix(in oklch, var(--foreground) 6%, transparent);
+    --muted: #2a2a2d;
+    --muted-foreground: #ababad;
+    --accent: rgb(255 255 255 / 6%);
     --accent-foreground: var(--foreground);
-    --destructive: oklch(0.396 0.141 25.72);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(1 0 0 / 0.07);
-    --input: oklch(1 0 0 / 0.13);
+    --destructive: #ea8a7d;
+    --destructive-foreground: #121213;
+    --success: #6fbf8f;
+    --success-foreground: #121213;
+    --warning: #d9b463;
+    --warning-foreground: #141416;
+    --info: #aeb6c1;
+    --info-foreground: #141416;
+    --border: rgb(255 255 255 / 12%);
+    --input: rgb(255 255 255 / 18%);
     --ring: color-mix(in oklch, var(--brand) 50%, transparent);
-    /* 桌面默认强调色；显式 data-accent 预设仍优先，手机 PWA 不受影响。 */
-    --brand: oklch(0.7 0.16 285);
-    --brand-foreground: oklch(0.165 0.006 286);
-    --elevation-float: 0 1px 2px oklch(0 0 0 / 0.3), 0 16px 40px -12px oklch(0 0 0 / 0.55);
-    /* fork 表面映射：外壳/导航用上游 canvas，内容用 surface。 */
-    --shell: oklch(0.165 0.006 286);
+    --elevation-float: 0 0 0 0.5px rgb(255 255 255 / 10%), 0 16px 36px -16px rgb(0 0 0 / 70%);
+    /* fork 表面映射：外壳/导航用 Kettu 的侧栏底，内容用页面底色。 */
+    --shell: #0e0e10;
     --panel: var(--background);
     --color-nav: var(--color-shell);
     --color-line: var(--color-border);
-    --color-faint: oklch(0.56 0.01 286);
+    --color-faint: #6e6e72;
   }
 }
 

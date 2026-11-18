@@ -436,6 +436,7 @@ export const zhTranslations: Record<string, string> = {
   'Choose interface theme': '选择界面主题',
   'Accent color': '强调色',
   'Highlight color used across the interface': '界面高亮使用的颜色',
+  Fox: '狐狸橙',
   Ocean: '晴空蓝',
   Violet: '紫罗兰',
   Indigo: '靛蓝',
@@ -562,8 +563,9 @@ export const zhTranslations: Record<string, string> = {
     '为选中主题调整外观模式、强调色、排版与背景。',
   Plugin: '插件',
   'Ocean Light': '晴空碧海',
+  'Kettu Light': 'Kettu 白（默认）',
   'Mint Light': '薄荷白',
-  'Cloud Light': '云白（默认）',
+  'Cloud Light': '云白',
   'Mint Light uses its own green accent.': '薄荷白使用主题自带的绿色强调色。',
   'Cloud Light uses its own monochrome accent.': '云白使用主题自带的黑白强调色。',
   'No favorite themes yet. Click the heart icon to add favorites.':

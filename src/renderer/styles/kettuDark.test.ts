@@ -24,74 +24,73 @@ function resolve(value: string): string {
   });
 }
 
-// J3n5en/EnsoCode 4bc6eb9c: src/shared/theme/builtinThemes.ts (Enso dark)
-// + derive.ts. Keep local expectations; tests must not depend on a checkout or network.
-const surface = 'oklch(0.205 0.007 286)';
-const text = 'oklch(0.94 0.004 286)';
-const canvas = 'oklch(0.165 0.006 286)';
-const mix = (color: string, percent: number, base: string) =>
-  `color-mix(in oklch, ${color} ${percent}%, ${base})`;
+// Kettu 的深色令牌（src/renderer/src/styles/tokens.css 的 [data-theme='dark']）。本地写死期望值：
+// 回归测试不读 Kettu 检出目录，也不联网。
+const app = '#141416';
+const sidebar = '#0e0e10';
+const surface = '#212124';
+const text = '#e6e6e7';
 
-describe('upstream Enso dark palette', () => {
-  it('uses upstream surfaces, text, controls and border colours', () => {
+describe('Kettu dark palette', () => {
+  it('uses the Kettu dark desk, sheets, text and hairlines', () => {
     const expected = {
-      '--background': surface,
+      '--background': app,
       '--foreground': text,
-      '--card': mix(text, 3, surface),
+      '--card': surface,
       '--card-foreground': text,
-      '--popover': mix(text, 5, surface),
+      '--popover': surface,
       '--popover-foreground': text,
       '--primary': text,
-      '--primary-foreground': surface,
-      '--secondary': mix(text, 6, surface),
+      '--primary-foreground': app,
+      '--secondary': '#2a2a2d',
       '--secondary-foreground': text,
-      '--muted': mix(text, 7, surface),
-      '--muted-foreground': 'oklch(0.74 0.008 286)',
-      '--accent': mix(text, 6, 'transparent'),
+      '--muted': '#2a2a2d',
+      '--muted-foreground': '#ababad',
+      '--accent': 'rgb(255 255 255 / 6%)',
       '--accent-foreground': text,
-      '--border': 'oklch(1 0 0 / 0.07)',
-      '--input': 'oklch(1 0 0 / 0.13)',
-      '--ring': mix('oklch(0.7 0.16 285)', 50, 'transparent'),
-      '--brand': 'oklch(0.7 0.16 285)',
-      '--brand-foreground': canvas,
+      '--border': 'rgb(255 255 255 / 12%)',
+      '--input': 'rgb(255 255 255 / 18%)',
+      '--ring': 'color-mix(in oklch, #f2581b 50%, transparent)',
+      '--brand': '#f2581b',
+      '--brand-foreground': '#ffffff',
     };
     for (const [token, value] of Object.entries(expected)) {
       expect(resolve(dark[token]), token).toBe(value);
     }
   });
 
-  it('uses upstream status colours and floating shadow', () => {
+  it('uses the Kettu dark status colours and its raised-sheet shadow', () => {
     expect(dark).toMatchObject({
-      '--destructive': 'oklch(0.396 0.141 25.72)',
-      '--destructive-foreground': 'oklch(0.985 0 0)',
-      '--success': 'oklch(0.527 0.154 150.07)',
-      '--success-foreground': 'oklch(0.985 0 0)',
-      '--warning': 'oklch(0.769 0.189 70.08)',
-      '--warning-foreground': 'oklch(0.205 0.014 285.82)',
-      '--info': 'oklch(0.623 0.214 259.81)',
-      '--info-foreground': 'oklch(0.985 0 0)',
-      '--elevation-float': '0 1px 2px oklch(0 0 0 / 0.3), 0 16px 40px -12px oklch(0 0 0 / 0.55)',
+      '--destructive': '#ea8a7d',
+      '--destructive-foreground': '#121213',
+      '--success': '#6fbf8f',
+      '--success-foreground': '#121213',
+      '--warning': '#d9b463',
+      '--warning-foreground': '#141416',
+      '--info': '#aeb6c1',
+      '--info-foreground': '#141416',
+      '--elevation-float': '0 0 0 0.5px rgb(255 255 255 / 10%), 0 16px 36px -16px rgb(0 0 0 / 70%)',
     });
   });
 
-  it('maps fork shell/navigation to upstream canvas and content to upstream surface', () => {
-    expect(resolve(dark['--shell'])).toBe(canvas);
-    expect(resolve(dark['--panel'])).toBe(surface);
+  it('maps the shell to the Kettu sidebar and the panel to the page', () => {
+    expect(resolve(dark['--shell'])).toBe(sidebar);
+    expect(resolve(dark['--panel'])).toBe(app);
     expect(dark['--color-nav']).toBe('var(--color-shell)');
     expect(dark['--color-line']).toBe('var(--color-border)');
-    expect(dark['--color-faint']).toBe('oklch(0.56 0.01 286)');
+    expect(dark['--color-faint']).toBe('#6e6e72');
     // Use the remapped tokens so wallpaper mode still controls opacity.
     const wallpaper = declarations(desktop, 'html.bg-image-enabled');
     expect(wallpaper['--color-shell']).toContain('var(--bg-panel-alpha');
     expect(wallpaper['--color-border']).toContain('var(--bg-border-alpha');
   });
 
-  it('keeps desktop dark overrides separate from light, PWA and custom accent presets', () => {
+  it('keeps desktop dark overrides separate from light and custom accent presets', () => {
     expect(declarations(desktop, ':root')['--background']).toBe('rgb(245 248 250)');
-    expect(declarations(shared, '.dark')['--brand']).toBe('rgb(114 165 202)');
     expect(declarations(shared, "html.dark[data-accent='teal']")['--brand']).toBe(
       'rgb(69 190 186)'
     );
+    expect(declarations(shared, "html.dark[data-accent='fox']")['--brand']).toBe('#f2581b');
     expect(declarations(desktop, '.dark')['color-scheme']).toBe('dark');
     for (const property of ['--radius', '--font-size-base', 'padding', 'margin', 'width']) {
       expect(declarations(desktop, '.dark')[property], property).toBeUndefined();
@@ -121,6 +120,7 @@ describe('upstream Enso dark palette', () => {
     expect(track).toEqual({});
     expect(indicator).toEqual({});
     expect(active).toEqual({});
-    expect(declarations(shared, '.dark')['--selection']).toContain('var(--brand)');
+    // 选中块是中性的，不跟着强调色染。
+    expect(declarations(shared, '.dark')['--selection']).toBe('rgb(255 255 255 / 8%)');
   });
 });

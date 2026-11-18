@@ -46,16 +46,16 @@ beforeAll(async () => {
 });
 
 describe('desktop light palette', () => {
-  it('新安装默认使用浅色云白，不依赖系统外观', () => {
+  it('新安装默认使用 Kettu 浅色，不依赖系统外观', () => {
     const store = settings.useSettingsStore.getState();
     expect(store.theme).toBe('light');
-    expect(store.lightPalette).toBe('cloud-light');
-    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    expect(store.lightPalette).toBe('kettu-light');
+    expect(documentElement.dataset.lightPalette).toBe('kettu-light');
     const notifySystemChange = mediaChange.mock.calls.find(([event]) => event === 'change')?.[1];
     expect(notifySystemChange).toBeTypeOf('function');
     systemDark = true;
     notifySystemChange?.();
-    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    expect(documentElement.dataset.lightPalette).toBe('kettu-light');
     expect(documentElement.classList.contains('dark')).toBe(false);
     systemDark = false;
   });
@@ -99,15 +99,16 @@ describe('desktop light palette', () => {
     expect(documentElement.dataset.lightPalette).toBeUndefined();
   });
 
-  it('保留已保存的配色，缺失或非法浅色方案回退云白', async () => {
+  it('保留已保存的配色，缺失或非法浅色方案回退 Kettu 浅色', async () => {
     const store = settings.useSettingsStore;
     for (const [saved, expected] of [
+      [{ lightPalette: 'kettu-light' }, 'kettu-light'],
       [{ lightPalette: 'mint-light' }, 'mint-light'],
-      [{ lightPalette: { palette: 'mint-light' } }, 'cloud-light'],
+      [{ lightPalette: { palette: 'mint-light' } }, 'kettu-light'],
       [{ lightPalette: 'cloud-light' }, 'cloud-light'],
-      [{ lightPalette: 'cloud' }, 'cloud-light'],
+      [{ lightPalette: 'cloud' }, 'kettu-light'],
       [{ lightPalette: 'ocean' }, 'ocean'],
-      [{}, 'cloud-light'],
+      [{}, 'kettu-light'],
     ] as const) {
       settingsRead.mockResolvedValueOnce({
         'enso-settings': { version: 18, state: { theme: 'light', ...saved } },
@@ -120,20 +121,20 @@ describe('desktop light palette', () => {
     }
   });
 
-  it('设置入口收到非法浅色方案时同样回退云白', () => {
+  it('设置入口收到非法浅色方案时同样回退 Kettu 浅色', () => {
     const store = settings.useSettingsStore.getState();
     store.setTheme('light');
     store.setLightPalette('mint-light');
     // @ts-expect-error 外部调用可能绕过静态类型，验证运行时回退。
     store.setLightPalette('unknown');
-    expect(settings.useSettingsStore.getState().lightPalette).toBe('cloud-light');
-    expect(documentElement.dataset.lightPalette).toBe('cloud-light');
+    expect(settings.useSettingsStore.getState().lightPalette).toBe('kettu-light');
+    expect(documentElement.dataset.lightPalette).toBe('kettu-light');
   });
 });
 
 describe('accent color setting', () => {
-  it('缺省晴空蓝，切换时写入 html[data-accent]', () => {
-    expect(settings.useSettingsStore.getState().accentColor).toBe('ocean');
+  it('缺省狐狸橙，切换时写入 html[data-accent]', () => {
+    expect(settings.useSettingsStore.getState().accentColor).toBe('fox');
     settings.useSettingsStore.getState().setAccentColor('teal');
     expect(settings.useSettingsStore.getState().accentColor).toBe('teal');
     expect(documentElement.dataset.accent).toBe('teal');
@@ -143,7 +144,7 @@ describe('accent color setting', () => {
 
   it('持久化里的非法强调色合并时落回默认值', () => {
     const current = { editMode: 'apply_patch' as const, accentColor: 'violet' as const };
-    expect(mergeSettingsState({ accentColor: 'neon' }, current).accentColor).toBe('ocean');
+    expect(mergeSettingsState({ accentColor: 'neon' }, current).accentColor).toBe('fox');
     expect(mergeSettingsState({ accentColor: 'amber' }, current).accentColor).toBe('amber');
     expect(mergeSettingsState({}, current).accentColor).toBe('violet');
   });
