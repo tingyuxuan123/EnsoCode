@@ -1,3 +1,5 @@
+import { BROWSER_ACT_WAIT_TEXT_REQUIRED } from '@shared/browser/actions';
+
 /** Display-only projection. Labels never authorize actions or rewrite the worker's history. */
 export interface BrowserLabel {
   text?: string;
@@ -14,6 +16,7 @@ export interface BrowserToolView {
   steps: BrowserStepView[];
   count: number;
   error?: string;
+  invalidWaitStep?: number;
   warning?: string;
 }
 export type BrowserToolState = 'running' | 'reviewing' | 'ok' | 'error';
@@ -162,19 +165,32 @@ export function browserPresentation(
       ? args.steps.filter(record).slice(0, 10)
       : [];
   const body = outputText(output);
+  const error =
+    state === 'error'
+      ? (text(data.error, 6000) ??
+        text(data.message, 6000) ??
+        (body.trim().startsWith('{') ? undefined : body.trim().slice(0, 6000)))
+      : undefined;
+  const invalidWait =
+    name === 'browser_act' && error?.endsWith(`: ${BROWSER_ACT_WAIT_TEXT_REQUIRED}`)
+      ? /^Invalid browser_act step (\d+):/.exec(error)
+      : null;
+  const waitIndex = invalidWait ? Number(invalidWait[1]) - 1 : -1;
+  const invalidWaitStep = rawSteps[waitIndex]?.action === 'wait' ? waitIndex + 1 : undefined;
   const stopped = /browser_act step (\d+) stopped \((\d+) completed\)/.exec(body);
   // 没有结果里的 completed 或 stopped 计数，就没有「哪些步骤跑过」的证据：
   // 取消、超时、进程退出都可能已经投递输入，不能标成未执行。
   const confirmed =
     (typeof data.completed === 'number' && Number.isSafeInteger(data.completed)) || !!stopped;
-  const completed = !confirmed
-    ? 0
-    : typeof data.completed === 'number' && Number.isSafeInteger(data.completed)
-      ? Math.max(0, Math.min(rawSteps.length, data.completed))
-      : Math.min(rawSteps.length, Number(stopped![2]));
-  const interrupted = state === 'error' && !confirmed;
-  const failedIndex =
-    state === 'error' && !interrupted ? (stopped ? Number(stopped[1]) - 1 : completed) : -1;
+  const completed =
+    !confirmed || invalidWaitStep
+      ? 0
+      : typeof data.completed === 'number' && Number.isSafeInteger(data.completed)
+        ? Math.max(0, Math.min(rawSteps.length, data.completed))
+        : Math.min(rawSteps.length, Number(stopped![2]));
+  const interrupted = state === 'error' && !confirmed && !invalidWaitStep;
+  const failedAt = stopped ? Number(stopped[1]) - 1 : completed;
+  const failedIndex = state === 'error' && !interrupted && !invalidWaitStep ? failedAt : -1;
   const steps = rawSteps.map(
     (step, i): BrowserStepView => ({
       ordinal: i + 1,
@@ -188,12 +204,6 @@ export function browserPresentation(
             : 'pending',
     })
   );
-  const error =
-    state === 'error'
-      ? (text(data.error, 6000) ??
-        text(data.message, 6000) ??
-        (body.trim().startsWith('{') ? undefined : body.trim().slice(0, 6000)))
-      : undefined;
   const redact = (value: string) =>
     typedValues(args)
       .sort((a, b) => b.length - a.length)
@@ -210,6 +220,7 @@ export function browserPresentation(
           )
         : 1,
     ...(error ? { error: redact(error) } : {}),
+    ...(invalidWaitStep ? { invalidWaitStep } : {}),
     ...(typeof data.observationError === 'string'
       ? { warning: redact(data.observationError.slice(0, 6000)) }
       : typeof data.notice === 'string'

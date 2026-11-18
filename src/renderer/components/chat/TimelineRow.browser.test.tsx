@@ -64,6 +64,24 @@ describe('browser steps are not debugging output', () => {
     expect(html).not.toContain('Not executed');
     expect(html).toContain('Browser action aborted');
   });
+  it('explains that a rejected wait step prevented the entire batch from running', () => {
+    const html = render(
+      row(
+        'browser_act',
+        {
+          steps: [
+            { action: 'type', ref: 'e1', text: 'question', submit: true },
+            { action: 'wait', timeoutMs: 8000 },
+          ],
+        },
+        'Invalid browser_act step 2: Wait requires non-empty text. No steps were executed.',
+        true
+      )
+    );
+    expect(html).toContain('Step 2 is missing the text to wait for. No steps were executed.');
+    expect(html.match(/Not executed/g)).toHaveLength(2);
+    expect(html).not.toContain('Needs verification');
+  });
   it('keeps an approval audit visible without restoring the raw JSON result card', () => {
     const item = row('browser_navigate', { description: '打开登录页' }, '{"tabId":"internal-tab"}');
     if (item.kind !== 'tool') throw new Error('missing tool');

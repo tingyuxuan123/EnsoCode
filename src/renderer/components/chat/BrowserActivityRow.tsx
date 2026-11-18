@@ -74,7 +74,11 @@ export function BrowserActivityRow({
           role="status"
           className="ml-6 whitespace-pre-wrap break-words text-sm text-destructive"
         >
-          {view.error || t('Browser action did not finish.')}
+          {view.invalidWaitStep
+            ? t('Step {{step}} is missing the text to wait for. No steps were executed.', {
+                step: view.invalidWaitStep,
+              })
+            : view.error || t('Browser action did not finish.')}
         </div>
       )}
       {view.warning && (

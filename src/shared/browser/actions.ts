@@ -16,6 +16,8 @@ export const BROWSER_ACTIONS = [
 ] as const;
 export const BROWSER_ACTION_MAX_STEPS = 10;
 export const BROWSER_ACTION_BUDGET_MS = 45_000;
+export const BROWSER_ACT_WAIT_TEXT_REQUIRED =
+  'Wait requires non-empty text. No steps were executed.';
 export interface ActionTarget {
   ref?: string;
   target?: string;
@@ -82,7 +84,8 @@ export function parseBrowserActions(raw: unknown): BrowserAction[] {
     throw new Error(`browser_act requires 1–${BROWSER_ACTION_MAX_STEPS} steps`);
   let chars = 0;
   return raw.steps.map((step, index) => {
-    const bad = () => new Error(`Invalid browser_act step ${index + 1}`);
+    const bad = (reason?: string) =>
+      new Error(`Invalid browser_act step ${index + 1}${reason ? `: ${reason}` : ''}`);
     if (!record(step) || !BROWSER_ACTIONS.includes(step.action as BrowserAction['action']))
       throw bad();
     const action = step.action as BrowserAction['action'];
@@ -110,8 +113,9 @@ export function parseBrowserActions(raw: unknown): BrowserAction[] {
       (!Number.isSafeInteger(step.nth) || Number(step.nth) < 1 || Number(step.nth) > 400)
     )
       throw bad();
-    if (['type', 'fill', 'wait'].includes(action) && typeof step.text !== 'string') throw bad();
-    if (action === 'wait' && !String(step.text).trim()) throw bad();
+    if (['type', 'fill'].includes(action) && typeof step.text !== 'string') throw bad();
+    if (action === 'wait' && (typeof step.text !== 'string' || !step.text.trim()))
+      throw bad(BROWSER_ACT_WAIT_TEXT_REQUIRED);
     if (step.submit !== undefined && typeof step.submit !== 'boolean') throw bad();
     if (action === 'check' && typeof step.checked !== 'boolean') throw bad();
     if (action === 'press') {

@@ -2317,19 +2317,23 @@ export class BrowserHost {
       const generation = tab.generation;
       const snapshotId = `${tab.snapshotScope}-${++tab.snapshotSeq}`;
       const raw = await tab.view.webContents.executeJavaScript(
-        pageReadScript(request, snapshotId),
+        pageReadScript(request, snapshotId, { collectElements: kind === 'elements' }),
         true
       );
       this.assertSnapshotCurrent(tab, generation);
       const snapshot = parsePageReadSnapshot(raw, snapshotId);
-      this.invalidateRefs(tab);
+      if (kind === 'elements') {
+        this.invalidateRefs(tab);
+        tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), snapshot.entries);
+        tab.actionEntries = [
+          ...(snapshot.text
+            ? [{ role: 'text', name: snapshot.text.slice(0, 2000), depth: 0 }]
+            : []),
+          ...snapshot.entries,
+        ];
+      }
       tab.readSnapshot = snapshot;
       tab.readKey = key;
-      tab.lastSnapshot = renderSnapshot(this.pageInfo(tab.view.webContents), snapshot.entries);
-      tab.actionEntries = [
-        ...(snapshot.text ? [{ role: 'text', name: snapshot.text.slice(0, 2000), depth: 0 }] : []),
-        ...snapshot.entries,
-      ];
     }
     if (!tab.readSnapshot) throw new Error('Read snapshot unavailable');
     return {

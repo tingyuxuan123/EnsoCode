@@ -463,10 +463,11 @@ it('真实键盘输入不永久暂停成员 Agent，也不影响其他成员的 
   expect(host.state(tabId).holder?.name).toBe('Alice');
   await host.dispose();
 });
-it('读取生成快照代际，新读使旧 ref 和游标失效', async () => {
-  const { host, tabId } = await open();
+it('只读正文和翻页不消耗控件引用，读取新控件才替换它们', async () => {
+  const { host, tabId, contents } = await open();
   mock.exec = async (script) => {
-    const snapshotId = /const snapshotId = "([^"]+)"/.exec(script)?.[1] ?? 'x';
+    const snapshotId = /const snapshotId = "([^"]+)"/.exec(script)?.[1];
+    if (!snapshotId) return { x: 10, y: 10 };
     return {
       text: 'abcdef',
       entries: [{ role: 'button', name: 'Save', depth: 0, ref: `e${snapshotId}_1`, kind: 'click' }],
@@ -477,8 +478,20 @@ it('读取生成快照代际，新读使旧 ref 和游标失效', async () => {
   const first = (await host.invoke('conv', 'read_elements', { tabId })) as {
     entries: { ref: string }[];
   };
-  await host.invoke('conv', 'read_text', { tabId });
-  await expect(host.invoke('conv', 'click', { tabId, ref: first.entries[0].ref })).rejects.toThrow(
+  const page = (await host.invoke('conv', 'read_text', { tabId, maxChars: 3 })) as {
+    text: string;
+    nextCursor: string;
+  };
+  expect(page.text).toBe('abc');
+  await expect(
+    host.invoke('conv', 'read_text', { tabId, cursor: page.nextCursor })
+  ).resolves.toMatchObject({ text: 'def' });
+  await host.invoke('conv', 'click', { tabId, ref: first.entries[0].ref });
+  expect(contents.inputs).toContainEqual(expect.objectContaining({ type: 'mouseDown' }));
+
+  const second = (await host.invoke('conv', 'read_elements', { tabId })) as typeof first;
+  await host.invoke('conv', 'read_elements', { tabId });
+  await expect(host.invoke('conv', 'click', { tabId, ref: second.entries[0].ref })).rejects.toThrow(
     /stale/
   );
   await host.dispose();

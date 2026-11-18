@@ -100,6 +100,27 @@ describe('页面已加载 DOM 读取', () => {
       ])
     );
   });
+  it('只读正文不覆盖网页内已有的控件引用或为新控件添加引用', () => {
+    const { document, window } = parseHTML(
+      '<html><body><textarea data-enso-ref="es1_1">Draft</textarea><button>Send</button><p>Reply</p></body></html>'
+    );
+    for (const el of document.querySelectorAll('*')) {
+      Object.defineProperty(el, 'getBoundingClientRect', {
+        value: () => ({ width: 100, height: 20 }),
+      });
+    }
+    const result = new Function(
+      'document',
+      'window',
+      'getComputedStyle',
+      `return ${pageReadScript({ scope: 'document' }, 's2', { collectElements: false })}`
+    )(document, window, () => ({}));
+    expect(result.text).toContain('Reply');
+    expect(result.text).not.toContain('Draft');
+    expect(result.entries).toEqual([]);
+    expect(document.querySelector('textarea')?.getAttribute('data-enso-ref')).toBe('es1_1');
+    expect(document.querySelector('button')?.hasAttribute('data-enso-ref')).toBe(false);
+  });
   it('开放 shadow root 里的文本与控件也有引用', () => {
     const { document, window } = parseHTML('<html><body><main></main></body></html>');
     const root = document.querySelector('main')?.attachShadow({ mode: 'open' });

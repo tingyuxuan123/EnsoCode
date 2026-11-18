@@ -424,7 +424,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     define(
       'browser_act',
       'act',
-      'Run 1–10 already-decided steps in one tab with one tool round trip, then return bounded page changes and usable refs. Prefer this over separate click/type/press calls and repeated snapshots. Stops at the first failure, cancellation or manual input; never replays steps. Target a control by ref OR target (visible label), optionally role and 1-based nth; a target may appear after an earlier step. Example steps: [{action:"click",target:"Search",role:"button"},{action:"type",target:"Query",text:"hello",submit:true},{action:"wait",text:"Results"}]. Actions: click, type/fill (text), press (key), scroll (direction/amount, optional target), select (values), hover, check (checked), wait (text/timeoutMs), navigate (url, same tab). Do not batch decisions needing unseen page content or authorization. No scripts, arbitrary paths, uploads or tab switching. 45-second total budget.',
+      'Run 1–10 already-decided steps in one tab with one tool round trip, then return bounded page changes and usable refs. Prefer this over separate click/type/press calls and repeated snapshots. Stops at the first failure, cancellation or manual input; never replays steps. Target a control by ref OR target (visible label), optionally role and 1-based nth; a target may appear after an earlier step. Example steps: [{action:"click",target:"Search",role:"button"},{action:"type",target:"Query",text:"hello",submit:true},{action:"wait",text:"Results"}]. Actions: click, type/fill (text), press (key), scroll (direction/amount, optional target), select (values), hover, check (checked), wait (requires non-empty text, timeoutMs is optional), navigate (url, same tab). If you do not know what text to wait for, omit the wait step and inspect the page after the action. Do not batch decisions needing unseen page content or authorization. No scripts, arbitrary paths, uploads or tab switching. 45-second total budget.',
       {
         steps: {
           type: 'array',
@@ -583,7 +583,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     define(
       'browser_read',
       'read_text',
-      'Read text or elements from viewport/default or loaded document (never scrolls to load more). Text supports ref/maxChars; elements supports role/text/limit. Reuse nextCursor with identical filters to page results. Read elements to obtain refs; document does not imply all frames or lazy content were read.',
+      'Read text or elements from viewport/default or loaded document (never scrolls to load more). Text supports ref/maxChars and does not invalidate current element refs. Elements supports role/text/limit and returns a new set of refs. Reuse nextCursor with identical filters to page results. Document does not imply all frames or lazy content were read.',
       {
         kind: choice('text', 'elements'),
         scope,

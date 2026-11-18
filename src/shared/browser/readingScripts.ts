@@ -37,7 +37,7 @@ export const FIND_PAGE_REF_SOURCE = `const findRef = (ref, root = document) => {
 export function pageReadScript(
   request: ReadRequest,
   snapshotId: string,
-  options?: { compact?: boolean; preserveRefs?: readonly string[] }
+  options?: { compact?: boolean; preserveRefs?: readonly string[]; collectElements?: boolean }
 ): string {
   return `(() => {
     ${FIND_PAGE_REF_SOURCE}
@@ -45,9 +45,10 @@ export function pageReadScript(
     const request = ${JSON.stringify(request)};
     const snapshotId = ${JSON.stringify(snapshotId)};
     const compact = ${options?.compact === true};
+    const collectElements = ${options?.collectElements !== false};
     const preserve = new Set(${JSON.stringify(options?.preserveRefs ?? [])});
     const used = new Set();
-    const bindings = window.__ensoBrowserRefs || (window.__ensoBrowserRefs = new WeakMap());
+    const bindings = collectElements ? (window.__ensoBrowserRefs || (window.__ensoBrowserRefs = new WeakMap())) : null;
     const entries = [], words = [], diagnostics = [];
     let count = 0, length = 0, scanned = 0, truncated = false;
     const visible = (el) => {
@@ -71,7 +72,7 @@ export function pageReadScript(
         const el = node;
         const tag = el.tagName.toLowerCase();
         if (/^(script|style|noscript|template)$/.test(tag) || el.id === 'enso-browser-lock-overlay' || el.id === 'enso-design-mode-root') continue;
-        if (visible(el) && !/^(hidden|file)$/.test(el.type || '') && el.matches('a,button,input,select,textarea,summary,[role],[tabindex],[contenteditable="true"],[onclick]')) {
+        if (collectElements && visible(el) && !/^(hidden|file)$/.test(el.type || '') && el.matches('a,button,input,select,textarea,summary,[role],[tabindex],[contenteditable="true"],[onclick]')) {
           let role = el.getAttribute('role') || ({ a: 'link', button: 'button', select: 'combobox', textarea: 'textbox', summary: 'button' }[tag]) || 'generic';
           if (tag === 'input') role = /^(checkbox|radio)$/.test(el.type) ? el.type : /^(button|submit|reset)$/.test(el.type) ? 'button' : 'textbox';
           const name = nameOf(el).slice(0, 500);

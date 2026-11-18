@@ -112,6 +112,28 @@ describe('browser_act', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it.each([{ timeoutMs: 8000 }, { timeoutMs: 8000, text: '  ' }])(
+    'explains an empty wait condition before sending any input: %j',
+    async (wait) => {
+      const { tool, invoke } = setup();
+      await expect(
+        tool.execute(
+          'c',
+          {
+            steps: [
+              { action: 'type', ref: 'e1', text: 'question', submit: true },
+              { action: 'wait', ...wait },
+            ],
+          } as never,
+          undefined,
+          undefined,
+          undefined as never
+        )
+      ).rejects.toThrow(/step 2: Wait requires non-empty text\. No steps were executed\./);
+      expect(invoke).not.toHaveBeenCalled();
+    }
+  );
+
   it('approves external navigation in a batch before any action; localhost remains exempt', async () => {
     const { tool, invoke } = setup();
     expect(tool).toBeDefined();

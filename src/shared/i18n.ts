@@ -2598,6 +2598,8 @@ export const zhTranslations: Record<string, string> = {
   'Not executed': '未执行',
   'Needs verification': '需要核对',
   'Browser action did not finish.': '浏览器操作未完成。',
+  'Step {{step}} is missing the text to wait for. No steps were executed.':
+    '第 {{step}} 步缺少要等待的文字，本批操作未执行。',
   '{{count}} to verify': '{{count}} 项待核对',
   'Browser tabs': '浏览器 · 标签页',
   'Browser lock': '浏览器 · 锁定',
