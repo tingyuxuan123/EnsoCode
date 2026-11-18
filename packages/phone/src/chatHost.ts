@@ -1,6 +1,6 @@
 import type { ChatHost } from '@/components/chat/chatHost';
 import { toWorkspaceRelPath } from './localImageRel';
-import type { SessionImageLoad } from './sessionImagePort';
+import type { SessionImageLoad, SessionImageTarget } from './sessionImagePort';
 
 /**
  * 成员会话标 botSession：时间线按桌面一样把 Main 注入的群消息 / 委派 / 引用拆成卡片。
@@ -11,8 +11,8 @@ export function phoneChatHost(input: {
   bot?: object;
   deviceReadOnly?: boolean;
   cwd?: string;
-  readImage?: (rel: string) => Promise<SessionImageLoad>;
-  invalidateImage?: (rel: string) => void;
+  readImage?: (target: SessionImageTarget) => Promise<SessionImageLoad>;
+  invalidateImage?: (target: SessionImageTarget) => void;
 }): ChatHost {
   const readImage = input.readImage;
   const invalidateImage = input.invalidateImage;
@@ -27,10 +27,15 @@ export function phoneChatHost(input: {
       ? {
           // 会话 + 执行目录：两者任一变化，同一相对路径都可能指向别的文件
           localImageScope: [input.sessionId ?? '', cwd ?? ''].join('|'),
-          readLocalImage: async (path: string) => {
+          readLocalImage: async (path: string, toolCallId?: string) => {
             const rel = toWorkspaceRelPath(path, cwd);
-            if (!rel) return { ok: false as const, error: 'outside' };
-            const result = await readImage(rel);
+            const target = rel
+              ? ({ kind: 'workspace', rel } as const)
+              : toolCallId
+                ? ({ kind: 'tool-call', id: toolCallId } as const)
+                : null;
+            if (!target) return { ok: false as const, error: 'outside' };
+            const result = await readImage(target);
             return 'dataUrl' in result
               ? { ok: true as const, dataUrl: result.dataUrl }
               : { ok: false as const, error: result.error };
@@ -39,9 +44,10 @@ export function phoneChatHost(input: {
       : {}),
     ...(invalidateImage
       ? {
-          invalidateLocalImage: (path: string) => {
+          invalidateLocalImage: (path: string, toolCallId?: string) => {
             const rel = toWorkspaceRelPath(path, cwd);
-            if (rel) invalidateImage(rel);
+            if (rel) invalidateImage({ kind: 'workspace', rel });
+            else if (toolCallId) invalidateImage({ kind: 'tool-call', id: toolCallId });
           },
         }
       : {}),

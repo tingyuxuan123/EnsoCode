@@ -39,7 +39,7 @@ import { PhoneTopBar, TopBarAction } from './PhoneTopBar';
 import { appendEchoMessages, type QueueSendEcho } from './queueSendEcho';
 import { readOnlyBanner } from './readOnly';
 import { SessionStatsLine } from './SessionStatsLine';
-import type { SessionImageLoad } from './sessionImagePort';
+import type { SessionImageLoad, SessionImageTarget } from './sessionImagePort';
 import { setDisplayedConversation } from './stubs/sessions-store';
 import { WebPreview } from './WebPreview';
 
@@ -53,9 +53,9 @@ interface Props {
   /** 本机时钟 − host 时钟（审批 / 提问卡剩余时间） */
   clockOffset?: number;
   /** 会话图片：手机没有 local-image://，由 host 按「会话 id + 相对路径」读回 data URL */
-  readImage?: (rel: string) => Promise<SessionImageLoad>;
+  readImage?: (target: SessionImageTarget) => Promise<SessionImageLoad>;
   /** 解码失败/同路径覆盖时作废该图缓存，重试才会重新取图 */
-  invalidateImage?: (rel: string) => void;
+  invalidateImage?: (target: SessionImageTarget) => void;
   connState: ConnState;
   stateLabel: string;
   /** Local send failure, also shown in Code mode (not only Bot conversations). */

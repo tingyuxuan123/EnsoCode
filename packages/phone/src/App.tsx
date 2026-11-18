@@ -65,7 +65,7 @@ import {
 import { READ_ONLY_ERROR } from './readOnly';
 import { SessionConfigSheet } from './SessionConfigSheet';
 import { SessionDrawer } from './SessionDrawer';
-import { SessionImagePort } from './sessionImagePort';
+import { SessionImagePort, type SessionImageTarget } from './sessionImagePort';
 import {
   clearDeviceData,
   type LastView,
@@ -795,14 +795,14 @@ export function App() {
   const activeReadImage = useMemo(
     () =>
       imagesAvailable && activeId
-        ? (rel: string) => imagesPort.load(activeId, rel, sessionImageCwd)
+        ? (target: SessionImageTarget) => imagesPort.load(activeId, target, sessionImageCwd)
         : undefined,
     [imagesAvailable, activeId, sessionImageCwd, imagesPort]
   );
   const activeInvalidateImage = useMemo(
     () =>
       imagesAvailable && activeId
-        ? (rel: string) => imagesPort.evict(activeId, rel, sessionImageCwd)
+        ? (target: SessionImageTarget) => imagesPort.evict(activeId, target, sessionImageCwd)
         : undefined,
     [imagesAvailable, activeId, sessionImageCwd, imagesPort]
   );

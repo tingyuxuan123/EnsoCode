@@ -2240,8 +2240,16 @@ function SandboxOutput({
  * 远程宿主（手机 PWA 浏览器）没有这个协议，改为经 host 取图，
  * 加载中与失败都有可见状态（不留空白、不静默藏掉）。
  */
-export function ReadImagePreview({ path, fallback }: { path: string; fallback: ReactNode }) {
-  const { state, retry, invalidate } = useLocalImageSource(path);
+export function ReadImagePreview({
+  path,
+  toolCallId,
+  fallback,
+}: {
+  path: string;
+  toolCallId?: string;
+  fallback: ReactNode;
+}) {
+  const { state, retry, invalidate } = useLocalImageSource(path, toolCallId);
   return (
     <ReadImagePreviewView
       state={state}
@@ -2630,6 +2638,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                 <ReadImagePreview
                   key={item.imagePath}
                   path={item.imagePath}
+                  toolCallId={item.imageToolCallId}
                   fallback={<ReadFileView path={item.summary} contents={item.output ?? ''} />}
                 />
               ) : item.name === 'read' && item.state !== 'error' ? (

@@ -22,7 +22,7 @@ const requestIdOf = (sent: PhoneToHost[]): string => {
 describe('SessionImagePort', () => {
   it('按会话 id + 相对路径上行，拿到 data URL 后缓存', async () => {
     const { port, sent } = makePort();
-    const pending = port.load('s1', 'shots/a.png');
+    const pending = port.load('s1', { kind: 'workspace', rel: 'shots/a.png' });
     expect(sent.at(-1)).toMatchObject({
       type: 'session-image',
       sessionId: 's1',
@@ -34,7 +34,30 @@ describe('SessionImagePort', () => {
       dataUrl: DATA_URL,
     });
     await expect(pending).resolves.toEqual({ dataUrl: DATA_URL });
-    await expect(port.load('s1', 'shots/a.png')).resolves.toEqual({ dataUrl: DATA_URL });
+    await expect(port.load('s1', { kind: 'workspace', rel: 'shots/a.png' })).resolves.toEqual({
+      dataUrl: DATA_URL,
+    });
+    expect(sent).toHaveLength(1);
+  });
+
+  it('目录外图片只上行工具调用 id，并用该 id 去重缓存', async () => {
+    const { port, sent } = makePort();
+    const target = { kind: 'tool-call' as const, id: 'read-1' };
+    const pending = port.load('s1', target);
+    expect(sent.at(-1)).toMatchObject({
+      type: 'session-image',
+      sessionId: 's1',
+      toolCallId: 'read-1',
+    });
+    expect(JSON.stringify(sent)).not.toContain('/tmp/');
+
+    port.receive({
+      type: 'session-image-result',
+      requestId: requestIdOf(sent),
+      dataUrl: DATA_URL,
+    });
+    await expect(pending).resolves.toEqual({ dataUrl: DATA_URL });
+    await expect(port.load('s1', target)).resolves.toEqual({ dataUrl: DATA_URL });
     expect(sent).toHaveLength(1);
   });
 

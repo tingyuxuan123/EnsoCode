@@ -51,7 +51,10 @@ export function localImageErrorText(error: string, t: (key: string) => string): 
   }
 }
 
-export function useLocalImageSource(path: string): {
+export function useLocalImageSource(
+  path: string,
+  toolCallId?: string
+): {
   state: LocalImageSource;
   remote: boolean;
   /** 重试 = 先作废宿主缓存再重新取图（同路径覆盖/坏图都必须真重取） */
@@ -79,7 +82,8 @@ export function useLocalImageSource(path: string): {
     }
     let alive = true;
     setState({ status: 'loading' });
-    load(path)
+    const pending = toolCallId ? load(path, toolCallId) : load(path);
+    pending
       .then((result) => {
         if (alive) setState(applyLocalImageLoad(result));
       })
@@ -89,10 +93,12 @@ export function useLocalImageSource(path: string): {
     return () => {
       alive = false;
     };
-  }, [remote, path, scope, attempt]);
+  }, [remote, path, toolCallId, scope, attempt]);
   const invalidate = useCallback(() => {
-    if (host?.invalidateLocalImage) host.invalidateLocalImage(path);
-  }, [host, path]);
+    if (!host?.invalidateLocalImage) return;
+    if (toolCallId) host.invalidateLocalImage(path, toolCallId);
+    else host.invalidateLocalImage(path);
+  }, [host, path, toolCallId]);
   const retry = useCallback(() => {
     // 先失效再重取：不然手机侧的「成功缓存」会把坏图/旧图原样还回来
     invalidate();

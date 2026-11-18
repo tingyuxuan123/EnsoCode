@@ -124,10 +124,13 @@ export type PhoneToHost =
       input: PairPreviewInput;
     }
   /**
-   * 会话里的图片（read/生成的图片文件）：手机只报工作区相对路径，
-   * host 按权威根解析、校验边界并压到手机帧预算内再回 data URL。
+   * 会话里的图片（read/生成的图片文件）：工作区图片只报相对路径；目录外 read 图片
+   * 只报时间线里的工具调用 id，由 host 从权威会话记录反查原始路径。
    */
-  | { type: 'session-image'; requestId: string; sessionId: string; rel: string }
+  | (
+      | { type: 'session-image'; requestId: string; sessionId: string; rel: string }
+      | { type: 'session-image'; requestId: string; sessionId: string; toolCallId: string }
+    )
   | { type: 'file-list'; requestId: string; target: PairFileTarget }
   | { type: 'file-read'; requestId: string; target: PairFileTarget; fileId: string; offset: number }
   | { type: 'prompt'; sessionId: string; text: string; images?: AttachedImage[] }

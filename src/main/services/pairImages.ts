@@ -1,8 +1,10 @@
 import { constants } from 'node:fs';
-import { open, stat } from 'node:fs/promises';
+import { open, realpath, stat } from 'node:fs/promises';
+import path from 'node:path';
 import type { HostToPhone, PhoneToHost } from '@enso/pair';
 import { previewImageMime } from '@shared/markdownPreviewImage';
 import { normalizeSessionImageRel } from '@shared/pair/imageRel';
+import type { ProjectedMessage } from '@shared/types/agent';
 import { resolveArtifactFile } from './bots/artifacts';
 import type { PairReply } from './pairHost';
 
@@ -41,11 +43,65 @@ export type SessionImageRead =
   | { file: string; mime: string; data: Buffer }
   | { error: SessionImageFailure };
 
-/** 读字节：O_NOFOLLOW 拒绝被换成符号链接，前后各校验一次身份，避免读到一半被替换 */
-export async function readSessionImage(root: string, rel: unknown): Promise<SessionImageRead> {
-  if (!normalizeSessionImageRel(rel)) return { error: 'invalid' };
-  const file = resolveSessionImageFile(root, rel);
-  if (!file) return { error: 'not-found' };
+function readPathArgument(args: unknown): string | null {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+  const record = args as Record<string, unknown>;
+  const value =
+    typeof record.path === 'string'
+      ? record.path
+      : typeof record.file_path === 'string'
+        ? record.file_path
+        : null;
+  const file = value?.trim();
+  if (!file || file.includes('\0') || file.startsWith('~')) return null;
+  if (file.startsWith('\\\\') || file.startsWith('//')) return null;
+  return file;
+}
+
+/**
+ * 目录外图片没有可相对化的工作区根，只能由会话记录授权：
+ * 工具调用 id 必须恰好对应一条成功的 read，再按其原始 path 参数解析。
+ */
+export async function resolveSessionImageReference(
+  root: string,
+  messages: readonly ProjectedMessage[],
+  toolCallId: unknown
+): Promise<string | null> {
+  if (
+    typeof toolCallId !== 'string' ||
+    !toolCallId ||
+    toolCallId.length > 512 ||
+    [...toolCallId].some((char) => char.charCodeAt(0) < 0x20)
+  )
+    return null;
+
+  const calls: string[] = [];
+  const completed = new Set<string>();
+  for (const message of messages) {
+    if (message.role === 'assistant') {
+      for (const part of message.content) {
+        if (part.type !== 'toolCall' || part.id !== toolCallId || part.name !== 'read') continue;
+        const file = readPathArgument(part.arguments);
+        if (file) calls.push(file);
+      }
+    } else if (
+      message.role === 'toolResult' &&
+      message.toolCallId === toolCallId &&
+      !message.isError
+    ) {
+      completed.add(toolCallId);
+    }
+  }
+  if (calls.length !== 1 || !completed.has(toolCallId)) return null;
+
+  const resolved = await realpath(path.resolve(root, calls[0])).catch(() => null);
+  if (!resolved || !previewImageMime(resolved)) return null;
+  const info = await stat(resolved).catch(() => null);
+  return info?.isFile() ? resolved : null;
+}
+
+/** 已授权文件的受限读取；身份前后复核，拒绝读取期间被替换。 */
+export async function readSessionImageFile(file: string): Promise<SessionImageRead> {
   const mime = sessionImageMime(file);
   if (!mime) return { error: 'unsupported' };
   let handle: Awaited<ReturnType<typeof open>> | null = null;
@@ -54,7 +110,7 @@ export async function readSessionImage(root: string, rel: unknown): Promise<Sess
     const before = await handle.stat();
     if (!before.isFile()) return { error: 'not-found' };
     if (before.size > SESSION_IMAGE_FILE_MAX) return { error: 'too-large' };
-    if (resolveSessionImageFile(root, rel) !== file) return { error: 'changed' };
+    if ((await realpath(file).catch(() => null)) !== file) return { error: 'changed' };
     // 有界读取：文件在读取过程中增长时最多读到预算 +1 字节就判超限，
     // 不会先把整份增长内容读进内存再判 changed（预算要是真上限）。
     const buffer = Buffer.allocUnsafe(SESSION_IMAGE_FILE_MAX + 1);
@@ -85,6 +141,17 @@ export async function readSessionImage(root: string, rel: unknown): Promise<Sess
   }
 }
 
+/** 读字节：O_NOFOLLOW 拒绝被换成符号链接，前后各校验一次身份，避免读到一半被替换 */
+export async function readSessionImage(root: string, rel: unknown): Promise<SessionImageRead> {
+  if (!normalizeSessionImageRel(rel)) return { error: 'invalid' };
+  const file = resolveSessionImageFile(root, rel);
+  if (!file) return { error: 'not-found' };
+  const read = await readSessionImageFile(file);
+  if ('error' in read) return read;
+  if (resolveSessionImageFile(root, rel) !== file) return { error: 'changed' };
+  return read;
+}
+
 export type SessionImageEncoder = (data: Buffer, mime: string) => string | null;
 
 export type SessionImageCommand = Extract<PhoneToHost, { type: 'session-image' }>;
@@ -104,6 +171,7 @@ export interface PairImagePort {
 
 export function createPairImagePort(input: {
   lookup: (sessionId: string) => SessionImageSource | null;
+  resolveReferencedFile?: (sessionId: string, toolCallId: string) => Promise<string | null>;
   encode: SessionImageEncoder;
 }): PairImagePort {
   const accessKey = (sessionId: string): string | null => {
@@ -120,7 +188,19 @@ export function createPairImagePort(input: {
 
       const before = input.lookup(command.sessionId);
       if (!before) return fail('unavailable');
-      const read = await readSessionImage(before.root, command.rel);
+      let read: SessionImageRead;
+      if ('rel' in command) {
+        read = await readSessionImage(before.root, command.rel);
+      } else {
+        let file: string | null = null;
+        try {
+          file =
+            (await input.resolveReferencedFile?.(command.sessionId, command.toolCallId)) ?? null;
+        } catch {
+          return fail('unavailable');
+        }
+        read = file ? await readSessionImageFile(file) : { error: 'not-found' };
+      }
       // 读盘期间 cwd/工作树/授权可能已经变了：重新按权威记录校验，旧内容不回给手机
       const after = input.lookup(command.sessionId);
       if (!after || after.root !== before.root || after.stamp !== before.stamp)

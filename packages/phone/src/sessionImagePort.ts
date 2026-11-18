@@ -8,6 +8,9 @@ import type { HostToPhone, PhoneToHost } from '@enso/pair';
 
 type Frame = Extract<HostToPhone, { type: 'session-image-result' }>;
 export type SessionImageLoad = { dataUrl: string } | { error: string };
+export type SessionImageTarget =
+  | { kind: 'workspace'; rel: string }
+  | { kind: 'tool-call'; id: string };
 
 const IMAGE_DATA_URL =
   /^data:image\/(?:png|jpeg|gif|webp|svg\+xml|bmp|avif|x-icon);base64,[A-Za-z0-9+/=]+$/;
@@ -25,8 +28,17 @@ const ERRORS = new Set([
  * 缓存 key：会话 id + 执行目录（scope，仅本地缓存判别，不上行）+ 相对路径。
  * 会话换了工作树/目录时天然 miss，不会把旧目录的像素当成同一张图。
  */
-export const sessionImageKey = (sessionId: string, rel: string, scope = ''): string =>
-  `${sessionId}|${scope}|${rel}`;
+const normalizeTarget = (target: SessionImageTarget | string): SessionImageTarget =>
+  typeof target === 'string' ? { kind: 'workspace', rel: target } : target;
+
+const targetKey = (target: SessionImageTarget): string =>
+  target.kind === 'workspace' ? `workspace:${target.rel}` : `tool-call:${target.id}`;
+
+export const sessionImageKey = (
+  sessionId: string,
+  target: SessionImageTarget | string,
+  scope = ''
+): string => `${sessionId}|${scope}|${targetKey(normalizeTarget(target))}`;
 
 /** 缓存成功图的条数上限：超了按插入顺序丢最早的（手机内存有限） */
 const CACHE_LIMIT = 24;
@@ -45,16 +57,20 @@ export class SessionImagePort {
   ) {}
 
   /** 已拿到的图（只缓存成功：失败要能重试）；没有则 undefined */
-  peek(sessionId: string, rel: string, scope = ''): SessionImageLoad | undefined {
-    return this.cache.get(sessionImageKey(sessionId, rel, scope));
+  peek(
+    sessionId: string,
+    target: SessionImageTarget | string,
+    scope = ''
+  ): SessionImageLoad | undefined {
+    return this.cache.get(sessionImageKey(sessionId, target, scope));
   }
 
   /**
    * 作废某个 key 的缓存（同张图被覆盖、解码失败、目录换代）。
    * 用代次号作废在途请求：旧回包到达时不能再重新填进缓存。
    */
-  evict(sessionId: string, rel: string, scope = ''): void {
-    const key = sessionImageKey(sessionId, rel, scope);
+  evict(sessionId: string, target: SessionImageTarget | string, scope = ''): void {
+    const key = sessionImageKey(sessionId, target, scope);
     this.generations.set(key, this.generation(key) + 1);
     this.cache.delete(key);
     for (const [requestId, entry] of [...this.requests]) {
@@ -70,8 +86,13 @@ export class SessionImagePort {
     for (const settle of pending ?? []) settle({ error: 'changed' });
   }
 
-  load(sessionId: string, rel: string, scope = ''): Promise<SessionImageLoad> {
-    const key = sessionImageKey(sessionId, rel, scope);
+  load(
+    sessionId: string,
+    rawTarget: SessionImageTarget | string,
+    scope = ''
+  ): Promise<SessionImageLoad> {
+    const target = normalizeTarget(rawTarget);
+    const key = sessionImageKey(sessionId, target, scope);
     const cached = this.cache.get(key);
     if (cached) return Promise.resolve(cached);
     const queued = this.waiters.get(key);
@@ -86,8 +107,11 @@ export class SessionImagePort {
       );
       try {
         // 宿主明确表示「没发出去」（未连接）时立刻失败，不等超时
-        if (this.send({ type: 'session-image', requestId, sessionId, rel }) === false)
-          this.settle(requestId, { error: 'offline' });
+        const command: PhoneToHost =
+          target.kind === 'workspace'
+            ? { type: 'session-image', requestId, sessionId, rel: target.rel }
+            : { type: 'session-image', requestId, sessionId, toolCallId: target.id };
+        if (this.send(command) === false) this.settle(requestId, { error: 'offline' });
       } catch {
         this.settle(requestId, { error: 'failed' });
       }

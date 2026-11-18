@@ -54,8 +54,8 @@ const buttons = () => [...container.querySelectorAll('button')];
 const byText = (text: string) => buttons().find((button) => button.textContent?.includes(text));
 
 const host = (input: {
-  readLocalImage: (path: string) => Promise<LocalImageLoad>;
-  invalidateLocalImage?: (path: string) => void;
+  readLocalImage: (path: string, toolCallId?: string) => Promise<LocalImageLoad>;
+  invalidateLocalImage?: (path: string, toolCallId?: string) => void;
   localImageScope?: string;
 }) => ({
   sessionId: 's',
@@ -155,5 +155,29 @@ describe('scope 变化触发真实重新加载', () => {
     });
     await settle();
     expect(img()?.getAttribute('src')).toBe(NEXT_SCOPE);
+  });
+
+  it('read 工具调用 id 随远程读图请求传给宿主', async () => {
+    const readLocalImage = vi
+      .fn<(path: string, toolCallId?: string) => Promise<LocalImageLoad>>()
+      .mockResolvedValue({ ok: true, dataUrl: OLD });
+    await render(
+      createElement(
+        ChatHostContext.Provider,
+        {
+          value: host({
+            readLocalImage,
+            localImageScope: 's|/work/proj/tmp-capture',
+          }),
+        },
+        createElement(ReadImagePreview, {
+          path: '/tmp/whole-1920.png',
+          toolCallId: 'read-1',
+          fallback: createElement('pre', null, '文本详情'),
+        })
+      )
+    );
+    await settle();
+    expect(readLocalImage).toHaveBeenCalledWith('/tmp/whole-1920.png', 'read-1');
   });
 });

@@ -911,6 +911,7 @@ describe('buildTimeline', () => {
       kind: 'tool',
       name: 'read',
       imagePath: '/proj/shot.png',
+      imageToolCallId: 'img',
       output: 'Read image file [image/png]',
     });
 

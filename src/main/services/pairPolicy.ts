@@ -384,15 +384,40 @@ export function parsePhoneCommand(value: unknown): CommandCheck {
       return command ? { ok: true, command } : { ok: false, error: 'invalid file request' };
     }
     case 'session-image': {
-      // 只接受会话 id + 工作区相对路径：任何绝对路径/盘符/`..` 在这里就被拒
+      // 工作区图片只收相对路径；目录外图片只收时间线里的 read 工具调用 id。
+      const hasRel = Object.hasOwn(v, 'rel');
+      const hasToolCallId = Object.hasOwn(v, 'toolCallId');
       if (
-        !onlyKeys(v, ['type', 'requestId', 'sessionId', 'rel']) ||
+        hasRel === hasToolCallId ||
+        !onlyKeys(
+          v,
+          hasToolCallId
+            ? ['type', 'requestId', 'sessionId', 'toolCallId']
+            : ['type', 'requestId', 'sessionId', 'rel']
+        ) ||
         !isStr(v.requestId) ||
         v.requestId.length > 100 ||
         !isStr(v.sessionId) ||
         v.sessionId.length > 200
       )
         return { ok: false, error: 'invalid image request' };
+      if (hasToolCallId) {
+        if (
+          !isStr(v.toolCallId) ||
+          v.toolCallId.length > 512 ||
+          [...v.toolCallId].some((char) => char.charCodeAt(0) < 0x20)
+        )
+          return { ok: false, error: 'invalid image reference' };
+        return {
+          ok: true,
+          command: {
+            type: 'session-image',
+            requestId: v.requestId,
+            sessionId: v.sessionId,
+            toolCallId: v.toolCallId,
+          },
+        };
+      }
       const rel = normalizeSessionImageRel(v.rel);
       if (!rel) return { ok: false, error: 'invalid image path' };
       return {

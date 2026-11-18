@@ -10,12 +10,14 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import type { HostToPhone } from '@enso/pair';
+import type { ProjectedMessage } from '@shared/types/agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createPairImagePort,
   normalizeSessionImageRel,
   readSessionImage,
   resolveSessionImageFile,
+  resolveSessionImageReference,
   SESSION_IMAGE_FILE_MAX,
   type SessionImageSource,
 } from './pairImages';
@@ -72,6 +74,39 @@ describe('会话图片路径边界', () => {
     writeFileSync(big, PNG);
     truncateSync(big, SESSION_IMAGE_FILE_MAX + 1);
     expect(await readSessionImage(root, 'shots/big.png')).toEqual({ error: 'too-large' });
+  });
+
+  it('目录外的 read 图片只能按成功的工具调用 id 反查到原始路径', async () => {
+    const outside = path.join(tmp, 'outside.png');
+    const messages: ProjectedMessage[] = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'read-1',
+            name: 'read',
+            arguments: { path: outside },
+          },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'read-1',
+        toolName: 'read',
+        isError: false,
+        content: [],
+      },
+    ];
+    await expect(resolveSessionImageReference(root, messages, 'read-1')).resolves.toBe(
+      realpathSync(outside)
+    );
+    await expect(resolveSessionImageReference(root, messages, 'read-unknown')).resolves.toBeNull();
+
+    const failed = messages.map((message) =>
+      message.role === 'toolResult' ? { ...message, isError: true } : message
+    );
+    await expect(resolveSessionImageReference(root, failed, 'read-1')).resolves.toBeNull();
   });
 });
 
@@ -146,6 +181,29 @@ describe('createPairImagePort', () => {
     });
     expect(frames.at(-1)).toMatchObject({ error: 'unavailable' });
     expect(calls).toBeGreaterThan(1);
+  });
+
+  it('目录外引用由授权解析器给文件，端口只读解析结果', async () => {
+    const external = path.join(tmp, 'outside.png');
+    writeFileSync(external, PNG);
+    const frames: HostToPhone[] = [];
+    const port = createPairImagePort({
+      lookup: () => source,
+      resolveReferencedFile: async (sessionId, toolCallId) =>
+        sessionId === 's1' && toolCallId === 'read-1' ? realpathSync(external) : null,
+      encode: (data, mime) => `data:${mime};base64,${data.toString('base64')}`,
+    });
+    await port.handle(
+      { type: 'session-image', requestId: 'r1', sessionId: 's1', toolCallId: 'read-1' },
+      async (frame) => {
+        frames.push(frame);
+        return true;
+      }
+    );
+    expect(frames[0]).toMatchObject({
+      type: 'session-image-result',
+      dataUrl: `data:image/png;base64,${PNG.toString('base64')}`,
+    });
   });
 
   it('canAccess/accessKey 跟随权威记录', () => {

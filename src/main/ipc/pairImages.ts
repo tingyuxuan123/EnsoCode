@@ -1,7 +1,11 @@
+import path from 'node:path';
+import { app } from 'electron';
 import { fitDataUrl } from '../services/bots/mediaImage';
+import { readBotSessionMessages } from '../services/bots/sessionMessages';
 import {
   createPairImagePort,
   type PairImagePort,
+  resolveSessionImageReference,
   type SessionImageSource,
 } from '../services/pairImages';
 import { codeFileContext } from './pairFiles';
@@ -19,6 +23,16 @@ export function createPairImagesPort(): PairImagePort {
     lookup: (sessionId): SessionImageSource | null => {
       const context = codeFileContext(sessionId);
       return context ? { root: context.root, stamp: context.stamp } : null;
+    },
+    resolveReferencedFile: async (sessionId, toolCallId) => {
+      const before = codeFileContext(sessionId);
+      if (!before) return null;
+      const messages = await readBotSessionMessages(
+        path.join(app.getPath('userData'), 'agent', 'sessions'),
+        before.conversation.sessionFile
+      );
+      if (codeFileContext(sessionId)?.stamp !== before.stamp) return null;
+      return resolveSessionImageReference(before.root, messages, toolCallId);
     },
     encode: (data, mime) => fitDataUrl(data, mime, SESSION_IMAGE_MAX_CHARS, SESSION_IMAGE_MAX_EDGE),
   });

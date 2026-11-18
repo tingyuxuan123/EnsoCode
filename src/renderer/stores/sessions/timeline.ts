@@ -91,6 +91,8 @@ export type TimelineItem =
       designArgs?: Record<string, unknown>;
       /** read 到图片时的绝对路径，展开后按原文件渲染（含 svg / 动图）；其它缺省 */
       imagePath?: string;
+      /** 目录外 read 图片在手机上的授权引用；工作区图片不需要 */
+      imageToolCallId?: string;
       /** edit 工具的替换块，用于渲染 diff；非 edit 为 null */
       edits: EditBlock[] | null;
       /** write 工具写入的文件内容,展开即可查看;非 write 为 null */
@@ -1363,6 +1365,7 @@ function buildMessageTimeline(
             ...(notices.length > 0 ? { notices } : {}),
             nestedPending: nestedPendingCount(part.id, pendingApprovals) || undefined,
             ...(imagePath ? { imagePath } : {}),
+            ...(imagePath && part.name === 'read' ? { imageToolCallId: part.id } : {}),
             ...(sandboxTool ? { sandbox: sandboxView } : {}),
             state,
             // 执行失败 = 文件没改，参数里的意图 diff 不能显示成已应用
