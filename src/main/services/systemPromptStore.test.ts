@@ -7,6 +7,7 @@ const userData = mkdtempSync(join(tmpdir(), 'enso-system-prompts-'));
 
 vi.mock('electron', () => ({ app: { getPath: () => userData } }));
 
+import { DEFAULT_PERSONA_PROMPT } from '../../shared/systemPrompt';
 import { deleteSystemPrompt, readSystemPrompt, writeSystemPrompt } from './systemPromptStore';
 
 const id = '4aade2cb-d2a1-47c3-a4a2-848f28571a97';
@@ -43,8 +44,6 @@ describe('systemPromptStore', () => {
   it('缺省只读取 pi 开头角色段落，不把工具规则作为可编辑正文', async () => {
     const result = await readSystemPrompt();
     expect(result.ok).toBe(true);
-    expect(result.content).toBe(
-      'You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.'
-    );
+    expect(result.content).toBe(DEFAULT_PERSONA_PROMPT);
   });
 });

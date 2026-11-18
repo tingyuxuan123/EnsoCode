@@ -212,12 +212,12 @@ export function editLatestAssistantForRetry(session: AgentSession): boolean {
 }
 
 /**
- * 无新增消息的活动续跑：pi 1.4.0 没有公开的 session.continue，裸 agent.continue 会绕过
+ * 无新增消息的活动续跑：pi 1.5.2 仍没有公开的 session.continue，裸 agent.continue 会绕过
  * 自动重试、agent_before_settle 和 agent_settled。用 custom 触发准备扩展提示词，去掉合成消息，
  * 保留无新增任务语义：不重跑用户 prompt hook、不消费 nextTurn、不重放任务/工具。
  * 不替换共享 session 方法；取消与唯一结算仍由 SDK 管理。升级复检点见 main/services.md。
  *
- * Pi 1.4.0 exposes no session.continue. Per-call proxies prepare custom-run prompt rules,
+ * Pi 1.5.2 exposes no session.continue. Per-call proxies prepare custom-run prompt rules,
  * omit the synthetic trigger and preserve nextTurn messages. The SDK owns retry, abort
  * and settlement. Never replace methods on the shared session or skip prompt preparation.
  */

@@ -1,6 +1,6 @@
 import { agentLoop, type AgentContext, type AgentLoopConfig, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { Static } from "typebox";
 import { debugLog } from "../../debug-log.js";
 import { hashId } from "../../ids.js";

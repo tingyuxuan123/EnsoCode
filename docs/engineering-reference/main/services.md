@@ -271,20 +271,20 @@ receipt 事件同理：发的是**绑定上下文的 `context.turnId`**（= 派�
 目前有三处。第一处：`src/agent/supervisor.ts` 的 `materializeSessionFile()` 调用
 `SessionManager._rewriteFile()`，并在成功重写后同步其私有 `flushed` 标记。
 
-**为什么需要**：pi 的 `_persist` 在会话出现第一条 assistant 消息前一个字节不写
-（避免留空会话文件），而纯派发的父容器按设计永远不跑主 coding 回合、永远没有
-assistant 消息。不干预的后果是父会话文件从未创建，重启后 `resumeConversation`
+**为什么需要**：pi 的 `_persist` 在会话出现第一条 user/assistant 消息前一个字节不写
+（避免留空会话文件；1.5.2 复检仍是这条启发式，见 `_hasConversation()`），而纯派发的
+父容器按设计永远不跑主 coding 回合、永远没有这类消息。不干预的后果是父会话文件从未创建，重启后 `resumeConversation`
 报「会话文件已丢失」，**连带该会话下所有 child 的历史都打不开**。
 
 **升级 pi 时必须复检这一处**。回归测试（`src/agent/sessionPersistence.test.ts`）故意包含
-一条**上游行为基线断言**——“pi 当前在没有 assistant 消息时不落盘”；上游改了这个
+一条**上游行为基线断言**——“pi 当前在没有 user/assistant 消息时不落盘”；上游改了这个
 启发式，该断言会先飘红提醒复检适配层是否还需要。
 
-Pi 0.87.1 的 `_rewriteFile()` 不设置 `flushed`；不显式同步时，首条 assistant
+`_rewriteFile()` 到 1.5.2 仍不设置 `flushed`；不显式同步时，首条 assistant
 会以 `wx` 创建已有文件并抛出 `EEXIST`。回归还须覆盖物化后追加首条 assistant、
 重开 JSONL 后消息仍存在。只有重写成功后才能设置该标记。
 
-第二处：`src/agent/sessionAdapter.ts` 的 `continueSessionActivity()` 在 pi 1.4.0
+第二处：`src/agent/sessionAdapter.ts` 的 `continueSessionActivity()` 在 pi 1.5.2
 通过每次调用独立的 Proxy 调用私有 `_startRun`，以 custom trigger 准备规则并移除合成消息。
 1.4 删除了旧 `_runAgentPrompt([])`；公开 API 仍没有不新增消息的 session 级 continue，裸
 `agent.continue()` 绕过自动重试、`agent_before_settle` 与 `agent_settled`，手工补发
@@ -300,9 +300,11 @@ UserPromptSubmit/分支 note、不追加合成 user/custom 任务；真实扩展
 期间已置 idle，直接启动会造成嵌套结算。压缩、branch summary 或其它活动中不允许续跑；保留原
 `agent.continue()` 的上下文边界：空、仅 system 或 assistant 尾部都拒绝，不发起请求。
 
-**升级 pi 必须复检第二处**：优先查找公开无消息继续 API；确认 `_startRun` 仍通过
-`this._prepareRun` 准备消息、custom trigger 消息按引用进入结果（从结果剔除）、空消息续跑
-仍被接受，并保留完整 post-run / before-settle / settled 生命周期。
+**升级 pi 必须复检第二处**（1.5.2 已复检）：优先查找公开无消息继续 API；确认 `_startRun`
+仍通过 `this._prepareRun` 准备消息、custom trigger 消息按引用进入结果（从结果剔除）、空消息续跑
+仍被接受，并保留完整 post-run / before-settle / settled 生命周期。1.5.2 给 `_startRun`
+加了第二个可选参数 `onStarted`（准备完成、首个请求前回调），续跑传 undefined 即可；
+`_prepareRun` 里的 nextTurn 消费与 system patch unshift 形状未变，代理仍按引用剔除合成消息。
 两个私有方法缺失时必须在启动前拒绝，不留下 busy 状态。
 真实 SDK 回归还验证强制 persona/扩展段落在工具前后保留、临时错误自动重试、abort 后只结算
 一次，以及后续正常 prompt 消费 nextTurn，避免代理泄漏；不将方法 bind 回真实对象，否则会
@@ -314,7 +316,8 @@ UserPromptSubmit/分支 note、不追加合成 user/custom 任务；真实扩展
 选号等待时取消与唯一结算）、`sessionAdapter.test.ts` 和 `supervisor.silentTurn.test.ts`。
 
 第三处：`sessionAdapter.steerActiveSession()` 针对 Bot 插话，以每次调用独立的代理拦截
-pi `_queueSteer`（1.4.0 已复检），在异步 input hook 后、同步入队前再次检查活轮，仍沿用原生
+pi `_queueSteer`（1.5.2 已复检：仍同步 push 文本并 `agent.steer`，`PendingMessageQueue`
+形状与 drain 替换数组的行为未变），在异步 input hook 后、同步入队前再次检查活轮，仍沿用原生
 steer 的扩展命令拒绝与模板展开语义。不使用 `prompt(..., streamingBehavior:'steer')`
 在 `started` 回调抛错：那时已经可能做过压缩并清空 nextTurn 消息。
 已入队但到 `agent_settled` 仍未消费的消息（如 abort）按对象引用从
@@ -337,11 +340,33 @@ steer 的扩展命令拒绝与模板展开语义。不使用 `prompt(..., stream
 `replacePersonaParagraph` 匹配开头默认段落，`Available tools` 及之后的内容原样保留；
 不使用 loader 的 `systemPrompt` / `systemPromptOverride`，避免绕过 pi 默认工具准则生成。
 设置页默认预览也只展示 `DEFAULT_PERSONA_PROMPT`；升级 pi 时复检默认段落，匹配失败时
-保留原文并追加角色描述。回归见 `systemPrompt.test.ts`、`supervisor.agentDispatch.test.ts`。
+保留原文并追加角色描述。当前基线（pi 1.5.2）：`You are a coding assistant running inside pi,
+a coding agent harness. Help users inspect files, run commands, and modify code.`。1.5.0 收紧过
+这段 preamble（"Tightened system prompt"），旧常量会让每次替换退化成"保留原文 + 追加角色"。
+回归见 `systemPrompt.test.ts`（含上游组装基线断言）、`supervisor.agentDispatch.test.ts`。
 正文以 UUID 文件保存，Renderer 仅修改预设引用，Main
 在设置原子落盘成功后才清理取消引用的文件，不能在 debounce 期间先删正文；回归见
 `settingsPresetPrompts.test.ts`。配置导入为正文分配新 UUID，不覆盖本机同 ID 正文；旧导入
 正文保留给设置备份恢复使用。
+
+## 升级 pi 时工具 schema 走 pi-schema，`Type` 从 typebox 导入
+
+pi 1.5.0 起工具参数校验改由 `@earendil-works/pi-schema` 完成：只认 JSON Schema，
+`Type.Refine()` / `Type.BigInt()` / `Type.Undefined()` / codec 等 TypeBox 专有特性不再生效，
+普通 JSON Schema 也获得同样的数值字符串与单值转数组的 coercion，校验失败文案改成
+`- path: missing` 这种形状。同时 `@earendil-works/pi-ai` 不再 re-export `Type` / `Static` /
+`TSchema`（只有扩展的 compat 入口做运行时映射），所以本仓库的自建 schema 一律
+`import { Type } from 'typebox'`，不要从 pi-ai 取；写 schema 时也不要依赖上面那些 TypeBox 专有特性。
+`validateToolArguments()`（`pluginMcpGateway.ts` 用它校验 MCP 参数）仍导出，但现在返回
+pi-schema coercion 之后的值。
+
+同一轮升级还带两个默认行为变化，属于有意跟随上游：
+
+- `cacheWarming` 默认从 `streaming` 改成 `idle`：会话空闲 30 分钟内会后台预热 prompt 缓存，
+  只在预计回本时发起，成功预热会以 `usage` 条目（kind `cache_warm`）落盘。长驻 bot/群会话
+  因此可能有用户没触发过的少量费用；要退回旧行为就显式设置 `cacheWarming: "streaming"`。
+- `anthropic` provider 在 `api.anthropic.com` 上默认启用 message threads（只发新增消息，
+  上下文被改写时整请求回退），以及 OpenAI 兼容端点在工具全关时不再发 `"tools": []`。
 
 ## 委派前展示能力，缺口不靠猜测补齐
 

@@ -49,7 +49,7 @@ describe('pnpm 项目配置', () => {
     }
   });
 
-  it('内置 pi 各包同步锁定 1.4.0，不再加载旧版恢复补丁', () => {
+  it('内置 pi 各包同步锁定同一精确版本，不再加载旧版恢复补丁', () => {
     const packages = [
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
@@ -57,10 +57,14 @@ describe('pnpm 项目配置', () => {
       '@earendil-works/pi-mcp',
       '@earendil-works/pi-tui',
     ] as const;
+    const version = pkg.dependencies['@earendil-works/pi-coding-agent'];
+    // 版本号本身由升级决定，这里只锁「五个包同版本、精确锁定、与锁文件一致」。
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
     for (const name of packages) {
-      expect(pkg.dependencies[name]).toBe('1.4.0');
-      expect(lockfile.importers['.'].dependencies[name].specifier).toBe('1.4.0');
-      expect(lockfile.importers['.'].dependencies[name].version).toMatch(/^1\.4\.0(?:\(|$)/);
+      expect(pkg.dependencies[name]).toBe(version);
+      expect(lockfile.importers['.'].dependencies[name].specifier).toBe(version);
+      const locked = String(lockfile.importers['.'].dependencies[name].version);
+      expect(locked === version || locked.startsWith(`${version}(`)).toBe(true);
     }
     expect(
       Object.keys(workspace.patchedDependencies).some((name) =>

@@ -117,7 +117,13 @@ describe('真实 DefaultResourceLoader', () => {
       noSkills: true,
     });
     const installs = blockInstalls(loader);
-    await expect(loader.reload()).rejects.toThrow(/install blocked/);
-    expect(installs).toEqual(['evil-project-pkg@1.0.0']);
+    // pi 1.5 起缺包安装失败不再中断启动：跳过该包并把它记成一条扩展警告。
+    // 拦截器仍抛出，所以这里断言的是「安装被尝试过」这一可观察事实。
+    await expect(loader.reload()).resolves.toBeUndefined();
+    // 安装失败不再中断 resolve，项目与全局 packages 都会被尝试。
+    expect(installs).toEqual(['evil-project-pkg@1.0.0', 'evil-global-pkg@1.0.0']);
+    expect(
+      loader.getExtensions().warnings?.some((warning) => warning.path.includes('evil-project-pkg'))
+    ).toBe(true);
   });
 });
