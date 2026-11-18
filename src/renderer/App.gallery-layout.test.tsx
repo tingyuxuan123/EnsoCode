@@ -77,7 +77,7 @@ vi.mock('@/components/app/TitleBar', () => ({
   TitleBar: () => <div data-slot="title-bar" />,
 }));
 vi.mock('@/components/app/BackgroundLayer', () => ({ BackgroundLayer: () => null }));
-vi.mock('@/components/app/UpdateBanner', () => ({ UpdateBanner: () => null }));
+vi.mock('@/components/app/UpdateRailItem', () => ({ UpdateRailItem: () => null }));
 vi.mock('@/components/extensions/ExtensionsPage', () => ({ ExtensionsPage: () => null }));
 vi.mock('@/components/nodes/RemoteNodeView', () => ({ RemoteNodeView: () => null }));
 vi.mock('@/components/oauth/OauthCredentialBootstrap', () => ({

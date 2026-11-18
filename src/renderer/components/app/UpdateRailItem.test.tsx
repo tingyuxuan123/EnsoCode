@@ -1,15 +1,32 @@
 // @vitest-environment happy-dom
 import type { UpdateStatus } from '@shared/types/updater';
+import type { ReactNode } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { UpdateBanner } from './UpdateBanner';
+import { UpdateRailItem } from './UpdateRailItem';
 
 const settings = vi.hoisted(() => ({ autoUpdate: false }));
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, values?: Record<string, unknown>) =>
+      key.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values?.[name] ?? '')),
+  }),
+}));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: (select: (state: typeof settings) => unknown) => select(settings),
 }));
+// 图标轨按钮的悬浮提示与 Popover 的定位都用 Base UI；这里只测内容与动作。
+vi.mock('./RailTip', () => ({ RailTip: ({ children }: { children: ReactNode }) => children }));
+vi.mock('@/components/ui/popover', () => {
+  const Wrap = ({ children }: { children?: ReactNode }) => <>{children}</>;
+  const Trigger = ({ children, ...rest }: { children?: ReactNode; [key: string]: unknown }) => (
+    <button type="button" {...rest}>
+      {children}
+    </button>
+  );
+  return { Popover: Wrap, PopoverPopup: Wrap, PopoverTrigger: Trigger };
+});
 
 const info = {
   version: '0.2.13',
@@ -26,7 +43,7 @@ const info = {
   ].join('\n'),
 };
 
-describe('UpdateBanner', () => {
+describe('UpdateRailItem', () => {
   const downloadUpdate = vi.fn(async () => {});
   const quitAndInstall = vi.fn(async () => {});
   let listener: (next: UpdateStatus) => void;
@@ -50,7 +67,7 @@ describe('UpdateBanner', () => {
       },
     });
     root = createRoot(document.body.appendChild(document.createElement('div')));
-    await act(async () => root.render(<UpdateBanner />));
+    await act(async () => root.render(<UpdateRailItem />));
   });
 
   afterEach(async () => {
@@ -58,6 +75,33 @@ describe('UpdateBanner', () => {
     document.body.replaceChildren();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('下载中用图标轨上的圆环给出百分比，不再占一整条横幅', async () => {
+    await status({
+      status: 'downloading',
+      progress: { percent: 8, bytesPerSecond: 1, total: 100, transferred: 8 },
+    });
+    const trigger = document.querySelector<HTMLButtonElement>('button[data-slot="update-rail"]');
+    expect(trigger?.getAttribute('aria-label')).toBe('Downloading update… 8%');
+    const ring = document.querySelector('[data-slot="update-progress"]');
+    // 圆环是装饰：百分比由按钮的 aria-label 表达，弧长按 8% 画。
+    expect(ring?.getAttribute('aria-hidden')).toBe('true');
+    expect(ring?.querySelector('circle:last-of-type')?.getAttribute('stroke-dasharray')).toMatch(
+      /^8(\s|$)/
+    );
+    // 横幅里的整行文字只在展开面板里出现，图标轨本身不再撑开工作区。
+    expect(document.querySelector('[data-slot="update-banner"]')).toBeNull();
+  });
+
+  it('检查中、无新版本等状态在图标轨上不占位', async () => {
+    for (const quiet of [
+      { status: 'checking' },
+      { status: 'not-available' },
+    ] satisfies UpdateStatus[]) {
+      await status(quiet);
+      expect(document.querySelector('button[data-slot="update-rail"]')).toBeNull();
+    }
   });
 
   it('可用状态提供日志和手动下载；下载完成仍可看日志并重启', async () => {

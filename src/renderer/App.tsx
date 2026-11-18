@@ -12,7 +12,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
 import { TitleBar } from '@/components/app/TitleBar';
-import { UpdateBanner } from '@/components/app/UpdateBanner';
 import { BotView } from '@/components/bots/BotView';
 import { globalBoard, rootBoardGroups } from '@/components/bots/globalBoard';
 import { ModeSwitch } from '@/components/bots/ModeSwitch';
@@ -678,7 +677,6 @@ export default function App() {
         centered={modeEntry}
         actions={viewActions}
       />
-      <UpdateBanner />
       {/* 平铺外壳：图标轨 + 侧栏 + 工作区，分栏只用 1px 细线，不再做浮起的圆角卡片 */}
       <div className="flex min-h-0 flex-1">
         <AppRail

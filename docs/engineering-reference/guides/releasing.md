@@ -206,7 +206,7 @@ Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID
   先短时探测，不等待长时间无进展下载；不得跳过签名或哈希验收。
 
 回归：`scripts/release.test.mjs`、`src/main/services/updater/AutoUpdater.test.ts`、
-`src/renderer/components/app/UpdateBanner.test.tsx`、
+`src/renderer/components/app/UpdateRailItem.test.tsx`、
 `src/renderer/components/settings/GeneralSettings.updates.test.tsx`。
 这些测试覆盖日志来源、手动操作和失败 UI，不代表 Windows NSIS 的安装、旧数据保留或系统浏览器
 实际打开已验收；个人 feed 仍仅用于 Mac arm64。

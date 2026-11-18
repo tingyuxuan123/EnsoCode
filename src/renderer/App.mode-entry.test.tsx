@@ -140,7 +140,7 @@ vi.mock('@/components/sidepanel/SidePanel', () => ({
 }));
 vi.mock('@/components/app/StatusBar', () => ({ StatusBar: shell.mark('status-bar') }));
 vi.mock('@/components/app/BackgroundLayer', () => ({ BackgroundLayer: () => null }));
-vi.mock('@/components/app/UpdateBanner', () => ({ UpdateBanner: () => null }));
+vi.mock('@/components/app/UpdateRailItem', () => ({ UpdateRailItem: () => null }));
 vi.mock('@/components/extensions/ExtensionsPage', () => ({
   ExtensionsPage: ({ request }: { request?: { pluginId?: string } }) => {
     shell.extensionRequest = request;

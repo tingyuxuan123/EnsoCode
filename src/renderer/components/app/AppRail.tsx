@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { RailTip } from './RailTip';
 import { StatusBar } from './StatusBar';
+import { UpdateRailItem } from './UpdateRailItem';
 
 interface AppRailProps {
   /** 侧栏是否收起；仅在可收起的视图（Code / Bot）传入 */
@@ -168,6 +169,7 @@ export function AppRail({
         </RailTip>
       )}
       <div className="flex-1" />
+      <UpdateRailItem />
       <StatusBar />
       <RailTip label={t('Ask CodeKiln')}>
         <button
