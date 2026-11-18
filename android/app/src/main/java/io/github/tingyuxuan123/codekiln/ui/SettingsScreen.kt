@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,7 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.SettingsUiState
+import io.github.tingyuxuan123.codekiln.SettingsUiState
 
 /**
  * Device and notification settings: one real computer, the desktop-granted permission, the background watch

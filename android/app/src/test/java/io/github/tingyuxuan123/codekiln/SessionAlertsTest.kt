@@ -1,6 +1,6 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
 import org.junit.Assert.*
 import org.junit.Test
 

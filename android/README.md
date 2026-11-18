@@ -1,4 +1,4 @@
-# Collabra — Android
+# CodeKiln — Android
 
 Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创建纯文字任务、查看会话、处理审批和提问、发送文字或图片、排队、插话和停止、管理会话目标、查看任务看板、重试与压缩上下文**。
 
@@ -11,7 +11,7 @@ Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创�
 - `eaves-logo.vetd` 的雨帘标志和运行中小尺寸静态帧。雨丝动画尚未接入。
 - 可用的页面导航、系统返回、抽屉搜索与状态 / 项目筛选；纯展示规则的 JVM 单测、基础 Compose 导航测试。
 - `.github/workflows/build-android.yml`：PR / main 的向量一致性、Go 中继联调、Android 单测、lint 和 debug 构建（未包含签名发布）。
-- 生产入口可扫码、粘贴配对链接或从 `enso://pair` 深链预填，再由用户确认。凭据和防重放 pin
+- 生产入口可扫码、粘贴配对链接或从 `codekiln://pair` 深链预填，再由用户确认。凭据和防重放 pin
   由 Android Keystore 加密，存入不参与备份的文件；App 重启能恢复配对，支持解绑与失效记录清理。
 - 前台 OkHttp WebSocket：认证后读取目录，支持心跳和断线退避；被替换不自动抢回。
 - 单会话订阅与尾窗快照、增量游标续传、显式历史分页；Markdown 正文、用户气泡、工具/思考步骤折叠。
@@ -154,6 +154,9 @@ claim 是一次性操作：仅在请求尚未开始发送的网络故障后重�
 
 ## 构建与验证
 
+从改名前的 Android 客户端切换到 CodeKiln 时，新包与旧包会并存，不会覆盖安装，也不会继承旧配对、草稿或通知权限。
+先另存旧 App 中未发的草稿，再在旧 App 中解绑。安装新包后，用桌面端新生成的二维码重新配对，按需重新启用通知。
+
 - Android SDK Platform 36、Build Tools 36.0.0；最低 Android 8.0 / API 26。
 - Gradle 9.3.1、AGP 9.1.1、Kotlin 2.4.21；JDK 17+（开发机的 JBR 25 可运行）。
 - 设置 `JAVA_HOME`、`ANDROID_HOME`；也可以使用仅本机的 `local.properties` 配置 `sdk.dir`（不要提交）。
@@ -225,15 +228,15 @@ Windows 用 `android\gradlew.bat -p android :pair:interopTest`。需要 JDK 17+�
 ./android/gradlew -p android :app:assembleDebug :app:assembleDebugAndroidTest
 node scripts/android-pair-smoke.mjs
 # 另验会话审批/回答/发送/插话/队列/停止 → 选项目/模型/思考/审批 → 创建 → 收到首轮输出
-EAVES_SESSION_SMOKE=1 node scripts/android-pair-smoke.mjs
+CODEKILN_SESSION_SMOKE=1 node scripts/android-pair-smoke.mjs
 # 熄屏后目录审批通知 → 系统通知点击准确会话 → 停止服务与解绑
-EAVES_BACKGROUND_SMOKE=1 node scripts/android-pair-smoke.mjs
+CODEKILN_BACKGROUND_SMOKE=1 node scripts/android-pair-smoke.mjs
 ```
 
-脚本使用 `ANDROID_HOME` 和 PATH 上的 Go，默认 `emulator-5554`（可用 `EAVES_TEST_EMULATOR` 覆盖）。
-启动临时 Go 中继、建立临时 `adb reverse`、验证 App 链路后解绑并移除转发；截图输出在 `temp/eaves-pair-live/`。
+脚本使用 `ANDROID_HOME` 和 PATH 上的 Go，默认 `emulator-5554`（可用 `CODEKILN_TEST_EMULATOR` 覆盖）。
+启动临时 Go 中继、建立临时 `adb reverse`、验证 App 链路后解绑并移除转发；截图输出在 `temp/codekiln-pair-live/`。
 日常 `connectedDebugAndroidTest` 不需要启动中继，回环用例由该脚本单独运行。
-PowerShell 使用 `$env:EAVES_SESSION_SMOKE='1'` 后运行 Node 命令。
+PowerShell 使用 `$env:CODEKILN_SESSION_SMOKE='1'` 后运行 Node 命令。
 后台测试临时授予通知权限（结束后恢复），不会读取或覆盖已有配对；未验证实体手机锁屏 30 分钟、Doze 或厂商后台策略。
 
 真实桌面联调（与 fake host 烟测不同，模型仍为本地确定性服务）：
@@ -242,17 +245,17 @@ PowerShell 使用 `$env:EAVES_SESSION_SMOKE='1'` 后运行 Node 命令。
 ./android/gradlew -p android :app:assembleDebug :app:assembleDebugAndroidTest
 node scripts/android-desktop-smoke.mjs
 # 浅色、空媒体库的 API 33+ 模拟器：打开系统 PhotoPicker，选择生成的唯一测试图，比较 worker 发送的 JPEG 摘要
-EAVES_DESKTOP_IMAGE_SMOKE=1 node scripts/android-desktop-smoke.mjs
+CODEKILN_DESKTOP_IMAGE_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 额外验证设定 → 暂停当前自动目标 → 继续 → 清除，以及两次实际 worker 请求
-EAVES_DESKTOP_GOAL_SMOKE=1 node scripts/android-desktop-smoke.mjs
+CODEKILN_DESKTOP_GOAL_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 额外验证已启动会话的思考开关和深度、模型切换：目录确认，下一轮实际走新服务和模型
-EAVES_DESKTOP_MODEL_SMOKE=1 node scripts/android-desktop-smoke.mjs
+CODEKILN_DESKTOP_MODEL_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 创建一次性成员与群聊：手机发送，验证群正文刷新和当前轮停止
-EAVES_DESKTOP_BOT_SMOKE=1 node scripts/android-desktop-smoke.mjs
+CODEKILN_DESKTOP_BOT_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # Bot 烟测中再验证创建话题 → 空时间线 → 切回主话题
-EAVES_DESKTOP_BOT_SMOKE=1 EAVES_DESKTOP_BOT_THREADS_SMOKE=1 node scripts/android-desktop-smoke.mjs
+CODEKILN_DESKTOP_BOT_SMOKE=1 CODEKILN_DESKTOP_BOT_THREADS_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 另验手机首次单聊 → 发送 → 再订阅同一历史，以及手机新建两人群（可与 threads 合用）
-EAVES_DESKTOP_BOT_SMOKE=1 EAVES_DESKTOP_BOT_MEMBERS_SMOKE=1 node scripts/android-desktop-smoke.mjs
+CODEKILN_DESKTOP_BOT_SMOKE=1 CODEKILN_DESKTOP_BOT_MEMBERS_SMOKE=1 node scripts/android-desktop-smoke.mjs
 ```
 
 脚本启动当前源码的 Electron dev / Main / worker，使用临时 userData、临时项目、随机且非 9222 的 CDP 端口、
@@ -260,7 +263,7 @@ EAVES_DESKTOP_BOT_SMOKE=1 EAVES_DESKTOP_BOT_MEMBERS_SMOKE=1 node scripts/android
 验证从手机选择非默认项目和模型，Main/worker 实际配置与 cwd、单次首句投递、进程重启恢复和解绑；
 验证运行中入队、编辑，等待当前轮结束后用 Main 权威历史核对只发送一次编辑后的文字；
 另以无副作用的 echo 命令确认“自动接受编辑”仍要求命令审批，并在手机拒绝，不授权任何实际破坏性操作。
-证据只记录脱敏元数据，输出在 `temp/eaves-real-desktop/`；结束后清除临时配对、转发、profile 和子进程。
+证据只记录脱敏元数据，输出在 `temp/codekiln-real-desktop/`；结束后清除临时配对、转发、profile 和子进程。
 当前在 Windows + API 37 模拟器验证，不代表实体手机、线上中继或两家真实厂商模型的验收。
 API 37 的系统 PhotoPicker 若不暴露确认按钮的可访问性节点，测试仅在识别到浅色按钮像素时补一次点击；
 深色下该测试兜底不会触发，不属于生产图片选择器逻辑。
@@ -275,15 +278,15 @@ API 37 的系统 PhotoPicker 若不暴露确认按钮的可访问性节点，测
 安装 debug APK 后：
 
 ```sh
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame index
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame home
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame empty
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame pair
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame session
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame ask
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame members
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame group
-adb shell am start -n io.github.tingyuxuan123.eaves/.DesignPreviewActivity --es frame bot
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame index
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame home
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame empty
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame pair
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame session
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame ask
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame members
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame group
+adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame bot
 ```
 
 样例仅来自 `ensocode-android.vetd/components/data.ts`，源码和 Activity 都在 `src/debug/`，不会进入 release。debug 样例的发送按钮也不可用。系统切换深色模式可比较相同页面的深色分支。

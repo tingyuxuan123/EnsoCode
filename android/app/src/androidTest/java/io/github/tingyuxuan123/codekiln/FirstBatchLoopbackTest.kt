@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
@@ -12,10 +12,10 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
-import io.github.tingyuxuan123.eaves.mirror.AndroidTextDraftStore
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.DraftKind
+import io.github.tingyuxuan123.codekiln.mirror.AndroidPairCredentialStore
+import io.github.tingyuxuan123.codekiln.mirror.AndroidTextDraftStore
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.DraftKind
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -32,8 +32,8 @@ class FirstBatchLoopbackTest {
     private val newText = "Independent_New_Task_未创建_1487"
 
     private fun guard(): Pair<String, String> {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val taskId = args.getString("eavesDesktopTaskId")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val taskId = args.getString("codekilnDesktopTaskId")
         assumeTrue("Only disposable loopback desktop acceptance", BuildConfig.DEBUG && expected != null && taskId != null)
         val credentials = requireNotNull(AndroidPairCredentialStore(context, allowLoopbackHttp = true).load())
         require(credentials.pairId == expected && credentials.relayUrl.startsWith("http://127.0.0.1:"))
@@ -52,9 +52,9 @@ class FirstBatchLoopbackTest {
         compose.onNodeWithContentDescription("设置").performClick()
         compose.onNodeWithText("设备与通知").assertIsDisplayed()
         compose.waitUntil(45_000) {
-            (compose.activity.application as EavesApplication).companion.state.value.link.hostName != null
+            (compose.activity.application as CodeKilnApplication).companion.state.value.link.hostName != null
         }
-        val hostname = requireNotNull((compose.activity.application as EavesApplication).companion.state.value.link.hostName)
+        val hostname = requireNotNull((compose.activity.application as CodeKilnApplication).companion.state.value.link.hostName)
         compose.onNodeWithText(hostname).assertIsDisplayed()
         compose.onNodeWithText("可操作").assertIsDisplayed()
         compose.onNodeWithText("解绑这台手机").performScrollTo().performClick()
@@ -80,7 +80,7 @@ class FirstBatchLoopbackTest {
     @Test fun verifyUnsentDraftsAfterProcessRestartAndClearThemWithoutSending() {
         val (_, taskId) = guard()
         compose.waitUntil(45_000) {
-            (compose.activity.application as EavesApplication).drafts.text(DraftKey(DraftKind.NewTask, "new-task")) == newText
+            (compose.activity.application as CodeKilnApplication).drafts.text(DraftKey(DraftKind.NewTask, "new-task")) == newText
         }
         compose.onNodeWithText(newText).assertIsDisplayed()
         compose.onNodeWithContentDescription("任务描述").performTextReplacement("")

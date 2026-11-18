@@ -1,6 +1,6 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
 
 internal data class BoardGroups(
     val waiting: List<DesktopTask>,

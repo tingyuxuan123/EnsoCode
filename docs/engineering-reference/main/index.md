@@ -50,7 +50,8 @@ services 不 import `ipcMain`，这样才能被单独调用和推理。
 
 ## dev 与打包版的 userData 隔离
 
-`src/main/index.ts` 里 dev 缺省落在 `appData/enso-code-dev`，打包版才是 `appData/enso-code`：
+`src/main/index.ts` 里 dev 缺省使用 `appData/enso-code-dev`，打包版使用 `appData/enso-code`。
+这两个目录名不随品牌改名而变：已保存的会话 JSONL 和工作区路径可能是绝对路径，只搬目录会导致旧会话无法读取或继续。
 
 ```ts
 app.setPath(

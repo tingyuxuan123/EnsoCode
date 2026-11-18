@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopLinkState
-import io.github.tingyuxuan123.eaves.mirror.DesktopProject
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.ui.TaskStatus
+import io.github.tingyuxuan123.codekiln.mirror.DesktopLinkState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProject
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.ui.TaskStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

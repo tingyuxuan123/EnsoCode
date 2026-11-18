@@ -418,10 +418,10 @@ export async function createCheckpoint(
       .join('\n');
 
     const commitEnv = {
-      GIT_AUTHOR_NAME: 'enso-code',
+      GIT_AUTHOR_NAME: 'codekiln',
       GIT_AUTHOR_EMAIL: 'checkpoint@enso',
       GIT_AUTHOR_DATE: iso,
-      GIT_COMMITTER_NAME: 'enso-code',
+      GIT_COMMITTER_NAME: 'codekiln',
       GIT_COMMITTER_EMAIL: 'checkpoint@enso',
       GIT_COMMITTER_DATE: iso,
     };

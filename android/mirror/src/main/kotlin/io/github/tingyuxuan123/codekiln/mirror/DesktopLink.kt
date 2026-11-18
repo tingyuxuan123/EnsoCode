@@ -1,13 +1,13 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.FrameCrypto
-import io.github.tingyuxuan123.eaves.pair.FrameReplay
-import io.github.tingyuxuan123.eaves.pair.PairCryptoException
-import io.github.tingyuxuan123.eaves.pair.ReplayRole
-import io.github.tingyuxuan123.eaves.pair.SessionSync
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.pair.SessionTimelineReducer
-import io.github.tingyuxuan123.eaves.pair.isReplayBootstrapResponse
+import io.github.tingyuxuan123.codekiln.pair.FrameCrypto
+import io.github.tingyuxuan123.codekiln.pair.FrameReplay
+import io.github.tingyuxuan123.codekiln.pair.PairCryptoException
+import io.github.tingyuxuan123.codekiln.pair.ReplayRole
+import io.github.tingyuxuan123.codekiln.pair.SessionSync
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.pair.SessionTimelineReducer
+import io.github.tingyuxuan123.codekiln.pair.isReplayBootstrapResponse
 import java.net.Proxy
 import java.nio.ByteBuffer
 import java.util.Collections

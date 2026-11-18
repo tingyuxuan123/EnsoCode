@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,10 +38,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopProject
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.mirror.TaskApprovalMode
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProject
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.mirror.TaskApprovalMode
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
 
 /** Native counterpart of frames/new-config.tsx. Choices apply immediately; no fake model/preset list. */
 @OptIn(ExperimentalMaterial3Api::class)

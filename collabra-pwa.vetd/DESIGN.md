@@ -1,7 +1,7 @@
-# Collabra PWA · 设计约定
+# CodeKiln PWA · 设计约定
 
 风格不是重新发明的：它照搬仓库里已定稿的 `ensocode-android.vetd`（Vetta Android 客户端），
-只把品牌名与 Logo 换成 Collabra。四条规则不可破：
+只把品牌名与 Logo 换成 CodeKiln。四条规则不可破：
 
 1. 黑白为底，强调靠反色。用户气泡、主按钮是墨黑胶囊 `--color-pill`，不用蓝色。
 2. 彩色只留给状态。蓝=运行、黄=等你、红=出错、绿=完成；完成与空闲不画符号。

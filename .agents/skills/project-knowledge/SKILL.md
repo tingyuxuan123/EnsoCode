@@ -1,16 +1,16 @@
 ---
 name: project-knowledge
 description: >
-  Navigate Collabra (repository EnsoCode) project knowledge: long-term engineering conventions, layer boundaries,
+  Navigate CodeKiln (repository EnsoCode) project knowledge: long-term engineering conventions, layer boundaries,
   testing rules, historical decisions, and high-cost pitfalls. Use before non-trivial or cross-layer changes,
   when adding IPC or session/worker behavior, when debugging state/history/input issues,
   when a fix reveals a reusable rule, when preparing a desktop release/update, or when the user asks to search or capture project knowledge.
-  Collabra 项目知识导航、踩坑检索、根因沉淀、TDD、发版、推送更新、打包升级和工程约定。
+  CodeKiln 项目知识导航、踩坑检索、根因沉淀、TDD、发版、推送更新、打包升级和工程约定。
 ---
 
 # Project Knowledge
 
-这是 Collabra（桌面版、手机端、Android 共用本仓库）项目知识的导航和维护入口，不替代权威文档，也不恢复任务状态机或工作流。先按下面的场景选择最相关的文档，避免无目的地通读整个知识库。
+这是 CodeKiln（桌面版、手机端、Android 共用本仓库）项目知识的导航和维护入口，不替代权威文档，也不恢复任务状态机或工作流。先按下面的场景选择最相关的文档，避免无目的地通读整个知识库。
 
 路径约定：`docs/…` 从仓库根目录解析；其余裸路径（如 `main/ipc.md`、`renderer/state.md`）以 `docs/engineering-reference/` 为基准。引用优先写成仓库根目录路径，便于从任何位置打开。
 

@@ -1,17 +1,17 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.ui.FileKind
-import io.github.tingyuxuan123.eaves.ui.previewFile
-import io.github.tingyuxuan123.eaves.ui.fileSizeLabel
+import io.github.tingyuxuan123.codekiln.ui.FileKind
+import io.github.tingyuxuan123.codekiln.ui.previewFile
+import io.github.tingyuxuan123.codekiln.ui.fileSizeLabel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class FilePreviewTest {
     @Test fun `utf8 text is shown and invalid bytes fall back to binary`() {
-        val text = previewFile("README.md", "# Collabra\n\n- 一条".toByteArray())
+        val text = previewFile("README.md", "# CodeKiln\n\n- 一条".toByteArray())
         assertEquals(FileKind.Text, text.kind)
-        assertEquals("# Collabra\n\n- 一条", text.text)
+        assertEquals("# CodeKiln\n\n- 一条", text.text)
         assertEquals(FileKind.Binary, previewFile("blob.bin", byteArrayOf(1, 0, 2, 0)).kind)
         assertEquals(FileKind.Binary, previewFile("broken.txt", byteArrayOf(0xC3.toByte())).kind)
     }

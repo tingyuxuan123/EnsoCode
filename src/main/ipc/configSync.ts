@@ -62,9 +62,9 @@ export function registerConfigSyncHandlers(): void {
       const win = senderWindow(event);
       if (!options || !win) return { ok: false, error: 'Invalid export request.' };
       const result = await dialog.showSaveDialog(win, {
-        title: 'Export Collabra Configuration',
+        title: 'Export CodeKiln Configuration',
         defaultPath: 'ensocode-settings.enso-config',
-        filters: [{ name: 'Collabra Configuration', extensions: ['enso-config'] }],
+        filters: [{ name: 'CodeKiln Configuration', extensions: ['enso-config'] }],
       });
       if (result.canceled || !result.filePath) {
         return { ok: false, error: 'Export cancelled.', cancelled: true };
@@ -82,9 +82,9 @@ export function registerConfigSyncHandlers(): void {
       const win = senderWindow(event);
       if (!win) return { ok: false, error: 'Invalid import request.' };
       const result = await dialog.showOpenDialog(win, {
-        title: 'Import Collabra Configuration',
+        title: 'Import CodeKiln Configuration',
         properties: ['openFile'],
-        filters: [{ name: 'Collabra Configuration', extensions: ['enso-config'] }],
+        filters: [{ name: 'CodeKiln Configuration', extensions: ['enso-config'] }],
       });
       return openImportForSender(
         event.sender.id,

@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import android.Manifest
 import android.app.Activity
@@ -89,7 +89,7 @@ private fun CameraPreview(onCode: (String) -> Unit) {
                     scanner.process(InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees))
                         .addOnSuccessListener(ContextCompat.getMainExecutor(context)) { codes ->
                             val code = codes.firstNotNullOfOrNull { it.rawValue?.takeIf { value ->
-                                value.length <= 8192 && (value.startsWith("enso://pair?") || value.startsWith("https://") || value.startsWith("http://127.0.0.1"))
+                                value.length <= 8192 && (value.startsWith("codekiln://pair?") || value.startsWith("https://") || value.startsWith("http://127.0.0.1"))
                             } }
                             if (active.get() && code != null && delivered.compareAndSet(false, true)) {
                                 decoded = true

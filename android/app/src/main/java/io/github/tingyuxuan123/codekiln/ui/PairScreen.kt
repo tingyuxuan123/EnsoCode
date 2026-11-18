@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -43,7 +43,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.R
+import io.github.tingyuxuan123.codekiln.R
 
 /** The manual LAN fields are an inert design specimen, not an alternate pairing protocol. */
 internal data class PairSpecimen(val address: String, val code: String)
@@ -92,7 +92,7 @@ internal fun PairScreen(
             ScannerGuide(paired = state.paired, scanner = if (specimen == null && !state.paired && !state.busy) scanner else null)
             Label(if (state.paired) if (state.watchActive) "配对已保存。后台提醒已开启，离开应用后仍会保持连接。"
                 else "配对已保存在这台手机上。未开启后台提醒时，离开应用会暂停连接。"
-                else "在电脑上打开 Collabra → 设置 → 手机，扫描出现的二维码即可配对。", 15, 22,
+                else "在电脑上打开 CodeKiln → 设置 → 手机，扫描出现的二维码即可配对。", 15, 22,
                 Modifier.padding(start = 4.dp, end = 4.dp, top = 16.dp), color = c.ink2)
             if (specimen == null) {
                 if (state.paired) {
@@ -132,7 +132,7 @@ internal fun PairScreen(
                             cursorBrush = Brush.verticalGradient(listOf(c.ink, c.ink)),
                             decorationBox = { input ->
                                 Box {
-                                    if (link.isEmpty()) Label("enso://pair?… 或 https://…", 14, 20, color = c.faint, maxLines = 1)
+                                    if (link.isEmpty()) Label("codekiln://pair?… 或 https://…", 14, 20, color = c.faint, maxLines = 1)
                                     input()
                                 }
                             })
@@ -196,7 +196,7 @@ private fun ScannerGuide(paired: Boolean = false, scanner: (@Composable () -> Un
         }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Image(painterResource(R.drawable.eaves_mark), null, Modifier.size(22.dp),
+            Image(painterResource(R.drawable.codekiln_mark), null, Modifier.size(22.dp),
                 colorFilter = ColorFilter.tint(Color.White.copy(alpha = .6f)))
             Label(if (paired) "端到端加密配对" else "对准电脑上的二维码", 13, 18, color = Color.White.copy(alpha = .75f))
         }

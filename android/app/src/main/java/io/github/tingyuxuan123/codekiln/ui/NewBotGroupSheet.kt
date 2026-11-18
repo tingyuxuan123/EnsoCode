@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,9 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotsState
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.writeBusy
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotsState
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.writeBusy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

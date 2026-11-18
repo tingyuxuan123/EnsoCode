@@ -1,7 +1,7 @@
 {
-  "name": "Collabra",
-  "short_name": "Collabra",
-  "description": "把手机当作 Collabra 的第二块屏幕：查看会话、发消息、批审批。",
+  "name": "CodeKiln",
+  "short_name": "CodeKiln",
+  "description": "把手机当作 CodeKiln 的第二块屏幕：查看会话、发消息、批审批。",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

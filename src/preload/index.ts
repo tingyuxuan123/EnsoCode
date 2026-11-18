@@ -1301,7 +1301,7 @@ const electronAPI = {
   /** 连接到节点：本机作为 guest 连别的 EnsoCode 桌面（密钥与连接在 main） */
   nodes: {
     list: (): Promise<NodesStatus> => ipcRenderer.invoke(IPC_CHANNELS.NODES_LIST),
-    /** 粘贴对方的配对链接（https 或 enso://） */
+    /** 粘贴对方的配对链接（https 或 codekiln://） */
     pair: (inviteUri: string): Promise<NodePairResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.NODES_PAIR, inviteUri),
     remove: (nodeId: string): Promise<NodeActionResult> =>

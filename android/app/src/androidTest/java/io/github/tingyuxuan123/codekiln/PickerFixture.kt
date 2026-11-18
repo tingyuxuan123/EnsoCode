@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.content.ContentResolver
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -17,18 +17,18 @@ import android.graphics.Rect
 import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.ui.importSessionPictures
+import io.github.tingyuxuan123.codekiln.ui.importSessionPictures
 import java.util.UUID
 
 /** The isolated emulator's picker must show the generated color pattern before we select anything. */
 internal class PickerFixture(private val resolver: ContentResolver) : AutoCloseable {
-    private val album = "Eaves smoke ${UUID.randomUUID().toString().take(8)}"
+    private val album = "CodeKiln smoke ${UUID.randomUUID().toString().take(8)}"
     private var uri: Uri? = null
 
     init {
         check(Build.VERSION.SDK_INT >= 33)
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "eaves-fixture.png")
+            put(MediaStore.Images.Media.DISPLAY_NAME, "codekiln-fixture.png")
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$album")
             put(MediaStore.Images.Media.IS_PENDING, 1)

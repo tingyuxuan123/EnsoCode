@@ -17,7 +17,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'Collabra', body: '', sessionId: '' };
+  let payload = { title: 'CodeKiln', body: '', sessionId: '' };
   try {
     payload = { ...payload, ...event.data.json() };
   } catch {

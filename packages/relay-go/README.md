@@ -1,4 +1,4 @@
-# Collabra relay (Go)
+# CodeKiln relay (Go)
 
 <p align="right"><a href="README.zh-CN.md">简体中文</a></p>
 

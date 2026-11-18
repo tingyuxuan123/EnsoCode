@@ -35,7 +35,7 @@ describe('McpOAuthClientProvider', () => {
       openExternal: vi.fn(),
     });
     expect(provider.redirectUrl).toBe('http://127.0.0.1:5000/cb');
-    expect(provider.clientMetadata.client_name).toBe('Collabra');
+    expect(provider.clientMetadata.client_name).toBe('CodeKiln');
     expect(provider.clientMetadata.redirect_uris).toEqual(['http://127.0.0.1:5000/cb']);
     expect(provider.state()).toBe('st');
   });

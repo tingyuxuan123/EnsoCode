@@ -9,7 +9,7 @@ export const WINDOW_ICON_FILE_WIN = 'icon.ico';
 export const WINDOW_ICON_FILE_LINUX = 'icon-win.png';
 
 /** Must match electron-builder.yml `appId` for installed builds. */
-export const WINDOWS_APP_USER_MODEL_ID = 'com.j3n5en.enso-code';
+export const WINDOWS_APP_USER_MODEL_ID = 'com.j3n5en.codekiln';
 
 /**
  * Packaged Windows must NOT BrowserWindow.setIcon.
@@ -41,7 +41,7 @@ export function resolveWindowsAppUserModelId(input: {
 }): string {
   if (!input.isPackaged) return `${WINDOWS_APP_USER_MODEL_ID}.dev`;
   const normalized = input.execPath.replace(/\//g, '\\').toLowerCase();
-  // electron-builder dir output, or any copy outside Local\Programs\enso-code
+  // electron-builder dir output, or any copy outside Local\Programs\codekiln
   if (normalized.includes('\\win-unpacked\\') || normalized.includes('\\dist\\')) {
     return `${WINDOWS_APP_USER_MODEL_ID}.portable`;
   }
@@ -71,7 +71,7 @@ export function windowsTaskbarAppDetails(input: {
     appIconPath: exe,
     appIconIndex: 0,
     relaunchCommand: quoted,
-    relaunchDisplayName: input.displayName ?? 'Collabra',
+    relaunchDisplayName: input.displayName ?? 'CodeKiln',
   };
 }
 

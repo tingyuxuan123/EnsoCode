@@ -1,8 +1,8 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
-import io.github.tingyuxuan123.eaves.ui.boardGroups
-import io.github.tingyuxuan123.eaves.ui.relativeTime
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.ui.boardGroups
+import io.github.tingyuxuan123.codekiln.ui.relativeTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

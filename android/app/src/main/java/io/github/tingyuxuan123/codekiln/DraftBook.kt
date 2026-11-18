@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DRAFT_ENTRY_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.DRAFT_TEXT_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.DRAFT_TOTAL_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.TextDraftStore
+import io.github.tingyuxuan123.codekiln.mirror.DRAFT_ENTRY_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.DRAFT_TEXT_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.DRAFT_TOTAL_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.TextDraftStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

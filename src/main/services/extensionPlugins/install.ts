@@ -32,7 +32,7 @@ export type PluginInstallSource =
   | { kind: 'zip'; path: string }
   | { kind: 'url'; url: string }
   /**
-   * Collabra fork：插件市场来源。marketId 由 Main 按当前配置的市场盖在权威记录上；
+   * CodeKiln fork：插件市场来源。marketId 由 Main 按当前配置的市场盖在权威记录上；
    * 缺省表示历史（上游 enso）市场记录，不能再被当前市场接管。
    */
   | { kind: 'market'; id: string; version?: string; marketId?: string };

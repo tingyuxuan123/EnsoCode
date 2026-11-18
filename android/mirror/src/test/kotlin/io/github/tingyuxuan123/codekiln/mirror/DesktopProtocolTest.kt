@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject

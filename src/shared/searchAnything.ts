@@ -184,7 +184,7 @@ const STATIC_CATALOG: SettingsSearchEntry[] = [
     category: 'general',
     title: 'Context compaction strategy',
     description:
-      'Standard uses default compact. Smart compaction uses Collabra verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.',
+      'Standard uses default compact. Smart compaction uses CodeKiln verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.',
   },
   {
     id: 'general.compactReserveTokens',
@@ -255,7 +255,7 @@ const STATIC_CATALOG: SettingsSearchEntry[] = [
     category: 'tools',
     title: 'LCU computer control',
     description:
-      'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart Collabra to apply changes to open sessions.',
+      'Allow the already-installed LCU Pi extension to load. Separate from built-in Computer; does not install LCU. Applies to new or cold-restored sessions. Restart CodeKiln to apply changes to open sessions.',
   },
   {
     id: 'tools.rtkEnabled',

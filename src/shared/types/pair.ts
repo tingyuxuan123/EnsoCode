@@ -21,7 +21,7 @@ export interface PairStatusDevice {
 export interface PairStatus {
   relayUrl: string;
   pairing: boolean;
-  /** 配对中的 QR 内容（enso://pair?...） */
+  /** 配对中的 QR 内容（codekiln://pair?...） */
   inviteUri?: string;
   /** 配对码过期时间戳（ms），用于 UI 倒计时 */
   pairingExpiresAt?: number;

@@ -127,7 +127,7 @@ export function pinnedArchiveFetch(
         method: 'GET',
         headers: {
           host: url.host,
-          'user-agent': 'Collabra-plugin-installer',
+          'user-agent': 'CodeKiln-plugin-installer',
           accept: 'application/zip',
           'accept-encoding': 'identity',
         },

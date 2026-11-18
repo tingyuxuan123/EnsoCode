@@ -23,7 +23,7 @@ export interface PairInvite {
 
 export function buildPairUri(invite: PairInvite): string {
   const pk = toBase64Url(invite.publicKey);
-  return `enso://pair?relay=${encodeURIComponent(invite.relay)}&pk=${pk}`;
+  return `codekiln://pair?relay=${encodeURIComponent(invite.relay)}&pk=${pk}`;
 }
 
 /**
@@ -37,10 +37,10 @@ export function buildPairLink(invite: PairInvite): string {
   return `${base}/#relay=${encodeURIComponent(invite.relay)}&pk=${pk}`;
 }
 
-/** 解析配对码：兼容 enso:// 自定义 scheme 与 https 链接（片段或查询串） */
+/** 解析配对码：兼容 codekiln:// 自定义 scheme 与 https 链接（片段或查询串） */
 export function parsePairUri(uri: string): PairInvite {
   const text = uri.trim();
-  const custom = /^enso:\/\/pair\?(.*)$/.exec(text);
+  const custom = /^codekiln:\/\/pair\?(.*)$/.exec(text);
   if (custom) return fromParams(new URLSearchParams(custom[1]));
 
   if (/^https?:\/\//i.test(text)) {
@@ -50,7 +50,7 @@ export function parsePairUri(uri: string): PairInvite {
     // https 链接的来源站点即中继，relay 缺省时可从中推出
     return fromParams(params, url.origin);
   }
-  throw new Error('not an enso pair uri');
+  throw new Error('not a codekiln pair uri');
 }
 
 function fromParams(params: URLSearchParams, fallbackRelay?: string): PairInvite {

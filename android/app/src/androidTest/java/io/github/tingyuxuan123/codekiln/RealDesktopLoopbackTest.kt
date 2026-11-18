@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.graphics.Bitmap
 import androidx.compose.ui.test.ComposeTimeoutException
@@ -26,18 +26,18 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
-import io.github.tingyuxuan123.eaves.mirror.GoalCommand
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.eaves.mirror.activeBotThread
-import io.github.tingyuxuan123.eaves.pair.PairEncoding
+import io.github.tingyuxuan123.codekiln.mirror.AndroidPairCredentialStore
+import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.activeBotThread
+import io.github.tingyuxuan123.codekiln.pair.PairEncoding
 import java.io.File
 import android.os.Build
 import java.security.MessageDigest
 import android.util.Base64
-import io.github.tingyuxuan123.eaves.mirror.SessionImage
+import io.github.tingyuxuan123.codekiln.mirror.SessionImage
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -54,7 +54,7 @@ class RealDesktopLoopbackTest {
     private val marker = "Android desktop smoke first turn."
 
     @Test fun pairCreateAndReceive() {
-        val encoded = args.getString("eavesDesktopInviteB64")
+        val encoded = args.getString("codekilnDesktopInviteB64")
         assumeTrue("Only a disposable real-desktop fixture", BuildConfig.DEBUG && encoded != null)
         assertNull(store().load())
         val invite = PairEncoding.fromBase64Url(requireNotNull(encoded)).toString(Charsets.UTF_8)
@@ -66,7 +66,7 @@ class RealDesktopLoopbackTest {
             await("已连接")
         } catch (error: ComposeTimeoutException) {
             screenshot("desktop-pair-failure.png")
-            val state = (compose.activity.application as EavesApplication).companion.state.value
+            val state = (compose.activity.application as CodeKilnApplication).companion.state.value
             throw AssertionError("Pair failed: paired=${state.paired}, busy=${state.busy}, problem=${state.problem}, phase=${state.link.phase}", error)
         }
         assertEquals(1, store().load()?.replayVersion)
@@ -89,19 +89,19 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun restoreAndOpen() {
-        val expected = args.getString("eavesDesktopExpectedId")
+        val expected = args.getString("codekilnDesktopExpectedId")
         assumeTrue("Only after real-desktop claim", BuildConfig.DEBUG && expected != null)
         val saved = requireNotNull(store().load())
         assertEquals(expected, saved.pairId)
         assertEquals(1, saved.replayVersion)
         require(saved.relayUrl.startsWith("http://127.0.0.1:"))
         compose.onNodeWithContentDescription("打开任务列表").performClick()
-        val taskId = requireNotNull(args.getString("eavesDesktopTaskId"))
+        val taskId = requireNotNull(args.getString("codekilnDesktopTaskId"))
         try {
             compose.waitUntil(45_000) { compose.onAllNodes(hasTestTag("task-$taskId")).fetchSemanticsNodes().isNotEmpty() }
         } catch (error: ComposeTimeoutException) {
             screenshot("desktop-restore-failure.png")
-            val link = (compose.activity.application as EavesApplication).companion.state.value.link
+            val link = (compose.activity.application as CodeKilnApplication).companion.state.value.link
             throw AssertionError("Expected task $taskId; phase=${link.phase}, readOnly=${link.readOnly}, catalog=${link.catalog.map { it.id to it.title }}, projects=${link.projects?.size}", error)
         }
         compose.onNodeWithTag("task-$taskId").performScrollTo().assertTextContains("selected-project").performClick()
@@ -110,8 +110,8 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifyApprovalAndUnpair() {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val taskId = args.getString("eavesDesktopTaskId")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val taskId = args.getString("codekilnDesktopTaskId")
         assumeTrue("Only the disposable fixture may exercise approval", BuildConfig.DEBUG && expected != null && taskId != null)
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
@@ -119,7 +119,7 @@ class RealDesktopLoopbackTest {
         compose.waitUntil(45_000) { compose.onAllNodes(hasTestTag("task-$taskId")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("task-$taskId").performClick()
         await("fake-ok")
-        val tool = requireNotNull(args.getString("eavesDesktopTool"))
+        val tool = requireNotNull(args.getString("codekilnDesktopTool"))
         require(tool == "powershell" || tool == "bash")
         compose.onNodeWithContentDescription("会话消息").performTextInput("""[[tool:$tool {"command":"echo EAVES_APPROVAL_PROBE"}]]""")
         compose.onNodeWithContentDescription("发送").performClick()
@@ -130,7 +130,7 @@ class RealDesktopLoopbackTest {
             compose.onAllNodesWithText("$ echo EAVES_APPROVAL_PROBE").fetchSemanticsNodes().isEmpty() &&
                 compose.onAllNodes(hasContentDescription("发送")).fetchSemanticsNodes().isNotEmpty()
         }
-        if (args.getString("eavesDesktopModel") == "1") return // The driver keeps this fixture paired for the model test.
+        if (args.getString("codekilnDesktopModel") == "1") return // The driver keeps this fixture paired for the model test.
         compose.onNodeWithContentDescription("打开任务列表").performClick()
         compose.onNodeWithText("连接电脑").performClick()
         await("已连接")
@@ -141,10 +141,10 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifyQueueDrainsAfterCurrentTurn() {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val taskId = args.getString("eavesDesktopTaskId")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val taskId = args.getString("codekilnDesktopTaskId")
         assumeTrue("Only the disposable desktop queue fixture", BuildConfig.DEBUG && expected != null && taskId != null &&
-            args.getString("eavesDesktopQueue") == "1")
+            args.getString("codekilnDesktopQueue") == "1")
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
         compose.onNodeWithContentDescription("打开任务列表").performClick()
@@ -171,10 +171,10 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifySessionModelSwitch() {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val taskId = args.getString("eavesDesktopTaskId")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val taskId = args.getString("codekilnDesktopTaskId")
         assumeTrue("Only the disposable desktop model fixture", BuildConfig.DEBUG && expected != null && taskId != null &&
-            args.getString("eavesDesktopModel") == "1")
+            args.getString("codekilnDesktopModel") == "1")
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
         compose.onNodeWithContentDescription("打开任务列表").performClick()
@@ -184,7 +184,7 @@ class RealDesktopLoopbackTest {
         compose.onNodeWithContentDescription("切换会话模型").performClick()
         fun awaitThinking(enabled: Boolean, level: TaskThinkingLevel? = null) {
             compose.waitUntil(15_000) {
-                val link = (compose.activity.application as EavesApplication).companion.state.value.link
+                val link = (compose.activity.application as CodeKilnApplication).companion.state.value.link
                 link.catalog.any { it.id == taskId && it.reasoningEnabled == enabled && (level == null || it.thinkingLevel == level) } &&
                     link.session?.thinkingAttempt?.phase == SessionCommandPhase.Observed
             }
@@ -199,7 +199,7 @@ class RealDesktopLoopbackTest {
         await("Local default model")
         compose.onNodeWithText("Local default model").performScrollTo().performClick()
         compose.waitUntil(15_000) {
-            val link = (compose.activity.application as EavesApplication).companion.state.value.link
+            val link = (compose.activity.application as CodeKilnApplication).companion.state.value.link
             link.catalog.any { it.id == taskId && it.providerId == "loopback-A" && it.modelId == "fake-model-1" } &&
                 link.session?.modelAttempt?.phase == SessionCommandPhase.Observed
         }
@@ -209,7 +209,7 @@ class RealDesktopLoopbackTest {
         compose.onNodeWithContentDescription("会话消息").performTextInput(text)
         compose.onNodeWithContentDescription("发送").performClick()
         compose.waitUntil(45_000) {
-            val session = (compose.activity.application as EavesApplication).companion.state.value.link.session
+            val session = (compose.activity.application as CodeKilnApplication).companion.state.value.link.session
             val attempt = session?.textAttempt
             attempt?.text == text && attempt.phase == SessionCommandPhase.Observed &&
                 session.timeline.status == "idle"
@@ -217,10 +217,10 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifyImagePickedAndSent() {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val taskId = args.getString("eavesDesktopTaskId")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val taskId = args.getString("codekilnDesktopTaskId")
         assumeTrue("Only disposable desktop image fixture on a PhotoPicker device", BuildConfig.DEBUG && Build.VERSION.SDK_INT >= 33 &&
-            expected != null && taskId != null && args.getString("eavesDesktopImage") == "1")
+            expected != null && taskId != null && args.getString("codekilnDesktopImage") == "1")
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
         compose.onNodeWithContentDescription("打开任务列表").performClick()
@@ -237,7 +237,7 @@ class RealDesktopLoopbackTest {
                 compose.onAllNodes(hasContentDescription("待发送图片 1")).fetchSemanticsNodes().isNotEmpty()
             }
             compose.waitUntil(30_000) {
-                val link = (compose.activity.application as EavesApplication).companion.state.value.link
+                val link = (compose.activity.application as CodeKilnApplication).companion.state.value.link
                 link.phase == LinkPhase.Online && link.session?.loading == false
             }
             compose.onNodeWithContentDescription("发送").assertIsEnabled()
@@ -246,7 +246,7 @@ class RealDesktopLoopbackTest {
             compose.waitUntil(30_000) {
                 compose.onAllNodes(hasContentDescription("待发送图片 1")).fetchSemanticsNodes().isEmpty()
             }
-            val link = (compose.activity.application as EavesApplication).companion.state.value.link
+            val link = (compose.activity.application as CodeKilnApplication).companion.state.value.link
             val part = requireNotNull(link.session).timeline.messages.last { it.role == "user" }.content.single { it["type"]?.toString() == "\"image\"" }
             val encoded = (part["data"] as kotlinx.serialization.json.JsonPrimitive).content
             val mime = (part["mimeType"] as kotlinx.serialization.json.JsonPrimitive).content
@@ -258,13 +258,13 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifyGoalLifecycle() {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val taskId = args.getString("eavesDesktopTaskId")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val taskId = args.getString("codekilnDesktopTaskId")
         assumeTrue("Only the disposable desktop goal fixture", BuildConfig.DEBUG && expected != null && taskId != null &&
-            args.getString("eavesDesktopGoal") == "1")
+            args.getString("codekilnDesktopGoal") == "1")
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
-        val controller = (compose.activity.application as EavesApplication).companion
+        val controller = (compose.activity.application as CodeKilnApplication).companion
         fun linkState() = controller.state.value.link.session?.takeIf { it.timeline.sessionId == taskId }
         fun observed(command: GoalCommand, status: String?) = compose.waitUntil(20_000) {
             linkState()?.let { session -> session.goalReady && session.goal?.status == status &&
@@ -305,12 +305,12 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifyBotSendAndStop() {
-        val expected = args.getString("eavesDesktopExpectedId")
-        val chatId = args.getString("eavesDesktopBotChat")
+        val expected = args.getString("codekilnDesktopExpectedId")
+        val chatId = args.getString("codekilnDesktopBotChat")
         assumeTrue("Only the disposable desktop Bot fixture", BuildConfig.DEBUG && expected != null && chatId != null)
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
-        val controller = (compose.activity.application as EavesApplication).companion
+        val controller = (compose.activity.application as CodeKilnApplication).companion
         fun bots() = controller.state.value.link.bots
         val title = "Android Bot smoke group"
         compose.onNodeWithContentDescription("打开任务列表").performClick()
@@ -336,7 +336,7 @@ class RealDesktopLoopbackTest {
         compose.waitUntil(20_000) { bots()?.stop?.phase == SessionCommandPhase.Observed }
         assertNull(bots()?.chatStates?.get(chatId)?.current)
 
-        if (args.getString("eavesDesktopBotThreads") == "1") {
+        if (args.getString("codekilnDesktopBotThreads") == "1") {
             val rootId = requireNotNull(chatId)
             compose.onNodeWithContentDescription("话题").performClick()
             compose.onNodeWithText("新线程").performScrollTo().assertIsEnabled().performClick()
@@ -359,12 +359,12 @@ class RealDesktopLoopbackTest {
     }
 
     @Test fun verifyMemberCreationAndDirectHistory() {
-        val expected = args.getString("eavesDesktopExpectedId")
+        val expected = args.getString("codekilnDesktopExpectedId")
         assumeTrue("Only the disposable desktop Bot fixture", BuildConfig.DEBUG && expected != null &&
-            args.getString("eavesDesktopBotMembers") == "1")
+            args.getString("codekilnDesktopBotMembers") == "1")
         val saved = requireNotNull(store().load())
         require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
-        val controller = (compose.activity.application as EavesApplication).companion
+        val controller = (compose.activity.application as CodeKilnApplication).companion
         fun link() = controller.state.value.link
         compose.onNodeWithContentDescription("打开任务列表").performClick()
         compose.onNodeWithText("成员").performClick()

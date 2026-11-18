@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import android.content.ClipData
 import android.content.ClipDescription
@@ -114,7 +114,7 @@ private fun SessionCodeBlock(code: String, language: String?, style: TextStyle) 
             Label(language?.takeIf { it.isNotBlank() } ?: "代码", 12, 16, Modifier.weight(1f), color = c.dim, maxLines = 1)
             Row(Modifier.heightIn(min = 48.dp).clip(Enso.pillShape).clickable(role = Role.Button) {
                 scope.launch {
-                    val clip = ClipData.newPlainText("Collabra", code)
+                    val clip = ClipData.newPlainText("CodeKiln", code)
                     if (Build.VERSION.SDK_INT >= 33) clip.description.extras = PersistableBundle().apply {
                         // Code and signed download URLs may carry credentials; hide the system preview.
                         putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)

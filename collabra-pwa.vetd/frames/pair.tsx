@@ -17,7 +17,7 @@ export default function Pair() {
 			/>
 			<header className="relative flex items-center gap-2.5 px-5 pt-1">
 				<BrandMark size={26} />
-				<span className="text-[17px] leading-6 font-semibold">Collabra</span>
+				<span className="text-[17px] leading-6 font-semibold">CodeKiln</span>
 				<div className="flex-1" />
 				<LinkPill
 					online={false}

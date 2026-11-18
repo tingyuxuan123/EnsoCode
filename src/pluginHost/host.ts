@@ -485,7 +485,7 @@ export function runPluginHost(transport: HostTransport): void {
         openChildRun: (parentId: string, childId: string) =>
           hostCall('session.openChildRun', { parentId, childId }),
         create: (input?: unknown) => hostCall('session.create', input ?? {}),
-        // Collabra fork：读取发起会话的消息投影（上游没有该 API）
+        // CodeKiln fork：读取发起会话的消息投影（上游没有该 API）
         messages: () => hostCall('session.messages', {}),
       },
       host: { capabilities: () => hostCall('host.capabilities', {}) },

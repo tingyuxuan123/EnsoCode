@@ -35,11 +35,11 @@ export function SummonEnsoButton({ label = true }: { label?: boolean }) {
       onClick={() => {
         void window.electronAPI.window.summonAgent({ typeKey: ENSO_AGENT_TYPE_KEY });
       }}
-      aria-label={t('Ask Collabra')}
-      title={t('Ask Collabra')}
+      aria-label={t('Ask CodeKiln')}
+      title={t('Ask CodeKiln')}
     >
       <Sparkles className="h-3.5 w-3.5" />
-      {label && <span>{t('Ask Collabra')}</span>}
+      {label && <span>{t('Ask CodeKiln')}</span>}
     </button>
   );
 }

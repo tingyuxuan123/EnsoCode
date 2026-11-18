@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject

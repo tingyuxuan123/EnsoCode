@@ -1,11 +1,11 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 /** A foreground lease for the app's existing DesktopLink, never a second socket or a sticky restart. */
 class LinkService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val companion get() = (application as EavesApplication).companion
+    private val companion get() = (application as CodeKilnApplication).companion
     private lateinit var notifications: LinkNotifications
     private var lease: String? = null
     private var observer: Job? = null
@@ -96,7 +96,7 @@ class LinkService : Service() {
     }
 
     internal companion object {
-        const val START = "io.github.tingyuxuan123.eaves.START_WATCH"
-        const val STOP = "io.github.tingyuxuan123.eaves.STOP_WATCH"
+        const val START = "io.github.tingyuxuan123.codekiln.START_WATCH"
+        const val STOP = "io.github.tingyuxuan123.codekiln.STOP_WATCH"
     }
 }

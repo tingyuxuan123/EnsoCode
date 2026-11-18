@@ -40,14 +40,14 @@
 ## 验证口径
 
 - 成员功能已在 API 37 模拟器完成 `connectedDebugAndroidTest`（成员 11 项，无失败）；浅色成员、群聊、单聊用设计稿 debug 样本逐屏截图对照。
-  `EAVES_DESKTOP_BOT_MEMBERS_SMOKE=1` 的隔离桌面联调验证首次单聊、发送后重新打开同一历史、两人建群及主持人落库；
-  与 `EAVES_DESKTOP_BOT_THREADS_SMOKE=1` 合跑验证群发送、停止、新线程和切回主话题。
+  `CODEKILN_DESKTOP_BOT_MEMBERS_SMOKE=1` 的隔离桌面联调验证首次单聊、发送后重新打开同一历史、两人建群及主持人落库；
+  与 `CODEKILN_DESKTOP_BOT_THREADS_SMOKE=1` 合跑验证群发送、停止、新线程和切回主话题。
 - JVM 与 Compose 设备测试覆盖**已实现切片**；按需中继/截图用例在常规设备测试中跳过，另行 opt-in。
-- 本轮（原生第一批：设备与通知入口 + 文字草稿）在专用未配对模拟器 `Eaves_Members_Test`（API 37，1080×2400 / 420 dpi）实跑：
+- 本轮（原生第一批：设备与通知入口 + 文字草稿）在专用未配对模拟器 `CodeKiln_Members_Test`（API 37，1080×2400 / 420 dpi）实跑：
   `./gradlew check` 通过（app 107 项 JVM 单测、mirror 298 项）；`./gradlew :app:connectedDebugAndroidTest` 共 120 项、0 失败、17 项 opt-in 跳过。
   新增覆盖：`SettingsScreenTest` 6 项（真实电脑名、只读/可操作、提醒开关、通知权限入口、解绑二次确认、未配对态）、
   `TextDraftDeviceTest` 4 项（落盘无明文、换配对隔离、坏文件恢复、按配对清理）、`DraftRestoreScreenTest` 1 项（切页后回到同一会话仍见草稿）、
-  `NavigationTest` 增加 1 项（抽屉齿轮进「设备与通知」、系统返回回到抽屉）。`NewTaskConfigTest` 已有 3 项按新草稿契约（`EavesApp` 改为注入草稿宿主）改接线后复跑通过。
+  `NavigationTest` 增加 1 项（抽屉齿轮进「设备与通知」、系统返回回到抽屉）。`NewTaskConfigTest` 已有 3 项按新草稿契约（`CodeKilnApp` 改为注入草稿宿主）改接线后复跑通过。
   根目录 `pnpm typecheck && pnpm lint && pnpm test` 同时通过。
 - 草稿验收（第一批）：`DraftBookAcceptanceTest` 5 项、`BotDraftAcceptanceTest` 1 项、`DraftCleanupAcceptanceTest` 2 项、
   `mirror` 的 `TextDraftAcceptanceTest` 7 项、设备侧 `FirstBatchAcceptanceTest` 4 项与 `FirstBatchStorageAcceptanceTest` 2 项全部通过。
@@ -62,7 +62,7 @@
 - 新任务设置面板（`NewTaskConfigSheet`）：面板高度上限改为取窗口高度减去 134dp 预留（顶部设计留白 47 + 拖动条行 18 + 手势条 24 + sheet 展开余量 45），
   不再用 `BoxWithConstraints` 的 `maxHeight * .94f`；模型列表从 `LazyColumn(heightIn(240dp))` 改为普通 `Column`，面板只剩一层纵向滚动。
   新增 `NewTaskConfigSheetLayoutTest` 5 项（唯一纵向滚动节点、在模型列表上轻上滑标题随面板上移 ≥120dp、滚到底可见「助手代审」且落在可视区内、
-  标题/关闭按钮不被裁掉且关闭有效、视口高度跨帧与滚动后不变、快速上滑也收敛）。专用模拟器 `Eaves_Members_Test`（API 37，1080×2400 / 420 dpi）实跑 5/5 通过；
+  标题/关闭按钮不被裁掉且关闭有效、视口高度跨帧与滚动后不变、快速上滑也收敛）。专用模拟器 `CodeKiln_Members_Test`（API 37，1080×2400 / 420 dpi）实跑 5/5 通过；
   改动前同一套用例 4/4 失败：面板内 2 个纵向滚动节点（页面 `(0,264)-(1080,2337)`、模型列表 `(32,608)-(1048,1238)`），在模型列表上轻上滑标题 285px → 285px（位移 0）。
 - 本轮未验证：实体手机、真实桌面配对下的「设备与通知」页与草稿实际恢复、线上中继；`START_NOT_STICKY` 等既有边界未改动。
   整跑中 `SessionMenuScreenTest` 的压缩用例曾偶发失败一次，单跑与随后两次整跑均通过，未改动该测试。
@@ -81,7 +81,7 @@
 - RED→GREEN：`SessionPresentationTest` 新增 6 项（私聊单条、任务 context/acceptance-check/previous-runs、批量与连续多信封、
   notes-updated 前置、非开头同名标签与 Markdown/代码块、坏信封与缺 `from`、工具输出不改写），先因 `SessionBlock.Delegation`
   未定义而编译失败，实现后 20 项全绿；设备侧 `MembersScreenTest` 新增 2 项（私聊展开前只有摘要、无原始标签；群聊 human/bot 折行）。
-- 实跑：专用未配对模拟器 `Eaves_Members_Test`（API 37）`./gradlew check` 通过（app 114 项 JVM 单测、mirror 沿用既有），
+- 实跑：专用未配对模拟器 `CodeKiln_Members_Test`（API 37）`./gradlew check` 通过（app 114 项 JVM 单测、mirror 沿用既有），
   `:app:connectedDebugAndroidTest` 共 122 项、0 失败、17 项 opt-in 跳过，其中新增两项均通过。
 - 产物：`app/build/outputs/apk/debug/app-debug.apk` 40,307,065 字节，sha256 `33817ed6d7643d3c6fdf32b1eb100dce579a31c4089a8eda5022d87a82f77205`，
   2026-11-15 13:45；`classes5.dex` 含 `SessionDelegationKind` / `sessionDelegationStatus`。上一版 APK 已被同路径覆盖，
@@ -97,7 +97,7 @@
   RED：按旧语义（`text()` 内写 pin、`confirm` 无 pin 时回退到当前修订）跑 `DraftBookAcceptanceTest` 2 项失败
   （`reading the draft for display never authorises a confirmation`、A→B→A）；改回后 `DraftBookTest` + `DraftBookAcceptanceTest` 20 项全绿。
   既有断言未放宽：A→B→A 用例只把「取提交文字」的写法从 `text()` 换成 `pin()`，断言文字与存储结果一字未改。
-- P2-2 离开页面期间到达的回执（`MainActivity.kt`）：pin 成了跨页面的提交凭据，`EavesApp` 用「会话 ID + attempt id/phase」观察
+- P2-2 离开页面期间到达的回执（`MainActivity.kt`）：pin 成了跨页面的提交凭据，`CodeKilnApp` 用「会话 ID + attempt id/phase」观察
   文本回执与队列 `Enqueue` 回执，观察到 `Observed` 就 `book.confirm(key, attempt.text)`。页面不在前台时 pin 仍然有效，
   所以已投递的草稿照样被清掉；而没 pin 过、或已被编辑取代（修订号变了）的同文草稿不会被误清。
   页面内原有的进屏基线（`openingTextReceipt`）与编辑代际判断保持不动，`FirstBatchAcceptanceTest` 3 项一条未改、仍通过。
@@ -120,7 +120,7 @@
   前者尾部正文从 `Prose` 改成整段原文，后者去掉尾部正文、只验证 notes-updated 前置仍能识别整段信封；
   另外新增 `委派信封后接正文时与桌面一致按原文展示` 3 例守住该语义。未改动桌面代码。
   已知差异（写进 README）：连续多个独立信封安卓逐条展开，桌面会把整段当成一条。
-- 收口命令（专用未配对模拟器 `Eaves_Members_Test`，API 37，1080×2400 / 420 dpi）：
+- 收口命令（专用未配对模拟器 `CodeKiln_Members_Test`，API 37，1080×2400 / 420 dpi）：
   `./gradlew check` 通过（app 125 项 JVM 单测、mirror 298 项，均 0 失败 0 跳过；lint 通过）；
   `./gradlew :app:connectedDebugAndroidTest` 共 111 项、0 失败、17 项 opt-in 跳过（其中含本轮新增 1 项）；
   `./gradlew :app:assembleDebug` 通过。

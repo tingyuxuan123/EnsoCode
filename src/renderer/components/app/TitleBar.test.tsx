@@ -16,10 +16,10 @@ const render = (props: Parameters<typeof TitleBar>[0]) =>
   renderToStaticMarkup(createElement(TitleBar, props));
 const centered = createElement('div', { 'data-testid': 'mode-switch' });
 
-it('召唤入口使用 Collabra 名称，组件和派发标识不随品牌改变', () => {
+it('召唤入口使用 CodeKiln 名称，组件和派发标识不随品牌改变', () => {
   const html = renderToStaticMarkup(createElement(SummonEnsoButton));
-  expect(html).toContain('aria-label="Ask Collabra"');
-  expect(html).toContain('>Ask Collabra</span>');
+  expect(html).toContain('aria-label="Ask CodeKiln"');
+  expect(html).toContain('>Ask CodeKiln</span>');
   expect(html).not.toContain('Ask Enso');
 });
 
@@ -27,7 +27,7 @@ describe('TitleBar centered content', () => {
   it('renders centered content as an overlay sibling of title and actions', () => {
     setPlatform('win32');
     const html = render({
-      title: 'Eaves',
+      title: 'CodeKiln',
       centered,
       actions: createElement('button', { type: 'button' }, 'act'),
     });
@@ -36,13 +36,13 @@ describe('TitleBar centered content', () => {
     expect(html).toContain('pointer-events-auto');
     expect(html).toContain('data-testid="mode-switch"');
     // 标题不被居中内容替换，仍在左侧
-    expect(html).toContain('Eaves');
+    expect(html).toContain('CodeKiln');
     expect(html).toContain('act');
   });
 
   it('keeps the window drag region under the overlay', () => {
     setPlatform('win32');
-    const html = render({ title: 'Eaves', centered });
+    const html = render({ title: 'CodeKiln', centered });
     // 覆盖层 pointer-events:none，空处仍可拖动窗口
     expect(html).toContain('pointer-events-none absolute inset-0');
     expect(html).toContain('no-drag');
@@ -50,7 +50,7 @@ describe('TitleBar centered content', () => {
 
   it('marks the centered lane so the mode switch has one stable visual carrier', () => {
     setPlatform('darwin');
-    const html = render({ title: 'Eaves', centered });
+    const html = render({ title: 'CodeKiln', centered });
     expect(html).toContain('data-slot="title-bar-center"');
     expect(html).toContain('data-testid="mode-switch"');
   });
@@ -58,8 +58,8 @@ describe('TitleBar centered content', () => {
   it('caps a long heading before the centered lane instead of letting it run underneath', () => {
     setPlatform('darwin');
     const heading = createElement('span', { 'data-testid': 'heading' }, 'Session');
-    const centeredHtml = render({ title: 'Eaves', heading, centered });
-    const plainHtml = render({ title: 'Eaves', heading });
+    const centeredHtml = render({ title: 'CodeKiln', heading, centered });
+    const plainHtml = render({ title: 'CodeKiln', heading });
     // 居中通道出现时标题预留空间，不能被居中的分段控件盖住
     expect(centeredHtml).toContain('data-slot="title-bar-heading"');
     expect(centeredHtml).toContain('data-center-reserve="true"');
@@ -69,9 +69,9 @@ describe('TitleBar centered content', () => {
 
   it('macOS: hides the title beside traffic lights when centered', () => {
     setPlatform('darwin');
-    const html = render({ title: 'Eaves', centered });
+    const html = render({ title: 'CodeKiln', centered });
     expect(html).toContain('data-testid="mode-switch"');
-    expect(html).not.toContain('Eaves');
+    expect(html).not.toContain('CodeKiln');
     // 红绿灯预留仍在
     expect(html).toContain('pl-[84px]');
   });
@@ -79,11 +79,11 @@ describe('TitleBar centered content', () => {
   it('heading replaces the title but stays inside the drag region', () => {
     setPlatform('darwin');
     const html = render({
-      title: 'Eaves',
+      title: 'CodeKiln',
       heading: createElement('span', { 'data-testid': 'heading' }, 'Session'),
     });
     expect(html).toContain('data-testid="heading"');
-    expect(html).not.toContain('>Eaves<');
+    expect(html).not.toContain('>CodeKiln<');
     // 只读标题不能挡住窗口拖拽
     expect(html).not.toContain('no-drag');
   });
@@ -91,12 +91,12 @@ describe('TitleBar centered content', () => {
   it('leading still replaces the title and stays left (no centering)', () => {
     setPlatform('win32');
     const html = render({
-      title: 'Eaves',
+      title: 'CodeKiln',
       leading: createElement('span', { 'data-testid': 'lead' }),
     });
     expect(html).toContain('data-testid="lead"');
     expect(html).not.toContain('absolute inset-0');
-    expect(html).not.toContain('Eaves');
+    expect(html).not.toContain('CodeKiln');
   });
 
   it('preserves titles and platform-specific caption controls', () => {

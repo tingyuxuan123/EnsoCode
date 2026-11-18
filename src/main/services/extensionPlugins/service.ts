@@ -520,7 +520,7 @@ export class ExtensionPluginService {
   }
   /**
    * 市场安装与同名已装插件的来源冲突说明。第一版不做静默迁移：
-   * 本地目录 / ZIP / URL / 旧市场来源都必须由用户显式重装才能换成 Collabra 市场。
+   * 本地目录 / ZIP / URL / 旧市场来源都必须由用户显式重装才能换成 CodeKiln 市场。
    */
   private marketSourceConflict(id: string, marketId: string): string | null {
     const existing = this.records.find((r) => r.id === id);

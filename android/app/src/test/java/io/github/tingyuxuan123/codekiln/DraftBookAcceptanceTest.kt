@@ -1,8 +1,8 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.DraftKind
-import io.github.tingyuxuan123.eaves.mirror.TextDraftStore
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.DraftKind
+import io.github.tingyuxuan123.codekiln.mirror.TextDraftStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy

@@ -131,7 +131,7 @@ const SLOT_RULES: Record<ThemeAssetSlot, string> = {
   'status-icon': `[data-enso="status-line"]::before{${overlay('status-icon', 'left:2px;top:50%;width:20px;height:20px;translate:0 -50%')}}`,
   'panel-corner': `[data-enso="side-panel"]{position:relative}[data-enso="side-panel"]::after{${overlay('panel-corner', 'right:10px;bottom:10px;width:72px;height:72px;opacity:0.9;z-index:5')}}`,
 };
-/** 只为解析后的固定素材槽生成规则；没有素材时不触碰现有 Collabra 样式。 */
+/** 只为解析后的固定素材槽生成规则；没有素材时不触碰现有 CodeKiln 样式。 */
 export function themeAssetsCss(
   assets: ThemeAssets | undefined,
   background?: ThemeBackground

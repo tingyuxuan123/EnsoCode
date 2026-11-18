@@ -120,7 +120,7 @@ export function PairScreen({
       }
       setUri(trimmed);
       if (isPairPayload(trimmed)) void pair(trimmed);
-      else setError('这段内容不是配对链接，请确认复制的是桌面端那条 enso:// 链接');
+      else setError('这段内容不是配对链接，请确认复制的是桌面端那条 codekiln:// 链接');
     } catch {
       setError('读不到剪贴板，请手动把链接粘贴到输入框');
     }
@@ -147,7 +147,7 @@ export function PairScreen({
           if (cancelled || !streamRef.current) return;
           try {
             const value = await scanner.scan(video);
-            // 兼容两种码：桌面新版发 https 链接（系统相机也能直接打开），旧版是 enso:// scheme
+            // 兼容两种码：桌面新版发 https 链接（系统相机也能直接打开），旧版是 codekiln:// scheme
             if (value && isPairPayload(value)) {
               onDetectedRef.current(value);
               return;
@@ -173,7 +173,7 @@ export function PairScreen({
 
       <header className="phone-pair-header relative flex items-center gap-2.5 px-5">
         <img src="/icons/logo-192.png" alt="" className="size-[26px] shrink-0" />
-        <span className="text-[17px] leading-6 font-semibold">Collabra</span>
+        <span className="text-[17px] leading-6 font-semibold">CodeKiln</span>
         <div className="flex-1" />
         <span className="flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-card2 px-2">
           <span className="size-1.5 rounded-full bg-faint" />
@@ -227,7 +227,7 @@ export function PairScreen({
               if (event.nativeEvent.isComposing) return;
               if (event.key === 'Enter' && uri.trim()) void pair(uri.trim());
             }}
-            placeholder="enso://pair?relay=…&pk=…"
+            placeholder="codekiln://pair?relay=…&pk=…"
             aria-label="配对链接"
             autoCapitalize="off"
             autoCorrect="off"

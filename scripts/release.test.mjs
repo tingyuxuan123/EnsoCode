@@ -18,8 +18,8 @@ const version = '0.2.10';
 const data = Buffer.from('test installer');
 const sha512 = createHash('sha512').update(data).digest('base64');
 const manifest = (url) => ({ version, files: [{ url, sha512, size: data.length }] });
-const arm = manifest(`Collabra-${version}-arm64-mac.zip`);
-const intel = manifest(`Collabra-${version}-mac.zip`);
+const arm = manifest(`CodeKiln-${version}-arm64-mac.zip`);
+const intel = manifest(`CodeKiln-${version}-mac.zip`);
 
 test('版本与 tag 必须一致，手动分支构建也必须使用合法稳定版本', () => {
   assert.equal(assertReleaseVersion(version, `v${version}`), version);
@@ -513,46 +513,46 @@ test('个人安装包只使用独立 generic 更新源，正式 GitHub 更新源
   assert.equal(official.publish.releaseType, 'draft');
 });
 
-test('打包显示 Collabra 但沿用既有系统标识和可更新的 ASCII 安装包名', async () => {
+test('打包显示 CodeKiln，系统标识与包名同步改名，安装包名保持 ASCII', async () => {
   const config = parse(await readFile(new URL('../electron-builder.yml', import.meta.url), 'utf8'));
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(config.productName, 'Collabra');
-  assert.equal(config.appId, 'com.j3n5en.enso-code');
-  assert.equal(pkg.name, 'enso-code');
-  assert.equal(pkg.description, 'Collabra - AI 协作工作台');
+  assert.equal(config.productName, 'CodeKiln');
+  assert.equal(config.appId, 'com.j3n5en.codekiln');
+  assert.equal(pkg.name, 'codekiln');
+  assert.equal(pkg.description, 'CodeKiln - AI 协作工作台');
   assert.equal(pkg.productName, undefined);
   assert.equal(config.extraMetadata?.productName, undefined);
   assert.equal(config.publish.repo, 'EnsoCode');
-  assert.equal(config.win.executableName, 'Eaves');
-  assert.equal(config.nsis.artifactName, `Collabra-Setup-\${version}.\${ext}`);
-  assert.equal(config.mac.artifactName, `Collabra-\${version}-\${arch}-mac.\${ext}`);
-  assert.equal(config.dmg.artifactName, `Collabra-\${version}-\${arch}.\${ext}`);
-  assert.equal(config.linux.artifactName, `Collabra-\${version}-\${arch}.\${ext}`);
+  assert.equal(config.win.executableName, 'CodeKiln');
+  assert.equal(config.nsis.artifactName, `CodeKiln-Setup-\${version}.\${ext}`);
+  assert.equal(config.mac.artifactName, `CodeKiln-\${version}-\${arch}-mac.\${ext}`);
+  assert.equal(config.dmg.artifactName, `CodeKiln-\${version}-\${arch}.\${ext}`);
+  assert.equal(config.linux.artifactName, `CodeKiln-\${version}-\${arch}.\${ext}`);
   for (const value of Object.values(config.mac.extendInfo).filter((v) => typeof v === 'string')) {
-    assert.match(value, /^Collabra uses /);
+    assert.match(value, /^CodeKiln uses /);
   }
 });
 
-test('构建和远端验收使用 Collabra 资产及 Mac 二进制，Windows 二进制保持不变', async () => {
+test('构建和远端验收使用 CodeKiln 资产与全新平台二进制名', async () => {
   for (const name of ['build.yml', 'build-personal-mac.yml', 'build-windows.yml']) {
     const source = await readFile(new URL(`../.github/workflows/${name}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /小满|Xiaoman/);
     if (name !== 'build-windows.yml') {
-      assert.match(source, /Collabra\.app/);
-      assert.match(source, /Contents\/MacOS\/Collabra/);
+      assert.match(source, /CodeKiln\.app/);
+      assert.match(source, /Contents\/MacOS\/CodeKiln/);
     }
-    if (name !== 'build-personal-mac.yml') assert.match(source, /win-unpacked\/Eaves\.exe/);
-    assert.match(source, /Collabra-/);
+    if (name !== 'build-personal-mac.yml') assert.match(source, /win-unpacked\/CodeKiln\.exe/);
+    assert.match(source, /CodeKiln-/);
   }
 });
 
-test('旧品牌日志仍可读取，但输出使用 Collabra 且证书原名不变', async () => {
+test('旧品牌日志仍可读取，但输出使用 CodeKiln 且证书原名不变', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'enso-legacy-notes-'));
   try {
-    for (const brand of ['小满', 'EnsoCode']) {
+    for (const brand of ['小满', 'EnsoCode', 'Collabra']) {
       await writeFile(path.join(dir, `${version}.md`), `# ${brand} ${version}\n\n- 旧版真实变更\n`);
       const notes = await personalRelease.readPersonalReleaseNotes(version, dir);
-      assert.ok(notes.startsWith(`# Collabra ${version}\n\n- 旧版真实变更\n`));
+      assert.ok(notes.startsWith(`# CodeKiln ${version}\n\n- 旧版真实变更\n`));
       assert.match(notes, /信任 EnsoCode Local Signing 证书/);
     }
   } finally {
@@ -571,7 +571,7 @@ test('个人清单只在安装包校验后生成，使用不可变个人 Release
     const notes = path.join(dir, 'release-notes');
     await mkdir(source);
     await mkdir(notes);
-    await writeFile(path.join(notes, `${version}.md`), `# Collabra ${version}\n\n- 修复真实问题\n`);
+    await writeFile(path.join(notes, `${version}.md`), `# CodeKiln ${version}\n\n- 修复真实问题\n`);
     await writeFile(
       path.join(source, 'latest-mac.yml'),
       stringify({ ...arm, path: arm.files[0].url, sha512 })
@@ -583,7 +583,7 @@ test('个人清单只在安装包校验后生成，使用不可变个人 Release
     const feed = parse(await readFile(path.join(output, 'latest-mac.yml'), 'utf8'));
     const url = `https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v${version}/${arm.files[0].url}`;
     assert.equal(feed.version, version);
-    assert.equal(feed.releaseName, `Collabra ${version} — 个人测试`);
+    assert.equal(feed.releaseName, `CodeKiln ${version} — 个人测试`);
     assert.equal(feed.files[0].url, url);
     assert.equal(feed.path, url);
     assert.equal(feed.files[0].sha512, sha512);
@@ -616,15 +616,15 @@ test('个人日志必须是版本匹配、有正文的有限大小 UTF-8 文件'
     await assert.rejects(() => readPersonalReleaseNotes(version, dir));
     for (const bad of [
       ' ',
-      `# Collabra ${version}\n \n`,
-      '# Collabra 0.2.11\n\n- Mismatched',
-      `# Collabra ${version}\n\n${'长'.repeat(16384)}`,
-      Buffer.concat([Buffer.from(`# Collabra ${version}\n\n`), Buffer.from([0xff])]),
+      `# CodeKiln ${version}\n \n`,
+      '# CodeKiln 0.2.11\n\n- Mismatched',
+      `# CodeKiln ${version}\n\n${'长'.repeat(16384)}`,
+      Buffer.concat([Buffer.from(`# CodeKiln ${version}\n\n`), Buffer.from([0xff])]),
     ]) {
       await writeFile(file, bad);
       await assert.rejects(() => readPersonalReleaseNotes(version, dir));
     }
-    await writeFile(file, `# Collabra ${version}\r\n\r\n- Real changes\r\n`);
+    await writeFile(file, `# CodeKiln ${version}\r\n\r\n- Real changes\r\n`);
     assert.match(await readPersonalReleaseNotes(version, dir), /\n\n- Real changes\n/);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -644,7 +644,7 @@ test('CLI 按仓库版本读取日志，输出与 feed 同源的正文和安全�
       await copyFile(new URL(name, import.meta.url), path.join(scripts, name));
     }
     await writeFile(path.join(dir, 'package.json'), JSON.stringify({ version }));
-    const source = `# Collabra ${version}\n\n- Actual CLI changes\n`;
+    const source = `# CodeKiln ${version}\n\n- Actual CLI changes\n`;
     await writeFile(path.join(notes, `${version}.md`), source);
     const { stdout } = await promisify(execFile)(process.execPath, [
       path.join(scripts, 'personal-release.mjs'),
@@ -672,7 +672,7 @@ test('个人日志拒绝符号链接文件与目录', { skip: process.platform =
     const alias = path.join(dir, 'notes-alias');
     const outside = path.join(dir, 'valid.md');
     const file = path.join(notes, `${version}.md`);
-    const valid = `# Collabra ${version}\n\n- Real changes\n`;
+    const valid = `# CodeKiln ${version}\n\n- Real changes\n`;
     await mkdir(notes);
     await writeFile(outside, valid);
     await symlink(outside, file);

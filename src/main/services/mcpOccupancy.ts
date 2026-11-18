@@ -90,7 +90,7 @@ export async function listMcpOccupancyTools(server: McpServerEntry): Promise<Occ
 }
 
 async function probeMcpTools(server: McpServerEntry): Promise<ProbedTool[]> {
-  const client = new Client({ name: 'enso-code', version: '0.1.0' });
+  const client = new Client({ name: 'codekiln', version: '0.1.0' });
   try {
     return await withTimeout(
       (async () => {

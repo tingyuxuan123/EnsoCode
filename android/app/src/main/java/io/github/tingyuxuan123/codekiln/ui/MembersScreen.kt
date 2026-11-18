@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.*
+import io.github.tingyuxuan123.codekiln.mirror.*
 
 /** One directory, one full-screen conversation. All rows come from the authenticated desktop. */
 @Composable

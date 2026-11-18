@@ -140,7 +140,7 @@ export function getExtensionPlugins(): ExtensionPluginService {
     },
     market: new PluginMarket({
       root,
-      // 市场身份固定为 Collabra；镜像与缓存都按它隔离，renderer 无法指定别的市场
+      // 市场身份固定为 CodeKiln；镜像与缓存都按它隔离，renderer 无法指定别的市场
       marketId: MARKET_ID,
       fetch: pinnedArchiveFetch,
       hostVersion: app.getVersion(),

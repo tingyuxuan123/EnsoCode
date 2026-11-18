@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopModel
-import io.github.tingyuxuan123.eaves.mirror.DesktopProject
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.mirror.TaskApprovalMode
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopModel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProject
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.mirror.TaskApprovalMode
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
 import org.junit.Assert.*
 import org.junit.Test
 

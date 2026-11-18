@@ -1,6 +1,6 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
-import io.github.tingyuxuan123.eaves.pair.SessionMessage
+import io.github.tingyuxuan123.codekiln.pair.SessionMessage
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 

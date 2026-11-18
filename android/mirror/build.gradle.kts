@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.tingyuxuan123.eaves.mirror"
+    namespace = "io.github.tingyuxuan123.codekiln.mirror"
     compileSdk = 36
 
     defaultConfig {

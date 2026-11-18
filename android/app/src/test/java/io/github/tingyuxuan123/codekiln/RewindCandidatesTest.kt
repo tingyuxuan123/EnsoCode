@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.pair.SessionMessage
-import io.github.tingyuxuan123.eaves.ui.rewindCandidates
+import io.github.tingyuxuan123.codekiln.pair.SessionMessage
+import io.github.tingyuxuan123.codekiln.ui.rewindCandidates
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals

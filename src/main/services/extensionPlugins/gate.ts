@@ -122,9 +122,9 @@ export interface GateDeps {
   ): Promise<unknown>;
   /** 插件自己的配置值（含密钥）；只交给插件进程，不进渲染层 */
   config(pluginId: string): Record<string, string | number | boolean>;
-  /** Collabra fork：会话消息投影；只交给插件进程 */
+  /** CodeKiln fork：会话消息投影；只交给插件进程 */
   sessionMessages?(sessionId: string): Promise<unknown>;
-  /** Collabra fork：当前会话状态是否允许写文件 / 调 MCP */
+  /** CodeKiln fork：当前会话状态是否允许写文件 / 调 MCP */
   invocationPolicy?(target: McpTarget): Promise<PluginInvocationPolicy>;
   mcpTools(target: McpTarget, signal: AbortSignal): Promise<McpToolInfo[]>;
   mcpCall(
@@ -279,7 +279,7 @@ export class InvocationTable {
         entry.controller.abort();
       }
   }
-  /** Collabra fork：宿主收敛时不留悬挂授权 */
+  /** CodeKiln fork：宿主收敛时不留悬挂授权 */
   dispose(): void {
     for (const id of [...this.table.keys()]) this.cancel(id);
     this.table.clear();
@@ -353,7 +353,7 @@ export class PluginHostGate {
     this.invocations = new InvocationTable(deps.now);
   }
 
-  /** Collabra fork：停用 / 卸载 / 退出时清空调用授权与限流窗口 */
+  /** CodeKiln fork：停用 / 卸载 / 退出时清空调用授权与限流窗口 */
   dispose(): void {
     this.invocations.dispose();
     this.injects.clear();
@@ -442,7 +442,7 @@ export class PluginHostGate {
       case 'fs.readText': {
         permit('fs.read');
         const target = await this.resolveProjectPath(invocation(), a.path, manifest.fs.read, false);
-        // Collabra fork：O_NOFOLLOW 打开后再 fstat，避免 realpath 与读取之间的符号链接替换
+        // CodeKiln fork：O_NOFOLLOW 打开后再 fstat，避免 realpath 与读取之间的符号链接替换
         const file = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
         try {
           const info = await file.stat();
@@ -465,7 +465,7 @@ export class PluginHostGate {
         const target = await this.resolveProjectPath(inv, a.path, manifest.fs.write, true);
         await this.assertMutation(inv, 'allowWrite');
         if (inv.cancelled) throw pluginError('ABORTED', '调用已取消');
-        // Collabra fork：只写普通文件，不跟随符号链接，不接受硬链接
+        // CodeKiln fork：只写普通文件，不跟随符号链接，不接受硬链接
         const file = await open(
           target,
           constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW,
@@ -585,7 +585,7 @@ export class PluginHostGate {
       case 'config.get':
         return this.deps.config(pluginId);
       case 'session.messages': {
-        // Collabra fork：会话消息投影，只交给插件进程
+        // CodeKiln fork：会话消息投影，只交给插件进程
         permit('session.read');
         const inv = invocation();
         if (!inv.sessionId) throw pluginError('NO_SESSION', '调用不属于会话');
@@ -966,7 +966,7 @@ export class PluginHostGate {
     }
   }
 
-  /** Collabra fork：写文件 / 调 MCP 前确认当前会话状态允许变更 */
+  /** CodeKiln fork：写文件 / 调 MCP 前确认当前会话状态允许变更 */
   private async assertMutation(
     inv: Invocation,
     capability: keyof PluginInvocationPolicy

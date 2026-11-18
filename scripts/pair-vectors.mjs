@@ -93,7 +93,7 @@ async function primitives() {
   const uris = [
     encoding.buildPairUri(invite),
     encoding.buildPairLink(invite),
-    `  enso://pair?relay=https%3A%2F%2Frelay.example.test%2F&pk=${publicKey}  `,
+    `  codekiln://pair?relay=https%3A%2F%2Frelay.example.test%2F&pk=${publicKey}  `,
     `https://relay.example.test/#pk=${publicKey}`,
     `https://relay.example.test:443/path?pk=${publicKey}`,
     `https://relay.example.test:8443/path?pk=${publicKey}`,
@@ -103,7 +103,7 @@ async function primitives() {
     `https://web.example.test/?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=${publicKey}&pk=${otherKey}`,
     `https://web.example.test/?pk=${otherKey}#pk=${publicKey}&pk=${otherKey}`,
     `https://web.example.test/?pk=${publicKey}#`,
-    `enso://pair?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=${publicKey}&pk=${otherKey}`,
+    `codekiln://pair?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=${publicKey}&pk=${otherKey}`,
   ];
   const invites = uris.map((uri) => {
     const parsed = encoding.parsePairUri(uri);
@@ -116,11 +116,11 @@ async function primitives() {
     '',
     'not a pair uri',
     `ftp://relay.example.test/?pk=${publicKey}`,
-    `enso://other?relay=https%3A%2F%2Frelay.test&pk=${publicKey}`,
+    `codekiln://other?relay=https%3A%2F%2Frelay.test&pk=${publicKey}`,
     `ENSO://pair?relay=https%3A%2F%2Frelay.test&pk=${publicKey}`,
-    `enso://pair?pk=${publicKey}`,
-    'enso://pair?relay=https%3A%2F%2Frelay.test',
-    `enso://pair?relay=&pk=${publicKey}`,
+    `codekiln://pair?pk=${publicKey}`,
+    'codekiln://pair?relay=https%3A%2F%2Frelay.test',
+    `codekiln://pair?relay=&pk=${publicKey}`,
     'https://relay.example.test/#pk=',
     'https://relay.example.test/#pk=!!!!',
     `https://relay.example.test/?pk=${publicKey}#unrelated=1`,

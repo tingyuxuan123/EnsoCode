@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
-import io.github.tingyuxuan123.eaves.ui.PairUiState
-import io.github.tingyuxuan123.eaves.ui.TaskSummary
-import io.github.tingyuxuan123.eaves.ui.TaskStatus
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.ui.NewTaskUiState
+import io.github.tingyuxuan123.codekiln.ui.PairUiState
+import io.github.tingyuxuan123.codekiln.ui.TaskSummary
+import io.github.tingyuxuan123.codekiln.ui.TaskStatus
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

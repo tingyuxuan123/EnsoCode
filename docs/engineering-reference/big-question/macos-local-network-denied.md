@@ -34,12 +34,12 @@ cat /tmp/p.out   # Connection to 192.168.0.1 port 80 [tcp/http] succeeded!  rc=0
    "改过 Info.plist 的 Electron.app 拷贝"。
 
    ```text
-   codesign -dvvv /Applications/EnsoCode.app
+   codesign -dvvv /Applications/CodeKiln.app
      Identifier=Electron          ← 主可执行文件出厂 linker-signed 残留
      Signature=adhoc
      Info.plist=not bound         ← Info.plist 未参与签名
      Sealed Resources=none
-   ls /Applications/EnsoCode.app/Contents/_CodeSignature      → No such file
+   ls /Applications/CodeKiln.app/Contents/_CodeSignature      → No such file
    ls ".../Electron Framework.framework/Versions/A/_CodeSignature" → No such file
    ```
 
@@ -48,7 +48,7 @@ cat /tmp/p.out   # Connection to 192.168.0.1 port 80 [tcp/http] succeeded!  rc=0
    `codesign -dvv` 里 `Info.plist=not bound` / `Sealed Resources=none` 是这条根因最简洁的判据。
 
    （`log show ... CONTAINS "LocalNetwork"` 只能看到 `found bundle id Electron by PID` 与
-   `found bundle id com.j3n5en.enso-code by UUID` 成对出现——身份"找得到"，但授权核对
+   `found bundle id com.j3n5en.codekiln by UUID` 成对出现——身份"找得到"，但授权核对
    失败。别拿这两行当"身份没问题"的证据。）
 
 ## 修法
@@ -58,14 +58,14 @@ cat /tmp/p.out   # Connection to 192.168.0.1 port 80 [tcp/http] succeeded!  rc=0
 1. `mac.extendInfo` 声明 `NSLocalNetworkUsageDescription`。
 2. `mac.identity: '-'` —— **关键**。不显式给 identity 时，没有证书就静默跳过签名；
    给了 `'-'` 才会走 ad-hoc 重签，把 Info.plist 绑定、资源封存、
-   `Identifier` 变成 `com.j3n5en.enso-code`。正式发布用真 Developer ID 覆盖
+   `Identifier` 变成 `com.j3n5en.codekiln`。正式发布用真 Developer ID 覆盖
    （`CSC_IDENTITY_AUTO_DISCOVERY` / CI 证书），不影响发布包。
 
 实测 `pnpm build:mac:dir` 前后对比：
 
 ```text
 签名前                                签名后
-Identifier=Electron                   Identifier=com.j3n5en.enso-code
+Identifier=Electron                   Identifier=com.j3n5en.codekiln
 Info.plist=not bound                  Info.plist entries=34
 Sealed Resources=none                 Sealed Resources version=2 rules=13 files=426
 Contents/_CodeSignature 不存在        Contents/_CodeSignature/CodeResources 149.3K
@@ -75,7 +75,7 @@ codesign --verify --strict 失败       valid on disk / satisfies its Designated
 electron-builder 同时补上了 `com.apple.security.cs.disable-library-validation`
 （hardenedRuntime + ad-hoc 的必需项），否则包会启动即崩。
 
-- 装好后需要让 TCC 重新问一次：`tccutil reset All com.j3n5en.enso-code`，
+- 装好后需要让 TCC 重新问一次：`tccutil reset All com.j3n5en.codekiln`，
   再正常双击启动；ad-hoc 包每次重建 cdhash 都变，授权不跨重建保留，
   所以「本地 ad-hoc 构建 → 手动授予 → 长期使用」不可靠，稳定得用真证书。
 - 结论未变之前，agent 侧只走 `127.0.0.1` / `localhost`：需要跨网段的服务，
@@ -87,9 +87,9 @@ electron-builder 同时补上了 `com.apple.security.cs.disable-library-validati
 
 ```bash
 /usr/libexec/PlistBuddy -c "Print :NSLocalNetworkUsageDescription" \
-  /Applications/EnsoCode.app/Contents/Info.plist      # 有值
-codesign -dvvv /Applications/EnsoCode.app 2>&1 | grep -E "^Identifier|Sealed"     # com.j3n5en.enso-code + 封存非 0
-codesign --verify --deep --strict /Applications/EnsoCode.app                    # 通过
+  /Applications/CodeKiln.app/Contents/Info.plist      # 有值
+codesign -dvvv /Applications/CodeKiln.app 2>&1 | grep -E "^Identifier|Sealed"     # com.j3n5en.codekiln + 封存非 0
+codesign --verify --deep --strict /Applications/CodeKiln.app                    # 通过
 nc -z -G2 -w3 192.168.0.1 80                        # 网关可达即策略已放行
 ```
 

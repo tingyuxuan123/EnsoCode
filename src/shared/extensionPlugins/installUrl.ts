@@ -2,7 +2,7 @@ const MAX_URL_LENGTH = 2048;
 
 export type PluginInstallUrlResult = { ok: true; url: URL } | { ok: false; error: string };
 
-/** Collabra fork：安装来源只接受没有账号密码的 HTTPS 链接 */
+/** CodeKiln fork：安装来源只接受没有账号密码的 HTTPS 链接 */
 export function parsePluginInstallUrl(input: string): PluginInstallUrlResult {
   let url: URL;
   try {

@@ -2,12 +2,12 @@ import Avatar from "boring-avatars";
 import mark from "../assets/collabra-mark.png";
 import { avatarPalette, memberColor } from "./avatarPalette";
 
-// Collabra 的 C 字标，透明底。
+// CodeKiln 的 C 字标，透明底。
 export function BrandMark({ size = 24 }: { size?: number }) {
 	return (
 		<img
 			src={mark}
-			alt="Collabra"
+			alt="CodeKiln"
 			className="shrink-0 object-contain"
 			style={{ width: size, height: size }}
 		/>

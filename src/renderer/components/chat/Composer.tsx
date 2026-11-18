@@ -66,11 +66,26 @@ import { MentionEditor, type MentionEditorHandle, type MentionEditorState } from
 import { MentionPicker } from './MentionPicker';
 import { requestOpenChatModelPicker } from './ModelPicker';
 import type { ComposerPayload, MentionSegment } from './mentionComposer';
-import { createEditorPayload, mentionPopupLayout, resolvePopupKeyAction } from './mentionComposer';
+import {
+  createEditorPayload,
+  mentionPopupLayout,
+  mentionPopupMaxHeight,
+  resolvePopupKeyAction,
+} from './mentionComposer';
 import { SlashChip } from './SlashChip';
 import { filterComposerCommands } from './skillCompletion';
 import { appendSlash, foldLeadingSkills, removeSlash, slashChain } from './slashChain';
 import { VoiceInputButton } from './VoiceInputButton';
+
+// 弹窗挂在输入框上方、向上长：mb-1.5 的 6px 间隙 + 窗口顶部留一点呼吸空间。
+const MENTION_POPUP_MARGIN = 14;
+/** 与 CSS max-h-72 对齐的默认上限；屏幕再高也不做无限长的菜单。 */
+const MENTION_POPUP_CAP = 288;
+/** 一级与二级之间的间距（ml-1）。 */
+const MENTION_FLYOUT_GAP = 4;
+/** 二级列的目标宽度（w-72）；聊天栏窄时按需要收窄，但不低于最小可读宽度。 */
+const MENTION_FLYOUT_WIDTH = 288;
+const MENTION_FLYOUT_MIN_WIDTH = 180;
 
 interface ComposerProps {
   /** Phone keeps the shared draft/command pipeline, with a separate round send action. */
@@ -259,10 +274,11 @@ export function Composer({
         ),
     });
   }, [isolated, focusKey]);
-  const [popupLayout, setPopupLayout] = useState<{
-    left: number;
-    flyoutSide: 'left' | 'right';
-  }>({ left: 0, flyoutSide: 'right' });
+  const [popupLayout, setPopupLayout] = useState<{ left: number; flyoutWidth: number }>({
+    left: 0,
+    flyoutWidth: MENTION_FLYOUT_WIDTH,
+  });
+  const [mentionMaxHeight, setMentionMaxHeight] = useState<number | undefined>(undefined);
   // 编辑器的纯文本投影与卡片存在性（DOM 是事实源，这里只存渲染需要的派生态）
   const [editorPlain, setEditorPlain] = useState('');
   const [editorHasMentions, setEditorHasMentions] = useState(false);
@@ -513,24 +529,54 @@ export function Composer({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 光标移动、picker 挂载、flyout 打开都要重测宽高
   useLayoutEffect(() => {
-    if (popupKind !== 'mention') return;
+    if (popupKind !== 'mention') {
+      setMentionMaxHeight(undefined);
+      return;
+    }
     const container = composerRef.current;
     if (!container) return;
     const sync = () => {
       const containerRect = container.getBoundingClientRect();
+      // 弹窗向上长；窗口矮或条目多时只给输入框上方真实可用的高度，否则会顶出窗口被截断
+      setMentionMaxHeight(
+        mentionPopupMaxHeight({
+          composerTop: containerRect.top,
+          margin: MENTION_POPUP_MARGIN,
+          cap: MENTION_POPUP_CAP,
+        })
+      );
+      // 卡片可以铺满聊天栏（含内边距），但不能压到侧栏：按聊天栏而非输入框量宽度。
+      const column = container.parentElement ?? container;
+      const columnRect = column.getBoundingClientRect();
       const picker = container.querySelector('[data-slot="mention-picker"]');
       const listbox = picker?.querySelector('[role="listbox"]');
-      const flyout = picker?.querySelector('[data-slot="mention-flyout"]');
       const anchor = editorRef.current?.getMentionAnchorRect();
+      const listWidth = listbox instanceof HTMLElement ? listbox.offsetWidth : 320;
+      // 二级只在打开文件夹时出现；聊天栏窄时收窄二级列，让整张卡片仍留在聊天栏内。
+      const folderOpen = Boolean(picker?.querySelector('[data-slot="mention-flyout"]'));
+      const flyoutWidth = folderOpen
+        ? Math.min(
+            MENTION_FLYOUT_WIDTH,
+            Math.max(
+              MENTION_FLYOUT_MIN_WIDTH,
+              // 卡片左右各 1px 描边，留出来才不会顶出聊天栏
+              Math.floor(columnRect.width - listWidth - MENTION_FLYOUT_GAP - 2)
+            )
+          )
+        : MENTION_FLYOUT_WIDTH;
+      const cardWidth = listWidth + (folderOpen ? MENTION_FLYOUT_GAP + flyoutWidth : 0);
       const next = mentionPopupLayout({
-        anchorLeft: anchor ? anchor.left - containerRect.left : 0,
-        containerWidth: containerRect.width,
-        popupWidth: listbox instanceof HTMLElement ? listbox.offsetWidth : 280,
-        flyoutWidth: flyout instanceof HTMLElement ? flyout.offsetWidth : 252,
-        flyoutGap: 4,
+        anchorLeft: anchor ? anchor.left - columnRect.left : 0,
+        containerWidth: columnRect.width,
+        cardWidth,
       });
+      // 布局按聊天栏坐标算；picker 的定位父级是输入框容器，换算回它的坐标，且不越过聊天栏左缘。
+      const offset = containerRect.left - columnRect.left;
+      const left = Math.max(next.left - offset, -offset);
       setPopupLayout((previous) =>
-        previous.left === next.left && previous.flyoutSide === next.flyoutSide ? previous : next
+        previous.left === left && previous.flyoutWidth === flyoutWidth
+          ? previous
+          : { left, flyoutWidth }
       );
     };
     sync();
@@ -805,7 +851,8 @@ export function Composer({
           onFolderIndexChange={setFolderIndex}
           onSelect={pickMention}
           left={popupLayout.left}
-          flyoutSide={popupLayout.flyoutSide}
+          flyoutWidth={popupLayout.flyoutWidth}
+          maxHeight={mentionMaxHeight}
         />
       )}
       {popupKind === 'plugin' && (

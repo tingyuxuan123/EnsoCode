@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.FrameReplay
-import io.github.tingyuxuan123.eaves.pair.ReplayRole
+import io.github.tingyuxuan123.codekiln.pair.FrameReplay
+import io.github.tingyuxuan123.codekiln.pair.ReplayRole
 import java.util.Base64
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject

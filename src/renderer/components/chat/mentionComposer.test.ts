@@ -17,6 +17,7 @@ import {
   fileMentionBasename,
   mentionDisplayText,
   mentionPopupLayout,
+  mentionPopupMaxHeight,
   resolvePopupKeyAction,
   serializeSegments,
   splitInlineFileTokens,
@@ -28,7 +29,7 @@ const registry: AgentTypeCandidate[] = [
   {
     typeKey: 'agent:enso',
     displayName: 'Enso',
-    description: 'Eaves system agent for product capabilities and team setup',
+    description: 'CodeKiln system agent for product capabilities and team setup',
     source: 'system',
     locked: true,
     canDisable: false,
@@ -68,10 +69,10 @@ const duplicateNames = toFileMentionCandidates([
   { name: 'index.ts', relativePath: 'src/renderer/index.ts' },
 ]);
 
-it('旧系统目录的 Enso 候选展示为 Collabra，派发 typeKey 保持不变', () => {
+it('旧系统目录的 Enso 候选展示为 CodeKiln，派发 typeKey 保持不变', () => {
   expect(toAgentMentionCandidates(registry)[0]).toMatchObject({
-    label: 'Collabra',
-    displayName: 'Collabra',
+    label: 'CodeKiln',
+    displayName: 'CodeKiln',
     typeKey: 'agent:enso',
     id: 'agent:enso',
   });
@@ -710,80 +711,31 @@ describe('typed multi-entity mentions', () => {
 });
 
 describe('mentionPopupLayout', () => {
-  const popupWidth = 280;
-  const flyoutWidth = 252;
-  const flyoutGap = 4;
+  const cardWidth = 320;
+  const openCardWidth = 320 + 4 + 252;
 
-  it('锚在 caret 左侧，左边有空间时不偏移', () => {
-    expect(
-      mentionPopupLayout({
-        anchorLeft: 48,
-        containerWidth: 640,
-        popupWidth,
-        flyoutWidth,
-        flyoutGap,
-      }).left
-    ).toBe(48);
+  it('卡片跟着锚点，右侧有空间时不偏移', () => {
+    expect(mentionPopupLayout({ anchorLeft: 40, containerWidth: 960, cardWidth }).left).toBe(40);
   });
 
-  it('caret 靠右会溢出时把弹窗夹进容器右缘', () => {
-    expect(
-      mentionPopupLayout({
-        anchorLeft: 500,
-        containerWidth: 640,
-        popupWidth,
-        flyoutWidth,
-        flyoutGap,
-      }).left
-    ).toBe(360);
+  it('锚点靠右会让卡片溢出时把卡片整体左移', () => {
+    expect(mentionPopupLayout({ anchorLeft: 900, containerWidth: 960, cardWidth }).left).toBe(640);
   });
 
-  it('caret 在容器外或为负时不小于 0', () => {
+  it('打开二级时按整张卡片宽度夹紧，二级不会被挤出容器', () => {
     expect(
-      mentionPopupLayout({
-        anchorLeft: -20,
-        containerWidth: 640,
-        popupWidth,
-        flyoutWidth,
-        flyoutGap,
-      }).left
+      mentionPopupLayout({ anchorLeft: 900, containerWidth: 960, cardWidth: openCardWidth }).left
+    ).toBe(960 - openCardWidth);
+  });
+
+  it('锚点在容器外或为负时不小于 0', () => {
+    expect(mentionPopupLayout({ anchorLeft: -20, containerWidth: 640, cardWidth }).left).toBe(0);
+  });
+
+  it('卡片比容器还宽时仍贴左，避免负 left', () => {
+    expect(
+      mentionPopupLayout({ anchorLeft: 80, containerWidth: 400, cardWidth: openCardWidth }).left
     ).toBe(0);
-  });
-
-  it('弹窗比容器还宽时仍贴左，避免负 left', () => {
-    expect(
-      mentionPopupLayout({
-        anchorLeft: 80,
-        containerWidth: 200,
-        popupWidth,
-        flyoutWidth,
-        flyoutGap,
-      }).left
-    ).toBe(0);
-  });
-
-  it('夹紧后右侧仍放得下 flyout 时向右展开', () => {
-    expect(
-      mentionPopupLayout({
-        anchorLeft: 40,
-        containerWidth: 640,
-        popupWidth,
-        flyoutWidth,
-        flyoutGap,
-      }).flyoutSide
-    ).toBe('right');
-  });
-
-  it('贴右后右侧不够放 flyout 时翻到左边', () => {
-    expect(
-      mentionPopupLayout({
-        anchorLeft: 500,
-        containerWidth: 640,
-        popupWidth,
-        flyoutWidth,
-        flyoutGap,
-      }).flyoutSide
-    ).toBe('left');
   });
 
   describe('cleanTitleSummarySource：清洗送给标题总结模型的输入源', () => {
@@ -864,5 +816,20 @@ describe('mentionPopupLayout', () => {
       );
       expect(extractRepresentativeTitle(`${pasted}\u00a0`)).toBe('pasted-text.txt');
     });
+  });
+});
+
+describe('mentionPopupMaxHeight', () => {
+  it('上方空间充足时用弹窗自己的上限', () => {
+    expect(mentionPopupMaxHeight({ composerTop: 700, margin: 8, cap: 288 })).toBe(288);
+  });
+
+  it('窗口矮时只给输入框上方真正能用的高度，避免顶出窗口被截断', () => {
+    expect(mentionPopupMaxHeight({ composerTop: 180, margin: 8, cap: 288 })).toBe(172);
+  });
+
+  it('几乎没有空间时不返回负数', () => {
+    expect(mentionPopupMaxHeight({ composerTop: 4, margin: 8, cap: 288 })).toBe(0);
+    expect(mentionPopupMaxHeight({ composerTop: -20, margin: 8, cap: 288 })).toBe(0);
   });
 });

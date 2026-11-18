@@ -85,7 +85,7 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
     <section className="space-y-3" data-settings-row="plugins.market" data-slot="plugin-market">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="mr-auto font-semibold text-sm">
-          {t('Collabra plugin market')}{' '}
+          {t('CodeKiln plugin market')}{' '}
           <span data-slot="market-id" className="font-normal text-muted-foreground text-xs">
             {marketId}
           </span>

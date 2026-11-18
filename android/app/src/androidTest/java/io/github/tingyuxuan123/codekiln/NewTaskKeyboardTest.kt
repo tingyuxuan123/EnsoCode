@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.view.KeyEvent
 import androidx.activity.compose.setContent
@@ -11,7 +11,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
+import io.github.tingyuxuan123.codekiln.ui.NewTaskUiState
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -25,7 +25,7 @@ class NewTaskKeyboardTest {
     @Test fun composerStaysJustAboveKeyboardAndReturnsWhenDismissed() {
         // Keep the real activity window but make the composer available without pairing.
         compose.activityRule.scenario.onActivity { activity ->
-            activity.setContent { EavesApp(state = NewTaskUiState(online = true)) }
+            activity.setContent { CodeKilnApp(state = NewTaskUiState(online = true)) }
         }
         val send = compose.onNodeWithContentDescription("发送")
         val restingBottom = send.fetchSemanticsNode().boundsInWindow.bottom

@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.FrameReplay
-import io.github.tingyuxuan123.eaves.pair.ReplayRole
+import io.github.tingyuxuan123.codekiln.pair.FrameReplay
+import io.github.tingyuxuan123.codekiln.pair.ReplayRole
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -1063,7 +1063,7 @@ class DesktopSessionLinkTest {
         val sockets = mutableListOf<FakeSocket>()
         var host = FrameReplay(key, ReplayRole.Host, announce = true)
         val socket get() = sockets.last()
-        val link = DesktopLink(PairCredentials("pair-1", "token", key, "Eaves", "https://example.test"),
+        val link = DesktopLink(PairCredentials("pair-1", "token", key, "CodeKiln", "https://example.test"),
             ::modern, false, StandardTestDispatcher(scope.testScheduler), ::elapsedMillis, ::jitter,
             ::openSocket, wallMillis = ::wallMillis)
         val state get() = link.state.value

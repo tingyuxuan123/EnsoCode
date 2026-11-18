@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -40,10 +40,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewFrame
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewFrame
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewState
 import kotlin.math.max
 import kotlin.math.roundToInt
 

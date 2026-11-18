@@ -1,6 +1,6 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
-import io.github.tingyuxuan123.eaves.mirror.SessionImage
+import io.github.tingyuxuan123.codekiln.mirror.SessionImage
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent

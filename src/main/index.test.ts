@@ -162,7 +162,7 @@ describe('Main userData isolation', () => {
     );
   });
 
-  it('defaults development userData to the isolated enso-code-dev profile', async () => {
+  it('keeps the existing enso-code-dev profile isolated after rebranding', async () => {
     await import('./index');
     await new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -172,7 +172,7 @@ describe('Main userData isolation', () => {
     );
   });
 
-  it('ignores ENSO_USER_DATA_DIR in packaged builds', async () => {
+  it('keeps the existing enso-code profile in packaged builds even with an override', async () => {
     mocks.isPackaged = true;
     process.env.ENSO_USER_DATA_DIR = '/tmp/must-not-be-used';
     await import('./index');

@@ -29,8 +29,8 @@ afterEach(async () => {
 });
 
 describe('BrowserNewTab layout', () => {
-  it('内嵌浏览器使用 Collabra 品牌', () => {
-    expect(container.querySelector('h2')?.textContent).toBe('Collabra Browser');
+  it('内嵌浏览器使用 CodeKiln 品牌', () => {
+    expect(container.querySelector('h2')?.textContent).toBe('CodeKiln Browser');
   });
   it('centers the content block horizontally and vertically inside the panel', () => {
     const shell = container.querySelector(':scope > div');

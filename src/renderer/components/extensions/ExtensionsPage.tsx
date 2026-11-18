@@ -282,7 +282,7 @@ export function ExtensionsPage({
         id: plugin.id,
         name: plugin.name,
         description: plugin.description,
-        source: 'Collabra plugins',
+        source: 'CodeKiln plugins',
         version: plugin.version,
         status: plugin.pendingVersion
           ? 'Pending permission approval'
@@ -918,7 +918,7 @@ export function ExtensionsPage({
           if (!open) setRemoveTarget(null);
         }}
         title={t('Remove extension?')}
-        description={t('This removes the entry from Collabra without deleting the original files.')}
+        description={t('This removes the entry from CodeKiln without deleting the original files.')}
         confirmLabel={t('Remove')}
         onConfirm={() => {
           if (removeTarget?.kind === 'skill') removeSkill(removeTarget.id);
@@ -970,8 +970,8 @@ export function ExtensionsPage({
             <DialogTitle>{authorGuideTitle}</DialogTitle>
             <DialogDescription>
               {locale === 'zh'
-                ? '在Collabra源码目录运行以下命令。校验不会执行插件代码。'
-                : 'Run these commands from a Collabra source checkout. Validation does not run plugin code.'}
+                ? '在CodeKiln源码目录运行以下命令。校验不会执行插件代码。'
+                : 'Run these commands from a CodeKiln source checkout. Validation does not run plugin code.'}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>

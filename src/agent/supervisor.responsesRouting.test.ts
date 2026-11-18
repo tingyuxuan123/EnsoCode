@@ -133,7 +133,7 @@ function payloadRecord(payload: unknown): Record<string, unknown> {
 
 function expectConfiguredHeaders(request: CapturedRequest): void {
   expect(request.headers.get('authorization')).toBe(`Bearer ${API_KEY}`);
-  expect(request.headers.get('user-agent')).toMatch(/^enso-code\//);
+  expect(request.headers.get('user-agent')).toMatch(/^codekiln\//);
   expect(request.headers.get('x-fixture-caller')).toBe('retained');
 }
 

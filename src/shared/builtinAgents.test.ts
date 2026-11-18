@@ -63,7 +63,7 @@ describe('agentTypeDisplayName', () => {
   it('maps type keys to human-readable names', () => {
     expect(agentTypeDisplayName(`custom:${CUSTOM_ID}`, custom)).toBe('reviewer-x');
     expect(agentTypeDisplayName('builtin:scout', custom)).toBe('scout');
-    expect(agentTypeDisplayName(ENSO_AGENT_TYPE_KEY, custom)).toBe('Collabra');
+    expect(agentTypeDisplayName(ENSO_AGENT_TYPE_KEY, custom)).toBe('CodeKiln');
   });
 
   it('keeps legacy plain names and falls back for unknown custom ids', () => {
@@ -75,8 +75,8 @@ describe('agentTypeDisplayName', () => {
 
   it('旧系统协作者实例只在展示时换品牌，不改存储名或其他 Agent 名称', () => {
     const name = 'Enso · a1';
-    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, name)).toBe('Collabra · a1');
-    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, 'Enso-1234')).toBe('Collabra-1234');
+    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, name)).toBe('CodeKiln · a1');
+    expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, 'Enso-1234')).toBe('CodeKiln-1234');
     expect(agentInstanceDisplayName(ENSO_AGENT_TYPE_KEY, '我的配置助手')).toBe('我的配置助手');
     expect(agentInstanceDisplayName('builtin:worker', name)).toBe(name);
     expect(name).toBe('Enso · a1');
@@ -102,7 +102,7 @@ describe('AgentType registry and locked Enso profile', () => {
     });
     expect(snapshot.candidates[0]).toMatchObject({
       typeKey: ENSO_AGENT_TYPE_KEY,
-      displayName: 'Collabra',
+      displayName: 'CodeKiln',
       source: 'system',
       locked: true,
       canDisable: false,
@@ -115,7 +115,7 @@ describe('AgentType registry and locked Enso profile', () => {
     for (const name of [
       'Enso',
       ' ENSO ',
-      'Collabra',
+      'CodeKiln',
       ' ＣＯＬＬＡＢＲＡ ',
       'agent:foo',
       'builtin:scout',
@@ -133,7 +133,7 @@ describe('AgentType registry and locked Enso profile', () => {
       customAgentTypes: [],
     });
     expect(
-      parseAgentTypeCandidate({ ...current.candidates[0], displayName: 'Collabra' })
+      parseAgentTypeCandidate({ ...current.candidates[0], displayName: 'CodeKiln' })
     ).not.toBeNull();
     expect(
       parseAgentTypeRegistrySnapshot({

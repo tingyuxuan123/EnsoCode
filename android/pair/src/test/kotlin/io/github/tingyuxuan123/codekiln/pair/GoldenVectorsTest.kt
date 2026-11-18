@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import java.io.File
 import kotlinx.serialization.json.Json
@@ -16,7 +16,7 @@ import org.junit.Test
 
 class GoldenVectorsTest {
     private fun vectors(file: String): JsonObject {
-        val directory = System.getProperty("eaves.pair.vectors") ?: error("Missing Gradle vector directory")
+        val directory = System.getProperty("codekiln.pair.vectors") ?: error("Missing Gradle vector directory")
         return Json.parseToJsonElement(File(directory, "$file.json").readText(Charsets.UTF_8)).jsonObject.also {
             assertEquals("Unsupported $file vector format", 1, it.getValue("version").jsonPrimitive.int)
         }

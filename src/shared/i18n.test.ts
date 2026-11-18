@@ -9,16 +9,16 @@ import {
 } from './i18n';
 import { BUILTIN_TOOLS } from './types/builtinTools';
 
-it('translates Collabra branding without falling back to English keys', () => {
-  expect(translate('zh', 'Welcome to Collabra')).toBe('欢迎使用Collabra');
-  expect(translate('zh', 'Open inside Collabra')).toBe('在Collabra内打开');
-  expect(translate('zh', 'That is not a Collabra pairing link.')).toBe('这不是Collabra配对链接。');
-  expect(translate('zh', 'This file is not a valid Collabra team file.')).toBe(
-    '该文件不是有效的Collabra团队文件。'
+it('translates CodeKiln branding without falling back to English keys', () => {
+  expect(translate('zh', 'Welcome to CodeKiln')).toBe('欢迎使用CodeKiln');
+  expect(translate('zh', 'Open inside CodeKiln')).toBe('在CodeKiln内打开');
+  expect(translate('zh', 'That is not a CodeKiln pairing link.')).toBe('这不是CodeKiln配对链接。');
+  expect(translate('zh', 'This file is not a valid CodeKiln team file.')).toBe(
+    '该文件不是有效的CodeKiln团队文件。'
   );
-  expect(translate('zh', 'Ask Collabra')).toBe('询问 Collabra');
-  expect(translate('zh', 'Need help choosing a setup? Ask Collabra.')).toBe(
-    '不确定如何配置？询问 Collabra。'
+  expect(translate('zh', 'Ask CodeKiln')).toBe('询问 CodeKiln');
+  expect(translate('zh', 'Need help choosing a setup? Ask CodeKiln.')).toBe(
+    '不确定如何配置？询问 CodeKiln。'
   );
 });
 
@@ -159,7 +159,7 @@ const MODEL_CENTER_ENSO_I18N_KEYS = [
   'Default model changed: {{previous}} → {{next}}',
   'Subscription credentials could not be loaded: {{error}}',
   // Typed Agent recipient, child TAB, and parent notifications
-  'Ask Collabra',
+  'Ask CodeKiln',
   'Type @ to choose a file or Agent',
   'Create or select a project to start a conversation',
   'Agents',

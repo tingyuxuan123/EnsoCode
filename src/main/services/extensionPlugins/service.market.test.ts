@@ -455,7 +455,7 @@ function signedMarketFixture(options: { marketId?: string } = {}) {
     plugins: [
       {
         id: 'collabra.paper',
-        name: 'Collabra Paper',
+        name: 'CodeKiln Paper',
         description: 'Original neutral theme',
         tier: 'official',
         category: 'themes',

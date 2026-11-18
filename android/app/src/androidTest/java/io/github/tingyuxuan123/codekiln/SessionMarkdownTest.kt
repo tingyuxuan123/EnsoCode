@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.content.ClipboardManager
 import android.content.Context
@@ -13,8 +13,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performFirstLinkClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.SessionMarkdown
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.SessionMarkdown
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -35,7 +35,7 @@ class SessionMarkdownTest {
     }
 
     @Test fun pairingDeepLinksAndLocalFilesAreNotLaunchedFromAgentText() {
-        val opened = show("[配对](enso://pair?test=true)\n\n[文件](file:///data/local/tmp/test)")
+        val opened = show("[配对](codekiln://pair?test=true)\n\n[文件](file:///data/local/tmp/test)")
         clickLink("配对")
         clickLink("文件")
         compose.runOnIdle { assertEquals(emptyList<String>(), opened) }

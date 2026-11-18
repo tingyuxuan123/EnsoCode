@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import io.github.tingyuxuan123.eaves.mirror.*
+import io.github.tingyuxuan123.codekiln.mirror.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

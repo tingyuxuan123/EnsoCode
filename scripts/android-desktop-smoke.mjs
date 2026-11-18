@@ -18,15 +18,15 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
 if (!sdk) throw new Error('ANDROID_HOME must identify the local Android SDK');
 const adb = path.join(sdk, 'platform-tools', process.platform === 'win32' ? 'adb.exe' : 'adb');
-const serial = process.env.EAVES_TEST_EMULATOR ?? 'emulator-5554';
-const pkg = 'io.github.tingyuxuan123.eaves';
+const serial = process.env.CODEKILN_TEST_EMULATOR ?? 'emulator-5554';
+const pkg = 'io.github.tingyuxuan123.codekiln';
 const runner = `${pkg}.test/androidx.test.runner.AndroidJUnitRunner`;
-const output = path.join(root, 'temp/eaves-real-desktop');
-const botMode = process.env.EAVES_DESKTOP_BOT_SMOKE === '1';
-const threadMode = botMode && process.env.EAVES_DESKTOP_BOT_THREADS_SMOKE === '1';
-const memberMode = botMode && process.env.EAVES_DESKTOP_BOT_MEMBERS_SMOKE === '1';
+const output = path.join(root, 'temp/codekiln-real-desktop');
+const botMode = process.env.CODEKILN_DESKTOP_BOT_SMOKE === '1';
+const threadMode = botMode && process.env.CODEKILN_DESKTOP_BOT_THREADS_SMOKE === '1';
+const memberMode = botMode && process.env.CODEKILN_DESKTOP_BOT_MEMBERS_SMOKE === '1';
 // macOS aliases /var to /private/var; the worker records the canonical cwd.
-const temporary = await realpath(await mkdtemp(path.join(tmpdir(), 'eaves-real-desktop-')));
+const temporary = await realpath(await mkdtemp(path.join(tmpdir(), 'codekiln-real-desktop-')));
 const profile = path.join(temporary, 'profile');
 const project = path.join(temporary, 'selected-project');
 const children = [];
@@ -101,7 +101,7 @@ function instrument(method, extras, testClass = 'RealDesktopLoopbackTest') {
   for (const [key, value] of Object.entries(extras)) args.push('-e', key, value);
   const result = command(adb, ['-s', serial, ...args, runner], 150_000).toString('utf8');
   if (!/OK \(1 test\)/.test(result) || /FAILURES!!!|INSTRUMENTATION_FAILED/.test(result)) {
-    const encoded = extras.eavesDesktopInviteB64;
+    const encoded = extras.codekilnDesktopInviteB64;
     const detail = encoded
       ? result
           .replaceAll(encoded, '<invite>')
@@ -299,7 +299,7 @@ try {
     .subarray(0, 16)
     .toString('base64url');
   instrument('pairCreateAndReceive', {
-    eavesDesktopInviteB64: Buffer.from(invite).toString('base64url'),
+    codekilnDesktopInviteB64: Buffer.from(invite).toString('base64url'),
   });
   const inspect = async () =>
     evaluate(
@@ -333,8 +333,8 @@ try {
   android('shell', 'am', 'force-stop', pkg);
   try {
     instrument('restoreAndOpen', {
-      eavesDesktopExpectedId: expectedId,
-      eavesDesktopTaskId: evidence.id,
+      codekilnDesktopExpectedId: expectedId,
+      codekilnDesktopTaskId: evidence.id,
     });
   } catch (error) {
     console.error(
@@ -352,9 +352,9 @@ try {
   const afterRestore = (await endpoint()).count;
   if (afterRestore !== 1) throw new Error('Process restore duplicated a model request');
   instrument('verifyQueueDrainsAfterCurrentTurn', {
-    eavesDesktopExpectedId: expectedId,
-    eavesDesktopTaskId: evidence.id,
-    eavesDesktopQueue: '1',
+    codekilnDesktopExpectedId: expectedId,
+    codekilnDesktopTaskId: evidence.id,
+    codekilnDesktopQueue: '1',
   });
   await waitUntil(async () => (await inspect()).status === 'idle', {
     timeout: 10_000,
@@ -375,12 +375,12 @@ try {
   ) {
     throw new Error('Queue did not drain exactly once with the edited message');
   }
-  const imageMode = process.env.EAVES_DESKTOP_IMAGE_SMOKE === '1';
+  const imageMode = process.env.CODEKILN_DESKTOP_IMAGE_SMOKE === '1';
   if (imageMode) {
     instrument('verifyImagePickedAndSent', {
-      eavesDesktopExpectedId: expectedId,
-      eavesDesktopTaskId: evidence.id,
-      eavesDesktopImage: '1',
+      codekilnDesktopExpectedId: expectedId,
+      codekilnDesktopTaskId: evidence.id,
+      codekilnDesktopImage: '1',
     });
     const proof = JSON.parse(
       android('exec-out', 'run-as', pkg, 'cat', 'cache/desktop-image-proof.json').toString('utf8')
@@ -407,13 +407,13 @@ try {
       throw new Error('Worker did not dispatch the exact picked image bytes once');
     }
   }
-  const goalMode = process.env.EAVES_DESKTOP_GOAL_SMOKE === '1';
+  const goalMode = process.env.CODEKILN_DESKTOP_GOAL_SMOKE === '1';
   if (goalMode) {
     const beforeGoal = (await endpoint()).count;
     instrument('verifyGoalLifecycle', {
-      eavesDesktopExpectedId: expectedId,
-      eavesDesktopTaskId: evidence.id,
-      eavesDesktopGoal: '1',
+      codekilnDesktopExpectedId: expectedId,
+      codekilnDesktopTaskId: evidence.id,
+      codekilnDesktopGoal: '1',
     });
     const afterGoal = await inspect();
     const goalTurns = afterGoal.history?.ok
@@ -452,9 +452,9 @@ try {
     const chatId = chat.chat.id;
     const beforeBot = (await endpoint()).count;
     instrument('verifyBotSendAndStop', {
-      eavesDesktopExpectedId: expectedId,
-      eavesDesktopBotChat: chatId,
-      ...(threadMode ? { eavesDesktopBotThreads: '1' } : {}),
+      codekilnDesktopExpectedId: expectedId,
+      codekilnDesktopBotChat: chatId,
+      ...(threadMode ? { codekilnDesktopBotThreads: '1' } : {}),
     });
     if (threadMode) {
       const snapshot = await evaluate('window.electronAPI.bots.chats()');
@@ -490,8 +490,8 @@ try {
     }
     if (memberMode) {
       instrument('verifyMemberCreationAndDirectHistory', {
-        eavesDesktopExpectedId: expectedId,
-        eavesDesktopBotMembers: '1',
+        codekilnDesktopExpectedId: expectedId,
+        codekilnDesktopBotMembers: '1',
       });
       const snapshot = await evaluate('window.electronAPI.bots.chats()');
       const direct = snapshot?.chats?.filter((row) => row.kind === 'direct');
@@ -512,16 +512,16 @@ try {
       }
     }
   }
-  const modelMode = process.env.EAVES_DESKTOP_MODEL_SMOKE === '1';
+  const modelMode = process.env.CODEKILN_DESKTOP_MODEL_SMOKE === '1';
   const shellTool = ['powershell', 'bash'].find((name) =>
     requests.requests[0]?.toolNames?.includes(name)
   );
   if (!shellTool) throw new Error('No supported command tool advertised by the worker');
   instrument('verifyApprovalAndUnpair', {
-    eavesDesktopExpectedId: expectedId,
-    eavesDesktopTaskId: evidence.id,
-    eavesDesktopTool: shellTool,
-    ...(modelMode ? { eavesDesktopModel: '1' } : {}),
+    codekilnDesktopExpectedId: expectedId,
+    codekilnDesktopTaskId: evidence.id,
+    codekilnDesktopTool: shellTool,
+    ...(modelMode ? { codekilnDesktopModel: '1' } : {}),
   });
   const afterApproval = await inspect();
   if (
@@ -543,9 +543,9 @@ try {
     });
     const beforeSwitch = (await endpoint()).count;
     instrument('verifySessionModelSwitch', {
-      eavesDesktopExpectedId: expectedId,
-      eavesDesktopTaskId: evidence.id,
-      eavesDesktopModel: '1',
+      codekilnDesktopExpectedId: expectedId,
+      codekilnDesktopTaskId: evidence.id,
+      codekilnDesktopModel: '1',
     });
     const switched = await inspect();
     const dispatched = (await endpoint()).requests.slice(beforeSwitch);
@@ -669,7 +669,11 @@ try {
   let clean = true;
   if (expectedId) {
     try {
-      instrument('cleanupLoopbackFixture', { eavesPairCleanup: expectedId }, 'PairingLoopbackTest');
+      instrument(
+        'cleanupLoopbackFixture',
+        { codekilnPairCleanup: expectedId },
+        'PairingLoopbackTest'
+      );
     } catch {
       clean = false;
       console.error('App fixture cleanup needs attention.');

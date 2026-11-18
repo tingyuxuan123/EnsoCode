@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.graphics.Bitmap
 import android.app.Notification
@@ -21,16 +21,16 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
-import io.github.tingyuxuan123.eaves.mirror.RelayPairingClient
-import io.github.tingyuxuan123.eaves.pair.PairEncoding
+import io.github.tingyuxuan123.codekiln.mirror.AndroidPairCredentialStore
+import io.github.tingyuxuan123.codekiln.mirror.RelayPairingClient
+import io.github.tingyuxuan123.codekiln.pair.PairEncoding
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -42,7 +42,7 @@ class PairingLoopbackTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     @Test fun claimAndShowAuthenticatedCatalog() {
-        val encoded = InstrumentationRegistry.getArguments().getString("eavesPairInviteB64")
+        val encoded = InstrumentationRegistry.getArguments().getString("codekilnPairInviteB64")
         assumeTrue("Run with a disposable loopback invite", BuildConfig.DEBUG && encoded != null)
         val invite = PairEncoding.fromBase64Url(requireNotNull(encoded)).toString(Charsets.UTF_8)
         // The checked test runner starts with an isolated emulator install, not an existing pair.
@@ -62,15 +62,15 @@ class PairingLoopbackTest {
 
     @Test fun restoreAfterProcessRestartAndUnpair() {
         assumeTrue("Run after the loopback claim in a new process", BuildConfig.DEBUG &&
-            InstrumentationRegistry.getArguments().getString("eavesPairRestore") == "1")
+            InstrumentationRegistry.getArguments().getString("codekilnPairRestore") == "1")
         val saved = requireNotNull(store().load())
-        assertEquals(InstrumentationRegistry.getArguments().getString("eavesPairExpectedId"), saved.pairId)
+        assertEquals(InstrumentationRegistry.getArguments().getString("codekilnPairExpectedId"), saved.pairId)
         require(saved.relayUrl.startsWith("http://127.0.0.1:"))
         assertEquals(1, saved.replayVersion)
         compose.onNodeWithContentDescription("打开任务列表").performClick()
         await("Fake host demo")
         screenshot("pair-catalog-dark.png")
-        val sessionFlow = InstrumentationRegistry.getArguments().getString("eavesSessionFlow") == "1"
+        val sessionFlow = InstrumentationRegistry.getArguments().getString("codekilnSessionFlow") == "1"
         if (sessionFlow) {
             compose.onNodeWithText("Fake host demo").performClick()
             await("它想运行一条命令")
@@ -149,7 +149,7 @@ class PairingLoopbackTest {
     }
 
     @Test fun cleanupLoopbackFixture() = runBlocking {
-        val expected = InstrumentationRegistry.getArguments().getString("eavesPairCleanup")
+        val expected = InstrumentationRegistry.getArguments().getString("codekilnPairCleanup")
         assumeTrue("Cleanup only a specifically named disposable fixture", BuildConfig.DEBUG && expected != null)
         val credentials = store().load() ?: return@runBlocking
         require(credentials.pairId == expected && credentials.relayUrl.startsWith("http://127.0.0.1:"))
@@ -159,7 +159,7 @@ class PairingLoopbackTest {
 
     @Test fun backgroundWatchPostsAndOpensAuthenticatedTask() {
         val args = InstrumentationRegistry.getArguments()
-        val expected = args.getString("eavesWatchPairId")
+        val expected = args.getString("codekilnWatchPairId")
         assumeTrue(BuildConfig.DEBUG && expected != null)
         val saved = requireNotNull(store().load())
         require(saved.pairId == expected && saved.relayUrl.startsWith("http://127.0.0.1:"))
@@ -167,7 +167,7 @@ class PairingLoopbackTest {
         val context = instrumentation.targetContext
         val manager = context.getSystemService(NotificationManager::class.java)
         val power = context.getSystemService(PowerManager::class.java)
-        val controller = (compose.activity.application as EavesApplication).companion
+        val controller = (compose.activity.application as CodeKilnApplication).companion
         try {
             compose.onNodeWithContentDescription("打开任务列表").performClick()
             compose.onNodeWithText("连接电脑").performClick()

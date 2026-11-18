@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 /**
  * Compact token labels never round a value up into the next unit, so a bar or badge cannot

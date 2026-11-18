@@ -242,7 +242,7 @@ export function SessionDrawer(props: Props) {
             )}
             {docked && <img src="/icons/logo-192.png" alt="" className="mr-1.5 size-6 shrink-0" />}
             <h1 className="shrink-0 text-[22px] leading-7 font-bold tracking-[-0.01em]">
-              Collabra
+              CodeKiln
             </h1>
             <span className="ml-1 flex h-6 min-w-0 items-center gap-1.5 rounded-full bg-card2/70 px-2">
               <span

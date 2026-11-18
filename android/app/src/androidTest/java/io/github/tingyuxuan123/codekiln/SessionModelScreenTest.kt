@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
@@ -11,21 +11,21 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.DesktopLinkState
-import io.github.tingyuxuan123.eaves.mirror.DesktopModel
-import io.github.tingyuxuan123.eaves.mirror.DesktopModelAttempt
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
-import io.github.tingyuxuan123.eaves.mirror.DesktopThinkingAttempt
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
-import io.github.tingyuxuan123.eaves.ui.PairUiState
-import io.github.tingyuxuan123.eaves.ui.TaskStatus
-import io.github.tingyuxuan123.eaves.ui.TaskSummary
+import io.github.tingyuxuan123.codekiln.mirror.DesktopLinkState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopModel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopModelAttempt
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.mirror.DesktopThinkingAttempt
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.ui.NewTaskUiState
+import io.github.tingyuxuan123.codekiln.ui.PairUiState
+import io.github.tingyuxuan123.codekiln.ui.TaskStatus
+import io.github.tingyuxuan123.codekiln.ui.TaskSummary
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -119,7 +119,7 @@ class SessionModelScreenTest {
     private fun showSession(live: () -> DesktopLinkState, onReasoning: ((String, Boolean) -> Unit)? = null,
         onThinking: ((String, TaskThinkingLevel) -> Unit)? = null, onSetModel: (String, String, String) -> Unit) {
         compose.setContent {
-            EavesApp(initialRoute = EavesRoute.Home, state = NewTaskUiState(online = true, tasks = listOf(
+            CodeKilnApp(initialRoute = CodeKilnRoute.Home, state = NewTaskUiState(online = true, tasks = listOf(
                 TaskSummary(task.id, task.title, task.projectName, "刚刚", TaskStatus.Running))),
                 pairState = PairUiState(paired = true), live = live(), onSelectSession = {}, onSessionModel = onSetModel,
                 onSessionReasoning = onReasoning, onSessionThinking = onThinking)

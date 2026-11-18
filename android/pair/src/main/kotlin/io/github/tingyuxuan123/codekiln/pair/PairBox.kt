@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import com.iwebpp.crypto.TweetNaclFast
 import com.iwebpp.crypto.TweetNaclFast.Box

@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
@@ -17,27 +17,27 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotChat
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotInboxItem
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotMember
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotsState
-import io.github.tingyuxuan123.eaves.mirror.DesktopGroupEntry
-import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotThreadAction
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotGroupCreate
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifact
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifacts
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
-import io.github.tingyuxuan123.eaves.mirror.DesktopFilesState
-import io.github.tingyuxuan123.eaves.mirror.DesktopFileEntry
-import io.github.tingyuxuan123.eaves.mirror.DesktopFileChunk
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.pair.SessionMessage
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.pair.SessionAsk
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.MembersScreen
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotChat
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotInboxItem
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotMember
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotsState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopGroupEntry
+import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotThreadAction
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotGroupCreate
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifact
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifacts
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFilesState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileEntry
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileChunk
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.pair.SessionMessage
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.pair.SessionAsk
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.MembersScreen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -89,7 +89,7 @@ class MembersScreenTest {
     @Test fun aRunningChatCanBeStoppedAndAMessageSentOnce() {
         val sent = mutableListOf<Pair<String, String>>()
         val stopped = mutableListOf<String>()
-        val running = bots.copy(chatStates = mapOf("c1" to io.github.tingyuxuan123.eaves.mirror.DesktopBotChatState(
+        val running = bots.copy(chatStates = mapOf("c1" to io.github.tingyuxuan123.codekiln.mirror.DesktopBotChatState(
             "c1", "b2", emptyList(), 1, false)))
         val state = mutableStateOf(running)
         compose.setContent { EnsoTheme {
@@ -105,8 +105,8 @@ class MembersScreenTest {
         compose.onNodeWithContentDescription("发送到成员").performClick()
         assertEquals(listOf("c1" to " 看下错误日志 "), sent)
         compose.runOnIdle { state.value = running.copy(
-            send = io.github.tingyuxuan123.eaves.mirror.DesktopBotSendAttempt(
-                "d1", "c1", "x", io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase.Unconfirmed)) }
+            send = io.github.tingyuxuan123.codekiln.mirror.DesktopBotSendAttempt(
+                "d1", "c1", "x", io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase.Unconfirmed)) }
         compose.onNodeWithText("发送未确认，请先检查桌面。").assertIsDisplayed()
     }
 
@@ -132,18 +132,18 @@ class MembersScreenTest {
         compose.onNodeWithContentDescription("发送到成员").performClick()
         assertEquals(listOf("c1" to "  保留这份草稿  "), sent)
         compose.onNodeWithContentDescription("群聊消息").assertTextEquals("  保留这份草稿  ")
-        val waiting = io.github.tingyuxuan123.eaves.mirror.DesktopBotSendAttempt(
-            requireNotNull(deliveryId), "c1", "保留这份草稿", io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase.Waiting)
+        val waiting = io.github.tingyuxuan123.codekiln.mirror.DesktopBotSendAttempt(
+            requireNotNull(deliveryId), "c1", "保留这份草稿", io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase.Waiting)
         compose.runOnIdle { state.value = bots.copy(send = waiting) }
         compose.onNodeWithContentDescription("发送到成员").assertIsNotEnabled()
         compose.runOnIdle { state.value = bots.copy(send = waiting.copy(
-            phase = io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase.Unconfirmed)) }
+            phase = io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase.Unconfirmed)) }
         compose.onNodeWithContentDescription("返回成员列表").performClick()
         compose.onNodeWithText("修复登录").performClick()
         compose.onNodeWithContentDescription("群聊消息").assertTextEquals("  保留这份草稿  ")
         compose.onNodeWithContentDescription("群聊消息").performTextReplacement("后来编辑的草稿")
         compose.runOnIdle { state.value = bots.copy(send = waiting.copy(
-            phase = io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase.Observed)) }
+            phase = io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase.Observed)) }
         compose.onNodeWithContentDescription("群聊消息").assertTextEquals("后来编辑的草稿")
     }
 

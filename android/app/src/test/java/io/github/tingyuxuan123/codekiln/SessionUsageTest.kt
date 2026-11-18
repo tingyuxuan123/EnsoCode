@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.ui.contextPercent
-import io.github.tingyuxuan123.eaves.ui.tokenCount
+import io.github.tingyuxuan123.codekiln.ui.contextPercent
+import io.github.tingyuxuan123.codekiln.ui.tokenCount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

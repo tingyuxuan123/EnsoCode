@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TaskPresentationTest {
-    private fun task(id: String, status: TaskStatus, project: String? = "Eaves", pinned: Boolean = false) =
+    private fun task(id: String, status: TaskStatus, project: String? = "CodeKiln", pinned: Boolean = false) =
         TaskSummary(id, "Task $id", project, "刚刚", status, pinned)
 
     @Test fun `看板优先显示等待处理再显示运行中但不改变同类顺序`() {
@@ -28,7 +28,7 @@ class TaskPresentationTest {
 
     @Test fun `搜索同时匹配标题和项目且忽略大小写及两侧空白`() {
         val tasks = listOf(task("a", TaskStatus.Running), task("b", TaskStatus.Done, "Other"))
-        assertEquals(listOf("a"), visibleTasks(tasks, " eAvEs ").map { it.id })
+        assertEquals(listOf("a"), visibleTasks(tasks, " cOdEkIlN ").map { it.id })
         assertEquals(listOf("b"), visibleTasks(tasks, "task B").map { it.id })
         assertEquals(tasks, visibleTasks(tasks, "  "))
     }
@@ -38,14 +38,14 @@ class TaskPresentationTest {
             task("one", TaskStatus.Waiting), task("two", TaskStatus.Running),
             task("three", TaskStatus.Waiting, "Other"),
         )
-        assertEquals(listOf("one"), visibleTasks(tasks, "task", TaskStatus.Waiting, "Eaves").map { it.id })
-        assertEquals(emptyList<TaskSummary>(), visibleTasks(tasks, "missing", TaskStatus.Waiting, "Eaves"))
+        assertEquals(listOf("one"), visibleTasks(tasks, "task", TaskStatus.Waiting, "CodeKiln").map { it.id })
+        assertEquals(emptyList<TaskSummary>(), visibleTasks(tasks, "missing", TaskStatus.Waiting, "CodeKiln"))
     }
 
     @Test fun `无项目的对话可以搜索且置顶保持原始权威顺序`() {
         val tasks = listOf(task("plain", TaskStatus.Done, null), task("pin", TaskStatus.Done, pinned = true))
         assertEquals(tasks, visibleTasks(tasks))
         assertEquals(listOf("plain"), visibleTasks(tasks, "plain").map { it.id })
-        assertEquals(listOf("pin"), visibleTasks(tasks, project = "Eaves").map { it.id })
+        assertEquals(listOf("pin"), visibleTasks(tasks, project = "CodeKiln").map { it.id })
     }
 }

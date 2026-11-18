@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -13,7 +13,7 @@ class SessionWebUrlTest {
     }
 
     @Test fun `拒绝自定义协议文件相对路径用户信息与畸形网址`() {
-        for (url in listOf("enso://pair?claim=test", "file:///sdcard/app.apk", "content://foo/item",
+        for (url in listOf("codekiln://pair?claim=test", "file:///sdcard/app.apk", "content://foo/item",
             "intent://example.com/#Intent;scheme=https;end", "javascript:alert(1)", "//example.com/file",
             "https:example.com/file", "https:///file", "https://example.com@wrong.example/file",
             "https://example.com\\@wrong.example/file", "https://example.com/file\n", "https://example.com/file name")) {

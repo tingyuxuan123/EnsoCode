@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
 /** The kind of local composer a draft belongs to. Ids never cross between kinds. */
 enum class DraftKind { Session, Chat, NewTask }

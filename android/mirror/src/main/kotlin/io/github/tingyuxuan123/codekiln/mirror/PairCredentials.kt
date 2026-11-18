@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
 class PairCredentials(
     val pairId: String,

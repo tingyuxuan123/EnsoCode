@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -6,8 +6,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.CreationPhase
-import io.github.tingyuxuan123.eaves.mirror.DesktopCreation
+import io.github.tingyuxuan123.codekiln.mirror.CreationPhase
+import io.github.tingyuxuan123.codekiln.mirror.DesktopCreation
 
 @Composable
 internal fun CreationNotice(creation: DesktopCreation?, tooLong: Boolean, onReview: () -> Unit, onUnlock: () -> Unit) {

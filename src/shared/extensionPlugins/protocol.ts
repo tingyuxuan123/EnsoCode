@@ -203,7 +203,7 @@ export const PLUGIN_HOST_APIS = [
   'composer.insertText',
   'composer.replaceDraft',
   'config.get',
-  /** Collabra fork：读取发起会话的消息投影；上游用 session.list 替代 */
+  /** CodeKiln fork：读取发起会话的消息投影；上游用 session.list 替代 */
   'session.messages',
   'mcp.tools',
   'mcp.call',

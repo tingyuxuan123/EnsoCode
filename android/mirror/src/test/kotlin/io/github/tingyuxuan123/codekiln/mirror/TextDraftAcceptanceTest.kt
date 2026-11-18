@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

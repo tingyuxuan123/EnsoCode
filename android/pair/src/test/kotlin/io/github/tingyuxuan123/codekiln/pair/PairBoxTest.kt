@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import java.io.File
 import kotlinx.serialization.json.Json
@@ -15,7 +15,7 @@ import org.junit.Test
 
 class PairBoxTest {
     private val vectors = run {
-        val directory = checkNotNull(System.getProperty("eaves.pair.vectors"))
+        val directory = checkNotNull(System.getProperty("codekiln.pair.vectors"))
         Json.parseToJsonElement(File(directory, "crypto.json").readText(Charsets.UTF_8)).jsonObject.also {
             assertEquals(1, it.getValue("version").jsonPrimitive.int)
         }

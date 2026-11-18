@@ -42,7 +42,7 @@ export default function Preview() {
 				</div>
 				<div className="min-h-0 flex-1 overflow-hidden rounded-b-[18px] bg-card px-5 py-5">
 					<p className="text-[11px] leading-4 font-medium tracking-[0.08em] text-faint uppercase">
-						Collabra
+						CodeKiln
 					</p>
 					<h1 className="mt-2 text-[22px] leading-7 font-bold tracking-[-0.01em]">会话恢复没有丢消息</h1>
 					<p className="mt-2 text-[14px] leading-[22px] text-ink2">

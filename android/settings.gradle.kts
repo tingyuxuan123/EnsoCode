@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Eaves"
+rootProject.name = "CodeKiln"
 include(":app", ":pair", ":mirror")

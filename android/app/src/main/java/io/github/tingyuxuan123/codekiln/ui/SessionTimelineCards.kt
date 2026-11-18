@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,8 +31,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.pair.SessionTodo
-import io.github.tingyuxuan123.eaves.pair.SessionTodoStatus
+import io.github.tingyuxuan123.codekiln.pair.SessionTodo
+import io.github.tingyuxuan123.codekiln.pair.SessionTodoStatus
 
 /** 例行任务注入的紧凑行：标题 + 一句摘要，展开才看完整 prompt；原始标签不进 UI。 */
 @Composable

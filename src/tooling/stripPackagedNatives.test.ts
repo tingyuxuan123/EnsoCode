@@ -67,10 +67,10 @@ describe('stripPackagedNatives', () => {
   it('resolves unpacked paths and host prebuild names per platform', () => {
     expect(hostPrebuildName('darwin', 'arm64')).toBe('darwin-arm64.node');
     expect(hostPrebuildName('win32', 'x64')).toBe('win32-x64.node');
-    expect(unpackedAppDir('/out', 'darwin', 'EnsoCode')).toBe(
-      path.join('/out', 'EnsoCode.app', 'Contents', 'Resources', 'app.asar.unpacked')
+    expect(unpackedAppDir('/out', 'darwin', 'CodeKiln')).toBe(
+      path.join('/out', 'CodeKiln.app', 'Contents', 'Resources', 'app.asar.unpacked')
     );
-    expect(unpackedAppDir('/out', 'linux', 'EnsoCode')).toBe(
+    expect(unpackedAppDir('/out', 'linux', 'CodeKiln')).toBe(
       path.join('/out', 'resources', 'app.asar.unpacked')
     );
   });

@@ -28,25 +28,41 @@ export function extractMentionQuery(text: string, cursor: number): string | null
 }
 
 export interface MentionPopupLayoutInput {
-  /** @ token / 光标相对定位父级的 left */
+  /** @ token 相对聊天栏左缘的 left */
   anchorLeft: number;
+  /** 聊天栏宽度：卡片可以铺满它，但不能压到侧栏 */
   containerWidth: number;
-  popupWidth: number;
-  flyoutWidth: number;
-  flyoutGap: number;
+  /** 整张卡片宽度：一级列表 + 打开二级时的间距与二级 */
+  cardWidth: number;
 }
 
 export interface MentionPopupLayout {
   left: number;
-  flyoutSide: 'left' | 'right';
 }
 
-/** 弹窗跟锚点，夹进容器；右侧放不下 flyout 时翻到左边 */
+export interface MentionPopupMaxHeightInput {
+  /** 输入框（弹窗锚点）在视口里的顶边 */
+  composerTop: number;
+  /** 与输入框之间要留的空隙，含弹窗自己的下边距 */
+  margin: number;
+  /** 弹窗自己的最大高度上限 */
+  cap: number;
+}
+
+/** 弹窗挂在输入框上方，向上长。窗口矮或条目多时不能顶出窗口：
+ * 只给「输入框顶边减去空隙」这段真实可用的高度，剩下的靠列表自己滚动。
+ */
+export function mentionPopupMaxHeight(input: MentionPopupMaxHeightInput): number {
+  return Math.max(0, Math.min(input.cap, Math.floor(input.composerTop - input.margin)));
+}
+
+/**
+ * 一级列表与二级面板是同一张卡片的两列，按卡片整体宽度夹进聊天栏：
+ * 卡片跟着锚点，右缘不够就左移，永远不压到侧栏，二级也不会被裁掉。
+ */
 export function mentionPopupLayout(input: MentionPopupLayoutInput): MentionPopupLayout {
-  const maxLeft = Math.max(0, input.containerWidth - input.popupWidth);
-  const left = Math.min(Math.max(0, input.anchorLeft), maxLeft);
-  const spaceRight = input.containerWidth - left - input.popupWidth - input.flyoutGap;
-  return { left, flyoutSide: spaceRight >= input.flyoutWidth ? 'right' : 'left' };
+  const maxLeft = Math.max(0, input.containerWidth - input.cardWidth);
+  return { left: Math.min(Math.max(0, input.anchorLeft), maxLeft) };
 }
 
 export type PopupKeyAction =

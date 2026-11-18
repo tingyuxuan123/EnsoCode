@@ -136,8 +136,8 @@ it('图标地址更新后重新尝试加载，失败占位不会残留', async (
   expect(fallback()).toBeNull();
 });
 
-it('标题标明这是 Collabra 市场，并显示市场身份', async () => {
-  expect(container.textContent).toContain('Collabra plugin market');
+it('标题标明这是 CodeKiln 市场，并显示市场身份', async () => {
+  expect(container.textContent).toContain('CodeKiln plugin market');
   expect(container.querySelector('[data-slot="market-id"]')?.textContent).toBe('collabra');
 });
 

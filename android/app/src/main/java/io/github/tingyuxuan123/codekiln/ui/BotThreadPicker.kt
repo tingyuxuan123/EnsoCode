@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,10 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotChat
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotThreadAction
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotChat
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotThreadAction
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
 
 /** `frames/threads.tsx`. Choosing a topic changes the desktop too; do not navigate optimistically. */
 @OptIn(ExperimentalMaterial3Api::class)

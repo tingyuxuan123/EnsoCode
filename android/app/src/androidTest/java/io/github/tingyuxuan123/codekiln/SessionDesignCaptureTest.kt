@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.graphics.Bitmap
 import android.content.Intent
@@ -21,7 +21,7 @@ import java.io.File
 class SessionDesignCaptureTest {
     @get:Rule val compose = createEmptyComposeRule()
     @Test fun capture() {
-        val frame = InstrumentationRegistry.getArguments().getString("eavesDesignFrame")
+        val frame = InstrumentationRegistry.getArguments().getString("codekilnDesignFrame")
         assumeTrue(frame in setOf("session", "ask", "new-config", "queue", "members", "group", "bot"))
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val intent = Intent(context, DesignPreviewActivity::class.java).putExtra("frame", frame)

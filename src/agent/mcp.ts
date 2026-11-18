@@ -490,7 +490,7 @@ export class McpManager {
 
   private async connect(server: McpServerSpawnConfig): Promise<Connection> {
     this.emitStatus(server, 'connecting');
-    const client = new Client({ name: 'enso-code', version: '0.1.0' });
+    const client = new Client({ name: 'codekiln', version: '0.1.0' });
     let tools: Awaited<ReturnType<Client['listTools']>>['tools'];
     const connectTimeoutMs = mcpTimeoutMsOrDefault(
       server.connectTimeoutMs,

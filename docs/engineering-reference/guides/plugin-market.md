@@ -1,4 +1,4 @@
-# Collabra 精选插件市场
+# CodeKiln 精选插件市场
 
 ## 仓库与发布
 
@@ -15,7 +15,7 @@
 
 - 当前市场只认 `schemaVersion: 2`、`marketId: collabra` 及独立生产公钥；`v1/` 是 URL
   目录名，不是索引 schema 版本。公钥、主源及镜像在 `main/services/extensionPlugins/market.ts`。
-- 版本必须声明 Collabra host、插件 API 版本、应用版本范围、平台和实测界面列表。
+- 版本必须声明 CodeKiln host、插件 API 版本、应用版本范围、平台和实测界面列表。
   选择最高**兼容**版本，不盲装最新发布版；配色能加载不等于装饰覆盖所有界面。
 - 缓存和防回滚计数位于 `extension-plugins/market/collabra/`。旧的 `market/state.json`
   不参与新市场验签或 sequence 判断，不能清除新计数来绕过回滚保护。

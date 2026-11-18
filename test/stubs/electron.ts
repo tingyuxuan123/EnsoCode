@@ -4,8 +4,8 @@
  * 这里提供最小实现，让纯函数可以被单独导入测试。
  */
 export const app = {
-  getPath: (name: string) => `/tmp/enso-code-test/${name}`,
-  getName: () => 'enso-code',
+  getPath: (name: string) => `/tmp/codekiln-test/${name}`,
+  getName: () => 'codekiln',
   on: () => {},
 };
 

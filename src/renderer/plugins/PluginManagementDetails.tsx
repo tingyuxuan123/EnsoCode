@@ -45,7 +45,7 @@ export function PluginManagementDetails({
       {plugin.source?.kind === 'market' && (
         <p data-slot="plugin-source" className="text-muted-foreground">
           {plugin.source.marketId
-            ? t('Collabra market')
+            ? t('CodeKiln market')
             : t('Installed from the previous plugin market')}
         </p>
       )}

@@ -77,7 +77,7 @@ function trayIcon() {
 }
 
 function trayToggleLabel(zh: boolean): string {
-  if (trayClickAction(active) === 'show') return zh ? '打开Collabra' : 'Show Collabra';
+  if (trayClickAction(active) === 'show') return zh ? '打开CodeKiln' : 'Show CodeKiln';
   return zh ? '最小化到托盘' : 'Minimize to tray';
 }
 
@@ -131,7 +131,7 @@ function rebuildTrayMenu(): void {
       },
     ])
   );
-  tray.setToolTip('Collabra');
+  tray.setToolTip('CodeKiln');
 }
 
 function handleTrayActivate(): void {

@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import java.io.File
 import java.nio.ByteBuffer
@@ -236,7 +236,7 @@ class FrameReplayTest {
     }
 
     private fun loadVectors(): JsonObject {
-        val directory = System.getProperty("eaves.pair.vectors") ?: error("Missing Gradle vector directory")
+        val directory = System.getProperty("codekiln.pair.vectors") ?: error("Missing Gradle vector directory")
         return Json.parseToJsonElement(File(directory, "replay.json").readText()).jsonObject.also {
             assertEquals(1, it.getValue("version").jsonPrimitive.int)
         }

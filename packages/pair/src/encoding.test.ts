@@ -21,7 +21,7 @@ describe('配对 URI', () => {
   it('往返 relay + 公钥', () => {
     const publicKey = new Uint8Array(32).map((_, i) => i);
     const uri = buildPairUri({ relay: 'wss://relay.example.com', publicKey });
-    expect(uri.startsWith('enso://pair?')).toBe(true);
+    expect(uri.startsWith('codekiln://pair?')).toBe(true);
     const parsed = parsePairUri(uri);
     expect(parsed.relay).toBe('wss://relay.example.com');
     expect(Buffer.from(parsed.publicKey).equals(Buffer.from(publicKey))).toBe(true);
@@ -29,7 +29,7 @@ describe('配对 URI', () => {
 
   it('非法 URI 抛错', () => {
     expect(() => parsePairUri('https://example.com')).toThrow();
-    expect(() => parsePairUri('enso://pair?relay=x')).toThrow();
+    expect(() => parsePairUri('codekiln://pair?relay=x')).toThrow();
   });
 });
 

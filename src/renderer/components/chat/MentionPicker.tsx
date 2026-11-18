@@ -24,8 +24,12 @@ interface MentionPickerProps {
   onFolderIndexChange: (index: number) => void;
   onSelect: (candidate: MentionCandidate) => void;
   id?: string;
+  /** 整张卡片相对输入框容器的 left */
   left?: number;
-  flyoutSide?: 'left' | 'right';
+  /** 二级列宽；聊天栏窄时收窄，避免整张卡片挤出聊天栏 */
+  flyoutWidth?: number;
+  /** 输入框上方真实可用的高度；不给就用样式里的默认上限。 */
+  maxHeight?: number;
 }
 
 export function MentionPicker({
@@ -38,9 +42,10 @@ export function MentionPicker({
   onOpenFolderIdChange,
   onFolderIndexChange,
   onSelect,
+  maxHeight,
   id = 'composer-mention-picker',
   left = 0,
-  flyoutSide = 'right',
+  flyoutWidth,
 }: MentionPickerProps) {
   const { t } = useI18n();
   const items = useMemo(() => flattenMentionRoot(groups, query), [groups, query]);
@@ -115,14 +120,17 @@ export function MentionPicker({
   return (
     <div
       data-slot="mention-picker"
-      className="absolute bottom-full z-10 mb-1.5 max-w-full"
-      style={{ left }}
+      style={{
+        left,
+        ...(maxHeight === undefined ? {} : { maxHeight }),
+      }}
+      className="absolute bottom-full z-10 mb-1.5 flex max-w-[calc(100vw-16px)] overflow-hidden rounded-lg border bg-popover shadow-md"
     >
       <div
         id={id}
         role="listbox"
         aria-label={t('Mention suggestions')}
-        className="max-h-72 w-80 max-w-full overflow-y-auto rounded-lg border bg-popover p-1 shadow-md"
+        className="max-h-72 w-80 max-w-full shrink-0 overflow-y-auto p-1"
       >
         {nested ? (
           <>
@@ -186,10 +194,8 @@ export function MentionPicker({
           role="listbox"
           aria-label={folderLabels[openFolderId]}
           data-slot="mention-flyout"
-          className={cn(
-            'absolute top-0 z-20 max-h-72 w-72 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md',
-            flyoutSide === 'right' ? 'left-full ml-1' : 'right-full mr-1'
-          )}
+          style={flyoutWidth === undefined ? undefined : { width: flyoutWidth }}
+          className="max-h-72 w-72 shrink-0 overflow-y-auto border-l p-1"
         >
           {folderItems.map((candidate, index) => (
             <MentionOption

@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.PairBox
-import io.github.tingyuxuan123.eaves.pair.PairEncoding
+import io.github.tingyuxuan123.codekiln.pair.PairBox
+import io.github.tingyuxuan123.codekiln.pair.PairEncoding
 import java.io.IOException
 import java.net.ProtocolException
 import java.net.Proxy
@@ -90,7 +90,7 @@ class RelayPairingClient(private val allowLoopbackHttp: Boolean = false) {
         try {
             require(link.length <= MAX_LINK_LENGTH)
             val text = link.trim { it.isWhitespace() || it == '\uFEFF' }
-            if (!text.startsWith("enso://pair?")) {
+            if (!text.startsWith("codekiln://pair?")) {
                 // Shared invite parsing accepts URL origin fallback. Reject repaired or credentialed
                 // origins before it can discard their ambiguous authority; QR params are not requested.
                 PairRelayUrl.parse(text.substringBefore('#').substringBefore('?'), allowLoopbackHttp)

@@ -73,7 +73,7 @@ export default function Sessions() {
 				>
 					<span className="icon-[lucide--arrow-left] size-6" />
 				</Link>
-				<h1 className="shrink-0 text-[22px] leading-7 font-bold tracking-[-0.01em]">Collabra</h1>
+				<h1 className="shrink-0 text-[22px] leading-7 font-bold tracking-[-0.01em]">CodeKiln</h1>
 				<span className="ml-1 flex h-6 min-w-0 items-center gap-1.5 rounded-full bg-card2 px-2">
 					<span className="size-1.5 shrink-0 rounded-full bg-green" />
 					<span className="truncate text-[11px] leading-4 font-medium text-ink2">书房 · 已连接</span>

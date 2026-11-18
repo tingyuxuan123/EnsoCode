@@ -1,8 +1,8 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotSendAttempt
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.botMessageText
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotSendAttempt
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.botMessageText
 
 /** Local, process-memory-only text. Clicking send is not a receipt. */
 internal data class BotMessageDraft(val text: String = "", val submission: BotDraftSubmission? = null) {

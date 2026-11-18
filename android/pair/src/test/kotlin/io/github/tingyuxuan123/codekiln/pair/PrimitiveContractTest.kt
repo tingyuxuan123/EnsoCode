@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import java.util.Base64
 import javax.crypto.Cipher
@@ -47,16 +47,16 @@ class PrimitiveContractTest {
 
     @Test fun `非空坏片段不能偷偷回退到查询串`() {
         assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("https://example.com/?pk=AQ#irrelevant") }
-        assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("enso://pair?pk=AQ") }
+        assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("codekiln://pair?pk=AQ") }
         assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("file:///pair?relay=x&pk=AQ") }
-        assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("enso://pair?relay=x\n&pk=AQ") }
+        assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("codekiln://pair?relay=x\n&pk=AQ") }
         assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("https://example.com/??pk=AQ") }
     }
 
     @Test fun `参数按URLSearchParams规则处理加号百分号和空值`() {
-        val invite = PairEncoding.parsePairUri("enso://pair?relay=https%3A%2F%2Fexample.com%2Fa+b&pk=AQ")
+        val invite = PairEncoding.parsePairUri("codekiln://pair?relay=https%3A%2F%2Fexample.com%2Fa+b&pk=AQ")
         assertEquals("https://example.com/a b", invite.relay)
-        assertEquals("%ZZ", PairEncoding.parsePairUri("enso://pair?relay=%ZZ&pk=AQ").relay)
+        assertEquals("%ZZ", PairEncoding.parsePairUri("codekiln://pair?relay=%ZZ&pk=AQ").relay)
         assertThrows(IllegalArgumentException::class.java) { PairEncoding.parsePairUri("https://example.com/#relay=&pk=AQ") }
     }
 

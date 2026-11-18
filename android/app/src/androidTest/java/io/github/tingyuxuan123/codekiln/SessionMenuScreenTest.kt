@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
@@ -11,16 +11,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.DesktopContextUsage
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.DesktopUsageTotals
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.MaintenanceBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionMaintenanceCommand
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.SessionHeader
-import io.github.tingyuxuan123.eaves.ui.SessionScreen
+import io.github.tingyuxuan123.codekiln.mirror.DesktopContextUsage
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopUsageTotals
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.MaintenanceBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionMaintenanceCommand
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.SessionHeader
+import io.github.tingyuxuan123.codekiln.ui.SessionScreen
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -83,14 +83,14 @@ class SessionMenuScreenTest {
         compose.onNodeWithContentDescription("压缩要求（可选）").performTextInput("  只保留测试与结论  ")
         compose.onNodeWithText("开始压缩").performClick()
         assertEquals(listOf(Triple(SessionMaintenanceCommand.Compact, baseline, "只保留测试与结论")), actions)
-        compose.runOnIdle { state.value = idle.copy(compaction = io.github.tingyuxuan123.eaves.mirror.DesktopCompaction("queued")) }
+        compose.runOnIdle { state.value = idle.copy(compaction = io.github.tingyuxuan123.codekiln.mirror.DesktopCompaction("queued")) }
         compose.onNodeWithText("桌面已排队，等本轮结束后压缩。").assertIsDisplayed()
         compose.onNodeWithText("开始压缩").assertIsEnabled()
     }
 
     @Test fun rewindOffersOnlyRealUserMessagesAndSendsTheChosenIndexWithRestoreChoice() {
         val actions = mutableListOf<Triple<Long, Boolean, MaintenanceBaseline>>()
-        fun text(index: Long, role: String, body: String) = io.github.tingyuxuan123.eaves.pair.SessionMessage(index, role, listOf(
+        fun text(index: Long, role: String, body: String) = io.github.tingyuxuan123.codekiln.pair.SessionMessage(index, role, listOf(
             buildJsonObject { put("type", "text"); put("text", body) }))
         val history = timeline.copy(messages = listOf(
             text(0, "user", "第一条用户消息"),
@@ -119,11 +119,11 @@ class SessionMenuScreenTest {
     }
 
     @Test fun tasksPanelListsRealSubagentsAndBackgroundTasksAndConfirmsStopOnce() {
-        val actions = mutableListOf<Pair<io.github.tingyuxuan123.eaves.mirror.SessionTaskKind, String>>()
+        val actions = mutableListOf<Pair<io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind, String>>()
         val running = timeline.copy(
-            subagents = listOf(io.github.tingyuxuan123.eaves.pair.SessionSubagent(
+            subagents = listOf(io.github.tingyuxuan123.codekiln.pair.SessionSubagent(
                 "a1", "调研 IPC 通道注册", "running", 2, "grep handlers", agentType = "scout")),
-            backgroundTasks = listOf(io.github.tingyuxuan123.eaves.pair.SessionBackgroundTask(
+            backgroundTasks = listOf(io.github.tingyuxuan123.codekiln.pair.SessionBackgroundTask(
                 "t1", "pnpm dev", "running", "listening on 5173")),
         )
         val state = mutableStateOf(idle.copy(timeline = running))
@@ -138,7 +138,7 @@ class SessionMenuScreenTest {
         compose.onNodeWithText("pnpm dev").assertIsDisplayed()
         compose.onNodeWithContentDescription("停止 调研 IPC 通道注册").performClick()
         compose.onNodeWithText("确认停止").performClick()
-        assertEquals(listOf(io.github.tingyuxuan123.eaves.mirror.SessionTaskKind.Subagent to "a1"), actions)
+        assertEquals(listOf(io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind.Subagent to "a1"), actions)
         compose.runOnIdle { state.value = idle.copy(timeline = running.copy(
             subagents = emptyList(),
             backgroundTasks = listOf(running.backgroundTasks.single().copy(status = "done")))) }
@@ -149,8 +149,8 @@ class SessionMenuScreenTest {
     @Test fun artifactBrowserListsHostFilesOpensTextAndPagesThroughChunks() {
         val reads = mutableListOf<Pair<String, Long>>()
         var lists = 0
-        val empty = io.github.tingyuxuan123.eaves.mirror.DesktopFilesState()
-        val body = "# Collabra\nhello".toByteArray()
+        val empty = io.github.tingyuxuan123.codekiln.mirror.DesktopFilesState()
+        val body = "# CodeKiln\nhello".toByteArray()
         val state = mutableStateOf(idle.copy(files = empty))
         compose.setContent { EnsoTheme {
             SessionScreen(SessionHeader("菜单测试"), state.value, LinkPhase.Online, true,
@@ -161,8 +161,8 @@ class SessionMenuScreenTest {
         compose.onNodeWithText("产物与文件").performClick()
         compose.onNodeWithText("这个会话还没有可浏览的产物。").assertIsDisplayed()
         compose.runOnIdle { state.value = idle.copy(files = empty.copy(entries = listOf(
-            io.github.tingyuxuan123.eaves.mirror.DesktopFileEntry("f1", "README.md", 2_048, "README.md"),
-            io.github.tingyuxuan123.eaves.mirror.DesktopFileEntry("f2", "logo.png", 900, "assets/logo.png"),
+            io.github.tingyuxuan123.codekiln.mirror.DesktopFileEntry("f1", "README.md", 2_048, "README.md"),
+            io.github.tingyuxuan123.codekiln.mirror.DesktopFileEntry("f2", "logo.png", 900, "assets/logo.png"),
         ))) }
         compose.onNodeWithText("README.md").assertIsDisplayed()
         compose.onNodeWithText("README.md · 2 KB").assertIsDisplayed()
@@ -170,9 +170,9 @@ class SessionMenuScreenTest {
         assertEquals(listOf("f1" to 0L), reads)
         compose.runOnIdle { state.value = idle.copy(files = empty.copy(
             entries = state.value.files!!.entries,
-            chunk = io.github.tingyuxuan123.eaves.mirror.DesktopFileChunk(
+            chunk = io.github.tingyuxuan123.codekiln.mirror.DesktopFileChunk(
                 "f1", "README.md", 6_000, 0, body))) }
-        compose.onNodeWithText("# Collabra\nhello").assertIsDisplayed()
+        compose.onNodeWithText("# CodeKiln\nhello").assertIsDisplayed()
         compose.onNodeWithText("加载更多").performClick()
         assertEquals("f1" to body.size.toLong(), reads.last())
         // Read-only connections may browse; nothing in this sheet writes to the workspace.
@@ -183,11 +183,11 @@ class SessionMenuScreenTest {
 
     @Test fun previewListsPagesOpensWithBoundedViewportAndForwardsTapsKeysAndText() {
         var opened: Triple<String, Int, Int>? = null
-        val inputs = mutableListOf<io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput>()
-        val actions = mutableListOf<io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction>()
+        val inputs = mutableListOf<io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput>()
+        val actions = mutableListOf<io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction>()
         val png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-        val state = mutableStateOf(idle.copy(preview = io.github.tingyuxuan123.eaves.mirror.DesktopPreviewState(
-            entries = listOf(io.github.tingyuxuan123.eaves.mirror.DesktopPreviewEntry("e1", "localhost:5173", "server")))))
+        val state = mutableStateOf(idle.copy(preview = io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewState(
+            entries = listOf(io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewEntry("e1", "localhost:5173", "server")))))
         compose.setContent { EnsoTheme {
             SessionScreen(SessionHeader("菜单测试"), state.value, LinkPhase.Online, false,
                 {}, {}, {}, { _, _ -> }, { _, _ -> },
@@ -204,17 +204,17 @@ class SessionMenuScreenTest {
         assertEquals(true, width in 320..1280)
         assertEquals(true, height in 240..1200)
         compose.runOnIdle { state.value = idle.copy(preview = state.value.preview!!.copy(
-            previewId = "p1", frame = io.github.tingyuxuan123.eaves.mirror.DesktopPreviewFrame(
+            previewId = "p1", frame = io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewFrame(
                 "f1", 100, 100, "data:image/png;base64,$png", "预览页"))) }
         compose.onNodeWithContentDescription("网页预览画面").assertIsDisplayed().performClick()
-        val click = inputs.filterIsInstance<io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput.Click>().single()
+        val click = inputs.filterIsInstance<io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput.Click>().single()
         assertEquals(true, click.x in 0..100 && click.y in 0..100)
         compose.onNodeWithContentDescription("回车").performClick()
         compose.onNodeWithContentDescription("发到页面的文字").performTextInput("hello")
         compose.onNodeWithContentDescription("发送到页面").performClick()
-        assertEquals(io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput.Key("Enter"), inputs[1])
-        assertEquals(io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput.Text("hello"), inputs[2])
+        assertEquals(io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput.Key("Enter"), inputs[1])
+        assertEquals(io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput.Text("hello"), inputs[2])
         compose.onNodeWithContentDescription("刷新预览").performClick()
-        assertEquals(io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction.Refresh, actions.single())
+        assertEquals(io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction.Refresh, actions.single())
     }
 }

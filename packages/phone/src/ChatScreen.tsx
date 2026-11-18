@@ -486,9 +486,9 @@ export function ChatScreen(props: Props) {
         {sessionId === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
             <span className="mb-3 flex size-11 items-center justify-center rounded-[13px] border border-brand/20 bg-brand/8 text-brand dark:bg-brand/14">
-              <img src="/icons/logo-192.png" alt="Collabra" className="size-6" />
+              <img src="/icons/logo-192.png" alt="CodeKiln" className="size-6" />
             </span>
-            <p className="font-semibold text-[22px] tracking-tight">Collabra</p>
+            <p className="font-semibold text-[22px] tracking-tight">CodeKiln</p>
             <p className="text-muted-foreground text-sm">
               {props.connState === 'online' ? '从左上角选择会话，或新建一个' : props.stateLabel}
             </p>
@@ -522,7 +522,7 @@ export function ChatScreen(props: Props) {
             loading={view === null}
             running={running}
             error={undefined}
-            emptyTitle={props.projectName || 'Collabra'}
+            emptyTitle={props.projectName || 'CodeKiln'}
             // 手机端不虚拟化：见 MessageTimeline 里 virtualize 的说明
             virtualize={false}
             historyLoading={props.historyLoading}
@@ -587,7 +587,7 @@ export function ChatScreen(props: Props) {
               ) : !pendingInput ? (
                 <Composer
                   appearance="phone"
-                  placeholder={bot ? `向 ${props.title} 提问…` : '回复 Collabra…'}
+                  placeholder={bot ? `向 ${props.title} 提问…` : '回复 CodeKiln…'}
                   commands={slashCommands}
                   running={running}
                   busy={running}

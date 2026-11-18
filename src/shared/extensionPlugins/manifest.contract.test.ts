@@ -374,7 +374,7 @@ describe('parseExtensionPluginManifest', () => {
     ).not.toEqual([]);
   });
 
-  it('mcp.tools 需要 mcp.call 权限，且必须写成精确的 server/tool（Collabra fork 收紧）', () => {
+  it('mcp.tools 需要 mcp.call 权限，且必须写成精确的 server/tool（CodeKiln fork 收紧）', () => {
     expect(errorsOf({ ...base(), mcp: { tools: ['enhance_prompt'] } })).not.toEqual([]);
     const ok = parseExtensionPluginManifest(
       {

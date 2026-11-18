@@ -83,7 +83,7 @@ export type BackgroundSizeMode = 'cover' | 'contain' | 'repeat' | 'center';
 export interface SettingsState {
   // UI
   theme: Theme;
-  /** Explicit plugin palette; empty preserves the local Collabra light palettes. */
+  /** Explicit plugin palette; empty preserves the local CodeKiln light palettes. */
   pluginTheme: string;
   /** Device-local; expanded permissions still require explicit approval. */
   pluginAutoUpdate: boolean;

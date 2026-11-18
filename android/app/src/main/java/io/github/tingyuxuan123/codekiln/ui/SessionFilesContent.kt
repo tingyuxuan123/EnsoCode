@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -27,8 +27,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopFileChunk
-import io.github.tingyuxuan123.eaves.mirror.DesktopFilesState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileChunk
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFilesState
 
 /**
  * Read-only artifact browser. Lists opaque file IDs from the host, opens them as text or images,

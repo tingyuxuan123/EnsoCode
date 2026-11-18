@@ -28,7 +28,7 @@ export default function Offline() {
 				<p className="mt-2 text-[14px] leading-[22px] text-dim">
 					书房 · MacBook Pro 最后在线 12 分钟前。
 					<br />
-					它可能休眠或退出了 Collabra。
+					它可能休眠或退出了 CodeKiln。
 				</p>
 				<div className="mt-6 flex items-center gap-2.5">
 					<button className="glass-ink flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-medium">

@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "io.github.tingyuxuan123.eaves"
+    namespace = "io.github.tingyuxuan123.codekiln"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.tingyuxuan123.eaves"
+        applicationId = "io.github.tingyuxuan123.codekiln"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("eavesAndroidVersionCode").get().toInt()
-        versionName = providers.gradleProperty("eavesAndroidVersionName").get()
+        versionCode = providers.gradleProperty("codekilnAndroidVersionCode").get().toInt()
+        versionName = providers.gradleProperty("codekilnAndroidVersionName").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

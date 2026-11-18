@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
@@ -149,7 +149,7 @@ class AndroidPairCredentialStore(
         // The application uses a single process; serialize disk compare/update across store instances.
         val LOCK = Any()
         const val KEYSTORE = "AndroidKeyStore"
-        const val KEY_ALIAS = "io.github.tingyuxuan123.eaves.pair.credentials.v1"
+        const val KEY_ALIAS = "io.github.tingyuxuan123.codekiln.pair.credentials.v1"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val ENVELOPE_VERSION: Byte = 1
         const val IV_SIZE = 12

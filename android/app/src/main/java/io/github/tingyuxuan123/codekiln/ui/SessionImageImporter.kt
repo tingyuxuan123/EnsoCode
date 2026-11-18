@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
@@ -9,9 +9,9 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.util.Base64
-import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_BYTES
-import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.SessionImage
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_BYTES
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.SessionImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.UUID

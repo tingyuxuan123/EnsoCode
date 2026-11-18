@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.mirror.AndroidTextDraftStore
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.DraftKind
+import io.github.tingyuxuan123.codekiln.mirror.AndroidTextDraftStore
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.DraftKind
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals

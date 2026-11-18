@@ -450,7 +450,7 @@ export function parseExtensionPluginManifest(
     tools: stringList(
       isRecord(mcpRaw) ? mcpRaw.tools : undefined,
       'mcp.tools',
-      // Collabra fork：授权必须同时绑定 MCP server 与 tool（server/tool）
+      // CodeKiln fork：授权必须同时绑定 MCP server 与 tool（server/tool）
       (t) => parsePluginMcpGrant(t) !== null
     ),
   };

@@ -2,7 +2,7 @@
 	"version": 1,
 	"mode": "app",
 	"input": {
-		"brief": "Collabra PWA: the phone companion for a desktop coding-agent workbench — see running sessions, approve tool calls, reply, review diffs, and talk to teammate bots.",
+		"brief": "CodeKiln PWA: the phone companion for a desktop coding-agent workbench — see running sessions, approve tool calls, reply, review diffs, and talk to teammate bots.",
 		"screens": [
 			"连接电脑（配对码 + 扫码）",
 			"会话列表（编程 / Bot、项目分组、设备）",

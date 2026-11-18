@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -48,27 +48,27 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.R
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.QueueCommand
-import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
-import io.github.tingyuxuan123.eaves.mirror.GoalCommand
-import io.github.tingyuxuan123.eaves.mirror.MaintenanceBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionMaintenanceCommand
-import io.github.tingyuxuan123.eaves.mirror.RewindBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionTaskKind
-import io.github.tingyuxuan123.eaves.mirror.TaskStopBaseline
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput
-import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.sessionImagePromptFits
-import io.github.tingyuxuan123.eaves.mirror.SESSION_TEXT_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.pair.SessionApproval
-import io.github.tingyuxuan123.eaves.pair.SessionAsk
+import io.github.tingyuxuan123.codekiln.R
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.QueueCommand
+import io.github.tingyuxuan123.codekiln.mirror.DesktopGoal
+import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
+import io.github.tingyuxuan123.codekiln.mirror.MaintenanceBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionMaintenanceCommand
+import io.github.tingyuxuan123.codekiln.mirror.RewindBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind
+import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.sessionImagePromptFits
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_TEXT_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.pair.SessionApproval
+import io.github.tingyuxuan123.codekiln.pair.SessionAsk
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -416,9 +416,9 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
     Column(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(22.dp).background(c.card, CircleShape), contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.eaves_mark), null, Modifier.size(18.dp))
+                Image(painterResource(R.drawable.codekiln_mark), null, Modifier.size(18.dp))
             }
-            Label("Collabra", 15, 20, weight = FontWeight.SemiBold)
+            Label("CodeKiln", 15, 20, weight = FontWeight.SemiBold)
             val time = specimen?.turnTime ?: turn.timestamp?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
             if (time != null) Label(time, 12, 16, color = c.dim)
         }

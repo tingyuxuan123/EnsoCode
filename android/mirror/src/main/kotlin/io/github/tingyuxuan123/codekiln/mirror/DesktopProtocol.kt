@@ -1,6 +1,6 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
 import java.util.Collections
 import java.util.Base64
 import kotlinx.serialization.json.JsonArray

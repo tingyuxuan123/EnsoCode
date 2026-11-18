@@ -1,4 +1,4 @@
-# Collabra 原生插件
+# CodeKiln 原生插件
 
 本次工作区移植以 `J3n5en/EnsoCode@c221f690`（0.3.5）为固定基线；安装版是否具备新 API 取决于实际发布版本。工程边界见 [移植记录](project-history/2026-11-13-plugin-port.md)。
 
@@ -8,9 +8,9 @@
 
 ## 适用范围：本仓库的原生插件 API
 
-本文描述的是 **Collabra 实际实现的原生插件 API，清单版本为 `schemaVersion: 1`**，不是 Open Vetta、VS Code 或 Claude Code 的插件 SDK。那些平台的插件不能只改文件名就按本文运行。兼容标识仍沿用 `enso.*`。
+本文描述的是 **CodeKiln 实际实现的原生插件 API，清单版本为 `schemaVersion: 1`**，不是 Open Vetta、VS Code 或 Claude Code 的插件 SDK。那些平台的插件不能只改文件名就按本文运行。兼容标识仍沿用 `enso.*`。
 
-界面布局、主题和侧栏可以改变，但插件应通过 `enso.slots`、`enso.composer` 等宿主接口工作，不要依赖 Collabra 内部组件、DOM 选择器或内部 store。`ui.js` 虽然同权，直接访问这些内部实现也不属于稳定兼容约定。
+界面布局、主题和侧栏可以改变，但插件应通过 `enso.slots`、`enso.composer` 等宿主接口工作，不要依赖 CodeKiln 内部组件、DOM 选择器或内部 store。`ui.js` 虽然同权，直接访问这些内部实现也不属于稳定兼容约定。
 
 安装版不一定包含当前工作区尚未发布的功能。如果没有主侧栏「扩展」入口，使用下面保留的「设置 → 插件」入口；是否存在入口不能代替实际 API 兼容验证。
 
@@ -60,8 +60,8 @@ my-snippets/
 ## 先理解信任边界
 
 - **`main.mjs` 是完整的 Node.js 子进程，不是操作系统沙箱**。代码本身可以访问 Node 能访问的资源。
-- **`ui.js` 在主界面执行，与 Collabra 界面同权**，可以访问 DOM 和界面已有接口。只启用完全信任的代码。
-- 清单的权限、文件范围和域名只约束 **Collabra 提供的宿主 API**，不能约束插件自己导入 Node 模块或直接操作页面。
+- **`ui.js` 在主界面执行，与 CodeKiln 界面同权**，可以访问 DOM 和界面已有接口。只启用完全信任的代码。
+- 清单的权限、文件范围和域名只约束 **CodeKiln 提供的宿主 API**，不能约束插件自己导入 Node 模块或直接操作页面。
 - 侧栏 HTML 与上述两者不同：它运行在 `sandbox="allow-scripts"` 的 opaque-origin iframe，不能访问普通 preload、父界面或外部资源。页面只持有调用本插件的固定 MessagePort。
 - 不要在清单、脚本、MCP `env` 或示例里放真实凭证。配置项可标记为 `secret`，界面只显示已设置状态；插件自己的代码仍能通过配置 API 取得自己被授权的值。
 
@@ -77,7 +77,7 @@ my-snippets/
 相同 id 再安装视为更新。授权范围扩大时旧版本继续运行，新版本等待单独批准；拒绝则保留旧版。
 手动更新需要安装预览确认。市场来源默认允许未扩权更新自动安装，可在扩展页关闭；插件正忙则延后，扩大权限仍进入待批准。GitHub/其他链接来源只检查并提示，不自动安装。配置页的空密钥输入表示保持旧值，Clear value 表示显式删除。
 
-精选插件市场是 Collabra 自建市场（签名索引 `marketId: collabra`）。安装来源写进 Main 的登记表，并决定后续更新渠道：市场、目录、ZIP、HTTPS 链接之间不会互相接管、自动认领或静默覆盖。同名插件已经从别的来源安装时，市场安装会被直接拒绝并说明现有来源。历史记录里不带 `marketId` 的 `kind: market` 视为旧的上游 enso 市场来源：不会被迁移成 Collabra，也不会再检查更新。旧插件保持可用；跨市场迁移暂不支持，不要删除旧插件或它的数据来换取迁移。
+精选插件市场是 CodeKiln 自建市场（签名索引 `marketId: collabra`）。安装来源写进 Main 的登记表，并决定后续更新渠道：市场、目录、ZIP、HTTPS 链接之间不会互相接管、自动认领或静默覆盖。同名插件已经从别的来源安装时，市场安装会被直接拒绝并说明现有来源。历史记录里不带 `marketId` 的 `kind: market` 视为旧的上游 enso 市场来源：不会被迁移成 CodeKiln，也不会再检查更新。旧插件保持可用；跨市场迁移暂不支持，不要删除旧插件或它的数据来换取迁移。
 
 市场仓库、签名发布、内置快照和运维边界见 [自有插件市场](engineering-reference/guides/plugin-market.md)。
 卸载会删除插件安装副本、私有数据及配置。停用/卸载立即撤销宿主挂点、补全、侧栏桥及旧渲染 API。
@@ -187,7 +187,7 @@ HTML 中 `enso.on(name,listener)` / `onTheme(listener)` 返回取消函数，`en
 ### 主题
 
 主题 JSON 的 `light` / `dark` 均需 canvas/surface/sunken/border/borderStrong/text/textMuted/textSubtle/accent 调色板，可附安全 CSS token、固定素材槽与背景图。相对素材 URL 只在本插件包内解析，任意本机路径不会暴露给页面。附加 CSS 属于额外样式能力，扩大时要重新授权。
-用户显式选择插件主题才覆盖当前主题；停用、卸载或加载失败时恢复原有 Collabra 配色，不改写薄荷白、cloud-light 等既有主题设置。
+用户显式选择插件主题才覆盖当前主题；停用、卸载或加载失败时恢复原有 CodeKiln 配色，不改写薄荷白、cloud-light 等既有主题设置。
 选中主题的调色板与附加 CSS 会应用到主窗口、设置、协作看板和独立设计窗口；固定素材槽与背景图依赖主窗口的 `data-enso` 挂点，只在主窗口出现，不会铺到设置或看板。
 
 ## Node 入口

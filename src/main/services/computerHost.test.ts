@@ -473,7 +473,7 @@ describe('ComputerHost', () => {
             ...original,
             pid: 99,
             bundleId: 'enso',
-            path: '/EnsoCode.app',
+            path: '/CodeKiln.app',
           };
           return 'once';
         },
@@ -522,7 +522,7 @@ describe('ComputerHost', () => {
               ...original,
               pid: 99,
               bundleId: 'enso',
-              path: '/EnsoCode.app',
+              path: '/CodeKiln.app',
             };
             if (change === 'replacement') backend.windowsList[0].pid = 88;
             else backend.raiseFails = true;

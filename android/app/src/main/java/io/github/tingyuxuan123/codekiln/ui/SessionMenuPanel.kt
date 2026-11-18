@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -46,30 +46,30 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.R
-import io.github.tingyuxuan123.eaves.mirror.DesktopCompaction
-import io.github.tingyuxuan123.eaves.mirror.DesktopContextUsage
-import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
-import io.github.tingyuxuan123.eaves.mirror.DesktopGoalAttempt
-import io.github.tingyuxuan123.eaves.mirror.DesktopMaintenanceAttempt
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction
-import io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.DesktopRewindAttempt
-import io.github.tingyuxuan123.eaves.mirror.DesktopTaskStopAttempt
-import io.github.tingyuxuan123.eaves.mirror.DesktopUsageTotals
-import io.github.tingyuxuan123.eaves.mirror.GoalCommand
-import io.github.tingyuxuan123.eaves.mirror.MaintenanceBaseline
-import io.github.tingyuxuan123.eaves.mirror.SESSION_TEXT_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionMaintenanceCommand
-import io.github.tingyuxuan123.eaves.mirror.RewindBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionTaskKind
-import io.github.tingyuxuan123.eaves.mirror.TaskStopBaseline
-import io.github.tingyuxuan123.eaves.mirror.taskStopBaseline
-import io.github.tingyuxuan123.eaves.mirror.sessionGoalText
-import io.github.tingyuxuan123.eaves.mirror.maintenanceBaseline
-import io.github.tingyuxuan123.eaves.mirror.rewindBaseline
+import io.github.tingyuxuan123.codekiln.R
+import io.github.tingyuxuan123.codekiln.mirror.DesktopCompaction
+import io.github.tingyuxuan123.codekiln.mirror.DesktopContextUsage
+import io.github.tingyuxuan123.codekiln.mirror.DesktopGoal
+import io.github.tingyuxuan123.codekiln.mirror.DesktopGoalAttempt
+import io.github.tingyuxuan123.codekiln.mirror.DesktopMaintenanceAttempt
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction
+import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopRewindAttempt
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTaskStopAttempt
+import io.github.tingyuxuan123.codekiln.mirror.DesktopUsageTotals
+import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
+import io.github.tingyuxuan123.codekiln.mirror.MaintenanceBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_TEXT_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionMaintenanceCommand
+import io.github.tingyuxuan123.codekiln.mirror.RewindBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind
+import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
+import io.github.tingyuxuan123.codekiln.mirror.taskStopBaseline
+import io.github.tingyuxuan123.codekiln.mirror.sessionGoalText
+import io.github.tingyuxuan123.codekiln.mirror.maintenanceBaseline
+import io.github.tingyuxuan123.codekiln.mirror.rewindBaseline
 
 internal enum class SessionSurface { Menu, GoalDetails, GoalEditor, Compact, Rewind, Tasks, Files, Preview }
 internal data class GoalEditor(val expected: DesktopGoal?, val draft: String, val afterAttempt: Long)
@@ -549,13 +549,13 @@ private fun TaskRow(title: String, detail: String, running: Boolean, canStop: Bo
     }
 }
 
-private fun io.github.tingyuxuan123.eaves.pair.SessionSubagent.statusText() = when (status) {
+private fun io.github.tingyuxuan123.codekiln.pair.SessionSubagent.statusText() = when (status) {
     "running" -> "进行中"
     "done" -> "已完成"
     else -> "失败"
 }
 
-private fun io.github.tingyuxuan123.eaves.pair.SessionBackgroundTask.statusText() = when (status) {
+private fun io.github.tingyuxuan123.codekiln.pair.SessionBackgroundTask.statusText() = when (status) {
     "running" -> "进行中"
     "done" -> "已完成"
     else -> "失败"
@@ -642,7 +642,7 @@ private fun SessionSheet(title: String, aside: DesktopGoal?, onDismiss: () -> Un
                 if (aside != null) Row(Modifier.background(if (aside.status == "paused") c.card2 else aside.tint().copy(alpha = .10f), CircleShape)
                     .padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (aside.status == "active") Image(painterResource(R.drawable.eaves_running_small), null, Modifier.size(14.dp))
+                    if (aside.status == "active") Image(painterResource(R.drawable.codekiln_running_small), null, Modifier.size(14.dp))
                     else Glyph(aside.icon(), Modifier.size(14.dp), aside.tint())
                     Label(aside.label(), 13, 18, color = aside.tint(), weight = FontWeight.Medium)
                 }

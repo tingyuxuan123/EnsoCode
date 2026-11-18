@@ -2,7 +2,7 @@ import type { ExtensionPluginPermission, PluginConfigType, PluginTriggerSymbol }
 import type { MarketCategory, MarketScreenshot } from './marketCategories';
 import type { PluginStatusItem } from './statusItems';
 
-/** Collabra fork：列表结果带登记表错误（上游直接返回数组，fork 保留只读错误提示） */
+/** CodeKiln fork：列表结果带登记表错误（上游直接返回数组，fork 保留只读错误提示） */
 export interface ExtensionPluginListResult {
   plugins: ExtensionPluginSummary[];
   registryError?: string;
@@ -114,7 +114,7 @@ export type ExtensionPluginMarketList =
       ok: true;
       stale: boolean;
       chinaMirror: boolean;
-      /** 当前生效的市场身份；UI 据此标示 Collabra 市场 */
+      /** 当前生效的市场身份；UI 据此标示 CodeKiln 市场 */
       marketId: string;
       plugins: ExtensionPluginMarketEntry[];
     }
@@ -197,7 +197,7 @@ export interface PluginToolDescriptor {
   timeoutMs?: number;
   /** 清单声明只读；worker 转成 readOnlyHint */
   readOnly?: boolean;
-  /** Collabra fork：已安装代号 + 清单指纹；旧 worker 不能调用更新后的插件 */
+  /** CodeKiln fork：已安装代号 + 清单指纹；旧 worker 不能调用更新后的插件 */
   fingerprint: string;
 }
 

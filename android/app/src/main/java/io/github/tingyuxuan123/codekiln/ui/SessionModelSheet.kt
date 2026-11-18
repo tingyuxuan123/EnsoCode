@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -26,8 +26,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -1,6 +1,6 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
 
 internal enum class TaskNoticeKind { Attention, Failed, Done }
 internal data class TaskNotice(val sessionId: String, val title: String, val kind: TaskNoticeKind,

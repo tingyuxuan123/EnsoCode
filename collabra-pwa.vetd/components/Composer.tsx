@@ -1,7 +1,7 @@
 // 输入区：白底圆角输入条 + 外侧一枚 48 的墨黑发送键；运行中换成停止键，
 // 下面一行是会话统计（上下文、用量、缓存、速度）。
 export function Composer({
-	placeholder = "回复 Collabra…",
+	placeholder = "回复 CodeKiln…",
 	meta,
 	running = false,
 }: {

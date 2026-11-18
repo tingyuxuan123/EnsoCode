@@ -1,13 +1,13 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
-import io.github.tingyuxuan123.eaves.mirror.PairCredentials
-import io.github.tingyuxuan123.eaves.mirror.PairException
-import io.github.tingyuxuan123.eaves.mirror.PairFailure
+import io.github.tingyuxuan123.codekiln.mirror.AndroidPairCredentialStore
+import io.github.tingyuxuan123.codekiln.mirror.PairCredentials
+import io.github.tingyuxuan123.codekiln.mirror.PairException
+import io.github.tingyuxuan123.codekiln.mirror.PairFailure
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

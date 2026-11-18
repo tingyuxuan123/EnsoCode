@@ -81,7 +81,6 @@ const shell = vi.hoisted(() => {
     remoteNodes: [] as { nodeId: string; hostOnline: boolean }[],
     sidebar: { width: undefined as number | undefined, collapsed: false, mounts: 0 },
     botView: null as { sidebarWidth?: number; collapsed?: boolean } | null,
-    workbenchTitle: null as object | null,
     extensionsListener: null as (() => void) | null,
     extensionsPending: null as SettingsDeepLink | null,
     extensionRequest: undefined as { pluginId?: string } | undefined,
@@ -142,12 +141,6 @@ vi.mock('@/components/sidepanel/SidePanel', () => ({
 vi.mock('@/components/app/StatusBar', () => ({ StatusBar: shell.mark('status-bar') }));
 vi.mock('@/components/app/BackgroundLayer', () => ({ BackgroundLayer: () => null }));
 vi.mock('@/components/app/UpdateBanner', () => ({ UpdateBanner: () => null }));
-vi.mock('@/components/app/WorkbenchTitle', () => ({
-  WorkbenchTitle: (props: object) => {
-    shell.workbenchTitle = props;
-    return null;
-  },
-}));
 vi.mock('@/components/extensions/ExtensionsPage', () => ({
   ExtensionsPage: ({ request }: { request?: { pluginId?: string } }) => {
     shell.extensionRequest = request;
@@ -242,7 +235,6 @@ beforeEach(() => {
   );
   shell.sidebar = { width: undefined, collapsed: false, mounts: 0 };
   shell.botView = null;
-  shell.workbenchTitle = null;
   shell.remoteNodes = [];
   shell.extensionsListener = null;
   shell.extensionsPending = null;
@@ -338,16 +330,17 @@ describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
     expect(actions?.querySelector('button[aria-label="Toggle side panel"]')).not.toBeNull();
   });
 
-  it('远程节点让位给对方的目录时不渲染紧凑标题（标题来自本机会话）', async () => {
+  it('远程节点让位给对方的目录时标题栏不重复品牌字', async () => {
     await setBotModeEnabled(true);
-    shell.workbenchTitle = null;
     shell.remoteNodes = [{ nodeId: 'node-remote', hostOnline: true }];
     act(() => useRemoteNodesStore.setState({ activeNodeId: 'node-remote' }));
     await mountApp();
     await act(async () => {});
     expect(present('remote-node')).not.toBeNull();
     expect(modeSwitch()).toBeNull();
-    expect(shell.workbenchTitle).toBeNull();
+    // 顶栏左侧不再显示品牌字与「工作台」标签
+    expect(titleBar()?.querySelector('[data-slot="title-bar-heading"]')).toBeNull();
+    expect(titleBar()?.textContent ?? '').not.toContain('Workbench');
   });
 
   it('Bot、图片工作台、设计画廊里模式分段都在原位', async () => {

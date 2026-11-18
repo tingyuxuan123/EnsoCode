@@ -12,7 +12,7 @@ const SELECTORS = {
 const items = (value) => {
   if (Array.isArray(value)) return value;
   if (value && Array.isArray(value.items)) return value.items;
-  throw new Error('浏览器 DOM 检查结果不兼容，请更新 Collabra');
+  throw new Error('浏览器 DOM 检查结果不兼容，请更新 CodeKiln');
 };
 
 export class BrowserSheet {

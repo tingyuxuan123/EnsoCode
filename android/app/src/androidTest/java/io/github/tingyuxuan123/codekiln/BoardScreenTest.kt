@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -6,9 +6,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
-import io.github.tingyuxuan123.eaves.ui.BoardScreen
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.ui.BoardScreen
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -26,12 +26,12 @@ class BoardScreenTest {
     @Test fun waitingRunningAndDoneTasksAreGroupedFromRealCatalogFields() {
         var opened: String? = null
         val tasks = listOf(
-            DesktopTask("wait", "会话恢复后时间线为空", "Eaves", now - 5 * minute, "running",
+            DesktopTask("wait", "会话恢复后时间线为空", "CodeKiln", now - 5 * minute, "running",
                 pendingApprovalCount = 2, projectId = "p1"),
-            DesktopTask("run", "首页 Hero 用哪张截图", "Eaves", now - 40 * minute, "running", projectId = "p1"),
-            DesktopTask("done", "解释 apply_patch 的格式", "Eaves", now - 90 * minute, "idle", projectId = "p1"),
-            DesktopTask("old", "昨天的任务", "Eaves", now - 26 * 60 * minute, "idle", projectId = "p1"),
-            DesktopTask("archived", "归档任务", "Eaves", now - minute, "running", archived = true, projectId = "p1"),
+            DesktopTask("run", "首页 Hero 用哪张截图", "CodeKiln", now - 40 * minute, "running", projectId = "p1"),
+            DesktopTask("done", "解释 apply_patch 的格式", "CodeKiln", now - 90 * minute, "idle", projectId = "p1"),
+            DesktopTask("old", "昨天的任务", "CodeKiln", now - 26 * 60 * minute, "idle", projectId = "p1"),
+            DesktopTask("archived", "归档任务", "CodeKiln", now - minute, "running", archived = true, projectId = "p1"),
         )
         compose.setContent { EnsoTheme { BoardScreen(tasks, now, onBack = {}, onTask = { opened = it }) } }
         compose.onNodeWithText("等你处理").assertIsDisplayed()

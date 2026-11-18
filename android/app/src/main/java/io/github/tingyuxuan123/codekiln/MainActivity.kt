@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.os.Bundle
 import android.Manifest
@@ -29,56 +29,57 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.HomeScreen
-import io.github.tingyuxuan123.eaves.ui.SettingsScreen
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.DraftKind
-import io.github.tingyuxuan123.eaves.ui.NewTaskScreen
-import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
-import io.github.tingyuxuan123.eaves.ui.PairScreen
-import io.github.tingyuxuan123.eaves.ui.PairSpecimen
-import io.github.tingyuxuan123.eaves.ui.PairUiState
-import io.github.tingyuxuan123.eaves.ui.PairingScanner
-import io.github.tingyuxuan123.eaves.ui.SessionHeader
-import io.github.tingyuxuan123.eaves.ui.BoardScreen
-import io.github.tingyuxuan123.eaves.ui.MembersScreen
-import io.github.tingyuxuan123.eaves.ui.SessionScreen
-import io.github.tingyuxuan123.eaves.ui.SessionSpecimen
-import io.github.tingyuxuan123.eaves.mirror.DesktopLinkState
-import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
-import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
-import io.github.tingyuxuan123.eaves.mirror.GoalCommand
-import io.github.tingyuxuan123.eaves.mirror.MaintenanceBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionMaintenanceCommand
-import io.github.tingyuxuan123.eaves.mirror.RewindBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionTaskKind
-import io.github.tingyuxuan123.eaves.mirror.TaskStopBaseline
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.CreationPhase
-import io.github.tingyuxuan123.eaves.mirror.QueueCommand
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionImage
-import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.eaves.mirror.SESSION_TEXT_LIMIT
-import io.github.tingyuxuan123.eaves.ui.TaskConfiguration
-import io.github.tingyuxuan123.eaves.ui.NewTaskConfigSheet
-import io.github.tingyuxuan123.eaves.ui.CreationNotice
-import io.github.tingyuxuan123.eaves.ui.title
-import io.github.tingyuxuan123.eaves.ui.PictureDraftState
-import io.github.tingyuxuan123.eaves.ui.PictureTicket
-import io.github.tingyuxuan123.eaves.ui.SessionPictureDraft
-import io.github.tingyuxuan123.eaves.ui.importSessionPictures
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.HomeScreen
+import io.github.tingyuxuan123.codekiln.ui.SettingsScreen
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.DraftKind
+import io.github.tingyuxuan123.codekiln.ui.NewTaskScreen
+import io.github.tingyuxuan123.codekiln.ui.NewTaskUiState
+import io.github.tingyuxuan123.codekiln.ui.PairScreen
+import io.github.tingyuxuan123.codekiln.ui.PairSpecimen
+import io.github.tingyuxuan123.codekiln.ui.PairUiState
+import io.github.tingyuxuan123.codekiln.ui.PairingScanner
+import io.github.tingyuxuan123.codekiln.ui.SessionHeader
+import io.github.tingyuxuan123.codekiln.ui.BoardScreen
+import io.github.tingyuxuan123.codekiln.ui.MembersScreen
+import io.github.tingyuxuan123.codekiln.ui.SessionScreen
+import io.github.tingyuxuan123.codekiln.ui.SessionSpecimen
+import io.github.tingyuxuan123.codekiln.mirror.DesktopLinkState
+import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
+import io.github.tingyuxuan123.codekiln.mirror.DesktopGoal
+import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
+import io.github.tingyuxuan123.codekiln.mirror.MaintenanceBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionMaintenanceCommand
+import io.github.tingyuxuan123.codekiln.mirror.RewindBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind
+import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.CreationPhase
+import io.github.tingyuxuan123.codekiln.mirror.QueueCommand
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionImage
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.TaskLaunch
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_TEXT_LIMIT
+import io.github.tingyuxuan123.codekiln.pair.PairEncoding
+import io.github.tingyuxuan123.codekiln.ui.TaskConfiguration
+import io.github.tingyuxuan123.codekiln.ui.NewTaskConfigSheet
+import io.github.tingyuxuan123.codekiln.ui.CreationNotice
+import io.github.tingyuxuan123.codekiln.ui.title
+import io.github.tingyuxuan123.codekiln.ui.PictureDraftState
+import io.github.tingyuxuan123.codekiln.ui.PictureTicket
+import io.github.tingyuxuan123.codekiln.ui.SessionPictureDraft
+import io.github.tingyuxuan123.codekiln.ui.importSessionPictures
 
 class MainActivity : ComponentActivity() {
     private class Invite(val link: String)
     private val invite = mutableStateOf<Invite?>(null)
     private val notice = mutableStateOf<TaskNoticeOpen?>(null)
     private val notificationsAllowed = mutableStateOf(false)
-    private val companion get() = (application as EavesApplication).companion
+    private val companion get() = (application as CodeKilnApplication).companion
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,7 +87,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) { consumeInvite(intent); consumeNotice(intent) }
         setContent {
             val state by companion.state.collectAsStateWithLifecycle()
-            val book = (application as EavesApplication).drafts
+            val book = (application as CodeKilnApplication).drafts
             val drafts by book.drafts.collectAsStateWithLifecycle()
             var link by remember { mutableStateOf("") }
             val incoming = invite.value
@@ -97,7 +98,7 @@ class MainActivity : ComponentActivity() {
             }
             LaunchedEffect(state.pairId, state.paired) { book.bind(state.pairId.takeIf { state.paired }) }
             LaunchedEffect(incoming) { if (incoming != null) link = incoming.link }
-            EavesApp(state = state.taskUi(System.currentTimeMillis()), pairState = state.pairUi(),
+            CodeKilnApp(state = state.taskUi(System.currentTimeMillis()), pairState = state.pairUi(),
                 settings = state.settingsUi(notificationsAllowed.value),
                 drafts = drafts, onDraftEdit = book::edit,
                 onDraftPin = { key -> book.pin(key) },
@@ -161,7 +162,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onStop() {
         companion.setVisible(false)
-        (application as EavesApplication).drafts.flush()
+        (application as CodeKilnApplication).drafts.flush()
         super.onStop()
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); consumeInvite(intent); consumeNotice(intent) }
@@ -180,7 +181,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openNotificationSettings() {
         try { startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)) }
-        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(this, "请在系统设置中管理 Collabra 通知。", Toast.LENGTH_SHORT).show() }
+        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(this, "请在系统设置中管理 CodeKiln 通知。", Toast.LENGTH_SHORT).show() }
     }
 
     private fun consumeNotice(value: Intent) {
@@ -198,19 +199,20 @@ class MainActivity : ComponentActivity() {
 
     private fun consumeInvite(value: Intent) {
         if (value.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
-        if (value.action == Intent.ACTION_VIEW && value.data?.scheme == "enso" && value.data?.host == "pair") {
+        val uri = value.data ?: return
+        if (value.action == Intent.ACTION_VIEW && uri.scheme == PairEncoding.PAIR_SCHEME && uri.host == PairEncoding.PAIR_HOST) {
             value.dataString?.takeIf { it.length <= 8192 }?.let { invite.value = Invite(it) }
             value.data = null
         }
     }
 }
 
-internal enum class EavesRoute { NewTask, Home, Pair, Session, Board, Members, Settings }
+internal enum class CodeKilnRoute { NewTask, Home, Pair, Session, Board, Members, Settings }
 internal class TaskNoticeOpen(val sessionId: String?)
 
 @Composable
-internal fun EavesApp(
-    initialRoute: EavesRoute = EavesRoute.NewTask,
+internal fun CodeKilnApp(
+    initialRoute: CodeKilnRoute = CodeKilnRoute.NewTask,
     state: NewTaskUiState = NewTaskUiState(),
     pairSpecimen: PairSpecimen? = null,
     pairState: PairUiState = PairUiState(),
@@ -253,8 +255,8 @@ internal fun EavesApp(
     onSessionReadFile: ((String, String, Long) -> Unit)? = null,
     onSessionListPreviews: ((String) -> Unit)? = null,
     onSessionOpenPreview: ((String, String, Int, Int) -> Unit)? = null,
-    onSessionPreviewAction: ((String, io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction) -> Unit)? = null,
-    onSessionPreviewInput: ((String, io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput) -> Unit)? = null,
+    onSessionPreviewAction: ((String, io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction) -> Unit)? = null,
+    onSessionPreviewInput: ((String, io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput) -> Unit)? = null,
     onRequestBots: (() -> Unit)? = null,
     onRequestInbox: (() -> Unit)? = null,
     onOpenBotChat: ((String) -> Unit)? = null,
@@ -278,10 +280,10 @@ internal fun EavesApp(
     onBotReadFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)? = null,
 ) {
     var route by rememberSaveable { mutableStateOf(initialRoute) }
-    var pairReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
-    var settingsReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
-    var boardReturn by rememberSaveable { mutableStateOf(EavesRoute.NewTask) }
-    var membersReturn by rememberSaveable { mutableStateOf(EavesRoute.Home) }
+    var pairReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
+    var settingsReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
+    var boardReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.NewTask) }
+    var membersReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
     val descriptionKey = DraftKey(DraftKind.NewTask, "new-task")
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var memberSessionId by remember(pairState.paired) { mutableStateOf<String?>(null) }
@@ -310,7 +312,7 @@ internal fun EavesApp(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(SESSION_IMAGE_LIMIT)) { uris ->
         val ticket = pickerTicket
         pickerTicket = null
-        if (route == EavesRoute.Session && ticket?.owner == selectedId && pairState.paired) {
+        if (route == CodeKilnRoute.Session && ticket?.owner == selectedId && pairState.paired) {
             pictureDraft.select(ticket, uris.map { it.toString() })
         }
     }
@@ -339,7 +341,7 @@ internal fun EavesApp(
     val openPair = {
         if (!creating) {
             pairReturn = route
-            route = EavesRoute.Pair
+            route = CodeKilnRoute.Pair
         }
     }
     val openTask: (String) -> Unit = { id ->
@@ -348,30 +350,30 @@ internal fun EavesApp(
             selectedId = id
             selectedTitle = task.title
             selectedProject = task.project
-            route = EavesRoute.Session
+            route = CodeKilnRoute.Session
         } else if (!creating) unavailable()
     }
     val back = {
         route = when (route) {
-            EavesRoute.Pair -> pairReturn
-            EavesRoute.Session -> EavesRoute.Home
-            EavesRoute.Board -> boardReturn
-            EavesRoute.Members -> membersReturn
-            EavesRoute.Settings -> settingsReturn
-            else -> EavesRoute.NewTask
+            CodeKilnRoute.Pair -> pairReturn
+            CodeKilnRoute.Session -> CodeKilnRoute.Home
+            CodeKilnRoute.Board -> boardReturn
+            CodeKilnRoute.Members -> membersReturn
+            CodeKilnRoute.Settings -> settingsReturn
+            else -> CodeKilnRoute.NewTask
         }
     }
     val openBoard = {
-        if (!creating) { boardReturn = route; route = EavesRoute.Board }
+        if (!creating) { boardReturn = route; route = CodeKilnRoute.Board }
     }
     val openMembers = {
-        if (!creating) { membersReturn = route; route = EavesRoute.Members }
+        if (!creating) { membersReturn = route; route = CodeKilnRoute.Members }
     }
     val openSettings = {
-        if (!creating) { settingsReturn = route; route = EavesRoute.Settings }
+        if (!creating) { settingsReturn = route; route = CodeKilnRoute.Settings }
     }
-    val subscribedId = if (route == EavesRoute.Members) memberSessionId else selectedId.takeIf { route == EavesRoute.Session }
-    val selectable = state.tasks.any { it.id == subscribedId } || (route == EavesRoute.Members && memberSessionId != null)
+    val subscribedId = if (route == CodeKilnRoute.Members) memberSessionId else selectedId.takeIf { route == CodeKilnRoute.Session }
+    val selectable = state.tasks.any { it.id == subscribedId } || (route == CodeKilnRoute.Members && memberSessionId != null)
     val sessionSendKey = { id: String -> DraftKey(DraftKind.Session, id) }
     // 逐字匹配回执并清掉「用户真的提交过」的那次草稿。pin 是跨页面的提交凭据：
     // 回执在离开会话页期间到达时仍能清除已投递内容，而从没 pin 过的同文草稿不会被误清。
@@ -396,16 +398,16 @@ internal fun EavesApp(
         if (subscribedId == null || !pairState.paired) onSelectSession?.invoke(null)
         else if (selectable) onSelectSession?.invoke(subscribedId)
     }
-    LaunchedEffect(openPairInvite) { if (openPairInvite != null && route != EavesRoute.Pair) openPair() }
+    LaunchedEffect(openPairInvite) { if (openPairInvite != null && route != CodeKilnRoute.Pair) openPair() }
     LaunchedEffect(openTaskNotice) {
         if (openTaskNotice != null) {
-            route = EavesRoute.Home
+            route = CodeKilnRoute.Home
             if (openTaskNotice.sessionId == null) onNoticeConsumed()
         }
     }
     LaunchedEffect(openTaskNotice, route, live.phase, live.catalogReady, state.tasks, pairState.paired) {
         val id = openTaskNotice?.sessionId ?: return@LaunchedEffect
-        if (route != EavesRoute.Home) return@LaunchedEffect
+        if (route != CodeKilnRoute.Home) return@LaunchedEffect
         if (!pairState.paired || live.phase in setOf(LinkPhase.Revoked, LinkPhase.Failed, LinkPhase.Replaced)) onNoticeConsumed()
         else if (live.phase == LinkPhase.Online && live.catalogReady) {
             if (state.tasks.any { it.id == id }) openTask(id)
@@ -425,17 +427,17 @@ internal fun EavesApp(
             }.orEmpty())
             if (draft == launching?.text) onDraftEdit(descriptionKey, "")
             launching = null
-            route = EavesRoute.Session
+            route = CodeKilnRoute.Session
             showConfig = false
         }
     }
-    BackHandler(enabled = creating || route != EavesRoute.NewTask) { if (!creating) back() }
+    BackHandler(enabled = creating || route != CodeKilnRoute.NewTask) { if (!creating) back() }
     EnsoTheme {
         when (route) {
-            EavesRoute.NewTask -> NewTaskScreen(
+            CodeKilnRoute.NewTask -> NewTaskScreen(
                 state.copy(draft = draft, project = config.project(live.projects)?.name ?: state.project,
                     model = config.model(live.providers)?.label?.let { model -> config.thinkingLevel?.let { "$model · ${it.title()}" } ?: model } ?: state.model,
-                    composerEnabled = !creating), onHome = { if (!creating) route = EavesRoute.Home }, onPair = openPair,
+                    composerEnabled = !creating), onHome = { if (!creating) route = CodeKilnRoute.Home }, onPair = openPair,
                 onConfig = { if (!creating) { if (state.online) { keyboard?.hide(); showConfig = true } else openPair() } },
                 onBoard = openBoard, onTask = openTask, onDraft = { onDraftEdit(descriptionKey, it) },
                 onSend = config.launch(live.projects, live.providers, draft)?.takeIf {
@@ -444,14 +446,14 @@ internal fun EavesApp(
                 }?.let { request -> { keyboard?.hide(); launching = request; onCreateTask?.invoke(request) } },
                 footer = {
                     CreationNotice(creation, draft.length > SESSION_TEXT_LIMIT,
-                        onReview = { route = EavesRoute.Home }, onUnlock = { confirmNew = true })
+                        onReview = { route = CodeKilnRoute.Home }, onUnlock = { confirmNew = true })
                 },
             )
-            EavesRoute.Home -> HomeScreen(
-                state, onNew = { route = EavesRoute.NewTask }, onPair = openPair, onTask = openTask,
+            CodeKilnRoute.Home -> HomeScreen(
+                state, onNew = { route = CodeKilnRoute.NewTask }, onPair = openPair, onTask = openTask,
                 onBoard = openBoard, onMembers = openMembers, onSettings = openSettings, onUnavailable = unavailable,
             )
-            EavesRoute.Members -> {
+            CodeKilnRoute.Members -> {
                 LaunchedEffect(live.phase) {
                     if (live.phase == LinkPhase.Online) {
                         onRequestBots?.invoke()
@@ -476,26 +478,26 @@ internal fun EavesApp(
                     drafts = drafts, onDraftEdit = onDraftEdit, onDraftPin = onDraftPin,
                     onDraftConfirmed = onDraftConfirmed)
             }
-            EavesRoute.Board -> BoardScreen(
+            CodeKilnRoute.Board -> BoardScreen(
                 live.catalog.filterNot { it.archived }, System.currentTimeMillis(), onBack = back, onTask = openTask,
             )
-            EavesRoute.Pair -> PairScreen(onClose = back, specimen = pairSpecimen, state = pairState,
+            CodeKilnRoute.Pair -> PairScreen(onClose = back, specimen = pairSpecimen, state = pairState,
                 link = pairLink, onLink = onPairLink, onPair = onPair, onReconnect = onReconnect,
                 onUnpair = onUnpair, scanner = scanner, onWatch = onWatch, onNotificationSettings = onNotificationSettings)
-            EavesRoute.Settings -> SettingsScreen(settings, onBack = back,
+            CodeKilnRoute.Settings -> SettingsScreen(settings, onBack = back,
                 onReconnect = onReconnect.takeIf { pairState.paired && !pairState.busy },
                 onWatch = onWatch, onNotificationSettings = onNotificationSettings,
                 onUnpair = onUnpair, onPair = openPair)
-            EavesRoute.Session -> {
+            CodeKilnRoute.Session -> {
                 val task = live.catalog.firstOrNull { it.id == selectedId && !it.archived }
                 val canConfigure = task != null && task.parentId == null && live.catalogReady
-                val currentConfigSession = { subscribedId?.takeIf { route == EavesRoute.Session && selectedId == it } }
+                val currentConfigSession = { subscribedId?.takeIf { route == CodeKilnRoute.Session && selectedId == it } }
                 val header = sessionSpecimen?.header ?: SessionHeader(
                     task?.title ?: selectedTitle ?: "会话", task?.projectName?.takeIf { it.isNotBlank() } ?: selectedProject,
                 )
                 SessionScreen(header, sessionSpecimen?.state ?: live.session?.takeIf { it.timeline.sessionId == selectedId },
                     if (sessionSpecimen != null) LinkPhase.Online else live.phase, live.readOnly,
-                    onDrawer = { route = EavesRoute.Home }, onRetry = onSessionRetry, onHistory = onHistory,
+                    onDrawer = { route = CodeKilnRoute.Home }, onRetry = onSessionRetry, onHistory = onHistory,
                     onApproval = { requestId, decision -> subscribedId?.let { onApproval(it, requestId, decision) } },
                     onAsk = { requestId, answer -> subscribedId?.let { onAsk(it, requestId, answer) } }, specimen = sessionSpecimen,
                     draft = sessionDraft, onDraft = onSessionDraft,
@@ -566,7 +568,7 @@ internal fun EavesApp(
                     } })
             }
         }
-        if (showConfig && route == EavesRoute.NewTask) NewTaskConfigSheet(
+        if (showConfig && route == CodeKilnRoute.NewTask) NewTaskConfigSheet(
             live.projects, live.providers, config, state.online && !live.readOnly && !creating,
             onChange = { config = it }, onDismiss = { showConfig = false })
         if (confirmNew) AlertDialog(onDismissRequest = { confirmNew = false },

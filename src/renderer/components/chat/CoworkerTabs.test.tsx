@@ -79,7 +79,7 @@ describe('协作者标签操作语义', () => {
     const html = renderToStaticMarkup(
       createElement(CoworkerTabs, { parentId: 'parent', displayedId: 'parent' })
     );
-    expect(html).toContain('Collabra · a1');
+    expect(html).toContain('CodeKiln · a1');
     expect(html).not.toContain('Enso · a1');
     expect(mock.state.conversations.coworker).toHaveProperty(
       'child.agentInstanceName',

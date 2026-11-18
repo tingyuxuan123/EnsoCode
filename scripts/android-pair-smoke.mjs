@@ -10,14 +10,14 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
 if (!sdk) throw new Error('ANDROID_HOME must identify the local Android SDK');
 const adb = path.join(sdk, 'platform-tools', process.platform === 'win32' ? 'adb.exe' : 'adb');
-const serial = process.env.EAVES_TEST_EMULATOR ?? 'emulator-5554';
-const pkg = 'io.github.tingyuxuan123.eaves';
+const serial = process.env.CODEKILN_TEST_EMULATOR ?? 'emulator-5554';
+const pkg = 'io.github.tingyuxuan123.codekiln';
 const runner = `${pkg}.test/androidx.test.runner.AndroidJUnitRunner`;
 const testClass = `${pkg}.PairingLoopbackTest`;
-const output = path.join(root, 'temp/eaves-pair-live');
-const temporary = await mkdtemp(path.join(tmpdir(), 'eaves-app-pair-'));
+const output = path.join(root, 'temp/codekiln-pair-live');
+const temporary = await mkdtemp(path.join(tmpdir(), 'codekiln-app-pair-'));
 const children = [];
-const watchMode = process.env.EAVES_BACKGROUND_SMOKE === '1';
+const watchMode = process.env.CODEKILN_BACKGROUND_SMOKE === '1';
 let grantedWatchPermission = false;
 
 function command(binary, args, timeout = 20_000) {
@@ -145,7 +145,7 @@ try {
     .toString('base64url');
   android('shell', 'cmd', 'uimode', 'night', 'no');
   instrument('claimAndShowAuthenticatedCatalog', {
-    eavesPairInviteB64: Buffer.from(invite).toString('base64url'),
+    codekilnPairInviteB64: Buffer.from(invite).toString('base64url'),
   });
   await writeFile(
     path.join(output, 'pair-light.png'),
@@ -158,12 +158,14 @@ try {
   android('shell', 'am', 'force-stop', pkg);
   android('shell', 'cmd', 'uimode', 'night', 'yes');
   if (watchMode)
-    instrument('backgroundWatchPostsAndOpensAuthenticatedTask', { eavesWatchPairId: expectedId });
+    instrument('backgroundWatchPostsAndOpensAuthenticatedTask', {
+      codekilnWatchPairId: expectedId,
+    });
   else
     instrument('restoreAfterProcessRestartAndUnpair', {
-      eavesPairRestore: '1',
-      eavesPairExpectedId: expectedId,
-      eavesSessionFlow: process.env.EAVES_SESSION_SMOKE === '1' ? '1' : '0',
+      codekilnPairRestore: '1',
+      codekilnPairExpectedId: expectedId,
+      codekilnSessionFlow: process.env.CODEKILN_SESSION_SMOKE === '1' ? '1' : '0',
     });
   if (!watchMode)
     await writeFile(
@@ -187,7 +189,7 @@ try {
       'Foreground service retained authenticated catalog while the emulator screen was off; a task notification opened its exact session, and stop cleared notifications.'
     );
   }
-  if (!watchMode && process.env.EAVES_SESSION_SMOKE === '1') {
+  if (!watchMode && process.env.CODEKILN_SESSION_SMOKE === '1') {
     for (const name of [
       'session-approval-dark.png',
       'session-ask-dark.png',
@@ -213,7 +215,7 @@ try {
 } finally {
   if (expectedId) {
     try {
-      instrument('cleanupLoopbackFixture', { eavesPairCleanup: expectedId });
+      instrument('cleanupLoopbackFixture', { codekilnPairCleanup: expectedId });
     } catch {
       console.error('Fixture cleanup needs attention; no existing pairing was overwritten.');
       process.exitCode = 1;

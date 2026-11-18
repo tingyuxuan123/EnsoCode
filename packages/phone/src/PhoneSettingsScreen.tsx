@@ -160,7 +160,7 @@ export function PhoneSettingsScreen({
         )}
         {pushAvailability === 'ok' && connected && !pushConfigReady && (
           <p className="pt-2 text-[11px] leading-4 text-faint">
-            需先升级桌面端 Collabra 才能开启推送。
+            需先升级桌面端 CodeKiln 才能开启推送。
           </p>
         )}
         {pushAvailability === 'needs-install' && (

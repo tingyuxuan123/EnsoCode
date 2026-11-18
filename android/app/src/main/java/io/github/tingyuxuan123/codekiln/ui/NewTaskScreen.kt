@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.tingyuxuan123.eaves.R
+import io.github.tingyuxuan123.codekiln.R
 
 internal data class NewTaskUiState(
     val greeting: String = "你好",
@@ -121,7 +121,7 @@ private fun TaskGlanceCard(glance: TaskGlance, onTask: (String) -> Unit, onBoard
         Row(Modifier.padding(start = 14.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(24.dp).background(c.card, CircleShape), contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.eaves_running_small), "Collabra 运行中", Modifier.size(20.dp))
+                Image(painterResource(R.drawable.codekiln_running_small), "CodeKiln 运行中", Modifier.size(20.dp))
             }
             Label("任务看板", 15, 20, weight = FontWeight.SemiBold)
         }
@@ -152,7 +152,7 @@ private fun TaskGlanceCard(glance: TaskGlance, onTask: (String) -> Unit, onBoard
 internal fun StatusGlyph(status: TaskStatus, modifier: Modifier = Modifier) {
     when (status) {
         TaskStatus.Waiting -> Glyph(EnsoIcon.Waiting, modifier.size(16.dp), Enso.colors.yellow, "等待处理")
-        TaskStatus.Running -> Image(painterResource(R.drawable.eaves_running_small), "运行中", modifier.size(16.dp))
+        TaskStatus.Running -> Image(painterResource(R.drawable.codekiln_running_small), "运行中", modifier.size(16.dp))
         TaskStatus.Error -> Glyph(EnsoIcon.Error, modifier.size(16.dp), Enso.colors.red, "出错")
         TaskStatus.Done, TaskStatus.Idle -> Unit
     }

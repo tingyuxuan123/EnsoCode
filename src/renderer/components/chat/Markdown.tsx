@@ -144,7 +144,7 @@ function revealErrorDescription(error: string, t: (key: string) => string): stri
     case 'unavailable':
       return t('The linked file or folder is unavailable.');
     case 'unsupported-viewer':
-      return t('This file format cannot be previewed inside Collabra.');
+      return t('This file format cannot be previewed inside CodeKiln.');
     case 'too-large':
       return t('The image is too large to preview.');
     case 'invalid-application':

@@ -4,7 +4,7 @@ export function pluginInstallUrlFromLink(raw: string): string | null {
   try {
     const url = new URL(raw.trim());
     if (
-      url.protocol !== 'enso:' ||
+      url.protocol !== 'codekiln:' ||
       url.hostname !== 'install-plugin' ||
       (url.pathname !== '' && url.pathname !== '/') ||
       url.username ||

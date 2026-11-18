@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
@@ -10,15 +10,15 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.pair.SessionMessage
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.SessionHeader
-import io.github.tingyuxuan123.eaves.ui.SessionScreen
-import io.github.tingyuxuan123.eaves.ui.TimelineImage
-import io.github.tingyuxuan123.eaves.ui.decodeTimelineImage
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.pair.SessionMessage
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.SessionHeader
+import io.github.tingyuxuan123.codekiln.ui.SessionScreen
+import io.github.tingyuxuan123.codekiln.ui.TimelineImage
+import io.github.tingyuxuan123.codekiln.ui.decodeTimelineImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.serialization.json.JsonObject
@@ -79,7 +79,7 @@ class SessionTimelineRenderTest {
             "bash · ./gradlew check", "web_fetch · 读取官方文档", "task_output · 读取后台任务结果", "apply_patch · 更新图标映射")) {
             compose.onNodeWithText(row).assertIsDisplayed()
         }
-        if (InstrumentationRegistry.getArguments().getString("eavesWorklogIconsCapture") == "1") {
+        if (InstrumentationRegistry.getArguments().getString("codekilnWorklogIconsCapture") == "1") {
             compose.waitForIdle()
             val instrument = InstrumentationRegistry.getInstrumentation()
             val bitmap = requireNotNull(instrument.uiAutomation.takeScreenshot())

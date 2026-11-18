@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 internal enum class TaskStatus { Waiting, Running, Error, Done, Idle }
 

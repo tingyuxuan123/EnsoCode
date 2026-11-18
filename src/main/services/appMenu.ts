@@ -1,9 +1,9 @@
 import { app, Menu, type MenuItemConstructorOptions } from 'electron';
 
-export const APP_DISPLAY_NAME = 'Collabra';
+export const APP_DISPLAY_NAME = 'CodeKiln';
 
 /**
- * Electron 默认 appMenu 用 app.name（package.json name = enso-code）拼 About/Hide/Quit。
+ * Electron 默认 appMenu 用 app.name（package.json name = codekiln）拼 About/Hide/Quit。
  * 不能改 app.name：macOS safeStorage 钥匙串条目按 app.name 命名，改了会解不开已存凭据。
  */
 export function macAppMenuTemplate(): MenuItemConstructorOptions[] {

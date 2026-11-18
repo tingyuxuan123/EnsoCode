@@ -27,7 +27,7 @@ tasks.test {
     // Repository-controlled TS golden vectors; no credentials or developer configuration.
     val vectors = rootProject.file("../packages/pair/vectors")
     inputs.dir(vectors).withPathSensitivity(PathSensitivity.RELATIVE)
-    systemProperty("eaves.pair.vectors", vectors.absolutePath)
+    systemProperty("codekiln.pair.vectors", vectors.absolutePath)
     filter.excludeTestsMatching("*.KotlinGuestInteropTest")
 }
 
@@ -37,9 +37,9 @@ tasks.register<Test>("interopTest") {
     group = "verification"
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
-    filter.includeTestsMatching("io.github.tingyuxuan123.eaves.pair.KotlinGuestInteropTest")
-    environment("EAVES_KOTLIN_PAIR_GO", "1")
-    systemProperty("eaves.pair.workspace", rootProject.projectDir.parentFile.absolutePath)
+    filter.includeTestsMatching("io.github.tingyuxuan123.codekiln.pair.KotlinGuestInteropTest")
+    environment("CODEKILN_KOTLIN_PAIR_GO", "1")
+    systemProperty("codekiln.pair.workspace", rootProject.projectDir.parentFile.absolutePath)
     // This is real network/process work; never report a cached or skipped smoke as current evidence.
     doNotTrackState("A fresh relay process and pairing are required for each smoke run")
 }

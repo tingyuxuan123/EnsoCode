@@ -140,7 +140,7 @@ export async function sendPush(pairId: string, payload: PushPayload): Promise<vo
   try {
     await webPush.sendNotification(subscription, JSON.stringify(payload), {
       vapidDetails: {
-        subject: 'https://github.com/enso-code',
+        subject: 'https://github.com/tingyuxuan123/EnsoCode',
         publicKey: store.vapid.publicKey,
         privateKey: store.vapid.privateKey,
       },

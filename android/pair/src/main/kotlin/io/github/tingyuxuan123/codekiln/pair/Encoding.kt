@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import java.io.ByteArrayOutputStream
 import java.net.IDN
@@ -11,6 +11,9 @@ data class PairInvite(val relay: String, val publicKey: ByteArray)
 
 /** Compatibility boundary for packages/pair/src/encoding.ts. No network or Android dependency. */
 object PairEncoding {
+    const val PAIR_SCHEME = "codekiln"
+    const val PAIR_HOST = "pair"
+
     fun toBase64Url(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
     fun fromBase64Url(text: String): ByteArray {
@@ -27,7 +30,7 @@ object PairEncoding {
 
     fun parsePairUri(uri: String): PairInvite {
         val text = uri.trim { it.isWhitespace() || it == '\uFEFF' }
-        if (text.startsWith("enso://pair?")) {
+        if (text.startsWith("$PAIR_SCHEME://$PAIR_HOST?")) {
             // TS's custom-scheme regex is not dotAll; embedded line terminators cannot match.
             require(text.none { it == '\r' || it == '\n' || it == '\u2028' || it == '\u2029' }) {
                 "Invalid pair URI"

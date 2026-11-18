@@ -59,8 +59,8 @@ if (!app.isPackaged) {
 applyWindowsChromiumSwitches(app.commandLine);
 
 // 自动化可在开发环境显式指定 userData；打包版永不接受环境覆盖。
-// dev 缺省隔离到 appData/enso-code-dev：与打包版彻底分离，避免单实例锁 /
-// Chromium profile 锁冲突（对齐 EnsoAI 的 dev profile 方案）。
+// dev 与打包版使用不同目录，避免单实例锁 / Chromium profile 锁冲突。
+// 品牌改名不改目录名：已保存的会话和工作区记录引用了原目录下的绝对路径。
 const developmentUserData = !app.isPackaged ? process.env.ENSO_USER_DATA_DIR?.trim() : undefined;
 app.setPath(
   'userData',
@@ -118,7 +118,7 @@ if (!gotTheLock) {
     });
 
     registerIpcHandlers();
-    if (app.isPackaged) app.setAsDefaultProtocolClient('enso');
+    if (app.isPackaged) app.setAsDefaultProtocolClient('codekiln');
     pluginInstallInbox.start((url) => {
       void import('./ipc/window').then(({ openSettingsDeepLink }) =>
         openSettingsDeepLink(pluginInstallSettingsLink(url))

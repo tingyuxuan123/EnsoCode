@@ -319,7 +319,7 @@ export function createController(
           throw new Error('仅限明确启用写入并校准的测试副本');
         const address = text(args.address, '空白测试单元格', 12);
         if ((await sheet.readCell(address)) !== '') throw new Error('测试格不是空白，不会覆盖');
-        const marker = `Collabra-读回验证-${randomUUID()}`;
+        const marker = `CodeKiln-读回验证-${randomUUID()}`;
         // 未知结果不自动重放/清理，下一步错误需用户查看该指定测试格。
         state.writeTested = false;
         await save(data);

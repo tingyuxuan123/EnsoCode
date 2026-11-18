@@ -45,7 +45,7 @@ describe('Bot injected messages', () => {
 });
 
 describe('回复头品牌', () => {
-  it('Code 和远程普通回复使用 Collabra，保留真实模型与时间', () => {
+  it('Code 和远程普通回复使用 CodeKiln，保留真实模型与时间', () => {
     for (const host of [null, { sessionId: 'remote', canRewind: false, canRetry: false }]) {
       const html = renderToStaticMarkup(
         createElement(
@@ -54,7 +54,7 @@ describe('回复头品牌', () => {
           createElement(ReplyHeader, { model: 'gonshi/gpt-6.1-sol', at: 1_700_000_000_000 })
         )
       );
-      expect(html).toContain('>Collabra</span>');
+      expect(html).toContain('>CodeKiln</span>');
       expect(html).not.toContain('>Enso</span>');
       expect(html).toContain('gonshi/gpt-6.1-sol');
       expect(html).toMatch(/\d{2}:\d{2}/);
@@ -72,6 +72,6 @@ describe('回复头品牌', () => {
       createElement(ChatHostContext.Provider, { value: host }, createElement(ReplyHeader))
     );
     expect(html).toContain('>Enso</span>');
-    expect(html).not.toContain('>Collabra</span>');
+    expect(html).not.toContain('>CodeKiln</span>');
   });
 });

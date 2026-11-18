@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.FrameReplay
-import io.github.tingyuxuan123.eaves.pair.ReplayRole
+import io.github.tingyuxuan123.codekiln.pair.FrameReplay
+import io.github.tingyuxuan123.codekiln.pair.ReplayRole
 import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -61,7 +61,7 @@ class DesktopLinkTransportTest {
                 }
             }))
             val link = DesktopLink(
-                PairCredentials("pair-1", "a&b=+/", key, "Eaves", "http://127.0.0.1:${server.port}/relay/"),
+                PairCredentials("pair-1", "a&b=+/", key, "CodeKiln", "http://127.0.0.1:${server.port}/relay/"),
                 { pins.incrementAndGet() }, allowLoopbackHttp = true,
             )
             try {
@@ -92,7 +92,7 @@ class DesktopLinkTransportTest {
                 server.enqueue(MockResponse().setResponseCode(302)
                     .addHeader("Location", "http://127.0.0.1:${target.port}/?token=opaque"))
                 val link = DesktopLink(
-                    PairCredentials("pair-1", "opaque", ByteArray(32), "Eaves", "http://127.0.0.1:${server.port}"),
+                    PairCredentials("pair-1", "opaque", ByteArray(32), "CodeKiln", "http://127.0.0.1:${server.port}"),
                     {}, allowLoopbackHttp = true,
                 )
                 try {

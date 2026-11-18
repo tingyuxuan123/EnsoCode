@@ -157,7 +157,7 @@ describe('原子私有插件登记表', () => {
       { kind: 'url', url: 'http://example.com/a.zip' },
       { kind: 'dir', path: '../relative' },
       { kind: 'market', id: '../bad' },
-      { kind: 'market', id: valid.id, marketId: 'Collabra!' },
+      { kind: 'market', id: valid.id, marketId: 'CodeKiln!' },
       { kind: 'market', id: valid.id, marketId: 'x'.repeat(33) },
       { kind: 'market', id: valid.id, marketId: 7 },
       { kind: 'unknown' },

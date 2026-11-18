@@ -91,7 +91,7 @@ export interface PluginMarketOptions {
   /** 市场身份；缓存与防回滚 sequence 都以它为键 */
   marketId: string;
   fetch: MarketFetch;
-  /** Collabra fork：DNS 结果必须校验并钉住连接；缺省用系统解析 */
+  /** CodeKiln fork：DNS 结果必须校验并钉住连接；缺省用系统解析 */
   resolve?: ResolveAddresses;
   hostVersion: string;
   /** 宿主平台，缺省用 process.platform；测试可注入 */

@@ -1,10 +1,10 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
-import io.github.tingyuxuan123.eaves.pair.SessionMessage
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.pair.SessionTimelineReducer
-import io.github.tingyuxuan123.eaves.pair.SessionTodo
-import io.github.tingyuxuan123.eaves.pair.SessionTodoStatus
+import io.github.tingyuxuan123.codekiln.pair.SessionMessage
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.pair.SessionTimelineReducer
+import io.github.tingyuxuan123.codekiln.pair.SessionTodo
+import io.github.tingyuxuan123.codekiln.pair.SessionTodoStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject

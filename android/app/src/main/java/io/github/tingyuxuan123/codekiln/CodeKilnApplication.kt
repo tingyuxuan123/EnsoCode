@@ -1,30 +1,30 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.app.Application
 import android.os.Build
-import io.github.tingyuxuan123.eaves.mirror.AndroidPairCredentialStore
-import io.github.tingyuxuan123.eaves.mirror.AndroidTextDraftStore
-import io.github.tingyuxuan123.eaves.mirror.DesktopLink
-import io.github.tingyuxuan123.eaves.mirror.DesktopGoal
-import io.github.tingyuxuan123.eaves.mirror.GoalCommand
-import io.github.tingyuxuan123.eaves.mirror.MaintenanceBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionMaintenanceCommand
-import io.github.tingyuxuan123.eaves.mirror.RewindBaseline
-import io.github.tingyuxuan123.eaves.mirror.SessionTaskKind
-import io.github.tingyuxuan123.eaves.mirror.TaskStopBaseline
-import io.github.tingyuxuan123.eaves.mirror.BotThreadCommand
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotArtifactTarget
-import io.github.tingyuxuan123.eaves.mirror.RelayPairingClient
-import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.eaves.mirror.SessionImage
-import io.github.tingyuxuan123.eaves.mirror.QueueCommand
+import io.github.tingyuxuan123.codekiln.mirror.AndroidPairCredentialStore
+import io.github.tingyuxuan123.codekiln.mirror.AndroidTextDraftStore
+import io.github.tingyuxuan123.codekiln.mirror.DesktopLink
+import io.github.tingyuxuan123.codekiln.mirror.DesktopGoal
+import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
+import io.github.tingyuxuan123.codekiln.mirror.MaintenanceBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionMaintenanceCommand
+import io.github.tingyuxuan123.codekiln.mirror.RewindBaseline
+import io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind
+import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
+import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
+import io.github.tingyuxuan123.codekiln.mirror.RelayPairingClient
+import io.github.tingyuxuan123.codekiln.mirror.TaskLaunch
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.mirror.SessionImage
+import io.github.tingyuxuan123.codekiln.mirror.QueueCommand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 /** One foreground link per application process; credentials never enter a Compose state. */
-class EavesApplication : Application() {
+class CodeKilnApplication : Application() {
     private val draftStore by lazy { AndroidTextDraftStore(this) }
 
     /** Composer text kept across pages and restarts, scoped to the current pairing identity. */
@@ -78,10 +78,10 @@ class EavesApplication : Application() {
                     override fun listPreviews(sessionId: String) = link.listPreviews(sessionId)
                     override fun openPreview(sessionId: String, entryId: String, width: Int, height: Int) =
                         link.openPreview(sessionId, entryId, width, height)
-                    override fun previewAction(sessionId: String, action: io.github.tingyuxuan123.eaves.mirror.DesktopPreviewAction) =
+                    override fun previewAction(sessionId: String, action: io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction) =
                         link.previewAction(sessionId, action)
                     override fun previewInput(sessionId: String,
-                        input: io.github.tingyuxuan123.eaves.mirror.DesktopPreviewInput) = link.previewInput(sessionId, input)
+                        input: io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput) = link.previewInput(sessionId, input)
                     override fun requestBots() = link.requestBots()
                     override fun requestInbox() = link.requestInbox()
                     override fun openBotChat(chatId: String) = link.openBotChat(chatId)

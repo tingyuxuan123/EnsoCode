@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.net.Uri
 import android.os.Build
@@ -12,7 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.ui.importSessionPictures
+import io.github.tingyuxuan123.codekiln.ui.importSessionPictures
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
@@ -27,7 +27,7 @@ class PhotoPickerDeviceTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun systemPickerReturnsOnlyGrantedFixtureAndImporterCanReadIt() = runBlocking {
-        assumeTrue(Build.VERSION.SDK_INT >= 33 && InstrumentationRegistry.getArguments().getString("eavesPhotoPicker") == "1")
+        assumeTrue(Build.VERSION.SDK_INT >= 33 && InstrumentationRegistry.getArguments().getString("codekilnPhotoPicker") == "1")
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
         val selected = AtomicReference(emptyList<Uri>())
         compose.setContent {

@@ -45,7 +45,7 @@ it('exposes separate reply identity, model and time slots without depending on t
   );
   const { document } = parseHTML(html);
   expect(document.querySelector('[data-reply-header] [data-reply-name]')?.textContent).toBe(
-    'Collabra'
+    'CodeKiln'
   );
   expect(document.querySelector('[data-reply-model]')?.textContent).toBe(
     'gonshi/gpt-6.1-sol-long-provider-model-name'

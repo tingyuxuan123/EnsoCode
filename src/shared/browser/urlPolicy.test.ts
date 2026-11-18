@@ -16,7 +16,7 @@ describe('assertAllowedUrl', () => {
     for (const raw of [
       'file:///etc/passwd',
       'javascript:alert(1)',
-      'enso://settings',
+      'codekiln://settings',
       'chrome://settings',
       'devtools://x',
       'data:text/html,hi',

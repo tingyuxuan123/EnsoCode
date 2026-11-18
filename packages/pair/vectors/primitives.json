@@ -78,7 +78,7 @@
   ],
   "invites": [
     {
-      "uri": "enso://pair?relay=https%3A%2F%2Frelay.example.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+      "uri": "codekiln://pair?relay=https%3A%2F%2Frelay.example.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
       "relay": "https://relay.example.test",
       "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
     },
@@ -88,7 +88,7 @@
       "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
     },
     {
-      "uri": "  enso://pair?relay=https%3A%2F%2Frelay.example.test%2F&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI  ",
+      "uri": "  codekiln://pair?relay=https%3A%2F%2Frelay.example.test%2F&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI  ",
       "relay": "https://relay.example.test/",
       "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
     },
@@ -138,7 +138,7 @@
       "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
     },
     {
-      "uri": "enso://pair?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw",
+      "uri": "codekiln://pair?relay=https%3A%2F%2Ffirst.test&relay=https%3A%2F%2Fsecond.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI&pk=PmpVCC7sk9s_lDfzCI_ekGwtkP81cylw-6l3jnlQThw",
       "relay": "https://first.test",
       "publicKey": "aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI"
     }
@@ -147,11 +147,11 @@
     "",
     "not a pair uri",
     "ftp://relay.example.test/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
-    "enso://other?relay=https%3A%2F%2Frelay.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "codekiln://other?relay=https%3A%2F%2Frelay.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
     "ENSO://pair?relay=https%3A%2F%2Frelay.test&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
-    "enso://pair?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
-    "enso://pair?relay=https%3A%2F%2Frelay.test",
-    "enso://pair?relay=&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "codekiln://pair?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
+    "codekiln://pair?relay=https%3A%2F%2Frelay.test",
+    "codekiln://pair?relay=&pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI",
     "https://relay.example.test/#pk=",
     "https://relay.example.test/#pk=!!!!",
     "https://relay.example.test/?pk=aQ0zoCbEgEvuyDMPFaptO4MohiRMDDbyy0fPqOje1RI#unrelated=1",

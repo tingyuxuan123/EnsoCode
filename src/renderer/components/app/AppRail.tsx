@@ -9,7 +9,6 @@ import {
   SquareKanban,
   SquareTerminal,
 } from 'lucide-react';
-import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
@@ -63,13 +62,10 @@ export function AppRail({
   return (
     <nav
       data-slot="app-rail"
-      aria-label="Collabra"
+      aria-label="CodeKiln"
       // 固定像素宽：根字号可调（--font-size-base），图标轨不随 rem 缩放
       className="flex w-[56px] shrink-0 flex-col items-center gap-[8px] bg-shell py-[12px]"
     >
-      <div className="mb-[4px] flex size-[32px] items-center justify-center text-foreground">
-        <EnsoMark className="size-[24px]" />
-      </div>
       {onToggleSidebar && (
         <RailTip label={sidebarLabel} shortcut={shortcut(bindings['toggle-sidebar'])}>
           <button
@@ -173,14 +169,14 @@ export function AppRail({
       )}
       <div className="flex-1" />
       <StatusBar />
-      <RailTip label={t('Ask Collabra')}>
+      <RailTip label={t('Ask CodeKiln')}>
         <button
           type="button"
           onClick={() => {
             void window.electronAPI.window.summonAgent({ typeKey: ENSO_AGENT_TYPE_KEY });
           }}
           className={cn(RAIL_BUTTON, 'text-brand hover:text-brand')}
-          aria-label={t('Ask Collabra')}
+          aria-label={t('Ask CodeKiln')}
         >
           <Sparkles className="size-[19px]" />
         </button>

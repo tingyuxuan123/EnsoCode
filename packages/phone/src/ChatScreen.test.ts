@@ -64,12 +64,12 @@ it('pending approval replaces the input instead of stacking a disabled composer 
   expect(render({ view })).not.toContain('data-draft-key');
 });
 
-it('没有选中会话时的空态用对外品牌「Collabra」，图标走应用图标而不是内联旧 logo', () => {
+it('没有选中会话时的空态用对外品牌「CodeKiln」，图标走应用图标而不是内联旧 logo', () => {
   const html = render({ sessionId: null });
-  expect(html).toContain('Collabra');
+  expect(html).toContain('CodeKiln');
   expect(html).not.toContain('EnsoCode');
   expect(html).toContain('src="/icons/logo-192.png"');
-  expect(html).toContain('alt="Collabra"');
+  expect(html).toContain('alt="CodeKiln"');
 });
 
 it('Code 和 Bot 都能看到本地握手发送失败，而不是只有 Bot notice', () => {

@@ -23,7 +23,7 @@ import {
   type TimelineItem,
 } from '@/stores/sessions/timeline';
 import { useSettingsStore } from '@/stores/settings';
-import { EavesWorkingIcon } from './EavesWorkingIcon';
+import { CodeKilnWorkingIcon } from './CodeKilnWorkingIcon';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
@@ -602,7 +602,7 @@ export function MessageTimeline({
           data-timeline-busy=""
           className="flex min-h-[calc(26rem/14)] items-center gap-2 text-[calc(13rem/14)]"
         >
-          <EavesWorkingIcon />
+          <CodeKilnWorkingIcon />
           <span className="t-shimmer" data-text={loading ? t('Loading…') : t('Working…')}>
             {loading ? t('Loading…') : t('Working…')}
           </span>

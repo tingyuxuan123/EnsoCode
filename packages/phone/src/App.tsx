@@ -1432,7 +1432,7 @@ export function App() {
         ) : (
           <ChatScreen
             sessionId={activeId}
-            title={entry?.title || (activeId ? '会话' : 'Collabra')}
+            title={entry?.title || (activeId ? '会话' : 'CodeKiln')}
             projectName={entry?.projectName ?? ''}
             cwd={entry?.cwd}
             readImage={activeReadImage}

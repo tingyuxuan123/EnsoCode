@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -7,8 +7,8 @@ import android.media.ExifInterface
 import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.tingyuxuan123.eaves.ui.PictureImportException
-import io.github.tingyuxuan123.eaves.ui.prepareSessionPicture
+import io.github.tingyuxuan123.codekiln.ui.PictureImportException
+import io.github.tingyuxuan123.codekiln.ui.prepareSessionPicture
 import java.io.ByteArrayInputStream
 import java.io.File
 import kotlinx.coroutines.runBlocking

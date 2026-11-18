@@ -67,7 +67,7 @@ export function SmartCompactPicker() {
             </h4>
             <p className="mt-0.5 text-muted-foreground text-[calc(12rem/14)]">
               {t(
-                'Standard uses default compact. Smart compaction uses Collabra verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.'
+                'Standard uses default compact. Smart compaction uses CodeKiln verified summary at compact time. Codex native compaction additionally stores an official Codex checkpoint on Codex models and uses smart compaction otherwise. Continuous memory records observations in the background so compact keeps more context; all fall back to default compact on failure. Switching strategy takes effect on the next session. The summary model and compaction mode apply to open conversations on the next compaction.'
               )}
             </p>
           </div>

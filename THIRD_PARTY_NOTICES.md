@@ -2,7 +2,7 @@
 
 ## 小满 Android icons
 
-The native Android icons in `android/app/src/main/java/io/github/tingyuxuan123/eaves/ui/EnsoIcons.kt`
+The native Android icons in `android/app/src/main/java/io/github/tingyuxuan123/codekiln/ui/EnsoIcons.kt`
 are converted from the design document's Lucide (ISC, with applicable Feather MIT
 attribution) and Pictogrammers Material Design Icons (Apache-2.0) paths. Applicable
 licenses and attribution are bundled in `android/app/src/main/assets/licenses/`;

@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -21,12 +21,12 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.DesktopModel
-import io.github.tingyuxuan123.eaves.mirror.DesktopProject
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.NewTaskConfigSheet
-import io.github.tingyuxuan123.eaves.ui.TaskConfiguration
+import io.github.tingyuxuan123.codekiln.mirror.DesktopModel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProject
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.NewTaskConfigSheet
+import io.github.tingyuxuan123.codekiln.ui.TaskConfiguration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule

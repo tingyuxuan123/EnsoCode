@@ -58,7 +58,7 @@ describe('AppRail 精简导航', () => {
         designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
         collaborationBoard: { active: false, onToggle: vi.fn() },
       })
-    ).toEqual(['Image studio', 'Design', 'Collaboration board', 'Ask Collabra', 'Settings']);
+    ).toEqual(['Image studio', 'Design', 'Collaboration board', 'Ask CodeKiln', 'Settings']);
     const document = parseHTML(
       renderToStaticMarkup(
         createElement(AppRail, {
@@ -83,7 +83,7 @@ describe('AppRail 精简导航', () => {
       'Code',
       'Image studio',
       'Design',
-      'Ask Collabra',
+      'Ask CodeKiln',
       'Settings',
     ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
@@ -100,7 +100,7 @@ describe('AppRail 精简导航', () => {
       imageStudio: { active: true, onToggle: vi.fn() },
       designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
     };
-    expect(railItems(props)).toEqual(['Image studio', 'Design', 'Ask Collabra', 'Settings']);
+    expect(railItems(props)).toEqual(['Image studio', 'Design', 'Ask CodeKiln', 'Settings']);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
     expect(
       document.querySelector('[aria-label="Image studio"]')?.getAttribute('aria-pressed')
@@ -121,13 +121,14 @@ describe('AppRail 精简导航', () => {
       '---',
       'Design',
       'Collaboration board',
-      'Ask Collabra',
+      'Ask CodeKiln',
       'Settings',
     ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
-    const brand = document.querySelector('[data-slot="app-rail"]')?.firstElementChild;
-    expect(brand?.querySelector('img')?.getAttribute('src')).toContain('brand-mark.png');
-    expect(brand?.nextElementSibling?.getAttribute('aria-label')).toBe('Expand sidebar');
+    // 图标轨顶部不再挂品牌图，第一个入口就是侧栏开关
+    const first = document.querySelector('[data-slot="app-rail"]')?.firstElementChild;
+    expect(first?.getAttribute('aria-label')).toBe('Expand sidebar');
+    expect(document.querySelector('[data-slot="app-rail"] img')).toBeNull();
   });
 
   it('全局协作看板在设计入口下方，没有设计入口时仍显示', () => {
@@ -135,10 +136,10 @@ describe('AppRail 精简导航', () => {
       collaborationBoard: { active: true, attention: 3, onToggle: vi.fn() },
       designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
     };
-    expect(railItems(props)).toEqual(['Design', 'Collaboration board', 'Ask Collabra', 'Settings']);
+    expect(railItems(props)).toEqual(['Design', 'Collaboration board', 'Ask CodeKiln', 'Settings']);
     expect(railItems({ collaborationBoard: props.collaborationBoard })).toEqual([
       'Collaboration board',
-      'Ask Collabra',
+      'Ask CodeKiln',
       'Settings',
     ]);
     const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
@@ -167,7 +168,7 @@ describe('AppRail 精简导航', () => {
 
   it('设计入口只在宿主允许时出现，并反映画廊的切换状态', () => {
     const props = { designGallery: { label: 'Design', active: false, onToggle: vi.fn() } };
-    expect(railItems(props)).toEqual(['Design', 'Ask Collabra', 'Settings']);
+    expect(railItems(props)).toEqual(['Design', 'Ask CodeKiln', 'Settings']);
     const markup = (active: boolean) =>
       parseHTML(
         renderToStaticMarkup(
@@ -188,7 +189,7 @@ describe('AppRail 精简导航', () => {
         onToggleSidebar: vi.fn(),
         onOpenSearch: vi.fn(),
       })
-    ).toEqual(['Collapse sidebar', '---', 'Ask Collabra', 'Settings']);
+    ).toEqual(['Collapse sidebar', '---', 'Ask CodeKiln', 'Settings']);
   });
 
   it('收起时搜索紧跟侧栏开关、位于分隔符上方', () => {
@@ -198,10 +199,10 @@ describe('AppRail 精简导航', () => {
         onToggleSidebar: vi.fn(),
         onOpenSearch: vi.fn(),
       })
-    ).toEqual(['Expand sidebar', 'Search anything', '---', 'Ask Collabra', 'Settings']);
+    ).toEqual(['Expand sidebar', 'Search anything', '---', 'Ask CodeKiln', 'Settings']);
   });
 
   it('没有侧栏操作时仅保留全局入口', () => {
-    expect(railItems({})).toEqual(['Ask Collabra', 'Settings']);
+    expect(railItems({})).toEqual(['Ask CodeKiln', 'Settings']);
   });
 });

@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.pair
+package io.github.tingyuxuan123.codekiln.pair
 
 import java.net.URI
 import java.net.URLEncoder
@@ -19,14 +19,14 @@ import org.junit.Test
 class KotlinGuestInteropTest {
     @Test(timeout = 240_000)
     fun `Kotlin访客经真实Go中继完成配对认证流式同步审批提问和撤销`() {
-        assumeTrue("Set EAVES_KOTLIN_PAIR_GO=1 to run the loopback smoke", System.getenv("EAVES_KOTLIN_PAIR_GO") == "1")
-        val workspace = System.getProperty("eaves.pair.workspace")?.let(Path::of)
-            ?: throw AssertionError("eaves.pair.workspace must identify the repository")
+        assumeTrue("Set CODEKILN_KOTLIN_PAIR_GO=1 to run the loopback smoke", System.getenv("CODEKILN_KOTLIN_PAIR_GO") == "1")
+        val workspace = System.getProperty("codekiln.pair.workspace")?.let(Path::of)
+            ?: throw AssertionError("codekiln.pair.workspace must identify the repository")
         assertTrue("Workspace must be absolute", workspace.isAbsolute)
         assertTrue("Go relay source must exist", Files.isRegularFile(workspace.resolve("packages/relay-go/go.mod")))
         assertTrue("Repository fake host must exist", Files.isRegularFile(workspace.resolve("scripts/pair-fake-host.mjs")))
 
-        val directory = Files.createTempDirectory("eaves-kotlin-pair-")
+        val directory = Files.createTempDirectory("codekiln-kotlin-pair-")
         var cleanupKey: ByteArray? = null
         try {
             val contentKey = PairBox.generateContentKey().also { cleanupKey = it }

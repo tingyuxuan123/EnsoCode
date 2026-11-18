@@ -34,7 +34,7 @@ export interface McpOAuthProviderOptions {
   state: string;
   store: McpOAuthStore;
   openExternal: (url: string) => void | Promise<void>;
-  /** 动态注册用的 client_name；缺省 Collabra */
+  /** 动态注册用的 client_name；缺省 CodeKiln */
   clientName?: string;
 }
 
@@ -50,7 +50,7 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      client_name: this.options.clientName || 'Collabra',
+      client_name: this.options.clientName || 'CodeKiln',
       redirect_uris: [this.options.redirectUrl],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],

@@ -99,6 +99,6 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: eaves-debug-only
+          name: codekiln-debug-only
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7

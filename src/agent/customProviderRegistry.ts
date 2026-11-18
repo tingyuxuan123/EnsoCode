@@ -19,7 +19,7 @@ import { withRequestBodyBudget } from './requestBodyBudget';
 import { providerKeyFor } from './smartCompact';
 
 /** 统一的客户端标识，格式对齐 pi-coding-agent 的 getPiUserAgent。 */
-const ENSO_USER_AGENT = `enso-code/${version} (${process.platform}; node/${process.version}; ${process.arch})`;
+const ENSO_USER_AGENT = `codekiln/${version} (${process.platform}; node/${process.version}; ${process.arch})`;
 
 type CustomModelDefinition = NonNullable<
   Parameters<ModelRuntime['registerProvider']>[1]['models']

@@ -3,7 +3,7 @@ import { type AgentTypeEntry, BUILTIN_AGENT_TYPES, DESIGNER_AGENT_NAME } from '.
 export const DESIGNER_AGENT_TYPE_KEY = `builtin:${DESIGNER_AGENT_NAME}` as const;
 export const ENSO_AGENT_TYPE_KEY = 'agent:enso' as const;
 /** Display brand only; persisted type/profile/tool identifiers remain unchanged. */
-export const SYSTEM_ASSISTANT_DISPLAY_NAME = 'Collabra' as const;
+export const SYSTEM_ASSISTANT_DISPLAY_NAME = 'CodeKiln' as const;
 export const ENSO_LOCKED_PROFILE_ID = 'enso-locked-v1' as const;
 export const ENSO_SYSTEM_PROMPT_ID = 'enso-system-v1' as const;
 export const ENSO_LOCKED_TOOL_IDS = ['enso_capabilities', 'enso_app', 'ask_user'] as const;
@@ -60,7 +60,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const BUILTIN_NAME_PATTERN = /^[a-z][a-z0-9_-]*$/;
 const RESERVED_AGENT_NAMES: Readonly<Record<string, true>> = {
   enso: true,
+  // 旧品牌保留名继续占用：已有数据里有这些名字，放开会被 custom agent 抢走。
   collabra: true,
+  codekiln: true,
   [ENSO_AGENT_TYPE_KEY]: true,
   [ENSO_LOCKED_PROFILE_ID]: true,
   [ENSO_SYSTEM_PROMPT_ID]: true,
@@ -323,7 +325,7 @@ export function buildAgentTypeRegistrySnapshot(input: {
     {
       typeKey: ENSO_AGENT_TYPE_KEY,
       displayName: SYSTEM_ASSISTANT_DISPLAY_NAME,
-      description: 'Collabra system agent for product capabilities and team setup',
+      description: 'CodeKiln system agent for product capabilities and team setup',
       source: 'system',
       locked: true,
       canDisable: false,

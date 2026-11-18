@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_BYTES
-import io.github.tingyuxuan123.eaves.mirror.SESSION_IMAGE_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_BYTES
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_LIMIT
 
 internal data class PictureDraftState(val owner: String? = null, val pictures: List<LocalSessionPicture> = emptyList(),
     val loading: Boolean = false, val error: String? = null)

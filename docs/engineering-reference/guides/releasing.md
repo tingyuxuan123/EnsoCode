@@ -25,9 +25,17 @@ CI 结束才判断成功；queued / in_progress / artifact 上传成功都不是
 
 ## 版本、仓库与更新源
 
-- 产品显示名统一为「Collabra」；下载资产使用 ASCII 前缀 `Collabra`，沿用现有清单的安全文件名规则。
-  Mac 包内为 `Collabra.app`，二进制为 `Contents/MacOS/Collabra`，Windows 保留 `Eaves.exe` 以兼容旧快捷方式；系统 appId、包名、
-  数据目录、配对协议、GitHub 仓库和签名证书不因品牌改名而变化。CI 路径须与 builder 配置同步。
+- 产品显示名统一为「CodeKiln」；下载资产使用 ASCII 前缀 `CodeKiln`，沿用现有清单的安全文件名规则。
+  Mac 包内为 `CodeKiln.app`，二进制为 `Contents/MacOS/CodeKiln`；Windows 为 `CodeKiln.exe`，Linux 启动文件为
+  `codekiln`（取自包名）。CI 路径须与 builder 配置同步。
+- CodeKiln 不只改了显示名：`appId` 为 `com.j3n5en.codekiln`、包名 `codekiln`、配对与插件安装协议 `codekiln://`、Android
+  `applicationId` 与包路径 `io.github.tingyuxuan123.codekiln` 都已换名。**没有改变**的是 GitHub 仓库
+  `EnsoCode`、个人更新源地址、签名证书（指纹与名称）、插件 API 命名空间（`enso-plugin.d.ts` / `Enso*` 类型）、
+  桌面数据目录（`appData/enso-code`，dev 为 `appData/enso-code-dev`）、本地存储键与若干加密上下文常量。
+- 因为 `appId` 与包名都变了，旧版 `Collabra.app` 不会自动升级到 CodeKiln：老用户必须手动安装一次，
+  之后才会走新清单自动更新。macOS `safeStorage` 的钥匙串条目按包名建立，改名后已存的 API key 需要重新输入；
+  会话、设置、Bot 与记忆仍留在原数据目录，不执行搬迁。
+- 已在使用的第三方插件安装链接（`enso://install-plugin?…`）改名后失效，需改用新的 `codekiln://` 链接。
 - `package.json` 是版本权威；个人 tag 为 `personal-v<version>`，正式 tag 为 `v<version>`。
 - 版本必须大于已安装和已公开版本。不要移动已有 tag；失败需要改代码时用新版本。
 - 本仓库个人源：`tingyuxuan123/EnsoCode` 的 `personal-updates` 分支。
@@ -36,8 +44,8 @@ CI 结束才判断成功；queued / in_progress / artifact 上传成功都不是
 - 正式包仍使用 GitHub latest；个人流程绝不改变正式 latest，不为个人 URL 放宽正式清单校验。
 - 旧正式包不会自动切到个人源；仅首次迁移需要用户手动安装一次同证书个人包。
 - 新个人发布必须在同一 tag 提交中提供 `release-notes/<version>.md`。首行严格为
-  `# Collabra <version>`，其后填写实际变更，使用 UTF-8 Markdown，最多 24 KiB；不能是符号链接。
-  历史日志保留原有 `# 小满 <version>` 或 `# EnsoCode <version>` 标题，校验仍兼容，读取输出统一为 Collabra。
+  `# CodeKiln <version>`，其后填写实际变更，使用 UTF-8 Markdown，最多 24 KiB；不能是符号链接。
+  历史日志保留原有 `# 小满 <version>`、`# EnsoCode <version>` 或 `# Collabra <version>` 标题，校验仍兼容，读取输出统一为 CodeKiln。
   [日志格式及未发布草稿](../../../release-notes/README.md)不能替代该版本文件。
   `node scripts/personal-release.mjs notes` 按 `package.json` 版本校验并附加个人证书、非正式发布和重启说明。
   CI 在使用私钥前拒绝不合规的日志；Release 正文和个人清单 `releaseNotes` 都使用这一份内容。
@@ -121,7 +129,7 @@ TAG="personal-v$VERSION"
 git ls-remote --tags origin "refs/tags/$TAG"
 # 仅当 tag 不存在且工作区干净时创建，不移动或强推旧 tag。
 git push origin HEAD:main
-git tag -a "$TAG" -m "Collabra $VERSION personal update"
+git tag -a "$TAG" -m "CodeKiln $VERSION personal update"
 git push origin "$TAG"
 ```
 
@@ -163,7 +171,7 @@ HTML 产物名带 `../`，导致 `vite:build-html` 失败。回归见 `scripts/p
 
 ```bash
 git push origin HEAD:main
-git tag -a "windows-v$VERSION" -m "Collabra $VERSION Windows x64"
+git tag -a "windows-v$VERSION" -m "CodeKiln $VERSION Windows x64"
 git push origin "windows-v$VERSION"
 gh run list --repo tingyuxuan123/EnsoCode --workflow build-windows.yml --limit 5
 ```
@@ -192,7 +200,7 @@ Apple Secrets 为 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID
   `scripts/release.test.mjs` 只检查脚本合约，进度可见、UAC、自定义旧目录和自动重开仍需 Windows 实机验收。
 - 更新完成后核对运行版本、旧设置/会话/项目和本次功能；不能把下载完成当作安装完成。
 - ZIP 下载后仍可能在 Squirrel 签名验证阶段失败，错误必须允许覆盖 downloaded 状态。
-- 可检查 `~/Library/Caches/enso-code-updater/pending/update-info.json`、ZIP SHA-512，
+- 可检查 `~/Library/Caches/codekiln-updater/pending/update-info.json`、ZIP SHA-512，
   并用 `codesign --verify -R='<旧应用 requirement>' <新应用>` 验证同证书兼容。
 - 不打印本地代理中的临时凭据。人工网络排障时命令行不一定继承 macOS 系统代理，
   先短时探测，不等待长时间无进展下载；不得跳过签名或哈希验收。

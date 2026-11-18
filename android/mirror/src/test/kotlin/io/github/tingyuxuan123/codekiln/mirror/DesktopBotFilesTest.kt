@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.FrameReplay
-import io.github.tingyuxuan123.eaves.pair.ReplayRole
+import io.github.tingyuxuan123.codekiln.pair.FrameReplay
+import io.github.tingyuxuan123.codekiln.pair.ReplayRole
 import java.io.IOException
 import java.util.Base64
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -329,7 +329,7 @@ class DesktopBotFilesTest {
         val socket get() = sockets.last()
         val entry = DesktopBotArtifactTarget("c1", entryId = "e1")
         val direct = DesktopBotArtifactTarget("c2", conversationId = "cv2", messageIndex = 3)
-        val link = DesktopLink(PairCredentials("pair-1", "token", key, "Eaves", "https://example.test"),
+        val link = DesktopLink(PairCredentials("pair-1", "token", key, "CodeKiln", "https://example.test"),
             {}, false, StandardTestDispatcher(scope.testScheduler), { scope.testScheduler.currentTime }, { 0.5 },
             { request, listener -> FakeSocket(request, listener).also(sockets::add) })
         val state get() = link.state.value

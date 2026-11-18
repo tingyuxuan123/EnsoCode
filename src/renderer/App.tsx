@@ -13,7 +13,6 @@ import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
 import { TitleBar } from '@/components/app/TitleBar';
 import { UpdateBanner } from '@/components/app/UpdateBanner';
-import { WorkbenchTitle } from '@/components/app/WorkbenchTitle';
 import { BotView } from '@/components/bots/BotView';
 import { globalBoard, rootBoardGroups } from '@/components/bots/globalBoard';
 import { ModeSwitch } from '@/components/bots/ModeSwitch';
@@ -664,18 +663,15 @@ export default function App() {
       <BackgroundLayer />
       <OauthCredentialBootstrap />
       <TitleBar
-        title="Collabra"
         leading={galleryActive ? <DesignGalleryHeader side="left" /> : undefined}
         heading={
-          // 远程节点 / Bot 模式不显示本机会话标题
+          // 标题栏不再重复品牌字；只有图片工作台 / 扩展页给出自己的标题
           studioActive ? (
             <span className="truncate text-[calc(13rem/14)] font-medium">
               {studioTitle || t('Image studio')}
             </span>
           ) : extensionsActive ? (
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
-          ) : !remoteNodeActive && !botModeActive && !galleryActive ? (
-            <WorkbenchTitle />
           ) : undefined
         }
         // 工作模式分段居中承载（上游组织）；右侧只留显示控制

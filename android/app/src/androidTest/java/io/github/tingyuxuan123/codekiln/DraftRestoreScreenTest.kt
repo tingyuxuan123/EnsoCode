@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
@@ -12,16 +12,16 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.DesktopLinkState
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.DraftKind
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
-import io.github.tingyuxuan123.eaves.ui.TaskStatus
-import io.github.tingyuxuan123.eaves.ui.TaskSummary
+import io.github.tingyuxuan123.codekiln.mirror.DesktopLinkState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.DraftKind
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.NewTaskUiState
+import io.github.tingyuxuan123.codekiln.ui.TaskStatus
+import io.github.tingyuxuan123.codekiln.ui.TaskSummary
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
@@ -43,7 +43,7 @@ class DraftRestoreScreenTest {
         val edits = mutableListOf<Pair<DraftKey, String>>()
         compose.activityRule.scenario.onActivity { activity ->
             activity.setContent { EnsoTheme {
-                EavesApp(initialRoute = EavesRoute.Home,
+                CodeKilnApp(initialRoute = CodeKilnRoute.Home,
                     state = NewTaskUiState(online = true, tasks = listOf(
                         TaskSummary("s1", "任务一", null, "刚刚", TaskStatus.Idle))),
                     live = DesktopLinkState(LinkPhase.Online, "书房电脑", readOnly = false,

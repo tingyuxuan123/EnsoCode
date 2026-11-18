@@ -189,7 +189,7 @@ export function Onboarding() {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t('Welcome to Collabra')}
+        aria-label={t('Welcome to CodeKiln')}
         tabIndex={-1}
         className="relative flex w-[620px] max-w-full flex-col overflow-hidden rounded-[6px] border border-border bg-popover"
       >
@@ -227,7 +227,7 @@ export function Onboarding() {
               <div className="flex items-center gap-[8px]">
                 <Wand2 className="size-[calc(20rem/14)] text-primary" />
                 <h2 className="text-[calc(18rem/14)] font-semibold leading-[calc(26rem/14)]">
-                  {t('Welcome to Collabra')}
+                  {t('Welcome to CodeKiln')}
                 </h2>
               </div>
               <p className="text-[calc(13rem/14)] leading-[calc(24rem/14)] text-muted-foreground">
@@ -295,11 +295,11 @@ export function Onboarding() {
           {modelReady && (
             <div className="mt-[16px] flex items-center justify-between gap-[12px] rounded-[6px] border border-line px-[12px] py-[8px]">
               <p className="text-[calc(11rem/14)] text-muted-foreground">
-                {t('Need help choosing a setup? Ask Collabra.')}
+                {t('Need help choosing a setup? Ask CodeKiln.')}
               </p>
               <Button variant="ghost" size="sm" onClick={summonEnso}>
                 <Sparkles className="h-3.5 w-3.5" />
-                {t('Ask Collabra')}
+                {t('Ask CodeKiln')}
               </Button>
             </div>
           )}

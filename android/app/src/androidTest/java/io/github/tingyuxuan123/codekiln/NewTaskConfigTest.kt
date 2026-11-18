@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
@@ -13,27 +13,27 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.tingyuxuan123.eaves.mirror.CreationPhase
-import io.github.tingyuxuan123.eaves.mirror.DesktopCreation
-import io.github.tingyuxuan123.eaves.mirror.DesktopLinkState
-import io.github.tingyuxuan123.eaves.mirror.DesktopModel
-import io.github.tingyuxuan123.eaves.mirror.DesktopProject
-import io.github.tingyuxuan123.eaves.mirror.DesktopProvider
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.DesktopTask
-import io.github.tingyuxuan123.eaves.mirror.DraftKey
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionTextAttempt
-import io.github.tingyuxuan123.eaves.mirror.TaskApprovalMode
-import io.github.tingyuxuan123.eaves.mirror.TaskLaunch
-import io.github.tingyuxuan123.eaves.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.NewTaskConfigSheet
-import io.github.tingyuxuan123.eaves.ui.NewTaskUiState
-import io.github.tingyuxuan123.eaves.ui.PairUiState
-import io.github.tingyuxuan123.eaves.ui.TaskConfiguration
+import io.github.tingyuxuan123.codekiln.mirror.CreationPhase
+import io.github.tingyuxuan123.codekiln.mirror.DesktopCreation
+import io.github.tingyuxuan123.codekiln.mirror.DesktopLinkState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopModel
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProject
+import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopTask
+import io.github.tingyuxuan123.codekiln.mirror.DraftKey
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionTextAttempt
+import io.github.tingyuxuan123.codekiln.mirror.TaskApprovalMode
+import io.github.tingyuxuan123.codekiln.mirror.TaskLaunch
+import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.NewTaskConfigSheet
+import io.github.tingyuxuan123.codekiln.ui.NewTaskUiState
+import io.github.tingyuxuan123.codekiln.ui.PairUiState
+import io.github.tingyuxuan123.codekiln.ui.TaskConfiguration
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -58,7 +58,7 @@ class NewTaskConfigTest {
         val live = DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers)
         val drafts = DraftHost()
         var sent: TaskLaunch? = null
-        compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
+        compose.setContent { CodeKilnApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
             live = live, drafts = drafts.state.value, onDraftEdit = drafts::edit, onCreateTask = { sent = it }) }
         compose.onNodeWithText("模型一 · 高").performTouchInput { click() }
         compose.onNodeWithText("新任务设置").assertIsDisplayed()
@@ -90,7 +90,7 @@ class NewTaskConfigTest {
     @Test fun vanishedChosenModelDisablesCreationWithoutDiscardingDescription() {
         val live = mutableStateOf(DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers))
         val drafts = DraftHost()
-        compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
+        compose.setContent { CodeKilnApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
             live = live.value, drafts = drafts.state.value, onDraftEdit = drafts::edit,
             onCreateTask = { error("Unavailable model must not create") }) }
         compose.onNodeWithContentDescription("打开新任务设置").performClick()
@@ -107,7 +107,7 @@ class NewTaskConfigTest {
         val live = mutableStateOf(DesktopLinkState(LinkPhase.Online, readOnly = false, projects = projects, providers = providers))
         val drafts = DraftHost()
         var sent: TaskLaunch? = null
-        compose.setContent { EavesApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
+        compose.setContent { CodeKilnApp(state = NewTaskUiState(online = true), pairState = PairUiState(paired = true),
             live = live.value, drafts = drafts.state.value, onDraftEdit = drafts::edit,
             onSelectSession = {}, onCreateTask = { sent = it }) }
         compose.onNodeWithContentDescription("任务描述").performTextInput("首条任务")

@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves.ui
+package io.github.tingyuxuan123.codekiln.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
@@ -41,11 +41,11 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.tingyuxuan123.eaves.mirror.DesktopQueuedMessage
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.QueueCommand
-import io.github.tingyuxuan123.eaves.mirror.SESSION_TEXT_LIMIT
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.DesktopQueuedMessage
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.QueueCommand
+import io.github.tingyuxuan123.codekiln.mirror.SESSION_TEXT_LIMIT
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
 
 private val disclosureEasing = CubicBezierEasing(.22f, 1f, .36f, 1f)
 private data class QueuedAction(val command: QueueCommand, val item: DesktopQueuedMessage)

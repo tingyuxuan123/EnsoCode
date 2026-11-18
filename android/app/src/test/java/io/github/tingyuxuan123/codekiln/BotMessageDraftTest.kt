@@ -1,8 +1,8 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
-import io.github.tingyuxuan123.eaves.mirror.DesktopBotSendAttempt
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.ui.BotMessageDraft
+import io.github.tingyuxuan123.codekiln.mirror.DesktopBotSendAttempt
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.ui.BotMessageDraft
 import org.junit.Assert.*
 import org.junit.Test
 

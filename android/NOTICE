@@ -1,4 +1,4 @@
-Collabra Android
+CodeKiln Android
 
 Visual reference: ensocode-android.vetd, whose theme is based on Vetta Android.
 No Vetta platform implementation has been copied in this increment.
@@ -31,7 +31,7 @@ permissions and limitations under the License.
 
 Full Lucide / Feather and Apache-2.0 license texts are included in the APK under
 assets/licenses/ and in the corresponding android/app/src/main/assets/licenses/.
-Kotlin ImageVector conversion and equivalent rounded-rectangle paths are Eaves
+Kotlin ImageVector conversion and equivalent rounded-rectangle paths are CodeKiln
 modifications of the original SVG icon geometry.
 
 JetBrains Mono Regular 2.304 (unmodified)
@@ -44,11 +44,11 @@ Copyright (c) 2014-present tom zhou<appnet.link@gmail.com>
 Java port originating at https://github.com/InstantWebP2P/tweetnacl-java
 Maven distribution: https://github.com/purejava/tweetnacl-java/tree/v1.1.2
 MIT License; full text is included in assets/licenses/TWEETNACL-JAVA-MIT.txt.
-Used unmodified for NaCl box key exchange in android/pair. Collabra supplies secure
+Used unmodified for NaCl box key exchange in android/pair. CodeKiln supplies secure
 random nonces and rejects all-zero X25519 shared secrets before invoking box.
 
 Multiplatform Markdown Renderer (Material 3) 0.39.0
 Source: https://github.com/mikepenz/multiplatform-markdown-renderer
 Apache License 2.0; full text is included in assets/licenses/APACHE-2.0.txt.
 Only user-activated HTTP/HTTPS links may open externally; remote image fetching
-and application/file deep links remain disabled in Collabra sessions.
+and application/file deep links remain disabled in CodeKiln sessions.

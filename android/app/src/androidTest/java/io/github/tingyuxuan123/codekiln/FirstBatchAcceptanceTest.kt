@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.activity.ComponentActivity
@@ -10,16 +10,16 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import io.github.tingyuxuan123.eaves.mirror.DesktopQueueAttempt
-import io.github.tingyuxuan123.eaves.mirror.DesktopSessionState
-import io.github.tingyuxuan123.eaves.mirror.LinkPhase
-import io.github.tingyuxuan123.eaves.mirror.QueueCommand
-import io.github.tingyuxuan123.eaves.mirror.SessionCommandPhase
-import io.github.tingyuxuan123.eaves.mirror.SessionTextAttempt
-import io.github.tingyuxuan123.eaves.pair.SessionTimeline
-import io.github.tingyuxuan123.eaves.ui.EnsoTheme
-import io.github.tingyuxuan123.eaves.ui.SessionHeader
-import io.github.tingyuxuan123.eaves.ui.SessionScreen
+import io.github.tingyuxuan123.codekiln.mirror.DesktopQueueAttempt
+import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
+import io.github.tingyuxuan123.codekiln.mirror.QueueCommand
+import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
+import io.github.tingyuxuan123.codekiln.mirror.SessionTextAttempt
+import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
+import io.github.tingyuxuan123.codekiln.ui.EnsoTheme
+import io.github.tingyuxuan123.codekiln.ui.SessionHeader
+import io.github.tingyuxuan123.codekiln.ui.SessionScreen
 import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Rule

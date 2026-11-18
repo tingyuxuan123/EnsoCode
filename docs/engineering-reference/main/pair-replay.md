@@ -33,7 +33,7 @@ guest 在看到新版 host 之前不添加扩展字段，避免旧 host 严格�
 ## 回归防线
 
 - `packages/pair/src/replay.test.ts`：重复、乱序、窗口边界、反射、前缀切换、旧质询、重连和并发。
-- `android/pair/src/test/kotlin/io/github/tingyuxuan123/eaves/pair/FrameReplayTest.kt`：Kotlin 对照同一组
+- `android/pair/src/test/kotlin/io/github/tingyuxuan123/codekiln/pair/FrameReplayTest.kt`：Kotlin 对照同一组
   `packages/pair/vectors/replay.json`，并在 JVM 上验证并发收发与过期解密结果；
   `:pair:interopTest` 用临时 Go 中继和 TS fake host 运行 Kotlin guest。
 - `src/main/services/pairReplay.test.ts`：宿主实际派发次数及跨连接代际拒绝。

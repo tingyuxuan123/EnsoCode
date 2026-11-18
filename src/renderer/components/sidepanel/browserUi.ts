@@ -62,7 +62,7 @@ export function resolveBrowserAddress(raw: string): BrowserResult<string> {
       return {
         ok: false,
         error:
-          'Enter a valid file URL without credentials or NUL characters. Collabra checks workspace access.',
+          'Enter a valid file URL without credentials or NUL characters. CodeKiln checks workspace access.',
       };
     }
   }
@@ -73,7 +73,7 @@ export function resolveBrowserAddress(raw: string): BrowserResult<string> {
     return {
       ok: false,
       error:
-        'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by Collabra.',
+        'Only HTTP, HTTPS, or workspace file URLs can be opened here. Workspace files are validated by CodeKiln.',
     };
   }
   const host = input.split(/[/?#]/, 1)[0] ?? '';

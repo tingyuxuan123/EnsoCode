@@ -1,7 +1,7 @@
-package io.github.tingyuxuan123.eaves.mirror
+package io.github.tingyuxuan123.codekiln.mirror
 
-import io.github.tingyuxuan123.eaves.pair.PairBox
-import io.github.tingyuxuan123.eaves.pair.PairEncoding
+import io.github.tingyuxuan123.codekiln.pair.PairBox
+import io.github.tingyuxuan123.codekiln.pair.PairEncoding
 import java.net.InetAddress
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -131,7 +131,7 @@ class RelayPairingClientTest {
 
     private fun relay(path: String = "") = "http://127.0.0.1:${server.port}$path"
     private fun link(key: ByteArray = publicKey, path: String = "") =
-        "enso://pair?relay=${relay(path)}&pk=${PairEncoding.toBase64Url(key)}"
+        "codekiln://pair?relay=${relay(path)}&pk=${PairEncoding.toBase64Url(key)}"
 
     private suspend fun failure(block: suspend () -> Unit): PairException {
         try {

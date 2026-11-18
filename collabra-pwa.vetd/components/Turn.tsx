@@ -14,7 +14,7 @@ export function UserBubble({ children }: { children: ReactNode }) {
 
 // 一轮回复的抬头：头像、名字、时间；进行中再跟蓝弧和它在做什么。
 export function TurnHead({
-	name = "Collabra",
+	name = "CodeKiln",
 	time,
 	live,
 }: {

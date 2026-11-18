@@ -1,4 +1,4 @@
-package io.github.tingyuxuan123.eaves
+package io.github.tingyuxuan123.codekiln
 
 import android.view.KeyEvent
 import android.content.Intent
@@ -54,7 +54,7 @@ class NavigationTest {
     }
 
     @Test fun deepLinkPrefillsAndRequiresManualConfirmation() {
-        val link = "enso://pair?relay=https%3A%2F%2Frelay.example.test&pk=AQ"
+        val link = "codekiln://pair?relay=https%3A%2F%2Frelay.example.test&pk=AQ"
         compose.activityRule.scenario.onActivity { activity ->
             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(activity.packageName))
         }
