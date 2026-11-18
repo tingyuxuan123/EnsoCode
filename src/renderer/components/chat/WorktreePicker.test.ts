@@ -270,11 +270,14 @@ describe('WorktreePicker', () => {
     expect(render('current')).not.toContain('role="dialog"');
     expect(render('current')).toContain('data-open="false"');
   });
-  it.each(['trunk', 'release/stable'])('权威默认分支 %s 不占工具栏空间', async (branch) => {
-    const html = await loadBranches({ currentBranch: branch, defaultBranch: branch });
-    expect(html).toContain('truncate">Local</span>');
-    expect(html).not.toContain(`Local · ${branch}`);
-  });
+  it.each(['trunk', 'release/stable', 'main'])(
+    '本地工作区直接显示当前分支 %s，不再写「Local」',
+    async (branch) => {
+      const html = await loadBranches({ currentBranch: branch, defaultBranch: branch });
+      expect(html).toContain(`truncate">${branch}</span>`);
+      expect(html).not.toContain('truncate">Local</span>');
+    }
+  );
   it('隔离工作区默认分支只显示工作区名称', async () => {
     harness.conversations.current.worktree = worktree;
     const html = await loadBranches({
@@ -284,22 +287,24 @@ describe('WorktreePicker', () => {
     expect(html).toContain('truncate">Readable task</span>');
     expect(html).not.toContain('Readable task · feature/task');
   });
-  it.each(['main', 'master', 'feature/task'])('默认分支未知时不猜测隐藏 %s', async (branch) => {
+  it.each(['main', 'master', 'feature/task'])('本地默认分支未知时照样显示 %s', async (branch) => {
     expect(await loadBranches({ currentBranch: branch, defaultBranch: null })).toContain(
-      `Local · ${branch}`
+      `truncate">${branch}</span>`
     );
   });
-  it('旧版响应缺少默认分支元数据时保留分支后缀', async () => {
+  it('旧版响应缺少默认分支元数据时仍显示分支名', async () => {
     expect(await loadBranches({ currentBranch: 'main', defaultBranch: undefined })).toContain(
-      'Local · main'
+      'truncate">main</span>'
     );
   });
-  it('非默认分支继续使用紧凑分支后缀', async () => {
-    expect(await loadBranches({ currentBranch: 'feature/task' })).toContain('Local · feature/task');
+  it('本地非默认分支也是分支名本身，不加前缀', async () => {
+    const html = await loadBranches({ currentBranch: 'feature/task' });
+    expect(html).toContain('truncate">feature/task</span>');
+    expect(html).not.toContain('Local ·');
   });
-  it('分离 HEAD 不会被未知默认分支隐藏', async () => {
+  it('分离 HEAD 显示说明而不是空分支名', async () => {
     expect(await loadBranches({ currentBranch: null, defaultBranch: null })).toContain(
-      'Local · Detached HEAD'
+      'truncate">Detached HEAD</span>'
     );
   });
   it('非 Git 查询失败不打扰工作区页，进入分支页才展示错误与重试', async () => {

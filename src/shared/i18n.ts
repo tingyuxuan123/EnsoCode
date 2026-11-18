@@ -307,8 +307,7 @@ export const zhTranslations: Record<string, string> = {
   'Temporary chats': '临时会话',
   'Start a temporary chat': '新建临时会话',
   'Temporary chats are kept until you delete them.': '临时会话会保留，直到你主动删除。',
-  // 输入框下方的位置托盘（主机 / 项目 / 分支）
-  'Ahead of upstream by {{count}} commits': '领先上游 {{count}} 个提交',
+  // 输入框下方的位置托盘（远端主机 / 项目）
   'Open sessions apply tool changes when the current turn finishes. Running tools and agents are not stopped.':
     '已打开会话会在当前回合结束后应用工具开关，不会停止正在运行的工具或代理。',
   'Script orchestration, workspace write access and goal tools keep their spawn-time configuration.':

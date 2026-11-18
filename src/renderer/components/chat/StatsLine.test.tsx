@@ -143,7 +143,7 @@ describe('托盘左侧的位置', () => {
     expect(tray?.querySelector('[data-slot="stats-line-tray"]')).not.toBeNull();
   });
 
-  it('本地项目只显示项目名和分支，不挂「这台 Mac」这种常量', () => {
+  it('本地项目只显示项目名：分支由工作区选择器负责，这里不重复', () => {
     harness.projects = [{ id: 'p1', name: 'EnsoCode', path: '/code/EnsoCode', kind: 'local' }];
     harness.conversation = {
       ...fixture(),
@@ -153,10 +153,9 @@ describe('托盘左侧的位置', () => {
     harness.statuses = { fixture: { exists: true, dirty: false, ahead: 2 } };
     const document = render();
     expect(trayText(document)).toContain('EnsoCode');
-    expect(trayText(document)).toContain('main');
-    expect(trayText(document)).toContain('↑2');
+    expect(trayText(document)).not.toContain('main');
+    expect(trayText(document)).not.toContain('↑');
     expect(trayText(document)).not.toContain('This Mac');
-    expect(trayText(document)).not.toContain('这台 Mac');
   });
 
   it('SSH 项目才提示远端主机，否则不知道自己改的是哪台机器', () => {

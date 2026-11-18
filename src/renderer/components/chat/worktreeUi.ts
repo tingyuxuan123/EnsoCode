@@ -4,6 +4,42 @@ export function worktreeDisplayName(worktree: SessionWorktree): string {
   return worktree.name?.trim() || worktree.branch;
 }
 
+export interface WorkspaceTriggerLabel {
+  text: string;
+  /** `branch` 表示文字是分支/工作区名，`house` 表示只代表「本地」。 */
+  icon: 'branch' | 'house';
+}
+
+/**
+ * composer 工作区选择器按钮上的文字。
+ *
+ * 本地工作区（主工作树）不写「本地」——主工作树叫什么不重要，用户要确认的是
+ * 「我改的是不是 main」。只有拿不到分支（非 git、还没读到）时才回落到「本地」。
+ * 隔离工作区仍以工作区显示名为准，分支和名字不同且不是默认分支时才补一个后缀。
+ */
+export function workspaceTriggerLabel(
+  input: {
+    /** 隔离 worktree 的显示名；本地工作区为 null。 */
+    worktreeName: string | null;
+    currentBranch?: string | null;
+    /** 有 head commit 但没分支 = detached HEAD。 */
+    headCommit?: string | null;
+    defaultBranch?: string | null;
+  },
+  labels: { local: string; detached: string }
+): WorkspaceTriggerLabel {
+  const branch = input.currentBranch ?? (input.headCommit ? labels.detached : null);
+  if (!input.worktreeName)
+    return branch ? { text: branch, icon: 'branch' } : { text: labels.local, icon: 'house' };
+  const suffix =
+    branch &&
+    branch !== input.worktreeName &&
+    (!input.defaultBranch || input.currentBranch !== input.defaultBranch)
+      ? ` · ${branch}`
+      : '';
+  return { text: `${input.worktreeName}${suffix}`, icon: 'branch' };
+}
+
 type WorktreeConversation = {
   projectId: string;
   worktree?: SessionWorktree;

@@ -711,7 +711,7 @@ export function ChatView() {
             }}
             onAbort={() => void useSessionsStore.getState().abort()}
           />
-          <StatsLine conversationId={chrome.id} branch={branch} />
+          <StatsLine conversationId={chrome.id} />
         </div>
       </div>
     </div>

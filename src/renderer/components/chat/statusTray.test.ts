@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchLabel, hostLabel, trayPlace } from './statusTray';
+import { hostLabel, trayPlace } from './statusTray';
 
 describe('输入框下方的位置托盘', () => {
   it.each([
@@ -20,15 +20,6 @@ describe('输入框下方的位置托盘', () => {
 
   it('缺 kind 但带远端目标时仍按远端处理，不因历史数据丢掉提示', () => {
     expect(hostLabel({ sshHost: 'box' })).toBe('box');
-  });
-
-  it('分支名与领先提交数分开表达，0 不画箭头', () => {
-    expect(branchLabel('main', 0)).toEqual({ name: 'main', ahead: 0 });
-    expect(branchLabel('main', 3)).toEqual({ name: 'main', ahead: 3 });
-    expect(branchLabel(undefined, 0)).toBeNull();
-    expect(branchLabel('  ', 0)).toBeNull();
-    expect(branchLabel('main', -1)).toEqual({ name: 'main', ahead: 0 });
-    expect(branchLabel('main', Number.NaN)).toEqual({ name: 'main', ahead: 0 });
   });
 
   it('临时会话不挂项目名，避免把承载目录当成项目', () => {

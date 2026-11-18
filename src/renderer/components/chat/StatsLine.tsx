@@ -15,7 +15,6 @@ import {
   Folder,
   FolderOpen,
   Gauge,
-  GitBranch,
   Hourglass,
   type LucideIcon,
   Package,
@@ -47,7 +46,7 @@ import { ContextMeter } from './ContextMeter';
 import { buildRequestBodySegment } from './requestBodySegment';
 import { StatusLineSettings } from './StatusLineSettings';
 import { resolveSessionUsageAccount } from './sessionUsageAccount';
-import { branchLabel, hostLabel, trayPlace } from './statusTray';
+import { hostLabel, trayPlace } from './statusTray';
 import {
   buildUsageSegmentValues,
   CRITICAL_PERCENT,
@@ -60,11 +59,6 @@ export type { SegmentValue };
 
 interface StatsLineProps {
   conversationId: string;
-  /**
-   * 本地工作区当前分支。主树的分支只由 composer 的工作区选择器在切换后回报，
-   * store 里没有第二份权威记录，所以由调用方传进来；缺省时回落到会话绑定的 worktree 分支。
-   */
-  branch?: string;
 }
 
 /**
@@ -446,7 +440,7 @@ function TrayLink({
  *  见 `statusLinePresetOf`。外层恒占一行高度：避免统计从无到有时输入框跳动；
  *  已开启且有数据的段位稳定显示，窄窗口横向滚动，不再悬停展开挤动布局。
  *  全部段位关掉时仍渲染空容器 + 设置按钮，否则用户关完就再也打不开设置。 */
-export function StatsLine({ conversationId, branch: branchProp }: StatsLineProps) {
+export function StatsLine({ conversationId }: StatsLineProps) {
   const { t } = useI18n();
   const conversation = useSessionsStore((state) => state.conversations[conversationId]);
   const messages = conversation?.messages ?? [];
@@ -467,7 +461,6 @@ export function StatsLine({ conversationId, branch: branchProp }: StatsLineProps
     [providers, virtualModels]
   );
   const projects = useSettingsStore((state) => state.projects);
-  const statuses = useSessionsStore((state) => state.worktreeStatuses);
   const rawSegments = useSettingsStore((state) => state.statusLineSegments);
   // 渲染层第二道防线：见 sanitizeStatusLineSegments 注释；useMemo 保持引用稳定，
   // 只在 store 里的原始值真的变化时才重新计算，不会每次 render 都产生新数组打断记忆化。
@@ -516,10 +509,8 @@ export function StatsLine({ conversationId, branch: branchProp }: StatsLineProps
   const place = trayPlace(projects.find((p) => p.id === conversation.projectId));
   // 只有远端项目才提示「代码不在这台机器上」；本机项目这一段整段不渲染。
   const host = hostLabel(projects.find((p) => p.id === conversation.projectId));
-  const worktreeBranch = branchProp ?? conversation.worktree?.branch;
-  const ahead = statuses[conversation.parentId ?? conversation.id]?.ahead;
-  const branch = branchLabel(worktreeBranch, ahead);
-  const hasPlace = Boolean(host || place.project || place.temporary || branch);
+  // 分支不在这里重复：它由 composer 的工作区选择器显示（本地就显示当前分支名）。
+  const hasPlace = Boolean(host || place.project || place.temporary);
 
   return (
     <div
@@ -536,18 +527,6 @@ export function StatsLine({ conversationId, branch: branchProp }: StatsLineProps
           {place.project && <TrayLink icon={Folder} text={place.project} title={place.project} />}
           {place.temporary && (
             <TrayLink icon={Folder} text={t('Temporary chats')} title={t('Temporary chats')} />
-          )}
-          {branch && (
-            <TrayLink
-              icon={GitBranch}
-              text={branch.name}
-              title={
-                branch.ahead > 0
-                  ? t('Ahead of upstream by {{count}} commits', { count: branch.ahead })
-                  : branch.name
-              }
-              trailing={branch.ahead > 0 ? `↑${branch.ahead}` : undefined}
-            />
           )}
         </div>
       )}

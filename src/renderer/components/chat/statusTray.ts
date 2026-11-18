@@ -26,23 +26,6 @@ export function hostLabel(
   return null;
 }
 
-export interface BranchLabel {
-  name: string;
-  /** 领先上游/base 的提交数；0 表示不画箭头。 */
-  ahead: number;
-}
-
-/** 分支名 + 领先提交数；没有分支（非 git / 加载中）返回 null，让整枚药丸消失。 */
-export function branchLabel(
-  branch: string | undefined,
-  ahead: number | undefined
-): BranchLabel | null {
-  const name = branch?.trim();
-  if (!name) return null;
-  const count = typeof ahead === 'number' && Number.isFinite(ahead) ? Math.floor(ahead) : 0;
-  return { name, ahead: count > 0 ? count : 0 };
-}
-
 export interface TrayPlace {
   /** 项目展示名；临时会话为 null。 */
   project: string | null;

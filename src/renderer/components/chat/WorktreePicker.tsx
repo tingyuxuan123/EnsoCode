@@ -29,7 +29,12 @@ import { WorkspaceBranchList } from './WorkspaceBranchList';
 import { worktreeHoverText } from './WorktreeBadge';
 import { WorktreeRenameDialog } from './WorktreeRenameDialog';
 import { workspaceBranchFeedback } from './workspaceBranchFeedback';
-import { canAttachWorktree, existingProjectWorktrees, worktreeDisplayName } from './worktreeUi';
+import {
+  canAttachWorktree,
+  existingProjectWorktrees,
+  workspaceTriggerLabel,
+  worktreeDisplayName,
+} from './worktreeUi';
 
 /**
  * composer 工具行的工作区选择（紧跟预设选择器）：本地工作区 / 隔离 worktree。
@@ -176,16 +181,16 @@ export function WorktreePicker({
   const canAttach = canAttachWorktree(conversation);
 
   const currentBranch = branchData ? branchData.currentBranch : conversation.worktree?.branch;
-  const branchLabel = currentBranch ?? (branchData?.headCommit ? t('Detached HEAD') : '');
-  const workspaceName = conversation.worktree
-    ? worktreeDisplayName(conversation.worktree)
-    : t('Local');
-  const pickerLabel =
-    branchLabel &&
-    branchLabel !== workspaceName &&
-    (!branchData?.defaultBranch || currentBranch !== branchData.defaultBranch)
-      ? `${workspaceName} · ${branchLabel}`
-      : workspaceName;
+  const trigger = workspaceTriggerLabel(
+    {
+      worktreeName: conversation.worktree ? worktreeDisplayName(conversation.worktree) : null,
+      currentBranch,
+      headCommit: branchData?.headCommit,
+      defaultBranch: branchData?.defaultBranch,
+    },
+    { local: t('Local'), detached: t('Detached HEAD') }
+  );
+  const pickerLabel = trigger.text;
   const branchDisabled =
     disabled ||
     missing ||
@@ -411,16 +416,15 @@ export function WorktreePicker({
               : pickerLabel
           }
         >
+          {/* 图标与文字都跟工具栏里其它选择器同尺寸：预设/计划用 14px 图标、12px 文字。 */}
           {busy ? (
-            <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-          ) : isolated ? (
-            <GitBranch className="h-3 w-3 shrink-0" />
+            <Loader2 className="size-[calc(14rem/14)] shrink-0 animate-spin" />
+          ) : trigger.icon === 'branch' ? (
+            <GitBranch className="size-[calc(14rem/14)] shrink-0" />
           ) : (
-            <House className="h-3 w-3 shrink-0" />
+            <House className="size-[calc(14rem/14)] shrink-0" />
           )}
-          {!compact && (
-            <span className="min-w-0 font-mono text-[calc(11rem/14)] truncate">{pickerLabel}</span>
-          )}
+          {!compact && <span className="min-w-0 truncate">{pickerLabel}</span>}
           {!compact && <ChevronDown className="h-3 w-3 shrink-0" />}
         </PopoverTrigger>
         <PopoverPopup
