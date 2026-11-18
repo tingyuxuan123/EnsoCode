@@ -1,53 +1,37 @@
-version: 0.2.85
+version: 0.2.86
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.85/Collabra-0.2.85-arm64-mac.zip
-    sha512: Yq4YMk+SrpXQvZardX319e627zN2vZbfZIQxMYDQrvK1tjj8R6uISljgBP7d2umE7hZsosWsdvgiPHPRIEGoOA==
-    size: 183992683
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.85/Collabra-0.2.85-arm64.dmg
-    sha512: CGZMDPp41trmzb2J1pBdyBXQxEkwHNb2lxawwTAspktl7fAD1vD8DleoyCxi6O1tLGClDcQ9XtmqbsYxQe5/Fg==
-    size: 179126168
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.85/Collabra-0.2.85-arm64-mac.zip
-sha512: Yq4YMk+SrpXQvZardX319e627zN2vZbfZIQxMYDQrvK1tjj8R6uISljgBP7d2umE7hZsosWsdvgiPHPRIEGoOA==
-releaseDate: 2026-11-17T11:18:22.236Z
-releaseName: Collabra 0.2.85 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.86/Collabra-0.2.86-arm64-mac.zip
+    sha512: vGqlCTckPTRdkil0F5/9GCCpnVeu2a2zfvQrCql/3NarQ4CFfL+qQj4LRdf17tYk0+wAINhr8zA+06Ov2LgmRg==
+    size: 183993087
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.86/Collabra-0.2.86-arm64.dmg
+    sha512: X97evlxxyXZ09Q5Qc4aWWUSu/KWbkUkRnf7tK0kwPPL5sgCMLZcRbw7c+bsPjaajag/MiTa2rrkpZErt/Pib8A==
+    size: 179124611
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.86/Collabra-0.2.86-arm64-mac.zip
+sha512: vGqlCTckPTRdkil0F5/9GCCpnVeu2a2zfvQrCql/3NarQ4CFfL+qQj4LRdf17tYk0+wAINhr8zA+06Ov2LgmRg==
+releaseDate: 2026-11-18T01:24:27.179Z
+releaseName: Collabra 0.2.86 — 个人测试
 releaseNotes: >
-  # Collabra 0.2.85
+  # Collabra 0.2.86
 
 
-  ## 浏览器操作更流畅
+  ## 图标轨入口回归
 
 
-  - 已经确定的连续步骤可以一次执行，减少点击、填写与等待之间反复请求模型的时间。
+  - 关闭 Bot 功能后，标题栏不再保留只剩一个「Code」的分段控件，Code 入口回到左侧图标轨，
+    排在图片工作台上方，鼠标悬浮显示「Code」，选中时用图标轨统一的底色与品牌色。
+  - 从设计画廊、图片工作台或扩展页点这个 Code 入口，直接回到 Code 对话，不需要先关掉当前页面。
 
-  - 点击、填写和导航后直接返回页面变化与可继续操作的控件，不再要求每一步都重新读取整页。
+  - 协作看板的内容来自 Bot 任务，Bot 功能关闭后入口一并消失，图标轨不再留一个永远空着的按钮。
 
-  - 支持定位前一步操作后才出现的输入框或按钮；结合页面变化和网络请求进行有界等待。
-
-  - 兼容模型补齐无关可选字段的调用，减少参数错误和回退为逐步操作的情况。
-
-  - 连续操作仍校验页面归属和导航权限；遇到失败、取消或人工操作立即停止，不自动重放已经发送的输入。
-
-
-  ## 浏览器过程更清楚
-
-
-  - 浏览器步骤按操作次数和实际思考时长收拢，展开后显示“进入登录页、填写账号、填写密码”等简短动作。
-
-  - 不再直接展示内部工具名、引用编号、JSON 参数和整块协议结果，也不回显密码或输入正文。
-
-  - 旧会话没有动作描述时，使用操作类型和之前实际看到的控件名称显示摘要。
-
-  - 真实失败、尚未执行的步骤和需要核对的页面结果仍会明确提示，审批记录保留。
-
-  - 取消、超时或没有结果的中断不会声称“未执行”；无法确认的步骤标为“需要核对”，避免诱导原样重放。
-
+  - Bot 功能开启时行为不变：Code / Bot 仍由标题栏中部的分段控件承载，看板入口保留。
+    远程节点接管本机界面时两者都不出现，不暴露未启用的功能。
 
   ## 验收与更新范围
 
 
-  - GPT 与 DeepSeek 均在隔离桌面环境完成真实浏览器验收：四个连续步骤一次执行，加上打开页面共两次工具调用。
-
-  - 已检查实际展开界面的动作列表，并完成桌面全量检查和手机端类型检查、构建。
+  - 图标轨组件与工作模式入口的单测覆盖了新顺序与门控：Bot 关闭时 Code 在图片工作台上方、看板缺席；
+    开启时图标轨不重复工作模式入口。
+  - 主题验收脚本的「Bot 关闭后的 Code」断言同步改为图标轨选中态，避免沿用旧的分段胶囊口径。
 
   - 本次发布为 Mac arm64 同证书个人版，更新个人通道，不改变正式 Latest。
 
@@ -57,5 +41,5 @@ releaseNotes: >
   ---
 
 
-  个人测试通道 0.2.85：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.86：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
