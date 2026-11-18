@@ -1,39 +1,49 @@
-version: 0.2.86
+version: 0.2.87
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.86/Collabra-0.2.86-arm64-mac.zip
-    sha512: vGqlCTckPTRdkil0F5/9GCCpnVeu2a2zfvQrCql/3NarQ4CFfL+qQj4LRdf17tYk0+wAINhr8zA+06Ov2LgmRg==
-    size: 183993087
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.86/Collabra-0.2.86-arm64.dmg
-    sha512: X97evlxxyXZ09Q5Qc4aWWUSu/KWbkUkRnf7tK0kwPPL5sgCMLZcRbw7c+bsPjaajag/MiTa2rrkpZErt/Pib8A==
-    size: 179124611
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.86/Collabra-0.2.86-arm64-mac.zip
-sha512: vGqlCTckPTRdkil0F5/9GCCpnVeu2a2zfvQrCql/3NarQ4CFfL+qQj4LRdf17tYk0+wAINhr8zA+06Ov2LgmRg==
-releaseDate: 2026-11-18T01:24:27.179Z
-releaseName: Collabra 0.2.86 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.87/Collabra-0.2.87-arm64-mac.zip
+    sha512: kDopBJItw5Y0CVmf0AZ91P9WrWbpvqYXIUp3FQnBe5STjFbvQ3qGaWJ7AQM9UgHud2wv11PMGqW319OvX3PRLg==
+    size: 184710407
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.87/Collabra-0.2.87-arm64.dmg
+    sha512: 8hI9O2zKS3PlXG0vqgiuFwUCoGkQrVkx7aH3FqXlKZTeLe1JcCfzchf3q/bFYZp1u7cifOpgPSvpjYp3Op/VGQ==
+    size: 179808454
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.87/Collabra-0.2.87-arm64-mac.zip
+sha512: kDopBJItw5Y0CVmf0AZ91P9WrWbpvqYXIUp3FQnBe5STjFbvQ3qGaWJ7AQM9UgHud2wv11PMGqW319OvX3PRLg==
+releaseDate: 2026-11-18T02:11:42.663Z
+releaseName: Collabra 0.2.87 — 个人测试
 releaseNotes: >
-  # Collabra 0.2.86
+  # Collabra 0.2.87
 
 
-  ## 图标轨入口回归
+  ## 浏览器操作定位不一致
 
 
-  - 关闭 Bot 功能后，标题栏不再保留只剩一个「Code」的分段控件，Code 入口回到左侧图标轨，
-    排在图片工作台上方，鼠标悬浮显示「Code」，选中时用图标轨统一的底色与品牌色。
-  - 从设计画廊、图片工作台或扩展页点这个 Code 入口，直接回到 Code 对话，不需要先关掉当前页面。
+  - 修复“快照里看得到登录按钮，批量操作却报 Target not found”的问题。快照、页面读取与
+    批量操作现在共用同一套控件命名规则，覆盖 `aria-labelledby` 关联文字、提交按钮的
+    value 以及输入框的 name。
+  - 「登 录」这类中文排版空格可以按「登录」定位，但仍优先完整精确名称；同一页出现多个
+    同名控件时继续拒绝并要求用 role 或 nth 指定。
+  - 批量操作中途停止时，错误里会附带一次有界的当前页面和可用引用，方便直接接着往下点，
+    不必先自己再取一次快照。
 
-  - 协作看板的内容来自 Bot 任务，Bot 功能关闭后入口一并消失，图标轨不再留一个永远空着的按钮。
+  ## 安全边界没有放宽
 
-  - Bot 功能开启时行为不变：Code / Bot 仍由标题栏中部的分段控件承载，看板入口保留。
-    远程节点接管本机界面时两者都不出现，不暴露未启用的功能。
+
+  - 旧引用仍然不会被猜成新元素；失败信息里没有展示的引用也不能直接执行。
+
+  - 已填写或已点击的步骤不会自动重放，人工介入或取消之后也不会再追加读取页面。
+
+  - 密码输入框的值仍然不读取、不输出。
+
 
   ## 验收与更新范围
 
 
-  - 图标轨组件与工作模式入口的单测覆盖了新顺序与门控：Bot 关闭时 Code 在图片工作台上方、看板缺席；
-    开启时图标轨不重复工作模式入口。
-  - 主题验收脚本的「Bot 关闭后的 Code」断言同步改为图标轨选中态，避免沿用旧的分段胶囊口径。
-
-  - 本次发布为 Mac arm64 同证书个人版，更新个人通道，不改变正式 Latest。
+  - 单测覆盖按钮 value、`aria-labelledby`、输入框 name、中文排版空格与歧义拒绝；新增的
+    `browserHost.actions.test.ts` 验证旧引用不发送输入、失败反馈可用、中途停止不重放、
+    人工介入后不再读取。
+  - 隔离 Electron 真实 guest 页面验证通过：三种登录按钮形态各完成一次账号密码填写与登录、
+    旧引用被拒绝且返回的新引用可继续点击、批次中途停止只保留已完成的输入。
+  - 本次发布为 Mac arm64 同证书个人版，更新个人通道，不改变正式 Latest；同时提供 Windows x64 构建。
 
   - 安装和重启由用户操作；发布成功不代表已经完成本机安装、旧数据保留或自动升级验收。
 
@@ -41,5 +51,5 @@ releaseNotes: >
   ---
 
 
-  个人测试通道 0.2.86：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.87：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
