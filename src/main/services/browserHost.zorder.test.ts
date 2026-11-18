@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
   dir: '',
@@ -467,4 +467,118 @@ it('hibernateAll 关掉 guest webContents，进托盘才能丢掉 renderer', asy
   expect(host.listSearchableTabs().some((tab) => tab.url.startsWith('https://example.com'))).toBe(
     true
   );
+});
+
+describe('浏览器休眠后的续接', () => {
+  const defaultDir = mock.dir;
+  const sessionId = 'resume-conv';
+  const tabId = 'original-tab';
+  const url = 'https://example.com/resume';
+  let host: BrowserHost;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mock.dir = mkdtempSync(join(tmpdir(), 'browser-resume-'));
+    host = new BrowserHost();
+  });
+
+  afterEach(async () => {
+    await host.dispose();
+    rmSync(mock.dir, { recursive: true, force: true });
+    mock.dir = defaultDir;
+    vi.useRealTimers();
+  });
+
+  const show = (id: string) => host.setViewport(id, sessionId, viewport);
+  const list = () => host.invoke(sessionId, 'tabs', { action: 'list' });
+  const open = () => host.userNavigate(tabId, sessionId, url);
+  const sleepTab = async () => {
+    show(tabId);
+    host.setViewport(tabId, sessionId, null);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(host.state(tabId).tabId).toBeNull();
+  };
+
+  it('默认导航唤醒原 tab，明确要求 newTab 才另开', async () => {
+    await open();
+    await sleepTab();
+
+    expect(await host.invoke(sessionId, 'navigate', { url, newTab: false })).toMatchObject({
+      tabId,
+      url,
+    });
+    expect(await list()).toMatchObject({ tabs: [{ tabId, url, active: true }] });
+
+    await sleepTab();
+    expect(await host.invoke(sessionId, 'navigate', { url, newTab: true })).not.toMatchObject({
+      tabId,
+    });
+    expect(host.state(tabId).tabId).toBeNull();
+  });
+
+  it('列出休眠 tab 不加载网页，选中才用同一 ID 恢复', async () => {
+    await open();
+    await sleepTab();
+
+    expect(await list()).toMatchObject({ tabs: [{ tabId, url, hibernated: true }] });
+    expect(mock.contents).toHaveLength(1);
+    expect(await host.invoke(sessionId, 'tabs', { action: 'select', tabId })).toMatchObject({
+      selected: tabId,
+      tabs: [{ tabId, url, active: true }],
+    });
+    expect(host.state(tabId).url).toBe(url);
+    expect(mock.contents).toHaveLength(2);
+  });
+
+  it('成员上次操作的 tab 休眠后，不拿另一个前台 tab 顶替', async () => {
+    const actor = { sessionId: 'member-1', name: 'Member' };
+    await open();
+    await host.invoke(sessionId, 'navigation', { action: 'reveal', tabId }, actor);
+    host.releaseActor(actor.sessionId);
+    show(tabId);
+    await host.userNavigate('foreground', sessionId, 'https://example.com/foreground');
+    show('foreground');
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(host.state(tabId).tabId).toBeNull();
+
+    expect(await host.invoke(sessionId, 'navigation', { action: 'reveal' }, actor)).toMatchObject({
+      tabId,
+      url,
+    });
+    expect(host.state('foreground').url).toBe('https://example.com/foreground');
+  });
+
+  it('其他会话不能恢复休眠 tab；用户关闭它后不会被工具复活', async () => {
+    await open();
+    await sleepTab();
+
+    await expect(host.invoke('other', 'tabs', { action: 'select', tabId })).rejects.toThrow();
+    expect(await host.invoke('other', 'tabs', { action: 'list' })).toEqual({ tabs: [] });
+    expect(mock.contents).toHaveLength(1);
+
+    await host.closeTab(tabId);
+    expect(await list()).toEqual({ tabs: [] });
+    expect(host.listSearchableTabs()).toEqual([]);
+    await expect(host.invoke(sessionId, 'navigate', { tabId, url })).rejects.toThrow();
+    expect(mock.contents).toHaveLength(1);
+  });
+
+  it('没有内存指针时复用唯一的旧标签，多项时先要求选择', async () => {
+    await open();
+    mock.contents[0].emit('did-navigate');
+    await host.dispose();
+    host = new BrowserHost();
+    expect(await host.invoke(sessionId, 'navigate', { url })).toMatchObject({ tabId });
+
+    await host.userNavigate('second-tab', sessionId, 'https://example.com/second');
+    await host.hibernateAll();
+    await host.dispose();
+    host = new BrowserHost();
+
+    const viewsBefore = mock.contents.length;
+    await expect(host.invoke(sessionId, 'navigate', { url })).rejects.toThrow(/select one/);
+    expect(mock.contents).toHaveLength(viewsBefore);
+    await host.closeSession(sessionId);
+    expect(await list()).toEqual({ tabs: [] });
+  });
 });

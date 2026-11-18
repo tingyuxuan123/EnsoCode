@@ -86,7 +86,6 @@ import {
   snapshotRefOptions,
 } from '@shared/browser/snapshot';
 import {
-  dropPersistedTabsForSession,
   type PersistedBrowserTab,
   parsePersistedBrowserTabs,
   serializePersistedBrowserTabs,
@@ -334,7 +333,9 @@ interface Tab {
   device: BrowserDevice;
   /** 人工操作 / 导航后的页面代际，仅用于拒绝迟到快照，不是控制权。 */
   generation: number;
+  snapshotScope: string;
   snapshotSeq: number;
+  restoring?: Promise<void>;
   readSnapshot?: PageReadSnapshot;
   readKey?: string;
   queue: Promise<unknown>;
@@ -526,6 +527,18 @@ export class BrowserHost {
     return tab;
   }
 
+  private savedTab(tabId: string): PersistedBrowserTab | undefined {
+    this.loadPersisted();
+    return Object.hasOwn(this.persisted, tabId) ? this.persisted[tabId] : undefined;
+  }
+
+  private tabOwner(tabId: string): string | undefined {
+    const live = this.tabs.get(tabId);
+    if (live) return live.ownerSessionId;
+    const saved = this.savedTab(tabId);
+    return saved ? (saved.conversationId ?? tabId) : undefined;
+  }
+
   /** 会话名下还活着的 tab，一行一个 id + 标题 + 地址；没有就说没有 */
   private tabSummary(conversationId: string): string {
     const owned = [...this.tabs.values()].filter((tab) => tab.ownerSessionId === conversationId);
@@ -615,8 +628,8 @@ export class BrowserHost {
   }
 
   private requestReveal(sessionId: string, tabId?: string): void {
-    const tab =
-      (tabId ? this.tabs.get(tabId) : this.tabFor(sessionId)) ?? this.createTab(sessionId);
+    const tab = tabId ? this.tabs.get(tabId) : this.tabFor(sessionId);
+    if (!tab) return;
     this.pendingReveal.add(sessionId);
     this.userTabs.add(tab.id);
     for (const listener of this.revealListeners) listener(sessionId, tab.id);
@@ -657,6 +670,7 @@ export class BrowserHost {
         title: state.title,
         conversationId: tab.ownerSessionId,
         at: Date.now(),
+        createdAt: tab.createdAt,
       });
     }
     if (tab && state.url.startsWith('file:')) this.forgetTab(tab.id);
@@ -674,12 +688,10 @@ export class BrowserHost {
       // 面板 id 与浏览器 tab id 同形但不等价：只认已存在的 tab。未知 id 交给
       // restoreTab 按持久化 URL 懒恢复；没有 URL 就不该建一个空白 tab，更不能
       // 把 agent 的「当前 tab」指过去（否则下一次不带 tabId 的 reload/导航落到空页）。
-      const tab = this.tabs.get(tabId);
+      const tab = this.tabs.get(tabId) ?? this.restoreTab(tabId);
       if (tab) {
         if (tab.ownerSessionId === sessionId) this.currentBySession.set(sessionId, tabId);
         this.userTabs.add(tabId);
-      } else {
-        void this.restoreTab(tabId, sessionId);
       }
       this.pendingReveal.delete(sessionId);
       this.shown = { tabId, sessionId, viewport, covered };
@@ -1084,15 +1096,15 @@ export class BrowserHost {
 
   /** 面板地址栏 / 按钮 */
   async userNavigate(tabId: string, sessionId: string, raw: string): Promise<void> {
-    const existing = this.tabs.get(tabId);
-    if (existing && existing.ownerSessionId !== sessionId)
-      throw new Error('Browser tab owner mismatch.');
-    if (!existing) this.createTab(sessionId, tabId);
+    const owner = this.tabOwner(tabId);
+    if (owner && owner !== sessionId) throw new Error('Browser tab owner mismatch.');
+    const url = this.allowUrl(raw, sessionId);
+    const tab =
+      this.tabs.get(tabId) ?? this.restoreTab(tabId, false) ?? this.createTab(sessionId, tabId);
     this.currentBySession.set(sessionId, tabId);
     this.userTabs.add(tabId);
-    const url = this.allowUrl(raw, sessionId);
-    const tab = this.tabs.get(tabId);
-    if (!tab) return;
+    // 地址栏接管正在恢复的 tab；旧加载取消后不能误销毁它。
+    tab.restoring = undefined;
     this.userInteracted(tab);
     await Promise.race([
       tab.view.webContents.loadURL(url.href),
@@ -1142,23 +1154,19 @@ export class BrowserHost {
 
   async closeTab(tabId: string): Promise<void> {
     const tab = this.tabs.get(tabId);
-    if (!tab) return;
+    const owner = this.tabOwner(tabId);
+    if (!owner) return;
     this.userTabs.delete(tabId);
     this.forgetTab(tabId);
-    await this.destroyTab(tab);
-    for (const listener of this.closeListeners) listener(tab.ownerSessionId, tabId);
+    if (tab) await this.destroyTab(tab);
+    else this.forgetTabPointers(owner, tabId);
+    for (const listener of this.closeListeners) listener(owner, tabId);
   }
 
   async closeSession(sessionId: string): Promise<void> {
-    const live = [...this.tabs.values()].filter((tab) => tab.ownerSessionId === sessionId);
-    for (const tab of live) await this.closeTab(tab.id);
-    this.loadPersisted();
-    const next = dropPersistedTabsForSession(this.persisted, sessionId);
-    if (Object.keys(next).length !== Object.keys(this.persisted).length) {
-      this.persisted = next;
-      this.writePersisted();
-    }
+    for (const tab of this.tabsForSession(sessionId)) await this.closeTab(tab.id);
     this.currentBySession.delete(sessionId);
+    this.agentBySession.delete(sessionId);
   }
 
   /**
@@ -1387,54 +1395,78 @@ export class BrowserHost {
       throw new Error(BROWSER_TAB_CLOSED_NOTICE);
     const requested =
       isRecord(params) && params.tabId !== undefined ? paramString(params, 'tabId') : undefined;
-    let explicit: string | undefined;
-    if (requested) {
-      const outcome = explicitTabOutcome(
-        op,
-        this.tabs.has(requested),
-        this.agentTabFor(sessionId) !== undefined
-      );
-      // 'fallback' 留给下面按「会话当前 tab」解析；'reject' 的报错里带着可用 tab 列表
-      if (outcome === 'use') explicit = this.ownedTab(requested, sessionId).id;
-      else if (outcome === 'reject') this.ownedTab(requested, sessionId);
-    }
+    const requestedOwner = requested ? this.tabOwner(requested) : undefined;
+    if (requestedOwner && requestedOwner !== sessionId)
+      throw new Error('Browser tab owner mismatch');
     if (op === 'tabs') {
+      if (requested && !requestedOwner) this.ownedTab(requested, sessionId);
       return this.handleTabs(
         sessionId,
         isRecord(params) && typeof params.action === 'string' ? params.action : 'list',
         isRecord(params) && typeof params.index === 'number' ? params.index : undefined,
         actor,
-        explicit
+        requested,
+        options
       );
     }
-    const pointed = actor ? this.tabClaims.pointer(actor.sessionId) : undefined;
     const newTab = op === 'navigate' && isRecord(params) && params.newTab === true;
-    let tab = explicit
-      ? this.ownedTab(explicit, sessionId)
-      : newTab
-        ? undefined
-        : ((pointed ? this.tabs.get(pointed) : undefined) ?? this.agentTabFor(sessionId));
-    if (
-      !tab &&
-      (op === 'navigate' ||
-        actions?.[0]?.action === 'navigate' ||
-        (op === 'navigation' && isRecord(params) && params.action === 'search'))
-    )
-      tab = this.createTab(sessionId);
+    const navigateAction = op === 'navigation' && isRecord(params) ? params.action : undefined;
+    const startsNavigation =
+      op === 'navigate' || actions?.[0]?.action === 'navigate' || navigateAction === 'search';
+    let tabId = requestedOwner ? requested : undefined;
+    if (!tabId && !newTab) {
+      tabId = this.currentToolTabId(sessionId, actor);
+      if (!tabId) {
+        const candidates = this.tabsForSession(sessionId);
+        if (candidates.length === 1) tabId = candidates[0].id;
+        else if (candidates.length > 1 && !requested)
+          throw new Error('Multiple browser tabs are available. Use browser_tabs to select one.');
+      }
+    }
+    if (requested && explicitTabOutcome(op, !!requestedOwner, !!tabId) === 'reject')
+      this.ownedTab(requested, sessionId);
+
+    let tab = tabId ? this.tabs.get(tabId) : undefined;
+    if (!tab && tabId) {
+      options?.guard?.();
+      if (op === 'close') {
+        await this.closeTab(tabId);
+        if (actor) this.tabClaims.takeClosed(actor.sessionId);
+        return { closed: tabId };
+      }
+      if (
+        !startsNavigation &&
+        !READ_ONLY_BROWSER_OPS.has(op) &&
+        op !== 'lock' &&
+        navigateAction !== 'reveal'
+      )
+        throw new Error(
+          'Browser tab is hibernating. Call browser_snapshot or select the tab before continuing.'
+        );
+      if (op === 'navigate') this.allowUrl(paramString(params, 'url'), sessionId);
+      if (navigateAction === 'search') paramString(params, 'query');
+      for (const step of actions ?? [])
+        if (step.action === 'navigate') this.allowUrl(step.url!, sessionId);
+      // 导航可以直接加载目的地址；不先访问休眠前的网址，也不另建 ID。
+      tab = this.restoreTab(tabId, !startsNavigation);
+    }
+    if (!tab && startsNavigation && !tabId) tab = this.createTab(sessionId);
     if (!tab) throw new Error('No browser tab is open. Call browser_navigate first.');
     const target = this.ownedTab(tab.id, sessionId);
-    // 工具一旦选定 tab，后续不带 tabId 的调用都跟随它；UI 面板可见性不得改写这个指针
-    this.agentBySession.set(sessionId, target.id);
     if (actor) {
       const claim = this.tabClaims.claim(target.id, actor);
       if (!claim.ok) throw new Error(browserTabBusyMessage(claim.holder.name));
       if (target.lastHolder !== actor.sessionId) this.invalidateRefs(target);
       target.lastHolder = actor.sessionId;
     }
+    // 工具一旦选定 tab，后续不带 tabId 的调用都跟随它；UI 面板可见性不得改写这个指针
+    this.agentBySession.set(sessionId, target.id);
+    const restoring = target.restoring;
     let draining: Promise<unknown> | undefined;
     const task = target.queue
       .catch(() => {})
       .then(async () => {
+        if (restoring) await restoring;
         this.assertTabActive(target);
         options?.signal?.throwIfAborted();
         options?.guard?.();
@@ -1834,7 +1866,7 @@ export class BrowserHost {
 
   private async scanActionState(tab: Tab, settle: boolean): Promise<SnapshotEntry[]> {
     const generation = tab.generation;
-    const prefix = `${tab.id.replace(/[^a-z0-9-]/gi, '').slice(-40)}-${++tab.snapshotSeq}`;
+    const prefix = `${tab.snapshotScope}-${++tab.snapshotSeq}`;
     const refs = tab.lastSnapshot?.refs ?? [];
     const raw: unknown = await tab.view.webContents.executeJavaScript(
       pageActionObservationScript(prefix, refs, settle),
@@ -1927,10 +1959,39 @@ export class BrowserHost {
     }
   }
 
-  private tabsForSession(sessionId: string): Tab[] {
-    return [...this.tabs.values()]
+  private currentToolTabId(sessionId: string, actor?: BrowserActor): string | undefined {
+    return [
+      actor && this.tabClaims.pointer(actor.sessionId),
+      this.agentBySession.get(sessionId),
+      this.currentBySession.get(sessionId),
+    ].find((id) => id && this.tabOwner(id) === sessionId);
+  }
+
+  private tabsForSession(sessionId: string) {
+    this.loadPersisted();
+    const live = [...this.tabs.values()]
       .filter((tab) => tab.ownerSessionId === sessionId)
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .map((tab) => ({ id: tab.id, createdAt: tab.createdAt, state: this.stateOf(tab) }));
+    const sleeping = Object.entries(this.persisted).flatMap(([id, saved]) =>
+      !this.tabs.has(id) && (saved.conversationId ?? id) === sessionId
+        ? [
+            {
+              id,
+              createdAt: saved.createdAt ?? saved.at ?? 0,
+              state: {
+                ...EMPTY_STATE,
+                tabId: id,
+                title: saved.title,
+                url: saved.url,
+                hibernated: true,
+              },
+            },
+          ]
+        : []
+    );
+    return [...live, ...sleeping].sort(
+      (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+    );
   }
 
   private async handleTabs(
@@ -1938,16 +1999,16 @@ export class BrowserHost {
     action: string,
     index?: number,
     actor?: BrowserActor,
-    tabId?: string
+    tabId?: string,
+    options?: { signal?: AbortSignal; guard?: () => void }
   ): Promise<unknown> {
     if (!['new', 'select', 'close', 'list'].includes(action))
       throw new Error('Invalid tabs action');
     const list = () => {
-      const current =
-        (actor && this.tabClaims.pointer(actor.sessionId)) ?? this.agentBySession.get(sessionId);
+      const current = this.currentToolTabId(sessionId, actor);
       return this.tabsForSession(sessionId).map((tab, tabIndex) => ({
         index: tabIndex,
-        ...this.stateOf(tab),
+        ...tab.state,
         active: tab.id === current,
       }));
     };
@@ -1962,31 +2023,35 @@ export class BrowserHost {
     if (action === 'select') {
       if (!tabId && (index === undefined || !Number.isInteger(index)))
         throw new Error('tabId or index is required for select');
-      const tab = tabId
-        ? this.ownedTab(tabId, sessionId)
-        : this.tabsForSession(sessionId)[index ?? -1];
-      if (!tab) throw new Error(`No browser tab at index ${index}`);
-      this.currentBySession.set(sessionId, tab.id);
-      this.agentBySession.set(sessionId, tab.id);
-      if (actor) this.tabClaims.point(actor.sessionId, tab.id);
-      this.requestReveal(sessionId, tab.id);
-      return { selected: tab.id, tabs: list() };
+      const id = tabId ?? this.tabsForSession(sessionId)[index ?? -1]?.id;
+      if (!id) throw new Error(`No browser tab at index ${index}`);
+      options?.guard?.();
+      const tab = this.tabs.get(id) ?? this.restoreTab(id) ?? this.ownedTab(id, sessionId);
+      if (tab.restoring) await tab.restoring;
+      options?.signal?.throwIfAborted();
+      options?.guard?.();
+      if (this.tabs.get(id) !== tab) throw new Error('Browser tab is closed');
+      this.currentBySession.set(sessionId, id);
+      this.agentBySession.set(sessionId, id);
+      if (actor) this.tabClaims.point(actor.sessionId, id);
+      this.requestReveal(sessionId, id);
+      return { selected: id, tabs: list() };
     }
     if (action === 'close') {
-      const tabs = this.tabsForSession(sessionId);
-      const pointed = actor ? this.tabClaims.pointer(actor.sessionId) : undefined;
-      const tab =
-        index === undefined
-          ? ((pointed ? this.tabs.get(pointed) : undefined) ?? this.tabFor(sessionId))
-          : tabs[index];
-      if (!tab) throw new Error('No browser tab to close');
-      if (actor) {
-        const claim = this.tabClaims.claim(tab.id, actor);
+      const id =
+        tabId ??
+        (index === undefined
+          ? this.currentToolTabId(sessionId, actor)
+          : this.tabsForSession(sessionId)[index]?.id);
+      if (!id) throw new Error('No browser tab to close');
+      options?.guard?.();
+      if (actor && this.tabs.has(id)) {
+        const claim = this.tabClaims.claim(id, actor);
         if (!claim.ok) throw new Error(browserTabBusyMessage(claim.holder.name));
       }
-      await this.closeTab(tab.id);
+      await this.closeTab(id);
       if (actor) this.tabClaims.takeClosed(actor.sessionId);
-      return { closed: tab.id, tabs: list() };
+      return { closed: id, tabs: list() };
     }
     return { tabs: list() };
   }
@@ -1996,16 +2061,20 @@ export class BrowserHost {
     const tab =
       target ??
       (newTab ? this.createTab(sessionId) : (this.tabFor(sessionId) ?? this.createTab(sessionId)));
-    const contents = tab.view.webContents;
     tab.lastSnapshot = undefined;
+    await this.loadTabUrl(tab, url.href);
+    this.assertTabActive(tab);
+    this.requestReveal(sessionId, tab.id);
+    return this.pageInfo(tab.view.webContents);
+  }
+
+  private async loadTabUrl(tab: Tab, url: string): Promise<void> {
     await Promise.race([
-      contents.loadURL(url.href),
+      tab.view.webContents.loadURL(url),
       sleep(NAVIGATE_TIMEOUT_MS).then(() => {
-        throw new Error(`Navigation to ${url.href} timed out`);
+        throw new Error(`Navigation to ${url} timed out`);
       }),
     ]);
-    this.requestReveal(sessionId, tab.id);
-    return this.pageInfo(contents);
   }
 
   /**
@@ -2246,7 +2315,7 @@ export class BrowserHost {
     } else {
       if (request.ref) this.assertRef(tab, request.ref);
       const generation = tab.generation;
-      const snapshotId = `${tab.id.replace(/[^a-z0-9-]/gi, '').slice(-40)}-${++tab.snapshotSeq}`;
+      const snapshotId = `${tab.snapshotScope}-${++tab.snapshotSeq}`;
       const raw = await tab.view.webContents.executeJavaScript(
         pageReadScript(request, snapshotId),
         true
@@ -2272,7 +2341,7 @@ export class BrowserHost {
 
   private async snapshot(tab: Tab): Promise<string> {
     const generation = tab.generation;
-    const prefix = `${tab.id.replace(/[^a-z0-9-]/gi, '').slice(-40)}-${++tab.snapshotSeq}`;
+    const prefix = `${tab.snapshotScope}-${++tab.snapshotSeq}`;
     const script = PAGE_SNAPSHOT_SCRIPT.replace(
       "const ref = 'e' + (++counter);",
       `const ref = 'e' + ${JSON.stringify(prefix)} + '_' + (++counter);`
@@ -2594,8 +2663,8 @@ export class BrowserHost {
 
   /** agent 视角的当前 tab：只由工具自己选定/显式 tabId 更新，UI 面板上报不改它 */
   private agentTabFor(sessionId: string): Tab | undefined {
-    const id = this.agentBySession.get(sessionId);
-    return (id ? this.tabs.get(id) : undefined) ?? this.tabFor(sessionId);
+    const id = this.currentToolTabId(sessionId);
+    return id ? this.tabs.get(id) : undefined;
   }
 
   private mustTab(sessionId: string): Tab {
@@ -2604,7 +2673,12 @@ export class BrowserHost {
     return tab;
   }
 
-  private createTab(sessionId: string, tabId?: string): Tab {
+  private createTab(
+    sessionId: string,
+    tabId?: string,
+    createdAt = Date.now(),
+    activate = true
+  ): Tab {
     this.evictIfNeeded();
     const view = new WebContentsView({
       webPreferences: {
@@ -2622,7 +2696,7 @@ export class BrowserHost {
       id,
       view,
       ownerSessionId: sessionId,
-      createdAt: Date.now(),
+      createdAt,
       locked: false,
       ready: false,
       devtoolsOpen: false,
@@ -2638,12 +2712,16 @@ export class BrowserHost {
       networkListenersInstalled: false,
       device: { enabled: false },
       generation: 0,
+      // tabId 跨休眠稳定，元素引用只在本次 WebContents 内有效。
+      snapshotScope: randomUUID(),
       snapshotSeq: 0,
       queue: Promise.resolve(),
       emulationQueue: Promise.resolve(),
     };
     const contents = view.webContents;
-    const push = () => this.emitState(sessionId, id);
+    const push = () => {
+      if (this.tabs.get(id) === tab) this.emitState(sessionId, id);
+    };
     // 人工操作只让旧引用失效，不取消协作等待或锁死后续 Agent 工具。
     contents.on('input-event', (_event, input) => {
       if (tab.synthetic === 0 && USER_INPUT.has(input.type)) this.userInteracted(tab);
@@ -2702,14 +2780,14 @@ export class BrowserHost {
       return { action: 'deny' };
     });
     contents.on('destroyed', () => {
+      // 旧 WebContents 可能比同 ID 的恢复晚关闭，不能清掉新一代。
+      if (this.tabs.get(id) !== tab) return;
       this.tabs.delete(id);
-      this.tabClaims.closeTab(id);
-      if (this.currentBySession.get(sessionId) === id) this.currentBySession.delete(sessionId);
-      if (this.agentBySession.get(sessionId) === id) this.agentBySession.delete(sessionId);
+      this.forgetTabPointers(sessionId, id);
       this.emitState(sessionId, id);
     });
     this.tabs.set(id, tab);
-    this.currentBySession.set(sessionId, id);
+    if (activate) this.currentBySession.set(sessionId, id);
     this.layout();
     this.emitState(sessionId, id);
     return tab;
@@ -2751,15 +2829,18 @@ export class BrowserHost {
     await this.destroyTab(tab);
   }
 
+  private forgetTabPointers(sessionId: string, tabId: string): void {
+    this.tabClaims.closeTab(tabId);
+    if (this.currentBySession.get(sessionId) === tabId) this.currentBySession.delete(sessionId);
+    if (this.agentBySession.get(sessionId) === tabId) this.agentBySession.delete(sessionId);
+    this.lastSeen.delete(tabId);
+  }
+
   private async destroyTab(tab: Tab, opts?: { keepPersist?: boolean }): Promise<void> {
+    if (this.tabs.get(tab.id) !== tab) return;
     this.tabs.delete(tab.id);
-    this.tabClaims.closeTab(tab.id);
-    if (this.currentBySession.get(tab.ownerSessionId) === tab.id) {
-      this.currentBySession.delete(tab.ownerSessionId);
-    }
-    if (this.agentBySession.get(tab.ownerSessionId) === tab.id) {
-      this.agentBySession.delete(tab.ownerSessionId);
-    }
+    if (opts?.keepPersist) this.tabClaims.suspendTab(tab.id);
+    else this.forgetTabPointers(tab.ownerSessionId, tab.id);
     if (!this.disposing && !opts?.keepPersist && !this.userTabs.has(tab.id)) {
       this.forgetTab(tab.id);
     }
@@ -2767,7 +2848,7 @@ export class BrowserHost {
     this.teardownDevTools(tab);
     this.detach(tab.view);
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
-    this.emitState(tab.ownerSessionId, tab.id);
+    if (!this.tabs.has(tab.id)) this.emitState(tab.ownerSessionId, tab.id);
   }
 
   async flush(): Promise<void> {
@@ -2821,7 +2902,7 @@ export class BrowserHost {
 
   private forgetTab(sessionId: string): void {
     this.loadPersisted();
-    if (!(sessionId in this.persisted)) return;
+    if (!Object.hasOwn(this.persisted, sessionId)) return;
     delete this.persisted[sessionId];
     this.writePersisted();
   }
@@ -2830,25 +2911,26 @@ export class BrowserHost {
     this.lastSeen.set(tabId, Date.now());
     if (this.idleTimer) return;
     this.idleTimer = setInterval(() => void this.hibernateIdleTabs(), IDLE_TICK_MS);
+    this.idleTimer.unref?.();
   }
 
   private async hibernateIdleTabs(): Promise<void> {
     const now = Date.now();
     for (const tab of [...this.tabs.values()]) {
-      if (tab.locked || tab.id === this.shown?.tabId || this.tabClaims.holder(tab.id)) continue;
+      if (
+        this.tabs.get(tab.id) !== tab ||
+        tab.locked ||
+        tab.active ||
+        tab.restoring ||
+        tab.id === this.shown?.tabId ||
+        this.tabClaims.holder(tab.id)
+      )
+        continue;
       const seen = this.lastSeen.get(tab.id) ?? tab.createdAt;
       if (now - seen < IDLE_MS) continue;
       const state = this.stateOf(tab);
-      if (state.url.startsWith('http')) {
-        this.rememberTab(tab.id, {
-          url: state.url,
-          title: state.title,
-          conversationId: tab.ownerSessionId,
-          at: seen,
-        });
-      }
       if (state.url.startsWith('file:')) continue;
-      await this.destroyTab(tab, { keepPersist: true });
+      await this.hibernateTab(tab, state, seen);
     }
     if (this.tabs.size === 0 && this.idleTimer) {
       clearInterval(this.idleTimer);
@@ -2856,22 +2938,51 @@ export class BrowserHost {
     }
   }
 
-  private async restoreTab(tabId: string, sessionId?: string): Promise<void> {
-    this.loadPersisted();
-    if (this.tabs.has(tabId)) return;
-    const saved = this.persisted[tabId];
+  private hibernateTab(tab: Tab, state: BrowserTabState, at: number): Promise<void> {
+    if (state.url.startsWith('http')) {
+      this.rememberTab(tab.id, {
+        url: state.url,
+        title: state.title,
+        conversationId: tab.ownerSessionId,
+        at,
+        createdAt: tab.createdAt,
+      });
+    }
+    return this.destroyTab(tab, { keepPersist: !!this.savedTab(tab.id) });
+  }
+
+  private restoreTab(tabId: string, loadSaved = true): Tab | undefined {
+    const existing = this.tabs.get(tabId);
+    if (existing) return existing;
+    const saved = this.savedTab(tabId);
     // 没有持久化 URL = 从没加载过页面。此时建 tab 只会留下一个永久空白页，
     // 并把 agent 的当前 tab 指过去；面板首帧会在真正导航后自己再上报。
     if (!saved?.url) return;
+    let url: string;
     try {
-      assertAllowedUrl(saved.url);
+      url = assertAllowedUrl(saved.url).href;
     } catch {
       return;
     }
-    const owner = saved.conversationId ?? sessionId ?? tabId;
-    const tab = this.createTab(owner, tabId);
+    const owner = saved.conversationId ?? tabId;
+    const tab = this.createTab(owner, tabId, saved.createdAt ?? saved.at ?? 0, false);
     this.userTabs.add(tab.id);
-    await tab.view.webContents.loadURL(saved.url).catch(() => {});
+    this.touch(tabId);
+    if (loadSaved) {
+      const loading = this.loadTabUrl(tab, url);
+      tab.restoring = loading;
+      void loading
+        .then(
+          () => {
+            if (tab.restoring === loading) tab.restoring = undefined;
+          },
+          () => {
+            if (tab.restoring === loading) return this.destroyTab(tab, { keepPersist: true });
+          }
+        )
+        .catch(() => {});
+    }
+    return tab;
   }
 
   async restorePersistedTabs(): Promise<void> {
@@ -2929,16 +3040,8 @@ export class BrowserHost {
       this.idleTimer = undefined;
     }
     for (const tab of [...this.tabs.values()]) {
-      const state = this.stateOf(tab);
-      if (state.url.startsWith('http')) {
-        this.rememberTab(tab.id, {
-          url: state.url,
-          title: state.title,
-          conversationId: tab.ownerSessionId,
-          at: this.lastSeen.get(tab.id) ?? tab.createdAt,
-        });
-      }
-      await this.destroyTab(tab, { keepPersist: true });
+      if (this.tabs.get(tab.id) !== tab) continue;
+      await this.hibernateTab(tab, this.stateOf(tab), this.lastSeen.get(tab.id) ?? tab.createdAt);
     }
   }
 

@@ -73,6 +73,10 @@ export class BrowserTabClaims {
     this.closed.delete(sessionId);
   }
 
+  suspendTab(tabId: string): void {
+    this.drop(tabId);
+  }
+
   closeTab(tabId: string): void {
     this.drop(tabId);
     for (const [sessionId, pointed] of [...this.pointers])

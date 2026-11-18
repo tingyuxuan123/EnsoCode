@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
   dir: '',
@@ -102,10 +102,12 @@ vi.mock('electron', () => ({
 
 import { BrowserHost } from './browserHost';
 
-mock.dir = mkdtempSync(join(tmpdir(), 'browser-capabilities-'));
-afterAll(() => rmSync(mock.dir, { recursive: true, force: true }));
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  rmSync(mock.dir, { recursive: true, force: true });
+});
 beforeEach(() => {
+  mock.dir = mkdtempSync(join(tmpdir(), 'browser-capabilities-'));
   mock.contents.length = 0;
   mock.commands.length = 0;
   mock.exec = async () => 'ok';

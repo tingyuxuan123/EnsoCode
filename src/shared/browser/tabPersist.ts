@@ -7,6 +7,7 @@ export interface PersistedBrowserTab {
   title: string;
   conversationId?: string;
   at?: number;
+  createdAt?: number;
   device?: BrowserDevice;
 }
 
@@ -24,6 +25,7 @@ export function parsePersistedBrowserTabs(raw: unknown): Record<string, Persiste
       continue;
     }
     const at = (value as { at?: unknown }).at;
+    const createdAt = (value as { createdAt?: unknown }).createdAt;
     const conversationId = (value as { conversationId?: unknown }).conversationId;
     let device: BrowserDevice | undefined;
     try {
@@ -38,6 +40,7 @@ export function parsePersistedBrowserTabs(raw: unknown): Record<string, Persiste
         ? { conversationId }
         : { conversationId: sessionId }),
       ...(typeof at === 'number' && Number.isFinite(at) ? { at } : {}),
+      ...(typeof createdAt === 'number' && Number.isFinite(createdAt) ? { createdAt } : {}),
     };
   }
   return out;

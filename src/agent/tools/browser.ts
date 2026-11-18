@@ -468,7 +468,7 @@ export function createBrowserTools(invoker: BrowserInvoker): ToolDefinition[] {
     define(
       'browser_tabs',
       'tabs',
-      'List/create/select/close conversation tabs. Select/close by tabId or legacy 0-based index. New creates a blank tab.',
+      'List/create/select/close conversation tabs, including hibernating tabs. Listing does not wake tabs. Select by tabId to restore and reuse a hibernating tab. Select/close by tabId or legacy 0-based index. New creates a blank tab.',
       { action: choice('list', 'new', 'select', 'close'), index: bounded(0, 99, true) },
       [],
       { action: 'list' }
