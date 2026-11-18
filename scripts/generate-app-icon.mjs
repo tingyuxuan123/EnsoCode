@@ -14,6 +14,9 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
 const SIZES = [16, 32, 48, 64, 128, 256, 512];
 const ICO_SIZES = [256, 128, 64, 48, 32, 16];
+// 菜单栏模板图标画布高度与剪影高度（pt）：22pt 画布、16pt 剪影。
+const TRAY_CANVAS = 22;
+const TRAY_GLYPH = 16;
 const ARTWORK = new URL('../assets/branding/codekiln-logo.png', import.meta.url);
 // 素材 2048×2048：白底包裹的深色圆角方板，板沿外还有一圈生成器光晕。
 // 向内裁 18px 再按实测圆角遮罩，白底与光晕都不会进 Dock / 任务栏 / 安装包。
@@ -152,6 +155,24 @@ async function flameGlyph(sharp, platePng) {
     .toBuffer();
 }
 
+/** 菜单栏模板图标：22pt 画布只画 16pt 剪影，与系统菜单栏图标的上下留白对齐。
+ * 剪影顶满画布时，macOS 会按 22pt 原样绘制，整条菜单栏里只有它比邻居大一圈。
+ */
+async function trayTemplate(sharp, glyph, size) {
+  const content = Math.round((size * TRAY_GLYPH) / TRAY_CANVAS);
+  const inset = Math.floor((size - content) / 2);
+  const body = await sharp(glyph)
+    .resize(content, content, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  return sharp({
+    create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: body, left: inset, top: inset }])
+    .png()
+    .toBuffer();
+}
+
 /** Windows Shell layout: PNG at 256, 32-bit DIB + AND mask below 256.
  * Keep 16/32's empty AND masks / white transparent RGB from the proven old
  * generator. PNG-only small frames regress taskbar/Explorer rounded corners.
@@ -272,8 +293,8 @@ export async function generateIcons(root = ROOT) {
     );
   }
   await writePng('build/icon-win.png', await plateAt(sharp, crop, 256), 256);
-  await writePng('build/trayTemplate.png', mono, 22);
-  await writePng('build/trayTemplate@2x.png', mono, 44);
+  await write('build/trayTemplate.png', await trayTemplate(sharp, mono, TRAY_CANVAS));
+  await write('build/trayTemplate@2x.png', await trayTemplate(sharp, mono, TRAY_CANVAS * 2));
   await write('build/icon.ico', await ico(sharp, pngs));
   await write('build/icon.icns', icns(pngs));
   // In-app phone UI keeps transparency; installed PWA icons below stay opaque.

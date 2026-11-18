@@ -56,6 +56,21 @@ test('generates the CodeKiln artwork for desktop, phone, Android and monochrome 
         for (let i = 0; i < data.length; i += 4) {
           assert.equal(data[i] + data[i + 1] + data[i + 2], 0, file);
         }
+        if (file.includes('trayTemplate')) {
+          // 菜单栏图标要和系统图标一样留出上下留白；顶满 22pt 画布会比邻居大一圈。
+          const inkRows = [];
+          for (let y = 0; y < info.height; y++) {
+            for (let x = 0; x < info.width; x++) {
+              if (data[(y * info.width + x) * 4 + 3] > 8) {
+                inkRows.push(y);
+                break;
+              }
+            }
+          }
+          const expected = Math.round((info.width * 16) / 22);
+          assert.equal(inkRows[0], Math.floor((info.width - expected) / 2), `${file}: top inset`);
+          assert.ok(Math.abs(inkRows.length - expected) <= 1, `${file}: ink ${inkRows.length}`);
+        }
       } else if (file.startsWith('build/')) {
         assert.ok(data[3] < 16, file);
         assert.ok(
