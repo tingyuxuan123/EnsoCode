@@ -8,26 +8,30 @@ import { CodeKilnWorkingIcon } from './CodeKilnWorkingIcon';
 const render = () => renderToStaticMarkup(createElement(CodeKilnWorkingIcon));
 
 describe('CodeKilnWorkingIcon', () => {
-  it('renders the accessible CodeKiln logo without changing the 22px footer footprint', () => {
+  it('renders an accessible 3×3 status grid without changing the 22px footer footprint', () => {
     const html = render();
-    expect(html).toContain('<img');
-    expect(html).toContain('brand-mark.png');
-    expect(html).toContain('alt="CodeKiln"');
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="CodeKiln"');
+    expect(html).toContain('codekiln-working-dots');
     expect(html).toContain('size-[calc(22rem/14)] shrink-0');
-    expect(html).not.toContain('<path');
+    expect(html.match(/class="codekiln-working-dot"/g)).toHaveLength(9);
+    expect(html).not.toContain('<img');
     expect(html).not.toContain('animate-ping');
   });
 
-  it('animates only the working logo rather than retaining old rain-curtain artwork', () => {
-    expect(render()).toContain('codekiln-working-icon');
+  it('uses the dot loader rather than retaining old working artwork', () => {
+    expect(render()).toContain('codekiln-working-dots');
+    expect(render()).not.toContain('codekiln-working-icon');
+    expect(render()).not.toContain('brand-mark.png');
     expect(render()).not.toContain('animate-eaves-');
   });
 
-  it('uses a looping animation and restores a fully visible static logo for reduced motion', () => {
+  it('uses a looping sequential pulse and disables it for reduced motion', () => {
+    const html = render();
     const css = parse(readFileSync(new URL('../../styles/shared.css', import.meta.url), 'utf8'));
     const normal = new Map<string, string>();
     const reduced = new Map<string, string>();
-    css.walkRules('.codekiln-working-icon', (rule) => {
+    css.walkRules('.codekiln-working-dot', (rule) => {
       const parent = rule.parent;
       const declarations =
         parent?.type === 'atrule' && parent.params === '(prefers-reduced-motion: reduce)'
@@ -37,10 +41,14 @@ describe('CodeKilnWorkingIcon', () => {
         declarations.set(decl.prop, decl.value);
       });
     });
-    expect(normal.get('animation')).toContain('codekiln-working-breathe');
+    expect(normal.get('animation')).toContain('codekiln-working-dot');
     expect(normal.get('animation')).toContain('infinite');
     expect(reduced.get('animation')).toBe('none');
-    expect(reduced.get('transform')).toBe('none');
-    expect(reduced.get('opacity')).toBe('1');
+
+    expect(css.toString()).toContain(
+      'animation-delay: calc(var(--working-dot-index) * var(--working-dot-step))'
+    );
+    expect(html).toContain('--working-dot-index:0');
+    expect(html).toContain('--working-dot-index:8');
   });
 });

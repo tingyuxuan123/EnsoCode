@@ -98,18 +98,34 @@
 }
 
 
-/* 运行态品牌图轻轻呼吸、摆动；只变换图像，不影响文字和计时布局。 */
-.codekiln-working-icon {
-  --working-logo-cycle: 2400ms;
-  transform-origin: center;
-  animation: codekiln-working-breathe var(--working-logo-cycle) var(--ease-in-out, ease-in-out) infinite;
+/* 运行态九点列序脉冲；颜色跟随用户强调色，不改变文字和计时布局。 */
+.codekiln-working-dots {
+  --working-dot-size: calc(4rem / 14);
+  --working-dot-gap: calc(3rem / 14);
+  --working-dot-cycle: 1200ms;
+  --working-dot-step: 110ms;
+  display: grid;
+  grid-template-columns: repeat(3, var(--working-dot-size));
+  grid-auto-rows: var(--working-dot-size);
+  gap: var(--working-dot-gap);
+  place-content: center;
 }
-@keyframes codekiln-working-breathe {
-  0%, 100% { transform: rotate(-6deg) scale(0.94); opacity: 0.8; }
-  50% { transform: translateY(calc(-1rem / 14)) rotate(6deg) scale(1.04); opacity: 1; }
+.codekiln-working-dot {
+  display: block;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--brand) 18%, transparent);
+  animation: codekiln-working-dot var(--working-dot-cycle) ease-in-out infinite;
+  animation-delay: calc(var(--working-dot-index) * var(--working-dot-step));
+}
+@keyframes codekiln-working-dot {
+  0%, 42%, 100% { background-color: color-mix(in srgb, var(--brand) 18%, transparent); }
+  12% { background-color: var(--brand); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .codekiln-working-icon { animation: none; transform: none; opacity: 1; }
+  .codekiln-working-dot {
+    animation: none;
+    background-color: color-mix(in srgb, var(--brand) 30%, transparent);
+  }
 }
 
 /* ── Shimmer text (15) — Thinking… 流光 ──────────────────────── */

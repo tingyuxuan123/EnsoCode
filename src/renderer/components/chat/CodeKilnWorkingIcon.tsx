@@ -1,12 +1,23 @@
-import brandLogo from '../../../../build/brand-mark.png';
+import type { CSSProperties } from 'react';
 
-/** Animated CodeKiln logo in the existing running-status footprint. */
+const DOTS = Array.from({ length: 9 }, (_, index) => index);
+
+/** Nine-dot working indicator in the existing running-status footprint. */
 export function CodeKilnWorkingIcon() {
   return (
-    <img
-      src={brandLogo}
-      alt="CodeKiln"
-      className="codekiln-working-icon size-[calc(22rem/14)] shrink-0 object-contain"
-    />
+    <span
+      role="img"
+      aria-label="CodeKiln"
+      className="codekiln-working-dots size-[calc(22rem/14)] shrink-0"
+    >
+      {DOTS.map((dot) => (
+        <i
+          key={dot}
+          aria-hidden="true"
+          className="codekiln-working-dot"
+          style={{ '--working-dot-index': dot } as CSSProperties}
+        />
+      ))}
+    </span>
   );
 }
