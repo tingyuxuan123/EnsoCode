@@ -1812,8 +1812,19 @@ export class BrowserHost {
       return { completed, ...(await this.observeAction(tab, before, since)) };
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error);
+      let currentPage = '';
+      try {
+        // Observe only: never replay a failed step or resolve an old ref to a different node.
+        this.assertTabActive(tab);
+        const entries = await this.scanActionState(tab, false);
+        const feedback = actionChanges(undefined, entries);
+        if (tab.lastSnapshot) tab.lastSnapshot.refs = feedback.refs;
+        currentPage = `\nCurrent page (fresh refs; inspect before continuing):\n${feedback.text}`;
+      } catch {
+        // Cancellation, a manual edit or navigation can also prevent a safe recovery read.
+      }
       throw new Error(
-        `browser_act step ${Math.min(completed + 1, steps.length)} stopped (${completed} completed). ${why} The current step may have delivered input; inspect before retrying. Later steps were not executed. Do not replay completed steps.`
+        `browser_act step ${Math.min(completed + 1, steps.length)} stopped (${completed} completed). ${why} The current step may have delivered input; inspect before retrying. Later steps were not executed. Do not replay completed steps.${currentPage}`
       );
     } finally {
       clearTimeout(timer);

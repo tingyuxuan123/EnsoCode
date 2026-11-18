@@ -62,6 +62,17 @@ describe('bounded browser actions', () => {
 });
 
 describe('action targets and compact feedback', () => {
+  it('识别中文按钮的排版空格，但仍优先完整精确名称并拒绝歧义', () => {
+    expect(findActionTarget([button('e1', '登 录')], { target: '登录' })).toBe('e1');
+    expect(
+      findActionTarget([button('e1', '登 录'), button('e2', '登录')], { target: '登录' })
+    ).toBe('e2');
+    expect(() =>
+      findActionTarget([button('e1', '登 录'), button('e2', '登　录')], { target: '登录' })
+    ).toThrow(/ambiguous/i);
+    expect(findActionTarget([button('e1', 'Sign in')], { target: 'Signin' })).toBeUndefined();
+  });
+
   it('prefers exact visible labels and refuses ambiguous matches', () => {
     const entries = [button('e1', 'Save'), button('e2', 'Save as')];
     expect(findActionTarget(entries, { target: 'Save' })).toBe('e1');

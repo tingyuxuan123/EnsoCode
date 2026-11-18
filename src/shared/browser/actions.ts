@@ -156,6 +156,8 @@ export function parseBrowserActions(raw: unknown): BrowserAction[] {
 }
 
 const normalize = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+const compactHanSpacing = (text: string) =>
+  text.replace(/(?<=\p{Script=Han})\s+(?=\p{Script=Han})/gu, '');
 export function findActionTarget(
   entries: readonly SnapshotEntry[],
   target: ActionTarget
@@ -166,7 +168,14 @@ export function findActionTarget(
     (e) => e.ref && (!target.role || normalize(e.role) === normalize(target.role))
   );
   const exact = candidates.filter((e) => normalize(e.name) === text);
-  const matches = exact.length ? exact : candidates.filter((e) => normalize(e.name).includes(text));
+  const compact = compactHanSpacing(text);
+  const matches =
+    [
+      exact,
+      candidates.filter((e) => compactHanSpacing(normalize(e.name)) === compact),
+      candidates.filter((e) => normalize(e.name).includes(text)),
+      candidates.filter((e) => compactHanSpacing(normalize(e.name)).includes(compact)),
+    ].find((group) => group.length > 0) ?? [];
   if (target.nth) return matches[target.nth - 1]?.ref;
   if (matches.length > 1)
     throw new Error(

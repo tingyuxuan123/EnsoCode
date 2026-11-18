@@ -1,5 +1,6 @@
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
+import { findActionTarget } from './actions';
 import { pageReadScript } from './readingScripts';
 
 const read = (scope: 'viewport' | 'document', html: string) => {
@@ -29,6 +30,25 @@ const read = (scope: 'viewport' | 'document', html: string) => {
 };
 
 describe('页面已加载 DOM 读取', () => {
+  it('批量操作按提交按钮 value 和 aria-labelledby 定位，与快照一致', () => {
+    const result = read(
+      'viewport',
+      '<span id="login-label">普通登录</span><input type="submit" value="登录"><button aria-labelledby="login-label"></button>'
+    );
+    expect(findActionTarget(result.entries, { target: '登录', role: 'button' })).toBe('es1_1');
+    expect(findActionTarget(result.entries, { target: '普通登录', role: 'button' })).toBe('es1_2');
+  });
+
+  it('按输入框 name 定位，且不会把密码 value 当成控件名称', () => {
+    const result = read(
+      'viewport',
+      '<input name="username"><input type="password" name="password" value="DO_NOT_LEAK">'
+    );
+    expect(findActionTarget(result.entries, { target: 'username' })).toBe('es1_1');
+    expect(findActionTarget(result.entries, { target: 'password' })).toBe('es1_2');
+    expect(JSON.stringify(result)).not.toContain('DO_NOT_LEAK');
+  });
+
   it('action feedback keeps refs only on the same surviving DOM node; cloned refs are not reused', () => {
     const { document, window } = parseHTML(
       '<html><body><button aria-label="Save">Save</button><input type="password" value="DO_NOT_LEAK"></body></html>'

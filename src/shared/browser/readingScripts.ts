@@ -1,5 +1,29 @@
 import type { ReadRequest } from './reading';
 
+/** Snapshot, reads and action targeting must describe the same control by the same name. */
+export const PAGE_CONTROL_NAME_SOURCE = `const nameOf = (el) => {
+  const clean = (text) => (text || '').replace(/\\s+/g, ' ').trim();
+  const aria = clean(el.getAttribute('aria-label'));
+  if (aria) return aria;
+  const labelledBy = el.getAttribute('aria-labelledby');
+  if (labelledBy) {
+    const root = el.getRootNode();
+    const text = clean(labelledBy.split(/\\s+/).map((id) =>
+      (root.getElementById?.(id) || el.ownerDocument.getElementById(id))?.textContent || ''
+    ).join(' '));
+    if (text) return text;
+  }
+  if (el.labels && el.labels.length) {
+    const text = clean(Array.from(el.labels).map((label) => label.textContent || '').join(' '));
+    if (text) return text;
+  }
+  const tag = el.tagName.toLowerCase();
+  const type = (el.type || '').toLowerCase();
+  if (tag === 'input' && /^(submit|button|reset)$/.test(type)) return clean(el.value);
+  if (tag === 'input' || tag === 'textarea') return clean(el.getAttribute('placeholder') || el.getAttribute('name'));
+  return clean(el.getAttribute('alt') || el.innerText || el.textContent);
+};`;
+
 export const FIND_PAGE_REF_SOURCE = `const findRef = (ref, root = document) => {
   const own = root.querySelector('[data-enso-ref=' + JSON.stringify(ref) + ']');
   if (own) return own;
@@ -17,6 +41,7 @@ export function pageReadScript(
 ): string {
   return `(() => {
     ${FIND_PAGE_REF_SOURCE}
+    ${PAGE_CONTROL_NAME_SOURCE}
     const request = ${JSON.stringify(request)};
     const snapshotId = ${JSON.stringify(snapshotId)};
     const compact = ${options?.compact === true};
@@ -49,7 +74,7 @@ export function pageReadScript(
         if (visible(el) && !/^(hidden|file)$/.test(el.type || '') && el.matches('a,button,input,select,textarea,summary,[role],[tabindex],[contenteditable="true"],[onclick]')) {
           let role = el.getAttribute('role') || ({ a: 'link', button: 'button', select: 'combobox', textarea: 'textbox', summary: 'button' }[tag]) || 'generic';
           if (tag === 'input') role = /^(checkbox|radio)$/.test(el.type) ? el.type : /^(button|submit|reset)$/.test(el.type) ? 'button' : 'textbox';
-          const name = (el.getAttribute('aria-label') || (el.labels ? Array.from(el.labels).map((label) => label.textContent || '').join(' ') : '') || el.getAttribute('placeholder') || el.getAttribute('alt') || el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 500);
+          const name = nameOf(el).slice(0, 500);
           const previous = el.getAttribute('data-enso-ref');
           const ref = preserve.has(previous) && bindings.get(el) === previous && !used.has(previous) ? previous : 'e' + snapshotId + '_' + (++count);
           used.add(ref);

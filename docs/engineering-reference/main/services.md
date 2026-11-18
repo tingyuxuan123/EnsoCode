@@ -629,6 +629,10 @@ function isRegisteredSource(id: string, sourcePath: string): boolean { ... }
   一次最多 10 步、总预算 45 秒，同一 tab 的一个队列槽内执行；支持按 ref 或可见标签（role/nth）定位，
   后续控件可在前一步后出现。整批参数和导航边界先校验，外网导航先审批；不开放脚本、文件上传、
   任意路径、跨 tab 或嵌套批处理。首错、取消、人工输入即停，说明完成数，绝不自动重试已投递的输入。
+- snapshot、read 与批量操作共用控件命名规则（含 `aria-labelledby`、提交按钮 value、输入框 name），
+  避免快照可见却 `Target not found`；中文排版空格仅作精确名称之后的匹配回退，多义目标仍拒绝。
+  批次失败时尽力附有界当前页与可用 ref，不重放输入；取消或人工介入后不追加读取，截断未展示的 ref
+  仍不可执行。回归：`browserHost.actions.test.ts`、`shared/browser/readingScripts.test.ts`、`actions.test.ts`。
 - 模型参数在 schema 校验前按 action 去掉无关占位字段、空白定位字段；Main 仍只接收严格的规范形态。
   动作间最多等 2 秒，结合 DOM 静默 300ms 与本次新发有限网络请求；忽略 WebSocket/EventSource 和旧请求。
   网络观察懒启且复用 debugger，不改 DevTools 互斥；未完成请求带提示返回，不冒充页面已稳定。

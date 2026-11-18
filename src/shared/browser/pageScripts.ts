@@ -5,7 +5,7 @@
  */
 
 import { DESIGN_SCRIBBLE_HOLD_MS, DESIGN_SCRIBBLE_MOVE_PX } from './designMode';
-import { FIND_PAGE_REF_SOURCE } from './readingScripts';
+import { FIND_PAGE_REF_SOURCE, PAGE_CONTROL_NAME_SOURCE } from './readingScripts';
 
 const REF_ATTR = 'data-enso-ref';
 const LOCK_OVERLAY_ID = 'enso-browser-lock-overlay';
@@ -71,22 +71,7 @@ export const PAGE_SNAPSHOT_SCRIPT = `(() => {
     if (el.isContentEditable) return 'textbox';
     return 'generic';
   };
-  const nameOf = (el) => {
-    const aria = el.getAttribute('aria-label');
-    if (aria) return aria;
-    const labelledBy = el.getAttribute('aria-labelledby');
-    if (labelledBy) {
-      const text = labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.textContent || '').join(' ').trim();
-      if (text) return text;
-    }
-    if (el.labels && el.labels.length) return Array.from(el.labels).map((l) => l.textContent || '').join(' ').trim();
-    const tag = el.tagName.toLowerCase();
-    if (tag === 'img') return el.getAttribute('alt') || '';
-    if (tag === 'input' && (el.type === 'submit' || el.type === 'button')) return el.value || '';
-    if (tag === 'input' || tag === 'textarea') return el.getAttribute('placeholder') || el.getAttribute('name') || '';
-    const text = (el.innerText || el.textContent || '').trim();
-    return text.length > 200 ? text.slice(0, 200) + '…' : text;
-  };
+  ${PAGE_CONTROL_NAME_SOURCE}
   const valueOf = (el) => {
     const tag = el.tagName.toLowerCase();
     if (tag === 'input' && (el.type === 'checkbox' || el.type === 'radio')) return el.checked ? 'checked' : '';
@@ -137,7 +122,7 @@ export const PAGE_SNAPSHOT_SCRIPT = `(() => {
     const ref = 'e' + (++counter);
     el.setAttribute(REF_ATTR, ref);
     bindings.set(el, ref);
-    const entry = { role, name: nameOf(el), depth: 0, ref, kind };
+    const entry = { role, name: nameOf(el).slice(0, 500), depth: 0, ref, kind };
     const value = valueOf(el);
     if (value) entry.value = value.length > 200 ? value.slice(0, 200) + '…' : value;
     out.push(entry);
