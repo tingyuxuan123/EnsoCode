@@ -197,7 +197,7 @@ ENSO_CDP_PORT=9333 node scripts/verify-theme-selection.mjs
 
 该脚本拒绝默认 9222，通过真实 Chromium 与共享 React 控件校验系统/应用明暗交叉组合、
 深浅终端同步与开关开启/关闭状态、
-Code/画图/设计/Bot 真实点击切换、Bot 关闭后的 Code、青绿/紫色及背景图 85%/100% 可见度；
+Code/画图/设计/Bot 真实点击切换、Bot 关闭后 Code 回到图标轨的选中态、青绿/紫色及背景图 85%/100% 可见度；
 检查颜色而非只看 aria/class，结束卸载临时控件并还原隔离设置。完整矩阵见脚本。
 
 ## 尺寸惯例

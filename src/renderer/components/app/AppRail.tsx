@@ -1,5 +1,14 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import { Image, PanelLeft, Ruler, Search, Settings2, Sparkles, SquareKanban } from 'lucide-react';
+import {
+  Image,
+  PanelLeft,
+  Ruler,
+  Search,
+  Settings2,
+  Sparkles,
+  SquareKanban,
+  SquareTerminal,
+} from 'lucide-react';
 import { EnsoMark } from '@/components/chat/EnsoMark';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
@@ -14,6 +23,11 @@ interface AppRailProps {
   onToggleSidebar?: () => void;
   /** 侧栏收起时补上的搜索入口（展开时搜索在侧栏顶部） */
   onOpenSearch?: () => void;
+  /**
+   * Bot 功能关闭时由宿主提供：标题栏不再渲染只剩 Code 一项的分段控件，
+   * Code 入口回到图标轨，排在图片工作台上方。
+   */
+  codeWorkspace?: { active: boolean; onToggle(): void };
   /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
   designGallery?: { label: string; active: boolean; onToggle(): void };
   imageStudio?: { active: boolean; onToggle(): void };
@@ -27,13 +41,15 @@ const RAIL_SELECTED = 'bg-selection text-brand hover:bg-selection hover:text-bra
 
 /**
  * 全局图标轨（56px）：品牌、侧栏开关、收起时的搜索、分隔符、功能模块、Enso 与设置。
- * Code / Bot 是工作模式，入口固定在主标题栏右上角，图标轨不再重复。
+ * Code / Bot 是工作模式，入口默认在主标题栏中部；Bot 功能关闭时标题栏只剩一个
+ * Code 分段没有意义，改由宿主传入 `codeWorkspace`，把 Code 入口放回图片工作台上方。
  * 图标不带文字，名称走右侧悬浮提示。
  */
 export function AppRail({
   sidebarCollapsed,
   onToggleSidebar,
   onOpenSearch,
+  codeWorkspace,
   designGallery,
   imageStudio,
   collaborationBoard,
@@ -85,6 +101,20 @@ export function AppRail({
           className="my-1 w-5 border-t border-border"
           aria-hidden
         />
+      )}
+      {codeWorkspace && (
+        <RailTip label="Code">
+          <button
+            type="button"
+            onClick={codeWorkspace.onToggle}
+            className={cn(RAIL_BUTTON, codeWorkspace.active && RAIL_SELECTED)}
+            aria-label="Code"
+            data-rail-view="code"
+            aria-pressed={codeWorkspace.active}
+          >
+            <SquareTerminal className="size-[19px]" />
+          </button>
+        </RailTip>
       )}
       {imageStudio && (
         <RailTip label={t('Image studio')}>

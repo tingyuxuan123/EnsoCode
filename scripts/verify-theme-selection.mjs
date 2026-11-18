@@ -248,16 +248,17 @@ try {
   click('button[data-rail-view="code"]');
   await evaluate(`window.__stores.settings.getState().setBotModeEnabled(false)`);
   await settle();
+  // Bot 关闭后只剩 Code 一项，标题栏分段不再渲染；入口回到图标轨，沿用 brand + selection。
   const fallback = await evaluate(
-    `(()=>{const b=document.querySelector('button[data-rail-view=code]');const fill=b.querySelector('[data-slot=mode-switch-selection]');const p=document.createElement('span');p.style.color='var(--foreground)';p.style.backgroundColor='var(--color-background)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();const t=document.createElement('span');t.style.backgroundColor='var(--selection)';document.body.append(t);const selection=getComputedStyle(t).backgroundColor;t.remove();return {active:b.getAttribute('aria-pressed'),pill:Boolean(fill),color:getComputedStyle(b).color,bg:fill?getComputedStyle(fill).backgroundColor:null,expected,selection,count:document.querySelectorAll('[data-rail-view][aria-pressed=true]').length};})()`
+    `(()=>{const b=document.querySelector('button[data-rail-view=code]');const p=document.createElement('span');p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();return {active:b.getAttribute('aria-pressed'),inRail:Boolean(b.closest('[data-slot=app-rail]')),pill:Boolean(b.querySelector('[data-slot=mode-switch-selection]')),color:getComputedStyle(b).color,bg:getComputedStyle(b).backgroundColor,expected,count:document.querySelectorAll('[data-rail-view][aria-pressed=true]').length};})()`
   );
   assert.equal(fallback.active, 'true');
-  assert.equal(fallback.pill, true, 'Code keeps its capsule with Bot disabled');
+  assert.equal(fallback.inRail, true, 'Code returns to the icon rail with Bot disabled');
+  assert.equal(fallback.pill, false, 'rail Code has no mode capsule');
   assert.equal(fallback.count, 1, 'only Code is selected with Bot disabled');
-  assert.equal(fallback.bg, fallback.expected.bg);
   assert.equal(fallback.color, fallback.expected.color);
-  assert.notEqual(fallback.bg, fallback.selection, 'Code pill is not the selection tint');
-  results.push({ check: 'Code remains selected with Bot disabled', passed: true });
+  assert.equal(fallback.bg, fallback.expected.bg, 'Code rail entry keeps the selection tint');
+  results.push({ check: 'Code returns to the rail with Bot disabled', passed: true });
 
   // Use the real settings buttons, not only root-token self-comparisons: light
   // palettes used to disable these and override --brand even after store updates.

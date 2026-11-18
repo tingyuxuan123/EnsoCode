@@ -67,10 +67,32 @@ describe('AppRail 精简导航', () => {
         })
       )
     ).document;
-    // 模式切换属于标题栏，图标轨不能再出现同款工作模式钩子
+    // 图标轨不自己推导工作模式：Code 入口只在宿主显式提供时出现
     expect(document.querySelector('[data-rail-view="code"]')).toBeNull();
     expect(document.querySelector('[data-rail-view="bot"]')).toBeNull();
     expect(document.querySelector('[data-slot="mode-switch"]')).toBeNull();
+  });
+
+  it('Bot 关闭时的 Code 入口排在图片工作台上方，沿用图标轨选中态钩子', () => {
+    const props = {
+      codeWorkspace: { active: true, onToggle: vi.fn() },
+      imageStudio: { active: false, onToggle: vi.fn() },
+      designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
+    };
+    expect(railItems(props)).toEqual([
+      'Code',
+      'Image studio',
+      'Design',
+      'Ask Collabra',
+      'Settings',
+    ]);
+    const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
+    const code = document.querySelector('[aria-label="Code"]');
+    expect(code?.getAttribute('data-rail-view')).toBe('code');
+    expect(code?.getAttribute('aria-pressed')).toBe('true');
+    expect(code?.classList.contains('bg-selection')).toBe(true);
+    expect(code?.classList.contains('text-brand')).toBe(true);
+    expect(code?.querySelector('svg')?.getAttribute('class')).toContain('lucide-square-terminal');
   });
 
   it('图片工作台是独立入口，位于设计入口前并反映选中状态', () => {

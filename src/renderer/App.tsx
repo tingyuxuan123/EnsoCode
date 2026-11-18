@@ -581,15 +581,26 @@ export default function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  // Code / Bot 是工作模式，按上游组织居中承载在标题栏：远程节点接管本机界面时不提供，
-  // Bot 还受实验开关门控（关闭时只留 Code，仍能从画廊 / 生图回到 Code 对话）。
-  const modeEntry = remoteNodeActive ? undefined : (
-    <ModeSwitch
-      includeBot={botModeEnabled}
-      inactive={studioActive || galleryActive || extensionsActive}
-      onSelect={closeWorkspacePage}
-    />
-  );
+  // Code / Bot 是工作模式，按上游组织居中承载在标题栏：远程节点接管本机界面时不提供。
+  // Bot 功能关闭时只剩 Code 一项，分段控件没有切换意义，入口回落到图标轨（见 codeRail）。
+  const modeEntry =
+    remoteNodeActive || !botModeEnabled ? undefined : (
+      <ModeSwitch
+        inactive={studioActive || galleryActive || extensionsActive}
+        onSelect={closeWorkspacePage}
+      />
+    );
+  // Bot 功能关闭时的 Code 入口：排在图片工作台上方，负责从画廊 / 生图 / 扩展页回到对话。
+  const codeRail =
+    remoteNodeActive || botModeEnabled
+      ? undefined
+      : {
+          active: !studioActive && !galleryActive && !extensionsActive && !botModeActive,
+          onToggle: () => {
+            closeWorkspacePage();
+            showLocalCodeView();
+          },
+        };
   // 模式入口右侧的显示控制：图片历史、画廊 header、聊天宽度与右侧面板。
   const viewActions = studioActive ? (
     <button
@@ -718,8 +729,10 @@ export default function App() {
                 }
               : undefined
           }
+          codeWorkspace={codeRail}
           collaborationBoard={
-            !remoteNodeActive
+            // 看板内容来自 Bot 任务：功能关闭后没有可看的东西，入口一并消失。
+            !remoteNodeActive && botModeEnabled
               ? {
                   active: false,
                   attention: boardAttention,

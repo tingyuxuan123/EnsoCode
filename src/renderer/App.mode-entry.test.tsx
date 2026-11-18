@@ -302,21 +302,29 @@ it('原生插件通知从 Bot 切回本机扩展页，保留详情定位', async
 });
 
 describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
-  it('左侧图标轨只留功能导航，不再重复 Code / Bot 入口', async () => {
+  it('Bot 关闭时 Code 入口回到图标轨、位于图片工作台上方，协作看板随之消失', async () => {
     await mountApp();
-    expect(railEntry('code')).toBeNull();
+    // 只剩 Code 一项的分段控件没有意义，入口交还给图标轨
+    expect(modeSwitch()).toBeNull();
     expect(railEntry('bot')).toBeNull();
-    // 侧栏开关、画图、设计、看板仍留在图标轨
+    expect(railEntry('code')?.getAttribute('aria-pressed')).toBe('true');
+    // 侧栏开关、画图、设计仍留在图标轨；看板由 Bot 功能提供，关闭后不出现
     expect(rail()?.querySelector('button[aria-label="Collapse sidebar"]')).not.toBeNull();
     expect(railEntry('images')).not.toBeNull();
     expect(railEntry('design')).not.toBeNull();
-    expect(railEntry('board')).not.toBeNull();
+    expect(railEntry('board')).toBeNull();
+    const labels = Array.from(rail()?.querySelectorAll('button[aria-label]') ?? []).map((button) =>
+      button.getAttribute('aria-label')
+    );
+    expect(labels.indexOf('Code')).toBeLessThan(labels.indexOf('Image studio'));
   });
 
   it('Bot 开启时 Code / Bot 分段由标题栏中部承载，右侧动作区只留显示控制', async () => {
     await setBotModeEnabled(true);
     await mountApp();
     expect(modeSwitch()).not.toBeNull();
+    expect(railEntry('code')).toBeNull();
+    expect(railEntry('board')).not.toBeNull();
     expect(segment('code')?.getAttribute('aria-pressed')).toBe('true');
     expect(segment('bot')?.getAttribute('aria-pressed')).toBe('false');
 
@@ -446,15 +454,23 @@ describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
     expect(present('conversation-tabs')).toBeNull();
   });
 
-  it('Bot 实验开关关闭时没有 Bot 分段，Code 入口仍能从画廊回到对话', async () => {
+  it('Bot 实验开关关闭时没有 Bot 分段，图标轨的 Code 入口把画廊 / 生图带回对话', async () => {
     await mountApp();
-    expect(modeSwitch()).not.toBeNull();
+    expect(modeSwitch()).toBeNull();
     expect(segment('bot')).toBeNull();
-    expect(segment('code')?.getAttribute('aria-pressed')).toBe('true');
+    expect(railEntry('code')?.getAttribute('aria-pressed')).toBe('true');
 
     await openGallery(true);
-    await click(segment('code'));
+    expect(railEntry('code')?.getAttribute('aria-pressed')).toBe('false');
+    await click(railEntry('code'));
     expect(present('design-gallery')).toBeNull();
+    expect(present('chat-view')).not.toBeNull();
+    expect(mode()).toBe('code');
+
+    act(() => useImageStudioStore.getState().setOpen(true));
+    expect(present('image-studio')).not.toBeNull();
+    await click(railEntry('code'));
+    expect(present('image-studio')).toBeNull();
     expect(present('chat-view')).not.toBeNull();
   });
 
