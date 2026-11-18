@@ -48,6 +48,17 @@ describe('TurnFilesCard', () => {
     expect(html.match(/data-turn-file=/g)).toHaveLength(2);
   });
 
+  it('每个文件行用 Material 类型图标，与文件树、Git 面板同一套', () => {
+    const html = renderToStaticMarkup(
+      createElement(TurnFilesCard, { conversationId: 'c', summary: summary(2) })
+    );
+    expect(html.match(/<img[^>]+typescript\.svg/g)).toHaveLength(2);
+    for (const img of html.match(/<img[^>]+>/g) ?? []) {
+      expect(img).toContain('alt=""');
+      expect(img).toContain('aria-hidden="true"');
+    }
+  });
+
   it('Footer 只在主聊天提供数据、且该轮有改动时渲染', () => {
     expect(renderToStaticMarkup(createElement(TurnFilesFooter, { messageIndex: 5 }))).toBe('');
     const withData = (index: number) =>

@@ -1,8 +1,8 @@
 import type { GitFile } from '@shared/types/git';
-import { FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { FileTypeIcon } from './fileIcons';
 
 const STATUS = {
   added: { label: 'A', color: 'text-success' },
@@ -45,7 +45,8 @@ export function GitFileRow({
         aria-pressed={selected}
         onClick={onSelect}
       >
-        <FileText aria-hidden="true" className={cn('size-3.5 shrink-0', status.color)} />
+        {/* 类型图标用 Material Icon Theme 自带的配色；状态由后面的字母与颜色表达。 */}
+        <FileTypeIcon name={file.path} className="size-3.5" />
         <span className={cn('truncate', !showDirectory && 'flex-1')}>{name}</span>
         {showDirectory && (
           <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">

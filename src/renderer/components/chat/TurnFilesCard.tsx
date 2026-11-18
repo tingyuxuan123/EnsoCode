@@ -1,5 +1,6 @@
-import { ChevronDown, FileCode2, Files } from 'lucide-react';
+import { ChevronDown, Files } from 'lucide-react';
 import { createContext, useContext, useState } from 'react';
+import { FileTypeIcon } from '@/components/sidepanel/fileIcons';
 import { useI18n } from '@/i18n';
 import { openSidePanelFile } from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
@@ -86,7 +87,7 @@ export function TurnFilesCard({
                 onClick={() => openSidePanelFile(conversationId, file.path)}
                 className="flex h-[calc(36rem/14)] w-full min-w-0 items-center gap-[8px] px-[12px] text-left transition-colors hover:bg-accent"
               >
-                <FileCode2 className="size-[calc(14rem/14)] shrink-0 text-primary" aria-hidden />
+                <FileTypeIcon name={file.path} className="size-[calc(14rem/14)]" />
                 <span className="min-w-0 flex-1 truncate">
                   {dir && <span className="text-muted-foreground">{dir}</span>}
                   <span className="font-medium text-foreground">{name}</span>
