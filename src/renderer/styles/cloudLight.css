@@ -67,9 +67,11 @@
     --cloud-send-inactive: #b4b4b4;
   }
 
-  /* With wallpaper the regular nav token must still inherit surface alpha. */
+  /* 导航面取纯白，比外壳（图标轨 #f8f8f8）与工作区（#faf9f9）都亮一档：
+     mono 浅色里外壳与工作区都近白，侧栏只能靠这一档明度差分层。
+     With wallpaper the nav token must still inherit surface alpha. */
   html[data-light-palette='cloud-light']:not(.bg-image-enabled) {
-    --color-nav: #f8f8f8;
+    --color-nav: #ffffff;
   }
 }
 

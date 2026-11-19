@@ -72,6 +72,15 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 开关轨道/拇指/位移也要同比例缩放，避免大字号裁切和重叠；窗口标题栏等原生几何除外。
 回归见 `src/renderer/styles/typographyScale.test.ts`。
 
+桌面默认字体与 Kettu 对齐：Inter Variable 的 `opsz` 正体/斜体，中文用 `Platform Chinese`
+匹配系统 Regular / Medium / Semibold，等宽字体随包提供 JetBrains Mono Variable。界面正文
+13px（`13rem/14`）、输入框 15px（桌面 `--composer-font-size`）；根字号仍为 14px，不把控件和
+原生窗口几何一起缩小。仅启用 Inter 的 `cv11`，不全局强制等宽数字或其它字形变体。
+桌面聊天默认值集中在 `lib/desktopTypography.ts`：正文/表格 14、标题 18、代码 12px；
+与共享宿主缩放基线分离，手机和文件预览保持原默认。v20 仅升级完整旧默认排版与旧默认等宽字体，
+自定义字号、字重、字体和全局缩放不变。回归：`kettuTypography.test.ts`、settings 的
+`chatTypography.test.ts` / `migrate.test.ts`。
+
 聊天排版由 `shared/chatTypography.ts` 集中定义正文、标题、表格、代码块与行内代码的字号/字重。
 `--chat-*` 变量按原宿主基线等比应用，不能修改根字号；用户正文单独包文本，避免芯片、元信息或
 嵌套 Markdown 二次放大。文件预览显式重置默认变量，聊天设置不影响它。偏好本机容错、导入严格校验，
@@ -98,11 +107,11 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 - `sync-terminal`：调 `applyTerminalThemeToApp()`，把 ghostty 终端主题的配色
   写进全局 CSS 变量，让整个界面跟随终端配色。
 - 桌面浅色方案独立保存在 `lightPalette`，默认为 `kettu-light`（`shared/lightPalette.ts` 的 `DEFAULT_LIGHT_PALETTE`）；旧配置缺字段或非法值也回退 Kettu 白，已有合法选择不变。四个浅色方案均支持已保存的强调色：不禁用设置按钮；`shared.css` 的 `html:not(.dark)[data-accent=...]` 比浅色方案默认 `brand` 更具体，包含 ocean，深色默认是狐狸橙。方案只在显式浅色或系统浅色时生效，不影响深色/终端同步。回归：`lightAccent.test.ts`、`AppearanceSettings.accent.test.tsx`。
-  - `kettu-light`（Kettu 白，默认）对齐 Kettu 的浅色令牌：纸白工作区 `#ffffff` 坐在 `#f8f8f8` 桌面上，卡片与浮层同为白、只靠黑 10% 细线分层；文字 `#1f1f1f` / `#5c5c5c` / `#686868`；`--primary` 取墨色 `#1f1f1f`（Kettu 的控件蓝只给控件，而宿主拿 `text-primary` 标建议卡图标、模型选择器与思考档位，照搬蓝色会散满整屏；实心主按钮本来就是 `bg-foreground` 的黑/白）；圆角按 Kettu 的 Scale B（5 控件 / 8 卡片与菜单 / 10 输入框与对话框）；投影只给浮层与输入框。方案自己不留 `--brand`，强调色完全交给 `html[data-accent]`。实现集中在 `styles/kettuLight.css`，回归见 `kettuLight.test.ts`。
+  - `kettu-light`（Kettu 白，默认）对齐 Kettu 的浅色令牌：纸白工作区 `#ffffff` 坐在 `#f8f8f8` 的图标轨上，导航面（侧栏 / 设置导航 / Bot 侧栏）取 `#fcfcfc`——比图标轨亮一档、比工作区暗一档，`bg-shell` 与 `bg-nav` 之间靠这级明度差分层，不额外加描边；卡片与浮层同为白、只靠黑 10% 细线分层；文字 `#1f1f1f` / `#5c5c5c` / `#686868`；`--primary` 取墨色 `#1f1f1f`（Kettu 的控件蓝只给控件，而宿主拿 `text-primary` 标建议卡图标、模型选择器与思考档位，照搬蓝色会散满整屏；实心主按钮本来就是 `bg-foreground` 的黑/白）；圆角按 Kettu 的 Scale B（5 控件 / 8 卡片与菜单 / 10 输入框与对话框）；投影只给浮层与输入框。方案自己不留 `--brand`，强调色完全交给 `html[data-accent]`。实现集中在 `styles/kettuLight.css`，回归见 `kettuLight.test.ts`。
   - 强调色默认是 `fox`（狐狸橙 `#f2581b`，Kettu 的发送/进行中色）：浅色与深色都取这一支；深色里填充偏亮，压在上面的字用白色，其他深色预设（ocean/violet/indigo/teal/amber/graphite）各自给 `--brand-foreground` 深墨，不要靠继承。
   - 薄荷白全部样式在 `styles/mintLight.css`，只换肤不改尺寸：灰阶与绿色同色相，`--accent` 保持中性；发送/选择/聚焦跟随用户强调色，运行/完成仍用绿色状态语义；圆角 8 / 12 / 16（行与控件 / 浮层与气泡 / 输入框与对话框）。组件覆盖优先挂 `data-slot`、`data-model-picker`、`aria-pressed` 等稳定属性。
   - 该文件的组件规则不在 `@layer` 内，会压过 Tailwind 工具类（包括 `hover:`、`disabled:`），写覆盖时要显式处理这些状态。改浮层圆角要连 `::before` 一起改：命令面板的 `::before` 带底色，只改外框会在角上露出旧圆角。代码视图选中色用宿主 `diffs-container` 上的 `--diffs-selection-base`（文档侧声明压过 shadow `:host`），不要改 `--diffs-modified-*`，那会连带 diff 的修改色。
-  - `cloud-light`（云白）配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白导航/卡片 `#f8f8f8`、纯白输入框/浮层、中性普通主操作、浅灰用户消息；发送/当前选中/聚焦跟随用户强调色，不给外壳或用户气泡染色。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
+  - `cloud-light`（云白）配色参考 Open Vetta 的 **mono 浅色**（不是 Classic 靛蓝）：纸白工作区 `#faf9f9`、近白图标轨与卡片 `#f8f8f8`、纯白导航面与输入框/浮层、中性普通主操作、浅灰用户消息；发送/当前选中/聚焦跟随用户强调色，不给外壳或用户气泡染色。实现集中在 `styles/cloudLight.css`，保留现有布局与 10 / 14 / 18 圆角；回归见 `cloudLight.test.ts`。
   - 云白的 `--muted`（`#fafafa`）与 `--background`（`#faf9f9`）几乎同色，可见中性面是 `--secondary` / `--accent`。需要「中性浅色选中块或分段轨道」时用 `bg-secondary`（常驻选中仍优先 `bg-selection`），不要照搬上游的 `bg-muted`——胶囊和轨道会在云白下整体消失。标题栏 Code/Bot 分段与聊天页签按上游结构（淡轨道 + 独立内容色胶囊、圆角浅色胶囊页签），令牌走 fork 语义；回归见 `ModeSwitch.test.tsx`、`CoworkerTabs.test.tsx`。背景图模式下 `bg-background` 胶囊会被面板 alpha 重映射，探针要比 `var(--color-background)` 而不是 `var(--background)`。
 
 设置 → 外观 的「主题」卡片网格是内置方案与插件主题的统一入口：四张内置浅色卡 + 已启用插件的
@@ -132,6 +141,15 @@ sessions 依赖带进设计窗口。插件主题数据经 `extensionPlugins.list
 
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
 在 `system`/`light`/`dark` 下改配色方案看不到界面变化，这是设计如此，不是 bug。
+
+工作区是一块浮在外壳上的**圆角卡片**（对齐 ChatGPT/Codex 的 app shell：主内容面 `12px` 圆角、
+四周留缝露出外壳底色）。实现只有两处：`[data-enso='canvas']` 给 `--workbench-card-gap`
+（缝，`6px`）与 `--workbench-card-radius`（缝 + `6px`，卡片外沿正好是这圈圆角），
+`[data-workbench-card]` 只负责 `margin` 与 `border-radius`。图标轨、侧栏、标题栏、壁纸层
+都留在外壳上、保持直角；卡片裁切由各内容区自己的 `overflow-hidden` 完成。**新加工作区模式
+（Code / Bot / 远程节点 / 图片工作台之外的入口）时必须同时挂 `data-workbench-card` 与
+`overflow-hidden`**，否则那块内容区四角会退回直角。留缝、圆角同源，回归见
+`styles/workbenchCard.test.ts`，Bot 侧入口还由 `components/bots/BotView.test.tsx` 守一枚标记。
 
 `html.dark` 只切换语义色变量，不会自动把 Chromium 原生控件（`<select>` 弹出层、滚动条）切到深色。
 `:root` 必须设 `color-scheme: light`，`.dark` 必须设 `color-scheme: dark`，否则 Windows 上原生下拉仍是白底。

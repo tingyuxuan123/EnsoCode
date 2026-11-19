@@ -37,6 +37,19 @@ describe('聊天排版偏好', () => {
     });
   });
 
+  it('允许桌面提供独立默认，保留自定义字段，不改变手机和文件预览的基线', () => {
+    const defaults = {
+      ...CHAT_TYPOGRAPHY_DEFAULTS,
+      body: { fontSize: 14, fontWeight: 400 as const },
+    };
+    expect(normalizeChatTypography(undefined, defaults).body.fontSize).toBe(14);
+    expect(
+      normalizeChatTypography({ body: { fontSize: 20, fontWeight: 'bad' } }, defaults).body
+    ).toEqual({ fontSize: 20, fontWeight: 400 });
+    expect(normalizeChatTypography(undefined).body.fontSize).toBe(15);
+    expect(chatTypographyVariables(defaults)['--chat-body-scale']).toBe(String(14 / 15));
+  });
+
   it('导入仅接受完整对象、允许的字重和8到32的整数字号，拒绝额外键', () => {
     for (const size of [8, 32]) {
       const value = normalizeChatTypography({ body: { fontSize: size, fontWeight: 100 } });

@@ -204,7 +204,10 @@ export function BotView({
           workspaceHidden={workspaceHidden}
         />
       ) : (
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-background px-8 text-center">
+        <div
+          className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3 overflow-hidden bg-background px-8 text-center"
+          data-workbench-card=""
+        >
           <Bot className="h-8 w-8 text-muted-foreground" />
           <p className="font-semibold text-[calc(18rem/14)]">{t('Bot mode')}</p>
           <p className="max-w-[420px] text-[calc(13rem/14)] text-muted-foreground leading-6">

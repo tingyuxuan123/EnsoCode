@@ -43,7 +43,10 @@ describe('Cloud Light neutral palette', () => {
       '--border': '#e4e4e4',
       '--input': '#e4e4e4',
     });
-    expect(declarations(`${scope}:not(.bg-image-enabled)`)['--color-nav']).toBe('#f8f8f8');
+    // 导航面比外壳（图标轨）亮一档，两者之间才看得出分栏。
+    const nav = declarations(`${scope}:not(.bg-image-enabled)`)['--color-nav'];
+    expect(nav).toBe('#ffffff');
+    expect(nav).not.toBe(tokens['--shell']);
   });
 
   it('keeps primary actions monochrome and user messages quiet rather than blue', () => {

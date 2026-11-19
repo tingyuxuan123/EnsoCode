@@ -1,0 +1,72 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.7816782191846583,
+		"x": -4442.524400070841,
+		"y": 98.13276565690671
+	},
+	"frames": [
+		{
+			"id": "current",
+			"file": "frames/current.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1280,
+			"height": 770,
+			"title": "主窗口 · 现状",
+			"meta": {
+				"width": 1280,
+				"height": 770,
+				"title": "主窗口 · 现状"
+			}
+		},
+		{
+			"id": "paper",
+			"file": "frames/paper.tsx",
+			"x": 5760,
+			"y": 0,
+			"width": 1280,
+			"height": 770,
+			"title": "纸片版 · 侧栏 / 会话 / 面板",
+			"meta": {
+				"width": 1280,
+				"height": 770,
+				"title": "纸片版 · 侧栏 / 会话 / 面板"
+			}
+		},
+		{
+			"id": "unified",
+			"file": "frames/unified.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1280,
+			"height": 770,
+			"title": "主窗口 · 统一后",
+			"meta": {
+				"width": 1280,
+				"height": 770,
+				"title": "主窗口 · 统一后"
+			}
+		},
+		{
+			"id": "zones",
+			"file": "frames/zones.tsx",
+			"x": 3040,
+			"y": 0,
+			"width": 1280,
+			"height": 1080,
+			"title": "局部放大 · 三处接缝",
+			"meta": {
+				"width": 1280,
+				"height": 1080,
+				"title": "局部放大 · 三处接缝"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"interactionMode": "desktop"
+}

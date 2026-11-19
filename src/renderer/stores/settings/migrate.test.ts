@@ -2,6 +2,51 @@ import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine
 import { describe, expect, it } from 'vitest';
 import { mergeSettingsState, migrateSettings, SETTINGS_VERSION } from './migrate';
 
+describe('Kettu 桌面字体默认值升级', () => {
+  const oldTypography = {
+    body: { fontSize: 15, fontWeight: 400 },
+    headings: { fontSize: 18, fontWeight: 600 },
+    table: { fontSize: 15, fontWeight: 400 },
+    codeBlock: { fontSize: 11, fontWeight: 400 },
+    inlineCode: { fontSize: 11, fontWeight: 400 },
+  };
+
+  it('v20 只升级整套旧默认字号和旧默认等宽字体，迁移幂等', () => {
+    const migrated = migrateSettings(
+      {
+        terminalFontFamily: 'ui-monospace, SF Mono, Menlo, Monaco, Consolas, monospace',
+        terminalFontSize: 14,
+        chatTypography: oldTypography,
+      },
+      19
+    );
+    expect(migrated).toMatchObject({
+      terminalFontFamily:
+        '"JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace',
+      terminalFontSize: 14,
+      chatTypography: {
+        body: { fontSize: 14, fontWeight: 400 },
+        table: { fontSize: 14, fontWeight: 400 },
+        codeBlock: { fontSize: 12, fontWeight: 400 },
+        inlineCode: { fontSize: 12, fontWeight: 400 },
+      },
+    });
+    expect(migrateSettings(migrated, 19)).toEqual(migrated);
+    expect(migrateSettings({}, 19)).toEqual({});
+  });
+
+  it('不覆盖自定义字体、字号、字重或当前版本显式选择的旧数值', () => {
+    const custom = {
+      terminalFontFamily: 'Fira Code, monospace',
+      terminalFontSize: 20,
+      chatTypography: { ...oldTypography, body: { fontSize: 20, fontWeight: 500 } },
+    };
+    expect(migrateSettings(custom, 19)).toEqual(custom);
+    const explicit = { chatTypography: oldTypography };
+    expect(migrateSettings(explicit, SETTINGS_VERSION)).toBe(explicit);
+  });
+});
+
 describe('Kettu 浅色默认外观水合', () => {
   const current = {
     editMode: 'apply_patch' as const,
@@ -180,7 +225,7 @@ describe('三项用量统计默认布局升级', () => {
 
   it('v18 旧默认升级为三项统计，不修改其它设置或原对象', () => {
     const previous = { statusLineSegments: previousDefault, theme: 'dark' };
-    expect(SETTINGS_VERSION).toBe(19);
+    expect(SETTINGS_VERSION).toBeGreaterThanOrEqual(19);
     expect(migrateSettings(previous, 18)).toEqual({
       statusLineSegments: ['tokens', 'cache', 'context'],
       theme: 'dark',

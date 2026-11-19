@@ -43,7 +43,10 @@ describe('Kettu 浅色（默认方案）', () => {
       '--border': 'rgb(0 0 0 / 10%)',
       '--input': 'rgb(0 0 0 / 16%)',
     });
-    expect(declarations(`${scope}:not(.bg-image-enabled)`)['--color-nav']).toBe('#f8f8f8');
+    // 导航面比外壳（图标轨）亮一档，两者之间才看得出分栏。
+    const nav = declarations(`${scope}:not(.bg-image-enabled)`)['--color-nav'];
+    expect(nav).toBe('#fcfcfc');
+    expect(nav).not.toBe(tokens['--shell']);
   });
 
   it('keeps primary as the ink like the dark sheet and never pins --brand', () => {

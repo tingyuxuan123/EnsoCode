@@ -1,0 +1,37 @@
+@import "@fontsource-variable/inter";
+
+/*
+ * 令牌直接抄自线上应用（shared.css + kettuLight.css + globals.css），
+ * 主题是用户已经定下的，这里只做「接缝 / 对齐 / 圆角」的局部改造，
+ * 不改配色、不改字体。
+ *
+ * 三级明度：轨道 #f8f8f8 → 垫子（侧栏 + 卡片外的缝）#fcfcfc → 纸 #ffffff。
+ */
+@theme {
+	--font-sans: "Inter Variable", "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+	--font-mono: "SF Mono", Menlo, ui-monospace, monospace;
+
+	--color-rail: #f8f8f8;
+	--color-mat: #fcfcfc;
+	--color-paper: #ffffff;
+	--color-ink: #1f1f1f;
+	--color-muted: #5c5c5c;
+	--color-subtle: #686868;
+	--color-line: rgb(0 0 0 / 10%);
+	--color-line-strong: rgb(0 0 0 / 16%);
+	--color-accent: #f2581b;
+	--color-success: #2e7550;
+	--color-selection: rgb(0 0 0 / 6%);
+	--color-track: #f4f4f5;
+
+	--radius-control: 5px;
+	--radius-block: 8px;
+	--radius-field: 10px;
+	--radius-card: 12px;
+}
+
+html,
+body {
+	height: 100%;
+	background: var(--color-rail);
+}

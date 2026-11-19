@@ -28,9 +28,13 @@ beforeAll(async () => {
 });
 
 describe('聊天排版持久化', () => {
-  it('默认不改变渲染比例，偏好只写聊天变量', () => {
+  it('桌面正文默认 14px，偏好只写聊天变量', () => {
     const store = settings.useSettingsStore.getState();
-    expect(store).toHaveProperty('chatTypography.body.fontSize', 15);
+    expect(store).toHaveProperty('chatTypography.body.fontSize', 14);
+    expect(store).toHaveProperty('chatTypography.codeBlock.fontSize', 12);
+    expect(store.terminalFontFamily).toBe(
+      '"JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace'
+    );
     setProperty.mockClear();
     store.setChatTypography({ ...store.chatTypography, body: { fontSize: 20, fontWeight: 500 } });
     expect(settings.useSettingsStore.getState().chatTypography.body.fontSize).toBe(20);
@@ -61,7 +65,7 @@ describe('聊天排版持久化', () => {
     expect(setProperty).toHaveBeenCalledWith('--chat-body-scale', '1.6');
     read.mockResolvedValueOnce({ 'enso-settings': { version: 18, state: {} } });
     await store.persist.rehydrate();
-    expect(store.getState()).toHaveProperty('chatTypography.body.fontSize', 15);
-    expect(setProperty).toHaveBeenCalledWith('--chat-body-scale', '1');
+    expect(store.getState()).toHaveProperty('chatTypography.body.fontSize', 14);
+    expect(setProperty).toHaveBeenCalledWith('--chat-body-scale', String(14 / 15));
   });
 });

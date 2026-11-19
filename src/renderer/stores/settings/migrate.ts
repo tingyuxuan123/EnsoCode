@@ -1,5 +1,5 @@
 import { type AccentColor, resolveAccentColor } from '@shared/accentColor';
-import { normalizeChatTypography } from '@shared/chatTypography';
+import { CHAT_TYPOGRAPHY_PARTS, parseChatTypography } from '@shared/chatTypography';
 import {
   CODE_SEARCH_DEFAULT_OFF_SETTINGS_VERSION,
   parseCodeSearchAccountKey,
@@ -19,6 +19,7 @@ import {
 } from '@shared/types/builtinTools';
 import { isSpeechModelId } from '@shared/types/speech';
 import { parseWebSearchChain } from '@shared/webSearchChain';
+import { DEFAULT_MONO_FONT_FAMILY, normalizeDesktopChatTypography } from '@/lib/desktopTypography';
 
 /**
  * 持久化数据的版本迁移。
@@ -32,7 +33,7 @@ import { parseWebSearchChain } from '@shared/webSearchChain';
  */
 
 /** 当前持久化数据版本；改数据形状时 +1 并在 `migrateSettings` 里加一段 */
-export const SETTINGS_VERSION = 19;
+export const SETTINGS_VERSION = 20;
 
 export function mergeSettingsState<T extends { editMode: EditMode; accentColor: AccentColor }>(
   persisted: unknown,
@@ -112,7 +113,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
       : {}),
     ...lightAppearance,
     ...('chatTypography' in source || 'chatTypography' in current
-      ? { chatTypography: normalizeChatTypography(source.chatTypography) }
+      ? { chatTypography: normalizeDesktopChatTypography(source.chatTypography) }
       : {}),
     editMode,
     accentColor,
@@ -140,6 +141,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * v16 → v17：全局与项目内置工具列表补 code_search 默认关，避免升级时静默云端发送代码。
  * v17 → v18：界面默认强调色由靛蓝改为晴空蓝；旧版落盘的 indigo 即旧默认值，随之换成 ocean。
  * v18 → v19：统计行旧默认精简为 Token / 缓存 / 上下文，保留自定义顺序、完整预设和全关。
+ * v19 → v20：桌面采用 Kettu 默认字体与字号；只迁移完整旧默认，保留自定义排版与字体。
  */
 export function migrateSettings(persisted: unknown, version: number): unknown {
   if (version >= SETTINGS_VERSION) return persisted;
@@ -277,6 +279,25 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
     ];
     if (segments.length === oldDefault.length && oldDefault.every((id, i) => segments[i] === id)) {
       state = { ...state, statusLineSegments: [...STATUS_LINE_PRESETS.default] };
+    }
+  }
+  if (version < 20) {
+    if (state.terminalFontFamily === 'ui-monospace, SF Mono, Menlo, Monaco, Consolas, monospace') {
+      state = { ...state, terminalFontFamily: DEFAULT_MONO_FONT_FAMILY };
+    }
+    const typography = parseChatTypography(state.chatTypography);
+    // 冻结 v19 旧默认；与旧默认完全相同的显式配置无法区分，随默认升级。
+    // 只要改过任意一项，就保留整套配置，不逐项猜测用户意图。
+    const oldSizes = { body: 15, headings: 18, table: 15, codeBlock: 11, inlineCode: 11 };
+    if (
+      typography &&
+      CHAT_TYPOGRAPHY_PARTS.every(
+        (part) =>
+          typography[part].fontSize === oldSizes[part] &&
+          typography[part].fontWeight === (part === 'headings' ? 600 : 400)
+      )
+    ) {
+      state = { ...state, chatTypography: normalizeDesktopChatTypography(undefined) };
     }
   }
   return state;

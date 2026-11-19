@@ -44,18 +44,17 @@ function validWeight(value: unknown): value is ChatFontWeight {
 }
 
 /** 本机旧设置或手改坏配置：逐字段降级，不转换字符串、不把坏值钳成有效偏好。 */
-export function normalizeChatTypography(value: unknown): ChatTypography {
+export function normalizeChatTypography(
+  value: unknown,
+  defaults: Readonly<ChatTypography> = CHAT_TYPOGRAPHY_DEFAULTS
+): ChatTypography {
   const source = record(value);
   const result = {} as ChatTypography;
   for (const part of CHAT_TYPOGRAPHY_PARTS) {
     const entry = record(source?.[part]);
     result[part] = {
-      fontSize: validSize(entry?.fontSize)
-        ? entry.fontSize
-        : CHAT_TYPOGRAPHY_DEFAULTS[part].fontSize,
-      fontWeight: validWeight(entry?.fontWeight)
-        ? entry.fontWeight
-        : CHAT_TYPOGRAPHY_DEFAULTS[part].fontWeight,
+      fontSize: validSize(entry?.fontSize) ? entry.fontSize : defaults[part].fontSize,
+      fontWeight: validWeight(entry?.fontWeight) ? entry.fontWeight : defaults[part].fontWeight,
     };
   }
   return result;

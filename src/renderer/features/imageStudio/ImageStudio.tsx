@@ -335,8 +335,9 @@ export function ImageStudio({
       {!collapsed && <ResizeHandle onResize={onResize} onResizingChange={setResizing} />}
       <div
         ref={workspaceRef}
-        className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-t border-line bg-background"
+        className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
         data-slot="workbench-main"
+        data-workbench-card=""
       >
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!turns.length ? (

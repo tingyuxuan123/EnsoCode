@@ -44,7 +44,10 @@ export function BotInbox() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+      data-workbench-card=""
+    >
       <header className="flex h-[calc(56rem/14)] shrink-0 items-center gap-2.5 border-b px-4">
         <div className="font-medium text-[calc(13rem/14)]">{t('Inbox')}</div>
         <div className="text-muted-foreground text-[calc(11rem/14)]">

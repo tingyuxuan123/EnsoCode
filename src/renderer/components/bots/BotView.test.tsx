@@ -127,4 +127,10 @@ describe('BotView goal handoff', () => {
     expect(mocks.openDirect).not.toHaveBeenCalled();
     expect(mocks.seedBotDraft).not.toHaveBeenCalled();
   });
+  it('marks the bot workspace as the rounded workbench card', () => {
+    // Bot 模式和 Code 模式共用同一枚卡片标记，漏挂会让内容区四角变成直角。
+    const card = window.document.querySelector('[data-workbench-card]');
+    expect(card).not.toBeNull();
+    expect(card?.className).toContain('overflow-hidden');
+  });
 });

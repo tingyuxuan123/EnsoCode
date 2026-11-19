@@ -338,7 +338,7 @@ export function BotChatView({
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden" data-workbench-card="">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <header className="@container flex h-[calc(56rem/14)] shrink-0 items-center gap-2 border-line border-b px-4">
           {direct ? (

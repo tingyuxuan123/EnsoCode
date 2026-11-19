@@ -79,6 +79,12 @@ describe('聊天排版设置', () => {
     );
     expect(reset).toBeDefined();
     await act(async () => reset?.click());
-    expect(harness.update).toHaveBeenCalledWith(normalizeChatTypography(undefined));
+    expect(harness.update).toHaveBeenCalledWith({
+      body: { fontSize: 14, fontWeight: 400 },
+      headings: { fontSize: 18, fontWeight: 600 },
+      table: { fontSize: 14, fontWeight: 400 },
+      codeBlock: { fontSize: 12, fontWeight: 400 },
+      inlineCode: { fontSize: 12, fontWeight: 400 },
+    });
   });
 });

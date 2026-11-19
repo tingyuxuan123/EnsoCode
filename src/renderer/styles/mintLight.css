@@ -77,9 +77,11 @@
     --mint-bubble: #e8f7ec;
   }
 
-  /* With wallpaper the regular nav token must still inherit surface alpha. */
+  /* 导航面比外壳（图标轨 #f3f6f4）亮一档，同色相微调：
+     外壳带雾灰，侧栏提到近白，侧栏与图标轨之间才看得出分栏。
+     With wallpaper the regular nav token must still inherit surface alpha. */
   html[data-light-palette='mint-light']:not(.bg-image-enabled) {
-    --color-nav: #f6f8f7;
+    --color-nav: #fafcfb;
   }
 }
 

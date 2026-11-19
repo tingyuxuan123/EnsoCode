@@ -1,11 +1,33 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource-variable/inter/opsz-italic.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
 @import "./shared.css";
 @import "./kettuLight.css";
 @import "./mintLight.css";
 @import "./cloudLight.css";
 /* The plugin owns a separately compiled, scoped utilities/theme sheet. */
 @source not "../features/design/vetta";
+
+/* 与 Kettu 一致：中文按平台字体的实际档位匹配，避免中间字重落到 Light。 */
+@font-face {
+  font-family: "Platform Chinese";
+  font-weight: 300 449;
+  src: local("PingFang SC Regular"), local("PingFangSC-Regular"), local("Microsoft YaHei"),
+    local("MicrosoftYaHei"), local("Noto Sans CJK SC Regular"), local("NotoSansCJKsc-Regular");
+}
+@font-face {
+  font-family: "Platform Chinese";
+  font-weight: 450 549;
+  src: local("PingFang SC Medium"), local("PingFangSC-Medium"), local("Microsoft YaHei"),
+    local("MicrosoftYaHei"), local("Noto Sans CJK SC Medium"), local("NotoSansCJKsc-Medium");
+}
+@font-face {
+  font-family: "Platform Chinese";
+  font-weight: 550 700;
+  src: local("PingFang SC Semibold"), local("PingFangSC-Semibold"), local("Microsoft YaHei Bold"),
+    local("MicrosoftYaHei-Bold"), local("Noto Sans CJK SC Bold"), local("NotoSansCJKsc-Bold");
+}
 
 @theme {
   --color-background: var(--background);
@@ -79,10 +101,12 @@
    */
   :root {
     color-scheme: light;
-    --font-family-sans: "Inter Variable", "Inter", -apple-system, "SF Pro Text",
-      "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-    --font-family-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+    --font-family-sans: "Inter Variable", "Platform Chinese", "PingFang SC", "Microsoft YaHei",
+      "Noto Sans CJK SC", system-ui, sans-serif;
+    --font-family-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
+      Consolas, monospace;
     --font-size-base: 14px;
+    --composer-font-size: calc(15rem / 14);
     --background: rgb(245 248 250);
     --foreground: rgb(27 38 50);
     --card: rgb(245 248 250);
@@ -166,7 +190,11 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01", "ss03", "tnum";
+    /* 界面按 Kettu 的 13px 排字；保留 14px 根基线，避免缩小 rem 控件和窗口几何。 */
+    font-size: calc(13rem / 14);
+    line-height: 1.4;
+    font-feature-settings: "cv11";
+    text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -179,6 +207,28 @@
   html.enso-main-shell,
   html.enso-main-shell body {
     background: transparent;
+  }
+
+  /*
+   * 外壳 + 工作区卡片：图标轨 / 侧栏 / 标题栏铺在外壳上，工作区是浮在外壳里的一块
+   * 圆角卡片，四周留缝露出外壳底色（与 ChatGPT/Codex 的 app shell 同一做法：
+   * 主内容面 border-radius 12px，桌面是 #f8f8f8 一类的壳色）。
+   *
+   * 缝与圆角同源：--workbench-card-gap 一处定义，圆角按「缝 + 卡片自身圆角」推出来，
+   * 卡片外沿就是外圆角，缝里不会露出被裁掉一角的卡片底。
+   * 四周都留缝：左侧那圈缝落在 1px 分栏手柄与卡片之间，手柄仍贴着侧栏边缘，
+   * 拖动热区不受影响。裁切交给卡片上的 overflow-hidden，这里不再重复声明。
+   */
+  [data-enso='canvas'] {
+    --workbench-card-gap: 6px;
+    --workbench-card-radius: calc(var(--workbench-card-gap) + 6px);
+  }
+
+  /* 所有工作区内容区（Code / Bot / 远程节点 / 图片工作台）共用一枚标记，
+     免得每加一个模式就漏掉一处留缝。 */
+  [data-workbench-card] {
+    margin: var(--workbench-card-gap);
+    border-radius: var(--workbench-card-radius);
   }
 
   /*

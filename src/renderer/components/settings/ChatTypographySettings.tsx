@@ -6,7 +6,6 @@ import {
   type ChatTypographyEntry,
   type ChatTypographyPart,
   chatTypographyVariables,
-  normalizeChatTypography,
 } from '@shared/chatTypography';
 import { useEffect, useState } from 'react';
 import { Markdown } from '@/components/chat/Markdown';
@@ -20,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useI18n } from '@/i18n';
+import { normalizeDesktopChatTypography } from '@/lib/desktopTypography';
 import { useSettingsStore } from '@/stores/settings';
 
 const LABELS: Record<ChatTypographyPart, string> = {
@@ -113,7 +113,7 @@ export function ChatTypographySettings() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setTypography(normalizeChatTypography(undefined))}
+          onClick={() => setTypography(normalizeDesktopChatTypography(undefined))}
         >
           {t('Restore default typography')}
         </Button>

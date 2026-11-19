@@ -5,7 +5,7 @@ import {
   DEFAULT_BOT_MAX_RUNNING_TURNS,
   normalizeBotMaxRunningTurns,
 } from '@shared/bots/concurrency';
-import { chatTypographyVariables, normalizeChatTypography } from '@shared/chatTypography';
+import { chatTypographyVariables } from '@shared/chatTypography';
 import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
   type DefaultModelRef,
@@ -59,6 +59,7 @@ import { parseWindowsLocalShell } from '@shared/windowsLocalShell';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { resolveColorScheme } from '@/lib/colorScheme';
+import { DEFAULT_MONO_FONT_FAMILY, normalizeDesktopChatTypography } from '@/lib/desktopTypography';
 import {
   applyTerminalThemeToApp,
   clearTerminalThemeFromApp,
@@ -162,14 +163,14 @@ const initialState = {
   pluginAutoUpdate: true,
   lightPalette: DEFAULT_LIGHT_PALETTE,
   accentColor: DEFAULT_ACCENT_COLOR,
-  chatTypography: normalizeChatTypography(undefined),
+  chatTypography: normalizeDesktopChatTypography(undefined),
   language: getDefaultLocale(),
   fileOpenRules: [] as FileOpenRule[],
   contextMenuOpen: normalizeContextMenuOpen(undefined),
   openLinksInBuiltinBrowser: true,
   terminalTheme: 'Dracula',
   terminalFontSize: 14,
-  terminalFontFamily: 'ui-monospace, SF Mono, Menlo, Monaco, Consolas, monospace',
+  terminalFontFamily: DEFAULT_MONO_FONT_FAMILY,
   terminalFontWeight: 'normal' as FontWeight,
   terminalFontWeightBold: '500' as FontWeight,
   terminalShell: 'auto' as const,
@@ -319,7 +320,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       setChatTypography: (value) => {
-        const chatTypography = normalizeChatTypography(value);
+        const chatTypography = normalizeDesktopChatTypography(value);
         applyChatTypography(chatTypography);
         set({ chatTypography });
       },
@@ -1129,7 +1130,7 @@ export const useSettingsStore = create<SettingsState>()(
       merge: (persisted, current) => mergeSettingsState(persisted, current),
       partialize: (state) => ({
         ...state,
-        chatTypography: normalizeChatTypography(state.chatTypography),
+        chatTypography: normalizeDesktopChatTypography(state.chatTypography),
         fileOpenRules: normalizeFileOpenRules(state.fileOpenRules),
         contextMenuOpen: normalizeContextMenuOpen(state.contextMenuOpen),
       }),

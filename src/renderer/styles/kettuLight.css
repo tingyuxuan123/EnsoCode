@@ -63,9 +63,11 @@
     --kettu-send-inactive: #949494;
   }
 
-  /* 导航面比工作区暗一档，壁纸模式下交回 surface alpha。 */
+  /* 导航面比外壳（图标轨 #f8f8f8）亮一档、比工作区纸白暗一档：
+     侧栏与图标轨之间靠这 4 级明度差分层，不再依赖额外描边。
+     壁纸模式下交回 surface alpha。 */
   html[data-light-palette='kettu-light']:not(.bg-image-enabled) {
-    --color-nav: #f8f8f8;
+    --color-nav: #fcfcfc;
   }
 }
 

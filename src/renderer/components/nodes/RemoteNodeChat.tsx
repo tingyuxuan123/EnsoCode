@@ -117,7 +117,10 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
 
   return (
     <ChatHostContext.Provider value={host}>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+        data-workbench-card=""
+      >
         <header className="flex h-[calc(36rem/14)] shrink-0 items-center gap-2 border-b bg-muted/30 px-4">
           <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="shrink-0 text-muted-foreground text-[calc(11rem/14)]">{node.label}</span>
