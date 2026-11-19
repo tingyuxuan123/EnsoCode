@@ -1,69 +1,74 @@
-version: 0.2.89
+version: 0.2.93
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.89/CodeKiln-0.2.89-arm64-mac.zip
-    sha512: E83rfHU5QJ/GjwnUlnn46dm0hBY+4fWdR529T/WPc9EpBMW9LyPv7vQAaxXb1hc0II9KN3piH0+CVS+2EVNC6w==
-    size: 186521583
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.89/CodeKiln-0.2.89-arm64.dmg
-    sha512: bbldEeSSBVJBA+P0Z4v9pQXvVCjRJRWLC49LYZEEJStMGOzunu9bY46ZynJdwtTLQytRz152MyVJf/C2OvKwaA==
-    size: 182902987
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.89/CodeKiln-0.2.89-arm64-mac.zip
-sha512: E83rfHU5QJ/GjwnUlnn46dm0hBY+4fWdR529T/WPc9EpBMW9LyPv7vQAaxXb1hc0II9KN3piH0+CVS+2EVNC6w==
-releaseDate: 2026-11-18T08:40:22.157Z
-releaseName: CodeKiln 0.2.89 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.93/CodeKiln-0.2.93-arm64-mac.zip
+    sha512: 0aEtFFAZ0KqP/IQQUT5mFmbRztGls4CLHFKcWYIFKselV9ku+rjhar/Z8yFpf/qlxAqlYpuLvN4upHZj6MnhWA==
+    size: 191028766
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.93/CodeKiln-0.2.93-arm64.dmg
+    sha512: nrPMlsqOtKDybl3HRHYy32rvCtui6uuywLlWaPm7DMB74pNLucAcLzMAKIB1wHgJdtf99CmD7f1XCcYo9zTJmA==
+    size: 187406838
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.93/CodeKiln-0.2.93-arm64-mac.zip
+sha512: 0aEtFFAZ0KqP/IQQUT5mFmbRztGls4CLHFKcWYIFKselV9ku+rjhar/Z8yFpf/qlxAqlYpuLvN4upHZj6MnhWA==
+releaseDate: 2026-11-19T05:46:58.009Z
+releaseName: CodeKiln 0.2.93 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.89
+  # CodeKiln 0.2.93
 
 
-  ## 新默认主题：Kettu 白 / Kettu 深色
+  ## 移动设备面板
 
 
-  - 新安装默认浅色 **Kettu 白**：纸白工作区坐在 `#f8f8f8` 桌面上，卡片与浮层同为白、只靠
-    黑 10% / 16% 细线分层；文字 `#1f1f1f` / `#5c5c5c`；圆角按 Kettu 的紧几何 5 / 8 / 10，
-    投影只给浮层与输入框。
-  - 深色换成 **Kettu dark**：侧栏 `#0e0e10` 比页面 `#141416` 暗一档，浮层与卡片 `#212124`
-    比页面亮一档，靠明度分层而不是投影；描边是白色 12% / 18% 的细线。
-  - 新安装默认强调色改为「狐狸橙」`#f2581b`。已保存的浅色方案与强调色保持原样，只有缺失或
-    非法值才回退到新默认。
+  - 标题栏的手机图标，或右侧面板的 ＋ → 移动设备，都能打开当前本地 Code 会话的设备面板：
+    列出 Android 模拟器与真机、iOS 模拟器与 iPhone。选中即启动（已关机的模拟器会先开机），
+    画面直接显示在应用内，不另开原生模拟器窗口。
+  - 画面支持点按、拖动、滚轮、文字输入，以及 Android 的返回、主屏幕、最近任务、锁屏、
+    音量与旋转；上方可截图、录制最长 60 秒画面、切换浅深色，也能随时断开。
+  - 设备按会话归属，同一台设备不会被两个会话同时操作；在别的会话打开时点它会移过来。
 
-  ## 选中块与图标
+  - 环境准备收成一条折叠的检查：缺 Xcode、缺 Android SDK、USB 调试未授权都列出官方链接，
+    CodeKiln 不代装、不接受许可、不代签名。
 
-
-  - 选中块（设置导航、会话行、分段页签、主题卡）改成中性的黑 / 白叠色加细线，橙色只留给发送、
-    开关与复选、焦点环；和手机端的 `--ink` 叠色一致。
-  - 建议卡、模型选择器、思考档位、状态环节点等图标恢复墨色，不再整屏发蓝；没有内容可发时，
-    发送键的橙色描边一并去掉。
-  - 设置 → 外观：深色外观下四张内置主题卡改用深色缩略图，不再在近黑窗口里摆一排白卡片。
+  ## 让 AI 操作设备
 
 
-  ## 文件行图标
+  - 新增 device_* 系列工具：读屏（无障碍树）、点按、填字、滑动、硬件键、旋转、装/启/停应用、
+    打开链接、看日志、改外观与定位等。
+  - 第一次操作某台设备前必须授权：拒绝、仅本会话允许、始终允许这台设备。
+    等待授权期间输入框与消息队列会锁住，不会把没生效的话发出去。
+  - 授权在界面上随时可撤销；「始终允许」单独管理，可按设备收回。
 
 
-  - 本轮改动卡片与改动面板的文件行换成 Material 类型图标，与文件树、搜索结果、文件页签、
-    产物卡同一套；改动状态仍由后面的字母与颜色表达，不给类型图标染色。
+  ## 界面
+
+
+  - 桌面排版对齐 Kettu：界面 13px、输入框 15px，等宽文字换成 JetBrains Mono，
+    中文按平台字体的字重档位匹配，中间字重不再落到 Light。
+  - 工作区从贴边的实底块变成浮在外壳里的圆角卡片，四周留缝；Code、Bot、远程节点、
+    图片工作台保持同一套外壳。
+  - 移动设备面板的空态重排：可启动的设备在前，环境检查退成页脚；
+    设备行的状态改成「已关机」这类读作状态的短标签，不再像可点的关机按钮。
+
+  ## 本次修复
+
+
+  - 修好 CI 构建 iOS 画面 helper 时的 Swift 类型推断报错（参数集记录显式写成 `[UInt8]`），
+    本次包才能正常打出。
+  - 截图与录屏真正落到下载文件夹：此前画面被丢弃还提示「设备主机未就绪」；
+    录屏现在按 10 fps 拷贝画面，静止的屏幕也能录出可播放的 MP4。
+  - AI 打开设备时，面板会自己出现并选中那台设备，而不是只回一句「就在对话旁边」。
+
 
   ## 验收与更新范围
 
 
-  - `pnpm typecheck`、`pnpm lint` 干净，全量测试 14730 项通过；开发构建真机截图复核了浅色与
-    深色主窗口、设置外观页与主题卡。
-  - 本次只改配色、线条与圆角这一层，不改布局尺寸；代码高亮、diff 与终端配色仍走各自主题系统，
-    本次未改。
-  - 本次为 Mac arm64 同证书个人版，推进个人更新通道，不改变正式 Latest。
+  - 本次包含 TypeScript、lint 与全量测试（14952 通过）。
 
-  - 安装与重启由用户自己操作；发布成功不代表已在本机完成安装、旧数据保留或自动升级验收。
+  - 本次为 Mac arm64 同证书个人版，继续推进个人更新通道并发布为 prerelease，不改变正式 Latest。
 
-
-  ## 本版为何重新构建
-
-
-  - 0.2.88 的构建在发布门的测试阶段被一条**不稳定的计时断言**拦住：它把「尾部读 50 条 + 一次
-    写盘」整段耗时，去比「冷启动从头扫 50k 行」，写盘与打开文件的固定成本盖过了数据量差异，
-    在较慢的 CI runner 上会随机失败。现在改成两边都只测冷启动的一次读，不再包含写盘。
-  - 这条断言只存在于测试里，应用行为与 0.2.88 完全一致；0.2.88 从未公开，个人通道的上一版仍是 0.2.87。
+  - 安装、退出与重启由用户操作；发布完成不代表本机已经安装或完成旧数据升级验收。
 
 
   ---
 
 
-  个人测试通道 0.2.89：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.93：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
