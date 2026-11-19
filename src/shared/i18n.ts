@@ -3815,6 +3815,8 @@ export const zhTranslations: Record<string, string> = {
   'It stays on': '它会继续开着',
   'It stays connected': '它会继续连着',
   'Screenshot saved to Downloads': '截图已存到下载文件夹',
+  'This window cannot save captures': '这个窗口不能保存画面',
+  'The recording held no frames': '这段录屏没有录到画面',
   'Recording saved to Downloads': '录屏已存到下载文件夹',
   'use {{name}}': '使用 {{name}}',
   'Allow access to {{name}}?': '允许使用 {{name}} 吗？',

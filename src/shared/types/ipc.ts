@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   DEVICE_ACCESS_ANSWER: 'device-access:answer',
   DEVICE_ACCESS_REVOKE: 'device-access:revoke',
   DEVICE_ACCESS_CHANGED: 'device-access:changed',
+  DEVICE_CAPTURE_SAVE: 'device-capture:save',
   IMAGE_PROVIDER_READ: 'image-provider:read',
   IMAGE_PROVIDER_UPDATE: 'image-provider:update',
   IMAGE_PROVIDER_SET_KEY: 'image-provider:set-key',

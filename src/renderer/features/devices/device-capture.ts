@@ -5,11 +5,16 @@ import type { DeviceCaptureKind, DeviceInfo } from '@shared/device-host';
 import { addToast } from '@/components/ui/toast';
 import { useDevicesStore } from '@/stores/devices';
 import { deviceBridge } from './bridge';
-import { devicesText } from './i18n';
+import { DEVICES_KEYS, devicesText } from './i18n';
 import { errorMessage } from './support';
 
-const FRAME_RATE = 30;
 const BITS_PER_SECOND = 8_000_000;
+/**
+ * How often the device's picture is copied onto the canvas that is recorded. A screen that does
+ * not change paints nothing, and a canvas that never paints hands `captureStream` no frames at
+ * all, so a still screen would otherwise record as an empty file.
+ */
+const COPY_INTERVAL_MS = 100;
 
 /** The containers a recording may come in, the one most players open first. */
 const FORMATS: { mimeType: string; kind: DeviceCaptureKind }[] = [
@@ -22,7 +27,12 @@ const FORMATS: { mimeType: string; kind: DeviceCaptureKind }[] = [
 /** The canvas each shown device is drawn to. */
 const canvases = new Map<string, HTMLCanvasElement>();
 
-let active: { deviceId: string; recorder: MediaRecorder; stream: MediaStream } | null = null;
+let active: {
+  deviceId: string;
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  timer: ReturnType<typeof setInterval>;
+} | null = null;
 
 export function canRecord(): boolean {
   return (
@@ -35,7 +45,7 @@ async function keep(device: DeviceInfo, kind: DeviceCaptureKind, data: ArrayBuff
   const save = deviceBridge()?.saveCapture;
   if (!save) {
     // Without a capture channel the picture stays on screen only; say so rather than pretend.
-    addToast({ type: 'warning', title: devicesText('The device host is not ready') });
+    addToast({ type: 'warning', title: devicesText(DEVICES_KEYS.saveUnavailable) });
     return;
   }
   try {
@@ -66,10 +76,21 @@ export async function saveScreenshot(device: DeviceInfo, sessionId: string): Pro
 }
 
 export function startRecording(device: DeviceInfo): void {
-  const canvas = canvases.get(device.id);
+  const source = canvases.get(device.id);
   const format = FORMATS.find((entry) => MediaRecorder.isTypeSupported(entry.mimeType));
-  if (active || !canvas || !format) return;
-  const stream = canvas.captureStream(FRAME_RATE);
+  if (active || !source || !format) return;
+  // The stage is what is recorded: a copy of the screen's canvas, repainted on a steady beat.
+  const stage = document.createElement('canvas');
+  const paint = (): void => {
+    if (stage.width !== source.width || stage.height !== source.height) {
+      stage.width = source.width;
+      stage.height = source.height;
+    }
+    stage.getContext('2d')?.drawImage(source, 0, 0, stage.width, stage.height);
+  };
+  paint();
+  const timer = setInterval(paint, COPY_INTERVAL_MS);
+  const stream = stage.captureStream(Math.round(1000 / COPY_INTERVAL_MS));
   const recorder = new MediaRecorder(stream, {
     mimeType: format.mimeType,
     videoBitsPerSecond: BITS_PER_SECOND,
@@ -79,8 +100,12 @@ export function startRecording(device: DeviceInfo): void {
     if (event.data.size > 0) parts.push(event.data);
   };
   recorder.onstop = () => {
+    clearInterval(timer);
     for (const track of stream.getTracks()) track.stop();
-    if (parts.length === 0) return;
+    if (parts.length === 0) {
+      addToast({ type: 'warning', title: devicesText(DEVICES_KEYS.emptyRecording) });
+      return;
+    }
     void new Blob(parts)
       .arrayBuffer()
       .then((data) => keep(device, format.kind, data))
@@ -88,7 +113,7 @@ export function startRecording(device: DeviceInfo): void {
   };
   recorder.onerror = () => stopRecording();
   recorder.start(1_000);
-  active = { deviceId: device.id, recorder, stream };
+  active = { deviceId: device.id, recorder, stream, timer };
   useDevicesStore.setState({ recording: { deviceId: device.id, since: Date.now() } });
 }
 

@@ -1,5 +1,6 @@
 import { IPC_CHANNELS } from '@shared/types';
-import { type IpcMainEvent, ipcMain } from 'electron';
+import { app, type IpcMainEvent, ipcMain } from 'electron';
+import { parseDeviceCapture, saveDeviceCapture } from '../services/deviceCapture';
 import { deviceHost } from '../services/deviceHost';
 import {
   answerDeviceAccess,
@@ -24,6 +25,17 @@ function isDeviceSender(event: Pick<IpcMainEvent, 'sender' | 'senderFrame'>): bo
 export function registerDeviceHostHandlers(): void {
   ipcMain.on('device-host:connect', (event: IpcMainEvent) => {
     if (isDeviceSender(event)) deviceHost.connect(event.sender);
+  });
+  // The pane keeps a capture it drew; Main is what writes it, and only into Downloads.
+  ipcMain.handle(IPC_CHANNELS.DEVICE_CAPTURE_SAVE, async (event, payload: unknown) => {
+    if (!isDeviceSender(event)) return null;
+    const capture = parseDeviceCapture(payload);
+    if (!capture) return null;
+    try {
+      return await saveDeviceCapture({ directory: app.getPath('downloads'), ...capture });
+    } catch {
+      return null;
+    }
   });
 }
 

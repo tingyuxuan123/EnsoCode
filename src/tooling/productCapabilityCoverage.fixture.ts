@@ -947,6 +947,7 @@ export const IPC_PRODUCT_COVERAGE = {
   DEVICE_ACCESS_ANSWER: surfaces('coding-tools.mobile-devices'),
   DEVICE_ACCESS_REVOKE: surfaces('coding-tools.mobile-devices'),
   DEVICE_ACCESS_CHANGED: excluded('Host pushes device access entries to the user interfaces.'),
+  DEVICE_CAPTURE_SAVE: surfaces('coding-tools.mobile-devices'),
   COMPUTER_ALLOWED_APPS: surfaces('coding-tools.computer'),
   COMPUTER_REVOKE_APP: surfaces('coding-tools.computer'),
   EXTENSION_PLUGINS_LIST: surfaces('tools.list'),

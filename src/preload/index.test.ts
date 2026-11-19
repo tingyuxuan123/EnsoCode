@@ -31,6 +31,25 @@ it('exposes the device host port, never a raw process or file API', async () => 
   expect('perform' in api).toBe(false);
 });
 
+it('hands a capture to Main and only reports the path it wrote', async () => {
+  const api = electronAPI.devices;
+  mocks.invoke
+    .mockClear()
+    .mockResolvedValueOnce('/tmp/Downloads/Pixel.png')
+    .mockResolvedValueOnce(null);
+  const data = new Uint8Array([1, 2, 3]).buffer;
+  expect(await api.saveCapture('Pixel', 'png', data)).toBe('/tmp/Downloads/Pixel.png');
+  expect(mocks.invoke.mock.calls[0]).toEqual([
+    IPC_CHANNELS.DEVICE_CAPTURE_SAVE,
+    {
+      device: 'Pixel',
+      kind: 'png',
+      data,
+    },
+  ]);
+  expect(await api.saveCapture('Pixel', 'png', data)).toBeNull();
+});
+
 it('round-trips device access decisions on dedicated channels without translating their scope', async () => {
   const api = electronAPI.devices;
   const entries = [

@@ -24,6 +24,7 @@ import type {
 import type { DeviceAccessDecision, DeviceAccessEntry } from '@shared/device-agent';
 import {
   DEVICE_METHODS,
+  type DeviceCaptureKind,
   type DeviceEvent,
   type DeviceMethod,
   type DeviceParams,
@@ -1770,6 +1771,19 @@ const electronAPI = {
     onEvent: (listener: (event: DeviceEvent) => void) => deviceClient.onEvent(listener),
     onConnection: (listener: (state: PortConnectionState) => void) =>
       deviceClient.onConnection(listener),
+    /** Main writes the capture into Downloads; the page only learns where it landed. */
+    saveCapture: async (
+      device: string,
+      kind: DeviceCaptureKind,
+      data: ArrayBuffer
+    ): Promise<string | null> => {
+      const written: unknown = await ipcRenderer.invoke(IPC_CHANNELS.DEVICE_CAPTURE_SAVE, {
+        device,
+        kind,
+        data,
+      });
+      return typeof written === 'string' ? written : null;
+    },
   },
 
   computer: {

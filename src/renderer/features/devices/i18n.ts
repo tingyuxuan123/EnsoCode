@@ -15,6 +15,8 @@ export const DEVICES_KEYS = {
   record: 'Record screen',
   stopRecording: 'Stop screen recording',
   recording: 'Recording, {{time}}',
+  saveUnavailable: 'This window cannot save captures',
+  emptyRecording: 'The recording held no frames',
   more: 'Device options',
   reconnect: 'Reconnect',
   retry: 'Try again',
