@@ -6,10 +6,11 @@ interface ResizeHandleProps {
   onResize: (deltaX: number) => void;
   /** 拖拽开始/结束通知(消费方可借此暂停宽度动画,避免 spring 追赶抖动) */
   onResizingChange?: (resizing: boolean) => void;
+  className?: string;
 }
 
-/** 侧边栏缘的拖拽手柄:视觉 1px,命中区左右各扩 4px,中段悬停时浮出抓握点 */
-export function ResizeHandle({ onResize, onResizingChange }: ResizeHandleProps) {
+/** 卡片缝隙中的拖拽手柄:静止透明,悬停/拖动时在缝隙中段浮出细指示条与抓握点 */
+export function ResizeHandle({ onResize, onResizingChange, className }: ResizeHandleProps) {
   const [resizing, setResizing] = useState(false);
   const lastX = useRef(0);
 
@@ -45,14 +46,14 @@ export function ResizeHandle({ onResize, onResizingChange }: ResizeHandleProps) 
   );
 
   return (
-    <div className="group relative w-px shrink-0 bg-transparent">
+    <div className={cn('group relative w-px shrink-0 bg-transparent', className)}>
       <div
         data-slot="resize-hit"
         onMouseDown={handleMouseDown}
         className={cn(
           '-left-1 -right-1 absolute inset-y-0 z-10 cursor-col-resize',
-          'after:absolute after:inset-y-0 after:left-1 after:w-px after:transition-colors hover:after:bg-ring',
-          resizing && 'after:bg-ring'
+          'after:absolute after:inset-y-3 after:left-1/2 after:w-[2px] after:-translate-x-1/2 after:rounded-full after:transition-colors hover:after:bg-border',
+          resizing && 'after:bg-ring hover:after:bg-ring'
         )}
       />
       {/* 抓握点:悬停/拖动时在分隔线中段浮出,补上「这里能左右拖」的可见落点 */}

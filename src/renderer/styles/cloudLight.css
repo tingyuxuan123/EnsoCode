@@ -75,20 +75,6 @@
   }
 }
 
-/* ── 外壳：保留导航与工作区的左上圆角，不改尺寸 ──────────────────
- * 侧栏展开时圆角落在侧栏；收起后落在工作区。只改圆角与描边，不动尺寸。
- */
-html[data-light-palette='cloud-light'] [data-slot='project-sidebar']:not([aria-hidden='true']) {
-  border-top-left-radius: 14px;
-  border-left: 1px solid var(--color-line);
-}
-
-html[data-light-palette='cloud-light']
-  div:has(> [data-slot='project-sidebar'][aria-hidden='true'])
-  ~ [data-slot='workbench-main'] {
-  border-top-left-radius: 14px;
-}
-
 /* 普通开关保持白卡；工作区导航交回共享强调色选中态。 */
 html[data-light-palette='cloud-light'] [data-slot='app-rail'] button[aria-pressed='true']:not([data-rail-view]) {
   background-color: var(--color-popover);
@@ -114,11 +100,6 @@ html[data-light-palette='cloud-light'] [data-slot='project-sidebar'] [data-slot=
 /* ── 侧栏：当前会话用强调色淡染，不加描边、色条或投影 ────────── */
 html[data-light-palette='cloud-light'] [data-slot='conversation-row'][data-active='true'] {
   background-color: var(--selection);
-}
-
-html[data-light-palette='cloud-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::before,
-html[data-light-palette='cloud-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::after {
-  background-color: transparent;
 }
 
 /* ── 会话区：浅灰消息、黑字，避免一整块高饱和色压过回复正文 ──────── */

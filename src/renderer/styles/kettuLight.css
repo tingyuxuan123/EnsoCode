@@ -85,15 +85,6 @@ html[data-light-palette='kettu-light'] [data-slot='conversation-row'][data-activ
   background-color: var(--selection);
 }
 
-html[data-light-palette='kettu-light']
-  .enso-conv-tree
-  [data-slot='conversation-row'][data-active='true']::before,
-html[data-light-palette='kettu-light']
-  .enso-conv-tree
-  [data-slot='conversation-row'][data-active='true']::after {
-  background-color: transparent;
-}
-
 /* ── 输入框：白卡 + 细线 + 很轻的投影；聚焦描边与光晕跟随强调色 ── */
 html[data-light-palette='kettu-light'] [data-slot='composer'] {
   border-radius: 10px;

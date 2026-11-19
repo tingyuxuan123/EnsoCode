@@ -420,10 +420,10 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
   const tab = (
     <div
       className={cn(
-        'group/tab relative flex h-full min-w-0 items-center gap-1.5 border-r border-line pr-1.5 pl-3 text-[calc(12rem/14)]',
+        'group/tab relative flex h-[calc(28rem/14)] min-w-0 items-center gap-[calc(6rem/14)] rounded-[calc(6rem/14)] pr-1.5 pl-2.5 text-[calc(12rem/14)] transition-colors',
         active
-          ? 'bg-selection text-selection-foreground'
-          : 'text-muted-foreground hover:bg-accent/50'
+          ? 'bg-secondary font-medium text-foreground'
+          : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
       )}
     >
       {props.api.id === 'changes' ? (
@@ -474,7 +474,7 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
       <button
         type="button"
         className={cn(
-          'flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-control hover:text-foreground focus-visible:opacity-100',
+          'flex size-[calc(18rem/14)] shrink-0 items-center justify-center rounded-[calc(4rem/14)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:opacity-100',
           !active && 'opacity-0 group-hover/tab:opacity-100'
         )}
         aria-label={t('Close')}
@@ -542,14 +542,14 @@ function NewTabMenu({
     <Menu>
       <MenuTrigger
         className={cn(
-          'flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground',
+          'flex items-center justify-center rounded-[calc(6rem/14)] text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground',
           compact
-            ? 'h-6 w-6 rounded p-1 hover:bg-muted'
-            : 'h-8 gap-1.5 border border-dashed px-3 text-sm hover:border-solid'
+            ? 'size-[calc(26rem/14)]'
+            : 'h-8 gap-1.5 rounded-md border border-dashed px-3 text-sm hover:border-solid'
         )}
         aria-label={t('New tab')}
       >
-        <Plus className="h-4 w-4" />
+        <Plus className={compact ? 'size-[calc(14rem/14)]' : 'h-4 w-4'} />
         {!compact && <span>{t('New tab')}</span>}
       </MenuTrigger>
       <MenuPopup align={compact ? 'end' : 'center'} className="min-w-36">
@@ -631,10 +631,10 @@ function SidePanelHeaderActions({
   const workflowAvailable = useWorkflowAvailable(projectId);
   const designAvailable = useDesignAvailable(conversationId, designSessionId);
   return (
-    <div className="flex h-full items-center gap-0.5">
+    <div className="flex h-full items-center gap-0.5 pl-1">
       <button
         type="button"
-        className="flex h-6 w-6 items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex size-[calc(26rem/14)] items-center justify-center rounded-[calc(6rem/14)] text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
         onClick={toggleSidePanelExpand}
         aria-label={expandLabel}
         title={expandLabel}
@@ -712,7 +712,7 @@ function Watermark(props: IWatermarkPanelProps) {
   const designAvailable = useDesignAvailable(conversationId, designSessionId);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-end border-b bg-background px-2 py-1">
+      <div className="flex h-[var(--workbench-header-height)] shrink-0 items-center justify-end border-b border-line bg-background px-2.5">
         <SidePanelHeaderActions containerApi={props.containerApi} />
       </div>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-background px-6 text-center">
@@ -988,7 +988,7 @@ export function SidePanel({
    * 弹簧过冲/打开首帧时 aside 比内容宽出来的那一条就会露出没有面板遮罩的裸壁纸。
    * 全屏 cover 态 aside 本身是实底，内容照常铺满。border-l 占 1px，内容按 content-box 扣掉。
    */
-  const contentW = cover ? undefined : Math.max(0, width - (open ? 1 : 0));
+  const contentW = cover ? undefined : Math.max(0, width - (open ? 2 : 0));
   const activeId = conversationId;
   const skipWidthAnim = shouldSkipSidePanelWidthAnim({
     resizing,
@@ -1010,6 +1010,7 @@ export function SidePanel({
         ref={asideRef}
         data-slot="side-panel"
         data-enso="side-panel"
+        data-workbench-pane={open || cover ? '' : undefined}
         initial={false}
         animate={{ width: targetW }}
         style={
@@ -1026,8 +1027,7 @@ export function SidePanel({
           workspaceHidden ? 'hidden' : 'flex',
           // 平时透明让底层挖孔透出 guest；全屏盖在 ChatView 上、收起动画中必须实底
           open && !cover ? 'bg-transparent' : 'bg-panel',
-          cover ? 'absolute inset-y-0 right-0' : 'relative shrink-0',
-          open && 'border-l border-line'
+          cover ? 'absolute inset-0 z-10' : 'relative shrink-0'
         )}
       >
         {open && !cover && contentW !== undefined ? (

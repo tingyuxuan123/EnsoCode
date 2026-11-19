@@ -65,7 +65,7 @@ export function AppRail({
       data-slot="app-rail"
       aria-label="CodeKiln"
       // 固定像素宽：根字号可调（--font-size-base），图标轨不随 rem 缩放
-      className="flex w-[56px] shrink-0 flex-col items-center gap-[8px] bg-shell py-[12px]"
+      className="flex w-[56px] shrink-0 flex-col items-center gap-[8px] bg-shell pt-[4px] pb-[12px]"
     >
       {onToggleSidebar && (
         <RailTip label={sidebarLabel} shortcut={shortcut(bindings['toggle-sidebar'])}>

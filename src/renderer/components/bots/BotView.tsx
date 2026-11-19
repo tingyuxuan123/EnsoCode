@@ -111,7 +111,10 @@ export function BotView({
   return (
     <>
       {collapsed ? (
-        <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-t border-r bg-nav py-2">
+        <aside
+          data-workbench-sidebar=""
+          className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-hidden bg-nav py-2"
+        >
           <BotSearchButton className={RAIL_BUTTON} />
           <button
             type="button"
@@ -190,7 +193,7 @@ export function BotView({
             onNewTeam={openTeam}
             onStartFromGoal={() => setGoalOpen(true)}
           />
-          <ResizeHandle onResize={onResize} />
+          <ResizeHandle onResize={onResize} className="ml-[3px] -mr-[3px]" />
         </>
       )}
 

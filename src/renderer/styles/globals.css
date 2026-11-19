@@ -210,25 +210,53 @@
   }
 
   /*
-   * 外壳 + 工作区卡片：图标轨 / 侧栏 / 标题栏铺在外壳上，工作区是浮在外壳里的一块
-   * 圆角卡片，四周留缝露出外壳底色（与 ChatGPT/Codex 的 app shell 同一做法：
-   * 主内容面 border-radius 12px，桌面是 #f8f8f8 一类的壳色）。
+   * 外壳 + 圆角悬浮卡片体系：标题栏 / 图标轨铺在外壳底色上，侧栏、主工作区和右侧面板
+   * 均是浮在外壳里的圆角卡片（同一 12px 圆角、同一 6px 留缝、同一细线描边），
+   * 避免侧栏直角与工作区圆角并排造成几何割裂。
    *
-   * 缝与圆角同源：--workbench-card-gap 一处定义，圆角按「缝 + 卡片自身圆角」推出来，
-   * 卡片外沿就是外圆角，缝里不会露出被裁掉一角的卡片底。
-   * 四周都留缝：左侧那圈缝落在 1px 分栏手柄与卡片之间，手柄仍贴着侧栏边缘，
-   * 拖动热区不受影响。裁切交给卡片上的 overflow-hidden，这里不再重复声明。
+   * 缝与圆角同源：--workbench-card-gap 一处定义，圆角按「缝 + 卡片自身圆角」推出来；
+   * 会话页签条与右侧面板页签条共用 --workbench-header-height，保证横向底线严格对齐。
+   * 裁切交给卡片上的 overflow-hidden，这里不再重复声明。
    */
   [data-enso='canvas'] {
     --workbench-card-gap: 6px;
     --workbench-card-radius: calc(var(--workbench-card-gap) + 6px);
+    --workbench-header-height: calc(40rem / 14);
+    --workbench-card-border: color-mix(in srgb, var(--color-border) 85%, transparent);
+  }
+
+  .dark [data-enso='canvas'],
+  html.bg-image-enabled [data-enso='canvas'] {
+    --workbench-card-border: var(--color-border);
   }
 
   /* 所有工作区内容区（Code / Bot / 远程节点 / 图片工作台）共用一枚标记，
-     免得每加一个模式就漏掉一处留缝。 */
+     顶部直接衔接 44px 标题栏（标题栏内部已对称留白），左右与底部保留 --workbench-card-gap。 */
   [data-workbench-card] {
-    margin: var(--workbench-card-gap);
+    margin: 0 var(--workbench-card-gap) var(--workbench-card-gap);
     border-radius: var(--workbench-card-radius);
+  }
+
+  [data-workbench-card]:not([data-workbench-split]) {
+    border: 1px solid var(--workbench-card-border);
+  }
+
+  /* 分栏工作区（主聊天 + 右侧面板）内各自独立的圆角子卡片，保持四角一致圆润。 */
+  [data-workbench-pane] {
+    border-radius: var(--workbench-card-radius);
+    border: 1px solid var(--workbench-card-border);
+  }
+
+  /* 侧栏卡片与工作区卡片共享上下留缝、圆角半径和细线描边；收起时去边避免留细线。 */
+  [data-workbench-sidebar] {
+    margin-top: 0;
+    margin-bottom: var(--workbench-card-gap);
+    border-radius: var(--workbench-card-radius);
+    border: 1px solid var(--workbench-card-border);
+  }
+
+  [data-workbench-sidebar][aria-hidden='true'] {
+    border-width: 0;
   }
 
   /*
@@ -447,36 +475,6 @@ html.bg-image-enabled .shiki span {
 /* 聊天列铺满：覆盖 CHAT_COL 的阶梯 max-w，两侧只留 padding */
 html.enso-chat-wide .enso-chat-col {
   max-width: none;
-}
-
-/*
- * 侧栏项目下的会话竖线：每行画自己那段并向上盖住 gap-y-0.5 行距；有状态点的行在点上下断开，
- * 与会话区工具时间线同一画法。圆心 x = pl-2 + 半个图标列、y = py-1.5 + 半个行高，均为 1rem；
- * 全用 rem 跟随界面字号缩放。
- */
-.enso-conv-tree [data-slot='conversation-row'] {
-  position: relative;
-}
-.enso-conv-tree [data-slot='conversation-row']::before,
-.enso-conv-tree [data-slot='conversation-row']:has([data-slot='conversation-status'])::after {
-  content: '';
-  position: absolute;
-  left: calc(1rem - 0.5px);
-  width: 1px;
-  background-color: var(--color-border);
-  pointer-events: none;
-}
-.enso-conv-tree [data-slot='conversation-row']::before {
-  top: -0.125rem;
-  bottom: 0;
-}
-.enso-conv-tree [data-slot='conversation-row']:has([data-slot='conversation-status'])::before {
-  bottom: auto;
-  height: 0.625rem;
-}
-.enso-conv-tree [data-slot='conversation-row']:has([data-slot='conversation-status'])::after {
-  top: 1.5rem;
-  bottom: 0;
 }
 
 /**

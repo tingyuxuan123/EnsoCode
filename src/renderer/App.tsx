@@ -818,18 +818,20 @@ export default function App() {
                     }}
                   />
                 </div>
-                {!collapsed && <ResizeHandle onResize={handleResize} />}
+                {!collapsed && (
+                  <ResizeHandle onResize={handleResize} className="ml-[3px] -mr-[3px]" />
+                )}
               </>
             )}
             {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔。
-                圆角、四周留缝与裁切在 globals.css 的 workbench-card 规则里，
-                卡片外沿就是外壳露出的那圈缝。 */}
+                圆角、四周留缝与细线在 globals.css 的 workbench-card / workbench-pane 规则里，
+                让侧栏、聊天区与右侧面板保持四角一致的圆角悬浮卡片几何。 */}
             <div
               ref={workspaceRef}
               data-slot="workbench-main"
               data-enso="main"
               data-workbench-card=""
-              // 卡片四周靠留缝分层，不再单独描边（见 globals.css 的 workbench-card 规则）
+              data-workbench-split={galleryActive ? undefined : ''}
               className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
             >
               {galleryActive ? (
@@ -837,20 +839,27 @@ export default function App() {
               ) : (
                 <>
                   <div
+                    data-workbench-pane=""
                     className={cn(
-                      'min-h-0 min-w-0 flex-1 flex-col',
+                      'min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
                       extensionsActive ? 'hidden' : 'flex'
                     )}
                   >
                     <ChatView />
                   </div>
                   {extensionsActive && (
-                    <ExtensionsPage onBack={closeWorkspacePage} request={extensionRequest} />
+                    <div
+                      data-workbench-pane=""
+                      className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
+                    >
+                      <ExtensionsPage onBack={closeWorkspacePage} request={extensionRequest} />
+                    </div>
                   )}
                   {sideOpen && !sideFullscreen && !extensionsActive && (
                     <ResizeHandle
                       onResize={handleSideResize}
                       onResizingChange={handleSideResizing}
+                      className="w-[var(--workbench-card-gap)]"
                     />
                   )}
                   <SidePanel

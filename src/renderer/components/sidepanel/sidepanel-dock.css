@@ -2,6 +2,7 @@
    不跟随我们的 light/dark/sync-terminal，也绕过背景图透明化。
    底色全部置透，由宿主 <aside> 的 bg-background 刷一层（避免多层叠色）。 */
 .enso-side-dock .dv-dockview {
+  --dv-tabs-and-actions-container-height: var(--workbench-header-height, calc(40rem / 14));
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: transparent;
   --dv-activegroup-visiblepanel-tab-background-color: transparent;
@@ -36,18 +37,21 @@
 }
 
 .enso-side-dock .dv-tabs-and-actions-container {
-  /* 必须走 --color-* 映射层：背景图模式下注入通用面板 alpha */
-  background: var(--color-shell);
+  /* 与 CoworkerTabs 共用卡片表面和头高：必须走 --color-* 映射层以保留壁纸透明化 */
+  background: var(--color-background);
   border-bottom: 1px solid var(--color-line);
-  height: 40px;
+  height: var(--workbench-header-height, calc(40rem / 14));
   min-height: 0;
-  align-items: stretch;
-  padding: 0;
+  align-items: center;
+  padding: 0 8px;
+  gap: 4px;
 }
 
 .enso-side-dock .dv-tabs-container {
   height: 100%;
-  align-items: stretch;
+  align-items: center;
+  gap: 4px;
+  scrollbar-width: none;
 }
 
 .enso-side-dock .dv-tab {
@@ -58,7 +62,7 @@
   box-shadow: none !important;
   margin: 0 !important;
   padding: 0 !important;
-  height: 100% !important;
+  height: auto !important;
 }
 
 .enso-side-dock .dv-default-tab,

@@ -226,16 +226,14 @@ export function ImageStudio({
           targetW: collapsed ? 0 : sidebarWidth,
         })}
         aria-hidden={collapsed || undefined}
-        className={cn(
-          'flex min-h-0 shrink-0 flex-col overflow-hidden bg-shell',
-          !collapsed && 'border-r border-line'
-        )}
+        className="flex min-h-0 shrink-0 flex-col overflow-hidden bg-nav"
         data-slot="image-studio-sidebar"
+        data-workbench-sidebar=""
       >
         {/* 正文按目标宽度固定，宽度动画只裁剪外壳，收起时与 Code 项目侧栏一样整块让位 */}
         <div
           className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')}
-          style={{ width: sidebarWidth }}
+          style={{ width: Math.max(0, sidebarWidth - 2) }}
           data-slot="image-studio-sidebar-body"
         >
           <div className="flex h-[44px] shrink-0 items-center px-3">
@@ -332,14 +330,24 @@ export function ImageStudio({
           </div>
         </div>
       </motion.aside>
-      {!collapsed && <ResizeHandle onResize={onResize} onResizingChange={setResizing} />}
+      {!collapsed && (
+        <ResizeHandle
+          onResize={onResize}
+          onResizingChange={setResizing}
+          className="ml-[3px] -mr-[3px]"
+        />
+      )}
       <div
         ref={workspaceRef}
-        className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+        className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
         data-slot="workbench-main"
         data-workbench-card=""
+        data-workbench-split=""
       >
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main
+          data-workbench-pane=""
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+        >
           {!turns.length ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 text-center">
               <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -582,6 +590,7 @@ export function ImageStudio({
               setResizing(value);
               onHistoryResizingChange(value);
             }}
+            className="w-[var(--workbench-card-gap)]"
           />
         )}
         {/* 与 Code 右侧面板一致：外壳常驻、宽度动画，收起时 invisible 让正文立即不可交互 */}
@@ -594,14 +603,18 @@ export function ImageStudio({
             targetW: historyOpen ? historyWidth : 0,
           })}
           aria-hidden={!historyOpen || undefined}
+          data-workbench-pane={historyOpen ? '' : undefined}
           className={cn(
-            'flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden',
-            historyOpen ? 'border-l border-line' : 'invisible'
+            'flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-background',
+            !historyOpen && 'invisible'
           )}
           data-slot="image-studio-history"
           aria-label={t('Image history')}
         >
-          <div className="flex h-full min-h-0 flex-col" style={{ width: historyWidth }}>
+          <div
+            className="flex h-full min-h-0 flex-col"
+            style={{ width: Math.max(0, historyWidth - (historyOpen ? 2 : 0)) }}
+          >
             <div className="flex h-[44px] shrink-0 px-3">
               <span className={cn(tab, activeTab, 'font-medium')}>
                 <Image className="size-3.5" />

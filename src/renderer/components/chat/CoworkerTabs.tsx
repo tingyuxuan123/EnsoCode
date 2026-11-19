@@ -124,7 +124,7 @@ export function CoworkerTabs({
   // 不用 muted：cloud-light 的 muted 与 background 几乎同色，胶囊会整体消失。
   const tabClass = (active: boolean) =>
     cn(
-      'relative flex min-w-0 shrink-0 items-center gap-[calc(6rem/14)] rounded-[calc(6rem/14)] px-[calc(8rem/14)] py-[calc(4rem/14)] text-[calc(12rem/14)] transition-colors',
+      'relative flex h-[calc(28rem/14)] min-w-0 shrink-0 items-center gap-[calc(6rem/14)] rounded-[calc(6rem/14)] px-[calc(9rem/14)] text-[calc(12rem/14)] transition-colors',
       active
         ? 'bg-secondary font-medium text-foreground'
         : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
@@ -133,7 +133,7 @@ export function CoworkerTabs({
   return (
     <div
       data-slot="conversation-tabs"
-      className="flex shrink-0 items-center gap-[calc(4rem/14)] border-b border-line px-3 py-[calc(4rem/14)]"
+      className="flex h-[var(--workbench-header-height)] shrink-0 items-center gap-[calc(4rem/14)] border-b border-line bg-background px-2.5"
     >
       <div
         data-slot="conversation-tab-scroller"
@@ -294,7 +294,7 @@ export function CoworkerTabs({
           aria-label={t('Add collaborator')}
           disabled={!parentStarted}
           onClick={() => setHiring(true)}
-          className="ml-[calc(2rem/14)] flex size-[calc(24rem/14)] shrink-0 items-center justify-center rounded-[calc(6rem/14)] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground disabled:opacity-40"
+          className="ml-[calc(2rem/14)] flex size-[calc(26rem/14)] shrink-0 items-center justify-center rounded-[calc(6rem/14)] text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-40"
         >
           <Plus className="size-[calc(14rem/14)]" />
         </button>

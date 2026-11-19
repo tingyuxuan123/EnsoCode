@@ -516,7 +516,7 @@ export function BrowserView({
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="flex h-[calc(40rem/14)] shrink-0 items-center gap-0.5 border-b border-line px-2">
+      <div className="flex h-[calc(40rem/14)] shrink-0 items-center gap-0.5 border-b border-line bg-background px-2">
         <Button
           variant="ghost"
           size="icon-xs"
@@ -579,7 +579,7 @@ export function BrowserView({
             placeholder={t('Search or enter a URL')}
             aria-label={t('Search or enter a URL')}
             spellCheck={false}
-            className="h-8 w-full min-w-0 rounded-lg border border-border/70 bg-muted/50 pl-8 pr-3 text-[calc(11rem/14)] text-foreground outline-none transition-[background-color,border-color,box-shadow] placeholder:text-muted-foreground/72 hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/25"
+            className="h-[calc(28rem/14)] w-full min-w-0 rounded-[calc(6rem/14)] border border-border/60 bg-secondary/60 pl-8 pr-3 text-[calc(11rem/14)] text-foreground outline-none transition-[background-color,border-color,box-shadow] placeholder:text-muted-foreground/72 hover:bg-secondary/85 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/25"
           />
         </form>
         <Button

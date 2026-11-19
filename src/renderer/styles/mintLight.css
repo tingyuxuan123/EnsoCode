@@ -86,17 +86,11 @@
 }
 
 /* ── 侧栏：当前会话 ─────────────────────────────────────────────
- * 用强调色淡染与轻投影托起，不加描边或色条。会话树线在这一行断开，
- * 不从卡片中间穿过；上下两段仍是统一的灰色细线。
+ * 用强调色淡染与轻投影托起，不加描边或色条。
  */
 html[data-light-palette='mint-light'] [data-slot='conversation-row'][data-active='true'] {
   background-color: var(--selection);
   box-shadow: var(--mint-lift);
-}
-
-html[data-light-palette='mint-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::before,
-html[data-light-palette='mint-light'] .enso-conv-tree [data-slot='conversation-row'][data-active='true']::after {
-  background-color: transparent;
 }
 
 /* 分组标签与全局选择共用用户强调色，不随壁纸透明度消失。 */

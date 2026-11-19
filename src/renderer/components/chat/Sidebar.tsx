@@ -766,11 +766,15 @@ export function Sidebar({
       transition={springStandard}
       data-slot="project-sidebar"
       data-enso="sidebar"
+      data-workbench-sidebar=""
       aria-hidden={collapsed || undefined}
-      className="flex shrink-0 flex-col overflow-hidden border-t border-line bg-nav"
+      className="flex shrink-0 flex-col overflow-hidden bg-nav"
     >
       {/* 收起后整栏让位：搜索 / 设置 / 询问 Enso / 展开入口都在全局图标轨上 */}
-      <div className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')} style={{ width }}>
+      <div
+        className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')}
+        style={{ width: width ? Math.max(0, width - 2) : undefined }}
+      >
         {/* 项目 / 临时对话分段 + 全局搜索；Code / Bot 切换常驻左侧图标轨 */}
         <div className="flex shrink-0 items-center gap-2 px-[12px] pt-[12px]">
           <Tabs
@@ -794,7 +798,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex size-[calc(36rem/14)] shrink-0 items-center justify-center rounded-md bg-accent/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="flex size-[calc(36rem/14)] shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
             title={
               searchShortcut ? `${t('Search anything')} (${searchShortcut})` : t('Search anything')
             }
@@ -1316,7 +1320,7 @@ export function Sidebar({
                                       variants={heightVariants}
                                       className="overflow-hidden"
                                     >
-                                      <div className="enso-conv-tree mt-0.5 flex flex-col gap-y-0.5">
+                                      <div className="mt-0.5 flex flex-col gap-y-0.5 pb-1">
                                         {visibleConversations.slice(0, shownCount).map((id) => (
                                           <motion.div
                                             key={id}

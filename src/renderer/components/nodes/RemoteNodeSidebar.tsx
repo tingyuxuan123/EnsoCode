@@ -132,7 +132,8 @@ export function RemoteNodeSidebar({
 
   return (
     <aside
-      className="flex shrink-0 flex-col overflow-hidden border-line border-t border-r bg-nav"
+      data-workbench-sidebar=""
+      className="flex shrink-0 flex-col overflow-hidden bg-nav"
       style={{ width: width ?? 264 }}
     >
       <div className="shrink-0 px-3 pt-3">

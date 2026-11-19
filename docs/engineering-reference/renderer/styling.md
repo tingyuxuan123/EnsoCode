@@ -142,14 +142,18 @@ sessions 依赖带进设计窗口。插件主题数据经 `extensionPlugins.list
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
 在 `system`/`light`/`dark` 下改配色方案看不到界面变化，这是设计如此，不是 bug。
 
-工作区是一块浮在外壳上的**圆角卡片**（对齐 ChatGPT/Codex 的 app shell：主内容面 `12px` 圆角、
-四周留缝露出外壳底色）。实现只有两处：`[data-enso='canvas']` 给 `--workbench-card-gap`
-（缝，`6px`）与 `--workbench-card-radius`（缝 + `6px`，卡片外沿正好是这圈圆角），
-`[data-workbench-card]` 只负责 `margin` 与 `border-radius`。图标轨、侧栏、标题栏、壁纸层
-都留在外壳上、保持直角；卡片裁切由各内容区自己的 `overflow-hidden` 完成。**新加工作区模式
+工作区、侧栏与右侧面板统一采用浮在外壳上的**圆角卡片**（对齐 ChatGPT/Codex 的 app shell：
+所有主表面共用 `12px` 圆角、左右与底部 `6px` 留缝（顶部直接衔接 44px 标题栏内部留白，保持标题栏上下对称）和细线描边，避免侧栏直角与工作区圆角并排割裂）。
+实现集中在 `globals.css`：`[data-enso='canvas']` 定义 `--workbench-card-gap`（`6px`）、
+`--workbench-card-radius`（缝 + `6px`）、`--workbench-card-border` 与 `--workbench-header-height`
+（`calc(40rem / 14)`）；`[data-workbench-card]` 负责外框留缝与圆角，单栏工作区自动带细线描边，
+分栏工作区（`data-workbench-split`）由内部各个 `[data-workbench-pane]` 各自圆角描边，侧栏用
+`[data-workbench-sidebar]` 共享同一上下留缝、圆角与描边。图标轨、标题栏、壁纸层留在外壳上
+保持直角；卡片裁切由各内容区自己的 `overflow-hidden` 完成。聊天页签条与右侧面板页签条共用
+`--workbench-header-height` 与 `bg-background` 胶囊样式，确保横向底线对齐。**新加工作区模式
 （Code / Bot / 远程节点 / 图片工作台之外的入口）时必须同时挂 `data-workbench-card` 与
-`overflow-hidden`**，否则那块内容区四角会退回直角。留缝、圆角同源，回归见
-`styles/workbenchCard.test.ts`，Bot 侧入口还由 `components/bots/BotView.test.tsx` 守一枚标记。
+`overflow-hidden`**，否则那块内容区四角会退回直角。回归见 `styles/workbenchCard.test.ts`，
+Bot 侧入口还由 `components/bots/BotView.test.tsx` 守一枚标记。
 
 `html.dark` 只切换语义色变量，不会自动把 Chromium 原生控件（`<select>` 弹出层、滚动条）切到深色。
 `:root` 必须设 `color-scheme: light`，`.dark` 必须设 `color-scheme: dark`，否则 Windows 上原生下拉仍是白底。

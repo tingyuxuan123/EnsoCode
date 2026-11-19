@@ -338,8 +338,15 @@ export function BotChatView({
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden" data-workbench-card="">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
+      data-workbench-card=""
+      data-workbench-split=""
+    >
+      <div
+        data-workbench-pane=""
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+      >
         <header className="@container flex h-[calc(56rem/14)] shrink-0 items-center gap-2 border-line border-b px-4">
           {direct ? (
             <BotAvatar bot={direct} busy={summary.running} />
@@ -454,9 +461,16 @@ export function BotChatView({
         </div>
       </div>
 
-      {panelOpen && <ResizeHandle onResize={resizePanel} onResizingChange={setResizing} />}
+      {panelOpen && (
+        <ResizeHandle
+          onResize={resizePanel}
+          onResizingChange={setResizing}
+          className="w-[var(--workbench-card-gap)]"
+        />
+      )}
       <motion.aside
         ref={asideRef}
+        data-workbench-pane={panelOpen ? '' : undefined}
         initial={false}
         animate={{ width: targetW }}
         style={{
@@ -467,15 +481,12 @@ export function BotChatView({
           cover: false,
           targetW,
         })}
-        className={cn(
-          'relative flex min-h-0 shrink-0 flex-col overflow-clip border-line bg-background',
-          panelOpen && 'border-l'
-        )}
+        className="relative flex min-h-0 shrink-0 flex-col overflow-clip bg-background"
       >
         {/* 内容固定目标宽度，开合动画只裁切不重排 */}
         <div
           className={cn('flex h-full min-h-0 flex-col', !panelOpen && 'invisible')}
-          style={{ width }}
+          style={{ width: Math.max(0, width - (panelOpen ? 2 : 0)) }}
         >
           <div className="flex h-[calc(36rem/14)] shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
             {(['info', 'board', 'browser', 'design', 'delegations'] as const)
