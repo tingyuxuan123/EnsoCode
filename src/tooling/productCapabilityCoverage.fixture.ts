@@ -408,6 +408,7 @@ export const BUILTIN_TOOL_COVERAGE: Readonly<Record<string, CoverageDisposition>
   isolated_sandbox: surfaces('coding-tools.isolated-sandbox'),
   memory: surfaces('coding-tools.memory'),
   computer: surfaces('coding-tools.computer'),
+  mobile_devices: surfaces('coding-tools.mobile-devices'),
   plan: surfaces('coding-tools.plan'),
 };
 
@@ -940,6 +941,12 @@ export const IPC_PRODUCT_COVERAGE = {
   BOT_TEMPLATES_CHANGED: excluded('Bot mode template library change notification transport.'),
   COMPUTER_CAPABILITIES: surfaces('coding-tools.computer'),
   COMPUTER_OPEN_PERMISSIONS: surfaces('coding-tools.computer'),
+  DEVICE_ACCESS_LIST: surfaces('coding-tools.mobile-devices'),
+  DEVICE_ACCESS_ALLOWED: surfaces('coding-tools.mobile-devices'),
+  DEVICE_ACCESS_FORGET: surfaces('coding-tools.mobile-devices'),
+  DEVICE_ACCESS_ANSWER: surfaces('coding-tools.mobile-devices'),
+  DEVICE_ACCESS_REVOKE: surfaces('coding-tools.mobile-devices'),
+  DEVICE_ACCESS_CHANGED: excluded('Host pushes device access entries to the user interfaces.'),
   COMPUTER_ALLOWED_APPS: surfaces('coding-tools.computer'),
   COMPUTER_REVOKE_APP: surfaces('coding-tools.computer'),
   EXTENSION_PLUGINS_LIST: surfaces('tools.list'),

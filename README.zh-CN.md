@@ -28,7 +28,7 @@
 <p align="center">
   <a href="https://github.com/tingyuxuan123/EnsoCode/releases"><img src="https://img.shields.io/github/v/release/tingyuxuan123/EnsoCode?include_prereleases&label=personal%20release" alt="最新个人版本" /></a>
   <img src="https://img.shields.io/badge/personal%20build-macOS%20Apple%20Silicon-555" alt="个人构建：macOS Apple Silicon" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT 开源许可" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 开源许可" /></a>
 </p>
 
 ---
@@ -165,4 +165,4 @@ pnpm typecheck && pnpm lint && pnpm test
 
 感谢 [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode) 及其贡献者提供原始项目，也感谢 [pi](https://github.com/earendil-works/pi) 和工作台依赖的开源项目。
 
-本项目使用 [MIT License](LICENSE)，保留原有版权与许可声明。第三方依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目使用 [GNU Affero General Public License v3.0](LICENSE)。移动设备主机、驱动与面板移植自 [Kettu](https://github.com/KettuAI/Kettu)（AGPL-3.0-only），因此整个项目改为按 AGPL-3.0 分发。保留原有版权与许可声明；第三方依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

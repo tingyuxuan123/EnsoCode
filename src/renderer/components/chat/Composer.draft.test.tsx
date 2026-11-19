@@ -1,15 +1,34 @@
 // @vitest-environment happy-dom
-import { act } from 'react';
+import { act, type ComponentProps } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { handleDraftRequest } from '@/plugins/draftBridge';
 import { Composer } from './Composer';
 import { composerDrafts, createComposerDrafts } from './composerDraft';
-import { insertUiElementMentions } from './composerMentionBridge';
+import {
+  insertComposerImage,
+  insertComposerMention,
+  insertComposerText,
+  insertUiElementMention,
+  insertUiElementMentions,
+} from './composerMentionBridge';
+import { requestOpenChatModelPicker } from './ModelPicker';
 import type { ComposerPayload } from './mentionComposer';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
-vi.mock('@/stores/settings', () => ({
-  useSettingsStore: (select: (s: object) => unknown) => select({ keybindings: {} }),
+vi.mock('@/stores/settings', () => {
+  const state = { keybindings: { 'switch-model': 'alt+m', 'send-message': 'enter' } };
+  return {
+    useSettingsStore: Object.assign((select: (s: typeof state) => unknown) => select(state), {
+      getState: () => state,
+    }),
+  };
+});
+// Mutate this set without notifying React to exercise handlers from the last unlocked render.
+const pending = vi.hoisted(() => new Set<string>());
+vi.mock('@/stores/deviceAccess', () => ({
+  usePendingDeviceAccess: (id: string) => pending.has(id),
+  hasPendingDeviceAccess: (id: string) => pending.has(id),
 }));
 vi.mock('@/hooks/useMentionSearch', () => ({
   useMentionSearch: () => ({}),
@@ -28,6 +47,8 @@ let container: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
+  pending.clear();
+  vi.mocked(requestOpenChatModelPicker).mockClear();
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -41,7 +62,8 @@ afterEach(async () => {
 
 const render = (
   focusKey: string,
-  onSend: (payload: ComposerPayload) => boolean = vi.fn(() => true)
+  onSend: (payload: ComposerPayload) => boolean = vi.fn(() => true),
+  props: Partial<ComponentProps<typeof Composer>> = {}
 ) =>
   act(async () => {
     root.render(
@@ -53,6 +75,7 @@ const render = (
         busy={false}
         onSend={onSend}
         onAbort={() => {}}
+        {...props}
       />
     );
   });
@@ -64,6 +87,205 @@ async function type(text: string) {
     editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 }
+
+describe('Composer pending device access', () => {
+  // The plugin/draft target can have a different key from the session requesting access.
+  const focusKey = 'draft-a';
+  const deviceAccessSessionId = 'device-session';
+  const props = { deviceAccessSessionId };
+  const editor = () => container.querySelector<HTMLElement>('[role="combobox"]')!;
+  const send = () =>
+    container.querySelector<HTMLButtonElement>('[data-composer-action-button="send"]')!;
+  const keydown = (key: string, init?: KeyboardEventInit) =>
+    editor().dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code: key, key, ...init })
+    );
+
+  it('locks only the requested session and preserves its existing draft on unlock', async () => {
+    const onSend = vi.fn(() => false);
+    pending.add(focusKey);
+    await render(focusKey, onSend, props);
+    await type('keep this draft');
+    expect(editor().getAttribute('contenteditable')).toBe('true');
+    expect(send().disabled).toBe(false);
+
+    pending.add(deviceAccessSessionId);
+    await render(focusKey, onSend, props);
+    expect(editor().getAttribute('contenteditable')).toBe('false');
+    expect(send().disabled).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Attach image"]')!.disabled
+    ).toBe(true);
+
+    pending.delete(deviceAccessSessionId);
+    await render(focusKey, onSend, props);
+    await act(async () => send().click());
+    expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ text: 'keep this draft' }));
+  });
+
+  it('checks current access for Send, Enter and switch-model before React rerenders', async () => {
+    const onSend = vi.fn(() => false);
+    await render(focusKey, onSend, props);
+    await type('do not submit yet');
+    const shortcuts = () => {
+      keydown('Enter');
+      keydown('m', { code: 'KeyM', altKey: true });
+    };
+    await act(async () => shortcuts());
+    expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ text: 'do not submit yet' }));
+    expect(requestOpenChatModelPicker).toHaveBeenCalledOnce();
+    onSend.mockClear();
+    vi.mocked(requestOpenChatModelPicker).mockClear();
+    pending.add(deviceAccessSessionId);
+    expect(send().disabled).toBe(false);
+    await act(async () => {
+      send().click();
+      shortcuts();
+    });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(requestOpenChatModelPicker).not.toHaveBeenCalled();
+  });
+
+  it('does not steer the queued message with Enter during the pre-render gap', async () => {
+    const onSteerQueued = vi.fn();
+    await render(focusKey, undefined, { ...props, running: true, queuedCount: 1, onSteerQueued });
+    pending.add(deviceAccessSessionId);
+    await act(async () => {
+      keydown('Enter');
+    });
+    expect(onSteerQueued).not.toHaveBeenCalled();
+    pending.delete(deviceAccessSessionId);
+    await act(async () => {
+      keydown('Enter');
+    });
+    expect(onSteerQueued).toHaveBeenCalledOnce();
+  });
+
+  it('rejects external inserts without changing the draft or images before rerender', async () => {
+    const onSend = vi.fn(() => false);
+    await render(focusKey, onSend, props);
+    await type('original');
+    const candidate = {
+      kind: 'ui-element' as const,
+      id: 'save',
+      label: 'Save',
+      path: '#save',
+      text: 'Save',
+      imageId: 'image-1',
+    };
+    const image = { data: 'YQ==', mimeType: 'image/png' };
+    pending.add(deviceAccessSessionId);
+    await act(async () => {
+      insertComposerText('injected');
+      insertComposerMention({ kind: 'file', id: 'a.ts', relativePath: 'a.ts', label: 'a.ts' });
+      insertComposerImage(image);
+      insertUiElementMention(candidate, image);
+      expect(insertUiElementMentions([{ candidate, image }], focusKey)).toBe(false);
+    });
+    pending.delete(deviceAccessSessionId);
+    await render(focusKey, onSend, props);
+    await act(async () => send().click());
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'original', images: [], mentions: [] })
+    );
+  });
+
+  it('rejects a valid plugin draft edit while pending, without invalidating its revision', async () => {
+    await render(focusKey, undefined, props);
+    const read = handleDraftRequest({ sessionId: focusKey, op: 'readDraft', payload: {} });
+    if (!read.ok) throw new Error(read.error);
+    const { generation, rev } = read.value as { generation: number; rev: number };
+    const insert = () =>
+      handleDraftRequest({
+        sessionId: focusKey,
+        op: 'insertText',
+        payload: { text: 'from plugin', expect: { generation, rev } },
+      });
+    pending.add(deviceAccessSessionId);
+    await act(async () => {
+      expect(insert().ok).toBe(false);
+    });
+    expect(editor().textContent).toBe('');
+    pending.delete(deviceAccessSessionId);
+    await act(async () => {
+      expect(insert().ok).toBe(true);
+    });
+    expect(editor().textContent).toBe('from plugin');
+  });
+
+  it('defers injected draft and initial recipient until resolved, then consumes each once', async () => {
+    const recipient = {
+      kind: 'agent-type',
+      typeKey: 'agent:enso',
+      id: 'agent:enso',
+      label: 'Enso',
+      displayName: 'Enso',
+      description: 'System agent',
+      source: 'system',
+      locked: true,
+      canDisable: false,
+      canEdit: false,
+    } as const;
+    const onSend = vi.fn(() => false);
+    const inject = {
+      ...props,
+      injectedDraft: 'reply later',
+      initialRecipient: recipient,
+      onDraftConsumed: vi.fn(),
+      onInitialRecipientConsumed: vi.fn(),
+    };
+    pending.add(deviceAccessSessionId);
+    await render(focusKey, onSend, inject);
+    expect(editor().textContent).toBe('');
+    expect(container.textContent).not.toContain(recipient.displayName);
+    expect(inject.onDraftConsumed).not.toHaveBeenCalled();
+    expect(inject.onInitialRecipientConsumed).not.toHaveBeenCalled();
+
+    pending.delete(deviceAccessSessionId);
+    await render(focusKey, onSend, inject);
+    await act(async () => send().click());
+    expect(inject.onDraftConsumed).toHaveBeenCalledOnce();
+    expect(inject.onInitialRecipientConsumed).toHaveBeenCalledOnce();
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'reply later', recipient })
+    );
+  });
+
+  it('discards an image whose read completes after access becomes pending', async () => {
+    let finish!: () => void;
+    const readAsDataURL = vi.fn(function (this: FileReader) {
+      finish = () => {
+        Object.defineProperty(this, 'result', { value: 'data:image/png;base64,YQ==' });
+        this.dispatchEvent(new ProgressEvent('load'));
+      };
+    });
+    const reader = vi
+      .spyOn(FileReader.prototype, 'readAsDataURL')
+      .mockImplementation(readAsDataURL);
+    try {
+      const onSend = vi.fn(() => false);
+      await render(focusKey, onSend, props);
+      await type('keep text');
+      const file = new File(['a'], 'a.png', { type: 'image/png' });
+      const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+      Object.defineProperty(input, 'files', { value: [file] });
+      await act(async () => {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      expect(reader).toHaveBeenCalledWith(file);
+      pending.add(deviceAccessSessionId);
+      await act(async () => finish());
+      pending.delete(deviceAccessSessionId);
+      await render(focusKey, onSend, props);
+      await act(async () => send().click());
+      expect(onSend).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'keep text', images: [] })
+      );
+    } finally {
+      reader.mockRestore();
+    }
+  });
+});
 
 describe('Composer draft lifecycle', () => {
   it('appends browser picks after the draft as an ordered batch with their own attachments', async () => {

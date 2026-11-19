@@ -36,6 +36,9 @@ docs/plans/
 # 误配 store-dir 时落在仓库里的 pnpm 缓存
 .pnpm-store/
 
+# 出图产物目录（工作区 .xiaoman/images/<uuid>），属运行期数据不入库
+.xiaoman/
+
 # agent 与调查的 scratch 产物（约定：temp/<工作标识>/），不进版本库也不进门禁
 temp/
 .bce-tool/
@@ -52,3 +55,9 @@ resources/rtk/*/rtk.tmp-*
 # 随包设计引擎由 prepare-design-engine.mjs / CI 预装，不提交安装产物。
 resources/design/engine/node_modules/
 resources/design/engine/.enso-design-engine-stamp.json
+
+# iOS 设备 helper 的 Rust 构建产物（二进制由 tools/install/device-helpers.mjs 预装）
+native/ios-device/target/
+
+# 设计画布的渲染验收快照（设计源文件仍入库）
+*.vetd/.snapshots/

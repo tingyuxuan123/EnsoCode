@@ -23,6 +23,51 @@ vi.mock('electron', () => ({
 const electronAPI = mocks.exposeInMainWorld.mock.calls[0]?.[1] as ElectronAPI;
 const { taskBoard } = electronAPI;
 
+it('exposes the device host port, never a raw process or file API', async () => {
+  const api = electronAPI.devices;
+  expect(typeof api.request).toBe('function');
+  expect(typeof api.onEvent).toBe('function');
+  expect(typeof api.onConnection).toBe('function');
+  expect('perform' in api).toBe(false);
+});
+
+it('round-trips device access decisions on dedicated channels without translating their scope', async () => {
+  const api = electronAPI.devices;
+  const entries = [
+    {
+      kind: 'device_access',
+      id: 'entry',
+      sessionId: 's',
+      deviceId: 'android:emulator-5554',
+      deviceName: 'Android emulator',
+      expiresAt: 120_000,
+      decision: 'session',
+    },
+  ];
+  mocks.invoke.mockClear().mockResolvedValueOnce(entries);
+  expect(await api.listAccess('s')).toBe(entries);
+  await api.answerAccess('s', 'entry', 'session');
+  await api.answerAccess('s', 'entry', 'always');
+  await api.revokeAccess('s', 'android:emulator-5554');
+  await api.allowedAccess();
+  await api.forgetAccess('android:emulator-5554');
+  expect(mocks.invoke.mock.calls).toEqual([
+    [IPC_CHANNELS.DEVICE_ACCESS_LIST, 's'],
+    [IPC_CHANNELS.DEVICE_ACCESS_ANSWER, 's', 'entry', 'session'],
+    [IPC_CHANNELS.DEVICE_ACCESS_ANSWER, 's', 'entry', 'always'],
+    [IPC_CHANNELS.DEVICE_ACCESS_REVOKE, 's', 'android:emulator-5554'],
+    [IPC_CHANNELS.DEVICE_ACCESS_ALLOWED],
+    [IPC_CHANNELS.DEVICE_ACCESS_FORGET, 'android:emulator-5554'],
+  ]);
+  const callback = vi.fn();
+  const off = api.onAccessChanged(callback);
+  const listener = mocks.on.mock.lastCall?.[1];
+  listener({}, entries[0]);
+  expect(callback.mock.calls).toEqual([[entries[0]]]);
+  off();
+  expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.DEVICE_ACCESS_CHANGED, listener);
+});
+
 const event = {
   dispatchId: '66666666-6666-4666-8666-666666666666',
   child: {

@@ -81,7 +81,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x64]
+        include:
+          - arch: arm64
+            rust_target: aarch64-apple-darwin
+          - arch: x64
+            rust_target: x86_64-apple-darwin
     # x64 也在 Apple 芯片上交叉打包：Intel runner 各阶段慢 2–4 倍。
     # 原生依赖全是 N-API 预编译，按目标架构装包即可；after-pack 校验包内 Mach-O 架构。
     runs-on: macos-15
@@ -113,6 +117,16 @@ jobs:
 
       - name: Prepare bundled design engine (Mac ${{ matrix.arch }})
         run: node scripts/prepare-design-engine.mjs
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+
+      - name: Setup Rust target for iOS helper
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Prepare device helpers (Mac ${{ matrix.arch }})
+        run: pnpm fetch:device-helpers
         env:
           npm_config_arch: ${{ matrix.arch }}
 
@@ -239,6 +253,11 @@ jobs:
         env:
           npm_config_arch: x64
 
+      - name: Prepare device helpers (Windows x64)
+        run: pnpm fetch:device-helpers
+        env:
+          npm_config_arch: x64
+
       - name: Build Windows
         run: pnpm exec electron-builder --win --x64 --publish onTag
         env:
@@ -300,6 +319,11 @@ jobs:
 
       - name: Prepare bundled design engine (Linux x64)
         run: node scripts/prepare-design-engine.mjs
+        env:
+          npm_config_arch: x64
+
+      - name: Prepare device helpers (Linux x64)
+        run: pnpm fetch:device-helpers
         env:
           npm_config_arch: x64
 

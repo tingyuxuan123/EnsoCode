@@ -78,6 +78,16 @@ jobs:
         env:
           npm_config_arch: arm64
 
+      - name: Setup Rust target for iOS helper
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Prepare device helpers (Mac arm64)
+        run: pnpm fetch:device-helpers
+        env:
+          npm_config_arch: arm64
+
       - name: Import personal signing certificate
         env:
           LOCAL_SIGNING_CERTIFICATE: ${{ secrets.LOCAL_SIGNING_CERTIFICATE }}

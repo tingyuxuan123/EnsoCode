@@ -21,6 +21,7 @@ import {
   PanelsTopLeft,
   Plus,
   Puzzle,
+  Smartphone,
   SquareTerminal,
   Workflow,
   X,
@@ -39,6 +40,7 @@ import { DesignPanel } from '@/features/design/mounts/DesignPanel';
 import { useOpenDesignWindow } from '@/features/design/mounts/DesignWindowControls';
 import { useDesignCwd } from '@/features/design/mounts/useDesignCwd';
 import { CANVAS_TAB_ID } from '@/features/design/vetta/src/tab-ids';
+import { DevicesPane } from '@/features/devices/devices-pane';
 import { useI18n } from '@/i18n';
 import {
   addSidePanelBrowser,
@@ -48,6 +50,7 @@ import {
   bindSidePanelDock,
   closeSidePanelBrowser,
   disposeConversationResources,
+  revealMobileDevicesPanel,
   selectWorkflowAvailable,
 } from '@/lib/sidePanelDock';
 import { toggleSidePanelExpand } from '@/lib/sidePanelExpand';
@@ -191,6 +194,24 @@ function FilesPanel(props: IDockviewPanelProps<{ conversationId?: string; projec
   const { conversationId, projectId } = props.params;
   if (!conversationId || !projectId) return null;
   return <FilesView conversationId={conversationId} projectId={projectId} />;
+}
+
+/** 移动设备：设备标签 + 实时画面；面板可见且属于当前会话时才挂载（视频流不白跑）。 */
+function MobileDevicesPanel({ api }: IDockviewPanelProps) {
+  const { visible, conversationId } = useContext(PanelContext);
+  const [active, setActive] = useState(api.isVisible && api.isActive);
+  useEffect(() => {
+    const update = () => setActive(api.isVisible && api.isActive);
+    const visibility = api.onDidVisibilityChange(update);
+    const activation = api.onDidActiveChange(update);
+    update();
+    return () => {
+      visibility.dispose();
+      activation.dispose();
+    };
+  }, [api]);
+  if (!visible || !active || !conversationId) return null;
+  return <DevicesPane key={conversationId} conversationId={conversationId} />;
 }
 
 function addBtwPanel(
@@ -409,6 +430,8 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <GitCompare className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'files' ? (
         <FolderOpen className="h-3 w-3 shrink-0" />
+      ) : props.api.id === 'mobile-devices' ? (
+        <Smartphone className="h-3 w-3 shrink-0" />
       ) : props.api.id.startsWith('btw:') ? (
         <MessageCircle className="h-3 w-3 shrink-0" />
       ) : isSubagentPanel(props.api.id) ? (
@@ -431,7 +454,13 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
       ) : (
         <SquareTerminal className="h-3 w-3 shrink-0" />
       )}
-      <span className="max-w-32 truncate">{props.api.id === 'design' ? t('Design') : title}</span>
+      <span className="max-w-32 truncate">
+        {props.api.id === 'design'
+          ? t('Design')
+          : props.api.id === 'mobile-devices'
+            ? t('Mobile devices')
+            : title}
+      </span>
       {props.api.id === 'design' && (
         <DesignPopOutButton
           active={active}
@@ -486,6 +515,7 @@ function NewTabMenu({
   onNewChanges,
   onNewFiles,
   onNewBrowser,
+  onNewMobileDevices,
   onNewBtw,
   onNewWorkflow,
   onNewDesign,
@@ -497,6 +527,7 @@ function NewTabMenu({
   onNewChanges: () => void;
   onNewFiles: () => void;
   onNewBrowser: () => void;
+  onNewMobileDevices: () => void;
   onNewBtw: () => void;
   /** 缺省 = 该项目没开 workflow 工具，不给入口 */
   onNewWorkflow?: () => void;
@@ -537,6 +568,10 @@ function NewTabMenu({
         <MenuItem onClick={onNewBrowser}>
           <Globe className="h-4 w-4" />
           {t('Browser')}
+        </MenuItem>
+        <MenuItem onClick={onNewMobileDevices}>
+          <Smartphone className="h-4 w-4" />
+          {t('Mobile devices')}
         </MenuItem>
         {onNewDesign && (
           <MenuItem onClick={onNewDesign}>
@@ -642,6 +677,9 @@ function SidePanelHeaderActions({
         onNewChanges={() => addChangesPanel(containerApi, conversationId, projectId, t('Changes'))}
         onNewFiles={() => addFilesPanel(containerApi, conversationId, projectId, t('Files'))}
         onNewBrowser={() => addBrowserPanel(containerApi, conversationId, projectId, t('Browser'))}
+        onNewMobileDevices={() =>
+          revealMobileDevicesPanel(containerApi, group ? { referenceGroup: group } : undefined)
+        }
         onNewBtw={() => {
           if (group) {
             const count = containerApi.panels.filter((panel) => panel.id.startsWith('btw:')).length;
@@ -708,6 +746,7 @@ function Watermark(props: IWatermarkPanelProps) {
           onNewBrowser={() =>
             addBrowserPanel(props.containerApi, conversationId, projectId, t('Browser'))
           }
+          onNewMobileDevices={() => revealMobileDevicesPanel(props.containerApi)}
           onNewBtw={() => addBtwPanel(props.containerApi, conversationId, projectId, t('Btw'))}
           onNewWorkflow={
             workflowAvailable
@@ -729,6 +768,7 @@ const DOCK_COMPONENTS = {
   terminal: TerminalPanel,
   changes: ChangesPanel,
   files: FilesPanel,
+  'mobile-devices': MobileDevicesPanel,
   browser: BrowserPanel,
   design: DesignDockPanel,
   btw: BtwPanel,
@@ -817,6 +857,7 @@ function ConversationDock({
       if (
         panel.id === 'changes' ||
         panel.id === 'files' ||
+        panel.id === 'mobile-devices' ||
         panel.id === 'design' ||
         panel.id.startsWith('plugin:')
       )

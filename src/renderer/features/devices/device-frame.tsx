@@ -1,0 +1,333 @@
+// The device around its screen, fitted into the room the pane gives it: Xcode's own frame for a
+// simulator, else a plain one drawn here. The whole device turns with the screen, so the picture
+// inside reads upright.
+
+import type {
+  DeviceFrameButton,
+  DeviceOrientation,
+  DeviceFrame as Frame,
+} from '@shared/device-host';
+import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
+import { DEVICES_KEYS } from './i18n';
+
+type Size = { width: number; height: number };
+type Rect = Size & { x: number; y: number };
+type Body = Rect & { radius: number };
+
+/** Bezel and screen corner of the plain frame, as parts of the screen's shorter side. */
+const PLAIN_BEZEL = 0.045;
+const PLAIN_CORNER = 0.09;
+
+/** What an agent does on the device in its turn: where its latest action landed, from 0 to 1. */
+export interface DeviceAgentActs {
+  /** The agent has the device. */
+  light: boolean;
+  /** Counts the agent's actions. */
+  act: number;
+  /** Where the latest action landed on the screen as it is shown, from 0 to 1. */
+  at: { x: number; y: number } | null;
+}
+
+interface Layout {
+  /** The upright device, in its own units. */
+  width: number;
+  height: number;
+  screen: Rect;
+  radii: [number, number, number, number];
+  /** Clockwise degrees the device is turned on screen. */
+  turn: number;
+  /** The device without the buttons that stick out past it. */
+  body: Body;
+  /** No frame pictures: the body is drawn here. */
+  plain: boolean;
+}
+
+/**
+ * How far the device turns: a simulator's picture stays portrait when it rotates, as Simulator
+ * shows it, while an Android picture already arrives turned.
+ */
+function turnOf(orientation: DeviceOrientation, picture: Size): number {
+  if (picture.width > picture.height) return 0;
+  switch (orientation) {
+    case 'landscape_left':
+      return 90;
+    case 'landscape_right':
+      return -90;
+    case 'portrait_upside_down':
+      return 180;
+    default:
+      return 0;
+  }
+}
+
+function layoutOf(frame: Frame | null, picture: Size, orientation: DeviceOrientation): Layout {
+  const turn = turnOf(orientation, picture);
+  if (frame) {
+    return {
+      width: frame.width,
+      height: frame.height,
+      screen: frame.screen,
+      radii: frame.radii,
+      turn,
+      // A host from before the body leaves the whole frame as the body.
+      body: frame.body ?? {
+        x: 0,
+        y: 0,
+        width: frame.width,
+        height: frame.height,
+        radius: frame.radii[0] + frame.screen.x,
+      },
+      plain: false,
+    };
+  }
+  const short = Math.min(picture.width, picture.height);
+  const bezel = short * PLAIN_BEZEL;
+  const corner = short * PLAIN_CORNER;
+  const width = picture.width + bezel * 2;
+  const height = picture.height + bezel * 2;
+  return {
+    width,
+    height,
+    screen: { x: bezel, y: bezel, ...picture },
+    radii: [corner, corner, corner, corner],
+    turn,
+    body: { x: 0, y: 0, width, height, radius: corner + bezel },
+    plain: true,
+  };
+}
+
+/** A point on the screen as it is shown, from 0 to 1, on the picture the device turns to show it. */
+function onPicture(at: { x: number; y: number }, turn: number): { x: number; y: number } {
+  switch (turn) {
+    case 90:
+      return { x: at.y, y: 1 - at.x };
+    case -90:
+      return { x: 1 - at.y, y: at.x };
+    case 180:
+      return { x: 1 - at.x, y: 1 - at.y };
+    default:
+      return at;
+  }
+}
+
+function dataUrl(png: ArrayBuffer): string {
+  const bytes = new Uint8Array(png);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return `data:image/png;base64,${btoa(binary)}`;
+}
+
+export function DeviceFrame({
+  frame,
+  picture,
+  orientation,
+  room,
+  focused,
+  agent = null,
+  onButton,
+  className,
+  children,
+}: {
+  frame: Frame | null;
+  /** The size of the pictures the device streams. */
+  picture: Size;
+  orientation: DeviceOrientation;
+  room: Size;
+  focused: boolean;
+  /** What an agent does on the device in its turn, marked on it. */
+  agent?: DeviceAgentActs | null;
+  /** A button on the frame went down or up. */
+  onButton?: (name: string, phase: 'down' | 'up') => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const layout = layoutOf(frame, picture, orientation);
+  const sideways = Math.abs(layout.turn) === 90;
+  const shown = sideways
+    ? { width: layout.height, height: layout.width }
+    : { width: layout.width, height: layout.height };
+  const scale = Math.max(0, Math.min(room.width / shown.width, room.height / shown.height));
+  const images = useMemo(
+    () =>
+      frame?.images.map((image) => ({
+        ...image,
+        src: dataUrl(image.png),
+        downSrc: image.button?.down ? dataUrl(image.button.down) : null,
+      })) ?? [],
+    [frame]
+  );
+  const px = (value: number): number => value * scale;
+  const tap = agent?.at ? onPicture(agent.at, layout.turn) : null;
+  const { body } = layout;
+  const place = (rect: Rect) => ({
+    left: px(rect.x),
+    top: px(rect.y),
+    width: px(rect.width),
+    height: px(rect.height),
+  });
+
+  return (
+    <div
+      className={cn('relative shrink-0', className)}
+      style={{ width: Math.floor(px(shown.width)), height: Math.floor(px(shown.height)) }}
+    >
+      <div
+        className="absolute top-1/2 left-1/2"
+        style={{
+          width: px(layout.width),
+          height: px(layout.height),
+          transform: `translate(-50%, -50%) rotate(${layout.turn}deg)`,
+        }}
+      >
+        {layout.plain && (
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-foreground/85 shadow-[0_0_0_var(--hairline,1px)_var(--border)]"
+            style={{ borderRadius: px(body.radius) }}
+          />
+        )}
+        {images.map((image) =>
+          image.button && onButton ? (
+            <FrameButton
+              key={`${image.x}:${image.y}:${image.width}`}
+              button={image.button}
+              src={image.src}
+              downSrc={image.downSrc}
+              style={place(image)}
+              onButton={onButton}
+            />
+          ) : (
+            <img
+              key={`${image.x}:${image.y}:${image.width}`}
+              alt=""
+              aria-hidden
+              draggable={false}
+              src={image.src}
+              className="pointer-events-none absolute select-none"
+              style={place(image)}
+            />
+          )
+        )}
+        <div
+          className={cn('absolute overflow-hidden bg-black', focused && 'ring-2 ring-ring')}
+          style={{
+            ...place(layout.screen),
+            borderRadius: layout.radii.map((radius) => `${px(radius)}px`).join(' '),
+          }}
+        >
+          {children}
+          {tap && agent && agent.act > 0 && (
+            <span
+              key={agent.act}
+              aria-hidden
+              className="pointer-events-none absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/40 ring-2 ring-brand/70 [animation:device-tap_700ms_ease-out_forwards]"
+              style={{ left: `${tap.x * 100}%`, top: `${tap.y * 100}%` }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A button on the frame, named as the guide names it. */
+function buttonLabelKey(name: string): string {
+  switch (name) {
+    case 'volume-up':
+      return DEVICES_KEYS.volumeUp;
+    case 'volume-down':
+      return DEVICES_KEYS.volumeDown;
+    case 'power':
+    case 'side-button':
+      return DEVICES_KEYS.side;
+    case 'action':
+      return DEVICES_KEYS.action;
+    default:
+      return DEVICES_KEYS.otherButton;
+  }
+}
+
+/**
+ * A hardware button on the frame, as Xcode's Simulator has it: it slides out by its rollover
+ * travel under the pointer, shows its pressed picture while held, and is held on the device from
+ * pointer down to up, so a long press works.
+ */
+function FrameButton({
+  button,
+  src,
+  downSrc,
+  style,
+  onButton,
+}: {
+  button: DeviceFrameButton;
+  src: string;
+  downSrc: string | null;
+  style: CSSProperties;
+  onButton: (name: string, phase: 'down' | 'up') => void;
+}) {
+  const { t } = useI18n();
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const held = useRef(false);
+  const latest = useRef(onButton);
+  useEffect(() => {
+    latest.current = onButton;
+  });
+
+  // A button held when the frame goes away must not stay down on the device.
+  useEffect(
+    () => () => {
+      if (held.current) latest.current(button.name, 'up');
+    },
+    [button.name]
+  );
+
+  const release = (): void => {
+    if (!held.current) return;
+    held.current = false;
+    setPressed(false);
+    onButton(button.name, 'up');
+  };
+
+  const out = hovered || pressed;
+  return (
+    <button
+      type="button"
+      aria-label={t(buttonLabelKey(button.name))}
+      aria-pressed={pressed}
+      className="absolute touch-none select-none transition-[translate] duration-100 ease-out"
+      style={{
+        ...style,
+        translate: out ? `${button.hover.x * 100}% ${button.hover.y * 100}%` : undefined,
+      }}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onPointerDown={(event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        held.current = true;
+        setPressed(true);
+        onButton(button.name, 'down');
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+    >
+      <img
+        alt=""
+        aria-hidden
+        draggable={false}
+        src={pressed && downSrc ? downSrc : src}
+        className={cn(
+          'pointer-events-none absolute inset-0 size-full select-none',
+          pressed && !downSrc && 'brightness-125'
+        )}
+      />
+    </button>
+  );
+}

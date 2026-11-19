@@ -24,6 +24,7 @@ const pendingFileOpens = new Map<string, FileTarget>();
 const pendingFilesReveal = new Set<string>();
 type DesignReveal = { conversationId: string; title?: string; width?: number | 'max' };
 const pendingDesignReveal = new Map<string, DesignReveal>();
+const pendingMobileDevices = new Set<string>();
 type PluginViewReveal = { conversationId: string; pluginId: string; viewId: string; title: string };
 const pendingPluginViews = new Map<string, Map<string, PluginViewReveal>>();
 const pendingBrowserReveal: {
@@ -90,6 +91,7 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
   // onReady restores the saved layout synchronously; reveal only after fromJSON completes.
   queueMicrotask(() => {
     if (docks.get(conversationId) !== api) return;
+    if (pendingMobileDevices.delete(conversationId)) addSidePanelMobileDevices(conversationId);
     const design = pendingDesignReveal.get(conversationId);
     const pluginViews = pendingPluginViews.get(conversationId);
     pendingPluginViews.delete(conversationId);
@@ -321,6 +323,27 @@ export function addSidePanelDesign(opts?: Partial<DesignReveal>): void {
   });
 }
 
+export function revealMobileDevicesPanel(
+  api: DockviewApi,
+  group?: Parameters<DockviewApi['addPanel']>[0]['position']
+) {
+  const id = 'mobile-devices';
+  const existing = api.getPanel(id);
+  if (existing) existing.focus();
+  else
+    api.addPanel({ id, component: id, title: 'Mobile devices', ...(group && { position: group }) });
+}
+
+/** A direct entry into the current local Code session, without an intermediate external window. */
+export function addSidePanelMobileDevices(conversationId: string): void {
+  const conversation = useSessionsStore.getState().conversations[conversationId];
+  if (!conversation || conversation.btwParentId) return;
+  useSidePanelStore.getState().ensureOpen(conversationId);
+  const api = docks.get(conversationId);
+  if (api) revealMobileDevicesPanel(api);
+  else pendingMobileDevices.add(conversationId);
+}
+
 export function setSidePanelDesignVisible(conversationId: string, visible: boolean): void {
   if (visible) return; // Availability is not an instruction to steal focus/open.
   const dockId = resolveSidePanelDockConversationId(
@@ -509,6 +532,7 @@ export function closeSidePanelBrowser(conversationId: string, tabId: string): vo
 }
 
 export function disposeConversationResources(conversationId: string): void {
+  pendingMobileDevices.delete(conversationId);
   const api = docks.get(conversationId);
   docks.delete(conversationId);
   // A btw parent may own observers inside another dock. Close only its transient views.
@@ -554,7 +578,7 @@ export function disposeConversationResources(conversationId: string): void {
   if (api) {
     for (const panel of [...api.panels]) {
       if (isSubagentPanel(panel.id)) continue;
-      if (panel.id === 'changes' || panel.id === 'files' || panel.id === 'design') continue;
+      if (['changes', 'files', 'design', 'mobile-devices'].includes(panel.id)) continue;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) continue;
       releaseTerminal(panel.id);
       void window.electronAPI?.terminal?.dispose(panel.id);

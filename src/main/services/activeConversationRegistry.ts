@@ -293,6 +293,18 @@ export class ActiveConversationRegistry {
       if (value.ownerWebContentsId === ownerWebContentsId) this.selectionBindings.delete(id);
   }
 
+  isSelectedLocalRoot(owner: number, id: string): boolean {
+    if (!this.options.isMainWebContents(owner) || this.selectedByWebContents.get(owner) !== id)
+      return false;
+    const c = this.options.authority.conversation(id);
+    if (c?.kind !== 'root' || c.lifecycle === 'ended' || c.bot || c.superAssistant) return false;
+    const project = this.options.authority.project(c.projectId);
+    return (
+      project?.state === 'active' &&
+      (project.kind === undefined || project.kind === 'local' || project.kind === 'scratch')
+    );
+  }
+
   invalidateBindingsForConversation(conversationId: string): void {
     const parentBindingIds = new Set<string>();
     for (const [id, value] of this.parentBindings) {

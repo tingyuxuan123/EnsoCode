@@ -22,11 +22,13 @@ import {
   setDesignPromptAttachment,
   useDesignComposer,
 } from '@/features/design/host/composer';
+import { DeviceRequest } from '@/features/devices/device-request';
 import { useMemberName } from '@/hooks/useMemberName';
 import { toChatMentionCandidates } from '@/hooks/useMentionSearch';
 import { useSpeechStatus } from '@/hooks/useSpeechStatus';
 import { useI18n } from '@/i18n';
 import { startDesktopVoiceSession } from '@/lib/voiceSession';
+import { hasPendingDeviceAccess } from '@/stores/deviceAccess';
 import { useMaterializedProviders, useUsableProviders } from '@/stores/modelDirectory/useProviders';
 import { oauthCredentialContext, useOauthCredentialStore } from '@/stores/oauthCredentials';
 import { useSessionsStore } from '@/stores/sessions';
@@ -463,6 +465,7 @@ export function ChatView() {
               todos={pinnedTodos}
             />
           </MarkdownLinkContext.Provider>
+          <DeviceRequest sessionId={chrome.id} surface="chat" />
           <ApprovalBar
             key={capabilityApprovals[0]?.requestId ?? 'no-capability-approval'}
             approvals={capabilityApprovals}
@@ -531,6 +534,7 @@ export function ChatView() {
             commands={slashCommands}
             running={running}
             busy={busy}
+            deviceAccessSessionId={chrome.id}
             locked={
               (chrome.pendingApprovals ?? []).length > 0 ||
               capabilityApprovals.length > 0 ||
@@ -553,7 +557,10 @@ export function ChatView() {
             injectedDraftAppend={chrome.draftAppend}
             onDraftConsumed={() => useSessionsStore.getState().clearDraft(chrome.id)}
             queuedCount={chrome.queuedMessages?.length ?? 0}
-            onSteerQueued={() => useSessionsStore.getState().steerQueued(chrome.id)}
+            onSteerQueued={() => {
+              if (!hasPendingDeviceAccess(chrome.id))
+                useSessionsStore.getState().steerQueued(chrome.id);
+            }}
             initialRecipient={
               chrome.prefillAgentTypeKey === ENSO_AGENT_TYPE_KEY
                 ? ENSO_PREFILL_CANDIDATE
@@ -673,6 +680,7 @@ export function ChatView() {
             }
             onActivate={activateParent}
             onSend={(payload) => {
+              if (hasPendingDeviceAccess(chrome.id)) return false;
               if (!payload.recipient && !project) return false;
               if (
                 !payload.recipient &&

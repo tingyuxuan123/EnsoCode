@@ -114,6 +114,11 @@ jobs:
         env:
           npm_config_arch: x64
 
+      - name: Prepare device helpers (Windows x64)
+        run: pnpm fetch:device-helpers
+        env:
+          npm_config_arch: x64
+
       - name: Verify Windows design paths
         run: >-
           pnpm exec vitest run src/shared/design/paths.test.ts

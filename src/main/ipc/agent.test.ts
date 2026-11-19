@@ -56,8 +56,25 @@ const mocks = vi.hoisted(() => ({
   isReady: vi.fn(() => true),
   workspaceTreeRunning: vi.fn(() => false),
   sendComputerResult: vi.fn(),
+  sendAgentCommand: vi.fn(() => ({ ok: true })),
   computerInvoke: vi.fn(),
   computerCloseAll: vi.fn(),
+  bindDevice: vi.fn(),
+  deviceCall: vi.fn(),
+  deviceTurnEnded: vi.fn(),
+  deviceHostPost: vi.fn(),
+  deviceHostConnect: vi.fn(),
+  listDeviceAccess: vi.fn(),
+  answerDeviceAccess: vi.fn(),
+  revokeDeviceAccess: vi.fn(),
+  destroyDeviceAccessSession: vi.fn(),
+  listAllowedDeviceAccess: vi.fn(),
+  forgetDeviceAccess: vi.fn(),
+  broadcast: vi.fn(),
+  mobileForAgent: vi.fn(),
+  mobileGrant: vi.fn((): string | null => 'android:test'),
+  mobileRevoke: vi.fn(),
+  mobileClear: vi.fn(),
   compactSession: vi.fn(() => ({ ok: true })),
   sessionFile: vi.fn((): string | undefined => undefined),
   scheduleMemoryDistill: vi.fn(async () => undefined),
@@ -106,6 +123,23 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('../services/deviceHost', () => ({
+  deviceHost: { post: mocks.deviceHostPost, connect: mocks.deviceHostConnect },
+}));
+vi.mock('../services/deviceTools', () => ({
+  bindDeviceToolMain: mocks.bindDevice,
+  deviceToolGateway: { call: mocks.deviceCall, turnEnded: mocks.deviceTurnEnded },
+  listDeviceAccess: mocks.listDeviceAccess,
+  answerDeviceAccess: mocks.answerDeviceAccess,
+  revokeDeviceAccess: mocks.revokeDeviceAccess,
+  destroyDeviceAccessSession: mocks.destroyDeviceAccessSession,
+  listAllowedDeviceAccess: mocks.listAllowedDeviceAccess,
+  forgetDeviceAccess: mocks.forgetDeviceAccess,
+}));
+vi.mock('../windows/createAppWindow', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../windows/createAppWindow')>()),
+  sendToAllWindows: mocks.broadcast,
+}));
 vi.mock('../services/sessionFileCleanup', () => ({
   removeConversationSessionFiles: mocks.cleanupSessionFiles,
 }));
@@ -169,6 +203,7 @@ vi.mock('../services/agentHost', () => ({
   sendBrowserResultToSession: mocks.sendBrowserResult,
   sendDesignResultToSession: mocks.sendDesignResult,
   sendComputerResultToSession: mocks.sendComputerResult,
+  sendAgentCommand: mocks.sendAgentCommand,
   registerPluginSessionBridge: mocks.registerPluginSessionBridge,
   sendPluginInterceptResultToSession: mocks.pluginInterceptResult,
   sendPluginToolResultToSession: mocks.pluginToolResult,
@@ -191,6 +226,14 @@ vi.mock('../services/computerHost', () => ({
     invoke: mocks.computerInvoke,
     close: vi.fn(),
     closeAll: mocks.computerCloseAll,
+  },
+}));
+vi.mock('../services/mobileDevices/host', () => ({
+  mobileDeviceHost: {
+    grant: mocks.mobileGrant,
+    forAgent: mocks.mobileForAgent,
+    revokeSession: mocks.mobileRevoke,
+    clear: mocks.mobileClear,
   },
 }));
 vi.mock('../services/agentDispatchService', async () => {
@@ -275,7 +318,8 @@ vi.mock('./worktree', () => ({
 }));
 
 import { resolveSubagentModelSelection, rewindSession } from '../services/agentHost';
-import { getSourceAuthorityRegistry, registerAgentHandlers } from './agent';
+import { disposeDeviceRequests, getSourceAuthorityRegistry, registerAgentHandlers } from './agent';
+import { registerDeviceHostHandlers } from './deviceHost';
 
 const sender = {
   id: 1,
@@ -1833,6 +1877,345 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
       });
       expect(mocks.computerInvoke).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('device tools bridge', () => {
+  const parent = {
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    generation: '22222222-2222-4222-8222-222222222222',
+  };
+  const child = {
+    ...parent,
+    sessionId: 'child',
+    parent,
+    instanceId: 'i',
+    instanceName: 'n',
+    typeKey: 'agent:scout',
+    profileId: 'p',
+  };
+  const emit = (event: Record<string, unknown>) =>
+    mocks.setAgentEventListener.mock.calls.at(-1)![0]({ seq: 1, ...event });
+
+  beforeEach(() => {
+    mocks.handlers.clear();
+    registerAgentHandlers();
+    mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: [] });
+    mocks.currentIdentity.mockReturnValue(parent);
+    mocks.isAlive.mockReturnValue(true);
+    mocks.isMainWebContents.mockReturnValue(true);
+    mocks.isReady.mockReturnValue(true);
+    mocks.deviceCall.mockReset().mockResolvedValue({ result: {} });
+    mocks.sendAgentCommand.mockClear();
+    mocks.destroyDeviceAccessSession.mockClear();
+    const authority = getSourceAuthorityRegistry()!;
+    vi.spyOn(authority, 'conversation').mockImplementation((id) =>
+      id === parent.sessionId
+        ? {
+            conversationId: id,
+            projectId: 'local',
+            kind: 'root',
+            lifecycle: 'ready',
+            version: 1,
+          }
+        : undefined
+    );
+    vi.spyOn(authority, 'project').mockReturnValue({
+      projectId: 'local',
+      state: 'active',
+      version: 1,
+      canonicalPath: '/workspace',
+    });
+  });
+
+  const mainFrame = {};
+  const deviceEvent = { sender: { ...sender, mainFrame }, senderFrame: mainFrame };
+  const invoke = (channel: string, ...args: unknown[]) =>
+    mocks.handlers.get(channel)!(deviceEvent, ...args);
+  it('only grants the device port and access IPC to the main workbench top frame', () => {
+    registerDeviceHostHandlers();
+    const connect = mocks.handlers.get('device-host:connect')!;
+    connect(deviceEvent);
+    expect(mocks.deviceHostConnect).toHaveBeenCalledWith(deviceEvent.sender);
+    const protectedOperations = [
+      mocks.deviceHostConnect,
+      mocks.listDeviceAccess,
+      mocks.listAllowedDeviceAccess,
+      mocks.answerDeviceAccess,
+      mocks.revokeDeviceAccess,
+      mocks.forgetDeviceAccess,
+    ];
+    for (const spy of protectedOperations) spy.mockClear();
+    mocks.isMainWebContents.mockImplementation((id?: number) => id === sender.id);
+    for (const bad of [
+      { ...deviceEvent, senderFrame: {} },
+      { ...deviceEvent, senderFrame: null },
+      { ...deviceEvent, sender: { ...deviceEvent.sender, id: 2 } },
+    ]) {
+      connect(bad);
+      expect(mocks.handlers.get(IPC_CHANNELS.DEVICE_ACCESS_LIST)!(bad, parent.sessionId)).toEqual(
+        []
+      );
+      expect(mocks.handlers.get(IPC_CHANNELS.DEVICE_ACCESS_ALLOWED)!(bad)).toEqual([]);
+      mocks.handlers.get(IPC_CHANNELS.DEVICE_ACCESS_ANSWER)!(
+        bad,
+        parent.sessionId,
+        'entry',
+        'always'
+      );
+      mocks.handlers.get(IPC_CHANNELS.DEVICE_ACCESS_REVOKE)!(bad, parent.sessionId, 'phone');
+      mocks.handlers.get(IPC_CHANNELS.DEVICE_ACCESS_FORGET)!(bad, 'phone');
+    }
+    for (const spy of protectedOperations) expect(spy).not.toHaveBeenCalled();
+  });
+  const request = (requestId: string) =>
+    emit({
+      type: 'device-tool-invoke',
+      identity: parent,
+      requestId,
+      toolName: 'device_snapshot',
+      args: {},
+    });
+  it('publishes only the device entry and keeps generic approval in the worker', () => {
+    const entry = {
+      kind: 'device_access',
+      id: 'entry',
+      sessionId: parent.sessionId,
+      deviceId: 'phone',
+      deviceName: 'Phone',
+      expiresAt: 100,
+      decision: null,
+    };
+    mocks.broadcast.mockClear();
+    mocks.bindDevice.mock.lastCall![0].changed(entry);
+    expect(mocks.broadcast.mock.calls).toEqual([[IPC_CHANNELS.DEVICE_ACCESS_CHANGED, entry]]);
+    invoke(IPC_CHANNELS.AGENT_APPROVAL_RESPOND, parent.sessionId, 'entry', 'allowSession');
+    expect(mocks.respondApproval).toHaveBeenCalledWith(parent, 'entry', 'allowSession');
+  });
+
+  it('routes typed access operations; malformed or untrusted input never reaches the store', () => {
+    const {
+      DEVICE_ACCESS_LIST: list,
+      DEVICE_ACCESS_ANSWER: answer,
+      DEVICE_ACCESS_REVOKE: revoke,
+      DEVICE_ACCESS_ALLOWED: allowed,
+      DEVICE_ACCESS_FORGET: forget,
+    } = IPC_CHANNELS;
+    const id = parent.sessionId;
+    const entries = [{ id: 'entry', sessionId: id }];
+    mocks.listDeviceAccess.mockReturnValue(entries);
+    mocks.listAllowedDeviceAccess.mockReturnValue(['phone']);
+    mocks.answerDeviceAccess.mockClear();
+    mocks.revokeDeviceAccess.mockClear();
+    mocks.forgetDeviceAccess.mockClear();
+    expect(invoke(list, id)).toEqual(entries);
+    expect(invoke(answer, id, 'entry', 'session')).toBeUndefined();
+    expect(mocks.answerDeviceAccess).toHaveBeenCalledWith(id, 'entry', 'session');
+    expect(invoke(revoke, id, 'phone')).toBeUndefined();
+    expect(mocks.revokeDeviceAccess).toHaveBeenCalledWith(id, 'phone');
+    expect(invoke(allowed)).toEqual(['phone']);
+    expect(invoke(forget, 'phone')).toBeUndefined();
+    expect(mocks.forgetDeviceAccess).toHaveBeenCalledWith('phone');
+    invoke(answer, id, 'entry', 'timeout');
+    invoke(answer, {}, 'entry', 'always');
+    invoke(answer, 'missing', 'entry', 'always');
+    invoke(revoke, id, {});
+    invoke(forget, {});
+    mocks.isMainWebContents.mockReturnValue(false);
+    expect(invoke(list, id)).toEqual([]);
+    expect(invoke(allowed)).toEqual([]);
+    invoke(answer, id, 'entry', 'always');
+    invoke(revoke, id, 'phone');
+    invoke(forget, 'phone');
+    expect(mocks.answerDeviceAccess).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeDeviceAccess).toHaveBeenCalledTimes(1);
+    expect(mocks.forgetDeviceAccess).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['abort', 'release', 'worker-exited', 'stop', 'dispose', 'replace', 'parent-ended'])(
+    'cancels a pending ask at %s without dropping the session grant',
+    async (phase) => {
+      const pending = Promise.withResolvers<unknown>();
+      mocks.deviceCall.mockReturnValueOnce(pending.promise);
+      request('pending');
+      const { signal } = mocks.deviceCall.mock.lastCall![0];
+      emit({
+        type: 'device-tool-cancel',
+        identity: { ...parent, generation: 'old' },
+        requestId: 'pending',
+      });
+      expect(signal.aborted).toBe(false);
+      if (phase === 'worker-exited') emit({ type: phase });
+      else if (phase === 'parent-ended')
+        emit({ type: phase, identity: parent, reason: 'released' });
+      else if (phase === 'dispose') disposeDeviceRequests();
+      else if (phase === 'replace')
+        mocks.browserCancellationListener?.({ ...parent, generation: 'new' }, 'resume');
+      else if (phase === 'stop') mocks.browserCancellationListener?.();
+      else mocks.browserCancellationListener?.(parent, phase);
+      expect(signal.aborted).toBe(true);
+      expect(mocks.destroyDeviceAccessSession).not.toHaveBeenCalled();
+      pending.reject(new Error('late'));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(mocks.sendAgentCommand).not.toHaveBeenCalledWith(
+        expect.objectContaining({ requestId: 'pending' })
+      );
+    }
+  );
+
+  it('isolates identical worker request IDs across sessions, including cancellation', async () => {
+    const other = { ...parent, sessionId: 'other-root' };
+    const authority = getSourceAuthorityRegistry()!;
+    const local = authority.conversation(parent.sessionId)!;
+    vi.mocked(authority.conversation).mockImplementation((id) => ({
+      ...local,
+      conversationId: id,
+    }));
+    mocks.currentIdentity.mockImplementation((id) => (id === other.sessionId ? other : parent));
+    const first = Promise.withResolvers<unknown>();
+    const second = Promise.withResolvers<unknown>();
+    mocks.deviceCall.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    request('shared-id');
+    emit({
+      type: 'device-tool-invoke',
+      identity: other,
+      requestId: 'shared-id',
+      toolName: 'device_snapshot',
+      args: {},
+    });
+    expect(mocks.deviceCall.mock.calls).toHaveLength(2);
+    emit({ type: 'device-tool-cancel', identity: parent, requestId: 'shared-id' });
+    expect(mocks.deviceCall.mock.calls[0]![0].signal.aborted).toBe(true);
+    expect(mocks.deviceCall.mock.calls[1]![0].signal.aborted).toBe(false);
+    first.resolve({ result: {} });
+    second.resolve({ result: {} });
+    await vi.waitFor(() =>
+      expect(mocks.sendAgentCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ identity: other, ok: true })
+      )
+    );
+    expect(mocks.sendAgentCommand).not.toHaveBeenCalledWith(
+      expect.objectContaining({ identity: parent })
+    );
+  });
+
+  it('forwards a used device turn ending once, never for stale or unrelated turns', async () => {
+    mocks.deviceHostPost.mockClear();
+    const ended = (identity: typeof parent) => emit({ type: 'turn-completed', identity });
+    ended(parent);
+    request('device-use');
+    await vi.waitFor(() => expect(mocks.sendAgentCommand).toHaveBeenCalled());
+    ended({ ...parent, generation: 'old' });
+    expect(mocks.deviceHostPost).not.toHaveBeenCalled();
+    ended(parent);
+    ended(parent);
+    expect(mocks.deviceHostPost.mock.calls).toEqual([
+      [{ type: 'device-host:turn-ended', sessionId: parent.sessionId }],
+    ]);
+    expect(mocks.deviceTurnEnded).toHaveBeenCalledWith(parent.sessionId);
+    expect(mocks.destroyDeviceAccessSession).not.toHaveBeenCalled();
+  });
+
+  it('never admits a stale generation or a child claiming the actual root ID', () => {
+    const authority = mocks.bindDevice.mock.lastCall![0].authority;
+    expect(authority({ ...parent, generation: 'older' })).toBeNull();
+    expect(authority({ ...child, sessionId: parent.sessionId })).toBeNull();
+    expect(authority(parent)).toMatchObject({
+      sessionId: parent.sessionId,
+      projectPath: '/workspace',
+    });
+    mocks.browserCancellationListener?.(parent, 'release');
+    expect(authority(parent)).toBeNull();
+    invoke(IPC_CHANNELS.DEVICE_ACCESS_LIST, parent.sessionId);
+    expect(mocks.listDeviceAccess).toHaveBeenCalledWith(parent.sessionId);
+    mocks.answerDeviceAccess.mockClear();
+    invoke(IPC_CHANNELS.DEVICE_ACCESS_ANSWER, parent.sessionId, 'old-entry', 'always');
+    expect(mocks.answerDeviceAccess).not.toHaveBeenCalled();
+  });
+
+  it('destroys grants only on accepted conversation removal', () => {
+    const authority = getSourceAuthorityRegistry()!;
+    const value = authority.conversation(parent.sessionId)!;
+    const remove = vi.spyOn(authority, 'removeConversation');
+    const payload = { requestId: 'remove', conversationId: parent.sessionId, version: 1 };
+    remove.mockReturnValueOnce({ accepted: false, error: 'stale' });
+    invoke(IPC_CHANNELS.SOURCE_CONVERSATION_REMOVE, payload);
+    expect(mocks.destroyDeviceAccessSession).not.toHaveBeenCalled();
+    remove.mockReturnValueOnce({ accepted: true, value });
+    invoke(IPC_CHANNELS.SOURCE_CONVERSATION_REMOVE, payload);
+    expect(mocks.destroyDeviceAccessSession).toHaveBeenCalledWith(parent.sessionId);
+    expect(mocks.deviceHostPost).toHaveBeenCalledWith({
+      type: 'device-host:sessions-ended',
+      sessionIds: [parent.sessionId],
+    });
+  });
+
+  it("forwards the model call to the device gateway with Main's own session identity", async () => {
+    emit({
+      type: 'device-tool-invoke',
+      identity: parent,
+      requestId: 'd1',
+      toolName: 'device_snapshot',
+      args: {},
+    });
+    await vi.waitFor(() =>
+      expect(mocks.sendAgentCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'device-tool-result', requestId: 'd1' })
+      )
+    );
+  });
+
+  it('refuses a child identity even when the parent session is live', async () => {
+    emit({
+      type: 'device-tool-invoke',
+      identity: child,
+      requestId: 'd2',
+      toolName: 'device_snapshot',
+      args: {},
+    });
+    await vi.waitFor(() =>
+      expect(mocks.sendAgentCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'device-tool-result', requestId: 'd2', ok: false })
+      )
+    );
+  });
+
+  it('answers a repeated requestId once and cancels an abandoned one', async () => {
+    emit({
+      type: 'device-tool-invoke',
+      identity: parent,
+      requestId: 'dup',
+      toolName: 'device_snapshot',
+      args: {},
+    });
+    emit({
+      type: 'device-tool-invoke',
+      identity: parent,
+      requestId: 'dup',
+      toolName: 'device_snapshot',
+      args: {},
+    });
+    emit({ type: 'device-tool-cancel', identity: parent, requestId: 'dup' });
+    await vi.waitFor(() =>
+      expect(mocks.sendAgentCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'device-tool-result', requestId: 'dup' })
+      )
+    );
+  });
+
+  it('rejects a malformed tool name instead of driving a device', async () => {
+    emit({
+      type: 'device-tool-invoke',
+      identity: parent,
+      requestId: 'd3',
+      toolName: 'rm -rf /',
+      args: {},
+    });
+    await vi.waitFor(() =>
+      expect(mocks.sendAgentCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'device-tool-result', requestId: 'd3', ok: false })
+      )
+    );
   });
 });
 

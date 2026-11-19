@@ -417,7 +417,7 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
     );
 
     const insertNodeAtCaret = useCallback(
-      (build: () => Node, replaceToken: boolean) => {
+      (build: () => Node, replaceToken: boolean, appendSpace = true) => {
         const root = rootRef.current;
         if (!root) return;
         root.focus();
@@ -439,9 +439,13 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
         }
         const node = build();
         range.insertNode(node);
-        const space = document.createTextNode('\u00a0');
-        node.parentNode?.insertBefore(space, node.nextSibling);
-        placeCaretAfter(space);
+        if (appendSpace) {
+          const space = document.createTextNode('\u00a0');
+          node.parentNode?.insertBefore(space, node.nextSibling);
+          placeCaretAfter(space);
+        } else {
+          placeCaretAfter(node);
+        }
         emitState();
       },
       [activeTokenRange, emitState]
@@ -517,11 +521,15 @@ export const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>
           );
         },
         insertText: (text, literal = false) => {
-          insertNodeAtCaret(() => {
-            const node = document.createTextNode(text);
-            if (literal) literalNodes.current.add(node);
-            return node;
-          }, false);
+          insertNodeAtCaret(
+            () => {
+              const node = document.createTextNode(text);
+              if (literal) literalNodes.current.add(node);
+              return node;
+            },
+            false,
+            false
+          );
         },
         getMentionAnchorRect: () => {
           const token = activeTokenRange('@');

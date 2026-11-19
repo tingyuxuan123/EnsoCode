@@ -1,7 +1,10 @@
+import { DEVICE_TOOLS_BUILTIN_ID } from '@shared/device-tools';
 import type { OccupancyTool } from '@shared/occupancy';
 import { EMPTY_PLAN_STATE } from '@shared/planMode';
 import { BUILTIN_AGENT_TYPES } from '@shared/types';
 import type { AgentTypeSpawnConfig, SubagentModelOption } from '@shared/types/agent';
+import { DeviceToolInvoker } from '../agent-host/devices/invoker';
+import { createDeviceTools } from '../agent-host/devices/pi';
 import { AskManager, createAskTool } from './ask';
 import { createTaskTools } from './backgroundTasks';
 import { codemodeToolSnapshot } from './codemode';
@@ -83,5 +86,8 @@ export function snapshotBuiltinOccupancyTools(input?: {
     } as never).map(fields),
     isolated_sandbox: [fields(codemodeToolSnapshot())],
     computer: [fields(createComputerTool(new ComputerInvoker(noopIdentity, () => {})))],
+    [DEVICE_TOOLS_BUILTIN_ID]: createDeviceTools((toolName, args, signal) =>
+      new DeviceToolInvoker(() => {}).invoke(toolName, args, signal)
+    ).map(fields),
   };
 }

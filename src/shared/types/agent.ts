@@ -111,6 +111,7 @@ import {
   type ModelThinkingLevelOverride,
 } from './llm';
 import { type AgentDispatchTask, parseAgentDispatchTask } from './mentions';
+
 import {
   type PluginCommandSpawn,
   type PluginHookSpawn,
@@ -1409,6 +1410,14 @@ export type AgentCommand =
       error?: string;
     }
   | {
+      type: 'device-tool-result';
+      identity: SessionIdentity | ChildSessionIdentity;
+      requestId: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    }
+  | {
       type: 'rewind';
       identity: SessionIdentity;
       entryId?: string;
@@ -1894,6 +1903,8 @@ export type RendererAgentEvent =
               | 'agent-control-cancel'
               | 'computer-invoke'
               | 'computer-cancel'
+              | 'device-tool-invoke'
+              | 'device-tool-cancel'
               | 'browser-invoke'
               | 'browser-cancel'
               | 'design-invoke'
@@ -2227,6 +2238,24 @@ export type AgentWorkerEvent =
     }
   | {
       type: 'computer-cancel';
+      identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      requestId: string;
+    }
+  | {
+      /**
+       * 移动设备工具调用：worker 只上抛工具名与模型参数，会话身份、设备授权与项目目录
+       * 全由 Main 依据权威记录决定，模型无法自报 sessionId。
+       */
+      type: 'device-tool-invoke';
+      identity: SessionIdentity | ChildSessionIdentity;
+      seq: number;
+      requestId: string;
+      toolName: string;
+      args: unknown;
+    }
+  | {
+      type: 'device-tool-cancel';
       identity: SessionIdentity | ChildSessionIdentity;
       seq: number;
       requestId: string;
@@ -4133,6 +4162,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'memory-result':
     case 'delegation-result':
     case 'computer-result':
+    case 'device-tool-result':
     case 'plugin-intercept-result':
     case 'plugin-tool-result': {
       if (
@@ -4658,6 +4688,22 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'computer-cancel':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
+        isNonEmptyString(value.requestId)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'device-tool-invoke':
+      // The worker never names a session, an agent or a folder: only the tool and its arguments.
+      // Main derives the request from these same arguments and re-checks it.
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'toolName', 'args']) &&
+        isNonEmptyString(value.requestId) &&
+        typeof value.toolName === 'string' &&
+        /^device_[a-z_]{1,40}$/.test(value.toolName) &&
+        isRecord(value.args) &&
+        boundedJson(value.args, 16_384)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
+    case 'device-tool-cancel':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
         isNonEmptyString(value.requestId)
         ? (value as unknown as AgentWorkerEvent)

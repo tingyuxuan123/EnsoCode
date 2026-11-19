@@ -5,6 +5,7 @@ import {
   type InlineExtension,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import { DEVICE_TOOL_NAMES } from '@shared/device-agent';
 import type { McpServerSpawnConfig } from '@shared/types/agent';
 import { looksLikeApplyPatchDocument } from './applyPatch/parser';
 import { mcpNamespaceName, oneLine } from './mcpNames';
@@ -45,6 +46,7 @@ export const CODEMODE_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set([
   'task_output',
   'task_stop',
   'computer',
+  ...DEVICE_TOOL_NAMES,
   'send_image',
   // Paid image calls need a direct tool result for the durable chat preview.
   'generate_image',

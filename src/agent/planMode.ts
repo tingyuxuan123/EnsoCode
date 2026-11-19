@@ -1,5 +1,6 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { normalizeComputerParams } from '@shared/computer/params';
+import { DEVICE_TOOL_NAMES } from '@shared/device-agent';
 import {
   activePlanNote,
   foldPlanState,
@@ -182,6 +183,7 @@ function executionDone(entries: readonly unknown[], planId: string): boolean {
 }
 
 const DENIED_TOOLS = new Set([
+  ...DEVICE_TOOL_NAMES,
   'edit',
   'write',
   'apply_patch',

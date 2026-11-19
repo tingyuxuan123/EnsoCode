@@ -1265,6 +1265,15 @@ export const CAPABILITY_CATALOG = {
     reason: 'CodeKiln never receives host-desktop computer tools.',
     suggestedAction: 'Ask the coding agent to use the computer tool.',
   }),
+  'coding-tools.mobile-devices': unavailable('coding-tools.mobile-devices', {
+    description:
+      'List, open and drive the mobile devices on this host: snapshot, tap, fill, type, scroll, swipe, buttons, rotation, install, launch, logs, appearance, location and permissions.',
+    risk: 'dangerous',
+    targetContext: 'origin-conversation',
+    reason:
+      'Mobile devices stay on this host: only the current local root conversation may drive them, the user allows each device, and subagents, coworkers and remote sessions never inherit it.',
+    suggestedAction: 'Answer the device access request in the conversation or the device pane.',
+  }),
   'coding-tools.plan': unavailable('coding-tools.plan', {
     description: 'Research read-only and submit an implementation plan for user approval.',
     risk: 'read',

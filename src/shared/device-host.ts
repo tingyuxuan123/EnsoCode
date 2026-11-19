@@ -1,0 +1,291 @@
+// The contract between the device host and its clients: a window's renderer, a paired device's
+// channel through the remote host, and the agent host running agents' device tools.
+
+import type { ActiveControl } from './control';
+import type { Platform } from './platform';
+import type { PortConnectionState } from './port-rpc';
+
+export type DevicePlatform = 'ios' | 'android';
+export type DeviceKind = 'simulator' | 'emulator' | 'physical';
+
+/**
+ * `ios-sim:<udid>`, `ios:<udid>`, `android:<serial>` or `avd:<name>` for an emulator that is not
+ * running; a running emulator is listed by its serial.
+ */
+export type DeviceId = string;
+
+export type DeviceState = 'booted' | 'booting' | 'shutdown' | 'connected' | 'unavailable';
+
+/** A step the host or the device still needs before the device can be shown or driven. */
+export type DeviceProblem =
+  | 'xcode-missing'
+  | 'apple-silicon-required'
+  | 'android-sdk-missing'
+  | 'developer-mode-off'
+  | 'not-paired'
+  | 'ddi-not-mounted'
+  | 'usb-required'
+  | 'ios-27-for-input'
+  | 'runner-unsigned'
+  | 'runner-untrusted'
+  | 'ui-automation-off'
+  | 'usb-debugging-unauthorized'
+  | 'offline';
+
+/** The turn that uses a device, from its agent's first call on it until the turn ends. */
+export interface DeviceOperator {
+  /** The session whose turn uses the device. */
+  sessionId: string | null;
+  agentName: string | null;
+  /** The user took over; the agent's calls wait until they hand it back. */
+  user: boolean;
+  /** Who uses it now, by the rules every surface an agent and the user share follows. */
+  control: ActiveControl;
+}
+
+export interface DeviceInfo {
+  id: DeviceId;
+  platform: DevicePlatform;
+  kind: DeviceKind;
+  name: string;
+  /** Such as "26.5" or "15"; null when unknown. */
+  osVersion: string | null;
+  model: string | null;
+  state: DeviceState;
+  connection: 'usb' | 'network' | null;
+  /** The session that holds the device, or null when none does. */
+  sessionId: string | null;
+  operator: DeviceOperator | null;
+  problems: DeviceProblem[];
+  /** Whether the user can tap and type on its stream now. */
+  input: boolean;
+  /** The host booted this simulator or emulator, so it shuts down when its session lets it go. */
+  bootedByHost: boolean;
+}
+
+export type DeviceAppearance = 'light' | 'dark';
+
+/** What a pane keeps of a device: a screenshot, or a recording as the client could encode it. */
+export const DEVICE_CAPTURE_KINDS = ['png', 'mp4', 'webm'] as const;
+export type DeviceCaptureKind = (typeof DEVICE_CAPTURE_KINDS)[number];
+
+/** How many devices one session holds at a time. */
+export const SESSION_DEVICE_LIMIT = 4;
+
+export interface DeviceEnvironment {
+  platform: Platform;
+  /** iOS simulators and physical devices can be used: macOS with Xcode. */
+  ios: boolean;
+  /** iOS simulators can stream: Apple silicon as well. */
+  iosStream: boolean;
+  android: boolean;
+  problems: DeviceProblem[];
+}
+
+export type DeviceOrientation =
+  | 'portrait'
+  | 'portrait_upside_down'
+  | 'landscape_left'
+  | 'landscape_right';
+
+export interface DeviceScreen {
+  width: number;
+  height: number;
+  orientation: DeviceOrientation;
+  /** WebCodecs' codec string, such as `avc1.640033` or `hvc1.1.6.L153.B0`. */
+  codec: string;
+}
+
+export type DeviceButton =
+  | 'home'
+  | 'lock'
+  | 'volumeUp'
+  | 'volumeDown'
+  | 'back'
+  | 'recents'
+  | 'rotate';
+
+export type TouchPhase = 'begin' | 'move' | 'end';
+
+/** What the user does on the stream. Coordinates are 0 to 1 within the frame as it is shown. */
+export type DeviceInput =
+  | { type: 'touch'; phase: TouchPhase; x: number; y: number; finger?: number }
+  | { type: 'scroll'; x: number; y: number; dx: number; dy: number }
+  /** A key by its `KeyboardEvent.code`, for keys that are not text, or text on a hardware keyboard. */
+  | { type: 'key'; phase: 'down' | 'up'; code: string }
+  /** Text the device's keyboard cannot take a key at a time, such as Chinese, or pasted text. */
+  | { type: 'text'; text: string }
+  | { type: 'button'; button: DeviceButton }
+  /** A button drawn on the device's frame, by its name there, held from down to up. */
+  | { type: 'frameButton'; name: string; phase: 'down' | 'up' };
+
+export type FrameKind = 'description' | 'key' | 'delta' | 'seed';
+
+/** A rectangle in a device frame's own points. */
+export interface DeviceFrameRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A hardware button on the frame that the pointer presses, as on Xcode's Simulator. */
+export interface DeviceFrameButton {
+  /** The name a `frameButton` input gives. */
+  name: string;
+  /** The picture while the button is held, or null to brighten the usual one. */
+  down: ArrayBuffer | null;
+  /** How far the button slides out under the pointer, in parts of its own width and height. */
+  hover: { x: number; y: number };
+}
+
+/**
+ * The device's own frame, as Xcode draws its simulator, in portrait: pictures placed back to
+ * front in the frame's points, with the screen over them. Clients turn it with the screen.
+ * A picture with `button` is a button a client may let the pointer press; one that ignores it
+ * draws the button still.
+ */
+export interface DeviceFrame {
+  width: number;
+  height: number;
+  screen: DeviceFrameRect;
+  /** The screen's corner radii in points: top left, top right, bottom right, bottom left. */
+  radii: [number, number, number, number];
+  /**
+   * The device's body without the room its buttons stick out into, and its corner radius in
+   * points. An older host sends none.
+   */
+  body?: DeviceFrameRect & { radius: number };
+  images: Array<DeviceFrameRect & { png: ArrayBuffer; button?: DeviceFrameButton }>;
+}
+
+export interface DeviceContract {
+  'devices.environment': { params: Record<string, never>; result: DeviceEnvironment };
+  'devices.list': { params: { sessionId?: string }; result: DeviceInfo[] };
+  /**
+   * Boots the device if it is a simulator or emulator, and gives it to the session, which holds
+   * at most `SESSION_DEVICE_LIMIT`.
+   */
+  'devices.open': { params: { deviceId: DeviceId; sessionId: string }; result: DeviceInfo };
+  /** Takes a device another session holds for this one, as it is: running, and still booted. */
+  'devices.move': { params: { deviceId: DeviceId; sessionId: string }; result: DeviceInfo };
+  /**
+   * Takes the device from the session; `shutdown` also shuts a simulator or emulator down. One
+   * the host booted itself shuts down either way.
+   */
+  'devices.close': {
+    params: { deviceId: DeviceId; sessionId: string; shutdown?: boolean };
+    result: undefined;
+  };
+  /**
+   * Shuts a simulator or emulator down while its session keeps it, so its tab stays to start it
+   * again. A running emulator the host did not start is let go, since only its serial is known.
+   */
+  'devices.shutdown': { params: { deviceId: DeviceId; sessionId: string }; result: undefined };
+  /**
+   * Starts sending the device's frames to this port, starting at a keyframe. This and every
+   * request below are served only for the session that holds the device.
+   */
+  'devices.watch': {
+    params: { deviceId: DeviceId; sessionId: string };
+    result: { screen: DeviceScreen | null };
+  };
+  'devices.unwatch': { params: { deviceId: DeviceId; sessionId: string }; result: undefined };
+  /** The client has decoded frames up to `seq`; the host sends more only as these arrive. */
+  'devices.ack': {
+    params: { deviceId: DeviceId; sessionId: string; seq: number };
+    result: undefined;
+  };
+  'devices.input': {
+    params: { deviceId: DeviceId; sessionId: string; input: DeviceInput };
+    result: undefined;
+  };
+  /**
+   * The user's input while a turn uses the device is held back, scrolling aside; only this gives
+   * them the device, until they hand it back or the turn ends. The agent's calls wait meanwhile.
+   */
+  'devices.takeOver': { params: { deviceId: DeviceId; sessionId: string }; result: undefined };
+  /** The same as `devices.takeOver`, under the name clients built before it still send. */
+  'devices.stopAgent': { params: { deviceId: DeviceId; sessionId: string }; result: undefined };
+  /** Hands the device back to the agent's turn, whose waiting calls go on. */
+  'devices.handBack': { params: { deviceId: DeviceId; sessionId: string }; result: undefined };
+  'devices.screenshot': {
+    params: { deviceId: DeviceId; sessionId: string };
+    result: { png: ArrayBuffer };
+  };
+  /** Light or dark, or null for a device whose appearance the host cannot read or set. */
+  'devices.appearance': {
+    params: { deviceId: DeviceId; sessionId: string };
+    result: { appearance: DeviceAppearance | null };
+  };
+  'devices.setAppearance': {
+    params: { deviceId: DeviceId; sessionId: string; appearance: DeviceAppearance };
+    result: undefined;
+  };
+  /** The frame to draw the screen in, or null where the client draws a plain one. */
+  'devices.frame': {
+    params: { deviceId: DeviceId; sessionId: string };
+    result: { frame: DeviceFrame | null };
+  };
+}
+
+export type DeviceMethod = keyof DeviceContract;
+export type DeviceParams<M extends DeviceMethod> = DeviceContract[M]['params'];
+export type DeviceResult<M extends DeviceMethod> = DeviceContract[M]['result'];
+
+export const DEVICE_METHODS = [
+  'devices.environment',
+  'devices.list',
+  'devices.open',
+  'devices.move',
+  'devices.close',
+  'devices.shutdown',
+  'devices.watch',
+  'devices.unwatch',
+  'devices.ack',
+  'devices.input',
+  'devices.takeOver',
+  'devices.stopAgent',
+  'devices.handBack',
+  'devices.screenshot',
+  'devices.appearance',
+  'devices.setAppearance',
+  'devices.frame',
+] as const satisfies readonly DeviceMethod[];
+
+export type DeviceEvent =
+  | { type: 'devices.changed'; devices: DeviceInfo[] }
+  | { type: 'device.screen'; deviceId: DeviceId; screen: DeviceScreen }
+  /** `data` is an avcC or hvcC record for a description, a JPEG for a seed, else an access unit. */
+  | { type: 'device.frame'; deviceId: DeviceId; seq: number; kind: FrameKind; data: ArrayBuffer }
+  | {
+      type: 'device.stream';
+      deviceId: DeviceId;
+      state: 'starting' | 'live' | 'stopped' | 'error';
+      error?: string;
+    }
+  /** To a paired device: its port to the device host was lost, so it watches its devices again. */
+  | { type: 'devices.restarted' }
+  /** A session's agent opened a device, so a window shows it if that session's panel is free. */
+  | { type: 'device.opened'; deviceId: DeviceId; sessionId: string }
+  /**
+   * To the device's watchers: the agent acted on it, at a point of its screen as it is shown, from
+   * 0 to 1, or on it as a whole.
+   */
+  | { type: 'device.act'; deviceId: DeviceId; at: { x: number; y: number } | null };
+
+export interface DevicesApi {
+  request<M extends DeviceMethod>(method: M, params: DeviceParams<M>): Promise<DeviceResult<M>>;
+  onEvent(listener: (event: DeviceEvent) => void): () => void;
+  onConnection(listener: (state: PortConnectionState) => void): () => void;
+  restart(): Promise<void>;
+}
+
+/**
+ * Frames a client may have in flight before it acknowledges; behind that the host skips ahead.
+ * About a second of a moving screen, so a remote client's round trip is not taken for a slow one.
+ */
+export const DEVICE_FLOW = {
+  window: 60,
+  maxTextBytes: 4096,
+} as const;

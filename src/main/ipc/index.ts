@@ -14,6 +14,7 @@ import { registerComputerHandlers } from './computer';
 import { registerConfigSyncHandlers } from './configSync';
 import { registerDesignHandlers } from './design';
 import { registerDesignWindowHandlers } from './designWindow';
+import { registerDeviceHostHandlers } from './deviceHost';
 import { registerExtensionPluginHandlers } from './extensionPlugins';
 import { registerFileHandlers } from './files';
 import { registerFilesWorkspaceHandlers } from './filesWorkspace';
@@ -60,6 +61,7 @@ export function registerIpcHandlers(): void {
   registerBrowserHandlers();
   registerSshConnectionHandlers();
   registerComputerHandlers();
+  registerDeviceHostHandlers();
   registerExtensionPluginHandlers();
   registerDesignHandlers();
   registerDesignWindowHandlers();

@@ -28,7 +28,7 @@
 <p align="center">
   <a href="https://github.com/tingyuxuan123/EnsoCode/releases"><img src="https://img.shields.io/github/v/release/tingyuxuan123/EnsoCode?include_prereleases&label=personal%20release" alt="Latest personal release" /></a>
   <img src="https://img.shields.io/badge/personal%20build-macOS%20Apple%20Silicon-555" alt="Personal build: macOS Apple Silicon" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License" /></a>
 </p>
 
 ---
@@ -165,4 +165,4 @@ This is a personally maintained project. Development follows the maintainer’s 
 
 Thanks to [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode) and its contributors for the original project, and to [pi](https://github.com/earendil-works/pi) and the open-source projects this workbench builds on.
 
-Released under the [MIT License](LICENSE). Original copyright and license notices are preserved. See also [Third-party notices](THIRD_PARTY_NOTICES.md).
+Released under the [GNU Affero General Public License v3.0](LICENSE). The mobile-device host, drivers and panel are ported from [Kettu](https://github.com/KettuAI/Kettu) (AGPL-3.0-only), so this project as a whole is now distributed under AGPL-3.0. Original copyright and license notices are preserved; see [Third-party notices](THIRD_PARTY_NOTICES.md).

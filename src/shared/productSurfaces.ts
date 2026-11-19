@@ -508,6 +508,11 @@ export const PRODUCT_SURFACE_INVENTORY = {
     kind: 'action',
     label: 'Use host desktop computer',
   },
+  'coding-tools.mobile-devices': {
+    domain: 'coding-tools',
+    kind: 'action',
+    label: 'List, open and drive mobile devices',
+  },
   'coding-tools.plan': {
     domain: 'coding-tools',
     kind: 'action',

@@ -41,6 +41,7 @@ import {
 } from '@/plugins/commands';
 import { resolvePluginKeybindings } from '@/plugins/keybindings';
 import { PluginStatusItems } from '@/plugins/statusItems';
+import { hasPendingDeviceAccess, usePendingDeviceAccess } from '@/stores/deviceAccess';
 import { useSettingsStore } from '@/stores/settings';
 import { registerDraftTarget } from '../../plugins/draftBridge';
 import { PluginComposerSlots } from '../../plugins/slots';
@@ -53,6 +54,7 @@ import { composerDrafts as drafts } from './composerDraft';
 import {
   registerComposerFocus,
   registerComposerInsert,
+  registerComposerInsertBlocker,
   registerComposerInsertImage,
   registerComposerInsertText,
   registerComposerInsertUiElement,
@@ -95,6 +97,8 @@ interface ComposerProps {
   running: boolean;
   busy: boolean;
   focusKey?: string;
+  /** Local session only. Remote and bot draft keys are not device-access identities. */
+  deviceAccessSessionId?: string;
   presetId?: string;
   /** 挂载/切会话时是否自动聚焦。移动端置 false，否则一进会话就弹出键盘挡住内容 */
   autoFocus?: boolean;
@@ -149,11 +153,12 @@ export function Composer({
   running,
   busy,
   focusKey,
+  deviceAccessSessionId,
   presetId,
   autoFocus = true,
   enterToSend = true,
   toolbar,
-  locked = false,
+  locked: approvalLocked = false,
   attachment,
   injectedDraft,
   injectedImages,
@@ -176,6 +181,32 @@ export function Composer({
   savePastedText,
 }: ComposerProps) {
   const { t } = useI18n();
+  const pendingAccess = usePendingDeviceAccess(deviceAccessSessionId);
+  const locked = approvalLocked || pendingAccess;
+  // Each unlocked interval belongs to one draft. Retained callbacks (file reads,
+  // transcription, plugin picks) must not write after a lock or session switch.
+  const scope = useMemo(
+    () => ({ focusKey, deviceAccessSessionId, pendingAccess }),
+    [focusKey, deviceAccessSessionId, pendingAccess]
+  );
+  const activeScope = useRef<typeof scope | null>(scope);
+  useLayoutEffect(() => {
+    activeScope.current = scope;
+    return () => {
+      activeScope.current = null;
+    };
+  }, [scope]);
+  const editBlocked = useCallback(
+    () =>
+      approvalLocked ||
+      activeScope.current !== scope ||
+      scope.pendingAccess ||
+      Boolean(scope.deviceAccessSessionId && hasPendingDeviceAccess(scope.deviceAccessSessionId)),
+    [approvalLocked, scope]
+  );
+  useLayoutEffect(() => {
+    if (!isolated) return registerComposerInsertBlocker(editBlocked);
+  }, [isolated, editBlocked]);
   const [holdToTalk, setHoldToTalk] = useState(false);
   // 断线重连时语音会短暂不可用：不清掉按住说话，恢复后原样回来
   const holdVoice = voiceMode === 'hold' ? voice : undefined;
@@ -185,9 +216,9 @@ export function Composer({
   const mentionPickerId = useId();
   const [images, setImages] = useState<AttachedImage[]>([]);
   const [slash, setSlash] = useState<string | null>(null);
-  const [recipient, setRecipient] = useState<AgentTypeMentionCandidate | undefined>(
-    initialRecipient
-  );
+  const draftStateRef = useRef({ images, slash });
+  draftStateRef.current = { images, slash };
+  const [recipient, setRecipient] = useState<AgentTypeMentionCandidate>();
   const prevFocusKeyRef = useRef<string | undefined>(undefined);
   const restoringDraft = useRef(false);
   const sendingRef = useRef(false);
@@ -264,6 +295,7 @@ export function Composer({
         composingRef.current ||
         pluginStateRef.current.busy ||
         pluginStateRef.current.locked ||
+        hasPendingDeviceAccess(deviceAccessSessionId) ||
         !editorRef.current,
       hasReferences: () =>
         pluginStateRef.current.images.length > 0 ||
@@ -273,7 +305,7 @@ export function Composer({
             pluginStateRef.current.attachment
         ),
     });
-  }, [isolated, focusKey]);
+  }, [isolated, focusKey, deviceAccessSessionId]);
   const [popupLayout, setPopupLayout] = useState<{ left: number; flyoutWidth: number }>({
     left: 0,
     flyoutWidth: MENTION_FLYOUT_WIDTH,
@@ -409,16 +441,20 @@ export function Composer({
   }, [focusKey]);
 
   useEffect(() => {
-    if (!initialRecipient) return;
+    if (!initialRecipient || editBlocked()) return;
     setRecipient(initialRecipient);
     onInitialRecipientConsumed?.();
-  }, [initialRecipient, onInitialRecipientConsumed]);
+  }, [initialRecipient, onInitialRecipientConsumed, editBlocked]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: injected content is an external one-shot signal.
   useEffect(() => {
-    if (!injectedDraft && !injectedImages?.length) return;
+    if (editBlocked() || (!injectedDraft && !injectedImages?.length)) return;
+    const { images: currentImages, slash: currentSlash } = draftStateRef.current;
     const draft = applyInjectedDraft(
-      { segments: editorRef.current?.getSegments() ?? [], images, slash },
+      {
+        segments: editorRef.current?.getSegments() ?? [],
+        images: currentImages,
+        slash: currentSlash,
+      },
       { text: injectedDraft, images: injectedImages },
       injectedDraftAppend
     );
@@ -427,7 +463,7 @@ export function Composer({
     editorRef.current?.setSegments(draft.segments);
     onDraftConsumed?.();
     window.setTimeout(() => editorRef.current?.focus(), 0);
-  }, [injectedDraft, injectedImages, injectedDraftAppend]);
+  }, [injectedDraft, injectedImages, injectedDraftAppend, editBlocked, onDraftConsumed]);
 
   const subQuery = slashSubcommandQuery(slash, editorPlain.replaceAll('\uFFFC', ''));
   const pluginSlash = usePluginSlashCommands();
@@ -439,7 +475,8 @@ export function Composer({
   useEffect(() => {
     if (isolated) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.repeat || locked || busy) return;
+      if (event.defaultPrevented || event.isComposing || event.repeat || editBlocked() || busy)
+        return;
       const overrides = useSettingsStore.getState().keybindings;
       const binding = eventToBinding(event);
       const command = binding
@@ -457,7 +494,7 @@ export function Composer({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isolated, locked, busy, focusKey]);
+  }, [isolated, busy, editBlocked, focusKey]);
   const subResults =
     slashQuery === null && skillQuery === null && subQuery !== null
       ? filterSlashSubcommands(slash, subQuery)
@@ -594,7 +631,7 @@ export function Composer({
 
   const applySlashSubcommand = useCallback(
     async (name: string, sendNow: boolean) => {
-      if (sendingRef.current) return;
+      if (editBlocked() || sendingRef.current) return;
       const segments: MentionSegment[] = [{ type: 'text', text: name }];
       editorRef.current?.setSegments(segments);
       if (!sendNow) return;
@@ -626,11 +663,12 @@ export function Composer({
       setSlashQuery(null);
       setSkillQuery(null);
     },
-    [images, onSend, recipient, slash, focusKey]
+    [editBlocked, images, onSend, recipient, slash, focusKey]
   );
 
   const pickActive = useCallback(
     (submitSubcommand = false) => {
+      if (editBlocked()) return;
       if (popupKind === 'mention') {
         if (openFolderId) {
           const candidate = mentionGroups[openFolderId][folderIndex];
@@ -678,6 +716,7 @@ export function Composer({
       skillQuery,
       subResults,
       applySlashSubcommand,
+      editBlocked,
       focusKey,
       isolated,
     ]
@@ -690,10 +729,10 @@ export function Composer({
   // 仅快捷键触发，无绑定时不提示
   const steerAvailable =
     running && queuedCount > 0 && onSteerQueued !== undefined && enterToSend && !!sendBinding;
-  const steerable = steerAvailable && !hasContent && !agentRecipient && !locked;
+  const steerableNow = () => steerAvailable && !hasContent && !agentRecipient && !editBlocked();
 
   const handleSend = async () => {
-    if (!hasContent || locked || sendingRef.current) return;
+    if (!hasContent || editBlocked() || sendingRef.current) return;
     const payload = createEditorPayload({
       segments: editorRef.current?.getSegments() ?? [],
       slash,
@@ -732,27 +771,36 @@ export function Composer({
     setSkillQuery(null);
   };
 
-  const ingestFiles = useCallback((files: File[]) => {
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = reader.result as string;
-          const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-          setImages((current) => [...current, { data: base64, mimeType: file.type }]);
-        };
-        reader.readAsDataURL(file);
-        continue;
+  const ingestFiles = useCallback(
+    (files: File[]) => {
+      if (editBlocked()) return;
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (editBlocked()) return;
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+            setImages((current) => [...current, { data: base64, mimeType: file.type }]);
+          };
+          reader.readAsDataURL(file);
+          continue;
+        }
+        const filePath = window.electronAPI.files.pathForFile(file);
+        if (!filePath) continue;
+        // 拖入的文件在光标处插原子卡片，位置/顺序语义保留
+        editorRef.current?.insertFileChip(filePath);
       }
-      const filePath = window.electronAPI.files.pathForFile(file);
-      if (!filePath) continue;
-      // 拖入的文件在光标处插原子卡片，位置/顺序语义保留
-      editorRef.current?.insertFileChip(filePath);
-    }
-  }, []);
+    },
+    [editBlocked]
+  );
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const isComposing = event.nativeEvent.isComposing || composingRef.current;
+    if (editBlocked()) {
+      event.preventDefault();
+      return;
+    }
     if (popupKind) {
       const activeItem = popupKind === 'mention' ? mentionItems[activeIndex] : undefined;
       const action = resolvePopupKeyAction({
@@ -830,7 +878,7 @@ export function Composer({
       const pressedSend = eventToBinding(event, { allowBare: true });
       if (pressedSend === sendBinding) {
         event.preventDefault();
-        if (steerable) onSteerQueued?.();
+        if (steerableNow()) onSteerQueued?.();
         else handleSend();
       }
     }
@@ -1033,7 +1081,7 @@ export function Composer({
           ))}
           <MentionEditor
             ref={editorRef}
-            className="text-[calc(14rem/14)] leading-[calc(24rem/14)]"
+            className="text-[length:var(--composer-font-size,1rem)] leading-[calc(24rem/14)]"
             placeholder={
               slash
                 ? ''

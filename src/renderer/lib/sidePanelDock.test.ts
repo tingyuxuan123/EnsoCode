@@ -2,6 +2,7 @@ import type { DockviewApi } from 'dockview-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addSidePanelBrowser,
+  addSidePanelMobileDevices,
   bindSidePanelDock,
   disposeConversationResources,
   openSidePanelBrowserUrl,
@@ -48,6 +49,30 @@ beforeEach(() => {
   };
   vi.clearAllMocks();
   harness.navigate.mockResolvedValue({ ok: true, result: {} });
+});
+
+it('回收会话时不会把移动设备标签当作终端销毁', () => {
+  const dispose = vi.fn();
+  vi.stubGlobal('window', { electronAPI: { terminal: { dispose } } });
+  const { api } = fakeDock();
+  Object.assign(api, { panels: [{ id: 'mobile-devices' }, { id: 'terminal-id' }] });
+  bindSidePanelDock('parent', api);
+  disposeConversationResources('parent');
+  expect(dispose.mock.calls).toEqual([['terminal-id']]);
+});
+
+it('标题栏可以打开当前会话尚未挂载的设备工作区，多次点击也只打开一个', async () => {
+  addSidePanelMobileDevices('cold');
+  addSidePanelMobileDevices('cold');
+  expect(harness.ensureOpen).toHaveBeenCalledWith('cold');
+  const { api, addPanel } = fakeDock();
+  bindSidePanelDock('cold', api);
+  await Promise.resolve();
+  expect(addPanel).toHaveBeenCalledExactlyOnceWith({
+    id: 'mobile-devices',
+    component: 'mobile-devices',
+    title: 'Mobile devices',
+  });
 });
 
 describe('openSidePanelBrowserUrl', () => {

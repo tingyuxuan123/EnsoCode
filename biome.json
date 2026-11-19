@@ -69,6 +69,7 @@
       "!android/**/build",
       "!android/.gradle",
       "!android/.kotlin",
+      "!native/**/target",
       "!*.vetd",
       "!docs/project-history/**/*.html",
       "!packages/relay-go/frontend/assets",

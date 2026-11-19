@@ -21,6 +21,14 @@ import type {
   CompactReserveTokensReadResult,
   CompactReserveTokensResult,
 } from '@shared/compactionSettings';
+import type { DeviceAccessDecision, DeviceAccessEntry } from '@shared/device-agent';
+import {
+  DEVICE_METHODS,
+  type DeviceEvent,
+  type DeviceMethod,
+  type DeviceParams,
+  type DeviceResult,
+} from '@shared/device-host';
 import type { GeneratedImage } from '@shared/imageGeneration';
 import type {
   ImageProviderResult,
@@ -63,6 +71,7 @@ import type {
 } from '@shared/memory/graphDto';
 import type { PastedTextFileResult } from '@shared/pastedText';
 import type { PlanRespondAction } from '@shared/planMode';
+import type { PortConnectionState } from '@shared/port-rpc';
 import type {
   ResourceSnapshot,
   SessionCleanRequest,
@@ -281,6 +290,16 @@ import type {
   ParentSourceBindingRequest,
   ParentSourceBindingResult,
 } from '@shared/types/mentions';
+import { hostTransport } from './hostTransport';
+import { PortClient } from './port-client';
+
+const deviceClient = new PortClient<DeviceEvent>({
+  label: 'device host',
+  methods: DEVICE_METHODS,
+  transport: hostTransport('device-host'),
+  lazy: true,
+});
+
 import type {
   NodeActionResult,
   NodeMessage,
@@ -1725,6 +1744,32 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.BROWSER_DESIGN_MODE_EVENT, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_DESIGN_MODE_EVENT, listener);
     },
+  },
+
+  devices: {
+    allowedAccess: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.DEVICE_ACCESS_ALLOWED),
+    forgetAccess: (deviceId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEVICE_ACCESS_FORGET, deviceId),
+    listAccess: (sessionId: string): Promise<DeviceAccessEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEVICE_ACCESS_LIST, sessionId),
+    answerAccess: (
+      sessionId: string,
+      entryId: string,
+      decision: DeviceAccessDecision
+    ): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEVICE_ACCESS_ANSWER, sessionId, entryId, decision),
+    revokeAccess: (sessionId: string, deviceId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DEVICE_ACCESS_REVOKE, sessionId, deviceId),
+    onAccessChanged: (callback: (entry: DeviceAccessEntry) => void): (() => void) => {
+      const listener = (_event: unknown, entry: DeviceAccessEntry) => callback(entry);
+      ipcRenderer.on(IPC_CHANNELS.DEVICE_ACCESS_CHANGED, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.DEVICE_ACCESS_CHANGED, listener);
+    },
+    request: <M extends DeviceMethod>(method: M, params: DeviceParams<M>) =>
+      deviceClient.request(method, params) as Promise<DeviceResult<M>>,
+    onEvent: (listener: (event: DeviceEvent) => void) => deviceClient.onEvent(listener),
+    onConnection: (listener: (state: PortConnectionState) => void) =>
+      deviceClient.onConnection(listener),
   },
 
   computer: {

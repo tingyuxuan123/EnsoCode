@@ -46,6 +46,17 @@ function setup() {
 }
 
 describe('ActiveConversationRegistry', () => {
+  it('only authorizes the selected local root in its owning workbench', () => {
+    const { registry, conversation } = setup();
+    const id = conversation.conversationId;
+    expect(registry.isSelectedLocalRoot(1, id)).toBe(false);
+    registry.selectConversation(1, id);
+    expect(registry.isSelectedLocalRoot(1, id)).toBe(true);
+    expect(registry.isSelectedLocalRoot(2, id)).toBe(false);
+    expect(registry.isSelectedLocalRoot(1, 'other')).toBe(false);
+    registry.invalidateConversation(id);
+    expect(registry.isSelectedLocalRoot(1, id)).toBe(false);
+  });
   it('issues a Main model selection binding and consumes it once', () => {
     const { registry, conversation } = setup();
     expect(registry.selectConversation(1, conversation.conversationId)).toBe(true);

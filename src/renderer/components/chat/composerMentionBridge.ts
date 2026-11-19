@@ -13,6 +13,14 @@ import type {
 
 type InsertFn = (candidate: FileMentionCandidate | ChatMentionCandidate) => void;
 
+let blocked: (() => boolean) | null = null;
+export function registerComposerInsertBlocker(fn: () => boolean): () => void {
+  blocked = fn;
+  return () => {
+    if (blocked === fn) blocked = null;
+  };
+}
+
 let current: InsertFn | null = null;
 let insertText: ((text: string) => void) | null = null;
 let focusComposer: (() => void) | null = null;
@@ -43,7 +51,7 @@ export function registerComposerInsertText(fn: (text: string) => void): () => vo
 }
 
 export function requestFocusComposer(): boolean {
-  if (!focusComposer) return false;
+  if (!focusComposer || blocked?.()) return false;
   focusComposer();
   return true;
 }
@@ -51,13 +59,13 @@ export function requestFocusComposer(): boolean {
 export function insertComposerMention(
   candidate: FileMentionCandidate | ChatMentionCandidate
 ): boolean {
-  if (!current) return false;
+  if (!current || blocked?.()) return false;
   current(candidate);
   return true;
 }
 
 export function insertComposerText(text: string): boolean {
-  if (!insertText) return false;
+  if (!insertText || blocked?.()) return false;
   insertText(text);
   return true;
 }
@@ -75,7 +83,7 @@ export function insertUiElementMention(
   candidate: UiElementMentionCandidate,
   image?: AttachedImage
 ): boolean {
-  if (!insertUiElement) return false;
+  if (!insertUiElement || blocked?.()) return false;
   insertUiElement(candidate, image);
   return true;
 }
@@ -105,7 +113,7 @@ export function insertUiElementMentions(
   items: readonly ComposerUiElementInsert[],
   conversationId: string
 ): boolean {
-  return items.length > 0 && (insertUiElements?.(items, conversationId) ?? false);
+  return !blocked?.() && items.length > 0 && (insertUiElements?.(items, conversationId) ?? false);
 }
 
 export function registerComposerInsertImage(fn: (image: AttachedImage) => void): () => void {
@@ -116,7 +124,7 @@ export function registerComposerInsertImage(fn: (image: AttachedImage) => void):
 }
 
 export function insertComposerImage(image: AttachedImage): boolean {
-  if (!insertImage) return false;
+  if (!insertImage || blocked?.()) return false;
   insertImage(image);
   return true;
 }

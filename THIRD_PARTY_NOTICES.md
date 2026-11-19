@@ -205,3 +205,48 @@ macOS-signature caveat are in `design/UPSTREAM.md`. Full upstream source is at
 <https://github.com/isomorphic-git/isomorphic-git>, commit
 `aa6812cd674bf2f9d4cd3c9ad7bcaf608ce80b90` (`src/utils/join.js`), with ZenFS
 origin at <https://github.com/zen-fs/core/blob/main/src/path.ts>.
+
+## 设备辅助程序：scrcpy 与 Kettu iOS helpers
+
+设备宿主（`src/device-host/`）运行的外部程序由 `tools/install/device-helpers.mjs`
+准备，输出到 `out/helpers`，打包时整目录作为应用资源 `helpers` 分发
+（`electron-builder.yml` 的 `extraResources`）。各程序的许可全文随该目录一起分发，
+源文件在 `resources/device-helpers/`。
+
+### scrcpy-server v5.0.1
+
+Android 设备通过 [scrcpy](https://github.com/Genymobile/scrcpy) 的服务端
+`scrcpy-server` v5.0.1 串流画面并注入输入。构建时按固定 URL 下载并校验 SHA-256
+`764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536`，未修改。
+该程序由设备宿主推送到手机并在设备上运行，本机从不执行。scrcpy 由 Genymobile 及
+贡献者以 Apache-2.0 授权发布，版权归 Romain Vimont 与 scrcpy 贡献者所有；许可全文见
+`helpers/LICENSE-APACHE-2.0.txt`（源文件 `resources/device-helpers/LICENSE-APACHE-2.0.txt`，
+取自 <https://github.com/Genymobile/scrcpy/blob/v5.0.1/LICENSE>）。
+
+### kettu-ios-usb-capture / kettu-ios-device
+
+macOS 上的两个 iOS 辅助程序来自 Kettu（<https://github.com/KettuAI/Kettu>，
+AGPL-3.0-only），源码位于本仓库 `native/ios-usb-capture/`（Swift，用 `swiftc` 编译）
+与 `native/ios-device/`（Rust，用 `cargo build --release --locked` 编译），未做功能修改，
+仅按本仓库的格式化约定调整了 `build.mjs` 的写法。
+
+- `kettu-ios-usb-capture` 以 AGPL-3.0-only 授权，许可全文见
+  `helpers/LICENSE-AGPL-3.0-only.txt`（源文件
+  `resources/device-helpers/LICENSE-AGPL-3.0-only.txt`）。该程序对应的源码就是
+  `native/ios-usb-capture/`，构建脚本 `native/ios-usb-capture/build.mjs`。
+- `kettu-ios-device` 以 AGPL-3.0-only 授权（`native/ios-device/Cargo.toml` 的
+  `license = "AGPL-3.0-only"`），许可全文同上。该程序对应的源码是
+  `native/ios-device/`，构建脚本 `native/ios-device/build.mjs`。
+
+两个程序都只在打包时由 `tools/install/device-helpers.mjs` 从本仓库源码构建，随包二进制
+与其源码一一对应；修改这两个辅助程序后按 AGPL-3.0 第 5、6 条需要在分发时提供对应源码，
+本仓库即为该源码的提供位置。
+
+### idevice 0.1.68
+
+`kettu-ios-device` 静态链接 [idevice](https://github.com/jkcoxson/idevice) 0.1.68
+（crates.io），用于通过 usbmuxd 与 iOS 设备通信。idevice 以 MIT 授权，
+Copyright 2026 Jackson Coxson；许可全文见 `helpers/LICENSE-MIT-idevice.txt`
+（源文件 `resources/device-helpers/LICENSE-MIT-idevice.txt`，取自
+<https://github.com/jkcoxson/idevice/blob/master/LICENSE.txt>）。该依赖的其它传递依赖
+仍按各自许可随 Rust 构建使用，其许可文本不随二进制再分发。

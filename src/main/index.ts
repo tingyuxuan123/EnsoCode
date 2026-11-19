@@ -3,6 +3,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { pluginInstallSettingsLink } from '@shared/extensionPlugins/pluginProtocol';
 import { app, type BrowserWindow } from 'electron';
 import { registerIpcHandlers } from './ipc';
+import { disposeDeviceRequests } from './ipc/agent';
 import { consumeTrayReenterAfterUpdate, readSettings } from './ipc/settings';
 import { createPluginInstallInbox } from './protocol/pluginInstall';
 import { agentWorkerAlive, startAgentWorker, stopAgentWorkerForQuit } from './services/agentHost';
@@ -19,6 +20,7 @@ import {
 } from './services/appServerMode';
 import { browserHost } from './services/browserHost';
 import { computerHost } from './services/computerHost';
+import { deviceHost } from './services/deviceHost';
 import { releaseLocalChatSlot } from './services/llama/chat';
 import { disposeLlamaRuntime, llamaRuntimeActive } from './services/llama/runtime';
 import {
@@ -178,6 +180,8 @@ if (!gotTheLock) {
   // Electron 退出即断开中继，手机侧收到 host-offline
   app.on('before-quit', () => {
     stopTrayToggleShortcut();
+    disposeDeviceRequests();
+    void deviceHost.stop();
     stopPairHost();
     stopPairGuest();
     browserQuitDrain ??= browserHost.dispose();

@@ -86,6 +86,12 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
     description:
       'Host desktop: list windows, screenshot, accessibility tree, and input. Default off. Not the built-in browser.',
   },
+  {
+    id: 'mobile_devices',
+    name: 'Mobile devices',
+    description:
+      'Mobile devices: use the emulators, simulators and phones on this host (device_* tools). Allow a device for one conversation or always. You can take control at any time.',
+  },
 ];
 
 /**
@@ -111,6 +117,7 @@ export const HOT_BUILTIN_TOOL_IDS = [
   'background_tasks',
   'memory',
   'computer',
+  'mobile_devices',
 ] as const;
 
 /** 引入 computer 的设置版本；更早落盘的禁用列表不含它，按默认关闭补齐 */

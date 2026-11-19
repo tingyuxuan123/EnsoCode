@@ -2653,6 +2653,89 @@ describe('computer-invoke / computer-result', () => {
   });
 });
 
+describe('device-tool-invoke / device-tool-result', () => {
+  const invoke = {
+    type: 'device-tool-invoke',
+    identity: parent,
+    seq: 5,
+    requestId: 'md-1',
+    toolName: 'device_tap',
+    args: { deviceId: 'ios-sim:ABC', ref: 'e3' },
+  };
+  const result = {
+    type: 'device-tool-result',
+    identity: parent,
+    requestId: 'md-1',
+    ok: true,
+    result: { result: { text: 'Tapped @e3', image: 'iVBORw0KGgo=' } },
+  };
+
+  it('device-tool-invoke 只带工具名与模型参数，绝不带会话、agent 或设备目录', () => {
+    expect(parseAgentWorkerEvent(invoke)).toEqual(invoke);
+    expect(parseAgentWorkerEvent({ ...invoke, identity: child })).not.toBeNull();
+    for (const toolName of ['device_list', 'device_open', 'device_set_permission'])
+      expect(parseAgentWorkerEvent({ ...invoke, toolName, args: {} })).not.toBeNull();
+    // 模型不能自报身份：多出 sessionId / agentName / projectPath 就整条丢弃。
+    for (const extra of [
+      { sessionId: 'other' },
+      { agentName: 'someone' },
+      { projectPath: '/tmp' },
+      { device: 'android:x' },
+    ])
+      expect(
+        parseAgentWorkerEvent({ ...invoke, args: { ...invoke.args, ...extra } })
+      ).not.toBeNull();
+    for (const toolName of ['mobile_device', 'device_', 'bash', '', `device_${'x'.repeat(60)}`])
+      expect(parseAgentWorkerEvent({ ...invoke, toolName })).toBeNull();
+    for (const args of [null, 'screen', [], 7])
+      expect(parseAgentWorkerEvent({ ...invoke, args })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, requestId: '' })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, extra: 1 })).toBeNull();
+    expect(
+      parseAgentWorkerEvent({ ...invoke, identity: { ...parent, generation: 'old' } })
+    ).toBeNull();
+    // 事件本身不带授权结论：授权只在 Main 依据权威记录决定。
+    expect(Object.keys(invoke)).not.toContain('sessionId');
+    expect(Object.keys(invoke)).not.toContain('allowed');
+  });
+
+  it('device-tool-cancel 只带 requestId', () => {
+    const cancel = { type: 'device-tool-cancel', identity: parent, seq: 6, requestId: 'md-1' };
+    expect(parseAgentWorkerEvent(cancel)).toEqual(cancel);
+    expect(parseAgentWorkerEvent({ ...cancel, requestId: '' })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...cancel, toolName: 'device_tap' })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...cancel, extra: 1 })).toBeNull();
+  });
+
+  it('device-tool-result 成功带 result，失败带 error，字段互斥', () => {
+    expect(parseAgentCommand(result)).toEqual(result);
+    const failed = {
+      type: 'device-tool-result',
+      identity: parent,
+      requestId: 'md-1',
+      ok: false,
+      error: 'The user did not allow this session to use the device.',
+    };
+    expect(parseAgentCommand(failed)).toEqual(failed);
+    expect(parseAgentCommand({ ...result, ok: false })).toBeNull();
+    expect(parseAgentCommand({ ...failed, ok: true })).toBeNull();
+    expect(parseAgentCommand({ ...result, extra: 1 })).toBeNull();
+  });
+
+  it('设备工具事件不进渲染层普通事件流（与 computer 同等待遇）', () => {
+    // 编译期由 RendererAgentEvent 的 Exclude 保证；这里守住运行时字段形状不变。
+    expect(parseAgentWorkerEvent(invoke)?.type).toBe('device-tool-invoke');
+    expect(
+      parseAgentWorkerEvent({
+        type: 'device-tool-cancel',
+        identity: parent,
+        seq: 6,
+        requestId: 'x',
+      })?.type
+    ).toBe('device-tool-cancel');
+  });
+});
+
 describe('tool-output 事件跨进程边界', () => {
   const event = {
     type: 'tool-output',

@@ -32,9 +32,18 @@ extraResources:
       - '!**/.DS_Store'
       - '!**/node_modules/.package-lock.json'
       - '!engine/.enso-design-engine-stamp.json'
+  # 设备宿主要执行的外部程序：scrcpy-server 与 macOS 的 iOS 辅助程序，
+  # 由 tools/install/device-helpers.mjs 生成到 out/helpers，连同各自的许可全文一起分发。
+  - from: out/helpers
+    to: helpers
+    filter:
+      - '**/*'
+      - '!*.partial'
 files:
   - out/**
   - THIRD_PARTY_NOTICES.md
+  # 已作为 extraResources 的 helpers 目录整份拷到 app 外，不再进 asar（二进制无法从 asar 内执行）
+  - '!out/helpers{,/**/*}'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'

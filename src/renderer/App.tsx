@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FoldHorizontal, PanelRight, UnfoldHorizontal } from 'lucide-react';
+import { FoldHorizontal, PanelRight, Smartphone, UnfoldHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
@@ -65,6 +65,7 @@ import { useI18n } from '@/i18n';
 import { effectiveKeybindings, eventToBinding, isEventInSidePanel } from '@/lib/keybindings';
 import {
   addSidePanelBtw,
+  addSidePanelMobileDevices,
   addSidePanelTerminal,
   closeActiveSidePanelTab,
 } from '@/lib/sidePanelDock';
@@ -81,6 +82,7 @@ import {
   useAppModeStore,
   useBotModeActive,
 } from '@/stores/bots/mode';
+import { initDevices } from '@/stores/devices';
 import { bindPairCatalogSync } from '@/stores/pairCatalog';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSessionsStore } from '@/stores/sessions';
@@ -215,6 +217,8 @@ export default function App() {
     return () => document.documentElement.classList.remove('enso-main-shell');
   }, []);
   useEffect(() => window.electronAPI.app.onCloseRequest(setCloseRequestId), []);
+  // 移动设备列表由设备主机推送；没有设备桥时这里什么都不订阅。
+  useEffect(() => initDevices(), []);
   useEffect(
     () =>
       window.electronAPI.app.onFlushPersist((requestId) => {
@@ -631,6 +635,17 @@ export default function App() {
           <UnfoldHorizontal className="h-4 w-4" />
         )}
       </button>
+      {!remoteNodeActive && !botModeActive && activeConversationId && (
+        <button
+          type="button"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+          aria-label={t('Mobile devices')}
+          title={t('Mobile devices')}
+          onClick={() => addSidePanelMobileDevices(activeConversationId)}
+        >
+          <Smartphone className="size-4" />
+        </button>
+      )}
       {!remoteNodeActive && (
         <button
           type="button"
@@ -677,7 +692,8 @@ export default function App() {
         centered={modeEntry}
         actions={viewActions}
       />
-      {/* 平铺外壳：图标轨 + 侧栏 + 工作区，分栏只用 1px 细线，不再做浮起的圆角卡片 */}
+      {/* 外壳：图标轨 + 侧栏铺在外壳底色上，工作区是浮在外壳里的一块圆角卡片
+          （留缝、圆角与裁切见 globals.css 的 workbench-card 规则）。 */}
       <div className="flex min-h-0 flex-1">
         <AppRail
           sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
@@ -804,12 +820,16 @@ export default function App() {
                 {!collapsed && <ResizeHandle onResize={handleResize} />}
               </>
             )}
-            {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔 */}
+            {/* 卡片底色由子面板各自提供：这层若刷实底会挡住浏览器挖孔。
+                圆角、四周留缝与裁切在 globals.css 的 workbench-card 规则里，
+                卡片外沿就是外壳露出的那圈缝。 */}
             <div
               ref={workspaceRef}
               data-slot="workbench-main"
               data-enso="main"
-              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-line border-l border-t"
+              data-workbench-card=""
+              // 卡片四周靠留缝分层，不再单独描边（见 globals.css 的 workbench-card 规则）
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
             >
               {galleryActive ? (
                 <DesignGallery />

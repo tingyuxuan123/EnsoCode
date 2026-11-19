@@ -9,6 +9,8 @@ import {
   type SessionIdentity,
 } from '@shared/builtinAgents';
 import { conversationCwd } from '@shared/conversationCwd';
+import { DEVICE_TOOL_NAMES } from '@shared/device-agent';
+import { DEVICE_TOOLS_BUILTIN_ID, type DeviceToolAnswer } from '@shared/device-tools';
 import type { PluginBrowserBridgeInput } from '@shared/extensionPlugins/browserBridge';
 import { resolveSshTarget } from '@shared/ssh';
 import {
@@ -23,7 +25,6 @@ import type {
   AgentRemoteConfig,
   AgentSpawnRequest,
   AgentWorkerEvent,
-  ApprovalDecision,
   ApprovalMode,
   ChildHistoryResult,
   ConversationReloadResult,
@@ -55,6 +56,7 @@ import {
 } from '@shared/types/mentions';
 import { app, ipcMain, powerMonitor, type WebContents, webContents } from 'electron';
 import { titleSummaryTimeoutMs } from '../../agent/titleSummary';
+import { deviceToolCall } from '../../agent-host/devices/main';
 import { ActiveConversationRegistry } from '../services/activeConversationRegistry';
 import { AgentDispatchService } from '../services/agentDispatchService';
 import {
@@ -126,6 +128,12 @@ import { readChildHistory as readPersistedChildHistory } from '../services/child
 import { computerHost } from '../services/computerHost';
 import { reloadConversation } from '../services/conversationReload';
 import { getDesignToolBroker } from '../services/design';
+import { deviceHost } from '../services/deviceHost';
+import {
+  bindDeviceToolMain,
+  destroyDeviceAccessSession,
+  deviceToolGateway,
+} from '../services/deviceTools';
 import { getExtensionPlugins } from '../services/extensionPlugins';
 import type { McpTarget } from '../services/extensionPlugins/gate';
 import { PluginMcpRequests } from '../services/extensionPlugins/mcpRequests';
@@ -200,6 +208,7 @@ import {
   sendImageTool,
 } from './bots';
 import { agentSessionIndex, capabilityGateway, handleCapabilityInvoke } from './capabilities';
+import { registerDeviceAccessHandlers } from './deviceHost';
 import { readSettings, readSshTimeoutSeconds } from './settings';
 import {
   removeRegisteredWorktree,
@@ -245,6 +254,43 @@ let dispatchService: AgentDispatchService | null = null;
 let agentService: AgentService | null = null;
 const pendingAgentControl = new Map<string, AbortController>();
 const pendingComputer = new Map<string, AbortController>();
+const pendingDeviceTools = new Map<
+  string,
+  { identity: SessionIdentity; controller: AbortController }
+>();
+const deviceRequestKey = (identity: SessionIdentity, requestId: string) =>
+  JSON.stringify([identity.sessionId, identity.generation, requestId]);
+// A turn can still own a native device after its last IPC call has finished.
+const deviceTurns = new Map<string, string>();
+let deviceRequestsDisposed = false;
+
+function cancelDeviceRequests(sessionId?: string, generation?: string): void {
+  for (const [key, { identity, controller }] of pendingDeviceTools) {
+    if (sessionId !== undefined && identity.sessionId !== sessionId) continue;
+    if (generation !== undefined && identity.generation !== generation) continue;
+    pendingDeviceTools.delete(key);
+    controller.abort();
+  }
+  for (const [id, ownerGeneration] of deviceTurns) {
+    if (sessionId !== undefined && sessionId !== id) continue;
+    if (generation !== undefined && generation !== ownerGeneration) continue;
+    deviceTurns.delete(id);
+    deviceToolGateway.turnEnded(id);
+    // post() never starts a host just to report cleanup.
+    deviceHost.post({ type: 'device-host:turn-ended', sessionId: id });
+  }
+}
+
+function destroyDeviceSession(sessionId: string): void {
+  cancelDeviceRequests(sessionId);
+  destroyDeviceAccessSession(sessionId);
+  deviceHost.post({ type: 'device-host:sessions-ended', sessionIds: [sessionId] });
+}
+
+export function disposeDeviceRequests(): void {
+  deviceRequestsDisposed = true;
+  cancelDeviceRequests();
+}
 const pendingPluginTools = new Map<
   string,
   { identity: SessionIdentity; root: SessionIdentity; controller: AbortController }
@@ -300,6 +346,13 @@ function cancelBrowserRequests(
   identity?: SessionIdentity,
   phase?: 'abort' | 'release' | 'resume'
 ): void {
+  if (phase !== 'resume') cancelDeviceRequests(identity?.sessionId, identity?.generation);
+  else if (identity) {
+    // A new spawn may replace a generation before an ended event arrives.
+    const previous = deviceTurns.get(identity.sessionId);
+    if (previous !== undefined && previous !== identity.generation)
+      cancelDeviceRequests(identity.sessionId, previous);
+  }
   if (phase !== 'resume') imageGenerationBridge.cancel(identity);
   if (phase !== 'resume') cancelDesignRequests(identity);
   if (phase !== 'resume') {
@@ -433,6 +486,21 @@ function browserToolAllowed(identity: SessionIdentity | ChildSessionIdentity): b
   }).includes('browser');
 }
 let sourceBindings: ActiveConversationRegistry | null = null;
+/**
+ * 移动设备工具在设置或项目里被显式关闭时拒绝；默认开启。
+ * 默认开启不等于有权限：真正的设备访问仍要用户在面板里逐个会话授权。
+ */
+function _mobileToolAllowed(sessionId: string): boolean {
+  // 模型入口只允许父会话，sessionId 本身就是根会话，不需要再回溯 parent。
+  const conversation = sourceAuthority?.conversation(sessionId);
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  const projectId = project?.state === 'active' ? project.projectId : undefined;
+  const state = readSettingsState() ?? {};
+  return !resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
+    disabledBuiltinTools: projectDisabledBuiltinTools(state.projects, projectId),
+  }).includes(DEVICE_TOOLS_BUILTIN_ID);
+}
+
 let sourceAuthority: SourceAuthorityRegistry | null = null;
 let botWorkerObserver: ((event: AgentWorkerEvent | { type: 'worker-exited' }) => void) | null =
   null;
@@ -457,6 +525,11 @@ export function getAgentService(): AgentService | null {
 
 export function getSourceAuthorityRegistry(): SourceAuthorityRegistry | null {
   return sourceAuthority;
+}
+
+/** 面板授权前校验：该会话必须是这个窗口当前选中的本地根会话。 */
+export function isSelectedLocalRoot(owner: number, id: string): boolean {
+  return sourceBindings?.isSelectedLocalRoot(owner, id) ?? false;
 }
 
 /** Bot 会话宿主订阅 worker 事件（turn 结果、运行态） */
@@ -1425,6 +1498,7 @@ async function wireNativePluginHost(): Promise<void> {
 }
 
 export function registerAgentHandlers(): void {
+  deviceRequestsDisposed = false;
   cancelBrowserRequests();
   seenBrowserRequests.clear();
   seenDesignRequests.clear();
@@ -1488,6 +1562,44 @@ export function registerAgentHandlers(): void {
         : null;
     },
   });
+  // Access history and revocation survive worker eviction; issuing or answering calls requires
+  // both the durable local-root authority and a live, unpaused generation.
+  const localDeviceSession = (sessionId: string) => {
+    const conversation = sourceAuthority?.conversation(sessionId);
+    if (
+      conversation?.kind !== 'root' ||
+      conversation.lifecycle === 'ended' ||
+      conversation.bot ||
+      conversation.superAssistant
+    )
+      return null;
+    const project = sourceAuthority?.project(conversation.projectId);
+    if (project?.state !== 'active' || project.kind === 'ssh') return null;
+    return {
+      sessionId,
+      agentName: conversation.displayTitle ?? sessionId,
+      projectPath: project.canonicalPath,
+    };
+  };
+  const deviceAuthority = (identity: SessionIdentity) =>
+    !deviceRequestsDisposed &&
+    !('parent' in identity) &&
+    currentBrowserIdentity(identity) &&
+    agentSessionIndex.isReady(identity)
+      ? localDeviceSession(identity.sessionId)
+      : null;
+  bindDeviceToolMain({
+    authority: deviceAuthority,
+    toolEnabled: _mobileToolAllowed,
+    changed: (entry) => sendToAllWindows(IPC_CHANNELS.DEVICE_ACCESS_CHANGED, entry),
+  });
+  registerDeviceAccessHandlers(
+    (id) => !!localDeviceSession(id),
+    (id) => {
+      const identity = exactIdentity(id);
+      return !!identity && identity.sessionId === id && !!deviceAuthority(identity);
+    }
+  );
   dispatchService = new AgentDispatchService({
     sourceRegistry: sourceBindings,
     sessionIndex: agentSessionIndex,
@@ -1777,11 +1889,12 @@ export function registerAgentHandlers(): void {
             sessionFile: workerEvent.sessionFile,
           });
         if (target) {
-          sourceAuthority?.removeConversation({
+          const removed = sourceAuthority?.removeConversation({
             requestId: randomUUID(),
             conversationId: target.conversationId,
             version: target.version,
           });
+          if (removed?.accepted) destroyDeviceSession(target.conversationId);
         }
         broadcastAgentEvent({
           ...workerEvent,
@@ -1804,6 +1917,7 @@ export function registerAgentHandlers(): void {
       void browserHost.closeForSession(workerEvent.identity.sessionId);
     }
     if (workerEvent.type === 'turn-completed' || workerEvent.type === 'turn-failed') {
+      cancelDeviceRequests(workerEvent.identity.sessionId, workerEvent.identity.generation);
       browserHost.releaseActor(workerEvent.identity.sessionId);
     }
     if (workerEvent.type === 'parent-ended') {
@@ -2312,6 +2426,69 @@ export function registerAgentHandlers(): void {
         .finally(() => pendingComputer.delete(requestId));
       return;
     }
+    if (workerEvent.type === 'device-tool-cancel') {
+      const entry = pendingDeviceTools.get(
+        deviceRequestKey(workerEvent.identity, workerEvent.requestId)
+      );
+      if (entry && sameBrowserIdentity(entry.identity, workerEvent.identity))
+        entry.controller.abort();
+      return;
+    }
+    if (workerEvent.type === 'device-tool-invoke') {
+      const { identity, requestId, toolName, args } = workerEvent;
+      const reply = (outcome: DeviceToolAnswer) =>
+        sendAgentCommand({
+          type: 'device-tool-result',
+          identity,
+          requestId,
+          ok: 'result' in outcome,
+          ...('result' in outcome
+            ? { result: outcome.result }
+            : { error: `${outcome.error.code}: ${outcome.error.message}` }),
+        });
+      if (!deviceAuthority(identity)) {
+        reply({
+          error: { code: 'not_allowed', message: 'A current local root session is required' },
+        });
+        return;
+      }
+      if (!DEVICE_TOOL_NAMES.some((name) => name === toolName)) {
+        reply({ error: { code: 'invalid_params', message: 'Unknown device tool' } });
+        return;
+      }
+      const key = deviceRequestKey(identity, requestId);
+      if (pendingDeviceTools.has(key)) {
+        reply({
+          error: { code: 'invalid_params', message: 'Device requestId has already been used' },
+        });
+        return;
+      }
+      const controller = new AbortController();
+      deviceTurns.set(identity.sessionId, identity.generation);
+      pendingDeviceTools.set(key, { identity, controller });
+      const deliver = (answer: DeviceToolAnswer) => {
+        if (!controller.signal.aborted && deviceAuthority(identity)) reply(answer);
+      };
+      void deviceToolCall(deviceToolGateway, {
+        caller: { sessionId: identity.sessionId, generation: identity.generation },
+        toolName,
+        args,
+        signal: controller.signal,
+      })
+        .then(deliver, (error: unknown) =>
+          deliver({
+            error: {
+              code: 'failed',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          })
+        )
+        .finally(() => {
+          if (pendingDeviceTools.get(key)?.controller === controller)
+            pendingDeviceTools.delete(key);
+        });
+      return;
+    }
     if (workerEvent.type === 'agent-control-cancel') {
       pendingAgentControl.get(workerEvent.requestId)?.abort(workerEvent.kind);
       return;
@@ -2384,7 +2561,10 @@ export function registerAgentHandlers(): void {
     if (!parsed || !isMainWebContents(event.sender.id))
       return { accepted: false, error: 'Invalid conversation request.' };
     const result = sourceAuthority!.endConversation(parsed);
-    if (result.accepted) sourceBindings!.invalidateConversation(parsed.conversationId);
+    if (result.accepted) {
+      cancelDeviceRequests(parsed.conversationId);
+      sourceBindings!.invalidateConversation(parsed.conversationId);
+    }
     return result;
   });
   ipcMain.handle(IPC_CHANNELS.SOURCE_CONVERSATION_REMOVE, (event, request: unknown) => {
@@ -2393,6 +2573,7 @@ export function registerAgentHandlers(): void {
       return { accepted: false, error: 'Invalid conversation request.' };
     const result = sourceAuthority!.removeConversation(parsed);
     if (result.accepted) {
+      destroyDeviceSession(parsed.conversationId);
       sendAgentCommand({ type: 'forget-notifications', conversationId: parsed.conversationId });
       sourceBindings!.invalidateConversation(parsed.conversationId);
       removeConversationSessionFiles({
@@ -2855,7 +3036,7 @@ export function registerAgentHandlers(): void {
       ) {
         return { ok: false, error: 'invalid approval response or stale generation' };
       }
-      return respondApproval(identity, requestId, decision as ApprovalDecision);
+      return respondApproval(identity, requestId, decision);
     }
   );
 

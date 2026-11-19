@@ -40,6 +40,7 @@ import {
   WORKSPACE_WRITE_TOOL_ID,
 } from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
+import { DEVICE_TOOLS_BUILTIN_ID } from '@shared/device-tools';
 import {
   PLUGIN_AGENT_ARGS_MAX_CHARS,
   PLUGIN_AGENT_OUTPUT_MAX_CHARS,
@@ -107,6 +108,8 @@ import type { PluginCommandSpawn, PluginHookSpawn } from '@shared/types/plugins'
 import { VIRTUAL_PROVIDER_ID } from '@shared/virtualModels';
 import type { WebSearchChainEntry } from '@shared/webSearchChain';
 import type { WindowsLocalShell } from '@shared/windowsLocalShell';
+import { DeviceToolInvoker } from '../agent-host/devices/invoker';
+import { createDeviceTools } from '../agent-host/devices/pi';
 import { AgentControlInvoker } from './agentControl';
 import {
   createApplyPatchTool,
@@ -312,6 +315,7 @@ import { createGroupHistoryTool } from './tools/groupHistory';
 import { createGroupTasksTool } from './tools/groupTasks';
 import { createImageGenerationTools, ImageGenerationInvoker } from './tools/imageGeneration';
 import { createMemoryTools, MemoryInvoker } from './tools/memory';
+
 import { createPluginTools, PluginToolInvoker } from './tools/pluginTools';
 import { createRoutineProposeTool } from './tools/routinePropose';
 import { confirmOutsideImage, createSendImageTool } from './tools/sendImage';
@@ -425,6 +429,8 @@ interface ManagedSession {
   /** 已因不支持 adaptive 降级过的模型（虚拟模型下每个成员各降一次） */
   adaptiveDowngraded: Set<string>;
   computer?: ComputerInvoker;
+  /** 设备工具：Main 授权并驱动 device host，worker 只上抛工具名与参数。 */
+  deviceTools?: DeviceToolInvoker;
   pluginTools?: PluginToolInvoker;
   pluginEvents?: PluginEventInvoker;
   /** 最近一次 auto_retry_start 携带的原始错误（取消重试时的终态错误文案） */
@@ -532,6 +538,7 @@ const PENDING_COUNTERS: Record<PendingCounterKey, true> = {
   delegation: true,
   agentControl: true,
   computer: true,
+  deviceTools: true,
   pluginTools: true,
   pluginEvents: true,
 };
@@ -1352,6 +1359,7 @@ export class SessionSupervisor {
     managed.delegation?.cancelAll('Session released');
     managed.agentControl?.close('Session released');
     managed.computer?.cancelAll('Session released');
+    managed.deviceTools?.cancelAll('Session released');
     managed.pluginTools?.cancelAll('Session released');
     managed.pluginEvents?.cancelAll();
     this.pluginMcp.cancelSession(managed.identity);
@@ -1690,7 +1698,8 @@ export class SessionSupervisor {
             command.type === 'image-generation-result' ||
             command.type === 'memory-result' ||
             command.type === 'delegation-result' ||
-            command.type === 'computer-result'
+            command.type === 'computer-result' ||
+            command.type === 'device-tool-result'
           ? command.identity
           : command.type === 'dismiss-child' ||
               command.type === 'dismiss-coworker' ||
@@ -2195,6 +2204,13 @@ export class SessionSupervisor {
         }
         return;
       }
+      case 'device-tool-result': {
+        const managed = this.must(command.identity);
+        if (!managed.deviceTools?.resolve(command)) {
+          console.warn(`[device] dropped result for unknown request ${command.requestId}`);
+        }
+        return;
+      }
       case 'plugin-tool-result': {
         const managed = this.sessions.get(command.identity.sessionId);
         if (!managed?.pluginTools?.resolve(command)) {
@@ -2397,6 +2413,7 @@ export class SessionSupervisor {
         // 用户中止：预算 Run 就此结束，不再补交报告，之后的回合也不再计数
         managed.requestBudget?.disarm();
         managed.computer?.cancelAll('Computer action aborted');
+        managed.deviceTools?.cancelAll('Device action aborted');
         managed.pluginTools?.cancelAll('Plugin tool aborted');
         managed.pluginEvents?.cancelAll();
         this.pluginMcp.cancelSession(managed.identity);
@@ -3503,6 +3520,37 @@ export class SessionSupervisor {
           }
         )
       : undefined;
+    // 移动设备：授权与 device host 都在 Main，worker 只上抛工具名与模型参数；
+    // 子会话 / 远程 / bot 一律不挂，Main 也会按权威身份再拒一次。
+    const deviceTools =
+      !remote && !botMode
+        ? new DeviceToolInvoker(
+            (request) => {
+              const managed = managedRef ?? this.sessions.get(sessionId);
+              if (!managed) throw new Error('Session is not ready for device tools.');
+              this.options.emit({
+                type: 'device-tool-invoke',
+                identity: managed.identity,
+                seq: ++managed.seq,
+                requestId: request.requestId,
+                toolName: request.toolName,
+                args: request.args,
+              });
+            },
+            {
+              emitCancel: (requestId) => {
+                const managed = managedRef ?? this.sessions.get(sessionId);
+                if (!managed) return;
+                this.options.emit({
+                  type: 'device-tool-cancel',
+                  identity: managed.identity,
+                  seq: ++managed.seq,
+                  requestId,
+                });
+              },
+            }
+          )
+        : undefined;
     const sessionTools = [
       ...buildCoreTools(),
       ...builtin(
@@ -3594,6 +3642,14 @@ export class SessionSupervisor {
       ...builtin('todo', [createTodoTool((todos) => todoReminder.update(todos))]),
       ...(computer
         ? builtin('computer', [withComputerApproval(gate, createComputerTool(computer))])
+        : []),
+      ...(deviceTools
+        ? builtin(
+            DEVICE_TOOLS_BUILTIN_ID,
+            createDeviceTools((toolName, args, signal) =>
+              deviceTools.invoke(toolName, args, signal)
+            )
+          )
         : []),
       ...builtin('ask_user', [createAskTool(askManager)]),
       ...builtin('subagent', [unifiedSubagentTool]),
@@ -3814,6 +3870,7 @@ export class SessionSupervisor {
       if (managed.plan && planMode !== undefined) plan.setActive(planMode);
     }
     managedRef.computer = computer;
+    managedRef.deviceTools = deviceTools;
     managedRef.pluginTools = pluginToolInvoker;
     managedRef.pluginEvents = pluginEventInvoker;
     if (pluginEventInvoker?.plan.observe.includes('session_start'))
@@ -5926,6 +5983,7 @@ export class SessionSupervisor {
       managed.agentControl?.close('Enso worker shutdown');
       managed.currentTurnId = undefined;
       managed.computer?.cancelAll('Enso worker shutdown');
+      managed.deviceTools?.cancelAll('Enso worker shutdown');
       managed.pluginTools?.cancelAll('Enso worker shutdown');
       managed.pluginEvents?.cancelAll();
       this.pluginMcp.close();
