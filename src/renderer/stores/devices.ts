@@ -7,7 +7,6 @@ import { addToast } from '@/components/ui/toast';
 import { deviceBridge } from '@/features/devices/bridge';
 import { devicesText } from '@/features/devices/i18n';
 import { errorMessage } from '@/features/devices/support';
-import { useSessionsStore } from '@/stores/sessions';
 
 interface DevicesStore {
   environment: DeviceEnvironment | null;
@@ -161,29 +160,28 @@ export function selectDevice(sessionId: string, deviceId: string): void {
 }
 
 /**
- * Follows the device list the host sends. An agent that opens a device shows it in its session's
- * pane, which the caller has already opened.
+ * Follows the device list the host sends. An agent that opens a device selects it in its session
+ * and asks `show` to put the pane in front of the user, so the tool's "it is shown beside the
+ * conversation" is true.
  */
-export function initDevices(): () => void {
+export function initDevices(show?: (sessionId: string) => void): () => void {
   const api = deviceBridge();
   if (!api) return () => undefined;
-  const stopChanged = api.onEvent((event) => {
+  const stopEvents = api.onEvent((event) => {
     if (event.type === 'devices.changed') {
       useDevicesStore.setState({ devices: event.devices, loaded: true });
+    } else if (event.type === 'device.opened') {
+      const { sessionId, deviceId } = event;
+      useDevicesStore.setState((s) => ({ selected: { ...s.selected, [sessionId]: deviceId } }));
+      void loadDevices();
+      show?.(sessionId);
     }
   });
-  const opened = ({ sessionId, deviceId }: { sessionId: string; deviceId: string }): void => {
-    if (!useSessionsStore.getState().conversations[sessionId]) return;
-    useDevicesStore.setState((s) => ({ selected: { ...s.selected, [sessionId]: deviceId } }));
-    void loadDevices();
-  };
-  const stopOpened = api.onOpened?.(opened);
   const stopConnection = api.onConnection((state) => {
     if (state === 'connected' && useDevicesStore.getState().loaded) void loadDevices();
   });
   return () => {
-    stopChanged();
-    stopOpened?.();
+    stopEvents();
     stopConnection();
   };
 }

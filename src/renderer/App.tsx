@@ -218,7 +218,8 @@ export default function App() {
   }, []);
   useEffect(() => window.electronAPI.app.onCloseRequest(setCloseRequestId), []);
   // 移动设备列表由设备主机推送；没有设备桥时这里什么都不订阅。
-  useEffect(() => initDevices(), []);
+  // agent 打开设备时把它所在的会话面板摆到前面，工具承诺的「就在对话旁边」才成立。
+  useEffect(() => initDevices((sessionId) => addSidePanelMobileDevices(sessionId)), []);
   useEffect(
     () =>
       window.electronAPI.app.onFlushPersist((requestId) => {

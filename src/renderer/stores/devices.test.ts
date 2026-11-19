@@ -4,6 +4,7 @@ import { setDeviceBridge } from '@/features/devices/bridge';
 import {
   deviceInUse,
   devicesOf,
+  initDevices,
   loadDevices,
   openDevice,
   selectDevice,
@@ -186,5 +187,42 @@ describe('deviceInUse', () => {
         's1'
       )
     ).toBeNull();
+  });
+});
+
+describe('initDevices', () => {
+  it('agent 打开设备时选中它，并让承载它的界面出现', async () => {
+    const listeners: ((event: unknown) => void)[] = [];
+    bridgeOf([device({ id: 'android:emulator-5554', sessionId: 's1' })], {
+      onEvent: (listener: (event: unknown) => void) => {
+        listeners.push(listener);
+        return () => undefined;
+      },
+    });
+    const show = vi.fn();
+    const stop = initDevices(show);
+    listeners[0]?.({ type: 'device.opened', deviceId: 'android:emulator-5554', sessionId: 's1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    stop();
+    expect(show).toHaveBeenCalledWith('s1');
+    expect(useDevicesStore.getState().selected.s1).toBe('android:emulator-5554');
+  });
+
+  it('一个会话打开设备不影响别的会话已经选中的设备', async () => {
+    const listeners: ((event: unknown) => void)[] = [];
+    bridgeOf([device({ id: 'a', sessionId: 's1' })], {
+      onEvent: (listener: (event: unknown) => void) => {
+        listeners.push(listener);
+        return () => undefined;
+      },
+    });
+    useDevicesStore.setState({ selected: { s2: 'b' } });
+    const show = vi.fn();
+    const stop = initDevices(show);
+    listeners[0]?.({ type: 'device.opened', deviceId: 'a', sessionId: 's1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    stop();
+    expect(show).toHaveBeenCalledWith('s1');
+    expect(useDevicesStore.getState().selected).toEqual({ s2: 'b', s1: 'a' });
   });
 });

@@ -24,9 +24,8 @@ describe('deviceBridgeApi', () => {
   });
 
   it('可选方法在时必须是函数', () => {
-    expect(deviceBridgeApi({ ...stub(), onOpened: 'nope' })).toBeNull();
     expect(deviceBridgeApi({ ...stub(), saveCapture: 'nope' })).toBeNull();
-    const api = { ...stub(), onOpened: vi.fn(), saveCapture: vi.fn() };
+    const api = { ...stub(), saveCapture: vi.fn() };
     expect(deviceBridgeApi(api)).toBe(api);
   });
 });
