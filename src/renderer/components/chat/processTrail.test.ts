@@ -139,4 +139,21 @@ describe('processTrail helpers', () => {
     );
     expect(expired.size).toBe(0);
   });
+
+  it('marks suppressed keys as seen without scheduling a redundant entrance animation', () => {
+    const seen = new Set<string>(['u-1', 't-1']);
+    const active = new Map<string, number>();
+    const live = collectLiveEnteredKeys(
+      seen,
+      ['u-1', 'group-t-1', 't-3'],
+      true,
+      2000,
+      active,
+      false,
+      new Set(['group-t-1'])
+    );
+    expect(seen.has('group-t-1')).toBe(true);
+    expect(live.has('group-t-1')).toBe(false);
+    expect(live.has('t-3')).toBe(true);
+  });
 });

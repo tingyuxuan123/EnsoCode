@@ -98,150 +98,207 @@
 }
 
 
-/* 运行态 Enso 轨道信标：细轨、扫掠彗尾弧与呼吸炽核；颜色跟随强调色，随阶段微调节奏。 */
-.codekiln-working-pill {
+/* 运行态无框星火状态行：多层流体星花绽放 + 缓转 + 手打逐字淡入 + 暖色轻滑光标。 */
+.codekiln-working-row {
   animation: codekiln-working-enter var(--duration-fast, 250ms)
     var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 @keyframes codekiln-working-enter {
   from {
     opacity: 0;
-    transform: translateY(var(--distance-micro, 4px)) scale(0.98);
+    transform: translateY(var(--distance-micro, 4px));
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 .codekiln-working-icon {
-  --working-orbit-dur: 1300ms;
-  --working-pulse-dur: 1800ms;
-  --working-sweep-dur: 1700ms;
-}
-.codekiln-working-icon[data-phase='tool'] {
-  --working-orbit-dur: 1050ms;
-  --working-pulse-dur: 1450ms;
-}
-.codekiln-working-icon[data-phase='thinking'] {
-  --working-orbit-dur: 1650ms;
-  --working-pulse-dur: 1500ms;
-}
-.codekiln-working-icon[data-phase='writing'] {
-  --working-orbit-dur: 1200ms;
-  --working-pulse-dur: 1750ms;
+  --spark-breath: 2200ms;
+  --spark-turn: 11000ms;
+  --spark-ease: cubic-bezier(0.37, 0, 0.22, 1);
 }
 
-.codekiln-working-track {
-  fill: none;
-  stroke: color-mix(in srgb, var(--foreground) 11%, transparent);
-  stroke-width: 1.65;
-}
-.codekiln-working-orbit {
-  transform-box: fill-box;
+.codekiln-spark-rotor {
   transform-origin: center;
-  animation: codekiln-working-orbit var(--working-orbit-dur) var(--ease-linear, linear) infinite;
+  animation: codekiln-working-orbit var(--spark-turn) var(--ease-linear, linear) infinite;
 }
-.codekiln-working-arc-tail {
-  fill: none;
-  stroke: color-mix(in srgb, var(--brand) 34%, transparent);
-  stroke-width: 1.75;
-  stroke-linecap: round;
-  stroke-dasharray: 27 49;
-  stroke-dashoffset: 0;
+
+.codekiln-spark-aura {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: codekiln-spark-aura var(--spark-breath) var(--spark-ease) infinite;
 }
-.codekiln-working-arc-head {
-  fill: none;
-  stroke: var(--brand);
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-dasharray: 9 49;
-  stroke-dashoffset: -18;
-  animation: codekiln-working-sweep var(--working-sweep-dur) var(--ease-in-out, ease-in-out) infinite;
+.codekiln-spark-triad-primary {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: codekiln-spark-triad-primary var(--spark-breath) var(--spark-ease) infinite;
 }
-.codekiln-working-halo {
-  fill: color-mix(in srgb, var(--brand) 22%, transparent);
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: codekiln-working-halo var(--working-pulse-dur) var(--ease-in-out, ease-in-out) infinite;
+.codekiln-spark-triad-secondary {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: codekiln-spark-triad-secondary var(--spark-breath) var(--spark-ease)
+    calc(var(--spark-breath) * -0.93) infinite;
 }
-.codekiln-working-core {
-  fill: var(--brand);
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: codekiln-working-core var(--working-pulse-dur) var(--ease-in-out, ease-in-out) infinite;
+.codekiln-spark-rays {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: codekiln-spark-rays var(--spark-breath) var(--spark-ease) infinite;
 }
+.codekiln-spark-core {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: codekiln-spark-core var(--spark-breath) var(--spark-ease) infinite;
+}
+.codekiln-spark-glint {
+  opacity: 0.34;
+}
+
+@keyframes codekiln-spark-aura {
+  0%, 100% {
+    opacity: 0.32;
+    transform: scale(0.54);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+}
+@keyframes codekiln-spark-triad-primary {
+  0% {
+    opacity: 0;
+    transform: scale(0.16) rotate(-22deg);
+  }
+  14% {
+    opacity: 0.4;
+    transform: scale(0.32) rotate(-13deg);
+  }
+  48% {
+    opacity: 1;
+    transform: scale(1.03) rotate(0deg);
+  }
+  58% {
+    opacity: 0.96;
+    transform: scale(0.99) rotate(4deg);
+  }
+  86% {
+    opacity: 0.32;
+    transform: scale(0.28) rotate(17deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.16) rotate(22deg);
+  }
+}
+@keyframes codekiln-spark-triad-secondary {
+  0% {
+    opacity: 0;
+    transform: scale(0.14) rotate(18deg);
+  }
+  16% {
+    opacity: 0.32;
+    transform: scale(0.3) rotate(11deg);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1) rotate(0deg);
+  }
+  60% {
+    opacity: 0.78;
+    transform: scale(0.96) rotate(-3deg);
+  }
+  88% {
+    opacity: 0.24;
+    transform: scale(0.24) rotate(-14deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.14) rotate(-18deg);
+  }
+}
+@keyframes codekiln-spark-rays {
+  0%, 30%, 74%, 100% {
+    opacity: 0;
+    transform: scale(0.76);
+  }
+  52% {
+    opacity: 0.56;
+    transform: scale(1.06);
+  }
+  66% {
+    opacity: 0.14;
+    transform: scale(1.15);
+  }
+}
+@keyframes codekiln-spark-core {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  48%, 58% {
+    opacity: 0.96;
+    transform: scale(0.64);
+  }
+}
+
+.codekiln-musing-caret {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1.5px;
+  height: 0.95em;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--brand) 68%, var(--foreground));
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(0, -50%, 0);
+  will-change: transform, opacity;
+}
+
 @keyframes codekiln-working-orbit {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-@keyframes codekiln-working-sweep {
-  0%, 100% {
-    stroke-dasharray: 9 49;
-    stroke-dashoffset: -18;
-  }
-  50% {
-    stroke-dasharray: 16 49;
-    stroke-dashoffset: -11;
-  }
-}
-@keyframes codekiln-working-halo {
-  0%, 100% {
-    opacity: 0.45;
-    transform: scale(0.78);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.26);
-  }
 }
 @keyframes codekiln-working-core {
   0%, 100% { transform: scale(0.88); }
   50% { transform: scale(1.1); }
 }
 
-.codekiln-working-label.t-shimmer {
-  --shimmer-base: color-mix(in srgb, var(--foreground) 74%, transparent);
-  --shimmer-highlight: var(--foreground);
-}
-.codekiln-working-label-swap {
-  animation: codekiln-working-label-swap var(--duration-quick, 150ms)
-    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-@keyframes codekiln-working-label-swap {
-  from {
-    opacity: 0;
-    filter: blur(var(--blur-small, 2px));
-    transform: translateY(var(--distance-micro, 4px));
-  }
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .codekiln-working-pill,
-  .codekiln-working-orbit,
-  .codekiln-working-arc-head,
-  .codekiln-working-halo,
-  .codekiln-working-core,
-  .codekiln-working-label-swap {
+  .codekiln-working-row,
+  .codekiln-spark-rotor,
+  .codekiln-spark-aura,
+  .codekiln-spark-triad-primary,
+  .codekiln-spark-triad-secondary,
+  .codekiln-spark-rays,
+  .codekiln-spark-core {
     animation: none;
   }
-  .codekiln-working-orbit {
-    transform: rotate(-45deg);
+  .codekiln-spark-rotor {
+    transform: rotate(0deg);
   }
-  .codekiln-working-halo {
-    opacity: 0.7;
-    transform: scale(1);
+  .codekiln-spark-aura {
+    opacity: 0.65;
+    transform: scale(0.95);
   }
-  .codekiln-working-core {
-    transform: scale(1);
+  .codekiln-spark-triad-primary {
+    opacity: 1;
+    transform: scale(0.96);
   }
-  .codekiln-working-label.t-shimmer {
-    color: var(--foreground);
+  .codekiln-spark-triad-secondary {
+    opacity: 0.78;
+    transform: scale(0.94);
+  }
+  .codekiln-spark-rays {
+    opacity: 0;
+  }
+  .codekiln-spark-core {
+    opacity: 1;
+    transform: scale(0.72);
+  }
+  .codekiln-musing-caret {
+    display: none;
   }
 }
 
@@ -405,21 +462,19 @@
     var(--acc-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
-/* ── 会话进行中新增的过程步骤柔化滑入（仅直播新增，历史回放不播） ── */
+/* ── 会话进行中新增的过程步骤柔化滑入（仅直播新增，纯合成层无模糊闪白） ── */
 @keyframes t-process-enter {
   from {
-    opacity: 0;
-    filter: blur(var(--blur-small, 2px));
-    transform: translateY(6px);
+    opacity: 0.25;
+    transform: translate3d(0, 8px, 0);
   }
   to {
     opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 .t-process-enter {
-  animation: t-process-enter var(--duration-fast, 250ms)
+  animation: t-process-enter 200ms
     var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 

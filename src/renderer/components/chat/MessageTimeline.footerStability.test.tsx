@@ -115,11 +115,11 @@ describe('MessageTimeline footer stability', () => {
       )
     );
 
-    const initialPill = container.querySelector('[data-slot="working-status"]');
-    const initialIcon = initialPill?.querySelector('[role="img"]');
-    expect(initialPill).not.toBeNull();
+    const initialRow = container.querySelector('[data-slot="working-status"]');
+    const initialIcon = initialRow?.querySelector('[role="img"]');
+    expect(initialRow).not.toBeNull();
     expect(initialIcon).not.toBeNull();
-    expect(initialPill?.textContent).toContain('Thinking…');
+    expect(initialRow?.querySelector('[role="status"]')?.textContent).toBe('Thinking…');
 
     const toolRow: Extract<TimelineItem, { kind: 'tool' }> = {
       kind: 'tool',
@@ -148,10 +148,10 @@ describe('MessageTimeline footer stability', () => {
       )
     );
 
-    const updatedPill = container.querySelector('[data-slot="working-status"]');
-    const updatedIcon = updatedPill?.querySelector('[role="img"]');
-    expect(updatedPill).toBe(initialPill);
+    const updatedRow = container.querySelector('[data-slot="working-status"]');
+    const updatedIcon = updatedRow?.querySelector('[role="img"]');
+    expect(updatedRow).toBe(initialRow);
     expect(updatedIcon).toBe(initialIcon);
-    expect(updatedPill?.textContent).toContain('Running…');
+    expect(updatedRow?.querySelector('[role="status"]')?.textContent).toBe('Running…');
   });
 });

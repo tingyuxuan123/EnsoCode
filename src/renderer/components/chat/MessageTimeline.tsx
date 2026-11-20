@@ -30,6 +30,12 @@ import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
 import { collectLiveEnteredKeys, processRowGap, shouldShowProcessRail } from './processTrail';
+import {
+  findSuppressedEnterKeys,
+  isUserScrollUp,
+  nextSmoothScrollTop,
+  SMOOTH_FOLLOW_MAX_GLIDE_PX,
+} from './smoothScrollFollow';
 import { isNestedRow, ReplyHeader, RetryTurnButton, TimelineRow } from './TimelineRow';
 import { nextTimelineReveal, revealGroupKeys } from './timelineReveal';
 import {
@@ -39,6 +45,7 @@ import {
 } from './timelineRowOrigin';
 import { WelcomeSuggestions } from './WelcomeSuggestions';
 import { WorkingStatus } from './WorkingStatus';
+import { isCompactingTurn, isReviewingTurn, type MusingCue, musingCueFor } from './workingMusings';
 
 /** 消息和输入共用阅读列；padding 放在列上，保持容器查询断点与两侧对齐。全宽模式仍由 enso-chat-wide 覆盖。 */
 export const CHAT_COL =
@@ -71,7 +78,14 @@ const AT_BOTTOM_THRESHOLD = 40;
 // 稳定引用。库每次渲染都重发 props；按引用去重的输入不能每次都是新对象。
 const INITIAL_TOP_MOST_ITEM_INDEX = { index: 'LAST', align: 'end' } as const;
 const VIEWPORT_OVERSCAN = { top: 600, bottom: 600 };
-const followChatOutput = (isAtBottom: boolean) => (isAtBottom ? 'auto' : false);
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 function TimelineList({ style, ...props }: ListProps) {
   const hidden = style?.visibility === 'hidden';
@@ -93,6 +107,9 @@ interface TimelineChromeValue {
   busy: boolean;
   loading: boolean;
   phase: BusyPhase;
+  cue: MusingCue | null;
+  compacting: boolean;
+  waitingForApproval: boolean;
   since?: number;
   error?: string;
   onRetryResume?: () => void;
@@ -110,10 +127,20 @@ function TimelineFooter() {
   const chrome = useContext(TimelineChromeContext);
   const { t } = useI18n();
   if (!chrome) return null;
-  const { busy, loading, phase, since, error, onRetryResume } = chrome;
+  const { busy, loading, phase, cue, compacting, waitingForApproval, since, error, onRetryResume } =
+    chrome;
   return (
     <div data-timeline-footer="" className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
-      {busy && <WorkingStatus loading={loading} phase={phase} since={since} />}
+      {busy && (
+        <WorkingStatus
+          loading={loading}
+          phase={phase}
+          cue={cue}
+          compacting={compacting}
+          waitingForApproval={waitingForApproval}
+          since={since}
+        />
+      )}
       {error && (
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 text-sm text-destructive whitespace-pre-wrap">{t(error)}</p>
@@ -223,9 +250,20 @@ export function MessageTimeline({
   const [fitsViewport, setFitsViewport] = useState(false);
   // ref 镜像：imperative handle 里读，避免闭包拿到旧值
   const atBottomRef = useRef(true);
+  /** 贴底自动跟随锁：仅当用户主动向上滚动或跳转历史时解除，内容长高不误解除 */
+  const followingRef = useRef(true);
+  const runningRef = useRef(running || busy);
+  runningRef.current = running || busy;
   const scrollerRef = useRef<HTMLElement | null>(null);
+  const virtuosoCleanupRef = useRef<(() => void) | null>(null);
+  const virtuosoSyncObservedRef = useRef<(() => void) | null>(null);
+  const boundVirtuosoScrollerRef = useRef<HTMLElement | null>(null);
   const settleRef = useRef(0);
   const followSettleRef = useRef(0);
+  const glideRafRef = useRef(0);
+  const glideLastMsRef = useRef(0);
+  const glidingWriteRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
   const observerRef = useRef<ResizeObserver | null>(null);
   /** 内容长高贴底纠正中：忽略这段期间的 scroll 误判，避免展开瞬间被当成用户上滚 */
   const pinningRef = useRef(false);
@@ -341,13 +379,15 @@ export function MessageTimeline({
         true
       );
     }
+    const suppressed = findSuppressedEnterKeys(folded, seenRowKeysRef.current);
     return collectLiveEnteredKeys(
       seenRowKeysRef.current,
       keys,
       running && !loading && !olderPrepended,
       Date.now(),
       liveEnterRef.current,
-      false
+      false,
+      suppressed
     );
   }, [folded, running, loading, olderCursor, currentEpoch]);
   // 引用必须稳定：TimelineRow 的 memo 比较不含回调
@@ -375,6 +415,13 @@ export function MessageTimeline({
     return result;
   }, [items]);
 
+  const stopGlide = useCallback(() => {
+    cancelAnimationFrame(glideRafRef.current);
+    glideRafRef.current = 0;
+    glideLastMsRef.current = 0;
+    glidingWriteRef.current = false;
+  }, []);
+
   /** 单次贴底：只在确实没贴底时写，贴住后不再碰 scrollTop（反复写会与 Virtuoso 自身的滚动纠正打架） */
   const pinToBottom = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -382,8 +429,52 @@ export function MessageTimeline({
     if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 2) {
       pinningRef.current = true;
       scroller.scrollTop = scroller.scrollHeight;
+      lastScrollTopRef.current = scroller.scrollTop;
     }
   }, []);
+
+  /**
+   * 指数阻尼平滑贴底：新步骤 / 流式文本快速追加时以帧率无关的速度顺滑上移，
+   * 消除瞬跳和频闪；用户一向上滚或触碰立即让权。
+   */
+  const kickGlide = useCallback(() => {
+    if (!followingRef.current) return;
+    const scroller = scrollerRef.current;
+    if (!scroller || glideRafRef.current !== 0) return;
+    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    if (gap <= 1) return;
+    const reduced = prefersReducedMotion();
+    if (reduced) {
+      pinToBottom();
+      return;
+    }
+    const step = (now: number) => {
+      const el = scrollerRef.current;
+      if (!el || !followingRef.current) {
+        stopGlide();
+        return;
+      }
+      const dtMs = glideLastMsRef.current > 0 ? now - glideLastMsRef.current : 16;
+      glideLastMsRef.current = now;
+      const target = Math.max(0, el.scrollHeight - el.clientHeight);
+      const current = el.scrollTop;
+      const { next, done } = nextSmoothScrollTop(current, target, dtMs, false);
+      if (next > current) {
+        glidingWriteRef.current = true;
+        el.scrollTop = next;
+        lastScrollTopRef.current = el.scrollTop;
+      }
+      if (done) {
+        stopGlide();
+        atBottomRef.current = true;
+        setAtBottom(true);
+      } else {
+        glideRafRef.current = requestAnimationFrame(step);
+      }
+    };
+    glideLastMsRef.current = 0;
+    glideRafRef.current = requestAnimationFrame(step);
+  }, [pinToBottom, stopGlide]);
 
   /*
    * 滚到底：Virtuoso 动态测高会在滚动后继续修正总高（窄屏换行远多于估算、iOS 测量更慢），
@@ -394,6 +485,23 @@ export function MessageTimeline({
    */
   const scrollToBottom = useCallback(() => {
     cancelAnimationFrame(settleRef.current);
+    stopGlide();
+    followingRef.current = true;
+    atBottomRef.current = true;
+    setAtBottom(true);
+
+    // 已经靠近底部（如贴底发消息）时走平滑上移，不启动 1.2s 硬砸循环打断流式丝滑感。
+    const currentScroller = scrollerRef.current;
+    if (
+      virtualize &&
+      currentScroller &&
+      currentScroller.scrollHeight - currentScroller.scrollTop - currentScroller.clientHeight <=
+        SMOOTH_FOLLOW_MAX_GLIDE_PX
+    ) {
+      kickGlide();
+      return;
+    }
+
     const deadline = Date.now() + 1200;
     // 用户一碰屏幕就交还控制权：真机上 iOS 的惯性滚动与我们的纠正会互相打架，
     // 表现为持续闪烁；有这道闸，最坏情况下一次触摸即可终止。
@@ -423,17 +531,124 @@ export function MessageTimeline({
       else abort();
     };
     settle();
+  }, [kickGlide, pinToBottom, stopGlide, virtualize]);
 
-    setAtBottom(true);
-    atBottomRef.current = true;
-  }, [pinToBottom]);
+  const attachVirtuosoScroller = useCallback(
+    (el: HTMLElement | Window | null) => {
+      const next = el instanceof HTMLElement ? el : null;
+      if (next === boundVirtuosoScrollerRef.current) return;
+      virtuosoCleanupRef.current?.();
+      virtuosoCleanupRef.current = null;
+      boundVirtuosoScrollerRef.current = next;
+      scrollerRef.current = next;
+      if (!next) return;
+
+      lastScrollTopRef.current = next.scrollTop;
+
+      const yieldToUser = () => {
+        stopGlide();
+        followingRef.current = false;
+      };
+      const onWheel = (event: WheelEvent) => {
+        if (event.deltaY < 0) yieldToUser();
+      };
+      const onTouchStart = () => {
+        yieldToUser();
+      };
+      const onPointerDown = (event: PointerEvent) => {
+        const rect = next.getBoundingClientRect();
+        if (event.clientX >= rect.right - 18) yieldToUser();
+      };
+      const onScroll = () => {
+        if (glidingWriteRef.current) {
+          glidingWriteRef.current = false;
+          lastScrollTopRef.current = next.scrollTop;
+          return;
+        }
+        if (pinningRef.current) {
+          pinningRef.current = false;
+          lastScrollTopRef.current = next.scrollTop;
+          return;
+        }
+        const current = next.scrollTop;
+        if (isUserScrollUp(lastScrollTopRef.current, current)) {
+          stopGlide();
+          followingRef.current = false;
+          if (atBottomRef.current) {
+            atBottomRef.current = false;
+            setAtBottom(false);
+          }
+        } else if (next.scrollHeight - current - next.clientHeight <= AT_BOTTOM_THRESHOLD) {
+          followingRef.current = true;
+          if (!atBottomRef.current) {
+            atBottomRef.current = true;
+            setAtBottom(true);
+          }
+        }
+        lastScrollTopRef.current = current;
+      };
+
+      next.addEventListener('wheel', onWheel, { passive: true });
+      next.addEventListener('touchstart', onTouchStart, { passive: true });
+      next.addEventListener('pointerdown', onPointerDown, { passive: true });
+      next.addEventListener('scroll', onScroll, { passive: true });
+
+      let resizeObserver: ResizeObserver | null = null;
+      const observedTargets = new WeakSet<Element>();
+      const observeIfNew = (target: Element | null) => {
+        if (!resizeObserver || !target || observedTargets.has(target)) return;
+        observedTargets.add(target);
+        resizeObserver.observe(target);
+      };
+      const syncObserved = () => {
+        observeIfNew(next);
+        observeIfNew(next.querySelector('[data-testid="virtuoso-item-list"]'));
+        observeIfNew(next.querySelector('[data-timeline-footer]'));
+      };
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          syncObserved();
+          if (!followingRef.current) return;
+          if (next.scrollHeight - next.scrollTop - next.clientHeight <= 1) return;
+          if (runningRef.current) kickGlide();
+          else pinToBottom();
+        });
+        syncObserved();
+      }
+
+      virtuosoSyncObservedRef.current = syncObserved;
+      virtuosoCleanupRef.current = () => {
+        virtuosoSyncObservedRef.current = null;
+        next.removeEventListener('wheel', onWheel);
+        next.removeEventListener('touchstart', onTouchStart);
+        next.removeEventListener('pointerdown', onPointerDown);
+        next.removeEventListener('scroll', onScroll);
+        resizeObserver?.disconnect();
+      };
+    },
+    [kickGlide, pinToBottom, stopGlide]
+  );
+
+  // 新步骤 / 流式增量落地后立刻起平滑跟滚，不依赖 Virtuoso 的瞬跳 followOutput。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: folded / items / busy 变化是贴底跟滚的触发信号
+  useLayoutEffect(() => {
+    if (!virtualize) return;
+    virtuosoSyncObservedRef.current?.();
+    if (!followingRef.current || !runningRef.current) return;
+    kickGlide();
+  }, [virtualize, folded, items, busy, kickGlide]);
+
   useEffect(
     () => () => {
       cancelAnimationFrame(settleRef.current);
       cancelAnimationFrame(followSettleRef.current);
+      stopGlide();
+      virtuosoCleanupRef.current?.();
+      virtuosoCleanupRef.current = null;
+      boundVirtuosoScrollerRef.current = null;
       window.clearTimeout(userScrollTimerRef.current);
     },
-    []
+    [stopGlide]
   );
 
   /*
@@ -488,6 +703,8 @@ export function MessageTimeline({
     return folded.findIndex((item) => item.kind === 'tool-group' && groupContainsKey(item, key));
   };
   const scrollToFoldedKey = (key: string): void => {
+    stopGlide();
+    followingRef.current = false;
     if (!virtualize) {
       scrollerRef.current
         ?.querySelector(`[data-nav-key="${CSS.escape(key)}"]`)
@@ -688,6 +905,9 @@ export function MessageTimeline({
     busy,
     loading,
     phase: busyPhaseFor(folded.at(-1)),
+    cue: busy && !loading ? musingCueFor(items) : null,
+    compacting: busy && !loading && isCompactingTurn(items),
+    waitingForApproval: busy && !loading && isReviewingTurn(items),
     since: !loading ? (lastOutputAt ?? runStartedAt) : undefined,
     error,
     onRetryResume,
@@ -865,12 +1085,15 @@ export function MessageTimeline({
               computeItemKey={(_, item) => item.key}
               firstItemIndex={firstItemIndex}
               startReached={requestOlder}
-              // 贴底时新内容自动跟随（含流式增高）；非贴底不抢滚
-              followOutput={followChatOutput}
+              // 由阻尼平滑跟滚接管贴底，避免 Virtuoso 每次增量硬跳造成闪烁
+              followOutput={false}
               atBottomThreshold={AT_BOTTOM_THRESHOLD}
               atBottomStateChange={(value) => {
+                // 自动跟滚吸收新内容增高期间忽略瞬态 false，不闪「回到底部」按钮
+                if (!value && followingRef.current) return;
                 setAtBottom(value);
                 atBottomRef.current = value;
+                if (value) followingRef.current = true;
               }}
               increaseViewportBy={VIEWPORT_OVERSCAN}
               initialTopMostItemIndex={INITIAL_TOP_MOST_ITEM_INDEX}
@@ -887,9 +1110,7 @@ export function MessageTimeline({
                   return current;
                 });
               }}
-              scrollerRef={(el) => {
-                scrollerRef.current = el instanceof HTMLElement ? el : null;
-              }}
+              scrollerRef={attachVirtuosoScroller}
               className="scroll-stable h-full select-text"
               components={VIRTUOSO_COMPONENTS}
               // Virtuoso 传入的是含 firstItemIndex 的绝对下标，换算回 folded 下标

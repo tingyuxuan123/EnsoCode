@@ -55,7 +55,8 @@ export function collectLiveEnteredKeys(
   running: boolean,
   now: number,
   activeEnters: Map<string, number>,
-  initialMount: boolean
+  initialMount: boolean,
+  suppressedKeys?: ReadonlySet<string>
 ): Set<string> {
   for (const [key, enteredAt] of activeEnters) {
     if (now - enteredAt >= LIVE_ENTER_MS) activeEnters.delete(key);
@@ -67,7 +68,7 @@ export function collectLiveEnteredKeys(
   for (const key of currentKeys) {
     if (seenKeys.has(key)) continue;
     seenKeys.add(key);
-    if (running) activeEnters.set(key, now);
+    if (running && !suppressedKeys?.has(key)) activeEnters.set(key, now);
   }
   return new Set(activeEnters.keys());
 }
