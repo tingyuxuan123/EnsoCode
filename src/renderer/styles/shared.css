@@ -98,33 +98,150 @@
 }
 
 
-/* 运行态九点列序脉冲；颜色跟随用户强调色，不改变文字和计时布局。 */
-.codekiln-working-dots {
-  --working-dot-size: calc(4rem / 14);
-  --working-dot-gap: calc(3rem / 14);
-  --working-dot-cycle: 1200ms;
-  --working-dot-step: 110ms;
-  display: grid;
-  grid-template-columns: repeat(3, var(--working-dot-size));
-  grid-auto-rows: var(--working-dot-size);
-  gap: var(--working-dot-gap);
-  place-content: center;
+/* 运行态 Enso 轨道信标：细轨、扫掠彗尾弧与呼吸炽核；颜色跟随强调色，随阶段微调节奏。 */
+.codekiln-working-pill {
+  animation: codekiln-working-enter var(--duration-fast, 250ms)
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
-.codekiln-working-dot {
-  display: block;
-  border-radius: 999px;
-  background-color: color-mix(in srgb, var(--brand) 18%, transparent);
-  animation: codekiln-working-dot var(--working-dot-cycle) ease-in-out infinite;
-  animation-delay: calc(var(--working-dot-index) * var(--working-dot-step));
+@keyframes codekiln-working-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--distance-micro, 4px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
-@keyframes codekiln-working-dot {
-  0%, 42%, 100% { background-color: color-mix(in srgb, var(--brand) 18%, transparent); }
-  12% { background-color: var(--brand); }
+
+.codekiln-working-icon {
+  --working-orbit-dur: 1300ms;
+  --working-pulse-dur: 1800ms;
+  --working-sweep-dur: 1700ms;
 }
+.codekiln-working-icon[data-phase='tool'] {
+  --working-orbit-dur: 1050ms;
+  --working-pulse-dur: 1450ms;
+}
+.codekiln-working-icon[data-phase='thinking'] {
+  --working-orbit-dur: 1650ms;
+  --working-pulse-dur: 1500ms;
+}
+.codekiln-working-icon[data-phase='writing'] {
+  --working-orbit-dur: 1200ms;
+  --working-pulse-dur: 1750ms;
+}
+
+.codekiln-working-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--foreground) 11%, transparent);
+  stroke-width: 1.65;
+}
+.codekiln-working-orbit {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: codekiln-working-orbit var(--working-orbit-dur) var(--ease-linear, linear) infinite;
+}
+.codekiln-working-arc-tail {
+  fill: none;
+  stroke: color-mix(in srgb, var(--brand) 34%, transparent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-dasharray: 27 49;
+  stroke-dashoffset: 0;
+}
+.codekiln-working-arc-head {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-dasharray: 9 49;
+  stroke-dashoffset: -18;
+  animation: codekiln-working-sweep var(--working-sweep-dur) var(--ease-in-out, ease-in-out) infinite;
+}
+.codekiln-working-halo {
+  fill: color-mix(in srgb, var(--brand) 22%, transparent);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: codekiln-working-halo var(--working-pulse-dur) var(--ease-in-out, ease-in-out) infinite;
+}
+.codekiln-working-core {
+  fill: var(--brand);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: codekiln-working-core var(--working-pulse-dur) var(--ease-in-out, ease-in-out) infinite;
+}
+@keyframes codekiln-working-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes codekiln-working-sweep {
+  0%, 100% {
+    stroke-dasharray: 9 49;
+    stroke-dashoffset: -18;
+  }
+  50% {
+    stroke-dasharray: 16 49;
+    stroke-dashoffset: -11;
+  }
+}
+@keyframes codekiln-working-halo {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.78);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.26);
+  }
+}
+@keyframes codekiln-working-core {
+  0%, 100% { transform: scale(0.88); }
+  50% { transform: scale(1.1); }
+}
+
+.codekiln-working-label.t-shimmer {
+  --shimmer-base: color-mix(in srgb, var(--foreground) 74%, transparent);
+  --shimmer-highlight: var(--foreground);
+}
+.codekiln-working-label-swap {
+  animation: codekiln-working-label-swap var(--duration-quick, 150ms)
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+@keyframes codekiln-working-label-swap {
+  from {
+    opacity: 0;
+    filter: blur(var(--blur-small, 2px));
+    transform: translateY(var(--distance-micro, 4px));
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .codekiln-working-dot {
+  .codekiln-working-pill,
+  .codekiln-working-orbit,
+  .codekiln-working-arc-head,
+  .codekiln-working-halo,
+  .codekiln-working-core,
+  .codekiln-working-label-swap {
     animation: none;
-    background-color: color-mix(in srgb, var(--brand) 30%, transparent);
+  }
+  .codekiln-working-orbit {
+    transform: rotate(-45deg);
+  }
+  .codekiln-working-halo {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  .codekiln-working-core {
+    transform: scale(1);
+  }
+  .codekiln-working-label.t-shimmer {
+    color: var(--foreground);
   }
 }
 
@@ -150,13 +267,13 @@
     transparent         60%,
     transparent        100%
   );
-  background-size: var(--shimmer-band) 100%;
+  background-size: var(--shimmer-band, 400%) 100%;
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
+  animation: t-shimmer var(--shimmer-dur, 2000ms) var(--shimmer-ease, linear) infinite;
 }
 @keyframes t-shimmer {
   0%   { background-position: 100% 0; }

@@ -2,7 +2,9 @@ import { ArrowDown, ChevronRight, FolderOpen, LoaderCircle } from 'lucide-react'
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import {
   Component,
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -22,7 +24,7 @@ import {
   type TimelineItem,
 } from '@/stores/sessions/timeline';
 import { useSettingsStore } from '@/stores/settings';
-import { busyPhaseFor } from './busyStatus';
+import { type BusyPhase, busyPhaseFor } from './busyStatus';
 import { EnsoMark } from './EnsoMark';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
@@ -83,6 +85,55 @@ function TimelineList({ style, ...props }: ListProps) {
   }, [hidden, reveal]);
   return <div {...props} style={hidden && reveal ? { ...style, visibility: 'visible' } : style} />;
 }
+
+interface TimelineChromeValue {
+  pageChrome: HistoryPageChrome;
+  onLoadMore?: () => void;
+  busy: boolean;
+  loading: boolean;
+  phase: BusyPhase;
+  since?: number;
+  error?: string;
+  onRetryResume?: () => void;
+}
+
+const TimelineChromeContext = createContext<TimelineChromeValue | null>(null);
+
+function TimelineHeader() {
+  const chrome = useContext(TimelineChromeContext);
+  if (!chrome) return null;
+  return <HistoryPageHeader chrome={chrome.pageChrome} onLoadMore={chrome.onLoadMore} />;
+}
+
+function TimelineFooter() {
+  const chrome = useContext(TimelineChromeContext);
+  const { t } = useI18n();
+  if (!chrome) return null;
+  const { busy, loading, phase, since, error, onRetryResume } = chrome;
+  return (
+    <div data-timeline-footer="" className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
+      {busy && <WorkingStatus loading={loading} phase={phase} since={since} />}
+      {error && (
+        <div className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 text-sm text-destructive whitespace-pre-wrap">{t(error)}</p>
+          <RetryTurnButton />
+          {onRetryResume && (
+            <Button size="sm" variant="outline" onClick={onRetryResume}>
+              {t('Retry resume')}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Virtuoso 按组件引用挂载 Header / Footer；保持引用稳定，避免每次流式更新卸载重挂。
+const VIRTUOSO_COMPONENTS = {
+  List: TimelineList,
+  Header: TimelineHeader,
+  Footer: TimelineFooter,
+};
 
 export interface MessageTimelineHandle {
   /** 滚到底并恢复跟随（发送消息 / 点回到底部按钮） */
@@ -590,248 +641,229 @@ export function MessageTimeline({
         )
     );
   }, [virtualize, hasOlder, historyLoading, firstItemIndex, folded.length, items.length]);
-  const renderHeader = () => (
-    <HistoryPageHeader
-      chrome={pageChrome}
-      onLoadMore={pageChrome === 'more' ? requestOlder : undefined}
-    />
-  );
-  const renderFooter = () => (
-    <div data-timeline-footer="" className={cn(CHAT_COL, 'pb-6 [overflow-wrap:anywhere]')}>
-      {busy && (
-        <WorkingStatus
-          loading={loading}
-          phase={busyPhaseFor(folded.at(-1))}
-          since={!loading ? (lastOutputAt ?? runStartedAt) : undefined}
-        />
-      )}
-      {error && (
-        <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 text-sm text-destructive whitespace-pre-wrap">{t(error)}</p>
-          <RetryTurnButton />
-          {onRetryResume && (
-            <Button size="sm" variant="outline" onClick={onRetryResume}>
-              {t('Retry resume')}
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  const chromeValue: TimelineChromeValue = {
+    pageChrome,
+    onLoadMore: pageChrome === 'more' ? requestOlder : undefined,
+    busy,
+    loading,
+    phase: busyPhaseFor(folded.at(-1)),
+    since: !loading ? (lastOutputAt ?? runStartedAt) : undefined,
+    error,
+    onRetryResume,
+  };
 
   return (
     <ChatSearchHighlightContext.Provider value={searchHighlight}>
-      <div data-enso="timeline" className="@container relative min-h-0 flex-1">
-        <NavRail items={navItems} activeKey={activeNavKey} onJump={jumpTo} />
-        {items.length === 0 && !busy ? (
-          <EmptyReveal className="h-full overflow-y-auto">
-            <div className={cn(CHAT_COL, 'flex min-h-full items-center py-[calc(28rem/14)]')}>
-              <section
-                data-slot="welcome-panel"
-                className="relative w-full overflow-hidden rounded-[calc(20rem/14)] border border-border/70 bg-card/75 px-[calc(18rem/14)] py-[calc(20rem/14)] shadow-sm @min-[36rem]:px-[calc(26rem/14)] @min-[36rem]:py-[calc(24rem/14)]"
-              >
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-[18%] top-0 h-px bg-gradient-to-r from-transparent via-brand/55 to-transparent"
-                />
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -top-[calc(76rem/14)] -right-[calc(64rem/14)] size-[calc(190rem/14)] rounded-full bg-brand/[0.055] blur-3xl"
-                />
+      <TimelineChromeContext.Provider value={chromeValue}>
+        <div data-enso="timeline" className="@container relative min-h-0 flex-1">
+          <NavRail items={navItems} activeKey={activeNavKey} onJump={jumpTo} />
+          {items.length === 0 && !busy ? (
+            <EmptyReveal className="h-full overflow-y-auto">
+              <div className={cn(CHAT_COL, 'flex min-h-full items-center py-[calc(28rem/14)]')}>
+                <section
+                  data-slot="welcome-panel"
+                  className="relative w-full overflow-hidden rounded-[calc(20rem/14)] border border-border/70 bg-card/75 px-[calc(18rem/14)] py-[calc(20rem/14)] shadow-sm @min-[36rem]:px-[calc(26rem/14)] @min-[36rem]:py-[calc(24rem/14)]"
+                >
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-[18%] top-0 h-px bg-gradient-to-r from-transparent via-brand/55 to-transparent"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -top-[calc(76rem/14)] -right-[calc(64rem/14)] size-[calc(190rem/14)] rounded-full bg-brand/[0.055] blur-3xl"
+                  />
 
-                <div className="relative">
-                  <div className="t-stagger-line t-stagger-line--1 flex items-start gap-[calc(13rem/14)]">
-                    <span className="flex size-[calc(42rem/14)] shrink-0 items-center justify-center rounded-[calc(13rem/14)] border border-border/70 bg-background/80 shadow-xs">
-                      <EnsoMark className="size-[calc(21rem/14)]" />
-                    </span>
-                    <div className="min-w-0 flex-1 pt-[1px]">
-                      <span className="inline-flex min-w-0 max-w-full items-center gap-[calc(5rem/14)] rounded-full border border-border/60 bg-secondary/45 px-[calc(9rem/14)] py-[calc(4rem/14)] text-[calc(10.5rem/14)] text-muted-foreground">
-                        <FolderOpen className="size-[calc(13rem/14)] shrink-0" />
-                        {onSuggestion && (
-                          <>
-                            <span className="max-w-[220px] truncate">{emptyTitle}</span>
-                            <ChevronRight className="size-[calc(11rem/14)] shrink-0 opacity-60" />
-                          </>
-                        )}
-                        <span className="shrink-0">{t('New conversation')}</span>
+                  <div className="relative">
+                    <div className="t-stagger-line t-stagger-line--1 flex items-start gap-[calc(13rem/14)]">
+                      <span className="flex size-[calc(42rem/14)] shrink-0 items-center justify-center rounded-[calc(13rem/14)] border border-border/70 bg-background/80 shadow-xs">
+                        <EnsoMark className="size-[calc(21rem/14)]" />
                       </span>
-                      <p className="mt-[calc(9rem/14)] text-[calc(23rem/14)] leading-[calc(29rem/14)] font-semibold tracking-[-0.025em] @min-[36rem]:text-[calc(25rem/14)] @min-[36rem]:leading-[calc(31rem/14)]">
-                        {onSuggestion ? t('Start a new task') : emptyTitle}
-                      </p>
-                    </div>
-                  </div>
-
-                  {error ? (
-                    <>
-                      <p className="t-stagger-line t-stagger-line--2 mt-[calc(18rem/14)] max-w-md text-sm text-destructive whitespace-pre-wrap">
-                        {t(error)}
-                      </p>
-                      {onRetryResume && (
-                        <Button size="sm" variant="outline" onClick={onRetryResume}>
-                          {t('Retry resume')}
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {emptyDescription !== '' && (
-                        <p className="t-stagger-line t-stagger-line--2 mt-[calc(9rem/14)] max-w-[640px] text-[calc(13rem/14)] leading-[calc(23rem/14)] text-muted-foreground">
-                          {emptyDescription ??
-                            (onSuggestion
-                              ? t(
-                                  'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
-                                  {
-                                    project: emptyTitle,
-                                  }
-                                )
-                              : t('Ask the agent…'))}
+                      <div className="min-w-0 flex-1 pt-[1px]">
+                        <span className="inline-flex min-w-0 max-w-full items-center gap-[calc(5rem/14)] rounded-full border border-border/60 bg-secondary/45 px-[calc(9rem/14)] py-[calc(4rem/14)] text-[calc(10.5rem/14)] text-muted-foreground">
+                          <FolderOpen className="size-[calc(13rem/14)] shrink-0" />
+                          {onSuggestion && (
+                            <>
+                              <span className="max-w-[220px] truncate">{emptyTitle}</span>
+                              <ChevronRight className="size-[calc(11rem/14)] shrink-0 opacity-60" />
+                            </>
+                          )}
+                          <span className="shrink-0">{t('New conversation')}</span>
+                        </span>
+                        <p className="mt-[calc(9rem/14)] text-[calc(23rem/14)] leading-[calc(29rem/14)] font-semibold tracking-[-0.025em] @min-[36rem]:text-[calc(25rem/14)] @min-[36rem]:leading-[calc(31rem/14)]">
+                          {onSuggestion ? t('Start a new task') : emptyTitle}
                         </p>
-                      )}
-                      {onSuggestion && (
-                        <div className="t-stagger-line t-stagger-line--3 mt-[calc(22rem/14)] border-t border-border/60 pt-[calc(18rem/14)]">
-                          <WelcomeSuggestions onPick={onSuggestion} />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </section>
+                      </div>
+                    </div>
+
+                    {error ? (
+                      <>
+                        <p className="t-stagger-line t-stagger-line--2 mt-[calc(18rem/14)] max-w-md text-sm text-destructive whitespace-pre-wrap">
+                          {t(error)}
+                        </p>
+                        {onRetryResume && (
+                          <Button size="sm" variant="outline" onClick={onRetryResume}>
+                            {t('Retry resume')}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {emptyDescription !== '' && (
+                          <p className="t-stagger-line t-stagger-line--2 mt-[calc(9rem/14)] max-w-[640px] text-[calc(13rem/14)] leading-[calc(23rem/14)] text-muted-foreground">
+                            {emptyDescription ??
+                              (onSuggestion
+                                ? t(
+                                    'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
+                                    {
+                                      project: emptyTitle,
+                                    }
+                                  )
+                                : t('Ask the agent…'))}
+                          </p>
+                        )}
+                        {onSuggestion && (
+                          <div className="t-stagger-line t-stagger-line--3 mt-[calc(22rem/14)] border-t border-border/60 pt-[calc(18rem/14)]">
+                            <WelcomeSuggestions onPick={onSuggestion} />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </EmptyReveal>
+          ) : items.length === 0 && error ? (
+            <EmptyReveal className="flex h-full flex-col items-center justify-center gap-2 text-center">
+              <p className="t-stagger-line t-stagger-line--1 max-w-md text-sm text-destructive whitespace-pre-wrap">
+                {t(error)}
+              </p>
+              {onRetryResume && (
+                <Button size="sm" variant="outline" onClick={onRetryResume}>
+                  {t('Retry resume')}
+                </Button>
+              )}
+            </EmptyReveal>
+          ) : items.length === 0 ? (
+            // spawn/resume 期间（历史消息尚未回放）：明确的加载态，不留空白页
+            <div className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
+              <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">{t('Preparing session…')}</p>
             </div>
-          </EmptyReveal>
-        ) : items.length === 0 && error ? (
-          <EmptyReveal className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <p className="t-stagger-line t-stagger-line--1 max-w-md text-sm text-destructive whitespace-pre-wrap">
-              {t(error)}
-            </p>
-            {onRetryResume && (
-              <Button size="sm" variant="outline" onClick={onRetryResume}>
-                {t('Retry resume')}
-              </Button>
-            )}
-          </EmptyReveal>
-        ) : items.length === 0 ? (
-          // spawn/resume 期间（历史消息尚未回放）：明确的加载态，不留空白页
-          <div className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
-            <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">{t('Preparing session…')}</p>
-          </div>
-        ) : !virtualize ? (
-          <div
-            ref={(el) => {
-              scrollerRef.current = el;
-            }}
-            onTouchStart={() => {
-              userScrollingRef.current = true;
-              window.clearTimeout(userScrollTimerRef.current);
-            }}
-            onTouchEnd={() => {
-              window.clearTimeout(userScrollTimerRef.current);
-              userScrollTimerRef.current = window.setTimeout(() => {
-                userScrollingRef.current = false;
-              }, 400);
-            }}
-            onWheel={() => {
-              userScrollingRef.current = true;
-              window.clearTimeout(userScrollTimerRef.current);
-              userScrollTimerRef.current = window.setTimeout(() => {
-                userScrollingRef.current = false;
-              }, 400);
-            }}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              if (pinningRef.current) {
-                pinningRef.current = false;
-                atBottomRef.current = true;
-                setAtBottom(true);
-                return;
-              }
-              /*
-               * 进行中的 write/edit 会先以标题贴底、再突然插入 max-h-96 正文。
-               * 浏览器会为这次长高发一次非用户 scroll（钉住工具头），若据此解除跟随，
-               * 画面就停在工具开头。完成态不再默认展开，所以只有 loading 才复现。
-               */
-              if (!userScrollingRef.current) {
-                if (atBottomRef.current) pinToBottom();
-                return;
-              }
-              const value = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_THRESHOLD;
-              if (value !== atBottomRef.current) {
-                atBottomRef.current = value;
+          ) : !virtualize ? (
+            <div
+              ref={(el) => {
+                scrollerRef.current = el;
+              }}
+              onTouchStart={() => {
+                userScrollingRef.current = true;
+                window.clearTimeout(userScrollTimerRef.current);
+              }}
+              onTouchEnd={() => {
+                window.clearTimeout(userScrollTimerRef.current);
+                userScrollTimerRef.current = window.setTimeout(() => {
+                  userScrollingRef.current = false;
+                }, 400);
+              }}
+              onWheel={() => {
+                userScrollingRef.current = true;
+                window.clearTimeout(userScrollTimerRef.current);
+                userScrollTimerRef.current = window.setTimeout(() => {
+                  userScrollingRef.current = false;
+                }, 400);
+              }}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (pinningRef.current) {
+                  pinningRef.current = false;
+                  atBottomRef.current = true;
+                  setAtBottom(true);
+                  return;
+                }
+                /*
+                 * 进行中的 write/edit 会先以标题贴底、再突然插入 max-h-96 正文。
+                 * 浏览器会为这次长高发一次非用户 scroll（钉住工具头），若据此解除跟随，
+                 * 画面就停在工具开头。完成态不再默认展开，所以只有 loading 才复现。
+                 */
+                if (!userScrollingRef.current) {
+                  if (atBottomRef.current) pinToBottom();
+                  return;
+                }
+                const value =
+                  el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_THRESHOLD;
+                if (value !== atBottomRef.current) {
+                  atBottomRef.current = value;
+                  setAtBottom(value);
+                }
+                if (onStartReached) {
+                  if (el.scrollTop < 80 && !startReachedLatch.current) {
+                    startReachedLatch.current = true;
+                    onStartReached();
+                  } else if (el.scrollTop > 240) {
+                    startReachedLatch.current = false;
+                  }
+                }
+              }}
+              className="scroll-stable h-full select-text overflow-y-auto [overflow-anchor:none]"
+            >
+              <div ref={attachContent}>
+                <TimelineHeader />
+                {folded.map((item, index) => renderRow(item, index))}
+                <TimelineFooter />
+              </div>
+            </div>
+          ) : (
+            <Virtuoso
+              key={rowEpoch.current}
+              ref={virtuosoRef}
+              data={folded}
+              // 不用首条长消息探测整段高度，否则初始定位反复校正，正文隐藏只剩脚点。
+              defaultItemHeight={80}
+              computeItemKey={(_, item) => item.key}
+              firstItemIndex={firstItemIndex}
+              startReached={requestOlder}
+              // 贴底时新内容自动跟随（含流式增高）；非贴底不抢滚
+              followOutput={followChatOutput}
+              atBottomThreshold={AT_BOTTOM_THRESHOLD}
+              atBottomStateChange={(value) => {
                 setAtBottom(value);
-              }
-              if (onStartReached) {
-                if (el.scrollTop < 80 && !startReachedLatch.current) {
-                  startReachedLatch.current = true;
-                  onStartReached();
-                } else if (el.scrollTop > 240) {
-                  startReachedLatch.current = false;
-                }
-              }
-            }}
-            className="scroll-stable h-full select-text overflow-y-auto [overflow-anchor:none]"
-          >
-            <div ref={attachContent}>
-              {renderHeader()}
-              {folded.map((item, index) => renderRow(item, index))}
-              {renderFooter()}
-            </div>
-          </div>
-        ) : (
-          <Virtuoso
-            key={rowEpoch.current}
-            ref={virtuosoRef}
-            data={folded}
-            // 不用首条长消息探测整段高度，否则初始定位反复校正，正文隐藏只剩脚点。
-            defaultItemHeight={80}
-            computeItemKey={(_, item) => item.key}
-            firstItemIndex={firstItemIndex}
-            startReached={requestOlder}
-            // 贴底时新内容自动跟随（含流式增高）；非贴底不抢滚
-            followOutput={followChatOutput}
-            atBottomThreshold={AT_BOTTOM_THRESHOLD}
-            atBottomStateChange={(value) => {
-              setAtBottom(value);
-              atBottomRef.current = value;
-            }}
-            increaseViewportBy={VIEWPORT_OVERSCAN}
-            initialTopMostItemIndex={INITIAL_TOP_MOST_ITEM_INDEX}
-            // 可视范围起点附近的 user 轮次作为导航条高亮
-            rangeChanged={({ startIndex }) => {
-              renderedStartRef.current = startIndex;
-              if (startIndex > firstItemIndex + 4) startReachedLatch.current = false;
-              scheduleActiveNavKey(() => {
-                const dataIndex = Math.max(0, startIndex - firstItemIndex);
-                let current: string | null = null;
-                for (let i = 0; i <= Math.min(dataIndex + 1, folded.length - 1); i++) {
-                  if (folded[i]?.kind === 'user') current = folded[i].key;
-                }
-                return current;
-              });
-            }}
-            scrollerRef={(el) => {
-              scrollerRef.current = el instanceof HTMLElement ? el : null;
-            }}
-            className="scroll-stable h-full select-text"
-            components={{
-              List: TimelineList,
-              Header: renderHeader,
-              Footer: renderFooter,
-            }}
-            // Virtuoso 传入的是含 firstItemIndex 的绝对下标，换算回 folded 下标
-            itemContent={(index, item) => renderRow(item, index - firstItemIndex)}
-          />
-        )}
-        {!atBottom && items.length > 0 && (
-          <button
-            type="button"
-            onClick={scrollToBottom}
-            className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-[calc(11rem/14)] text-muted-foreground shadow-float transition-colors hover:text-foreground"
-          >
-            <ArrowDown className="h-3 w-3" />
-            {t('Scroll to bottom')}
-          </button>
-        )}
-      </div>
+                atBottomRef.current = value;
+              }}
+              increaseViewportBy={VIEWPORT_OVERSCAN}
+              initialTopMostItemIndex={INITIAL_TOP_MOST_ITEM_INDEX}
+              // 可视范围起点附近的 user 轮次作为导航条高亮
+              rangeChanged={({ startIndex }) => {
+                renderedStartRef.current = startIndex;
+                if (startIndex > firstItemIndex + 4) startReachedLatch.current = false;
+                scheduleActiveNavKey(() => {
+                  const dataIndex = Math.max(0, startIndex - firstItemIndex);
+                  let current: string | null = null;
+                  for (let i = 0; i <= Math.min(dataIndex + 1, folded.length - 1); i++) {
+                    if (folded[i]?.kind === 'user') current = folded[i].key;
+                  }
+                  return current;
+                });
+              }}
+              scrollerRef={(el) => {
+                scrollerRef.current = el instanceof HTMLElement ? el : null;
+              }}
+              className="scroll-stable h-full select-text"
+              components={VIRTUOSO_COMPONENTS}
+              // Virtuoso 传入的是含 firstItemIndex 的绝对下标，换算回 folded 下标
+              itemContent={(index, item) => renderRow(item, index - firstItemIndex)}
+            />
+          )}
+          {!atBottom && items.length > 0 && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-[calc(11rem/14)] text-muted-foreground shadow-float transition-colors hover:text-foreground"
+            >
+              <ArrowDown className="h-3 w-3" />
+              {t('Scroll to bottom')}
+            </button>
+          )}
+        </div>
+      </TimelineChromeContext.Provider>
     </ChatSearchHighlightContext.Provider>
   );
 }
