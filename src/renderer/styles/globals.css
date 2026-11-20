@@ -1090,6 +1090,27 @@ html.bg-image-enabled [data-slot='bot-card-button']:not(:hover) {
   grid-area: 1 / 1;
 }
 
+/* ── 桌面过程时间线：行悬停光学留白与连续步骤连接轨 ───────────── */
+.codekiln-step-trigger {
+  margin-inline: calc(-6rem / 14);
+  padding-inline: calc(6rem / 14);
+}
+.codekiln-process-row[data-process-rail='true'] {
+  position: relative;
+}
+.codekiln-process-row[data-process-rail='true']:has([data-step-icon]):not(
+    :has([data-slot='tool-details'])
+  ):not(:has([data-reasoning-body]))::before {
+  content: '';
+  position: absolute;
+  left: calc(10.5rem / 14);
+  top: calc(27rem / 14);
+  bottom: calc(-8rem / 14);
+  width: 1px;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--color-border) 78%, transparent);
+}
+
 /* 内嵌浏览器：Agent 持有 tab 时，guest 沉到 workbench 下，这层渐变描边叠在网页上 */
 .browser-agent-glow {
   border: 2px solid transparent;

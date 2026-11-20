@@ -1682,6 +1682,7 @@ function ReasoningBody({
   return (
     <div
       ref={bodyRef}
+      data-reasoning-body=""
       onScroll={() => {
         const body = bodyRef.current;
         if (!body) return;
@@ -1689,8 +1690,8 @@ function ReasoningBody({
       }}
       className={cn(
         // 流式时只开一个小窗口（约 4 行），像活动指示而不是正文；
-        // 思考结束后用户主动展开才给完整高度。
-        't-acc-reveal scroll-stable scroll-pill mt-2 ml-2 overflow-y-auto border-l border-border py-0.5 pl-3.5 text-[calc(13rem/14)] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap',
+        // 思考结束后用户主动展开才给完整高度。左侧竖线对齐 22px 图标中线。
+        't-acc-reveal scroll-stable scroll-pill mt-1.5 ml-[calc(10rem/14)] overflow-y-auto rounded-r-[calc(8rem/14)] border-l-2 border-border/80 bg-secondary/30 px-3.5 py-2.5 text-[calc(13rem/14)] leading-relaxed text-muted-foreground/85 whitespace-pre-wrap',
         streaming ? 'max-h-28' : 'max-h-[min(16rem,38vh)]'
       )}
     >
@@ -1911,10 +1912,16 @@ function WorklogHead({
       className="flex w-full items-center gap-[8px] text-[calc(12rem/14)] text-muted-foreground"
     >
       {worklog.status === 'running' ? (
-        <LoaderCircle
-          className="size-[calc(14rem/14)] shrink-0 animate-spin text-primary"
-          aria-hidden
-        />
+        <span
+          aria-hidden="true"
+          className="inline-flex size-[calc(14rem/14)] shrink-0 items-center justify-center"
+        >
+          <svg viewBox="0 0 14 14" aria-hidden="true" className="size-full overflow-visible">
+            <circle cx="7" cy="7" r="4.8" className="codekiln-status-track" />
+            <circle cx="7" cy="7" r="4.8" className="codekiln-status-orbit" />
+            <circle cx="7" cy="7" r="1.65" className="codekiln-status-core" />
+          </svg>
+        </span>
       ) : (
         <CircleCheck
           className={cn(
@@ -1925,22 +1932,25 @@ function WorklogHead({
         />
       )}
       {worklog.forced ? (
-        <div className="inline-flex min-w-0 items-center gap-1.5">{label}</div>
+        <div className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground/80">
+          {label}
+        </div>
       ) : (
         <button
           type="button"
           onClick={() => onToggle?.(item.key)}
           aria-expanded={item.expanded}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-1 -mx-1 py-0.5 text-left font-medium text-foreground/75 transition-colors hover:bg-secondary/55 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {label}
         </button>
       )}
       {!item.expanded && detail.length > 0 && (
-        <span className="min-w-0 truncate text-muted-foreground/70">{detail.join(' · ')}</span>
+        <span className="min-w-0 truncate text-muted-foreground/75">{detail.join(' · ')}</span>
       )}
+      <span aria-hidden="true" className="hidden h-px flex-1 bg-border/50 @min-[28rem]:block" />
       {worklog.failed > 0 && (
-        <span className="ml-auto shrink-0 rounded bg-destructive/12 px-1.5 py-px text-[calc(11rem/14)] text-destructive">
+        <span className="ml-auto shrink-0 rounded-full bg-destructive/12 px-2 py-0.5 text-[calc(11rem/14)] font-medium text-destructive">
           {t('{{count}} calls failed', { count: worklog.failed })}
         </span>
       )}
@@ -2042,30 +2052,38 @@ function ToolGroupRow({
       {head}
       <div
         data-slot="tool-details"
-        className="t-acc-reveal mt-2 mb-1 overflow-hidden rounded-xl border border-border/70 bg-card text-sm"
+        className="t-acc-reveal relative z-[1] mt-1.5 mb-2 overflow-hidden rounded-[calc(11rem/14)] border border-border/75 bg-card/95 text-sm shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:shadow-[0_1px_3px_rgb(0_0_0/0.35)]"
       >
         {explore.goal && (
-          <div className="border-b border-border/60 px-3 py-2">
-            <div className="mb-0.5 text-[calc(11rem/14)] text-muted-foreground">{t('Goal')}</div>
-            <p className="whitespace-pre-wrap">{explore.goal}</p>
+          <div className="border-b border-border/55 bg-secondary/25 px-3.5 py-2.5">
+            <div className="mb-1 text-[calc(11rem/14)] font-medium text-muted-foreground">
+              {t('Goal')}
+            </div>
+            <p className="whitespace-pre-wrap text-[calc(13rem/14)] leading-relaxed">
+              {explore.goal}
+            </p>
           </div>
         )}
         {explore.report && (
-          <div className="border-b border-border/60 px-3 py-2">
-            <div className="mb-0.5 text-[calc(11rem/14)] text-muted-foreground">{t('Result')}</div>
+          <div className="border-b border-border/55 px-3.5 py-2.5">
+            <div className="mb-1 text-[calc(11rem/14)] font-medium text-muted-foreground">
+              {t('Result')}
+            </div>
             <Markdown text={explore.report} />
           </div>
         )}
         <button
           type="button"
           onClick={() => onToggle?.(exploreStepsKey(item.key))}
-          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[calc(11rem/14)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="flex w-full items-center gap-1.5 bg-secondary/30 px-3.5 py-2 text-left text-[calc(11.5rem/14)] text-muted-foreground transition-colors hover:bg-secondary/65 hover:text-foreground"
         >
           <ChevronRight
             className={cn('h-3 w-3 shrink-0 transition-transform', explore.steps && 'rotate-90')}
           />
-          <span>{explore.steps ? t('Hide process') : t('Show process')}</span>
-          <span>· {t('{{count}} tool calls', { count: item.count })}</span>
+          <span className="font-medium">
+            {explore.steps ? t('Hide process') : t('Show process')}
+          </span>
+          <span className="opacity-75">· {t('{{count}} tool calls', { count: item.count })}</span>
         </button>
       </div>
     </>
@@ -2192,52 +2210,105 @@ function SandboxOutput({
   output: string | null;
   view: SandboxView | null;
 }) {
+  const { t } = useI18n();
   const value =
     view?.status === 'completed' ? formatSandboxValue(view.value) : (view?.error ?? output);
+  const cleanValue = value ? stripAnsi(value) : null;
+  const sourceLines = source ? source.split('\n').length : 0;
+  const outputLines = cleanValue ? cleanValue.split('\n').length : 0;
+  const hasCalls = Boolean(view && view.calls.length > 0);
+  const failedCalls = view?.calls.filter((call) => !call.ok) ?? [];
+
   return (
-    <div className="space-y-1 px-3 py-1">
-      {source ? <CodeBlock code={source} language="javascript" /> : null}
-      {view && view.calls.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {[...new Map(view.calls.map((call) => [call.name, call])).keys()].map((name) => {
-            const group = view.calls.filter((call) => call.name === name);
-            const failed = group.find((call) => !call.ok);
-            const label = `${name} ×${group.length}`;
-            return (
-              <span
-                key={name}
-                className={cn(
-                  'rounded-md border px-1.5 py-0.5 font-mono text-[calc(11rem/14)]',
-                  failed ? 'border-destructive/40 text-destructive' : 'text-muted-foreground'
-                )}
-                title={group
-                  .map((call) => call.summary)
-                  .filter(Boolean)
-                  .join('\n')}
-              >
-                {label}
+    <div className="divide-y divide-border/55">
+      {source ? (
+        <div data-sandbox-section="script">
+          <div className="flex items-center justify-between border-b border-border/50 bg-secondary/45 px-3 py-1.5 text-[calc(11rem/14)] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="font-medium text-foreground/75">{t('Script')}</span>
+              <span className="rounded bg-background/80 px-1.5 py-px font-mono text-[calc(10rem/14)] text-muted-foreground/80">
+                JS
               </span>
-            );
-          })}
+            </span>
+            <span className="font-mono text-[calc(10.5rem/14)] text-muted-foreground/70 tabular-nums">
+              {sourceLines}L
+            </span>
+          </div>
+          <CodeBlock code={source} language="javascript" embedded />
         </div>
       ) : null}
-      {view?.calls.some((call) => !call.ok) && (
-        <ul className="space-y-1 font-mono text-xs text-destructive">
-          {view.calls.filter((call) => !call.ok).map((call, index) => (
-            <li key={index} className="break-words">
-              {[call.name, call.summary, call.error].filter(Boolean).join(' · ')}
-            </li>
-          ))}
-        </ul>
-      )}
-      {value ? (
-        view?.status === 'completed' && typeof view.value !== 'string' ? (
-          <CodeBlock code={value} language="json" />
-        ) : (
-          <pre className="font-mono text-[calc(11rem/14)] leading-relaxed text-muted-foreground whitespace-pre-wrap">
-            {stripAnsi(value)}
-          </pre>
-        )
+      {hasCalls && view ? (
+        <div data-sandbox-section="calls" className="bg-secondary/20">
+          <div className="flex flex-wrap items-center gap-1.5 px-3 py-2">
+            {[...new Map(view.calls.map((call) => [call.name, call])).keys()].map((name) => {
+              const group = view.calls.filter((call) => call.name === name);
+              const failed = group.some((call) => !call.ok);
+              return (
+                <span
+                  key={name}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[calc(11rem/14)]',
+                    failed
+                      ? 'border-destructive/35 bg-destructive/8 text-destructive'
+                      : 'border-border/65 bg-background/75 text-foreground/80'
+                  )}
+                  title={group
+                    .map((call) => call.summary)
+                    .filter(Boolean)
+                    .join('\n')}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-[calc(5rem/14)] shrink-0 rounded-full',
+                      failed ? 'bg-destructive' : 'bg-success/85'
+                    )}
+                  />
+                  <span>{name}</span>
+                  <span className="text-muted-foreground/75 tabular-nums">×{group.length}</span>
+                </span>
+              );
+            })}
+          </div>
+          {failedCalls.length > 0 && (
+            <ul className="space-y-1 border-t border-destructive/20 bg-destructive/6 px-3 py-2 font-mono text-[calc(11rem/14)] text-destructive">
+              {failedCalls.map((call, index) => (
+                <li
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 沙箱同一次执行的失败调用列表只追加、顺序稳定
+                  key={`${call.name}-${call.summary ?? ''}-${index}`}
+                  className="break-words"
+                >
+                  {[call.name, call.summary, call.error].filter(Boolean).join(' · ')}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+      {cleanValue ? (
+        <div data-sandbox-section="output">
+          <div className="flex items-center justify-between border-b border-border/50 bg-secondary/45 px-3 py-1.5 text-[calc(11rem/14)] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="font-medium text-foreground/75">{t('Output')}</span>
+              {outputLines > 1 && (
+                <span className="font-mono text-[calc(10.5rem/14)] text-muted-foreground/70 tabular-nums">
+                  {outputLines}L
+                </span>
+              )}
+            </span>
+            <CopyButton
+              text={cleanValue}
+              className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground"
+            />
+          </div>
+          {view?.status === 'completed' && typeof view.value !== 'string' ? (
+            <CodeBlock code={value ?? ''} language="json" embedded />
+          ) : (
+            <pre className="bg-background/50 px-3.5 py-2.5 font-mono text-[calc(11.5rem/14)] leading-relaxed text-foreground/80 whitespace-pre-wrap dark:bg-background/25">
+              {cleanValue}
+            </pre>
+          )}
+        </div>
       ) : null}
     </div>
   );
@@ -2404,7 +2475,9 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
       : sandbox?.calls.length && item.state !== 'error'
         ? summarizeSandboxCalls(sandbox.calls)
         : summary;
-  const hasBody = Boolean(item.output || item.source || sentMessage || item.ask || sandbox?.calls.length);
+  const hasBody = Boolean(
+    item.output || item.source || sentMessage || item.ask || sandbox?.calls.length
+  );
   const notices = item.notices ?? [];
   // 子代理等待行：运行中可展开看在等的子代理各自在干什么
   const waitProgress = item.state === 'running' && item.waiting === 'subagent' && !host;
@@ -2584,7 +2657,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
       {expanded && expandable && (
         <div
           data-slot="tool-details"
-          className="t-acc-reveal mt-2 mb-1 overflow-hidden rounded-xl border border-border/70 bg-card"
+          className="t-acc-reveal relative z-[1] mt-1.5 mb-2 overflow-hidden rounded-[calc(11rem/14)] border border-border/75 bg-card/95 shadow-[0_1px_2px_rgb(0_0_0/0.04)] dark:shadow-[0_1px_3px_rgb(0_0_0/0.35)]"
         >
           {mcp && (
             <div className="truncate border-b border-border/60 px-3 py-1 font-mono text-[calc(11rem/14)] text-muted-foreground">

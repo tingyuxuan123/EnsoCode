@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchTerminalBackground, readAppPanelColor } from '@/lib/terminalSurface';
 import { stripAnsi } from '@/lib/terminalText';
+import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 
 /** bash 工具输出：沿用终端配色与等宽字体族，但字号/字重跟随聊天流（text-[calc(11rem/14)]），不套终端那套大字号 */
@@ -28,11 +29,12 @@ export function TerminalOutput({
     () => matchTerminalBackground(theme.background, readAppPanelColor()),
     [theme, appTheme]
   );
+  const hasBody = Boolean(output || failure);
 
   return (
     <div
       data-slot="terminal-output"
-      className="px-3 py-2 text-[calc(11rem/14)] leading-relaxed"
+      className="px-3.5 py-2.5 text-[calc(11rem/14)] leading-relaxed"
       style={{
         backgroundColor: background,
         ['--terminal-bg' as string]: background,
@@ -40,20 +42,25 @@ export function TerminalOutput({
         fontFamily,
       }}
     >
-      <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <div
+        className={cn(
+          'whitespace-pre-wrap [overflow-wrap:anywhere]',
+          hasBody && 'mb-2 border-b border-current/12 pb-2'
+        )}
+      >
         <span style={{ color: theme.green }}>$ </span>
         {command}
       </div>
       {output && (
         <pre
-          className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
+          className="whitespace-pre-wrap [overflow-wrap:anywhere]"
           style={{ fontFamily: 'inherit' }}
         >
           {stripAnsi(output)}
         </pre>
       )}
       {failure && (
-        <div className="mt-2 text-muted-foreground" data-slot="shell-failure">
+        <div className={cn('text-muted-foreground', output && 'mt-2')} data-slot="shell-failure">
           <span className="font-medium">
             {t(SHELL_FAILURE_DISPLAY[failure.kind].label)}
             {failure.exitCode === undefined ? '' : ` (exit ${failure.exitCode})`}

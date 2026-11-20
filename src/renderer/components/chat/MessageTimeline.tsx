@@ -29,6 +29,7 @@ import { EnsoMark } from './EnsoMark';
 import { diffFoldMotion, EMPTY_FOLD_MOTION } from './foldMotion';
 import { ChatSearchHighlightContext } from './highlightQuery';
 import { NavRail } from './NavRail';
+import { collectLiveEnteredKeys, processRowGap, shouldShowProcessRail } from './processTrail';
 import { isNestedRow, ReplyHeader, RetryTurnButton, TimelineRow } from './TimelineRow';
 import { nextTimelineReveal, revealGroupKeys } from './timelineReveal';
 import {
@@ -306,6 +307,10 @@ export function MessageTimeline({
   const rowEpoch = useRef(0);
   /** Virtuoso 最近一次渲染范围的起点（绝对下标）；重挂后作废 */
   const renderedStartRef = useRef<number | null>(null);
+  /** 已见过的行 key：只给运行中实时追加的新步骤播入场动效，历史回放与上翻不播 */
+  const seenRowKeysRef = useRef<Set<string> | null>(null);
+  const liveEnterRef = useRef<Map<string, number>>(new Map());
+  const prevOlderCursorRef = useRef(olderCursor);
   const rowOrigin = nextTimelineRowOrigin(
     rowAnchor.current,
     folded.map((item) => item.key)
@@ -314,8 +319,37 @@ export function MessageTimeline({
   if (rowOrigin.remount) {
     rowEpoch.current += 1;
     renderedStartRef.current = null;
+    seenRowKeysRef.current = null;
+    liveEnterRef.current.clear();
   }
+  const currentEpoch = rowEpoch.current;
   const firstItemIndex = rowOrigin.firstItemIndex;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentEpoch 重置已见集合
+  const liveEnteredKeys = useMemo(() => {
+    const olderPrepended = prevOlderCursorRef.current !== olderCursor;
+    prevOlderCursorRef.current = olderCursor;
+    const keys = folded.map((item) => item.key);
+    if (seenRowKeysRef.current === null) {
+      if (keys.length === 0) return new Set<string>();
+      seenRowKeysRef.current = new Set<string>();
+      return collectLiveEnteredKeys(
+        seenRowKeysRef.current,
+        keys,
+        false,
+        Date.now(),
+        liveEnterRef.current,
+        true
+      );
+    }
+    return collectLiveEnteredKeys(
+      seenRowKeysRef.current,
+      keys,
+      running && !loading && !olderPrepended,
+      Date.now(),
+      liveEnterRef.current,
+      false
+    );
+  }, [folded, running, loading, olderCursor, currentEpoch]);
   // 引用必须稳定：TimelineRow 的 memo 比较不含回调
   const setTurnCollapsed = useCallback((key: string, collapsed: boolean) => {
     setTurnOverrides((prev) =>
@@ -553,13 +587,9 @@ export function MessageTimeline({
     [searchQuery, activeHit?.key, activeHit?.nth]
   );
 
-  // 行距对齐 ZCode：工作项之间统一 gap-4；同一组展开出的子项之间 gap-2，组头到首个子项 pt-2
-  const rowGap = (item: TimelineItem, index: number): string => {
-    const next = folded[index + 1];
-    if (item.kind === 'tool-group' && item.worklog) return 'pb-5';
-    if (next !== undefined && isNestedRow(next)) return 'pb-2';
-    return 'pb-4';
-  };
+  // 连续过程步骤走紧凑行距并用时间轨串联；正文、工作日志和组边界留足呼吸感
+  const rowGap = (item: TimelineItem, index: number): string =>
+    processRowGap(item, folded[index + 1]);
   const renderRow = (item: TimelineItem, index: number) => {
     const prev = folded[index - 1];
     const next = folded[index + 1];
@@ -572,6 +602,7 @@ export function MessageTimeline({
     const child = foldChildren.get(item.key);
     const revealAt = child && foldMotionRef.current.reveal.get(child.group);
     const revealing = child && revealAt !== undefined && now - revealAt < FOLD_MOTION_MS;
+    const liveEntering = !revealing && liveEnteredKeys.has(item.key);
     return (
       <div
         key={item.key}
@@ -589,16 +620,17 @@ export function MessageTimeline({
           CHAT_COL,
           rowGap(item, index),
           revealing && 't-fold-reveal',
+          liveEntering && 't-process-enter',
           '[overflow-wrap:anywhere]'
         )}
       >
         {replyHead && <ReplyHeader model={replyHead.replyModel} at={replyHead.replyAt} />}
         <RowErrorBoundary itemKey={item.key}>
           {nested ? (
-            // 展开的分组子项：左侧细竖线串起同组（对齐 ZCode ml-2 border-l pl-3.5）
+            // 展开的分组子项：左侧细竖线对齐 22px 图标中线串起同组
             <div
               className={cn(
-                'ml-2 border-l border-border pl-3.5',
+                'ml-[calc(10rem/14)] border-l border-border/75 pl-3.5',
                 next !== undefined && isNestedRow(next) && '-mb-2 pb-2'
               )}
             >
@@ -609,7 +641,16 @@ export function MessageTimeline({
               />
             </div>
           ) : (
-            <TimelineRow item={item} onToggleGroup={toggleGroup} onToggleTurn={setTurnCollapsed} />
+            <div
+              className="codekiln-process-row"
+              data-process-rail={shouldShowProcessRail(item, next) ? 'true' : undefined}
+            >
+              <TimelineRow
+                item={item}
+                onToggleGroup={toggleGroup}
+                onToggleTurn={setTurnCollapsed}
+              />
+            </div>
           )}
         </RowErrorBoundary>
       </div>
@@ -856,7 +897,7 @@ export function MessageTimeline({
             <button
               type="button"
               onClick={scrollToBottom}
-              className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 text-[calc(11rem/14)] text-muted-foreground shadow-float transition-colors hover:text-foreground"
+              className="absolute bottom-4 left-1/2 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border border-border/80 bg-card/90 px-3 text-[calc(11rem/14)] font-medium text-muted-foreground shadow-float backdrop-blur-md transition-[background-color,border-color,color,transform] duration-150 hover:border-border hover:bg-card hover:text-foreground active:scale-[0.97]"
             >
               <ArrowDown className="h-3 w-3" />
               {t('Scroll to bottom')}

@@ -1,5 +1,6 @@
 import { chatCodeBlockTypographyStyle } from '@shared/chatTypography';
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { CopyButton } from './CopyButton';
 import { codeToHtml } from './snippetHighlighter';
 
@@ -17,11 +18,14 @@ export function CodeBlock({
   code,
   language,
   streaming = false,
+  embedded = false,
 }: {
   code: string;
   language?: string;
   /** 流式中内容还在变，不写高亮缓存、不显示复制按钮 */
   streaming?: boolean;
+  /** 嵌入工具详情卡内部时去掉外边框与上下留白，避免双层框嵌套 */
+  embedded?: boolean;
 }) {
   const [html, setHtml] = useState<string | null>(null);
 
@@ -52,7 +56,12 @@ export function CodeBlock({
         <pre
           data-chat-code=""
           style={chatCodeBlockTypographyStyle}
-          className="my-2 overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-[calc(11rem/14)] leading-relaxed"
+          className={cn(
+            'overflow-x-auto p-3 font-mono text-[calc(11rem/14)] leading-relaxed',
+            embedded
+              ? 'bg-background/50 dark:bg-background/25'
+              : 'my-2 rounded-md border bg-muted/50'
+          )}
         >
           <code>{code}</code>
         </pre>
@@ -65,7 +74,12 @@ export function CodeBlock({
       <div
         data-chat-code=""
         style={chatCodeBlockTypographyStyle}
-        className="my-2 overflow-x-auto rounded-md border text-[calc(11rem/14)] leading-relaxed [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:p-3 [&_pre]:font-mono"
+        className={cn(
+          'overflow-x-auto text-[calc(11rem/14)] leading-relaxed [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:p-3 [&_pre]:font-mono',
+          embedded
+            ? 'bg-background/50 dark:bg-background/25 [&_pre]:!bg-transparent'
+            : 'my-2 rounded-md border'
+        )}
         // biome-ignore lint/security/noDangerouslySetInnerHtml: shiki 输出的受控 HTML（本地生成，无用户注入）
         dangerouslySetInnerHTML={{ __html: html }}
       />

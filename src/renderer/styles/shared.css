@@ -389,15 +389,62 @@
 
 /* ── Accordion expand (21) — 展开内容挂载 reveal ─────────────── */
 @keyframes t-acc-reveal {
-  from { opacity: 0; filter: blur(2px); transform: translateY(4px); }
-  to   { opacity: 1; filter: blur(0);   transform: translateY(0); }
+  from {
+    opacity: 0;
+    filter: blur(var(--blur-small, 2px));
+    transform: translateY(-4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
 }
 .t-acc-reveal {
-  animation: t-acc-reveal var(--acc-expand) var(--acc-ease);
+  animation: t-acc-reveal var(--acc-expand, 250ms)
+    var(--acc-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+/* ── 会话进行中新增的过程步骤柔化滑入（仅直播新增，历史回放不播） ── */
+@keyframes t-process-enter {
+  from {
+    opacity: 0;
+    filter: blur(var(--blur-small, 2px));
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+.t-process-enter {
+  animation: t-process-enter var(--duration-fast, 250ms)
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+/* ── 运行中的步骤图标徽标轻呼吸光晕 ───────────────────────────── */
+@keyframes codekiln-step-icon-live {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 26%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+  }
+}
+.codekiln-step-icon-live {
+  border-color: color-mix(in srgb, var(--brand) 38%, transparent);
+  background-color: color-mix(in srgb, var(--brand) 10%, transparent);
+  color: var(--brand);
+  animation: codekiln-step-icon-live 1900ms var(--ease-in-out, ease-in-out) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-acc-reveal { animation: none !important; }
+  .t-acc-reveal,
+  .t-process-enter,
+  .codekiln-step-icon-live {
+    animation: none !important;
+  }
 }
 
 /* ── 探后折叠组：收拢从折前跨度缩回（配对时组头落位），展开子行错峰揭示 ── */
