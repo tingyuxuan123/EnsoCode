@@ -1,73 +1,36 @@
-version: 0.2.97
+version: 0.2.98
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.97/CodeKiln-0.2.97-arm64-mac.zip
-    sha512: SGQbo14S6DgpMNjF359UnbzXj6E/dbp1rdLuqbMy1twtnvKATZenpjjCVnTfvN19ivcR8Fnpv/4SVQ6xFqnQFw==
-    size: 191042785
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.97/CodeKiln-0.2.97-arm64.dmg
-    sha512: H/19l5th8G8UP/uT3kObqhvHOhUANHWX1j3DncYz1Qk/NVsxnU6tKZnFs/kQxlP1jBqi/qTXTWx3k6A3lXjMpg==
-    size: 187417500
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.97/CodeKiln-0.2.97-arm64-mac.zip
-sha512: SGQbo14S6DgpMNjF359UnbzXj6E/dbp1rdLuqbMy1twtnvKATZenpjjCVnTfvN19ivcR8Fnpv/4SVQ6xFqnQFw==
-releaseDate: 2026-11-20T09:11:20.249Z
-releaseName: CodeKiln 0.2.97 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.98/CodeKiln-0.2.98-arm64-mac.zip
+    sha512: pSCpP2pgDXjQ8aHE0eWal0Kxb31xdw12uCIk0HP/7DeoWtZrp9vR0bhWEOtQix2o+o89wKAfmYABVsE3do6tXw==
+    size: 191043130
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.98/CodeKiln-0.2.98-arm64.dmg
+    sha512: Grf4WGZS0cn50LEd5MT+hBOEHT//c/jhipKs8S80wJh4BWYQcqL0cjr0MIP004+LC+X/cOtqo2NqKyTLSqOYPw==
+    size: 187420103
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.98/CodeKiln-0.2.98-arm64-mac.zip
+sha512: pSCpP2pgDXjQ8aHE0eWal0Kxb31xdw12uCIk0HP/7DeoWtZrp9vR0bhWEOtQix2o+o89wKAfmYABVsE3do6tXw==
+releaseDate: 2026-11-20T13:26:06.362Z
+releaseName: CodeKiln 0.2.98 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.97
+  # CodeKiln 0.2.98
 
 
-  ## 运行时旁白：状态条会说它在干什么
+  ## 移除 LCU 电脑控制扩展接入
 
 
-  - 回合运行中不再只显示「思考中 / 执行中」这类阶段词：状态条按当前步骤给出旁白，
-    读文件、改代码、搜代码、跑命令、查网页、调子代理、用 MCP、出图各有自己的说法。
-  - 旁白按打字机节奏逐字出现，带光标与省略号停顿；步骤切换时平滑替换，不再突兀跳字。
+  - 移除设置中的 LCU 开关和专属自动授权。已安装的旧 LCU 入口不再随 CodeKiln 会话加载，避免其 `js` 工具参数导致部分
+  Responses 模型拒绝整轮请求。
 
-  - 尊重系统「减少动态效果」：开启后旁白直接呈现，不做逐字动画。
-
-
-  ## 跟随最新输出更顺
+  - 保留 CodeKiln 自带的「电脑操控」及其他 Pi 扩展，不卸载本机 LCU，也不改写 Pi 配置。
 
 
-  - 跟随到底改为帧率无关的指数滑动，60 / 120 / 144Hz 上手感一致且不会越过底部。
-
-  - 一次涌出大段输出时先预推进再平滑落点，长回答滚到底不再一格一格跳。
-
-  - 你向上滚动时仍然立即接管，不被自动跟随抢回。
+  ## 设置页
 
 
-  ## @ 引用弹窗
-
-
-  - 重做弹窗的排版层级：分组、命中项与说明文字的权重分开了。
-
-  - 过去会话不再显示原始 jsonl 文件名：改为相对时间与所属项目，跨项目引用一眼能认出来。
-
-
-  ## 图标
-
-
-  - 图标轨、Ask CodeKiln、设置齿轮与通用分类换成定制微标，脚本工具与思考步骤也有了专属小标；
-    侧栏扩展入口同步换新。
-  - 标题栏、引导页与设置页内的同一批图标一并统一，不再新旧混用。
-
-
-  ## 仍包含上一版内容
-
-
-  - 0.2.96 的聊天区宽窄切换、状态栏工作区目录菜单、欢迎区重排与更新弹窗中文化同样在本次包内。
-
-
-  ## 验收与更新范围
-
-
-  - 本次通过 TypeScript、lint、全量测试与桌面构建检查。
-
-  - 本次为 Mac arm64 同证书个人版与 Windows x64 版；个人通道发布为 prerelease，
-    Windows 版按既有规则公开并设为 Latest。
-  - 安装、退出与重启由用户操作；发布完成不代表本机已经安装或完成旧数据升级验收。
+  - 记忆知识图谱和代码编辑器按需加载，打开设置时不再提前加载它们。
 
 
   ---
 
 
-  个人测试通道 0.2.97：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.98：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
