@@ -43,7 +43,6 @@ import {
   Pin,
   PinOff,
   Plus,
-  Puzzle,
   RefreshCw,
   Search,
   Settings,
@@ -52,6 +51,7 @@ import {
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ExtensionsIcon } from '@/components/app/NavIcons';
 import { AddProjectDialog, type AddProjectResult } from '@/components/chat/AddProjectDialog';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { ConversationStatusIndicator } from '@/components/chat/ConversationStatusIndicator';
@@ -857,7 +857,7 @@ export function Sidebar({
               : 'hover:bg-accent'
           )}
         >
-          <Puzzle className="size-[calc(17rem/14)] shrink-0" />
+          <ExtensionsIcon className="size-[calc(17rem/14)] shrink-0" active={extensionsActive} />
           {t('Extensions')}
         </button>
         {/* 项目标题行：全部折叠/展开 + 添加项目或分组 */}

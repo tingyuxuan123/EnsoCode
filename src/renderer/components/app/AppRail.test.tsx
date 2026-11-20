@@ -92,7 +92,48 @@ describe('AppRail 精简导航', () => {
     expect(code?.getAttribute('aria-pressed')).toBe('true');
     expect(code?.classList.contains('bg-selection')).toBe(true);
     expect(code?.classList.contains('text-brand')).toBe(true);
-    expect(code?.querySelector('svg')?.getAttribute('class')).toContain('lucide-square-terminal');
+    expect(code?.querySelector('svg')?.getAttribute('data-rail-glyph')).toBe('code');
+    expect(code?.querySelector('svg')?.getAttribute('class') ?? '').not.toContain(
+      'lucide-square-terminal'
+    );
+  });
+
+  it('功能入口使用定制几何微标并统一细描边，不再使用旧通用 Lucide 图标', () => {
+    const document = parseHTML(
+      renderToStaticMarkup(
+        createElement(AppRail, {
+          sidebarCollapsed: false,
+          onToggleSidebar: vi.fn(),
+          codeWorkspace: { active: false, onToggle: vi.fn() },
+          imageStudio: { active: true, onToggle: vi.fn() },
+          designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
+          collaborationBoard: { active: false, onToggle: vi.fn() },
+        })
+      )
+    ).document;
+
+    const codeSvg = document.querySelector('[aria-label="Code"] svg');
+    const imagesSvg = document.querySelector('[aria-label="Image studio"] svg');
+    const designSvg = document.querySelector('[aria-label="Design"] svg');
+    const sidebarSvg = document.querySelector('[aria-label="Collapse sidebar"] svg');
+    const boardSvg = document.querySelector('[aria-label="Collaboration board"] svg');
+    const settingsSvg = document.querySelector('[aria-label="Settings"] svg');
+
+    expect(codeSvg?.getAttribute('data-rail-glyph')).toBe('code');
+    expect(imagesSvg?.getAttribute('data-rail-glyph')).toBe('images');
+    expect(imagesSvg?.querySelector('[data-active-fill]')).not.toBeNull();
+    expect(designSvg?.getAttribute('data-rail-glyph')).toBe('design');
+    expect(designSvg?.querySelector('[data-active-fill]')).toBeNull();
+
+    for (const legacy of ['lucide-square-terminal', 'lucide-image', 'lucide-ruler']) {
+      expect(codeSvg?.getAttribute('class') ?? '').not.toContain(legacy);
+      expect(imagesSvg?.getAttribute('class') ?? '').not.toContain(legacy);
+      expect(designSvg?.getAttribute('class') ?? '').not.toContain(legacy);
+    }
+
+    for (const lucideSvg of [sidebarSvg, boardSvg, settingsSvg]) {
+      expect(lucideSvg?.getAttribute('stroke-width')).toBe('1.75');
+    }
   });
 
   it('图片工作台是独立入口，位于设计入口前并反映选中状态', () => {

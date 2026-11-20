@@ -1,18 +1,10 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import {
-  Image,
-  PanelLeft,
-  Ruler,
-  Search,
-  Settings2,
-  Sparkles,
-  SquareKanban,
-  SquareTerminal,
-} from 'lucide-react';
+import { PanelLeft, Search, Settings2, Sparkles, SquareKanban } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
+import { CodeWorkspaceIcon, DesignGalleryIcon, ImageStudioIcon } from './NavIcons';
 import { RailTip } from './RailTip';
 import { StatusBar } from './StatusBar';
 import { UpdateRailItem } from './UpdateRailItem';
@@ -76,7 +68,7 @@ export function AppRail({
             aria-pressed={!sidebarCollapsed}
             aria-label={sidebarLabel}
           >
-            <PanelLeft className="size-[18px]" />
+            <PanelLeft className="size-[18px]" strokeWidth={1.75} />
           </button>
         </RailTip>
       )}
@@ -88,7 +80,7 @@ export function AppRail({
             className={RAIL_BUTTON}
             aria-label={t('Search anything')}
           >
-            <Search className="size-[18px]" />
+            <Search className="size-[18px]" strokeWidth={1.75} />
           </button>
         </RailTip>
       )}
@@ -109,7 +101,7 @@ export function AppRail({
             data-rail-view="code"
             aria-pressed={codeWorkspace.active}
           >
-            <SquareTerminal className="size-[19px]" />
+            <CodeWorkspaceIcon className="size-[19px]" />
           </button>
         </RailTip>
       )}
@@ -123,7 +115,7 @@ export function AppRail({
             data-rail-view="images"
             aria-pressed={imageStudio.active}
           >
-            <Image className="size-[19px]" />
+            <ImageStudioIcon className="size-[19px]" active={imageStudio.active} />
           </button>
         </RailTip>
       )}
@@ -137,7 +129,7 @@ export function AppRail({
             data-rail-view="design"
             aria-pressed={designGallery.active}
           >
-            <Ruler className="size-[19px]" />
+            <DesignGalleryIcon className="size-[19px]" active={designGallery.active} />
           </button>
         </RailTip>
       )}
@@ -156,7 +148,7 @@ export function AppRail({
             }
             aria-pressed={collaborationBoard.active}
           >
-            <SquareKanban className="size-[19px]" />
+            <SquareKanban className="size-[19px]" strokeWidth={1.75} />
             {!!collaborationBoard.attention && (
               <span
                 aria-hidden
@@ -180,7 +172,7 @@ export function AppRail({
           className={cn(RAIL_BUTTON, 'text-brand hover:text-brand')}
           aria-label={t('Ask CodeKiln')}
         >
-          <Sparkles className="size-[19px]" />
+          <Sparkles className="size-[19px]" strokeWidth={1.75} />
         </button>
       </RailTip>
       <RailTip label={t('Settings')} shortcut={shortcut(bindings['open-settings'])}>
@@ -190,7 +182,7 @@ export function AppRail({
           className={RAIL_BUTTON}
           aria-label={t('Settings')}
         >
-          <Settings2 className="size-[19px]" />
+          <Settings2 className="size-[19px]" strokeWidth={1.75} />
         </button>
       </RailTip>
     </nav>
