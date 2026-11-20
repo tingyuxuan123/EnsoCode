@@ -72,6 +72,10 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 开关轨道/拇指/位移也要同比例缩放，避免大字号裁切和重叠；窗口标题栏等原生几何除外。
 回归见 `src/renderer/styles/typographyScale.test.ts`。
 
+按内容溢出显隐的「更多」按钮，应比较内容自然宽度和不受按钮显隐影响的容器宽度。
+不要用滚动视口加回固定像素：`rem` 按钮和间距随字号变化，临界宽度会让按钮反复显隐或无法收起。
+侧栏分组标签的回归见 `src/renderer/components/chat/GroupChips.test.tsx`。
+
 桌面默认字体与 Kettu 对齐：Inter Variable 的 `opsz` 正体/斜体，中文用 `Platform Chinese`
 匹配系统 Regular / Medium / Semibold，等宽字体随包提供 JetBrains Mono Variable。界面正文
 13px（`13rem/14`）、输入框 15px（桌面 `--composer-font-size`）；根字号仍为 14px，不把控件和

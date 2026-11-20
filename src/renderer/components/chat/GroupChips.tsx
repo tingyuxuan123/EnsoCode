@@ -14,8 +14,6 @@ export const POPOVER_ROW_CLASS =
 
 const CHIP_ICON_CLASS =
   'flex size-6.5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground';
-/** ⌄ 自身宽度 + 间距：按「没有 ⌄ 时」判断是否放得下，否则 ⌄ 占的位置会让它一直不消失 */
-const OVERFLOW_TRIGGER_SPACE = 30;
 const EDGE_FADE = 20;
 
 interface GroupChipsProps {
@@ -50,6 +48,7 @@ export function GroupChips({
   const [searchOpen, setSearchOpen] = useState(false);
   const showSearch = searchOpen || query.length > 0;
   const inputRef = useRef<HTMLInputElement>(null);
+  const availableRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false, overflow: false });
 
@@ -62,26 +61,29 @@ export function GroupChips({
 
   const measure = useCallback(() => {
     const el = scrollRef.current;
-    // 搜索展开时标签条隐藏，宽度为 0，保留上次结果
-    if (!el || el.clientWidth === 0) return;
-    setEdges((prev) => {
-      const reclaim = prev.overflow ? OVERFLOW_TRIGGER_SPACE : 0;
-      const next = {
-        left: el.scrollLeft > 1,
-        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
-        overflow: el.scrollWidth > el.clientWidth + reclaim + 1,
-      };
-      return prev.left === next.left && prev.right === next.right && prev.overflow === next.overflow
+    const content = el?.firstElementChild;
+    // 外层给标签和 ⌄ 共用的宽度不随 ⌄ 显隐变化；搜索展开时宽度为 0。
+    const availableWidth = availableRef.current?.getBoundingClientRect().width;
+    if (!el || !content || !availableWidth) return;
+    const next = {
+      left: el.scrollLeft > 1,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+      overflow: content.getBoundingClientRect().width > availableWidth,
+    };
+    setEdges((prev) =>
+      prev.left === next.left && prev.right === next.right && prev.overflow === next.overflow
         ? prev
-        : next;
-    });
+        : next
+    );
   }, []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    const available = availableRef.current;
+    if (!el || !available) return;
     measure();
     const observer = new ResizeObserver(measure);
+    observer.observe(available);
     observer.observe(el);
     if (el.firstElementChild) observer.observe(el.firstElementChild);
     return () => observer.disconnect();
@@ -164,7 +166,10 @@ export function GroupChips({
           </button>
         </label>
       )}
-      <div className={cn('flex min-w-0 flex-1 items-center gap-1', showSearch && 'hidden')}>
+      <div
+        ref={availableRef}
+        className={cn('flex min-w-0 flex-1 items-center gap-1', showSearch && 'hidden')}
+      >
         <div
           ref={scrollRef}
           onScroll={measure}
@@ -216,6 +221,8 @@ export function GroupChips({
             onEditGroup={onEditGroup}
           />
         )}
+      </div>
+      {!showSearch && (
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
@@ -225,7 +232,7 @@ export function GroupChips({
         >
           <TextSearch className="size-3.5" />
         </button>
-      </div>
+      )}
     </div>
   );
 }
