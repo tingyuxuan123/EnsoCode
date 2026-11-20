@@ -2349,7 +2349,7 @@ function ConversationRow({
       tabIndex={0}
       title={hoverTitle}
     >
-      <ConversationDot conversation={conversation} />
+      <ConversationDot conversation={conversation} active={active} />
       <div className="flex min-w-0 items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {sourceTitle && (
@@ -2768,6 +2768,7 @@ function IconSlot({ children }: { children: React.ReactNode }) {
 
 function ConversationDot({
   conversation,
+  active = false,
 }: {
   conversation: {
     status: string;
@@ -2778,6 +2779,7 @@ function ConversationDot({
     pendingCapabilityAsks?: readonly unknown[];
     hasRunningChild?: boolean;
   };
+  active?: boolean;
 }) {
   // 待审批 / 待能力确认与 coworker tab 同为 attention；它们也按「等你处理」排在分组最前
   const tone =
@@ -2791,11 +2793,10 @@ function ConversationDot({
           pendingAskCount: conversation.pendingAsks?.length ?? 0,
           hasRunningChild: conversation.hasRunningChild,
         });
-  // 锁进与项目行同宽的图标列:圆点/图标两种形态切换时标题不再左右跳动。
-  // 空闲不画点:满列空心圈没有信息量,只有运行/待回答/失败/未读才需要被看见
+  // 锁进与项目行同宽的图标列:状态变化时标题不左右跳动；空闲态显示 4px 微点基准线（方案 A）。
   return (
     <span className="flex size-4 shrink-0 items-center justify-center">
-      {tone !== 'idle' && <ConversationStatusIndicator tone={tone} size="sm" />}
+      <ConversationStatusIndicator tone={tone} size="sm" idleVariant="subtle-dot" active={active} />
     </span>
   );
 }

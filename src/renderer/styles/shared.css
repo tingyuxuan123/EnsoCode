@@ -245,6 +245,109 @@
   }
 }
 
+/* ── 侧栏 / 页签会话状态微标（running / attention / waiting / failed / unread） ── */
+.codekiln-status-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--foreground) 14%, transparent);
+  stroke-width: 1.5;
+}
+.codekiln-status-orbit {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-dasharray: 11 21;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: codekiln-working-orbit 1100ms var(--ease-linear, linear) infinite;
+}
+.codekiln-status-core {
+  fill: var(--brand);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: codekiln-working-core 1500ms var(--ease-in-out, ease-in-out) infinite;
+}
+.codekiln-status-attention-ring {
+  fill: none;
+  stroke: var(--destructive);
+  stroke-width: 1.4;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: codekiln-status-attention-ring 1650ms
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) infinite;
+}
+.codekiln-status-attention-core {
+  fill: var(--destructive);
+}
+@keyframes codekiln-status-attention-ring {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.65);
+  }
+  75%, 100% {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+.codekiln-status-waiting {
+  animation: codekiln-status-waiting 2200ms var(--ease-in-out, ease-in-out) infinite;
+}
+@keyframes codekiln-status-waiting {
+  0%, 100% { opacity: 0.82; }
+  50% { opacity: 1; }
+}
+.codekiln-status-waiting-ring {
+  fill: color-mix(in srgb, var(--warning) 14%, transparent);
+  stroke: color-mix(in srgb, var(--warning) 62%, transparent);
+  stroke-width: 1.25;
+}
+.codekiln-status-waiting-glyph {
+  fill: none;
+  stroke: var(--warning);
+  stroke-width: 1.35;
+  stroke-linecap: round;
+}
+.codekiln-status-waiting-dot {
+  fill: var(--warning);
+}
+.codekiln-status-failed-ring {
+  fill: color-mix(in srgb, var(--destructive) 12%, transparent);
+  stroke: color-mix(in srgb, var(--destructive) 72%, transparent);
+  stroke-width: 1.25;
+}
+.codekiln-status-failed-glyph {
+  stroke: var(--destructive);
+  stroke-width: 1.45;
+  stroke-linecap: round;
+}
+.codekiln-status-failed-dot {
+  fill: var(--destructive);
+}
+.codekiln-status-unread {
+  background-color: var(--success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codekiln-status-orbit {
+    animation: none;
+    transform: rotate(-45deg);
+  }
+  .codekiln-status-core {
+    animation: none;
+    transform: scale(1);
+  }
+  .codekiln-status-attention-ring {
+    animation: none;
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  .codekiln-status-waiting {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* ── Shimmer text (15) — Thinking… 流光 ──────────────────────── */
 .t-shimmer {
   /* 挂在类上而非 :root：本文件先于两端的 transitions 模板变量加载，:root 上会被其写死的灰阶覆盖 */
