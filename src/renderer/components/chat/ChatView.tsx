@@ -51,6 +51,7 @@ import { MarkdownLinkContext } from './Markdown';
 import { MessageQueue } from './MessageQueue';
 import { CHAT_COL, type MessageTimelineHandle } from './MessageTimeline';
 import { ModelPicker } from './ModelPicker';
+import type { ChatMentionMeta } from './mentionPickerDisplay';
 import { PlanBar } from './PlanBar';
 import { PlanModeToggle } from './PlanModeToggle';
 import { PresetPicker } from './PresetPicker';
@@ -117,6 +118,19 @@ export function ChatView() {
         : [],
     [candidateConversations, parentId, parentProjectId]
   );
+  const chatMeta = useMemo(() => {
+    if (chatCandidates.length === 0) return undefined;
+    const projectNameById = new Map(projects.map((entry) => [entry.id, projectDisplayName(entry)]));
+    const meta = new Map<string, ChatMentionMeta>();
+    for (const conversation of candidateConversations) {
+      meta.set(conversation.id, {
+        createdAt: conversation.createdAt,
+        projectName: projectNameById.get(conversation.projectId),
+        sameProject: conversation.projectId === parentProjectId,
+      });
+    }
+    return meta;
+  }, [candidateConversations, chatCandidates.length, parentProjectId, projects]);
   // 会话显式选择优先；新草稿沿 项目默认 → 分组默认 → 全局默认，不再退化到 providers 第一项。
   const conversationProject = useMemo(
     () => projects.find((entry) => entry.id === chrome?.projectId),
@@ -512,6 +526,7 @@ export function ChatView() {
             }
             cwd={toolCwd}
             chatCandidates={chatCandidates}
+            chatMeta={chatMeta}
             commands={slashCommands}
             running={running}
             busy={busy}

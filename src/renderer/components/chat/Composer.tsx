@@ -74,19 +74,20 @@ import {
   mentionPopupMaxHeight,
   resolvePopupKeyAction,
 } from './mentionComposer';
+import type { ChatMentionMeta } from './mentionPickerDisplay';
 import { SlashChip } from './SlashChip';
 import { filterComposerCommands } from './skillCompletion';
 import { appendSlash, foldLeadingSkills, removeSlash, slashChain } from './slashChain';
 import { VoiceInputButton } from './VoiceInputButton';
 
-// 弹窗挂在输入框上方、向上长：mb-1.5 的 6px 间隙 + 窗口顶部留一点呼吸空间。
-const MENTION_POPUP_MARGIN = 14;
+// 弹窗挂在输入框上方、向上长：mb-2 的 8px 间隙 + 窗口顶部留一点呼吸空间。
+const MENTION_POPUP_MARGIN = 16;
 /** 与 CSS max-h-72 对齐的默认上限；屏幕再高也不做无限长的菜单。 */
 const MENTION_POPUP_CAP = 288;
-/** 一级与二级之间的间距（ml-1）。 */
-const MENTION_FLYOUT_GAP = 4;
-/** 二级列的目标宽度（w-72）；聊天栏窄时按需要收窄，但不低于最小可读宽度。 */
-const MENTION_FLYOUT_WIDTH = 288;
+/** 一级与二级之间的 1px 分隔线宽度。 */
+const MENTION_FLYOUT_GAP = 1;
+/** 二级列的目标宽度；聊天栏窄时按需要收窄，但不低于最小可读宽度。 */
+const MENTION_FLYOUT_WIDTH = 316;
 const MENTION_FLYOUT_MIN_WIDTH = 180;
 
 interface ComposerProps {
@@ -120,6 +121,8 @@ interface ComposerProps {
   onInitialRecipientConsumed?: () => void;
   /** @ 弹窗的过去会话候选（宿主从 sessions store 算好传入，保持本组件与 store 解耦） */
   chatCandidates?: ChatMentionCandidate[];
+  /** 过去会话辅助元信息（相对时间与跨项目归属，供 @ 弹窗展示） */
+  chatMeta?: ReadonlyMap<string, ChatMentionMeta>;
   /** 浏览不自动 spawn：用户开始打字/聚焦输入框时再拉 worker */
   onActivate?: () => void;
   onSend: (payload: ComposerPayload) => boolean | undefined | Promise<boolean | undefined>;
@@ -167,6 +170,7 @@ export function Composer({
   initialRecipient,
   onInitialRecipientConsumed,
   chatCandidates,
+  chatMeta,
   onActivate,
   onSend,
   onAbort,
@@ -898,6 +902,7 @@ export function Composer({
           onOpenFolderIdChange={setOpenFolderId}
           onFolderIndexChange={setFolderIndex}
           onSelect={pickMention}
+          chatMeta={chatMeta}
           left={popupLayout.left}
           flyoutWidth={popupLayout.flyoutWidth}
           maxHeight={mentionMaxHeight}
