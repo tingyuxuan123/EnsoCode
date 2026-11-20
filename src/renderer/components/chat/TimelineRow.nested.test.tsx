@@ -39,12 +39,12 @@ describe('分组展开的子项', () => {
     expect(html).toContain('data-tool-nested=""');
     expect(html).toContain('>Terminal<');
     expect(html).toContain('ls src');
-    expect(html).not.toContain('lucide-square-terminal');
+    expect(html).not.toContain('lucide-terminal');
   });
 
-  it('顶层行带 16px 图标，命令用普通字体', () => {
+  it('顶层行带图标，命令用普通字体', () => {
     const html = renderToStaticMarkup(createElement(TimelineRow, { item: tool({}) }));
-    expect(html).toContain('lucide-square-terminal');
+    expect(html).toContain('lucide-terminal');
     expect(html).not.toContain('font-mono');
   });
 

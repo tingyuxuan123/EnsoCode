@@ -16,9 +16,9 @@ import type {
 import { parseWorkflowPresetMessage } from '@shared/workflowPresetMessage';
 import {
   ArrowDownToLine,
+  Bookmark,
   Bot,
   BoxSelect,
-  Brain,
   Check,
   ChevronDown,
   ChevronRight,
@@ -26,27 +26,31 @@ import {
   CircleCheck,
   ClipboardCheck,
   ClipboardList,
+  Compass,
   FilePlus,
   FileText,
   FolderOpen,
-  FoldVertical,
   GitBranch,
   GitCompare,
   Globe,
   History,
   ListTodo,
   LoaderCircle,
-  type LucideIcon,
+  MessageCircleQuestion,
   MessagesSquare,
   PackageMinus,
   Pencil,
   RefreshCw,
   Search,
+  Send,
   SkipForward,
+  Smartphone,
   Sparkles,
   Target,
+  Terminal,
   TerminalSquare,
   Undo2,
+  WandSparkles,
   Workflow,
   Wrench,
 } from 'lucide-react';
@@ -135,6 +139,7 @@ import { fileMentionBasename, splitInlineMentions, splitMentionRefs } from './me
 import { ReadFileView } from './ReadFileView';
 import { RtkToolStatsBar } from './RtkToolStatsBar';
 import { SlashChip, slashChipClass, splitSlashCommand } from './SlashChip';
+import { ScriptOrchestrationIcon, type StepIconComponent, ThinkingSparkIcon } from './StepIcons';
 import { SubagentResult } from './SubagentResult';
 import { slashChain } from './slashChain';
 import { parseSubagentReceipt } from './subagentReceipt';
@@ -1628,7 +1633,7 @@ function ThinkingRow({
   return (
     <div data-enso="thinking" data-live={streaming ? '' : undefined}>
       <ToolSummaryRow
-        icon={nested ? undefined : Brain}
+        icon={nested ? undefined : ThinkingSparkIcon}
         kind={streaming ? t('Thinking') : t('Thought')}
         running={streaming}
         separator={!streaming || lastLine !== null}
@@ -2013,7 +2018,7 @@ function ToolGroupRow({
   const head = (
     <div data-explore-head={explore ? '' : undefined}>
       <ToolSummaryRow
-        icon={explore ? FoldVertical : item.terminal ? TerminalSquare : Search}
+        icon={explore ? Compass : item.terminal ? Terminal : Search}
         kind={kind}
         separator
         summary={summaryText ? <span className="min-w-0 truncate">{summaryText}</span> : undefined}
@@ -3009,17 +3014,29 @@ function SubagentWaitProgress({ agentIds }: { agentIds?: string[] }) {
   );
 }
 
-function toolIcon(name: string): LucideIcon {
+function toolIcon(name: string): StepIconComponent {
   if (name === 'read') return FileText;
   if (name === 'ls') return FolderOpen;
-  if (name === 'grep' || name === 'find' || name === 'glob' || name === 'code_search')
+  if (
+    name === 'grep' ||
+    name === 'find' ||
+    name === 'glob' ||
+    name === 'code_search' ||
+    name === 'tool_search'
+  ) {
     return Search;
-  if (name === 'bash' || name === 'powershell' || name === 'task_output') return TerminalSquare;
+  }
+  if (name === 'bash' || name === 'powershell' || name === 'task_output') return Terminal;
   if (name === 'edit' || name === 'apply_patch') return Pencil;
   if (name === 'write') return FilePlus;
-  if (isSandboxTool(name)) return BoxSelect;
+  if (isSandboxTool(name) || name === 'workflow') return ScriptOrchestrationIcon;
   if (name === 'subagent') return Bot;
-  if (name.includes('web') || name.includes('fetch')) return Globe;
+  if (name === 'recall' || name.startsWith('memory_')) return Bookmark;
+  if (name === 'generate_image' || name === 'edit_image') return WandSparkles;
+  if (name === 'ask_user') return MessageCircleQuestion;
+  if (name === 'message_coworker' || name === 'message_main_agent') return Send;
+  if (name.startsWith('device_')) return Smartphone;
+  if (name.includes('web') || name.includes('fetch') || name.startsWith('browser_')) return Globe;
   return Wrench;
 }
 

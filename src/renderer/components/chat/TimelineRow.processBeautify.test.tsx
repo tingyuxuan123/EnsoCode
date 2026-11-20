@@ -208,4 +208,74 @@ describe('conversation process beautification', () => {
       }
     }
   });
+
+  it('uses bespoke script-orchestration and thinking glyphs and borderless tool icons inside step badges', () => {
+    const renderTool = (name: string) =>
+      renderToStaticMarkup(
+        createElement(TimelineRow, {
+          item: {
+            kind: 'tool',
+            key: `icon-${name}`,
+            name,
+            summary: 'demo',
+            output: null,
+            state: 'ok',
+            edits: null,
+            writeContent: null,
+            todos: null,
+            durationMs: 100,
+            agentMeta: null,
+          },
+        })
+      );
+
+    for (const name of ['codemode', 'exec', 'workflow']) {
+      const html = renderTool(name);
+      expect(html, name).toContain('data-step-glyph="script-orchestration"');
+      expect(html, name).not.toContain('lucide-square-dashed');
+      expect(html, name).not.toContain('lucide-box-select');
+    }
+
+    const thinkingHtml = renderToStaticMarkup(
+      createElement(TimelineRow, {
+        item: {
+          kind: 'thinking',
+          key: 'th-icon',
+          text: 'reasoning',
+          streaming: false,
+          durationMs: 1400,
+        },
+      })
+    );
+    expect(thinkingHtml).toContain('data-step-glyph="thinking"');
+    expect(thinkingHtml).not.toContain('lucide-brain');
+
+    const bashHtml = renderTool('bash');
+    expect(bashHtml).toContain('lucide-terminal');
+    expect(bashHtml).not.toContain('lucide-square-terminal');
+
+    const exploreHtml = renderToStaticMarkup(
+      createElement(TimelineRow, {
+        item: {
+          kind: 'tool-group',
+          key: 'exp-icon',
+          expanded: false,
+          count: 3,
+          stats: { commands: 0, reads: 2, searches: 1, others: 0 },
+          exploring: false,
+          children: [],
+          explore: { goal: 'check', report: 'done', steps: false },
+        },
+      })
+    );
+    expect(exploreHtml).toContain('lucide-compass');
+    expect(exploreHtml).not.toContain('lucide-fold-vertical');
+
+    expect(renderTool('memory_search')).toContain('lucide-bookmark');
+    expect(renderTool('generate_image')).toContain('lucide-wand-sparkles');
+    expect(renderTool('ask_user')).toContain('lucide-message-circle-question');
+    expect(renderTool('message_coworker')).toContain('lucide-send');
+    expect(renderTool('device_tap')).toContain('lucide-smartphone');
+    expect(renderTool('tool_search')).toContain('lucide-search');
+  });
 });

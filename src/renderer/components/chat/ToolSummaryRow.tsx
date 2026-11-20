@@ -1,7 +1,8 @@
-import { ChevronRight, type LucideIcon } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { QueuedSummaryContent } from './QueuedSummaryContent';
+import type { StepIconComponent } from './StepIcons';
 
 /**
  * 工具 / 思考 / 分组的一行摘要：
@@ -28,7 +29,7 @@ export function ToolSummaryRow({
   actionLabel,
   actions,
 }: {
-  icon?: LucideIcon;
+  icon?: StepIconComponent;
   kind: string;
   summary?: ReactNode;
   trailing?: ReactNode;
