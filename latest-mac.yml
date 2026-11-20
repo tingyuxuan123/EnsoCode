@@ -1,53 +1,59 @@
-version: 0.2.94
+version: 0.2.95
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.94/CodeKiln-0.2.94-arm64-mac.zip
-    sha512: pnB2WIcuBvD3PsK2UaIqBFizmttRJxho13GS6qqZlo6dXH+9Tgnv+mWgSuYle1cyZRsPbt59M0+EgGe4y5xXNA==
-    size: 191029216
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.94/CodeKiln-0.2.94-arm64.dmg
-    sha512: 76KMqPvx0xJkdIqJbQWABaDdOFaWHZo4ch/1i1wNK3jmIt6vr1bff2nACS9VDLkdagX9Gv9UyiDVtER0kfLC/w==
-    size: 187408925
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.94/CodeKiln-0.2.94-arm64-mac.zip
-sha512: pnB2WIcuBvD3PsK2UaIqBFizmttRJxho13GS6qqZlo6dXH+9Tgnv+mWgSuYle1cyZRsPbt59M0+EgGe4y5xXNA==
-releaseDate: 2026-11-19T08:33:27.241Z
-releaseName: CodeKiln 0.2.94 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.95/CodeKiln-0.2.95-arm64-mac.zip
+    sha512: NV5WLI8oK5OD7uLBAyKaNjt3ALPxUuasqCU+8WyWF8AhRhLOoqfWO8xspR3Cz8HmL6tipXSsnPFpx7vsjqRVgg==
+    size: 191030113
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.95/CodeKiln-0.2.95-arm64.dmg
+    sha512: P9i17MwurGTET/s4Cknb/46bMMUmhURiJBPZzTDCyXqtFbP4oG2njlGFKaSjAYno5M2v8Jt4nbpWLpdtTugt9Q==
+    size: 187417500
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.95/CodeKiln-0.2.95-arm64-mac.zip
+sha512: NV5WLI8oK5OD7uLBAyKaNjt3ALPxUuasqCU+8WyWF8AhRhLOoqfWO8xspR3Cz8HmL6tipXSsnPFpx7vsjqRVgg==
+releaseDate: 2026-11-20T03:50:34.920Z
+releaseName: CodeKiln 0.2.95 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.94
+  # CodeKiln 0.2.95
 
 
-  ## 外壳：侧栏、工作区与右侧面板统一成圆角卡片
+  ## 会话过程轨迹：步骤徽标、竖向轨迹与入场动效
 
 
-  - 侧栏不再是贴着窗口的直角栏。它和工作区、右侧面板现在共用同一条 6px 留缝、
-    同一个 12px 圆角、同一条细线描边，三个面像同一套卡片，而不是三种灰。
-  - 主工作区拆成分栏子卡片：聊天区与右侧面板各自圆角，中间只隔一道缝。
-
-  - 拖拽手柄藏进缝里：静止时完全不可见，鼠标移上去才在中段浮出细条和抓握点，
-    不再有一条常驻竖线把界面切开。
-  - 会话页签条与右侧页签条共用同一头高，横线严格对齐；右栏页签改成圆角药丸，
-    加号按钮也对到同一高度。
-  - 侧栏会话树那条竖线一并去掉，选中行不再为了它断开，列表更安静。
+  - 工具、思考与分组的摘要行换成 22px 圆角图标徽标：运行中轻微呼吸，失败转红，
+    悬停整行浮出浅底，chevron 不再完全隐形。
+  - 连续的过程步骤之间用一条安静的竖向轨迹串起来，相邻步骤行距收紧到 6px 级，
+    正文与工作日志周围仍留宽松间距，长回合的过程区更像一条时间线而不是一叠句子。
+  - 只有回合运行中新到达的步骤播放入场动效；历史加载和向上滚动回看不会重放动画。
 
 
-  ## 仍包含本次通道内的其它改动
+  ## 侧栏状态与加载状态
 
 
-  - 桌面移动设备面板与 AI 设备工具（0.2.93 首次发布）：Android 模拟器/真机、
-    iOS 模拟器/iPhone 的画面、点按、输入、开关机，以及按会话授权的 device_* 工具。
-  - 截图与录屏保存到下载文件夹，AI 打开设备时面板会自动出现。
+  - 会话状态微标重新区分语义：运行是迷你 Enso 环，待审批是脉冲环，等待回答是问号徽标，
+    失败是静态叹号，未读是绿点，空闲是与文字基线对齐的极细占位点。
+  - 加载胶囊重做成圆角药丸：环形光点按阶段变形，阶段文字切换时滚动替换并扫光，
+    计时沿同一基线排列。
+
+  ## 修复
+
+
+  - 侧栏分组下拉按钮反复闪烁：溢出判断改按外层可用宽度比较内容宽度，
+    不再因为 ⌄ 自己占的宽度而反复显隐。
+  - 脚本编排（workflow）里失败的工具调用现在会显示出来，不再被折叠隐藏；
+    补丁类工具的纯成功回执不再单独占行，但变更对比保留。
+  - 修复消息列表页脚重挂：跟随最新输出时底部状态条不再被反复卸载重建。
 
 
   ## 验收与更新范围
 
 
-  - 本次包含 TypeScript、lint 与全量测试（14968 用例，桌面进程启动相关用例在
-    高负载下偶发超时，单独重跑通过）。
-  - 本次为 Mac arm64 同证书个人版，继续推进个人更新通道并发布为 prerelease，不改变正式 Latest。
+  - 本次通过 TypeScript、lint、全量测试与桌面构建检查。
 
+  - 本次为 Mac arm64 同证书个人版，继续推进个人更新通道并发布为 prerelease，
+    不改变正式 Latest。
   - 安装、退出与重启由用户操作；发布完成不代表本机已经安装或完成旧数据升级验收。
 
 
   ---
 
 
-  个人测试通道 0.2.94：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.95：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
