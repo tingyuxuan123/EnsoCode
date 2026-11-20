@@ -200,14 +200,6 @@ describe('createLocalComplete', () => {
 });
 
 describe('memoryCompleteFromSettings', () => {
-  it('远端 complete 标注 8 秒辅助检索预算，不改变默认模型选择', async () => {
-    const complete = await memoryCompleteFromSettings(
-      { memoryChatModel: 'remote' },
-      { modelsRoot: '/missing', remoteComplete: async () => async () => 'remote' }
-    );
-    expect(complete?.searchTimeoutMs).toBe(8000);
-  });
-
   it('uses the remote complete when the setting is remote or absent', async () => {
     const remote = async () => async () => 'remote-text';
     const fromAbsent = await memoryCompleteFromSettings(undefined, {

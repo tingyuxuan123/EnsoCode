@@ -1,358 +1,449 @@
-import { existsSync, statSync } from 'node:fs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { LOG_FILENAME, SCHEMA_FILENAME, type VaultPreset } from '@shared/memory/constants';
 import type {
-  CrystalSourceDto,
-  DistillJobDto,
-  EvolvesEdgeDto,
-  KgJobDto,
-  MemoryDetail,
+  CompileJobDto,
+  MemoryCreateInput,
+  MemoryEditPatch,
   MemoryJobsSnapshot,
-  MemoryListItem,
+  MemoryLintReport,
   MemoryListQuery,
   MemoryListResult,
+  MemoryMutationResult,
+  MemoryNoteDetail,
   MemoryStats,
-  ReembedJobDto,
+  VaultDocDto,
+  VaultDocKind,
+  VaultSpaceDto,
 } from '@shared/memory/dto';
-import { searchAssistReport } from '@shared/memory/searchAssist';
-import type Database from 'better-sqlite3';
-import { listCrystalSources } from './memory/crystal';
-import { openMemoryDb, vecTableExists } from './memory/db';
-import { type DistillJob, listDistillJobs } from './memory/distill';
-import { buildFtsMatchQuery } from './memory/fts';
-import { countFailedKgJobs, type KgJob, listEntityNames, listKgJobs } from './memory/kg';
-import { getReembedJob, type ReembedJob } from './memory/reembed';
-import { searchMemories } from './memory/search';
 import {
-  getMemory,
-  listEvolves,
-  MEMORY_COLUMNS,
-  type MemoryRow,
-  reviewEvolves,
-  rowToMemory,
-  updateMemory,
-  vecDelete,
-} from './memory/store';
-import type { Embedder, Evolves, Memory, SearchAssist } from './memory/types';
+  normalizeNoteType,
+  parseMarkdownNote,
+  parseNoteId,
+  relPathToSlug,
+  serializeMarkdownNote,
+} from '@shared/memory/markdown';
+import { buildPresetSchemaMarkdown } from '@shared/memory/presets';
+import type Database from 'better-sqlite3';
+import type { VaultBindingStore } from './memory/bindings';
+import { type CompileJobRow, clearFinishedCompileJobs } from './memory/compiler';
+import {
+  buildWikiGraph,
+  buildWikiTree,
+  getNoteDetail,
+  listIndexedNotes,
+  syncSpaceIndex,
+} from './memory/indexDb';
+import { runVaultLint } from './memory/lint';
+import { upsertWikiNote } from './memory/operations';
+import { parseSpaceId } from './memory/types';
+import {
+  appendVaultLog,
+  archiveNoteFile,
+  chooseIndexFilename,
+  deleteNoteFile,
+  ensureVaultScaffold,
+  readNoteFile,
+  readNoteMtimeIso,
+  readSchemaFile,
+  restoreNoteFile,
+  withSpaceLock,
+  writeNoteAtomic,
+  writeSchemaFile,
+} from './memory/vault';
 
-const SUMMARY_CHARS = 240;
+export { buildWikiGraph, buildWikiTree };
 
-function summarize(content: string): string {
-  const chars = Array.from(content.replace(/\s+/g, ' ').trim());
-  return chars.length <= SUMMARY_CHARS
-    ? chars.join('')
-    : `${chars.slice(0, SUMMARY_CHARS).join('')}…`;
+export interface AdminContext {
+  db: Database.Database;
+  bindings: VaultBindingStore;
+  indexDbPath: string;
+  language: string;
+  spaceLabel: (spaceId: string) => string;
+  knownExtraSpaceIds?: readonly string[];
+  onSelfWrite?: (rootPath: string) => void;
 }
 
-function toListItem(memory: Memory): MemoryListItem {
-  return {
-    id: memory.id,
-    title: memory.title,
-    contentSummary: summarize(memory.content),
-    unitType: memory.unitType,
-    spaceId: memory.spaceId,
-    // 真实项目名只在 Main 接线层可得（需要 sourceAuthority），这里先放原始 id，由 ipc 层覆盖
-    spaceLabel: memory.spaceId,
-    importance: memory.importance,
-    isCrystal: memory.isCrystal,
-    isLatest: memory.isLatest,
-    lifecycleState: memory.lifecycleState,
-    createdAt: memory.createdAt,
-    updatedAt: memory.updatedAt,
-    appearances: memory.appearances,
-  };
-}
+export function listVaultSpaces(ctx: AdminContext): VaultSpaceDto[] {
+  const spaceIds = new Set<string>([
+    ...ctx.bindings.listKnownSpaceIds(),
+    ...(ctx.knownExtraSpaceIds ?? []),
+  ]);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const out: VaultSpaceDto[] = [];
 
-function toEvolvesDto(edge: Evolves): EvolvesEdgeDto {
-  return { ...edge };
-}
-
-function toCrystalSourceDto(
-  source: ReturnType<typeof listCrystalSources>[number]
-): CrystalSourceDto {
-  return { ...toListItem(source.memory), contributionWeight: source.contributionWeight };
-}
-
-export function listMemoriesForAdmin(
-  db: Database.Database,
-  query: MemoryListQuery
-): MemoryListResult {
-  const conditions: string[] = ["m.lifecycle_state != 'deleted'"];
-  const params: unknown[] = [];
-  if (!query.includeArchived) conditions.push("m.lifecycle_state = 'active'");
-  if (query.spaceId !== undefined && query.spaceId !== null) {
-    conditions.push('m.space_id = ?');
-    params.push(query.spaceId);
-  }
-  if (query.unitType !== undefined) {
-    conditions.push('m.unit_type = ?');
-    params.push(query.unitType);
-  }
-  const text = query.query?.trim() ?? '';
-  if (text) {
-    const { match, short } = buildFtsMatchQuery(text);
-    const textConditions: string[] = [];
-    if (match) {
-      textConditions.push('m.rowid IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?)');
-      params.push(match);
-    }
-    for (const token of short) {
-      textConditions.push("m.semantic_field LIKE ? ESCAPE '\\'");
-      params.push(`%${token.replace(/[\\%_]/g, (char) => `\\${char}`)}%`);
-    }
-    if (textConditions.length > 0) conditions.push(`(${textConditions.join(' OR ')})`);
-  }
-  const where = conditions.join(' AND ');
-  const total = (
-    db.prepare(`SELECT count(*) AS total FROM memories m WHERE ${where}`).get(...params) as {
-      total: number;
-    }
-  ).total;
-  const rows = db
-    .prepare(
-      `SELECT ${MEMORY_COLUMNS.split(', ')
-        .map((column) => `m.${column}`)
-        .join(', ')} FROM memories m WHERE ${where}
-       ORDER BY m.updated_at DESC, m.id ASC LIMIT ? OFFSET ?`
-    )
-    .all(...params, query.limit, query.offset) as MemoryRow[];
-  return { items: rows.map(rowToMemory).map(toListItem), total };
-}
-
-/**
- * 语义模式：直接复用 agent 那条检索路径，保证「管理页搜得到 = agent 搜得到」。
- * 代价是没有精确 total、不能深分页（RRF 只给 top-N），也看不到已归档行（searchMemories 只查 active + latest）。
- * embedder 为 null 时 searchMemories 自动降级为 FTS + 实体两通道，不报错。
- */
-export async function searchMemoriesForAdmin(
-  db: Database.Database,
-  query: MemoryListQuery,
-  embedder: Embedder | null,
-  assist?: SearchAssist | null
-): Promise<MemoryListResult> {
-  const text = query.query?.trim() ?? '';
-  if (!text) return { items: [], total: 0, approximate: true, vectorsUsed: false, assist: 'off' };
-  const spaceIds =
-    query.spaceId !== undefined && query.spaceId !== null ? [query.spaceId] : listSpaceIds(db);
-  const hits = await searchMemories(db, {
-    q: text,
-    spaceIds,
-    limit: query.limit,
-    embedder,
-    mmr: true,
-    mode: query.mode === 'deep' ? 'deep' : 'fast',
-    assist: query.mode === 'deep' ? assist : undefined,
-  });
-  // unitType 在语义通道里没有下推，只能在结果上后过滤
-  const items = hits
-    .map((hit) => toListItem(hit.memory))
-    .filter((item) => query.unitType === undefined || item.unitType === query.unitType);
-  return {
-    items,
-    total: items.length,
-    approximate: true,
-    vectorsUsed: hits.some((hit) => hit.relevance !== null),
-    ...searchAssistReport(query.mode === 'deep' ? 'deep' : 'fast', assist),
-  };
-}
-
-function listSpaceIds(db: Database.Database): string[] {
-  return (
-    db
+  for (const spaceId of spaceIds) {
+    const parsed = parseSpaceId(spaceId);
+    if (!parsed) continue;
+    const resolved = ctx.bindings.resolveSpace(spaceId);
+    const counts = ctx.db
       .prepare(
-        "SELECT DISTINCT space_id AS spaceId FROM memories WHERE lifecycle_state != 'deleted'"
+        `SELECT
+           count(*) FILTER (WHERE is_archived = 0) AS note_count,
+           count(*) FILTER (WHERE is_archived = 0 AND status = 'draft') AS draft_count,
+           count(*) FILTER (WHERE is_archived = 0 AND stale_after IS NOT NULL AND stale_after < ?) AS stale_count
+         FROM notes WHERE space_id = ?`
       )
-      .all() as {
-      spaceId: string;
-    }[]
-  ).map((row) => row.spaceId);
-}
+      .get(todayIso, spaceId) as { note_count: number; draft_count: number; stale_count: number };
+    const broken = (
+      ctx.db
+        .prepare(
+          `SELECT count(*) AS c FROM links l
+           JOIN notes n ON n.space_id = l.space_id AND n.rel_path = l.source_path
+           WHERE l.space_id = ? AND l.is_broken = 1 AND n.is_archived = 0 AND n.is_raw = 0`
+        )
+        .get(spaceId) as { c: number }
+    ).c;
 
-export function getMemoryDetail(db: Database.Database, id: string): MemoryDetail | null {
-  const memory = getMemory(db, id);
-  if (!memory || memory.lifecycleState === 'deleted') return null;
-  return {
-    ...toListItem(memory),
-    content: memory.content,
-    eventStart: memory.eventStart,
-    eventEnd: memory.eventEnd,
-    temporalPrecision: memory.temporalPrecision,
-    embeddingModel: memory.embeddingModel,
-    evolves: listEvolves(db, id).map(toEvolvesDto),
-    entityNames: listEntityNames(db, id),
-    crystalSources: memory.isCrystal ? listCrystalSources(db, id).map(toCrystalSourceDto) : [],
-  };
-}
-
-export function archiveMemory(db: Database.Database, id: string): Memory | null {
-  return updateMemory(db, id, { lifecycleState: 'archived' });
-}
-
-export function restoreMemory(db: Database.Database, id: string): Memory | null {
-  return updateMemory(db, id, { lifecycleState: 'active' });
-}
-
-export function deleteMemoryPermanently(db: Database.Database, id: string): boolean {
-  const row = db
-    .prepare('SELECT rowid, embedding_dim AS embeddingDim FROM memories WHERE id = ?')
-    .get(id) as { rowid: number; embeddingDim: number | null } | undefined;
-  if (!row) return false;
-  return db
-    .transaction(() => {
-      if (row.embeddingDim !== null && vecTableExists(db, row.embeddingDim)) {
-        vecDelete(db, row.rowid, row.embeddingDim);
-      }
-      db.prepare('DELETE FROM mentions WHERE memory_id = ?').run(id);
-      db.prepare('DELETE FROM crystallized_from WHERE crystal_id = ? OR source_id = ?').run(id, id);
-      db.prepare('DELETE FROM evolves WHERE older_id = ? OR newer_id = ?').run(id, id);
-      db.prepare("DELETE FROM memory_jobs WHERE kind = 'kg' AND target LIKE ? ESCAPE '\\'").run(
-        `${id.replace(/[\\%_]/g, (char) => `\\${char}`)}#%`
-      );
-      const deleted = db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes > 0;
-      db.exec(`
-        DELETE FROM entities WHERE id NOT IN (SELECT entity_id FROM mentions);
-        DELETE FROM entity_aliases WHERE entity_id NOT IN (SELECT id FROM entities);
-        DELETE FROM entity_relations
-          WHERE source_id NOT IN (SELECT id FROM entities) OR target_id NOT IN (SELECT id FROM entities);
-      `);
-      return deleted;
-    })
-    .immediate();
-}
-
-export function deleteMemorySpace(db: Database.Database, spaceId: string): number {
-  return db
-    .transaction(() => {
-      if (spaceId.startsWith('bot:')) {
-        db.prepare(
-          "DELETE FROM memory_jobs WHERE kind = 'distill' AND CASE WHEN json_valid(payload) THEN json_extract(payload, '$.botId') END = ?"
-        ).run(spaceId.slice(4));
-      }
-      // 群删除后，待续跑的成员蒸馏不再分流进已删的群 space（成员自身部分照常落 bot space）
-      if (spaceId.startsWith('chat:')) {
-        db.prepare(
-          "UPDATE memory_jobs SET payload = json_remove(payload, '$.chatId') WHERE kind = 'distill' AND CASE WHEN json_valid(payload) THEN json_extract(payload, '$.chatId') END = ?"
-        ).run(spaceId.slice(5));
-      }
-      const rows = db.prepare('SELECT id FROM memories WHERE space_id = ?').all(spaceId) as {
-        id: string;
-      }[];
-      for (const row of rows) deleteMemoryPermanently(db, row.id);
-      return rows.length;
-    })
-    .immediate();
-}
-
-export function listPendingEvolves(db: Database.Database): EvolvesEdgeDto[] {
-  const rows = db
-    .prepare(
-      "SELECT older_id AS olderId FROM evolves WHERE review_state = 'pending' ORDER BY created_at, id"
-    )
-    .all() as { olderId: string }[];
-  const seen = new Set<string>();
-  const result: EvolvesEdgeDto[] = [];
-  for (const row of rows) {
-    for (const edge of listEvolves(db, row.olderId)) {
-      if (edge.reviewState !== 'pending' || seen.has(edge.id)) continue;
-      seen.add(edge.id);
-      result.push(toEvolvesDto(edge));
-    }
+    out.push({
+      spaceId,
+      label: ctx.spaceLabel(spaceId),
+      kind: parsed.kind,
+      rootPath: resolved.rootPath,
+      isExternal: resolved.isExternal,
+      preset: resolved.preset,
+      noteCount: counts.note_count,
+      brokenLinks: broken,
+      staleCount: counts.stale_count,
+      draftCount: counts.draft_count,
+      indexFilename: fs.existsSync(resolved.rootPath)
+        ? chooseIndexFilename(resolved.rootPath)
+        : 'index.md',
+    });
   }
-  return result;
+
+  const order = { global: 0, project: 1, chat: 2, bot: 3 };
+  return out.sort((a, b) => order[a.kind] - order[b.kind] || a.label.localeCompare(b.label));
 }
 
-export function reviewEvolvesEdge(
-  db: Database.Database,
-  id: string,
-  state: 'accepted' | 'rejected'
-): EvolvesEdgeDto | null {
-  const edge = reviewEvolves(db, id, state);
-  return edge ? toEvolvesDto(edge) : null;
-}
+export function getMemoryStats(ctx: AdminContext): MemoryStats {
+  const spaces = listVaultSpaces(ctx);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const row = ctx.db
+    .prepare(
+      `SELECT
+         count(*) FILTER (WHERE is_archived = 0) AS total_notes,
+         count(*) FILTER (WHERE is_archived = 0 AND status = 'draft') AS draft_count,
+         count(*) FILTER (WHERE is_archived = 0 AND status = 'verified') AS verified_count,
+         count(*) FILTER (WHERE is_archived = 0 AND stale_after IS NOT NULL AND stale_after < ?) AS stale_count,
+         count(*) FILTER (WHERE is_archived = 1) AS archived_count
+       FROM notes`
+    )
+    .get(todayIso) as {
+    total_notes: number;
+    draft_count: number;
+    verified_count: number;
+    stale_count: number;
+    archived_count: number;
+  };
+  const links = ctx.db
+    .prepare(
+      `SELECT
+         count(*) FILTER (WHERE is_broken = 0) AS ok_links,
+         count(*) FILTER (WHERE is_broken = 1) AS broken_links
+       FROM links`
+    )
+    .get() as { ok_links: number; broken_links: number };
 
-export function getMemoryStats(db: Database.Database): MemoryStats {
-  const aggregate = db
-    .prepare(
-      `SELECT count(*) AS total,
-              sum(CASE WHEN is_crystal = 1 THEN 1 ELSE 0 END) AS crystals,
-              sum(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) AS embedded
-       FROM memories WHERE lifecycle_state != 'deleted'`
-    )
-    .get() as { total: number; crystals: number | null; embedded: number | null };
-  const spaces = db
-    .prepare(
-      `SELECT space_id AS spaceId, count(*) AS total FROM memories
-       WHERE lifecycle_state != 'deleted' GROUP BY space_id ORDER BY space_id`
-    )
-    .all() as { spaceId: string; total: number }[];
-  const entities = (db.prepare('SELECT count(*) AS total FROM entities').get() as { total: number })
-    .total;
-  // 同上：标签由 ipc 层填，服务层不认识项目注册表
-  let databaseBytes = 0;
+  let indexBytes = 0;
   try {
-    databaseBytes = statSync(db.name).size;
+    indexBytes = fs.statSync(ctx.indexDbPath).size;
   } catch {}
+
   return {
-    total: aggregate.total,
-    bySpace: Object.fromEntries(spaces.map((row) => [row.spaceId, row.total])),
-    spaceLabels: {},
-    crystals: aggregate.crystals ?? 0,
-    entities,
-    embedded: aggregate.embedded ?? 0,
-    databaseBytes,
+    totalNotes: row.total_notes,
+    totalLinks: links.ok_links,
+    brokenLinks: links.broken_links,
+    draftCount: row.draft_count,
+    verifiedCount: row.verified_count,
+    staleCount: row.stale_count,
+    archivedCount: row.archived_count,
+    indexBytes,
+    spaces,
   };
 }
 
-function toDistillDto(job: DistillJob): DistillJobDto {
-  return {
+export function listNotesForAdmin(ctx: AdminContext, query: MemoryListQuery): MemoryListResult {
+  return listIndexedNotes(ctx.db, query, ctx.spaceLabel);
+}
+
+export function getNoteDetailById(ctx: AdminContext, id: string): MemoryNoteDetail | null {
+  const parsed = parseNoteId(id);
+  if (!parsed) return null;
+  const resolved = ctx.bindings.resolveSpace(parsed.spaceId);
+  return getNoteDetail(ctx.db, parsed.spaceId, parsed.relPath, resolved.rootPath, ctx.spaceLabel);
+}
+
+export async function createNoteManual(
+  ctx: AdminContext,
+  input: MemoryCreateInput
+): Promise<MemoryMutationResult> {
+  try {
+    const res = await upsertWikiNote(ctx.db, ctx.bindings, {
+      spaceId: input.spaceId,
+      note: input.slug,
+      title: input.title,
+      type: input.type,
+      description: input.description,
+      tags: input.tags,
+      content: input.body,
+      mode: 'replace',
+      actor: 'user',
+      status: 'verified',
+      language: ctx.language,
+      skipSanitize: true,
+      onSelfWrite: ctx.onSelfWrite,
+    });
+    const resolved = ctx.bindings.resolveSpace(res.spaceId);
+    const note = getNoteDetail(ctx.db, res.spaceId, res.relPath, resolved.rootPath, ctx.spaceLabel);
+    return note ? { ok: true, note } : { ok: false, error: 'Failed to load created note.' };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function editNoteManual(
+  ctx: AdminContext,
+  id: string,
+  patch: MemoryEditPatch
+): Promise<MemoryMutationResult> {
+  const parsedId = parseNoteId(id);
+  if (!parsedId) return { ok: false, error: 'Invalid note id.' };
+  const { spaceId, relPath } = parsedId;
+
+  return withSpaceLock(spaceId, () => {
+    const resolved = ctx.bindings.resolveSpace(spaceId);
+    const raw = readNoteFile(resolved.rootPath, relPath);
+    if (raw === null) return { ok: false, error: 'Note not found.' };
+    if (patch.expectedUpdatedAt) {
+      const diskUpdatedAt = readNoteMtimeIso(resolved.rootPath, relPath);
+      if (diskUpdatedAt && diskUpdatedAt !== patch.expectedUpdatedAt) {
+        syncSpaceIndex(ctx.db, spaceId, resolved.rootPath, { updateManagedIndex: false });
+        const currentNote =
+          getNoteDetail(ctx.db, spaceId, relPath, resolved.rootPath, ctx.spaceLabel) ?? undefined;
+        return {
+          ok: false,
+          conflict: true,
+          currentNote,
+          error: 'Note was modified externally on disk.',
+        };
+      }
+    }
+    const existing = parseMarkdownNote(raw, relPathToSlug(relPath));
+    const nowIso = new Date().toISOString();
+
+    const nextFm = {
+      ...existing.frontmatter,
+      ...(patch.title !== undefined
+        ? { title: patch.title.trim() || existing.frontmatter.title }
+        : {}),
+      ...(patch.description !== undefined
+        ? patch.description.trim()
+          ? { description: patch.description.trim() }
+          : { description: undefined }
+        : {}),
+      ...(patch.type !== undefined ? { type: normalizeNoteType(patch.type) } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.tags !== undefined
+        ? { tags: patch.tags.map((t) => t.trim()).filter(Boolean) }
+        : {}),
+      ...(patch.staleAfter !== undefined
+        ? patch.staleAfter?.trim()
+          ? { stale_after: patch.staleAfter.trim() }
+          : { stale_after: undefined }
+        : {}),
+    };
+    if (patch.status === 'verified') {
+      nextFm.verified = { by: 'user', at: nowIso };
+    }
+
+    const nextBody = patch.body !== undefined ? patch.body : existing.body;
+    const serialized = serializeMarkdownNote(nextFm, nextBody);
+    ctx.onSelfWrite?.(resolved.rootPath);
+    writeNoteAtomic(resolved.rootPath, relPath, serialized);
+    appendVaultLog(resolved.rootPath, {
+      action: patch.status === 'verified' && patch.body === undefined ? 'verify' : 'edit',
+      slug: relPathToSlug(relPath),
+      detail: `${nextFm.title ?? relPath} (user)`,
+    });
+    syncSpaceIndex(ctx.db, spaceId, resolved.rootPath, { updateManagedIndex: true });
+    const detail = getNoteDetail(ctx.db, spaceId, relPath, resolved.rootPath, ctx.spaceLabel);
+    return detail ? { ok: true, note: detail } : { ok: false, error: 'Note not found after edit.' };
+  });
+}
+
+export async function archiveNoteById(
+  ctx: AdminContext,
+  id: string
+): Promise<MemoryMutationResult> {
+  const parsedId = parseNoteId(id);
+  if (!parsedId) return { ok: false, error: 'Invalid note id.' };
+  const { spaceId, relPath } = parsedId;
+  return withSpaceLock(spaceId, () => {
+    const resolved = ctx.bindings.resolveSpace(spaceId);
+    try {
+      ctx.onSelfWrite?.(resolved.rootPath);
+      const out = archiveNoteFile(resolved.rootPath, relPath);
+      syncSpaceIndex(ctx.db, spaceId, resolved.rootPath, { updateManagedIndex: true });
+      const detail = getNoteDetail(ctx.db, spaceId, out.relPath, resolved.rootPath, ctx.spaceLabel);
+      return detail ? { ok: true, note: detail } : { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+}
+
+export async function restoreNoteById(
+  ctx: AdminContext,
+  id: string
+): Promise<MemoryMutationResult> {
+  const parsedId = parseNoteId(id);
+  if (!parsedId) return { ok: false, error: 'Invalid note id.' };
+  const { spaceId, relPath } = parsedId;
+  return withSpaceLock(spaceId, () => {
+    const resolved = ctx.bindings.resolveSpace(spaceId);
+    try {
+      ctx.onSelfWrite?.(resolved.rootPath);
+      const out = restoreNoteFile(resolved.rootPath, relPath);
+      syncSpaceIndex(ctx.db, spaceId, resolved.rootPath, { updateManagedIndex: true });
+      const detail = getNoteDetail(ctx.db, spaceId, out.relPath, resolved.rootPath, ctx.spaceLabel);
+      return detail ? { ok: true, note: detail } : { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+}
+
+export async function deleteNotePermanentlyById(
+  ctx: AdminContext,
+  id: string
+): Promise<MemoryMutationResult> {
+  const parsedId = parseNoteId(id);
+  if (!parsedId) return { ok: false, error: 'Invalid note id.' };
+  const { spaceId, relPath } = parsedId;
+  return withSpaceLock(spaceId, () => {
+    const resolved = ctx.bindings.resolveSpace(spaceId);
+    ctx.onSelfWrite?.(resolved.rootPath);
+    const deleted = deleteNoteFile(resolved.rootPath, relPath);
+    if (!deleted) return { ok: false, error: 'Note not found.' };
+    appendVaultLog(resolved.rootPath, {
+      action: 'delete',
+      slug: relPathToSlug(relPath),
+      detail: 'deleted permanently by user',
+    });
+    syncSpaceIndex(ctx.db, spaceId, resolved.rootPath, { updateManagedIndex: true });
+    return { ok: true };
+  });
+}
+
+export function runLintForAdmin(ctx: AdminContext, spaceId?: string | null): MemoryLintReport {
+  return runVaultLint(ctx.db, {
+    ...(spaceId ? { spaceIds: [spaceId] } : {}),
+    spaceLabel: ctx.spaceLabel,
+  });
+}
+
+export function getSchemaForSpace(ctx: AdminContext, spaceId: string): string {
+  const resolved = ctx.bindings.resolveSpace(spaceId);
+  return readSchemaFile(resolved.rootPath, resolved.preset, ctx.language);
+}
+
+export function saveSchemaForSpace(
+  ctx: AdminContext,
+  spaceId: string,
+  content: string,
+  preset?: VaultPreset
+): void {
+  if (preset) ctx.bindings.setPreset(spaceId, preset);
+  const resolved = ctx.bindings.resolveSpace(spaceId);
+  ensureVaultScaffold(resolved.rootPath, resolved.preset, ctx.language, resolved.isExternal);
+  ctx.onSelfWrite?.(resolved.rootPath);
+  writeSchemaFile(resolved.rootPath, content);
+}
+
+export function applyPresetToSpace(
+  ctx: AdminContext,
+  spaceId: string,
+  preset: VaultPreset
+): string {
+  ctx.bindings.setPreset(spaceId, preset);
+  const resolved = ctx.bindings.resolveSpace(spaceId);
+  const content = buildPresetSchemaMarkdown(preset, ctx.language);
+  ensureVaultScaffold(resolved.rootPath, preset, ctx.language, resolved.isExternal);
+  ctx.onSelfWrite?.(resolved.rootPath);
+  writeSchemaFile(resolved.rootPath, content);
+  return content;
+}
+
+export function toMemoryJobsSnapshot(
+  jobs: readonly CompileJobRow[],
+  resolveSessionTitle: (sessionId: string) => string | null,
+  resolveProjectName: (projectId: string | null) => string | null
+): MemoryJobsSnapshot {
+  const compile: CompileJobDto[] = jobs.map((job) => ({
     id: job.id,
-    sessionId: job.payload.sessionId,
+    sessionId: job.sessionId,
+    sessionTitle: resolveSessionTitle(job.sessionId),
     projectId: job.payload.projectId,
+    projectName: resolveProjectName(job.payload.projectId),
     status: job.status,
     attempts: job.attempts,
-    total: job.total,
-    done: job.done,
-    failed: job.failed,
+    written: job.written,
     error: job.error,
     notes: job.notes,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
-  };
+  }));
+  return { compile };
 }
 
-function toKgDto(job: KgJob): KgJobDto {
-  const { fingerprint: _fingerprint, ...dto } = job;
-  return dto;
+export { clearFinishedCompileJobs };
+
+export function readVaultDoc(
+  ctx: AdminContext,
+  spaceId: string,
+  kind: VaultDocKind
+): VaultDocDto | null {
+  const resolved = ctx.bindings.resolveSpace(spaceId);
+  if (kind === 'schema') {
+    const filePath = path.join(resolved.rootPath, SCHEMA_FILENAME);
+    let updatedAt: string | null = null;
+    try {
+      if (fs.existsSync(filePath))
+        updatedAt = new Date(fs.statSync(filePath).mtimeMs).toISOString();
+    } catch {}
+    return {
+      spaceId,
+      kind,
+      filename: SCHEMA_FILENAME,
+      content: readSchemaFile(resolved.rootPath, resolved.preset, ctx.language),
+      updatedAt,
+    };
+  }
+  const filename = kind === 'log' ? LOG_FILENAME : chooseIndexFilename(resolved.rootPath);
+  const filePath = path.join(resolved.rootPath, filename);
+  if (!fs.existsSync(filePath)) {
+    return { spaceId, kind, filename, content: '', updatedAt: null };
+  }
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return null;
+    return {
+      spaceId,
+      kind,
+      filename,
+      content: fs.readFileSync(filePath, 'utf8'),
+      updatedAt: new Date(stat.mtimeMs).toISOString(),
+    };
+  } catch {
+    return null;
+  }
 }
 
-function toReembedDto(job: ReembedJob): ReembedJobDto {
-  return { ...job };
-}
-
-export function toMemoryJobsSnapshot(
-  distill: DistillJob[],
-  kg: KgJob[],
-  reembed: ReembedJob | null
-): MemoryJobsSnapshot {
-  return {
-    distill: distill.map(toDistillDto),
-    kg: kg.map(toKgDto),
-    reembed: reembed ? toReembedDto(reembed) : null,
-    kgFailed: kg.filter((job) => job.status === 'done' && (job.failed > 0 || Boolean(job.error)))
-      .length,
-  };
-}
-
-export function getMemoryJobsSnapshot(db: Database.Database, limit = 50): MemoryJobsSnapshot {
-  return {
-    ...toMemoryJobsSnapshot(listDistillJobs(db, limit), listKgJobs(db, limit), getReembedJob(db)),
-    kgFailed: countFailedKgJobs(db),
-  };
-}
-
-/** 只删终态行。pending/running 必须留着：worker 按 id 写回，删了会丢进度、状态永久错乱。失败是 done+error，没有独立 failed 状态。 */
-export function clearFinishedMemoryJobs(db: Database.Database): number {
-  return db.prepare("DELETE FROM memory_jobs WHERE status IN ('done','cancelled')").run().changes;
-}
-
-export function openExistingMemoryDb(dbPath: string): Database.Database | null {
-  return existsSync(dbPath) ? openMemoryDb(dbPath) : null;
+export function noteFileAbsolutePath(bindings: VaultBindingStore, id: string): string | null {
+  const parsed = parseNoteId(id);
+  if (!parsed) return null;
+  const resolved = bindings.resolveSpace(parsed.spaceId);
+  const target = path.resolve(resolved.rootPath, parsed.relPath);
+  return fs.existsSync(target) ? target : null;
 }

@@ -5,7 +5,7 @@ import {
   SPEECH_SAMPLE_RATE,
   type SpeechModelId,
 } from '@shared/types/speech';
-import type { DownloadableModel } from '../memory/embedding/downloader';
+import type { DownloadableModel } from '../llama/downloader';
 
 /** 仅 GitHub Release 提供的整包（HF/ModelScope 无单文件），解压后按 files 校验 */
 export interface SpeechModelArchive {

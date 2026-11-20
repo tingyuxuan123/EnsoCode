@@ -1,36 +1,35 @@
-import { CRYSTAL_MIN_SOURCES } from '@shared/memory/constants';
-import { searchAssistReport } from '@shared/memory/searchAssist';
 import {
-  parseMemoryCaptureRequest,
-  parseMemoryCrystallizeRequest,
-  parseMemoryDeleteRequest,
+  parseMemoryArchiveRequest,
+  parseMemoryIndexRequest,
+  parseMemoryReadRequest,
   parseMemorySearchRequest,
+  parseMemoryUpsertRequest,
 } from '@shared/memory/toolParams';
 import type { MemoryOp } from '@shared/types/agent';
 import type Database from 'better-sqlite3';
-import { deleteMemoryPermanently } from '../memoryAdmin';
-import { createCrystal } from './crystal';
-import type { Complete } from './distill';
-import { type PendingWriteInput, queuePendingWrite } from './pending';
+import type { VaultBindingStore } from './bindings';
+import {
+  getNoteDetail,
+  listIndexedNotes,
+  resolveNoteRef,
+  searchIndexedNotes,
+  syncSpaceIndex,
+} from './indexDb';
+import { upsertWikiNote } from './operations';
+import { queuePendingWrite } from './pending';
 import { sanitizeMemoryWrite } from './safety';
-import { searchMemories } from './search';
-import { createSearchAssist } from './searchLlm';
 import { defaultCaptureSpace, type MemorySpaceContext, resolveSpaceIds } from './space';
-import { createMemory, getMemory } from './store';
-import { type Embedder, GLOBAL_SPACE, type Memory, MemoryValidationError } from './types';
+import { GLOBAL_SPACE, MemoryValidationError } from './types';
+import { archiveNoteFile, ensureVaultScaffold, readSchemaFile, withSpaceLock } from './vault';
 
-/** projectId：Main 权威 Project.id，会话不属于任何项目（或项目已失效）时为 null；botId/chatId 仅 Bot 模式 */
 export interface MemoryBridgeContext extends MemorySpaceContext {
-  embedder?: Embedder | null;
+  bindings: VaultBindingStore;
+  language?: string;
+  sessionId?: string;
   now?: Date;
-  /** 真正新插一行后的 best-effort hook（KG 抽取排队） */
-  onCreated?: (memory: Memory) => void;
-  /** 删除成功后的通知（刷新记忆视图） */
-  onDeleted?: (id: string) => void;
-  /** Bot 会话写 project / global 进入待审批后的通知（刷新收件箱 / 记忆审批入口） */
+  onChanged?: () => void;
   onPending?: (id: string) => void;
-  /** deep 检索的 instruct LLM；不可用时检索退回本地意图 */
-  complete?: (() => Complete | null | Promise<Complete | null>) | null;
+  onSelfWrite?: (rootPath: string) => void;
 }
 
 /** Bot 会话写共享空间（项目 / 全局）需用户审批；自己的 bot / chat 空间直接写 */
@@ -38,33 +37,26 @@ function needsReview(ctx: MemoryBridgeContext, spaceId: string): boolean {
   return Boolean(ctx.botId) && (spaceId === GLOBAL_SPACE || spaceId.startsWith('proj:'));
 }
 
-function queueForReview(
-  db: Database.Database,
-  ctx: MemoryBridgeContext,
-  input: Omit<PendingWriteInput, 'botId' | 'chatId'>
-): unknown {
-  const pending = queuePendingWrite(
-    db,
-    { ...input, botId: ctx.botId ?? null, chatId: ctx.chatId ?? null },
-    ctx.now
-  );
-  ctx.onPending?.(pending.id);
-  return {
-    status: 'pending_review',
-    written: false,
-    ...(input.redacted ? { redacted: true } : {}),
-    pendingId: pending.id,
-    message:
-      `Not written yet: writes from Bot members to the ${input.spaceId === GLOBAL_SPACE ? 'global' : 'project'} ` +
-      'memory space need user approval. It is queued in the inbox and will be saved once the user approves; do not resubmit it.',
-  };
+function defaultReadScope(ctx: MemorySpaceContext) {
+  return ctx.chatId ? 'chat' : ctx.botId ? 'bot' : ctx.projectId ? 'project' : 'global';
 }
 
-const REDACTED_NOTE = 'Secrets in the content were replaced with [REDACTED] before saving.';
+function ensureAndSyncSpaces(
+  db: Database.Database,
+  bindings: VaultBindingStore,
+  spaceIds: readonly string[],
+  language?: string
+): void {
+  for (const spaceId of spaceIds) {
+    const space = bindings.resolveSpace(spaceId);
+    ensureVaultScaffold(space.rootPath, space.preset, language ?? 'zh', space.isExternal);
+    syncSpaceIndex(db, spaceId, space.rootPath);
+  }
+}
 
 /**
- * worker `memory-invoke` 的 Main 侧执行入口。载荷按 unknown 收窄（桥两端都归一/校验，不信任 worker），
- * 返回给模型的是精简投影，不是整行。
+ * Worker `memory-invoke` 的 Main 侧执行入口。
+ * 所有入参按 unknown 收窄，所有路径由 Main 按 spaceId 派生并校验边界。
  */
 export async function executeMemoryOp(
   db: Database.Database,
@@ -72,231 +64,263 @@ export async function executeMemoryOp(
   params: unknown,
   ctx: MemoryBridgeContext
 ): Promise<unknown> {
+  if (op === 'index') {
+    const req = parseMemoryIndexRequest(params ?? {});
+    if (!req) throw new MemoryValidationError('invalid_request', 'invalid memory_index params');
+    const spaceIds = resolveSpaceIds(req.spaceId ?? defaultReadScope(ctx), ctx);
+    if (spaceIds.length === 0) return { schema: '', notes: [], spaces: [] };
+    ensureAndSyncSpaces(db, ctx.bindings, spaceIds, ctx.language);
+
+    const primary = ctx.bindings.resolveSpace(spaceIds[0]);
+    const schema = readSchemaFile(primary.rootPath, primary.preset, ctx.language ?? 'zh');
+    const notes: {
+      spaceId: string;
+      slug: string;
+      title: string;
+      type: string;
+      description: string;
+      status: string;
+      tags: string[];
+      linkCount: number;
+      isRaw: boolean;
+    }[] = [];
+
+    for (const spaceId of spaceIds) {
+      const remaining = req.limit - notes.length;
+      if (remaining <= 0) break;
+      const listed = listIndexedNotes(db, {
+        spaceId,
+        type: req.type,
+        includeArchived: false,
+        includeRaw: req.includeRaw,
+        limit: remaining,
+        offset: 0,
+      });
+      for (const item of listed.items) {
+        notes.push({
+          spaceId: item.spaceId,
+          slug: item.slug,
+          title: item.title,
+          type: item.type,
+          description: item.description,
+          status: item.status,
+          tags: item.tags,
+          linkCount: item.outboundCount + item.inboundCount,
+          isRaw: item.isRaw,
+        });
+      }
+    }
+    return { spaces: spaceIds, schema, notes };
+  }
+
   if (op === 'search') {
-    const request = parseMemorySearchRequest(params);
-    if (!request)
-      throw new MemoryValidationError('invalid_request', 'invalid memory_search params');
-    const spaceIds = resolveSpaceIds(request.spaceId, ctx);
-    const assist =
-      request.mode === 'deep' ? createSearchAssist((await ctx.complete?.()) ?? null) : undefined;
-    const hits = await searchMemories(db, {
-      q: request.query,
+    const req = parseMemorySearchRequest(params);
+    if (!req) throw new MemoryValidationError('invalid_request', 'invalid memory_search params');
+    const spaceIds = resolveSpaceIds(req.spaceId ?? defaultReadScope(ctx), ctx);
+    if (spaceIds.length === 0) return { results: [] };
+    ensureAndSyncSpaces(db, ctx.bindings, spaceIds, ctx.language);
+
+    const hits = searchIndexedNotes(db, {
       spaceIds,
-      limit: request.limit,
-      embedder: ctx.embedder,
-      now: ctx.now,
-      mode: request.mode,
-      assist,
-      // agent 检索启用 MMR 去冗余；显式写出来，默认值变化不会静默关掉它
-      mmr: true,
-      eventDateFrom: request.eventDateFrom ?? null,
-      eventDateTo: request.eventDateTo ?? null,
-      recordedDateFrom: request.recordedDateFrom ?? null,
-      recordedDateTo: request.recordedDateTo ?? null,
+      query: req.query,
+      type: req.type,
+      status: req.status,
+      includeArchived: false,
+      limit: req.limit,
     });
     return {
       results: hits.map((hit, index) => ({
-        id: hit.memory.id,
-        title: hit.memory.title,
-        content: hit.memory.content,
-        unitType: hit.memory.unitType,
-        spaceId: hit.memory.spaceId,
+        id: hit.id,
+        spaceId: hit.spaceId,
+        slug: hit.slug,
+        title: hit.title,
+        type: hit.type,
+        status: hit.status,
+        description: hit.description,
+        snippet: hit.snippet,
+        tags: hit.tags,
+        isRaw: hit.isRaw,
+        neighbors: hit.neighbors,
         rank: index + 1,
-        ...(hit.relevance === null ? {} : { relevance: Number(hit.relevance.toFixed(4)) }),
-        isLatest: hit.memory.isLatest,
       })),
-      ...searchAssistReport(request.mode, assist),
     };
   }
-  if (op === 'capture') {
-    const request = parseMemoryCaptureRequest(params);
-    if (!request) {
-      throw new MemoryValidationError('invalid_request', 'invalid memory_capture params');
-    }
-    const [spaceId] = resolveSpaceIds(request.spaceId ?? defaultCaptureSpace(ctx), ctx);
-    if (!spaceId) {
+
+  if (op === 'read') {
+    const req = parseMemoryReadRequest(params);
+    if (!req) throw new MemoryValidationError('invalid_request', 'invalid memory_read params');
+    const spaceIds = resolveSpaceIds(req.spaceId ?? 'all', ctx);
+    if (spaceIds.length === 0) return { found: false };
+    ensureAndSyncSpaces(db, ctx.bindings, spaceIds, ctx.language);
+
+    const ref = resolveNoteRef(db, spaceIds, req.note);
+    if (!ref) return { found: false, note: req.note };
+    const space = ctx.bindings.resolveSpace(ref.spaceId);
+    const detail = getNoteDetail(db, ref.spaceId, ref.relPath, space.rootPath);
+    if (!detail) return { found: false, note: req.note };
+    return {
+      found: true,
+      id: detail.id,
+      spaceId: detail.spaceId,
+      slug: detail.slug,
+      relPath: detail.relPath,
+      title: detail.title,
+      type: detail.type,
+      status: detail.status,
+      description: detail.description,
+      tags: detail.tags,
+      resource: detail.resource,
+      sources: detail.sources,
+      staleAfter: detail.staleAfter,
+      isRaw: detail.isRaw,
+      isArchived: detail.isArchived,
+      body: detail.body,
+      links: detail.links,
+      backlinks: detail.backlinks,
+      updatedAt: detail.updatedAt,
+    };
+  }
+
+  if (op === 'upsert') {
+    const req = parseMemoryUpsertRequest(params);
+    if (!req) throw new MemoryValidationError('invalid_request', 'invalid memory_upsert params');
+    const spaceKey = req.spaceId ?? defaultCaptureSpace(ctx);
+    const spaceIds = resolveSpaceIds(spaceKey, ctx);
+    const targetSpaceId = spaceIds[0];
+    if (!targetSpaceId) {
       throw new MemoryValidationError(
         'no_project',
-        "this session has no project; use spaceId 'global' instead"
+        "Cannot write to 'project' memory without an active project; set spaceId='global' instead."
       );
     }
-    const safe = sanitizeMemoryWrite({ title: request.title ?? null, content: request.content });
-    if (needsReview(ctx, spaceId)) {
-      return queueForReview(db, ctx, {
-        kind: 'capture',
-        spaceId,
-        title: safe.title,
-        content: safe.content,
-        redacted: safe.redacted,
-        payload: {
-          unitType: request.unitType,
-          unitTypeSource: request.unitTypeSource,
-          importance: request.importance,
-          ...(request.eventStart ? { eventStart: request.eventStart } : {}),
-          ...(request.eventEnd ? { eventEnd: request.eventEnd } : {}),
-          ...(request.force ? { force: true } : {}),
-          ...(request.evolvesFromId ? { evolvesFromId: request.evolvesFromId } : {}),
-          ...(request.evolvesRelation ? { evolvesRelation: request.evolvesRelation } : {}),
+
+    const sanitized = sanitizeMemoryWrite({ title: req.title, content: req.content });
+    const safeDesc = req.description
+      ? sanitizeMemoryWrite({ title: null, content: req.description }).content
+      : undefined;
+
+    if (needsReview(ctx, targetSpaceId)) {
+      const space = ctx.bindings.resolveSpace(targetSpaceId);
+      ensureVaultScaffold(space.rootPath, space.preset, ctx.language ?? 'zh', space.isExternal);
+      syncSpaceIndex(db, targetSpaceId, space.rootPath);
+      const pending = queuePendingWrite(
+        db,
+        ctx.bindings,
+        {
+          kind: 'agent',
+          spaceId: targetSpaceId,
+          botId: ctx.botId ?? null,
+          chatId: ctx.chatId ?? null,
+          note: req.note,
+          title: sanitized.title ?? req.title,
+          type: req.type,
+          description: safeDesc,
+          mode: req.mode,
+          section: req.section,
+          tags: req.tags,
+          sources: req.sources ?? (ctx.sessionId ? [`session:${ctx.sessionId}`] : []),
+          resource: req.resource,
+          staleAfter: req.staleAfter,
+          proposedBody: sanitized.content,
+          redacted: sanitized.redacted,
         },
-      });
-    }
-    const result = await createMemory(
-      db,
-      {
-        content: safe.content,
-        title: safe.title,
-        unitType: request.unitType,
-        unitTypeSource: request.unitTypeSource,
-        importance: request.importance,
-        spaceId,
-        source: 'agent',
-        eventStart: request.eventStart ?? null,
-        eventEnd: request.eventEnd ?? null,
-        force: request.force,
-        evolvesFromId: request.evolvesFromId ?? null,
-        evolvesRelation: request.evolvesRelation ?? null,
-      },
-      { embedder: ctx.embedder, now: ctx.now, onCreated: ctx.onCreated }
-    );
-    if (result.status !== 'inserted') {
-      // 只返回候选（含全文，调用方才能判断关系 / 决定 force），明确告知未写入
+        ctx.now
+      );
+      ctx.onPending?.(pending.id);
+      ctx.onChanged?.();
       return {
-        status: 'candidates_found',
+        status: 'pending_review',
         written: false,
+        pendingId: pending.id,
+        spaceId: targetSpaceId,
+        slug: pending.slug,
+        title: pending.title,
+        ...(sanitized.redacted ? { redacted: true } : {}),
         message:
-          'Nothing was written: similar memories already exist. Drop it, resubmit with ' +
-          'evolvesFromId + evolvesRelation, or resubmit with force=true.',
-        candidates: result.candidates.map((c) => ({
-          id: c.memory.id,
-          title: c.memory.title,
-          content: c.memory.content,
-          unitType: c.memory.unitType,
-          similarity: Number(c.similarity.toFixed(4)),
-          bm25Top1: c.bm25Top1,
-        })),
+          `Not written yet: writes from Bot members to ${targetSpaceId === GLOBAL_SPACE ? 'global' : 'project'} ` +
+          'wiki memory require user approval and have been queued in the inbox.',
       };
     }
-    const { memory } = result;
+
+    const res = await upsertWikiNote(db, ctx.bindings, {
+      spaceId: targetSpaceId,
+      note: req.note,
+      title: sanitized.title ?? req.title,
+      type: req.type,
+      description: safeDesc,
+      content: sanitized.content,
+      mode: req.mode,
+      section: req.section,
+      tags: req.tags,
+      sources: req.sources ?? (ctx.sessionId ? [`session:${ctx.sessionId}`] : []),
+      resource: req.resource,
+      staleAfter: req.staleAfter,
+      actor: ctx.botId ? `bot:${ctx.botId}` : 'collabra-agent',
+      status: 'draft',
+      language: ctx.language,
+      now: ctx.now,
+      skipSanitize: true,
+      onSelfWrite: ctx.onSelfWrite,
+    });
+    ctx.onChanged?.();
     return {
-      status: 'inserted',
-      ...(result.deduplicated ? { deduplicated: true } : {}),
-      ...(safe.redacted ? { redacted: true, note: REDACTED_NOTE } : {}),
-      ...(result.evolves
-        ? { evolves: { relation: result.evolves.relation, olderId: result.evolves.olderId } }
-        : {}),
-      memory: {
-        id: memory.id,
-        title: memory.title,
-        unitType: memory.unitType,
-        spaceId: memory.spaceId,
-        importance: memory.importance,
-      },
+      status: res.action,
+      written: true,
+      spaceId: res.spaceId,
+      relPath: res.relPath,
+      slug: res.slug,
+      title: res.title,
+      type: res.type,
+      noteStatus: res.status,
+      ...(sanitized.redacted ? { redacted: true } : {}),
     };
   }
-  if (op === 'crystallize') {
-    const request = parseMemoryCrystallizeRequest(params);
-    if (!request) {
+
+  if (op === 'archive') {
+    const req = parseMemoryArchiveRequest(params);
+    if (!req) throw new MemoryValidationError('invalid_request', 'invalid memory_archive params');
+    const spaceIds = resolveSpaceIds(req.spaceId ?? defaultCaptureSpace(ctx), ctx);
+    if (spaceIds.length === 0) {
+      throw new MemoryValidationError('no_project', 'No target memory space available.');
+    }
+    ensureAndSyncSpaces(db, ctx.bindings, spaceIds, ctx.language);
+
+    const ref = resolveNoteRef(db, spaceIds, req.note);
+    if (!ref) {
+      throw new MemoryValidationError('not_found', `Memory note not found: ${req.note}`);
+    }
+    if (ref.isRaw) {
       throw new MemoryValidationError(
-        'invalid_request',
-        `invalid memory_crystallize params: content, title and sourceIds (>= ${CRYSTAL_MIN_SOURCES} distinct memory ids) are required`
+        'readonly_raw',
+        'Cannot archive read-only raw/ reference files.'
       );
     }
-    // 模型不指定 space：源只能来自本会话可见的 space（all 解析结果），结晶落在源所在 space；
-    // 不可见的源与“不存在”同样拒绝，不泄露其它项目的 space
-    const visible = new Set(resolveSpaceIds('all', ctx));
-    const spaceIds = new Set<string>();
-    for (const id of request.sourceIds) {
-      const source = getMemory(db, id);
-      if (!source || !visible.has(source.spaceId)) {
-        throw new MemoryValidationError(
-          'crystal_sources',
-          `source memory not found or not visible in this session: ${id}`
-        );
-      }
-      spaceIds.add(source.spaceId);
-    }
-    if (spaceIds.size !== 1) {
+    if (needsReview(ctx, ref.spaceId)) {
       throw new MemoryValidationError(
-        'crystal_sources',
-        'all source memories must belong to the same space (all global, or all current project)'
+        'permission_denied',
+        'Bot members cannot archive notes in shared project or global vaults directly.'
       );
     }
-    const [spaceId] = spaceIds;
-    const safe = sanitizeMemoryWrite({ title: request.title, content: request.content });
-    if (needsReview(ctx, spaceId)) {
-      return queueForReview(db, ctx, {
-        kind: 'crystallize',
-        spaceId,
-        title: safe.title,
-        content: safe.content,
-        redacted: safe.redacted,
-        payload: { sourceIds: request.sourceIds, ...(request.force ? { force: true } : {}) },
+
+    const archived = await withSpaceLock(ref.spaceId, () => {
+      const space = ctx.bindings.resolveSpace(ref.spaceId);
+      ctx.onSelfWrite?.(space.rootPath);
+      const out = archiveNoteFile(space.rootPath, ref.relPath, {
+        reason: req.reason,
+        supersededBy: req.supersededBy,
+        now: ctx.now,
       });
-    }
-    const result = await createCrystal(
-      db,
-      {
-        content: safe.content,
-        title: safe.title ?? request.title,
-        sourceIds: request.sourceIds,
-        spaceId,
-        force: request.force,
-      },
-      { embedder: ctx.embedder, now: ctx.now, onCreated: ctx.onCreated }
-    );
-    if (result.status !== 'inserted') {
-      return {
-        status: 'candidates_found',
-        written: false,
-        message:
-          'Nothing was written: similar memories already exist. Drop it, or resubmit with ' +
-          'force=true if the crystal genuinely adds information.',
-        candidates: result.candidates.map((c) => ({
-          id: c.memory.id,
-          title: c.memory.title,
-          content: c.memory.content,
-          unitType: c.memory.unitType,
-          similarity: Number(c.similarity.toFixed(4)),
-          bm25Top1: c.bm25Top1,
-        })),
-      };
-    }
-    const { memory } = result;
+      syncSpaceIndex(db, ref.spaceId, space.rootPath, { updateManagedIndex: true });
+      return out;
+    });
+    ctx.onChanged?.();
     return {
-      status: 'inserted',
-      memory: {
-        id: memory.id,
-        title: memory.title,
-        spaceId: memory.spaceId,
-        isCrystal: memory.isCrystal,
-        sourceUnitCount: memory.sourceUnitCount,
-      },
+      status: 'archived',
+      spaceId: ref.spaceId,
+      slug: archived.slug,
+      archivedPath: archived.relPath,
     };
   }
-  if (op === 'delete') {
-    const request = parseMemoryDeleteRequest(params);
-    if (!request) {
-      throw new MemoryValidationError(
-        'invalid_request',
-        'invalid memory_delete params: id is required'
-      );
-    }
-    // 只能删本会话可见 space 的记忆；不可见与不存在同样拒绝，不泄露其它项目
-    const memory = getMemory(db, request.id);
-    const visible = new Set(resolveSpaceIds('all', ctx));
-    if (
-      !memory ||
-      memory.lifecycleState === 'deleted' ||
-      !visible.has(memory.spaceId) ||
-      !deleteMemoryPermanently(db, request.id)
-    ) {
-      throw new MemoryValidationError(
-        'not_found',
-        `memory not found or not visible in this session: ${request.id}`
-      );
-    }
-    ctx.onDeleted?.(request.id);
-    return { status: 'deleted', id: request.id };
-  }
-  throw new MemoryValidationError('unknown_op', `unknown memory op: ${String(op)}`);
+
+  throw new MemoryValidationError('unsupported_op', `Unsupported memory op: ${String(op)}`);
 }

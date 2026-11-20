@@ -1087,4 +1087,5 @@ export const useBotsStore = create<BotsState>()((set, get) => {
 
 /** Bot 待处理数：收件箱入口与标题栏徽标共用 */
 export const useBotPendingCount = (): number =>
-  useBotsStore((s) => visibleInbox(s.inbox).length) + usePendingMemoryWrites().length;
+  useBotsStore((s) => visibleInbox(s.inbox).length) +
+  usePendingMemoryWrites().filter((write) => write.kind !== 'compile').length;

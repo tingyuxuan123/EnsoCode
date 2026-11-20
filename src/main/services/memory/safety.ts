@@ -1,5 +1,5 @@
-import { redactSecrets } from './distill';
 import { scanMemoryInjection } from './injectionScan';
+import { redactSecrets } from './redact';
 import { MemoryValidationError } from './types';
 
 export { scanMemoryInjection };
@@ -10,7 +10,7 @@ export interface SanitizedMemoryWrite {
   redacted: boolean;
 }
 
-/** 注入命中抛 unsafe_content（不落库）；否则返回脱敏后的标题 / 正文 */
+/** 注入命中抛 unsafe_content（不落盘）；否则返回脱敏后的标题 / 正文 */
 export function sanitizeMemoryWrite(input: {
   title: string | null;
   content: string;

@@ -1,13 +1,11 @@
 import type {
-  EvolvesEdgeDto,
-  MemoryDetail,
-  MemoryListItem,
   MemoryListQuery,
   MemoryListResult,
+  MemoryNoteDetail,
+  MemoryNoteSummary,
+  PendingMemoryWriteDto,
 } from '@shared/memory/dto';
 import {
-  Children,
-  type ComponentProps,
   createElement,
   type EffectCallback,
   type ElementType,
@@ -19,14 +17,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogTitle } from '@/components/ui/dialog';
-import { InputGroupInput } from '@/components/ui/input-group';
-import { Select } from '@/components/ui/select';
 import {
   emptyReason,
   isPristineEmpty,
   MemoryLibrary,
   MemoryRows,
-  PendingReviewSection,
   PendingWritesSection,
 } from './MemoryLibrary';
 
@@ -37,16 +32,16 @@ vi.mock('react', async (importOriginal) => {
   return {
     ...react,
     useState: (initial: unknown) =>
-      // biome-ignore lint/correctness/useHookAtTopLevel: 仅组件测试启用 harness，SSR 子组件保留真实 hooks。
+      // biome-ignore lint/correctness/useHookAtTopLevel: test harness only
       hooks.current ? hooks.current.state(initial) : react.useState(initial),
     useRef: (initial: unknown) =>
-      // biome-ignore lint/correctness/useHookAtTopLevel: 同上，测试适配层而非组件。
+      // biome-ignore lint/correctness/useHookAtTopLevel: test harness only
       hooks.current ? hooks.current.memo(() => ({ current: initial }), []) : react.useRef(initial),
     useCallback: (callback: () => unknown, deps: unknown[]) =>
-      // biome-ignore lint/correctness/useHookAtTopLevel: 同上，测试适配层而非组件。
+      // biome-ignore lint/correctness/useHookAtTopLevel: test harness only
       hooks.current ? hooks.current.memo(() => callback, deps) : react.useCallback(callback, deps),
     useEffect: (effect: EffectCallback, deps: unknown[]) =>
-      // biome-ignore lint/correctness/useHookAtTopLevel: 同上，测试适配层而非组件。
+      // biome-ignore lint/correctness/useHookAtTopLevel: test harness only
       hooks.current ? hooks.current.effect(effect, deps) : react.useEffect(effect, deps),
   };
 });
@@ -61,508 +56,259 @@ vi.mock('@/i18n', () => ({
 const t = (key: string, params?: Record<string, string>) =>
   params ? key.replace(/\{\{(\w+)\}\}/g, (_, k: string) => params[k] ?? '') : key;
 
-function item(overrides: Partial<MemoryListItem> = {}): MemoryListItem {
+function noteItem(over: Partial<MemoryNoteSummary> = {}): MemoryNoteSummary {
   return {
-    id: 'm1',
-    title: 'Use Postgres',
-    contentSummary: 'Chosen after benchmarking',
-    unitType: 'decision',
+    id: 'global::wiki/decisions/okf.md',
     spaceId: 'global',
     spaceLabel: 'Global',
-    importance: 0.6,
-    isCrystal: false,
-    isLatest: true,
-    lifecycleState: 'active',
-    createdAt: '2025-01-01T00:00:00.000Z',
-    updatedAt: '2025-01-02T00:00:00.000Z',
-    appearances: 3,
-    ...overrides,
+    relPath: 'wiki/decisions/okf.md',
+    slug: 'decisions/okf',
+    title: 'Use OKF v0.2',
+    description: 'Markdown with [[wikilink]] as source of truth',
+    type: 'decisions',
+    status: 'verified',
+    tags: ['okf'],
+    isRaw: false,
+    isArchived: false,
+    generatedBy: 'user',
+    generatedAt: '2026-11-20T00:00:00.000Z',
+    verifiedBy: 'user',
+    verifiedAt: '2026-11-20T00:00:00.000Z',
+    staleAfter: null,
+    outboundCount: 2,
+    inboundCount: 1,
+    lineCount: 20,
+    updatedAt: '2026-11-20T00:00:00.000Z',
+    ...over,
   };
 }
 
-const edge: EvolvesEdgeDto = {
-  id: 'e1',
-  olderId: 'older-id-1234',
-  newerId: 'newer-id-5678',
-  relation: 'challenges',
-  confidence: 0.8,
-  reason: 'Contradicts the earlier note',
-  reviewState: 'pending',
-  reviewedAt: null,
-  createdAt: '2025-01-03T00:00:00.000Z',
-};
-
-// Node 环境下保留 hook 身份、依赖比较和 cleanup；交互走 JSX，不依赖 state 下标。
 class LibraryHarness {
   private cells: { value?: unknown; deps?: unknown[]; cleanup?: () => void }[] = [];
   private cursor = 0;
   private effects: (() => void)[] = [];
   private tree: ReactNode = null;
-  private mounted = true;
-  private revision = 0;
-  writesAfterUnmount = 0;
 
   state(initial: unknown) {
     const index = this.cursor++;
-    this.cells[index] ??= { value: typeof initial === 'function' ? initial() : initial };
-    const cell = this.cells[index];
-    return [
-      cell.value,
-      (value: unknown) => {
-        if (!this.mounted) this.writesAfterUnmount++;
-        cell.value = typeof value === 'function' ? value(cell.value) : value;
-      },
-    ];
-  }
-
-  memo(factory: () => unknown, deps: unknown[]) {
-    const index = this.cursor++;
-    const cell = this.cells[index];
-    if (!cell || deps.some((dep, i) => !Object.is(dep, cell.deps?.[i]))) {
-      this.cells[index] = { value: factory(), deps };
+    if (!(index in this.cells)) {
+      this.cells[index] = { value: typeof initial === 'function' ? initial() : initial };
     }
-    return this.cells[index].value;
+    const cell = this.cells[index];
+    const set = (next: unknown) => {
+      cell.value =
+        typeof next === 'function' ? (next as (prev: unknown) => unknown)(cell.value) : next;
+    };
+    return [cell.value, set] as const;
   }
 
-  effect(effect: EffectCallback, deps: unknown[]) {
+  memo<T>(factory: () => T, deps: unknown[]): T {
     const index = this.cursor++;
     const cell = this.cells[index];
-    if (!cell || deps.some((dep, i) => !Object.is(dep, cell.deps?.[i]))) {
+    if (!cell?.deps || deps.some((d, i) => !Object.is(d, cell.deps?.[i]))) {
+      const value = factory();
+      this.cells[index] = { value, deps };
+      return value;
+    }
+    return cell.value as T;
+  }
+
+  effect(callback: EffectCallback, deps: unknown[]) {
+    const index = this.cursor++;
+    const cell = this.cells[index];
+    if (!cell?.deps || deps.some((d, i) => !Object.is(d, cell.deps?.[i]))) {
+      const prevCleanup = cell?.cleanup;
+      this.cells[index] = { deps };
       this.effects.push(() => {
-        cell?.cleanup?.();
-        this.cells[index] = { deps, cleanup: effect() || undefined };
+        prevCleanup?.();
+        const cleanup = callback();
+        this.cells[index].cleanup = typeof cleanup === 'function' ? cleanup : undefined;
       });
     }
   }
 
-  render(revision = this.revision) {
-    this.revision = revision;
+  render() {
     this.cursor = 0;
-    hooks.current = this;
-    try {
-      this.tree = MemoryLibrary({ revision });
-    } finally {
-      hooks.current = null;
+    this.effects = [];
+    this.tree = MemoryLibrary();
+    for (const run of this.effects) run();
+    return this.tree;
+  }
+
+  async settle() {
+    for (let i = 0; i < 4; i++) {
+      this.render();
+      await Promise.resolve();
     }
-    for (const effect of this.effects.splice(0)) effect();
-    return this;
+    return this.render();
   }
 
   unmount() {
     for (const cell of this.cells) cell.cleanup?.();
-    this.mounted = false;
-  }
-
-  elements(type: unknown): ReactElement<Record<string, unknown>>[] {
-    const found: ReactElement<Record<string, unknown>>[] = [];
-    const visit = (node: ReactNode) => {
-      Children.forEach(node, (child) => {
-        if (!isValidElement<Record<string, unknown>>(child)) return;
-        if (child.type === type) found.push(child);
-        visit(child.props.children as ReactNode);
-      });
-    };
-    visit(this.tree);
-    return found;
-  }
-
-  props<T extends ElementType>(type: T, index = 0): ComponentProps<T> {
-    return this.elements(type)[index].props as ComponentProps<T>;
-  }
-
-  query(value: string) {
-    this.props(InputGroupInput).onChange?.({ target: { value } } as Parameters<
-      NonNullable<ComponentProps<typeof InputGroupInput>['onChange']>
-    >[0]);
-    return this.render();
-  }
-
-  select(index: number, value: string) {
-    const change = this.props(Select, index).onValueChange;
-    change?.(value, {} as Parameters<NonNullable<typeof change>>[1]);
-    return this.render();
-  }
-
-  click(label: string) {
-    const button = this.elements(Button).find((node) => node.props.children === label);
-    if (!button) throw new Error(`Missing button: ${label}`);
-    (button.props.onClick as () => void)();
-    return this.render();
-  }
-
-  html() {
-    return renderToStaticMarkup(this.tree);
-  }
-
-  rows() {
-    return this.props(MemoryRows).items.map((row: MemoryListItem) => row.title);
   }
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
-function setupLibrary() {
-  const requests: {
-    query: MemoryListQuery;
-    response: ReturnType<typeof deferred<MemoryListResult>>;
-  }[] = [];
-  const details: ReturnType<typeof deferred<MemoryDetail | null>>[] = [];
-  let onChanged = () => {};
-  const unsubscribe = vi.fn();
-  const memory = {
-    list: vi.fn((query: MemoryListQuery) => {
-      const response = deferred<MemoryListResult>();
-      requests.push({ query, response });
-      return response.promise;
-    }),
-    stats: vi.fn(async () => ({
-      bySpace: { 'project-A': 1, 'project-B': 1 },
-      spaceLabels: { 'project-A': 'Project A', 'project-B': 'Project B' },
-      total: 2,
-    })),
-    evolvesPending: vi.fn(async () => [edge]),
-    detail: vi.fn(() => {
-      const response = deferred<MemoryDetail | null>();
-      details.push(response);
-      return response.promise;
-    }),
-    archive: vi.fn(async () => ({ ok: true })),
-    onChanged: vi.fn((listener: () => void) => {
-      onChanged = listener;
-      return unsubscribe;
-    }),
+function findAll(root: ReactNode, match: (el: ReactElement) => boolean): ReactElement[] {
+  const hits: ReactElement[] = [];
+  const visit = (node: ReactNode): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+    if (!isValidElement(node)) return;
+    if (match(node)) hits.push(node);
+    const props = node.props as { children?: ReactNode };
+    if (props.children !== undefined) visit(props.children);
   };
-  vi.stubGlobal('window', { electronAPI: { memory } });
-  const ui = new LibraryHarness().render();
-  const reply = async (index: number, titles: string[], extra: Partial<MemoryListResult> = {}) => {
-    requests[index].response.resolve({
-      items: titles.map((title) => item({ id: title, title })),
-      total: titles.length,
-      ...extra,
-    });
-    await Promise.resolve();
-    ui.render();
-  };
-  return { ui, requests, details, memory, reply, changed: () => onChanged(), unsubscribe };
+  visit(root);
+  return hits;
 }
+
+const byType = (root: ReactNode, type: ElementType) => findAll(root, (el) => el.type === type);
 
 afterEach(() => {
+  hooks.current?.unmount();
   hooks.current = null;
-  vi.unstubAllGlobals();
 });
 
-describe('MemoryLibrary response ordering', () => {
-  it('明确衰减按创建时间，不把检索次数当访问热度', () => {
-    const { ui } = setupLibrary();
-    expect(ui.html()).toContain(
-      'Decay is based on creation time; retrieval counts do not refresh it.'
-    );
-  });
-
-  it('deep 展示模型辅助降级原因，旧响应缺字段不伪称使用模型', async () => {
-    const { ui, reply } = setupLibrary();
-    await reply(0, ['Initial']);
-    ui.query('Postgres');
-    ui.select(0, 'deep');
-    await reply(2, ['Baseline'], {
-      approximate: true,
-      assist: 'fallback',
-      assistReason: 'timeout',
-    });
-    expect(ui.html()).toContain('Model assist fallback: timeout');
-    ui.query('another');
-    await reply(3, ['Older backend'], { approximate: true });
-    expect(ui.html()).not.toContain('Model assist used');
-    expect(ui.html()).not.toContain('Model assist fallback');
-  });
-
-  it.each(['query', 'space', 'page', 'mode', 'changed', 'revision'] as const)(
-    'keeps the latest rows and count after an older %s response',
-    async (change) => {
-      const { ui, reply, requests, changed } = setupLibrary();
-      await reply(0, ['Initial'], { total: 75 });
-      ui.query('older');
-      switch (change) {
-        case 'query':
-          ui.query('newer');
-          break;
-        case 'space':
-          ui.select(1, 'project-B');
-          break;
-        case 'page':
-          ui.click('Next');
-          break;
-        case 'mode':
-          ui.select(0, 'fast');
-          break;
-        case 'changed':
-          changed();
-          break;
-        case 'revision':
-          ui.render(1);
-          break;
-      }
-      expect(requests).toHaveLength(3);
-      await reply(2, ['Relevant first', 'Relevant second'], {
-        total: change === 'mode' ? 2 : 60,
-        approximate: change === 'mode',
-        vectorsUsed: change !== 'mode',
-      });
-      const latest = ui.html();
-      expect(latest.indexOf('Relevant first')).toBeLessThan(latest.indexOf('Relevant second'));
-      if (change === 'mode') {
-        expect(latest).toContain('vectors are skipped');
-        expect(ui.elements(Button).some((node) => node.props.children === 'Next')).toBe(false);
-      } else {
-        expect(latest).toContain(change === 'page' ? '26–50 / 60' : '1–25 / 60');
-      }
-      await reply(1, ['Obsolete'], { total: 999 });
-      expect(ui.rows()).toEqual(['Relevant first', 'Relevant second']);
-      expect(ui.html()).toBe(latest);
-    }
-  );
-
-  it('preserves the latest semantic ranking and vector status when a slower query finishes', async () => {
-    const { ui, reply } = setupLibrary();
-    await reply(0, ['Initial']);
-    ui.query('slow');
-    ui.select(0, 'fast');
-    ui.query('fast');
-    await reply(3, ['Most relevant', 'Less relevant'], { approximate: true, vectorsUsed: true });
-    const latest = ui.html();
-    expect(latest.indexOf('Most relevant')).toBeLessThan(latest.indexOf('Less relevant'));
-    await reply(2, ['Obsolete semantic'], { approximate: true, vectorsUsed: false });
-    expect(ui.html()).toBe(latest);
-    expect(ui.html()).not.toContain('vectors are skipped');
-    expect(ui.elements(Button).some((node) => node.props.children === 'Next')).toBe(false);
-  });
-
-  it('invalidates a slow semantic response when its query becomes whitespace', async () => {
-    const { ui, reply, requests } = setupLibrary();
-    await reply(0, ['Initial']);
-    ui.query('slow semantic');
-    ui.select(0, 'fast');
-    ui.query('   ');
-    expect(requests).toHaveLength(3);
-    ui.render();
-    expect(ui.html()).toContain('Type a query to search by meaning.');
-    await reply(2, ['Late semantic'], { approximate: true, vectorsUsed: false });
-    await reply(1, ['Late exact'], { total: 100 });
-    expect(ui.rows()).toEqual([]);
-    expect(ui.html()).toContain('Type a query to search by meaning.');
-    expect(ui.html()).not.toContain('vectors are skipped');
-    expect(ui.elements(Button).some((node) => node.props.children === 'Next')).toBe(false);
-  });
-
-  it.each([false, true])(
-    'keeps statistics and reviews independent of list retrieval (empty semantic: %s)',
-    async (emptySemantic) => {
-      const { ui, memory } = setupLibrary();
-      if (emptySemantic) ui.select(0, 'fast');
-      await Promise.resolve();
-      ui.render();
-      expect(memory.list).toHaveBeenCalledOnce();
-      expect(ui.props(Select, 1).items).toContainEqual({ value: 'project-B', label: 'Project B' });
-      expect(ui.html()).toContain(edge.reason);
-      expect(ui.rows()).toEqual([]);
-    }
-  );
-
-  it('reloads the current filter after a mutation started under an older filter', async () => {
-    const { ui, reply, requests, memory } = setupLibrary();
-    await reply(0, ['Initial']);
-    const archived = deferred<{ ok: boolean }>();
-    memory.archive.mockReturnValueOnce(archived.promise);
-    ui.props(MemoryRows).onToggle?.('Initial');
-    ui.render().click('Archive selected');
-    ui.query('current');
-    await reply(1, ['Current result']);
-    archived.resolve({ ok: true });
-    await Promise.resolve();
-    expect(requests.at(-1)?.query.query).toBe('current');
-    await reply(2, ['Current refreshed']);
-    expect(ui.rows()).toEqual(['Current refreshed']);
-  });
-
-  it('does not apply pending list, statistics, review or detail replies after unmount', async () => {
-    const { ui, requests, details, unsubscribe } = setupLibrary();
-    ui.props(MemoryRows).onOpen('m1');
-    ui.unmount();
-    requests[0].response.resolve({ items: [item()], total: 1 });
-    details[0].resolve(null);
-    await Promise.resolve();
-    expect(unsubscribe).toHaveBeenCalledOnce();
-    expect(ui.writesAfterUnmount).toBe(0);
-  });
-
-  it.each([false, true])('ignores an older detail response (closed: %s)', async (closed) => {
-    const { ui, details } = setupLibrary();
-    ui.props(MemoryRows).onOpen('older');
-    ui.props(MemoryRows).onOpen('newer');
-    const detail: MemoryDetail = {
-      ...item({ id: 'newer', title: 'Newer detail' }),
-      content: 'Body',
-      eventStart: null,
-      eventEnd: null,
-      temporalPrecision: null,
-      embeddingModel: null,
-      evolves: [],
-      entityNames: [],
-      crystalSources: [],
-    };
-    details[1].resolve(detail);
-    await Promise.resolve();
-    ui.render();
-    expect(ui.props(Dialog).open).toBe(true);
-    expect(ui.props(DialogTitle).children).toBe('Newer detail');
-    if (closed) {
-      const close = ui.props(Dialog).onOpenChange;
-      close?.(false, {} as Parameters<NonNullable<typeof close>>[1]);
-      ui.render();
-    }
-    details[0].resolve({ ...detail, id: 'older', title: 'Older detail' });
-    await Promise.resolve();
-    ui.render();
-    expect(ui.props(Dialog).open).toBe(!closed);
-    if (!closed) expect(ui.props(DialogTitle).children).toBe('Newer detail');
-    expect(ui.elements(DialogTitle).some((node) => node.props.children === 'Older detail')).toBe(
-      false
-    );
-  });
-});
-
-describe('emptyReason', () => {
-  it('asks for a query in semantic mode instead of blaming the filters', () => {
-    // 语义检索按相关度排序，没查询词后端直接返回空——说「没有符合筛选条件」是误导
-    expect(emptyReason('fast', '', false, false)).toBe('needs-query');
-    expect(emptyReason('deep', '   ', true, true)).toBe('needs-query');
-  });
-
-  it('falls back to the exact-mode distinction once a query exists', () => {
-    expect(emptyReason('fast', 'redis', false, false)).toBe('library-empty');
-    expect(emptyReason('deep', 'redis', true, true)).toBe('no-match');
-    // 精确模式可以无查询词列全部，所以空查询不算 needs-query
-    expect(emptyReason('exact', '', false, false)).toBe('library-empty');
-    expect(emptyReason('exact', '', true, false)).toBe('no-match');
-  });
-});
-
-describe('isPristineEmpty', () => {
-  it('separates "library is empty" from "filters matched nothing"', () => {
+describe('MemoryLibrary helpers', () => {
+  it('computes empty state reasons cleanly', () => {
     expect(isPristineEmpty(false, false)).toBe(true);
-    expect(isPristineEmpty(false, true)).toBe(false);
-    expect(isPristineEmpty(true, false)).toBe(false);
-    // 统计尚未返回时不敢断言库是空的，按「无匹配」显示
-    expect(isPristineEmpty(null, false)).toBe(false);
+    expect(emptyReason(false, false)).toBe('library-empty');
+    expect(emptyReason(false, true)).toBe('no-match');
+    expect(emptyReason(true, false)).toBe('no-match');
+  });
+
+  it('renders rows with slug, link counts, status, and description', () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRows, { items: [noteItem()], onOpen: () => {}, t })
+    );
+    expect(html).toContain('Use OKF v0.2');
+    expect(html).toContain('[[decisions/okf]]');
+    expect(html).toContain('decisions');
+    expect(html).toContain('Verified');
+  });
+
+  it('renders pending write approval cards', () => {
+    const writes: PendingMemoryWriteDto[] = [
+      {
+        id: 'w1',
+        kind: 'agent',
+        spaceId: 'global',
+        spaceLabel: 'Global',
+        botId: 'b1',
+        chatId: null,
+        targetRelPath: 'wiki/notes/p.md',
+        slug: 'notes/p',
+        title: 'Shared rule',
+        type: 'notes',
+        description: null,
+        mode: 'replace',
+        section: null,
+        existingBody: null,
+        proposedBody: 'Always run tests',
+        redacted: false,
+        createdAt: '2026-11-20T00:00:00.000Z',
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(PendingWritesSection, { writes, onReview: () => {}, t })
+    );
+    expect(html).toContain('Shared rule');
+    expect(html).toContain('Always run tests');
+    expect(html).toContain('[[notes/p]]');
   });
 });
 
-describe('MemoryRows', () => {
-  it('旧 DTO 缺 appearances 时显示零，不回退到旧 access_count', () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRows, {
-        t,
-        onOpen: () => {},
-        items: [item({ appearances: undefined, accessCount: 99 })],
-      })
-    );
-    expect(html).toContain('Retrieved 0 times');
-    expect(html).not.toContain('99');
-  });
+describe('MemoryLibrary interactive flows', () => {
+  it('loads notes, opens detail editor, and enforces two-step delete confirmation', async () => {
+    const detailMock: MemoryNoteDetail = {
+      ...noteItem({ status: 'draft' }),
+      body: 'Body text',
+      rawMarkdown: '---\ntype: decisions\n---\nBody text',
+      resource: null,
+      sources: [],
+      supersededBy: null,
+      links: [],
+      backlinks: [],
+    };
+    const del = vi.fn(async () => ({ ok: true }));
+    const update = vi.fn(async () => ({
+      ok: true,
+      note: { ...detailMock, status: 'verified' as const },
+    }));
 
-  it('marks crystals and archived rows, and shows access counts', () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRows, {
-        t,
-        onOpen: () => {},
-        items: [
-          item({ id: 'c1', isCrystal: true, title: 'Retrieval fuses three channels' }),
-          item({ id: 'a1', lifecycleState: 'archived', title: 'Old decision' }),
-        ],
-      })
-    );
-    expect(html).toContain('★');
-    expect(html).toContain('Archived');
-    expect(html).toContain('Retrieval fuses three channels');
-    expect(html).toContain('Retrieved 3 times');
-    expect(html).toContain('decision');
-  });
-
-  it('shows the caller-provided empty label instead of a bare list', () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRows, {
-        t,
-        onOpen: () => {},
-        items: [],
-        emptyLabel: 'No memories match these filters.',
-      })
-    );
-    expect(html).toContain('No memories match these filters.');
-    expect(html).not.toContain('<li class="flex items-center gap-2 px-3 py-2">');
-  });
-});
-
-describe('PendingReviewSection', () => {
-  it('lists Bot memory writes awaiting approval with target space and redaction note', () => {
-    expect(
-      renderToStaticMarkup(
-        createElement(PendingWritesSection, { t, writes: [], onReview: () => {} })
-      )
-    ).toBe('');
-    const html = renderToStaticMarkup(
-      createElement(PendingWritesSection, {
-        t,
-        onReview: () => {},
-        writes: [
-          {
-            id: 'p1',
-            kind: 'capture',
-            spaceId: 'global',
-            spaceLabel: 'Global',
-            originLabel: '成员：Alice',
-            title: 'Staging key',
-            content: 'api_key=[REDACTED]',
-            botId: 'b1',
-            chatId: null,
-            redacted: true,
-            createdAt: '2026-10-05T00:00:00.000Z',
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        electronAPI: {
+          memory: {
+            list: vi.fn(
+              async (_q: MemoryListQuery): Promise<MemoryListResult> => ({
+                items: [noteItem({ status: 'draft' })],
+                total: 1,
+                types: ['decisions'],
+              })
+            ),
+            stats: vi.fn(async () => ({
+              totalNotes: 1,
+              totalLinks: 0,
+              brokenLinks: 0,
+              draftCount: 1,
+              verifiedCount: 0,
+              staleCount: 0,
+              archivedCount: 0,
+              indexBytes: 1024,
+              spaces: [],
+            })),
+            detail: vi.fn(async () => detailMock),
+            update,
+            delete: del,
+            pendingWrites: vi.fn(async () => []),
+            onChanged: () => () => {},
           },
-        ],
-      })
-    );
-    expect(html).toContain('Alice');
-    expect(html).toContain('Global');
-    expect(html).toContain('api_key=[REDACTED]');
-    expect(html).toContain('Secrets redacted');
-    expect(html).toContain('Approve');
-    expect(html).toContain('Reject');
-  });
+        },
+      },
+    });
 
-  it('is absent when nothing is pending', () => {
-    const html = renderToStaticMarkup(
-      createElement(PendingReviewSection, { t, edges: [], onReview: () => {} })
-    );
-    expect(html).toBe('');
-  });
+    hooks.current = new LibraryHarness();
+    let tree = await hooks.current.settle();
 
-  it('states that reviewing never deletes or supersedes anything', () => {
-    const html = renderToStaticMarkup(
-      createElement(PendingReviewSection, { t, edges: [edge], onReview: () => {} })
+    // Open note row via MemoryRows callback
+    const rowsEl = byType(tree, MemoryRows)[0];
+    expect(rowsEl).toBeDefined();
+    const rowProps = rowsEl.props as { items: MemoryNoteSummary[]; onOpen: (id: string) => void };
+    expect(rowProps.items[0]?.title).toBe('Use OKF v0.2');
+    rowProps.onOpen(rowProps.items[0].id);
+    tree = await hooks.current.settle();
+
+    const dialogs = byType(tree, Dialog);
+    const detailDialog = dialogs.find((d) => (d.props as { open: boolean }).open);
+    expect(detailDialog).toBeDefined();
+    const titleProps = byType(detailDialog, DialogTitle)[0].props as { children?: ReactNode };
+    expect(titleProps.children).toBe('Use OKF v0.2');
+
+    // Click Delete permanently → opens confirm dialog without calling delete yet
+    const deleteBtn = byType(detailDialog, Button).find((b) =>
+      JSON.stringify(b.props).includes('Delete permanently')
     );
-    expect(html).toContain('Needs review');
-    expect(html).toContain('challenges');
-    expect(html).toContain('Contradicts the earlier note');
-    expect(html).toContain(
-      'Reviewing only records your judgement. Nothing is deleted and no memory is superseded.'
+    expect(deleteBtn).toBeDefined();
+    (deleteBtn!.props as { onClick: () => void }).onClick();
+    tree = await hooks.current.settle();
+    expect(del).not.toHaveBeenCalled();
+
+    const confirmDialog = byType(tree, Dialog).find(
+      (d) =>
+        (d.props as { open: boolean }).open &&
+        JSON.stringify(d.props).includes('Delete this note permanently?')
     );
-    // 拒绝按钮的文案不能暗示删除
-    expect(html).toContain('Dismiss');
-    expect(html).not.toContain('Delete');
+    expect(confirmDialog).toBeDefined();
+    const confirmBtn = byType(confirmDialog, Button).find(
+      (b) => (b.props as { variant?: string }).variant === 'destructive'
+    );
+    (confirmBtn!.props as { onClick: () => void }).onClick();
+    await hooks.current.settle();
+    expect(del).toHaveBeenCalledWith('global::wiki/decisions/okf.md');
   });
 });

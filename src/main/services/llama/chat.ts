@@ -1,5 +1,4 @@
-import { searchLlmTimeoutMs } from '@shared/memory/searchAssist';
-import type { Complete } from '../memory/distill';
+import type { Complete } from '../memory/types';
 import {
   chatModelIdFromSettings,
   localChatModelPathIfReady,
@@ -329,16 +328,12 @@ export async function memoryCompleteFromSettings(
 ): Promise<Complete | null> {
   const id = chatModelIdFromSettings(state);
   if (id === REMOTE_CHAT_MODEL_ID) {
-    const complete = await opts.remoteComplete();
-    if (complete) complete.searchTimeoutMs = searchLlmTimeoutMs('remote');
-    return complete;
+    return opts.remoteComplete();
   }
   const gguf = localChatModelPathIfReady(opts.modelsRoot, id);
   if (!gguf) return null;
   const spec = resolveChatModelSpec(id);
-  const complete = (opts.createLocal ?? createLocalComplete)(gguf, {
+  return (opts.createLocal ?? createLocalComplete)(gguf, {
     contextSize: spec?.contextSize,
   });
-  complete.searchTimeoutMs = searchLlmTimeoutMs('local');
-  return complete;
 }

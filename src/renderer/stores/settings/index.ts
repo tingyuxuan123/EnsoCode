@@ -26,6 +26,12 @@ import {
   normalizeMaxActiveCoworkers,
 } from '@shared/maxActiveCoworkers';
 import {
+  DEFAULT_MEMORY_DISTILL_ENABLED,
+  DEFAULT_MEMORY_LANGUAGE,
+  isMemoryLanguage,
+  resolveMemoryLanguage,
+} from '@shared/memory/constants';
+import {
   DEFAULT_MEMORY_MODEL_IDLE_MINUTES,
   normalizeMemoryModelIdleMinutes,
 } from '@shared/memory/modelIdle';
@@ -190,12 +196,8 @@ const initialState = {
   smartCompactEnabled: false,
   smartCompactModel: null as import('@shared/defaultModel').DefaultModelRef | null,
   smartCompactMode: 'auto' as import('@shared/smartCompactMode').SmartCompactMode,
-  memoryEmbeddingModel: 'local:potion-multilingual-128M',
-  memoryEmbeddingAutoDownload: false,
   memoryModelIdleMinutes: DEFAULT_MEMORY_MODEL_IDLE_MINUTES,
-  memoryEmbeddingRemoteProviderId: null as string | null,
-  memoryDistillEnabled: false,
-  memoryKgEnabled: false,
+  memoryDistillEnabled: DEFAULT_MEMORY_DISTILL_ENABLED,
   voiceInputEnabled: false,
   botModeEnabled: false,
   botRouteClassifier: null as VirtualClassifierConfig | null,
@@ -250,7 +252,7 @@ const initialState = {
   titleSummaryModel: null as import('@shared/defaultModel').DefaultModelRef | null,
   memoryDistillModel: null as import('@shared/defaultModel').DefaultModelRef | null,
   memoryChatModel: 'remote',
-  memoryLanguage: 'en',
+  memoryLanguage: DEFAULT_MEMORY_LANGUAGE,
   approvalReviewer: null as import('@shared/defaultModel').DefaultModelRef | null,
   approvalAutoManage: false,
   approvalAllowThreshold: 0.9,
@@ -371,15 +373,10 @@ export const useSettingsStore = create<SettingsState>()(
       setRtkEnabled: (rtkEnabled) => set({ rtkEnabled }),
       setDesignEnabled: (designEnabled) => set({ designEnabled }),
       setProtectedActionsInCode: (protectedActionsInCode) => set({ protectedActionsInCode }),
-      setMemoryEmbeddingModel: (memoryEmbeddingModel) => set({ memoryEmbeddingModel }),
-      setMemoryEmbeddingAutoDownload: (memoryEmbeddingAutoDownload) =>
-        set({ memoryEmbeddingAutoDownload }),
       setMemoryModelIdleMinutes: (value) =>
         set({ memoryModelIdleMinutes: normalizeMemoryModelIdleMinutes(value) }),
-      setMemoryEmbeddingRemoteProviderId: (memoryEmbeddingRemoteProviderId) =>
-        set({ memoryEmbeddingRemoteProviderId }),
-      setMemoryDistillEnabled: (memoryDistillEnabled) => set({ memoryDistillEnabled }),
-      setMemoryKgEnabled: (memoryKgEnabled) => set({ memoryKgEnabled }),
+      setMemoryDistillEnabled: (memoryDistillEnabled) =>
+        set({ memoryDistillEnabled: memoryDistillEnabled !== false }),
       setVoiceInputEnabled: (voiceInputEnabled) => set({ voiceInputEnabled }),
       setBotModeEnabled: (botModeEnabled) => set({ botModeEnabled }),
       setBotRouteClassifier: (botRouteClassifier) => set({ botRouteClassifier }),
@@ -521,7 +518,8 @@ export const useSettingsStore = create<SettingsState>()(
       setTitleSummaryModel: (titleSummaryModel) => set({ titleSummaryModel }),
       setMemoryDistillModel: (memoryDistillModel) => set({ memoryDistillModel }),
       setMemoryChatModel: (memoryChatModel) => set({ memoryChatModel }),
-      setMemoryLanguage: (memoryLanguage) => set({ memoryLanguage }),
+      setMemoryLanguage: (memoryLanguage) =>
+        set({ memoryLanguage: resolveMemoryLanguage(memoryLanguage) }),
       setApprovalReviewer: (approvalReviewer) => set({ approvalReviewer }),
       setApprovalAutoManage: (enabled) => set({ approvalAutoManage: enabled === true }),
       setApprovalAllowThreshold: (value) =>
@@ -1207,6 +1205,12 @@ export const useSettingsStore = create<SettingsState>()(
         // 外部手改 settings.json 可能写进 truthy 字符串等脏值；只有显式 false 才算关闭
         if (s.microcompactEnabled !== true && s.microcompactEnabled !== false) {
           useSettingsStore.setState({ microcompactEnabled: true });
+        }
+        if (s.memoryDistillEnabled !== true && s.memoryDistillEnabled !== false) {
+          useSettingsStore.setState({ memoryDistillEnabled: DEFAULT_MEMORY_DISTILL_ENABLED });
+        }
+        if (!isMemoryLanguage(s.memoryLanguage)) {
+          useSettingsStore.setState({ memoryLanguage: resolveMemoryLanguage(s.memoryLanguage) });
         }
         // 老用户（升级前已有配置）视为已完成引导，避免被打扰
         if (

@@ -1,175 +1,218 @@
-import { existsSync } from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import type { ChildSessionIdentity, SessionIdentity } from '@shared/builtinAgents';
+import {
+  DEFAULT_MEMORY_DISTILL_ENABLED,
+  DEFAULT_MEMORY_LANGUAGE,
+  resolveMemoryLanguage,
+} from '@shared/memory/constants';
 import { normalizeMemoryModelIdleMinutes } from '@shared/memory/modelIdle';
 import { effectiveDisabledBuiltinTools } from '@shared/types';
 import type { MemoryOp } from '@shared/types/agent';
-import { hasProviderCredentials, type ModelProvider } from '@shared/types/llm';
 import type Database from 'better-sqlite3';
 import { app } from 'electron';
 import { holdLocalChat, syncLocalChatFromSettings } from './llama/chat';
+import { VaultBindingStore } from './memory/bindings';
 import { executeMemoryOp } from './memory/bridge';
-import { openMemoryDb } from './memory/db';
 import {
-  buildTranscript,
+  type CompileJobRow,
+  type CompilePayload,
   type Complete,
-  type DistillJob,
-  type DistillPayload,
-  distillFingerprint,
-  ensureDistillJob,
-  lastDistillWatermark,
-  listDistillJobs,
-  listResumableDistillJobs,
-  runDistillJob,
+  ensureCompileJob,
+  lastCompileWatermark,
+  listCompileJobs,
+  listResumableCompileJobs,
+  recentCompiledNotes,
+  runCompileJob,
   sliceTranscript,
   type TranscriptMessage,
-} from './memory/distill';
-import { type DownloadProgress, downloadModel, isModelReady } from './memory/embedding/downloader';
-import { createEmbeddingProvider, toEmbedder } from './memory/embedding/provider';
-import {
-  DEFAULT_EMBEDDING_MODEL_ID,
-  embeddingModelDirName,
-  resolveEmbeddingModelSpec,
-} from './memory/embedding/registry';
-import type { RemoteEmbeddingOptions } from './memory/embedding/remote';
-import type { EmbeddingModelSpec, EmbeddingProvider } from './memory/embedding/types';
-import {
-  countFailedKgJobs,
-  ensureKgJob,
-  ensurePendingKgJobs,
-  type KgJob,
-  listKgJobs,
-  listResumableKgJobs,
-  retryFailedKgJobs,
-  runKgJob,
-} from './memory/kg';
+} from './memory/compiler';
+import { deleteSpaceIndex, openIndexDb, syncSpaceIndex } from './memory/indexDb';
 import { approvePendingWrite } from './memory/pending';
-import { getReembedJob, type ReembedJob, runReembedJob } from './memory/reembed';
-import { sanitizeMemoryWrite } from './memory/safety';
-import { distillSpaces, type MemorySpaceContext } from './memory/space';
-import { getMemory, updateMemory } from './memory/store';
-import type { Embedder, Memory } from './memory/types';
+import type { MemorySpaceContext } from './memory/space';
+import { ensureVaultScaffold } from './memory/vault';
+import { VaultWatcherManager } from './memory/watcher';
 
-// electron 只出现在这层接线：services/memory/* 保持纯 Node 以便测试注入路径
 let db: Database.Database | null = null;
+let bindings: VaultBindingStore | null = null;
+let watcher: VaultWatcherManager | null = null;
+let rootOverride: string | null = null;
 
-export interface MemoryEmbeddingConfig {
-  /** 注册表 id；`none` 纯 FTS。默认 potion-multilingual-128M */
-  modelId: string;
-  /**
-   * 模型未就绪时是否后台下载；下载期间检索降级纯 FTS，完成后自动接入。
-   * 默认关：默认模型约 530MB，没有进度 UI 前不能在一次 memory_search 里静默拉起；由设置页显式开启。
-   */
-  autoDownload: boolean;
-  onProgress?: (p: DownloadProgress) => void;
-  /** `remote:*` 模型的凭证解析：由接线层从既有 ModelProvider（baseUrl/apiKey）取，这里不新增 key 存储 */
-  remoteCredentials?: () => RemoteEmbeddingOptions | null;
+/** 测试注入根目录（避免依赖 Electron app.getPath）。生产环境传 null。 */
+export function setMemoryRootForTest(dir: string | null): void {
+  closeMemoryDb();
+  rootOverride = dir;
 }
 
-let config: MemoryEmbeddingConfig = { modelId: DEFAULT_EMBEDDING_MODEL_ID, autoDownload: false };
-let provider: EmbeddingProvider | null = null;
-let embedder: Embedder | null = null;
-/**
- * 最近一次 embedding 失败的原因。整条链路以前是 `.catch(() => null)` 全吞，
- * 表现成「向量数一直是 0，点补齐没反应」而无从排查——把它留下来给设置页显示。
- */
-let lastEmbeddingError: string | null = null;
-// 只缓存本代订阅；文件互斥与取消由 downloader 的同目录共享任务负责。
-let download: Promise<void> | null = null;
-// provider 构造是异步的（GGUF 加载 / 建 context）；失败后置 null 让下次调用重试
-let providerInit: Promise<Embedder | null> | null = null;
-let embeddingGeneration = 0;
-let embeddingClose: Promise<void> = Promise.resolve();
-let memoryModelIdleMinutes = 10;
-
-function invalidateMemoryEmbedding(): void {
-  embeddingGeneration += 1;
-  reembedAbort?.abort();
-  const previous = provider;
-  const previousInit = providerInit;
-  const previousClose = embeddingClose;
-  provider = null;
-  embedder = null;
-  providerInit = null;
-  download = null;
-  lastEmbeddingError = null;
-  const closing = (async () => {
-    await previous?.close?.();
-  })();
-  embeddingClose = Promise.allSettled([previousClose, previousInit, closing]).then(() => {});
+export function memoryRoot(): string {
+  return rootOverride ?? path.join(app.getPath('userData'), 'memory');
 }
 
-export function awaitMemoryEmbeddingClose(): Promise<void> {
-  return embeddingClose;
+export function memoryIndexPath(): string {
+  return path.join(memoryRoot(), 'index.db');
 }
 
-/**
- * 设置层调用；切换模型立即作用于之后的写入/查询，旧向量由后台滚动重嵌（持久化 jobs 表，可中断续跑）；
- * 重嵌完成前旧行仍能由 FTS 搜到。任何配置变化都重新调度：没有待处理行时 ensureReembedJob 是空操作。
- */
-export function configureMemoryEmbedding(next: Partial<MemoryEmbeddingConfig>): void {
-  config = { ...config, ...next };
-  invalidateMemoryEmbedding();
-  scheduleReembed();
+export function memoryBindings(): VaultBindingStore {
+  if (!bindings) bindings = new VaultBindingStore(memoryRoot());
+  return bindings;
 }
 
-/** settings.json 的 state 按 unknown 收窄；非法 id 回默认模型，按实际凭证去重（API key 不离开 Main） */
-export function syncMemoryEmbeddingFromSettings(state: Record<string, unknown>): void {
-  memoryModelIdleMinutes = normalizeMemoryModelIdleMinutes(state.memoryModelIdleMinutes);
-  syncLocalChatFromSettings({ ...state, memoryModelIdleMinutes });
-  provider?.setIdleMinutes?.(memoryModelIdleMinutes);
-  const rawModel = state.memoryEmbeddingModel;
-  const modelId =
-    typeof rawModel === 'string' && resolveEmbeddingModelSpec(rawModel)
-      ? rawModel
-      : DEFAULT_EMBEDDING_MODEL_ID;
-  const autoDownload = state.memoryEmbeddingAutoDownload === true;
-  const providerId =
-    typeof state.memoryEmbeddingRemoteProviderId === 'string'
-      ? state.memoryEmbeddingRemoteProviderId
-      : null;
-  const providers = Array.isArray(state.providers) ? (state.providers as unknown[]) : [];
-  const remoteCredentials = (): RemoteEmbeddingOptions | null => {
-    const p = providers.find(
-      (x): x is ModelProvider =>
-        Boolean(x) && typeof x === 'object' && (x as ModelProvider).id === providerId
-    );
-    if (!p || typeof p.baseUrl !== 'string' || !hasProviderCredentials(p) || !p.apiKey) return null;
-    return { baseUrl: p.baseUrl, apiKey: p.apiKey };
-  };
-  const credentials = remoteCredentials();
-  const previous = config.remoteCredentials?.();
-  const sameCredentials =
-    resolveEmbeddingModelSpec(modelId)?.runtime !== 'openai-compatible' ||
-    (credentials?.baseUrl === previous?.baseUrl && credentials?.apiKey === previous?.apiKey);
-  // 保存值快照而非 providers 引用：原地编辑也能识别变更，且无关设置不释放本地大模型。
-  const next = { modelId, autoDownload, remoteCredentials: () => credentials };
-  if (modelId === config.modelId && autoDownload === config.autoDownload && sameCredentials) {
-    config = { ...config, ...next };
-    return;
+function ensureWatcher(): VaultWatcherManager {
+  if (!watcher) {
+    watcher = new VaultWatcherManager((spaceId, rootPath) => {
+      try {
+        const res = syncSpaceIndex(memoryDatabase(), spaceId, rootPath, {
+          updateManagedIndex: true,
+        });
+        if (res.changed > 0 || res.removed > 0) notifyMemoryChanged();
+      } catch {}
+    });
   }
-  configureMemoryEmbedding(next);
+  return watcher;
 }
 
-function memoryRoot(): string {
-  return path.join(app.getPath('userData'), 'memory');
+export function watchSpace(spaceId: string): void {
+  try {
+    const resolved = memoryBindings().resolveSpace(spaceId);
+    if (fs.existsSync(resolved.rootPath)) {
+      ensureWatcher().watch(spaceId, resolved.rootPath);
+    }
+  } catch {}
 }
 
-function memoryDb(): Database.Database {
+export function unwatchSpace(spaceId: string): void {
+  watcher?.unwatch(spaceId);
+}
+
+export function markVaultSelfWrite(rootPath: string): void {
+  watcher?.markSelfWrite(rootPath);
+}
+
+export function memoryDatabase(): Database.Database {
   if (!db) {
-    db = openMemoryDb(path.join(memoryRoot(), 'memory.db'));
-    // 上次进程退出时可能留下 pending 任务，或有旧行从未拿到当前模型的向量；开库后统一调度
-    scheduleReembed();
-    resumeMemoryDistill();
-    resumeMemoryKg();
+    db = openIndexDb(memoryIndexPath());
+    syncAllKnownSpaces();
+    resumeMemoryCompile();
   }
   return db;
 }
 
-/**
- * LLM 后台任务（蒸馏 / KG 抽取）共用一条 FIFO 串行链：同一时刻只有一个后台 LLM 调用，先到先跑，
- * 两类任务不会互相饿死也不会同时打满 provider。重嵌走独立链（embedder 资源，逐行短事务）。
- */
+export function syncAllKnownSpaces(opts: { force?: boolean } = {}): void {
+  const database = db;
+  if (!database) return;
+  const store = memoryBindings();
+  const known = store.listKnownSpaceIds();
+  for (const spaceId of known) {
+    try {
+      const space = store.resolveSpace(spaceId);
+      if (spaceId === 'global') {
+        ensureVaultScaffold(space.rootPath, space.preset, compileConfig.language, space.isExternal);
+      }
+      if (fs.existsSync(space.rootPath)) {
+        syncSpaceIndex(database, spaceId, space.rootPath, {
+          updateManagedIndex: false,
+          force: opts.force,
+        });
+        watchSpace(spaceId);
+      }
+    } catch {}
+  }
+}
+
+export function rebuildMemoryIndex(): void {
+  if (db) {
+    try {
+      db.close();
+    } catch {}
+    db = null;
+  }
+  const indexPath = memoryIndexPath();
+  for (const suffix of ['', '-wal', '-shm']) {
+    try {
+      fs.rmSync(`${indexPath}${suffix}`, { force: true });
+    } catch {}
+  }
+  db = openIndexDb(indexPath);
+  syncAllKnownSpaces({ force: true });
+  notifyMemoryChanged();
+}
+
+export function closeMemoryDb(): void {
+  if (changeTimer) {
+    clearTimeout(changeTimer);
+    changeTimer = null;
+  }
+  watcher?.closeAll();
+  watcher = null;
+  if (db) {
+    try {
+      db.close();
+    } catch {}
+    db = null;
+  }
+  bindings = null;
+}
+
+// ---------------------------------------------------------------------------
+// 变更通知（trailing 防抖，避免高频批量写刷爆 UI）
+// ---------------------------------------------------------------------------
+
+let onMemoryChanged: (() => void) | null = null;
+let changeTimer: NodeJS.Timeout | null = null;
+
+export function setMemoryChangeListener(listener: (() => void) | null): void {
+  onMemoryChanged = listener;
+}
+
+export function notifyMemoryChanged(): void {
+  if (!onMemoryChanged) return;
+  if (changeTimer) return;
+  changeTimer = setTimeout(() => {
+    changeTimer = null;
+    onMemoryChanged?.();
+  }, 120);
+}
+
+// ---------------------------------------------------------------------------
+// 设置同步 & 异步 Wiki Compiler
+// ---------------------------------------------------------------------------
+
+export interface MemoryCompileConfig {
+  enabled: boolean;
+  complete: (() => Complete | null | Promise<Complete | null>) | null;
+  readTranscript: (sessionFile: string) => Promise<TranscriptMessage[]>;
+  language: string;
+}
+
+let compileConfig: MemoryCompileConfig = {
+  enabled: DEFAULT_MEMORY_DISTILL_ENABLED,
+  complete: null,
+  readTranscript: readSessionTranscript,
+  language: DEFAULT_MEMORY_LANGUAGE,
+};
+
+export function configureMemoryDistill(next: Partial<MemoryCompileConfig>): void {
+  compileConfig = { ...compileConfig, ...next };
+}
+
+export function syncMemoryFromSettings(state: Record<string, unknown>): void {
+  const memoryModelIdleMinutes = normalizeMemoryModelIdleMinutes(state.memoryModelIdleMinutes);
+  syncLocalChatFromSettings({ ...state, memoryModelIdleMinutes });
+  const enabled =
+    state.memoryDistillEnabled !== false &&
+    !effectiveDisabledBuiltinTools(state.disabledBuiltinTools).includes('memory');
+  const language = resolveMemoryLanguage(state.memoryLanguage);
+  configureMemoryDistill({ enabled, language });
+}
+
+export function memoryLanguage(): string {
+  return compileConfig.language;
+}
+
+export function getMemoryCompletion(): Promise<Complete | null> {
+  return Promise.resolve(compileConfig.complete?.() ?? null);
+}
+
 let llmJobRun: Promise<void> = Promise.resolve();
 const enqueueLlmJob = (task: () => Promise<void>): Promise<void> => {
   const release = holdLocalChat();
@@ -181,46 +224,6 @@ const enqueueLlmJob = (task: () => Promise<void>): Promise<void> => {
   return run;
 };
 
-// ---------------------------------------------------------------------------
-// 会话结束后的异步蒸馏。任务落 memory_jobs，重启后续跑；任何失败只吞掉，不影响会话本身。
-// ---------------------------------------------------------------------------
-
-export interface MemoryDistillConfig {
-  /** 独立开关：只想手动记忆的用户保持关闭；缺省关 */
-  enabled: boolean;
-  /**
-   * 一次性文本补全的获取器；worker 不在线 / 没有可用模型时返回 null，任务保留 pending 等下次机会。
-   * 由接线层（ipc/agent）注入，模型与凭证由 Main 从设置自读。
-   */
-  complete: (() => Complete | null | Promise<Complete | null>) | null;
-  /** 从权威 jsonl 读出对话；缺省用 pi SessionManager，测试注入 */
-  readTranscript: (sessionFile: string) => Promise<TranscriptMessage[]>;
-  /** 记忆输出语言（settings.memoryLanguage）；缺省英文 */
-  language: string;
-}
-
-let distillConfig: MemoryDistillConfig = {
-  enabled: false,
-  complete: null,
-  readTranscript: readSessionTranscript,
-  language: 'en',
-};
-
-export function configureMemoryDistill(next: Partial<MemoryDistillConfig>): void {
-  distillConfig = { ...distillConfig, ...next };
-}
-
-export function syncMemoryDistillFromSettings(state: Record<string, unknown>): void {
-  configureMemoryDistill({
-    // 内置工具关掉后记忆分页会隐藏，自动蒸馏必须一起停，否则会话结束仍会写库。
-    enabled:
-      state.memoryDistillEnabled === true &&
-      !effectiveDisabledBuiltinTools(state.disabledBuiltinTools).includes('memory'),
-    language: typeof state.memoryLanguage === 'string' ? state.memoryLanguage : 'en',
-  });
-}
-
-/** 缺省读取器：与 readParentHistoryTail 同源（SessionManager 当前分支），只取 user/assistant 的文本片段 */
 async function readSessionTranscript(sessionFile: string): Promise<TranscriptMessage[]> {
   const sessionDir = path.join(app.getPath('userData'), 'agent', 'sessions');
   const root = path.resolve(sessionDir);
@@ -245,164 +248,108 @@ async function readSessionTranscript(sessionFile: string): Promise<TranscriptMes
   return out;
 }
 
-/**
- * 会话结束 / 闲置回收 / Bot「新对话」时调用。读权威 jsonl → 按 fromEntryId 切出增量 → 打码拼接 →
- * 建幂等任务（同会话同内容只一次）→ 后台跑。返回新水位（下次的 fromEntryId），由调用方保存；
- * 读失败 / 开关关闭时原样返回起点。开关关闭不建库也不建任务。绝不抛。
- */
 export async function scheduleMemoryDistill(
-  payload: DistillPayload,
-  /** continueFromLastJob：未给 fromEntryId 时从该会话最近一次任务的终点续作（Code 会话无外部水位） */
+  payload: CompilePayload,
   opts: { continueFromLastJob?: boolean } = {}
 ): Promise<string | undefined> {
-  if (!distillConfig.enabled) return payload.fromEntryId;
+  if (!compileConfig.enabled) return payload.fromEntryId;
   let watermark = payload.fromEntryId;
-  await runDistill(
-    payload,
-    undefined,
-    undefined,
-    false,
-    (next) => {
+  await runCompile(payload, {
+    manual: false,
+    continueFromLastJob: opts.continueFromLastJob === true,
+    onWatermark: (next) => {
       watermark = next;
     },
-    opts.continueFromLastJob === true
-  );
+  });
   return watermark;
 }
 
-/**
- * 设置页手动提炼：**绕过 memoryDistillEnabled**。自动开关只决定「会话结束时要不要自己跑」，
- * 用户显式点击本身就是意图；否则开关打开前的历史会话永远无法被提炼，冷启动库总是空的。
- * 返回是否真的跑了一轮（同会话同内容已提炼过会被指纹跳过）。
- */
 export async function distillSessionNow(
-  payload: DistillPayload,
+  payload: CompilePayload,
   opts: { force?: boolean } = {}
 ): Promise<boolean> {
-  const overallStartedAt = performance.now();
   let started = false;
-  await runDistill(
-    payload,
-    () => {
+  await runCompile(payload, {
+    manual: true,
+    force: opts.force,
+    onStarted: () => {
       started = true;
     },
-    opts.force,
-    true
-  );
-  console.info('[memory-distill] manual overall', {
-    sessionId: payload.sessionId,
-    durationMs: Math.round(performance.now() - overallStartedAt),
-    started,
   });
   return started;
 }
 
-function runDistill(
-  payload: DistillPayload,
-  onStarted?: () => void,
-  force?: boolean,
-  manual = false,
-  onWatermark?: (watermark: string | undefined) => void,
-  continueFromLastJob = false
+function runCompile(
+  initialPayload: CompilePayload,
+  opts: {
+    manual: boolean;
+    force?: boolean;
+    continueFromLastJob?: boolean;
+    onStarted?: () => void;
+    onWatermark?: (watermark: string | undefined) => void;
+  }
 ): Promise<void> {
-  const queuedAt = performance.now();
   return enqueueLlmJob(async () => {
-    if (manual)
-      console.info('[memory-distill] manual background queue wait', {
-        sessionId: payload.sessionId,
-        durationMs: Math.round(performance.now() - queuedAt),
-      });
-    // 在串行队列里读水位：压缩触发与会话结束触发先后到达时，后者能看到前者盖的终点
-    if (continueFromLastJob && payload.fromEntryId === undefined) {
-      const fromEntryId = lastDistillWatermark(memoryDb(), payload.sessionId);
-      if (fromEntryId) payload = { ...payload, fromEntryId };
+    const database = memoryDatabase();
+    let payload = { ...initialPayload, ...(opts.force ? { force: true } : {}) };
+    if (opts.continueFromLastJob && payload.fromEntryId === undefined) {
+      const last = lastCompileWatermark(database, payload.sessionId);
+      if (last) payload = { ...payload, fromEntryId: last };
     }
-    const { messages, watermark } = sliceTranscript(
-      await distillConfig.readTranscript(payload.sessionFile),
-      payload.fromEntryId
-    );
-    const transcript = buildTranscript(messages);
-    if (!transcript) {
-      onWatermark?.(watermark);
+    const messages = await compileConfig.readTranscript(payload.sessionFile);
+    const sliced = sliceTranscript(messages, payload.fromEntryId, payload.toEntryId);
+    if (sliced.messages.length === 0) {
+      opts.onWatermark?.(sliced.watermark);
       return;
     }
-    // 语言写进 payload 并进指纹：改完语言再提炼不会被当成「已提炼」跳过，
-    // 续跑旧任务时也用它自己的语言复算，不受之后的设置变更影响
-    const stamped: DistillPayload = {
+    const stamped: CompilePayload = {
       ...payload,
-      language: distillConfig.language,
-      ...(watermark !== undefined ? { toEntryId: watermark } : {}),
+      ...(sliced.watermark ? { toEntryId: sliced.watermark } : {}),
     };
-    const job = ensureDistillJob(
-      memoryDb(),
-      stamped,
-      distillFingerprint(stamped.sessionId, transcript, stamped.language),
-      { force }
-    );
-    // 任务已落 memory_jobs（或同内容已提炼过）才推进水位：之后失败可续跑，不丢增量
-    onWatermark?.(watermark);
-    if (!job) return;
-    onStarted?.();
-    await runOneDistill(job, transcript);
+    const jobId = ensureCompileJob(database, stamped);
+    opts.onWatermark?.(sliced.watermark);
+    const complete = await compileConfig.complete?.();
+    if (!complete) return;
+    opts.onStarted?.();
+    await runCompileJob(database, jobId, {
+      bindings: memoryBindings(),
+      readTranscript: compileConfig.readTranscript,
+      complete,
+      language: compileConfig.language,
+      onSelfWrite: markVaultSelfWrite,
+      onChanged: notifyMemoryChanged,
+    });
+    notifyMemoryChanged();
   });
 }
 
-async function runOneDistill(job: DistillJob, transcript: string): Promise<void> {
-  const complete = await distillConfig.complete?.();
-  if (!complete || !db) return;
-  // 与 memory_capture 的缺省归属一致：bot 会话进 bot space，项目会话进项目 space
-  const { projectId, botId, chatId } = job.payload;
-  const spaces = distillSpaces({
-    projectId,
-    ...(botId ? { botId } : {}),
-    ...(chatId ? { chatId } : {}),
-  });
-  await runDistillJob(db, job, {
-    transcript,
-    complete,
-    embedder: await memoryEmbedder(),
-    spaceId: spaces.self,
-    ...(spaces.chat ? { chatSpaceId: spaces.chat } : {}),
-    onCreated: onMemoryCreated,
-  });
-  // 一条都没写入时（全部低重要度 / 撞去重）也要通知：任务状态和丢弃原因变了
-  notifyMemoryChanged();
-}
-
-/** 开库时把上次没跑完的任务接上（pending / 半路 running）；内容已变的由 runDistillJob 标 cancelled */
-function resumeMemoryDistill(): void {
-  if (!distillConfig.enabled || !db) return;
-  const jobs = listResumableDistillJobs(db);
+function resumeMemoryCompile(): void {
+  if (!compileConfig.enabled || !db) return;
+  const jobs = listResumableCompileJobs(db);
   if (jobs.length === 0) return;
   void enqueueLlmJob(async () => {
+    const complete = await compileConfig.complete?.();
+    if (!complete || !db) return;
     for (const job of jobs) {
       try {
-        const { messages } = sliceTranscript(
-          await distillConfig.readTranscript(job.payload.sessionFile),
-          job.payload.fromEntryId,
-          job.payload.toEntryId
-        );
-        const transcript = buildTranscript(messages);
-        await runOneDistill(job, transcript);
-      } catch {
-        /* 单个任务失败不影响其余 */
-      }
+        await runCompileJob(db, job.id, {
+          bindings: memoryBindings(),
+          readTranscript: compileConfig.readTranscript,
+          complete,
+          language: compileConfig.language,
+          onSelfWrite: markVaultSelfWrite,
+          onChanged: notifyMemoryChanged,
+        });
+      } catch {}
     }
   });
 }
 
-/** 设置页出口：最近蒸馏任务及逐条丢弃原因；库未打开不为此建库 */
-export function getMemoryDistillJobs(limit?: number): DistillJob[] {
-  return db ? listDistillJobs(db, limit) : [];
+export function getMemoryCompileJobs(limit?: number): CompileJobRow[] {
+  return db ? listCompileJobs(db, limit) : [];
 }
 
-/** 等后台蒸馏收尾（测试 / 退出前用）；与 KG 共链，所以也等到排在前面的 KG 任务 */
 export async function awaitMemoryDistill(): Promise<void> {
-  await awaitLlmJobs();
-}
-
-// 任务跑完可能又排了新任务（蒸馏写入 → KG 排队），循环到链真正空闲
-async function awaitLlmJobs(): Promise<void> {
   let seen: Promise<void>;
   do {
     seen = llmJobRun;
@@ -410,365 +357,66 @@ async function awaitLlmJobs(): Promise<void> {
   } while (seen !== llmJobRun);
 }
 
+export function getRecentCompiledNotes(spaceId: string, sinceMs: number): string[] {
+  return recentCompiledNotes(memoryDatabase(), spaceId, sinceMs);
+}
+
 // ---------------------------------------------------------------------------
-// 记忆创建后的异步实体抽取。任务落 memory_jobs(kind='kg')，重启后续跑；绝不进 create 热路径。
+// Worker 调用桥 & 待审批写入批准
 // ---------------------------------------------------------------------------
 
-export interface MemoryKgConfig {
-  /** 独立开关（设置 memoryKgEnabled），缺省关；与蒸馏开关无联动 */
-  enabled: boolean;
-  /** 与蒸馏同源的一次性补全获取器；接线层不单独注入时回落到 distillConfig.complete */
-  complete: (() => Complete | null | Promise<Complete | null>) | null;
-}
-
-let kgConfig: MemoryKgConfig = { enabled: false, complete: null };
-
-export function configureMemoryKg(next: Partial<MemoryKgConfig>): void {
-  kgConfig = { ...kgConfig, ...next };
-}
-
-export function syncMemoryKgFromSettings(state: Record<string, unknown>): void {
-  const enabled = state.memoryKgEnabled === true;
-  const turningOn = enabled && !kgConfig.enabled;
-  configureMemoryKg({ enabled });
-  if (turningOn && db) resumeMemoryKg();
-}
-
-/**
- * 记忆库发生写入时通知界面。由接线层注入（Main 不直接依赖 BrowserWindow）：
- * 不这么做的话，agent 通过工具写记忆时设置页完全不会刷新，只能靠用户手动关开。
- */
-let onMemoryChanged: (() => void) | null = null;
-
-export function setMemoryChangeListener(listener: (() => void) | null): void {
-  onMemoryChanged = listener;
-}
-
-/**
- * 合并窗口：批量提炼会连续写很多条记忆、排很多个 KG 任务，
- * 每次都广播会让渲染层反复重算整张图谱。只取 trailing 边，
- * 保证「最后一次写入之后」一定有一次通知。
- */
-const CHANGE_NOTIFY_DEBOUNCE_MS = 150;
-let changeNotifyTimer: NodeJS.Timeout | null = null;
-
-/** 写入路径统一从这里通知；失败不能影响写入本身 */
-export function notifyMemoryChanged(): void {
-  if (changeNotifyTimer) return;
-  changeNotifyTimer = setTimeout(() => {
-    changeNotifyTimer = null;
-    try {
-      onMemoryChanged?.();
-    } catch {}
-  }, CHANGE_NOTIFY_DEBOUNCE_MS);
-  // 不让这个定时器拖住进程退出
-  changeNotifyTimer.unref?.();
-}
-
-/** createMemory 的 onCreated hook：只排队，不在这里调 LLM；开关关闭时连任务都不建 */
-function onMemoryCreated(memory: Memory): void {
-  notifyMemoryChanged();
-  if (!kgConfig.enabled || !db) return;
-  const job = ensureKgJob(db, memory.id);
-  if (job) void enqueueLlmJob(() => runOneKg(job));
-}
-
-/** 用户手动改标题 / 正文：与工具写入同样过注入扫描与脱敏；正文变了重嵌并重抽实体。不存在或已删除返回 null */
-export function editMemory(id: string, patch: { title: string; content: string }): Memory | null {
-  const database = memoryDb();
-  const current = getMemory(database, id);
-  if (!current || current.lifecycleState === 'deleted') return null;
-  const safe = sanitizeMemoryWrite({ title: patch.title, content: patch.content });
-  const updated = updateMemory(database, id, { title: safe.title ?? '', content: safe.content });
-  if (!updated) return null;
-  if (updated.content !== current.content || updated.title !== current.title) {
-    scheduleReembed();
-    onMemoryCreated(updated);
-  }
-  return updated;
-}
-
-async function runOneKg(job: KgJob): Promise<void> {
-  const complete = await (kgConfig.complete ?? distillConfig.complete)?.();
-  if (!complete || !db) return;
-  await runKgJob(db, job, { complete });
-  // 图谱数据是这一步才落库的。记忆写入时那次通知发生在抽取之前，
-  // 界面当时刷新也看不到实体；不在这里再通知一次，图谱就永远是空的。
-  notifyMemoryChanged();
-}
-
-/** 开库时把上次没跑完的抽取接上；内容已变 / 已删除的由 runKgJob 标 cancelled */
-function resumeMemoryKg(): void {
-  if (!kgConfig.enabled || !db) return;
-  ensurePendingKgJobs(db);
-  const jobs = listResumableKgJobs(db);
-  if (jobs.length === 0) return;
-  void enqueueLlmJob(async () => {
-    for (const job of jobs) await runOneKg(job);
-  });
-}
-
-/** 设置页出口；库未打开不为此建库 */
-export function getMemoryKgJobs(limit?: number): KgJob[] {
-  return readKgSnapshot([], (database) => listKgJobs(database, limit));
-}
-
-export function getMemoryKgFailedCount(): number {
-  return readKgSnapshot(0, countFailedKgJobs);
-}
-
-/** Inspect existing persisted jobs without opening the host or scheduling model work. */
-function readKgSnapshot<T>(fallback: T, read: (database: Database.Database) => T): T {
-  if (db) return read(db);
-  const file = path.join(memoryRoot(), 'memory.db');
-  if (!existsSync(file)) return fallback;
-  let database: Database.Database | null = null;
-  try {
-    database = openMemoryDb(file);
-    return read(database);
-  } catch {
-    return fallback;
-  } finally {
-    database?.close();
-  }
-}
-
-export function retryFailedMemoryKg(): number {
-  // Settings can be opened before any agent has opened the host DB. Never create a missing DB.
-  if (!db) {
-    const file = path.join(memoryRoot(), 'memory.db');
-    if (!existsSync(file)) return 0;
-    // Do not claim the host handle: its next normal open must still initialize/resume all queues.
-    const temporary = openMemoryDb(file);
-    try {
-      return retryFailedKgJobs(temporary).length;
-    } finally {
-      temporary.close();
-    }
-  }
-  const jobs = retryFailedKgJobs(db);
-  if (jobs.length > 0 && kgConfig.enabled) {
-    void enqueueLlmJob(async () => {
-      for (const job of jobs) {
-        if (!kgConfig.enabled) break;
-        await runOneKg(job);
-      }
-    });
-  }
-  return jobs.length;
-}
-
-/** 等后台 KG 抽取收尾（测试 / 退出前用） */
-export async function awaitMemoryKg(): Promise<void> {
-  await awaitLlmJobs();
-}
-
-let reembedAbort: AbortController | null = null;
-let reembedRun: Promise<void> | null = null;
-
-// 后台重嵌：同时只跑一份，再次触发先打断前一份（它会把任务回到 pending，下一份接着跑）。
-// 触发点：配置变化、开库、embedder 首次就绪、模型下载完成（3b Major 2：只在切模型时触发会让
-// “先有记忆、后启用 embedding”的旧行永远拿不到向量）。embedder 未就绪（模型未下载 / none）则不建任务；
-// 任何失败都吞掉，不影响前台读写
-function scheduleReembed(): void {
-  reembedAbort?.abort();
-  const ac = new AbortController();
-  reembedAbort = ac;
-  const prev = reembedRun ?? Promise.resolve();
-  reembedRun = prev
-    .then(async () => {
-      if (ac.signal.aborted) return;
-      if (!db) {
-        lastEmbeddingError = 'memory database is not open yet';
-        return;
-      }
-      const e = await memoryEmbedder();
-      if (!e || ac.signal.aborted || !db) return;
-      const job = await runReembedJob(db, e, { signal: ac.signal });
-      if (ac.signal.aborted) return;
-      // 任务层自己把逐行失败吞进 failed 计数，这里把它提上来
-      lastEmbeddingError =
-        job?.error ?? (job && job.failed > 0 ? `${job.failed} rows failed` : null);
-    })
-    .catch((error: unknown) => {
-      if (!ac.signal.aborted) {
-        lastEmbeddingError = error instanceof Error ? error.message : String(error);
-      }
-    })
-    .finally(() => {
-      if (reembedAbort === ac) reembedAbort = null;
-    });
-}
-
-// embedder 就绪 / 下载完成时调用；已有调度在等它就绪时不重复调度（否则会把那份打断后再重跑）
-function scheduleReembedIfIdle(): void {
-  if (!reembedAbort) scheduleReembed();
-}
-
-/**
- * 设置页手动下载 / 删除模型后调用（memoryModels 那条路径不经过本模块的 autoDownload）。
- * 丢掉 provider 缓存让下次解析重新探测磁盘；库文件已存在就顺带打开，
- * 否则 memoryHost 的 db 一直是 null（它只在 agent 用记忆时才懒开），重嵌永远不会跑。
- */
-export function refreshMemoryEmbedding(opts: { reembed?: boolean } = {}): void {
-  invalidateMemoryEmbedding();
-  // 删除模型仅失效缓存；主动重嵌会在 autoDownload 开启时立即把它下回来。
-  if (opts.reembed === false) return;
-  if (!db && existsSync(path.join(memoryRoot(), 'memory.db'))) memoryDb();
-  scheduleReembed();
-}
-
-/** 设置页轮询用；库未打开时不为此建库 */
-export function getMemoryReembedProgress(): ReembedJob | null {
-  return db ? getReembedJob(db) : null;
-}
-
-/** 等当前后台重嵌收尾（测试 / 退出前用）；没有在跑的立即返回 */
-export async function awaitMemoryReembed(): Promise<void> {
-  // 重嵌结束时可能又被就绪钩子调度了一轮，循环到真正空闲
-  while (reembedAbort) await reembedRun;
-  await reembedRun;
-}
-
-/**
- * 知识视图（解读 / 结晶）的一次性补全；复用提炼那条模型链。
- * worker 不在线 / 没有可用模型时返回 null，由调用方告诉用户，不静默失败。
- */
-export async function getMemoryCompletion(): Promise<Complete | null> {
-  return (await (kgConfig.complete ?? distillConfig.complete)?.()) ?? null;
-}
-
-/** 解读 / 结晶要写库，走与 agent 同一个连接（同一进程内串行） */
-export function memoryDatabase(): Database.Database {
-  return memoryDb();
-}
-
-/** 记忆输出语言，给解读 / 结晶的提示词用 */
-export function memoryLanguage(): string {
-  return distillConfig.language;
-}
-
-/** 管理页语义搜索用；未就绪返回 null，调用方自行降级，不在这里触发下载 */
-export function getMemoryEmbedder(): Promise<Embedder | null> {
-  return memoryEmbedder();
-}
-
-/** 设置页出口：为什么没有向量。null = 没出过错（可能只是模型没下载） */
-export function getMemoryEmbeddingError(): string | null {
-  return lastEmbeddingError;
-}
-
-// embedding 任何环节失败都只让 embedder 为 null（§12：不得阻止落库），绝不向调用方抛错
-async function memoryEmbedder(): Promise<Embedder | null> {
-  if (embedder) return embedder;
-  if (providerInit) return providerInit;
-  const spec = resolveEmbeddingModelSpec(config.modelId);
-  if (!spec) {
-    lastEmbeddingError = `unknown embedding model: ${config.modelId}`;
-    return null;
-  }
-  if (spec.runtime === 'none') {
-    lastEmbeddingError = null;
-    return null;
-  }
-  const generation = embeddingGeneration;
-  const dir = path.join(memoryRoot(), 'models', embeddingModelDirName(spec));
-  if (spec.files.length > 0 && !isModelReady(dir, spec)) {
-    lastEmbeddingError = config.autoDownload ? 'model is downloading' : 'model is not downloaded';
-    if (config.autoDownload && !download) {
-      const onProgress = config.onProgress;
-      const pending = downloadModel(spec, dir, {
-        onProgress: (progress) => {
-          if (generation === embeddingGeneration) onProgress?.(progress);
-        },
-      })
-        // 下载完成就能给已有记忆补向量，不等下一次前台读写
-        .then(() => {
-          if (generation === embeddingGeneration) scheduleReembedIfIdle();
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (download === pending) download = null;
-        });
-      download = pending;
-    }
-    return null;
-  }
-  const init = createEmbeddingProvider(spec, {
-    modelDir: dir,
-    remote: remoteOptions(spec),
-    idleMinutes: memoryModelIdleMinutes,
-  })
-    .then(async (p) => {
-      if (generation !== embeddingGeneration) {
-        await p?.close?.();
-        return null;
-      }
-      p?.setIdleMinutes?.(memoryModelIdleMinutes);
-      provider = p;
-      embedder = p ? toEmbedder(p) : null;
-      lastEmbeddingError = p ? null : 'embedding provider could not be created';
-      if (embedder) scheduleReembedIfIdle();
-      return embedder;
-    })
-    .catch((error: unknown) => {
-      if (generation === embeddingGeneration) {
-        lastEmbeddingError = error instanceof Error ? error.message : String(error);
-      }
-      return null;
-    })
-    .finally(() => {
-      if (providerInit === init) providerInit = null;
-    });
-  providerInit = init;
-  return init;
-}
-
-function remoteOptions(spec: EmbeddingModelSpec): RemoteEmbeddingOptions | undefined {
-  if (spec.runtime !== 'openai-compatible') return undefined;
-  return config.remoteCredentials?.() ?? undefined;
-}
-
-export function closeMemoryDb(): void {
-  invalidateMemoryEmbedding();
-  reembedAbort = null;
-  db?.close();
-  db = null;
-}
-
-/** 子会话（coworker `${parentId}::cw-x` / enso child）归属父会话所在项目。 */
+/** 子会话（coworker `${parentId}::cw-x` / typed child）归属父会话所在项目。 */
 export function rootSessionId(identity: SessionIdentity | ChildSessionIdentity): string {
-  const parent = (identity as ChildSessionIdentity).parent?.sessionId;
-  const id = parent ?? identity.sessionId;
-  const sep = id.indexOf('::');
-  return sep === -1 ? id : id.slice(0, sep);
+  const raw = 'parent' in identity ? identity.parent.sessionId : identity.sessionId;
+  const sep = raw.indexOf('::');
+  return sep === -1 ? raw : raw.slice(0, sep);
 }
 
-/** scope：会话记忆上下文（memorySpaceContext 推导）；兼容旧调用传 projectId 字符串 / null */
 export async function invokeMemory(
   op: MemoryOp,
   params: unknown,
-  scope: MemorySpaceContext | string | null
+  ctx: MemorySpaceContext & { sessionId?: string }
 ): Promise<unknown> {
-  const space = scope !== null && typeof scope === 'object' ? scope : { projectId: scope };
-  return executeMemoryOp(memoryDb(), op, params, {
-    ...space,
-    embedder: await memoryEmbedder(),
-    onCreated: onMemoryCreated,
-    onDeleted: notifyMemoryChanged,
-    onPending: notifyMemoryChanged,
-    complete: () => getMemoryCompletion(),
+  const database = memoryDatabase();
+  const store = memoryBindings();
+  const result = await executeMemoryOp(database, op, params, {
+    ...ctx,
+    bindings: store,
+    language: compileConfig.language,
+    onSelfWrite: markVaultSelfWrite,
+    onChanged: notifyMemoryChanged,
+    onPending: () => notifyMemoryChanged(),
   });
+  // Ensure active space is watched after first touch
+  if (ctx.projectId) watchSpace(`proj:${ctx.projectId}`);
+  watchSpace('global');
+  return result;
 }
 
-/** 批准 Bot 成员写共享空间的待审批记忆：走与工具写入同一条创建链路（向量、KG 排队、变更通知） */
-export async function approvePendingMemoryWrite(
-  id: string
-): Promise<{ ok: boolean; error?: string }> {
-  const result = await approvePendingWrite(memoryDb(), id, {
-    embedder: await memoryEmbedder(),
-    onCreated: onMemoryCreated,
+export function approvePendingMemoryWrite(id: string): {
+  ok: boolean;
+  relPath?: string;
+  spaceId?: string;
+  error?: string;
+} {
+  const result = approvePendingWrite(memoryDatabase(), id, memoryBindings(), {
+    language: compileConfig.language,
+    onSelfWrite: markVaultSelfWrite,
   });
+  if (result.ok) notifyMemoryChanged();
+  return result;
+}
+
+export async function removeSpaceCompletely(spaceId: string): Promise<void> {
+  await awaitMemoryDistill();
+  unwatchSpace(spaceId);
+  const store = memoryBindings();
+  const resolved = store.resolveSpace(spaceId);
+  deleteSpaceIndex(memoryDatabase(), spaceId);
+  // 只删除 Collabra 托管目录，绝不删除用户挂载的外部 Obsidian Vault！
+  if (!resolved.isExternal && fs.existsSync(resolved.rootPath)) {
+    fs.rmSync(resolved.rootPath, { recursive: true, force: true });
+  }
+  store.removeSpace(spaceId);
   notifyMemoryChanged();
-  return result.ok ? { ok: true } : { ok: false, error: result.error };
 }

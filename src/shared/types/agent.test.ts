@@ -2582,8 +2582,12 @@ describe('memory-invoke / memory-result', () => {
   it('memory-invoke 只接受闭集 op，identity 可为 parent 或 child', () => {
     expect(parseAgentWorkerEvent(invoke)).toEqual(invoke);
     expect(parseAgentWorkerEvent({ ...invoke, identity: child })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'capture' })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'delete' })).not.toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'index' })).not.toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'read' })).not.toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'upsert' })).not.toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'archive' })).not.toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'capture' })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, op: 'delete' })).toBeNull();
     expect(parseAgentWorkerEvent({ ...invoke, op: 'purge' })).toBeNull();
     expect(parseAgentWorkerEvent({ ...invoke, requestId: '' })).toBeNull();
     const { params: _p, ...noParams } = invoke;

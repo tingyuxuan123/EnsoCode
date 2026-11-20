@@ -149,10 +149,7 @@ export const SETTINGS_STATE_FIELDS = [
   'imageGeneration',
   'disabledWorkflowPresets',
   'subagentAllowedModes',
-  'memoryEmbeddingModel',
-  'memoryEmbeddingAutoDownload',
   'memoryModelIdleMinutes',
-  'memoryEmbeddingRemoteProviderId',
   'memoryDistillEnabled',
   'voiceInputEnabled',
   'botModeEnabled',
@@ -167,7 +164,6 @@ export const SETTINGS_STATE_FIELDS = [
   'voiceCorrectionRemoteModel',
   'voiceVocabulary',
   'voiceGeminiApiKey',
-  'memoryKgEnabled',
   'onboarded',
   'keybindings',
   'projects',
@@ -206,9 +202,7 @@ const CONFIG_SYNC_EXCLUDED_STATE_FIELDS = new Set<SettingsStateField>([
   'backgroundRandomEnabled',
   'backgroundRefreshNonce',
   'lastApprovalMode',
-  'memoryEmbeddingAutoDownload',
   'memoryModelIdleMinutes',
-  'memoryEmbeddingRemoteProviderId',
   'voiceInputEnabled',
   'botModeEnabled',
   'botMaxRunningTurns',
@@ -238,21 +232,12 @@ export const CONFIG_SYNC_COMMIT_FIELDS = SETTINGS_STATE_FIELDS.filter(
   (field) => !CONFIG_SYNC_EXCLUDED_STATE_FIELDS.has(field)
 );
 
-// 记忆 embedding 配置只存 id/开关，模型文件在 userData/memory/models；切换立即作用于之后的写入与查询
+// 记忆编译与语言配置变更后同步到 memoryHost（vault 挂载路径放在 Main 独占的 vault-bindings.json）
 function notifyMemoryEmbeddingSettings(settings: Record<string, unknown>): void {
   void import('../services/memoryHost')
-    .then(
-      ({
-        syncMemoryEmbeddingFromSettings,
-        syncMemoryDistillFromSettings,
-        syncMemoryKgFromSettings,
-      }) => {
-        const state = settingsStateOf(settings);
-        syncMemoryEmbeddingFromSettings(state);
-        syncMemoryDistillFromSettings(state);
-        syncMemoryKgFromSettings(state);
-      }
-    )
+    .then(({ syncMemoryFromSettings }) => {
+      syncMemoryFromSettings(settingsStateOf(settings));
+    })
     .catch(() => {});
 }
 

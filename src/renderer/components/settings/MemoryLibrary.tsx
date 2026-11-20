@@ -1,17 +1,10 @@
-import {
-  type ImportanceTier,
-  importanceTier,
-  UNIT_TYPES,
-  type UnitType,
-} from '@shared/memory/constants';
-import {
-  type EvolvesEdgeDto,
-  isMemoryRetrievalMode,
-  type MemoryDetail,
-  type MemoryListItem,
-  type MemoryListResult,
-  type MemorySearchMode,
-  type PendingMemoryWriteDto,
+import type { NoteStatus } from '@shared/memory/constants';
+import type {
+  MemoryListResult,
+  MemoryNoteDetail,
+  MemoryNoteSummary,
+  PendingMemoryWriteDto,
+  VaultSpaceDto,
 } from '@shared/memory/dto';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +20,8 @@ import {
   DialogPanel,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupInput } from '@/components/ui/input-group';
 import {
   Select,
   SelectItem,
@@ -36,13 +30,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
 import { usePendingMemoryWrites, usePendingMemoryWritesStore } from '@/stores/memoryReview';
-
-/**
- * 记忆库浏览与维护。归档是默认动作；永久删除要二次确认（禁止静默删除）。
- * evolves 审阅只改 review_state，不动 is_latest 也不删关系。
- */
 
 export const MEMORY_PAGE_SIZE = 25;
 const ALL = '__all__';
@@ -51,25 +43,23 @@ function formatDate(iso: string): string {
   return iso.slice(0, 10);
 }
 
-/** 空结果分两种：库里真的没东西 vs 当前筛选条件没命中（接口未启用时返回空而非报错） */
 export function isPristineEmpty(libraryHasRows: boolean | null, hasFilters: boolean): boolean {
   return libraryHasRows === false && !hasFilters;
 }
 
-export type MemoryEmptyReason = 'needs-query' | 'library-empty' | 'no-match';
+export type MemoryEmptyReason = 'library-empty' | 'no-match';
 
-/**
- * fast/deep 按相关度排序，没有查询词就无从排起，后端直接返回空——
- * 这时说「没有符合筛选条件」是误导，要请用户先输入。
- */
 export function emptyReason(
-  mode: MemorySearchMode,
-  query: string,
   libraryHasRows: boolean | null,
   hasFilters: boolean
 ): MemoryEmptyReason {
-  if (isMemoryRetrievalMode(mode) && !query.trim()) return 'needs-query';
   return isPristineEmpty(libraryHasRows, hasFilters) ? 'library-empty' : 'no-match';
+}
+
+function statusLabelKey(status: NoteStatus): string {
+  if (status === 'verified') return 'Verified';
+  if (status === 'draft') return 'Draft';
+  return 'Deprecated';
 }
 
 export function MemoryRows({
@@ -80,7 +70,7 @@ export function MemoryRows({
   onToggle,
   emptyLabel,
 }: {
-  items: MemoryListItem[];
+  items: MemoryNoteSummary[];
   onOpen: (id: string) => void;
   t: (key: string, params?: Record<string, string>) => string;
   selected?: ReadonlySet<string>;
@@ -106,21 +96,25 @@ export function MemoryRows({
             onClick={() => onOpen(item.id)}
             className="min-w-0 flex-1 space-y-0.5 text-left"
           >
-            <span className="flex items-center gap-2">
-              {item.isCrystal && <span title={t('Crystal')}>★</span>}
-              <span className="truncate text-[calc(13rem/14)]">{item.title}</span>
-              <Badge variant="secondary">{item.unitType}</Badge>
-              <ImportanceBadge importance={item.importance} t={t} />
-              {item.lifecycleState === 'archived' && (
-                <Badge variant="outline">{t('Archived')}</Badge>
-              )}
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="truncate font-medium text-[calc(13rem/14)]">{item.title}</span>
+              <Badge variant="secondary">{item.type}</Badge>
+              <Badge variant={item.status === 'verified' ? 'default' : 'outline'}>
+                {t(statusLabelKey(item.status))}
+              </Badge>
+              {item.isRaw && <Badge variant="outline">raw</Badge>}
+              {item.isArchived && <Badge variant="outline">{t('Archived')}</Badge>}
             </span>
-            <span className="line-clamp-2 text-muted-foreground text-[calc(12rem/14)]">
-              {item.contentSummary}
+            <span className="block truncate font-mono text-muted-foreground text-[calc(11rem/14)]">
+              [[{item.slug}]] · ↗ {item.outboundCount} · ↙ {item.inboundCount}
             </span>
+            {item.description && (
+              <span className="line-clamp-2 text-muted-foreground text-[calc(12rem/14)]">
+                {item.description}
+              </span>
+            )}
             <span className="block text-muted-foreground text-[calc(12rem/14)]">
-              {formatDate(item.updatedAt)} · {item.spaceLabel} ·{' '}
-              {t('Retrieved {{count}} times', { count: String(item.appearances ?? 0) })}
+              {formatDate(item.updatedAt)} · {item.spaceLabel}
             </span>
           </button>
         </li>
@@ -129,112 +123,57 @@ export function MemoryRows({
   );
 }
 
-// 重要度是有序的，不是分类：用不同强度的 variant 让高低一眼可分，
-// 全用同一个灰 badge 等于没给信息。tooltip 给出原始数值。
-const IMPORTANCE_STYLE: Record<
-  ImportanceTier,
-  { variant: 'warning' | 'info' | 'outline' | 'secondary'; label: string }
-> = {
-  critical: { variant: 'warning', label: 'critical' },
-  important: { variant: 'info', label: 'important' },
-  useful: { variant: 'outline', label: 'useful' },
-  low: { variant: 'outline', label: 'low' },
-};
-
-function ImportanceBadge({
-  importance,
-  t,
-}: {
-  importance: number;
-  t: (key: string, vars?: Record<string, string>) => string;
-}) {
-  const tier = importanceTier(importance);
-  const style = IMPORTANCE_STYLE[tier];
-  return (
-    <Badge
-      variant={style.variant}
-      className={tier === 'low' ? 'text-muted-foreground' : undefined}
-      title={t('Importance {{value}}', { value: importance.toFixed(2) })}
-    >
-      {t(style.label)}
-    </Badge>
-  );
-}
-
-export function PendingReviewSection({
-  edges,
-  onReview,
-  t,
-}: {
-  edges: EvolvesEdgeDto[];
-  onReview: (id: string, state: 'accepted' | 'rejected') => void;
-  t: (key: string) => string;
-}) {
-  if (edges.length === 0) return null;
-  return (
-    <section className="space-y-2" data-settings-row="memory.review">
-      <h3 className="text-[calc(14rem/14)] font-medium">{t('Needs review')}</h3>
-      <p className="text-[calc(12rem/14)] text-muted-foreground">
-        {t(
-          'Reviewing only records your judgement. Nothing is deleted and no memory is superseded.'
-        )}
-      </p>
-      {edges.map((edge) => (
-        <div key={edge.id} className="space-y-1 rounded-[6px] border px-3 py-2">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{edge.relation}</Badge>
-            <span className="text-[calc(12rem/14)] text-muted-foreground">
-              {edge.olderId.slice(0, 8)} → {edge.newerId.slice(0, 8)}
-            </span>
-          </div>
-          {edge.reason && (
-            <p className="text-[calc(12rem/14)] text-muted-foreground">{edge.reason}</p>
-          )}
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => onReview(edge.id, 'accepted')}>
-              {t('Accept')}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onReview(edge.id, 'rejected')}>
-              {t('Dismiss')}
-            </Button>
-          </div>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-/** Bot 成员写项目 / 全局记忆的待审批项；批准后才真正写入 */
+/** 待审批写入（Bot 写共享空间）：批准后才写入对应 Markdown Vault */
 export function PendingWritesSection({
   writes,
   onReview,
   t,
+  busyId,
+  error,
 }: {
   writes: PendingMemoryWriteDto[];
   onReview: (id: string, decision: 'approve' | 'reject') => void;
   t: (key: string) => string;
+  busyId?: string | null;
+  error?: string | null;
 }) {
   if (writes.length === 0) return null;
   return (
     <section className="space-y-2" data-settings-row="memory.pending-writes">
       <h3 className="text-[calc(14rem/14)] font-medium">{t('Memory writes awaiting approval')}</h3>
       <p className="text-[calc(12rem/14)] text-muted-foreground">
-        {t('Bot members need your approval before writing to project or global memory.')}
+        {t('Suggestions are not written to the vault until you approve them.')}
       </p>
+      {error && (
+        <p role="alert" className="text-destructive text-xs">
+          {t(error)}
+        </p>
+      )}
       {writes.map((write) => (
         <div key={write.id} className="space-y-1 rounded-[6px] border px-3 py-2">
           <div className="flex flex-wrap items-center gap-2 text-[calc(12rem/14)] text-muted-foreground">
-            {write.originLabel && <span className="text-foreground">{write.originLabel}</span>}
             <span>→ {write.spaceLabel}</span>
+            <Badge variant="secondary">{write.type}</Badge>
+            <span className="font-mono text-[calc(11rem/14)]">[[{write.slug}]]</span>
             {write.redacted && <span>· {t('Secrets redacted')}</span>}
           </div>
-          {write.title && <div className="text-[calc(13rem/14)] font-medium">{write.title}</div>}
-          <p className="whitespace-pre-wrap text-[calc(12rem/14)]">{write.content}</p>
+          <div className="text-[calc(13rem/14)] font-medium">{write.title}</div>
+          <p className="whitespace-pre-wrap text-[calc(12rem/14)]">{write.proposedBody}</p>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => onReview(write.id, 'approve')}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!!busyId}
+              onClick={() => onReview(write.id, 'approve')}
+            >
               {t('Approve')}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => onReview(write.id, 'reject')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!!busyId}
+              onClick={() => onReview(write.id, 'reject')}
+            >
               {t('Reject')}
             </Button>
           </div>
@@ -247,11 +186,24 @@ export function PendingWritesSection({
 function PendingWritesReview({ t }: { t: (key: string) => string }) {
   const writes = usePendingMemoryWrites();
   const review = usePendingMemoryWritesStore((s) => s.review);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
   return (
     <PendingWritesSection
       writes={writes}
       t={t}
-      onReview={(id, decision) => void review(id, decision)}
+      busyId={busyId}
+      error={error}
+      onReview={(id, decision) => {
+        setBusyId(id);
+        setError(null);
+        void review(id, decision)
+          .then((result) => {
+            if (!result.ok) setError(result.error ?? 'Failed');
+          })
+          .catch(() => setError('Failed'))
+          .finally(() => setBusyId(null));
+      }}
     />
   );
 }
@@ -260,23 +212,38 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
   const { t } = useI18n();
   const [query, setQuery] = React.useState('');
   const [spaceId, setSpaceId] = React.useState<string>(ALL);
-  const [unitType, setUnitType] = React.useState<string>(ALL);
+  const [noteType, setNoteType] = React.useState<string>(ALL);
+  const [statusFilter, setStatusFilter] = React.useState<string>(ALL);
   const [includeArchived, setIncludeArchived] = React.useState(false);
+  const [includeRaw, setIncludeRaw] = React.useState(false);
   const [offset, setOffset] = React.useState(0);
-  const [mode, setMode] = React.useState<MemorySearchMode>('exact');
-  const [approximate, setApproximate] = React.useState(false);
-  const [vectorsUsed, setVectorsUsed] = React.useState(true);
-  const [assist, setAssist] = React.useState<Pick<MemoryListResult, 'assist' | 'assistReason'>>({});
-  const [items, setItems] = React.useState<MemoryListItem[]>([]);
+  const [items, setItems] = React.useState<MemoryNoteSummary[]>([]);
   const [total, setTotal] = React.useState(0);
-  const [spaces, setSpaces] = React.useState<{ id: string; label: string }[]>([]);
+  const [availableTypes, setAvailableTypes] = React.useState<string[]>([]);
+  const [spaces, setSpaces] = React.useState<VaultSpaceDto[]>([]);
   const [libraryExists, setLibraryExists] = React.useState<boolean | null>(null);
-  const [detail, setDetail] = React.useState<MemoryDetail | null>(null);
+  const [detail, setDetail] = React.useState<MemoryNoteDetail | null>(null);
+  const [editor, setEditor] = React.useState<{
+    title: string;
+    type: string;
+    description: string;
+    status: NoteStatus;
+    tags: string;
+    staleAfter: string;
+    body: string;
+  } | null>(null);
+  const [creating, setCreating] = React.useState<{
+    spaceId: string;
+    title: string;
+    type: string;
+    description: string;
+    tags: string;
+    body: string;
+  } | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  const [pendingEdges, setPendingEdges] = React.useState<EvolvesEdgeDto[]>([]);
 
   const mounted = React.useRef(false);
   const listRequest = React.useRef(0);
@@ -293,48 +260,33 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
 
   const reload = React.useCallback(() => {
     if (!mounted.current) return;
-    // 包括不发 IPC 的空查询，也必须让此前在途的结果过期。
     const request = ++listRequest.current;
     const isCurrent = () => mounted.current && request === listRequest.current;
-    // 语义模式没有查询词时后端必然返回空，别白跑一次 IPC（还会顺带加载 embedder）
-    if (isMemoryRetrievalMode(mode) && !query.trim()) {
-      setItems([]);
-      setTotal(0);
-      setApproximate(true);
-      setVectorsUsed(true);
-      setAssist({});
-      return;
-    }
+
     void window.electronAPI.memory
       .list({
         query: query.trim() || undefined,
         spaceId: spaceId === ALL ? undefined : spaceId,
-        unitType: unitType === ALL ? undefined : (unitType as UnitType),
+        type: noteType === ALL ? undefined : noteType,
+        status: statusFilter === ALL ? undefined : (statusFilter as NoteStatus),
         includeArchived,
+        includeRaw,
         limit: MEMORY_PAGE_SIZE,
         offset,
-        mode,
       })
-      .then((result) => {
+      .then((result: MemoryListResult) => {
         if (!isCurrent()) return;
         setItems(result.items);
         setTotal(result.total);
-        setApproximate(result.approximate === true);
-        setVectorsUsed(result.vectorsUsed !== false);
-        setAssist({ assist: result.assist, assistReason: result.assistReason });
+        setAvailableTypes(result.types);
       });
-    // 全库统计与待审阅不属于列表筛选，不能随空查询一起作废。
+
     void window.electronAPI.memory.stats().then((stats) => {
       if (!mounted.current) return;
-      setSpaces(
-        Object.keys(stats.bySpace).map((id) => ({ id, label: stats.spaceLabels[id] ?? id }))
-      );
-      setLibraryExists(stats.total > 0);
+      setSpaces(stats.spaces);
+      setLibraryExists(stats.totalNotes + stats.archivedCount > 0);
     });
-    void window.electronAPI.memory.evolvesPending().then((edges) => {
-      if (mounted.current) setPendingEdges(edges);
-    });
-  }, [query, spaceId, unitType, includeArchived, offset, mode]);
+  }, [query, spaceId, noteType, statusFilter, includeArchived, includeRaw, offset]);
 
   React.useEffect(() => {
     reload();
@@ -342,10 +294,11 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       listRequest.current++;
     };
   }, [reload]);
-  // Main 在任何写入后广播（包括 agent 通过工具写的），比靠组件树传 revision 可靠
+
   const reloadRef = React.useRef(reload);
   reloadRef.current = reload;
   React.useEffect(() => window.electronAPI.memory.onChanged(() => reloadRef.current()), []);
+
   const seenRevision = React.useRef(revision);
   React.useEffect(() => {
     if (seenRevision.current === revision) return;
@@ -356,16 +309,101 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
   const openDetail = (id: string) => {
     const request = ++detailRequest.current;
     void window.electronAPI.memory.detail(id).then((result) => {
-      if (mounted.current && request === detailRequest.current) setDetail(result);
+      if (mounted.current && request === detailRequest.current) {
+        setDetail(result);
+        setEditor(
+          result
+            ? {
+                title: result.title,
+                type: result.type,
+                description: result.description,
+                status: result.status,
+                tags: result.tags.join(', '),
+                staleAfter: result.staleAfter ?? '',
+                body: result.body,
+              }
+            : null
+        );
+      }
     });
   };
 
   const closeDetail = () => {
     detailRequest.current++;
     setDetail(null);
+    setEditor(null);
   };
 
-  // 串行：每次变更都要重新拉列表，并发会让分页与 total 错位
+  const saveEdit = async () => {
+    if (!detail || !editor) return;
+    setBusy(true);
+    try {
+      const tags = editor.tags
+        .split(/[,，]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await window.electronAPI.memory.update(detail.id, {
+        title: editor.title,
+        type: editor.type,
+        description: editor.description,
+        status: editor.status,
+        tags,
+        staleAfter: editor.staleAfter.trim() || null,
+        body: editor.body,
+      });
+      if (res.ok && res.note) {
+        setDetail(res.note);
+        addToast({ type: 'success', title: t('Saved') });
+        reloadRef.current();
+      } else {
+        addToast({ type: 'error', title: t('Save failed'), description: res.error });
+      }
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+
+  const verifyDetail = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const res = await window.electronAPI.memory.update(detail.id, { status: 'verified' });
+      if (res.ok && res.note) {
+        setDetail(res.note);
+        setEditor((curr) => (curr ? { ...curr, status: 'verified' } : curr));
+        reloadRef.current();
+      }
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+
+  const createNote = async () => {
+    if (!creating?.title.trim()) return;
+    setBusy(true);
+    try {
+      const res = await window.electronAPI.memory.create({
+        spaceId: creating.spaceId,
+        title: creating.title.trim(),
+        type: creating.type.trim() || 'notes',
+        description: creating.description.trim() || undefined,
+        tags: creating.tags
+          .split(/[,，]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+        body: creating.body,
+      });
+      if (res.ok) {
+        setCreating(null);
+        reloadRef.current();
+      } else {
+        addToast({ type: 'error', title: t('Create failed'), description: res.error });
+      }
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+
   const bulkRun = async (run: (id: string) => Promise<unknown>) => {
     setBusy(true);
     try {
@@ -380,9 +418,6 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
     }
   };
 
-  const bulkArchive = () => void bulkRun((id) => window.electronAPI.memory.archive(id));
-  const bulkDelete = () => void bulkRun((id) => window.electronAPI.memory.delete(id));
-
   const runMutation = (action: Promise<{ ok: boolean }>) => {
     void action.then(() => {
       if (!mounted.current) return;
@@ -393,68 +428,68 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
   };
 
   const hasFilters =
-    query.trim() !== '' || spaceId !== ALL || unitType !== ALL || includeArchived === true;
+    query.trim() !== '' ||
+    spaceId !== ALL ||
+    noteType !== ALL ||
+    statusFilter !== ALL ||
+    includeArchived ||
+    includeRaw;
+
   const spaceItems = [
     { value: ALL, label: t('All spaces') },
-    ...spaces.map((space) => ({ value: space.id, label: space.label })),
+    ...spaces.map((space) => ({ value: space.spaceId, label: space.label })),
   ];
-  const unitTypeItems = [
+  const typeItems = [
     { value: ALL, label: t('All types') },
-    ...UNIT_TYPES.map((type) => ({ value: type, label: type })),
+    ...availableTypes.map((type) => ({ value: type, label: type })),
   ];
-  const modeItems = [
-    { value: 'exact', label: t('Exact match') },
-    { value: 'fast', label: t('Fast retrieval') },
-    { value: 'deep', label: t('Deep retrieval') },
+  const statusItems = [
+    { value: ALL, label: t('All statuses') },
+    { value: 'verified', label: t('Verified') },
+    { value: 'draft', label: t('Draft') },
+    { value: 'deprecated', label: t('Deprecated') },
   ];
 
   return (
     <div className="space-y-4" data-settings-row="memory.library">
-      <div>
-        <h3 className="text-[calc(14rem/14)] font-medium">{t('Stored memories')}</h3>
-        <p className="text-[calc(12rem/14)] text-muted-foreground">
-          {t('Everything the agent has saved. Archiving hides a memory from search but keeps it.')}{' '}
-          {t('Decay is based on creation time; retrieval counts do not refresh it.')}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[calc(14rem/14)] font-medium">{t('Wiki notes')}</h3>
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
+            {t('Browse, edit, verify, or open Markdown notes directly in Obsidian.')}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setCreating({
+              spaceId: spaceId !== ALL ? spaceId : (spaces[0]?.spaceId ?? 'global'),
+              title: '',
+              type: 'notes',
+              description: '',
+              tags: '',
+              body: '',
+            })
+          }
+        >
+          {t('New note')}
+        </Button>
       </div>
 
+      <PendingWritesReview t={t} />
+
       <div className="flex flex-wrap items-center gap-2">
-        {/* 检索方式属于「怎么搜」，和搜索框合成一个控件，不当作并列的筛选项 */}
-        <InputGroup className="w-full sm:w-96" data-size="sm">
+        <InputGroup className="w-full sm:w-72" data-size="sm">
           <InputGroupInput
             value={query}
-            placeholder={t('Search memories')}
+            placeholder={t('Search wiki notes')}
             onChange={(event) => {
               setOffset(0);
               setQuery(event.target.value);
             }}
           />
-          <InputGroupAddon align="inline-end" className="pe-1">
-            <Select
-              value={mode}
-              items={modeItems}
-              onValueChange={(value) => {
-                setOffset(0);
-                setMode(value === 'deep' ? 'deep' : value === 'fast' ? 'fast' : 'exact');
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-auto min-w-0 gap-1 border-0 bg-transparent px-2 shadow-none before:hidden"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                {modeItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </InputGroupAddon>
         </InputGroup>
-        {/* base-ui 的 Select 靠 items 把 value 映射成 label；不传时触发器会直接显示原始 value */}
         <Select
           value={spaceId}
           items={spaceItems}
@@ -475,53 +510,64 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
           </SelectPopup>
         </Select>
         <Select
-          value={unitType}
-          items={unitTypeItems}
+          value={noteType}
+          items={typeItems}
           onValueChange={(value) => {
             setOffset(0);
-            setUnitType(String(value));
+            setNoteType(String(value));
           }}
         >
-          <SelectTrigger size="sm" className="w-36">
+          <SelectTrigger size="sm" className="w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {unitTypeItems.map((item) => (
+            {typeItems.map((item) => (
               <SelectItem key={item.value} value={item.value}>
                 {item.label}
               </SelectItem>
             ))}
           </SelectPopup>
         </Select>
-        {mode === 'exact' && (
-          <label className="flex items-center gap-2 text-muted-foreground text-[calc(13rem/14)]">
-            <Switch
-              checked={includeArchived}
-              onCheckedChange={(value) => {
-                setOffset(0);
-                setIncludeArchived(value === true);
-              }}
-            />
-            {t('Show archived')}
-          </label>
-        )}
+        <Select
+          value={statusFilter}
+          items={statusItems}
+          onValueChange={(value) => {
+            setOffset(0);
+            setStatusFilter(String(value));
+          }}
+        >
+          <SelectTrigger size="sm" className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {statusItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+        <label className="flex items-center gap-1.5 text-muted-foreground text-[calc(12rem/14)]">
+          <Switch
+            checked={includeArchived}
+            onCheckedChange={(value) => {
+              setOffset(0);
+              setIncludeArchived(value === true);
+            }}
+          />
+          {t('Show archived')}
+        </label>
+        <label className="flex items-center gap-1.5 text-muted-foreground text-[calc(12rem/14)]">
+          <Switch
+            checked={includeRaw}
+            onCheckedChange={(value) => {
+              setOffset(0);
+              setIncludeRaw(value === true);
+            }}
+          />
+          {t('Show raw')}
+        </label>
       </div>
-
-      {isMemoryRetrievalMode(mode) && (
-        <p className="text-[calc(12rem/14)] text-muted-foreground">
-          {t(
-            mode === 'deep'
-              ? 'Same recall as Fast, plus intent-weighted fusion and an optional short-timeout LLM rerank. Failures fall back; archived memories are excluded.'
-              : 'Same path the agent uses: full-text, vectors and entities merged by relevance. Shows the top matches only — no exact count, and archived memories are excluded.'
-          )}
-          {!vectorsUsed && ` ${t('Embedding model is not ready, so vectors are skipped.')}`}
-          {mode === 'deep' && assist.assist === 'llm' && ` ${t('Model assist used.')}`}
-          {mode === 'deep' && assist.assist === 'off' && ` ${t('Model assist off.')}`}
-          {mode === 'deep' &&
-            assist.assist === 'fallback' &&
-            ` ${t('Model assist fallback: {{reason}}', { reason: assist.assistReason ?? 'error' })}`}
-        </p>
-      )}
 
       {selected.size > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-[6px] border border-selection-border bg-selection px-3 py-2 text-selection-foreground">
@@ -537,7 +583,12 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
             >
               {t('Clear selection')}
             </Button>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => bulkArchive()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void bulkRun((id) => window.electronAPI.memory.archive(id))}
+            >
               {t('Archive selected')}
             </Button>
             <button
@@ -559,12 +610,11 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
         selected={selected}
         emptyLabel={
           {
-            'needs-query': t('Type a query to search by meaning.'),
             'library-empty': t(
-              'No memories yet. They appear here once the agent stores something.'
+              'No wiki notes yet. They appear here once the agent or you create one.'
             ),
-            'no-match': t('No memories match these filters.'),
-          }[emptyReason(mode, query, libraryExists, hasFilters)]
+            'no-match': t('No notes match these filters.'),
+          }[emptyReason(libraryExists, hasFilters)]
         }
         onToggle={(id) => {
           const next = new Set(selected);
@@ -573,7 +623,7 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
         }}
       />
 
-      {!approximate && total > MEMORY_PAGE_SIZE && (
+      {total > MEMORY_PAGE_SIZE && (
         <div className="flex items-center justify-between text-[calc(12rem/14)] text-muted-foreground">
           <Button
             variant="outline"
@@ -597,92 +647,103 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
         </div>
       )}
 
-      <PendingWritesReview t={t} />
-
-      <PendingReviewSection
-        edges={pendingEdges}
-        t={t}
-        onReview={(id, state) => runMutation(window.electronAPI.memory.evolvesReview(id, state))}
-      />
-
       <Dialog open={detail !== null} onOpenChange={(open) => !open && closeDetail()}>
-        <DialogContent>
-          {detail && (
+        <DialogContent className="sm:max-w-2xl">
+          {detail && editor && (
             <>
               <DialogHeader>
                 <DialogTitle>{detail.title}</DialogTitle>
                 <DialogDescription>
-                  {[detail.unitType, detail.spaceLabel, formatDate(detail.createdAt)].join(' · ')}
+                  [[{detail.slug}]] · {detail.spaceLabel} · {formatDate(detail.updatedAt)}
                 </DialogDescription>
               </DialogHeader>
 
-              <DialogPanel className="space-y-4">
-                <p className="whitespace-pre-wrap text-[calc(13rem/14)]">{detail.content}</p>
-
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-                  <MetaField label={t('Importance')} value={detail.importance.toFixed(2)} />
-                  <MetaField
-                    label={t('Embedding')}
-                    value={detail.embeddingModel ?? t('Not vectorized')}
-                  />
-                  {detail.eventStart && (
-                    <MetaField
-                      label={t('Event date')}
-                      value={`${detail.eventStart}${detail.eventEnd ? ` → ${detail.eventEnd}` : ''}`}
+              <DialogPanel className="space-y-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="space-y-1 text-[calc(12rem/14)]">
+                    <span className="text-muted-foreground">{t('Title')}</span>
+                    <Input
+                      size="sm"
+                      value={editor.title}
+                      onChange={(e) => setEditor({ ...editor, title: e.target.value })}
                     />
-                  )}
-                </dl>
+                  </label>
+                  <label className="space-y-1 text-[calc(12rem/14)]">
+                    <span className="text-muted-foreground">{t('Category')}</span>
+                    <Input
+                      size="sm"
+                      value={editor.type}
+                      onChange={(e) => setEditor({ ...editor, type: e.target.value })}
+                    />
+                  </label>
+                </div>
 
-                {detail.entityNames.length > 0 && (
-                  <section className="space-y-1.5">
-                    <p className="font-medium text-[calc(12rem/14)]">{t('Entities')}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {detail.entityNames.map((name) => (
-                        <Badge key={name} variant="secondary">
-                          {name}
-                        </Badge>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="space-y-1 text-[calc(12rem/14)]">
+                    <span className="text-muted-foreground">{t('Summary')}</span>
+                    <Input
+                      size="sm"
+                      value={editor.description}
+                      onChange={(e) => setEditor({ ...editor, description: e.target.value })}
+                    />
+                  </label>
+                  <label className="space-y-1 text-[calc(12rem/14)]">
+                    <span className="text-muted-foreground">{t('Tags')}</span>
+                    <Input
+                      size="sm"
+                      placeholder="tag1, tag2"
+                      value={editor.tags}
+                      onChange={(e) => setEditor({ ...editor, tags: e.target.value })}
+                    />
+                  </label>
+                </div>
+
+                <label className="block space-y-1 text-[calc(12rem/14)]">
+                  <span className="text-muted-foreground">{t('Markdown content')}</span>
+                  <Textarea
+                    rows={10}
+                    className="font-mono text-[calc(12rem/14)]"
+                    value={editor.body}
+                    onChange={(e) => setEditor({ ...editor, body: e.target.value })}
+                  />
+                </label>
+
+                {(detail.links.length > 0 || detail.backlinks.length > 0) && (
+                  <div className="space-y-1.5">
+                    <p className="font-medium text-[calc(12rem/14)]">{t('Wikilinks')}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detail.links.map((link) => (
+                        <button
+                          key={`out:${link.target}`}
+                          type="button"
+                          disabled={!link.resolvedNoteId}
+                          onClick={() => link.resolvedNoteId && openDetail(link.resolvedNoteId)}
+                          className={cn(
+                            'rounded border px-1.5 py-0.5 font-mono text-[calc(11rem/14)]',
+                            link.isBroken
+                              ? 'border-destructive/50 text-destructive'
+                              : 'hover:bg-accent/60'
+                          )}
+                        >
+                          → [[{link.target}]]
+                        </button>
+                      ))}
+                      {detail.backlinks.map((bl) => (
+                        <button
+                          key={`in:${bl.noteId}`}
+                          type="button"
+                          onClick={() => openDetail(bl.noteId)}
+                          className="rounded border px-1.5 py-0.5 font-mono text-[calc(11rem/14)] hover:bg-accent/60"
+                        >
+                          ← [[{bl.slug}]]
+                        </button>
                       ))}
                     </div>
-                  </section>
-                )}
-
-                {detail.crystalSources.length > 0 && (
-                  <section className="space-y-1.5">
-                    <p className="font-medium text-[calc(12rem/14)]">{t('Synthesized from')}</p>
-                    <ul className="divide-y rounded-[6px] border">
-                      {detail.crystalSources.map((source) => (
-                        <li
-                          key={source.id}
-                          className="flex items-center justify-between gap-2 px-3 py-2"
-                        >
-                          <span className="truncate text-[calc(13rem/14)]">{source.title}</span>
-                          <span className="shrink-0 text-muted-foreground text-[calc(12rem/14)]">
-                            {(source.contributionWeight * 100).toFixed(0)}%
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-
-                {detail.evolves.length > 0 && (
-                  <section className="space-y-1.5">
-                    <p className="font-medium text-[calc(12rem/14)]">{t('Related versions')}</p>
-                    <ul className="divide-y rounded-[6px] border">
-                      {detail.evolves.map((edge) => (
-                        <li key={edge.id} className="flex items-center gap-2 px-3 py-2">
-                          <Badge variant="outline">{edge.relation}</Badge>
-                          <span className="text-muted-foreground text-[calc(12rem/14)]">
-                            {edge.reviewState}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
+                  </div>
                 )}
               </DialogPanel>
 
-              <DialogFooter>
+              <DialogFooter className="flex-wrap">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -691,7 +752,29 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
                 >
                   {t('Delete permanently')}
                 </Button>
-                {detail.lifecycleState === 'archived' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void window.electronAPI.memory.openVault({
+                      noteId: detail.id,
+                      app: 'obsidian',
+                    })
+                  }
+                >
+                  {t('Open in Obsidian')}
+                </Button>
+                {detail.status === 'draft' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void verifyDetail()}
+                  >
+                    {t('Mark verified')}
+                  </Button>
+                )}
+                {detail.isArchived ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -708,6 +791,78 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
                     {t('Archive')}
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  disabled={busy || !editor.title.trim()}
+                  onClick={() => void saveEdit()}
+                >
+                  {t('Save')}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={creating !== null} onOpenChange={(open) => !open && setCreating(null)}>
+        <DialogContent className="sm:max-w-xl">
+          {creating && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t('New note')}</DialogTitle>
+                <DialogDescription>
+                  {t('Saved as an OKF v0.2 Markdown file in the selected vault.')}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogPanel className="space-y-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="space-y-1 text-[calc(12rem/14)]">
+                    <span className="text-muted-foreground">{t('Title')}</span>
+                    <Input
+                      size="sm"
+                      value={creating.title}
+                      onChange={(e) => setCreating({ ...creating, title: e.target.value })}
+                    />
+                  </label>
+                  <label className="space-y-1 text-[calc(12rem/14)]">
+                    <span className="text-muted-foreground">{t('Category')}</span>
+                    <Input
+                      size="sm"
+                      placeholder="systems / incidents / notes"
+                      value={creating.type}
+                      onChange={(e) => setCreating({ ...creating, type: e.target.value })}
+                    />
+                  </label>
+                </div>
+                <label className="block space-y-1 text-[calc(12rem/14)]">
+                  <span className="text-muted-foreground">{t('Summary')}</span>
+                  <Input
+                    size="sm"
+                    value={creating.description}
+                    onChange={(e) => setCreating({ ...creating, description: e.target.value })}
+                  />
+                </label>
+                <label className="block space-y-1 text-[calc(12rem/14)]">
+                  <span className="text-muted-foreground">{t('Markdown content')}</span>
+                  <Textarea
+                    rows={8}
+                    className="font-mono text-[calc(12rem/14)]"
+                    value={creating.body}
+                    onChange={(e) => setCreating({ ...creating, body: e.target.value })}
+                  />
+                </label>
+              </DialogPanel>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>
+                  {t('Cancel')}
+                </DialogClose>
+                <Button
+                  size="sm"
+                  disabled={busy || !creating.title.trim()}
+                  onClick={() => void createNote()}
+                >
+                  {t('Create')}
+                </Button>
               </DialogFooter>
             </>
           )}
@@ -721,17 +876,22 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {t('Delete {{count}} memories permanently?', { count: String(selected.size) })}
+              {t('Delete {{count}} notes permanently?', { count: String(selected.size) })}
             </DialogTitle>
             <DialogDescription>
               {t(
-                'This cannot be undone. Archiving keeps the memory out of search while preserving it.'
+                'This cannot be undone. Archiving keeps the note out of search while preserving it.'
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" size="sm" />}>{t('Cancel')}</DialogClose>
-            <Button variant="destructive" size="sm" disabled={busy} onClick={bulkDelete}>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={() => void bulkRun((id) => window.electronAPI.memory.delete(id))}
+            >
               {t('Delete permanently')}
             </Button>
           </DialogFooter>
@@ -744,10 +904,10 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('Delete this memory permanently?')}</DialogTitle>
+            <DialogTitle>{t('Delete this note permanently?')}</DialogTitle>
             <DialogDescription>
               {t(
-                'This cannot be undone. Archiving keeps the memory out of search while preserving it.'
+                'This cannot be undone. Archiving keeps the note out of search while preserving it.'
               )}
             </DialogDescription>
           </DialogHeader>
@@ -765,15 +925,6 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function MetaField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground text-[calc(12rem/14)]">{label}</dt>
-      <dd className="truncate text-[calc(13rem/14)]">{value}</dd>
     </div>
   );
 }

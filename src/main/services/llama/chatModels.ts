@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { isModelReady } from '../memory/embedding/downloader';
+import { isModelReady } from './downloader';
 
 /**
  * 本地 chat 模型注册表。与 embedding 那套同构：差异全是数据，运行时不按 id 写分支。

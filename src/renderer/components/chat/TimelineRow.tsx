@@ -2503,7 +2503,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   const memoryHits =
     expanded && item.name === 'memory_search' ? parseMemorySearchHits(item.output) : null;
   const memoryCapture =
-    expanded && item.name === 'memory_capture'
+    expanded && item.name === 'memory_upsert'
       ? parseMemoryCapture(item.output, item.memoryContent)
       : null;
   const subagentReceipt =

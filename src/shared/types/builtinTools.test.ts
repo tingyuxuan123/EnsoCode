@@ -42,7 +42,7 @@ describe('isBuiltinToolEnabledForProject', () => {
 
 describe('effectiveDisabledBuiltinTools', () => {
   it('缺字段时使用默认关闭列表', () => {
-    expect(effectiveDisabledBuiltinTools(undefined)).toEqual(['memory', 'computer', 'code_search']);
+    expect(effectiveDisabledBuiltinTools(undefined)).toEqual(['computer', 'code_search']);
     for (const id of DEFAULT_DISABLED_BUILTIN_TOOLS) {
       expect(
         BUILTIN_TOOLS.some((tool) => tool.id === id),

@@ -1,160 +1,96 @@
-import type { UnitType } from './constants';
+import type { NoteStatus } from './constants';
 
 /**
- * 知识视图（图谱 / 知识树 / 解读 / 结晶）的 renderer 侧数据契约。
- * 与 dto.ts 一样：Main 内部类型不外泄，只给展示需要的字段。
+ * 知识视图（[[wikilink]] 图谱 / 分类树）的数据契约。
  */
 
 export interface GraphNodeDto {
+  /** Canonical note ID (`${spaceId}::${relPath}`) */
   id: string;
-  name: string;
-  /** UPPER_SNAKE，见 constants.KG_ENTITY_TYPES */
-  entityType: string;
-  /** 提及该实体的记忆数，决定节点大小 */
-  memoryCount: number;
   spaceId: string;
   spaceLabel: string;
+  slug: string;
+  title: string;
+  noteType: string;
+  status: NoteStatus;
+  /** 入链 + 出链总数，决定节点视觉大小 */
+  linkCount: number;
+  isRaw: boolean;
+  isArchived: boolean;
 }
 
 export interface GraphEdgeDto {
   source: string;
   target: string;
-  relation: string;
-  strength: number;
+  label: string;
 }
 
 export interface MemoryGraphDto {
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
-  /** 实体总数；nodes 被 limit 截断时用于提示 */
-  totalEntities: number;
+  totalNotes: number;
 }
 
 export interface GraphQuery {
   spaceId?: string | null;
-  /** 只保留提及数 ≥ 该值的实体，滤掉一次性噪声 */
-  minMemories?: number;
   limit: number;
-  /** 聚焦某个实体：只返回它与其邻居 */
-  focusEntityId?: string | null;
+  includeOrphans?: boolean;
+  includeArchived?: boolean;
 }
 
-export type TreeNodeKind = 'space' | 'group' | 'memory';
+export type TreeNodeKind = 'space' | 'group' | 'note';
+export type TreeGrouping = 'type' | 'status' | 'space';
 
 export interface TreeNodeDto {
   id: string;
   kind: TreeNodeKind;
   label: string;
-  /** 该子树下的记忆数 */
   count: number;
-  /** memory 节点才有：用于打开详情 */
-  memoryId?: string;
-  isCrystal?: boolean;
+  noteId?: string;
+  slug?: string;
+  status?: NoteStatus;
   children?: TreeNodeDto[];
 }
-
-export type TreeGrouping = 'unitType' | 'entity' | 'time';
 
 export interface TreeQuery {
   spaceId?: string | null;
   groupBy: TreeGrouping;
-  /** 每组最多列多少条记忆，避免把整库塞进 DOM */
   limitPerGroup: number;
-}
-
-export interface InsightRequest {
-  /** 二选一：按实体解读，或按明确的记忆集合解读 */
-  entityId?: string | null;
-  memoryIds?: string[];
-  spaceId?: string | null;
-}
-
-export interface InsightResult {
-  ok: boolean;
-  /** 解读正文（markdown） */
-  text?: string;
-  /** 参与解读的记忆条数 */
-  sourceCount?: number;
-  error?: string;
-}
-
-export interface CrystallizeRequest {
-  memoryIds: string[];
-  /** 留空则由模型拟标题 */
-  title?: string;
-}
-
-export interface CrystallizeResult {
-  ok: boolean;
-  memoryId?: string;
-  title?: string;
-  content?: string;
-  /** 命中候选网时返回，调用方决定是否强制写入 */
-  candidates?: { id: string; title: string; similarity: number }[];
-  error?: string;
-}
-
-export interface MemoryBriefDto {
-  id: string;
-  title: string;
-  unitType: UnitType;
-  contentSummary: string;
-  isCrystal: boolean;
-  updatedAt: string;
+  includeArchived?: boolean;
 }
 
 export function isGraphQuery(value: unknown): value is GraphQuery {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
-  if (!Number.isSafeInteger(row.limit) || (row.limit as number) < 1 || (row.limit as number) > 500)
-    return false;
-  if (row.spaceId !== undefined && row.spaceId !== null && typeof row.spaceId !== 'string')
-    return false;
-  if (row.minMemories !== undefined && !Number.isSafeInteger(row.minMemories)) return false;
   if (
-    row.focusEntityId !== undefined &&
-    row.focusEntityId !== null &&
-    typeof row.focusEntityId !== 'string'
-  )
+    !Number.isSafeInteger(row.limit) ||
+    (row.limit as number) < 1 ||
+    (row.limit as number) > 500
+  ) {
     return false;
+  }
+  if (row.spaceId !== undefined && row.spaceId !== null && typeof row.spaceId !== 'string') {
+    return false;
+  }
+  if (row.includeOrphans !== undefined && typeof row.includeOrphans !== 'boolean') return false;
+  if (row.includeArchived !== undefined && typeof row.includeArchived !== 'boolean') return false;
   return true;
 }
 
 export function isTreeQuery(value: unknown): value is TreeQuery {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
-  if (row.groupBy !== 'unitType' && row.groupBy !== 'entity' && row.groupBy !== 'time')
-    return false;
+  if (row.groupBy !== 'type' && row.groupBy !== 'status' && row.groupBy !== 'space') return false;
   if (
     !Number.isSafeInteger(row.limitPerGroup) ||
     (row.limitPerGroup as number) < 1 ||
     (row.limitPerGroup as number) > 200
-  )
+  ) {
     return false;
-  if (row.spaceId !== undefined && row.spaceId !== null && typeof row.spaceId !== 'string')
-    return false;
-  return true;
-}
-
-export function isInsightRequest(value: unknown): value is InsightRequest {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  if (row.entityId !== undefined && row.entityId !== null && typeof row.entityId !== 'string')
-    return false;
-  if (row.memoryIds !== undefined) {
-    if (!Array.isArray(row.memoryIds) || row.memoryIds.some((id) => typeof id !== 'string'))
-      return false;
   }
-  if (row.spaceId !== undefined && row.spaceId !== null && typeof row.spaceId !== 'string')
+  if (row.spaceId !== undefined && row.spaceId !== null && typeof row.spaceId !== 'string') {
     return false;
-  return typeof row.entityId === 'string' || Array.isArray(row.memoryIds);
-}
-
-export function isCrystallizeRequest(value: unknown): value is CrystallizeRequest {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  if (!Array.isArray(row.memoryIds) || row.memoryIds.some((id) => typeof id !== 'string'))
-    return false;
-  if (row.title !== undefined && typeof row.title !== 'string') return false;
+  }
+  if (row.includeArchived !== undefined && typeof row.includeArchived !== 'boolean') return false;
   return true;
 }

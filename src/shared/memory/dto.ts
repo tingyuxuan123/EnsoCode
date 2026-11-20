@@ -1,104 +1,183 @@
-import { isUnitType, type UnitType } from './constants';
-import type { SearchAssistReason, SearchAssistState } from './searchAssist';
-import type { TemporalPrecision } from './temporal';
+import {
+  isNoteStatus,
+  isUpsertMode,
+  isVaultPreset,
+  type NoteStatus,
+  type UpsertMode,
+  type VaultPreset,
+} from './constants';
 
-export type MemoryLifecycleState = 'active' | 'archived' | 'deleted';
-export type EvolvesRelationDto = 'replaces' | 'enriches' | 'confirms' | 'challenges';
-export type EvolvesReviewStateDto = 'pending' | 'accepted' | 'rejected';
+export type VaultSpaceKind = 'global' | 'project' | 'bot' | 'chat';
 
-export interface MemoryListItem {
-  id: string;
-  title: string;
-  contentSummary: string;
-  unitType: UnitType;
+export interface VaultSpaceDto {
   spaceId: string;
-  /** 人可读的归属：项目名或 Global；spaceId 是 `proj:<uuid>`，不能直接给用户看 */
-  spaceLabel: string;
-  importance: number;
-  isCrystal: boolean;
-  isLatest: boolean;
-  lifecycleState: MemoryLifecycleState;
-  createdAt: string;
-  updatedAt: string;
-  /** 被检索返回次数，不等于实际被使用；旧 DTO 缺失时显示 0。 */
-  appearances?: number;
-  /** 兼容旧历史，不再用于展示检索次数。 */
-  accessCount?: number;
+  label: string;
+  kind: VaultSpaceKind;
+  rootPath: string;
+  isExternal: boolean;
+  preset: VaultPreset;
+  noteCount: number;
+  brokenLinks: number;
+  staleCount: number;
+  draftCount: number;
+  indexFilename: string;
 }
 
-export interface EvolvesEdgeDto {
+export interface MemoryNoteSummary {
+  /** Canonical opaque id: `${spaceId}::${relPath}` */
   id: string;
-  olderId: string;
-  newerId: string;
-  relation: EvolvesRelationDto;
-  confidence: number;
-  reason: string | null;
-  reviewState: EvolvesReviewStateDto;
-  reviewedAt: string | null;
-  createdAt: string;
+  spaceId: string;
+  spaceLabel: string;
+  relPath: string;
+  slug: string;
+  title: string;
+  description: string;
+  type: string;
+  status: NoteStatus;
+  tags: string[];
+  isRaw: boolean;
+  isArchived: boolean;
+  generatedBy: string | null;
+  generatedAt: string | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  staleAfter: string | null;
+  outboundCount: number;
+  inboundCount: number;
+  lineCount: number;
+  updatedAt: string;
 }
 
-export interface CrystalSourceDto extends MemoryListItem {
-  contributionWeight: number;
+export interface NoteLinkDto {
+  raw: string;
+  target: string;
+  resolvedNoteId: string | null;
+  resolvedTitle: string | null;
+  isBroken: boolean;
 }
 
-export interface MemoryDetail extends MemoryListItem {
-  content: string;
-  eventStart: string | null;
-  eventEnd: string | null;
-  temporalPrecision: TemporalPrecision | null;
-  embeddingModel: string | null;
-  evolves: EvolvesEdgeDto[];
-  entityNames: string[];
-  crystalSources: CrystalSourceDto[];
+export interface NoteBacklinkDto {
+  noteId: string;
+  slug: string;
+  title: string;
+  type: string;
 }
 
-export type MemorySearchMode = 'exact' | 'fast' | 'deep';
-
-export function isMemoryRetrievalMode(mode: unknown): mode is 'fast' | 'deep' {
-  return mode === 'fast' || mode === 'deep';
+export interface MemoryNoteDetail extends MemoryNoteSummary {
+  body: string;
+  rawMarkdown: string;
+  resource: string | null;
+  sources: string[];
+  supersededBy: string | null;
+  links: NoteLinkDto[];
+  backlinks: NoteBacklinkDto[];
 }
 
 export interface MemoryListQuery {
   spaceId?: string | null;
   query?: string;
-  unitType?: UnitType;
+  type?: string;
+  status?: NoteStatus;
   includeArchived?: boolean;
+  includeRaw?: boolean;
   limit: number;
   offset: number;
-  /**
-   * exact（缺省）= FTS 全文，可精确分页；
-   * fast / deep = 与 agent 同一条检索路径（FTS ∪ 向量 ∪ 实体 → RRF → decay），只返回 top-N。
-   */
-  mode?: MemorySearchMode;
 }
 
 export interface MemoryListResult {
-  items: MemoryListItem[];
+  items: MemoryNoteSummary[];
   total: number;
-  /** fast/deep 模式下 total 只是本次返回条数，不能用于深分页 */
-  approximate?: boolean;
-  /** fast/deep 模式实际是否用上了向量（模型未就绪时自动降级为 FTS + 实体） */
-  vectorsUsed?: boolean;
-  assist?: SearchAssistState;
-  assistReason?: SearchAssistReason;
+  types: string[];
 }
 
-export interface DistillJobDto {
+export type VaultDocKind = 'index' | 'log' | 'schema';
+
+export interface VaultDocDto {
+  spaceId: string;
+  kind: VaultDocKind;
+  filename: string;
+  content: string;
+  updatedAt: string | null;
+}
+
+export function isVaultDocKind(value: unknown): value is VaultDocKind {
+  return value === 'index' || value === 'log' || value === 'schema';
+}
+
+export interface MemoryEditPatch {
+  title?: string;
+  description?: string;
+  type?: string;
+  status?: NoteStatus;
+  tags?: string[];
+  staleAfter?: string | null;
+  body?: string;
+  /** Optimistic concurrency guard matching MemoryNoteDetail.updatedAt on disk. */
+  expectedUpdatedAt?: string | null;
+}
+
+export interface MemoryCreateInput {
+  spaceId: string;
+  slug?: string;
+  title: string;
+  type: string;
+  description?: string;
+  tags?: string[];
+  body: string;
+}
+
+export interface MemoryMutationResult {
+  ok: boolean;
+  note?: MemoryNoteDetail;
+  conflict?: boolean;
+  currentNote?: MemoryNoteDetail;
+  error?: string;
+}
+
+export interface MemoryVaultActionResult {
+  ok: boolean;
+  space?: VaultSpaceDto;
+  cancelled?: boolean;
+  error?: string;
+}
+
+export type MemoryLintIssueKind =
+  | 'broken_link'
+  | 'orphan'
+  | 'stale'
+  | 'unverified_draft'
+  | 'missing_description'
+  | 'oversized';
+
+export interface MemoryLintIssue {
+  kind: MemoryLintIssueKind;
+  spaceId: string;
+  spaceLabel: string;
+  noteId: string;
+  slug: string;
+  title: string;
+  detail: string;
+}
+
+export interface MemoryLintReport {
+  issues: MemoryLintIssue[];
+  checkedNotes: number;
+  checkedAt: string;
+}
+
+export interface CompileJobDto {
   id: number;
   sessionId: string;
-  /** 会话标题；取不到时为 null，UI 回退到短 id */
   sessionTitle?: string | null;
   projectId: string | null;
   projectName?: string | null;
   status: 'pending' | 'running' | 'done' | 'cancelled';
   attempts: number;
-  total: number;
-  done: number;
-  failed: number;
+  written: number;
   error: string | null;
   notes: {
-    kind: 'low_importance' | 'candidates_found' | 'deduplicated' | 'rejected';
+    kind: 'created' | 'updated' | 'pending_review' | 'skipped' | 'rejected';
+    slug: string | null;
     title: string | null;
     detail: string;
   }[];
@@ -106,87 +185,53 @@ export interface DistillJobDto {
   updatedAt: string;
 }
 
-export interface KgJobDto {
-  id: number;
-  memoryId: string;
-  /** 记忆标题；记忆已删时为 null */
-  memoryTitle?: string | null;
-  status: 'pending' | 'running' | 'done' | 'cancelled';
-  attempts: number;
-  total: number;
-  done: number;
-  /** 失败终态为 1；旧 DTO 缺失时回退 error。 */
-  failed?: number;
-  error: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ReembedJobDto {
-  id: number;
-  target: string;
-  status: 'pending' | 'running' | 'done' | 'cancelled';
-  cursor: number;
-  total: number;
-  done: number;
-  failed: number;
-  error: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface MemoryJobsSnapshot {
-  distill: DistillJobDto[];
-  kg: KgJobDto[];
-  reembed: ReembedJobDto | null;
-  /** 全库失败 KG 数量，不受列表 limit 截断；旧 DTO 可缺失。 */
-  kgFailed?: number;
-}
-
-export interface MemoryKgRetryResult {
-  ok: boolean;
-  reset: number;
-  error?: string;
+  compile: CompileJobDto[];
 }
 
 export interface MemoryStats {
-  total: number;
-  bySpace: Record<string, number>;
-  /** space id → 项目名 / Global；缺失的 space（项目已删）不在表里 */
-  spaceLabels: Record<string, string>;
-  crystals: number;
-  entities: number;
-  embedded: number;
-  databaseBytes: number;
-  /** 为什么没有向量；null = 没出过错 */
-  embeddingError?: string | null;
+  totalNotes: number;
+  totalLinks: number;
+  brokenLinks: number;
+  draftCount: number;
+  verifiedCount: number;
+  staleCount: number;
+  archivedCount: number;
+  indexBytes: number;
+  spaces: VaultSpaceDto[];
 }
 
-export interface DistillableSessionDto {
+export type PendingMemoryWriteKind = 'agent' | 'compile';
+export type PendingMemoryWriteDecision = 'approve' | 'reject';
+
+export interface PendingMemoryWriteDto {
+  id: string;
+  kind: PendingMemoryWriteKind;
+  spaceId: string;
+  spaceLabel: string;
+  botId: string | null;
+  chatId: string | null;
+  targetRelPath: string;
+  slug: string;
+  title: string;
+  type: string;
+  description: string | null;
+  mode: UpsertMode;
+  section: string | null;
+  existingBody: string | null;
+  proposedBody: string;
+  redacted: boolean;
+  createdAt: string;
+}
+
+export interface CompilableSessionDto {
   sessionId: string;
   title: string;
   projectId: string | null;
   projectName: string | null;
-  /** 已经提炼过（存在该会话的任务）；正文变了仍可再提炼一次 */
-  distilled: boolean;
-  /** 会话 jsonl 的最后修改时间，用于排序与展示 */
-  updatedAt: string | null;
-}
-
-export type EmbeddingModelState = 'ready' | 'missing' | 'downloading' | 'unavailable';
-
-export interface EmbeddingModelDto {
-  id: string;
-  /** 运行时分档：model2vec 查表 / gguf 走 llama.cpp / 远程 / 不用向量 */
-  runtime: 'model2vec' | 'gguf' | 'openai-compatible' | 'none';
-  /** 入库向量维度；远程模型首次响应前未知 */
-  dim: number | null;
-  approxBytes: number;
-  /** 已落盘字节数，用于断点续传进度展示 */
-  downloadedBytes: number;
-  state: EmbeddingModelState;
-  /** 需要下载文件的模型才为 true；none / remote 为 false */
-  downloadable: boolean;
+  messageCount: number;
+  compiled: boolean;
+  updatedAt: string;
 }
 
 export interface ChatModelDto {
@@ -196,9 +241,8 @@ export interface ChatModelDto {
   contextSize: number;
   approxBytes: number;
   downloadedBytes: number;
-  state: EmbeddingModelState;
   downloadable: boolean;
-  /** 专用模型（如语音纠错），记忆设置不列出 */
+  state: 'ready' | 'missing' | 'downloading';
   purpose?: 'voice-correction';
 }
 
@@ -209,76 +253,102 @@ export interface EmbeddingDownloadProgressDto {
   fileCount: number;
   received: number;
   total: number | null;
-  done?: boolean;
+  done?: true;
   error?: string;
 }
 
-export interface MemoryMutationResult {
-  ok: boolean;
-  memory?: MemoryDetail;
-  edge?: EvolvesEdgeDto;
-  error?: string;
+export type ChatModelDownloadProgressDto = EmbeddingDownloadProgressDto;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Bot 成员写 project / global 记忆的待审批项（批准前不在 memories 里） */
-export interface PendingMemoryWriteDto {
-  id: string;
-  kind: 'capture' | 'crystallize';
-  spaceId: string;
-  spaceLabel: string;
-  /** 发起写入的成员（Main 解析的显示名） */
-  originLabel: string;
-  title: string | null;
-  content: string;
-  botId: string | null;
-  chatId: string | null;
-  /** 写入前已把密钥替换成 [REDACTED] */
-  redacted: boolean;
-  createdAt: string;
-}
-
-export type PendingMemoryWriteDecision = 'approve' | 'reject';
-
-/** 手动编辑记忆；title 为空沿用原标题 */
-export interface MemoryEditPatch {
-  title: string;
-  content: string;
+export function isMemoryListQuery(value: unknown): value is MemoryListQuery {
+  if (!isRecord(value)) return false;
+  if (
+    !Number.isSafeInteger(value.limit) ||
+    (value.limit as number) < 1 ||
+    (value.limit as number) > 500
+  ) {
+    return false;
+  }
+  if (!Number.isSafeInteger(value.offset) || (value.offset as number) < 0) return false;
+  if (value.spaceId !== undefined && value.spaceId !== null && typeof value.spaceId !== 'string') {
+    return false;
+  }
+  if (value.query !== undefined && typeof value.query !== 'string') return false;
+  if (value.type !== undefined && typeof value.type !== 'string') return false;
+  if (value.status !== undefined && !isNoteStatus(value.status)) return false;
+  if (value.includeArchived !== undefined && typeof value.includeArchived !== 'boolean') {
+    return false;
+  }
+  if (value.includeRaw !== undefined && typeof value.includeRaw !== 'boolean') return false;
+  return true;
 }
 
 export function isMemoryEditPatch(value: unknown): value is MemoryEditPatch {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  if (value.title !== undefined && typeof value.title !== 'string') return false;
+  if (value.description !== undefined && typeof value.description !== 'string') return false;
+  if (value.type !== undefined && typeof value.type !== 'string') return false;
+  if (value.status !== undefined && !isNoteStatus(value.status)) return false;
+  if (
+    value.tags !== undefined &&
+    (!Array.isArray(value.tags) || value.tags.some((t) => typeof t !== 'string'))
+  ) {
+    return false;
+  }
+  if (
+    value.staleAfter !== undefined &&
+    value.staleAfter !== null &&
+    typeof value.staleAfter !== 'string'
+  ) {
+    return false;
+  }
+  if (
+    value.expectedUpdatedAt !== undefined &&
+    value.expectedUpdatedAt !== null &&
+    typeof value.expectedUpdatedAt !== 'string'
+  ) {
+    return false;
+  }
+  if (value.body !== undefined && typeof value.body !== 'string') return false;
   return (
-    Object.keys(row).every((key) => key === 'title' || key === 'content') &&
-    typeof row.title === 'string' &&
-    typeof row.content === 'string' &&
-    row.content.trim().length > 0
+    value.title !== undefined ||
+    value.description !== undefined ||
+    value.type !== undefined ||
+    value.status !== undefined ||
+    value.tags !== undefined ||
+    value.staleAfter !== undefined ||
+    value.body !== undefined
   );
+}
+
+export function isMemoryCreateInput(value: unknown): value is MemoryCreateInput {
+  if (!isRecord(value)) return false;
+  if (typeof value.spaceId !== 'string' || !value.spaceId.trim()) return false;
+  if (typeof value.title !== 'string' || !value.title.trim()) return false;
+  if (typeof value.type !== 'string' || !value.type.trim()) return false;
+  if (typeof value.body !== 'string') return false;
+  if (value.slug !== undefined && typeof value.slug !== 'string') return false;
+  if (value.description !== undefined && typeof value.description !== 'string') return false;
+  if (
+    value.tags !== undefined &&
+    (!Array.isArray(value.tags) || value.tags.some((t) => typeof t !== 'string'))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function isPendingMemoryWriteDecision(value: unknown): value is PendingMemoryWriteDecision {
   return value === 'approve' || value === 'reject';
 }
 
-export function isMemoryListQuery(value: unknown): value is MemoryListQuery {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  if (!Number.isSafeInteger(row.limit) || (row.limit as number) < 1 || (row.limit as number) > 200)
-    return false;
-  if (!Number.isSafeInteger(row.offset) || (row.offset as number) < 0) return false;
-  if (row.spaceId !== undefined && row.spaceId !== null && typeof row.spaceId !== 'string')
-    return false;
-  if (row.query !== undefined && typeof row.query !== 'string') return false;
-  if (row.unitType !== undefined && (typeof row.unitType !== 'string' || !isUnitType(row.unitType)))
-    return false;
-  if (row.includeArchived !== undefined && typeof row.includeArchived !== 'boolean') return false;
-  if (row.mode !== undefined && row.mode !== 'exact' && row.mode !== 'fast' && row.mode !== 'deep')
-    return false;
-  return true;
+export function isValidVaultPreset(value: unknown): value is VaultPreset {
+  return isVaultPreset(value);
 }
 
-export function isEvolvesReviewState(
-  value: unknown
-): value is Exclude<EvolvesReviewStateDto, 'pending'> {
-  return value === 'accepted' || value === 'rejected';
+export function isValidUpsertMode(value: unknown): value is UpsertMode {
+  return isUpsertMode(value);
 }

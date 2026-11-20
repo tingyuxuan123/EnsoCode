@@ -16,14 +16,15 @@ const ALL: { id: SettingsCategory }[] = [
 ];
 
 describe('memory entry visibility', () => {
-  it('is hidden on a fresh install, because memory ships disabled', () => {
+  it('is visible on a fresh install, because memory ships enabled', () => {
     const ids = visibleCategories(ALL, [...DEFAULT_DISABLED_BUILTIN_TOOLS]).map((c) => c.id);
-    expect(ids).not.toContain('memory');
+    expect(ids).toContain('memory');
   });
 
   it('always leaves a way back: the memory toggle lives in Built-in tools', () => {
     // 入口隐藏后唯一的开启路径。这一条断了就再也打不开记忆功能。
-    const ids = visibleCategories(ALL, [...DEFAULT_DISABLED_BUILTIN_TOOLS]).map((c) => c.id);
+    const ids = visibleCategories(ALL, ['memory']).map((c) => c.id);
+    expect(ids).not.toContain('memory');
     expect(ids).toContain('tools');
     expect(BUILTIN_TOOLS.map((tool) => tool.id)).toContain('memory');
   });

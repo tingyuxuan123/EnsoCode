@@ -9,7 +9,7 @@ import {
   listChatModelSpecs,
   resolveChatModelSpec,
 } from './llama/chatModels';
-import { downloadedBytes, downloadModel, isModelReady } from './memory/embedding/downloader';
+import { downloadedBytes, downloadModel, isModelReady } from './llama/downloader';
 
 /**
  * 本地 chat 模型的显式下载管理。与 memoryModels.ts 同层同模式：

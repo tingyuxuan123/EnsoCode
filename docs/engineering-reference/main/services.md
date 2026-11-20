@@ -129,24 +129,17 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   已登记定义，可见集合另由 cwd 的 `DesignPresence` 决定。规划和审批在 worker，Main 用根会话的
   权威 cwd 与画布路由，结果回原 child generation；历史 hook 仅由父会话触发。
 
-## 内置记忆的相关度、取消与失败恢复
+## Markdown Wiki 记忆、索引重建与审批边界
 
-- 本地 BGE-M3 使用原生 8192 token 上限，不沿用其它 embedding 的 512 配置；否则
-  开头相同的长记忆会被截成相同前缀。仍按训练长度和特殊 token 预算截断，每个 provider
-  实例实际截断只告警一次，只记录模型与 token 数、不记录正文；不自动重建历史向量索引。
-- 混排 score 仅用于排序，对外返回 rank 与可选向量余弦 relevance；FTS 命中不填伪相关度，
-  旧历史 score 不能继续当百分比展示。显式匹配年份加分最多 0.1，不降低语义权重。
-- 向量距离相同时按记忆 rowid（插入序）排，不用随机 UUID 决胜，也不改原始相关度。
-- deep 辅助使用有界超时和真实 AbortSignal，远端完整链路传到 worker，本地传到 llama；
-  不只丢弃 Promise 结果。降级原因与是否使用模型辅助必须可观察；检索次数沿用 appearances。
-- KG 重试复用 failed 列、幂等重置，关闭时不启动抽取。冷库管理操作使用临时句柄并关闭，
-  不提前占用宿主全局 db，否则正常开库的蒸馏/向量/KG 恢复钩子会被跳过。
-- KG Level 1 输出预算为 4096 tokens；仅输出不可解析时在同一次任务尝试内提示只输出 JSON，
-  最多补一次。供应商报错直接交给任务层，不额外请求，也不额外累计任务尝试次数。
+- **纯 Markdown 为权威源，SQLite FTS5 为可丢弃派生索引**：每个记忆空间是一个兼容 Obsidian 的本地目录（`schema.md`、`index.md`、`log.md`、`raw/`、`wiki/`、`archive/`），笔记使用 OKF v0.2 Frontmatter 与 `[[wikilink]]`。`<userData>/memory/index.db` 只保存可随时重建的 `notes`、`links` 与 `notes_fts`（FTS5 `trigram`），不存权威正文；外置原生模块只依赖 `better-sqlite3` FTS5（已移除 `sqlite-vec` 与 `@huggingface/tokenizers`）。
+- **外部 Obsidian Vault 绑定与 `index.md` 安全**：空间默认存放在 `<userData>/memory/vaults/{global,projects/<id>,bots/<id>,chats/<id>}/`；外部绑定关系仅由 Main 保存在 `<userData>/memory/vault-bindings.json` 并做 canonical 路径与根目录/家目录边界校验。解绑或删除会话/成员/项目绝不删除外部 Vault 目录内的用户文件。绑定已有 Obsidian Vault 且存在无 `<!-- collabra:managed -->` 标记的手写 `index.md` 时，改为写入 `_collabra-index.md`。
+- **内置工具与审批边界**：提供 `memory_index`、`memory_search`、`memory_read`、`memory_upsert`、`memory_archive`（随内置 `memory` 开关在设置版本升级及新装时默认开启）。`memory_search` 按会话推导可见空间并结合 FTS5 匹配、`[[wikilink]]` 图连接与状态加权；`raw/` 文件只读、`memory_archive` 软归档到 `archive/`。Bot 模式写入共享 `project`/`global` 空间仍先落入 `pending_writes` 待人工审批后写入 `.md` 文件。
+- **会话编译、确定性体检与实时监视**：会话结束或空闲回收后按配置开关触发 Wiki 编译器（优先更新已有页面，新条目默认为 `draft`）；`lint.ts` 对断链 `[[wikilink]]`、孤立笔记、过期 `staleAfter`、陈旧草稿、缺摘要与超长页面做无模型确定性检查；`watcher.ts` 防抖监听外部 Obsidian 编辑并增量刷新索引。
+  回归：`memory/vault.test.ts`、`memory/indexDb.test.ts`、`memory/lint.test.ts`、`memory/compiler.test.ts`、`memory/bridge.test.ts`、`memory/bindings.test.ts`、`memoryHost.test.ts`、`memoryAdmin.test.ts`。
 
 回归：`streamGuard.test.ts`、`streamGuard.sdk.test.ts`、`backgroundTasks.test.ts`、
 `ensoCompact/extract.test.ts`、`supervisor.agentDispatch.test.ts`、`pendingNotifications.test.ts`、
-`builtinLoadout.sdk.test.ts`、`scratchWorkspace.test.ts`、`memoryHost.retry.test.ts`。
+`builtinLoadout.sdk.test.ts`、`scratchWorkspace.test.ts`。
 
 
 ## 桌面后台输入、原生插件与托管代审
@@ -525,7 +518,7 @@ CodeKiln 不再接入 LCU：旧设置在水合时丢弃，专属授权不再提�
 - 发出 abort 不等于文件 I/O 已结束。同目录下载重启前等待旧任务收尾，不能仅删除 `running` 后立即复用 `.part`。
 - 回归须挂起初始化或重试，再跨事件轮次切换、取消和重开，验证旧任务不会覆盖新配置、释放新资源或删除新任务状态。
 
-回归位置：`src/main/services/memoryHost.test.ts`、`src/main/services/chatModels.test.ts`、`src/main/services/memoryModels.test.ts`。
+回归位置：`src/main/services/memoryHost.test.ts`、`src/main/services/chatModels.test.ts`。
 
 ## 网络请求按协议分派
 

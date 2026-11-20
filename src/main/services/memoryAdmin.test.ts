@@ -1,276 +1,161 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import type Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { openMemoryDb } from './memory/db';
-import { ensureDistillJob, listResumableDistillJobs } from './memory/distill';
-import { applyExtraction } from './memory/kg';
-import { createMemory, getMemory } from './memory/store';
-import type { Embedder } from './memory/types';
+import { afterEach, describe, expect, it } from 'vitest';
+import { VaultBindingStore } from './memory/bindings';
+import { openIndexDb } from './memory/indexDb';
 import {
-  archiveMemory,
-  clearFinishedMemoryJobs,
-  deleteMemoryPermanently,
-  deleteMemorySpace,
-  getMemoryJobsSnapshot,
-  listMemoriesForAdmin,
-  openExistingMemoryDb,
-  restoreMemory,
-  searchMemoriesForAdmin,
+  type AdminContext,
+  applyPresetToSpace,
+  archiveNoteById,
+  createNoteManual,
+  deleteNotePermanentlyById,
+  editNoteManual,
+  getMemoryStats,
+  getNoteDetailById,
+  getSchemaForSpace,
+  listNotesForAdmin,
+  readVaultDoc,
+  restoreNoteById,
+  runLintForAdmin,
 } from './memoryAdmin';
 
-let dir: string;
-let db: Database.Database;
-
-beforeEach(() => {
-  dir = mkdtempSync(path.join(tmpdir(), 'enso-memory-admin-'));
-  db = openMemoryDb(path.join(dir, 'memory.db'));
-});
+const dirs: string[] = [];
+function tmpDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'enso-memory-admin-'));
+  dirs.push(dir);
+  return dir;
+}
 
 afterEach(() => {
-  db.close();
-  rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-async function add(content: string, spaceId = 'global') {
-  const result = await createMemory(db, { content, spaceId, force: true });
-  if (result.status !== 'inserted') throw new Error('memory was not inserted');
-  return result.memory;
-}
-
-it('deletes all versions and archived memories in a bot space, preserving other spaces', async () => {
-  const space = 'bot:11111111-1111-4111-8111-111111111111';
-  const first = await add('one', space);
-  const second = await add('two', space);
-  const other = await add('keep');
-  archiveMemory(db, second.id);
-  ensureDistillJob(
-    db,
-    { sessionId: 'old', sessionFile: 'old.jsonl', projectId: null, botId: space.slice(4) },
-    'old#hash'
-  );
-  expect(deleteMemorySpace(db, space)).toBe(2);
-  expect(getMemory(db, first.id)).toBeNull();
-  expect(getMemory(db, second.id)).toBeNull();
-  expect(getMemory(db, other.id)).not.toBeNull();
-  expect(listResumableDistillJobs(db)).toEqual([]);
-});
-
-it('deleting a chat space keeps pending member jobs but stops them routing into the chat', async () => {
-  const chatId = '33333333-3333-4333-8333-333333333333';
-  const kept = await add('member note', 'bot:11111111-1111-4111-8111-111111111111');
-  await add('group note', `chat:${chatId}`);
-  ensureDistillJob(
-    db,
-    {
-      sessionId: 'g',
-      sessionFile: 'g.jsonl',
-      projectId: null,
-      botId: '11111111-1111-4111-8111-111111111111',
-      chatId,
-    },
-    'g#hash'
-  );
-  expect(deleteMemorySpace(db, `chat:${chatId}`)).toBe(1);
-  expect(getMemory(db, kept.id)).not.toBeNull();
-  const [job] = listResumableDistillJobs(db);
-  expect(job.payload.botId).toBe('11111111-1111-4111-8111-111111111111');
-  expect(job.payload).not.toHaveProperty('chatId');
-});
-
-describe('memory admin — 语义搜索模式', () => {
-  it('deep 明确回报是否使用模型辅助，fast 恒为 off', async () => {
-    await add('Postgres assist');
-    const assist = {
-      analyze: async () => null,
-      rerank: async () => null,
-      outcome: () => ({ assist: 'fallback' as const, assistReason: 'unparseable' as const }),
+describe('memoryAdmin wiki operations', () => {
+  it('supports create, edit/verify, archive, restore, delete, stats, lint, and preset switching', async () => {
+    const work = tmpDir();
+    const dbPath = path.join(work, 'index.db');
+    const db = openIndexDb(dbPath);
+    const bindings = new VaultBindingStore(work);
+    const ctx: AdminContext = {
+      db,
+      bindings,
+      indexDbPath: dbPath,
+      language: 'zh',
+      spaceLabel: (id) => (id === 'global' ? 'Global' : id),
     };
-    const deep = await searchMemoriesForAdmin(
-      db,
-      { query: 'Postgres', limit: 10, offset: 0, mode: 'deep' },
-      null,
-      assist
-    );
-    expect(deep).toMatchObject({ assist: 'fallback', assistReason: 'unparseable' });
-    const fast = await searchMemoriesForAdmin(
-      db,
-      { query: 'Postgres', limit: 10, offset: 0, mode: 'fast' },
-      null,
-      assist
-    );
-    expect(fast).toMatchObject({ assist: 'off' });
-  });
 
-  const embedder: Embedder = {
-    model: 'kw',
-    dim: 1,
-    embed: async () => Float32Array.from([1]),
-  };
-
-  it('embedder 为 null 时降级而不报错，并如实报告 vectorsUsed=false', async () => {
-    await add('我们决定用 Postgres 做主库');
-    const result = await searchMemoriesForAdmin(
-      db,
-      { query: 'Postgres', limit: 10, offset: 0, mode: 'fast' },
-      null
-    );
-    expect(result.vectorsUsed).toBe(false);
-    expect(result.approximate).toBe(true);
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0].appearances).toBe(1);
-  });
-
-  it('实体通道生效：正文没有该词但 MENTIONS 同实体的记忆也能搜到', async () => {
-    const literal = await add('Kubernetes 上线流程已跑通');
-    const paraphrase = await add('集群编排方案确定，后续按此推进');
-    for (const memory of [literal, paraphrase]) {
-      applyExtraction(db, memory, {
-        entities: [
-          { name: 'Kubernetes', type: 'PRODUCT', description: null, confidence: 0.9, aliases: [] },
-        ],
-        relations: [],
+    try {
+      const created = await createNoteManual(ctx, {
+        spaceId: 'global',
+        slug: 'preferences/editor',
+        title: '编辑器偏好',
+        type: 'preferences',
+        description: '使用 Obsidian 查看 Markdown',
+        tags: ['obsidian'],
+        body: '偏好本地 Markdown，参见 [[notes/missing]]。',
       });
+      expect(created.ok).toBe(true);
+      expect(created.note?.status).toBe('verified');
+      const id = created.note!.id;
+
+      const listed = listNotesForAdmin(ctx, { spaceId: 'global', limit: 20, offset: 0 });
+      expect(listed.total).toBe(1);
+      expect(listed.types).toEqual(['preferences']);
+
+      const edited = await editNoteManual(ctx, id, {
+        title: '编辑器与 Obsidian 偏好',
+        body: '更新后的偏好正文。',
+        status: 'verified',
+      });
+      expect(edited.ok).toBe(true);
+      expect(getNoteDetailById(ctx, id)?.title).toBe('编辑器与 Obsidian 偏好');
+
+      const lint = runLintForAdmin(ctx, 'global');
+      expect(lint.checkedNotes).toBe(1);
+
+      const archived = await archiveNoteById(ctx, id);
+      expect(archived.ok).toBe(true);
+      expect(archived.note?.isArchived).toBe(true);
+
+      const restored = await restoreNoteById(ctx, archived.note!.id);
+      expect(restored.ok).toBe(true);
+      expect(restored.note?.isArchived).toBe(false);
+
+      const stats = getMemoryStats(ctx);
+      expect(stats.totalNotes).toBe(1);
+      expect(stats.verifiedCount).toBe(1);
+
+      applyPresetToSpace(ctx, 'global', 'engineering');
+      expect(getSchemaForSpace(ctx, 'global')).toContain('systems');
+
+      const deleted = await deleteNotePermanentlyById(ctx, restored.note!.id);
+      expect(deleted.ok).toBe(true);
+      expect(listNotesForAdmin(ctx, { spaceId: 'global', limit: 20, offset: 0 }).total).toBe(0);
+    } finally {
+      db.close();
     }
-    const semantic = await searchMemoriesForAdmin(
+  });
+
+  it('detects external disk modifications via expectedUpdatedAt and reads system vault docs', async () => {
+    const work = tmpDir();
+    const dbPath = path.join(work, 'index.db');
+    const db = openIndexDb(dbPath);
+    const bindings = new VaultBindingStore(work);
+    const ctx: AdminContext = {
       db,
-      { query: 'Kubernetes', limit: 10, offset: 0, mode: 'fast' },
-      embedder
-    );
-    expect(semantic.items.map((i) => i.id).sort()).toEqual([literal.id, paraphrase.id].sort());
-    // 精确模式只能命中字面那条——两条路径的差异就在这里
-    const exact = listMemoriesForAdmin(db, { query: 'Kubernetes', limit: 10, offset: 0 });
-    expect(exact.items.map((i) => i.id)).toEqual([literal.id]);
-  });
+      bindings,
+      indexDbPath: dbPath,
+      language: 'zh',
+      spaceLabel: (id) => (id === 'global' ? 'Global' : id),
+    };
 
-  it('空查询不跑检索；unitType 在结果上后过滤', async () => {
-    await add('Postgres 主库决策');
-    expect(
-      (await searchMemoriesForAdmin(db, { query: '  ', limit: 10, offset: 0 }, embedder)).items
-    ).toEqual([]);
-    const filtered = await searchMemoriesForAdmin(
-      db,
-      { query: 'Postgres', limit: 10, offset: 0, unitType: 'procedure' },
-      embedder
-    );
-    expect(filtered.items).toEqual([]);
-  });
-});
+    try {
+      const created = await createNoteManual(ctx, {
+        spaceId: 'global',
+        slug: 'systems/conflict-check',
+        title: 'Conflict Check',
+        type: 'systems',
+        body: 'Initial content',
+      });
+      expect(created.ok).toBe(true);
+      const id = created.note!.id;
 
-describe('memory admin', () => {
-  it('展示被检索次数，不把未写入的 access_count 当命中数', async () => {
-    const memory = await add('appearance count');
-    db.prepare('UPDATE memories SET appearances = 7, access_count = 99 WHERE id = ?').run(
-      memory.id
-    );
-    const result = listMemoriesForAdmin(db, { limit: 10, offset: 0 });
-    expect(result.items[0]).toMatchObject({ appearances: 7 });
-  });
+      // Simulate Obsidian editing the file externally and bumping mtime
+      const resolved = bindings.resolveSpace('global');
+      const absPath = path.join(resolved.rootPath, created.note!.relPath);
+      fs.writeFileSync(absPath, `${fs.readFileSync(absPath, 'utf8')}\n\n## Edited in Obsidian\n`);
+      const future = new Date(Date.now() + 5000);
+      fs.utimesSync(absPath, future, future);
 
-  it('returns correct total independently of pagination and escapes FTS syntax', async () => {
-    await add('alpha (special) one');
-    await add('alpha "special" two');
-    await add('unrelated');
+      const staleAttempt = await editNoteManual(ctx, id, {
+        body: 'Stale overwrite attempt',
+        expectedUpdatedAt: created.note!.updatedAt,
+      });
+      expect(staleAttempt.ok).toBe(false);
+      expect(staleAttempt.conflict).toBe(true);
+      expect(staleAttempt.currentNote?.body).toContain('Edited in Obsidian');
 
-    const result = listMemoriesForAdmin(db, {
-      query: 'alpha ("special")',
-      limit: 1,
-      offset: 0,
-    });
-    expect(result.total).toBe(2);
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0].contentSummary.length).toBeLessThanOrEqual(241);
-  });
+      // Writing with latest expectedUpdatedAt succeeds cleanly
+      const updated = await editNoteManual(ctx, id, {
+        body: 'Merged overwrite',
+        expectedUpdatedAt: staleAttempt.currentNote!.updatedAt,
+      });
+      expect(updated.ok).toBe(true);
+      expect(updated.note?.body).toBe('Merged overwrite');
 
-  it('archives and restores without deleting the row', async () => {
-    const memory = await add('keep this row');
-    expect(archiveMemory(db, memory.id)?.lifecycleState).toBe('archived');
-    expect(getMemory(db, memory.id)).not.toBeNull();
-    expect(restoreMemory(db, memory.id)?.lifecycleState).toBe('active');
-  });
-
-  it('permanent delete removes mentions, vector rows, and crystal edges in one operation', async () => {
-    const source = await add('source memory');
-    const crystal = await add('crystal memory');
-    applyExtraction(db, source, {
-      entities: [
-        { name: 'SQLite', type: 'TECHNOLOGY', description: null, confidence: 1, aliases: [] },
-      ],
-      relations: [],
-    });
-    db.prepare('UPDATE memories SET is_crystal = 1 WHERE id = ?').run(crystal.id);
-    db.prepare(
-      `INSERT INTO crystallized_from (crystal_id, source_id, contribution_weight, created_at)
-       VALUES (?, ?, 1, ?)`
-    ).run(crystal.id, source.id, new Date().toISOString());
-
-    expect(deleteMemoryPermanently(db, source.id)).toBe(true);
-    expect(getMemory(db, source.id)).toBeNull();
-    expect(db.prepare('SELECT 1 FROM mentions WHERE memory_id = ?').get(source.id)).toBeUndefined();
-    expect(
-      db.prepare('SELECT 1 FROM crystallized_from WHERE source_id = ?').get(source.id)
-    ).toBeUndefined();
-  });
-
-  it('does not create a database when the file does not exist', () => {
-    const missing = path.join(dir, 'missing', 'memory.db');
-    expect(openExistingMemoryDb(missing)).toBeNull();
-    expect(() => openMemoryDb(missing).close()).not.toThrow();
-  });
-});
-
-function insertJob(
-  kind: string,
-  target: string,
-  status: string,
-  error: string | null = null
-): number {
-  const now = new Date().toISOString();
-  const info = db
-    .prepare(
-      `INSERT INTO memory_jobs (kind, target, status, cursor, total, done, failed, error, created_at, updated_at)
-       VALUES (?, ?, ?, 0, 0, 0, 0, ?, ?, ?)`
-    )
-    .run(kind, target, status, error, now, now);
-  return Number(info.lastInsertRowid);
-}
-
-function jobIds(): number[] {
-  return (db.prepare('SELECT id FROM memory_jobs ORDER BY id').all() as { id: number }[]).map(
-    (row) => row.id
-  );
-}
-
-describe('memory admin — 清空历史任务', () => {
-  it('KG 全库失败计数不受列表 limit 截断，取消与其它类型失败不算 KG 失败', () => {
-    insertJob('kg', 'first#failed', 'done', 'bad');
-    insertJob('kg', 'second#failed', 'done', 'bad');
-    insertJob('kg', 'third#cancel', 'cancelled', 'changed');
-    insertJob('distill', 'fourth#distill', 'done', 'bad');
-    const snapshot = getMemoryJobsSnapshot(db, 1);
-    expect(snapshot.kg).toHaveLength(1);
-    expect(snapshot.kgFailed).toBe(2);
-  });
-
-  it('deletes done/cancelled (including failed-as-done) and keeps pending/running', () => {
-    const pending = insertJob('distill', 'pending-fp', 'pending');
-    const running = insertJob('kg', 'mem#kg', 'running');
-    insertJob('distill', 'done-fp', 'done');
-    insertJob('kg', 'mem#failed', 'done', 'provider down');
-    insertJob('reembed', 'local:qwen3', 'cancelled');
-
-    expect(clearFinishedMemoryJobs(db)).toBe(3);
-    expect(jobIds()).toEqual([pending, running]);
-    expect(
-      db.prepare('SELECT status FROM memory_jobs ORDER BY id').all() as { status: string }[]
-    ).toEqual([{ status: 'pending' }, { status: 'running' }]);
-  });
-
-  it('returns 0 when there is nothing finished to delete', () => {
-    const pending = insertJob('distill', 'pending-fp', 'pending');
-    expect(clearFinishedMemoryJobs(db)).toBe(0);
-    expect(jobIds()).toEqual([pending]);
-    expect(clearFinishedMemoryJobs(db)).toBe(0);
+      // System vault docs: index, log, schema
+      const indexDoc = readVaultDoc(ctx, 'global', 'index');
+      const logDoc = readVaultDoc(ctx, 'global', 'log');
+      const schemaDoc = readVaultDoc(ctx, 'global', 'schema');
+      expect(indexDoc?.filename).toBe('index.md');
+      expect(indexDoc?.content).toContain('[[systems/conflict-check');
+      expect(logDoc?.filename).toBe('log.md');
+      expect(logDoc?.content).toContain('conflict-check');
+      expect(schemaDoc?.filename).toBe('schema.md');
+      expect(schemaDoc?.content).toContain('OKF v0.2');
+    } finally {
+      db.close();
+    }
   });
 });

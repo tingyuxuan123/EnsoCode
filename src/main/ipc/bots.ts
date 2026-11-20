@@ -131,7 +131,6 @@ import { resolveDesignRoot } from '../services/design/roots';
 import { searchFiles } from '../services/fileSearch';
 import { resolveGlobalInstruction } from '../services/instructionStore';
 import { setBotAvatarResolver } from '../services/localImageProtocol';
-import { listMemories } from '../services/memory/store';
 import { notifyBotChat } from '../services/notifications';
 import { readStoredOauthCredentialKeys } from '../services/oauthProviders';
 import { releasePairPreviews } from '../services/pairHost';
@@ -1122,10 +1121,8 @@ function skillEntries(value: unknown): SkillEntry[] {
 
 /** since 之后整理写入某空间的结论（核心笔记重写的输入） */
 async function recentDistilled(spaceId: string, since: number): Promise<string[]> {
-  const { memoryDatabase } = await import('../services/memoryHost');
-  return listMemories(memoryDatabase(), { spaceIds: [spaceId], limit: 50 })
-    .filter((memory) => memory.source === 'distill' && Date.parse(memory.createdAt) >= since)
-    .map((memory) => `${memory.title}: ${memory.content}`);
+  const { getRecentCompiledNotes } = await import('../services/memoryHost');
+  return getRecentCompiledNotes(spaceId, since);
 }
 
 /** 笔记归属必须存在；群笔记只给群聊 */

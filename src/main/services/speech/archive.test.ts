@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isModelReady } from '../memory/embedding/downloader';
+import { isModelReady } from '../llama/downloader';
 import { downloadArchiveModel } from './archive';
 import type { SpeechModelSpec } from './model';
 

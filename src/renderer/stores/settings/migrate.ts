@@ -8,6 +8,7 @@ import { resolveCompactStrategy } from '@shared/compactStrategy';
 import { normalizeContextMenuOpen, normalizeFileOpenRules } from '@shared/fileOpening';
 import { parseImageGenerationSettings } from '@shared/imageGeneration';
 import { DEFAULT_LIGHT_PALETTE, parseLightPalette } from '@shared/lightPalette';
+import { resolveMemoryLanguage } from '@shared/memory/constants';
 import { extractModelOverrides, referencedModelIds } from '@shared/modelDirectory';
 import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine';
 import { type EditMode, type ModelEntry, resolveEditMode } from '@shared/types';
@@ -33,7 +34,7 @@ import { DEFAULT_MONO_FONT_FAMILY, normalizeDesktopChatTypography } from '@/lib/
  */
 
 /** 当前持久化数据版本；改数据形状时 +1 并在 `migrateSettings` 里加一段 */
-export const SETTINGS_VERSION = 20;
+export const SETTINGS_VERSION = 22;
 
 export function mergeSettingsState<T extends { editMode: EditMode; accentColor: AccentColor }>(
   persisted: unknown,
@@ -41,7 +42,21 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
 ): T {
   if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) return current;
   const source = persisted as Record<string, unknown>;
-  const { hashlineEditEnabled, bashInterceptEnabled, voiceModel, lcuEnabled, ...rest } = source;
+  const {
+    hashlineEditEnabled,
+    bashInterceptEnabled,
+    voiceModel,
+    lcuEnabled,
+    memoryEmbeddingModel,
+    memoryEmbeddingAutoDownload,
+    memoryEmbeddingRemoteProviderId,
+    memoryKgEnabled,
+    ...rest
+  } = source;
+  void memoryEmbeddingModel;
+  void memoryEmbeddingAutoDownload;
+  void memoryEmbeddingRemoteProviderId;
+  void memoryKgEnabled;
   const editMode =
     'editMode' in source || 'hashlineEditEnabled' in source
       ? resolveEditMode(source.editMode, hashlineEditEnabled)
@@ -81,6 +96,14 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     'designEnabled' in source || 'designEnabled' in current
       ? { designEnabled: source.designEnabled !== false }
       : {};
+  const memoryDefaults = {
+    ...('memoryDistillEnabled' in source || 'memoryDistillEnabled' in current
+      ? { memoryDistillEnabled: source.memoryDistillEnabled !== false }
+      : {}),
+    ...('memoryLanguage' in source || 'memoryLanguage' in current
+      ? { memoryLanguage: resolveMemoryLanguage(source.memoryLanguage) }
+      : {}),
+  };
   return {
     ...current,
     ...rest,
@@ -94,6 +117,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...contextMenuOpening,
     ...browserLinkOpening,
     ...design,
+    ...memoryDefaults,
     ...('pluginAutoUpdate' in source || 'pluginAutoUpdate' in current
       ? { pluginAutoUpdate: source.pluginAutoUpdate !== false }
       : {}),
@@ -137,6 +161,8 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * v17 → v18：界面默认强调色由靛蓝改为晴空蓝；旧版落盘的 indigo 即旧默认值，随之换成 ocean。
  * v18 → v19：统计行旧默认精简为 Token / 缓存 / 上下文，保留自定义顺序、完整预设和全关。
  * v19 → v20：桌面采用 Kettu 默认字体与字号；只迁移完整旧默认，保留自定义排版与字体。
+ * v20 → v21：长期记忆重写为轻量级 Markdown Wiki，移除旧 embedding/KG 配置字段并默认开启 memory 工具。
+ * v21 → v22：Wiki 自动编译默认开启、记忆语言默认简体中文（将 v21 冻结旧默认 false / 'en' 迁为 true / 'zh'）。
  */
 export function migrateSettings(persisted: unknown, version: number): unknown {
   if (version >= SETTINGS_VERSION) return persisted;
@@ -295,7 +321,49 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
       state = { ...state, chatTypography: normalizeDesktopChatTypography(undefined) };
     }
   }
+  if (version < 21) {
+    const {
+      memoryEmbeddingModel,
+      memoryEmbeddingAutoDownload,
+      memoryEmbeddingRemoteProviderId,
+      memoryKgEnabled,
+      ...rest
+    } = state;
+    void memoryEmbeddingModel;
+    void memoryEmbeddingAutoDownload;
+    void memoryEmbeddingRemoteProviderId;
+    void memoryKgEnabled;
+    state = enableMemoryToolOnUpgrade(rest);
+  }
+  if (version < 22) {
+    if (state.memoryDistillEnabled === false) {
+      state = { ...state, memoryDistillEnabled: true };
+    }
+    if (state.memoryLanguage === 'en') {
+      state = { ...state, memoryLanguage: 'zh' };
+    }
+  }
   return state;
+}
+
+function enableMemoryToolOnUpgrade(state: Record<string, unknown>): Record<string, unknown> {
+  const stripMemory = (entry: Record<string, unknown>): Record<string, unknown> => {
+    if (!Array.isArray(entry.disabledBuiltinTools)) return entry;
+    const next = entry.disabledBuiltinTools.filter((id) => id !== 'memory');
+    return next.length === entry.disabledBuiltinTools.length
+      ? entry
+      : { ...entry, disabledBuiltinTools: next };
+  };
+  const migrated = stripMemory(state);
+  if (!Array.isArray(migrated.projects)) return migrated;
+  return {
+    ...migrated,
+    projects: migrated.projects.map((project) =>
+      project && typeof project === 'object' && !Array.isArray(project)
+        ? stripMemory(project as Record<string, unknown>)
+        : project
+    ),
+  };
 }
 
 function migrateAgentToolModes(state: Record<string, unknown>): Record<string, unknown> {

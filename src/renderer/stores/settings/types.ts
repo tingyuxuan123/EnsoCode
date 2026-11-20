@@ -163,18 +163,10 @@ export interface SettingsState {
   /** 验证式压缩档位；缺省 auto */
   smartCompactMode: import('@shared/smartCompactMode').SmartCompactMode;
 
-  /** 记忆向量模型注册表 id（none / local:* / remote:*）；模型文件在 userData，这里只存 id */
-  memoryEmbeddingModel: string;
-  /** 本地模型未就绪时是否后台下载；设备本地，缺省关 */
-  memoryEmbeddingAutoDownload: boolean;
   /** 本地记忆模型空闲卸载分钟数；5/10/30，0 = 永不，缺省 10 */
   memoryModelIdleMinutes: number;
-  /** remote:* 模型使用哪个已配置 provider 的 baseUrl/apiKey；设备本地 */
-  memoryEmbeddingRemoteProviderId: string | null;
-  /** 会话结束后是否用 LLM 自动蒸馏长期记忆；缺省关（只想手动记忆的用户保持关闭） */
+  /** 会话结束后是否用 LLM 自动编译沉淀 Wiki 记忆；缺省关 */
   memoryDistillEnabled: boolean;
-  /** 记忆创建后是否用 LLM 异步抽取实体图谱；缺省关 */
-  memoryKgEnabled: boolean;
   /** 语音输入：开启后才提示下载本地识别模型；缺省关 */
   voiceInputEnabled: boolean;
   /** 实验功能：Bot 模式；缺省关，关闭时 Main 不启动 Bot 后台逻辑 */
@@ -375,12 +367,8 @@ export interface SettingsState {
   setRtkEnabled: (value: boolean) => void;
   setDesignEnabled: (value: boolean) => void;
   setProtectedActionsInCode: (value: boolean) => void;
-  setMemoryEmbeddingModel: (value: string) => void;
-  setMemoryEmbeddingAutoDownload: (value: boolean) => void;
   setMemoryModelIdleMinutes: (value: number) => void;
-  setMemoryEmbeddingRemoteProviderId: (value: string | null) => void;
   setMemoryDistillEnabled: (value: boolean) => void;
-  setMemoryKgEnabled: (value: boolean) => void;
   setVoiceInputEnabled: (value: boolean) => void;
   setBotModeEnabled: (value: boolean) => void;
   setBotRouteClassifier: (value: VirtualClassifierConfig | null) => void;

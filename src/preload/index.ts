@@ -42,34 +42,28 @@ import type {
   ImageStudioSession,
   ImageStudioSummary,
 } from '@shared/imageStudio';
+import type { VaultPreset } from '@shared/memory/constants';
 import type {
   ChatModelDto,
-  DistillableSessionDto,
+  CompilableSessionDto,
   EmbeddingDownloadProgressDto,
-  EmbeddingModelDto,
-  EvolvesEdgeDto,
-  MemoryDetail,
+  MemoryCreateInput,
   MemoryEditPatch,
   MemoryJobsSnapshot,
-  MemoryKgRetryResult,
+  MemoryLintReport,
   MemoryListQuery,
   MemoryListResult,
   MemoryMutationResult,
+  MemoryNoteDetail,
   MemoryStats,
+  MemoryVaultActionResult,
   PendingMemoryWriteDecision,
   PendingMemoryWriteDto,
+  VaultDocDto,
+  VaultDocKind,
+  VaultSpaceDto,
 } from '@shared/memory/dto';
-import type {
-  CrystallizeRequest,
-  CrystallizeResult,
-  GraphQuery,
-  InsightRequest,
-  InsightResult,
-  MemoryBriefDto,
-  MemoryGraphDto,
-  TreeNodeDto,
-  TreeQuery,
-} from '@shared/memory/graphDto';
+import type { GraphQuery, MemoryGraphDto, TreeNodeDto, TreeQuery } from '@shared/memory/graphDto';
 import type { PastedTextFileResult } from '@shared/pastedText';
 import type { PlanRespondAction } from '@shared/planMode';
 import type { PortConnectionState } from '@shared/port-rpc';
@@ -504,8 +498,10 @@ const electronAPI = {
   memory: {
     list: (query: MemoryListQuery): Promise<MemoryListResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_LIST, query),
-    detail: (id: string): Promise<MemoryDetail | null> =>
+    detail: (id: string): Promise<MemoryNoteDetail | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_DETAIL, id),
+    create: (input: MemoryCreateInput): Promise<MemoryMutationResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_CREATE, input),
     archive: (id: string): Promise<MemoryMutationResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_ARCHIVE, id),
     restore: (id: string): Promise<MemoryMutationResult> =>
@@ -515,14 +511,36 @@ const electronAPI = {
     update: (id: string, patch: MemoryEditPatch): Promise<MemoryMutationResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_UPDATE, id, patch),
     stats: (): Promise<MemoryStats> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_STATS),
+    spaces: (): Promise<VaultSpaceDto[]> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_SPACES),
+    bindVault: (spaceId: string): Promise<MemoryVaultActionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_BIND_VAULT, spaceId),
+    unbindVault: (spaceId: string): Promise<MemoryVaultActionResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_UNBIND_VAULT, spaceId),
+    openVault: (target: {
+      spaceId?: string;
+      noteId?: string;
+      app?: 'folder' | 'obsidian';
+    }): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_OPEN_VAULT, target),
+    getSchema: (spaceId: string): Promise<string> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_GET_SCHEMA, spaceId),
+    saveSchema: (
+      spaceId: string,
+      content: string,
+      preset?: VaultPreset
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_SAVE_SCHEMA, spaceId, content, preset),
+    applyPreset: (
+      spaceId: string,
+      preset: VaultPreset
+    ): Promise<{ ok: boolean; schema?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_APPLY_PRESET, spaceId, preset),
+    rebuildIndex: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_REBUILD_INDEX),
+    lint: (spaceId?: string | null): Promise<MemoryLintReport> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_LINT, spaceId ?? null),
     jobs: (): Promise<MemoryJobsSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_JOBS),
     clearJobs: (): Promise<number> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_JOBS_CLEAR),
-    kgRetryFailed: (): Promise<MemoryKgRetryResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_KG_RETRY_FAILED),
-    evolvesPending: (): Promise<EvolvesEdgeDto[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_EVOLVES_PENDING),
-    evolvesReview: (id: string, state: 'accepted' | 'rejected'): Promise<MemoryMutationResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_EVOLVES_REVIEW, id, state),
     pendingWrites: (): Promise<PendingMemoryWriteDto[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PENDING_WRITES),
     reviewPendingWrite: (
@@ -530,39 +548,21 @@ const electronAPI = {
       decision: PendingMemoryWriteDecision
     ): Promise<MemoryMutationResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_PENDING_WRITE_REVIEW, id, decision),
-    models: (): Promise<EmbeddingModelDto[]> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_MODELS),
-    downloadModel: (modelId: string): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_MODEL_DOWNLOAD, modelId),
-    cancelModelDownload: (modelId: string): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_MODEL_CANCEL, modelId),
-    deleteModel: (modelId: string): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_MODEL_DELETE, modelId),
-    reembed: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_REEMBED),
     graph: (query: GraphQuery): Promise<MemoryGraphDto> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_GRAPH, query),
-    graphEntity: (entityId: string): Promise<MemoryBriefDto[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_GRAPH_ENTITY, entityId),
     tree: (query: TreeQuery): Promise<TreeNodeDto[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_TREE, query),
-    insight: (request: InsightRequest): Promise<InsightResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_INSIGHT, request),
-    crystallize: (request: CrystallizeRequest): Promise<CrystallizeResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_CRYSTALLIZE, request),
-    distillableSessions: (): Promise<DistillableSessionDto[]> =>
+    distillableSessions: (): Promise<CompilableSessionDto[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_DISTILLABLE_SESSIONS),
     distillSession: (sessionId: string, force = false): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.MEMORY_DISTILL_SESSION, sessionId, force),
-    /** 记忆库发生任何写入（含 agent 工具写入）时触发，用于让列表/图谱重拉 */
+    readVaultDoc: (spaceId: string, kind: VaultDocKind): Promise<VaultDocDto | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.MEMORY_READ_VAULT_DOC, spaceId, kind),
+    /** 记忆库发生任何写入（含 agent 工具与外部 Obsidian 编辑）时触发 */
     onChanged: (listener: () => void): (() => void) => {
       const handler = () => listener();
       ipcRenderer.on(IPC_CHANNELS.MEMORY_CHANGED, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.MEMORY_CHANGED, handler);
-    },
-    onModelProgress: (listener: (progress: EmbeddingDownloadProgressDto) => void): (() => void) => {
-      const handler = (_event: unknown, progress: EmbeddingDownloadProgressDto) =>
-        listener(progress);
-      ipcRenderer.on(IPC_CHANNELS.MEMORY_MODEL_PROGRESS, handler);
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.MEMORY_MODEL_PROGRESS, handler);
     },
     chatModels: (): Promise<ChatModelDto[]> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_CHAT_MODELS),
     downloadChatModel: (modelId: string): Promise<boolean> =>

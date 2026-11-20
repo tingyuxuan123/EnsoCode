@@ -3785,7 +3785,7 @@ describe('消息类工具行（联系主 agent / 联系队员 / 子代理发消�
   });
 });
 
-describe('memory_capture 记录记忆行', () => {
+describe('memory_upsert 记录记忆行', () => {
   const capture = (name: string, args: Record<string, unknown>) =>
     buildTimeline(
       [
@@ -3801,15 +3801,15 @@ describe('memory_capture 记录记忆行', () => {
 
   it('摘要取标题，缺省时取正文首行；正文随行带出供展开显示（回执不带正文）', () => {
     expect(
-      capture('memory_capture', { title: ' 工具行规则 ', content: ' 第一行\n第二行 ' })
+      capture('memory_upsert', { title: ' 工具行规则 ', content: ' 第一行\n第二行 ' })
     ).toMatchObject({ summary: '工具行规则', memoryContent: '第一行\n第二行' });
-    expect(capture('memory_capture', { content: '第一行\n第二行' })).toMatchObject({
+    expect(capture('memory_upsert', { content: '第一行\n第二行' })).toMatchObject({
       summary: '第一行',
     });
   });
 
   it('正文为空或其它工具不带正文', () => {
-    expect(capture('memory_capture', { content: '  ' })).not.toHaveProperty('memoryContent');
+    expect(capture('memory_upsert', { content: '  ' })).not.toHaveProperty('memoryContent');
     expect(capture('memory_search', { query: 'q', content: 'x' })).toMatchObject({ summary: 'q' });
     expect(capture('memory_search', { query: 'q', content: 'x' })).not.toHaveProperty(
       'memoryContent'

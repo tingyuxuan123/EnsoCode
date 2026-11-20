@@ -36,7 +36,7 @@ export function BotInbox() {
     () => inboxSections(inbox, { routines, delegations }),
     [inbox, routines, delegations]
   );
-  const memoryWrites = usePendingMemoryWrites();
+  const memoryWrites = usePendingMemoryWrites().filter((write) => write.kind !== 'compile');
   const byId = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots]);
   const chatName = (chatId: string | null) => {
     const chat = chats.find((entry) => entry.id === chatId);

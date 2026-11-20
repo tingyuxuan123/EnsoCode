@@ -1,12 +1,5 @@
-import { CRYSTAL_MIN_SOURCES } from '@shared/memory/constants';
-import type {
-  CrystallizeResult,
-  InsightResult,
-  MemoryBriefDto,
-  MemoryGraphDto,
-  TreeGrouping,
-  TreeNodeDto,
-} from '@shared/memory/graphDto';
+import type { MemoryNoteDetail } from '@shared/memory/dto';
+import type { MemoryGraphDto, TreeGrouping, TreeNodeDto } from '@shared/memory/graphDto';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,46 +21,35 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useI18n } from '@/i18n';
-import { cn } from '@/lib/utils';
 import { MemoryTreeView } from './MemoryTreeView';
 
-// Do not pull Cytoscape and its layout engine into the Settings first paint.
 const MemoryGraphView = React.lazy(async () => ({
   default: (await import('./MemoryGraphView')).MemoryGraphView,
 }));
 
-/**
- * 知识视图：图谱 / 知识树两种浏览方式，共用「解读」与「结晶」两个动作。
- * 解读只读（LLM 生成 briefing），结晶会写库（走 createCrystal 的完整链路，含候选网）。
- */
-
-const GRAPH_LIMIT = 120;
-const TREE_LIMIT_PER_GROUP = 30;
-const EMPTY_GRAPH: MemoryGraphDto = { nodes: [], edges: [], totalEntities: 0 };
+const GRAPH_LIMIT = 150;
+const TREE_LIMIT_PER_GROUP = 40;
+const EMPTY_GRAPH: MemoryGraphDto = { nodes: [], edges: [], totalNotes: 0 };
 
 type Mode = 'graph' | 'tree';
 
 export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
   const { t } = useI18n();
   const [mode, setMode] = React.useState<Mode>('graph');
-  const [groupBy, setGroupBy] = React.useState<TreeGrouping>('unitType');
+  const [groupBy, setGroupBy] = React.useState<TreeGrouping>('type');
   const [graph, setGraph] = React.useState<MemoryGraphDto>(EMPTY_GRAPH);
   const [tree, setTree] = React.useState<TreeNodeDto[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [entityId, setEntityId] = React.useState<string | null>(null);
-  const [entityMemories, setEntityMemories] = React.useState<MemoryBriefDto[]>([]);
-  const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set());
-  const [insight, setInsight] = React.useState<InsightResult | null>(null);
-  const [interpreting, setInterpreting] = React.useState(false);
-  const [crystal, setCrystal] = React.useState<CrystallizeResult | null>(null);
-  const [crystallizing, setCrystallizing] = React.useState(false);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [detail, setDetail] = React.useState<MemoryNoteDetail | null>(null);
+  const [treeDialogDetail, setTreeDialogDetail] = React.useState<MemoryNoteDetail | null>(null);
 
   const reload = React.useCallback(() => {
     setLoading(true);
     const done = () => setLoading(false);
     if (mode === 'graph') {
       void window.electronAPI.memory
-        .graph({ limit: GRAPH_LIMIT, minMemories: 1 })
+        .graph({ limit: GRAPH_LIMIT, includeOrphans: true })
         .then(setGraph)
         .finally(done);
     } else {
@@ -82,6 +64,7 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
   const reloadRef = React.useRef(reload);
   reloadRef.current = reload;
   React.useEffect(() => window.electronAPI.memory.onChanged(() => reloadRef.current()), []);
+
   const seenRevision = React.useRef(revision);
   React.useEffect(() => {
     if (seenRevision.current === revision) return;
@@ -90,32 +73,30 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
   }, [revision, reload]);
 
   React.useEffect(() => {
-    if (!entityId) {
-      setEntityMemories([]);
+    if (!selectedId) {
+      setDetail(null);
       return;
     }
-    void window.electronAPI.memory.graphEntity(entityId).then(setEntityMemories);
-  }, [entityId]);
+    let cancelled = false;
+    void window.electronAPI.memory.detail(selectedId).then((next) => {
+      if (!cancelled) setDetail(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
-  const runInsight = async (request: { entityId?: string; memoryIds?: string[] }) => {
-    setInterpreting(true);
-    setInsight(null);
-    try {
-      setInsight(await window.electronAPI.memory.insight(request));
-    } finally {
-      setInterpreting(false);
+  const handleVerify = async (id: string) => {
+    const res = await window.electronAPI.memory.update(id, { status: 'verified' });
+    if (res.ok && res.note) {
+      setDetail(res.note);
+      if (treeDialogDetail?.id === id) setTreeDialogDetail(res.note);
+      reload();
     }
   };
 
-  const runCrystallize = async () => {
-    setCrystallizing(true);
-    try {
-      const result = await window.electronAPI.memory.crystallize({ memoryIds: [...selected] });
-      setCrystal(result);
-      if (result.ok) setSelected(new Set());
-    } finally {
-      setCrystallizing(false);
-    }
+  const handleOpenObsidian = (id: string) => {
+    void window.electronAPI.memory.openVault({ noteId: id, app: 'obsidian' });
   };
 
   const modeItems = [
@@ -123,19 +104,18 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
     { value: 'tree', label: t('Tree') },
   ];
   const groupItems = [
-    { value: 'unitType', label: t('By type') },
-    { value: 'entity', label: t('By entity') },
-    { value: 'time', label: t('By month') },
+    { value: 'type', label: t('By type') },
+    { value: 'status', label: t('By status') },
+    { value: 'space', label: t('By space') },
   ];
-  const enoughForCrystal = selected.size >= CRYSTAL_MIN_SOURCES;
 
   return (
     <div className="space-y-4" data-settings-row="memory.knowledge">
       <div>
-        <h3 className="font-medium text-[calc(14rem/14)]">{t('Knowledge')}</h3>
+        <h3 className="font-medium text-[calc(14rem/14)]">{t('Knowledge graph')}</h3>
         <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t(
-            'Browse what the agent knows as a graph or a tree, ask for an interpretation, and consolidate related memories into a crystal.'
+            'Browse [[wikilink]] connections as a graph or inspect notes grouped by category and trust status.'
           )}
         </p>
       </div>
@@ -161,7 +141,7 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
           <Select
             value={groupBy}
             items={groupItems}
-            onValueChange={(value) => setGroupBy(value as TreeGrouping)}
+            onValueChange={(value) => setGroupBy((value as TreeGrouping) || 'type')}
           >
             <SelectTrigger size="sm" className="w-36">
               <SelectValue />
@@ -174,29 +154,6 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
               ))}
             </SelectPopup>
           </Select>
-        )}
-        <span className="flex-1" />
-        {mode === 'tree' && (
-          <>
-            <span
-              className={cn(
-                'text-[calc(12rem/14)]',
-                enoughForCrystal ? 'text-foreground' : 'text-muted-foreground'
-              )}
-            >
-              {t('{{count}} selected', { count: String(selected.size) })}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!enoughForCrystal || crystallizing}
-              onClick={() => void runCrystallize()}
-            >
-              {crystallizing
-                ? t('Synthesizing…')
-                : t('Crystallize ({{min}}+)', { min: String(CRYSTAL_MIN_SOURCES) })}
-            </Button>
-          </>
         )}
       </div>
 
@@ -214,86 +171,88 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
           <MemoryGraphView
             graph={graph}
             loading={loading}
-            selectedId={entityId}
-            onSelect={setEntityId}
-            memories={entityMemories}
-            interpreting={interpreting}
-            onInterpret={(id) => void runInsight({ entityId: id })}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            detail={detail}
+            onVerify={(id) => void handleVerify(id)}
+            onOpenObsidian={handleOpenObsidian}
           />
         </React.Suspense>
       ) : (
         <MemoryTreeView
           tree={tree}
           loading={loading}
-          selected={selected}
-          interpreting={interpreting}
-          onToggle={(id) => {
-            const next = new Set(selected);
-            if (!next.delete(id)) next.add(id);
-            setSelected(next);
-          }}
-          onInterpretGroup={(group) => {
-            const ids = (group.children ?? [])
-              .map((c) => c.memoryId)
-              .filter((id): id is string => Boolean(id));
-            void runInsight({ memoryIds: ids });
+          onSelectNote={(id) => {
+            void window.electronAPI.memory.detail(id).then((d) => {
+              if (d) setTreeDialogDetail(d);
+            });
           }}
         />
       )}
 
-      <Dialog open={insight !== null} onOpenChange={(open) => !open && setInsight(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('Interpretation')}</DialogTitle>
-            {insight?.ok && (
-              <DialogDescription>
-                {t('Based on {{count}} memories', { count: String(insight.sourceCount ?? 0) })}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-          <DialogPanel>
-            {insight?.ok ? (
-              <p className="whitespace-pre-wrap text-[calc(13rem/14)]">{insight.text}</p>
-            ) : (
-              <p className="text-destructive text-[calc(13rem/14)]">{insight?.error}</p>
-            )}
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" size="sm" />}>{t('Close')}</DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={crystal !== null} onOpenChange={(open) => !open && setCrystal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {crystal?.ok ? t('Crystal created') : t('Nothing was written')}
-            </DialogTitle>
-            {crystal?.ok && <DialogDescription>{crystal.title}</DialogDescription>}
-          </DialogHeader>
-          <DialogPanel className="space-y-3">
-            {crystal?.ok ? (
-              <p className="whitespace-pre-wrap text-[calc(13rem/14)]">{crystal.content}</p>
-            ) : (
-              <>
-                <p className="text-destructive text-[calc(13rem/14)]">{crystal?.error}</p>
-                {crystal?.candidates && crystal.candidates.length > 0 && (
-                  <ul className="divide-y rounded-[6px] border">
-                    {crystal.candidates.map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                        <span className="truncate text-[calc(13rem/14)]">{c.title}</span>
-                        <Badge variant="secondary">{(c.similarity * 100).toFixed(0)}%</Badge>
-                      </li>
-                    ))}
-                  </ul>
+      <Dialog
+        open={treeDialogDetail !== null}
+        onOpenChange={(open) => !open && setTreeDialogDetail(null)}
+      >
+        <DialogContent className="sm:max-w-xl">
+          {treeDialogDetail && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{treeDialogDetail.title}</DialogTitle>
+                <DialogDescription>
+                  [[{treeDialogDetail.slug}]] · {treeDialogDetail.type} ·{' '}
+                  {treeDialogDetail.spaceLabel}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogPanel className="space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant={treeDialogDetail.status === 'verified' ? 'default' : 'outline'}>
+                    {t(
+                      treeDialogDetail.status === 'verified'
+                        ? 'Verified'
+                        : treeDialogDetail.status === 'draft'
+                          ? 'Draft'
+                          : 'Deprecated'
+                    )}
+                  </Badge>
+                  {treeDialogDetail.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      #{tag}
+                    </Badge>
+                  ))}
+                </div>
+                {treeDialogDetail.description && (
+                  <p className="text-muted-foreground text-[calc(12rem/14)]">
+                    {treeDialogDetail.description}
+                  </p>
                 )}
-              </>
-            )}
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" size="sm" />}>{t('Close')}</DialogClose>
-          </DialogFooter>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[6px] bg-muted/40 p-3 font-sans text-[calc(13rem/14)] leading-relaxed">
+                  {treeDialogDetail.body}
+                </pre>
+              </DialogPanel>
+              <DialogFooter>
+                {treeDialogDetail.status === 'draft' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleVerify(treeDialogDetail.id)}
+                  >
+                    {t('Mark verified')}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenObsidian(treeDialogDetail.id)}
+                >
+                  {t('Open in Obsidian')}
+                </Button>
+                <DialogClose render={<Button variant="outline" size="sm" />}>
+                  {t('Close')}
+                </DialogClose>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

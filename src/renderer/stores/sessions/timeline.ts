@@ -128,7 +128,7 @@ export type TimelineItem =
       plan?: { title: string; text: string } | null;
       /** 联系主 agent / 队员、子代理 send 发出的正文，或子代理 spawn 交代的任务；其它工具缺省 */
       sentMessage?: string;
-      /** memory_capture 记下的正文（写入回执不带正文）；其它工具缺省 */
+      /** memory_upsert 记下的正文（写入回执不带正文）；其它工具缺省 */
       memoryContent?: string;
       /** ask_user 当时的问题、选项与用户的回答；其它工具缺省 */
       ask?: AskUserView;
@@ -262,6 +262,8 @@ const SUMMARY_KEYS = [
   'command',
   'pattern',
   'query',
+  'note',
+  'title',
   'url',
   'description',
   'summary',
@@ -690,12 +692,12 @@ function extractSubagentHeader(
     : { op: operation as SubagentOp, title };
 }
 
-/** memory_capture 的标题（缺省取正文首行）与正文 */
+/** memory_upsert 的标题（缺省取正文首行）与正文 */
 function extractCapturedMemory(
   name: string,
   args: unknown
 ): { title: string; content: string } | null {
-  if (name !== 'memory_capture' || !args || typeof args !== 'object') return null;
+  if (name !== 'memory_upsert' || !args || typeof args !== 'object') return null;
   const { title, content } = args as Record<string, unknown>;
   if (typeof content !== 'string' || !content.trim()) return null;
   const text = content.trim();

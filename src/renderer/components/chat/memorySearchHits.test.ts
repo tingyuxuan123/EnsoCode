@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { parseMemoryCapture, parseMemorySearchHits } from './memorySearchHits';
 
 const hit = (over: Record<string, unknown> = {}) => ({
-  id: 'm1',
+  id: 'proj:3e8d::wiki/decisions/rtk.md',
+  slug: 'decisions/rtk',
   title: 'RTK 采用官方 prebuilt',
-  content: '随应用分发，默认开启',
-  unitType: 'decision',
+  snippet: '随应用分发，默认开启',
+  type: 'decisions',
+  status: 'verified',
   spaceId: 'proj:3e8d',
-  relevance: 0.955,
-  isLatest: true,
   ...over,
 });
 
@@ -17,25 +17,33 @@ describe('parseMemorySearchHits', () => {
     const output = JSON.stringify({
       results: [
         hit(),
-        hit({ id: 'm2', spaceId: 'global', unitType: 'preference', relevance: 0.8 }),
+        hit({
+          id: 'global::wiki/preferences/lang.md',
+          slug: 'preferences/lang',
+          spaceId: 'global',
+          type: 'preferences',
+          status: 'draft',
+        }),
       ],
     });
     expect(parseMemorySearchHits(output)).toEqual([
       {
-        id: 'm1',
+        id: 'proj:3e8d::wiki/decisions/rtk.md',
+        slug: 'decisions/rtk',
         title: 'RTK 采用官方 prebuilt',
         content: '随应用分发，默认开启',
-        unitType: 'decision',
+        noteType: 'decisions',
+        status: 'verified',
         space: 'project',
-        relevance: 0.955,
       },
       {
-        id: 'm2',
+        id: 'global::wiki/preferences/lang.md',
+        slug: 'preferences/lang',
         title: 'RTK 采用官方 prebuilt',
         content: '随应用分发，默认开启',
-        unitType: 'preference',
+        noteType: 'preferences',
+        status: 'draft',
         space: 'global',
-        relevance: 0.8,
       },
     ]);
   });
@@ -44,30 +52,22 @@ describe('parseMemorySearchHits', () => {
     expect(parseMemorySearchHits('{"results":[]}')).toEqual([]);
   });
 
-  it('旧 score 历史仍可展示正文，但不把混分当相关度；非法概率置空', () => {
-    for (const relevance of [undefined, null, '0.9', 1.5, -2]) {
-      const parsed = parseMemorySearchHits(
-        JSON.stringify({ results: [hit({ relevance, score: 0.95 })] })
-      );
-      expect(parsed?.[0]).toMatchObject({ id: 'm1', relevance: null });
-    }
-  });
-
   it('可选字段缺失或非法时置空，不拖垮整条结果', () => {
     expect(
       parseMemorySearchHits(
         JSON.stringify({
-          results: [hit({ unitType: undefined, spaceId: 'team:x', relevance: 'high' })],
+          results: [hit({ type: undefined, status: 'unknown', spaceId: 'team:x' })],
         })
       )
     ).toEqual([
       {
-        id: 'm1',
+        id: 'proj:3e8d::wiki/decisions/rtk.md',
+        slug: 'decisions/rtk',
         title: 'RTK 采用官方 prebuilt',
         content: '随应用分发，默认开启',
-        unitType: null,
+        noteType: null,
+        status: null,
         space: null,
-        relevance: null,
       },
     ]);
   });
@@ -80,7 +80,7 @@ describe('parseMemorySearchHits', () => {
     ['非对象', '[1,2]'],
     ['缺 results', '{"error":"no_project"}'],
     ['results 非数组', '{"results":"x"}'],
-    ['条目缺 content', JSON.stringify({ results: [hit({ content: undefined })] })],
+    ['条目缺正文', JSON.stringify({ results: [hit({ snippet: undefined })] })],
     ['条目 id 为空', JSON.stringify({ results: [hit({ id: '' })] })],
     ['条目非对象', '{"results":[null]}'],
   ])('形状不符（%s）返回 null，交给调用方回退原文', (_label, output) => {
@@ -88,69 +88,68 @@ describe('parseMemorySearchHits', () => {
   });
 });
 
-describe('parseMemoryCapture', () => {
-  const inserted = (over: Record<string, unknown> = {}) =>
+describe('parseMemoryCapture (memory_upsert)', () => {
+  const receipt = (over: Record<string, unknown> = {}) =>
     JSON.stringify({
-      status: 'inserted',
-      memory: {
-        id: 'm9',
-        title: '工具行不能整段隐藏输出',
-        unitType: 'learning',
-        spaceId: 'proj:3e8d',
-        importance: 0.75,
-      },
+      status: 'created',
+      written: true,
+      spaceId: 'proj:3e8d',
+      relPath: 'wiki/incidents/tool-row.md',
+      slug: 'incidents/tool-row',
+      title: '工具行不能整段隐藏输出',
+      type: 'incidents',
+      noteStatus: 'draft',
       ...over,
     });
 
-  it('写入成功：回执不带正文，正文取自调用参数', () => {
-    expect(parseMemoryCapture(inserted(), '捎带提醒会被一起藏掉')).toEqual({
+  it('写入/更新成功：正文取自调用参数', () => {
+    expect(parseMemoryCapture(receipt(), '捎带提醒会被一起藏掉')).toEqual({
       written: true,
-      deduplicated: false,
+      action: 'created',
       memory: {
-        id: 'm9',
+        id: 'proj:3e8d::wiki/incidents/tool-row.md',
+        slug: 'incidents/tool-row',
         title: '工具行不能整段隐藏输出',
         content: '捎带提醒会被一起藏掉',
-        unitType: 'learning',
+        noteType: 'incidents',
+        status: 'draft',
         space: 'project',
-        relevance: null,
       },
     });
-    expect(parseMemoryCapture(inserted({ deduplicated: true }), 'x')).toMatchObject({
+    expect(parseMemoryCapture(receipt({ status: 'updated' }), 'x')).toMatchObject({
       written: true,
-      deduplicated: true,
+      action: 'updated',
     });
   });
 
-  it('发现相似记忆时未写入：列出候选，以相似度作分数', () => {
-    const output = JSON.stringify({
-      status: 'candidates_found',
+  it('Bot 写共享空间进入待审批队列', () => {
+    const out = JSON.stringify({
+      status: 'pending_review',
       written: false,
-      message: 'Nothing was written: similar memories already exist.',
-      candidates: [
-        hit({ id: 'c1', spaceId: undefined, score: undefined, similarity: 0.9312, bm25Top1: true }),
-      ],
+      pendingId: 'pend-1',
+      spaceId: 'global',
+      slug: 'notes/shared',
+      title: '共享规则',
     });
-    expect(parseMemoryCapture(output, '新正文')).toEqual({
+    expect(parseMemoryCapture(out, '正文')).toEqual({
       written: false,
-      candidates: [
-        {
-          id: 'c1',
-          title: 'RTK 采用官方 prebuilt',
-          content: '随应用分发，默认开启',
-          unitType: 'decision',
-          space: null,
-          relevance: 0.9312,
-        },
-      ],
+      pendingReview: true,
+      memory: {
+        id: 'pend-1',
+        slug: 'notes/shared',
+        title: '共享规则',
+        content: '正文',
+        noteType: null,
+        status: 'draft',
+        space: 'global',
+      },
     });
   });
 
   it.each([
     ['错误文本', 'Memory is disabled', 'x'],
-    ['写入成功但缺正文参数', inserted(), undefined],
-    ['memory 非对象', inserted({ memory: null }), 'x'],
-    ['候选非数组', '{"status":"candidates_found","candidates":null}', 'x'],
-    ['未知状态', '{"status":"skipped"}', 'x'],
+    ['写入成功但缺正文参数', receipt(), undefined],
+    ['未知状态', '{"status":"skipped","title":"x"}', 'x'],
   ])('形状不符（%s）返回 null，交给调用方回退原文', (_label, output, content) => {
     expect(parseMemoryCapture(output, content)).toBeNull();
   });

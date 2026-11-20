@@ -19,7 +19,7 @@ src/main/
   services/             纯逻辑，不碰 ipcMain
     agentHost.ts        worker 生命周期、命令下发与事件广播
     bots/               成员 / 群聊 / 委派 / 群任务宿主
-    memory/             记忆库、向量索引、蒸馏与待审批写入
+    memory/             Markdown Wiki 记忆库、FTS5 派生索引、会话编译与待审批写入
     browserHost.ts      内嵌浏览器宿主
     pairHost.ts         手机配对、远程会话与中继
     design/             设计画布、预览服务与引擎桥
@@ -80,4 +80,4 @@ debounce 中的会话元数据会丢，表现得很像“持久化 bug”。
 - [shell-scheduling.md](shell-scheduling.md) —— 命令让位与截止、进程移交、回执与失败展示
 - [windows.md](windows.md) —— 多窗口、无边框标题栏、macOS 红绿灯
 - [settings-persistence.md](settings-persistence.md) —— settings.json 缓存、防抖、原子写、多窗口广播
-- [native-modules.md](native-modules.md) —— better-sqlite3 / sqlite-vec / level 与 pnpm 构建脚本
+- [native-modules.md](native-modules.md) —— better-sqlite3 (FTS5) / level 与 pnpm 构建脚本

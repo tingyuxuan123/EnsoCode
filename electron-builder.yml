@@ -7,10 +7,6 @@ protocols:
 directories:
   buildResources: build
 extraResources:
-  # 配合 files 里的 sqlite-vec-windows-x64：from/to 拷进来的文件不吃 asarUnpack，
-  # 而 loadExtension 读不了 asar 内的 dll，真实文件放到 app.asar.unpacked
-  - from: node_modules/.pnpm/sqlite-vec-windows-x64@0.1.9/node_modules/sqlite-vec-windows-x64
-    to: app.asar.unpacked/node_modules/sqlite-vec-windows-x64
   - from: build/trayTemplate.png
     to: trayTemplate.png
   - from: build/trayTemplate@2x.png
@@ -70,10 +66,6 @@ files:
   - '!node_modules/koffi/cnoke.cjs'
   - '!node_modules/koffi/src/koffi/src/trampolines.cjs'
   - '!node_modules/koffi/src/**/*.{cc,hh,inc,def,S,asm,txt}'
-  # 收集器在 Windows 上不跟进 pnpm junction，漏掉 sqlite-vec 平台包（向量检索退回扫 BLOB）；
-  # 直接拷真实目录供 require.resolve 定位（dll 本体见 extraResources），其他平台没有该目录时跳过
-  - from: node_modules/.pnpm/sqlite-vec-windows-x64@0.1.9/node_modules/sqlite-vec-windows-x64
-    to: node_modules/sqlite-vec-windows-x64
   # node-llama-cpp 平台预编译全部按需下载（含 CPU / Metal / CUDA / Vulkan）
   - '!node_modules/@node-llama-cpp/**'
   - '!node_modules/.pnpm/@node-llama-cpp+*/**'
@@ -106,9 +98,7 @@ electronLanguages:
   - zh_CN
   - zh-TW
   - zh_TW
-# sqlite-vec 是 dlopen 的动态库，留在 asar 内无法加载（db.ts 会回退到 app.asar.unpacked）
 asarUnpack:
-  - node_modules/sqlite-vec-*/**
   # onnxruntime-node 的 .node 绑定与 bin/ 下的 ORT 动态库同样不能从 asar 内加载（onnx.ts 动态 require）
   - node_modules/onnxruntime-node/**/*.node
   - node_modules/onnxruntime-node/bin/**

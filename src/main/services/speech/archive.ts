@@ -2,11 +2,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import {
-  type DownloadProgress,
-  ModelDownloadError,
-  sha256File,
-} from '../memory/embedding/downloader';
+import { type DownloadProgress, ModelDownloadError, sha256File } from '../llama/downloader';
 import type { SpeechModelSpec } from './model';
 
 const PART = '.archive.part';

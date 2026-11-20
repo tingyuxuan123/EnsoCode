@@ -14,11 +14,18 @@ const unpacked = (file) => file.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1
 const isWindows = process.platform === 'win32';
 
 const checks = {
-  'better-sqlite3 + sqlite-vec': () => {
+  'better-sqlite3 (fts5)': () => {
     const Database = appRequire('better-sqlite3');
     const db = new Database(':memory:');
-    db.loadExtension(unpacked(appRequire('sqlite-vec').getLoadablePath()));
-    return db.prepare('select vec_version() as v').get().v;
+    try {
+      db.exec("CREATE VIRTUAL TABLE t USING fts5(body, tokenize='trigram')");
+      db.prepare('INSERT INTO t VALUES (?)').run('Collabra Markdown Wiki 记忆索引');
+      const row = db.prepare("SELECT body FROM t WHERE t MATCH 'Wiki'").get();
+      if (!row) throw new Error('fts5 trigram match missing');
+      return 'fts5-trigram-ok';
+    } finally {
+      db.close();
+    }
   },
   'classic-level': async () => {
     const { Level } = await appImport('level');

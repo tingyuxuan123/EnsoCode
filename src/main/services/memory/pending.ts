@@ -1,164 +1,237 @@
 import { randomUUID } from 'node:crypto';
+import type { UpsertMode } from '@shared/memory/constants';
+import type { PendingMemoryWriteDto, PendingMemoryWriteKind } from '@shared/memory/dto';
+import {
+  normalizeNoteType,
+  parseMarkdownNote,
+  patchMarkdownSection,
+  relPathToSlug,
+  serializeMarkdownNote,
+} from '@shared/memory/markdown';
 import type Database from 'better-sqlite3';
-import { createCrystal } from './crystal';
-import { type CreateMemoryOptions, createMemory } from './store';
-import type { CreateMemoryInput, Memory } from './types';
-
-/**
- * Bot 会话写 project / global 空间的待审批队列：批准前不进 memories（不参与检索、去重、KG），
- * 批准时按原请求真正写入；拒绝只删队列行。
- */
-export type PendingWriteKind = 'capture' | 'crystallize';
+import type { VaultBindingStore } from './bindings';
+import { syncSpaceIndex } from './indexDb';
+import { resolveTargetRelPath } from './operations';
+import { appendVaultLog, ensureVaultScaffold, readNoteFile, writeNoteAtomic } from './vault';
 
 export interface PendingWriteInput {
-  kind: PendingWriteKind;
+  kind: PendingMemoryWriteKind;
   spaceId: string;
-  title: string | null;
-  content: string;
   botId: string | null;
   chatId: string | null;
-  /** 入队前已做过密钥脱敏 */
+  note?: string;
+  title: string;
+  type: string;
+  description?: string;
+  mode: UpsertMode;
+  section?: string;
+  tags?: string[];
+  sources?: string[];
+  resource?: string;
+  staleAfter?: string;
+  proposedBody: string;
   redacted: boolean;
-  /** capture：CreateMemoryInput 其余字段；crystallize：{ sourceIds, force? } */
-  payload: Record<string, unknown>;
 }
 
-export interface PendingWrite extends PendingWriteInput {
-  id: string;
-  createdAt: string;
-}
-
-interface PendingRow {
+interface RawPendingRow {
   id: string;
   kind: string;
   space_id: string;
-  title: string | null;
-  content: string;
-  payload: string;
   bot_id: string | null;
   chat_id: string | null;
+  target_rel_path: string;
+  slug: string;
+  title: string;
+  type: string;
+  description: string | null;
+  mode: string;
+  section: string | null;
+  tags_json: string;
+  sources_json: string;
+  resource: string | null;
+  stale_after: string | null;
+  existing_body: string | null;
+  proposed_body: string;
   redacted: number;
   created_at: string;
 }
 
-function toPending(row: PendingRow): PendingWrite {
-  let payload: Record<string, unknown> = {};
+function parseJsonStrings(raw: string): string[] {
   try {
-    const parsed: unknown = JSON.parse(row.payload);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      payload = parsed as Record<string, unknown>;
-    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
   } catch {
-    /* 坏行按空载荷处理，批准时由创建校验拒绝 */
+    return [];
   }
+}
+
+function toDto(row: RawPendingRow, spaceLabel: (spaceId: string) => string): PendingMemoryWriteDto {
   return {
     id: row.id,
-    kind: row.kind === 'crystallize' ? 'crystallize' : 'capture',
+    kind: row.kind === 'compile' ? 'compile' : 'agent',
     spaceId: row.space_id,
-    title: row.title,
-    content: row.content,
+    spaceLabel: spaceLabel(row.space_id),
     botId: row.bot_id,
     chatId: row.chat_id,
+    targetRelPath: row.target_rel_path,
+    slug: row.slug,
+    title: row.title,
+    type: row.type,
+    description: row.description,
+    mode: (row.mode === 'append' || row.mode === 'section' ? row.mode : 'replace') as UpsertMode,
+    section: row.section,
+    existingBody: row.existing_body,
+    proposedBody: row.proposed_body,
     redacted: row.redacted === 1,
-    payload,
     createdAt: row.created_at,
   };
 }
 
 export function queuePendingWrite(
   db: Database.Database,
+  bindings: VaultBindingStore,
   input: PendingWriteInput,
   now: Date = new Date()
-): PendingWrite {
-  const pending: PendingWrite = { ...input, id: randomUUID(), createdAt: now.toISOString() };
+): PendingMemoryWriteDto {
+  const space = bindings.resolveSpace(input.spaceId);
+  const safeType = normalizeNoteType(input.type);
+  const target = resolveTargetRelPath(db, input.spaceId, input.note, input.title, safeType);
+  const existingRaw = readNoteFile(space.rootPath, target.relPath);
+  const existingBody = existingRaw ? parseMarkdownNote(existingRaw, input.title).body : null;
+  const slug = relPathToSlug(target.relPath);
+  const id = randomUUID();
+  const createdAt = now.toISOString();
+
   db.prepare(
-    `INSERT INTO pending_writes (id, kind, space_id, title, content, payload, bot_id, chat_id, redacted, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO pending_writes (
+       id, kind, space_id, bot_id, chat_id, target_rel_path, slug, title, type,
+       description, mode, section, tags_json, sources_json, resource, stale_after,
+       existing_body, proposed_body, redacted, status, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`
   ).run(
-    pending.id,
-    pending.kind,
-    pending.spaceId,
-    pending.title,
-    pending.content,
-    JSON.stringify(pending.payload),
-    pending.botId,
-    pending.chatId,
-    pending.redacted ? 1 : 0,
-    pending.createdAt
+    id,
+    input.kind,
+    input.spaceId,
+    input.botId,
+    input.chatId,
+    target.relPath,
+    slug,
+    input.title,
+    safeType,
+    input.description ?? null,
+    input.mode,
+    input.section ?? null,
+    JSON.stringify(input.tags ?? []),
+    JSON.stringify(input.sources ?? []),
+    input.resource ?? null,
+    input.staleAfter ?? null,
+    existingBody,
+    input.proposedBody,
+    input.redacted ? 1 : 0,
+    createdAt
   );
-  return pending;
+
+  const row = db.prepare('SELECT * FROM pending_writes WHERE id = ?').get(id) as RawPendingRow;
+  return toDto(row, (s) => s);
 }
 
-export function listPendingWrites(db: Database.Database): PendingWrite[] {
-  return (
-    db.prepare('SELECT * FROM pending_writes ORDER BY created_at, id').all() as PendingRow[]
-  ).map(toPending);
+export function listPendingWrites(
+  db: Database.Database,
+  spaceLabel: (spaceId: string) => string = (s) => s
+): PendingMemoryWriteDto[] {
+  const rows = db
+    .prepare(
+      "SELECT * FROM pending_writes WHERE status = 'pending' ORDER BY created_at ASC, id ASC"
+    )
+    .all() as RawPendingRow[];
+  return rows.map((row) => toDto(row, spaceLabel));
 }
 
 export function rejectPendingWrite(db: Database.Database, id: string): boolean {
-  return db.prepare('DELETE FROM pending_writes WHERE id = ?').run(id).changes > 0;
+  return (
+    db
+      .prepare("UPDATE pending_writes SET status = 'rejected' WHERE id = ? AND status = 'pending'")
+      .run(id).changes > 0
+  );
 }
 
-const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
-
-function captureInput(pending: PendingWrite, force: boolean): CreateMemoryInput {
-  const p = pending.payload;
-  return {
-    content: pending.content,
-    title: pending.title,
-    spaceId: pending.spaceId,
-    source: 'agent',
-    unitType: (str(p.unitType) as CreateMemoryInput['unitType']) ?? null,
-    ...(str(p.unitTypeSource)
-      ? { unitTypeSource: p.unitTypeSource as CreateMemoryInput['unitTypeSource'] }
-      : {}),
-    ...(typeof p.importance === 'number' ? { importance: p.importance } : {}),
-    eventStart: str(p.eventStart) ?? null,
-    eventEnd: str(p.eventEnd) ?? null,
-    evolvesFromId: str(p.evolvesFromId) ?? null,
-    evolvesRelation: (str(p.evolvesRelation) as CreateMemoryInput['evolvesRelation']) ?? null,
-    force,
-  };
-}
-
-/**
- * 批准即「看过内容仍要写入」：先按原请求写（保留精确去重），撞相似候选再 force 写入。
- * 创建失败（源记忆已失效等）保留队列行，交给用户拒绝。
- */
-export async function approvePendingWrite(
+export function approvePendingWrite(
   db: Database.Database,
   id: string,
-  opts: CreateMemoryOptions
-): Promise<{ ok: true; memory: Memory } | { ok: false; error: string }> {
-  const row = db.prepare('SELECT * FROM pending_writes WHERE id = ?').get(id) as
-    | PendingRow
-    | undefined;
-  if (!row) return { ok: false, error: 'Pending memory write not found.' };
-  const pending = toPending(row);
-  const create = (force: boolean) => {
-    if (pending.kind === 'capture') return createMemory(db, captureInput(pending, force), opts);
-    const sourceIds = Array.isArray(pending.payload.sourceIds)
-      ? pending.payload.sourceIds.filter((item): item is string => typeof item === 'string')
-      : [];
-    return createCrystal(
-      db,
-      {
-        content: pending.content,
-        title: pending.title ?? '',
-        sourceIds,
-        spaceId: pending.spaceId,
-        force,
-      },
-      opts
-    );
-  };
-  try {
-    let result = await create(pending.payload.force === true);
-    if (result.status !== 'inserted') result = await create(true);
-    if (result.status !== 'inserted') return { ok: false, error: 'Memory was not written.' };
-    rejectPendingWrite(db, id);
-    return { ok: true, memory: result.memory };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  bindings: VaultBindingStore,
+  opts: { language?: string; now?: Date; onSelfWrite?: (rootPath: string) => void } = {}
+): { ok: boolean; relPath?: string; spaceId?: string; error?: string } {
+  const row = db
+    .prepare("SELECT * FROM pending_writes WHERE id = ? AND status = 'pending'")
+    .get(id) as RawPendingRow | undefined;
+  if (!row) return { ok: false, error: 'Pending write not found.' };
+
+  const now = opts.now ?? new Date();
+  const isoNow = now.toISOString();
+  const space = bindings.resolveSpace(row.space_id);
+  ensureVaultScaffold(space.rootPath, space.preset, opts.language ?? 'zh', space.isExternal);
+
+  const existingRaw = readNoteFile(space.rootPath, row.target_rel_path);
+  const existingParsed = existingRaw ? parseMarkdownNote(existingRaw, row.title) : null;
+
+  let nextBody: string;
+  if (!existingParsed || row.mode === 'replace') {
+    nextBody = row.proposed_body.trim();
+  } else if (row.mode === 'section' && row.section) {
+    nextBody = patchMarkdownSection(existingParsed.body, row.section, row.proposed_body);
+  } else {
+    const prev = existingParsed.body.trimEnd();
+    nextBody = prev ? `${prev}\n\n${row.proposed_body.trim()}` : row.proposed_body.trim();
   }
+
+  const tags = [
+    ...new Set([...(existingParsed?.frontmatter.tags ?? []), ...parseJsonStrings(row.tags_json)]),
+  ];
+  const sources = [
+    ...new Set([
+      ...(existingParsed?.frontmatter.sources ?? []),
+      ...parseJsonStrings(row.sources_json),
+    ]),
+  ];
+
+  const markdown = serializeMarkdownNote(
+    {
+      type: row.type,
+      title: row.title,
+      ...(row.description
+        ? { description: row.description }
+        : existingParsed?.frontmatter.description
+          ? { description: existingParsed.frontmatter.description }
+          : {}),
+      status: 'verified',
+      tags,
+      ...(row.resource
+        ? { resource: row.resource }
+        : existingParsed?.frontmatter.resource
+          ? { resource: existingParsed.frontmatter.resource }
+          : {}),
+      generated: { by: row.bot_id ? `bot:${row.bot_id}` : 'collabra-agent', at: row.created_at },
+      verified: { by: 'user', at: isoNow },
+      ...(row.stale_after
+        ? { stale_after: row.stale_after }
+        : existingParsed?.frontmatter.stale_after
+          ? { stale_after: existingParsed.frontmatter.stale_after }
+          : {}),
+      sources,
+      extra: existingParsed?.frontmatter.extra ?? {},
+    },
+    nextBody
+  );
+
+  opts.onSelfWrite?.(space.rootPath);
+  const writtenRel = writeNoteAtomic(space.rootPath, row.target_rel_path, markdown);
+  appendVaultLog(space.rootPath, {
+    action: existingParsed ? 'update' : 'create',
+    slug: relPathToSlug(writtenRel),
+    detail: `${row.title} (approved)`,
+    now,
+  });
+  syncSpaceIndex(db, row.space_id, space.rootPath, { updateManagedIndex: true });
+  db.prepare("UPDATE pending_writes SET status = 'approved' WHERE id = ?").run(id);
+  return { ok: true, relPath: writtenRel, spaceId: row.space_id };
 }

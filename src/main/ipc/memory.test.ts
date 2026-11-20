@@ -1,444 +1,138 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  handlers: new Map<string, (...args: any[]) => unknown>(),
-  db: { close: vi.fn() },
-  openExistingMemoryDb: vi.fn(),
-  listMemoriesForAdmin: vi.fn(() => ({ items: [], total: 0 })),
-  getMemoryDetail: vi.fn(() => null),
-  archiveMemory: vi.fn(() => null),
-  restoreMemory: vi.fn(() => null),
-  deleteMemoryPermanently: vi.fn(() => false),
-  clearFinishedMemoryJobs: vi.fn(() => 0),
-  getMemoryStats: vi.fn(),
-  listPendingEvolves: vi.fn(() => []),
-  reviewEvolvesEdge: vi.fn(() => null),
-  toMemoryJobsSnapshot: vi.fn(() => ({ distill: [], kg: [], reembed: null })),
-  getMemoryDistillJobs: vi.fn(() => []),
-  getMemoryKgJobs: vi.fn(() => []),
-  getMemoryKgFailedCount: vi.fn(() => 0),
-  retryFailedMemoryKg: vi.fn(() => 0),
-  getMemoryReembedProgress: vi.fn(() => null),
-  distillSessionNow: vi.fn(async () => true),
-  getMemoryCompletion: vi.fn(
-    async () => null as null | ((s: string, u: string) => Promise<string>)
-  ),
-  listPendingWrites: vi.fn((): unknown[] => []),
-  rejectPendingWrite: vi.fn(() => false),
-  approvePendingMemoryWrite: vi.fn(
-    async (): Promise<{ ok: boolean; error?: string }> => ({ ok: false, error: 'x' })
-  ),
-  editMemory: vi.fn((): unknown => null),
-  registry: null as { projection: () => unknown } | null,
-  settings: null as Record<string, unknown> | null,
-  send: vi.fn(),
-  shellSend: vi.fn(),
-}));
+type Handler = (event: { sender: { id: number } }, ...args: unknown[]) => unknown;
+const handlers = new Map<string, Handler>();
+const showOpenDialog = vi.fn();
+const openPath = vi.fn();
+const openExternal = vi.fn();
 
 vi.mock('electron', () => ({
-  app: { getPath: vi.fn(() => '/user-data') },
-  BrowserWindow: {
-    // 主窗口是 shell + WebContentsView：直接发给 shell webContents 渲染层收不到
-    getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: mocks.shellSend } }],
+  app: { getPath: () => os.tmpdir() },
+  BrowserWindow: { fromWebContents: () => null },
+  dialog: { showOpenDialog: (...args: unknown[]) => showOpenDialog(...args) },
+  shell: {
+    openPath: (...args: unknown[]) => openPath(...args),
+    openExternal: (...args: unknown[]) => openExternal(...args),
   },
   ipcMain: {
-    handle: vi.fn((channel: string, handler: (...args: any[]) => unknown) => {
-      mocks.handlers.set(channel, handler);
-    }),
+    handle: (channel: string, fn: Handler) => handlers.set(channel, fn),
   },
 }));
-// memory.ts 动态 import('./agent') 取项目/会话权威；真模块会拉进 utilityProcess 与 vite 专属的 ?modulePath
-vi.mock('./agent', () => ({
-  getSourceAuthorityRegistry: () => mocks.registry,
-}));
-vi.mock('./settings', () => ({ readSettings: () => mocks.settings }));
-vi.mock('../windows/MainWindow', () => ({ isMainWebContents: (id: number) => id === 1 }));
-vi.mock('../windows/SettingsWindow', () => ({ isSettingsWebContents: () => false }));
-vi.mock('../windows/createAppWindow', () => ({
-  sendToAllWindows: (channel: string, ...args: unknown[]) => mocks.send(channel, ...args),
-}));
-vi.mock('../services/memoryAdmin', () => ({
-  openExistingMemoryDb: mocks.openExistingMemoryDb,
-  listMemoriesForAdmin: mocks.listMemoriesForAdmin,
-  getMemoryDetail: mocks.getMemoryDetail,
-  archiveMemory: mocks.archiveMemory,
-  restoreMemory: mocks.restoreMemory,
-  deleteMemoryPermanently: mocks.deleteMemoryPermanently,
-  clearFinishedMemoryJobs: mocks.clearFinishedMemoryJobs,
-  getMemoryStats: mocks.getMemoryStats,
-  listPendingEvolves: mocks.listPendingEvolves,
-  reviewEvolvesEdge: mocks.reviewEvolvesEdge,
-  toMemoryJobsSnapshot: mocks.toMemoryJobsSnapshot,
-}));
-vi.mock('../services/memoryHost', () => ({
-  getMemoryDistillJobs: mocks.getMemoryDistillJobs,
-  getMemoryKgJobs: mocks.getMemoryKgJobs,
-  getMemoryKgFailedCount: mocks.getMemoryKgFailedCount,
-  retryFailedMemoryKg: mocks.retryFailedMemoryKg,
-  getMemoryReembedProgress: mocks.getMemoryReembedProgress,
-  distillSessionNow: mocks.distillSessionNow,
-  getMemoryCompletion: mocks.getMemoryCompletion,
-  getMemoryEmbedder: vi.fn(async () => null),
-  memoryDatabase: vi.fn(() => mocks.db),
-  memoryLanguage: vi.fn(() => 'en'),
-  refreshMemoryEmbedding: vi.fn(),
-  getMemoryEmbeddingError: vi.fn(() => null),
-  setMemoryChangeListener: vi.fn(),
-  approvePendingMemoryWrite: mocks.approvePendingMemoryWrite,
-  editMemory: mocks.editMemory,
-}));
-vi.mock('../services/memory/pending', () => ({
-  listPendingWrites: mocks.listPendingWrites,
-  rejectPendingWrite: mocks.rejectPendingWrite,
-}));
-vi.mock('../services/memory/graph', () => ({
-  buildMemoryGraph: vi.fn(() => ({ nodes: [], edges: [], totalEntities: 0 })),
-  buildMemoryTree: vi.fn(() => []),
-  entityMemoryIds: vi.fn(() => []),
-  memoriesForEntity: vi.fn(() => []),
-  memoriesForPrompt: vi.fn(() => ({ text: '', count: 0 })),
-}));
-vi.mock('../services/memory/crystal', () => ({ createCrystal: vi.fn() }));
-vi.mock('../services/memory/distill', () => ({ looseParse: vi.fn(() => null) }));
-vi.mock('../services/memory/store', () => ({ getMemory: vi.fn(() => null) }));
-vi.mock('../services/memoryModels', () => ({
-  listEmbeddingModels: vi.fn(() => []),
-  startEmbeddingModelDownload: vi.fn(async () => true),
-  cancelEmbeddingModelDownload: vi.fn(() => true),
-  deleteEmbeddingModel: vi.fn(() => true),
-  setEmbeddingProgressSink: vi.fn(),
-}));
-vi.mock('../services/chatModels', () => ({
-  listChatModels: vi.fn(() => []),
-  startChatModelDownload: vi.fn(async () => true),
-  cancelChatModelDownload: vi.fn(() => true),
-  deleteChatModel: vi.fn(() => true),
-  setChatModelProgressSink: vi.fn(),
-}));
 
+vi.mock('../windows/MainWindow', () => ({ isMainWebContents: (id: number) => id === 1 }));
+vi.mock('../windows/SettingsWindow', () => ({ isSettingsWebContents: (id: number) => id === 2 }));
+vi.mock('../windows/createAppWindow', () => ({ sendToAllWindows: vi.fn() }));
+vi.mock('./settings', () => ({ readSettings: () => ({}) }));
+vi.mock('./agent', () => ({ getSourceAuthorityRegistry: () => null }));
+
+import { closeMemoryDb, setMemoryRootForTest } from '../services/memoryHost';
 import { registerMemoryHandlers } from './memory';
 
-const event = { sender: { id: 1 } };
-const handler = (channel: string) => {
-  const value = mocks.handlers.get(channel);
-  if (!value) throw new Error(`handler not registered: ${channel}`);
-  return value;
-};
+const dirs: string[] = [];
+function tmpDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'enso-memory-ipc-'));
+  dirs.push(dir);
+  return dir;
+}
 
-beforeAll(registerMemoryHandlers);
+const trusted = { sender: { id: 1 } };
+const untrusted = { sender: { id: 999 } };
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.openExistingMemoryDb.mockReturnValue(mocks.db);
-  mocks.registry = null;
-  mocks.settings = null;
+  handlers.clear();
+  showOpenDialog.mockReset();
+  openPath.mockReset();
+  openExternal.mockReset();
+  setMemoryRootForTest(tmpDir());
+  registerMemoryHandlers();
 });
 
-describe('memory IPC', () => {
-  it('scratch 列表与旧空间标为临时会话，手动提炼不写入隐藏项目 space', async () => {
-    const projectId = 'scratch-hidden';
-    mocks.registry = {
-      projection: () => ({
-        projects: [{ projectId, kind: 'scratch', canonicalPath: '/user-data/scratch/internal' }],
-        conversations: [{ conversationId: 'temporary', projectId, sessionFile: 'temp.jsonl' }],
-      }),
-    };
-    const sessions = await handler(IPC_CHANNELS.MEMORY_DISTILLABLE_SESSIONS)(event);
-    expect(sessions).toMatchObject([
-      { sessionId: 'temporary', projectId: null, projectName: 'Temporary chats' },
-    ]);
-    await handler(IPC_CHANNELS.MEMORY_DISTILL_SESSION)(event, 'temporary', false);
-    expect(mocks.distillSessionNow).toHaveBeenCalledWith(
-      { sessionId: 'temporary', sessionFile: 'temp.jsonl', projectId: null },
-      { force: false }
-    );
-    mocks.listMemoriesForAdmin.mockReturnValueOnce({
-      items: [{ id: 'old', spaceId: `proj:${projectId}`, spaceLabel: 'internal' }],
-      total: 1,
-    } as never);
-    const result = await handler(IPC_CHANNELS.MEMORY_LIST)(event, { limit: 10, offset: 0 });
-    expect(result).toMatchObject({ items: [{ spaceLabel: 'Temporary chats' }] });
-  });
+afterEach(() => {
+  closeMemoryDb();
+  setMemoryRootForTest(null);
+  for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+});
 
-  it('KG retry 只接受可信窗口无载荷请求；结构化回报并仅在 reset 后广播', async () => {
-    const retry = handler(IPC_CHANNELS.MEMORY_KG_RETRY_FAILED);
-    expect(retry({ sender: { id: 99 } })).toMatchObject({ ok: false, reset: 0 });
-    for (const raw of [null, {}, '/tmp/foreign.db', { path: '/tmp/foreign.db' }]) {
-      expect(retry(event, raw)).toMatchObject({ ok: false, reset: 0 });
-    }
-    expect(retry(event, undefined, { path: 'x' })).toMatchObject({ ok: false });
-    expect(mocks.retryFailedMemoryKg).not.toHaveBeenCalled();
-    expect(mocks.openExistingMemoryDb).not.toHaveBeenCalled();
-    mocks.retryFailedMemoryKg.mockReturnValueOnce(2);
-    expect(retry(event)).toEqual({ ok: true, reset: 2 });
-    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
-    mocks.send.mockClear();
-    expect(retry(event)).toEqual({ ok: true, reset: 0 });
-    expect(mocks.send).not.toHaveBeenCalled();
-    mocks.retryFailedMemoryKg.mockImplementationOnce(() => {
-      throw new Error('locked');
-    });
-    expect(retry(event)).toEqual({ ok: false, reset: 0, error: 'locked' });
-  });
-
-  it('labels project spaces with the project name, never the raw proj:<uuid>', async () => {
-    const projectId = '6db81646-1111-4111-8111-111111111111';
-    mocks.registry = {
-      projection: () => ({
-        projects: [{ projectId, canonicalPath: '/Users/me/work/enso-code' }],
-        conversations: [],
-      }),
-    };
-    mocks.listMemoriesForAdmin.mockReturnValue({
-      items: [{ id: 'm1', spaceId: `proj:${projectId}`, spaceLabel: `proj:${projectId}` }],
-      total: 1,
-    } as never);
-    const result = (await handler(IPC_CHANNELS.MEMORY_LIST)(event, {
-      limit: 20,
-      offset: 0,
-    })) as { items: { spaceLabel: string }[] };
-    expect(result.items[0].spaceLabel).toBe('enso-code');
-
-    mocks.listMemoriesForAdmin.mockReturnValue({
-      items: [{ id: 'm2', spaceId: 'global', spaceLabel: 'global' }],
-      total: 1,
-    } as never);
-    const globalResult = (await handler(IPC_CHANNELS.MEMORY_LIST)(event, {
-      limit: 20,
-      offset: 0,
-    })) as { items: { spaceLabel: string }[] };
-    expect(globalResult.items[0].spaceLabel).toBe('Global');
-  });
-
-  it('uses the stored conversation title for distillable sessions', async () => {
-    mocks.registry = {
-      projection: () => ({
-        projects: [{ projectId: 'p1', canonicalPath: '/Users/me/work/enso-code' }],
-        conversations: [
-          { conversationId: 'c1', projectId: 'p1', sessionFile: 'a.jsonl' },
-          { conversationId: 'c2', projectId: 'p1', sessionFile: 'b.jsonl' },
-        ],
-      }),
-    };
-    // 真实结构是 Record<id, Conversation>；早期按数组解析，标题一条都读不到
-    mocks.settings = {
-      'enso-conversations': {
-        state: { conversations: { c1: { id: 'c1', title: 'Fix retry loop' } } },
-      },
-    };
-    const sessions = (await handler(IPC_CHANNELS.MEMORY_DISTILLABLE_SESSIONS)(event)) as {
-      sessionId: string;
-      title: string;
-      projectName: string | null;
-    }[];
-    expect(sessions.find((s) => s.sessionId === 'c1')?.title).toBe('Fix retry loop');
-    expect(sessions.find((s) => s.sessionId === 'c1')?.projectName).toBe('enso-code');
-    // 没有存标题的회话回退到短 id，不编造
-    expect(sessions.find((s) => s.sessionId === 'c2')?.title).toBe('c2');
-  });
-
-  it('knowledge handlers reject malformed input and never touch the db', async () => {
-    // 图谱 / 树 / 解读 / 结晶都按 unknown 收窄；非法载荷不能落到查询层
-    expect(await handler(IPC_CHANNELS.MEMORY_GRAPH)(event, { limit: 0 })).toEqual({
-      nodes: [],
-      edges: [],
-      totalEntities: 0,
-    });
-    expect(await handler(IPC_CHANNELS.MEMORY_TREE)(event, { groupBy: 'nope' })).toEqual([]);
-    expect(await handler(IPC_CHANNELS.MEMORY_INSIGHT)(event, {})).toMatchObject({ ok: false });
-    expect(await handler(IPC_CHANNELS.MEMORY_CRYSTALLIZE)(event, { memoryIds: 'x' })).toMatchObject(
-      { ok: false }
-    );
-    expect(mocks.openExistingMemoryDb).not.toHaveBeenCalled();
-  });
-
-  it('crystallize refuses fewer than the minimum sources before calling any model', async () => {
-    const result = (await handler(IPC_CHANNELS.MEMORY_CRYSTALLIZE)(event, {
-      memoryIds: ['a', 'b'],
-    })) as { ok: boolean; error?: string };
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/at least/i);
-    expect(mocks.getMemoryCompletion).not.toHaveBeenCalled();
-  });
-
-  it('interpretation reports the missing model instead of failing silently', async () => {
-    mocks.getMemoryCompletion.mockResolvedValueOnce(null);
-    const result = (await handler(IPC_CHANNELS.MEMORY_INSIGHT)(event, {
-      entityId: 'e1',
-    })) as { ok: boolean; error?: string };
-    expect(result).toMatchObject({ ok: false });
-    expect(result.error).toMatch(/model/i);
-  });
-
-  it('broadcasts a change after every write so other views reload', async () => {
-    // 组件树传 revision 只覆盖「在设置页点的操作」；agent 通过工具写记忆时界面不会动
-    mocks.archiveMemory.mockReturnValue({ id: 'm1' } as never);
-    mocks.getMemoryDetail.mockReturnValue({ id: 'm1', spaceId: 'global' } as never);
-    await handler(IPC_CHANNELS.MEMORY_ARCHIVE)(event, 'm1');
-    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
-
-    mocks.send.mockClear();
-    mocks.deleteMemoryPermanently.mockReturnValue(true);
-    await handler(IPC_CHANNELS.MEMORY_DELETE)(event, 'm1');
-    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
-
-    // 找不到目标时不该广播
-    mocks.send.mockClear();
-    mocks.deleteMemoryPermanently.mockReturnValue(false);
-    await handler(IPC_CHANNELS.MEMORY_DELETE)(event, 'ghost');
-    expect(mocks.send).not.toHaveBeenCalled();
-  });
-
-  it('edits a memory only with a trusted window and a well-formed patch', async () => {
-    const update = handler(IPC_CHANNELS.MEMORY_UPDATE);
-    for (const patch of [
-      null,
-      { title: 'x' },
-      { title: 'x', content: '   ' },
-      { title: 1, content: 'x' },
-      { title: 'x', content: 'y', importance: 1 },
-    ]) {
-      expect(await update(event, 'm1', patch)).toMatchObject({ ok: false });
-    }
-    expect(await update(event, '', { title: '', content: 'y' })).toMatchObject({ ok: false });
-    expect(await update({ sender: { id: 99 } }, 'm1', { title: '', content: 'y' })).toMatchObject({
-      ok: false,
-    });
-    expect(mocks.editMemory).not.toHaveBeenCalled();
-
-    mocks.editMemory.mockReturnValueOnce(null);
-    expect(await update(event, 'ghost', { title: '', content: 'y' })).toMatchObject({ ok: false });
-    expect(mocks.send).not.toHaveBeenCalled();
-
-    mocks.editMemory.mockImplementationOnce(() => {
-      throw new Error('Refused to write memory: prompt-injection');
-    });
-    expect(await update(event, 'm1', { title: '', content: 'bad' })).toEqual({
-      ok: false,
-      error: 'Refused to write memory: prompt-injection',
-    });
-
-    mocks.editMemory.mockReturnValueOnce({ id: 'm1' });
-    expect(await update(event, 'm1', { title: 'T', content: 'y' })).toEqual({ ok: true });
-    expect(mocks.editMemory).toHaveBeenLastCalledWith('m1', { title: 'T', content: 'y' });
-    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
-  });
-
-  it('rejects invalid list input before reaching the service', async () => {
-    const result = await handler(IPC_CHANNELS.MEMORY_LIST)(event, { limit: 0, offset: 0 });
-    expect(result).toEqual({ items: [], total: 0 });
-    expect(mocks.openExistingMemoryDb).not.toHaveBeenCalled();
-    expect(mocks.listMemoriesForAdmin).not.toHaveBeenCalled();
-  });
-
-  it('returns empty data when the database is absent', async () => {
-    mocks.openExistingMemoryDb.mockReturnValue(null);
-    expect(await handler(IPC_CHANNELS.MEMORY_LIST)(event, { limit: 20, offset: 0 })).toEqual({
+describe('memory IPC handlers', () => {
+  it('rejects untrusted senders and malformed payloads', async () => {
+    const list = handlers.get(IPC_CHANNELS.MEMORY_LIST)!;
+    expect(await list(untrusted, { limit: 10, offset: 0 })).toEqual({
       items: [],
       total: 0,
+      types: [],
     });
-    expect(mocks.listMemoriesForAdmin).not.toHaveBeenCalled();
-  });
+    expect(await list(trusted, { limit: -1, offset: 0 })).toEqual({
+      items: [],
+      total: 0,
+      types: [],
+    });
 
-  it('rejects chat-model IPC that is untrusted or not a model id', async () => {
-    expect(await handler(IPC_CHANNELS.MEMORY_CHAT_MODELS)({ sender: { id: 99 } })).toEqual([]);
-    expect(await handler(IPC_CHANNELS.MEMORY_CHAT_MODEL_DOWNLOAD)(event, 1)).toBe(false);
-    expect(await handler(IPC_CHANNELS.MEMORY_CHAT_MODEL_DOWNLOAD)(event, '')).toBe(false);
-    expect(await handler(IPC_CHANNELS.MEMORY_CHAT_MODEL_CANCEL)(event, null)).toBe(false);
-    expect(await handler(IPC_CHANNELS.MEMORY_CHAT_MODEL_DELETE)(event, { id: 'x' })).toBe(false);
-  });
-
-  it('rejects invalid and untrusted writes without reaching the service', async () => {
-    expect(await handler(IPC_CHANNELS.MEMORY_ARCHIVE)(event, 42)).toMatchObject({ ok: false });
+    const create = handlers.get(IPC_CHANNELS.MEMORY_CREATE)!;
     expect(
-      await handler(IPC_CHANNELS.MEMORY_ARCHIVE)({ sender: { id: 99 } }, 'memory-id')
-    ).toMatchObject({ ok: false });
-    expect(mocks.archiveMemory).not.toHaveBeenCalled();
+      await create(trusted, { spaceId: '../escape', title: 'X', type: 'notes', body: 'hi' })
+    ).toEqual({
+      ok: false,
+      error: 'Invalid request.',
+    });
   });
 
-  it('validates evolves review state', async () => {
-    expect(
-      await handler(IPC_CHANNELS.MEMORY_EVOLVES_REVIEW)(event, 'edge-id', 'pending')
-    ).toMatchObject({ ok: false });
-    expect(mocks.reviewEvolvesEdge).not.toHaveBeenCalled();
-  });
+  it('creates, edits, verifies, graphs, lints, and binds external Obsidian vault via Main dialog', async () => {
+    const create = handlers.get(IPC_CHANNELS.MEMORY_CREATE)!;
+    const list = handlers.get(IPC_CHANNELS.MEMORY_LIST)!;
+    const graph = handlers.get(IPC_CHANNELS.MEMORY_GRAPH)!;
+    const lint = handlers.get(IPC_CHANNELS.MEMORY_LINT)!;
+    const bind = handlers.get(IPC_CHANNELS.MEMORY_BIND_VAULT)!;
 
-  it('gets job snapshots from memoryHost without opening the database', async () => {
-    const result = await handler(IPC_CHANNELS.MEMORY_JOBS)(event);
-    expect(mocks.getMemoryDistillJobs).toHaveBeenCalled();
-    expect(mocks.getMemoryKgJobs).toHaveBeenCalled();
-    expect(mocks.getMemoryReembedProgress).toHaveBeenCalled();
-    expect(mocks.toMemoryJobsSnapshot).toHaveBeenCalled();
-    expect(mocks.openExistingMemoryDb).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ distill: [], kg: [], reembed: null });
-  });
+    const created = (await create(trusted, {
+      spaceId: 'global',
+      title: '测试页',
+      type: 'notes',
+      description: '简介',
+      body: '正文 [[missing-target]]',
+    })) as { ok: boolean; note?: { id: string } };
+    expect(created.ok).toBe(true);
 
-  it('rejects untrusted job history clears without opening the database', async () => {
-    expect(await handler(IPC_CHANNELS.MEMORY_JOBS_CLEAR)({ sender: { id: 99 } })).toBe(0);
-    expect(mocks.openExistingMemoryDb).not.toHaveBeenCalled();
-    expect(mocks.clearFinishedMemoryJobs).not.toHaveBeenCalled();
-  });
+    const listed = (await list(trusted, { spaceId: 'global', limit: 20, offset: 0 })) as {
+      total: number;
+    };
+    expect(listed.total).toBe(1);
 
-  it('clears finished jobs and broadcasts when any rows were deleted', async () => {
-    mocks.clearFinishedMemoryJobs.mockReturnValue(4);
-    expect(await handler(IPC_CHANNELS.MEMORY_JOBS_CLEAR)(event)).toBe(4);
-    expect(mocks.clearFinishedMemoryJobs).toHaveBeenCalledWith(mocks.db);
-    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
-  });
+    const g = (await graph(trusted, { spaceId: 'global', limit: 50 })) as { nodes: unknown[] };
+    expect(g.nodes).toHaveLength(1);
 
-  it('does not broadcast when there was nothing to clear', async () => {
-    mocks.clearFinishedMemoryJobs.mockReturnValue(0);
-    expect(await handler(IPC_CHANNELS.MEMORY_JOBS_CLEAR)(event)).toBe(0);
-    expect(mocks.send).not.toHaveBeenCalled();
-  });
+    const report = (await lint(trusted, 'global')) as { issues: { kind: string }[] };
+    expect(report.issues.some((i) => i.kind === 'broken_link')).toBe(true);
 
-  it('pending writes: list labels spaces and hides internal payload', async () => {
-    mocks.listPendingWrites.mockReturnValue([
-      {
-        id: 'p1',
-        kind: 'capture',
-        spaceId: 'global',
-        title: 't',
-        content: 'c',
-        botId: 'b1',
-        chatId: null,
-        redacted: true,
-        createdAt: '2026-10-05T00:00:00.000Z',
-        payload: { importance: 0.7 },
-      },
-    ]);
-    expect(await handler(IPC_CHANNELS.MEMORY_PENDING_WRITES)({ sender: { id: 99 } })).toEqual([]);
-    expect(await handler(IPC_CHANNELS.MEMORY_PENDING_WRITES)(event)).toEqual([
-      {
-        id: 'p1',
-        kind: 'capture',
-        spaceId: 'global',
-        spaceLabel: 'Global',
-        originLabel: '成员：已删除成员',
-        title: 't',
-        content: 'c',
-        botId: 'b1',
-        chatId: null,
-        redacted: true,
-        createdAt: '2026-10-05T00:00:00.000Z',
-      },
-    ]);
-  });
+    const externalVault = tmpDir();
+    fs.writeFileSync(path.join(externalVault, 'obsidian-note.md'), '# From Obsidian\n\nHello!\n');
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [externalVault] });
 
-  it('pending write review: narrows input, rejects / approves and broadcasts', async () => {
-    const review = handler(IPC_CHANNELS.MEMORY_PENDING_WRITE_REVIEW);
-    expect(await review(event, 'p1', 'maybe')).toMatchObject({ ok: false });
-    expect(await review(event, 42, 'reject')).toMatchObject({ ok: false });
-    expect(await review({ sender: { id: 99 } }, 'p1', 'approve')).toMatchObject({ ok: false });
-    expect(mocks.rejectPendingWrite).not.toHaveBeenCalled();
-    expect(mocks.approvePendingMemoryWrite).not.toHaveBeenCalled();
+    const bound = (await bind(trusted, 'global')) as {
+      ok: boolean;
+      space?: { isExternal: boolean };
+    };
+    expect(bound.ok).toBe(true);
+    expect(bound.space?.isExternal).toBe(true);
 
-    mocks.rejectPendingWrite.mockReturnValue(true);
-    expect(await review(event, 'p1', 'reject')).toEqual({ ok: true });
-    expect(mocks.send).toHaveBeenCalledWith(IPC_CHANNELS.MEMORY_CHANGED, undefined);
+    const afterBind = (await list(trusted, { spaceId: 'global', limit: 20, offset: 0 })) as {
+      items: { title: string }[];
+    };
+    expect(afterBind.items.map((i) => i.title)).toContain('From Obsidian');
 
-    mocks.approvePendingMemoryWrite.mockResolvedValue({ ok: true });
-    expect(await review(event, 'p2', 'approve')).toEqual({ ok: true });
-    expect(mocks.approvePendingMemoryWrite).toHaveBeenCalledWith('p2');
+    const readVaultDocHandler = handlers.get(IPC_CHANNELS.MEMORY_READ_VAULT_DOC)!;
+    expect(readVaultDocHandler).toBeTypeOf('function');
+    expect(await readVaultDocHandler(untrusted, 'global', 'schema')).toBeNull();
+    expect(await readVaultDocHandler(trusted, '../bad', 'schema')).toBeNull();
+    expect(await readVaultDocHandler(trusted, 'global', 'secret')).toBeNull();
+    const schemaDoc = (await readVaultDocHandler(trusted, 'global', 'schema')) as {
+      filename: string;
+      content: string;
+    } | null;
+    expect(schemaDoc?.filename).toBe('schema.md');
+    expect(schemaDoc?.content.length).toBeGreaterThan(0);
   });
 });

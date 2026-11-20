@@ -40,6 +40,7 @@ import { presetOverlay } from '@shared/extensionPlugins/preset';
 import { PLUGIN_INJECT_MAX_CHARS } from '@shared/extensionPlugins/protocol';
 import { normalizeMaxActiveCoworkers } from '@shared/maxActiveCoworkers';
 import { mcpTimeoutsForSpawn } from '@shared/mcpTimeout';
+import { resolveMemoryLanguage } from '@shared/memory/constants';
 import { pickModelCapabilityOverrides } from '@shared/modelCatalog';
 import { materializeProviders } from '@shared/modelDirectory';
 import { eligibleOauthPoolAccountKeys, isOauthAccountPool } from '@shared/oauthAccountPool';
@@ -1134,7 +1135,7 @@ export function spawnSession(
     : undefined;
   const smartCompactMode = parseSmartCompactMode(state?.smartCompactMode) ?? undefined;
   // 记忆存储语言下发给 worker：memory_search 的描述据此告诉模型该用哪种语言查
-  const memoryLanguage = typeof state?.memoryLanguage === 'string' ? state.memoryLanguage : 'en';
+  const memoryLanguage = resolveMemoryLanguage(state?.memoryLanguage);
   const presetApplied = applyPluginPresetOverrides({
     model: resolved.selection.config,
     thinkingLevel: request.thinkingLevel,

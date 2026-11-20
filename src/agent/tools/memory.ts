@@ -1,16 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { ChildSessionIdentity } from '@shared/builtinAgents';
-import { CRYSTAL_MIN_SOURCES, EVOLVES_RELATIONS, UNIT_TYPES } from '@shared/memory/constants';
 import {
-  MEMORY_CAPTURE_SPACES,
-  MEMORY_SEARCH_MAX_LIMIT,
-  MEMORY_SEARCH_MODES,
+  MAX_INDEX_LIMIT,
+  MAX_SEARCH_LIMIT,
+  NOTE_STATUSES,
+  resolveMemoryLanguage,
+  UPSERT_MODES,
+} from '@shared/memory/constants';
+import {
   MEMORY_SEARCH_SPACES,
-  normalizeMemoryCaptureParams,
-  normalizeMemoryCrystallizeParams,
-  normalizeMemoryDeleteParams,
+  MEMORY_WRITE_SPACES,
+  normalizeMemoryArchiveParams,
+  normalizeMemoryIndexParams,
+  normalizeMemoryReadParams,
   normalizeMemorySearchParams,
+  normalizeMemoryUpsertParams,
 } from '@shared/memory/toolParams';
 import type { MemoryOp, SessionIdentity } from '@shared/types/agent';
 
@@ -33,12 +38,11 @@ interface Pending {
   reject(error: Error): void;
 }
 
-// 本地 SQLite 查询远快于浏览器动作，但 Main 可能正忙于首次建库 / WAL 恢复
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 /**
- * worker ↔ Main 的记忆库挂起调用表（同 BrowserInvoker 范式）。请求经 `memory-invoke` 事件上抛，
- * 结果经 `memory-result` 命令回落；abort / 超时 / shutdown 全部 fail-closed。
+ * worker ↔ Main 的 Wiki 记忆挂起调用表（同 BrowserInvoker 范式）。请求经 `memory-invoke` 上抛，
+ * 结果经 `memory-result` 回落；abort / 超时 / shutdown 全部 fail-closed。
  */
 export class MemoryInvoker<Op extends string = MemoryOp> {
   private readonly pending = new Map<string, Pending>();
@@ -76,7 +80,6 @@ export class MemoryInvoker<Op extends string = MemoryOp> {
     return promise;
   }
 
-  /** Main 回落；未知 requestId 返回 false（已超时 / 已取消）。 */
   resolve(result: MemoryInvokeResult): boolean {
     const entry = this.pending.get(result.requestId);
     if (!entry) return false;
@@ -115,21 +118,24 @@ const requireText = (params: Record<string, unknown>, key: string): void => {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${key} is required`);
 };
 
-/**
- * 记忆工具：库在 Main，这里只发请求收结果。schema 每个属性都声明 type（不同模型对未声明类型的
- * 猜测不一致）；归一在 prepareArguments 里、schema 校验之前完成，execute 再兜底一次给直接调用路径。
- */
-/** 记忆存储语言 → 给模型的检索指引。存储语言与提问语言不一致时 FTS 通道会整条哑火，必须说清楚 */
 function languageHint(language: string | undefined): string {
+  const resolved = resolveMemoryLanguage(language);
   const label =
-    language === 'zh' ? 'Chinese' : language === 'auto' ? "the user's own language" : 'English';
+    resolved === 'zh'
+      ? 'Simplified Chinese'
+      : resolved === 'auto'
+        ? "the user's own language"
+        : 'English';
   return (
-    ` Memories are written in ${label}, which may differ from the conversation language: ` +
-    'phrase the query the same way the memory would be written, and always keep proper nouns and ' +
-    'technical terms verbatim (Postgres, Kubernetes, a file name) — those match across languages.'
+    ` Notes are written in ${label}; keep code identifiers, file paths, and proper nouns verbatim ` +
+    'so cross-language lookups match reliably.'
   );
 }
 
+/**
+ * Wiki 记忆工具（5 个精简动作：index / search / read / upsert / archive）。
+ * 每个属性都显式声明完整 JSON Schema 类型；归一化在 prepareArguments 内、schema 校验之前执行。
+ */
 export function createMemoryTools(
   invoker: MemoryInvoker,
   opts: { language?: string } = {}
@@ -140,8 +146,8 @@ export function createMemoryTools(
     description: string,
     parameters: ToolDefinition['parameters'],
     op: MemoryOp,
-    normalize: (raw: unknown) => unknown,
-    requiredKey: string
+    normalize: (raw: unknown) => Record<string, unknown>,
+    requiredKeys: readonly string[]
   ): ToolDefinition => ({
     name,
     label,
@@ -150,217 +156,226 @@ export function createMemoryTools(
     prepareArguments: normalize as unknown as ToolDefinition['prepareArguments'],
     async execute(_toolCallId, params, signal) {
       const normalized = normalize(params ?? {});
-      if (!normalized || typeof normalized !== 'object') throw new Error('invalid arguments');
-      requireText(normalized as Record<string, unknown>, requiredKey);
+      for (const key of requiredKeys) requireText(normalized, key);
       return textResult(await invoker.invoke(op, normalized, signal));
     },
   });
 
   return [
     define(
-      'memory_search',
-      'Memory search',
-      'Search long-term memories (decisions, preferences, procedures, lessons, facts) captured in ' +
-        'earlier sessions. Use it when the user refers to something decided or learned before, when ' +
-        'starting work in a project to recall prior context, or before proposing an approach that ' +
-        'may already have been settled. Implicit references count: "that approach", "like last time", ' +
-        'or a problem that resembles one solved before. Skip it for genuinely new topics, generic ' +
-        'language/syntax questions, or when the user explicitly wants a fresh take; a search that ' +
-        'returns nothing relevant costs a round trip. Results are ranked by relevance and recency; only the latest ' +
-        'version of each memory is returned. Two independent time filters exist: eventDate* filters by ' +
-        'WHEN THE EVENT HAPPENED (e.g. "the 2020 migration"), recordedDate* filters by WHEN THE MEMORY ' +
-        'WAS SAVED (e.g. "what did we note last month"). Use one family per call, never both. ' +
-        'mode=fast (default) is vector + full-text + entity + 1-hop related-entity (community) with equal fusion weights and no extra LLM. ' +
-        'mode=deep uses the same recall channels but reweights fusion by query intent (keyword vs conceptual vs relationship); ' +
-        'it does not rewrite the query and does not use HyDE. Skip deep for named-thing lookups. ' +
-        'Deep may also run a short-timeout LLM to classify intent and rerank up to 8 hits; failures fall back.' +
-        languageHint(opts.language),
+      'memory_index',
+      'Memory index',
+      'List the compact wiki catalog (slug, title, type, one-line description, status) and vault schema rules. ' +
+        'Call this before writing new knowledge so you can follow vault categories and update existing pages instead of duplicating them. ' +
+        'Do not call it on every trivial question; use it when reviewing prior knowledge or preparing to capture durable conclusions.',
       schema(
         {
-          query: { type: 'string', description: 'Natural-language query or keywords' },
-          limit: {
-            type: 'integer',
-            minimum: 1,
-            maximum: MEMORY_SEARCH_MAX_LIMIT,
-            description: 'Max results (default 10)',
-          },
           spaceId: {
             type: 'string',
             enum: [...MEMORY_SEARCH_SPACES],
             description:
-              "'all' = every space visible to this session (default); 'global' = cross-project only; 'project' = current project only; " +
-              "'bot' = your own member memory, 'chat' = this group chat's shared memory (both only in Bot mode sessions)",
+              "Omit for the current project, group, or member vault (falls back to 'global' when none). " +
+              "Use 'global' for cross-project preferences or 'all' for cross-scope overview.",
           },
-          eventDateFrom: {
+          type: {
             type: 'string',
             description:
-              'Earliest date the remembered event happened: YYYY, YYYY-MM or YYYY-MM-DD. Cannot be combined with recordedDate*',
+              'Optional category filter (e.g. systems, incidents, decisions, preferences)',
           },
-          eventDateTo: {
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: MAX_INDEX_LIMIT,
+            description: 'Max entries to return (default 80)',
+          },
+          includeRaw: {
+            type: 'boolean',
+            description:
+              'Include read-only raw/ reference files (e.g. DB schemas, PRDs). Default false.',
+          },
+        },
+        []
+      ),
+      'index',
+      normalizeMemoryIndexParams,
+      []
+    ),
+    define(
+      'memory_search',
+      'Memory search',
+      'Search the Obsidian-compatible Markdown wiki by keywords, category, or status. ' +
+        'Returns matching note summaries, trust status (draft/verified), and 1-hop [[wikilink]] neighbors. ' +
+        'Use concise keywords (1–4 distinctive terms), not full sentences. Only search when prior decisions, ' +
+        'incidents, domain rules, or standing preferences would change what you do.' +
+        languageHint(opts.language),
+      schema(
+        {
+          query: {
             type: 'string',
             description:
-              'Latest date the remembered event happened (inclusive; YYYY covers the whole year). Cannot be combined with recordedDate*',
+              'Keywords or phrase to search across titles, descriptions, tags, and bodies',
           },
-          recordedDateFrom: {
+          spaceId: {
+            type: 'string',
+            enum: [...MEMORY_SEARCH_SPACES],
+            description: "Omit for the active scope; use 'global' or 'all' when needed.",
+          },
+          type: {
             type: 'string',
             description:
-              'Earliest date the memory was saved: YYYY, YYYY-MM or YYYY-MM-DD. Cannot be combined with eventDate*',
+              'Optional category filter (e.g. systems, domains, incidents, practices, workflows)',
           },
-          recordedDateTo: {
+          status: {
             type: 'string',
-            description:
-              'Latest date the memory was saved (inclusive). Cannot be combined with eventDate*',
+            enum: [...NOTE_STATUSES],
+            description: 'Optional trust-status filter: draft, verified, or deprecated',
           },
-          mode: {
-            type: 'string',
-            enum: [...MEMORY_SEARCH_MODES],
-            description:
-              "'fast' (default) = equal-weight vector/FTS/entity, no extra LLM; 'deep' = same recall, intent-weighted fusion",
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: MAX_SEARCH_LIMIT,
+            description: 'Max results to return (default 8)',
           },
         },
         ['query']
       ),
       'search',
       normalizeMemorySearchParams,
-      'query'
+      ['query']
     ),
     define(
-      'memory_capture',
-      'Memory capture',
-      'Save one durable, distilled memory for future sessions. Use it when the user states a ' +
-        'standing preference or constraint, when a decision is made (including rejected ' +
-        'alternatives and why), when a reusable procedure or a hard-won lesson emerges, or when the ' +
-        'user asks you to remember something. The best moment is right after something resolves: a ' +
-        'root cause is found, a trade-off is settled, an assumption turns out wrong. Write 1-3 ' +
-        'sentences capturing WHAT and WHY, self-contained enough to be useful months later. Do NOT ' +
-        'capture routine fixes, work still in progress, simple Q&A, or anything a search engine ' +
-        'would answer; never store raw chat transcripts or transient task chatter. A typical ' +
-        'session yields at most 1-3 memories. If the result is ' +
-        "status='candidates_found', NOTHING was written: similar memories already exist. Either drop " +
-        'the capture, resubmit with evolvesFromId + evolvesRelation to record how it relates to one ' +
-        'of them, or resubmit with force=true to store it as a separate memory.',
+      'memory_read',
+      'Memory read',
+      'Read the full Markdown content, OKF frontmatter, outbound [[wikilink]]s, and backlinks of one wiki note ' +
+        '(or read-only raw/ reference). Pass a slug, relative path, or exact title obtained from memory_index or memory_search.',
       schema(
         {
-          content: {
-            type: 'string',
-            description: 'The memory itself: specific, self-contained, with reasoning',
-          },
-          title: {
-            type: 'string',
-            description: 'Short title, max 80 chars (derived from content if omitted)',
-          },
-          unitType: {
+          note: {
             type: 'string',
             description:
-              `One of ${UNIT_TYPES.join('|')}. fact=objective statement; preference=standing taste/constraint; ` +
-              'decision=committed choice; plan=future intent; procedure=reusable how-to; learning=lesson ' +
-              'without a runbook; context=background; event=time-bounded happening. Defaults to fact.',
-          },
-          importance: {
-            type: 'number',
-            minimum: 0,
-            maximum: 1,
-            description:
-              '0.9+ critical decision/insight; 0.7-0.9 important; 0.5-0.7 useful (default 0.6)',
+              'Note slug (e.g. systems/auth), relative path (wiki/systems/auth.md), or exact title',
           },
           spaceId: {
             type: 'string',
-            enum: [...MEMORY_CAPTURE_SPACES],
-            description:
-              "'project' = only relevant to the current project (default outside Bot mode); 'global' = applies across all projects (e.g. user preferences); " +
-              "'bot' = your own member memory: your preferences, habits, lessons (Bot mode sessions only, default there); " +
-              "'chat' = shared by this group chat: team conventions, decisions, project background, division of work, shared terms (Bot mode group chats only)",
-          },
-          eventStart: {
-            type: 'string',
-            description: 'Only if the memory is about a dated event: YYYY, YYYY-MM or YYYY-MM-DD',
-          },
-          eventEnd: {
-            type: 'string',
-            description: 'End of the event range, same formats as eventStart',
-          },
-          force: {
-            type: 'boolean',
-            description:
-              'Only after a candidates_found result: store anyway as a separate memory (default false)',
-          },
-          evolvesFromId: {
-            type: 'string',
-            description:
-              'Id of an existing memory this one evolves from (from candidates_found or memory_search); requires evolvesRelation. ' +
-              'Omit both evolves* fields for a new memory. An empty id means no evolution.',
-          },
-          evolvesRelation: {
-            type: 'string',
-            enum: [...EVOLVES_RELATIONS],
-            description:
-              'Only with a non-empty evolvesFromId; a valid relation paired with an empty id is ignored. ' +
-              'replaces = supersedes the old memory (it stops being latest); enriches = adds detail; ' +
-              'confirms = restates it; challenges = contradicts it (both stay latest, flagged for review)',
+            enum: [...MEMORY_SEARCH_SPACES],
+            description: "Optional scope narrowing; defaults to searching visible scopes ('all').",
           },
         },
-        ['content']
+        ['note']
       ),
-      'capture',
-      normalizeMemoryCaptureParams,
-      'content'
+      'read',
+      normalizeMemoryReadParams,
+      ['note']
     ),
     define(
-      'memory_crystallize',
-      'Memory crystallize',
-      `Consolidate ${CRYSTAL_MIN_SOURCES} or more related existing memories into one higher-level ` +
-        'memory (a "crystal"). Use it only when a memory_search has returned several memories that ' +
-        'clearly belong to the same topic AND a synthesis would say something none of them says alone ' +
-        '(a pattern, a rule, a consolidated procedure). Do not use it to restate a single memory, to ' +
-        'summarize the current conversation, or as a routine step after every search; most sessions ' +
-        'never need it. The sources stay intact and searchable; the crystal is ranked above them. ' +
-        "If the result is status='candidates_found', NOTHING was written: a similar memory already " +
-        'exists. Drop it, or resubmit with force=true only if the crystal genuinely adds information.',
+      'memory_upsert',
+      'Memory upsert',
+      'Create or update an Evergreen Markdown wiki page (OKF v0.2 frontmatter + [[wikilink]]). ' +
+        'Capture ONLY at high-value moments (zero writes is normal): ' +
+        '(1) root-cause incident wrap-up, (2) lasting mental-model breakthrough, ' +
+        '(3) second occurrence of a recurring issue/reminder, or (4) confirmed user decision / standing preference. ' +
+        'Always search or inspect memory_index first — UPDATE an existing page (mode=section or append or replace) over creating duplicates. ' +
+        'Interlink related pages with [[slug]] syntax, include a 1-line description, and cite sources when known. ' +
+        'Do NOT overwrite raw/ files or write routine fixes, temporary plans, or unaccepted suggestions.' +
+        languageHint(opts.language),
       schema(
         {
-          sourceIds: {
-            type: 'array',
-            items: { type: 'string' },
-            minItems: CRYSTAL_MIN_SOURCES,
-            description: `Ids of at least ${CRYSTAL_MIN_SOURCES} distinct existing memories (from memory_search) that the crystal is synthesized from; all must be in the same space (all global, or all current project)`,
+          note: {
+            type: 'string',
+            description:
+              'Target slug or relative path (e.g. incidents/oauth-refresh). Omit only when creating a brand-new page (derived from type/title).',
           },
           title: {
             type: 'string',
-            description: 'Short title of the synthesized knowledge, max 80 chars',
+            description: 'Concise human-readable page title (max 120 chars)',
+          },
+          type: {
+            type: 'string',
+            description:
+              'Open-vocabulary category matching the vault schema (e.g. systems, domains, incidents, practices, workflows, decisions, preferences, notes)',
+          },
+          description: {
+            type: 'string',
+            description: 'One-line summary shown in index.md and search results (max 240 chars)',
           },
           content: {
             type: 'string',
             description:
-              'The synthesis itself: 2-5 sentences stating the higher-level conclusion and why it holds, more informative than any single source',
+              'Markdown body (or section body when mode=section), using [[slug]] wikilinks to related pages',
           },
-          force: {
-            type: 'boolean',
-            description: 'Only after a candidates_found result: store anyway (default false)',
+          mode: {
+            type: 'string',
+            enum: [...UPSERT_MODES],
+            description:
+              "'replace' overwrites body (default for new notes); 'append' adds to end; 'section' replaces/appends one heading specified in section",
+          },
+          section: {
+            type: 'string',
+            description: 'Heading title to replace or append when mode=section (without leading #)',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Short keyword tags for filtering',
+          },
+          sources: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Evidence references such as code paths, URLs, or raw notes',
+          },
+          resource: {
+            type: 'string',
+            description:
+              'Optional primary code path, API endpoint, or entity URI this page describes',
+          },
+          staleAfter: {
+            type: 'string',
+            description: 'Optional re-verification deadline in YYYY-MM-DD format',
+          },
+          spaceId: {
+            type: 'string',
+            enum: [...MEMORY_WRITE_SPACES],
+            description:
+              "'project' = current project vault (default outside Bot mode); 'global' = cross-project vault; " +
+              "'bot' = member private vault; 'chat' = shared group vault",
           },
         },
-        ['sourceIds', 'title', 'content']
+        ['title', 'type', 'content']
       ),
-      'crystallize',
-      normalizeMemoryCrystallizeParams,
-      'content'
+      'upsert',
+      normalizeMemoryUpsertParams,
+      ['title', 'content']
     ),
     define(
-      'memory_delete',
-      'Memory delete',
-      'Permanently delete one memory by id; this cannot be undone. Use it only when the user asks ' +
-        'to forget or remove a memory, or confirms that a memory is wrong or obsolete. Get the id ' +
-        'from memory_search first. Do not use it to replace an outdated memory with a newer ' +
-        'version: capture the new one with evolvesRelation=replaces instead. Only memories in the ' +
-        'global space or the current project can be deleted.',
+      'memory_archive',
+      'Memory archive',
+      'Soft-archive an obsolete or superseded wiki page: marks status=deprecated, optionally links supersededBy, ' +
+        'and moves it into archive/ while recording log.md. Use only when the user confirms a page is obsolete or replaced.',
       schema(
         {
-          id: { type: 'string', description: 'Id of the memory to delete (from memory_search)' },
+          note: {
+            type: 'string',
+            description: 'Slug, relative path, or exact title of the note to archive',
+          },
+          reason: {
+            type: 'string',
+            description: 'Brief reason why this page is being archived',
+          },
+          supersededBy: {
+            type: 'string',
+            description: 'Optional [[new-slug]] wikilink pointing to the replacement page',
+          },
+          spaceId: {
+            type: 'string',
+            enum: [...MEMORY_WRITE_SPACES],
+            description: 'Target space; defaults to the active project or bot space',
+          },
         },
-        ['id']
+        ['note']
       ),
-      'delete',
-      normalizeMemoryDeleteParams,
-      'id'
+      'archive',
+      normalizeMemoryArchiveParams,
+      ['note']
     ),
   ];
 }

@@ -49,14 +49,8 @@ export const SETTINGS_DATA_COVERAGE = {
     'Microcompaction context clearing is a device-local desktop session preference.'
   ),
   designEnabled: excluded('UI design canvas is a device-local desktop session preference.'),
-  memoryEmbeddingModel: excluded('Memory embedding model choice is a desktop preference.'),
-  memoryEmbeddingAutoDownload: excluded('Memory model download policy is a device preference.'),
   memoryModelIdleMinutes: excluded('Memory model idle unloading policy is a device preference.'),
-  memoryEmbeddingRemoteProviderId: excluded(
-    'Memory remote embedding provider is a device-local reference.'
-  ),
-  memoryDistillEnabled: excluded('Memory auto-distillation preference; not an Enso capability.'),
-  memoryKgEnabled: excluded('Memory entity-graph extraction preference; not an Enso capability.'),
+  memoryDistillEnabled: excluded('Memory auto-compile preference; not an Enso capability.'),
   voiceInputEnabled: excluded('Voice input is a device-local composer preference.'),
   protectedActionsInCode: excluded(
     'Protected-action confirmation floor for Code sessions; desktop safety preference.'
@@ -202,16 +196,8 @@ export const SETTINGS_ACTION_COVERAGE = {
   setProtectedActionsInCode: excluded(
     'Protected-action confirmation floor for Code sessions; desktop safety preference.'
   ),
-  setMemoryEmbeddingModel: excluded('Memory embedding model choice is a desktop preference.'),
-  setMemoryEmbeddingAutoDownload: excluded('Memory model download policy is a device preference.'),
   setMemoryModelIdleMinutes: excluded('Memory model idle unloading policy is a device preference.'),
-  setMemoryEmbeddingRemoteProviderId: excluded(
-    'Memory remote embedding provider is a device-local reference.'
-  ),
-  setMemoryDistillEnabled: excluded('Memory auto-distillation preference; not an Enso capability.'),
-  setMemoryKgEnabled: excluded(
-    'Memory entity-graph extraction preference; not an Enso capability.'
-  ),
+  setMemoryDistillEnabled: excluded('Memory auto-compile preference; not an Enso capability.'),
   setVoiceInputEnabled: excluded('Voice input is a device-local composer preference.'),
   setBotModeEnabled: excluded(
     'Experimental Bot mode toggle; device-local, not an Enso capability.'
@@ -822,23 +808,25 @@ export const IPC_PRODUCT_COVERAGE = {
   RESOURCES_SESSIONS_CLEAN_DONE: excluded('Main window acknowledgement of a session cleanup.'),
   MEMORY_LIST: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_DETAIL: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_CREATE: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_ARCHIVE: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_RESTORE: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_DELETE: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_UPDATE: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_STATS: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_SPACES: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_BIND_VAULT: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_UNBIND_VAULT: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_OPEN_VAULT: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_GET_SCHEMA: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_SAVE_SCHEMA: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_APPLY_PRESET: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_REBUILD_INDEX: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_LINT: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_JOBS: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_JOBS_CLEAR: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_KG_RETRY_FAILED: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_EVOLVES_PENDING: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_EVOLVES_REVIEW: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_PENDING_WRITES: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_PENDING_WRITE_REVIEW: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_MODELS: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_MODEL_DOWNLOAD: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_MODEL_CANCEL: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_MODEL_DELETE: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_MODEL_PROGRESS: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_CHAT_MODELS: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_CHAT_MODEL_DOWNLOAD: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_CHAT_MODEL_CANCEL: excluded('Memory desktop UI; not an Enso capability.'),
@@ -855,15 +843,12 @@ export const IPC_PRODUCT_COVERAGE = {
   SPEECH_SESSION_CANCEL: excluded('Composer dictation; not an Enso capability.'),
   SPEECH_PARTIAL: excluded('Composer dictation; not an Enso capability.'),
   SPEECH_MIC_ACCESS: excluded('Composer dictation microphone permission.'),
-  MEMORY_REEMBED: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_CHANGED: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_GRAPH: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_GRAPH_ENTITY: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_TREE: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_INSIGHT: excluded('Memory desktop UI; not an Enso capability.'),
-  MEMORY_CRYSTALLIZE: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_DISTILLABLE_SESSIONS: excluded('Memory desktop UI; not an Enso capability.'),
   MEMORY_DISTILL_SESSION: excluded('Memory desktop UI; not an Enso capability.'),
+  MEMORY_READ_VAULT_DOC: excluded('Memory desktop UI; not an Enso capability.'),
   BTW_PROMPT: excluded('Desktop side-panel aside chat; not an Enso capability.'),
   BTW_ABORT: excluded('Desktop side-panel aside chat abort; not an Enso capability.'),
   BTW_SPAWN: excluded('Desktop side-panel aside chat spawn; not an Enso capability.'),

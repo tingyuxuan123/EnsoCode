@@ -27,13 +27,7 @@ import {
   registerLocalImageProtocolHandler,
   registerLocalImageSchemePrivileges,
 } from './services/localImageProtocol';
-import {
-  awaitMemoryEmbeddingClose,
-  closeMemoryDb,
-  syncMemoryDistillFromSettings,
-  syncMemoryEmbeddingFromSettings,
-  syncMemoryKgFromSettings,
-} from './services/memoryHost';
+import { closeMemoryDb, syncMemoryFromSettings } from './services/memoryHost';
 import { startPairGuest, stopPairGuest } from './services/pairGuest';
 import { startPairHost, stopPairHost } from './services/pairHost';
 import { getProxyConfig } from './services/proxyConfig';
@@ -140,9 +134,7 @@ if (!gotTheLock) {
       persisted?.state && typeof persisted.state === 'object' ? persisted.state : {}
     ) as Record<string, unknown>;
     syncTrayToggleShortcut(persistedState.keybindings);
-    syncMemoryEmbeddingFromSettings(persistedState);
-    syncMemoryDistillFromSettings(persistedState);
-    syncMemoryKgFromSettings(persistedState);
+    syncMemoryFromSettings(persistedState);
     syncSpeechFromSettings(persistedState);
     // UI shell 必须先创建并发起加载；Agent worker 初始化变重时不得阻塞 renderer spawn。
     const mainWindow = createMainWindow();
@@ -205,7 +197,6 @@ if (!gotTheLock) {
     {
       shouldWait: llamaRuntimeActive,
       wait: async () => {
-        await awaitMemoryEmbeddingClose();
         await releaseLocalChatSlot();
         await disposeLlamaRuntime();
       },

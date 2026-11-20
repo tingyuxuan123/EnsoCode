@@ -1,4 +1,4 @@
-import type { MemoryCaptureSpace, MemorySearchSpace } from '@shared/memory/toolParams';
+import type { MemorySearchSpace, MemoryWriteSpace } from '@shared/memory/toolParams';
 import { isBotChatId, isBotId } from '@shared/types/bot';
 import {
   botSpaceId,
@@ -41,18 +41,18 @@ export function memorySpaceContext(
   return ctx;
 }
 
-/** 模型未指定 spaceId 时 capture 的语义 space */
-export function defaultCaptureSpace(ctx: MemorySpaceContext): MemoryCaptureSpace {
+/** 模型未指定 spaceId 时写入的语义 space */
+export function defaultCaptureSpace(ctx: MemorySpaceContext): MemoryWriteSpace {
   return ctx.botId ? 'bot' : 'project';
 }
 
-/** 自动蒸馏落库的 space：与 capture 缺省一致，无项目时落 global */
+/** 自动编译落盘的 space：与写入缺省一致，无项目时落 global */
 export function distillSpaceId(ctx: MemorySpaceContext): string {
   if (ctx.botId) return botSpaceId(ctx.botId);
   return ctx.projectId ? projectSpaceId(ctx.projectId) : GLOBAL_SPACE;
 }
 
-/** 群聊成员会话的蒸馏落点：自身 space 之外再给群 space，由模型按 scope 分流；其余会话只有 self */
+/** 群聊成员会话的编译落点：自身 space 之外再给群 space，由模型按 scope 分流；其余会话只有 self */
 export function distillSpaces(ctx: MemorySpaceContext): { self: string; chat?: string } {
   const self = distillSpaceId(ctx);
   return ctx.botId && isBotChatId(ctx.chatId) ? { self, chat: chatSpaceId(ctx.chatId) } : { self };

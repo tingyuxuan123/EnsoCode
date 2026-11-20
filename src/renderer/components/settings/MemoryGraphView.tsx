@@ -1,4 +1,5 @@
-import type { MemoryBriefDto, MemoryGraphDto } from '@shared/memory/graphDto';
+import type { MemoryNoteDetail } from '@shared/memory/dto';
+import type { MemoryGraphDto } from '@shared/memory/graphDto';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import * as React from 'react';
@@ -7,12 +8,6 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { buildLegend, graphStylesheet, toElements } from './memoryGraphStyle';
-
-/**
- * 知识图谱：cytoscape + fcose 力导向布局。
- * 交互（拖拽节点、滚轮缩放、框选）由 cytoscape 提供；这里只负责数据同步、
- * 选中高亮和主题色。
- */
 
 let registered = false;
 function ensureLayout(): void {
@@ -25,7 +20,6 @@ const LAYOUT = {
   name: 'fcose',
   animate: false,
   randomize: false,
-  // 提及数多的节点更"重"，自然沉到中心
   nodeRepulsion: 8000,
   idealEdgeLength: 90,
   nodeSeparation: 90,
@@ -37,18 +31,18 @@ export function MemoryGraphView({
   graph,
   selectedId,
   onSelect,
-  memories,
+  detail,
   loading,
-  onInterpret,
-  interpreting,
+  onVerify,
+  onOpenObsidian,
 }: {
   graph: MemoryGraphDto;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  memories: MemoryBriefDto[];
+  detail: MemoryNoteDetail | null;
   loading: boolean;
-  onInterpret: (entityId: string) => void;
-  interpreting: boolean;
+  onVerify: (id: string) => void;
+  onOpenObsidian: (id: string) => void;
 }) {
   const { t } = useI18n();
   const hostRef = React.useRef<HTMLDivElement | null>(null);
@@ -76,7 +70,6 @@ export function MemoryGraphView({
     });
     cy.layout(LAYOUT).run();
     cy.on('tap', 'node', (event) => onSelectRef.current(event.target.id() as string));
-    // 点空白处取消选中
     cy.on('tap', (event) => {
       if (event.target === cy) onSelectRef.current(null);
     });
@@ -87,7 +80,6 @@ export function MemoryGraphView({
     };
   }, [graph.nodes, graph.edges, dark]);
 
-  // 选中时把非邻居淡出——这是图谱唯一真正有用的交互
   React.useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
@@ -105,7 +97,6 @@ export function MemoryGraphView({
   const legend = React.useMemo(() => buildLegend(graph.nodes, dark), [graph.nodes, dark]);
   const selected = graph.nodes.find((n) => n.id === selectedId) ?? null;
 
-  // 点图例只高亮该类型，不改变选中的实体
   React.useEffect(() => {
     const cy = cyRef.current;
     if (!cy || selectedId) return;
@@ -113,7 +104,7 @@ export function MemoryGraphView({
       cy.elements().removeClass('dimmed');
       if (!typeFilter) return;
       cy.nodes()
-        .filter((n) => n.data('entityType') !== typeFilter)
+        .filter((n) => n.data('noteType') !== typeFilter)
         .addClass('dimmed');
     });
   }, [typeFilter, selectedId]);
@@ -121,9 +112,7 @@ export function MemoryGraphView({
   if (graph.nodes.length === 0) {
     return (
       <p className="rounded-[6px] border px-3 py-6 text-muted-foreground text-[calc(13rem/14)]">
-        {loading
-          ? t('Loading…')
-          : t('No entities yet. Turn on entity extraction and store a few memories first.')}
+        {loading ? t('Loading…') : t('No wiki notes yet.')}
       </p>
     );
   }
@@ -154,19 +143,17 @@ export function MemoryGraphView({
 
       <div className="space-y-2">
         <p className="text-muted-foreground text-[calc(12rem/14)]">
-          {t('Colour = entity type · size = how many memories mention it', {})}
+          {t('Color = category · size = wikilink connections')}
         </p>
         <div className="flex flex-wrap gap-1.5">
           {legend.map((entry) => (
             <button
-              key={entry.entityType}
+              key={entry.noteType}
               type="button"
-              onClick={() =>
-                setTypeFilter(typeFilter === entry.entityType ? null : entry.entityType)
-              }
+              onClick={() => setTypeFilter(typeFilter === entry.noteType ? null : entry.noteType)}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[calc(12rem/14)] transition-colors',
-                typeFilter === entry.entityType
+                typeFilter === entry.noteType
                   ? 'border-selection-border bg-selection text-selection-foreground'
                   : 'hover:bg-accent/50'
               )}
@@ -175,62 +162,92 @@ export function MemoryGraphView({
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
-              <span className="text-muted-foreground">{entry.entityType.toLowerCase()}</span>
+              <span className="text-muted-foreground">{entry.noteType}</span>
               <span className="tabular-nums">{entry.count}</span>
             </button>
           ))}
         </div>
         <p className="text-muted-foreground text-[calc(12rem/14)]">
-          {t('{{shown}} of {{total}} entities', {
+          {t('{{shown}} of {{total}} notes', {
             shown: String(graph.nodes.length),
-            total: String(graph.totalEntities),
+            total: String(graph.totalNotes),
           })}
         </p>
       </div>
 
       {selected && (
-        <section className="space-y-2 rounded-[6px] border p-3">
-          <div className="flex items-start justify-between gap-3">
+        <section className="space-y-2.5 rounded-[6px] border p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-[calc(13rem/14)]">
-                <span className="truncate font-medium">{selected.name}</span>
-                <Badge variant="secondary">{selected.entityType}</Badge>
+              <p className="flex flex-wrap items-center gap-2 text-[calc(13rem/14)]">
+                <span className="truncate font-medium">{selected.title}</span>
+                <Badge variant="secondary">{selected.noteType}</Badge>
+                <Badge variant={selected.status === 'verified' ? 'default' : 'outline'}>
+                  {t(
+                    selected.status === 'verified'
+                      ? 'Verified'
+                      : selected.status === 'draft'
+                        ? 'Draft'
+                        : 'Deprecated'
+                  )}
+                </Badge>
               </p>
-              <p className="text-muted-foreground text-[calc(12rem/14)]">
-                {t('{{count}} memories · {{space}}', {
-                  count: String(selected.memoryCount),
-                  space: selected.spaceLabel,
-                })}
+              <p className="font-mono text-muted-foreground text-[calc(11rem/14)]">
+                [[{selected.slug}]] · {selected.spaceLabel}
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={interpreting}
-              onClick={() => onInterpret(selected.id)}
-            >
-              {interpreting ? t('Interpreting…') : t('Interpret')}
-            </Button>
+            <div className="flex shrink-0 gap-1.5">
+              {selected.status === 'draft' && (
+                <Button size="sm" variant="outline" onClick={() => onVerify(selected.id)}>
+                  {t('Mark verified')}
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => onOpenObsidian(selected.id)}>
+                {t('Open in Obsidian')}
+              </Button>
+            </div>
           </div>
-          <ul className="divide-y rounded-[6px] border">
-            {memories.length === 0 && (
-              <li className="px-3 py-4 text-muted-foreground text-[calc(13rem/14)]">
-                {t('Loading…')}
-              </li>
-            )}
-            {memories.map((m) => (
-              <li key={m.id} className="space-y-0.5 px-3 py-2">
-                <p className="flex items-center gap-2 text-[calc(13rem/14)]">
-                  {m.isCrystal && <span title={t('Crystal')}>★</span>}
-                  <span className="truncate">{m.title}</span>
-                  <Badge variant="secondary">{m.unitType}</Badge>
-                </p>
-                <p className="line-clamp-2 text-muted-foreground text-[calc(12rem/14)]">
-                  {m.contentSummary}
-                </p>
-              </li>
-            ))}
-          </ul>
+
+          {detail && detail.id === selected.id && (
+            <div className="space-y-2 text-[calc(12rem/14)]">
+              {detail.description && <p className="text-muted-foreground">{detail.description}</p>}
+              {detail.body && (
+                <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-[6px] bg-muted/40 p-2.5 font-sans text-[calc(12rem/14)] leading-relaxed">
+                  {detail.body}
+                </pre>
+              )}
+              {(detail.links.length > 0 || detail.backlinks.length > 0) && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {detail.links.map((link) => (
+                    <button
+                      key={`out:${link.target}`}
+                      type="button"
+                      disabled={!link.resolvedNoteId}
+                      onClick={() => link.resolvedNoteId && onSelect(link.resolvedNoteId)}
+                      className={cn(
+                        'rounded border px-1.5 py-0.5 font-mono text-[calc(11rem/14)]',
+                        link.isBroken
+                          ? 'border-destructive/50 text-destructive'
+                          : 'hover:bg-accent/60'
+                      )}
+                    >
+                      → [[{link.target}]]
+                    </button>
+                  ))}
+                  {detail.backlinks.map((bl) => (
+                    <button
+                      key={`in:${bl.noteId}`}
+                      type="button"
+                      onClick={() => onSelect(bl.noteId)}
+                      className="rounded border px-1.5 py-0.5 font-mono text-[calc(11rem/14)] hover:bg-accent/60"
+                    >
+                      ← [[{bl.slug}]]
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
     </div>

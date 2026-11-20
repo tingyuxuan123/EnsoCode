@@ -1,12 +1,13 @@
 import type { PendingMemoryWriteDto } from '@shared/memory/dto';
 import type { BotProfile } from '@shared/types/bot';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { usePendingMemoryWritesStore } from '@/stores/memoryReview';
 import { BotAvatar } from './BotAvatar';
 
-/** 收件箱：成员写项目 / 全局记忆的待审批卡片；批准后才真正写入 */
+/** 收件箱：成员写项目 / 全局 Wiki 记忆的待审批卡片；批准后才真正落盘 */
 export function MemoryWriteCard({
   write,
   bot,
@@ -31,7 +32,7 @@ export function MemoryWriteCard({
   };
   return (
     <div data-slot="bot-card" className="rounded-md border bg-card p-3">
-      <div className="flex items-center gap-2 text-muted-foreground text-[calc(11rem/14)]">
+      <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground text-[calc(11rem/14)]">
         <BotAvatar bot={bot} size="sm" />
         <span className="text-foreground">{bot?.name ?? t('Deleted member')}</span>
         {chatName && <span>· {chatName}</span>}
@@ -39,11 +40,24 @@ export function MemoryWriteCard({
           {t('Memory write')}
         </span>
         <span>→ {write.spaceLabel}</span>
+        <Badge variant="secondary" size="sm">
+          {write.type}
+        </Badge>
+        <Badge variant="outline" size="sm">
+          {write.existingBody
+            ? `${write.mode}${write.section ? ` #${write.section}` : ''}`
+            : t('New')}
+        </Badge>
         {write.redacted && <span>· {t('Secrets redacted')}</span>}
       </div>
-      {write.title && <div className="mt-2 font-medium text-sm">{write.title}</div>}
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="font-medium text-sm">{write.title}</span>
+        <span className="truncate font-mono text-muted-foreground text-[calc(11rem/14)]">
+          [[{write.slug}]]
+        </span>
+      </div>
       <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-muted/60 px-2 py-1.5 text-[calc(11rem/14)]">
-        {write.content}
+        {write.proposedBody}
       </pre>
       {error && <div className="mt-1 text-destructive text-[calc(11rem/14)]">{error}</div>}
       <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5">

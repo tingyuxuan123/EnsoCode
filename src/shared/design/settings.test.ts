@@ -10,7 +10,7 @@ describe('design tool settings', () => {
       designEnabled: false,
       projects: [{ id: 'override', disabledBuiltinTools: [] }, { id: 'inherit' }, null],
     });
-    expect(off?.disabledBuiltinTools).toEqual(['memory', 'computer', 'code_search', 'design']);
+    expect(off?.disabledBuiltinTools).toEqual(['computer', 'code_search', 'design']);
     expect(off?.projects).toEqual([
       { id: 'override', disabledBuiltinTools: ['design'] },
       { id: 'inherit' },

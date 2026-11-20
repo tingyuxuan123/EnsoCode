@@ -2,104 +2,97 @@ import type { GraphEdgeDto, GraphNodeDto } from '@shared/memory/graphDto';
 import type cytoscape from 'cytoscape';
 
 /**
- * cytoscape 的元素与样式。抽出来是为了能直接断言「节点大小随提及数增长」
- * 「实体类型配色稳定」这类规则，而不用把整个画布渲染起来。
+ * Wiki 知识图谱（[[wikilink]]）的 Cytoscape 元素与样式。
+ * 颜色必须在这里算出十六进制字符串：cytoscape 不认现代 CSS 变量/空格 hsl。
  */
 
-/** 实体类型 → 色相；表外类型按名字哈希，保证同名恒同色 */
-export const ENTITY_TYPE_HUES: Record<string, number> = {
-  PERSON: 340,
-  ORGANIZATION: 20,
-  TEAM: 20,
-  PRODUCT: 210,
-  TOOL: 210,
-  SYSTEM: 250,
-  SERVICE: 250,
-  PLATFORM: 250,
-  CONCEPT: 160,
-  METHOD: 160,
-  TECHNIQUE: 160,
-  EVENT: 40,
-  PROJECT: 280,
-  DOCUMENT: 90,
-  TERM: 190,
+export const NOTE_TYPE_HUES: Record<string, number> = {
+  systems: 250,
+  domains: 160,
+  incidents: 350,
+  practices: 140,
+  workflows: 205,
+  decisions: 35,
+  preferences: 285,
+  projects: 220,
+  people: 330,
+  notes: 190,
+  note: 190,
 };
 
-export function hueFor(entityType: string): number {
-  if (ENTITY_TYPE_HUES[entityType] !== undefined) return ENTITY_TYPE_HUES[entityType];
+export function hueFor(noteType: string): number {
+  const key = noteType.trim().toLowerCase();
+  if (NOTE_TYPE_HUES[key] !== undefined) return NOTE_TYPE_HUES[key];
   let h = 0;
-  for (let i = 0; i < entityType.length; i++) h = (h * 17 + entityType.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < key.length; i++) h = (h * 17 + key.charCodeAt(i)) >>> 0;
   return h % 360;
 }
 
 const MIN_SIZE = 22;
-const MAX_SIZE = 64;
+const MAX_SIZE = 60;
 
-/** 面积随提及数线性增长（视觉上更诚实），所以直径走平方根 */
-export function nodeSize(memoryCount: number, maxCount: number): number {
-  if (maxCount <= 1) return MIN_SIZE;
-  const t = Math.sqrt(Math.max(1, memoryCount)) / Math.sqrt(maxCount);
+/** 面积随关联度（入链+出链+1）线性增长，所以直径走平方根 */
+export function nodeSize(linkCount: number, maxCount: number): number {
+  const safeMax = Math.max(1, maxCount);
+  const weight = Math.max(1, linkCount + 1);
+  if (safeMax <= 1) return MIN_SIZE;
+  const t = Math.sqrt(weight) / Math.sqrt(safeMax + 1);
   return Math.round(MIN_SIZE + (MAX_SIZE - MIN_SIZE) * Math.min(1, t));
 }
 
-/**
- * 颜色必须在这里就算成字符串：样式表里写 `data(hue)` 会让 cytoscape 把数字
- * 当颜色解析，挂载时直接抛 `color.toLowerCase is not a function`。
- */
 export function toElements(
   nodes: readonly GraphNodeDto[],
   edges: readonly GraphEdgeDto[],
   dark: boolean
 ): cytoscape.ElementDefinition[] {
-  const maxCount = Math.max(1, ...nodes.map((n) => n.memoryCount));
+  const maxCount = Math.max(1, ...nodes.map((n) => n.linkCount));
   const ids = new Set(nodes.map((n) => n.id));
   return [
     ...nodes.map((n) => ({
       data: {
         id: n.id,
-        label: n.name,
-        size: nodeSize(n.memoryCount, maxCount),
-        color: hueToColor(hueFor(n.entityType), dark),
-        entityType: n.entityType,
-        memoryCount: n.memoryCount,
+        label: n.title,
+        size: nodeSize(n.linkCount, maxCount),
+        color: hueToColor(hueFor(n.noteType), dark),
+        noteType: n.noteType,
+        status: n.status,
+        linkCount: n.linkCount,
         spaceLabel: n.spaceLabel,
       },
     })),
-    // 图被 limit 截断时会留下指向缺失节点的边，cytoscape 遇到会抛
     ...edges
       .filter((e) => ids.has(e.source) && ids.has(e.target) && e.source !== e.target)
-      .map((e) => ({
+      .map((e, idx) => ({
         data: {
-          id: `${e.source}->${e.target}:${e.relation}`,
+          id: `${e.source}->${e.target}#${idx}`,
           source: e.source,
           target: e.target,
-          label: e.relation.replace(/_/g, ' ').toLowerCase(),
-          width: 1 + e.strength * 2.5,
+          label: e.label.replace(/_/g, ' ').toLowerCase(),
+          width: 1.5,
         },
       })),
   ];
 }
 
 export interface LegendEntry {
-  entityType: string;
+  noteType: string;
   color: string;
   count: number;
 }
 
-/** 图例：当前图里出现的实体类型 + 配色 + 节点数，按数量倒序 */
+/** 图例：当前图谱里出现的 Wiki 分类 + 配色 + 笔记数，按数量倒序 */
 export function buildLegend(nodes: readonly GraphNodeDto[], dark: boolean): LegendEntry[] {
   const counts = new Map<string, number>();
-  for (const n of nodes) counts.set(n.entityType, (counts.get(n.entityType) ?? 0) + 1);
+  for (const n of nodes) counts.set(n.noteType, (counts.get(n.noteType) ?? 0) + 1);
   return [...counts.entries()]
-    .map(([entityType, count]) => ({
-      entityType,
+    .map(([noteType, count]) => ({
+      noteType,
       count,
-      color: hueToColor(hueFor(entityType), dark),
+      color: hueToColor(hueFor(noteType), dark),
     }))
-    .sort((a, b) => b.count - a.count || a.entityType.localeCompare(b.entityType));
+    .sort((a, b) => b.count - a.count || a.noteType.localeCompare(b.noteType));
 }
 
-/** dark 由调用方传入：cytoscape 不认 CSS 变量，颜色必须是具体值 */
 export function graphStylesheet(dark: boolean): cytoscape.StylesheetJson {
   const label = dark ? '#e7e7e9' : '#1c1c1f';
   const line = dark ? '#4b4b52' : '#c9c9d1';
@@ -108,7 +101,7 @@ export function graphStylesheet(dark: boolean): cytoscape.StylesheetJson {
       selector: 'node',
       style: {
         'background-color': 'data(color)',
-        'background-opacity': 0.85,
+        'background-opacity': 0.88,
         width: 'data(size)',
         height: 'data(size)',
         label: 'data(label)',
@@ -116,7 +109,7 @@ export function graphStylesheet(dark: boolean): cytoscape.StylesheetJson {
         color: label,
         'text-valign': 'bottom',
         'text-margin-y': 4,
-        'text-max-width': '120px',
+        'text-max-width': '130px',
         'text-wrap': 'ellipsis',
         'border-width': 0,
         'transition-property': 'opacity, border-width',
@@ -128,14 +121,14 @@ export function graphStylesheet(dark: boolean): cytoscape.StylesheetJson {
       style: {
         width: 'data(width)',
         'line-color': line,
+        'target-arrow-color': line,
+        'target-arrow-shape': 'triangle',
+        'arrow-scale': 0.8,
         'curve-style': 'bezier',
         opacity: 0.65,
-        'font-size': 9,
-        color: label,
-        'text-opacity': 0,
       },
     },
-    { selector: 'edge:selected, edge.highlighted', style: { 'text-opacity': 0.85, opacity: 1 } },
+    { selector: 'edge:selected, edge.highlighted', style: { opacity: 1 } },
     {
       selector: 'node:selected',
       style: { 'border-width': 3, 'border-color': label, 'background-opacity': 1 },
@@ -144,10 +137,6 @@ export function graphStylesheet(dark: boolean): cytoscape.StylesheetJson {
   ] as unknown as cytoscape.StylesheetJson;
 }
 
-/**
- * hue → hex。必须是 hex：cytoscape 用自己的颜色解析器，不认现代 CSS 的
- * 空格语法 `hsl(210 68% 52%)`，解析失败会静默退化成默认灰色。
- */
 export function hueToColor(hue: number, dark: boolean): string {
   return hslToHex(hue, dark ? 0.62 : 0.68, dark ? 0.58 : 0.52);
 }

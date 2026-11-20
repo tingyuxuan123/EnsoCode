@@ -93,18 +93,8 @@ export const CONFIG_SYNC_FIELD_POLICY = {
   smartCompactEnabled: { mode: 'portable' },
   smartCompactModel: { mode: 'portable' },
   smartCompactMode: { mode: 'portable' },
-  memoryEmbeddingModel: { mode: 'portable' },
-  memoryEmbeddingAutoDownload: {
-    mode: 'excluded',
-    reason: 'device policy for a multi-hundred-MB model download',
-  },
   memoryModelIdleMinutes: { mode: 'excluded', reason: 'device-local model residency policy' },
-  memoryEmbeddingRemoteProviderId: {
-    mode: 'excluded',
-    reason: 'references a device-local provider record id',
-  },
   memoryDistillEnabled: { mode: 'portable' },
-  memoryKgEnabled: { mode: 'portable' },
   voiceInputEnabled: { mode: 'excluded', reason: 'speech model lives on this device' },
   botModeEnabled: { mode: 'excluded', reason: 'bot members and chats live on this device' },
   botMaxRunningTurns: { mode: 'excluded', reason: 'device-local Bot concurrency limit' },

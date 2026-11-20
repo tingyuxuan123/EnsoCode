@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOT_NOTES_MAX_CHARS } from '@shared/bots/notes';
-import { redactSecrets } from '../memory/distill';
 import { scanMemoryInjection } from '../memory/injectionScan';
+import { redactSecrets } from '../memory/redact';
 import type { AbilityCompleter } from './abilitySuggester';
 import { writeAtomic } from './files';
 

@@ -1,10 +1,12 @@
+import { VAULT_PRESETS, type VaultPreset } from '@shared/memory/constants';
 import type {
   ChatModelDto,
-  DistillableSessionDto,
+  CompilableSessionDto,
   EmbeddingDownloadProgressDto,
-  EmbeddingModelDto,
   MemoryJobsSnapshot,
+  MemoryLintReport,
   MemoryStats,
+  VaultSpaceDto,
 } from '@shared/memory/dto';
 import { MEMORY_MODEL_IDLE_MINUTES } from '@shared/memory/modelIdle';
 import * as React from 'react';
@@ -29,69 +31,34 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useUsableProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
 import { type JobKind, toJobRows } from './memoryJobRows';
-import {
-  embeddingBackendSelectValue,
-  embeddingModelLabel,
-  isRemoteEmbeddingId,
-  nextEmbeddingBackend,
-  REMOTE_EMBEDDING_BACKEND_ID,
-  remoteEmbeddingModelId,
-  toRemoteEmbeddingId,
-} from './memoryModelItems';
-
-/**
- * 记忆设置分页。开关写 settings.json（Main 侧 notifyMemoryEmbeddingSettings 会同步到 memoryHost），
- * 统计与后台任务走 memory:* IPC；库未启用时这些接口返回空值而不是报错。
- */
 
 const JOBS_POLL_MS = 4000;
-// 补齐进行中时轮询快一些，否则点完最长要等一整个 JOBS_POLL_MS 才有动静
-const BACKFILL_POLL_MS = 800;
 const VISIBLE_JOBS = 6;
-// 用带前缀的 key：Distill / Entities 在别处已有不同语义的译文
+
 const JOB_KIND_LABELS: Record<JobKind, string> = {
-  distill: 'job:distill',
-  kg: 'job:entities',
-  reembed: 'job:vectors',
+  compile: 'job:compile',
 };
 
-const EMPTY_JOBS: MemoryJobsSnapshot = { distill: [], kg: [], reembed: null, kgFailed: 0 };
+const EMPTY_JOBS: MemoryJobsSnapshot = { compile: [] };
 
-// 模型清单来自 Main 的注册表（registry.ts），不在渲染层重写一份：
-// 手写副本一旦 id 对不上，选中后会静默回落默认模型，用户完全看不出来
-/**
- * 批量提炼前的分支：范围内全部未提炼 → 直接跑；有已提炼的 → 先问。
- * 抽成纯函数以便直接断言（SSR 渲染下拿不到弹窗交互）。
- */
-export function needsBulkPrompt(scope: readonly { distilled: boolean }[]): boolean {
-  return scope.some((session) => session.distilled);
+export function needsBulkPrompt(scope: readonly { compiled: boolean }[]): boolean {
+  return scope.some((session) => session.compiled);
 }
 
 interface BulkPrompt {
   token: string;
   label: string;
-  scope: DistillableSessionDto[];
-  pending: DistillableSessionDto[];
+  scope: CompilableSessionDto[];
+  pending: CompilableSessionDto[];
 }
 
-/**
- * 什么时候该把 embedding 失败原因摆出来：有记忆、有缺口、且拿到了原因。
- * 抽成纯函数以便直接断言（SSR 渲染下 useEffect 不执行，stats 恒为 null）。
- */
-export function embeddingErrorNotice(stats: MemoryStats | null): string | null {
-  if (!stats || stats.total === 0 || stats.embedded >= stats.total) return null;
-  return stats.embeddingError ?? null;
-}
-
-/**
- * 选了本地 GGUF 但权重不在盘上时，提炼会静默 pending。
- * 不自动下载：E2B 就 3GB+，没点过下载不能当同意。
- */
 export function localChatBlocksDistill(
   model: Pick<ChatModelDto, 'downloadable' | 'state'> | null
 ): 'missing' | 'downloading' | null {
@@ -106,7 +73,6 @@ export interface BatchProgress {
   startedAt: number;
 }
 
-/** 已完成的平均耗时 × 剩余个数；还没跑完一个时无法估算，返回 null 而不是编一个数 */
 export function estimateRemainingMs(progress: BatchProgress, now: number): number | null {
   if (progress.done === 0 || progress.done >= progress.total) return null;
   const perItem = (now - progress.startedAt) / progress.done;
@@ -123,11 +89,10 @@ export function formatDuration(ms: number): string {
 export interface SessionGroup {
   key: string;
   name: string;
-  sessions: DistillableSessionDto[];
+  sessions: CompilableSessionDto[];
 }
 
-/** 按项目分组；无项目的沉底。组内保持传入顺序（Main 已按 mtime 倒序） */
-export function groupSessionsByProject(sessions: DistillableSessionDto[]): SessionGroup[] {
+export function groupSessionsByProject(sessions: CompilableSessionDto[]): SessionGroup[] {
   const byProject = new Map<string, SessionGroup>();
   for (const session of sessions) {
     const key = session.projectId ?? '';
@@ -186,27 +151,35 @@ function SwitchRow({
   );
 }
 
+const PRESET_LABELS: Record<VaultPreset, string> = {
+  engineering: 'Engineering',
+  personal: 'Personal',
+  minimal: 'Minimal',
+};
+
+const LINT_LABELS: Record<MemoryLintReport['issues'][number]['kind'], string> = {
+  broken_link: 'Broken link',
+  orphan: 'Orphan note',
+  stale: 'Stale note',
+  unverified_draft: 'Old draft',
+  missing_description: 'No summary',
+  oversized: 'Oversized',
+};
+
 export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => void } = {}) {
   const { t } = useI18n();
   const disabledBuiltinTools = useSettingsStore((state) => state.disabledBuiltinTools);
-  const embeddingModel = useSettingsStore((state) => state.memoryEmbeddingModel);
-  const setEmbeddingModel = useSettingsStore((state) => state.setMemoryEmbeddingModel);
-  const autoDownload = useSettingsStore((state) => state.memoryEmbeddingAutoDownload);
-  const setAutoDownload = useSettingsStore((state) => state.setMemoryEmbeddingAutoDownload);
   const modelIdleMinutes = useSettingsStore((state) => state.memoryModelIdleMinutes);
   const setModelIdleMinutes = useSettingsStore((state) => state.setMemoryModelIdleMinutes);
-  const remoteProviderId = useSettingsStore((state) => state.memoryEmbeddingRemoteProviderId);
-  const setRemoteProviderId = useSettingsStore((state) => state.setMemoryEmbeddingRemoteProviderId);
   const distillEnabled = useSettingsStore((state) => state.memoryDistillEnabled);
   const setDistillEnabled = useSettingsStore((state) => state.setMemoryDistillEnabled);
-  const kgEnabled = useSettingsStore((state) => state.memoryKgEnabled);
-  const setKgEnabled = useSettingsStore((state) => state.setMemoryKgEnabled);
   const distillModel = useSettingsStore((state) => state.memoryDistillModel);
   const setDistillModel = useSettingsStore((state) => state.setMemoryDistillModel);
   const chatModel = useSettingsStore((state) => state.memoryChatModel) || 'remote';
   const setChatModel = useSettingsStore((state) => state.setMemoryChatModel);
   const memoryLanguage = useSettingsStore((state) => state.memoryLanguage);
   const setMemoryLanguage = useSettingsStore((state) => state.setMemoryLanguage);
+
   const modelCandidates = useUsableProviders();
   const distillProvider = distillModel
     ? modelCandidates.find((entry) => entry.id === distillModel.providerId)
@@ -214,35 +187,27 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
   const distillModelEntry = distillProvider?.models.find(
     (entry) => entry.id === distillModel?.modelId
   );
-  const remoteEmbeddingModel = remoteEmbeddingModelId(embeddingModel);
-  const embeddingProvider = remoteProviderId
-    ? modelCandidates.find((entry) => entry.id === remoteProviderId)
-    : undefined;
-  const embeddingRemoteEntry = embeddingProvider?.models.find(
-    (entry) => entry.id === remoteEmbeddingModel
-  );
 
   const memoryEnabled = !disabledBuiltinTools.includes('memory');
   const [stats, setStats] = React.useState<MemoryStats | null>(null);
   const [jobs, setJobs] = React.useState<MemoryJobsSnapshot>(EMPTY_JOBS);
-  const [models, setModels] = React.useState<EmbeddingModelDto[]>([]);
-  const [progress, setProgress] = React.useState<EmbeddingDownloadProgressDto | null>(null);
   const [chatModels, setChatModels] = React.useState<ChatModelDto[]>([]);
   const [chatProgress, setChatProgress] = React.useState<EmbeddingDownloadProgressDto | null>(null);
-  const [sessions, setSessions] = React.useState<DistillableSessionDto[]>([]);
-  const [distilling, setDistilling] = React.useState<string | null>(null);
+  const [sessions, setSessions] = React.useState<CompilableSessionDto[]>([]);
+  const [compiling, setCompiling] = React.useState<string | null>(null);
   const [sessionsOf, setSessionsOf] = React.useState<SessionGroup | null>(null);
   const [batch, setBatch] = React.useState<BatchProgress | null>(null);
   const [bulkPrompt, setBulkPrompt] = React.useState<BulkPrompt | null>(null);
-  const [backfilling, setBackfilling] = React.useState(false);
   const [allJobs, setAllJobs] = React.useState(false);
-  const [kgRetryBusy, setKgRetryBusy] = React.useState(false);
-  const [kgRetryError, setKgRetryError] = React.useState<string | null>(null);
-  const kgRetryPending = React.useRef(false);
-  // 轮询回调里要读最新值，state 会被闭包定住
-  const backfillingRef = React.useRef(false);
-  backfillingRef.current = backfilling;
-  // 点补齐后立刻拉一次，不等下一个轮询周期
+  const [rebuilding, setRebuilding] = React.useState(false);
+  const [lintReport, setLintReport] = React.useState<MemoryLintReport | null>(null);
+  const [linting, setLinting] = React.useState(false);
+  const [schemaEditor, setSchemaEditor] = React.useState<{
+    space: VaultSpaceDto;
+    content: string;
+    saving: boolean;
+  } | null>(null);
+
   const loadRef = React.useRef<(() => void) | null>(null);
 
   const refreshSessions = React.useCallback(() => {
@@ -252,18 +217,6 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
   React.useEffect(() => {
     if (memoryEnabled) refreshSessions();
   }, [memoryEnabled, refreshSessions]);
-
-  const refreshModels = React.useCallback(() => {
-    void window.electronAPI.memory.models().then(setModels);
-  }, []);
-
-  React.useEffect(() => {
-    refreshModels();
-    return window.electronAPI.memory.onModelProgress((next) => {
-      setProgress(next.done ? null : next);
-      if (next.done) refreshModels();
-    });
-  }, [refreshModels]);
 
   const refreshChatModels = React.useCallback(() => {
     void window.electronAPI.memory
@@ -291,48 +244,37 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         if (!cancelled) setStats(next);
       });
       void window.electronAPI.memory.jobs().then((next) => {
-        if (cancelled) return;
-        setJobs(next);
-        // 重嵌收尾（或压根没建任务：模型未就绪 / 没有待补的行）就退出补齐态，
-        // 否则按钮会一直显示「补齐中」
-        if (backfillingRef.current && next.reembed?.status !== 'running') setBackfilling(false);
+        if (!cancelled) setJobs(next);
       });
     };
     loadRef.current = load;
     load();
-    // 记忆库变化时统计要立刻跟上，不等下一个轮询周期
     const offChanged = window.electronAPI.memory.onChanged(load);
-    const timer = window.setInterval(load, backfilling ? BACKFILL_POLL_MS : JOBS_POLL_MS);
+    const timer = window.setInterval(load, JOBS_POLL_MS);
     return () => {
       cancelled = true;
       loadRef.current = null;
       offChanged();
       window.clearInterval(timer);
     };
-  }, [memoryEnabled, backfilling]);
+  }, [memoryEnabled]);
 
   const groups = groupSessionsByProject(sessions);
-  const pendingSessions = sessions.filter((session) => !session.distilled);
+  const pendingSessions = sessions.filter((session) => !session.compiled);
 
-  // 串行跑：后台 LLM 本就是一条 FIFO 链，并发发起只会让进度不可读。
-  // 耗时完全取决于模型，不预设常量，只用已完成的真实耗时推剩余
-  /**
-   * 批量入口：范围内有已提炼的就先问一声。
-   * 默不作声地跳过已提炼的，会让「改完语言/换了模型想重跑」这个真实诉求无路可走。
-   */
-  const requestBulkDistill = (scope: DistillableSessionDto[], token: string, label: string) => {
-    const pending = scope.filter((session) => !session.distilled);
+  const requestBulkCompile = (scope: CompilableSessionDto[], token: string, label: string) => {
+    const pending = scope.filter((session) => !session.compiled);
     if (!needsBulkPrompt(scope)) {
-      void runDistill(scope, token);
+      void runCompile(scope, token);
       return;
     }
     setBulkPrompt({ token, label, scope, pending });
   };
 
-  const runDistill = async (targets: DistillableSessionDto[], token: string, force = false) => {
+  const runCompile = async (targets: CompilableSessionDto[], token: string, force = false) => {
     const selected = chatModels.find((model) => model.id === chatModel) ?? null;
     if (localChatBlocksDistill(selected)) return;
-    setDistilling(token);
+    setCompiling(token);
     const startedAt = Date.now();
     setBatch({ done: 0, total: targets.length, startedAt });
     try {
@@ -341,37 +283,96 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         setBatch({ done: i + 1, total: targets.length, startedAt });
       }
     } finally {
-      setDistilling(null);
+      setCompiling(null);
       setBatch(null);
       refreshSessions();
-      // 记忆库是另一个组件在拉数据，提炼写入后它不会自己知道
       onLibraryChanged?.();
     }
   };
 
-  const selectedModel = models.find((model) => model.id === embeddingModel) ?? null;
+  const handleBindVault = async (spaceId: string) => {
+    const res = await window.electronAPI.memory.bindVault(spaceId);
+    if (res.cancelled) return;
+    if (res.ok) {
+      addToast({ type: 'success', title: t('Obsidian Vault bound') });
+      loadRef.current?.();
+      onLibraryChanged?.();
+    } else {
+      addToast({ type: 'error', title: t('Bind failed'), description: res.error });
+    }
+  };
+
+  const handleUnbindVault = async (spaceId: string) => {
+    const res = await window.electronAPI.memory.unbindVault(spaceId);
+    if (res.ok) {
+      addToast({ type: 'success', title: t('Obsidian Vault unbound') });
+      loadRef.current?.();
+      onLibraryChanged?.();
+    } else {
+      addToast({ type: 'error', title: t('Unbind failed'), description: res.error });
+    }
+  };
+
+  const openSchema = async (space: VaultSpaceDto) => {
+    const content = await window.electronAPI.memory.getSchema(space.spaceId);
+    setSchemaEditor({ space, content, saving: false });
+  };
+
+  const saveSchema = async () => {
+    if (!schemaEditor) return;
+    setSchemaEditor({ ...schemaEditor, saving: true });
+    const res = await window.electronAPI.memory.saveSchema(
+      schemaEditor.space.spaceId,
+      schemaEditor.content
+    );
+    if (res.ok) {
+      setSchemaEditor(null);
+      addToast({ type: 'success', title: t('Schema saved') });
+    } else {
+      setSchemaEditor({ ...schemaEditor, saving: false });
+      addToast({ type: 'error', title: t('Save failed'), description: res.error });
+    }
+  };
+
+  const applyPreset = async (spaceId: string, preset: VaultPreset) => {
+    const res = await window.electronAPI.memory.applyPreset(spaceId, preset);
+    if (res.ok && res.schema !== undefined) {
+      setSchemaEditor((curr) =>
+        curr && curr.space.spaceId === spaceId
+          ? { ...curr, space: { ...curr.space, preset }, content: res.schema ?? curr.content }
+          : curr
+      );
+      loadRef.current?.();
+    }
+  };
+
+  const runLint = async () => {
+    setLinting(true);
+    try {
+      const report = await window.electronAPI.memory.lint(null);
+      setLintReport(report);
+    } finally {
+      setLinting(false);
+    }
+  };
+
   const selectedChatModel = chatModels.find((model) => model.id === chatModel) ?? null;
   const chatBlocked = localChatBlocksDistill(selectedChatModel);
   const chatModelItems = chatModels.map((model) => ({
     value: model.id,
     label: model.id === 'remote' ? t('Remote (API model)') : model.label,
   }));
-  const modelItems = [
-    ...models.map((model) => ({ value: model.id, label: embeddingModelLabel(model) })),
-    { value: REMOTE_EMBEDDING_BACKEND_ID, label: t('Remote (OpenAI-compatible)') },
-  ];
   const modelIdleItems = MEMORY_MODEL_IDLE_MINUTES.map((minutes) => ({
     value: String(minutes),
     label: minutes === 0 ? t('Never') : t('{{count}} min', { count: minutes }),
   }));
   const languageItems = [
-    { value: 'en', label: t('English') },
     { value: 'zh', label: t('Simplified Chinese') },
+    { value: 'en', label: t('English') },
     { value: 'auto', label: t('Follow conversation') },
   ];
-  const showRemotePicker =
-    isRemoteEmbeddingId(embeddingModel) || selectedModel?.runtime === 'openai-compatible';
   const jobRows = React.useMemo(() => toJobRows(jobs), [jobs]);
+  const spaces = stats?.spaces ?? [];
 
   return (
     <div className="space-y-[24px]" data-slot="settings-page" data-settings-row="memory.root">
@@ -381,97 +382,254 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         </h2>
         <p className="text-[calc(13rem/14)] text-muted-foreground">
           {t(
-            'Durable knowledge the agent can search and write across sessions. Stored locally in a SQLite database.'
+            'Obsidian-compatible Markdown Wiki vaults (OKF v0.2 + [[wikilink]]) with a rebuildable local FTS5 search index.'
           )}
         </p>
-        {/* 开关只在「内置工具」页：这一页本身就是 memory 工具启用后才出现的，
-            在这里再放一个「关闭我自己」的开关，点下去整页消失，说明文字也永远看不到 */}
         <p className="text-muted-foreground text-[calc(12rem/14)]">
           {t('Turn memory off in Built-in tools.')}
         </p>
       </section>
 
-      <div
-        className="flex items-center justify-between gap-[16px] py-[10px]"
-        data-settings-row="memory.modelIdleMinutes"
-      >
-        <div className="min-w-0">
-          <p className="text-[calc(13rem/14)]">{t('Unload automatically when idle')}</p>
+      <section className="space-y-2" data-settings-row="memory.stats">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-[calc(14rem/14)] font-medium">{t('Wiki overview')}</h3>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!memoryEnabled || rebuilding}
+            onClick={() => {
+              setRebuilding(true);
+              void window.electronAPI.memory
+                .rebuildIndex()
+                .then((res) => {
+                  if (res.ok) addToast({ type: 'success', title: t('Search index rebuilt') });
+                  else
+                    addToast({ type: 'error', title: t('Rebuild failed'), description: res.error });
+                  loadRef.current?.();
+                  onLibraryChanged?.();
+                })
+                .finally(() => setRebuilding(false));
+            }}
+          >
+            {rebuilding ? t('Rebuilding…') : t('Rebuild index')}
+          </Button>
+        </div>
+        {stats === null || stats.totalNotes === 0 ? (
+          <p className="text-[calc(12rem/14)] text-muted-foreground">{t('No wiki notes yet.')}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat label={t('Notes')} value={String(stats.totalNotes)} />
+            <Stat label={t('Wikilinks')} value={String(stats.totalLinks)} />
+            <Stat label={t('Verified')} value={String(stats.verifiedCount)} />
+            <Stat label={t('Draft')} value={String(stats.draftCount)} />
+            <Stat label={t('Broken links')} value={String(stats.brokenLinks)} />
+            <Stat label={t('Stale notes')} value={String(stats.staleCount)} />
+            <Stat label={t('Archived')} value={String(stats.archivedCount)} />
+            <Stat label={t('Index size')} value={formatBytes(stats.indexBytes)} />
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-2" data-settings-row="memory.vaults">
+        <div>
+          <h3 className="text-[calc(14rem/14)] font-medium">{t('Spaces & Obsidian Vaults')}</h3>
           <p className="text-[calc(12rem/14)] text-muted-foreground">
             {t(
-              'Release local model memory after this idle period. Models load automatically the next time they are needed.'
+              'Each space stores plain Markdown files. Bind any space to an existing Obsidian Vault folder, or open it directly in Obsidian.'
             )}
           </p>
         </div>
-        <Select
-          value={String(modelIdleMinutes)}
-          items={modelIdleItems}
-          onValueChange={(value) => {
-            if (value !== null) setModelIdleMinutes(Number(value));
-          }}
-          disabled={!memoryEnabled}
-        >
-          <SelectTrigger className="w-56 shrink-0" aria-label={t('Unload automatically when idle')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            {modelIdleItems.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
+        {spaces.length === 0 ? (
+          <p className="text-[calc(12rem/14)] text-muted-foreground">
+            {t('Spaces appear once memory is active.')}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-[6px] border">
+            {spaces.map((space) => (
+              <li key={space.spaceId} className="space-y-2 px-3 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium text-[calc(13rem/14)]">{space.label}</span>
+                      <Badge variant={space.isExternal ? 'default' : 'secondary'}>
+                        {space.isExternal ? t('Obsidian Vault') : t('Managed')}
+                      </Badge>
+                      <Badge variant="outline">{t(PRESET_LABELS[space.preset])}</Badge>
+                      <span className="text-muted-foreground text-[calc(12rem/14)]">
+                        {t('{{count}} notes', { count: String(space.noteCount) })}
+                        {space.draftCount > 0 ? ` · ${space.draftCount} ${t('Draft')}` : ''}
+                        {space.brokenLinks > 0
+                          ? ` · ${space.brokenLinks} ${t('Broken links')}`
+                          : ''}
+                      </span>
+                    </div>
+                    <p className="truncate font-mono text-muted-foreground text-[calc(11rem/14)]">
+                      {space.rootPath}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        void window.electronAPI.memory.openVault({
+                          spaceId: space.spaceId,
+                          app: 'obsidian',
+                        })
+                      }
+                    >
+                      {t('Open in Obsidian')}
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() =>
+                        void window.electronAPI.memory.openVault({
+                          spaceId: space.spaceId,
+                          app: 'folder',
+                        })
+                      }
+                    >
+                      {t('Open folder')}
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => void openSchema(space)}>
+                      {t('Edit schema.md')}
+                    </Button>
+                    {space.isExternal ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => void handleUnbindVault(space.spaceId)}
+                      >
+                        {t('Unbind')}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => void handleBindVault(space.spaceId)}
+                      >
+                        {t('Bind Obsidian Vault')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </li>
             ))}
-          </SelectPopup>
-        </Select>
-      </div>
+          </ul>
+        )}
+      </section>
 
-      <section className="space-y-2">
-        <h3 className="text-[calc(14rem/14)] font-medium">{t('Embedding model')}</h3>
-        <p className="text-[calc(12rem/14)] text-muted-foreground">
-          {t(
-            'Used for semantic search and near-duplicate detection. Without it search still works using full-text only.'
-          )}
-        </p>
-        <div
-          className="flex items-center justify-between gap-[16px] py-[10px]"
-          data-settings-row="memory.embeddingModel"
-        >
-          <div className="min-w-0">
-            <p className="text-[calc(13rem/14)]">
-              {selectedModel
-                ? embeddingModelLabel(selectedModel)
-                : (remoteEmbeddingModel ??
-                  (showRemotePicker ? t('Remote (OpenAI-compatible)') : embeddingModel))}
-            </p>
+      <section className="space-y-2" data-settings-row="memory.lint">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-[calc(14rem/14)] font-medium">{t('Vault health')}</h3>
             <p className="text-[calc(12rem/14)] text-muted-foreground">
-              {selectedModel
-                ? [
-                    selectedModel.dim ? `${selectedModel.dim}d` : null,
-                    selectedModel.downloadable ? formatBytes(selectedModel.approxBytes) : null,
-                    selectedModel.runtime,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : showRemotePicker
-                  ? 'openai-compatible'
-                  : t('Unknown model; the default is used instead.')}
+              {t(
+                'Deterministic lint checks for broken [[wikilinks]], orphan notes, stale deadlines, old drafts, missing summaries, and oversized pages.'
+              )}
             </p>
           </div>
-          {/* items 必传：base-ui 靠它把 value 映射成 label，否则触发器显示原始 id */}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!memoryEnabled || linting}
+            onClick={() => void runLint()}
+          >
+            {linting ? t('Checking…') : t('Run health check')}
+          </Button>
+        </div>
+        {lintReport &&
+          (lintReport.issues.length === 0 ? (
+            <p className="rounded-[6px] border px-3 py-2 text-muted-foreground text-[calc(12rem/14)]">
+              {t('Checked {{count}} notes — no issues found.', {
+                count: String(lintReport.checkedNotes),
+              })}
+            </p>
+          ) : (
+            <ul className="max-h-64 divide-y overflow-auto rounded-[6px] border">
+              {lintReport.issues.map((issue) => (
+                <li
+                  key={`${issue.noteId}:${issue.kind}:${issue.detail}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant={issue.kind === 'broken_link' ? 'destructive' : 'outline'}>
+                        {t(LINT_LABELS[issue.kind])}
+                      </Badge>
+                      <span className="truncate font-medium text-[calc(12rem/14)]">
+                        {issue.title}
+                      </span>
+                      <span className="font-mono text-muted-foreground text-[calc(11rem/14)]">
+                        [[{issue.slug}]]
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground text-[calc(11rem/14)]">
+                      {issue.spaceLabel} · {issue.detail}
+                    </p>
+                  </div>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() =>
+                      void window.electronAPI.memory.openVault({
+                        noteId: issue.noteId,
+                        app: 'obsidian',
+                      })
+                    }
+                  >
+                    {t('Open in Obsidian')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ))}
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-[calc(14rem/14)] font-medium">{t('Wiki compiler')}</h3>
+        <SwitchRow
+          rowId="memory.distill"
+          title={t('Compile sessions automatically')}
+          description={t(
+            'When a session ends or is reclaimed after being idle for 30 minutes, compile durable lessons into draft wiki notes (always updates existing pages first).'
+          )}
+          checked={distillEnabled}
+          onChange={setDistillEnabled}
+          disabled={!memoryEnabled}
+        />
+        {distillEnabled && chatBlocked && (
+          <p className="text-[calc(12rem/14)] text-destructive">
+            {t(
+              'Automatic compilation is on, but the local model is not ready. Sessions will queue until you download it.'
+            )}
+          </p>
+        )}
+
+        <div
+          className="flex items-center justify-between gap-[16px] py-[10px]"
+          data-settings-row="memory.language"
+        >
+          <div className="min-w-0">
+            <p className="text-[calc(13rem/14)]">{t('Memory language')}</p>
+            <p className="text-[calc(12rem/14)] text-muted-foreground">
+              {t(
+                'Language used when creating or compiling wiki notes (code identifiers stay verbatim).'
+              )}
+            </p>
+          </div>
           <Select
-            value={embeddingBackendSelectValue(embeddingModel)}
-            items={modelItems}
-            onValueChange={(value) => {
-              if (value !== null) {
-                setEmbeddingModel(nextEmbeddingBackend(embeddingModel, String(value)));
-              }
-            }}
+            value={memoryLanguage}
+            items={languageItems}
+            onValueChange={(value) => setMemoryLanguage(String(value))}
             disabled={!memoryEnabled}
           >
             <SelectTrigger className="w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
-              {modelItems.map((item) => (
+              {languageItems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
                 </SelectItem>
@@ -480,125 +638,13 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           </Select>
         </div>
 
-        {selectedModel?.downloadable && (
-          <div
-            className="flex items-center justify-between gap-[16px] py-[10px]"
-            data-settings-row="memory.download"
-          >
-            <div className="min-w-0">
-              <p className="text-[calc(13rem/14)]">
-                {selectedModel.state === 'ready'
-                  ? t('Model downloaded')
-                  : selectedModel.state === 'downloading'
-                    ? t('Downloading…')
-                    : t('Model not downloaded')}
-              </p>
-              <p className="text-[calc(12rem/14)] text-muted-foreground">
-                {progress && progress.modelId === selectedModel.id
-                  ? `${progress.file} · ${formatBytes(progress.received)}${
-                      progress.total ? ` / ${formatBytes(progress.total)}` : ''
-                    } (${progress.fileIndex + 1}/${progress.fileCount})`
-                  : selectedModel.state === 'ready'
-                    ? formatBytes(selectedModel.downloadedBytes)
-                    : t('Semantic search stays off until the model is on disk.')}
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              {selectedModel.state === 'downloading' ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void window.electronAPI.memory
-                      .cancelModelDownload(selectedModel.id)
-                      .then(refreshModels);
-                  }}
-                >
-                  {t('Cancel')}
-                </Button>
-              ) : selectedModel.state === 'ready' ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void window.electronAPI.memory
-                      .deleteModel(selectedModel.id)
-                      .then(refreshModels);
-                  }}
-                >
-                  {t('Remove')}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  disabled={!memoryEnabled}
-                  onClick={() => {
-                    void window.electronAPI.memory
-                      .downloadModel(selectedModel.id)
-                      .then(refreshModels);
-                  }}
-                >
-                  {t('Download')}
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {showRemotePicker && (
-          <div
-            className="flex items-center justify-between gap-[16px] py-[10px]"
-            data-settings-row="memory.remoteModel"
-          >
-            <div className="min-w-0">
-              <p className="text-[calc(13rem/14)]">{t('Remote model')}</p>
-              <p className="text-[calc(12rem/14)] text-muted-foreground">
-                {t('Credentials stay in the main process and are never sent to the renderer.')}
-              </p>
-            </div>
-            {modelCandidates.length > 0 && (
-              <div className="w-56 shrink-0">
-                <ModelPicker
-                  providers={modelCandidates}
-                  providerId={embeddingProvider?.id ?? remoteProviderId ?? ''}
-                  modelId={embeddingRemoteEntry?.id ?? remoteEmbeddingModel ?? ''}
-                  reasoningEnabled={false}
-                  thinkingLevel="medium"
-                  showReasoningControls={false}
-                  emptyLabel={t('Select model')}
-                  side="bottom"
-                  triggerClassName={MODEL_PICKER_FORM_TRIGGER_CLASS}
-                  onSelect={(providerId, modelId) => {
-                    setRemoteProviderId(providerId);
-                    setEmbeddingModel(toRemoteEmbeddingId(modelId));
-                  }}
-                  onReasoningChange={() => {}}
-                  onThinkingChange={() => {}}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        <SwitchRow
-          rowId="memory.autoDownload"
-          title={t('Download models automatically')}
-          description={t(
-            'Off by default, so a model is only fetched when you press Download. While a model is missing, search degrades to full-text; existing memories are re-embedded once it arrives.'
-          )}
-          checked={autoDownload}
-          onChange={setAutoDownload}
-          disabled={!memoryEnabled}
-        />
-      </section>
-
-      <section className="space-y-2" data-settings-row="memory.distillModel">
-        <h3 className="text-[calc(14rem/14)] font-medium">{t('Distillation')}</h3>
         <div className="flex items-center justify-between gap-[16px] py-[10px]">
           <div className="min-w-0">
-            <p className="text-[calc(13rem/14)]">{t('Completion backend')}</p>
+            <p className="text-[calc(13rem/14)]">{t('Compiler backend')}</p>
             <p className="text-[calc(12rem/14)] text-muted-foreground">
-              {t('Local GGUF runs on this machine. Remote uses the model below.')}
+              {t(
+                'Use a remote API model or download an offline local model for session compilation.'
+              )}
             </p>
           </div>
           <Select
@@ -607,7 +653,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             onValueChange={(value) => setChatModel(String(value))}
             disabled={!memoryEnabled}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-56 shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
@@ -619,6 +665,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             </SelectPopup>
           </Select>
         </div>
+
         {selectedChatModel?.downloadable && (
           <div
             className={cn(
@@ -685,25 +732,14 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             </div>
           </div>
         )}
-        {chatBlocked === 'missing' && (
-          <p className="text-[calc(12rem/14)] text-destructive">
-            {t(
-              'Local model selected but the weights are not on disk. Distillation and interpretation will wait until you click Download.'
-            )}
-          </p>
-        )}
-        {chatBlocked === 'downloading' && (
-          <p className="text-[calc(12rem/14)] text-muted-foreground">
-            {t('Download in progress. Distillation waits until the model is ready.')}
-          </p>
-        )}
+
         {chatModel === 'remote' && (
           <>
             <div className="flex items-center justify-between gap-[16px] py-[10px]">
               <div className="min-w-0">
-                <p className="text-[calc(13rem/14)]">{t('Distillation model')}</p>
+                <p className="text-[calc(13rem/14)]">{t('Compiler model')}</p>
                 <p className="text-[calc(12rem/14)] text-muted-foreground">
-                  {t('Reads finished sessions and writes the memories.')}
+                  {t('Reads finished sessions and compiles durable wiki notes.')}
                 </p>
               </div>
               {modelCandidates.length > 0 && (
@@ -732,29 +768,35 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             )}
           </>
         )}
+
         <div
           className="flex items-center justify-between gap-[16px] py-[10px]"
-          data-settings-row="memory.language"
+          data-settings-row="memory.modelIdleMinutes"
         >
           <div className="min-w-0">
-            <p className="text-[calc(13rem/14)]">{t('Memory language')}</p>
+            <p className="text-[calc(13rem/14)]">{t('Unload automatically when idle')}</p>
             <p className="text-[calc(12rem/14)] text-muted-foreground">
               {t(
-                'English keeps retrieval and near-duplicate detection stable across languages. Choose Follow conversation if your team only works in one language.'
+                'Release local model memory after this idle period. Models load automatically the next time they are needed.'
               )}
             </p>
           </div>
           <Select
-            value={memoryLanguage}
-            items={languageItems}
-            onValueChange={(value) => setMemoryLanguage(String(value))}
+            value={String(modelIdleMinutes)}
+            items={modelIdleItems}
+            onValueChange={(value) => {
+              if (value !== null) setModelIdleMinutes(Number(value));
+            }}
             disabled={!memoryEnabled}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger
+              className="w-56 shrink-0"
+              aria-label={t('Unload automatically when idle')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
-              {languageItems.map((item) => (
+              {modelIdleItems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   {item.label}
                 </SelectItem>
@@ -764,101 +806,25 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         </div>
       </section>
 
-      <section className="space-y-2">
-        <h3 className="text-[calc(14rem/14)] font-medium">{t('Background processing')}</h3>
-        <SwitchRow
-          rowId="memory.distill"
-          title={t('Distill sessions automatically')}
-          description={t(
-            'When a session ends, or goes idle for 30 minutes and is reclaimed, extract 1-3 durable memories from it in the background.'
-          )}
-          checked={distillEnabled}
-          onChange={setDistillEnabled}
-          disabled={!memoryEnabled}
-        />
-        {distillEnabled && chatBlocked && (
-          <p className="text-[calc(12rem/14)] text-destructive">
-            {t(
-              'Automatic distillation is on, but the local model is not ready. Sessions will queue until you download it.'
-            )}
-          </p>
-        )}
-        <SwitchRow
-          rowId="memory.kg"
-          title={t('Extract entities')}
-          description={t(
-            'Build an entity graph so a memory can be recalled by a name it does not literally contain.'
-          )}
-          checked={kgEnabled}
-          onChange={setKgEnabled}
-          disabled={!memoryEnabled}
-        />
-      </section>
-
-      <section className="space-y-2" data-settings-row="memory.stats">
-        <h3 className="text-[calc(14rem/14)] font-medium">{t('Library')}</h3>
-        {stats === null || stats.total === 0 ? (
-          <p className="text-[calc(12rem/14)] text-muted-foreground">
-            {t('No memories stored yet.')}
-          </p>
-        ) : (
-          <>
-            {embeddingErrorNotice(stats) && (
-              <p className="text-[calc(12rem/14)] text-destructive">
-                {t('Vectors unavailable: {{reason}}', {
-                  reason: embeddingErrorNotice(stats) ?? '',
-                })}
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <Stat label={t('Memories')} value={String(stats.total)} />
-              <Stat label={t('Crystals')} value={String(stats.crystals)} />
-              <Stat label={t('Entities')} value={String(stats.entities)} />
-              <Stat
-                label={t('With vectors')}
-                value={`${stats.embedded}/${stats.total}`}
-                action={
-                  stats.embedded < stats.total ? (
-                    <button
-                      type="button"
-                      disabled={backfilling}
-                      className="text-[calc(12rem/14)] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
-                      onClick={() => {
-                        setBackfilling(true);
-                        void window.electronAPI.memory.reembed().then(() => loadRef.current?.());
-                      }}
-                    >
-                      {backfilling ? t('Backfilling…') : t('Backfill')}
-                    </button>
-                  ) : null
-                }
-              />
-              <Stat label={t('Database size')} value={formatBytes(stats.databaseBytes)} />
-              <Stat label={t('Spaces')} value={String(Object.keys(stats.bySpace).length)} />
-            </div>
-          </>
-        )}
-      </section>
-
       <section className="space-y-2" data-settings-row="memory.distillSessions">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-[calc(14rem/14)] font-medium">{t('Distill past sessions')}</h3>
+          <h3 className="text-[calc(14rem/14)] font-medium">{t('Compile past sessions')}</h3>
           {pendingSessions.length > 0 && (
             <Button
               size="sm"
               variant="outline"
-              disabled={!memoryEnabled || distilling !== null || chatBlocked !== null}
-              onClick={() => requestBulkDistill(sessions, 'all', t('All sessions'))}
+              disabled={!memoryEnabled || compiling !== null || chatBlocked !== null}
+              onClick={() => requestBulkCompile(sessions, 'all', t('All sessions'))}
             >
-              {distilling === 'all'
-                ? t('Distilling…')
-                : t('Distill all ({{count}})', { count: String(pendingSessions.length) })}
+              {compiling === 'all'
+                ? t('Compiling…')
+                : t('Compile all ({{count}})', { count: String(pendingSessions.length) })}
             </Button>
           )}
         </div>
         <p className="text-[calc(12rem/14)] text-muted-foreground">
           {t(
-            'The automatic switch only covers sessions that end from now on. Distill earlier sessions here to fill the library.'
+            'The automatic switch only covers sessions that end from now on. Compile earlier sessions here to populate the wiki.'
           )}
         </p>
         {batch && (
@@ -882,13 +848,13 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         ) : (
           <ul className="divide-y rounded-[6px] border">
             {groups.map((group) => {
-              const groupPending = group.sessions.filter((s) => !s.distilled);
+              const groupPending = group.sessions.filter((s) => !s.compiled);
               return (
                 <li key={group.key} className="flex items-center justify-between gap-3 px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[calc(13rem/14)]">{group.name}</p>
                     <p className="text-muted-foreground text-[calc(12rem/14)]">
-                      {t('{{total}} sessions · {{pending}} not distilled', {
+                      {t('{{total}} sessions · {{pending}} not compiled', {
                         total: String(group.sessions.length),
                         pending: String(groupPending.length),
                       })}
@@ -903,13 +869,13 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
                       variant="outline"
                       disabled={
                         !memoryEnabled ||
-                        distilling !== null ||
+                        compiling !== null ||
                         group.sessions.length === 0 ||
                         chatBlocked !== null
                       }
-                      onClick={() => requestBulkDistill(group.sessions, group.key, group.name)}
+                      onClick={() => requestBulkCompile(group.sessions, group.key, group.name)}
                     >
-                      {distilling === group.key ? t('Distilling…') : t('Distill project')}
+                      {compiling === group.key ? t('Compiling…') : t('Compile project')}
                     </Button>
                   </div>
                 </li>
@@ -919,157 +885,14 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
         )}
       </section>
 
-      <Dialog open={sessionsOf !== null} onOpenChange={(open) => !open && setSessionsOf(null)}>
-        <DialogContent>
-          {sessionsOf && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{sessionsOf.name}</DialogTitle>
-                <DialogDescription>
-                  {t('{{total}} sessions · {{pending}} not distilled', {
-                    total: String(sessionsOf.sessions.length),
-                    pending: String(sessionsOf.sessions.filter((s) => !s.distilled).length),
-                  })}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogPanel>
-                <ul className="divide-y rounded-[6px] border">
-                  {sessionsOf.sessions.map((session) => (
-                    <li
-                      key={session.sessionId}
-                      className="flex items-center justify-between gap-3 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[calc(13rem/14)]">{session.title}</p>
-                        <p className="text-muted-foreground text-[calc(12rem/14)]">
-                          {session.updatedAt ? session.updatedAt.slice(0, 10) : ''}
-                          {session.distilled ? ` · ${t('Already distilled')}` : ''}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="shrink-0"
-                        disabled={!memoryEnabled || distilling !== null || chatBlocked !== null}
-                        onClick={() =>
-                          void runDistill([session], session.sessionId, session.distilled)
-                        }
-                      >
-                        {distilling === session.sessionId
-                          ? t('Distilling…')
-                          : session.distilled
-                            ? t('Distill again')
-                            : t('Distill')}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </DialogPanel>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" size="sm" />}>
-                  {t('Close')}
-                </DialogClose>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={bulkPrompt !== null} onOpenChange={(open) => !open && setBulkPrompt(null)}>
-        <DialogContent>
-          {bulkPrompt && (
-            <>
-              {/* 说明文字必须放进 DialogHeader：DialogDescription 自身不带 padding，
-                  裸放在 DialogContent 下会顶到弹窗边缘、与标题不对齐 */}
-              <DialogHeader>
-                <DialogTitle>{t('Some sessions were already distilled')}</DialogTitle>
-                <DialogDescription>
-                  {t(
-                    '{{label}}: {{total}} sessions, {{done}} already distilled. Re-distilling runs the model again and may add new memories alongside the existing ones.',
-                    {
-                      label: bulkPrompt.label,
-                      total: String(bulkPrompt.scope.length),
-                      done: String(bulkPrompt.scope.length - bulkPrompt.pending.length),
-                    }
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose render={<Button variant="ghost" size="sm" />}>
-                  {t('Cancel')}
-                </DialogClose>
-                {/* 主次按代价定：重跑全部会把已提炼的会话再过一遍模型（多数是白跑），
-                    不该做成最醒目的默认按钮。只在没有剩余可提炼时它才是唯一有意义的操作。 */}
-                <Button
-                  variant={bulkPrompt.pending.length > 0 ? 'default' : 'outline'}
-                  size="sm"
-                  disabled={bulkPrompt.pending.length === 0}
-                  onClick={() => {
-                    const target = bulkPrompt;
-                    setBulkPrompt(null);
-                    void runDistill(target.pending, target.token);
-                  }}
-                >
-                  {t('Only the {{count}} remaining', {
-                    count: String(bulkPrompt.pending.length),
-                  })}
-                </Button>
-                <Button
-                  variant={bulkPrompt.pending.length > 0 ? 'outline' : 'default'}
-                  size="sm"
-                  onClick={() => {
-                    const target = bulkPrompt;
-                    setBulkPrompt(null);
-                    void runDistill(target.scope, target.token, true);
-                  }}
-                >
-                  {t('Re-distill all {{count}}', { count: String(bulkPrompt.scope.length) })}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
       <section className="space-y-2" data-settings-row="memory.jobs">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-medium text-[calc(14rem/14)]">{t('Background tasks')}</h3>
-          <div className="flex shrink-0 items-center gap-1">
-            {(jobs.kgFailed ?? 0) > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={kgRetryBusy}
-                onClick={() => {
-                  if (kgRetryPending.current) return;
-                  kgRetryPending.current = true;
-                  setKgRetryBusy(true);
-                  setKgRetryError(null);
-                  void window.electronAPI.memory
-                    .kgRetryFailed()
-                    .then((result) => {
-                      if (!result.ok) setKgRetryError(result.error ?? 'Retry failed');
-                      loadRef.current?.();
-                    })
-                    .catch((error: unknown) =>
-                      setKgRetryError(error instanceof Error ? error.message : String(error))
-                    )
-                    .finally(() => {
-                      kgRetryPending.current = false;
-                      setKgRetryBusy(false);
-                    });
-                }}
-              >
-                {t('Retry failed extractions ({{count}})', { count: String(jobs.kgFailed) })}
-              </Button>
-            )}
+          <h3 className="text-[calc(14rem/14)] font-medium">{t('Background tasks')}</h3>
+          <div className="flex items-center gap-1">
             {jobRows.some((row) => row.state !== 'running') && (
               <Button
                 size="sm"
                 variant="ghost"
-                title={t(
-                  'Removes completed and cancelled jobs. Running tasks are kept. Sessions will show as not distilled again, since that flag is derived from job history — re-distilling is deduplicated, so it will not create duplicate memories.'
-                )}
                 onClick={() => {
                   void window.electronAPI.memory.clearJobs();
                 }}
@@ -1086,11 +909,6 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             )}
           </div>
         </div>
-        {kgRetryError && (
-          <p className="text-destructive text-[calc(12rem/14)]" role="alert">
-            {kgRetryError}
-          </p>
-        )}
         {jobRows.length === 0 ? (
           <p className="text-muted-foreground text-[calc(13rem/14)]">{t('Nothing running.')}</p>
         ) : (
@@ -1123,26 +941,159 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           </ul>
         )}
       </section>
+
+      <Dialog open={sessionsOf !== null} onOpenChange={(open) => !open && setSessionsOf(null)}>
+        <DialogContent>
+          {sessionsOf && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{sessionsOf.name}</DialogTitle>
+                <DialogDescription>
+                  {t('{{total}} sessions · {{pending}} not compiled', {
+                    total: String(sessionsOf.sessions.length),
+                    pending: String(sessionsOf.sessions.filter((s) => !s.compiled).length),
+                  })}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogPanel>
+                <ul className="divide-y rounded-[6px] border">
+                  {sessionsOf.sessions.map((session) => (
+                    <li
+                      key={session.sessionId}
+                      className="flex items-center justify-between gap-3 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[calc(13rem/14)]">{session.title}</p>
+                        <p className="text-muted-foreground text-[calc(12rem/14)]">
+                          {session.updatedAt ? session.updatedAt.slice(0, 10) : ''}
+                          {session.compiled ? ` · ${t('Already compiled')}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!memoryEnabled || compiling !== null || chatBlocked !== null}
+                        onClick={() =>
+                          void runCompile([session], session.sessionId, session.compiled)
+                        }
+                      >
+                        {compiling === session.sessionId
+                          ? t('Compiling…')
+                          : session.compiled
+                            ? t('Compile again')
+                            : t('Compile')}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </DialogPanel>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>
+                  {t('Close')}
+                </DialogClose>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkPrompt !== null} onOpenChange={(open) => !open && setBulkPrompt(null)}>
+        <DialogContent>
+          {bulkPrompt && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t('Some sessions were already compiled')}</DialogTitle>
+                <DialogDescription>{bulkPrompt.label}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>
+                  {t('Cancel')}
+                </DialogClose>
+                {bulkPrompt.pending.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const next = bulkPrompt;
+                      setBulkPrompt(null);
+                      void runCompile(next.pending, next.token, false);
+                    }}
+                  >
+                    {t('Only new ({{count}})', { count: String(bulkPrompt.pending.length) })}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const next = bulkPrompt;
+                    setBulkPrompt(null);
+                    void runCompile(next.scope, next.token, true);
+                  }}
+                >
+                  {t('Re-compile all ({{count}})', { count: String(bulkPrompt.scope.length) })}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={schemaEditor !== null} onOpenChange={(open) => !open && setSchemaEditor(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          {schemaEditor && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {schemaEditor.space.label} · {t('schema.md')}
+                </DialogTitle>
+                <DialogDescription>
+                  {t('Apply a preset template or edit the vault rules directly.')}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogPanel className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground text-[calc(12rem/14)]">
+                    {t('Preset')}:
+                  </span>
+                  {VAULT_PRESETS.map((preset) => (
+                    <Button
+                      key={preset}
+                      size="xs"
+                      variant={schemaEditor.space.preset === preset ? 'default' : 'outline'}
+                      onClick={() => void applyPreset(schemaEditor.space.spaceId, preset)}
+                    >
+                      {t(PRESET_LABELS[preset])}
+                    </Button>
+                  ))}
+                </div>
+                <Textarea
+                  rows={14}
+                  className="font-mono text-[calc(12rem/14)]"
+                  value={schemaEditor.content}
+                  onChange={(e) => setSchemaEditor({ ...schemaEditor, content: e.target.value })}
+                />
+              </DialogPanel>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>
+                  {t('Cancel')}
+                </DialogClose>
+                <Button size="sm" disabled={schemaEditor.saving} onClick={() => void saveSchema()}>
+                  {t('Save')}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  action,
-}: {
-  label: string;
-  value: string;
-  action?: React.ReactNode;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[6px] border px-3 py-2">
       <p className="text-muted-foreground text-[calc(12rem/14)]">{label}</p>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[calc(13rem/14)]">{value}</p>
-        {action}
-      </div>
+      <p className="text-[calc(13rem/14)]">{value}</p>
     </div>
   );
 }

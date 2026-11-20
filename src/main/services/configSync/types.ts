@@ -86,12 +86,8 @@ export interface ConfigSyncState {
   compactStrategy?: CompactStrategy;
   smartCompactEnabled?: boolean;
   smartCompactMode?: SmartCompactMode;
-  /** 记忆向量模型注册表 id（`none` / `local:*` / `remote:*`） */
-  memoryEmbeddingModel?: string;
-  /** 会话结束后是否用 LLM 自动蒸馏长期记忆；缺省关 */
+  /** 会话结束后是否用 LLM 自动编译沉淀 Wiki 记忆；缺省关 */
   memoryDistillEnabled?: boolean;
-  /** 记忆创建后是否用 LLM 异步抽取实体图谱；缺省关 */
-  memoryKgEnabled?: boolean;
   defaultReasoningEnabled?: boolean;
   defaultThinkingLevel?: ThinkingLevel;
   defaultPresetId?: string;

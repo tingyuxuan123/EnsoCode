@@ -1,14 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-
-/** 删除后等待在途蒸馏 / KG 收尾，避免模型异步结果重新生成已删除成员的记忆。 */
-export async function removeBotMemorySpace(userData: string, spaceId: string): Promise<void> {
-  if (!existsSync(join(userData, 'memory', 'memory.db'))) return;
+/** 删除 Bot / 群后等待在途编译收尾，清理派生索引与 Collabra 托管目录（不动用户外部 Vault）。 */
+export async function removeBotMemorySpace(_userData: string, spaceId: string): Promise<void> {
   const host = await import('../memoryHost');
-  const db = host.memoryDatabase();
-  await host.awaitMemoryDistill();
-  await host.awaitMemoryKg();
-  const { deleteMemorySpace } = await import('../memoryAdmin');
-  deleteMemorySpace(db, spaceId);
-  host.notifyMemoryChanged();
+  await host.removeSpaceCompletely(spaceId);
 }

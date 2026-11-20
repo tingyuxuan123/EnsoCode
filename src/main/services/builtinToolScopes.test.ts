@@ -14,7 +14,6 @@ describe('builtin tool scopes', () => {
     expect(sessionDisabledTools(undefined, undefined, [], true)).toEqual([
       'code_search',
       'computer',
-      'memory',
     ]);
   });
 

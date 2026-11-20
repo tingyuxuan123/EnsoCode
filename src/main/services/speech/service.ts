@@ -14,7 +14,7 @@ import {
   type VoiceSession,
 } from '@shared/types/speech';
 import { app } from 'electron';
-import { downloadedBytes, downloadModel, isModelReady } from '../memory/embedding/downloader';
+import { downloadedBytes, downloadModel, isModelReady } from '../llama/downloader';
 import { downloadArchiveModel } from './archive';
 import type { SpeechEngine, SpeechEngineStream } from './engine';
 import { geminiApiKeyFromSettings, openGeminiLiveStream, parseVocabulary } from './gemini';

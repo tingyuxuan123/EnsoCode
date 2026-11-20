@@ -26,20 +26,18 @@ export function MemorySearchResults({
   );
 }
 
-/** memory_capture：写入的那条直接展开；未写入时说明原因并列出挡住它的相似记忆 */
+/** memory_upsert：写入/更新的那条直接展开；Bot 写共享空间待审时标出提示 */
 export function MemoryCaptureResult({ view }: { view: MemoryCaptureView }) {
   const { t } = useI18n();
   const note = view.written
-    ? view.deduplicated && t('Identical memory already exists, nothing new was written')
-    : t('Similar memories already exist, nothing was written');
+    ? view.action === 'updated'
+      ? t('Updated existing wiki note')
+      : null
+    : t('Queued for approval in Inbox');
   return (
     <>
       {note && <p className="px-3 pt-2 text-[calc(11rem/14)] text-muted-foreground">{note}</p>}
-      {view.written ? (
-        <MemorySearchResults hits={[view.memory]} defaultOpen />
-      ) : (
-        <MemorySearchResults hits={view.candidates} />
-      )}
+      <MemorySearchResults hits={[view.memory]} defaultOpen />
     </>
   );
 }
@@ -53,7 +51,6 @@ function MemoryHitRow({ hit, defaultOpen }: { hit: MemorySearchHit; defaultOpen:
         type="button"
         aria-expanded={open}
         onClick={(event) => {
-          // 在本条内拖选复制时不切换折叠
           const selection = window.getSelection();
           if (selection?.toString() && event.currentTarget.contains(selection.anchorNode)) return;
           setOpen((v) => !v);
@@ -69,9 +66,20 @@ function MemoryHitRow({ hit, defaultOpen }: { hit: MemorySearchHit; defaultOpen:
           >
             {hit.title}
           </span>
-          {hit.unitType && (
+          {hit.noteType && (
             <Badge variant="secondary" size="sm">
-              {hit.unitType}
+              {hit.noteType}
+            </Badge>
+          )}
+          {hit.status && (
+            <Badge variant="outline" size="sm">
+              {t(
+                hit.status === 'verified'
+                  ? 'Verified'
+                  : hit.status === 'draft'
+                    ? 'Draft'
+                    : 'Deprecated'
+              )}
             </Badge>
           )}
           {hit.space && (
@@ -79,15 +87,12 @@ function MemoryHitRow({ hit, defaultOpen }: { hit: MemorySearchHit; defaultOpen:
               {t(hit.space === 'global' ? 'Global' : 'Project')}
             </Badge>
           )}
-          {hit.relevance !== null && (
-            <span
-              className="shrink-0 font-mono text-[calc(11rem/14)] text-muted-foreground/70 tabular-nums"
-              title={t('Semantic similarity')}
-            >
-              {hit.relevance.toFixed(2)}
-            </span>
-          )}
         </span>
+        {hit.slug && (
+          <span className="block truncate font-mono text-[calc(10rem/14)] text-muted-foreground/80">
+            [[{hit.slug}]]
+          </span>
+        )}
         <span
           className={cn(
             'mt-0.5 whitespace-pre-wrap break-words text-muted-foreground text-[calc(11rem/14)] leading-relaxed',

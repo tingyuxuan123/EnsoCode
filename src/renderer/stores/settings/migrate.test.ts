@@ -482,27 +482,27 @@ describe('设置持久化迁移', () => {
     expect(previous.localMemoryEnabled).toBe(true);
   });
 
-  it('v7 → v8 把已落盘的空 disabledBuiltinTools 补上 memory 默认关', () => {
+  it('v7 → v21 迁移后补齐 computer/code_search 默认关并启用新版轻量 Wiki memory', () => {
     expect(migrateSettings({ theme: 'dark', disabledBuiltinTools: [] }, 7)).toEqual({
       theme: 'dark',
-      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
+      disabledBuiltinTools: ['computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       editMode: 'apply_patch',
     });
   });
 
-  it('v7 → v8 已有其它禁用项时只追加 memory，不覆盖用户选择', () => {
+  it('v7 → v21 已有其它禁用项时保留用户选择并启用 memory', () => {
     expect(migrateSettings({ disabledBuiltinTools: ['browser'] }, 7)).toEqual({
-      disabledBuiltinTools: ['browser', 'memory', 'computer', 'code_search'],
+      disabledBuiltinTools: ['browser', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       editMode: 'apply_patch',
     });
   });
 
-  it('v7 → v8 已经关掉 memory 则不重复追加', () => {
+  it('v7 → v21 原禁用列表含 memory 时在 v21 升级自动开启', () => {
     const state = { disabledBuiltinTools: ['memory', 'browser'] };
     expect(migrateSettings(state, 7)).toEqual({
-      disabledBuiltinTools: ['memory', 'browser', 'computer', 'code_search'],
+      disabledBuiltinTools: ['browser', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
       editMode: 'apply_patch',
     });
@@ -661,12 +661,12 @@ describe('设置持久化迁移', () => {
     expect(migrateSettings(current, SETTINGS_VERSION)).toBe(current);
   });
 
-  it('v13 → v14 把已落盘的 disabledBuiltinTools 补上 computer 默认关', () => {
+  it('v13 → v21 补上 computer/code_search 默认关并启用新版 memory', () => {
     expect(migrateSettings({ disabledBuiltinTools: ['memory'] }, 13)).toEqual({
-      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
+      disabledBuiltinTools: ['computer', 'code_search'],
     });
     expect(migrateSettings({ disabledBuiltinTools: ['memory', 'computer'] }, 13)).toEqual({
-      disabledBuiltinTools: ['memory', 'computer', 'code_search'],
+      disabledBuiltinTools: ['computer', 'code_search'],
     });
     expect(migrateSettings({ theme: 'dark' }, 13)).toEqual({ theme: 'dark' });
     expect(
@@ -674,6 +674,46 @@ describe('设置持久化迁移', () => {
     ).toEqual({
       projects: [{ id: 'p1', disabledBuiltinTools: ['browser', 'computer', 'code_search'] }],
     });
+  });
+
+  it('v20 → v21 移除旧 embedding/KG 字段并在全局与项目列表默认开启 memory', () => {
+    const legacy = {
+      memoryEmbeddingModel: 'local:potion-multilingual-128M',
+      memoryEmbeddingAutoDownload: true,
+      memoryEmbeddingRemoteProviderId: 'p1',
+      memoryKgEnabled: true,
+      memoryDistillEnabled: true,
+      disabledBuiltinTools: ['memory', 'computer'],
+      projects: [{ id: 'p1', disabledBuiltinTools: ['memory', 'browser'] }, { id: 'p2' }],
+    };
+    const expected = {
+      memoryDistillEnabled: true,
+      disabledBuiltinTools: ['computer'],
+      projects: [{ id: 'p1', disabledBuiltinTools: ['browser'] }, { id: 'p2' }],
+    };
+    expect(migrateSettings(legacy, 20)).toEqual(expected);
+    expect(migrateSettings(expected, 20)).toEqual(expected);
+  });
+
+  it('v21 → v22 将旧默认关闭自动编译与英文记忆语言切为开启与简体中文，并保留显式选择', () => {
+    const legacy = { memoryDistillEnabled: false, memoryLanguage: 'en' };
+    const expected = { memoryDistillEnabled: true, memoryLanguage: 'zh' };
+    expect(migrateSettings(legacy, 21)).toEqual(expected);
+    expect(migrateSettings(expected, 21)).toEqual(expected);
+
+    const followConv = { memoryDistillEnabled: true, memoryLanguage: 'auto' };
+    expect(migrateSettings(followConv, 21)).toEqual(followConv);
+
+    expect(migrateSettings(legacy, SETTINGS_VERSION)).toBe(legacy);
+    expect(mergeSettingsState(legacy, { editMode: 'apply_patch', accentColor: 'ocean' })).toEqual(
+      expect.objectContaining(legacy)
+    );
+    expect(
+      mergeSettingsState(
+        { memoryDistillEnabled: 'false', memoryLanguage: 'fr' },
+        { editMode: 'apply_patch', accentColor: 'ocean' }
+      )
+    ).toEqual(expect.objectContaining({ memoryDistillEnabled: true, memoryLanguage: 'zh' }));
   });
 
   // 持久化文件是用户机器上的真实文件，可能被手改坏或来自更早的残缺版本

@@ -6,7 +6,7 @@ import type {
 import { useEffect } from 'react';
 import { create } from 'zustand';
 
-/** Bot 成员写 project / global 记忆的待审批项；收件箱与记忆库审批入口共用 */
+/** 收件箱与记忆库共用的审批队列；自动提炼候选只在记忆库展示。 */
 interface PendingMemoryWritesState {
   items: PendingMemoryWriteDto[];
   refresh: () => Promise<void>;

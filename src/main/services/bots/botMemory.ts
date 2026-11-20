@@ -1,4 +1,4 @@
-import type { DistillPayload } from '../memory/distill';
+import type { CompilePayload as DistillPayload } from '../memory/compiler';
 import { type MemoryAuthority, memorySpaceContext } from '../memory/space';
 import type { BotStore } from './botStore';
 import type { BotChatStore } from './chatStore';

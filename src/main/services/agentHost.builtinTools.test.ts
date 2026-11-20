@@ -94,6 +94,29 @@ it('微压缩默认启用，明确关闭在 spawn 与既有压缩路由中均保
   }
 });
 
+it('memoryLanguage 缺省或非法时回落简体中文，显式合法值原样下发', () => {
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  try {
+    for (const [input, expected] of [
+      [undefined, 'zh'],
+      ['invalid', 'zh'],
+      ['zh', 'zh'],
+      ['en', 'en'],
+      ['auto', 'auto'],
+    ] as const) {
+      settings.state.memoryLanguage = input;
+      expect(spawnSession(identity, request, new Set()).ok).toBe(true);
+      expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+        memoryLanguage: expected,
+      });
+    }
+  } finally {
+    stopAgentWorker();
+  }
+});
+
 beforeEach(() => {
   setNativePluginResources(undefined);
   setNativePluginRuntimeSource(null);

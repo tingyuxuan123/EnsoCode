@@ -154,8 +154,8 @@ import {
   voiceCorrectionModelIdFromSettings,
 } from '../services/llama/chatModels';
 import { clearMcpStatuses, recordMcpStatus } from '../services/mcpStatusCache';
-import type { Complete } from '../services/memory/distill';
 import { memorySpaceContext } from '../services/memory/space';
+import type { Complete } from '../services/memory/types';
 import {
   configureMemoryDistill,
   invokeMemory,
@@ -2148,7 +2148,7 @@ export function registerAgentHandlers(): void {
         });
         return;
       }
-      void invokeMemory(op, params, memory.context).then(
+      void invokeMemory(op, params, { ...memory.context, sessionId: rootSessionId(identity) }).then(
         (result) => sendMemoryResultToSession(identity, requestId, { ok: true, result }),
         (error: unknown) =>
           sendMemoryResultToSession(identity, requestId, {

@@ -73,9 +73,7 @@ const STATE_KEYS = [
   'compactStrategy',
   'smartCompactEnabled',
   'smartCompactMode',
-  'memoryEmbeddingModel',
   'memoryDistillEnabled',
-  'memoryKgEnabled',
   'defaultReasoningEnabled',
   'defaultThinkingLevel',
   'defaultPresetId',
@@ -947,7 +945,6 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     'titleSummaryEnabled',
     'smartCompactEnabled',
     'memoryDistillEnabled',
-    'memoryKgEnabled',
     'defaultReasoningEnabled',
     'subagentModelsEnabled',
     'defaultModelFollowLast',
@@ -981,12 +978,7 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     throw new Error('Invalid state.chatTypography');
   if (state.language !== undefined && !['en', 'zh'].includes(String(state.language)))
     throw new Error('Invalid state.language');
-  for (const key of [
-    'terminalTheme',
-    'terminalFontFamily',
-    'memoryEmbeddingModel',
-    'memoryChatModel',
-  ]) {
+  for (const key of ['terminalTheme', 'terminalFontFamily', 'memoryChatModel']) {
     if (state[key] !== undefined) nonEmptyStringField(state, key, 'state');
   }
   numberField(state, 'terminalFontSize', 'state', Number.MIN_VALUE, Number.MAX_SAFE_INTEGER);

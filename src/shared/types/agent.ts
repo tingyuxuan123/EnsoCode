@@ -273,8 +273,8 @@ export const BROWSER_OPS = [
 ] as const;
 export type BrowserOp = (typeof BROWSER_OPS)[number];
 
-/** 记忆库活在 Main（better-sqlite3），worker 只发 memory-invoke 事件；op 闭集在这里冻结 */
-export const MEMORY_OPS = ['search', 'capture', 'crystallize', 'delete'] as const;
+/** 长期记忆（Markdown Wiki Vault + 派生索引）活在 Main，worker 只发 memory-invoke 事件；op 闭集在这里冻结 */
+export const MEMORY_OPS = ['index', 'search', 'read', 'upsert', 'archive'] as const;
 export type MemoryOp = (typeof MEMORY_OPS)[number];
 
 /** 桌面 computer 活在 Main，worker 只发 computer-invoke；guest JS 一次 run。 */
