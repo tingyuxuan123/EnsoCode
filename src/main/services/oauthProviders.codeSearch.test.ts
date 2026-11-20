@@ -16,6 +16,11 @@ vi.mock('electron', () => ({
 vi.mock('./agentHost', () => ({ pushCodeSearchConfig }));
 vi.mock('./proxyConfig', () => ({ getProxyConfig: () => ({ whenReady: async () => true }) }));
 vi.mock('./modelDirectory', () => ({ refreshModelDirectory: async () => {} }));
+vi.mock('@shared/providers/devin', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/providers/devin')>()),
+  // This test covers login invalidation, not the provider's identity/usage HTTP probe.
+  fetchDevinUsage: vi.fn(async () => ({ windows: [] })),
+}));
 
 const oauthKeys = new Set(['devin', 'anthropic']);
 const provider = {
@@ -105,7 +110,11 @@ describe('OAuth 账号变化触发代码搜索配置失效', () => {
       ownerWebContentsId: 7,
       host: 'provider-wizard',
     });
-    if (handle.completion) await handle.completion;
+    expect(handle.start.status).toBe('started');
+    await expect(handle.completion).resolves.toMatchObject({
+      type: 'done',
+      account: { key: 'devin#2' },
+    });
     await vi.waitFor(() =>
       expect(pushCodeSearchConfig).toHaveBeenCalledWith({ invalidateAccountKey: 'devin#2' })
     );
