@@ -2215,12 +2215,21 @@ function SandboxOutput({
                   .filter(Boolean)
                   .join('\n')}
               >
-                {failed ? `${label} · ${failed.error ?? 'error'}` : label}
+                {label}
               </span>
             );
           })}
         </div>
       ) : null}
+      {view?.calls.some((call) => !call.ok) && (
+        <ul className="space-y-1 font-mono text-xs text-destructive">
+          {view.calls.filter((call) => !call.ok).map((call, index) => (
+            <li key={index} className="break-words">
+              {[call.name, call.summary, call.error].filter(Boolean).join(' · ')}
+            </li>
+          ))}
+        </ul>
+      )}
       {value ? (
         view?.status === 'completed' && typeof view.value !== 'string' ? (
           <CodeBlock code={value} language="json" />
@@ -2380,6 +2389,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   const hasWrite = Boolean(item.writeContent);
   const hasFileChanges = Boolean(item.fileChanges && item.fileChanges.length > 0);
   const sandbox = item.sandbox ?? null;
+  const failedCalls = sandbox?.calls.filter((call) => !call.ok) ?? [];
   // 消息类工具展开显示发出的正文（投递回执已在 timeline 剥掉）；出错时只显示错误输出
   const sentMessage = item.state === 'error' ? null : item.sentMessage;
   const hasImage = Boolean(item.imagePath) && item.state !== 'error';
@@ -2394,7 +2404,7 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
       : sandbox?.calls.length && item.state !== 'error'
         ? summarizeSandboxCalls(sandbox.calls)
         : summary;
-  const hasBody = Boolean(item.output || item.source || sentMessage || item.ask);
+  const hasBody = Boolean(item.output || item.source || sentMessage || item.ask || sandbox?.calls.length);
   const notices = item.notices ?? [];
   // 子代理等待行：运行中可展开看在等的子代理各自在干什么
   const waitProgress = item.state === 'running' && item.waiting === 'subagent' && !host;
@@ -2444,6 +2454,11 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   const delta = toolLineDelta(item);
   const status = (
     <>
+      {failedCalls.length > 0 && (
+        <span className="shrink-0 whitespace-nowrap text-destructive">
+          {t('{{count}} calls failed', { count: failedCalls.length })}
+        </span>
+      )}
       {item.backgroundTaskId && (
         <span className="shrink-0 whitespace-nowrap" title={item.backgroundTaskId}>
           {t('Moved to background')}

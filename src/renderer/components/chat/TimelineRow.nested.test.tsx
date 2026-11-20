@@ -63,6 +63,17 @@ describe('分组展开的子项', () => {
     expect(html).toContain('aria-label="1"');
   });
 
+  it.each([true, false])('脚本正常完成时根据实际调用显示失败提示：ok=%s', (ok) => {
+    const html = renderToStaticMarkup(createElement(TimelineRow, {
+      item: tool({
+        name: 'codemode',
+        sandbox: { status: 'completed', calls: [{ name: 'read', ok: true }, { name: 'read', ok }] },
+      }),
+    }));
+    expect(html).toContain('read ×2');
+    expect(html.includes('calls failed')).toBe(!ok);
+  });
+
   it('失败行直接给出错误首行，不用展开', () => {
     const html = renderToStaticMarkup(
       createElement(TimelineRow, {
