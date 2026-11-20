@@ -367,3 +367,23 @@ describe('模块级常量的 i18n key（#5）', () => {
     }
   });
 });
+
+describe('updater i18n keys', () => {
+  it('更新弹窗、图标轨入口与更新内容标题均有中文映射', () => {
+    const keys = [
+      'Updates',
+      'Release notes',
+      'Download',
+      'Restart to update',
+      'Update failed',
+      'New version {{version}} found',
+      'New version {{version}} is ready — restart to update.',
+      'Downloading update… {{percent}}%',
+    ];
+    for (const key of keys) {
+      expect(zhTranslations[key], `missing updater key: ${key}`).toBeTypeOf('string');
+      expect(getTranslation('zh', key)).not.toBe(key);
+    }
+    expect(getTranslation('zh', 'Release notes')).toBe('更新内容');
+  });
+});

@@ -192,4 +192,47 @@ describe('UpdateRailItem', () => {
     expect(button('Release notes')).toBeUndefined();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
+
+  it('更新弹窗标题保留单一 v 前缀版本标签并保留有序列表起始编号与代码块', async () => {
+    await status({
+      status: 'downloaded',
+      info: {
+        version: 'v0.2.95',
+        releaseNotes: [
+          '# CodeKiln 0.2.95',
+          '## 改进',
+          '- 包含 `inline` 与 [链接](https://example.com)',
+          '<ol start="3"><li>第三条</li></ol>',
+          '```ts\nconst ok = true;\n```',
+          '---',
+          '个人测试通道 0.2.95：测试说明。',
+        ].join('\n\n'),
+      },
+    });
+    await act(async () => button('Release notes')?.click());
+    const dialog = document.querySelector('[role="dialog"]');
+    const badge = dialog?.querySelector('[data-slot="release-version-badge"]');
+    expect(badge?.textContent).toBe('v0.2.95');
+    const body = dialog?.querySelector('[data-slot="dialog-panel"]');
+    expect(body?.querySelector('h1')?.textContent).toBe('CodeKiln 0.2.95');
+    expect(body?.querySelector('h2')?.textContent).toBe('改进');
+    expect(body?.querySelector('ol')?.getAttribute('start')).toBe('3');
+    expect(body?.querySelector('pre code')?.textContent).toContain('const ok = true;');
+    expect(body?.querySelector('hr + p:last-child')?.textContent).toContain('个人测试通道 0.2.95');
+  });
+
+  it('下载中且无更新内容时不渲染空动作区，仍可关闭提示', async () => {
+    await status({
+      status: 'downloading',
+      progress: { percent: 42, bytesPerSecond: 100, total: 1000, transferred: 420 },
+    });
+    expect(button('Release notes')).toBeUndefined();
+    expect(button('Download')).toBeUndefined();
+    expect(button('Restart to update')).toBeUndefined();
+    expect(document.querySelector('[data-slot="update-actions"]')).toBeNull();
+    const close = document.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+    expect(close).not.toBeNull();
+    await act(async () => close?.click());
+    expect(document.querySelector('button[data-slot="update-rail"]')).toBeNull();
+  });
 });

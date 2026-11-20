@@ -80,6 +80,9 @@ export function UpdateRailItem() {
         ? t('New version {{version}} found', { version: version ?? '' })
         : t('Downloading update… {{percent}}%', { percent });
 
+  const showDownloadAction = isAvailable && !autoUpdate;
+  const hasActions = canShowNotes || showDownloadAction || isDownloaded;
+
   return (
     <>
       <Popover>
@@ -104,45 +107,19 @@ export function UpdateRailItem() {
         <PopoverPopup
           side="right"
           align="end"
-          className="w-72 [&_[data-slot=popover-viewport]]:p-2"
+          className="w-[300px] shadow-float [&_[data-slot=popover-viewport]]:p-3"
         >
-          <div className="flex items-start gap-2 text-[calc(12rem/14)]">
+          <div className="flex items-start gap-2.5 text-[calc(12rem/14)]">
             {isError ? (
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+            ) : isDownloaded ? (
+              <RotateCw className="mt-0.5 size-4 shrink-0 text-brand" />
             ) : (
-              <Download className="mt-0.5 size-3.5 shrink-0 text-primary" />
+              <Download className="mt-0.5 size-4 shrink-0 text-brand" />
             )}
-            <span className="min-w-0 flex-1 break-words">{label}</span>
-          </div>
-          <div className="mt-2 flex items-center justify-end gap-1">
-            {canShowNotes && (
-              <button
-                type="button"
-                onClick={showNotes}
-                className="shrink-0 rounded-md px-2 py-1 text-[calc(12rem/14)] text-primary hover:bg-primary/10"
-              >
-                {t('Release notes')}
-              </button>
-            )}
-            {isAvailable && !autoUpdate && (
-              <button
-                type="button"
-                disabled={downloadPending}
-                onClick={() => void download()}
-                className="shrink-0 rounded-md bg-primary px-2 py-1 text-[calc(12rem/14)] text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {t('Download')}
-              </button>
-            )}
-            {isDownloaded && (
-              <button
-                type="button"
-                onClick={() => void window.electronAPI.updater.quitAndInstall()}
-                className="shrink-0 rounded-md bg-primary px-2 py-1 text-[calc(12rem/14)] text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                {t('Restart to update')}
-              </button>
-            )}
+            <span className="min-w-0 flex-1 break-words text-popover-foreground leading-snug">
+              {label}
+            </span>
             <button
               type="button"
               onClick={() => {
@@ -151,11 +128,43 @@ export function UpdateRailItem() {
               }}
               title={t('Close')}
               aria-label={t('Close')}
-              className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              className="-mt-0.5 -mr-1 shrink-0 rounded-[5px] p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X className="size-3.5" />
             </button>
           </div>
+          {hasActions && (
+            <div data-slot="update-actions" className="mt-3 flex items-center justify-end gap-1.5">
+              {canShowNotes && (
+                <button
+                  type="button"
+                  onClick={showNotes}
+                  className="shrink-0 rounded-[5px] border border-border/80 bg-transparent px-2.5 py-1 font-medium text-[calc(12rem/14)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  {t('Release notes')}
+                </button>
+              )}
+              {showDownloadAction && (
+                <button
+                  type="button"
+                  disabled={downloadPending}
+                  onClick={() => void download()}
+                  className="shrink-0 rounded-[5px] bg-primary px-2.5 py-1 font-medium text-[calc(12rem/14)] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {t('Download')}
+                </button>
+              )}
+              {isDownloaded && (
+                <button
+                  type="button"
+                  onClick={() => void window.electronAPI.updater.quitAndInstall()}
+                  className="shrink-0 rounded-[5px] bg-primary px-2.5 py-1 font-medium text-[calc(12rem/14)] text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  {t('Restart to update')}
+                </button>
+              )}
+            </div>
+          )}
         </PopoverPopup>
       </Popover>
       <ReleaseNotesDialog info={isError ? null : notes} onClose={closeNotes} />
