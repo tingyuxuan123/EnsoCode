@@ -1249,8 +1249,7 @@ function buildMessageTimeline(
             part.name === 'apply_patch' &&
             result &&
             !result.isError &&
-            (!result.applyPatchOutcome ||
-              result.applyPatchOutcome.status === 'success');
+            (!result.applyPatchOutcome || result.applyPatchOutcome.status === 'success');
           const rawOutput = result
             ? result.applyPatchOutcome
               ? formatApplyPatchOutcome(result.applyPatchOutcome)

@@ -3067,9 +3067,7 @@ describe('apply_patch timeline', () => {
   };
 
   it('成功时保留 diff，不展示补丁回执', () => {
-    const changes = [
-      { path: 'a.ts', oldText: 'a', newText: 'b', type: 'update' as const },
-    ];
+    const changes = [{ path: 'a.ts', oldText: 'a', newText: 'b', type: 'update' as const }];
     const [row] = buildTimeline(
       [
         call,
@@ -3088,7 +3086,7 @@ describe('apply_patch timeline', () => {
           },
         },
       ],
-      false,
+      false
     );
     expect(row).toMatchObject({
       state: 'ok',

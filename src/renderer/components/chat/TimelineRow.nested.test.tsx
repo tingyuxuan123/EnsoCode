@@ -64,12 +64,20 @@ describe('分组展开的子项', () => {
   });
 
   it.each([true, false])('脚本正常完成时根据实际调用显示失败提示：ok=%s', (ok) => {
-    const html = renderToStaticMarkup(createElement(TimelineRow, {
-      item: tool({
-        name: 'codemode',
-        sandbox: { status: 'completed', calls: [{ name: 'read', ok: true }, { name: 'read', ok }] },
-      }),
-    }));
+    const html = renderToStaticMarkup(
+      createElement(TimelineRow, {
+        item: tool({
+          name: 'codemode',
+          sandbox: {
+            status: 'completed',
+            calls: [
+              { name: 'read', ok: true },
+              { name: 'read', ok },
+            ],
+          },
+        }),
+      })
+    );
     expect(html).toContain('read ×2');
     expect(html.includes('calls failed')).toBe(!ok);
   });
