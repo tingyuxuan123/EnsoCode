@@ -1245,6 +1245,12 @@ function buildMessageTimeline(
           const partial = toolOutputs?.[part.id];
           const sandboxTool = isSandboxTool(part.name);
           const execSource = sandboxTool ? execSourceFromArgs(part.arguments) : null;
+          const hidePatchReceipt =
+            part.name === 'apply_patch' &&
+            result &&
+            !result.isError &&
+            (!result.applyPatchOutcome ||
+              result.applyPatchOutcome.status === 'success');
           const rawOutput = result
             ? result.applyPatchOutcome
               ? formatApplyPatchOutcome(result.applyPatchOutcome)
@@ -1361,7 +1367,13 @@ function buildMessageTimeline(
                       call.summary ??
                       summarizeArgs(call.args, cwd)),
             source: execSource,
-            output: sent ? stripDeliveryReceipt(output) : asked ? asked.output : output,
+            output: hidePatchReceipt
+              ? null
+              : sent
+                ? stripDeliveryReceipt(output)
+                : asked
+                  ? asked.output
+                  : output,
             ...(notices.length > 0 ? { notices } : {}),
             nestedPending: nestedPendingCount(part.id, pendingApprovals) || undefined,
             ...(imagePath ? { imagePath } : {}),

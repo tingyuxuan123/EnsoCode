@@ -3066,6 +3066,38 @@ describe('apply_patch timeline', () => {
     ],
   };
 
+  it('成功时保留 diff，不展示补丁回执', () => {
+    const changes = [
+      { path: 'a.ts', oldText: 'a', newText: 'b', type: 'update' as const },
+    ];
+    const [row] = buildTimeline(
+      [
+        call,
+        {
+          role: 'toolResult',
+          toolCallId: 'patch-1',
+          toolName: 'apply_patch',
+          content: [{ type: 'text', text: 'Patch success.' }],
+          fileChanges: changes,
+          applyPatchOutcome: {
+            status: 'success',
+            applied: ['a.ts'],
+            failed: [],
+            unattempted: [],
+            uncertain: [],
+          },
+        },
+      ],
+      false,
+    );
+    expect(row).toMatchObject({
+      state: 'ok',
+      fileChanges: changes,
+      output: null,
+    });
+    expect(shouldShowToolOutputAfterFileChanges(row)).toBe(false);
+  });
+
   it('partial error 仍携带所有实际落盘文件，不把参数意图当 diff', () => {
     const changes = [
       { path: 'src/a.ts', oldText: 'a', newText: 'aa', type: 'update' as const },
