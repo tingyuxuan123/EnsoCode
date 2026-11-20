@@ -220,7 +220,6 @@ describe('buildSettingsCatalog', () => {
     'agents.maxActiveCoworkers',
     'tools.root',
     'tools.rtkEnabled',
-    'tools.lcuEnabled',
     'tools.editMode',
     'skills.root',
     'mcp.root',
@@ -238,20 +237,8 @@ describe('buildSettingsCatalog', () => {
     }
   });
 
-  it('中英文均能定位独立的 LCU 电脑控制开关', () => {
-    const catalog = buildSettingsCatalog();
-    expect(catalog.find((entry) => entry.id === 'tools.lcuEnabled')).toMatchObject({
-      category: 'tools',
-      title: 'LCU computer control',
-    });
-    expect(getTranslation('zh', 'LCU computer control')).toBe('LCU 电脑控制');
-    for (const query of ['LCU', 'LCU computer control', 'LCU 电脑控制']) {
-      expect(
-        searchSettingsEntries(catalog, query, {
-          translate: (key) => getTranslation('zh', key),
-        }).map((entry) => entry.id)
-      ).toContain('tools.lcuEnabled');
-    }
+  it('设置搜索不再索引 LCU 开关', () => {
+    expect(buildSettingsCatalog().map((entry) => entry.id)).not.toContain('tools.lcuEnabled');
   });
 
   it('Bot 设置迁到「实验」与「Bot 模式」页，通用页不再有旧条目', () => {

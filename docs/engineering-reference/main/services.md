@@ -162,7 +162,7 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 - 内置 `computer` 对实际呈现的 AX 引用记录 role/title/description；动作在原授权与 guard 后复核，
   身份变化则拒绝并要求重新 `ax()/find()`。diff 省略的行和旧 ref 解析不能悄悄更新身份，
   AXPress 失败转坐标前仍需核对；value/focus/selection、合成行标题不作身份。
-  这不是原子核验与投递，字段完全相同的元素复用仍有盲区；外部 LCU 扩展不受此实现保护。
+  这不是原子核验与投递，字段完全相同的元素复用仍有盲区。
   回归：`computer/guest.test.ts`、`computer/backgroundSafety.test.ts`、`shared/computer/axTree.test.ts`。
 
 **原生插件**（`services/extensionPlugins/`、`pluginHost/`、`renderer/plugins/`、[plugins.md](../../plugins.md)）
@@ -491,14 +491,11 @@ Enso 不调 pi 的 `bindExtensions`，pi 不发 `session_start`/`session_shutdow
 
 ## Pi 扩展的人机选择与授权
 
-设置 → 内置工具中的「LCU 电脑控制」由本机 `lcuEnabled` 独立控制，缺省开启只保留已安装扩展的既有加载，
-不安装 LCU，也不影响内置 `computer`。改动在新建或冷恢复会话时读取，不热卸载运行中扩展；
-已打开的会话需要释放后重新打开（或重启应用）。该设备策略不随配置同步导入/导出，也不开放给模型修改。
-关闭时，`lcuExtension.ts` 先通过 SDK 公开包解析器发现资源，在执行扩展前按安装入口的文件身份排除 LCU，
-再关闭磁盘扩展自动发现并显式传入其余入口；相对路径、目录包、file URL 与符号链接均由 SDK 统一解析。
-不能用加载后的 `extensionsOverride` 或按 `js` 名称隐藏替代，否则扩展副作用已执行或误伤同名第三方工具。
-不修改 Pi settings 或 LCU 安装文件；升级 SDK 时复检 `noExtensions` 与显式入口的加载顺序。
-回归：`projectCode.test.ts`、`supervisor.agentDispatch.test.ts`、`lcuEnabled.test.ts`。
+CodeKiln 不再接入 LCU：旧设置在水合时丢弃，专属授权不再提供，不影响内置 `computer`。
+为避免升级后通用 Pi 发现仍执行旧安装入口，`sessionResourceLoader.ts` 在加载前按规范化文件身份排除该入口，
+保留同名工具和同包内的其他扩展，不改 Pi 设置或本机安装文件。不要用加载后才执行的 `extensionsOverride`
+代替。升级 SDK 时复检 `noExtensions` 与显式路径的加载顺序；回归见 `projectCode.test.ts` 和
+`supervisor.agentDispatch.test.ts`。
 
 `extensionUI.ts` 在会话注册后通过公开 `extensionRunner.setUIContext` 接入 `select` / `confirm`，
 以 `rpc` 模式复用 `AskManager` → `ask-request` → AskBar → `ask-respond`。不要为接一个选择框调用
@@ -507,25 +504,14 @@ Enso 不调 pi 的 `bindExtensions`，pi 不发 `session_start`/`session_shutdow
 - 扩展选择带 `selectionOnly: true`，隐藏自由输入；只返回扩展提供的精确原始标签，不 trim、不截到四项。
 - 空字符串仅对严格选择表示取消；普通 `ask_user` 忽略空白答复。非原始选项、超时、中断和失效代际均返回
   `undefined`（确认返回 `false`）。普通选择不设默认许可、不替扩展记住许可，也不把会话许可提升成永久许可。
-- `full` 对已安装 LCU 的原生应用许可自动返回 **Allow once**，不写 session/always 白名单；降档后下次许可恢复询问。
-  必须同时匹配 canonical 扩展文件身份、`js` / `js_reset` 的 LCU 标签、实际会话执行的同一工具定义，以及完整原生许可形状。
-  不按同名工具或标题单独放行；网页、录音、普通 `select` / `confirm` / `ask_user` 均不在自动范围内。
-  受保护动作底线仍优先，系统辅助功能/屏幕录制许可不由此授予。
-- 工具执行前（包括 codemode 嵌套调用）通过公开注册定义为可信 LCU 注入该次执行的 UI 代理；不使用全局当前工具名或
-  AsyncLocalStorage（MCP stdio 回包不处于原工具异步上下文）。LCU 并行调用共享一批活调用生命期，避免较后调用结束使
-  较早调用的许可误取消；最后一个调用结束/取消后整批代理失效，旧批次不能借用下一批的授权。失效代际始终拒绝。
-  切到 `full` 只收口可信待选请求；已提交的人工拒绝、取消或超时不被覆盖，尚未交付的自动允许在降档后失效。
 - 请求绑定具体 managed session / AskManager；发送失败立即收尾。所有结束路径只发一次 resolved，清计时器与
   abort 监听；旧会话不得创建悬空卡片或采用迟到许可。已配对手机沿用既有可信答复通路。
 - 停止/释放/解雇先封闭扩展交互，再取消旧请求；shutdown hook 不得重新弹框阻塞释放。
   停止的封闭令牌只由对应 abort 收尾解除，不得解开随后发生的释放/再次停止；截止后的答复即使先于计时器回调也拒绝。
-- 这里只支持选择与确认。终端 custom、输入编辑器、状态小组件以及 `/lcu pick` 的 composer 写入不在本桥范围内；
-  macOS 屏幕录制/辅助功能仍由系统授权，工具审批模式也不代替 LCU 的应用许可。
+- 这里只支持选择与确认。终端 custom、输入编辑器和状态小组件不在本桥范围内。
 
 升级 Pi 时复检公开 runner UI 绑定及 runtime 重建行为：重建 runner 必须重新绑定，不能默认保留。
-另复检工具 wrapper 是否仍在实际执行时读取原注册定义的 `execute`；若改成注册时复制，需要重新适配（安全降级为人工卡片）。
 回归：`extensionUI.test.ts`（真实 SDK、临时目录）、`ask.test.ts`、`supervisor.agentDispatch.test.ts`、
-`extensionUI.fullApproval.test.ts`、`extensionUI.sdkApproval.test.ts`（真实 SDK 动态注册及负对照）、
 `shared/types/agent.test.ts`、`main/ipc/agent.test.ts`、`AskBar.test.tsx`。
 
 ## 异步资源替换与取消

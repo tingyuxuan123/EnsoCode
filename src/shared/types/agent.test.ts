@@ -1253,15 +1253,10 @@ describe('parent/child commands', () => {
     }
   });
 
-  it('spawn-parent 只接受布尔 LCU 开关，兼容未配置旧命令', () => {
+  it('spawn-parent 不再接受已移除的 LCU 开关', () => {
     const base = { type: 'spawn-parent', identity: parent, cwd: '/repo', model };
     expect(parseAgentCommand(base)).toEqual(base);
-    for (const lcuEnabled of [true, false]) {
-      expect(parseAgentCommand({ ...base, lcuEnabled })).toEqual({ ...base, lcuEnabled });
-    }
-    for (const lcuEnabled of [0, 1, 'false', null, {}, []]) {
-      expect(parseAgentCommand({ ...base, lcuEnabled })).toBeNull();
-    }
+    expect(parseAgentCommand({ ...base, lcuEnabled: true })).toBeNull();
   });
 
   it('命令结果统计在 worker 边界校验，非法计数拒绝', () => {

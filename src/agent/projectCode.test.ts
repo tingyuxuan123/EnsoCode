@@ -12,8 +12,8 @@ import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createLcuResourceLoader } from './lcuExtension';
 import { createProjectSettingsManager, listProjectCodeSources } from './projectCode';
+import { createFilteredResourceLoader } from './sessionResourceLoader';
 
 const dirs: string[] = [];
 function tmp(): string {
@@ -133,7 +133,7 @@ describe('createProjectSettingsManager', () => {
   });
 });
 
-describe('LCU 独立加载开关', () => {
+describe('旧 LCU 安装入口迁移', () => {
   function fixture(entry = 'extension.mjs') {
     const cwd = tmp();
     const agentDir = tmp();
@@ -170,15 +170,10 @@ describe('LCU 独立加载开关', () => {
     return join(alias, 'extension.mjs');
   }
 
-  async function loadLcu(
-    f: ReturnType<typeof fixture>,
-    lcuEnabled?: boolean,
-    trusted: string[] = []
-  ) {
+  async function loadLcu(f: ReturnType<typeof fixture>, trusted: string[] = []) {
     const { settingsManager } = createProjectSettingsManager(f.cwd, f.agentDir, trusted);
-    const loader = await createLcuResourceLoader(
+    const loader = await createFilteredResourceLoader(
       { cwd: f.cwd, agentDir: f.agentDir, settingsManager, noThemes: true },
-      lcuEnabled,
       f.extensionPath
     );
     await loader.reload();
@@ -187,36 +182,35 @@ describe('LCU 独立加载开关', () => {
   }
 
   it.each(['string', 'object'] as const)(
-    '关闭时不执行 %s 包形式的 LCU，其他扩展保留且用户配置不改写',
+    '不执行 %s 包形式的 LCU，其他扩展保留且用户配置不改写',
     async (form) => {
       const f = fixture();
       const source = `./${relative(f.agentDir, f.extensionPath)}`;
       const file = join(f.agentDir, 'settings.json');
       const original = JSON.stringify({ packages: [form === 'string' ? source : { source }] });
       write(file, original);
-      expect(await loadLcu(f, false)).toEqual(['other']);
+      expect(await loadLcu(f)).toEqual(['other']);
       expect(existsSync(f.marker)).toBe(false);
       expect(readFileSync(file, 'utf8')).toBe(original);
     }
   );
 
-  it('开启和缺省都沿用已安装的 LCU，关闭后重新开启可恢复', async () => {
+  it('没有加载开关时也不执行旧 LCU 安装入口，保留其他扩展', async () => {
     const f = fixture();
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ packages: [f.extensionPath] }));
-    expect(await loadLcu(f, false)).toEqual(['other']);
-    expect(await loadLcu(f, true)).toEqual(expect.arrayContaining(['js', 'other']));
-    expect(await loadLcu(f)).toEqual(expect.arrayContaining(['js', 'other']));
+    expect(await loadLcu(f)).toEqual(['other']);
+    expect(existsSync(f.marker)).toBe(false);
   });
 
   it('阻止已信任项目显式引用和全局自动发现的符号链接别名', async () => {
     const f = fixture();
     const alias = discoverableAlias(f);
     write(join(f.cwd, '.pi/settings.json'), JSON.stringify({ extensions: [alias] }));
-    expect(await loadLcu(f, false, listProjectCodeSources(f.cwd))).toEqual(['other']);
+    expect(await loadLcu(f, listProjectCodeSources(f.cwd))).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('全局显式 extensions 路径关闭后不执行，不按工具名或文件名误伤其他扩展', async () => {
+  it('全局显式 extensions 路径不执行，不按工具名或文件名误伤其他扩展', async () => {
     const f = fixture();
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ extensions: [f.extensionPath] }));
     write(
@@ -225,22 +219,22 @@ describe('LCU 独立加载开关', () => {
         parameters: {type:'object',properties:{}},
         execute: async () => ({content:[],details:{}}) });`
     );
-    expect(await loadLcu(f, false)).toEqual(expect.arrayContaining(['js', 'other']));
+    expect(await loadLcu(f)).toEqual(expect.arrayContaining(['js', 'other']));
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('开启不会自动安装或加载没有在 Pi 配置里启用的 LCU', async () => {
+  it('不会自动加载未引用的旧安装入口', async () => {
     const f = fixture();
-    expect(await loadLcu(f, true)).toEqual(['other']);
+    expect(await loadLcu(f)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('坏配置不让自动发现的 LCU 绕过关闭，仍不改写坏文件', async () => {
+  it('坏配置不让自动发现的 LCU 绕过拦截，仍不改写坏文件', async () => {
     const f = fixture();
     discoverableAlias(f);
     const file = join(f.agentDir, 'settings.json');
     write(file, '{broken');
-    expect(await loadLcu(f, false)).toEqual(['other']);
+    expect(await loadLcu(f)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
     expect(readFileSync(file, 'utf8')).toBe('{broken');
   });
@@ -260,18 +254,18 @@ describe('LCU 独立加载开关', () => {
     );
     const file = join(f.agentDir, 'settings.json');
     write(file, JSON.stringify({ packages: [packageDir] }));
-    expect((await loadLcu(f, false)).sort()).toEqual(['other', 'sibling']);
+    expect((await loadLcu(f)).sort()).toEqual(['other', 'sibling']);
     expect(existsSync(f.marker)).toBe(false);
     write(file, JSON.stringify({ extensions: [packageDir] }));
-    expect((await loadLcu(f, false)).sort()).toEqual(['other', 'sibling']);
+    expect((await loadLcu(f)).sort()).toEqual(['other', 'sibling']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it.each(['url', 'spaces'] as const)('关闭不能被 %s 包路径写法绕过', async (form) => {
+  it.each(['url', 'spaces'] as const)('拦截不能被 %s 包路径写法绕过', async (form) => {
     const f = fixture();
     const source = form === 'url' ? pathToFileURL(f.extensionPath).href : ` ${f.extensionPath} `;
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ packages: [source] }));
-    expect(await loadLcu(f, false)).toEqual(['other']);
+    expect(await loadLcu(f)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
@@ -287,11 +281,11 @@ describe('LCU 独立加载开关', () => {
       join(f.agentDir, 'settings.json'),
       `\uFEFF${JSON.stringify({ packages: [f.extensionPath, other] })}`
     );
-    expect((await loadLcu(f, false)).sort()).toEqual(['extra', 'other']);
+    expect((await loadLcu(f)).sort()).toEqual(['extra', 'other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('自动发现目录的 manifest 引用安装入口及其别名也被关闭', async () => {
+  it('自动发现目录的 manifest 引用安装入口及其别名也被排除', async () => {
     const f = fixture();
     const dir = join(f.agentDir, 'extensions/lcu-adapter');
     write(
@@ -299,7 +293,7 @@ describe('LCU 独立加载开关', () => {
       JSON.stringify({ pi: { extensions: ['./alias/extension.mjs'] } })
     );
     linkDirectory(dirname(f.extensionPath), join(dir, 'alias'));
-    expect(await loadLcu(f, false)).toEqual(['other']);
+    expect(await loadLcu(f)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
@@ -315,11 +309,11 @@ describe('LCU 独立加载开关', () => {
       JSON.stringify({ pi: { extensions: ['extension.mjs'] } })
     );
     linkDirectory(packageDir, join(f.agentDir, 'extensions/lcu'));
-    expect(await loadLcu(f, false)).toEqual(['other']);
+    expect(await loadLcu(f)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('父目录里的独立 index 扩展不因包含 LCU 子目录而被误关', async () => {
+  it('父目录里的独立 index 扩展不因包含 LCU 子目录而被被排除', async () => {
     const f = fixture();
     const root = dirname(dirname(f.extensionPath));
     write(
@@ -328,24 +322,24 @@ describe('LCU 独立加载开关', () => {
       parameters:{type:'object',properties:{}},execute:async()=>({content:[],details:{}})});`
     );
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ packages: [root] }));
-    expect((await loadLcu(f, false)).sort()).toEqual(['other', 'parent']);
+    expect((await loadLcu(f)).sort()).toEqual(['other', 'parent']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('目录包的 index 入口是 LCU 符号链接时也不能绕过关闭', async () => {
+  it('目录包的 index 入口是 LCU 符号链接时也不能绕过拦截', async () => {
     const f = fixture('index.ts');
     const root = join(tmp(), 'index-alias');
     linkDirectory(dirname(f.extensionPath), root);
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ packages: [root] }));
-    expect(await loadLcu(f, false)).toEqual(['other']);
+    expect(await loadLcu(f)).toEqual(['other']);
     expect(existsSync(f.marker)).toBe(false);
   });
 
-  it('关闭 LCU 保留 inline 工具，重复 reload 仍不执行 LCU', async () => {
+  it('排除 LCU 保留 inline 工具，重复 reload 仍不执行 LCU', async () => {
     const f = fixture();
     write(join(f.agentDir, 'settings.json'), JSON.stringify({ packages: [f.extensionPath] }));
     const { settingsManager } = createProjectSettingsManager(f.cwd, f.agentDir, []);
-    const loader = await createLcuResourceLoader(
+    const loader = await createFilteredResourceLoader(
       {
         cwd: f.cwd,
         agentDir: f.agentDir,
@@ -362,7 +356,6 @@ describe('LCU 独立加载开关', () => {
             }),
         ],
       },
-      false,
       f.extensionPath
     );
     for (let i = 0; i < 2; i++) {

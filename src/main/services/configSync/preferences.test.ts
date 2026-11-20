@@ -80,11 +80,7 @@ describe('config sync portable preference contract', () => {
       validateBundle({ ...bundle({}), state: { ...baseState(), designEnabled: false } })
     ).toThrow();
   });
-  it('LCU 加载开关仅留当前设备，不随配置同步导出或提交', () => {
-    expect(CONFIG_SYNC_FIELD_POLICY).toHaveProperty('lcuEnabled', {
-      mode: 'excluded',
-      reason: expect.stringContaining('device-local'),
-    });
+  it('配置同步不接受旧 LCU 设置', () => {
     expect(SYNC_FIELDS).not.toContain('lcuEnabled');
     expect(() =>
       validateBundle({

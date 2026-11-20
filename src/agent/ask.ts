@@ -32,8 +32,6 @@ export class AskManager {
       defaultAnswer?: string;
       /** Internal: strict ExtensionUI selection, never a free-form/default answer. */
       selectionOnly?: boolean;
-      /** 宿主内部跟踪已成功发出的选择；不暴露给模型或 IPC。 */
-      onRequestId?: (requestId: string) => void;
     } = {}
   ): Promise<string> {
     if (opts.signal?.aborted) return Promise.reject(new Error('question cancelled'));
@@ -90,7 +88,6 @@ export class AskManager {
       }
       try {
         if (this.onRequest(info) === false) onAbort();
-        else if (!settled) opts.onRequestId?.(requestId);
       } catch (error) {
         settle(() => reject(error));
       }
@@ -103,7 +100,6 @@ export class AskManager {
     opts: {
       signal?: AbortSignal;
       timeoutMs?: number;
-      onRequestId?: (requestId: string) => void;
     } = {}
   ): Promise<string | undefined> {
     try {

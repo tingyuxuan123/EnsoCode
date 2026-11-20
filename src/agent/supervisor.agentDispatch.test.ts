@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type {
   ExtensionUIContext,
@@ -508,35 +508,38 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     }
   });
 
-  it.each([true, false])('LCU=%s 传到资源加载层，与内置 Computer 独立', async (lcuEnabled) => {
+  it('新会话排除旧 LCU 安装入口，但保留内置 Computer', async () => {
     const events: AgentWorkerEvent[] = [];
     const root = mkdtempSync(path.join(tmpdir(), 'enso-lcu-supervisor-'));
-    const lcu = path.join(homedir(), '.local/share/lcu/pi/extension.mjs');
+    const home = path.join(root, 'home');
+    const lcu = path.join(home, '.local/share/lcu/pi/extension.mjs');
+    mkdirSync(path.dirname(lcu), { recursive: true });
+    writeFileSync(lcu, 'export default () => {};');
     writeFileSync(path.join(root, 'settings.json'), JSON.stringify({ packages: [lcu] }));
     const supervisor = new SessionSupervisor({
       emit: (event) => events.push(event),
       agentDir: root,
       sessionDir: root,
     });
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     try {
       supervisor.handleCommand({
         type: 'spawn-parent',
         identity: parent,
         cwd: root,
         model,
-        lcuEnabled,
         disabledTools: [],
       });
       await waitFor(events, 'parent-ready');
       const manager = mocks.loaderOptions[0].settingsManager as SettingsManager;
       expect(manager.getGlobalSettings().packages).toEqual([lcu]);
-      if (!lcuEnabled) {
-        expect(mocks.loaderOptions[0].noExtensions).toBe(true);
-        expect(mocks.loaderOptions[0].additionalExtensionPaths).not.toContain(lcu);
-      }
+      expect(mocks.loaderOptions[0].noExtensions).toBe(true);
+      expect(mocks.loaderOptions[0].additionalExtensionPaths).not.toContain(lcu);
       const tools = mocks.createAgentSession.mock.calls[0][0].customTools as ToolDefinition[];
       expect(tools.some((tool) => tool.name === 'computer')).toBe(true);
     } finally {
+      vi.unstubAllEnvs();
       await supervisor.shutdown();
       await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 });
     }

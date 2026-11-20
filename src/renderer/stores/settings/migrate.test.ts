@@ -2,6 +2,13 @@ import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine
 import { describe, expect, it } from 'vitest';
 import { mergeSettingsState, migrateSettings, SETTINGS_VERSION } from './migrate';
 
+it.each([true, false, 'false'])('水合时丢弃旧 LCU 设置 %s，不改变内置 Computer', (lcuEnabled) => {
+  const current = { editMode: 'apply_patch' as const, accentColor: 'ocean' as const };
+  const restored = mergeSettingsState({ lcuEnabled, disabledBuiltinTools: ['computer'] }, current);
+  expect(restored).not.toHaveProperty('lcuEnabled');
+  expect(restored).toHaveProperty('disabledBuiltinTools', ['computer']);
+});
+
 describe('Kettu 桌面字体默认值升级', () => {
   const oldTypography = {
     body: { fontSize: 15, fontWeight: 400 },

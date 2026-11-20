@@ -577,7 +577,7 @@ it('clears scopes on worker exit/reset; replacement generation owns future pushe
   stopAgentWorker();
 });
 
-it.each([false, true])('新建和冷恢复均从 Main 本机设置读取 LCU：resume=%s', (resume) => {
+it.each([false, true])('新建和冷恢复均忽略旧 LCU 设置：resume=%s', (resume) => {
   const dir = mkdtempSync(join(tmpdir(), 'enso-lcu-spawn-'));
   const resumeFile = join(dir, 'session.jsonl');
   writeFileSync(resumeFile, '');
@@ -585,16 +585,13 @@ it.each([false, true])('新建和冷恢复均从 Main 本机设置读取 LCU：r
     startAgentWorker();
     const worker = workers.at(-1)!;
     worker.emit('spawn');
-    for (const lcuEnabled of [undefined, true, false, null, 'false', 0]) {
-      settings.state.lcuEnabled = lcuEnabled;
-      expect(
-        spawnSession(identity, { ...request, ...(resume ? { resumeFile } : {}) }, new Set()).ok
-      ).toBe(true);
-      expect(worker.posted.findLast((command) => command.type === 'spawn-parent')).toMatchObject({
-        lcuEnabled: lcuEnabled !== false,
-        ...(resume ? { resumeFile } : {}),
-      });
-    }
+    settings.state.lcuEnabled = true;
+    expect(
+      spawnSession(identity, { ...request, ...(resume ? { resumeFile } : {}) }, new Set()).ok
+    ).toBe(true);
+    const command = worker.posted.findLast((command) => command.type === 'spawn-parent');
+    expect(command).toBeDefined();
+    expect(command).not.toHaveProperty('lcuEnabled');
   } finally {
     stopAgentWorker();
     rmSync(dir, { recursive: true, force: true });

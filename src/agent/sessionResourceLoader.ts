@@ -6,8 +6,7 @@ import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi
 
 const require = createRequire(import.meta.url);
 
-/** LCU 安装器注册的 Pi 入口；与应用授权的可信文件身份保持一致。 */
-export function installedLcuExtensionPath(): string {
+function retiredExtensionPath(): string {
   return join(homedir(), '.local/share/lcu/pi/extension.mjs');
 }
 
@@ -40,19 +39,20 @@ function extensionIdentity(path: string): string {
 }
 
 /**
- * 先用 SDK 公开的包解析器发现入口（不会执行扩展），再只把非 LCU 的入口交给 loader。
- * noExtensions 禁掉 loader 的磁盘自动发现，避免第二次解析或 reload 又把 LCU 带回来。
- * 不改用户配置；不能用加载后才执行的 extensionsOverride，也不能按 js 名称过滤。
+ * 旧版安装入口可能仍留在 Pi 配置里。只在 loader 执行前按文件身份跳过它，
+ * 不改配置，不误拦注册了同名工具的其他扩展。
  */
-export async function createLcuResourceLoader(
+export async function createFilteredResourceLoader(
   options: ConstructorParameters<typeof DefaultResourceLoader>[0],
-  lcuEnabled = true,
-  extensionPath = installedLcuExtensionPath()
+  extensionPath = retiredExtensionPath()
 ): Promise<DefaultResourceLoader> {
-  if (lcuEnabled || (options.noExtensions && !options.additionalExtensionPaths?.length)) {
+  if (
+    (options.noExtensions && !options.additionalExtensionPaths?.length) ||
+    !existsSync(extensionPath)
+  ) {
     return new DefaultResourceLoader(options);
   }
-  if (!options.settingsManager) throw new Error('LCU loading policy requires a settings manager');
+  if (!options.settingsManager) throw new Error('Extension filtering requires a settings manager');
   const packageManager = new DefaultPackageManager({
     cwd: options.cwd,
     agentDir: options.agentDir,
@@ -68,6 +68,7 @@ export async function createLcuResourceLoader(
     { temporary: true }
   );
   const installed = canonicalPath(extensionPath);
+  // reload 也只使用这些已过滤的显式入口，避免自动发现把旧入口带回来。
   const allowed = [
     ...new Set(
       [...explicit.extensions, ...(options.noExtensions ? [] : paths.extensions)]

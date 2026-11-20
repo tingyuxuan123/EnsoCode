@@ -83,7 +83,6 @@ export const CONFIG_SYNC_FIELD_POLICY = {
   exploreFoldEnabled: { mode: 'portable' },
   rtkEnabled: { mode: 'portable' },
   designEnabled: { mode: 'excluded', reason: 'device-local UI design canvas feature policy' },
-  lcuEnabled: { mode: 'excluded', reason: 'device-local installed LCU extension loading policy' },
   editMode: { mode: 'portable' },
   hashlineEditEnabled: { mode: 'excluded', reason: 'legacy read-only edit mode migration' },
   compactStrategy: { mode: 'portable' },

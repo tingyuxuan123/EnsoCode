@@ -48,7 +48,6 @@ export const SETTINGS_DATA_COVERAGE = {
   microcompactEnabled: excluded(
     'Microcompaction context clearing is a device-local desktop session preference.'
   ),
-  lcuEnabled: excluded('LCU extension loading is a device-local desktop session preference.'),
   designEnabled: excluded('UI design canvas is a device-local desktop session preference.'),
   memoryEmbeddingModel: excluded('Memory embedding model choice is a desktop preference.'),
   memoryEmbeddingAutoDownload: excluded('Memory model download policy is a device preference.'),
@@ -199,7 +198,6 @@ export const SETTINGS_ACTION_COVERAGE = {
     'Explore-fold is a desktop session preference, not an Enso capability.'
   ),
   setRtkEnabled: excluded('RTK command compression is a desktop session preference.'),
-  setLcuEnabled: excluded('LCU extension loading is a device-local desktop session preference.'),
   setDesignEnabled: excluded('UI design canvas is a device-local desktop session preference.'),
   setProtectedActionsInCode: excluded(
     'Protected-action confirmation floor for Code sessions; desktop safety preference.'

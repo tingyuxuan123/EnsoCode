@@ -183,7 +183,6 @@ const initialState = {
   exploreFoldEnabled: false,
   rtkEnabled: true,
   designEnabled: true,
-  lcuEnabled: true,
   protectedActionsInCode: false,
   editMode: 'apply_patch' as import('@shared/types').EditMode,
   compactStrategy: 'standard' as import('@shared/compactStrategy').CompactStrategy,
@@ -371,7 +370,6 @@ export const useSettingsStore = create<SettingsState>()(
       setExploreFoldEnabled: (exploreFoldEnabled) => set({ exploreFoldEnabled }),
       setRtkEnabled: (rtkEnabled) => set({ rtkEnabled }),
       setDesignEnabled: (designEnabled) => set({ designEnabled }),
-      setLcuEnabled: (lcuEnabled) => set({ lcuEnabled }),
       setProtectedActionsInCode: (protectedActionsInCode) => set({ protectedActionsInCode }),
       setMemoryEmbeddingModel: (memoryEmbeddingModel) => set({ memoryEmbeddingModel }),
       setMemoryEmbeddingAutoDownload: (memoryEmbeddingAutoDownload) =>

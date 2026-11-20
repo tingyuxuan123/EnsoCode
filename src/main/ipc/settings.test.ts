@@ -180,16 +180,11 @@ describe('settings广播策略', () => {
     expect(CONFIG_SYNC_COMMIT_FIELDS).not.toContain('hashlineEditEnabled');
   });
 
-  it('LCU 本机开关可持久化，不在配置同步提交白名单', async () => {
+  it('不再接受已移除的 LCU 设置', async () => {
     const settings = await import('./settings');
-    expect(settings.SETTINGS_STATE_FIELDS).toContain('lcuEnabled');
+    expect(settings.SETTINGS_STATE_FIELDS).not.toContain('lcuEnabled');
     expect(settings.CONFIG_SYNC_COMMIT_FIELDS).not.toContain('lcuEnabled');
-    expect(settings.patchSettingsState('lcuEnabled', false)).toMatchObject({ ok: true });
-    settings.flushSettings();
-    expect(
-      JSON.parse(readFileSync(path.join(userData, 'settings.json'), 'utf8'))['enso-settings'].state
-        .lcuEnabled
-    ).toBe(false);
+    expect(settings.patchSettingsState('lcuEnabled', true)).toMatchObject({ ok: false });
   });
 
   it('Microcompaction 开关可持久化，只接受布尔值，且不在配置同步提交白名单', async () => {

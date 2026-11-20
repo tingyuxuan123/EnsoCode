@@ -200,12 +200,11 @@ import {
   createExploreFoldTools,
   exploreFoldExtension,
 } from './exploreFold';
-import { bindExtensionUI, type ExtensionUIBridge } from './extensionUI';
+import { bindExtensionUI } from './extensionUI';
 import { OperationGate } from './gate';
 import { createGoalTools } from './goal';
 import { readHarnessRuleFiles, resolveHarnessSkillRoots } from './harnessAssets';
 import { type ContextMessage, sanitizeContextMessages } from './imageContext';
-import { createLcuResourceLoader, installedLcuExtensionPath } from './lcuExtension';
 import { McpManager } from './mcp';
 import { partitionMcpNamespaces } from './mcpNames';
 import { createMessageCoworkerTool } from './messageCoworker';
@@ -266,6 +265,7 @@ import {
   selectEvictable,
 } from './sessionEviction';
 import { branchSessionFromPersistedFile, resolveForkLeafId } from './sessionFork';
+import { createFilteredResourceLoader } from './sessionResourceLoader';
 import { createSessionCommandTool } from './sessionShell';
 import { MAX_SHELL_TIMEOUT_SEC } from './shell/policy';
 import { type SilentTurnKind, silentTurnKind } from './silentTurn';
@@ -400,7 +400,6 @@ interface ManagedSession {
   forkBase?: PluginForkBase;
   /** 停止/释放期间禁止扩展重开交互；代币防止旧 abort 的 finally 解开新关闭门。 */
   extensionUIBlock?: symbol;
-  extensionUI?: ExtensionUIBridge;
   childIdentity?: ChildSessionIdentity;
   childMetadata?: ChildConversationMetadata;
   session: AgentSession;
@@ -596,8 +595,6 @@ async function createSessionResourceLoader(options: {
   remoteSsh?: { host: string };
   /** 加载项目内 .claude/.codex/.cursor 的 skills 与规则文件；远程会话不适用（cwd 不在本机） */
   loadHarnessAssets?: boolean;
-  /** 已安装的 LCU Pi 扩展开关，与内置 computer 无关；只在创建 loader 时读取。 */
-  lcuEnabled?: boolean;
   /** 用户已信任的项目代码来源；未全部信任时不加载项目扩展与包 */
   trustedProjectCode?: readonly string[];
   /** Claude 插件命令：作为 `/plugin:command` 提示词模板加入 */
@@ -770,7 +767,7 @@ async function createSessionResourceLoader(options: {
             ...(harness ? readHarnessRuleFiles(options.cwd) : []),
           ]),
   };
-  const loader = await createLcuResourceLoader(loaderOptions, !readOnly && options.lcuEnabled);
+  const loader = await createFilteredResourceLoader(loaderOptions);
   return loader;
 }
 
@@ -1837,7 +1834,6 @@ export class SessionSupervisor {
           command.botRoutines,
           command.botWriteLock,
           command.botDelegationTask,
-          command.lcuEnabled,
           command.pluginEvents,
           command.workflowPresetFiles
         );
@@ -2118,7 +2114,6 @@ export class SessionSupervisor {
       case 'set-approval-mode': {
         const managed = this.must(command.identity);
         managed.gate.mode = command.mode;
-        managed.extensionUI?.approvalModeChanged();
         return;
       }
       case 'set-plan-mode':
@@ -2493,7 +2488,6 @@ export class SessionSupervisor {
     botRoutines = false,
     botWriteLock?: { label: string; ancestors: string[] },
     botDelegationTask = false,
-    lcuEnabled = true,
     pluginEventPlan?: PluginEventPlan,
     workflowPresetFiles: readonly string[] = []
   ): Promise<void> {
@@ -2617,7 +2611,6 @@ export class SessionSupervisor {
       remoteAgentsFiles,
       ...(remote ? { remoteSsh: { host: remote.host } } : {}),
       loadHarnessAssets,
-      lcuEnabled,
       trustedProjectCode,
       pluginCommands,
       pluginEvents: pluginEventInvoker,
@@ -3128,7 +3121,6 @@ export class SessionSupervisor {
               ...(remote ? { remoteSsh: { host: remote.host } } : {}),
               // 类型化子代理与项目资源隔离（同 noSkills/noExtensions），不追加 harness 资源
               loadHarnessAssets: resolved || agentType ? false : loadHarnessAssets,
-              lcuEnabled: ephemeral ? false : lcuEnabled,
               trustedProjectCode,
               // 临时/只读会话：连磁盘 settings 与已安装包都不碰（见 readOnlyResources）
               readOnlyResources: ephemeral === true,
@@ -4036,16 +4028,10 @@ export class SessionSupervisor {
     });
     this.sessions.set(identity.sessionId, managed);
     if (session.extensionRunner) {
-      managed.extensionUI = bindExtensionUI(
+      bindExtensionUI(
         session.extensionRunner,
         managed.asks,
-        () => this.sessions.get(identity.sessionId) === managed && !managed.extensionUIBlock,
-        {
-          approvalMode: () => gate.mode,
-          requiresConfirmation: () => gate.protectedFloor,
-          lcuExtensionPath: installedLcuExtensionPath(),
-          getToolDefinition: (name) => session.getToolDefinition?.(name),
-        }
+        () => this.sessions.get(identity.sessionId) === managed && !managed.extensionUIBlock
       );
     }
     this.flushPendingMcpTools(managed);
@@ -5003,7 +4989,6 @@ export class SessionSupervisor {
         return;
       }
       case 'tool_execution_start': {
-        managed.extensionUI?.prepareTool(event.toolName);
         // codemode 嵌套调用只进脚本，不上时间线
         if (event.parentToolCallId) return;
         // 耗时只从真正开始执行算：同轮后发工具不能把前面 bash 的排队算进去

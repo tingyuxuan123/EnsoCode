@@ -41,7 +41,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
 ): T {
   if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) return current;
   const source = persisted as Record<string, unknown>;
-  const { hashlineEditEnabled, bashInterceptEnabled, voiceModel, ...rest } = source;
+  const { hashlineEditEnabled, bashInterceptEnabled, voiceModel, lcuEnabled, ...rest } = source;
   const editMode =
     'editMode' in source || 'hashlineEditEnabled' in source
       ? resolveEditMode(source.editMode, hashlineEditEnabled)
@@ -64,6 +64,7 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
       ? { codeSearchAccountKey: parseCodeSearchAccountKey(source.codeSearchAccountKey) }
       : {};
   void bashInterceptEnabled;
+  void lcuEnabled; // Removed desktop preference; never merge it back from disk.
   const fileOpening =
     'fileOpenRules' in source || 'fileOpenRules' in current
       ? { fileOpenRules: normalizeFileOpenRules(source.fileOpenRules) }
@@ -75,11 +76,6 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
   const browserLinkOpening =
     'openLinksInBuiltinBrowser' in source || 'openLinksInBuiltinBrowser' in current
       ? { openLinksInBuiltinBrowser: source.openLinksInBuiltinBrowser !== false }
-      : {};
-  // 本机已安装 LCU 的既有加载行为默认保留；旧配置或坏类型只有显式 false 才关闭。
-  const lcu =
-    'lcuEnabled' in source || 'lcuEnabled' in current
-      ? { lcuEnabled: source.lcuEnabled !== false }
       : {};
   const design =
     'designEnabled' in source || 'designEnabled' in current
@@ -97,7 +93,6 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...fileOpening,
     ...contextMenuOpening,
     ...browserLinkOpening,
-    ...lcu,
     ...design,
     ...('pluginAutoUpdate' in source || 'pluginAutoUpdate' in current
       ? { pluginAutoUpdate: source.pluginAutoUpdate !== false }

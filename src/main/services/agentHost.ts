@@ -1173,7 +1173,6 @@ export function spawnSession(
     ...(trustedProjectCode.length > 0 ? { trustedProjectCode } : {}),
     ...(windowsLocalShell !== 'auto' ? { windowsLocalShell } : {}),
     rtkEnabled: state?.rtkEnabled !== false,
-    lcuEnabled: state?.lcuEnabled !== false,
     microcompactEnabled: state?.microcompactEnabled !== false,
     ...(exploreFoldEnabled ? { exploreFoldEnabled: true } : {}),
     editMode,

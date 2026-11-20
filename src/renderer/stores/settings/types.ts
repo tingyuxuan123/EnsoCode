@@ -142,9 +142,6 @@ export interface SettingsState {
   /** UI 设计画布；缺省开。技能加载在新建/冷恢复时应用，工具可见性按轮更新。 */
   designEnabled: boolean;
 
-  /** 本机已安装 LCU 扩展加载开关；缺省开，新建或冷恢复生效，不影响内置 Computer。 */
-  lcuEnabled: boolean;
-
   /** Code 会话也启用受保护动作底线（Bot 会话恒开）；缺省关，新建或冷恢复会话生效。 */
   protectedActionsInCode: boolean;
 
@@ -377,7 +374,6 @@ export interface SettingsState {
   setExploreFoldEnabled: (value: boolean) => void;
   setRtkEnabled: (value: boolean) => void;
   setDesignEnabled: (value: boolean) => void;
-  setLcuEnabled: (value: boolean) => void;
   setProtectedActionsInCode: (value: boolean) => void;
   setMemoryEmbeddingModel: (value: string) => void;
   setMemoryEmbeddingAutoDownload: (value: boolean) => void;
