@@ -1,45 +1,41 @@
-version: 0.2.95
+version: 0.2.96
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.95/CodeKiln-0.2.95-arm64-mac.zip
-    sha512: NV5WLI8oK5OD7uLBAyKaNjt3ALPxUuasqCU+8WyWF8AhRhLOoqfWO8xspR3Cz8HmL6tipXSsnPFpx7vsjqRVgg==
-    size: 191030113
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.95/CodeKiln-0.2.95-arm64.dmg
-    sha512: P9i17MwurGTET/s4Cknb/46bMMUmhURiJBPZzTDCyXqtFbP4oG2njlGFKaSjAYno5M2v8Jt4nbpWLpdtTugt9Q==
-    size: 187417500
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.95/CodeKiln-0.2.95-arm64-mac.zip
-sha512: NV5WLI8oK5OD7uLBAyKaNjt3ALPxUuasqCU+8WyWF8AhRhLOoqfWO8xspR3Cz8HmL6tipXSsnPFpx7vsjqRVgg==
-releaseDate: 2026-11-20T03:50:34.920Z
-releaseName: CodeKiln 0.2.95 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.96/CodeKiln-0.2.96-arm64-mac.zip
+    sha512: 6UGAOSREhaSN//UMPzbJbfmFUYPpI9sZb/2roP3LWvxkC6lRHsbIr49MKGETu7Gb0t9p4PvemgkGxqDh3NFAeQ==
+    size: 191031699
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.96/CodeKiln-0.2.96-arm64.dmg
+    sha512: Keo93f/Hb704PGUAWcuFOhfRlOZEaakPcMTMBm7F9ey90GLGLIxTrb2/PPjYPdsTxseqFxInaoHjewtV+w+rBA==
+    size: 187404850
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.96/CodeKiln-0.2.96-arm64-mac.zip
+sha512: 6UGAOSREhaSN//UMPzbJbfmFUYPpI9sZb/2roP3LWvxkC6lRHsbIr49MKGETu7Gb0t9p4PvemgkGxqDh3NFAeQ==
+releaseDate: 2026-11-20T06:04:22.723Z
+releaseName: CodeKiln 0.2.96 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.95
+  # CodeKiln 0.2.96
 
 
-  ## 会话过程轨迹：步骤徽标、竖向轨迹与入场动效
+  ## 聊天区宽度可切换
 
 
-  - 工具、思考与分组的摘要行换成 22px 圆角图标徽标：运行中轻微呼吸，失败转红，
-    悬停整行浮出浅底，chevron 不再完全隐形。
-  - 连续的过程步骤之间用一条安静的竖向轨迹串起来，相邻步骤行距收紧到 6px 级，
-    正文与工作日志周围仍留宽松间距，长回合的过程区更像一条时间线而不是一叠句子。
-  - 只有回合运行中新到达的步骤播放入场动效；历史加载和向上滚动回看不会重放动画。
+  - 聊天卡片顶栏右侧新增宽窄切换按钮：在阅读宽度与全宽之间切换，选择记进设置，
+    立即作用于当前会话，重启后保持。
+
+  ## 状态栏的项目名变成工作区菜单
 
 
-  ## 侧栏状态与加载状态
+  - 底部状态栏里的项目名不再只是文字标签，点开就能看到并切换会话的工作目录。
+
+  - 临时会话走同一套菜单；远端项目仍单独显示主机标签，本机项目不加多余提示。
 
 
-  - 会话状态微标重新区分语义：运行是迷你 Enso 环，待审批是脉冲环，等待回答是问号徽标，
-    失败是静态叹号，未读是绿点，空闲是与文字基线对齐的极细占位点。
-  - 加载胶囊重做成圆角药丸：环形光点按阶段变形，阶段文字切换时滚动替换并扫光，
-    计时沿同一基线排列。
-
-  ## 修复
+  ## 欢迎页与更新提示
 
 
-  - 侧栏分组下拉按钮反复闪烁：溢出判断改按外层可用宽度比较内容宽度，
-    不再因为 ⌄ 自己占的宽度而反复显隐。
-  - 脚本编排（workflow）里失败的工具调用现在会显示出来，不再被折叠隐藏；
-    补丁类工具的纯成功回执不再单独占行，但变更对比保留。
-  - 修复消息列表页脚重挂：跟随最新输出时底部状态条不再被反复卸载重建。
+  - 空会话欢迎区重新排版：建议入口更紧凑，悬停与键盘可达性补齐，并补上回归用例。
+
+  - 更新弹窗重做：图标与按钮层级更清楚，更新日志、下载与「重启以更新」不再挤在同一行，
+    浮层阴影与间距跟其它卡片一致。
+  - 补齐更新相关文案的中文翻译，不再有中英混排。
 
 
   ## 验收与更新范围
@@ -55,5 +51,5 @@ releaseNotes: >
   ---
 
 
-  个人测试通道 0.2.95：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.96：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
