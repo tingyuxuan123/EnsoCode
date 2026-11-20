@@ -7,6 +7,7 @@ import { Bot, MessageCircle, Monitor } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { AskBar } from '@/components/chat/AskBar';
+import { ChatWidthToggle } from '@/components/chat/ChatWidthToggle';
 import { Composer } from '@/components/chat/Composer';
 import { ChatHostContext } from '@/components/chat/chatHost';
 import {
@@ -149,6 +150,7 @@ export function RemoteNodeChat(props: RemoteNodeChatProps) {
               {banner}
             </span>
           )}
+          <ChatWidthToggle className="h-7 w-7 rounded-md hover:bg-accent/50" />
         </header>
 
         {props.tabGroup && (

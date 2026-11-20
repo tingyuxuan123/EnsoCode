@@ -1,5 +1,5 @@
 import type { OpenInApp } from '@shared/types';
-import { Code2, Copy, Folder, FolderOpen, GitBranch, SquareTerminal } from 'lucide-react';
+import { ChevronUp, Code2, Copy, Folder, FolderOpen, SquareTerminal } from 'lucide-react';
 import { type ReactNode, useCallback, useState } from 'react';
 import { openDirectoryFromMenu, openDirectoryLabel } from '@/components/chat/openDirectoryAction';
 import {
@@ -13,81 +13,63 @@ import {
 } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
 
-const REVEAL =
-  'group-hover:grid-cols-[1fr] group-hover:opacity-100 group-focus-visible:grid-cols-[1fr] group-focus-visible:opacity-100 group-data-popup-open:grid-cols-[1fr] group-data-popup-open:opacity-100';
-
-/** 会话头部右侧的工作区徽标：平时只有文件夹图标和状态点，悬停展开项目/分支，点击打开「用…打开」菜单 */
-export function WorkspaceBadge({
+/** 输入框左下角的工作区目录菜单：承接访达/编辑器/终端打开与路径复制，向上展开。 */
+export function WorkspaceDirectoryMenu({
   project,
   conversationId,
   path,
-  branch,
+  label,
   openDisabled,
-  children,
 }: {
   project: { id: string; name: string; kind?: string };
   conversationId: string;
   path: string;
-  branch?: string;
+  label: string;
   openDisabled?: boolean;
-  /** 状态点 */
-  children: ReactNode;
 }) {
   const { t } = useI18n();
   const [apps, setApps] = useState<OpenInApp[]>([]);
   const local = project.kind !== 'ssh';
   const scratch = project.kind === 'scratch';
-  const label = scratch ? t('Temporary chats') : project.name;
+  const platform = typeof window !== 'undefined' ? (window.electronAPI?.env?.platform ?? '') : '';
+
   const refreshApps = useCallback(() => {
-    if (!local) return;
-    window.electronAPI.projects
-      .openInApps()
+    if (!local || typeof window === 'undefined') return;
+    const loader = window.electronAPI?.projects?.openInApps;
+    if (!loader) return;
+    loader()
       .then(setApps)
       .catch(() => undefined);
   }, [local]);
+
   const open = (appId?: string) =>
     void openDirectoryFromMenu(
       { projectId: project.id, conversationId, ...(appId ? { appId } : {}) },
       t
     );
+
   const editors = apps.filter((app) => app.kind === 'editor');
   const terminals = apps.filter((app) => app.kind === 'terminal');
 
   return (
     <Menu onOpenChange={(next) => next && refreshApps()}>
       <MenuTrigger
-        className="group ml-1.5 flex h-6 min-w-0 shrink-0 items-center rounded-full border border-border/60 px-2 font-mono text-[11.5px] text-muted-foreground outline-none transition-colors duration-(--duration-quick) hover:border-border focus-visible:border-border data-popup-open:border-border"
-        title={scratch ? label : path}
-        aria-label={branch && !scratch ? `${label} / ${branch}` : label}
+        data-slot="workspace-directory-trigger"
+        className="group flex h-[calc(24rem/14)] shrink-0 items-center gap-[calc(6rem/14)] rounded-full px-[calc(8rem/14)] text-[calc(12rem/14)] text-muted-foreground tabular-nums outline-none transition-colors duration-(--duration-quick) ease-(--ease-out) hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-foreground"
+        title={path || (scratch ? label : '')}
+        aria-label={label}
         onPointerEnter={refreshApps}
       >
-        <Folder className="h-3 w-3 shrink-0" />
-        <span
-          className={
-            scratch
-              ? 'grid grid-cols-[1fr] opacity-100'
-              : `grid grid-cols-[0fr] opacity-0 transition-[grid-template-columns,opacity] duration-(--duration-fast) ease-(--ease-smooth-out) ${REVEAL}`
-          }
-        >
-          <span className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap pl-1.5">
-            <span className="max-w-40 truncate">{label}</span>
-            {branch && !scratch && (
-              <>
-                <span className="opacity-40">/</span>
-                <GitBranch className="h-3 w-3 shrink-0" />
-                <span className="max-w-40 truncate">{branch}</span>
-              </>
-            )}
-          </span>
-        </span>
-        <span className="ml-1.5 flex shrink-0 items-center">{children}</span>
+        <Folder className="size-[calc(13rem/14)] shrink-0 opacity-75" />
+        <span className="max-w-[calc(160rem/14)] truncate">{label}</span>
+        <ChevronUp className="size-[calc(11rem/14)] shrink-0 opacity-45 transition-[opacity,transform] duration-(--duration-quick) ease-(--ease-out) group-hover:opacity-80 group-data-popup-open:rotate-180 group-data-popup-open:opacity-90" />
       </MenuTrigger>
-      <MenuPopup align="end" className="min-w-48">
+      <MenuPopup side="top" align="start" sideOffset={6} className="min-w-48">
         {local && (
           <>
             <MenuItem disabled={openDisabled} onClick={() => open()}>
               <FolderOpen />
-              {t(openDirectoryLabel(window.electronAPI.env.platform))}
+              {t(openDirectoryLabel(platform))}
             </MenuItem>
             <AppGroup
               label={t('Editors')}
@@ -106,7 +88,7 @@ export function WorkspaceBadge({
             <MenuSeparator />
           </>
         )}
-        <MenuItem onClick={() => void navigator.clipboard.writeText(path)}>
+        <MenuItem disabled={!path} onClick={() => void navigator.clipboard?.writeText(path)}>
           <Copy />
           {t('Copy Path')}
         </MenuItem>

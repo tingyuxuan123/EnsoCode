@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { FoldHorizontal, PanelRight, Smartphone, UnfoldHorizontal } from 'lucide-react';
+import { PanelRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
@@ -172,7 +172,6 @@ export default function App() {
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const [sidebarView, setSidebarView] = useState<SidebarView>('projects');
   const { t } = useI18n();
-  const chatWide = useSettingsStore((s) => s.chatWide);
   const activeConversationId = useSessionsStore((s) => s.activeId);
   const activeTabId = useSessionsStore((s) =>
     s.activeId ? s.conversations[s.activeId]?.activeTabId : undefined
@@ -604,7 +603,7 @@ export default function App() {
             showLocalCodeView();
           },
         };
-  // 模式入口右侧的显示控制：图片历史、画廊 header、聊天宽度与右侧面板。
+  // 模式入口右侧的显示控制：图片历史、画廊 header 与右侧面板。
   const viewActions = studioActive ? (
     <button
       type="button"
@@ -618,50 +617,19 @@ export default function App() {
     </button>
   ) : galleryActive ? (
     <DesignGalleryHeader side="right" />
-  ) : extensionsActive ? undefined : (
-    <>
-      <button
-        type="button"
-        className={cn(
-          'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-          chatWide ? 'text-foreground' : 'text-muted-foreground'
-        )}
-        onClick={() => useSettingsStore.getState().setChatWide(!chatWide)}
-        aria-label={chatWide ? t('Use reading width') : t('Use full chat width')}
-        title={chatWide ? t('Use reading width') : t('Use full chat width')}
-      >
-        {chatWide ? (
-          <FoldHorizontal className="h-4 w-4" />
-        ) : (
-          <UnfoldHorizontal className="h-4 w-4" />
-        )}
-      </button>
-      {!remoteNodeActive && !botModeActive && activeConversationId && (
-        <button
-          type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-          aria-label={t('Mobile devices')}
-          title={t('Mobile devices')}
-          onClick={() => addSidePanelMobileDevices(activeConversationId)}
-        >
-          <Smartphone className="size-4" />
-        </button>
+  ) : extensionsActive || remoteNodeActive ? undefined : (
+    <button
+      type="button"
+      className={cn(
+        'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
+        (botModeActive ? botPanelOpen : sideOpen) ? 'text-foreground' : 'text-muted-foreground'
       )}
-      {!remoteNodeActive && (
-        <button
-          type="button"
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-            (botModeActive ? botPanelOpen : sideOpen) ? 'text-foreground' : 'text-muted-foreground'
-          )}
-          onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
-          aria-label={t('Toggle side panel')}
-          title={t('Toggle side panel')}
-        >
-          <PanelRight className="h-4 w-4" />
-        </button>
-      )}
-    </>
+      onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
+      aria-label={t('Toggle side panel')}
+      title={t('Toggle side panel')}
+    >
+      <PanelRight className="h-4 w-4" />
+    </button>
   );
 
   return (

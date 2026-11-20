@@ -9,6 +9,7 @@ import { GALLERY_VIEW_ID } from '@/features/design/vetta/src/tab-ids';
 import { useImageStudioStore } from '@/features/imageStudio/store';
 import { useAppModeStore } from '@/stores/bots/mode';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
+import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { useSidebarStore } from '@/stores/sidebar';
 import App from './App';
@@ -244,6 +245,7 @@ beforeEach(() => {
   useSidebarStore.setState({ collapsed: false, auto: false });
   useAppModeStore.setState({ mode: 'code' });
   useRemoteNodesStore.setState({ activeNodeId: 'local' });
+  useSessionsStore.setState({ activeId: null });
   useSettingsStore.setState({ botModeEnabled: false, designEnabled: true });
   useImageStudioStore.setState({ open: false, historyOpen: false });
   useDesignRegistry.setState({ contributions: [], ui: {}, canvasSessionId: null });
@@ -326,8 +328,17 @@ describe('Code / Bot 模式入口按上游组织居中在标题栏', () => {
     const actions = titleBar()?.querySelector('[data-slot="title-bar-actions"]');
     expect(actions?.contains(modeSwitch() as Node)).toBe(false);
     expect(actions?.querySelector('[data-slot="titlebar-mode-separator"]')).toBeNull();
-    expect(actions?.querySelector('button[aria-label="Use full chat width"]')).not.toBeNull();
+    expect(actions?.querySelector('button[aria-label="Use full chat width"]')).toBeNull();
     expect(actions?.querySelector('button[aria-label="Toggle side panel"]')).not.toBeNull();
+  });
+
+  it('有活动会话时标题栏右侧只留侧栏开关，不再挂载移动设备或聊天宽度入口', async () => {
+    act(() => useSessionsStore.setState({ activeId: 'conv-1' }));
+    await mountApp();
+    const actions = titleBar()?.querySelector('[data-slot="title-bar-actions"]');
+    expect(actions?.querySelector('button[aria-label="Toggle side panel"]')).not.toBeNull();
+    expect(actions?.querySelector('button[aria-label="Use full chat width"]')).toBeNull();
+    expect(actions?.querySelector('button[aria-label="Mobile devices"]')).toBeNull();
   });
 
   it('远程节点让位给对方的目录时标题栏不重复品牌字', async () => {

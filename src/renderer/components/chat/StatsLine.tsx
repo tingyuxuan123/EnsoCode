@@ -31,6 +31,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { fetchAccountUsage, USAGE_CACHE_TTL_MS, usageCache } from '@/hooks/useAccountUsage';
@@ -40,6 +41,7 @@ import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import type { Conversation } from '@/stores/sessions';
 import { useSessionsStore } from '@/stores/sessions';
 import { computeStats, formatDuration } from '@/stores/sessions/stats';
+import { resolveSessionWorkspace } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
 import { ContextInspector } from './ContextInspector';
 import { ContextMeter } from './ContextMeter';
@@ -54,6 +56,7 @@ import {
   type SegmentValue,
   toSessionUsageStats,
 } from './usageSegments';
+import { WorkspaceDirectoryMenu } from './WorkspaceDirectoryMenu';
 
 export type { SegmentValue };
 
@@ -500,17 +503,23 @@ export function StatsLine({ conversationId }: StatsLineProps) {
     [t, conversation, messages, labelProviders, projects, now, usageData]
   );
 
+  const project = projects.find((p) => p.id === conversation?.projectId);
+  const workspace = useSessionsStore(
+    useShallow((state) => resolveSessionWorkspace(project, conversationId, state.conversations))
+  );
+
   if (!conversation || !icons || !values) return null;
 
   // 渲染顺序恒按 statusLineSegments 数组自身顺序（用户拖拽排序的落点），⛔ 不要改回按
   // STATUS_LINE_SEGMENT_IDS 声明序 filter —— 那是旧契约，已被拖拽排序需求反转。
   const visibleSegments = enabledSegments.filter((id) => values[id]);
 
-  const place = trayPlace(projects.find((p) => p.id === conversation.projectId));
+  const place = trayPlace(project);
   // 只有远端项目才提示「代码不在这台机器上」；本机项目这一段整段不渲染。
-  const host = hostLabel(projects.find((p) => p.id === conversation.projectId));
+  const host = hostLabel(project);
   // 分支不在这里重复：它由 composer 的工作区选择器显示（本地就显示当前分支名）。
   const hasPlace = Boolean(host || place.project || place.temporary);
+  const placeLabel = place.project ?? (place.temporary ? t('Temporary chats') : null);
 
   return (
     <div
@@ -524,10 +533,18 @@ export function StatsLine({ conversationId }: StatsLineProps) {
           className="flex min-w-0 flex-nowrap items-center gap-[calc(2rem/14)] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {host && <TrayLink icon={HOST_ICONS} text={host} title={host} static />}
-          {place.project && <TrayLink icon={Folder} text={place.project} title={place.project} />}
-          {place.temporary && (
-            <TrayLink icon={Folder} text={t('Temporary chats')} title={t('Temporary chats')} />
-          )}
+          {placeLabel &&
+            (project && workspace ? (
+              <WorkspaceDirectoryMenu
+                project={project}
+                conversationId={workspace.rootConversationId}
+                path={workspace.cwd ?? ''}
+                label={placeLabel}
+                openDisabled={workspace.worktreeMissing || !workspace.cwd}
+              />
+            ) : (
+              <TrayLink icon={Folder} text={placeLabel} title={placeLabel} />
+            ))}
         </div>
       )}
       {visibleSegments.length > 0 && (

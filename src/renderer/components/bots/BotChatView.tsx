@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { APPROVAL_MODE_META } from '@/components/chat/ApprovalModePicker';
 import { AskBar } from '@/components/chat/AskBar';
+import { ChatWidthToggle } from '@/components/chat/ChatWidthToggle';
 import { CHAT_COL } from '@/components/chat/MessageTimeline';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import { sidePanelWidthTransition } from '@/components/sidepanel/sidePanelWidthAnim';
@@ -404,6 +405,7 @@ export function BotChatView({
           ) : (
             <ThreadSwitcher group={group} thread={chat} />
           )}
+          <ChatWidthToggle className="h-7 w-7 rounded-md hover:bg-muted" />
         </header>
 
         {direct ? (

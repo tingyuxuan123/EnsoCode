@@ -39,6 +39,7 @@ import { ApprovalBar } from './ApprovalBar';
 import { ApprovalModePicker } from './ApprovalModePicker';
 import { AskBar } from './AskBar';
 import { ChatSessionTimeline } from './ChatSessionTimeline';
+import { ChatWidthToggle } from './ChatWidthToggle';
 import { CollapsingToolbar } from './CollapsingToolbar';
 import { Composer } from './Composer';
 import { ConversationStatusIndicator } from './ConversationStatusIndicator';
@@ -60,7 +61,6 @@ import { resolveSessionUsageAccount } from './sessionUsageAccount';
 import { dedupeSlashCommands } from './skillCompletion';
 import { TaskBar } from './TaskBar';
 import { usePinnedTodos } from './TodoBar';
-import { WorkspaceBadge } from './WorkspaceBadge';
 import { WorktreeMissingDialog } from './WorktreeMissingDialog';
 import { WorktreePicker } from './WorktreePicker';
 
@@ -223,16 +223,6 @@ export function ChatView() {
               );
 
   const project = projects.find((p) => p.id === chrome?.projectId);
-  const pickerId = chrome?.id;
-  const [localBranch, setLocalBranch] = useState<{ id: string; branch: string }>();
-  const handleBranchChange = useCallback(
-    (branch: string | undefined) =>
-      setLocalBranch(pickerId && branch ? { id: pickerId, branch } : undefined),
-    [pickerId]
-  );
-  const branch =
-    chrome?.parentWorktreeBranch ??
-    (localBranch?.id === chrome?.parentId ? localBranch?.branch : undefined);
   const skills = useSettingsStore((state) => state.skills);
   const loadLocalSkills = useSettingsStore((state) => state.loadLocalSkills);
   const designEnabled = useSettingsStore((state) => state.designEnabled);
@@ -392,19 +382,10 @@ export function ChatView() {
         parentId={chrome.parentId}
         displayedId={chrome.id}
         trailing={
-          project ? (
-            <WorkspaceBadge
-              project={project}
-              conversationId={chrome.parentId}
-              path={toolCwd ?? ''}
-              branch={branch}
-              openDisabled={chrome.parentWorktreeMissing}
-            >
-              {statusDot}
-            </WorkspaceBadge>
-          ) : (
-            <div className="flex min-w-0 shrink-0 items-center">{statusDot}</div>
-          )
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+            <ChatWidthToggle />
+            <span className="flex items-center px-0.5">{statusDot}</span>
+          </div>
         }
       />
       <ChatSessionTimeline
@@ -599,11 +580,7 @@ export function ChatView() {
                           id: 'worktree',
                           rank: 2,
                           render: (compact) => (
-                            <WorktreePicker
-                              compact={compact}
-                              conversationId={chrome.id}
-                              onBranchChange={handleBranchChange}
-                            />
+                            <WorktreePicker compact={compact} conversationId={chrome.id} />
                           ),
                         },
                         ...(planAvailable || chrome.planState?.active

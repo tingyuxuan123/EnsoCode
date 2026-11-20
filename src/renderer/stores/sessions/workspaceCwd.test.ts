@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { sessionWorkspaceCwd } from './workspaceCwd';
+import { resolveSessionWorkspace, sessionWorkspaceCwd } from './workspaceCwd';
 
 it('scratch 文件/变更面板的 child 与父共享 cwd，但不暴露相邻会话目录', () => {
   const id = '11111111-1111-4111-8111-111111111111';
@@ -30,4 +30,19 @@ it('普通根/worktree/SSH 路径保留，循环坏 parent 数据拒绝', () => 
       child: { parentId: 'child' },
     })
   ).toBeUndefined();
+});
+
+it('resolveSessionWorkspace 追溯根会话并保留 worktree 缺失状态', () => {
+  const project = { kind: 'local', path: '/repo' };
+  const conversations = {
+    root: { worktree: { path: '/wt/feat' }, worktreeMissing: true },
+    coworker: { parentId: 'root' },
+    btw: { btwParentId: 'coworker' },
+  };
+  expect(resolveSessionWorkspace(project, 'btw', conversations)).toEqual({
+    rootConversationId: 'root',
+    cwd: '/wt/feat',
+    worktreeMissing: true,
+  });
+  expect(resolveSessionWorkspace(undefined, 'btw', conversations)).toBeUndefined();
 });
