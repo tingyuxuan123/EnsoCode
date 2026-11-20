@@ -9,8 +9,9 @@ import { isClassifierOnlyProvider } from '@shared/providerCatalog';
 import type { AgentTypeEntry, AgentTypeModelMode } from '@shared/types';
 import { hasProviderCredentials, MODEL_THINKING_LEVEL_OVERRIDES } from '@shared/types';
 import { BUILTIN_AGENT_TYPES } from '@shared/types/assets';
-import { AlertCircle, Bot, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, Bot, Pencil, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
+import { AskCodeKilnIcon } from '@/components/app/NavIcons';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -78,7 +79,7 @@ export function AgentTypesSettings() {
                 });
               }}
             >
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <AskCodeKilnIcon className="size-3.5 text-primary" />
               {t('Auto configure with AI')}
             </Button>
           </AlertAction>

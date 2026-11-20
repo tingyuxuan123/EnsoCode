@@ -3,8 +3,9 @@ import { SUBAGENT_MODELS_CONFIGURE_PROMPT } from '@shared/i18n';
 import { pickModelCapabilityOverrides } from '@shared/modelCatalog';
 import type { ModelProvider, ModelThinkingLevelOverride } from '@shared/types';
 import { MODEL_THINKING_LEVEL_OVERRIDES } from '@shared/types';
-import { Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
+import { AskCodeKilnIcon } from '@/components/app/NavIcons';
 import { ModelPicker } from '@/components/chat/ModelPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,7 +96,7 @@ export function SubagentModelsSettings() {
             className="h-7 gap-1 px-2.5 text-[calc(12rem/14)]"
             onClick={handleAiConfigure}
           >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <AskCodeKilnIcon className="size-3.5 text-primary" />
             {t('Auto configure with AI')}
           </Button>
           <Switch checked={enabled} onCheckedChange={setEnabled} />

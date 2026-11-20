@@ -2,7 +2,15 @@ import { parseHTML } from 'linkedom';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CodeWorkspaceIcon, DesignGalleryIcon, ExtensionsIcon, ImageStudioIcon } from './NavIcons';
+import {
+  AskCodeKilnIcon,
+  CodeWorkspaceIcon,
+  DesignGalleryIcon,
+  ExtensionsIcon,
+  GeneralPreferencesIcon,
+  ImageStudioIcon,
+  SettingsGearIcon,
+} from './NavIcons';
 
 function renderSvg(element: React.ReactElement) {
   const html = renderToStaticMarkup(element);
@@ -15,7 +23,10 @@ describe('NavIcons', () => {
       { Comp: CodeWorkspaceIcon, attr: 'data-rail-glyph', glyph: 'code' },
       { Comp: ImageStudioIcon, attr: 'data-rail-glyph', glyph: 'images' },
       { Comp: DesignGalleryIcon, attr: 'data-rail-glyph', glyph: 'design' },
+      { Comp: SettingsGearIcon, attr: 'data-rail-glyph', glyph: 'settings' },
+      { Comp: AskCodeKilnIcon, attr: 'data-nav-glyph', glyph: 'ask-codekiln' },
       { Comp: ExtensionsIcon, attr: 'data-nav-glyph', glyph: 'extensions' },
+      { Comp: GeneralPreferencesIcon, attr: 'data-nav-glyph', glyph: 'general' },
     ] as const;
 
     for (const { Comp, attr, glyph } of cases) {

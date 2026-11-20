@@ -137,3 +137,82 @@ export function ExtensionsIcon({ className, active = false }: NavIconProps) {
     </svg>
   );
 }
+
+/**
+ * Ask CodeKiln 专属入口微标：Enso 缺口圆环 + 中心星核与弧尾星点，
+ * 呼应运行状态中的轨道彗星语言，在 14px 标题栏按钮与 19px 图标轨均保持清晰轮廓。
+ */
+export function AskCodeKilnIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-nav-glyph="ask-codekiln"
+      className={className}
+    >
+      <path d="M19.85 10.35A8.25 8.25 0 1 1 13.65 4.15" />
+      <circle cx="18.35" cy="5.65" r="1.2" fill="currentColor" stroke="none" />
+      <path
+        d="M12 7c.52 2.9 2.1 4.48 5 5-2.9.52-4.48 2.1-5 5-.52-2.9-2.1-4.48-5-5 2.9-.52 4.48-2.1 5-5Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
+  );
+}
+
+/**
+ * 设置入口图标：对称精密六齿齿轮 + 舒展内孔，替代易与筛选混淆的双滑杆图标。
+ */
+export function SettingsGearIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-rail-glyph="settings"
+      className={className}
+    >
+      <path d="M10.44 3.14 L13.56 3.14 L14.31 5.66 A6.75 6.75 0 0 1 16.34 6.83 L18.89 6.21 L20.46 8.92 L18.65 10.83 A6.75 6.75 0 0 1 18.65 13.17 L20.46 15.08 L18.89 17.79 L16.34 17.17 A6.75 6.75 0 0 1 14.31 18.34 L13.56 20.86 L10.44 20.86 L9.69 18.34 A6.75 6.75 0 0 1 7.66 17.17 L5.11 17.79 L3.54 15.08 L5.35 13.17 A6.75 6.75 0 0 1 5.35 10.83 L3.54 8.92 L5.11 6.21 L7.66 6.83 A6.75 6.75 0 0 1 9.69 5.66 Z" />
+      <circle cx="12" cy="12" r="2.75" />
+    </svg>
+  );
+}
+
+/**
+ * 设置页「通用」分类图标：三行精密调校滑杆，避免在设置窗口内再次重复外层齿轮。
+ */
+export function GeneralPreferencesIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.85}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-nav-glyph="general"
+      className={className}
+    >
+      <path d="M3.5 6h8.5" />
+      <path d="M18 6h2.5" />
+      <path d="M15 4v4" />
+      <path d="M3.5 12h2.5" />
+      <path d="M12 12h8.5" />
+      <path d="M9 10v4" />
+      <path d="M3.5 18h7.5" />
+      <path d="M17 18h3.5" />
+      <path d="M14 16v4" />
+    </svg>
+  );
+}

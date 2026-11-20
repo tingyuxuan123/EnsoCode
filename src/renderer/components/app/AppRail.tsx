@@ -1,10 +1,16 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
-import { PanelLeft, Search, Settings2, Sparkles, SquareKanban } from 'lucide-react';
+import { PanelLeft, Search, SquareKanban } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
-import { CodeWorkspaceIcon, DesignGalleryIcon, ImageStudioIcon } from './NavIcons';
+import {
+  AskCodeKilnIcon,
+  CodeWorkspaceIcon,
+  DesignGalleryIcon,
+  ImageStudioIcon,
+  SettingsGearIcon,
+} from './NavIcons';
 import { RailTip } from './RailTip';
 import { StatusBar } from './StatusBar';
 import { UpdateRailItem } from './UpdateRailItem';
@@ -172,7 +178,7 @@ export function AppRail({
           className={cn(RAIL_BUTTON, 'text-brand hover:text-brand')}
           aria-label={t('Ask CodeKiln')}
         >
-          <Sparkles className="size-[19px]" strokeWidth={1.75} />
+          <AskCodeKilnIcon className="size-[19px]" />
         </button>
       </RailTip>
       <RailTip label={t('Settings')} shortcut={shortcut(bindings['open-settings'])}>
@@ -182,7 +188,7 @@ export function AppRail({
           className={RAIL_BUTTON}
           aria-label={t('Settings')}
         >
-          <Settings2 className="size-[19px]" strokeWidth={1.75} />
+          <SettingsGearIcon className="size-[19px]" />
         </button>
       </RailTip>
     </nav>

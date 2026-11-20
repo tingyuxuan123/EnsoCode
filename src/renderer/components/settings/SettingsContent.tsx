@@ -15,7 +15,6 @@ import {
   Plug,
   Puzzle,
   Server,
-  Settings,
   Smartphone,
   Sparkles,
   Terminal,
@@ -23,6 +22,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import * as React from 'react';
+import { GeneralPreferencesIcon } from '@/components/app/NavIcons';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
@@ -104,7 +104,7 @@ export function SettingsContent() {
     /** 子菜单：缩进挂在父分类下 */
     sub?: boolean;
   }> = [
-    { id: 'general', icon: Settings, label: t('General') },
+    { id: 'general', icon: GeneralPreferencesIcon, label: t('General') },
     { id: 'shortcuts', icon: Keyboard, label: t('Shortcuts') },
     { id: 'voice', icon: Mic, label: t('Voice input') },
     { id: 'appearance', icon: Palette, label: t('Appearance') },

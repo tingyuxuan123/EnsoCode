@@ -1,11 +1,12 @@
 import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
 import { WINDOWS_CAPTION_BUTTONS_WIDTH } from '@shared/windowControls';
-import { Copy, Minus, Sparkles, Square, X } from 'lucide-react';
+import { Copy, Minus, Square, X } from 'lucide-react';
 import { useRef } from 'react';
 import { useNativeWindowControls } from '@/hooks/useNativeWindowControls';
 import { useWindowMaximized } from '@/hooks/useWindowMaximized';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { AskCodeKilnIcon } from './NavIcons';
 
 interface TitleBarProps {
   title?: string;
@@ -38,7 +39,7 @@ export function SummonEnsoButton({ label = true }: { label?: boolean }) {
       aria-label={t('Ask CodeKiln')}
       title={t('Ask CodeKiln')}
     >
-      <Sparkles className="h-3.5 w-3.5" />
+      <AskCodeKilnIcon className="size-3.5" />
       {label && <span>{t('Ask CodeKiln')}</span>}
     </button>
   );

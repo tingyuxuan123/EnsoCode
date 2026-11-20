@@ -115,6 +115,7 @@ describe('AppRail 精简导航', () => {
     const codeSvg = document.querySelector('[aria-label="Code"] svg');
     const imagesSvg = document.querySelector('[aria-label="Image studio"] svg');
     const designSvg = document.querySelector('[aria-label="Design"] svg');
+    const askSvg = document.querySelector('[aria-label="Ask CodeKiln"] svg');
     const sidebarSvg = document.querySelector('[aria-label="Collapse sidebar"] svg');
     const boardSvg = document.querySelector('[aria-label="Collaboration board"] svg');
     const settingsSvg = document.querySelector('[aria-label="Settings"] svg');
@@ -124,15 +125,21 @@ describe('AppRail 精简导航', () => {
     expect(imagesSvg?.querySelector('[data-active-fill]')).not.toBeNull();
     expect(designSvg?.getAttribute('data-rail-glyph')).toBe('design');
     expect(designSvg?.querySelector('[data-active-fill]')).toBeNull();
+    expect(askSvg?.getAttribute('data-nav-glyph')).toBe('ask-codekiln');
+    expect(settingsSvg?.getAttribute('data-rail-glyph')).toBe('settings');
 
-    for (const legacy of ['lucide-square-terminal', 'lucide-image', 'lucide-ruler']) {
-      expect(codeSvg?.getAttribute('class') ?? '').not.toContain(legacy);
-      expect(imagesSvg?.getAttribute('class') ?? '').not.toContain(legacy);
-      expect(designSvg?.getAttribute('class') ?? '').not.toContain(legacy);
+    for (const [svg, legacy] of [
+      [codeSvg, 'lucide-square-terminal'],
+      [imagesSvg, 'lucide-image'],
+      [designSvg, 'lucide-ruler'],
+      [askSvg, 'lucide-sparkles'],
+      [settingsSvg, 'lucide-settings-2'],
+    ] as const) {
+      expect(svg?.getAttribute('class') ?? '').not.toContain(legacy);
     }
 
-    for (const lucideSvg of [sidebarSvg, boardSvg, settingsSvg]) {
-      expect(lucideSvg?.getAttribute('stroke-width')).toBe('1.75');
+    for (const railSvg of [sidebarSvg, boardSvg, settingsSvg]) {
+      expect(railSvg?.getAttribute('stroke-width')).toBe('1.75');
     }
   });
 

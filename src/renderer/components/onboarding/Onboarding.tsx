@@ -2,6 +2,7 @@ import { ENSO_AGENT_TYPE_KEY } from '@shared/builtinAgents';
 import { resolveChatModel } from '@shared/defaultModel';
 import { Bot, Check, Layers, Plug, Server, Sparkles, Wand2, X } from 'lucide-react';
 import * as React from 'react';
+import { AskCodeKilnIcon } from '@/components/app/NavIcons';
 import { Button } from '@/components/ui/button';
 import { useOverlayGuard } from '@/hooks/useOverlayGuard';
 import { useI18n } from '@/i18n';
@@ -298,7 +299,7 @@ export function Onboarding() {
                 {t('Need help choosing a setup? Ask CodeKiln.')}
               </p>
               <Button variant="ghost" size="sm" onClick={summonEnso}>
-                <Sparkles className="h-3.5 w-3.5" />
+                <AskCodeKilnIcon className="size-3.5" />
                 {t('Ask CodeKiln')}
               </Button>
             </div>

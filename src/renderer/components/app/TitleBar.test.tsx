@@ -20,6 +20,8 @@ it('召唤入口使用 CodeKiln 名称，组件和派发标识不随品牌改变
   const html = renderToStaticMarkup(createElement(SummonEnsoButton));
   expect(html).toContain('aria-label="Ask CodeKiln"');
   expect(html).toContain('>Ask CodeKiln</span>');
+  expect(html).toContain('data-nav-glyph="ask-codekiln"');
+  expect(html).not.toContain('lucide-sparkles');
   expect(html).not.toContain('Ask Enso');
 });
 
