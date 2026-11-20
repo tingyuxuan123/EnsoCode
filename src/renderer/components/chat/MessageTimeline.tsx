@@ -700,76 +700,79 @@ export function MessageTimeline({
           <NavRail items={navItems} activeKey={activeNavKey} onJump={jumpTo} />
           {items.length === 0 && !busy ? (
             <EmptyReveal className="h-full overflow-y-auto">
-              <div className={cn(CHAT_COL, 'flex min-h-full items-center py-[calc(28rem/14)]')}>
+              <div
+                className={cn(
+                  CHAT_COL,
+                  'flex min-h-full items-center pt-[calc(24rem/14)] pb-[calc(44rem/14)]'
+                )}
+              >
                 <section
                   data-slot="welcome-panel"
-                  className="relative w-full overflow-hidden rounded-[calc(20rem/14)] border border-border/70 bg-card/75 px-[calc(18rem/14)] py-[calc(20rem/14)] shadow-sm @min-[36rem]:px-[calc(26rem/14)] @min-[36rem]:py-[calc(24rem/14)]"
+                  className="mx-auto flex w-full max-w-[680px] flex-col items-center text-center"
                 >
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-[18%] top-0 h-px bg-gradient-to-r from-transparent via-brand/55 to-transparent"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -top-[calc(76rem/14)] -right-[calc(64rem/14)] size-[calc(190rem/14)] rounded-full bg-brand/[0.055] blur-3xl"
-                  />
-
-                  <div className="relative">
-                    <div className="t-stagger-line t-stagger-line--1 flex items-start gap-[calc(13rem/14)]">
-                      <span className="flex size-[calc(42rem/14)] shrink-0 items-center justify-center rounded-[calc(13rem/14)] border border-border/70 bg-background/80 shadow-xs">
-                        <EnsoMark className="size-[calc(21rem/14)]" />
-                      </span>
-                      <div className="min-w-0 flex-1 pt-[1px]">
-                        <span className="inline-flex min-w-0 max-w-full items-center gap-[calc(5rem/14)] rounded-full border border-border/60 bg-secondary/45 px-[calc(9rem/14)] py-[calc(4rem/14)] text-[calc(10.5rem/14)] text-muted-foreground">
-                          <FolderOpen className="size-[calc(13rem/14)] shrink-0" />
-                          {onSuggestion && (
-                            <>
-                              <span className="max-w-[220px] truncate">{emptyTitle}</span>
-                              <ChevronRight className="size-[calc(11rem/14)] shrink-0 opacity-60" />
-                            </>
-                          )}
-                          <span className="shrink-0">{t('New conversation')}</span>
+                  <div className="t-stagger-line t-stagger-line--1 flex flex-col items-center">
+                    <EnsoMark className="size-[calc(44rem/14)] drop-shadow-[0_2px_8px_rgb(0_0_0/0.12)] dark:drop-shadow-[0_0_1px_rgb(255_255_255/0.28)]" />
+                    {onSuggestion && (
+                      <span
+                        data-slot="welcome-breadcrumb"
+                        className="mt-[calc(14rem/14)] inline-flex min-w-0 max-w-full items-center gap-[calc(5rem/14)] rounded-full border border-border/75 bg-secondary/55 px-[calc(10rem/14)] py-[calc(3.5rem/14)] text-[calc(11.5rem/14)] text-muted-foreground"
+                      >
+                        <FolderOpen className="size-[calc(12.5rem/14)] shrink-0 opacity-75" />
+                        <span className="max-w-[240px] truncate font-medium text-foreground/80">
+                          {emptyTitle}
                         </span>
-                        <p className="mt-[calc(9rem/14)] text-[calc(23rem/14)] leading-[calc(29rem/14)] font-semibold tracking-[-0.025em] @min-[36rem]:text-[calc(25rem/14)] @min-[36rem]:leading-[calc(31rem/14)]">
-                          {onSuggestion ? t('Start a new task') : emptyTitle}
-                        </p>
-                      </div>
-                    </div>
-
-                    {error ? (
-                      <>
-                        <p className="t-stagger-line t-stagger-line--2 mt-[calc(18rem/14)] max-w-md text-sm text-destructive whitespace-pre-wrap">
-                          {t(error)}
-                        </p>
-                        {onRetryResume && (
-                          <Button size="sm" variant="outline" onClick={onRetryResume}>
-                            {t('Retry resume')}
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {emptyDescription !== '' && (
-                          <p className="t-stagger-line t-stagger-line--2 mt-[calc(9rem/14)] max-w-[640px] text-[calc(13rem/14)] leading-[calc(23rem/14)] text-muted-foreground">
-                            {emptyDescription ??
-                              (onSuggestion
-                                ? t(
-                                    'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
-                                    {
-                                      project: emptyTitle,
-                                    }
-                                  )
-                                : t('Ask the agent…'))}
-                          </p>
-                        )}
-                        {onSuggestion && (
-                          <div className="t-stagger-line t-stagger-line--3 mt-[calc(22rem/14)] border-t border-border/60 pt-[calc(18rem/14)]">
-                            <WelcomeSuggestions onPick={onSuggestion} />
-                          </div>
-                        )}
-                      </>
+                        <ChevronRight className="size-[calc(11rem/14)] shrink-0 opacity-45" />
+                        <span className="shrink-0">{t('New conversation')}</span>
+                      </span>
                     )}
+                    <h2
+                      className={cn(
+                        'font-semibold text-[calc(24rem/14)] text-foreground leading-[calc(30rem/14)] tracking-[-0.025em] @min-[36rem]:text-[calc(26rem/14)] @min-[36rem]:leading-[calc(32rem/14)]',
+                        onSuggestion ? 'mt-[calc(12rem/14)]' : 'mt-[calc(14rem/14)]'
+                      )}
+                    >
+                      {onSuggestion ? t('Start a new task') : emptyTitle}
+                    </h2>
                   </div>
+
+                  {error ? (
+                    <>
+                      <p className="t-stagger-line t-stagger-line--2 mt-[calc(12rem/14)] max-w-md whitespace-pre-wrap text-destructive text-sm">
+                        {t(error)}
+                      </p>
+                      {onRetryResume && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={onRetryResume}
+                          className="t-stagger-line t-stagger-line--3 mt-[calc(14rem/14)]"
+                        >
+                          {t('Retry resume')}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {emptyDescription !== '' && (
+                        <p className="t-stagger-line t-stagger-line--2 mt-[calc(8rem/14)] max-w-[520px] text-[calc(13rem/14)] text-muted-foreground leading-[calc(21rem/14)]">
+                          {emptyDescription ??
+                            (onSuggestion
+                              ? t(
+                                  'Describe the work to complete in {{project}}. Choose a model and approval mode below.',
+                                  {
+                                    project: emptyTitle,
+                                  }
+                                )
+                              : t('Ask the agent…'))}
+                        </p>
+                      )}
+                      {onSuggestion && (
+                        <div className="t-stagger-line t-stagger-line--3 mt-[calc(26rem/14)] w-full">
+                          <WelcomeSuggestions onPick={onSuggestion} />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </section>
               </div>
             </EmptyReveal>
