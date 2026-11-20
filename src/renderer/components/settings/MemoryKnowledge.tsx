@@ -29,8 +29,12 @@ import {
 } from '@/components/ui/select';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { MemoryGraphView } from './MemoryGraphView';
 import { MemoryTreeView } from './MemoryTreeView';
+
+// Do not pull Cytoscape and its layout engine into the Settings first paint.
+const MemoryGraphView = React.lazy(async () => ({
+  default: (await import('./MemoryGraphView')).MemoryGraphView,
+}));
 
 /**
  * 知识视图：图谱 / 知识树两种浏览方式，共用「解读」与「结晶」两个动作。
@@ -197,15 +201,26 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
       </div>
 
       {mode === 'graph' ? (
-        <MemoryGraphView
-          graph={graph}
-          loading={loading}
-          selectedId={entityId}
-          onSelect={setEntityId}
-          memories={entityMemories}
-          interpreting={interpreting}
-          onInterpret={(id) => void runInsight({ entityId: id })}
-        />
+        <React.Suspense
+          fallback={
+            <p
+              role="status"
+              className="rounded-[6px] border px-3 py-6 text-muted-foreground text-[calc(13rem/14)]"
+            >
+              {t('Loading…')}
+            </p>
+          }
+        >
+          <MemoryGraphView
+            graph={graph}
+            loading={loading}
+            selectedId={entityId}
+            onSelect={setEntityId}
+            memories={entityMemories}
+            interpreting={interpreting}
+            onInterpret={(id) => void runInsight({ entityId: id })}
+          />
+        </React.Suspense>
       ) : (
         <MemoryTreeView
           tree={tree}
