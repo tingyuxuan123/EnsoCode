@@ -1,41 +1,59 @@
-version: 0.2.96
+version: 0.2.97
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.96/CodeKiln-0.2.96-arm64-mac.zip
-    sha512: 6UGAOSREhaSN//UMPzbJbfmFUYPpI9sZb/2roP3LWvxkC6lRHsbIr49MKGETu7Gb0t9p4PvemgkGxqDh3NFAeQ==
-    size: 191031699
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.96/CodeKiln-0.2.96-arm64.dmg
-    sha512: Keo93f/Hb704PGUAWcuFOhfRlOZEaakPcMTMBm7F9ey90GLGLIxTrb2/PPjYPdsTxseqFxInaoHjewtV+w+rBA==
-    size: 187404850
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.96/CodeKiln-0.2.96-arm64-mac.zip
-sha512: 6UGAOSREhaSN//UMPzbJbfmFUYPpI9sZb/2roP3LWvxkC6lRHsbIr49MKGETu7Gb0t9p4PvemgkGxqDh3NFAeQ==
-releaseDate: 2026-11-20T06:04:22.723Z
-releaseName: CodeKiln 0.2.96 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.97/CodeKiln-0.2.97-arm64-mac.zip
+    sha512: SGQbo14S6DgpMNjF359UnbzXj6E/dbp1rdLuqbMy1twtnvKATZenpjjCVnTfvN19ivcR8Fnpv/4SVQ6xFqnQFw==
+    size: 191042785
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.97/CodeKiln-0.2.97-arm64.dmg
+    sha512: H/19l5th8G8UP/uT3kObqhvHOhUANHWX1j3DncYz1Qk/NVsxnU6tKZnFs/kQxlP1jBqi/qTXTWx3k6A3lXjMpg==
+    size: 187417500
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.97/CodeKiln-0.2.97-arm64-mac.zip
+sha512: SGQbo14S6DgpMNjF359UnbzXj6E/dbp1rdLuqbMy1twtnvKATZenpjjCVnTfvN19ivcR8Fnpv/4SVQ6xFqnQFw==
+releaseDate: 2026-11-20T09:11:20.249Z
+releaseName: CodeKiln 0.2.97 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.96
+  # CodeKiln 0.2.97
 
 
-  ## 聊天区宽度可切换
+  ## 运行时旁白：状态条会说它在干什么
 
 
-  - 聊天卡片顶栏右侧新增宽窄切换按钮：在阅读宽度与全宽之间切换，选择记进设置，
-    立即作用于当前会话，重启后保持。
+  - 回合运行中不再只显示「思考中 / 执行中」这类阶段词：状态条按当前步骤给出旁白，
+    读文件、改代码、搜代码、跑命令、查网页、调子代理、用 MCP、出图各有自己的说法。
+  - 旁白按打字机节奏逐字出现，带光标与省略号停顿；步骤切换时平滑替换，不再突兀跳字。
 
-  ## 状态栏的项目名变成工作区菜单
-
-
-  - 底部状态栏里的项目名不再只是文字标签，点开就能看到并切换会话的工作目录。
-
-  - 临时会话走同一套菜单；远端项目仍单独显示主机标签，本机项目不加多余提示。
+  - 尊重系统「减少动态效果」：开启后旁白直接呈现，不做逐字动画。
 
 
-  ## 欢迎页与更新提示
+  ## 跟随最新输出更顺
 
 
-  - 空会话欢迎区重新排版：建议入口更紧凑，悬停与键盘可达性补齐，并补上回归用例。
+  - 跟随到底改为帧率无关的指数滑动，60 / 120 / 144Hz 上手感一致且不会越过底部。
 
-  - 更新弹窗重做：图标与按钮层级更清楚，更新日志、下载与「重启以更新」不再挤在同一行，
-    浮层阴影与间距跟其它卡片一致。
-  - 补齐更新相关文案的中文翻译，不再有中英混排。
+  - 一次涌出大段输出时先预推进再平滑落点，长回答滚到底不再一格一格跳。
+
+  - 你向上滚动时仍然立即接管，不被自动跟随抢回。
+
+
+  ## @ 引用弹窗
+
+
+  - 重做弹窗的排版层级：分组、命中项与说明文字的权重分开了。
+
+  - 过去会话不再显示原始 jsonl 文件名：改为相对时间与所属项目，跨项目引用一眼能认出来。
+
+
+  ## 图标
+
+
+  - 图标轨、Ask CodeKiln、设置齿轮与通用分类换成定制微标，脚本工具与思考步骤也有了专属小标；
+    侧栏扩展入口同步换新。
+  - 标题栏、引导页与设置页内的同一批图标一并统一，不再新旧混用。
+
+
+  ## 仍包含上一版内容
+
+
+  - 0.2.96 的聊天区宽窄切换、状态栏工作区目录菜单、欢迎区重排与更新弹窗中文化同样在本次包内。
 
 
   ## 验收与更新范围
@@ -43,13 +61,13 @@ releaseNotes: >
 
   - 本次通过 TypeScript、lint、全量测试与桌面构建检查。
 
-  - 本次为 Mac arm64 同证书个人版，继续推进个人更新通道并发布为 prerelease，
-    不改变正式 Latest。
+  - 本次为 Mac arm64 同证书个人版与 Windows x64 版；个人通道发布为 prerelease，
+    Windows 版按既有规则公开并设为 Latest。
   - 安装、退出与重启由用户操作；发布完成不代表本机已经安装或完成旧数据升级验收。
 
 
   ---
 
 
-  个人测试通道 0.2.96：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.97：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
