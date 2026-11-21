@@ -1,36 +1,41 @@
-version: 0.2.98
+version: 0.2.99
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.98/CodeKiln-0.2.98-arm64-mac.zip
-    sha512: pSCpP2pgDXjQ8aHE0eWal0Kxb31xdw12uCIk0HP/7DeoWtZrp9vR0bhWEOtQix2o+o89wKAfmYABVsE3do6tXw==
-    size: 191043130
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.98/CodeKiln-0.2.98-arm64.dmg
-    sha512: Grf4WGZS0cn50LEd5MT+hBOEHT//c/jhipKs8S80wJh4BWYQcqL0cjr0MIP004+LC+X/cOtqo2NqKyTLSqOYPw==
-    size: 187420103
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.98/CodeKiln-0.2.98-arm64-mac.zip
-sha512: pSCpP2pgDXjQ8aHE0eWal0Kxb31xdw12uCIk0HP/7DeoWtZrp9vR0bhWEOtQix2o+o89wKAfmYABVsE3do6tXw==
-releaseDate: 2026-11-20T13:26:06.362Z
-releaseName: CodeKiln 0.2.98 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.99/CodeKiln-0.2.99-arm64-mac.zip
+    sha512: KKn4O+hYtO0XpBJYHW5NAiS0QfneusByuCBwq2PbPEWc8WeOV9rcI/9RCMbddZunckewG8Z4MMaL4Yj0x7MwpA==
+    size: 190922566
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.99/CodeKiln-0.2.99-arm64.dmg
+    sha512: yhGMIVN5zNL+cVBNifc4sjHFGpLsOy93NZ6+9AIGzATwbOaXcbpoPSWW8nEj203pSUTlPcgnaRuqDb3cRJ0x5g==
+    size: 187310802
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.99/CodeKiln-0.2.99-arm64-mac.zip
+sha512: KKn4O+hYtO0XpBJYHW5NAiS0QfneusByuCBwq2PbPEWc8WeOV9rcI/9RCMbddZunckewG8Z4MMaL4Yj0x7MwpA==
+releaseDate: 2026-11-21T03:37:07.502Z
+releaseName: CodeKiln 0.2.99 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.98
+  # CodeKiln 0.2.99
 
 
-  ## 移除 LCU 电脑控制扩展接入
+  ## 记忆 Wiki
 
 
-  - 移除设置中的 LCU 开关和专属自动授权。已安装的旧 LCU 入口不再随 CodeKiln 会话加载，避免其 `js` 工具参数导致部分
-  Responses 模型拒绝整轮请求。
+  - 在主界面新增记忆 Wiki，集中浏览、搜索和编辑各个记忆空间的笔记，并在笔记之间沿链接跳转。
 
-  - 保留 CodeKiln 自带的「电脑操控」及其他 Pi 扩展，不卸载本机 LCU，也不改写 Pi 配置。
+  - 记忆笔记以本地 Markdown 文件保存；记忆空间可绑定已有的 Obsidian Vault，外部编辑会同步到搜索索引。
+
+  - 新增笔记体检，可发现断链、孤立笔记、陈旧草稿等问题。归档会保留笔记文件，不直接删除。
+
+  - **升级提示：**旧版 SQLite 记忆不会自动迁移，也不会出现在新版 Wiki 中。更新不会删除旧库；如需保留旧记忆，请在升级前备份。
 
 
-  ## 设置页
+  ## 助手记忆工具
 
 
-  - 记忆知识图谱和代码编辑器按需加载，打开设置时不再提前加载它们。
+  - 助手可查阅记忆索引、搜索、读取、写入或归档笔记。Bot 写入共享记忆仍需人工审批。
+
+  - 支持按完整笔记 ID 精确读取；简称匹配到多篇笔记时会返回候选，不会猜测要读哪一篇。
 
 
   ---
 
 
-  个人测试通道 0.2.98：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.99：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
