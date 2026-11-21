@@ -13,6 +13,7 @@ import { RefreshCw } from 'lucide-react';
 import {
   type KeyboardEvent,
   type PointerEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -29,6 +30,14 @@ import { DEVICES_KEYS } from './i18n';
 import { errorCode, errorMessage } from './support';
 
 type StreamState = 'starting' | 'live' | 'stopped' | 'error';
+type TouchPoint = { x: number; y: number };
+type TouchPhase = Extract<DeviceInput, { type: 'touch' }>['phase'];
+
+interface ScreenPointer {
+  id: number;
+  last: TouchPoint;
+  send: (phase: TouchPhase, point: TouchPoint) => void;
+}
 
 /** Keys that are not text: sent by their code, the rest arrives as text through the field. */
 const KEY_CODES = new Set([
@@ -93,7 +102,7 @@ export function DeviceScreen({
   const [attempt, setAttempt] = useState(0);
   const [drawn, setDrawn] = useState(false);
   const [focused, setFocused] = useState(false);
-  const pointer = useRef<{ id: number; pinch: boolean } | null>(null);
+  const pointer = useRef<ScreenPointer | null>(null);
   const box = useRef<HTMLDivElement>(null);
   // Where the user's finger landed, each a ripple for a moment.
   const [taps, setTaps] = useState<{ id: number; x: number; y: number }[]>([]);
@@ -108,6 +117,24 @@ export function DeviceScreen({
   const id = device.id;
   const ownFrame = device.platform === 'ios' && device.kind === 'simulator';
   const ready = room !== null && (!ownFrame || frame !== undefined);
+
+  const endTouch = useCallback((pointerId?: number, at?: TouchPoint): void => {
+    const active = pointer.current;
+    if (!active || (pointerId !== undefined && active.id !== pointerId)) return;
+    pointer.current = null;
+    active.send('end', at ?? active.last);
+    const element = canvas.current;
+    if (element?.hasPointerCapture(active.id)) element.releasePointerCapture(active.id);
+  }, []);
+
+  useEffect(() => {
+    const release = (): void => endTouch();
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('blur', release);
+      release();
+    };
+  }, [endTouch]);
 
   // The pane's head and tab say how the stream is doing, and its Record takes this canvas.
   useEffect(() => setDeviceStream(id, { ...stream, drawn }), [id, stream, drawn]);
@@ -382,13 +409,6 @@ export function DeviceScreen({
     void api.request('devices.input', { deviceId: id, sessionId, input }).catch(inputFailed);
   };
 
-  const touch = (event: PointerEvent<HTMLCanvasElement>, phase: 'begin' | 'move' | 'end'): void => {
-    const { x, y } = point(event);
-    sendInput({ type: 'touch', phase, x, y, finger: 0 });
-    // Option and a drag pinch: a second finger mirrored around the screen's center.
-    if (pointer.current?.pinch) sendInput({ type: 'touch', phase, x: 1 - x, y: 1 - y, finger: 1 });
-  };
-
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.metaKey || event.ctrlKey) return;
@@ -482,31 +502,44 @@ export function DeviceScreen({
             aria-label={t(DEVICES_KEYS.screenLabel, { name: device.name })}
             className="block size-full touch-none select-none"
             onPointerDown={(event) => {
+              if (event.button !== 0 || !event.isPrimary) return;
               // The mouse down that follows would move focus off the keyboard field.
               event.preventDefault();
               if (holds) {
-                if (event.button === 0) onHeld();
+                onHeld();
                 return;
               }
+              endTouch();
               event.currentTarget.setPointerCapture(event.pointerId);
-              pointer.current = { id: event.pointerId, pinch: fingers && event.altKey };
-              touch(event, 'begin');
+              const at = point(event);
+              const pinch = fingers && event.altKey;
+              const send = (phase: TouchPhase, { x, y }: TouchPoint): void => {
+                sendInput({ type: 'touch', phase, x, y, finger: 0 });
+                // Option and a drag pinch: a second finger mirrored around the screen's center.
+                if (pinch) sendInput({ type: 'touch', phase, x: 1 - x, y: 1 - y, finger: 1 });
+              };
+              pointer.current = { id: event.pointerId, last: at, send };
+              send('begin', at);
               ripple(event);
               field.current?.focus();
             }}
             onPointerMove={(event) => {
-              if (pointer.current?.id === event.pointerId) touch(event, 'move');
+              const active = pointer.current;
+              if (active?.id !== event.pointerId) return;
+              // A release outside the window can be missed; a returning hover is not a drag.
+              if (event.pointerType === 'mouse' && (event.buttons & 1) === 0) {
+                endTouch(event.pointerId);
+                return;
+              }
+              active.last = point(event);
+              active.send('move', active.last);
             }}
             onPointerUp={(event) => {
               if (pointer.current?.id !== event.pointerId) return;
-              touch(event, 'end');
-              pointer.current = null;
+              endTouch(event.pointerId, point(event));
             }}
-            onPointerCancel={(event) => {
-              if (pointer.current?.id !== event.pointerId) return;
-              touch(event, 'end');
-              pointer.current = null;
-            }}
+            onPointerCancel={(event) => endTouch(event.pointerId)}
+            onLostPointerCapture={(event) => endTouch(event.pointerId)}
             onWheel={(event) => {
               const { x, y } = point(event);
               sendInput({ type: 'scroll', x, y, dx: event.deltaX, dy: event.deltaY });
