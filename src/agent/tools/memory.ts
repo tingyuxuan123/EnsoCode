@@ -247,13 +247,15 @@ export function createMemoryTools(
       'memory_read',
       'Memory read',
       'Read the full Markdown content, OKF frontmatter, outbound [[wikilink]]s, and backlinks of one wiki note ' +
-        '(or read-only raw/ reference). Pass a slug, relative path, or exact title obtained from memory_index or memory_search.',
+        '(or read-only raw/ reference). For a memory_search hit, pass its full id verbatim as note, not its slug. ' +
+        'For an ambiguous short reference, retry with a candidate id.',
       schema(
         {
           note: {
             type: 'string',
             description:
-              'Note slug (e.g. systems/auth), relative path (wiki/systems/auth.md), or exact title',
+              'Copy the full memory_search hit id verbatim (e.g. global::wiki/systems/auth.md). ' +
+              'You can also use an unambiguous short name, slug, relative path, or title.',
           },
           spaceId: {
             type: 'string',

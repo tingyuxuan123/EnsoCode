@@ -1,3 +1,4 @@
+import { makeNoteId } from '@shared/memory/markdown';
 import {
   parseMemoryArchiveRequest,
   parseMemoryIndexRequest,
@@ -12,6 +13,7 @@ import {
   getNoteDetail,
   listIndexedNotes,
   resolveNoteRef,
+  resolveReadNoteRefs,
   searchIndexedNotes,
   syncSpaceIndex,
 } from './indexDb';
@@ -153,7 +155,22 @@ export async function executeMemoryOp(
     if (spaceIds.length === 0) return { found: false };
     ensureAndSyncSpaces(db, ctx.bindings, spaceIds, ctx.language);
 
-    const ref = resolveNoteRef(db, spaceIds, req.note);
+    const refs = resolveReadNoteRefs(db, spaceIds, req.note);
+    if (refs.length > 1) {
+      return {
+        found: false,
+        reason: 'ambiguous',
+        note: req.note,
+        candidates: refs.map(({ spaceId, relPath, title }) => ({
+          id: makeNoteId(spaceId, relPath),
+          spaceId,
+          title,
+        })),
+        message:
+          'This note reference matches multiple visible spaces. Retry memory_read with one of the candidate ids as note.',
+      };
+    }
+    const ref = refs[0];
     if (!ref) return { found: false, note: req.note };
     const space = ctx.bindings.resolveSpace(ref.spaceId);
     const detail = getNoteDetail(db, ref.spaceId, ref.relPath, space.rootPath);

@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { VaultBindingStore } from './bindings';
-import { executeMemoryOp } from './bridge';
-import { openIndexDb } from './indexDb';
+import { executeMemoryOp, type MemoryBridgeContext } from './bridge';
+import { openIndexDb, syncSpaceIndex } from './indexDb';
 import { approvePendingWrite, listPendingWrites } from './pending';
-import { readNoteFile } from './vault';
+import { readNoteFile, writeNoteAtomic } from './vault';
 
 const dirs: string[] = [];
 function tmpDir(): string {
@@ -158,5 +158,118 @@ describe('wiki memory bridge (5 agent ops)', () => {
     } finally {
       db.close();
     }
+  });
+});
+
+describe('memory_read 的跨空间笔记身份', () => {
+  const botId = '22222222-2222-4222-8222-222222222222';
+  const chatId = '33333333-3333-4333-8333-333333333333';
+  const botSpace = `bot:${botId}`;
+  const chatSpace = `chat:${chatId}`;
+  const hiddenSpace = 'bot:44444444-4444-4444-8444-444444444444';
+  const sharedPath = 'wiki/systems/rule.md';
+  const botRule = `${botSpace}::${sharedPath}`;
+  const chatRule = `${chatSpace}::${sharedPath}`;
+  const hiddenRule = `${hiddenSpace}::${sharedPath}`;
+  const missingRule = `${chatSpace}::wiki/systems/missing.md`;
+  let db: ReturnType<typeof openIndexDb>;
+  let ctx: MemoryBridgeContext;
+
+  beforeEach(() => {
+    const work = tmpDir();
+    const bindings = new VaultBindingStore(work);
+    db = openIndexDb(path.join(work, 'index.db'));
+    ctx = { botId, chatId, bindings };
+    const write = (spaceId: string, relPath: string, title: string, body: string) => {
+      const { rootPath } = bindings.resolveSpace(spaceId);
+      writeNoteAtomic(rootPath, relPath, `---\ntitle: ${JSON.stringify(title)}\n---\n\n${body}`);
+    };
+    write(botSpace, sharedPath, 'Shared rule', 'Bot-only answer.');
+    write(chatSpace, sharedPath, 'Shared rule', 'Group-only answer.');
+    write(hiddenSpace, sharedPath, 'Shared rule', 'Hidden answer.');
+    write(chatSpace, 'wiki/systems/unique.md', 'API::Baseline', 'Unique group answer.');
+    // 旧的 title fallback 会先去掉引用的 .md，让三个失效 ID 都能命中诱饵。
+    write(botSpace, 'wiki/systems/decoy-hidden.md', hiddenRule.slice(0, -3), 'Hidden-ID decoy.');
+    write(botSpace, 'wiki/systems/decoy-missing.md', missingRule.slice(0, -3), 'Missing-ID decoy.');
+    write(
+      botSpace,
+      'wiki/systems/decoy-wrong-scope.md',
+      chatRule.slice(0, -3),
+      'Wrong-scope decoy.'
+    );
+    syncSpaceIndex(db, hiddenSpace, bindings.resolveSpace(hiddenSpace).rootPath);
+  });
+
+  afterEach(() => db.close());
+
+  it('用默认搜索返回的完整 id 读回群笔记，而不是同 slug 的 Bot 笔记', async () => {
+    const { results } = (await executeMemoryOp(db, 'search', { query: 'Group-only' }, ctx)) as {
+      results: { id: string; slug: string }[];
+    };
+    expect(results).toMatchObject([{ id: chatRule, slug: 'systems/rule' }]);
+    await expect(executeMemoryOp(db, 'read', { note: results[0].id }, ctx)).resolves.toMatchObject({
+      found: true,
+      id: chatRule,
+      body: expect.stringContaining('Group-only answer.'),
+    });
+  });
+
+  it.each([
+    { note: 'systems/rule' },
+    { note: 'rule', spaceId: 'all' },
+    { note: sharedPath },
+    { note: 'Shared rule' },
+  ])('短引用 $note 跨可见空间冲突时只给候选完整 id，可用候选重试', async (params) => {
+    const result = (await executeMemoryOp(db, 'read', params, ctx)) as {
+      found: boolean;
+      reason?: string;
+      candidates: { id: string }[];
+    };
+    expect(result).toMatchObject({ found: false, reason: 'ambiguous', note: params.note });
+    expect(result).not.toHaveProperty('body');
+    expect(result.candidates.map(({ id }) => id).sort()).toEqual([botRule, chatRule]);
+    const groupCandidate = result.candidates.find(({ id }) => id === chatRule)!;
+    await expect(
+      executeMemoryOp(db, 'read', { note: groupCandidate.id }, ctx)
+    ).resolves.toMatchObject({
+      found: true,
+      id: chatRule,
+      body: expect.stringContaining('Group-only answer.'),
+    });
+  });
+
+  it.each([
+    { spaceId: 'bot', id: botRule, body: 'Bot-only answer.' },
+    { spaceId: 'chat', id: chatRule, body: 'Group-only answer.' },
+  ])('显式 $spaceId scope 仍可用短名读取本空间笔记', async ({ spaceId, id, body }) => {
+    await expect(
+      executeMemoryOp(db, 'read', { note: 'rule', spaceId }, ctx)
+    ).resolves.toMatchObject({
+      found: true,
+      id,
+      body: expect.stringContaining(body),
+    });
+  });
+
+  it.each(['unique', 'systems/unique', 'wiki/systems/unique.md', 'API::Baseline'])(
+    '跨空间没有冲突的短引用 %s 仍可读取',
+    async (note) => {
+      await expect(executeMemoryOp(db, 'read', { note }, ctx)).resolves.toMatchObject({
+        found: true,
+        id: `${chatSpace}::wiki/systems/unique.md`,
+        body: expect.stringContaining('Unique group answer.'),
+      });
+    }
+  );
+
+  it.each([
+    { note: hiddenRule },
+    { note: missingRule, spaceId: 'all' },
+    { note: chatRule, spaceId: 'bot' },
+  ])('完整 id $note 在目标空间不可见或不存在时不回退到标题', async (params) => {
+    await expect(executeMemoryOp(db, 'read', params, ctx)).resolves.toEqual({
+      found: false,
+      note: params.note,
+    });
   });
 });

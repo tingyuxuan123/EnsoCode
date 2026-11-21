@@ -7,6 +7,7 @@ interface JsonSchemaObj {
     string,
     {
       type: string;
+      description?: string;
       enum?: readonly unknown[];
       items?: { type: string };
       minimum?: number;
@@ -98,6 +99,21 @@ describe('wiki memory agent tools', () => {
       );
       assertMatchesSchema(tool.parameters as unknown as JsonSchemaObj, prepared);
     }
+  });
+
+  it('引导模型把搜索命中的完整 id 原样传入 memory_read 的 note', () => {
+    const { tools } = makeTools();
+    const readTool = tools.find((t) => t.name === 'memory_read')!;
+    const parameters = readTool.parameters as unknown as JsonSchemaObj;
+    expect(readTool.description).toMatch(/memory_search.*\bid\b.*verbatim/i);
+    expect(parameters.properties.note.description).toMatch(/memory_search.*\bid\b.*verbatim/i);
+
+    const id = 'proj:Demo::wiki/systems/Deploy.md';
+    const prepared = (readTool.prepareArguments as (raw: unknown) => Record<string, unknown>)({
+      note: id,
+    });
+    assertMatchesSchema(parameters, prepared);
+    expect(prepared).toEqual({ note: id });
   });
 
   it('routes execute calls through MemoryInvoker and resolves JSON response', async () => {

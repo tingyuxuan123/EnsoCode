@@ -27,7 +27,7 @@ import {
 import Database from 'better-sqlite3';
 import { contentHash } from './contentHash';
 import { buildFtsMatchQuery } from './fts';
-import type { IndexedNoteRow } from './types';
+import { type IndexedNoteRow, isSpaceId } from './types';
 import { readNoteFile, scanVaultMarkdownFiles, writeManagedIndex } from './vault';
 
 export const INDEX_SCHEMA_VERSION = 1;
@@ -736,13 +736,14 @@ export function listIndexedNotes(
   };
 }
 
-export function resolveNoteRef(
+function* matchingNoteRefs(
   db: Database.Database,
   spaceIds: readonly string[],
-  noteRef: string
-): IndexedNoteRow | null {
+  noteRef: string,
+  strictId: boolean
+): Generator<IndexedNoteRow, void> {
   const cleaned = noteRef.trim();
-  if (!cleaned || spaceIds.length === 0) return null;
+  if (!cleaned || spaceIds.length === 0) return;
 
   // Support canonical `${spaceId}::${relPath}`
   const sep = cleaned.indexOf('::');
@@ -753,8 +754,13 @@ export function resolveNoteRef(
       const exact = db
         .prepare('SELECT * FROM notes WHERE space_id = ? AND rel_path = ?')
         .get(spaceId, relPath) as RawNoteRow | undefined;
-      if (exact) return toIndexedRow(exact);
+      if (exact) {
+        yield toIndexedRow(exact);
+        return;
+      }
     }
+    // Read never falls back from a qualified ID. A title can still contain '::'.
+    if (strictId && isSpaceId(spaceId)) return;
   }
 
   for (const spaceId of spaceIds) {
@@ -766,10 +772,26 @@ export function resolveNoteRef(
       const row = db
         .prepare('SELECT * FROM notes WHERE space_id = ? AND rel_path = ?')
         .get(spaceId, target) as RawNoteRow | undefined;
-      if (row) return toIndexedRow(row);
+      if (row) yield toIndexedRow(row);
     }
   }
-  return null;
+}
+
+export function resolveNoteRef(
+  db: Database.Database,
+  spaceIds: readonly string[],
+  noteRef: string
+): IndexedNoteRow | null {
+  return matchingNoteRefs(db, spaceIds, noteRef, false).next().value ?? null;
+}
+
+/** Exact ID, or the best legacy short-reference match in each visible space. */
+export function resolveReadNoteRefs(
+  db: Database.Database,
+  spaceIds: readonly string[],
+  noteRef: string
+): IndexedNoteRow[] {
+  return [...matchingNoteRefs(db, spaceIds, noteRef, true)];
 }
 
 export function getNoteDetail(
