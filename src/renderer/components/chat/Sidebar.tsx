@@ -110,7 +110,7 @@ import { addToast } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding, IS_MAC } from '@/lib/keybindings';
-import { heightVariants, springStandard } from '@/lib/motion';
+import { easeOutLayout, heightVariants, springStandard } from '@/lib/motion';
 import { formatRelativeTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
@@ -763,7 +763,8 @@ export function Sidebar({
     <motion.aside
       initial={false}
       animate={{ width: collapsed ? 0 : width }}
-      transition={springStandard}
+      // 收起时 spring 会越过 0；CSS 丢弃负宽度，工作区边缘就会卡在最后几像素。
+      transition={collapsed ? easeOutLayout : springStandard}
       data-slot="project-sidebar"
       data-enso="sidebar"
       data-workbench-sidebar=""
