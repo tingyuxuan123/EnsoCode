@@ -28,7 +28,7 @@ import {
   skyLightKeyWindowRecords,
   skyMouseButtonNumber,
 } from './skyClick';
-import { isListedCgWindowLayer } from './windowSource';
+import { isComputerInternalWindow, isListedCgWindowLayer } from './windowSource';
 
 /** 后台窗口事件的落点：屏幕坐标与窗口内坐标（含标题栏）同时给出 */
 export interface SkyPoint {
@@ -364,10 +364,12 @@ async function load(): Promise<MacosNative | null> {
         const layer = readNumber(dictGet(dict, 'kCGWindowLayer'));
         if (!isListedCgWindowLayer(layer)) continue;
         const id = String(Math.round(readNumber(dictGet(dict, 'kCGWindowNumber'))));
+        const title = readString(dictGet(dict, 'kCGWindowName'));
+        if (isComputerInternalWindow({ id, title })) continue;
         windows.push({
           id,
           app: readString(dictGet(dict, 'kCGWindowOwnerName')),
-          title: readString(dictGet(dict, 'kCGWindowName')),
+          title,
           pid: Math.round(readNumber(dictGet(dict, 'kCGWindowOwnerPID'))),
           focused: false,
           x:

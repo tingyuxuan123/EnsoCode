@@ -10,6 +10,11 @@ const PNG = Buffer.from(
 
 export class FakeDesktopBackend implements DesktopBackend {
   readonly clicks: Array<{ target: string; x: number; y: number; delivery?: string }> = [];
+  readonly drags: Array<{
+    target: string;
+    points: Array<{ x: number; y: number }>;
+    delivery?: string;
+  }> = [];
   readonly launches: string[] = [];
   readonly panes: string[] = [];
   clipboard = '';
@@ -129,8 +134,9 @@ export class FakeDesktopBackend implements DesktopBackend {
   async move(_target: string, _x: number, _y: number, opts?: PointerOptions) {
     this.inputs.push({ method: 'move', delivery: opts?.delivery });
   }
-  async drag(_target: string, _points: unknown, opts?: PointerOptions) {
+  async drag(target: string, points: Array<{ x: number; y: number }>, opts?: PointerOptions) {
     this.inputs.push({ method: 'drag', delivery: opts?.delivery });
+    this.drags.push({ target, points, delivery: opts?.delivery });
   }
   async scroll(
     _target: string,

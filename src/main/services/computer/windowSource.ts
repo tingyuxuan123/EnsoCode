@@ -1,3 +1,51 @@
+export const COMPUTER_PREVIEW_WINDOW_TITLE = '__enso_computer_preview__';
+export const COMPUTER_OCCUPANCY_WINDOW_TITLE = '__enso_computer_occupancy__';
+
+const internalWindowIds = new Set<string>();
+
+/** 从 Electron mediaSourceId（形如 window:1590:0）提取原生窗口 ID。 */
+export function parseMediaSourceWindowId(mediaSourceId: string | undefined): string | undefined {
+  if (!mediaSourceId) return undefined;
+  const match = /^window:(\d+):/u.exec(mediaSourceId);
+  return match?.[1];
+}
+
+export function registerComputerInternalWindowId(windowId: string | undefined): void {
+  if (windowId) internalWindowIds.add(windowId);
+}
+
+export function unregisterComputerInternalWindowId(windowId: string | undefined): void {
+  if (windowId) internalWindowIds.delete(windowId);
+}
+
+export function isComputerInternalWindow(window: { id?: string; title?: string }): boolean {
+  if (
+    window.title === COMPUTER_PREVIEW_WINDOW_TITLE ||
+    window.title === COMPUTER_OCCUPANCY_WINDOW_TITLE
+  ) {
+    return true;
+  }
+  if (!window.id) return false;
+  if (internalWindowIds.has(window.id)) return true;
+  const mediaWindowId = parseMediaSourceWindowId(window.id);
+  return mediaWindowId !== undefined && internalWindowIds.has(mediaWindowId);
+}
+
+/** 登记并跟踪 computer 内部辅助窗口，在窗口销毁后解除登记。 */
+export function trackComputerInternalWindow(win: {
+  getMediaSourceId?: () => string;
+  once: (event: 'closed', listener: () => void) => unknown;
+}): void {
+  let id: string | undefined;
+  try {
+    id = parseMediaSourceWindowId(win.getMediaSourceId?.());
+  } catch {
+    id = undefined;
+  }
+  registerComputerInternalWindowId(id);
+  win.once('closed', () => unregisterComputerInternalWindowId(id));
+}
+
 export function isListedCgWindowLayer(layer: number): boolean {
   return layer >= 0 && layer <= 8;
 }

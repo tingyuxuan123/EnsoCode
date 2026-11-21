@@ -53,6 +53,8 @@ files:
     to: node_modules/quickjs-wasi
   - from: node_modules/libopus-wasm
     to: node_modules/libopus-wasm
+  - from: node_modules/agent-device
+    to: node_modules/agent-device
   # node-datachannel 平台包是 optional 兄弟目录，收集器只打 JS；不显式拷贝则
   # require('@node-datachannel/<platform>') 在安装包里找不到（Windows 直连会降级中继）
   - from: node_modules/.pnpm/node-datachannel@0.33.2/node_modules/@node-datachannel
@@ -108,6 +110,8 @@ asarUnpack:
   - node_modules/@node-datachannel/**/*.node
   # ripgrep 二进制不能从 asar 内执行
   - node_modules/@vscode/ripgrep/bin/**
+  # device-host 直接用 ELECTRON_RUN_AS_NODE 起 bin/agent-device.mjs，且包含 Android APK / Apple runner
+  - node_modules/agent-device/**
 mac:
   # 更新清单只接受安全的 ASCII 文件名；显示品牌与下载文件名分离。
   artifactName: CodeKiln-${version}-${arch}-mac.${ext}

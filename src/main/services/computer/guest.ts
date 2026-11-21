@@ -92,6 +92,67 @@ function jsonClone(value: unknown): unknown {
   }
 }
 
+function toDragPoint(raw: unknown): { x: number; y: number } | undefined {
+  if (Array.isArray(raw)) {
+    const x = raw[0];
+    const y = raw[1];
+    return typeof x === 'number' &&
+      typeof y === 'number' &&
+      Number.isFinite(x) &&
+      Number.isFinite(y)
+      ? { x, y }
+      : undefined;
+  }
+  if (raw && typeof raw === 'object') {
+    const record = raw as Record<string, unknown>;
+    return typeof record.x === 'number' &&
+      typeof record.y === 'number' &&
+      Number.isFinite(record.x) &&
+      Number.isFinite(record.y)
+      ? { x: record.x, y: record.y }
+      : undefined;
+  }
+  return undefined;
+}
+
+function normalizeDragPoints(args: Record<string, unknown>): Array<{ x: number; y: number }> {
+  let candidates: unknown[];
+  if (Array.isArray(args.points)) {
+    candidates = args.points;
+  } else if (args.from !== undefined && args.to !== undefined) {
+    candidates = [args.from, args.to];
+  } else if (
+    typeof args.fromX === 'number' &&
+    typeof args.fromY === 'number' &&
+    typeof args.toX === 'number' &&
+    typeof args.toY === 'number'
+  ) {
+    candidates = [
+      { x: args.fromX, y: args.fromY },
+      { x: args.toX, y: args.toY },
+    ];
+  } else if (
+    typeof args.x1 === 'number' &&
+    typeof args.y1 === 'number' &&
+    typeof args.x2 === 'number' &&
+    typeof args.y2 === 'number'
+  ) {
+    candidates = [
+      { x: args.x1, y: args.y1 },
+      { x: args.x2, y: args.y2 },
+    ];
+  } else {
+    candidates = [];
+  }
+  const points = candidates
+    .map(toDragPoint)
+    .filter((point): point is { x: number; y: number } => point !== undefined);
+  if (points.length < 2) {
+    throw new Error('drag needs at least two points');
+  }
+  return points;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -249,7 +310,34 @@ function win(info) {
     click(x, y, opts) { return host('click', { target: id, x, y, ...(opts || {}) }); },
     doubleClick(x, y, opts) { return host('click', { target: id, x, y, count: 2, ...(opts || {}) }); },
     move(x, y, opts) { return host('move', { target: id, x, y, ...(opts || {}) }); },
-    drag(points, opts) { return host('drag', { target: id, points, ...(opts || {}) }); },
+    drag(...raw) {
+      if (
+        typeof raw[0] === 'number' &&
+        typeof raw[1] === 'number' &&
+        typeof raw[2] === 'number' &&
+        typeof raw[3] === 'number'
+      ) {
+        const opts = raw[4] && typeof raw[4] === 'object' && !Array.isArray(raw[4]) ? raw[4] : {};
+        return host('drag', {
+          target: id,
+          points: [{ x: raw[0], y: raw[1] }, { x: raw[2], y: raw[3] }],
+          ...opts,
+        });
+      }
+      const isPointArg = (v) =>
+        (!!v && typeof v === 'object' && !Array.isArray(v) && 'x' in v && 'y' in v) ||
+        (Array.isArray(v) && typeof v[0] === 'number' && typeof v[1] === 'number');
+      if (isPointArg(raw[0]) && isPointArg(raw[1])) {
+        const opts = raw[2] && typeof raw[2] === 'object' && !Array.isArray(raw[2]) ? raw[2] : {};
+        return host('drag', {
+          target: id,
+          points: [raw[0], raw[1]],
+          ...opts,
+        });
+      }
+      const [points, opts] = raw;
+      return host('drag', { target: id, points, ...(opts || {}) });
+    },
     scroll(x, y, dxOrOpts, dy) {
       if (typeof dxOrOpts === 'number' || typeof dy === 'number') {
         return host('scroll', { target: id, x, y, dx: Number(dxOrOpts) || 0, dy: Number(dy) || 0 });
@@ -814,16 +902,10 @@ export async function runComputerGuest(input: {
         }
         case 'drag': {
           const target = String(args.target ?? '');
-          const points = Array.isArray(args.points) ? args.points : [];
-          const mapped = points.map((point) => {
-            const record = asRecord(point);
-            return mapScreenshotPoint(
-              input.session.frames,
-              target,
-              Number(record.x),
-              Number(record.y)
-            );
-          });
+          const points = normalizeDragPoints(args);
+          const mapped = points.map((point) =>
+            mapScreenshotPoint(input.session.frames, target, point.x, point.y)
+          );
           const { delivery } = await deliver(
             args,
             (opts) =>

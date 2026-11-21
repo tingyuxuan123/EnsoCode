@@ -74,6 +74,7 @@ describe('createComputerTool', () => {
     expect(guidelines).toContain('refs of unchanged elements stay the same across calls');
     expect(guidelines).toMatch(/observed ref.*identity.*changes.*re-run ax\(\)\/find\(\)/iu);
     expect(guidelines).not.toContain('New ax() invalidates older refs');
+    expect(guidelines).toContain('win.drag(x1, y1, x2, y2)');
   });
 
   it('schema 声明完整类型，缺 code 不发请求', async () => {

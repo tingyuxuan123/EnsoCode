@@ -171,6 +171,7 @@ export function createComputerTool(invoker: ComputerInvoker): ToolDefinition {
       'desktop.app("访达") launches if needed; desktop.window("微信") matches localized names; do not use osascript.',
       "Screenshot the same target before click(x,y). If an observed ref's identity (role/title/description) changes, input is refused (StaleRef); re-run ax()/find() before acting. Unchanged refs remain valid across snapshots.",
       'win.scroll(x, y, dx, dy) moves by pixels like a mouse wheel: dy > 0 scrolls up (earlier content), dy < 0 scrolls down (newer content); use a few hundred pixels per step and check pixelsChanged.',
+      'win.drag(x1, y1, x2, y2) drags between two points in the latest screenshot (or pass [{ x: x1, y: y1 }, { x: x2, y: y2 }] / [[x1, y1], [x2, y2]]).',
       'Input actions wait for UI to settle; extra wait() only for slow loads. timeout is a wall-clock budget for the whole call (default 60s, max 120s).',
       "Prefer AX actions (el.setValue, el.perform('AXPress'), el.focus) — they do not touch the user's mouse or keyboard. Screenshots and AX reads never take over.",
       'A screenshot with `hidden` may be stale (covered Chrome/Electron windows stop repainting); verify with ax()/el.value.',

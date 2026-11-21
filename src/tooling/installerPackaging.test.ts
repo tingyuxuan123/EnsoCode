@@ -51,6 +51,7 @@ const MAIN_RUNTIME_PACKAGES = [
   '@electron-toolkit/utils',
   '@modelcontextprotocol/sdk',
   '@rahularya01/pi-cursor',
+  'agent-device',
   'better-sqlite3',
   'electron-updater',
   'koffi',

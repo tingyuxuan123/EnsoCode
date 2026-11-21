@@ -49,7 +49,11 @@ import {
   skyMouseButton,
   skyPointerClickRecipe,
 } from './skyClick';
-import { findCapturerWindowSource, thumbnailCropForWindow } from './windowSource';
+import {
+  findCapturerWindowSource,
+  isComputerInternalWindow,
+  thumbnailCropForWindow,
+} from './windowSource';
 
 const execFileAsync = promisify(execFile);
 
@@ -120,24 +124,27 @@ export class MacosDesktopBackend implements DesktopBackend {
 
   async windows(): Promise<ComputerWindowInfo[]> {
     const native = await this.nativeOrNull();
-    if (native) return native.windows();
+    if (native)
+      return (await native.windows()).filter((window) => !isComputerInternalWindow(window));
     const sources = await desktopCapturer.getSources({
       types: ['window'],
       thumbnailSize: { width: 1, height: 1 },
     });
-    return sources.map((source) => {
-      const name = source.name;
-      const split = name.indexOf(' - ');
-      return {
-        id: source.id,
-        app: split > 0 ? name.slice(0, split) : name,
-        title: split > 0 ? name.slice(split + 3) : name,
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-      };
-    });
+    return sources
+      .map((source) => {
+        const name = source.name;
+        const split = name.indexOf(' - ');
+        return {
+          id: source.id,
+          app: split > 0 ? name.slice(0, split) : name,
+          title: split > 0 ? name.slice(split + 3) : name,
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+        };
+      })
+      .filter((window) => !isComputerInternalWindow(window));
   }
 
   async capture(target: string, maxWidth: number, maxHeight: number): Promise<CaptureBytes> {
@@ -523,7 +530,7 @@ export class MacosDesktopBackend implements DesktopBackend {
   }
 
   async drag(target: string, points: Array<{ x: number; y: number }>, opts?: PointerOptions) {
-    if (points.length === 0) return;
+    if (points.length < 2) throw new Error('drag needs at least two points');
     const native = await this.requireNative('input');
     if ((opts?.delivery ?? 'background') === 'foreground') {
       await opts?.guard?.check();
@@ -531,7 +538,6 @@ export class MacosDesktopBackend implements DesktopBackend {
       await native.drag(points);
       return;
     }
-    if (points.length < 2) throw new Error('drag needs at least two points');
     if (skyMouseButton(opts?.button) !== 'left') {
       throw new BackgroundUnavailableError('macOS background drag supports the left button only');
     }

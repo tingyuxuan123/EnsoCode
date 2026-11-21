@@ -82,6 +82,86 @@ describe('runComputerGuest', () => {
     expect(result.returnValue).toMatchObject({ clickSpace: 'w1', x: 10, y: 5 });
   });
 
+  it('win.drag 支持位置参数、对象数组和二元元组坐标并映射到屏幕坐标', async () => {
+    const backend = new FakeDesktopBackend();
+    const baseCapture = backend.capture.bind(backend);
+    backend.capture = async (target: string) => ({
+      ...(await baseCapture(target)),
+      originX: 100,
+      originY: 100,
+    });
+    await run(
+      `
+        const win = await desktop.window('w1');
+        await win.screenshot();
+        await win.drag(10, 5, 30, 20);
+        await win.drag([{ x: 10, y: 5 }, { x: 30, y: 20 }]);
+        await win.drag([[10, 5], [30, 20]]);
+        await win.drag({ x: 10, y: 5 }, { x: 30, y: 20 });
+      `,
+      { backend }
+    );
+    expect(backend.drags).toEqual([
+      {
+        target: 'w1',
+        points: [
+          { x: 120, y: 110 },
+          { x: 160, y: 140 },
+        ],
+        delivery: 'background',
+      },
+      {
+        target: 'w1',
+        points: [
+          { x: 120, y: 110 },
+          { x: 160, y: 140 },
+        ],
+        delivery: 'background',
+      },
+      {
+        target: 'w1',
+        points: [
+          { x: 120, y: 110 },
+          { x: 160, y: 140 },
+        ],
+        delivery: 'background',
+      },
+      {
+        target: 'w1',
+        points: [
+          { x: 120, y: 110 },
+          { x: 160, y: 140 },
+        ],
+        delivery: 'background',
+      },
+    ]);
+  });
+
+  it('win.drag 有效坐标点不足两个时显式报错而不静默返回成功', async () => {
+    const backend = new FakeDesktopBackend();
+    await expect(
+      run(
+        `
+          const win = await desktop.window('w1');
+          await win.screenshot();
+          await win.drag(10, 5);
+        `,
+        { backend }
+      )
+    ).rejects.toThrow(/drag needs at least two points/i);
+    await expect(
+      run(
+        `
+          const win = await desktop.window('w1');
+          await win.screenshot();
+          await win.drag([]);
+        `,
+        { backend }
+      )
+    ).rejects.toThrow(/drag needs at least two points/i);
+    expect(backend.drags).toEqual([]);
+  });
+
   it('未截图就 click 抛 FrameError', async () => {
     await expect(
       run(`const win = await desktop.window('w1'); await win.click(1, 1)`)

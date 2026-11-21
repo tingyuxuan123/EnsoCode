@@ -63,4 +63,20 @@ describe('device host build entry', () => {
     ).find((step) => step.run?.includes('fetch:device-helpers'));
     expect(personalHelper?.env?.npm_config_arch).toBe('arm64');
   });
+
+  it('packages and unpacks agent-device so device-host can spawn its CLI outside asar', () => {
+    const config = parse(readFileSync(path.join(root, 'electron-builder.yml'), 'utf8')) as {
+      files?: Array<string | { from?: string; to?: string }>;
+      asarUnpack?: string[];
+    };
+    expect(config.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'node_modules/agent-device',
+          to: 'node_modules/agent-device',
+        }),
+      ])
+    );
+    expect(config.asarUnpack).toContain('node_modules/agent-device/**');
+  });
 });

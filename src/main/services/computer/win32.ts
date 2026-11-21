@@ -18,7 +18,11 @@ import { axPressFallbackMessage, isAxPressUnsupported } from './axJob';
 import { AX_SNAPSHOT_DEFAULT_DEPTH } from './axWalkBudget';
 import type { AxClickVerification, CaptureBytes, DesktopBackend, PointerOptions } from './backend';
 import { loadWin32Native, type Win32Native } from './win32Native';
-import { findCapturerWindowSource, thumbnailCropForWindow } from './windowSource';
+import {
+  findCapturerWindowSource,
+  isComputerInternalWindow,
+  thumbnailCropForWindow,
+} from './windowSource';
 import { resolveWinLaunch, resolveWinSettingsPane } from './winLaunch';
 
 const execFileAsync = promisify(execFile);
@@ -79,20 +83,23 @@ export class WindowsDesktopBackend implements DesktopBackend {
 
   async windows(): Promise<ComputerWindowInfo[]> {
     const native = await this.nativeOrNull();
-    if (native) return native.windows();
+    if (native)
+      return (await native.windows()).filter((window) => !isComputerInternalWindow(window));
     const sources = await desktopCapturer.getSources({
       types: ['window'],
       thumbnailSize: { width: 1, height: 1 },
     });
-    return sources.map((source) => ({
-      id: source.id,
-      app: source.name,
-      title: source.name,
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-    }));
+    return sources
+      .map((source) => ({
+        id: source.id,
+        app: source.name,
+        title: source.name,
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+      }))
+      .filter((window) => !isComputerInternalWindow(window));
   }
 
   async capture(target: string, maxWidth: number, maxHeight: number): Promise<CaptureBytes> {
@@ -203,7 +210,7 @@ export class WindowsDesktopBackend implements DesktopBackend {
   }
 
   async drag(target: string, points: Array<{ x: number; y: number }>, opts?: PointerOptions) {
-    if (points.length === 0) return;
+    if (points.length < 2) throw new Error('drag needs at least two points');
     await this.move(target, points[0].x, points[0].y, opts);
     await (await this.requireNative()).drag(points);
   }

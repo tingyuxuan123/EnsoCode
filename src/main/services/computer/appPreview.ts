@@ -3,6 +3,7 @@ import path from 'node:path';
 import { app, BrowserWindow, nativeImage, screen, session } from 'electron';
 import { PreviewController, type PreviewView } from './appPreviewController';
 import { placePreview, previewSize } from './appPreviewLayout';
+import { COMPUTER_PREVIEW_WINDOW_TITLE, trackComputerInternalWindow } from './windowSource';
 
 const PARTITION = 'computer-preview';
 
@@ -10,7 +11,7 @@ function previewHtml(zh: boolean): string {
   const failed = zh
     ? '无法显示画面（需要屏幕录制权限）'
     : 'Preview unavailable (Screen Recording needed)';
-  return `<!doctype html><html><head><meta charset="utf-8">
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${COMPUTER_PREVIEW_WINDOW_TITLE}</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; media-src blob: mediastream:">
 <style>
 html,body{margin:0;height:100%;background:transparent;overflow:hidden;user-select:none;-webkit-app-region:drag;
@@ -117,6 +118,7 @@ function createView(onUserClose: (windowId: string) => void): PreviewView {
     if (win && !win.isDestroyed()) return win;
     const created = new BrowserWindow({
       show: false,
+      title: COMPUTER_PREVIEW_WINDOW_TITLE,
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
@@ -166,6 +168,7 @@ function createView(onUserClose: (windowId: string) => void): PreviewView {
       anchor = { right: bounds.x + bounds.width, bottom: bounds.y + bounds.height };
     });
     void created.loadFile(file);
+    trackComputerInternalWindow(created);
     win = created;
     return created;
   };
