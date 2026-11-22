@@ -1773,6 +1773,16 @@ export class SessionSupervisor {
           }
           return;
         }
+        if (command.type === 'set-model' && 'parent' in command.identity) {
+          // 切换失败不等于该会话的轮次失败，也不改原模型或运行状态。
+          this.options.emit({
+            type: 'model-change-rejected',
+            identity: command.identity,
+            seq: ++managed.seq,
+            reason: 'Could not change the coworker model.',
+          });
+          return;
+        }
         managed.status = 'failed';
         this.emitStatus(managed, message);
       });
@@ -2030,8 +2040,41 @@ export class SessionSupervisor {
         return;
       case 'set-model': {
         const managed = this.must(command.identity);
+        const child = 'parent' in command.identity ? command.identity : undefined;
+        const busy = () =>
+          managed.status !== 'idle' ||
+          !managed.session.isIdle ||
+          managed.compaction ||
+          managed.promptDelivery ||
+          managed.roundPending ||
+          (managed.currentTurnId && managed.promptedRequestIds.has(managed.currentTurnId));
         const runtime = await this.getRuntime();
+        if (
+          child &&
+          (!managed.childIdentity ||
+            !isSameChildSessionIdentity(managed.childIdentity, child) ||
+            child.profileId ||
+            child.typeKey.startsWith('bot:') ||
+            busy())
+        ) {
+          this.options.emit({
+            type: 'model-change-rejected',
+            identity: child,
+            seq: ++managed.seq,
+            reason: 'This coworker cannot change models now.',
+          });
+          return;
+        }
         const base = await resolveSessionModel(runtime, command.model);
+        if (child && busy()) {
+          this.options.emit({
+            type: 'model-change-rejected',
+            identity: child,
+            seq: ++managed.seq,
+            reason: 'This coworker cannot change models now.',
+          });
+          return;
+        }
         const next = applyReasoningToModel(
           { ...base, compat: base.compat ? { ...base.compat } : undefined },
           managed.session.model ? Boolean(managed.session.model.reasoning) : false,
@@ -2040,6 +2083,11 @@ export class SessionSupervisor {
         await managed.session.setModel(next);
         ensureAssistantUsage(managed.session.messages as unknown[]);
         managed.modelId = command.model.modelId;
+        if (child) {
+          const parent = this.sessions.get(child.parent.sessionId);
+          const coworker = parent?.coworkers.get(child.instanceName);
+          if (coworker?.id === child.sessionId) coworker.modelId = command.model.modelId;
+        }
         managed.reviewSecrets = accumulateApprovalReviewSecrets(
           managed.reviewSecrets,
           approvalModelSecrets(command.model)
@@ -2053,16 +2101,7 @@ export class SessionSupervisor {
           model: settingsModelRef(command.model),
         });
         // SDK 在 prompt 的输入/鉴权预检中仍可能报告 idle；已投递的轮次也不能打断。
-        if (
-          managed.status !== 'idle' ||
-          !managed.session.isIdle ||
-          managed.compaction ||
-          managed.promptDelivery ||
-          managed.roundPending ||
-          (managed.currentTurnId && managed.promptedRequestIds.has(managed.currentTurnId))
-        ) {
-          return;
-        }
+        if (busy()) return;
         try {
           const usage = managed.session.getContextUsage();
           // 虚拟模型的用量窗口可能来自上次物理路由；这里使用新选择本身的窗口。

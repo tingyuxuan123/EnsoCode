@@ -2524,8 +2524,8 @@ export function registerAgentHandlers(): void {
       }
     }
     if (workerEvent.type === 'child-ready') {
-      const { proof: _proof, ...rendererEvent } = workerEvent;
-      broadcastAgentEvent(rendererEvent);
+      const { proof, ...rendererEvent } = workerEvent;
+      broadcastAgentEvent({ ...rendererEvent, model: proof.model });
       return;
     }
     broadcastAgentEvent(workerEvent);
@@ -2976,13 +2976,27 @@ export function registerAgentHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SET_MODEL,
-    async (_event, sessionId: unknown, providerId: unknown, modelId: unknown) => {
+    async (
+      event,
+      sessionId: unknown,
+      providerId: unknown,
+      modelId: unknown,
+      childGeneration?: unknown
+    ) => {
       const rejected = botControlError(sessionId);
       if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
-      if (!identity || 'parent' in identity) {
+      if (!identity) {
         return { ok: false, error: 'invalid session or stale generation' };
       }
+      const canChange = () =>
+        'parent' in identity
+          ? isMainWebContents(event.sender.id) &&
+            childGeneration === identity.generation &&
+            !botControlError(identity.parent.sessionId) &&
+            agentSessionIndex.canChangeCoworkerModel(identity)
+          : childGeneration === undefined && !identity.sessionId.includes('::cw-');
+      if (!canChange()) return { ok: false, error: 'This coworker cannot change models now.' };
       if (!isNonEmptyString(providerId) || !isNonEmptyString(modelId)) {
         return { ok: false, error: 'providerId and modelId are required' };
       }
@@ -2992,6 +3006,9 @@ export function registerAgentHandlers(): void {
       } catch {
         return { ok: false, error: 'model credentials unavailable' };
       }
+      // 凭据读取期间 child 可能开始新轮或换代；仍以最初选中的 exact identity 下发。
+      if ('parent' in identity && !canChange())
+        return { ok: false, error: 'This coworker cannot change models now.' };
       return setSessionModel(identity, providerId, modelId, credentialKeys);
     }
   );

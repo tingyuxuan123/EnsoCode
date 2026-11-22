@@ -1438,7 +1438,7 @@ export function resolvePresetSystemPrompt(
  * 请求却仍打旧 provider，且该会话后续所有 @Agent 派发被永久拒绝。
  */
 export function setSessionModel(
-  identity: SessionIdentity,
+  identity: SessionIdentity | ChildSessionIdentity,
   providerId: string,
   modelId: string,
   authenticatedAccountKeys: ReadonlySet<string>

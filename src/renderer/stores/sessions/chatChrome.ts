@@ -1,4 +1,5 @@
 import { conversationHasRunningChild } from '@shared/conversationDotTone';
+import { coworkerModelControl } from './coworkerTabPolicy';
 import type { Conversation } from './index';
 import { chatSurfaceBusy } from './messageCache';
 
@@ -47,6 +48,7 @@ export interface ChatChrome {
   childLockedProfileId?: string;
   activeOauthAsk: Conversation['activeOauthAsk'];
   displayedParentId?: string;
+  coworkerModelControl: ReturnType<typeof coworkerModelControl>;
   busy: boolean;
 }
 
@@ -114,6 +116,7 @@ export function selectChatChrome(state: SessionsSlice): ChatChrome | null {
     childLockedProfileId: displayed.child?.lockedProfileId,
     activeOauthAsk: displayed.activeOauthAsk,
     displayedParentId: displayed.parentId,
+    coworkerModelControl: coworkerModelControl(displayed),
     busy: chatSurfaceBusy(displayed),
   };
 }

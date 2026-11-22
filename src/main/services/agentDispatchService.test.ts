@@ -166,6 +166,7 @@ async function setup(
   const spawnChildCalls: Array<{
     identity: ChildSessionIdentity;
     cwd: string;
+    modelId: string;
     resumeFile?: string;
   }> = [];
   const resumeCoworkerCalls: Array<{
@@ -210,12 +211,12 @@ async function setup(
           },
         ],
       }),
-      resolveModel: () => ({
+      resolveModel: (providerId, modelId) => ({
         ok: true,
         selection: {
-          ref: { providerId: 'provider', modelId: 'model' },
-          runtimeRef: { providerId: 'runtime', modelId: 'model' },
-          config: config.model,
+          ref: { providerId, modelId },
+          runtimeRef: { providerId: 'runtime', modelId },
+          config: { ...config.model, modelId },
         },
       }),
       resolveAgentType: () =>
@@ -240,8 +241,13 @@ async function setup(
         );
         return { ok: true };
       },
-      spawnChild: (identity, cwd, _config, resumeFile) => {
-        spawnChildCalls.push({ identity, cwd, ...(resumeFile ? { resumeFile } : {}) });
+      spawnChild: (identity, cwd, spawnConfig, resumeFile) => {
+        spawnChildCalls.push({
+          identity,
+          cwd,
+          modelId: spawnConfig.model.modelId,
+          ...(resumeFile ? { resumeFile } : {}),
+        });
         if (options.rejectChild) {
           const reason = options.rejectChild;
           queueMicrotask(() =>
@@ -648,7 +654,7 @@ describe('parent-ready 级联恢复 child（§7.3）', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   /** 持久化形状：typed child（带 metadata）+ 工具直雇 legacy + 已 ended + 缺 sessionFile */
-  function persistedState(conversationId: string): Record<string, unknown> {
+  function persistedState(conversationId: string) {
     const typedId = `${conversationId}::cw-${INSTANCE_ID}`;
     const legacyId = `${conversationId}::cw-bob`;
     const endedId = `${conversationId}::cw-ended`;
@@ -799,6 +805,33 @@ describe('parent-ready 级联恢复 child（§7.3）', () => {
     await settle();
     expect(fixture.spawnChildCalls).toHaveLength(1);
     expect(fixture.resumeCoworkerCalls).toHaveLength(1);
+  });
+
+  it.each([true, false])('恢复时只应用未锁定协作者的手动模型（locked=%s）', async (locked) => {
+    const fixture = await setup(undefined, {
+      persistedState: (id) => {
+        const state = persistedState(id);
+        const childId = `${id}::cw-${INSTANCE_ID}`;
+        const child = state.conversations[childId];
+        return {
+          conversations: {
+            ...state.conversations,
+            [childId]: {
+              ...child,
+              child: locked
+                ? child.child
+                : { ...child.child, agentTypeKey: 'builtin:scout', lockedProfileId: undefined },
+              coworkerModelOverride: { providerId: 'alt-provider', modelId: 'alt-model' },
+            },
+          },
+        };
+      },
+    });
+    await ready(fixture, '11111111-1111-4111-8111-111111111111');
+    expect(fixture.spawnChildCalls[0]).toMatchObject({
+      modelId: locked ? 'model' : 'alt-model',
+      resumeFile: '/tmp/typed.jsonl',
+    });
   });
 
   it('类型解析失败（已删/禁用）时该 child 跳过，不静默降级、不影响其他 child', async () => {

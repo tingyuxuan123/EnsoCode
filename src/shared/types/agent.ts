@@ -1058,6 +1058,17 @@ export interface ChildConversationMetadata {
   lockedProfileId?: typeof ENSO_LOCKED_PROFILE_ID;
 }
 
+/** 手动换当前会话的模型不改角色配置；系统助手与成员角色仍走各自的模型策略。 */
+export function allowsCoworkerModelChange(child: ChildConversationMetadata | undefined): boolean {
+  return Boolean(
+    child &&
+      (child.mode === undefined || child.mode === 'coworker') &&
+      !child.lockedProfileId &&
+      child.agentTypeKey !== 'agent:enso' &&
+      !child.agentTypeKey.startsWith('bot:')
+  );
+}
+
 export interface SafeChildRef {
   sessionId: string;
   generation: string;
@@ -1311,7 +1322,7 @@ export type AgentCommand =
       activeOnly?: true;
     }
   | { type: 'withdraw-steer'; identity: SessionIdentity; deliveryId: string }
-  | { type: 'set-model'; identity: SessionIdentity; model: SpawnModelConfig }
+  | { type: 'set-model'; identity: SessionIdentity | ChildSessionIdentity; model: SpawnModelConfig }
   | { type: 'set-thinking'; identity: SessionIdentity; level: ThinkingLevel }
   | {
       type: 'set-reasoning';
@@ -1844,7 +1855,7 @@ export type ParentLifecycleEvent =
        * 已启动模型，否则后续派发的 selection 校验会永远对不上（见 issue #30）。
        */
       type: 'model-changed';
-      identity: SessionIdentity;
+      identity: SessionIdentity | ChildSessionIdentity;
       seq: number;
       model: ModelRef;
     }
@@ -1857,6 +1868,7 @@ export type ParentLifecycleEvent =
   | { type: 'parent-ended'; identity: SessionIdentity; seq: number; reason: string };
 
 export type ChildLifecycleEvent =
+  | { type: 'model-change-rejected'; identity: ChildSessionIdentity; seq: number; reason: string }
   | {
       type: 'child-reserved';
       identity: ChildSessionIdentity;
@@ -1881,7 +1893,7 @@ export type ChildLifecycleEvent =
 
 export type RendererChildLifecycleEvent =
   | Exclude<ChildLifecycleEvent, { type: 'child-ready' }>
-  | Omit<Extract<ChildLifecycleEvent, { type: 'child-ready' }>, 'proof'>;
+  | (Omit<Extract<ChildLifecycleEvent, { type: 'child-ready' }>, 'proof'> & { model?: ModelRef });
 
 /** Renderer 收到统一普通+child事件流；exact profile proof 只在 worker→Main 边界。 */
 export type RendererAgentEvent =
@@ -2996,7 +3008,7 @@ function parseSubagentModelOption(value: unknown): SubagentModelOption | null {
   return value as unknown as SubagentModelOption;
 }
 
-function parseModelRef(value: unknown): ModelRef | null {
+export function parseModelRef(value: unknown): ModelRef | null {
   if (!isRecord(value) || !hasExactKeys(value, ['providerId', 'modelId'])) return null;
   return isNonEmptyString(value.providerId) && isNonEmptyString(value.modelId)
     ? { providerId: value.providerId, modelId: value.modelId }
@@ -4386,9 +4398,12 @@ function parseLifecycleEvent(value: Record<string, unknown>): AgentWorkerEvent |
     value.type === 'child-reserved' ||
     value.type === 'child-ready' ||
     value.type === 'child-rejected' ||
-    value.type === 'child-ended'
+    value.type === 'child-ended' ||
+    value.type === 'model-change-rejected'
       ? parseChildSessionIdentity(value.identity)
-      : parseSessionIdentity(value.identity);
+      : value.type === 'model-changed'
+        ? parseAnySessionIdentity(value.identity)
+        : parseSessionIdentity(value.identity);
   if (!identity || !isSequence(value.seq)) return null;
   switch (value.type) {
     case 'parent-ready':
@@ -4401,6 +4416,7 @@ function parseLifecycleEvent(value: Record<string, unknown>): AgentWorkerEvent |
     case 'parent-ended':
     case 'child-rejected':
     case 'child-ended':
+    case 'model-change-rejected':
       return isNonEmptyString(value.reason) ? (value as unknown as AgentWorkerEvent) : null;
     case 'child-reserved':
       return isNonEmptyString(value.requestId) && parseChildConversationMetadata(value.metadata)
@@ -4464,6 +4480,7 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
   if (
     value.type === 'parent-ready' ||
     value.type === 'model-changed' ||
+    value.type === 'model-change-rejected' ||
     value.type === 'parent-rejected' ||
     value.type === 'parent-ended' ||
     value.type === 'child-reserved' ||

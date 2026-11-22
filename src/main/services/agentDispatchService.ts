@@ -19,6 +19,7 @@ import {
   type AgentSessionCustomEntry,
   type AgentSpawnRequest,
   type AgentWorkerEvent,
+  allowsCoworkerModelChange,
   type ChildLifecycleEvent,
   type DispatchMainEvent,
   type DispatchProgressPhase,
@@ -26,6 +27,7 @@ import {
   type ModelRef,
   type ParentLifecycleEvent,
   parseChildConversationMetadata,
+  parseModelRef,
   type RendererAgentEvent,
   type ResolvedAgentTypeSpawnConfig,
   type SpawnModelConfig,
@@ -826,7 +828,7 @@ export class AgentDispatchService {
       const metadata = parseChildConversationMetadata(child.child);
       if (metadata) {
         // typed child：registry 重新解析，类型已删/禁用 → 不恢复不降级（只读回放兑底）；
-        // 模型继承恢复后的 parent 模型（resolveParentSource 读 sessionIndex.model）
+        // 先解析角色的正常配置，再只覆盖该会话手动选过的模型，不改角色资源或权限。
         const model = this.options.host.resolveModel(
           source.selectedModel.providerId,
           source.selectedModel.modelId,
@@ -840,6 +842,16 @@ export class AgentDispatchService {
           parent.sessionId
         );
         if (!resolved.ok || !resolved.config) continue;
+        const override = allowsCoworkerModelChange(metadata)
+          ? parseModelRef(child.coworkerModelOverride)
+          : null;
+        const chosen = override
+          ? this.options.host.resolveModel(override.providerId, override.modelId, credentialKeys)
+          : null;
+        const config =
+          chosen?.ok && chosen.selection
+            ? { ...resolved.config, model: chosen.selection.config }
+            : resolved.config;
         const reservation = this.options.sessionIndex.reserveChildResume(
           parent,
           metadata,
@@ -849,7 +861,7 @@ export class AgentDispatchService {
         const spawned = this.options.host.spawnChild(
           reservation.reservation.child,
           await this.resolveSpawnCwd(source),
-          resolved.config,
+          config,
           resumeFile
         );
         if (!spawned.ok) this.options.sessionIndex.releaseChild(reservation.reservation.child);

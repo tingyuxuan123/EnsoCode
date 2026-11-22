@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   persistedConversation: vi.fn(),
   currentIdentity: vi.fn(),
   coworkerOf: vi.fn(),
+  canChangeCoworkerModel: vi.fn(() => false),
   childProof: vi.fn(),
   resolveTeamTarget: vi.fn(),
   isMainWebContents: vi.fn(() => true),
@@ -281,6 +282,7 @@ vi.mock('./capabilities', () => ({
     resolveTeamTarget: mocks.resolveTeamTarget,
     persistedConversation: mocks.persistedConversation,
     coworkerOf: mocks.coworkerOf,
+    canChangeCoworkerModel: mocks.canChangeCoworkerModel,
     sessionFile: mocks.sessionFile,
   },
   capabilityGateway: {
@@ -1094,6 +1096,38 @@ describe('agent IPC Main identity boundary', () => {
     mocks.currentIdentity.mockReturnValue(undefined);
     await expect(handler?.(event, 'gone', 'pv-B', 'model-1')).resolves.toMatchObject({ ok: false });
     expect(mocks.setSessionModel).not.toHaveBeenCalled();
+  });
+
+  it('桌面可给空闲协作者换模型，只投递到指定的 child generation', async () => {
+    const handler = mocks.handlers.get(IPC_CHANNELS.AGENT_SET_MODEL);
+    const child = {
+      sessionId: 'conv-1::cw-1',
+      generation: 'current-child',
+      parent: { sessionId: 'conv-1', generation: 'gen-1' },
+      instanceId: 'i',
+      instanceName: 'Scout-1',
+      typeKey: 'builtin:scout',
+    };
+    mocks.currentIdentity.mockReturnValue(child);
+    mocks.canChangeCoworkerModel.mockReturnValue(true);
+    try {
+      await expect(
+        handler?.(event, child.sessionId, 'pv-B', 'model-2', 'stale-child')
+      ).resolves.toMatchObject({ ok: false });
+      expect(mocks.setSessionModel).not.toHaveBeenCalled();
+
+      await expect(
+        handler?.(event, child.sessionId, 'pv-B', 'model-2', child.generation)
+      ).resolves.toMatchObject({ ok: true });
+      expect(mocks.setSessionModel).toHaveBeenCalledExactlyOnceWith(
+        child,
+        'pv-B',
+        'model-2',
+        expect.anything()
+      );
+    } finally {
+      mocks.canChangeCoworkerModel.mockReturnValue(false);
+    }
   });
 
   describe('手机第二屏的会话命令桥', () => {

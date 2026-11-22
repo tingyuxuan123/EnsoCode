@@ -998,9 +998,16 @@ const electronAPI = {
     setModel: (
       sessionId: string,
       providerId: string,
-      modelId: string
+      modelId: string,
+      childGeneration?: string
     ): Promise<AgentActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.AGENT_SET_MODEL, sessionId, providerId, modelId),
+      ipcRenderer.invoke(
+        IPC_CHANNELS.AGENT_SET_MODEL,
+        sessionId,
+        providerId,
+        modelId,
+        childGeneration
+      ),
     setThinking: (sessionId: string, level: ThinkingLevel): Promise<AgentActionResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_SET_THINKING, sessionId, level),
     setReasoning: (

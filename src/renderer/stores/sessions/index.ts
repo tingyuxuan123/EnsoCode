@@ -23,6 +23,7 @@ import type {
   ContextOccupancy,
   ConversationAuthorityProjection,
   DispatchMainEvent,
+  ModelRef,
   ProjectAuthorityProjection,
   ProjectedMessage,
   RendererAgentEvent,
@@ -88,7 +89,7 @@ import {
   rewindWorkerPhase,
   shouldSendRewindCommand,
 } from './conversationRewind';
-import { canSelectCoworkerTab } from './coworkerTabPolicy';
+import { canSelectCoworkerTab, coworkerModelControl } from './coworkerTabPolicy';
 import { GOAL_AUTO_TURN_LIMIT } from './goalSteps';
 import {
   hideRetiredCoordinator,
@@ -285,6 +286,9 @@ export interface Conversation extends SessionProjection {
   /** 上次使用的模型，resume 时沿用 */
   lastProviderId?: string;
   lastModelId?: string;
+  /** 仅协作者会话的手动、已确认选择；下次级联恢复时覆写角色默认模型。 */
+  coworkerModelOverride?: ModelRef;
+  modelSwitchPending?: boolean;
   /** 是否开启推理（per 会话记忆） */
   reasoningEnabled?: boolean;
   /** 推理档位（reasoning 开启时有效） */
@@ -481,6 +485,7 @@ interface SessionsState {
   setPreset(id: string, presetId: string): void;
   /** 记忆会话选用的模型（选择器读写;send/resume 沿用） */
   setModel(id: string, providerId: string, modelId: string): void;
+  setCoworkerModel(id: string, providerId: string, modelId: string): Promise<void>;
   /** 设置审批档位；已 spawn 的会话即时下发 */
   setApprovalMode(id: string, mode: ApprovalMode): void;
   /** 开关 Plan 模式；已 spawn 即时下发，否则随下次 spawn 生效 */
@@ -595,6 +600,12 @@ function publishSessionMuted(id: string, muted: boolean): void {
 /** 归档时一并清掉静音与置顶（与「归档与置顶互斥」同一条规则） */
 function archivedFlags(now: number): Partial<Conversation> {
   return { archived: true, archivedAt: now, pinned: undefined, muted: undefined };
+}
+
+function showCoworkerModelError(error: string): void {
+  void import('@/components/ui/toast')
+    .then(({ addToast }) => addToast({ type: 'error', description: error }))
+    .catch(() => {});
 }
 
 export const useSessionsStore = create<SessionsState>()(
@@ -1117,7 +1128,10 @@ export const useSessionsStore = create<SessionsState>()(
             const conversations = { ...state.conversations };
             for (const id of Object.keys(conversations)) {
               if (conversations[id].started) {
-                conversations[id] = applyAgentEvent(conversations[id], id, event) as Conversation;
+                conversations[id] = {
+                  ...(applyAgentEvent(conversations[id], id, event) as Conversation),
+                  modelSwitchPending: undefined,
+                };
               }
             }
             return { conversations };
@@ -1245,6 +1259,7 @@ export const useSessionsStore = create<SessionsState>()(
                     error: undefined,
                     pendingCapabilityAsks: [],
                     activeOauthAsk: undefined,
+                    modelSwitchPending: undefined,
                     // 只有渲染层原以为 worker 还持有（started）时本地正文才可能掉队；
                     // 浏览态（尾窗上屏、started=false）的正文是 jsonl 来的，不动
                     ...(absentTarget &&
@@ -1270,6 +1285,7 @@ export const useSessionsStore = create<SessionsState>()(
                     error: 'Session ended — history not restored',
                     pendingCapabilityAsks: [],
                     activeOauthAsk: undefined,
+                    modelSwitchPending: undefined,
                   };
             }
             return { conversations };
@@ -1504,6 +1520,7 @@ export const useSessionsStore = create<SessionsState>()(
                     started: true,
                     spawning: false,
                     createdAt: coworker.createdAt,
+                    coworkerModelOverride: existing?.coworkerModelOverride,
                     ...(coworker.sessionFile ? { sessionFile: coworker.sessionFile } : {}),
                     ...(coworker.modelId ? { lastModelId: coworker.modelId } : {}),
                   };
@@ -1815,15 +1832,32 @@ export const useSessionsStore = create<SessionsState>()(
                   started: true,
                   historyOnly: undefined,
                   sessionFile: event.sessionFile,
+                  ...(event.model
+                    ? { lastProviderId: event.model.providerId, lastModelId: event.model.modelId }
+                    : {}),
                 }
               : {}),
+            ...(event.type === 'model-changed' && 'parent' in event.identity
+              ? {
+                  lastProviderId: event.model.providerId,
+                  lastModelId: event.model.modelId,
+                  coworkerModelOverride: event.model,
+                  modelSwitchPending: undefined,
+                }
+              : {}),
+            ...(event.type === 'model-change-rejected' ? { modelSwitchPending: undefined } : {}),
             ...(event.type === 'session-custom-entry' &&
             event.entry.kind === 'capability-receipt' &&
             conversation.activeOauthAsk?.requestId === event.entry.receipt.requestId
               ? { activeOauthAsk: undefined }
               : {}),
             ...(event.type === 'parent-ended' || event.type === 'child-ended'
-              ? { started: false, pendingCapabilityAsks: [], activeOauthAsk: undefined }
+              ? {
+                  started: false,
+                  pendingCapabilityAsks: [],
+                  activeOauthAsk: undefined,
+                  modelSwitchPending: undefined,
+                }
               : {}),
             // worker 释放冷会话：冷缓存期间 upsert 已被丢，本地正文可能掉队，而回收定时器只在切会话时
             // 武装、夜里不再切就永远不清。这里直接清掉，切回时走 jsonl 尾窗；热正文可信，保留
@@ -1849,10 +1883,18 @@ export const useSessionsStore = create<SessionsState>()(
             // spawn IPC ack 时已乐观置 started:true；拒绝到达不清回 false 的话，
             // 重发会绕过 spawn 分支直接 prompt 到 worker 里不存在的会话，重试无声失败。
             ...(event.type === 'parent-rejected' || event.type === 'child-rejected'
-              ? { started: false }
+              ? { started: false, modelSwitchPending: undefined }
               : {}),
           });
         });
+        if (
+          event.type === 'model-change-rejected' &&
+          currentConversation.modelSwitchPending &&
+          currentConversation.generation === event.identity.generation &&
+          event.seq > currentConversation.lastSeq
+        ) {
+          showCoworkerModelError(event.reason);
+        }
         if (event.type === 'parent-ready') {
           // 派发 Enso 等一次性任务会就地启动主会话，但不会给主会话写入普通消息。
           // 当前视图没切换，仍需读一次尾窗；确认历史为空后才能解除加载和输入忙碌态。
@@ -3253,6 +3295,7 @@ export const useSessionsStore = create<SessionsState>()(
           if (!conversation.parentId && !conversation.btwParentId && !spawnCwd)
             return 'conversation workspace is unavailable';
           if (conversation.workspaceMigrating) return 'workspace operation in progress';
+          if (conversation.modelSwitchPending) return 'coworker model change in progress';
           if (conversation.rewinding || conversation.restoringFiles) return 'rewind in progress';
           // 只读回放的已结束实例：必须在乐观回显之前拦，否则会往只读历史里插一条
           // 根本没发出去的用户消息。
@@ -3781,6 +3824,33 @@ export const useSessionsStore = create<SessionsState>()(
               }
             });
           pendingSelectionUpdates.set(parentId, update);
+        },
+
+        async setCoworkerModel(id, providerId, modelId) {
+          const { conversations } = get();
+          const conversation = conversations[id];
+          if (
+            !conversation?.generation ||
+            !conversation.parentId ||
+            !canSelectCoworkerTab(conversations, conversation.parentId, id) ||
+            coworkerModelControl(conversation) !== 'ready'
+          )
+            return;
+          if (conversation.lastProviderId === providerId && conversation.lastModelId === modelId)
+            return;
+          const generation = conversation.generation;
+          set((state) => patch(state, id, { modelSwitchPending: true }));
+          let result: { ok: boolean; error?: string };
+          try {
+            result = await window.electronAPI.agent.setModel(id, providerId, modelId, generation);
+          } catch {
+            result = { ok: false };
+          }
+          const current = get().conversations[id];
+          if (result.ok || current?.generation !== generation || !current.modelSwitchPending)
+            return;
+          set((state) => patch(state, id, { modelSwitchPending: undefined }));
+          showCoworkerModelError(result.error ?? 'Could not change the coworker model.');
         },
 
         setApprovalMode(id, mode) {

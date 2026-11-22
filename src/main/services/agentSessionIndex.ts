@@ -21,6 +21,7 @@ import type {
   ResolvedChildProfileProof,
   WorkspaceLockEvent,
 } from '@shared/types/agent';
+import { allowsCoworkerModelChange } from '@shared/types/agent';
 import { type AgentTypeEntry, BUILTIN_AGENT_TYPES } from '@shared/types/assets';
 import { withPluginAgentTypes } from './pluginRuntime';
 
@@ -249,6 +250,15 @@ export class AgentSessionIndex {
     return this.sessions.get(identity.parent.sessionId)?.coworkers.get(identity.sessionId)?.child;
   }
 
+  canChangeCoworkerModel(identity: ChildSessionIdentity): boolean {
+    return (
+      this.isReady(identity) &&
+      this.isReady(identity.parent) &&
+      this.sessions.get(identity.sessionId)?.status === 'idle' &&
+      allowsCoworkerModelChange(this.childMetadata(identity))
+    );
+  }
+
   sessionFile(identity: SessionIdentity): string | undefined {
     const current = this.sessions.get(identity.sessionId);
     return current && isSameGeneration(current.identity, identity)
@@ -470,6 +480,10 @@ export class AgentSessionIndex {
       if (!current || !isSameGeneration(current.identity, event.identity)) return false;
       current.model = event.model;
       current.lastSeq = event.seq;
+      if ('parent' in event.identity) {
+        const coworker = this.coworkerOf(event.identity.parent, event.identity.sessionId);
+        if (coworker) coworker.modelId = event.model.modelId;
+      }
       return true;
     }
     if (event.type === 'parent-rejected' || event.type === 'parent-ended') {

@@ -534,7 +534,8 @@ export function ChatView() {
             locked={
               (chrome.pendingApprovals ?? []).length > 0 ||
               capabilityApprovals.length > 0 ||
-              Boolean(chrome.rewinding || chrome.restoringFiles)
+              Boolean(chrome.rewinding || chrome.restoringFiles) ||
+              chrome.coworkerModelControl === 'pending'
             }
             focusKey={chrome.id}
             presetId={chrome.presetId ?? 'default'}
@@ -658,15 +659,52 @@ export function ChatView() {
                   </>
                 )}
                 {chrome.displayedParentId && (
-                  <span className="text-[calc(11rem/14)] text-muted-foreground">
-                    {memberName ??
-                      (chrome.agentType
-                        ? agentTypeDisplayName(chrome.agentType, customAgentTypes)
-                        : 'coworker')}
-                    {chrome.lastModelId
-                      ? ` · ${modelDisplayName(virtualModels, chrome.lastModelId)}`
-                      : ''}
-                  </span>
+                  <>
+                    <span className="text-[calc(11rem/14)] text-muted-foreground">
+                      {memberName ??
+                        (chrome.agentType
+                          ? agentTypeDisplayName(chrome.agentType, customAgentTypes)
+                          : 'coworker')}
+                      {chrome.coworkerModelControl !== 'ready' && chrome.lastModelId
+                        ? ` · ${modelDisplayName(virtualModels, chrome.lastModelId)}`
+                        : ''}
+                    </span>
+                    {chrome.coworkerModelControl === 'ready' && (
+                      <div
+                        className="ml-auto min-w-0 max-w-full shrink-0 [&_[data-model-picker=trigger]]:max-w-full"
+                        data-slot="composer-model"
+                      >
+                        <ModelPicker
+                          listenHotkey
+                          providers={enabledProviders}
+                          virtualModels={virtualModels}
+                          providerId={chrome.lastProviderId ?? ''}
+                          modelId={chrome.lastModelId ?? ''}
+                          reasoningEnabled={false}
+                          thinkingLevel="medium"
+                          showReasoningControls={false}
+                          onSelect={(pid, mid) =>
+                            void useSessionsStore.getState().setCoworkerModel(chrome.id, pid, mid)
+                          }
+                          onReasoningChange={ignoreCoworkerReasoningChange}
+                          onThinkingChange={ignoreCoworkerReasoningChange}
+                        />
+                      </div>
+                    )}
+                    {chrome.coworkerModelControl !== 'hidden' &&
+                      chrome.coworkerModelControl !== 'ready' && (
+                        <span
+                          className="ml-auto text-[calc(11rem/14)] text-muted-foreground"
+                          role="status"
+                        >
+                          {chrome.coworkerModelControl === 'pending'
+                            ? t('Switching model…')
+                            : chrome.coworkerModelControl === 'busy'
+                              ? t('Model can be changed when the coworker is idle.')
+                              : t('Model selection is unavailable.')}
+                        </span>
+                      )}
+                  </>
                 )}
               </>
             }
@@ -717,6 +755,8 @@ export function ChatView() {
     </div>
   );
 }
+const ignoreCoworkerReasoningChange = () => {};
+
 const ENSO_PREFILL_CANDIDATE: AgentTypeMentionCandidate = {
   kind: 'agent-type',
   id: ENSO_AGENT_TYPE_KEY,

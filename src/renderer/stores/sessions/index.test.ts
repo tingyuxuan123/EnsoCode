@@ -23,6 +23,7 @@ let sourceProjection: SourceAuthorityProjection = { projects: [], conversations:
 let nextConversationId = 'parent';
 const agentPrompt = vi.fn(async () => ({ ok: true }));
 const agentSpawn = vi.fn(async () => ({ ok: true }));
+const agentSetModel = vi.fn(async () => ({ ok: true }));
 const reloadConversation = vi.fn(
   async (_conversationId: string): Promise<ConversationReloadResult> => ({
     ok: false,
@@ -182,6 +183,7 @@ vi.stubGlobal('window', {
       readChildHistory,
       reloadConversation,
       prompt: agentPrompt,
+      setModel: agentSetModel,
       summarizeTitle,
       spawn: agentSpawn,
       dismissCoworker,
@@ -1075,6 +1077,67 @@ describe('typed Agent child projection', () => {
     expect(projected.pendingAsks).toEqual([{ requestId: 'ask-1', question: 'Continue?' }]);
     expect(projected.customEntries).toHaveLength(1);
     expect(state.conversations.parent.messages).toEqual([]);
+  });
+
+  it('切换协作者模型只改当前 child，在 worker 确认后生效并保存', async () => {
+    onAgentEvent?.(reserve(1));
+    const child = childIdentity(1);
+    const previous = { providerId: 'child-provider', modelId: 'child-model' };
+    const selected = { providerId: 'other-provider', modelId: 'other-model' };
+    onAgentEvent?.({
+      type: 'child-ready',
+      identity: child,
+      seq: 2,
+      sessionFile: '/tmp/child.jsonl',
+      model: previous,
+    });
+    const store = sessionsModule.useSessionsStore;
+    const parent = store.getState().conversations.parent;
+    const defaultModel = settingsModule.useSettingsStore.getState().defaultModel;
+    const readChild = () => store.getState().conversations[child.sessionId];
+
+    agentSetModel.mockClear();
+    await store.getState().setCoworkerModel(child.sessionId, selected.providerId, selected.modelId);
+    expect(agentSetModel).toHaveBeenCalledExactlyOnceWith(
+      child.sessionId,
+      selected.providerId,
+      selected.modelId,
+      child.generation
+    );
+    expect(readChild()).toMatchObject({ lastModelId: previous.modelId, modelSwitchPending: true });
+
+    onAgentEvent?.({
+      type: 'model-changed',
+      identity: { ...child, generation: 'stale' },
+      seq: 50,
+      model: selected,
+    });
+    expect(readChild().lastModelId).toBe(previous.modelId);
+
+    expect(
+      await store
+        .getState()
+        .send('blocked', { ...selected, cwd: '/workspace' }, undefined, child.sessionId)
+    ).toBe('coworker model change in progress');
+    expect(readChild().messages).toEqual([]);
+
+    onAgentEvent?.({ type: 'model-changed', identity: child, seq: 3, model: selected });
+    expect(readChild()).toMatchObject({
+      lastProviderId: selected.providerId,
+      lastModelId: selected.modelId,
+      coworkerModelOverride: selected,
+    });
+    expect(readChild().modelSwitchPending).toBeFalsy();
+    const saved = cachedPartializeSessions(store.getState()).conversations[child.sessionId];
+    expect(saved).toMatchObject({ coworkerModelOverride: selected });
+    expect(saved.modelSwitchPending).toBeUndefined();
+    expect(store.getState().conversations.parent).toBe(parent);
+    expect(settingsModule.useSettingsStore.getState().defaultModel).toBe(defaultModel);
+    expect(updateConversationSelection).not.toHaveBeenCalled();
+
+    onAgentEvent?.({ type: 'status', identity: child, seq: 4, status: 'running' });
+    await store.getState().setCoworkerModel(child.sessionId, previous.providerId, previous.modelId);
+    expect(agentSetModel).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches through Main binding only and waits for child-reserved before creating a TAB', async () => {

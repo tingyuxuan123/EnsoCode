@@ -1,3 +1,29 @@
+import { allowsCoworkerModelChange } from '@shared/types/agent';
+import type { Conversation } from './index';
+
+export function coworkerModelControl(conversation: Conversation) {
+  if (
+    !conversation.parentId ||
+    !allowsCoworkerModelChange(conversation.child) ||
+    conversation.ended ||
+    conversation.historyOnly
+  )
+    return 'hidden';
+  if (conversation.modelSwitchPending) return 'pending';
+  if (!conversation.started || !conversation.generation || conversation.spawning)
+    return 'unavailable';
+  if (
+    conversation.status === 'running' ||
+    conversation.compaction ||
+    conversation.queuedMessages?.length ||
+    conversation.messages.some((message) => message.optimistic && !message.deliveryRejected)
+  )
+    return 'busy';
+  return conversation.status === 'idle' && !conversation.workspaceMigrating
+    ? 'ready'
+    : 'unavailable';
+}
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)

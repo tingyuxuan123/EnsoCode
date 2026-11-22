@@ -403,6 +403,51 @@ describe('AgentSessionIndex generation and reservation authority', () => {
     expect(sessions.model(parent)).toEqual({ providerId: 'pv-B', modelId: 'model-1' });
   });
 
+  it('只有 ready、空闲、未锁定的持久协作者可换模型', () => {
+    const sessions = index();
+    sessions.prepareParent(parent);
+    sessions.observe({
+      type: 'parent-ready',
+      identity: parent,
+      seq: 1,
+      sessionFile: '/tmp/parent.jsonl',
+      model: { providerId: 'parent-provider', modelId: 'parent-model' },
+    });
+    const makeChild = (mode: 'task' | 'coworker') => {
+      const result = sessions.reserveChild(
+        parent,
+        'builtin:scout',
+        'Scout',
+        `request-${mode}`,
+        undefined,
+        'agent-tool',
+        mode
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result.reservation.child;
+    };
+    const coworker = makeChild('coworker');
+    expect(sessions.canChangeCoworkerModel(coworker)).toBe(false);
+    sessions.observe(readyChild(coworker));
+    expect(sessions.canChangeCoworkerModel(coworker)).toBe(true);
+
+    const selected = { providerId: 'other-provider', modelId: 'other-model' };
+    sessions.observe({ type: 'model-changed', identity: coworker, seq: 2, model: selected });
+    expect(sessions.model(coworker)).toEqual(selected);
+    expect(sessions.model(parent)?.modelId).toBe('parent-model');
+
+    sessions.observe({ type: 'status', identity: coworker, seq: 3, status: 'running' });
+    expect(sessions.canChangeCoworkerModel(coworker)).toBe(false);
+    sessions.observe({ type: 'status', identity: coworker, seq: 4, status: 'idle' });
+    expect(sessions.canChangeCoworkerModel({ ...coworker, generation: 'stale' })).toBe(false);
+    sessions.observe({ type: 'child-ended', identity: coworker, seq: 5, reason: 'dismissed' });
+    expect(sessions.canChangeCoworkerModel(coworker)).toBe(false);
+
+    const task = makeChild('task');
+    sessions.observe(readyChild(task));
+    expect(sessions.canChangeCoworkerModel(task)).toBe(false);
+  });
+
   it('rejects duplicate or decreasing seq and does not let snapshots overwrite sequenced state', () => {
     const sessions = index();
     sessions.prepareParent(parent);

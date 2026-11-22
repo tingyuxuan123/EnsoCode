@@ -55,6 +55,7 @@ function persistOne(conversation: PersistableConversation): PersistableConversat
     abortRequested: _abortRequested,
     compaction: _compaction,
     compactionError: _compactionError,
+    modelSwitchPending: _modelSwitchPending,
     rewinding: _rewinding,
     restoringFiles: _restoringFiles,
     // 标题总结的运行态：在飞 Map 随重启作废，失败与摘要都不值得跨重启保留
