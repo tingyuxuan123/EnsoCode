@@ -173,7 +173,12 @@ describe('memory upsert receipts', () => {
       )
     ).toEqual({ spaceId: 'proj:p', relPath: 'wiki/a.md', title: 'A', status: 'updated' });
     expect(
-      parseMemoryUpsertReceipt({ status: 'pending_review', written: false, relPath: 'wiki/a.md', spaceId: 'proj:p' })
+      parseMemoryUpsertReceipt({
+        status: 'pending_review',
+        written: false,
+        relPath: 'wiki/a.md',
+        spaceId: 'proj:p',
+      })
     ).toBeNull();
     expect(parseMemoryUpsertReceipt({ status: 'created', written: true })).toBeNull();
     // 真实回执里 truncated 是 false，曾因只认 true 把整段 diff 丢掉

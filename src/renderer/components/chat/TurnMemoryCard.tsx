@@ -10,11 +10,18 @@ const PREVIEW_COUNT = 3;
 
 function DiffBlock({ patch }: { patch: string }) {
   // 纯展示：把补丁行拼成带符号的文本，避免为每一行生成 key。
-  const rows = patch.split('\n');
+  // 内容相同的行会重复出现，用「行内容 + 第几次出现」作为稳定 key，不依赖下标。
+  const seen = new Map<string, number>();
+  const rows = patch.split('\n').map((line) => {
+    const count = (seen.get(line) ?? 0) + 1;
+    seen.set(line, count);
+    return { line, key: `${count}:${line}` };
+  });
   return (
     <pre className="max-h-[240px] overflow-auto border-t bg-muted/30 px-[12px] py-[8px] font-mono text-[calc(11.5rem/14)] leading-[calc(17rem/14)]">
-      {rows.map((line) => (
+      {rows.map(({ line, key }) => (
         <div
+          key={key}
           className={
             line.startsWith('+')
               ? 'text-success'
