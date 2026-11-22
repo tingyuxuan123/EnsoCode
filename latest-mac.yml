@@ -1,24 +1,61 @@
-version: 0.2.101
+version: 0.2.102
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.101/CodeKiln-0.2.101-arm64-mac.zip
-    sha512: r6kPLLfqOu6Cg1SKExI+AbCXIk5rt022keRL3nugbmOiE0jnTG1oCVXF0gRzH1Uh1HbJu+7v1bCSyTpAcXeN9Q==
-    size: 191564038
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.101/CodeKiln-0.2.101-arm64.dmg
-    sha512: HchOY7US9uAGQMALcKdIcX4iFsDbJj2HUEhIRDX/QG9WyNui41aXDYIBZdS2tB7oQ1lBr5oGLRfcYPD1vKpg3g==
-    size: 187606661
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.101/CodeKiln-0.2.101-arm64-mac.zip
-sha512: r6kPLLfqOu6Cg1SKExI+AbCXIk5rt022keRL3nugbmOiE0jnTG1oCVXF0gRzH1Uh1HbJu+7v1bCSyTpAcXeN9Q==
-releaseDate: 2026-11-21T06:01:33.299Z
-releaseName: CodeKiln 0.2.101 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.102/CodeKiln-0.2.102-arm64-mac.zip
+    sha512: /Ts0h/CXcWxPnOgXe2WD9vOBt2tQOVDHJqWA+oqAR1WCSfh6UhHEQ8nPBXMvVKPPwBT36hp5BQ4bHfH7wXwWww==
+    size: 191581339
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.102/CodeKiln-0.2.102-arm64.dmg
+    sha512: UNTdq/HqiV+gevkLSfI5elgjGjg6Ueyw+CEnllqAq/oI7N7x8rUzlUCeLDbn8L+C/C7zPKn5ffSaGyPx3QZJCQ==
+    size: 187600672
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.102/CodeKiln-0.2.102-arm64-mac.zip
+sha512: /Ts0h/CXcWxPnOgXe2WD9vOBt2tQOVDHJqWA+oqAR1WCSfh6UhHEQ8nPBXMvVKPPwBT36hp5BQ4bHfH7wXwWww==
+releaseDate: 2026-11-22T13:36:57.929Z
+releaseName: CodeKiln 0.2.102 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.101
+  # CodeKiln 0.2.102
 
 
-  - 修复设备画面在松开鼠标后仍跟随指针拖动、滑动停在半屏的问题。拖动中失去指针捕获或窗口焦点时，也会释放设备上的触点。
+  ## 协作者会话
+
+
+  - 可以在协作者会话中手动切换模型，切换后沿用当前会话的上下文继续工作。
+
+
+  ## 设备操控
+
+
+  - 重构设备访问请求的处理流程，同一台设备上的待处理授权请求不再堆积，授权面板会跟随当前会话显示。
+
+  - 设备画面在丢失指针捕获或窗口焦点时立即释放触点，不再出现松手后仍继续拖动的情况。
+
+
+  ## 记忆与知识库
+
+
+  - 记忆笔记改动以紧凑差异展示，在会话时间线里直接看到本次更新了哪些条目。
+
+  - 新增记忆写入的静态检查，能提前拦下格式错误、失效引用和重复条目。
+
+  - 启动时按需注入项目记忆提示，减少无关上下文占用；记忆来源代码变化后会标记为待复核。
+
+
+  ## 安卓端
+
+
+  - 会话时间线新增工作状态行，能看清当前正在执行的步骤。
+
+  - 会话产物支持下载与用其他应用打开，图片可在时间线内直接查看。
+
+  - 桌面镜像连接更稳定，重连后会补齐会话与产物状态。
+
+
+  ## 界面
+
+
+  - 补充和统一了一批界面文案。
 
 
   ---
 
 
-  个人测试通道 0.2.101：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.102：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
