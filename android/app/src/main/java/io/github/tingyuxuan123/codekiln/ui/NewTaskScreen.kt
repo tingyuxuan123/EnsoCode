@@ -171,8 +171,14 @@ internal fun Composer(
     onAttach: (() -> Unit)? = null,
     attachmentAvailable: Boolean = false,
     actionLabel: String = if (running) "停止" else "发送",
+    actionInFrame: Boolean = false,
 ) {
     val c = Enso.colors
+    val send: @Composable () -> Unit = {
+        val size = if (actionInFrame) 40.dp else 48.dp
+        GlyphButton(if (running) EnsoIcon.Stop else EnsoIcon.ArrowUp, actionLabel, size, 22.dp,
+            Modifier.background(c.pill.copy(alpha = if (dimAction) .35f else 1f), CircleShape), c.pillInk, onAction)
+    }
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
         Row(Modifier.weight(1f).clip(Enso.composerShape).background(c.card)
@@ -194,9 +200,8 @@ internal fun Composer(
                     }
                 },
             )
-            GlyphButton(EnsoIcon.Mic, "语音输入（尚未接入）", 36.dp, 22.dp)
+            if (actionInFrame) send() else GlyphButton(EnsoIcon.Mic, "语音输入（尚未接入）", 36.dp, 22.dp)
         }
-        GlyphButton(if (running) EnsoIcon.Stop else EnsoIcon.ArrowUp, actionLabel, 48.dp, 22.dp,
-            Modifier.background(c.pill.copy(alpha = if (dimAction) .35f else 1f), CircleShape), c.pillInk, onAction)
+        if (!actionInFrame) send()
     }
 }

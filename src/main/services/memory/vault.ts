@@ -32,7 +32,13 @@ const spaceLocks = new Map<string, Promise<unknown>>();
 export function withSpaceLock<T>(spaceId: string, fn: () => Promise<T> | T): Promise<T> {
   const prev = spaceLocks.get(spaceId) ?? Promise.resolve();
   const next = prev.catch(() => {}).then(fn);
-  const tracked = next.finally(() => {
+  // 队尾只负责顺序：next 的失败由调用方处理，这里必须消费掉，否则拒绝的写入会变成
+  // unhandled rejection（例如向 raw/ 写入被拒、状态页路径冲突）。
+  const settled = next.then(
+    () => undefined,
+    () => undefined
+  );
+  const tracked = settled.then(() => {
     if (spaceLocks.get(spaceId) === tracked) spaceLocks.delete(spaceId);
   });
   spaceLocks.set(spaceId, tracked);

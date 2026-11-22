@@ -116,6 +116,31 @@ describe('AgentService lifecycle', () => {
     );
   });
 
+  it('用户在子会话里中止这一轮：Run 结算为 cancelled 并通知，不停在 running', async () => {
+    const onRunSettled = vi.fn();
+    const notify = vi.fn();
+    const { service, children } = setup({ onRunSettled, notify, now: () => 789 });
+    const spawned = await service.spawn(spawnRequest({ mode: 'coworker' }));
+    if (!spawned.ok) throw new Error(spawned.error);
+    expect(service.progress(owner.ownerId)).toHaveLength(1);
+
+    service.observe({
+      type: 'turn-completed',
+      identity: children[0],
+      seq: 1,
+      turnId: spawned.value.runId,
+      aborted: true,
+    });
+
+    expect(service.progress(owner.ownerId)).toEqual([]);
+    expect(onRunSettled).toHaveBeenCalledExactlyOnceWith(
+      children[0],
+      expect.objectContaining({ runId: spawned.value.runId, status: 'cancelled' }),
+      expect.stringContaining('stopped this Run')
+    );
+    expect(notify).toHaveBeenCalledOnce();
+  });
+
   it('onRunSettled：取消 validating 后迟到 gate 不再发布成功或复活 run', async () => {
     const onRunSettled = vi.fn();
     const { service, runtime, children } = setup({ onRunSettled, now: () => 456 });

@@ -88,4 +88,163 @@ describe('deterministic vault lint', () => {
       db.close();
     }
   });
+
+  it('flags append-style revision markers and duplicated topics', () => {
+    const work = tmpDir();
+    const vault = path.join(work, 'vault');
+    const db = openIndexDb(path.join(work, 'index.db'));
+    try {
+      writeNoteAtomic(
+        vault,
+        'wiki/domains/voxel.md',
+        [
+          '---',
+          'type: domains',
+          'title: 体素哈希参数',
+          'description: 哈希表装载因子',
+          'status: verified',
+          '---',
+          '',
+          '装载因子保持在 0.85 以下。',
+          '',
+          '## Update (2026-11-12)',
+          '',
+          '街景数据下 0.85 会卡死，改用 0.70。',
+        ].join('\n')
+      );
+      writeNoteAtomic(
+        vault,
+        'wiki/systems/hash.md',
+        [
+          '---',
+          'type: systems',
+          'title: 体素哈希',
+          'description: 哈希表结构',
+          'status: verified',
+          '---',
+          '',
+          '正文。',
+        ].join('\n')
+      );
+      writeNoteAtomic(
+        vault,
+        'wiki/notes/hash-copy.md',
+        [
+          '---',
+          'type: notes',
+          'title: 体素哈希',
+          'description: 同一主题的另一份记录',
+          'status: verified',
+          '---',
+          '',
+          '正文。',
+        ].join('\n')
+      );
+      writeNoteAtomic(
+        vault,
+        'wiki/systems/updater.md',
+        [
+          '---',
+          'type: systems',
+          'title: 自动更新',
+          'description: 检查与安装',
+          'status: verified',
+          '---',
+          '',
+          '## 更新机制',
+          '',
+          '启动时检查一次。',
+        ].join('\n')
+      );
+
+      syncSpaceIndex(db, 'proj:lint2', vault);
+      const report = runVaultLint(db, {
+        spaceIds: ['proj:lint2'],
+        now: new Date('2026-11-20T00:00:00Z'),
+      });
+
+      const ofKind = (kind: string) =>
+        report.issues
+          .filter((i) => i.kind === kind)
+          .map((i) => i.slug)
+          .sort();
+      expect(ofKind('revision_marker')).toEqual(['domains/voxel']);
+      expect(ofKind('duplicate_title')).toEqual(['notes/hash-copy', 'systems/hash']);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps the status page unique, short, and fresh, and never treats it as an orphan', () => {
+    const work = tmpDir();
+    const vault = path.join(work, 'vault');
+    const db = openIndexDb(path.join(work, 'index.db'));
+    try {
+      const longBody = Array.from({ length: 70 }, (_, i) => `第 ${i + 1} 行当前状态`).join('\n');
+      writeNoteAtomic(
+        vault,
+        'wiki/status.md',
+        [
+          '---',
+          'type: status',
+          'title: 项目状态',
+          'description: 当前进展、下一步与卡点',
+          'status: verified',
+          '---',
+          '',
+          'As of 2026-06-01',
+          '',
+          longBody,
+        ].join('\n')
+      );
+      for (const slug of ['wiki/systems/a.md', 'wiki/systems/b.md']) {
+        writeNoteAtomic(
+          vault,
+          slug,
+          [
+            '---',
+            'type: systems',
+            'title: 孤立页',
+            'description: 没有链接',
+            'status: verified',
+            '---',
+            '',
+            '正文。',
+          ].join('\n')
+        );
+      }
+      writeNoteAtomic(
+        vault,
+        'wiki/notes/old-status.md',
+        [
+          '---',
+          'type: status',
+          'title: 旧状态页',
+          'description: 早前的进展',
+          'status: verified',
+          '---',
+          '',
+          'As of 2026-01-01',
+        ].join('\n')
+      );
+
+      syncSpaceIndex(db, 'proj:lint3', vault);
+      const report = runVaultLint(db, {
+        spaceIds: ['proj:lint3'],
+        now: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
+      });
+
+      const ofKind = (kind: string) =>
+        report.issues
+          .filter((i) => i.kind === kind)
+          .map((i) => i.slug)
+          .sort();
+      expect(ofKind('status_oversized')).toEqual(['status']);
+      expect(ofKind('status_duplicate')).toEqual(['notes/old-status', 'status']);
+      expect(ofKind('status_stale')).toEqual(['notes/old-status', 'status']);
+      expect(ofKind('orphan')).toEqual(['systems/a', 'systems/b']);
+    } finally {
+      db.close();
+    }
+  });
 });

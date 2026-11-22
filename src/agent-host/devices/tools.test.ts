@@ -188,6 +188,7 @@ describe('device access on Main', () => {
     options: {
       root?: boolean;
       enabled?: boolean;
+      approvalMode?: 'full' | 'supervised' | 'auto-edits' | 'assistant';
       always?: string[];
       store?: DeviceAccessStore;
     } = {}
@@ -205,6 +206,7 @@ describe('device access on Main', () => {
                 sessionId: candidate.sessionId,
                 agentName: 'Claude Code',
                 projectPath: '/work/app',
+                approvalMode: options.approvalMode,
               },
       },
       call: async (call: DeviceHostCall) => {
@@ -236,6 +238,35 @@ describe('device access on Main', () => {
     caller,
     toolName,
     args,
+  });
+
+  it('完全放行直接打开和操作设备，切回监督后没有残留授权', async () => {
+    const options = { approvalMode: 'full' as 'full' | 'supervised' };
+    const { gateway: subject, calls, deps, store } = gateway('deny', options);
+    await expect(subject.call(callOf('device_open'))).resolves.toHaveProperty('result');
+    await expect(subject.call(callOf('device_snapshot'))).resolves.toHaveProperty('result');
+    expect(deps.ask).not.toHaveBeenCalled();
+    expect(calls.map(({ kind }) => kind)).toEqual(['open', 'action']);
+    expect(store.list()).toEqual([]);
+
+    options.approvalMode = 'supervised';
+    await expect(subject.call(callOf('device_snapshot'))).resolves.toHaveProperty('error');
+    expect(deps.ask).toHaveBeenCalledOnce();
+  });
+
+  it('完全放行不跳过用户接管，交还前降级则不执行排队操作', async () => {
+    const options = { approvalMode: 'full' as 'full' | 'supervised' };
+    const { gateway: subject, calls, deps } = gateway('deny', options);
+    await expect(subject.call(callOf('device_snapshot'))).resolves.toHaveProperty('result');
+    expect(subject.takeOver(SIM)).toBe(true);
+    const acting = subject.call(callOf('device_tap', { deviceId: SIM, ref: 'e1' }));
+    await Promise.resolve();
+    expect(calls.map(({ kind }) => kind)).toEqual(['action']);
+    options.approvalMode = 'supervised';
+    expect(subject.handBack(SIM)).toBe(true);
+    await expect(acting).resolves.toMatchObject({ error: { code: 'not_allowed' } });
+    expect(deps.ask).not.toHaveBeenCalled();
+    expect(calls.map(({ kind }) => kind)).toEqual(['action']);
   });
 
   it('asks once per session and device, then lets the session act', async () => {
@@ -495,7 +526,7 @@ describe('device access on Main', () => {
   });
 
   it('refuses a caller that is not the live local root session', async () => {
-    const { gateway: subject, calls } = gateway('session', { root: false });
+    const { gateway: subject, calls } = gateway('session', { root: false, approvalMode: 'full' });
     expect(await subject.call(callOf('device_snapshot'))).toMatchObject({
       error: { code: 'not_allowed' },
     });
@@ -503,7 +534,11 @@ describe('device access on Main', () => {
   });
 
   it('refuses when the tool group is switched off, even with a permission', async () => {
-    const { gateway: subject, calls } = gateway('session', { enabled: false, always: [SIM] });
+    const { gateway: subject, calls } = gateway('session', {
+      enabled: false,
+      always: [SIM],
+      approvalMode: 'full',
+    });
     expect(await subject.call(callOf('device_snapshot'))).toMatchObject({
       error: { code: 'not_allowed' },
     });

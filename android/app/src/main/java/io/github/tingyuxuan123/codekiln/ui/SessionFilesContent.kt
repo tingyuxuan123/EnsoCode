@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.tingyuxuan123.codekiln.mirror.DesktopFileChunk
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileEntry
+import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
 import io.github.tingyuxuan123.codekiln.mirror.DesktopFilesState
 
 /**
@@ -40,13 +43,26 @@ internal fun SessionFilesContent(
     files: DesktopFilesState?,
     onList: (() -> Unit)?,
     onRead: ((String, Long) -> Unit)?,
+    fetchFile: ArtifactChunkReader? = null,
+    downloads: ArtifactDownloads? = null,
+    target: FileDownloadTarget? = null,
 ) {
     val c = Enso.colors
+    val transfers = downloads?.state?.collectAsState()?.value.orEmpty()
     LaunchedEffect(panels.surface, files?.entries, files?.listing) {
         if (panels.surface == SessionSurface.Files && files == null && onList != null) onList()
     }
     val opened = panels.openedFile
     val chunk = files?.chunk?.takeIf { it.fileId == opened }
+    val fileLink = panels.fileLink
+    LaunchedEffect(fileLink, files?.entries, files?.listing) {
+        if (fileLink != null && files?.listing == false && files.listError == null) {
+            fileLink.match(files.entries)?.let { entry ->
+                panels.fileLink = null
+                openSessionArtifact(panels, entry, fetchFile, onRead, downloads, target)
+            }
+        }
+    }
     if (opened == null) {
         when {
             files == null || files.listing -> SheetHint("正在读取桌面文件列表…")
@@ -56,32 +72,42 @@ internal fun SessionFilesContent(
                 .background(c.card, RoundedCornerShape(20.dp))) {
                 files.entries.forEachIndexed { index, entry ->
                     if (index > 0) Hairline()
-                    Row(Modifier.fillMaxWidth().clickable(enabled = onRead != null, role = Role.Button) {
-                        panels.openedFile = entry.id
-                        onRead?.invoke(entry.id, 0)
+                    Row(Modifier.fillMaxWidth().clickable(enabled = onRead != null || fetchFile != null, role = Role.Button) {
+                        openSessionArtifact(panels, entry, fetchFile, onRead, downloads, target)
                     }.padding(horizontal = 16.dp, vertical = 11.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Glyph(EnsoIcon.Files, Modifier.size(16.dp), c.ink2)
                         Column(Modifier.weight(1f)) {
                             Label(entry.name, 15, 20, weight = FontWeight.Medium, maxLines = 1)
-                            Label("${entry.rel} · ${fileSizeLabel(entry.size)}", 12, 16, color = c.dim, maxLines = 1)
+                            val status = target?.let { transfers[ArtifactDownloadKey(it, entry.id)].cardLabel() }
+                            Label(status ?: "${entry.rel} · ${fileSizeLabel(entry.size)}", 12, 16, color = c.dim, maxLines = 1)
                         }
                         Glyph(EnsoIcon.Right, Modifier.size(16.dp), c.faint)
                     }
                 }
             }
         }
+        if (fileLink != null && files?.listing == false && files.listError == null) SheetHint("未找到这条链接对应的会话产物。")
         if (files?.listError != null) SheetHint("列表可能不完整；不会自动重试。")
         return
     }
     val entry = files?.entries?.firstOrNull { it.id == opened }
+    val directAction = entry?.takeIf { fetchFile != null }?.let { artifactActionOnTap(it.name) }
+    val transfer = target?.let { transfers[ArtifactDownloadKey(it, opened)] }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(50)).background(c.card2)
-            .clickable(role = Role.Button) { panels.openedFile = null }.padding(horizontal = 12.dp, vertical = 6.dp),
+            .clickable(role = Role.Button) { panels.openedFile = null; panels.fileAction = null }.padding(horizontal = 12.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center) { Label("返回列表", 13, 18, color = c.ink2) }
         Label(entry?.name ?: chunk?.name ?: "文件", 14, 20, Modifier.weight(1f), weight = FontWeight.Medium, maxLines = 1)
-        if (chunk != null) Label("${chunk.offset + chunk.data.size} / ${chunk.size}", 12, 16, color = c.dim)
+        if (directAction != null) Label(fileSizeLabel(entry.size), 12, 16, color = c.dim)
+        else if (chunk != null) Label("${chunk.offset + chunk.data.size} / ${chunk.size}", 12, 16, color = c.dim)
+    }
+    if (entry != null && fetchFile != null && downloads != null && target != null) {
+        ArtifactFileActions(entry, target, downloads, fetchFile, !files.reading && !files.listing, panels.fileAction) {
+            panels.fileAction = null
+        }
+        if (directAction != null || transfer.isAvailableOrDownloading()) return
     }
     when {
         files?.reading == true && chunk == null -> SheetHint("正在读取…")
@@ -98,10 +124,24 @@ internal fun SessionFilesContent(
                 }, contentAlignment = Alignment.Center) { Label("加载更多", 14, 20, weight = FontWeight.Medium) }
         }
         if (chunk.size > chunk.data.size) {
-            Label("为控制流量只读取分段；不会把整份文件写进手机存储。", 12, 16,
+            Label("这里是分段预览，选择「保存文件」可取回完整文件。", 12, 16,
                 Modifier.padding(horizontal = 24.dp, vertical = 4.dp), color = c.faint)
         }
     }
+}
+
+internal fun openSessionArtifact(panels: SessionPanels, entry: DesktopFileEntry,
+    fetchFile: ArtifactChunkReader?, onRead: ((String, Long) -> Unit)?, downloads: ArtifactDownloads? = null,
+    target: FileDownloadTarget? = null) {
+    panels.openedFile = entry.id
+    panels.surface = SessionSurface.Files
+    val transfer = target?.let { downloads?.state?.value?.get(ArtifactDownloadKey(it, entry.id)) }
+    if (transfer.isAvailableOrDownloading()) {
+        panels.fileAction = null
+        return
+    }
+    panels.fileAction = fetchFile?.let { artifactActionOnTap(entry.name) }
+    if (panels.fileAction == null) onRead?.invoke(entry.id, 0)
 }
 
 @Composable

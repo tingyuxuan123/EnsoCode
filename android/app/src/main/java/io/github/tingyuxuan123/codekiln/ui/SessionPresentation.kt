@@ -1,5 +1,6 @@
 package io.github.tingyuxuan123.codekiln.ui
 
+import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
 import io.github.tingyuxuan123.codekiln.pair.SessionMessage
 import io.github.tingyuxuan123.codekiln.pair.SessionTodo
 import io.github.tingyuxuan123.codekiln.pair.SessionTodoStatus
@@ -12,6 +13,8 @@ internal data class SessionTurn(
     val user: Boolean,
     val timestamp: Long?,
     val blocks: List<SessionBlock>,
+    val artifactHints: Set<String> = emptySet(),
+    val replyModel: String? = null,
 )
 
 internal sealed interface SessionBlock {
@@ -28,6 +31,7 @@ internal sealed interface SessionBlock {
         val notices = entries.count { it is Notice }
     }
     data class Images(val images: List<TimelineImage>) : SessionBlock
+    data class RemoteImage(val target: SessionImageTarget) : SessionBlock
     data object ImagePlaceholder : SessionBlock
     /** 注入的委派信封：只保留来源、状态与正文，原始 XML 与 id 不进渲染层。 */
     data class Delegation(
@@ -59,16 +63,23 @@ internal enum class SessionStepKind { Thinking, Tool }
 
 private data class CallSite(val messageIndex: Long, val partIndex: Int, val name: String?)
 private data class ToolOutput(val text: String?, val notices: List<SessionBlock.Notice>, val todos: List<SessionTodo>?, val failed: Boolean)
+private val imageFile = Regex("(?i)\\.(png|jpe?g|webp|gif|bmp|ico|avif|tiff?)$")
 
 internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
     val pending = mutableMapOf<String, CallSite>()
     val matched = mutableMapOf<CallSite, ToolOutput>()
     val outputs = mutableMapOf<Long, ToolOutput>()
     val linked = mutableSetOf<Long>()
+    val readImageCalls = mutableSetOf<String>()
+    val readImages = mutableMapOf<Long, String>()
     for (message in messages) when (message.role) {
         "assistant" -> message.content.forEachIndexed { index, part ->
             if (part["type"].text() == "toolCall") part["id"].text()?.takeIf { it.isNotBlank() }?.let { id ->
                 pending[id] = CallSite(message.index, index, part["name"].text())
+                readImageCalls.remove(id)
+                val args = part["arguments"] as? JsonObject
+                val path = args?.get("path").text() ?: args?.get("file_path").text()
+                if (part["name"].text() == "read" && path != null && imageFile.containsMatchIn(path)) readImageCalls += id
             }
         }
         "toolResult" -> {
@@ -80,6 +91,7 @@ internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
                 pending.remove(id)
                 matched[call] = output
                 linked += message.index
+                if (id != null && readImageCalls.remove(id) && !output.failed) readImages[message.index] = id
             }
         }
     }
@@ -91,7 +103,7 @@ internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
     }
     for (message in messages) {
         if (message.role == "user") {
-            val notice = if (message.content.any { it["type"].text() != "text" }) null else standaloneNotice(message.toolText())
+            val notice = message.sessionNotice()
             if (notice != null) {
                 val builder = current ?: TurnBuilder(message.index, false, message.timestamp).also { current = it }
                 builder.blocks.add(notice)
@@ -106,6 +118,7 @@ internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
             if (builder.blocks.isNotEmpty()) turns.add(builder.build())
         } else if (message.role == "assistant") {
             val builder = current ?: TurnBuilder(message.index, false, message.timestamp).also { current = it }
+            builder.observeAssistant(message)
             message.content.forEachIndexed { index, part -> when (part["type"].text()) {
                 "text" -> part["text"].text()?.takeIf { it.isNotEmpty() }?.let { builder.prose(it) }
                 "thinking" -> builder.step(SessionStep("思考", part["text"].text(), kind = SessionStepKind.Thinking))
@@ -113,8 +126,12 @@ internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
                     val id = part["id"].text()
                     val name = part["name"].text()
                     val output = matched[CallSite(message.index, index, name)]
+                    val arguments = part["arguments"] as? JsonObject
+                    if (output?.failed == false && name in setOf("write", "edit", "write_file")) {
+                        (arguments?.get("path").text() ?: arguments?.get("file_path").text())
+                            ?.let(::artifactPath)?.let(builder.artifactHints::add)
+                    }
                     if (output?.todos == null) {
-                        val arguments = part["arguments"] as? JsonObject
                         val detail = if (name == "todo") null else listOf("command", "path", "file_path", "pattern", "description")
                             .firstNotNullOfOrNull { arguments?.get(it).text() } ?: arguments?.toString()
                         builder.step(SessionStep(name ?: "工具", detail?.bounded(), output?.text, id, output?.failed == true))
@@ -129,7 +146,13 @@ internal fun sessionTurns(messages: List<SessionMessage>): List<SessionTurn> {
             if (output.todos != null) builder.blocks.add(SessionBlock.Todos(output.todos))
             else if (message.index !in linked) builder.step(SessionStep(message.toolName ?: "工具结果", null, output.text,
                 message.toolCallId, output.failed))
-            message.content.filter { it["type"].text() == "image" }.forEach(builder::image)
+            val inline = message.content.filter { it["type"].text() == "image" }
+            val remote = if (output.failed) null else when (message.toolName) {
+                    "generate_image", "edit_image" -> output.text?.let(::generatedImageTarget)
+                    else -> readImages[message.index]?.let(SessionImageTarget::Read)
+            }
+            if (remote != null && timelineImages(inline).isEmpty()) builder.blocks.add(SessionBlock.RemoteImage(remote))
+            else inline.forEach(builder::image)
         } else if (message.role == "compactionSummary") {
             flush()
             turns.add(SessionTurn(message.index, false, message.timestamp,
@@ -178,6 +201,9 @@ private fun readNotice(text: String, kind: SessionNoticeKind): Pair<SessionBlock
     if (end < 0) return null
     return SessionBlock.Notice(kind, text.substring(open.length, end).trim().bounded()) to end + close.length
 }
+
+internal fun SessionMessage.sessionNotice(): SessionBlock.Notice? =
+    if (role == "user" && content.all { it["type"].text() == "text" }) standaloneNotice(toolText()) else null
 
 private fun standaloneNotice(text: String): SessionBlock.Notice? {
     val trimmed = text.trim()
@@ -371,6 +397,17 @@ private fun legacyTodos(text: String): List<SessionTodo>? {
 
 private class TurnBuilder(val index: Long, val user: Boolean, val timestamp: Long?) {
     val blocks = mutableListOf<SessionBlock>()
+    val artifactHints = mutableSetOf<String>()
+    private var replyModel: String? = null
+    private var replyModelFailed = false
+
+    fun observeAssistant(message: SessionMessage) {
+        // As on desktop, keep the first responding model unless it failed and another retried.
+        if (message.model != null && (replyModel == null || replyModelFailed)) {
+            replyModel = message.model
+            replyModelFailed = message.stopReason == "error"
+        }
+    }
     fun image(part: kotlinx.serialization.json.JsonObject) {
         val image = timelineImages(listOf(part)).singleOrNull()
         if (image == null) blocks.add(SessionBlock.ImagePlaceholder)
@@ -395,7 +432,7 @@ private class TurnBuilder(val index: Long, val user: Boolean, val timestamp: Lon
         if (previous == null) blocks.add(SessionBlock.Steps(listOf(value)))
         else blocks[blocks.lastIndex] = SessionBlock.Steps(previous.steps + value)
     }
-    fun build() = SessionTurn(index, user, timestamp, blocks.toList())
+    fun build() = SessionTurn(index, user, timestamp, blocks.toList(), artifactHints.toSet(), replyModel)
 }
 
 private fun JsonElement?.text(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content

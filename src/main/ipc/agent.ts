@@ -71,6 +71,7 @@ import {
   dismissCoworkerSession,
   forgetParentToolProfile,
   forkSession,
+  getSessionApprovalMode,
   isAgentWorkerReady,
   isBrowserSessionToolEnabled,
   isDesignSessionToolEnabled,
@@ -208,7 +209,7 @@ import {
   sendImageTool,
 } from './bots';
 import { agentSessionIndex, capabilityGateway, handleCapabilityInvoke } from './capabilities';
-import { registerDeviceAccessHandlers } from './deviceHost';
+import { isDeviceSender, registerDeviceAccessHandlers } from './deviceHost';
 import { readSettings, readSshTimeoutSeconds } from './settings';
 import {
   removeRegisteredWorktree,
@@ -488,7 +489,7 @@ function browserToolAllowed(identity: SessionIdentity | ChildSessionIdentity): b
 let sourceBindings: ActiveConversationRegistry | null = null;
 /**
  * 移动设备工具在设置或项目里被显式关闭时拒绝；默认开启。
- * 默认开启不等于有权限：真正的设备访问仍要用户在面板里逐个会话授权。
+ * 工具开启与设备授权是两层；授权在 Main 按当前档位或明确的设备许可判断。
  */
 function _mobileToolAllowed(sessionId: string): boolean {
   // 模型入口只允许父会话，sessionId 本身就是根会话，不需要再回溯 parent。
@@ -939,7 +940,8 @@ function distillSessionMemory(identity: SessionIdentity) {
   if (sessionFile) {
     const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
     if (conversation?.bot) void getBotServices()?.memory.distill({ ...conversation, sessionFile });
-    else
+    // 本地项目的 Wiki 由当前会话在 agent_before_settle 内处理；回收与压缩不能重复编译。
+    else if (project?.state === 'active' && project.kind && project.kind !== 'local')
       void scheduleMemoryDistill(
         {
           sessionId: identity.sessionId,
@@ -1581,13 +1583,17 @@ export function registerAgentHandlers(): void {
       projectPath: project.canonicalPath,
     };
   };
-  const deviceAuthority = (identity: SessionIdentity) =>
-    !deviceRequestsDisposed &&
-    !('parent' in identity) &&
-    currentBrowserIdentity(identity) &&
-    agentSessionIndex.isReady(identity)
-      ? localDeviceSession(identity.sessionId)
-      : null;
+  const deviceAuthority = (identity: SessionIdentity) => {
+    if (
+      deviceRequestsDisposed ||
+      'parent' in identity ||
+      !currentBrowserIdentity(identity) ||
+      !agentSessionIndex.isReady(identity)
+    )
+      return null;
+    const local = localDeviceSession(identity.sessionId);
+    return local ? { ...local, approvalMode: getSessionApprovalMode(identity) } : null;
+  };
   bindDeviceToolMain({
     authority: deviceAuthority,
     toolEnabled: _mobileToolAllowed,
@@ -3059,18 +3065,18 @@ export function registerAgentHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SET_APPROVAL_MODE,
-    async (_event, sessionId: unknown, mode: unknown): Promise<AgentActionResult> => {
+    async (event, sessionId: unknown, mode: unknown): Promise<AgentActionResult> => {
       const rejected = botControlError(sessionId);
       if (rejected) return rejected;
+      // Full access also authorizes devices; embedded frames must not be able to select it.
+      if (!isDeviceSender(event))
+        return { ok: false, error: 'Only the workbench may change approval.' };
       const identity = exactIdentity(sessionId);
-      if (!identity || !APPROVAL_MODES.includes(mode as ApprovalMode)) {
+      const approvalMode = APPROVAL_MODES.find((candidate) => candidate === mode);
+      if (!identity || !approvalMode) {
         return { ok: false, error: 'invalid approval mode or stale generation' };
       }
-      return setSessionApprovalMode(
-        identity,
-        mode as ApprovalMode,
-        await readStoredOauthCredentialKeys()
-      );
+      return setSessionApprovalMode(identity, approvalMode, await readStoredOauthCredentialKeys());
     }
   );
 

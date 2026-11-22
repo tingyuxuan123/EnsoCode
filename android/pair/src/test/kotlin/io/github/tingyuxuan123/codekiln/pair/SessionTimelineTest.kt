@@ -76,6 +76,30 @@ class SessionTimelineTest {
         assertNull(SessionMessage(0, "user", emptyList()).timestamp)
     }
 
+    @Test fun `回复模型沿用权威投影且坏的可选身份不会吞掉正文`() {
+        val rows = listOf(
+            message("已失败") + obj("""{"model":"model-first","stopReason":"error"}"""),
+            message("最终答案") + obj("""{"model":"model-final","stopReason":"stop"}"""),
+            message("仍然可读") + obj("""{"model":{"id":"bad"},"stopReason":42}"""),
+            message("用户正文", "user") + obj("""{"model":"not-authoritative"}"""),
+        ).map(::JsonObject)
+        val parsed = requireNotNull(SessionTimelineReducer.sync(SessionTimeline("s1"), snapshot(messages = rows)))
+        assertEquals(listOf("model-first", "model-final", null, null), parsed.messages.map { it.model })
+        assertEquals(listOf("error", "stop", null, null), parsed.messages.map { it.stopReason })
+        assertEquals(rows.size, parsed.messages.size)
+        assertEquals("仍然可读", text(parsed.messages[2]))
+    }
+
+    @Test fun `apply_patch result supplies a display filename without projecting its path`() {
+        val rows = listOf(
+            JsonObject(message("ok", "toolResult") + obj("""{"toolName":"apply_patch","fileChanges":[{"type":"modify","path":"C:\\repo\\tests\\ConversationDeliveryTest.kt"}]}""")),
+            JsonObject(message("safe", "toolResult") + obj("""{"fileChanges":[{"path":"/tmp/"}]}""")),
+            JsonObject(message("not a result") + obj("""{"fileChanges":[{"path":"file.txt"}]}""")),
+        )
+        val parsed = requireNotNull(SessionTimelineReducer.sync(SessionTimeline("s1"), snapshot(messages = rows)))
+        assertEquals(listOf("ConversationDeliveryTest.kt", null, null), parsed.messages.map { it.toolFileName })
+    }
+
     @Test fun `TS fake host尾窗快照按绝对index读取且原子替换状态`() {
         val old = baseline(0, 3).copy(status = "failed", error = "old", approvals = listOf(
             SessionApproval("old", "bash", "command", "old")))

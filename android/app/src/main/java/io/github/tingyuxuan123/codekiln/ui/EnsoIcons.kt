@@ -19,6 +19,7 @@ internal enum class EnsoIcon(val paths: String, val solid: Boolean = false) {
     Folder("M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"),
     Chevrons("m7 15l5 5l5-5M7 9l5-5l5 5"),
     Down("m6 9l6 6l6-6"),
+    Up("m6 15l6-6l6 6"),
     Right("m9 18l6-6l-6-6"),
     Back("m15 18l-6-6l6-6"),
     Plus("M5 12h14m-7-7v14"),

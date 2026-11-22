@@ -41,6 +41,7 @@ internal fun MembersScreen(
     /** 真正的发送才算一次提交；渲染输入框读草稿不算。 */
     onDraftPin: (DraftKey) -> Unit = {},
     onDraftConfirmed: (DraftKey, String) -> Unit = { _, _ -> },
+    fetchArtifact: ArtifactFetcher? = null,
 ) {
     var openRootId by remember { mutableStateOf(initialChatId) }
     var displayedId by remember { mutableStateOf(initialChatId) }
@@ -140,7 +141,8 @@ internal fun MembersScreen(
             onOlder = { onLoadOlder(enabledChat.id, it) }, onHistory = onHistory, onSessionRetry = onSessionRetry,
             onApproval = onApproval, onAsk = onAsk, onThreads = if (threadAvailable) ({ showThreads = true }) else null,
             onNewSession = onNewSession, onConfirmNewSession = onConfirmNewSession, onRetryEntry = onRetryEntry,
-            onArtifacts = onArtifacts, onArtifactImage = onArtifactImage, onListBotFiles = onListBotFiles, onReadBotFile = onReadBotFile)
+            onArtifacts = onArtifacts, onArtifactImage = onArtifactImage, onListBotFiles = onListBotFiles,
+            onReadBotFile = onReadBotFile, fetchArtifact = fetchArtifact)
         if (showThreads && threadAvailable) BotThreadPicker(root, bots.threads.filter { it.parentId == root.id },
             requireNotNull(active), action, writable && onThreadChange != null && (!bots.writeBusy || threadWaiting),
             onDismiss = { showThreads = false }, onChoose = { command, id -> onThreadChange?.invoke(root.id, command, id, active.id) })

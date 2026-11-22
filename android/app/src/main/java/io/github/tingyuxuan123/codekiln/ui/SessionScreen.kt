@@ -1,6 +1,7 @@
 package io.github.tingyuxuan123.codekiln.ui
 
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,16 +19,20 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -37,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -47,9 +51,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.tingyuxuan123.codekiln.R
 import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileEntry
+import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
+import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
 import io.github.tingyuxuan123.codekiln.mirror.DesktopProvider
 import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
 import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
@@ -71,6 +79,8 @@ import io.github.tingyuxuan123.codekiln.pair.SessionApproval
 import io.github.tingyuxuan123.codekiln.pair.SessionAsk
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
@@ -122,6 +132,8 @@ internal fun SessionScreen(
     onOpenPreview: ((String, Int, Int) -> Unit)? = null,
     onPreviewAction: ((DesktopPreviewAction) -> Unit)? = null,
     onPreviewInput: ((DesktopPreviewInput) -> Unit)? = null,
+    onLoadImage: (suspend (SessionImageTarget) -> String?)? = null,
+    fetchFile: ArtifactChunkReader? = null,
     modelProviderId: String? = null,
     modelId: String? = null,
     modelProviders: List<DesktopProvider>? = null,
@@ -133,12 +145,19 @@ internal fun SessionScreen(
 ) {
     val c = Enso.colors
     val timeline = state?.timeline
+    val downloads = LocalArtifactDownloads.current ?: if (fetchFile != null) rememberArtifactDownloads(timeline?.sessionId) else null
+    val fileTarget = timeline?.sessionId?.let(FileDownloadTarget::Session)
     val turns = remember(timeline?.messages) { sessionTurns(timeline?.messages.orEmpty()) }
     val approval = timeline?.approvals?.firstOrNull { !it.reviewing } ?: timeline?.approvals?.firstOrNull()
     val ask = timeline?.asks?.firstOrNull()
     val terminalError = timeline?.error
     val pendingResponses = state?.pendingResponses.orEmpty()
     val online = phase == LinkPhase.Online
+    val workStatus = remember(online, state?.loading, state?.error, state?.running, state?.compaction?.state,
+        timeline?.messages, timeline?.approvals, timeline?.asks) { sessionWorkingStatus(state, online) }
+    val workSince = remember(timeline?.sessionId, timeline?.cursor?.get("epoch"), workStatus?.lastOutput, workStatus?.showElapsed) {
+        workStatus?.takeIf { it.showElapsed }?.let { SystemClock.elapsedRealtime() }
+    }
     val writable = online && !readOnly && state?.loading == false && !state.error
     val canSetModel = writable && onSetModel != null && state.modelReady
     var showModels by remember(timeline?.sessionId, timeline?.cursor?.get("epoch"), canSetModel) { mutableStateOf(false) }
@@ -171,6 +190,36 @@ internal fun SessionScreen(
     }
     val isSpecimen = specimen != null
     val goals = remember(timeline?.sessionId) { SessionPanels() }
+    val imageSlots = remember(timeline?.sessionId) { Semaphore(2) }
+    val loadImage: (suspend (SessionImageTarget) -> String?)? = onLoadImage?.let { read ->
+        { target -> imageSlots.withPermit { read(target) } }
+    }
+    val newestReply = turns.lastOrNull()?.takeUnless { it.user }
+    LaunchedEffect(timeline?.sessionId, newestReply?.index, online, state?.running, state?.loading) {
+        if (fetchFile != null && online && state?.running == false && !state.loading && !state.error && newestReply != null) {
+            onListFiles?.invoke()
+        }
+    }
+    val handleLink: (SessionLink) -> Boolean = { link ->
+        when {
+            !online -> false
+            link is SessionLink.Preview && onListPreviews != null && onOpenPreview != null -> {
+                goals.previewLink = link
+                goals.surface = SessionSurface.Preview
+                onListPreviews()
+                true
+            }
+            link is SessionLink.File && onListFiles != null -> {
+                goals.openedFile = null
+                goals.fileAction = null
+                goals.fileLink = link
+                goals.surface = SessionSurface.Files
+                onListFiles()
+                true
+            }
+            else -> false
+        }
+    }
     val goal = state?.goal
     // A receipt may only clear the revision that was submitted. Text equality alone cannot tell a draft
     // edited A → B → A from an untouched A, so every local edit drops the "this is the submitted text" mark.
@@ -201,7 +250,7 @@ internal fun SessionScreen(
             onDraft("")
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(c.page).designTopInset().designBottomInset(28.dp).imePadding()) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(c.card).designTopInset().designBottomInset(16.dp).imePadding()) {
         val panelLimit = maxHeight * .55f
         val queueLimit = maxHeight * .32f
         Column(Modifier.fillMaxSize()) {
@@ -217,6 +266,7 @@ internal fun SessionScreen(
                     approval != null -> ({ GlyphButton(EnsoIcon.More, "会话菜单（未接入）", 40.dp, 24.dp, tint = c.ink2) })
                     else -> null
                 })
+            Hairline()
             if (goal != null) SessionGoalBar(goal, state.goalReady && online) { goals.surface = SessionSurface.GoalDetails }
             if (goals.surface == null) (taskStopNotice(state?.taskStop) ?: rewindNotice(state?.rewind)
                 ?: maintenanceNotice(state?.maintenance, state?.compaction) ?: goalNotice(state?.goalAttempt))?.let { notice ->
@@ -226,8 +276,10 @@ internal fun SessionScreen(
                 Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = c.dim)
             if (!showModels && configStatus != null) Label(configStatus, 12, 16,
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), color = c.dim)
-            LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
+            LazyColumn(Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = 740.dp)
+                .fillMaxWidth().padding(horizontal = 16.dp),
                 reverseLayout = true, verticalArrangement = Arrangement.Top) {
+                if (workStatus != null && terminalError == null) item(key = "session-working") { SessionWorkingRow(workStatus, workSince) }
                 if (terminalError != null) item(key = "session-error") {
                     Label(terminalError, 13, 18, Modifier.padding(vertical = 12.dp), color = c.red)
                 }
@@ -238,7 +290,12 @@ internal fun SessionScreen(
                             EnsoIcon.Compress, Modifier.padding(vertical = 8.dp))
                         is SessionBlock.Notice -> TimelineDisclosure(block.kind.title, block.detail,
                             EnsoIcon.Terminal, Modifier.padding(vertical = 8.dp))
-                        else -> AssistantTurn(turn, approval, specimen, state?.running == true && turn.index == turns.lastOrNull()?.index)
+                        else -> CompositionLocalProvider(LocalConversationLink provides handleLink) {
+                            AssistantTurn(turn, approval, specimen, state?.running == true && turn.index == newestReply?.index,
+                                loadImage, state?.files?.entries.orEmpty(), downloads, fileTarget, onArtifact = { entry: DesktopFileEntry ->
+                                    openSessionArtifact(goals, entry, fetchFile, onReadFile, downloads, fileTarget)
+                                }.takeIf { online && (onReadFile != null || fetchFile != null) })
+                        }
                     }
                 }
                 if (state != null && (state.loadingHistory || (state.hasMoreHistory && state.timeline.baseIndex > 0))) {
@@ -257,10 +314,13 @@ internal fun SessionScreen(
                 }
                 val date = specimen?.date ?: turns.firstOrNull()?.timestamp?.let(::sessionDate)
                 if (date != null) item(key = "session-date") {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.Center) {
-                        Label(date, 11, 14, color = c.faint)
+                    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Hairline(Modifier.weight(1f))
+                        Label(date, 11, 16, color = c.dim)
+                        Hairline(Modifier.weight(1f))
                     }
-                } else if (turns.isEmpty()) item(key = "session-empty") {
+                } else if (turns.isEmpty() && workStatus == null) item(key = "session-empty") {
                     Label(when {
                         state?.error == true -> "暂时无法同步会话"
                         !online -> "等待电脑上线"
@@ -288,16 +348,18 @@ internal fun SessionScreen(
                                 onQueue?.invoke(command, id, text)
                             })
                     }
-                    SessionComposer(state, writable, readOnly, draft, editDraft,
-                        { text, runningMode -> submittedRevision = true; onText(text, runningMode) }, onStop,
-                        onEnqueue = onQueue?.let { queue -> { text -> submittedRevision = true; queue(QueueCommand.Enqueue, null, text) } },
-                        pictures = pictures, onPickPictures = onPickPictures, onRemovePicture = onRemovePicture,
-                        onSendPictures = onSendPictures)
+                    Column(Modifier.align(Alignment.CenterHorizontally).widthIn(max = 740.dp).fillMaxWidth()) {
+                        SessionComposer(state, writable, readOnly, draft, editDraft,
+                            { text, runningMode -> submittedRevision = true; onText(text, runningMode) }, onStop,
+                            onEnqueue = onQueue?.let { queue -> { text -> submittedRevision = true; queue(QueueCommand.Enqueue, null, text) } },
+                            pictures = pictures, onPickPictures = onPickPictures, onRemovePicture = onRemovePicture,
+                            onSendPictures = onSendPictures)
+                    }
                 }
             }
         }
         SessionMenuPanels(goals, state, writable, readOnly, onGoal, onMaintain, onRewind, onStopTask,
-            onListFiles, onReadFile, onListPreviews, onOpenPreview, onPreviewAction, onPreviewInput)
+            onListFiles, onReadFile, onListPreviews, onOpenPreview, onPreviewAction, onPreviewInput, fetchFile, downloads)
     }
     if (showModels && canSetModel) SessionModelSheet(
         modelProviders, modelProviderId, modelId, state.running,
@@ -382,7 +444,7 @@ private fun SessionComposer(
         running -> "输入插话内容"
         else -> "继续说…"
     }, inputLabel = "会话消息", inputEnabled = canEdit, running = running, dimAction = action == null,
-        onAttach = onPickPictures.takeIf { canPick }, attachmentAvailable = onPickPictures != null)
+        onAttach = onPickPictures.takeIf { canPick }, attachmentAvailable = onPickPictures != null, actionInFrame = true)
 }
 
 private data class PictureBudgetInput(val sessionId: String, val text: String, val pictures: List<LocalSessionPicture>)
@@ -390,37 +452,59 @@ private data class PictureBudgetInput(val sessionId: String, val text: String, v
 @Composable
 private fun UserTurn(turn: SessionTurn) {
     val c = Enso.colors
-    Column(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 20.dp), horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // The web conversation uses a quiet blue-grey user bubble, not the primary button colour.
-        Column(Modifier.clip(RoundedCornerShape(12.dp)).background(if (c.dark) c.card2 else Color(0xFFDFE8EF))
-            .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            turn.blocks.forEach { block -> when (block) {
-                is SessionBlock.Prose -> Label(block.text, 16, 24, color = c.ink)
-                is SessionBlock.Delegation -> SessionDelegationCard(block)
-                is SessionBlock.Routine -> SessionRoutineCard(block)
-                is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
-                is SessionBlock.Images -> TimelineImageStrip(block.images, Modifier.padding(top = 2.dp))
-                SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.ink2)
-                else -> Unit
-            } }
+    val images = remember(turn.blocks) { turn.blocks.filterIsInstance<SessionBlock.Images>().flatMap { it.images } }
+    val bubble = remember(turn.blocks) { turn.blocks.filterNot { it is SessionBlock.Images } }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 16.dp)) {
+        val limit = maxWidth * .86f
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (images.isNotEmpty()) TimelineImageStrip(images, Modifier.widthIn(max = limit), compact = true)
+            if (bubble.isNotEmpty()) Column(Modifier.widthIn(max = limit).clip(RoundedCornerShape(16.dp))
+                .background(c.card2).padding(horizontal = 13.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                bubble.forEach { block -> when (block) {
+                    is SessionBlock.Prose -> UserMessageText(block.text)
+                    is SessionBlock.Delegation -> SessionDelegationCard(block)
+                    is SessionBlock.Routine -> SessionRoutineCard(block)
+                    is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
+                    SessionBlock.ImagePlaceholder -> Label("图片附件", 13, 18, color = c.ink2)
+                    else -> Unit
+                } }
+            }
+            turn.timestamp?.let { Label(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)), 11, 16, color = c.dim) }
         }
-        turn.timestamp?.let { Label(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)), 12, 18, color = c.dim) }
     }
 }
 
 @Composable
-private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specimen: SessionSpecimen?, running: Boolean) {
+private fun UserMessageText(text: String) {
+    var expanded by remember(text) { mutableStateOf(false) }
+    var clipped by remember(text) { mutableStateOf(false) }
+    Column(horizontalAlignment = Alignment.End) {
+        SelectionContainer {
+            Text(text, style = ensoText(15, 24), color = Enso.colors.ink,
+                maxLines = if (expanded) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (!expanded) clipped = it.hasVisualOverflow })
+        }
+        if (clipped) GlyphButton(if (expanded) EnsoIcon.Up else EnsoIcon.Down,
+            if (expanded) "收起用户消息" else "展开用户消息", 40.dp, 16.dp, tint = Enso.colors.dim) { expanded = !expanded }
+    }
+}
+
+@Composable
+private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specimen: SessionSpecimen?, running: Boolean,
+    onLoadImage: (suspend (SessionImageTarget) -> String?)?, files: List<DesktopFileEntry>,
+    downloads: ArtifactDownloads?, target: FileDownloadTarget?,
+    onArtifact: ((DesktopFileEntry) -> Unit)?) {
     val c = Enso.colors
     val blocks = remember(turn.blocks, running) { sessionWorklogBlocks(turn.blocks, running) }
-    Column(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(22.dp).background(c.card, CircleShape), contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.codekiln_mark), null, Modifier.size(18.dp))
-            }
-            Label("CodeKiln", 15, 20, weight = FontWeight.SemiBold)
+    val artifacts = remember(turn, files) { replyArtifacts(turn, files) }
+    Column(Modifier.fillMaxWidth().padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 22.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Image(painterResource(R.drawable.codekiln_mark), null, Modifier.size(18.dp))
+            Label("CodeKiln", 12, 17, weight = FontWeight.Medium)
+            turn.replyModel?.let { Label(it, 11, 16, Modifier.weight(1f, fill = false), color = c.dim, maxLines = 1) }
             val time = specimen?.turnTime ?: turn.timestamp?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
-            if (time != null) Label(time, 12, 16, color = c.dim)
+            if (time != null) Label(time, 11, 16, color = c.dim, maxLines = 1)
         }
         blocks.forEach { block -> when (block) {
             is SessionBlock.Prose -> SessionMarkdown(block.text)
@@ -433,8 +517,11 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
             is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
             is SessionBlock.Compaction -> TimelineDisclosure("上下文已压缩", block.summary, EnsoIcon.Compress)
             is SessionBlock.Images -> TimelineImageStrip(block.images)
+            is SessionBlock.RemoteImage -> if (onLoadImage != null) TimelineRemoteImage(block.target, onLoadImage)
+                else Label("图片需连接支持预览的桌面端", 13, 18, color = c.dim)
             SessionBlock.ImagePlaceholder -> Label("图片附件", 14, 20, color = c.dim)
         } }
+        if (!running && onArtifact != null && artifacts.isNotEmpty()) SessionTurnArtifacts(artifacts, downloads, target, onArtifact)
         if (specimen?.changeSummary == true) Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -456,6 +543,42 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
                     Modifier.background(c.yellow.copy(alpha = .15f), CircleShape).padding(horizontal = 10.dp, vertical = 4.dp),
                     color = c.ink2, weight = FontWeight.Medium)
             }
+        }
+    }
+}
+
+/** Desktop-style footer, but describes delivered files, not a diff we did not receive. */
+@Composable
+private fun SessionTurnArtifacts(files: List<DesktopFileEntry>, downloads: ArtifactDownloads?,
+    target: FileDownloadTarget?, open: (DesktopFileEntry) -> Unit) {
+    val c = Enso.colors
+    val transfers = downloads?.state?.collectAsState()?.value.orEmpty()
+    val shape = RoundedCornerShape(8.dp)
+    var expanded by remember(files.map { it.id }) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(top = 3.dp).clip(shape).border(.75.dp, c.line, shape)) {
+        Row(Modifier.fillMaxWidth().background(c.card2.copy(alpha = .70f)).padding(horizontal = 11.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Glyph(EnsoIcon.Files, Modifier.size(15.dp), c.dim)
+            Label("本轮产物", 12, 17, Modifier.weight(1f), weight = FontWeight.Medium)
+            Label("${files.size} 个文件", 11, 16, color = c.dim)
+        }
+        (if (expanded) files else files.take(3)).forEach { file ->
+            Hairline()
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { open(file) }.heightIn(min = 44.dp)
+                .padding(horizontal = 11.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Glyph(EnsoIcon.FileText, Modifier.size(15.dp), c.dim)
+                Label(file.name, 13, 18, Modifier.weight(1f), maxLines = 1)
+                val status = target?.let { transfers[ArtifactDownloadKey(it, file.id)].cardLabel() }
+                Label(status ?: fileSizeLabel(file.size), 11, 16, color = if (status == null) c.dim else c.ink2, maxLines = 1)
+                Glyph(EnsoIcon.Right, Modifier.size(14.dp), c.dim)
+            }
+        }
+        if (files.size > 3) {
+            Hairline()
+            Label(if (expanded) "收起文件" else "还有 ${files.size - 3} 个文件", 12, 17,
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { expanded = !expanded }
+                    .padding(horizontal = 11.dp, vertical = 12.dp), color = c.dim)
         }
     }
 }

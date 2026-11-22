@@ -363,21 +363,6 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
     }
   };
 
-  const verifyDetail = async () => {
-    if (!detail) return;
-    setBusy(true);
-    try {
-      const res = await window.electronAPI.memory.update(detail.id, { status: 'verified' });
-      if (res.ok && res.note) {
-        setDetail(res.note);
-        setEditor((curr) => (curr ? { ...curr, status: 'verified' } : curr));
-        reloadRef.current();
-      }
-    } finally {
-      if (mounted.current) setBusy(false);
-    }
-  };
-
   const createNote = async () => {
     if (!creating?.title.trim()) return;
     setBusy(true);
@@ -764,16 +749,6 @@ export function MemoryLibrary({ revision = 0 }: { revision?: number } = {}) {
                 >
                   {t('Open in Obsidian')}
                 </Button>
-                {detail.status === 'draft' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void verifyDetail()}
-                  >
-                    {t('Mark verified')}
-                  </Button>
-                )}
                 {detail.isArchived ? (
                   <Button
                     variant="outline"

@@ -147,7 +147,12 @@ export type MemoryLintIssueKind =
   | 'stale'
   | 'unverified_draft'
   | 'missing_description'
-  | 'oversized';
+  | 'oversized'
+  | 'revision_marker'
+  | 'duplicate_title'
+  | 'status_oversized'
+  | 'status_stale'
+  | 'status_duplicate';
 
 export interface MemoryLintIssue {
   kind: MemoryLintIssueKind;

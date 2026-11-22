@@ -33,7 +33,6 @@ export function MemoryGraphView({
   onSelect,
   detail,
   loading,
-  onVerify,
   onOpenObsidian,
 }: {
   graph: MemoryGraphDto;
@@ -41,7 +40,6 @@ export function MemoryGraphView({
   onSelect: (id: string | null) => void;
   detail: MemoryNoteDetail | null;
   loading: boolean;
-  onVerify: (id: string) => void;
   onOpenObsidian: (id: string) => void;
 }) {
   const { t } = useI18n();
@@ -197,11 +195,6 @@ export function MemoryGraphView({
               </p>
             </div>
             <div className="flex shrink-0 gap-1.5">
-              {selected.status === 'draft' && (
-                <Button size="sm" variant="outline" onClick={() => onVerify(selected.id)}>
-                  {t('Mark verified')}
-                </Button>
-              )}
               <Button size="sm" variant="outline" onClick={() => onOpenObsidian(selected.id)}>
                 {t('Open in Obsidian')}
               </Button>

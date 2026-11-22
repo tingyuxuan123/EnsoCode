@@ -50,6 +50,10 @@ data class SessionMessage(
     /** Null means no usable metadata; an empty list is an explicit checklist clear. */
     val todos: List<SessionTodo>? = null,
     val isError: Boolean = false,
+    val model: String? = null,
+    val stopReason: String? = null,
+    /** First changed file for the working cue. The directory is not needed by the UI. */
+    val toolFileName: String? = null,
 )
 
 data class SessionTodo(val content: String, val status: SessionTodoStatus)
@@ -284,7 +288,13 @@ object SessionTimelineReducer {
             readTodos(message["todos"])?.takeIf { todoWeight(it) <= MAX_CONTENT_WEIGHT - contentWeight }
         } else null
         val isError = isToolResult && message["isError"].boolean() == true
-        return SessionMessage(index, role, content, timestamp, toolCallId, toolName, todos, isError)
+        // Older desktops omit these fields. A malformed optional identity must not hide the reply.
+        val model = if (role == "assistant") message["model"].text()?.takeIf { it.isNotBlank() && it.none(Char::isISOControl) } else null
+        val stopReason = if (role == "assistant") message["stopReason"].text(32) else null
+        val change = if (isToolResult) (message["fileChanges"] as? JsonArray)?.firstOrNull() as? JsonObject else null
+        val fileName = change?.get("path").text(4_096)?.substringAfterLast('/')?.substringAfterLast('\\')
+            ?.takeIf { it.length in 1..512 && it.isNotBlank() && it != "." && it != ".." && it.none(Char::isISOControl) }
+        return SessionMessage(index, role, content, timestamp, toolCallId, toolName, todos, isError, model, stopReason, fileName)
     }
 
     private fun readTodos(value: JsonElement?): List<SessionTodo>? {

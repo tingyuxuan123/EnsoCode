@@ -34,6 +34,9 @@
 - `src/renderer/components/chat/localImageSource.tsx`、`TimelineRow.tsx`、`GeneratedImageCard.tsx`：
   `ChatHost.readLocalImage` 存在时走远程读取，**加载中与失败都有可见状态**；不存在时保持桌面
   `local-image://` 行为不变。
+- Android 原生端复用同一 `session-image`：普通会话从回放与实时投影识别成功的 `read` 调用和生成图结果，
+  `DesktopLink` 在已认证且声明 `images=true` 时发起请求，按会话、连接、epoch 和请求 ID 收结果；
+  `TimelineImageViews.kt` 复用缩略图和大图，不把远端图片写入会话投影。
 
 ## 明确不做
 

@@ -5,6 +5,7 @@ import io.github.tingyuxuan123.codekiln.pair.ReplayRole
 import java.io.IOException
 import java.util.Base64
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -27,6 +28,50 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DesktopFilesTest {
+    @Test fun `readonly download is tied to a listed file and exact reply`() = runTest {
+        fixture { f ->
+            f.ready(readOnly = true)
+            val target = FileDownloadTarget.Session("s")
+            assertNull(async { f.link.fetchFileChunk(target, "unlisted", 0) }.await())
+            assertTrue(f.commands().isEmpty())
+            f.listResult(f.listAndRequest(), """[{"id":"f1","name":"report.pdf","size":3,"rel":"report.pdf"}]""")
+            val read = async { f.link.fetchFileChunk(target, "f1", 0) }
+            runCurrent()
+            val request = f.commands().single()["requestId"].linkString()!!
+            f.readResult("wrong") { put("size", 3); put("offset", 0); put("data", "AQID") }
+            assertFalse(read.isCompleted)
+            f.readResult(request) { put("size", 3); put("offset", 0); put("data", "AQID") }
+            assertArrayEquals(byteArrayOf(1, 2, 3), read.await()?.data)
+            assertNull(f.session?.files?.chunk) // Download must not replace the paged preview.
+        }
+    }
+
+    @Test fun `image read requires host capability and discards a response after switching sessions`() = runTest {
+        fixture { f ->
+            f.ready(readOnly = true)
+            val target = SessionImageTarget.Read("call-1")
+            assertNull(async { f.link.loadSessionImage("s", target) }.await())
+            assertTrue(f.commands().isEmpty())
+            f.frame(json("""{"type":"host-info","readOnly":true,"images":true}"""))
+            val image = async { f.link.loadSessionImage("s", target) }
+            runCurrent()
+            val command = f.commands().single()
+            assertEquals(setOf("type", "requestId", "sessionId", "toolCallId"), command.keys)
+            assertEquals("call-1", command["toolCallId"].linkString())
+            val id = command["requestId"].linkString()
+            f.frame(json("""{"type":"session-image-result","requestId":"wrong","dataUrl":"data:image/png;base64,eA=="}"""))
+            assertFalse(image.isCompleted)
+            f.frame(json("""{"type":"session-image-result","requestId":"$id","dataUrl":"data:image/png;base64,eA=="}"""))
+            assertEquals("data:image/png;base64,eA==", image.await())
+            val late = async { f.link.loadSessionImage("s", target) }
+            runCurrent()
+            val lateId = f.commands().single()["requestId"].linkString()
+            f.link.selectSession("other"); runCurrent()
+            f.frame(json("""{"type":"session-image-result","requestId":"$lateId","dataUrl":"data:image/png;base64,eA=="}"""))
+            assertNull(late.await())
+        }
+    }
+
     @Test fun `list sends the exact command and accepts the matching result`() = runTest {
         fixture { f ->
             f.ready()
@@ -353,7 +398,7 @@ class DesktopFilesTest {
         }
     }
 
-    private fun TestScope.fixture(block: (Fixture) -> Unit) {
+    private inline fun TestScope.fixture(block: (Fixture) -> Unit) {
         val f = Fixture(this)
         try { block(f) } finally { f.link.close(); runCurrent(); advanceTimeBy(1_001); runCurrent() }
     }

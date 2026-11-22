@@ -11,14 +11,6 @@ const labels = {
   always: 'Always allow this device',
   deny: 'Deny',
 } as const;
-const outcomes = {
-  session: 'Allowed for this conversation',
-  always: 'Always allowed this device',
-  deny: 'Device access denied',
-  timeout: 'Device access request expired',
-  revoked: 'Device access revoked',
-} as const;
-
 type Surface = 'chat' | 'pane';
 export function DeviceRequest({
   sessionId,
@@ -27,12 +19,11 @@ export function DeviceRequest({
   sessionId: string;
   surface?: Surface;
 }) {
-  const entries = useDeviceAccessEntries(sessionId);
-  const latest = entries.find((e) => e.decision === null) ?? entries.at(-1);
-  if (!latest) return null;
+  const pending = useDeviceAccessEntries(sessionId).filter((entry) => entry.decision === null);
+  if (pending.length === 0) return null;
   return (
     <div className="max-h-56 shrink-0 overflow-y-auto" data-device-access-surface={surface}>
-      {(surface === 'pane' ? [latest] : entries).map((entry) => (
+      {(surface === 'pane' ? pending.slice(0, 1) : pending).map((entry) => (
         <AccessCard key={entry.id} entry={entry} />
       ))}
     </div>
@@ -55,13 +46,11 @@ function AccessCard({ entry }: { entry: DeviceAccessEntry }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const act = async (decision: DeviceAccessDecision | 'revoke') => {
+  const act = async (decision: DeviceAccessDecision) => {
     setBusy(true);
     setError('');
     try {
-      const api = window.electronAPI.devices;
-      if (decision === 'revoke') await api.revokeAccess(entry.sessionId, entry.deviceId);
-      else await api.answerAccess(entry.sessionId, entry.id, decision);
+      await window.electronAPI.devices.answerAccess(entry.sessionId, entry.id, decision);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -76,40 +65,24 @@ function AccessCard({ entry }: { entry: DeviceAccessEntry }) {
       <div className="flex items-center gap-1.5">
         <ShieldCheck aria-hidden className="size-4 shrink-0" />
         <span title={entry.deviceId}>
-          {entry.decision === null
-            ? t('Allow access to {{name}}?', { name: entry.deviceName })
-            : `${entry.deviceName} · ${t(outcomes[entry.revoked ? 'revoked' : entry.decision])}`}
+          {t('Allow access to {{name}}?', { name: entry.deviceName })}
         </span>
       </div>
-      {entry.decision === null ? (
-        <>
-          <Deadline expiresAt={entry.expiresAt} />
-          <div className="mt-2 flex flex-wrap gap-1">
-            {(['deny', 'session', 'always'] as const).map((decision) => (
-              <Button
-                key={decision}
-                variant={decision === 'session' ? 'outline' : 'ghost'}
-                size="xs"
-                disabled={busy}
-                data-device-decision={decision}
-                onClick={() => void act(decision)}
-              >
-                {t(labels[decision])}
-              </Button>
-            ))}
-          </div>
-        </>
-      ) : entry.decision === 'session' && !entry.revoked ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={busy}
-          data-device-decision="revoke"
-          onClick={() => void act('revoke')}
-        >
-          {t('Revoke')}
-        </Button>
-      ) : null}
+      <Deadline expiresAt={entry.expiresAt} />
+      <div className="mt-2 flex flex-wrap gap-1">
+        {(['deny', 'session', 'always'] as const).map((decision) => (
+          <Button
+            key={decision}
+            variant={decision === 'session' ? 'outline' : 'ghost'}
+            size="xs"
+            disabled={busy}
+            data-device-decision={decision}
+            onClick={() => void act(decision)}
+          >
+            {t(labels[decision])}
+          </Button>
+        ))}
+      </div>
       {error && (
         <p role="alert" className="text-destructive">
           {error}

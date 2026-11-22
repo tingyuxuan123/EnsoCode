@@ -1,4 +1,8 @@
-import type { AgentSessionCustomEntry, ProjectedMessage } from '@shared/types/agent';
+import type {
+  AgentSessionCustomEntry,
+  ProjectedMemoryUpdate,
+  ProjectedMessage,
+} from '@shared/types/agent';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { applyPendingDesignCards } from '@/features/design/host/cards';
 import { useDesignRegistry } from '@/features/design/host/registry';
@@ -19,6 +23,7 @@ import { timelineSearchHits } from './chatSearch';
 import { MarkdownLinkContext } from './Markdown';
 import { MessageTimeline, type MessageTimelineHandle } from './MessageTimeline';
 import { TurnFilesContext } from './TurnFilesCard';
+import { TurnMemoryContext } from './TurnMemoryCard';
 import { turnFileChanges } from './turnFileChanges';
 
 const EMPTY_MESSAGES: ProjectedMessage[] = [];
@@ -137,6 +142,13 @@ export function ChatSessionTimeline({
     () => ({ conversationId, summaries: turnFileChanges(timeline, cwd) }),
     [conversationId, cwd, timeline]
   );
+  const turnMemory = useMemo(() => {
+    const map = new Map<number, readonly ProjectedMemoryUpdate[]>();
+    messages.forEach((message, index) => {
+      if (message.memoryUpdates?.length) map.set(index + historyBaseIndex, message.memoryUpdates);
+    });
+    return map;
+  }, [messages, historyBaseIndex]);
 
   const timelineActivity = chatTimelineActivity({
     started,
@@ -231,51 +243,53 @@ export function ChatSessionTimeline({
     <ChatSessionContext.Provider value={conversationId}>
       <MarkdownLinkContext.Provider value={markdownLinkContext}>
         <TurnFilesContext.Provider value={turnFiles}>
-          {findOpen && (
-            <ChatFindBar
-              query={findQuery}
-              onQueryChange={(value) => {
-                setFindQuery(value);
-                setFindIndex(0);
-              }}
-              current={findHits.length === 0 ? 0 : Math.min(findIndex, findHits.length - 1) + 1}
-              total={findHits.length}
-              onPrev={() => stepFind(-1)}
-              onNext={() => stepFind(1)}
-              onClose={() => {
-                setFindOpen(false);
-                setFindQuery('');
-              }}
+          <TurnMemoryContext.Provider value={turnMemory}>
+            {findOpen && (
+              <ChatFindBar
+                query={findQuery}
+                onQueryChange={(value) => {
+                  setFindQuery(value);
+                  setFindIndex(0);
+                }}
+                current={findHits.length === 0 ? 0 : Math.min(findIndex, findHits.length - 1) + 1}
+                total={findHits.length}
+                onPrev={() => stepFind(-1)}
+                onNext={() => stepFind(1)}
+                onClose={() => {
+                  setFindOpen(false);
+                  setFindQuery('');
+                }}
+              />
+            )}
+            <MessageTimeline
+              key={conversationId}
+              ref={timelineRef}
+              items={timelineWithCards}
+              busy={timelineActivity !== null}
+              loading={timelineActivity === 'loading'}
+              running={running}
+              runStartedAt={runStartedAt}
+              lastOutputAt={lastOutputAt}
+              error={terminalErrorText(messages, error)}
+              emptyTitle={emptyTitle}
+              onSuggestion={onSuggestion}
+              onRetryResume={
+                !started && sessionFile && status === 'failed'
+                  ? () => void useSessionsStore.getState().resumeConversation(conversationId)
+                  : undefined
+              }
+              historyLoading={historyLoading}
+              hasOlder={historyBaseIndex > 0}
+              olderCursor={historyBaseIndex}
+              onStartReached={
+                historyBaseIndex > 0
+                  ? () => void useSessionsStore.getState().loadOlderHistory(conversationId)
+                  : undefined
+              }
+              searchQuery={findOpen ? findQuery : ''}
+              activeHit={findOpen ? (findHits[findIndex] ?? null) : null}
             />
-          )}
-          <MessageTimeline
-            key={conversationId}
-            ref={timelineRef}
-            items={timelineWithCards}
-            busy={timelineActivity !== null}
-            loading={timelineActivity === 'loading'}
-            running={running}
-            runStartedAt={runStartedAt}
-            lastOutputAt={lastOutputAt}
-            error={terminalErrorText(messages, error)}
-            emptyTitle={emptyTitle}
-            onSuggestion={onSuggestion}
-            onRetryResume={
-              !started && sessionFile && status === 'failed'
-                ? () => void useSessionsStore.getState().resumeConversation(conversationId)
-                : undefined
-            }
-            historyLoading={historyLoading}
-            hasOlder={historyBaseIndex > 0}
-            olderCursor={historyBaseIndex}
-            onStartReached={
-              historyBaseIndex > 0
-                ? () => void useSessionsStore.getState().loadOlderHistory(conversationId)
-                : undefined
-            }
-            searchQuery={findOpen ? findQuery : ''}
-            activeHit={findOpen ? (findHits[findIndex] ?? null) : null}
-          />
+          </TurnMemoryContext.Provider>
         </TurnFilesContext.Provider>
       </MarkdownLinkContext.Provider>
     </ChatSessionContext.Provider>

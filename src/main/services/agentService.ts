@@ -205,6 +205,8 @@ function projectedActivity(message: unknown): AgentRunActivity | undefined {
 const NOTIFY_TEXT_LIMIT = 1_500;
 /** 等待行预览只要结论所在的末尾 */
 const PROGRESS_TEXT_TAIL = 160;
+/** 用户在子会话里中止了这一轮：Run 结束但不算交付，通知里说明原因 */
+const ABORTED_RUN_ERROR = 'The user stopped this Run.';
 
 function toolCallIdsOf(message: unknown): string[] {
   const value = message as { role?: unknown; content?: unknown } | undefined;
@@ -670,6 +672,9 @@ export class AgentService implements AgentServiceContract {
       }
       if (event.type === 'turn-failed') {
         this.settleRun(agent, active, 'failed', event.error);
+      } else if (event.aborted) {
+        // 用户中止了子会话这一轮：Run 到此结束，但不算成功交付
+        this.settleRun(agent, active, 'cancelled', ABORTED_RUN_ERROR);
       } else if (active.schema !== undefined || active.gate !== undefined) {
         active.status = 'validating';
         void this.validateRun(agent, active);
@@ -855,7 +860,7 @@ export class AgentService implements AgentServiceContract {
   private settleRun(
     agent: AgentRecord,
     run: RunRecord,
-    status: Extract<AgentRunStatus, 'succeeded' | 'failed'>,
+    status: Extract<AgentRunStatus, 'succeeded' | 'failed' | 'cancelled'>,
     error?: string
   ): void {
     if (TERMINAL_RUN_STATUSES.has(run.status)) return;

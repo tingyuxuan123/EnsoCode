@@ -148,6 +148,7 @@ import { TodoList } from './TodoBar';
 import { ToolNotices } from './ToolNotices';
 import { ToolSummaryRow } from './ToolSummaryRow';
 import { TurnFilesFooter } from './TurnFilesCard';
+import { TurnMemoryFooter } from './TurnMemoryCard';
 import { TurnWaterfallDetails } from './TurnWaterfallDetails';
 import { toolLineDelta } from './toolLineDelta';
 import { shouldCollapseUserQuery, USER_QUERY_MAX_HEIGHT } from './userQueryCollapse';
@@ -1589,7 +1590,10 @@ function TextRow({
         (host?.turnFooter ? (
           host.turnFooter(Number(item.key.split('-')[0]))
         ) : (
-          <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
+          <>
+            <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
+            <TurnMemoryFooter messageIndex={Number(item.key.split('-')[0])} />
+          </>
         ))}
     </div>
   );

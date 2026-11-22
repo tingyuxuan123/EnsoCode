@@ -3,11 +3,12 @@ import type { DeviceAccessEntry } from '@shared/device-agent';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
+import { DevicePermissions } from './device-permissions';
 import { DeviceRequest } from './device-request';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
-it('shares one request across both surfaces, even when a stale initial read finishes after the answer', async () => {
+it('回答后两个入口都撤掉提示，过期快照不会复活卡片，会话授权仍可管理', async () => {
   const entry: DeviceAccessEntry = {
     kind: 'device_access',
     id: 'ask',
@@ -22,13 +23,14 @@ it('shares one request across both surfaces, even when a stale initial read fini
   const off = vi.fn();
   const api = {
     listAccess: vi.fn(() => initial.promise),
+    allowedAccess: vi.fn(async () => []),
     onAccessChanged: vi.fn((cb: typeof push) => {
-      push = cb;
+      if (push === undefined) push = cb;
       return off;
     }),
     answerAccess: vi.fn(
-      async (_session: string, _id: string, decision: 'always' | 'session' | 'deny') =>
-        push({ ...entry, decision })
+      async (_session: string, id: string, decision: 'always' | 'session' | 'deny') =>
+        push({ ...entry, id, decision })
     ),
     revokeAccess: vi.fn(async () => push({ ...entry, decision: 'session', revoked: true })),
   };
@@ -49,22 +51,38 @@ it('shares one request across both surfaces, even when a stale initial read fini
         <>
           <DeviceRequest surface="chat" sessionId="s" />
           <DeviceRequest sessionId="s" />
+          <DevicePermissions sessionId="s" />
         </>
       )
     );
     expect(api.listAccess).toHaveBeenCalledTimes(1);
     await act(async () => push({ ...entry, sessionId: 'other' }));
-    expect(div.children).toHaveLength(0);
+    expect(div.querySelector('[data-device-access-surface]')).toBeNull();
     await act(async () => push(entry));
+    expect(div.querySelectorAll('[data-device-access-surface]')).toHaveLength(2);
     await click('chat', 'session');
     await act(async () => initial.resolve([entry]));
-    expect(div.querySelectorAll('[data-device-decision="revoke"]')).toHaveLength(2);
-    await click('pane', 'revoke');
-    expect(div.querySelectorAll('[data-device-decision]')).toHaveLength(0);
+    expect(div.querySelector('[data-device-access-surface]')).toBeNull();
+    expect(div.textContent).not.toContain('Allowed for this conversation');
+    const details = div.querySelector('details')!;
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event('toggle', { bubbles: true }));
+    });
+    const revoke = Array.from(details.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Revoke'
+    );
+    expect(revoke).toBeDefined();
+    await act(async () => revoke!.click());
     expect(api.revokeAccess).toHaveBeenCalledWith('s', 'android:1');
+    await act(async () => {
+      details.open = false;
+      details.dispatchEvent(new Event('toggle', { bubbles: true }));
+    });
     const next = { ...entry, id: 'next' };
     await act(async () => push(next));
     await click('pane', 'always');
+    expect(div.querySelector('[data-device-access-surface]')).toBeNull();
     expect(api.answerAccess.mock.calls).toEqual([
       ['s', 'ask', 'session'],
       ['s', 'next', 'always'],
@@ -73,5 +91,5 @@ it('shares one request across both surfaces, even when a stale initial read fini
     await act(async () => root.unmount());
     vi.unstubAllGlobals();
   }
-  expect(off).toHaveBeenCalledTimes(1);
+  expect(off).toHaveBeenCalledTimes(2);
 });

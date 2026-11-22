@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -115,6 +117,7 @@ class DesktopLink internal constructor(
     private var fileReadPending: FileReadPending? = null
     private var botFileListPending: BotFileListPending? = null
     private var botFileReadPending: BotFileReadPending? = null
+    private val sessionImageReads = mutableMapOf<String, SessionImagePending>()
     // A bot artifact frame carries no request id: once a target went silent, its late answer could not
     // be told apart from a new request's, so this generation never asks for that target again.
     private val silentBotArtifacts = LinkedHashSet<DesktopBotArtifactTarget>()
@@ -380,6 +383,24 @@ class DesktopLink internal constructor(
             fileId.length !in 1..FILE_TEXT_LIMIT || fileId.isBlank() || offset !in 0..MAX_SAFE_INTEGER ||
             baseline.session?.timeline?.sessionId != sessionId || baseline.session.files?.reading == true) return
         events.trySend(Event.ReadFile(sessionId, fileId, offset))
+    }
+
+    suspend fun fetchFileChunk(target: FileDownloadTarget, fileId: String, offset: Long): DesktopFileChunk? {
+        if (disposed.get()) return null
+        val reply = CompletableDeferred<DesktopFileChunk?>()
+        val event = when (target) {
+            is FileDownloadTarget.Session -> Event.ReadFile(target.id, fileId, offset, reply)
+            is FileDownloadTarget.Bot -> Event.ReadBotFile(target.artifact, fileId, offset, reply)
+        }
+        if (events.trySend(event).isFailure) return null
+        return try { withTimeoutOrNull(FILE_TIMEOUT_MS) { reply.await() } } finally { reply.cancel() }
+    }
+
+    suspend fun loadSessionImage(sessionId: String, target: SessionImageTarget): String? {
+        if (disposed.get() || !target.isValid()) return null
+        val reply = CompletableDeferred<String?>()
+        if (events.trySend(Event.ReadSessionImage(sessionId, target, reply)).isFailure) return null
+        return try { withTimeoutOrNull(FILE_TIMEOUT_MS) { reply.await() } } finally { reply.cancel() }
     }
 
     /**
@@ -676,9 +697,10 @@ class DesktopLink internal constructor(
             is Event.WriteRewind -> writeRewind(event)
             is Event.WriteTaskStop -> writeTaskStop(event)
             is Event.ListFiles -> requestFileList(event.sessionId)
-            is Event.ReadFile -> requestFileRead(event)
+            is Event.ReadFile -> if (!requestFileRead(event)) { event.reply?.complete(null) } else Unit
             is Event.ListBotFiles -> requestBotFileList(event.target)
-            is Event.ReadBotFile -> requestBotFileRead(event)
+            is Event.ReadBotFile -> if (!requestBotFileRead(event)) { event.reply?.complete(null) } else Unit
+            is Event.ReadSessionImage -> if (!requestSessionImage(event)) { event.reply.complete(null) } else Unit
             is Event.ListPreviews -> requestPreviewList(event.sessionId)
             is Event.OpenPreview -> requestPreviewOpen(event)
             is Event.PreviewAction -> requestPreviewAction(event)
@@ -933,7 +955,10 @@ class DesktopLink internal constructor(
         taskStopEvidence = null
         // File answers are only meaningful for the connection and selection that asked.
         fileListPending = null
+        fileReadPending?.reply?.complete(null)
         fileReadPending = null
+        sessionImageReads.values.forEach { it.reply.complete(null) }
+        sessionImageReads.clear()
         // A preview answer is equally bound to the connection and selection that asked.
         previewPending = null
         pendingSync = null
@@ -2547,17 +2572,17 @@ class DesktopLink internal constructor(
     }
 
     /** One block of one desktop-authored file id; the display-only `rel` never travels back. */
-    private fun requestFileRead(event: Event.ReadFile) {
-        if (!visible) return
-        val connection = current?.takeIf(::online) ?: return
+    private fun requestFileRead(event: Event.ReadFile): Boolean {
+        if (!visible || event.reply?.isActive == false) return false
+        val connection = current?.takeIf(::online) ?: return false
         val state = mutableState.value
-        val session = state.session ?: return
+        val session = state.session ?: return false
         if (selectedSession != event.sessionId || session.timeline.sessionId != event.sessionId ||
             event.sessionId.length !in 1..FILE_TEXT_LIMIT || event.fileId.length !in 1..FILE_TEXT_LIMIT ||
-            event.fileId.isBlank() || event.offset !in 0..MAX_SAFE_INTEGER) return
+            event.fileId.isBlank() || event.offset !in 0..MAX_SAFE_INTEGER) return false
         val files = session.files ?: DesktopFilesState()
-        if (files.reading) return // One read in flight; the next block waits for this one.
-        if (state.bots?.files?.reading == true) return
+        if (files.reading || state.bots?.files?.reading == true) return false
+        if (event.reply != null && (files.listing || files.entries.none { it.id == event.fileId })) return false
         val requestId = UUID.randomUUID().toString()
         if (!send(connection, buildJsonObject {
             put("type", "file-read")
@@ -2567,12 +2592,49 @@ class DesktopLink internal constructor(
             put("offset", event.offset)
         })) {
             if (current === connection) localFileError(event.sessionId, readError = FILE_SEND_ERROR)
-            return
+            return false
         }
-        fileReadPending = FileReadPending(requestId, event.sessionId, event.fileId, event.offset, connection)
+        fileReadPending = FileReadPending(requestId, event.sessionId, event.fileId, event.offset, connection, event.reply)
         mutableState.value = state.copy(session = session.copy(files = files.copy(reading = true,
             readingFileId = event.fileId, readOffset = event.offset, readError = null)))
         arm(connection, Timer.FileRead, FILE_TIMEOUT_MS)
+        return true
+    }
+
+    private fun requestSessionImage(event: Event.ReadSessionImage): Boolean {
+        sessionImageReads.entries.removeAll { !it.value.reply.isActive }
+        val state = mutableState.value
+        val session = state.session ?: return false
+        val connection = current?.takeIf(::online) ?: return false
+        if (!visible || !state.sessionImages || session.loading || session.error || !event.reply.isActive ||
+            selectedSession != event.sessionId || session.timeline.sessionId != event.sessionId ||
+            sessionImageReads.size >= 4 || !event.target.isValid()) return false
+        val requestId = UUID.randomUUID().toString()
+        val target = event.target
+        if (!send(connection, buildJsonObject {
+            put("type", "session-image")
+            put("requestId", requestId)
+            put("sessionId", event.sessionId)
+            when (target) {
+                is SessionImageTarget.Read -> put("toolCallId", target.toolCallId)
+                is SessionImageTarget.Generated -> put("rel", target.relativePath)
+            }
+        })) return false
+        sessionImageReads[requestId] = SessionImagePending(connection, event.sessionId,
+            session.timeline.cursor?.get("epoch").linkString(), event.reply)
+        return true
+    }
+
+    private fun sessionImageResult(connection: Connection, frame: JsonObject) {
+        val requestId = frame["requestId"].linkString() ?: return
+        val pending = sessionImageReads[requestId]?.takeIf { it.generation === connection } ?: return
+        sessionImageReads.remove(requestId)
+        val session = mutableState.value.session
+        val data = frame["dataUrl"].linkString()?.takeIf { raw -> raw.length <= 700_000 &&
+            raw.substringBefore(',') in setOf("data:image/png;base64", "data:image/jpeg;base64",
+                "data:image/webp;base64", "data:image/gif;base64") && raw.substringAfter(',', "").isNotEmpty() }
+        pending.reply.complete(data.takeIf { visible && frame["error"] == null && selectedSession == pending.sessionId &&
+            session?.timeline?.sessionId == pending.sessionId && session.timeline.cursor?.get("epoch").linkString() == pending.epoch })
     }
 
     private fun finishFileList() {
@@ -2630,6 +2692,7 @@ class DesktopLink internal constructor(
         finishFileRead()
         val error = frame["error"].linkString()
         if (error != null) {
+            pending.reply?.complete(null)
             mutableState.value = state.copy(session = session.copy(files = files.copy(reading = false,
                 readError = error.takeIf { it.isNotEmpty() } ?: FILE_INVALID_ERROR)))
             return
@@ -2641,12 +2704,14 @@ class DesktopLink internal constructor(
         val size = frame["size"].linkIndex()
         val offset = frame["offset"].linkIndex()
         val data = desktopFileData(frame["data"])
-        val next = if ((named && name == null) || size == null || offset != pending.offset || data == null) {
-            // A drifted or malformed block is an error, not a shorter file.
+        val chunk = if ((!named || name != null) && size != null && offset == pending.offset && data != null)
+            DesktopFileChunk(pending.fileId, name, size, pending.offset, data) else null
+        val next = if (chunk == null) {
             files.copy(reading = false, readError = FILE_INVALID_ERROR)
-        } else files.copy(reading = false, readError = null, readOffset = offset,
-            chunk = DesktopFileChunk(pending.fileId, name, size, offset, data))
+        } else files.copy(reading = false, readError = null, readOffset = chunk.offset,
+            chunk = if (pending.reply == null) chunk else files.chunk)
         mutableState.value = state.copy(session = session.copy(files = next))
+        pending.reply?.complete(chunk.takeIf { visible })
     }
 
     /** The association survives the timeout so a late, still matching answer is accepted. */
@@ -2663,6 +2728,7 @@ class DesktopLink internal constructor(
 
     private fun fileReadTimeout() {
         val pending = fileReadPending ?: return
+        pending.reply?.complete(null)
         val state = mutableState.value
         val session = state.session ?: return
         if (selectedSession != pending.sessionId || session.timeline.sessionId != pending.sessionId) return
@@ -2709,17 +2775,17 @@ class DesktopLink internal constructor(
     }
 
     /** One block of one desktop-authored file id; the display-only `rel` never travels back. */
-    private fun requestBotFileRead(event: Event.ReadBotFile) {
-        if (!visible) return
-        val connection = current?.takeIf(::online) ?: return
+    private fun requestBotFileRead(event: Event.ReadBotFile): Boolean {
+        if (!visible || event.reply?.isActive == false) return false
+        val connection = current?.takeIf(::online) ?: return false
         val state = mutableState.value
-        val bots = state.bots ?: return
+        val bots = state.bots ?: return false
         if (bots.filesTarget != event.target || !botTargetValid(event.target) ||
             event.fileId.length !in 1..FILE_TEXT_LIMIT || event.fileId.isBlank() ||
-            event.offset !in 0..MAX_SAFE_INTEGER) return
+            event.offset !in 0..MAX_SAFE_INTEGER) return false
         val files = bots.files ?: DesktopFilesState()
-        if (files.reading) return // One read in flight; the next block waits for this one.
-        if (state.session?.files?.reading == true) return
+        if (files.reading || state.session?.files?.reading == true) return false
+        if (event.reply != null && (files.listing || files.entries.none { it.id == event.fileId })) return false
         val requestId = UUID.randomUUID().toString()
         if (!send(connection, buildJsonObject {
             put("type", "file-read")
@@ -2729,12 +2795,13 @@ class DesktopLink internal constructor(
             put("offset", event.offset)
         })) {
             if (current === connection) localBotFileError(event.target, readError = FILE_SEND_ERROR)
-            return
+            return false
         }
-        botFileReadPending = BotFileReadPending(requestId, event.target, event.fileId, event.offset, connection)
+        botFileReadPending = BotFileReadPending(requestId, event.target, event.fileId, event.offset, connection, event.reply)
         mutableState.value = state.copy(bots = bots.copy(files = files.copy(reading = true,
             readingFileId = event.fileId, readOffset = event.offset, readError = null)))
         arm(connection, Timer.BotFileRead, FILE_TIMEOUT_MS)
+        return true
     }
 
     private fun finishBotFileList() {
@@ -2750,6 +2817,7 @@ class DesktopLink internal constructor(
     /** Bot file traffic belongs to one connection, one chat and one message. */
     private fun clearBotFiles() {
         botFileListPending = null
+        botFileReadPending?.reply?.complete(null)
         botFileReadPending = null
         silentBotArtifacts.clear()
         current?.let { connection ->
@@ -2818,6 +2886,7 @@ class DesktopLink internal constructor(
         clearBotFileRead()
         val error = frame["error"].linkString()
         if (error != null) {
+            pending.reply?.complete(null)
             mutableState.value = state.copy(bots = bots.copy(files = files.copy(reading = false,
                 readError = error.takeIf { it.isNotEmpty() } ?: FILE_INVALID_ERROR)))
             return true
@@ -2829,12 +2898,14 @@ class DesktopLink internal constructor(
         val size = frame["size"].linkIndex()
         val offset = frame["offset"].linkIndex()
         val data = desktopFileData(frame["data"])
-        val next = if ((named && name == null) || size == null || offset != pending.offset || data == null) {
-            // A drifted or malformed block is an error, not a shorter file.
+        val chunk = if ((!named || name != null) && size != null && offset == pending.offset && data != null)
+            DesktopFileChunk(pending.fileId, name, size, pending.offset, data) else null
+        val next = if (chunk == null) {
             files.copy(reading = false, readError = FILE_INVALID_ERROR)
-        } else files.copy(reading = false, readError = null, readOffset = offset,
-            chunk = DesktopFileChunk(pending.fileId, name, size, offset, data))
+        } else files.copy(reading = false, readError = null, readOffset = chunk.offset,
+            chunk = if (pending.reply == null) chunk else files.chunk)
         mutableState.value = state.copy(bots = bots.copy(files = next))
+        pending.reply?.complete(chunk.takeIf { visible && botTargetValid(pending.target) })
         return true
     }
 
@@ -2852,6 +2923,7 @@ class DesktopLink internal constructor(
 
     private fun botFileReadTimeout() {
         val pending = botFileReadPending ?: return
+        pending.reply?.complete(null)
         val state = mutableState.value
         val bots = state.bots ?: return
         if (bots.filesTarget != pending.target) return
@@ -3218,6 +3290,7 @@ class DesktopLink internal constructor(
         when (frame["type"].linkString()) {
             "file-list-result" -> fileListResult(connection, frame)
             "file-read-result" -> fileReadResult(connection, frame)
+            "session-image-result" -> sessionImageResult(connection, frame)
             "preview-list-result" -> previewListResult(connection, frame)
             "preview-result" -> previewResult(connection, frame)
             "session-sync" -> {
@@ -3486,9 +3559,18 @@ class DesktopLink internal constructor(
         return false
     }
 
+    /**
+     * Any frame proves the link alive, pong or not, and clears the misses counted so far; the
+     * desktop's own heartbeat reads messages the same way (packages/pair/src/heartbeat.ts).
+     */
+    private fun alive(connection: Connection) {
+        cancelTimer(connection, Timer.Pong)
+        connection.pongMisses = 0
+    }
+
     private fun text(connection: Connection, control: String) {
         if (!active(connection)) return
-        cancelTimer(connection, Timer.Pong)
+        alive(connection)
         when (control) {
             "pong" -> connection.pingAt?.let { sent ->
                 connection.pingAt = null
@@ -3518,7 +3600,7 @@ class DesktopLink internal constructor(
     }
 
     private fun binary(connection: Connection, bytes: ByteString) {
-        cancelTimer(connection, Timer.Pong)
+        alive(connection)
         val replay = replay ?: return
         if (phase == LinkPhase.AwaitingHost && !connection.seenHostControl && connection.earlyPackets.size < MAX_EARLY_PACKETS) {
             connection.earlyPackets.add(bytes)
@@ -3650,7 +3732,10 @@ class DesktopLink internal constructor(
         if (event.kind == Timer.Retire) end(connection, null, false)
         else if (active(connection)) when (event.kind) {
             Timer.Ping -> ping(connection)
-            Timer.Connect, Timer.Authenticate, Timer.Pong -> end(connection, null, false)
+            // A pong that is one beat late, or a desktop blocked by a long task, must not cost a
+            // healthy link: probe once more before giving up, as the desktop's heartbeat does.
+            Timer.Pong -> if (++connection.pongMisses < PONG_MAX_MISSES) ping(connection) else end(connection, null, false)
+            Timer.Connect, Timer.Authenticate -> end(connection, null, false)
             Timer.SessionSync -> subscribePending(connection)
             Timer.History -> {
                 historyBefore = null
@@ -3801,6 +3886,8 @@ class DesktopLink internal constructor(
         var socket: WebSocket? = null
         var retiring = false
         var pingAt: Long? = null
+        /** Probes in a row that went unanswered; any frame clears it. */
+        var pongMisses = 0
         var seenHostControl = false
         var lastSyncAt = 0L
         var lastSyncSession: String? = null
@@ -3835,7 +3922,8 @@ class DesktopLink internal constructor(
             if (sequence <= (readSequences[read.kind] ?: 0)) return state
             readSequences[read.kind] = sequence
             return when (read) {
-                is DesktopRead.Host -> state.copy(hostName = read.name ?: state.hostName, readOnly = read.readOnly)
+                is DesktopRead.Host -> state.copy(hostName = read.name ?: state.hostName, readOnly = read.readOnly,
+                    sessionImages = read.sessionImages)
                 is DesktopRead.Catalog -> state.copy(catalog = read.tasks, catalogReady = true)
                 DesktopRead.InvalidCatalog -> state.copy(catalog = Collections.unmodifiableList(state.catalog.map {
                     if (it.providerId == null && it.modelId == null) it else it.copy(providerId = null, modelId = null)
@@ -3875,9 +3963,13 @@ class DesktopLink internal constructor(
         data class WriteTaskStop(val sessionId: String, val kind: SessionTaskKind, val targetId: String,
             val baseline: TaskStopBaseline, val authority: Any) : Event
         data class ListFiles(val sessionId: String) : Event
-        data class ReadFile(val sessionId: String, val fileId: String, val offset: Long) : Event
+        data class ReadFile(val sessionId: String, val fileId: String, val offset: Long,
+            val reply: CompletableDeferred<DesktopFileChunk?>? = null) : Event
         data class ListBotFiles(val target: DesktopBotArtifactTarget) : Event
-        data class ReadBotFile(val target: DesktopBotArtifactTarget, val fileId: String, val offset: Long) : Event
+        data class ReadBotFile(val target: DesktopBotArtifactTarget, val fileId: String, val offset: Long,
+            val reply: CompletableDeferred<DesktopFileChunk?>? = null) : Event
+        data class ReadSessionImage(val sessionId: String, val target: SessionImageTarget,
+            val reply: CompletableDeferred<String?>) : Event
         data class ListPreviews(val sessionId: String) : Event
         data class OpenPreview(val sessionId: String, val entryId: String, val width: Int, val height: Int) : Event
         data class PreviewAction(val sessionId: String, val action: DesktopPreviewAction) : Event
@@ -3927,11 +4019,13 @@ class DesktopLink internal constructor(
         val generation: Connection)
     private data class FileListPending(val requestId: String, val sessionId: String, val generation: Connection)
     private data class FileReadPending(val requestId: String, val sessionId: String, val fileId: String,
-        val offset: Long, val generation: Connection)
+        val offset: Long, val generation: Connection, val reply: CompletableDeferred<DesktopFileChunk?>?)
     private data class BotFileListPending(val requestId: String, val target: DesktopBotArtifactTarget,
         val generation: Connection)
     private data class BotFileReadPending(val requestId: String, val target: DesktopBotArtifactTarget,
-        val fileId: String, val offset: Long, val generation: Connection)
+        val fileId: String, val offset: Long, val generation: Connection, val reply: CompletableDeferred<DesktopFileChunk?>?)
+    private data class SessionImagePending(val generation: Connection, val sessionId: String, val epoch: String?,
+        val reply: CompletableDeferred<String?>)
     private data class PreviewPending(val requestId: String, val sessionId: String, val request: PreviewRequest,
         val generation: Connection)
     private data class BotTimelineSent(val chatId: String, val beforeSeq: Long?, val at: Long)
@@ -3967,6 +4061,7 @@ class DesktopLink internal constructor(
         const val AUTH_TIMEOUT_MS = 12_000L
         const val PING_INTERVAL_MS = 15_000L
         const val PONG_TIMEOUT_MS = 8_000L
+        const val PONG_MAX_MISSES = 2
         const val CLOSE_TIMEOUT_MS = 1_000L
         const val SYNC_DEDUPE_MS = 1_501L // Desktop suppresses duplicate worker snapshot requests for 1.5s.
         const val SYNC_TIMEOUT_MS = 10_000L

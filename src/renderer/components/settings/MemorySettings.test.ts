@@ -174,9 +174,11 @@ describe('MemorySettings', () => {
     expect(html).toContain('data-settings-row="memory.lint"');
     expect(html).toContain('Turn memory off in Built-in tools.');
     expect(html).toContain('Compile sessions automatically');
-    expect(html).toContain('idle for 30 minutes');
     expect(html).not.toContain('Extract entities');
     expect(html).toContain('No wiki notes yet.');
     expect(html).toContain('Nothing running.');
+    expect(html).toContain('After each reply, this session checks the project wiki');
+    setState({ language: 'zh' });
+    expect(renderToStaticMarkup(createElement(MemorySettings))).toContain('每轮答复完成后');
   });
 });

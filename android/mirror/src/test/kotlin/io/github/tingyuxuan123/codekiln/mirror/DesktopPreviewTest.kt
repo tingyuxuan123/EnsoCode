@@ -320,7 +320,7 @@ class DesktopPreviewTest {
     }
 
     @Test fun `only a bounded standard base64 png or jpeg is a displayable frame`() {
-        // A relay frame is far smaller than the decoded cap, so the cap is a guard on its own.
+        // The cap is the largest data URL the desktop sends, which is one relay frame's worth.
         val full = "data:image/jpeg;base64," +
             Base64.getEncoder().encodeToString(ByteArray(PREVIEW_FRAME_BYTES))
         assertEquals(full, desktopPreviewDataUrl(JsonPrimitive(full)))

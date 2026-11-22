@@ -6,23 +6,28 @@ import {
   COMPILE_MAX_OUTPUT_TOKENS,
   DEFAULT_NOTE_TYPE,
   isUpsertMode,
+  MEMORY_VERIFIER_ACTOR,
   type UpsertMode,
+  VERIFY_MAX_NOTE_CHARS,
 } from '@shared/memory/constants';
 import type { CompileJobDto } from '@shared/memory/dto';
-import { normalizeNoteSlug, normalizeNoteType } from '@shared/memory/markdown';
+import { normalizeNoteSlug, normalizeNoteType, parseMarkdownNote } from '@shared/memory/markdown';
 import {
   WIKI_COMPILE_GROUP_SCOPE_RULES,
   WIKI_COMPILE_PROMPT,
+  WIKI_REWRITE_PROMPT,
+  WIKI_VERIFY_PROMPT,
   withMemoryLanguage,
 } from '@shared/memory/prompts';
 import type Database from 'better-sqlite3';
 import type { VaultBindingStore } from './bindings';
+import { contentHash } from './contentHash';
 import { listIndexedNotes, syncSpaceIndex } from './indexDb';
-import { upsertWikiNote } from './operations';
+import { markNoteVerified, resolveTargetRelPath, upsertWikiNote } from './operations';
 import { looseParse, redactSecrets } from './redact';
 import { distillSpaces } from './space';
 import type { Complete, TranscriptMessage } from './types';
-import { ensureVaultScaffold, readSchemaFile } from './vault';
+import { ensureVaultScaffold, readNoteFile, readSchemaFile } from './vault';
 
 export type { Complete, TranscriptMessage };
 export { looseParse, redactSecrets };
@@ -170,6 +175,73 @@ export function parseCompilePlan(raw: string): CompilePlan | null {
     if (actions.length >= COMPILE_MAX_ACTIONS) break;
   }
   return { actions };
+}
+
+function stripRewriteWrapper(input: string): string | null {
+  let text = input.replace(/\r\n?/g, '\n').trim();
+  const fenced = text.match(/^(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n?\1\s*$/);
+  if (fenced) text = fenced[2].trim();
+  if (text.startsWith('---\n')) {
+    const frontmatter = text.match(/^---\n[\s\S]*?\n---(?:\n|$)/);
+    if (frontmatter) text = text.slice(frontmatter[0].length).trim();
+  }
+  return text.trim() ? text.trim() : null;
+}
+
+/**
+ * 解析“就地重写”结果：模型可能返回裸 Markdown、代码围栏包住的 Markdown、
+ * 带 frontmatter 的整页，或 {"content": "..."}。无有效正文时返回 null。
+ */
+export function parseRewriteBody(raw: string): string | null {
+  const trimmed = raw.replace(/\r\n?/g, '\n').trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('{')) {
+    const parsed = looseParse(trimmed);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const row = parsed as Record<string, unknown>;
+      const body =
+        typeof row.content === 'string'
+          ? row.content
+          : typeof row.body === 'string'
+            ? row.body
+            : '';
+      return body.trim() ? stripRewriteWrapper(body) : null;
+    }
+    return null;
+  }
+  return stripRewriteWrapper(trimmed);
+}
+
+export interface VerifyVerdict {
+  slug: string;
+  supported: boolean;
+  reason: string;
+}
+
+/**
+ * 解析核验结果。任何无法确认的情况都按 unsupported 处理：
+ * 失败方向必须是“留在 draft 等 lint 提醒”，不是“自动标成已验证”。
+ */
+export function parseVerifyVerdicts(raw: string): VerifyVerdict[] {
+  const parsed = looseParse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  const list = (parsed as Record<string, unknown>).verdicts;
+  if (!Array.isArray(list)) return [];
+
+  const out: VerifyVerdict[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const slug = typeof row.slug === 'string' ? row.slug.trim() : '';
+    if (!slug) continue;
+    const verdict = typeof row.verdict === 'string' ? row.verdict.trim().toLowerCase() : '';
+    out.push({
+      slug,
+      supported: verdict === 'supported',
+      reason: typeof row.reason === 'string' ? row.reason.trim().slice(0, 240) : '',
+    });
+  }
+  return out;
 }
 
 export function compileFingerprint(payload: CompilePayload): string {
@@ -337,6 +409,138 @@ function buildCompactCatalog(db: Database.Database, spaceIds: readonly string[])
   return lines.length > 0 ? lines.join('\n') : '(no existing pages yet)';
 }
 
+/**
+ * 已有页面必须“就地重写”：编译时模型只看到目录摘要，看不到正文，
+ * 所以把当前正文交给模型重写成整页，再以 replace 落盘，
+ * 避免把新结论追加在已过期的结论后面。
+ * 任何一步不可靠（路径解析失败、正文过长、模型无输出）都退到“追加”，绝不退到 replace：
+ * 此时模型只给了增量结论，直接 replace 会把旧页正文整段抹掉。
+ */
+async function mergeIntoExistingPage(
+  db: Database.Database,
+  opts: RunCompileOptions,
+  spaceId: string,
+  act: CompileAction
+): Promise<{ content: string; mode: UpsertMode; expectedBodyHash?: string }> {
+  // 已有页面：section 保持局部替换，其余一律追加；replace 只能由下面的成功重写产生。
+  const fallback = {
+    content: act.content,
+    mode: (act.mode === 'section' && act.section ? 'section' : 'append') as UpsertMode,
+  };
+
+  let target: { relPath: string; exists: boolean };
+  try {
+    target = resolveTargetRelPath(db, spaceId, act.slug, act.title, act.type);
+  } catch {
+    return fallback;
+  }
+  if (!target.exists) return fallback;
+
+  const space = opts.bindings.resolveSpace(spaceId);
+  const existingRaw = readNoteFile(space.rootPath, target.relPath);
+  if (!existingRaw) return fallback;
+  const existingBody = parseMarkdownNote(existingRaw, act.title).body.trim();
+  if (!existingBody || existingBody.length > COMPILE_MAX_CHUNK_CHARS) return fallback;
+
+  try {
+    const raw = await opts.complete(
+      withMemoryLanguage(WIKI_REWRITE_PROMPT, opts.language),
+      [
+        `## Existing page (${target.relPath})`,
+        existingBody,
+        '',
+        '## New conclusions from this session',
+        act.content.trim(),
+      ].join('\n'),
+      { maxTokens: COMPILE_MAX_OUTPUT_TOKENS }
+    );
+    const body = parseRewriteBody(raw);
+    return body
+      ? { content: body, mode: 'replace', expectedBodyHash: contentHash(existingBody) }
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * 落盘之后的独立核验：只看“已经写下的文字”和原始证据。
+ * 通过则转 verified（用户不需要再点确认），不通过就留在 draft 并说明理由。
+ * 核验调用失败不阻塞写入，页面继续保持 draft，由 lint 的 unverified_draft 兜底。
+ */
+async function auditWrittenNotes(
+  opts: RunCompileOptions,
+  written: readonly { spaceId: string; relPath: string; slug: string; title: string }[],
+  transcript: string
+): Promise<Map<string, VerifyVerdict & { bodyHash: string }>> {
+  // 按空间分组：不同空间可能有一模一样的 slug，混在一起核验会把 A 的结论盖到 B 上。
+  // 正文超过展示上限的笔记不发去核验——没看全就盖章等于谎报。
+  const bySpace = new Map<
+    string,
+    { slug: string; relPath: string; body: string; head: string }[]
+  >();
+  const seenPerSpace = new Map<string, Set<string>>();
+  const ambiguous = new Set<string>();
+  for (const note of written) {
+    const space = opts.bindings.resolveSpace(note.spaceId);
+    const raw = readNoteFile(space.rootPath, note.relPath);
+    if (!raw) continue;
+    const body = parseMarkdownNote(raw, note.title).body.trim();
+    if (!body) continue;
+    if (body.length > VERIFY_MAX_NOTE_CHARS) continue;
+    // 同一空间下 slug 可能撞车（`x.md` 与 `wiki/x.md`）；撞了就不核验，
+    // 否则会把 A 的 verdict/哈希盖到 B 上。
+    const seen = seenPerSpace.get(note.spaceId) ?? new Set<string>();
+    if (seen.has(note.slug)) {
+      ambiguous.add(`${note.spaceId}::${note.slug}`);
+      continue;
+    }
+    seen.add(note.slug);
+    seenPerSpace.set(note.spaceId, seen);
+    const bucket = bySpace.get(note.spaceId) ?? [];
+    bucket.push({
+      slug: note.slug,
+      relPath: note.relPath,
+      body,
+      head: [`### [[${note.slug}]] ${note.title}`, body].join('\n'),
+    });
+    bySpace.set(note.spaceId, bucket);
+  }
+  if (bySpace.size === 0) return new Map();
+
+  const out = new Map<string, VerifyVerdict & { bodyHash: string }>();
+  for (const [spaceId, notes] of bySpace) {
+    const auditable = notes.filter((note) => !ambiguous.has(`${spaceId}::${note.slug}`));
+    if (auditable.length === 0) continue;
+    try {
+      const raw = await opts.complete(
+        withMemoryLanguage(WIKI_VERIFY_PROMPT, opts.language),
+        [
+          '## Evidence (quoted data)',
+          trimTranscriptForCompile(transcript, COMPILE_MAX_CHUNK_CHARS),
+          '',
+          '## Notes to audit',
+          auditable.map((note) => note.head).join('\n\n'),
+        ].join('\n'),
+        { maxTokens: COMPILE_MAX_OUTPUT_TOKENS }
+      );
+      // 只用送审项回填：同 slug 但被跳过（超长/撞车）的笔记不能借用它的路径
+      const bySlug = new Map(auditable.map((note) => [note.slug, note] as const));
+      for (const verdict of parseVerifyVerdicts(raw)) {
+        const target = bySlug.get(verdict.slug);
+        if (!target) continue;
+        out.set(`${spaceId}::${target.relPath}`, {
+          ...verdict,
+          bodyHash: contentHash(target.body),
+        });
+      }
+    } catch {
+      // 单个空间核验失败不影响其他空间；这些页面保持 draft
+    }
+  }
+  return out;
+}
+
 export async function runCompileJob(
   db: Database.Database,
   jobId: number,
@@ -426,17 +630,27 @@ export async function runCompileJob(
 
     let written = 0;
     const notes: CompileJobDto['notes'] = [];
+    const auditQueue: {
+      spaceId: string;
+      relPath: string;
+      slug: string;
+      title: string;
+      entry: number;
+    }[] = [];
     for (const act of plan.actions) {
       const targetSpaceId = act.scope === 'chat' && targets.chat ? targets.chat : targets.self;
       try {
+        const merged = await mergeIntoExistingPage(db, opts, targetSpaceId, act);
         const res = await upsertWikiNote(db, opts.bindings, {
           spaceId: targetSpaceId,
           note: act.slug,
           title: act.title,
           type: act.type,
           description: act.description,
-          content: act.content,
-          mode: act.mode,
+          content: merged.content,
+          mode: merged.mode,
+          ...(merged.expectedBodyHash ? { expectedBodyHash: merged.expectedBodyHash } : {}),
+          conflictFallbackContent: act.content,
           section: act.section,
           tags: act.tags,
           sources: [`session:${job.sessionId}`],
@@ -451,8 +665,28 @@ export async function runCompileJob(
           kind: res.action,
           slug: res.slug,
           title: res.title,
-          detail: `${res.spaceId}/${res.slug}`,
+          detail: res.downgraded
+            ? `${res.spaceId}/${res.slug} · draft: page changed during compile`
+            : `${res.spaceId}/${res.slug}`,
         });
+        // 降级写入的是“旧正文 + 增量”，没有经过重写，不参与核验
+        if (!res.downgraded) {
+          auditQueue.push({
+            spaceId: res.spaceId,
+            relPath: res.relPath,
+            slug: res.slug,
+            title: res.title,
+            entry: notes.length - 1,
+          });
+        } else {
+          // 同一页先成功写入、后被降级：之前排队的核验项会读到最终稿并盖章，必须撤掉
+          for (let i = auditQueue.length - 1; i >= 0; i -= 1) {
+            const queued = auditQueue[i];
+            if (queued.spaceId === res.spaceId && queued.relPath === res.relPath) {
+              auditQueue.splice(i, 1);
+            }
+          }
+        }
       } catch (err) {
         notes.push({
           kind: 'rejected',
@@ -460,6 +694,30 @@ export async function runCompileJob(
           title: act.title,
           detail: err instanceof Error ? err.message : String(err),
         });
+      }
+    }
+
+    if (auditQueue.length > 0) {
+      const verdicts = await auditWrittenNotes(opts, auditQueue, transcript);
+      for (const item of auditQueue) {
+        const verdict = verdicts.get(`${item.spaceId}::${item.relPath}`);
+        const verified =
+          verdict?.supported === true &&
+          (await markNoteVerified(db, opts.bindings, {
+            spaceId: item.spaceId,
+            relPath: item.relPath,
+            by: MEMORY_VERIFIER_ACTOR,
+            now,
+            onSelfWrite: opts.onSelfWrite,
+            expectedBodyHash: verdict.bodyHash,
+          }));
+        const current = notes[item.entry];
+        notes[item.entry] = {
+          ...current,
+          detail: verified
+            ? `${current.detail} · verified`
+            : `${current.detail} · draft${verdict?.reason ? `: ${verdict.reason}` : ''}`,
+        };
       }
     }
 

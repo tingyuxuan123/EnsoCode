@@ -16,6 +16,18 @@ class SessionPresentationTest {
     private fun message(index: Long, role: String, vararg parts: String, call: String? = null, tool: String? = null) =
         SessionMessage(index, role, parts.map { Json.parseToJsonElement(it).jsonObject }, toolCallId = call, toolName = tool)
 
+    @Test fun `回复头和PC一样保留这轮实际模型并用重试替换失败的首个模型`() {
+        val turns = wireTurns("""[
+          {"role":"user","content":[{"type":"text","text":"第一个问题"}]},
+          {"role":"assistant","model":"original-model","stopReason":"error","content":[]},
+          {"role":"assistant","model":"fallback-model","content":[{"type":"text","text":"已完成"}]},
+          {"role":"assistant","model":"later-step-model","content":[{"type":"text","text":"补充"}]},
+          {"role":"user","content":[{"type":"text","text":"第二个问题"}]},
+          {"role":"assistant","content":[{"type":"text","text":"没有模型元数据的历史"}]}
+        ]""")
+        assertEquals(listOf("fallback-model", null), turns.filterNot { it.user }.map { it.replyModel })
+    }
+
     @Test fun `用户和助手分别成轮且未知内容不会伪造正文`() {
         val turns = sessionTurns(listOf(
             message(4, "user", """{"type":"text","text":"查看结果"}"""),

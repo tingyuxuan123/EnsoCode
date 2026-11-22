@@ -36,13 +36,14 @@ export function run(
   file: string,
   args: string[],
   env: Env,
-  timeout = LIST_TIMEOUT_MS
+  timeout = LIST_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       file,
       args,
-      { env, timeout, maxBuffer: 32 * 1024 * 1024, windowsHide: true },
+      { env, timeout, signal, maxBuffer: 32 * 1024 * 1024, windowsHide: true },
       (error, stdout, stderr) => {
         if (error) reject(Object.assign(error, { stderr: String(stderr) }));
         else resolve(String(stdout));
@@ -216,6 +217,21 @@ export function parseAdbDevices(
   return rows;
 }
 
+/** The host emulator console can identify an AVD even before adbd authorizes shell access. */
+export async function emulatorAvdName(
+  adb: string,
+  serial: string,
+  env: Env,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (!/^emulator-\d+$/.test(serial)) return null;
+  const reply = await run(adb, ['-s', serial, 'emu', 'avd', 'name'], env, 2_000, signal).catch(
+    () => ''
+  );
+  const [name, status] = reply.trim().split(/\r?\n/);
+  return name && /^[\w.-]+$/.test(name) && status === 'OK' ? name : null;
+}
+
 export async function listAndroid(tools: Tools, env: Env): Promise<FoundDevice[]> {
   const found: FoundDevice[] = [];
   const runningAvds = new Set<string>();
@@ -225,6 +241,7 @@ export async function listAndroid(tools: Tools, env: Env): Promise<FoundDevice[]
       const emulator = row.serial.startsWith('emulator-');
       let name = row.model ?? row.serial;
       let osVersion: string | null = null;
+      let avdName: string | null = null;
       if (row.state === 'device') {
         const props = await run(
           tools.adb,
@@ -239,9 +256,13 @@ export async function listAndroid(tools: Tools, env: Env): Promise<FoundDevice[]
         ).catch(() => '');
         const [release, avd] = props.split(/\r?\n/).map((value) => value.trim());
         osVersion = release || null;
-        if (emulator && avd) {
-          runningAvds.add(avd);
-          name = avd.replace(/_/g, ' ');
+        avdName = avd || null;
+      }
+      if (emulator) {
+        avdName ??= await emulatorAvdName(tools.adb, row.serial, env);
+        if (avdName) {
+          runningAvds.add(avdName);
+          name = avdName.replace(/_/g, ' ');
         }
       }
       const problems: DeviceProblem[] = [];

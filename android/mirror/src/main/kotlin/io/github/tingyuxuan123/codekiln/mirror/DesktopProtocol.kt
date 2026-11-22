@@ -68,6 +68,7 @@ data class DesktopLinkState(
     val creation: DesktopCreation? = null,
     val catalogReady: Boolean = false,
     val bots: DesktopBotsState? = null,
+    val sessionImages: Boolean = false,
 )
 
 data class DesktopSessionState(
@@ -287,7 +288,9 @@ internal sealed interface DesktopRead {
     enum class Kind { Host, Catalog, Projects, Providers }
     val kind: Kind
 
-    data class Host(val name: String?, val readOnly: Boolean) : DesktopRead { override val kind = Kind.Host }
+    data class Host(val name: String?, val readOnly: Boolean, val sessionImages: Boolean = false) : DesktopRead {
+        override val kind = Kind.Host
+    }
     // Only chat-bearing rows belong here. A null queue is malformed; a null goal is known absent.
     // Malformed goals are omitted from the map just like missing/slim rows. Occupancy and totals
     // are display-only: a valid full row without the key proves the desktop has nothing to show.
@@ -303,7 +306,7 @@ internal sealed interface DesktopRead {
 
 internal fun desktopRead(payload: JsonObject): DesktopRead? = when (payload["type"].linkString()) {
     "host-info" -> DesktopRead.Host(payload["hostname"].linkString()?.takeIf { it.isNotBlank() },
-        payload["readOnly"] == JsonPrimitive(true))
+        payload["readOnly"] == JsonPrimitive(true), payload["images"] == JsonPrimitive(true))
     "catalog" -> desktopCatalogRead(payload) ?: DesktopRead.InvalidCatalog
     "projects" -> desktopProjects(payload)?.let(DesktopRead::Projects)
     "providers" -> desktopProviders(payload)?.let(DesktopRead::Providers)
@@ -411,8 +414,12 @@ internal const val PREVIEW_SIZE_LIMIT = 4_096
 /** A rendered frame may be larger than the viewport that was asked for. */
 internal const val PREVIEW_FRAME_SIZE_LIMIT = 8_192
 
-/** Decoded image cap; the encrypted relay frame is far smaller than this. */
-internal const val PREVIEW_FRAME_BYTES = 3 * 1024 * 1024
+/**
+ * Decoded image cap. The desktop sends no data URL longer than 700_000 chars (pairPreview.ts),
+ * and Base64 makes that 525_000 bytes, just under the relay's 1 MiB frame; a bigger cap only
+ * accepted pictures that could never arrive.
+ */
+internal const val PREVIEW_FRAME_BYTES = 525_000
 
 /** One block of typed text; the desktop applies its own, smaller, limit. */
 const val PREVIEW_INPUT_TEXT_LIMIT = 20_000

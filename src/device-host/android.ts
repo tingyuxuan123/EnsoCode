@@ -4,9 +4,10 @@
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { DeviceInput, DeviceScreen } from '@shared/device-host';
 import { AnnexBToAvcc } from './annexb';
-import { parseAdbDevices, run } from './discovery';
+import { emulatorAvdName, parseAdbDevices, run } from './discovery';
 import { type DeviceDriver, DriverError, type DriverEvents } from './driver';
 import type { Env } from './find-command';
 import { freePort, helperPath } from './runtime';
@@ -304,11 +305,13 @@ export async function bootEmulator(
   emulator: string,
   adb: string,
   avd: string,
-  env: Env
+  env: Env,
+  incoming?: AbortSignal
 ): Promise<string> {
   const before = new Set(
-    parseAdbDevices(await run(adb, ['devices'], env)).map((row) => row.serial)
+    parseAdbDevices(await run(adb, ['devices'], env, 5_000, incoming)).map((row) => row.serial)
   );
+  incoming?.throwIfAborted();
   const child = spawn(
     emulator,
     ['-avd', avd, '-no-window', '-no-audio', '-no-boot-anim', '-gpu', 'host'],
@@ -319,22 +322,56 @@ export async function bootEmulator(
       windowsHide: true,
     }
   );
+  const stopped = new AbortController();
+  const signal = incoming ? AbortSignal.any([incoming, stopped.signal]) : stopped.signal;
+  let exited = false;
+  child.once('error', (error) => {
+    exited = true;
+    stopped.abort(error);
+  });
+  child.once('exit', (code, signalCode) => {
+    exited = true;
+    stopped.abort(new Error(`The emulator process exited (${code ?? signalCode})`));
+  });
   child.unref();
   const deadline = Date.now() + 240_000;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-    const rows = parseAdbDevices(await run(adb, ['devices'], env).catch(() => ''));
-    for (const row of rows) {
-      if (before.has(row.serial) || !row.serial.startsWith('emulator-') || row.state !== 'device')
-        continue;
-      const booted = await run(
-        adb,
-        ['-s', row.serial, 'shell', 'getprop sys.boot_completed'],
-        env,
-        5_000
-      ).catch(() => '');
-      if (booted.trim() === '1') return row.serial;
+  let unauthorizedSince: number | null = null;
+  try {
+    while (Date.now() < deadline) {
+      await delay(2_000, undefined, { signal });
+      signal.throwIfAborted();
+      const rows = parseAdbDevices(await run(adb, ['devices'], env, 5_000, signal).catch(() => ''));
+      let unauthorized = false;
+      for (const row of rows) {
+        if (before.has(row.serial) || (row.state !== 'device' && row.state !== 'unauthorized'))
+          continue;
+        if ((await emulatorAvdName(adb, row.serial, env, signal)) !== avd) continue;
+        if (row.state === 'unauthorized') {
+          unauthorized = true;
+          continue;
+        }
+        const booted = await run(
+          adb,
+          ['-s', row.serial, 'shell', 'getprop sys.boot_completed'],
+          env,
+          5_000,
+          signal
+        ).catch(() => '');
+        signal.throwIfAborted();
+        if (booted.trim() === '1') return row.serial;
+      }
+      signal.throwIfAborted();
+      unauthorizedSince = unauthorized ? (unauthorizedSince ?? Date.now()) : null;
+      if (unauthorizedSince !== null && Date.now() - unauthorizedSince >= 15_000) {
+        throw new Error(
+          'ADB is not authorized for this emulator. Cold boot it in Android Studio and approve any USB debugging prompt there, then reopen it here.'
+        );
+      }
     }
+    throw new Error('The emulator did not finish booting');
+  } catch (error) {
+    // Only stop the process this call spawned, never another emulator found in adb.
+    if (!exited) child.kill();
+    throw signal.aborted ? signal.reason : error;
   }
-  throw new Error('The emulator did not finish booting');
 }

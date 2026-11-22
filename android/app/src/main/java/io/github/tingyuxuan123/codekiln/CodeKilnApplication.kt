@@ -14,6 +14,8 @@ import io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind
 import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
 import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
 import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
+import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
+import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
 import io.github.tingyuxuan123.codekiln.mirror.RelayPairingClient
 import io.github.tingyuxuan123.codekiln.mirror.TaskLaunch
 import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
@@ -75,6 +77,10 @@ class CodeKilnApplication : Application() {
                     override fun listFiles(sessionId: String) = link.listFiles(sessionId)
                     override fun readFile(sessionId: String, fileId: String, offset: Long) =
                         link.readFile(sessionId, fileId, offset)
+                    override suspend fun fetchFileChunk(target: FileDownloadTarget, fileId: String, offset: Long) =
+                        link.fetchFileChunk(target, fileId, offset)
+                    override suspend fun loadSessionImage(sessionId: String, target: SessionImageTarget) =
+                        link.loadSessionImage(sessionId, target)
                     override fun listPreviews(sessionId: String) = link.listPreviews(sessionId)
                     override fun openPreview(sessionId: String, entryId: String, width: Int, height: Int) =
                         link.openPreview(sessionId, entryId, width, height)

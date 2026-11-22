@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -89,7 +91,10 @@ internal fun SessionGroupMessagesCard(block: SessionBlock.GroupMessages) {
 @Composable
 internal fun SessionWorklogRow(worklog: SessionBlock.Worklog, description: String?, prose: @Composable (String) -> Unit) {
     val c = Enso.colors
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expandedByUser by rememberSaveable { mutableStateOf(false) }
+    // Desktop never hides the only useful activity of a running or incomplete reply.
+    val forced = worklog.running || !worklog.hasAnswer
+    val expanded = forced || expandedByUser
     val title = description ?: when {
         worklog.running -> "工作中"
         worklog.hasAnswer -> "已工作"
@@ -101,9 +106,10 @@ internal fun SessionWorklogRow(worklog: SessionBlock.Worklog, description: Strin
         if (isEmpty() && worklog.notices > 0) add("${worklog.notices} 条通知")
     }.joinToString(" · ")
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(role = Role.Button) { expanded = !expanded }
-            .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }
-            .heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).then(if (forced) Modifier else Modifier
+            .clickable(role = Role.Button) { expandedByUser = !expandedByUser }
+            .semantics { stateDescription = if (expanded) "已展开" else "已折叠" })
+            .heightIn(min = if (forced) 28.dp else 40.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Glyph(when {
                 worklog.running -> EnsoIcon.Timer
@@ -114,15 +120,16 @@ internal fun SessionWorklogRow(worklog: SessionBlock.Worklog, description: Strin
                 worklog.hasAnswer -> c.green
                 else -> c.dim
             })
-            Label(title, 13, 19, color = c.ink2, weight = FontWeight.Medium, maxLines = 1)
-            Glyph(if (expanded) EnsoIcon.Down else EnsoIcon.Right, Modifier.size(13.dp), c.dim)
-            Label(if (expanded) "" else counts, 12, 18, Modifier.weight(1f), color = c.dim, maxLines = 1)
+            Label(title, 12, 18, color = c.ink2, weight = FontWeight.Medium, maxLines = 1)
+            if (!forced) Glyph(if (expanded) EnsoIcon.Down else EnsoIcon.Right, Modifier.size(13.dp), c.dim)
+            Label(if (expanded) "" else counts, 11, 17, Modifier.weight(1f), color = c.dim, maxLines = 1)
             if (worklog.failures > 0) Label("${worklog.failures} 次调用失败", 11, 16,
                 Modifier.background(c.red.copy(alpha = .09f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
                 color = c.red, maxLines = 1)
         }
-        if (expanded) Column(Modifier.fillMaxWidth().padding(start = 22.dp, bottom = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (expanded) Column(Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 6.dp)
+            .drawBehind { drawLine(c.line, Offset.Zero, Offset(0f, size.height), strokeWidth = 1.dp.toPx()) }
+            .padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             worklog.entries.forEach { block -> when (block) {
                 is SessionBlock.Prose -> prose(block.text)
                 is SessionBlock.Steps -> block.steps.forEach { WorklogStep(it) }

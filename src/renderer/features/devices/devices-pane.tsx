@@ -350,7 +350,7 @@ export function DevicesPane({ conversationId }: { conversationId: string }) {
         <DeviceRequest sessionId={sessionId} />
         {body}
       </PaneBody>
-      <DevicePermissions />
+      <DevicePermissions sessionId={sessionId} />
     </PaneSheet>
   );
 }

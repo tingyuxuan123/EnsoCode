@@ -101,6 +101,38 @@ describe('wiki memory bridge (5 agent ops)', () => {
     }
   });
 
+  it('surfaces the one status page separately from the note catalog', async () => {
+    const work = tmpDir();
+    const bindings = new VaultBindingStore(work);
+    const db = openIndexDb(path.join(work, 'index.db'));
+    const ctx = { projectId: 'p1', bindings, language: 'zh' };
+    try {
+      const before = (await executeMemoryOp(db, 'index', {}, ctx)) as { status: unknown };
+      expect(before.status).toBeNull();
+
+      await executeMemoryOp(
+        db,
+        'upsert',
+        {
+          title: '项目状态',
+          type: 'status',
+          description: '当前进展、下一步与卡点',
+          content: 'As of 2026-06-01\n\n- 正在做：status 页\n- 下一步：体检',
+        },
+        ctx
+      );
+
+      const after = (await executeMemoryOp(db, 'index', {}, ctx)) as {
+        status: { slug: string; content: string } | null;
+      };
+      expect(after.status?.slug).toBe('status');
+      expect(after.status?.content).toContain('下一步');
+      expect(after.status?.content).not.toContain('type: status');
+    } finally {
+      db.close();
+    }
+  });
+
   it('queues Bot writes to shared project/global spaces for user approval, and applies on approve', async () => {
     const work = tmpDir();
     const bindings = new VaultBindingStore(work);

@@ -23,8 +23,10 @@
 | [image-context-request-body-limit.md](image-context-request-body-limit.md) | 长工具轮读图后持续 CF 502；同轮 / 压缩后图片累积，整包超过约 32 MiB（预算守卫及状态栏已双厂商真机验收） |
 | [queued-prompt-vs-compaction.md](queued-prompt-vs-compaction.md) | 排队消息 / 打断后发送报 Cannot submit a prompt while compaction is in progress |
 | [worktree-move-races.md](worktree-move-races.md) | 会话切到隔离 worktree 后，文件仍写进主工作树；新命令被 worker 静默丢弃 |
+| [spawn-parent-field-allowlist.md](spawn-parent-field-allowlist.md) | Main 报启动成功但会话永不开始；worker 日志 dropped unparsable command |
 | [cdp-hidden-window-input.md](cdp-hidden-window-input.md) | CDP 拖拽/点击时好时坏，eval/截图全正常，极易误判为产品 bug |
 | [device-drag-missing-release.md](device-drag-missing-release.md) | 移动设备面板滑到一半停住，松手后不按鼠标键也能拖动画面 |
+| [android-emulator-adb-unauthorized.md](android-emulator-adb-unauthorized.md) | Android 模拟器打开一直等；同一 AVD 同时显示为「关机」和 ADB 未授权 |
 | [windows-detached-powershell.md](windows-detached-powershell.md) | Windows 后台 PowerShell 返回 exit 0、无输出且命令未执行 |
 | [windows-test-fixtures.md](windows-test-fixtures.md) | Windows 全量测试因链接权限、路径、换行及占用文件失败；O_NOFOLLOW 缺失漏读链接 |
 | [optimistic-echo-blocks-snapshot.md](optimistic-echo-blocks-snapshot.md) | 冷会话回来先发一句后，聊天区只剩这一句、计时器在走、工具卡不出现；worker 其实在正常干活 |

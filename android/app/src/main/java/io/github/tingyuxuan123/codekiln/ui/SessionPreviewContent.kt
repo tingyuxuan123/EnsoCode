@@ -64,6 +64,17 @@ internal fun SessionPreviewContent(
     LaunchedEffect(panels.surface, preview?.entries, preview?.listing) {
         if (panels.surface == SessionSurface.Preview && preview == null && onList != null) onList()
     }
+    val deepLink = panels.previewLink
+    LaunchedEffect(deepLink, preview) {
+        if (deepLink != null && preview != null && !preview.busy && preview.listError == null) {
+            deepLink.match(preview.entries)?.let { entry ->
+                panels.previewLink = null
+                onOpen?.invoke(entry.id, 480, 720)
+            }
+        }
+    }
+    if (deepLink != null && preview != null && !preview.busy && preview.listError == null &&
+        deepLink.match(preview.entries) == null) SheetHint("桌面没有提供此链接的预览，可以选择下方可用页面。")
     if (preview?.previewId == null) {
         when {
             preview == null || preview.listing -> SheetHint("正在查找桌面上的预览页…")

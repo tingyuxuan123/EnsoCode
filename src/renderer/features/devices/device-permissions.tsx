@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
+import { useDeviceAccessEntries } from '@/stores/deviceAccess';
 
 /** Forget affects future conversations; it does not revoke an existing session grant. */
-export function DevicePermissions() {
+export function DevicePermissions({ sessionId }: { sessionId: string }) {
   const { t } = useI18n();
+  const entries = useDeviceAccessEntries(sessionId);
+  const sessionGrants = entries.filter((entry) => entry.decision === 'session' && !entry.revoked);
   const [open, setOpen] = useState(false);
   const [ids, setIds] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -47,6 +50,29 @@ export function DevicePermissions() {
       </summary>
       {open && (
         <div className="max-h-28 overflow-y-auto">
+          {sessionGrants.length > 0 && (
+            <div className="mb-1 border-b border-line/60 pb-1">
+              <p className="text-muted-foreground">{t('Allowed for this conversation')}</p>
+              {sessionGrants.map((entry) => (
+                <div className="flex items-center justify-between gap-2" key={entry.id}>
+                  <span className="truncate" title={entry.deviceId}>
+                    {entry.deviceName}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() =>
+                      void api
+                        .revokeAccess(sessionId, entry.deviceId)
+                        .catch((err) => setError(String(err)))
+                    }
+                  >
+                    {t('Revoke')}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
           {ids.length === 0 && !error && t('No devices are always allowed.')}
           {ids.map((id) => (
             <div className="flex items-center justify-between gap-2" key={id}>

@@ -13,7 +13,7 @@ import { isMainWebContents } from '../windows/MainWindow';
 
 // A device-host port gives direct access to device controls. Trust the workbench frame,
 // not just its webContents: embedded pages can share the latter.
-function isDeviceSender(event: Pick<IpcMainEvent, 'sender' | 'senderFrame'>): boolean {
+export function isDeviceSender(event: Pick<IpcMainEvent, 'sender' | 'senderFrame'>): boolean {
   return (
     isMainWebContents(event.sender.id) &&
     !!event.senderFrame &&

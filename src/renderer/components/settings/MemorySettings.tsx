@@ -164,6 +164,11 @@ const LINT_LABELS: Record<MemoryLintReport['issues'][number]['kind'], string> = 
   unverified_draft: 'Old draft',
   missing_description: 'No summary',
   oversized: 'Oversized',
+  revision_marker: 'Revision markers',
+  duplicate_title: 'Duplicate title',
+  status_oversized: 'Status too long',
+  status_stale: 'Status stale',
+  status_duplicate: 'Two status pages',
 };
 
 export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => void } = {}) {
@@ -526,7 +531,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
             <h3 className="text-[calc(14rem/14)] font-medium">{t('Vault health')}</h3>
             <p className="text-[calc(12rem/14)] text-muted-foreground">
               {t(
-                'Deterministic lint checks for broken [[wikilinks]], orphan notes, stale deadlines, old drafts, missing summaries, and oversized pages.'
+                'Deterministic lint checks for broken [[wikilinks]], orphan notes, stale deadlines, old drafts, missing summaries, oversized pages, append-style revision markers, duplicate titles, and the one-screen status page budget.'
               )}
             </p>
           </div>
@@ -593,7 +598,7 @@ export function MemorySettings({ onLibraryChanged }: { onLibraryChanged?: () => 
           rowId="memory.distill"
           title={t('Compile sessions automatically')}
           description={t(
-            'When a session ends or is reclaimed after being idle for 30 minutes, compile durable lessons into draft wiki notes (always updates existing pages first).'
+            'After each reply, this session checks the project wiki before the turn ends: it writes durable conclusions or reports that nothing changed. Follow-ups are reviewed with the latest answer.'
           )}
           checked={distillEnabled}
           onChange={setDistillEnabled}

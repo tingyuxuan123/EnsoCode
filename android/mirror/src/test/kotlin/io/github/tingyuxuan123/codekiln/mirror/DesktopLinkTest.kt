@@ -190,6 +190,11 @@ class DesktopLinkTest {
             assertEquals(listOf("ping", "ping"), first.textSent)
             advanceTimeBy(8_000)
             runCurrent()
+            // One unanswered probe only probes again; a pong a beat late is not a dead link.
+            assertEquals(listOf("ping", "ping", "ping"), first.textSent)
+            assertFalse(first.cancelled)
+            advanceTimeBy(8_000)
+            runCurrent()
             assertEquals(LinkPhase.Offline, f.state.phase)
             assertTrue(first.cancelled)
             advanceTimeBy(1_000)

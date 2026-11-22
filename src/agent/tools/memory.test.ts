@@ -116,6 +116,26 @@ describe('wiki memory agent tools', () => {
     expect(prepared).toEqual({ note: id });
   });
 
+  it('明确要求记住长期约定时，在当轮查找并更新已有页，而不是仅口头答应', () => {
+    const { tools } = makeTools();
+    const searchTool = tools.find((t) => t.name === 'memory_search')!;
+    const upsertTool = tools.find((t) => t.name === 'memory_upsert')!;
+    expect(searchTool.description).toMatch(/look up.*explicit requests to remember/i);
+    expect(upsertTool.description).toMatch(/explicitly asks .*remember.*lasting.*same turn/i);
+    expect(upsertTool.description).toMatch(/memory_search or memory_index.*intended vault.*first/i);
+    expect(upsertTool.description).toMatch(/memory_read.*update it in place/i);
+    expect(upsertTool.description).toMatch(/create a page only if no suitable page exists/i);
+  });
+
+  it('按真实回执报告保存页、待审批或失败，且不落库普通问答', () => {
+    const { tools } = makeTools();
+    const upsertTool = tools.find((t) => t.name === 'memory_upsert')!;
+    expect(upsertTool.description).toMatch(/saved only when written=true.*title.*spaceId.*relPath/);
+    expect(upsertTool.description).toMatch(/pending_review.*queued for approval.*not yet saved/);
+    expect(upsertTool.description).toMatch(/fails or is unavailable.*not saved/);
+    expect(upsertTool.description).toMatch(/Do not save routine Q&A/i);
+  });
+
   it('routes execute calls through MemoryInvoker and resolves JSON response', async () => {
     const emit = vi.fn();
     const invoker = new MemoryInvoker({ sessionId: 's1', generation: 'gen-1' }, emit);

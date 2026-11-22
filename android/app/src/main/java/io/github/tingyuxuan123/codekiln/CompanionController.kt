@@ -22,6 +22,9 @@ import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction
 import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput
 import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
 import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileChunk
+import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
+import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
 import io.github.tingyuxuan123.codekiln.mirror.PairException
 import io.github.tingyuxuan123.codekiln.mirror.PairFailure
 import io.github.tingyuxuan123.codekiln.mirror.TextDraftStore
@@ -60,6 +63,8 @@ internal interface CompanionLink : AutoCloseable {
     fun stopTask(sessionId: String, kind: SessionTaskKind, targetId: String, baseline: TaskStopBaseline) = Unit
     fun listFiles(sessionId: String) = Unit
     fun readFile(sessionId: String, fileId: String, offset: Long) = Unit
+    suspend fun fetchFileChunk(target: FileDownloadTarget, fileId: String, offset: Long): DesktopFileChunk? = null
+    suspend fun loadSessionImage(sessionId: String, target: SessionImageTarget): String? = null
     fun listPreviews(sessionId: String) = Unit
     fun openPreview(sessionId: String, entryId: String, width: Int, height: Int) = Unit
     fun previewAction(sessionId: String, action: DesktopPreviewAction) = Unit
@@ -306,6 +311,17 @@ internal class CompanionController(
     fun readFile(sessionId: String, fileId: String, offset: Long) {
         if (visible && currentSession() == sessionId) connection?.readFile(sessionId, fileId, offset)
     }
+
+    suspend fun fetchFileChunk(target: FileDownloadTarget, fileId: String, offset: Long): DesktopFileChunk? {
+        val allowed = when (target) {
+            is FileDownloadTarget.Session -> visible && currentSession() == target.id
+            is FileDownloadTarget.Bot -> botReadable()
+        }
+        return if (allowed) connection?.fetchFileChunk(target, fileId, offset) else null
+    }
+
+    suspend fun loadSessionImage(sessionId: String, target: SessionImageTarget): String? =
+        if (visible && currentSession() == sessionId) connection?.loadSessionImage(sessionId, target) else null
 
     fun listPreviews(sessionId: String) {
         if (visible && currentSession() == sessionId) connection?.listPreviews(sessionId)

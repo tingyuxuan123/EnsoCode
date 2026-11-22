@@ -7,6 +7,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
 }));
 
+import { memoryStartupBlock } from './memory/startupRegistry';
 import {
   awaitMemoryDistill,
   closeMemoryDb,
@@ -159,5 +160,64 @@ describe('memoryHost wiki integration', () => {
       results: { slug: string }[];
     };
     expect(search.results.map((r) => r.slug)).toContain('practices/testing');
+  });
+
+  it('hands the session a status page and catalog size at spawn, and stays silent for empty projects', async () => {
+    const root = tmpDir();
+    setMemoryRootForTest(root);
+    syncMemoryFromSettings({ memoryDistillEnabled: false, memoryLanguage: 'zh' });
+
+    // 还没写过笔记的项目也要拿到空库引导，否则新项目永远学不会用记忆
+    memoryDatabase();
+    expect(memoryStartupBlock({ projectId: 'p-empty' }) ?? '').toContain('no notes yet');
+
+    await invokeMemory(
+      'upsert',
+      {
+        title: '项目状态',
+        type: 'status',
+        description: '当前进展与下一步',
+        content: 'As of 2026-06-01\n\n- 正在做：记忆注入\n- 下一步：代码闭环',
+      },
+      { projectId: 'p-startup' }
+    );
+    await invokeMemory(
+      'upsert',
+      {
+        note: 'practices/testing',
+        title: '测试命令规范',
+        type: 'practices',
+        description: '提交前运行 pnpm test',
+        content: '始终使用 pnpm test 运行完整测试集。',
+      },
+      { projectId: 'p-startup' }
+    );
+
+    const block = memoryStartupBlock({ projectId: 'p-startup' }) ?? '';
+    expect(block).toContain('Current status');
+    expect(block).toContain('正在做：记忆注入');
+    expect(block).toContain('memory_index');
+
+    // 关掉 memory 内置工具后不再注入，避免提示词让模型调用不存在的工具
+    syncMemoryFromSettings({
+      memoryDistillEnabled: false,
+      memoryLanguage: 'zh',
+      disabledBuiltinTools: ['memory'],
+    });
+    expect(memoryStartupBlock({ projectId: 'p-startup' })).toBeNull();
+  });
+
+  it('still injects guidance when the project vault exists but holds no notes', () => {
+    const root = tmpDir();
+    setMemoryRootForTest(root);
+    syncMemoryFromSettings({ memoryDistillEnabled: true, memoryLanguage: 'zh' });
+
+    memoryDatabase();
+    const space = memoryBindings().resolveSpace('proj:p-empty-vault');
+    fs.mkdirSync(space.rootPath, { recursive: true });
+
+    const block = memoryStartupBlock({ projectId: 'p-empty-vault' }) ?? '';
+    expect(block).toContain('no notes yet');
+    expect(block).toContain('memory_upsert');
   });
 });

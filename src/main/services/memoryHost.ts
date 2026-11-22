@@ -13,7 +13,8 @@ import type Database from 'better-sqlite3';
 import { app } from 'electron';
 import { holdLocalChat, syncLocalChatFromSettings } from './llama/chat';
 import { VaultBindingStore } from './memory/bindings';
-import { executeMemoryOp } from './memory/bridge';
+import { executeMemoryOp, readStatusPage } from './memory/bridge';
+import { readLatestCommitIso } from './memory/codeFreshness';
 import {
   type CompileJobRow,
   type CompilePayload,
@@ -27,9 +28,12 @@ import {
   sliceTranscript,
   type TranscriptMessage,
 } from './memory/compiler';
-import { deleteSpaceIndex, openIndexDb, syncSpaceIndex } from './memory/indexDb';
+import { deleteSpaceIndex, listIndexedNotes, openIndexDb, syncSpaceIndex } from './memory/indexDb';
 import { approvePendingWrite } from './memory/pending';
 import type { MemorySpaceContext } from './memory/space';
+import { buildMemoryStartupBlock } from './memory/startupPrompt';
+import { setMemoryStartupProvider } from './memory/startupRegistry';
+import { projectSpaceId } from './memory/types';
 import { ensureVaultScaffold } from './memory/vault';
 import { VaultWatcherManager } from './memory/watcher';
 
@@ -96,6 +100,66 @@ export function memoryDatabase(): Database.Database {
   }
   return db;
 }
+
+let memoryToolsEnabled = true;
+/** 刚确认过“这个空间是空的”的缓存，避免每次 spawn 都全量扫一次 vault */
+const emptySpaces = new Map<string, number>();
+
+/**
+ * 会话启动时的记忆摘要：条数 + 状态页正文。
+ * 只读索引；索引为空时才做一次扫描，避免每次 spawn 都全量扫 vault。
+ * 任何异常都返回 null —— 记忆注入失败不该拦住会话启动。
+ */
+setMemoryStartupProvider((request) => {
+  const database = db;
+  if (!memoryToolsEnabled || !database || !bindings || !request.projectId) return null;
+  const spaceId = projectSpaceId(request.projectId);
+  const space = bindings.resolveSpace(spaceId);
+
+  const countNotes = () =>
+    listIndexedNotes(database, {
+      spaceId,
+      includeArchived: false,
+      includeRaw: false,
+      limit: 1,
+      offset: 0,
+    }).total;
+
+  let total = countNotes();
+  // 新项目还没有 vault 目录时也要能走到注入(空库引导)，否则模型永远学不会用记忆。
+  if (total === 0 && fs.existsSync(space.rootPath)) {
+    if ((emptySpaces.get(spaceId) ?? 0) <= Date.now()) {
+      try {
+        syncSpaceIndex(database, spaceId, space.rootPath);
+        total = countNotes();
+      } catch {
+        // 扫描失败就用当前索引结果，不阻塞会话启动
+      }
+      if (total === 0) emptySpaces.set(spaceId, Date.now() + 60_000);
+    }
+  }
+
+  const status = readStatusPage(database, bindings, [spaceId]);
+  // 空库也注入：否则新项目的模型永远不知道这里有记忆库，也就永远不会写下第一条
+
+  const newestNote = database
+    .prepare('SELECT MAX(updated_at) AS at FROM notes WHERE space_id = ? AND is_archived = 0')
+    .get(spaceId) as { at: string | null } | undefined;
+
+  return buildMemoryStartupBlock({
+    noteCount: total,
+    memoryUpdatedAt: newestNote?.at ?? null,
+    codeUpdatedAt: readLatestCommitIso(request.cwd ?? ''),
+    status: status
+      ? {
+          slug: status.slug,
+          title: status.title,
+          body: status.content,
+          updatedAt: status.updatedAt,
+        }
+      : null,
+  });
+});
 
 export function syncAllKnownSpaces(opts: { force?: boolean } = {}): void {
   const database = db;
@@ -198,9 +262,11 @@ export function configureMemoryDistill(next: Partial<MemoryCompileConfig>): void
 export function syncMemoryFromSettings(state: Record<string, unknown>): void {
   const memoryModelIdleMinutes = normalizeMemoryModelIdleMinutes(state.memoryModelIdleMinutes);
   syncLocalChatFromSettings({ ...state, memoryModelIdleMinutes });
-  const enabled =
-    state.memoryDistillEnabled !== false &&
-    !effectiveDisabledBuiltinTools(state.disabledBuiltinTools).includes('memory');
+  const toolsDisabled = effectiveDisabledBuiltinTools(state.disabledBuiltinTools).includes(
+    'memory'
+  );
+  memoryToolsEnabled = !toolsDisabled;
+  const enabled = state.memoryDistillEnabled !== false && !toolsDisabled;
   const language = resolveMemoryLanguage(state.memoryLanguage);
   configureMemoryDistill({ enabled, language });
 }

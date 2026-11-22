@@ -34,11 +34,12 @@ private data class PreviewItem(val key: String, val name: String, val size: Long
 internal fun MemberArtifactSheet(target: DesktopBotArtifactTarget, bots: DesktopBotsState, onDismiss: () -> Unit,
     onList: ((DesktopBotArtifactTarget) -> Unit)?, onImage: ((DesktopBotArtifactTarget, String?, String?) -> Unit)?,
     onListFiles: ((DesktopBotArtifactTarget) -> Unit)?, onReadFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)?,
-    initialSelection: String? = null) {
+    initialSelection: String? = null, fetchArtifact: ArtifactFetcher? = null, downloads: ArtifactDownloads? = null) {
     val c = Enso.colors
     val listing = bots.artifacts?.takeIf { it.target == target }
     val image = bots.artifactImage?.takeIf { it.target == target }
     val files = bots.files?.takeIf { bots.filesTarget == target }
+    val fileTarget = FileDownloadTarget.Bot(target)
     var selected by remember(target, initialSelection) { mutableStateOf(initialSelection) }
     LaunchedEffect(target, bots.artifacts?.phase) {
         if (listing == null && bots.artifacts?.phase != SessionCommandPhase.Waiting) onList?.invoke(target)
@@ -71,7 +72,9 @@ internal fun MemberArtifactSheet(target: DesktopBotArtifactTarget, bots: Desktop
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Glyph(EnsoIcon.Files, Modifier.size(20.dp), c.ink2)
                         Label(entry.name, 15, 20, Modifier.weight(1f), weight = FontWeight.Medium, maxLines = 1)
-                        entry.size?.let { Label(fileSizeLabel(it), 12, 16, color = c.dim) }
+                        val fileId = files?.entries?.firstOrNull { it.rel == entry.rel }?.id
+                        val status = downloadEntryTransfer(downloads, fileTarget, fileId).cardLabel()
+                        (status ?: entry.size?.let(::fileSizeLabel))?.let { Label(it, 12, 16, color = c.dim) }
                         Glyph(EnsoIcon.Right, Modifier.size(16.dp), c.faint)
                     }
                 }
@@ -81,15 +84,18 @@ internal fun MemberArtifactSheet(target: DesktopBotArtifactTarget, bots: Desktop
     }
     val file = files?.entries?.firstOrNull { it.rel == opened.rel }
     val chunk = files?.chunk?.takeIf { it.fileId == file?.id }
+    val directAction = if (!opened.image && fetchArtifact != null) artifactActionOnTap(opened.name) else null
+    val hasTransfer = downloadEntryTransfer(downloads, fileTarget, file?.id).isAvailableOrDownloading()
+    var autoAction by remember(target, opened.key) { mutableStateOf(directAction) }
     val selectedImage = image?.takeIf { it.mediaId == opened.mediaId && it.rel == opened.rel }
     LaunchedEffect(opened.key, bots.artifactImage?.phase) {
         if (opened.image && opened.error == null && selectedImage == null && bots.artifactImage?.phase != SessionCommandPhase.Waiting) {
             onImage?.invoke(target, opened.mediaId, opened.rel)
         }
     }
-    LaunchedEffect(opened.key) { if (!opened.image && files == null) onListFiles?.invoke(target) }
+    LaunchedEffect(opened.key) { if ((!opened.image || opened.rel != null && fetchArtifact != null) && files == null) onListFiles?.invoke(target) }
     LaunchedEffect(opened.key, file?.id, files?.reading) {
-        if (!opened.image && file != null && chunk == null && !files.reading && files.readError == null) {
+        if (!opened.image && directAction == null && !hasTransfer && file != null && chunk == null && !files.reading && files.readError == null) {
             onReadFile?.invoke(target, file.id, 0)
         }
     }
@@ -105,6 +111,10 @@ internal fun MemberArtifactSheet(target: DesktopBotArtifactTarget, bots: Desktop
                         color = if (current) c.pillInk else c.ink2, weight = FontWeight.Medium, maxLines = 1)
                 }
             }
+            if (file != null && fetchArtifact != null && downloads != null) {
+                ArtifactFileActions(file, fileTarget, downloads, { id, offset -> fetchArtifact(fileTarget, id, offset) },
+                    !files.reading && !files.listing, autoAction) { autoAction = null }
+            }
             LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp).fillMaxWidth()
                 .background(c.card, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)),
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp)) {
@@ -113,6 +123,7 @@ internal fun MemberArtifactSheet(target: DesktopBotArtifactTarget, bots: Desktop
                     else when {
                         files?.listError != null || files?.readError != null -> SheetHint("未能读取桌面文件。")
                         files != null && !files.listing && file == null -> SheetHint("此文件已不可读取。")
+                        (directAction != null || hasTransfer) && file != null -> Unit
                         chunk == null -> SheetHint("正在读取桌面文件…")
                         else -> {
                             val preview = remember(chunk) { previewFile(opened.name, chunk.data) }
@@ -120,7 +131,8 @@ internal fun MemberArtifactSheet(target: DesktopBotArtifactTarget, bots: Desktop
                                 FileKind.Empty -> SheetHint("文件是空的。")
                                 FileKind.Text -> if (opened.name.endsWith(".md", true) && chunk.offset == 0L) SessionMarkdown(preview.text.orEmpty(), compact = true)
                                     else Label(preview.text.orEmpty(), 14, 21, color = c.ink2)
-                                else -> SheetHint("此格式暂不能在手机预览，请在电脑端打开。")
+                                else -> SheetHint(if (fetchArtifact != null) "此格式不能直接预览，可保存完整文件。"
+                                    else "此格式暂不能在手机预览，请在电脑端打开。")
                             }
                             val next = chunk.offset + chunk.data.size
                             if (next < chunk.size && chunk.data.isNotEmpty()) Label(if (files.reading) "正在加载…" else "加载下一段", 14, 20,

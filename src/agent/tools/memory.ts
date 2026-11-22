@@ -157,7 +157,9 @@ export function createMemoryTools(
     async execute(_toolCallId, params, signal) {
       const normalized = normalize(params ?? {});
       for (const key of requiredKeys) requireText(normalized, key);
-      return textResult(await invoker.invoke(op, normalized, signal));
+      const value = await invoker.invoke(op, normalized, signal);
+      // Text may acquire system reminders; keep the upsert receipt machine-readable for settlement.
+      return { ...textResult(value), details: op === 'upsert' ? value : undefined };
     },
   });
 
@@ -165,8 +167,9 @@ export function createMemoryTools(
     define(
       'memory_index',
       'Memory index',
-      'List the compact wiki catalog (slug, title, type, one-line description, status) and vault schema rules. ' +
-        'Call this before writing new knowledge so you can follow vault categories and update existing pages instead of duplicating them. ' +
+      'List the compact wiki catalog (slug, title, type, one-line description, status), vault schema rules, and the project status page body when one exists. ' +
+        'Use this before writing when you need the vault categories or a catalog lookup for an existing page. ' +
+        'Also call it when resuming work, to read what is in progress, the next step, and the blockers. ' +
         'Do not call it on every trivial question; use it when reviewing prior knowledge or preparing to capture durable conclusions.',
       schema(
         {
@@ -205,8 +208,8 @@ export function createMemoryTools(
       'Memory search',
       'Search the Obsidian-compatible Markdown wiki by keywords, category, or status. ' +
         'Returns matching note summaries, trust status (draft/verified), and 1-hop [[wikilink]] neighbors. ' +
-        'Use concise keywords (1–4 distinctive terms), not full sentences. Only search when prior decisions, ' +
-        'incidents, domain rules, or standing preferences would change what you do.' +
+        'Use concise keywords (1–4 distinctive terms), not full sentences. Look up existing pages for explicit requests to remember durable information, ' +
+        'or search when prior decisions, incidents, domain rules, or standing preferences would change what you do.' +
         languageHint(opts.language),
       schema(
         {
@@ -273,12 +276,18 @@ export function createMemoryTools(
       'memory_upsert',
       'Memory upsert',
       'Create or update an Evergreen Markdown wiki page (OKF v0.2 frontmatter + [[wikilink]]). ' +
-        'Capture ONLY at high-value moments (zero writes is normal): ' +
+        'If the user explicitly asks you to remember a lasting convention, decision, or preference, look it up and call memory_upsert in the same turn before replying; do not just promise to remember. ' +
+        'Always use memory_search or memory_index in the intended vault first, using the same scope for lookup and write. ' +
+        'Read a matching page with memory_read and update it in place, using its relPath as note. Create a page only if no suitable page exists. ' +
+        'Prefer mode=replace or mode=section for one heading; preserve unrelated content without leaving a dated update, changelog, or superseded statements. ' +
+        'For a remember request, report it as saved only when written=true and give the returned title, spaceId, and relPath. ' +
+        'For pending_review, say it is queued for approval, not yet saved, and name the proposed page. If the write fails or is unavailable, say it was not saved and why. ' +
+        'Otherwise capture ONLY at high-value moments (zero writes is normal): ' +
         '(1) root-cause incident wrap-up, (2) lasting mental-model breakthrough, ' +
         '(3) second occurrence of a recurring issue/reminder, or (4) confirmed user decision / standing preference. ' +
-        'Always search or inspect memory_index first — UPDATE an existing page (mode=section or append or replace) over creating duplicates. ' +
+        'Use type="status" for the one page that holds what is in progress, the next step and the blockers; overwrite it whole. ' +
         'Interlink related pages with [[slug]] syntax, include a 1-line description, and cite sources when known. ' +
-        'Do NOT overwrite raw/ files or write routine fixes, temporary plans, or unaccepted suggestions.' +
+        'Do not save routine Q&A, routine fixes, temporary plans, or unaccepted suggestions. Never overwrite raw/ files.' +
         languageHint(opts.language),
       schema(
         {

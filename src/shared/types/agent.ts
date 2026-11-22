@@ -1252,6 +1252,13 @@ export type AgentCommand =
       rolePrompt?: string;
       /** 仅普通 parent：替换 pi 默认提示词开头的角色段落，其余运行时内容保留 */
       systemPrompt?: string;
+      /** 追加进系统提示词的附加段落（Main 注入的记忆摘要等）；按内容去重，不覆盖 persona */
+      systemPromptAppend?: string;
+      /** 本机普通项目：答复后在收口前用同一会话处理 Wiki 记忆；由 Main 按项目和开关判定 */
+      memoryTurnReview?: boolean;
+      /** 预设的强调 / 拒答重试提示词；worker 暂未消费，登记只为不让整条启动命令被判非法 */
+      systemPromptBoost?: string;
+      refusalRetryPrompt?: string;
       botMode?: boolean;
       /** Bot 群聊成员会话：挂 group_tasks / group_history 工具（私聊 / 委派子会话不挂） */
       botGroupTasks?: boolean;
@@ -1373,7 +1380,13 @@ export type AgentCommand =
   /** 设置里禁用的内置预设：worker 执行与工具说明都按它过滤 */
   | { type: 'set-disabled-workflow-presets'; ids: string[] }
   /** Main-owned effective parent loadout; worker applies only when SDK is idle. */
-  | { type: 'set-builtin-tools'; identity: SessionIdentity; disabledTools: string[] }
+  | {
+      type: 'set-builtin-tools';
+      identity: SessionIdentity;
+      disabledTools: string[];
+      /** 缺省表示不改；显式 false 让进行中的会话立即停止收口整理 */
+      memoryTurnReview?: boolean;
+    }
   /** Main-only deletion tombstone, never a model tool or generic renderer IPC. */
   | { type: 'forget-notifications'; conversationId: string }
   | { type: 'set-web-search-config'; chain: WebSearchChainEntry[]; configured?: boolean }
@@ -1713,6 +1726,23 @@ export function parseShellFailure(value: unknown): ShellFailure | undefined {
   };
 }
 
+export interface ProjectedMemoryUpdate {
+  /** 记忆空间（proj:/bot:/chat:/global），点击卡片时用它拼 note id */
+  spaceId: string;
+  relPath: string;
+  title?: string;
+  status: 'created' | 'updated';
+  /** 本次正文改动的裁剪补丁（`-旧` / `+新` / 空格上下文） */
+  diff?: ProjectedMemoryDiff;
+}
+
+export interface ProjectedMemoryDiff {
+  patch: string;
+  added: number;
+  removed: number;
+  truncated?: true;
+}
+
 export interface ProjectedMessage {
   pluginArtifacts?: PluginArtifactInfo[];
   pluginSource?: PluginMessageSource;
@@ -1752,6 +1782,8 @@ export interface ProjectedMessage {
   editDiff?: { oldText: string; newText: string };
   /** apply_patch toolResult 中已确实落盘的物理文件操作 */
   fileChanges?: ProjectedFileChange[];
+  /** 本轮收尾时写入/更新的 Wiki 笔记（折叠卡片用；正文仍在 Vault） */
+  memoryUpdates?: ProjectedMemoryUpdate[];
   /** Whitelisted managed review audit metadata, also restored from JSONL. */
   approvalReview?: ApprovalReviewRecord;
   /** apply_patch 完整终态清单，不依赖普通 content 截断预算 */
@@ -2031,6 +2063,8 @@ export type AgentWorkerEvent =
       requestBudgetStop?: true;
       /** 预算停止后补报告那一轮出错：错误随结果交回，不丢已有输出 */
       requestBudgetError?: string;
+      /** 本轮被用户中止：turnId 仍是发起时的 Run id，Main 据此结算为 cancelled 而非成功 */
+      aborted?: true;
     }
   | {
       type: 'turn-failed';
@@ -2616,6 +2650,36 @@ const isMcpScopeChallenge = (value: unknown): value is McpScopeChallenge =>
 const isSequence = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) >= 0;
 
+const PROJECTED_MEMORY_UPDATE_LIMIT = 12;
+
+function parseMemoryDiff(value: unknown): ProjectedMemoryDiff | null {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['patch', 'added', 'removed', 'truncated']))
+    return null;
+  if (typeof value.patch !== 'string' || value.patch.length > 4000) return null;
+  if (!isSequence(value.added) || !isSequence(value.removed)) return null;
+  if (value.truncated !== undefined && typeof value.truncated !== 'boolean') return null;
+  return value as unknown as ProjectedMemoryDiff;
+}
+
+export function parseProjectedMemoryUpdates(value: unknown): ProjectedMemoryUpdate[] | null {
+  if (!Array.isArray(value) || value.length > PROJECTED_MEMORY_UPDATE_LIMIT) return null;
+  for (const item of value) {
+    if (
+      !isRecord(item) ||
+      !hasOnlyKeys(item, ['spaceId', 'relPath', 'title', 'status', 'diff']) ||
+      (item.diff !== undefined && !parseMemoryDiff(item.diff)) ||
+      !isNonEmptyString(item.spaceId) ||
+      item.spaceId.length > 128 ||
+      !isNonEmptyString(item.relPath) ||
+      item.relPath.length > 512 ||
+      (item.title !== undefined && (!isNonEmptyString(item.title) || item.title.length > 200)) ||
+      (item.status !== 'created' && item.status !== 'updated')
+    )
+      return null;
+  }
+  return value as ProjectedMemoryUpdate[];
+}
+
 function parseProjectedFileChanges(value: unknown): ProjectedFileChange[] | null {
   if (!Array.isArray(value) || value.length > PROJECTED_FILE_CHANGE_LIMIT) return null;
   for (const item of value) {
@@ -2770,6 +2834,11 @@ function hasValidProjectedMetadata(value: Record<string, unknown>): boolean {
   const fileChanges =
     value.fileChanges === undefined ? undefined : parseProjectedFileChanges(value.fileChanges);
   if (fileChanges === null) return false;
+  const memoryUpdates =
+    value.memoryUpdates === undefined
+      ? undefined
+      : parseProjectedMemoryUpdates(value.memoryUpdates);
+  if (memoryUpdates === null) return false;
   if (value.applyPatchOutcome === undefined) return true;
   const outcome = parseProjectedApplyPatchOutcome(value.applyPatchOutcome);
   return (
@@ -3766,6 +3835,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'remote',
           'rolePrompt',
           'systemPrompt',
+          'systemPromptAppend',
+          'memoryTurnReview',
+          'systemPromptBoost',
+          'refusalRetryPrompt',
           'botMode',
           'botGroupTasks',
           'botRoutines',
@@ -3834,6 +3907,10 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
             value.approvalReviewerClassifier === undefined)) ||
         (value.rolePrompt !== undefined && !isNonEmptyString(value.rolePrompt)) ||
         (value.systemPrompt !== undefined && !isNonEmptyString(value.systemPrompt)) ||
+        (value.systemPromptAppend !== undefined && !isNonEmptyString(value.systemPromptAppend)) ||
+        (value.memoryTurnReview !== undefined && typeof value.memoryTurnReview !== 'boolean') ||
+        (value.systemPromptBoost !== undefined && !isNonEmptyString(value.systemPromptBoost)) ||
+        (value.refusalRetryPrompt !== undefined && !isNonEmptyString(value.refusalRetryPrompt)) ||
         (value.botMode !== undefined && typeof value.botMode !== 'boolean') ||
         (value.botGroupTasks !== undefined && typeof value.botGroupTasks !== 'boolean') ||
         (value.botRoutines !== undefined && typeof value.botRoutines !== 'boolean') ||
@@ -4136,8 +4213,9 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         ? (value as unknown as AgentCommand)
         : null;
     case 'set-builtin-tools':
-      return hasExactKeys(value, ['type', 'identity', 'disabledTools']) &&
+      return hasOnlyKeys(value, ['type', 'identity', 'disabledTools', 'memoryTurnReview']) &&
         parseSessionIdentity(value.identity) &&
+        (value.memoryTurnReview === undefined || typeof value.memoryTurnReview === 'boolean') &&
         Array.isArray(value.disabledTools) &&
         value.disabledTools.length <= 64 &&
         value.disabledTools.every(
@@ -4803,7 +4881,8 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         (value.digest === undefined || parseTurnDigest(value.digest)) &&
         (value.requestBudgetStop === undefined || value.requestBudgetStop === true) &&
         (value.requestBudgetError === undefined ||
-          (value.requestBudgetStop === true && isNonEmptyString(value.requestBudgetError)))
+          (value.requestBudgetStop === true && isNonEmptyString(value.requestBudgetError))) &&
+        (value.aborted === undefined || value.aborted === true)
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'turn-failed':

@@ -1,3 +1,4 @@
+import { STATUS_NOTE_REL_PATH, STATUS_NOTE_TYPE } from '@shared/memory/constants';
 import { makeNoteId } from '@shared/memory/markdown';
 import {
   parseMemoryArchiveRequest,
@@ -43,6 +44,44 @@ function defaultReadScope(ctx: MemorySpaceContext) {
   return ctx.chatId ? 'chat' : ctx.botId ? 'bot' : ctx.projectId ? 'project' : 'global';
 }
 
+/**
+ * `memory_index` 顺带返回状态页正文：agent 恢复一个项目时先看“现在进行到哪”，
+ * 不必再用一次 memory_read。优先读固定路径，其次接受外部 Obsidian 里已有的 status 页。
+ */
+export function readStatusPage(
+  db: Database.Database,
+  bindings: VaultBindingStore,
+  spaceIds: readonly string[]
+): { spaceId: string; slug: string; title: string; content: string; updatedAt: string } | null {
+  for (const spaceId of spaceIds) {
+    const space = bindings.resolveSpace(spaceId);
+    const canonical = getNoteDetail(db, spaceId, STATUS_NOTE_REL_PATH, space.rootPath);
+    const detail =
+      canonical ??
+      (() => {
+        const listed = listIndexedNotes(db, {
+          spaceId,
+          type: STATUS_NOTE_TYPE,
+          includeArchived: false,
+          includeRaw: false,
+          limit: 1,
+          offset: 0,
+        }).items[0];
+        return listed ? getNoteDetail(db, spaceId, listed.relPath, space.rootPath) : null;
+      })();
+    if (detail) {
+      return {
+        spaceId,
+        slug: detail.slug,
+        title: detail.title,
+        content: detail.body,
+        updatedAt: detail.updatedAt,
+      };
+    }
+  }
+  return null;
+}
+
 function ensureAndSyncSpaces(
   db: Database.Database,
   bindings: VaultBindingStore,
@@ -70,11 +109,12 @@ export async function executeMemoryOp(
     const req = parseMemoryIndexRequest(params ?? {});
     if (!req) throw new MemoryValidationError('invalid_request', 'invalid memory_index params');
     const spaceIds = resolveSpaceIds(req.spaceId ?? defaultReadScope(ctx), ctx);
-    if (spaceIds.length === 0) return { schema: '', notes: [], spaces: [] };
+    if (spaceIds.length === 0) return { schema: '', status: null, notes: [], spaces: [] };
     ensureAndSyncSpaces(db, ctx.bindings, spaceIds, ctx.language);
 
     const primary = ctx.bindings.resolveSpace(spaceIds[0]);
     const schema = readSchemaFile(primary.rootPath, primary.preset, ctx.language ?? 'zh');
+    const status = readStatusPage(db, ctx.bindings, spaceIds);
     const notes: {
       spaceId: string;
       slug: string;
@@ -112,7 +152,7 @@ export async function executeMemoryOp(
         });
       }
     }
-    return { spaces: spaceIds, schema, notes };
+    return { spaces: spaceIds, schema, status, notes };
   }
 
   if (op === 'search') {
@@ -289,6 +329,7 @@ export async function executeMemoryOp(
       title: res.title,
       type: res.type,
       noteStatus: res.status,
+      ...(res.diff ? { diff: res.diff } : {}),
       ...(sanitized.redacted ? { redacted: true } : {}),
     };
   }

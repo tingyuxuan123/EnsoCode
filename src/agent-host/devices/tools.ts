@@ -45,7 +45,7 @@ export const DEVICE_TOOLS: DeviceToolSpec[] = [
     name: 'device_open',
     title: 'Open a mobile device',
     description:
-      'Opens a device for this session and shows it beside the conversation; a shut-down simulator or emulator boots first. Asks the user the first time.',
+      'Opens a device for this session and shows it beside the conversation; a shut-down simulator or emulator boots first. Outside Full access, asks if no device permission exists.',
     parameters: object({ deviceId: DEVICE_ID }, ['deviceId']),
     readOnly: false,
   },

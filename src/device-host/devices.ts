@@ -94,6 +94,7 @@ export class DeviceManager {
   private readonly booted = new Map<DeviceId, DeviceId>();
   /** Devices this host is booting, which a listing from before the boot must not forget. */
   private readonly booting = new Set<DeviceId>();
+  private readonly emulatorBoots = new Map<DeviceId, AbortController>();
   /** Who uses each device a turn uses, by its id. */
   private readonly controls: SurfaceControls;
   private readonly turns = new Map<DeviceId, DeviceTurn>();
@@ -228,9 +229,13 @@ export class DeviceManager {
     if (holder && holder !== sessionId) {
       throw new DeviceError('busy', 'Another session is using this device', { sessionId: holder });
     }
+    if (this.emulatorBoots.has(id)) throw new DeviceError('busy', 'The emulator is still starting');
     this.checkRoom(id, sessionId);
     this.leases.set(id, sessionId);
     this.saveLeases();
+    if (found.kind === 'emulator' && found.state === 'shutdown') {
+      return this.openEmulator(found, sessionId, !!holder);
+    }
     const tools = await this.loadTools();
     const env = await this.deps.env();
     if (found.kind === 'simulator' && found.state !== 'booted' && tools.xcrun) {
@@ -249,35 +254,63 @@ export class DeviceManager {
       } finally {
         this.booting.delete(id);
       }
-    } else if (found.kind === 'emulator' && found.state === 'shutdown') {
-      if (!tools.emulator || !tools.adb)
-        throw new DeviceError('unavailable', 'The Android emulator is missing');
-      this.setState(id, 'booting');
-      const serial = await bootEmulator(tools.emulator, tools.adb, found.target, env).catch(
-        (error: unknown) => {
-          this.setState(id, 'shutdown');
-          throw new DeviceError('unavailable', `The emulator did not start: ${String(error)}`);
-        }
-      );
-      // The running emulator is listed by its serial; the lease moves with it.
-      this.leases.delete(id);
-      const avd = id;
-      id = `android:${serial}`;
-      this.leases.set(id, sessionId);
-      this.booted.set(id, avd);
-      this.saveLeases();
-      this.booting.add(id);
-      try {
-        await this.list();
-      } finally {
-        this.booting.delete(id);
-      }
     } else {
       await this.list();
     }
     const info = this.info(id);
     if (!info) throw new DeviceError('not_found', 'The device went away');
     return info;
+  }
+
+  private async openEmulator(
+    found: FoundDevice,
+    sessionId: string,
+    alreadyHeld: boolean
+  ): Promise<DeviceInfo> {
+    const avd = found.id;
+    const boot = new AbortController();
+    this.emulatorBoots.set(avd, boot);
+    this.setState(avd, 'booting');
+    let serial: string;
+    try {
+      const tools = await this.loadTools();
+      if (!tools.emulator || !tools.adb) throw new Error('The Android emulator is missing');
+      const env = await this.deps.env();
+      boot.signal.throwIfAborted();
+      serial = await bootEmulator(tools.emulator, tools.adb, found.target, env, boot.signal);
+      boot.signal.throwIfAborted();
+    } catch (error) {
+      if (!alreadyHeld && this.leases.get(avd) === sessionId) {
+        this.leases.delete(avd);
+        this.saveLeases();
+      }
+      this.setState(avd, 'shutdown');
+      const message = error instanceof Error ? error.message : String(error);
+      throw new DeviceError('unavailable', `The emulator did not start: ${message}`);
+    } finally {
+      this.emulatorBoots.delete(avd);
+    }
+    // The running emulator is listed by its serial; the lease moves with it.
+    const id = `android:${serial}`;
+    this.leases.delete(avd);
+    this.leases.set(id, sessionId);
+    this.booted.set(id, avd);
+    this.saveLeases();
+    this.booting.add(id);
+    try {
+      await this.list();
+      // A discovery in progress may have collected adb rows before the emulator connected.
+      if (!this.info(id)) await this.list();
+      const info = this.info(id);
+      if (!info) throw new DeviceError('not_found', 'The device went away');
+      return info;
+    } finally {
+      this.booting.delete(id);
+    }
+  }
+
+  private cancelEmulatorBoot(id: DeviceId): void {
+    this.emulatorBoots.get(id)?.abort(new Error('The session cancelled the emulator startup'));
   }
 
   /**
@@ -289,6 +322,8 @@ export class DeviceManager {
     const holder = this.leases.get(id);
     if (!holder) return this.open(id, sessionId);
     if (holder !== sessionId) {
+      if (this.emulatorBoots.has(id))
+        throw new DeviceError('busy', 'The emulator is still starting');
       this.checkRoom(id, sessionId);
       this.controls.forget(id);
       this.dropWatchers(id);
@@ -320,6 +355,7 @@ export class DeviceManager {
     await this.restored;
     if (this.leases.get(id) !== sessionId) return;
     this.leases.delete(id);
+    this.cancelEmulatorBoot(id);
     const booted = this.booted.delete(id);
     this.saveLeases();
     this.controls.forget(id);
@@ -340,7 +376,9 @@ export class DeviceManager {
     if (found && found.kind === 'physical') {
       throw new DeviceError('unavailable', 'Only simulators and emulators shut down from here');
     }
-    const down = found?.kind === 'emulator' ? (this.booted.get(id) ?? null) : id;
+    this.cancelEmulatorBoot(id);
+    const down =
+      found?.kind === 'emulator' && !id.startsWith('avd:') ? (this.booted.get(id) ?? null) : id;
     this.booted.delete(id);
     this.controls.forget(id);
     this.dropWatchers(id);
@@ -365,6 +403,7 @@ export class DeviceManager {
     for (const [id, sessionId] of [...this.leases]) {
       if (!ended.has(sessionId)) continue;
       this.leases.delete(id);
+      this.cancelEmulatorBoot(id);
       this.controls.forget(id);
       this.dropWatchers(id);
       if (this.booted.delete(id)) booted.push(id);
@@ -652,6 +691,7 @@ export class DeviceManager {
 
   async dispose(): Promise<void> {
     this.setPolling(false);
+    for (const id of this.emulatorBoots.keys()) this.cancelEmulatorBoot(id);
     await Promise.all([...this.live.keys()].map((id) => this.stopLive(id)));
     await this.saving;
   }
@@ -680,6 +720,10 @@ export class DeviceManager {
     ]);
     const next = new Map<DeviceId, FoundDevice>();
     for (const device of lists.flat()) next.set(device.id, device);
+    for (const [id, boot] of this.emulatorBoots) {
+      const device = next.get(id);
+      if (device && !boot.signal.aborted) next.set(id, { ...device, state: 'booting' });
+    }
     this.found = next;
     // One that went down is no longer ours: started again by the user, it stays on. An emulator
     // is down once its AVD is listed and its serial is not; adb lists an offline one as both.

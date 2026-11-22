@@ -15,6 +15,10 @@ vi.mock('./modelDirectory', () => ({
   onModelDirectoryChanged: () => () => {},
 }));
 vi.mock('./oauthProviders', () => ({ readStoredOauthCredentialKeys: async () => new Set() }));
+const startup = vi.hoisted(() => ({
+  memoryStartupBlock: vi.fn<(req: { projectId?: string | null }) => string | null>(() => null),
+}));
+vi.mock('./memory/startupRegistry', () => ({ memoryStartupBlock: startup.memoryStartupBlock }));
 // 桌面控制只在 macOS/Windows 可用；固定为可用，避免 Linux CI 自动追加 computer 限制
 vi.mock('./computer/support', () => ({ isComputerPlatformSupported: () => true }));
 class Worker extends EventEmitter {
@@ -47,6 +51,7 @@ import {
   configuredAgentTypes,
   expectedAgentTypeToolIds,
   forgetParentToolProfile,
+  getSessionApprovalMode,
   isBrowserSessionToolEnabled,
   pushBuiltinTools,
   pushCompactRoute,
@@ -56,6 +61,7 @@ import {
   sendPluginInterceptResultToSession,
   sendPluginToolProgressToSession,
   setDesignCanvasCwds,
+  setSessionApprovalMode,
   spawnSession,
   startAgentWorker,
   stopAgentWorker,
@@ -117,6 +123,83 @@ it('memoryLanguage 缺省或非法时回落简体中文，显式合法值原样�
   }
 });
 
+it('只在真实本机项目上开启当轮 Wiki 收口，并随开关热更新', () => {
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  try {
+    settings.state.disabledBuiltinTools = [];
+    settings.state.memoryDistillEnabled = true;
+    expect(spawnSession(identity, request, new Set(), undefined, 'p1').ok).toBe(true);
+    expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+      memoryTurnReview: true,
+    });
+    pushBuiltinTools();
+    expect(worker.posted.findLast((c) => c.type === 'set-builtin-tools')).toMatchObject({
+      memoryTurnReview: true,
+    });
+    settings.state.memoryDistillEnabled = false;
+    pushBuiltinTools();
+    expect(worker.posted.findLast((c) => c.type === 'set-builtin-tools')).toMatchObject({
+      memoryTurnReview: false,
+    });
+    settings.state.memoryDistillEnabled = true;
+    pushBuiltinTools();
+    expect(worker.posted.findLast((c) => c.type === 'set-builtin-tools')).toMatchObject({
+      memoryTurnReview: true,
+    });
+    // 关掉 memory 内置工具后不再收口
+    settings.state.disabledBuiltinTools = ['memory'];
+    pushBuiltinTools();
+    expect(worker.posted.findLast((c) => c.type === 'set-builtin-tools')).toMatchObject({
+      memoryTurnReview: false,
+    });
+    settings.state.disabledBuiltinTools = [];
+    // 远程项目交给原有的编译通道，不挂当轮整理
+    const remote = { ...identity, sessionId: 'remote-parent' };
+    expect(
+      spawnSession(
+        remote,
+        request,
+        new Set(),
+        {
+          host: 'h',
+          timeoutSeconds: 1,
+        } as never,
+        'p1'
+      ).ok
+    ).toBe(true);
+    expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).not.toHaveProperty(
+      'memoryTurnReview'
+    );
+  } finally {
+    stopAgentWorker();
+  }
+});
+
+it('会话启动时把记忆摘要追加进系统提示词，没有记忆时不留下空段', () => {
+  startAgentWorker();
+  const worker = workers.at(-1)!;
+  worker.emit('spawn');
+  try {
+    startup.memoryStartupBlock.mockReturnValueOnce('## Memory\n\nSTATUS BODY');
+    expect(spawnSession(identity, request, new Set(), undefined, 'p1').ok).toBe(true);
+    expect(startup.memoryStartupBlock).toHaveBeenLastCalledWith({ projectId: 'p1', cwd: '/tmp' });
+    expect(worker.posted.findLast((c) => c.type === 'spawn-parent')).toMatchObject({
+      systemPromptAppend: expect.stringContaining('STATUS BODY'),
+    });
+
+    startup.memoryStartupBlock.mockReturnValueOnce(null);
+    expect(spawnSession(identity, request, new Set(), undefined, 'p1').ok).toBe(true);
+    const bare = worker.posted.findLast((c) => c.type === 'spawn-parent');
+    expect(bare && 'systemPromptAppend' in bare ? bare.systemPromptAppend : '').not.toContain(
+      'STATUS BODY'
+    );
+  } finally {
+    stopAgentWorker();
+  }
+});
+
 beforeEach(() => {
   setNativePluginResources(undefined);
   setNativePluginRuntimeSource(null);
@@ -137,6 +220,28 @@ beforeEach(() => {
       },
     ],
   };
+});
+
+it('主进程读到下发给当前会话代次的审批档，旧代切换不能放行新代', () => {
+  startAgentWorker();
+  workers.at(-1)!.emit('spawn');
+  const next = { ...identity, generation: '22222222-2222-4222-8222-222222222222' };
+  try {
+    expect(spawnSession(identity, { ...request, approvalMode: 'supervised' }, new Set()).ok).toBe(
+      true
+    );
+    expect(getSessionApprovalMode(identity)).toBe('supervised');
+    expect(setSessionApprovalMode(identity, 'full').ok).toBe(true);
+    expect(getSessionApprovalMode(identity)).toBe('full');
+
+    expect(spawnSession(next, { ...request, approvalMode: 'auto-edits' }, new Set()).ok).toBe(true);
+    setSessionApprovalMode(identity, 'full');
+    expect(getSessionApprovalMode(identity)).toBeUndefined();
+    expect(getSessionApprovalMode(next)).toBe('auto-edits');
+  } finally {
+    stopAgentWorker();
+  }
+  expect(getSessionApprovalMode(next)).toBeUndefined();
 });
 
 const pluginRuntime = () => {
@@ -499,7 +604,9 @@ it('pushes effective hot changes per parent generation, updates browser admissio
   expect(expectedAgentTypeToolIds('all', { parentSessionId: identity.sessionId })).toEqual(proof);
   pushBuiltinTools();
   const updates = () => worker.posted.filter((command) => command.type === 'set-builtin-tools');
-  expect(updates()).toEqual([{ type: 'set-builtin-tools', identity, disabledTools: ['plan'] }]);
+  expect(updates()).toEqual([
+    { type: 'set-builtin-tools', identity, disabledTools: ['plan'], memoryTurnReview: true },
+  ]);
   expect(isBrowserSessionToolEnabled(identity)).toBe(true);
   expect(expectedAgentTypeToolIds('all', { parentSessionId: identity.sessionId })).toEqual(proof);
   pushBuiltinTools();

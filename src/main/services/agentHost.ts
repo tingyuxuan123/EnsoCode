@@ -131,6 +131,7 @@ import { resolveGlobalInstruction } from './instructionStore';
 import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
 import { getMcpOAuthStore } from './mcpOAuthStore';
 import { getMcpToolCatalog } from './mcpToolCatalog';
+import { memoryStartupBlock } from './memory/startupRegistry';
 import { getModelDirectorySnapshot, onModelDirectoryChanged } from './modelDirectory';
 import { nativePluginResources } from './nativePluginResources';
 import { OAUTH_POOL_EXHAUSTED } from './oauthAccountPool';
@@ -306,9 +307,14 @@ type BrowserCancellationPhase = 'abort' | 'release' | 'resume';
 let browserCancellationListener:
   | ((identity?: SessionIdentity, phase?: BrowserCancellationPhase) => void)
   | null = null;
-const browserSessionTools = new Map<
+const parentSessionToolPolicies = new Map<
   string,
-  { generation: string; enabled: boolean; designEnabled: boolean }
+  {
+    generation: string;
+    browserEnabled: boolean;
+    designEnabled: boolean;
+    approvalMode: ApprovalMode;
+  }
 >();
 let designSettingsListener: (() => void) | undefined;
 export function setDesignSettingsListener(listener: () => void): void {
@@ -327,13 +333,18 @@ function pushDesignCanvasCwds(): void {
 }
 
 export function isBrowserSessionToolEnabled(identity: SessionIdentity): boolean {
-  const policy = browserSessionTools.get(identity.sessionId);
-  return policy?.generation === identity.generation && policy.enabled === true;
+  const policy = parentSessionToolPolicies.get(identity.sessionId);
+  return policy?.generation === identity.generation && policy.browserEnabled === true;
 }
 
 export function isDesignSessionToolEnabled(identity: SessionIdentity): boolean {
-  const policy = browserSessionTools.get(identity.sessionId);
+  const policy = parentSessionToolPolicies.get(identity.sessionId);
   return policy?.generation === identity.generation && policy.designEnabled === true;
+}
+
+export function getSessionApprovalMode(identity: SessionIdentity): ApprovalMode | undefined {
+  const policy = parentSessionToolPolicies.get(identity.sessionId);
+  return policy?.generation === identity.generation ? policy.approvalMode : undefined;
 }
 
 export function isImageGenerationSessionEnabled(identity: SessionIdentity): boolean {
@@ -464,7 +475,7 @@ export function startAgentWorker(): void {
       workerExited = true;
     }
     browserCancellationListener?.();
-    browserSessionTools.clear();
+    parentSessionToolPolicies.clear();
     builtinToolScopes.clear();
     parentToolProfiles.clear();
     parentPluginScopes.clear();
@@ -485,7 +496,7 @@ export function startAgentWorker(): void {
 
 export function stopAgentWorker(): void {
   browserCancellationListener?.();
-  browserSessionTools.clear();
+  parentSessionToolPolicies.clear();
   builtinToolScopes.clear();
   parentToolProfiles.clear();
   parentPluginScopes.clear();
@@ -610,16 +621,21 @@ export function sendAgentCommand(command: AgentCommand): { ok: boolean; error?: 
     browserCancellationListener?.(command.identity, 'resume');
   }
   if (command.type === 'spawn-parent' && !builtinToolScopes.has(command.identity)) {
-    browserSessionTools.set(command.identity.sessionId, {
+    parentSessionToolPolicies.set(command.identity.sessionId, {
       generation: command.identity.generation,
-      enabled: !command.disabledTools?.includes('browser'),
+      browserEnabled: !command.disabledTools?.includes('browser'),
       designEnabled: !command.disabledTools?.includes('design'),
+      // Match the worker spawn default and use the final mode after preset restrictions.
+      approvalMode: command.approvalMode ?? 'full',
     });
-  } else if (command.type === 'set-builtin-tools') {
-    const policy = browserSessionTools.get(command.identity.sessionId);
+  } else if (command.type === 'set-builtin-tools' || command.type === 'set-approval-mode') {
+    const policy = parentSessionToolPolicies.get(command.identity.sessionId);
     if (policy?.generation === command.identity.generation) {
-      policy.enabled = !command.disabledTools.includes('browser');
-      policy.designEnabled = !command.disabledTools.includes('design');
+      if (command.type === 'set-approval-mode') policy.approvalMode = command.mode;
+      else {
+        policy.browserEnabled = !command.disabledTools.includes('browser');
+        policy.designEnabled = !command.disabledTools.includes('design');
+      }
     }
   }
   const action = agentCommandDispatch({
@@ -828,7 +844,7 @@ export function forgetParentToolProfile(sessionId: string): void {
   parentToolProfiles.delete(sessionId);
   parentPluginScopes.delete(sessionId);
   builtinToolScopes.forget(sessionId);
-  browserSessionTools.delete(sessionId);
+  parentSessionToolPolicies.delete(sessionId);
 }
 
 export function expectedAgentTypeToolIds(
@@ -922,7 +938,7 @@ export function resolveAgentTypeSpawnConfig(
     disabledBuiltinTools: projectDisabledBuiltinTools(state?.projects, context?.projectId),
   });
   const parentPolicy = context?.parentSessionId
-    ? browserSessionTools.get(context.parentSessionId)
+    ? parentSessionToolPolicies.get(context.parentSessionId)
     : undefined;
   // Child readiness verifies every registered definition, not just those currently visible.
   const designerWithTools =
@@ -1059,6 +1075,8 @@ export function spawnSession(
     return { ok: false, error: '自定义系统提示词正文读取失败，请重新保存或恢复默认。' };
   }
   const promptKit = mergePresetPromptKit(ownKit, pluginPreset);
+  // Bot 会话与远程会话各有自己的记忆通道，这里只给本机项目会话追加。
+  const memoryBlock = !bot && !remote ? memoryStartupBlock({ projectId, cwd: request.cwd }) : null;
   const instruction = bot
     ? bot.instruction
     : pluginPresetInstruction(pluginPreset?.instruction, () =>
@@ -1201,7 +1219,13 @@ export function spawnSession(
     ...(remote ? { remote } : {}),
     ...(options?.rolePrompt ? { rolePrompt: options.rolePrompt } : {}),
     ...(promptKit.systemPrompt ? { systemPrompt: promptKit.systemPrompt } : {}),
-    ...(promptKit.systemPromptAppend ? { systemPromptAppend: promptKit.systemPromptAppend } : {}),
+    ...(promptKit.systemPromptAppend || memoryBlock
+      ? {
+          systemPromptAppend: [promptKit.systemPromptAppend, memoryBlock]
+            .filter(Boolean)
+            .join('\n\n'),
+        }
+      : {}),
     ...(promptKit.systemPromptBoost ? { systemPromptBoost: promptKit.systemPromptBoost } : {}),
     ...(promptKit.refusalRetryPrompt ? { refusalRetryPrompt: promptKit.refusalRetryPrompt } : {}),
     ...(options?.bot ? { botMode: true } : {}),
@@ -1210,10 +1234,20 @@ export function spawnSession(
     ...(options?.bot?.delegationTask ? { botDelegationTask: true } : {}),
     ...(options?.bot?.writeLock ? { botWriteLock: options.bot.writeLock } : {}),
     ...(options?.bot || state?.protectedActionsInCode === true ? { protectedActions: true } : {}),
+    ...(!remote && !bot && projectId && state?.memoryDistillEnabled !== false
+      ? { memoryTurnReview: true }
+      : {}),
   });
   if (
     sent.ok &&
-    builtinToolScopes.remember(identity, projectId, extraDisabledTools, presetApplied.disabledTools)
+    builtinToolScopes.remember(
+      identity,
+      projectId,
+      extraDisabledTools,
+      presetApplied.disabledTools,
+      // 只有本机普通项目在收口前整理；远程、Bot、隐藏工作区走各自通道。
+      !remote && !bot && Boolean(projectId)
+    )
   ) {
     parentPluginScopes.set(identity.sessionId, {
       native: !remote && !bot,
@@ -2482,11 +2516,22 @@ export function pushDisabledWorkflowPresets(): void {
 export function pushBuiltinTools(): void {
   designSettingsListener?.();
   if (!worker || !workerReady) return;
-  for (const change of builtinToolScopes.changes(
-    designToolSettings(readSettingsState()),
-    isComputerPlatformSupported()
-  )) {
-    sendAgentCommand({ type: 'set-builtin-tools', ...change });
+  const state = designToolSettings(readSettingsState());
+  const computerSupported = isComputerPlatformSupported();
+  // 收口开关与工具禁用表分开判变化：只翻自动整理开关时 disabledTools 没变，不能因此漏下发。
+  const reviewed = new Set<string>();
+  for (const update of builtinToolScopes.memoryTurnReviewUpdates(state, computerSupported)) {
+    reviewed.add(update.identity.sessionId);
+    sendAgentCommand({
+      type: 'set-builtin-tools',
+      identity: update.identity,
+      disabledTools: update.disabledTools,
+      memoryTurnReview: update.memoryTurnReview,
+    });
+  }
+  for (const change of builtinToolScopes.changes(state, computerSupported)) {
+    if (!reviewed.has(change.identity.sessionId))
+      sendAgentCommand({ type: 'set-builtin-tools', ...change });
   }
 }
 

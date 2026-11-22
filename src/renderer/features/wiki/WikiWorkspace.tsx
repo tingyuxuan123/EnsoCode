@@ -6,17 +6,7 @@ import type {
   VaultSpaceDto,
 } from '@shared/memory/dto';
 import { resolveWikiLinkTarget } from '@shared/memory/markdown';
-import {
-  Archive,
-  Check,
-  Code2,
-  Columns2,
-  ExternalLink,
-  Eye,
-  RotateCcw,
-  Save,
-  Trash2,
-} from 'lucide-react';
+import { Archive, Code2, Columns2, ExternalLink, Eye, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import {
@@ -437,22 +427,6 @@ export function WikiWorkspace({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [hasUnsavedChanges, saveCurrent]);
 
-  const handleVerifyToggle = async () => {
-    if (!detail) return;
-    const nextStatus: NoteStatus = detail.status === 'verified' ? 'draft' : 'verified';
-    setBusy(true);
-    try {
-      const res = await window.electronAPI.memory.update(detail.id, { status: nextStatus });
-      if (res.ok && res.note) {
-        setDetail(res.note);
-        setEditor((curr) => (curr ? { ...curr, status: res.note!.status } : curr));
-        await loadSpacesAndNotes(activeSpaceId, query);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const handleArchiveToggle = async () => {
     if (!detail) return;
     setBusy(true);
@@ -683,15 +657,6 @@ export function WikiWorkspace({
 
               {selection?.kind === 'note' && detail && !detail.isRaw && (
                 <>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => void handleVerifyToggle()}
-                  >
-                    <Check className="mr-1 size-3" />
-                    {detail.status === 'verified' ? t('Verified') : t('Mark verified')}
-                  </Button>
                   <Button
                     size="xs"
                     variant="ghost"

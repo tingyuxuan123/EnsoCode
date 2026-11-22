@@ -1,8 +1,8 @@
 import type { VaultPreset } from './constants';
 
 export const PRESET_TYPES: Record<VaultPreset, readonly string[]> = {
-  engineering: ['systems', 'domains', 'incidents', 'practices', 'workflows', 'decisions'],
-  personal: ['preferences', 'decisions', 'projects', 'people', 'notes'],
+  engineering: ['systems', 'domains', 'incidents', 'practices', 'workflows', 'decisions', 'status'],
+  personal: ['preferences', 'decisions', 'projects', 'people', 'notes', 'status'],
   minimal: ['notes'],
 };
 
@@ -33,6 +33,12 @@ export function buildPresetSchemaMarkdown(preset: VaultPreset, language: string 
 - \`practices\`：可复用工程最佳实践、编码与测试规范
 - \`workflows\`：常用操作流程、发版与排查 Runbook
 - \`decisions\`：重要架构/技术选型决策及放弃的备选方案
+- \`status\`：当前进展、下一步与卡点的单页视图，不是知识页
+
+## 状态页（每空间唯一）
+- 固定放在 \`wiki/status.md\`，\`type: status\`；一个空间只有这一篇描述“现在”。
+- 只写仍然活跃的工作、下一步和卡点，每条带日期与来源；完成的事项移出状态页，结论写进对应主题页。
+- 整篇覆盖写，首行保留 \`As of YYYY-MM-DD\`；正文预算 60 行。
 
 ## 沉淀时机与原则
 仅在以下高价值时机主动沉淀，常规小修不写入：
@@ -42,6 +48,10 @@ export function buildPresetSchemaMarkdown(preset: VaultPreset, language: string 
 4. **决策落地**：用户明确拍板的架构、风格、约束或取舍。
 
 **写入纪律**：先查 \`index.md\` / 搜索已有页面，**更新优先于新建**；每篇聚焦单一主题，通过 \`[[slug]]\` 互相链接，写明证据来源（\`sources\`）。
+
+**就地重写**：页面只描述当前成立的事实。更新同一主题时改写原文并删掉被取代的陈述，不要留 \`Update (日期)\`、变更记录或"以前是 X、现在是 Y"；一个事实只写在一处，其余页面用 \`[[slug]]\` 引用。
+
+**写结论，不写路径**：只写已经确立的结论，不记录被排除的候选、放弃的假设和尝试顺序（用户明确要求保留时才写）。
 `
       : `# Vault Schema (Software Engineering)
 
@@ -61,6 +71,12 @@ This vault follows **Open Knowledge Format (OKF v0.2)** and the **LLM Wiki** pat
 - \`practices\`: Reusable engineering conventions and testing rules
 - \`workflows\`: Runbooks, release and debugging procedures
 - \`decisions\`: Committed design choices and rejected alternatives
+- \`status\`: One-screen view of current work, next step, and blockers (not a knowledge page)
+
+## Status Page (one per vault)
+- Always lives at \`wiki/status.md\` with \`type: status\`; one page per vault describes "now".
+- Keep only active work, the next step and blockers, each with its date and source. Finished work leaves the page; its conclusions go to the owning topic page.
+- Overwrite the whole body and keep an \`As of YYYY-MM-DD\` first line. Budget: 60 lines.
 
 ## Capture Triggers & Discipline
 Capture only when durable value emerges (zero writes is normal):
@@ -70,6 +86,10 @@ Capture only when durable value emerges (zero writes is normal):
 4. Confirmed user decision or standing constraint
 
 Always search \`index.md\` first; **update existing pages over creating duplicates**, interlink with \`[[wikilink]]\`, and cite \`sources\`.
+
+**Rewrite in place**: a page states what is true now. When updating a topic, rewrite the affected text and delete the statements it supersedes. No \`Update (date)\` lines, changelog sections, or "previously X, now Y"; one fact lives in one page, other pages reference it with \`[[slug]]\`.
+
+**Write conclusions, not the path**: record what was established, not the eliminated candidates, abandoned hypotheses, or order of attempts (unless the user asked to keep them).
 `;
   }
 
@@ -85,6 +105,7 @@ Always search \`index.md\` first; **update existing pages over creating duplicat
 - \`projects\`：正在推进的重点主题背景与目标
 - \`people\`：协作者、团队分工与语境
 - \`notes\`：其他可复用的通用知识卡片
+- \`status\`：正在进行的事与卡点的单页视图（\`wiki/status.md\`，整篇覆盖写，≤60 行，首行 \`As of YYYY-MM-DD\`）
 
 ## 写入原则
 - 先搜后写，更新既有主题页优先于新建碎片笔记。
@@ -101,6 +122,7 @@ This vault follows **Open Knowledge Format (OKF v0.2)** and works natively in Ob
 - \`projects\`: Active multi-session goals and context
 - \`people\`: Collaborators, roles, and shared context
 - \`notes\`: General evergreen notes
+- \`status\`: One-screen view of what is in progress (\`wiki/status.md\`, overwrite, <=60 lines, first line \`As of YYYY-MM-DD\`)
 
 ## Principles
 - Search first; update existing evergreen pages rather than creating fragments.

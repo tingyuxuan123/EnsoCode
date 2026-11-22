@@ -25,4 +25,15 @@ describe('vault presets', () => {
     expect(minimal).toContain('notes');
     expect(PRESET_TYPES.engineering.length).toBeGreaterThan(3);
   });
+
+  it('gives every real vault one status page type with a one-screen budget', () => {
+    expect(PRESET_TYPES.engineering).toContain('status');
+    expect(PRESET_TYPES.personal).toContain('status');
+    expect(PRESET_TYPES.minimal).not.toContain('status');
+
+    const engZh = buildPresetSchemaMarkdown('engineering', 'zh');
+    expect(engZh).toContain('status');
+    expect(engZh).toContain('60 行');
+    expect(buildPresetSchemaMarkdown('engineering', 'en')).toContain('60 lines');
+  });
 });

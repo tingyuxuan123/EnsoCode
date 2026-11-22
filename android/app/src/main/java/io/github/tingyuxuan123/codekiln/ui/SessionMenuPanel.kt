@@ -1,5 +1,7 @@
 package io.github.tingyuxuan123.codekiln.ui
 
+import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -84,6 +86,9 @@ internal class SessionPanels {
     var rewind by mutableStateOf<RewindChoice?>(null)
     var stopTarget by mutableStateOf<Pair<SessionTaskKind, String>?>(null)
     var openedFile by mutableStateOf<String?>(null)
+    var fileAction by mutableStateOf<ArtifactAction?>(null)
+    var fileLink by mutableStateOf<SessionLink.File?>(null)
+    var previewLink by mutableStateOf<SessionLink.Preview?>(null)
     var previewText by mutableStateOf("")
 }
 
@@ -168,6 +173,8 @@ internal fun SessionMenuPanels(
     onOpenPreview: ((String, Int, Int) -> Unit)? = null,
     onPreviewAction: ((DesktopPreviewAction) -> Unit)? = null,
     onPreviewInput: ((DesktopPreviewInput) -> Unit)? = null,
+    fetchFile: ArtifactChunkReader? = null,
+    downloads: ArtifactDownloads? = null,
 ) {
     val c = Enso.colors
     val goal = state?.goal
@@ -207,6 +214,9 @@ internal fun SessionMenuPanels(
         panels.surface = null; panels.clearing = null; panels.compactText = null; panels.rewind = null
         panels.stopTarget = null
         panels.openedFile = null
+        panels.fileAction = null
+        panels.fileLink = null
+        panels.previewLink = null
         panels.previewText = ""
     }
     fun edit() {
@@ -277,6 +287,8 @@ internal fun SessionMenuPanels(
                 MenuRow(EnsoIcon.Files, "产物与文件",
                     state?.files?.entries?.size?.let { "$it 个文件" } ?: "浏览当前会话的产出", onListFiles != null) {
                     panels.openedFile = null
+                    panels.fileAction = null
+                    panels.fileLink = null
                     panels.surface = SessionSurface.Files
                 }
                 MenuRow(EnsoIcon.Globe, "网页预览",
@@ -473,7 +485,8 @@ internal fun SessionMenuPanels(
                     SheetHint("停止只发给桌面一次；手机不会自行杀死任务，也不会重发。")
                 }
             }
-            SessionSurface.Files -> SessionFilesContent(panels, state?.files, onListFiles, onReadFile)
+            SessionSurface.Files -> SessionFilesContent(panels, state?.files, onListFiles, onReadFile, fetchFile,
+                downloads, state?.timeline?.sessionId?.let(FileDownloadTarget::Session))
             SessionSurface.Preview -> SessionPreviewContent(panels, state?.preview,
                 onListPreviews, onOpenPreview, onPreviewAction, onPreviewInput)
         }

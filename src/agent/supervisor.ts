@@ -89,6 +89,7 @@ import type {
   MessageTiming,
   ModelRef,
   NodeStatus,
+  ProjectedMemoryUpdate,
   ProjectedMessage,
   ResolvedAgentTypeSpawnConfig,
   SessionSnapshot,
@@ -207,6 +208,12 @@ import { readHarnessRuleFiles, resolveHarnessSkillRoots } from './harnessAssets'
 import { type ContextMessage, sanitizeContextMessages } from './imageContext';
 import { McpManager } from './mcp';
 import { partitionMcpNamespaces } from './mcpNames';
+import {
+  isReviewHiddenMessage,
+  memoryTurnReviewExtension,
+  parseMemoryUpsertReceipt,
+  reviewHiddenKeys,
+} from './memoryTurnReview';
 import { createMessageCoworkerTool } from './messageCoworker';
 import { createMessageMainTool } from './messageMain';
 import { type MicrocompactOptions, microcompactExtension } from './microcompact';
@@ -415,6 +422,14 @@ interface ManagedSession {
   proofToolIds: string[];
   safeJournal?: EnsoSafeJournal;
   currentTurnId?: string;
+  /**
+   * 用户中止时还没收口的 Run id。收口要把它带回 Main 结算这条 Run，否则那条 Run 永远停在
+   * running，父会话的 wait 会一直等下去。
+   *
+   * 不复用 currentTurnId：它同时是「本轮进行中」的判据（闲置回收、工作区锁都看它），
+   * 而 abort 之后 agent_settled 可能永远不来（工具不响应信号），残留会让会话再也回收不掉。
+   */
+  pendingAbortRunId?: string;
   /** 上一轮结束时 messages.length：本轮消息从这里开始，供 agent_end 切本轮摘要 */
   turnStartIndex: number;
   promptedRequestIds: Set<string>;
@@ -423,6 +438,14 @@ interface ManagedSession {
   design?: DesignInvoker;
   imageGeneration?: ImageGenerationInvoker;
   memory?: MemoryInvoker;
+  memoryTurnReview?: boolean;
+  /** Preserve the actual answer for titles and notifications, not the wiki receipt after it. */
+  memoryReviewDigest?: ReturnType<typeof buildTurnDigest>;
+  memoryReviewError?: string;
+  /** 收尾轮进行中：它的问答与工具卡都属于内部记账，不进时间线 */
+  memoryReviewPhase?: boolean;
+  /** 本轮收尾实际写入的 Wiki 页，挂在真答案上给折叠卡片用 */
+  memoryUpdates?: ProjectedMemoryUpdate[];
   delegation?: MemoryInvoker<DelegationOp>;
   agentControl?: AgentControlInvoker;
   /** 已因不支持 adaptive 降级过的模型（虚拟模型下每个成员各降一次） */
@@ -622,6 +645,9 @@ async function createSessionResourceLoader(options: {
   childContract?: boolean;
   /** 仅父会话：工具调用前先说一句下一步打算，供用户在运行中看到进度 */
   progressPreamble?: boolean;
+  memoryTurnReview?: InlineExtension;
+  /** 追加进系统提示词的附加段落（记忆摘要等）；进 system prompt 才不会随压缩丢失 */
+  systemPromptAppend?: string;
   /**
    * 只读/临时会话（插件只读代理等）：不读磁盘 settings、不加载任何磁盘资源。
    * 见 readOnlyResources：否则 `reload()` 会按 settings 里的 packages 去安装依赖。
@@ -733,8 +759,12 @@ async function createSessionResourceLoader(options: {
           ]
         : []),
       options.silentTurnRecovery,
+      ...(options.memoryTurnReview ? [options.memoryTurnReview] : []),
       ...(options.childContract
         ? [appendSystemPromptExtension('subagent-contract', SUBAGENT_CONTRACT_PROMPT)]
+        : []),
+      ...(options.systemPromptAppend
+        ? [appendSystemPromptExtension('spawn-append', options.systemPromptAppend)]
         : []),
       ...(options.progressPreamble ? [progressPreambleExtension] : []),
       // Last input hook: disk/plugin transforms run first and `handled` short-circuits.
@@ -1035,7 +1065,7 @@ export class SessionSupervisor {
   /** Spawn is asynchronous; only the matching generation may consume this update. */
   private readonly pendingBuiltinTools = new Map<
     string,
-    { identity: SessionIdentity; disabled: readonly string[] }
+    { identity: SessionIdentity; disabled: readonly string[]; memoryTurnReview?: boolean }
   >();
   /**
    * Main 推送的统一模型目录。revision 与自定义 provider 语义都没变时不再注册。
@@ -1584,6 +1614,8 @@ export class SessionSupervisor {
     if (command.type === 'set-builtin-tools') {
       const managed = this.sessions.get(command.identity.sessionId);
       if (managed?.applyBuiltinTools && isSameGeneration(managed.identity, command.identity)) {
+        if (command.memoryTurnReview !== undefined)
+          managed.memoryTurnReview = command.memoryTurnReview;
         managed.pendingBuiltinTools = [...command.disabledTools];
         this.flushPendingBuiltinTools(managed);
       } else if (!managed) {
@@ -1592,6 +1624,7 @@ export class SessionSupervisor {
           {
             identity: command.identity,
             disabled: [...command.disabledTools],
+            memoryTurnReview: command.memoryTurnReview,
           }
         );
       }
@@ -1845,7 +1878,9 @@ export class SessionSupervisor {
           command.botWriteLock,
           command.botDelegationTask,
           command.pluginEvents,
-          command.workflowPresetFiles
+          command.workflowPresetFiles,
+          command.systemPromptAppend,
+          command.memoryTurnReview
         );
         return;
       case 'spawn-child':
@@ -2443,6 +2478,9 @@ export class SessionSupervisor {
         managed.imageGeneration?.cancelAll('Image generation aborted');
         managed.memory?.cancelAll('Memory action aborted');
         managed.delegation?.cancelAll('Delegation action aborted');
+        // 记下本轮在 Main 侧的 Run id 再清 currentTurnId：收口要把它带回去才能结算那条 Run，
+        // 但 currentTurnId 是「本轮进行中」的判据，不能为了一笔回执让会话再也回收不掉。
+        if (managed.currentTurnId !== undefined) managed.pendingAbortRunId = managed.currentTurnId;
         managed.currentTurnId = undefined;
         // 用户中止：预算 Run 就此结束，不再补交报告，之后的回合也不再计数
         managed.requestBudget?.disarm();
@@ -2528,7 +2566,9 @@ export class SessionSupervisor {
     botWriteLock?: { label: string; ancestors: string[] },
     botDelegationTask = false,
     pluginEventPlan?: PluginEventPlan,
-    workflowPresetFiles: readonly string[] = []
+    workflowPresetFiles: readonly string[] = [],
+    systemPromptAppend?: string,
+    memoryTurnReview = false
   ): Promise<void> {
     const sessionId = identity.sessionId;
     const sessionEditMode = resolveEditMode(requestedEditMode, hashlineEditEnabled);
@@ -2599,6 +2639,7 @@ export class SessionSupervisor {
     });
     let visibleDesignNames = designToolNames(!disabledTools.includes('design') && !remote, false);
     let refreshDesignTools = () => {};
+    let memoryReviewActive = false;
     let managedRef: ManagedSession | undefined;
     const pluginEventInvoker =
       botMode || remote
@@ -2636,6 +2677,39 @@ export class SessionSupervisor {
         },
       }),
       branchContext: this.branchContextExtension(() => managedRef),
+      ...(!botMode && !remote
+        ? {
+            memoryTurnReview: memoryTurnReviewExtension(
+              () =>
+                !!managedRef?.memoryTurnReview &&
+                !managedRef.extensionUIBlock &&
+                !managedRef.plan?.state().active &&
+                !(
+                  managedRef.pendingBuiltinTools ??
+                  managedRef.builtinDisabledTools ??
+                  disabledTools
+                ).includes('memory'),
+              {
+                start: () => {
+                  memoryReviewActive = true;
+                  if (managedRef) managedRef.memoryReviewPhase = true;
+                  if (managedRef)
+                    managedRef.memoryReviewDigest = buildTurnDigest(
+                      managedRef.messages,
+                      managedRef.turnStartIndex
+                    );
+                },
+                reset: () => {
+                  memoryReviewActive = false;
+                  if (managedRef) managedRef.memoryReviewPhase = false;
+                },
+                fail: (reason) => {
+                  if (managedRef) managedRef.memoryReviewError = reason;
+                },
+              }
+            ),
+          }
+        : {}),
       oauthPoolRecovery: this.oauthPoolRecovery(),
       silentTurnRecovery: silentTurnRecoveryExtension((kind) => {
         if (!managedRef) return;
@@ -2657,6 +2731,7 @@ export class SessionSupervisor {
       exploreFold,
       codemode: codemodeHost.extension,
       persona: systemPrompt,
+      ...(systemPromptAppend ? { systemPromptAppend } : {}),
       progressPreamble: true,
       ...(compactStrategy !== 'standard'
         ? {
@@ -3793,7 +3868,7 @@ export class SessionSupervisor {
     });
     const codemodeTools = codemodeHost.activeToolNames();
     const cursorBridge = isCursorModel(piModel)
-      ? attachCursorBridgeToSession(session, customTools, cwd)
+      ? attachCursorBridgeToSession(session, customTools, cwd, () => !memoryReviewActive)
       : undefined;
     if (!cursorBridge) ensureAssistantUsage(session.messages as unknown[]);
     console.log(
@@ -3892,6 +3967,7 @@ export class SessionSupervisor {
       refreshDesignTools = () =>
         managed.applyBuiltinTools?.(managed.builtinDisabledTools ?? disabledTools);
       const pending = this.pendingBuiltinTools.get(`${sessionId}\0${identity.generation}`);
+      managed.memoryTurnReview = pending?.memoryTurnReview ?? memoryTurnReview;
       for (const [key, entry] of this.pendingBuiltinTools) {
         if (entry.identity.sessionId === sessionId) this.pendingBuiltinTools.delete(key);
       }
@@ -4945,6 +5021,11 @@ export class SessionSupervisor {
         managed.requestStartMs = Date.now();
         return;
       case 'message_start': {
+        if (event.message.role === 'user') {
+          managed.memoryReviewDigest = undefined;
+          managed.memoryReviewError = undefined;
+          managed.memoryUpdates = undefined;
+        }
         const index = managed.messages.length;
         const message = projectMessage(event.message);
         if (message?.role === 'assistant') {
@@ -4994,6 +5075,21 @@ export class SessionSupervisor {
           managed.forkBase.reply = event.message;
         const projected = projectMessage(event.message);
         this.replaceLastMessage(managed, projected);
+        // 主回答里自己写 Wiki 也要出卡片：不能只认收尾轮。
+        if (projected?.role === 'toolResult' && projected.toolName === 'memory_upsert') {
+          const receipt = parseMemoryUpsertReceipt(
+            projected.content.map((part) => (part.type === 'text' ? part.text : '')).join('\n')
+          );
+          if (receipt) {
+            managed.memoryUpdates ??= [];
+            if (
+              !managed.memoryUpdates.some(
+                (item) => item.spaceId === receipt.spaceId && item.relPath === receipt.relPath
+              )
+            )
+              managed.memoryUpdates.push(receipt);
+          }
+        }
         if (projected?.role === 'assistant') {
           const text = projected.content
             .filter(
@@ -5189,6 +5285,10 @@ export class SessionSupervisor {
           return;
         }
         managed.settlePending = false;
+        if (managed.memoryReviewError) {
+          this.failTurn(managed, managed.memoryReviewError);
+          return;
+        }
         // 请求预算到 1.5 倍：这次中止是为了强制交出，不收口、不通知父会话。
         // 补一轮只交报告的请求，仍用原来的 turnId，父会话只看到一次收尾结果。
         if (managed.requestBudget?.phaseNow === 'stopping') {
@@ -5238,8 +5338,12 @@ export class SessionSupervisor {
 
   /** 本轮成功收口。budget：子代理因请求预算被强制停止，带上标记（及补报告的错误）交回已有输出。 */
   private completeTurn(managed: ManagedSession, budget?: { error?: string }): void {
-    const turnId = managed.currentTurnId ?? randomUUID();
+    // 被用户中止的轮次已经清过 currentTurnId，收口要用当时记下的 Run id，Main 才认得出这条 Run
+    const abortedRunId = managed.pendingAbortRunId;
+    managed.pendingAbortRunId = undefined;
+    const turnId = managed.currentTurnId ?? abortedRunId ?? randomUUID();
     managed.currentTurnId = undefined;
+    const aborted = abortedRunId !== undefined;
     // 预算只管一次 Run：收口即清零，之后用户自己发起的回合不计数
     managed.requestBudget?.disarm();
     managed.status = 'idle';
@@ -5248,7 +5352,11 @@ export class SessionSupervisor {
     managed.contextUsage.setPendingSnapshot(undefined);
     this.emitSessionMeta(managed);
     // 本轮摘要随 turn-completed 下发：renderer 冷会话没有正文，只能由 worker 切
-    const digest = buildTurnDigest(managed.messages, managed.turnStartIndex);
+    // 用户中止的轮次不总结：它不是一次有效产出，不该参与滚动标题与重试摘要
+    const digest = aborted
+      ? undefined
+      : (managed.memoryReviewDigest ?? buildTurnDigest(managed.messages, managed.turnStartIndex));
+    managed.memoryReviewDigest = undefined;
     managed.turnStartIndex = managed.messages.length;
     this.workspaceClaims.release(managed.identity.sessionId);
     this.options.emit({
@@ -5257,6 +5365,8 @@ export class SessionSupervisor {
       seq: ++managed.seq,
       turnId,
       ...(digest ? { digest } : {}),
+      // 用户中止：Main 据此把这条 Run 结算成 cancelled，而不是当成功交付
+      ...(aborted ? { aborted: true as const } : {}),
       ...(budget ? { requestBudgetStop: true } : {}),
       ...(budget?.error ? { requestBudgetError: budget.error } : {}),
     });
@@ -5329,6 +5439,8 @@ export class SessionSupervisor {
     deliveryId?: string
   ): void {
     if (!message) return;
+    // 收尾轮的问答与工具结果只服务记忆判定，不能顶掉用户看到的那条回答。
+    if (isReviewHiddenMessage(managed.memoryReviewPhase === true, message)) return;
     const index = managed.messages.length;
     const decorated = this.withTiming(managed, index, message);
     managed.messages.push(decorated);
@@ -5348,6 +5460,8 @@ export class SessionSupervisor {
     streaming = false
   ): void {
     if (!message) return;
+    // 收尾阶段不上屏：此时到达的增量都属于被排除的那条消息。
+    if (managed.memoryReviewPhase) return;
     if (managed.messages.length === 0) {
       this.upsertLocalMessage(managed, message);
       return;
@@ -5405,9 +5519,20 @@ export class SessionSupervisor {
   }
 
   private reconcileMessages(managed: ManagedSession, rawMessages: unknown[]): void {
+    const hidden = reviewHiddenKeys(managed.session.sessionManager.getBranch());
     const projected = rawMessages
       .map(projectMessage)
-      .filter((message): message is ProjectedMessage => message !== null);
+      .filter((message): message is ProjectedMessage => message !== null)
+      .filter((message) => !hidden.has(`${message.role}:${message.timestamp ?? ''}`));
+    // 必须在发 upsert 之前挂上：卡片数据随这条消息一起下发。
+    if (managed.memoryUpdates?.length) {
+      const lastAssistant = projected.findLastIndex((message) => message.role === 'assistant');
+      if (lastAssistant >= 0)
+        projected[lastAssistant] = {
+          ...projected[lastAssistant]!,
+          memoryUpdates: managed.memoryUpdates,
+        };
+    }
     projected.forEach((rawMessage, index) => {
       const known = managed.messages[index];
       const message = this.withTiming(managed, index, rawMessage);
@@ -5681,7 +5806,11 @@ export class SessionSupervisor {
   }
 
   private failTurn(managed: ManagedSession, error: string, undelivered = false): void {
-    const turnId = managed.currentTurnId ?? randomUUID();
+    managed.memoryReviewError = undefined;
+    managed.memoryReviewDigest = undefined;
+    // 中止后的失败收口同样要带上那条 Run id，否则 Main 侧 Run 停在 running
+    const turnId = managed.currentTurnId ?? managed.pendingAbortRunId ?? randomUUID();
+    managed.pendingAbortRunId = undefined;
     managed.currentTurnId = undefined;
     managed.settlePending = false;
     managed.requestBudget?.disarm();

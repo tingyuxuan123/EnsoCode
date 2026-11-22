@@ -19,8 +19,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +47,8 @@ import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
 import kotlinx.coroutines.launch
+
+internal val LocalConversationLink = compositionLocalOf<((SessionLink) -> Boolean)?> { null }
 
 /** Only explicit web addresses may be handed to Android's external URI handler. */
 internal fun sessionWebUrl(raw: String): String? {
@@ -71,13 +75,22 @@ internal fun SessionMarkdown(text: String, compact: Boolean = false) {
     val c = Enso.colors
     val context = LocalContext.current
     val browser = LocalUriHandler.current
-    // No automatic network fetch or deep link: only a user's tap on a validated web URL reaches Android.
+    val desktopLink = rememberUpdatedState(LocalConversationLink.current)
+    // A local link can only select a host-listed item. Never send it to an external Android app.
     val webLinks = remember(browser, context) { object : UriHandler {
         override fun openUri(uri: String) {
-            val url = sessionWebUrl(uri)
-            if (url == null) {
-                Toast.makeText(context, "只能打开 HTTP 或 HTTPS 网页链接", Toast.LENGTH_SHORT).show()
-                return
+            val url = when (val link = sessionLink(uri)) {
+                is SessionLink.Browser -> link.url
+                is SessionLink.Preview, is SessionLink.File -> {
+                    if (desktopLink.value?.invoke(link) != true) {
+                        Toast.makeText(context, "此处无法打开桌面文件或本地网页", Toast.LENGTH_SHORT).show()
+                    }
+                    return
+                }
+                null -> {
+                    Toast.makeText(context, "无法打开此链接", Toast.LENGTH_SHORT).show()
+                    return
+                }
             }
             try { browser.openUri(url) }
             catch (_: IllegalArgumentException) {
@@ -89,15 +102,16 @@ internal fun SessionMarkdown(text: String, compact: Boolean = false) {
     } }
     CompositionLocalProvider(LocalUriHandler provides webLinks) {
         SelectionContainer {
-            val prose = if (compact) ensoText(15, 24) else ensoText(16, 25)
+            // Same text-first hierarchy as the PC Markdown, adapted to the narrow reading column.
+            val prose = if (compact) ensoText(14, 23) else ensoText(15, 25)
             Markdown(content = text, modifier = Modifier.fillMaxWidth(), components = SessionMarkdownComponents,
                 padding = markdownPadding(list = 2.dp, listItemTop = 2.dp, listItemBottom = 2.dp, listIndent = 12.dp),
                 colors = markdownColor(text = c.ink, codeBackground = c.card2),
                 typography = markdownTypography(text = prose, paragraph = prose, ordered = prose, bullet = prose, list = prose,
-                    h1 = ensoText(24, 32, FontWeight.SemiBold), h2 = ensoText(22, 30, FontWeight.SemiBold),
-                    h3 = ensoText(20, 28, FontWeight.SemiBold), h4 = ensoText(18, 26, FontWeight.SemiBold),
-                    h5 = ensoText(17, 24, FontWeight.Medium), h6 = ensoText(16, 24, FontWeight.Medium), quote = prose,
-                    code = ensoText(13, 20, font = Enso.mono), inlineCode = ensoText(14, 20, font = Enso.mono)))
+                    h1 = ensoText(19, 27, FontWeight.SemiBold), h2 = ensoText(18, 26, FontWeight.SemiBold),
+                    h3 = ensoText(16, 24, FontWeight.SemiBold), h4 = ensoText(15, 24, FontWeight.Medium),
+                    h5 = ensoText(15, 24), h6 = ensoText(15, 24), quote = prose,
+                    code = ensoText(13, 20, font = Enso.mono), inlineCode = ensoText(13, 20, font = Enso.mono)))
         }
     }
 }
@@ -108,7 +122,7 @@ private fun SessionCodeBlock(code: String, language: String?, style: TextStyle) 
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(8.dp)
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(shape).background(c.card2)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Label(language?.takeIf { it.isNotBlank() } ?: "代码", 12, 16, Modifier.weight(1f), color = c.dim, maxLines = 1)

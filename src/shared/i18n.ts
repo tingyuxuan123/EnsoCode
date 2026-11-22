@@ -1823,8 +1823,8 @@ export const zhTranslations: Record<string, string> = {
   'Apply a preset template or edit the vault rules directly.':
     '应用预设模板或直接编辑该空间的规则。',
   'Vault health': 'Wiki 健康检查',
-  'Deterministic lint checks for broken [[wikilinks]], orphan notes, stale deadlines, old drafts, missing summaries, and oversized pages.':
-    '确定性检查断链 [[wikilink]]、孤立笔记、过期日期、长期未审草稿、缺少摘要与超长页面。',
+  'Deterministic lint checks for broken [[wikilinks]], orphan notes, stale deadlines, old drafts, missing summaries, oversized pages, append-style revision markers, duplicate titles, and the one-screen status page budget.':
+    '确定性检查断链 [[wikilink]]、孤立笔记、过期日期、长期未审草稿、缺少摘要、超长页面、追加式更新标记、重复标题与状态页单屏预算。',
   'Run health check': '运行体检',
   'Checking…': '检查中…',
   'Checked {{count}} notes — no issues found.': '已检查 {{count}} 篇笔记，未发现问题。',
@@ -1834,12 +1834,15 @@ export const zhTranslations: Record<string, string> = {
   'Old draft': '长期草稿',
   'No summary': '缺少摘要',
   Oversized: '页面过长',
+  'Revision markers': '追加式更新标记',
+  'Duplicate title': '标题重复',
+  'Status too long': '状态页过长',
+  'Status stale': '状态页过期',
+  'Two status pages': '状态页重复',
   'Wiki compiler': 'Wiki 编译',
   'Compile sessions automatically': '自动编译会话到 Wiki',
-  'When a session ends or is reclaimed after being idle for 30 minutes, compile durable lessons into draft wiki notes (always updates existing pages first).':
-    '会话结束或空闲 30 分钟被回收时，自动把值得沉淀的结论整理成草稿 Wiki 笔记（始终优先更新已有页面）。',
-  'Automatic compilation is on, but the local model is not ready. Sessions will queue until you download it.':
-    '已开启自动编译，但本地模型尚未就绪；下载完成前会话会先排队。',
+  'After each reply, this session checks the project wiki before the turn ends: it writes durable conclusions or reports that nothing changed. Follow-ups are reviewed with the latest answer.':
+    '每轮答复完成后，当前会话会在收口前检查本项目 Wiki：写入值得长期保留的结论，或明确报告没有新增；追问按最近一次答复整理。',
   'Language used when creating or compiling wiki notes (code identifiers stay verbatim).':
     '创建或编译 Wiki 笔记时使用的语言（代码标识符保持原样）。',
   'Compiler backend': '编译后端',
@@ -1868,10 +1871,9 @@ export const zhTranslations: Record<string, string> = {
   '{{shown}} of {{total}} notes': '显示 {{shown}} / {{total}} 篇笔记',
   'By status': '按状态',
   'By space': '按空间',
-  'Mark verified': '标记为已验证',
   'Wiki notes': 'Wiki 笔记',
-  'Browse, edit, verify, or open Markdown notes directly in Obsidian.':
-    '浏览、编辑、验证笔记，或直接在 Obsidian 中打开 Markdown 文件。',
+  'Browse, edit, or open Markdown notes directly in Obsidian.':
+    '浏览、编辑笔记，或直接在 Obsidian 中打开 Markdown 文件。',
   'New note': '新建笔记',
   'Search wiki notes': '搜索 Wiki 笔记',
   'All statuses': '全部状态',
@@ -2089,6 +2091,8 @@ export const zhTranslations: Record<string, string> = {
   'Background Agent': '后台 Agent',
   'Current progress': '当前进度',
   '{{count}} files changed': '{{count}} 个文件已修改',
+  '{{count}} wiki notes updated': '{{count}} 条 Wiki 记忆已更新',
+  '{{count}} more': '还有 {{count}} 条',
   '{{count}} more files': '还有 {{count}} 个文件',
   'Clear finished tasks': '清空历史任务',
   'Removes completed and cancelled jobs. Running tasks are kept. Sessions will show as not distilled again, since that flag is derived from job history — re-distilling is deduplicated, so it will not create duplicate memories.':

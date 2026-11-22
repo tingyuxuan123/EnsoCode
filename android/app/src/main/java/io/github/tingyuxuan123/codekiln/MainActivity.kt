@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +61,11 @@ import io.github.tingyuxuan123.codekiln.mirror.CreationPhase
 import io.github.tingyuxuan123.codekiln.mirror.QueueCommand
 import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
 import io.github.tingyuxuan123.codekiln.mirror.SessionImage
+import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
+import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
+import io.github.tingyuxuan123.codekiln.ui.ArtifactFetcher
+import io.github.tingyuxuan123.codekiln.ui.LocalArtifactDownloads
+import io.github.tingyuxuan123.codekiln.ui.rememberArtifactDownloads
 import io.github.tingyuxuan123.codekiln.mirror.SESSION_IMAGE_LIMIT
 import io.github.tingyuxuan123.codekiln.mirror.TaskLaunch
 import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
@@ -120,6 +126,9 @@ class MainActivity : ComponentActivity() {
                 onSessionStopTask = companion::stopTask,
                 onSessionListFiles = companion::listFiles,
                 onSessionReadFile = companion::readFile,
+                fetchArtifact = companion::fetchFileChunk,
+                downloadPairId = state.pairId,
+                loadSessionImage = companion::loadSessionImage,
                 onSessionListPreviews = companion::listPreviews,
                 onSessionOpenPreview = companion::openPreview,
                 onSessionPreviewAction = companion::previewAction,
@@ -278,6 +287,9 @@ internal fun CodeKilnApp(
     onBotArtifactImage: ((DesktopBotArtifactTarget, String?, String?) -> Unit)? = null,
     onBotListFiles: ((DesktopBotArtifactTarget) -> Unit)? = null,
     onBotReadFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)? = null,
+    fetchArtifact: ArtifactFetcher? = null,
+    downloadPairId: String? = null,
+    loadSessionImage: (suspend (String, SessionImageTarget) -> String?)? = null,
 ) {
     var route by rememberSaveable { mutableStateOf(initialRoute) }
     var pairReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
@@ -432,7 +444,8 @@ internal fun CodeKilnApp(
         }
     }
     BackHandler(enabled = creating || route != CodeKilnRoute.NewTask) { if (!creating) back() }
-    EnsoTheme {
+    val downloads = if (fetchArtifact != null) rememberArtifactDownloads(downloadPairId.takeIf { pairState.paired }) else null
+    CompositionLocalProvider(LocalArtifactDownloads provides downloads) { EnsoTheme {
         when (route) {
             CodeKilnRoute.NewTask -> NewTaskScreen(
                 state.copy(draft = draft, project = config.project(live.projects)?.name ?: state.project,
@@ -475,6 +488,7 @@ internal fun CodeKilnApp(
                     onRetryEntry = onBotRetryEntry, onDismissInbox = onBotDismissInbox, onCreateGroup = onBotCreateGroup,
                     onArtifacts = onBotArtifacts, onArtifactImage = onBotArtifactImage,
                     onListBotFiles = onBotListFiles, onReadBotFile = onBotReadFile, onOpenDirect = onBotOpenDirect,
+                    fetchArtifact = fetchArtifact,
                     drafts = drafts, onDraftEdit = onDraftEdit, onDraftPin = onDraftPin,
                     onDraftConfirmed = onDraftConfirmed)
             }
@@ -536,6 +550,11 @@ internal fun CodeKilnApp(
                     onReadFile = onSessionReadFile?.let { action -> { fileId, offset ->
                         subscribedId?.let { action(it, fileId, offset) }
                     } },
+                    fetchFile = fetchArtifact?.let { fetch -> subscribedId?.let { id -> { fileId, offset ->
+                        fetch(FileDownloadTarget.Session(id), fileId, offset)
+                    } } },
+                    onLoadImage = loadSessionImage?.takeIf { live.sessionImages && live.phase == LinkPhase.Online }
+                        ?.let { load -> subscribedId?.let { id -> { target -> load(id, target) } } },
                     onListPreviews = onSessionListPreviews?.let { action -> { subscribedId?.let(action) } },
                     onOpenPreview = onSessionOpenPreview?.let { action -> { entryId, width, height ->
                         subscribedId?.let { action(it, entryId, width, height) }
@@ -577,5 +596,5 @@ internal fun CodeKilnApp(
             confirmButton = { TextButton(onClick = { onDismissCreation(creation?.sessionId); confirmNew = false }) {
                 Text("已检查，解除限制") } },
             dismissButton = { TextButton(onClick = { confirmNew = false }) { Text("取消") } })
-    }
+    } }
 }

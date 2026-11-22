@@ -32,8 +32,10 @@ internal fun MemberConversation(
     onArtifacts: ((DesktopBotArtifactTarget) -> Unit)?,
     onArtifactImage: ((DesktopBotArtifactTarget, String?, String?) -> Unit)?,
     onListBotFiles: ((DesktopBotArtifactTarget) -> Unit)?, onReadBotFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)?,
+    fetchArtifact: ArtifactFetcher? = null,
 ) {
     val c = Enso.colors
+    val downloads = LocalArtifactDownloads.current ?: if (fetchArtifact != null) rememberArtifactDownloads(chat.id) else null
     val group = chat.kind == "group" && !process
     val byId = remember(bots.members) { bots.members.associateBy { it.id } }
     val processBot = if (process) bots.inbox.firstOrNull { it.conversationId == conversationId }?.botId
@@ -123,10 +125,15 @@ internal fun MemberConversation(
                                 val artifacts = bots.artifacts?.takeIf { it.target == target && it.phase == SessionCommandPhase.Observed }
                                 if (artifacts == null) ArtifactEntry { artifactTarget = target }
                                 else if (artifacts.artifacts.isNotEmpty() || artifacts.media.isNotEmpty()) {
-                                    artifacts.artifacts.forEach { file -> ArtifactEntry(file.name, fileSizeLabel(file.size)) {
-                                        artifactSelection = "file-${file.rel}"
-                                        artifactTarget = target
-                                    } }
+                                    artifacts.artifacts.forEach { file ->
+                                        val fileId = bots.files?.takeIf { bots.filesTarget == target }
+                                            ?.entries?.firstOrNull { it.rel == file.rel }?.id
+                                        val status = downloadEntryTransfer(downloads, FileDownloadTarget.Bot(target), fileId).cardLabel()
+                                        ArtifactEntry(file.name, status ?: fileSizeLabel(file.size)) {
+                                            artifactSelection = "file-${file.rel}"
+                                            artifactTarget = target
+                                        }
+                                    }
                                     artifacts.media.forEachIndexed { index, media ->
                                         ArtifactEntry(media.name ?: "图片 ${index + 1}") {
                                             artifactSelection = "media-${media.mediaId ?: index}"
@@ -192,7 +199,7 @@ internal fun MemberConversation(
     }
     artifactTarget?.let { target -> MemberArtifactSheet(target, bots, onDismiss = { artifactTarget = null; artifactSelection = null },
         onList = onArtifacts, onImage = onArtifactImage, onListFiles = onListBotFiles, onReadFile = onReadBotFile,
-        initialSelection = artifactSelection) }
+        initialSelection = artifactSelection, fetchArtifact = fetchArtifact, downloads = downloads) }
     if (reset?.phase == BotNewSessionPhase.NeedsConfirmation && !confirmationDismissed && writable && onConfirmNewSession != null) {
         AlertDialog(onDismissRequest = { confirmationDismissed = true }, title = { Text("开始新对话？") },
             text = { Text("当前工作将停止，接下来的消息会使用新上下文。已有记录会保留。") },
@@ -287,7 +294,7 @@ private fun ConversationText(text: String, ink: androidx.compose.ui.graphics.Col
 }
 
 @Composable
-private fun ArtifactEntry(title: String = "查看本轮产物", detail: String? = null, onClick: () -> Unit) {
+internal fun ArtifactEntry(title: String = "查看本轮产物", detail: String? = null, onClick: () -> Unit) {
     val c = Enso.colors
     Row(Modifier.fillMaxWidth().padding(top = 6.dp).background(c.card, RoundedCornerShape(16.dp))
         .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
@@ -312,6 +319,7 @@ private fun MemberBlock(block: SessionBlock, bubbleInk: androidx.compose.ui.grap
         is SessionBlock.Todos -> SessionTodoCard(block.items)
         is SessionBlock.Compaction -> TimelineDisclosure("上下文已压缩", block.summary, EnsoIcon.Compress)
         is SessionBlock.Images -> TimelineImageStrip(block.images)
+        is SessionBlock.RemoteImage -> Unit // Bot images use the reply's scoped artifact/media IDs.
         SessionBlock.ImagePlaceholder -> Label("图片附件", 13, 18, color = bubbleInk ?: Enso.colors.dim)
         is SessionBlock.Steps -> Unit
     }

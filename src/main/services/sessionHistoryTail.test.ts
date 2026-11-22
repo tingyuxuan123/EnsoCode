@@ -130,3 +130,132 @@ describe('projectParentHistoryTail', () => {
     spy.mockRestore();
   });
 });
+
+describe('review closeout suppression in history', () => {
+  const assistant = (text: string, timestamp: number) => ({
+    type: 'message',
+    message: { role: 'assistant', content: [{ type: 'text', text }], timestamp },
+  });
+  const user = (text: string, timestamp: number) => ({
+    type: 'message',
+    message: { role: 'user', content: [{ type: 'text', text }], timestamp },
+  });
+  const branch = [
+    user('问题', 1),
+    assistant('真实总结', 2),
+    { type: 'custom_message', customType: 'codekiln.project-memory-review', display: false },
+    assistant('我已更新 wiki/x.md', 3),
+    user('下一问', 4),
+    assistant('下一答', 5),
+  ];
+
+  it('drops the bookkeeping answer while keeping the real summary and later turns', () => {
+    const tail = projectParentHistoryTail(branch as never);
+    expect(tail.messages.map((m) => m.content[0])).toEqual([
+      { type: 'text', text: '问题' },
+      { type: 'text', text: '真实总结' },
+      { type: 'text', text: '下一问' },
+      { type: 'text', text: '下一答' },
+    ]);
+    expect(tail.baseIndex).toBe(0);
+  });
+
+  it('cards a wiki write made inside the answering turn, without any closeout marker', () => {
+    const branch = [
+      {
+        type: 'message',
+        message: { role: 'user', content: '记一下：测试环境可自建单', timestamp: 1 },
+      },
+      {
+        type: 'message',
+        message: { role: 'assistant', content: [{ type: 'text', text: '' }], timestamp: 2 },
+      },
+      {
+        type: 'message',
+        message: {
+          role: 'toolResult',
+          toolName: 'memory_upsert',
+          toolCallId: 't',
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'created',
+                written: true,
+                spaceId: 'proj:p',
+                relPath: 'wiki/workflows/a.md',
+                title: '测试环境自建单',
+              }),
+            },
+          ],
+          timestamp: 3,
+        },
+      },
+      {
+        type: 'message',
+        message: { role: 'assistant', content: [{ type: 'text', text: '已记下' }], timestamp: 4 },
+      },
+    ];
+    const tail = projectParentHistoryTail(branch as never);
+    expect(tail.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      memoryUpdates: [
+        {
+          spaceId: 'proj:p',
+          relPath: 'wiki/workflows/a.md',
+          title: '测试环境自建单',
+          status: 'created',
+        },
+      ],
+    });
+  });
+
+  it('keeps absolute page indices aligned after filtering', () => {
+    const page = projectParentHistoryPage(branch as never, 3);
+    // 下标必须在过滤后的对话上对齐：第 3 条之前是「问题 / 真实总结 / 下一问」
+    expect(page.baseIndex + page.messages.length).toBe(3);
+    expect(page.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+  });
+});
+
+describe('review memory updates on reload', () => {
+  it('attaches landed wiki writes to the real answer instead of the hidden closeout', () => {
+    const receipt = (relPath: string, status: string) => ({
+      type: 'message',
+      message: {
+        role: 'toolResult',
+        toolName: 'memory_upsert',
+        toolCallId: 't',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ status, written: true, relPath, spaceId: 'proj:p' }),
+          },
+        ],
+        timestamp: 3,
+      },
+    });
+    const branch = [
+      { type: 'message', message: { role: 'user', content: '问', timestamp: 1 } },
+      {
+        type: 'message',
+        message: { role: 'assistant', content: [{ type: 'text', text: '真答案' }], timestamp: 2 },
+      },
+      { type: 'custom_message', customType: 'codekiln.project-memory-review', display: false },
+      receipt('wiki/decisions/a.md', 'updated'),
+      receipt('wiki/decisions/pending.md', 'pending_review'),
+      {
+        type: 'message',
+        message: { role: 'assistant', content: [{ type: 'text', text: '已写入' }], timestamp: 4 },
+      },
+    ];
+    const tail = projectParentHistoryTail(branch as never);
+    expect(tail.messages.map((m) => m.content[0])).toEqual([
+      { type: 'text', text: '问' },
+      { type: 'text', text: '真答案' },
+    ]);
+    expect(tail.messages.at(-1)?.memoryUpdates).toEqual([
+      { spaceId: 'proj:p', relPath: 'wiki/decisions/a.md', status: 'updated' },
+    ]);
+  });
+});

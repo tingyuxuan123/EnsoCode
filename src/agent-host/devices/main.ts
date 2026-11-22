@@ -20,6 +20,7 @@ import {
   type DeviceToolCallRequest,
   deviceRequestOf,
 } from '@shared/device-tools';
+import type { ApprovalMode } from '@shared/types/agent';
 import type { DeviceAccessStore } from './access';
 
 export type DeviceHostCall = DeviceCall;
@@ -55,6 +56,7 @@ export interface DeviceSessionRecord {
   sessionId: string;
   agentName: string;
   projectPath: string | null;
+  approvalMode?: ApprovalMode;
 }
 
 export interface DeviceCallInput {
@@ -141,13 +143,17 @@ export class DeviceToolGateway {
     return session;
   }
 
-  private hasAccess(sessionId: string, deviceId: string): boolean {
-    return this.deps.store.has(deviceId) || this.allowed.get(sessionId)?.has(deviceId) === true;
+  private hasAccess(session: DeviceSessionRecord, deviceId: string): boolean {
+    return (
+      session.approvalMode === 'full' ||
+      this.deps.store.has(deviceId) ||
+      this.allowed.get(session.sessionId)?.has(deviceId) === true
+    );
   }
 
   private authorized(caller: Caller, deviceId: string, signal: AbortSignal): DeviceSessionRecord {
     const session = this.current(caller, signal);
-    if (!this.hasAccess(session.sessionId, deviceId))
+    if (!this.hasAccess(session, deviceId))
       throw new Refused('not_allowed', 'Device access was revoked.');
     return session;
   }
@@ -203,7 +209,7 @@ export class DeviceToolGateway {
 
   private async access(caller: Caller, deviceId: string, signal: AbortSignal): Promise<void> {
     const { sessionId, generation } = caller;
-    if (this.hasAccess(sessionId, deviceId)) return;
+    if (this.hasAccess(this.current(caller, signal), deviceId)) return;
     // Reserve even while listing. Different worker generations must never adopt one another's card.
     const key = JSON.stringify([sessionId, generation, deviceId]);
     let question = this.asking.get(key);

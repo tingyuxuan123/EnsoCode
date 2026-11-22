@@ -86,15 +86,6 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
     };
   }, [selectedId]);
 
-  const handleVerify = async (id: string) => {
-    const res = await window.electronAPI.memory.update(id, { status: 'verified' });
-    if (res.ok && res.note) {
-      setDetail(res.note);
-      if (treeDialogDetail?.id === id) setTreeDialogDetail(res.note);
-      reload();
-    }
-  };
-
   const handleOpenObsidian = (id: string) => {
     void window.electronAPI.memory.openVault({ noteId: id, app: 'obsidian' });
   };
@@ -174,7 +165,6 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
             selectedId={selectedId}
             onSelect={setSelectedId}
             detail={detail}
-            onVerify={(id) => void handleVerify(id)}
             onOpenObsidian={handleOpenObsidian}
           />
         </React.Suspense>
@@ -231,15 +221,6 @@ export function MemoryKnowledge({ revision = 0 }: { revision?: number } = {}) {
                 </pre>
               </DialogPanel>
               <DialogFooter>
-                {treeDialogDetail.status === 'draft' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleVerify(treeDialogDetail.id)}
-                  >
-                    {t('Mark verified')}
-                  </Button>
-                )}
                 <Button
                   variant="outline"
                   size="sm"

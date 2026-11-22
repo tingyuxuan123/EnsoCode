@@ -1,6 +1,8 @@
 package io.github.tingyuxuan123.codekiln
 
 import android.graphics.Bitmap
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -11,6 +13,8 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.tingyuxuan123.codekiln.mirror.DesktopSessionState
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFileEntry
+import io.github.tingyuxuan123.codekiln.mirror.DesktopFilesState
 import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
 import io.github.tingyuxuan123.codekiln.pair.SessionMessage
 import io.github.tingyuxuan123.codekiln.pair.SessionTimeline
@@ -110,15 +114,107 @@ class SessionTimelineRenderTest {
         compose.onNodeWithText("诊断输出").assertIsDisplayed()
     }
 
-    @Test fun compactedContextAndFailedToolsShowSeparateCollapsedDetails() {
+    @Test fun incompleteWorklogKeepsStepsVisibleLikeDesktopButDetailsStillCollapse() {
         show(SessionMessage(0, "compactionSummary", listOf(text("压缩后保留的信息"))),
             SessionMessage(1, "toolResult", listOf(text("编译诊断：权限不足")), toolName = "bash", isError = true))
         compose.onNodeWithText("上下文已压缩").performClick()
         compose.onNodeWithText("压缩后保留的信息").assertIsDisplayed()
         compose.onNodeWithText("编译诊断：权限不足").assertDoesNotExist()
-        compose.onNodeWithText("执行记录").performClick()
         compose.onNodeWithText("查看错误详情").performClick()
         compose.onNodeWithText("编译诊断：权限不足").assertIsDisplayed()
+    }
+
+    @Test fun longUserBubbleExpandsAndReplyShowsTheModelThatActuallyAnswered() {
+        val prompt = (1..13).joinToString("\n") { "第 $it 行用户消息" }
+        show(SessionMessage(0, "user", listOf(text(prompt))),
+            SessionMessage(1, "assistant", listOf(text("这是一条历史回复。")), model = "historical-model"))
+        compose.onNodeWithText("historical-model").assertIsDisplayed()
+        compose.onNodeWithContentDescription("展开用户消息").performClick()
+        compose.onNodeWithContentDescription("收起用户消息").performClick()
+        compose.onNodeWithContentDescription("展开用户消息").assertIsDisplayed()
+    }
+
+    @Test fun liveWorkingFooterShowsTheEditedFileAndElapsedTimeOnlyWhileWorking() {
+        val messages = listOf(SessionMessage(0, "user", listOf(text("补齐附件下载的边界测试。"))),
+            SessionMessage(1, "toolResult", listOf(text("已修改")), toolName = "apply_patch",
+                toolFileName = "ConversationDeliveryTest.kt"))
+        val running = SessionTimeline("s", messages = messages, status = "running")
+        val state = mutableStateOf(DesktopSessionState(running, loading = false))
+        compose.setContent { EnsoTheme(dark = false) {
+            SessionScreen(SessionHeader("附件下载验收", "CodeKiln"), state.value, LinkPhase.Online, false,
+                {}, {}, {}, { _, _ -> }, { _, _ -> })
+        } }
+        val work = compose.onNodeWithContentDescription("工作状态：确认 ConversationDeliveryTe", substring = true)
+        work.assertIsDisplayed()
+        val clock = compose.onAllNodesWithText(" 秒", substring = true, useUnmergedTree = true)
+        fun clockText() = clock.fetchSemanticsNodes().singleOrNull()?.config?.get(SemanticsProperties.Text)?.single()?.text
+        val initial = requireNotNull(clockText()) { "Expected a visible elapsed timer" }
+        compose.waitUntil(timeoutMillis = 8_000) { clockText()?.let { it != initial } == true }
+        if (InstrumentationRegistry.getArguments().getString("codekilnWorkingCapture") == "1") {
+            val instrument = InstrumentationRegistry.getInstrumentation()
+            val bitmap = requireNotNull(instrument.uiAutomation.takeScreenshot())
+            try {
+                File(instrument.targetContext.cacheDir, "working-status.png").outputStream().use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            } finally { bitmap.recycle() }
+        }
+        compose.runOnIdle { state.value = state.value.copy(timeline = running.copy(status = "idle")) }
+        work.assertDoesNotExist()
+        clock.assertCountEquals(0)
+    }
+
+    @Test fun desktopStyleReplyKeepsWideImageAndClickableArtifactsInTheReadingColumn() {
+        val image = Bitmap.createBitmap(480, 180, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(0xffe3efe9.toInt())
+            android.graphics.Canvas(this).apply {
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                paint.color = 0xff27463c.toInt()
+                paint.textSize = 26f
+                drawText("Conversation sync check", 28f, 62f, paint)
+                paint.color = 0xff5c947f.toInt()
+                drawRect(28f, 92f, 428f, 108f, paint)
+                drawRect(28f, 121f, 306f, 137f, paint)
+            }
+        }
+        val bytes = ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        image.recycle()
+        val file = DesktopFileEntry("f1", "验收报告.pdf", 24_600, "out/验收报告.pdf")
+        val messages = listOf(
+            SessionMessage(0, "user", listOf(text("把移动端会话和 PC 对齐，验收后发我截图和报告。")), 1_790_000_000_000),
+            SessionMessage(1, "assistant", listOf(buildJsonObject {
+                put("type", "thinking"); put("text", "对照 PC 的会话内容和附件入口")
+            }), 1_790_000_015_000, model = "example-model"),
+            SessionMessage(2, "toolResult", listOf(buildJsonObject {
+                put("type", "image"); put("mimeType", "image/png")
+                put("data", java.util.Base64.getEncoder().encodeToString(bytes))
+            }), toolName = "read"),
+            SessionMessage(3, "assistant", listOf(text("## 会话验收\n\n已对齐正文、工作记录和产物。\n\n- 图片保留原比例\n- [查看验收报告](out/验收报告.pdf)"))),
+        )
+        val state = DesktopSessionState(SessionTimeline("s", messages = messages, status = "idle"),
+            loading = false, files = DesktopFilesState(entries = listOf(file)))
+        val opened = mutableListOf<String>()
+        compose.setContent { EnsoTheme {
+            SessionScreen(SessionHeader("会话样式验收", "CodeKiln"), state, LinkPhase.Online, false,
+                {}, {}, {}, { _, _ -> }, { _, _ -> }, onListFiles = {}, onReadFile = { id, _ -> opened += id })
+        } }
+        val preview = compose.onNodeWithContentDescription("查看图片 1").assertIsDisplayed().fetchSemanticsNode()
+        val bounds = preview.boundsInRoot
+        assertTrue("Expected the original panoramic shape, not a square crop", bounds.width / bounds.height > 2.4f)
+        compose.onNodeWithText("example-model").assertIsDisplayed()
+        compose.onNodeWithText("本轮产物").assertIsDisplayed()
+        if (InstrumentationRegistry.getArguments().getString("codekilnConversationCapture") == "1") {
+            compose.waitForIdle()
+            val instrument = InstrumentationRegistry.getInstrumentation()
+            val bitmap = requireNotNull(instrument.uiAutomation.takeScreenshot())
+            try {
+                File(instrument.targetContext.cacheDir, "conversation-pc-aligned.png").outputStream().use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            } finally { bitmap.recycle() }
+        }
+        compose.onNodeWithText(file.name).performClick()
+        assertTrue(opened == listOf("f1"))
     }
 
     @Test fun resultImagesDoNotDecodeAtUnboundedOriginalResolution() {

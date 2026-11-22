@@ -22,6 +22,7 @@ const fake = vi.hoisted(() => {
     shutdowns: [] as string[],
     /** The user boots the simulator between the host's listing and its own boot. */
     bootedMeanwhile: false,
+    androidBoot: null as ((signal?: AbortSignal) => Promise<void>) | null,
     /** The AVD each running emulator was started from. */
     avds: new Map<string, string>(),
     /** An AVD runs as `serial`, so adb lists the emulator in its place. */
@@ -124,8 +125,15 @@ vi.mock('./agent', () => {
 });
 
 vi.mock('./android', () => ({
-  bootEmulator: async (_emulator: string, _adb: string, avd: string) => {
+  bootEmulator: async (
+    _emulator: string,
+    _adb: string,
+    avd: string,
+    _env: unknown,
+    signal?: AbortSignal
+  ) => {
     fake.boots.push(avd);
+    await fake.androidBoot?.(signal);
     fake.runEmulator(avd, 'emulator-5556');
     return 'emulator-5556';
   },
@@ -299,6 +307,7 @@ beforeEach(async () => {
   fake.boots = [];
   fake.shutdowns = [];
   fake.bootedMeanwhile = false;
+  fake.androidBoot = null;
 });
 
 afterEach(async () => {
@@ -684,6 +693,40 @@ function startHost(): {
 }
 
 describe('emulators the host booted', () => {
+  it('does not leave the AVD reserved on a failed first open', async () => {
+    const devices = manager();
+    fake.androidBoot = async () => {
+      throw new Error('ADB authorization did not complete');
+    };
+    await expect(devices.open(AVD.id, 's1')).rejects.toMatchObject({ code: 'unavailable' });
+    expect(await devices.list()).toContainEqual(
+      expect.objectContaining({
+        id: AVD.id,
+        sessionId: null,
+        state: 'shutdown',
+      })
+    );
+    fake.androidBoot = null;
+    await expect(devices.open(AVD.id, 's2')).resolves.toMatchObject({ sessionId: 's2' });
+  });
+
+  it('cancels an in-flight boot when its session closes the AVD', async () => {
+    const devices = manager();
+    const started = Promise.withResolvers<void>();
+    const boot = Promise.withResolvers<void>();
+    fake.androidBoot = (signal) => {
+      signal?.addEventListener('abort', () => boot.reject(signal.reason), { once: true });
+      started.resolve();
+      return boot.promise;
+    };
+    const pending = devices.open(AVD.id, 's1').catch((error) => error);
+    await started.promise;
+    await devices.close(AVD.id, 's1', false);
+    // Finish an uncancelled boot to expose any lease created after close returns.
+    boot.resolve();
+    expect(await pending).toMatchObject({ code: 'unavailable' });
+    expect((await devices.list()).every(({ sessionId }) => sessionId !== 's1')).toBe(true);
+  });
   it('shuts one down when its only tab closes, and leaves the one the user started on', async () => {
     const devices = manager();
     const started = await devices.open(AVD.id, 's1');

@@ -50,6 +50,8 @@ const mocks = vi.hoisted(() => ({
   designSettingsListener: undefined as undefined | (() => void),
   browserInvoke: vi.fn(),
   browserSessionEnabled: vi.fn(() => true),
+  sessionApprovalMode: vi.fn<() => 'full' | 'supervised' | undefined>(() => undefined),
+  setSessionApprovalMode: vi.fn(() => ({ ok: true })),
   browserCancellationListener: undefined as
     | undefined
     | ((identity?: { sessionId: string; generation: string }, phase?: string) => void),
@@ -188,8 +190,9 @@ vi.mock('../services/agentHost', () => ({
     mocks.designSettingsListener = listener;
   }),
   isBrowserSessionToolEnabled: mocks.browserSessionEnabled,
+  getSessionApprovalMode: mocks.sessionApprovalMode,
   isDesignSessionToolEnabled: () => true,
-  setSessionApprovalMode: vi.fn(),
+  setSessionApprovalMode: mocks.setSessionApprovalMode,
   setSessionModel: mocks.setSessionModel,
   setSessionReasoning: vi.fn(),
   setSessionThinking: vi.fn(),
@@ -1966,6 +1969,19 @@ describe('device tools bridge', () => {
   const deviceEvent = { sender: { ...sender, mainFrame }, senderFrame: mainFrame };
   const invoke = (channel: string, ...args: unknown[]) =>
     mocks.handlers.get(channel)!(deviceEvent, ...args);
+
+  it('只有主工作台顶层能切换会话档位以放行设备请求', async () => {
+    const change = mocks.handlers.get(IPC_CHANNELS.AGENT_SET_APPROVAL_MODE)!;
+    mocks.setSessionApprovalMode.mockClear();
+    expect(
+      await change({ ...deviceEvent, senderFrame: {} }, parent.sessionId, 'full')
+    ).toMatchObject({ ok: false });
+    expect(mocks.setSessionApprovalMode).not.toHaveBeenCalled();
+    await expect(change(deviceEvent, parent.sessionId, 'full')).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(mocks.setSessionApprovalMode).toHaveBeenCalledWith(parent, 'full', expect.any(Set));
+  });
   it('only grants the device port and access IPC to the main workbench top frame', () => {
     registerDeviceHostHandlers();
     const connect = mocks.handlers.get('device-host:connect')!;
@@ -2151,13 +2167,16 @@ describe('device tools bridge', () => {
   });
 
   it('never admits a stale generation or a child claiming the actual root ID', () => {
+    mocks.sessionApprovalMode.mockReturnValueOnce('full');
     const authority = mocks.bindDevice.mock.lastCall![0].authority;
     expect(authority({ ...parent, generation: 'older' })).toBeNull();
     expect(authority({ ...child, sessionId: parent.sessionId })).toBeNull();
     expect(authority(parent)).toMatchObject({
       sessionId: parent.sessionId,
       projectPath: '/workspace',
+      approvalMode: 'full',
     });
+    expect(mocks.sessionApprovalMode).toHaveBeenLastCalledWith(parent);
     mocks.browserCancellationListener?.(parent, 'release');
     expect(authority(parent)).toBeNull();
     invoke(IPC_CHANNELS.DEVICE_ACCESS_LIST, parent.sessionId);
@@ -2284,8 +2303,15 @@ describe('压缩完成触发记忆整理', () => {
       ...(bot ? { bot } : {}),
     });
 
-  it('Code 会话：成功压缩后按增量水位蒸馏；失败 / 放弃 / 开始不触发', () => {
+  it('远程项目保留成功压缩后的增量编译；失败 / 放弃 / 开始不触发', () => {
     conversation();
+    vi.spyOn(getSourceAuthorityRegistry()!, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/repo',
+      kind: 'ssh',
+      state: 'active',
+      version: 1,
+    });
     emit({ type: 'compaction', state: 'start' });
     emit({ type: 'compaction', state: 'end', error: 'boom' });
     emit({ type: 'compaction', state: 'end', abandoned: true });
@@ -2293,19 +2319,23 @@ describe('压缩完成触发记忆整理', () => {
     emit({ type: 'compaction', state: 'end' });
     expect(mocks.scheduleMemoryDistill).toHaveBeenCalledTimes(1);
     expect(mocks.scheduleMemoryDistill).toHaveBeenCalledWith(
-      { sessionId: 'conv-1', sessionFile: '/tmp/agent/sessions/conv-1.jsonl', projectId: null },
+      { sessionId: 'conv-1', sessionFile: '/tmp/agent/sessions/conv-1.jsonl', projectId: 'p' },
       { continueFromLastJob: true }
     );
     expect(distill).not.toHaveBeenCalled();
   });
 
-  it('Code 会话结束同样走增量水位', () => {
+  it('普通本地项目不因压缩、结束或回收再运行后台编译', () => {
     conversation();
+    vi.spyOn(getSourceAuthorityRegistry()!, 'project').mockReturnValue({
+      projectId: 'p',
+      canonicalPath: '/repo',
+      state: 'active',
+      version: 1,
+    });
+    emit({ type: 'compaction', state: 'end' });
     emit({ type: 'parent-ended' });
-    expect(mocks.scheduleMemoryDistill).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'conv-1' }),
-      { continueFromLastJob: true }
-    );
+    expect(mocks.scheduleMemoryDistill).not.toHaveBeenCalled();
   });
 
   it('Bot 群聊会话：压缩后走 Bot 记忆整理并标记下次补群状态', () => {

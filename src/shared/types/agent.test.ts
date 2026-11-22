@@ -193,6 +193,14 @@ describe('retired Super Assistant worker protocol', () => {
     expect(parseAgentCommand({ ...spawn, superAssistant: true })).toBeNull();
   });
 
+  it('carries an appended system prompt block instead of dropping the whole spawn', () => {
+    const spawn = { type: 'spawn-parent', identity: parent, cwd: '/tmp', model };
+    const withAppend = { ...spawn, systemPromptAppend: '## Project memory\n\nSTATUS BODY' };
+    expect(parseAgentCommand(withAppend)).toEqual(withAppend);
+    expect(parseAgentCommand({ ...spawn, systemPromptAppend: '' })).toBeNull();
+    expect(parseAgentCommand({ ...spawn, systemPromptAppend: 42 })).toBeNull();
+  });
+
   it('rejects coordinator results', () => {
     expect(
       parseAgentCommand({
@@ -848,6 +856,28 @@ describe('parent/child commands', () => {
     }
     expect(parseAgentCommand({ ...command, extra: true })).toBeNull();
     expect(parseAgentCommand({ ...command, identity: { sessionId: 'parent' } })).toBeNull();
+  });
+
+  it('carries the project Wiki closeout flag on both spawn and hot tool updates', () => {
+    const spawn = {
+      type: 'spawn-parent',
+      identity: parent,
+      cwd: '/tmp',
+      model,
+      memoryTurnReview: true,
+    };
+    expect(parseAgentCommand(spawn)).toMatchObject({ memoryTurnReview: true });
+    expect(parseAgentCommand({ ...spawn, memoryTurnReview: 'true' })).toBeNull();
+
+    const update = {
+      type: 'set-builtin-tools',
+      identity: parent,
+      disabledTools: [],
+      memoryTurnReview: false,
+    };
+    expect(parseAgentCommand(update)).toMatchObject({ memoryTurnReview: false });
+    expect(parseAgentCommand({ ...update, memoryTurnReview: 1 })).toBeNull();
+    expect(parseAgentCommand({ ...update, extra: true })).toBeNull();
   });
 
   it('rewind accepts an exclusive persisted entry anchor and rejects ambiguous or dirty anchors', () => {
@@ -2086,6 +2116,16 @@ describe('标题总结命令与事件', () => {
     expect(
       parseAgentWorkerEvent({ ...event, requestBudgetStop: true, requestBudgetError: '' })
     ).toBeNull();
+  });
+
+  it('turn-completed 中止标记只接受 true：它让 Main 把该 Run 结算成 cancelled', () => {
+    const event = { type: 'turn-completed', identity: parent, seq: 1, turnId: 'turn-1' };
+    expect(parseAgentWorkerEvent({ ...event, aborted: true })).toEqual({
+      ...event,
+      aborted: true,
+    });
+    expect(parseAgentWorkerEvent({ ...event, aborted: false })).toBeNull();
+    expect(parseAgentWorkerEvent({ ...event, aborted: 'yes' })).toBeNull();
   });
 });
 
