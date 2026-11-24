@@ -478,7 +478,7 @@ export function ImageProviderForm({
                     >
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectPopup>
+                    <SelectPopup alignItemWithTrigger={false}>
                       <SelectItem value="">{t('Use first model')}</SelectItem>
                       {config.models.map((id) => (
                         <SelectItem key={id} value={id}>

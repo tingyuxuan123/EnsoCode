@@ -66,6 +66,13 @@ Base UI 的 `SelectValue` 关着 popup 时读不到 `SelectItem` 文案，缺 `i
 因为 `SelectPopup` 默认用 `Z_INDEX.DROPDOWN`(40)，而 `MODAL_CONTENT` 是 51。
 症状是点开下拉看不见选项。嵌套弹窗里的下拉用 `DROPDOWN_IN_NESTED_MODAL`。
 
+## 下拉列表靠近窗口边缘
+
+如果下拉已经可见，但短列表末项被滚动提示遮住，先检查 `SelectPopup` 的选中项对齐模式，
+而不是加层级。图片设置的两个模型下拉用 `alignItemWithTrigger={false}`，让菜单在下方放不下时
+翻到按钮上方，而不是为了对齐选中项挤在窗口底部。回归时把按钮滚到窗口底部附近，用三个模型
+验证「使用第一个模型」及全部模型都可见，并用长列表确认仍可滚动到底。
+
 ## 危险操作要变色
 
 会造成不可逆或外溢影响的操作，整块提示区和主按钮都要转为警示色，
