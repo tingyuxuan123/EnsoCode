@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { CopyButton } from '@/components/chat/CopyButton';
 import { GeneratedImageSkeleton } from '@/components/chat/GeneratedImageSkeleton';
 import { ResizeHandle } from '@/components/chat/ResizeHandle';
 import { useImageProviderSettings } from '@/components/settings/useImageProviderSettings';
@@ -387,15 +388,28 @@ export function ImageStudio({
               <div className="mx-auto flex max-w-[820px] flex-col gap-3 py-4">
                 {turns.map((turn) => (
                   <div key={turn.id} className="contents">
-                    <div className="flex justify-end">
-                      <div className="max-w-[min(520px,85%)] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-secondary px-4 py-2.5 text-[calc(13rem/14)] leading-relaxed text-secondary-foreground">
+                    <div className="group/studio-prompt flex max-w-[min(520px,85%)] flex-col items-end gap-1 self-end">
+                      <div className="max-w-full rounded-2xl rounded-tr-sm bg-secondary px-4 py-2.5 text-[calc(13rem/14)] leading-relaxed text-secondary-foreground">
                         {turn.sourceImageId && (
                           <span className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
                             <Image className="size-3" />
                             {t('Image to image')}
                           </span>
                         )}
-                        {turn.prompt}
+                        <p className="select-text whitespace-pre-wrap break-words">{turn.prompt}</p>
+                      </div>
+                      <div className="flex items-center gap-1 text-[calc(11rem/14)] text-faint select-none transition-opacity [@media(hover:hover)]:opacity-0 group-hover/studio-prompt:opacity-100 focus-within:opacity-100">
+                        <CopyButton
+                          text={turn.prompt}
+                          className="size-[calc(24rem/14)] justify-center rounded-sm focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                        <time>
+                          {new Date(turn.createdAt).toLocaleTimeString(undefined, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hourCycle: 'h23',
+                          })}
+                        </time>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">

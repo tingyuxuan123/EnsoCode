@@ -119,6 +119,51 @@ const panelWidth = (slot: string) =>
   Number.parseFloat(container.querySelector<HTMLElement>(`[data-slot=${slot}]`)?.style.width ?? '');
 const panel = (slot: string) => container.querySelector<HTMLElement>(`[data-slot=${slot}]`)!;
 describe('图片工作台交互', () => {
+  it('每条提示词都可单独复制原文，不把改图标签或时间带入剪贴板', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    const createdAt = new Date(2026, 0, 1, 9, 2).getTime();
+    const prompts = ['绘制一只猫\n水彩风格', '保留构图\n改成蓝色背景'];
+    const turns: ImageStudioTurn[] = prompts.map((prompt, index) => ({
+      id: `turn-${index}`,
+      prompt,
+      createdAt,
+      options: DEFAULT_IMAGE_STUDIO_OPTIONS,
+      status: 'completed',
+      ...(index === 1 ? { sourceImageId: 'reference' } : {}),
+    }));
+    try {
+      await act(async () =>
+        useImageStudioStore.setState({
+          activeId: 'prompt-copy',
+          sessions: {
+            'prompt-copy': {
+              id: 'prompt-copy',
+              title: '提示词复制',
+              createdAt,
+              updatedAt: createdAt,
+              imageCount: 0,
+              references: [],
+              turns,
+            },
+          },
+        })
+      );
+      const timeline = panel('studio-timeline');
+      const buttons = Array.from(
+        timeline.querySelectorAll<HTMLButtonElement>('button[title="Copy"]')
+      );
+      expect(buttons).toHaveLength(2);
+      expect(Array.from(timeline.querySelectorAll('time'), (time) => time.textContent)).toEqual([
+        '09:02',
+        '09:02',
+      ]);
+      for (const copy of buttons) await act(async () => copy.click());
+      expect(writeText.mock.calls).toEqual(prompts.map((prompt) => [prompt]));
+      expect(buttons[1]?.querySelector('[data-state=b]')).not.toBeNull();
+    } finally {
+      writeText.mockRestore();
+    }
+  });
   it.each([false, true])(
     '生图/改图直接使用聊天现有黑白蓝动画，完成、失败或取消后移除，editing=%s',
     async (editing) => {
