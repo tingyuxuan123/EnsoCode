@@ -354,6 +354,8 @@ export const IPC_CHANNELS = {
   FILES_REVEAL: 'files:reveal',
   FILES_OPEN: 'files:open',
   FILES_OPEN_CONTEXT: 'files:open-context',
+  FILES_OPEN_CITATION: 'files:open-citation',
+  FILES_SAVE_CITATION: 'files:save-citation',
   FILES_SEARCH_WORKSPACE: 'files:search-workspace',
 
   GIT_DIFF_HEAD: 'git:diff-head',

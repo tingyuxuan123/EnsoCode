@@ -30,6 +30,7 @@ import {
   type DeviceParams,
   type DeviceResult,
 } from '@shared/device-host';
+import { openCitationGestureKey, saveCitationGestureKey } from '@shared/fileCitationGesture';
 import type { GeneratedImage } from '@shared/imageGeneration';
 import type {
   ImageProviderResult,
@@ -105,6 +106,8 @@ import type {
   OauthAccountUsage,
   OauthCodexImportResult,
   OauthProviderInfo,
+  OpenFileCitationIntent,
+  OpenFileCitationResult,
   OpenInApp,
   PairCatalogPayload,
   PairCreatedSession,
@@ -113,6 +116,8 @@ import type {
   PairStatus,
   ProviderApiConfig,
   RecentProject,
+  SaveFileCitationRequest,
+  SaveFileCitationResult,
   SshConnection,
   SshHostKeyChallenge,
   TestProviderResult,
@@ -316,6 +321,9 @@ import type {
   WorkspaceSearchQueryResult,
 } from '@shared/workspaceSearchQuery';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { createFileCitationGestureGate } from './fileCitationGesture';
+
+const useCitationGesture = globalThis.window ? createFileCitationGestureGate(window) : () => false;
 
 const electronAPI = {
   imageStudio: {
@@ -695,6 +703,24 @@ const electronAPI = {
   },
 
   workspaceFiles: {
+    openCitation: async (intent: OpenFileCitationIntent): Promise<OpenFileCitationResult> => {
+      if (!useCitationGesture('open', openCitationGestureKey(intent)))
+        return { ok: false, error: 'user-action-required' };
+      const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(intent.path));
+      const citationId = Array.from(new Uint8Array(bytes), (value) =>
+        value.toString(16).padStart(2, '0')
+      ).join('');
+      return ipcRenderer.invoke(IPC_CHANNELS.FILES_OPEN_CITATION, {
+        conversationId: intent.conversationId,
+        projectId: intent.projectId,
+        citationId,
+        action: intent.action,
+      });
+    },
+    saveCitation: (request: SaveFileCitationRequest): Promise<SaveFileCitationResult> =>
+      useCitationGesture('save', saveCitationGestureKey(request))
+        ? ipcRenderer.invoke(IPC_CHANNELS.FILES_SAVE_CITATION, request)
+        : Promise.resolve({ ok: false, error: 'user-action-required' }),
     openContext: (request: FilesOpenContextRequest): Promise<FilesMutateResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILES_OPEN_CONTEXT, request),
     open: (request: FilesOpenRequest): Promise<FilesOpenResult> =>

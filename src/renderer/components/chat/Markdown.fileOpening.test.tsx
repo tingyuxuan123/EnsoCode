@@ -1,6 +1,7 @@
 import type { ContextMenuOpen } from '@shared/fileOpening';
 import { parseHTML } from 'linkedom';
 import { act, type ReactElement, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -12,10 +13,12 @@ import {
 
 const harness = vi.hoisted(() => ({
   open: vi.fn(),
+  openCitation: vi.fn(),
   openContext: vi.fn(),
   reveal: vi.fn(),
   readImage: vi.fn(),
   openSidePanelFile: vi.fn(),
+  openSidePanelFileCitation: vi.fn(),
   openSidePanelBrowserUrl: vi.fn(),
   toast: vi.fn(),
   contextMenuOpen: [] as ContextMenuOpen,
@@ -27,6 +30,7 @@ const harness = vi.hoisted(() => ({
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock('@/lib/sidePanelDock', () => ({
   openSidePanelFile: harness.openSidePanelFile,
+  openSidePanelFileCitation: harness.openSidePanelFileCitation,
   openSidePanelBrowserUrl: harness.openSidePanelBrowserUrl,
 }));
 vi.mock('@/components/ui/toast', () => ({ addToast: harness.toast }));
@@ -79,7 +83,7 @@ vi.mock('@/components/ui/dialog', () => {
   const Wrap = ({ children }: { children?: ReactNode }) => <span>{children}</span>;
   return {
     Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
-      open ? <span role="dialog">{children}</span> : null,
+      open ? createPortal(<span role="dialog">{children}</span>, container) : null,
     DialogContent: Wrap,
     DialogHeader: Wrap,
     DialogTitle: Wrap,
@@ -156,6 +160,7 @@ beforeEach(() => {
       env: { platform: 'win32' },
       workspaceFiles: {
         open: harness.open,
+        openCitation: harness.openCitation,
         openContext: harness.openContext,
         reveal: harness.reveal,
         readImage: harness.readImage,
@@ -166,6 +171,7 @@ beforeEach(() => {
   root = createRoot(container);
   vi.clearAllMocks();
   harness.open.mockResolvedValue({ ok: true, target: 'internal', viewer: 'text', rel: 'src/a.ts' });
+  harness.openCitation.mockReset().mockResolvedValue({ ok: true, target: 'handled' });
   harness.reveal.mockResolvedValue({ ok: true });
   harness.openContext.mockResolvedValue({ ok: true });
   harness.contextMenuOpen = [
@@ -259,6 +265,62 @@ describe('聊天文件链接的打开方式', () => {
     });
     expect(harness.openSidePanelFile).toHaveBeenCalledWith('child', 'src/a.ts');
     expect(harness.reveal).not.toHaveBeenCalled();
+  });
+
+  it('工作区外的引用点开后在原会话开可编辑标签，不再显示弹窗', async () => {
+    const citationId = 'c'.repeat(64);
+    const revision = 'd'.repeat(64);
+    harness.openCitation.mockResolvedValueOnce({
+      ok: true,
+      target: 'text',
+      citationId,
+      revision,
+      path: 'C:/Downloads/hook.ts',
+      content: 'first line\nreturn { continue: true };',
+    });
+    await render('[Stop hook](file:///C:/Downloads/hook.ts:2)');
+    await act(async () => {
+      await click('a');
+      await vi.waitFor(() => {
+        expect(harness.openCitation).toHaveBeenCalledWith({
+          conversationId: 'child',
+          projectId: 'project',
+          path: 'C:/Downloads/hook.ts',
+          action: 'preview',
+        });
+      });
+    });
+    expect(harness.openSidePanelFileCitation).toHaveBeenCalledWith('child', citationId, {
+      path: 'C:/Downloads/hook.ts',
+      content: 'first line\nreturn { continue: true };',
+      line: 2,
+      revision,
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(harness.open).not.toHaveBeenCalled();
+    expect(harness.openSidePanelFile).not.toHaveBeenCalled();
+    expect(harness.toast).not.toHaveBeenCalled();
+  });
+
+  it('外部引用的文件夹按钮只定位原件，不开编辑标签', async () => {
+    await render('[source](C:/Downloads/hook.ts)');
+    await click('button[aria-label="Reveal in File Explorer"]');
+    await vi.waitFor(() => {
+      expect(harness.openCitation).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'reveal' })
+      );
+    });
+    expect(harness.reveal).not.toHaveBeenCalled();
+    expect(harness.openSidePanelFileCitation).not.toHaveBeenCalled();
+    expect(harness.toast).not.toHaveBeenCalled();
+  });
+
+  it('SSH 对话不会把工作区外的远端路径当成本机文件', async () => {
+    harness.projects = [{ id: 'project', kind: 'ssh' }];
+    await render('[source](/tmp/hook.ts)');
+    await click('a');
+    expect(harness.openCitation).not.toHaveBeenCalled();
+    expect(harness.open).not.toHaveBeenCalled();
   });
 
   it('Markdown 正文指定预览，handled 可执行文件不再打开内部面板', async () => {

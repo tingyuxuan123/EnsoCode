@@ -5,15 +5,23 @@ export function isSubagentPanel(id: string): boolean {
   return id.startsWith('subagent:') || id.startsWith('subagents:');
 }
 
+export const FILE_CITATION_PANEL = 'file-citation';
+
+export function isFileCitationPanel(id: string): boolean {
+  return id.startsWith(`${FILE_CITATION_PANEL}:`);
+}
+
 function isTransientPanel(id: string, panel: SerializedDockview['panels'][string]): boolean {
   return (
     isSubagentPanel(id) ||
+    isFileCitationPanel(id) ||
+    panel.contentComponent === FILE_CITATION_PANEL ||
     panel.contentComponent === 'subagent-session' ||
     panel.contentComponent === 'subagent-directory'
   );
 }
 
-/** Strip observers only at the persistence boundary; keep full layouts in renderer memory. */
+/** Never persist observer panels or approved external file contents. */
 export function stripTransientSidePanelLayouts(
   layouts: Record<string, SerializedDockview | undefined>
 ): Record<string, SerializedDockview | undefined> {

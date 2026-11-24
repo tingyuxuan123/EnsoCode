@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import {
   classifyMarkdownLink,
   parseMarkdownHttpUrl,
   splitFileLineRef,
   toWorkspaceRelativePath,
-} from './markdownLinks';
+} from '@shared/markdownLinks';
+import { describe, expect, it } from 'vitest';
 
 describe('parseMarkdownHttpUrl', () => {
   it.each([

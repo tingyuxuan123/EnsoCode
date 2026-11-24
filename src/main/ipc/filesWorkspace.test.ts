@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -11,14 +12,27 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { externalCitationPath } from '@shared/markdownLinks';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { bashPath, posixShell } from '../../../test/helpers/shell';
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, request: unknown) => Promise<unknown>>(),
-  project: { kind: 'local', state: 'active', canonicalPath: '', sshHost: 'host' },
-  conversation: { projectId: 'project', lifecycle: 'active' },
+  project: {
+    kind: 'local' as string | undefined,
+    state: 'active',
+    canonicalPath: '',
+    sshHost: 'host',
+  },
+  conversation: {
+    projectId: 'project',
+    lifecycle: 'active',
+    sessionFile: undefined as string | undefined,
+  },
+  userData: '',
+  confirm: vi.fn(),
   exec: vi.fn(),
   writeText: vi.fn(),
   showItemInFolder: vi.fn(),
@@ -32,10 +46,15 @@ vi.mock('node:path', async (importOriginal) => {
   return { ...actual, default: { ...actual.default } };
 });
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp' },
+  app: { getPath: () => mocks.userData, getLocale: () => 'en' },
   clipboard: { writeText: mocks.writeText },
+  dialog: { showMessageBox: mocks.confirm },
   shell: { showItemInFolder: mocks.showItemInFolder, openPath: mocks.openPath },
   ipcMain: { handle: (key: string, fn: never) => mocks.handlers.set(key, fn) },
+}));
+vi.mock('../windows/MainWindow', () => ({
+  getMainWindow: () => ({ id: 1 }),
+  isMainWebContents: (id: number) => id === 42,
 }));
 vi.mock('./worktree', () => ({ sessionWorktreeBusy: mocks.busy }));
 vi.mock('./settings', async () => {
@@ -81,7 +100,9 @@ let root = '';
 beforeEach(() => {
   root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'files-ipc-')));
   mocks.project = { kind: 'local', state: 'active', canonicalPath: root, sshHost: 'host' };
-  mocks.conversation = { projectId: 'project', lifecycle: 'active' };
+  mocks.conversation = { projectId: 'project', lifecycle: 'active', sessionFile: undefined };
+  mocks.userData = root;
+  mocks.confirm.mockReset();
   mocks.exec.mockReset();
   mocks.busy.mockReturnValue(false);
   mocks.readSettings.mockReset().mockReturnValue(null);
@@ -93,6 +114,76 @@ beforeEach(() => {
   registerFilesWorkspaceHandlers();
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+it('本机项目外部引用由主窗口顶层发起，无需弹窗；保存只接受会话与版本标识', async () => {
+  const workspace = path.join(root, 'workspace');
+  const original = path.join(root, 'original.md');
+  mocks.userData = path.join(root, 'profile');
+  const sessions = path.join(mocks.userData, 'agent', 'sessions');
+  const sessionFile = path.join(sessions, 'fixture.jsonl');
+  mkdirSync(workspace);
+  mkdirSync(sessions, { recursive: true });
+  writeFileSync(original, '# Original source');
+  const timestamp = new Date(0).toISOString();
+  writeFileSync(
+    sessionFile,
+    [
+      { type: 'session', version: 3, id: 'session', timestamp, cwd: workspace },
+      {
+        type: 'message',
+        id: 'm',
+        parentId: null,
+        timestamp,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: `[original](${pathToFileURL(original).href})` }],
+        },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n')
+  );
+  mocks.project = { ...mocks.project, kind: undefined, canonicalPath: workspace };
+  mocks.conversation = { projectId: 'project', lifecycle: 'ready', sessionFile };
+  const target = externalCitationPath(original) ?? original;
+  const request = {
+    conversationId: 'conversation',
+    projectId: 'project',
+    citationId: createHash('sha256').update(target).digest('hex'),
+    action: 'preview',
+  };
+  const handler = mocks.handlers.get(IPC_CHANNELS.FILES_OPEN_CITATION);
+  const mainFrame = { routingId: 1, processId: 2 };
+  const sender = { id: 42, mainFrame };
+  const permitted = { senderFrame: mainFrame, sender };
+  const child = { senderFrame: { routingId: 2, processId: 2 }, sender };
+  expect(await handler?.(child, request)).toMatchObject({ ok: false });
+  const result = await handler?.(permitted, request);
+  expect(result).toEqual({
+    ok: true,
+    target: 'text',
+    citationId: request.citationId,
+    path: target,
+    content: '# Original source',
+    revision: expect.any(String),
+  });
+  expect(mocks.confirm).not.toHaveBeenCalled();
+  if (!result || typeof result !== 'object' || !('revision' in result))
+    throw new Error('Missing revision');
+  const edit = {
+    conversationId: request.conversationId,
+    projectId: request.projectId,
+    citationId: request.citationId,
+    revision: result.revision,
+    content: '# Edited',
+  };
+  const save = mocks.handlers.get(IPC_CHANNELS.FILES_SAVE_CITATION);
+  expect(await save?.(child, edit)).toMatchObject({ ok: false });
+  expect(await save?.(permitted, { ...edit, path: original })).toMatchObject({ ok: false });
+  expect(await save?.(permitted, edit)).toMatchObject({ ok: true, revision: expect.any(String) });
+  expect(readFileSync(original, 'utf8')).toBe('# Edited');
+});
+
 const invoke = (channel: string, request = {}) =>
   mocks.handlers.get(channel)?.(
     {},

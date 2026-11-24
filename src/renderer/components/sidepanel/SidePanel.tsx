@@ -50,6 +50,7 @@ import {
   bindSidePanelDock,
   closeSidePanelBrowser,
   disposeConversationResources,
+  requestSidePanelTabClose,
   revealMobileDevicesPanel,
   selectWorkflowAvailable,
 } from '@/lib/sidePanelDock';
@@ -62,7 +63,11 @@ import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { isSidePanelExpanded, useSidePanelStore } from '@/stores/sidePanel';
 import { sanitizeSidePanelLayout } from '@/stores/sidePanel/layoutSanitize';
-import { isSubagentPanel } from '@/stores/sidePanel/transientPanels';
+import {
+  FILE_CITATION_PANEL,
+  isFileCitationPanel,
+  isSubagentPanel,
+} from '@/stores/sidePanel/transientPanels';
 import {
   CHAT_MIN_WIDTH,
   resolveSidePanelWidth,
@@ -72,7 +77,9 @@ import { useWorkflowRunsStore } from '@/stores/workflowRuns';
 import { BrowserView } from './BrowserView';
 import { BtwView } from './BtwView';
 import { ChangesView } from './ChangesView';
+import { FileCitationView } from './FileCitationView';
 import { FilesView } from './FilesView';
+import { FileTypeIcon } from './fileIcons';
 import { SubagentDirectoryView } from './SubagentDirectoryView';
 import { SubagentSessionView } from './SubagentSessionView';
 import { shouldSkipSidePanelWidthAnim, sidePanelWidthTransition } from './sidePanelWidthAnim';
@@ -358,7 +365,7 @@ function closeGroupTabs(
   const ordered = api.group.panels.map((panel) => panel.id);
   const closing = new Set(idsToClose(ordered, api.id, kind));
   for (const panel of [...api.group.panels]) {
-    if (closing.has(panel.id)) panel.api.close();
+    if (closing.has(panel.id)) requestSidePanelTabClose(panel.api);
   }
 }
 
@@ -430,6 +437,8 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <GitCompare className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'files' ? (
         <FolderOpen className="h-3 w-3 shrink-0" />
+      ) : isFileCitationPanel(props.api.id) ? (
+        <FileTypeIcon name={title} className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'mobile-devices' ? (
         <Smartphone className="h-3 w-3 shrink-0" />
       ) : props.api.id.startsWith('btw:') ? (
@@ -482,7 +491,7 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          props.api.close();
+          requestSidePanelTabClose(props.api);
         }}
       >
         <X className="h-3 w-3" />
@@ -768,6 +777,7 @@ const DOCK_COMPONENTS = {
   terminal: TerminalPanel,
   changes: ChangesPanel,
   files: FilesPanel,
+  [FILE_CITATION_PANEL]: FileCitationView,
   'mobile-devices': MobileDevicesPanel,
   browser: BrowserPanel,
   design: DesignDockPanel,
@@ -853,7 +863,7 @@ function ConversationDock({
     });
     // 只有用户关 tab 才回收;dock 本身不随切会话卸载
     event.api.onDidRemovePanel((panel) => {
-      if (isSubagentPanel(panel.id)) return;
+      if (isSubagentPanel(panel.id) || isFileCitationPanel(panel.id)) return;
       if (
         panel.id === 'changes' ||
         panel.id === 'files' ||

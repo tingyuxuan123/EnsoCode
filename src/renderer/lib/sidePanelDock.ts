@@ -1,16 +1,20 @@
+import { parseMarkdownHttpUrl } from '@shared/markdownLinks';
 import {
   isWorkflowAvailable,
   projectDisabledBuiltinTools,
   resolveDisabledBuiltinTools,
 } from '@shared/types/builtinTools';
-import type { DockviewApi } from 'dockview-react';
-import { parseMarkdownHttpUrl } from '@/components/chat/markdownLinks';
+import type { DockviewApi, DockviewPanelApi } from 'dockview-react';
 import { releaseTerminal } from '@/lib/terminalRegistry';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import type { SettingsState } from '@/stores/settings/types';
 import { useSidePanelStore } from '@/stores/sidePanel';
-import { isSubagentPanel } from '@/stores/sidePanel/transientPanels';
+import {
+  FILE_CITATION_PANEL,
+  isFileCitationPanel,
+  isSubagentPanel,
+} from '@/stores/sidePanel/transientPanels';
 import { resolveSidePanelDockConversationId } from './sidePanelDockId';
 import { resolveSubagentTarget } from './subagentTargets';
 
@@ -22,6 +26,32 @@ const filesOpeners = new Map<string, (...target: FileTarget) => void>();
 const pendingFileOpens = new Map<string, FileTarget>();
 /** dock 未挂载时挂起的 Files 面板，dock 绑定后补建 */
 const pendingFilesReveal = new Set<string>();
+export interface FileCitationPreview {
+  path: string;
+  content: string;
+  line?: number;
+  revision?: string;
+}
+export interface FileCitationPanelParams extends FileCitationPreview {
+  conversationId: string;
+  projectId: string;
+  citationId: string;
+}
+const pendingFileCitations = new Map<string, Map<string, FileCitationPreview>>();
+const citationClosers = new WeakMap<DockviewPanelApi, () => void>();
+
+export function registerFileCitationCloser(panel: DockviewPanelApi, close: () => void): () => void {
+  citationClosers.set(panel, close);
+  return () => {
+    citationClosers.delete(panel);
+  };
+}
+
+export function requestSidePanelTabClose(panel: DockviewPanelApi): void {
+  const close = citationClosers.get(panel);
+  if (close) close();
+  else panel.close();
+}
 type DesignReveal = { conversationId: string; title?: string; width?: number | 'max' };
 const pendingDesignReveal = new Map<string, DesignReveal>();
 const pendingMobileDevices = new Set<string>();
@@ -91,6 +121,11 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
   // onReady restores the saved layout synchronously; reveal only after fromJSON completes.
   queueMicrotask(() => {
     if (docks.get(conversationId) !== api) return;
+    const citations = pendingFileCitations.get(conversationId);
+    pendingFileCitations.delete(conversationId);
+    for (const [citationId, file] of citations ?? []) {
+      openSidePanelFileCitation(conversationId, citationId, file);
+    }
     if (pendingMobileDevices.delete(conversationId)) addSidePanelMobileDevices(conversationId);
     const design = pendingDesignReveal.get(conversationId);
     const pluginViews = pendingPluginViews.get(conversationId);
@@ -238,6 +273,43 @@ export function openSidePanelFile(
   const api = docks.get(dockId);
   if (api) revealFilesPanel(api, dockId, projectId);
   else pendingFilesReveal.add(dockId);
+}
+
+/** Open only bytes returned from the clicked citation, independently of the Files workspace editor. */
+export function openSidePanelFileCitation(
+  conversationId: string,
+  citationId: string,
+  file: FileCitationPreview
+): void {
+  // The citation IPC accepts saved local root chats only. Its owner is the original chat, not the active one.
+  const projectId = useSessionsStore.getState().conversations[conversationId]?.projectId;
+  if (!projectId) return;
+  useSidePanelStore.getState().ensureOpen(conversationId);
+  const dock = docks.get(conversationId);
+  if (!dock) {
+    const pending = pendingFileCitations.get(conversationId) ?? new Map();
+    pending.set(citationId, file);
+    pendingFileCitations.set(conversationId, pending);
+    return;
+  }
+  const id = `${FILE_CITATION_PANEL}:${citationId}`;
+  const title = file.path.split(/[/\\]/).at(-1) || file.path;
+  const params: FileCitationPanelParams = {
+    ...file,
+    line: file.line,
+    revision: file.revision,
+    conversationId,
+    projectId,
+    citationId,
+  };
+  const existing = dock.getPanel(id);
+  if (existing) {
+    if (existing.api.title !== title) existing.api.setTitle(title);
+    existing.api.updateParameters(params);
+    existing.focus();
+    return;
+  }
+  dock.addPanel({ id, component: FILE_CITATION_PANEL, title, params, renderer: 'always' });
 }
 
 export function addSidePanelBrowser(opts?: {
@@ -551,6 +623,7 @@ export function disposeConversationResources(conversationId: string): void {
   filesOpeners.delete(conversationId);
   pendingFileOpens.delete(conversationId);
   pendingFilesReveal.delete(conversationId);
+  pendingFileCitations.delete(conversationId);
   pendingDesignReveal.delete(conversationId);
   pendingSubagentReveal.delete(conversationId);
   for (const pending of pendingSubagentReveal.values()) {
@@ -577,7 +650,7 @@ export function disposeConversationResources(conversationId: string): void {
   }
   if (api) {
     for (const panel of [...api.panels]) {
-      if (isSubagentPanel(panel.id)) continue;
+      if (isSubagentPanel(panel.id) || isFileCitationPanel(panel.id)) continue;
       if (['changes', 'files', 'design', 'mobile-devices'].includes(panel.id)) continue;
       if (panel.id === 'browser' || panel.id.startsWith('browser:')) continue;
       releaseTerminal(panel.id);
@@ -595,5 +668,5 @@ export function closeActiveSidePanelTab(): void {
     const closeFile = filesTabClosers.get(active.conversationId);
     if (closeFile?.()) return;
   }
-  active.api.activePanel?.api.close();
+  if (active.api.activePanel) requestSidePanelTabClose(active.api.activePanel.api);
 }

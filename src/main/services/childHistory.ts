@@ -93,13 +93,14 @@ function isSessionEntry(value: unknown): value is SessionEntry {
 }
 
 /** Same last-entry leaf semantics as SessionManager.getBranch, without its disk repair/migration. */
-function piBranch(header: Record<string, unknown>, entries: unknown[]): SessionEntry[] | null {
+export function parsePiHistoryBranch(header: unknown, entries: unknown[]): SessionEntry[] | null {
+  const root = record(header);
   if (
-    header.type !== 'session' ||
-    (header.version !== 2 && header.version !== 3) ||
-    !nonEmpty(header.id) ||
-    typeof header.cwd !== 'string' ||
-    typeof header.timestamp !== 'string'
+    root?.type !== 'session' ||
+    (root.version !== 2 && root.version !== 3) ||
+    !nonEmpty(root.id) ||
+    typeof root.cwd !== 'string' ||
+    typeof root.timestamp !== 'string'
   ) {
     return null;
   }
@@ -212,7 +213,7 @@ export async function readChildHistory(
         },
       };
     }
-    const branch = piBranch(header, values);
+    const branch = parsePiHistoryBranch(header, values);
     if (!branch) return unavailable();
     return {
       ok: true,

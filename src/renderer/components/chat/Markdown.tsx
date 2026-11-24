@@ -1,4 +1,12 @@
 import { chatBodyTypographyStyle, chatInlineCodeTypographyStyle } from '@shared/chatTypography';
+import { openCitationGestureKey } from '@shared/fileCitationGesture';
+import {
+  classifyFileReference,
+  externalCitationPath,
+  parseMarkdownHttpUrl,
+  splitFileLineRef,
+  toWorkspaceRelativePath,
+} from '@shared/markdownLinks';
 import { previewImageMime } from '@shared/markdownPreviewImage';
 import { isBuiltinToolEnabledForProject } from '@shared/types/builtinTools';
 import type { Element } from 'hast';
@@ -26,7 +34,11 @@ import {
 } from '@/components/ui/context-menu';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
-import { openSidePanelBrowserUrl, openSidePanelFile } from '@/lib/sidePanelDock';
+import {
+  openSidePanelBrowserUrl,
+  openSidePanelFile,
+  openSidePanelFileCitation,
+} from '@/lib/sidePanelDock';
 import { cn } from '@/lib/utils';
 import { type PluginSlotEntry, parsePluginFence, pluginMessageLeaf } from '@/plugins/registry';
 import { PluginBlock, PluginMessageLeaf } from '@/plugins/slots';
@@ -37,12 +49,6 @@ import { CodeBlock } from './CodeBlock';
 import { CopyButton } from './CopyButton';
 import { highlightNode } from './highlightQuery';
 import { MermaidRenderer } from './MermaidRenderer';
-import {
-  classifyMarkdownLink,
-  parseMarkdownHttpUrl,
-  splitFileLineRef,
-  toWorkspaceRelativePath,
-} from './markdownLinks';
 
 /**
  * 解析代码围栏的 info 串。除了纯语言名（```ts），agent 常输出
@@ -143,6 +149,12 @@ function revealErrorDescription(error: string, t: (key: string) => string): stri
       return t('This link is not available on the local computer.');
     case 'unavailable':
       return t('The linked file or folder is unavailable.');
+    case 'citation-unavailable':
+      return t('This file citation could not be found in the saved conversation.');
+    case 'protected-path':
+      return t('This protected file cannot be opened from chat.');
+    case 'user-action-required':
+      return t('Click the file link to open it.');
     case 'unsupported-viewer':
       return t('This file format cannot be previewed inside CodeKiln.');
     case 'too-large':
@@ -230,21 +242,6 @@ function FileLinkContextMenu({
   );
 }
 
-/**
- * 行号只适用于带扩展名的本地文件，避免将 javascript:123 等协议误识别成路径。
- *
- * Line references apply only to local files with extensions, never protocols such as javascript:123.
- */
-function classifyFileReference(href: string) {
-  const classification = classifyMarkdownLink(href);
-  if (classification.kind === 'external') return { classification, line: undefined };
-  const reference = splitFileLineRef(classification.kind === 'local' ? classification.path : href);
-  if (reference.line && /\.[\w]+$/.test(reference.path)) {
-    return { classification: classifyMarkdownLink(reference.path), line: reference.line };
-  }
-  return { classification, line: undefined };
-}
-
 /** `[`path`](path)` 形式：链接只含一段 inline code 时取其文本，用于把定位按钮并入代码框 */
 function soleInlineCodeText(node: unknown): string | null {
   const kids = (node as { children?: unknown[] } | undefined)?.children;
@@ -262,12 +259,15 @@ function useSshProject(context: MarkdownLinkContextValue | null) {
   );
 }
 
-/** 共享现有授权、打开规则与图片预览；只向 Main 发送经过边界检查的相对路径。 */
-function useLocalFileOpen(path: string | null, line?: number) {
+/** Worktree IPC continues to receive only relative paths; citation IPC receives only an identifier. */
+function useLocalFileOpen(path: string | null, line?: number, allowCitation = false) {
   const { t } = useI18n();
   const linkContext = useContext(MarkdownLinkContext);
   const ssh = useSshProject(linkContext);
   const [imagePreview, setImagePreview] = useState<{ rel: string; dataUrl: string } | null>(null);
+  const rel = linkContext && path !== null ? toWorkspaceRelativePath(path, linkContext.cwd) : null;
+  const external =
+    allowCitation && !ssh && rel === null && path !== null ? externalCitationPath(path) : null;
 
   const fail = (error: string) => {
     addToast({
@@ -279,9 +279,30 @@ function useLocalFileOpen(path: string | null, line?: number) {
 
   const openLocal = async (reveal: boolean) => {
     if (!linkContext || path === null || (reveal && ssh)) return;
-    const rel = toWorkspaceRelativePath(path, linkContext.cwd);
     if (rel == null) {
-      fail('invalid-path');
+      if (!external) {
+        fail(ssh ? 'unsupported' : 'invalid-path');
+        return;
+      }
+      try {
+        const result = await window.electronAPI.workspaceFiles.openCitation({
+          conversationId: linkContext.conversationId,
+          projectId: linkContext.projectId,
+          path: external,
+          action: reveal ? 'reveal' : 'preview',
+        });
+        if (!result.ok) fail(result.error);
+        else if (!reveal && result.target === 'text') {
+          openSidePanelFileCitation(linkContext.conversationId, result.citationId, {
+            path: result.path,
+            content: result.content,
+            revision: result.revision,
+            line,
+          });
+        }
+      } catch {
+        fail('unavailable');
+      }
       return;
     }
     if (!reveal && line) {
@@ -341,7 +362,7 @@ function useLocalFileOpen(path: string | null, line?: number) {
   const preview = (
     <WorkspaceImagePreview image={imagePreview} onClose={() => setImagePreview(null)} />
   );
-  return { linkContext, openLocal, preview, ssh };
+  return { linkContext, openLocal, preview, ssh, external };
 }
 
 /** 卡片的越界路径仅可复制，不扩大工作区权限，也不导航到磁盘 URL。 */
@@ -427,9 +448,10 @@ function MarkdownAnchor({
   const { t } = useI18n();
   const openArtifactLink = useContext(MarkdownLocalLinkContext);
   const { classification, line } = classifyFileReference(href ?? '');
-  const { linkContext, openLocal, preview, ssh } = useLocalFileOpen(
+  const { linkContext, openLocal, preview, ssh, external } = useLocalFileOpen(
     classification.kind === 'local' ? classification.path : null,
-    line
+    line,
+    true
   );
   const browserEnabled = useSettingsStore(
     (state) =>
@@ -449,6 +471,19 @@ function MarkdownAnchor({
   const local =
     classification.kind === 'local' && (linkContext !== null || openArtifactLink !== null);
   const codeText = local ? soleInlineCodeText(node) : null;
+  const citationGesture = (action: 'preview' | 'reveal') =>
+    linkContext && external
+      ? {
+          'data-file-citation-action': 'open',
+          'data-file-citation-key': openCitationGestureKey({
+            conversationId: linkContext.conversationId,
+            projectId: linkContext.projectId,
+            path: external,
+            action,
+          }),
+          ...(action === 'preview' ? { title: external } : {}),
+        }
+      : {};
 
   const open = () => {
     if (linkContext) void openLocal(false);
@@ -487,6 +522,7 @@ function MarkdownAnchor({
 
   const anchorElement = (
     <a
+      {...citationGesture('preview')}
       href={classification.kind === 'external' ? href || undefined : undefined}
       className={cn(
         // chip 内（`[`path`](path)`）已经是可点控件，颜色和常态下划线会让一行里的路径结成色块
@@ -511,7 +547,21 @@ function MarkdownAnchor({
   );
   if (!local || classification.kind !== 'local' || !linkContext) return anchorElement;
   const anchor = (
-    <FileLinkContextMenu context={linkContext} file={classification.path}>
+    <FileLinkContextMenu
+      context={external ? null : linkContext}
+      file={classification.path}
+      extra={
+        external ? (
+          <ContextMenuItem
+            {...citationGesture('reveal')}
+            closeOnClick
+            onClick={() => void openLocal(true)}
+          >
+            {t(revealLabel())}
+          </ContextMenuItem>
+        ) : undefined
+      }
+    >
       {anchorElement}
     </FileLinkContextMenu>
   );
@@ -525,6 +575,7 @@ function MarkdownAnchor({
         {anchor}
         {!ssh && (
           <button
+            {...citationGesture('reveal')}
             type="button"
             className="inline-flex shrink-0 rounded-[3px] p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
             aria-label={t(revealLabel())}
@@ -544,6 +595,7 @@ function MarkdownAnchor({
       {anchor}
       {!ssh && (
         <button
+          {...citationGesture('reveal')}
           type="button"
           className="ml-1 inline-flex rounded p-0.5 align-middle text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label={t(revealLabel())}

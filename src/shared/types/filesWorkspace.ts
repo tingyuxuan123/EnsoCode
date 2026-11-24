@@ -24,6 +24,35 @@ export type FilesOpenResult =
   | { ok: true; target: 'handled' }
   | { ok: false; error: string };
 
+export interface OpenFileCitationRequest {
+  conversationId: string;
+  projectId: string;
+  citationId: string;
+  action: 'preview' | 'reveal';
+}
+
+/** Renderer to isolated preload only. The absolute path is never forwarded to Main. */
+export type OpenFileCitationIntent = Omit<OpenFileCitationRequest, 'citationId'> & { path: string };
+
+export type OpenFileCitationResult =
+  | {
+      ok: true;
+      target: 'text';
+      citationId: string;
+      path: string;
+      content: string;
+      revision?: string;
+    }
+  | { ok: true; target: 'handled' }
+  | { ok: false; error: string };
+
+export interface SaveFileCitationRequest extends Omit<OpenFileCitationRequest, 'action'> {
+  revision: string;
+  content: string;
+}
+
+export type SaveFileCitationResult = { ok: true; revision: string } | { ok: false; error: string };
+
 export type FilesFetchRemoteImageResult =
   | { ok: true; dataUrl: string }
   | { ok: false; error: string };

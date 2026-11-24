@@ -2,6 +2,9 @@
 
 两个主 store：设置持久化的 `stores/settings/` 与会话元数据持久化的 `stores/sessions/`。右侧面板另有 `stores/sidePanel/`：dock 布局与各会话的开关/宽度/Changes 模式 persist 到 localStorage，`fullscreen`、`browserHoles` 只活在内存里。
 
+外部文件引用在点击来源会话的 dock 中按引用标识复用标签页；文件路径、正文、版本标识、行号和草稿只在内存里，
+与子代理观察面板一同从持久布局中剥离，不经过 Files 的读写入口，也不在应用重启时自动恢复。未保存草稿不因切换标签或重复点链接丢失。
+
 `snapshotsByConversation`（Changes「Session」模式的编辑前全文）也是运行态：按会话 `loadSnapshots` 惰性从主进程回读，
 `saveSnapshots` 写内存 + IPC 落盘。会话键不存在 = 尚未回读，此时 `ChangesView` **不得聚合也不得保存**——否则用当前磁盘
 内容 reconstruct 出的 old 会盖掉磁盘上更早的快照；回读失败要标成已加载（空），不然面板永远空白。

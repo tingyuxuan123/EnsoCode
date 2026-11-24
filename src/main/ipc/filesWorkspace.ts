@@ -16,12 +16,21 @@ import type {
   FilesWatchEvent,
   FilesWatchResult,
   FilesWriteResult,
+  OpenFileCitationResult,
+  SaveFileCitationRequest,
+  SaveFileCitationResult,
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { parseWorkspaceFileSearchRequest } from '@shared/workspaceFileSearch';
 import { app, clipboard, type IpcMainInvokeEvent, ipcMain, shell } from 'electron';
 import { createSshExecutor } from '../../agent/ssh/executor';
 import { resolveLocalCwdForBrowser } from '../services/browserFileRoot';
+import {
+  openFileCitation,
+  parseOpenFileCitationRequest,
+  parseSaveFileCitationRequest,
+  saveFileCitation,
+} from '../services/fileCitations';
 import {
   assertEntryName,
   createLocalDir,
@@ -54,6 +63,52 @@ import { sessionWorktreeBusy } from './worktree';
 const watches = new RefCountWatchers();
 const hookedSenders = new Set<number>();
 const sshPollHashes = new Map<string, string>();
+const openingCitations = new Set<number>();
+
+async function citationContext(
+  event: IpcMainInvokeEvent,
+  request: Pick<SaveFileCitationRequest, 'conversationId' | 'projectId'>
+) {
+  const { isMainWebContents } = await import('../windows/MainWindow');
+  const frame = event.senderFrame;
+  const fromWorkbench = () =>
+    frame &&
+    frame === event.sender.mainFrame &&
+    event.senderFrame === frame &&
+    isMainWebContents(event.sender.id);
+  if (!frame || !fromWorkbench()) return null;
+  const activeSessionFile = () => {
+    const registry = getSourceAuthorityRegistry();
+    const conversation = registry?.conversation(request.conversationId);
+    const project = registry?.project(request.projectId);
+    if (
+      !conversation ||
+      conversation.projectId !== request.projectId ||
+      conversation.lifecycle !== 'ready' ||
+      conversation.bot ||
+      project?.state !== 'active' ||
+      (project.kind !== undefined && project.kind !== 'local' && project.kind !== 'scratch')
+    )
+      return undefined;
+    return conversation.sessionFile;
+  };
+  const sessionFile = activeSessionFile();
+  if (!sessionFile) return null;
+  const userData = app.getPath('userData');
+  const appData = app.getPath('appData');
+  return {
+    sessionFile,
+    sessionDir: path.join(userData, 'agent', 'sessions'),
+    origin: `${event.sender.id}:${frame.processId}:${frame.routingId}:${request.conversationId}:${request.projectId}`,
+    protectedRoots: [
+      userData,
+      path.join(appData, 'enso-code'),
+      path.join(appData, 'enso-code-dev'),
+    ],
+    stillAuthorized: () => Boolean(fromWorkbench() && activeSessionFile() === sessionFile),
+    reveal: (absolute: string) => shell.showItemInFolder(absolute),
+  };
+}
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
@@ -226,6 +281,28 @@ export function registerFilesWorkspaceHandlers(): void {
     const cwd = resolveLocalCwd(parsed.conversationId, parsed.projectId);
     if (!cwd) return { ok: false, error: 'unavailable' };
     return openLocalWorkspaceFile(cwd, parsed.rel, readFileOpenRules());
+  });
+  handle(IPC_CHANNELS.FILES_OPEN_CITATION, async (event, raw): Promise<OpenFileCitationResult> => {
+    const request = parseOpenFileCitationRequest(raw);
+    if (!request) return { ok: false, error: 'unavailable' };
+    const context = await citationContext(event, request);
+    if (!context) return { ok: false, error: 'citation-unavailable' };
+    const senderId = event.sender.id;
+    if (openingCitations.has(senderId)) return { ok: false, error: 'unavailable' };
+    openingCitations.add(senderId);
+    try {
+      return await openFileCitation(request, context);
+    } finally {
+      openingCitations.delete(senderId);
+    }
+  });
+  handle(IPC_CHANNELS.FILES_SAVE_CITATION, async (event, raw): Promise<SaveFileCitationResult> => {
+    const request = parseSaveFileCitationRequest(raw);
+    if (!request) return { ok: false, error: 'unavailable' };
+    const context = await citationContext(event, request);
+    return context
+      ? saveFileCitation(request, context)
+      : { ok: false, error: 'citation-unavailable' };
   });
   handle(
     IPC_CHANNELS.FILES_OPEN_CONTEXT,

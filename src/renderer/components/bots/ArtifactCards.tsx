@@ -1,4 +1,5 @@
 import type { BotMediaItem } from '@shared/bots/sendImage';
+import { toWorkspaceRelativePath } from '@shared/markdownLinks';
 import type {
   BotArtifact,
   BotArtifactOpenAction,
@@ -9,7 +10,6 @@ import type {
 import { ExternalLink, FolderOpen, ImageOff, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Markdown, MarkdownLocalLinkContext } from '@/components/chat/Markdown';
-import { toWorkspaceRelativePath } from '@/components/chat/markdownLinks';
 import { ReadFileView } from '@/components/chat/ReadFileView';
 import { FileTypeIcon } from '@/components/sidepanel/fileIcons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

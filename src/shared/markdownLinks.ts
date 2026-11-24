@@ -91,6 +91,29 @@ export function classifyMarkdownLink(raw: string): MarkdownLink {
   return { kind: 'local', path: decoded };
 }
 
+/** Line numbers are only recognized on file links with an extension. */
+export function classifyFileReference(href: string) {
+  const classification = classifyMarkdownLink(href);
+  if (classification.kind === 'external') return { classification, line: undefined };
+  const reference = splitFileLineRef(classification.kind === 'local' ? classification.path : href);
+  if (reference.line && /\.[\w]+$/.test(reference.path)) {
+    return { classification: classifyMarkdownLink(reference.path), line: reference.line };
+  }
+  return { classification, line: undefined };
+}
+
+/** Only ordinary, absolute local paths can be citations. No UNC, device paths or ADS. */
+export function externalCitationPath(raw: string): string | null {
+  if (raw.length > 4096 || /[\p{Cc}\p{Cf}]/u.test(raw)) return null;
+  let value = raw;
+  if (/^\/?[a-z]:[/\\]/i.test(value)) {
+    value = value.replace(/^\//, '').replace(/\\/g, '/');
+    if (value.slice(2).includes(':')) return null;
+  } else if (!/^\/(?!\/)/.test(value) || /[:\\]/.test(value)) return null;
+  if (value.split('/').some((part) => part === '.' || part === '..')) return null;
+  return value;
+}
+
 interface CanonicalAbsolutePath {
   value: string;
   windows: boolean;

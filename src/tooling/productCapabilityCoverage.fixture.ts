@@ -694,6 +694,10 @@ export const IPC_PRODUCT_COVERAGE = {
   FILES_REVEAL: excluded('Side panel Files reveal in system file manager.'),
   FILES_OPEN: excluded('User-clicked workspace file opening; not an autonomous model capability.'),
   FILES_OPEN_CONTEXT: excluded('User right-clicks a chat file link; not a model capability.'),
+  FILES_OPEN_CITATION: excluded('Trusted desktop gesture on a saved local chat citation.'),
+  FILES_SAVE_CITATION: excluded(
+    'Explicit desktop save of a previously opened local chat citation.'
+  ),
   FILES_SEARCH_WORKSPACE: excluded(
     'Side panel Files name/content search scoped to conversation cwd.'
   ),

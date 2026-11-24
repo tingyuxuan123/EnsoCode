@@ -25,16 +25,32 @@ import {
   bindSidePanelDock,
   disposeConversationResources,
   openSidePanelFile,
+  openSidePanelFileCitation,
   registerFilesOpener,
 } from './sidePanelDock';
 
 function fakeDock() {
-  const panels: { id: string; params: unknown; focus: ReturnType<typeof vi.fn> }[] = [];
+  const panels: {
+    id: string;
+    component: string;
+    title?: string;
+    params: unknown;
+    focus: ReturnType<typeof vi.fn>;
+    api: {
+      updateParameters: ReturnType<typeof vi.fn>;
+      title?: string;
+      setTitle: ReturnType<typeof vi.fn>;
+    };
+  }[] = [];
   const api = {
     panels,
     getPanel: (id: string) => panels.find((panel) => panel.id === id),
-    addPanel: (opts: { id: string; params: unknown }) => {
-      panels.push({ id: opts.id, params: opts.params, focus: vi.fn() });
+    addPanel: (opts: { id: string; component: string; title?: string; params: unknown }) => {
+      panels.push({
+        ...opts,
+        focus: vi.fn(),
+        api: { updateParameters: vi.fn(), title: opts.title, setTitle: vi.fn() },
+      });
     },
   };
   return { api: api as unknown as DockviewApi, panels };
@@ -126,5 +142,47 @@ describe('openSidePanelFile', () => {
     expect(open).toHaveBeenLastCalledWith('README.md', undefined, 'markdown');
     openSidePanelFile('btw', 'README.md', 9);
     expect(open).toHaveBeenLastCalledWith('README.md', 9);
+  });
+});
+
+describe('openSidePanelFileCitation', () => {
+  const id = 'a'.repeat(64);
+  const file = { path: 'C:/Downloads/hook.ts', content: 'first\nsecond', line: 2 };
+
+  it('opens the source conversation’s dock, including after a cold mount', async () => {
+    const active = fakeDock();
+    bindSidePanelDock('parent', active.api);
+    openSidePanelFileCitation('late', id, file);
+    expect(active.panels).toHaveLength(0);
+    expect(harness.ensureOpen).toHaveBeenCalledWith('late');
+
+    const owner = fakeDock();
+    bindSidePanelDock('late', owner.api);
+    await Promise.resolve();
+    expect(owner.panels).toMatchObject([
+      { id: `file-citation:${id}`, component: 'file-citation', title: 'hook.ts', params: file },
+    ]);
+  });
+
+  it('focuses the existing tab and updates the target line and approved contents', () => {
+    const { api, panels } = fakeDock();
+    bindSidePanelDock('parent', api);
+    openSidePanelFileCitation('parent', id, file);
+    const latest = { ...file, line: 1, content: 'new text' };
+    openSidePanelFileCitation('parent', id, latest);
+    expect(panels).toHaveLength(1);
+    expect(panels[0].api.updateParameters).toHaveBeenCalledWith(expect.objectContaining(latest));
+    expect(panels[0].focus).toHaveBeenCalledOnce();
+  });
+
+  it('rejects missing conversations and drops pending previews for disposed owners', async () => {
+    openSidePanelFileCitation('missing', id, file);
+    expect(harness.ensureOpen).not.toHaveBeenCalled();
+    openSidePanelFileCitation('late', id, file);
+    disposeConversationResources('late');
+    const { api, panels } = fakeDock();
+    bindSidePanelDock('late', api);
+    await Promise.resolve();
+    expect(panels).toHaveLength(0);
   });
 });

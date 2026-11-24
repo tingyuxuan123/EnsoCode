@@ -60,6 +60,26 @@ describe('transient observer panels', () => {
     expect(result.transient).toBeUndefined();
   });
 
+  it('never serializes citation bodies or paths and retains normal file tabs', () => {
+    const id = 'file-citation:outside';
+    const source = layout(
+      {
+        [id]: {
+          contentComponent: 'file-citation',
+          params: { path: '/private/original.ts', content: 'outside file body', line: 20 },
+        },
+        files: { contentComponent: 'files' },
+      },
+      [[id, 'files']]
+    );
+    const persisted = stripTransientSidePanelLayouts({ chat: source }).chat;
+    expect(Object.keys(persisted?.panels ?? {})).toEqual(['files']);
+    expect(JSON.stringify(persisted)).not.toMatch(
+      /file-citation|private\/original|outside file body/
+    );
+    expect(source.panels[id]?.params?.content).toBe('outside file body');
+  });
+
   it('strips by component as well as ID and repairs active group when its leaf disappears', () => {
     const source = layout(
       {
