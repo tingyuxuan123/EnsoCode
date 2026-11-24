@@ -63,7 +63,11 @@ export function PluginUiHost() {
             )
           );
           currentViews = enabled.flatMap((plugin) =>
-            plugin.views.map((view) => ({ pluginId: plugin.id, ...view }))
+            plugin.views.map((view) => ({
+              pluginId: plugin.id,
+              ...(plugin.icon ? { icon: plugin.icon } : {}),
+              ...view,
+            }))
           );
           setPluginViews(
             enabled.flatMap((plugin) =>
@@ -71,6 +75,7 @@ export function PluginUiHost() {
                 build: plugin.build,
                 pluginId: plugin.id,
                 pluginName: plugin.name,
+                ...(plugin.icon ? { icon: plugin.icon } : {}),
                 ...view,
               }))
             )
@@ -100,8 +105,10 @@ export function PluginUiHost() {
         })
         .catch((error) => console.warn('[plugin] list failed', error));
     };
-    reload();
     const unsubscribe = api.onChanged(reload);
+    // Subscribe before the first read: an install completing during that read
+    // would otherwise be missed until the next unrelated change.
+    reload();
     const unsubscribeDraft = api.onDraftRequest((request) => {
       if (
         [

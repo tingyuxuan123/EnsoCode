@@ -495,7 +495,7 @@ describe('agent control tool protocol', () => {
     }
   });
 
-  it('activeOnly 只允许带 deliveryId 的 steer，不能用于 prompt', () => {
+  it('rejects the removed active-only steer option', () => {
     const command = {
       type: 'steer',
       identity: parent,
@@ -503,7 +503,7 @@ describe('agent control tool protocol', () => {
       deliveryId: 's',
       activeOnly: true,
     };
-    expect(parseAgentCommand(command)).toEqual(command);
+    expect(parseAgentCommand(command)).toBeNull();
     for (const patch of [
       { type: 'prompt' },
       { deliveryId: undefined },
@@ -513,7 +513,7 @@ describe('agent control tool protocol', () => {
       expect(parseAgentCommand({ ...command, ...patch })).toBeNull();
   });
 
-  it.each(['delivery-settled', 'delivery-rejected', 'delivery-deferred'])(
+  it.each(['delivery-settled', 'delivery-rejected'])(
     '%s 只接受精确 identity、seq 与 deliveryId',
     (type) => {
       const event = { type, identity: parent, seq: 3, deliveryId: 'delivery-1' };
@@ -656,11 +656,11 @@ describe('Main-owned source authority contracts', () => {
     expect(parseConversationAuthority({ ...conversation, parentId: 'forged' })).toBeNull();
   });
 
-  it('bot-home 项目与 bot 会话绑定只在权威形状里出现，renderer 创建请求不得携带', () => {
+  it('retired project and chat shapes are rejected at the IPC boundary', () => {
     const botId = '33333333-3333-4333-8333-333333333333';
     const chatId = '44444444-4444-4444-8444-444444444444';
     const home = { projectId, canonicalPath: '/u/bots/x/workspace', kind: 'bot-home' };
-    expect(parseProjectAuthority({ ...home, state: 'active', version: 1 })).not.toBeNull();
+    expect(parseProjectAuthority({ ...home, state: 'active', version: 1 })).toBeNull();
     expect(
       parseProjectAuthority({ ...home, sshHost: 'h', state: 'active', version: 1 })
     ).toBeNull();
@@ -670,9 +670,9 @@ describe('Main-owned source authority contracts', () => {
 
     const base = { conversationId, projectId, kind: 'root', lifecycle: 'draft', version: 1 };
     const direct = { ...base, bot: { botId, chatId } };
-    expect(parseConversationAuthority(direct)).toEqual(direct);
+    expect(parseConversationAuthority(direct)).toBeNull();
     const delegated = { ...base, bot: { botId, chatId: null, delegationId: 'd-1' } };
-    expect(parseConversationAuthority(delegated)).toEqual(delegated);
+    expect(parseConversationAuthority(delegated)).toBeNull();
     expect(parseConversationAuthority({ ...base, bot: { botId: 'x', chatId } })).toBeNull();
     expect(parseConversationAuthority({ ...base, bot: { botId } })).toBeNull();
     expect(parseConversationAuthority({ ...base, bot: { botId, chatId, extra: 1 } })).toBeNull();
@@ -2587,8 +2587,8 @@ describe('browser-invoke / browser-result', () => {
   });
 });
 
-describe('delegation and retired memory wire protocol', () => {
-  it('delegation-invoke 接受 group_history，拒绝未知 op', () => {
+describe('retired tool wire protocol', () => {
+  it('rejects old delegation tool invocations', () => {
     const event = {
       type: 'delegation-invoke',
       identity: parent,
@@ -2597,8 +2597,7 @@ describe('delegation and retired memory wire protocol', () => {
       op: 'group_history',
       params: { limit: 5 },
     };
-    expect(parseAgentWorkerEvent(event)).toEqual(event);
-    expect(parseAgentWorkerEvent({ ...event, op: 'group_secrets' })).toBeNull();
+    expect(parseAgentWorkerEvent(event)).toBeNull();
   });
 
   const invoke = {
@@ -2622,14 +2621,14 @@ describe('delegation and retired memory wire protocol', () => {
     expect(parseAgentWorkerEvent({ ...invoke, identity: child })).toBeNull();
   });
 
-  it('rejects memory-result without affecting delegation-result', () => {
+  it('rejects old memory and delegation results', () => {
     const failed = { ...result, ok: false, error: 'boom', result: undefined };
     delete (failed as { result?: unknown }).result;
     expect(parseAgentCommand(result)).toBeNull();
     expect(parseAgentCommand(failed)).toBeNull();
     for (const outcome of [result, failed]) {
       const delegationResult = { ...outcome, type: 'delegation-result' };
-      expect(parseAgentCommand(delegationResult)).toEqual(delegationResult);
+      expect(parseAgentCommand(delegationResult)).toBeNull();
     }
   });
 });
@@ -3003,11 +3002,11 @@ describe('spawn-parent system prompt 协议', () => {
 });
 
 describe('受保护动作底线协议', () => {
-  it('spawn-parent 携 botWriteLock：名字与祖先会话列表齐全才通过', () => {
+  it('rejects the retired workspace-write lock on spawn', () => {
     const base = { type: 'spawn-parent', identity: parent, cwd: '/repo', model };
     expect(
       parseAgentCommand({ ...base, botWriteLock: { label: 'alice', ancestors: ['p'] } })
-    ).toMatchObject({ botWriteLock: { label: 'alice', ancestors: ['p'] } });
+    ).toBeNull();
     expect(parseAgentCommand({ ...base, botWriteLock: { label: 'alice' } })).toBeNull();
     expect(parseAgentCommand({ ...base, botWriteLock: { label: '', ancestors: [] } })).toBeNull();
     expect(parseAgentCommand({ ...base, botWriteLock: { label: 'a', ancestors: [1] } })).toBeNull();

@@ -1,4 +1,3 @@
-import type { BotTemplateLibrary } from '@shared/bots/templateLibrary';
 import type {
   BtwAbortRequest,
   BtwDisposeRequest,
@@ -152,58 +151,6 @@ import type {
 } from '@shared/types/agent';
 import { parseDispatchMainEvent } from '@shared/types/agent';
 import type {
-  BotAbilitySuggestRequest,
-  BotAbilitySuggestResult,
-  BotActionResult,
-  BotArtifactOpenAction,
-  BotArtifactReadRequest,
-  BotArtifactReadResult,
-  BotArtifactsResult,
-  BotArtifactTarget,
-  BotChatCreateInput,
-  BotChatSessionsResult,
-  BotChatStateResult,
-  BotChatsListResult,
-  BotChatUpdateInput,
-  BotChatWriteResult,
-  BotDelegationRetryResult,
-  BotDelegationsResult,
-  BotDesignWorkspaceResult,
-  BotDraftInput,
-  BotEvent,
-  BotFileSearchRequest,
-  BotFileSearchResult,
-  BotGetResult,
-  BotGoalSuggestRequest,
-  BotGoalSuggestResult,
-  BotInboxListResult,
-  BotInboxUpdateInput,
-  BotNewSessionResult,
-  BotNotesResult,
-  BotPersonaSuggestRequest,
-  BotPersonaSuggestResult,
-  BotRoutineReviewResult,
-  BotRoutineRunsResult,
-  BotRoutineSaveInput,
-  BotRoutineSaveResult,
-  BotRoutinesResult,
-  BotSearchRequest,
-  BotSearchResult,
-  BotSendRequest,
-  BotSendResult,
-  BotsListResult,
-  BotTaskSaveInput,
-  BotTasksResult,
-  BotTaskWriteResult,
-  BotTeamCreateRequest,
-  BotTeamCreateResult,
-  BotTeamPreviewRequest,
-  BotTeamPreviewResult,
-  BotTemplatesResult,
-  BotTimelineResult,
-  BotWriteIpcResult,
-} from '@shared/types/botIpc';
-import type {
   BrowserClearKind,
   BrowserDesignModeEvent,
   BrowserDevice,
@@ -299,7 +246,6 @@ import type {
   SpeechStatusDto,
   SpeechTranscribeResult,
 } from '@shared/types/speech';
-import type { TaskBoardNavigation, TaskBoardWindowResult } from '@shared/types/taskBoard';
 import type { UpdateStatus } from '@shared/types/updater';
 import type {
   WorkflowPresetDraft,
@@ -313,7 +259,6 @@ import type {
   WorkspaceBranchSwitchResult,
   WorktreeStatus,
 } from '@shared/types/worktree';
-import type { BotUsageOverviewResult, BotUsageSummaryResult } from '@shared/usage/botUsage';
 import type { UsageRangeDays, UsageSummaryResult } from '@shared/usage/types';
 import type { TitleBarAppearance } from '@shared/windowControls';
 import type {
@@ -1286,22 +1231,6 @@ const electronAPI = {
     },
   },
 
-  taskBoard: {
-    open: (): Promise<TaskBoardWindowResult> => ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_OPEN),
-    focusMain: (): Promise<TaskBoardWindowResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_FOCUS_MAIN),
-    navigate: (target: TaskBoardNavigation): Promise<TaskBoardWindowResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_NAVIGATE, target),
-    /** 只通知有待处理目标；消费与推送不重复触发导航。 */
-    onNavigate: (callback: () => void): (() => void) => {
-      const listener = () => callback();
-      ipcRenderer.on(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
-    },
-    consumeNavigation: (): Promise<TaskBoardNavigation | null> =>
-      ipcRenderer.invoke(IPC_CHANNELS.TASK_BOARD_NAVIGATION_CONSUME),
-  },
-
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MINIMIZE),
     maximize: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MAXIMIZE),
@@ -1364,195 +1293,6 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.BTW_SPAWN, request),
     dispose: (request: BtwDisposeRequest): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.BTW_DISPOSE, request),
-  },
-  bots: {
-    delegations: (request: { chatId?: string } = {}): Promise<BotDelegationsResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_DELEGATIONS_LIST, request),
-    cancelDelegation: (id: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_DELEGATION_CANCEL, { id }),
-    retryDelegation: (id: string, mode?: 'resume' | 'restart'): Promise<BotDelegationRetryResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_DELEGATION_RETRY, mode ? { id, mode } : { id }),
-    routines: {
-      list: (request: { botId?: string } = {}): Promise<BotRoutinesResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ROUTINES_LIST, request),
-      save: (request: BotRoutineSaveInput): Promise<BotRoutineSaveResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ROUTINE_SAVE, request),
-      remove: (request: { botId: string; id: string }): Promise<BotActionResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ROUTINE_DELETE, request),
-      runNow: (request: {
-        botId: string;
-        id: string;
-        dryRun?: boolean;
-      }): Promise<BotActionResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_ROUTINE_RUN_NOW, request),
-      review: (request: {
-        botId: string;
-        id: string;
-        approve: boolean;
-      }): Promise<BotRoutineReviewResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ROUTINE_REVIEW, request),
-      runs: (request: { botId: string; id: string }): Promise<BotRoutineRunsResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ROUTINE_RUNS, request),
-    },
-    /** 成员 / 群核心笔记：target 只传 { botId } 或 { chatId } */
-    notes: {
-      get: (target: { botId: string } | { chatId: string }): Promise<BotNotesResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_NOTES_GET, target),
-      save: (
-        request: ({ botId: string } | { chatId: string }) & { content: string; version: string }
-      ): Promise<BotNotesResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_NOTES_SAVE, request),
-    },
-    tasks: {
-      list: (chatId: string): Promise<BotTasksResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TASKS_LIST, { chatId }),
-      save: (request: BotTaskSaveInput): Promise<BotTaskWriteResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_SAVE, request),
-      assign: (request: {
-        chatId: string;
-        id: string;
-        botId: string;
-      }): Promise<BotTaskWriteResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_ASSIGN, request),
-      complete: (request: {
-        chatId: string;
-        id: string;
-        result?: string;
-      }): Promise<BotTaskWriteResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_COMPLETE, request),
-      cancel: (request: { chatId: string; id: string }): Promise<BotTaskWriteResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_CANCEL, request),
-      remove: (request: { chatId: string; id: string }): Promise<BotActionResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_DELETE, request),
-      /** 验收：通过 → done；退回需 reason → todo，rework 时原执行人在原会话返工 */
-      review: (
-        request: { chatId: string; id: string } & (
-          | { accept: true }
-          | { accept: false; reason: string; rework?: boolean }
-        )
-      ): Promise<BotTaskWriteResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_REVIEW, request),
-      /** 任务卡回复：缺信息卡住时解除并让原执行人接着做；执行中插入当前执行；其他状态记评论 */
-      reply: (request: { chatId: string; id: string; text: string }): Promise<BotTaskWriteResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TASK_REPLY, request),
-    },
-    list: (): Promise<BotsListResult> => ipcRenderer.invoke(IPC_CHANNELS.BOTS_LIST),
-    get: (botId: string): Promise<BotGetResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_GET, { botId }),
-    create: (draft: BotDraftInput): Promise<BotWriteIpcResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CREATE, draft),
-    suggestAbilities: (request: BotAbilitySuggestRequest): Promise<BotAbilitySuggestResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SUGGEST_ABILITIES, request),
-    suggestPersona: (request: BotPersonaSuggestRequest): Promise<BotPersonaSuggestResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SUGGEST_PERSONA, request),
-    suggestGoal: (request: BotGoalSuggestRequest): Promise<BotGoalSuggestResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SUGGEST_GOAL, request),
-    previewTeam: (request: BotTeamPreviewRequest): Promise<BotTeamPreviewResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_TEAM_PREVIEW, request),
-    createTeam: (request: BotTeamCreateRequest): Promise<BotTeamCreateResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_TEAM_CREATE, request),
-    update: (request: {
-      botId: string;
-      expectedVersion?: number;
-      draft: BotDraftInput;
-    }): Promise<BotWriteIpcResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_UPDATE, request),
-    archive: (botId: string, archived: boolean): Promise<BotWriteIpcResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_ARCHIVE, { botId, archived }),
-    remove: (botId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_DELETE, { botId }),
-    /** image=null 移除图片头像，恢复颜色头像 */
-    setAvatar: (botId: string, image: Uint8Array | null): Promise<BotWriteIpcResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SET_AVATAR, { botId, image }),
-    chats: (): Promise<BotChatsListResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_CHATS_LIST),
-    createChat: (request: BotChatCreateInput): Promise<BotChatWriteResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_CREATE, request),
-    updateChat: (request: BotChatUpdateInput): Promise<BotChatWriteResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_UPDATE, request),
-    deleteChat: (chatId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_DELETE, { chatId }),
-    newSession: (chatId: string): Promise<BotNewSessionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_NEW_SESSION, { chatId }),
-    switchSession: (chatId: string, conversationId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_SWITCH_SESSION, { chatId, conversationId }),
-    cloneChat: (request: { chatId: string; title: string }): Promise<BotChatWriteResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_CLONE, request),
-    createThread: (chatId: string): Promise<BotChatWriteResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_THREAD_CREATE, { chatId }),
-    selectThread: (chatId: string, threadId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_THREAD_SELECT, { chatId, threadId }),
-    renameThread: (chatId: string, title: string): Promise<BotChatWriteResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_THREAD_UPDATE, { chatId, title }),
-    deleteThread: (chatId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_THREAD_DELETE, { chatId }),
-    stopChat: (chatId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_STOP, { chatId }),
-    interjectQueued: (chatId: string, deliveryId: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_INTERJECT_QUEUED, { chatId, deliveryId }),
-    chatState: (chatId: string): Promise<BotChatStateResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_STATE, { chatId }),
-    chatSessions: (chatId: string): Promise<BotChatSessionsResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_SESSIONS, { chatId }),
-    timeline: (request: {
-      chatId: string;
-      beforeSeq?: number;
-      /** 只要该 seq 之后的增量；缺口超过 limit 时返回最新一页 */
-      afterSeq?: number;
-      limit?: number;
-    }): Promise<BotTimelineResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_TIMELINE, request),
-    send: (request: BotSendRequest): Promise<BotSendResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SEND, request),
-    openWorkspace: (target: { chatId: string } | { botId: string }): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_OPEN_WORKSPACE, target),
-    designWorkspace: (request: { chatId: string }): Promise<BotDesignWorkspaceResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_DESIGN_WORKSPACE, request),
-    sessionHistory: (request: {
-      conversationId: string;
-      beforeIndex?: number;
-    }): Promise<ParentHistoryTailResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SESSION_HISTORY, request),
-    search: (request: BotSearchRequest): Promise<BotSearchResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_SEARCH, request),
-    searchFiles: (request: BotFileSearchRequest): Promise<BotFileSearchResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_FILE_SEARCH, request),
-    /** 超长粘贴存成 txt：存放目录由 Main 按 chatId 推导 */
-    savePastedText: (request: { chatId: string; text: string }): Promise<PastedTextFileResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_CHAT_SAVE_PASTED_TEXT, request),
-    /** 私聊回退到持久化 user entry；结果经 AGENT_EVENT 的 rewind-done 回来 */
-    rewind: (request: {
-      chatId: string;
-      entryId: string;
-      restoreFiles?: boolean;
-    }): Promise<BotActionResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_REWIND, request),
-    retry: (chatId: string, entryId?: string): Promise<BotActionResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_RETRY, { chatId, ...(entryId ? { entryId } : {}) }),
-    templates: {
-      get: (): Promise<BotTemplatesResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_TEMPLATES_GET),
-      save: (library: BotTemplateLibrary): Promise<BotTemplatesResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_TEMPLATES_SAVE, library),
-      onChanged: (callback: (library: BotTemplateLibrary) => void): (() => void) => {
-        const listener = (_: unknown, library: BotTemplateLibrary) => callback(library);
-        ipcRenderer.on(IPC_CHANNELS.BOT_TEMPLATES_CHANGED, listener);
-        return () => ipcRenderer.removeListener(IPC_CHANNELS.BOT_TEMPLATES_CHANGED, listener);
-      },
-    },
-    usageSummary: (days: UsageRangeDays): Promise<BotUsageSummaryResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.BOT_USAGE_SUMMARY, days),
-    usage: (): Promise<BotUsageOverviewResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_USAGE),
-    inbox: {
-      list: (): Promise<BotInboxListResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_INBOX_LIST),
-      update: (request: BotInboxUpdateInput): Promise<BotActionResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_INBOX_UPDATE, request),
-    },
-    artifacts: {
-      list: (target: BotArtifactTarget): Promise<BotArtifactsResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ARTIFACTS_LIST, target),
-      read: (request: BotArtifactReadRequest): Promise<BotArtifactReadResult> =>
-        ipcRenderer.invoke(IPC_CHANNELS.BOT_ARTIFACT_READ, request),
-      open: (
-        request: BotArtifactTarget & { rel: string; action: BotArtifactOpenAction }
-      ): Promise<BotActionResult> => ipcRenderer.invoke(IPC_CHANNELS.BOT_ARTIFACT_OPEN, request),
-    },
-    onEvent: (callback: (event: BotEvent) => void): (() => void) => {
-      const listener = (_: unknown, event: BotEvent) => callback(event);
-      ipcRenderer.on(IPC_CHANNELS.BOT_EVENT, listener);
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.BOT_EVENT, listener);
-    },
   },
   terminal: {
     create: (request: TerminalCreateRequest): Promise<TerminalCreateResult> =>

@@ -34,6 +34,7 @@ function MenuPopup({
   alignOffset,
   side = 'bottom',
   zIndex,
+  anchor,
   ...props
 }: MenuPrimitive.Popup.Props & {
   align?: MenuPrimitive.Positioner.Props['align'];
@@ -41,6 +42,8 @@ function MenuPopup({
   alignOffset?: MenuPrimitive.Positioner.Props['alignOffset'];
   side?: MenuPrimitive.Positioner.Props['side'];
   zIndex?: number;
+  /** 用别的元素代替触发器定位（例如让选模型的浮层贴整张输入条，而不是贴胶囊） */
+  anchor?: MenuPrimitive.Positioner.Props['anchor'];
 }) {
   const layer = zIndex ?? Z_INDEX.MODAL_BACKDROP;
   return (
@@ -53,6 +56,7 @@ function MenuPopup({
       <MenuPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
+        anchor={anchor}
         data-slot="menu-positioner"
         side={side}
         sideOffset={sideOffset}

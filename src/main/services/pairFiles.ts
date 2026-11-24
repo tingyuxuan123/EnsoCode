@@ -9,9 +9,9 @@ import {
   type PairFileTarget,
   type PhoneToHost,
 } from '@enso/pair';
-import { resolveArtifactFile } from './bots/artifacts';
 import type { PairReply } from './pairHost';
 import { parsePairFileCommand } from './pairPolicy';
+import { resolveArtifactFile } from './workspaceArtifacts';
 
 export interface PairFileSource {
   root: string;

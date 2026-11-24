@@ -31,6 +31,7 @@ import { DefaultModelPicker } from './DefaultModelPicker';
 import { LocalImportDialog } from './LocalImportDialog';
 import { NewSessionBadge } from './NewSessionBadge';
 import { AccountUsageBlock } from './OauthProvidersDialog';
+import { PresetProvidersSection } from './PresetProvidersSection';
 import { ProviderEditDialog } from './ProviderEditDialog';
 import { ProviderSetupWizard } from './ProviderSetupWizard';
 import {
@@ -232,6 +233,7 @@ export function ProvidersSettings() {
               })}
         </p>
       )}
+      <PresetProvidersSection />
       <DefaultModelPicker />
       <VirtualModelsSettings />
       <TitleSummaryPicker />

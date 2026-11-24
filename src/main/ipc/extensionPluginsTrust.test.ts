@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * 只多 `list` + `asset`；管理的写通道、调用通道、配置与 draft 回复一律不扩权。
  * 同时守住外层闸门与 createExtensionPluginHandlers 内部闸门两层，防止只改一层失效。
  */
-const ids = { main: 7, settings: 8, taskboard: 9, design: 10 };
+const ids = { main: 7, settings: 8, design: 10 };
 const ORIGIN = 'http://localhost:5173';
 
 const mocks = vi.hoisted(() => ({
@@ -35,9 +35,6 @@ vi.mock('../windows/MainWindow', () => ({
 }));
 vi.mock('../windows/SettingsWindow', () => ({
   getSettingsWindow: () => ({ isDestroyed: () => false, webContents: { id: 8 } }),
-}));
-vi.mock('../windows/TaskBoardWindow', () => ({
-  isTaskBoardWebContents: (id: number) => id === 9,
 }));
 vi.mock('../windows/DesignWindow', () => ({
   designWindowSession: (id: number) => (id === 10 ? 'root-session' : null),
@@ -97,12 +94,9 @@ afterEach(() => {
 });
 
 describe('插件 IPC 的只读放行', () => {
-  it('协作看板与独立设计窗口能读插件列表与主题素材', async () => {
+  it('独立设计窗口能读插件列表与主题素材', async () => {
     const handler = await registered();
-    for (const [id, url] of [
-      [ids.taskboard, `${ORIGIN}/taskboard.html`],
-      [ids.design, `${ORIGIN}/design.html`],
-    ] as const) {
+    for (const [id, url] of [[ids.design, `${ORIGIN}/design.html`]] as const) {
       expect(await handler(IPC_CHANNELS.EXTENSION_PLUGINS_LIST)(sender(id, url))).toEqual({
         plugins: [],
       });
@@ -116,9 +110,9 @@ describe('插件 IPC 的只读放行', () => {
     }
   });
 
-  it('管理、安装、调用、配置与 draft 通道对看板/设计窗口仍拒绝，且不初始化服务', async () => {
+  it('管理、安装、调用、配置与 draft 通道对设计窗口仍拒绝，且不初始化服务', async () => {
     const handler = await registered();
-    const event = sender(ids.taskboard, `${ORIGIN}/taskboard.html`);
+    const event = sender(ids.design, `${ORIGIN}/design.html`);
     for (const channel of [
       IPC_CHANNELS.EXTENSION_PLUGINS_UNINSTALL,
       IPC_CHANNELS.EXTENSION_PLUGINS_SET_ENABLED,
@@ -136,13 +130,13 @@ describe('插件 IPC 的只读放行', () => {
     const handler = await registered();
     const list = handler(IPC_CHANNELS.EXTENSION_PLUGINS_LIST);
     for (const event of [
-      subframeSender(ids.taskboard, `${ORIGIN}/taskboard.html`),
-      sender(ids.taskboard, 'https://evil.example/'),
-      sender(ids.taskboard, `${ORIGIN}/index.html`),
+      subframeSender(ids.design, `${ORIGIN}/design.html`),
+      sender(ids.design, 'https://evil.example/'),
+      sender(ids.design, `${ORIGIN}/index.html`),
       sender(ids.design, `${ORIGIN}/taskboard.html`),
       sender(ids.design, 'file:///app/renderer/plugin-view.html'),
-      sender(99, `${ORIGIN}/taskboard.html`),
-      sender(ids.main, `${ORIGIN}/taskboard.html`),
+      sender(99, `${ORIGIN}/design.html`),
+      sender(ids.main, `${ORIGIN}/design.html`),
       sender(ids.settings, `${ORIGIN}/design.html`),
     ])
       expect(await list(event)).toMatchObject({ code: 'PERMISSION_DENIED' });

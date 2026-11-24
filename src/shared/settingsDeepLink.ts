@@ -17,9 +17,6 @@ export const SETTINGS_CATEGORIES = [
   'ssh',
   'usage',
   'resources',
-  'experimental',
-  'bots',
-  'botTemplates',
 ] as const;
 
 export type SettingsCategory = (typeof SETTINGS_CATEGORIES)[number];

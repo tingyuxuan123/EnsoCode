@@ -59,7 +59,7 @@ const ERROR: Record<string, string> = {
   invalid: '文件已变化或不可用，请刷新列表后重试。',
 };
 
-/** 普通会话顶栏 / Bot 回复共用。只下载原始字节，不把 HTML/SVG 当同源页面打开。 */
+/** 会话文件下载。只下载原始字节，不把 HTML/SVG 当同源页面打开。 */
 export function FileDownloads({
   target,
   children,

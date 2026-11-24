@@ -80,8 +80,6 @@ const mocks = vi.hoisted(() => ({
   mobileClear: vi.fn(),
   compactSession: vi.fn(() => ({ ok: true })),
   sessionFile: vi.fn((): string | undefined => undefined),
-  getBotServices: vi.fn((): unknown => null),
-  maybeNotifyBot: vi.fn(async (_event: { type: string }) => {}),
   pluginDispatchEvent: vi.fn(async () => undefined),
   pluginIntercept: vi.fn(async () => ({ append: 'safe context' })),
   pluginCallTool: vi.fn(async (_input: unknown) => ({ content: 'ok' })),
@@ -220,8 +218,6 @@ vi.mock('../services/browserHost', () => ({
     invoke: mocks.browserInvoke,
     tabUrl: mocks.browserTabUrl,
     closeForSession: vi.fn(async () => {}),
-    releaseActor: vi.fn(),
-    forgetActor: vi.fn(),
   },
 }));
 vi.mock('../services/computerHost', () => ({
@@ -255,7 +251,6 @@ vi.mock('../services/agentDispatchService', async () => {
 });
 vi.mock('../services/notifications', () => ({
   maybeNotify: vi.fn(),
-  maybeNotifyBot: mocks.maybeNotifyBot,
 }));
 vi.mock('../services/sessionMuteGate', () => ({
   setSessionMuteOverride: mocks.setSessionMuteOverride,
@@ -294,10 +289,6 @@ vi.mock('./capabilities', () => ({
   handleCapabilityInvoke: vi.fn(),
 }));
 vi.mock('./settings', () => ({ readSettings: mocks.readSettings }));
-vi.mock('./bots', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./bots')>()),
-  getBotServices: mocks.getBotServices,
-}));
 vi.mock('../services/childHistory', () => ({ readChildHistory: mocks.readChildHistory }));
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs')>()),
@@ -328,18 +319,16 @@ const sender = {
 const event = { sender };
 
 describe('agent IPC Main identity boundary', () => {
-  it('plugin bridge excludes SSH and Bot identities from inject, directory and status', async () => {
+  it('plugin bridge excludes SSH identities from inject, directory and status', async () => {
     const authority = getSourceAuthorityRegistry()!;
     const local = { sessionId: 'local', generation: '11111111-1111-4111-8111-111111111111' };
     const remote = { ...local, sessionId: 'remote' };
-    const bot = { ...local, sessionId: 'bot' };
-    const rows = [local, remote, bot].map((identity) => ({
+    const rows = [local, remote].map((identity) => ({
       conversationId: identity.sessionId,
       projectId: identity.sessionId,
       kind: 'root' as const,
       lifecycle: 'ready' as const,
       version: 1,
-      ...(identity === bot ? { bot: { botId: 'b', chatId: null } } : {}),
     }));
     vi.spyOn(authority, 'conversation').mockImplementation((id) =>
       rows.find((row) => row.conversationId === id)
@@ -362,15 +351,13 @@ describe('agent IPC Main identity boundary', () => {
       })),
     } as ReturnType<typeof authority.projection>);
     mocks.currentIdentity.mockImplementation((id) =>
-      [local, remote, bot].find((identity) => identity.sessionId === id)
+      [local, remote].find((identity) => identity.sessionId === id)
     );
     await vi.waitFor(() => expect(mocks.registerPluginSessionBridge).toHaveBeenCalled());
     const lookup = mocks.registerPluginSessionBridge.mock.calls.at(-1)![0];
     expect(lookup('remote')).toBeUndefined();
-    expect(lookup('bot')).toBeUndefined();
     const directory = mocks.setPluginSessionDirectory.mock.calls.at(-1)![0];
     expect(directory.listAll().map((row: { id: string }) => row.id)).not.toContain('remote');
-    expect(directory.listAll().map((row: { id: string }) => row.id)).not.toContain('bot');
     expect(directory.status('remote')).toEqual({
       sessionId: 'remote',
       state: 'idle',
@@ -582,7 +569,7 @@ describe('agent IPC Main identity boundary', () => {
     mocks.readSettingsState.mockReturnValue({ disabledBuiltinTools: ['browser'] });
     await expect(bridge(request)).rejects.toThrow();
     mocks.readSettingsState.mockReturnValue({});
-    mocks.browserInvoke.mockImplementationOnce(async (_key, _op, _params, _actor, options) => {
+    mocks.browserInvoke.mockImplementationOnce(async (_key, _op, _params, options) => {
       conversation.version++;
       options.guard();
       return {};
@@ -793,74 +780,6 @@ describe('agent IPC Main identity boundary', () => {
       }
     }
   );
-
-  it('通用 AGENT_SPAWN 拒绝 bot 会话（人设与工作区只能由 BotSessionHost 组装）', async () => {
-    const authority = getSourceAuthorityRegistry()!;
-    vi.spyOn(authority, 'conversation').mockReturnValue({
-      conversationId: 'bot-target',
-      projectId: 'p',
-      kind: 'root',
-      lifecycle: 'draft',
-      version: 1,
-      bot: { botId: '11111111-1111-4111-8111-111111111111', chatId: null },
-    });
-    vi.spyOn(authority, 'project').mockReturnValue({
-      projectId: 'p',
-      canonicalPath: '/repo',
-      state: 'active',
-      version: 1,
-    });
-    const result = await mocks.handlers.get(IPC_CHANNELS.AGENT_SPAWN)!(event, {
-      sessionId: 'bot-target',
-      providerId: 'provider',
-      modelId: 'model',
-      cwd: '/repo',
-    });
-    expect(result).toMatchObject({ ok: false });
-    expect(mocks.spawnSession).not.toHaveBeenCalled();
-  });
-
-  it('Bot authority rejects generic execution and policy changes but keeps abort available', async () => {
-    vi.spyOn(getSourceAuthorityRegistry()!, 'conversation').mockReturnValue({
-      conversationId: 'bot-target',
-      projectId: 'p',
-      kind: 'root',
-      lifecycle: 'ready',
-      version: 1,
-      bot: { botId: '11111111-1111-4111-8111-111111111111', chatId: null },
-    });
-    mocks.currentIdentity.mockReturnValue({ sessionId: 'bot-target', generation: 'g' });
-    for (const [channel, args] of [
-      [IPC_CHANNELS.AGENT_PROMPT, ['hello']],
-      [IPC_CHANNELS.AGENT_STEER, ['hello']],
-      [IPC_CHANNELS.AGENT_SET_MODEL, ['provider', 'model']],
-      [IPC_CHANNELS.AGENT_SET_THINKING, ['high']],
-      [IPC_CHANNELS.AGENT_SET_REASONING, [true]],
-      [IPC_CHANNELS.AGENT_SET_APPROVAL_MODE, ['full']],
-    ] as const) {
-      expect(await mocks.handlers.get(channel)!(event, 'bot-target', ...args)).toMatchObject({
-        ok: false,
-        error: expect.stringContaining('Bot'),
-      });
-    }
-    const bridge = mocks.setPairAgentBridge.mock.calls.at(-1)![0];
-    expect(bridge.prompt('bot-target', 'hello')).toMatchObject({ ok: false });
-    const headless = mocks.configurePairSessionHost.mock.calls.at(-1)![0];
-    expect(headless.compact('bot-target')).toMatchObject({ ok: false });
-    mocks.compactSession.mockClear();
-    expect(
-      await mocks.handlers.get(IPC_CHANNELS.AGENT_COMPACT)!(event, 'bot-target', '保留分工')
-    ).toEqual({ ok: true });
-    expect(mocks.compactSession).toHaveBeenCalledWith(
-      { sessionId: 'bot-target', generation: 'g' },
-      '保留分工'
-    );
-    expect(bridge.steer('bot-target', 'hello')).toMatchObject({ ok: false });
-    bridge.abort('bot-target');
-    expect(mocks.abortSession).toHaveBeenCalled();
-    expect(mocks.promptSession).not.toHaveBeenCalled();
-    expect(mocks.steerSession).not.toHaveBeenCalled();
-  });
 
   it('cleans a late fork file if the target was removed before completion', () => {
     const sourceId = '11111111-1111-4111-8111-111111111111';
@@ -1469,60 +1388,6 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
         expect.objectContaining({ ok: true })
       );
     });
-    it('Bot 委派设计路由到其权威所属话题，而非隐藏的 Code 画布', async () => {
-      const authority = getSourceAuthorityRegistry()!;
-      const root = authority.conversation(parent.sessionId)!;
-      vi.spyOn(authority, 'conversation').mockReturnValue({
-        ...root,
-        bot: { botId: 'designer', chatId: null, delegationId: 'first-delegation' },
-      });
-      const executionOf = vi.fn(() => ({ chatId: 'current-topic' }));
-      mocks.getBotServices.mockReturnValue({
-        delegations: { executionOf, chatIdOf: () => 'old-topic' },
-      });
-      try {
-        invoke('bot-delegation-create');
-        await Promise.resolve();
-        expect(executionOf).toHaveBeenCalledWith(parent.sessionId);
-        expect(mocks.designRequest).toHaveBeenCalledWith(
-          expect.objectContaining({
-            cwd: '/repo',
-            sessionId: parent.sessionId,
-            botChatId: 'current-topic',
-            tool: 'vetd_create',
-          })
-        );
-      } finally {
-        mocks.getBotServices.mockReturnValue(null);
-      }
-    });
-    it('普通 Bot 设计保留直接群聊标识；Code 来源的成员委派不伪造群聊归属', async () => {
-      const authority = getSourceAuthorityRegistry()!;
-      const root = authority.conversation(parent.sessionId)!;
-      const conversation = vi.spyOn(authority, 'conversation');
-      conversation.mockReturnValue({ ...root, bot: { botId: 'designer', chatId: 'group-topic' } });
-      invoke('bot-direct-create');
-      await Promise.resolve();
-      expect(mocks.designRequest).toHaveBeenLastCalledWith(
-        expect.objectContaining({ botChatId: 'group-topic' })
-      );
-      conversation.mockReturnValue({
-        ...root,
-        bot: { botId: 'designer', chatId: null, delegationId: 'code-delegation' },
-      });
-      mocks.getBotServices.mockReturnValue({
-        delegations: { executionOf: () => ({ chatId: null }), chatIdOf: () => 'stale-topic' },
-      });
-      try {
-        invoke('code-member-create');
-        await Promise.resolve();
-        expect(mocks.designRequest).toHaveBeenLastCalledWith(
-          expect.objectContaining({ botChatId: undefined })
-        );
-      } finally {
-        mocks.getBotServices.mockReturnValue(null);
-      }
-    });
     it('deduplicates, binds cancellation, rejects timeout and suppresses late replies; disabling aborts pending calls', async () => {
       vi.useFakeTimers();
       try {
@@ -1704,7 +1569,7 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
     it('取消绑定身份，重放 requestId 不再次执行，迟到结果不投递', async () => {
       let signal: AbortSignal | undefined;
       let finish: ((result: unknown) => void) | undefined;
-      mocks.browserInvoke.mockImplementation((_key, _op, _params, _actor, options) => {
+      mocks.browserInvoke.mockImplementation((_key, _op, _params, options) => {
         signal = options?.signal;
         return new Promise((resolve) => {
           finish = resolve;
@@ -1730,7 +1595,7 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
     });
     it('generation 结束和 worker 退出立即取消 Main，在途完成不能给新代回结果', async () => {
       const signals: AbortSignal[] = [];
-      mocks.browserInvoke.mockImplementation((_key, _op, _params, _actor, options) => {
+      mocks.browserInvoke.mockImplementation((_key, _op, _params, options) => {
         signals.push(options?.signal);
         return new Promise(() => {});
       });
@@ -1769,7 +1634,7 @@ describe('agent IPC 标题总结：回退链全部可解析候选一次性下发
       try {
         let signal: AbortSignal | undefined;
         let finish: ((value: unknown) => void) | undefined;
-        mocks.browserInvoke.mockImplementation((_key, _op, _params, _actor, options) => {
+        mocks.browserInvoke.mockImplementation((_key, _op, _params, options) => {
           signal = options.signal;
           return new Promise((resolve) => {
             finish = resolve;
@@ -2264,67 +2129,5 @@ describe('device tools bridge', () => {
         expect.objectContaining({ type: 'device-tool-result', requestId: 'd3', ok: false })
       )
     );
-  });
-});
-
-describe('Bot 的压缩与通知事件', () => {
-  const identity = { sessionId: 'conv-1', generation: 'g' };
-  const emit = (event: Record<string, unknown>) =>
-    mocks.setAgentEventListener.mock.calls.at(-1)![0]({ seq: 1, identity, ...event });
-  const distill = vi.fn(async () => {});
-  const markCompacted = vi.fn();
-
-  beforeEach(() => {
-    mocks.handlers.clear();
-    registerAgentHandlers();
-    distill.mockClear();
-    markCompacted.mockClear();
-    mocks.sessionFile.mockReturnValue('/tmp/agent/sessions/conv-1.jsonl');
-    mocks.getBotServices.mockReturnValue({
-      memory: { distill },
-      groups: { markCompacted },
-      chats: { rootOf: () => undefined },
-    });
-  });
-
-  const conversation = (bot?: { botId: string; chatId: string | null }) =>
-    vi.spyOn(getSourceAuthorityRegistry()!, 'conversation').mockReturnValue({
-      conversationId: 'conv-1',
-      projectId: 'p',
-      kind: 'root',
-      lifecycle: 'ready',
-      version: 1,
-      ...(bot ? { bot } : {}),
-    });
-
-  it('Bot 群聊成功压缩只标记下次补群状态，不整理长期记忆', () => {
-    conversation({ botId: 'bot-a', chatId: 'chat-1' });
-    emit({ type: 'compaction', state: 'start' });
-    emit({ type: 'compaction', state: 'end', error: 'boom' });
-    emit({ type: 'compaction', state: 'end', abandoned: true });
-    expect(markCompacted).not.toHaveBeenCalled();
-    emit({ type: 'compaction', state: 'end' });
-    expect(markCompacted).toHaveBeenCalledWith('chat-1', 'bot-a', 'conv-1');
-    expect(distill).not.toHaveBeenCalled();
-  });
-
-  it('Bot 私聊压缩不触发群状态或长期记忆', () => {
-    conversation({ botId: 'bot-a', chatId: null });
-    emit({ type: 'compaction', state: 'end' });
-    expect(distill).not.toHaveBeenCalled();
-    expect(markCompacted).not.toHaveBeenCalled();
-  });
-
-  it('Bot 审批解决及会话结束事件也到达通知门，防止异步通知迟发', () => {
-    conversation({ botId: 'bot-a', chatId: 'chat-1' });
-    mocks.maybeNotifyBot.mockClear();
-    emit({ type: 'approval-resolved', requestId: 'apr' });
-    emit({ type: 'parent-ended', reason: 'ended' });
-    emit({ type: 'child-ended', reason: 'ended' });
-    expect(mocks.maybeNotifyBot.mock.calls.map(([event]) => event.type)).toEqual([
-      'approval-resolved',
-      'parent-ended',
-      'child-ended',
-    ]);
   });
 });

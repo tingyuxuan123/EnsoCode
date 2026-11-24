@@ -55,13 +55,13 @@ const customProvider = (models: ModelEntry[]): ModelProvider => ({
 });
 
 describe('referencedModelIds', () => {
-  it('坏设置不崩，固定 agent 和 Bot 分类器引用按 provider 隔离', () => {
+  it('坏设置不崩，固定 agent 和虚拟模型分类器引用按 provider 隔离', () => {
     for (const value of [null, [], 'bad', { projects: [null], virtualModels: [{}] }]) {
       expect([...referencedModelIds(value, 'oauth')]).toEqual([]);
     }
     const state = {
       agentTypes: [{ providerId: 'oauth', modelId: 'fixed', modelMode: 'fixed' }],
-      botRouteClassifier: { model: { providerId: 'oauth', modelId: 'judge' } },
+      virtualModels: [{ classifier: { model: { providerId: 'oauth', modelId: 'judge' } } }],
       defaultModel: { providerId: 'other', modelId: 'wrong-account' },
       providers: [{ id: 'oauth', models: [{ id: 'not-a-selection' }] }],
     };

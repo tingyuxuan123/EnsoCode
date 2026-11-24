@@ -1,9 +1,3 @@
-/** 内嵌浏览器当前 tab 状态(main → renderer 推送) */
-export interface BrowserTabHolder {
-  conversationId: string;
-  name: string;
-}
-
 /** 仅作用单个 tab 的设备预览；enabled=false 表示恢复桌面。 */
 export interface BrowserDevice {
   enabled: boolean;
@@ -78,8 +72,6 @@ export interface BrowserTabState {
   devtoolsDock?: 'bottom' | 'right' | 'left' | 'undocked';
   /** 用户圈选 Design Mode */
   designMode: boolean;
-  /** 共享浏览器里正在操作该 tab 的成员会话 */
-  holder: BrowserTabHolder | null;
 }
 
 export type BrowserClearKind = 'cookies' | 'cache' | 'all';

@@ -32,10 +32,10 @@ class TextDraftDeviceTest {
     }
 
     private val code = DraftKey(DraftKind.Session, "session-1")
-    private val chat = DraftKey(DraftKind.Chat, "chat-1")
+    private val newTask = DraftKey(DraftKind.NewTask, "new-task")
 
     @Test fun draftsSurviveANewStoreInstanceWithoutPlaintextOnDisk() {
-        val entries = mapOf(code to "写了一半的代码任务", chat to "群里未发出的文字")
+        val entries = mapOf(code to "写了一半的代码任务", newTask to "未提交的新任务描述")
         AndroidTextDraftStore(context).save("pair-a", entries)
         assertEquals(entries, AndroidTextDraftStore(context).load("pair-a"))
         val raw = file.readBytes()
@@ -46,9 +46,9 @@ class TextDraftDeviceTest {
     @Test fun anotherPairingIdentityNeverReadsThePreviousDrafts() {
         AndroidTextDraftStore(context).save("pair-a", mapOf(code to "旧电脑草稿"))
         assertEquals(emptyMap<DraftKey, String>(), AndroidTextDraftStore(context).load("pair-b"))
-        AndroidTextDraftStore(context).save("pair-b", mapOf(chat to "新电脑草稿"))
+        AndroidTextDraftStore(context).save("pair-b", mapOf(newTask to "新电脑草稿"))
         assertEquals(emptyMap<DraftKey, String>(), AndroidTextDraftStore(context).load("pair-a"))
-        assertEquals(mapOf(chat to "新电脑草稿"), AndroidTextDraftStore(context).load("pair-b"))
+        assertEquals(mapOf(newTask to "新电脑草稿"), AndroidTextDraftStore(context).load("pair-b"))
     }
 
     @Test fun corruptFileReadsAsEmptyAndTheNextSaveRecovers() {

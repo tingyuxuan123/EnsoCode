@@ -9,14 +9,14 @@ import type {
   PhoneToHost,
 } from '@enso/pair';
 import type { ProjectedMessage } from '@shared/types/agent';
+import type { PairReply } from './pairHost';
+import { parsePairPreviewCommand } from './pairPolicy';
 import {
   artifactCandidates,
   resolveArtifactFile,
   resolveArtifacts,
   textPathCandidates,
-} from './bots/artifacts';
-import type { PairReply } from './pairHost';
-import { parsePairPreviewCommand } from './pairPolicy';
+} from './workspaceArtifacts';
 
 export interface PairPreviewSource {
   root: string;

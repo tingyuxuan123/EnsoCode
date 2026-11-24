@@ -1,16 +1,16 @@
 import path from 'node:path';
 import { app } from 'electron';
-import { fitDataUrl } from '../services/bots/mediaImage';
-import { readBotSessionMessages } from '../services/bots/sessionMessages';
+import { fitDataUrl } from '../services/pairImageEncoding';
 import {
   createPairImagePort,
   type PairImagePort,
   resolveSessionImageReference,
   type SessionImageSource,
 } from '../services/pairImages';
+import { readPairSessionMessages } from '../services/pairSessionHistory';
 import { codeFileContext } from './pairFiles';
 
-/** 手机看会话里的图片：单张大图 ≤700K 字符、长边 ≤2048，和 Bot 产物同一口径（手机单帧 <1MB） */
+/** 手机看会话里的图片：单张大图 ≤700K 字符、长边 ≤2048（手机单帧 <1MB） */
 const SESSION_IMAGE_MAX_CHARS = 700_000;
 const SESSION_IMAGE_MAX_EDGE = 2048;
 
@@ -27,7 +27,7 @@ export function createPairImagesPort(): PairImagePort {
     resolveReferencedFile: async (sessionId, toolCallId) => {
       const before = codeFileContext(sessionId);
       if (!before) return null;
-      const messages = await readBotSessionMessages(
+      const messages = await readPairSessionMessages(
         path.join(app.getPath('userData'), 'agent', 'sessions'),
         before.conversation.sessionFile
       );

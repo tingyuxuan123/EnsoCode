@@ -228,9 +228,14 @@ it('动作中取消也撤销 hook，取消前已入队则不发 CDP', async () =
   const before = new AbortController();
   before.abort();
   await expect(
-    host.invoke('copy-abort', 'plugin_copy_selection', { tabId }, undefined, {
-      signal: before.signal,
-    })
+    host.invoke(
+      'copy-abort',
+      'plugin_copy_selection',
+      { tabId },
+      {
+        signal: before.signal,
+      }
+    )
   ).rejects.toThrow();
   expect(expressions()).toEqual([]);
   expect(mock.sent).toEqual([]);
@@ -243,9 +248,14 @@ it('动作中取消也撤销 hook，取消前已入队则不发 CDP', async () =
     if (event.type === 'keyUp') during.abort();
   };
   await expect(
-    host.invoke('copy-abort', 'plugin_copy_selection', { tabId }, undefined, {
-      signal: during.signal,
-    })
+    host.invoke(
+      'copy-abort',
+      'plugin_copy_selection',
+      { tabId },
+      {
+        signal: during.signal,
+      }
+    )
   ).rejects.toThrow();
   await vi.waitFor(() => expect(expressions().some(isCleanup)).toBe(true));
   mock.onSend = undefined;
@@ -274,11 +284,16 @@ it('按 tab 队列串行，排队期间 guard 失败不发 CDP', async () => {
   mock.calls.length = 0;
   mock.sent.length = 0;
   await expect(
-    host.invoke('copy-queue', 'plugin_copy_selection', { tabId }, undefined, {
-      guard: () => {
-        throw new Error('document changed');
-      },
-    })
+    host.invoke(
+      'copy-queue',
+      'plugin_copy_selection',
+      { tabId },
+      {
+        guard: () => {
+          throw new Error('document changed');
+        },
+      }
+    )
   ).rejects.toThrow('document changed');
   expect(expressions()).toEqual([]);
   expect(mock.sent).toEqual([]);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  botCommandError,
   checkSetModel,
   checkSpawn,
   narrowSnapshot,
@@ -58,17 +57,7 @@ describe('手机命令白名单', () => {
       expect(parsePhoneCommand({ ...input, input: invalid }).ok).toBe(false);
   });
   it('accepts file requests only as rebuilt opaque IDs, never paths', () => {
-    const targets = [
-      { sessionId: 'session' },
-      { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } },
-      {
-        bot: {
-          chatId: '11111111-1111-4111-8111-111111111111',
-          conversationId: 'session',
-          messageIndex: 0,
-        },
-      },
-    ];
+    const targets = [{ sessionId: 'session' }];
     for (const target of targets) {
       for (const command of [
         { type: 'file-list', requestId: 'r', target },
@@ -119,62 +108,14 @@ describe('手机命令白名单', () => {
       expect(parsePhoneCommand({ ...command, ...patch }).ok).toBe(false);
   });
 
-  it('validates bot new-session IDs and explicit confirmation, dropping unknown fields', () => {
-    const command = { type: 'bot-new-session', chatId: 'chat', requestId: 'request' };
-    for (const confirmed of [undefined, false, true]) {
-      const input = { ...command, ...(confirmed === undefined ? {} : { confirmed }) };
-      expect(parsePhoneCommand({ ...input, path: '/ignored' })).toEqual({
-        ok: true,
-        command: input,
-      });
-    }
-    for (const patch of [
-      { chatId: '' },
-      { chatId: 'x'.repeat(129) },
-      { requestId: '' },
-      { requestId: 'x'.repeat(201) },
-      { requestId: null },
-      { confirmed: 'true' },
-      { confirmed: 1 },
-    ])
-      expect(parsePhoneCommand({ ...command, ...patch }).ok).toBe(false);
+  it('rejects retired wire commands and targets without disrupting ordinary commands', () => {
+    expect(parsePhoneCommand({ type: 'bot-catalog-request' }).ok).toBe(false);
+    const target = { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } };
+    expect(parsePhoneCommand({ type: 'file-list', requestId: 'r', target }).ok).toBe(false);
+    expect(parsePhoneCommand({ type: 'preview-list', requestId: 'r', target }).ok).toBe(false);
+    expect(parsePhoneCommand({ type: 'snapshot' }).ok).toBe(true);
   });
 
-  it('validates group thread create/select IDs, dropping unknown fields', () => {
-    const create = { type: 'bot-thread-create', chatId: 'chat', requestId: 'request' };
-    const select = { ...create, type: 'bot-thread-select', threadId: 'thread' };
-    for (const command of [create, select])
-      expect(parsePhoneCommand({ ...command, title: 'ignored' })).toEqual({ ok: true, command });
-    for (const [command, patch] of [
-      [create, { chatId: '' }],
-      [create, { chatId: 'x'.repeat(129) }],
-      [create, { requestId: '' }],
-      [create, { requestId: 'x'.repeat(201) }],
-      [select, { threadId: undefined }],
-      [select, { threadId: '' }],
-      [select, { threadId: 3 }],
-      [select, { requestId: null }],
-    ] as const)
-      expect(parsePhoneCommand({ ...command, ...patch }).ok).toBe(false);
-  });
-
-  it('Bot sessions reject generic execution/queue/policy commands but permit abort and answers', () => {
-    for (const type of [
-      'prompt',
-      'steer',
-      'enqueue',
-      'queue-send-now',
-      'queue-interrupt-send',
-      'set-model',
-      'set-thinking',
-      'retry',
-    ]) {
-      expect(botCommandError(type, true)).toContain('Bot');
-      expect(botCommandError(type, false)).toBeUndefined();
-    }
-    for (const type of ['abort', 'approval-respond', 'ask-respond', 'subscribe', 'history'])
-      expect(botCommandError(type, true)).toBeUndefined();
-  });
   it('放行 prompt/steer/abort/审批/ask/snapshot/subscribe', () => {
     const ok = [
       { type: 'prompt', sessionId: 's', text: 'hi' },
@@ -685,204 +626,10 @@ describe('history 分页切片', () => {
   });
 });
 
-describe('Bot 模式上行命令', () => {
-  const chatId = '11111111-1111-4111-8111-111111111111';
-
-  it('放行 bot 命令并收窄成只含已知字段的新对象', () => {
-    const send = parsePhoneCommand({
-      type: 'bot-send',
-      chatId,
-      text: 'hi @阿后',
-      deliveryId: 'd-1',
-      extra: 'drop-me',
-    });
-    expect(send).toEqual({
-      ok: true,
-      command: { type: 'bot-send', chatId, text: 'hi @阿后', deliveryId: 'd-1' },
-    });
-    const image = { data: 'AAAA', mimeType: 'image/png' };
-    expect(
-      parsePhoneCommand({ type: 'bot-send', chatId, text: '', images: [image], deliveryId: 'd' })
-    ).toEqual({
-      ok: true,
-      command: { type: 'bot-send', chatId, text: '', images: [image], deliveryId: 'd' },
-    });
-    expect(parsePhoneCommand({ type: 'bot-catalog-request', x: 1 })).toEqual({
-      ok: true,
-      command: { type: 'bot-catalog-request' },
-    });
-    expect(parsePhoneCommand({ type: 'bot-inbox-request', x: 1 })).toEqual({
-      ok: true,
-      command: { type: 'bot-inbox-request' },
-    });
-    expect(parsePhoneCommand({ type: 'bot-inbox-dismiss', key: 'budget:a:d', x: 1 })).toEqual({
-      ok: true,
-      command: { type: 'bot-inbox-dismiss', key: 'budget:a:d' },
-    });
-    for (const key of [undefined, 1, '', 'k'.repeat(301)])
-      expect(parsePhoneCommand({ type: 'bot-inbox-dismiss', key }).ok).toBe(false);
-    expect(parsePhoneCommand({ type: 'bot-chat-open', chatId })).toEqual({
-      ok: true,
-      command: { type: 'bot-chat-open', chatId },
-    });
-    expect(parsePhoneCommand({ type: 'bot-stop', chatId })).toEqual({
-      ok: true,
-      command: { type: 'bot-stop', chatId },
-    });
-    expect(parsePhoneCommand({ type: 'bot-retry', chatId, entryId: 'failure' })).toEqual({
-      ok: true,
-      command: { type: 'bot-retry', chatId, entryId: 'failure' },
-    });
-    expect(parsePhoneCommand({ type: 'bot-retry', chatId, conversationId: 'injected' }).ok).toBe(
-      false
-    );
-    expect(parsePhoneCommand({ type: 'bot-timeline', chatId })).toEqual({
-      ok: true,
-      command: { type: 'bot-timeline', chatId },
-    });
-    expect(parsePhoneCommand({ type: 'bot-timeline', chatId, beforeSeq: 12 })).toEqual({
-      ok: true,
-      command: { type: 'bot-timeline', chatId, beforeSeq: 12 },
-    });
-  });
-
-  it('validates group creation identities, title and strict fields', () => {
-    const a = '11111111-1111-4111-8111-111111111111';
-    const b = '22222222-2222-4222-8222-222222222222';
-    const command = {
-      type: 'bot-group-create',
-      requestId: a,
-      title: ' Team ',
-      memberIds: [a, b],
-      bossBotId: a,
-    };
-    expect(parsePhoneCommand(command)).toEqual({ ok: true, command });
-    expect(parsePhoneCommand({ ...command, title: 'x'.repeat(200) }).ok).toBe(true);
-    const sixtyFive = Array.from(
-      { length: 65 },
-      (_, index) => `${index.toString(16).padStart(8, '0')}-2222-4222-8222-222222222222`
-    );
-    expect(
-      parsePhoneCommand({ ...command, memberIds: sixtyFive.slice(0, 64), bossBotId: sixtyFive[0] })
-        .ok
-    ).toBe(true);
-    expect(
-      parsePhoneCommand({ ...command, memberIds: sixtyFive, bossBotId: sixtyFive[0] }).ok
-    ).toBe(false);
-    for (const patch of [
-      { requestId: 'not-uuid' },
-      { requestId: 1 },
-      { title: '' },
-      { title: '  ' },
-      { title: 'x'.repeat(201) },
-      { title: null },
-      { memberIds: [a] },
-      { memberIds: [a, a] },
-      { memberIds: [a, 'bad'] },
-      { memberIds: 'bad' },
-      { memberIds: Array(501).fill(a) },
-      { bossBotId: b.replace(/2/g, '3') },
-      { bossBotId: null },
-      { workspace: { kind: 'project', projectId: 'forged' } },
-    ])
-      expect(parsePhoneCommand({ ...command, ...patch }).ok, JSON.stringify(patch)).toBe(false);
-  });
-
-  it('validates direct-open identities and rejects unknown fields', () => {
-    const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const botId = '11111111-1111-4111-8111-111111111111';
-    const command = { type: 'bot-direct-open', requestId, botId };
-    expect(parsePhoneCommand(command)).toEqual({ ok: true, command });
-    expect(parsePhoneCommand({ ...command, requestId: requestId.toUpperCase() }).ok).toBe(true);
-    for (const patch of [
-      { requestId: 'not-uuid' },
-      { requestId: 1 },
-      { botId: 'not-uuid' },
-      { botId: null },
-      { title: 'Team' },
-      { memberIds: [botId] },
-      { workspace: { kind: 'member-home' } },
-    ])
-      expect(parsePhoneCommand({ ...command, ...patch }).ok, JSON.stringify(patch)).toBe(false);
-    expect(parsePhoneCommand({ type: 'bot-direct-open', requestId }).ok).toBe(false);
-  });
-
-  it('坏输入被拒', () => {
-    const bad = [
-      { type: 'bot-send', chatId, text: 'hi' },
-      { type: 'bot-send', chatId, text: '   ', deliveryId: 'd' },
-      { type: 'bot-send', chatId, text: 1, deliveryId: 'd' },
-      { type: 'bot-send', chatId: '', text: 'hi', deliveryId: 'd' },
-      { type: 'bot-send', chatId, text: 'hi', deliveryId: 'd', images: [{ data: 1 }] },
-      { type: 'bot-send', chatId, text: 'hi', deliveryId: 'd', images: 'x' },
-      { type: 'bot-send', chatId, text: 'x'.repeat(200_001), deliveryId: 'd' },
-      { type: 'bot-send', chatId, text: 'hi', deliveryId: 'd'.repeat(300) },
-      { type: 'bot-chat-open' },
-      { type: 'bot-chat-open', chatId: 'x'.repeat(300) },
-      { type: 'bot-stop', chatId: 3 },
-      { type: 'bot-timeline', chatId, beforeSeq: -1 },
-      { type: 'bot-timeline', chatId, beforeSeq: 1.5 },
-      { type: 'bot-timeline', chatId, beforeSeq: '3' },
-    ];
-    for (const cmd of bad) {
-      expect(parsePhoneCommand(cmd).ok, JSON.stringify(cmd).slice(0, 120)).toBe(false);
-    }
-  });
-
-  it('产物与发图：按聊天 + 条目 / 会话消息标识重建，图片按 mediaId 或 rel 二选一', () => {
-    const mediaId = `${'a'.repeat(64)}.png`;
-    const entry = { chatId, entryId: 'e-1' };
-    const turn = { chatId, conversationId: 'c-1', messageIndex: 3 };
-    expect(parsePhoneCommand({ type: 'bot-artifacts', target: { ...entry, x: 1 }, y: 2 })).toEqual({
-      ok: true,
-      command: { type: 'bot-artifacts', target: entry },
-    });
-    expect(parsePhoneCommand({ type: 'bot-artifacts', target: turn })).toEqual({
-      ok: true,
-      command: { type: 'bot-artifacts', target: turn },
-    });
-    expect(
-      parsePhoneCommand({ type: 'bot-artifact-image', requestId: 'r1', target: entry, mediaId })
-    ).toEqual({
-      ok: true,
-      command: { type: 'bot-artifact-image', requestId: 'r1', target: entry, mediaId },
-    });
-    expect(
-      parsePhoneCommand({ type: 'bot-artifact-image', requestId: 'r2', target: turn, rel: 'a.png' })
-    ).toEqual({
-      ok: true,
-      command: { type: 'bot-artifact-image', requestId: 'r2', target: turn, rel: 'a.png' },
-    });
-    const bad = [
-      { type: 'bot-artifacts' },
-      { type: 'bot-artifacts', target: { chatId: 'not-uuid', entryId: 'e' } },
-      { type: 'bot-artifacts', target: { chatId, conversationId: 'c', messageIndex: -1 } },
-      { type: 'bot-artifacts', target: { chatId, conversationId: 'c', messageIndex: 1.5 } },
-      { type: 'bot-artifacts', target: { chatId, entryId: 'e'.repeat(300) } },
-      { type: 'bot-artifact-image', target: entry, mediaId },
-      { type: 'bot-artifact-image', requestId: 'r'.repeat(200), target: entry, mediaId },
-      { type: 'bot-artifact-image', requestId: 'r', target: entry },
-      { type: 'bot-artifact-image', requestId: 'r', target: entry, mediaId, rel: 'a.png' },
-      { type: 'bot-artifact-image', requestId: 'r', target: entry, mediaId: '../../x.png' },
-      {
-        type: 'bot-artifact-image',
-        requestId: 'r',
-        target: entry,
-        mediaId: `${'a'.repeat(64)}.svg`,
-      },
-      { type: 'bot-artifact-image', requestId: 'r', target: entry, rel: '' },
-      { type: 'bot-artifact-image', requestId: 'r', target: entry, rel: 'x'.repeat(5000) },
-    ];
-    for (const cmd of bad) {
-      expect(parsePhoneCommand(cmd).ok, JSON.stringify(cmd).slice(0, 120)).toBe(false);
-    }
-  });
-});
-
 describe('审批/提问收束事件跨会话转发', () => {
   it('approval-resolved / ask-resolved 与 request 同样不受订阅限制', () => {
     for (const type of ['approval-resolved', 'ask-resolved']) {
-      expect(shouldForward({ type, sessionId: 'bot-session' }, null), type).toBe(true);
+      expect(shouldForward({ type, sessionId: 'session' }, null), type).toBe(true);
       expect(shouldForward({ type, sessionId: 'bot-session' }, 'other'), type).toBe(true);
     }
   });

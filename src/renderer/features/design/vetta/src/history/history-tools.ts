@@ -13,7 +13,7 @@ import { restoreDesign } from "./restore";
 
 interface HistoryToolsOptions {
 	/** 无画布场景下解析目标 .vetd（显式参数 > 打开的画布 > cwd 里唯一那份）。 */
-	resolveVetdPath(host: { fs: PluginContext["fs"] }, session: { cwd: string; botChatId?: string | null }, explicit?: string): Promise<string>;
+	resolveVetdPath(host: { fs: PluginContext["fs"] }, session: { cwd: string }, explicit?: string): Promise<string>;
 	scopeUse: readonly ("project" | "conversation")[];
 }
 
@@ -99,7 +99,7 @@ ctx.agent.registerTool<RestoreInput>({
 			if (!target) {
 				return { ok: false, error: `No version "${version}" in this design's history. Call vetd_history first.` };
 			}
-			const controller = getCanvasController(session.cwd, session.botChatId);
+			const controller = getCanvasController(session.cwd);
 			const outcome = await restoreDesign(ctx, designDir, target, {
 				session: controller?.session.dirPath === designDir ? controller.session : null,
 			});

@@ -3,15 +3,7 @@ import { localCompactionNoticeIndex } from '@shared/pair/guestProjection';
 import type { AttachedImage, ProjectedMessage, SlashCommand } from '@shared/types/agent';
 import type { StartVoiceSession } from '@shared/types/speech';
 import { ArrowUp, Bot, EllipsisVertical, Loader2, Lock } from 'lucide-react';
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ApprovalBar } from '@/components/chat/ApprovalBar';
 import { AskBar } from '@/components/chat/AskBar';
 import { Composer } from '@/components/chat/Composer';
@@ -27,8 +19,6 @@ import { RetryBar } from '@/components/chat/RetryBar';
 import { usePinnedTodos } from '@/components/chat/TodoBar';
 import { cn } from '@/lib/utils';
 import { buildTimeline } from '@/stores/sessions/timeline';
-import { BotArtifacts } from './BotArtifacts';
-import { artifactMessageTarget } from './botArtifactsPort';
 import { ConversationMenu } from './ConversationMenu';
 import { phoneChatHost } from './chatHost';
 import type { ConnState, SessionView } from './client';
@@ -50,15 +40,13 @@ interface Props {
   /** 工具执行目录：项目内绝对路径在时间线里收成相对路径 */
   cwd?: string;
   view: SessionView | null;
-  /** 本机时钟 − host 时钟（审批 / 提问卡剩余时间） */
-  clockOffset?: number;
   /** 会话图片：手机没有 local-image://，由 host 按「会话 id + 相对路径」读回 data URL */
   readImage?: (target: SessionImageTarget) => Promise<SessionImageLoad>;
   /** 解码失败/同路径覆盖时作废该图缓存，重试才会重新取图 */
   invalidateImage?: (target: SessionImageTarget) => void;
   connState: ConnState;
   stateLabel: string;
-  /** Local send failure, also shown in Code mode (not only Bot conversations). */
+  /** Local send failure. */
   notice?: string | null;
   /** 订阅会话同步中：标题旁状态灯用 amber pulse */
   syncing?: boolean;
@@ -67,11 +55,9 @@ interface Props {
   onRetrySync?: () => void;
   canCreate: boolean;
   onOpenDrawer(): void;
-  /** 大屏横屏侧栏已常驻：左上不再显示抽屉入口（bot.onBack 仍优先显示返回） */
+  /** 大屏横屏侧栏已常驻：左上不再显示抽屉入口 */
   drawerDocked?: boolean;
   onNewSession(): void;
-  newSessionHint?: string;
-  newSessionBusy?: boolean;
   /** 当前模型标签；undefined = 子会话或目录未含模型信息，不显示切换入口 */
   modelLabel?: string;
   onOpenConfig?(): void;
@@ -99,16 +85,6 @@ interface Props {
   onAbort(): void;
   onApproval(requestId: string, decision: 'allow' | 'allowSession' | 'deny'): void;
   onAsk(requestId: string, answer: string): void;
-  /** Bot 成员会话：发送走 bot-send，无回退/重试/斜杠命令；readOnly = 群聊「查看过程」 */
-  bot?: {
-    chatId?: string;
-    readOnly?: boolean;
-    onBack?(): void;
-    notice?: string | null;
-    outbox?: ReactNode;
-  };
-  /** Bot 私聊：每轮最终回复下方挂产物卡片与 send_image 图 */
-  artifacts?: { chatId: string; conversationId: string };
   /** 桌面把本设备设为只读：只能查看，隐藏输入/审批/回答等写操作 */
   deviceReadOnly?: boolean;
   /** 有写操作刚被桌面以只读拦下 */
@@ -119,7 +95,6 @@ interface Props {
 export function ChatScreen(props: Props) {
   const { view, sessionId } = props;
   const timelineRef = useRef<MessageTimelineHandle>(null);
-  const [sending, setSending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   // tabs sliding：pill 位置/尺寸由 JS 测量写入，CSS 负责补间；首帧挂起过渡避免从 0 宽飞入
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -143,8 +118,7 @@ export function ChatScreen(props: Props) {
   }, [sessionId, props.tabGroup]);
   const running = view?.status === 'running';
   const pendingInput = Boolean(view?.approvals.length || view?.asks.length);
-  const bot = props.bot;
-  const readOnly = Boolean(bot?.readOnly || props.deviceReadOnly || props.connState === 'replaced');
+  const readOnly = Boolean(props.deviceReadOnly || props.connState === 'replaced');
   /** 同步有界重试已耗尽：本机缓存正文照常显示，但不能再宣称「同步中…」 */
   const syncFailed = Boolean(props.syncFailed);
   const syncing = Boolean(props.syncing) && !syncFailed;
@@ -152,54 +126,18 @@ export function ChatScreen(props: Props) {
     () => (view ? [...view.messages.entries()].sort((a, b) => a[0] - b[0]) : []),
     [view]
   );
-  const messageIndices = useMemo(() => entries.map(([index]) => index), [entries]);
-  const artifactChatId = props.artifacts?.chatId;
-  const artifactConversationId = props.artifacts?.conversationId;
   const host = useMemo(
-    () => ({
-      ...phoneChatHost({
+    () =>
+      phoneChatHost({
         sessionId,
-        bot,
         deviceReadOnly: props.deviceReadOnly,
         cwd: props.cwd,
         readImage: props.readImage,
         invalidateImage: props.invalidateImage,
       }),
-      ...(artifactChatId && artifactConversationId
-        ? {
-            turnFooter: (localIndex: number) => {
-              const target = artifactMessageTarget(
-                artifactChatId,
-                artifactConversationId,
-                messageIndices,
-                localIndex
-              );
-              return target ? (
-                <>
-                  <BotArtifacts target={target} />
-                  <div className="mt-1.5">
-                    <WebPreview target={{ bot: target }}>网页预览</WebPreview>
-                  </div>
-                </>
-              ) : null;
-            },
-          }
-        : {}),
-    }),
-    [
-      sessionId,
-      bot,
-      props.deviceReadOnly,
-      props.cwd,
-      props.readImage,
-      props.invalidateImage,
-      artifactChatId,
-      artifactConversationId,
-      messageIndices,
-    ]
+    [sessionId, props.deviceReadOnly, props.cwd, props.readImage, props.invalidateImage]
   );
   const slashCommands = useMemo<SlashCommand[]>(() => {
-    if (bot) return [];
     const base: SlashCommand[] = [
       {
         name: '/goal',
@@ -214,7 +152,7 @@ export function ChatScreen(props: Props) {
       (command) => command.name !== '/goal' && command.name !== '/compact'
     );
     return [...base, ...extra];
-  }, [props.slashCommands, bot]);
+  }, [props.slashCommands]);
 
   const messages = useMemo<ProjectedMessage[]>(
     () =>
@@ -303,32 +241,23 @@ export function ChatScreen(props: Props) {
   }, [timeline]);
 
   const send = async (text: string, images: AttachedImage[]) => {
-    setSending(true);
-    try {
-      // 手机拍照动辄数 MB，压到单帧上限内再发
-      const budget = imageBudget(images.length);
-      const compressed: AttachedImage[] = [];
-      for (const image of images) {
-        compressed.push(await compressImageIfNeeded(image, budget));
-      }
-      props.onSend(text, compressed);
-      timelineRef.current?.scrollToBottom();
-    } finally {
-      setSending(false);
+    // 手机拍照动辄数 MB，压到单帧上限内再发
+    const budget = imageBudget(images.length);
+    const compressed: AttachedImage[] = [];
+    for (const image of images) {
+      compressed.push(await compressImageIfNeeded(image, budget));
     }
+    props.onSend(text, compressed);
+    timelineRef.current?.scrollToBottom();
   };
 
   return (
     <ChatHostContext.Provider value={host}>
       <div className="phone-chat-root relative flex h-full min-h-0 flex-col">
         <PhoneTopBar
-          lead={bot?.onBack ? 'back' : props.drawerDocked ? 'none' : 'menu'}
-          leadLabel={bot?.onBack ? '返回群聊' : '打开会话列表'}
-          {...(bot?.onBack
-            ? { onLead: bot.onBack }
-            : props.drawerDocked
-              ? {}
-              : { onLead: props.onOpenDrawer })}
+          lead={props.drawerDocked ? 'none' : 'menu'}
+          leadLabel="打开会话列表"
+          {...(props.drawerDocked ? {} : { onLead: props.onOpenDrawer })}
           title={props.title}
           detail={
             <>
@@ -367,17 +296,11 @@ export function ChatScreen(props: Props) {
               {subjectLine(props.projectName, props.modelLabel) || props.stateLabel}
             </>
           }
-          {...(props.onOpenConfig && !bot
-            ? { detailMenu: true, onDetail: props.onOpenConfig }
-            : {})}
+          {...(props.onOpenConfig ? { detailMenu: true, onDetail: props.onOpenConfig } : {})}
         >
-          {bot?.readOnly ? (
-            <span className="size-12 shrink-0" />
-          ) : (
-            <TopBarAction label="会话菜单" onClick={() => setMenuOpen(true)}>
-              <EllipsisVertical className="size-6" aria-hidden />
-            </TopBarAction>
-          )}
+          <TopBarAction label="会话菜单" onClick={() => setMenuOpen(true)}>
+            <EllipsisVertical className="size-6" aria-hidden />
+          </TopBarAction>
         </PhoneTopBar>
 
         {props.connState === 'host-offline' && (
@@ -546,10 +469,9 @@ export function ChatScreen(props: Props) {
                   queued={(props.queued ?? []).map((q) => ({ id: q.id, text: q.text }))}
                 />
               )}
-              {bot?.outbox}
-              {(props.notice || bot?.notice) && (
+              {props.notice && (
                 <p className="mb-1 rounded-[14px] bg-red/8 px-3 py-2 text-[12px] leading-4 text-red">
-                  {props.notice || bot?.notice}
+                  {props.notice}
                 </p>
               )}
               {!props.deviceReadOnly && (
@@ -558,13 +480,11 @@ export function ChatScreen(props: Props) {
                     appearance="phone"
                     approvals={view?.approvals ?? []}
                     onRespond={props.onApproval}
-                    clockOffset={props.clockOffset}
                   />
                   <AskBar
                     appearance="phone"
                     asks={view?.asks ?? []}
                     onAnswer={props.onAsk}
-                    clockOffset={props.clockOffset}
                     autoFocus={false}
                   />
                 </>
@@ -587,16 +507,12 @@ export function ChatScreen(props: Props) {
               ) : !pendingInput ? (
                 <Composer
                   appearance="phone"
-                  placeholder={bot ? `向 ${props.title} 提问…` : '回复 CodeKiln…'}
+                  placeholder="回复 CodeKiln…"
                   commands={slashCommands}
                   running={running}
                   busy={running}
-                  locked={
-                    props.newSessionBusy ||
-                    (Boolean(bot) && sending) ||
-                    (view?.approvals ?? []).length > 0
-                  }
-                  focusKey={bot?.chatId ? `bot-chat:${bot.chatId}` : sessionId}
+                  locked={(view?.approvals ?? []).length > 0}
+                  focusKey={sessionId}
                   // 移动端不自动聚焦：一进会话就弹键盘会挡住消息
                   autoFocus={false}
                   // 软键盘的「换行」就是 Enter：Enter 只换行，发送必须点按钮
@@ -625,15 +541,8 @@ export function ChatScreen(props: Props) {
             {
               key: 'new-session',
               label: '开新会话',
-              hint: bot ? '清掉这段上下文，开始新一轮对话' : '选一个项目，开始新的工作',
-              icon: 'new-session',
-              danger: Boolean(bot),
-              disabled:
-                !props.canCreate ||
-                readOnly ||
-                (Boolean(bot) && sending) ||
-                props.connState !== 'online',
-              disabledHint: props.newSessionHint,
+              hint: '选一个项目，开始新的工作',
+              disabled: !props.canCreate || readOnly || props.connState !== 'online',
               onSelect: () => {
                 setMenuOpen(false);
                 props.onNewSession();
@@ -642,7 +551,7 @@ export function ChatScreen(props: Props) {
           ]}
           footer={
             <>
-              {sessionId && !bot && (
+              {sessionId && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   <FileDownloads target={{ sessionId }}>文件下载</FileDownloads>
                   <WebPreview target={{ sessionId }}>网页预览</WebPreview>

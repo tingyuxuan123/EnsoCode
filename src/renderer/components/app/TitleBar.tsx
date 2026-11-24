@@ -17,14 +17,6 @@ interface TitleBarProps {
   leading?: React.ReactNode;
   /** 只读的标题内容（不拦截拖拽）；与 leading 二选一 */
   heading?: React.ReactNode;
-  /**
-   * 可选的居中内容使用独立覆盖层，在 Windows 上避开原生按钮区域。
-   * 它保留左侧标题；macOS 隐藏标题以免挤占系统红绿灯。
-   *
-   * Center optional content in an overlay that excludes native Windows controls.
-   * Keep the left title except on macOS, where traffic lights take precedence.
-   */
-  centered?: React.ReactNode;
 }
 
 export function SummonEnsoButton({ label = true }: { label?: boolean }) {
@@ -53,7 +45,7 @@ export function SummonEnsoButton({ label = true }: { label?: boolean }) {
  * Preserve native caption controls and Snap Layouts on Windows, traffic lights
  * on macOS, and renderer caption controls on Linux.
  */
-export function TitleBar({ title, className, actions, leading, heading, centered }: TitleBarProps) {
+export function TitleBar({ title, className, actions, leading, heading }: TitleBarProps) {
   const { t } = useI18n();
   const isMac = window.electronAPI.env.platform === 'darwin';
   const isWindows = window.electronAPI.env.platform === 'win32';
@@ -81,31 +73,14 @@ export function TitleBar({ title, className, actions, leading, heading, centered
         // 窄窗口/大字号下标题行必须自己裁切：项目徽标是 shrink-0，溢出会画到右侧的动作控件下面
         <div
           data-slot="title-bar-heading"
-          data-center-reserve={centered ? 'true' : undefined}
-          className={cn(
-            'flex min-w-0 flex-1 items-center overflow-hidden',
-            // 居中的模式分段压在绝对定位通道里，标题必须提前收住，不能画到它下面。
-            // 4.8rem = 分段控件一半宽（随界面字号缩放），40px = 红绿灯把窗口中心
-            // 推离内容起点后的偏移加间隙。
-            centered && 'max-w-[calc(50%-4.8rem-40px)]'
-          )}
+          className="flex min-w-0 flex-1 items-center overflow-hidden"
         >
           {heading}
         </div>
-      ) : !centered || !isMac ? (
+      ) : (
         <span className="flex items-center gap-2 text-[calc(12rem/14)] font-medium text-muted-foreground">
           {title}
         </span>
-      ) : null}
-
-      {centered && (
-        <div
-          data-slot="title-bar-center"
-          className="pointer-events-none absolute inset-0 flex items-center justify-center"
-          style={isWindows ? { right: nativeControlsInset } : undefined}
-        >
-          <div className="no-drag pointer-events-auto">{centered}</div>
-        </div>
       )}
 
       {actions && (

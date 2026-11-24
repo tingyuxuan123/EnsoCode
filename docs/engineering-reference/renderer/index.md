@@ -9,12 +9,11 @@ src/renderer/
   index.html / index.tsx              主窗口入口
   settings.html / settings.tsx        设置窗口入口
   design.html / design-window.tsx     设计窗口入口
-  taskboard.html / taskboard.tsx      协作看板窗口入口
   App.tsx
   components/
     ui/                         base-ui 封装，kebab-case 文件名
     app/                        应用级组件（TitleBar 等）
-    agent/ bots/ chat/ ...      按领域组织的界面
+    agent/ chat/ ...      按领域组织的界面
     settings/                   设置面板与弹窗，PascalCase
   features/                     design（设计画布）、imageStudio 等大功能
   plugins/                      插件宿主与运行时

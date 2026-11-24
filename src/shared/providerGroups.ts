@@ -56,6 +56,8 @@ const VENDOR_LABELS: Readonly<Record<string, string>> = {
   groq: 'Groq',
   mistral: 'Mistral AI',
   local: 'Local',
+  // 预设服务商（见 shared/presetProviders.ts）：条目带 catalogId，靠这张表出展示名
+  magpie: 'Magpie',
   'azure-openai': 'Azure OpenAI',
   alibaba: 'Alibaba Cloud',
   volcengine: 'Volcengine',

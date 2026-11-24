@@ -25,7 +25,7 @@ import {
   Pin,
   SquarePen,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Select,
   SelectItem,
@@ -86,7 +86,6 @@ interface Props {
   onAddDevice(): void;
   onRenameDevice(pairId: string, label: string): void;
   onUnpairDevice(pairId: string): void;
-  botSegment?: { active: boolean; onChange(active: boolean): void; panel: ReactNode };
 }
 
 /** The mobile list is a screen, not a narrow desktop sidebar. Wide layouts can still pin it. */
@@ -99,7 +98,6 @@ export function SessionDrawer(props: Props) {
     catalog,
     activeId,
     canCreate,
-    botSegment,
     groups = [],
   } = props;
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -118,7 +116,6 @@ export function SessionDrawer(props: Props) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [now, setNow] = useState(Date.now);
   usePhoneBack(open && !docked && props.backToConversation !== false, props.onClose, 10);
-  usePhoneBack(open && Boolean(botSegment?.active), () => botSegment?.onChange(false), 20);
   usePhoneBack(open && settingsOpen, () => setSettingsOpen(false), 30);
   usePhoneBack(open && sessionMenu !== null, () => setSessionMenu(null), 40);
   useEffect(() => {
@@ -223,108 +220,76 @@ export function SessionDrawer(props: Props) {
               )
         )}
       >
-        {!botSegment?.active && (
-          <header
-            className={cn(
-              'phone-list-header relative flex shrink-0 items-center gap-1 py-2 pr-3',
-              docked ? 'pl-5' : 'pl-1'
-            )}
-          >
-            {!docked && (
-              <button
-                type="button"
-                aria-label="返回会话"
-                onClick={props.onClose}
-                className="flex size-12 shrink-0 items-center justify-center rounded-full text-ink active:bg-card2"
-              >
-                <ArrowLeft className="size-6" aria-hidden />
-              </button>
-            )}
-            {docked && <img src="/icons/logo-192.png" alt="" className="mr-1.5 size-6 shrink-0" />}
-            <h1 className="shrink-0 text-[22px] leading-7 font-bold tracking-[-0.01em]">
-              CodeKiln
-            </h1>
-            <span className="ml-1 flex h-6 min-w-0 items-center gap-1.5 rounded-full bg-card2/70 px-2">
-              <span
-                className={cn(
-                  'size-1.5 shrink-0 rounded-full',
-                  props.connected ? 'bg-green' : 'bg-faint'
-                )}
-              />
-              <span className="truncate text-[11px] leading-4 font-medium text-ink2">
-                {props.connected ? `${device?.label ?? '电脑'} · 已连接` : props.connectionLabel}
-              </span>
-            </span>
-            <div className="flex-1" />
-            {pinnable && props.onTogglePinned && (
-              <button
-                type="button"
-                onClick={props.onTogglePinned}
-                aria-label={docked ? '收起侧栏' : '固定侧栏'}
-                className="flex size-8 shrink-0 items-center justify-center text-dim"
-              >
-                {docked ? (
-                  <PanelLeftClose className="size-4" />
-                ) : (
-                  <PanelLeftOpen className="size-4" />
-                )}
-              </button>
-            )}
+        <header
+          className={cn(
+            'phone-list-header relative flex shrink-0 items-center gap-1 py-2 pr-3',
+            docked ? 'pl-5' : 'pl-1'
+          )}
+        >
+          {!docked && (
             <button
               type="button"
-              aria-label="设备与通知"
-              onClick={() => setSettingsOpen(true)}
-              className="glass flex size-10 shrink-0 items-center justify-center rounded-full text-ink2"
+              aria-label="返回会话"
+              onClick={props.onClose}
+              className="flex size-12 shrink-0 items-center justify-center rounded-full text-ink active:bg-card2"
             >
-              <MonitorSmartphone className="size-5" />
+              <ArrowLeft className="size-6" aria-hidden />
             </button>
-          </header>
-        )}
-        {!botSegment?.active && (
-          <div className="flex shrink-0 items-center gap-2.5 px-5 pt-1 pb-2">
-            <div className="flex rounded-full bg-card2 p-1">
-              {(botSegment ? ['编程', 'Bot'] : ['编程']).map((label) => {
-                const selected = (label === 'Bot') === Boolean(botSegment?.active);
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => botSegment?.onChange(label === 'Bot')}
-                    className={cn(
-                      'flex h-8 items-center rounded-full px-3.5 text-[14px] leading-5 font-medium',
-                      selected ? 'bg-card text-ink shadow-[0_1px_3px_rgb(0_0_0/0.08)]' : 'text-dim'
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex-1" />
-            {!botSegment?.active && (
-              <>
-                <span className="text-[13px] leading-4 text-dim tabular-nums">
-                  {waiting} 个等你
-                </span>
-                <button
-                  type="button"
-                  aria-label="按状态筛选"
-                  title={STATUS_FILTER_LABEL[filter]}
-                  aria-pressed={filter !== 'all'}
-                  onClick={() => setFilter(cycleStatusFilter(filter))}
-                  className={cn(
-                    'flex size-[38px] shrink-0 items-center justify-center rounded-full',
-                    filter === 'all' ? 'bg-card2 text-ink2' : 'bg-pill text-pill-ink'
-                  )}
-                >
-                  <ArrowDownWideNarrow className="size-[18px]" />
-                </button>
-              </>
+          )}
+          {docked && <img src="/icons/logo-192.png" alt="" className="mr-1.5 size-6 shrink-0" />}
+          <h1 className="shrink-0 text-[22px] leading-7 font-bold tracking-[-0.01em]">CodeKiln</h1>
+          <span className="ml-1 flex h-6 min-w-0 items-center gap-1.5 rounded-full bg-card2/70 px-2">
+            <span
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                props.connected ? 'bg-green' : 'bg-faint'
+              )}
+            />
+            <span className="truncate text-[11px] leading-4 font-medium text-ink2">
+              {props.connected ? `${device?.label ?? '电脑'} · 已连接` : props.connectionLabel}
+            </span>
+          </span>
+          <div className="flex-1" />
+          {pinnable && props.onTogglePinned && (
+            <button
+              type="button"
+              onClick={props.onTogglePinned}
+              aria-label={docked ? '收起侧栏' : '固定侧栏'}
+              className="flex size-8 shrink-0 items-center justify-center text-dim"
+            >
+              {docked ? (
+                <PanelLeftClose className="size-4" />
+              ) : (
+                <PanelLeftOpen className="size-4" />
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="设备与通知"
+            onClick={() => setSettingsOpen(true)}
+            className="glass flex size-10 shrink-0 items-center justify-center rounded-full text-ink2"
+          >
+            <MonitorSmartphone className="size-5" />
+          </button>
+        </header>
+        <div className="flex shrink-0 items-center justify-end gap-2.5 px-5 pt-1 pb-2">
+          <span className="text-[13px] leading-4 text-dim tabular-nums">{waiting} 个等你</span>
+          <button
+            type="button"
+            aria-label="按状态筛选"
+            title={STATUS_FILTER_LABEL[filter]}
+            aria-pressed={filter !== 'all'}
+            onClick={() => setFilter(cycleStatusFilter(filter))}
+            className={cn(
+              'flex size-[38px] shrink-0 items-center justify-center rounded-full',
+              filter === 'all' ? 'bg-card2 text-ink2' : 'bg-pill text-pill-ink'
             )}
-          </div>
-        )}
-        {!botSegment?.active && groups.length > 0 && (
+          >
+            <ArrowDownWideNarrow className="size-[18px]" />
+          </button>
+        </div>
+        {groups.length > 0 && (
           <div className="shrink-0 px-5 pb-2">
             <Select
               items={[
@@ -367,105 +332,97 @@ export function SessionDrawer(props: Props) {
             </Select>
           </div>
         )}
-        {botSegment?.active ? (
-          botSegment.panel
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto pb-28">
-            {filter !== 'all' && (
-              <p className="px-5 py-1 text-[12px] leading-4 text-dim">
-                {STATUS_FILTER_LABEL[filter]}
-              </p>
-            )}
-            {projects.length === 0 && (
-              <p className="px-5 py-8 text-center text-[13px] text-dim">桌面端还没有项目</p>
-            )}
-            {groupId === ALL_GROUP_ID && groups.length > 0
-              ? sections.map((section) => (
-                  <div key={section.groupId}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCollapsedGroups((old) => ({
-                          ...old,
-                          [section.groupId]: !old[section.groupId],
-                        }))
-                      }
-                      className="flex w-full items-center gap-1 px-5 pt-3 text-left text-[12px] font-medium text-dim"
-                    >
-                      <ChevronRight
-                        className={cn('size-3.5', !collapsedGroups[section.groupId] && 'rotate-90')}
-                      />
-                      {section.group?.emoji} {section.group?.name ?? '未分组'}
-                    </button>
-                    {!collapsedGroups[section.groupId] && section.projects.map(renderProject)}
-                  </div>
-                ))
-              : availableProjects.map(renderProject)}
-            {orphans.length > 0 && (
-              <ProjectList
-                name="其他"
-                sessions={orphans}
-                folded={folded.orphans}
-                revealed={revealed.orphans ?? 0}
-                activeId={activeId}
-                now={now}
-                onFold={() => setFolded((old) => ({ ...old, orphans: !old.orphans }))}
-                onReveal={(next) => setRevealed((old) => ({ ...old, orphans: next }))}
-                onSelect={props.onSelect}
-                onMenu={setSessionMenu}
-              />
-            )}
-            {archives.length > 0 && (
-              <div className="pt-4">
-                <button
-                  type="button"
-                  onClick={() => setArchivedOpen(!archivedOpen)}
-                  className="flex w-full items-center gap-2 px-5 py-2 text-[13px] text-dim"
-                >
-                  <Archive className="size-4" />
-                  <span className="flex-1 text-left">已归档</span>
-                  {archives.length}
-                  <ChevronRight className={cn('size-3.5', archivedOpen && 'rotate-90')} />
-                </button>
-                {archivedOpen &&
-                  archives.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      active={activeId === session.id}
-                      now={now}
-                      onSelect={props.onSelect}
-                      onMenu={setSessionMenu}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-28">
+          {filter !== 'all' && (
+            <p className="px-5 py-1 text-[12px] leading-4 text-dim">
+              {STATUS_FILTER_LABEL[filter]}
+            </p>
+          )}
+          {projects.length === 0 && (
+            <p className="px-5 py-8 text-center text-[13px] text-dim">桌面端还没有项目</p>
+          )}
+          {groupId === ALL_GROUP_ID && groups.length > 0
+            ? sections.map((section) => (
+                <div key={section.groupId}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCollapsedGroups((old) => ({
+                        ...old,
+                        [section.groupId]: !old[section.groupId],
+                      }))
+                    }
+                    className="flex w-full items-center gap-1 px-5 pt-3 text-left text-[12px] font-medium text-dim"
+                  >
+                    <ChevronRight
+                      className={cn('size-3.5', !collapsedGroups[section.groupId] && 'rotate-90')}
                     />
-                  ))}
-              </div>
-            )}
-          </div>
-        )}
-        {!botSegment?.active && (
-          <>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-page via-page/85 to-transparent" />
-            <div className="phone-list-actions absolute right-4 flex items-center gap-3">
-              {activeId && (
-                <FileDownloads
-                  target={{ sessionId: activeId }}
-                  triggerClassName="glass flex size-14 shrink-0 items-center justify-center rounded-full text-ink"
-                >
-                  <Download className="size-6" />
-                </FileDownloads>
-              )}
+                    {section.group?.emoji} {section.group?.name ?? '未分组'}
+                  </button>
+                  {!collapsedGroups[section.groupId] && section.projects.map(renderProject)}
+                </div>
+              ))
+            : availableProjects.map(renderProject)}
+          {orphans.length > 0 && (
+            <ProjectList
+              name="其他"
+              sessions={orphans}
+              folded={folded.orphans}
+              revealed={revealed.orphans ?? 0}
+              activeId={activeId}
+              now={now}
+              onFold={() => setFolded((old) => ({ ...old, orphans: !old.orphans }))}
+              onReveal={(next) => setRevealed((old) => ({ ...old, orphans: next }))}
+              onSelect={props.onSelect}
+              onMenu={setSessionMenu}
+            />
+          )}
+          {archives.length > 0 && (
+            <div className="pt-4">
               <button
                 type="button"
-                aria-label="新会话"
-                disabled={!canCreate || !newProject}
-                onClick={() => newProject && props.onNewConversation(newProject.id)}
-                className="glass-ink flex size-14 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                onClick={() => setArchivedOpen(!archivedOpen)}
+                className="flex w-full items-center gap-2 px-5 py-2 text-[13px] text-dim"
               >
-                <SquarePen className="size-6" />
+                <Archive className="size-4" />
+                <span className="flex-1 text-left">已归档</span>
+                {archives.length}
+                <ChevronRight className={cn('size-3.5', archivedOpen && 'rotate-90')} />
               </button>
+              {archivedOpen &&
+                archives.map((session) => (
+                  <SessionRow
+                    key={session.id}
+                    session={session}
+                    active={activeId === session.id}
+                    now={now}
+                    onSelect={props.onSelect}
+                    onMenu={setSessionMenu}
+                  />
+                ))}
             </div>
-          </>
-        )}
+          )}
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-page via-page/85 to-transparent" />
+        <div className="phone-list-actions absolute right-4 flex items-center gap-3">
+          {activeId && (
+            <FileDownloads
+              target={{ sessionId: activeId }}
+              triggerClassName="glass flex size-14 shrink-0 items-center justify-center rounded-full text-ink"
+            >
+              <Download className="size-6" />
+            </FileDownloads>
+          )}
+          <button
+            type="button"
+            aria-label="新会话"
+            disabled={!canCreate || !newProject}
+            onClick={() => newProject && props.onNewConversation(newProject.id)}
+            className="glass-ink flex size-14 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+          >
+            <SquarePen className="size-6" />
+          </button>
+        </div>
         {menuEntry && (
           <>
             <button

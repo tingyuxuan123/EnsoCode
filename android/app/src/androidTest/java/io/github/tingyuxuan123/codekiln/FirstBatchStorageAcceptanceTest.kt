@@ -37,7 +37,7 @@ class FirstBatchStorageAcceptanceTest {
 
     @Test fun keystoreStoresASCIIAndUTF8MarkersOnlyAsCiphertextAndSeparatesDomains() {
         val entries = mapOf(key to "SECRET_ASCII_DRAFT_1487 中文",
-            DraftKey(DraftKind.Chat, key.id) to "SECRET_BOT_DRAFT_1487")
+            DraftKey(DraftKind.NewTask, key.id) to "SECRET_TASK_DRAFT_1487")
         AndroidTextDraftStore(context).save("pair-a", entries)
         val raw = file.readBytes()
         for (text in entries.values) {

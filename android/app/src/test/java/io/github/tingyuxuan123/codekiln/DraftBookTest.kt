@@ -40,15 +40,15 @@ class DraftBookTest {
     }
 
     private val code = DraftKey(DraftKind.Session, "session-1")
-    private val chat = DraftKey(DraftKind.Chat, "chat-1")
+    private val newTask = DraftKey(DraftKind.NewTask, "new-task")
 
     @Test fun `重新进入时读回同一配对身份的草稿`() = runTest {
-        val store = Store("pair-a", mapOf(code to "写了一半", chat to "群里的草稿"))
+        val store = Store("pair-a", mapOf(code to "写了一半", newTask to "新任务描述"))
         val book = DraftBook(store, this, StandardTestDispatcher(testScheduler))
         book.bind("pair-a")
         advanceUntilIdle()
         assertEquals("写了一半", book.text(code))
-        assertEquals("群里的草稿", book.text(chat))
+        assertEquals("新任务描述", book.text(newTask))
     }
 
     @Test fun `编辑在防抖后落盘且不需要额外确认`() = runTest {

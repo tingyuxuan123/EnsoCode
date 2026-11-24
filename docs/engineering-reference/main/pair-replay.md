@@ -101,15 +101,7 @@ App 不得补窗口、速率或缓存率。`retry` / `compact` 没有请求 ID �
 而脏行只丢该行、不整表清空；非数组的 level 帧应触发重新同步而不是当作空表。
 `task-stop` / `subagent-stop` 没有结果帧：只能观察之后帧里目标不再 running，超时与断线均为未确认，不能自动重发。
 
-Bot 文字发送使用原有 `deliveryId`：App 在点击时生成 UUID，Mirror 原样发送并按 `bot-send-result` 对号结算；
-不能拿同文消息或按钮点击清空草稿。失败/超时保留文字，成功确认也只清未改动的那份草稿。
-`bot-stop` 无投递 ID，只有发送之后的 `bot-chat-state.current=null` 可作为“不再报告运行”的线索；
-旧序号帧不能覆盖较新的运行态，停止也不表示队列已清空。`bot-event` 通知正文变化，打开群聊需合并刷新只读页；
-该刷新可以重读，但绝不能顺带重发 send/stop。私聊历史来自会话订阅，不能把群时间线接口超时等同私聊为空。
-
-`bot-thread-create` / `bot-thread-select` 是写入桌面当前话题，不是本地切页。只有 `bot-catalog.threads=true` 才提供入口。
-`bot-chats` 的 `threads` 必须匹配根群 `parentId`，归档项不可选；结果按根群 ID + requestId 关联。
-即使目录先到，也要等对应在途操作结算；回执不是目录，不能凭回执伪造新话题行。`epochSeq` 是新对话分段，不是线程标识。
+从旧桌面收到已经退役的 Bot 帧时，手机应忽略这些帧，不打断普通会话目录和同步。旧 Bot 命令不再属于当前协议。
 
 ## 隔离联调证据（2026-11-03）
 

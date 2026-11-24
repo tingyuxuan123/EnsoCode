@@ -74,7 +74,6 @@ export interface PluginSystemPromptProviderContext {
 		id: string;
 		cwd: string;
 		/** EnsoCode: canvas ownership, independent of the workspace path. */
-		botChatId?: string | null;
 		scenario: ConversationScenario;
 	};
 	model: {

@@ -3,7 +3,6 @@ import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentTypeEditDialog } from './AgentTypesSettings';
-import { BotSettings } from './BotSettings';
 import { API_KIND_LABELS } from './constants';
 import { ProviderApiForm } from './ProviderApiForm';
 import { ProviderSetupWizard } from './ProviderSetupWizard';
@@ -120,9 +119,6 @@ beforeEach(() => {
     defaultModel: null,
     skills: [],
     mcpServers: [],
-    botRouteClassifier: classifierConfig,
-    botAssistantModel: null,
-    botMaxRunningTurns: 1,
   };
 });
 
@@ -164,17 +160,6 @@ describe('TypeSafe settings', () => {
   it('marks the provider list entry as classification-only', () => {
     expect(renderToStaticMarkup(<ProvidersSettings />)).toContain(note);
   });
-
-  it.each([{ models: classifier.models }, { models: [] }])(
-    'offers TypeSafe for bot classification, but not for helper chat (models: $models)',
-    ({ models }) => {
-      harness.state.providers = [{ ...classifier, models }, chat];
-      const markup = renderToStaticMarkup(<BotSettings />);
-      expect(markup).toContain('data-option="typesafe"');
-      expect(markup).toContain('data-chat-models="chat"');
-      expect(markup).not.toMatch(/data-chat-models="[^"]*typesafe/);
-    }
-  );
 
   it('offers TypeSafe for virtual routing, but not primary or fast chat', () => {
     harness.state.virtualModels = [

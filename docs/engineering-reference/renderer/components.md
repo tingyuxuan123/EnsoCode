@@ -94,7 +94,7 @@
 
 ## 文件和目录图标用 Material Icon Theme
 
-文件树、文件搜索命中、文件页签和 Bot 产物卡片的图标统一走
+文件树、文件搜索命中和文件页签的图标统一走
 `src/renderer/components/sidepanel/fileIcons.tsx` 的 `<FileTypeIcon>`，
 不要自己挑 lucide 图标：
 
@@ -163,14 +163,14 @@
 `TimelineRow` 的正文不再追加时间 / 耗时 / TTFT / 速度统计行。复制与轮末分叉放在
 正文右侧绝对定位的操作区，保留稳定且随字号缩放的横向空间，不以透明页脚预留高度。
 悬停与键盘聚焦只改变操作区可见性，不改变行高或正文折行；无 hover 的触屏常显。
-文件改动汇总与宿主 `turnFooter` 仍在正文下方完整展示。回归：`TimelineRow.actions.test.tsx`。
+文件改动汇总 仍在正文下方完整展示。回归：`TimelineRow.actions.test.tsx`。
 
 子代理完成通知只在 Renderer 投影为 Markdown 报告与用量底栏，不改写 Main/worker 的原通知。
 只识别与 `completionText` 对应的完整头尾包络，报告内的 usage 样例不剥离；未知或损坏格式保留原文。
 回归：`agentNotification.test.ts`、`TimelineRow.actions.test.tsx`。
 
 Code 聊天 HTTP(S) 链接可按设备本地偏好在所属会话的新浏览器 tab 打开；项目禁用 browser、
-无有效会话或带 Ctrl/Cmd 等修饰键时保留外链行为。本地文件与 Bot 产物仍走原授权链路，
+无有效会话或带 Ctrl/Cmd 等修饰键时保留外链行为。本地文件仍走原授权链路，
 手机设置桩固定关闭此偏好。回归：`Markdown.fileOpening.test.tsx`、`sidePanelDock.test.ts`。
 
 ## 动态状态与读屏播报
@@ -179,26 +179,10 @@ Code 聊天 HTTP(S) 链接可按设备本地偏好在所属会话的新浏览器
 `aria-hidden="true"`。把计时器放进 atomic live region 会让读屏器每秒重播整张状态卡。
 回归：`WorkingStatus.test.tsx`。
 
-## Code / Bot 工作模式入口
+## 工作区入口
 
-工作模式入口固定在主 `TitleBar` 居中位置（`ModeSwitch` → `data-slot="mode-switch"`，经 `title-bar-center`
-绝对居中通道，与上游一致），是淡色轨道 + 内容色胶囊的分段控件；不再贴右上角，也不再用
-`titlebar-mode-separator` 与聊天宽度 / 面板按钮之间画分隔线。
-左侧 `AppRail` 只留侧栏开关、图片工作台、设计、看板等功能导航，不再有第二份 Code / Bot 入口。
-例外：`botModeEnabled` 关闭时标题栏不渲染分段控件（只剩一个 Code 分段没有切换意义），
-宿主改为传入 `AppRail.codeWorkspace`，Code 入口回到图标轨并排在图片工作台上方，
-继续负责把画廊 / 生图 / 扩展页带回 Code 对话；协作看板入口同时消失，因为看板内容本身来自 Bot 任务。
-
-- 分段轨道是 `bg-secondary/60`；选中胶囊是 `bg-background` + `shadow-xs` + `text-foreground`，
-  未选中为 `text-muted-foreground`，不再用图标轨的 `bg-selection` / `text-brand`（那套仍留在 `AppRail`）。
-  `aria-pressed`、`data-app-mode`、`data-rail-view` 沿用图标轨的稳定钩子，
-  验收脚本按全局 `button[data-rail-view]` 定位，不能只在 `app-rail` 作用域里查。
-- `inactive`：画廊 / 生图 / 扩展页不是工作模式，两个分段都不标当前选中，但点击仍会把宿主带回
-  Code 对话或 Bot 视图。
-- 门控不绕：`botModeEnabled` 关闭时标题栏分段整体不渲染、Code 入口落到 `AppRail.codeWorkspace`，
-  协作看板入口一并隐藏；远程节点接管时两者都不渲染。不能只关模块不切模式，
-  也不能因此让 Bot 绕过开关或本机限制。
-- 回归：`ModeSwitch.test.tsx`、`App.mode-entry.test.tsx`、`AppRail.test.tsx`。
+本机 Code 入口在 `AppRail`，位于图片工作台和设计画廊之前。点击可从画廊、生图或扩展页回到对话；远程节点接管时不渲染本机工作区入口。图标轨选中态使用 `bg-selection` / `text-brand`，以 `aria-pressed` 和 `data-rail-view` 做回归断言。
+回归：`App.mode-entry.test.tsx`、`AppRail.test.tsx`。
 
 ## 工作区底部入口与全局状态
 
@@ -215,7 +199,7 @@ Code 侧栏底部固定一行：`NodeSwitcher` 占可伸缩区域，归档入口
 
 `StatusBar` 改由图标轨承载，只在有本机运行 / 待处理会话或当前远程节点不可用时显示。
 沿用 `summarizeWorkbench` 的去重口径，远程模式下计数也明确标记属于本机；不能因侧栏
-折叠、切到 Bot 或画廊而丢失后台摘要。远程健康状态仍由节点入口展示。
+折叠或切到画廊而丢失后台摘要。远程健康状态仍由节点入口展示。
 回归：`StatusBar.test.tsx`、`NodeSwitcher.test.tsx`、`App.gallery-layout.test.tsx`。
 
 ## 插件管理入口分工
@@ -224,19 +208,6 @@ Code 侧栏底部固定一行：`NodeSwitcher` 占可伸缩区域，归档入口
 不再挂载 `NativePluginsSection`。原生插件统一由主侧栏「扩展」管理；旧 `plugins.enso` 深链
 经 Main 兼容导航进入扩展页，安装 URL 继续走原有预览，通知定位打开原生插件详情。
 回归：`PluginsSettings.test.tsx`、`ExtensionsPage.test.tsx`；跨窗口契约见 [IPC 规范](../main/ipc.md)。
-
-## Bot 成员过程入口统一分流
-
-输入框上方成员忙碌条与任务看板的「查看过程」使用同一委派状态分流：排队 / 执行中补载缺失的会话投影，已结束读取历史；普通成员群会话仍看实时投影。不要直接设置弹窗目标而跳过补载，否则冷会话会显示空白新对话。续做可复用同一子会话，排队提示不能只看该会话的第一条旧执行记录。回归：`BotChatView.test.tsx`。
-
-## Bot 群聊设计交付必须可见、可点
-
-群聊正文没有 Code 的 `MarkdownLinkContext`，不能裸渲染本地交稿链接：它会显示下划线但点击无效。
-`GroupTimeline` 把正文交给 `ArtifactCards`，通过 `MarkdownLocalLinkContext` 复用该条消息的产物预览；只匹配 Main 返回的清单，绝对路径用 `workspaceRoot` 转相对标识，不能导航 `file://` 或扩大到任意工作区文件。
-PNG 等图片产物直接显示缩略图，接近视口才请求；Main 复用现有 `bots.artifacts.read` 的 `variant: 'thumb'`，长边不超过 480、data URL 不超过 200000 字符。点击正文或缩略图再按原 target + rel 读取原图；已结束的成员会话仍走 Bot 产物授权，不借 Code 会话复活。
-回归：`ArtifactCards.test.tsx`、`Markdown.fileOpening.test.tsx`、`ipc/bots.test.ts`；验收同时检查文字链接与缩略图，不能以工具读图成功代替用户可见。
-
-右侧「设计稿」是工作区入口，不依赖任何交稿消息或活跃成员会话。用 `bots.designWorkspace({ chatId })` 获取 Main 权威的项目根，再复用设计扫描；群话题共享根群工作区，画布归属仍是当前话题。源码包若保留 `theme.css` 和有效 `frames/*.tsx`，即使缺 `design.json` 也列出；扫描不写文件，显式打开时由 `DesignSession` 重建。无会话画布不创建假会话，也不操作隐藏的 Code 输入框。
 
 ## 浏览器过程展示面向用户，不展示协议卡片
 
@@ -262,27 +233,6 @@ PNG 等图片产物直接显示缩略图，接近视口才请求；Main 复用�
 即便提供初始估算，持续行高变化仍会让初始定位的完成信号迟迟不到。`TimelineList` 经公开 `components.List` 接口给隐藏态加 100 毫秒显示上限，只放开 visibility，透传 ref 和测量样式，不重挂列表、不改滚动位置或会话正文。上限从本次挂载第一次 hidden 起算，Virtuoso 来回切换 visibility 不得重计，否则切换 coworker 时正文会一直不出现。`initialTopMostItemIndex`、`increaseViewportBy`、`followOutput` 必须是稳定引用：库每次渲染都重发 props，按引用去重的输入不能每次都是新对象。不能用等待整个轮次结束替代显示保障；PWA 的非虚拟化路径不受此门控。
 
 回归：在隔离 dev 环境、窗口保持可见时运行 `node scripts/verify-timeline-height.mjs`，真实测量长首条 / 长末条 / 往返切换 / 短列表以及持续测高时的总高、正文可见和末条贴底。持续测高必须在停止之前显示正文；脚本不改会话或设置。
-
-## Bot 私聊的委派与当前轮状态不占正文
-
-私聊进行中的委派不再压在正文上方，改为右侧面板的「委派」页签（`ActiveDelegations`）：
-入口固定显示、只在有排队/执行的委派时带数量，结束后自然移出并保留虚线空态，
-不再因列表变空而让入口来回闪现，也不自动抢焦点或把用户从信息页带走。
-页签只在私聊出现，切到群聊或被关掉的设计/浏览器页签一样回退信息页；群聊仍在信息页里看委派历史。
-
-输入框上方不再重复渲染当前轮状态与工具步骤（原 `BotLiveStatus` 私聊副本）：状态已经在头部副标题
-（工作中 / 排队）与成员忙碌条体现，工具步骤在会话正文里。`BotLiveStatus` 仍服务于群聊里
-「正在回复的成员」行，不要连带删掉。
-
-回归：`BotChatView.test.tsx`、`ActiveDelegations.test.tsx`。
-
-## Bot 成员模型草稿与保存入口
-
-`ModelPicker` 选型时可能在同一次交互中先替换 provider/model，再按目标能力归一化思考档位。
-`EngineField` 通过函数式更新合并到最新 engine；新建与资料编辑两处消费者都必须透传 updater，
-不能从本轮渲染闭包展开旧 engine，否则后一次思考更新会把新模型覆盖回去。
-成员资料的保存 / 放弃操作区常驻滚动区之外，无修改或保存中禁用；大字号和小窗口下只滚动表单内容。
-回归：`BotProfilePanel.test.tsx`；布局验收需实测按钮在视口内，happy-dom 不证明几何可见性。
 
 ## 子模型思考与条目开关
 

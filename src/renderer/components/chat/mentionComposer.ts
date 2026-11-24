@@ -396,7 +396,7 @@ export function splitMentionRefs(text: string): SentMentionRefs {
 /** 编辑器段 → 发送 payload：wire text 内联序列化，mentions 从段派生 */
 export function createEditorPayload(input: {
   segments: readonly MentionSegment[];
-  /** The same string protocol serves one command or a leading skill chain (not a Bot array). */
+  /** The same string protocol serves one command or a leading skill chain. */
   slash: string | null;
   images: AttachedImage[];
   recipient?: AgentTypeMentionCandidate;

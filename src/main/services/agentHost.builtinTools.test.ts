@@ -323,31 +323,16 @@ it('disabled optional overlays fall back while required plugin presets fail; rem
   expect(
     spawnSession(identity, { ...request, presetId: 'plugin:enso.example:review' }, new Set())
   ).toMatchObject({ ok: false });
-  for (const bot of [false, true]) {
-    const owner = { ...identity, sessionId: bot ? 'bot' : 'ssh' };
-    expect(
-      spawnSession(
-        owner,
-        { ...request, sessionId: owner.sessionId },
-        new Set(),
-        bot ? undefined : { host: 'fixture', auth: 'key' },
-        undefined,
-        bot
-          ? {
-              bot: {
-                systemPrompt: 'bot persona',
-                instruction: { path: '/bot', content: 'bot' },
-                skillIds: [],
-                mcpServerIds: [],
-              },
-            }
-          : undefined
-      ).ok
-    ).toBe(true);
-    const command = worker.posted.findLast((c) => c.type === 'spawn-parent');
-    for (const field of ['pluginTools', 'pluginEvents', 'workflowPresetFiles'])
-      expect(command).not.toHaveProperty(field);
-  }
+  const owner = { ...identity, sessionId: 'ssh' };
+  expect(
+    spawnSession(owner, { ...request, sessionId: owner.sessionId }, new Set(), {
+      host: 'fixture',
+      auth: 'key',
+    }).ok
+  ).toBe(true);
+  const command = worker.posted.findLast((entry) => entry.type === 'spawn-parent');
+  for (const field of ['pluginTools', 'pluginEvents', 'workflowPresetFiles'])
+    expect(command).not.toHaveProperty(field);
   stopAgentWorker();
 });
 

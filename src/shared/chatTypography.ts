@@ -17,7 +17,7 @@ export interface ChatTypographyEntry {
 }
 export type ChatTypography = Record<ChatTypographyPart, ChatTypographyEntry>;
 
-// Code 正文实际 15px、h1/h2 18px（h3 16px）、代码 11px；Bot 等宿主保留自己的基线。
+// Code 正文实际 15px、h1/h2 18px（h3 16px）、代码 11px。
 export const CHAT_TYPOGRAPHY_DEFAULTS: Readonly<ChatTypography> = {
   body: { fontSize: 15, fontWeight: 400 },
   headings: { fontSize: 18, fontWeight: 600 },

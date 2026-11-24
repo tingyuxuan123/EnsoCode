@@ -184,19 +184,29 @@ it('取消与 guard 都在插入前停止，不调用 insertText', async () => {
   const before = new AbortController();
   before.abort();
   await expect(
-    host.invoke('insert-abort', 'plugin_insert_text', { tabId, text: 'x' }, undefined, {
-      signal: before.signal,
-    })
+    host.invoke(
+      'insert-abort',
+      'plugin_insert_text',
+      { tabId, text: 'x' },
+      {
+        signal: before.signal,
+      }
+    )
   ).rejects.toThrow();
   expect(checks()).toEqual([]);
   expect(mock.inserted).toEqual([]);
 
   await expect(
-    host.invoke('insert-abort', 'plugin_insert_text', { tabId, text: 'x' }, undefined, {
-      guard: () => {
-        throw new Error('document changed');
-      },
-    })
+    host.invoke(
+      'insert-abort',
+      'plugin_insert_text',
+      { tabId, text: 'x' },
+      {
+        guard: () => {
+          throw new Error('document changed');
+        },
+      }
+    )
   ).rejects.toThrow('document changed');
   expect(checks()).toEqual([]);
   expect(mock.inserted).toEqual([]);
@@ -206,9 +216,14 @@ it('取消与 guard 都在插入前停止，不调用 insertText', async () => {
   const during = new AbortController();
   mock.onCheck = () => during.abort();
   await expect(
-    host.invoke('insert-abort', 'plugin_insert_text', { tabId, text: 'x' }, undefined, {
-      signal: during.signal,
-    })
+    host.invoke(
+      'insert-abort',
+      'plugin_insert_text',
+      { tabId, text: 'x' },
+      {
+        signal: during.signal,
+      }
+    )
   ).rejects.toThrow();
   expect(mock.inserted).toEqual([]);
   mock.onCheck = undefined;

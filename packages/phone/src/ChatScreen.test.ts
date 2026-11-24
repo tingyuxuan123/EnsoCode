@@ -33,8 +33,8 @@ beforeEach(() => {
 const render = (patch: Partial<Parameters<typeof ChatScreen>[0]> = {}) =>
   renderToStaticMarkup(
     createElement(ChatScreen, {
-      sessionId: 'direct',
-      title: 'Bot',
+      sessionId: 'session',
+      title: 'Code',
       projectName: '',
       view: null,
       connState: 'online',
@@ -46,15 +46,12 @@ const render = (patch: Partial<Parameters<typeof ChatScreen>[0]> = {}) =>
       onAbort: noop,
       onApproval: noop,
       onAsk: noop,
-      bot: {},
       ...patch,
     })
   );
 
-it('uses one session menu in direct Bot and Code, but not the read-only group process', () => {
+it('uses one session menu for the conversation', () => {
   expect(render()).toContain('aria-label="会话菜单"');
-  expect(render({ bot: undefined })).toContain('aria-label="会话菜单"');
-  expect(render({ bot: { readOnly: true } })).not.toContain('aria-label="会话菜单"');
   expect(render()).not.toContain('aria-label="新建会话"');
 });
 
@@ -72,20 +69,15 @@ it('没有选中会话时的空态用对外品牌「CodeKiln」，图标走应�
   expect(html).toContain('alt="CodeKiln"');
 });
 
-it('Code 和 Bot 都能看到本地握手发送失败，而不是只有 Bot notice', () => {
-  for (const bot of [undefined, {}]) {
-    expect(render({ bot, notice: '操作未发送：handshake timeout' })).toContain(
-      '操作未发送：handshake timeout'
-    );
-  }
+it('显示本地握手发送失败', () => {
+  expect(render({ notice: '操作未发送：handshake timeout' })).toContain(
+    '操作未发送：handshake timeout'
+  );
 });
 
-it('retains a direct Bot draft across session replacement, without merging Code drafts', () => {
+it('isolates drafts by session id', () => {
   for (const sessionId of ['old', 'new']) {
-    expect(render({ sessionId, bot: { chatId: 'chat' } })).toContain(
-      'data-draft-key="bot-chat:chat"'
-    );
-    expect(render({ sessionId, bot: undefined })).toContain(`data-draft-key="${sessionId}"`);
+    expect(render({ sessionId })).toContain(`data-draft-key="${sessionId}"`);
   }
 });
 

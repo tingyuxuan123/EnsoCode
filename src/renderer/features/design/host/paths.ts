@@ -10,7 +10,7 @@ export class DesignPaths {
   remember(info: DesignRootInfo): void {
     const path = validateDesignAbsolutePath(info.path);
     const key = JSON.stringify(info.ref);
-    // Bot members and successive group sessions can share a path. An older
+    // Successive sessions may share a workspace path. An older
     // session may already have ended, even though the shared directory remains.
     this.roots.delete(key);
     this.roots.set(key, { ...info, path });

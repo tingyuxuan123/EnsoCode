@@ -16,7 +16,6 @@ describe('listProjectSessions', () => {
     conv('b', 'p1'),
     conv('c', 'p2'),
     conv('d', 'p1', { lifecycle: 'ended' }),
-    conv('e', 'p1', { bot: { botId: 'x' } }),
     conv('f', 'p1'),
   ];
   const persisted: Record<string, Record<string, unknown>> = {
@@ -25,7 +24,7 @@ describe('listProjectSessions', () => {
     f: { createdAt: 10 },
   };
 
-  it('只列同项目、未结束、非 Bot 的主会话，按最近活动排序', () => {
+  it('只列同项目、未结束 的主会话，按最近活动排序', () => {
     const list = listProjectSessions({
       origin: 'a',
       conversations,
@@ -54,7 +53,7 @@ describe('listProjectSessions', () => {
 });
 
 describe('listAllSessions', () => {
-  it('跨项目列出主会话并带项目标识，排除已移除项目与 Bot 工作区', () => {
+  it('跨项目列出主会话并带项目标识，排除已移除项目', () => {
     const projects = [
       { projectId: 'p1', canonicalPath: '/w/alpha', state: 'active' as const, version: 1 },
       {
@@ -65,13 +64,6 @@ describe('listAllSessions', () => {
         version: 1,
       },
       { projectId: 'p3', canonicalPath: '/w/gone', state: 'removed' as const, version: 1 },
-      {
-        projectId: 'p4',
-        canonicalPath: '/w/bot',
-        kind: 'bot-home' as const,
-        state: 'active' as const,
-        version: 1,
-      },
     ];
     const activity: Record<string, Record<string, unknown>> = {
       a: { lastActiveAt: 5 },
@@ -82,8 +74,6 @@ describe('listAllSessions', () => {
         conv('a', 'p1'),
         conv('b', 'p2'),
         conv('c', 'p3'),
-        conv('d', 'p4'),
-        conv('e', 'p1', { bot: { botId: 'x' } }),
         conv('f', 'p1', { lifecycle: 'ended' }),
       ],
       projects,

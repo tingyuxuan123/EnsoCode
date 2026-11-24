@@ -27,24 +27,12 @@
 - Main 从发给 worker 的有效审批档判断，包括预设约束和主工作台顶层发出的切换指令；工具参数、页面文案和渲染层状态不是权限来源。等待交还控制权后还要重新判断当前档位。
 - 聊天输入区和设备面板只展示待处理的授权请求；回答后两处都收起，显式授权仍可在折叠的设备授权管理区撤销或移除。
 
-## Bot 宿主的投递边界
-
-本地群任务托管的根群授权、编号直通、回执记账、提醒去重和受控恢复契约见
-[本地群任务托管](../guides/task-supervision.md)。托管不等于自动重放命令，也不替代审批。
-
-- `status: idle` 不是回合终态：worker 还会发送 session-meta、turn-completed。Bot 槽位、结果归属与队列只在终态结算；但中断、命令失败等路径只有 idle/failed，宿主在宽限期后兜底结算并 pump，无宿主轮次的会话回到 idle 时也要 pump，否则排队投递与并发槽永久挂起。
-- deliveryId 是「某会话的一次投递」的身份，按会话去重：群聊一轮里人类/例行/委派结果的 deliveryId 只给首个投递，接力一律新生成；命中去重（`duplicate`）对群当前成员按失败写 system 条目并推进，不能当作已发出。
-- 委派结果使用稳定 delegationId，worker 开始处理后确认；重启通过 jsonl 用户消息去重，不以“已入队”当作已投递。
-- Bot 插话的 IPC 发送成功不等于消费成功：宿主等 `delivery-settled` 才推进群游标；`delivery-deferred` 沿用原投递顺序重新准入。相同会话的旧排队/准备中/未确认插话不能被新插话越过，但其它会话的排队任务不能阻塞当前活轮补充。停止、会话终止和 worker 退出必须显式结算未确认插话。
-- 委派按目标成员自身的工具、skill、MCP 执行，审批档取双方更严并持久化，嵌套/恢复沿用该审批档；readonly 父会话的子代理仍继承 workspace_write 禁用。
-- 新建成员及内置成员/团队模板默认 `full` 自主运行，创建界面必须在折叠能力区之外明示授权范围与命令可访问当前账号资源的风险；自定义模板、导入文件和已有成员显式设置的审批档位不自动升级。双方均为 `full` 的委派不新增逐次审批，任一方的显式限制仍生效。
-- 保存成员审批档位后，Bot 宿主对空闲普通会话同步 worker；活轮结束或下次投递前同步，失败不得继续投递或伪报已生效。模型探测只覆盖模型、不能覆盖审批；探测或 spawn 等待期间保存的降级必须先于首条 prompt 生效。委派保留任务快照，不被成员后续授权静默升级；只读、禁用工具、预算及桌面应用/系统等独立授权不变。回归见 `botSessionHost.test.ts`、`templates.test.ts`、`teamTemplates.test.ts`、`delegation.test.ts`、`agent/approval.test.ts`。
-- Bot 停用先冻结投递，再取消委派和排队项、清路由、退订并停止调度；排队取消按 deliveryId 结算，不能清掉同会话另一项的审批计时器。
-
 ## agentHost：worker 生命周期与命令下发
 
 已退役的超级助理仅保留磁盘兼容：旧总控不会出现在会话目录，也不会被选择、启动或恢复投递。
 不会迁移或删除其 journal 与任务账本；它曾创建的普通 Code 会话仍可按原模型、审批设置与历史打开。
+
+已移除的 Bot 目录和历史不会自动删除。`source-registry.json` 读入时隔离旧 `bot-home` 项目、其会话及带 `bot` 绑定的记录；不注册为普通会话，也不复用这些 ID。后续写入普通会话时原记录仍会保留。回归：`sourceAuthorityRegistry.test.ts`。
 
 `agentHost.ts` 托管唯一的 agent worker（`utilityProcess.fork(out/main/agent.js)`，
 故障域 A：一个进程装全部活会话）。关键约束：
@@ -126,7 +114,7 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 - scratch 是仅 Main 可创建的隐藏项目载体；每个根会话 cwd 固定为 `userData/scratch/<UUID>`。
   共用无 Node 依赖的 `conversationCwd` 词法规则，Main 再验证 exact realpath 与符号链接边界；
   文件树、浏览器、子代理和 workflow 不得退回共享 scratch 根或旁边会话目录。
-  临时历史保留到显式删除，不参加自动删除；不把 scratch 作为 Bot/手机普通项目或项目级权限覆盖。
+  临时历史保留到显式删除，不参加自动删除；不把 scratch 作为手机普通项目或项目级权限覆盖。
 - 可热切内置工具在启动时注册，由 Main 按 generation 推有效全局/项目/固定禁用列表，
   worker 只在 SDK 真正 idle 时激活；正在跑的回合只缓存最新配置，不中止工具与既有 child。
   sandbox/write/goal 保持 spawn 固定，个人版 code_search 仍须通过本机账号配置门。
@@ -137,7 +125,7 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
 
 ## 项目知识扩展与已停用的内置记忆
 
-- 内置 Markdown Wiki 的工具、索引、自动编译和 Bot 核心笔记注入已停用。旧应用数据目录中的 Wiki、外部 Obsidian Vault 及会话文件不会自动迁移、覆盖或删除。Bot 与群的手写笔记仍可编辑，但不再自动改写或注入。会话历史与上下文压缩继续工作。
+- 内置 Markdown Wiki 的工具、索引和自动编译已停用。旧应用数据目录中的 Wiki、外部 Obsidian Vault 及会话文件不会自动迁移、覆盖或删除。会话历史与上下文压缩继续工作。
 - [独立 llmdoc 扩展](../../../examples/plugins/llmdoc/README.md) 提供 Git 项目的知识检索和变更复核。插件本身只读仓库；显式维护只准备对话请求，实际写入和 Git 提交由 Agent 分别确认执行，不读取历史聊天或在后台改写文档。
 
 回归：`streamGuard.test.ts`、`streamGuard.sdk.test.ts`、`backgroundTasks.test.ts`、
@@ -320,21 +308,6 @@ UserPromptSubmit/分支 note、不追加合成 user/custom 任务；真实扩展
 （真实 SDK + supervisor retry 分支 + 假 provider：四账号顺序、活动排除复位、工具只一次、
 选号等待时取消与唯一结算）、`sessionAdapter.test.ts` 和 `supervisor.silentTurn.test.ts`。
 
-第三处：`sessionAdapter.steerActiveSession()` 针对 Bot 插话，以每次调用独立的代理拦截
-pi `_queueSteer`（1.5.2 已复检：仍同步 push 文本并 `agent.steer`，`PendingMessageQueue`
-形状与 drain 替换数组的行为未变），在异步 input hook 后、同步入队前再次检查活轮，仍沿用原生
-steer 的扩展命令拒绝与模板展开语义。不使用 `prompt(..., streamingBehavior:'steer')`
-在 `started` 回调抛错：那时已经可能做过压缩并清空 nextTurn 消息。
-已入队但到 `agent_settled` 仍未消费的消息（如 abort）按对象引用从
-`agent.steeringQueue.messages` 移除，并同步 `_steeringMessages` / `_emitQueueUpdate`，
-再回报 deferred；不能 `clearQueue()`，否则普通 steer、扩展 custom 消息和 followUp 也被清掉。
-队列 drain 会替换 messages 数组，不能缓存旧数组引用。
-
-**升级 pi 必须复检第三处**：优先采用公开的活轮限定投递/单条撤销 API；确认私有入队方法
-仍同步追加消息，队列对象和文本索引形状未变。`sessionAdapter.test.ts` 使用真实 SDK 验证
-异步 hook 跨结束、边界成功消费一次、abort 后仅移除目标且保留普通/扩展插话；
-`supervisor.agentDispatch.test.ts` 和 Bot 宿主/群联测验证消费回执与重新准入。
-
 新增此类依赖前先找公开 API；确实没有时，三件事缺一不可：
 
 1. 封成带注释的适配函数（说清为什么需要、上游行为是什么）
@@ -458,7 +431,7 @@ let lastScan: { scanId: string; byId: Map<string, Cached> } | null = null;
 
 实现在 `assetScan/index.ts` 的 `skillNameKey` / `mcpKey` / `seenInstructionHashes`。
 
-Code 的开头连续 `/skill:name` 由最后一个内联 input 扩展按 loader 权威技能目录展开，插件的 transform/handled 语义先行；Bot 和无前缀的 Pi 原生单技能不变，worker plan/role 前缀后的单技能由扩展补展开。新块沿用 Pi XML，仅添加 `content-length`（正文 UTF-16 长度），解析必须验证安全整数、精确闭合和分隔符，坏长度整条按普通正文保留；投影在既有单段预算内优先裁技能正文并重算长度、保留用户任务，不改权威源，技能正文不进设置。
+Code 的开头连续 `/skill:name` 由最后一个内联 input 扩展按 loader 权威技能目录展开，插件的 transform/handled 语义先行；无前缀的 Pi 原生单技能不变，worker plan/role 前缀后的单技能由扩展补展开。新块沿用 Pi XML，仅添加 `content-length`（正文 UTF-16 长度），解析必须验证安全整数、精确闭合和分隔符，坏长度整条按普通正文保留；投影在既有单段预算内优先裁技能正文并重算长度、保留用户任务，不改权威源，技能正文不进设置。
 
 重复项**标记而不丢弃**：候选带 `duplicated` 和 `duplicateReason`
 （`registered` / `same-content` / `same-name`），界面上置灰且默认不勾选，

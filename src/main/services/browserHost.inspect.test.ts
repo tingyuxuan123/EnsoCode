@@ -146,7 +146,7 @@ it('检查走 BrowserHost 队列并响应取消信号', async () => {
   // 已取消的调用在入队前就失败，不会发出 CDP
   const before = evaluated();
   await expect(
-    host.inspectElements(tabId, 'owner', '#main', undefined, { signal: AbortSignal.abort() })
+    host.inspectElements(tabId, 'owner', '#main', { signal: AbortSignal.abort() })
   ).rejects.toThrow();
   expect(evaluated()).toBe(before);
 
@@ -171,7 +171,7 @@ it('排队期间URL改变，检查开始前guard阻止发出CDP', async () => {
   const tabId = await openTab(host, 'guard-owner');
   const before = mock.calls.filter((call) => call.method === 'Runtime.evaluate').length;
   await expect(
-    host.inspectElements(tabId, 'guard-owner', '#main', undefined, {
+    host.inspectElements(tabId, 'guard-owner', '#main', {
       guard: () => {
         throw new Error('document changed');
       },

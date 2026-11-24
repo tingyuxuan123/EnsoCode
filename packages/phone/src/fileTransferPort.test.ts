@@ -24,17 +24,12 @@ describe('Web 文件取回', () => {
     port.receive({ ...value, requestId: sent.at(-1)!.requestId } as Reply);
   };
 
-  it('普通会话和 Bot 都只发标识符并按请求对号入座', async () => {
+  it('会话文件只发标识符并按请求对号入座', async () => {
     const pending = port.list(target);
     expect(sent[0]).toMatchObject({ type: 'file-list', target });
     port.receive({ type: 'file-list-result', requestId: 'stale', files: [file] });
     reply({ type: 'file-list-result', files: [file] });
     expect(await pending).toEqual({ files: [file] });
-    const bot = { bot: { chatId: 'chat', entryId: 'entry' } };
-    const next = port.list(bot);
-    expect(sent.at(-1)).toMatchObject({ target: bot });
-    reply({ type: 'file-list-result', files: [] });
-    expect(await next).toEqual({ files: [] });
   });
 
   it('逐块拉取后合成原始二进制，进度只计算已验证字节', async () => {

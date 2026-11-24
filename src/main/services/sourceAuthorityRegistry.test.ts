@@ -15,6 +15,79 @@ afterEach(() => {
 });
 
 describe('SourceAuthorityRegistry', () => {
+  it('keeps retired Bot records on disk but never restores them as ordinary projects or sessions', () => {
+    const root = temporary();
+    const registryFile = path.join(root, 'registry.json');
+    const registry = new SourceAuthorityRegistry({ registryFile });
+    const project = registry.ensureScratchProject(path.join(root, 'scratch'))!;
+    const botHome = {
+      ...project,
+      projectId: '11111111-1111-4111-8111-111111111111',
+      kind: 'bot-home',
+    };
+    const botConversation = {
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      projectId: project.projectId,
+      kind: 'root',
+      lifecycle: 'ready',
+      version: 1,
+      sessionFile: path.join(root, 'bot-history.jsonl'),
+      bot: { botId: 'member', chatId: 'chat' },
+    };
+    const orphan = {
+      ...botConversation,
+      conversationId: '33333333-3333-4333-8333-333333333333',
+      projectId: botHome.projectId,
+      bot: undefined,
+    };
+    writeFileSync(botConversation.sessionFile, 'preserved Bot history\n');
+    writeFileSync(
+      registryFile,
+      JSON.stringify({
+        migrationVersion: 1,
+        projects: [project, botHome],
+        conversations: [botConversation, orphan],
+      })
+    );
+    const before = readFileSync(registryFile, 'utf8');
+    const reopened = new SourceAuthorityRegistry({ registryFile });
+
+    expect(reopened.rendererProjection()).toEqual({ projects: [project], conversations: [] });
+    expect(reopened.project(botHome.projectId)).toBeUndefined();
+    for (const { conversationId } of [botConversation, orphan]) {
+      expect(reopened.conversation(conversationId)).toBeUndefined();
+      expect(reopened.spawnCwd(conversationId)).toBeNull();
+      expect(
+        reopened.createConversation({
+          requestId: 'reuse',
+          projectId: project.projectId,
+          projectVersion: project.version,
+          conversationId,
+        }).accepted
+      ).toBe(false);
+    }
+    expect(readFileSync(registryFile, 'utf8')).toBe(before);
+
+    const ordinaryId = '44444444-4444-4444-8444-444444444444';
+    expect(
+      reopened.createConversation({
+        requestId: 'ordinary',
+        projectId: project.projectId,
+        projectVersion: project.version,
+        conversationId: ordinaryId,
+      }).accepted
+    ).toBe(true);
+    const after = JSON.parse(readFileSync(registryFile, 'utf8'));
+    expect(after.projects).toContainEqual(botHome);
+    expect(after.conversations).toEqual(
+      expect.arrayContaining([botConversation, JSON.parse(JSON.stringify(orphan))])
+    );
+    expect(readFileSync(botConversation.sessionFile, 'utf8')).toBe('preserved Bot history\n');
+    expect(
+      new SourceAuthorityRegistry({ registryFile }).rendererProjection().conversations
+    ).toMatchObject([{ conversationId: ordinaryId }]);
+  });
+
   it('retired coordinator stays on disk but is hidden and cannot be selected or spawned', () => {
     const root = temporary();
     const registryFile = path.join(root, 'registry.json');
@@ -145,128 +218,6 @@ describe('SourceAuthorityRegistry', () => {
         projectVersion: 1,
       }).accepted
     ).toBe(false);
-  });
-
-  const botId = '33333333-3333-4333-8333-333333333333';
-  const chatId = '44444444-4444-4444-8444-444444444444';
-
-  it('bot-home 项目由 Main 幂等登记，renderer 投影与 renderer 操作都看不到它', () => {
-    const root = temporary();
-    const changes: unknown[] = [];
-    const registry = new SourceAuthorityRegistry({
-      registryFile: path.join(root, 'registry.json'),
-      onChanged: (projection) => changes.push(projection),
-    });
-    const home = path.join(root, 'bots', botId, 'workspace');
-    const first = registry.ensureBotHomeProject(home);
-    expect(first?.kind).toBe('bot-home');
-    expect(registry.ensureBotHomeProject(home)?.projectId).toBe(first?.projectId);
-    if (!first) return;
-
-    const local = registry.createProject({ requestId: 'p', path: home });
-    expect(local.accepted && local.value.projectId).not.toBe(first.projectId);
-
-    expect(registry.rendererProjection().projects.map((p) => p.kind)).not.toContain('bot-home');
-    expect(changes.at(-1)).toEqual(registry.rendererProjection());
-    expect(
-      registry.createConversation({ requestId: 'c', projectId: first.projectId, projectVersion: 1 })
-        .accepted
-    ).toBe(false);
-    expect(
-      registry.selectProject({ requestId: 's', projectId: first.projectId, version: 1 }).accepted
-    ).toBe(false);
-    expect(
-      registry.removeProject({ requestId: 'r', projectId: first.projectId, version: 1 }).accepted
-    ).toBe(false);
-  });
-
-  it('bot 会话只由 Main 创建/结束，renderer 投影和通用会话操作拒绝它', () => {
-    const root = temporary();
-    const registryFile = path.join(root, 'registry.json');
-    const registry = new SourceAuthorityRegistry({ registryFile });
-    const project = registry.ensureBotHomeProject(path.join(root, 'home'));
-    if (!project) throw new Error('no project');
-    const conversation = registry.createBotConversation(project.projectId, { botId, chatId });
-    expect(conversation?.bot).toEqual({ botId, chatId });
-    if (!conversation) return;
-    expect(registry.projection().conversations).toHaveLength(1);
-    expect(registry.rendererProjection().conversations).toHaveLength(0);
-    expect(registry.botConversations().map((c) => c.conversationId)).toEqual([
-      conversation.conversationId,
-    ]);
-
-    const request = {
-      requestId: 'x',
-      conversationId: conversation.conversationId,
-      version: conversation.version,
-    };
-    expect(registry.selectConversation(request).accepted).toBe(false);
-    expect(registry.endConversation(request).accepted).toBe(false);
-    expect(registry.removeConversation(request).accepted).toBe(false);
-    expect(
-      registry.updateSelection({ ...request, selection: { providerId: 'p', modelId: 'm' } })
-        .accepted
-    ).toBe(false);
-
-    const reloaded = new SourceAuthorityRegistry({ registryFile });
-    expect(reloaded.conversation(conversation.conversationId)?.bot).toEqual({ botId, chatId });
-
-    expect(registry.endBotConversation(conversation.conversationId)?.lifecycle).toBe('ended');
-    expect(registry.removeBotConversation(conversation.conversationId)?.conversationId).toBe(
-      conversation.conversationId
-    );
-    expect(registry.conversation(conversation.conversationId)).toBeUndefined();
-  });
-
-  it('结束的 bot 会话可由 Main 重新打开；项目不可用或非 bot 会话拒绝', () => {
-    const root = temporary();
-    const registryFile = path.join(root, 'r.json');
-    const registry = new SourceAuthorityRegistry({ registryFile });
-    const home = registry.ensureBotHomeProject(path.join(root, 'home'));
-    if (!home) throw new Error('no project');
-    const draft = registry.createBotConversation(home.projectId, { botId, chatId });
-    const ready = registry.createBotConversation(home.projectId, { botId, chatId });
-    if (!draft || !ready) throw new Error('no conversation');
-    registry.markReady(ready.conversationId, path.join(root, 's.jsonl'), {
-      providerId: 'p',
-      modelId: 'm',
-    });
-    registry.endBotConversation(draft.conversationId);
-    registry.endBotConversation(ready.conversationId);
-
-    expect(registry.reopenBotConversation(draft.conversationId)?.lifecycle).toBe('draft');
-    const reopened = registry.reopenBotConversation(ready.conversationId);
-    expect(reopened?.lifecycle).toBe('ready');
-    expect(reopened?.sessionFile).toBe(path.join(root, 's.jsonl'));
-    expect(
-      new SourceAuthorityRegistry({ registryFile }).conversation(ready.conversationId)?.lifecycle
-    ).toBe('ready');
-    expect(registry.reopenBotConversation('missing')).toBeUndefined();
-
-    registry.endBotConversation(ready.conversationId);
-    expect(registry.removeBotHomeProject(home.projectId)).toBe(true);
-    expect(registry.reopenBotConversation(ready.conversationId)).toBeUndefined();
-    expect(registry.conversation(ready.conversationId)?.lifecycle).toBe('ended');
-  });
-
-  it('Main 移除 bot-home 项目时结束其会话；bot 会话也可挂在本地 Code 项目下', () => {
-    const root = temporary();
-    const registry = new SourceAuthorityRegistry({ registryFile: path.join(root, 'r.json') });
-    const home = registry.ensureBotHomeProject(path.join(root, 'home'));
-    if (!home) throw new Error('no project');
-    const conversation = registry.createBotConversation(home.projectId, { botId, chatId });
-    expect(registry.removeBotHomeProject(home.projectId)).toBe(true);
-    expect(registry.conversation(conversation!.conversationId)?.lifecycle).toBe('ended');
-    expect(registry.createBotConversation(home.projectId, { botId, chatId })).toBeUndefined();
-
-    const codePath = path.join(root, 'code');
-    mkdirSync(codePath);
-    const code = registry.createProject({ requestId: 'p', path: codePath });
-    if (!code.accepted) throw new Error('no code project');
-    expect(registry.removeBotHomeProject(code.value.projectId)).toBe(false);
-    expect(registry.createBotConversation(code.value.projectId, { botId, chatId })?.projectId).toBe(
-      code.value.projectId
-    );
   });
 
   it('atomically owns project/conversation target and ignores later generic settings forgery', () => {

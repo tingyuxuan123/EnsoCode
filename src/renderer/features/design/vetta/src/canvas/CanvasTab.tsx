@@ -41,12 +41,10 @@ function storageKey(cwd: string): string {
 }
 
 export function CanvasTab() {
-	const { cwd, bot } = useActivityTab();
-	const designPath = bot?.path;
-	const botChatId = bot?.chatId;
+	const { cwd } = useActivityTab();
 	const { t } = useTranslation();
-	const [files, setFiles] = useState<string[]>(designPath ? [designPath] : []);
-	const [selectedPath, setSelectedPath] = useState<string | null>(designPath ?? null);
+	const [files, setFiles] = useState<string[]>([]);
+	const [selectedPath, setSelectedPath] = useState<string | null>(null);
 	const [phase, setPhase] = useState<Phase>({ kind: "idle" });
 	const [session, setSession] = useState<DesignSession | null>(null);
 	const [notesStore, setNotesStore] = useState<NotesStore | null>(null);
@@ -90,8 +88,8 @@ export function CanvasTab() {
 	// 画布很吃宽度：每次激活本标签卡（切走会卸载，故每次都触发）把活动面板拉满，
 	// 用户之后仍可自行拖窄。
 	useEffect(() => {
-		if (!botChatId) getPluginCtx().ui.setActivityPanelWidth("max");
-	}, [botChatId]);
+		getPluginCtx().ui.setActivityPanelWidth("max");
+	}, []);
 
 	const refreshFiles = useCallback(async (): Promise<string[]> => {
 		if (!cwd) {
@@ -108,7 +106,6 @@ export function CanvasTab() {
 
 	// Scope switch: rescan and restore the remembered selection for this cwd.
 	useEffect(() => {
-		if (designPath) return;
 		let cancelled = false;
 		void refreshFiles().then((found) => {
 			if (cancelled) return;
@@ -124,12 +121,11 @@ export function CanvasTab() {
 		return () => {
 			cancelled = true;
 		};
-	}, [cwd, designPath, refreshFiles]);
+	}, [cwd, refreshFiles]);
 
 	// 画布开着时的打开请求（vetd_create、画廊、文件树右键）：目标多半是刚落盘的新设计，
 	// 先重扫再切，否则下拉里没有它、选中也会被当成无效路径。
 	useEffect(() => {
-		if (designPath) return;
 		let disposed = false;
 		const unsubscribe = onPendingDesignPath(() => {
 			const pending = takePendingDesignPath(cwd ?? undefined);
@@ -142,7 +138,7 @@ export function CanvasTab() {
 			disposed = true;
 			unsubscribe();
 		};
-	}, [cwd, designPath, refreshFiles]);
+	}, [cwd, refreshFiles]);
 
 	// Open the selected design: session + engine server; teardown on switch.
 	useEffect(() => {
@@ -152,7 +148,7 @@ export function CanvasTab() {
 			setPhase({ kind: "idle" });
 			return;
 		}
-		localStorage.setItem(storageKey(botChatId ? `${cwd}\0${botChatId}` : cwd), selectedPath);
+		localStorage.setItem(storageKey(cwd), selectedPath);
 		const recoveryKey = `${cwd}\0${selectedPath}`;
 		if (recoveryKeyRef.current !== recoveryKey) {
 			recoveryKeyRef.current = recoveryKey;
@@ -208,7 +204,6 @@ export function CanvasTab() {
 			});
 			setCanvasController({
 				cwd,
-				botChatId,
 				session: nextSession,
 				notes: nextNotes,
 				port: server.port,
@@ -251,7 +246,7 @@ export function CanvasTab() {
 				console.warn("[vetd] 设计引擎清理失败，交由宿主生命周期兜底", error);
 			});
 		};
-	}, [selectedPath, cwd, botChatId, t, reloadNonce]);
+	}, [selectedPath, cwd, t, reloadNonce]);
 
 
 	const createDesign = async (): Promise<void> => {

@@ -1,14 +1,12 @@
 /** Dev-only visual fixtures: production build has index.html as its sole entry.
  * These are the real PWA components, not a second implementation of the design. */
-import type { CatalogEntry, PairBotMember, ProjectEntry, ProviderEntry } from '@enso/pair';
+import type { CatalogEntry, ProjectEntry, ProviderEntry } from '@enso/pair';
 import { emptyGuestView } from '@shared/pair/guestProjection';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BotDrawerPanel } from '../src/BotDrawerPanel';
 import { ChatScreen } from '../src/ChatScreen';
 import { FileDownloadsRoot } from '../src/FileDownloads';
 import { FileTransferPort } from '../src/fileTransferPort';
-import { GroupChatScreen } from '../src/GroupChatScreen';
 import { NewSessionSheet } from '../src/NewSessionSheet';
 import { PairScreen } from '../src/PairScreen';
 import { type SessionConfig, SessionConfigSheet } from '../src/SessionConfigSheet';
@@ -91,24 +89,6 @@ const catalog: CatalogEntry[] = [
     updatedAt: now - 3600000,
   },
 ];
-const bots: PairBotMember[] = [
-  { id: 'manager', name: '林经理', title: '项目经理', avatarColor: '#a681cc', status: 'idle' },
-  { id: 'dev', name: '阿全', title: '全栈', avatarColor: '#60bcec', status: 'running' },
-  { id: 'design', name: '小设', title: '设计', avatarColor: '#eda480', status: 'idle' },
-  { id: 'test', name: '小测', title: '测试', avatarColor: '#a3c98e', status: 'idle' },
-];
-const botMap = new Map(bots.map((bot) => [bot.id, bot]));
-const chat = {
-  id: 'team',
-  kind: 'group' as const,
-  title: 'EnsoCode 优化讨论',
-  members: bots.map((bot) => bot.id),
-  bossBotId: 'manager',
-  updatedAt: now,
-  lastSeq: 4,
-  sessions: {},
-  status: 'idle' as const,
-};
 const view = emptyGuestView();
 view.status = screen === 'running' ? 'running' : 'idle';
 view.messages.set(0, {
@@ -211,11 +191,10 @@ function Preview() {
   const navigation = usePhoneScreenBack({
     enabled: screen === 'navigation',
     docked: false,
-    initialListOpen: screen === 'sessions' || screen === 'bot' || screen === 'settings',
+    initialListOpen: screen === 'sessions' || screen === 'settings',
   });
   const drawer = navigation.drawerOpen;
   const setDrawer = (open: boolean) => (open ? navigation.openDrawer() : navigation.closeDrawer());
-  const [bot, setBot] = useState(screen === 'bot');
   const [config, setConfig] = useState(screen === 'config');
   const [creating, setCreating] = useState(screen === 'new-session');
   const [sessionConfig, setSessionConfig] = useState<SessionConfig>({
@@ -270,107 +249,38 @@ function Preview() {
               onAddDevice={noop}
               onRenameDevice={noop}
               onUnpairDevice={noop}
-              botSegment={{
-                active: bot,
-                onChange: setBot,
-                panel: (
-                  <BotDrawerPanel
-                    onBack={() => setBot(false)}
-                    connectionLabel="书房"
-                    bots={bots}
-                    chats={[chat]}
-                    activeChatId={null}
-                    onSelect={() => setDrawer(false)}
-                  />
-                ),
-              }}
             />
             <div inert={drawer} aria-hidden={drawer} className="h-full min-w-0 flex-1">
-              {screen === 'group' ? (
-                <GroupChatScreen
-                  chat={chat}
-                  bots={botMap}
-                  timeline={{
-                    entries: [
-                      {
-                        id: 'h',
-                        kind: 'human',
-                        seq: 1,
-                        at: now - 3600000,
-                        text: '帮我部署上去看看，124.222.38.18',
-                        mentions: [],
-                      },
-                      {
-                        id: 'b',
-                        kind: 'bot',
-                        seq: 2,
-                        at: now - 1800000,
-                        botId: 'dev',
-                        text: '部署完成，就等你实机验收。',
-                        conversationId: 'dev',
-                        turnId: '1',
-                      },
-                      {
-                        id: 'm',
-                        kind: 'bot',
-                        seq: 3,
-                        at: now - 1200000,
-                        botId: 'manager',
-                        text: '网页已上 relay.yfdl.site，公网入口和健康检查正常。别清浏览器数据——会丢配对和离线队列。',
-                        conversationId: 'manager',
-                        turnId: '2',
-                      },
-                    ],
-                    lastSeq: 3,
-                    hasOlder: false,
-                  }}
-                  state={undefined}
-                  pending={[]}
-                  activities={[]}
-                  clockOffset={0}
-                  connState="online"
-                  stateLabel="已连接"
-                  notice={null}
-                  onOpenDrawer={() => setDrawer(true)}
-                  onLoadOlder={noop}
-                  onSend={noop}
-                  onStop={noop}
-                  onOpenProcess={noop}
-                  onApproval={noop}
-                  onAsk={noop}
-                />
-              ) : (
-                <ChatScreen
-                  sessionId="main"
-                  title={regression ? 'PWA 界面设计稿还原重构' : catalog[0].title}
-                  projectName="EnsoCode"
-                  modelLabel={regression ? 'GPT-6.1 Sol' : 'Sonnet 4.6 · 思考 高'}
-                  view={view}
-                  connState="online"
-                  stateLabel="已连接"
-                  canCreate
-                  onOpenDrawer={() => setDrawer(true)}
-                  onNewSession={() => setCreating(true)}
-                  onOpenConfig={() => setConfig(true)}
-                  onSend={noop}
-                  onAbort={noop}
-                  onApproval={noop}
-                  onAsk={noop}
-                  deviceReadOnly={screen === 'readonly-device'}
-                  tabGroup={{
-                    parent: catalog[0],
-                    children: [{ ...catalog[0], id: 'dev', title: '阿全' }],
-                  }}
-                  onSelectTab={noop}
-                  usageTotals={{
-                    inputTokens: 10000,
-                    outputTokens: 2400,
-                    cacheHitPercent: 92,
-                    tokensPerSecond: 42,
-                  }}
-                  context={{ used: 38000, window: 100000 }}
-                />
-              )}
+              <ChatScreen
+                sessionId="main"
+                title={regression ? 'PWA 界面设计稿还原重构' : catalog[0].title}
+                projectName="EnsoCode"
+                modelLabel={regression ? 'GPT-6.1 Sol' : 'Sonnet 4.6 · 思考 高'}
+                view={view}
+                connState="online"
+                stateLabel="已连接"
+                canCreate
+                onOpenDrawer={() => setDrawer(true)}
+                onNewSession={() => setCreating(true)}
+                onOpenConfig={() => setConfig(true)}
+                onSend={noop}
+                onAbort={noop}
+                onApproval={noop}
+                onAsk={noop}
+                deviceReadOnly={screen === 'readonly-device'}
+                tabGroup={{
+                  parent: catalog[0],
+                  children: [{ ...catalog[0], id: 'dev', title: '阿全' }],
+                }}
+                onSelectTab={noop}
+                usageTotals={{
+                  inputTokens: 10000,
+                  outputTokens: 2400,
+                  cacheHitPercent: 92,
+                  tokensPerSecond: 42,
+                }}
+                context={{ used: 38000, window: 100000 }}
+              />
             </div>
             <NewSessionSheet
               open={creating}

@@ -462,9 +462,6 @@ private fun UserTurn(turn: SessionTurn) {
                 .background(c.card2).padding(horizontal = 13.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 bubble.forEach { block -> when (block) {
                     is SessionBlock.Prose -> UserMessageText(block.text)
-                    is SessionBlock.Delegation -> SessionDelegationCard(block)
-                    is SessionBlock.Routine -> SessionRoutineCard(block)
-                    is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
                     SessionBlock.ImagePlaceholder -> Label("图片附件", 13, 18, color = c.ink2)
                     else -> Unit
                 } }
@@ -512,9 +509,6 @@ private fun AssistantTurn(turn: SessionTurn, approval: SessionApproval?, specime
             is SessionBlock.Steps -> Unit // Rendered only inside a worklog.
             is SessionBlock.Todos -> SessionTodoCard(block.items)
             is SessionBlock.Notice -> TimelineDisclosure(block.kind.title, block.detail, EnsoIcon.Terminal)
-            is SessionBlock.Delegation -> SessionDelegationCard(block)
-            is SessionBlock.Routine -> SessionRoutineCard(block)
-            is SessionBlock.GroupMessages -> SessionGroupMessagesCard(block)
             is SessionBlock.Compaction -> TimelineDisclosure("上下文已压缩", block.summary, EnsoIcon.Compress)
             is SessionBlock.Images -> TimelineImageStrip(block.images)
             is SessionBlock.RemoteImage -> if (onLoadImage != null) TimelineRemoteImage(block.target, onLoadImage)

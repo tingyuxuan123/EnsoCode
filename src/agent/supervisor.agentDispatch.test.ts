@@ -2671,76 +2671,25 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       return { events, supervisor, piSession, userMessage, settled };
     }
 
-    it('Bot 插话到达时 worker 已空闲，回退 Main 排队而不滞留 pi', async () => {
-      const { events, supervisor, piSession } = await spawned();
-      supervisor.handleCommand({
-        type: 'steer',
-        identity: parent,
-        text: 'late',
-        deliveryId: 's',
-        activeOnly: true,
-      } as AgentCommand);
-      await settle();
-      expect(piSession.steer).not.toHaveBeenCalled();
-      expect(piSession.prompt).not.toHaveBeenCalled();
-      expect(events).toContainEqual(
-        expect.objectContaining({ type: 'delivery-deferred', deliveryId: 's' })
-      );
-      await supervisor.shutdown();
-    });
-
-    it('Bot 插话在异步 input hook 后转空闲，不偷开新轮且拒收标记不串号', async () => {
-      const { events, supervisor, piSession, userMessage, settled } = await spawned();
-      piSession.isStreaming = true;
-      const gate = Promise.withResolvers<void>();
-      piSession.steer.mockImplementationOnce(async function (this: typeof piSession, text) {
-        await gate.promise;
-        await this._queueSteer(text);
-        return 'queued';
-      });
-      supervisor.handleCommand({
-        type: 'steer',
-        identity: parent,
-        text: 'late',
-        deliveryId: 's',
-        activeOnly: true,
-      } as AgentCommand);
-      await settle();
-      piSession.isStreaming = false;
-      gate.resolve();
-      await settle();
-      expect(events).toContainEqual(
-        expect.objectContaining({ type: 'delivery-deferred', deliveryId: 's' })
-      );
-      expect(settled()).toEqual([]);
-      supervisor.handleCommand({ type: 'prompt', identity: parent, text: 'next', deliveryId: 'p' });
-      await settle();
-      userMessage('next');
-      expect(settled()).toEqual(['p']);
-      await supervisor.shutdown();
-    });
-
-    it('Bot 已入队但结算前未消费时只移除本条，并交回 Main', async () => {
+    it('可撤回的插话在结算前未消费时只移除本条，并发送一次拒收回执', async () => {
       const { events, supervisor, piSession } = await spawned();
       piSession.isStreaming = true;
       await piSession.steer('ordinary');
       supervisor.handleCommand({
         type: 'steer',
         identity: parent,
-        text: 'guarded',
+        text: 'unconsumed',
         deliveryId: 's',
-        activeOnly: true,
       });
       await settle();
-      expect(piSession.getSteeringMessages()).toEqual(['ordinary', 'guarded']);
+      expect(piSession.getSteeringMessages()).toEqual(['ordinary', 'unconsumed']);
+      const rejected = () => events.filter((event) => event.type === 'delivery-rejected');
       piSession.isStreaming = false;
       piSession.emit({ type: 'agent_settled' });
-      expect(events.filter((event) => event.type === 'delivery-deferred')).toEqual([
-        expect.objectContaining({ deliveryId: 's' }),
-      ]);
+      expect(rejected()).toEqual([expect.objectContaining({ deliveryId: 's' })]);
       expect(piSession.getSteeringMessages()).toEqual(['ordinary']);
       piSession.emit({ type: 'agent_settled' });
-      expect(events.filter((event) => event.type === 'delivery-deferred')).toHaveLength(1);
+      expect(rejected()).toHaveLength(1);
       await supervisor.shutdown();
     });
 

@@ -20,7 +20,7 @@ description: >
 | --- | --- |
 | 任意非平凡改动 | `AGENTS.md`、`docs/engineering-guidelines.md` |
 | 跨主进程 / preload / renderer | `docs/engineering-reference/guides/cross-layer-thinking-guide.md`、`main/ipc.md` |
-| Main、worker、child、session、Bot / 成员 / 群聊 | `docs/engineering-reference/main/services.md`、`renderer/state.md` |
+| Main、worker、child、session | `docs/engineering-reference/main/services.md`、`renderer/state.md` |
 | 新增或修改 IPC | `docs/engineering-reference/main/ipc.md` |
 | provider、skill、MCP、指令扫描 | `docs/engineering-reference/main/services.md`、`testing.md` |
 | React、Zustand、持久化、多窗口同步 | `docs/engineering-reference/renderer/state.md`、`renderer/components.md` |
@@ -33,7 +33,6 @@ description: >
 | 代码搜索工具 | `docs/engineering-reference/main/code-search.md` |
 | 纯逻辑、协议、解析器、路径校验 | `docs/engineering-reference/testing.md` |
 | 怀疑已有类似实现 | `docs/engineering-reference/guides/code-reuse-thinking-guide.md` |
-| 后台任务、监督与等待恢复 | `docs/engineering-reference/guides/task-supervision.md` |
 | 可复现审查、证据化验收 | `docs/engineering-reference/guides/reproducible-review.md` |
 | 发版、推送更新、打包升级、原生模块、GitHub Actions / Release | `docs/engineering-reference/guides/releasing.md`、`main/native-modules.md` |
 

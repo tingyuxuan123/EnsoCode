@@ -37,21 +37,19 @@ class DraftBookAcceptanceTest {
         override fun clear(pairId: String?) { if (pairId == null || pairId == owner) entries = emptyMap() }
     }
 
-    @Test fun `same ID in Code Bot and new task remains isolated after reload`() = runTest {
+    @Test fun `same ID in Code and new task remains isolated after reload`() = runTest {
         val store = Store()
         val dispatcher = StandardTestDispatcher(testScheduler)
         val book = DraftBook(store, this, dispatcher)
         book.bind("pair-a")
         advanceUntilIdle()
         book.edit(key, "code")
-        book.edit(DraftKey(DraftKind.Chat, key.id), "bot")
         book.edit(DraftKey(DraftKind.NewTask, key.id), "new task")
         book.flush()
         val restored = DraftBook(store, this, dispatcher)
         restored.bind("pair-a")
         advanceUntilIdle()
         assertEquals("code", restored.text(key))
-        assertEquals("bot", restored.text(DraftKey(DraftKind.Chat, key.id)))
         assertEquals("new task", restored.text(DraftKey(DraftKind.NewTask, key.id)))
     }
 

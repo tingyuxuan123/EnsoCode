@@ -132,15 +132,15 @@ className={cn('text-sm font-medium', !enabled && 'text-muted-foreground line-thr
 不改已保存的内置方案。不要让插件作者为宿主分段、页签或设置导航逐个写 CSS 补色。
 回归见 `stores/pluginThemes.test.ts`。
 
-跟随应用外观的入口（主窗口、设置、协作看板、独立设计窗口）都在自己的组件树里挂
+跟随应用外观的入口（主窗口、设置、独立设计窗口）都在自己的组件树里挂
 `plugins/PluginThemeHost`：窗口之间不共享 `html` 主题类，漏挂的窗口会一直停在云白。宿主只加载
 light/dark 调色板与插件 CSS，样式标签清空即恢复内置配色；插件素材槽与背景图规则只认主窗口的
-`data-enso` 挂点，所以设置、看板、设计窗口不会跟着铺壁纸或装饰。会话活动属性
+`data-enso` 挂点，所以设置和设计窗口不会跟着铺壁纸或装饰。会话活动属性
 （`data-enso-session` / `data-enso-activity`，素材槽的 running/waiting/error 状态）依赖 sessions
 store，只在主窗口由 `plugins/SessionActivityAttributes` 订阅，不能跟着主题宿主扩散到第二个入口。
 回归见 `plugins/pluginThemeWindows.test.ts`，`designWindowBoundary.test.ts` 同时守住宿主不得把
 sessions 依赖带进设计窗口。插件主题数据经 `extensionPlugins.list` / `asset` 读取，这两条只读
-通道额外放行 Main 权威登记的看板/设计窗口，写与管理通道仍限主窗口与设置窗口（见
+通道额外放行 Main 权威登记的设计窗口，写与管理通道仍限主窗口与设置窗口（见
 `main/windows.md`）。
 
 **配色方案选择器只在 `sync-terminal` 模式下影响界面外观**。
@@ -155,9 +155,8 @@ sessions 依赖带进设计窗口。插件主题数据经 `extensionPlugins.list
 `[data-workbench-sidebar]` 共享同一上下留缝、圆角与描边。图标轨、标题栏、壁纸层留在外壳上
 保持直角；卡片裁切由各内容区自己的 `overflow-hidden` 完成。聊天页签条与右侧面板页签条共用
 `--workbench-header-height` 与 `bg-background` 胶囊样式，确保横向底线对齐。**新加工作区模式
-（Code / Bot / 远程节点 / 图片工作台之外的入口）时必须同时挂 `data-workbench-card` 与
-`overflow-hidden`**，否则那块内容区四角会退回直角。回归见 `styles/workbenchCard.test.ts`，
-Bot 侧入口还由 `components/bots/BotView.test.tsx` 守一枚标记。
+（Code / 远程节点 / 图片工作台之外的入口）时必须同时挂 `data-workbench-card` 与
+`overflow-hidden`**，否则那块内容区四角会退回直角。回归见 `styles/workbenchCard.test.ts`。
 
 `html.dark` 只切换语义色变量，不会自动把 Chromium 原生控件（`<select>` 弹出层、滚动条）切到深色。
 `:root` 必须设 `color-scheme: light`，`.dark` 必须设 `color-scheme: dark`，否则 Windows 上原生下拉仍是白底。
@@ -204,8 +203,7 @@ inverse 令牌取原始 `--background`，仍跟随 light/dark/sync-terminal，�
   但承载内容的大面板应慎用，避免父子多层半透明叠色后比周围更实。hover/选中等瞬态可正常使用。
 - **承载内容的卡片叠在已半透明的面板上**（`bg-card` / `bg-muted` 卡片放在 `bg-background` 面板里）→
   两层 `--bg-panel-alpha` 叠成近乎不透明。给卡片挂 `data-slot`，加进 `globals.css` 的置透明列表
-  （`tool-details`、`welcome-suggestion`、Bot 页 `bot-card` / `bot-notice`），背景图模式下只留边框；
-  带 `hover:bg-*` 的可点卡片行用 `bot-card-button`（只在非 hover 态置透明）。常驻的选中高亮
+  （如 `tool-details`、`welcome-suggestion`），背景图模式下只留边框；常驻的选中高亮
   不要用实色 `bg-muted` 或弱 hover 色，统一用 `bg-selection`。
 - **第三方组件自己刷底色**（终端、代码高亮、diff）→ 给宿主元素挂 `data-slot`，在
   `globals.css` 的 `html.bg-image-enabled` 区块加一条覆写：内部置透，宿主只刷**一层**。
@@ -230,7 +228,7 @@ ENSO_CDP_PORT=9333 node scripts/verify-theme-selection.mjs
 
 该脚本拒绝默认 9222，通过真实 Chromium 与共享 React 控件校验系统/应用明暗交叉组合、
 深浅终端同步与开关开启/关闭状态、
-Code/画图/设计/Bot 真实点击切换、Bot 关闭后 Code 回到图标轨的选中态、青绿/紫色及背景图 85%/100% 可见度；
+通过图标轨真实点击切换 Code/画图/设计时的选中态、青绿/紫色及背景图 85%/100% 可见度；
 检查颜色而非只看 aria/class，结束卸载临时控件并还原隔离设置。完整矩阵见脚本。
 
 ## 尺寸惯例
@@ -280,7 +278,7 @@ framer-motion 的 `height` / `width` 不做 clamp。欠阻尼 spring（如 `spri
 
 全屏列表必须有可见的「返回会话」入口（常驻侧栏除外）。PWA 内部子页/面板用
 `packages/phone/src/usePhoneBack.ts` 统一注册返回层，不各自监听 `popstate`，否则一次系统返回会同时关闭多层。
-`usePhoneScreenBack` 给聊天页本身注册 rank 0 返回层（含 Code、Bot 和通知冷启动），
+`usePhoneScreenBack` 给聊天页本身注册 rank 0 返回层（含通知冷启动），
 不能只保护列表/弹层：聊天页 Back 必须先到根列表，而不是直接离开 PWA。
 通过工具栏打开的列表 Back 回当前聊天；通过 Back 或冷启动打开的根列表不注册此返回层，
 再次 Back 可以离开，避免聊天与列表无限循环。可见的「返回会话」按钮仍可显式重开聊天。

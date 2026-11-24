@@ -65,7 +65,6 @@ const EMPTY: BrowserTabState = {
   locked: false,
   devtoolsOpen: false,
   designMode: false,
-  holder: null,
 };
 
 type Rect = { x: number; y: number; width: number; height: number };

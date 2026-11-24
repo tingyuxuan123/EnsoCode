@@ -51,8 +51,6 @@ export interface ApprovalGateOptions {
   autoReject?: boolean;
   /** 受保护动作底线：开启时对外发送 / 删除 / 付款 / 部署 / 密钥类动作无视档位与会话白名单，强制真人确认 */
   protectedFloor?: boolean;
-  /** bot 模式：档位为 full 时底线不生效（完全放行即真放行），按当前档位实时判断 */
-  exemptFull?: boolean;
   /** 等真人处理的时限：真人阶段的请求带 expiresAt，由 Main 到期发 request-timeout */
   humanTimeoutMs?: number;
 }
@@ -91,19 +89,16 @@ export class ApprovalGate {
   }
 
   get protectedFloor(): boolean {
-    if (this.mode === 'assistant') return true;
-    if (this.options?.protectedFloor !== true) return false;
-    return !(this.options.exemptFull === true && this.mode === 'full');
+    return this.mode === 'assistant' || this.options?.protectedFloor === true;
   }
 
   /** 子会话沿用底线配置，再按自身档位判断 */
   get floorOptions(): Pick<
     ApprovalGateOptions,
-    'protectedFloor' | 'exemptFull' | 'humanTimeoutMs' | 'autoReject'
+    'protectedFloor' | 'humanTimeoutMs' | 'autoReject'
   > {
     return {
       protectedFloor: this.options?.protectedFloor === true,
-      exemptFull: this.options?.exemptFull === true,
       humanTimeoutMs: this.options?.humanTimeoutMs,
       // 子会话沿用父会话的无人值守状态，否则子会话里仍会弹卡片等人
       autoReject: this.options?.autoReject === true,

@@ -21,7 +21,7 @@ describe('RequestBudget', () => {
     expect(budgetStopThreshold(SOFT)).toBe(15);
   });
 
-  it('未 arm 不计不拦（主会话、Bot 成员不计数）', () => {
+  it('未 arm 不计不拦（例如主会话）', () => {
     const budget = new RequestBudget(SOFT);
     expect(drive(budget, 100).every((action) => action === undefined)).toBe(true);
     expect(budget.requests).toBe(0);

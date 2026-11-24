@@ -422,19 +422,29 @@ it('取消、guard 与中途 URL 变化都在输入或 Enter 前拦截', async (
   const before = new AbortController();
   before.abort();
   await expect(
-    host.invoke('wps-abort', 'plugin_read_wps_range', { tabId, address: 'A1:L201' }, undefined, {
-      signal: before.signal,
-    })
+    host.invoke(
+      'wps-abort',
+      'plugin_read_wps_range',
+      { tabId, address: 'A1:L201' },
+      {
+        signal: before.signal,
+      }
+    )
   ).rejects.toThrow();
   expect(mock.executed).toEqual([]);
 
   reset();
   await expect(
-    host.invoke('wps-abort', 'plugin_read_wps_range', { tabId, address: 'A1:L201' }, undefined, {
-      guard: () => {
-        throw new Error('document changed');
-      },
-    })
+    host.invoke(
+      'wps-abort',
+      'plugin_read_wps_range',
+      { tabId, address: 'A1:L201' },
+      {
+        guard: () => {
+          throw new Error('document changed');
+        },
+      }
+    )
   ).rejects.toThrow('document changed');
   expect(mock.executed).toEqual([]);
 
@@ -445,9 +455,14 @@ it('取消、guard 与中途 URL 变化都在输入或 Enter 前拦截', async (
     if (kind === 'prepare') during.abort();
   };
   await expect(
-    host.invoke('wps-abort', 'plugin_read_wps_range', { tabId, address: 'A1:L201' }, undefined, {
-      signal: during.signal,
-    })
+    host.invoke(
+      'wps-abort',
+      'plugin_read_wps_range',
+      { tabId, address: 'A1:L201' },
+      {
+        signal: during.signal,
+      }
+    )
   ).rejects.toThrow();
   expect(mock.executed).toEqual(['ready', 'prepare']);
   expect(mock.inserted).toEqual([]);

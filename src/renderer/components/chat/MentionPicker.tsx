@@ -1,5 +1,5 @@
 import type { MentionCandidate } from '@shared/types/mentions';
-import { Bot, ChevronRight, History, Users } from 'lucide-react';
+import { Bot, ChevronRight, History } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { FileTypeIcon } from '@/components/sidepanel/fileIcons';
 import { Badge } from '@/components/ui/badge';
@@ -80,10 +80,9 @@ export function MentionPicker({
   if (items.length === 0) return null;
   const folderLabels: Record<FolderId, string> = {
     agents: t('Agents'),
-    members: t('Members'),
     chats: t('Chats'),
   };
-  const folderIcons: Record<FolderId, typeof Bot> = { agents: Bot, members: Users, chats: History };
+  const folderIcons: Record<FolderId, typeof Bot> = { agents: Bot, chats: History };
   const folderItems = openFolderId ? groups[openFolderId] : [];
   const heightStyle = maxHeight === undefined ? undefined : { maxHeight };
   let flatIndex = 0;
@@ -212,12 +211,8 @@ export function MentionPicker({
         ) : (
           <>
             {renderGroup('agents', false)}
-            {renderGroup('members', groups.agents.length > 0)}
-            {renderGroup('chats', groups.agents.length + groups.members.length > 0)}
-            {renderGroup(
-              'files',
-              groups.agents.length + groups.members.length + groups.chats.length > 0
-            )}
+            {renderGroup('chats', groups.agents.length > 0)}
+            {renderGroup('files', groups.agents.length + groups.chats.length > 0)}
           </>
         )}
       </div>
@@ -251,7 +246,6 @@ export function MentionPicker({
                 id={`${id}-sub-${index}`}
                 candidate={candidate}
                 active={index === folderIndex}
-                inFlyout
                 chatMeta={candidate.kind === 'chat' ? chatMeta?.get(candidate.id) : undefined}
                 locale={locale ?? 'en'}
                 onHover={() => onFolderIndexChange(index)}
@@ -270,7 +264,6 @@ function MentionOption({
   id,
   candidate,
   active,
-  inFlyout = false,
   pathLabel,
   chatMeta,
   locale,
@@ -281,7 +274,6 @@ function MentionOption({
   ref: React.Ref<HTMLButtonElement>;
   candidate: MentionCandidate;
   active: boolean;
-  inFlyout?: boolean;
   pathLabel?: string;
   chatMeta?: ChatMentionMeta;
   locale: string;
@@ -301,9 +293,7 @@ function MentionOption({
       : undefined;
   const subtitle =
     candidate.kind === 'agent-type'
-      ? candidate.source === 'bot'
-        ? candidate.description
-        : t(candidate.description)
+      ? t(candidate.description)
       : candidate.kind === 'file'
         ? fileParentPath
         : candidate.kind === 'ui-element'
@@ -342,11 +332,6 @@ function MentionOption({
         />
       ) : candidate.kind === 'chat' ? (
         <History className={cn('size-4 shrink-0', iconTone)} strokeWidth={1.75} />
-      ) : candidate.kind === 'agent-type' && candidate.source === 'bot' ? (
-        <Users
-          className={cn('size-4 shrink-0', iconTone, twoLine && 'mt-0.5')}
-          strokeWidth={1.75}
-        />
       ) : (
         <Bot className={cn('size-4 shrink-0', iconTone, twoLine && 'mt-0.5')} strokeWidth={1.75} />
       )}
@@ -355,16 +340,14 @@ function MentionOption({
           <span className="min-w-0 truncate font-medium text-[calc(13rem/14)]">
             {candidate.label}
           </span>
-          {candidate.kind === 'agent-type' && !(inFlyout && candidate.source === 'bot') && (
+          {candidate.kind === 'agent-type' && (
             <Badge variant="secondary" size="sm">
               {t(
                 candidate.source === 'system'
                   ? 'System'
                   : candidate.source === 'builtin'
                     ? 'Built-in'
-                    : candidate.source === 'bot'
-                      ? 'Member'
-                      : 'Custom'
+                    : 'Custom'
               )}
             </Badge>
           )}

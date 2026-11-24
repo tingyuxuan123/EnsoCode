@@ -37,10 +37,6 @@ class DesignPreviewActivity : ComponentActivity() {
             else -> CodeKilnRoute.NewTask
         }
         setContent {
-            if (frame in setOf("members", "group", "bot")) {
-                MemberDesignPreview(frame ?: "members")
-                return@setContent
-            }
             CodeKilnApp(route, state = if (frame == "empty") sample.copy(tasks = emptyList()) else sample,
                 pairSpecimen = PairSpecimen("192.168.1.24:47821", "48219"),
                 initialShowConfig = frame == "new-config",
@@ -67,7 +63,6 @@ private val sample = NewTaskUiState(
     project = "CodeKiln",
     online = true,
     computer = "tingyu 的 MacBook Pro",
-    pendingMemberCount = 2,
     tasks = listOf(
         TaskSummary("s1", "会话恢复后时间线为空", "CodeKiln", "刚刚", TaskStatus.Waiting, pinned = true),
         TaskSummary("s4", "首页 Hero 用哪张截图", "ensocode-site", "4 分钟前", TaskStatus.Waiting),

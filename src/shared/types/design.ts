@@ -314,7 +314,7 @@ export interface DesignToolRequestEvent {
   requestId: string;
   tool: DesignToolName;
   params: unknown;
-  session: { sessionId: string; cwd: string; botChatId?: string };
+  session: { sessionId: string; cwd: string };
 }
 
 export type DesignToolResponse =

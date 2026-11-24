@@ -6,7 +6,7 @@
 它与 Claude Code 插件互不替代：设置 → 插件里两类插件分区管理。
 可审阅的离线例子见 [examples/plugins](../examples/plugins/README.md)。
 
-原内置 Wiki 记忆已移除，不会迁移或删除旧 Vault。本机 Git 项目可单独安装 [llmdoc 知识地图](../examples/plugins/llmdoc/README.md) 浏览、检索、复核工程知识。扩展自动检测已有的 Node、Git 和 CLI，缺少 CLI 时由用户点击安装到扩展的私有目录；并在有知识库的项目里，于每轮开始前追加一条只读查阅提醒。初始化和更新通过显式的 Agent 工作流进行，写入与提交需分别确认，不会自动编译聊天记录。
+原内置 Wiki 记忆已移除，不会迁移或删除旧 Vault。本机 Git 项目可单独安装 [知识地图](../examples/plugins/llmdoc/README.md) 浏览、检索、复核工程知识。扩展自动检测已有的 Node、Git 和 CLI，缺少 CLI 时由用户点击安装到扩展的私有目录；并在有知识库的项目里，于每轮开始前追加一条只读查阅提醒。初始化和更新通过显式的 Agent 工作流进行，写入与提交需分别确认，不会自动编译聊天记录。
 
 ## 适用范围：本仓库的原生插件 API
 

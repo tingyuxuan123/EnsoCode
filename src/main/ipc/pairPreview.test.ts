@@ -15,8 +15,6 @@ const mocks = vi.hoisted(() => ({
   projects: new Map<string, ProjectAuthority>(),
   worktree: undefined as { projectId: string; path: string } | undefined,
   readMessages: vi.fn(),
-  enabled: true,
-  services: null as unknown,
 }));
 vi.mock('electron', () => ({
   app: { getPath: () => mocks.userData },
@@ -30,15 +28,10 @@ vi.mock('./agent', () => ({
   }),
 }));
 vi.mock('./worktree', () => ({ sessionWorktree: () => mocks.worktree }));
-vi.mock('./bots', () => ({
-  botModeEnabled: () => mocks.enabled,
-  getBotServices: () => mocks.services,
-}));
-vi.mock('../services/bots/sessionMessages', () => ({ readBotSessionMessages: mocks.readMessages }));
+vi.mock('../services/pairSessionHistory', () => ({ readPairSessionMessages: mocks.readMessages }));
 
 import { createPairPreviewsPort } from './pairPreview';
 
-const CHAT = '11111111-1111-4111-8111-111111111111';
 describe('Main preview authority', () => {
   let tmp: string;
   let root: string;
@@ -58,8 +51,6 @@ describe('Main preview authority', () => {
     mocks.conversations.clear();
     mocks.projects.clear();
     mocks.worktree = undefined;
-    mocks.enabled = true;
-    mocks.services = null;
     mocks.projects.set('p', { projectId: 'p', canonicalPath: root, state: 'active', version: 1 });
     mocks.conversations.set('s', {
       conversationId: 's',
@@ -100,7 +91,7 @@ describe('Main preview authority', () => {
     expect((await list({ sessionId: 'missing' })).error).toBe('unavailable');
     expect(factory).not.toHaveBeenCalled();
   });
-  it('rejects ended, removed, SSH, bot-on-Code and mismatched worktrees; uses the actual worktree', async () => {
+  it('rejects ended, removed, SSH and mismatched worktrees; uses the actual worktree', async () => {
     const project = mocks.projects.get('p')!;
     const conversation = mocks.conversations.get('s')!;
     for (const patch of [{ state: 'removed' as const }, { kind: 'ssh' as const }]) {
@@ -108,10 +99,8 @@ describe('Main preview authority', () => {
       expect((await list({ sessionId: 's' })).error).toBe('unavailable');
     }
     mocks.projects.set('p', project);
-    for (const patch of [{ lifecycle: 'ended' as const }, { bot: { botId: 'b', chatId: CHAT } }]) {
-      mocks.conversations.set('s', { ...conversation, ...patch });
-      expect((await list({ sessionId: 's' })).error).toBe('unavailable');
-    }
+    mocks.conversations.set('s', { ...conversation, lifecycle: 'ended' });
+    expect((await list({ sessionId: 's' })).error).toBe('unavailable');
     mocks.conversations.set('s', conversation);
     mocks.worktree = { projectId: 'other', path: root };
     expect((await list({ sessionId: 's' })).error).toBe('unavailable');
@@ -171,43 +160,5 @@ describe('Main preview authority', () => {
     expect(frames.at(-1)).toMatchObject({ error: 'unavailable' });
     expect(close).toHaveBeenCalledOnce();
     port.release('pair');
-  });
-  function bots(kind: 'direct' | 'group') {
-    mocks.conversations.set('s', {
-      ...mocks.conversations.get('s')!,
-      bot: { botId: 'b', chatId: CHAT },
-    });
-    mocks.services = {
-      chats: {
-        get: (id: string) => (id === CHAT ? { id, kind } : undefined),
-        findEntry: (_chatId: string, id: string) =>
-          id === 'entry'
-            ? {
-                kind: 'bot',
-                conversationId: 's',
-                text: 'Created report.html http://localhost:5173/',
-              }
-            : undefined,
-      },
-      host: {},
-    };
-  }
-  it('authorizes Bot direct turns and persisted group entries through chat/conversation ownership', async () => {
-    bots('direct');
-    mocks.projects.set('p', { ...mocks.projects.get('p')!, kind: 'bot-home' });
-    expect(
-      (await list({ bot: { chatId: CHAT, conversationId: 's', messageIndex: 1 } })).entries
-    ).toHaveLength(2);
-    expect(
-      (await list({ bot: { chatId: CHAT, conversationId: 's', messageIndex: 0 } })).error
-    ).toBe('unavailable');
-    expect(
-      (await list({ bot: { chatId: CHAT, conversationId: 'other', messageIndex: 1 } })).error
-    ).toBe('unavailable');
-    bots('group');
-    expect((await list({ bot: { chatId: CHAT, entryId: 'entry' } })).entries).toHaveLength(2);
-    expect((await list({ bot: { chatId: CHAT, entryId: 'forged' } })).error).toBe('unavailable');
-    mocks.enabled = false;
-    expect((await list({ bot: { chatId: CHAT, entryId: 'entry' } })).error).toBe('unavailable');
   });
 });

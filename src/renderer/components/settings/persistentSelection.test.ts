@@ -12,7 +12,6 @@ const cases = [
     '../../features/imageStudio/ImageStudio.tsx',
     /activeId === item.id\s*\? '([^']+)'\s*: '([^']+)'/,
   ],
-  ['../bots/BotBrowserPanel.tsx', /tabId === active\s*\? '([^']+)'\s*: '([^']+)'/],
 ] as const;
 
 describe('persistent business selection', () => {

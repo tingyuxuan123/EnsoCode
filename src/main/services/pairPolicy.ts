@@ -8,12 +8,9 @@ import {
   VOICE_CHUNK_MAX_CHARS,
   VOICE_CHUNK_MAX_INDEX,
 } from '@enso/pair';
-import { isMediaId } from '@shared/bots/sendImage';
 import { normalizeSessionImageRel } from '@shared/pair/imageRel';
 import { takeSnapshotTail } from '@shared/snapshotTail';
-import { isDeliveryId, THINKING_LEVELS } from '@shared/types/agent';
-import { isBotId } from '@shared/types/bot';
-import { parseArtifactTarget } from './bots/artifacts';
+import { THINKING_LEVELS } from '@shared/types/agent';
 
 /**
  * 手机上行命令的结构校验 + 下行事件过滤。
@@ -28,201 +25,6 @@ const isSignal = (v: unknown): v is string =>
   typeof v === 'string' && v.length > 0 && v.length <= DIRECT_SIGNAL_MAX_CHARS;
 const isSafeIndex = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v >= -1;
-const isChatId = (v: unknown): v is string => isStr(v) && v.length <= 128;
-const BOT_TEXT_MAX_CHARS = 100_000;
-
-export function botCommandError(type: string, bot: boolean): string | undefined {
-  return bot &&
-    [
-      'prompt',
-      'steer',
-      'enqueue',
-      'queue-send-now',
-      'queue-interrupt-send',
-      'set-model',
-      'set-thinking',
-      'set-reasoning',
-      'goal-set',
-      'goal-resume',
-      'retry',
-      'rewind',
-      'compact',
-      'spawn',
-    ].includes(type)
-    ? 'Bot sessions must use Bot services for execution and policy changes.'
-    : undefined;
-}
-
-function parseImages(value: unknown): { data: string; mimeType: string }[] | null {
-  if (!Array.isArray(value) || value.length > 20) return null;
-  const images: { data: string; mimeType: string }[] = [];
-  for (const item of value) {
-    if (typeof item !== 'object' || item === null) return null;
-    const { data, mimeType } = item as Record<string, unknown>;
-    if (!isStr(data) || !isStr(mimeType)) return null;
-    images.push({ data, mimeType });
-  }
-  return images;
-}
-
-/** Bot 命令：按字段重建对象，未知字段不进 Main 服务（botsInput 还会按 onlyKeys 再校验一次） */
-function parseBotCommand(v: Record<string, unknown>): CommandCheck {
-  switch (v.type) {
-    case 'bot-catalog-request':
-      return { ok: true, command: { type: 'bot-catalog-request' } };
-    case 'bot-group-create': {
-      const { requestId, title, memberIds, bossBotId } = v;
-      if (
-        !Object.keys(v).every((key) =>
-          ['type', 'requestId', 'title', 'memberIds', 'bossBotId'].includes(key)
-        ) ||
-        !isBotId(requestId) ||
-        typeof title !== 'string' ||
-        !title.trim() ||
-        title.length > 200 ||
-        !Array.isArray(memberIds) ||
-        memberIds.length < 2 ||
-        // Match the native companion's bounded chat-member directory projection.
-        memberIds.length > 64 ||
-        !memberIds.every(isBotId) ||
-        new Set(memberIds).size !== memberIds.length ||
-        !isBotId(bossBotId) ||
-        !memberIds.includes(bossBotId)
-      )
-        return { ok: false, error: 'invalid group-create request' };
-      return {
-        ok: true,
-        command: {
-          type: 'bot-group-create',
-          requestId,
-          title,
-          memberIds: [...memberIds],
-          bossBotId,
-        },
-      };
-    }
-    case 'bot-direct-open': {
-      const { requestId, botId } = v;
-      if (
-        !Object.keys(v).every((key) => ['type', 'requestId', 'botId'].includes(key)) ||
-        !isBotId(requestId) ||
-        !isBotId(botId)
-      )
-        return { ok: false, error: 'invalid direct-open request' };
-      return { ok: true, command: { type: 'bot-direct-open', requestId, botId } };
-    }
-    case 'bot-inbox-request':
-      return { ok: true, command: { type: 'bot-inbox-request' } };
-    case 'bot-inbox-dismiss':
-      if (!isStr(v.key) || v.key.length > 300) return { ok: false, error: 'invalid key' };
-      return { ok: true, command: { type: 'bot-inbox-dismiss', key: v.key } };
-    case 'bot-chat-open':
-    case 'bot-stop':
-      if (!isChatId(v.chatId)) return { ok: false, error: 'invalid chatId' };
-      return { ok: true, command: { type: v.type, chatId: v.chatId } };
-    case 'bot-new-session':
-      if (
-        !isChatId(v.chatId) ||
-        !isStr(v.requestId) ||
-        v.requestId.length > 200 ||
-        (v.confirmed !== undefined && typeof v.confirmed !== 'boolean')
-      )
-        return { ok: false, error: 'invalid new-session request' };
-      return {
-        ok: true,
-        command: {
-          type: 'bot-new-session',
-          chatId: v.chatId,
-          requestId: v.requestId,
-          ...(v.confirmed !== undefined ? { confirmed: v.confirmed } : {}),
-        },
-      };
-    case 'bot-thread-create':
-      if (!isChatId(v.chatId) || !isStr(v.requestId) || v.requestId.length > 200)
-        return { ok: false, error: 'invalid thread request' };
-      return {
-        ok: true,
-        command: { type: 'bot-thread-create', chatId: v.chatId, requestId: v.requestId },
-      };
-    case 'bot-thread-select':
-      if (
-        !isChatId(v.chatId) ||
-        !isChatId(v.threadId) ||
-        !isStr(v.requestId) ||
-        v.requestId.length > 200
-      )
-        return { ok: false, error: 'invalid thread request' };
-      return {
-        ok: true,
-        command: {
-          type: 'bot-thread-select',
-          chatId: v.chatId,
-          threadId: v.threadId,
-          requestId: v.requestId,
-        },
-      };
-    case 'bot-retry':
-      if (!isChatId(v.chatId) || !isStr(v.entryId) || v.entryId.length > 200)
-        return { ok: false, error: 'invalid retry target' };
-      return { ok: true, command: { type: 'bot-retry', chatId: v.chatId, entryId: v.entryId } };
-    case 'bot-timeline': {
-      if (!isChatId(v.chatId)) return { ok: false, error: 'invalid chatId' };
-      if (v.beforeSeq === undefined) {
-        return { ok: true, command: { type: 'bot-timeline', chatId: v.chatId } };
-      }
-      if (!Number.isSafeInteger(v.beforeSeq) || (v.beforeSeq as number) < 0) {
-        return { ok: false, error: 'invalid beforeSeq' };
-      }
-      return {
-        ok: true,
-        command: { type: 'bot-timeline', chatId: v.chatId, beforeSeq: v.beforeSeq as number },
-      };
-    }
-    case 'bot-send': {
-      if (!isChatId(v.chatId)) return { ok: false, error: 'invalid chatId' };
-      if (typeof v.text !== 'string' || v.text.length > BOT_TEXT_MAX_CHARS) {
-        return { ok: false, error: 'invalid text' };
-      }
-      if (!isDeliveryId(v.deliveryId)) return { ok: false, error: 'invalid deliveryId' };
-      const images = v.images === undefined ? [] : parseImages(v.images);
-      if (!images) return { ok: false, error: 'invalid images' };
-      if (!v.text.trim() && images.length === 0) return { ok: false, error: 'empty message' };
-      return {
-        ok: true,
-        command: {
-          type: 'bot-send',
-          chatId: v.chatId,
-          text: v.text,
-          ...(images.length > 0 ? { images } : {}),
-          deliveryId: v.deliveryId,
-        },
-      };
-    }
-    case 'bot-artifacts': {
-      const target = parseArtifactTarget(v.target);
-      if (!target) return { ok: false, error: 'invalid target' };
-      return { ok: true, command: { type: 'bot-artifacts', target } };
-    }
-    case 'bot-artifact-image': {
-      const target = parseArtifactTarget(v.target);
-      if (!target) return { ok: false, error: 'invalid target' };
-      if (!isStr(v.requestId) || v.requestId.length > 100)
-        return { ok: false, error: 'invalid requestId' };
-      const { requestId } = v;
-      if (v.mediaId !== undefined && v.rel === undefined && isMediaId(v.mediaId))
-        return {
-          ok: true,
-          command: { type: 'bot-artifact-image', requestId, target, mediaId: v.mediaId },
-        };
-      if (v.rel !== undefined && v.mediaId === undefined && isStr(v.rel) && v.rel.length <= 4096)
-        return { ok: true, command: { type: 'bot-artifact-image', requestId, target, rel: v.rel } };
-      return { ok: false, error: 'invalid image' };
-    }
-    default:
-      return { ok: false, error: `unknown command type: ${String(v.type)}` };
-  }
-}
-
 /** spawn 需要的白名单上下文：手机只能在这些集合内选，cwd 由 main 反查，不接受手机传路径 */
 export interface SpawnWhitelist {
   projects: { id: string; path: string }[];
@@ -239,13 +41,7 @@ export function parsePairFileTarget(value: unknown): PairFileTarget | null {
   const v = value as Record<string, unknown>;
   if (onlyKeys(v, ['sessionId']) && isStr(v.sessionId) && v.sessionId.length <= 200)
     return { sessionId: v.sessionId };
-  if (!onlyKeys(v, ['bot']) || !v.bot || typeof v.bot !== 'object' || Array.isArray(v.bot))
-    return null;
-  const bot = v.bot as Record<string, unknown>;
-  const keys =
-    'entryId' in bot ? ['chatId', 'entryId'] : ['chatId', 'conversationId', 'messageIndex'];
-  const target = onlyKeys(bot, keys) ? parseArtifactTarget(bot) : null;
-  return target ? { bot: target } : null;
+  return null;
 }
 
 export function parsePairFileCommand(
@@ -372,7 +168,6 @@ export function parsePairPreviewCommand(
 export function parsePhoneCommand(value: unknown): CommandCheck {
   if (typeof value !== 'object' || value === null) return { ok: false, error: 'not an object' };
   const v = value as Record<string, unknown>;
-  if (typeof v.type === 'string' && v.type.startsWith('bot-')) return parseBotCommand(v);
   if (typeof v.type === 'string' && v.type.startsWith('preview-')) {
     const command = parsePairPreviewCommand(v);
     return command ? { ok: true, command } : { ok: false, error: 'invalid preview request' };

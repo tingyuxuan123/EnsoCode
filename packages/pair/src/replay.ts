@@ -70,7 +70,7 @@ export function isReplayBootstrap(type: string): boolean {
   return BOOTSTRAP.has(type);
 }
 
-/** Read-only replies to bootstrap requests; action/file/preview/voice/Bot results are excluded. */
+/** Read-only replies to bootstrap requests; action/file/preview/voice results are excluded. */
 export function isReplayBootstrapResponse(type: string): boolean {
   return [
     'replay-hello',

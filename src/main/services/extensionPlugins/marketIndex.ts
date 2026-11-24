@@ -22,7 +22,6 @@ export const MARKET_TESTED_SURFACES = [
   'code',
   'bot',
   'image-studio',
-  'taskboard',
   'design',
   'settings',
 ] as const;

@@ -10,9 +10,7 @@ vi.mock('./ChatScreen', () => ({
   ChatScreen: ({ sessionId }: { sessionId: string }) => `CODE_VIEW:${sessionId}`,
 }));
 vi.mock('./client', () => ({ PairClient: class {} }));
-vi.mock('./GroupChatScreen', () => ({ GroupChatScreen: () => 'GROUP_VIEW' }));
 vi.mock('./SessionDrawer', () => ({ SessionDrawer: () => createElement('aside') }));
-vi.mock('./BotDrawerPanel', () => ({ BotDrawerPanel: () => null }));
 vi.mock('./PairScreen', () => ({ PairScreen: () => null }));
 vi.mock('./NewSessionSheet', () => ({ NewSessionSheet: () => null }));
 vi.mock('./SessionConfigSheet', () => ({ SessionConfigSheet: () => null }));
@@ -49,13 +47,11 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it('does not show Code while the restored Bot directory is still loading', () => {
-  const html = renderToStaticMarkup(createElement(App));
-  expect(html).not.toContain('CODE_VIEW:old-code');
-  expect(html).toContain('恢复 Bot 聊天');
+it('restores the Code session and ignores retired Bot selections', () => {
+  expect(renderToStaticMarkup(createElement(App))).toContain('CODE_VIEW:old-code');
 });
 
-it('lets an explicit launch session override the restored Bot chat', () => {
+it('lets an explicit launch session override the remembered Code session', () => {
   window.location.search = '?session=notification';
   expect(renderToStaticMarkup(createElement(App))).toContain('CODE_VIEW:notification');
 });
@@ -84,6 +80,6 @@ it.each(['', '?session=notification'])(
     const rootClasses = html.match(/^<div class="([^"]+)"/)?.[1].split(' ');
     expect(rootClasses).toContain(rule?.[1]);
     expect(html).toContain('<aside>');
-    expect(html).toContain(search ? 'CODE_VIEW:notification' : '恢复 Bot 聊天');
+    expect(html).toContain(search ? 'CODE_VIEW:notification' : 'CODE_VIEW:old-code');
   }
 );

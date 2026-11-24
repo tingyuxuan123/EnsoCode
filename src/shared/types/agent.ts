@@ -851,8 +851,7 @@ export interface ModelRef {
   modelId: string;
 }
 
-/** bot-home：Bot 成员 / 群独立工作区的隐藏项目，只由 Main 创建，不投影给 renderer */
-export type ProjectKind = 'local' | 'ssh' | 'bot-home' | 'scratch';
+export type ProjectKind = 'local' | 'ssh' | 'scratch';
 
 export interface ProjectAuthority {
   projectId: string;
@@ -914,13 +913,6 @@ export interface ConversationForkOrigin {
   entryId: string;
 }
 
-/** Bot 会话归属：只由 Main 写入；chatId 为 null 表示委派会话 */
-export interface ConversationBotBinding {
-  botId: string;
-  chatId: string | null;
-  delegationId?: string;
-}
-
 export interface ConversationAuthority {
   conversationId: string;
   projectId: string;
@@ -930,7 +922,6 @@ export interface ConversationAuthority {
   sessionFile?: string;
   selection?: DefaultModelRef & { revision: number };
   forkedFrom?: ConversationForkOrigin;
-  bot?: ConversationBotBinding;
   /** Legacy-only: retired coordinator marker in persisted authority records. */
   superAssistant?: true;
   /** Legacy-only: dispatched root marker in persisted authority records. */
@@ -1060,8 +1051,7 @@ export function allowsCoworkerModelChange(child: ChildConversationMetadata | und
     child &&
       (child.mode === undefined || child.mode === 'coworker') &&
       !child.lockedProfileId &&
-      child.agentTypeKey !== 'agent:enso' &&
-      !child.agentTypeKey.startsWith('bot:')
+      child.agentTypeKey !== 'agent:enso'
   );
 }
 
@@ -1251,16 +1241,7 @@ export type AgentCommand =
       /** 预设的强调 / 拒答重试提示词；worker 暂未消费，登记只为不让整条启动命令被判非法 */
       systemPromptBoost?: string;
       refusalRetryPrompt?: string;
-      botMode?: boolean;
-      /** Bot 群聊成员会话：挂 group_tasks / group_history 工具（私聊 / 委派子会话不挂） */
-      botGroupTasks?: boolean;
-      /** Bot 私聊 / 群聊成员会话（非委派）：挂 routine_propose / send_image 工具 */
-      botRoutines?: boolean;
-      /** Bot 挂看板任务的委派会话：挂 report_blocked 工具 */
-      botDelegationTask?: boolean;
-      /** Bot 写成员：同工作区按文件占用、全局命令短独占；祖先会话（委派链）互不阻塞 */
-      botWriteLock?: { label: string; ancestors: string[] };
-      /** 受保护动作底线（Bot 会话恒开；Code 会话由设置项决定） */
+      /** 受保护动作底线由设置项决定 */
       protectedActions?: boolean;
       /** 期望的 Plan 模式；与会话 jsonl 折叠结果不同时由 worker 追加切换条目 */
       planMode?: boolean;
@@ -1277,7 +1258,7 @@ export type AgentCommand =
       identity: ChildSessionIdentity;
       requestId: string;
       task: AgentDispatchTask;
-      /** 子代理 Run：按请求软预算计数。Bot 成员等派发不带此标记，不计数。 */
+      /** 子代理 Run：按请求软预算计数。 */
       requestBudget?: true;
     }
   | {
@@ -1317,8 +1298,6 @@ export type AgentCommand =
       images?: AttachedImage[];
       /** renderer 乐观回显的投递标识；worker 在对应 user 消息上屏后以 delivery-settled 回执 */
       deliveryId?: string;
-      /** Bot 插话仅允许进入活轮；不再忙时交回 Main 重新准入。 */
-      activeOnly?: true;
     }
   | { type: 'withdraw-steer'; identity: SessionIdentity; deliveryId: string }
   | { type: 'set-model'; identity: SessionIdentity | ChildSessionIdentity; model: SpawnModelConfig }
@@ -1391,14 +1370,6 @@ export type AgentCommand =
     }
   | {
       type: 'browser-result' | 'design-result' | 'image-generation-result';
-      identity: SessionIdentity | ChildSessionIdentity;
-      requestId: string;
-      ok: boolean;
-      result?: unknown;
-      error?: string;
-    }
-  | {
-      type: 'delegation-result';
       identity: SessionIdentity | ChildSessionIdentity;
       requestId: string;
       ok: boolean;
@@ -2009,7 +1980,6 @@ export type AgentWorkerEvent =
   | { type: 'delivery-rejected'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'delivery-steer-queued'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'delivery-withdrawn'; identity: SessionIdentity; seq: number; deliveryId: string }
-  | { type: 'delivery-deferred'; identity: SessionIdentity; seq: number; deliveryId: string }
   | { type: 'status'; identity: SessionIdentity; seq: number; status: NodeStatus; error?: string }
   | {
       type: 'message-upsert';
@@ -2186,21 +2156,6 @@ export type AgentWorkerEvent =
       identity: SessionIdentity | ChildSessionIdentity;
       seq: number;
       requestId: string;
-    }
-  | {
-      type: 'delegation-invoke';
-      identity: SessionIdentity;
-      seq: number;
-      requestId: string;
-      op:
-        | 'delegate'
-        | 'check_delegation'
-        | 'group_tasks'
-        | 'group_history'
-        | 'routine_propose'
-        | 'send_image'
-        | 'report_blocked';
-      params: unknown;
     }
   | {
       type: 'agent-control-invoke';
@@ -3016,7 +2971,7 @@ function isValidProjectRemoteFields(value: Record<string, unknown>): boolean {
   if (value.kind === 'local' || value.kind === undefined) {
     return value.sshHost === undefined && value.sshConnectionId === undefined;
   }
-  if (value.kind === 'bot-home' || value.kind === 'scratch') {
+  if (value.kind === 'scratch') {
     return value.sshHost === undefined && value.sshConnectionId === undefined;
   }
   return false;
@@ -3091,7 +3046,6 @@ export function parseConversationAuthority(value: unknown): ConversationAuthorit
       'sessionFile',
       'selection',
       'forkedFrom',
-      'bot',
     ]) ||
     !isUuid(value.conversationId) ||
     !isUuid(value.projectId) ||
@@ -3123,18 +3077,7 @@ export function parseConversationAuthority(value: unknown): ConversationAuthorit
       return null;
     }
   }
-  if (value.bot !== undefined && !isConversationBotBinding(value.bot)) return null;
   return value as unknown as ConversationAuthority;
-}
-
-function isConversationBotBinding(value: unknown): value is ConversationBotBinding {
-  return (
-    isRecord(value) &&
-    hasOnlyKeys(value, ['botId', 'chatId', 'delegationId']) &&
-    isUuid(value.botId) &&
-    (value.chatId === null || isUuid(value.chatId)) &&
-    (value.delegationId === undefined || isNonEmptyString(value.delegationId))
-  );
 }
 
 export function parseSourceAuthorityProjection(value: unknown): SourceAuthorityProjection | null {
@@ -3761,11 +3704,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'systemPromptAppend',
           'systemPromptBoost',
           'refusalRetryPrompt',
-          'botMode',
-          'botGroupTasks',
-          'botRoutines',
-          'botDelegationTask',
-          'botWriteLock',
           'protectedActions',
           'planMode',
         ]) ||
@@ -3831,15 +3769,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         (value.systemPromptAppend !== undefined && !isNonEmptyString(value.systemPromptAppend)) ||
         (value.systemPromptBoost !== undefined && !isNonEmptyString(value.systemPromptBoost)) ||
         (value.refusalRetryPrompt !== undefined && !isNonEmptyString(value.refusalRetryPrompt)) ||
-        (value.botMode !== undefined && typeof value.botMode !== 'boolean') ||
-        (value.botGroupTasks !== undefined && typeof value.botGroupTasks !== 'boolean') ||
-        (value.botRoutines !== undefined && typeof value.botRoutines !== 'boolean') ||
-        (value.botDelegationTask !== undefined && typeof value.botDelegationTask !== 'boolean') ||
-        (value.botWriteLock !== undefined &&
-          (!isRecord(value.botWriteLock) ||
-            !isNonEmptyString(value.botWriteLock.label) ||
-            !Array.isArray(value.botWriteLock.ancestors) ||
-            !value.botWriteLock.ancestors.every(isNonEmptyString))) ||
         (value.protectedActions !== undefined && typeof value.protectedActions !== 'boolean')
       ) {
         return null;
@@ -3988,22 +3917,11 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'prompt':
     case 'steer': {
       const images = value.images === undefined ? [] : parseAttachedImages(value.images);
-      return hasOnlyKeys(value, [
-        'type',
-        'identity',
-        'text',
-        'images',
-        'deliveryId',
-        'activeOnly',
-      ]) &&
+      return hasOnlyKeys(value, ['type', 'identity', 'text', 'images', 'deliveryId']) &&
         parseAnySessionIdentity(value.identity) &&
         typeof value.text === 'string' &&
         images !== null &&
         (value.text.length > 0 || images.length > 0) &&
-        (value.activeOnly === undefined ||
-          (value.type === 'steer' &&
-            value.activeOnly === true &&
-            isDeliveryId(value.deliveryId))) &&
         (value.deliveryId === undefined || isDeliveryId(value.deliveryId))
         ? (value as unknown as AgentCommand)
         : null;
@@ -4164,7 +4082,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'browser-result':
     case 'design-result':
     case 'image-generation-result':
-    case 'delegation-result':
     case 'computer-result':
     case 'device-tool-result':
     case 'plugin-intercept-result':
@@ -4671,19 +4588,6 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         isNonEmptyString(value.requestId)
         ? (value as unknown as AgentWorkerEvent)
         : null;
-    case 'delegation-invoke':
-      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'op', 'params']) &&
-        parseSessionIdentity(value.identity) &&
-        isNonEmptyString(value.requestId) &&
-        (value.op === 'delegate' ||
-          value.op === 'check_delegation' ||
-          value.op === 'group_tasks' ||
-          value.op === 'group_history' ||
-          value.op === 'routine_propose' ||
-          value.op === 'send_image' ||
-          value.op === 'report_blocked')
-        ? (value as unknown as AgentWorkerEvent)
-        : null;
     case 'computer-invoke':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'op', 'params']) &&
         isNonEmptyString(value.requestId) &&
@@ -4772,7 +4676,6 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
     case 'delivery-rejected':
     case 'delivery-steer-queued':
     case 'delivery-withdrawn':
-    case 'delivery-deferred':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'deliveryId']) &&
         isDeliveryId(value.deliveryId)
         ? (value as unknown as AgentWorkerEvent)

@@ -16,8 +16,7 @@ interface SessionSource {
   state(id: string): PluginSessionState;
 }
 
-const listable = (c: ConversationAuthority) =>
-  c.kind === 'root' && c.lifecycle !== 'ended' && !c.bot;
+const listable = (c: ConversationAuthority) => c.kind === 'root' && c.lifecycle !== 'ended';
 
 /** 权威记录定范围，持久化的会话行只提供标题与时间 */
 function toInfo(
@@ -62,14 +61,12 @@ export function listProjectSessions(
   );
 }
 
-/** 所有在用项目的主会话；不含 Bot 工作区 */
+/** 所有在用项目的主会话 */
 export function listAllSessions(
   input: SessionSource & { projects: readonly ProjectAuthority[] }
 ): PluginSessionInfo[] {
   const projects = new Map(
-    input.projects
-      .filter((p) => p.state === 'active' && p.kind !== 'bot-home')
-      .map((p) => [p.projectId, p])
+    input.projects.filter((p) => p.state === 'active').map((p) => [p.projectId, p])
   );
   return newestFirst(
     input.conversations.flatMap((c) => {

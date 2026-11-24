@@ -4,12 +4,7 @@ import { act, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  LocalFileTrigger,
-  Markdown,
-  MarkdownLinkContext,
-  MarkdownLocalLinkContext,
-} from './Markdown';
+import { LocalFileTrigger, Markdown, MarkdownLinkContext } from './Markdown';
 
 const harness = vi.hoisted(() => ({
   open: vi.fn(),
@@ -558,21 +553,6 @@ describe('聊天网页链接分流', () => {
     await click('a');
     expect(harness.openSidePanelBrowserUrl).not.toHaveBeenCalled();
     expect(harness.open).not.toHaveBeenCalled();
-  });
-
-  it('Bot 产物链接只走原授权 handler，网页不借产物上下文创建 Code browser', async () => {
-    const artifact = vi.fn();
-    await act(async () =>
-      root.render(
-        <MarkdownLocalLinkContext.Provider value={artifact}>
-          <Markdown text="[artifact](output/result.html) [web](https://example.com)" />
-        </MarkdownLocalLinkContext.Provider>
-      )
-    );
-    expect(await click('a')).toBe(true);
-    expect(artifact).toHaveBeenCalledWith('output/result.html');
-    expect(await click('a:last-child')).toBe(false);
-    expect(harness.openSidePanelBrowserUrl).not.toHaveBeenCalled();
   });
 
   it('内置导航失败展示错误 toast，不静默失败', async () => {

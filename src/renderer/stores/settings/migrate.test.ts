@@ -288,7 +288,6 @@ describe('设置持久化迁移', () => {
       'reviewer',
       'compact',
       'voice',
-      'bot',
       'subagent',
       'classifier',
     ];
@@ -308,7 +307,6 @@ describe('设置持久化迁移', () => {
       approvalReviewer: ref('reviewer'),
       smartCompactModel: ref('compact'),
       voiceCorrectionRemoteModel: ref('voice'),
-      botAssistantModel: ref('bot'),
       subagentModels: [ref('subagent')],
       providers: ['oauth', 'other'].map((id) => ({
         id,

@@ -38,7 +38,7 @@ class TextDraftAcceptanceTest {
     }
 
     @Test fun `64000 total units fit and the 64001st evicts only the oldest slot`() {
-        val second = DraftKey(DraftKind.Chat, "chat-a")
+        val second = DraftKey(DraftKind.NewTask, "new-task")
         val entries = linkedMapOf(key to "a".repeat(32_000), second to "b".repeat(32_000))
         assertEquals(entries, TextDraftRecord.decode(TextDraftRecord.encode("pair-a", entries)).entries)
         val third = DraftKey(DraftKind.Session, "newest")

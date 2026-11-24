@@ -1,5 +1,7 @@
 package io.github.tingyuxuan123.codekiln.mirror
 
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -9,10 +11,32 @@ import org.junit.Test
 class TextDraftRecordTest {
     private val pair = "pair-fixture"
     private val session = DraftKey(DraftKind.Session, "session-1")
-    private val chat = DraftKey(DraftKind.Chat, "chat-1")
+    private val newTask = DraftKey(DraftKind.NewTask, "task-1")
+
+    @Test fun `old records drop the retired slot without losing Code drafts`() {
+        val expected = linkedMapOf(session to "ordinary", DraftKey(DraftKind.NewTask, session.id) to "new task")
+        for (version in 1..2) {
+            val bytes = ByteArrayOutputStream()
+            DataOutputStream(bytes).use { out ->
+                out.writeByte(version)
+                out.writeUTF(pair)
+                out.writeByte(3)
+                for ((slot, draft) in listOf("ordinary", "retired", "new task").withIndex()) {
+                    out.writeByte(slot)
+                    out.writeUTF(session.id)
+                    if (version == 1) out.writeUTF(draft)
+                    else {
+                        out.writeInt(draft.length)
+                        out.write(draft.toByteArray(Charsets.UTF_8))
+                    }
+                }
+            }
+            assertEquals(expected, TextDraftRecord.decode(bytes.toByteArray()).entries)
+        }
+    }
 
     @Test fun `草稿往返保留配对身份与条目内容`() {
-        val entries = mapOf(session to "第一行\n第二行", chat to "群里未发出的文字")
+        val entries = mapOf(session to "第一行\n第二行", newTask to "新任务的描述")
         val decoded = TextDraftRecord.decode(TextDraftRecord.encode(pair, entries))
         assertEquals(pair, decoded.pairId)
         assertEquals(entries, decoded.entries)
@@ -23,11 +47,11 @@ class TextDraftRecordTest {
      * 否则解码后拿不回真正的先后。这里只要求「同样的内容 + 同样的编辑顺序」写出的字节稳定。
      */
     @Test fun `同样的草稿与同样的编辑顺序写出稳定的字节`() {
-        val first = TextDraftRecord.encode(pair, linkedMapOf(session to "a", chat to "b"))
-        val second = TextDraftRecord.encode(pair, linkedMapOf(session to "a", chat to "b"))
+        val first = TextDraftRecord.encode(pair, linkedMapOf(session to "a", newTask to "b"))
+        val second = TextDraftRecord.encode(pair, linkedMapOf(session to "a", newTask to "b"))
         assertTrue(first.contentEquals(second))
         assertFalse("编辑顺序是内容，顺序不同不能写出同样的字节",
-            first.contentEquals(TextDraftRecord.encode(pair, linkedMapOf(chat to "b", session to "a"))))
+            first.contentEquals(TextDraftRecord.encode(pair, linkedMapOf(newTask to "b", session to "a"))))
     }
 
     @Test fun `不同配对身份读到的对应草稿互不相通`() {
@@ -38,7 +62,7 @@ class TextDraftRecordTest {
     }
 
     @Test fun `空白草稿不落盘`() {
-        assertEquals(emptyMap<DraftKey, String>(), TextDraftRecord.normalize(mapOf(session to "", chat to "   \n\t")))
+        assertEquals(emptyMap<DraftKey, String>(), TextDraftRecord.normalize(mapOf(session to "", newTask to "   \n\t")))
     }
 
     @Test fun `单条草稿截断到上限且不静默丢字符之外的字段`() {
@@ -60,8 +84,8 @@ class TextDraftRecordTest {
     @Test fun `非法会话标识的草稿被丢弃而不是写坏记录`() {
         val normalized = TextDraftRecord.normalize(mapOf(
             DraftKey(DraftKind.Session, "") to "空",
-            DraftKey(DraftKind.Chat, "bad\u0000id") to "控制字符",
-            DraftKey(DraftKind.Chat, "x".repeat(513)) to "过长",
+            DraftKey(DraftKind.NewTask, "bad\u0000id") to "控制字符",
+            DraftKey(DraftKind.NewTask, "x".repeat(513)) to "过长",
             session to "合法",
         ))
         assertEquals(mapOf(session to "合法"), normalized)

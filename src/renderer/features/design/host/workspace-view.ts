@@ -1,4 +1,3 @@
-import { isBotModeActive } from '@/stores/bots/mode';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSettingsStore } from '@/stores/settings';
 import { GALLERY_VIEW_ID } from '../vetta/src/tab-ids';
@@ -7,13 +6,11 @@ import { updateDesignUi, useDesignRegistry } from './registry';
 export function isDesignGalleryAvailable({
   designEnabled,
   remoteNodeActive,
-  botModeActive,
 }: {
   designEnabled: boolean;
   remoteNodeActive: boolean;
-  botModeActive: boolean;
 }): boolean {
-  return designEnabled && !remoteNodeActive && !botModeActive;
+  return designEnabled && !remoteNodeActive;
 }
 
 /** The registry is the only workspace route source; this state is never persisted. */
@@ -22,7 +19,6 @@ export function openDesignGallery(): void {
     !isDesignGalleryAvailable({
       designEnabled: useSettingsStore.getState().designEnabled,
       remoteNodeActive: useRemoteNodesStore.getState().activeNodeId !== 'local',
-      botModeActive: isBotModeActive(),
     })
   )
     return;

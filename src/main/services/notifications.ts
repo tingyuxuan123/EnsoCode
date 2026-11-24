@@ -100,48 +100,6 @@ function notify(
   notification.show();
 }
 
-export async function maybeNotifyBot(
-  event: RendererAgentEvent,
-  bot: { enabled: boolean; chatId: string | null; name: string; conversationId: string }
-): Promise<void> {
-  const isCurrent = approvalNotifications.observe(event);
-  if (!isCurrent) return;
-  if (!bot.enabled) return;
-  if (event.type !== 'approval-request' && event.type !== 'ask-request') return;
-  // 静音在 await 前后各核一次：等窗口模块期间用户可能刚切了静音，不能迟发
-  if (isSessionMuted(event.identity.sessionId)) return;
-  const { focusMainWindow, getMainWindow } = await import('../windows/MainWindow');
-  if (!isCurrent()) return;
-  if (isSessionMuted(event.identity.sessionId)) return;
-  if (getMainWindow()?.isFocused()) return;
-  const title = `${bot.name} · ${event.type === 'ask-request' ? texts().ask : texts().approval}`;
-  const body =
-    event.type === 'ask-request'
-      ? event.ask.question
-      : `${event.request.tool} · ${event.request.summary}`;
-  notify(event.identity.sessionId, title, body.slice(0, 100), () => {
-    const win = focusMainWindow();
-    sendToWindow(win, IPC_CHANNELS.BOT_EVENT, {
-      kind: 'open',
-      ...(bot.chatId ? { chatId: bot.chatId } : {}),
-      conversationId: bot.conversationId,
-    });
-  });
-}
-
-/** Bot 聊天的回合 / 接力批次 / 稍后提醒通知：主窗口聚焦时不弹，点击切到 Bot 模式打开该聊天 */
-export async function notifyBotChat(
-  chatId: string,
-  build: (lang: 'zh' | 'en') => { title: string; body: string }
-): Promise<void> {
-  const { focusMainWindow, getMainWindow } = await import('../windows/MainWindow');
-  if (getMainWindow()?.isFocused()) return;
-  const { title, body } = build(texts() === TEXTS.zh ? 'zh' : 'en');
-  notify(`bot-chat:${chatId}`, title, body, () => {
-    sendToWindow(focusMainWindow(), IPC_CHANNELS.BOT_EVENT, { kind: 'open', chatId });
-  });
-}
-
 /**
  * 后台通知：对待审批/轮完成/会话失败弹系统通知。
  * 仅当「主窗口聚焦且用户正看着事件所属会话」时抑制——看别的会话/设置页照弹。

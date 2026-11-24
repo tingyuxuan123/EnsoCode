@@ -51,7 +51,7 @@ export const DIRECT_SIGNAL_MAX_CHARS = 16_384;
 export type PairSyncCursor = { epoch: string; seq: number };
 
 /** Opaque Main-derived identity; rel is display-only, never accepted in file requests. */
-export type PairFileTarget = { sessionId: string } | { bot: PairBotArtifactTarget };
+export type PairFileTarget = { sessionId: string };
 export interface PairPreviewEntry {
   id: string;
   label: string;
@@ -199,43 +199,7 @@ export type PhoneToHost =
    */
   | { type: 'voice-chunk'; requestId: string; index: number; data: string; last?: true }
   /** 放弃录音：host 丢弃该 requestId 的识别会话，不再回 voice-result */
-  | { type: 'voice-cancel'; requestId: string }
-  /** Bot 模式：仅桌面开启 Bot 模式时响应；旧桌面在白名单处拒绝，不影响其它帧 */
-  | { type: 'bot-catalog-request' }
-  /** requestId: UUID; title: nonblank, ≤200 UTF-16 units; 2–500 distinct Bot UUIDs. */
-  | {
-      type: 'bot-group-create';
-      requestId: string;
-      title: string;
-      memberIds: string[];
-      bossBotId: string;
-    }
-  /** requestId、botId 均为 UUID；已有未归档私聊复用，归档私聊明确拒绝，不自动复活 */
-  | { type: 'bot-direct-open'; requestId: string; botId: string }
-  | { type: 'bot-send'; chatId: string; text: string; images?: AttachedImage[]; deliveryId: string }
-  /** 打开聊天：群聊回最新一页时间线 + 运行态 */
-  | { type: 'bot-chat-open'; chatId: string }
-  /** 群时间线分页：缺省 beforeSeq = 最新一页 */
-  | { type: 'bot-timeline'; chatId: string; beforeSeq?: number }
-  | { type: 'bot-stop'; chatId: string }
-  | { type: 'bot-new-session'; chatId: string; requestId: string; confirmed?: boolean }
-  /** 群话题：chatId 为根群；复用桌面新建 / 切换逻辑，切换会同步桌面当前话题 */
-  | { type: 'bot-thread-create'; chatId: string; requestId: string }
-  | { type: 'bot-thread-select'; chatId: string; threadId: string; requestId: string }
-  | { type: 'bot-retry'; chatId: string; entryId: string }
-  /** 收件箱：请求当前条目；忽略只对提示类条目有效（审批、提问、例程需要处理） */
-  | { type: 'bot-inbox-request' }
-  | { type: 'bot-inbox-dismiss'; key: string }
-  /** 一条回复的产物卡片与 send_image 图片（带中继缩略图） */
-  | { type: 'bot-artifacts'; target: PairBotArtifactTarget }
-  /** 点开看大图：mediaId（send_image）或 rel（图片产物）二选一，host 压到 ≤700KB */
-  | {
-      type: 'bot-artifact-image';
-      requestId: string;
-      target: PairBotArtifactTarget;
-      mediaId?: string;
-      rel?: string;
-    };
+  | { type: 'voice-cancel'; requestId: string };
 
 /** 手机命令白名单：main 只接受这些 type，其余（set-approval-mode、设置写入等）拒绝 */
 export const PHONE_COMMAND_TYPES = [
@@ -283,21 +247,6 @@ export const PHONE_COMMAND_TYPES = [
   'probe',
   'voice-chunk',
   'voice-cancel',
-  'bot-catalog-request',
-  'bot-group-create',
-  'bot-direct-open',
-  'bot-send',
-  'bot-chat-open',
-  'bot-timeline',
-  'bot-stop',
-  'bot-new-session',
-  'bot-thread-create',
-  'bot-thread-select',
-  'bot-retry',
-  'bot-inbox-request',
-  'bot-inbox-dismiss',
-  'bot-artifacts',
-  'bot-artifact-image',
 ] as const satisfies readonly PhoneToHost['type'][];
 
 export function isPhoneCommand(value: unknown): value is PhoneToHost {
@@ -388,187 +337,6 @@ export interface ProviderEntry {
   id: string;
   name: string;
   models: { id: string; label?: string }[];
-}
-
-// ── Bot 模式（与 @shared/types/bot 对齐的最小投影，不含人设/模型/权限配置）──
-
-export type PairBotRunState = 'idle' | 'running' | 'queued';
-
-export interface PairBotMember {
-  id: string;
-  name: string;
-  title: string;
-  avatarColor: string;
-  archived?: true;
-  status: PairBotRunState;
-}
-
-export interface PairBotChatSummary {
-  id: string;
-  kind: 'direct' | 'group';
-  title: string;
-  members: string[];
-  bossBotId: string | null;
-  pinned?: true;
-  archived?: true;
-  updatedAt: number;
-  lastSeq: number;
-  epochSeq?: number;
-  /** 群话题：子话题指向根群；根群带当前话题（缺省 = 根群自身） */
-  parentId?: string;
-  threadTitle?: string;
-  activeThreadId?: string;
-  /** 时间线末条摘要（私聊无时间线时缺省） */
-  last?: { kind: PairGroupEntry['kind']; text: string; botId?: string; at: number };
-  /** 各成员当前在用会话：手机打开私聊 / 查看过程时订阅它 */
-  sessions: Record<string, { conversationId: string }>;
-  status: PairBotRunState;
-}
-
-/** 旧手机遇到不认识的值（如 blocked）只是文案为空，不报错 */
-export type PairDelegationState =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'canceled'
-  | 'blocked';
-
-interface PairGroupEntryBase {
-  seq: number;
-  id: string;
-  at: number;
-  truncated?: true;
-}
-
-export type PairGroupEntry =
-  | (PairGroupEntryBase & { kind: 'human'; text: string; mentions: string[]; images?: string[] })
-  | (PairGroupEntryBase & {
-      kind: 'bot';
-      botId: string;
-      text: string;
-      conversationId: string;
-      turnId: string;
-    })
-  | (PairGroupEntryBase & {
-      kind: 'delegation';
-      delegationId: string;
-      from: string;
-      to: string;
-      state: PairDelegationState;
-      summary?: string;
-      /** 挂了看板任务：结果卡可默认折叠 */
-      taskId?: string;
-    })
-  /** 旧手机不认识 progress：渲染 switch 无匹配，不显示、不报错 */
-  | (PairGroupEntryBase & {
-      kind: 'progress';
-      botId: string;
-      taskId: string;
-      taskSeq: number;
-      delegationId: string;
-      phase: 'started' | 'blocked' | 'delivered';
-      text: string;
-    })
-  | (PairGroupEntryBase & {
-      kind: 'system';
-      text: string;
-      newConversation?: true;
-      failure?: { botId: string; conversationId?: string; mode: 'resume' | 'deliver' };
-      retryOf?: string;
-    });
-
-export interface PairBotEvent {
-  kind: 'catalog' | 'chat' | 'timeline' | 'queue' | 'delegation' | 'routine' | 'model-notice';
-  chatId?: string;
-  seq?: number;
-  text?: string;
-}
-
-export interface PairBotInboxItem {
-  key: string;
-  kind:
-    | 'approval'
-    | 'ask'
-    | 'delegation-interrupted'
-    | 'budget'
-    | 'routine-draft'
-    | 'routine-blocked'
-    | 'silence'
-    | 'task-blocked';
-  chatId: string | null;
-  botId?: string;
-  /** Exact authority-owned conversation for pending requests, including delegated sessions. */
-  conversationId?: string;
-  /** 委派会话：botId 替 ownerBotId 执行 */
-  ownerBotId?: string;
-  /** 工具与摘要 / 问题 / 任务 / 例程标题或阻塞原因 */
-  text?: string;
-  /** 静默起点 */
-  since?: number;
-  createdAt: number;
-  dismissible: boolean;
-}
-
-/** 产物挂在哪条消息：群 bot 条目按 entryId；私聊按会话 + 该轮助手消息下标 */
-export type PairBotArtifactTarget =
-  | { chatId: string; entryId: string }
-  | { chatId: string; conversationId: string; messageIndex: number };
-
-export interface PairBotArtifact {
-  rel: string;
-  name: string;
-  size: number;
-  kind: 'image' | 'markdown' | 'html' | 'pdf' | 'text' | 'other';
-}
-
-/** send_image 的图：web = 网页截图，desktop = 桌面截图，file = 文件副本；upload = 人随群消息发的图；失败项只展示原因 */
-export type PairBotMedia = (
-  | { ok: true; mediaId: string; thumb?: string }
-  | { ok: false; error: 'too-large' | 'quota' }
-) & { source: 'file' | 'web' | 'desktop' | 'upload'; name?: string; caption?: string };
-
-export interface PairBotChatState {
-  current: string | null;
-  queue: string[];
-  hops: number;
-  turnsByBot: Record<string, number>;
-  pendingHuman: boolean;
-}
-
-export interface PairBotActivityStep {
-  name: string;
-  /** 参数单行摘要（≤80 字） */
-  detail: string;
-  status: 'running' | 'done' | 'error' | 'denied' | 'timeout';
-  durationMs?: number;
-  /** 运行中步骤的开始时刻（host 时钟） */
-  startedAt?: number;
-}
-
-/** 成员会话的本轮运行态：正在跑或在排队的会话各一条 */
-export interface PairBotActivity {
-  conversationId: string;
-  botId: string;
-  /** 所属聊天；委派会话为发起委派的聊天 */
-  chatId: string | null;
-  /** 委派会话：替这位成员干活 */
-  ownerBotId?: string;
-  state: 'queued' | 'thinking' | 'typing' | 'tool' | 'retrying';
-  /** queued 的固定原因，不包含模型解释或其他会话的任务内容 */
-  reason?:
-    | 'turn'
-    | 'capacity'
-    | 'member-check'
-    | 'member-serial'
-    | 'member-fifo'
-    | 'member-stopping';
-  /** 本轮开始时刻（host 时钟） */
-  startedAt?: number;
-  /** 本轮最近 3 个工具步骤 */
-  steps: PairBotActivityStep[];
-  /** 未列出的更早步骤数 */
-  more: number;
 }
 
 /**
@@ -677,82 +445,8 @@ export type HostToPhone =
   | { type: 'voice-partial'; requestId: string; text: string; correcting?: true }
   /** voice-chunk 的应答；error 为 SpeechErrorCode，未知值按 failed 处理 */
   | { type: 'voice-result'; requestId: string; text?: string; error?: string }
-  /**
-   * Bot 模式目录。enabled=false 表示桌面已关闭 Bot 模式（手机隐藏 Bot 分段）。
-   * 旧手机 switch 无 default 分支，以下 bot 帧一律忽略。
-   */
-  | {
-      type: 'bot-catalog';
-      enabled: boolean;
-      bots: PairBotMember[];
-      newSession?: boolean;
-      threads?: boolean;
-      groupCreate?: true;
-      directOpen?: true;
-    }
-  /** threads：列出的根群下的子话题（带 parentId）；旧手机只读 chats */
-  | { type: 'bot-chats'; chats: PairBotChatSummary[]; threads?: PairBotChatSummary[] }
-  /** 群时间线一页（升序）；beforeSeq 回显请求，缺省 = 最新一页；单帧超限时由 host 减少条数 */
-  | {
-      type: 'group-timeline';
-      chatId: string;
-      entries: PairGroupEntry[];
-      lastSeq: number;
-      epochSeq?: number;
-      beforeSeq?: number;
-      hasOlder: boolean;
-    }
-  | { type: 'bot-event'; event: PairBotEvent }
-  | ({ type: 'bot-chat-state'; chatId: string } & PairBotChatState)
-  /** bot-send 的应答：失败时手机提示并恢复输入 */
-  | { type: 'bot-send-result'; chatId: string; deliveryId: string; ok: boolean; error?: string }
-  | { type: 'bot-retry-result'; chatId: string; entryId: string; ok: boolean; error?: string }
-  | {
-      type: 'bot-group-create-result';
-      requestId: string;
-      ok: boolean;
-      chatId?: string;
-      error?: string;
-    }
-  /** bot-direct-open 的应答：chatId 为复用的已有私聊或新建私聊 */
-  | {
-      type: 'bot-direct-open-result';
-      requestId: string;
-      ok: boolean;
-      chatId?: string;
-      error?: string;
-    }
-  | {
-      type: 'bot-new-session-result';
-      chatId: string;
-      requestId: string;
-      ok: boolean;
-      error?: string;
-      needsConfirmation?: boolean;
-    }
-  /** bot-thread-create / select 的应答；threadId 为当前话题 */
-  | {
-      type: 'bot-thread-result';
-      chatId: string;
-      requestId: string;
-      ok: boolean;
-      threadId?: string;
-      error?: string;
-    }
-  /** 只读设备的写命令被 host 拦截（bot-send 走 bot-send-result）；旧手机忽略 */
+  /** 只读设备的写命令被 host 拦截；旧手机忽略 */
   | { type: 'command-rejected'; command: string; error: 'read-only' }
-  /** Bot 收件箱：未结束且未忽略的条目（新的在前），变化时整表重推 */
-  | { type: 'bot-inbox'; items: PairBotInboxItem[] }
-  /** 成员实时运行态整表（变化时节流重推）；now 为 host 时钟，手机据此换算计时 */
-  | { type: 'bot-activity'; now: number; items: PairBotActivity[] }
-  /** bot-artifacts 的应答（target 原样回显，手机按它对号入座） */
-  | {
-      type: 'bot-artifacts';
-      target: PairBotArtifactTarget;
-      artifacts: PairBotArtifact[];
-      media: PairBotMedia[];
-    }
-  | { type: 'bot-artifact-image'; requestId: string; dataUrl?: string; error?: string }
   /** session-image 的应答：dataUrl 已压到手机单帧预算内；error 见 host 侧错误码 */
   | { type: 'session-image-result'; requestId: string; dataUrl?: string; error?: string }
   | { type: 'file-list-result'; requestId: string; files: PairFileEntry[]; error?: string }

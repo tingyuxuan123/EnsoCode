@@ -138,9 +138,6 @@ export interface MarkdownLinkContextValue {
  */
 export const MarkdownLinkContext = createContext<MarkdownLinkContextValue | null>(null);
 
-/** Bot 等无 Code 会话面板的宿主复用自己的授权产物预览，不直接导航 file://。 */
-export const MarkdownLocalLinkContext = createContext<((path: string) => void) | null>(null);
-
 function revealErrorDescription(error: string, t: (key: string) => string): string {
   switch (error) {
     case 'invalid-path':
@@ -446,7 +443,6 @@ function MarkdownAnchor({
   node?: unknown;
 }) {
   const { t } = useI18n();
-  const openArtifactLink = useContext(MarkdownLocalLinkContext);
   const { classification, line } = classifyFileReference(href ?? '');
   const { linkContext, openLocal, preview, ssh, external } = useLocalFileOpen(
     classification.kind === 'local' ? classification.path : null,
@@ -468,8 +464,7 @@ function MarkdownAnchor({
       linkContext !== null &&
       state.conversations[linkContext.conversationId]?.projectId === linkContext.projectId
   );
-  const local =
-    classification.kind === 'local' && (linkContext !== null || openArtifactLink !== null);
+  const local = classification.kind === 'local' && linkContext !== null;
   const codeText = local ? soleInlineCodeText(node) : null;
   const citationGesture = (action: 'preview' | 'reveal') =>
     linkContext && external
@@ -484,11 +479,6 @@ function MarkdownAnchor({
           ...(action === 'preview' ? { title: external } : {}),
         }
       : {};
-
-  const open = () => {
-    if (linkContext) void openLocal(false);
-    else if (classification.kind === 'local') openArtifactLink?.(classification.path);
-  };
 
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (classification.kind === 'external') {
@@ -517,7 +507,7 @@ function MarkdownAnchor({
       return;
     }
     event.preventDefault();
-    if (local) open();
+    if (local) void openLocal(false);
   };
 
   const anchorElement = (
@@ -538,7 +528,7 @@ function MarkdownAnchor({
       onKeyDown={(event) => {
         if (local && event.key === 'Enter') {
           event.preventDefault();
-          open();
+          void openLocal(false);
         }
       }}
     >
@@ -646,7 +636,7 @@ export const markdownComponents: Components = {
       {children}
     </ol>
   ),
-  // 内层缩放保留宿主已有 h1-h3 的级别字号覆盖（Code 与 Bot baseline 不同）。
+  // 内层缩放保留宿主已有 h1-h3 的级别字号覆盖。
   h1: ({ children }) => (
     <h1
       className="mt-3 mb-1.5 text-base font-semibold"
@@ -843,8 +833,7 @@ function MarkdownView({
   leafSlot?: { messageIndex: number; sessionId: string | null; entry: PluginSlotEntry } | null;
 }) {
   const linkContext = useContext(MarkdownLinkContext);
-  const localLinkHandler = useContext(MarkdownLocalLinkContext);
-  const allowLocalMarkdownLinks = linkContext !== null || localLinkHandler !== null;
+  const allowLocalMarkdownLinks = linkContext !== null;
   const ctx = useMemo(
     () => ({ text, streaming, searchQuery, activeNth, leafSlot }),
     [text, streaming, searchQuery, activeNth, leafSlot]

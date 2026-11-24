@@ -270,19 +270,16 @@ export function registerDesignTools(ctx: PluginContext): void {
 			// 还要显式覆盖本轮开头写入的 disable，避免 agent 只剩 vetd_create 可用。
 			setDesignPresence(session.cwd, true);
 			for (const toolName of DESIGN_ONLY_TOOLS) actions.tools.enable(toolName);
-			// The desktop Bot host reveals the exact design in its own chat dock.
-			if (!session.botChatId) {
-				setPendingDesignPath(result.vetdPath, session.cwd);
-				console.debug(
-					`[vetta-ui-design:activity-tab-debug] vetd_create requesting canvas ${JSON.stringify({
-						sessionCwd: session.cwd,
-						vetdPath: result.vetdPath,
-						tabId: CANVAS_TAB_ID,
-					})}`,
-				);
-				ctx.ui.setActivityTabVisible(CANVAS_TAB_ID, true, { cwd: session.cwd });
-				ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
-			}
+			setPendingDesignPath(result.vetdPath, session.cwd);
+			console.debug(
+				`[vetta-ui-design:activity-tab-debug] vetd_create requesting canvas ${JSON.stringify({
+					sessionCwd: session.cwd,
+					vetdPath: result.vetdPath,
+					tabId: CANVAS_TAB_ID,
+				})}`,
+			);
+			ctx.ui.setActivityTabVisible(CANVAS_TAB_ID, true, { cwd: session.cwd });
+			ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
 			const stated = statedIntentFrom(trigger.input.intent);
 			const dealt =
 				directionMode === "page" && dealSession && dealParams
@@ -347,9 +344,9 @@ export function registerDesignTools(ctx: PluginContext): void {
 		// 所以批量串行；上限 12 帧，外层留足内层极端超时与总览合成时间。
 		timeoutMs: 270_000,
 		handler: async ({ host, session, trigger }) => {
-			const controller = getCanvasController(session.cwd, session.botChatId);
+			const controller = getCanvasController(session.cwd);
 			if (!controller) {
-				if (!session.botChatId) ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
+				ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max", cwd: session.cwd });
 				return {
 					ok: false,
 					retryable: true,
@@ -565,7 +562,7 @@ export function registerDesignTools(ctx: PluginContext): void {
 		scope_use: SCOPE_USE,
 		handler: async ({ host, session }) => {
 			const designs = await findVetdFiles(host.fs, session.cwd);
-			const controller = getCanvasController(session.cwd, session.botChatId);
+			const controller = getCanvasController(session.cwd);
 			const engine = await engineDiagnostics(controller?.session.dirPath ?? null);
 			const shell = controller ? await inspectSharedShell(host.fs, controller.session.dirPath) : null;
 			const [issues, sourceFingerprints] = controller
@@ -686,9 +683,9 @@ export function registerDesignTools(ctx: PluginContext): void {
 	});
 
 	/** 无画布场景下解析目标 .vetd：显式参数 > 打开的画布 > cwd 里唯一那份。 */
-	const resolveVetdPath = async (host: { fs: PluginContext["fs"] }, { cwd, botChatId }: { cwd: string; botChatId?: string | null }, explicit?: string) => {
+	const resolveVetdPath = async (host: { fs: PluginContext["fs"] }, { cwd }: { cwd: string }, explicit?: string) => {
 		if (explicit) return explicit;
-		const controller = getCanvasController(cwd, botChatId);
+		const controller = getCanvasController(cwd);
 		if (controller) return controller.session.vetdPath;
 		const designs = await findVetdFiles(host.fs, cwd);
 		if (designs.length === 1) return designs[0];
@@ -852,7 +849,7 @@ export function registerDesignTools(ctx: PluginContext): void {
 		timeoutMs: 120_000,
 		handler: async ({ host, session, trigger }) => {
 			const { ids, resolve } = trigger.input;
-			const controller = getCanvasController(session.cwd, session.botChatId);
+			const controller = getCanvasController(session.cwd);
 
 			// —— 回写：agent 处理完的备注在这里定点落状态（插件仍是唯一写者）。 ——
 			if (resolve && resolve.length > 0) {

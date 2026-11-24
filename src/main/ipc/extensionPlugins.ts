@@ -15,7 +15,6 @@ import { getWindowWebContents, sendToAllWindows } from '../windows/createAppWind
 import { designWindowSession } from '../windows/DesignWindow';
 import { getMainWindow } from '../windows/MainWindow';
 import { getSettingsWindow } from '../windows/SettingsWindow';
-import { isTaskBoardWebContents } from '../windows/TaskBoardWindow';
 import { PluginOwnerLifetimes } from './extensionPluginsOwners';
 
 interface PluginSenderEvent {
@@ -387,7 +386,6 @@ export function registerExtensionPluginHandlers(): void {
         mainUrl: url,
         settingsUrl: '',
       });
-    if (isTaskBoardWebContents(senderId)) return trustedAs(expected('taskboard'));
     if (designWindowSession(senderId) !== null) return trustedAs(expected('design'));
     return false;
   };

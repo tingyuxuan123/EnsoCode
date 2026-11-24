@@ -16,7 +16,6 @@ import type {
   ConversationAuthority,
   ConversationAuthorityProjection,
   ConversationAuthorityRequest,
-  ConversationBotBinding,
   CreateConversationAuthorityRequest,
   CreateProjectAuthorityRequest,
   ModelRef,
@@ -31,8 +30,8 @@ import { resolveScratchWorkspace } from './scratchWorkspace';
 
 interface PersistedAuthority {
   migrationVersion: 1;
-  projects: ProjectAuthority[];
-  conversations: ConversationAuthority[];
+  projects: unknown[];
+  conversations: unknown[];
 }
 
 export interface SourceAuthorityRegistryOptions {
@@ -69,7 +68,6 @@ function projectIdentity(
 ): string {
   if (project.kind === 'ssh') return `ssh:${project.sshConnectionId}:${project.canonicalPath}`;
   if (project.kind === 'scratch') return `scratch:${project.canonicalPath}`;
-  if (project.kind === 'bot-home') return `bot-home:${project.canonicalPath}`;
   // realpath on Windows preserves drive-letter casing. Normalize only local keys;
   // retain component case for case-sensitive Windows directories and all SSH paths.
   const localPath =
@@ -101,6 +99,9 @@ function normalizeStoredProject(project: ProjectAuthority): { canonicalPath: str
 export class SourceAuthorityRegistry {
   private readonly projects = new Map<string, ProjectAuthority>();
   private readonly conversations = new Map<string, ConversationAuthority>();
+  // Preserve retired records verbatim on ordinary commits without granting any authority.
+  private readonly retiredProjects = new Map<string, Record<string, unknown>>();
+  private readonly retiredConversations = new Map<string, Record<string, unknown>>();
   private readonly randomUuid: () => string;
 
   constructor(private readonly options: SourceAuthorityRegistryOptions) {
@@ -130,26 +131,22 @@ export class SourceAuthorityRegistry {
     };
   }
 
-  /** renderer / 手机可见部分：不含 bot-home 项目、Bot 会话和已退役的总控。 */
+  /** Renderer / phone projection also omits the retired coordinator. */
   rendererProjection(): SourceAuthorityProjection {
     const full = this.projection();
     return {
-      projects: full.projects.filter((project) => project.kind !== 'bot-home'),
-      conversations: full.conversations.filter(
-        (conversation) => !conversation.bot && !conversation.superAssistant
-      ),
+      projects: full.projects,
+      conversations: full.conversations.filter((conversation) => !conversation.superAssistant),
     };
-  }
-
-  botConversations(): ConversationAuthorityProjection[] {
-    return [...this.conversations.values()]
-      .filter((conversation) => conversation.bot)
-      .map((conversation) => this.copyConversation(conversation));
   }
 
   project(projectId: string): ProjectAuthority | undefined {
     const value = this.projects.get(projectId);
     return value ? this.hydrateProject(value) : undefined;
+  }
+
+  isRetiredConversation(conversationId: string): boolean {
+    return this.retiredConversations.has(conversationId);
   }
 
   conversation(conversationId: string): ConversationAuthority | undefined {
@@ -183,7 +180,7 @@ export class SourceAuthorityRegistry {
   createProject(
     request: CreateProjectAuthorityRequest
   ): AuthorityMutationResult<ProjectAuthorityProjection> {
-    if (request.kind === 'bot-home' || request.kind === 'scratch') {
+    if (request.kind === 'scratch') {
       return { accepted: false, error: 'Project kind is reserved.' };
     }
     try {
@@ -210,34 +207,6 @@ export class SourceAuthorityRegistry {
     });
   }
 
-  /** 仅 Main：把 Bot 工作区目录登记为隐藏项目（按路径幂等，目录不存在则创建） */
-  ensureBotHomeProject(dir: string): ProjectAuthorityProjection | undefined {
-    try {
-      mkdirSync(dir, { recursive: true });
-      const canonicalPath = realpathSync(dir);
-      const existing = this.findActiveByIdentity(`bot-home:${canonicalPath}`);
-      if (existing) return { ...existing };
-      const inserted = this.insertProject({
-        projectId: this.randomUuid(),
-        canonicalPath,
-        kind: 'bot-home',
-        state: 'active',
-        version: 1,
-      });
-      return inserted.accepted ? inserted.value : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  removeBotHomeProject(projectId: string): boolean {
-    const project = this.projects.get(projectId);
-    if (project?.kind !== 'bot-home' || project.state !== 'active') return false;
-    this.markProjectRemoved(project);
-    this.commit();
-    return true;
-  }
-
   /** Main-only hidden carrier; renderer creates conversations by this project's authority id. */
   ensureScratchProject(dir: string): ProjectAuthorityProjection | undefined {
     try {
@@ -259,15 +228,6 @@ export class SourceAuthorityRegistry {
         version: 1,
       });
       return inserted.accepted ? inserted.value : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  botHomeProject(dir: string): ProjectAuthorityProjection | undefined {
-    try {
-      const existing = this.findActiveByIdentity(`bot-home:${realpathSync(dir)}`);
-      return existing ? { ...existing } : undefined;
     } catch {
       return undefined;
     }
@@ -315,6 +275,9 @@ export class SourceAuthorityRegistry {
   private insertProject(
     value: ProjectAuthority
   ): AuthorityMutationResult<ProjectAuthorityProjection> {
+    if (this.retiredProjects.has(value.projectId) || this.projects.has(value.projectId)) {
+      return { accepted: false, error: 'Project authority is stale or unavailable.' };
+    }
     this.projects.set(value.projectId, value);
     this.commit();
     return { accepted: true, value: this.hydrateProject(value) };
@@ -324,10 +287,7 @@ export class SourceAuthorityRegistry {
     request: SelectProjectAuthorityRequest
   ): AuthorityMutationResult<ProjectAuthorityProjection> {
     const project = this.projects.get(request.projectId);
-    return project &&
-      project.kind !== 'bot-home' &&
-      project.state === 'active' &&
-      project.version === request.version
+    return project && project.state === 'active' && project.version === request.version
       ? { accepted: true, value: this.hydrateProject(project) }
       : { accepted: false, error: 'Project authority is stale or unavailable.' };
   }
@@ -338,7 +298,6 @@ export class SourceAuthorityRegistry {
     const project = this.projects.get(request.projectId);
     if (
       project?.state !== 'active' ||
-      project.kind === 'bot-home' ||
       project.kind === 'scratch' ||
       project.version !== request.version
     ) {
@@ -364,11 +323,7 @@ export class SourceAuthorityRegistry {
     request: CreateConversationAuthorityRequest
   ): AuthorityMutationResult<ConversationAuthorityProjection> {
     const project = this.projects.get(request.projectId);
-    if (
-      project?.state !== 'active' ||
-      project.kind === 'bot-home' ||
-      project.version !== request.projectVersion
-    ) {
+    if (project?.state !== 'active' || project.version !== request.projectVersion) {
       return { accepted: false, error: 'Project authority is stale or unavailable.' };
     }
     if (request.conversationId) {
@@ -380,13 +335,15 @@ export class SourceAuthorityRegistry {
         return existing.projectId === project.projectId &&
           existing.kind === 'root' &&
           existing.lifecycle !== 'ended' &&
-          !existing.bot &&
           !existing.superAssistant
           ? { accepted: true, value: this.copyConversation(existing) }
           : { accepted: false, error: 'Conversation authority is stale or unavailable.' };
       }
     }
     const conversationId = request.conversationId ?? this.randomUuid();
+    if (this.retiredConversations.has(conversationId) || this.conversations.has(conversationId)) {
+      return { accepted: false, error: 'Conversation authority is stale or unavailable.' };
+    }
     if (
       project.kind === 'scratch' &&
       !resolveScratchWorkspace(project.canonicalPath, conversationId, { create: true })
@@ -404,59 +361,6 @@ export class SourceAuthorityRegistry {
     this.conversations.set(value.conversationId, value);
     this.commit();
     return { accepted: true, value: this.copyConversation(value) };
-  }
-
-  /** 仅 Main：为 Bot 成员新建根会话（项目须 active 且不是 ssh） */
-  createBotConversation(
-    projectId: string,
-    bot: ConversationBotBinding
-  ): ConversationAuthorityProjection | undefined {
-    const project = this.projects.get(projectId);
-    if (project?.state !== 'active' || project.kind === 'ssh' || project.kind === 'scratch')
-      return undefined;
-    const value: ConversationAuthority = {
-      conversationId: this.randomUuid(),
-      projectId,
-      kind: 'root',
-      lifecycle: 'draft',
-      version: 1,
-      bot: { ...bot },
-    };
-    this.conversations.set(value.conversationId, value);
-    this.commit();
-    return this.copyConversation(value);
-  }
-
-  endBotConversation(conversationId: string): ConversationAuthorityProjection | undefined {
-    const conversation = this.conversations.get(conversationId);
-    if (!conversation?.bot) return undefined;
-    if (conversation.lifecycle !== 'ended') {
-      conversation.lifecycle = 'ended';
-      conversation.version += 1;
-      this.commit();
-    }
-    return this.copyConversation(conversation);
-  }
-
-  /** 仅 Main：私聊切回旧对话时重新打开（所属项目须仍 active） */
-  reopenBotConversation(conversationId: string): ConversationAuthorityProjection | undefined {
-    const conversation = this.conversations.get(conversationId);
-    if (!conversation?.bot) return undefined;
-    if (this.projects.get(conversation.projectId)?.state !== 'active') return undefined;
-    if (conversation.lifecycle === 'ended') {
-      conversation.lifecycle = conversation.sessionFile ? 'ready' : 'draft';
-      conversation.version += 1;
-      this.commit();
-    }
-    return this.copyConversation(conversation);
-  }
-
-  removeBotConversation(conversationId: string): ConversationAuthorityProjection | undefined {
-    const conversation = this.conversations.get(conversationId);
-    if (!conversation?.bot) return undefined;
-    this.conversations.delete(conversationId);
-    this.commit();
-    return this.copyConversation(conversation);
   }
 
   selectConversation(
@@ -484,12 +388,7 @@ export class SourceAuthorityRegistry {
     request: ConversationAuthorityRequest
   ): AuthorityMutationResult<ConversationAuthorityProjection> {
     const conversation = this.conversations.get(request.conversationId);
-    if (
-      !conversation ||
-      conversation.bot ||
-      conversation.superAssistant ||
-      conversation.version !== request.version
-    ) {
+    if (!conversation || conversation.superAssistant || conversation.version !== request.version) {
       return { accepted: false, error: 'Conversation authority is stale or unavailable.' };
     }
     this.conversations.delete(conversation.conversationId);
@@ -536,7 +435,6 @@ export class SourceAuthorityRegistry {
     const conversation = this.conversations.get(request.conversationId);
     const project = conversation ? this.projects.get(conversation.projectId) : undefined;
     return conversation &&
-      !conversation.bot &&
       !conversation.superAssistant &&
       conversation.lifecycle !== 'ended' &&
       conversation.version === request.version &&
@@ -550,7 +448,6 @@ export class SourceAuthorityRegistry {
       ...value,
       ...(value.selection ? { selection: { ...value.selection } } : {}),
       ...(value.forkedFrom ? { forkedFrom: { ...value.forkedFrom } } : {}),
-      ...(value.bot ? { bot: { ...value.bot } } : {}),
     };
   }
 
@@ -559,8 +456,8 @@ export class SourceAuthorityRegistry {
     const temporary = `${this.options.registryFile}.tmp`;
     const state: PersistedAuthority = {
       migrationVersion: 1,
-      projects: [...this.projects.values()],
-      conversations: [...this.conversations.values()],
+      projects: [...this.projects.values(), ...this.retiredProjects.values()],
+      conversations: [...this.conversations.values(), ...this.retiredConversations.values()],
     };
     writeFileSync(temporary, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 });
     renameSync(temporary, this.options.registryFile);
@@ -618,17 +515,43 @@ export class SourceAuthorityRegistry {
         !Array.isArray(parsed.conversations)
       )
         return false;
-      for (const project of parsed.projects) {
-        if (validId(project.projectId) && typeof project.canonicalPath === 'string')
-          this.projects.set(project.projectId, project);
+      for (const raw of parsed.projects) {
+        const project = record(raw);
+        if (validId(project?.projectId) && project.kind === 'bot-home') {
+          this.retiredProjects.set(project.projectId, project);
+        }
       }
-      for (const conversation of parsed.conversations) {
+      for (const raw of parsed.projects) {
+        const project = record(raw);
         if (
-          validId(conversation.conversationId) &&
+          validId(project?.projectId) &&
+          typeof project.canonicalPath === 'string' &&
+          !this.retiredProjects.has(project.projectId)
+        ) {
+          this.projects.set(project.projectId, raw as ProjectAuthority);
+        }
+      }
+      for (const raw of parsed.conversations) {
+        const conversation = record(raw);
+        if (
+          validId(conversation?.conversationId) &&
+          (conversation.bot != null ||
+            (typeof conversation.projectId === 'string' &&
+              this.retiredProjects.has(conversation.projectId)))
+        ) {
+          this.retiredConversations.set(conversation.conversationId, conversation);
+        }
+      }
+      for (const raw of parsed.conversations) {
+        const conversation = record(raw);
+        if (
+          validId(conversation?.conversationId) &&
+          typeof conversation.projectId === 'string' &&
           this.projects.has(conversation.projectId) &&
+          !this.retiredConversations.has(conversation.conversationId) &&
           conversation.kind === 'root'
         ) {
-          this.conversations.set(conversation.conversationId, conversation);
+          this.conversations.set(conversation.conversationId, raw as ConversationAuthority);
         }
       }
       return true;

@@ -3,7 +3,7 @@ import type { HostToPhone, PhoneToHost } from '@enso/pair';
 /**
  * 会话图片（read / 生成图片）的手机端端口：
  * 手机只发 sessionId + 工作区相对路径，host 按权威根解析并压到单帧预算内回 data URL。
- * 与 botArtifactsPort 同构：同 key 去重请求、内存缓存、失败可按 key 重试、断线统一失败。
+ * 同 key 去重请求、内存缓存、失败可按 key 重试、断线统一失败。
  */
 
 type Frame = Extract<HostToPhone, { type: 'session-image-result' }>;

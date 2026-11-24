@@ -14,20 +14,13 @@ type ToneInput = {
   pendingApprovalCount?: number;
 };
 
-/** 会话/成员状态 → 一个符号档位。等你的优先级最高，其次出错、运行中。 */
+/** 会话状态 → 一个符号档位。等你的优先级最高，其次出错、运行中。 */
 export function rowTone(input: ToneInput): RowTone {
   const waiting = (input.pendingAskCount ?? 0) > 0 || (input.pendingApprovalCount ?? 0) > 0;
   if (waiting) return 'waiting';
   if (input.status === 'failed') return 'error';
   if (input.status === 'running') return 'running';
   if (input.unread) return 'done';
-  return 'idle';
-}
-
-/** Bot 成员/聊天用的档位（没有待审批计数，用运行态与收件箱标记） */
-export function botTone(status: 'idle' | 'running' | 'queued', waiting = false): RowTone {
-  if (waiting) return 'waiting';
-  if (status === 'running' || status === 'queued') return 'running';
   return 'idle';
 }
 

@@ -5,6 +5,7 @@ import { browserHost } from '../services/browserHost';
 import { sendToAllWindows } from '../windows/createAppWindow';
 import { isMainWebContents } from '../windows/MainWindow';
 import { isSettingsWebContents } from '../windows/SettingsWindow';
+import { getSourceAuthorityRegistry } from './agent';
 
 const isId = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
@@ -38,6 +39,9 @@ const readViewport = (sender: WebContents, raw: unknown) =>
 
 /** 右侧面板内嵌浏览器：矩形上报、地址栏动作、清数据。业务在 browserHost。 */
 export function registerBrowserHandlers(): void {
+  browserHost.setRetiredConversationResolver(
+    (id) => getSourceAuthorityRegistry()?.isRetiredConversation(id) ?? false
+  );
   ipcMain.handle(
     IPC_CHANNELS.BROWSER_SET_VIEWPORT,
     (event, tabId: unknown, conversationId: unknown, raw: unknown, covered: unknown) => {

@@ -14,7 +14,6 @@
 | [relay-web-deploy.md](relay-web-deploy.md) | 部署或排查手机配对中继 / Web 入口 |
 | [releasing.md](releasing.md) | 发版、打包、推送更新与安装验收 |
 | [reproducible-review.md](reproducible-review.md) | 需要可复跑证据的代码审查和验收 |
-| [task-supervision.md](task-supervision.md) | 后台任务、监督、等待与恢复语义 |
 
 ## 本仓库的层
 

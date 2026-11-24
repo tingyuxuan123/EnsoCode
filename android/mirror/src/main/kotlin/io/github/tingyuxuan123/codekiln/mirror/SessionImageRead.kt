@@ -16,5 +16,4 @@ internal fun SessionImageTarget.isValid(): Boolean = when (this) {
 
 sealed interface FileDownloadTarget {
     data class Session(val id: String) : FileDownloadTarget
-    data class Bot(val artifact: DesktopBotArtifactTarget) : FileDownloadTarget
 }

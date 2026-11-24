@@ -12,8 +12,6 @@ import io.github.tingyuxuan123.codekiln.mirror.SessionMaintenanceCommand
 import io.github.tingyuxuan123.codekiln.mirror.RewindBaseline
 import io.github.tingyuxuan123.codekiln.mirror.SessionTaskKind
 import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
-import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
-import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
 import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
 import io.github.tingyuxuan123.codekiln.mirror.RelayPairingClient
@@ -88,27 +86,6 @@ class CodeKilnApplication : Application() {
                         link.previewAction(sessionId, action)
                     override fun previewInput(sessionId: String,
                         input: io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput) = link.previewInput(sessionId, input)
-                    override fun requestBots() = link.requestBots()
-                    override fun requestInbox() = link.requestInbox()
-                    override fun openBotChat(chatId: String) = link.openBotChat(chatId)
-                    override fun loadBotTimeline(chatId: String, beforeSeq: Long?) = link.loadBotTimeline(chatId, beforeSeq)
-                    override fun closeBotChat(chatId: String) = link.closeBotChat(chatId)
-                    override fun sendBotMessage(chatId: String, text: String, deliveryId: String) =
-                        link.sendBotMessage(chatId, text, deliveryId)
-                    override fun stopBotChat(chatId: String) = link.stopBotChat(chatId)
-                    override fun changeBotThread(rootId: String, command: BotThreadCommand, targetId: String?, expectedActiveId: String) =
-                        link.changeBotThread(rootId, command, targetId, expectedActiveId)
-                    override fun requestBotNewSession(chatId: String) = link.requestBotNewSession(chatId)
-                    override fun confirmBotNewSession(chatId: String) = link.confirmBotNewSession(chatId)
-                    override fun retryBotEntry(chatId: String, entryId: String) = link.retryBotEntry(chatId, entryId)
-                    override fun dismissBotInboxItem(key: String) = link.dismissBotInboxItem(key)
-                    override fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) = link.createBotGroup(title, memberIds, bossBotId)
-                    override fun openBotDirect(botId: String) = link.openBotDirect(botId)
-                    override fun loadBotArtifacts(target: DesktopBotArtifactTarget) = link.loadBotArtifacts(target)
-                    override fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String?, rel: String?) =
-                        link.loadBotArtifactImage(target, mediaId, rel)
-                    override fun listBotFiles(target: DesktopBotArtifactTarget) = link.listBotFiles(target)
-                    override fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) = link.readBotFile(target, fileId, offset)
                     override fun createTask(request: TaskLaunch) = link.createTask(request)
                     override fun dismissCreation(sessionId: String?) = link.dismissCreation(sessionId)
                     override fun close() = link.close()

@@ -93,9 +93,7 @@ vi.mock('./pushNotifier', () => ({
 
 import type { PairReply } from './pairHost';
 import {
-  broadcastPairFrame,
   setDeviceScope,
-  setPairBotPort,
   setPairFilePort,
   setPairPreviewPort,
   startPairHost,
@@ -110,7 +108,6 @@ describe('pairHost 目录下发', () => {
     hostMocks.sealPreview = null;
     setPairFilePort(null);
     setPairPreviewPort(null);
-    setPairBotPort(null);
     hostMocks.socket = {
       readyState: 1,
       binaryType: '',
@@ -140,7 +137,6 @@ describe('pairHost 目录下发', () => {
     stopPairHost();
     setPairPreviewPort(null);
     setPairFilePort(null);
-    setPairBotPort(null);
   });
 
   const control = (type: 'peer-joined' | 'peer-left'): void => {
@@ -260,8 +256,6 @@ describe('pairHost 目录下发', () => {
       theme: 'dark',
     });
     expect(release.mock.calls.length).toBe(beforeRemoval + 1);
-    broadcastPairFrame({ type: 'bot-catalog', enabled: false, bots: [] });
-    expect(release.mock.calls.length).toBe(beforeRemoval + 2);
     hostMocks.socket?.onclose?.({ code: 1006 });
     expect(release.mock.calls.length).toBeGreaterThan(beforeRemoval + 1);
     hostMocks.socket?.onmessage?.({ data: JSON.stringify({ type: 'revoked' }) });
@@ -315,7 +309,7 @@ describe('pairHost 目录下发', () => {
     );
   });
 
-  it('requires a known currently subscribed Code session, but Bot group files need no subscription', async () => {
+  it('requires a known currently subscribed Code session', async () => {
     const handle = vi.fn(async () => {});
     setPairFilePort({ handle });
     fileCatalog();
@@ -338,28 +332,6 @@ describe('pairHost 目录下发', () => {
     await receive({ type: 'subscribe', sessionId: 's' });
     await receive({ type: 'file-list', requestId: 'allowed', target: { sessionId: 's' } });
     await vi.waitFor(() => expect(handle).toHaveBeenCalledTimes(1));
-    handle.mockClear();
-    setPairBotPort({
-      handle: async () => {},
-      resync: () => {},
-      sessionAccess: () => 'deny',
-      coldSnapshot: async () => null,
-      sessionTitle: () => undefined,
-      observe: () => {},
-    });
-    await receive({ type: 'file-list', requestId: 'denied', target: { sessionId: 's' } });
-    await vi.waitFor(async () =>
-      expect((await sentPayloads()).find((frame) => frame.requestId === 'denied')).toMatchObject({
-        error: 'unavailable',
-      })
-    );
-    expect(handle).not.toHaveBeenCalled();
-    await receive({
-      type: 'file-list',
-      requestId: 'bot',
-      target: { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } },
-    });
-    await vi.waitFor(() => expect(handle).toHaveBeenCalledTimes(1));
   });
 
   it('does not block incoming frames and drops stale replies after subscription changes or disconnect', async () => {
@@ -379,18 +351,16 @@ describe('pairHost 目录下发', () => {
     await receive({ type: 'file-list', requestId: 'first', target: { sessionId: 's' } });
     await vi.waitFor(() => expect(handle).toHaveBeenCalledTimes(1));
     await receive({ type: 'subscribe', sessionId: null });
-    await receive({
-      type: 'file-list',
-      requestId: 'bot',
-      target: { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } },
-    });
+    await receive({ type: 'subscribe', sessionId: 's' });
+    await receive({ type: 'file-list', requestId: 'still-busy', target: { sessionId: 's' } });
     await vi.waitFor(async () =>
-      expect((await sentPayloads()).find((frame) => frame.requestId === 'bot')).toMatchObject({
+      expect(
+        (await sentPayloads()).find((frame) => frame.requestId === 'still-busy')
+      ).toMatchObject({
         error: 'busy',
       })
     );
     expect(handle).toHaveBeenCalledTimes(1);
-    await receive({ type: 'subscribe', sessionId: 's' });
     expect(await replies[0]({ type: 'file-list-result', requestId: 'first', files: [] })).toBe(
       false
     );
@@ -450,7 +420,8 @@ describe('pairHost 目录下发', () => {
     setPairFilePort({ handle });
     fileCatalog();
     control('peer-joined');
-    const target = { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } };
+    const target = { sessionId: 's' };
+    await receive({ type: 'subscribe', sessionId: target.sessionId });
     await receive({ type: 'file-list', requestId: 'old', target });
     await vi.waitFor(() => expect(handle).toHaveBeenCalledTimes(1));
     await receive({ type: 'file-list', requestId: 'flood', target });
@@ -462,6 +433,7 @@ describe('pairHost 目录下发', () => {
     expect(handle).toHaveBeenCalledTimes(1);
     control('peer-left');
     control('peer-joined');
+    await receive({ type: 'subscribe', sessionId: target.sessionId });
     await receive({ type: 'file-list', requestId: 'new', target });
     await vi.waitFor(() => expect(handle).toHaveBeenCalledTimes(2));
     finishes[0]();
@@ -505,7 +477,8 @@ describe('pairHost 目录下发', () => {
     setPairFilePort({ handle, canAccess: () => true, accessKey });
     fileCatalog();
     control('peer-joined');
-    const target = { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' } };
+    const target = { sessionId: 's' };
+    await receive({ type: 'subscribe', sessionId: target.sessionId });
     await receive({ type: 'file-list', requestId: 'offline', target });
     await vi.waitFor(async () =>
       expect((await sentPayloads()).find((frame) => frame.requestId === 'offline')).toMatchObject({

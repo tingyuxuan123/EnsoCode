@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 const renderer = path.resolve(__dirname, '..');
 const source = (file: string) => readFileSync(path.join(renderer, file), 'utf8');
 
-const THEMED_WINDOWS = ['App.tsx', 'settings.tsx', 'taskboard.tsx', 'design-window.tsx'];
+const THEMED_WINDOWS = ['App.tsx', 'settings.tsx', 'design-window.tsx'];
 
 describe('独立窗口的基础主题接入', () => {
   it.each(THEMED_WINDOWS)('%s 挂载插件主题宿主', (entry) => {

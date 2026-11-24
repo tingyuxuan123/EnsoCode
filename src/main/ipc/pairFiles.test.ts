@@ -15,8 +15,6 @@ const mocks = vi.hoisted(() => ({
   projects: new Map<string, ProjectAuthority>(),
   worktree: undefined as { projectId: string; path: string } | undefined,
   readMessages: vi.fn(),
-  enabled: true,
-  services: null as unknown,
 }));
 vi.mock('electron', () => ({
   app: { getPath: () => mocks.userData },
@@ -30,15 +28,9 @@ vi.mock('./agent', () => ({
   }),
 }));
 vi.mock('./worktree', () => ({ sessionWorktree: () => mocks.worktree }));
-vi.mock('./bots', () => ({
-  botModeEnabled: () => mocks.enabled,
-  getBotServices: () => mocks.services,
-}));
-vi.mock('../services/bots/sessionMessages', () => ({ readBotSessionMessages: mocks.readMessages }));
+vi.mock('../services/pairSessionHistory', () => ({ readPairSessionMessages: mocks.readMessages }));
 
 import { createPairFilesPort } from './pairFiles';
-
-const CHAT = '11111111-1111-4111-8111-111111111111';
 
 describe('Main device file authority', () => {
   let tmp: string;
@@ -55,8 +47,6 @@ describe('Main device file authority', () => {
     mocks.conversations.clear();
     mocks.projects.clear();
     mocks.worktree = undefined;
-    mocks.enabled = true;
-    mocks.services = null;
     mocks.projects.set('p', { projectId: 'p', canonicalPath: root, state: 'active', version: 1 });
     mocks.conversations.set('s', {
       conversationId: 's',
@@ -96,7 +86,7 @@ describe('Main device file authority', () => {
     expect((await list({ sessionId: 'forged' })).error).toBe('unavailable');
   });
 
-  it('prefers the authoritative worktree; rejects SSH, removed, ended and bot sessions on the Code route', async () => {
+  it('prefers the authoritative worktree; rejects SSH, removed and ended sessions on the Code route', async () => {
     const worktree = path.join(tmp, 'worktree');
     mkdirSync(worktree);
     writeFileSync(path.join(worktree, 'report.txt'), 'worktree version');
@@ -115,8 +105,6 @@ describe('Main device file authority', () => {
     }
     const conversation = mocks.conversations.get('s')!;
     mocks.conversations.set('s', { ...conversation, lifecycle: 'ended' });
-    expect((await list({ sessionId: 's' })).error).toBe('unavailable');
-    mocks.conversations.set('s', { ...conversation, bot: { botId: 'b', chatId: 'chat' } });
     expect((await list({ sessionId: 's' })).error).toBe('unavailable');
   });
 
@@ -150,50 +138,5 @@ describe('Main device file authority', () => {
     expect(result.files).toHaveLength(128);
     expect(result.files[0]?.name).toBe('new-report.docx');
     expect(result.files.some((file) => file.name === 'old-0.txt')).toBe(false);
-  });
-
-  function botServices(kind: 'direct' | 'group') {
-    mocks.conversations.set('s', {
-      ...mocks.conversations.get('s')!,
-      bot: { botId: 'b', chatId: CHAT },
-    });
-    mocks.services = {
-      chats: {
-        get: (id: string) => (id === CHAT ? { id, kind } : undefined),
-        findEntry: (_chatId: string, id: string) =>
-          id === 'entry'
-            ? { kind: 'bot', conversationId: 's', text: 'Created report.txt' }
-            : undefined,
-        mediaDir: () => path.join(tmp, 'media'),
-      },
-      host: {},
-    };
-  }
-
-  it('supports direct Bot turns and group entry fallback without a subscribed Code session', async () => {
-    botServices('direct');
-    expect(
-      (await list({ bot: { chatId: CHAT, conversationId: 's', messageIndex: 1 } })).files.map(
-        (file) => file.rel
-      )
-    ).toEqual(['report.txt']);
-    expect(
-      (
-        await list({
-          bot: {
-            chatId: '22222222-2222-4222-8222-222222222222',
-            conversationId: 's',
-            messageIndex: 1,
-          },
-        })
-      ).error
-    ).toBe('unavailable');
-    botServices('group');
-    mocks.readMessages.mockRejectedValue(new Error('missing history'));
-    expect(
-      (await list({ bot: { chatId: CHAT, entryId: 'entry' } })).files.map((file) => file.rel)
-    ).toEqual(['report.txt']);
-    mocks.enabled = false;
-    expect((await list({ bot: { chatId: CHAT, entryId: 'entry' } })).error).toBe('unavailable');
   });
 });

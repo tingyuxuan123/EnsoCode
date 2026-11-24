@@ -2,13 +2,10 @@ import type { SettingsDeepLink } from '@shared/settingsDeepLink';
 import {
   BarChart3,
   Bot,
-  BotMessageSquare,
   FileText,
-  FlaskConical,
   Gauge,
   Keyboard,
   Layers,
-  LayoutTemplate,
   Mic,
   Palette,
   Plug,
@@ -27,12 +24,9 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { AgentTypesSettings } from './AgentTypesSettings';
 import { AppearanceSettings } from './AppearanceSettings';
-import { BotSettings } from './BotSettings';
-import { BotTemplatesSettings } from './BotTemplatesSettings';
 import { BuiltinToolsSettings } from './BuiltinToolsSettings';
 import type { SettingsCategory } from './constants';
 import { DevicesSettings } from './DevicesSettings';
-import { ExperimentalSettings } from './ExperimentalSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { InstructionsSettings } from './InstructionsSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
@@ -65,12 +59,6 @@ export function SettingsContent() {
   const [activeCategory, setActiveCategory] = React.useState<SettingsCategory>('general');
   const [flashRowId, setFlashRowId] = React.useState<string | null>(null);
   const disabledBuiltinTools = useSettingsStore((state) => state.disabledBuiltinTools);
-  const botModeEnabled = useSettingsStore((state) => state.botModeEnabled);
-  // 水合前 botModeEnabled 恒为 false：此时不据此把指向 Bot 页的深链改落到实验页
-  const hydrated = React.useSyncExternalStore(
-    (onChange) => useSettingsStore.persist?.onFinishHydration?.(onChange) ?? (() => {}),
-    () => useSettingsStore.persist?.hasHydrated?.() ?? true
-  );
 
   const applyLink = React.useCallback((link: SettingsDeepLink) => {
     setActiveCategory(link.category);
@@ -95,8 +83,6 @@ export function SettingsContent() {
     id: SettingsCategory;
     icon: React.ElementType;
     label: string;
-    /** 子菜单：缩进挂在父分类下 */
-    sub?: boolean;
   }> = [
     { id: 'general', icon: GeneralPreferencesIcon, label: t('General') },
     { id: 'shortcuts', icon: Keyboard, label: t('Shortcuts') },
@@ -115,18 +101,11 @@ export function SettingsContent() {
     { id: 'ssh', icon: Terminal, label: t('SSH') },
     { id: 'usage', icon: BarChart3, label: t('Usage') },
     { id: 'resources', icon: Gauge, label: t('Resources') },
-    { id: 'experimental', icon: FlaskConical, label: t('Experimental') },
-    { id: 'bots', icon: BotMessageSquare, label: t('Bot mode'), sub: true },
-    { id: 'botTemplates', icon: LayoutTemplate, label: t('Bot templates'), sub: true },
   ];
-  const categories = visibleCategories(allCategories, disabledBuiltinTools, botModeEnabled);
+  const categories = visibleCategories(allCategories, disabledBuiltinTools);
 
   // 当前页随功能开关隐藏时，落到能重新启用该功能的地方。
-  const resolvedCategory = resolveActiveCategory(
-    activeCategory,
-    disabledBuiltinTools,
-    botModeEnabled || !hydrated
-  );
+  const resolvedCategory = resolveActiveCategory(activeCategory, disabledBuiltinTools);
   React.useEffect(() => {
     if (resolvedCategory !== activeCategory) setActiveCategory(resolvedCategory);
   }, [resolvedCategory, activeCategory]);
@@ -147,7 +126,7 @@ export function SettingsContent() {
             aria-current={activeCategory === category.id ? 'page' : undefined}
             className={cn(
               'flex min-h-[calc(32rem/14)] w-full items-center gap-[8px] rounded-[6px] px-[10px] py-[6px] text-left text-[calc(13rem/14)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-nav',
-              category.sub && 'pl-[28px]',
+
               activeCategory === category.id
                 ? 'bg-selection font-medium text-selection-foreground'
                 : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
@@ -181,11 +160,6 @@ export function SettingsContent() {
         {activeCategory === 'usage' && <UsageSettings />}
         {activeCategory === 'resources' && <ResourcesSettings />}
         {activeCategory === 'voice' && <VoiceInputSettings />}
-        {activeCategory === 'experimental' && (
-          <ExperimentalSettings onOpenBots={() => setActiveCategory('bots')} />
-        )}
-        {activeCategory === 'bots' && <BotSettings />}
-        {activeCategory === 'botTemplates' && <BotTemplatesSettings />}
       </div>
     </div>
   );

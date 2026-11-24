@@ -20,7 +20,7 @@ Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创�
   到期倒计时依赖手机时间；时钟不同步可能提前禁用按钮，桌面仍负责最终校验。
 - 已同步的可操作会话支持 `prompt` / 显式 `steer` / `abort`。普通发送不自动改成插话，插话也不等同于消息排队。
   现有协议没有投递回执；只有同一 epoch 的新用户消息与文字匹配时才清空未修改的草稿。不乐观插入消息，断线或超时不重发。
-  不会在手机上唤醒未加载的历史会话；这种会话需先在桌面打开。会话与成员聊天的文字草稿按配对身份和会话/聊天 ID 保存在本机，
+  不会在手机上唤醒未加载的历史会话；这种会话需先在桌面打开。普通会话的文字草稿按配对身份和会话 ID 保存在本机，
   切页和进程重启后回到同一条会话仍能看到；见下条「文字草稿」。
 - 空闲的已有会话可通过系统照片选择器选择最多 4 张 JPEG / PNG。输入限制 24 MiB / 8000 万像素，校正 JPEG 方向，
   转成最长边不超过 1600 px 的 JPEG；不发 URI、原图元数据或文件名。图片原始编码体合计最多 700,000 字节，
@@ -60,39 +60,6 @@ Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创�
   待批准或待回答时显示对应等待状态，运行结束或断开后撤下。系统关闭动画时显示静态状态。
   展开的思考与工具步骤沿用 PC 端图标分类，读取、检索、终端和网页工具不再共用一个图标。
   回复、最新待办、工具返回图片和上下文压缩摘要仍各自可见；执行中不收走正在输出的正文。
-- 桌面注入的信封不再把原始 XML 当正文，解析口径与桌面 `parseBotInjectedMessage` 一致：**只认整段注入**，
-  或「前置信封 + 换行后的群消息补投」这一种续接。信封后面还有普通正文时整段按原文展示（与桌面一致），
-  不是开头的同名标签、Markdown 包裹、代码块、属性非法或未闭合的坏信封、工具输出里的标签也一律原样保留，绝不吞掉真实正文。
-  属性只接受 `key="value"`、实体只解 `&amp; &lt; &gt; &quot; &apos;`（一次替换，不二次解码）。
-  折叠后的样子：`delegation-task` / `delegation-result` / `delegation-results` 是「谁 → 谁 · 状态 · 一句摘要」紧凑卡，
-  原文（含 `<context>`）展开后才显示，`id` 与标签不进渲染层，任务尾部丢掉 `acceptance-check` / `previous-runs`；
-  `routine`（含 `dry-run` 试运行标记）是「例行任务 · 标题」+ 一句摘要，展开看完整 prompt；
-  `group-info` / `group-state` 作为上下文隐藏，`group-message` 逐条折成「谁 · 一句摘要」，展开看全文，尾部真实指令始终可见。
-  `notes-updated` 只在后面真的能折成注入块时才跳过。私聊 `SessionPresentation` 的用户正文与
-  群聊 `MemberConversation` 的 human/bot 条目共用同一解析。与桌面的已知差异：连续多个独立信封安卓逐条展开，
-  桌面会把整段当作一条。
-- `members` 页面按设计分为收件箱、群聊、单聊，头像、叠放头像、运行点和相对时间来自真实目录；
-  点开群聊按 `bot-chat-open` / `bot-timeline` 拉取全屏群时间线，支持 human/bot/system 与 delegation/progress 委派进度卡，
-  可「加载更早」。`bot-event` 只触发打开群聊的合并只读刷新，关闭聊天后停止刷新；不重发业务写入。
-  桌面关闭 Bot 模式时明确说明而不是显示空列表。私聊使用 `chat.sessions` 的权威 conversationId 订阅既有快照/增量/历史，
-  可查看真实正文、执行记录、待办与图片；收件箱审批/提问打开对应成员会话，复用既有请求过期、只读和待确认门控。
-- 尚无单聊时用 `bot-direct-open`（桌面声明 `directOpen=true`）按成员 ID 首次打开；既有单聊保持原 ID，不恢复归档单聊。
-  右下「新群聊」选择 2–64 位成员、主持人与群名（最多 200 字），通过 `bot-group-create` 新建独立聊天工作区。
-  等匹配回执与目录同时确认后才打开，不乐观新建；桌面按设备+requestId 提供进程内 10 分钟幂等，超时不会自动重发。
-- 会话菜单「新对话」使用 `bot-new-session`：正在工作的群聊需二次确认，成功后靠权威目录/时间线刷新。
-  失败系统行可 `bot-retry`；可忽略的收件箱行等待 `bot-inbox` 真正移除，不在手机自行删除。
-- 回复的产物入口读取 `bot-artifacts`，图片用 `bot-artifact-image`；文本/Markdown 用 `file-list` / `file-read` 的 bot target，
-  只把桌面签发的 opaque fileId 用作读取参数，支持图片与 Markdown/文本预览，以及同普通会话的完整文件打开与保存。
-  HTML 作为文本，不执行脚本；只读可查看产物，断线或切聊天清空文件投影。
-- 会话内可向成员发消息（`bot-send`，UI 生成 UUID deliveryId，按 `bot-send-result` 结算 ok/失败）与停止群聊当前轮（`bot-stop`，
-  以晚于发送的 `bot-chat-state.current` 变空为观测，不承诺队列已清空）。发送前做 JS trim 与 32000 字符上限。
-  草稿保留到匹配 deliveryId 的成功应答；关闭聊天再打开仍保留，确认不会擦掉后来编辑的文字。文字会持久化，见「文字草稿」。
-  15s/10s 超时只标未确认、不自动重发；只读连接与后台一律拒绝写入，过期 UI 动作不能跨可见性/认证代际执行。
-  成员发图与语音输入尚未接入，入口不会伪装可用。
-- 群聊「话题」入口只在桌面认证目录声明 `threads=true` 时出现，列出主话题和该根群下未归档的子线程。
-  新建/切换使用原有 `bot-thread-create` / `bot-thread-select`，按根群 ID + requestId 匹配回执，
-  并等待认证目录的实际选中项再打开正文；不修改本地权威目录，不自动重试。新线程可能复用桌面上现有空话题。
-  只读可查看线程，不可切换或新建。切换会同步桌面当前话题，但不停止旧话题正在进行的轮次。
 - 菜单「网页预览」用 `preview-list` / `preview-open` / `preview-frame` / `preview-refresh` / `preview-close`
   与 `preview-input` 串流电脑上的页面：打开时按受控视口（320–1280 × 240–1200）请求帧，点按与拖动按显示比例换算成页面坐标，
   按键条（Tab/Esc/回车/上下/退格）与文字输入也转发给页面。帧只接受 png/jpeg dataUrl 前缀；同一设备同时只有一个预览操作，
@@ -109,11 +76,11 @@ Kotlin / Jetpack Compose 原生客户端。App 现可**配对单台电脑、创�
 - 抽屉底部齿轮打开「设备与通知」：显示桌面下发的真实电脑名与连接阶段、桌面授予的「可操作／只读」、后台提醒开关与系统通知权限、
   当前这台已配对手机，以及重新连接和解绑（含二次确认）。只有一台电脑，因此不做设备切换、不做虚构列表、不提供「手机改成只读」这类
   桌面权限开关；只读只能由电脑设置。权限关闭时给出进入系统通知设置的入口。沿用既有配对、前台服务和系统通知通道，不新建第二个 socket。
-- 文字草稿：普通 Code 会话、成员单聊／群聊和新任务描述的输入文字按「配对身份 + 会话/聊天 ID」保存在本机，
+- 文字草稿：普通 Code 会话和新任务描述的输入文字按「配对身份 + 会话或新任务标识」保存在本机，
   切页、回到同一条会话或进程重启后恢复，换会话不再互相清空。存储复用 Android Keystore 的 AES-GCM 密钥，文件放在
   `noBackupFilesDir`（不参与备份，无明文），不是全局 settings，也没有引入数据库或新协议。
   有界：单条最多 32000 字（与发送上限一致），最多 24 条，超出按最近编辑淘汰；空白等于没有草稿。
-  只有桌面权威确认（同 epoch 的新用户消息、匹配 deliveryId 的 `bot-send-result`、已观察到的队列项）才清理，
+  只有桌面权威确认（同 epoch 的新用户消息、已观察到的队列项）才清理，
   失败、超时、断线一律保留，不自动重发。未确认的发送尝试只留在内存，不持久化也不重放。
   `DraftBook` 把「读草稿」和「登记提交」拆开：`text()` 只读，渲染输入框不会产生任何提交语义；
   真正的发送才 `pin()` 当前修订号，`confirm()` 必须同时匹配这次 pin 的修订和文字。因此确认只能清掉用户确实提交过的那一版，
@@ -142,8 +109,8 @@ Kotlin JSON 兼容层在库解析前校验裸 token / 控制字符，并保留�
 这是接收端资源上限，不修改线上帧格式；拒绝应由后续连接层当作坏帧丢弃，不断开连接。
 解析失败只抛通用错误，不附带可能包含解密明文的库异常。
 
-**尚未实现**：预设选择、SSH/worktree 新建、新任务/插话/队列图片、拍照、队列重排、改动审查、多电脑管理、离线目录缓存、通知内直接操作/静默时段/成员提醒、
-WebRTC / 分片 / 语音、成员发图/语音、通用文档上传、成员配置编辑，以及正式签名发布。
+**尚未实现**：预设选择、SSH/worktree 新建、新任务/插话/队列图片、拍照、队列重排、改动审查、多电脑管理、离线目录缓存、通知内直接操作/静默时段、
+WebRTC / 分片 / 语音、通用文档上传，以及正式签名发布。
 Markdown 正文支持长按选择；围栏和缩进代码块右上角「复制」写入完整代码，即使超出屏宽也不会截断。
 HTTP/HTTPS 网页仅在用户点击后交给 Android 打开。普通会话的 `localhost` / HTML 只能匹配桌面发布的网页预览项，
 文件链接只能匹配已有产物；`file:` 不会直接交给系统打开。拒绝 `intent:` 等协议，也不自动请求公网图片。详细缺口和验证边界见 [实现与验收状态](IMPLEMENTATION_STATUS.md)。
@@ -185,18 +152,11 @@ Windows 使用 `gradlew.bat`。根目录的 pnpm 检查不覆盖 Kotlin。
 可用当前账户另开端口，例如 `adb -P 5038 start-server`，并在本次进程设置 `ADB_SERVER_SOCKET=tcp:127.0.0.1:5038`
 与 `ANDROID_ADB_SERVER_PORT=5038`，保持 CLI 和 Gradle 都使用同一 server。验收完只停止本次创建的 server。
 
-成员会话不在 Code 任务目录中；私聊/收件箱跳转只用已认证 `bot-chats.sessions` 或 `bot-inbox.conversationId`，
-不能把 Code catalog 当所有合法会话的白名单，也不要从收件箱 key 字符串猜会话 ID。聊天 title 和成员职位可为空，不能因此丢弃整条目录。
-
 仅在受限网络需要时，把代理设在**当前进程的 JVM 系统参数**，不要把个人代理写进仓库。
 
 已在 1080×2400 / 420 dpi 的 API 37 模拟器验证导航、空态、搜索、配对和会话响应。
 `SettingsScreenTest` 覆盖「设备与通知」的真实电脑名、只读与权限展示、提醒开关、通知权限入口和解绑二次确认（并断言不存在设备切换与手机侧权限开关）；
 `DraftRestoreScreenTest` 覆盖会话草稿在切页后回到同一会话仍可见；`TextDraftDeviceTest` 覆盖 Keystore 落盘无明文、换配对不串数据与坏文件恢复。
-`MembersScreenTest` 覆盖私聊与群聊里的委派信封折叠（断言原始标签不出现、摘要与状态可见、展开后才有细节），
-以及例行任务与群消息补投的紧凑行（`例行任务 · 标题`、`群消息 · N 条`、尾部指令可见，`<routine` / `<group-message` / `<group-info` 不出现）；
-JVM 侧 `SessionPresentationTest` 覆盖批量与整段匹配、信封后接正文回退原文、`notes-updated` 前置、
-`routine`（含 `dry-run`）与 `group-info`/`group-message`、Markdown/代码块与非开头同名标签、坏信封不改写正文。
 `DraftBookTest` / `DraftBookAcceptanceTest` 覆盖显式 `pin`/`confirm`、读文本不产生提交语义、离开页面后到达的回执仍能清除、
 以及 pin 之后又改过的内容不被旧回执清掉。
 `SessionScreenTest` 覆盖审批、代审、受保护/只读/过期和选项回答；`PairCryptoDeviceTest` 使用 Android JCE 和共享向量验证 NaCl 与防重放；
@@ -258,12 +218,6 @@ CODEKILN_DESKTOP_IMAGE_SMOKE=1 node scripts/android-desktop-smoke.mjs
 CODEKILN_DESKTOP_GOAL_SMOKE=1 node scripts/android-desktop-smoke.mjs
 # 额外验证已启动会话的思考开关和深度、模型切换：目录确认，下一轮实际走新服务和模型
 CODEKILN_DESKTOP_MODEL_SMOKE=1 node scripts/android-desktop-smoke.mjs
-# 创建一次性成员与群聊：手机发送，验证群正文刷新和当前轮停止
-CODEKILN_DESKTOP_BOT_SMOKE=1 node scripts/android-desktop-smoke.mjs
-# Bot 烟测中再验证创建话题 → 空时间线 → 切回主话题
-CODEKILN_DESKTOP_BOT_SMOKE=1 CODEKILN_DESKTOP_BOT_THREADS_SMOKE=1 node scripts/android-desktop-smoke.mjs
-# 另验手机首次单聊 → 发送 → 再订阅同一历史，以及手机新建两人群（可与 threads 合用）
-CODEKILN_DESKTOP_BOT_SMOKE=1 CODEKILN_DESKTOP_BOT_MEMBERS_SMOKE=1 node scripts/android-desktop-smoke.mjs
 ```
 
 脚本启动当前源码的 Electron dev / Main / worker，使用临时 userData、临时项目、随机且非 9222 的 CDP 端口、
@@ -292,9 +246,6 @@ adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --
 adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame pair
 adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame session
 adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame ask
-adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame members
-adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame group
-adb shell am start -n io.github.tingyuxuan123.codekiln/.DesignPreviewActivity --es frame bot
 ```
 
 样例仅来自 `ensocode-android.vetd/components/data.ts`，源码和 Activity 都在 `src/debug/`，不会进入 release。debug 样例的发送按钮也不可用。系统切换深色模式可比较相同页面的深色分支。

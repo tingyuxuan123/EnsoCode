@@ -29,7 +29,6 @@ export async function dispatchDesignTool(
     session: {
       id: request.session.sessionId,
       cwd: request.session.cwd,
-      botChatId: request.session.botChatId ?? null,
       scenario: 'conversation',
     },
     model: { provider: '', id: '', api: '', input: [] },

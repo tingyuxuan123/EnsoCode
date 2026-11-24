@@ -87,12 +87,6 @@ vi.mock('@/components/onboarding/Onboarding', () => ({ Onboarding: () => null })
 vi.mock('@/components/search/WorkspaceSearchDialog', () => ({
   WorkspaceSearchDialog: () => null,
 }));
-vi.mock('@/components/bots/BotView', () => ({ BotView: () => null }));
-vi.mock('@/components/bots/globalBoard', () => ({
-  rootBoardGroups: () => [],
-  globalBoard: () => ({ attention: 0 }),
-}));
-vi.mock('@/components/bots/ModeSwitch', () => ({ ModeSwitch: () => null }));
 vi.mock('@/features/imageStudio/ImageStudio', () => ({ ImageStudio: () => null }));
 vi.mock('@/features/design/DesignRuntimeHost', () => ({ DesignRuntimeHost: () => null }));
 vi.mock('@/features/design/DesignWindowRelay', () => ({ DesignWindowRelay: () => null }));

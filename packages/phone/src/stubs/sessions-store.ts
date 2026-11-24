@@ -36,6 +36,7 @@ export interface Conversation {
   /** TimelineRow / sidePanelDock 读取；手机无侧栏工程，空串即可 */
   projectId: string;
   parentId?: string;
+  btwParentId?: string;
   historyOnly?: boolean;
   historyBaseIndex?: number;
   historyLoading?: boolean;

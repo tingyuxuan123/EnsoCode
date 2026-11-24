@@ -5,8 +5,8 @@ import type { HostToPhone, PhoneToHost } from '@enso/pair';
 import { previewImageMime } from '@shared/markdownPreviewImage';
 import { normalizeSessionImageRel } from '@shared/pair/imageRel';
 import type { ProjectedMessage } from '@shared/types/agent';
-import { resolveArtifactFile } from './bots/artifacts';
 import type { PairReply } from './pairHost';
+import { resolveArtifactFile } from './workspaceArtifacts';
 
 /**
  * 会话图片（read / 生成图片）的手机预览端口：
@@ -15,7 +15,7 @@ import type { PairReply } from './pairHost';
  * - 与文件端口同构：cwd/root 或授权变化后重新校验，答复前再确认一次访问权。
  */
 
-/** 直接读盘上限：超过就不解码（和 Bot 产物同一口径） */
+/** 直接读盘上限：超过就不解码 */
 export const SESSION_IMAGE_FILE_MAX = 20 * 1024 * 1024;
 
 export type SessionImageFailure =

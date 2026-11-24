@@ -47,11 +47,9 @@ export const CODEMODE_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set([
   'task_stop',
   'computer',
   ...DEVICE_TOOL_NAMES,
-  'send_image',
   // Paid image calls need a direct tool result for the durable chat preview.
   'generate_image',
   'edit_image',
-  'report_blocked',
 ]);
 
 const SHELL_HEAD =

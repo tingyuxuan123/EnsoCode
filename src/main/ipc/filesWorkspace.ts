@@ -85,7 +85,6 @@ async function citationContext(
       !conversation ||
       conversation.projectId !== request.projectId ||
       conversation.lifecycle !== 'ready' ||
-      conversation.bot ||
       project?.state !== 'active' ||
       (project.kind !== undefined && project.kind !== 'local' && project.kind !== 'scratch')
     )

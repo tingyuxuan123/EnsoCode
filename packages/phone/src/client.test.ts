@@ -560,6 +560,8 @@ describe('PairClient 缓存与续传', () => {
 
   it('新epoch快照替换旧缓存，不能混入上一代的历史前缀', async () => {
     const socket = await start();
+    socket.receive({ type: 'bot-catalog', enabled: true, bots: [] });
+    socket.receive({ type: 'group-timeline', chatId: 's', lastSeq: 400, entries: [] });
     socket.receive({
       type: 'session-sync',
       sessionId: 's',
@@ -571,6 +573,7 @@ describe('PairClient 缓存与续传', () => {
         sessions: [{ sessionId: 's', baseIndex: 1, messages: [text('new branch')] }],
       },
     });
+    socket.receive({ type: 'bot-event', event: { kind: 'timeline', chatId: 's', seq: 401 } });
     await settle();
     expect([...(client.getSession('s')?.messages ?? [])]).toEqual([[1, text('new branch')]]);
     expect(events.onSync).toHaveBeenLastCalledWith('synced');
@@ -1147,173 +1150,5 @@ describe('PairClient 缓存与续传', () => {
     socket.close();
     await expect(pending).resolves.toEqual({ ok: false, error: 'failed' });
     await expect(recording.finish()).resolves.toEqual({ ok: false, error: 'failed' });
-  });
-});
-
-describe('PairClient Bot 帧', () => {
-  let client: PairClient;
-  let events: ClientEvents;
-  beforeEach(() => {
-    vi.useFakeTimers();
-    Socket.all = [];
-    vi.stubGlobal('WebSocket', Socket);
-    vi.stubGlobal('localStorage', {
-      getItem: () => null,
-      setItem: () => {},
-      removeItem: () => {},
-    });
-    events = {
-      onState: vi.fn(),
-      onCatalog: vi.fn(),
-      onProjects: vi.fn(),
-      onProviders: vi.fn(),
-      onSession: vi.fn(),
-      onBotCatalog: vi.fn(),
-      onBotChats: vi.fn(),
-      onGroupTimeline: vi.fn(),
-      onBotEvent: vi.fn(),
-      onBotChatState: vi.fn(),
-      onBotSendResult: vi.fn(),
-      onBotNewSessionResult: vi.fn(),
-      onBotThreadResult: vi.fn(),
-      onBotInbox: vi.fn(),
-      onBotActivity: vi.fn(),
-    };
-    client = new PairClient(device, events, null, {
-      load: vi.fn(async () => null),
-      save: vi.fn(async () => {}),
-      clear: vi.fn(async () => {}),
-    });
-  });
-  afterEach(() => {
-    client.close();
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-  });
-
-  async function start() {
-    client.connect();
-    await settle();
-    const socket = Socket.all[0];
-    socket.open();
-    await settle();
-    return socket;
-  }
-
-  it('未知帧静默忽略，不影响后续帧', async () => {
-    const socket = await start();
-    socket.receive({ type: 'from-the-future', payload: 1 });
-    socket.receive({ type: 'bot-chats', chats: [] });
-    await settle();
-    expect(events.onBotChats).toHaveBeenCalledWith([], []);
-  });
-
-  it('Bot 帧分发到对应回调', async () => {
-    const socket = await start();
-    const timeline = {
-      type: 'group-timeline',
-      chatId: 'c',
-      entries: [],
-      lastSeq: 0,
-      hasOlder: false,
-    };
-    socket.receive({ type: 'bot-catalog', enabled: true, bots: [] });
-    socket.receive({ type: 'bot-inbox', items: [{ key: 'k', kind: 'budget', chatId: null }] });
-    socket.receive({ type: 'bot-inbox', items: 'bad' });
-    socket.receive({ type: 'bot-activity', now: Date.now() - 5000, items: [] });
-    socket.receive({ type: 'bot-activity', items: [] });
-    socket.receive(timeline);
-    socket.receive({ type: 'bot-event', event: { kind: 'timeline', chatId: 'c', seq: 3 } });
-    socket.receive({
-      type: 'bot-chat-state',
-      chatId: 'c',
-      current: null,
-      queue: [],
-      hops: 0,
-      turnsByBot: {},
-      pendingHuman: false,
-    });
-    socket.receive({
-      type: 'bot-send-result',
-      chatId: 'c',
-      deliveryId: 'd',
-      ok: false,
-      error: 'x',
-    });
-    await settle();
-    expect(events.onBotCatalog).toHaveBeenCalledWith(true, [], false, false);
-    expect(events.onBotInbox).toHaveBeenCalledTimes(1);
-    expect(events.onBotInbox).toHaveBeenCalledWith([{ key: 'k', kind: 'budget', chatId: null }]);
-    expect(events.onBotActivity).toHaveBeenCalledTimes(1);
-    const [items, offset] = vi.mocked(events.onBotActivity!).mock.calls[0];
-    expect(items).toEqual([]);
-    expect(offset).toBeGreaterThanOrEqual(5000);
-    expect(events.onGroupTimeline).toHaveBeenCalledWith(timeline);
-    expect(events.onBotEvent).toHaveBeenCalledWith({ kind: 'timeline', chatId: 'c', seq: 3 });
-    const notice = {
-      kind: 'model-notice' as const,
-      chatId: 'c',
-      text: 'Alice 的模型不可用，本次改用默认模型 Claude（鉴权失败）',
-    };
-    socket.receive({ type: 'bot-event', event: notice });
-    await settle();
-    expect(events.onBotEvent).toHaveBeenCalledWith(notice);
-    expect(events.onBotChatState).toHaveBeenCalledWith(expect.objectContaining({ chatId: 'c' }));
-    expect(events.onBotSendResult).toHaveBeenCalledWith(
-      expect.objectContaining({ deliveryId: 'd', ok: false })
-    );
-  });
-
-  it('结构不对的 Bot 帧丢弃', async () => {
-    const socket = await start();
-    socket.receive({ type: 'bot-catalog', enabled: true, bots: 'nope' });
-    socket.receive({ type: 'group-timeline', chatId: 'c', entries: null });
-    socket.receive({ type: 'bot-event', event: null });
-    await settle();
-    expect(events.onBotCatalog).not.toHaveBeenCalled();
-    expect(events.onGroupTimeline).not.toHaveBeenCalled();
-    expect(events.onBotEvent).not.toHaveBeenCalled();
-  });
-
-  it('dispatches new-session capability and correlated result, rejects malformed results', async () => {
-    const socket = await start();
-    socket.receive({ type: 'bot-catalog', enabled: true, bots: [], newSession: true });
-    const result = {
-      type: 'bot-new-session-result',
-      chatId: 'chat',
-      requestId: 'request',
-      ok: false,
-      needsConfirmation: true,
-    };
-    socket.receive(result);
-    socket.receive({ ...result, requestId: 3 });
-    socket.receive({ ...result, ok: 'yes' });
-    await settle();
-    expect(events.onBotCatalog).toHaveBeenCalledWith(true, [], true, false);
-    expect(events.onBotNewSessionResult).toHaveBeenCalledExactlyOnceWith(result);
-  });
-
-  it('dispatches thread capability, thread summaries and correlated thread results', async () => {
-    const socket = await start();
-    socket.receive({ type: 'bot-catalog', enabled: true, bots: [], threads: true });
-    const thread = { id: 't', kind: 'group', parentId: 'chat' };
-    socket.receive({ type: 'bot-chats', chats: [], threads: [thread] });
-    socket.receive({ type: 'bot-chats', chats: [], threads: 'bad' });
-    const result = {
-      type: 'bot-thread-result',
-      chatId: 'chat',
-      requestId: 'request',
-      ok: true,
-      threadId: 't',
-    };
-    socket.receive(result);
-    socket.receive({ ...result, requestId: 3 });
-    socket.receive({ ...result, chatId: null });
-    socket.receive({ ...result, ok: 'yes' });
-    await settle();
-    expect(events.onBotCatalog).toHaveBeenCalledWith(true, [], false, true);
-    expect(events.onBotChats).toHaveBeenNthCalledWith(1, [], [thread]);
-    expect(events.onBotChats).toHaveBeenNthCalledWith(2, [], []);
-    expect(events.onBotThreadResult).toHaveBeenCalledExactlyOnceWith(result);
   });
 });

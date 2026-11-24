@@ -195,7 +195,7 @@ describe('Agent dispatch strict transport', () => {
         source: 'bot',
         canDisable: false,
       })
-    ).not.toBeNull();
+    ).toBeNull();
     expect(parseMentionCandidate({ ...base, id: 'reviewer', typeKey: 'reviewer' })).toBeNull();
   });
 

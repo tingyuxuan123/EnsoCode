@@ -10,13 +10,14 @@ const bridge = vi.hoisted(() => ({
 }));
 vi.mock('electron', () => ({ contextBridge: bridge, ipcRenderer: bridge }));
 
-it('removes the Wiki bridge while keeping speech, manual notes and local model management', async () => {
+it('removes the Wiki and Bot bridges while keeping speech and local model management', async () => {
   await import('../preload/index');
   const [key, api] = bridge.exposeInMainWorld.mock.calls[0] as [string, ElectronAPI];
   expect(key).toBe('electronAPI');
   expect(api).not.toHaveProperty('memory');
   expect(api.speech.status).toBeTypeOf('function');
-  expect(api.bots.notes.save).toBeTypeOf('function');
+  expect(api).not.toHaveProperty('bots');
+  expect(api).not.toHaveProperty('taskBoard');
 
   await api.localModels.list();
   await api.localModels.download('voice-model');

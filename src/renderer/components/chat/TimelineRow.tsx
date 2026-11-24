@@ -1,6 +1,3 @@
-import { splitChatReferences } from '@shared/bots/composerRefs';
-import { parseBotInjectedMessage } from '@shared/bots/injectedMessage';
-import { stripBotNotesUpdate } from '@shared/bots/notes';
 import { isBtwIsolationPrompt } from '@shared/btw';
 import { agentInstanceDisplayName, SYSTEM_ASSISTANT_DISPLAY_NAME } from '@shared/builtinAgents';
 import { chatBodyTypographyStyle } from '@shared/chatTypography';
@@ -36,7 +33,6 @@ import {
   ListTodo,
   LoaderCircle,
   MessageCircleQuestion,
-  MessagesSquare,
   PackageMinus,
   Pencil,
   RefreshCw,
@@ -62,9 +58,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from 'react';
-import { InjectedMessageCard } from '@/components/bots/InjectedMessageCard';
 import {
   Dialog,
   DialogContent,
@@ -714,37 +708,6 @@ function UserText({
   activeNth?: number;
 }) {
   const { t } = useI18n();
-  const host = useChatHost();
-  const botHost = Boolean(host?.speaker || host?.botSession);
-  const injected = botHost ? parseBotInjectedMessage(text) : null;
-  if (injected) return <InjectedMessageCard message={injected} />;
-  // Main 投递前追加的笔记更新块不展示
-  const withoutNotes = botHost ? stripBotNotesUpdate(text) : text;
-  if (withoutNotes !== text)
-    return <UserText text={withoutNotes} searchQuery={searchQuery} activeNth={activeNth} />;
-  // Bot 输入框 @聊天：Main 追加的摘录块折叠成 chip
-  const chatRefs = botHost ? splitChatReferences(text) : null;
-  if (chatRefs?.refs.length) {
-    return (
-      <div className="flex w-full flex-col items-end gap-1.5">
-        {chatRefs.body && (
-          <UserText text={chatRefs.body} searchQuery={searchQuery} activeNth={activeNth} />
-        )}
-        <div className="flex flex-wrap justify-end gap-1.5">
-          {chatRefs.refs.map((ref) => (
-            <span
-              key={ref.id}
-              title={t('Referenced chat')}
-              className="inline-flex h-6 max-w-56 items-center gap-1 rounded-md bg-muted px-1.5 text-[calc(11rem/14)]"
-            >
-              <MessagesSquare className="h-3 w-3 shrink-0" />
-              <span className="min-w-0 truncate">{ref.title}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
   const planPrefix = splitPlanPrefix(text);
   if (planPrefix.note) {
     const remainder = planPrefix.rest.trim();
@@ -901,41 +864,19 @@ export function isNestedRow(item: TimelineItem): boolean {
 
 /** 每轮回复的身份头：标识 + 模型 + 时间，挂在本轮首个 assistant 行之上 */
 export function ReplyHeader({ model, at }: { model?: string; at?: number }) {
-  const speaker = useChatHost()?.speaker;
   return (
     <div
       data-reply-header=""
       className="mb-[8px] flex min-h-[calc(20rem/14)] min-w-0 items-center gap-[8px] text-[calc(12rem/14)] select-none"
     >
-      {speaker ? (
-        speaker.image ? (
-          <img
-            data-reply-avatar=""
-            src={speaker.image}
-            alt=""
-            draggable={false}
-            className="size-[calc(22rem/14)] shrink-0 rounded-full object-cover"
-            style={{ backgroundColor: speaker.color }}
-          />
-        ) : (
-          <span
-            data-reply-avatar=""
-            className="flex size-[calc(22rem/14)] shrink-0 items-center justify-center rounded-full font-semibold text-[calc(11rem/14)] text-white"
-            style={{ backgroundColor: speaker.color }}
-          >
-            {[...speaker.name.trim()][0]?.toUpperCase() ?? '?'}
-          </span>
-        )
-      ) : (
-        <span
-          data-reply-avatar=""
-          className="flex size-[calc(17rem/14)] shrink-0 items-center justify-center text-foreground"
-        >
-          <EnsoMark className="size-[calc(17rem/14)]" />
-        </span>
-      )}
+      <span
+        data-reply-avatar=""
+        className="flex size-[calc(17rem/14)] shrink-0 items-center justify-center text-foreground"
+      >
+        <EnsoMark className="size-[calc(17rem/14)]" />
+      </span>
       <span data-reply-name="" className="shrink-0 truncate font-medium text-foreground">
-        {speaker?.name ?? SYSTEM_ASSISTANT_DISPLAY_NAME}
+        {SYSTEM_ASSISTANT_DISPLAY_NAME}
       </span>
       {model && (
         <span
@@ -1186,40 +1127,24 @@ function displayedConversation(state: ReturnType<typeof useSessionsStore.getStat
   return active.activeTabId ? (state.conversations[active.activeTabId] ?? active) : active;
 }
 
-const noSubscribe = () => () => {};
-
 /** 终态错误后续跑：已 spawn 且非 running 才显示（手机 stub started=false 自动隐藏） */
 export function RetryTurnButton() {
   const { t } = useI18n();
   const host = useChatHost();
-  const controls = host?.botControls;
-  const sessionCanRetry = useSessionsStore((state) => {
+  const canRetry = useSessionsStore((state) => {
     // 远程节点视图：协议无 retry，宿主显式关闭
-    if (host && (!host.canRetry || host.botControls)) return false;
+    if (host && !host.canRetry) return false;
     const conversation = displayedConversation(state);
     return Boolean(
       conversation?.started && !conversation.spawning && conversation.status !== 'running'
     );
   });
-  // Bot 私聊：投影在 bots store；冷会话由 Main 先恢复再续跑
-  const retryable = () => {
-    if (!controls || !host?.canRetry) return false;
-    const projection = controls.projection();
-    return Boolean(projection && projection.status !== 'running');
-  };
-  const botCanRetry = useSyncExternalStore(
-    controls?.subscribe ?? noSubscribe,
-    retryable,
-    retryable
-  );
-  const canRetry = controls ? botCanRetry : sessionCanRetry;
   if (!canRetry) return null;
   return (
     <button
       type="button"
       title={t('Retry')}
       onClick={() => {
-        if (controls) return controls.retry();
         const conversation = displayedConversation(useSessionsStore.getState());
         if (!conversation) return;
         useSessionsStore.getState().retry(conversation.id);
@@ -1327,9 +1252,7 @@ function RewindButton({ messageIndex }: { messageIndex: number }) {
     entryId: string;
   } | null>(null);
   const host = useChatHost();
-  const controls = host?.botControls;
-  const sessionCanRewind = useSessionsStore((state) => {
-    if (host?.botControls) return false;
+  const canRewind = useSessionsStore((state) => {
     const conversation = displayedConversation(state);
     return (
       canRewindDisplayedSession(state, host) &&
@@ -1339,28 +1262,8 @@ function RewindButton({ messageIndex }: { messageIndex: number }) {
       )
     );
   });
-  /** Bot 私聊：该行可回退时返回目标 user entryId（原始值选择，避免流式更新重渲染每行） */
-  const rewindTarget = () => {
-    if (!controls || !host?.canRewind || !host.sessionId) return null;
-    const projection = controls.projection();
-    if (!projection || projection.status === 'running') return null;
-    return (
-      resolveRewindConfirm(host.sessionId, host.sessionId, projection, messageIndex)?.entryId ??
-      null
-    );
-  };
-  const botEntryId = useSyncExternalStore(
-    controls?.subscribe ?? noSubscribe,
-    rewindTarget,
-    rewindTarget
-  );
-  const canRewind = controls ? botEntryId !== null : sessionCanRewind;
   if (!canRewind) return null;
   const queueRewind = (restoreFiles: boolean) => {
-    if (controls && host?.sessionId && botEntryId) {
-      setPending({ restoreFiles, conversationId: host.sessionId, entryId: botEntryId });
-      return;
-    }
     const conversation = displayedConversation(useSessionsStore.getState());
     if (!conversation) return;
     const target = resolveRewindConfirm(
@@ -1373,7 +1276,6 @@ function RewindButton({ messageIndex }: { messageIndex: number }) {
       setPending({ restoreFiles, conversationId: conversation.id, entryId: target.entryId });
   };
   const rewind = (restoreFiles: boolean, originId: string, entryId: string) => {
-    if (controls) return controls.rewind(entryId, restoreFiles);
     const state = useSessionsStore.getState();
     const displayed = displayedConversation(state);
     const target = resolveRewindConfirm(
@@ -1580,13 +1482,9 @@ function TextRow({
         )}
       </div>
       {item.waterfall && !item.streaming && <TurnWaterfallDetails waterfall={item.waterfall} />}
-      {item.turnEnd &&
-        !item.streaming &&
-        (host?.turnFooter ? (
-          host.turnFooter(Number(item.key.split('-')[0]))
-        ) : (
-          <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
-        ))}
+      {item.turnEnd && !item.streaming && (
+        <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
+      )}
     </div>
   );
 }

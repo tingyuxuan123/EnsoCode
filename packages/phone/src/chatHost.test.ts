@@ -17,11 +17,11 @@ vi.mock('@/stores/settings', () => ({
 vi.mock('@/stores/sessions', () => ({ useSessionsStore: () => null }));
 vi.mock('@/components/chat/Markdown', () => ({ Markdown: () => null }));
 
-const render = (text: string, bot?: { readOnly?: boolean }) =>
+const render = (text: string) =>
   renderToStaticMarkup(
     createElement(
       ChatHostContext.Provider,
-      { value: phoneChatHost({ sessionId: 's', bot }) },
+      { value: phoneChatHost({ sessionId: 's' }) },
       createElement(TimelineRow, { item: { kind: 'user', key: '0', images: [], text } })
     )
   );
@@ -34,19 +34,7 @@ const groupTurn = [
 ].join('\n');
 
 describe('phoneChatHost', () => {
-  it('Bot 成员会话（含只读查看过程）按桌面一样拆注入块：群状态隐藏、分派提示一行、引用聊天成标签', () => {
-    for (const bot of [{}, { readOnly: true }]) {
-      const html = render(groupTurn, bot);
-      expect(html).toContain('data-bot-injection="group"');
-      expect(html).toContain('看下手机端');
-      expect(html).toContain('Dispatch hint: 你被点名');
-      expect(html).toContain('旧讨论');
-      expect(html).not.toContain('成员 A 正在忙');
-      for (const tag of ['group-state', 'group-message', 'routing-note', 'chat-reference'])
-        expect(html).not.toContain(`&lt;${tag}`);
-    }
-  });
-  it('普通会话不解释 Bot 标签', () => {
+  it('普通会话的类似标签按原文显示', () => {
     expect(render(groupTurn)).toContain('&lt;group-message');
   });
 });

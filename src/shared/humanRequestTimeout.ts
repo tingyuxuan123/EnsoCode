@@ -1,4 +1,4 @@
-/** Bot 群聊里审批卡 / 提问卡等人处理的时限（截止时间以 Main 的墙钟为准） */
+/** 审批卡 / 提问卡等人处理的时限（截止时间以 Main 的墙钟为准） */
 export const HUMAN_REQUEST_TIMEOUT_MS = 10 * 60_000;
 
 export const APPROVAL_TIMEOUT_PREFIX = '审批超时（10 分钟未处理）';

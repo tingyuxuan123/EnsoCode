@@ -156,16 +156,14 @@ describe('device file chunks', () => {
     expect((await offline.read(id)).error).toBe('unavailable');
   });
 
-  it('bounds listings and supports bot target identity without a Code session', async () => {
+  it('bounds listings and signs file IDs for the issuing session', async () => {
     const rels = Array.from({ length: 150 }, (_, i) => `${i}.txt`);
     for (const rel of rels) writeFileSync(path.join(root, rel), rel);
     const { list, read } = fixture(rels);
-    const bot: PairFileTarget = {
-      bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'entry' },
-    };
-    const files = (await list(bot)).files;
+    const other: PairFileTarget = { sessionId: 'another-session' };
+    const files = (await list(other)).files;
     expect(files.length).toBe(128);
-    expect((await read(files[0].id, 0, bot)).data).toBe(Buffer.from('0.txt').toString('base64'));
+    expect((await read(files[0].id, 0, other)).data).toBe(Buffer.from('0.txt').toString('base64'));
     expect((await read(files[0].id, 0)).error).toBe('not-found');
   });
 });

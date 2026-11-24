@@ -29,7 +29,6 @@ export function restoreLegacyDispatchedConversations<T extends Slice>(
     if (
       row.kind !== 'root' ||
       row.lifecycle === 'ended' ||
-      row.bot ||
       row.superAssistant ||
       !row.dispatchedBySuperAssistant
     )

@@ -5,8 +5,6 @@ import path from 'node:path';
 import type { McpServerEntry, ModelProvider } from '@shared/types';
 import { parseAgentCommand } from '@shared/types/agent';
 import { describe, expect, it, vi } from 'vitest';
-import { botToAgentType } from './bots/botAgentType';
-import { createModelProbe } from './bots/modelProbe';
 import { McpToolCatalogStore } from './mcpToolCatalog';
 import { pickSubagentModelRefs } from './subagentModels';
 
@@ -40,8 +38,6 @@ vi.mock('./modelDirectory', () => ({
 }));
 
 import {
-  agentTypeRegistrySnapshot,
-  configuredAgentTypes,
   expectedAgentTypeToolIds,
   isBrowserSessionToolEnabled,
   readSettingsState,
@@ -54,7 +50,6 @@ import {
   resolveWebSearchConfig,
   sendAgentCommand,
   setBrowserCancellationListener,
-  setMemberAgentTypeSource,
   stopAgentWorker,
   stopAgentWorkerForQuit,
   toSessionMcpConfig,
@@ -530,24 +525,6 @@ describe('resolveModelSelection 虚拟模型', () => {
       fallbacks: [],
     });
     expect(resolved.selection.config.virtual?.fast).toBeUndefined();
-    const complete = vi.fn(async () => 'OK');
-    const probe = createModelProbe({
-      settings: () => state,
-      credentials: async () => new Set(),
-      isWorkerReady: () => true,
-      complete,
-      resolve: (ref, keys) => {
-        const result = resolveModelSelection(ref.providerId, ref.modelId, keys, {
-          allowVirtual: true,
-        });
-        return result.ok ? { ok: true, config: result.selection.config } : result;
-      },
-    });
-    expect(await probe(tsRef)).toMatchObject({ ok: false });
-    expect(complete).not.toHaveBeenCalled();
-    state.defaultModel = chatRef;
-    expect(await probe(tsRef)).toMatchObject({ ok: true, fallback: { model: chatRef } });
-    expect(complete.mock.calls).toHaveLength(1);
   });
   const provider = (id: string, models: string[], extra: Record<string, unknown> = {}) => ({
     id,
@@ -698,101 +675,6 @@ describe('resolveModelSelection 虚拟模型', () => {
       ok: false,
       error: '虚拟模型没有可用成员',
     });
-  });
-});
-
-describe('agentHost 成员 agent type', () => {
-  const BOT_ID = '33333333-3333-4333-8333-333333333333';
-  const member = (name: string, id = BOT_ID) =>
-    botToAgentType(
-      {
-        id,
-        name,
-        title: 'Reviewer',
-        scope: 'Reviews code',
-        avatar: { color: '#888' },
-        approvalMode: 'full',
-        engine: { providerId: 'p1', modelId: 'strong' },
-        tools: 'readonly',
-        skillIds: [],
-        mcpServerIds: [],
-        delegation: { canDelegateTo: 'any', acceptFrom: 'any' },
-        memory: { enabled: true },
-        createdAt: 1,
-        updatedAt: 1,
-        version: 1,
-      },
-      'Be strict.'
-    );
-  const setSettings = () => {
-    settingsMock.value = {
-      'enso-settings': {
-        version: 99,
-        state: {
-          providers: [
-            {
-              id: 'p1',
-              name: 'p1',
-              api: 'anthropic-messages',
-              apiKey: 'key',
-              baseUrl: 'https://p1.test',
-              enabled: true,
-              models: [{ id: 'strong' }, { id: 'weak' }],
-            },
-          ],
-        },
-      },
-    };
-  };
-
-  it('registry、@ 派发与 worker 工具列表都带上成员；与内置同名的成员被跳过', () => {
-    setSettings();
-    setMemberAgentTypeSource(() => [
-      member('Alice'),
-      member('scout', '44444444-4444-4444-8444-444444444444'),
-    ]);
-    try {
-      const candidates = agentTypeRegistrySnapshot().candidates;
-      expect(candidates.filter((entry) => entry.source === 'bot')).toMatchObject([
-        { typeKey: `bot:${BOT_ID}`, displayName: 'Alice', description: 'Reviewer — Reviews code' },
-      ]);
-      expect(candidates.find((entry) => entry.typeKey === 'builtin:scout')).toBeDefined();
-
-      const parent = resolveModelSelection('p1', 'weak', new Set());
-      if (!parent.ok) throw new Error(parent.error);
-      const resolved = resolveAgentTypeSpawnConfig(`bot:${BOT_ID}`, parent.selection, new Set());
-      expect(resolved.ok).toBe(true);
-      if (!resolved.ok) return;
-      expect(resolved.config).toMatchObject({
-        typeKey: `bot:${BOT_ID}`,
-        displayName: 'Alice',
-        tools: 'readonly',
-      });
-      expect(resolved.config.systemPrompt).toContain('Be strict.');
-      expect(resolved.expectedModel).toEqual({ providerId: 'p1', modelId: 'strong' });
-      expect(resolved.expectedToolIds).not.toContain('bash');
-      expect(
-        resolveAgentTypeSpawnConfig(
-          'bot:44444444-4444-4444-8444-444444444444',
-          parent.selection,
-          new Set()
-        ).ok
-      ).toBe(false);
-
-      const workerTypes = configuredAgentTypes(new Set());
-      const bots = workerTypes.filter((entry) => entry.name.startsWith('bot:'));
-      expect(bots).toHaveLength(1);
-      expect(bots[0]).toMatchObject({
-        name: `bot:${BOT_ID}`,
-        description: 'Member "Alice" — Reviewer — Reviews code',
-        tools: 'readonly',
-        allowModelOverride: false,
-        model: { modelId: 'strong' },
-      });
-      expect(bots[0]?.systemPrompt).toContain('Be strict.');
-    } finally {
-      setMemberAgentTypeSource(() => []);
-    }
   });
 });
 

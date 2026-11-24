@@ -10,7 +10,6 @@ import {
 const availability = vi.hoisted(() => ({
   designEnabled: true,
   activeNodeId: 'local',
-  botModeActive: false,
 }));
 vi.mock('@/stores/settings', () => ({
   useSettingsStore: { getState: () => availability },
@@ -18,10 +17,9 @@ vi.mock('@/stores/settings', () => ({
 vi.mock('@/stores/remoteNodes', () => ({
   useRemoteNodesStore: { getState: () => availability },
 }));
-vi.mock('@/stores/bots/mode', () => ({ isBotModeActive: () => availability.botModeActive }));
 
 beforeEach(() => {
-  Object.assign(availability, { designEnabled: true, activeNodeId: 'local', botModeActive: false });
+  Object.assign(availability, { designEnabled: true, activeNodeId: 'local' });
   useDesignRegistry.setState({ ui: {} });
 });
 
@@ -38,9 +36,8 @@ describe('design workspace routing', () => {
   });
 
   it.each([
-    { designEnabled: false, activeNodeId: 'local', botModeActive: false },
-    { designEnabled: true, activeNodeId: 'remote', botModeActive: false },
-    { designEnabled: true, activeNodeId: 'local', botModeActive: true },
+    { designEnabled: false, activeNodeId: 'local' },
+    { designEnabled: true, activeNodeId: 'remote' },
   ])('cannot open in an unavailable mode: %o', (mode) => {
     Object.assign(availability, mode);
     expect(

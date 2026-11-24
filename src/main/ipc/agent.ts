@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { browserSessionKey } from '@shared/bots/browser';
 import {
   type ChildSessionIdentity,
   DESIGNER_AGENT_TYPE_KEY,
@@ -46,7 +45,6 @@ import {
   THINKING_LEVELS,
 } from '@shared/types/agent';
 import { DESIGNER_AGENT_NAME } from '@shared/types/assets';
-import { parseTaskCheck } from '@shared/types/bot';
 import { effectiveSubagentAllowedModes } from '@shared/types/builtinTools';
 import { type DesignHookEvent, designToolTimeoutMs } from '@shared/types/design';
 import {
@@ -94,7 +92,6 @@ import {
   sendAgentCommand,
   sendBrowserResultToSession,
   sendComputerResultToSession,
-  sendDelegationResultToSession,
   sendDesignResultToSession,
   sendPluginInterceptResultToSession,
   sendPluginToolProgressToSession,
@@ -118,10 +115,8 @@ import {
 } from '../services/agentHost';
 import { validateAgentRun } from '../services/agentRunValidation';
 import { AgentService } from '../services/agentService';
-import { HumanRequestTimeouts } from '../services/bots/humanRequestTimeouts';
 import { pickBrowserFileRoot, setBrowserFileRootResolver } from '../services/browserFileRoot';
 import { browserHost } from '../services/browserHost';
-import type { BrowserActor } from '../services/browserTabClaims';
 import { chatModelsRoot } from '../services/chatModels';
 import { readChildHistory as readPersistedChildHistory } from '../services/childHistory';
 import { computerHost } from '../services/computerHost';
@@ -140,6 +135,7 @@ import { observePluginPlanEvent, PluginPlanStates } from '../services/extensionP
 import { SessionStateTracker } from '../services/extensionPlugins/sessionState';
 import { listAllSessions, listProjectSessions } from '../services/extensionPlugins/sessions';
 import { searchFiles } from '../services/fileSearch';
+import { HumanRequestTimeouts } from '../services/humanRequestTimeouts';
 import { independentImageProvider } from '../services/imageGeneration/providerHost';
 import { generateImage } from '../services/imageGeneration/service';
 import { ImageGenerationBridge } from '../services/imageGenerationBridge';
@@ -154,7 +150,7 @@ import {
 } from '../services/llama/chatModels';
 import { clearMcpStatuses, recordMcpStatus } from '../services/mcpStatusCache';
 import { setNativePluginResources } from '../services/nativePluginResources';
-import { maybeNotify, maybeNotifyBot, setViewedSession } from '../services/notifications';
+import { maybeNotify, setViewedSession } from '../services/notifications';
 import { readStoredOauthCredentialKeys } from '../services/oauthProviders';
 import { forwardAgentEvent, setPairAgentBridge } from '../services/pairHost';
 import {
@@ -189,15 +185,6 @@ import { titleModelCandidates } from '../services/titleSummary';
 import { ingestSessionJsonl } from '../services/usage/ledgerStore';
 import { sendToAllWindows } from '../windows/createAppWindow';
 import { isMainWebContents } from '../windows/MainWindow';
-import {
-  botModeEnabled,
-  botScreenshots,
-  getBotServices,
-  groupHistoryTool,
-  groupTasksTool,
-  routineProposeTool,
-  sendImageTool,
-} from './bots';
 import { agentSessionIndex, capabilityGateway, handleCapabilityInvoke } from './capabilities';
 import { isDeviceSender, registerDeviceAccessHandlers } from './deviceHost';
 import { readSettings, readSshTimeoutSeconds } from './settings';
@@ -493,8 +480,6 @@ function _mobileToolAllowed(sessionId: string): boolean {
 }
 
 let sourceAuthority: SourceAuthorityRegistry | null = null;
-let botWorkerObserver: ((event: AgentWorkerEvent | { type: 'worker-exited' }) => void) | null =
-  null;
 const selectionClockOwners = new WeakSet<WebContents>();
 
 function watchSelectionClock(sender: WebContents): void {
@@ -523,13 +508,6 @@ export function isSelectedLocalRoot(owner: number, id: string): boolean {
   return sourceBindings?.isSelectedLocalRoot(owner, id) ?? false;
 }
 
-/** Bot 会话宿主订阅 worker 事件（turn 结果、运行态） */
-export function setBotWorkerEventObserver(
-  observer: ((event: AgentWorkerEvent | { type: 'worker-exited' }) => void) | null
-): void {
-  botWorkerObserver = observer;
-}
-
 function broadcastAgentEvent(event: RendererAgentEvent): void {
   for (const change of pluginSessionStates.observe(event)) {
     const conversation = sourceAuthority?.conversation(change.sessionId);
@@ -552,27 +530,7 @@ function broadcastAgentEvent(event: RendererAgentEvent): void {
   } catch {
     // renderer 已崩但 webContents 对象还在：Render frame was disposed
   }
-  const conversationId =
-    'identity' in event && event.identity ? rootSessionId(event.identity) : undefined;
-  const binding = conversationId ? sourceAuthority?.conversation(conversationId)?.bot : undefined;
-  if (
-    binding &&
-    conversationId &&
-    (event.type === 'approval-request' ||
-      event.type === 'approval-resolved' ||
-      event.type === 'parent-ended' ||
-      event.type === 'child-ended' ||
-      event.type === 'ask-request')
-  ) {
-    const enabled = botModeEnabled();
-    void maybeNotifyBot(event, {
-      enabled,
-      chatId: binding.chatId,
-      conversationId,
-      name: (enabled ? getBotServices()?.bots.get(binding.botId)?.name : undefined) ?? '成员',
-    }).catch((error) => console.warn('[bots] notification failed', error));
-    // bot 会话的回合完成 / 失败由 Bot 服务按聊天发带成员名的通知（群接力整批合并）
-  } else if (!binding) maybeNotify(event);
+  maybeNotify(event);
   // 手机第二屏：按订阅过滤后加密下发（host 在 main，不依赖窗口焦点）
   forwardAgentEvent(event);
   handlePairHeadlessAgentEvent(event);
@@ -682,13 +640,13 @@ export function pluginProjectRoot(sessionId: string): string | null {
 
 /**
  * 独立设计窗口的绑定目标：子会话 tab 归到根会话；只接受设计功能开启时本机、
- * 非 Bot、未结束的会话。与 design-invoke 一样按根会话路由工具调用。
+ * 未结束的会话。与 design-invoke 一样按根会话路由工具调用。
  */
 export function designWindowSessionId(sessionId: string): string | null {
   if (readSettingsState()?.designEnabled === false) return null;
   const rootId = agentSessionIndex.workspaceRoot(sessionId);
   const conversation = sourceAuthority?.conversation(rootId);
-  if (!conversation || conversation.bot || conversation.lifecycle === 'ended') return null;
+  if (!conversation || conversation.lifecycle === 'ended') return null;
   return pluginProjectRoot(rootId) ? rootId : null;
 }
 
@@ -723,10 +681,6 @@ async function spawnBoundSession(
   }
   const authority = sourceAuthority?.conversation(request.sessionId);
   if (authority?.superAssistant) return { ok: false, error: 'Conversation unavailable.' };
-  // bot 会话的人设 / 工作区只能由 Main 的 BotSessionHost 组装，通用 spawn 路径一律拒绝
-  if (authority?.bot) {
-    return { ok: false, error: 'bot conversation must be spawned by bot host' };
-  }
   const currentCwd = authoritativeSpawnCwd(request.sessionId);
   if (!currentCwd || authority?.lifecycle === 'ended' || sessionWorktreeBusy(request.sessionId))
     return { ok: false, error: 'conversation authority changed' };
@@ -889,59 +843,14 @@ function rootSessionId(identity: SessionIdentity | ChildSessionIdentity): string
   return separator === -1 ? raw : raw.slice(0, separator);
 }
 
-function botControlError(sessionId: unknown): { ok: false; error: string } | undefined {
-  return typeof sessionId === 'string' && sourceAuthority?.conversation(sessionId)?.bot
-    ? { ok: false, error: 'Bot sessions must use Bot services for execution and policy changes.' }
-    : undefined;
-}
-
-/** 浏览器会话键：Bot 聊天（含委派子会话）共享一个，其余按会话隔离 */
-function browserKeyFor(sessionId: string): string {
-  return browserSessionKey(
-    sessionId,
-    sourceAuthority?.conversation(sessionId)?.bot,
-    (id) => getBotServices()?.delegations.chatIdOf(id),
-    (chatId) => getBotServices()?.chats.rootOf(chatId)?.id ?? chatId
-  );
-}
-
-const sharesBrowser = (sessionId: string) => browserKeyFor(sessionId) !== sessionId;
-
-/** 共享浏览器里按成员会话加标签锁；委派子会话按它自己的会话占用 */
-function browserActorFor(sessionId: string): BrowserActor | undefined {
-  if (!sharesBrowser(sessionId)) return undefined;
-  const botId = sourceAuthority?.conversation(sessionId)?.bot?.botId;
-  const name = botId ? getBotServices()?.bots.get(botId)?.name : undefined;
-  return { sessionId, name: name ?? 'Another member' };
-}
-
-/** Bot 会话的截图留最近 3 张给 send_image（子会话截的图归到父会话）；非 Bot 会话不缓存 */
-function cacheBotScreenshots(
-  identity: SessionIdentity | ChildSessionIdentity,
-  shots: readonly unknown[],
-  source: 'web' | 'desktop'
-): void {
-  const sessionId = rootSessionId(identity);
-  if (!sourceAuthority?.conversation(sessionId)?.bot) return;
-  for (const shot of shots) {
-    const data = shot && typeof shot === 'object' ? (shot as { data?: unknown }).data : undefined;
-    if (typeof data === 'string' && data)
-      botScreenshots.push(sessionId, { data: Buffer.from(data, 'base64'), source });
-  }
-}
-
 /** 手机端只提供 sessionId；本层解析 exact identity 并执行与桌面一致的 spawn 准入。 */
 function wirePairAgentBridge(): void {
   setPairAgentBridge({
     prompt: (sessionId, text, images) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) promptSession(identity, text, images);
     },
     steer: (sessionId, text, images) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) steerSession(identity, text, images);
     },
@@ -995,14 +904,10 @@ function wirePairSessionHost(): void {
       return spawnBoundSession(identity, request, credentialKeys);
     },
     prompt: (sessionId, text, images) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) promptSession(identity, text, images);
     },
     steer: (sessionId, text, images) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) steerSession(identity, text, images);
     },
@@ -1011,8 +916,6 @@ function wirePairSessionHost(): void {
       if (identity) abortSession(identity);
     },
     setModel: (sessionId, providerId, modelId) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = rootIdentity(sessionId);
       if (!identity) return;
       void readStoredOauthCredentialKeys()
@@ -1020,8 +923,6 @@ function wirePairSessionHost(): void {
         .catch(() => {});
     },
     setReasoning: (sessionId, enabled, level) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (!identity) return;
       const thinking =
@@ -1031,27 +932,19 @@ function wirePairSessionHost(): void {
       setSessionReasoning(identity, enabled, thinking);
     },
     setThinking: (sessionId, level) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (!identity || !(THINKING_LEVELS as readonly string[]).includes(level)) return;
       setSessionThinking(identity, level as ThinkingLevel);
     },
     compact: (sessionId, instructions) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) compactSession(identity, instructions);
     },
     rewind: (sessionId, userIndexFromEnd, restoreFiles) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) rewindSession(identity, userIndexFromEnd, restoreFiles);
     },
     retry: (sessionId) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (identity) retrySession(identity);
     },
@@ -1195,7 +1088,7 @@ const imageGenerationBridge = new ImageGenerationBridge({
     )
       return false;
     const conversation = sourceAuthority?.conversation(identity.sessionId);
-    if (!conversation || conversation.bot || conversation.lifecycle === 'ended') return false;
+    if (!conversation || conversation.lifecycle === 'ended') return false;
     const state = readSettingsState();
     return !resolveDisabledBuiltinTools(state?.disabledBuiltinTools, {
       disabledBuiltinTools: projectDisabledBuiltinTools(
@@ -1226,11 +1119,9 @@ function localPluginConversation(sessionId: string): boolean {
     !!conversation &&
     conversation.kind === 'root' &&
     conversation.lifecycle !== 'ended' &&
-    !conversation.bot &&
     !conversation.superAssistant &&
     project?.state === 'active' &&
-    project.kind !== 'ssh' &&
-    project.kind !== 'bot-home'
+    project.kind !== 'ssh'
   );
 }
 export function pluginSessionGeneration(sessionId: string): string | null {
@@ -1313,12 +1204,7 @@ function pluginBrowserDeps() {
         return { ok: false as const, code: 'ABORTED', message: '浏览器会话已失效' };
       if (!browserToolAllowed(identity))
         return { ok: false as const, code: 'PERMISSION_DENIED', message: '当前会话未启用浏览器' };
-      const actor = browserActorFor(identity.sessionId);
-      return {
-        ok: true as const,
-        sessionKey: browserKeyFor(identity.sessionId),
-        ...(actor ? { actor } : {}),
-      };
+      return { ok: true as const, sessionKey: identity.sessionId };
     },
     isSessionCurrent: (input: PluginBrowserBridgeInput, grant: { authorityVersion?: number }) => {
       if (input.kind === 'ui' && input.op === 'read_range')
@@ -1344,18 +1230,15 @@ function pluginBrowserDeps() {
     },
     currentTabId: (sessionKey: string) => browserHost.agentTabId(sessionKey),
     run: (run: PluginBrowserRunInput) =>
-      browserHost.invoke(run.sessionKey, run.op, run.params, run.actor, {
+      browserHost.invoke(run.sessionKey, run.op, run.params, {
         signal: run.signal,
         guard: run.guard,
       }),
     inspect: (inspect: PluginBrowserInspectInput) =>
-      browserHost.inspectElements(
-        inspect.tabId,
-        inspect.sessionKey,
-        inspect.selector,
-        inspect.actor,
-        { signal: inspect.signal, guard: inspect.guard }
-      ),
+      browserHost.inspectElements(inspect.tabId, inspect.sessionKey, inspect.selector, {
+        signal: inspect.signal,
+        guard: inspect.guard,
+      }),
   };
 }
 
@@ -1506,7 +1389,6 @@ export function registerAgentHandlers(): void {
     if (
       conversation?.kind !== 'root' ||
       conversation.lifecycle === 'ended' ||
-      conversation.bot ||
       conversation.superAssistant
     )
       return null;
@@ -1645,7 +1527,7 @@ export function registerAgentHandlers(): void {
             text: input.prompt,
             images: [],
             fileMentions: [],
-            // 只有 AgentService 的子代理 Run 计请求预算；派发服务的 Bot 成员不带这个标记
+            // 只有 AgentService 的子代理 Run 计请求预算
           },
           true
         ),
@@ -1719,7 +1601,6 @@ export function registerAgentHandlers(): void {
     observePluginPlanEvent(pluginPlanStates, workerEvent);
     dispatchService?.observe(workerEvent);
     agentService?.observe(workerEvent);
-    botWorkerObserver?.(workerEvent);
     humanTimeouts.observe(workerEvent);
     if (workerEvent.type === 'design-hook') {
       // Stop follows abort/release: the action admission pause must not suppress history hooks.
@@ -1850,38 +1731,17 @@ export function registerAgentHandlers(): void {
       return;
     }
     // 回合结束：agent 开的无头 tab 关掉（用户正看的 / 锁住的不动）；parent-ended 强关
-    // Bot 聊天的浏览器由成员共享，随聊天删除才关
-    if (
-      (workerEvent.type === 'turn-completed' || workerEvent.type === 'turn-failed') &&
-      !sharesBrowser(workerEvent.identity.sessionId)
-    ) {
+    if (workerEvent.type === 'turn-completed' || workerEvent.type === 'turn-failed') {
       void browserHost.closeForSession(workerEvent.identity.sessionId);
     }
     if (workerEvent.type === 'turn-completed' || workerEvent.type === 'turn-failed') {
       cancelDeviceRequests(workerEvent.identity.sessionId, workerEvent.identity.generation);
-      browserHost.releaseActor(workerEvent.identity.sessionId);
     }
     if (workerEvent.type === 'parent-ended') {
       forgetParentToolProfile(workerEvent.identity.sessionId);
-      browserHost.forgetActor(workerEvent.identity.sessionId);
-      if (!sharesBrowser(workerEvent.identity.sessionId))
-        void browserHost.closeForSession(workerEvent.identity.sessionId, { force: true });
+
+      void browserHost.closeForSession(workerEvent.identity.sessionId, { force: true });
       computerHost.close(workerEvent.identity.sessionId);
-    }
-    // 压缩成功后，群聊成员下次投递补群状态。
-    if (
-      workerEvent.type === 'compaction' &&
-      workerEvent.state === 'end' &&
-      !workerEvent.error &&
-      !workerEvent.abandoned
-    ) {
-      const bot = sourceAuthority?.conversation(workerEvent.identity.sessionId)?.bot;
-      if (bot?.chatId)
-        getBotServices()?.groups.markCompacted(
-          bot.chatId,
-          bot.botId,
-          workerEvent.identity.sessionId
-        );
     }
     if (workerEvent.type === 'browser-cancel') {
       const pending = pendingBrowser.get(workerEvent.requestId);
@@ -1940,17 +1800,6 @@ export function registerAgentHandlers(): void {
         );
         return;
       }
-      const bot = sourceAuthority?.conversation(sessionId)?.bot;
-      // Task delegates are independent root sessions with chatId:null. Route
-      // their canvas to the current authoritative execution's topic, not Code.
-      const delegations = bot?.delegationId ? getBotServices()?.delegations : undefined;
-      const execution = delegations?.executionOf(sessionId);
-      const botChatId =
-        bot?.chatId ??
-        (execution
-          ? execution.chatId
-          : bot?.delegationId && delegations?.chatIdOf(bot.delegationId)) ??
-        undefined;
       const controller = new AbortController();
       const timeoutMs = designToolTimeoutMs(tool);
       const timer = setTimeout(() => {
@@ -1972,7 +1821,6 @@ export function registerAgentHandlers(): void {
           const result = await getDesignToolBroker().request({
             sessionId,
             cwd,
-            botChatId,
             tool,
             params,
             timeoutMs,
@@ -2037,23 +1885,10 @@ export function registerAgentHandlers(): void {
         browserToolAllowed(identity);
       void (async () => {
         try {
-          const result = await browserHost.invoke(
-            browserKeyFor(identity.sessionId),
-            op,
-            params,
-            browserActorFor(identity.sessionId),
-            { signal: controller.signal }
-          );
+          const result = await browserHost.invoke(identity.sessionId, op, params, {
+            signal: controller.signal,
+          });
           if (!current()) return;
-          if (
-            op === 'screenshot' ||
-            (op === 'cdp' &&
-              params &&
-              typeof params === 'object' &&
-              'method' in params &&
-              params.method === 'Page.captureScreenshot')
-          )
-            cacheBotScreenshots(identity, [result], 'web');
           sendBrowserResultToSession(identity, requestId, { ok: true, result });
         } catch (error) {
           if (current()) reject(error instanceof Error ? error.message : String(error));
@@ -2062,92 +1897,6 @@ export function registerAgentHandlers(): void {
           clearTimeout(timer);
         }
       })();
-      return;
-    }
-    if (workerEvent.type === 'delegation-invoke') {
-      const { identity, requestId, op, params } = workerEvent;
-      try {
-        const conversation = sourceAuthority?.conversation(identity.sessionId);
-        const services =
-          botModeEnabled() && conversation?.bot && agentSessionIndex.isCurrent(identity)
-            ? getBotServices()
-            : undefined;
-        const service = services?.delegations;
-        if (!service || !params || typeof params !== 'object' || Array.isArray(params)) {
-          sendDelegationResultToSession(identity, requestId, {
-            ok: false,
-            error: botModeEnabled()
-              ? 'Bot delegation unavailable or invalid arguments.'
-              : 'disabled',
-          });
-          return;
-        }
-        const input = params as Record<string, unknown>;
-        let result: unknown;
-        if (op === 'group_tasks' && conversation?.bot) {
-          result = groupTasksTool(services, identity.sessionId, conversation.bot, input);
-        } else if (op === 'group_history' && conversation?.bot) {
-          result = groupHistoryTool(services, identity.sessionId, conversation.bot, input);
-        } else if (op === 'routine_propose' && conversation?.bot) {
-          result = routineProposeTool(services, identity.sessionId, conversation.bot, input);
-        } else if (op === 'send_image' && conversation?.bot) {
-          result = sendImageTool(services, identity.sessionId, conversation.bot, input);
-        } else if (
-          op === 'report_blocked' &&
-          typeof input.need === 'string' &&
-          (input.waitFor === undefined || input.waitFor === 'parent' || input.waitFor === 'human')
-        ) {
-          result = service.reportBlocked(identity.sessionId, {
-            need: input.need,
-            ...(input.waitFor ? { waitFor: input.waitFor } : {}),
-          });
-        } else if (
-          op === 'delegate' &&
-          typeof input.to === 'string' &&
-          typeof input.task === 'string' &&
-          (input.context === undefined || typeof input.context === 'string') &&
-          (input.taskId === undefined || typeof input.taskId === 'string') &&
-          (input.deadlineMinutes === undefined || typeof input.deadlineMinutes === 'number') &&
-          (input.keep === undefined || typeof input.keep === 'boolean') &&
-          (input.check === undefined || parseTaskCheck(input.check))
-        ) {
-          const check = parseTaskCheck(input.check);
-          result = service.delegateAndConfirm(identity.sessionId, {
-            to: input.to,
-            task: input.task,
-            ...(typeof input.context === 'string' ? { context: input.context } : {}),
-            ...(typeof input.taskId === 'string' ? { taskId: input.taskId } : {}),
-            ...(typeof input.deadlineMinutes === 'number'
-              ? { deadlineMinutes: input.deadlineMinutes }
-              : {}),
-            ...(input.keep === true ? { keep: true } : {}),
-            ...(check ? { check } : {}),
-          });
-        } else if (
-          op === 'check_delegation' &&
-          (input.id === undefined || typeof input.id === 'string') &&
-          (input.cancel === undefined || typeof input.cancel === 'boolean')
-        ) {
-          result = service.check(identity.sessionId, {
-            ...(typeof input.id === 'string' ? { id: input.id } : {}),
-            ...(typeof input.cancel === 'boolean' ? { cancel: input.cancel } : {}),
-          });
-        } else result = { ok: false, error: 'Invalid delegation arguments.' };
-        void Promise.resolve(result).then(
-          (value) =>
-            sendDelegationResultToSession(identity, requestId, { ok: true, result: value }),
-          (error: unknown) =>
-            sendDelegationResultToSession(identity, requestId, {
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-            })
-        );
-      } catch (error) {
-        sendDelegationResultToSession(identity, requestId, {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
       return;
     }
     if (workerEvent.type === 'plugin-tool-cancel') {
@@ -2320,7 +2069,6 @@ export function registerAgentHandlers(): void {
         .invoke(identity.sessionId, op, params, controller.signal)
         .then(
           (result) => {
-            cacheBotScreenshots(identity, result.screenshots, 'desktop');
             sendComputerResultToSession(identity, requestId, { ok: true, result });
           },
           (error: unknown) =>
@@ -2717,8 +2465,6 @@ export function registerAgentHandlers(): void {
       images?: unknown,
       deliveryId?: unknown
     ): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (
         !identity ||
@@ -2747,8 +2493,6 @@ export function registerAgentHandlers(): void {
       images?: unknown,
       deliveryId?: unknown
     ): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (
         !identity ||
@@ -2771,8 +2515,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_WITHDRAW_STEER,
     (_event, sessionId: unknown, generation: unknown, deliveryId: unknown): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (!identity || identity.generation !== generation || !isDeliveryId(deliveryId))
         return { ok: false, error: 'invalid withdrawal or stale session generation' };
@@ -2798,8 +2540,6 @@ export function registerAgentHandlers(): void {
   );
 
   ipcMain.handle(IPC_CHANNELS.AGENT_RETRY, (_event, sessionId: unknown): AgentActionResult => {
-    const rejected = botControlError(sessionId);
-    if (rejected) return rejected;
     const identity = exactIdentity(sessionId);
     return identity
       ? retrySession(identity)
@@ -2889,8 +2629,6 @@ export function registerAgentHandlers(): void {
       modelId: unknown,
       childGeneration?: unknown
     ) => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (!identity) {
         return { ok: false, error: 'invalid session or stale generation' };
@@ -2899,7 +2637,6 @@ export function registerAgentHandlers(): void {
         'parent' in identity
           ? isMainWebContents(event.sender.id) &&
             childGeneration === identity.generation &&
-            !botControlError(identity.parent.sessionId) &&
             agentSessionIndex.canChangeCoworkerModel(identity)
           : childGeneration === undefined && !identity.sessionId.includes('::cw-');
       if (!canChange()) return { ok: false, error: 'This coworker cannot change models now.' };
@@ -2922,8 +2659,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SET_THINKING,
     (_event, sessionId: unknown, level: unknown): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (!identity || !THINKING_LEVELS.includes(level as ThinkingLevel)) {
         return { ok: false, error: 'invalid thinking level or stale generation' };
@@ -2935,8 +2670,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SET_REASONING,
     (_event, sessionId: unknown, enabled: unknown, level?: unknown): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (!identity || typeof enabled !== 'boolean') {
         return { ok: false, error: 'invalid reasoning input or stale generation' };
@@ -2966,8 +2699,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SET_APPROVAL_MODE,
     async (event, sessionId: unknown, mode: unknown): Promise<AgentActionResult> => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       // Full access also authorizes devices; embedded frames must not be able to select it.
       if (!isDeviceSender(event))
         return { ok: false, error: 'Only the workbench may change approval.' };
@@ -2983,8 +2714,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_SET_PLAN_MODE,
     (_event, sessionId: unknown, active: unknown): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       const command = identity && parseAgentCommand({ type: 'set-plan-mode', identity, active });
       if (!command) return { ok: false, error: 'invalid plan mode or stale generation' };
@@ -3020,7 +2749,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_COMPACT,
     (_event, sessionId: unknown, instructions: unknown): AgentActionResult => {
-      // 压缩不改执行与策略（忙碌时 worker 排队），桌面端对 bot 会话放行；手机 pair 仍拒绝
       const identity = exactIdentity(sessionId);
       if (
         !identity ||
@@ -3036,8 +2764,6 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.AGENT_REWIND,
     (_event, sessionId: unknown, entryId: unknown, restoreFiles: unknown): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       if (
         !identity ||
@@ -3059,8 +2785,6 @@ export function registerAgentHandlers(): void {
       targetConversationId: unknown,
       anchor: unknown
     ): AgentActionResult => {
-      const rejected = botControlError(sessionId);
-      if (rejected) return rejected;
       const identity = exactIdentity(sessionId);
       const record = asRecord(anchor);
       const entryId = typeof record?.entryId === 'string' ? record.entryId : undefined;

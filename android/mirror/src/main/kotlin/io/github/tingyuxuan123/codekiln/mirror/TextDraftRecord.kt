@@ -24,7 +24,8 @@ internal object TextDraftRecord {
      */
     private const val VERSION = 2
     private const val MIN_VERSION = 1
-    private const val MAX_KIND = 2
+    // The retired Chat slot has its own wire tag in both versions. Never reuse it for Code drafts.
+    private const val RETIRED_CHAT_TAG = 1
     private const val MAX_TEXT_BYTES = MAX_TEXT * 3
 
     data class Record(val pairId: String, val entries: Map<DraftKey, String>)
@@ -37,7 +38,7 @@ internal object TextDraftRecord {
     fun normalize(entries: Map<DraftKey, String>): Map<DraftKey, String> {
         val usable = LinkedHashMap<DraftKey, String>()
         for ((key, text) in entries) {
-            if (!isDraftKey(key)) continue
+            if (!isDraftId(key.id)) continue
             if (text.isBlank()) continue
             usable[key] = truncate(text)
         }
@@ -64,7 +65,7 @@ internal object TextDraftRecord {
             out.writeByte(normalized.size)
             // Iteration order is the order of last edit, so eviction still drops the oldest slot after a restart.
             normalized.forEach { (key, text) ->
-                out.writeByte(key.kind.ordinal)
+                out.writeByte(key.kind.recordTag)
                 out.writeUTF(key.id)
                 writeText(out, text)
             }
@@ -84,13 +85,13 @@ internal object TextDraftRecord {
                 require(count <= MAX_ENTRIES) { "Invalid draft record" }
                 val entries = LinkedHashMap<DraftKey, String>()
                 repeat(count) {
-                    val kind = DraftKind.entries.getOrNull(input.readUnsignedByte())?.takeIf { it.ordinal <= MAX_KIND }
-                        ?: throw IllegalArgumentException("Invalid draft record")
+                    val tag = input.readUnsignedByte()
+                    val kind = DraftKind.entries.firstOrNull { it.recordTag == tag }
+                    require(kind != null || tag == RETIRED_CHAT_TAG) { "Invalid draft record" }
                     val id = input.readUTF()
                     val text = if (version >= 2) readText(input) else input.readUTF()
-                    val key = DraftKey(kind, id)
-                    require(isDraftKey(key) && text.isNotBlank() && text.length <= MAX_TEXT) { "Invalid draft record" }
-                    entries[key] = text
+                    require(isDraftId(id) && text.isNotBlank() && text.length <= MAX_TEXT) { "Invalid draft record" }
+                    if (kind != null) entries[DraftKey(kind, id)] = text
                 }
                 require(entries.values.sumOf { it.length } <= MAX_TOTAL) { "Invalid draft record" }
                 require(input.read() == -1) { "Invalid draft record" }
@@ -126,6 +127,6 @@ internal object TextDraftRecord {
         }
     }
 
-    private fun isDraftKey(key: DraftKey): Boolean =
-        key.id.length in 1..MAX_ID_LENGTH && key.id.none(Char::isISOControl)
+    private fun isDraftId(id: String): Boolean =
+        id.length in 1..MAX_ID_LENGTH && id.none(Char::isISOControl)
 }

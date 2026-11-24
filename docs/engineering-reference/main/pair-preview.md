@@ -3,11 +3,11 @@
 ## 行为与所属层
 
 这是 Main 的远端交互渲染能力，不是文件下载、公开 HTTP 隧道或 PWA 同源 HTML 展示。
-Code 顶栏和 Bot 回复下方选择 Main 推导的 HTML / 本地开发服务候选；Web 只接收有界 JPEG，
+Code 会话顶栏选择 Main 推导的 HTML / 本地开发服务候选；Web 只接收有界 JPEG，
 发送有限的点击、滚动、文本和按键命令。HTML、React、Vue/Vite 复用同一预览入口。
 
 - `packages/pair/src/protocol.ts`：`preview-*` 命令、能力声明、画面和输入类型。
-- `src/main/ipc/pairPreview.ts`：会话 / Bot 所有权、project / worktree、权威投影和根身份。
+- `src/main/ipc/pairPreview.ts`：会话 所有权、project / worktree、权威投影和根身份。
 - `src/main/services/pairPreview.ts`：候选推导、不透明 ID、配对归属、容量 / 并发 / 速率和销毁。
 - `pairPreviewBrowser.ts`：专用无持久化分区、沙箱 offscreen 浏览器、截图和可信有限输入。
 - `pairPreviewPolicy.ts`、`pairPreviewStatic.ts`：请求限制、静态 MIME / 目录边界与 Vite 兼容。
@@ -25,7 +25,7 @@ Code 顶栏和 Bot 回复下方选择 Main 推导的 HTML / 本地开发服务�
    固定启动脚本禁用 WebRTC/WebTransport；禁止权限、下载、文件选择、弹窗、子页面和 worker。
 3. 网络只允许选中的数字回环地址及同端口 WS，或隔离 session 私有静态 origin。
    CSP、webRequest 和分区私有黑洞代理叠加，不能调用系统代理或暴露其他端口。
-4. Wire 只收会话 / Bot 标识、不透明候选 ID、previewId 和有限输入，不收 URL、端口、路径或 CDP。
+4. Wire 只收会话 标识、不透明候选 ID、previewId 和有限输入，不收 URL、端口、路径或 CDP。
    开发服务 URL 从 Main 权威助手 / 工具正文提取，用户须显式点选；不扫描端口、不自动执行 npm。
    这是会话授权候选，不代表已验证服务进程属于该项目；不支持任意公网地址或 SSH。
 5. 静态资源每次验证 realpath / inode / 根、普通文件、MIME 和大小；禁遍历、秘密文件和 symlink 逃逸。
@@ -34,7 +34,7 @@ Code 顶栏和 Bot 回复下方选择 Main 推导的 HTML / 本地开发服务�
 6. 画面 data URL（含 base64）最多 700,000 字符，密文保持低于中继 1 MB；不是 JPEG 原始字节限制。
    输入绑定最新 frameId，手机坐标按**实际图像矩形**换算；导航后旧输入不能打到新页。
 7. 同配对一个、全局最多两个（含创建中），每配对一个在途操作；关闭是取消，不排在截图后。
-   断线、解绑、作用域 / 会话切换、Bot 停用、目录消失销毁浏览器；每次操作及加密前后重查权威。
+   断线、解绑、作用域 / 会话切换、目录消失销毁浏览器；每次操作及加密前后重查权威。
    无目录事件的独立权威变更在操作时立即拒绝，最长 30 秒清理周期；闲置 10 分钟释放。
 
 ## 验证与边界

@@ -14,13 +14,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 export interface MentionSearchGroups {
   agents: AgentTypeMentionCandidate[];
-  /** Bot 模式成员（source = bot），与 agent 类型分组展示 */
-  members: AgentTypeMentionCandidate[];
   files: FileMentionCandidate[];
   chats: ChatMentionCandidate[];
 }
 
-export type MentionFolderId = 'agents' | 'members' | 'chats';
+export type MentionFolderId = 'agents' | 'chats';
 
 export interface MentionPickerItem {
   candidate: MentionCandidate;
@@ -31,7 +29,7 @@ export type MentionRootItem =
   | { type: 'folder'; id: MentionFolderId }
   | { type: 'item'; candidate: MentionCandidate; group: MentionFolderId | 'files' };
 
-const FOLDER_IDS: readonly MentionFolderId[] = ['agents', 'members', 'chats'];
+const FOLDER_IDS: readonly MentionFolderId[] = ['agents', 'chats'];
 
 export function flattenMentionGroups(groups: MentionSearchGroups): MentionPickerItem[] {
   return [
@@ -163,8 +161,7 @@ export function groupMentionCandidates(
     ? chats.filter((candidate) => candidate.label.toLocaleLowerCase().includes(normalized))
     : [...chats];
   return {
-    agents: matchingAgents.filter((candidate) => candidate.source !== 'bot'),
-    members: matchingAgents.filter((candidate) => candidate.source === 'bot'),
+    agents: matchingAgents,
     files: matchingFiles,
     chats: matchingChats,
   };
@@ -233,7 +230,7 @@ export function useMentionSearch(
   return useMemo(
     () =>
       query === null
-        ? { agents: [], members: [], files: [], chats: [] }
+        ? { agents: [], files: [], chats: [] }
         : groupMentionCandidates(query, agents, files, chats),
     [agents, files, chats, query]
   );

@@ -1,7 +1,24 @@
 import { allowsCoworkerModelChange } from '@shared/types/agent';
-import type { Conversation } from './index';
+import type { TimelineMessage } from './reducer';
 
-export function coworkerModelControl(conversation: Conversation) {
+/** Keep the policy independent of the desktop store: the phone reuses child tab eligibility. */
+type CoworkerModelState = {
+  parentId?: string;
+  child?: Parameters<typeof allowsCoworkerModelChange>[0];
+  ended?: boolean;
+  historyOnly?: boolean;
+  modelSwitchPending?: boolean;
+  started: boolean;
+  generation?: string;
+  spawning: boolean;
+  status: string;
+  compaction?: 'queued' | 'running';
+  queuedMessages?: readonly unknown[];
+  messages: readonly Pick<TimelineMessage, 'optimistic' | 'deliveryRejected'>[];
+  workspaceMigrating?: boolean;
+};
+
+export function coworkerModelControl(conversation: CoworkerModelState) {
   if (
     !conversation.parentId ||
     !allowsCoworkerModelChange(conversation.child) ||

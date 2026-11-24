@@ -18,7 +18,6 @@ import {
   effectiveDisabledBuiltinAgentTypes,
   isReservedAgentTypeName,
   type SessionIdentity,
-  visibleMemberAgentTypes,
 } from '@shared/builtinAgents';
 import type { CapabilityExecutionEnvelope } from '@shared/capabilities/types';
 import {
@@ -118,7 +117,6 @@ import { ENSO_SYSTEM_PROMPT } from '../../agent/ensoPrompt';
 import agentWorkerPath from '../../agent/index?modulePath';
 import { readSettings } from '../ipc/settings';
 import { agentCommandDispatch } from './agentCommandDispatch';
-import { type MemberAgentType, memberSpawnDescription } from './bots/botAgentType';
 import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
@@ -650,13 +648,6 @@ export function sendAgentCommand(command: AgentCommand): { ok: boolean; error?: 
   return { ok: true };
 }
 
-let memberAgentTypes: () => readonly MemberAgentType[] = () => [];
-
-/** Bot 模块注入在册成员（关闭 Bot 模式时返回空）；每次构造注册表/下发 worker 时现取 */
-export function setMemberAgentTypeSource(source: () => readonly MemberAgentType[]): void {
-  memberAgentTypes = source;
-}
-
 export function agentTypeRegistrySnapshot(): AgentTypeRegistrySnapshot {
   const state = readSettingsState();
   const disabledBuiltinAgentTypes = effectiveDisabledBuiltinAgentTypes(state);
@@ -668,7 +659,6 @@ export function agentTypeRegistrySnapshot(): AgentTypeRegistrySnapshot {
     revision: settingsRevision(state, disabledBuiltinAgentTypes),
     disabledBuiltinAgentTypes,
     customAgentTypes,
-    members: memberAgentTypes(),
   });
 }
 
@@ -818,7 +808,6 @@ const parentPluginScopes = new Map<
   string,
   {
     native: boolean;
-    claude: boolean;
     activePresetId?: string;
   }
 >();
@@ -894,19 +883,16 @@ export function resolveAgentTypeSpawnConfig(
   if (typeKey.startsWith('builtin:')) {
     const name = typeKey.slice('builtin:'.length);
     definition = BUILTIN_AGENT_TYPES.find((entry) => entry.name === name);
-  } else if (typeKey.startsWith('bot:')) {
-    definition = memberAgentTypes().find((entry) => entry.typeKey === typeKey);
   } else {
     const id = typeKey.slice('custom:'.length);
     const scope = context?.parentSessionId
       ? parentPluginScopes.get(context.parentSessionId)
       : undefined;
     const extension = context?.remote || scope?.native === false ? null : getNativePluginRuntime();
-    const plugins = scope?.claude === false ? { ...enabledPlugins(state), agents: [] } : undefined;
     definition = withPluginAgentTypes(
       Array.isArray(state?.agentTypes) ? state.agentTypes.filter(isAgentTypeEntry) : [],
       state,
-      plugins,
+      undefined,
       context?.remote || scope?.native === false
         ? []
         : extension?.agentTypesForSpawn({ activePresetId: scope?.activePresetId })
@@ -1016,21 +1002,6 @@ export function spawnSession(
     rolePrompt?: string;
     extraDisabledTools?: readonly string[];
     omitDispatchTools?: boolean;
-    /** Bot 会话：人设、指令与技能/MCP 选择全由 Main 按成员档案组装，替代预设与插件资源 */
-    bot?: {
-      systemPrompt: string;
-      instruction: { path: string; content: string };
-      skillIds: string[];
-      mcpServerIds: string[];
-      /** 群聊成员会话：worker 挂 group_tasks */
-      groupTasks?: boolean;
-      /** 私聊 / 群聊成员会话（非委派）：worker 挂 routine_propose */
-      routines?: boolean;
-      /** 挂看板任务的委派会话：worker 挂 report_blocked */
-      delegationTask?: boolean;
-      /** 写成员同工作区写协调 */
-      writeLock?: { label: string; ancestors: string[] };
-    };
   }
 ): { ok: boolean; error?: string } {
   if (request.resumeFile && !existsSync(request.resumeFile)) {
@@ -1051,40 +1022,32 @@ export function spawnSession(
     return { ok: false, error: 'Select an assistant approval model in Settings first.' };
   }
   const approvalReviewerSource = reviewer.ok ? reviewer.source : null;
-  const bot = options?.bot;
-  // 本机插件不并入 Bot/远程会话；读取资源不会执行插件代码。
-  const extensionPlugins = remote || bot ? null : getNativePluginRuntime();
-  const overlay = remote || bot ? undefined : presetOverlay(request.presetId, resolvePreset);
+  // 本机插件不并入 远程会话；读取资源不会执行插件代码。
+  const extensionPlugins = remote ? null : getNativePluginRuntime();
+  const overlay = remote ? undefined : presetOverlay(request.presetId, resolvePreset);
   // 保留旧的轻量资源注入，供尚未初始化新运行时的宿主使用。
-  const native =
-    remote || bot || extensionPlugins ? null : nativePluginResources(overlay?.pluginPresetId);
+  const native = remote || extensionPlugins ? null : nativePluginResources(overlay?.pluginPresetId);
   const overlayResult = extensionPlugins?.presetForSpawn(overlay?.pluginPresetId) ?? native?.preset;
   if (overlayResult && !overlayResult.ok && overlay?.required) {
     return { ok: false, error: overlayResult.error };
   }
   const pluginPreset = overlayResult?.ok ? overlayResult : undefined;
-  const preset: Preset | undefined = bot
-    ? { id: 'bot', name: 'bot', skillIds: bot.skillIds, mcpServerIds: bot.mcpServerIds }
-    : (overlay?.preset ?? resolvePreset(request.presetId));
-  const ownKit = bot
-    ? { ok: true as const, systemPrompt: bot.systemPrompt }
-    : resolvePresetPromptKit(preset);
+  const preset = overlay?.preset ?? resolvePreset(request.presetId);
+  const ownKit = resolvePresetPromptKit(preset);
   if (!ownKit.ok) {
     return { ok: false, error: '自定义系统提示词正文读取失败，请重新保存或恢复默认。' };
   }
   const promptKit = mergePresetPromptKit(ownKit, pluginPreset);
-  const instruction = bot
-    ? bot.instruction
-    : pluginPresetInstruction(pluginPreset?.instruction, () =>
-        resolveGlobalInstruction(preset ? { instructionId: preset.instructionId } : undefined)
-      );
+  const instruction = pluginPresetInstruction(pluginPreset?.instruction, () =>
+    resolveGlobalInstruction(preset ? { instructionId: preset.instructionId } : undefined)
+  );
   const state = readSettingsState();
   // Claude 插件：按各自开关现读安装目录，不受预设影响
   const plugins = enabledPlugins(state);
   const activePluginPreset = pluginPreset ? overlay?.pluginPresetId : undefined;
   const skillPaths = [
     ...enabledSkillPaths(preset),
-    ...(bot ? [] : plugins.skillPaths),
+    ...plugins.skillPaths,
     ...(extensionPlugins?.skillPathsForSpawn(activePluginPreset) ?? native?.skillPaths ?? []),
     ...(remote ? [] : bundledDesignSkillPaths(state)),
   ];
@@ -1092,7 +1055,7 @@ export function spawnSession(
   const mcpServers = enabledMcpServers(preset);
   const mcpNames = new Set(mcpServers.map((server) => server.name));
   for (const server of [
-    ...(bot ? [] : plugins.mcpServers),
+    ...plugins.mcpServers,
     ...(extensionPlugins?.mcpServersForSpawn(activePluginPreset) ?? native?.mcpServers ?? []),
   ]) {
     if (!mcpNames.has(server.name)) mcpServers.push(server);
@@ -1109,10 +1072,8 @@ export function spawnSession(
     : configuredAgentTypes(
         authenticatedAccountKeys,
         subagentModels.length > 0,
-        bot ? { ...plugins, agents: [] } : plugins,
-        remote || bot
-          ? []
-          : extensionPlugins?.agentTypesForSpawn({ activePresetId: activePluginPreset })
+        plugins,
+        remote ? [] : extensionPlugins?.agentTypesForSpawn({ activePresetId: activePluginPreset })
       );
   const presetOverrides = pluginPreset ? readPluginPresetOverrides(pluginPreset) : undefined;
   // 固定禁用必须进入 scope，避免全局工具热更新重新启用插件预设禁止的工具。
@@ -1215,20 +1176,14 @@ export function spawnSession(
     ...(promptKit.systemPromptAppend ? { systemPromptAppend: promptKit.systemPromptAppend } : {}),
     ...(promptKit.systemPromptBoost ? { systemPromptBoost: promptKit.systemPromptBoost } : {}),
     ...(promptKit.refusalRetryPrompt ? { refusalRetryPrompt: promptKit.refusalRetryPrompt } : {}),
-    ...(options?.bot ? { botMode: true } : {}),
-    ...(options?.bot?.groupTasks ? { botGroupTasks: true } : {}),
-    ...(options?.bot?.routines ? { botRoutines: true } : {}),
-    ...(options?.bot?.delegationTask ? { botDelegationTask: true } : {}),
-    ...(options?.bot?.writeLock ? { botWriteLock: options.bot.writeLock } : {}),
-    ...(options?.bot || state?.protectedActionsInCode === true ? { protectedActions: true } : {}),
+    ...(state?.protectedActionsInCode === true ? { protectedActions: true } : {}),
   });
   if (
     sent.ok &&
     builtinToolScopes.remember(identity, projectId, extraDisabledTools, presetApplied.disabledTools)
   ) {
     parentPluginScopes.set(identity.sessionId, {
-      native: !remote && !bot,
-      claude: !bot,
+      native: !remote,
       ...(activePluginPreset ? { activePresetId: activePluginPreset } : {}),
     });
     rememberParentToolProfile(identity.sessionId, {
@@ -1569,14 +1524,6 @@ export function sendDesignResultToSession(
   return sendAgentCommand({ type: 'design-result', identity, requestId, ...outcome });
 }
 
-export function sendDelegationResultToSession(
-  identity: SessionIdentity,
-  requestId: string,
-  outcome: { ok: true; result: unknown } | { ok: false; error: string }
-): { ok: boolean; error?: string } {
-  return sendAgentCommand({ type: 'delegation-result', identity, requestId, ...outcome });
-}
-
 export function sendComputerResultToSession(
   identity: SessionIdentity | ChildSessionIdentity,
   requestId: string,
@@ -1711,8 +1658,7 @@ export function steerSession(
   identity: SessionIdentity,
   text: string,
   images?: AttachedImage[],
-  deliveryId?: string,
-  activeOnly?: true
+  deliveryId?: string
 ): { ok: boolean; error?: string } {
   return sendAgentCommand({
     type: 'steer',
@@ -1720,7 +1666,6 @@ export function steerSession(
     text,
     ...(images?.length ? { images } : {}),
     ...(deliveryId ? { deliveryId } : {}),
-    ...(activeOnly ? { activeOnly } : {}),
   });
 }
 
@@ -2166,39 +2111,7 @@ export function configuredAgentTypes(
         : {}),
     };
   });
-  const members = visibleMemberAgentTypes(memberAgentTypes(), custom).map(
-    (entry): AgentTypeSpawnConfig => {
-      const resources = resolveAgentTypeResources(entry);
-      const bound =
-        entry.providerId && entry.modelId
-          ? resolveModelSelection(entry.providerId, entry.modelId, authenticatedAccountKeys)
-          : null;
-      return {
-        name: entry.typeKey,
-        description: memberSpawnDescription(entry),
-        systemPrompt: entry.systemPrompt,
-        tools: entry.tools,
-        allowModelOverride: false,
-        ...(resources.ok && resources.skillPaths.length > 0
-          ? { skillPaths: [...resources.skillPaths] }
-          : {}),
-        ...(resources.ok && resources.mcpServers.length > 0
-          ? { mcpServers: [...resources.mcpServers] }
-          : {}),
-        ...(bound?.ok ? { model: bound.selection.config } : {}),
-        // 与 custom 分支/resolveAgentTypeSpawnConfig 同口径：白名单过滤，非法不透传
-        ...(MODEL_REASONING_OVERRIDES.includes(entry.reasoning as ModelReasoningOverride)
-          ? { reasoning: entry.reasoning as ModelReasoningOverride }
-          : {}),
-        ...(MODEL_THINKING_LEVEL_OVERRIDES.includes(
-          entry.thinkingLevel as ModelThinkingLevelOverride
-        )
-          ? { thinkingLevel: entry.thinkingLevel as ModelThinkingLevelOverride }
-          : {}),
-      };
-    }
-  );
-  return [...builtins, ...customs, ...members];
+  return [...builtins, ...customs];
 }
 
 /** 设置页「允许子代理指定模型」列表 → 解析凭证后随 spawn-parent 下发（开关关闭/不可用静默跳过） */
@@ -2731,7 +2644,7 @@ function spawnModelConfig(
     ...(isOauthAccountPool(provider) ? { oauthAccountPool: provider.oauthAccountPool } : {}),
     // 统一目录后 OAuth 条目 models 只承载稀疏用户覆盖（enabled/别名/能力/档位），
     // 行覆盖对 OAuth 同样生效；旧守卫丢弃它们是因为那时行是 catalog 冻结拷贝。
-    // 已知过渡窗口：renderer 水合才执行 v16 稀疏化，Main 先读（bot 自启/tray）时
+    // 已知过渡窗口：renderer 水合才执行 v16 稀疏化，Main 先读（tray）时
     // v15 稠密行的 catalog 能力字段会被当覆盖透传——只影响子会话档位且水合后自愈，接受。
     ...pickModelCapabilityOverrides(entry),
   };

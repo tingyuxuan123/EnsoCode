@@ -11,7 +11,6 @@ export interface ActivityTabContextValue {
 	/** EnsoCode: owner of the mounted canvas; prevents stale callbacks changing chat target. */
 	sessionId?: string;
 	/** EnsoCode: a Bot tab is pinned to its chat's selected deliverable. */
-	bot?: { chatId: string; path: string };
 	/** Whether this tab is the selected docked tab or a visible floating tab. */
 	active: boolean;
 }

@@ -14,29 +14,28 @@ import {
   VIRTUAL_PROVIDER_ID,
   type VirtualModelEntry,
 } from '@shared/virtualModels';
-import { BadgeCheck, Brain, Check, ChevronDown, KeyRound, Shuffle, Sparkle } from 'lucide-react';
+import {
+  BadgeCheck,
+  Brain,
+  Check,
+  ChevronDown,
+  KeyRound,
+  Search,
+  Shuffle,
+  Sparkle,
+} from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { providerDisplayName } from '@/components/settings/chatgptPool';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from '@/components/ui/menu';
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { Switch } from '@/components/ui/switch';
 import { prefetchAccountUsage, useCachedAccountUsage } from '@/hooks/useAccountUsage';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useModelMeta } from '@/stores/modelMeta';
 import { formatTokens } from '@/stores/sessions/stats';
-import { interceptRootCascadeEscape, markSubmenuOpen } from './modelPickerCascadeEsc';
+import { pickRailKey, providerRailKey, showsPickerRail, VIRTUAL_RAIL_KEY } from './modelPickerRail';
 import { type SessionUsageAccount, usageAccountKeyForProvider } from './sessionUsageAccount';
 import { ThinkingLevelSlider } from './ThinkingLevelSlider';
 import { showsThinkingSlider } from './thinkingLevelTrack';
@@ -110,7 +109,7 @@ const LEVEL_LABEL_KEYS: Record<ThinkingLevel, string> = {
 
 /**
  * 账号身份数据来自厂商侧（外部输入），渲染前在解析边界做防御性兜底：剔除控制字符
- * （避免破坏渲染/布局），超长截断（避免撑破固定宽度的级联菜单，配合渲染侧的 max-w+truncate
+ * （避免破坏渲染/布局），超长截断（避免撑破固定宽度的菜单，配合渲染侧的 max-w+truncate
  * 双重兜底，不是互相替代）。
  */
 function sanitizeAccountText(value: string, maxLength: number): string {
@@ -125,32 +124,10 @@ function sanitizeAccountText(value: string, maxLength: number): string {
 }
 
 /**
- * 单个条目超过这个模型数时，二级子菜单顶部出现局部过滤框。
- * 依据：子菜单高度上限 `max-h-64`(16rem/256px)，单行约 32px，约能容纳 8 行不滚动、
- * 加余量到约 12-15 行仍算"一眼扫得完"；超过 20 条基本必然要滚动，线性翻找体验开始变差，
- * 这时给一个局部过滤框比继续滚动更划算。⚠️ 与顶部跨条目全局搜索是两回事，互不干扰。
- */
-const SUBMENU_FILTER_THRESHOLD = 20;
-
-/** 同一条目内展示名（label ?? id）重复的已启用模型；这些行需附 id 才能区分（如 Cursor 上游重名）。 */
-export function duplicateModelLabels(models: readonly ModelEntry[]): Set<string> {
-  const seen = new Set<string>();
-  const duplicated = new Set<string>();
-  for (const model of models) {
-    if (model.enabled === false) continue;
-    const name = model.label ?? model.id;
-    if (seen.has(name)) duplicated.add(name);
-    else seen.add(name);
-  }
-  return duplicated;
-}
-
-/**
  * base-ui Menu 在弹层打开时会把方向键/回车/Esc 当菜单导航、把可打印字符当 typeahead 处理——
- * 后者会在 keydown 阶段抢先 `preventDefault()`，导致弹层内任何 `<input>`（顶部全局搜索框、
- * 二级子菜单过滤框）完全打不进字。修法是只拦截"会被当 typeahead 吞掉"的按键，方向键/回车/Esc/Tab
- * 仍放行冒泡给 Menu 的根级键盘处理器——这样搜索/过滤框能正常打字，同时不破坏原生的方向键选中、
- * 右键进子菜单、回车确认、Esc 逐级退出（这正是选级联 Menu 组件而不是手写两栏的收益，不能丢）。
+ * 后者会在 keydown 阶段抢先 `preventDefault()`，导致弹层内的搜索框完全打不进字。修法是只拦截
+ * "会被当 typeahead 吞掉"的按键，方向键/回车/Esc/Tab 仍放行冒泡给 Menu 的根级键盘处理器——
+ * 这样搜索框能正常打字，同时不破坏方向键选中、回车确认、Esc 关闭。
  */
 const MENU_NAV_KEYS: Record<string, true> = {
   ArrowUp: true,
@@ -168,7 +145,7 @@ function stopTypeaheadOnly(e: KeyboardEvent<HTMLInputElement>): void {
 
 interface ModelPickerProps {
   providers: ModelProvider[];
-  /** 传入时在顶部列出虚拟模型（仅会话主模型与默认模型的选择场景） */
+  /** 传入时在条目轨里多一个虚拟模型入口（仅会话主模型与默认模型的选择场景） */
   virtualModels?: readonly VirtualModelEntry[];
   /** 选中虚拟模型时附在触发器上的实际路由模型 */
   routedModelLabel?: string;
@@ -185,7 +162,7 @@ interface ModelPickerProps {
   onReasoningModeChange?: (mode: 'follow' | 'on' | 'off', level: ThinkingLevel) => void;
   /** 仅当前选中自定义模型的条目覆盖；OAuth 能力仍以 catalog 为准。 */
   modelCapabilityOverrides?: ModelCapabilityOverrides;
-  /** 仅需 provider/account/model 级联的场景可隐藏 reasoning/thinking。 */
+  /** 仅需 provider/model 级联的场景可隐藏推理栏。 */
   showReasoningControls?: boolean;
   /** 仅会话工具行：响应全局「切换模型」快捷键并聚焦搜索框 */
   listenHotkey?: boolean;
@@ -267,30 +244,30 @@ function ModelMetaBridge({
 }
 
 /**
- * 一行模型的内容：名称 + （可选）所属条目标签 + 上下文窗口 + 选中标记。
- * 同一条目里显示名重复时，id 单独放在名称下一行（小字），避免和名称挤在同一行被截断。
- * 窗口缺失时整段不渲染
- * （不留占位符，有值才显示；`catalog-fallback` 来源仍标「估算」——那是有值，只是不够权威，
- * ⛔ 不编造数字）。
+ * 一行模型的内容：名称 + 模型 id（小字）+ （可选）所属条目标签 + 上下文窗口 + 选中标记。
+ *
+ * 模型 id 恒定显示而不是「重名时才显示」：一个网关背后挂多个上游时，
+ * `auto/gpt-6.2-sol` 和 `gonshi/gpt-6.1-sol` 的显示名可能一模一样，而 id 是唯一稳定的身份；
+ * 每行都带 id 也让行高恒定，切换条目时列表不会忽高忽低。
+ *
+ * 窗口缺失时整段不渲染（不留占位符，有值才显示；`catalog-fallback` 来源仍标「估算」——
+ * 那是有值，只是不够权威，⛔ 不编造数字）。
  *
  * ⚠️ 选中标记的槽位恒定占宽（`selected` 为 false 时槽位仍渲染，只是内部空着），不能写成
  * `selected && <Check/>` 那种整个节点条件渲染——`MenuItem` 是 flex 行，名称那一列用的是
  * `flex-1`（会自动吃掉行内剩余空间），选中标记要是时有时无，行内其余 shrink-0 兄弟元素的
- * 总宽度就会跟着变，挤压/放宽名称列，导致上下文窗口值的横坐标随选中状态左右跳动。槽位恒定后，
- * 同一份内容（同名称/同条目标签）无论选中与否，窗口值都落在同一个横坐标上。
+ * 总宽度就会跟着变，挤压/放宽名称列，导致上下文窗口值的横坐标随选中状态左右跳动。
  */
 function ModelRowContent({
   model,
   meta,
   entryTag,
   selected,
-  showId,
 }: {
   model: ModelEntry;
   meta: ModelMeta | undefined;
   entryTag?: string;
   selected: boolean;
-  showId?: boolean;
 }) {
   const { t } = useI18n();
   // 行覆盖（ModelEntry.contextWindow，含 Fetch Models 落地的元数据）优先于 catalog；
@@ -303,27 +280,23 @@ function ModelRowContent({
     meta?.source === 'catalog-fallback';
   return (
     <>
-      {showId ? (
-        <span className="flex min-w-0 flex-1 flex-col items-start">
-          <span className="max-w-full truncate">{model.label ?? model.id}</span>
-          <span
-            data-model-row-id={model.id}
-            className="max-w-full truncate font-mono text-[calc(11rem/14)] leading-3 text-muted-foreground"
-          >
-            {model.id}
-          </span>
+      <span className="flex min-w-0 flex-1 flex-col items-start justify-center">
+        <span className="max-w-full truncate">{model.label ?? model.id}</span>
+        <span
+          data-model-row-id={model.id}
+          className="max-w-full truncate font-mono text-[calc(10.5rem/14)] leading-[calc(14rem/14)] text-muted-foreground/65"
+        >
+          {model.id}
         </span>
-      ) : (
-        <span className="min-w-0 flex-1 truncate">{model.label ?? model.id}</span>
-      )}
+      </span>
       {entryTag && (
-        <span className="shrink-0 truncate text-[calc(11rem/14)] text-muted-foreground/60">
+        <span className="max-w-24 shrink-0 truncate text-[calc(11rem/14)] text-muted-foreground/60">
           {entryTag}
         </span>
       )}
       {windowTokens !== undefined && (
         <span
-          className="shrink-0 text-[calc(11rem/14)] tabular-nums text-muted-foreground/70"
+          className="shrink-0 text-[calc(10.5rem/14)] tabular-nums text-muted-foreground/70"
           title={estimated ? t('Estimated context window (catalog fallback)') : t('Context window')}
         >
           {formatTokens(windowTokens)}
@@ -338,10 +311,10 @@ function ModelRowContent({
 }
 
 /**
- * 一个供应商「条目」（订阅账号或 API-key 配置）在菜单里的展示名。
+ * 一个供应商「条目」（订阅账号或 API-key 配置）在列表顶部的展示名。
  * 读法与设置页 `ProvidersSettings.tsx` 同款口径对齐（同一套账号信息，不让用户学两遍）：
  * 订阅条目主位放账号身份——邮箱优先，没有邮箱退回账号 key，都没有才退回 provider.name
- * （厂商名已经是分组标题，不重复放主位）；`plan` 单独返回供调用方渲染成徽标。
+ * （厂商名已经是列表顶部的分组名，不重复放主位）；`plan` 单独返回供调用方渲染成徽标。
  * API-key 条目主位仍是 `provider.name`（用户自定义命名本身就是区分信息），host 当副标题。
  */
 function entryLabelOf(
@@ -371,101 +344,64 @@ function entryLabelOf(
   return { primary: provider.name, secondary: host, isSubscription: false };
 }
 
-/**
- * 二级子菜单的模型列表：固定高度上限 + 内部滚动；条目模型数超过 `SUBMENU_FILTER_THRESHOLD`
- * 时顶部加一个只收窄本条目的局部过滤框，并在底部标"显示 N / 共 M"。
- * ⚠️ 局部过滤 state 是这个组件自己的（每个 provider 条目独立一份），不与顶部跨条目全局搜索共享。
- * 过滤框故意不做"子菜单打开即自动 focus"：那样会抢走 base-ui Menu 原生落在子菜单第一项上的
- * 方向键导航焦点——键盘可达是选级联 Menu 组件的主要收益之一，不能丢；用户想用过滤框时点一下
- * 即可。`onKeyDown` 仍然要接 `stopTypeaheadOnly`（只拦可打印字符，放行方向键/回车/Esc），
- * 否则 Menu 的 typeahead 会吞掉这个输入框的按键（和顶部搜索框同一个坑，同一个修法）。
- */
-function ProviderSubmenuList({
-  provider,
-  meta,
-  selectedProviderId,
-  selectedModelId,
-  onSelectModel,
-}: {
-  provider: ModelProvider;
-  meta: Record<string, ModelMeta> | undefined;
-  selectedProviderId: string;
-  selectedModelId: string;
-  onSelectModel: (modelId: string) => void;
-}) {
-  const { t } = useI18n();
-  const [filter, setFilter] = useState('');
-  const enabledModels = useMemo(
-    () => provider.models.filter((m) => m.enabled !== false),
-    [provider.models]
-  );
-  const duplicatedLabels = useMemo(() => duplicateModelLabels(enabledModels), [enabledModels]);
-  const showFilter = enabledModels.length > SUBMENU_FILTER_THRESHOLD;
-  const visibleModels = useMemo(() => {
-    if (!showFilter || !filter.trim()) return enabledModels;
-    const q = filter.trim();
-    return enabledModels
-      .map((model) => ({
-        model,
-        score: bestFieldScore(q, [
-          [model.id, 1],
-          [model.label ?? '', 1],
-        ]),
-      }))
-      .filter((entry): entry is { model: ModelEntry; score: number } => entry.score !== null)
-      .sort((a, b) => b.score - a.score)
-      .map((entry) => entry.model);
-  }, [showFilter, filter, enabledModels]);
+/** 条目轨上的一个入口：订阅账号 / API-key 网关 / 虚拟模型。图标位放条目首字母，重名靠 title 区分。 */
+interface RailEntry {
+  key: string;
+  providerId?: string;
+  title: string;
+  initial: string;
+  isVirtual: boolean;
+}
 
+/** 没有图标时用条目名首字符做头像，和 open-vetta 的第一栏同一种读法。 */
+function railInitial(label: string): string {
+  return Array.from(label.trim())[0]?.toUpperCase() ?? '?';
+}
+
+/**
+ * 条目轨的一项。用 MenuItem 而不是裸 button：菜单的方向键导航只认 MenuItem，
+ * 裸 button 会被排除在 roving focus 之外，键盘用户就切不了条目。
+ * `closeOnClick={false}`——切条目只换右两栏的内容，不该顺手关掉整个浮层。
+ */
+function RailItem({
+  entry,
+  active,
+  onSelect,
+}: {
+  entry: RailEntry;
+  active: boolean;
+  onSelect: () => void;
+}) {
   return (
-    <>
-      {showFilter && (
-        <div className="-mx-1 -mt-1 mb-1 border-b p-1.5">
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={stopTypeaheadOnly}
-            placeholder={t('Filter models in this entry')}
-            className="h-7 w-full rounded-md border bg-transparent px-2 text-[calc(11rem/14)] outline-none placeholder:text-muted-foreground focus:border-ring"
-          />
-        </div>
+    <MenuItem
+      closeOnClick={false}
+      data-model-picker-rail={entry.key}
+      aria-current={active ? 'true' : undefined}
+      title={entry.title}
+      onClick={onSelect}
+      className={cn(
+        'size-9 min-h-0 shrink-0 justify-center gap-0 rounded-[7px] p-0 text-[calc(11.5rem/14)] font-semibold',
+        active
+          ? 'bg-accent text-accent-foreground data-highlighted:bg-accent'
+          : 'text-muted-foreground'
       )}
-      <div className="max-h-64 overflow-y-auto">
-        {visibleModels.map((model) => (
-          <MenuItem key={model.id} onClick={() => onSelectModel(model.id)}>
-            <ModelRowContent
-              model={model}
-              meta={meta?.[model.id]}
-              showId={duplicatedLabels.has(model.label ?? model.id)}
-              selected={provider.id === selectedProviderId && model.id === selectedModelId}
-            />
-          </MenuItem>
-        ))}
-        {visibleModels.length === 0 && (
-          <p className="px-2 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
-            {t('No models found')}
-          </p>
-        )}
-      </div>
-      {showFilter && (
-        <p className="-mx-1 -mb-1 mt-1 border-t px-2 py-1 text-[calc(11rem/14)] text-muted-foreground/60">
-          {t('Showing {{shown}} of {{total}} models', {
-            shown: visibleModels.length,
-            total: enabledModels.length,
-          })}
-        </p>
+    >
+      {entry.isVirtual ? (
+        <Shuffle className="size-4" />
+      ) : (
+        <span className="leading-none">{entry.initial}</span>
       )}
-    </>
+    </MenuItem>
   );
 }
 
-/** 订阅条目子菜单顶部的额度块：子菜单展开时才拉取（60s 共享缓存）；无数据/出错静默隐藏 */
-function SubmenuUsage({ accountKey }: { accountKey: string }) {
+/** 当前条目是订阅账号时，列表顶部的额度块：只在该条目被展开时拉取（60s 共享缓存）；无数据/出错静默隐藏 */
+function EntryUsage({ accountKey }: { accountKey: string }) {
   const { t } = useI18n();
   const info = useCachedAccountUsage(accountKey);
   if (!info || info.error || info.windows.length === 0) return null;
   return (
-    <div className="-mx-1 -mt-1 mb-1 space-y-1 border-b px-3 py-2">
+    <div className="shrink-0 space-y-1 border-b border-border/60 px-2 py-1.5">
       {info.windows.map((windowInfo) => (
         <div
           key={windowInfo.label}
@@ -505,14 +441,15 @@ interface SearchHit {
   provider: ModelProvider;
   model: ModelEntry;
   entryTag: string;
-  showId: boolean;
   score: number;
 }
 
 /**
- * composer 工具行的模型选择：级联菜单 —— 一级是供应商「条目」（按厂商用组标题归拢，
- * 同厂商多账号/自定义多网关各占独立一级项），hover/点击展开二级模型子菜单；
- * 关键词非空时改为跨条目的扁平模糊搜索列表。
+ * 模型选择浮层：三栏——条目轨（账号 / 网关 / 虚拟模型）｜所选条目的模型列表（顶部跨条目搜索）
+ * ｜所选模型的推理档位。结构对齐 open-vetta 的选模型面板：来源不占一次点击，模型不再藏在二级菜单；
+ * 推理控制件仍用本应用自己的开关 + 档位滑杆，只是从列表底部搬到右栏，和它真正作用的模型对齐。
+ *
+ * 关键词非空时中间栏改为跨条目的扁平模糊搜索列表。
  */
 export function ModelPicker({
   providers,
@@ -545,14 +482,15 @@ export function ModelPicker({
   const reasoningInherited = reasoningMode === 'follow';
   const thinkingInherited = reasoningMode !== undefined && !modelCapabilityOverrides?.thinkingLevel;
   const [open, setOpen] = useState(false);
+  /** 浮层要贴整张输入条，而不是贴胶囊：贴胶囊会盖住输入区上半部，贴输入条则整块浮在它上面 */
+  const [composerAnchor, setComposerAnchor] = useState<HTMLElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [keyword, setKeyword] = useState('');
-  const openSubmenuIdsRef = useRef(new Set<string>());
-  const searchFocusedRef = useRef(false);
+  const [activeRailKey, setActiveRailKey] = useState<string | undefined>();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchFocusRef = useRef(false);
   const openRef = useRef(open);
   openRef.current = open;
-  const [hoverLockedIds, setHoverLockedIds] = useState<ReadonlySet<string>>(new Set());
   const [oauthInfos, setOauthInfos] = useState<OauthProviderInfo[]>([]);
   const [metaByProvider, setMetaByProvider] = useState<Record<string, Record<string, ModelMeta>>>(
     {}
@@ -599,8 +537,8 @@ export function ModelPicker({
   const groups = useMemo(() => groupProviders(providers, oauthInfos), [providers, oauthInfos]);
 
   // 弹层打开时才刷新订阅账号展示名（登录/登出可能已发生），关闭时不必轮询。
-  // 同时预热所有订阅账号的额度：额度探测要打厂商端点（可能秒级延迟），
-  // 若等到子菜单展开才拉，hover 停留期间往往还没返回；预热后命中 60s 共享缓存。
+  // 同时预热订阅账号的额度：额度探测要打厂商端点（可能秒级延迟），
+  // 若等切到该条目才拉，第一次展开往往还没返回；预热后命中 60s 共享缓存。
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -616,24 +554,21 @@ export function ModelPicker({
     };
   }, [open, providers, activeAccount]);
 
-  // 打开时只清搜索词。搜索框 tabIndex=-1，避免根菜单 initialFocus 落到第一个可聚焦的
-  // input 上；级联态焦点必须留在 Menu item，Esc 才能逐级退。点进搜索框 / 有关键词才是
-  // 搜索模式，那时没有级联，Esc 一次关整棵。快捷键打开则主动聚焦搜索框。
+  // 打开时只清搜索词，并把条目轨回到「当前模型所属条目」——上次浏览的条目不该成为这次的开场。
+  // 搜索框 tabIndex=-1，避免根菜单 initialFocus 落到第一个可聚焦的 input 上；
+  // 级联退场后 Esc 一律关整棵，所以没有「先退搜索再关菜单」这一层了。
   useEffect(() => {
     if (!open) return;
     setKeyword('');
-    openSubmenuIdsRef.current.clear();
-    setHoverLockedIds(new Set());
+    const trigger = wrapperRef.current?.querySelector<HTMLElement>('[data-model-picker="trigger"]');
+    // 只有输入条里的胶囊才换锚点；设置页/表单里的选择器依旧贴自己的触发器
+    setComposerAnchor(trigger?.closest<HTMLElement>('[data-slot="composer"]') ?? null);
     const focusSearch = pendingSearchFocusRef.current;
     pendingSearchFocusRef.current = false;
-    searchFocusedRef.current = focusSearch;
     if (!focusSearch) return;
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        searchFocusedRef.current = true;
-      });
+      raf2 = requestAnimationFrame(() => searchInputRef.current?.focus());
     });
     return () => {
       cancelAnimationFrame(raf1);
@@ -646,7 +581,6 @@ export function ModelPicker({
     const onHotkey = () => {
       if (openRef.current) {
         searchInputRef.current?.focus();
-        searchFocusedRef.current = true;
         return;
       }
       pendingSearchFocusRef.current = true;
@@ -664,7 +598,7 @@ export function ModelPicker({
     return table;
   }, [oauthInfos]);
 
-  // 每个 provider 条目对应的厂商名 + 条目展示名，供二级子菜单标题与搜索命中行的消歧标签共用
+  // 每个 provider 条目对应的厂商名 + 条目展示名，供列表顶部标题与搜索命中行的消歧标签共用
   const entryInfoByProviderId = useMemo(() => {
     const table: Record<
       string,
@@ -695,13 +629,6 @@ export function ModelPicker({
   }, []);
 
   const searching = keyword.trim().length > 0;
-  const searchingRef = useRef(searching);
-  searchingRef.current = searching;
-
-  useEffect(() => {
-    if (!searching) return;
-    openSubmenuIdsRef.current.clear();
-  }, [searching]);
 
   const searchHits = useMemo<SearchHit[]>(() => {
     if (!searching) return [];
@@ -710,7 +637,6 @@ export function ModelPicker({
     for (const provider of providers) {
       const info = entryInfoByProviderId[provider.id];
       const entryTag = info ? `${info.vendorLabel} · ${info.primary}` : provider.name;
-      const duplicatedLabels = duplicateModelLabels(provider.models);
       for (const model of provider.models) {
         if (model.enabled === false) continue;
         const score = bestFieldScore(q, [
@@ -720,13 +646,7 @@ export function ModelPicker({
           [info?.vendorLabel ?? '', 0.4],
         ]);
         if (score === null) continue;
-        hits.push({
-          provider,
-          model,
-          entryTag,
-          score,
-          showId: duplicatedLabels.has(model.label ?? model.id),
-        });
+        hits.push({ provider, model, entryTag, score });
       }
     }
     return hits.sort((a, b) => b.score - a.score);
@@ -740,13 +660,14 @@ export function ModelPicker({
         : selectableVirtualModels,
     [searching, keyword, selectableVirtualModels]
   );
+  /** 虚拟模型行：条目轨与搜索态共用一份，选择仍回传虚拟引用 */
   const virtualItems = virtualHits.map((entry) => (
     <MenuItem
       key={`virtual/${entry.id}`}
       data-model-picker-virtual={entry.id}
       onClick={() => handleSelectModel(VIRTUAL_PROVIDER_ID, entry.id)}
     >
-      <Shuffle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <Shuffle className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">{entry.name}</span>
       <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
         {currentVirtual?.id === entry.id && <Check className="h-3.5 w-3.5 text-brand" />}
@@ -843,45 +764,85 @@ export function ModelPicker({
     normalizeThinking,
   ]);
 
-  const handleRootOpenChange = useCallback(
-    (
-      nextOpen: boolean,
-      details: { reason?: string; cancel: () => void; allowPropagation: () => void }
-    ) => {
-      if (
-        interceptRootCascadeEscape(nextOpen, details, {
-          openSubmenuCount: openSubmenuIdsRef.current.size,
-          searchFocused: searchFocusedRef.current || searchingRef.current,
-        })
-      ) {
-        setHoverLockedIds(new Set(openSubmenuIdsRef.current));
-        return;
+  /** 条目轨：虚拟模型排第一，其余按厂商分组顺序平铺（同厂商多账号 / 多网关各占一项） */
+  const railEntries = useMemo<RailEntry[]>(() => {
+    const entries: RailEntry[] = [];
+    if (selectableVirtualModels.length > 0) {
+      entries.push({
+        key: VIRTUAL_RAIL_KEY,
+        title: t('Virtual models'),
+        initial: '',
+        isVirtual: true,
+      });
+    }
+    for (const group of groups) {
+      for (const provider of group.providers) {
+        const info = entryInfoByProviderId[provider.id];
+        const primary = info?.primary ?? provider.name;
+        entries.push({
+          key: providerRailKey(provider.id),
+          providerId: provider.id,
+          title: [info?.vendorLabel, primary].filter(Boolean).join(' · '),
+          initial: railInitial(primary),
+          isVirtual: false,
+        });
       }
-      if (!nextOpen) {
-        openSubmenuIdsRef.current.clear();
-        searchFocusedRef.current = false;
-        setHoverLockedIds(new Set());
-      }
-      setOpen(nextOpen);
-    },
-    []
+    }
+    return entries;
+  }, [groups, entryInfoByProviderId, selectableVirtualModels, t]);
+
+  const railKeys = useMemo(() => railEntries.map((entry) => entry.key), [railEntries]);
+  // 用户点过就以点击为准；没点过 / 条目已被删（账号移除、设置页未选模型）时回落到当前模型所属条目。
+  // 用原始 providerId 而不是 capabilityRef：虚拟模型的能力按主模型算，但它自己的家在虚拟条目里。
+  const railKey =
+    activeRailKey && railKeys.includes(activeRailKey)
+      ? activeRailKey
+      : pickRailKey(railKeys, providerId);
+  const activeEntry = railEntries.find((entry) => entry.key === railKey);
+  const activeProvider = activeEntry?.providerId
+    ? providers.find((provider) => provider.id === activeEntry.providerId)
+    : undefined;
+  const activeInfo = activeEntry?.providerId
+    ? entryInfoByProviderId[activeEntry.providerId]
+    : undefined;
+  const activeModels = useMemo(
+    () => activeProvider?.models.filter((m) => m.enabled !== false) ?? [],
+    [activeProvider]
   );
+  // 额度只跟当前条目走：池模式下用当前会话实际接替的账号，避免把别的成员额度当成这一条的
+  const activeAccountKey = activeProvider
+    ? usageAccountKeyForProvider(activeProvider, activeAccount)
+    : undefined;
+  const railTitle = activeEntry?.isVirtual
+    ? t('Virtual models')
+    : (activeInfo?.vendorLabel ?? activeProvider?.name ?? '');
+  const entryMeta = activeEntry?.isVirtual
+    ? undefined
+    : [activeInfo?.primary, activeInfo?.secondary].filter(Boolean).join(' · ');
+  const currentModelLabel = currentVirtual?.name ?? current?.label ?? current?.id ?? modelId;
 
   return (
-    <div className={cn('min-w-0 max-w-full', triggerClassName && 'w-full')}>
-      <Menu open={open} onOpenChange={handleRootOpenChange}>
+    <div ref={wrapperRef} className={cn('min-w-0 max-w-full', triggerClassName && 'w-full')}>
+      <Menu open={open} onOpenChange={setOpen}>
         <MenuTrigger
           data-model-picker="trigger"
+          data-open={open ? '' : undefined}
           className={cn(
-            'flex h-[calc(28rem/14)] min-w-14 max-w-64 shrink items-center gap-[4px] rounded-[6px] px-[8px] text-[calc(12rem/14)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'flex h-[calc(28rem/14)] min-w-14 max-w-64 shrink items-center gap-[calc(6rem/14)] rounded-[6px] px-[calc(8rem/14)] text-[calc(12rem/14)] transition-colors',
+            // 常态是一枚安静的胶囊：淡底 + 前景色文字，而不是一行悬在输入条上的灰字
+            formTrigger
+              ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              : 'bg-muted/45 text-foreground hover:bg-muted',
+            // 展开态与浮层同开同关：胶囊被点亮，浮层才有「从这里长出来」的锚点
+            !formTrigger && open && 'bg-muted',
             triggerClassName
           )}
           title={triggerLabel}
         >
           {!formTrigger && (
-            <Sparkle className="size-[calc(14rem/14)] shrink-0 text-primary" aria-hidden />
+            <Sparkle className="size-[calc(14rem/14)] shrink-0 text-brand" aria-hidden />
           )}
-          <span className="flex min-w-0 items-center gap-1">
+          <span className="flex min-w-0 items-center gap-[calc(6rem/14)]">
             <span className="min-w-0 truncate">{triggerLabel}</span>
             {hasSelection && showReasoningControls && reasoningMode ? (
               <span
@@ -898,230 +859,271 @@ export function ModelPicker({
                 {reasoningMode === 'on' && ` · ${t(LEVEL_LABEL_KEYS[displayedThinkingLevel])}`}
               </span>
             ) : hasSelection && showReasoningControls && displayedReasoningEnabled ? (
+              // 档位是一枚小块而不是跟模型名并排的散字：名字可能很长，档位需要在被截断时仍然读得到
               <span
-                className="flex shrink-0 items-center gap-0.5 text-primary"
+                className="flex h-[calc(17rem/14)] shrink-0 items-center gap-[3px] rounded-[4px] bg-brand/[0.14] px-[calc(4rem/14)] text-brand"
                 data-trigger-thinking={displayedThinkingLevel}
               >
-                <Brain className="h-3 w-3" />
-                {t(LEVEL_LABEL_KEYS[displayedThinkingLevel])}
+                <Brain className="h-[calc(11rem/14)] w-[calc(11rem/14)]" />
+                <span className="text-[calc(10.5rem/14)] font-medium leading-none">
+                  {t(LEVEL_LABEL_KEYS[displayedThinkingLevel])}
+                </span>
               </span>
             ) : null}
           </span>
-          <ChevronDown className={cn('h-3 w-3 shrink-0', formTrigger && 'ms-auto opacity-80')} />
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 shrink-0 transition-transform',
+              formTrigger && 'ms-auto opacity-80',
+              open && '-rotate-180'
+            )}
+          />
         </MenuTrigger>
         <MenuPopup
           data-model-picker="root"
           side={side}
-          align="start"
-          className="w-80"
+          // 输入条里：整块浮在输入条上方、右边缘对齐输入条右边缘
+          anchor={composerAnchor ?? undefined}
+          align={composerAnchor ? 'end' : 'start'}
+          sideOffset={composerAnchor ? 6 : 4}
+          className="w-[596px] max-w-[calc(100vw-1rem)]"
           zIndex={zIndex}
         >
           {providers.map((provider) => (
             <ModelMetaBridge key={provider.id} provider={provider} onData={handleMetaData} />
           ))}
 
-          <div className="-mx-1 -mt-1 mb-1 border-b p-2">
-            <input
-              ref={searchInputRef}
-              data-model-picker="search"
-              tabIndex={-1}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onFocus={() => {
-                searchFocusedRef.current = true;
-              }}
-              onBlur={() => {
-                searchFocusedRef.current = false;
-              }}
-              onKeyDown={stopTypeaheadOnly}
-              placeholder={t('Search models')}
-              className="h-8 w-full rounded-md border bg-transparent px-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-ring"
-            />
-          </div>
-
-          <div className="max-h-72 overflow-y-auto">
-            {searching ? (
-              <>
-                {virtualItems}
-                {searchHits.map(({ provider, model, entryTag, showId }) => (
-                  <MenuItem
-                    key={`${provider.id}/${model.id}`}
-                    onClick={() => handleSelectModel(provider.id, model.id)}
-                  >
-                    <ModelRowContent
-                      model={model}
-                      meta={metaByProvider[provider.id]?.[model.id]}
-                      entryTag={entryTag}
-                      showId={showId}
-                      selected={provider.id === providerId && model.id === modelId}
-                    />
-                  </MenuItem>
-                ))}
-                {searchHits.length === 0 && virtualItems.length === 0 && (
-                  <p className="px-1 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
-                    {t('No models found')}
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                {virtualItems.length > 0 && (
-                  <MenuGroup>
-                    <MenuGroupLabel>{t('Virtual models')}</MenuGroupLabel>
-                    {virtualItems}
-                  </MenuGroup>
-                )}
-                {groups.map((group) => (
-                  <MenuGroup key={group.vendorId}>
-                    <MenuGroupLabel>
-                      {group.vendorId === CUSTOM_VENDOR_ID ? t('Custom') : group.label}
-                    </MenuGroupLabel>
-                    {group.providers.map((provider) => {
-                      const info = entryInfoByProviderId[provider.id];
-                      const accountKey = usageAccountKeyForProvider(provider, activeAccount);
-                      const isSubscription =
-                        info?.isSubscription ?? Boolean(provider.oauthAccountKey);
-                      return (
-                        <MenuSub
-                          key={provider.id}
-                          onOpenChange={(next) => {
-                            markSubmenuOpen(openSubmenuIdsRef.current, provider.id, next);
-                          }}
-                        >
-                          <MenuSubTrigger
-                            openOnHover={!hoverLockedIds.has(provider.id)}
-                            onPointerLeave={() => {
-                              setHoverLockedIds((prev) => {
-                                if (!prev.has(provider.id)) return prev;
-                                const next = new Set(prev);
-                                next.delete(provider.id);
-                                return next;
-                              });
-                            }}
-                          >
-                            {isSubscription ? (
-                              <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            ) : (
-                              <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            )}
-                            <span className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
-                              <span className="w-full truncate text-left">
-                                {info?.primary ?? provider.name}
-                              </span>
-                              {info?.secondary && (
-                                <span className="w-full truncate text-left text-[calc(11rem/14)] text-muted-foreground/60">
-                                  {info.secondary}
-                                </span>
-                              )}
-                            </span>
-                            {info?.plan && (
-                              <Badge
-                                variant="outline"
-                                size="sm"
-                                className="max-w-20 shrink-0 truncate text-[calc(11rem/14)] uppercase"
-                              >
-                                {info.plan}
-                              </Badge>
-                            )}
-                            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-                              {provider.id === providerId && (
-                                <Check className="h-3.5 w-3.5 text-brand" />
-                              )}
-                            </span>
-                          </MenuSubTrigger>
-                          <MenuSubPopup
-                            data-model-picker="submenu"
-                            className="w-72"
-                            zIndex={zIndex}
-                          >
-                            {accountKey && <SubmenuUsage accountKey={accountKey} />}
-                            <ProviderSubmenuList
-                              provider={provider}
-                              meta={metaByProvider[provider.id]}
-                              selectedProviderId={providerId}
-                              selectedModelId={modelId}
-                              onSelectModel={(mid) => handleSelectModel(provider.id, mid)}
-                            />
-                          </MenuSubPopup>
-                        </MenuSub>
-                      );
-                    })}
-                  </MenuGroup>
-                ))}
-                {groups.length === 0 && virtualItems.length === 0 && (
-                  <p className="px-1 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
-                    {t('No models found')}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-
-          {showReasoningControls && (
-            <div className="-mx-1 -mb-1 mt-1 border-t p-3">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1 text-[calc(11rem/14)]">
-                  <Brain className="h-3.5 w-3.5 text-muted-foreground" />
-                  {t('Reasoning')}
-                </span>
-                {!reasoningMode && (
-                  <Switch
-                    tabIndex={-1}
-                    aria-label={t('Reasoning')}
-                    checked={displayedReasoningEnabled}
-                    onCheckedChange={onReasoningChange}
-                    disabled={reasoningUnsupported}
+          {/* 三栏面板：抵消 MenuPopup 内层容器的 6px 内边距，自己管分栏与滚动 */}
+          <div
+            data-model-picker="panel"
+            className="-m-1.5 flex overflow-hidden rounded-[5px]"
+            style={{ height: 'min(368px, calc(var(--available-height, 420px) - 12px))' }}
+          >
+            {showsPickerRail(railKeys) && (
+              <div
+                data-model-picker="rail"
+                className="flex w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border/60 bg-muted/40 p-1"
+              >
+                {railEntries.map((entry) => (
+                  <RailItem
+                    key={entry.key}
+                    entry={entry}
+                    active={entry.key === railKey}
+                    onSelect={() => setActiveRailKey(entry.key)}
                   />
-                )}
+                ))}
               </div>
-              {reasoningMode && (
-                <div className="mt-2 flex gap-1" role="group" aria-label={t('Reasoning')}>
-                  {(['follow', 'on', 'off'] as const).map((mode) => (
-                    <Button
-                      key={mode}
-                      type="button"
-                      size="sm"
-                      variant={reasoningMode === mode ? 'default' : 'outline'}
-                      className="h-7 flex-1 px-2 text-[calc(11rem/14)]"
-                      aria-pressed={reasoningMode === mode}
-                      data-reasoning-mode={mode}
-                      disabled={
-                        mode === 'on' && !!currentProvider?.oauthAccountKey && reasoningUnsupported
-                      }
-                      onClick={() => onReasoningModeChange?.(mode, displayedThinkingLevel)}
-                    >
-                      {t(mode === 'follow' ? 'Follow parent' : mode === 'on' ? 'On' : 'Off')}
-                    </Button>
-                  ))}
-                </div>
-              )}
-              {reasoningUnsupported && (!reasoningMode || !!currentProvider?.oauthAccountKey) && (
-                <p className="mt-1 text-[calc(11rem/14)] text-muted-foreground/70">
-                  {t('{{model}} does not support reasoning', { model: current?.label ?? modelId })}
-                </p>
-              )}
+            )}
 
-              {/* 当前档由滑杆的滑块 + 高亮标签共同表达，不再重复一行"深度：xx"。
-                  只有一个可用档时不画滑杆：没有可调范围，禁用态只会让人以为坏了 */}
-              {displayedReasoningEnabled && visibleLevels.length === 1 && (
-                <p
-                  className="mt-2 text-[calc(11rem/14)] text-muted-foreground"
-                  data-thinking-fixed=""
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="shrink-0 p-2 pb-1">
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70"
+                    aria-hidden
+                  />
+                  <input
+                    ref={searchInputRef}
+                    data-model-picker="search"
+                    tabIndex={-1}
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    onKeyDown={stopTypeaheadOnly}
+                    placeholder={t('Search models, accounts or gateways')}
+                    className={cn(
+                      'h-8 w-full rounded-[6px] border bg-transparent pl-7 text-[calc(12rem/14)] outline-none placeholder:text-muted-foreground focus:border-ring',
+                      listenHotkey && !keyword ? 'pr-11' : 'pr-2'
+                    )}
+                  />
+                  {listenHotkey && !keyword && (
+                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 rounded-[4px] border px-1 font-mono text-[calc(10rem/14)] leading-[calc(15rem/14)] text-muted-foreground/70">
+                      ⌘P
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {searching ? (
+                <div
+                  data-model-picker="results"
+                  className="min-h-0 flex-1 overflow-y-auto px-1 pb-1"
                 >
-                  {t(LEVEL_LABEL_KEYS[visibleLevels[0]])}
-                </p>
-              )}
-              {displayedReasoningEnabled && showsThinkingSlider(visibleLevels.length) && (
-                <ThinkingLevelSlider
-                  levels={visibleLevels}
-                  level={displayedThinkingLevel}
-                  labels={LEVEL_LABEL_KEYS}
-                  ariaLabel={t('Thinking level')}
-                  onChange={onThinkingChange}
-                />
+                  {virtualItems}
+                  {searchHits.map(({ provider, model, entryTag }) => (
+                    <MenuItem
+                      key={`${provider.id}/${model.id}`}
+                      onClick={() => handleSelectModel(provider.id, model.id)}
+                    >
+                      <ModelRowContent
+                        model={model}
+                        meta={metaByProvider[provider.id]?.[model.id]}
+                        entryTag={entryTag}
+                        selected={provider.id === providerId && model.id === modelId}
+                      />
+                    </MenuItem>
+                  ))}
+                  {searchHits.length === 0 && virtualItems.length === 0 && (
+                    <p className="px-1 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
+                      {t('No models found')}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* 条目头：厂商名留在左，账号邮箱 / 网关地址跟右——来源信息不丢，但不占一次点击 */}
+                  <div className="flex h-7 shrink-0 items-center gap-1.5 px-2">
+                    <span className="flex min-w-0 shrink items-center gap-1 text-[calc(11rem/14)] text-muted-foreground">
+                      {activeEntry?.isVirtual ? (
+                        <Shuffle className="size-3 shrink-0" aria-hidden />
+                      ) : activeInfo?.isSubscription ? (
+                        <BadgeCheck className="size-3 shrink-0" aria-hidden />
+                      ) : (
+                        <KeyRound className="size-3 shrink-0" aria-hidden />
+                      )}
+                      <span className="truncate">{railTitle}</span>
+                    </span>
+                    {entryMeta && (
+                      <span className="min-w-0 flex-1 truncate text-right font-mono text-[calc(10.5rem/14)] text-muted-foreground/60">
+                        {entryMeta}
+                      </span>
+                    )}
+                    {activeInfo?.plan && (
+                      <Badge
+                        variant="outline"
+                        size="sm"
+                        className="max-w-20 shrink-0 truncate text-[calc(10rem/14)] uppercase"
+                      >
+                        {activeInfo.plan}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {activeAccountKey && <EntryUsage accountKey={activeAccountKey} />}
+
+                  <div
+                    data-model-picker="models"
+                    className="min-h-0 flex-1 overflow-y-auto px-1 pb-1"
+                  >
+                    {activeEntry?.isVirtual
+                      ? virtualItems
+                      : activeModels.map((model) => (
+                          <MenuItem
+                            key={model.id}
+                            onClick={() => handleSelectModel(activeProvider?.id ?? '', model.id)}
+                          >
+                            <ModelRowContent
+                              model={model}
+                              meta={
+                                activeProvider
+                                  ? metaByProvider[activeProvider.id]?.[model.id]
+                                  : undefined
+                              }
+                              selected={activeProvider?.id === providerId && model.id === modelId}
+                            />
+                          </MenuItem>
+                        ))}
+                    {(activeEntry?.isVirtual
+                      ? virtualItems.length === 0
+                      : activeModels.length === 0) && (
+                      <p className="px-1 py-4 text-center text-[calc(11rem/14)] text-muted-foreground">
+                        {t('No models found')}
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
             </div>
-          )}
+
+            {/* 推理栏：开关 / 三态 + 档位滑杆，与它真正作用的那个模型同栏 */}
+            {showReasoningControls && (
+              <div
+                data-model-picker="reasoning"
+                className="flex w-[212px] shrink-0 flex-col border-l border-border/60 bg-muted/25 px-2.5 py-2"
+              >
+                <div className="flex h-6 shrink-0 items-center justify-between gap-2">
+                  <span className="flex items-center gap-1 text-[calc(11rem/14)] text-muted-foreground">
+                    <Brain className="size-3.5" aria-hidden />
+                    {t('Reasoning')}
+                  </span>
+                  {!reasoningMode && (
+                    <Switch
+                      tabIndex={-1}
+                      aria-label={t('Reasoning')}
+                      checked={displayedReasoningEnabled}
+                      onCheckedChange={onReasoningChange}
+                      disabled={reasoningUnsupported}
+                    />
+                  )}
+                </div>
+                {hasSelection && (
+                  <p
+                    className="mt-0.5 shrink-0 truncate text-[calc(11rem/14)] text-muted-foreground/70"
+                    title={currentModelLabel}
+                  >
+                    {currentModelLabel}
+                  </p>
+                )}
+
+                {reasoningMode && (
+                  <div
+                    className="mt-2 flex shrink-0 gap-1"
+                    role="group"
+                    aria-label={t('Reasoning')}
+                  >
+                    {(['follow', 'on', 'off'] as const).map((mode) => (
+                      <Button
+                        key={mode}
+                        type="button"
+                        size="sm"
+                        variant={reasoningMode === mode ? 'default' : 'outline'}
+                        className="h-7 min-w-0 flex-1 px-1 text-[calc(11rem/14)]"
+                        aria-pressed={reasoningMode === mode}
+                        data-reasoning-mode={mode}
+                        disabled={
+                          mode === 'on' &&
+                          !!currentProvider?.oauthAccountKey &&
+                          reasoningUnsupported
+                        }
+                        onClick={() => onReasoningModeChange?.(mode, displayedThinkingLevel)}
+                      >
+                        {t(mode === 'follow' ? 'Follow parent' : mode === 'on' ? 'On' : 'Off')}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 当前档由滑杆的滑块 + 高亮标签共同表达，不再重复一行"深度：xx"。
+                    只有一个可用档时不画滑杆：没有可调范围，禁用态只会让人以为坏了 */}
+                <div className="flex min-h-0 flex-1 flex-col justify-center">
+                  {displayedReasoningEnabled && visibleLevels.length === 1 && (
+                    <p
+                      className="text-[calc(11rem/14)] text-muted-foreground"
+                      data-thinking-fixed=""
+                    >
+                      {t(LEVEL_LABEL_KEYS[visibleLevels[0]])}
+                    </p>
+                  )}
+                  {displayedReasoningEnabled && showsThinkingSlider(visibleLevels.length) && (
+                    <ThinkingLevelSlider
+                      levels={visibleLevels}
+                      level={displayedThinkingLevel}
+                      labels={LEVEL_LABEL_KEYS}
+                      ariaLabel={t('Thinking level')}
+                      onChange={onThinkingChange}
+                    />
+                  )}
+                </div>
+
+                {reasoningUnsupported && (!reasoningMode || !!currentProvider?.oauthAccountKey) && (
+                  <p className="shrink-0 text-[calc(11rem/14)] leading-[calc(16rem/14)] text-muted-foreground/70">
+                    {t('{{model}} does not support reasoning', {
+                      model: current?.label ?? modelId,
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </MenuPopup>
       </Menu>
     </div>

@@ -3,6 +3,14 @@ import { cn } from '@/lib/utils';
 /** 上下文进度条转为警示色的阈值 */
 const WARNING_PERCENT = 70;
 
+/**
+ * 半程阈值：0–49% 用最淡的一档，50% 起提亮一档，色相不变。
+ * 为什么不是加一档颜色：70% 的黄已经意味着「该看一看了」，50% 只是「用了一半」，
+ * 换色相会把正常的半程误读成警报；而 12px 的环上 40%/50%/60% 的弧长几乎分不出来，
+ * 只靠弧长读不出「过半」。提亮一档既不改语义，又能和刚开聊区分开。
+ */
+const HALF_PERCENT = 50;
+
 /** 圆环的半径与线宽（viewBox 单位）：14px 显示时环宽约 1.75px，和图标笔画同量级。 */
 const RING_RADIUS = 5;
 const RING_STROKE = 1.75;
@@ -14,9 +22,10 @@ function clampPercent(percent: number): number {
   return Math.min(100, Math.max(0, percent));
 }
 
-function toneOf(percent: number, critical: boolean): 'critical' | 'warning' | 'normal' {
+function toneOf(percent: number, critical: boolean): 'critical' | 'warning' | 'half' | 'normal' {
   if (critical) return 'critical';
-  return percent >= WARNING_PERCENT ? 'warning' : 'normal';
+  if (percent >= WARNING_PERCENT) return 'warning';
+  return percent >= HALF_PERCENT ? 'half' : 'normal';
 }
 
 /**
@@ -48,7 +57,9 @@ export function ContextMeter({
             ? 'text-destructive'
             : tone === 'warning'
               ? 'text-warning'
-              : 'text-muted-foreground/60'
+              : tone === 'half'
+                ? 'text-muted-foreground'
+                : 'text-muted-foreground/60'
         )}
       >
         <svg viewBox="0 0 12 12" aria-hidden className="size-[calc(12rem/14)] -rotate-90">
@@ -89,7 +100,9 @@ export function ContextMeter({
             ? 'bg-destructive'
             : tone === 'warning'
               ? 'bg-warning'
-              : 'bg-muted-foreground/60'
+              : tone === 'half'
+                ? 'bg-muted-foreground'
+                : 'bg-muted-foreground/60'
         )}
         style={{ width: `${clampPercent(percent)}%` }}
       />

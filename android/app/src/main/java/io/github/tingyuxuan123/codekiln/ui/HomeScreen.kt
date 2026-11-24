@@ -42,7 +42,6 @@ internal fun HomeScreen(
     onPair: () -> Unit,
     onTask: (String) -> Unit,
     onBoard: () -> Unit,
-    onMembers: () -> Unit,
     onSettings: () -> Unit,
     onUnavailable: () -> Unit,
 ) {
@@ -78,8 +77,6 @@ internal fun HomeScreen(
                         HomeEntry(EnsoIcon.NewTask, "新任务", state.project ?: "", onNew)
                         HomeEntry(EnsoIcon.Board, "任务看板",
                             state.tasks.count { it.status == TaskStatus.Waiting }.let { if (it > 0) "$it 个等你" else "" }, onBoard)
-                        HomeEntry(EnsoIcon.Users, "成员",
-                            if (state.pendingMemberCount > 0) "${state.pendingMemberCount} 条待处理" else "", onMembers)
                         HomeEntry(EnsoIcon.Scan, "连接电脑", state.computer ?: "尚未配对", onPair)
                     }
                 }

@@ -23,8 +23,6 @@ const RENDERER_ONLY_PACKAGES = [
   '@xterm/xterm',
   'class-variance-authority',
   'clsx',
-  'cytoscape',
-  'cytoscape-fcose',
   'dockview-react',
   'framer-motion',
   'hast-util-sanitize',

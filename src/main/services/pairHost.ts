@@ -21,7 +21,6 @@ import {
   type PairFileTarget,
   type PairScope,
   type PairSyncCursor,
-  type PhoneToHost,
   type ProjectEntry,
   type ProjectGroupEntry,
   type ProviderEntry,
@@ -56,7 +55,6 @@ import type {
   AttachedImage,
   RendererAgentEvent,
 } from '@shared/types/agent';
-import { isBotId } from '@shared/types/bot';
 import type {
   PairCreatedSession,
   PairQueueAction,
@@ -71,7 +69,6 @@ import { requestSnapshot, setPinnedSessions } from './agentHost';
 import { ApprovalNotificationGate } from './approvalNotificationGate';
 import { MacosSystemSleepAssertion } from './macosSystemSleepAssertion';
 import { readNotifyMainAgentOnly } from './notifications';
-import type { BotSessionAccess } from './pairBotFrames';
 import { PAIR_DIRECT_ENABLED, PAIR_STUN_SERVERS } from './pairDirectConfig';
 import { isDirectPeerAvailable, mainDirectPeerFactory, preloadDirectPeer } from './pairDirectPeer';
 import type { PairFileCommand, PairFilePort } from './pairFiles';
@@ -79,7 +76,6 @@ import type { PairImagePort, SessionImageCommand, SessionImageFrame } from './pa
 import { flushChangedMeta, requestPairMeta } from './pairMetaFlush';
 import { startPairNetworkWatch } from './pairNetworkWatch';
 import {
-  botCommandError,
   checkSetModel,
   checkSpawn,
   narrowSnapshot,
@@ -283,27 +279,6 @@ export function setPairQueueActionListener(listener: (action: PairQueueAction) =
   onQueueAction = listener;
 }
 
-export type PairBotCommand = Extract<
-  PhoneToHost,
-  {
-    type:
-      | 'bot-catalog-request'
-      | 'bot-group-create'
-      | 'bot-direct-open'
-      | 'bot-send'
-      | 'bot-chat-open'
-      | 'bot-timeline'
-      | 'bot-stop'
-      | 'bot-new-session'
-      | 'bot-thread-create'
-      | 'bot-thread-select'
-      | 'bot-retry'
-      | 'bot-inbox-request'
-      | 'bot-inbox-dismiss'
-      | 'bot-artifacts'
-      | 'bot-artifact-image';
-  }
->;
 export type PairReply = (message: HostToPhone, valid?: () => boolean) => Promise<boolean>;
 
 let previewPort: PairPreviewPort | null = null;
@@ -318,7 +293,7 @@ function releasePreview(conn: Connection): void {
   previewPort?.release(conn.device.pairId);
 }
 
-/** Main authority/mode changes must tear down browsers, not merely hide their frames. */
+/** Main authority changes must tear down browsers, not merely hide their frames. */
 export function releasePairPreviews(): void {
   for (const conn of connections.values()) releasePreview(conn);
 }
@@ -336,54 +311,12 @@ export function setPairImagePort(port: PairImagePort | null): void {
   imagePort = port;
 }
 
-/**
- * Bot 模式挂点（ipc/pairBots 注入）：pairHost 只做传输。
- * Bot 成员会话不在 renderer 会话表里，订阅时由它判定放行与快照来源。
- */
-export interface PairBotPort {
-  handle(pairId: string, command: PairBotCommand, reply: PairReply): Promise<void>;
-  /** 进房/重同步：补推 Bot 目录 */
-  resync(pairId: string, reply: PairReply): void;
-  sessionAccess(sessionId: string): BotSessionAccess;
-  /** worker 无投影的 Bot 会话：由会话文件合成 snapshot 事件 */
-  coldSnapshot(sessionId: string): Promise<RendererAgentEvent | null>;
-  /** 推送标题：Bot 会话不在目录里 */
-  sessionTitle(sessionId: string): string | undefined;
-  observe(event: RendererAgentEvent): void;
-}
-
-let botPort: PairBotPort | null = null;
-
-export function setPairBotPort(port: PairBotPort | null): void {
-  if (botPort !== port) for (const conn of connections.values()) releasePreview(conn);
-  botPort = port;
-}
-
-/** 发给所有在线手机（Bot 事件/目录广播） */
-export function broadcastPairFrame(message: HostToPhone): void {
-  for (const conn of connections.values()) {
-    if (conn.phoneOnline) void send(conn, message);
-  }
-}
-
 export function isPairSessionRunning(sessionId: string): boolean {
   return runningTaskIds.has(sessionId);
 }
 
-/** 订阅/分页要快照：Bot 会话不走 renderer 恢复，冷会话由 Bot 层合成快照 */
 function snapshotForPhone(sessionId: string, resume: boolean): void {
-  const access = botPort?.sessionAccess(sessionId) ?? 'none';
-  if (access === 'deny') return;
-  if (access === 'cold') {
-    void botPort
-      ?.coldSnapshot(sessionId)
-      .then((event) => {
-        if (event) forwardSnapshot(event);
-      })
-      .catch((error) => console.warn('[pair] bot session snapshot failed', error));
-    return;
-  }
-  if (access === 'none' && resume) onResumeRequest?.(sessionId);
+  if (resume) onResumeRequest?.(sessionId);
   requestSnapshot(sessionId);
 }
 
@@ -993,10 +926,7 @@ function replayHealthy(conn: Connection): boolean {
 
 function previewTargetAccessible(conn: Connection, target: PairFileTarget): boolean {
   return (
-    !('sessionId' in target) ||
-    (target.sessionId === conn.subscribedId &&
-      catalog.some((entry) => entry.id === target.sessionId) &&
-      botPort?.sessionAccess(target.sessionId) !== 'deny')
+    target.sessionId === conn.subscribedId && catalog.some((entry) => entry.id === target.sessionId)
   );
 }
 
@@ -1045,13 +975,7 @@ function handlePreviewCommand(
 }
 
 function fileTargetAccessible(conn: Connection, target: PairFileTarget): boolean {
-  if (
-    'sessionId' in target &&
-    (target.sessionId !== conn.subscribedId ||
-      !catalog.some((entry) => entry.id === target.sessionId) ||
-      botPort?.sessionAccess(target.sessionId) === 'deny')
-  )
-    return false;
+  if (!previewTargetAccessible(conn, target)) return false;
   try {
     return filePort?.canAccess?.(target) ?? true;
   } catch {
@@ -1066,11 +990,7 @@ function fileUnavailable(command: PairFileCommand, error = 'unavailable'): HostT
 }
 
 function sessionImageAccessible(conn: Connection, sessionId: string): boolean {
-  if (
-    sessionId !== conn.subscribedId ||
-    !catalog.some((entry) => entry.id === sessionId) ||
-    botPort?.sessionAccess(sessionId) === 'deny'
-  )
+  if (sessionId !== conn.subscribedId || !catalog.some((entry) => entry.id === sessionId))
     return false;
   try {
     return imagePort?.canAccess?.(sessionId) ?? false;
@@ -1203,18 +1123,6 @@ function isCurrentSync(conn: Connection, revision: number, sessionId: string): b
   );
 }
 
-/** 结构校验失败但带合法 requestId 的创建命令：回失败回执，手机不必等到超时。 */
-function malformedCreationReply(payload: unknown): HostToPhone | null {
-  if (typeof payload !== 'object' || payload === null || !('type' in payload)) return null;
-  const requestId = 'requestId' in payload ? payload.requestId : undefined;
-  if (!isBotId(requestId)) return null;
-  if (payload.type === 'bot-group-create')
-    return { type: 'bot-group-create-result', requestId, ok: false, error: 'invalid-request' };
-  if (payload.type === 'bot-direct-open')
-    return { type: 'bot-direct-open-result', requestId, ok: false, error: 'invalid-request' };
-  return null;
-}
-
 async function handleFrame(
   conn: Connection,
   frame: Uint8Array,
@@ -1258,9 +1166,6 @@ async function handleFrame(
   const parsed = parsePhoneCommand(payload);
   if (!parsed.ok) {
     console.warn(`[pair] command rejected: ${parsed.error}`);
-    // A valid correlation identity can settle a malformed creation without reaching Bot services.
-    const rejected = malformedCreationReply(payload);
-    if (rejected) void send(conn, rejected);
     return;
   }
   const command = parsed.command;
@@ -1268,16 +1173,6 @@ async function handleFrame(
     console.warn(`[pair] command rejected: ${command.type} needs operate scope`);
     void send(conn, scopeRejection(command));
     return;
-  }
-  if ('sessionId' in command && command.sessionId) {
-    const error = botCommandError(
-      command.type,
-      (botPort?.sessionAccess(command.sessionId) ?? 'none') !== 'none'
-    );
-    if (error) {
-      console.warn(`[pair] command rejected: ${error}`);
-      return;
-    }
   }
   switch (command.type) {
     case 'preview-list':
@@ -1312,10 +1207,6 @@ async function handleFrame(
       agentBridge?.respondAsk(command.sessionId, command.requestId, command.answer);
       break;
     case 'subscribe': {
-      if (command.sessionId && botPort?.sessionAccess(command.sessionId) === 'deny') {
-        console.warn('[pair] subscribe rejected: bot mode disabled');
-        return;
-      }
       // 只有「同一个未答 sync」且还在突发窗口内的重复订阅才吞掉；窗口外一律重新要快照。
       // requestId 不参与去重：手机上换号重订阅时 pendingSync 已换成最新号，在途快照到达即按新号兑现。
       const waiting =
@@ -1426,26 +1317,6 @@ async function handleFrame(
       if (command.sessionId !== conn.subscribedId) return;
       conn.pendingHistory = command.beforeIndex;
       snapshotForPhone(command.sessionId, false);
-      break;
-    case 'bot-catalog-request':
-    case 'bot-group-create':
-    case 'bot-direct-open':
-    case 'bot-send':
-    case 'bot-chat-open':
-    case 'bot-timeline':
-    case 'bot-stop':
-    case 'bot-new-session':
-    case 'bot-thread-create':
-    case 'bot-thread-select':
-    case 'bot-retry':
-    case 'bot-inbox-request':
-    case 'bot-inbox-dismiss':
-    case 'bot-artifacts':
-    case 'bot-artifact-image':
-      // 发送可能要等 spawn：不卡本连接的收帧队列
-      void botPort
-        ?.handle(conn.device.pairId, command, (message) => send(conn, message))
-        .catch((error) => console.warn('[pair] bot command failed', error));
       break;
     case 'push-subscribe':
       setPushSubscription(conn.device.pairId, command.subscription);
@@ -1618,7 +1489,6 @@ function enqueueSend(
 }
 
 function send(conn: Connection, message: HostToPhone, guard?: SendGuard): Promise<boolean> {
-  if (message.type === 'bot-catalog' && !message.enabled) releasePreview(conn);
   return enqueueSend(conn, message, false, guard);
 }
 
@@ -1659,7 +1529,6 @@ function resyncGuestMeta(conn: Connection, forgetCatalog = true): void {
     conn.providersSentAt = undefined;
   }
   requestMeta(conn);
-  botPort?.resync(conn.device.pairId, (message) => send(conn, message));
 }
 
 async function sendMeta(conn: Connection): Promise<void> {
@@ -1853,7 +1722,6 @@ export function forwardAgentEvent(event: RendererAgentEvent): void {
   const shouldNotify = approvalPushNotifications.observe(event);
   runningTaskIds = applyPairPowerTaskEvent(runningTaskIds, event);
   syncPowerBlocker();
-  botPort?.observe(event);
   const e = event as {
     type: string;
     sessionId?: string;
@@ -1877,8 +1745,7 @@ export function forwardAgentEvent(event: RendererAgentEvent): void {
       if (shouldNotify && hasPushSubscription(conn.device.pairId)) {
         const payload = buildPushPayload(
           e,
-          catalog.find((entry) => entry.id === flatSessionId)?.title ??
-            (flatSessionId ? botPort?.sessionTitle(flatSessionId) : undefined),
+          catalog.find((entry) => entry.id === flatSessionId)?.title,
           readNotifyMainAgentOnly(),
           // 静音会话不给配对设备推送；目录与时间线照常同步
           flatSessionId ? isSessionMuted(flatSessionId) : false

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -499,6 +499,20 @@ describe('浏览器休眠后的续接', () => {
     expect(host.state(tabId).tabId).toBeNull();
   };
 
+  it('does not restore or list tabs owned by a retired chat, but leaves the record on disk', async () => {
+    const file = join(mock.dir, 'browser-tabs.json');
+    const rows = {
+      'retired-tab': { conversationId: 'bot-chat:old', url, title: 'Retired' },
+      'retired-private': { conversationId: 'retired-session', url, title: 'Retired private' },
+      [tabId]: { conversationId: sessionId, url, title: 'Code' },
+    };
+    host.setRetiredConversationResolver((id) => id === 'retired-session');
+    writeFileSync(file, JSON.stringify(rows));
+    expect(host.listSearchableTabs().map((tab) => tab.tabId)).toEqual([tabId]);
+    expect(await host.invoke('bot-chat:old', 'tabs', { action: 'list' })).toEqual({ tabs: [] });
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(rows);
+  });
+
   it('默认导航唤醒原 tab，明确要求 newTab 才另开', async () => {
     await open();
     await sleepTab();
@@ -528,24 +542,6 @@ describe('浏览器休眠后的续接', () => {
     });
     expect(host.state(tabId).url).toBe(url);
     expect(mock.contents).toHaveLength(2);
-  });
-
-  it('成员上次操作的 tab 休眠后，不拿另一个前台 tab 顶替', async () => {
-    const actor = { sessionId: 'member-1', name: 'Member' };
-    await open();
-    await host.invoke(sessionId, 'navigation', { action: 'reveal', tabId }, actor);
-    host.releaseActor(actor.sessionId);
-    show(tabId);
-    await host.userNavigate('foreground', sessionId, 'https://example.com/foreground');
-    show('foreground');
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
-    expect(host.state(tabId).tabId).toBeNull();
-
-    expect(await host.invoke(sessionId, 'navigation', { action: 'reveal' }, actor)).toMatchObject({
-      tabId,
-      url,
-    });
-    expect(host.state('foreground').url).toBe('https://example.com/foreground');
   });
 
   it('其他会话不能恢复休眠 tab；用户关闭它后不会被工具复活', async () => {

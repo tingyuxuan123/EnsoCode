@@ -17,7 +17,7 @@ export interface TurnFileSummary {
   files: TurnFileChange[];
 }
 
-/** 行 key `${absIndex}-${part}` 的消息绝对下标，与 turnFooter 的参数同源 */
+/** 行 key `${absIndex}-${part}` 的消息绝对下标 */
 const messageIndexOf = (key: string): number => Number(key.split('-')[0]);
 
 function* toolRows(items: readonly TimelineItem[]): Generator<ToolItem> {
@@ -29,7 +29,7 @@ function* toolRows(items: readonly TimelineItem[]): Generator<ToolItem> {
 
 /**
  * 每轮结束时按文件汇总本轮工具改动（edit / write / apply_patch，真正落盘的才算）。
- * 键为该轮最终回复所在消息的绝对下标（turnFooter 的参数）；没改文件、未结束的轮没有条目。
+ * 键为该轮最终回复所在消息的绝对下标；没改文件、未结束的轮没有条目。
  * bash 等命令改的文件不计——与 ZCode 同口径，只认工具写盘。
  */
 export function turnFileChanges(

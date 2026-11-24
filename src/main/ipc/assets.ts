@@ -101,7 +101,7 @@ export function registerAssetHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.ASSETS_LIST_PROJECT_SKILLS, (_event, projectId: unknown) => {
     if (typeof projectId !== 'string' || !projectId) return [];
     const project = getSourceAuthorityRegistry()?.project(projectId);
-    if (project?.state !== 'active' || project.kind === 'ssh' || project.kind === 'bot-home') {
+    if (project?.state !== 'active' || project.kind === 'ssh') {
       return [];
     }
     const state = readSettingsState();

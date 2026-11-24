@@ -1,0 +1,33 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "Redesign the CodeKiln desktop model picker popover: merge open-vetta's three-column picker (provider rail, searchable flat model list, reasoning column) with CodeKiln's own reasoning control (switch plus gradient level slider). Dark app UI, brand orange.",
+		"screens": [
+			"模型选择浮层：厂商轨 + 可搜索模型列表 + 所选模型的推理档位栏（开关 + 自有渐变滑杆）",
+			"搜索态：跨厂商平铺结果，副标题消歧",
+			"子模型三态：跟随父会话 / 开 / 关",
+			"结构标注：哪件借自 open-vetta，哪件保留自 CodeKiln"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 706873045,
+	"at": "2026-11-24T07:42:16.851Z",
+	"options": [],
+	"choice": null,
+	"allow": [],
+	"redraws": [],
+	"intent": {
+		"stated": {
+			"mood": "CodeKiln 应用自身的深色界面，Kettu 令牌，品牌橙强调色",
+			"colour": "深色 #141416 / 浮层 #212124 / 品牌橙 #f2581b",
+			"boldness": "restrained",
+			"goAhead": true
+		},
+		"questions": [],
+		"answers": null
+	},
+	"proposals": []
+}

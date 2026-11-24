@@ -36,58 +36,6 @@ import androidx.compose.ui.unit.dp
 import io.github.tingyuxuan123.codekiln.pair.SessionTodo
 import io.github.tingyuxuan123.codekiln.pair.SessionTodoStatus
 
-/** 例行任务注入的紧凑行：标题 + 一句摘要，展开才看完整 prompt；原始标签不进 UI。 */
-@Composable
-internal fun SessionRoutineCard(routine: SessionBlock.Routine) {
-    val c = Enso.colors
-    var expanded by remember(routine) { mutableStateOf(false) }
-    val summary = routine.prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: ""
-    Column(Modifier.fillMaxWidth().then(if (routine.prompt.isBlank()) Modifier else Modifier.clip(RoundedCornerShape(6.dp))
-        .clickable(role = Role.Button) { expanded = !expanded }
-        .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }),
-        verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Glyph(EnsoIcon.Timer, Modifier.size(15.dp), c.dim)
-            Label("例行任务 · ${routine.title}", 12, 17, Modifier.weight(1f), color = c.dim, maxLines = 1)
-            if (routine.dryRun) Label("试运行", 11, 15, Modifier.background(c.dim.copy(alpha = .10f), CircleShape)
-                .padding(horizontal = 7.dp, vertical = 1.dp), color = c.dim, maxLines = 1)
-            if (routine.prompt.isNotBlank()) Glyph(if (expanded) EnsoIcon.Down else EnsoIcon.Right,
-                Modifier.size(13.dp), c.dim)
-        }
-        if (summary.isNotEmpty() && !expanded) Label(summary, 13, 19, color = c.ink2, maxLines = 2)
-        if (expanded) Text(routine.prompt, Modifier.padding(start = 21.dp, bottom = 2.dp),
-            color = c.dim, style = ensoText(12, 18, font = Enso.mono))
-    }
-}
-
-/** 群消息补投的紧凑行：每条「谁 · 一句摘要」，展开才看全文，尾部的真实指令始终可见。 */
-@Composable
-internal fun SessionGroupMessagesCard(block: SessionBlock.GroupMessages) {
-    val c = Enso.colors
-    var expanded by remember(block) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().then(Modifier.clip(RoundedCornerShape(6.dp))
-        .clickable(role = Role.Button) { expanded = !expanded }
-        .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }),
-        verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Glyph(EnsoIcon.Users, Modifier.size(15.dp), c.dim)
-            Label("群消息 · ${block.entries.size} 条", 12, 17, Modifier.weight(1f), color = c.dim, maxLines = 1)
-            Glyph(if (expanded) EnsoIcon.Down else EnsoIcon.Right, Modifier.size(13.dp), c.dim)
-        }
-        block.entries.forEach { entry ->
-            if (expanded) Text("${entry.from}：${entry.text}", Modifier.padding(start = 21.dp),
-                color = c.dim, style = ensoText(12, 18, font = Enso.mono))
-            else {
-                val summary = entry.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: ""
-                Label("${entry.from} · $summary", 13, 19, Modifier.padding(start = 21.dp), color = c.ink2, maxLines = 2)
-            }
-        }
-        block.instruction?.let { Label(it, 13, 19, Modifier.padding(start = 21.dp, top = 2.dp), color = c.ink) }
-    }
-}
-
 @Composable
 internal fun SessionWorklogRow(worklog: SessionBlock.Worklog, description: String?, prose: @Composable (String) -> Unit) {
     val c = Enso.colors
@@ -165,48 +113,6 @@ private fun WorklogStep(step: SessionStep) {
         Label(title, 13, 19, color = c.red)
         TimelineDisclosure("查看错误详情", details, step.worklogIcon)
     } else TimelineDisclosure(title, details, step.worklogIcon)
-}
-
-internal fun sessionDelegationStatus(status: String?): String? = when (status?.trim()?.lowercase()) {
-    null, "" -> null
-    "queued" -> "排队中"
-    "running", "started", "in_progress" -> "进行中"
-    "blocked" -> "卡住"
-    "completed" -> "已完成"
-    "delivered" -> "已交付"
-    "failed" -> "失败"
-    "canceled", "cancelled" -> "已取消"
-    else -> status.trim()
-}
-
-/** 委派信封的紧凑卡：谁 → 谁 · 状态 · 一句摘要，原始 XML 只在展开后作为可读正文出现。 */
-@Composable
-internal fun SessionDelegationCard(block: SessionBlock.Delegation, peer: String? = null) {
-    val c = Enso.colors
-    var expanded by remember(block) { mutableStateOf(false) }
-    val detail = listOfNotNull(block.text, block.context?.takeIf { it.isNotBlank() }?.let { "上下文\n$it" })
-        .filter { it.isNotBlank() }.joinToString("\n\n").takeIf { it.isNotBlank() }
-    val status = sessionDelegationStatus(block.status)
-        ?: if (block.kind == SessionDelegationKind.Task) "委派任务" else null
-    val summary = block.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: ""
-    val title = "${block.from.ifBlank { "成员" }} → ${peer?.takeIf { it.isNotBlank() } ?: "我"}"
-    Column(Modifier.fillMaxWidth().then(if (detail == null) Modifier else Modifier.clip(RoundedCornerShape(6.dp))
-        .clickable(role = Role.Button) { expanded = !expanded }
-        .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }),
-        verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Glyph(if (block.kind == SessionDelegationKind.Task) EnsoIcon.Users else EnsoIcon.Inbox,
-                Modifier.size(15.dp), c.dim)
-            Label(title, 12, 17, Modifier.weight(1f), color = c.dim, maxLines = 1)
-            if (status != null) Label(status, 11, 15, Modifier.background(c.dim.copy(alpha = .10f), CircleShape)
-                .padding(horizontal = 7.dp, vertical = 1.dp), color = c.dim, maxLines = 1)
-            if (detail != null) Glyph(if (expanded) EnsoIcon.Down else EnsoIcon.Right, Modifier.size(13.dp), c.dim)
-        }
-        if (summary.isNotEmpty()) Label(summary, 13, 19, color = c.ink2, maxLines = 2)
-        if (expanded && detail != null) Text(detail, Modifier.padding(start = 21.dp, bottom = 2.dp),
-            color = c.dim, style = ensoText(12, 18, font = Enso.mono))
-    }
 }
 
 @Composable

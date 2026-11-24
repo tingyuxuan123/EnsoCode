@@ -31,7 +31,6 @@ import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
 import io.github.tingyuxuan123.codekiln.mirror.LinkPhase
 import io.github.tingyuxuan123.codekiln.mirror.SessionCommandPhase
 import io.github.tingyuxuan123.codekiln.mirror.TaskThinkingLevel
-import io.github.tingyuxuan123.codekiln.mirror.activeBotThread
 import io.github.tingyuxuan123.codekiln.pair.PairEncoding
 import java.io.File
 import android.os.Build
@@ -302,100 +301,6 @@ class RealDesktopLoopbackTest {
         assertEquals(true, linkState()?.running) // Clear must not abort the held resume.
         compose.waitUntil(45_000) { linkState()?.timeline?.status == "idle" }
         assertNull(linkState()?.goal)
-    }
-
-    @Test fun verifyBotSendAndStop() {
-        val expected = args.getString("codekilnDesktopExpectedId")
-        val chatId = args.getString("codekilnDesktopBotChat")
-        assumeTrue("Only the disposable desktop Bot fixture", BuildConfig.DEBUG && expected != null && chatId != null)
-        val saved = requireNotNull(store().load())
-        require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
-        val controller = (compose.activity.application as CodeKilnApplication).companion
-        fun bots() = controller.state.value.link.bots
-        val title = "Android Bot smoke group"
-        compose.onNodeWithContentDescription("打开任务列表").performClick()
-        compose.onNodeWithText("成员").performClick()
-        await(title)
-        compose.onNodeWithText(title).performClick()
-        compose.waitUntil(20_000) { bots()?.chatStates?.containsKey(chatId) == true }
-
-        val input = compose.onNodeWithContentDescription("群聊消息")
-        val send = compose.onNodeWithContentDescription("发送到成员")
-        val first = "Android Bot smoke first message."
-        input.performTextReplacement(first)
-        send.assertIsEnabled().performClick()
-        compose.waitUntil(20_000) { bots()?.send?.let { it.text == first && it.phase == SessionCommandPhase.Observed } == true }
-        await("fake-ok")
-        compose.waitUntil(20_000) { bots()?.chatStates?.get(chatId)?.current == null }
-
-        val held = "Android queue hold first turn. Android Bot stop fixture."
-        input.performTextReplacement(held)
-        send.assertIsEnabled().performClick()
-        compose.waitUntil(20_000) { bots()?.chatStates?.get(chatId)?.current != null }
-        compose.onNodeWithContentDescription("停止").assertIsEnabled().performClick()
-        compose.waitUntil(20_000) { bots()?.stop?.phase == SessionCommandPhase.Observed }
-        assertNull(bots()?.chatStates?.get(chatId)?.current)
-
-        if (args.getString("codekilnDesktopBotThreads") == "1") {
-            val rootId = requireNotNull(chatId)
-            compose.onNodeWithContentDescription("话题").performClick()
-            compose.onNodeWithText("新线程").performScrollTo().assertIsEnabled().performClick()
-            compose.waitUntil(20_000) {
-                val active = bots()?.activeBotThread(rootId)
-                active?.parentId == rootId && bots()?.threadAction?.phase == SessionCommandPhase.Observed &&
-                    bots()?.timelineChatId == active.id && bots()?.timelineLoading == false
-            }
-            val newTopic = requireNotNull(bots()?.activeBotThread(rootId))
-            assertEquals(rootId, newTopic.parentId)
-            assertEquals(emptyList<String>(), bots()?.timeline?.map { it.text })
-            compose.onNodeWithContentDescription("话题").performClick()
-            compose.onNodeWithText("主话题").performScrollTo().assertIsEnabled().performClick()
-            compose.waitUntil(20_000) {
-                bots()?.activeBotThread(rootId)?.id == rootId && bots()?.threadAction?.resultId == rootId &&
-                    bots()?.timelineChatId == rootId && bots()?.timelineLoading == false
-            }
-            await(first)
-        }
-    }
-
-    @Test fun verifyMemberCreationAndDirectHistory() {
-        val expected = args.getString("codekilnDesktopExpectedId")
-        assumeTrue("Only the disposable desktop Bot fixture", BuildConfig.DEBUG && expected != null &&
-            args.getString("codekilnDesktopBotMembers") == "1")
-        val saved = requireNotNull(store().load())
-        require(saved.relayUrl.startsWith("http://127.0.0.1:") && saved.pairId == expected)
-        val controller = (compose.activity.application as CodeKilnApplication).companion
-        fun link() = controller.state.value.link
-        compose.onNodeWithContentDescription("打开任务列表").performClick()
-        compose.onNodeWithText("成员").performClick()
-        await("FixtureLead")
-        compose.onNodeWithText("FixtureLead").performClick()
-        compose.waitUntil(20_000) { link().bots?.directOpen?.phase == SessionCommandPhase.Observed }
-        compose.onNodeWithContentDescription("单聊消息").performTextReplacement("Android member direct history fixture.")
-        compose.onNodeWithContentDescription("发送到成员").assertIsEnabled().performClick()
-        await("fake-ok")
-        val directId = requireNotNull(link().bots?.directOpen?.chatId)
-        val direct = requireNotNull(link().bots?.chats?.firstOrNull { it.id == directId })
-        val conversation = requireNotNull(direct.sessions[direct.members.single()])
-        assertEquals(conversation, link().session?.timeline?.sessionId)
-        screenshot("desktop-member-direct.png")
-        compose.onNodeWithContentDescription("返回成员列表").performClick()
-        compose.onNodeWithText("FixtureLead").performClick()
-        await("fake-ok")
-        compose.onNodeWithContentDescription("返回成员列表").performClick()
-        compose.onNodeWithText("新群聊").performClick()
-        compose.onNodeWithText("群聊名称").performTextReplacement("Android created member group")
-        val checkBox = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Checkbox)
-        compose.onNode(hasText("FixtureLead") and checkBox).performClick()
-        compose.onNode(hasText("FixturePeer") and checkBox).performClick()
-        compose.onNodeWithText("创建群聊").assertIsEnabled().performClick()
-        compose.waitUntil(20_000) {
-            val bots = link().bots
-            val attempt = bots?.groupCreate
-            attempt?.phase == SessionCommandPhase.Observed && bots.timelineChatId == attempt.chatId && !bots.timelineLoading
-        }
-        compose.onNodeWithText("Android created member group").assertIsDisplayed()
-        screenshot("desktop-member-created-group.png")
     }
 
     private fun await(text: String) = compose.waitUntil(45_000) {

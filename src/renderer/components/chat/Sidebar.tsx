@@ -776,7 +776,7 @@ export function Sidebar({
         className={cn('flex h-full min-h-0 flex-col', collapsed && 'hidden')}
         style={{ width: width ? Math.max(0, width - 2) : undefined }}
       >
-        {/* 项目 / 临时对话分段 + 全局搜索；Code / Bot 切换常驻左侧图标轨 */}
+        {/* 项目 / 临时对话分段 + 全局搜索 */}
         <div className="flex shrink-0 items-center gap-2 px-[12px] pt-[12px]">
           <Tabs
             value={view}

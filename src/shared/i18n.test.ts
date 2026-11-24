@@ -13,9 +13,6 @@ it('translates CodeKiln branding without falling back to English keys', () => {
   expect(translate('zh', 'Welcome to CodeKiln')).toBe('欢迎使用CodeKiln');
   expect(translate('zh', 'Open inside CodeKiln')).toBe('在CodeKiln内打开');
   expect(translate('zh', 'That is not a CodeKiln pairing link.')).toBe('这不是CodeKiln配对链接。');
-  expect(translate('zh', 'This file is not a valid CodeKiln team file.')).toBe(
-    '该文件不是有效的CodeKiln团队文件。'
-  );
   expect(translate('zh', 'Ask CodeKiln')).toBe('询问 CodeKiln');
   expect(translate('zh', 'Need help choosing a setup? Ask CodeKiln.')).toBe(
     '不确定如何配置？询问 CodeKiln。'

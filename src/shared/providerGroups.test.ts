@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CUSTOM_VENDOR_ID, groupProviders, vendorOf } from './providerGroups';
+import { CUSTOM_VENDOR_ID, groupProviders, vendorLabel, vendorOf } from './providerGroups';
 import type { ModelProvider } from './types/llm';
 
 const provider = (overrides: Partial<ModelProvider>): ModelProvider => ({
@@ -180,5 +180,20 @@ describe('groupProviders', () => {
       [{ id: 'xai', name: 'xAI (SuperGrok)' }]
     );
     expect(groups[0].label).toBe('xAI (SuperGrok)');
+  });
+
+  it('预设服务商按 catalogId 归组，展示名取静态表而不是原样小写 id', () => {
+    // 预设条目带 catalogId；地址是本机 127.0.0.1，若不看 catalogId 会被并进 Local 组
+    const preset = provider({
+      id: 'preset-row',
+      catalogId: 'magpie',
+      baseUrl: 'http://127.0.0.1:3425/v1',
+    });
+    const local = provider({ id: 'ollama-row', baseUrl: 'http://127.0.0.1:11434' });
+    expect(vendorOf(preset)).toBe('magpie');
+    expect(vendorLabel('magpie')).toBe('Magpie');
+    const groups = groupProviders([preset, local]);
+    expect(groups.map((group) => group.vendorId).sort()).toEqual(['local', 'magpie']);
+    expect(groups.find((group) => group.vendorId === 'magpie')?.label).toBe('Magpie');
   });
 });

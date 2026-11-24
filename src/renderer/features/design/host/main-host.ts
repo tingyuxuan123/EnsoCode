@@ -1,8 +1,8 @@
 import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import { addSidePanelDesign, setSidePanelDesignVisible } from '@/lib/sidePanelDock';
-import { isBotModeActive, showLocalCodeView } from '@/stores/bots/mode';
 import { readMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { oauthCredentialContext, useOauthCredentialStore } from '@/stores/oauthCredentials';
+import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSessionsStore } from '@/stores/sessions';
 import { sessionWorkspaceCwd } from '@/stores/sessions/workspaceCwd';
 import { useSettingsStore } from '@/stores/settings';
@@ -98,8 +98,6 @@ export function createMainDesignHost(): DesignContextHost {
     );
   };
   const promptTarget = () => {
-    // Bot canvases (including sessionless workspace previews) never own the hidden Code composer.
-    if (isBotModeActive()) return null;
     const state = useSessionsStore.getState();
     return resolveDesignPromptTarget(
       viewedDesignSessionId(state.conversations, state.activeId),
@@ -235,7 +233,8 @@ export function createMainDesignHost(): DesignContextHost {
         if (!conversation) throw new Error('Design session not found');
         if (conversation.parentId || conversation.btwParentId || conversation.historyOnly)
           throw new Error('Gallery navigation requires a root conversation');
-        showLocalCodeView();
+        const nodes = useRemoteNodesStore.getState();
+        if (nodes.activeNodeId !== 'local') nodes.switchNode('local');
         closeDesignGallery();
         state.selectConversation(conversation.id);
       },
@@ -249,7 +248,8 @@ export function createMainDesignHost(): DesignContextHost {
           .projects.find((entry) => entry.kind !== 'ssh' && entry.path === input.cwd);
         if (!project) throw new Error('Local design project not found');
         await resolveDesignRoot({ kind: 'project', projectId: project.id });
-        showLocalCodeView();
+        const nodes = useRemoteNodesStore.getState();
+        if (nodes.activeNodeId !== 'local') nodes.switchNode('local');
         closeDesignGallery();
         const id = await useSessionsStore.getState().newConversation(project.id);
         if (!id) throw new Error('Could not create design conversation');

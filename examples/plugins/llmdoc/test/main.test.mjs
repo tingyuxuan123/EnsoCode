@@ -138,6 +138,8 @@ async function fixture(t) {
   const context = { projectRoot, sessionId: 'fixture', signal: new AbortController().signal };
   const tools = new Map();
   const methods = new Map();
+  const handlers = new Map();
+  const injections = [];
   const dataDir = join(dir, 'plugin-data');
   await mkdir(dataDir);
   activate({
@@ -145,16 +147,21 @@ async function fixture(t) {
     config: { get: async () => config },
     tools: { register: (name, handler) => tools.set(name, handler) },
     renderer: { handle: (name, handler) => methods.set(name, handler) },
-    events: { on: () => {} },
+    events: { on: (name, handler) => handlers.set(name, handler) },
+    session: { inject: async (input) => injections.push(input) },
   });
-  return { dir, projectRoot, packageRoot, config, context, tools, methods };
+  return { dir, projectRoot, packageRoot, config, context, tools, methods, handlers, injections };
 }
 
 test('sandbox methods and read-only agent tools share the pinned CLI contract', async (t) => {
   const { tools, methods, context, projectRoot } = await fixture(t);
-  const { contributes } = JSON.parse(
+  const { contributes, icon, name } = JSON.parse(
     await readFile(new URL('../enso-plugin.json', import.meta.url), 'utf8')
   );
+  assert.equal(name, '知识地图');
+  assert.equal(icon, 'icon.svg');
+  assert.equal(contributes.views[0].title, '知识地图');
+  await access(new URL('../icon.svg', import.meta.url));
   const expectedTools = [...readNames, 'runtime'].sort();
   const expectedMethods = [
     ...readNames.filter((name) => name !== 'upgrade'),
@@ -188,6 +195,30 @@ test('sandbox methods and read-only agent tools share the pinned CLI contract', 
   const preview = await methods.get('show')({ id }, context);
   assert.equal(preview.body, 'x'.repeat(12000));
   assert.equal(preview.bodyTruncated, true);
+});
+
+test('agent_end appends a review reminder from the read-only status check', async (t) => {
+  const { handlers, injections, context, projectRoot } = await fixture(t);
+  await rm(join(projectRoot, '.git'), { recursive: true });
+  execFileSync('git', ['init', '-q', projectRoot]);
+  execFileSync('git', ['-C', projectRoot, 'add', id]);
+  execFileSync('git', [
+    '-C',
+    projectRoot,
+    '-c',
+    'user.email=fixture@example.invalid',
+    '-c',
+    'user.name=Fixture',
+    'commit',
+    '-qm',
+    'fixture',
+  ]);
+  await handlers.get('agent_end')({}, context);
+  assert.equal(injections.length, 1);
+  assert.match(injections[0].text, /1 篇待复核/);
+  assert.equal(injections[0].deliverAs, 'followUp');
+  assert.equal(injections[0].triggerTurn, false);
+  assert.equal(await readFile(join(projectRoot, id), 'utf8'), markdown);
 });
 
 test('search treats a query as one literal argv item and cannot make or update the upstream cache', async (t) => {

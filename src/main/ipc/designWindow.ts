@@ -81,7 +81,7 @@ export function createDesignWindowHandlers(deps: {
   mainId(): number | null;
   /** 独立设计窗口绑定的根会话；其它 sender 返回 null。 */
   boundSession(senderId: number): string | null;
-  /** Main 权威：本机、非 Bot、未结束会话的根会话 id；不合格返回 null。 */
+  /** Main 权威：本机、未结束会话的根会话 id；不合格返回 null。 */
   target(sessionId: string): string | null | Promise<string | null>;
   open(sessionId: string): void;
   sessions(): string[];

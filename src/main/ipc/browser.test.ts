@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => unknown>(),
   listeners: new Map<string, (...args: any[]) => unknown>(),
   host: {
+    setRetiredConversationResolver: vi.fn(),
     setOverlayActive: vi.fn(),
     setViewport: vi.fn(() => 'state'),
     setDevToolsViewport: vi.fn(() => 'state'),
@@ -44,6 +45,7 @@ vi.mock('electron', () => ({
   },
 }));
 vi.mock('../services/browserHost', () => ({ browserHost: mocks.host }));
+vi.mock('./agent', () => ({ getSourceAuthorityRegistry: () => null }));
 vi.mock('../windows/createAppWindow', () => ({ sendToAllWindows: () => {} }));
 vi.mock('../windows/MainWindow', () => ({ isMainWebContents: (id: number) => id === 1 }));
 vi.mock('../windows/SettingsWindow', () => ({ isSettingsWebContents: (id: number) => id === 3 }));

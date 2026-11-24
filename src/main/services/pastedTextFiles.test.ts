@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { botChatPasteOwner, removePastedTextFiles, savePastedTextFile } from './pastedTextFiles';
+import { removePastedTextFiles, savePastedTextFile } from './pastedTextFiles';
 import { removeConversationSessionFiles } from './sessionFileCleanup';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -34,20 +34,16 @@ describe('pastedTextFiles', () => {
 
   it('拒绝低于门槛的文本与越界 / 非法的会话标识', async () => {
     expect((await savePastedTextFile(sessionDir, ID, 'short')).ok).toBe(false);
-    for (const owner of ['', '..', '../x', `${ID}/../..`, 'a/b', `bot-..`, '/abs', `${ID}\\x`]) {
+    for (const owner of ['', '..', '../x', `${ID}/../..`, 'a/b', `bot-${ID}`, '/abs', `${ID}\\x`]) {
       expect((await savePastedTextFile(sessionDir, owner, LONG)).ok).toBe(false);
     }
     expect(existsSync(path.join(sessionDir, 'pasted-text'))).toBe(false);
-    expect((await savePastedTextFile(sessionDir, botChatPasteOwner(ID), LONG)).ok).toBe(true);
   });
 
   it('只清理该会话自己的粘贴文件；非法标识不删任何东西', async () => {
     const mine = await savePastedTextFile(sessionDir, ID, LONG);
     const other = await savePastedTextFile(sessionDir, OTHER, LONG);
-    const bot = await savePastedTextFile(sessionDir, botChatPasteOwner(ID), LONG);
     removePastedTextFiles(sessionDir, '..');
-    removePastedTextFiles(sessionDir, botChatPasteOwner(ID));
-    expect(bot.ok && existsSync(bot.path)).toBe(false);
     expect(mine.ok && existsSync(mine.path)).toBe(true);
     expect(other.ok && existsSync(other.path)).toBe(true);
   });

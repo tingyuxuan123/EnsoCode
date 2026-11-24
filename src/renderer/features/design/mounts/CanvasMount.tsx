@@ -11,7 +11,7 @@ import { CANVAS_TAB_ID } from '../vetta/src/tab-ids';
 import { DesignRoot } from './DesignRoot';
 
 /*
- * 画布挂载点：主窗口 Dock、Bot 工作区和独立设计窗口共用。
+ * 画布挂载点：主窗口 Dock 和独立设计窗口共用。
  * 不得导入 sessions / sidePanel 等主窗口 store（独立设计窗口也加载本文件）。
  */
 
@@ -19,12 +19,10 @@ export function CanvasMount({
   sessionId,
   cwd,
   component: Canvas,
-  bot,
 }: {
   sessionId: string | null;
   cwd: string;
   component: PluginActivityTabContribution['component'];
-  bot?: { chatId: string; path: string };
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -40,13 +38,13 @@ export function CanvasMount({
         .catch((error) => console.warn('[design] canvas report failed', error));
     };
     const stop = onCanvasController((controller) =>
-      report(controller !== null && getCanvasController(cwd, bot?.chatId ?? null) === controller)
+      report(controller !== null && getCanvasController(cwd) === controller)
     );
     return () => {
       stop();
       report(false);
     };
-  }, [sessionId, cwd, bot?.chatId]);
+  }, [sessionId, cwd]);
   return (
     <DesignRoot>
       <div
@@ -85,7 +83,7 @@ export function CanvasMount({
         }}
       >
         <__ActivityTabContext.Provider
-          value={{ cwd, active: true, sessionId: sessionId ?? undefined, bot }}
+          value={{ cwd, active: true, sessionId: sessionId ?? undefined }}
         >
           <Canvas />
         </__ActivityTabContext.Provider>

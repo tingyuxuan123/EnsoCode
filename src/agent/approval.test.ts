@@ -441,144 +441,26 @@ describe('受保护动作底线', () => {
   });
 });
 
-describe('bot 模式完全放行跳过受保护底线', () => {
-  const tool = (name = 'bash') => {
+describe('子会话受保护动作底线', () => {
+  it('底线开启时 full 子会话仍对受保护动作要求确认', async () => {
+    const gate = new ApprovalGate('full', vi.fn(), vi.fn(), { protectedFloor: true });
+    const onRequest = vi.fn<(info: ApprovalRequestInfo) => void>();
+    const child = new ApprovalGate('full', onRequest, vi.fn(), gate.floorOptions);
     const execute = vi.fn().mockResolvedValue({ content: [], details: {} });
-    return {
+    const run = withApproval(child, 'command', {
+      name: 'bash',
+      label: 'Bash',
+      description: '',
+      parameters: {} as never,
       execute,
-      def: { name, label: name, description: '', parameters: {} as never, execute },
-    };
-  };
-  const botGate = (mode: GateMode, options: { protectedFloor: boolean; exemptFull?: boolean }) => {
-    const infos: ApprovalRequestInfo[] = [];
-    const gate = new ApprovalGate(
-      mode,
-      (info) => infos.push(info),
-      () => undefined,
-      {
-        ...options,
-        humanTimeoutMs: 600_000,
-      }
-    );
-    return { gate, infos };
-  };
-  const run = (gate: ApprovalGate, command: string, def = tool().def) =>
-    withApproval(gate, 'command', def).execute(
-      'c1',
-      { command },
-      undefined,
-      undefined,
-      undefined as never
-    );
-
-  it('full 成员的删除 / 对外发送 / 部署直接执行，读密钥也不弹卡', async () => {
-    const { gate, infos } = botGate('full', { protectedFloor: true, exemptFull: true });
-    const bash = tool();
-    for (const command of ['rm -rf build', 'git push --force', 'npm publish']) {
-      await run(gate, command, bash.def);
-    }
-    const read = tool('read');
-    await withProtectedFloor(gate, 'read', read.def).execute(
-      'r1',
-      { path: '/repo/.env' },
-      undefined,
-      undefined,
-      undefined as never
-    );
-    expect(gate.protectedFloor).toBe(false);
-    expect(infos).toHaveLength(0);
-    expect(bash.execute).toHaveBeenCalledTimes(3);
-    expect(read.execute).toHaveBeenCalledOnce();
-  });
-
-  it('非 full 成员照旧兜底：auto-edits 下受保护命令弹卡并带类别与超时', async () => {
-    const { gate, infos } = botGate('auto-edits', { protectedFloor: true, exemptFull: true });
-    const bash = tool();
-    const pending = run(gate, 'rm -rf build', bash.def);
-    await vi.waitFor(() => expect(infos).toHaveLength(1));
-    expect(infos[0]).toMatchObject({ protected: 'delete' });
-    expect(infos[0].expiresAt).toBeTypeOf('number');
-    gate.respond(infos[0].requestId, 'deny');
-    await expect(pending).rejects.toThrow(/denied/);
-    expect(bash.execute).not.toHaveBeenCalled();
-  });
-
-  it('非 full 的 assistant 成员受保护动作仍跳过代审直接等真人', async () => {
-    const review = vi.fn().mockResolvedValue({ decision: 'auto_allow' });
-    const infos: ApprovalRequestInfo[] = [];
-    const gate = new ApprovalGate(
-      'assistant',
-      (info) => infos.push(info),
-      () => undefined,
-      {
-        review,
-        protectedFloor: true,
-        exemptFull: true,
-      }
-    );
-    const pending = run(gate, 'npm publish');
-    await vi.waitFor(() => expect(infos).toHaveLength(1));
-    expect(infos[0].protected).toBeTruthy();
-    expect(review).not.toHaveBeenCalled();
-    gate.respond(infos[0].requestId, 'allow');
-    await pending;
-  });
-
-  it('运行中切换档位即时生效：full 切到 supervised 后底线恢复', async () => {
-    const { gate, infos } = botGate('full', { protectedFloor: true, exemptFull: true });
-    await run(gate, 'rm -rf build');
-    expect(infos).toHaveLength(0);
-    gate.mode = 'supervised';
-    expect(gate.protectedFloor).toBe(true);
-    const pending = run(gate, 'rm -rf dist');
-    await vi.waitFor(() => expect(infos).toHaveLength(1));
-    expect(infos[0].protected).toBe('delete');
-    gate.respond(infos[0].requestId, 'allow');
-    await pending;
-  });
-
-  it('子会话按自身档位判断：沿用底线配置，不继承父会话的放行结果', async () => {
-    const parent = botGate('full', { protectedFloor: true, exemptFull: true });
-    expect(parent.gate.protectedFloor).toBe(false);
-    const childInfos: ApprovalRequestInfo[] = [];
-    const child = new ApprovalGate(
-      'auto-edits',
-      (info) => childInfos.push(info),
-      () => undefined,
-      parent.gate.floorOptions
-    );
-    expect(child.protectedFloor).toBe(true);
-    const pending = run(child, 'rm -rf build');
-    await vi.waitFor(() => expect(childInfos).toHaveLength(1));
-    child.respond(childInfos[0].requestId, 'deny');
-    await expect(pending).rejects.toThrow(/denied/);
-
-    const strictParent = botGate('supervised', { protectedFloor: true, exemptFull: true });
-    const fullChild = new ApprovalGate(
-      'full',
-      () => undefined,
-      () => undefined,
-      strictParent.gate.floorOptions
-    );
-    expect(strictParent.gate.protectedFloor).toBe(true);
-    expect(fullChild.protectedFloor).toBe(false);
-  });
-
-  it('Code 模式（底线开启、未豁免）full 仍对受保护动作要求确认，子会话同样', async () => {
-    const { gate, infos } = botGate('full', { protectedFloor: true });
-    expect(gate.protectedFloor).toBe(true);
-    const pending = run(gate, 'rm -rf build');
-    await vi.waitFor(() => expect(infos).toHaveLength(1));
-    gate.respond(infos[0].requestId, 'allow');
-    await pending;
-    const child = new ApprovalGate(
-      'full',
-      () => undefined,
-      () => undefined,
-      gate.floorOptions
-    );
-    expect(child.protectedFloor).toBe(true);
-    expect(botGate('full', { protectedFloor: false }).gate.protectedFloor).toBe(false);
+    }).execute('c1', { command: 'rm -rf build' }, undefined, undefined, undefined as never);
+    await vi.waitFor(() => expect(onRequest).toHaveBeenCalledOnce());
+    expect(execute).not.toHaveBeenCalled();
+    const [request] = onRequest.mock.calls[0];
+    expect(request.protected).toBe('delete');
+    child.respond(request.requestId, 'allow');
+    await run;
+    expect(execute).toHaveBeenCalledOnce();
   });
 });
 

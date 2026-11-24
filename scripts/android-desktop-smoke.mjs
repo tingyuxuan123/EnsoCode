@@ -22,9 +22,6 @@ const serial = process.env.CODEKILN_TEST_EMULATOR ?? 'emulator-5554';
 const pkg = 'io.github.tingyuxuan123.codekiln';
 const runner = `${pkg}.test/androidx.test.runner.AndroidJUnitRunner`;
 const output = path.join(root, 'temp/codekiln-real-desktop');
-const botMode = process.env.CODEKILN_DESKTOP_BOT_SMOKE === '1';
-const threadMode = botMode && process.env.CODEKILN_DESKTOP_BOT_THREADS_SMOKE === '1';
-const memberMode = botMode && process.env.CODEKILN_DESKTOP_BOT_MEMBERS_SMOKE === '1';
 // macOS aliases /var to /private/var; the worker records the canonical cwd.
 const temporary = await realpath(await mkdtemp(path.join(tmpdir(), 'codekiln-real-desktop-')));
 const profile = path.join(temporary, 'profile');
@@ -34,7 +31,6 @@ let rpc;
 let expectedId;
 let reversed;
 let cdpPort;
-let botConnectivityProbes = 0;
 
 function command(binary, args, timeout = 20_000) {
   const result = spawnSync(binary, args, {
@@ -202,7 +198,6 @@ try {
           theme: 'light',
           language: 'zh-CN',
           titleSummaryEnabled: false,
-          ...(botMode ? { botModeEnabled: true } : {}),
         },
         version: 2,
       },
@@ -434,84 +429,6 @@ try {
       );
     }
   }
-  if (botMode) {
-    const chat = await evaluate(`(async()=>{
-      const api=window.electronAPI.bots;
-      const draft={title:'Loopback',tools:'readonly',memory:{enabled:false},engine:{providerId:'loopback-A',modelId:'fake-model-1'}};
-      const member=await api.create({...draft,name:'FixtureLead'});
-      if(!member.ok) return member;
-      const peer=await api.create({...draft,name:'FixturePeer'});
-      if(!peer.ok) return peer;
-      return api.createChat({kind:'group',title:'Android Bot smoke group',members:[member.bot.id,peer.bot.id],bossBotId:member.bot.id,workspace:{kind:'chat-home'},routing:{mode:'boss'}});
-    })()`);
-    if (!chat?.ok || !/^[a-z0-9-]+$/i.test(chat.chat?.id ?? '')) {
-      throw new Error(
-        `Failed to create disposable Bot group: ${chat?.error ?? 'invalid identity'}`
-      );
-    }
-    const chatId = chat.chat.id;
-    const beforeBot = (await endpoint()).count;
-    instrument('verifyBotSendAndStop', {
-      codekilnDesktopExpectedId: expectedId,
-      codekilnDesktopBotChat: chatId,
-      ...(threadMode ? { codekilnDesktopBotThreads: '1' } : {}),
-    });
-    if (threadMode) {
-      const snapshot = await evaluate('window.electronAPI.bots.chats()');
-      const rootChat = snapshot?.chats?.find((row) => row.id === chatId);
-      const topics = snapshot?.chats?.filter((row) => row.parentId === chatId);
-      if (!snapshot?.ok || !rootChat || rootChat.activeThreadId || topics?.length !== 1) {
-        throw new Error('Desktop did not retain one new topic and switch back to the root');
-      }
-    }
-    const timeline = await evaluate(
-      `window.electronAPI.bots.timeline({chatId:${JSON.stringify(chatId)},limit:20})`
-    );
-    const botRequests = (await endpoint()).requests.slice(beforeBot);
-    // A new Bot worker first probes its provider with a no-tools "ping" before normal dispatch.
-    const workerRequests = botRequests.filter((request) => request.toolNames?.length > 0);
-    botConnectivityProbes = botRequests.filter(
-      (request) => !request.toolNames?.length && request.lastUserText === 'ping'
-    ).length;
-    const firstMessages = timeline?.ok
-      ? timeline.entries.filter(
-          (entry) => entry.kind === 'human' && entry.text === 'Android Bot smoke first message.'
-        )
-      : [];
-    if (
-      firstMessages.length !== 1 ||
-      !timeline.entries.some((entry) => entry.kind === 'bot' && entry.text === 'fake-ok') ||
-      workerRequests.length !== 2 ||
-      workerRequests.length + botConnectivityProbes !== botRequests.length
-    ) {
-      throw new Error(
-        `Bot fixture mismatch: human=${firstMessages.length}, bot=${timeline.entries?.filter((entry) => entry.kind === 'bot').length}, workerRequests=${workerRequests.length}, probes=${botConnectivityProbes}`
-      );
-    }
-    if (memberMode) {
-      instrument('verifyMemberCreationAndDirectHistory', {
-        codekilnDesktopExpectedId: expectedId,
-        codekilnDesktopBotMembers: '1',
-      });
-      const snapshot = await evaluate('window.electronAPI.bots.chats()');
-      const direct = snapshot?.chats?.filter((row) => row.kind === 'direct');
-      const created = snapshot?.chats?.filter(
-        (row) => row.title === 'Android created member group'
-      );
-      if (
-        !snapshot?.ok ||
-        direct?.length !== 1 ||
-        Object.keys(direct[0].sessions).length !== 1 ||
-        created?.length !== 1 ||
-        created[0].members.length !== 2 ||
-        created[0].bossBotId !== direct[0].members[0]
-      ) {
-        throw new Error(
-          'Desktop did not persist the same direct session and exactly one two-member group'
-        );
-      }
-    }
-  }
   const modelMode = process.env.CODEKILN_DESKTOP_MODEL_SMOKE === '1';
   const shellTool = ['powershell', 'bash'].find((name) =>
     requests.requests[0]?.toolNames?.includes(name)
@@ -648,13 +565,6 @@ try {
         ...(imageMode ? { androidPhotoPickerImageMatchedWorkerDispatch: true } : {}),
         ...(goalMode
           ? { goalSetPauseResumeClearConfirmed: true, goalKickoffAndResumeRequests: 2 }
-          : {}),
-        ...(botMode
-          ? { botSendAndStopConfirmed: true, botWorkerRequests: 2, botConnectivityProbes }
-          : {}),
-        ...(threadMode ? { botThreadCreatedAndRootRestored: true } : {}),
-        ...(memberMode
-          ? { botDirectOpenedSentAndResubscribed: true, botGroupCreatedFromAndroid: true }
           : {}),
       },
       null,

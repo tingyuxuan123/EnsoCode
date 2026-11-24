@@ -12,54 +12,17 @@ import { transcriptMessages } from './transcript';
 
 export const OAUTH_POOL_TERMINAL_ERROR_ENTRY = 'enso.oauth-pool-terminal-error';
 
-/** Pi 1.0：仅在本次 steer 的同步入队点检查活轮，不触碰 prompt 的压缩/nextTurn 副作用。
+/**
+ * 在 steer 真正入队时检查活轮：异步 input hook 可能跨过回合边界。
  * 每次调用独立代理，不替换共享 session 方法；私有队列形状由真实 SDK 契约测试锁定。
+ * Preserve ordinary steer behavior when the SDK does not expose a detachable queue.
  */
-export async function steerActiveSession(
-  session: AgentSession,
-  text: string,
-  images: Parameters<AgentSession['steer']>[1],
-  onQueued: (detach: () => boolean) => void,
-  prepareText: (text: string) => string = (text) => text
-): Promise<'queued' | 'handled' | 'deferred'> {
-  if (!session.isStreaming || session.isRetrying) return 'deferred';
-  const deferred = new Error('active turn ended before steering');
-  const guarded = interceptSteeringQueue(session, onQueued, (input) => {
-    if (!session.isStreaming || session.isRetrying) throw deferred;
-    return prepareText(input);
-  });
-  if (!guarded) throw new Error('Unsupported Pi steering adapter');
-  try {
-    return await guarded.steer(text, images);
-  } catch (error) {
-    if (error === deferred) return 'deferred';
-    throw error;
-  }
-}
-
-/** Preserve ordinary steer behavior when the SDK does not expose a detachable queue. */
 export function steerWithWithdrawal(
   session: AgentSession,
   text: string,
   images: Parameters<AgentSession['steer']>[1],
   onQueued: (detach: () => boolean) => void
 ): Promise<'queued' | 'handled' | 'deferred'> | undefined {
-  const deferred = new Error('active turn ended before detachable steering');
-  const proxy = interceptSteeringQueue(session, onQueued, (input) => {
-    if (!session.isStreaming || session.isRetrying) throw deferred;
-    return input;
-  });
-  return proxy?.steer(text, images).catch((error: unknown) => {
-    if (error === deferred) return 'deferred' as const;
-    throw error;
-  });
-}
-
-function interceptSteeringQueue(
-  session: AgentSession,
-  onQueued: (detach: () => boolean) => void,
-  prepareText: (input: string) => string
-): AgentSession | undefined {
   const adapter = session as unknown as {
     _queueSteer: (text: string, images: Parameters<AgentSession['steer']>[1]) => Promise<void>;
     _emitQueueUpdate: () => void;
@@ -68,13 +31,14 @@ function interceptSteeringQueue(
     .steeringQueue;
   if (!Array.isArray(queue?.messages) || typeof adapter._queueSteer !== 'function') return;
   const pendingQueue = queue as { messages: unknown[] };
-  return new Proxy(session, {
+  const ended = new Error('active turn ended before detachable steering');
+  const proxy = new Proxy(session, {
     get(target, key, receiver) {
       if (key !== '_queueSteer') return Reflect.get(target, key, receiver);
       return (input: string, attached: Parameters<AgentSession['steer']>[1]) => {
-        const queuedText = prepareText(input);
+        if (!session.isStreaming || session.isRetrying) throw ended;
         const previousLength = pendingQueue.messages.length;
-        const result = adapter._queueSteer(queuedText, attached);
+        const result = adapter._queueSteer(input, attached);
         if (pendingQueue.messages.length !== previousLength + 1) return result;
         const message = pendingQueue.messages.at(-1);
         onQueued(() => {
@@ -83,7 +47,7 @@ function interceptSteeringQueue(
           if (index < 0) return false;
           messages.splice(index, 1);
           const labels = session.getSteeringMessages() as string[];
-          const label = labels[index] === queuedText ? index : labels.indexOf(queuedText);
+          const label = labels[index] === input ? index : labels.indexOf(input);
           if (label >= 0) labels.splice(label, 1);
           adapter._emitQueueUpdate();
           return true;
@@ -91,6 +55,10 @@ function interceptSteeringQueue(
         return result;
       };
     },
+  });
+  return proxy.steer(text, images).catch((error: unknown) => {
+    if (error === ended) return 'deferred' as const;
+    throw error;
   });
 }
 

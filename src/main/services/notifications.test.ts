@@ -46,7 +46,7 @@ vi.mock('../windows/MainWindow', () => ({
   focusMainWindow: vi.fn(),
 }));
 
-import { maybeNotify, maybeNotifyBot, setViewedSession } from './notifications';
+import { maybeNotify, setViewedSession } from './notifications';
 import { resetSessionMuteOverrides, setSessionMuteOverride } from './sessionMuteGate';
 
 const identity = { sessionId: 'conversation-1', generation: 'g' } as const;
@@ -279,10 +279,8 @@ describe('maybeNotify', () => {
   });
 });
 
-describe.each(['session', 'bot'] as const)('%s approval notifications', (surface) => {
-  const bot = { enabled: true, chatId: 'chat', name: 'Alice', conversationId: 'conversation-1' };
-  const emit = (event: RendererAgentEvent) =>
-    surface === 'bot' ? maybeNotifyBot(event, bot) : Promise.resolve(maybeNotify(event));
+describe('session approval notifications', () => {
+  const emit = (event: RendererAgentEvent) => Promise.resolve(maybeNotify(event));
   const request = (phase?: 'reviewing', seq = 1): RendererAgentEvent => ({
     type: 'approval-request',
     identity,
@@ -376,41 +374,4 @@ describe.each(['session', 'bot'] as const)('%s approval notifications', (surface
     } as RendererAgentEvent);
     expect(notifications).toHaveLength(3);
   });
-
-  if (surface === 'bot') {
-    it.each(['parent-ended', 'child-ended', 'worker-exited'] as const)(
-      '%s 取消尚未发出的审批通知',
-      async (type) => {
-        const notification = emit(request());
-        await emit({
-          type,
-          identity: {
-            ...identity,
-            parent: identity,
-            instanceId: 'child',
-            instanceName: 'child',
-            typeKey: 'agent:enso',
-          },
-          seq: 2,
-          reason: 'ended',
-        } as RendererAgentEvent);
-        await notification;
-        expect(notifications).toHaveLength(0);
-      }
-    );
-
-    it('等待加载窗口模块时审批已解决，不迟发人工提醒', async () => {
-      const notification = emit(request());
-      await emit({ type: 'approval-resolved', identity, seq: 2, requestId: 'apr' });
-      await notification;
-      expect(notifications).toHaveLength(0);
-    });
-
-    it('等待加载窗口模块期间被静音，不迟发人工提醒', async () => {
-      const notification = emit(request());
-      setSessionMuteOverride('conversation-1', true);
-      await notification;
-      expect(notifications).toHaveLength(0);
-    });
-  }
 });

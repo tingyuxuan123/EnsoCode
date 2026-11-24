@@ -110,7 +110,6 @@ export function referencedModelIds(settings: unknown, providerId: unknown): Set<
     'approvalReviewer',
     'smartCompactModel',
     'voiceCorrectionRemoteModel',
-    'botAssistantModel',
   ])
     add(state[key]);
   for (const item of [...list(state.projects), ...list(state.projectGroups)])
@@ -123,7 +122,6 @@ export function referencedModelIds(settings: unknown, providerId: unknown): Set<
     for (const fallback of list(model.fallbacks)) add(fallback);
     add(record(model.classifier).model);
   }
-  add(record(state.botRouteClassifier).model);
   return ids;
 }
 

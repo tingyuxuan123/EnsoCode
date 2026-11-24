@@ -32,12 +32,6 @@ const READ_ONLY_ALLOWED = [
   'direct-ice',
   'direct-close',
   'probe',
-  'bot-catalog-request',
-  'bot-chat-open',
-  'bot-timeline',
-  'bot-inbox-request',
-  'bot-artifacts',
-  'bot-artifact-image',
 ];
 
 describe('配对作用域', () => {
@@ -80,84 +74,15 @@ describe('配对作用域', () => {
       'task-stop',
       'subagent-stop',
       'voice-chunk',
-      'bot-send',
-      'bot-stop',
-      'bot-retry',
-      'bot-inbox-dismiss',
     ] as const)
       expect(commandAllowedForScope('read', type), type).toBe(false);
   });
 
   it('未来新增的未知命令在只读下默认拦截', () => {
-    expect(commandAllowedForScope('read', 'bot-delegation-cancel')).toBe(false);
+    expect(commandAllowedForScope('read', 'future-write')).toBe(false);
   });
 
-  it('rejects group creation with its correlated result on read-only devices', () => {
-    expect(commandAllowedForScope('read', 'bot-group-create')).toBe(false);
-    expect(
-      scopeRejection({
-        type: 'bot-group-create',
-        requestId: 'r',
-        title: 'Team',
-        memberIds: [],
-        bossBotId: 'a',
-      })
-    ).toEqual({
-      type: 'bot-group-create-result',
-      requestId: 'r',
-      ok: false,
-      error: 'read-only',
-    });
-  });
-
-  it('rejects direct open with its correlated result on read-only devices', () => {
-    expect(commandAllowedForScope('read', 'bot-direct-open')).toBe(false);
-    expect(scopeRejection({ type: 'bot-direct-open', requestId: 'r', botId: 'b' })).toEqual({
-      type: 'bot-direct-open-result',
-      requestId: 'r',
-      ok: false,
-      error: 'read-only',
-    });
-  });
-
-  it('rejects new-session with the original request identity', () => {
-    expect(commandAllowedForScope('read', 'bot-new-session')).toBe(false);
-    expect(
-      scopeRejection({ type: 'bot-new-session', chatId: 'chat', requestId: 'request' })
-    ).toEqual({
-      type: 'bot-new-session-result',
-      chatId: 'chat',
-      requestId: 'request',
-      ok: false,
-      error: 'read-only',
-    });
-  });
-
-  it('rejects thread create/select on read-only devices with the original request identity', () => {
-    for (const command of [
-      { type: 'bot-thread-create', chatId: 'chat', requestId: 'request' },
-      { type: 'bot-thread-select', chatId: 'chat', threadId: 'thread', requestId: 'request' },
-    ] as const) {
-      expect(commandAllowedForScope('read', command.type)).toBe(false);
-      expect(commandAllowedForScope('operate', command.type)).toBe(true);
-      expect(scopeRejection(command)).toEqual({
-        type: 'bot-thread-result',
-        chatId: 'chat',
-        requestId: 'request',
-        ok: false,
-        error: 'read-only',
-      });
-    }
-  });
-
-  it('拦截后回执：bot-send 走 bot-send-result，其余写命令回 command-rejected', () => {
-    expect(scopeRejection({ type: 'bot-send', chatId: 'c', deliveryId: 'd', text: 'hi' })).toEqual({
-      type: 'bot-send-result',
-      chatId: 'c',
-      deliveryId: 'd',
-      ok: false,
-      error: 'read-only',
-    });
+  it('拦截写命令时回 command-rejected', () => {
     expect(scopeRejection({ type: 'task-stop', sessionId: 's', taskId: 't' })).toEqual({
       type: 'command-rejected',
       command: 'task-stop',

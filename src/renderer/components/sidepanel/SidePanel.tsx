@@ -1,4 +1,3 @@
-import { botBrowserChatId } from '@shared/bots/browser';
 import type {
   DockviewApi,
   DockviewReadyEvent,
@@ -57,6 +56,7 @@ import {
 import { toggleSidePanelExpand } from '@/lib/sidePanelExpand';
 import { releaseTerminal } from '@/lib/terminalRegistry';
 import { cn } from '@/lib/utils';
+import { PluginIcon } from '@/plugins/PluginIcon';
 import { PluginView } from '@/plugins/PluginView';
 import { type PluginViewRef, usePluginViews } from '@/plugins/viewBridge';
 import { useSessionsStore } from '@/stores/sessions';
@@ -80,6 +80,7 @@ import { ChangesView } from './ChangesView';
 import { FileCitationView } from './FileCitationView';
 import { FilesView } from './FilesView';
 import { FileTypeIcon } from './fileIcons';
+import { pluginViewLabel } from './pluginViewLabel';
 import { SubagentDirectoryView } from './SubagentDirectoryView';
 import { SubagentSessionView } from './SubagentSessionView';
 import { shouldSkipSidePanelWidthAnim, sidePanelWidthTransition } from './sidePanelWidthAnim';
@@ -385,10 +386,16 @@ function addPluginViewPanel(
     id,
     component: 'plugin',
     title: view.title,
-    params: { conversationId, pluginId: view.pluginId, viewId: view.id },
+    params: {
+      conversationId,
+      pluginId: view.pluginId,
+      ...(view.icon ? { pluginIcon: view.icon } : {}),
+      viewId: view.id,
+    },
     ...(group ? { position: { referenceGroup: group } } : {}),
   });
 }
+
 function PluginViewPanel(
   props: IDockviewPanelProps<{ conversationId?: string; pluginId?: string; viewId?: string }>
 ) {
@@ -399,7 +406,13 @@ function PluginViewPanel(
 }
 
 /** 与 CoworkerTabs 同款 chip:圆角、selection 激活、hover 出关闭 */
-function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null }>) {
+function SidePanelTab(
+  props: IDockviewPanelHeaderProps<{
+    favicon?: string | null;
+    pluginId?: string;
+    pluginIcon?: string;
+  }>
+) {
   const { t } = useI18n();
   const { conversationId, designSessionId } = useContext(PanelContext);
   const [active, setActive] = useState(props.api.isActive);
@@ -449,6 +462,12 @@ function SidePanelTab(props: IDockviewPanelHeaderProps<{ favicon?: string | null
         <Workflow className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'design' ? (
         <PanelsTopLeft className="h-3 w-3 shrink-0" />
+      ) : props.api.id.startsWith('plugin:') && props.params.pluginId ? (
+        <PluginIcon
+          pluginId={props.params.pluginId}
+          icon={props.params.pluginIcon}
+          className="h-3 w-3 shrink-0 object-contain"
+        />
       ) : props.api.id.startsWith('plugin:') ? (
         <Puzzle className="h-3 w-3 shrink-0" />
       ) : isBrowser && favicon && !faviconBroken ? (
@@ -607,8 +626,12 @@ function NewTabMenu({
         {onNewPluginView &&
           pluginViews.map((view) => (
             <MenuItem key={`${view.pluginId}:${view.id}`} onClick={() => onNewPluginView(view)}>
-              <Puzzle className="h-4 w-4" />
-              {view.title} · {view.pluginName}
+              <PluginIcon
+                pluginId={view.pluginId}
+                icon={view.icon}
+                className="h-4 w-4 shrink-0 object-contain"
+              />
+              {pluginViewLabel(view)}
             </MenuItem>
           ))}
       </MenuPopup>
@@ -920,7 +943,6 @@ export function SidePanel({
   const fullscreen = useSidePanelStore((s) => s.fullscreen);
   useEffect(() => {
     const stopReveal = window.electronAPI.browser.onReveal((event) => {
-      if (botBrowserChatId(event.conversationId)) return;
       addSidePanelBrowser({
         conversationId: event.conversationId,
         tabId: event.tabId,

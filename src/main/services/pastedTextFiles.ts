@@ -8,11 +8,9 @@ import {
   pastedTextFileContent,
 } from '@shared/pastedText';
 
-const OWNER_RE = /^(?:bot-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const OWNER_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const botChatPasteOwner = (chatId: string): string => `bot-${chatId}`;
-
-/** <sessionDir>/pasted-text/<owner>；owner 只认会话 / Bot 聊天 UUID，杜绝路径穿越 */
+/** <sessionDir>/pasted-text/<owner>；owner 只认会话 UUID，杜绝路径穿越 */
 function ownerDir(sessionDir: string, owner: string): string | undefined {
   if (!OWNER_RE.test(owner)) return undefined;
   const root = path.resolve(sessionDir, 'pasted-text');

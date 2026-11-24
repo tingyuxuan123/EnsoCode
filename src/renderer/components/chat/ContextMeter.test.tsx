@@ -8,6 +8,10 @@ describe('上下文细进度条', () => {
   it.each([
     [0, false, '0%', 'bg-muted-foreground/60'],
     [16, false, '16%', 'bg-muted-foreground/60'],
+    [49, false, '49%', 'bg-muted-foreground/60'],
+    // 半程起提亮一档：仍是常态语义（不改色相），但能与刚开聊区分开
+    [50, false, '50%', 'bg-muted-foreground'],
+    [69, false, '69%', 'bg-muted-foreground'],
     [70, false, '70%', 'bg-warning'],
     [95, true, '95%', 'bg-destructive'],
     [120, true, '100%', 'bg-destructive'],
@@ -32,6 +36,10 @@ describe('上下文圆环', () => {
   it.each([
     [0, false, 'text-muted-foreground/60'],
     [16, false, 'text-muted-foreground/60'],
+    [49, false, 'text-muted-foreground/60'],
+    // 12px 的环上，弧长在 40–60% 之间几乎分不出，半程靠提亮一档补一个可读信号
+    [50, false, 'text-muted-foreground'],
+    [69, false, 'text-muted-foreground'],
     [70, false, 'text-warning'],
     [95, true, 'text-destructive'],
   ])('占用 %s%% 用弧长表达且带警戒色', (percent, critical, tone) => {
@@ -46,6 +54,12 @@ describe('上下文圆环', () => {
     const [arc, rest] = (circles[1]?.getAttribute('stroke-dasharray') ?? '').split(' ').map(Number);
     expect(arc).toBeCloseTo((percent / 100) * circumference);
     expect(rest).toBeCloseTo(circumference);
+  });
+
+  it('critical 优先于占比：90% 以下但被判 critical 时仍用危险色', () => {
+    const meter = ring(50, true);
+    expect(meter?.classList.contains('text-destructive')).toBe(true);
+    expect(meter?.classList.contains('text-muted-foreground')).toBe(false);
   });
 
   it('超出范围时弧长夹在 0 到整圈之间', () => {

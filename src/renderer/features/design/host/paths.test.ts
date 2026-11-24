@@ -58,7 +58,7 @@ describe('design authoritative roots', () => {
   });
   it('uses the latest authority for a shared path when a Bot session rotates', () => {
     const paths = new DesignPaths();
-    const next = { ...root, ref: { kind: 'session' as const, sessionId: 'new-bot-session' } };
+    const next = { ...root, ref: { kind: 'session' as const, sessionId: 'new-session' } };
     paths.remember(root);
     paths.remember(next);
     expect(paths.map('/work/project/group.vetd')).toEqual({

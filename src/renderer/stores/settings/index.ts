@@ -1,10 +1,6 @@
 import { type AccentColor, DEFAULT_ACCENT_COLOR, resolveAccentColor } from '@shared/accentColor';
 import { parseApprovalAllowThreshold } from '@shared/approvalReviewRecord';
 import { DEFAULT_AUTO_RETRY_LIMIT, normalizeAutoRetryLimit } from '@shared/autoRetry';
-import {
-  DEFAULT_BOT_MAX_RUNNING_TURNS,
-  normalizeBotMaxRunningTurns,
-} from '@shared/bots/concurrency';
 import { chatTypographyVariables } from '@shared/chatTypography';
 import { parseCodeSearchAccountKey } from '@shared/codeSearch';
 import {
@@ -49,9 +45,7 @@ import { parseUsageModelPricing } from '@shared/usage/pricing';
 import {
   findVirtualModel,
   isVirtualRef,
-  parseVirtualClassifier,
   parseVirtualModels,
-  type VirtualClassifierConfig,
   type VirtualModelEntry,
 } from '@shared/virtualModels';
 import { parseWebSearchChain, type WebSearchChainEntry } from '@shared/webSearchChain';
@@ -192,10 +186,6 @@ const initialState = {
   smartCompactMode: 'auto' as import('@shared/smartCompactMode').SmartCompactMode,
   memoryModelIdleMinutes: DEFAULT_MEMORY_MODEL_IDLE_MINUTES,
   voiceInputEnabled: false,
-  botModeEnabled: false,
-  botRouteClassifier: null as VirtualClassifierConfig | null,
-  botAssistantModel: null as import('@shared/defaultModel').DefaultModelRef | null,
-  botMaxRunningTurns: DEFAULT_BOT_MAX_RUNNING_TURNS,
   voiceInputDevice: SYSTEM_MICROPHONE,
   voiceModel: DEFAULT_SPEECH_MODEL_ID,
   voiceCorrectionEnabled: false,
@@ -366,11 +356,6 @@ export const useSettingsStore = create<SettingsState>()(
       setMemoryModelIdleMinutes: (value) =>
         set({ memoryModelIdleMinutes: normalizeMemoryModelIdleMinutes(value) }),
       setVoiceInputEnabled: (voiceInputEnabled) => set({ voiceInputEnabled }),
-      setBotModeEnabled: (botModeEnabled) => set({ botModeEnabled }),
-      setBotRouteClassifier: (botRouteClassifier) => set({ botRouteClassifier }),
-      setBotAssistantModel: (botAssistantModel) => set({ botAssistantModel }),
-      setBotMaxRunningTurns: (value) =>
-        set({ botMaxRunningTurns: normalizeBotMaxRunningTurns(value) }),
       setVoiceInputDevice: (voiceInputDevice) => set({ voiceInputDevice }),
       setVoiceModel: (voiceModel) => set({ voiceModel }),
       setVoiceCorrectionEnabled: (voiceCorrectionEnabled) => set({ voiceCorrectionEnabled }),
@@ -1136,10 +1121,6 @@ export const useSettingsStore = create<SettingsState>()(
         if (JSON.stringify(virtualModels) !== JSON.stringify(s.virtualModels)) {
           useSettingsStore.setState({ virtualModels });
         }
-        const botRouteClassifier = parseVirtualClassifier(s.botRouteClassifier) ?? null;
-        if (JSON.stringify(botRouteClassifier) !== JSON.stringify(s.botRouteClassifier ?? null)) {
-          useSettingsStore.setState({ botRouteClassifier });
-        }
         const smartCompactMode = parseSmartCompactMode(s.smartCompactMode) ?? 'auto';
         if (smartCompactMode !== s.smartCompactMode) {
           useSettingsStore.setState({ smartCompactMode });
@@ -1166,10 +1147,6 @@ export const useSettingsStore = create<SettingsState>()(
         const autoRetryLimit = normalizeAutoRetryLimit(s.autoRetryLimit);
         if (autoRetryLimit !== s.autoRetryLimit) {
           useSettingsStore.setState({ autoRetryLimit });
-        }
-        const botMaxRunningTurns = normalizeBotMaxRunningTurns(s.botMaxRunningTurns);
-        if (botMaxRunningTurns !== s.botMaxRunningTurns) {
-          useSettingsStore.setState({ botMaxRunningTurns });
         }
         const sshTimeoutSeconds = normalizeSshTimeoutSeconds(s.sshTimeoutSeconds);
         if (sshTimeoutSeconds !== s.sshTimeoutSeconds) {

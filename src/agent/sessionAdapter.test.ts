@@ -21,7 +21,6 @@ import {
   continueSessionActivity,
   editLatestAssistantForRetry,
   silentTurnRecoveryExtension,
-  steerActiveSession,
   steerWithWithdrawal,
 } from './sessionAdapter';
 import { POST_TOOL_EMPTY_NUDGE, SILENT_TURN_NUDGE } from './silentTurn';
@@ -378,16 +377,6 @@ describe('Pi session adapter integration', () => {
     }
   );
 
-  it('guarded steer defers without starting an idle activity or persisting user input', async () => {
-    const current = await harness([]);
-    await expect(
-      steerActiveSession(current.session, 'late supplement', undefined, () => {})
-    ).resolves.toBe('deferred');
-    expect(current.requests).toEqual([]);
-    expect(current.session.getSteeringMessages()).toEqual([]);
-    expect(current.manager.getBranch().filter((entry) => entry.type === 'message')).toEqual([]);
-  });
-
   it('detachable steering removes the exact duplicate in the real Pi queue', async () => {
     const current = await harness(['wait-for-abort']);
     const original = current.session.prompt('original');
@@ -411,7 +400,7 @@ describe('Pi session adapter integration', () => {
     expect(current.session.getSteeringMessages()).toEqual([]);
   });
 
-  it('guarded steer rechecks activity after an async input hook without leaving queued input', async () => {
+  it('detachable steer rechecks activity after an async input hook without leaving queued input', async () => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const current = await harness(['wait-for-abort'], {
@@ -432,7 +421,7 @@ describe('Pi session adapter integration', () => {
     });
     const original = current.session.prompt('original');
     await current.streamStarted;
-    const supplement = steerActiveSession(current.session, 'late supplement', undefined, () => {});
+    const supplement = steerWithWithdrawal(current.session, 'late supplement', undefined, () => {});
     const rejected = expect(supplement).resolves.toBe('deferred');
     await entered.promise;
     await current.session.abort();
@@ -449,7 +438,7 @@ describe('Pi session adapter integration', () => {
     ).toEqual(['original']);
   });
 
-  it('guarded queued input can be detached at settle without removing ordinary or custom steering', async () => {
+  it('detachable queued input can be removed at settle without removing ordinary or custom steering', async () => {
     const current = await harness(['wait-for-abort']);
     const original = current.session.prompt('original');
     await current.streamStarted;
@@ -463,7 +452,7 @@ describe('Pi session adapter integration', () => {
     });
     let detach: (() => boolean) | undefined;
     expect(
-      await steerActiveSession(current.session, 'guarded', undefined, (remove) => {
+      await steerWithWithdrawal(current.session, 'guarded', undefined, (remove) => {
         detach = remove;
       })
     ).toBe('queued');
@@ -487,7 +476,7 @@ describe('Pi session adapter integration', () => {
     );
   });
 
-  it('guarded input in the active settlement boundary is consumed once and is no longer detachable', async () => {
+  it('detachable input in the active settlement boundary is consumed once and is no longer detachable', async () => {
     let injected = false;
     let detach: (() => boolean) | undefined;
     const current = await harness(
@@ -504,7 +493,7 @@ describe('Pi session adapter integration', () => {
                 if (injected) return;
                 injected = true;
                 expect(
-                  await steerActiveSession(current.session, 'supplement', undefined, (remove) => {
+                  await steerWithWithdrawal(current.session, 'supplement', undefined, (remove) => {
                     detach = remove;
                   })
                 ).toBe('queued');

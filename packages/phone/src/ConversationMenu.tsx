@@ -1,29 +1,15 @@
-import { ChevronRight, Files, GitBranch, PlusCircle, Waypoints, X } from 'lucide-react';
+import { ChevronRight, PlusCircle, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { usePhoneBack } from './usePhoneBack';
 
-/**
- * 会话菜单（设计稿 `bot-menu.tsx`）：一个会话只有一个入口，放会话级动作。
- * 开新会话是破坏性的，行内就写明「清掉这段上下文」，点下去还要再过一次确认
- * （确认由调用方经 botNewSessionPort 的 confirm 完成）。
- */
+/** 会话菜单：一个会话只有一个入口，放会话级动作。 */
 export interface ConversationMenuItem {
   key: string;
   label: string;
   hint: string;
-  icon: 'new-session' | 'thread' | 'artifacts' | 'comms';
-  danger?: boolean;
   disabled?: boolean;
-  disabledHint?: string;
   onSelect(): void;
 }
-
-const ICONS = {
-  'new-session': PlusCircle,
-  thread: GitBranch,
-  artifacts: Files,
-  comms: Waypoints,
-} as const;
 
 export function ConversationMenu({
   open,
@@ -71,26 +57,24 @@ export function ConversationMenu({
         </header>
         <div className="px-5">
           {items.map((item, index) => {
-            const Icon = ICONS[item.icon];
             return (
               <button
                 key={item.key}
                 type="button"
                 disabled={item.disabled}
-                title={item.disabled ? item.disabledHint : undefined}
                 onClick={() => {
                   if (item.disabled) return;
                   item.onSelect();
                 }}
-                className={cnMenuRow(index, item.disabled, item.danger)}
+                className={cnMenuRow(index, item.disabled)}
               >
-                <span className={cnIcon(item.disabled, item.danger)}>
-                  <Icon className="size-[18px]" aria-hidden />
+                <span className={cnIcon(item.disabled)}>
+                  <PlusCircle className="size-[18px]" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span
                     className={`block text-[15px] leading-5 font-medium ${
-                      item.danger ? 'text-red' : item.disabled ? 'text-faint' : ''
+                      item.disabled ? 'text-faint' : ''
                     }`}
                   >
                     {item.label}
@@ -118,20 +102,19 @@ export function ConversationMenu({
   );
 }
 
-function cnMenuRow(index: number, disabled?: boolean, danger?: boolean) {
+function cnMenuRow(index: number, disabled?: boolean) {
   return [
     'flex w-full items-center gap-3 py-3 text-left',
     index > 0 ? 'border-line/60 border-t' : '',
     disabled ? 'opacity-50' : '',
-    danger ? '' : '',
   ]
     .filter(Boolean)
     .join(' ');
 }
 
-function cnIcon(disabled?: boolean, danger?: boolean) {
+function cnIcon(disabled?: boolean) {
   return [
     'flex w-6 shrink-0 items-center justify-center',
-    disabled ? 'text-faint' : danger ? 'text-red' : 'text-ink',
+    disabled ? 'text-faint' : 'text-ink',
   ].join(' ');
 }

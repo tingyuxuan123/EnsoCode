@@ -8,13 +8,10 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { PanelRight } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppRail } from '@/components/app/AppRail';
 import { BackgroundLayer } from '@/components/app/BackgroundLayer';
 import { TitleBar } from '@/components/app/TitleBar';
-import { BotView } from '@/components/bots/BotView';
-import { globalBoard, rootBoardGroups } from '@/components/bots/globalBoard';
-import { ModeSwitch } from '@/components/bots/ModeSwitch';
 import { requestOpenChatFind } from '@/components/chat/ChatFindBar';
 import { ChatView } from '@/components/chat/ChatView';
 import { composerDrafts } from '@/components/chat/composerDraft';
@@ -39,7 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { addToast, ToastProvider } from '@/components/ui/toast';
+import { ToastProvider } from '@/components/ui/toast';
 import { DesignRuntimeHost } from '@/features/design/DesignRuntimeHost';
 import { DesignWindowRelay } from '@/features/design/DesignWindowRelay';
 import { useDesignRegistry } from '@/features/design/host/registry';
@@ -59,7 +56,6 @@ import { useAutoArchiveScan } from '@/hooks/useAutoArchiveScan';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useDockBadge } from '@/hooks/useDockBadge';
 import { useGenerationStallTimeout } from '@/hooks/useGenerationStallTimeout';
-import { useTaskBoardNavigation } from '@/hooks/useTaskBoardNavigation';
 import { useWindowsWindowChrome } from '@/hooks/useWindowsWindowChrome';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, eventToBinding, isEventInSidePanel } from '@/lib/keybindings';
@@ -74,14 +70,6 @@ import { PluginNotices } from '@/plugins/PluginNotices';
 import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { PluginUiHost } from '@/plugins/PluginUiHost';
 import { SessionActivityAttributes } from '@/plugins/SessionActivityAttributes';
-import { useBotsStore } from '@/stores/bots';
-import {
-  isBotModeActive,
-  openBotNotification,
-  showLocalCodeView,
-  useAppModeStore,
-  useBotModeActive,
-} from '@/stores/bots/mode';
 import { initDevices } from '@/stores/devices';
 import { bindPairCatalogSync } from '@/stores/pairCatalog';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
@@ -143,7 +131,8 @@ export default function App() {
       void api.consumeExtensionsDeepLink().then((link) => {
         // StrictMode 会清理后立即重订阅；首个异步消费结果仍属于这次挂载，不能丢掉。
         if (!link || !extensionNavigationMounted.current) return;
-        showLocalCodeView();
+        const nodes = useRemoteNodesStore.getState();
+        if (nodes.activeNodeId !== 'local') nodes.switchNode('local');
         closeDesignGallery();
         useImageStudioStore.getState().setOpen(false);
         setExtensionRequest({
@@ -193,7 +182,7 @@ export default function App() {
   const scratchProjectId = useSettingsStore(
     (s) => s.projects.find((project) => project.kind === 'scratch')?.id
   );
-  // 搜索、通知等选到另一类会话时跟随选中项；手动切页和 Code / Bot 切换保留当前页。
+  // 搜索、通知等选到另一类会话时跟随选中项；手动切页和 切换工作台保留当前页。
   useEffect(() => {
     if (!activeConversationId || !activeProjectId) return;
     setSidebarView(activeProjectId === scratchProjectId ? 'conversations' : 'projects');
@@ -206,8 +195,6 @@ export default function App() {
   );
   const sideFullscreen = useSidePanelStore((s) => s.fullscreen);
   const toggleSidePanel = useSidePanelStore((s) => s.toggleOpen);
-  const botPanelOpen = useBotsStore((s) => s.panelOpen);
-  const toggleBotPanel = useBotsStore((s) => s.togglePanel);
   useEffect(() => {
     if (sideFullscreen && !sideOpen) useSidePanelStore.getState().setFullscreen(false);
   }, [sideOpen, sideFullscreen]);
@@ -321,12 +308,10 @@ export default function App() {
   useEffect(() => useRemoteNodesStore.getState().bind(), []);
   const activeNodeId = useRemoteNodesStore((s) => s.activeNodeId);
   const remoteNodeActive = activeNodeId !== 'local';
-  const botModeActive = useBotModeActive();
   const designEnabled = useSettingsStore((s) => s.designEnabled);
   const galleryAvailable = isDesignGalleryAvailable({
     designEnabled,
     remoteNodeActive,
-    botModeActive,
   });
   const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
   const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
@@ -335,79 +320,34 @@ export default function App() {
   const studioTitle = useImageStudioStore((s) =>
     s.activeId ? s.sessions[s.activeId]?.title : undefined
   );
-  const studioActive = studioOpen && !remoteNodeActive && !botModeActive && !galleryActive;
+  const studioActive = studioOpen && !remoteNodeActive && !galleryActive;
   const activePanelOpen = studioActive ? studioHistoryOpen : sideOpen;
   // 与 Code 共用自动收放：只恢复为当前面板临时收起的侧栏，不覆盖用户手动收起。
   useEffect(() => {
     if (!activePanelOpen && sidebarAuto) useSidebarStore.getState().autoRestore();
   }, [activePanelOpen, sidebarAuto]);
-  const extensionsActive =
-    extensionsOpen && !remoteNodeActive && !botModeActive && !galleryActive && !studioActive;
+  const extensionsActive = extensionsOpen && !remoteNodeActive && !galleryActive && !studioActive;
   useEffect(() => {
-    if (remoteNodeActive || botModeActive || galleryActive)
-      useImageStudioStore.getState().setOpen(false);
-  }, [remoteNodeActive, botModeActive, galleryActive]);
+    if (remoteNodeActive || galleryActive) useImageStudioStore.getState().setOpen(false);
+  }, [remoteNodeActive, galleryActive]);
   useEffect(() => {
-    if (remoteNodeActive || botModeActive || galleryActive) {
+    if (remoteNodeActive || galleryActive) {
       setExtensionsOpen(false);
       setExtensionRequest(undefined);
     }
-  }, [botModeActive, galleryActive, remoteNodeActive]);
+  }, [galleryActive, remoteNodeActive]);
   const { t: designT } = useDesignTranslation();
   useEffect(() => {
     if (!galleryAvailable) closeDesignGallery();
   }, [galleryAvailable]);
-  const botModeEnabled = useSettingsStore((s) => s.botModeEnabled);
-  const boardChats = useBotsStore((state) => state.chats);
-  const boardTasks = useBotsStore((state) => state.tasks);
-  const boardDelegations = useBotsStore((state) => state.delegations);
-  const boardGroups = useMemo(() => rootBoardGroups(boardChats), [boardChats]);
-  const boardAttention = useMemo(() => {
-    if (!botModeEnabled || !boardGroups.every((group) => boardTasks[group.id] !== undefined))
-      return undefined;
-    return globalBoard(boardGroups, boardTasks, boardDelegations).attention;
-  }, [botModeEnabled, boardGroups, boardTasks, boardDelegations]);
-  useEffect(() => {
-    if (!botModeEnabled || remoteNodeActive) return;
-    const state = useBotsStore.getState();
-    for (const group of boardGroups) {
-      if (state.tasks[group.id] === undefined) void state.refreshTasks(group.id);
-    }
-  }, [botModeEnabled, boardGroups, remoteNodeActive]);
-  const appMode = useAppModeStore((s) => s.mode);
-  // 关闭实验开关或切到远程节点：回到 Code（设置未水合前 botModeEnabled 恒为 false，不能据此回退）
-  useEffect(() => {
-    const hydrated = useSettingsStore.persist?.hasHydrated?.() ?? true;
-    if (appMode === 'bot' && ((hydrated && !botModeEnabled) || remoteNodeActive)) {
-      useAppModeStore.getState().setMode('code');
-    }
-  }, [appMode, botModeEnabled, remoteNodeActive]);
-
-  // Bot 模式开关打开即常驻订阅：Code 模式下也要实时计数待处理，并响应通知点击跳转
-  useEffect(() => {
-    if (!botModeEnabled) return;
-    const unbind = useBotsStore.getState().bind();
-    const offOpen = window.electronAPI.bots.onEvent((event) => {
-      if (event.kind === 'open') {
-        closeWorkspacePage();
-        void openBotNotification(event);
-      }
-    });
-    return () => {
-      unbind();
-      offOpen();
-    };
-  }, [botModeEnabled, closeWorkspacePage]);
-
-  useTaskBoardNavigation(closeWorkspacePage);
-
-  // Code 会话通知点击：当前在远程节点或 Bot 模式时先切回本机 Code，会话由 sessions store 选中
+  // Code 会话通知点击：当前在远程节点时先切回本机，会话由 sessions store 选中
   useEffect(
     () =>
       window.electronAPI.agent.onFocusSession((sessionId) => {
         if (useSessionsStore.getState().conversations[sessionId]) {
           closeWorkspacePage();
-          showLocalCodeView();
+          const nodes = useRemoteNodesStore.getState();
+          if (nodes.activeNodeId !== 'local') nodes.switchNode('local');
         }
       }),
     [closeWorkspacePage]
@@ -447,18 +387,8 @@ export default function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       const pressed = eventToBinding(e);
       if (!pressed) return;
-      if (pressed === bindings['toggle-app-mode']) {
-        const settings = useSettingsStore.getState();
-        if (!settings.botModeEnabled || useRemoteNodesStore.getState().activeNodeId !== 'local')
-          return;
-        e.preventDefault();
-        closeWorkspacePage();
-        const modes = useAppModeStore.getState();
-        modes.setMode(modes.mode === 'bot' ? 'code' : 'bot');
-        return;
-      }
-      // 远程节点 / Bot 模式：本机 Code 会话相关的快捷键不响应（新对话/tab 切换/右侧面板/查找）
-      const remote = useRemoteNodesStore.getState().activeNodeId !== 'local' || isBotModeActive();
+      // 远程节点不响应本机 Code 会话相关的快捷键。
+      const remote = useRemoteNodesStore.getState().activeNodeId !== 'local';
       // 图片工作台接管自己的新建、输入和右侧栏快捷键，不能落到隐藏的 Code 会话。
       if (
         useImageStudioStore.getState().open &&
@@ -489,17 +419,6 @@ export default function App() {
         ].some((key) => pressed === bindings[key as keyof typeof bindings])
       )
         return;
-      if (isBotModeActive() && pressed === bindings['toggle-side-panel']) {
-        e.preventDefault();
-        useBotsStore.getState().togglePanel();
-        return;
-      }
-      if (isBotModeActive() && pressed === bindings['search-workspace']) {
-        e.preventDefault();
-        closeWorkspacePage();
-        useBotsStore.getState().setSearchOpen(true);
-        return;
-      }
       if (
         remote &&
         [
@@ -569,7 +488,6 @@ export default function App() {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
-      if (isBotModeActive()) return;
       e.preventDefault();
       useSidePanelStore.getState().setFullscreen(false);
     };
@@ -583,27 +501,16 @@ export default function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  // Code / Bot 是工作模式，按上游组织居中承载在标题栏：远程节点接管本机界面时不提供。
-  // Bot 功能关闭时只剩 Code 一项，分段控件没有切换意义，入口回落到图标轨（见 codeRail）。
-  const modeEntry =
-    remoteNodeActive || !botModeEnabled ? undefined : (
-      <ModeSwitch
-        inactive={studioActive || galleryActive || extensionsActive}
-        onSelect={closeWorkspacePage}
-      />
-    );
-  // Bot 功能关闭时的 Code 入口：排在图片工作台上方，负责从画廊 / 生图 / 扩展页回到对话。
-  const codeRail =
-    remoteNodeActive || botModeEnabled
-      ? undefined
-      : {
-          active: !studioActive && !galleryActive && !extensionsActive && !botModeActive,
-          onToggle: () => {
-            closeWorkspacePage();
-            showLocalCodeView();
-          },
-        };
-  // 模式入口右侧的显示控制：图片历史、画廊 header 与右侧面板。
+  // 从其他工作台回到普通会话。
+  const codeRail = remoteNodeActive
+    ? undefined
+    : {
+        active: !studioActive && !galleryActive && !extensionsActive,
+        onToggle: () => {
+          closeWorkspacePage();
+        },
+      };
+  // 标题栏右侧的显示控制：图片历史、画廊 header 与右侧面板。
   const viewActions = studioActive ? (
     <button
       type="button"
@@ -622,9 +529,9 @@ export default function App() {
       type="button"
       className={cn(
         'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-        (botModeActive ? botPanelOpen : sideOpen) ? 'text-foreground' : 'text-muted-foreground'
+        sideOpen ? 'text-foreground' : 'text-muted-foreground'
       )}
-      onClick={botModeActive ? toggleBotPanel : toggleSidePanel}
+      onClick={toggleSidePanel}
       aria-label={t('Toggle side panel')}
       title={t('Toggle side panel')}
     >
@@ -657,8 +564,6 @@ export default function App() {
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
           ) : undefined
         }
-        // 工作模式分段居中承载（上游组织）；右侧只留显示控制
-        centered={modeEntry}
         actions={viewActions}
       />
       {/* 外壳：图标轨 + 侧栏铺在外壳底色上，工作区是浮在外壳里的一块圆角卡片
@@ -670,15 +575,10 @@ export default function App() {
           onOpenSearch={
             remoteNodeActive
               ? undefined
-              : botModeActive
-                ? () => {
-                    closeWorkspacePage();
-                    useBotsStore.getState().setSearchOpen(true);
-                  }
-                : () => {
-                    closeWorkspacePage();
-                    setSearchOpen(true);
-                  }
+              : () => {
+                  closeWorkspacePage();
+                  setSearchOpen(true);
+                }
           }
           designGallery={
             galleryAvailable
@@ -702,48 +602,16 @@ export default function App() {
                   onToggle: () => {
                     const next = !studioActive;
                     closeWorkspacePage();
-                    if (next) showLocalCodeView();
                     useImageStudioStore.getState().setOpen(next);
                   },
                 }
               : undefined
           }
           codeWorkspace={codeRail}
-          collaborationBoard={
-            // 看板内容来自 Bot 任务：功能关闭后没有可看的东西，入口一并消失。
-            !remoteNodeActive && botModeEnabled
-              ? {
-                  active: false,
-                  attention: boardAttention,
-                  onToggle: () => {
-                    void window.electronAPI.taskBoard
-                      .open()
-                      .then((result) => {
-                        if (!result.ok) throw new Error(result.error);
-                      })
-                      .catch((error: unknown) => {
-                        addToast({
-                          type: 'error',
-                          title: t('Collaboration board'),
-                          description: error instanceof Error ? error.message : String(error),
-                        });
-                      });
-                  },
-                }
-              : undefined
-          }
         />
         {remoteNodeActive ? (
           // 远程节点态：整块换成对方的目录与会话；本机 Sidebar/ChatView/SidePanel 卸载
           <RemoteNodeView nodeId={activeNodeId} sidebarWidth={width} />
-        ) : botModeActive ? (
-          // Bot 模式：成员/群聊侧栏 + 聊天区；Code 侧栏/会话/右侧面板卸载
-          <BotView
-            sidebarWidth={width}
-            collapsed={collapsed}
-            onToggleCollapse={toggleSidebar}
-            onResize={handleResize}
-          />
         ) : studioActive ? (
           <ImageStudio
             collapsed={collapsed}

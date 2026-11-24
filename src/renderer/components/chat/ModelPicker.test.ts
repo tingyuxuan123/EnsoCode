@@ -9,12 +9,7 @@ import { VIRTUAL_PROVIDER_ID, type VirtualModelEntry } from '@shared/virtualMode
 import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  duplicateModelLabels,
-  ModelPicker,
-  persistClampedThinkingLevel,
-  resolvePickerCapabilities,
-} from './ModelPicker';
+import { ModelPicker, persistClampedThinkingLevel, resolvePickerCapabilities } from './ModelPicker';
 
 interface WrapperProps {
   children?: ReactNode;
@@ -22,10 +17,12 @@ interface WrapperProps {
 
 interface ClickWrapperProps extends WrapperProps {
   onClick?: () => void;
+  [key: `data-${string}`]: unknown;
 }
 
 const harness = vi.hoisted(() => ({
   menuItemClicks: [] as Array<() => void>,
+  railClicks: [] as Array<() => void>,
   sliderProps: null as Record<string, unknown> | null,
   switchProps: null as Record<string, unknown> | null,
   buttons: [] as Record<string, unknown>[],
@@ -58,9 +55,15 @@ vi.mock('@/hooks/useAccountUsage', () => ({
 
 vi.mock('@/components/ui/menu', () => {
   const Wrap = ({ children }: WrapperProps) => createElement('div', null, children);
-  const MenuItem = ({ children, onClick }: ClickWrapperProps) => {
-    if (onClick) harness.menuItemClicks.push(onClick);
-    return createElement('div', null, children);
+  const MenuItem = ({ children, onClick, ...rest }: ClickWrapperProps) => {
+    // 条目轨（账号 / 网关 / 虚拟模型）与模型行都是 MenuItem：轨道项单独记账，
+    // 这样「第 N 个模型行」的断言不会被轨道项插队打乱。
+    const rail = rest['data-model-picker-rail'];
+    if (onClick) (rail !== undefined ? harness.railClicks : harness.menuItemClicks).push(onClick);
+    const data = Object.fromEntries(
+      Object.entries(rest).filter(([key]) => key.startsWith('data-'))
+    );
+    return createElement('div', data, children);
   };
   const MenuTrigger = ({ children, title }: WrapperProps & { title?: string }) =>
     createElement('button', { type: 'button', title }, children);
@@ -135,6 +138,7 @@ const commonProps = {
 
 beforeEach(() => {
   harness.menuItemClicks = [];
+  harness.railClicks = [];
   harness.sliderProps = null;
   harness.switchProps = null;
   harness.buttons = [];
@@ -771,20 +775,8 @@ describe('ModelPicker reasoning controls mode', () => {
   });
 });
 
-describe('duplicateModelLabels', () => {
-  it('同一条目内重名的已启用模型需要附 id 消歧', () => {
-    const models: ModelEntry[] = [
-      { id: 'cursor-grok-4.6', label: 'Grok 4.6 Medium' },
-      { id: 'grok-4.6', label: 'Grok 4.6 Medium' },
-      { id: 'grok-4.6-max', label: 'Grok 4.6 Max Medium' },
-      { id: 'x', label: 'Grok 4.6 Max Medium', enabled: false },
-      { id: 'no-label' },
-      { id: 'other', label: 'no-label' },
-    ];
-    expect([...duplicateModelLabels(models)]).toEqual(['Grok 4.6 Medium', 'no-label']);
-  });
-
-  it('重名模型的 id 单独成行，不重名的不附 id', () => {
+describe('模型列表与条目轨', () => {
+  it('每行都带模型 id：网关背后多个上游时，显示名重名只能靠 id 认人', () => {
     const html = renderToStaticMarkup(
       createElement(ModelPicker, {
         ...commonProps,
@@ -792,16 +784,82 @@ describe('duplicateModelLabels', () => {
           {
             ...providers[0],
             models: [
-              { id: 'cursor-grok-4.6', label: 'Grok 4.6 Medium' },
-              { id: 'grok-4.6', label: 'Grok 4.6 Medium' },
+              { id: 'auto/gpt-6.2-sol', label: 'GPT-6.2 Sol' },
+              { id: 'gonshi/gpt-6.2-sol', label: 'GPT-6.2 Sol' },
               { id: 'gpt-5', label: 'GPT-5' },
             ],
           },
         ],
       })
     );
-    expect(html).toContain('data-model-row-id="cursor-grok-4.6"');
-    expect(html).toContain('data-model-row-id="grok-4.6"');
-    expect(html).not.toContain('data-model-row-id="gpt-5"');
+    expect(html).toContain('data-model-row-id="auto/gpt-6.2-sol"');
+    expect(html).toContain('data-model-row-id="gonshi/gpt-6.2-sol"');
+    expect(html).toContain('data-model-row-id="gpt-5"');
+  });
+
+  it('条目轨：默认停在当前模型所属条目，点击条目直接列出它的模型（不再进二级菜单）', () => {
+    const gateway: ModelProvider = {
+      ...providers[0],
+      id: 'gateway',
+      name: 'magpie',
+      models: [{ id: 'auto/gpt-6.2-sol', label: 'Gateway Sol' }],
+    };
+    const html = renderToStaticMarkup(
+      createElement(ModelPicker, {
+        ...commonProps,
+        providers: [providers[0], gateway],
+        providerId: 'gateway',
+        modelId: 'auto/gpt-6.2-sol',
+      })
+    );
+    expect(html).toContain('data-model-picker-rail="provider:api"');
+    expect(html).toContain('data-model-picker-rail="provider:gateway"');
+    // 打开即停在 gateway：列表里是它的模型，不是另一个条目的
+    expect(html).toContain('Gateway Sol');
+    expect(html).not.toContain('Chosen model');
+  });
+
+  it('只有一个条目时不画条目轨：没有可切换的来源，空列只会让人以为还能切', () => {
+    const html = renderToStaticMarkup(createElement(ModelPicker, commonProps));
+    expect(html).not.toContain('data-model-picker-rail');
+    expect(html).toContain('Chosen model');
+  });
+
+  it('点条目轨只换列表，不当成选模型关掉浮层', () => {
+    const gateway: ModelProvider = {
+      ...providers[0],
+      id: 'gateway',
+      name: 'magpie',
+      models: [{ id: 'auto/gpt-6.2-sol', label: 'Gateway Sol' }],
+    };
+    renderToStaticMarkup(
+      createElement(ModelPicker, {
+        ...commonProps,
+        providers: [providers[0], gateway],
+      })
+    );
+    expect(harness.railClicks).toHaveLength(2);
+    harness.railClicks[1]?.();
+    expect(commonProps.onSelect).not.toHaveBeenCalled();
+  });
+
+  it('showReasoningControls=false 时不出推理栏，但条目轨与列表照常', () => {
+    const gateway: ModelProvider = {
+      ...providers[0],
+      id: 'gateway',
+      name: 'magpie',
+      models: [{ id: 'auto/gpt-6.2-sol', label: 'Gateway Sol' }],
+    };
+    const html = renderToStaticMarkup(
+      createElement(ModelPicker, {
+        ...commonProps,
+        providers: [providers[0], gateway],
+        showReasoningControls: false,
+      })
+    );
+    expect(html).toContain('data-model-picker-rail="provider:api"');
+    expect(html).toContain('Chosen model');
+    expect(html).not.toContain('data-model-picker="reasoning"');
+    expect(html).not.toContain('Reasoning');
   });
 });

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { botTone, rowTitleClass, rowTone, StatusGlyph, waitingRowClass } from './StatusGlyph';
+import { rowTitleClass, rowTone, StatusGlyph, waitingRowClass } from './StatusGlyph';
 
 describe('会话行的状态符号', () => {
   it('等你的优先级最高：有挂起的提问/审批就是等你，即便还在跑', () => {
@@ -18,13 +18,6 @@ describe('会话行的状态符号', () => {
 
   it('待办计数为 0 不算等你', () => {
     expect(rowTone({ status: 'idle', pendingAskCount: 0, pendingApprovalCount: 0 })).toBe('idle');
-  });
-
-  it('Bot 成员按运行态映射，收件箱有待办时是等你', () => {
-    expect(botTone('running')).toBe('running');
-    expect(botTone('queued')).toBe('running');
-    expect(botTone('idle')).toBe('idle');
-    expect(botTone('idle', true)).toBe('waiting');
   });
 
   it('完成与空闲不渲染任何符号，只有等你/运行/出错才有', () => {

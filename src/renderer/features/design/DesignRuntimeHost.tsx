@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useBotModeActive } from '@/stores/bots/mode';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { viewedDesignSessionId } from './host/activity-route';
@@ -19,9 +18,8 @@ export function DesignRuntimeHost() {
     () => useDesignLocale.setState({ locale: language.startsWith('zh') ? 'zh' : 'en' }),
     [language]
   );
-  const botMode = useBotModeActive();
   const viewingSessionId = useSessionsStore((state) =>
-    botMode ? null : viewedDesignSessionId(state.conversations, state.activeId)
+    viewedDesignSessionId(state.conversations, state.activeId)
   );
   useEffect(() => {
     const streaming = viewingSessionId

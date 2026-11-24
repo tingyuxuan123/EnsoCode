@@ -21,7 +21,6 @@ vi.mock('electron', () => ({
 }));
 
 const electronAPI = mocks.exposeInMainWorld.mock.calls[0]?.[1] as ElectronAPI;
-const { taskBoard } = electronAPI;
 
 it('exposes the device host port, never a raw process or file API', async () => {
   const api = electronAPI.devices;
@@ -129,38 +128,6 @@ describe('preload agentDispatch.onEvent', () => {
 
     unsubscribe();
     expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.AGENT_DISPATCH_EVENT, listener);
-  });
-});
-
-describe('preload taskBoard', () => {
-  beforeEach(() => {
-    mocks.invoke.mockClear();
-    mocks.on.mockClear();
-    mocks.removeListener.mockClear();
-  });
-
-  it('仅暴露 typed 窗口 API，导航只传群 / 任务标识', () => {
-    void taskBoard.open();
-    void taskBoard.focusMain();
-    const target = { kind: 'task', chatId: 'group-id', taskId: 'task-id' } as const;
-    void taskBoard.navigate(target);
-    void taskBoard.consumeNavigation();
-    expect(mocks.invoke.mock.calls).toEqual([
-      [IPC_CHANNELS.TASK_BOARD_OPEN],
-      [IPC_CHANNELS.TASK_BOARD_FOCUS_MAIN],
-      [IPC_CHANNELS.TASK_BOARD_NAVIGATE, target],
-      [IPC_CHANNELS.TASK_BOARD_NAVIGATION_CONSUME],
-    ]);
-  });
-
-  it('导航通知可取消订阅，不把 Electron event 暴露给 renderer', () => {
-    const callback = vi.fn();
-    const off = taskBoard.onNavigate(callback);
-    const listener = mocks.on.mock.calls[0]?.[1] as (event: unknown) => void;
-    listener({ sender: 'internal' });
-    expect(callback).toHaveBeenCalledExactlyOnceWith();
-    off();
-    expect(mocks.removeListener).toHaveBeenCalledWith(IPC_CHANNELS.TASK_BOARD_NAVIGATION, listener);
   });
 });
 

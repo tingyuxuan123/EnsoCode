@@ -20,8 +20,6 @@ import io.github.tingyuxuan123.codekiln.mirror.TaskStopBaseline
 import io.github.tingyuxuan123.codekiln.mirror.taskStopBaseline
 import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction
 import io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput
-import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
-import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.codekiln.mirror.DesktopFileChunk
 import io.github.tingyuxuan123.codekiln.mirror.FileDownloadTarget
 import io.github.tingyuxuan123.codekiln.mirror.SessionImageTarget
@@ -69,24 +67,6 @@ internal interface CompanionLink : AutoCloseable {
     fun openPreview(sessionId: String, entryId: String, width: Int, height: Int) = Unit
     fun previewAction(sessionId: String, action: DesktopPreviewAction) = Unit
     fun previewInput(sessionId: String, input: DesktopPreviewInput) = Unit
-    fun requestBots() = Unit
-    fun requestInbox() = Unit
-    fun openBotChat(chatId: String) = Unit
-    fun loadBotTimeline(chatId: String, beforeSeq: Long?) = Unit
-    fun closeBotChat(chatId: String) = Unit
-    fun sendBotMessage(chatId: String, text: String, deliveryId: String) = Unit
-    fun stopBotChat(chatId: String) = Unit
-    fun changeBotThread(rootId: String, command: BotThreadCommand, targetId: String?, expectedActiveId: String) = Unit
-    fun requestBotNewSession(chatId: String) = Unit
-    fun confirmBotNewSession(chatId: String) = Unit
-    fun retryBotEntry(chatId: String, entryId: String) = Unit
-    fun dismissBotInboxItem(key: String) = Unit
-    fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) = Unit
-    fun openBotDirect(botId: String) = Unit
-    fun loadBotArtifacts(target: DesktopBotArtifactTarget) = Unit
-    fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String?, rel: String?) = Unit
-    fun listBotFiles(target: DesktopBotArtifactTarget) = Unit
-    fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) = Unit
     fun createTask(request: TaskLaunch) = Unit
     fun dismissCreation(sessionId: String?) = Unit
 }
@@ -217,11 +197,7 @@ internal class CompanionController(
             selectedSession = null
             connection?.selectSession(null)
         } else if (!mutable.value.busy && mutable.value.paired && mutable.value.link.phase == LinkPhase.Online &&
-            (mutable.value.link.catalog.any { it.id == sessionId && !it.archived } ||
-                mutable.value.link.bots?.let { bots -> bots.enabled == true &&
-                    ((bots.chats + bots.threads).any { !it.archived && sessionId in it.sessions.values } ||
-                        bots.activity.any { it.conversationId == sessionId } ||
-                        bots.inbox.any { it.conversationId == sessionId && it.kind in setOf("approval", "ask") }) } == true)) {
+            mutable.value.link.catalog.any { it.id == sessionId && !it.archived }) {
             selectedSession = sessionId
             connection?.selectSession(sessionId)
         }
@@ -313,11 +289,8 @@ internal class CompanionController(
     }
 
     suspend fun fetchFileChunk(target: FileDownloadTarget, fileId: String, offset: Long): DesktopFileChunk? {
-        val allowed = when (target) {
-            is FileDownloadTarget.Session -> visible && currentSession() == target.id
-            is FileDownloadTarget.Bot -> botReadable()
-        }
-        return if (allowed) connection?.fetchFileChunk(target, fileId, offset) else null
+        val sessionId = (target as? FileDownloadTarget.Session)?.id ?: return null
+        return if (visible && currentSession() == sessionId) connection?.fetchFileChunk(target, fileId, offset) else null
     }
 
     suspend fun loadSessionImage(sessionId: String, target: SessionImageTarget): String? =
@@ -337,84 +310,6 @@ internal class CompanionController(
 
     fun previewInput(sessionId: String, input: DesktopPreviewInput) {
         if (visible && currentSession() == sessionId) connection?.previewInput(sessionId, input)
-    }
-
-    // Bot mode is push-based: requests carry no session and read-only devices may still request.
-    fun requestBots() {
-        if (visible && mutable.value.paired && !mutable.value.busy && mutable.value.link.phase == LinkPhase.Online) {
-            connection?.requestBots()
-        }
-    }
-
-    fun requestInbox() {
-        if (visible && mutable.value.paired && !mutable.value.busy && mutable.value.link.phase == LinkPhase.Online) {
-            connection?.requestInbox()
-        }
-    }
-
-    fun openBotChat(chatId: String) {
-        if (chatId.isNotBlank() && chatId.length <= 512 &&
-            visible && mutable.value.paired && !mutable.value.busy && mutable.value.link.phase == LinkPhase.Online) {
-            connection?.openBotChat(chatId)
-        }
-    }
-
-    fun loadBotTimeline(chatId: String, beforeSeq: Long?) {
-        if (chatId.isNotBlank() && chatId.length <= 512 && (beforeSeq == null || beforeSeq >= 0) &&
-            visible && mutable.value.paired && !mutable.value.busy && mutable.value.link.phase == LinkPhase.Online) {
-            connection?.loadBotTimeline(chatId, beforeSeq)
-        }
-    }
-
-    fun closeBotChat(chatId: String) { connection?.closeBotChat(chatId) }
-
-    fun sendBotMessage(chatId: String, text: String, deliveryId: String) {
-        val state = mutable.value
-        if (chatId.isNotBlank() && chatId.length <= 512 && text.isNotBlank() &&
-            visible && state.paired && !state.busy && state.link.phase == LinkPhase.Online && !state.link.readOnly) {
-            connection?.sendBotMessage(chatId, text, deliveryId)
-        }
-    }
-
-    fun stopBotChat(chatId: String) {
-        val state = mutable.value
-        if (chatId.isNotBlank() && chatId.length <= 512 &&
-            visible && state.paired && !state.busy && state.link.phase == LinkPhase.Online && !state.link.readOnly) {
-            connection?.stopBotChat(chatId)
-        }
-    }
-
-    fun changeBotThread(rootId: String, command: BotThreadCommand, targetId: String?, expectedActiveId: String) {
-        val state = mutable.value
-        if (visible && state.paired && !state.busy && state.link.phase == LinkPhase.Online && !state.link.readOnly) {
-            connection?.changeBotThread(rootId, command, targetId, expectedActiveId)
-        }
-    }
-
-    private fun botWritable(): Boolean = mutable.value.let {
-        visible && it.paired && !it.busy && it.link.phase == LinkPhase.Online && !it.link.readOnly && it.link.bots?.enabled == true
-    }
-
-    fun requestBotNewSession(chatId: String) { if (botWritable()) connection?.requestBotNewSession(chatId) }
-    fun confirmBotNewSession(chatId: String) { if (botWritable()) connection?.confirmBotNewSession(chatId) }
-    fun retryBotEntry(chatId: String, entryId: String) { if (botWritable()) connection?.retryBotEntry(chatId, entryId) }
-    fun dismissBotInboxItem(key: String) { if (botWritable()) connection?.dismissBotInboxItem(key) }
-    fun createBotGroup(title: String, memberIds: List<String>, bossBotId: String) {
-        if (botWritable()) connection?.createBotGroup(title, memberIds, bossBotId)
-    }
-    fun openBotDirect(botId: String) { if (botWritable()) connection?.openBotDirect(botId) }
-    private fun botReadable(): Boolean = mutable.value.let {
-        visible && it.paired && !it.busy && it.link.phase == LinkPhase.Online && it.link.bots?.enabled == true
-    }
-    fun loadBotArtifacts(target: DesktopBotArtifactTarget) {
-        if (botReadable()) connection?.loadBotArtifacts(target)
-    }
-    fun loadBotArtifactImage(target: DesktopBotArtifactTarget, mediaId: String?, rel: String?) {
-        if (botReadable()) connection?.loadBotArtifactImage(target, mediaId, rel)
-    }
-    fun listBotFiles(target: DesktopBotArtifactTarget) { if (botReadable()) connection?.listBotFiles(target) }
-    fun readBotFile(target: DesktopBotArtifactTarget, fileId: String, offset: Long) {
-        if (botReadable()) connection?.readBotFile(target, fileId, offset)
     }
 
     fun createTask(request: TaskLaunch) {

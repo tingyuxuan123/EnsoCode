@@ -230,7 +230,7 @@
     --workbench-card-border: var(--color-border);
   }
 
-  /* 所有工作区内容区（Code / Bot / 远程节点 / 图片工作台）共用一枚标记，
+  /* 所有工作区内容区（Code / 远程节点 / 图片工作台）共用一枚标记，
      顶部直接衔接 44px 标题栏（标题栏内部已对称留白），左右与底部保留 --workbench-card-gap。 */
   [data-workbench-card] {
     margin: 0 var(--workbench-card-gap) var(--workbench-card-gap);
@@ -514,18 +514,12 @@ html.bg-image-enabled [data-slot='composer'] {
 
 /*
  * 承载内容的卡片叠在已半透明的面板上会叠成近乎不透明，这些卡片不再额外叠一层面板色，
- * 只留边框、直接透出壁纸：欢迎页建议、工具详情、Bot 页的内容卡片与系统提示条。
+ * 只留边框、直接透出壁纸：欢迎页建议与工具详情。
  */
 html.bg-image-enabled [data-slot='welcome-suggestion'],
 html.bg-image-enabled [data-slot='welcome-panel'],
 html.bg-image-enabled [data-slot='working-status'],
-html.bg-image-enabled [data-slot='tool-details'],
-html.bg-image-enabled [data-slot='bot-card'],
-html.bg-image-enabled [data-slot='bot-notice'] {
-  background-color: transparent;
-}
-/* 可点击的卡片行：只在静止态置透明，保留 hover 底色反馈 */
-html.bg-image-enabled [data-slot='bot-card-button']:not(:hover) {
+html.bg-image-enabled [data-slot='tool-details'] {
   background-color: transparent;
 }
 

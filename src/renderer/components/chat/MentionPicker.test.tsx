@@ -22,20 +22,6 @@ const baseGroups: MentionSearchGroups = {
       canEdit: false,
     },
   ],
-  members: [
-    {
-      kind: 'agent-type',
-      id: 'bot:alice',
-      typeKey: 'bot:alice',
-      label: 'Alice',
-      displayName: 'Alice',
-      description: 'Frontend specialist',
-      source: 'bot',
-      locked: true,
-      canDisable: false,
-      canEdit: false,
-    },
-  ],
   chats: [
     {
       kind: 'chat',
@@ -117,19 +103,12 @@ describe('MentionPicker', () => {
     expect(flyout?.querySelectorAll('[data-slot="badge"]')).toHaveLength(0);
   });
 
-  it('omits redundant Member badge inside members flyout while preserving Locked and flat agent pills', () => {
-    const membersFlyoutDoc = renderPicker({ openFolderId: 'members', activeIndex: 1 });
-    const flyout = membersFlyoutDoc.querySelector('[data-slot="mention-flyout"]');
-    const badges = Array.from(flyout?.querySelectorAll('[data-slot="badge"]') ?? []).map(
-      (b) => b.textContent
-    );
-    expect(badges).toEqual(['Locked']);
-
+  it('shows the agent source badge in search results', () => {
     const flatDoc = renderPicker({ query: 'e', openFolderId: null, activeIndex: 0 });
     const flatBadges = Array.from(flatDoc.querySelectorAll('[data-slot="badge"]')).map(
       (b) => b.textContent
     );
-    expect(flatBadges).toEqual(['Built-in', 'Member', 'Locked']);
+    expect(flatBadges).toEqual(['Built-in']);
   });
 
   it('propagates maxHeight to both root and flyout scroll containers without clipping', () => {

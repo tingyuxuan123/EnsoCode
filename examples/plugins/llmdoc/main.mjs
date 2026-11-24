@@ -620,6 +620,8 @@ export function activate(enso) {
     version: CLI_VERSION,
   });
   let busy = 0;
+  /** @type {((input: unknown, ctx: InvocationContext) => Promise<unknown>) | null} */
+  let statusInvoke = null;
   for (const op of /** @type {Operation[]} */ (Object.keys(OPS))) {
     /** @param {unknown} input @param {InvocationContext} ctx */
     const invoke = async (input, ctx) => {
@@ -660,6 +662,7 @@ export function activate(enso) {
         busy--;
       }
     };
+    if (op === 'status') statusInvoke = invoke;
     if (op !== 'upgrade') enso.renderer.handle(op, invoke);
     enso.tools.register(op, async (input, ctx) => ({
       content: JSON.stringify(await invoke(input, ctx)),
@@ -672,5 +675,36 @@ export function activate(enso) {
       return typeof root === 'string' ? root : null;
     },
     ready: async (root) => executable(await setup.resolveConfig(root), root),
+    review: async (root) => {
+      if (!statusInvoke) return null;
+      const outcome = await statusInvoke(
+        {},
+        /** @type {InvocationContext} */ ({
+          projectRoot: root,
+          sessionId: 'llmdoc-agent-end-review',
+        })
+      );
+      if (!isRecord(outcome) || outcome.operation !== 'status' || !isRecord(outcome.result))
+        return null;
+      const documents = outcome.result.documents;
+      const unmapped = outcome.result.unmapped;
+      if (!isRecord(documents) || !isRecord(unmapped)) return null;
+      const impacted = documents.impacted;
+      const needsReview = documents.needsReview;
+      const committed = unmapped.committed;
+      const dirty = unmapped.dirty;
+      if (
+        !Number.isInteger(impacted) ||
+        !Number.isInteger(needsReview) ||
+        !Array.isArray(committed) ||
+        !Array.isArray(dirty)
+      )
+        return null;
+      return {
+        impacted,
+        needsReview,
+        unmapped: committed.length + dirty.length,
+      };
+    },
   });
 }

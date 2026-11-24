@@ -85,7 +85,7 @@ await rpc.send('Page.reload');
 await ready(previousTimeOrigin);
 const original = await evaluate(`(()=>{
   const s=window.__stores.settings.getState();
-  return Object.fromEntries(['theme','accentColor','lightPalette','terminalTheme','botModeEnabled',
+  return Object.fromEntries(['theme','accentColor','lightPalette','terminalTheme',
     'designEnabled','backgroundImageEnabled','backgroundImagePath','backgroundOpacity'].map(k=>[k,s[k]]));
 })()`);
 const temp = mkdtempSync(path.join(tmpdir(), 'enso-theme-selection-'));
@@ -189,7 +189,7 @@ try {
   }
   await rpc.send('Emulation.setEmulatedMedia', { features: [] });
   await evaluate(
-    `(()=>{const s=window.__stores.settings.getState();s.setTheme('dark');s.setBotModeEnabled(true);s.setDesignEnabled(true);})()`
+    `(()=>{const s=window.__stores.settings.getState();s.setTheme('dark');s.setDesignEnabled(true);})()`
   );
   await settle();
   const shot = await rpc.send('Page.captureScreenshot', { format: 'png' });
@@ -201,64 +201,31 @@ try {
       await evaluate(`(()=>{const s=window.__stores.settings.getState();s.setAccentColor(${JSON.stringify(accent)});
         s.setBackgroundImagePath(${JSON.stringify(wallpaper)});s.setBackgroundOpacity(${opacity ?? 0.85});s.setBackgroundImageEnabled(${opacity !== null});})()`);
       await settle();
-      for (const view of ['code', 'images', 'design', 'bot']) {
-        // Code / Bot 是工作模式，入口在标题栏分段控件；画图 / 设计仍在左侧图标轨。
+      for (const view of ['code', 'images', 'design']) {
         click(`button[data-rail-view="${view}"]`);
         await settle();
-        // 两个承载层的选中样式不同：图标轨用 brand 文字 + selection 底，
-        // 标题栏模式分段用前景色文字 + 内容区色胶囊（上游风格）。
-        const modeSegment = view === 'code' || view === 'bot';
         const data = await evaluate(`(()=>{
           const b=document.querySelector('button[data-rail-view="${view}"]');
-          const fill=${modeSegment ? "b.querySelector('[data-slot=mode-switch-selection]')" : 'b'};
           const p=document.createElement('span');document.body.append(p);
-          p.style.color=${modeSegment ? "'var(--foreground)'" : "'var(--brand)'"};
-          // 模式胶囊的承载令牌是 --color-background（背景图模式下会被面板 alpha 重映射），
-          // 直接比 --background 会漏掉透明化机制。
-          p.style.backgroundColor=${modeSegment ? "'var(--color-background)'" : "'var(--selection)'"};
+          p.style.color='var(--brand)';
+          p.style.backgroundColor='var(--selection)';
           const expected={color:getComputedStyle(p).color,background:getComputedStyle(p).backgroundColor};p.remove();
-          const tint=document.createElement('span');tint.style.backgroundColor='var(--selection)';
-          document.body.append(tint);const selection=getComputedStyle(tint).backgroundColor;tint.remove();
-          return {pressed:b.getAttribute('aria-pressed'),pill:Boolean(fill),color:getComputedStyle(b).color,background:getComputedStyle(fill).backgroundColor,expected,
-            selection,count:document.querySelectorAll('button[data-rail-view][aria-pressed=true]').length};
+          return {pressed:b.getAttribute('aria-pressed'),color:getComputedStyle(b).color,background:getComputedStyle(b).backgroundColor,expected,
+            count:document.querySelectorAll('button[data-rail-view][aria-pressed=true]').length};
         })()`);
         assert.equal(data.pressed, 'true', `${view}: active state`);
-        assert.equal(data.pill, true, `${view}: selected segment has its own visual carrier`);
         assert.equal(data.count, 1, `${view}: exactly one workspace selected`);
-        assert.equal(
-          data.color,
-          data.expected.color,
-          `${view}: active text uses the ${modeSegment ? 'foreground' : 'brand'} token`
-        );
+        assert.equal(data.color, data.expected.color, `${view}: active text uses the brand token`);
         assert.equal(
           data.background,
           data.expected.background,
-          `${view}: ${modeSegment ? 'pill stays the content surface' : 'selection survives wallpaper'}`
+          `${view}: selection survives wallpaper`
         );
-        if (modeSegment)
-          assert.notEqual(
-            data.background,
-            data.selection,
-            `${view}: pill is the content surface, not the selection tint`
-          );
         results.push({ check: 'navigation', accent, wallpaper: opacity, view, passed: true });
       }
     }
   }
   click('button[data-rail-view="code"]');
-  await evaluate(`window.__stores.settings.getState().setBotModeEnabled(false)`);
-  await settle();
-  // Bot 关闭后只剩 Code 一项，标题栏分段不再渲染；入口回到图标轨，沿用 brand + selection。
-  const fallback = await evaluate(
-    `(()=>{const b=document.querySelector('button[data-rail-view=code]');const p=document.createElement('span');p.style.color='var(--brand)';p.style.backgroundColor='var(--selection)';document.body.append(p);const expected={color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor};p.remove();return {active:b.getAttribute('aria-pressed'),inRail:Boolean(b.closest('[data-slot=app-rail]')),pill:Boolean(b.querySelector('[data-slot=mode-switch-selection]')),color:getComputedStyle(b).color,bg:getComputedStyle(b).backgroundColor,expected,count:document.querySelectorAll('[data-rail-view][aria-pressed=true]').length};})()`
-  );
-  assert.equal(fallback.active, 'true');
-  assert.equal(fallback.inRail, true, 'Code returns to the icon rail with Bot disabled');
-  assert.equal(fallback.pill, false, 'rail Code has no mode capsule');
-  assert.equal(fallback.count, 1, 'only Code is selected with Bot disabled');
-  assert.equal(fallback.color, fallback.expected.color);
-  assert.equal(fallback.bg, fallback.expected.bg, 'Code rail entry keeps the selection tint');
-  results.push({ check: 'Code returns to the rail with Bot disabled', passed: true });
 
   // Use the real settings buttons, not only root-token self-comparisons: light
   // palettes used to disable these and override --brand even after store updates.
@@ -392,7 +359,7 @@ try {
   await evaluate(`(()=>{
     window.__themeSelectionFixture?.dispose();
     const s=window.__stores.settings.getState(), o=${JSON.stringify(original)};
-    for(const key of ['backgroundImageEnabled','backgroundImagePath','backgroundOpacity','terminalTheme','lightPalette','accentColor','botModeEnabled','designEnabled','theme']) {
+    for(const key of ['backgroundImageEnabled','backgroundImagePath','backgroundOpacity','terminalTheme','lightPalette','accentColor','designEnabled','theme']) {
       const setter='set'+key[0].toUpperCase()+key.slice(1);s[setter](o[key]);
     }
   })()`).catch((error) => {

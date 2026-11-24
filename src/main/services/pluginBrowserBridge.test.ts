@@ -359,14 +359,6 @@ describe('pluginBrowserInvoke（真实 Main 桥）', () => {
     );
   });
 
-  it('把会话 actor 透传给宿主，避免与别的成员抢同一个内容页', async () => {
-    const { invoke, runs } = setup({
-      authorize: { ok: true, sessionKey: 's1', actor: { sessionId: 's1', name: '成员' } },
-    });
-    await invoke(input());
-    expect(runs[0]?.actor).toEqual({ sessionId: 's1', name: '成员' });
-  });
-
   it('宿主报错原样上抛，不改成成功', async () => {
     const failure = Object.assign(new Error('Browser tab is closed'), { code: 'HOST_ERROR' });
     const run = vi.fn(async () => {

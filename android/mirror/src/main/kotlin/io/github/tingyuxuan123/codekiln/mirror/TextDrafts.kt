@@ -1,7 +1,7 @@
 package io.github.tingyuxuan123.codekiln.mirror
 
 /** The kind of local composer a draft belongs to. Ids never cross between kinds. */
-enum class DraftKind { Session, Chat, NewTask }
+enum class DraftKind(internal val recordTag: Int) { Session(0), NewTask(2) }
 
 /** Storage ceilings: one draft can never exceed a composer, and only the newest slots are kept. */
 const val DRAFT_TEXT_LIMIT = SESSION_TEXT_LIMIT

@@ -126,9 +126,7 @@ const state: BrowserTabState = {
   locked: false,
   devtoolsOpen: false,
   designMode: false,
-  holder: null,
 };
-const holder = { conversationId: 'agent-session', name: 'Browser agent' };
 let browserState: BrowserTabState;
 let root: Root;
 let container: HTMLElement;
@@ -279,26 +277,24 @@ describe('BrowserView controls', () => {
     ])
       expect(container.textContent).toContain(text);
   });
-  it.each([
-    { locked: false, holder: null },
-    { locked: false, holder },
-    { locked: true, holder },
-  ])('has no exclusive control UI for %o', async (ownership) => {
-    await emit({ ...ownership, url: 'https://example.com/' });
-    for (const text of [
-      'Take control',
-      'Allow agent to continue',
-      'Let me take over',
-      'Agent is browsing',
-      'In control {{time}}',
-    ])
-      expect(container.textContent).not.toContain(text);
-    expect(container.querySelector('.browser-agent-glow')).toBeNull();
-  });
+  it.each([{ locked: false }, { locked: true }])(
+    'has no exclusive control UI for %o',
+    async (ownership) => {
+      await emit({ ...ownership, url: 'https://example.com/' });
+      for (const text of [
+        'Take control',
+        'Allow agent to continue',
+        'Let me take over',
+        'Agent is browsing',
+        'In control {{time}}',
+      ])
+        expect(container.textContent).not.toContain(text);
+      expect(container.querySelector('.browser-agent-glow')).toBeNull();
+    }
+  );
   it('keeps navigation and design controls enabled while an agent retains the tab', async () => {
     await emit({
       locked: true,
-      holder,
       url: 'https://example.com/',
       canGoBack: true,
       canGoForward: true,
@@ -326,7 +322,6 @@ describe('BrowserView controls', () => {
   it('keeps device controls and resize handles available while an agent retains the tab', async () => {
     await emit({
       locked: true,
-      holder,
       url: 'https://example.com/',
       device: { enabled: true, width: 393, height: 852 },
     });
@@ -344,7 +339,7 @@ describe('BrowserView controls', () => {
     );
   });
   it('allows opening history pages while an agent retains the tab', async () => {
-    await emit({ locked: true, holder, url: 'https://example.com/' });
+    await emit({ locked: true, url: 'https://example.com/' });
     await click('Browsing history');
     expect(getButton('Open history page').disabled).toBe(false);
     await click('Open history page');
@@ -422,7 +417,7 @@ describe('BrowserView controls', () => {
     );
   });
   it('covers retained real pages only while an overlay intersects them', async () => {
-    await emit({ locked: true, holder, url: 'https://example.com/' });
+    await emit({ locked: true, url: 'https://example.com/' });
     await act(async () => harness.frame?.());
     expect(harness.setViewport).toHaveBeenLastCalledWith(
       'exact-tab',

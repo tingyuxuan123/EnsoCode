@@ -41,7 +41,6 @@ internal data class NewTaskUiState(
     val project: String? = null,
     val online: Boolean = false,
     val computer: String? = null,
-    val pendingMemberCount: Int = 0,
     val tasks: List<TaskSummary> = emptyList(),
     val draft: String = "",
     val composerAvailable: Boolean = true,

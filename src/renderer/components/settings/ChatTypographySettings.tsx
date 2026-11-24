@@ -120,7 +120,7 @@ export function ChatTypographySettings() {
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
         {t(
-          'Adjust chat text proportionally in Code and Bot. File previews and the interface are unchanged.'
+          'Adjust chat text proportionally in chats. File previews and the interface are unchanged.'
         )}
       </p>
       {CHAT_TYPOGRAPHY_PARTS.map((part) => (

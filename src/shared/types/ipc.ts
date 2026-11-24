@@ -119,12 +119,6 @@ export const IPC_CHANNELS = {
   /** 原生插件旧设置深链改投主窗口扩展页；通知只触发一次性消费。 */
   EXTENSIONS_DEEP_LINK: 'extensions:deep-link',
   EXTENSIONS_DEEP_LINK_CONSUME: 'extensions:deep-link-consume',
-  TASK_BOARD_OPEN: 'taskboard:open',
-  TASK_BOARD_FOCUS_MAIN: 'taskboard:focus-main',
-  TASK_BOARD_NAVIGATE: 'taskboard:navigate',
-  /** 唤醒主工作区；具体目标由主工作区原子消费，冷启动也不丢失。 */
-  TASK_BOARD_NAVIGATION: 'taskboard:navigation',
-  TASK_BOARD_NAVIGATION_CONSUME: 'taskboard:navigation-consume',
   WINDOW_POPUP_MENU: 'window:popup-menu',
   APP_CLOSE_REQUEST: 'app:close-request',
   APP_CLOSE_RESPONSE: 'app:close-response',
@@ -480,93 +474,6 @@ export const IPC_CHANNELS = {
   BTW_ABORT: 'btw:abort',
   BTW_SPAWN: 'btw:spawn',
   BTW_DISPOSE: 'btw:dispose',
-
-  // Bot 模式（实验）：成员、聊天、投递；身份 / 工作区 / 人设一律由 Main 推导
-  BOTS_LIST: 'bots:list',
-  BOT_GET: 'bots:get',
-  BOT_CREATE: 'bots:create',
-  BOT_UPDATE: 'bots:update',
-  BOT_ARCHIVE: 'bots:archive',
-  BOT_DELETE: 'bots:delete',
-  BOT_SET_AVATAR: 'bots:set-avatar',
-  BOT_CHATS_LIST: 'bots:chats-list',
-  BOT_CHAT_CREATE: 'bots:chat-create',
-  BOT_CHAT_UPDATE: 'bots:chat-update',
-  BOT_CHAT_DELETE: 'bots:chat-delete',
-  BOT_CHAT_NEW_SESSION: 'bots:chat-new-session',
-  BOT_CHAT_SWITCH_SESSION: 'bots:chat-switch-session',
-  BOT_CHAT_CLONE: 'bots:chat-clone',
-  /** 群话题：根群下新建 / 切换 / 改名 / 删除 */
-  BOT_THREAD_CREATE: 'bots:thread-create',
-  BOT_THREAD_SELECT: 'bots:thread-select',
-  BOT_THREAD_UPDATE: 'bots:thread-update',
-  BOT_THREAD_DELETE: 'bots:thread-delete',
-  BOT_CHAT_STOP: 'bots:chat-stop',
-  BOT_CHAT_INTERJECT_QUEUED: 'bots:chat-interject-queued',
-  BOT_CHAT_STATE: 'bots:chat-state',
-  BOT_CHAT_SESSIONS: 'bots:chat-sessions',
-  BOT_CHAT_TIMELINE: 'bots:chat-timeline',
-  BOT_SEND: 'bots:send',
-  BOT_OPEN_WORKSPACE: 'bots:open-workspace',
-  /** bot 会话正文（含已结束的历史会话），只接受 bot 会话 id */
-  BOT_SESSION_HISTORY: 'bots:session-history',
-  BOT_DELEGATIONS_LIST: 'bots:delegations-list',
-  BOT_DELEGATION_CANCEL: 'bots:delegation-cancel',
-  BOT_DELEGATION_RETRY: 'bots:delegation-retry',
-  BOT_ROUTINES_LIST: 'bots:routines-list',
-  BOT_ROUTINE_SAVE: 'bots:routine-save',
-  BOT_ROUTINE_DELETE: 'bots:routine-delete',
-  BOT_ROUTINE_RUN_NOW: 'bots:routine-run-now',
-  /** 批准 / 拒绝成员提议或改动的例行任务版本 */
-  BOT_ROUTINE_REVIEW: 'bots:routine-review',
-  /** 某例行任务最近 20 次运行历史 */
-  BOT_ROUTINE_RUNS: 'bots:routine-runs',
-  /** 成员 / 群核心笔记：只收 botId 或 chatId，保存带 version 防覆盖 */
-  BOT_NOTES_GET: 'bots:notes-get',
-  BOT_NOTES_SAVE: 'bots:notes-save',
-  /** 群任务看板：列表 / 新建或编辑 / 指派（以人类身份 @ 成员）/ 完成 / 取消 / 删除 */
-  BOT_TASKS_LIST: 'bots:tasks-list',
-  BOT_TASK_SAVE: 'bots:task-save',
-  BOT_TASK_ASSIGN: 'bots:task-assign',
-  BOT_TASK_COMPLETE: 'bots:task-complete',
-  BOT_TASK_CANCEL: 'bots:task-cancel',
-  BOT_TASK_DELETE: 'bots:task-delete',
-  BOT_TASK_REVIEW: 'bots:task-review',
-  BOT_TASK_REPLY: 'bots:task-reply',
-  /** 「自动设置能力」：便宜模型按成员描述推荐能力，只返回建议不落盘 */
-  BOT_SUGGEST_ABILITIES: 'bots:suggest-abilities',
-  BOT_SUGGEST_PERSONA: 'bots:suggest-persona',
-  BOT_SUGGEST_GOAL: 'bots:suggest-goal',
-  /** 团队模板 / 导入：校验并预览改名 */
-  BOT_TEAM_PREVIEW: 'bots:team-preview',
-  /** 原子创建团队（成员 + 群） */
-  BOT_TEAM_CREATE: 'bots:team-create',
-  /** 成员用量：按周期排行 / 今日·7 天·30 天概览与预算状态 */
-  BOT_USAGE_SUMMARY: 'bots:usage-summary',
-  BOT_USAGE: 'bots:usage',
-  /** Bot 收件箱（Main 持久化）：列表 / 忽略与重新打开 */
-  BOT_INBOX_LIST: 'bots:inbox-list',
-  BOT_INBOX_UPDATE: 'bots:inbox-update',
-  /** main → renderer：Bot 数据变化提示 */
-  BOT_EVENT: 'bots:event',
-  /** Bot 聊天全文搜索：群时间线 + 私聊当前 / 历史会话 */
-  BOT_SEARCH: 'bots:search',
-  /** 产物卡片：只收聊天 + 条目 / 会话消息标识，路径由 Main 推导并校验在工作区根内 */
-  BOT_ARTIFACTS_LIST: 'bots:artifacts-list',
-  BOT_ARTIFACT_READ: 'bots:artifact-read',
-  BOT_ARTIFACT_OPEN: 'bots:artifact-open',
-  /** 本机 Bot 设计面板：只收 chatId，解析当前聊天工作区，不启动成员会话。 */
-  BOT_DESIGN_WORKSPACE: 'bots:design-workspace',
-  /** 输入框 @文件补全：只收 chatId + 查询词，工作区根由 Main 推导 */
-  BOT_FILE_SEARCH: 'bots:file-search',
-  BOT_CHAT_SAVE_PASTED_TEXT: 'bots:chat-save-pasted-text',
-  /** 回退 / 重试：只收 chatId（群重试加失败 entryId），会话由 Main 按聊天推导 */
-  BOT_REWIND: 'bots:rewind',
-  BOT_RETRY: 'bots:retry',
-  /** 成员 / 团队模板库（userData/bot-templates.json）；写入后广播 CHANGED */
-  BOT_TEMPLATES_GET: 'bots:templates-get',
-  BOT_TEMPLATES_SAVE: 'bots:templates-save',
-  BOT_TEMPLATES_CHANGED: 'bots:templates-changed',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

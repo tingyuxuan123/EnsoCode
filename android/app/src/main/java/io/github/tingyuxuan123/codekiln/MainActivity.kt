@@ -43,12 +43,9 @@ import io.github.tingyuxuan123.codekiln.ui.PairUiState
 import io.github.tingyuxuan123.codekiln.ui.PairingScanner
 import io.github.tingyuxuan123.codekiln.ui.SessionHeader
 import io.github.tingyuxuan123.codekiln.ui.BoardScreen
-import io.github.tingyuxuan123.codekiln.ui.MembersScreen
 import io.github.tingyuxuan123.codekiln.ui.SessionScreen
 import io.github.tingyuxuan123.codekiln.ui.SessionSpecimen
 import io.github.tingyuxuan123.codekiln.mirror.DesktopLinkState
-import io.github.tingyuxuan123.codekiln.mirror.BotThreadCommand
-import io.github.tingyuxuan123.codekiln.mirror.DesktopBotArtifactTarget
 import io.github.tingyuxuan123.codekiln.mirror.DesktopGoal
 import io.github.tingyuxuan123.codekiln.mirror.GoalCommand
 import io.github.tingyuxuan123.codekiln.mirror.MaintenanceBaseline
@@ -133,24 +130,6 @@ class MainActivity : ComponentActivity() {
                 onSessionOpenPreview = companion::openPreview,
                 onSessionPreviewAction = companion::previewAction,
                 onSessionPreviewInput = companion::previewInput,
-                onRequestBots = companion::requestBots,
-                onRequestInbox = companion::requestInbox,
-                onOpenBotChat = companion::openBotChat,
-                onCloseBotChat = companion::closeBotChat,
-                onLoadBotTimeline = companion::loadBotTimeline,
-                onSendBotMessage = companion::sendBotMessage,
-                onStopBotChat = companion::stopBotChat,
-                onChangeBotThread = companion::changeBotThread,
-                onBotNewSession = companion::requestBotNewSession,
-                onBotConfirmNewSession = companion::confirmBotNewSession,
-                onBotRetryEntry = companion::retryBotEntry,
-                onBotDismissInbox = companion::dismissBotInboxItem,
-                onBotCreateGroup = companion::createBotGroup,
-                onBotOpenDirect = companion::openBotDirect,
-                onBotArtifacts = companion::loadBotArtifacts,
-                onBotArtifactImage = companion::loadBotArtifactImage,
-                onBotListFiles = companion::listBotFiles,
-                onBotReadFile = companion::readBotFile,
                 onWatch = {
                     if (state.watch.phase == WatchPhase.Active) companion.stopWatch()
                     else if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -216,7 +195,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal enum class CodeKilnRoute { NewTask, Home, Pair, Session, Board, Members, Settings }
+internal enum class CodeKilnRoute { NewTask, Home, Pair, Session, Board, Settings }
 internal class TaskNoticeOpen(val sessionId: String?)
 
 @Composable
@@ -266,27 +245,9 @@ internal fun CodeKilnApp(
     onSessionOpenPreview: ((String, String, Int, Int) -> Unit)? = null,
     onSessionPreviewAction: ((String, io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewAction) -> Unit)? = null,
     onSessionPreviewInput: ((String, io.github.tingyuxuan123.codekiln.mirror.DesktopPreviewInput) -> Unit)? = null,
-    onRequestBots: (() -> Unit)? = null,
-    onRequestInbox: (() -> Unit)? = null,
-    onOpenBotChat: ((String) -> Unit)? = null,
-    onCloseBotChat: ((String) -> Unit)? = null,
-    onLoadBotTimeline: ((String, Long?) -> Unit)? = null,
-    onSendBotMessage: ((String, String, String) -> Unit)? = null,
-    onStopBotChat: ((String) -> Unit)? = null,
-    onChangeBotThread: ((String, BotThreadCommand, String?, String) -> Unit)? = null,
     onSessionModel: ((String, String, String) -> Unit)? = null,
     onSessionReasoning: ((String, Boolean) -> Unit)? = null,
     onSessionThinking: ((String, TaskThinkingLevel) -> Unit)? = null,
-    onBotNewSession: ((String) -> Unit)? = null,
-    onBotConfirmNewSession: ((String) -> Unit)? = null,
-    onBotRetryEntry: ((String, String) -> Unit)? = null,
-    onBotDismissInbox: ((String) -> Unit)? = null,
-    onBotCreateGroup: ((String, List<String>, String) -> Unit)? = null,
-    onBotOpenDirect: ((String) -> Unit)? = null,
-    onBotArtifacts: ((DesktopBotArtifactTarget) -> Unit)? = null,
-    onBotArtifactImage: ((DesktopBotArtifactTarget, String?, String?) -> Unit)? = null,
-    onBotListFiles: ((DesktopBotArtifactTarget) -> Unit)? = null,
-    onBotReadFile: ((DesktopBotArtifactTarget, String, Long) -> Unit)? = null,
     fetchArtifact: ArtifactFetcher? = null,
     downloadPairId: String? = null,
     loadSessionImage: (suspend (String, SessionImageTarget) -> String?)? = null,
@@ -295,10 +256,8 @@ internal fun CodeKilnApp(
     var pairReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
     var settingsReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
     var boardReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.NewTask) }
-    var membersReturn by rememberSaveable { mutableStateOf(CodeKilnRoute.Home) }
     val descriptionKey = DraftKey(DraftKind.NewTask, "new-task")
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var memberSessionId by remember(pairState.paired) { mutableStateOf<String?>(null) }
     // Drafts live in DraftBook: per session, bounded, encrypted at rest and never in a Bundle.
     val sessionKey = selectedId?.let { DraftKey(DraftKind.Session, it) }
     val sessionDraft = sessionKey?.let { drafts[it] }.orEmpty()
@@ -370,7 +329,6 @@ internal fun CodeKilnApp(
             CodeKilnRoute.Pair -> pairReturn
             CodeKilnRoute.Session -> CodeKilnRoute.Home
             CodeKilnRoute.Board -> boardReturn
-            CodeKilnRoute.Members -> membersReturn
             CodeKilnRoute.Settings -> settingsReturn
             else -> CodeKilnRoute.NewTask
         }
@@ -378,14 +336,11 @@ internal fun CodeKilnApp(
     val openBoard = {
         if (!creating) { boardReturn = route; route = CodeKilnRoute.Board }
     }
-    val openMembers = {
-        if (!creating) { membersReturn = route; route = CodeKilnRoute.Members }
-    }
     val openSettings = {
         if (!creating) { settingsReturn = route; route = CodeKilnRoute.Settings }
     }
-    val subscribedId = if (route == CodeKilnRoute.Members) memberSessionId else selectedId.takeIf { route == CodeKilnRoute.Session }
-    val selectable = state.tasks.any { it.id == subscribedId } || (route == CodeKilnRoute.Members && memberSessionId != null)
+    val subscribedId = selectedId.takeIf { route == CodeKilnRoute.Session }
+    val selectable = state.tasks.any { it.id == subscribedId }
     val sessionSendKey = { id: String -> DraftKey(DraftKind.Session, id) }
     // 逐字匹配回执并清掉「用户真的提交过」的那次草稿。pin 是跨页面的提交凭据：
     // 回执在离开会话页期间到达时仍能清除已投递内容，而从没 pin 过的同文草稿不会被误清。
@@ -464,34 +419,8 @@ internal fun CodeKilnApp(
             )
             CodeKilnRoute.Home -> HomeScreen(
                 state, onNew = { route = CodeKilnRoute.NewTask }, onPair = openPair, onTask = openTask,
-                onBoard = openBoard, onMembers = openMembers, onSettings = openSettings, onUnavailable = unavailable,
+                onBoard = openBoard, onSettings = openSettings, onUnavailable = unavailable,
             )
-            CodeKilnRoute.Members -> {
-                LaunchedEffect(live.phase) {
-                    if (live.phase == LinkPhase.Online) {
-                        onRequestBots?.invoke()
-                        onRequestInbox?.invoke()
-                    }
-                }
-                MembersScreen(live.bots, onBack = back,
-                    onOpenChat = { chatId -> onOpenBotChat?.invoke(chatId) },
-                    onLoadOlder = { chatId, seq -> onLoadBotTimeline?.invoke(chatId, seq) },
-                    writable = !live.readOnly && live.phase == LinkPhase.Online,
-                    onSend = onSendBotMessage, onStop = onStopBotChat,
-                    onCloseChat = { chatId -> onCloseBotChat?.invoke(chatId) }, onThreadChange = onChangeBotThread,
-                    session = live.session, onSelectSession = { memberSessionId = it }, onHistory = onHistory,
-                    onSessionRetry = onSessionRetry,
-                    onApproval = { requestId, decision -> subscribedId?.let { onApproval(it, requestId, decision) } },
-                    onAsk = { requestId, answer -> subscribedId?.let { onAsk(it, requestId, answer) } },
-                    onStopSession = { subscribedId?.let(onSessionStop) },
-                    onNewSession = onBotNewSession, onConfirmNewSession = onBotConfirmNewSession,
-                    onRetryEntry = onBotRetryEntry, onDismissInbox = onBotDismissInbox, onCreateGroup = onBotCreateGroup,
-                    onArtifacts = onBotArtifacts, onArtifactImage = onBotArtifactImage,
-                    onListBotFiles = onBotListFiles, onReadBotFile = onBotReadFile, onOpenDirect = onBotOpenDirect,
-                    fetchArtifact = fetchArtifact,
-                    drafts = drafts, onDraftEdit = onDraftEdit, onDraftPin = onDraftPin,
-                    onDraftConfirmed = onDraftConfirmed)
-            }
             CodeKilnRoute.Board -> BoardScreen(
                 live.catalog.filterNot { it.archived }, System.currentTimeMillis(), onBack = back, onTask = openTask,
             )

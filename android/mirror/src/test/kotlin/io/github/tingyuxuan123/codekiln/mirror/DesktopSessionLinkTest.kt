@@ -47,6 +47,28 @@ class DesktopSessionLinkTest {
         }
     }
 
+    @Test fun `retired frames from an authenticated desktop do not disrupt Code sync`() = runTest {
+        fixture { f ->
+            f.link.selectSession("s")
+            f.connect()
+            f.hostFrame(hostInfo)
+            val subscribe = f.commands().single { it.type == "subscribe" }
+            val before = f.state
+            assertFalse(before.readOnly)
+
+            f.hostFrame(json("""{"type":"bot-catalog","enabled":true,"threads":true,"bots":[]}"""))
+            f.hostFrame(json("""{"type":"group-timeline","chatId":"s","entries":[],"lastSeq":99,"hasOlder":false}"""))
+            f.hostFrame(json("""{"type":"command-rejected","command":"bot-send","error":"read-only"}"""))
+            assertEquals(before, f.state)
+            assertTrue(f.commands().isEmpty())
+
+            f.sync(subscribe)
+            assertFalse(f.session!!.loading)
+            f.hostFrame(event("status", 1, "\"status\":\"running\""))
+            assertEquals("running", f.session!!.timeline.status)
+        }
+    }
+
     @Test fun `untrusted session frames never stage and stale request or session cannot settle current sync`() = runTest {
         fixture { f ->
             f.link.selectSession("s")

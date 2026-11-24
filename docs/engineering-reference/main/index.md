@@ -18,7 +18,6 @@ src/main/
     assets.ts           技能 / MCP / 指令文件扫描与内容读写
   services/             纯逻辑，不碰 ipcMain
     agentHost.ts        worker 生命周期、命令下发与事件广播
-    bots/               成员 / 群聊 / 委派 / 群任务宿主
     browserHost.ts      内嵌浏览器宿主
     pairHost.ts         手机配对、远程会话与中继
     design/             设计画布、预览服务与引擎桥
@@ -71,7 +70,7 @@ debounce 中的会话元数据会丢，表现得很像“持久化 bug”。
 ## 详细规范
 
 - [ipc.md](ipc.md) —— 通道三点式链路、参数校验、preload 出口
-- [services.md](services.md) —— Bot 宿主、agentHost、扫描器、敏感数据边界、账号池、MCP 与浏览器宿主
+- [services.md](services.md) —— agentHost、扫描器、敏感数据边界、账号池、MCP 与浏览器宿主
 - [code-search.md](code-search.md) —— 代码搜索工具协议、预算与证据回收
 - [pair-replay.md](pair-replay.md) —— 配对帧防重放、能力钉住、混合版本和隔离联调边界
 - [pair-preview.md](pair-preview.md) —— 手机端网页预览的候选推导、专用浏览器与有限输入边界

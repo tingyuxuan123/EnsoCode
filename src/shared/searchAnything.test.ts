@@ -210,8 +210,6 @@ describe('buildSettingsCatalog', () => {
     'general.autoRetryLimit',
     'general.proxy',
     'general.updates',
-    'experimental.botMode',
-    'bots.routeClassifier',
     'shortcuts.root',
     'appearance.theme',
     'providers.root',
@@ -241,13 +239,10 @@ describe('buildSettingsCatalog', () => {
     expect(buildSettingsCatalog().map((entry) => entry.id)).not.toContain('tools.lcuEnabled');
   });
 
-  it('Bot 设置迁到「实验」与「Bot 模式」页，通用页不再有旧条目', () => {
-    const catalog = buildSettingsCatalog();
-    const ids = catalog.map((e) => e.id);
-    expect(ids).not.toContain('general.botMode');
-    expect(ids).not.toContain('general.botRouteClassifier');
-    expect(catalog.find((e) => e.id === 'experimental.botMode')?.category).toBe('experimental');
-    expect(catalog.find((e) => e.id === 'bots.routeClassifier')?.category).toBe('bots');
+  it('不索引已移除的 Bot 设置', () => {
+    const ids = buildSettingsCatalog().map((entry) => entry.id);
+    expect(ids).not.toContain('experimental.botMode');
+    expect(ids.some((id) => id.startsWith('bots.'))).toBe(false);
   });
 
   it('general.language 标题包含 Language', () => {

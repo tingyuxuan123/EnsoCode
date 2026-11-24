@@ -14,17 +14,8 @@ afterEach(async () => {
 });
 
 describe('Web → 加密分块 → Main 文件服务', () => {
-  it.each([
-    { sessionId: 'code-session' },
-    { bot: { chatId: '11111111-1111-4111-8111-111111111111', entryId: 'group-reply' } },
-    {
-      bot: {
-        chatId: '11111111-1111-4111-8111-111111111111',
-        conversationId: 'bot-session',
-        messageIndex: 1,
-      },
-    },
-  ])('Code / Bot 群聊 / 私聊经过真实加解密恢复原始二进制 %j', async (target) => {
+  it('restores the original Code session file through authenticated encrypted chunks', async () => {
+    const target = { sessionId: 'code-session' };
     root = await mkdtemp(path.join(os.tmpdir(), 'enso-file-encrypted-'));
     const bytes = Buffer.from(Uint8Array.from({ length: 1_200_123 }, (_, i) => i % 251));
     await writeFile(path.join(root, '改好的报告.bin'), bytes);

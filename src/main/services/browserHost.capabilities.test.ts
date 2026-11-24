@@ -289,7 +289,6 @@ it('连续操作中止后不重放已完成的输入，不向后续步骤投递'
         { action: 'press', key: 'Enter' },
       ],
     },
-    undefined,
     { signal: controller.signal }
   );
   const rejected = expect(act).rejects.toThrow(/abort/i);
@@ -438,29 +437,15 @@ it('Agent 滚动触发 hash 更新仅推送 URL，不让已有引用失效', asy
   ).resolves.toMatchObject({ url: 'https://example.test/#section' });
   await host.dispose();
 });
-it('真实键盘输入不永久暂停成员 Agent，也不影响其他成员的 tab 占用协调', async () => {
+it('真实键盘输入不永久暂停当前会话的浏览器工具', async () => {
   const { host, tabId, contents } = await open();
-  const alice = { sessionId: 'alice', name: 'Alice' };
-  await host.invoke('conv', 'cdp', { tabId, method: 'Runtime.evaluate' }, alice);
+  await host.invoke('conv', 'cdp', { tabId, method: 'Runtime.evaluate' });
   contents.emit('input-event', {}, { type: 'rawKeyDown' });
-  await expect(
-    host.invoke('conv', 'press_key', { tabId, key: 'Enter' }, alice)
-  ).resolves.toBeDefined();
-  await expect(
-    host.invoke(
-      'conv',
-      'cdp',
-      { tabId, method: 'Runtime.evaluate' },
-      { sessionId: 'bob', name: 'Bob' }
-    )
-  ).rejects.toThrow(/Alice is using/);
+  await expect(host.invoke('conv', 'press_key', { tabId, key: 'Enter' })).resolves.toBeDefined();
   await host.userNavigate(tabId, 'conv', 'https://example.test/next');
   host.reload(tabId);
   host.stop(tabId);
-  await expect(
-    host.invoke('conv', 'press_key', { tabId, key: 'Tab' }, alice)
-  ).resolves.toBeDefined();
-  expect(host.state(tabId).holder?.name).toBe('Alice');
+  await expect(host.invoke('conv', 'press_key', { tabId, key: 'Tab' })).resolves.toBeDefined();
   await host.dispose();
 });
 it('只读正文和翻页不消耗控件引用，读取新控件才替换它们', async () => {
@@ -538,7 +523,6 @@ it('协作模式仍支持显式取消等待，取消后下次工具可正常执�
     'conv',
     'wait',
     { tabId, kind: 'text', text: 'not yet', timeoutMs: 5000 },
-    undefined,
     { signal: controller.signal }
   );
   const rejected = expect(waiting).rejects.toThrow(/abort/i);
@@ -576,9 +560,14 @@ it('取消中的迟到点击不得穿透到下一次操作，也不得提前释�
     return point;
   };
   const controller = new AbortController();
-  const click = host.invoke('conv', 'click', { tabId, ref: first.entries[0].ref }, undefined, {
-    signal: controller.signal,
-  });
+  const click = host.invoke(
+    'conv',
+    'click',
+    { tabId, ref: first.entries[0].ref },
+    {
+      signal: controller.signal,
+    }
+  );
   const rejected = expect(click).rejects.toThrow(/abort/i);
   await preparing;
   controller.abort();
@@ -607,9 +596,14 @@ it('永不 settle 的操作取消后在 grace 内保留队列，超时关闭 tab
     return new Promise<never>(() => {});
   };
   const controller = new AbortController();
-  const waiting = host.invoke('conv', 'wait', { tabId, kind: 'text', text: 'never' }, undefined, {
-    signal: controller.signal,
-  });
+  const waiting = host.invoke(
+    'conv',
+    'wait',
+    { tabId, kind: 'text', text: 'never' },
+    {
+      signal: controller.signal,
+    }
+  );
   const rejected = expect(waiting).rejects.toThrow(/abort/i);
   await preparing;
   let queuedError: unknown;
@@ -654,7 +648,7 @@ it('排队 caller 的取消立即拒绝，不必等待占用 tab 的底层操作
   const controller = new AbortController();
   let queuedError: unknown;
   const queued = host
-    .invoke('conv', 'press_key', { tabId, key: 'Enter' }, undefined, { signal: controller.signal })
+    .invoke('conv', 'press_key', { tabId, key: 'Enter' }, { signal: controller.signal })
     .catch((error) => {
       queuedError = error;
     });
@@ -683,9 +677,14 @@ it('grace 内底层操作已退出则清掉回收计时器，不关闭仍可协�
     return result;
   };
   const controller = new AbortController();
-  const waiting = host.invoke('conv', 'wait', { tabId, kind: 'text', text: 'ready' }, undefined, {
-    signal: controller.signal,
-  });
+  const waiting = host.invoke(
+    'conv',
+    'wait',
+    { tabId, kind: 'text', text: 'ready' },
+    {
+      signal: controller.signal,
+    }
+  );
   const rejected = expect(waiting).rejects.toThrow(/abort/i);
   await preparing;
   controller.abort();
@@ -710,9 +709,14 @@ it('取消的旧 tab 在 grace 内被关闭并同 id 重建时，超时不误关
     return new Promise<never>(() => {});
   };
   const controller = new AbortController();
-  const waiting = host.invoke('conv', 'wait', { tabId, kind: 'text', text: 'never' }, undefined, {
-    signal: controller.signal,
-  });
+  const waiting = host.invoke(
+    'conv',
+    'wait',
+    { tabId, kind: 'text', text: 'never' },
+    {
+      signal: controller.signal,
+    }
+  );
   const rejected = expect(waiting).rejects.toThrow(/abort/i);
   await preparing;
   controller.abort();
@@ -757,9 +761,14 @@ it('grace 超时关闭 tab 后，迟到点击结果也不能向恢复后的 tab 
     return point;
   };
   const controller = new AbortController();
-  const click = host.invoke('conv', 'click', { tabId, ref: snapshot.entries[0].ref }, undefined, {
-    signal: controller.signal,
-  });
+  const click = host.invoke(
+    'conv',
+    'click',
+    { tabId, ref: snapshot.entries[0].ref },
+    {
+      signal: controller.signal,
+    }
+  );
   const rejected = expect(click).rejects.toThrow(/abort/i);
   await preparing;
   controller.abort();
@@ -799,7 +808,6 @@ it.each(['destroyed', 'throwing'] as const)(
       'conv',
       'navigate',
       { tabId, url: 'https://example.test/next' },
-      undefined,
       {
         signal: controller.signal,
       }
@@ -824,9 +832,14 @@ it('取消拖拽会释放已经按下的鼠标，不影响后续协作操作', a
     if ((input as { type: string }).type === 'mouseDown') controller.abort();
   };
   await expect(
-    host.invoke('conv', 'drag', { tabId, fromX: 10, fromY: 20, toX: 100, toY: 200 }, undefined, {
-      signal: controller.signal,
-    })
+    host.invoke(
+      'conv',
+      'drag',
+      { tabId, fromX: 10, fromY: 20, toX: 100, toY: 200 },
+      {
+        signal: controller.signal,
+      }
+    )
   ).rejects.toThrow(/abort/i);
   await vi.waitFor(() =>
     expect(contents.inputs).toContainEqual(

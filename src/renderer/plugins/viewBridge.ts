@@ -101,6 +101,8 @@ export interface PluginViewRef {
   build?: string;
   pluginId: string;
   pluginName: string;
+  /** 清单里的插件图标相对路径；由 PluginIcon 走 asset 通道读取 */
+  icon?: string;
   id: string;
   title: string;
   entry: string;

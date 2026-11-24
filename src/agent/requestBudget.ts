@@ -1,6 +1,6 @@
 // 子代理单次 Run 的模型请求软预算。
 // 只数这次 Run 里子代理自己发出的模型请求（assistant 回合）；coworker 每次新 Run 重新计数。
-// 主会话和 Bot 成员不走这里。默认写死，0 表示关闭。
+// 主会话不走这里。默认写死，0 表示关闭。
 export const SOFT_REQUEST_BUDGET = 200;
 
 /** 到达 1.5 倍强制交出后，再留这么多次请求让交出那一步落地，用完仍不交就硬停。 */
@@ -61,7 +61,7 @@ export class RequestBudget {
     this.phase = this.soft > 0 ? 'running' : 'idle';
   }
 
-  /** 非预算回合（主会话、Bot 成员）或 Run 已结束：清零并停止计数。 */
+  /** 非预算回合或 Run 已结束：清零并停止计数。 */
   disarm(): void {
     this.count = 0;
     this.noticeSent = false;

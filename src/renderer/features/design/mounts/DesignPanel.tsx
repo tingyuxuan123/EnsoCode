@@ -1,23 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { BotDesignTarget } from '../host/bot-canvas';
 import { resolveDesignRoot } from '../host/paths';
 import { CanvasMount, useCanvasContribution } from './CanvasMount';
 import { DesignWindowPlaceholder, useDesignWindowOpen } from './DesignWindowControls';
 import { useDesignCwd } from './useDesignCwd';
-
-export function BotDesignPanel({ target }: { target: BotDesignTarget }) {
-  const tab = useCanvasContribution();
-  if (!tab) return null;
-  return (
-    <CanvasMount
-      key={`${target.sessionId}:${target.projectId ?? ''}:${target.path}`}
-      sessionId={target.sessionId ?? null}
-      cwd={target.cwd}
-      bot={target}
-      component={tab.component}
-    />
-  );
-}
 
 /** Active-only residency: upstream's controller is a singleton, not per dock. */
 export function DesignPanel({

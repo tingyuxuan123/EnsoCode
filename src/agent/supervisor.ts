@@ -49,7 +49,6 @@ import {
   type PluginAgentSource,
 } from '@shared/extensionPlugins/protocol';
 import type { PluginEventPlan, PluginToolDescriptor } from '@shared/extensionPlugins/types';
-import { HUMAN_REQUEST_TIMEOUT_MS } from '@shared/humanRequestTimeout';
 import { DEFAULT_MAX_ACTIVE_COWORKERS } from '@shared/maxActiveCoworkers';
 import { pickModelCapabilityOverrides, positiveContextWindow } from '@shared/modelCatalog';
 import type { ModelDirectorySnapshot } from '@shared/modelDirectory';
@@ -81,7 +80,6 @@ import type {
   AgentTypeSpawnConfig,
   AgentWorkerEvent,
   ApprovalMode,
-  AttachedImage,
   ChildConversationMetadata,
   CoworkerInfo,
   McpOAuthRefreshResult,
@@ -257,7 +255,6 @@ import {
   continueSessionActivity,
   editLatestAssistantForRetry,
   silentTurnRecoveryExtension,
-  steerActiveSession,
   steerWithWithdrawal,
 } from './sessionAdapter';
 import {
@@ -308,24 +305,16 @@ import { ToolOutputBudget } from './toolOutputBudget';
 import { BrowserInvoker, createBrowserTools, withNavigateApproval } from './tools/browser';
 import { createCodeSearchTool } from './tools/codeSearch';
 import { ComputerInvoker, createComputerTool, withComputerApproval } from './tools/computer';
-import { createDelegationTools } from './tools/delegation';
-import { DelegationInvoker } from './tools/delegationInvoker';
 import { createDesignTools, DesignInvoker } from './tools/design';
 import { createEnsoAppTool, EnsoAppInvoker } from './tools/ensoApp';
 import { createEnsoCapabilitiesTool } from './tools/ensoCapabilities';
-import { createGroupHistoryTool } from './tools/groupHistory';
-import { createGroupTasksTool } from './tools/groupTasks';
 import { createImageGenerationTools, ImageGenerationInvoker } from './tools/imageGeneration';
-
 import { createPluginTools, PluginToolInvoker } from './tools/pluginTools';
-import { createRoutineProposeTool } from './tools/routinePropose';
-import { confirmOutsideImage, createSendImageTool } from './tools/sendImage';
 import { createWebTools } from './tools/web';
 import { createVirtualChooser, resolveClassifierModel } from './virtualClassifier';
 import { registerVirtualModel } from './virtualModels';
 import { createWorkflowTool, WORKFLOW_STOPPED_BY_USER } from './workflow';
 import { listWorkflowPresets, loadWorkflowPreset, workflowPresetRoots } from './workflowPresets';
-import { WorkspaceClaims, withExclusiveCommand, withFileClaims } from './workspaceClaims';
 import { WorkspaceSwitchGate, workspaceBranchContextExtension } from './workspaceSwitch';
 import { withWritePreflight, withWriteScope } from './writeScope';
 
@@ -431,7 +420,6 @@ interface ManagedSession {
   browser?: BrowserInvoker;
   design?: DesignInvoker;
   imageGeneration?: ImageGenerationInvoker;
-  delegation?: DelegationInvoker;
   agentControl?: AgentControlInvoker;
   /** 已因不支持 adaptive 降级过的模型（虚拟模型下每个成员各降一次） */
   adaptiveDowngraded: Set<string>;
@@ -449,7 +437,7 @@ interface ManagedSession {
   /** 本次空回复恢复的类型；post-tool 第二次仍空则失败 */
   silentTurnKind?: SilentTurnKind;
   runawayGuard?: RunawayGuard;
-  /** 子代理请求软预算；只有带 requestBudget 标记的 Run 才 arm，主会话与 Bot 成员不 arm */
+  /** 子代理请求软预算；只有带 requestBudget 标记的 Run 才 arm */
   requestBudget?: RequestBudget;
   timings: (MessageTiming | undefined)[];
   /** 最近一次 turn_start 时刻；pi 在发起每次模型请求前触发，下一条 assistant message_start 消费 */
@@ -493,7 +481,7 @@ interface ManagedSession {
   /** 下一条 prompt 产生的 user 消息的投递回执；id 为 null 表示该投递无乐观回显 */
   promptDelivery?: { id: string | null };
   /** 已入 pi steer 队列、尚未上屏的投递回执，与 pi 队列同序 */
-  steerDeliveries?: { id: string | null; detach?: () => boolean; withdrawable?: true }[];
+  steerDeliveries?: { id: string | null; detach?: () => boolean }[];
   pendingBranch?: string;
   pendingBranchRequestId?: string;
   pendingVerifications?: number;
@@ -541,7 +529,6 @@ const PENDING_COUNTERS: Record<PendingCounterKey, true> = {
   ensoApp: true,
   browser: true,
   design: true,
-  delegation: true,
   agentControl: true,
   computer: true,
   deviceTools: true,
@@ -590,7 +577,6 @@ async function createSessionResourceLoader(options: {
   cwd: string;
   agentDir: string;
   noSkills: boolean;
-  skillChains?: boolean;
   designGate?: InlineExtension;
   /** 类型化子代理:不装项目扩展(扩展注册的工具与 systemPrompt 注入是给主会话的,漏进去会让它误以为要再委派) */
   noExtensions?: boolean;
@@ -752,7 +738,7 @@ async function createSessionResourceLoader(options: {
       ...(options.progressPreamble ? [progressPreambleExtension] : []),
       // Last input hook: disk/plugin transforms run first and `handled` short-circuits.
       // custom-persona remains last overall for its before_agent_start contract.
-      ...(options.skillChains ? [skillChainExtension(() => loader.getSkills().skills)] : []),
+      skillChainExtension(() => loader.getSkills().skills),
       ...(persona
         ? [
             {
@@ -963,8 +949,6 @@ export class SessionSupervisor {
       });
     });
   private readonly bgTasks: BackgroundTaskManager;
-  /** Bot 写成员在同一工作区的文件占用 / 全局命令独占（全部会话同进程共享） */
-  private readonly workspaceClaims = new WorkspaceClaims();
   private runtimePromise: Promise<ModelRuntime> | null = null;
   private readonly oauthPoolPending = new Map<
     string,
@@ -1332,7 +1316,6 @@ export class SessionSupervisor {
     managed.extensionUIBlock = Symbol('release');
     const parentId = managed.identity.sessionId;
     this.codeSearch.cancelSession(parentId);
-    this.workspaceClaims.forget(parentId);
     // 先收掉整棵子会话（coworker/child 都以 `${parentId}::` 为键前缀）
     for (const [id, child] of [...this.sessions]) {
       if (!id.startsWith(`${parentId}::`)) continue;
@@ -1365,7 +1348,6 @@ export class SessionSupervisor {
     managed.browser?.cancelAll('Session released');
     managed.design?.cancelAll('Session released');
     managed.imageGeneration?.cancelAll('Session released');
-    managed.delegation?.cancelAll('Session released');
     managed.agentControl?.close('Session released');
     managed.computer?.cancelAll('Session released');
     managed.deviceTools?.cancelAll('Session released');
@@ -1705,7 +1687,6 @@ export class SessionSupervisor {
         : command.type === 'browser-result' ||
             command.type === 'design-result' ||
             command.type === 'image-generation-result' ||
-            command.type === 'delegation-result' ||
             command.type === 'computer-result' ||
             command.type === 'device-tool-result'
           ? command.identity
@@ -1844,16 +1825,10 @@ export class SessionSupervisor {
           (command.pluginTools ?? []).filter(
             (tool) =>
               !command.remote &&
-              !command.botMode &&
               (!(command.disabledTools ?? []).includes(WORKSPACE_WRITE_TOOL_ID) ||
                 tool.readOnly === true)
           ),
-          command.botMode,
-          command.botGroupTasks,
           command.protectedActions,
-          command.botRoutines,
-          command.botWriteLock,
-          command.botDelegationTask,
           command.pluginEvents,
           command.workflowPresetFiles,
           command.systemPromptAppend
@@ -1930,7 +1905,7 @@ export class SessionSupervisor {
         }
         managed.promptedRequestIds.add(command.requestId);
         managed.currentTurnId = command.requestId;
-        // 只有子代理 Run（Main 带 requestBudget 标记）计数；Bot 成员等不 arm，不计数
+        // 只有子代理 Run（Main 带 requestBudget 标记）才计数。
         if (command.requestBudget) managed.requestBudget?.arm();
         else managed.requestBudget?.disarm();
         managed.safeJournal?.appendUserText(command.task.text);
@@ -1989,10 +1964,6 @@ export class SessionSupervisor {
       }
       case 'steer': {
         const managed = this.must(command.identity);
-        if (command.activeOnly && command.deliveryId) {
-          await this.steerActive(managed, command.text, command.images, command.deliveryId);
-          return;
-        }
         managed.plan?.supersede();
         const images = command.images?.map((image) => ({ type: 'image' as const, ...image }));
         // 重试倒计时期间 renderer 看到的仍是 running 会发 steer：此时没有活轮可插，
@@ -2010,7 +1981,7 @@ export class SessionSupervisor {
         const managed = this.sessions.get(command.identity.sessionId);
         if (!managed || !isSameGeneration(managed.identity, command.identity)) return;
         const slot = managed.steerDeliveries?.find(
-          (item) => item.withdrawable && item.id === command.deliveryId
+          (item) => item.detach && item.id === command.deliveryId
         );
         if (!slot?.detach?.()) return; // Pi already took it, or it never reached the queue.
         managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
@@ -2065,7 +2036,6 @@ export class SessionSupervisor {
           (!managed.childIdentity ||
             !isSameChildSessionIdentity(managed.childIdentity, child) ||
             child.profileId ||
-            child.typeKey.startsWith('bot:') ||
             busy())
         ) {
           this.options.emit({
@@ -2229,10 +2199,6 @@ export class SessionSupervisor {
         )
           return;
         managed.design?.resolve(command);
-        return;
-      }
-      case 'delegation-result': {
-        this.must(command.identity).delegation?.resolve(command);
         return;
       }
       case 'computer-result': {
@@ -2445,7 +2411,6 @@ export class SessionSupervisor {
         managed.browser?.cancelAll('Browser action aborted');
         managed.design?.cancelAll('Design action aborted');
         managed.imageGeneration?.cancelAll('Image generation aborted');
-        managed.delegation?.cancelAll('Delegation action aborted');
         // 记下本轮在 Main 侧的 Run id 再清 currentTurnId：收口要把它带回去才能结算那条 Run，
         // 但 currentTurnId 是「本轮进行中」的判据，不能为了一笔回执让会话再也回收不掉。
         if (managed.currentTurnId !== undefined) managed.pendingAbortRunId = managed.currentTurnId;
@@ -2526,12 +2491,7 @@ export class SessionSupervisor {
     pluginCommands: readonly PluginCommandSpawn[] = [],
     pluginHooks: readonly PluginHookSpawn[] = [],
     pluginToolDescriptors: readonly PluginToolDescriptor[] = [],
-    botMode = false,
-    botGroupTasks = false,
     protectedActions = false,
-    botRoutines = false,
-    botWriteLock?: { label: string; ancestors: string[] },
-    botDelegationTask = false,
     pluginEventPlan?: PluginEventPlan,
     workflowPresetFiles: readonly string[] = [],
     systemPromptAppend?: string
@@ -2606,21 +2566,19 @@ export class SessionSupervisor {
     let visibleDesignNames = designToolNames(!disabledTools.includes('design') && !remote, false);
     let refreshDesignTools = () => {};
     let managedRef: ManagedSession | undefined;
-    const pluginEventInvoker =
-      botMode || remote
-        ? undefined
-        : new PluginEventInvoker(
-            pluginEventPlan ?? { observe: [], intercept: [], inject: false },
-            (event) => {
-              const managed = managedRef ?? this.sessions.get(sessionId);
-              if (!managed || !isSameGeneration(managed.identity, identity))
-                throw new Error('Plugin session is not ready.');
-              this.options.emit({ ...event, identity: managed.identity, seq: ++managed.seq });
-            }
-          );
+    const pluginEventInvoker = remote
+      ? undefined
+      : new PluginEventInvoker(
+          pluginEventPlan ?? { observe: [], intercept: [], inject: false },
+          (event) => {
+            const managed = managedRef ?? this.sessions.get(sessionId);
+            if (!managed || !isSameGeneration(managed.identity, identity))
+              throw new Error('Plugin session is not ready.');
+            this.options.emit({ ...event, identity: managed.identity, seq: ++managed.seq });
+          }
+        );
     const resourceLoader = await createSessionResourceLoader({
       microcompact: this.microcompactOptions,
-      skillChains: !botMode,
       designGate: designGateExtension({
         cwd,
         enabled: () =>
@@ -2706,8 +2664,7 @@ export class SessionSupervisor {
       },
       {
         review: (info, signal, context) => this.reviewApproval(info, signal, context),
-        protectedFloor: botMode || protectedActions,
-        ...(botMode ? { exemptFull: true, humanTimeoutMs: HUMAN_REQUEST_TIMEOUT_MS } : {}),
+        protectedFloor: protectedActions,
       }
     );
     const checkpoints = new CheckpointManager(
@@ -2800,9 +2757,6 @@ export class SessionSupervisor {
             createLsToolDefinition(cwd) as unknown as Def,
           ];
     };
-    // Bot 写成员（本地工作区）参与同工作区写协调
-    const writeLock = botWriteLock && !remote ? botWriteLock : undefined;
-    if (writeLock) this.workspaceClaims.register({ id: sessionId, ...writeLock });
     // 后台任务 manager 本体始终本地 spawn:远程会话把命令变换成本地 ssh 命令
     const backgroundTransform = remote
       ? (command: string, taskCwd: string) => {
@@ -2835,20 +2789,13 @@ export class SessionSupervisor {
       foregroundSessionId = sessionId
     ): Def[] => {
       const guarded = (definition: Def): Def => (cp ? withCheckpoint(definition, cp) : definition);
-      const claimContext = { owner: sessionId, cwd };
-      const claimFiles = (definition: Def): Def =>
-        writeLock ? withFileClaims(definition, this.workspaceClaims, claimContext) : definition;
-      const exclusive = (definition: Def): Def =>
-        writeLock
-          ? withExclusiveCommand(definition, this.workspaceClaims, claimContext)
-          : definition;
       // scope 与完整只读预检都在审批之外；checkpoint 仅在批准后触发。
       const scoped = (
         kind: 'file-edit' | 'file-write',
         definition: Def,
         preflight?: (params: unknown, signal: AbortSignal | undefined) => Promise<unknown>
       ): Def => {
-        const approved = withApproval(toolGate, kind, claimFiles(guarded(definition)));
+        const approved = withApproval(toolGate, kind, guarded(definition));
         return withWriteScope(
           preflight ? withWritePreflight(approved, preflight) : approved,
           cwd,
@@ -2883,30 +2830,28 @@ export class SessionSupervisor {
         withApproval(
           toolGate,
           'command',
-          exclusive(
-            guarded(
-              withBackground(
-                withRtkOptimization(
-                  createSessionCommandTool({
-                    cwd,
-                    remote: Boolean(remoteOps),
-                    preference: windowsLocalShell,
-                    operations: remoteOps?.bash,
-                  }) as unknown as Def,
-                  {
-                    binaryPath: process.env.ENSO_RTK_PATH,
-                    dataDir: path.join(this.options.agentDir, 'rtk'),
-                    cwd,
-                    remote: Boolean(remoteOps),
-                    enabled: rtkEnabled,
-                  }
-                ),
-                this.bgTasks,
-                sessionId,
-                cwd,
-                backgroundTransform,
-                foregroundSessionId
-              )
+          guarded(
+            withBackground(
+              withRtkOptimization(
+                createSessionCommandTool({
+                  cwd,
+                  remote: Boolean(remoteOps),
+                  preference: windowsLocalShell,
+                  operations: remoteOps?.bash,
+                }) as unknown as Def,
+                {
+                  binaryPath: process.env.ENSO_RTK_PATH,
+                  dataDir: path.join(this.options.agentDir, 'rtk'),
+                  cwd,
+                  remote: Boolean(remoteOps),
+                  enabled: rtkEnabled,
+                }
+              ),
+              this.bgTasks,
+              sessionId,
+              cwd,
+              backgroundTransform,
+              foregroundSessionId
             )
           )
         ),
@@ -2995,7 +2940,7 @@ export class SessionSupervisor {
             return undefined;
           return managed;
         };
-        const childPlan = botMode || remote ? undefined : childPluginEventPlan(pluginEventPlan);
+        const childPlan = remote ? undefined : childPluginEventPlan(pluginEventPlan);
         const pluginIdentity: SessionIdentity = {
           sessionId: childIdentity.sessionId,
           generation: childIdentity.generation,
@@ -3139,7 +3084,6 @@ export class SessionSupervisor {
             )
           : await createSessionResourceLoader({
               microcompact: this.microcompactOptions,
-              skillChains: !botMode,
               ...(childDesign
                 ? {
                     designGate: designGateExtension({
@@ -3472,7 +3416,7 @@ export class SessionSupervisor {
     );
     const design = this.createDesignInvoker(identity, () => managedRef);
     const imageGeneration =
-      !remote && !botMode && toolEnabled(WORKSPACE_WRITE_TOOL_ID)
+      !remote && toolEnabled(WORKSPACE_WRITE_TOOL_ID)
         ? new ImageGenerationInvoker(
             identity,
             ({ requestId, tool, params }) => {
@@ -3497,23 +3441,9 @@ export class SessionSupervisor {
             }
           )
         : undefined;
-    const delegation = botMode
-      ? new DelegationInvoker(identity, (request) => {
-          const managed = managedRef ?? this.sessions.get(sessionId);
-          if (!managed) throw new Error('Session is not ready for delegations.');
-          this.options.emit({
-            type: 'delegation-invoke',
-            identity: managed.identity,
-            seq: ++managed.seq,
-            requestId: request.requestId,
-            op: request.op,
-            params: request.params,
-          });
-        })
-      : undefined;
     const workflowRoots = workflowPresetRoots(remote ? undefined : cwd, {
       customDir: this.options.workflowDir,
-      pluginFiles: botMode || remote ? [] : workflowPresetFiles,
+      pluginFiles: remote ? [] : workflowPresetFiles,
     });
     const workflowRuns = new Map<string, AbortController>();
     const computer = !remote
@@ -3546,36 +3476,35 @@ export class SessionSupervisor {
         )
       : undefined;
     // 移动设备：授权与 device host 都在 Main，worker 只上抛工具名与模型参数；
-    // 子会话 / 远程 / bot 一律不挂，Main 也会按权威身份再拒一次。
-    const deviceTools =
-      !remote && !botMode
-        ? new DeviceToolInvoker(
-            (request) => {
+    // 子会话 / 远程一律不挂，Main 也会按权威身份再拒一次。
+    const deviceTools = !remote
+      ? new DeviceToolInvoker(
+          (request) => {
+            const managed = managedRef ?? this.sessions.get(sessionId);
+            if (!managed) throw new Error('Session is not ready for device tools.');
+            this.options.emit({
+              type: 'device-tool-invoke',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              requestId: request.requestId,
+              toolName: request.toolName,
+              args: request.args,
+            });
+          },
+          {
+            emitCancel: (requestId) => {
               const managed = managedRef ?? this.sessions.get(sessionId);
-              if (!managed) throw new Error('Session is not ready for device tools.');
+              if (!managed) return;
               this.options.emit({
-                type: 'device-tool-invoke',
+                type: 'device-tool-cancel',
                 identity: managed.identity,
                 seq: ++managed.seq,
-                requestId: request.requestId,
-                toolName: request.toolName,
-                args: request.args,
+                requestId,
               });
             },
-            {
-              emitCancel: (requestId) => {
-                const managed = managedRef ?? this.sessions.get(sessionId);
-                if (!managed) return;
-                this.options.emit({
-                  type: 'device-tool-cancel',
-                  identity: managed.identity,
-                  seq: ++managed.seq,
-                  requestId,
-                });
-              },
-            }
-          )
-        : undefined;
+          }
+        )
+      : undefined;
     const sessionTools = [
       ...buildCoreTools(),
       ...builtin(
@@ -3596,21 +3525,6 @@ export class SessionSupervisor {
             'browser',
             createBrowserTools(browser).map((tool) => withNavigateApproval(gate, tool))
           )
-        : []),
-      ...(delegation
-        ? createDelegationTools(delegation, {
-            groupTasks: botGroupTasks,
-            delegationTask: botDelegationTask,
-          })
-        : []),
-      ...(delegation && botGroupTasks
-        ? [createGroupTasksTool(delegation), createGroupHistoryTool(delegation)]
-        : []),
-      ...(delegation && botRoutines
-        ? [
-            createRoutineProposeTool(delegation),
-            createSendImageTool(delegation, cwd, confirmOutsideImage(gate)),
-          ]
         : []),
       ...builtin('web', createWebTools({ chain: () => this.webSearchChain })),
       ...(imageGeneration
@@ -3635,7 +3549,7 @@ export class SessionSupervisor {
             })
           )
         : []),
-      ...(!remote && !botMode
+      ...(!remote
         ? builtin('code_search', [
             createCodeSearchTool({
               run: (input, searchCwd, signal) =>
@@ -3898,7 +3812,6 @@ export class SessionSupervisor {
     managedRef.pluginEvents = pluginEventInvoker;
     if (pluginEventInvoker?.plan.observe.includes('session_start'))
       pluginEventInvoker.notify('session_start', { reason: resumeFile ? 'resume' : 'startup' });
-    managedRef.delegation = delegation;
     this.options.emit({
       type: 'parent-ready',
       identity,
@@ -5170,7 +5083,7 @@ export class SessionSupervisor {
           if (!slot.id || !slot.detach?.()) continue;
           managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
           this.options.emit({
-            type: slot.withdrawable ? 'delivery-rejected' : 'delivery-deferred',
+            type: 'delivery-rejected',
             identity: managed.identity,
             seq: ++managed.seq,
             deliveryId: slot.id,
@@ -5247,7 +5160,6 @@ export class SessionSupervisor {
     // 用户中止的轮次不总结：它不是一次有效产出，不该参与滚动标题与重试摘要
     const digest = aborted ? undefined : buildTurnDigest(managed.messages, managed.turnStartIndex);
     managed.turnStartIndex = managed.messages.length;
-    this.workspaceClaims.release(managed.identity.sessionId);
     this.options.emit({
       type: 'turn-completed',
       identity: managed.identity,
@@ -5565,44 +5477,6 @@ export class SessionSupervisor {
       });
   }
 
-  private async steerActive(
-    managed: ManagedSession,
-    text: string,
-    images: AttachedImage[] | undefined,
-    deliveryId: string
-  ): Promise<void> {
-    const emit = (type: 'delivery-deferred' | 'delivery-rejected' | 'delivery-settled') =>
-      this.options.emit({ type, identity: managed.identity, seq: ++managed.seq, deliveryId });
-    if (!managed.session.isStreaming || managed.session.isRetrying) {
-      emit('delivery-deferred');
-      return;
-    }
-    managed.plan?.supersede();
-    const slot: NonNullable<ManagedSession['steerDeliveries']>[number] = { id: deliveryId };
-    managed.steerDeliveries ??= [];
-    managed.steerDeliveries.push(slot);
-    try {
-      const disposition = await steerActiveSession(
-        managed.session,
-        text,
-        images?.map((image) => ({ type: 'image' as const, ...image })),
-        (detach) => {
-          slot.detach = detach;
-        },
-        (input) => withPendingPlanNote(managed, input)
-      );
-      if (disposition === 'queued') {
-        this.bgTasks.backgroundAllForeground(managed.identity.sessionId, 'steer');
-      } else {
-        managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
-        emit(disposition === 'handled' ? 'delivery-settled' : 'delivery-deferred');
-      }
-    } catch {
-      managed.steerDeliveries = managed.steerDeliveries?.filter((item) => item !== slot);
-      emit('delivery-rejected');
-    }
-  }
-
   private steerTracked(
     managed: ManagedSession,
     text: string,
@@ -5618,7 +5492,6 @@ export class SessionSupervisor {
       allowWithdrawal && deliveryId && managed.session.isStreaming
         ? steerWithWithdrawal(managed.session, prepared, images, (detach) => {
             slot.detach = detach;
-            slot.withdrawable = true;
             this.options.emit({
               type: 'delivery-steer-queued',
               identity: managed.identity,
@@ -5703,7 +5576,6 @@ export class SessionSupervisor {
       });
     }
     this.emitStatus(managed, error);
-    this.workspaceClaims.release(managed.identity.sessionId);
     this.options.emit({
       type: 'turn-failed',
       identity: managed.identity,
@@ -5996,7 +5868,6 @@ export class SessionSupervisor {
       managed.browser?.cancelAll('Enso worker shutdown');
       managed.design?.cancelAll('Enso worker shutdown');
       managed.imageGeneration?.cancelAll('Enso worker shutdown');
-      managed.delegation?.cancelAll('Enso worker shutdown');
       managed.agentControl?.close('Enso worker shutdown');
       managed.currentTurnId = undefined;
       managed.computer?.cancelAll('Enso worker shutdown');

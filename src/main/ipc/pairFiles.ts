@@ -1,8 +1,6 @@
 import path from 'node:path';
 import type { PairFileTarget } from '@enso/pair';
 import { app } from 'electron';
-import { artifactCandidates, resolveArtifacts } from '../services/bots/artifacts';
-import { readBotSessionMessages } from '../services/bots/sessionMessages';
 import { pickBrowserFileRoot } from '../services/browserFileRoot';
 import {
   createPairFilePort,
@@ -10,16 +8,16 @@ import {
   type PairFilePort,
   type PairFileSource,
 } from '../services/pairFiles';
+import { readPairSessionMessages } from '../services/pairSessionHistory';
+import { artifactCandidates, resolveArtifacts } from '../services/workspaceArtifacts';
 import { getSourceAuthorityRegistry } from './agent';
-import { botModeEnabled, getBotServices } from './bots';
-import { phoneFileAccessKey, phoneFileSource } from './botsContent';
 import { sessionWorktree } from './worktree';
 
 /** 会话的权威文件根（项目/工作树/浏览器目录）：手机文件与图片端口共用，不接受手机传路径 */
 export function codeFileContext(sessionId: string) {
   const authority = getSourceAuthorityRegistry();
   const conversation = authority?.conversation(sessionId);
-  if (!conversation || conversation.bot) return null;
+  if (!conversation) return null;
   const project = authority?.project(conversation.projectId);
   const worktree = sessionWorktree(sessionId);
   const root = pickBrowserFileRoot({ conversation, project, worktree });
@@ -30,22 +28,13 @@ export function codeFileContext(sessionId: string) {
 
 /** This is a phone service port, not a new renderer IPC or a path-bearing API. */
 export function createPairFilesPort(): PairFilePort {
-  const accessKey = (target: PairFileTarget): string | null => {
-    if ('sessionId' in target) return codeFileContext(target.sessionId)?.stamp ?? null;
-    const services = botModeEnabled() ? getBotServices() : null;
-    return services ? phoneFileAccessKey(services, target.bot) : null;
-  };
+  const accessKey = (target: PairFileTarget): string | null =>
+    codeFileContext(target.sessionId)?.stamp ?? null;
   const canAccess = (target: PairFileTarget): boolean => accessKey(target) !== null;
   const lookup = async (target: PairFileTarget): Promise<PairFileSource | null> => {
-    if ('bot' in target) {
-      const services = botModeEnabled() ? getBotServices() : null;
-      if (!services) return null;
-      const source = await phoneFileSource(services, target.bot);
-      return botModeEnabled() && getBotServices() === services && canAccess(target) ? source : null;
-    }
     const before = codeFileContext(target.sessionId);
     if (!before) return null;
-    const messages = await readBotSessionMessages(
+    const messages = await readPairSessionMessages(
       path.join(app.getPath('userData'), 'agent', 'sessions'),
       before.conversation.sessionFile
     );

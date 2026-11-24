@@ -26,7 +26,7 @@ import type {
 import type { AgentMode, ApprovalMode, ThinkingLevel } from '@shared/types/agent';
 import type { SpeechModelId } from '@shared/types/speech';
 import type { ModelPricing, PricingTable } from '@shared/usage/pricing';
-import type { VirtualClassifierConfig, VirtualModelEntry } from '@shared/virtualModels';
+import type { VirtualModelEntry } from '@shared/virtualModels';
 import type { WebSearchChainEntry } from '@shared/webSearchChain';
 import type { WindowsLocalShell } from '@shared/windowsLocalShell';
 import type { OauthCredentialSnapshot } from '@/stores/oauthCredentials';
@@ -167,14 +167,6 @@ export interface SettingsState {
   memoryModelIdleMinutes: number;
   /** 语音输入：开启后才提示下载本地识别模型；缺省关 */
   voiceInputEnabled: boolean;
-  /** 实验功能：Bot 模式；缺省关，关闭时 Main 不启动 Bot 后台逻辑 */
-  botModeEnabled: boolean;
-  /** Bot 群聊智能选人的分类来源；null 走标题模型回退链 judge */
-  botRouteClassifier: VirtualClassifierConfig | null;
-  /** Bot 辅助任务（自动设置能力等）用的模型；null 跟随默认模型 */
-  botAssistantModel: DefaultModelRef | null;
-  /** Bot 全局并发上限（私聊/群聊/委派/例行共用）；缺省 4，范围 1–16 */
-  botMaxRunningTurns: number;
   /** 桌面录音用的麦克风设备 id；SYSTEM_MICROPHONE 跟随系统 */
   voiceInputDevice: string;
   /** 本机语音识别模型 */
@@ -361,10 +353,6 @@ export interface SettingsState {
   setProtectedActionsInCode: (value: boolean) => void;
   setMemoryModelIdleMinutes: (value: number) => void;
   setVoiceInputEnabled: (value: boolean) => void;
-  setBotModeEnabled: (value: boolean) => void;
-  setBotRouteClassifier: (value: VirtualClassifierConfig | null) => void;
-  setBotAssistantModel: (value: DefaultModelRef | null) => void;
-  setBotMaxRunningTurns: (value: number) => void;
   setVoiceInputDevice: (deviceId: string) => void;
   setVoiceModel: (model: SpeechModelId) => void;
   setVoiceCorrectionEnabled: (value: boolean) => void;

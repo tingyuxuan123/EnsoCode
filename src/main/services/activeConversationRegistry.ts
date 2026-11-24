@@ -297,7 +297,7 @@ export class ActiveConversationRegistry {
     if (!this.options.isMainWebContents(owner) || this.selectedByWebContents.get(owner) !== id)
       return false;
     const c = this.options.authority.conversation(id);
-    if (c?.kind !== 'root' || c.lifecycle === 'ended' || c.bot || c.superAssistant) return false;
+    if (c?.kind !== 'root' || c.lifecycle === 'ended' || c.superAssistant) return false;
     const project = this.options.authority.project(c.projectId);
     return (
       project?.state === 'active' &&

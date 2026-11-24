@@ -126,11 +126,7 @@ Screenshots use an isolated local preview without private conversations or provi
 
 Review diffs, approve tool actions, queue follow-ups, or interrupt a running task. Approval modes let you choose between manual review, automatically accepting edits, and full access. Git checkpoints provide a way to rewind supported changes.
 
-The icon rail on the left is the app switcher. Beyond **Code**, it holds the **image studio**, the **design gallery**, the **Wiki**, the **collaboration board** (the Bot-mode task board, when Bot mode is enabled), **Ask CodeKiln**, and **Settings**. Each module has its own sessions and artifacts without hiding the main conversation.
-
-### Bot mode
-
-Bot mode is an experimental mode you can enable under **Settings → Experimental**. It adds a `Code | Bot` switch to the title bar and lets you create members with their own persona, model, and tool set, then talk to them one-to-one or in groups. Members have their own inbox, delegation, and artifact views, and writes they attempt to shared memory can require your approval first.
+The icon rail on the left is the app switcher. Beyond **Code**, it holds the **image studio**, the **design gallery**, the **Wiki**, **Ask CodeKiln**, and **Settings**. Each module has its own sessions and artifacts without hiding the main conversation.
 
 ## Built-in tools
 
@@ -163,15 +159,15 @@ The design gallery hosts editable `.vetd` design documents rendered from TSX sou
 
 ## Project knowledge
 
-Install the optional [llmdoc Knowledge Map extension](examples/plugins/llmdoc/README.md) to browse and search project knowledge, find the documents affected by code changes, and start an explicit maintenance workflow in a local Git project. Agents can query the same documents on demand. Maintenance presents a preview and requires approval before writing or committing; the extension does not compile conversations.
+Install the optional [Knowledge Map extension](examples/plugins/llmdoc/README.md) to browse and search project knowledge, find the documents affected by code changes, and start an explicit maintenance workflow in a local Git project. Agents can query the same documents on demand. Maintenance presents a preview and requires approval before writing or committing; the extension does not compile conversations.
 
-The built-in Wiki, automatic Bot and group memory, and automatic core-note injection have been removed. Existing Wiki files and chat history are not migrated or deleted. You can still view old Markdown directly and edit member or group notes manually.
+The built-in Wiki has been removed. Existing Wiki files and chat history are not migrated or deleted. You can still open old Markdown files directly.
 
 ## Mobile devices and remote work
 
 For work away from the desk, the project also includes an optional phone companion, paired desktop remote nodes, and SSH projects. Phone and remote-node pairing use end-to-end encryption; a relay forwards ciphertext rather than conversation plaintext.
 
-- **Android client** — a native Kotlin/Compose app in [`android/`](android/README.md): pair one desktop, create text tasks, follow sessions, answer approvals and questions, send text or images, queue and interrupt, manage goals, browse the task board, and download session artifacts.
+- **Android client** — a native Kotlin/Compose app in [`android/`](android/README.md): pair one desktop, create text tasks, follow sessions, answer approvals and questions, send text or images, queue and interrupt, manage goals, browse the session status board, and download session artifacts.
 - **Phone web app** — a paired web surface in [`packages/phone`](packages/phone).
 - **Desktop remote nodes** — connect another desktop as a node, or take over this one from a paired client.
 - **Mobile device panel** — drive Android emulators, Android devices, iOS simulators, and iPhones attached to this machine, including letting the agent operate a device after you grant it for one conversation. Setup and limits are in [docs/mobile-devices.md](docs/mobile-devices.md).

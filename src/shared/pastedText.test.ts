@@ -8,7 +8,7 @@ import {
 
 const ID = '45451c80-50eb-464e-bd55-366c66d49bff';
 const MAC = `/Users/me/Library/Application Support/enso-code/agent/sessions/pasted-text/${ID}/d76184b6/pasted-text.txt`;
-const BOT = `/Users/me/Library/Application Support/enso-code/agent/sessions/pasted-text/bot-${ID}/19462dd5/pasted-text.txt`;
+const LEGACY = `/Users/me/Library/Application Support/enso-code/agent/sessions/pasted-text/bot-${ID}/19462dd5/pasted-text.txt`;
 const WIN = `C:\\Users\\me\\AppData\\Roaming\\enso code\\agent\\sessions\\pasted-text\\${ID}\\0a1b2c3d\\pasted-text.txt`;
 
 describe('pastedTextFileContent', () => {
@@ -39,9 +39,9 @@ describe('splitPastedTextRefs', () => {
       { type: 'file', path: MAC },
       { type: 'text', text: ' 请总结，再看 @src/a.ts' },
     ]);
-    expect(splitPastedTextRefs(`对比@${BOT}\u00a0和\n@${WIN}`)).toEqual([
+    expect(splitPastedTextRefs(`对比@${LEGACY}\u00a0和\n@${WIN}`)).toEqual([
       { type: 'text', text: '对比' },
-      { type: 'file', path: BOT },
+      { type: 'file', path: LEGACY },
       { type: 'text', text: '\u00a0和\n' },
       { type: 'file', path: WIN },
     ]);

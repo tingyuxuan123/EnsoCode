@@ -23,7 +23,6 @@ import {
   useDesignComposer,
 } from '@/features/design/host/composer';
 import { DeviceRequest } from '@/features/devices/device-request';
-import { useMemberName } from '@/hooks/useMemberName';
 import { toChatMentionCandidates } from '@/hooks/useMentionSearch';
 import { useSpeechStatus } from '@/hooks/useSpeechStatus';
 import { useI18n } from '@/i18n';
@@ -102,7 +101,6 @@ export function ChatView() {
     speechStatus?.models.find((model) => model.id === voiceModel)?.state === 'ready';
   const chrome = useSessionsStore(useShallow(selectChatChrome));
   const designAttachment = useDesignComposer((state) => state.bySession[chrome?.id ?? '']);
-  const memberName = useMemberName(chrome?.displayedParentId ? chrome.agentType : undefined);
   const pinnedTodos = usePinnedTodos(chrome?.id ?? '');
   const oauthSnapshot = useOauthCredentialStore((state) => state.snapshot);
   const enabledProviders = useUsableProviders();
@@ -661,10 +659,9 @@ export function ChatView() {
                 {chrome.displayedParentId && (
                   <>
                     <span className="text-[calc(11rem/14)] text-muted-foreground">
-                      {memberName ??
-                        (chrome.agentType
-                          ? agentTypeDisplayName(chrome.agentType, customAgentTypes)
-                          : 'coworker')}
+                      {chrome.agentType
+                        ? agentTypeDisplayName(chrome.agentType, customAgentTypes)
+                        : 'coworker'}
                       {chrome.coworkerModelControl !== 'ready' && chrome.lastModelId
                         ? ` · ${modelDisplayName(virtualModels, chrome.lastModelId)}`
                         : ''}

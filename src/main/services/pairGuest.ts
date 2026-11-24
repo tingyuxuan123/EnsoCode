@@ -521,8 +521,8 @@ async function handleFrame(
     flushPendingWrites(conn);
   }
   if (isReplayHello(payload)) return;
-  if (!trusted && (conn.replay.isReady() || !isReplayBootstrapResponse(payload.type))) return;
   if (typeof payload !== 'object' || payload === null || typeof payload.type !== 'string') return;
+  if (!trusted && (conn.replay.isReady() || !isReplayBootstrapResponse(payload.type))) return;
   switch (payload.type) {
     case 'host-info': {
       conn.hostname = payload.hostname;
@@ -552,17 +552,22 @@ async function handleFrame(
     case 'appearance':
     case 'push-config':
       return;
-    // 远程节点不提供 Bot 模式
-    case 'bot-catalog':
-    case 'bot-chats':
-    case 'group-timeline':
-    case 'bot-event':
-    case 'bot-chat-state':
-    case 'bot-send-result':
-    case 'bot-activity':
-      return;
-    default:
+    case 'catalog':
+    case 'projects':
+    case 'providers':
+    case 'agent-event':
+    case 'session-sync':
+    case 'history':
+    case 'voice-partial':
+    case 'voice-result':
+    case 'command-rejected':
+    case 'session-image-result':
+    case 'file-list-result':
+    case 'file-read-result':
+    case 'preview-list-result':
+    case 'preview-result':
       onMessage?.({ nodeId: conn.node.nodeId, payload });
+      return;
   }
 }
 

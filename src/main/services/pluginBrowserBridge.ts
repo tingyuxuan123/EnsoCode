@@ -6,7 +6,6 @@ import {
   type PluginBrowserOp,
   pluginBrowserUrl,
 } from '@shared/extensionPlugins/browserBridge';
-import type { BrowserActor } from './browserTabClaims';
 
 /** 插件桥允许落到 BrowserHost 的正式 op；`read` 复用宿主的 read_text 投影 */
 export type PluginBrowserHostOp =
@@ -26,7 +25,6 @@ export interface PluginBrowserSessionGrant {
   ok: true;
   /** 宿主会话键（本机根会话即会话 id） */
   sessionKey: string;
-  actor?: BrowserActor;
   /** 冷 UI 读取绑定 Main 权威会话版本；不替代 worker 的 generation。 */
   authorityVersion?: number;
 }
@@ -43,7 +41,6 @@ export interface PluginBrowserRunInput {
   sessionKey: string;
   op: PluginBrowserHostOp;
   params: Record<string, unknown>;
-  actor?: BrowserActor;
   signal: AbortSignal;
   guard: () => void;
 }
@@ -52,7 +49,6 @@ export interface PluginBrowserInspectInput {
   sessionKey: string;
   tabId: string;
   selector: string;
-  actor?: BrowserActor;
   signal: AbortSignal;
   guard: () => void;
 }
@@ -111,7 +107,7 @@ export function createPluginBrowserBridge(deps: PluginBrowserBridgeDeps) {
     const { signal } = input;
     const grant = deps.authorizeSession(input);
     if (!grant.ok) throw denied(grant.code, grant.message);
-    const { sessionKey, actor } = grant;
+    const { sessionKey } = grant;
     const assertAllowedUrl = (raw: string) => {
       const url = pluginBrowserUrl(raw, input.domains);
       if (!url) {
@@ -155,7 +151,6 @@ export function createPluginBrowserBridge(deps: PluginBrowserBridgeDeps) {
             sessionKey,
             op: 'navigate',
             params: { url: requested.href, newTab: true },
-            ...(actor ? { actor } : {}),
             signal,
             guard: assertCurrent,
           });
@@ -238,7 +233,6 @@ export function createPluginBrowserBridge(deps: PluginBrowserBridgeDeps) {
         sessionKey,
         op: 'plugin_read_wps_range',
         params: { tabId: fixedTab, address: input.params.address },
-        ...(actor ? { actor } : {}),
         signal,
         guard,
       });
@@ -252,7 +246,6 @@ export function createPluginBrowserBridge(deps: PluginBrowserBridgeDeps) {
         sessionKey,
         op: 'navigate',
         params: { url: requested.href, newTab: input.params.newTab === true },
-        ...(actor ? { actor } : {}),
         signal,
         guard: assertCurrent,
       });
@@ -284,7 +277,6 @@ export function createPluginBrowserBridge(deps: PluginBrowserBridgeDeps) {
             sessionKey,
             tabId,
             selector: String(input.params.selector),
-            ...(actor ? { actor } : {}),
             signal,
             guard,
           })
@@ -292,7 +284,6 @@ export function createPluginBrowserBridge(deps: PluginBrowserBridgeDeps) {
             sessionKey,
             op: HOST_OPS[input.op],
             params: hostParams(input.op, input.params),
-            ...(actor ? { actor } : {}),
             signal,
             guard,
           });
