@@ -21,6 +21,7 @@ import { setPluginCtx } from "./plugin-context";
 import { CANVAS_TAB_ID, GALLERY_VIEW_ID } from "./tab-ids";
 import { registerDesignTools } from "./tools";
 import { claimCanvasAutoOpen, openCanvasAfterWarmup } from "./vetd/auto-open";
+import { getDesignListing, publishDesignListing } from "./vetd/design-listing";
 import { setDesignPresence } from "./vetd/design-presence";
 import { registerToolGate } from "./vetd/tool-gate";
 import { isPureDesignProject, pickDesignPaths } from "./vetd/discover";
@@ -102,9 +103,9 @@ export default definePlugin({
 		// 品牌图由宿主从 plugin.json#icon 解析后注入；插件不拼宿主协议、不 import 包内 png。
 		const packageIcon = ctx.plugin.iconUrl ? <VetdFileIcon src={ctx.plugin.iconUrl} /> : undefined;
 
-		/** 最近一次 conversation-changed 的 cwd 与会话 id，用于丢弃过期的探测结果。 */
+		/** 最近一次 conversation-changed 的 cwd 和探测代次。 */
 		let latestCwd: string | null = null;
-		let latestSessionId: string | null = null;
+		let revealEpoch = 0;
 
 		/**
 		 * cwd 里有 .vetd 才把画布 Tab 上栏。
@@ -114,14 +115,20 @@ export default definePlugin({
 		 * 会话都展开一次，同一会话内关掉后不再反复弹。
 		 */
 		const revealTabForCwd = (cwd: string | null, sessionId: string | null): void => {
+			const epoch = ++revealEpoch;
+			publishDesignListing(cwd && sessionId ? { cwd, sessionId, paths: [] } : null);
 			if (!cwd) return;
 			void ctx.fs
 				.listFilesRecursive(cwd)
 				.catch(() => [])
 				.then((files) => {
-					if (latestCwd !== cwd || latestSessionId !== sessionId) return;
+					if (epoch !== revealEpoch) return;
 					// 还没迁移的旧格式也算数：Tab 先亮出来，真正的迁移在画布打开时发生。
 					const { bundles, legacyFiles } = pickDesignPaths(files);
+					if (sessionId) {
+						const paths = [...new Set([...bundles, ...(getDesignListing()?.paths ?? [])])].sort();
+						publishDesignListing({ cwd, sessionId, paths });
+					}
 					const found = bundles.length + legacyFiles.length;
 					// 这趟全量列举同时是设计工具闸门的判定依据，顺手喂进去，
 					// 免得闸门在每次模型调用前自己再扫一遍工作区。
@@ -133,7 +140,7 @@ export default definePlugin({
 					const openCanvas = (): void => {
 						void openCanvasAfterWarmup(
 							loadCanvasTab,
-							() => latestCwd !== cwd || latestSessionId !== sessionId,
+							() => epoch !== revealEpoch,
 							() => ctx.ui.openActivityTab(CANVAS_TAB_ID, { width: "max" }),
 						);
 					};
@@ -197,9 +204,7 @@ export default definePlugin({
 		ctx.conversation.on((event) => {
 			if (event.type === "conversation-changed") {
 				const { cwd, id } = event.conversation;
-				if (!cwd) return;
 				latestCwd = cwd;
-				latestSessionId = id;
 				revealTabForCwd(cwd, id);
 				return;
 			}

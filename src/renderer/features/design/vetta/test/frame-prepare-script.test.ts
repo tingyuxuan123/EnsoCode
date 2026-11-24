@@ -8,9 +8,17 @@
  *   （整份素材导出因此每帧白等 60s）。这时脚本得自己等一帧绘制后写回标记。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FRAME_READY_EXPRESSION, framePrepareScript } from "../src/canvas/offscreen-raster";
+import { FRAME_READY_EXPRESSION, framePrepareScript, tallFramePrepareScript } from "../src/canvas/offscreen-raster";
+import { scrollPrepareScript, scrollReadyExpression } from "../src/materials/scroll-probe";
 
-type PageWindow = Window & { __vetdPainted?: string | null };
+type PageWindow = Window & {
+	__vetdPainted?: string | null;
+	__vetdBooted?: boolean;
+	__vetdNavFrom?: string | null;
+	__vetdPrepareToken?: object;
+	__vetdScrollAt?: number | null;
+};
+const page = window as PageWindow;
 
 let posted: unknown[];
 let frames: FrameRequestCallback[];
@@ -40,12 +48,22 @@ beforeEach(() => {
 		return frames.length;
 	});
 	Object.defineProperty(document, "fonts", { configurable: true, value: { ready: Promise.resolve() } });
+	page.__vetdBooted = true;
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.restoreAllMocks();
-	(window as PageWindow).__vetdPainted = undefined;
-	(window as Window & { __vetdNavFrom?: string }).__vetdNavFrom = undefined;
+	delete page.__vetdPainted;
+	delete page.__vetdBooted;
+	delete page.__vetdNavFrom;
+	delete page.__vetdPrepareToken;
+	delete page.__vetdScrollAt;
+	document.getElementById("vetd-raster-tall")?.remove();
+	const scroller = document.scrollingElement || document.documentElement;
+	scroller.scrollTop = 0;
+	if (scroller instanceof HTMLElement) scroller.style.scrollBehavior = "";
+	document.documentElement.style.scrollBehavior = "";
 });
 
 function run(script: string): void {
@@ -103,6 +121,95 @@ it("does not mistake the previous frame's late paint for the target before navig
 	window.history.pushState({ key: "k-detail" }, "", "/detail");
 	(window as PageWindow).__vetdPainted = "detail";
 	expect(ready()).toBe(true);
+});
+
+describe("cold capture of a design with no index frame", () => {
+	function ready(expression = FRAME_READY_EXPRESSION): boolean {
+		return new Function(`return (${expression});`)() as boolean;
+	}
+
+	function paint(path: string): void {
+		window.history.replaceState({ key: path }, "", `/${path}`);
+		page.__vetdPainted = path;
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+		delete page.__vetdBooted;
+		window.history.replaceState(null, "", "/");
+	});
+
+	it("does not accept the first frame's paint as the requested bitmap after the startup redirect", () => {
+		run(framePrepareScript("Frame3"));
+		// The router's initial redirect can override an early show-frame to Frame3.
+		paint("Frame1");
+		expect(ready()).toBe(false);
+		expect(posted).toEqual([]);
+
+		page.__vetdBooted = true;
+		vi.advanceTimersByTime(20);
+		expect(ready()).toBe(false);
+		expect(posted).toEqual([{ vetd: true, type: "show-frame", id: "Frame3" }]);
+
+		paint("Frame3");
+		expect(ready()).toBe(true);
+	});
+
+	it("re-arms the same-frame paint after the startup redirect lands on the requested frame", async () => {
+		run(framePrepareScript("Frame1"));
+		paint("Frame1");
+		page.__vetdBooted = true;
+		vi.advanceTimersByTime(20);
+		expect(posted).toEqual([]);
+		expect(ready()).toBe(false);
+		await settle();
+		expect(ready()).toBe(true);
+	});
+
+	it("only lets the newest preparation navigate after the boot marker, including across capture modes", () => {
+		run(scrollPrepareScript("Frame2", 250));
+		vi.advanceTimersByTime(100);
+		run(framePrepareScript("Frame3"));
+		paint("Frame1");
+		page.__vetdBooted = true;
+		vi.advanceTimersByTime(100);
+		expect(posted).toEqual([{ vetd: true, type: "show-frame", id: "Frame3" }]);
+		paint("Frame3");
+		vi.advanceTimersByTime(100);
+		expect(ready()).toBe(true);
+		expect(page.__vetdScrollAt).toBeNull();
+	});
+
+	it("bounds the wait for an older engine without a boot marker, using only the latest request's deadline", () => {
+		run(framePrepareScript("Frame2"));
+		vi.advanceTimersByTime(100);
+		run(framePrepareScript("Frame3"));
+		vi.advanceTimersByTime(2_900);
+		expect(posted).toEqual([]);
+		vi.advanceTimersByTime(100);
+		expect(posted).toEqual([{ vetd: true, type: "show-frame", id: "Frame3" }]);
+	});
+
+	it.each([
+		["material tile", scrollPrepareScript("Frame3", 250)],
+		["tall bitmap tile", tallFramePrepareScript("Frame3", 6_200, 250)],
+	])("does not scroll or accept a %s of the startup frame", async (_label, script) => {
+		run(script);
+		paint("Frame1");
+		vi.advanceTimersByTime(100);
+		await settle();
+		expect(ready(scrollReadyExpression(250))).toBe(false);
+		expect(page.__vetdScrollAt).toBeNull();
+		expect(posted).toEqual([]);
+
+		page.__vetdBooted = true;
+		vi.advanceTimersByTime(20);
+		expect(posted).toEqual([{ vetd: true, type: "show-frame", id: "Frame3" }]);
+		paint("Frame3");
+		vi.advanceTimersByTime(100);
+		await settle();
+		expect(ready(scrollReadyExpression(250))).toBe(true);
+	});
 });
 
 describe("frame ready expression", () => {

@@ -10,6 +10,7 @@ import {
   type PackagedVetd,
   parseDesignManifest,
 } from '../vetta/src/export/import-design';
+import { addDesignToListing } from '../vetta/src/vetd/design-listing';
 import { migrateLegacyDesign } from '../vetta/src/vetd/migrate';
 import { viewedDesignSessionId } from './activity-route';
 import { createDesignContext, unwrap } from './context';
@@ -60,6 +61,7 @@ function reveal(owner: string, root: DesignRootInfo, path: string): void {
   selected(owner);
   if (!path.startsWith(`${root.path.replace(/\/$/, '')}/`))
     throw new Error('Design outside owner root');
+  addDesignToListing(root.path, path);
   setPendingDesignPath(path, root.path);
   addSidePanelDesign({ conversationId: owner, title: translate('tab.label'), width: 'max' });
 }
@@ -219,11 +221,17 @@ export async function loadDesignPreviewFile(
   };
 }
 
-export async function openDesignDirectory(owner: string, rel: string): Promise<void> {
+export async function openDesignDirectory(
+  owner: string,
+  rel: string,
+  expectedRoot?: string
+): Promise<void> {
   assertDesignArchivePath(rel);
   if (!/\.vetd$/i.test(rel)) throw new Error('Expected a design bundle');
   selected(owner);
   const root = await ownerRoot(owner);
+  if (expectedRoot !== undefined && root.path !== expectedRoot)
+    throw new Error('Design workspace changed');
   await verifyOwner(owner, root);
   reveal(owner, root, absolute(root, rel));
 }

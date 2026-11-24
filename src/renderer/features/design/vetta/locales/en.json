@@ -285,6 +285,7 @@
 	"gallery.detail.aria": "{{name}} style details",
 	"gallery.detail.palette": "Palette",
 	"gallery.detail.resources": "Resources",
+	"gallery.detail.author": "Author",
 	"gallery.detail.license": "License",
 	"gallery.detail.source": "View source",
 	"gallery.detail.openDemo": "Preview demo in app",

@@ -7,6 +7,12 @@
 `vetta/vendor/taste-skill` 整体复制，含 LICENSE、UPSTREAM.md 与 library JSON。
 补入上游 plugin.json（静态契约测试使用）和 Apache-2.0 LICENSE。
 
+本仓库首次引入于 2026-11-02：`6f82208e8` 打包引擎资源，`1fb6f8546` 迁入 Renderer
+插件（已含交互模式的设备切换）；2026-11-03 的 `6b028928a` 接入会话侧栏。
+后续按功能移植，不整体替换插件或 SDK：0.6.14 顶栏入口复用本地会话权威根和 Dock，
+0.6.17 位图修复保留本地引擎端口与 iframe 边界。上游 0.6.12 的工作空间落点不替换
+本仓库 Main 选择设计项目目录的约定。
+
 行为差距：小满没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
 执行工具和登记贡献，P2-UI 将画布、截图卡和样机工作台接入渲染层，不增加 preload 暴露。
 `host/` 负责 SDK 兼容、绝对路径拆分与 IPC；Main 仍负责权威根、realpath、写白名单。

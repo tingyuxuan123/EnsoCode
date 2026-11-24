@@ -131,6 +131,13 @@ describe('设计文件预览的权威根和所属会话', () => {
     );
     expect(h.reveal).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'owner' }));
   });
+  it('顶栏快照不能在工作区切换后打开另一个根里的同名设计', async () => {
+    await expect(openDesignDirectory('owner', 'nested/app.vetd', '/old/worktree')).rejects.toThrow(
+      'Design workspace changed'
+    );
+    expect(h.pending).not.toHaveBeenCalled();
+    expect(h.reveal).not.toHaveBeenCalled();
+  });
   it('导入写入始终使用原始session root，不会借同cwd其它会话的路径映射', async () => {
     const loaded = await loadDesignPreviewFile('owner', 'share.vetdz');
     h.fs.mockImplementation(async (request: { op: string }) =>

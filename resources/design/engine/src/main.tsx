@@ -275,11 +275,26 @@ function NavigationBridge() {
 	return null;
 }
 
+/**
+ * 离屏窗口从 `/` 启动。没有 index.tsx 时，要等首页的 <Navigate replace> 落地后
+ * 才允许截图脚本切帧，否则晚到的首页重定向会覆盖目标。置于 Routes 外，不等 frame
+ * 或外壳加载成功；截图仍由 FramePainted 单独确认绘制完成。
+ */
+function EngineBooted({ home }: { home: string | null }) {
+	const location = useLocation();
+	const settled = !(location.pathname === "/" && home !== null && home !== HOME_FRAME_ID);
+	useEffect(() => {
+		if (settled) (window as { __vetdBooted?: boolean }).__vetdBooted = true;
+	}, [settled]);
+	return null;
+}
+
 function App() {
 	const home = homeFrameId(frameIds);
 	return (
 		<>
 			<NavigationBridge />
+			<EngineBooted home={home} />
 			<Routes>
 				{/* 无路径的父路由：所有 frame 都是它的子路由，外壳因此只挂载一次。 */}
 				<Route element={<LayoutRoute />}>

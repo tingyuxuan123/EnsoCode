@@ -52,6 +52,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	act(() => root.unmount());
+	vi.useRealTimers();
 	host.remove();
 	document.body.innerHTML = "";
 	resetDesignSystems();
@@ -114,27 +115,66 @@ describe("DesignSystemGrid", () => {
 		]);
 	});
 
-	it("悬停点燃对应卡片的 demo 预览，移开熄灭", () => {
-		const html = "<!doctype html><html><body>demo</body></html>";
-		setDesignSystems([
-			{
-				...system("linear", "Linear"),
-				resources: [{ path: "demo.html", role: "demo", encoding: "text", content: html, bytes: html.length }],
-			},
-			system("stripe", "Stripe"),
-		]);
+	function renderWithDemos(): void {
+		vi.useFakeTimers();
+		setDesignSystems([system("linear", "Linear"), system("stripe", "Stripe")].map((entry) => {
+			const html = `<html><body>${entry.name}</body></html>`;
+			return { ...entry, resources: [{ path: "demo.html", role: "demo", encoding: "text", content: html, bytes: html.length }] };
+		}));
 		render(<DesignSystemGrid busy={false} onPick={() => {}} />);
-		const active = (): number => document.body.querySelectorAll("[data-active]").length;
-		expect(active()).toBe(0);
-		// React 的 onMouseEnter/Leave 由委托的 mouseover/mouseout 驱动。
-		act(() => {
-			tiles()[0].dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-		});
-		expect(active()).toBe(1);
-		act(() => {
-			tiles()[0].dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
-		});
-		expect(active()).toBe(0);
+	}
+	const frames = (): NodeListOf<HTMLIFrameElement> => host.querySelectorAll("iframe");
+	function mouse(tile: HTMLButtonElement, type: string): void {
+		act(() => { tile.dispatchEvent(new MouseEvent(type, { bubbles: true })); });
+	}
+	const advance = (ms: number): void => { act(() => { vi.advanceTimersByTime(ms); }); };
+
+	it("idle and fly-by cards have no frames; sustained hover mounts only that demo", () => {
+		renderWithDemos();
+		expect(frames()).toHaveLength(0);
+		mouse(tiles()[0], "mouseover");
+		advance(100);
+		expect(frames()).toHaveLength(0);
+		mouse(tiles()[0], "mouseout");
+		advance(200);
+		expect(frames()).toHaveLength(0);
+		mouse(tiles()[1], "mouseover");
+		advance(160);
+		expect(frames()).toHaveLength(1);
+		expect(tiles()[1].querySelector("iframe")?.getAttribute("srcdoc")).toContain("Stripe");
+		expect(frames()[0].tabIndex).toBe(-1);
+		mouse(tiles()[1], "mouseout");
+		expect(frames()).toHaveLength(0);
+	});
+
+	it("keyboard focus previews after a dwell, survives a pointer leaving, and clears on blur", () => {
+		renderWithDemos();
+		act(() => tiles()[0].focus());
+		mouse(tiles()[0], "mouseover");
+		mouse(tiles()[0], "mouseout");
+		advance(159);
+		expect(frames()).toHaveLength(0);
+		advance(1);
+		expect(tiles()[0].querySelector("iframe")).not.toBeNull();
+		act(() => tiles()[1].focus());
+		expect(frames()).toHaveLength(0);
+		advance(160);
+		expect(frames()).toHaveLength(1);
+		expect(tiles()[1].querySelector("iframe")).not.toBeNull();
+		act(() => tiles()[1].blur());
+		expect(frames()).toHaveLength(0);
+	});
+
+	it("keyboard focus can take over from a parked pointer on another card", () => {
+		renderWithDemos();
+		mouse(tiles()[0], "mouseover");
+		advance(160);
+		expect(tiles()[0].querySelector("iframe")).not.toBeNull();
+		act(() => tiles()[1].focus());
+		expect(frames()).toHaveLength(0);
+		advance(160);
+		expect(frames()).toHaveLength(1);
+		expect(tiles()[1].querySelector("iframe")).not.toBeNull();
 	});
 });
 

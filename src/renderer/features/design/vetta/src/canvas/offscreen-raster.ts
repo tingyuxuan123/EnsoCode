@@ -152,6 +152,7 @@ const HISTORY_KEY_EXPRESSION = `(history.state && history.state.key ? history.st
 export const FRAME_PAINTED_EXPRESSION = `(function () {
 	var painted = window.__vetdPainted;
 	if (typeof painted !== "string") return false;
+	if (window.__vetdNavFrom === null) return false;
 	if (window.__vetdNavFrom && ${HISTORY_KEY_EXPRESSION} === window.__vetdNavFrom) return false;
 	return painted === ${SHOWN_FRAME_EXPRESSION};
 })()`;
@@ -169,6 +170,30 @@ export const NAVIGATE_TO_FRAME_STATEMENTS = `window.__vetdPainted = null;
 
 /** 地址栏已经显示目标帧（页面表达式，调用处需先定义变量 `ID`）。 */
 export const SHOWING_FRAME_EXPRESSION = `${SHOWN_FRAME_EXPRESSION} === ID`;
+
+/** 兼容没有 `__vetdBooted` 标记的旧引擎：到点照旧切帧，不耗满宿主超时。 */
+const ENGINE_BOOT_WAIT_MS = 3_000;
+
+/**
+ * 等引擎路由落定。没有 index.tsx 的设计稿会在首次挂载时把 `/` 重定向到第一帧，
+ * 抢先发出的切帧导航会被覆盖，而第一帧的地址、历史 key、绘制标记照样会通过就绪检查。
+ * 等待期间用 null 阻止这些检查放行；新请求的令牌使上一轮遗留的等待不再切帧。
+ * `body` 在函数内执行，可以用 `return` 提前结束；已启动的引擎不额外等待。
+ */
+export function afterEngineBoot(body: string): string {
+	return `var TOKEN = {};
+	window.__vetdPrepareToken = TOKEN;
+	window.__vetdNavFrom = null;
+	var BOOT_DEADLINE = Date.now() + ${ENGINE_BOOT_WAIT_MS};
+	(function run() {
+		if (window.__vetdPrepareToken !== TOKEN) return;
+		if (window.__vetdBooted !== true && Date.now() < BOOT_DEADLINE) {
+			setTimeout(run, 20);
+			return;
+		}
+		${body}
+	})();`;
+}
 
 /**
  * 复用离屏窗口前先清掉上一帧的完成标记，再等这一帧重新画出来。
@@ -189,7 +214,7 @@ export function framePrepareScript(frameId: string): string {
 	const id = JSON.stringify(frameId);
 	return `(() => {
 	var ID = ${id};
-	if (${SHOWING_FRAME_EXPRESSION}) {
+	${afterEngineBoot(`if (${SHOWING_FRAME_EXPRESSION}) {
 		window.__vetdPainted = null;
 		window.__vetdNavFrom = "";
 		requestAnimationFrame(function () {
@@ -201,7 +226,7 @@ export function framePrepareScript(frameId: string): string {
 		});
 		return;
 	}
-	${NAVIGATE_TO_FRAME_STATEMENTS}
+	${NAVIGATE_TO_FRAME_STATEMENTS}`)}
 })()`;
 }
 

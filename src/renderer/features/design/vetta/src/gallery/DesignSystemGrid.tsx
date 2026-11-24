@@ -1,5 +1,5 @@
 import { useTranslation } from "@vetta-org/plugin-sdk";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DesignSystemTileContent } from "../cards/DesignSystemTileContent";
 import { refreshDesignCatalog, useCatalogState } from "../design-systems/index";
 import type { DesignSystem } from "../design-systems/types";
@@ -27,12 +27,35 @@ export interface DesignSystemGridProps {
 const GRID_CLASS = "grid grid-cols-3 gap-4";
 /** 骨架格数：填满一两行即可，不必假装有多少套。 */
 const SKELETON_COUNT = 6;
+/** 避免滚动时光标掠过的每一张卡片都挂载 iframe。 */
+const DEMO_DWELL_MS = 160;
+
+type PreviewSource = "hover" | "focus";
 
 export function DesignSystemGrid({ divided = false, busy, onPick }: DesignSystemGridProps) {
 	const { t } = useTranslation();
 	const { systems, status } = useCatalogState();
-	/** 悬停中的条目：只让它的 demo 滚动，其余保持静止。 */
-	const [hovered, setHovered] = useState<string | null>(null);
+	const [intent, setIntent] = useState<{ hover: string | null; focus: string | null; latest: PreviewSource }>({
+		hover: null,
+		focus: null,
+		latest: "hover",
+	});
+	const [demoId, setDemoId] = useState<string | null>(null);
+	const target = busy ? null : intent[intent.latest] ?? intent.hover ?? intent.focus;
+	const activeId = demoId === target ? demoId : null;
+	const updateIntent = (source: PreviewSource, id: string, entered: boolean): void => {
+		setIntent((current) => {
+			if (entered) return { ...current, [source]: id, latest: source };
+			return current[source] === id ? { ...current, [source]: null } : current;
+		});
+	};
+
+	useEffect(() => {
+		setDemoId(null);
+		if (!target) return;
+		const timer = setTimeout(() => setDemoId(target), DEMO_DWELL_MS);
+		return () => clearTimeout(timer);
+	}, [target]);
 
 	return (
 		<section className={divided ? "mt-8 border-t border-border/60 pt-6" : ""}>
@@ -46,14 +69,18 @@ export function DesignSystemGrid({ divided = false, busy, onPick }: DesignSystem
 							type="button"
 							disabled={busy}
 							onClick={() => onPick(system)}
-							onMouseEnter={() => setHovered(system.id)}
-							onMouseLeave={() => setHovered((current) => (current === system.id ? null : current))}
-							onFocus={() => setHovered(system.id)}
-							onBlur={() => setHovered((current) => (current === system.id ? null : current))}
+							onMouseEnter={() => updateIntent("hover", system.id, true)}
+							onMouseLeave={() => updateIntent("hover", system.id, false)}
+							onFocus={() => updateIntent("focus", system.id, true)}
+							onBlur={() => updateIntent("focus", system.id, false)}
 							aria-label={t("gallery.styles.view", { name: system.name })}
 							className="flex aspect-[4/3] min-w-0 flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card p-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg disabled:opacity-40"
 						>
-							<DesignSystemTileContent system={system} demoActive={hovered === system.id} />
+							<DesignSystemTileContent
+								system={system}
+								demo={activeId === system.id}
+								demoActive={activeId === system.id}
+							/>
 						</button>
 					))}
 				</div>

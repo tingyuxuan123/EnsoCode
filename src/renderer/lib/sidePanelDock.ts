@@ -372,15 +372,20 @@ export function addSidePanelDesign(opts?: Partial<DesignReveal>): void {
   if (!ownerId || !sessions.conversations[ownerId]) return;
   const dockId = resolveSidePanelDockConversationId(sessions.conversations, ownerId);
   const side = useSidePanelStore.getState();
+  // maximize opens and sizes atomically, before a cold dock first renders at the default width.
+  if (opts?.width === 'max') side.maximize(dockId);
   side.ensureOpen(dockId);
   const api = docks.get(dockId);
   if (!api) {
-    pendingDesignReveal.set(dockId, { ...opts, conversationId: ownerId });
+    pendingDesignReveal.set(dockId, {
+      ...opts,
+      conversationId: ownerId,
+      width: opts?.width === 'max' ? undefined : opts?.width,
+    });
     return;
   }
   // 「max」= 面板拉满但保留会话区；全屏会把正在对话的会话框整个盖掉
-  if (opts?.width === 'max') side.maximize(dockId);
-  else if (typeof opts?.width === 'number') side.setWidth(dockId, opts.width);
+  if (typeof opts?.width === 'number') side.setWidth(dockId, opts.width);
   const existing = api.getPanel('design');
   if (existing) {
     existing.api.updateParameters({ conversationId: ownerId });

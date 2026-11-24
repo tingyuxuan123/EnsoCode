@@ -34,7 +34,7 @@ export function Composer({
 
 					<div className="ml-auto flex items-center gap-1.5">
 						<span
-							className={`flex h-[26px] min-w-0 items-center gap-1.5 rounded-[7px] pl-1.5 pr-1 ${
+							className={`flex h-[28px] min-w-0 items-center gap-1.5 rounded-[6px] pl-2 pr-1 ${
 								open ? "bg-white/[0.11] ring-1 ring-inset ring-white/[0.14]" : "bg-white/[0.04]"
 							}`}
 						>

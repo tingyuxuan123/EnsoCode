@@ -82,6 +82,14 @@ describe("DesignSystemDetailDialog", () => {
 		expect(document.body.querySelector('[title^="primary"]')).not.toBeNull();
 	});
 
+	it("shows only a declared manifest author", async () => {
+		await render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
+		expect(document.body.textContent).not.toContain("gallery.detail.author");
+		const authored = { ...withDemo, author: "Ada" };
+		await render(<DesignSystemDetailDialog system={authored} busy={false} onUse={() => {}} onClose={() => {}} />);
+		expect([...document.querySelectorAll("dt")].find((term) => term.textContent === "gallery.detail.author")?.nextElementSibling?.textContent).toBe("Ada");
+	});
+
 	it("有 demo 时用常开滚动的真实预览，HTML 经宿主沙箱策略保护", async () => {
 		await render(<DesignSystemDetailDialog system={withDemo} busy={false} onUse={() => {}} onClose={() => {}} />);
 		const frame = document.querySelector('[data-slot="dialog-popup"] iframe');

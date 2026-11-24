@@ -47,6 +47,7 @@ import {
   isDesignSessionSelection,
   openDesignGallery,
 } from '@/features/design/host/workspace-view';
+import { DesignCanvasHeaderAction } from '@/features/design/mounts/DesignCanvasHeaderAction';
 import { DesignGallery, DesignGalleryHeader } from '@/features/design/mounts/DesignGallery';
 import { DesignGlobalSlots } from '@/features/design/mounts/DesignGlobalSlots';
 import { GALLERY_VIEW_ID } from '@/features/design/vetta/src/tab-ids';
@@ -525,18 +526,21 @@ export default function App() {
   ) : galleryActive ? (
     <DesignGalleryHeader side="right" />
   ) : extensionsActive || remoteNodeActive ? undefined : (
-    <button
-      type="button"
-      className={cn(
-        'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
-        sideOpen ? 'text-foreground' : 'text-muted-foreground'
-      )}
-      onClick={toggleSidePanel}
-      aria-label={t('Toggle side panel')}
-      title={t('Toggle side panel')}
-    >
-      <PanelRight className="h-4 w-4" />
-    </button>
+    <>
+      <DesignCanvasHeaderAction />
+      <button
+        type="button"
+        className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent/50',
+          sideOpen ? 'text-foreground' : 'text-muted-foreground'
+        )}
+        onClick={toggleSidePanel}
+        aria-label={t('Toggle side panel')}
+        title={t('Toggle side panel')}
+      >
+        <PanelRight className="h-4 w-4" />
+      </button>
+    </>
   );
 
   return (

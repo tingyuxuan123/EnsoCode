@@ -9,8 +9,7 @@ import { sandboxDesignDemoHtml } from "../../../host/demo-preview";
  * 静态时是按比例缩小的整页快照；悬停时页面自动滚动，长页面从头滚到底再滚回来。
  *
  * 实现取舍：
- * - **底层永远铺一张 token 色板**，iframe 真正 load 之后才淡入盖上去。iframe 渲染不出来
- *   （被环境拦、还没解析完、srcdoc 太大）时用户看到的是色板，而不是一块黑。
+ * - **底层铺一张 token 色板或调用方的静态封面**，iframe 真正 load 之后才淡入盖上去。
  * - **视口内才挂载 iframe**：一屏 20 多个文档同时解析既慢又没意义，滚动到才建。
  * - **缩放用 transform**，不是改 iframe 宽度：demo 始终按桌面宽度布局，不会被卡片宽度
  *   触发响应式断点变成手机版。
@@ -27,6 +26,8 @@ export interface DesignSystemDemoProps {
 	system: DesignSystem;
 	/** 悬停时才滚动：一屏 20 多张卡片同时动只会让人眼花。 */
 	active: boolean;
+	/** 卡片已有静态封面/色板时，预览加载期间保持底层可见。 */
+	placeholder?: boolean;
 	className?: string;
 }
 
@@ -44,7 +45,7 @@ export function designSystemDemoHtml(system: DesignSystem): string | null {
 	return demo?.encoding === "text" ? demo.content : null;
 }
 
-export function DesignSystemDemo({ system, active, className }: DesignSystemDemoProps) {
+export function DesignSystemDemo({ system, active, className, placeholder = true }: DesignSystemDemoProps) {
 	const html = designSystemDemoHtml(system);
 	const safeHtml = useMemo(() => html === null ? null : sandboxDesignDemoHtml(html), [html]);
 	const boxRef = useRef<HTMLDivElement | null>(null);
@@ -123,7 +124,7 @@ export function DesignSystemDemo({ system, active, className }: DesignSystemDemo
 			data-active={active || undefined}
 		>
 			{/* 兜底层：iframe 起不来时用户看到的是这套体系的色板，不是一块空白。 */}
-			<DesignSystemPreview system={system} className="absolute inset-0" />
+			{placeholder ? <DesignSystemPreview system={system} className="absolute inset-0" /> : null}
 
 			{distance > 0 ? (
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: 关键帧由本文件生成，唯一变量是已清洗的 id 与数字
@@ -150,6 +151,7 @@ export function DesignSystemDemo({ system, active, className }: DesignSystemDemo
 						title=""
 						sandbox="allow-same-origin"
 						referrerPolicy="no-referrer"
+						tabIndex={-1}
 						srcDoc={safeHtml ?? ""}
 						scrolling="no"
 						onLoad={onFrameLoad}

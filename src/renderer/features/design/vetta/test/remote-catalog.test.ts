@@ -43,6 +43,17 @@ describe("parseRemoteCatalog", () => {
 		expect(result?.rejected).toEqual([]);
 	});
 
+	it("takes a trimmed manifest author and version, preferring top-level author over origin.author", () => {
+		const result = parseRemoteCatalog(catalog([
+			entry({ author: " Ada ", origin: { author: "Another author" }, version: " 1.0.1 " }),
+			entry({ slug: "legacy", author: " ", origin: { author: " Legacy author " } }),
+			entry({ slug: "anonymous", author: 42, version: {}, origin: { author: " ", upstream: "https://example.com/" } }),
+		]), BASE);
+		expect(result?.systems.map((system) => [system.author, system.version])).toEqual([
+			["Ada", "1.0.1"], ["Legacy author", undefined], [undefined, undefined],
+		]);
+	});
+
 	it.each([
 		["顶层不是对象", "nope"],
 		["schemaVersion 不认识", { schemaVersion: 2, templates: [entry()] }],

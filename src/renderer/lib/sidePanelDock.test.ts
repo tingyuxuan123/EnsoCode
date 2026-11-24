@@ -2,6 +2,7 @@ import type { DockviewApi } from 'dockview-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addSidePanelBrowser,
+  addSidePanelDesign,
   addSidePanelMobileDevices,
   bindSidePanelDock,
   disposeConversationResources,
@@ -12,6 +13,7 @@ import { resolveSidePanelDockConversationId } from './sidePanelDockId';
 const harness = vi.hoisted(() => ({
   conversations: {} as Record<string, { projectId: string; btwParentId?: string }>,
   ensureOpen: vi.fn(),
+  maximize: vi.fn(),
   navigate: vi.fn(),
 }));
 vi.mock('@/stores/sessions', () => ({
@@ -24,7 +26,11 @@ vi.mock('@/stores/settings', () => ({
 }));
 vi.mock('@/stores/sidePanel', () => ({
   useSidePanelStore: {
-    getState: () => ({ ensureOpen: harness.ensureOpen, forgetConversation: vi.fn() }),
+    getState: () => ({
+      ensureOpen: harness.ensureOpen,
+      maximize: harness.maximize,
+      forgetConversation: vi.fn(),
+    }),
   },
 }));
 vi.mock('@/lib/terminalRegistry', () => ({ releaseTerminal: vi.fn() }));
@@ -73,6 +79,21 @@ it('标题栏可以打开当前会话尚未挂载的设备工作区，多次点�
     component: 'mobile-devices',
     title: 'Mobile devices',
   });
+});
+
+it('打开冷挂载的画布时，首个可见状态就是最大宽度，不等 dock 挂好再拉宽', async () => {
+  addSidePanelDesign({ conversationId: 'cold', width: 'max' });
+  expect(harness.maximize).toHaveBeenCalledExactlyOnceWith('cold');
+  expect(harness.maximize.mock.invocationCallOrder[0]).toBeLessThan(
+    harness.ensureOpen.mock.invocationCallOrder[0] ?? Infinity
+  );
+  const { api, addPanel } = fakeDock();
+  bindSidePanelDock('cold', api);
+  await Promise.resolve();
+  expect(addPanel).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ id: 'design', params: { conversationId: 'cold', projectId: 'p' } })
+  );
+  expect(harness.maximize).toHaveBeenCalledTimes(1);
 });
 
 describe('openSidePanelBrowserUrl', () => {
