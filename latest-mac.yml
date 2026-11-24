@@ -1,61 +1,47 @@
-version: 0.2.102
+version: 0.2.103
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.102/CodeKiln-0.2.102-arm64-mac.zip
-    sha512: /Ts0h/CXcWxPnOgXe2WD9vOBt2tQOVDHJqWA+oqAR1WCSfh6UhHEQ8nPBXMvVKPPwBT36hp5BQ4bHfH7wXwWww==
-    size: 191581339
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.102/CodeKiln-0.2.102-arm64.dmg
-    sha512: UNTdq/HqiV+gevkLSfI5elgjGjg6Ueyw+CEnllqAq/oI7N7x8rUzlUCeLDbn8L+C/C7zPKn5ffSaGyPx3QZJCQ==
-    size: 187600672
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.102/CodeKiln-0.2.102-arm64-mac.zip
-sha512: /Ts0h/CXcWxPnOgXe2WD9vOBt2tQOVDHJqWA+oqAR1WCSfh6UhHEQ8nPBXMvVKPPwBT36hp5BQ4bHfH7wXwWww==
-releaseDate: 2026-11-22T13:36:57.929Z
-releaseName: CodeKiln 0.2.102 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.103/CodeKiln-0.2.103-arm64-mac.zip
+    sha512: ftygZeCxHR8wshTZrFaqJC8TBMs/paXX2m6cssfHyLO/XUEi8iBtPEd+XW8zp+zu0Du79p+3elVQVBSKG2KE1g==
+    size: 191465636
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.103/CodeKiln-0.2.103-arm64.dmg
+    sha512: kzIeDZtFMcIPcfxX17oAdgCouj+E4uk3trxbL3j0ex++xS2JiuttAYN7qgRyavR3GO/jR+pZ46MN/Hdu5cUTfA==
+    size: 187492281
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.103/CodeKiln-0.2.103-arm64-mac.zip
+sha512: ftygZeCxHR8wshTZrFaqJC8TBMs/paXX2m6cssfHyLO/XUEi8iBtPEd+XW8zp+zu0Du79p+3elVQVBSKG2KE1g==
+releaseDate: 2026-11-24T05:59:35.206Z
+releaseName: CodeKiln 0.2.103 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.102
+  # CodeKiln 0.2.103
 
 
-  ## 协作者会话
+  ## 记忆与知识
 
 
-  - 可以在协作者会话中手动切换模型，切换后沿用当前会话的上下文继续工作。
+  - 移除旧的本地记忆与 Wiki 记忆子系统，包括记忆工具、记忆桥接、清理任务和对应设置项；升级时自动清理遗留设置键与已停用的记忆工具开关。
+
+  - 新增 llmdoc 知识地图插件（示例插件）：只读浏览、检索和复核当前 Git 项目里的 `llmdoc/` 知识文档，Git 诊断限定在当前工作树内。
+
+  - 随仓库补充 `llmdoc/` 知识文档目录，覆盖发布流程与会话投影等主题。
 
 
-  ## 设备操控
+  ## 文档与工程
 
 
-  - 重构设备访问请求的处理流程，同一台设备上的待处理授权请求不再堆积，授权面板会跟随当前会话显示。
+  - 更新 README 的功能说明、工作台截图与数据目录细节。
 
-  - 设备画面在丢失指针捕获或窗口焦点时立即释放触点，不再出现松手后仍继续拖动的情况。
-
-
-  ## 记忆与知识库
+  - 测试脚本纳入 llmdoc 插件测试，忽略其本机缓存目录。
 
 
-  - 记忆笔记改动以紧凑差异展示，在会话时间线里直接看到本次更新了哪些条目。
-
-  - 新增记忆写入的静态检查，能提前拦下格式错误、失效引用和重复条目。
-
-  - 启动时按需注入项目记忆提示，减少无关上下文占用；记忆来源代码变化后会标记为待复核。
+  ## 其他
 
 
-  ## 安卓端
+  - 修复图片设置里模型下拉选项显示不全的问题。
 
-
-  - 会话时间线新增工作状态行，能看清当前正在执行的步骤。
-
-  - 会话产物支持下载与用其他应用打开，图片可在时间线内直接查看。
-
-  - 桌面镜像连接更稳定，重连后会补齐会话与产物状态。
-
-
-  ## 界面
-
-
-  - 补充和统一了一批界面文案。
+  - 图片工坊支持选择和复制对话中的提示词。
 
 
   ---
 
 
-  个人测试通道 0.2.102：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.103：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
