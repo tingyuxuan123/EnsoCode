@@ -119,7 +119,7 @@ export function CloneGroupDialog({
           <div className="space-y-1">
             <FieldLabel>{t('Not copied')}</FieldLabel>
             <p className="text-muted-foreground">
-              {t('Chat history, group notes, routines, task board and group memory')}
+              {t('Chat history, group notes, routines and task board')}
             </p>
           </div>
         </DialogPanel>

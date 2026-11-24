@@ -116,7 +116,7 @@ describe('RunawayGuard', () => {
     expect(guard.observe('bash', { command: 'pnpm test' }, err)).toContain('same error');
   });
 
-  it('task_output 轮询无进展三次提醒，且禁止写入 Memory', () => {
+  it('task_output 轮询无进展三次提醒，且不应持久化该提醒', () => {
     const guard = new RunawayGuard();
     const args = { taskId: 'task-1' };
     const snap = { text: '[running] Full log: /tmp/x\n(no output yet)' };

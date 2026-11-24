@@ -24,8 +24,6 @@ export interface ContextOccupancyInput {
   conversationTokens: number;
   compactionTokens: number;
   compactedMessageCount: number;
-  projectMemoryText: string;
-  projectMemoryEnabled: boolean;
   reminderText: string;
   currentModelFamily: string;
   compactionModelFamily?: string;
@@ -74,8 +72,6 @@ export interface CollectContextOccupancyInput {
   compactionModelFamily?: string;
   contextWindow?: number;
   pendingTaskReminders?: readonly string[];
-  projectMemoryText?: string;
-  projectMemoryEnabled?: boolean;
   estimateMessageTokens?: (message: unknown) => number;
 }
 
@@ -145,8 +141,6 @@ export function collectContextOccupancy(input: CollectContextOccupancyInput): Co
     conversationTokens,
     compactionTokens: compaction ? charsToTokens(compaction.summary.length) : 0,
     compactedMessageCount: compactedCount(input.branch, compaction),
-    projectMemoryText: input.projectMemoryText ?? '',
-    projectMemoryEnabled: input.projectMemoryEnabled ?? true,
     reminderText: (input.pendingTaskReminders ?? []).join('\n'),
     currentModelFamily: input.currentModelFamily,
     compactionModelFamily: input.compactionModelFamily,
@@ -175,10 +169,7 @@ export function summarizeContextOccupancy(input: ContextOccupancyInput): Context
     tools: charsToTokens(joinLength(input.toolDefinitionTexts)),
     conversation: Math.max(0, Math.round(input.conversationTokens)),
     compaction: Math.max(0, Math.round(input.compactionTokens)),
-    projectMemory:
-      input.projectMemoryEnabled && input.projectMemoryText.trim().length > 0
-        ? charsToTokens(input.projectMemoryText.length)
-        : 0,
+    projectMemory: 0, // Retained only for the persisted occupancy shape.
     reminders: charsToTokens(input.reminderText.length),
   };
   const bucketSum = CONTEXT_OCCUPANCY_BUCKETS.reduce((sum, id) => sum + buckets[id], 0);

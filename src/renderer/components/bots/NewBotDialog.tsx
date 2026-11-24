@@ -149,12 +149,11 @@ export function NewBotDialog({
       );
       return;
     }
-    const { color, memoryEnabled, ...fields } = result.draft;
+    const { color, ...fields } = result.draft;
     setSource({ kind: 'import' });
     setDraft({
       ...blankDraft(color ?? draft.color),
       ...fields,
-      ...(memoryEnabled !== undefined ? { memoryEnabled } : {}),
     });
     setAvatar(isPng ? await coverSquare(file).catch(() => null) : null);
     setTouched(true);
@@ -194,7 +193,7 @@ export function NewBotDialog({
         skillIds: draft.skillIds,
         mcpServerIds: draft.mcpServerIds,
         delegation: { canDelegateTo: draft.canDelegateTo, acceptFrom: draft.acceptFrom },
-        memory: { enabled: draft.memoryEnabled },
+        memory: { enabled: false },
         ...(budget.budget ? { budget: budget.budget } : {}),
       });
       if (!result.ok) {
@@ -220,7 +219,7 @@ export function NewBotDialog({
           <DialogTitle>{t('New member')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Members have their own persona, model, tools and memory. Their name is how you @ them in groups.'
+              'Members have their own persona, model and tools. Their name is how you @ them in groups.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -378,7 +377,7 @@ export function NewBotDialog({
                 />
                 <span className="font-medium">{t('Abilities')}</span>
                 <span className="truncate text-muted-foreground text-[calc(11rem/14)]">
-                  {t('Tools, approval, skills, MCP, delegation and memory')}
+                  {t('Tools, approval, skills, MCP and delegation')}
                 </span>
               </button>
               {abilitiesOpen && (

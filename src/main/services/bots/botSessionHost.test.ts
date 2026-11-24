@@ -687,7 +687,7 @@ describe('BotSessionHost.ensureSession', () => {
     expect(runtime.engines).toHaveLength(2);
     expect(host.effectiveBot(ids[2])?.engine).toBeUndefined();
   });
-  it('injects notes into the system prompt and announces later updates once per conversation', async () => {
+  it('does not inject retired core notes into new prompts or later steering', async () => {
     let snap: { version: string; section: string; update: string } | undefined = {
       version: 'v1',
       section: '<member-notes>\nlikes tea\n</member-notes>',
@@ -700,10 +700,12 @@ describe('BotSessionHost.ensureSession', () => {
       authority: registry,
       runtime,
       emit: () => {},
-      notes: {
-        snapshot: (botId, chatId) => {
-          asked.push([botId, chatId]);
-          return snap;
+      ...{
+        notes: {
+          snapshot: (botId: string, chatId: string | null) => {
+            asked.push([botId, chatId]);
+            return snap;
+          },
         },
       },
     });
@@ -711,8 +713,9 @@ describe('BotSessionHost.ensureSession', () => {
     const chat = direct(alice.id);
     const first = await host.deliver(chat.id, alice.id, 'hi');
     if (!first.ok) throw new Error(first.error);
-    expect(runtime.spawns[0].systemPrompt).toMatch(/Be kind\.\n\n<member-notes>/);
-    expect(asked[0]).toEqual([alice.id, null]);
+    expect(runtime.spawns[0].systemPrompt).toContain('Be kind.');
+    expect(runtime.spawns[0].systemPrompt).not.toContain('<member-notes>');
+    expect(asked).toEqual([]);
     await host.deliver(chat.id, alice.id, 'same notes', { deliveryId: 'n1' });
     host.observe(ev({ type: 'delivery-settled', deliveryId: 'n1' }, first.conversationId));
     snap = { ...snap, version: 'v2', update: '<notes-updated>v2</notes-updated>' };
@@ -724,27 +727,13 @@ describe('BotSessionHost.ensureSession', () => {
     await host.deliver(chat.id, alice.id, 'memory off');
     expect(runtime.steers.map((item) => item.text)).toEqual([
       'same notes',
-      '<notes-updated>v2</notes-updated>\n\nafter update',
+      'after update',
       'again',
       'memory off',
     ]);
     expect(runtime.spawns).toHaveLength(1);
   });
-  it('passes group notes scope and leaves the system prompt alone when memory is off', async () => {
-    const asked: Array<[string, string | null]> = [];
-    host = new BotSessionHost({
-      bots,
-      chats,
-      authority: registry,
-      runtime,
-      emit: () => {},
-      notes: {
-        snapshot: (botId, chatId) => {
-          asked.push([botId, chatId]);
-          return undefined;
-        },
-      },
-    });
+  it('keeps the member persona in group conversations', async () => {
     const alice = bot('Alice', 'Be kind.');
     const bob = bot('Bob');
     const group = chats.create({
@@ -757,7 +746,6 @@ describe('BotSessionHost.ensureSession', () => {
     if (!group) throw new Error('chat');
     const sent = await host.deliver(group.id, alice.id, 'hi');
     if (!sent.ok) throw new Error(sent.error);
-    expect(asked[0]).toEqual([alice.id, group.id]);
     expect(runtime.spawns[0].systemPrompt.endsWith('Be kind.')).toBe(true);
   });
   it('recognizes persisted delegation results behind a notes update block', async () => {

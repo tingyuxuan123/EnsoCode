@@ -109,7 +109,6 @@ export function referencedModelIds(settings: unknown, providerId: unknown): Set<
     'titleSummaryModel',
     'approvalReviewer',
     'smartCompactModel',
-    'memoryDistillModel',
     'voiceCorrectionRemoteModel',
     'botAssistantModel',
   ])

@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>llmdoc 知识地图</title>
+    <style>
+      :root { color-scheme: light; }
+      :root[data-theme="dark"] { color-scheme: dark; }
+      body { padding: 10px; margin: 0; font: 13px/1.55 system-ui, sans-serif; color: CanvasText; background: Canvas; }
+      h1 { margin: 0 0 4px; font-size: 16px; }
+      h2 { margin: 12px 0 4px; font-size: 13px; }
+      p, ul { margin: 4px 0; }
+      form, nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+      input, textarea { flex: 1 1 100px; min-width: 0; }
+      input, textarea, button { font: inherit; padding: 4px 7px; border: 1px solid GrayText; border-radius: 4px; }
+      textarea { resize: vertical; }
+      button:not(:disabled) { cursor: pointer; }
+      ul { list-style: none; padding: 0; }
+      li { border-bottom: 1px solid color-mix(in srgb, CanvasText 16%, Canvas); padding: 5px 0; }
+      li button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+      #status, .hint { color: GrayText; }
+      #error { font-weight: 600; }
+      pre { white-space: pre-wrap; margin: 8px 0; overflow-wrap: anywhere; }
+      article, details { border-top: 1px solid GrayText; margin-top: 10px; }
+      details { padding-top: 6px; }
+      summary { cursor: pointer; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>llmdoc 知识地图</h1>
+    <p class="hint">当前本机 Git 项目 · 文档查询和报告只读</p>
+    <nav aria-label="项目检查">
+      <button id="inspect" type="button">重新检查项目</button>
+    </nav>
+    <p id="project-status" class="hint"></p>
+    <p id="status" role="status"></p>
+    <p id="error" role="alert" hidden></p>
+    <p id="git-configuration" role="alert" hidden></p>
+    <section id="setup" aria-label="扩展配置" hidden>
+      <h2>设置 llmdoc</h2>
+      <ul id="setup-missing"></ul>
+      <div id="install-offer" hidden>
+        <p id="install-note" class="hint">从 npm 官方 registry 下载固定版本的 @tokenroll/llmdoc 到扩展私有目录，不会写入当前项目。</p>
+        <button id="install-cli" type="button" aria-describedby="install-note">安装 llmdoc</button>
+      </div>
+    </section>
+    <p id="install-result" role="status"></p>
+    <section id="workflow" aria-label="维护草稿" hidden>
+      <h2>维护草稿</h2>
+      <p class="hint">点击只准备草稿，不会修改项目或自动发送。请回到对话手动发送并查看预览；写入和 Git 提交会分别向你确认。</p>
+      <nav aria-label="草稿操作">
+        <button id="init" type="button" data-needs-git hidden>项目初始化</button>
+        <span id="maintenance" hidden>
+          <button id="update" type="button" data-needs-git>复核与更新</button>
+          <button id="prune" type="button" data-needs-git>收敛文档</button>
+        </span>
+      </nav>
+      <p id="workflow-result" role="status"></p>
+    </section>
+    <section id="catalog" aria-label="知识地图" hidden>
+      <nav aria-label="诊断与检查">
+        <button id="status-report" type="button" data-needs-git>状态汇总</button>
+        <button id="delta" type="button" data-needs-git>变化与待复核</button>
+        <button id="validate" type="button" data-needs-git>校验文档</button>
+        <button id="prune-report" type="button">查看收敛报告</button>
+      </nav>
+      <section id="overview" aria-label="项目状态汇总"></section>
+      <section aria-label="变化与待复核">
+        <div id="review"></div>
+        <button id="delta-next" type="button" data-needs-git hidden>待复核下一页</button>
+      </section>
+      <details id="diagnostics" hidden>
+        <summary id="report-title"></summary>
+        <pre id="report-text"></pre>
+      </details>
+      <h2>查找文档</h2>
+      <form id="find">
+        <input id="query" aria-label="搜索关键词" maxlength="200" required />
+        <button id="search" type="submit">搜索</button>
+      </form>
+      <form id="find-context">
+        <textarea id="files" aria-label="项目相对源码路径，每行一个" placeholder="项目相对源码路径，每行一个&#10;例如 src/main.ts" rows="2" required></textarea>
+        <button id="context" type="submit">查找源码上下文</button>
+      </form>
+      <nav aria-label="知识地图翻页">
+        <button id="tree" type="button">刷新知识地图</button>
+        <button id="next" type="button" hidden>下一页</button>
+      </nav>
+      <section id="results" aria-label="文档列表"></section>
+      <article id="preview" aria-label="文档预览" hidden>
+        <h2 id="doc-id">文档预览</h2>
+        <p id="doc-notice" class="hint" hidden>正文过长，仅显示开头。</p>
+        <pre id="body"></pre>
+      </article>
+    </section>
+    <script>
+      const byId = (id) => document.getElementById(id);
+      const results = byId('results');
+      const status = byId('status');
+      const error = byId('error');
+      const preview = byId('preview');
+      const query = byId('query');
+      const next = byId('next');
+      const deltaNext = byId('delta-next');
+      const overview = byId('overview');
+      const review = byId('review');
+      const diagnostics = byId('diagnostics');
+      const workflowResult = byId('workflow-result');
+      const gitConfiguration = byId('git-configuration');
+      const setupMissing = byId('setup-missing');
+      const installResult = byId('install-result');
+      let inspection = null;
+      let page = null;
+      let deltaCursor = null;
+      let busy = false;
+
+      const isPresent = () => inspection?.configured === true && inspection.state === 'present';
+      const isMissing = () => inspection?.configured === true && inspection.state === 'missing';
+      const hasGit = () => inspection?.gitConfigured === true;
+      const canInstall = () =>
+        inspection?.setup?.cliAvailable === false && inspection.setup.canInstall === true;
+
+      function syncControls() {
+        byId('install-offer').hidden = !canInstall();
+        byId('workflow').hidden = !inspection?.configured;
+        byId('init').hidden = !isMissing();
+        byId('maintenance').hidden = !isPresent();
+        byId('catalog').hidden = !isPresent();
+        for (const button of document.querySelectorAll('button')) {
+          button.disabled = busy || button.closest('[hidden]') !== null ||
+            (button.hasAttribute('data-needs-git') && !hasGit());
+        }
+      }
+
+      function showError(failure) {
+        status.textContent = '';
+        error.textContent = failure?.message ?? String(failure);
+        error.hidden = false;
+      }
+
+      async function request(method, args, display, loading = '正在读取…') {
+        if (busy) return false;
+        busy = true;
+        syncControls();
+        error.hidden = true;
+        status.textContent = loading;
+        try {
+          if (typeof window.enso?.call !== 'function') throw new Error('无法连接 CodeKiln 扩展宿主。');
+          display(await window.enso.call(method, args));
+          return true;
+        } catch (failure) {
+          showError(failure);
+          return false;
+        } finally {
+          busy = false;
+          syncControls();
+        }
+      }
+
+      function openDocument(id) {
+        if (!isPresent() || busy) return;
+        preview.hidden = true;
+        return request('show', { id }, (doc) => {
+          byId('doc-id').textContent = doc.id;
+          byId('body').textContent = doc.body;
+          byId('doc-notice').hidden = !doc.bodyTruncated;
+          preview.hidden = false;
+          status.textContent = '已打开文档。';
+          preview.scrollIntoView({ block: 'nearest' });
+        });
+      }
+
+      function appendText(target, tag, value) {
+        const element = document.createElement(tag);
+        element.textContent = value;
+        target.append(element);
+        return element;
+      }
+
+      function textList(target, title, values) {
+        if (!values.length) return;
+        appendText(target, 'h2', title);
+        const list = document.createElement('ul');
+        for (const value of values) appendText(list, 'li', value);
+        target.append(list);
+      }
+
+      function documentGroup(title, docs) {
+        if (!docs.length) return;
+        appendText(results, 'h2', title);
+        const list = document.createElement('ul');
+        for (const doc of docs) {
+          const id = doc.id ?? doc.path;
+          const row = document.createElement('li');
+          const button = appendText(row, 'button', id);
+          button.type = 'button';
+          button.onclick = () => openDocument(id);
+          appendText(row, 'p', `[${doc.kind}] ${doc.description}`);
+          if (doc.snippet) appendText(row, 'p', doc.snippet).className = 'hint';
+          list.append(row);
+        }
+        results.append(list);
+      }
+
+      function listDocuments(entries, method) {
+        if (method === 'search') {
+          documentGroup('搜索结果', entries);
+          return;
+        }
+        const groups = new Map();
+        for (const entry of entries) {
+          const parts = entry.id.split('/');
+          const group = parts.length === 3 ? parts[1] : '根目录';
+          if (!groups.has(group)) groups.set(group, []);
+          groups.get(group).push(entry);
+        }
+        for (const [group, docs] of groups) documentGroup(group, docs);
+      }
+
+      function readResult(method, payload) {
+        if (
+          payload?.operation !== method ||
+          !Number.isInteger(payload.exitCode) ||
+          !payload.result ||
+          typeof payload.result !== 'object' ||
+          Array.isArray(payload.result)
+        ) {
+          throw new Error('llmdoc 未返回可显示的报告。');
+        }
+        if (payload.exitCode !== 0 && method !== 'validate' && method !== 'prune_report') {
+          throw new Error(`读取 ${method} 失败（退出码 ${payload.exitCode}）。`);
+        }
+        return payload.result;
+      }
+
+      function loadPage(method, args) {
+        if (!isPresent() || busy) return;
+        preview.hidden = true;
+        return request(method, args, (payload) => {
+          const context = method === 'context' ? readResult(method, payload) : null;
+          const total = context ? context.pagination.totalItems : payload.total;
+          const cursor = context ? context.pagination.nextCursor : payload.nextCursor;
+          const count = context
+            ? context.impacted.length + context.prerequisites.length
+            : payload.entries.length;
+          results.replaceChildren();
+          if (context) {
+            documentGroup('受影响文档', context.impacted);
+            documentGroup('前置文档', context.prerequisites);
+            textList(results, '没有映射的源码文件', context.unmappedFiles);
+          } else {
+            listDocuments(payload.entries, method);
+          }
+          page = { method, args, cursor };
+          next.hidden = !cursor;
+          status.textContent = count ? `本页 ${count} 篇，共 ${total} 篇。` : '没有匹配文档。';
+        });
+      }
+
+      function loadStatus() {
+        if (!isPresent() || !hasGit()) return;
+        return request('status', {}, (payload) => {
+          const data = readResult('status', payload);
+          const docs = data.documents;
+          overview.replaceChildren();
+          const rows = [
+            ['文档总数', docs?.total],
+            ['受影响', docs?.impacted],
+            ['待复核', docs?.needsReview],
+            ['有未提交变更', docs?.dirty],
+            ['基线', data.baseline],
+            ['当前 HEAD', data.head],
+            ['落后提交', data.commitsBehindHead],
+            ['落后相关提交', data.relevantCommitsBehindHead],
+            ['降级原因', data.degradedReason],
+          ];
+          textList(overview, '状态汇总', rows
+            .filter(([, value]) => value !== undefined && value !== null && value !== '')
+            .map(([label, value]) => `${label}：${typeof value === 'object' ? JSON.stringify(value) : value}`));
+          status.textContent = '已读取状态汇总。';
+        });
+      }
+
+      function loadDelta(args = {}) {
+        if (!isPresent() || !hasGit()) return;
+        return request('delta', args, (payload) => {
+          const data = readResult('delta', payload);
+          review.replaceChildren();
+          if (data.suggestedMode) appendText(review, 'p', `建议模式：${data.suggestedMode}`);
+          if (data.degradedReason) appendText(review, 'p', `降级原因：${data.degradedReason}`);
+          textList(review, '判断依据', data.reasons ?? []);
+          textList(review, '待复核文档', data.needsReview ?? []);
+          const impacted = (data.impacted ?? []).map(({ path, changedCommittedPaths, dirtyPaths }) => {
+            const parts = [path];
+            if (changedCommittedPaths?.length) parts.push(`已提交变更：${changedCommittedPaths.join('、')}`);
+            if (dirtyPaths?.length) parts.push(`未提交变更：${dirtyPaths.join('、')}`);
+            return parts.join(' · ');
+          });
+          textList(review, '受影响文档', impacted);
+          textList(review, '未映射的已提交变更', data.unmapped?.committed ?? []);
+          textList(review, '未映射的未提交变更', data.unmapped?.dirty ?? []);
+          deltaCursor = data.pagination?.nextCursor;
+          deltaNext.hidden = !deltaCursor;
+          const total = data.pagination?.totalItems;
+          appendText(review, 'p', typeof total === 'number' ? `共 ${total} 项变化。` : '已读取变化报告。');
+          status.textContent = '已读取待复核列表。';
+        });
+      }
+
+      function loadReport(method) {
+        if (busy || !isPresent() || (method === 'validate' && !hasGit())) return;
+        diagnostics.hidden = true;
+        return request(method, {}, (payload) => {
+          const data = readResult(method, payload);
+          const passed = payload.exitCode === 0;
+          const label = method === 'validate' ? (passed ? '校验通过' : '校验未通过') : '收敛报告';
+          const title = passed ? label : `${label}（退出码 ${payload.exitCode}）`;
+          byId('report-title').textContent = title;
+          byId('report-text').textContent = JSON.stringify(data, null, 2);
+          diagnostics.hidden = false;
+          diagnostics.open = true;
+          status.textContent = title;
+        });
+      }
+
+      function prepareWorkflow(action) {
+        if (busy || !hasGit() || !(action === 'init' ? isMissing() : isPresent())) return;
+        workflowResult.textContent = '';
+        return request('prepare_workflow', { action }, (result) => {
+          if (result?.prepared !== true) throw new Error('没有准备聊天草稿，请重试。');
+          status.textContent = '';
+          workflowResult.textContent = '聊天草稿已准备，操作尚未执行。请回到对话，确认内容后手动发送。';
+        }, '正在准备草稿…');
+      }
+
+      function renderSetup(setup) {
+        setupMissing.replaceChildren();
+        if (setup?.nodeAvailable === false) {
+          appendText(setupMissing, 'li', '未找到 Node.js。请先安装 Node.js，再在扩展设置中填写 Node.js 可执行文件的本机绝对路径。');
+        }
+        if (setup?.cliAvailable === false) {
+          appendText(setupMissing, 'li', '未找到 llmdoc CLI。也可自行安装固定版本，在扩展设置中填写 llmdoc CLI JS 入口的本机绝对路径。');
+          if (!canInstall() && typeof setup.installUnavailableReason === 'string' && setup.installUnavailableReason) {
+            appendText(setupMissing, 'li', setup.installUnavailableReason);
+          }
+        }
+        byId('setup').hidden = setupMissing.childElementCount === 0;
+      }
+
+      async function installCli(event) {
+        // Only a real browser click can initiate a network install, including on retry.
+        if (!(event instanceof window.MouseEvent) || event.isTrusted !== true || busy || !canInstall()) return;
+        installResult.textContent = '';
+        const ready = await request('install_cli', {}, (result) => {
+          if (result?.installed === true) installResult.textContent = 'llmdoc 已安装。';
+          else if (result?.installed === false && result.alreadyPresent === true) {
+            installResult.textContent = 'llmdoc 已存在，无需重复安装。';
+          } else {
+            throw new Error('未确认 llmdoc 已安装，请重试。');
+          }
+          status.textContent = '';
+        }, '正在从 npm 下载并安装 llmdoc…');
+        if (ready) await inspect();
+      }
+
+      async function inspect() {
+        if (busy) return;
+        inspection = page = deltaCursor = null;
+        next.hidden = deltaNext.hidden = diagnostics.hidden = preview.hidden = true;
+        gitConfiguration.hidden = true;
+        renderSetup();
+        byId('project-status').textContent = '';
+        workflowResult.textContent = '';
+        for (const section of [results, overview, review]) section.replaceChildren();
+        const checked = await request('inspect', {}, (result) => {
+          if (
+            (result?.state !== 'missing' && result?.state !== 'present') ||
+            typeof result.configured !== 'boolean' ||
+            typeof result.gitConfigured !== 'boolean'
+          ) {
+            throw new Error('无法识别当前项目的 llmdoc 状态。');
+          }
+          inspection = result;
+          const setup = result.setup;
+          renderSetup(setup);
+          if (!hasGit() && (inspection.configured || setup)) {
+            const detail = result.gitConfigurationError ||
+              (setup?.gitAvailable === false ? '未找到 Git。' : '尚未配置 Git 可执行文件。');
+            gitConfiguration.textContent = `${detail} 请安装 Git 或在扩展设置中填写 Git 可执行文件的本机绝对路径，再重新检查。配置前无法读取状态、变化、校验或准备维护草稿。`;
+            gitConfiguration.hidden = false;
+          }
+          status.textContent = '';
+          if (!inspection.configured) {
+            if (!result.configurationError && (setup?.nodeAvailable === false || setup?.cliAvailable === false)) return;
+            throw new Error(
+              inspection.configurationError || 'llmdoc 尚未配置。请在扩展设置中配置 Node.js 与 llmdoc CLI 后重新检查。'
+            );
+          }
+          byId('project-status').textContent = isMissing()
+            ? (hasGit() ? '当前项目缺少 llmdoc/，可先准备初始化草稿。' : '当前项目缺少 llmdoc/。')
+            : '当前项目已有 llmdoc/。';
+        });
+        if (checked && isPresent() && (await loadPage('tree', {})) && hasGit()) await loadStatus();
+      }
+
+      byId('inspect').onclick = () => {
+        installResult.textContent = '';
+        return inspect();
+      };
+      byId('install-cli').addEventListener('click', installCli);
+      byId('init').onclick = () => prepareWorkflow('init');
+      byId('update').onclick = () => prepareWorkflow('update');
+      byId('prune').onclick = () => prepareWorkflow('prune');
+      byId('status-report').onclick = loadStatus;
+      byId('delta').onclick = () => loadDelta();
+      deltaNext.onclick = () => {
+        if (deltaCursor) loadDelta({ cursor: deltaCursor });
+      };
+      byId('validate').onclick = () => loadReport('validate');
+      byId('prune-report').onclick = () => loadReport('prune_report');
+      byId('tree').onclick = () => loadPage('tree', {});
+      next.onclick = () => {
+        if (page?.cursor) loadPage(page.method, { ...page.args, cursor: page.cursor });
+      };
+      byId('find').onsubmit = (event) => {
+        event.preventDefault();
+        loadPage('search', { query: query.value });
+      };
+      byId('find-context').onsubmit = (event) => {
+        event.preventDefault();
+        if (busy || !isPresent()) return;
+        const files = byId('files').value.split(/\r?\n/).map((file) => file.trim()).filter(Boolean);
+        if (!files.length || files.some((file) =>
+          /^[/-]|\\|:/.test(file) || file.split('/').some((part) => !part || part === '.' || part === '..')
+        )) {
+          showError('请输入项目相对源码路径，每行一个，使用 / 分隔，不要使用绝对路径或 ..。');
+          return;
+        }
+        loadPage('context', { files });
+      };
+      inspect();
+    </script>
+  </body>
+</html>

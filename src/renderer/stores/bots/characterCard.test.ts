@@ -72,7 +72,6 @@ describe('buildCharacterCard', () => {
       color: '#22c55e',
       tools: 'readonly',
       approvalMode: 'supervised',
-      memory: false,
     });
     const text = JSON.stringify(card);
     expect(text).not.toContain('skill-1');
@@ -92,7 +91,6 @@ describe('buildCharacterCard', () => {
         color: '#22c55e',
         tools: 'readonly',
         approvalMode: 'supervised',
-        memoryEnabled: false,
       },
     });
   });
@@ -101,7 +99,13 @@ describe('buildCharacterCard', () => {
     const card = buildCharacterCard(bot, persona) as unknown as {
       data: { extensions: { enso: Record<string, unknown> } };
     };
-    card.data.extensions.enso = { title: 7, color: 'red', tools: 'root', approvalMode: 'x' };
+    card.data.extensions.enso = {
+      title: 7,
+      color: 'red',
+      tools: 'root',
+      approvalMode: 'x',
+      memory: true,
+    };
     const result = parseCharacterCard(JSON.stringify(card));
     expect(result.ok && result.draft).toEqual({
       name: 'Aria',

@@ -80,9 +80,6 @@ const SCALAR_SETTING_KEYS = [
   'defaultModel',
   'defaultModelFollowLast',
   'titleSummaryModel',
-  'memoryDistillModel',
-  'memoryChatModel',
-  'memoryLanguage',
   'smartCompactModel',
   'approvalReviewer',
   'defaultPresetId',
@@ -90,7 +87,6 @@ const SCALAR_SETTING_KEYS = [
   'compactStrategy',
   'smartCompactEnabled',
   'smartCompactMode',
-  'memoryDistillEnabled',
   'defaultReasoningEnabled',
   'defaultThinkingLevel',
   'subagentModelsEnabled',
@@ -586,7 +582,6 @@ function previewDisclosureWarnings(
   for (const key of [
     'defaultModel',
     'titleSummaryModel',
-    'memoryDistillModel',
     'smartCompactModel',
     'approvalReviewer',
   ] as const) {
@@ -758,7 +753,6 @@ export function planImport(
   for (const key of [
     'defaultModel',
     'titleSummaryModel',
-    'memoryDistillModel',
     'smartCompactModel',
     'approvalReviewer',
   ] as const) {
@@ -794,8 +788,6 @@ export function planImport(
     'compactStrategy',
     'smartCompactEnabled',
     'smartCompactMode',
-    'memoryChatModel',
-    'memoryDistillEnabled',
     'defaultReasoningEnabled',
     'defaultThinkingLevel',
     'subagentModelsEnabled',
@@ -853,7 +845,6 @@ export function planImport(
   for (const key of [
     'defaultModel',
     'titleSummaryModel',
-    'memoryDistillModel',
     'smartCompactModel',
     'approvalReviewer',
   ] as const) {

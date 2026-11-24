@@ -38,7 +38,6 @@ import { BotAvatar } from './BotAvatar';
 import { PresenceAvatar } from './BotPresence';
 import { chatErrorText } from './botText';
 import { GroupDelegations } from './GroupBoard';
-import { MemorySpaceList } from './MemorySpaceList';
 import { NotesEditor } from './NotesEditor';
 import { RoutineList } from './RoutineList';
 import { WorkspaceMenu } from './WorkspaceMenu';
@@ -423,14 +422,8 @@ export function GroupInfoPanel({
           <PanelSection title={t('Group notes')}>
             <NotesEditor
               target={{ chatId: chat.id }}
-              emptyText={t(
-                'No group notes yet. Group conventions and decisions are summarized here automatically after memories are organized.'
-              )}
+              emptyText={t('No group notes yet. Add your own notes for this group.')}
             />
-          </PanelSection>
-
-          <PanelSection title={t('Group memory')}>
-            <MemorySpaceList spaceId={`chat:${chat.id}`} emptyText={t('No group memories yet')} />
           </PanelSection>
 
           <PanelSection title={t('Team')}>
@@ -465,7 +458,7 @@ export function GroupInfoPanel({
             </Button>
             <p className="mt-1.5 text-muted-foreground text-[calc(11rem/14)]">
               {t(
-                'Group settings and member personas only. Memory, sessions, timeline, tasks, routines, models, skills and MCP are not included.'
+                'Group settings and member personas only. Notes, sessions, timeline, tasks, routines, models, skills and MCP are not included.'
               )}
             </p>
           </PanelSection>

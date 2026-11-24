@@ -51,7 +51,6 @@ const shell = vi.hoisted(() => {
       onChanged: () => () => {},
     },
     nodes: { list: async () => ({ nodes: shell.remoteNodes, secureStorage: true }) },
-    memory: { pendingWrites: async () => [], onChanged: () => () => {} },
     window: {
       onExtensionsDeepLink: (callback: () => void) => {
         shell.extensionsListener = callback;
@@ -168,8 +167,6 @@ vi.mock('@/components/bots/globalBoard', () => ({
   rootBoardGroups: () => [],
   globalBoard: () => ({ attention: 0 }),
 }));
-/** 记忆审批订阅会异步回写 store；本用例只关心模式入口，固定空列表避免 act 警告。 */
-vi.mock('@/stores/memoryReview', () => ({ usePendingMemoryWrites: () => [] }));
 vi.mock('@/features/imageStudio/ImageStudio', () => ({
   ImageStudio: shell.mark('image-studio'),
 }));
@@ -266,6 +263,13 @@ afterEach(async () => {
 async function mountApp(): Promise<void> {
   await act(() => root.render(<App />));
 }
+
+it('keeps the design and image workspaces without a built-in Wiki entry', async () => {
+  await mountApp();
+  expect(railEntry('images')).not.toBeNull();
+  expect(railEntry('design')).not.toBeNull();
+  expect(railEntry('wiki')).toBeNull();
+});
 
 it('冷启动待处理插件深链在 StrictMode 重订阅后不丢失', async () => {
   shell.extensionsPending = { category: 'plugins', rowId: 'plugins.enso' };

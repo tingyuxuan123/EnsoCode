@@ -18,8 +18,11 @@ vi.mock('@/stores/bots/templateLibrary', () => ({ updateTemplateLibrary: vi.fn()
 vi.mock('@/components/ui/toast', () => ({ addToast: vi.fn() }));
 vi.mock('./BotPresence', () => ({ PresenceAvatar: () => null }));
 vi.mock('./GroupBoard', () => ({ GroupDelegations: () => null }));
-vi.mock('./MemorySpaceList', () => ({ MemorySpaceList: () => null }));
-vi.mock('./NotesEditor', () => ({ NotesEditor: () => null }));
+vi.mock('./NotesEditor', () => ({
+  NotesEditor: ({ target, emptyText }: { target: { chatId: string }; emptyText: string }) => (
+    <p data-chat-notes={target.chatId}>{emptyText}</p>
+  ),
+}));
 vi.mock('./RoutineList', () => ({ RoutineList: () => null }));
 vi.mock('./WorkspaceMenu', () => ({ WorkspaceMenu: () => null }));
 
@@ -72,6 +75,14 @@ describe('群信息的本地任务托管', () => {
     host.remove();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps hand-written notes attached to the root group without a memory vault', async () => {
+    await render(chat, { ...chat, id: 'topic', parentId: chat.id });
+    expect(host.querySelector(`[data-chat-notes="${chat.id}"]`)?.textContent).toBe(
+      'No group notes yet. Add your own notes for this group.'
+    );
+    expect(host.textContent).not.toContain('Group memory');
   });
 
   it('旧群默认关闭，解释明确编号、提醒、本地运行、确认恢复和审批边界', async () => {

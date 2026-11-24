@@ -64,6 +64,7 @@
       "!**/*.css",
       "!!.claude/worktrees",
       "!!.zvec-grep",
+      "!!**/.llmdoc-tmp",
       "!.hce",
       "!temp",
       "!android/**/build",

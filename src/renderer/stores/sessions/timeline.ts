@@ -128,8 +128,6 @@ export type TimelineItem =
       plan?: { title: string; text: string } | null;
       /** 联系主 agent / 队员、子代理 send 发出的正文，或子代理 spawn 交代的任务；其它工具缺省 */
       sentMessage?: string;
-      /** memory_upsert 记下的正文（写入回执不带正文）；其它工具缺省 */
-      memoryContent?: string;
       /** ask_user 当时的问题、选项与用户的回答；其它工具缺省 */
       ask?: AskUserView;
       /** 子代理按 runId / agentId 指代目标的操作（summary 为 spawn 时起的标题）；其它缺省 */
@@ -690,19 +688,6 @@ function extractSubagentHeader(
   return operation === 'wait' && title
     ? { op: 'wait', title, titles }
     : { op: operation as SubagentOp, title };
-}
-
-/** memory_upsert 的标题（缺省取正文首行）与正文 */
-function extractCapturedMemory(
-  name: string,
-  args: unknown
-): { title: string; content: string } | null {
-  if (name !== 'memory_upsert' || !args || typeof args !== 'object') return null;
-  const { title, content } = args as Record<string, unknown>;
-  if (typeof content !== 'string' || !content.trim()) return null;
-  const text = content.trim();
-  const heading = typeof title === 'string' ? title.trim() : '';
-  return { title: heading || text.split('\n', 1)[0].trim(), content: text };
 }
 
 export interface AskUserView {
@@ -1279,7 +1264,6 @@ function buildMessageTimeline(
               : [];
           const sent = extractSentMessage(part.name, part.arguments, spawnedAgents);
           const sentMessage = sent?.text ?? extractSpawnTask(part.name, part.arguments);
-          const captured = extractCapturedMemory(part.name, part.arguments);
           const asked = extractAsk(
             part.name,
             part.arguments,
@@ -1362,7 +1346,6 @@ function buildMessageTimeline(
                       ? `${patchPaths.length} files`
                       : toProjectRelativePath(patchPaths[0] ?? '', cwd)
                     : (sent?.summary ??
-                      captured?.title ??
                       asked?.ask.question ??
                       subagent?.title ??
                       call.summary ??
@@ -1402,7 +1385,6 @@ function buildMessageTimeline(
               ? { plan: extractSubmittedPlan(part.name, part.arguments) }
               : {}),
             ...(sentMessage ? { sentMessage } : {}),
-            ...(captured ? { memoryContent: captured.content } : {}),
             ...(asked ? { ask: asked.ask } : {}),
             ...(subagent?.op ? { subagentOp: subagent.op } : {}),
             ...(subagent?.titles ? { subagentTitles: subagent.titles } : {}),
@@ -1791,7 +1773,6 @@ export function canRenderNestedRow(item: Extract<TimelineItem, { kind: 'tool' }>
     !item.agentMeta &&
     !item.subagentOp &&
     !item.sentMessage &&
-    !item.memoryContent &&
     !item.backgroundTaskId &&
     !item.waiting &&
     !item.nestedPending &&

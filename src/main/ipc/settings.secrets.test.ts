@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   },
 }));
 vi.mock('../services/modelDirectory', () => ({ notifyModelDirectorySettingsChanged: vi.fn() }));
-vi.mock('../services/memoryHost', () => ({}));
+vi.mock('../services/llama/chat', () => ({ syncLocalChatFromSettings: vi.fn() }));
 vi.mock('../services/speech/service', () => ({}));
 vi.mock('../services/trayToggleShortcut', () => ({ syncTrayToggleShortcut: vi.fn() }));
 

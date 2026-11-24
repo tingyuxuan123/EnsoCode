@@ -106,24 +106,11 @@ describe('BotSessionHost 插话', () => {
     ]);
   });
 
-  it('补充说明按界面语言，笔记更新块仍在最前', async () => {
-    let version = 'v1';
-    make({
-      language: () => 'en',
-      notes: {
-        snapshot: () => ({
-          version,
-          section: '',
-          update: `<notes-updated>${version}</notes-updated>`,
-        }),
-      },
-    });
+  it('补充说明按界面语言', async () => {
+    make({ language: () => 'en' });
     const { chatId, botId } = await started();
-    version = 'v2';
     await host.deliver(chatId, botId, 'more', { source: 'human' });
-    expect(runtime.steers.map((item) => item.text)).toEqual([
-      `<notes-updated>v2</notes-updated>\n\n${wrapInterjection('more', 'en')}`,
-    ]);
+    expect(runtime.steers.map((item) => item.text)).toEqual([wrapInterjection('more', 'en')]);
   });
 
   it('自动重试倒计时中人类插话排到下一轮，不打断重试', async () => {

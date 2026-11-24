@@ -21,8 +21,8 @@ import { registerFilesWorkspaceHandlers } from './filesWorkspace';
 import { registerGitHandlers } from './git';
 import { registerImageProviderHandlers } from './imageGeneration';
 import { registerImageStudioHandlers } from './imageStudio';
+import { registerLocalModelHandlers } from './localModels';
 import { registerMcpHandlers } from './mcp';
-import { registerMemoryHandlers } from './memory';
 import { registerModelDirectoryHandlers } from './modelDirectory';
 import { registerNodesHandlers } from './nodes';
 import { registerPairHandlers } from './pair';
@@ -77,7 +77,7 @@ export function registerIpcHandlers(): void {
   registerWorkspaceSearchHandlers();
   registerUsageHandlers();
   registerResourceHandlers();
-  registerMemoryHandlers();
+  registerLocalModelHandlers();
   registerBtwHandlers();
   registerBotHandlers();
   registerBotTemplateHandlers();

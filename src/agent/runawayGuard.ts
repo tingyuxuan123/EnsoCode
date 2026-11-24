@@ -55,7 +55,7 @@ export function runawayReminderText(kind: RunawaySignal): string {
           : `[runaway guard] The immediately repeated tool action has now occurred ${THRESHOLD} times with the same arguments and the same result. Do not repeat it unchanged. Inspect the results already returned and take a different next step.`;
   return (
     `<system-reminder>\n${guidance}\n` +
-    'This reminder applies only to the current Turn. Do not save or generalize it into Memory, Skills, or other persistent instructions.\n' +
+    'This reminder applies only to the current Turn. Do not save or generalize it into Skills or any persistent notes or instructions.\n' +
     '</system-reminder>'
   );
 }

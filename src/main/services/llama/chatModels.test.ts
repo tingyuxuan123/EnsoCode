@@ -4,8 +4,6 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   chatModelDirName,
-  chatModelIdFromSettings,
-  DEFAULT_CHAT_MODEL_ID,
   listChatModelSpecs,
   localChatModelPathIfReady,
   REMOTE_CHAT_MODEL_ID,
@@ -82,27 +80,6 @@ describe('registry data integrity', () => {
   it('keeps chat ids distinct from embedding ids', () => {
     // 两套注册表都用 local: 前缀；同名会让模型目录互相覆盖
     expect(listChatModelSpecs().map((s) => s.id)).not.toContain('local:qwen3-0.6b');
-  });
-});
-
-describe('chatModelIdFromSettings', () => {
-  it('defaults to remote when the setting is missing or unknown', () => {
-    expect(chatModelIdFromSettings(undefined)).toBe(DEFAULT_CHAT_MODEL_ID);
-    expect(chatModelIdFromSettings({})).toBe(REMOTE_CHAT_MODEL_ID);
-    expect(chatModelIdFromSettings({ memoryChatModel: 1 })).toBe(REMOTE_CHAT_MODEL_ID);
-    expect(chatModelIdFromSettings({ memoryChatModel: 'local:nope' })).toBe(REMOTE_CHAT_MODEL_ID);
-  });
-
-  it('keeps a known local id', () => {
-    expect(chatModelIdFromSettings({ memoryChatModel: 'local:gemma-4-e2b' })).toBe(
-      'local:gemma-4-e2b'
-    );
-  });
-
-  it('does not let memory pick a model tuned only for voice correction', () => {
-    expect(chatModelIdFromSettings({ memoryChatModel: 'local:myvoicetyping-1.5b' })).toBe(
-      REMOTE_CHAT_MODEL_ID
-    );
   });
 });
 

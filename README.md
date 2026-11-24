@@ -149,7 +149,6 @@ Every tool below can be switched on or off in **Settings → Built-in tools**. A
 | **Code search** | Search workspace code through a cloud-assisted index. Off by default; sends the query and selected code. |
 | **Image generation** | Generate and edit images through an OpenAI-compatible image service you configure separately. |
 | **Background tasks** | Run long commands in the background and get notified on completion. |
-| **Memory** | Search, read, update, and interlink a Markdown wiki of durable knowledge. See below. |
 | **Script orchestration** | Batch tool calls in JavaScript and filter results before they enter the conversation. |
 | **Computer** | Drive the host desktop: list windows, screenshot, read accessibility trees, send input. Off by default. |
 | **Mobile devices** | Use the emulators, simulators, and phones attached to this host. |
@@ -162,19 +161,11 @@ Image generation has its own connection settings — an OpenAI-compatible endpoi
 
 The design gallery hosts editable `.vetd` design documents rendered from TSX sources, with frame sizes, shared UI, screenshots, exports to PDF or PNG, and a version history you can restore. The agent can drive it through the design tools, but only inside a design that is actually open, and every file access is validated by the Main process.
 
-## Wiki memory
+## Project knowledge
 
-The Wiki is a durable, human-readable memory for a project, stored as Markdown in an Obsidian-compatible vault (OKF v0.2 frontmatter with `[[wikilinks]]`). It is not a transcript archive: it holds the conclusions worth keeping — conventions, decisions, domain rules, incident write-ups.
+Install the optional [llmdoc Knowledge Map extension](examples/plugins/llmdoc/README.md) to browse and search project knowledge, find the documents affected by code changes, and start an explicit maintenance workflow in a local Git project. Agents can query the same documents on demand. Maintenance presents a preview and requires approval before writing or committing; the extension does not compile conversations.
 
-- **Spaces** — a vault per project, a global vault, plus private bot and chat spaces. An existing Obsidian folder can be attached as an external vault.
-- **Notes** — typed, tagged, linked pages with a status (`draft`, `verified`, `deprecated`), an optional re-check deadline, and a one-line description.
-- **Search** — a rebuildable local FTS5 index; the index is disposable, the Markdown is the source of truth.
-- **Editing** — preview, edit, or split view in the app, or open the vault in Obsidian. External edits are picked up live and conflict with unsaved changes instead of overwriting them.
-- **Lint** — deterministic checks for broken wikilinks, orphan notes, expired re-check dates, stale drafts, missing summaries, oversized pages, append-style revision markers, duplicate titles, and the status-page budget.
-- **Compiler** — optionally, when a session ends, a separate pass reads the finished session and writes durable notes, or reports that nothing changed.
-- **Approval** — a bot writing into a shared project or global vault is queued for your review instead of written straight away.
-
-The agent reaches the same content through `memory_index`, `memory_search`, `memory_read`, `memory_upsert`, and `memory_archive`. Only the Main process touches the vault; the renderer passes identifiers, never disk paths.
+The built-in Wiki, automatic Bot and group memory, and automatic core-note injection have been removed. Existing Wiki files and chat history are not migrated or deleted. You can still view old Markdown directly and edit member or group notes manually.
 
 ## Mobile devices and remote work
 

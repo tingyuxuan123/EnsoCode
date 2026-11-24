@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
+import { DelegationInvoker } from './delegationInvoker';
 import { createGroupTasksTool, normalizeGroupTaskParams } from './groupTasks';
-import { MemoryInvoker } from './memory';
 
 it('normalizes aliases, numeric ids and nulls before typed schema validation', () => {
   expect(normalizeGroupTaskParams({ action: ' Done ', id: 3, result: 'ok', detail: null })).toEqual(
@@ -51,7 +51,7 @@ it('normalizes aliases, numeric ids and nulls before typed schema validation', (
 
 it('declares a fully typed schema with prepareArguments', () => {
   const tool = createGroupTasksTool(
-    new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {})
+    new DelegationInvoker({ sessionId: 's', generation: 'g' }, () => {})
   );
   expect(tool.name).toBe('group_tasks');
   const schema = tool.parameters as unknown as {

@@ -1,0 +1,21 @@
+{
+  "schema": "llmdoc.meta/v3",
+  "baseline": {
+    "revision": "4c78f48fbce8cd67125ee29ad0152bc6c4a7650c",
+    "verifiedAt": "2026-11-23T09:24:55Z"
+  },
+  "documents": {
+    "releases/personal-mac.mdx": {
+      "validatedRevision": null
+    },
+    "sessions/message-projection.mdx": {
+      "validatedRevision": null
+    }
+  },
+  "convergence": {
+    "capturedAt": "2026-11-23T09:24:55Z",
+    "source": "init",
+    "documentCount": 2,
+    "totalEstimatedTokens": 257
+  }
+}

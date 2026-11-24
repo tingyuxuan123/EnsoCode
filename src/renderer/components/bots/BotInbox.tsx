@@ -11,17 +11,15 @@ import { useBotsStore } from '@/stores/bots';
 import { formatElapsed } from '@/stores/bots/delegations';
 import { inboxSections } from '@/stores/bots/inbox';
 import type { PendingItem } from '@/stores/bots/selectors';
-import { usePendingMemoryWrites } from '@/stores/memoryReview';
 import { BotAvatar } from './BotAvatar';
 import { chatTitle } from './botText';
 import { DelegationBadge, failureText, retryDelegation, useNow } from './DelegationCard';
-import { MemoryWriteCard } from './MemoryWriteCard';
 import { RoutineAlertCard } from './RoutineCards';
 import { SessionHistoryDialog } from './SessionHistoryDialog';
 import { QuietFor } from './SilenceNote';
 import { replyToTask, TaskReply } from './TaskReply';
 
-/** 收件箱：Main 汇总的审批、提问、预算、例程、静默与中断委派，另加待批准的记忆写入 */
+/** 收件箱：Main 汇总的审批、提问、预算、例程、静默与中断委派 */
 export function BotInbox() {
   const { t } = useI18n();
   const inbox = useBotsStore((s) => s.inbox);
@@ -36,7 +34,6 @@ export function BotInbox() {
     () => inboxSections(inbox, { routines, delegations }),
     [inbox, routines, delegations]
   );
-  const memoryWrites = usePendingMemoryWrites().filter((write) => write.kind !== 'compile');
   const byId = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots]);
   const chatName = (chatId: string | null) => {
     const chat = chats.find((entry) => entry.id === chatId);
@@ -56,7 +53,7 @@ export function BotInbox() {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[768px] space-y-2 px-6 py-4">
-          {sections.count === 0 && memoryWrites.length === 0 && (
+          {sections.count === 0 && (
             <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
               <Inbox className="h-6 w-6" />
               <p className="text-sm">{t('Nothing needs your attention')}</p>
@@ -73,14 +70,6 @@ export function BotInbox() {
           ))}
           {sections.budgets.map((item) => (
             <BudgetCard key={item.key} item={item} bot={byId.get(item.botId ?? '')} />
-          ))}
-          {memoryWrites.map((write) => (
-            <MemoryWriteCard
-              key={write.id}
-              write={write}
-              bot={write.botId ? byId.get(write.botId) : undefined}
-              chatName={chatName(write.chatId)}
-            />
           ))}
           {sections.routines.map((alert) => (
             <RoutineAlertCard key={alert.routine.id} alert={alert} />

@@ -1,4 +1,4 @@
-import type { ChatModelDto, EmbeddingDownloadProgressDto } from '@shared/memory/dto';
+import type { ChatModelDto, LocalModelDownloadProgressDto } from '@shared/localModels';
 import { type SpeechModelDto, type SpeechModelId, SYSTEM_MICROPHONE } from '@shared/types/speech';
 import * as React from 'react';
 import { MODEL_PICKER_FORM_TRIGGER_CLASS, ModelPicker } from '@/components/chat/ModelPicker';
@@ -16,10 +16,10 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useSpeechStatus } from '@/hooks/useSpeechStatus';
 import { useI18n } from '@/i18n';
+import { formatBytes } from '@/lib/formatBytes';
 import { cn } from '@/lib/utils';
 import { useUsableProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
-import { formatBytes } from './MemorySettings';
 
 const MODEL_TEXT: Record<SpeechModelId, { name: string; description: string }> = {
   'x-asr-streaming': {
@@ -272,13 +272,13 @@ export function VoiceCorrectionSettings() {
   const setRemoteModel = useSettingsStore((state) => state.setVoiceCorrectionRemoteModel);
   const candidates = useUsableProviders();
   const [models, setModels] = React.useState<ChatModelDto[]>([]);
-  const [progress, setProgress] = React.useState<EmbeddingDownloadProgressDto | null>(null);
+  const [progress, setProgress] = React.useState<LocalModelDownloadProgressDto | null>(null);
   const refresh = React.useCallback(() => {
-    void window.electronAPI.memory.chatModels().then(setModels);
+    void window.electronAPI.localModels.list().then(setModels);
   }, []);
   React.useEffect(() => {
     refresh();
-    return window.electronAPI.memory.onChatModelProgress((next) => {
+    return window.electronAPI.localModels.onProgress((next) => {
       setProgress(next.done ? null : next);
       if (next.done) refresh();
     });
@@ -296,7 +296,7 @@ export function VoiceCorrectionSettings() {
     ? candidates.find((entry) => entry.id === remoteModel.providerId)
     : undefined;
   const remoteEntry = remoteProvider?.models.find((entry) => entry.id === remoteModel?.modelId);
-  const memory = window.electronAPI.memory;
+  const localModels = window.electronAPI.localModels;
 
   return (
     <div className="space-y-2" data-settings-row="tools.voiceCorrection">
@@ -352,9 +352,9 @@ export function VoiceCorrectionSettings() {
               </p>
               <DownloadActions
                 state={selected.state}
-                onDownload={() => void memory.downloadChatModel(selected.id).then(refresh)}
-                onCancel={() => void memory.cancelChatModelDownload(selected.id).then(refresh)}
-                onRemove={() => void memory.deleteChatModel(selected.id).then(refresh)}
+                onDownload={() => void localModels.download(selected.id).then(refresh)}
+                onCancel={() => void localModels.cancelDownload(selected.id).then(refresh)}
+                onRemove={() => void localModels.remove(selected.id).then(refresh)}
               />
             </div>
           ) : null}

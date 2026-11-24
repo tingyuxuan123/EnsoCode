@@ -545,7 +545,7 @@ describe('CapabilityGateway OAuth/default/secret/receipt', () => {
       request('tool-browser', 'tools.toggle-builtin', { id: 'browser', enabled: false })
     );
     expect(other.modelResult).toMatchObject({ ok: true });
-    expect(state.disabledBuiltinTools).toEqual(['memory', 'computer', 'code_search', 'browser']);
+    expect(state.disabledBuiltinTools).toEqual(['computer', 'code_search', 'browser']);
   });
 
   it('Enso 不能自行打开会外发代码的 code_search', async () => {

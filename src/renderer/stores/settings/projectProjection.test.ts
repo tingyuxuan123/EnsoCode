@@ -165,7 +165,7 @@ describe('project authority projection write guard', () => {
       id: 'p0',
       name: 'alpha',
       path: '/tmp/alpha',
-      disabledBuiltinTools: ['browser', 'memory'],
+      disabledBuiltinTools: ['browser', 'workflow'],
       subagentAllowedModes: ['task' as const],
     };
     settingsModule.useSettingsStore.setState({ projects: [local] });

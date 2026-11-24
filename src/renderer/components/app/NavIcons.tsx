@@ -101,40 +101,6 @@ export function DesignGalleryIcon({ className, active = false }: NavIconProps) {
 }
 
 /**
- * Wiki 笔记工作区图标：打开的知识册页边配双链星点，与设计画廊、通用设置保持一致的 1.75 细描边。
- */
-export function WikiWorkspaceIcon({ className, active = false }: NavIconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      data-rail-glyph="wiki"
-      className={className}
-    >
-      {active && (
-        <path
-          data-active-fill=""
-          d="M4.5 5.25C4.5 4.56 5.06 4 5.75 4H11a2 2 0 0 1 2 2v13.25a1.5 1.5 0 0 0-1.5-1.5H5.75A1.25 1.25 0 0 1 4.5 16.5V5.25Z"
-          fill="currentColor"
-          fillOpacity={0.14}
-          stroke="none"
-        />
-      )}
-      <path d="M12 6.25A2.25 2.25 0 0 0 9.75 4H5.75A1.25 1.25 0 0 0 4.5 5.25v11.5A1.25 1.25 0 0 0 5.75 18h4.5A1.75 1.75 0 0 1 12 19.75" />
-      <path d="M12 6.25A2.25 2.25 0 0 1 14.25 4h4A1.25 1.25 0 0 1 19.5 5.25v11.5A1.25 1.25 0 0 1 18.25 18h-4.5A1.75 1.75 0 0 0 12 19.75V6.25Z" />
-      <path d="M7.75 8.75h1.75" />
-      <path d="M7.75 12h1.75" />
-      <path d="M14.75 8.75h1.75" />
-    </svg>
-  );
-}
-
-/**
  * 扩展入口图标：2×2 模块化方块与轻旋置入的右上角单元，保持与侧栏圆圈图标一致的视觉体量。
  */
 export function ExtensionsIcon({ className, active = false }: NavIconProps) {

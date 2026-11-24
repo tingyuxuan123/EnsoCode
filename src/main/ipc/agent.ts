@@ -55,7 +55,6 @@ import {
   parseParentSourceBindingRequest,
 } from '@shared/types/mentions';
 import { app, ipcMain, powerMonitor, type WebContents, webContents } from 'electron';
-import { titleSummaryTimeoutMs } from '../../agent/titleSummary';
 import { deviceToolCall } from '../../agent-host/devices/main';
 import { ActiveConversationRegistry } from '../services/activeConversationRegistry';
 import { AgentDispatchService } from '../services/agentDispatchService';
@@ -97,7 +96,6 @@ import {
   sendComputerResultToSession,
   sendDelegationResultToSession,
   sendDesignResultToSession,
-  sendMemoryResultToSession,
   sendPluginInterceptResultToSession,
   sendPluginToolProgressToSession,
   sendPluginToolResultToSession,
@@ -147,7 +145,7 @@ import { generateImage } from '../services/imageGeneration/service';
 import { ImageGenerationBridge } from '../services/imageGenerationBridge';
 import { resolveImageProvider } from '../services/imageGenerationConfig';
 import { resolveLegacyDispatchedHistoryFile } from '../services/legacyDispatchedHistory';
-import { createLocalComplete, memoryCompleteFromSettings } from '../services/llama/chat';
+import { createLocalComplete } from '../services/llama/chat';
 import {
   localChatModelPathIfReady,
   REMOTE_CHAT_MODEL_ID,
@@ -155,14 +153,6 @@ import {
   voiceCorrectionModelIdFromSettings,
 } from '../services/llama/chatModels';
 import { clearMcpStatuses, recordMcpStatus } from '../services/mcpStatusCache';
-import { memorySpaceContext } from '../services/memory/space';
-import type { Complete } from '../services/memory/types';
-import {
-  configureMemoryDistill,
-  invokeMemory,
-  rootSessionId,
-  scheduleMemoryDistill,
-} from '../services/memoryHost';
 import { setNativePluginResources } from '../services/nativePluginResources';
 import { maybeNotify, maybeNotifyBot, setViewedSession } from '../services/notifications';
 import { readStoredOauthCredentialKeys } from '../services/oauthProviders';
@@ -808,39 +798,6 @@ async function readChildHistory(
   });
 }
 
-/**
- * 记忆蒸馏的 LLM 入口。设置为本地 GGUF 时走 llama.cpp；否则复用标题总结的远程回退链。
- * worker 不在线 / 本地权重未就绪返 null，让任务保留 pending 到下次开库续跑。
- */
-async function distillCompletion(): Promise<Complete | null> {
-  const state = (
-    readSettings()?.['enso-settings'] as { state?: Record<string, unknown> } | undefined
-  )?.state;
-  return memoryCompleteFromSettings(state, {
-    modelsRoot: chatModelsRoot(),
-    remoteComplete: () => remoteDistillCompletion(state),
-  });
-}
-
-async function remoteDistillCompletion(
-  state: Record<string, unknown> | undefined
-): Promise<Complete | null> {
-  if (!isAgentWorkerReady() || !state) return null;
-  // 记忆提炼有自己的模型时排在最前；未设则完全走标题模型的既有回退链
-  // （标题总结要快而便宜，提炼要质量，两者诉求不同）
-  const candidates = await remoteCandidates(state, state.memoryDistillModel);
-  if (candidates.length === 0) return null;
-  return (systemPrompt, userText, options) =>
-    completeText({
-      systemPrompt,
-      userText,
-      candidates,
-      timeoutMs: titleSummaryTimeoutMs(1),
-      ...(options?.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
-      ...(options?.signal ? { signal: options.signal } : {}),
-    });
-}
-
 const VOICE_CORRECTION_TIMEOUT_MS = 15_000;
 
 /** 语音纠错：本地 GGUF 走 llama.cpp；远程用单独选的模型，未选跟随标题模型。不可用返 null，保留原文 */
@@ -925,33 +882,11 @@ export async function readSessionHistoryFile(
   }
 }
 
-/**
- * 手机第二屏只持有裸 sessionId，而会话命令已收紧为 exact identity。身份解析与 spawn
- * 准入是策略，留在本文件（与渲染层走同一套 exactIdentity / persistedRootSpawn 守卫）；
- * pairHost 只做传输。解析不出身份就丢弃命令，不降级成按 sessionId 盲发。
- */
-/**
- * 会话结束 / 闲置回收 / 压缩完成：从权威 jsonl 异步蒸馏长期记忆（开关、幂等、水位、失败全在
- * memoryHost / BotMemoryService 内收口）。返回 bot 绑定供调用方做后续处理。
- */
-function distillSessionMemory(identity: SessionIdentity) {
-  const conversation = sourceAuthority?.conversation(identity.sessionId);
-  const sessionFile = agentSessionIndex.sessionFile(identity);
-  if (sessionFile) {
-    const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
-    if (conversation?.bot) void getBotServices()?.memory.distill({ ...conversation, sessionFile });
-    // 本地项目的 Wiki 由当前会话在 agent_before_settle 内处理；回收与压缩不能重复编译。
-    else if (project?.state === 'active' && project.kind && project.kind !== 'local')
-      void scheduleMemoryDistill(
-        {
-          sessionId: identity.sessionId,
-          sessionFile,
-          projectId: project?.state === 'active' ? project.projectId : null,
-        },
-        { continueFromLastJob: true }
-      );
-  }
-  return conversation?.bot;
+/** Typed children and old `parent::child` IDs use the parent as the authority. */
+function rootSessionId(identity: SessionIdentity | ChildSessionIdentity): string {
+  const raw = 'parent' in identity ? identity.parent.sessionId : identity.sessionId;
+  const separator = raw.indexOf('::');
+  return separator === -1 ? raw : raw.slice(0, separator);
 }
 
 function botControlError(sessionId: unknown): { ok: false; error: string } | undefined {
@@ -995,6 +930,7 @@ function cacheBotScreenshots(
   }
 }
 
+/** 手机端只提供 sessionId；本层解析 exact identity 并执行与桌面一致的 spawn 准入。 */
 function wirePairAgentBridge(): void {
   setPairAgentBridge({
     prompt: (sessionId, text, images) => {
@@ -1514,7 +1450,6 @@ export function registerAgentHandlers(): void {
   });
   wirePairAgentBridge();
   wirePairSessionHost();
-  configureMemoryDistill({ complete: distillCompletion });
   setSpeechCorrector(voiceCorrection);
   const agentDataDir = path.join(app.getPath('userData'), 'agent');
   sourceAuthority = new SourceAuthorityRegistry({
@@ -1932,16 +1867,15 @@ export function registerAgentHandlers(): void {
       if (!sharesBrowser(workerEvent.identity.sessionId))
         void browserHost.closeForSession(workerEvent.identity.sessionId, { force: true });
       computerHost.close(workerEvent.identity.sessionId);
-      distillSessionMemory(workerEvent.identity);
     }
-    // 压缩成功：jsonl 原文仍在，按水位提前整理记忆；群聊成员下次投递补群状态
+    // 压缩成功后，群聊成员下次投递补群状态。
     if (
       workerEvent.type === 'compaction' &&
       workerEvent.state === 'end' &&
       !workerEvent.error &&
       !workerEvent.abandoned
     ) {
-      const bot = distillSessionMemory(workerEvent.identity);
+      const bot = sourceAuthority?.conversation(workerEvent.identity.sessionId)?.bot;
       if (bot?.chatId)
         getBotServices()?.groups.markCompacted(
           bot.chatId,
@@ -2128,40 +2062,6 @@ export function registerAgentHandlers(): void {
           clearTimeout(timer);
         }
       })();
-      return;
-    }
-    if (workerEvent.type === 'memory-invoke') {
-      const { identity, requestId, op, params } = workerEvent;
-      // 项目 space 只认 Main 权威：worker 不上报 projectId，也不上报路径
-      const conversation = sourceAuthority?.conversation(rootSessionId(identity));
-      const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
-      const projectId = project?.state === 'active' ? project.projectId : null;
-      const memory = conversation?.bot
-        ? getBotServices()?.memory.context({ ...conversation, projectId })
-        : { enabled: true, context: memorySpaceContext({ projectId }) };
-      if (!memory?.enabled) {
-        sendMemoryResultToSession(identity, requestId, { ok: false, error: '该成员已关闭记忆' });
-        return;
-      }
-      const state = readSettingsState() ?? {};
-      const disabled = resolveDisabledBuiltinTools(state.disabledBuiltinTools, {
-        disabledBuiltinTools: projectDisabledBuiltinTools(state.projects, projectId ?? undefined),
-      });
-      if (disabled.includes('memory')) {
-        sendMemoryResultToSession(identity, requestId, {
-          ok: false,
-          error: 'Memory tool is disabled',
-        });
-        return;
-      }
-      void invokeMemory(op, params, { ...memory.context, sessionId: rootSessionId(identity) }).then(
-        (result) => sendMemoryResultToSession(identity, requestId, { ok: true, result }),
-        (error: unknown) =>
-          sendMemoryResultToSession(identity, requestId, {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          })
-      );
       return;
     }
     if (workerEvent.type === 'delegation-invoke') {

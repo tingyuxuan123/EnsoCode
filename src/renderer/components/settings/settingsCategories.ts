@@ -1,7 +1,7 @@
 import type { SettingsCategory } from './constants';
 
 /**
- * 记忆、工作流分页跟随内置工具开关显隐：功能没开就不该占一个入口。
+ * 工作流分页跟随内置工具开关显隐：功能没开就不该占一个入口。
  *
  * 关掉后仍能重新打开——「内置工具」页会遍历 BUILTIN_TOOLS，开关都在那里，
  * 所以隐藏入口不会造成没法再启用的死锁。
@@ -9,7 +9,6 @@ import type { SettingsCategory } from './constants';
 
 /** 依赖某个内置工具才显示的分页 */
 const TOOL_GATED: Partial<Record<SettingsCategory, string>> = {
-  memory: 'memory',
   workflows: 'workflow',
 };
 const BOT_PAGES: readonly SettingsCategory[] = ['bots', 'botTemplates'];

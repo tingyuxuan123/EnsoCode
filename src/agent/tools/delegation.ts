@@ -1,15 +1,6 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { normalizeTaskCheck } from '@shared/bots/taskCheck';
-import type { MemoryInvoker } from './memory';
-
-export type DelegationOp =
-  | 'delegate'
-  | 'check_delegation'
-  | 'group_tasks'
-  | 'group_history'
-  | 'routine_propose'
-  | 'send_image'
-  | 'report_blocked';
+import type { DelegationInvoker, DelegationOp } from './delegationInvoker';
 
 export function normalizeDelegationParams(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
@@ -45,7 +36,7 @@ export const CHECK_SCHEMA = {
 };
 
 export function createDelegationTools(
-  invoker: MemoryInvoker<DelegationOp>,
+  invoker: DelegationInvoker,
   options: { groupTasks?: boolean; delegationTask?: boolean } = {}
 ): ToolDefinition[] {
   const define = (

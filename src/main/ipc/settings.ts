@@ -123,9 +123,6 @@ export const SETTINGS_STATE_FIELDS = [
   'defaultModelFollowLast',
   'titleSummaryEnabled',
   'titleSummaryModel',
-  'memoryDistillModel',
-  'memoryChatModel',
-  'memoryLanguage',
   'approvalReviewer',
   'approvalAutoManage',
   'approvalAllowThreshold',
@@ -150,7 +147,6 @@ export const SETTINGS_STATE_FIELDS = [
   'disabledWorkflowPresets',
   'subagentAllowedModes',
   'memoryModelIdleMinutes',
-  'memoryDistillEnabled',
   'voiceInputEnabled',
   'botModeEnabled',
   'botMaxRunningTurns',
@@ -232,11 +228,10 @@ export const CONFIG_SYNC_COMMIT_FIELDS = SETTINGS_STATE_FIELDS.filter(
   (field) => !CONFIG_SYNC_EXCLUDED_STATE_FIELDS.has(field)
 );
 
-// 记忆编译与语言配置变更后同步到 memoryHost（vault 挂载路径放在 Main 独占的 vault-bindings.json）
-function notifyMemoryEmbeddingSettings(settings: Record<string, unknown>): void {
-  void import('../services/memoryHost')
-    .then(({ syncMemoryFromSettings }) => {
-      syncMemoryFromSettings(settingsStateOf(settings));
+function notifyLocalModelSettings(settings: Record<string, unknown>): void {
+  void import('../services/llama/chat')
+    .then(({ syncLocalChatFromSettings }) => {
+      syncLocalChatFromSettings(settingsStateOf(settings));
     })
     .catch(() => {});
 }
@@ -422,7 +417,7 @@ function scheduleWrite(
     }
     cachedSettings = data;
     isDirty = true;
-    notifyMemoryEmbeddingSettings(data);
+    notifyLocalModelSettings(data);
     notifyTrayToggleShortcut(data);
     notifySpeechSettings(data);
     if (
@@ -596,7 +591,7 @@ export function commitSettingsTransaction(
 
   cachedSettings = next;
   isDirty = false;
-  notifyMemoryEmbeddingSettings(next);
+  notifyLocalModelSettings(next);
   notifyTrayToggleShortcut(next);
   notifySpeechSettings(next);
   try {

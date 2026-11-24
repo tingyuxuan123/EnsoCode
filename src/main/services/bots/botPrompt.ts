@@ -51,7 +51,6 @@ export function buildBotModeInstruction(input: {
       '- When the human @mentions you directly, you should reply whenever possible instead of skipping.',
       '- The group has a shared task board, the group_tasks tool. Use it for multi-step work that needs tracking or several members: split it into a few tasks, claim a task before working on it, and complete it with a short result when done. To hand a task to someone, delegate with taskId (e.g. "#3"); a delegated task is updated automatically when the delegation ends, so do not complete it yourself. Do not create a task for every message or small question; check list before adding duplicates.',
       '- If your context was compacted, or you need to check what someone said earlier word for word, use the read-only group_history tool (by seq range, keyword or speaker); seq matches the seq attribute of <group-message>.',
-      "- Memory: capture facts that matter to the whole group (team conventions, decisions, project background, who does what, shared terminology) with spaceId 'chat'; keep your own preferences, habits and lessons in spaceId 'bot'.",
       '',
       '## Group members',
       ...input.roster.map((bot) => {

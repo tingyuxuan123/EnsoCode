@@ -1,4 +1,4 @@
-import { normalizeMemoryModelIdleMinutes } from '@shared/memory/modelIdle';
+import { normalizeMemoryModelIdleMinutes } from '@shared/localModels';
 
 /** 只计资源空闲时间；排队前 acquire，底层工作真正结束后 release。 */
 export class ModelIdleTimer {

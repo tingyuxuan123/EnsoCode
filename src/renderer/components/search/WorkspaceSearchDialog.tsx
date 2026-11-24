@@ -82,7 +82,6 @@ const SETTINGS_CATEGORY_LABELS: Record<SettingsCategory, string> = {
   agents: 'Agent types',
   workflows: 'Workflows',
   tools: 'Built-in tools',
-  memory: 'Memory',
   phone: 'Devices',
   ssh: 'SSH',
   usage: 'Usage',

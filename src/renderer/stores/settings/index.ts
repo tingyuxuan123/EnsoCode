@@ -22,19 +22,13 @@ import { normalizeLocale } from '@shared/i18n';
 import { parseImageGenerationSettings } from '@shared/imageGeneration';
 import { DEFAULT_LIGHT_PALETTE, type LightPalette, parseLightPalette } from '@shared/lightPalette';
 import {
+  DEFAULT_MEMORY_MODEL_IDLE_MINUTES,
+  normalizeMemoryModelIdleMinutes,
+} from '@shared/localModels';
+import {
   DEFAULT_MAX_ACTIVE_COWORKERS,
   normalizeMaxActiveCoworkers,
 } from '@shared/maxActiveCoworkers';
-import {
-  DEFAULT_MEMORY_DISTILL_ENABLED,
-  DEFAULT_MEMORY_LANGUAGE,
-  isMemoryLanguage,
-  resolveMemoryLanguage,
-} from '@shared/memory/constants';
-import {
-  DEFAULT_MEMORY_MODEL_IDLE_MINUTES,
-  normalizeMemoryModelIdleMinutes,
-} from '@shared/memory/modelIdle';
 import { directorySectionForAccount, materializeProviders } from '@shared/modelDirectory';
 import { applyProjectGroupPatch } from '@shared/projectGroups';
 import { projectNameFromPath } from '@shared/projectName';
@@ -197,7 +191,6 @@ const initialState = {
   smartCompactModel: null as import('@shared/defaultModel').DefaultModelRef | null,
   smartCompactMode: 'auto' as import('@shared/smartCompactMode').SmartCompactMode,
   memoryModelIdleMinutes: DEFAULT_MEMORY_MODEL_IDLE_MINUTES,
-  memoryDistillEnabled: DEFAULT_MEMORY_DISTILL_ENABLED,
   voiceInputEnabled: false,
   botModeEnabled: false,
   botRouteClassifier: null as VirtualClassifierConfig | null,
@@ -250,9 +243,6 @@ const initialState = {
   defaultModelFollowLast: false,
   titleSummaryEnabled: false,
   titleSummaryModel: null as import('@shared/defaultModel').DefaultModelRef | null,
-  memoryDistillModel: null as import('@shared/defaultModel').DefaultModelRef | null,
-  memoryChatModel: 'remote',
-  memoryLanguage: DEFAULT_MEMORY_LANGUAGE,
   approvalReviewer: null as import('@shared/defaultModel').DefaultModelRef | null,
   approvalAutoManage: false,
   approvalAllowThreshold: 0.9,
@@ -375,8 +365,6 @@ export const useSettingsStore = create<SettingsState>()(
       setProtectedActionsInCode: (protectedActionsInCode) => set({ protectedActionsInCode }),
       setMemoryModelIdleMinutes: (value) =>
         set({ memoryModelIdleMinutes: normalizeMemoryModelIdleMinutes(value) }),
-      setMemoryDistillEnabled: (memoryDistillEnabled) =>
-        set({ memoryDistillEnabled: memoryDistillEnabled !== false }),
       setVoiceInputEnabled: (voiceInputEnabled) => set({ voiceInputEnabled }),
       setBotModeEnabled: (botModeEnabled) => set({ botModeEnabled }),
       setBotRouteClassifier: (botRouteClassifier) => set({ botRouteClassifier }),
@@ -516,10 +504,6 @@ export const useSettingsStore = create<SettingsState>()(
 
       setTitleSummaryEnabled: (titleSummaryEnabled) => set({ titleSummaryEnabled }),
       setTitleSummaryModel: (titleSummaryModel) => set({ titleSummaryModel }),
-      setMemoryDistillModel: (memoryDistillModel) => set({ memoryDistillModel }),
-      setMemoryChatModel: (memoryChatModel) => set({ memoryChatModel }),
-      setMemoryLanguage: (memoryLanguage) =>
-        set({ memoryLanguage: resolveMemoryLanguage(memoryLanguage) }),
       setApprovalReviewer: (approvalReviewer) => set({ approvalReviewer }),
       setApprovalAutoManage: (enabled) => set({ approvalAutoManage: enabled === true }),
       setApprovalAllowThreshold: (value) =>
@@ -1205,12 +1189,6 @@ export const useSettingsStore = create<SettingsState>()(
         // 外部手改 settings.json 可能写进 truthy 字符串等脏值；只有显式 false 才算关闭
         if (s.microcompactEnabled !== true && s.microcompactEnabled !== false) {
           useSettingsStore.setState({ microcompactEnabled: true });
-        }
-        if (s.memoryDistillEnabled !== true && s.memoryDistillEnabled !== false) {
-          useSettingsStore.setState({ memoryDistillEnabled: DEFAULT_MEMORY_DISTILL_ENABLED });
-        }
-        if (!isMemoryLanguage(s.memoryLanguage)) {
-          useSettingsStore.setState({ memoryLanguage: resolveMemoryLanguage(s.memoryLanguage) });
         }
         // 老用户（升级前已有配置）视为已完成引导，避免被打扰
         if (

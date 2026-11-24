@@ -1,6 +1,5 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { DelegationOp } from './delegation';
-import type { MemoryInvoker } from './memory';
+import type { DelegationInvoker } from './delegationInvoker';
 
 const KEYS = ['title', 'prompt', 'schedule', 'doneBy'] as const;
 const ALIASES: Record<string, (typeof KEYS)[number]> = {
@@ -39,7 +38,7 @@ export function normalizeRoutineProposeParams(raw: unknown): unknown {
   return params;
 }
 
-export function createRoutineProposeTool(invoker: MemoryInvoker<DelegationOp>): ToolDefinition {
+export function createRoutineProposeTool(invoker: DelegationInvoker): ToolDefinition {
   return {
     name: 'routine_propose',
     label: 'routine_propose',

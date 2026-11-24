@@ -172,7 +172,7 @@ export function ThreadSwitcher({ group, thread }: { group: BotChat; thread: BotC
         onOpenChange={(value) => !value && setDeleting(null)}
         title={t('Delete this topic?')}
         description={t(
-          'Its messages and member sessions are removed; replies in progress are stopped. Group notes, memory and the task board stay.'
+          'Its messages and member sessions are removed; replies in progress are stopped. Group notes and the task board stay.'
         )}
         confirmLabel={t('Delete')}
         onConfirm={() => deleting && void remove(deleting)}

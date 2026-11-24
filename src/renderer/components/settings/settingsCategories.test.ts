@@ -5,25 +5,12 @@ import { isCategoryVisible, resolveActiveCategory, visibleCategories } from './s
 const cats = [
   { id: 'general' as SettingsCategory },
   { id: 'tools' as SettingsCategory },
-  { id: 'memory' as SettingsCategory },
   { id: 'usage' as SettingsCategory },
 ];
 
 describe('visibleCategories', () => {
-  it('hides the memory page while the memory tool is off', () => {
-    expect(visibleCategories(cats, ['memory']).map((c) => c.id)).toEqual([
-      'general',
-      'tools',
-      'usage',
-    ]);
-  });
-
-  it('shows it once the tool is enabled', () => {
-    expect(visibleCategories(cats, []).map((c) => c.id)).toContain('memory');
-  });
-
   it('never hides pages that do not depend on a tool', () => {
-    const ids = visibleCategories(cats, ['memory', 'browser', 'isolated_sandbox']).map((c) => c.id);
+    const ids = visibleCategories(cats, ['browser', 'isolated_sandbox']).map((c) => c.id);
     expect(ids).toEqual(['general', 'tools', 'usage']);
   });
 
@@ -32,7 +19,7 @@ describe('visibleCategories', () => {
     expect(visibleCategories(withWorkflows, ['workflow']).map((c) => c.id)).not.toContain(
       'workflows'
     );
-    expect(visibleCategories(withWorkflows, ['memory']).map((c) => c.id)).toContain('workflows');
+    expect(visibleCategories(withWorkflows, ['browser']).map((c) => c.id)).toContain('workflows');
     expect(resolveActiveCategory('workflows', ['workflow'])).toBe('tools');
   });
 });
@@ -40,23 +27,18 @@ describe('visibleCategories', () => {
 describe('resolveActiveCategory', () => {
   it('falls back to Built-in tools when the active page just got hidden', () => {
     // 落在能把它重新打开的地方，而不是通用页
-    expect(resolveActiveCategory('memory', ['memory'])).toBe('tools');
+    expect(resolveActiveCategory('workflows', ['workflow'])).toBe('tools');
   });
 
   it('leaves the active page alone when it is still visible', () => {
-    expect(resolveActiveCategory('memory', [])).toBe('memory');
-    expect(resolveActiveCategory('usage', ['memory'])).toBe('usage');
-  });
-
-  it('also catches a deep link pointing at a disabled feature', () => {
-    // deeplink 可能来自通知/外部跳转，指向一个当前没启用的功能
-    expect(resolveActiveCategory('memory', ['memory'])).toBe('tools');
+    expect(resolveActiveCategory('workflows', [])).toBe('workflows');
+    expect(resolveActiveCategory('usage', ['workflow'])).toBe('usage');
   });
 });
 
 describe('isCategoryVisible', () => {
   it('treats an unrelated disabled tool as irrelevant', () => {
-    expect(isCategoryVisible('memory', ['browser'])).toBe(true);
+    expect(isCategoryVisible('workflows', ['browser'])).toBe(true);
   });
 });
 

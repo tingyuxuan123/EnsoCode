@@ -13,7 +13,6 @@ export const SETTINGS_CATEGORIES = [
   'agents',
   'workflows',
   'tools',
-  'memory',
   'phone',
   'ssh',
   'usage',

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
+import { DelegationInvoker } from './delegationInvoker';
 import { createGroupHistoryTool, normalizeGroupHistoryParams } from './groupHistory';
-import { MemoryInvoker } from './memory';
 
 it('normalizes aliases, numeric strings, nulls and limit bounds before schema validation', () => {
   expect(
@@ -27,7 +27,7 @@ it('normalizes aliases, numeric strings, nulls and limit bounds before schema va
 
 it('declares a fully typed schema with prepareArguments', () => {
   const tool = createGroupHistoryTool(
-    new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {})
+    new DelegationInvoker({ sessionId: 's', generation: 'g' }, () => {})
   );
   expect(tool.name).toBe('group_history');
   const schema = tool.parameters as unknown as {

@@ -3785,37 +3785,33 @@ describe('消息类工具行（联系主 agent / 联系队员 / 子代理发消�
   });
 });
 
-describe('memory_upsert 记录记忆行', () => {
-  const capture = (name: string, args: Record<string, unknown>) =>
-    buildTimeline(
+it.each(['memory_upsert', 'memory_search'])(
+  '保留历史 %s 调用和原始回执，不生成专用卡片数据',
+  (name) => {
+    const output = '{"status":"created","title":"Old note"}';
+    const tool = buildTimeline(
       [
         user('记一下'),
         {
           role: 'assistant',
           stopReason: 'toolUse',
-          content: [{ type: 'toolCall', id: 'c1', name, arguments: args }],
+          content: [
+            { type: 'toolCall', id: 'c1', name, arguments: { query: 'q', content: 'old body' } },
+          ],
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'c1',
+          toolName: name,
+          content: [{ type: 'text', text: output }],
         },
       ],
       false
     ).find((item) => item.kind === 'tool');
-
-  it('摘要取标题，缺省时取正文首行；正文随行带出供展开显示（回执不带正文）', () => {
-    expect(
-      capture('memory_upsert', { title: ' 工具行规则 ', content: ' 第一行\n第二行 ' })
-    ).toMatchObject({ summary: '工具行规则', memoryContent: '第一行\n第二行' });
-    expect(capture('memory_upsert', { content: '第一行\n第二行' })).toMatchObject({
-      summary: '第一行',
-    });
-  });
-
-  it('正文为空或其它工具不带正文', () => {
-    expect(capture('memory_upsert', { content: '  ' })).not.toHaveProperty('memoryContent');
-    expect(capture('memory_search', { query: 'q', content: 'x' })).toMatchObject({ summary: 'q' });
-    expect(capture('memory_search', { query: 'q', content: 'x' })).not.toHaveProperty(
-      'memoryContent'
-    );
-  });
-});
+    expect(tool).toMatchObject({ name, output, summary: 'q', state: 'ok' });
+    expect(tool).not.toHaveProperty('memoryContent');
+  }
+);
 
 describe('ask_user 询问用户行', () => {
   const ask = (

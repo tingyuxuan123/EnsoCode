@@ -14,7 +14,6 @@ import {
   type ProjectedCodemodeCall,
   type ProjectedMessage,
   type ProjectedPart,
-  parseProjectedMemoryUpdates,
   parseShellFailure,
   projectDesignCards,
   type TodoItem,
@@ -27,7 +26,7 @@ import {
   type ProjectedApplyPatchOutcome,
   type ProjectedFileChange,
 } from '@shared/types/fileChanges';
-import { MEMORY_REVIEW_MESSAGE } from './memoryTurnReview';
+import { isLegacyMemoryReviewMessage } from './legacyMemoryReviewHistory';
 
 /** 渲染层单段文本上限。worker 里模型上下文仍是全文，只截投影。 */
 export const PROJECTED_TEXT_LIMIT = PROJECTED_FILE_TEXT_LIMIT;
@@ -163,7 +162,7 @@ function projectTodos(value: unknown): TodoItem[] | null {
  */
 export function projectMessage(value: unknown): ProjectedMessage | null {
   if (!isRecord(value) || typeof value.role !== 'string') return null;
-  if (value.role === 'custom' && value.customType === MEMORY_REVIEW_MESSAGE) return null;
+  if (isLegacyMemoryReviewMessage(value)) return null;
 
   const projected: ProjectedMessage = {
     role: value.role,
@@ -173,11 +172,6 @@ export function projectMessage(value: unknown): ProjectedMessage | null {
     projected.entryId = value.entryId;
   }
   if (typeof value.toolName === 'string') projected.toolName = value.toolName;
-  const memoryUpdates =
-    value.memoryUpdates === undefined
-      ? undefined
-      : parseProjectedMemoryUpdates(value.memoryUpdates);
-  if (memoryUpdates) projected.memoryUpdates = memoryUpdates;
   if (value.role === 'custom' && value.customType === PLUGIN_MESSAGE_TYPE) {
     const source = parsePluginMessageSource(value.details);
     if (source) projected.pluginSource = source;

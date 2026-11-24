@@ -69,12 +69,6 @@ export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
       'Background shell task: run long commands in the background and notify on completion',
   },
   {
-    id: 'memory',
-    name: 'Memory',
-    description:
-      'Markdown Wiki memory (Obsidian-compatible, OKF v0.2): search, read, update, and interlink durable project and personal knowledge across sessions',
-  },
-  {
     id: 'isolated_sandbox',
     name: 'Script orchestration',
     description:
@@ -114,7 +108,6 @@ export const HOT_BUILTIN_TOOL_IDS = [
   'code_search',
   'image_generation',
   'background_tasks',
-  'memory',
   'computer',
   'mobile_devices',
 ] as const;
@@ -201,7 +194,7 @@ export function effectiveSubagentAllowedModes(
 /** Main 直读磁盘时把未知形状收成 string[]；缺字段走默认关闭列表（空 = 全开）。 */
 export function effectiveDisabledBuiltinTools(disabled: unknown): string[] {
   return Array.isArray(disabled)
-    ? disabled.filter((id): id is string => typeof id === 'string')
+    ? disabled.filter((id): id is string => typeof id === 'string' && id !== 'memory')
     : [...DEFAULT_DISABLED_BUILTIN_TOOLS];
 }
 

@@ -1251,13 +1251,6 @@ export const CAPABILITY_CATALOG = {
     reason: 'CodeKiln never receives the coding-session isolated sandbox.',
     suggestedAction: 'Ask the coding agent to use the isolated sandbox.',
   }),
-  'coding-tools.memory': unavailable('coding-tools.memory', {
-    description: 'Search and capture durable memories across coding sessions.',
-    risk: 'dangerous',
-    targetContext: 'origin-project',
-    reason: 'CodeKiln never receives the coding-session memory tools.',
-    suggestedAction: 'Ask the coding agent to search or capture the memory.',
-  }),
   'coding-tools.computer': unavailable('coding-tools.computer', {
     description: 'Operate the host desktop with screenshots, accessibility, and input.',
     risk: 'dangerous',

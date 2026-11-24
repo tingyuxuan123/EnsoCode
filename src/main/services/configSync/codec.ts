@@ -64,16 +64,12 @@ const STATE_KEYS = [
   'defaultModel',
   'defaultModelFollowLast',
   'titleSummaryModel',
-  'memoryDistillModel',
-  'memoryChatModel',
-  'memoryLanguage',
   'smartCompactModel',
   'approvalReviewer',
   'titleSummaryEnabled',
   'compactStrategy',
   'smartCompactEnabled',
   'smartCompactMode',
-  'memoryDistillEnabled',
   'defaultReasoningEnabled',
   'defaultThinkingLevel',
   'defaultPresetId',
@@ -809,13 +805,7 @@ function validateReferences(
       );
   }
   for (const entry of subagentModels) validateRef(entry, providerModels, 'subagent model');
-  for (const key of [
-    'defaultModel',
-    'titleSummaryModel',
-    'memoryDistillModel',
-    'smartCompactModel',
-    'approvalReviewer',
-  ])
+  for (const key of ['defaultModel', 'titleSummaryModel', 'smartCompactModel', 'approvalReviewer'])
     if (state[key] !== undefined && state[key] !== null)
       validateRef(state[key], providerModels, key);
   if (
@@ -928,7 +918,16 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     throw new Error('Invalid bundle timestamp');
   }
   if (typeof bundle.secretsIncluded !== 'boolean') throw new Error('Invalid secretsIncluded');
-  const state = assertRecord(bundle.state, 'state');
+  const state = { ...assertRecord(bundle.state, 'state') };
+  // These fields were valid in older v1 exports; accept the bundle without importing them.
+  for (const key of [
+    'memoryDistillModel',
+    'memoryChatModel',
+    'memoryLanguage',
+    'memoryDistillEnabled',
+  ]) {
+    delete state[key];
+  }
   assertExactKeys(state, STATE_KEYS, 'state');
   const providers = (arrayField(state, 'providers', 'state') ?? []).map(validateProvider);
   const skills = (arrayField(state, 'skills', 'state') ?? []).map(validateSkill);
@@ -944,7 +943,6 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
   for (const key of [
     'titleSummaryEnabled',
     'smartCompactEnabled',
-    'memoryDistillEnabled',
     'defaultReasoningEnabled',
     'subagentModelsEnabled',
     'defaultModelFollowLast',
@@ -978,7 +976,7 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     throw new Error('Invalid state.chatTypography');
   if (state.language !== undefined && !['en', 'zh'].includes(String(state.language)))
     throw new Error('Invalid state.language');
-  for (const key of ['terminalTheme', 'terminalFontFamily', 'memoryChatModel']) {
+  for (const key of ['terminalTheme', 'terminalFontFamily']) {
     if (state[key] !== undefined) nonEmptyStringField(state, key, 'state');
   }
   numberField(state, 'terminalFontSize', 'state', Number.MIN_VALUE, Number.MAX_SAFE_INTEGER);
@@ -1036,6 +1034,9 @@ export function validateBundle(value: unknown): ConfigSyncBundle {
     !['cover', 'contain', 'repeat', 'center'].includes(String(state.backgroundSizeMode))
   )
     throw new Error('Invalid state.backgroundSizeMode');
+  if (Array.isArray(state.disabledBuiltinTools)) {
+    state.disabledBuiltinTools = state.disabledBuiltinTools.filter((id) => id !== 'memory');
+  }
   if (state.disabledBuiltinTools !== undefined)
     uniqueStringArray(
       state.disabledBuiltinTools,

@@ -16,7 +16,6 @@ import type {
 import { parseWorkflowPresetMessage } from '@shared/workflowPresetMessage';
 import {
   ArrowDownToLine,
-  Bookmark,
   Bot,
   BoxSelect,
   Check,
@@ -132,9 +131,7 @@ import {
   useLocalImageSource,
 } from './localImageSource';
 import { LocalFileTrigger, Markdown } from './Markdown';
-import { MemoryCaptureResult, MemorySearchResults } from './MemorySearchResults';
 import { mentionChipClass } from './MentionChip';
-import { parseMemoryCapture, parseMemorySearchHits } from './memorySearchHits';
 import { fileMentionBasename, splitInlineMentions, splitMentionRefs } from './mentionComposer';
 import { ReadFileView } from './ReadFileView';
 import { RtkToolStatsBar } from './RtkToolStatsBar';
@@ -148,7 +145,6 @@ import { TodoList } from './TodoBar';
 import { ToolNotices } from './ToolNotices';
 import { ToolSummaryRow } from './ToolSummaryRow';
 import { TurnFilesFooter } from './TurnFilesCard';
-import { TurnMemoryFooter } from './TurnMemoryCard';
 import { TurnWaterfallDetails } from './TurnWaterfallDetails';
 import { toolLineDelta } from './toolLineDelta';
 import { shouldCollapseUserQuery, USER_QUERY_MAX_HEIGHT } from './userQueryCollapse';
@@ -242,7 +238,6 @@ function itemEqual(prev: TimelineRowProps, next: TimelineRowProps): boolean {
         a.plan?.title === b.plan?.title &&
         a.plan?.text === b.plan?.text &&
         a.sentMessage === b.sentMessage &&
-        a.memoryContent === b.memoryContent &&
         a.ask?.question === b.ask?.question &&
         a.ask?.options.join('\n') === b.ask?.options.join('\n') &&
         a.ask?.answer === b.ask?.answer &&
@@ -1590,10 +1585,7 @@ function TextRow({
         (host?.turnFooter ? (
           host.turnFooter(Number(item.key.split('-')[0]))
         ) : (
-          <>
-            <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
-            <TurnMemoryFooter messageIndex={Number(item.key.split('-')[0])} />
-          </>
+          <TurnFilesFooter messageIndex={Number(item.key.split('-')[0])} />
         ))}
     </div>
   );
@@ -1813,7 +1805,7 @@ function CompactionRow({
         title={
           item.memory
             ? t(
-                'Summary rendered from continuous memory. Messages above are no longer in the model context; use recall for sources.'
+                'Summary rendered from continuous memory. Messages above are no longer in the model context.'
               )
             : item.verified
               ? t(
@@ -2504,12 +2496,6 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   const autoExpand =
     expandLiveEdits && (hasDiff || hasWrite || hasImage) && item.state === 'running';
   const [expanded, setExpanded] = useState(autoExpand);
-  const memoryHits =
-    expanded && item.name === 'memory_search' ? parseMemorySearchHits(item.output) : null;
-  const memoryCapture =
-    expanded && item.name === 'memory_upsert'
-      ? parseMemoryCapture(item.output, item.memoryContent)
-      : null;
   const subagentReceipt =
     expanded && item.name === 'subagent' && item.state !== 'error'
       ? parseSubagentReceipt(item.subagentOp, item.output)
@@ -2747,10 +2733,6 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
                 <div className="px-3 py-2 text-sm">
                   <Markdown text={item.output ?? ''} />
                 </div>
-              ) : memoryHits ? (
-                <MemorySearchResults hits={memoryHits} />
-              ) : memoryCapture ? (
-                <MemoryCaptureResult view={memoryCapture} />
               ) : (
                 <>
                   {item.ask && <AskUserResult ask={item.ask} waiting={item.state === 'running'} />}
@@ -3035,7 +3017,6 @@ function toolIcon(name: string): StepIconComponent {
   if (name === 'write') return FilePlus;
   if (isSandboxTool(name) || name === 'workflow') return ScriptOrchestrationIcon;
   if (name === 'subagent') return Bot;
-  if (name === 'recall' || name.startsWith('memory_')) return Bookmark;
   if (name === 'generate_image' || name === 'edit_image') return WandSparkles;
   if (name === 'ask_user') return MessageCircleQuestion;
   if (name === 'message_coworker' || name === 'message_main_agent') return Send;

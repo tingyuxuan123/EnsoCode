@@ -6,7 +6,6 @@ export type CharacterCardDraft = Pick<BotProfile, 'name' | 'title' | 'scope'> & 
   color?: string;
   tools?: BotProfile['tools'];
   approvalMode?: ApprovalMode;
-  memoryEnabled?: boolean;
 };
 export type CharacterCardResult =
   | { ok: true; draft: CharacterCardDraft }
@@ -35,10 +34,7 @@ function firstSentence(text: string): string {
 
 /** 成员 → SillyTavern V2 卡；enso 专有字段放 extensions.enso（不含技能 / MCP id、模型、委派名单） */
 export function buildCharacterCard(
-  bot: Pick<
-    BotProfile,
-    'name' | 'title' | 'scope' | 'avatar' | 'tools' | 'approvalMode' | 'memory'
-  >,
+  bot: Pick<BotProfile, 'name' | 'title' | 'scope' | 'avatar' | 'tools' | 'approvalMode'>,
   persona: string
 ) {
   return {
@@ -65,7 +61,6 @@ export function buildCharacterCard(
           color: bot.avatar.color,
           tools: bot.tools,
           approvalMode: bot.approvalMode,
-          memory: bot.memory.enabled,
         },
       },
     },
@@ -83,7 +78,6 @@ function ensoFields(ext: Record<string, unknown>): Partial<CharacterCardDraft> {
     ...(APPROVAL_MODES.includes(ext.approvalMode as ApprovalMode)
       ? { approvalMode: ext.approvalMode as ApprovalMode }
       : {}),
-    ...(typeof ext.memory === 'boolean' ? { memoryEnabled: ext.memory } : {}),
   };
 }
 

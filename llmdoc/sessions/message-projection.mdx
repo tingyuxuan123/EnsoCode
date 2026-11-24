@@ -1,0 +1,19 @@
+---
+description: 桌面会话正文的权威与投影边界；冷会话历史恢复、乐观回显和越界消息为何需要快照补回。
+kind: architecture
+code:
+  paths:
+    - src/renderer/stores/sessions/index.ts
+    - src/renderer/stores/sessions/messageCache.ts
+    - src/renderer/stores/sessions/reducer.ts
+---
+
+# 会话正文与历史恢复
+
+- **权威源是 worker / JSONL，桌面正文只是可丢弃投影。** 本地状态只持久化会话元数据，不持久化一份正文副本；补回正文要走快照或已有的历史读取路径。
+- **乐观回显不证明已有权威正文。** 只有用户刚发出的本地消息时，冷会话仍需补水。不能用消息数组非空替代权威判定，否则用户的一条新消息就能挡住整段历史恢复。任何不会真正发给 worker 的发送都要在乐观回显前拒绝。
+- **丢弃越界消息要有恢复路径。** reducer 以事件序号防止回退，按索引替换整条消息。索引无法适配当前投影时，丢弃正文以避免空洞；store 识别脱节并请求快照。被丢弃的正文不算可见输出，不能延长无输出计时。
+
+排查「刷新后只剩我刚发的一句话」时，先区分 renderer 是否只有乐观回显、worker / JSONL 是否仍有权威正文，再检查快照是否被请求；不要从时间线直接断定 worker 卡死。
+
+详见仓库中的状态管理规范 `docs/engineering-reference/renderer/state.md` 和冷会话回显踩坑记录 `docs/engineering-reference/big-question/optimistic-echo-blocks-snapshot.md`。

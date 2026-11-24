@@ -46,7 +46,7 @@ export function isVirtualPiModel(model: { api?: string } | undefined): boolean {
   return model?.api === 'pi-virtual';
 }
 
-/** 不走路由的直接调用（压缩摘要、记忆提炼）要的真实模型：快模型优先。 */
+/** 不走路由的直接调用（如压缩摘要）要的真实模型：快模型优先。 */
 export function directModelFor<T extends { api?: string; id?: string }>(model: T): T | Model<Api> {
   if (!isVirtualPiModel(model)) return model;
   const members = model.id ? registry.get(model.id) : undefined;

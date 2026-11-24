@@ -1068,6 +1068,67 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     }
   });
 
+  it('resumes old history without leaking the internal closeout or hiding real answers at the same timestamp', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'enso-legacy-review-'));
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: root,
+      sessionDir: root,
+    });
+    const question = { role: 'user', content: 'Question', timestamp: 1 };
+    const answer = { role: 'assistant', content: 'Real answer', timestamp: 2 };
+    const internal = { role: 'assistant', content: 'Internal closeout', timestamp: 2 };
+    const next = { role: 'user', content: 'Next question', timestamp: 3 };
+    const marker = {
+      type: 'custom_message',
+      customType: 'codekiln.project-memory-review',
+      content: 'Old internal instruction',
+      display: false,
+    };
+    const entry = (id: string, message: unknown) => ({ type: 'message', id, message });
+    const branch = [
+      entry('u1', question),
+      entry('a1', answer),
+      marker,
+      entry('a2', internal),
+      entry('u2', next),
+    ];
+    mocks.createAgentSession.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      vi.mocked(mocks.managers[0]?.getBranch as () => unknown[]).mockReturnValue(branch);
+      return {
+        session: {
+          ...session(options),
+          messages: [question, answer, { ...marker, role: 'custom' }, internal, next],
+        },
+      };
+    });
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: root,
+        model,
+        resumeFile: path.join(root, 'legacy.jsonl'),
+      });
+      await waitFor(events, 'parent-ready');
+      const snapshot = events.find((event) => event.type === 'snapshot');
+      expect(snapshot?.sessions[0]?.messages.map((message) => message.content[0])).toEqual([
+        { type: 'text', text: 'Question' },
+        { type: 'text', text: 'Real answer' },
+        { type: 'text', text: 'Next question' },
+      ]);
+      expect(snapshot?.sessions[0]?.messages.map((message) => message.entryId)).toEqual([
+        'u1',
+        undefined,
+        'u2',
+      ]);
+    } finally {
+      await supervisor.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('hot loadout registers initially disabled tools; idle switches preserve MCP and spawn-only tools', async () => {
     const events: AgentWorkerEvent[] = [];
     const supervisor = new SessionSupervisor({
@@ -1084,7 +1145,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       identity: parent,
       cwd: '/workspace',
       model,
-      disabledTools: ['browser', 'computer', 'memory', 'plan', 'subagent', 'code_search'],
+      disabledTools: ['browser', 'computer', 'plan', 'subagent', 'code_search'],
     });
     await waitFor(events, 'parent-ready');
     const current = mocks.sessions[0] as ReturnType<typeof session>;
@@ -1094,7 +1155,6 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       expect.arrayContaining([
         'browser_navigate',
         'computer',
-        'memory_search',
         'submit_plan',
         'subagent',
         'code_search',
@@ -1108,7 +1168,6 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       expect.arrayContaining([
         'browser_navigate',
         'computer',
-        'memory_search',
         'submit_plan',
         'subagent',
         'workflow',
@@ -1138,12 +1197,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
       browser.execute('nested', { url: 'https://example.test' }, undefined, undefined, {} as never)
     ).rejects.toThrow(/disabled/i);
     expect(
-      events.some(
-        (event) =>
-          event.type === 'browser-invoke' ||
-          event.type === 'computer-invoke' ||
-          event.type === 'memory-invoke'
-      )
+      events.some((event) => event.type === 'browser-invoke' || event.type === 'computer-invoke')
     ).toBe(false);
     await supervisor.shutdown();
   });
@@ -1311,13 +1365,7 @@ describe('SessionSupervisor deterministic child lifecycle', () => {
     const childSession = mocks.sessions[1] as ReturnType<typeof session>;
     const childTools = childSession.getActiveToolNames();
     expect(childTools).not.toEqual(
-      expect.arrayContaining([
-        'bash',
-        'apply_patch',
-        'subagent',
-        'browser_snapshot',
-        'memory_search',
-      ])
+      expect.arrayContaining(['bash', 'apply_patch', 'subagent', 'browser_snapshot'])
     );
     expect(events.find((event) => event.type === 'child-ready')).toMatchObject({
       proof: {

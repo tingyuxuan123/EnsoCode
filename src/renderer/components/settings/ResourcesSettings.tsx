@@ -45,8 +45,8 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { formatBytes } from '@/lib/formatBytes';
 import { cn } from '@/lib/utils';
-import { formatBytes } from './MemorySettings';
 
 type Tab = 'cpu' | 'memory' | 'storage';
 type Metric = 'cpu' | 'memory';
@@ -69,14 +69,14 @@ const CATEGORY_LABELS: Record<StorageCategoryId, [string, string]> = {
     'Tool outputs',
     'Saved long tool outputs; only those of deleted conversations are cleaned.',
   ],
-  memory: ['Memory', 'Memory vaults and rebuildable search index.'],
+  memory: ['Legacy memory files', 'Files kept from the discontinued built-in memory feature.'],
   models: ['Local models', 'Downloaded local chat and speech models.'],
   runtimes: ['Runtimes', 'Bundled tools, speech runtime and GPU backends.'],
   worktrees: ['Worktrees', 'Isolated worktrees created for conversations.'],
   snapshots: ['Change snapshots', 'Baselines for the Changes panel.'],
   browser: ['Browser data', 'Cookies, storage and cache of the built-in browser.'],
   cache: ['Cache', 'Rebuildable caches; cleaning is safe.'],
-  logs: ['Logs', 'Task and memory logs; files written in the last 24 hours are kept.'],
+  logs: ['Logs', 'App logs; files written in the last 24 hours are kept.'],
   backups: ['Backups', 'Configuration backup files; files from the last 24 hours are kept.'],
   config: ['Configuration', 'Settings, instructions, prompts and credentials.'],
   other: ['Other', 'Chromium profile data and other files.'],

@@ -3,7 +3,6 @@ import {
   BarChart3,
   Bot,
   BotMessageSquare,
-  Brain,
   FileText,
   FlaskConical,
   Gauge,
@@ -38,9 +37,6 @@ import { GeneralSettings } from './GeneralSettings';
 import { InstructionsSettings } from './InstructionsSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { McpSettings } from './McpSettings';
-import { MemoryKnowledge } from './MemoryKnowledge';
-import { MemoryLibrary } from './MemoryLibrary';
-import { MemorySettings } from './MemorySettings';
 import { PluginsSettings } from './PluginsSettings';
 import { PresetsSettings } from './PresetsSettings';
 import { ProvidersSettings } from './ProvidersSettings';
@@ -68,8 +64,6 @@ export function SettingsContent() {
   const { t } = useI18n();
   const [activeCategory, setActiveCategory] = React.useState<SettingsCategory>('general');
   const [flashRowId, setFlashRowId] = React.useState<string | null>(null);
-  // 提炼写入记忆后让记忆库重新拉数据（两个组件各自持有列表）
-  const [memoryRevision, setMemoryRevision] = React.useState(0);
   const disabledBuiltinTools = useSettingsStore((state) => state.disabledBuiltinTools);
   const botModeEnabled = useSettingsStore((state) => state.botModeEnabled);
   // 水合前 botModeEnabled 恒为 false：此时不据此把指向 Bot 页的深链改落到实验页
@@ -113,7 +107,6 @@ export function SettingsContent() {
     { id: 'agents', icon: Bot, label: t('Agent types') },
     { id: 'tools', icon: Wrench, label: t('Built-in tools') },
     { id: 'workflows', icon: Workflow, label: t('Workflows') },
-    { id: 'memory', icon: Brain, label: t('Memory') },
     { id: 'skills', icon: Sparkles, label: t('Skills') },
     { id: 'plugins', icon: Puzzle, label: t('Claude Code plugins') },
     { id: 'mcp', icon: Plug, label: t('MCP Servers') },
@@ -128,7 +121,7 @@ export function SettingsContent() {
   ];
   const categories = visibleCategories(allCategories, disabledBuiltinTools, botModeEnabled);
 
-  // 关掉 memory 工具时当前页会消失（deeplink 也可能指向未启用的功能），落到能重新打开它的地方
+  // 当前页随功能开关隐藏时，落到能重新启用该功能的地方。
   const resolvedCategory = resolveActiveCategory(
     activeCategory,
     disabledBuiltinTools,
@@ -183,13 +176,6 @@ export function SettingsContent() {
         {activeCategory === 'agents' && <AgentTypesSettings />}
         {activeCategory === 'workflows' && <WorkflowsSettings />}
         {activeCategory === 'tools' && <BuiltinToolsSettings />}
-        {activeCategory === 'memory' && (
-          <div className="space-y-8">
-            <MemorySettings onLibraryChanged={() => setMemoryRevision((n) => n + 1)} />
-            <MemoryKnowledge revision={memoryRevision} />
-            <MemoryLibrary revision={memoryRevision} />
-          </div>
-        )}
         {activeCategory === 'phone' && <DevicesSettings />}
         {activeCategory === 'ssh' && <SshSettings />}
         {activeCategory === 'usage' && <UsageSettings />}

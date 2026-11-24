@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createDelegationTools, normalizeDelegationParams } from './delegation';
-import { MemoryInvoker } from './memory';
+import { DelegationInvoker } from './delegationInvoker';
 
 it('normalizes optional nulls and boolean text before full typed schema validation', () => {
   expect(normalizeDelegationParams({ id: null, cancel: 'false' })).toEqual({ cancel: false });
@@ -42,7 +42,7 @@ it('normalizes optional nulls and boolean text before full typed schema validati
     task: 't',
   });
   const tools = createDelegationTools(
-    new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {})
+    new DelegationInvoker({ sessionId: 's', generation: 'g' }, () => {})
   );
   expect(tools.map((tool) => tool.name)).toEqual(['delegate', 'check_delegation']);
   expect(Object.keys((tools[0].parameters as { properties: object }).properties)).toEqual([
@@ -67,7 +67,7 @@ it('normalizes optional nulls and boolean text before full typed schema validati
 
 it('describes auto-created board tasks only for group sessions', () => {
   const describe = (groupTasks: boolean) =>
-    createDelegationTools(new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {}), {
+    createDelegationTools(new DelegationInvoker({ sessionId: 's', generation: 'g' }, () => {}), {
       groupTasks,
     }).find((tool) => tool.name === 'delegate')?.description ?? '';
   expect(describe(true)).toContain('Without taskId, a new board task is created');
@@ -81,13 +81,13 @@ it('describes auto-created board tasks only for group sessions', () => {
 
 it('report_blocked 只挂在看板任务的委派会话，schema 带完整类型，waitFor: null 归一化掉', () => {
   const names = (delegationTask: boolean) =>
-    createDelegationTools(new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {}), {
+    createDelegationTools(new DelegationInvoker({ sessionId: 's', generation: 'g' }, () => {}), {
       delegationTask,
     }).map((tool) => tool.name);
   expect(names(false)).not.toContain('report_blocked');
   expect(names(true)).toContain('report_blocked');
   const tool = createDelegationTools(
-    new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {}),
+    new DelegationInvoker({ sessionId: 's', generation: 'g' }, () => {}),
     { delegationTask: true }
   ).find((item) => item.name === 'report_blocked')!;
   expect(tool.parameters).toMatchObject({

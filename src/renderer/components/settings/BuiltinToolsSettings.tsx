@@ -10,7 +10,6 @@ import {
 } from '@shared/webSearchChain';
 import {
   Box,
-  Brain,
   ClipboardList,
   FilePenLine,
   FoldVertical,
@@ -81,7 +80,6 @@ const TOOL_ICON: Record<string, LucideIcon> = {
   code_search: Search,
   image_generation: ImagePlus,
   background_tasks: SquareTerminal,
-  memory: Brain,
   isolated_sandbox: Box,
   computer: Monitor,
 };

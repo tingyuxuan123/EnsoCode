@@ -74,8 +74,7 @@ import {
   suggestGoal,
   suggestPersona,
 } from '../services/bots/abilitySuggester';
-import { BotMemoryService } from '../services/bots/botMemory';
-import { BotNotesService, BotNotesStore, type BotNotesTarget } from '../services/bots/botNotes';
+import { BotNotesStore, type BotNotesTarget } from '../services/bots/botNotes';
 import {
   BOT_READONLY_DISABLED_TOOLS,
   mergeBotInstruction,
@@ -104,7 +103,6 @@ import { BotInboxStore } from '../services/bots/inboxStore';
 import { mediaFile, ScreenshotCache, sendImage, storeMedia } from '../services/bots/media';
 import { compressImage } from '../services/bots/mediaImage';
 import { createMemberTaskClassifier } from '../services/bots/memberTaskClassifier';
-import { removeBotMemorySpace } from '../services/bots/memoryCleanup';
 import {
   briefErrorReason,
   createModelProbe,
@@ -182,8 +180,7 @@ interface BotServices {
   chats: BotChatStore;
   host: BotSessionHost;
   groups: GroupChatService;
-  memory: BotMemoryService;
-  notes: BotNotesService;
+  notes: BotNotesStore;
   delegations: DelegationService;
   routines: BotRoutineStore;
   routineRuns: BotRoutineRunLog;
@@ -431,13 +428,7 @@ export function getBotServices(): BotServices | null {
   const botsRoot = path.join(userData, 'bots');
   const bots = new BotStore(botsRoot);
   const chats = new BotChatStore(path.join(userData, 'bot-chats'));
-  const notes = new BotNotesService({
-    store: new BotNotesStore({ bots: botsRoot, chats: path.join(userData, 'bot-chats') }),
-    complete: assistantCompleter(4096),
-    enabled: (botId) => bots.get(botId)?.memory.enabled === true,
-    recent: recentDistilled,
-    onChange: (target) => emitBotEvent(notesEvent(target)),
-  });
+  const notes = new BotNotesStore({ bots: botsRoot, chats: path.join(userData, 'bot-chats') });
   const usage = new BotUsageService({
     bots,
     conversations: () => authority.botConversations(),
@@ -520,7 +511,6 @@ export function getBotServices(): BotServices | null {
     runtime: createRuntime(botsRoot),
     maxRunningTurns: normalizeBotMaxRunningTurns(readSettingsState()?.botMaxRunningTurns),
     emit: emitBotEvent,
-    notes,
     budget: usage,
     classifyMemberTask: createMemberTaskClassifier(routingDeps),
     probe: (bot) => probe(bot.engine),
@@ -759,21 +749,6 @@ export function getBotServices(): BotServices | null {
     if (event.type === 'status' && event.status === 'running')
       delegations.observeRunning(event.identity.sessionId);
   });
-  const memory = new BotMemoryService({
-    bots,
-    chats,
-    watermarksFile: path.join(userData, 'bot-chats', 'memory-watermarks.json'),
-    isCodeProject: (id) => {
-      const project = authority.project(id);
-      return project?.state === 'active' && project.kind !== 'bot-home';
-    },
-    schedule: async (payload) =>
-      (await import('../services/memoryHost')).scheduleMemoryDistill(payload),
-    onDistilled: (input) => void notes.afterDistill(input),
-  });
-  host.onDiscard((scope) => {
-    if (scope.conversationId) memory.remove(scope.conversationId);
-  });
   setBotGroupSender((chat, text, options, refs, media) =>
     groups.send(chat.id, text, options, refs, media)
   );
@@ -795,7 +770,6 @@ export function getBotServices(): BotServices | null {
     chats,
     host,
     groups,
-    memory,
     notes,
     delegations,
     routines,
@@ -838,7 +812,6 @@ export function syncBotModeServices(): void {
     previous.delegations.disable();
     previous.host.dispose();
     previous.runner.dispose();
-    previous.memory.dispose();
     previous.snooze.dispose();
     previous.stopTitler();
     setBotWorkerEventObserver(null);
@@ -964,7 +937,7 @@ export async function newBotSession(
   request: unknown,
   confirmed = true
 ): Promise<BotNewSessionResult | { ok: false; needsConfirmation: true }> {
-  const { chats, host, memory } = services;
+  const { chats, host } = services;
   const chatId = chatIdOf(request);
   const chat = chatId ? chats.get(chatId) : undefined;
   if (!chat) return INVALID;
@@ -978,15 +951,12 @@ export async function newBotSession(
     if (chat.kind === 'group') return await startGroupConversation(services, chat);
     const old = chat.sessions[chat.members[0]];
     if (old) await host.stopTurn(chat.id, chat.members[0]);
-    const conversation = old && getSourceAuthorityRegistry()?.conversation(old.conversationId);
-    if (conversation) await memory.distill(conversation);
     return host.ensureSession(chat.id, chat.members[0], { fresh: true });
   } finally {
     resettingChats.delete(chat.id);
   }
 }
 
-/** 私聊切回旧对话：先停当前回合并提炼当前会话记忆，再重新打开目标会话；回复中由桌面先确认 */
 /** 群新话题（桌面与手机共用）：当前话题还没人说话时直接复用，不堆空话题 */
 export function createBotThread({ chats }: BotServices, request: unknown): BotChatWriteResult {
   const chatId = parseThreadChatInput(request);
@@ -1017,7 +987,7 @@ export function selectBotThread({ chats }: BotServices, request: unknown): BotAc
 }
 
 async function switchBotSession(services: BotServices, request: unknown): Promise<BotActionResult> {
-  const { chats, host, memory } = services;
+  const { chats, host } = services;
   const input = parseSessionSwitchInput(request);
   const chat = input ? chats.get(input.chatId) : undefined;
   if (!input || chat?.kind !== 'direct') return INVALID;
@@ -1030,8 +1000,6 @@ async function switchBotSession(services: BotServices, request: unknown): Promis
     const old = chat.sessions[botId];
     if (old?.conversationId === input.conversationId) return { ok: true };
     if (old) await host.stopTurn(chat.id, botId);
-    const conversation = old && getSourceAuthorityRegistry()?.conversation(old.conversationId);
-    if (conversation) await memory.distill(conversation);
     return host.switchSession(chat.id, botId, input.conversationId);
   } finally {
     resettingChats.delete(chat.id);
@@ -1117,12 +1085,6 @@ function skillEntries(value: unknown): SkillEntry[] {
       typeof item.path === 'string' &&
       item.path.length > 0
   );
-}
-
-/** since 之后整理写入某空间的结论（核心笔记重写的输入） */
-async function recentDistilled(spaceId: string, since: number): Promise<string[]> {
-  const { getRecentCompiledNotes } = await import('../services/memoryHost');
-  return getRecentCompiledNotes(spaceId, since);
 }
 
 /** 笔记归属必须存在；群笔记只给群聊 */
@@ -1288,11 +1250,6 @@ export async function rewindBotChat(
   );
   if (!result.ok) return result;
   services.delegations.discardRewound(conversationId, entry.userAt);
-  services.memory.rewind(
-    conversationId,
-    branch.map((item) => item.id),
-    entry.id
-  );
   emitBotEvent({ kind: 'chat', chatId: target.chatId });
   return { ok: true };
 }
@@ -1721,14 +1678,14 @@ export function registerBotHandlers(): void {
     if (!target || !notesOwnerExists(services, target)) return INVALID;
     return {
       ok: true,
-      notes: { ...services.notes.store.read(target), maxChars: BOT_NOTES_MAX_CHARS },
+      notes: { ...services.notes.read(target), maxChars: BOT_NOTES_MAX_CHARS },
     };
   });
 
   handle(IPC_CHANNELS.BOT_NOTES_SAVE, 'write', (_sender, request, services): BotNotesResult => {
     const input = parseNotesSaveInput(request);
     if (!input || !notesOwnerExists(services, input.target)) return INVALID;
-    const saved = services.notes.store.write(input.target, input.content, input.version);
+    const saved = services.notes.write(input.target, input.content, input.version);
     if (!saved.ok) return { ok: false, error: saved.error };
     emitBotEvent(notesEvent(input.target));
     return { ok: true, notes: { ...saved.notes, maxChars: BOT_NOTES_MAX_CHARS } };
@@ -1826,7 +1783,6 @@ export function registerBotHandlers(): void {
         }
       }
       const result = host.discardBot(botId);
-      if (result.ok) await removeBotMemorySpace(app.getPath('userData'), `bot:${botId}`);
       return result.ok
         ? result
         : {
@@ -1944,7 +1900,6 @@ export function registerBotHandlers(): void {
         removePastedTextFiles(sessionDir(), botChatPasteOwner(thread.id));
       tasks.forget(chatId);
       await browserHost.closeSession(botBrowserKey(chatId));
-      await removeBotMemorySpace(app.getPath('userData'), `chat:${chatId}`);
       return { ok: true };
     }
   );

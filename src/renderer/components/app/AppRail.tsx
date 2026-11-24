@@ -10,7 +10,6 @@ import {
   DesignGalleryIcon,
   ImageStudioIcon,
   SettingsGearIcon,
-  WikiWorkspaceIcon,
 } from './NavIcons';
 import { RailTip } from './RailTip';
 import { StatusBar } from './StatusBar';
@@ -30,8 +29,6 @@ interface AppRailProps {
   /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
   designGallery?: { label: string; active: boolean; onToggle(): void };
   imageStudio?: { active: boolean; onToggle(): void };
-  /** Wiki 笔记文件管理器入口（随内置 memory 开关显隐） */
-  wikiWorkspace?: { active: boolean; updated?: boolean; onToggle(): void };
   /** 本机全局看板，独立于当前 Code / Bot 聊天。 */
   collaborationBoard?: { active: boolean; attention?: number; onToggle(): void };
 }
@@ -53,7 +50,6 @@ export function AppRail({
   codeWorkspace,
   designGallery,
   imageStudio,
-  wikiWorkspace,
   collaborationBoard,
 }: AppRailProps) {
   const { t } = useI18n();
@@ -140,27 +136,6 @@ export function AppRail({
             aria-pressed={designGallery.active}
           >
             <DesignGalleryIcon className="size-[19px]" active={designGallery.active} />
-          </button>
-        </RailTip>
-      )}
-      {wikiWorkspace && (
-        <RailTip label={t('Wiki')}>
-          <button
-            type="button"
-            onClick={wikiWorkspace.onToggle}
-            className={cn(RAIL_BUTTON, wikiWorkspace.active && RAIL_SELECTED)}
-            aria-label={t('Wiki')}
-            data-rail-view="wiki"
-            aria-pressed={wikiWorkspace.active}
-          >
-            <WikiWorkspaceIcon className="size-[19px]" active={wikiWorkspace.active} />
-            {wikiWorkspace.updated && !wikiWorkspace.active && (
-              <span
-                aria-hidden
-                data-wiki-updated=""
-                className="pointer-events-none absolute top-1.5 right-1.5 size-1.5 rounded-full bg-brand"
-              />
-            )}
           </button>
         </RailTip>
       )}

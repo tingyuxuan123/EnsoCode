@@ -23,7 +23,6 @@ import {
   BOT_TURN_LIMIT_ERROR,
   type BotBudgetVerdict,
 } from '../../../shared/usage/botUsage';
-import type { BotNotesSnapshot } from './botNotes';
 import { buildBotModeInstruction, buildBotSystemPrompt } from './botPrompt';
 import type { BotStore } from './botStore';
 import type { BotChatStore } from './chatStore';
@@ -123,8 +122,6 @@ export interface BotSessionHostDeps {
     /** 一条 assistant 消息结束：计入今日账本 */
     record?(botId: string, conversationId: string, index: number, message: ProjectedMessage): void;
   };
-  /** 核心笔记：成员 memory 关闭时返回 undefined */
-  notes?: { snapshot(botId: string, chatId: string | null): BotNotesSnapshot | undefined };
   /**
    * 投递前实测完整模型链；回退配置只用于本次投递，不修改成员档案。
    * 成员与默认均不可用才拒绝，error 为可读原因。
@@ -252,11 +249,10 @@ export class BotSessionHost {
   /** 会话最近一次上报的上下文占用，估算流式中未报 input 的消息 */
   private readonly contextTokens = new Map<string, number>();
   /** 会话已看到的笔记版本（spawn 时进系统提示词，之后变化在投递前追加一次） */
-  private readonly notesSeen = new Map<string, string>();
   private readonly modelNotices = new Map<string, string>();
   private readonly deliveries = new Map<string, Map<string, 'sent' | 'started'>>();
   /** 入 IPC 不等于已消费；保留原投递与顺序，直到 worker 回执或会话终止。 */
-  private readonly pendingSteers = new Map<Delivery, string | undefined>();
+  private readonly pendingSteers = new Set<Delivery>();
   private readonly redirects = new Map<
     Delivery,
     {
@@ -1149,8 +1145,6 @@ export class BotSessionHost {
           (item) => item.conversationId === id && item.deliveryId === event.deliveryId
         );
         if (!delivery) return;
-        const seen = this.pendingSteers.get(delivery);
-        if (event.type === 'delivery-settled' && seen !== undefined) this.notesSeen.set(id, seen);
         if (this.settleRedirect(delivery, event.type === 'delivery-settled')) {
           if (event.type === 'delivery-settled')
             this.rememberDelivery(id, event.deliveryId, 'started');
@@ -1159,7 +1153,6 @@ export class BotSessionHost {
         }
         this.pendingSteers.delete(delivery);
         if (event.type === 'delivery-settled') {
-          if (seen !== undefined) this.notesSeen.set(id, seen);
           this.deliverySent(delivery, true);
           this.rememberDelivery(id, event.deliveryId, 'started');
           for (const listener of this.startedListeners)
@@ -1382,28 +1375,6 @@ export class BotSessionHost {
     this.watchdog = undefined;
   }
 
-  private notesFor(conversationId: string, botId: string): BotNotesSnapshot | undefined {
-    if (!this.deps.notes) return undefined;
-    const chatId = this.deps.authority.conversation(conversationId)?.bot?.chatId;
-    // 群话题共用根群的群笔记
-    const chat = chatId ? this.deps.chats.rootOf(chatId) : undefined;
-    return this.deps.notes.snapshot(botId, chat?.kind === 'group' ? chat.id : null);
-  }
-
-  /** 运行中会话的笔记变了：在本次投递前追加一次 <notes-updated> */
-  private withNotesUpdate(
-    delivery: Delivery,
-    text = delivery.text
-  ): { text: string; seen?: string } {
-    const snap = this.notesFor(delivery.conversationId, delivery.botId);
-    if (!snap || snap.version === (this.notesSeen.get(delivery.conversationId) ?? ''))
-      return { text };
-    return {
-      text: snap.update ? `${snap.update}\n\n${text}` : text,
-      seen: snap.version,
-    };
-  }
-
   private steer(delivery: Delivery): BotDeliverResult {
     if (this.disposed) return { ok: false, error: 'disabled' };
     if (
@@ -1411,18 +1382,16 @@ export class BotSessionHost {
       delivery.epoch !== (this.epochs.get(delivery.conversationId) ?? 0)
     )
       return { ok: false, error: 'canceled' };
-    const notes = this.withNotesUpdate(
-      delivery,
+    const text =
       delivery.source === 'human'
         ? wrapInterjection(delivery.text, this.deps.language?.() ?? 'zh')
-        : delivery.text
-    );
+        : delivery.text;
     delivery.deliveryId ??= randomUUID();
-    this.pendingSteers.set(delivery, notes.seen);
+    this.pendingSteers.add(delivery);
     this.rememberDelivery(delivery.conversationId, delivery.deliveryId, 'sent');
     const sent = this.deps.runtime.steer(
       delivery.conversationId,
-      notes.text,
+      text,
       delivery.images,
       delivery.deliveryId
     );
@@ -1492,15 +1461,13 @@ export class BotSessionHost {
       else if (probed.model) bot = { ...bot, engine: { ...bot.engine, ...probed.model } };
       if (fallback || probed.model) selected = bot;
     }
-    let notes: { text: string; seen?: string } = { text: delivery.text };
     if (!this.live.has(conversationId)) {
-      const spawned = await this.spawnLive(delivery, bot, selected);
+      const spawned = await this.spawnLive(delivery, selected);
       if (spawned) return fail(spawned);
     }
     // spawn 也会等待凭证和 worker；等待期间保存的权限变更必须先于首条 prompt。
     const error = await this.syncEngine(conversationId, selected);
     if (error) return fail(error);
-    notes = this.withNotesUpdate(delivery);
     if (
       this.stopping.has(conversationId) ||
       delivery.epoch !== (this.epochs.get(conversationId) ?? 0)
@@ -1515,14 +1482,13 @@ export class BotSessionHost {
     }
     const sent = this.deps.runtime.prompt(
       conversationId,
-      notes.text,
+      delivery.text,
       delivery.images,
       delivery.deliveryId
     );
     if (!sent.ok) return fail(sent.error ?? 'prompt-failed');
     this.modelNotice(delivery, bot, fallback);
     this.retryTasks.set(conversationId, this.tasks.get(conversationId) ?? '');
-    if (notes.seen !== undefined) this.notesSeen.set(conversationId, notes.seen);
     this.deliverySent(delivery);
     return { ok: true, conversationId };
   }
@@ -1576,11 +1542,7 @@ export class BotSessionHost {
   }
 
   /** spawn（带 resumeFile 恢复）并登记为 live；失败返回错误码 */
-  private async spawnLive(
-    delivery: Delivery,
-    bot: BotProfile,
-    effective?: BotProfile
-  ): Promise<string | undefined> {
+  private async spawnLive(delivery: Delivery, effective?: BotProfile): Promise<string | undefined> {
     const { conversationId } = delivery;
     const spec = this.spawnSpec(delivery);
     if (!spec.ok) return spec.error;
@@ -1591,12 +1553,6 @@ export class BotSessionHost {
         ...spec.spec,
         writeLock: { label: spec.spec.bot.name, ancestors: this.ancestors(conversationId) },
       };
-    const snap = this.notesFor(conversationId, bot.id);
-    if (snap?.section)
-      spec.spec = {
-        ...spec.spec,
-        systemPrompt: `${spec.spec.systemPrompt}\n\n${snap.section}`,
-      };
     const spawned = await this.deps.runtime.spawn(spec.spec);
     if (!spawned.ok) return spawned.error ?? 'spawn-failed';
     if (this.disposed || this.deps.authority.conversation(conversationId)?.lifecycle === 'ended') {
@@ -1605,7 +1561,6 @@ export class BotSessionHost {
     }
     this.liveProfiles.set(conversationId, spec.spec.bot);
     this.live.add(conversationId);
-    this.notesSeen.set(conversationId, snap?.version ?? '');
     return undefined;
   }
 
@@ -1636,7 +1591,7 @@ export class BotSessionHost {
     if (!bot) return { ok: false, error: 'session-unavailable' };
     if (!restore) return delivery;
     if (!this.live.has(conversationId)) {
-      const failed = await this.spawnLive(delivery, bot);
+      const failed = await this.spawnLive(delivery);
       if (failed) return { ok: false, error: failed };
     }
     const error = await this.syncEngine(conversationId);

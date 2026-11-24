@@ -8,8 +8,7 @@ import {
   sendImageItems,
 } from '@shared/bots/sendImage';
 import { type ApprovalGate, throwUnlessAllowed } from '../approval';
-import type { DelegationOp } from './delegation';
-import type { MemoryInvoker } from './memory';
+import type { DelegationInvoker } from './delegationInvoker';
 
 const PATH_ALIASES = [
   'file',
@@ -128,7 +127,7 @@ const errorResult = (text: string) => ({
 });
 
 export function createSendImageTool(
-  invoker: MemoryInvoker<DelegationOp>,
+  invoker: DelegationInvoker,
   cwd: string,
   confirmOutside: ConfirmOutsideImage
 ): ToolDefinition {

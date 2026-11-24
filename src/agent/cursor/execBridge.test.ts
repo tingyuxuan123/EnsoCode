@@ -11,26 +11,6 @@ function fakeTool(name: string, impl: CursorBridgeTool['execute']): CursorBridge
 }
 
 describe('dispatchCursorExec', () => {
-  it('blocks provider-native execution frames during a memory-only closeout', async () => {
-    const calls: string[] = [];
-    let allowed = false;
-    const bridge = createCursorSessionBridge({
-      cwd: '/test',
-      allowNativeExec: () => allowed,
-      tools: [
-        fakeTool('bash', async () => {
-          calls.push('run');
-          return { content: [] };
-        }),
-      ],
-    });
-    const frame = { type: 'shell' as const, command: 'echo test' };
-    expect((await bridge.dispatch(frame)).isError).toBe(true);
-    expect(calls).toEqual([]);
-    allowed = true;
-    expect((await bridge.dispatch(frame)).isError).toBe(false);
-    expect(calls).toEqual(['run']);
-  });
   it('read 帧调用本地 read，回写结果并发出 toolCall/toolResult', async () => {
     const invoked: unknown[] = [];
     const tools = new Map<string, CursorBridgeTool>([

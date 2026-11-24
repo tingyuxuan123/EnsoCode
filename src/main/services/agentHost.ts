@@ -40,7 +40,6 @@ import { presetOverlay } from '@shared/extensionPlugins/preset';
 import { PLUGIN_INJECT_MAX_CHARS } from '@shared/extensionPlugins/protocol';
 import { normalizeMaxActiveCoworkers } from '@shared/maxActiveCoworkers';
 import { mcpTimeoutsForSpawn } from '@shared/mcpTimeout';
-import { resolveMemoryLanguage } from '@shared/memory/constants';
 import { pickModelCapabilityOverrides } from '@shared/modelCatalog';
 import { materializeProviders } from '@shared/modelDirectory';
 import { eligibleOauthPoolAccountKeys, isOauthAccountPool } from '@shared/oauthAccountPool';
@@ -131,7 +130,6 @@ import { resolveGlobalInstruction } from './instructionStore';
 import { refreshMcpOAuthAccess } from './mcpOAuthRefresh';
 import { getMcpOAuthStore } from './mcpOAuthStore';
 import { getMcpToolCatalog } from './mcpToolCatalog';
-import { memoryStartupBlock } from './memory/startupRegistry';
 import { getModelDirectorySnapshot, onModelDirectoryChanged } from './modelDirectory';
 import { nativePluginResources } from './nativePluginResources';
 import { OAUTH_POOL_EXHAUSTED } from './oauthAccountPool';
@@ -1075,8 +1073,6 @@ export function spawnSession(
     return { ok: false, error: '自定义系统提示词正文读取失败，请重新保存或恢复默认。' };
   }
   const promptKit = mergePresetPromptKit(ownKit, pluginPreset);
-  // Bot 会话与远程会话各有自己的记忆通道，这里只给本机项目会话追加。
-  const memoryBlock = !bot && !remote ? memoryStartupBlock({ projectId, cwd: request.cwd }) : null;
   const instruction = bot
     ? bot.instruction
     : pluginPresetInstruction(pluginPreset?.instruction, () =>
@@ -1152,8 +1148,6 @@ export function spawnSession(
     ? smartCompactSummary.selection.config
     : undefined;
   const smartCompactMode = parseSmartCompactMode(state?.smartCompactMode) ?? undefined;
-  // 记忆存储语言下发给 worker：memory_search 的描述据此告诉模型该用哪种语言查
-  const memoryLanguage = resolveMemoryLanguage(state?.memoryLanguage);
   const presetApplied = applyPluginPresetOverrides({
     model: resolved.selection.config,
     thinkingLevel: request.thinkingLevel,
@@ -1199,7 +1193,6 @@ export function spawnSession(
     ...(smartCompactEnabled ? { smartCompactEnabled: true } : {}),
     ...(smartCompactSummaryModel ? { smartCompactSummaryModel } : {}),
     ...(smartCompactMode ? { smartCompactMode } : {}),
-    memoryLanguage,
     ...(skillPaths.length > 0 ? { skillPaths } : {}),
     ...(mcpServers.length > 0 ? { mcpServers } : {}),
     ...(plugins.commands.length > 0 ? { pluginCommands: plugins.commands } : {}),
@@ -1219,13 +1212,7 @@ export function spawnSession(
     ...(remote ? { remote } : {}),
     ...(options?.rolePrompt ? { rolePrompt: options.rolePrompt } : {}),
     ...(promptKit.systemPrompt ? { systemPrompt: promptKit.systemPrompt } : {}),
-    ...(promptKit.systemPromptAppend || memoryBlock
-      ? {
-          systemPromptAppend: [promptKit.systemPromptAppend, memoryBlock]
-            .filter(Boolean)
-            .join('\n\n'),
-        }
-      : {}),
+    ...(promptKit.systemPromptAppend ? { systemPromptAppend: promptKit.systemPromptAppend } : {}),
     ...(promptKit.systemPromptBoost ? { systemPromptBoost: promptKit.systemPromptBoost } : {}),
     ...(promptKit.refusalRetryPrompt ? { refusalRetryPrompt: promptKit.refusalRetryPrompt } : {}),
     ...(options?.bot ? { botMode: true } : {}),
@@ -1234,20 +1221,10 @@ export function spawnSession(
     ...(options?.bot?.delegationTask ? { botDelegationTask: true } : {}),
     ...(options?.bot?.writeLock ? { botWriteLock: options.bot.writeLock } : {}),
     ...(options?.bot || state?.protectedActionsInCode === true ? { protectedActions: true } : {}),
-    ...(!remote && !bot && projectId && state?.memoryDistillEnabled !== false
-      ? { memoryTurnReview: true }
-      : {}),
   });
   if (
     sent.ok &&
-    builtinToolScopes.remember(
-      identity,
-      projectId,
-      extraDisabledTools,
-      presetApplied.disabledTools,
-      // 只有本机普通项目在收口前整理；远程、Bot、隐藏工作区走各自通道。
-      !remote && !bot && Boolean(projectId)
-    )
+    builtinToolScopes.remember(identity, projectId, extraDisabledTools, presetApplied.disabledTools)
   ) {
     parentPluginScopes.set(identity.sessionId, {
       native: !remote && !bot,
@@ -1590,14 +1567,6 @@ export function sendDesignResultToSession(
   outcome: { ok: true; result: DesignToolResult } | { ok: false; error: string }
 ): { ok: boolean; error?: string } {
   return sendAgentCommand({ type: 'design-result', identity, requestId, ...outcome });
-}
-
-export function sendMemoryResultToSession(
-  identity: SessionIdentity | ChildSessionIdentity,
-  requestId: string,
-  outcome: { ok: true; result: unknown } | { ok: false; error: string }
-): { ok: boolean; error?: string } {
-  return sendAgentCommand({ type: 'memory-result', identity, requestId, ...outcome });
 }
 
 export function sendDelegationResultToSession(
@@ -2518,20 +2487,8 @@ export function pushBuiltinTools(): void {
   if (!worker || !workerReady) return;
   const state = designToolSettings(readSettingsState());
   const computerSupported = isComputerPlatformSupported();
-  // 收口开关与工具禁用表分开判变化：只翻自动整理开关时 disabledTools 没变，不能因此漏下发。
-  const reviewed = new Set<string>();
-  for (const update of builtinToolScopes.memoryTurnReviewUpdates(state, computerSupported)) {
-    reviewed.add(update.identity.sessionId);
-    sendAgentCommand({
-      type: 'set-builtin-tools',
-      identity: update.identity,
-      disabledTools: update.disabledTools,
-      memoryTurnReview: update.memoryTurnReview,
-    });
-  }
   for (const change of builtinToolScopes.changes(state, computerSupported)) {
-    if (!reviewed.has(change.identity.sessionId))
-      sendAgentCommand({ type: 'set-builtin-tools', ...change });
+    sendAgentCommand({ type: 'set-builtin-tools', ...change });
   }
 }
 

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import * as projection from '../../agent/projection';
 import {
+  projectParentHistoryAll,
   projectParentHistoryPage,
   projectParentHistoryTail,
   resolveParentHistoryFile,
@@ -160,7 +161,7 @@ describe('review closeout suppression in history', () => {
     expect(tail.baseIndex).toBe(0);
   });
 
-  it('cards a wiki write made inside the answering turn, without any closeout marker', () => {
+  it('keeps a real legacy tool result as history without decorating the answer', () => {
     const branch = [
       {
         type: 'message',
@@ -197,17 +198,13 @@ describe('review closeout suppression in history', () => {
       },
     ];
     const tail = projectParentHistoryTail(branch as never);
-    expect(tail.messages.at(-1)).toMatchObject({
-      role: 'assistant',
-      memoryUpdates: [
-        {
-          spaceId: 'proj:p',
-          relPath: 'wiki/workflows/a.md',
-          title: '测试环境自建单',
-          status: 'created',
-        },
-      ],
+    expect(tail.messages[2]).toMatchObject({
+      role: 'toolResult',
+      toolName: 'memory_upsert',
+      toolCallId: 't',
+      content: branch[2]?.message.content,
     });
+    expect(tail.messages.at(-1)).not.toHaveProperty('memoryUpdates');
   });
 
   it('keeps absolute page indices aligned after filtering', () => {
@@ -218,8 +215,8 @@ describe('review closeout suppression in history', () => {
   });
 });
 
-describe('review memory updates on reload', () => {
-  it('attaches landed wiki writes to the real answer instead of the hidden closeout', () => {
+describe('legacy review on reload', () => {
+  it('hides internal review tools and replies even at the end of the old history', () => {
     const receipt = (relPath: string, status: string) => ({
       type: 'message',
       message: {
@@ -249,13 +246,11 @@ describe('review memory updates on reload', () => {
         message: { role: 'assistant', content: [{ type: 'text', text: '已写入' }], timestamp: 4 },
       },
     ];
-    const tail = projectParentHistoryTail(branch as never);
-    expect(tail.messages.map((m) => m.content[0])).toEqual([
+    const messages = projectParentHistoryAll(branch as never);
+    expect(messages.map((m) => m.content[0])).toEqual([
       { type: 'text', text: '问' },
       { type: 'text', text: '真答案' },
     ]);
-    expect(tail.messages.at(-1)?.memoryUpdates).toEqual([
-      { spaceId: 'proj:p', relPath: 'wiki/decisions/a.md', status: 'updated' },
-    ]);
+    expect(messages.at(-1)).not.toHaveProperty('memoryUpdates');
   });
 });

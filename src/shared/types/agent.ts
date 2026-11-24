@@ -273,10 +273,6 @@ export const BROWSER_OPS = [
 ] as const;
 export type BrowserOp = (typeof BROWSER_OPS)[number];
 
-/** 长期记忆（Markdown Wiki Vault + 派生索引）活在 Main，worker 只发 memory-invoke 事件；op 闭集在这里冻结 */
-export const MEMORY_OPS = ['index', 'search', 'read', 'upsert', 'archive'] as const;
-export type MemoryOp = (typeof MEMORY_OPS)[number];
-
 /** 桌面 computer 活在 Main，worker 只发 computer-invoke；guest JS 一次 run。 */
 export const COMPUTER_OPS = ['run'] as const;
 export type ComputerOp = (typeof COMPUTER_OPS)[number];
@@ -1221,8 +1217,6 @@ export type AgentCommand =
       smartCompactSummaryModel?: SpawnModelConfig;
       /** 验证式压缩档位；缺省 auto（按占用跳档） */
       smartCompactMode?: import('../smartCompactMode').SmartCompactMode;
-      /** 记忆存储语言（settings.memoryLanguage）；写进 memory_search 描述，让模型用对语言查 */
-      memoryLanguage?: string;
       skillPaths?: string[];
       mcpServers?: McpServerSpawnConfig[];
       /** 已启用 Claude 插件的命令（作为 `/plugin:command` 提示词模板） */
@@ -1252,10 +1246,8 @@ export type AgentCommand =
       rolePrompt?: string;
       /** 仅普通 parent：替换 pi 默认提示词开头的角色段落，其余运行时内容保留 */
       systemPrompt?: string;
-      /** 追加进系统提示词的附加段落（Main 注入的记忆摘要等）；按内容去重，不覆盖 persona */
+      /** 追加进系统提示词的附加段落；按内容去重，不覆盖 persona */
       systemPromptAppend?: string;
-      /** 本机普通项目：答复后在收口前用同一会话处理 Wiki 记忆；由 Main 按项目和开关判定 */
-      memoryTurnReview?: boolean;
       /** 预设的强调 / 拒答重试提示词；worker 暂未消费，登记只为不让整条启动命令被判非法 */
       systemPromptBoost?: string;
       refusalRetryPrompt?: string;
@@ -1380,13 +1372,7 @@ export type AgentCommand =
   /** 设置里禁用的内置预设：worker 执行与工具说明都按它过滤 */
   | { type: 'set-disabled-workflow-presets'; ids: string[] }
   /** Main-owned effective parent loadout; worker applies only when SDK is idle. */
-  | {
-      type: 'set-builtin-tools';
-      identity: SessionIdentity;
-      disabledTools: string[];
-      /** 缺省表示不改；显式 false 让进行中的会话立即停止收口整理 */
-      memoryTurnReview?: boolean;
-    }
+  | { type: 'set-builtin-tools'; identity: SessionIdentity; disabledTools: string[] }
   /** Main-only deletion tombstone, never a model tool or generic renderer IPC. */
   | { type: 'forget-notifications'; conversationId: string }
   | { type: 'set-web-search-config'; chain: WebSearchChainEntry[]; configured?: boolean }
@@ -1412,7 +1398,7 @@ export type AgentCommand =
       error?: string;
     }
   | {
-      type: 'memory-result' | 'delegation-result';
+      type: 'delegation-result';
       identity: SessionIdentity | ChildSessionIdentity;
       requestId: string;
       ok: boolean;
@@ -1726,23 +1712,6 @@ export function parseShellFailure(value: unknown): ShellFailure | undefined {
   };
 }
 
-export interface ProjectedMemoryUpdate {
-  /** 记忆空间（proj:/bot:/chat:/global），点击卡片时用它拼 note id */
-  spaceId: string;
-  relPath: string;
-  title?: string;
-  status: 'created' | 'updated';
-  /** 本次正文改动的裁剪补丁（`-旧` / `+新` / 空格上下文） */
-  diff?: ProjectedMemoryDiff;
-}
-
-export interface ProjectedMemoryDiff {
-  patch: string;
-  added: number;
-  removed: number;
-  truncated?: true;
-}
-
 export interface ProjectedMessage {
   pluginArtifacts?: PluginArtifactInfo[];
   pluginSource?: PluginMessageSource;
@@ -1782,8 +1751,6 @@ export interface ProjectedMessage {
   editDiff?: { oldText: string; newText: string };
   /** apply_patch toolResult 中已确实落盘的物理文件操作 */
   fileChanges?: ProjectedFileChange[];
-  /** 本轮收尾时写入/更新的 Wiki 笔记（折叠卡片用；正文仍在 Vault） */
-  memoryUpdates?: ProjectedMemoryUpdate[];
   /** Whitelisted managed review audit metadata, also restored from JSONL. */
   approvalReview?: ApprovalReviewRecord;
   /** apply_patch 完整终态清单，不依赖普通 content 截断预算 */
@@ -2221,14 +2188,6 @@ export type AgentWorkerEvent =
       requestId: string;
     }
   | {
-      type: 'memory-invoke';
-      identity: SessionIdentity | ChildSessionIdentity;
-      seq: number;
-      requestId: string;
-      op: MemoryOp;
-      params: unknown;
-    }
-  | {
       type: 'delegation-invoke';
       identity: SessionIdentity;
       seq: number;
@@ -2650,36 +2609,6 @@ const isMcpScopeChallenge = (value: unknown): value is McpScopeChallenge =>
 const isSequence = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) >= 0;
 
-const PROJECTED_MEMORY_UPDATE_LIMIT = 12;
-
-function parseMemoryDiff(value: unknown): ProjectedMemoryDiff | null {
-  if (!isRecord(value) || !hasOnlyKeys(value, ['patch', 'added', 'removed', 'truncated']))
-    return null;
-  if (typeof value.patch !== 'string' || value.patch.length > 4000) return null;
-  if (!isSequence(value.added) || !isSequence(value.removed)) return null;
-  if (value.truncated !== undefined && typeof value.truncated !== 'boolean') return null;
-  return value as unknown as ProjectedMemoryDiff;
-}
-
-export function parseProjectedMemoryUpdates(value: unknown): ProjectedMemoryUpdate[] | null {
-  if (!Array.isArray(value) || value.length > PROJECTED_MEMORY_UPDATE_LIMIT) return null;
-  for (const item of value) {
-    if (
-      !isRecord(item) ||
-      !hasOnlyKeys(item, ['spaceId', 'relPath', 'title', 'status', 'diff']) ||
-      (item.diff !== undefined && !parseMemoryDiff(item.diff)) ||
-      !isNonEmptyString(item.spaceId) ||
-      item.spaceId.length > 128 ||
-      !isNonEmptyString(item.relPath) ||
-      item.relPath.length > 512 ||
-      (item.title !== undefined && (!isNonEmptyString(item.title) || item.title.length > 200)) ||
-      (item.status !== 'created' && item.status !== 'updated')
-    )
-      return null;
-  }
-  return value as ProjectedMemoryUpdate[];
-}
-
 function parseProjectedFileChanges(value: unknown): ProjectedFileChange[] | null {
   if (!Array.isArray(value) || value.length > PROJECTED_FILE_CHANGE_LIMIT) return null;
   for (const item of value) {
@@ -2834,11 +2763,6 @@ function hasValidProjectedMetadata(value: Record<string, unknown>): boolean {
   const fileChanges =
     value.fileChanges === undefined ? undefined : parseProjectedFileChanges(value.fileChanges);
   if (fileChanges === null) return false;
-  const memoryUpdates =
-    value.memoryUpdates === undefined
-      ? undefined
-      : parseProjectedMemoryUpdates(value.memoryUpdates);
-  if (memoryUpdates === null) return false;
   if (value.applyPatchOutcome === undefined) return true;
   const outcome = parseProjectedApplyPatchOutcome(value.applyPatchOutcome);
   return (
@@ -3813,7 +3737,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'smartCompactEnabled',
           'smartCompactSummaryModel',
           'smartCompactMode',
-          'memoryLanguage',
           'skillPaths',
           'mcpServers',
           'pluginCommands',
@@ -3836,7 +3759,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           'rolePrompt',
           'systemPrompt',
           'systemPromptAppend',
-          'memoryTurnReview',
           'systemPromptBoost',
           'refusalRetryPrompt',
           'botMode',
@@ -3889,7 +3811,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
           parseSpawnModelConfig(value.smartCompactSummaryModel) === null) ||
         (value.smartCompactMode !== undefined &&
           parseSmartCompactMode(value.smartCompactMode) === null) ||
-        (value.memoryLanguage !== undefined && typeof value.memoryLanguage !== 'string') ||
         (value.remote !== undefined && parseAgentRemoteConfig(value.remote) === null) ||
         (value.subagentModels !== undefined &&
           (!Array.isArray(value.subagentModels) ||
@@ -3908,7 +3829,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         (value.rolePrompt !== undefined && !isNonEmptyString(value.rolePrompt)) ||
         (value.systemPrompt !== undefined && !isNonEmptyString(value.systemPrompt)) ||
         (value.systemPromptAppend !== undefined && !isNonEmptyString(value.systemPromptAppend)) ||
-        (value.memoryTurnReview !== undefined && typeof value.memoryTurnReview !== 'boolean') ||
         (value.systemPromptBoost !== undefined && !isNonEmptyString(value.systemPromptBoost)) ||
         (value.refusalRetryPrompt !== undefined && !isNonEmptyString(value.refusalRetryPrompt)) ||
         (value.botMode !== undefined && typeof value.botMode !== 'boolean') ||
@@ -4213,9 +4133,8 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         ? (value as unknown as AgentCommand)
         : null;
     case 'set-builtin-tools':
-      return hasOnlyKeys(value, ['type', 'identity', 'disabledTools', 'memoryTurnReview']) &&
+      return hasExactKeys(value, ['type', 'identity', 'disabledTools']) &&
         parseSessionIdentity(value.identity) &&
-        (value.memoryTurnReview === undefined || typeof value.memoryTurnReview === 'boolean') &&
         Array.isArray(value.disabledTools) &&
         value.disabledTools.length <= 64 &&
         value.disabledTools.every(
@@ -4245,7 +4164,6 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
     case 'browser-result':
     case 'design-result':
     case 'image-generation-result':
-    case 'memory-result':
     case 'delegation-result':
     case 'computer-result':
     case 'device-tool-result':
@@ -4751,12 +4669,6 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
     case 'browser-cancel':
       return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId']) &&
         isNonEmptyString(value.requestId)
-        ? (value as unknown as AgentWorkerEvent)
-        : null;
-    case 'memory-invoke':
-      return hasExactKeys(value, ['type', 'identity', 'seq', 'requestId', 'op', 'params']) &&
-        isNonEmptyString(value.requestId) &&
-        MEMORY_OPS.includes(value.op as MemoryOp)
         ? (value as unknown as AgentWorkerEvent)
         : null;
     case 'delegation-invoke':

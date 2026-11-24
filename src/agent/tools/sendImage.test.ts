@@ -2,8 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { DelegationOp } from './delegation';
-import type { MemoryInvoker } from './memory';
+import type { DelegationInvoker, DelegationOp } from './delegationInvoker';
 import { createSendImageTool, normalizeSendImageParams } from './sendImage';
 
 const CWD = resolve('/work/repo');
@@ -32,11 +31,7 @@ function setup(branch: unknown[], cwd = CWD) {
     source: (params as { path?: string }).path ? 'file' : 'web',
   }));
   const confirm = vi.fn(async (_file: string, _signal?: AbortSignal, _id?: string) => {});
-  const tool = createSendImageTool(
-    { invoke } as unknown as MemoryInvoker<DelegationOp>,
-    cwd,
-    confirm
-  );
+  const tool = createSendImageTool({ invoke } as unknown as DelegationInvoker, cwd, confirm);
   const ctx = { sessionManager: { getBranch: () => branch } };
   const run = (params: unknown) =>
     tool.execute('call', params as any, undefined, undefined, ctx as any);

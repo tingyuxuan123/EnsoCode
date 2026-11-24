@@ -498,11 +498,6 @@ export const PRODUCT_SURFACE_INVENTORY = {
     kind: 'action',
     label: 'Run isolated sandbox',
   },
-  'coding-tools.memory': {
-    domain: 'coding-tools',
-    kind: 'action',
-    label: 'Search and capture long-term memory',
-  },
   'coding-tools.computer': {
     domain: 'coding-tools',
     kind: 'action',

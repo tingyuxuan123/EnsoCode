@@ -28,7 +28,6 @@ import { BotAvatar } from './BotAvatar';
 import { ColorPicker, EngineField, FieldLabel, nameError } from './BotFields';
 import { BotUsageCard } from './BotUsageCard';
 import { botErrorText, chatTitle } from './botText';
-import { MemorySpaceList } from './MemorySpaceList';
 import { NotesEditor } from './NotesEditor';
 import { PersonaSuggestButton } from './PersonaSuggest';
 import { RoutineList } from './RoutineList';
@@ -56,13 +55,12 @@ function formOf(bot: BotProfile, persona: string): FormState {
     mcpServerIds: bot.mcpServerIds,
     canDelegateTo: bot.delegation.canDelegateTo,
     acceptFrom: bot.delegation.acceptFrom,
-    memoryEnabled: bot.memory.enabled,
     ...budgetFormOf(bot.budget),
     ...limitsFormOf(bot),
   };
 }
 
-function draftOf(form: FormState): BotDraftInput | null {
+function draftOf(form: FormState, memory: BotProfile['memory']): BotDraftInput | null {
   const budget = budgetDraft(form);
   const limits = limitsDraft(form);
   if (!budget.ok || !limits.ok) return null;
@@ -78,7 +76,7 @@ function draftOf(form: FormState): BotDraftInput | null {
     skillIds: form.skillIds,
     mcpServerIds: form.mcpServerIds,
     delegation: { canDelegateTo: form.canDelegateTo, acceptFrom: form.acceptFrom },
-    memory: { enabled: form.memoryEnabled },
+    memory,
     budget: budget.budget,
     delegationTimeoutMinutes: limits.delegationTimeoutMinutes,
     maxTokensPerTurn: limits.maxTokensPerTurn,
@@ -187,7 +185,7 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
   };
 
   const save = async () => {
-    const draft = draftOf(form);
+    const draft = draftOf(form, bot.memory);
     if (!draft) {
       addToast({
         type: 'error',
@@ -302,7 +300,7 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
         <TabsList variant="underline" className="shrink-0 px-2">
           <TabsTab value="profile">{t('Profile')}</TabsTab>
           <TabsTab value="abilities">{t('Abilities')}</TabsTab>
-          <TabsTab value="memory">{t('Memory')}</TabsTab>
+          <TabsTab value="notes">{t('Notes')}</TabsTab>
           <TabsTab value="routines">{t('Routines')}</TabsTab>
           <TabsTab value="history">{t('History')}</TabsTab>
         </TabsList>
@@ -380,19 +378,11 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
             <BotAbilityFields value={form} onChange={patch} profile={form} botId={bot.id} />
           </TabsPanel>
 
-          <TabsPanel value="memory">
-            <div className="mb-4">
-              <FieldLabel hint={t('Injected into every new conversation')}>
-                {t('Core notes')}
-              </FieldLabel>
-              <NotesEditor
-                target={{ botId: bot.id }}
-                emptyText={t(
-                  'No notes yet. Key preferences and facts are summarized here automatically after memories are organized.'
-                )}
-              />
-            </div>
-            <MemorySpaceList spaceId={`bot:${bot.id}`} emptyText={t('No memories yet')} />
+          <TabsPanel value="notes">
+            <NotesEditor
+              target={{ botId: bot.id }}
+              emptyText={t('No notes yet. Add your own notes for this member.')}
+            />
           </TabsPanel>
 
           <TabsPanel value="routines">
@@ -443,7 +433,7 @@ export function BotProfilePanel({ botId, chat, onOpenHistory }: BotProfilePanelP
         description={
           confirm === 'delete'
             ? t(
-                'The member, their private chats, persona, memories and workspace are deleted. This cannot be undone.'
+                'The member, their private chats, persona and workspace are deleted. This cannot be undone.'
               )
             : t(
                 'Archived members stop replying and are hidden from the list. You can restore them later.'

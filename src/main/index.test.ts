@@ -43,6 +43,7 @@ vi.mock('@electron-toolkit/utils', () => ({
 vi.mock('./ipc', () => ({
   registerIpcHandlers: vi.fn(() => mocks.order.push('ipc')),
 }));
+vi.mock('./ipc/agent', () => ({ disposeDeviceRequests: vi.fn() }));
 vi.mock('./ipc/settings', () => ({
   readSettings: vi.fn(() => null),
   consumeTrayReenterAfterUpdate: () => mocks.consumeTrayReenter(),
@@ -53,6 +54,19 @@ vi.mock('./services/localImageProtocol', () => ({
 }));
 vi.mock('./services/appMenu', () => ({ installAppMenu: vi.fn() }));
 vi.mock('./services/computerHost', () => ({ computerHost: { closeAll: vi.fn() } }));
+vi.mock('./services/browserHost', () => ({
+  browserHost: { setHostWindow: vi.fn(), dispose: vi.fn(async () => undefined) },
+}));
+vi.mock('./services/deviceHost', () => ({ deviceHost: { stop: vi.fn(async () => undefined) } }));
+vi.mock('./services/llama/chat', () => ({
+  releaseLocalChatSlot: vi.fn(async () => undefined),
+  syncLocalChatFromSettings: vi.fn(),
+}));
+vi.mock('./services/llama/runtime', () => ({
+  disposeLlamaRuntime: vi.fn(async () => undefined),
+  llamaRuntimeActive: () => false,
+}));
+vi.mock('./services/speech/service', () => ({ syncSpeechFromSettings: vi.fn() }));
 vi.mock('./services/pairHost', () => ({
   startPairHost: vi.fn(() => mocks.order.push('pair')),
   stopPairHost: vi.fn(),

@@ -13,11 +13,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   ipcMain: { handle: vi.fn() },
 }));
-vi.mock('../services/memoryHost', () => ({
-  syncMemoryEmbeddingFromSettings: vi.fn(),
-  syncMemoryDistillFromSettings: vi.fn(),
-  syncMemoryKgFromSettings: vi.fn(),
-}));
+vi.mock('../services/llama/chat', () => ({ syncLocalChatFromSettings: vi.fn() }));
 vi.mock('../services/agentHost', () => ({
   pushApprovalReviewer: vi.fn(),
   pushMaxActiveCoworkers: vi.fn(),

@@ -1,6 +1,5 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { DelegationOp } from './delegation';
-import type { MemoryInvoker } from './memory';
+import type { DelegationInvoker } from './delegationInvoker';
 
 const MAX_LIMIT = 100;
 const ALIASES: Record<string, string> = {
@@ -43,7 +42,7 @@ export function normalizeGroupHistoryParams(raw: unknown): unknown {
   return params;
 }
 
-export function createGroupHistoryTool(invoker: MemoryInvoker<DelegationOp>): ToolDefinition {
+export function createGroupHistoryTool(invoker: DelegationInvoker): ToolDefinition {
   return {
     name: 'group_history',
     label: 'group_history',

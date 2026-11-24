@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { __resetLocalChatForTest, createLocalComplete, memoryCompleteFromSettings } from './chat';
-import type { LocalInferenceDiag } from './inferenceDiag';
+import { __resetLocalChatForTest, createLocalComplete } from './chat';
 import type { LlamaModelLike } from './runtime';
 
 function fakeModel(): LlamaModelLike {
@@ -55,64 +54,6 @@ describe('createLocalComplete', () => {
     expect(text).toContain('user-1');
   });
 
-  it('logs token meter and thought counts on local inference without any prompt text', async () => {
-    const lines: unknown[] = [];
-    const spy = vi.spyOn(console, 'info').mockImplementation((...args) => {
-      lines.push(args);
-    });
-    const complete = createLocalComplete('/m/a.gguf', {
-      acquireModelImpl: async () => fakeModel(),
-      createSession: async () => {
-        const session: {
-          lastDiag?: LocalInferenceDiag;
-          prompt: () => Promise<string>;
-          dispose: () => void;
-        } = {
-          prompt: async () => {
-            session.lastDiag = {
-              inputTokens: 41,
-              outputTokens: 17,
-              firstTokenMs: 12,
-              promptMs: 90,
-              thoughtChars: 8,
-              thoughtTokens: 3,
-              gpu: 'metal',
-              gpuLayers: 33,
-              flashAttentionConfig: 'auto',
-              finalTextChars: 19,
-            };
-            return 'VISIBLE_SECRET_JSON';
-          },
-          dispose: () => {},
-        };
-        return session;
-      },
-    });
-    await complete('system-secret', 'user-secret', { maxTokens: 1536, stage: 'extract' });
-    spy.mockRestore();
-    const inf = lines.find(
-      (row) => Array.isArray(row) && row[0] === '[memory-distill] local inference'
-    ) as [string, Record<string, unknown>] | undefined;
-    expect(inf?.[1]).toMatchObject({
-      stage: 'extract',
-      maxTokens: 1536,
-      inputTokens: 41,
-      outputTokens: 17,
-      firstTokenMs: 12,
-      promptMs: 90,
-      thoughtChars: 8,
-      thoughtTokens: 3,
-      gpu: 'metal',
-      gpuLayers: 33,
-      flashAttentionConfig: 'auto',
-      finalTextChars: 19,
-    });
-    const dumped = JSON.stringify(lines);
-    expect(dumped).not.toContain('user-secret');
-    expect(dumped).not.toContain('system-secret');
-    expect(dumped).not.toContain('VISIBLE_SECRET');
-  });
-
   it('passes a per-call output budget to the local session prompt', async () => {
     const promptOptions: unknown[] = [];
     const complete = createLocalComplete('/m/a.gguf', {
@@ -125,13 +66,13 @@ describe('createLocalComplete', () => {
         dispose: () => {},
       }),
     });
-    await complete('sys', 'user', { maxTokens: 1536, stage: 'consolidate' });
+    await complete('sys', 'user', { maxTokens: 1536 });
     expect(promptOptions).toEqual([
       expect.objectContaining({ maxTokens: 1536, signal: expect.any(AbortSignal) }),
     ]);
   });
 
-  it('creates a new session per call so concurrent insight cannot inherit distill history', async () => {
+  it('creates a new session per call, so local completions do not inherit prior prompts', async () => {
     const systems: string[] = [];
     const complete = createLocalComplete('/m/a.gguf', {
       acquireModelImpl: async () => fakeModel(),
@@ -196,33 +137,5 @@ describe('createLocalComplete', () => {
       }),
     });
     await expect(complete('s', 'u')).rejects.toThrow(/aborted|timed out/i);
-  });
-});
-
-describe('memoryCompleteFromSettings', () => {
-  it('uses the remote complete when the setting is remote or absent', async () => {
-    const remote = async () => async () => 'remote-text';
-    const fromAbsent = await memoryCompleteFromSettings(undefined, {
-      modelsRoot: '/missing',
-      remoteComplete: remote,
-    });
-    expect(fromAbsent).not.toBeNull();
-    expect(await fromAbsent!('s', 'u')).toBe('remote-text');
-
-    const fromRemote = await memoryCompleteFromSettings(
-      { memoryChatModel: 'remote' },
-      { modelsRoot: '/missing', remoteComplete: remote }
-    );
-    expect(await fromRemote!('s', 'u')).toBe('remote-text');
-  });
-
-  it('returns null for a local model that is not on disk instead of falling back to remote', async () => {
-    const remote = vi.fn(async () => async () => 'remote-text');
-    const complete = await memoryCompleteFromSettings(
-      { memoryChatModel: 'local:gemma-4-e2b' },
-      { modelsRoot: '/missing', remoteComplete: remote }
-    );
-    expect(complete).toBeNull();
-    expect(remote).not.toHaveBeenCalled();
   });
 });

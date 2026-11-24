@@ -29,8 +29,9 @@ vi.mock('./AvatarCropDialog', () => ({ AvatarButtons: () => null }));
 vi.mock('./BotAvatar', () => ({ BotAvatar: () => null }));
 vi.mock('./BotAbilities', () => ({ BotAbilityFields: () => null }));
 vi.mock('./BotUsageCard', () => ({ BotUsageCard: () => null }));
-vi.mock('./MemorySpaceList', () => ({ MemorySpaceList: () => null }));
-vi.mock('./NotesEditor', () => ({ NotesEditor: () => null }));
+vi.mock('./NotesEditor', () => ({
+  NotesEditor: ({ emptyText }: { emptyText: string }) => <p>{emptyText}</p>,
+}));
 vi.mock('./PersonaSuggest', () => ({ PersonaSuggestButton: () => null }));
 vi.mock('./RoutineList', () => ({ RoutineList: () => null }));
 vi.mock('@/components/chat/ModelPicker', () => ({
@@ -164,6 +165,16 @@ it('does not render the save actions when nothing has changed', () => {
   expect(h.update).not.toHaveBeenCalled();
 });
 
+it('keeps manual notes and chat history without advertising automatic memory or injection', async () => {
+  await act(async () => button('Notes').click());
+  expect(container.textContent).toContain('No notes yet. Add your own notes for this member.');
+  expect(container.textContent).toContain('History');
+  expect(container.textContent).not.toContain('Injected into every new conversation');
+  expect(
+    [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)
+  ).not.toContain('Memory');
+});
+
 it('keeps the selected provider/model when thinking is clamped in the same interaction, then saves it', async () => {
   await act(async () => button('Select limited model').click());
   expect(container.querySelector('[data-engine]')?.textContent).toBe(
@@ -178,6 +189,7 @@ it('keeps the selected provider/model when thinking is clamped in the same inter
     expectedVersion: 1,
     draft: expect.objectContaining({
       engine: { providerId: 'target-provider', modelId: 'limited-model', thinkingLevel: 'low' },
+      memory: { enabled: true },
     }),
   });
   expect(actions()).toBeNull();

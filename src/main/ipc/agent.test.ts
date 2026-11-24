@@ -80,7 +80,6 @@ const mocks = vi.hoisted(() => ({
   mobileClear: vi.fn(),
   compactSession: vi.fn(() => ({ ok: true })),
   sessionFile: vi.fn((): string | undefined => undefined),
-  scheduleMemoryDistill: vi.fn(async () => undefined),
   getBotServices: vi.fn((): unknown => null),
   maybeNotifyBot: vi.fn(async (_event: { type: string }) => {}),
   pluginDispatchEvent: vi.fn(async () => undefined),
@@ -295,10 +294,6 @@ vi.mock('./capabilities', () => ({
   handleCapabilityInvoke: vi.fn(),
 }));
 vi.mock('./settings', () => ({ readSettings: mocks.readSettings }));
-vi.mock('../services/memoryHost', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/memoryHost')>()),
-  scheduleMemoryDistill: mocks.scheduleMemoryDistill,
-}));
 vi.mock('./bots', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./bots')>()),
   getBotServices: mocks.getBotServices,
@@ -2272,7 +2267,7 @@ describe('device tools bridge', () => {
   });
 });
 
-describe('压缩完成触发记忆整理', () => {
+describe('Bot 的压缩与通知事件', () => {
   const identity = { sessionId: 'conv-1', generation: 'g' };
   const emit = (event: Record<string, unknown>) =>
     mocks.setAgentEventListener.mock.calls.at(-1)![0]({ seq: 1, identity, ...event });
@@ -2282,7 +2277,6 @@ describe('压缩完成触发记忆整理', () => {
   beforeEach(() => {
     mocks.handlers.clear();
     registerAgentHandlers();
-    mocks.scheduleMemoryDistill.mockClear();
     distill.mockClear();
     markCompacted.mockClear();
     mocks.sessionFile.mockReturnValue('/tmp/agent/sessions/conv-1.jsonl');
@@ -2303,58 +2297,21 @@ describe('压缩完成触发记忆整理', () => {
       ...(bot ? { bot } : {}),
     });
 
-  it('远程项目保留成功压缩后的增量编译；失败 / 放弃 / 开始不触发', () => {
-    conversation();
-    vi.spyOn(getSourceAuthorityRegistry()!, 'project').mockReturnValue({
-      projectId: 'p',
-      canonicalPath: '/repo',
-      kind: 'ssh',
-      state: 'active',
-      version: 1,
-    });
+  it('Bot 群聊成功压缩只标记下次补群状态，不整理长期记忆', () => {
+    conversation({ botId: 'bot-a', chatId: 'chat-1' });
     emit({ type: 'compaction', state: 'start' });
     emit({ type: 'compaction', state: 'end', error: 'boom' });
     emit({ type: 'compaction', state: 'end', abandoned: true });
-    expect(mocks.scheduleMemoryDistill).not.toHaveBeenCalled();
+    expect(markCompacted).not.toHaveBeenCalled();
     emit({ type: 'compaction', state: 'end' });
-    expect(mocks.scheduleMemoryDistill).toHaveBeenCalledTimes(1);
-    expect(mocks.scheduleMemoryDistill).toHaveBeenCalledWith(
-      { sessionId: 'conv-1', sessionFile: '/tmp/agent/sessions/conv-1.jsonl', projectId: 'p' },
-      { continueFromLastJob: true }
-    );
+    expect(markCompacted).toHaveBeenCalledWith('chat-1', 'bot-a', 'conv-1');
     expect(distill).not.toHaveBeenCalled();
   });
 
-  it('普通本地项目不因压缩、结束或回收再运行后台编译', () => {
-    conversation();
-    vi.spyOn(getSourceAuthorityRegistry()!, 'project').mockReturnValue({
-      projectId: 'p',
-      canonicalPath: '/repo',
-      state: 'active',
-      version: 1,
-    });
-    emit({ type: 'compaction', state: 'end' });
-    emit({ type: 'parent-ended' });
-    expect(mocks.scheduleMemoryDistill).not.toHaveBeenCalled();
-  });
-
-  it('Bot 群聊会话：压缩后走 Bot 记忆整理并标记下次补群状态', () => {
-    conversation({ botId: 'bot-a', chatId: 'chat-1' });
-    emit({ type: 'compaction', state: 'end' });
-    expect(distill).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-1',
-        sessionFile: '/tmp/agent/sessions/conv-1.jsonl',
-      })
-    );
-    expect(markCompacted).toHaveBeenCalledWith('chat-1', 'bot-a', 'conv-1');
-    expect(mocks.scheduleMemoryDistill).not.toHaveBeenCalled();
-  });
-
-  it('Bot 私聊会话：只整理记忆，不标记群状态', () => {
+  it('Bot 私聊压缩不触发群状态或长期记忆', () => {
     conversation({ botId: 'bot-a', chatId: null });
     emit({ type: 'compaction', state: 'end' });
-    expect(distill).toHaveBeenCalledTimes(1);
+    expect(distill).not.toHaveBeenCalled();
     expect(markCompacted).not.toHaveBeenCalled();
   });
 

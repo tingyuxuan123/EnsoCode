@@ -21,13 +21,12 @@ import {
 import { browserHost } from './services/browserHost';
 import { computerHost } from './services/computerHost';
 import { deviceHost } from './services/deviceHost';
-import { releaseLocalChatSlot } from './services/llama/chat';
+import { releaseLocalChatSlot, syncLocalChatFromSettings } from './services/llama/chat';
 import { disposeLlamaRuntime, llamaRuntimeActive } from './services/llama/runtime';
 import {
   registerLocalImageProtocolHandler,
   registerLocalImageSchemePrivileges,
 } from './services/localImageProtocol';
-import { closeMemoryDb, syncMemoryFromSettings } from './services/memoryHost';
 import { startPairGuest, stopPairGuest } from './services/pairGuest';
 import { startPairHost, stopPairHost } from './services/pairHost';
 import { getProxyConfig } from './services/proxyConfig';
@@ -134,7 +133,7 @@ if (!gotTheLock) {
       persisted?.state && typeof persisted.state === 'object' ? persisted.state : {}
     ) as Record<string, unknown>;
     syncTrayToggleShortcut(persistedState.keybindings);
-    syncMemoryFromSettings(persistedState);
+    syncLocalChatFromSettings(persistedState);
     syncSpeechFromSettings(persistedState);
     // UI shell 必须先创建并发起加载；Agent worker 初始化变重时不得阻塞 renderer spawn。
     const mainWindow = createMainWindow();
@@ -178,7 +177,6 @@ if (!gotTheLock) {
     stopPairGuest();
     browserQuitDrain ??= browserHost.dispose();
     computerHost.closeAll();
-    closeMemoryDb();
   });
   // node-pty TSFN / llama AsyncWorker 在 FreeEnvironment 期间回调会 SIGABRT；
   // 两步必须共用一次 preventDefault，谁先 app.quit 都会拆掉另一边的环境。

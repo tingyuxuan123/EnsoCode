@@ -1,0 +1,18 @@
+---
+description: Mac 个人版发版的授权、CI 验收与个人更新通道边界；区分手动构建、prerelease、Latest 和用户安装。
+kind: guide
+code:
+  paths:
+    - .github/workflows/build-personal-mac.yml
+    - scripts/personal-release.mjs
+    - electron-builder.personal.yml
+---
+
+# Mac 个人版发布与更新验收
+
+- **加功能不等于授权发版。** 明确要求发版时，默认走 Mac arm64 同证书个人版；本机不打包、不做 CI 失败时的构建兜底，也不晋升 GitHub Latest。
+- **手动构建与发布是两件事。** 在 main 手动触发只保留验收产物；进入 main 的版本由对应的 `personal-v<version>` tag 触发发布路径。
+- **先验收、后公开、再推进个人更新清单。** 草稿下载验收通过才公开个人 prerelease。公开资产必须能无凭据下载并通过验证，才推进 `personal-updates`；任何前置步骤失败，都不能让客户端看到新版本清单。
+- **发布成功不表示用户已安装。** CI 和公开清单验证的是分发状态；用户下载、安装、重启是下一步，不热替换当前应用。
+
+具体命令和验收细节以仓库内的发布手册 `docs/engineering-reference/guides/releasing.md` 和当前 workflow 为准。

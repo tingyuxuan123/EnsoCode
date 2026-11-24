@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AssistantMessage, TranscriptContext } from '@earendil-works/pi-ai';
@@ -15,6 +15,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { legacyMemoryReviewContext } from './legacyMemoryReviewHistory';
 import {
   buildSessionDisplayMessages,
   continueSessionActivity,
@@ -227,6 +228,61 @@ async function harness(
 }
 
 describe('Pi session adapter integration', () => {
+  it.each([false, true])(
+    'filters a reopened legacy review without editing the journal (compacted=%s)',
+    async (compacted) => {
+      const { manager, session, requests } = await harness(
+        [{ content: [{ type: 'text', text: 'New answer' }] }],
+        { extensions: [legacyMemoryReviewContext] }
+      );
+      manager.appendMessage({ role: 'user', content: 'Old question', timestamp: 1 });
+      const real = assistant(model, { content: [{ type: 'text', text: 'Real answer' }] });
+      manager.appendMessage(real);
+      manager.appendCustomMessageEntry(
+        'codekiln.project-memory-review',
+        'Retired instruction',
+        false
+      );
+      manager.appendMessage({
+        ...real,
+        content: [{ type: 'text', text: 'Internal closeout' }],
+      });
+      const nextUser = manager.appendMessage({
+        role: 'user',
+        content: 'Next question',
+        timestamp: 2,
+      });
+      manager.appendMessage(assistant(model, { content: [{ type: 'text', text: 'Next answer' }] }));
+      if (compacted) manager.appendCompaction('Existing summary', nextUser, 100);
+      const file = manager.getSessionFile()!;
+      const original = readFileSync(file, 'utf8');
+      const reopened = SessionManager.open(file);
+      const messages = buildSessionDisplayMessages(
+        { sessionManager: reopened } as typeof session,
+        reopened.buildSessionContext().messages
+      );
+      expect(messages.map(textOf).filter(Boolean)).toEqual([
+        'Old question',
+        'Real answer',
+        'Next question',
+        'Next answer',
+      ]);
+      if (compacted)
+        expect(messages).toContainEqual(
+          expect.objectContaining({ role: 'compactionSummary', summary: 'Existing summary' })
+        );
+      expect(readFileSync(file, 'utf8')).toBe(original);
+
+      session.refreshContext();
+      await session.prompt('New question');
+      expect(requests).toHaveLength(1);
+      expect(contextText(requests[0]!)).not.toContain('Retired instruction');
+      expect(manager.getBranch().filter((entry) => entry.type === 'custom_message')).toHaveLength(
+        1
+      );
+    }
+  );
+
   it('agent_settled 回调尚未结束时拒绝嵌套续跑，不新增请求或结算', async () => {
     let attempted = false;
     let rejection: unknown;

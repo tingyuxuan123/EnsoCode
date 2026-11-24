@@ -15,7 +15,6 @@ export type SettingsCategory =
   | 'agents'
   | 'workflows'
   | 'tools'
-  | 'memory'
   | 'phone'
   | 'ssh'
   | 'usage'

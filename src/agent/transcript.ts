@@ -1,5 +1,9 @@
 import { type SessionEntry, sessionEntryToContextMessages } from '@earendil-works/pi-coding-agent';
 import { OM_FOLDED } from './continuousMemory/vendor/session-ledger/types';
+import {
+  isLegacyMemoryReviewMessage,
+  legacyMemoryReviewEntries,
+} from './legacyMemoryReviewHistory';
 
 /**
  * 渲染层要的是完整对话记录，而 pi 的 `session.messages` 是 LLM 上下文视图：
@@ -10,9 +14,21 @@ import { OM_FOLDED } from './continuousMemory/vendor/session-ledger/types';
  */
 export function transcriptMessages(
   sessionManager: { getBranch(): SessionEntry[] },
-  contextMessages: unknown[]
+  contextMessages: unknown[],
+  hiddenReviews?: ReadonlySet<SessionEntry>
 ): unknown[] {
   const branch = sessionManager.getBranch();
+  const hidden = hiddenReviews ?? legacyMemoryReviewEntries(branch);
+  // Fallback for callers without SDK projection provenance; the adapter already filtered by entry.
+  if (!hiddenReviews && hidden.size > 0) {
+    const hiddenMessages = new Set<unknown>();
+    for (const entry of hidden) {
+      if (entry.type === 'message') hiddenMessages.add(entry.message);
+    }
+    contextMessages = contextMessages.filter(
+      (message) => !hiddenMessages.has(message) && !isLegacyMemoryReviewMessage(message)
+    );
+  }
   let compactionIndex = -1;
   for (let i = branch.length - 1; i >= 0; i--) {
     if (branch[i].type === 'compaction') {
@@ -26,7 +42,9 @@ export function transcriptMessages(
     ? branch.findIndex((entry) => entry.id === compaction.firstKeptEntryId)
     : -1;
   const cut = keptIndex >= 0 && keptIndex < compactionIndex ? keptIndex : compactionIndex;
-  const summarized = branch.slice(0, cut).flatMap(sessionEntryToContextMessages);
+  const summarized = branch
+    .slice(0, cut)
+    .flatMap((entry) => (hidden.has(entry) ? [] : sessionEntryToContextMessages(entry)));
   return withUserEntryIds(
     stampCompactionFromHook([...summarized, ...contextMessages], branch),
     branch

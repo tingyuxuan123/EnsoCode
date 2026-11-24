@@ -195,7 +195,7 @@ describe('retired Super Assistant worker protocol', () => {
 
   it('carries an appended system prompt block instead of dropping the whole spawn', () => {
     const spawn = { type: 'spawn-parent', identity: parent, cwd: '/tmp', model };
-    const withAppend = { ...spawn, systemPromptAppend: '## Project memory\n\nSTATUS BODY' };
+    const withAppend = { ...spawn, systemPromptAppend: '## Plugin instructions\n\nDetails' };
     expect(parseAgentCommand(withAppend)).toEqual(withAppend);
     expect(parseAgentCommand({ ...spawn, systemPromptAppend: '' })).toBeNull();
     expect(parseAgentCommand({ ...spawn, systemPromptAppend: 42 })).toBeNull();
@@ -848,36 +848,34 @@ describe('parent/child commands', () => {
     expect(parseAgentCommand({ ...command, path: '/tmp' })).toBeNull();
   });
   it('validates exact generation-bound set-builtin-tools commands', () => {
-    const command = { type: 'set-builtin-tools', identity: parent, disabledTools: ['memory'] };
+    const command = { type: 'set-builtin-tools', identity: parent, disabledTools: ['plan'] };
     expect(parseAgentCommand(command)).toEqual(command);
     expect(parseAgentCommand({ ...command, disabledTools: [] })).not.toBeNull();
-    for (const disabledTools of ['memory', [1], [''], ['x'.repeat(65)], Array(65).fill('todo')]) {
+    for (const disabledTools of ['plan', [1], [''], ['x'.repeat(65)], Array(65).fill('todo')]) {
       expect(parseAgentCommand({ ...command, disabledTools })).toBeNull();
     }
     expect(parseAgentCommand({ ...command, extra: true })).toBeNull();
     expect(parseAgentCommand({ ...command, identity: { sessionId: 'parent' } })).toBeNull();
   });
 
-  it('carries the project Wiki closeout flag on both spawn and hot tool updates', () => {
+  it('rejects retired memory options without rejecting ordinary spawn or hot tool updates', () => {
     const spawn = {
       type: 'spawn-parent',
       identity: parent,
       cwd: '/tmp',
       model,
-      memoryTurnReview: true,
     };
-    expect(parseAgentCommand(spawn)).toMatchObject({ memoryTurnReview: true });
-    expect(parseAgentCommand({ ...spawn, memoryTurnReview: 'true' })).toBeNull();
+    expect(parseAgentCommand(spawn)).toEqual(spawn);
+    expect(parseAgentCommand({ ...spawn, memoryTurnReview: true })).toBeNull();
+    expect(parseAgentCommand({ ...spawn, memoryLanguage: 'zh' })).toBeNull();
 
     const update = {
       type: 'set-builtin-tools',
       identity: parent,
       disabledTools: [],
-      memoryTurnReview: false,
     };
-    expect(parseAgentCommand(update)).toMatchObject({ memoryTurnReview: false });
-    expect(parseAgentCommand({ ...update, memoryTurnReview: 1 })).toBeNull();
-    expect(parseAgentCommand({ ...update, extra: true })).toBeNull();
+    expect(parseAgentCommand(update)).toEqual(update);
+    expect(parseAgentCommand({ ...update, memoryTurnReview: false })).toBeNull();
   });
 
   it('rewind accepts an exclusive persisted entry anchor and rejects ambiguous or dirty anchors', () => {
@@ -2589,7 +2587,7 @@ describe('browser-invoke / browser-result', () => {
   });
 });
 
-describe('memory-invoke / memory-result', () => {
+describe('delegation and retired memory wire protocol', () => {
   it('delegation-invoke 接受 group_history，拒绝未知 op', () => {
     const event = {
       type: 'delegation-invoke',
@@ -2619,30 +2617,20 @@ describe('memory-invoke / memory-result', () => {
     result: { results: [] },
   };
 
-  it('memory-invoke 只接受闭集 op，identity 可为 parent 或 child', () => {
-    expect(parseAgentWorkerEvent(invoke)).toEqual(invoke);
-    expect(parseAgentWorkerEvent({ ...invoke, identity: child })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'index' })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'read' })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'upsert' })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'archive' })).not.toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'capture' })).toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'delete' })).toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, op: 'purge' })).toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, requestId: '' })).toBeNull();
-    const { params: _p, ...noParams } = invoke;
-    expect(parseAgentWorkerEvent(noParams)).toBeNull();
-    expect(parseAgentWorkerEvent({ ...invoke, extra: 1 })).toBeNull();
+  it('rejects previously valid memory-invoke events', () => {
+    expect(parseAgentWorkerEvent(invoke)).toBeNull();
+    expect(parseAgentWorkerEvent({ ...invoke, identity: child })).toBeNull();
   });
 
-  it('memory-result 成功带 result，失败带 error，字段互斥', () => {
-    expect(parseAgentCommand(result)).toEqual(result);
+  it('rejects memory-result without affecting delegation-result', () => {
     const failed = { ...result, ok: false, error: 'boom', result: undefined };
     delete (failed as { result?: unknown }).result;
-    expect(parseAgentCommand(failed)).toEqual(failed);
-    expect(parseAgentCommand({ ...failed, error: '' })).toBeNull();
-    expect(parseAgentCommand({ ...result, ok: false })).toBeNull();
-    expect(parseAgentCommand({ ...result, extra: 1 })).toBeNull();
+    expect(parseAgentCommand(result)).toBeNull();
+    expect(parseAgentCommand(failed)).toBeNull();
+    for (const outcome of [result, failed]) {
+      const delegationResult = { ...outcome, type: 'delegation-result' };
+      expect(parseAgentCommand(delegationResult)).toEqual(delegationResult);
+    }
   });
 });
 

@@ -26,6 +26,29 @@ const bundle = (state: Partial<ConfigSyncBundle['state']>): ConfigSyncBundle => 
 });
 
 describe('config sync portable preference contract', () => {
+  it('accepts old bundles without importing retired memory preferences', () => {
+    const state = {
+      ...baseState(),
+      language: 'en',
+      memoryDistillModel: { providerId: 'old-provider', modelId: 'old-model' },
+      memoryChatModel: 'local:gemma-4-e2b',
+      memoryLanguage: 'zh',
+      memoryDistillEnabled: true,
+      disabledBuiltinTools: ['memory', 'browser'],
+    };
+    const validated = validateBundle({ ...bundle({}), state });
+    expect(validated.state).toHaveProperty('language', 'en');
+    expect(validated.state.disabledBuiltinTools).toEqual(['browser']);
+    for (const key of [
+      'memoryDistillModel',
+      'memoryChatModel',
+      'memoryLanguage',
+      'memoryDistillEnabled',
+    ]) {
+      expect(validated.state).not.toHaveProperty(key);
+      expect(SYNC_FIELDS).not.toContain(key);
+    }
+  });
   it('完整聊天排版对象可同步，恶意值、部分对象和额外属性导入时拒绝', () => {
     const typography = {
       body: { fontSize: 15, fontWeight: 400 },
@@ -167,8 +190,6 @@ describe('config sync portable preference contract', () => {
       'smartCompactEnabled',
       'smartCompactModel',
       'smartCompactMode',
-      'memoryChatModel',
-      'memoryDistillEnabled',
       'openChangesOnFileEdit',
       'compactReadOnlyTools',
       'expandLiveEdits',

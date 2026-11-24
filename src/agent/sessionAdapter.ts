@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { AgentSession, InlineExtension } from '@earendil-works/pi-coding-agent';
+import { legacyMemoryReviewEntries } from './legacyMemoryReviewHistory';
 import { projectMessage } from './projection';
 import {
   isSilentAssistantTurn,
@@ -286,9 +287,11 @@ export function buildSessionDisplayMessages(
   const projection = manager.buildSessionProjection?.();
   if (!projection) return transcriptMessages(manager, contextMessages);
 
+  const branch = manager.getBranch();
+  const hiddenReviews = legacyMemoryReviewEntries(branch);
   const editedTargets = new Set<string>();
   const terminalErrors = new Map<string, string>();
-  for (const entry of manager.getBranch()) {
+  for (const entry of branch) {
     if (entry.type === 'context_edit') editedTargets.add(entry.targetId);
     if (
       entry.type === 'custom' &&
@@ -303,6 +306,7 @@ export function buildSessionDisplayMessages(
   }
 
   const displayContext = projection.entries.flatMap((entry) => {
+    if (hiddenReviews.has(entry.sourceEntry)) return [];
     const error = terminalErrors.get(entry.sourceEntry.id);
     if (
       error &&
@@ -315,5 +319,5 @@ export function buildSessionDisplayMessages(
     }
     return entry.messages;
   });
-  return transcriptMessages(manager, displayContext);
+  return transcriptMessages(manager, displayContext, hiddenReviews);
 }

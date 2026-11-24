@@ -8,7 +8,6 @@ import { resolveCompactStrategy } from '@shared/compactStrategy';
 import { normalizeContextMenuOpen, normalizeFileOpenRules } from '@shared/fileOpening';
 import { parseImageGenerationSettings } from '@shared/imageGeneration';
 import { DEFAULT_LIGHT_PALETTE, parseLightPalette } from '@shared/lightPalette';
-import { resolveMemoryLanguage } from '@shared/memory/constants';
 import { extractModelOverrides, referencedModelIds } from '@shared/modelDirectory';
 import { STATUS_LINE_PRESETS, STATUS_LINE_SEGMENT_IDS } from '@shared/statusLine';
 import { type EditMode, type ModelEntry, resolveEditMode } from '@shared/types';
@@ -34,29 +33,15 @@ import { DEFAULT_MONO_FONT_FAMILY, normalizeDesktopChatTypography } from '@/lib/
  */
 
 /** 当前持久化数据版本；改数据形状时 +1 并在 `migrateSettings` 里加一段 */
-export const SETTINGS_VERSION = 22;
+export const SETTINGS_VERSION = 23;
 
 export function mergeSettingsState<T extends { editMode: EditMode; accentColor: AccentColor }>(
   persisted: unknown,
   current: T
 ): T {
   if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) return current;
-  const source = persisted as Record<string, unknown>;
-  const {
-    hashlineEditEnabled,
-    bashInterceptEnabled,
-    voiceModel,
-    lcuEnabled,
-    memoryEmbeddingModel,
-    memoryEmbeddingAutoDownload,
-    memoryEmbeddingRemoteProviderId,
-    memoryKgEnabled,
-    ...rest
-  } = source;
-  void memoryEmbeddingModel;
-  void memoryEmbeddingAutoDownload;
-  void memoryEmbeddingRemoteProviderId;
-  void memoryKgEnabled;
+  const source = stripLegacyMemorySettings(persisted as Record<string, unknown>);
+  const { hashlineEditEnabled, bashInterceptEnabled, voiceModel, lcuEnabled, ...rest } = source;
   const editMode =
     'editMode' in source || 'hashlineEditEnabled' in source
       ? resolveEditMode(source.editMode, hashlineEditEnabled)
@@ -96,14 +81,6 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     'designEnabled' in source || 'designEnabled' in current
       ? { designEnabled: source.designEnabled !== false }
       : {};
-  const memoryDefaults = {
-    ...('memoryDistillEnabled' in source || 'memoryDistillEnabled' in current
-      ? { memoryDistillEnabled: source.memoryDistillEnabled !== false }
-      : {}),
-    ...('memoryLanguage' in source || 'memoryLanguage' in current
-      ? { memoryLanguage: resolveMemoryLanguage(source.memoryLanguage) }
-      : {}),
-  };
   return {
     ...current,
     ...rest,
@@ -117,7 +94,6 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
     ...contextMenuOpening,
     ...browserLinkOpening,
     ...design,
-    ...memoryDefaults,
     ...('pluginAutoUpdate' in source || 'pluginAutoUpdate' in current
       ? { pluginAutoUpdate: source.pluginAutoUpdate !== false }
       : {}),
@@ -145,9 +121,6 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * v2 → v3：新增标题总结：缺省关闭（不让升级用户静默多烧 token）、无独立模型。
  * v3 → v4：新增助手代审模型，缺省未选（该档禁用）。
  * v4 → v5：记住上次审批档；缺省未选，新会话仍走代审可用性默认。
- * v5/v6 → v7：移除项目记忆配置，兼容曾保存独立记忆模型的开发版。
- * v7 → v8：旧落盘的空 `disabledBuiltinTools` 不是「用户打开了 memory」——
- * 只是 memory 加进默认关名单之前就写下的「全开」。补上 memory，缺字段不动（initialState 已是关）。
  * v8 → v9：压缩策略改为互斥枚举；旧 `smartCompactEnabled` 布尔迁为 `compactStrategy`，缺字段不动。
  * v9 → v10：文件编辑模式改为互斥枚举；旧 hashline 开关迁移后删除。
  * v10 → v11：移除 Hashline 与 bash 拦截；hashline 回落 replace。
@@ -161,14 +134,13 @@ export function mergeSettingsState<T extends { editMode: EditMode; accentColor: 
  * v17 → v18：界面默认强调色由靛蓝改为晴空蓝；旧版落盘的 indigo 即旧默认值，随之换成 ocean。
  * v18 → v19：统计行旧默认精简为 Token / 缓存 / 上下文，保留自定义顺序、完整预设和全关。
  * v19 → v20：桌面采用 Kettu 默认字体与字号；只迁移完整旧默认，保留自定义排版与字体。
- * v20 → v21：长期记忆重写为轻量级 Markdown Wiki，移除旧 embedding/KG 配置字段并默认开启 memory 工具。
- * v21 → v22：Wiki 自动编译默认开启、记忆语言默认简体中文（将 v21 冻结旧默认 false / 'en' 迁为 true / 'zh'）。
+ * v22 → v23：移除内置 Wiki 设置（包括更早的项目记忆设置），保留本地模型空闲设置。不读写用户笔记文件。
  */
 export function migrateSettings(persisted: unknown, version: number): unknown {
   if (version >= SETTINGS_VERSION) return persisted;
   if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) return persisted;
 
-  let state = { ...(persisted as Record<string, unknown>) };
+  let state = stripLegacyMemorySettings(persisted as Record<string, unknown>);
   if (version < 1 && Array.isArray(state.providers)) {
     state = {
       ...state,
@@ -194,16 +166,6 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
   }
   if (version < 5) {
     state = { ...state, lastApprovalMode: null };
-  }
-  if (version < 7) {
-    const { localMemoryEnabled, memoryModel, memoryConcurrency, ...rest } = state;
-    state = rest;
-  }
-  if (version < 8 && Array.isArray(state.disabledBuiltinTools)) {
-    const list = state.disabledBuiltinTools.filter((id): id is string => typeof id === 'string');
-    if (!list.includes('memory')) {
-      state = { ...state, disabledBuiltinTools: [...list, 'memory'] };
-    }
   }
   if (
     version < 9 &&
@@ -321,49 +283,40 @@ export function migrateSettings(persisted: unknown, version: number): unknown {
       state = { ...state, chatTypography: normalizeDesktopChatTypography(undefined) };
     }
   }
-  if (version < 21) {
-    const {
-      memoryEmbeddingModel,
-      memoryEmbeddingAutoDownload,
-      memoryEmbeddingRemoteProviderId,
-      memoryKgEnabled,
-      ...rest
-    } = state;
-    void memoryEmbeddingModel;
-    void memoryEmbeddingAutoDownload;
-    void memoryEmbeddingRemoteProviderId;
-    void memoryKgEnabled;
-    state = enableMemoryToolOnUpgrade(rest);
-  }
-  if (version < 22) {
-    if (state.memoryDistillEnabled === false) {
-      state = { ...state, memoryDistillEnabled: true };
-    }
-    if (state.memoryLanguage === 'en') {
-      state = { ...state, memoryLanguage: 'zh' };
-    }
-  }
   return state;
 }
 
-function enableMemoryToolOnUpgrade(state: Record<string, unknown>): Record<string, unknown> {
-  const stripMemory = (entry: Record<string, unknown>): Record<string, unknown> => {
-    if (!Array.isArray(entry.disabledBuiltinTools)) return entry;
-    const next = entry.disabledBuiltinTools.filter((id) => id !== 'memory');
-    return next.length === entry.disabledBuiltinTools.length
-      ? entry
-      : { ...entry, disabledBuiltinTools: next };
+const LEGACY_MEMORY_SETTINGS = [
+  'localMemoryEnabled',
+  'memoryModel',
+  'memoryConcurrency',
+  'memoryEmbeddingModel',
+  'memoryEmbeddingAutoDownload',
+  'memoryEmbeddingRemoteProviderId',
+  'memoryKgEnabled',
+  'memoryDistillEnabled',
+  'memoryDistillModel',
+  'memoryChatModel',
+  'memoryLanguage',
+] as const;
+
+function stripLegacyMemorySettings(state: Record<string, unknown>): Record<string, unknown> {
+  const migrated = { ...state };
+  for (const key of LEGACY_MEMORY_SETTINGS) delete migrated[key];
+  const stripTool = (entry: Record<string, unknown>): Record<string, unknown> => {
+    const disabled = entry.disabledBuiltinTools;
+    return Array.isArray(disabled) && disabled.includes('memory')
+      ? { ...entry, disabledBuiltinTools: disabled.filter((id) => id !== 'memory') }
+      : entry;
   };
-  const migrated = stripMemory(state);
-  if (!Array.isArray(migrated.projects)) return migrated;
-  return {
-    ...migrated,
-    projects: migrated.projects.map((project) =>
+  if (Array.isArray(migrated.projects)) {
+    migrated.projects = migrated.projects.map((project) =>
       project && typeof project === 'object' && !Array.isArray(project)
-        ? stripMemory(project as Record<string, unknown>)
+        ? stripTool(project as Record<string, unknown>)
         : project
-    ),
-  };
+    );
+  }
+  return stripTool(migrated);
 }
 
 function migrateAgentToolModes(state: Record<string, unknown>): Record<string, unknown> {

@@ -22,7 +22,6 @@ import type { BrowserTabHolder } from '@shared/types/browser';
 import { create } from 'zustand';
 import { draftFromSentText, seedBotDraft } from '@/components/bots/botDraft';
 import { addToast } from '@/components/ui/toast';
-import { usePendingMemoryWrites } from '@/stores/memoryReview';
 import { applyHistoryPage, emptyProjection } from '@/stores/sessions/reducer';
 import { resizeSidePanelWidth, SIDE_PANEL_DEFAULT_WIDTH } from '@/stores/sidePanel/width';
 import { type ChatBrowserTabs, closeChatTab, parseChatTabs, revealChatTab } from './browserTabs';
@@ -1086,6 +1085,4 @@ export const useBotsStore = create<BotsState>()((set, get) => {
 });
 
 /** Bot 待处理数：收件箱入口与标题栏徽标共用 */
-export const useBotPendingCount = (): number =>
-  useBotsStore((s) => visibleInbox(s.inbox).length) +
-  usePendingMemoryWrites().filter((write) => write.kind !== 'compile').length;
+export const useBotPendingCount = (): number => useBotsStore((s) => visibleInbox(s.inbox).length);

@@ -92,6 +92,11 @@ it('script orchestration keeps the persisted tool id when toggled', () => {
   expect(controls.toggleBuiltinTool).toHaveBeenCalledWith('isolated_sandbox', false);
 });
 
+it('no longer lists the built-in long-term memory tool', () => {
+  const html = renderToStaticMarkup(<BuiltinToolsSettings />);
+  expect(html).not.toContain('Long-term memory');
+});
+
 it('聊天链接偏好独立于 browser 工具开关，并解释 Ctrl/Cmd 外部打开', () => {
   const html = renderToStaticMarkup(<BuiltinToolsSettings />);
   expect(html).toContain('data-settings-row="tools.openLinksInBuiltinBrowser"');

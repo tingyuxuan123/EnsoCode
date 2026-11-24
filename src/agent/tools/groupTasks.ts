@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { normalizeTaskCheck } from '@shared/bots/taskCheck';
-import { CHECK_SCHEMA, type DelegationOp } from './delegation';
-import type { MemoryInvoker } from './memory';
+import { CHECK_SCHEMA } from './delegation';
+import type { DelegationInvoker } from './delegationInvoker';
 
 const ACTIONS = [
   'list',
@@ -51,7 +51,7 @@ export function normalizeGroupTaskParams(raw: unknown): unknown {
   return params;
 }
 
-export function createGroupTasksTool(invoker: MemoryInvoker<DelegationOp>): ToolDefinition {
+export function createGroupTasksTool(invoker: DelegationInvoker): ToolDefinition {
   return {
     name: 'group_tasks',
     label: 'group_tasks',

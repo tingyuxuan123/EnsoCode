@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { parseAgentWorkerEvent } from '../../shared/types/agent';
-import { MemoryInvoker } from './memory';
+import { DelegationInvoker } from './delegationInvoker';
 import { createRoutineProposeTool, normalizeRoutineProposeParams } from './routinePropose';
 
 it('schema 校验前归一化：别名键、去空白、@ 前缀、null 与空串删除、数字转串', () => {
@@ -30,9 +30,10 @@ it('schema 校验前归一化：别名键、去空白、@ 前缀、null 与空�
 });
 
 it('声明完整类型的 schema 与 prepareArguments，并经 invoker 调用 routine_propose', async () => {
-  const invoker = new MemoryInvoker({ sessionId: 's', generation: 'g' }, () => {});
-  const invoke = vi.spyOn(invoker, 'invoke').mockResolvedValue({ ok: true });
-  const tool = createRoutineProposeTool(invoker as never);
+  const identity = { sessionId: 's', generation: 'g' };
+  const emit = vi.fn<ConstructorParameters<typeof DelegationInvoker>[1]>();
+  const invoker = new DelegationInvoker(identity, emit);
+  const tool = createRoutineProposeTool(invoker);
   expect(tool.name).toBe('routine_propose');
   const schema = tool.parameters as unknown as {
     type: string;
@@ -48,18 +49,22 @@ it('声明完整类型的 schema 与 prepareArguments，并经 invoker 调用 ro
   );
   for (const property of Object.values(schema.properties)) expect(property.type).toBe('string');
   expect(tool.prepareArguments).toBeDefined();
-  await tool.execute(
+  const pending = tool.execute(
     'id',
     { name: 'a', prompt: 'b', schedule: 'hourly' } as never,
     undefined,
     undefined as never,
     undefined as never
   );
-  expect(invoke).toHaveBeenCalledWith(
-    'routine_propose',
-    { title: 'a', prompt: 'b', schedule: 'hourly' },
-    undefined
-  );
+  expect(emit).toHaveBeenCalledWith({
+    identity,
+    requestId: expect.any(String),
+    op: 'routine_propose',
+    params: { title: 'a', prompt: 'b', schedule: 'hourly' },
+  });
+  const requestId = emit.mock.calls[0]![0].requestId;
+  expect(invoker.resolve({ requestId, ok: true, result: { id: 'routine-1' } })).toBe(true);
+  expect((await pending).content).toEqual([{ type: 'text', text: '{"id":"routine-1"}' }]);
 });
 
 it('worker 事件协议接受 routine_propose op', () => {

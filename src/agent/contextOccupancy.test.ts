@@ -21,7 +21,7 @@ describe('summarizeContextOccupancy', () => {
     expect(charsToTokens(5)).toBe(2);
   });
 
-  it('缺文件与空记忆记 0，不把面板打空', () => {
+  it('缺文件记 0，不把面板打空', () => {
     const occupancy = summarizeContextOccupancy({
       systemText: 'sys',
       instructionText: '',
@@ -30,8 +30,6 @@ describe('summarizeContextOccupancy', () => {
       conversationTokens: 12,
       compactionTokens: 0,
       compactedMessageCount: 0,
-      projectMemoryText: '',
-      projectMemoryEnabled: true,
       reminderText: '',
       currentModelFamily: 'claude',
       compactionModelFamily: undefined,
@@ -54,8 +52,6 @@ describe('summarizeContextOccupancy', () => {
       conversationTokens: 20,
       compactionTokens: 8,
       compactedMessageCount: 6,
-      projectMemoryText: '',
-      projectMemoryEnabled: true,
       reminderText: 'abcd',
       currentModelFamily: 'claude',
       compactionModelFamily: 'claude',
@@ -73,8 +69,10 @@ describe('summarizeContextOccupancy', () => {
     expect(occupancy.compactionModelMismatch).toBe(false);
   });
 
-  it('关 project_memory 或空文件该桶恒 0', () => {
+  it('keeps the legacy memory bucket at zero even if old input contains memory text', () => {
+    const staleInput = { projectMemoryText: 'remember this', projectMemoryEnabled: true };
     const withText = summarizeContextOccupancy({
+      ...staleInput,
       systemText: '',
       instructionText: '',
       skillTexts: [],
@@ -82,12 +80,11 @@ describe('summarizeContextOccupancy', () => {
       conversationTokens: 0,
       compactionTokens: 0,
       compactedMessageCount: 0,
-      projectMemoryText: 'remember this',
-      projectMemoryEnabled: false,
       reminderText: '',
       currentModelFamily: 'gpt',
     });
     expect(withText.buckets.projectMemory).toBe(0);
+    expect(withText.used).toBe(0);
   });
 
   it('压缩模型家族与当前不一致则标 mismatch', () => {
@@ -99,8 +96,6 @@ describe('summarizeContextOccupancy', () => {
       conversationTokens: 1,
       compactionTokens: 1,
       compactedMessageCount: 3,
-      projectMemoryText: '',
-      projectMemoryEnabled: true,
       reminderText: '',
       currentModelFamily: 'claude',
       compactionModelFamily: 'gpt',
@@ -118,8 +113,6 @@ describe('summarizeContextOccupancy', () => {
         conversationTokens: 4,
         compactionTokens: 0,
         compactedMessageCount: 0,
-        projectMemoryText: '',
-        projectMemoryEnabled: true,
         reminderText: '',
         currentModelFamily: 'claude',
       },
@@ -139,8 +132,6 @@ describe('summarizeContextOccupancy', () => {
       conversationTokens: 50,
       compactionTokens: 0,
       compactedMessageCount: 0,
-      projectMemoryText: '',
-      projectMemoryEnabled: true,
       reminderText: '',
       currentModelFamily: 'claude',
       contextWindow: 10,
@@ -168,8 +159,6 @@ describe('summarizeContextOccupancy', () => {
       conversationTokens: 0,
       compactionTokens: 0,
       compactedMessageCount: 0,
-      projectMemoryText: '',
-      projectMemoryEnabled: true,
       reminderText: '',
       currentModelFamily: 'claude',
     });
@@ -186,8 +175,6 @@ describe('summarizeContextOccupancy 的 usedOverride / anchored', () => {
     conversationTokens: 10,
     compactionTokens: 0,
     compactedMessageCount: 0,
-    projectMemoryText: '',
-    projectMemoryEnabled: true,
     reminderText: '',
     currentModelFamily: 'claude',
   };

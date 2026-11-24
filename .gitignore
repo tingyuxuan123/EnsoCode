@@ -33,6 +33,9 @@ docs/plans/
 # zvec-grep 本地语义索引
 .zvec-grep/
 
+# llmdoc 本机缓存不入库；知识文档 llmdoc/ 可以入库。
+.llmdoc-tmp/
+
 # 误配 store-dir 时落在仓库里的 pnpm 缓存
 .pnpm-store/
 

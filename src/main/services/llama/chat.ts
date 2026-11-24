@@ -1,16 +1,8 @@
-import type { Complete } from '../memory/types';
-import {
-  chatModelIdFromSettings,
-  localChatModelPathIfReady,
-  REMOTE_CHAT_MODEL_ID,
-  resolveChatModelSpec,
-} from './chatModels';
 import { withoutReasoning } from './chatWrapper';
 import { ModelIdleTimer } from './idle';
 import {
   addThoughtChunk,
   type LocalInferenceDiag,
-  publicInferenceDiag,
   type TokenMeterSnapshot,
   tokenMeterDelta,
 } from './inferenceDiag';
@@ -22,6 +14,12 @@ import {
   loadLlama,
   releaseModel,
 } from './runtime';
+
+type Complete = (
+  systemPrompt: string,
+  userText: string,
+  options?: { maxTokens?: number; signal?: AbortSignal }
+) => Promise<string>;
 
 export interface ChatSessionLike {
   prompt(userText: string, opts?: { signal?: AbortSignal; maxTokens?: number }): Promise<string>;
@@ -40,7 +38,7 @@ export interface CreateLocalCompleteOptions {
   /**
    * 测试注入假 session。生产走 node-llama-cpp 的 LlamaChatSession。
    * 每次 Complete 都新建 session：契约是无状态 (system, user)→text，
-   * 复用会把提炼历史泄漏进解读。
+   * 不复用上一请求的对话内容。
    */
   createSession?: (model: LlamaModelLike, systemPrompt: string) => Promise<ChatSessionLike>;
 }
@@ -48,25 +46,12 @@ export interface CreateLocalCompleteOptions {
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_CONTEXT_SIZE = 8192;
 
-/**
- * llama.cpp 默认一个 sequence；提炼虽串行，解读/结晶可能并发。
- * 重叠推理会抢同一份 KV，所以进程内所有本地 Complete 共用这一把锁。
- */
+/** llama.cpp 默认一个 sequence，本地 Complete 串行使用同一份 KV。 */
 let queue: Promise<unknown> = Promise.resolve();
 let chatIdle = new ModelIdleTimer(() => releaseLocalChatSlot());
 
-let selectedChatModel = REMOTE_CHAT_MODEL_ID;
-
 export function syncLocalChatFromSettings(state: Record<string, unknown>): void {
   chatIdle.configure(state.memoryModelIdleMinutes);
-  const id = chatModelIdFromSettings(state);
-  if (id === selectedChatModel) return;
-  selectedChatModel = id;
-  void releaseLocalChatSlot().catch(() => {});
-}
-
-export function holdLocalChat(): () => void {
-  return chatIdle.acquire();
 }
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -204,7 +189,6 @@ async function readGpu(): Promise<string | boolean | null> {
 
 /** 仅供测试：丢掉缓存的 KV，避免跨用例串台 */
 export function __resetLocalChatForTest(): void {
-  selectedChatModel = REMOTE_CHAT_MODEL_ID;
   chatIdle.reset();
   chatIdle = new ModelIdleTimer(() => releaseLocalChatSlot());
   cachedContext = null;
@@ -245,7 +229,6 @@ export function createLocalComplete(
     ((model, systemPrompt) => defaultCreateSession(model, systemPrompt, modelPath, contextSize));
 
   return (systemPrompt, userText, completeOptions) => {
-    const queuedAt = performance.now();
     const release = chatIdle.acquire();
     return new Promise<string>((resolve, reject) => {
       const external = completeOptions?.signal;
@@ -257,12 +240,6 @@ export function createLocalComplete(
       external?.addEventListener('abort', onAbort, { once: true });
       if (external?.aborted) onAbort();
       void enqueue(async () => {
-        const startedAt = performance.now();
-        if (completeOptions?.stage)
-          console.info('[memory-distill] local queue wait', {
-            stage: completeOptions.stage,
-            durationMs: Math.round(startedAt - queuedAt),
-          });
         const timedOut = new Error('local chat timed out');
         const timer = setTimeout(() => {
           ac.abort(timedOut);
@@ -272,35 +249,15 @@ export function createLocalComplete(
         try {
           ac.signal.throwIfAborted();
           if (cachedContext && cachedContext.path !== modelPath) await disposeChatContext();
-          const modelStartedAt = performance.now();
           const model = await acquire('chat', modelPath);
-          if (completeOptions?.stage)
-            console.info('[memory-distill] local model acquire', {
-              stage: completeOptions.stage,
-              durationMs: Math.round(performance.now() - modelStartedAt),
-            });
           ac.signal.throwIfAborted();
-          const sessionStartedAt = performance.now();
           session = await createSession(model, systemPrompt);
-          if (completeOptions?.stage)
-            console.info('[memory-distill] local context/session prepare', {
-              stage: completeOptions.stage,
-              durationMs: Math.round(performance.now() - sessionStartedAt),
-            });
           ac.signal.throwIfAborted();
-          const inferenceStartedAt = performance.now();
           const text = await session.prompt(userText, {
             signal: ac.signal,
             maxTokens: completeOptions?.maxTokens,
           });
           ac.signal.throwIfAborted();
-          if (completeOptions?.stage)
-            console.info('[memory-distill] local inference', {
-              stage: completeOptions.stage,
-              durationMs: Math.round(performance.now() - inferenceStartedAt),
-              maxTokens: completeOptions.maxTokens,
-              ...publicInferenceDiag(session.lastDiag),
-            });
           // 调用者超时不代表 native 已停；锁、session 和空闲计时都等真实推理 settle。
           resolve(text);
         } catch (error) {
@@ -316,24 +273,4 @@ export function createLocalComplete(
       });
     });
   };
-}
-
-export async function memoryCompleteFromSettings(
-  state: Record<string, unknown> | undefined,
-  opts: {
-    modelsRoot: string;
-    remoteComplete: () => Promise<Complete | null>;
-    createLocal?: typeof createLocalComplete;
-  }
-): Promise<Complete | null> {
-  const id = chatModelIdFromSettings(state);
-  if (id === REMOTE_CHAT_MODEL_ID) {
-    return opts.remoteComplete();
-  }
-  const gguf = localChatModelPathIfReady(opts.modelsRoot, id);
-  if (!gguf) return null;
-  const spec = resolveChatModelSpec(id);
-  return (opts.createLocal ?? createLocalComplete)(gguf, {
-    contextSize: spec?.contextSize,
-  });
 }

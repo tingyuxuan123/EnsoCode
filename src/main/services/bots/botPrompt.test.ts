@@ -54,14 +54,15 @@ describe('buildBotModeInstruction', () => {
     expect(text).not.toContain('group_history');
   });
 
-  it('群聊：说明任务看板（拆分多步工作、先认领、完成写结果、别刷屏）与群记忆归属', () => {
+  it('群聊：仍说明任务看板，但不引导使用旧记忆', () => {
     const text = buildBotModeInstruction({ self: alice, kind: 'group', roster: [alice, bob] });
     expect(text).toContain('group_tasks');
     expect(text).toMatch(/claim/i);
     expect(text).toMatch(/result/i);
     expect(text).toMatch(/do not create a task for every/i);
     expect(text).toMatch(/taskId/);
-    expect(text).toContain("spaceId 'chat'");
+    expect(text).not.toContain('spaceId');
+    expect(text).not.toContain('memory_upsert');
   });
 
   it('群聊：说明压缩后或需核对原话时用 group_history 回查', () => {

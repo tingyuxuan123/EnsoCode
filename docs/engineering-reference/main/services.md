@@ -135,19 +135,10 @@ worker 侧的 `SessionSupervisor` 在 `src/agent/`（与 main/renderer/shared �
   已登记定义，可见集合另由 cwd 的 `DesignPresence` 决定。规划和审批在 worker，Main 用根会话的
   权威 cwd 与画布路由，结果回原 child generation；历史 hook 仅由父会话触发。
 
-## Markdown Wiki 记忆、索引重建与审批边界
+## 项目知识扩展与已停用的内置记忆
 
-- **纯 Markdown 为权威源，SQLite FTS5 为可丢弃派生索引**：每个记忆空间是一个兼容 Obsidian 的本地目录（`schema.md`、`index.md`、`log.md`、`raw/`、`wiki/`、`archive/`），笔记使用 OKF v0.2 Frontmatter 与 `[[wikilink]]`。`<userData>/memory/index.db` 只保存可随时重建的 `notes`、`links` 与 `notes_fts`（FTS5 `trigram`），不存权威正文；外置原生模块只依赖 `better-sqlite3` FTS5（已移除 `sqlite-vec` 与 `@huggingface/tokenizers`）。
-- **外部 Obsidian Vault 绑定与 `index.md` 安全**：空间默认存放在 `<userData>/memory/vaults/{global,projects/<id>,bots/<id>,chats/<id>}/`；外部绑定关系仅由 Main 保存在 `<userData>/memory/vault-bindings.json` 并做 canonical 路径与根目录/家目录边界校验。解绑或删除会话/成员/项目绝不删除外部 Vault 目录内的用户文件。绑定已有 Obsidian Vault 且存在无 `<!-- collabra:managed -->` 标记的手写 `index.md` 时，改为写入 `_collabra-index.md`。
-- **内置工具与审批边界**：提供 `memory_index`、`memory_search`、`memory_read`、`memory_upsert`、`memory_archive`（随内置 `memory` 开关在设置版本升级及新装时默认开启）。`memory_search` 按会话推导可见空间并结合 FTS5 匹配、`[[wikilink]]` 图连接与状态加权；`raw/` 文件只读、`memory_archive` 软归档到 `archive/`。Bot 模式写入共享 `project`/`global` 空间仍先落入 `pending_writes` 待人工审批后写入 `.md` 文件。
-- **知识页就地重写，不追加**：一页只描述当前成立的事实。编译器给模型的目录只有标题与摘要，看不到正文，因此 `mergeIntoExistingPage` 对命中已有页面的动作再发一次重写调用（`WIKI_REWRITE_PROMPT`），把当前正文与新结论合成整页后以 `replace` 落盘。**已有页面的回退只能是 `append`（或显式 `section`）**：路径解析失败、正文超过 `COMPILE_MAX_CHUNK_CHARS`、模型无有效输出时都不允许 `replace`——此时模型只给了增量结论，覆盖会抹掉旧页。写入带 `expectedBodyHash`：正文在模型思考期间被外部改过时，普通页降级为「只追加增量 + 强制 draft + 不参与核验」，状态页直接拒绝（`conflict`）交给人决定；`conflictFallbackContent` 只在降级分支使用，且与主内容一样过脱敏与安全扫描；同一页在同一次编译里先成功写入、后被降级时，之前排队的核验项要撤销，否则会读到最终稿并盖章。状态页在任何情况下都强制整页覆盖，`append`/`section` 不能制造两段互相矛盾的"现在"；`wiki/status.md` 按小写比对索引路径，命中多行（大小写敏感盘上两种拼写）直接报冲突。写入纪律同时写在 `WIKI_COMPILE_PROMPT`、`memory_upsert` 工具描述与 `schema.md` 预设里；`lint.revision_marker` 抓 `Update (日期)`、变更记录一类追加痕迹，`lint.duplicate_title` 抓同空间同标题的两份事实。
-- **状态页是“现在”，知识页是 evergreen**：`type: status` 的页面固定落在 `wiki/status.md`（`STATUS_NOTE_REL_PATH`），每个空间只有一篇——唯一性由路径结构保证，而不是靠校验去堵，标题变化也不会分裂成第二篇。它整篇覆盖写，首行 `As of YYYY-MM-DD`，只放仍然活跃的工作、下一步和卡点，预算 60 行（`LINT_STATUS_MAX_LINES`）。`memory_index` 额外返回 `status` 字段（正文，不带 frontmatter），agent 恢复项目时不必再发一次 `memory_read`。`lint.ts` 用 `status_oversized`、`status_stale`（30 天未更新）与 `status_duplicate` 守住这三条，并豁免状态页的 `orphan` 判定（入口文档不需要入链）。
-- **核验由模型做，不靠用户逐篇确认**：编译器写完一批笔记后按空间分组跑 `WIKI_VERIFY_PROMPT` 批量核验——同一份会话证据、只看已经落盘的文字，逐篇返回 `supported` / `unsupported`；通过的用 `markNoteVerified` 把 `status` 翻成 `verified` 并写 `verified.by = collabra-verifier`（写入者仍是 `collabra-compiler`，谁说的和谁核对的分开可查）。盖章有三道闸：只盖仍是 `draft` 的版本（不抢用户已经确认过的署名）、正文哈希必须与核验时一致、正文超过 `VERIFY_MAX_NOTE_CHARS` 或同空间 slug 撞车的笔记不送核验。核验失败、解析失败、没有可用模型时页面留在 `draft`，交给 `lint.unverified_draft` 提醒，绝不默认标成已验证。UI 不再提供逐篇“标记为已验证”按钮，笔记编辑器里的状态字段保留给确实要人工改判的场合；`memory_upsert` 这条 agent 直接写入的路径还没有核验器，仍落 `draft`。
-- **会话启动注入记忆摘要**：`spawnSession` 只给本机项目会话追加 `systemPromptAppend`（Bot 会话走自己的核心笔记通道，远程会话不带）：记忆条数 + 「先 `memory_index`/`memory_search`、再 `memory_read`」的用法 + 状态页归属与覆盖写要求 + 状态页正文（截断到 4000 字符）。`systemPromptAppend` 是三处同步的协议字段：`AgentCommand` 的 `spawn-parent` 类型、`hasOnlyKeys` 白名单、worker 侧 `appendSystemPromptExtension` 消费——缺一处整条启动命令会被丢弃（见 `big-question/spawn-parent-field-allowlist.md`）。数据由 `memoryHost` 通过 `setMemoryStartupProvider` 注册的回调读取，`agentHost` 只依赖 `memory/startupRegistry` 这层转发，避免把 sqlite 与本地模型依赖拖进 spawn 路径；空间里既没有笔记也没有状态页、或 `memory` 内置工具被关闭时返回 null，不留空段。provider 只查索引，索引为空时补一次 `syncSpaceIndex`（并缓存 60 秒“空空间”结论）。
-- **记忆与代码的新鲜度对比**：状态页归属那句让模型在会话中途就能覆盖状态页（不必等会话收口，`memory_upsert` 走 `type=status` 的固定路径）。`readLatestCommitIso` 用 `git -C <cwd> log -1 --format=%cI` 取仓库最后提交时间，与空间内最新笔记的 `updated_at` 按**日期**比较：代码更新则追加一行「repository has commits newer than this memory」，让“记忆可能过期”从隐性变成显性。只看时间点、不看 diff，任何失败（非 git、无 git、超时）返回 null，绝不阻塞启动。回归：`memory/startupPrompt.test.ts`、`memory/codeFreshness.test.ts`、`memoryHost.test.ts`、`agentHost.builtinTools.test.ts`。
-- **本地项目的当轮记忆**：启用自动整理时，当前模型给出答复后、SDK 发出 `agent_settled` 前，通过同一会话检查项目 Wiki。本轮已有真实写入回执就不重复写；否则需要写入回执或明确的「无新增」结论。收口请求只允许当前项目的记忆工具；失败不会报保存成功。压缩、会话结束和闲置回收不再为普通本地项目排第二份后台任务。手动编译历史会话与 Bot 的原有策略独立。收尾轮的问答与工具卡不上时间线，但真正落盘的写入会作为 `memoryUpdates` 挂在真答案上，渲染成与「文件已修改」同构的折叠卡片：每行带 `noteDiff` 算出的紧凑补丁（只留变化块与一行上下文，`NOTE_DIFF_MAX_LINES` 截断），点标题用 note id 打开右侧 Wiki 定位到该页；历史与重载从 `sessionHistoryTail` 同一口径重建。回归：`src/agent/memoryTurnReview.test.ts`、`src/agent/sessionAdapter.test.ts`、`src/main/ipc/agent.test.ts`、`src/main/services/sessionHistoryTail.test.ts`、`src/renderer/components/chat/TurnMemoryCard.test.tsx`、`src/shared/memory/noteDiff.test.ts`。
-- **确定性体检与实时监视**：`lint.ts` 对断链 `[[wikilink]]`、孤立笔记、过期 `staleAfter`、陈旧草稿、缺摘要、超长页面、追加式更新标记、重复标题与状态页预算做无模型确定性检查；`watcher.ts` 防抖监听外部 Obsidian 编辑并增量刷新索引。
-  回归：`memory/vault.test.ts`、`memory/indexDb.test.ts`、`memory/lint.test.ts`、`memory/operations.test.ts`、`memory/compiler.test.ts`、`memory/bridge.test.ts`、`memory/bindings.test.ts`、`memoryHost.test.ts`、`memoryAdmin.test.ts`。
+- 内置 Markdown Wiki 的工具、索引、自动编译和 Bot 核心笔记注入已停用。旧应用数据目录中的 Wiki、外部 Obsidian Vault 及会话文件不会自动迁移、覆盖或删除。Bot 与群的手写笔记仍可编辑，但不再自动改写或注入。会话历史与上下文压缩继续工作。
+- [独立 llmdoc 扩展](../../../examples/plugins/llmdoc/README.md) 提供 Git 项目的知识检索和变更复核。插件本身只读仓库；显式维护只准备对话请求，实际写入和 Git 提交由 Agent 分别确认执行，不读取历史聊天或在后台改写文档。
 
 回归：`streamGuard.test.ts`、`streamGuard.sdk.test.ts`、`backgroundTasks.test.ts`、
 `ensoCompact/extract.test.ts`、`supervisor.agentDispatch.test.ts`、`pendingNotifications.test.ts`、
@@ -530,7 +521,7 @@ CodeKiln 不再接入 LCU：旧设置在水合时丢弃，专属授权不再提�
 - 发出 abort 不等于文件 I/O 已结束。同目录下载重启前等待旧任务收尾，不能仅删除 `running` 后立即复用 `.part`。
 - 回归须挂起初始化或重试，再跨事件轮次切换、取消和重开，验证旧任务不会覆盖新配置、释放新资源或删除新任务状态。
 
-回归位置：`src/main/services/memoryHost.test.ts`、`src/main/services/chatModels.test.ts`。
+回归位置：`src/main/services/chatModels.test.ts`。
 
 ## 网络请求按协议分派
 

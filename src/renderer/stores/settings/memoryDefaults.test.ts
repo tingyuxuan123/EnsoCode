@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, expect, it, vi } from 'vitest';
 import type * as SettingsModule from './index';
 import { SETTINGS_VERSION } from './migrate';
 
@@ -34,45 +34,26 @@ beforeAll(async () => {
   await settings.useSettingsStore.persist.rehydrate();
 });
 
-describe('Wiki 记忆默认设置', () => {
-  it('默认开启自动编译会话到 Wiki 并默认使用简体中文，同时保留显式关闭与自定义语言', () => {
-    const store = settings.useSettingsStore;
-    expect(store.getState().memoryDistillEnabled).toBe(true);
-    expect(store.getState().memoryLanguage).toBe('zh');
-
-    store.getState().setMemoryDistillEnabled(false);
-    expect(store.getState().memoryDistillEnabled).toBe(false);
-    expect(writeKey).toHaveBeenLastCalledWith(
-      'enso-settings',
-      expect.objectContaining({
-        state: expect.objectContaining({ memoryDistillEnabled: false }),
-      })
-    );
-
-    store.getState().setMemoryDistillEnabled('false' as unknown as boolean);
-    expect(store.getState().memoryDistillEnabled).toBe(true);
-
-    store.getState().setMemoryLanguage('en');
-    expect(store.getState().memoryLanguage).toBe('en');
-    store.getState().setMemoryLanguage('auto');
-    expect(store.getState().memoryLanguage).toBe('auto');
-    store.getState().setMemoryLanguage('invalid');
-    expect(store.getState().memoryLanguage).toBe('zh');
-  });
-
-  it('水合脏持久化值时仅显式 false 关闭自动编译，非法语言回退简体中文', async () => {
-    for (const memoryDistillEnabled of [true, false, null, undefined, 0, 'false']) {
-      disk.value = {
-        'enso-settings': {
-          state: { memoryDistillEnabled, memoryLanguage: 'unknown' },
-          version: SETTINGS_VERSION,
-        },
-      };
-      await settings.useSettingsStore.persist.rehydrate();
-      expect(settings.useSettingsStore.getState().memoryDistillEnabled).toBe(
-        memoryDistillEnabled !== false
-      );
-      expect(settings.useSettingsStore.getState().memoryLanguage).toBe('zh');
-    }
-  });
+it('does not hydrate obsolete Wiki preferences, but keeps the local model idle policy', async () => {
+  const obsolete = {
+    memoryDistillEnabled: true,
+    memoryDistillModel: { providerId: 'p', modelId: 'm' },
+    memoryChatModel: 'remote',
+    memoryLanguage: 'auto',
+  };
+  disk.value = {
+    'enso-settings': {
+      state: {
+        ...obsolete,
+        memoryModelIdleMinutes: 30,
+        disabledBuiltinTools: ['memory', 'browser'],
+      },
+      version: SETTINGS_VERSION,
+    },
+  };
+  const store = settings.useSettingsStore;
+  await store.persist.rehydrate();
+  for (const key of Object.keys(obsolete)) expect(store.getState()).not.toHaveProperty(key);
+  expect(store.getState().disabledBuiltinTools).toEqual(['browser']);
+  expect(store.getState().memoryModelIdleMinutes).toBe(30);
 });

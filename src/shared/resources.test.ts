@@ -104,6 +104,8 @@ describe('classifyStoragePath', () => {
     ['agent/sessions/enso-abc__cw-def.jsonl', 'coworkers'],
     ['memory/memory.db', 'memory'],
     ['agent/pi-agent/memories/a.md', 'memory'],
+    ['agent/pi-agent/memories/old-notes.bak', 'memory'],
+    ['agent/pi-agent/memories/session.log', 'memory'],
     ['worktrees/repo/file', 'worktrees'],
     ['changes-snapshots/abc.json', 'snapshots'],
     ['settings.json', 'config'],

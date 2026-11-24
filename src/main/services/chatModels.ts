@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
 import path from 'node:path';
-import type { ChatModelDto, EmbeddingDownloadProgressDto } from '@shared/memory/dto';
+import type { ChatModelDto, LocalModelDownloadProgressDto } from '@shared/localModels';
 import { app } from 'electron';
 import { releaseLocalChatSlot } from './llama/chat';
 import {
@@ -12,11 +12,10 @@ import {
 import { downloadedBytes, downloadModel, isModelReady } from './llama/downloader';
 
 /**
- * 本地 chat 模型的显式下载管理。与 memoryModels.ts 同层同模式：
- * 设置页只传 id，路径由 Main 按注册表推导。
+ * 本地 chat 模型的显式下载管理。设置页只传 id，路径由 Main 按注册表推导。
  */
 
-type ProgressSink = (progress: EmbeddingDownloadProgressDto) => void;
+type ProgressSink = (progress: LocalModelDownloadProgressDto) => void;
 
 interface DownloadTask {
   controller: AbortController;
@@ -38,6 +37,7 @@ export function __setChatModelsRootForTest(root: string | null): void {
 }
 
 function modelsRoot(): string {
+  // 兼容安装版已下载的语音模型，不迁移或删除旧目录。
   return rootOverride ?? path.join(app.getPath('userData'), 'memory', 'chat-models');
 }
 

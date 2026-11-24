@@ -15,7 +15,6 @@ import { DetailRows, PickList, setFilteredIds } from '@/components/settings/Pres
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { addToast } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
 import { useBotsStore } from '@/stores/bots';
@@ -25,9 +24,7 @@ import { BotAvatar } from './BotAvatar';
 import { ApprovalSelect, FieldLabel, Segmented } from './BotFields';
 
 /** 成员能力（模型除外）：新建对话框与资料面板共用 */
-export interface AbilityForm extends AbilityValues, BudgetForm, LimitsForm {
-  memoryEnabled: boolean;
-}
+export type AbilityForm = AbilityValues & BudgetForm & LimitsForm;
 
 export const DEFAULT_ABILITIES: AbilityForm = {
   tools: 'all',
@@ -36,7 +33,6 @@ export const DEFAULT_ABILITIES: AbilityForm = {
   mcpServerIds: [],
   canDelegateTo: 'any',
   acceptFrom: 'any',
-  memoryEnabled: true,
   budgetCost: '',
   budgetTokens: '',
   delegationTimeout: '',
@@ -118,13 +114,6 @@ export function BotAbilityFields({
         bots={others}
         onChange={(acceptFrom) => onChange({ acceptFrom })}
       />
-      <label className="flex items-center justify-between gap-2 text-sm">
-        <span>{t('Long-term memory')}</span>
-        <Switch
-          checked={value.memoryEnabled}
-          onCheckedChange={(memoryEnabled) => onChange({ memoryEnabled })}
-        />
-      </label>
       <div>
         <FieldLabel>{t('Daily budget')}</FieldLabel>
         <div className="grid grid-cols-2 gap-2">

@@ -155,43 +155,19 @@ describe('AppRail 精简导航', () => {
     ).toBe('true');
   });
 
-  it('功能入口按 图片 -> 设计 -> Wiki -> 看板 排布并支持 Wiki 选中态与更新徽标', () => {
+  it('功能入口按 图片 -> 设计 -> 看板 排布', () => {
     const props = {
       imageStudio: { active: false, onToggle: vi.fn() },
       designGallery: { label: 'Design', active: false, onToggle: vi.fn() },
-      wikiWorkspace: { active: true, updated: true, onToggle: vi.fn() },
       collaborationBoard: { active: false, onToggle: vi.fn() },
     };
     expect(railItems(props)).toEqual([
       'Image studio',
       'Design',
-      'Wiki',
       'Collaboration board',
       'Ask CodeKiln',
       'Settings',
     ]);
-    const document = parseHTML(renderToStaticMarkup(createElement(AppRail, props))).document;
-    const wikiBtn = document.querySelector('[aria-label="Wiki"]');
-    expect(wikiBtn?.getAttribute('data-rail-view')).toBe('wiki');
-    expect(wikiBtn?.getAttribute('aria-pressed')).toBe('true');
-    expect(wikiBtn?.classList.contains('bg-selection')).toBe(true);
-    expect(wikiBtn?.classList.contains('text-brand')).toBe(true);
-    const svg = wikiBtn?.querySelector('svg');
-    expect(svg?.getAttribute('data-rail-glyph')).toBe('wiki');
-    expect(svg?.querySelector('[data-active-fill]')).not.toBeNull();
-    expect(svg?.getAttribute('stroke-width')).toBe('1.75');
-    expect(wikiBtn?.querySelector('[data-wiki-updated]')).toBeNull();
-    const updatedInactiveDoc = parseHTML(
-      renderToStaticMarkup(
-        createElement(AppRail, {
-          wikiWorkspace: { active: false, updated: true, onToggle: vi.fn() },
-        })
-      )
-    ).document;
-    expect(
-      updatedInactiveDoc.querySelector('[aria-label="Wiki"] [data-wiki-updated]')
-    ).not.toBeNull();
-    expect(railItems({})).not.toContain('Wiki');
   });
 
   it('侧栏开关之后是分隔符，全局入口按 看板 → 设置 排布', () => {

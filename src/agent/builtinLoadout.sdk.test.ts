@@ -129,7 +129,7 @@ it('real SDK preserves the whole running tool round, then changes the next reque
     },
     skillPaths: [path.join(root, 'skills')],
     mcpServers: [{ id: 'fixture', name: 'fixture', transport: 'stdio', command: 'never-started' }],
-    disabledTools: ['memory', 'computer'],
+    disabledTools: ['computer'],
   });
   await vi.waitFor(() => expect(events.some((event) => event.type === 'parent-ready')).toBe(true));
   const session = capture.sessions[0]!;
@@ -141,7 +141,7 @@ it('real SDK preserves the whole running tool round, then changes the next reque
   supervisor.handleCommand({
     type: 'set-builtin-tools',
     identity,
-    disabledTools: ['browser', 'memory', 'computer'],
+    disabledTools: ['browser', 'computer'],
   });
   expect(session.getActiveToolNames()).toContain('browser_snapshot');
   const invocation = events.find((event) => event.type === 'browser-invoke');
@@ -162,8 +162,18 @@ it('real SDK preserves the whole running tool round, then changes the next reque
   expect(session.isIdle).toBe(true);
   expect(session.getActiveToolNames()).not.toContain('browser_snapshot');
   expect(session.getCallableToolNames()).not.toContain('browser_snapshot');
+  const settled = events.filter((event) => event.type === 'turn-completed').length;
   await session.prompt('Continue without browser.');
+  expect(requests).toHaveLength(3);
+  expect(events.filter((event) => event.type === 'turn-completed')).toHaveLength(settled + 1);
+  expect(session.sessionManager.getBranch()).not.toContainEqual(
+    expect.objectContaining({
+      type: 'custom_message',
+      customType: 'codekiln.project-memory-review',
+    })
+  );
   const tools = getCurrentTools(requests[2]!.messages).map((tool) => tool.name);
+  expect(tools.filter((name) => name.startsWith('memory_'))).toEqual([]);
   expect(tools).not.toContain('browser_snapshot');
   expect(tools).toEqual(
     expect.arrayContaining(['mcp__fixture__read', 'code_search', 'codemode', 'subagent'])

@@ -19,11 +19,11 @@ describe('builtin tool scopes', () => {
 
   it('dedupes semantic sets per session, pins spawn-only settings, and forgets/reset scopes', () => {
     const scopes = new BuiltinToolScopes();
-    scopes.remember(identity('a'), 'p', [], ['memory', 'isolated_sandbox']);
-    scopes.remember(identity('b'), undefined, ['plan'], ['plan', 'memory']);
+    scopes.remember(identity('a'), 'p', [], ['todo', 'isolated_sandbox']);
+    scopes.remember(identity('b'), undefined, ['plan'], ['plan', 'todo']);
     const next = {
       disabledBuiltinTools: [],
-      projects: [{ id: 'p', disabledBuiltinTools: ['memory'] }],
+      projects: [{ id: 'p', disabledBuiltinTools: ['todo'] }],
     };
     expect(scopes.changes(next, true)).toEqual([
       { identity: identity('b'), disabledTools: ['plan'] },
@@ -42,8 +42,8 @@ describe('builtin tool scopes', () => {
     const scopes = new BuiltinToolScopes();
     const parent = identity('a');
     const fixed = ['plan'];
-    scopes.remember(parent, undefined, fixed, ['plan', 'memory']);
-    scopes.remember(identity('a', 'g2'), undefined, fixed, ['plan', 'memory']);
+    scopes.remember(parent, undefined, fixed, ['plan', 'todo']);
+    scopes.remember(identity('a', 'g2'), undefined, fixed, ['plan', 'todo']);
     parent.generation = 'dirty';
     fixed.length = 0;
     expect(scopes.changes({ disabledBuiltinTools: [] }, true)).toEqual([
@@ -53,7 +53,7 @@ describe('builtin tool scopes', () => {
 
   it('warm same-generation spawn cannot replace spawn-fixed restrictions', () => {
     const scopes = new BuiltinToolScopes();
-    scopes.remember(identity('a'), undefined, ['plan'], ['workspace_write', 'memory', 'plan']);
+    scopes.remember(identity('a'), undefined, ['plan'], ['workspace_write', 'todo', 'plan']);
     scopes.remember(identity('a'), undefined, [], []);
     expect(scopes.changes({ disabledBuiltinTools: [] }, true)).toEqual([
       { identity: identity('a'), disabledTools: ['plan', 'workspace_write'] },

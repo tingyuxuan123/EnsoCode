@@ -7,7 +7,6 @@ import { isModelReady } from './downloader';
  */
 
 export const REMOTE_CHAT_MODEL_ID = 'remote';
-export const DEFAULT_CHAT_MODEL_ID = REMOTE_CHAT_MODEL_ID;
 
 export interface ChatModelSpec {
   id: string;
@@ -22,7 +21,7 @@ export interface ChatModelSpec {
   approxBytes: number;
   files: { name: string; sha256?: string }[];
   sources: { huggingface: string | null; modelscope: string | null } | null;
-  /** 专用模型只给对应功能选，不出现在记忆的模型列表里 */
+  /** 专用模型仅为对应功能注册。 */
   purpose?: 'voice-correction';
 }
 
@@ -160,13 +159,6 @@ export function resolveChatModelSpec(id: string): ChatModelSpec | null {
 /** 缓存目录名：`:` 在 Windows 不能进路径，统一替换为 `_` */
 export function chatModelDirName(spec: ChatModelSpec): string {
   return spec.id.replace(/[^a-zA-Z0-9._-]/g, '_');
-}
-
-export function chatModelIdFromSettings(state: Record<string, unknown> | undefined): string {
-  const raw = state?.memoryChatModel;
-  if (typeof raw !== 'string' || !raw) return DEFAULT_CHAT_MODEL_ID;
-  const spec = resolveChatModelSpec(raw);
-  return spec && !spec.purpose ? raw : DEFAULT_CHAT_MODEL_ID;
 }
 
 /** 语音纠错可用通用 chat 模型或专用纠错模型；未设/未知走远程 */

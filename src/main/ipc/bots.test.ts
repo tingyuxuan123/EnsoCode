@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
 import type { HostToPhone } from '@enso/pair';
@@ -685,7 +693,7 @@ describe('bots IPC', () => {
     expect(text).toContain('title="Bob" kind="direct"');
   });
 
-  it('私聊回退：校验目标、取消越过的委派、退回记忆水位；群聊与忙碌会话拒绝', async () => {
+  it('私聊回退：校验目标、取消越过的委派；群聊与忙碌会话拒绝', async () => {
     const alice = await createBot('Alice');
     const bob = await createBot('Bob');
     const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
@@ -757,7 +765,8 @@ describe('bots IPC', () => {
     expect(state('late')?.deliveredAt).toBeDefined();
     expect(state('live')).toMatchObject({ state: 'canceled' });
     expect(state('live')?.deliveredAt).toBeDefined();
-    expect(services.chats.get(chatId)?.sessions[alice].distilledTo).toBe('a1');
+    // The old watermark is tolerated but no longer updated on rewind.
+    expect(services.chats.get(chatId)?.sessions[alice].distilledTo).toBe('a2');
 
     await services.host.deliver(chatId, alice, 'busy now');
     expect(await rewindBotChat(services, { chatId, entryId: 'u1' }, readBranch)).toEqual({
@@ -784,7 +793,7 @@ describe('bots IPC', () => {
     });
   });
 
-  it('核心笔记：入参收窄、version 防覆盖、只支持群笔记，保存后注入新会话系统提示词', async () => {
+  it('手写笔记：入参收窄、version 防覆盖，保存后不注入新会话', async () => {
     const alice = await createBot('Alice');
     const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
       kind: 'direct',
@@ -817,7 +826,7 @@ describe('bots IPC', () => {
 
     await call(IPC_CHANNELS.BOT_SEND, { chatId, text: 'hello', deliveryId: 'd1' });
     const options = mocks.spawnSession.mock.calls[0][5] as { bot: { systemPrompt: string } };
-    expect(options.bot.systemPrompt).toContain('<member-notes>\n- likes tea\n</member-notes>');
+    expect(options.bot.systemPrompt).not.toContain('likes tea');
   });
 
   it('群聊发送接入；状态和停止可用；改选工作区清空会话；删除群清理目录', async () => {
@@ -1617,7 +1626,11 @@ describe('群聊新对话与克隆', () => {
     const services = getBotServices()!;
     const old = services.host.ensureSession(chatId, alice);
     if (!old.ok) throw new Error(old.error);
-    const distill = vi.spyOn(services.memory, 'distill').mockResolvedValue(undefined);
+    const legacyVault = join(mocks.root, 'memory', 'vaults', 'bots', alice, 'legacy.md');
+    mkdirSync(join(legacyVault, '..'), { recursive: true });
+    writeFileSync(legacyVault, 'do not change old memory');
+    const savedNotes = services.notes.write({ kind: 'bot', id: alice }, 'keep my notes');
+    expect(savedNotes.ok).toBe(true);
     const send = await phone();
     const first = await send(chatId, 'request');
     expect(first).toContainEqual({
@@ -1644,10 +1657,10 @@ describe('群聊新对话与克隆', () => {
     );
     await send(chatId, 'request');
     expect(services.chats.get(chatId)!.sessions[alice].conversationId).toBe(current);
-    expect(distill).toHaveBeenCalledTimes(1);
     await send(chatId, 'request', undefined, 'other-peer');
     expect(services.chats.get(chatId)!.sessions[alice].conversationId).not.toBe(current);
-    expect(distill).toHaveBeenCalledTimes(2);
+    expect(readFileSync(legacyVault, 'utf8')).toBe('do not change old memory');
+    expect(services.notes.read({ kind: 'bot', id: alice }).content).toBe('keep my notes');
   });
 
   it.each([
@@ -1980,7 +1993,7 @@ describe('群话题', () => {
     return { alice, bob, carol, chatId, services };
   }
 
-  it('话题成员会话用根群目录与群笔记；话题不能单独改配置或删除', async () => {
+  it('话题成员会话沿用根群目录但不加载群笔记；话题不能单独改配置或删除', async () => {
     const { bob, chatId, services } = await team();
     const empty = await call(IPC_CHANNELS.BOT_NOTES_GET, { chatId });
     const version = (empty.notes as { version: string }).version;
@@ -2001,7 +2014,7 @@ describe('群话题', () => {
       { bot: { systemPrompt: string } },
     ];
     expect(request.cwd).toBe(services.chats.workspaceDir(chatId));
-    expect(options.bot.systemPrompt).toContain('<group-notes>\n- ship friday\n</group-notes>');
+    expect(options.bot.systemPrompt).not.toContain('ship friday');
 
     expect(await call(IPC_CHANNELS.BOT_CHAT_UPDATE, { chatId: thread.id, title: 'x' })).toEqual({
       ok: false,
@@ -2608,7 +2621,7 @@ describe('Bot 设计产物 IPC', () => {
 });
 
 describe('私聊切换对话', () => {
-  it('列出对话带标题与时间；切回旧对话先停当前回合并提炼记忆，再续用原会话', async () => {
+  it('列出对话带标题与时间；切回旧对话先停当前回合，再续用原会话', async () => {
     const alice = await createBot('Alice');
     const created = await call(IPC_CHANNELS.BOT_CHAT_CREATE, {
       kind: 'direct',
@@ -2648,7 +2661,6 @@ describe('私聊切换对话', () => {
     expect((listed.sessions as { activityAt?: number }[])[0].activityAt).toBeGreaterThan(0);
 
     const stop = vi.spyOn(services.host, 'stopTurn');
-    const distill = vi.spyOn(services.memory, 'distill').mockResolvedValue(undefined);
     for (const bad of [
       { chatId, conversationId: 'x' },
       { chatId, conversationId: '77777777-7777-4777-8777-777777777777' },
@@ -2664,9 +2676,6 @@ describe('私聊切换对话', () => {
       })
     ).toEqual({ ok: true });
     expect(stop).toHaveBeenCalledWith(chatId, alice);
-    expect(distill).toHaveBeenCalledWith(
-      expect.objectContaining({ conversationId: fresh.conversationId })
-    );
     expect(services.chats.get(chatId)?.sessions[alice].conversationId).toBe(old.conversationId);
     expect(registry.conversation(old.conversationId)?.lifecycle).toBe('ready');
     expect(registry.conversation(fresh.conversationId)?.lifecycle).toBe('ended');

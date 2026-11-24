@@ -77,9 +77,6 @@ export interface ConfigSyncState {
   defaultModel?: DefaultModelRef | null;
   defaultModelFollowLast?: boolean;
   titleSummaryModel?: DefaultModelRef | null;
-  memoryDistillModel?: DefaultModelRef | null;
-  memoryChatModel?: string;
-  memoryLanguage?: string;
   smartCompactModel?: DefaultModelRef | null;
   approvalReviewer?: DefaultModelRef | null;
   titleSummaryEnabled?: boolean;
@@ -87,7 +84,6 @@ export interface ConfigSyncState {
   smartCompactEnabled?: boolean;
   smartCompactMode?: SmartCompactMode;
   /** 会话结束后是否用 LLM 自动编译沉淀 Wiki 记忆；缺省关 */
-  memoryDistillEnabled?: boolean;
   defaultReasoningEnabled?: boolean;
   defaultThinkingLevel?: ThinkingLevel;
   defaultPresetId?: string;

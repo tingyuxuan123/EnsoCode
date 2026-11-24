@@ -209,6 +209,37 @@ describe('conversation process beautification', () => {
     }
   });
 
+  it('shows a historical Wiki tool result as ordinary text instead of a memory card', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const output = JSON.stringify({ results: [{ id: 'old', title: 'Old note', snippet: 'text' }] });
+    const item: Extract<TimelineItem, { kind: 'tool' }> = {
+      kind: 'tool',
+      key: 'legacy-wiki',
+      name: 'memory_search',
+      summary: 'notes',
+      output,
+      state: 'ok',
+      edits: null,
+      writeContent: null,
+      todos: null,
+      durationMs: null,
+      agentMeta: null,
+    };
+    try {
+      await act(async () => root.render(createElement(TimelineRow, { item })));
+      const trigger = container.querySelector<HTMLButtonElement>('button.group\\/tool-summary');
+      expect(trigger).not.toBeNull();
+      await act(async () => trigger?.click());
+      expect(container.querySelector('[data-slot="tool-details"] pre')?.textContent).toBe(output);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
   it('uses bespoke script-orchestration and thinking glyphs and borderless tool icons inside step badges', () => {
     const renderTool = (name: string) =>
       renderToStaticMarkup(
@@ -271,7 +302,9 @@ describe('conversation process beautification', () => {
     expect(exploreHtml).toContain('lucide-compass');
     expect(exploreHtml).not.toContain('lucide-fold-vertical');
 
-    expect(renderTool('memory_search')).toContain('lucide-bookmark');
+    expect(renderTool('memory_search')).toContain('memory_search');
+    expect(renderTool('memory_search')).not.toContain('lucide-bookmark');
+    expect(renderTool('memory_upsert')).not.toContain('lucide-bookmark');
     expect(renderTool('generate_image')).toContain('lucide-wand-sparkles');
     expect(renderTool('ask_user')).toContain('lucide-message-circle-question');
     expect(renderTool('message_coworker')).toContain('lucide-send');

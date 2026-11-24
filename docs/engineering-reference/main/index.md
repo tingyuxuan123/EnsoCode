@@ -19,7 +19,6 @@ src/main/
   services/             纯逻辑，不碰 ipcMain
     agentHost.ts        worker 生命周期、命令下发与事件广播
     bots/               成员 / 群聊 / 委派 / 群任务宿主
-    memory/             Markdown Wiki 记忆库、FTS5 派生索引、会话编译与待审批写入
     browserHost.ts      内嵌浏览器宿主
     pairHost.ts         手机配对、远程会话与中继
     design/             设计画布、预览服务与引擎桥

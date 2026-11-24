@@ -287,7 +287,6 @@ describe('设置持久化迁移', () => {
       'title',
       'reviewer',
       'compact',
-      'memory',
       'voice',
       'bot',
       'subagent',
@@ -308,7 +307,6 @@ describe('设置持久化迁移', () => {
       titleSummaryModel: ref('title'),
       approvalReviewer: ref('reviewer'),
       smartCompactModel: ref('compact'),
-      memoryDistillModel: ref('memory'),
       voiceCorrectionRemoteModel: ref('voice'),
       botAssistantModel: ref('bot'),
       subagentModels: [ref('subagent')],
@@ -482,7 +480,7 @@ describe('设置持久化迁移', () => {
     expect(previous.localMemoryEnabled).toBe(true);
   });
 
-  it('v7 → v21 迁移后补齐 computer/code_search 默认关并启用新版轻量 Wiki memory', () => {
+  it('v7 迁移后补齐 computer/code_search 默认关', () => {
     expect(migrateSettings({ theme: 'dark', disabledBuiltinTools: [] }, 7)).toEqual({
       theme: 'dark',
       disabledBuiltinTools: ['computer', 'code_search'],
@@ -491,7 +489,7 @@ describe('设置持久化迁移', () => {
     });
   });
 
-  it('v7 → v21 已有其它禁用项时保留用户选择并启用 memory', () => {
+  it('v7 迁移保留其它禁用项', () => {
     expect(migrateSettings({ disabledBuiltinTools: ['browser'] }, 7)).toEqual({
       disabledBuiltinTools: ['browser', 'computer', 'code_search'],
       subagentAllowedModes: ['task', 'coworker'],
@@ -499,7 +497,7 @@ describe('设置持久化迁移', () => {
     });
   });
 
-  it('v7 → v21 原禁用列表含 memory 时在 v21 升级自动开启', () => {
+  it('v7 迁移移除已有的 memory 禁用项并保留其它项', () => {
     const state = { disabledBuiltinTools: ['memory', 'browser'] };
     expect(migrateSettings(state, 7)).toEqual({
       disabledBuiltinTools: ['browser', 'computer', 'code_search'],
@@ -661,7 +659,7 @@ describe('设置持久化迁移', () => {
     expect(migrateSettings(current, SETTINGS_VERSION)).toBe(current);
   });
 
-  it('v13 → v21 补上 computer/code_search 默认关并启用新版 memory', () => {
+  it('v13 迁移补上 computer/code_search 默认关并移除旧 memory 禁用项', () => {
     expect(migrateSettings({ disabledBuiltinTools: ['memory'] }, 13)).toEqual({
       disabledBuiltinTools: ['computer', 'code_search'],
     });
@@ -676,7 +674,7 @@ describe('设置持久化迁移', () => {
     });
   });
 
-  it('v20 → v21 移除旧 embedding/KG 字段并在全局与项目列表默认开启 memory', () => {
+  it('移除旧 embedding/KG 字段和全局与项目列表的 memory 禁用项', () => {
     const legacy = {
       memoryEmbeddingModel: 'local:potion-multilingual-128M',
       memoryEmbeddingAutoDownload: true,
@@ -687,7 +685,6 @@ describe('设置持久化迁移', () => {
       projects: [{ id: 'p1', disabledBuiltinTools: ['memory', 'browser'] }, { id: 'p2' }],
     };
     const expected = {
-      memoryDistillEnabled: true,
       disabledBuiltinTools: ['computer'],
       projects: [{ id: 'p1', disabledBuiltinTools: ['browser'] }, { id: 'p2' }],
     };
@@ -695,25 +692,26 @@ describe('设置持久化迁移', () => {
     expect(migrateSettings(expected, 20)).toEqual(expected);
   });
 
-  it('v21 → v22 将旧默认关闭自动编译与英文记忆语言切为开启与简体中文，并保留显式选择', () => {
-    const legacy = { memoryDistillEnabled: false, memoryLanguage: 'en' };
-    const expected = { memoryDistillEnabled: true, memoryLanguage: 'zh' };
-    expect(migrateSettings(legacy, 21)).toEqual(expected);
-    expect(migrateSettings(expected, 21)).toEqual(expected);
-
-    const followConv = { memoryDistillEnabled: true, memoryLanguage: 'auto' };
-    expect(migrateSettings(followConv, 21)).toEqual(followConv);
-
-    expect(migrateSettings(legacy, SETTINGS_VERSION)).toBe(legacy);
-    expect(mergeSettingsState(legacy, { editMode: 'apply_patch', accentColor: 'ocean' })).toEqual(
-      expect.objectContaining(legacy)
-    );
-    expect(
-      mergeSettingsState(
-        { memoryDistillEnabled: 'false', memoryLanguage: 'fr' },
-        { editMode: 'apply_patch', accentColor: 'ocean' }
-      )
-    ).toEqual(expect.objectContaining({ memoryDistillEnabled: true, memoryLanguage: 'zh' }));
+  it('v22 → v23 清除旧 Wiki 设置但保留本地模型、语音和连续记忆压缩设置', () => {
+    const kept = {
+      memoryModelIdleMinutes: 0,
+      voiceCorrectionModel: 'remote',
+      compactStrategy: 'continuous-memory',
+      disabledBuiltinTools: ['browser'],
+      projects: [{ id: 'p1', disabledBuiltinTools: ['workflow'] }, null],
+    };
+    const legacy = {
+      ...kept,
+      memoryDistillEnabled: false,
+      memoryDistillModel: { providerId: 'p', modelId: 'm' },
+      memoryChatModel: 'local:m',
+      memoryLanguage: 'en',
+      disabledBuiltinTools: ['memory', 'browser'],
+      projects: [{ id: 'p1', disabledBuiltinTools: ['memory', 'workflow'] }, null],
+    };
+    expect(migrateSettings(legacy, 22)).toEqual(kept);
+    expect(migrateSettings(kept, 22)).toEqual(kept);
+    expect(legacy.disabledBuiltinTools).toEqual(['memory', 'browser']);
   });
 
   // 持久化文件是用户机器上的真实文件，可能被手改坏或来自更早的残缺版本

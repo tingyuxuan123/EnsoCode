@@ -6,6 +6,8 @@
 它与 Claude Code 插件互不替代：设置 → 插件里两类插件分区管理。
 可审阅的离线例子见 [examples/plugins](../examples/plugins/README.md)。
 
+原内置 Wiki 记忆已移除，不会迁移或删除旧 Vault。本机 Git 项目可单独安装 [llmdoc 知识地图](../examples/plugins/llmdoc/README.md) 浏览、检索、复核工程知识。扩展自动检测已有的 Node、Git 和 CLI，缺少 CLI 时由用户点击安装到扩展的私有目录；并在有知识库的项目里，于每轮开始前追加一条只读查阅提醒。初始化和更新通过显式的 Agent 工作流进行，写入与提交需分别确认，不会自动编译聊天记录。
+
 ## 适用范围：本仓库的原生插件 API
 
 本文描述的是 **CodeKiln 实际实现的原生插件 API，清单版本为 `schemaVersion: 1`**，不是 Open Vetta、VS Code 或 Claude Code 的插件 SDK。那些平台的插件不能只改文件名就按本文运行。兼容标识仍沿用 `enso.*`。
@@ -104,6 +106,7 @@ my-snippets/
 ```
 
 `id` 为小写反向域名，最长 40 字符；`name` 最长 60，`version` 最长 40。
+`id` 是插件的永久身份，不是显示名。`enso.example.*` 只用于本仓库示例；实际插件应使用自己的命名空间（例如 `com.yourname.tool`），不要复制示例 id。模型侧工具名、MCP 服务命名空间、插件预设 ID、配置与数据目录、授权记录都从 `id` 派生；发布后改 `id` 等于换了一个插件，旧安装不会自动升级。显示名称只由 `name` 决定。
 `schemaVersion` 固定为 1，清单最大 256KB。可选 `engines.enso` 只支持 `>=x.y.z`。
 插件资源路径须为安装目录内相对路径，不能含 `..`、绝对路径或反斜杠。
 

@@ -163,10 +163,8 @@ export interface SettingsState {
   /** 验证式压缩档位；缺省 auto */
   smartCompactMode: import('@shared/smartCompactMode').SmartCompactMode;
 
-  /** 本地记忆模型空闲卸载分钟数；5/10/30，0 = 永不，缺省 10 */
+  /** 本地模型空闲卸载分钟数（沿用旧键名）；5/10/30，0 = 永不，缺省 10 */
   memoryModelIdleMinutes: number;
-  /** 会话结束后是否用 LLM 自动编译沉淀 Wiki 记忆；缺省关 */
-  memoryDistillEnabled: boolean;
   /** 语音输入：开启后才提示下载本地识别模型；缺省关 */
   voiceInputEnabled: boolean;
   /** 实验功能：Bot 模式；缺省关，关闭时 Main 不启动 Bot 后台逻辑 */
@@ -278,12 +276,6 @@ export interface SettingsState {
   titleSummaryEnabled: boolean;
   /** 标题总结独立模型；null = 跟随全局默认模型 */
   titleSummaryModel: DefaultModelRef | null;
-  /** 记忆提炼模型；null = 跟随标题模型 → 全局默认的既有回退链 */
-  memoryDistillModel: DefaultModelRef | null;
-  /** 记忆补全走远程还是本地 GGUF；`remote` 或 `local:*` 注册表 id */
-  memoryChatModel: string;
-  /** 提炼出的记忆用什么语言写；缺省英文（检索与去重都对英文更稳） */
-  memoryLanguage: string;
   /** 助手代审模型；null = 该档不可用 */
   approvalReviewer: DefaultModelRef | null;
   /** Explicit device-local opt-in; classifiers only, never changes session approval mode. */
@@ -368,7 +360,6 @@ export interface SettingsState {
   setDesignEnabled: (value: boolean) => void;
   setProtectedActionsInCode: (value: boolean) => void;
   setMemoryModelIdleMinutes: (value: number) => void;
-  setMemoryDistillEnabled: (value: boolean) => void;
   setVoiceInputEnabled: (value: boolean) => void;
   setBotModeEnabled: (value: boolean) => void;
   setBotRouteClassifier: (value: VirtualClassifierConfig | null) => void;
@@ -449,10 +440,6 @@ export interface SettingsState {
   setTitleSummaryEnabled: (value: boolean) => void;
   /** 设置标题总结独立模型；null = 回到跟随全局默认 */
   setTitleSummaryModel: (model: DefaultModelRef | null) => void;
-  /** 记忆提炼独立模型；null = 回落到标题模型 → 全局默认 */
-  setMemoryDistillModel: (model: DefaultModelRef | null) => void;
-  setMemoryChatModel: (modelId: string) => void;
-  setMemoryLanguage: (language: string) => void;
   setApprovalReviewer: (model: DefaultModelRef | null) => void;
   setApprovalAutoManage: (enabled: boolean) => void;
   setApprovalAllowThreshold: (threshold: number) => void;

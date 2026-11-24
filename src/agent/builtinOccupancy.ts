@@ -14,7 +14,6 @@ import { createTodoTool } from './todo';
 import { BrowserInvoker, createBrowserTools } from './tools/browser';
 import { createCodeSearchTool } from './tools/codeSearch';
 import { ComputerInvoker, createComputerTool } from './tools/computer';
-import { createMemoryTools, MemoryInvoker } from './tools/memory';
 import { createWebTools } from './tools/web';
 
 function fields(tool: { name: string; description?: string; parameters?: unknown }): OccupancyTool {
@@ -78,7 +77,6 @@ export function snapshotBuiltinOccupancyTools(input?: {
         })
       ),
     ],
-    memory: createMemoryTools(new MemoryInvoker(noopIdentity, () => {})).map(fields),
     background_tasks: createTaskTools({
       read: async () => undefined,
       stop: () => false,

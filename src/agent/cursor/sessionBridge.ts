@@ -62,7 +62,6 @@ export function createCursorSessionBridge(options: {
   tools: ReadonlyArray<SessionTool>;
   cwd: string;
   emit?: (event: SessionEvent) => void;
-  allowNativeExec?: () => boolean;
 }): CursorSessionBridge {
   const tools = indexCursorTools(options.tools);
   const pendingResults: CursorExecEvent[] = [];
@@ -72,11 +71,7 @@ export function createCursorSessionBridge(options: {
     tools,
     cwd: options.cwd,
     async dispatch(frame) {
-      // Native exec frames bypass SDK tool_call hooks. None is a Wiki tool.
-      const dispatched = await dispatchCursorExec(
-        frame,
-        options.allowNativeExec?.() === false ? new Map() : tools
-      );
+      const dispatched = await dispatchCursorExec(frame, tools);
       pendingResults.push(...dispatched.events.filter((event) => event.type === 'toolResult'));
       if (emit) {
         for (const event of dispatched.events) emit(toAgentEvent(event, dispatched.args));
@@ -98,8 +93,7 @@ export function createCursorSessionBridge(options: {
 export function attachCursorBridgeToSession(
   session: AgentSession,
   tools: ReadonlyArray<SessionTool>,
-  cwd: string,
-  allowNativeExec?: () => boolean
+  cwd: string
 ): CursorSessionBridge {
   const listeners = new Set<SessionListener>();
   const origSubscribe = session.subscribe.bind(session);
@@ -113,7 +107,7 @@ export function attachCursorBridgeToSession(
     for (const listener of listeners) listener(event);
   };
 
-  const bridge = createCursorSessionBridge({ tools, cwd, emit, allowNativeExec });
+  const bridge = createCursorSessionBridge({ tools, cwd, emit });
   const drain = (bridge as CursorSessionBridge & { drain: () => CursorExecEvent[] }).drain;
 
   session.subscribe = ((listener: SessionListener) => {

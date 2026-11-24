@@ -1,5 +1,7 @@
 # 原生插件示例
 
+示例清单里的 `enso.example.*` 只用于演示。复制模板后必须把 `id` 改成自己的命名空间；模型工具名会变成 `plugin_<你的 id 点换成横线>__<工具名>`。`id` 同时决定预设、配置、私有数据和授权记录的归属，发布后再改会被视为另一个插件。
+
 仅用于你已审阅并完全信任的本地代码。`main.mjs` 是完整 Node；`ui.js` 与主界面同权。
 宿主 API 权限不是操作系统沙箱。下表的离线示例不申请网络、宿主 MCP 或凭证访问，不自动安装依赖；浏览器业务插件单独列在后面。
 
@@ -13,6 +15,7 @@
 | `word-stats` | 只统计工具收到的文本；本插件工具卡、`enso.example.wordstats:bars` 代码块；只读预设及附带 skill/指令/角色 |
 | `snippets` | `#review` / `#tests` 补全、输入框右按钮、回复右侧操作；读草稿后带 generation/rev 写入 |
 | `notes` | 侧栏 `+` → Local Notes；opaque-origin sandbox 页面经固定 MessagePort 调本插件，私有目录保存便签 |
+| [`llmdoc`](llmdoc/README.md) | 本机 Git 工作树的知识地图、源码反查、变更复核和维护草稿；需独立配置固定版本 CLI |
 
 ### 浏览器业务插件（需新宿主能力，先用测试副本）
 
