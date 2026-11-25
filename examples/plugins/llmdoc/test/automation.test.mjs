@@ -3,12 +3,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import {
-  createAutomation,
-  parseProposal,
-  renderDocument,
-  renderLedger,
-} from '../automation.mjs';
+import { createAutomation, parseProposal, renderDocument, renderLedger } from '../automation.mjs';
 
 const meta = {
   schema: 'llmdoc.meta/v3',
@@ -44,18 +39,61 @@ function proposal(overrides = {}) {
 
 test('rejects proposals with unsafe paths, kinds or unbounded bodies', () => {
   for (const bad of [
-    proposal({ documents: [{ path: '../escape.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x' }] }),
-    proposal({ documents: [{ path: 'llmdoc/index.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x' }] }),
-    proposal({ documents: [{ path: 'llmdoc/a/b/c.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x' }] }),
-    proposal({ documents: [{ path: 'llmdoc/a.mdx', kind: 'note', description: 'x', codePaths: [], body: 'x' }] }),
-    proposal({ documents: [{ path: 'llmdoc/a.mdx', kind: 'guide', description: '', codePaths: [], body: 'x' }] }),
-    proposal({ documents: [{ path: 'llmdoc/a.mdx', kind: 'guide', description: 'x', codePaths: ['../a.ts'], body: 'x' }] }),
-    proposal({ documents: [{ path: 'llmdoc/a.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x'.repeat(40001) }] }),
+    proposal({
+      documents: [
+        { path: '../escape.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x' },
+      ],
+    }),
+    proposal({
+      documents: [
+        { path: 'llmdoc/index.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x' },
+      ],
+    }),
+    proposal({
+      documents: [
+        { path: 'llmdoc/a/b/c.mdx', kind: 'guide', description: 'x', codePaths: [], body: 'x' },
+      ],
+    }),
+    proposal({
+      documents: [
+        { path: 'llmdoc/a.mdx', kind: 'note', description: 'x', codePaths: [], body: 'x' },
+      ],
+    }),
+    proposal({
+      documents: [
+        { path: 'llmdoc/a.mdx', kind: 'guide', description: '', codePaths: [], body: 'x' },
+      ],
+    }),
+    proposal({
+      documents: [
+        {
+          path: 'llmdoc/a.mdx',
+          kind: 'guide',
+          description: 'x',
+          codePaths: ['../a.ts'],
+          body: 'x',
+        },
+      ],
+    }),
+    proposal({
+      documents: [
+        {
+          path: 'llmdoc/a.mdx',
+          kind: 'guide',
+          description: 'x',
+          codePaths: [],
+          body: 'x'.repeat(40001),
+        },
+      ],
+    }),
   ]) {
     assert.throws(() => parseProposal(bad));
   }
   assert.equal(parseProposal('NONE').documents.length, 0);
-  assert.equal(parseProposal('```json\n' + proposal() + '\n```').documents[0].path, 'llmdoc/renderer/plugin-theme.mdx');
+  assert.equal(
+    parseProposal('```json\n' + proposal() + '\n```').documents[0].path,
+    'llmdoc/renderer/plugin-theme.mdx'
+  );
 });
 
 test('a proposed document keeps a stable identity and escapes front matter values', () => {
@@ -89,7 +127,10 @@ async function workspace(t) {
   await writeFile(join(root, 'llmdoc', 'meta.json'), JSON.stringify(meta, null, 2));
   await writeFile(join(root, 'llmdoc', 'sessions', 'message-projection.mdx'), existing[0].text);
   await mkdir(join(root, 'src', 'renderer', 'plugins'), { recursive: true });
-  await writeFile(join(root, 'src', 'renderer', 'plugins', 'themeBridge.ts'), 'export const a = 1;\n');
+  await writeFile(
+    join(root, 'src', 'renderer', 'plugins', 'themeBridge.ts'),
+    'export const a = 1;\n'
+  );
   const dataDir = join(root, '.plugin-data');
   await mkdir(dataDir);
   return { root, dataDir };
@@ -132,10 +173,13 @@ test('one agent_end run proposes documents, writes them atomically and records a
   api.root = root;
   const automation = createAutomation(api, { projectRoot: (ctx) => ctx.projectRoot });
   events.set('agent_end', (data, ctx) => automation.end(data, ctx));
-  await events.get('agent_end')({ text: '完成插件主题注入。' }, {
-    sessionId: 's1',
-    projectRoot: root,
-  });
+  await events.get('agent_end')(
+    { text: '完成插件主题注入。' },
+    {
+      sessionId: 's1',
+      projectRoot: root,
+    }
+  );
   assert.equal(calls.length, 1);
   assert.equal(calls[0].context, 'none');
   assert.match(calls[0].prompt, /themeBridge|会话投影/);
@@ -146,10 +190,10 @@ test('one agent_end run proposes documents, writes them atomically and records a
   const review = JSON.parse(await readFile(join(dataDir, 'reviews.json'), 'utf8'));
   assert.equal(review.entries.length, 1);
   assert.equal(review.entries[0].status, 'applied');
-  assert.deepEqual(review.entries[0].files.map((file) => file.path), [
-    'llmdoc/renderer/plugin-theme.mdx',
-    'llmdoc/meta.json',
-  ]);
+  assert.deepEqual(
+    review.entries[0].files.map((file) => file.path),
+    ['llmdoc/renderer/plugin-theme.mdx', 'llmdoc/meta.json']
+  );
 });
 
 test('a second run merges an existing document instead of overwriting it', async (t) => {
@@ -227,9 +271,20 @@ test('coalesces to one run per project and skips when disabled or unsupported', 
   off.api.dataDir = dataDir;
   off.api.root = root;
   const disabled = createAutomation(off.api, { projectRoot: (ctx) => ctx.projectRoot });
-  assert.equal((await disabled.end({ text: 'c' }, { sessionId: 's3', projectRoot: root })).skipped, true);
+  assert.equal(
+    (await disabled.end({ text: 'c' }, { sessionId: 's3', projectRoot: root })).skipped,
+    true
+  );
   assert.equal(off.calls.length, 0);
-  assert.equal((await automation.end({ text: 'd' }, { sessionId: 's1::child', projectRoot: root, agent: { kind: 'subagent' } })).skipped, true);
+  assert.equal(
+    (
+      await automation.end(
+        { text: 'd' },
+        { sessionId: 's1::child', projectRoot: root, agent: { kind: 'subagent' } }
+      )
+    ).skipped,
+    true
+  );
 });
 
 test('restore returns the exact prior bytes and refuses a stale review entry', async (t) => {

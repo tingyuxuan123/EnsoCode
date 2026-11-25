@@ -12,7 +12,8 @@ const MAX_REVIEWS = 50;
 const MAX_ENTRY_BYTES = 512 * 1024;
 const CONTROL = /[\p{Cc}\p{Cf}]/u;
 const DOC_ID = /^llmdoc\/(?:[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9.-]*\.mdx$/;
-const SOURCE_PATH = /^(?!\/)(?!.*\/\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[^\u0000-\u001f:*?"<>|\\]+$/;
+// Control characters stay excluded via a property escape so the intent survives linting.
+const SOURCE_PATH = /^(?!\/)(?!.*\/\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[^\p{Cc}:*?"<>|\\]+$/u;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const record = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -75,14 +76,16 @@ export function parseProposal(raw) {
     throw new Error('自动维护未返回约定的 JSON。');
   }
   if (!record(parsed) || !Array.isArray(parsed.documents)) throw new Error('提案缺少 documents。');
-  if (parsed.documents.length > MAX_DOCUMENTS) throw new Error(`一次最多提交 ${MAX_DOCUMENTS} 篇文档。`);
+  if (parsed.documents.length > MAX_DOCUMENTS)
+    throw new Error(`一次最多提交 ${MAX_DOCUMENTS} 篇文档。`);
   const seen = new Set();
   const documents = parsed.documents.map((row) => {
     if (!record(row)) throw new Error('文档条目格式无效。');
     const path = documentId(row.path);
     if (seen.has(path)) throw new Error('同一提案不能重复声明同一文档。');
     seen.add(path);
-    if (!text(row.kind) || !KINDS.includes(row.kind)) throw new Error('kind 必须是 architecture/guide/reference。');
+    if (!text(row.kind) || !KINDS.includes(row.kind))
+      throw new Error('kind 必须是 architecture/guide/reference。');
     if (!text(row.body) || !row.body.trim() || row.body.length > MAX_BODY)
       throw new Error(`正文必须是 1–${MAX_BODY} 字符。`);
     const codePaths = row.codePaths === undefined ? [] : row.codePaths;
@@ -131,9 +134,7 @@ export function mergeDocument(current, doc) {
   // A registered document without front matter still owns its prose: keep it verbatim.
   const rest = match ? current.slice(match[0].length) : current;
   const declared = new Set(
-    match
-      ? Array.from(match[0].matchAll(/^\s+- (.+)$/gm), (found) => found[1].trim())
-      : []
+    match ? Array.from(match[0].matchAll(/^\s+- (.+)$/gm), (found) => found[1].trim()) : []
   );
   const codePaths = Array.from(new Set([...declared, ...doc.codePaths])).sort();
   const incoming = body(doc).trimEnd();
@@ -174,7 +175,9 @@ async function reviews(directory) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   /** @param {unknown} value */
   const valid = (value) =>
-    record(value) && Array.isArray(value.entries) ? { ...value, entries: value.entries } : { entries: [] };
+    record(value) && Array.isArray(value.entries)
+      ? { ...value, entries: value.entries }
+      : { entries: [] };
   const read = async () => {
     const handle = await open(file, 'r').catch(() => null);
     if (!handle) return { entries: [] };
@@ -210,7 +213,9 @@ async function reviews(directory) {
 
 /** @param {unknown} value */
 function sessionId(value) {
-  return text(value) && value.length > 0 && value.length <= 200 && !CONTROL.test(value) ? value : null;
+  return text(value) && value.length > 0 && value.length <= 200 && !CONTROL.test(value)
+    ? value
+    : null;
 }
 
 /**
@@ -249,7 +254,8 @@ export function createAutomation(enso, deps) {
     const raw = await enso.fs.readText('llmdoc/meta.json');
     /** @type {unknown} */
     const meta = JSON.parse(raw);
-    if (!record(meta) || meta.schema !== 'llmdoc.meta/v3') throw new Error('llmdoc/meta.json 不是 V3 台账。');
+    if (!record(meta) || meta.schema !== 'llmdoc.meta/v3')
+      throw new Error('llmdoc/meta.json 不是 V3 台账。');
     return { meta, raw };
   }
 
@@ -301,7 +307,11 @@ export function createAutomation(enso, deps) {
     const files = [];
     for (const doc of proposal.documents) {
       const before = await enso.fs.readText(doc.path).catch(() => null);
-      files.push({ path: doc.path, before, after: before ? mergeDocument(before, doc) : renderDocument(doc) });
+      files.push({
+        path: doc.path,
+        before,
+        after: before ? mergeDocument(before, doc) : renderDocument(doc),
+      });
     }
     const meta = renderLedger(ledger.meta, proposal.documents);
     const after = `${JSON.stringify(meta, null, 2)}\n`;
@@ -361,15 +371,14 @@ export function createAutomation(enso, deps) {
           if (!proposal.documents.length) return { skipped: true, reason: '没有需要补充的知识' };
           const entry = await apply(target.root, proposal, ledger, target.sessionId);
           await enso.ui.view.emit('reviews', { entries: 1 }).catch(() => null);
-          await enso.ui.notify(
-            '知识地图已自动更新',
-            `${entry.summary}。可在侧栏审阅或回退；未创建 Git 提交。`
-          ).catch(() => null);
+          await enso.ui
+            .notify('知识地图已自动更新', `${entry.summary}。可在侧栏审阅或回退；未创建 Git 提交。`)
+            .catch(() => null);
           return { applied: proposal.documents.length, id: entry.id };
         } catch (error) {
-          await enso.ui.notify('知识地图自动维护未完成', String(error?.message ?? error).slice(0, 300)).catch(
-            () => null
-          );
+          await enso.ui
+            .notify('知识地图自动维护未完成', String(error?.message ?? error).slice(0, 300))
+            .catch(() => null);
           return { skipped: true, error: String(error?.message ?? error) };
         }
       })();
@@ -395,7 +404,9 @@ export function createAutomation(enso, deps) {
             status: entry.status,
             summary: entry.summary,
             files: Array.isArray(entry.files)
-              ? entry.files.map((file) => (record(file) ? { path: file.path, created: file.before === null } : null))
+              ? entry.files.map((file) =>
+                  record(file) ? { path: file.path, created: file.before === null } : null
+                )
               : [],
           }))
           .reverse(),
