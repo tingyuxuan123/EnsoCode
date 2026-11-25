@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ContextMenu,
   ContextMenuItem,
@@ -82,19 +83,20 @@ export function ZoomableImage({
           </ContextMenuItem>
         </ContextMenuPopup>
       </ContextMenu>
-      {open && (
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className={cn(
-            'fixed inset-0 flex cursor-zoom-out items-center justify-center bg-black/75'
-          )}
-          style={{ zIndex: Z_INDEX.NESTED_MODAL_BACKDROP }}
-          data-enso-float=""
-        >
-          <img src={src} alt="" className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain" />
-        </button>
-      )}
+      {/* 工具卡片的动画会建立 fixed 包含块；顶层 Portal 避免预览被卡片裁剪。 */}
+      {open &&
+        createPortal(
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 flex cursor-zoom-out items-center justify-center bg-black/75"
+            style={{ zIndex: Z_INDEX.NESTED_MODAL_BACKDROP }}
+            data-enso-float=""
+          >
+            <img src={src} alt="" className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain" />
+          </button>,
+          document.body
+        )}
     </>
   );
 }

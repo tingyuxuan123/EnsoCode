@@ -158,6 +158,13 @@
 - 验证方法：CDP `/json/list` 应出现 `type: worker`；prod 是 `file://`，模块 worker 照常可加载
   （已用 bogus 消息回 `Unknown request type` 验过）。
 
+## 会话图片放大层脱离消息容器
+
+`ZoomableImage` 的全窗口预览通过 Portal 挂到 `document.body`，不能留在消息或工具卡片内部。
+工具详情的 `t-acc-reveal` 动画以 `both` 保留 transform/filter，即使结束值没有视觉位移，仍会建立
+fixed 定位的包含块；再叠加 `overflow-hidden` 就会把放大图和遮罩裁在卡片里，提高 z-index 无效。
+回归：`ZoomableImage.test.tsx` 检查顶层挂载、点击与 Esc 关闭、重复打开及消息卸载清理。
+
 ## 回复正文操作不占独立行
 
 `TimelineRow` 的正文不再追加时间 / 耗时 / TTFT / 速度统计行。复制与轮末分叉放在

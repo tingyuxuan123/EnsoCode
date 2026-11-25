@@ -141,7 +141,7 @@ describe('图片复制与预览', () => {
           .querySelector('button:not([role])')
           ?.dispatchEvent(new window.Event('click', { bubbles: true }))
       );
-      expect(container.querySelectorAll('img')).toHaveLength(2);
+      expect(document.body.querySelectorAll('img')).toHaveLength(2);
       expect(container.querySelector('iframe,object,embed')).toBeNull();
     }
   );
@@ -156,13 +156,54 @@ describe('图片复制与预览', () => {
         .querySelector('button:not([role])')
         ?.dispatchEvent(new window.Event('click', { bubbles: true }))
     );
-    expect(container.querySelectorAll('img')).toHaveLength(2);
+    expect(document.body.querySelectorAll('img')).toHaveLength(2);
     await act(async () => {
       const event = new window.Event('keydown');
       Object.assign(event, { key: 'Escape' });
       window.dispatchEvent(event);
     });
     expect(container.querySelectorAll('img')).toHaveLength(1);
+    expect(document.body.querySelector('[data-enso-float]')).toBeNull();
+  });
+  it('放大层脱离带动画和裁剪的工具卡片，直接挂到页面顶层，点击后可关闭并重新打开', async () => {
+    const src = 'data:image/png;base64,AQID';
+    await act(async () =>
+      root.render(
+        <div
+          data-slot="tool-details"
+          className="t-acc-reveal overflow-hidden"
+          style={{ transform: 'translateY(0) scale(1)', overflow: 'hidden' }}
+        >
+          <ZoomableImage src={src} />
+        </div>
+      )
+    );
+    const thumbnail = container.querySelector('button:not([role])');
+    expect(thumbnail).not.toBeNull();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await act(async () => thumbnail?.dispatchEvent(new window.Event('click', { bubbles: true })));
+      const preview = document.body.querySelector<HTMLButtonElement>('[data-enso-float]');
+      expect(preview).not.toBeNull();
+      expect(preview?.parentElement).toBe(document.body);
+      expect(container.querySelector('[data-enso-float]')).toBeNull();
+      expect(preview?.querySelector('img')?.getAttribute('src')).toBe(src);
+      expect(container.querySelectorAll('img')).toHaveLength(1);
+      await act(async () => preview?.dispatchEvent(new window.Event('click', { bubbles: true })));
+      expect(document.body.querySelector('[data-enso-float]')).toBeNull();
+      expect(getNativeCaptionScrim()).toBeNull();
+    }
+  });
+  it('图片所在消息卸载时同步移除顶层预览和原生按钮遮罩', async () => {
+    await act(async () => root.render(<ZoomableImage src="data:image/png;base64,AQID" />));
+    await act(async () =>
+      container
+        .querySelector('button:not([role])')
+        ?.dispatchEvent(new window.Event('click', { bubbles: true }))
+    );
+    expect(document.body.querySelector('[data-enso-float]')?.parentElement).toBe(document.body);
+    await act(async () => root.render(null));
+    expect(document.body.querySelector('[data-enso-float]')).toBeNull();
+    expect(getNativeCaptionScrim()).toBeNull();
   });
   it('放大预览打开时按遮罩压暗原生按钮区，关闭后恢复', async () => {
     await act(async () => root.render(<ZoomableImage src="data:image/png;base64,AQID" />));
