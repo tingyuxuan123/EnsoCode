@@ -1,0 +1,147 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "CodeKiln desktop AI coding workbench main window: icon rail, session sidebar, chat timeline, right side panel",
+		"screens": [
+			"Main workbench: app rail + project sidebar + chat timeline with composer + right side panel"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 964318137,
+	"at": "2026-11-25T07:31:20.435Z",
+	"options": [
+		"kettu-fox",
+		"ocean-deep",
+		"paper-teal"
+	],
+	"choice": {
+		"proposalId": "kettu-fox"
+	},
+	"allow": [
+		"tell-mono",
+		"tell-font-count"
+	],
+	"intent": {
+		"stated": {
+			"mood": "faithful restoration of the existing app UI",
+			"colour": "dark Kettu theme with fox orange accent",
+			"emphasis": "density and information structure of the real workbench",
+			"boldness": "restrained"
+		},
+		"questions": [],
+		"answers": null
+	},
+	"obvious": "Dark slate app shell with indigo accent, Inter, white rounded cards on #0f1117, three-column layout with a left nav list.",
+	"proposals": [
+		{
+			"id": "kettu-fox",
+			"name": "Kettu 狐狸橙",
+			"idea": "On these screens, the workbench's own floating card geometry — a 56px icon rail and three gap-separated rounded panels on one shell ground — becomes the layout skeleton.",
+			"departs": "Restores the app's own Kettu dark tokens instead of a generated indigo/slate shell.",
+			"theme": "dark",
+			"colours": {
+				"ground": "#0e0e10",
+				"panel": "#141416",
+				"text": "#e6e6e7",
+				"muted": "#ababad",
+				"accent": "#c9430f",
+				"onAccent": "#ffffff",
+				"extra": {
+					"line": "#26262a",
+					"rail": "#0e0e10"
+				}
+			},
+			"type": {
+				"display": "Inter Tight",
+				"text": "Inter",
+				"class": "grotesk-tight"
+			},
+			"layout": "56px icon rail at far left; project sidebar card; chat card with a timeline of tool rows and a bordered composer; right side-panel card. Nothing is a full-bleed column.",
+			"radius": 6,
+			"shell": "rail",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "CodeKiln's timeline shows file paths, shell commands and diffs as the actual content; monospace is the product's material, not decoration."
+				},
+				{
+					"device": "third-face",
+					"reason": "The shell sets 13px interface type against 11px secondary rows; the density is the product's signature and needs a real size step."
+				}
+			]
+		},
+		{
+			"id": "ocean-deep",
+			"name": "深海蓝",
+			"idea": "On these screens, the running-state indicators — the spark row and the rail's spinner counts — become the only saturated thing on screen.",
+			"departs": "Cools the whole surface toward blue-grey and hands the accent to ocean blue; the card geometry and density stay.",
+			"theme": "dark",
+			"colours": {
+				"ground": "#0e1013",
+				"panel": "#141619",
+				"text": "#e4e8ee",
+				"muted": "#9aa4b2",
+				"accent": "#5b9aff",
+				"onAccent": "#0c1218",
+				"extra": {
+					"line": "#26292d",
+					"rail": "#0e1013"
+				}
+			},
+			"type": {
+				"display": "Schibsted Grotesk",
+				"text": "Inter",
+				"class": "grotesk-light"
+			},
+			"layout": "Same rail + three-card skeleton, but the sidebar loses its tone step and reads as one flat plane with the shell.",
+			"radius": 8,
+			"shell": "rail",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "Commands and paths remain the dominant texture of the timeline."
+				}
+			]
+		},
+		{
+			"id": "paper-teal",
+			"name": "纸白青",
+			"idea": "On these screens, the 1px hairline the app uses instead of shadows becomes the only layer device — white cards on a #f8f8f8 desk, no elevation anywhere.",
+			"departs": "Flips to the app's own light palette and drops the orange for teal; the card seams stay.",
+			"theme": "light",
+			"colours": {
+				"ground": "#f8f8f8",
+				"panel": "#ffffff",
+				"text": "#1f1f1f",
+				"muted": "#5c5c5c",
+				"accent": "#0a6b69",
+				"onAccent": "#ffffff",
+				"extra": {
+					"line": "#e4e4e6",
+					"rail": "#f8f8f8"
+				}
+			},
+			"type": {
+				"display": "Fraunces",
+				"text": "Inter",
+				"class": "serif-display"
+			},
+			"layout": "Rail and three white cards separated by hairlines and the 6px seam; the sidebar uses a grey pill for the active row rather than a tinted fill.",
+			"radius": 5,
+			"shell": "rail",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "Tool rows, paths and commands stay monospace; on a white ground the monospace columns carry the density."
+				}
+			]
+		}
+	],
+	"redraws": []
+}

@@ -1,0 +1,30 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.7566222300124268,
+		"x": 23.433222805529795,
+		"y": 61.68095049576584
+	},
+	"frames": [
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 29,
+			"y": -52,
+			"width": 1440,
+			"height": 900,
+			"title": "主窗口 · 工作台",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "主窗口 · 工作台"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"interactionMode": "desktop"
+}

@@ -1,0 +1,100 @@
+@import "@fontsource-variable/inter-tight";
+@import "@fontsource-variable/inter";
+
+/*
+ * Kettu 狐狸橙 — the tokens below are the app's own dark palette
+ * (src/renderer/styles/globals.css `.dark` + shared.css `.dark`),
+ * not an approximation: shell #0e0e10, page #141416, card #212124,
+ * brand #f2581b, white-alpha borders, radius 6 on controls.
+ */
+@theme {
+	--color-shell: #0e0e10;
+	--color-surface: #141416;
+	--color-surface-foreground: #e6e6e7;
+	--color-panel: #212124;
+	--color-elevated: #2a2a2d;
+	--color-muted: #ababad;
+	--color-faint: #6e6e72;
+	--color-line: #26262a;
+	--color-border: #2f2f33;
+	--color-primary: #f2581b;
+	--color-primary-foreground: #ffffff;
+	--color-success: #6fbf8f;
+	--color-destructive: #ea8a7d;
+	--color-warning: #d9b463;
+	--color-info: #aeb6c1;
+
+	--radius-card: 12px;
+	--radius-control: 6px;
+
+	--font-display: "Inter Tight Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif,
+		system-ui, sans-serif;
+	--font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui,
+		sans-serif;
+	--font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/*
+ * 会话状态微标的动画 —— 与 src/renderer/styles/shared.css 的
+ * .codekiln-status-* 关键帧一致（轨道旋转 1100ms linear、核心 1500ms 脉动、
+ * 待确认环 1650ms 扩散）。静态截图里动画停在首帧，形状必须本身可读。
+ */
+@keyframes codekiln-working-orbit {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@keyframes codekiln-working-core {
+	0%,
+	100% {
+		opacity: 0.55;
+		transform: scale(0.86);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+@keyframes codekiln-status-attention-ring {
+	0% {
+		opacity: 0.85;
+		transform: scale(0.65);
+	}
+	75%,
+	100% {
+		opacity: 0;
+		transform: scale(1.22);
+	}
+}
+
+.codekiln-status-orbit {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: codekiln-working-orbit 1100ms linear infinite;
+}
+.codekiln-status-core {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: codekiln-working-core 1500ms ease-in-out infinite;
+}
+.codekiln-status-attention-ring {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: codekiln-status-attention-ring 1650ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.codekiln-status-orbit {
+		animation: none;
+		transform: rotate(-45deg);
+	}
+	.codekiln-status-core {
+		animation: none;
+		transform: scale(1);
+	}
+	.codekiln-status-attention-ring {
+		animation: none;
+		opacity: 0.45;
+		transform: scale(1);
+	}
+}
