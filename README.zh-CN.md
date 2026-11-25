@@ -280,4 +280,6 @@ pnpm typecheck && pnpm lint && pnpm test
 
 感谢 [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode) 及其贡献者提供原始项目，也感谢 [pi](https://github.com/earendil-works/pi) 和工作台依赖的开源项目。
 
+感谢 [Open Vetta](https://github.com/openvetta/open-vetta) 及其贡献者。CodeKiln 的可编辑 `.vetd` 画布、预览引擎、设计版本历史和设计技能移植自 Open Vetta 的 `vetta-ui-design` 插件；部分生图工具和界面也改编自其 `image-gen` 插件。上述上游组件采用 Apache-2.0 许可，详见 [Open Vetta 归属声明](THIRD_PARTY_NOTICES.md#open-vetta-design-subsystem)。
+
 本项目使用 [GNU Affero General Public License v3.0](LICENSE)。移动设备主机、驱动与面板移植自 [Kettu](https://github.com/KettuAI/Kettu)（AGPL-3.0-only），因此整个项目改为按 AGPL-3.0 分发。保留原有版权与许可声明；第三方依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

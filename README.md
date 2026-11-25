@@ -280,4 +280,6 @@ This is a personally maintained project. Development follows the maintainer’s 
 
 Thanks to [J3n5en/EnsoCode](https://github.com/J3n5en/EnsoCode) and its contributors for the original project, and to [pi](https://github.com/earendil-works/pi) and the open-source projects this workbench builds on.
 
+Thanks to [Open Vetta](https://github.com/openvetta/open-vetta) and its contributors. CodeKiln’s editable `.vetd` canvas, preview engine, design history and design skill are ported from Open Vetta’s `vetta-ui-design` plugin. Parts of the image-generation tools and UI are also adapted from its `image-gen` plugin. These upstream components are licensed under Apache-2.0; see the [Open Vetta attribution](THIRD_PARTY_NOTICES.md#open-vetta-design-subsystem) for details.
+
 Released under the [GNU Affero General Public License v3.0](LICENSE). The mobile-device host, drivers and panel are ported from [Kettu](https://github.com/KettuAI/Kettu) (AGPL-3.0-only), so this project as a whole is now distributed under AGPL-3.0. Original copyright and license notices are preserved; see [Third-party notices](THIRD_PARTY_NOTICES.md).
