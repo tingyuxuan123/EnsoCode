@@ -216,7 +216,7 @@ test('coalesces to one run per project and skips when disabled or unsupported', 
   api.root = root;
   const automation = createAutomation(api, { projectRoot: (ctx) => ctx.projectRoot });
   const first = automation.end({ text: 'a' }, { sessionId: 's1', projectRoot: root });
-  await new Promise((resolve) => setImmediate(resolve));
+  while (!release) await new Promise((resolve) => setImmediate(resolve));
   const second = await automation.end({ text: 'b' }, { sessionId: 's2', projectRoot: root });
   assert.equal(second.skipped, true);
   release();
@@ -245,7 +245,8 @@ test('restore returns the exact prior bytes and refuses a stale review entry', a
   const after = await readFile(created, 'utf8');
   const restored = await automation.restore(id);
   assert.equal(restored.restored, true);
-  await assert.rejects(readFile(created, 'utf8'), { code: 'ENOENT' });
+  assert.equal(restored.needsManualDelete, true);
+  assert.match(await readFile(created, 'utf8'), /已回退/);
   assert.match(await readFile(join(root, 'llmdoc/meta.json'), 'utf8'), /message-projection/);
 
   await writeFile(created, after);
