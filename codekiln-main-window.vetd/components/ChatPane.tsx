@@ -318,7 +318,7 @@ export function ChatPane() {
 					<div className="rounded-[10px] border border-border bg-panel">
 						{/* data-composer-editor：min-h-64 / px-14 / pt-12 / pb-4 */}
 						<div className="flex min-h-[64px] items-start gap-1.5 px-[14px] pt-[12px] pb-[4px]">
-							<span className="text-[15px] leading-[24px] text-faint">
+							<span className="text-[14px] leading-[20px] text-muted">
 								消息将排队，本轮结束后发送…
 							</span>
 						</div>

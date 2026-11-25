@@ -1,13 +1,13 @@
 ---
 name: enso-cdp
 description: >
-  Drive the 小满 dev Electron renderer via bounded, loopback-only CDP helpers.
+  Drive the CodeKiln dev Electron renderer via bounded, loopback-only CDP helpers.
   Use when verifying UI in the running app, sending a composer chat turn, reading
   conversation/timeline state, screenshots, CDP, 真机验证, remote-debugging-port,
   or after changing renderer/main/agent/preload. Use when the user runs /enso-cdp.
 ---
 
-# 小满 CDP
+# CodeKiln CDP
 
 Dev (`!app.isPackaged`) already opens **9222** in `src/main/index.ts`. Do not inject `TEMP-DEBUG`. Packaged builds stay closed.
 

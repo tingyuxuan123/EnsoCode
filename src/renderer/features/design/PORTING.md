@@ -1,4 +1,4 @@
-# vetta-ui-design → 小满（P1–P3）
+# vetta-ui-design → CodeKiln（P1–P3）
 
 ## 基准与边界
 
@@ -13,7 +13,7 @@
 0.6.17 位图修复保留本地引擎端口与 iframe 边界。上游 0.6.12 的工作空间落点不替换
 本仓库 Main 选择设计项目目录的约定。
 
-行为差距：小满没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
+行为差距：CodeKiln 没有 Vetta 插件宿主、通用 command、特权文件协议；P1 在 Renderer
 执行工具和登记贡献，P2-UI 将画布、截图卡和样机工作台接入渲染层，不增加 preload 暴露。
 `host/` 负责 SDK 兼容、绝对路径拆分与 IPC；Main 仍负责权威根、realpath、写白名单。
 P3 补齐画廊、文件树和分享包预览；新增 Main 项目/原生选择/独立预览能力，仍不开放通用 command。
@@ -73,7 +73,7 @@ SDK 类型摘自上游 SDK，删去不需要的 capability/typebox runtime 依�
 - official projects.list 使用已有项目并 resolveRoot，sessions.list/listRunningCwds/open
   使用已知会话投影和 sessionWorkspaceCwd（含 worktree），shell.showItemInFolder 走 design.shell。
 
-明确不支持（调用抛 `小满 design host: … is not supported in P1`）：
+明确不支持（调用抛 `CodeKiln design host: … is not supported in P1`）：
 任意 command.run/spawn、fs.move、storage blobs、multipart/PUT/PATCH/DELETE 网络请求、
 conversation.abort、official.projects.open/rename/remove 等写操作、official.dialog.saveCopy、
 其它未实现 official 域；ui.captureRegion/createQrCode/sidebar 订阅。
@@ -203,7 +203,7 @@ conversation 接了查看会话的运行状态边沿（供 notes 闸口），尚
 - engine-recovery-ui：补 onPendingDesignPath fake 及函数型取消订阅。
 - runner-host/history-machine/payload-transfer 测试改用宿主 IPC fake；history-peek 使用真实已构建 runner 加 IPC fake。
 - file-url 测试覆盖异步二进制读取、MIME 拒绝及幂等释放；frame-handoff 覆盖端口改变重建 DOM；notes-auto-dispatch 覆盖所属会话及锚点。assets/direction 文案断言改为 P2 面板提示；entry-lazy 检查固定 IPC 而非 raw runner 动态加载。
-- 仅跳过 engine-manager 的 3 条 ~/.vetta 迁移/旧 readiness 测试：小满明确不迁移该目录，Main 引擎服务另测；退出事件测试继续跑。
+- 仅跳过 engine-manager 的 3 条 ~/.vetta 迁移/旧 readiness 测试：CodeKiln 不迁移该目录，Main 引擎服务另测；退出事件测试继续跑。
 
 新增 paths/results/context/runtime-dispatch/完整入口激活测试，包含 RED 后 GREEN 的路径映射、
 结果转换、分发与 cards 保留断言。P2 集成已进行 Claude/GPT 真实模型验证，详细结果与
@@ -221,12 +221,12 @@ P2-UI 验证（2026-11-03）：design project 163 文件、1040 passed、3 个�
 
 ## 设计功能的品牌文案
 
-上游界面把 agent 称作 “Vetta”，导出样机默认画 Vetta 图标与 “Designed By Vetta”。小满中：
+上游界面把 agent 称作 “Vetta”，导出样机默认画 Vetta 图标与 “Designed By Vetta”。移植到 CodeKiln 后：
 
-- `locales/{zh,en}.json` 中 18 处 “Vetta” 换成聊天界面上的 agent 名 “Enso”；插件名改为“设计 / Design”，样机开关使用小满标识。
+- 移植初期将 `locales/{zh,en}.json` 中 18 处 “Vetta” 换成当时的 agent 名 “Enso”；插件名改为“设计 / Design”，样机开关使用宿主品牌标识。
 - `canvas/NotesLayer.tsx`、`canvas/NotesDrawer.tsx` 写死的批注作者名改为 “Enso”。
-- `mockup/render.ts` 水印文字为 “小满 / Designed with 小满”；`mockup/brand-logo.ts` 使用 `build/icons/128x128.png`（常量名保持不变以减少 diff）。
-- `assets/assets-tool.ts` 外部图片 API 的 User-Agent 使用 ASCII 标识 `Xiaoman-Design`。
+- `mockup/render.ts` 水印文字为 “CodeKiln / Designed with CodeKiln”；`mockup/brand-logo.ts` 使用 `build/icons/128x128.png`（常量名保持不变以减少 diff）。
+- `assets/assets-tool.ts` 外部图片 API 的 User-Agent 使用 ASCII 标识 `CodeKiln-Design`。
 - `vetd/check-sources.ts` 中引用按钮文案的提示同步为“让 Enso 去做”。
 - 保留：`.vetdz` 保存对话框的文件类型名 “Vetta Design”（上游格式名）、给模型看的工具描述与技能正文（漂移测试要求与上游一致）。
 - `test/skill-presentation.test.ts` 的插件名断言同步改为“设计”。

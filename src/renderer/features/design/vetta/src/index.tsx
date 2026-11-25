@@ -20,11 +20,11 @@ import { watchPickedSystem } from "./new-session/picked-system";
 import { setPluginCtx } from "./plugin-context";
 import { CANVAS_TAB_ID, GALLERY_VIEW_ID } from "./tab-ids";
 import { registerDesignTools } from "./tools";
-import { claimCanvasAutoOpen, openCanvasAfterWarmup } from "./vetd/auto-open";
+import { openCanvasAfterWarmup } from "./vetd/auto-open";
 import { getDesignListing, publishDesignListing } from "./vetd/design-listing";
 import { setDesignPresence } from "./vetd/design-presence";
 import { registerToolGate } from "./vetd/tool-gate";
-import { isPureDesignProject, pickDesignPaths } from "./vetd/discover";
+import { pickDesignPaths } from "./vetd/discover";
 
 /**
  * 大件 UI 面组件全部懒加载：App 启动时宿主会整包求值本插件的入口 chunk，
@@ -110,9 +110,8 @@ export default definePlugin({
 		/**
 		 * cwd 里有 .vetd 才把画布 Tab 上栏。
 		 *
-		 * 纯设计项目（除设计稿和 README 之类外没有别的文件）额外自动展开画布：
-		 * 这种目录打开就是为了看设计，先给面板。混合项目不抢；每次打开（切入）
-		 * 会话都展开一次，同一会话内关掉后不再反复弹。
+		 * 这里只发现可用入口，不推断新会话也想看设计。画布展开只消费用户从画廊
+		 * 发出的明确预约；新建 / 打开设计由各自入口负责，不能因项目里已有稿子抢面板。
 		 */
 		const revealTabForCwd = (cwd: string | null, sessionId: string | null): void => {
 			const epoch = ++revealEpoch;
@@ -148,9 +147,6 @@ export default definePlugin({
 						openCanvas();
 						return;
 					}
-					if (!isPureDesignProject(files)) return;
-					if (!claimCanvasAutoOpen(sessionId)) return;
-					openCanvas();
 				});
 		};
 

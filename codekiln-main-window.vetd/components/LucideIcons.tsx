@@ -930,3 +930,117 @@ export function PinIcon({ className, strokeWidth = 2 }: IconProps) {
 		</svg>
 	);
 }
+
+
+export function TargetIcon({ className, strokeWidth = 2 }: IconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={strokeWidth}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<circle cx="12" cy="12" r="10" />
+			<circle cx="12" cy="12" r="6" />
+			<circle cx="12" cy="12" r="2" />
+		</svg>
+	);
+}
+
+export function Minimize2Icon({ className, strokeWidth = 2 }: IconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={strokeWidth}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<path d="m14 10 7-7" />
+			<path d="M20 10h-6V4" />
+			<path d="m3 21 7-7" />
+			<path d="M4 14h6v6" />
+		</svg>
+	);
+}
+
+export function PuzzleIcon({ className, strokeWidth = 2 }: IconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={strokeWidth}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z" />
+		</svg>
+	);
+}
+
+export function CornerDownLeftIcon({ className, strokeWidth = 2 }: IconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={strokeWidth}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<path d="M20 4v7a4 4 0 0 1-4 4H4" />
+			<path d="m9 10-5 5 5 5" />
+		</svg>
+	);
+}
+
+export function XIcon({ className, strokeWidth = 2 }: IconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={strokeWidth}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<path d="M18 6 6 18" />
+			<path d="m6 6 12 12" />
+		</svg>
+	);
+}
+
+
+export function SparklesIcon({ className, strokeWidth = 2 }: IconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={strokeWidth}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" />
+			<path d="M20 2v4" />
+			<path d="M22 4h-4" />
+			<circle cx="4" cy="20" r="2" />
+		</svg>
+	);
+}

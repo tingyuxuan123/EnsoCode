@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "codekiln.llmdoc",
   "name": "知识地图",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "description": "浏览、检索和复核本机 Git 项目的 llmdoc 知识。打开侧栏自动检测运行环境，可按需安装 CLI。",
   "icon": "icon.svg",
   "main": "main.mjs",

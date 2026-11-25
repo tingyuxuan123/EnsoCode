@@ -5,96 +5,566 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>知识地图</title>
     <style>
-      :root { color-scheme: light; }
-      :root[data-theme="dark"] { color-scheme: dark; }
-      body { padding: 10px; margin: 0; font: 13px/1.55 system-ui, sans-serif; color: CanvasText; background: Canvas; }
-      h1 { margin: 0 0 4px; font-size: 16px; }
-      h2 { margin: 12px 0 4px; font-size: 13px; }
-      p, ul { margin: 4px 0; }
-      form, nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-      input, textarea { flex: 1 1 100px; min-width: 0; }
-      input, textarea, button { font: inherit; padding: 4px 7px; border: 1px solid GrayText; border-radius: 4px; }
+      :root {
+        color-scheme: light;
+        --bg: #f4f1ea;
+        --surface: #fffdf8;
+        --surface-2: #f2eee5;
+        --surface-3: #ebe5d9;
+        --text: #242018;
+        --muted: #746d60;
+        --border: #e1dacd;
+        --border-strong: #cec4b3;
+        --accent: #b7651b;
+        --accent-strong: #8e4a10;
+        --accent-soft: #fbeada;
+        --ok: #1e7a50;
+        --ok-soft: #e6f4ec;
+        --warn: #9b6100;
+        --warn-soft: #fbf0d9;
+        --danger: #b43b2f;
+        --danger-soft: #fbe9e6;
+        --shadow: 0 1px 2px rgb(45 32 16 / 5%), 0 12px 32px rgb(45 32 16 / 5%);
+        --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", system-ui, sans-serif;
+        --mono: "SFMono-Regular", "SF Mono", "JetBrains Mono", Menlo, monospace;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #0d1117;
+        --surface: #141b24;
+        --surface-2: #1a232e;
+        --surface-3: #22303e;
+        --text: #e8eef5;
+        --muted: #93a2b3;
+        --border: #263240;
+        --border-strong: #3a4a5d;
+        --accent: #f0a34a;
+        --accent-strong: #ffd08a;
+        --accent-soft: #2a2117;
+        --ok: #66d19e;
+        --ok-soft: #132a21;
+        --warn: #f0c36a;
+        --warn-soft: #2b2417;
+        --danger: #ff9287;
+        --danger-soft: #2e1a1a;
+        --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 18px 36px rgb(0 0 0 / 12%);
+      }
+      * { box-sizing: border-box; }
+      html { background: var(--bg); scrollbar-color: var(--border-strong) transparent; }
+      body {
+        margin: 0;
+        padding: 18px 16px 40px;
+        color: var(--text);
+        background: var(--bg);
+        font: 13px/1.55 var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .shell { display: flex; flex-direction: column; gap: 12px; max-width: 760px; margin: 0 auto; }
+      .hero { display: flex; align-items: flex-start; gap: 12px; padding: 2px 2px 0; }
+      .mark {
+        display: grid;
+        flex: none;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid #31485e;
+        border-radius: 13px;
+        background: linear-gradient(145deg, #172538, #0b1420);
+        box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+      }
+      .mark svg { width: 32px; height: 32px; }
+      .hero-copy { flex: 1 1 auto; min-width: 0; }
+      .eyebrow {
+        margin: 0 0 3px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.16em;
+        line-height: 1.3;
+        text-transform: uppercase;
+      }
+      h1 { margin: 0; font-size: clamp(22px, 4vw, 27px); font-weight: 650; letter-spacing: -0.035em; line-height: 1.15; }
+      h2 { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: 0.01em; line-height: 1.35; }
+      p, ul { margin: 0; }
+      .hint { color: var(--muted); font-size: 12px; line-height: 1.55; }
+      .hero .hint { margin-top: 4px; }
+      .hero > button { flex: none; margin-left: auto; }
+      .signal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+      .project-status:empty, .run-status:empty { display: none; }
+      .project-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 4px 9px;
+        color: var(--muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 11.5px;
+      }
+      .project-status::before { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); content: ""; }
+      .project-status[data-state="present"]::before { background: var(--ok); }
+      .project-status[data-state="missing"]::before { background: var(--warn); }
+      .run-status { color: var(--muted); font-size: 11.5px; }
+      .alert {
+        margin: 0;
+        padding: 9px 11px;
+        color: var(--danger);
+        background: var(--danger-soft);
+        border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+        border-radius: 9px;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+      .alert.warning {
+        color: var(--warn);
+        background: var(--warn-soft);
+        border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+      }
+      .panel {
+        padding: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+      }
+      .panel-stack { display: flex; flex-direction: column; gap: 12px; }
+      .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+      .panel-head .hint { margin-top: 4px; }
+      .tiny-pill {
+        flex: none;
+        padding: 3px 7px;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+      .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+      .inline-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 5px 10px;
+        color: var(--text);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font: inherit;
+        font-size: 12px;
+        line-height: 1.2;
+        cursor: pointer;
+        transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+      }
+      button:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-strong); }
+      button:active:not(:disabled) { transform: translateY(1px); }
+      button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      button:disabled { cursor: default; opacity: 0.42; }
+      button.primary {
+        color: #1d1308;
+        background: var(--accent);
+        border-color: var(--accent);
+        font-weight: 650;
+      }
+      button.primary:hover:not(:disabled) { color: #1d1308; background: var(--accent-strong); border-color: var(--accent-strong); }
+      button.ghost { background: transparent; }
+      button.ghost:hover:not(:disabled) { background: var(--surface-2); }
+      button svg { width: 14px; height: 14px; flex: none; }
+      .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+      .field-label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+      form { margin: 0; }
+      input, textarea {
+        width: 100%;
+        min-width: 0;
+        padding: 8px 10px;
+        color: var(--text);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        font: inherit;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--muted) 75%, transparent); }
+      input:focus, textarea:focus { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 0; }
       textarea { resize: vertical; }
-      button:not(:disabled) { cursor: pointer; }
-      ul { list-style: none; padding: 0; }
-      li { border-bottom: 1px solid color-mix(in srgb, CanvasText 16%, Canvas); padding: 5px 0; }
-      li button { width: 100%; text-align: left; overflow-wrap: anywhere; }
-      #status, .hint { color: GrayText; }
-      #error { font-weight: 600; }
-      pre { white-space: pre-wrap; margin: 8px 0; overflow-wrap: anywhere; }
-      article, details { border-top: 1px solid GrayText; margin-top: 10px; }
-      details { padding-top: 6px; }
-      summary { cursor: pointer; }
+      .search-form { display: flex; align-items: flex-end; gap: 8px; }
+      .search-form .field { flex: 1 1 auto; }
+      .context-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; margin-top: 9px; }
+      .context-form textarea { min-height: 62px; max-height: 140px; }
+      #setup-missing, .plain-list { display: flex; flex-direction: column; gap: 5px; padding: 0; list-style: none; }
+      #setup-missing li {
+        padding: 7px 9px;
+        color: var(--warn);
+        background: var(--warn-soft);
+        border-left: 2px solid var(--warn);
+        border-radius: 0 6px 6px 0;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .install-offer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 9px;
+        margin-top: 10px;
+        padding: 10px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+      }
+      .install-offer .hint { flex: 1 1 180px; }
+      .result:empty { display: none; }
+      .result {
+        padding: 8px 10px;
+        color: var(--ok);
+        background: var(--ok-soft);
+        border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+        border-radius: 8px;
+        font-size: 12px;
+      }
+      #workflow .hint { margin-bottom: 10px; }
+      .review-block { margin-top: 10px; }
+      #overview:empty, #review:empty { display: none; }
+      #overview > h2, #review > h2, #results > h2 {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      #overview ul {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px 8px;
+        margin-top: 6px;
+        padding: 0;
+        list-style: none;
+      }
+      #overview li {
+        padding: 6px 8px;
+        color: var(--muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        font-size: 11.5px;
+        overflow-wrap: anywhere;
+      }
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .metric {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        padding: 8px 9px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .metric-label { color: var(--muted); font-size: 10px; letter-spacing: 0.02em; }
+      .metric-value {
+        color: var(--text);
+        font: 600 17px/1.1 var(--mono);
+        font-variant-numeric: tabular-nums;
+      }
+      #overview .overview-details {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 7px;
+        padding: 0;
+        list-style: none;
+      }
+      #overview .overview-details li {
+        padding: 0;
+        background: none;
+        border: 0;
+        font-size: 11.5px;
+      }
+      #review ul {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 5px;
+        padding: 0;
+        list-style: none;
+      }
+      #review li {
+        padding: 6px 8px;
+        color: var(--muted);
+        background: var(--surface-2);
+        border-left: 2px solid var(--border-strong);
+        border-radius: 0 6px 6px 0;
+        font: 11.5px/1.5 var(--mono);
+        overflow-wrap: anywhere;
+      }
+      #review > p { margin-top: 6px; color: var(--muted); font-size: 11.5px; }
+      #diagnostics {
+        margin-top: 10px;
+        overflow: hidden;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+      }
+      #diagnostics summary { padding: 9px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      #diagnostics pre {
+        max-height: 300px;
+        margin: 0;
+        padding: 0 11px 11px;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: var(--muted);
+        font: 11.5px/1.55 var(--mono);
+      }
+      .results-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
+      .results-head .hint { font-size: 11px; }
+      #results { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+      #results ul { display: flex; flex-direction: column; gap: 7px; margin-top: 3px; padding: 0; list-style: none; }
+      #results > h2:first-child { margin-top: 0; }
+      .doc-row {
+        padding: 9px 11px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+      }
+      .doc-row:hover { background: var(--surface-3); border-color: var(--border-strong); transform: translateY(-1px); }
+      .doc-path {
+        display: block;
+        width: 100%;
+        min-height: 0;
+        padding: 0;
+        overflow-wrap: anywhere;
+        color: var(--accent-strong);
+        background: none;
+        border: 0;
+        border-radius: 0;
+        text-align: left;
+        font: 600 12px/1.45 var(--mono);
+      }
+      .doc-path:hover:not(:disabled) { color: var(--accent); background: none; border-color: transparent; }
+      .doc-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin-top: 3px; }
+      .doc-kind {
+        padding: 1px 5px;
+        color: var(--accent-strong);
+        background: var(--accent-soft);
+        border-radius: 4px;
+        font: 600 10px/1.5 var(--mono);
+        letter-spacing: 0.02em;
+      }
+      .doc-description { color: var(--text); font-size: 12px; line-height: 1.5; }
+      .doc-snippet {
+        margin-top: 5px;
+        color: var(--muted);
+        font: 11.5px/1.55 var(--mono);
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+      #preview {
+        margin-top: 12px;
+        overflow: hidden;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+      }
+      #preview h2 {
+        margin: 0;
+        padding: 10px 12px;
+        overflow-wrap: anywhere;
+        color: var(--accent-strong);
+        border-bottom: 1px solid var(--border);
+        font: 600 11.5px/1.45 var(--mono);
+      }
+      #preview pre {
+        max-height: 420px;
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        color: var(--text);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: 12px/1.7 var(--mono);
+      }
+      #doc-notice { padding: 8px 12px 0; font-size: 11.5px; }
+      #delta-next { margin-top: 8px; }
       [hidden] { display: none; }
+      @media (max-width: 560px) {
+        body { padding: 14px 11px 30px; }
+        .hero { gap: 9px; }
+        .mark { width: 38px; height: 38px; }
+        .mark svg { width: 29px; height: 29px; }
+        .hero > button span { display: none; }
+        .context-form { grid-template-columns: minmax(0, 1fr); }
+        .context-form button { width: 100%; }
+        #overview ul, .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .panel { padding: 12px; border-radius: 12px; }
+      }
+      @media (max-width: 380px) {
+        #overview ul, .metric-grid { grid-template-columns: 1fr; }
+        .search-form { display: grid; grid-template-columns: minmax(0, 1fr); }
+        .search-form button { width: 100%; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+      }
     </style>
   </head>
   <body>
-    <h1>知识地图</h1>
-    <p class="hint">当前本机 Git 项目 · 文档查询和报告只读</p>
-    <nav aria-label="项目检查">
-      <button id="inspect" type="button">重新检查项目</button>
-    </nav>
-    <p id="project-status" class="hint"></p>
-    <p id="status" role="status"></p>
-    <p id="error" role="alert" hidden></p>
-    <p id="git-configuration" role="alert" hidden></p>
-    <section id="setup" aria-label="扩展配置" hidden>
-      <h2>设置 llmdoc</h2>
-      <ul id="setup-missing"></ul>
-      <div id="install-offer" hidden>
-        <p id="install-note" class="hint">从 npm 官方 registry 下载固定版本的 @tokenroll/llmdoc 到扩展私有目录，不会写入当前项目。</p>
-        <button id="install-cli" type="button" aria-describedby="install-note">安装 llmdoc</button>
-      </div>
-    </section>
-    <p id="install-result" role="status"></p>
-    <section id="workflow" aria-label="维护草稿" hidden>
-      <h2>维护草稿</h2>
-      <p class="hint">点击只准备草稿，不会修改项目或自动发送。请回到对话手动发送并查看预览；写入和 Git 提交会分别向你确认。</p>
-      <nav aria-label="草稿操作">
-        <button id="init" type="button" data-needs-git hidden>项目初始化</button>
-        <span id="maintenance" hidden>
-          <button id="update" type="button" data-needs-git>复核与更新</button>
-          <button id="prune" type="button" data-needs-git>收敛文档</button>
+    <main class="shell">
+      <header class="hero">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <title>知识地图</title>
+            <path d="M7 8.5 16 15l8-6M16 15l-6 9M16 15l7 8" stroke="#587084" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="m10 24 6-9 8 6" stroke="#f0a34a" stroke-width="1" stroke-linecap="round" />
+            <circle cx="7" cy="8.5" r="1.8" fill="#e8e0d2" />
+            <circle cx="24" cy="9" r="1.4" fill="#e8e0d2" />
+            <circle cx="10" cy="24" r="1.4" fill="#e8e0d2" />
+            <circle cx="23" cy="21" r="1.8" fill="#e8e0d2" />
+            <circle cx="16" cy="15" r="2.7" fill="#f0a34a" />
+          </svg>
         </span>
-      </nav>
-      <p id="workflow-result" role="status"></p>
-    </section>
-    <section id="catalog" aria-label="知识地图" hidden>
-      <nav aria-label="诊断与检查">
-        <button id="status-report" type="button" data-needs-git>状态汇总</button>
-        <button id="delta" type="button" data-needs-git>变化与待复核</button>
-        <button id="validate" type="button" data-needs-git>校验文档</button>
-        <button id="prune-report" type="button">查看收敛报告</button>
-      </nav>
-      <section id="overview" aria-label="项目状态汇总"></section>
-      <section aria-label="变化与待复核">
-        <div id="review"></div>
-        <button id="delta-next" type="button" data-needs-git hidden>待复核下一页</button>
+        <div class="hero-copy">
+          <p class="eyebrow">LLMDOC · PROJECT KNOWLEDGE</p>
+          <h1>知识地图</h1>
+          <p class="hint">当前本机 Git 项目 · 文档查询和报告只读</p>
+        </div>
+        <button id="inspect" class="ghost" type="button" aria-label="重新检查项目">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+            <path d="M20 4v7h-7" />
+          </svg>
+          <span>重新检查</span>
+        </button>
+      </header>
+
+      <div class="signal-row">
+        <p id="project-status" class="project-status"></p>
+        <p id="status" class="run-status" role="status"></p>
+      </div>
+      <p id="error" class="alert" role="alert" hidden></p>
+      <p id="git-configuration" class="alert warning" role="alert" hidden></p>
+
+      <section id="setup" class="panel" aria-label="扩展配置" hidden>
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">SETUP</p>
+            <h2>设置 llmdoc</h2>
+            <p class="hint">检测本机运行环境；安装只写入扩展私有目录。</p>
+          </div>
+        </div>
+        <ul id="setup-missing"></ul>
+        <div id="install-offer" class="install-offer" hidden>
+          <p id="install-note" class="hint">从 npm 官方 registry 下载固定版本的 @tokenroll/llmdoc 到扩展私有目录，不会写入当前项目。</p>
+          <button id="install-cli" class="primary" type="button" aria-describedby="install-note">安装 llmdoc</button>
+        </div>
       </section>
-      <details id="diagnostics" hidden>
-        <summary id="report-title"></summary>
-        <pre id="report-text"></pre>
-      </details>
-      <h2>查找文档</h2>
-      <form id="find">
-        <input id="query" aria-label="搜索关键词" maxlength="200" required />
-        <button id="search" type="submit">搜索</button>
-      </form>
-      <form id="find-context">
-        <textarea id="files" aria-label="项目相对源码路径，每行一个" placeholder="项目相对源码路径，每行一个&#10;例如 src/main.ts" rows="2" required></textarea>
-        <button id="context" type="submit">查找源码上下文</button>
-      </form>
-      <nav aria-label="知识地图翻页">
-        <button id="tree" type="button">刷新知识地图</button>
-        <button id="next" type="button" hidden>下一页</button>
-      </nav>
-      <section id="results" aria-label="文档列表"></section>
-      <article id="preview" aria-label="文档预览" hidden>
-        <h2 id="doc-id">文档预览</h2>
-        <p id="doc-notice" class="hint" hidden>正文过长，仅显示开头。</p>
-        <pre id="body"></pre>
-      </article>
-    </section>
+      <p id="install-result" class="result" role="status"></p>
+
+      <section id="workflow" class="panel" aria-label="维护草稿" hidden>
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">MAINTENANCE</p>
+            <h2>维护知识</h2>
+          </div>
+          <span class="tiny-pill">先预览</span>
+        </div>
+        <p class="hint">点击只准备草稿，不会修改项目或自动发送。请回到对话手动发送并查看预览；写入和 Git 提交会分别向你确认。</p>
+        <nav class="actions" aria-label="草稿操作">
+          <button id="init" type="button" data-needs-git hidden>项目初始化</button>
+          <span id="maintenance" class="inline-actions" hidden>
+            <button id="update" class="primary" type="button" data-needs-git>复核与更新</button>
+            <button id="prune" type="button" data-needs-git>收敛文档</button>
+          </span>
+        </nav>
+        <p id="workflow-result" class="result" role="status"></p>
+      </section>
+
+      <section id="catalog" class="panel-stack" aria-label="知识地图" hidden>
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">PROJECT HEALTH</p>
+              <h2>项目诊断</h2>
+            </div>
+            <span class="tiny-pill">只读</span>
+          </div>
+          <nav class="actions" aria-label="诊断与检查">
+            <button id="status-report" class="ghost" type="button" data-needs-git>状态汇总</button>
+            <button id="delta" class="ghost" type="button" data-needs-git>变化与待复核</button>
+            <button id="validate" class="ghost" type="button" data-needs-git>校验文档</button>
+            <button id="prune-report" class="ghost" type="button">收敛报告</button>
+          </nav>
+          <section id="overview" aria-label="项目状态汇总"></section>
+          <section class="review-block" aria-label="变化与待复核">
+            <div id="review"></div>
+            <button id="delta-next" class="ghost" type="button" data-needs-git hidden>继续查看待复核</button>
+          </section>
+          <details id="diagnostics" hidden>
+            <summary id="report-title"></summary>
+            <pre id="report-text"></pre>
+          </details>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">RETRIEVAL</p>
+              <h2>查找文档</h2>
+              <p class="hint">先查知识，再回源码核对；文档是参考资料，不是执行指令。</p>
+            </div>
+          </div>
+          <form id="find" class="search-form">
+            <div class="field">
+              <label class="field-label" for="query">按概念搜索</label>
+              <input id="query" aria-label="搜索关键词" maxlength="200" placeholder="搜索概念、模块、契约…" required />
+            </div>
+            <button id="search" class="primary" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m16 16 4 4" />
+              </svg>
+              搜索
+            </button>
+          </form>
+          <form id="find-context" class="context-form">
+            <div class="field">
+              <label class="field-label" for="files">按源码反查</label>
+              <textarea id="files" aria-label="项目相对源码路径，每行一个" placeholder="项目相对源码路径，每行一个&#10;例如 src/main.ts" rows="2" required></textarea>
+            </div>
+            <button id="context" type="submit">查找源码上下文</button>
+          </form>
+          <div class="results-head">
+            <span class="hint">文档结果</span>
+            <div class="actions">
+              <button id="tree" class="ghost" type="button">刷新知识地图</button>
+              <button id="next" class="ghost" type="button" hidden>下一页</button>
+            </div>
+          </div>
+          <section id="results" aria-label="文档列表"></section>
+          <article id="preview" aria-label="文档预览" hidden>
+            <h2 id="doc-id">文档预览</h2>
+            <p id="doc-notice" class="hint" hidden>正文过长，仅显示开头。</p>
+            <pre id="body"></pre>
+          </article>
+        </section>
+      </section>
+    </main>
     <script>
       const byId = (id) => document.getElementById(id);
       const results = byId('results');
@@ -183,6 +653,7 @@
         if (!values.length) return;
         appendText(target, 'h2', title);
         const list = document.createElement('ul');
+        list.className = 'plain-list';
         for (const value of values) appendText(list, 'li', value);
         target.append(list);
       }
@@ -194,11 +665,17 @@
         for (const doc of docs) {
           const id = doc.id ?? doc.path;
           const row = document.createElement('li');
+          row.className = 'doc-row';
           const button = appendText(row, 'button', id);
+          button.className = 'doc-path';
           button.type = 'button';
           button.onclick = () => openDocument(id);
-          appendText(row, 'p', `[${doc.kind}] ${doc.description}`);
-          if (doc.snippet) appendText(row, 'p', doc.snippet).className = 'hint';
+          const meta = document.createElement('div');
+          meta.className = 'doc-meta';
+          appendText(meta, 'span', doc.kind).className = 'doc-kind';
+          appendText(meta, 'span', doc.description).className = 'doc-description';
+          row.append(meta);
+          if (doc.snippet) appendText(row, 'p', doc.snippet).className = 'doc-snippet';
           list.append(row);
         }
         results.append(list);
@@ -269,20 +746,43 @@
           const data = readResult('status', payload);
           const docs = data.documents;
           overview.replaceChildren();
-          const rows = [
+          appendText(overview, 'h2', '状态汇总');
+          const metrics = [
             ['文档总数', docs?.total],
             ['受影响', docs?.impacted],
             ['待复核', docs?.needsReview],
-            ['有未提交变更', docs?.dirty],
+            ['未提交变更', docs?.dirty],
+          ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+          if (metrics.length) {
+            const grid = document.createElement('div');
+            grid.className = 'metric-grid';
+            for (const [label, value] of metrics) {
+              const card = document.createElement('div');
+              card.className = 'metric';
+              appendText(card, 'span', `${label}：`).className = 'metric-label';
+              appendText(card, 'strong', String(value)).className = 'metric-value';
+              grid.append(card);
+            }
+            overview.append(grid);
+          }
+          const details = [
             ['基线', data.baseline],
             ['当前 HEAD', data.head],
             ['落后提交', data.commitsBehindHead],
             ['落后相关提交', data.relevantCommitsBehindHead],
             ['降级原因', data.degradedReason],
-          ];
-          textList(overview, '状态汇总', rows
-            .filter(([, value]) => value !== undefined && value !== null && value !== '')
-            .map(([label, value]) => `${label}：${typeof value === 'object' ? JSON.stringify(value) : value}`));
+          ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+          if (details.length) {
+            const list = document.createElement('ul');
+            list.className = 'overview-details';
+            for (const [label, value] of details)
+              appendText(
+                list,
+                'li',
+                `${label}：${typeof value === 'object' ? JSON.stringify(value) : value}`
+              );
+            overview.append(list);
+          }
           status.textContent = '已读取状态汇总。';
         });
       }
@@ -375,7 +875,9 @@
         next.hidden = deltaNext.hidden = diagnostics.hidden = preview.hidden = true;
         gitConfiguration.hidden = true;
         renderSetup();
-        byId('project-status').textContent = '';
+        const projectStatus = byId('project-status');
+        projectStatus.textContent = '';
+        delete projectStatus.dataset.state;
         workflowResult.textContent = '';
         for (const section of [results, overview, review]) section.replaceChildren();
         const checked = await request('inspect', {}, (result) => {
@@ -402,9 +904,10 @@
               inspection.configurationError || 'llmdoc 尚未配置。请在扩展设置中配置 Node.js 与 llmdoc CLI 后重新检查。'
             );
           }
-          byId('project-status').textContent = isMissing()
+          projectStatus.textContent = isMissing()
             ? (hasGit() ? '当前项目缺少 llmdoc/，可先准备初始化草稿。' : '当前项目缺少 llmdoc/。')
             : '当前项目已有 llmdoc/。';
+          projectStatus.dataset.state = isMissing() ? 'missing' : 'present';
         });
         if (checked && isPresent() && (await loadPage('tree', {})) && hasGit()) await loadStatus();
       }
